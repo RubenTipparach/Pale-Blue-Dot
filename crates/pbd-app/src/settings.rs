@@ -1,6 +1,6 @@
 //! The player's own settings (`player-settings`): a frame limit, a render
-//! scale and auto step, kept in a versioned file in the user's config
-//! directory.
+//! scale, auto step and the rain's sun shadows, kept in a versioned file in
+//! the user's config directory.
 //!
 //! These are the PLAYER's. The tunables in `assets/config/*.ron` are the
 //! developer's and stay where they are. The file is not under `saves/`, names
@@ -25,8 +25,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 /// The file's version. A file with none is read as version 0, which had the
-/// same fields.
-pub const VERSION: u32 = 1;
+/// same fields as 1; version 2 added `rain_shadows`, which an older file
+/// reads as its default.
+pub const VERSION: u32 = 2;
 
 /// The render scales offered, in percent, in the order a press cycles them.
 pub const SCALES: [u32; 5] = [100, 85, 75, 67, 50];
@@ -107,16 +108,21 @@ pub struct PlayerSettings {
     pub render_scale: u32,
     /// A grounded walker walks up one terrain layer without a key.
     pub auto_step: bool,
+    /// The lit rain's sun shadows: the shafts trees and eaves cast through
+    /// it, six shadow-map samples per stretch of rain near the eye.
+    pub rain_shadows: bool,
 }
 
 /// A new player's settings, the owner's choice (2026-11-13, "default to
-/// this settings"): 60 fps, 85 %, auto step off.
+/// this settings"): 60 fps, 85 %, auto step off; and rain shadows off ("turn
+/// it off by default").
 impl Default for PlayerSettings {
     fn default() -> Self {
         Self {
             frame_limit: FrameLimit::Fps60,
             render_scale: 85,
             auto_step: false,
+            rain_shadows: false,
         }
     }
 }
@@ -130,6 +136,7 @@ impl PlayerSettings {
         frame_limit: FrameLimit::Off,
         render_scale: 100,
         auto_step: true,
+        rain_shadows: true,
     };
 }
 
@@ -143,6 +150,7 @@ struct File {
     frame_limit: FrameLimit,
     render_scale: u32,
     auto_step: bool,
+    rain_shadows: bool,
 }
 
 impl Default for File {
@@ -153,6 +161,7 @@ impl Default for File {
             frame_limit: base.frame_limit,
             render_scale: base.render_scale,
             auto_step: base.auto_step,
+            rain_shadows: base.rain_shadows,
         }
     }
 }
@@ -187,6 +196,7 @@ impl PlayerSettings {
             frame_limit: file.frame_limit,
             render_scale: snap_scale(file.render_scale),
             auto_step: file.auto_step,
+            rain_shadows: file.rain_shadows,
         };
         Ok((settings, file.version))
     }
@@ -199,6 +209,7 @@ impl PlayerSettings {
                 frame_limit: self.frame_limit,
                 render_scale: self.render_scale,
                 auto_step: self.auto_step,
+                rain_shadows: self.rain_shadows,
             },
             ron::ser::PrettyConfig::default(),
         )
@@ -237,16 +248,19 @@ impl PlayerSettings {
             frame_limit: overrides.frame_limit.unwrap_or(self.frame_limit),
             render_scale: overrides.render_scale.map_or(self.render_scale, snap_scale),
             auto_step: overrides.auto_step.unwrap_or(self.auto_step),
+            rain_shadows: overrides.rain_shadows.unwrap_or(self.rain_shadows),
         }
     }
 }
 
-/// A launch's flags: `--frame-limit`, `--render-scale`, `--no-auto-step`.
+/// A launch's flags: `--frame-limit`, `--render-scale`, `--no-auto-step`,
+/// `--rain-shadows on|off`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Overrides {
     pub frame_limit: Option<FrameLimit>,
     pub render_scale: Option<u32>,
     pub auto_step: Option<bool>,
+    pub rain_shadows: Option<bool>,
 }
 
 /// Where the file lives: `PBD_SETTINGS` if set, else the user's config
@@ -556,8 +570,19 @@ pub fn follow_auto_step(
     }
 }
 
-/// The settings' systems: the render scale and auto step each frame, the
-/// pacer last. `capture` stands the pacer down.
+/// The rain's sun shadows follow the setting, for the render world
+/// (`planet_water::RainShadows`).
+pub fn follow_rain_shadows(
+    settings: Res<PlayerSettings>,
+    mut shadows: ResMut<crate::planet::RainShadows>,
+) {
+    if shadows.0 != settings.rain_shadows {
+        shadows.0 = settings.rain_shadows;
+    }
+}
+
+/// The settings' systems: the render scale, auto step and the rain's
+/// shadows each frame, the pacer last. `capture` stands the pacer down.
 pub struct PlayerSettingsPlugin {
     pub capture: bool,
 }
@@ -576,6 +601,7 @@ impl Plugin for PlayerSettingsPlugin {
                     // the frame it is set.
                     apply_render_scale.before(bevy::camera::CameraUpdateSystems),
                     follow_auto_step,
+                    follow_rain_shadows,
                 ),
             );
         if !self.capture {
@@ -606,11 +632,34 @@ mod tests {
         assert_eq!(s.frame_limit, FrameLimit::Fps60);
         assert_eq!(s.render_scale, 85);
         assert!(!s.auto_step);
+        // "turn it off by default" (2026-11-13).
+        assert!(!s.rain_shadows);
         // Captures and benchmarks keep the engine as it was.
         let i = PlayerSettings::ISOLATED;
         assert_eq!(i.frame_limit.period(), None);
         assert_eq!(i.render_scale, 100);
         assert!(i.auto_step);
+        assert!(i.rain_shadows);
+    }
+
+    #[test]
+    fn a_file_from_before_rain_shadows_reads_them_off_and_keeps_the_rest() {
+        let text = "(version: 1, frame_limit: Fps120, render_scale: 67, auto_step: true)";
+        let (read, version) = PlayerSettings::parse(text).unwrap();
+        assert_eq!(version, 1);
+        assert_eq!(
+            read,
+            PlayerSettings {
+                frame_limit: FrameLimit::Fps120,
+                render_scale: 67,
+                auto_step: true,
+                rain_shadows: false,
+            }
+        );
+        assert!(
+            Loaded::Read(1).writable(),
+            "an older file takes the new field"
+        );
     }
 
     #[test]
@@ -620,6 +669,7 @@ mod tests {
             frame_limit: FrameLimit::Fps120,
             render_scale: 67,
             auto_step: false,
+            rain_shadows: true,
         };
         chosen.keep_to(&path).unwrap();
         let (read, loaded) = PlayerSettings::load_from(&path);
@@ -700,15 +750,18 @@ mod tests {
             frame_limit: FrameLimit::Fps60,
             render_scale: 50,
             auto_step: false,
+            rain_shadows: false,
         };
         let flags = Overrides {
             render_scale: Some(100),
+            rain_shadows: Some(true),
             ..default()
         };
         let run = file.with(&flags);
         assert_eq!(run.render_scale, 100);
         assert_eq!(run.frame_limit, FrameLimit::Fps60);
         assert!(!run.auto_step);
+        assert!(run.rain_shadows);
         // A capture or a benchmark reads no file and keeps nothing.
         let (isolated, keep) = for_launch(true, &Overrides::default());
         assert_eq!(isolated, PlayerSettings::ISOLATED);

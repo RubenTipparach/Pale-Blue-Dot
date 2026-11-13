@@ -297,3 +297,21 @@ is meant to be quiet (`menus-and-a-quiet-screen`). **Recommendation taken
   window, which is the "as today" promise.
 - **A busy-wait in the pacer** is up to 1.5 ms of a core a frame. It runs
   only with a cap set.
+
+## 8. Rain shadows (owner, 2026-11-13)
+
+The owner: "add a setting to turn off rain shadow please, and make sure it
+persists, that might help my cause a bit, turn it off by default". Taken as
+the lit rain's sun shadows (`lighting-model`): `rain_sun_seen` in
+`water.wgsl`, six shadow-map taps (each a walk down the four cascades) per
+stretch of rain within 60 m, so trees and eaves cast shafts through the rain.
+Nothing else in the game is a shadow of the rain; the drops on the lens are
+the owner's "rain drops", a separate item. Recommendation taken (ask only
+with screenshots).
+
+- `PlayerSettings::rain_shadows`, default false; the file's version 2, and a
+  version 1 file (without it) reads it as the default, off.
+- `ISOLATED` keeps it on, so no capture or benchmark moves.
+- `--rain-shadows on|off` overrides it for a launch.
+- The render world reads it as `RainShadows`, and the water uniform carries
+  it as `rain_light.x`; off, the rain takes the sun's light unshadowed.

@@ -562,6 +562,15 @@ impl Launch {
                     result.settings.render_scale = Some(percent);
                 }
                 "--no-auto-step" => result.settings.auto_step = Some(false),
+                "--rain-shadows" => {
+                    i += 1;
+                    let state = args.get(i).expect("--rain-shadows requires on or off");
+                    result.settings.rain_shadows = Some(match state.as_str() {
+                        "on" => true,
+                        "off" => false,
+                        _ => panic!("--rain-shadows takes on or off"),
+                    });
+                }
                 "--upscale" => {
                     i += 1;
                     let filter = args.get(i).expect("--upscale requires bilinear or nearest");
@@ -1186,10 +1195,11 @@ pub fn run(args: &[String]) {
         &launch.settings,
     );
     info!(
-        "PLAYER_SETTINGS frame_limit={} render_scale={}% auto_step={} file={}",
+        "PLAYER_SETTINGS frame_limit={} render_scale={}% auto_step={} rain_shadows={} file={}",
         player.frame_limit.label(),
         player.render_scale,
         player.auto_step,
+        player.rain_shadows,
         kept.path
             .as_ref()
             .map_or("none".into(), |p| p.display().to_string()),

@@ -116,6 +116,9 @@ struct WaterView {
     // and its eye (w one once there is one, and reflections are on).
     ssr_clip: mat4x4<f32>,
     ssr_eye: vec4<f32>,
+    // x one when the lit rain takes the sun's shadow maps (the player's RAIN
+    // SHADOWS, `player-settings` 8); yzw spare.
+    rain_light: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -1696,7 +1699,8 @@ fn rain_gather(eye: vec3<f32>, direction: vec3<f32>, far: f32, range: f32,
                 + vec3<f32>(0.80, 0.85, 1.0)*cloud_flash_at(p, layer)*0.15;
             if (view.rain_sky.w > 0.5) {
                 var sun_seen = 1.0;
-                if (enter < 60.0) { sun_seen = rain_sun_seen(eye, direction, enter, min(leave, 60.0), jitter); }
+                // RAIN SHADOWS off: the sun's light unshadowed, no map taps.
+                if (enter < 60.0 && view.rain_light.x > 0.5) { sun_seen = rain_sun_seen(eye, direction, enter, min(leave, 60.0), jitter); }
                 let mu = dot(direction, safe_normal(view.sun.xyz));
                 let lit = view.rain_sky.rgb
                     + view.rain_sun.rgb*rain_phase(mu, view.rain_sun.w)*12.566371*sun_seen

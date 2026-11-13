@@ -85,3 +85,19 @@ the window directly, with no extra camera or pass.
 - **WHEN** the render scale is 67 percent
 - **THEN** the 3D cameras render into an image 67 percent of the window's
   size, and a present camera draws it across the window
+
+### Requirement: The rain's sun shadows can be turned off
+The settings page SHALL offer RAIN SHADOWS, on or off, kept in the settings
+file with the others, and off for a new player and for a file written before
+it existed. Off, the lit rain SHALL take the sun's light unshadowed: no
+shadow-map samples in the rain volume, so trees and eaves cast no shafts
+through it. A capture or a benchmark SHALL draw them unless its flags say
+otherwise (`--rain-shadows on|off`).
+
+#### Scenario: A new player
+- **WHEN** the game starts with no settings file
+- **THEN** RAIN SHADOWS reads OFF and the rain takes no shadow-map samples
+
+#### Scenario: The choice is kept
+- **WHEN** the player turns RAIN SHADOWS on and starts the game again
+- **THEN** it reads ON and the rain's shafts are drawn

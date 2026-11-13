@@ -101,6 +101,8 @@ pub enum MenuAction {
     RenderScale,
     /// Turn auto step on or off.
     AutoStep,
+    /// Turn the rain's sun shadows on or off.
+    RainShadows,
 }
 
 /// A panel the mouse wheel scrolls.
@@ -163,6 +165,14 @@ fn settings_label(action: MenuAction, player: &PlayerSettings) -> Option<String>
                 "OFF  (jump to climb a layer)"
             }
         ),
+        MenuAction::RainShadows => format!(
+            "RAIN SHADOWS: {}",
+            if player.rain_shadows {
+                "ON  (shafts through the rain)"
+            } else {
+                "OFF"
+            }
+        ),
         _ => return None,
     })
 }
@@ -190,6 +200,7 @@ pub fn press_graphics(
                 changed.render_scale = pbd_app::settings::next_scale(changed.render_scale)
             }
             MenuAction::AutoStep => changed.auto_step = !changed.auto_step,
+            MenuAction::RainShadows => changed.rain_shadows = !changed.rain_shadows,
             _ => {}
         }
         if changed != *player {
@@ -524,6 +535,7 @@ pub fn spawn(mut commands: Commands) {
                     // `settings_label`'s, kept up by `label_graphics`.
                     button(panel, "FRAME LIMIT", MenuAction::FrameLimit);
                     button(panel, "RENDER SCALE", MenuAction::RenderScale);
+                    button(panel, "RAIN SHADOWS", MenuAction::RainShadows);
                     panel.spawn((
                         Text::new("MOVEMENT"),
                         TextFont {
@@ -1010,7 +1022,8 @@ pub fn press(
             MenuAction::Bloom
             | MenuAction::FrameLimit
             | MenuAction::RenderScale
-            | MenuAction::AutoStep => {}
+            | MenuAction::AutoStep
+            | MenuAction::RainShadows => {}
             MenuAction::Load(row) => {
                 let Some(slot) = index.slots.get(row).cloned() else {
                     continue;

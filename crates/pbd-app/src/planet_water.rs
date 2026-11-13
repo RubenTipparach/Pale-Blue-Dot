@@ -154,6 +154,22 @@ pub(super) struct WaterView {
     /// the houses and the trees as the wet ground does.
     ssr_clip: Mat4,
     ssr_eye: Vec4,
+    /// x one when the lit rain takes the sun's shadow maps (the player's
+    /// RAIN SHADOWS); yzw spare.
+    rain_light: Vec4,
+}
+
+/// Whether the lit rain takes the sun's shadow maps: the shafts trees and
+/// eaves cast through it (`player-settings` 8). The player's choice, off by
+/// default; on where nothing has chosen (a capture, a test), as before the
+/// setting existed.
+#[derive(Resource, Clone, Copy, ExtractResource)]
+pub struct RainShadows(pub bool);
+
+impl Default for RainShadows {
+    fn default() -> Self {
+        Self(true)
+    }
 }
 
 /// Where the shells' fall wraps, m: a multiple of every shell's streak cycle
@@ -1078,6 +1094,7 @@ pub(super) struct WaterSky<'w> {
     sea: Res<'w, crate::sea::SeaNow>,
     lighting: Option<Res<'w, crate::config::LightingSettings>>,
     fine: Option<Res<'w, super::lod::PlanetFine>>,
+    rain_shadows: Option<Res<'w, RainShadows>>,
 }
 
 /// The sky's mean radiance for a sun at elevation sine `e` under `cover`:
@@ -1127,8 +1144,10 @@ fn prepare_water_views(
         sea: sea_now,
         lighting,
         fine,
+        rain_shadows,
     } = sky;
     let lit_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
+    let rain_shadows = rain_shadows.is_none_or(|r| r.0);
     // `lighting-model`: under the new model the rain's rings on the water are
     // as many as it is raining (the terrain's own rule), not one a cell.
     let rings_follow_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
@@ -1388,6 +1407,16 @@ fn prepare_water_views(
             } else {
                 Vec4::ZERO
             },
+            rain_light: Vec4::new(
+                if rain_shadows {
+                    1.0
+                } else {
+                    0.0
+                },
+                0.0,
+                0.0,
+                0.0,
+            ),
         };
         // The puffs under the shown weather, far to near from this eye
         // (`cloud-puffs`).
@@ -2302,7 +2331,7 @@ mod tests {
         // The lit rain's lamps are one array of eight lanes (`lighting-model`).
         let lamps = block.matches("array<vec4<f32>, 8>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * lamps;
-        assert_eq!((mat4, vec4, lamps), (4, 60, 1));
+        assert_eq!((mat4, vec4, lamps), (4, 61, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");

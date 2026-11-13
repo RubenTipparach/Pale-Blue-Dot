@@ -61,3 +61,7 @@
       half-size traces (design 7).
 - [ ] DLSS: the above, plus the SDK, the licence, Vulkan, and
       `MainPassResolutionOverride` in every custom pass (design 7).
+
+## 10. Rain shadows (owner, 2026-11-13)
+- [x] `rain_shadows` in the settings and the file (version 2), the menu row, the flag, the render world's switch; tests for the default, an old file and the round trip.
+- [ ] Before-and-after shot in rain with sun through trees. Tried at `--at 20 40 --time 7 --rain 1`: the shafts there are subtle, and the two captures also differed in the rotor and the lens drops, so the pair did not isolate them; still to do.
