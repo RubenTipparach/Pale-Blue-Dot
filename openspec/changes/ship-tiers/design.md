@@ -82,8 +82,32 @@ delta; picking C adds a conic solver and nodes and removes most of the clause.
 
 - **The grid.** Axial hex cells (the ground lattice: pointy along z,
   2.833 m flat to flat) and integer layers 1 m tall. The rocket's core column
-  is cell (0, 0); the ring is its six neighbours. A later ring is possible but
-  not planned: seven cells a layer already builds a 8.5 m-wide cluster.
+  is cell (0, 0), and the grid reaches **four rings** out from it (the owner,
+  2026-11-12: "Allow larger rockets with more leg room to walk around in.
+  (3-4 radius? Blocks)"). Ring 1 makes a cluster 3 cells (8.5 m) across,
+  ring 3 one 7 cells (19.8 m) across, ring 4 one 9 cells (25.5 m) across:
+  61 cells a layer. A layer is edited as a hex disc in plan, as the drydock's
+  builder does, with the stack drawn beside it in profile.
+- **Room inside.** Rockets past ring 1 have room to walk. Interior parts,
+  one cell each: **crew deck** (a floor on the cell's top, walkable),
+  **cabin** (berths and a window), **ladder** (between decks, through the
+  floor), **hatch** (an outer door and its gangway), **airlock**, and
+  **hull** (an outer wall cell, sealed). A walkable floor has two clear
+  layers above it, as in the drydock and the town's houses; a storey is three
+  layers. The checks add: the command pod can be walked to from the hatch,
+  and every crew deck is reached by a ladder. A walker stands on the decks in
+  the rocket's frame, as on the cog's deck, on the pad and in flight.
+- **As the mockup builds it** (recommendations taken, ask only with
+  screenshots): interior masses deck 0.15 t, cabin 0.4, ladder 0.05, hatch
+  0.3, airlock 0.5, hull 0.15; a hatch or airlock is two layers tall,
+  standing on a deck, and a cabin counts as headroom where a hull wall does
+  not; the core's decoupler splits its whole layer, and decouplers elsewhere
+  on that layer only draw the separation ring. A stack holds together when
+  every cell touches the core column through other cells. Presets: Small
+  hop, First orbit, Too heavy, Lantern lander, Crew rocket (ring 2, two
+  decks), Heavy lifter (ring 3, cargo deck, airlock), Colony lander (ring 4,
+  752 cells, three decks, fifteen cabins; its upper stage lands on a light
+  world like Lantern, not Pale Blue) and Antimatter lander.
 - **Parts, one cell each** (mockup numbers; tonnes, kN, m/s):
 
   | Part | Where | Mass | Propellant | Thrust | Exhaust |
@@ -160,26 +184,14 @@ Tier 1 reaches: low orbit (535 m/s), Lantern's orbit on a Hohmann arc
 
 ## 6. Tier 3: antimatter
 
-- **Landers anywhere.** An antimatter core gives 60 km/s of delta-v at a TWR of
+- **Landers anywhere.** An antimatter core (1,000 kN, 60 km/s exhaust, 1.0 t;
+  the mockup's four-core lander makes 55 km/s at a TWR of 3.3) gives about
+  60 km/s of delta-v at a TWR of
   3 at 1 g: a lander flies surface to surface (Pale Blue to Cinder, 5 min 10 s,
   9.8 km/s) with no orbit stop.
-- **Starships** carry a warp ring, are built at a station yard, and never land.
-  A jump: target a system within 8 ly, charge 30 s, and the ship leaves one
-  system's frame and appears in the other's, 40 km off its first body. Nothing
-  is simulated between stars. Cost: one antimatter cell a light year.
-- **What the engine needs** (its own change before this tier is built):
-  - a **system record** (seed, generator version, star, bodies on rails) and a
-    galaxy list of systems with map positions in light years; today the one
-    system is hard-wired;
-  - **frames per system**: each system's root frame in f64; a ship's pose names
-    its system and frame (CLAUDE.md keeps frame identity explicit in poses,
-    velocities, persistence and uploads); a jump re-roots the ship's frame at
-    a tick boundary, rebasing pose, velocity and interpolation history
-    together; never one f64 frame spanning stars (positions stay
-    system-local, so f64 precision is never asked to cover light years);
-  - **saves per system**, created on first arrival and versioned like terrain;
-    every world a save names is carried forever;
-  - **world time** shared by every system and passing only while played.
+- **No warp.** The owner, 2026-11-12: "Let's not do warp." There are no
+  starships, no warp ring and no other star systems; antimatter is the top
+  tier, and its landers reach anywhere in the one system.
 
 ## 7. The power ladder (industry.html)
 
@@ -215,8 +227,9 @@ only says which tier each rung unlocks.
   screenshots).
 - Freighters on rails away from players, flown near them: recommendation taken
   (ask only with screenshots).
-- Starships last, after stations, with the multi-system engine work as its own
-  change: recommendation taken (ask only with screenshots).
+- Starships and warp: dropped by the owner ("Let's not do warp").
+- The assembly grid four rings out, with crew decks inside: the owner's ask
+  ("3-4 radius? Blocks"); four rings taken, the larger of the two.
 
 ## 10. Measured for this write-up
 

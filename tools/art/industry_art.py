@@ -1,5 +1,5 @@
 """Machine, generator and item icons, and the mockup-only textures, for the industry mockup
-(docs/mockups/industry.html): strip mining, refining, ether mining and power.
+(docs/mockups/industry.html): strip mining, refining, ether mining, oil and power.
 
 Pixel art drawn in code with the balatro-pixel-art kit (`.claude/skills/balatro-pixel-art`), the
 solitaire collection's style: a 32 x 32 native canvas, one bold subject, 3 to 5 tone ramps lit from
@@ -572,6 +572,155 @@ def tex_panel():
     return tile(px)
 
 
+# ---------------------------------------------------------------- oil (steer-and-sail design 5, M20)
+
+R.update({
+    "crude": ["#010000", "#161612", "#2b1f35", "#3e3551", "#69608b"],   # black with a violet sheen
+    "redpaint": ["#4a051e", "#a61e1f", "#d12d41", "#fa3a64"],
+    "tar": ["#010000", "#161612", "#2c2c25", "#434137"],
+})
+
+
+def pumpjack():
+    """The nodding donkey: skid, A-frame samson post, walking beam, horsehead over the well, crank."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(1, 27, 30, 30), R["soot"], "rim")                                # the skid
+    sp.part(sp.rect(25, 23, 30, 27), R["iron"], "rim")                               # wellhead
+    sp.part(sp.rect(3, 21, 11, 27), R["paint"], "rim")                               # gearbox
+    sp.part(sp.line([(9, 27), (15, 11)], 2) | sp.line([(21, 27), (16, 11)], 2), R["iron"], "rim")   # samson post
+    sp.part(sp.circle(7, 19, 4.5), R["soot"], "sphere")                              # the crank's weight
+    sp.part(sp.line([(7, 18), (5, 10)], 2), R["iron"], "flat", base=2)               # pitman arm
+    sp.part(sp.poly([(2, 7), (26, 9), (26, 12), (2, 10)]), R["paint"], "rim")        # walking beam
+    sp.part(sp.poly([(24, 6), (29, 7), (31, 11), (30, 18), (27, 18), (27, 12), (24, 11)]), R["paint"], "rim")   # horsehead
+    sp.part(sp.rect(28, 18, 28, 23), R["iron"], "flat", base=1, seam=False)          # polished rod
+    sp.plot(16, 11, "#bfcad7")
+    sp.plot(4, 8, WHITE)
+    sp.plot(5, 17, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def oil_refinery():
+    """The distillation column with its trays, a product tank beside it and the flare stack."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(3, 6, 6, 29), R["redpaint"], "cyl_v")                           # flare stack
+    sp.part(sp.rect(20, 17, 30, 29), R["metal"], "cyl_v")                           # product tank
+    sp.part(sp.ellipse(20, 15, 30, 19), R["metal"], "sphere")
+    sp.part(sp.rect(23, 21, 27, 22), R["amber"], "flat", base=2)
+    sp.part(sp.rect(10, 4, 19, 29), R["white"], "cyl_v")                            # the column
+    sp.part(sp.ellipse(10, 2, 19, 6), R["white"], "sphere")
+    for y in (10, 16, 22):                                                           # trays and draw-offs
+        sp.part(sp.rect(9, y, 20, y + 1), R["iron"], "flat", base=2)
+    sp.part(sp.rect(19, 12, 22, 13) | sp.rect(19, 24, 21, 25), R["iron"], "rim")
+    sp.part(sp.rect(1, 28, 31, 30), R["soot"], "rim")
+    sp.plot(12, 5, WHITE)
+    sp.plot(22, 18, WHITE)
+    sp.outline()
+    sp.part(sp.taper(4.5, 5, 4.5, 0, 3, 1), R["flame"], "inset", glow=True)          # the flare
+    return sp.image()
+
+
+def oil_plant():
+    """A boiler and turbine hall on fuel oil: a steel stack, a red-banded fuel oil tank, lit windows."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(16, 3, 20, 16), R["steel"], "cyl_v")                            # the stack
+    sp.part(sp.rect(15, 6, 21, 7), R["redpaint"], "flat", base=2)
+    sp.part(sp.rect(1, 14, 22, 29), R["conc"], "rim")                               # the hall
+    sp.part(sp.poly([(1, 14), (6, 10), (12, 14)]), R["iron"], "rim")                # roof vent
+    sp.part(sp.rect(21, 18, 31, 29), R["white"], "cyl_v")                           # fuel oil tank
+    sp.part(sp.ellipse(21, 16, 31, 20), R["white"], "sphere")
+    sp.part(sp.rect(21, 23, 31, 25), R["redpaint"], "flat", base=2)
+    for x in (4, 9, 14):
+        sp.part(sp.rect(x, 19, x + 2, 23), R["soot"], "flat", base=0)
+    sp.plot(24, 17, WHITE)
+    sp.outline()
+    for x in (4, 9, 14):
+        sp.part(sp.rect(x, 20, x + 2, 22), ["#c56d25", "#fb902f", "#faaf5c"], "flat", base=1, glow=True)
+    sp.part(sp.circle(18, 1, 1.5), R["tar"], "flat", base=2, glow=True)            # black smoke
+    return sp.image()
+
+
+def crude():
+    """Crude oil: a fat black drop with a violet sheen."""
+    sp = Sprite(32, 32)
+    sp.part(sp.circle(15.5, 20, 9.5) | sp.poly([(15.5, 2), (7, 17), (24, 17)]), R["crude"], "sphere")
+    sp.part(sp.ellipse(9, 13, 13, 22), ["#3e3551", "#69608b", "#9e3ba2"], "flat", base=1, seam=False)
+    sp.plots([(11, 13), (11, 14)], WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def drum(ramp, label, name):
+    def f():
+        sp = Sprite(32, 32)
+        sp.part(sp.rect(6, 5, 25, 29), ramp, "cyl_v")                               # the drum
+        sp.part(sp.ellipse(6, 2, 25, 7), R["steel"], "sphere")                      # its lid
+        for y in (11, 22):
+            sp.part(sp.rect(5, y, 26, y + 1), darker(ramp), "flat", base=1)         # rolling hoops
+        sp.part(sp.rect(10, 14, 21, 19), R["paper"], "rim")                         # the label
+        sp.part(sp.rect(12, 16, 19, 17), label, "flat", base=len(label) - 2, seam=False)
+        sp.plot(12, 3, WHITE)
+        sp.plot(8, 7, WHITE)
+        sp.outline()
+        return sp.image()
+    f.__name__ = name
+    return f
+
+
+def asphalt():
+    """Asphalt, the column's residue: a slab of road with its yellow line."""
+    sp = Sprite(32, 32)
+    top = sp.poly([(2, 13), (16, 6), (30, 13), (16, 20)])
+    sp.part(sp.poly([(2, 13), (16, 20), (16, 27), (2, 20)]), R["tar"], "flat", base=1)
+    sp.part(sp.poly([(16, 20), (30, 13), (30, 20), (16, 27)]), R["tar"], "flat", base=0)
+    sp.part(top, R["tar"], "rim", base=2)
+    sp.plots([(x, y) for y in range(8, 20) for x in range(4, 29) if top[y, x] and h(x, y, 11) > 0.9], "#a09f91")
+    sp.part(sp.line([(8, 11), (13, 13)], 2) | sp.line([(18, 15), (23, 17)], 2), R["amber"], "flat", base=3, seam=False)
+    sp.plot(15, 8, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def tex_asphalt():
+    """The refinery yard: dark tar with grey and pale gravel specks."""
+    def px(x, y):
+        n = h(x, y, 9)
+        if n > 0.96:
+            return "#a09f91"
+        if n > 0.78:
+            return "#434137"
+        if n < 0.12:
+            return "#161612"
+        return "#2c2c25"
+    return tile(px)
+
+
+def tex_flare():
+    """A flare stack's red and white bands, 8 px, a dark ring between."""
+    def px(x, y):
+        v = y % 16
+        if v in (0, 8):
+            return "#2c2c25"
+        red = v < 8
+        lit = x % 32 < 10
+        if red:
+            return "#d12d41" if lit else "#a61e1f"
+        return "#fffefe" if lit else "#bfcad7"
+    return tile(px)
+
+
+def tex_window():
+    """A lit window: warm panes in a dark frame, four panes to a tile. Self-lit at night."""
+    def px(x, y):
+        u, v = x % 16, y % 16
+        if u in (0, 15) or v in (0, 15) or u == 7 or v == 7:
+            return "#2c2c25"
+        if (u, v) in ((2, 2), (3, 2), (2, 3), (9, 2), (10, 2), (9, 3)):
+            return "#fffefe"
+        return "#faaf5c" if v < 7 else "#fb902f" if (u + v) % 2 else "#faaf5c"
+    return tile(px)
+
+
 ICONS = {
     "crusher": crusher, "smelter": smelter, "refinery": refinery, "press": press,
     "siphon": siphon, "filter": filter_bed, "tank": tank, "extractor": extractor,
@@ -584,6 +733,9 @@ ICONS = {
     "tex_white": tex_white, "tex_grate": tex_grate, "tex_ether": tex_ether,
     "fusion": fusion, "collider": collider, "antimatter": antimatter, "am-cell": am_cell, "drone": drone, "dyson": dyson,
     "tex_plasma": tex_plasma, "tex_panel": tex_panel,
+    "pumpjack": pumpjack, "oil-refinery": oil_refinery, "oil-plant": oil_plant, "crude": crude,
+    "fuel-oil": drum(R["redpaint"], R["soot"], "fuel_oil"), "diesel": drum(R["gold"], R["olive"], "diesel"), "asphalt": asphalt,
+    "tex_asphalt": tex_asphalt, "tex_flare": tex_flare, "tex_window": tex_window,
 }
 REFS = ["furnace_barge", "armour_plating", "emp_burst", "drop_tanks", "glass_seraph"]
 

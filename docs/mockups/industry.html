@@ -161,7 +161,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <div class="eyebrow">Pale Blue Dot &middot; design mockup &middot; <span class="badge">Proposal, not built</span></div>
     <h1>Pits, plants and power</h1>
     <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
-    <p class="lede">Industry on the hex grid: an open pit cut a layer at a time, the machines that turn its ore into plates, a siphon that cleans lake water and, much later, a mast that draws matter out of the ether, and the power ladder that runs all of it, from a coal plant to fusion, antimatter and a Dyson swarm round the star. Drag to turn, wheel to zoom. Night is on the toggle; at night only lamps, furnaces and vents light the ground.</p>
+    <p class="lede">Industry on the hex grid: an open pit cut a layer at a time, the machines that turn its ore into plates, a siphon that cleans lake water and, much later, a mast that draws matter out of the ether, the power ladder that runs all of it, from a coal plant to fusion, antimatter and a Dyson swarm round the star, and oil: a field under the ground, a pumpjack over it, a distillation column and an oil plant on the ladder. Drag to turn, wheel to zoom. Night is on the toggle; at night only lamps, furnaces, flares and windows light the ground. Machines stand still until <b>Run machines</b> is pressed.</p>
   </header>
 
   <div class="tabs" role="tablist" aria-label="Sections">
@@ -169,7 +169,9 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <button class="btn tab" role="tab" data-tab="refining"><img src="industry/smelter.png" alt="" width="32" height="32">2 Refining</button>
     <button class="btn tab" role="tab" data-tab="ether"><img src="industry/siphon.png" alt="" width="32" height="32">3 Ether mining</button>
     <button class="btn tab" role="tab" data-tab="power"><img src="industry/wind.png" alt="" width="32" height="32">4 Power, to the Dyson swarm</button>
+    <button class="btn tab" role="tab" data-tab="oil"><img src="industry/pumpjack.png?v=2" alt="" width="32" height="32">5 Oil</button>
     <span class="sp"></span>
+    <button class="btn" id="tRun" aria-pressed="false" title="Machines stand still until this is pressed">Run machines</button>
     <button class="btn" id="tDay" aria-pressed="true">Day 14:00</button><button class="btn" id="tNight" aria-pressed="false">Night 22:00</button>
   </div>
 
@@ -189,10 +191,10 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
 
   <section aria-labelledby="art-h">
     <div class="sec-head"><div class="eyebrow">About the art</div><h2 id="art-h">What is the game's, what is new</h2></div>
-    <p class="note"><b>The game's own, copied byte for byte</b> (<span class="src">docs/mockups/industry/game/README.md</span>): every hex column's top and side is a tile of the terrain atlas (<span class="src">assets/tilesets/atlas.png</span>): the fields sheet's grass, dirt, limestone and <b>copper ore in limestone</b>; the mountains sheet's slate, granite and <b>iron ore</b>; the redwood sheet's <b>ancient charcoal</b> as the coal seam; the basalt wastes' ash, basalt and sulfur round the geothermal plant; the beach sheet at the lake. Walls, yards and the spoil heap are the settlement textures (<span class="src">assets/textures/settlement</span>, at the manifest's <span class="src">repeat_m</span>); the trees and lamp posts are built as the game builds them; the pickaxe, shovel, hand, torch, lantern and brazier are the game's item icons. <b>Mockup-only</b>, pixel art drawn in code with the balatro-pixel-art kit (Sweaft-64): the machine, generator and item icons, and the machine paint, belt, concrete, hazard stripe, white cladding, furnace grate and ether textures (<span class="src">tools/art/industry_art.py</span>); the raw ore, coal and ingot icons are the crafting mockup's (<span class="src">tools/art/crafting_art.py</span>); the habitat metal and glass are the building mockup's; the home world's map in the space view is the planets mockup's, and the star's pixel surface is drawn in the page from Sweaft-64 tones. Water is a flat tint, as the game draws it. Numbers are first guesses, chosen to be easy to change.</p>
+    <p class="note"><b>The game's own, copied byte for byte</b> (<span class="src">docs/mockups/industry/game/README.md</span>): every hex column's top and side is a tile of the terrain atlas (<span class="src">assets/tilesets/atlas.png</span>): the fields sheet's grass, dirt, limestone and <b>copper ore in limestone</b>; the mountains sheet's slate, granite and <b>iron ore</b>; the redwood sheet's <b>ancient charcoal</b> as the coal seam; the basalt wastes' ash, basalt and sulfur round the geothermal plant; the beach sheet at the lake. Walls, yards and the spoil heap are the settlement textures (<span class="src">assets/textures/settlement</span>, at the manifest's <span class="src">repeat_m</span>); the trees and lamp posts are built as the game builds them; the pickaxe, shovel, hand, torch, lantern and brazier are the game's item icons. <b>Mockup-only</b>, pixel art drawn in code with the balatro-pixel-art kit (Sweaft-64): the machine, generator and item icons, and the machine paint, belt, concrete, hazard stripe, white cladding, furnace grate and ether textures (<span class="src">tools/art/industry_art.py</span>); the oil chain's pumpjack, column, oil plant, crude, fuel oil, diesel and asphalt icons and the asphalt, flare-stack band and lit-window textures are drawn the same way in the same script; the oil field and the map under it are noise from a seed, computed in the page, as the game would derive them; the raw ore, coal and ingot icons, and the polymer standing for polymer feed, are the crafting mockup's (<span class="src">tools/art/crafting_art.py</span>); the habitat metal and glass are the building mockup's; the home world's map in the space view is the planets mockup's, and the star's pixel surface is drawn in the page from Sweaft-64 tones. Water is a flat tint, as the game draws it. Numbers are first guesses, chosen to be easy to change.</p>
   </section>
 
-  <footer>Mockup for the owner, 2026-11-12, made to <span class="src">docs/mockups/ART-DIRECTION.md</span>. Proposal only: nothing on this page is built behaviour. No OpenSpec change yet; it would sit beside the crafting mockup's.</footer>
+  <footer>Mockup for the owner, 2026-11-12, made to <span class="src">docs/mockups/ART-DIRECTION.md</span>. Proposal only: nothing on this page is built behaviour. No OpenSpec change yet; it would sit beside the crafting mockup's. Oil (section 5, the oil plant in section 4) added 2026-11-13 to <span class="src">openspec/changes/steer-and-sail/design.md</span>, decisions 5 and 6.</footer>
 </div>
 <div id="err" hidden></div>
 
@@ -243,12 +245,12 @@ const fileOf = k => k.startsWith("m:") ? "industry/" + k.slice(2) + ".png?v=2" :
 function texOf(k) { if (k.startsWith("a:")) { const [, s, i] = k.split(":"); return atlasTex(+s, +i); } return TEXC[k] || (TEXC[k] = prep(loader.load(fileOf(k)))); }
 const REP = { brick: 2, cobble: 2, flag: 2.5, iron: 1, plank: 2, timber: 1, rubble: 2, basalt: 2, granite: 2, sand: 2, boards: 2, stone: 2, slate: 2, fieldstone: 2 };
 const repOf = k => { k = k.replace(/^glow:/, "").split("#")[0]; return k.startsWith("a:") ? 2 : k.startsWith("m:") ? 2 : k.startsWith("b:") ? 1.5 : (REP[k] || 2); };
-const MATS = {}, GLOWS = [];
+const MATS = {}, GLOWS = [], OVMATS = [];
 function mat(k) {
   if (MATS[k]) return MATS[k];
   if (k.startsWith("glow:")) {
     const [b, c] = k.slice(5).split("#"), m = new THREE.MeshBasicMaterial({ map: texOf(b), color: c ? new THREE.Color("#" + c) : 0xffffff });
-    m.userData.base = m.color.clone(); GLOWS.push(m); return (MATS[k] = m);
+    m.userData.base = m.color.clone(); if (b.includes("tex_window")) m.userData.day = new THREE.Color(0x46525e); GLOWS.push(m); return (MATS[k] = m);
   }
   const [b, c] = k.split("#"), dbl = /a:4:8|leaves/.test(b) ? { side: THREE.DoubleSide } : {};
   return (MATS[k] = PBD.litMaterial(texOf(b), c ? new THREE.Color("#" + c) : 0xffffff, dbl));
@@ -300,7 +302,7 @@ const LAMPMAT = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
 const WATER = PBD.litMaterial(null, 0x2a6a92, { transparent: true, opacity: 0.8, roughness: 0.3, depthWrite: false });
 const PUFF = { smoke: PBD.litMaterial(null, 0x3a3833, { transparent: true, opacity: 0.75 }), steam: PBD.litMaterial(null, 0xdfe6ea, { transparent: true, opacity: 0.6 }), ether: new THREE.MeshBasicMaterial({ color: 0xdd576d, transparent: true, opacity: 0.9 }) };
 const CUBE = new THREE.BoxGeometry(1, 1, 1);
-const ST = { tab: "mining", night: false, gen: "wind", wind: 9, flow: 70, stage: 1, target: "iron", t: 0, swarm: 12, space: false };
+const ST = { tab: "mining", night: false, gen: "wind", wind: 9, flow: 70, stage: 1, target: "iron", t: 0, swarm: 12, space: false, run: false, mt: 0, oilView: "overview", overlay: true, oilDays: 0 };
 
 // A puff stream: boxes that rise, grow and wrap (smoke, steam, motes)
 function puffs(S, x, y, z, material, o = {}) {
@@ -320,14 +322,15 @@ function belt(S, A, B, o = {}) {
   addMeshes(GS, S.group);
   const items = [], kinds = o.items || [], n = kinds.length ? Math.max(2, Math.floor(L / 1.6)) : 0, speed = o.speed || 0.9;
   for (let i = 0; i < n; i++) { const it = new THREE.Mesh(CUBE, mat(kinds[i % kinds.length])); const s = o.size || 0.36; it.scale.set(s, o.flat ? s * 0.4 : s, s); it.castShadow = true; S.group.add(it); items.push(it); }
-  S.anim.push((tt) => { const k = o.rate ? o.rate() : 1; t.offset.x = -tt * speed * k / 1.0; items.forEach((it, i) => { const f = ((tt * speed * k / L) + i / n) % 1; it.position.set(A[0] + dx * f, A[1] + dy * f + 0.06 + it.scale.y / 2, A[2] + dz * f); it.rotation.y = -ang; }); });
+  S.mach.push((tt) => { const k = o.rate ? o.rate() : 1; t.offset.x = -tt * speed * k / 1.0; items.forEach((it, i) => { const f = ((tt * speed * k / L) + i / n) % 1; it.position.set(A[0] + dx * f, A[1] + dy * f + 0.06 + it.scale.y / 2, A[2] + dz * f); it.rotation.y = -ang; }); });
   return m;
 }
 // A tag pinned to a point in the world, in the HUD's style
 function tag(S, text, x, y, z, cls = "") { S.tags.push({ text, p: new THREE.Vector3(x, y, z), cls }); }
 // A stack of hex (or n-gon) prisms: tanks, towers, the block dome
 function stackPrism(GS, top, side, x, z, rings) { for (const [r0, y0, y1, n = 6] of rings) GS.prism(top, side, poly(x, z, r0, n, Math.PI / 6), y0, y1, { bottom: top }); }
-function newScene(name) { return { name, group: new THREE.Group(), lights: [], flames: [], tags: [], anim: [], cam: null, pick: [] }; }
+// anim: what the world moves (smoke, water, wind, fire), always; mach: machines at work, only while Run is pressed
+function newScene(name) { return { name, group: new THREE.Group(), lights: [], flames: [], tags: [], anim: [], mach: [], cam: null, pick: [] }; }
 function finish(S) { for (const [x, y, z] of S.flames) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 0.2), LAMPMAT); b.position.set(x, y, z); S.group.add(b); } }
 
 // ===================================================================
@@ -392,7 +395,7 @@ function buildMining() {
   { const GS = new PBD.GeoSet(); GS.box("m:tex_paint", 2.2, -0.25, 0, 4.4, 0.5, 0.5); addMeshes(GS, boom); }
   const stick = new THREE.Group(); stick.position.set(4.3, 0, 0); boom.add(stick);
   { const GS = new PBD.GeoSet(); GS.box("m:tex_paint", 1.4, -0.2, 0, 2.8, 0.4, 0.4); GS.box("iron", 2.9, -0.5, 0, 0.8, 0.9, 1.1); addMeshes(GS, stick); }
-  S.anim.push(t => { house.rotation.y = -0.4 + Math.sin(t * 0.35) * 0.9; boom.rotation.z = 0.25 + Math.sin(t * 0.7) * 0.18; stick.rotation.z = -1.0 + Math.sin(t * 0.7 + 1.2) * 0.35; });
+  S.mach.push(t => { house.rotation.y = -0.4 + Math.sin(t * 0.35) * 0.9; boom.rotation.z = 0.25 + Math.sin(t * 0.7) * 0.18; stick.rotation.z = -1.0 + Math.sin(t * 0.7 + 1.2) * 0.35; });
   S.lights.push({ x: x0 + 1.8, y: y0 + 2.6, z: z0 + 0.8, c: lin(0xfff0c8), p: 1.6, R: 7 });
   S.flames.push([x0 + 1.4, y0 + 3.5, z0 + 0.6]);
   tag(S, "Digger, 1 cell a minute", x0, y0 + 5.3, z0, "warm");
@@ -433,7 +436,7 @@ function buildRefining() {
   GS.box("m:tex_paint", X.crusher, Y, 0, 2.6, 2.0, 2.6); GS.box("m:tex_hazard", X.crusher, Y, 1.31, 2.6, 0.3, 0.02);
   GS.box("iron", X.crusher, Y + 2.0, 0, 2.2, 0.35, 2.2); GS.box("iron", X.crusher, Y + 2.35, 0, 2.8, 0.35, 2.8);
   const rolls = []; for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.9, 6), mat("iron")); m.rotation.x = Math.PI / 2; m.position.set(X.crusher + s * 0.45, Y + 2.3, 0); S.group.add(m); rolls.push([m, s]); }
-  S.anim.push(t => rolls.forEach(([m, s]) => m.rotation.y = s * t * 2.2));
+  S.mach.push(t => rolls.forEach(([m, s]) => m.rotation.y = s * t * 2.2));
   S.lights.push({ x: X.crusher + 1.6, y: Y + 2.5, z: 1.6, c: lin(0xfff0c8), p: 1.2, R: 4.5 }); S.flames.push([X.crusher + 1.35, Y + 2.4, 1.35]);
   // smelter: brick, a chimney, a grate that glows
   GS.box("brick", X.smelter, Y, 0, 3.2, 3.0, 3.2); GS.box("brick", X.smelter + 0.9, Y + 3.0, -0.8, 1.0, 3.6, 1.0); GS.box("iron", X.smelter, Y + 3.0, 0, 3.4, 0.2, 3.4);
@@ -448,7 +451,7 @@ function buildRefining() {
   // press: a painted frame and two rolls, plates stacked on a pallet
   for (const s of [-1, 1]) GS.box("m:tex_paint", X.press, Y, s * 1.1, 2.2, 2.4, 0.4); GS.box("m:tex_paint", X.press, Y + 2.4, 0, 2.2, 0.4, 2.6);
   const prolls = []; for (const yy of [Y + 1.25, Y + 0.6]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 1.8, 6), mat("iron")); m.rotation.x = Math.PI / 2; m.position.set(X.press, yy, 0); S.group.add(m); prolls.push(m); }
-  S.anim.push(t => prolls.forEach((m, i) => m.rotation.y = (i ? 1 : -1) * t * 1.6));
+  S.mach.push(t => prolls.forEach((m, i) => m.rotation.y = (i ? 1 : -1) * t * 1.6));
   GS.box("plank", X.out, Y, 0, 1.8, 0.2, 1.4); for (let i = 0; i < 7; i++) GS.box("iron#e08a50", X.out, Y + 0.2 + i * 0.1, 0, 1.5, 0.08, 1.1);
   // belts between, each carrying what that step makes
   const seg = (a, b, it, o = {}) => belt(S, [a, BY, 0], [b, BY, 0], { items: [it], ground: () => Y, ...o });
@@ -498,10 +501,10 @@ function buildEther() {
   // stage 2: the extractor on its plinth, its glowing field, its turning rings and motes
   const ex = hx(7, 0), ez = hz(7, 0);
   stackPrism(GS, "b:tex_metal", "b:tex_metal", ex, ez, [[0.5, 1.4, 10.5], [1.0, 1.4, 2.2]]);
-  for (let i = 0; i < 3; i++) { const g = new THREE.Group(); g.position.set(ex, 4 + i * 2.2, ez); S.group.add(g); const gs = new PBD.GeoSet(); gs.prism("iron", "iron", poly(0, 0, 1.6 - i * 0.35), -0.15, 0.15); gs.prism("glow:m:tex_ether", null, poly(0, 0, 1.2 - i * 0.35), 0.16, 0.17); addMeshes(gs, g); S.anim.push(t => g.rotation.y = t * (0.4 + i * 0.25) * (i % 2 ? -1 : 1)); }
+  for (let i = 0; i < 3; i++) { const g = new THREE.Group(); g.position.set(ex, 4 + i * 2.2, ez); S.group.add(g); const gs = new PBD.GeoSet(); gs.prism("iron", "iron", poly(0, 0, 1.6 - i * 0.35), -0.15, 0.15); gs.prism("glow:m:tex_ether", null, poly(0, 0, 1.2 - i * 0.35), 0.16, 0.17); addMeshes(gs, g); S.mach.push(t => g.rotation.y = t * (0.4 + i * 0.25) * (i % 2 ? -1 : 1)); }
   const crystal = new THREE.Group(); crystal.position.set(ex, 11.4, ez); S.group.add(crystal);
   for (const s of [1, -1]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(s > 0 ? 0 : 0.7, s > 0 ? 0.7 : 0, 1.2, 6), mat("glow:m:tex_ether")); m.position.y = s * 0.6; crystal.add(m); }
-  S.anim.push(t => { crystal.rotation.y = t * 0.6; crystal.position.y = 11.4 + Math.sin(t * 1.3) * 0.25; });
+  S.mach.push(t => { crystal.rotation.y = t * 0.6; crystal.position.y = 11.4 + Math.sin(t * 1.3) * 0.25; });
   puffs(S, ex, 1.6, ez, PUFF.ether, { n: 26, life: 4.5, rise: 10, size: 0.16, drift: [0, 0] });
   S.etherLight = { x: ex, y: 4, z: ez, c: lin(0xc34988), p: 2.0, R: 9 }; S.lights.push(S.etherLight, { x: ex, y: 11.4, z: ez, c: lin(0xdd576d), p: 1.4, R: 6 });
   S.anim.push(t => { S.etherLight.p = 1.6 + Math.sin(t * 2.1) * 0.5; });
@@ -518,9 +521,171 @@ function buildEther() {
 }
 
 // ===================================================================
+// 5. Oil (steer-and-sail design 5): a seed-derived field of reservoir pressure, read like the
+// climate (derived, never saved); a pumpjack on a cell over it; the distillation column; the oil plant
+// ===================================================================
+const vnoise = (x, z, s) => { const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz), o = s * 1013;
+  const a = H2(xi + o, zi), b = H2(xi + 1 + o, zi), c = H2(xi + o, zi + 1), d = H2(xi + 1 + o, zi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; };
+const fbm = (x, z, s, oct = 4) => { let t = 0, a = 0.5, f = 1, n = 0; for (let i = 0; i < oct; i++) { t += a * vnoise(x * f, z * f, s + i * 7); n += a; a *= 0.5; f *= 2.03; } return t / n; };
+// A stand-in world for the map: elevation and moisture pick a biome; the reservoir is bigger under
+// sedimentary ground (fields, desert, swamp, the shelf sea) and absent under the high mountains.
+// The cut points are quantiles of this map's elevation and moisture (15% deep sea, 10% shelf, 4% beach,
+// 12% hills, 8% high mountains; the lowland split by moisture), taken once in oilInit.
+const elevAt = (x, z) => fbm(x / 1100, z / 1100, 11, 5), moistAt = (x, z) => fbm(x / 800, z / 800, 23, 3);
+function biomeAt(x, z) { const e = elevAt(x, z), m = moistAt(x, z), Q = OIL.q;
+  return e < Q.deep ? "deep" : e < Q.shelf ? "shelf" : e < Q.beach ? "beach" : e > Q.peaks ? "peaks" : e > Q.hills ? "hills" : m < Q.dry ? "desert" : m > Q.wet ? "swamp" : "fields"; }
+const SEDIMENT = { deep: 0, shelf: 1, beach: 0.8, fields: 1, desert: 1, swamp: 1, hills: 0.45, peaks: 0 };
+const BIOME_PX = { deep: "#191954", shelf: "#15578a", beach: "#eab798", fields: "#559642", desert: "#cfaa81", swamp: "#05582d", hills: "#725244", peaks: "#bfcad7" };
+const BIOME_NAME = { deep: "deep sea", shelf: "shelf sea", beach: "beach", fields: "fields", desert: "desert", swamp: "swamp", hills: "hills", peaks: "high mountains" };
+const oilRaw = (x, z) => SEDIMENT[biomeAt(x, z)] * (0.8 * fbm(x / 420, z / 420, 31, 4) + 0.2 * fbm(x / 36, z / 36, 47, 2));
+const OIL = { MW: 90, MH: 60, mpp: 50, share: 0.06 };
+function oilInit() {
+  if (OIL.thr != null) return OIL;
+  const E = [], M = []; for (let j = 0; j < OIL.MH; j++) for (let i = 0; i < OIL.MW; i++) { E.push(elevAt(i * OIL.mpp, j * OIL.mpp)); M.push(moistAt(i * OIL.mpp, j * OIL.mpp)); }
+  E.sort((a, b) => a - b); M.sort((a, b) => a - b); const qe = f => E[Math.floor(E.length * f)], qm = f => M[Math.floor(M.length * f)];
+  OIL.q = { deep: qe(0.15), shelf: qe(0.25), beach: qe(0.29), hills: qe(0.80), peaks: qe(0.92), dry: qm(0.25), wet: qm(0.8) };
+  const raw = []; for (let j = 0; j < OIL.MH; j++) for (let i = 0; i < OIL.MW; i++) raw.push(oilRaw(i * OIL.mpp, j * OIL.mpp));
+  const sorted = raw.slice().sort((a, b) => a - b); OIL.thr = sorted[Math.floor(sorted.length * (1 - OIL.share))]; OIL.span = (sorted[sorted.length - 1] - OIL.thr) * 0.75;
+  OIL.p = raw.map(pressure01); OIL.covered = OIL.p.filter(v => v > 0).length / OIL.p.length;
+  // the scene sits on fields ground across a field's edge, so the overlay shows where the oil stops:
+  // of the map's fields pixels by a field, the one whose 80 m square is nearest half over oil, strongest
+  const ring = []; for (let a = 0; a < 36; a++) for (const rr of [12, 24, 34]) ring.push([Math.cos(a / 36 * 6.283 + rr) * rr, Math.sin(a / 36 * 6.283 + rr) * rr]);
+  let best = -1; for (let j = 2; j < OIL.MH - 2; j++) for (let i = 2; i < OIL.MW - 2; i++) { const k = j * OIL.MW + i, v = OIL.p[k]; if (v < 0.2 || biomeAt(i * OIL.mpp, j * OIL.mpp) !== "fields") continue;
+    let on = 0, top = 0; for (const [dx, dz] of ring) { const w = pressure01(oilRaw(i * OIL.mpp + dx, j * OIL.mpp + dz)); if (w > 0) on++; top = Math.max(top, w); }
+    const f = on / ring.length, score = top - Math.abs(f - 0.5) * 2; if (score > best) { best = score; OIL.ci = i; OIL.cj = j; } }
+  if (best < 0) { OIL.ci = OIL.MW >> 1; OIL.cj = OIL.MH >> 1; }
+  OIL.ox = OIL.ci * OIL.mpp; OIL.oz = OIL.cj * OIL.mpp;
+  return OIL;
+}
+const pressure01 = r => clamp((r - OIL.thr) / OIL.span, 0, 1);
+const oilAt = (x, z) => pressure01(oilRaw(OIL.ox + x, OIL.oz + z));
+// the map, one pixel 50 m, biome under a violet overlay where there is oil; the scene's square marked
+function drawOilMap(cv, overlay) {
+  oilInit(); const c = cv.getContext("2d"), V = ["#4f1d83", "#7d2dbd", "#9e3ba2", "#c34988", "#dd576d"];
+  for (let j = 0; j < OIL.MH; j++) for (let i = 0; i < OIL.MW; i++) { const v = OIL.p[j * OIL.MW + i]; let col = BIOME_PX[biomeAt(i * OIL.mpp, j * OIL.mpp)];
+    if (overlay && v > 0 && (v > 0.2 || (i + j) % 2 === 0)) col = V[Math.min(4, Math.floor(v * 5))]; c.fillStyle = col; c.fillRect(i, j, 1, 1); }
+  c.fillStyle = "#fffefe"; const x0 = OIL.ci - 2, y0 = OIL.cj - 2; c.fillRect(x0, y0, 5, 1); c.fillRect(x0, y0 + 4, 5, 1); c.fillRect(x0, y0, 1, 5); c.fillRect(x0 + 4, y0, 1, 5);
+}
+// The well: up to 3 t a day at full pressure, falling as its share of the field is drawn:
+// rate = 3 p (1 - D / S), so D(t) = S (1 - e^(-3 p t / S)), S = 9,000 t x p.
+const OIL_DAYS_MAX = 6000;
+const WELL = { p: 0, S: 1 };
+const wellDrawn = d => WELL.S * (1 - Math.exp(-3 * WELL.p * d / WELL.S));
+const wellRate = d => 3 * WELL.p * (1 - wellDrawn(d) / WELL.S);
+function wellReadout() {
+  const el = $("wellro"); if (!el) return; const d = ST.oilDays, D = wellDrawn(d), r = wellRate(d);
+  el.innerHTML = `<dt>Game days pumped</dt><dd>${Math.round(d).toLocaleString("en")}</dd><dt>Drawn so far</dt><dd>${Math.round(D).toLocaleString("en")} t</dd><dt>Rate now</dt><dd>${r.toFixed(2)} t/day</dd><dt>Share left</dt><dd>${Math.round((1 - D / WELL.S) * 100)}%</dd>`;
+  const bar = $("wellbar"); if (bar) bar.style.width = (r / 3 * 100) + "%"; const sl = $("oildays"); if (sl && document.activeElement !== sl) sl.value = Math.round(d);
+  if (CUR && CUR.wellTag) { const t = $("tg" + CUR.wellTag); if (t) t.textContent = `Pumpjack, ${r.toFixed(1)} t/day`; }
+}
+// a thin box stretched between two points (a pitman arm, the polished rod)
+const Yv = new THREE.Vector3(0, 1, 0), tv = new THREE.Vector3();
+function rodBetween(m, a, b, w) { tv.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]); const L = tv.length(); m.scale.set(w, L, w); m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2); m.quaternion.setFromUnitVectors(Yv, tv.normalize()); }
+// the pumpjack: a skid, a samson post, the walking beam and horsehead, the crank and its weights,
+// the wellhead; all of it on one cell, facing +x, its floor at y
+function pumpjack(S, cx, y, cz) {
+  const g = new THREE.Group(); g.position.set(cx, y, cz); S.group.add(g);
+  const GS = new PBD.GeoSet();
+  GS.box("iron", -0.1, 0, 0, 2.6, 0.22, 1.1); GS.box("m:tex_hazard", -0.1, 0.22, 0.56, 2.6, 0.08, 0.02);
+  for (const s of [-1, 1]) { GS.box("iron", 0.05, 0.22, s * 0.36, 0.14, 2.05, 0.14); GS.box("iron", -0.3, 0.22, s * 0.36, 0.12, 1.1, 0.12); }
+  GS.box("iron", 0.05, 1.3, 0, 0.14, 0.12, 0.86); GS.box("iron", 0.05, 2.22, 0, 0.3, 0.2, 0.86);
+  GS.box("m:tex_paint", -0.9, 0.22, 0, 0.7, 0.62, 0.6); GS.box("iron", -1.3, 0.22, 0, 0.36, 0.4, 0.42);
+  GS.box("iron", 1.15, 0.22, 0, 0.32, 0.5, 0.32); GS.box("iron", 1.15, 0.72, 0, 0.18, 0.28, 0.18); GS.box("m:tex_paint", 1.15, 0.5, 0.2, 0.08, 0.12, 0.2);
+  addMeshes(GS, g);
+  const piv = [0.05, 2.42], beam = new THREE.Group(); beam.position.set(piv[0], piv[1], 0); g.add(beam);
+  { const B = new PBD.GeoSet(); B.box("m:tex_paint", -0.1, -0.11, 0, 2.6, 0.22, 0.24); B.box("m:tex_paint", 1.12, -0.95, 0, 0.26, 1.05, 0.34); B.box("m:tex_paint", 1.0, -0.15, 0, 0.3, 0.3, 0.34); B.box("iron", -1.3, -0.2, 0, 0.16, 0.24, 0.9); addMeshes(B, beam); }
+  const crank = new THREE.Group(); crank.position.set(-0.9, 1.05, 0); g.add(crank);
+  { const C = new PBD.GeoSet(); for (const s of [-1, 1]) { C.box("iron", -0.28, -0.06, s * 0.36, 0.7, 0.12, 0.08); C.box("iron#7a7768", -0.62, -0.28, s * 0.38, 0.4, 0.56, 0.14); } C.box("iron", 0, -0.08, 0, 0.16, 0.16, 0.86); addMeshes(C, crank); }
+  const arms = [-1, 1].map(s => { const m = new THREE.Mesh(CUBE, mat("iron")); m.castShadow = true; g.add(m); return [m, s]; });
+  const rod = new THREE.Mesh(CUBE, mat("iron")); g.add(rod);
+  const pose = t => {
+    const th = t * 1.1, pin = [-0.9 + 0.36 * Math.cos(th), 1.05 + 0.36 * Math.sin(th)], phi = -Math.asin(0.36 * Math.sin(th) / 1.35);
+    beam.rotation.z = phi; crank.rotation.z = th;
+    const rot = (lx, ly) => [piv[0] + lx * Math.cos(phi) - ly * Math.sin(phi), piv[1] + lx * Math.sin(phi) + ly * Math.cos(phi)];
+    const e = rot(-1.3, -0.1); arms.forEach(([m, s]) => rodBetween(m, [pin[0], pin[1], s * 0.46], [e[0], e[1], s * 0.46], 0.07));
+    const h = rot(1.22, -1.0); rodBetween(rod, [h[0], h[1], 0], [1.15, 1.0, 0], 0.04);
+  };
+  S.mach.push(t => pose(t));
+  return g;
+}
+function buildOil() {
+  oilInit();
+  const S = newScene("oil"), GS = S.lgs = new PBD.GeoSet(), F = SHEET.fields, N = 14;
+  const yard = (q, r) => hx(q, r) > 1.5 && hx(q, r) < 24 && Math.abs(hz(q, r)) < 9.5;
+  // the well: the strongest cell on the field west of the yard
+  let well = [-5, 1], wp = -1; for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) { if (hexDist(q, r) > 7 || hx(q, r) > -3 || hexDist(q, r) < 3) continue; const v = oilAt(hx(q, r), hz(q, r)); if (v > wp) { wp = v; well = [q, r]; } }
+  WELL.p = wp; WELL.S = Math.round(9000 * wp); S.wellCell = well;
+  const isWell = (q, r) => q === well[0] && r === well[1], tankCell = [well[0] + 1, well[1] - 1];
+  const H = (q, r) => yard(q, r) || isWell(q, r) ? 0.2 : hexDist(q, r) > 11 && H2(q * 3, r + 5) < 0.35 ? 1 : 0;
+  columns(GS, { N, H, skirt: -3, top: (q, r, h) => yard(q, r) ? "m:tex_asphalt" : isWell(q, r) ? "m:tex_concrete" : "a:" + F + ":0", side: (q, r, y, h) => yard(q, r) || isWell(q, r) ? "m:tex_concrete" : y === h ? "a:" + F + ":1" : "a:" + F + ":2" });
+  for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) { const d = hexDist(q, r); if (d > 9 && d < N && !yard(q, r) && H2(q * 5 + 3, r * 3 + 1) < 0.22) treeAt(GS, q, r, H(q, r)); }
+  // the overlay: each cell over the field tinted by its pressure, the field's edge drawn on the cell edges
+  S.overlay = new THREE.Group(); S.group.add(S.overlay);
+  { const byC = {}, edge = [], V = [0x4f1d83, 0x7d2dbd, 0x9e3ba2, 0xc34988, 0xdd576d];
+    for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) { if (hexDist(q, r) > N) continue; const v = oilAt(hx(q, r), hz(q, r)); if (v <= 0) continue;
+      // a glyph, not a wash: an inset hex sized and coloured by the pressure, so the ground still reads
+      const k = Math.min(4, Math.floor(v * 5)), y = H(q, r) + 0.05, c = [hx(q, r), y, hz(q, r)], P = hexPts(q, r), f = 0.3 + 0.35 * v; (byC[k] = byC[k] || []);
+      for (let i = 0; i < 6; i++) { const a = P[i], b = P[(i + 1) % 6]; byC[k].push(...c, c[0] + (b[0] - c[0]) * f, y, c[2] + (b[1] - c[2]) * f, c[0] + (a[0] - c[0]) * f, y, c[2] + (a[1] - c[2]) * f);
+        const nq = q + DIRS[i][0], nr = r + DIRS[i][1]; if (hexDist(nq, nr) > N || oilAt(hx(nq, nr), hz(nq, nr)) <= 0) edge.push(a[0], y + 0.02, a[1], b[0], y + 0.02, b[1]); } }
+    for (const [k, pts] of Object.entries(byC)) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); const m = new THREE.MeshBasicMaterial({ color: V[k], transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }); m.userData.op = 0.75; OVMATS.push(m); S.overlay.add(new THREE.Mesh(g, m)); }
+    const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.Float32BufferAttribute(edge, 3)); const lm = new THREE.LineBasicMaterial({ color: 0xfaaf5c, transparent: true, opacity: 1 }); lm.userData.op = 1; OVMATS.push(lm); S.overlay.add(new THREE.LineSegments(lg, lm)); }
+  // the pumpjack on its cell, a crude tank beside it, the flowline to the yard
+  const wx = hx(...well), wz = hz(...well), tx = hx(...tankCell), tz = hz(...tankCell);
+  pumpjack(S, wx, 0.2, wz);
+  stackPrism(GS, "b:tex_metal", "b:tex_metal", tx, tz, [[1.05, 0, 2.4], [0.4, 2.4, 2.6]]); GS.box("m:tex_asphalt", tx, 1.0, tz + 0.95, 1.2, 0.3, 0.12);
+  GS.box("iron", (wx + 1.15 + tx) / 2, 0.25, (wz + tz) / 2, Math.hypot(tx - wx - 1.15, tz - wz), 0.14, 0.14, Math.atan2(tz - wz, tx - wx - 1.15));
+  const C1 = [hx(3, -1), hz(3, -1)], C2 = [hx(2, -1), hz(2, -1)];   // the column's two cells
+  { const fx = C2[0] - 1.2, fz = C2[1], ax = tx + 0.9, az = tz; GS.box("iron", ax, 0.12, az, 0.14, 0.14, 0.14); const pts = [[ax, az], [ax, fz], [fx, fz]]; for (let i = 0; i < 2; i++) { const [a, b] = [pts[i], pts[i + 1]]; GS.box("iron", (a[0] + b[0]) / 2, 0.12, (a[1] + b[1]) / 2, Math.hypot(b[0] - a[0], b[1] - a[1]) + 0.14, 0.14, 0.14, Math.atan2(b[1] - a[1], b[0] - a[0])); } }
+  S.lights.push({ x: wx - 1.4, y: 2.6, z: wz - 1.6, ...LAMP }); PBD.lampPost(GS, wx - 1.85, 0, wz - 1.6); S.flames.push([wx - 1.4, 2.45, wz - 1.6]);
+  // the refinery: the column (cell 1, four layers), the crude heater (cell 2), four product tanks, the flare
+  stackPrism(GS, "m:tex_white", "m:tex_white", C1[0], C1[1], [[1.0, 0.2, 4.2], [1.2, 1.15, 1.25], [1.2, 2.15, 2.25], [1.2, 3.15, 3.25], [0.6, 4.2, 4.6]]);
+  stackPrism(GS, "iron", "iron", C1[0], C1[1], [[1.25, 0.2, 0.45]]);
+  GS.box("iron", C1[0] - 0.6, 4.6, C1[1], 0.14, 0.9, 0.14); GS.box("iron", C1[0] - 0.95, 5.35, C1[1], 0.85, 0.14, 0.14);
+  GS.box("brick", C2[0], 0.2, C2[1], 2.0, 1.5, 1.7); GS.box("iron", C2[0], 1.7, C2[1], 2.1, 0.15, 1.8); GS.box("glow:m:tex_grate", C2[0] - 0.4, 0.35, C2[1] + 0.86, 0.9, 0.6, 0.04);
+  stackPrism(GS, "iron", "b:tex_metal", C2[0] + 0.5, C2[1] - 0.4, [[0.22, 1.85, 4.3]]); GS.box("b:tex_metal", (C1[0] + C2[0]) / 2 + 0.3, 0.9, C1[1], C1[0] - C2[0] - 1.4, 0.24, 0.24);
+  for (const s of [-1, 1]) GS.box("m:tex_hazard", (C1[0] + C2[0]) / 2, 0.2, C1[1] + s * 1.42, C1[0] - C2[0] + 2.6, 0.06, 0.08);
+  S.lights.push({ x: C2[0] - 0.4, y: 0.7, z: C2[1] + 1.5, c: lin(0xff8a3d), p: 1.6, R: 4.5 });
+  // draw-offs: residue at the bottom layer, fuel oil, diesel, polymer feed at the top; each to its tank
+  const PROD = [["Residue 15%", "m:tex_asphalt", 0.7, [5, 1], 3.3], ["Fuel oil 45%", "m:tex_flare", 1.7, [6, -1], 4.1], ["Diesel 25%", "m:tex_paint", 2.7, [6, -3], 3.3], ["Polymer feed 15%", "b:tex_metal", 3.7, [4, -3], 4.1]];
+  for (const [name, band, py, cell, ty] of PROD) {
+    const x = hx(...cell), z = hz(...cell), a = Math.atan2(z - C1[1], x - C1[0]), sx = C1[0] + Math.cos(a) * 1.0, sz = C1[1] + Math.sin(a) * 1.0, ex = x - Math.cos(a) * 0.95, ez = z - Math.sin(a) * 0.95;
+    stackPrism(GS, "m:tex_white", "m:tex_white", x, z, [[0.95, 0.2, 2.6], [0.45, 2.6, 2.75]]); stackPrism(GS, null, band, x, z, [[1.0, 1.5, 1.9]]);
+    GS.box("iron", (sx + ex) / 2, py - 0.07, (sz + ez) / 2, Math.hypot(ex - sx, ez - sz), 0.14, 0.14, a);
+    if (py > 2.6) GS.box("iron", ex + Math.cos(a) * 0.5, 2.7, ez + Math.sin(a) * 0.5, 0.14, py - 2.7, 0.14);
+    tag(S, name, x, ty, z);
+  }
+  // the flare stack, burning off what the column cannot use: red and white, a flame that flickers
+  const FX = hx(8, -4), FZ = hz(8, -4); stackPrism(GS, "iron", "m:tex_flare", FX, FZ, [[0.28, 0.2, 9.0], [0.5, 0.2, 0.6], [0.36, 9.0, 9.2]]);
+  GS.box("iron", (FX + C1[0]) / 2, 0.3, (FZ + C1[1]) / 2, Math.hypot(FX - C1[0], FZ - C1[1]) - 1.0, 0.14, 0.14, Math.atan2(FZ - C1[1], FX - C1[0]));
+  { const fl = []; for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.7 - i * 0.22, 1, 0.7 - i * 0.22), mat(i === 2 ? "glow:m:tex_white#fff4c8" : i ? "glow:m:tex_grate#ffd080" : "glow:m:tex_grate")); S.group.add(f); fl.push(f); }
+    const fireL = { x: FX, y: 9.8, z: FZ, c: lin(0xff8a3d), p: 1.5, R: 14 }; S.lights.push(fireL);
+    S.anim.push(t => { fl.forEach((f, i) => { const k = 0.75 + 0.35 * Math.abs(Math.sin(t * (6 + i * 2.3) + i) * Math.sin(t * 2.7 + i)); f.scale.y = (1.3 - i * 0.3) * k; f.position.set(FX + Math.sin(t * 3 + i) * 0.06 + i * 0.05, 9.2 + i * 0.12 + f.scale.y / 2, FZ); }); });
+    puffs(S, FX + 0.2, 10.8, FZ, PUFF.smoke, { n: 8, life: 5, rise: 6, size: 0.6 }); }
+  // the control room: lit windows; the yard's lamps, apart, so the pools leave dark between them
+  const CR = [hx(2, 2), hz(2, 2)]; GS.box("m:tex_concrete", CR[0], 0.2, CR[1], 2.6, 2.6, 2.2); GS.box("iron", CR[0], 2.8, CR[1], 2.8, 0.18, 2.4); GS.box("boards", CR[0] - 0.7, 0.2, CR[1] + 1.11, 0.7, 1.7, 0.04);
+  GS.box("glow:m:tex_window", CR[0] + 0.45, 1.0, CR[1] + 1.11, 1.3, 1.1, 0.04); GS.box("glow:m:tex_window", CR[0] + 1.31, 1.0, CR[1], 0.04, 1.1, 1.5);
+  S.lights.push({ x: CR[0] + 0.45, y: 1.5, z: CR[1] + 1.9, c: lin(0xffc070), p: 0.9, R: 3.6 }, { x: CR[0] + 2.1, y: 1.5, z: CR[1], c: lin(0xffc070), p: 0.8, R: 3.4 });
+  for (const [x, z] of [[hx(4, 1) + 0.6, hz(4, 1)], [hx(6, -3), hz(6, -3) - 1.0], [hx(7, 0) + 1.0, hz(7, 0)]]) lampPost(S, GS, x, 0.2, z);
+  // the column's draw-off lamp, high on the column, as a refinery lights its ladders
+  S.lights.push({ x: C1[0] + 1.3, y: 3.4, z: C1[1] + 0.6, c: lin(0xfff0c8), p: 0.8, R: 4 }); S.flames.push([C1[0] + 1.15, 3.4, C1[1] + 0.55]);
+  addMeshes(GS, S.group); finish(S);
+  tag(S, "Pumpjack, 3.0 t/day", wx, 3.6, wz, "warm"); S.wellTag = S.tags.length - 1; tag(S, "Crude tank", tx, 3.3, tz);
+  tag(S, "Distillation column: 2 cells, 4 layers", C1[0], 9.2, C1[1], "warm"); tag(S, "Crude heater", C2[0] - 0.4, 2.4, C2[1] + 0.6); tag(S, "Flare stack", FX, 11.4, FZ, "warm"); tag(S, "Control room", CR[0], 3.6, CR[1]);
+  S.cams = { overview: { tx: 2, ty: 0, tz: 0, dist: 50, yaw: 0.25, pitch: 0.62 }, well: { tx: wx + 0.6, ty: 1.4, tz: wz + 0.5, dist: 14, yaw: 0.55, pitch: 0.36 }, refinery: { tx: C1[0] + 1.5, ty: 2.5, tz: C1[1] + 0.5, dist: 25, yaw: 0.35, pitch: 0.42 } };
+  S.cam = S.cams[ST.oilView] || S.cams.overview;
+  S.status = () => `oil field L0 | ${BIOME_NAME[biomeAt(OIL.ox, OIL.oz)]} | pressure ${WELL.p.toFixed(2)} under the well | ${ST.run ? "running" : "machines still"}`;
+  S.hot = [["m:pumpjack", "Pumpjack", 1], ["m:oil-refinery", "Distillation column", 1], ["m:oil-plant", "Oil plant", 1], ["m:crude", "Crude oil", 40], ["m:fuel-oil", "Fuel oil", 18], ["m:diesel", "Diesel", 10], ["c:polymer", "Polymer feed", 6], ["m:asphalt", "Asphalt", 6], ["m:pole", "Power pole", 12], ["g:hand", "Hand"]];
+  S.sel = 0;
+  S.group.userData.oil = true;
+  return S;
+}
+function setRun(v) { ST.run = v; const b = $("tRun"); b.setAttribute("aria-pressed", v); b.textContent = v ? "Stop machines" : "Run machines"; const p = $("pjRun"); if (p) { p.setAttribute("aria-pressed", v); p.textContent = v ? "Stop the pumpjack" : "Run the pumpjack"; } status(); }
+
+// ===================================================================
 // 4. Power: five generators, one at a time on its own ground
 // ===================================================================
 const GENS = {
+  oil: { name: "Oil plant", icon: "oil-plant", tier: "Mid", out: () => 1000, fuel: "Fuel oil from the distillation column (section 5): 250 kg a game hour at full load, 25 kg an hour per 100 kW, the ship oil engine's rate", foot: "12 cells: boiler and turbine hall, 2 storeys; 2 tank cells; stack 15 m", rule: "Anywhere on solid ground, fed by pipe or by tanker. Smoke: no town within 6 cells.", note: "The coal plant's layout on fuel oil: tanks for a hopper, burners for a grate, a steel stack. 1,000 kW: above the coal plant, below fission; five pumpjacks keep it at full load." },
   coal: { name: "Coal plant", icon: "coal-plant", tier: "Mid", out: () => 600, fuel: "Coal, 1 per 8 s at full load (450 per game hour)", foot: "7 cells, 2 storeys; stack 12 m", rule: "Anywhere on solid ground. Smoke: no town within 6 cells.", note: "The first steady power: a boiler hall, a coal hopper fed by belt, a brick stack." },
   wind: { name: "Wind turbines", icon: "wind", tier: "Mid", out: () => 3 * windKW(ST.wind), fuel: "None. Output with the wind: cut in 3 m/s, rated 12 m/s, cut out 25 m/s", foot: "1 cell each, 14 m tall; 3 cells apart", rule: "On a rise: the cell must stand 2 layers above every cell within 3. Rotor clear of trees.", note: "Three turbines on a hill. The slider is the wind; weather sets it in the game." },
   geo: { name: "Geothermal", icon: "geothermal", tier: "Mid-late", out: () => 400, fuel: "None. Steady day and night", foot: "4 cells over a vent", rule: "Only over a hot vent: basalt wastes or a volcanic world's sulfur cells, found by their steam.", note: "Wells over the vents, steam piped to a turbine house." },
@@ -531,8 +696,8 @@ const GENS = {
   antimatter: { name: "Antimatter plant", icon: "antimatter", tier: "Late", out: () => (GRID.cons.collider ? 16000 : 0), fuel: "Antimatter cells from the collider: 1 a game hour at full output", foot: "19 cells inside a 2-cell berm of basalt", rule: "Shielding berm all round, 3 layers high; no building within 4 cells.", note: "Containment vessels behind heavy shielding. A battery, not a source: 20,000 kW at the collider makes a cell that gives back 16,000 kW for an hour, anywhere you carry it." },
   dyson: { name: "Dyson swarm", icon: "dyson", tier: "End", out: () => Math.round(20000 * ST.swarm), fuel: "Sunlight. Each drone: 2 alloy plate, 1 circuit, 1 ether shard; 100,000 drones for the whole swarm", foot: "Launch rail 40 m, drone factory 7 cells, ground receiver 19 cells", rule: "Launch site with clear sky; a receiver anywhere the relays can see.", note: "The top of the ladder: a drone factory launches collectors to orbit the star; relay stations beam the power down to a receiver field." },
 };
-const TIERS = [["I", "Coal", ["coal"]], ["II", "Wind, water, heat", ["wind", "hydro", "geo"]], ["III", "Fission", ["nuclear"]], ["IV", "Fusion", ["fusion"]], ["V", "Antimatter", ["collider", "antimatter"]], ["VI", "Dyson swarm", ["dyson"]]];
-const GEN_ORDER = TIERS.flatMap(t => t[2]);
+const TIERS = [["I", "Coal and oil", ["coal", "oil"]], ["II", "Wind, water, heat", ["wind", "hydro", "geo"]], ["III", "Fission", ["nuclear"]], ["IV", "Fusion", ["fusion"]], ["V", "Antimatter", ["collider", "antimatter"]], ["VI", "Dyson swarm", ["dyson"]]];
+const GEN_ORDER = TIERS.flatMap(t => t[2]);   // coal, oil, then wind: oil sits between coal and wind
 const windKW = v => v < 3 || v > 25 ? 0 : Math.round(150 * Math.min(1, Math.pow((v - 3) / 9, 3)));
 function genGround(S, o) { const GS = S.lgs; columns(GS, { N: 12, skirt: -4, ...o }); }
 function buildPower(id) {
@@ -555,6 +720,23 @@ function buildPower(id) {
     for (const [x, z] of [[-9, -4], [7, 4.5], [6, -5]]) lampPost(S, GS, x, 0.2, z);
     tag(S, "Coal hopper", hx0, 6, 0); tag(S, "Boiler hall, 600 kW", 0, 6.2, 0, "warm"); tag(S, "Stack", 2.4, 15.2, -1);
     S.cam = { tx: -1, ty: 3, tz: 0, dist: 34, yaw: 0.55, pitch: 0.38 };
+  } else if (id === "oil") {
+    const pad = (q, r) => hexDist(q, r) <= 5, H = (q, r) => pad(q, r) ? 0.2 : 0;
+    genGround(S, { H, top: (q, r, h) => pad(q, r) ? "m:tex_asphalt" : grassTop(), side: (q, r, y, h) => pad(q, r) ? "m:tex_concrete" : grassSide(q, r, y, h) }); trees(H, (q, r) => !pad(q, r));
+    // the boiler hall and, lower, the turbine hall with its lit windows
+    GS.box("m:tex_concrete", -0.5, 0.2, -0.5, 7, 5.6, 4.6); GS.box("brick", -0.5, 0.2, -0.5, 7.2, 1.0, 4.8); GS.box("iron", -0.5, 5.8, -0.5, 7.4, 0.3, 4.8);
+    for (const x of [-2.5, -0.5, 1.5]) GS.box("glow:m:tex_grate#ffc890", x, 1.4, 1.81, 1.0, 0.7, 0.04);
+    GS.box("m:tex_concrete", 5.2, 0.2, -0.2, 4.4, 3.8, 4.0); GS.box("iron", 5.2, 4.0, -0.2, 4.6, 0.25, 4.2);
+    GS.box("glow:m:tex_window", 5.2, 1.6, 1.81, 3.2, 1.4, 0.04); GS.box("glow:m:tex_window", 7.41, 1.6, -0.2, 0.04, 1.4, 2.6);
+    stackPrism(GS, "iron", "b:tex_metal", 1.4, -2.0, [[0.75, 6.1, 15.4], [0.9, 15.4, 15.8], [0.82, 13.2, 14.2]]); stackPrism(GS, null, "m:tex_flare", 1.4, -2.0, [[0.84, 13.25, 14.15]]);
+    // two fuel oil tanks in a bund, piped to the burners
+    for (const z of [-3.2, 2.2]) { stackPrism(GS, "m:tex_white", "m:tex_white", -8.2, z, [[1.5, 0.2, 3.8], [0.6, 3.8, 4.0]]); stackPrism(GS, null, "m:tex_flare", -8.2, z, [[1.56, 2.3, 2.8]]); GS.box("iron", -5.6, 0.45, z * 0.5, 3.2, 0.18, 0.18, Math.atan2(-z * 0.5, 2.4)); }
+    GS.box("m:tex_concrete", -8.2, 0.2, -0.5, 0.3, 0.5, 9.4); GS.box("m:tex_concrete", -10.2, 0.2, -0.5, 0.3, 0.5, 9.4);
+    puffs(S, 1.4, 16, -2.0, PUFF.smoke, { n: 16, life: 7, rise: 11, size: 1.3 });
+    S.lights.push({ x: -0.5, y: 1.8, z: 2.8, c: lin(0xff8a3d), p: 1.8, R: 6.5 }, { x: 5.2, y: 1.8, z: 2.6, c: lin(0xffc070), p: 0.9, R: 4.2 }, { x: 8.2, y: 1.8, z: -0.2, c: lin(0xffc070), p: 0.8, R: 3.6 });
+    for (const [x, z] of [[-11.5, -5.5], [-6, 5.5], [9, 4.5], [4, -6]]) lampPost(S, GS, x, 0.2, z);
+    tag(S, "Fuel oil tanks", -8.2, 5.2, -0.5); tag(S, "Boiler hall, 1,000 kW", -0.5, 7.0, -0.5, "warm"); tag(S, "Turbine hall", 5.2, 5.0, -0.2); tag(S, "Stack", 1.4, 17.4, -2.0);
+    S.cam = { tx: -1, ty: 3.5, tz: 0, dist: 38, yaw: 0.55, pitch: 0.38 };
   } else if (id === "wind") {
     const H = (q, r) => Math.max(0, Math.round(4 - hexDist(q, r) * 0.55 + (H2(q + 9, r + 9) - 0.5) * 0.6));
     genGround(S, { H, top: grassTop, side: grassSide }); trees(H, (q, r) => hexDist(q, r) > 7);
@@ -574,7 +756,7 @@ function buildPower(id) {
       tag(S, "", x, y + 21, z);
     }
     S.tags.length = 0; tag(S, "Turbine, rated 150 kW", hx(0, 0), H(0, 0) + 21.5, 0);
-    S.anim.push((t, dt) => S.rotors.forEach((r, i) => r.rotation.x += dt * (windKW(ST.wind) > 0 ? 0.12 + ST.wind * 0.09 : 0.02) * (1 + i * 0.05)));
+    S.anim.push((t, dt) => S.rotors.forEach((r, i) => r.rotation.x += dt * (windKW(ST.wind) > 0 ? 0.12 + ST.wind * 0.09 : ST.wind > 0 ? 0.02 : 0) * (1 + i * 0.05)));
     S.lights.push({ x: hx(-1, 3), y: H(-1, 3) + 2.25, z: hz(-1, 3), ...LAMP }); PBD.lampPost(GS, hx(-1, 3) - 0.45, H(-1, 3), hz(-1, 3)); S.flames.push([hx(-1, 3), H(-1, 3) + 2.25, hz(-1, 3)]);
     GS.box("m:tex_concrete", hx(-1, 3) + 1.4, H(-1, 3), hz(-1, 3), 1.4, 1.6, 1.2); GS.box("iron", hx(-1, 3) + 1.4, H(-1, 3) + 1.6, hz(-1, 3), 1.6, 0.15, 1.4);
     tag(S, "Substation", hx(-1, 3) + 1.4, H(-1, 3) + 2.4, hz(-1, 3));
@@ -633,7 +815,7 @@ function buildPower(id) {
     for (let q = -14; q <= 14; q++) for (let r = -14; r <= 14; r++) { const dd = Math.hypot(hx(q, r), hz(q, r)); if (dd < RR - 5 && dd > 6 && H2(q * 3 + 1, r * 7 + 9) < 0.12) treeAt(GS, q, r, 0); }
     for (let i = 0; i < 96; i++) { const a = (i + 0.5) / 96 * Math.PI * 2; GS.box("glow:m:tex_ether#74effe", Math.cos(a) * RR, 1.02, Math.sin(a) * RR, 1.6, 0.06, 0.35, a + Math.PI / 2); }
     const mote = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({ color: 0xd2f8ff })); S.group.add(mote);
-    S.anim.push(t => { const a = t * 1.7; mote.position.set(Math.cos(a) * RR, 1.4, Math.sin(a) * RR); });
+    S.mach.push(t => { const a = t * 1.7; mote.position.set(Math.cos(a) * RR, 1.4, Math.sin(a) * RR); });
     GS.box("m:tex_white", RR, 1, 0, 7, 6, 7); GS.box("iron", RR, 7, 0, 7.4, 0.3, 7.4); GS.box("m:tex_hazard", RR - 3.52, 1, 0, 0.04, 0.4, 7); GS.box("glow:m:tex_ether#74effe", RR - 3.52, 3.2, 0, 0.04, 1.2, 3.6);
     GS.box("m:tex_concrete", RR - 9, 0, 6, 5, 3.4, 4); GS.box("iron", RR - 9, 3.4, 6, 5.2, 0.2, 4.2); GS.box("glow:m:tex_plasma", RR - 11.52, 1.2, 6, 0.04, 0.8, 2.4);
     for (const a of [0.9, 2.2, 3.5, 4.8]) lampPost(S, GS, Math.cos(a) * (RR - 3), 0, Math.sin(a) * (RR - 3));
@@ -660,7 +842,7 @@ function buildPower(id) {
     const r0 = [fx0 - 3, 0.6, 1.5], r1 = [-31, 20, 1.5], steps = 28;
     for (let i = 0; i < steps; i++) { const f = (i + 0.5) / steps, x = r0[0] + (r1[0] - r0[0]) * f, y = r0[1] + (r1[1] - r0[1]) * f; GS.box("b:tex_metal", x, y, r0[2], (r0[0] - r1[0]) / steps + 0.02, 0.4, 1.6); if (i % 4 === 2) GS.box("iron", x, 0, r0[2], 0.35, y, 0.35); }
     const pods = []; for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.3, 0.6), mat("m:tex_panel")); S.group.add(m); pods.push(m); }
-    S.anim.push(t => pods.forEach((m, i) => { const a = (t * 0.2 + i / 4) % 1; if (a < 0.6) { const f = a / 0.6; m.position.set(r0[0] + (r1[0] - r0[0]) * f, r0[1] + (r1[1] - r0[1]) * f + 0.55, r0[2]); } else { const f = (a - 0.6) / 0.4; m.position.set(r1[0] - f * 25, r1[1] + f * 60, r0[2]); } }));
+    S.mach.push(t => pods.forEach((m, i) => { const a = (t * 0.2 + i / 4) % 1; if (a < 0.6) { const f = a / 0.6; m.position.set(r0[0] + (r1[0] - r0[0]) * f, r0[1] + (r1[1] - r0[1]) * f + 0.55, r0[2]); } else { const f = (a - 0.6) / 0.4; m.position.set(r1[0] - f * 25, r1[1] + f * 60, r0[2]); } }));
     // the receiver: a field of collector cells round a tower, its beam from the relays
     const fx = hx(6, 3), fz = hz(6, 3);
     stackPrism(GS, "iron", "b:tex_metal", fx, fz, [[0.5, 0, 6], [1.4, 6, 6.6]]);
@@ -740,7 +922,6 @@ function buildSwarm() {
       const on = f > 0.02; bm.visible = on; tmp.subVectors(home.position, g.position); const l = tmp.length() - 4; tmp.normalize(); bm.scale.set(1, l, 1); bm.position.copy(g.position).addScaledVector(tmp, l / 2); bm.quaternion.setFromUnitVectors(Y, tmp);
       if (on) segs.push(g.position.x * 0.32, g.position.y * 0.32, g.position.z * 0.32, g.position.x, g.position.y, g.position.z); });
     inLines.geometry.setAttribute("position", new THREE.Float32BufferAttribute(segs, 3));
-    home.rotation.y += dt * 0.05;
   });
   tag(S, "Halcyon", 0, 9, 0); tag(S, "Pale Blue: the ground receiver", 58, 5.5, 14); tag(S, "Relay stations", 58, 12, 14, "warm"); tag(S, "END GAME &middot; Collector drones", 0, 21, 0, "late");
   S.cam = { tx: 26, ty: 0, tz: 6, dist: 80, yaw: 0.25, pitch: 0.42 };
@@ -755,11 +936,12 @@ function buildSwarm() {
 const SCENES = {};
 let CUR = null;
 const sceneId = () => ST.tab === "power" ? "power-" + ST.gen + (ST.gen === "dyson" && ST.space ? "-space" : "") : ST.tab;
-function getScene(id) { if (!SCENES[id]) { SCENES[id] = id === "mining" ? buildMining() : id === "refining" ? buildRefining() : id === "ether" ? buildEther() : id === "power-dyson-space" ? buildSwarm() : buildPower(id.slice(6)); SCENES[id].group.visible = false; scene.add(SCENES[id].group); } return SCENES[id]; }
+function getScene(id) { if (!SCENES[id]) { SCENES[id] = id === "mining" ? buildMining() : id === "oil" ? buildOil() : id === "refining" ? buildRefining() : id === "ether" ? buildEther() : id === "power-dyson-space" ? buildSwarm() : buildPower(id.slice(6)); SCENES[id].group.visible = false; scene.add(SCENES[id].group); } return SCENES[id]; }
 const ORB = { tx: 0, ty: 0, tz: 0, dist: 40, yaw: 0.5, pitch: 0.5 };
 function show() {
   if (CUR) CUR.group.visible = false;
-  CUR = getScene(sceneId()); CUR.group.visible = true; Object.assign(ORB, CUR.cam); placeCam();
+  CUR = getScene(sceneId()); CUR.group.visible = true; Object.assign(ORB, CUR.cams ? CUR.cams[ST.oilView] || CUR.cams.overview : CUR.cam); placeCam();
+  if (CUR.overlay) CUR.overlay.visible = ST.overlay;
   $("tags").innerHTML = CUR.tags.map((t, i) => `<div class="tag3d ${t.cls}" id="tg${i}">${t.text}</div>`).join("");
   PBD.setLights(CUR.lights); applyTime(); hotbar(); status();
 }
@@ -773,7 +955,8 @@ function applyTime() {
   if (n) { sun.color.set(0x8fa6d8); sun.intensity = 0.018; sun.position.set(-30, 60, 40); hemi.intensity = 0.004; hemi.color.set(0x34405a); hemi.groundColor.set(0x1a1a22); }
   else { sun.color.set(0xfff0d8); sun.intensity = 1.4; sun.position.set(45, 55, 30); hemi.intensity = 0.45; hemi.color.set(0xc8dcea); hemi.groundColor.set(0x5a5040); }
   PBD.LU.uLamp.value = n ? 1.15 : 0; LAMPMAT.color.set(n ? 0xffd9a0 : 0x6a655a); stars.material.opacity = n ? 1 : 0;
-  for (const m of GLOWS) m.color.copy(m.userData.base).multiplyScalar(n ? 1 : 0.8);
+  for (const m of GLOWS) n || !m.userData.day ? m.color.copy(m.userData.base).multiplyScalar(n ? 1 : 0.8) : m.color.copy(m.userData.day);
+  for (const m of OVMATS) m.opacity = m.userData.op * (n ? 0.35 : 1);
   PUFF.ether.color.set(n ? 0xdd576d : 0xc34988);
   $("tDay").setAttribute("aria-pressed", !n); $("tNight").setAttribute("aria-pressed", n);
 }
@@ -858,6 +1041,25 @@ function side() {
     setT(); $("target").addEventListener("change", e => { ST.target = e.target.value; setT(); });
     $("st1").addEventListener("click", () => { ST.stage = 1; Object.assign(ORB, { tx: 0, ty: 1.5, tz: -1, dist: 30, yaw: 0.35, pitch: 0.5 }); placeCam(); side(); status(); });
     $("st2").addEventListener("click", () => { ST.stage = 2; Object.assign(ORB, { tx: hx(7, 0), ty: 6, tz: 0, dist: 26, yaw: 0.9, pitch: 0.32 }); placeCam(); side(); status(); });
+  } else if (ST.tab === "oil") {
+    const SPLIT = [["m:fuel-oil", "Fuel oil", 0.45], ["m:diesel", "Diesel", 0.25], ["c:polymer", "Polymer feed", 0.15], ["m:asphalt", "Residue (asphalt)", 0.15]];
+    el.innerHTML = `<div class="field"><span>Look at</span><div class="gens" style="grid-template-columns:repeat(3,1fr)">${[["overview", "The field"], ["well", "The well"], ["refinery", "The column"]].map(([v, l]) => `<button data-ov="${v}" aria-pressed="${ST.oilView === v}">${l}</button>`).join("")}</div></div>
+      <div class="field"><span>Map &middot; oil overlay (after a survey drill)</span><canvas id="oilmap" width="${OIL.MW}" height="${OIL.MH}" style="width:${OIL.MW * 3}px;max-width:100%;image-rendering:pixelated;border:1px solid var(--hudline)" aria-label="A map of the region with the oil field overlay; the white square is the scene"></canvas>
+        <div class="seg"><button class="btn" id="ovOn" aria-pressed="${ST.overlay}">Oil overlay on</button><button class="btn" id="ovOff" aria-pressed="${!ST.overlay}">Off</button></div>
+        <div class="keys">One pixel is 50 m. Violet is reservoir pressure, brighter is stronger; the white square is the view. Oil lies under ${(OIL.covered * 100).toFixed(1)}% of this map, none under the high mountains (pale grey) or the deep sea.</div>
+        <dl class="stats"><dt>Dowsing, under the well</dt><dd>${WELL.p.toFixed(2)}</dd><dt>Under the column</dt><dd>${oilAt(hx(3, -1), hz(3, -1)).toFixed(2)}</dd><dt>Ground</dt><dd style="font-family:var(--body)">${BIOME_NAME[biomeAt(OIL.ox, OIL.oz)]}</dd></dl></div>
+      <div class="mpanel"><h3>Pumpjack &middot; 15 kW</h3><button class="btn" id="pjRun" aria-pressed="${ST.run}">${ST.run ? "Stop the pumpjack" : "Run the pumpjack"}</button>
+        <dl class="stats"><dt>Pressure here</dt><dd>${WELL.p.toFixed(2)}</dd><dt>The well's share</dt><dd>${WELL.S.toLocaleString("en")} t</dd></dl>
+        <dl class="stats" id="wellro"></dl><div class="meter"><i id="wellbar"></i></div><div class="keys" style="font-size:11px">Rate against the 3 t/day most: 3 &times; pressure &times; share left. Running, a second is 40 game days.</div>
+        <div class="field"><span>Game days pumped</span><input type="range" id="oildays" min="0" max="${OIL_DAYS_MAX}" step="10" value="${Math.round(ST.oilDays)}"></div></div>
+      <div class="mpanel"><h3>Distillation column &middot; 150 kW</h3><div class="io"><div class="slot">${img("m:crude")}<span class="n">1 t</span></div><div><div class="meter"><i data-run="20" style="width:30%"></i></div><div class="keys" style="font-size:11px">1 t of crude in 20 s</div></div><div class="slot">${img("m:fuel-oil")}<span class="n">.45</span></div></div>
+        <div class="rows">${SPLIT.map(([k, n, f]) => `<div class="row"><span>${img(k)}</span><span>${n}</span><span class="v">${f.toFixed(2)} t</span></div>`).join("")}</div></div>`;
+    drawOilMap($("oilmap"), ST.overlay); wellReadout();
+    for (const b of el.querySelectorAll("[data-ov]")) b.addEventListener("click", () => { ST.oilView = b.dataset.ov; location.hash = hashFor(); });
+    const ov = v => { ST.overlay = v; if (CUR.overlay) CUR.overlay.visible = v; side(); };
+    $("ovOn").addEventListener("click", () => ov(true)); $("ovOff").addEventListener("click", () => ov(false));
+    $("pjRun").addEventListener("click", () => setRun(!ST.run));
+    $("oildays").addEventListener("input", e => { ST.oilDays = +e.target.value; wellReadout(); });
   } else {
     const G = GENS[ST.gen];
     const tierOf = k => TIERS.find(t => t[2].includes(k)), kwOf = g => g.consumer ? g.draw : g.out();
@@ -896,6 +1098,7 @@ const RECIPES = [
   ["Rolling press", "m:press", [["c:copper-ingot", 1]], [["m:wire", 4]], 3, 60, "Wire for poles: one spool spans 4 cells."],
 ];
 function sheets() {
+  const ocell = ([k, t]) => `<span class="chip">${img(k)}${t}</span>`;
   const S = $("sheets"), cell = ([k, n]) => `<span class="chip">${k.startsWith("a:") ? tileImg(k) : img(k)}${n} ${NAMES[k] || k}</span>`;
   const blocks = {
     mining: `<section><div class="sec-head"><div class="eyebrow">1 &middot; Strip mining</div><h2>A pit cut a layer at a time</h2><p class="lede">The digger is a placed machine that takes cells the player marks, one 1 m layer at a time, and drops what it digs on its belt instead of in the player's pack. Its benches are whole cells: a bench is one cell wide and one layer high, so the pit steps down the way a dug hole in the game already does, and every face shows the strata the generator laid.</p></div>
@@ -923,10 +1126,26 @@ function sheets() {
       <div class="gridbox"><svg id="grid" role="img" aria-label="Power grid: generators on the left, poles in the middle, machines on the right"></svg></div>
       <div class="sd" id="sd"></div>
       <div class="cards">${GEN_ORDER.map(k => [k, GENS[k]]).map(([k, g]) => `<div class="card ${g.tier === "Late" || g.tier === "End" ? "late" : ""}"><div class="head">${img("m:" + g.icon, 64)}<div><div class="eyebrow">Tier ${TIERS.find(t => t[2].includes(k))[0]} &middot; ${g.tier}</div><h3>${g.name}</h3></div></div><dl><dt>${g.consumer ? "Draws" : "Output"}</dt><dd>${k === "wind" ? "0 to 150 kW each" : k === "hydro" ? "0 to 500 kW" : k === "dyson" ? "0 to 2,000,000 kW with the swarm" : k === "antimatter" ? "16,000 kW per cell burning" : g.consumer ? g.draw.toLocaleString("en") + " kW" : g.out().toLocaleString("en") + " kW"}</dd><dt>Fuel</dt><dd>${g.fuel}</dd><dt>Footprint</dt><dd>${g.foot}</dd><dt>Placement</dt><dd>${g.rule}</dd></dl></div>`).join("")}</div></section>`,
+    oil: `<section><div class="sec-head"><div class="eyebrow">5 &middot; Oil</div><h2>From the field to the grid</h2><p class="lede">Oil is a field, not cells: a seed-derived map of reservoir pressure under the land and the shallow sea, about 6% of the surface, bigger under sedimentary ground and absent under the high mountains. It is read like the climate, derived and never saved, so no cell of any world changes and an old world has the same fields as a new one. A pumpjack on a cell over it draws crude; a distillation column splits the crude; fuel oil runs the oil plant and ships' oil engines, diesel the engines, polymer feed the chemistry, and the residue becomes asphalt for roads.</p></div>
+      <div class="flow" aria-label="The oil chain, in the HUD's slots">${[["m:pumpjack", "Pumpjack", "3 t/day most"], ["m:crude", "Crude", "1 t"], ["m:oil-refinery", "Column", "150 kW"], ["m:fuel-oil", "Fuel oil", "0.45 t"], ["m:diesel", "Diesel", "0.25 t"], ["c:polymer", "Polymer feed", "0.15 t"], ["m:asphalt", "Asphalt", "0.15 t"]].map(([k, n, s], i) => `${i ? `<span class="ar">${i > 3 ? "+" : "&rarr;"}</span>` : ""}<div class="st"><div class="slot">${img(k, 64)}</div>${n}<small>${s}</small></div>`).join("")}</div>
+      <div class="cards">
+        <div class="card"><div class="head">${img("m:crude", 64)}<div><div class="eyebrow">The field</div><h3>Reservoir pressure</h3></div></div><dl><dt>Is</dt><dd>A 2D field from the world seed, 0 to 1; not a block, never saved</dd><dt>Where</dt><dd>About 6% of the surface; fields, desert, swamp and the shelf sea most, hills half, high mountains and deep sea none</dd><dt>Found by</dt><dd>The map's Oil overlay once a survey drill is built, and a dowsing readout of the pressure underfoot</dd></dl></div>
+        <div class="card"><div class="head">${img("m:pumpjack", 64)}<div><div class="eyebrow">Draw</div><h3>Pumpjack</h3></div></div><dl><dt>Place</dt><dd>On one cell over the field; offshore, a rig on piles</dd><dt>Gives</dt><dd>Up to 3 t of crude a day: 3 &times; the pressure under it, falling as its share of the field is drawn down</dd><dt>Saved</dt><dd>A well is a stored record (position, drawn total) naming whoever built it; the field it reads is not</dd><dt>Power</dt><dd>15 kW</dd></dl></div>
+        <div class="card"><div class="head">${img("m:oil-refinery", 64)}<div><div class="eyebrow">Recipe</div><h3>Distillation column</h3></div></div><dl><dt>Size</dt><dd>2 cells, 4 layers: the column and its crude heater</dd><dt>In</dt><dd><span class="chip">${img("m:crude")}1 t Crude</span></dd><dt>Out</dt><dd><span class="chip">${img("m:fuel-oil")}0.45 t Fuel oil</span><span class="chip">${img("m:diesel")}0.25 t Diesel</span><span class="chip">${img("c:polymer")}0.15 t Polymer feed</span><span class="chip">${img("m:asphalt")}0.15 t Residue (asphalt)</span></dd><dt>Time, power</dt><dd>20 s a tonne, 150 kW</dd><dt>Night</dt><dd>The flare stack burns what it cannot use; the brightest light on the plain</dd></dl></div>
+        <div class="card"><div class="head">${img("m:oil-plant", 64)}<div><div class="eyebrow">Tier I &middot; Mid</div><h3>Oil plant</h3></div></div><dl><dt>Output</dt><dd>1,000 kW, a boiler and turbine on fuel oil</dd><dt>Burns</dt><dd>About 250 kg of fuel oil a game hour at full load, 6 t a day</dd><dt>Ladder</dt><dd>Between coal and wind (section 4)</dd><dt>Smoke</dt><dd>Like the coal plant's: no town within 6 cells</dd></dl></div>
+      </div>
+      <div class="tbl"><table><thead><tr><th>Machine</th><th>In</th><th>Out</th><th>Time</th><th>Power</th><th>Note</th></tr></thead><tbody>${OIL_RECIPES.map(([m, mi, ins, outs, t, kw, note]) => `<tr><td><span class="chip">${img(mi)}${m}</span></td><td>${ins.map(ocell).join("") || "&ndash;"}</td><td>${outs.map(ocell).join("") || "power"}</td><td class="num">${t}</td><td class="num">${kw}</td><td style="color:var(--muted);font-size:13px">${note}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note"><b>The numbers balance:</b> at 25 kg of fuel oil an hour per 100 kW, the 1,000 kW plant burns 6 t of fuel oil a day. A pumpjack at its best gives 3 t of crude a day, so 1.35 t of fuel oil: about five wells keep one plant at full load, fewer as it runs at part load. Old saves: the field is derived, so an old world has oil where a new one with the same seed does.</p></section>`,
   };
   S.innerHTML = blocks[ST.tab] + `<section style="margin-top:28px"><div class="sec-head"><div class="eyebrow">Decisions</div><h2>Recommendations taken</h2><p class="lede">Nothing here is asked of the owner: none of it has a choice to look at side by side. Each is recorded as "recommendation taken (ask only with screenshots)" and can be overturned on the tracker.</p></div><div class="qs">${DEC.map(([q, r]) => `<div class="q"><h3>${q}</h3><p class="rec"><b>Taken:</b> ${r}</p></div>`).join("")}</div></section>`;
   paintTiles(S); if (ST.tab === "power") grid();
 }
+const OIL_RECIPES = [
+  ["Pumpjack", "m:pumpjack", [], [["m:crude", "up to 3 t Crude"]], "a day", "15 kW", "3 t a day at pressure 1, falling as the well's share of the field is drawn."],
+  ["Distillation column", "m:oil-refinery", [["m:crude", "1 t Crude"]], [["m:fuel-oil", "0.45 t Fuel oil"], ["m:diesel", "0.25 t Diesel"], ["c:polymer", "0.15 t Polymer feed"], ["m:asphalt", "0.15 t Residue (asphalt)"]], "20 s", "150 kW", "The polymer feed is the polymer the crafting chain already uses; asphalt is for roads."],
+  ["Oil plant", "m:oil-plant", [["m:fuel-oil", "250 kg Fuel oil"]], [], "an hour", "+1,000 kW", "At full load; less fuel at part load."],
+  ["Oil engine (a ship's)", "m:diesel", [["m:fuel-oil", "0.15 t Fuel oil"]], [], "an hour", "600 kW", "The drydock's level 4 engine: 25 kg an hour per 100 kW."],
+];
 const NAMES = { "c:copper-ore": "Copper ore", "c:iron-ore": "Iron ore", "c:coal": "Coal", "c:copper-ingot": "Copper ingot", "c:iron-ingot": "Iron ingot", "c:steel-ingot": "Steel ingot", "m:crushed-copper": "Crushed copper", "m:crushed-iron": "Crushed iron", "m:copper-plate": "Copper plate", "m:iron-plate": "Iron plate", "m:wire": "Wire", "m:fuel-rod": "Fuel rod", "m:clean-water": "Clean water" };
 const DEC = [
   ["I1. Machines are blocks", "Every machine and generator is made of cells with a facing, placed through the build path, like the crafting stations (crafting C3). A big one (the dome, the dam) is a stored multi-cell record."],
@@ -935,11 +1154,12 @@ const DEC = [
   ["I4. Power runs only while the world is played", "Generators burn fuel and machines work only in world time, which stops when the game is closed (CLAUDE.md, world persistence)."],
   ["I5. The ether extractor is late game", "It needs an off-world seed shard and 400 kW, so it comes after a ship and after nuclear or geothermal; it never replaces the pit for early ore."],
   ["I6. Antimatter is a battery", "The collider spends more than the plant returns (20,000 kW in, 16,000 kW out). Its worth is density and carrying: a cell runs a ship or an outpost far from any grid."],
+  ["I8. Oil is a field, not cells", "Reservoir pressure is derived from the seed like the climate, so oil needs no new generator version and an old world has the same fields as a new one. A well is a stored record; the field it reads is not (steer-and-sail, decision 5)."],
   ["I7. The Dyson swarm is the last tier", "Built in stages from the ground: launch site, the first thousand drones, relays and a receiver, then a swarm that builds itself. Output grows with the swarm, up to 2,000,000 kW; the star visibly dims as it fills."],
 ];
 // ---- the power grid view
-const GRID = { gens: { coal: true, wind: true, geo: false, hydro: true, nuclear: false, fusion: false, antimatter: false, dyson: false }, cons: { crusher: true, smelter: true, refinery: true, press: true, siphon: true, filter: true, extractor: false, collider: false } };
-const CONS = [["crusher", "Crusher", 40], ["smelter", "Smelter", 120], ["refinery", "Refinery", 90], ["press", "Rolling press", 60], ["siphon", "Siphon pump", 15], ["filter", "Filter tower", 5], ["extractor", "Ether extractor", 400], ["collider", "Collider", 20000]];
+const GRID = { gens: { coal: true, oil: false, wind: true, geo: false, hydro: true, nuclear: false, fusion: false, antimatter: false, dyson: false }, cons: { crusher: true, smelter: true, refinery: true, press: true, siphon: true, filter: true, pumpjack: true, "oil-refinery": true, extractor: false, collider: false } };
+const CONS = [["crusher", "Crusher", 40], ["smelter", "Smelter", 120], ["refinery", "Refinery", 90], ["press", "Rolling press", 60], ["siphon", "Siphon pump", 15], ["filter", "Filter tower", 5], ["pumpjack", "Pumpjack", 15], ["oil-refinery", "Distillation column", 150], ["extractor", "Ether extractor", 400], ["collider", "Collider", 20000]];
 function grid() {
   const svg = $("grid"); if (!svg) return;
   const Wd = 900, gk = GEN_ORDER.filter(k => !GENS[k].consumer), Hh = Math.max(gk.length, CONS.length) * 50 + 20;
@@ -966,7 +1186,9 @@ function grid() {
 // ===================================================================
 function route() {
   const parts = (location.hash.slice(1) || "mining").split("-");
-  ST.tab = ["mining", "refining", "ether", "power"].includes(parts[0]) ? parts[0] : "mining";
+  ST.tab = ["mining", "refining", "ether", "power", "oil"].includes(parts[0]) ? parts[0] : "mining";
+  if (ST.tab === "oil") ST.oilView = ["well", "refinery"].includes(parts[1]) ? parts[1] : "overview";
+  if (parts.includes("run") && !ST.run) setRun(true);
   if (ST.tab === "power" && GENS[parts[1]]) ST.gen = parts[1];
   ST.space = ST.tab === "power" && ST.gen === "dyson" && parts.includes("space");
   if (ST.tab === "ether" && parts[1] === "extractor") ST.stage = 2;
@@ -975,8 +1197,9 @@ function route() {
   show(); side(); sheets();
   if (ST.tab === "ether" && ST.stage === 2) $("st2").click();
 }
-const hashFor = () => ST.tab + (ST.tab === "power" ? "-" + ST.gen + (ST.gen === "dyson" && ST.space ? "-space" : "") : "") + (ST.night ? "-night" : "");
+const hashFor = () => ST.tab + (ST.tab === "oil" && ST.oilView !== "overview" ? "-" + ST.oilView : "") + (ST.tab === "power" ? "-" + ST.gen + (ST.gen === "dyson" && ST.space ? "-space" : "") : "") + (ST.night ? "-night" : "");
 for (const b of document.querySelectorAll("[data-tab]")) b.addEventListener("click", () => { ST.tab = b.dataset.tab; location.hash = hashFor(); });
+$("tRun").addEventListener("click", () => setRun(!ST.run));
 $("tDay").addEventListener("click", () => { ST.night = false; history.replaceState(null, "", "#" + hashFor()); applyTime(); status(); });
 $("tNight").addEventListener("click", () => { ST.night = true; history.replaceState(null, "", "#" + hashFor()); applyTime(); status(); });
 window.addEventListener("hashchange", route);
@@ -988,12 +1211,15 @@ const v3 = new THREE.Vector3();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now; ST.t += reduce ? dt * 0.25 : dt;
   if (CUR) {
+    const mdt = ST.run ? (reduce ? dt * 0.25 : dt) : 0; ST.mt += mdt;
     for (const f of CUR.anim) f(ST.t, reduce ? dt * 0.25 : dt);
+    for (const f of CUR.mach) f(ST.mt, mdt);
+    if (ST.run && ST.tab === "oil") { ST.oilDays = Math.min(OIL_DAYS_MAX, ST.oilDays + mdt * 40); wellReadout(); }
     if (CUR.etherLight) PBD.setLights(CUR.lights);
     if (CUR.beam) { CUR.beam.visible = ST.swarm > 2; CUR.beam.material.opacity = 0.25 + 0.5 * ST.swarm / 100; }
     const b = canvas.getBoundingClientRect();
     CUR.tags.forEach((t, i) => { const el = $("tg" + i); if (!el) return; v3.copy(t.p).project(camera); const vis = v3.z < 1 && Math.abs(v3.x) < 1.05 && Math.abs(v3.y) < 1.05; el.hidden = !vis || !t.text; el.style.left = ((v3.x + 1) / 2 * b.width) + "px"; el.style.top = ((1 - v3.y) / 2 * b.height) + "px"; });
-    for (const el of document.querySelectorAll("[data-run]")) { const s = +el.dataset.run; el.style.width = ((ST.t / s) % 1 * 100) + "%"; }
+    for (const el of document.querySelectorAll("[data-run]")) { const s = +el.dataset.run; el.style.width = ((ST.mt / s) % 1 * 100) + "%"; }
   }
   renderer.render(scene, camera); requestAnimationFrame(frame);
 }

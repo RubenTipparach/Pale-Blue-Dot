@@ -76,6 +76,33 @@ that the lamps read. `docs/mockups/towns.html` does this (the `tenebris-towns`
 design, section 7). `fishing.html` and `vehicles.html` predate this rule and
 have a fixed daylight.
 
+## Nothing in a mockup spins on its own (owner, 2026-11-12)
+
+**Standing instruction from the user:** "dont auto spin anything lol". A
+mockup's view stays where the viewer left it:
+- no camera drifts in an orbit when idle;
+- no preview turns on a turntable;
+- a parked craft's rotors, props and gyros stand still.
+The viewer turns things by dragging, and a "Turn" or "Play" button may start
+motion, off by default.
+
+Things that move because the world moves them keep moving: a station ring
+spinning for gravity, a wind turbine in the wind, a craft being flown, a ship
+under sail, workers at work.
+
+## One 3D view at a time, in tabs (owner, 2026-11-13)
+
+**Standing instruction from the user:** "make sure to apply the "tabs"
+idea, so we always only ever see 1 3d renderer on page at a time" (after
+"you just made me scrol down super far, put these things into tabs"). A
+mockup with more than one 3D view puts each in its own tab:
+- only the open tab's view is on the page and drawing; the others are
+  hidden and their render loops stopped;
+- a tab's renderer is made when the tab first opens, not on load;
+- the open tab is a bare `#anchor` in the link, so a tab can be linked to;
+- 2D panels (a builder grid, a chart, stats) may sit beside the one 3D
+  view in its tab.
+
 ## Every major step ends in a video (owner, 2026-09-27)
 
 **Standing instruction from the user:** "each major step needs a video

@@ -17,7 +17,13 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 3 | 2026-11-12 | OpenSpec changes named for M5, M6 and M9. |
 | 4 | 2026-11-12 | The lighting-perf checkpoint benchmark added to Misc. |
 | 5 | 2026-11-12 | M20 Pits, Plants and Power (industry) added. |
-| 6 | 2026-11-12 | M21 Rockets to Starships (ship-tiers) added; M20 republished as version 2. |
+| 6 | 2026-11-12 | M21 Rockets to Starships (ship-tiers) added from another session; M20 republished as version 2. |
+| 7 | 2026-11-12 | M22 Cranes and Printers, M23 Drydock and Hex Ship Builder and M24 Hangar and Chibi Aircraft (vehicle-yards). |
+| 8 | 2026-11-13 | M21 renamed Rockets and Landers (no warp, bigger walkable rockets). |
+| 9 | 2026-11-13 | M22 to M24 restored after a republish from main dropped them; M20, M22, M23 and M24 summaries brought up to their latest versions. |
+| 10 | 2026-11-13 | M22 to M24 restored on the live page. |
+| 11 | 2026-11-13 | M24 version 6: airships, easy flight, more lift, a bigger world, collisions. |
+| 12 | 2026-11-13 | One 3D view at a time, in tabs: M24 v7, M1 v6, M5 v7, M9 v4, M17 v11. |
 
 Every page on it links back to it: an "All Pale Blue Dot mockups (the tracker)" line under the
 page's title (the thirteen mockups of 2026-11-12, and the survey). The earlier mockups (M14 to M19)
@@ -49,8 +55,11 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 | M17 | Hex Tool Bench | `held-tools.html` | hex-held-tools (archived) | Approved for game, recorded: "Perfect", built and archived 2026-09-26 | https://claude.ai/artifact/YEf1BuLEk9Dppk55znZ5gr |
 | M18 | Rod, Shovel and School | `fishing.html` | fishing-and-equipment | Drafted (2026-09-24) | https://claude.ai/artifact/9XiEvkxSFJMtqaktg4eovj |
 | M19 | Kestrel, Tern and Loon | `vehicles.html` | vehicles, vehicle-models | Approved for game, recorded: approved, and the Rust port built (vehicles design) | https://claude.ai/artifact/UJebv7EdJUg1NLpvfVHi3D |
-| M20 | Pits, Plants and Power | `industry.html` | none yet | Drafted (2026-11-12; version 2, GPU screenshot gate not run) | https://claude.ai/artifact/JBcP2Js3bdQ2uApN3xUnHV |
-| M21 | Rockets to Starships | `ship-tiers.html` | ship-tiers | Drafted (2026-11-12; GPU screenshot gate not run: mockup work moved off the desktop during perf tuning) | https://claude.ai/artifact/2Sb7mNRv4wauJh8WFoR9eD |
+| M20 | Pits, Plants and Power | `industry.html` | steer-and-sail (oil) | Drafted (2026-11-12; version 3 adds oil, 2026-11-13; GPU screenshot gate not run) | https://claude.ai/artifact/JBcP2Js3bdQ2uApN3xUnHV |
+| M21 | Rockets and Landers (was Rockets to Starships) | `ship-tiers.html` | ship-tiers | Drafted (2026-11-12, another session); revised 2026-11-13: no warp, rockets four rings wide with decks | https://claude.ai/artifact/2Sb7mNRv4wauJh8WFoR9eD |
+| M22 | Cranes and Printers | `construction.html` | vehicle-yards | Drafted (2026-11-12); answers M3's note | https://claude.ai/artifact/2LjxDc7LuNFX6yjPbMLMwc |
+| M23 | Drydock and Hex Ship Builder | `drydock.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/DLRzGBKMJzhhFdayrbCVdx |
+| M24 | Hangar and Chibi Aircraft | `hangar.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/HrLdbcwrwbAD7PN1KojKKu |
 
 The thirteen of 2026-11-12 were published as one batch. Their commit (`d468860`) says "Fourteen",
 but it names thirteen subjects, and thirteen pages were published.
