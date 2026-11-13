@@ -165,8 +165,14 @@ pub fn puffs_at(site: &Site, look: Look, layer: &Layer, out: &mut Vec<Puff>) {
     // Kept a tenth under the layer's top, so a tower's top billboard stays
     // inside the shell the composite lays cloud over.
     let height = (top * layer.thickness_m * 0.9).max(MIN_HEIGHT_M);
-    let stack = ((height / (STACK_ASPECT * r)).ceil() as usize).clamp(1, MAX_STACK);
-    let each = height / stack as f32;
+    // One spacing up the column, whatever its height (`cloud-pop`): it was
+    // `height / stack`, with the stack a whole number, so as the weather moved
+    // the top across a step every billboard of the tower was resized and
+    // moved in one frame. The spacing only grows past `MAX_STACK` of them,
+    // where the two forms meet.
+    let each = (STACK_ASPECT * r).max(height / MAX_STACK as f32);
+    let count = (height / each).min(MAX_STACK as f32);
+    let stack = (count.ceil() as usize).clamp(1, MAX_STACK);
     let od = if look.optical_depth.is_finite() {
         look.optical_depth.max(0.0)
     } else {
@@ -178,15 +184,24 @@ pub fn puffs_at(site: &Site, look: Look, layer: &Layer, out: &mut Vec<Puff>) {
     for k in 0..stack {
         // Each billboard is centred in its share and reaches a tenth past it
         // both ways: the flat cut at the base takes the lowest one's underside
-        // and neighbours up a tower overlap.
-        let mid = base + each * (k as f32 + 0.5);
+        // and neighbours up a tower overlap. The lowest is whole, and as tall
+        // as the column while the column is under one spacing; one above it
+        // fades in as the column grows into its share, centred inside the
+        // column until it has its whole share.
+        let (mid, share, present) = if k == 0 {
+            let share = each.min(height);
+            (base + share * 0.5, share, 1.0)
+        } else {
+            let mid = (each * (k as f32 + 0.5)).min(height - each * 0.5);
+            (base + mid, each, (count - k as f32).clamp(0.0, 1.0))
+        };
         out.push(Puff {
             centre: site.direction * mid,
             // The upper billboards of a tower narrow toward its top.
             radius_across_m: r * (1.0 - 0.15 * k as f32),
-            radius_up_m: each * 0.6,
+            radius_up_m: share * 0.6,
             dark,
-            opacity: a * thick * layer.opacity,
+            opacity: a * thick * layer.opacity * present,
             base_radius_m: base,
             top_radius_m: base + height,
             seed: site.seed + 17.0 * k as f32,
@@ -373,6 +388,67 @@ mod tests {
                 .all(|w| w[1].centre.length() > w[0].centre.length())
         );
         assert!(tall[0].dark > 0.99 && low[0].dark == 0.0);
+    }
+
+    /// `cloud-pop`: as the weather moves a site's top a little each frame,
+    /// no billboard of its tower jumps. Matched by their place up the column;
+    /// one present on only one side of a step must be all but transparent.
+    #[test]
+    fn a_tower_grows_and_shrinks_without_re_forming() {
+        let site = Site {
+            direction: Vec3::X,
+            threshold: 0.0,
+            size: 0.5,
+            seed: 1.0,
+        };
+        let at = |top: f32| {
+            let mut out = Vec::new();
+            puffs_at(
+                &site,
+                Look {
+                    cover: 0.6,
+                    top,
+                    optical_depth: 40.0,
+                },
+                &LAYER,
+                &mut out,
+            );
+            out
+        };
+        let full = at(1.0)[0].opacity;
+        let steps = 2000;
+        let mut before = at(0.0);
+        for i in 1..=steps {
+            let top = i as f32 / steps as f32;
+            let now = at(top);
+            for k in 0..before.len().max(now.len()) {
+                match (before.get(k), now.get(k)) {
+                    (Some(a), Some(b)) => {
+                        let moved = a.centre.distance(b.centre);
+                        assert!(moved < 5.0, "billboard {k} jumped {moved} m at top {top}");
+                        for (x, y, what) in [
+                            (a.radius_across_m, b.radius_across_m, "across"),
+                            (a.radius_up_m, b.radius_up_m, "up"),
+                        ] {
+                            assert!((x - y).abs() < 5.0, "billboard {k}'s {what} jumped {x} -> {y} at top {top}");
+                        }
+                        assert!(
+                            (a.opacity - b.opacity).abs() < 0.02 * full,
+                            "billboard {k}'s opacity jumped {} -> {} at top {top}",
+                            a.opacity,
+                            b.opacity
+                        );
+                    }
+                    (Some(p), None) | (None, Some(p)) => assert!(
+                        p.opacity < 0.02 * full,
+                        "billboard {k} came or went at opacity {} at top {top}",
+                        p.opacity
+                    ),
+                    (None, None) => {}
+                }
+            }
+            before = now;
+        }
     }
 
     #[test]
