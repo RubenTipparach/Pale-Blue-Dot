@@ -212,6 +212,22 @@ Nothing heavy runs beside a benchmark: a browser rendering on the CPU or the
 GPU, a build or a second game makes the numbers worthless (perf-measure rule
 2). Run mockup screenshots before or after a perf sitting, not during it.
 
+## Build with `fast`, always; `--release` only for performance (owner, 2026-11-13)
+
+**Standing instruction from the user:** "build with fast ALWAYS unless doing
+performance runs", and "only use release for performance". Every build for
+playing, play-testing, fixing, verifying or capturing a look is
+`cargo build --profile fast -p pbd-app` (`target/fast/pbd-app.exe`, the
+same profile `run.bat` uses). It is incremental and skips link-time
+optimisation, so a small change rebuilds in seconds (about 10 s for a
+comment edit, 20 s for a changed constant in `walking.rs`), where
+`--release` takes 9-15 minutes.
+
+`--release` (`run.bat --full`) is for performance work only:
+`tools/perf_suite.py`, `--frame-log` numbers, benchmark reports and their
+captures. When the owner wants to play, build `fast`, skip tests, clippy and
+captures, and say when it is ready.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
