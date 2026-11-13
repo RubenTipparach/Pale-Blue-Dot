@@ -159,7 +159,11 @@ cannot be faded from. Instead the new set's bounce and lamp bake are made in
 the same pool task as the set, after it is built, and land in the same frame
 as its records. Cell for cell they hold the light the old set's bakes held
 (the same ground, lamps and sun), so the change at the landing is the
-geometry's own, which `detail-fade` handles.
+geometry's own, which `detail-fade` and `two-set-dissolve` handle. A set
+`two-set-dissolve` holds for the last landing's dissolve (`LodRefresh::held`)
+carries its bakes in the hold and publishes them when it lands, from the
+landing block, so they still go up in its landing frame; its bounce is for
+the sun as it was at the request, at most a fraction of a degree off.
 
 ### 7.3 Dusk, not edits
 
@@ -237,6 +241,23 @@ change between any two frames in the 60 after it.
 | Dusk (design 4) | town wall | +1.1 (corners) | +0.0 | 5.3 | 0.3 |
 | Dusk | sandstone wall | +0.5 | +0.1 | 5.9 | 0.2 |
 | Dusk | grass by the lantern post (the lamp bake's fade) | 0 | 0 | 2.2 | 1.2 |
+
+**On `two-set-dissolve` (`claude/perf-tuning` at `f07556d`), measured
+again**, before = that base plus the instruments, after = this change rebased
+onto it, the same runs and patches:
+
+| Swap | Patch | Step before | Step after |
+| --- | --- | ---: | ---: |
+| Night landing | lit ground, lower half | +24.1 | +0.5 (the walk) |
+| Day landing | shaded sand terrace | -10.2 | -2.2 (the walk: about -2 a frame round it) |
+| Day landing | red clay faces | -8.2 | +0.4 |
+| Day, the next landing | red clay faces | -4.1 | +0.0 |
+
+A scenic route on the rebased build (`--route scenic --time 21 --frames
+3000`): 41 landings, 37 of them held for the dissolve, no `LOD_FADE partial`
+or `cut short`, no shader or pipeline error; only two bounce or lamp bakes ran
+apart from a landing (the world's first, and one relight), so the landings
+brought their own.
 
 The settled picture is unchanged: 176 frames after the relight the two runs'
 frames differ by 0.0001 levels on average. The walking runs' largest steps

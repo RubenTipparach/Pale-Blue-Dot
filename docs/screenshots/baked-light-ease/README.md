@@ -57,6 +57,12 @@ smoothstep against 0.5 s linear). The bounce's 2-degree re-bakes, measured
 at a sand pit at 18:30 with the clock at 4x (`--at -1.86 -1.14 --yaw 0
 --pitch -12`), showed nothing to fix and were left (design 3).
 
+Measured again after rebasing onto `two-set-dissolve` (`claude/perf-tuning`
+at `f07556d`), the same commands, before = that base plus the instruments:
+night landing +24.1 before, +0.5 after; day landing, the terrace -10.2
+before, -2.2 after (the walk), the clay -8.2 before, +0.4 after. The frames
+in this folder are from the first sitting, on `a8376bd`.
+
 Frame cost was not measured here (`perf_suite.py` is the owner's): the bakes
 a landing now brings are made on its pool task (4-10 ms there), and the GPU
 reads the light field's second half only during a dusk blend.
