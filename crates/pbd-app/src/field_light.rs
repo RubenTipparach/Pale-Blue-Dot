@@ -11,8 +11,8 @@ use crate::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use bevy::camera::primitives::Aabb;
 use bevy::pbr::{ExtendedMaterial, MaterialExtension};
 use bevy::prelude::*;
-use bevy::render::render_resource::{AsBindGroup, ShaderType};
-use bevy::render::storage::ShaderStorageBuffer;
+use bevy::render::render_resource::{AsBindGroup, BufferUsages};
+use bevy::render::storage::{GpuShaderStorageBuffer, ShaderStorageBuffer};
 use bevy::shader::ShaderRef;
 use pbd_core::light;
 
@@ -43,23 +43,27 @@ impl RoomLights {
     /// As `field_lit.wgsl` reads them, in the planet's frame: where and how
     /// far, colour times power and whether only by night, and the band of
     /// height each lights. The fires first, so a building with more candles
-    /// than room keeps its hearth and sconces.
-    pub fn pack(&self, field: &mut FieldUniform) {
+    /// than room keeps its hearth and sconces. At most [`MAX_ROOM_LIGHTS`].
+    pub fn pack(&self) -> Vec<LightRow> {
         let mut lights: Vec<_> = self.0.iter().collect();
         lights.sort_by_key(|l| !l.kind.all_day());
-        let n = lights.len().min(MAX_ROOM_LIGHTS);
-        for (i, l) in lights.into_iter().take(n).enumerate() {
-            let [r, g, b] = l.kind.colour();
-            field.lights[i] = l.at.extend(l.kind.reach_m());
-            field.light_colour[i] = Vec4::new(
-                r * l.power,
-                g * l.power,
-                b * l.power,
-                if l.kind.all_day() { 0.0 } else { 1.0 },
-            );
-            field.light_span[i] = Vec4::new(-l.below_m, l.above_m, 0.0, 0.0);
-        }
-        field.look.w = n as f32;
+        lights
+            .into_iter()
+            .take(MAX_ROOM_LIGHTS)
+            .map(|l| {
+                let [r, g, b] = l.kind.colour();
+                LightRow {
+                    at: l.at.extend(l.kind.reach_m()),
+                    colour: Vec4::new(
+                        r * l.power,
+                        g * l.power,
+                        b * l.power,
+                        if l.kind.all_day() { 0.0 } else { 1.0 },
+                    ),
+                    span: Vec4::new(-l.below_m, l.above_m, 0.0, 0.0),
+                }
+            })
+            .collect()
     }
 }
 
@@ -81,46 +85,115 @@ pub struct SkyShare {
     pub bounce: f32,
 }
 
-/// The field at a mesh's bounds, as `field_lit.wgsl` reads it.
-#[derive(Clone, Copy, Debug, Default, ShaderType, Reflect)]
-pub struct FieldUniform {
+/// One field-lit mesh's own row of `field_lit.wgsl`'s `rows`, found by its
+/// [`MeshTag`] (`crab-breeze-lessons` rank 2): what differs from one mesh to
+/// the next. What is the same for every mesh is in [`FieldView`].
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FieldRow {
+    /// The mesh's bounds in the render frame.
     pub low: Vec4,
     pub high: Vec4,
-    /// The planet's centre in the render frame; w how far it has faded out
-    /// ([`Faded`]).
-    pub centre: Vec4,
-    pub sun: Vec4,
+    /// x how far it has faded out ([`Faded`]).
+    pub fade: Vec4,
+    /// The field at the bounds' eight corners, corner `x + 2y + 4z`.
     pub sky: [Vec4; 2],
     pub block: [Vec4; 2],
     /// x one where it is lit as the terrain is ([`LitLikeTerrain`]); y the
     /// share of the sky that reaches it and z the sun bounced round a room
-    /// ([`SkyShare`]; one and zero outdoors); w how many room lights.
+    /// ([`SkyShare`]; one and zero outdoors).
     pub look: Vec4,
-    /// A room's own lights ([`RoomLights::pack`]): where (planet frame) and
-    /// how far; colour times power, w one for a candle; the band of height
-    /// round each that it lights.
-    pub lights: [Vec4; MAX_ROOM_LIGHTS],
-    pub light_colour: [Vec4; MAX_ROOM_LIGHTS],
-    pub light_span: [Vec4; MAX_ROOM_LIGHTS],
+    /// x the first of its room lights in `room_lights`, y how many.
+    pub lights: Vec4,
+}
+
+/// One room light as `field_lit.wgsl` reads it ([`RoomLights::pack`]): where
+/// (planet frame) and how far; colour times power, w one for a candle; the
+/// band of height round it that it lights.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LightRow {
+    pub at: Vec4,
+    pub colour: Vec4,
+    pub span: Vec4,
+}
+
+/// What every field-lit mesh reads alike, written once a frame.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FieldView {
+    /// The planet's centre in the render frame.
+    pub centre: Vec4,
+    /// The way to the sun.
+    pub sun: Vec4,
     /// `lighting-model`: x one for the new model, y the cover over the
-    /// camera, z a lamp's glow, w the sun's apparent radius (L3); and the
-    /// sky's light (L2), clear then under a
-    /// full deck ([`crate::tone::SkyLight`]).
+    /// camera, z a lamp's glow, w the sun's apparent radius (L3).
     pub model: Vec4,
+    /// The sky's light (L2), clear then under a full deck
+    /// ([`crate::tone::SkyLight`]).
     pub sky_sh: [Vec4; 18],
 }
 
+/// Bytes of a run of vec4s as WGSL lays them out in storage: packed, 16 a
+/// vec4, little-endian.
+fn vec4_bytes<'a>(vec4s: impl IntoIterator<Item = &'a Vec4>) -> Vec<u8> {
+    vec4s
+        .into_iter()
+        .flat_map(|v| v.to_array())
+        .flat_map(f32::to_le_bytes)
+        .collect()
+}
+
+impl FieldRow {
+    const BYTES: u64 = 9 * 16;
+    fn vec4s(&self) -> [Vec4; 9] {
+        [
+            self.low,
+            self.high,
+            self.fade,
+            self.sky[0],
+            self.sky[1],
+            self.block[0],
+            self.block[1],
+            self.look,
+            self.lights,
+        ]
+    }
+}
+
+impl LightRow {
+    const BYTES: u64 = 3 * 16;
+    fn vec4s(&self) -> [Vec4; 3] {
+        [self.at, self.colour, self.span]
+    }
+}
+
+impl FieldView {
+    const BYTES: u64 = 21 * 16;
+    fn bytes(&self) -> Vec<u8> {
+        vec4_bytes(
+            [&self.centre, &self.sun, &self.model]
+                .into_iter()
+                .chain(self.sky_sh.iter()),
+        )
+    }
+}
+
 /// The extension that lights a PBR material from the field, and shades it
-/// with the sun's cascades (`sun-shadows` decision 4).
+/// with the sun's cascades (`sun-shadows` decision 4). One is shared by every
+/// field-lit mesh of a base material (`crab-breeze-lessons` rank 2): its
+/// buffers are written in place each frame, so the material itself never
+/// changes and the meshes under it batch.
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
 pub struct FieldLit {
-    #[uniform(100)]
-    pub field: FieldUniform,
+    #[storage(100, read_only)]
+    pub view: Handle<ShaderStorageBuffer>,
     #[texture(101, sample_type = "depth", dimension = "2d_array")]
     #[sampler(102, sampler_type = "comparison")]
     pub sun_map: Handle<Image>,
     #[storage(103, read_only)]
     pub sun_cascades: Handle<ShaderStorageBuffer>,
+    #[storage(104, read_only)]
+    pub rows: Handle<ShaderStorageBuffer>,
+    #[storage(105, read_only)]
+    pub room_lights: Handle<ShaderStorageBuffer>,
 }
 
 impl MaterialExtension for FieldLit {
@@ -132,27 +205,257 @@ impl MaterialExtension for FieldLit {
 /// A PBR material lit by the field.
 pub type FieldLitMaterial = ExtendedMaterial<StandardMaterial, FieldLit>;
 
+/// Rows the buffers are made with; they double when outgrown, and every
+/// shared material is then given the new buffer.
+const ROWS_START: usize = 4096;
+const LIGHTS_START: usize = 8192;
+
+/// Where one field-lit mesh's data lives: its row, and the run of room
+/// lights it may fill.
+#[derive(Clone, Copy, Debug)]
+struct Slot {
+    row: u32,
+    first: u32,
+    cap: u32,
+}
+
+/// What changed this frame, for the render world to write
+/// (`crab-breeze-lessons` rank 2). Emptied as the next frame's field systems
+/// start.
+#[derive(Resource, Clone, Default)]
+pub struct FieldUploads {
+    view: FieldView,
+    rows: Vec<(u32, FieldRow)>,
+    lights: Vec<(u32, LightRow)>,
+    view_buffer: Handle<ShaderStorageBuffer>,
+    rows_buffer: Handle<ShaderStorageBuffer>,
+    lights_buffer: Handle<ShaderStorageBuffer>,
+}
+
+/// Every field-lit mesh's row and room lights, as the CPU holds them, and the
+/// one material each base material is drawn with (`crab-breeze-lessons`
+/// rank 2).
+#[derive(Resource, Default)]
+pub struct FieldRows {
+    rows: Vec<FieldRow>,
+    free: Vec<u32>,
+    lights: Vec<LightRow>,
+    slots: std::collections::HashMap<Entity, Slot>,
+    shared: std::collections::HashMap<AssetId<StandardMaterial>, Handle<FieldLitMaterial>>,
+    row_capacity: usize,
+    light_capacity: usize,
+    uploads: FieldUploads,
+}
+
+/// A zeroed storage buffer the render world writes into.
+fn storage_buffer(bytes: u64) -> ShaderStorageBuffer {
+    let mut buffer = ShaderStorageBuffer::new(
+        &vec![0u8; bytes as usize],
+        bevy::asset::RenderAssetUsages::RENDER_WORLD,
+    );
+    buffer.buffer_description.usage |= BufferUsages::COPY_DST;
+    buffer
+}
+
+impl FieldRows {
+    fn new(buffers: &mut Assets<ShaderStorageBuffer>) -> Self {
+        Self {
+            row_capacity: ROWS_START,
+            light_capacity: LIGHTS_START,
+            uploads: FieldUploads {
+                view_buffer: buffers.add(storage_buffer(FieldView::BYTES)),
+                rows_buffer: buffers.add(storage_buffer(FieldRow::BYTES * ROWS_START as u64)),
+                lights_buffer: buffers.add(storage_buffer(LightRow::BYTES * LIGHTS_START as u64)),
+                ..default()
+            },
+            ..default()
+        }
+    }
+
+    /// How many meshes hold a row now.
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    /// Whether no mesh holds a row.
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
+    /// How many materials the field-lit meshes are drawn with.
+    pub fn materials(&self) -> usize {
+        self.shared.len()
+    }
+
+    /// The row a mesh reads, if it has one.
+    pub fn row(&self, entity: Entity) -> Option<FieldRow> {
+        self.slots.get(&entity).map(|s| self.rows[s.row as usize])
+    }
+
+    /// The room lights a mesh reads.
+    pub fn room_lights(&self, entity: Entity) -> &[LightRow] {
+        self.slots.get(&entity).map_or(&[], |s| {
+            let first = s.first as usize;
+            let count = self.rows[s.row as usize].lights.y as usize;
+            &self.lights[first..first + count]
+        })
+    }
+
+    fn set_row(&mut self, row: u32, value: FieldRow) {
+        self.rows[row as usize] = value;
+        self.uploads.rows.push((row, value));
+    }
+
+    /// A row for a new mesh, the buffer doubled if it is full.
+    fn take_row(&mut self, buffers: &mut Assets<ShaderStorageBuffer>) -> (u32, bool) {
+        if let Some(row) = self.free.pop() {
+            return (row, false);
+        }
+        let row = self.rows.len() as u32;
+        self.rows.push(FieldRow::default());
+        let grown = self.rows.len() > self.row_capacity;
+        if grown {
+            self.row_capacity = (self.row_capacity * 2).max(ROWS_START);
+            self.uploads.rows_buffer =
+                buffers.add(storage_buffer(FieldRow::BYTES * self.row_capacity as u64));
+            // The new buffer starts empty: every row goes again.
+            self.uploads.rows = (0..self.rows.len() as u32)
+                .zip(self.rows.iter().copied())
+                .collect();
+        }
+        (row, grown)
+    }
+
+    /// Room for `count` lights at the end of the lights, the buffer doubled
+    /// (and the lights packed again) if they do not fit.
+    fn take_lights(
+        &mut self,
+        count: u32,
+        buffers: &mut Assets<ShaderStorageBuffer>,
+    ) -> (u32, bool) {
+        if self.lights.len() + count as usize > self.light_capacity {
+            // Pack the live meshes' lights together, dropping what the gone
+            // ones left, and double the room if that is not enough.
+            let mut packed = Vec::with_capacity(self.lights.len());
+            let mut slots: Vec<_> = self.slots.iter_mut().collect();
+            slots.sort_by_key(|(_, s)| s.first);
+            for (_, slot) in slots {
+                let first = slot.first as usize;
+                let first_new = packed.len() as u32;
+                packed.extend_from_slice(&self.lights[first..first + slot.cap as usize]);
+                slot.first = first_new;
+                let mut row = self.rows[slot.row as usize];
+                row.lights.x = first_new as f32;
+                self.rows[slot.row as usize] = row;
+                self.uploads.rows.push((slot.row, row));
+            }
+            self.lights = packed;
+            while self.lights.len() + count as usize > self.light_capacity {
+                self.light_capacity = (self.light_capacity * 2).max(LIGHTS_START);
+            }
+            self.uploads.lights_buffer =
+                buffers.add(storage_buffer(LightRow::BYTES * self.light_capacity as u64));
+            let first = self.lights.len() as u32;
+            self.lights
+                .resize(self.lights.len() + count as usize, LightRow::default());
+            self.uploads.lights = (0..self.lights.len() as u32)
+                .zip(self.lights.iter().copied())
+                .collect();
+            return (first, true);
+        }
+        let first = self.lights.len() as u32;
+        self.lights
+            .resize(self.lights.len() + count as usize, LightRow::default());
+        (first, false)
+    }
+
+    fn set_lights(&mut self, first: u32, lights: &[LightRow]) {
+        for (i, l) in lights.iter().enumerate() {
+            let at = first + i as u32;
+            self.lights[at as usize] = *l;
+            self.uploads.lights.push((at, *l));
+        }
+    }
+
+    /// The material a base material's meshes share, made the first time.
+    fn shared(
+        &mut self,
+        base: &Handle<StandardMaterial>,
+        standard: &StandardMaterial,
+        shadows: &crate::planet::shadow::SunShadowMaps,
+        lit: &mut Assets<FieldLitMaterial>,
+    ) -> Handle<FieldLitMaterial> {
+        let uploads = &self.uploads;
+        self.shared
+            .entry(base.id())
+            .or_insert_with(|| {
+                lit.add(ExtendedMaterial {
+                    base: standard.clone(),
+                    extension: FieldLit {
+                        view: uploads.view_buffer.clone(),
+                        sun_map: shadows.map.clone(),
+                        sun_cascades: shadows.cascades.clone(),
+                        rows: uploads.rows_buffer.clone(),
+                        room_lights: uploads.lights_buffer.clone(),
+                    },
+                })
+            })
+            .clone()
+    }
+
+    /// Every shared material given the buffers again, after one has grown.
+    fn rebind(&self, lit: &mut Assets<FieldLitMaterial>) {
+        for handle in self.shared.values() {
+            if let Some(material) = lit.get_mut(handle) {
+                material.extension.rows = self.uploads.rows_buffer.clone();
+                material.extension.room_lights = self.uploads.lights_buffer.clone();
+            }
+        }
+    }
+}
+
 /// Lights the ship, the fish and the float from the field.
 pub struct FieldLightPlugin;
 
 impl Plugin for FieldLightPlugin {
     fn build(&self, app: &mut App) {
+        let rows = app
+            .world_mut()
+            .get_resource_mut::<Assets<ShaderStorageBuffer>>()
+            .map(|mut buffers| FieldRows::new(&mut buffers))
+            .unwrap_or_default();
         app.add_plugins(MaterialPlugin::<FieldLitMaterial>::default())
+            .insert_resource(rows)
             .add_systems(
                 PostUpdate,
-                (take_the_field, light_from_the_field, repack_room_lights)
+                (
+                    take_the_field,
+                    drop_the_field,
+                    light_from_the_field,
+                    repack_room_lights,
+                )
                     .chain()
                     .after(bevy::transform::TransformSystems::Propagate)
                     .run_if(crate::world_open),
             )
             .add_systems(Update, bake_town_outsides)
             .add_systems(Update, fill_follows_the_day);
+        if let Some(render) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            render
+                .init_resource::<FieldMirror>()
+                .add_systems(bevy::render::ExtractSchedule, extract_the_field)
+                .add_systems(
+                    bevy::render::Render,
+                    write_the_field.in_set(bevy::render::RenderSystems::PrepareResources),
+                );
+        }
     }
 }
 
-/// Give each new mesh under a `LitByField` root its own field-lit copy of its
-/// material. Its own, because each mesh is lit at its own bounds; the
-/// builders share one material between parts and never need to know.
+/// Give each new mesh under a `LitByField` root the field-lit material its
+/// base material's meshes share, and a row of its own, found by its
+/// [`MeshTag`] (`crab-breeze-lessons` rank 2): each is lit at its own
+/// bounds, and the builders never need to know.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn take_the_field(
     mut commands: Commands,
@@ -170,7 +473,16 @@ fn take_the_field(
     standard: Res<Assets<StandardMaterial>>,
     shadows: Option<Res<crate::planet::shadow::SunShadowMaps>>,
     mut lit: ResMut<Assets<FieldLitMaterial>>,
+    mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+    mut rows: ResMut<FieldRows>,
 ) {
+    let rows = &mut *rows;
+    rows.uploads.rows.clear();
+    rows.uploads.lights.clear();
+    let Some(shadows) = shadows else {
+        return;
+    };
+    let mut grown = false;
     for (entity, material, room_lights) in &added {
         let marked = std::iter::once(entity)
             .chain(parents.iter_ancestors(entity))
@@ -188,28 +500,55 @@ fn take_the_field(
         let like_terrain = std::iter::once(entity)
             .chain(parents.iter_ancestors(entity))
             .any(|at| terrain_like.contains(at));
-        let mut field = FieldUniform {
-            look: Vec4::new(if like_terrain { 1.0 } else { 0.0 }, 1.0, 0.0, 0.0),
-            ..default()
+        let handle = rows.shared(&material.0, base, &shadows, &mut lit);
+        let lights = room_lights.map(RoomLights::pack).unwrap_or_default();
+        // A mesh that carries room lights may gain some (a craft's lantern),
+        // so it keeps room for all of them.
+        let cap = if room_lights.is_some() {
+            MAX_ROOM_LIGHTS as u32
+        } else {
+            0
         };
-        if let Some(room_lights) = room_lights {
-            room_lights.pack(&mut field);
-        }
-        let handle = lit.add(ExtendedMaterial {
-            base: base.clone(),
-            extension: FieldLit {
-                field,
-                sun_map: shadows.as_ref().map(|s| s.map.clone()).unwrap_or_default(),
-                sun_cascades: shadows
-                    .as_ref()
-                    .map(|s| s.cascades.clone())
-                    .unwrap_or_default(),
+        let (row, row_grown) = rows.take_row(&mut buffers);
+        let (first, lights_grown) = rows.take_lights(cap, &mut buffers);
+        grown |= row_grown || lights_grown;
+        rows.set_lights(first, &lights);
+        rows.set_row(
+            row,
+            FieldRow {
+                look: Vec4::new(if like_terrain { 1.0 } else { 0.0 }, 1.0, 0.0, 0.0),
+                lights: Vec4::new(first as f32, lights.len() as f32, 0.0, 0.0),
+                ..default()
             },
-        });
+        );
+        rows.slots.insert(entity, Slot { row, first, cap });
         commands
             .entity(entity)
             .remove::<MeshMaterial3d<StandardMaterial>>()
-            .insert(MeshMaterial3d(handle));
+            .insert((MeshMaterial3d(handle), bevy::mesh::MeshTag(row)));
+    }
+    if grown {
+        rows.rebind(&mut lit);
+    }
+}
+
+/// Give back the rows of the meshes that are gone, and every so often the
+/// shared materials whose base material is gone with them.
+fn drop_the_field(
+    mut gone: RemovedComponents<MeshMaterial3d<FieldLitMaterial>>,
+    standard: Res<Assets<StandardMaterial>>,
+    mut rows: ResMut<FieldRows>,
+    mut frames: Local<u32>,
+) {
+    let rows = &mut *rows;
+    for entity in gone.read() {
+        if let Some(slot) = rows.slots.remove(&entity) {
+            rows.free.push(slot.row);
+        }
+    }
+    *frames = frames.wrapping_add(1);
+    if *frames % 600 == 0 {
+        rows.shared.retain(|base, _| standard.get(*base).is_some());
     }
 }
 
@@ -236,13 +575,6 @@ fn world_bounds(transform: &GlobalTransform, aabb: Option<&Aabb>) -> (Vec3, Vec3
     (low, high)
 }
 
-/// How far the sun moves, in its unit direction's components, before a
-/// field-lit material is given it again (`town-frame-time` decision 7): 2e-3
-/// is 0.11 degrees, about once a second at `DAY_S` 2880. Each rewrite makes
-/// the renderer prepare the material again, and at 1e-4 a town's were
-/// prepared every 45 ms.
-const SUN_STEP: f32 = 2e-3;
-
 /// What a field-lit mesh's corners last read (`town-frame-time` decision 1):
 /// the corners where it stood, the points they read (ground-clamped), the
 /// field they were read from and what it said. The generator's ground is
@@ -258,26 +590,29 @@ struct Corners {
 }
 
 /// Sample the field at every field-lit mesh's eight corners, each frame
-/// (`lamps-and-lanterns` decision 2), and hand them to its material. A mesh
-/// that has not moved, under a field that has not changed, keeps what its
-/// corners read last (`town-frame-time` decision 1).
+/// (`lamps-and-lanterns` decision 2), and write its row. A mesh that has not
+/// moved, under a field that has not changed, keeps what its corners read
+/// last (`town-frame-time` decision 1), and its row is written only when it
+/// changes.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn light_from_the_field(
     fine: Option<Res<PlanetFine>>,
     contact: Option<Res<PlanetContact>>,
     sun: Option<Res<crate::sky::Sun>>,
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
-    meshes: Query<(
-        Entity,
-        &GlobalTransform,
-        Option<&Aabb>,
-        &MeshMaterial3d<FieldLitMaterial>,
-        Option<&SkyShare>,
-        Option<&ChildOf>,
-    )>,
+    meshes: Query<
+        (
+            Entity,
+            &GlobalTransform,
+            Option<&Aabb>,
+            Option<&SkyShare>,
+            Option<&ChildOf>,
+        ),
+        With<MeshMaterial3d<FieldLitMaterial>>,
+    >,
     faded: Query<&Faded>,
     sky_light: Option<Res<crate::tone::SkyLight>>,
-    mut lit: ResMut<Assets<FieldLitMaterial>>,
+    mut rows: ResMut<FieldRows>,
     mut read: Local<(u32, std::collections::HashMap<Entity, Corners>)>,
 ) {
     let sky_light = sky_light.map(|s| *s).unwrap_or_default();
@@ -285,6 +620,18 @@ fn light_from_the_field(
         .map(|frame| frame.center.as_vec3())
         .unwrap_or(Vec3::ZERO);
     let toward_sun = sun.map(|sun| sun.direction()).unwrap_or(Vec3::Y);
+    let rows = &mut *rows;
+    rows.uploads.view = FieldView {
+        centre: centre.extend(0.0),
+        sun: toward_sun.extend(0.0),
+        model: Vec4::new(
+            if sky_light.new_model { 1.0 } else { 0.0 },
+            sky_light.cover,
+            sky_light.lamp_glow,
+            sky_light.shadow_spread,
+        ),
+        sky_sh: sky_light.sh,
+    };
     let key = match (&fine, &contact) {
         (Some(fine), Some(contact)) => (
             std::sync::Arc::as_ptr(&fine.set) as usize,
@@ -296,33 +643,20 @@ fn light_from_the_field(
     let (count, cache) = &mut *read;
     *count = count.wrapping_add(1);
     let now = *count;
-    // MEASUREMENT (`town-frame-time`): this system's time and how many
-    // materials it rewrote, each frame it passes 2 ms.
+    // MEASUREMENT (`town-frame-time`): this system's time and how many rows
+    // it rewrote, each frame it passes 2 ms.
     let started = std::time::Instant::now();
     let (mut seen, mut rewritten) = (0usize, 0usize);
-    for (entity, transform, aabb, material, share, parent) in &meshes {
+    for (entity, transform, aabb, share, parent) in &meshes {
+        let Some(slot) = rows.slots.get(&entity).copied() else {
+            continue;
+        };
         seen += 1;
+        let current = rows.rows[slot.row as usize];
         let (low, high) = world_bounds(transform, aabb);
         let gone = parent
             .and_then(|p| faded.get(p.parent()).ok())
             .map_or(0.0, |f| f.0.clamp(0.0, 1.0));
-        let mut field = FieldUniform {
-            low: low.extend(0.0),
-            high: high.extend(0.0),
-            centre: centre.extend(gone),
-            sun: toward_sun.extend(0.0),
-            model: Vec4::new(
-                if sky_light.new_model { 1.0 } else { 0.0 },
-                sky_light.cover,
-                sky_light.lamp_glow,
-                sky_light.shadow_spread,
-            ),
-            sky_sh: sky_light.sh,
-            ..default()
-        };
-        let Some(current) = lit.get(&material.0).map(|m| m.extension.field) else {
-            continue;
-        };
         let like_terrain = current.look.x > 0.5;
         let raw: [Vec3; 8] = std::array::from_fn(|i| {
             Vec3::new(
@@ -378,25 +712,27 @@ fn light_from_the_field(
                 entry.block[i / 4][i % 4] = block;
             }
         }
-        field.sky = entry.sky;
-        field.block = entry.block;
-        field.look = current.look;
-        field.lights = current.lights;
-        field.light_colour = current.light_colour;
-        field.light_span = current.light_span;
-        field.look.y = share.map_or(1.0, |s| s.sky);
-        field.look.z = share.map_or(0.0, |s| s.bounce);
-        let moved = (current.low - field.low).abs().max_element() > 1e-3
-            || current.look != field.look
-            || current.centre.w != field.centre.w
-            || (current.high - field.high).abs().max_element() > 1e-3
-            || (current.sun - field.sun).abs().max_element() > SUN_STEP
+        let mut row = FieldRow {
+            low: low.extend(0.0),
+            high: high.extend(0.0),
+            fade: Vec4::new(gone, 0.0, 0.0, 0.0),
+            sky: entry.sky,
+            block: entry.block,
+            look: current.look,
+            lights: current.lights,
+        };
+        row.look.y = share.map_or(1.0, |s| s.sky);
+        row.look.z = share.map_or(0.0, |s| s.bounce);
+        let moved = (current.low - row.low).abs().max_element() > 1e-3
+            || current.look != row.look
+            || current.fade != row.fade
+            || (current.high - row.high).abs().max_element() > 1e-3
             || (0..2).any(|k| {
-                (current.sky[k] - field.sky[k]).abs().max_element() > 1e-3
-                    || (current.block[k] - field.block[k]).abs().max_element() > 1e-3
+                (current.sky[k] - row.sky[k]).abs().max_element() > 1e-3
+                    || (current.block[k] - row.block[k]).abs().max_element() > 1e-3
             });
-        if moved && let Some(material) = lit.get_mut(&material.0) {
-            material.extension.field = field;
+        if moved {
+            rows.set_row(slot.row, row);
             rewritten += 1;
         }
     }
@@ -405,21 +741,141 @@ fn light_from_the_field(
         cache.retain(|_, c| c.seen == now);
     }
     crate::planet::lod::spent(
-        &format!("field corners: {seen} meshes, {rewritten} materials rewritten"),
+        &format!("field corners: {seen} meshes, {rewritten} rows rewritten"),
         started,
     );
 }
 
-/// Pack a mesh's room lights onto its material again when they change: a
-/// light a craft carries moves with it (`sail-the-cog` step 3, part 4).
+/// Pack a mesh's room lights again when they change: a light a craft carries
+/// moves with it (`sail-the-cog` step 3, part 4).
 fn repack_room_lights(
-    meshes: Query<(&RoomLights, &MeshMaterial3d<FieldLitMaterial>), Changed<RoomLights>>,
-    mut lit: ResMut<Assets<FieldLitMaterial>>,
+    meshes: Query<
+        (Entity, &RoomLights),
+        (Changed<RoomLights>, With<MeshMaterial3d<FieldLitMaterial>>),
+    >,
+    mut rows: ResMut<FieldRows>,
 ) {
-    for (lights, material) in &meshes {
-        if let Some(material) = lit.get_mut(&material.0) {
-            lights.pack(&mut material.extension.field);
+    for (entity, lights) in &meshes {
+        let Some(slot) = rows.slots.get(&entity).copied() else {
+            continue;
+        };
+        let mut packed = lights.pack();
+        packed.truncate(slot.cap as usize);
+        rows.set_lights(slot.first, &packed);
+        let mut row = rows.rows[slot.row as usize];
+        if row.lights.y != packed.len() as f32 {
+            row.lights.y = packed.len() as f32;
+            rows.set_row(slot.row, row);
         }
+    }
+}
+
+/// The render world's copy of every row, light and the view, and how much of
+/// each the GPU has not been given yet.
+#[derive(Resource, Default)]
+struct FieldMirror {
+    view: FieldView,
+    rows: Vec<FieldRow>,
+    lights: Vec<LightRow>,
+    dirty_rows: Option<(u32, u32)>,
+    dirty_lights: Option<(u32, u32)>,
+    buffers: FieldUploads,
+    /// The GPU buffers last written, so a new one is written whole.
+    written: [Option<bevy::render::render_resource::BufferId>; 3],
+}
+
+fn widen(range: &mut Option<(u32, u32)>, at: u32) {
+    *range = Some(range.map_or((at, at + 1), |(a, b)| (a.min(at), b.max(at + 1))));
+}
+
+/// Copy this frame's changes into the render world's mirror. The uploads
+/// are emptied as the next frame's field systems start; while the world is
+/// loading they are not, and the same rows are copied again, harmlessly.
+fn extract_the_field(
+    rows: bevy::render::Extract<Option<Res<FieldRows>>>,
+    mut mirror: ResMut<FieldMirror>,
+) {
+    let Some(rows) = rows.as_ref() else {
+        return;
+    };
+    let up = &rows.uploads;
+    let mirror = &mut *mirror;
+    mirror.view = up.view;
+    mirror.buffers.view_buffer = up.view_buffer.clone();
+    mirror.buffers.rows_buffer = up.rows_buffer.clone();
+    mirror.buffers.lights_buffer = up.lights_buffer.clone();
+    for (at, row) in &up.rows {
+        let i = *at as usize;
+        if mirror.rows.len() <= i {
+            mirror.rows.resize(i + 1, FieldRow::default());
+        }
+        mirror.rows[i] = *row;
+        widen(&mut mirror.dirty_rows, *at);
+    }
+    for (at, light) in &up.lights {
+        let i = *at as usize;
+        if mirror.lights.len() <= i {
+            mirror.lights.resize(i + 1, LightRow::default());
+        }
+        mirror.lights[i] = *light;
+        widen(&mut mirror.dirty_lights, *at);
+    }
+}
+
+/// Write what changed into the GPU's buffers in place: the shared materials'
+/// bind groups never change. A buffer the GPU has not seen before is
+/// written whole.
+fn write_the_field(
+    mut mirror: ResMut<FieldMirror>,
+    storage: Res<bevy::render::render_asset::RenderAssets<GpuShaderStorageBuffer>>,
+    queue: Res<bevy::render::renderer::RenderQueue>,
+) {
+    let mirror = &mut *mirror;
+    if let Some(gpu) = storage.get(&mirror.buffers.view_buffer) {
+        queue.write_buffer(&gpu.buffer, 0, &mirror.view.bytes());
+        mirror.written[0] = Some(gpu.buffer.id());
+    }
+    if let Some(gpu) = storage.get(&mirror.buffers.rows_buffer) {
+        let whole = mirror.written[1] != Some(gpu.buffer.id());
+        let range = if whole {
+            Some((0, mirror.rows.len() as u32))
+        } else {
+            mirror.dirty_rows
+        };
+        if let Some((a, b)) = range {
+            let b = b.min((gpu.buffer.size() / FieldRow::BYTES) as u32);
+            if a < b {
+                let vec4s: Vec<Vec4> = mirror.rows[a as usize..b as usize]
+                    .iter()
+                    .flat_map(FieldRow::vec4s)
+                    .collect();
+                let bytes = vec4_bytes(&vec4s);
+                queue.write_buffer(&gpu.buffer, a as u64 * FieldRow::BYTES, &bytes);
+            }
+        }
+        mirror.written[1] = Some(gpu.buffer.id());
+        mirror.dirty_rows = None;
+    }
+    if let Some(gpu) = storage.get(&mirror.buffers.lights_buffer) {
+        let whole = mirror.written[2] != Some(gpu.buffer.id());
+        let range = if whole {
+            Some((0, mirror.lights.len() as u32))
+        } else {
+            mirror.dirty_lights
+        };
+        if let Some((a, b)) = range {
+            let b = b.min((gpu.buffer.size() / LightRow::BYTES) as u32);
+            if a < b {
+                let vec4s: Vec<Vec4> = mirror.lights[a as usize..b as usize]
+                    .iter()
+                    .flat_map(LightRow::vec4s)
+                    .collect();
+                let bytes = vec4_bytes(&vec4s);
+                queue.write_buffer(&gpu.buffer, a as u64 * LightRow::BYTES, &bytes);
+            }
+        }
+        mirror.written[2] = Some(gpu.buffer.id());
+        mirror.dirty_lights = None;
     }
 }
 
@@ -751,7 +1207,7 @@ mod tests {
             s[i..i + j].to_string()
         };
         assert_eq!(body(&town), body(&terrain));
-        assert!(town.contains("if bayer4(in.position.xy) < field.centre.w {"));
+        assert!(town.contains("if bayer4(in.position.xy) < field.fade.x {"));
     }
 
     /// `field_lit.wgsl` carries the terrain's light constants, and they are
@@ -798,13 +1254,15 @@ mod tests {
             "var ambient = base * SKY_FILL * max(AMBIENT_FLOOR, mix(NIGHT_FILL, 1.0, daylight) * sky);"
                 .to_string(),
             "out.color.rgb * sun_up + ambient * (1.0 - sun_up) + mirrored + lamp".to_string(),
-            "@binding(100) var<uniform> field: Field;".to_string(),
+            // `crab-breeze-lessons` rank 2: a mesh's own row, found by its
+            // tag, and what every mesh reads alike.
+            "@binding(104) var<storage, read> rows: array<Field>;".to_string(),
+            "field = rows[mesh_functions::get_tag(in.instance_index)];".to_string(),
+            "@binding(100) var<storage, read> scene: Scene;".to_string(),
             // `cities-in-the-world` decision 7a: a building's own lights, as
-            // many as the uniform carries, lit the mockup's way.
-            format!("lights: array<vec4<f32>, {MAX_ROOM_LIGHTS}>,"),
-            format!("light_colour: array<vec4<f32>, {MAX_ROOM_LIGHTS}>,"),
-            format!("light_span: array<vec4<f32>, {MAX_ROOM_LIGHTS}>,"),
-            format!("let count = min(u32(field.look.w), {MAX_ROOM_LIGHTS}u);"),
+            // many as a row carries, lit the mockup's way.
+            "@binding(105) var<storage, read> room: array<RoomLight>;".to_string(),
+            format!("let count = min(u32(field.lights.y), {MAX_ROOM_LIGHTS}u);"),
             "q * q * (0.3 + 0.7 * max(facing, 0.0)) * d * d / (d * d + 0.36)".to_string(),
             "let fire = 0.9 + 0.3 * night;".to_string(),
             "let candle = 1.8 * clamp((night - 0.25) / 0.35, 0.0, 1.0);".to_string(),
@@ -896,6 +1354,167 @@ mod tests {
         assert!(
             (at_midnight - light::NIGHT_FILL).abs() < 1e-4,
             "{at_midnight}"
+        );
+    }
+
+    /// The rows, lights and view the CPU writes are laid out as
+    /// `field_lit.wgsl` reads them: the same number of vec4s, read off the
+    /// shader's own structs (`crab-breeze-lessons` rank 2).
+    #[test]
+    fn the_rows_are_the_shaders_structs() {
+        let shader = include_str!("../../../assets/shaders/field_lit.wgsl").replace("\r\n", "\n");
+        let vec4s = |name: &str| -> u64 {
+            let start = shader
+                .find(&format!("struct {name} {{"))
+                .unwrap_or_else(|| panic!("struct {name}"));
+            let body = &shader[start..start + shader[start..].find("\n}").expect("its end")];
+            body.lines()
+                .map(|l| l.split("//").next().unwrap_or("").trim())
+                .filter(|l| l.contains("vec4<f32>"))
+                .map(|l| match l.split("vec4<f32>, ").nth(1) {
+                    Some(n) => n.trim_end_matches(">,").parse::<u64>().expect("a length"),
+                    None => 1,
+                })
+                .sum()
+        };
+        assert_eq!(vec4s("Field") * 16, FieldRow::BYTES);
+        assert_eq!(
+            FieldRow::default().vec4s().len() as u64 * 16,
+            FieldRow::BYTES
+        );
+        assert_eq!(vec4s("RoomLight") * 16, LightRow::BYTES);
+        assert_eq!(vec4s("Scene") * 16, FieldView::BYTES);
+        assert_eq!(FieldView::default().bytes().len() as u64, FieldView::BYTES);
+    }
+
+    /// Meshes of one base material share one field-lit material, each with
+    /// its own row by its tag; a gone mesh's row is given to the next; and a
+    /// mesh fading writes its row, never a material (`crab-breeze-lessons`
+    /// rank 2).
+    #[test]
+    fn meshes_of_one_material_share_it_and_keep_their_own_rows() {
+        let mut world = World::new();
+        let mut standard = Assets::<StandardMaterial>::default();
+        let stone = standard.add(StandardMaterial::default());
+        let timber = standard.add(StandardMaterial::default());
+        world.insert_resource(standard);
+        world.insert_resource(Assets::<FieldLitMaterial>::default());
+        let mut buffers = Assets::<ShaderStorageBuffer>::default();
+        let rows = FieldRows::new(&mut buffers);
+        world.insert_resource(buffers);
+        world.insert_resource(rows);
+        world.insert_resource(crate::planet::shadow::SunShadowMaps {
+            map: Handle::default(),
+            cascades: Handle::default(),
+        });
+        let root = world
+            .spawn((LitByField, LitLikeTerrain, Transform::default()))
+            .id();
+        let piece = |world: &mut World, material: &Handle<StandardMaterial>| {
+            let e = world
+                .spawn((
+                    MeshMaterial3d(material.clone()),
+                    Transform::default(),
+                    GlobalTransform::default(),
+                ))
+                .id();
+            world.entity_mut(root).add_child(e);
+            e
+        };
+        let a = piece(&mut world, &stone);
+        let b = piece(&mut world, &stone);
+        let c = piece(&mut world, &timber);
+        let mut take = IntoSystem::into_system(take_the_field);
+        take.initialize(&mut world);
+        take.run((), &mut world).unwrap();
+        world.flush();
+        let material = |world: &World, e: Entity| {
+            world
+                .get::<MeshMaterial3d<FieldLitMaterial>>(e)
+                .expect("field-lit")
+                .0
+                .clone()
+        };
+        let tag = |world: &World, e: Entity| world.get::<bevy::mesh::MeshTag>(e).expect("a tag").0;
+        assert_eq!(
+            material(&world, a),
+            material(&world, b),
+            "one material for one base"
+        );
+        assert_ne!(
+            material(&world, a),
+            material(&world, c),
+            "another for another"
+        );
+        assert_eq!(world.resource::<Assets<FieldLitMaterial>>().len(), 2);
+        assert_ne!(tag(&world, a), tag(&world, b), "a row each");
+        let rows = world.resource::<FieldRows>();
+        assert_eq!((rows.len(), rows.materials()), (3, 2));
+        assert_eq!(
+            rows.row(a).expect("a's row").look.x,
+            1.0,
+            "lit as the terrain"
+        );
+
+        // A fade reaches the row, and no material is touched.
+        world.entity_mut(root).insert(Faded(0.5));
+        let before: Vec<_> = world
+            .resource::<Assets<FieldLitMaterial>>()
+            .iter()
+            .map(|(id, m)| (id, m.extension.rows.id()))
+            .collect();
+        let mut light = IntoSystem::into_system(light_from_the_field);
+        light.initialize(&mut world);
+        light.run((), &mut world).unwrap();
+        let rows = world.resource::<FieldRows>();
+        assert_eq!(rows.row(a).expect("a's row").fade.x, 0.5);
+        assert!(rows.uploads.rows.iter().any(|(r, _)| *r == tag(&world, a)));
+        let after: Vec<_> = world
+            .resource::<Assets<FieldLitMaterial>>()
+            .iter()
+            .map(|(id, m)| (id, m.extension.rows.id()))
+            .collect();
+        assert_eq!(before, after);
+
+        // A gone mesh's row goes to the next.
+        let freed = tag(&world, b);
+        world.despawn(b);
+        let mut drop = IntoSystem::into_system(drop_the_field);
+        drop.initialize(&mut world);
+        drop.run((), &mut world).unwrap();
+        let d = piece(&mut world, &timber);
+        take.run((), &mut world).unwrap();
+        world.flush();
+        assert_eq!(tag(&world, d), freed);
+        assert_eq!(world.resource::<FieldRows>().len(), 3);
+    }
+
+    /// A building with more lights than the shader reads keeps its fires
+    /// and drops candles (`cities-in-the-world` decision 7a).
+    #[test]
+    fn room_lights_pack_fires_first_and_no_more_than_the_shader_reads() {
+        use pbd_core::settlement::pieces::{LightKind, RoomLight};
+        let light = |kind, x: f32| RoomLight {
+            kind,
+            at: Vec3::new(x, 0.0, 0.0),
+            power: 1.0,
+            below_m: 1.0,
+            above_m: 2.0,
+        };
+        // Twenty candles first, then ten fires: thirty, more than fit.
+        let lights: Vec<RoomLight> = (0..20)
+            .map(|i| light(LightKind::Candle, i as f32))
+            .chain((0..10).map(|i| light(LightKind::Hearth, 100.0 + i as f32)))
+            .collect();
+        let packed = RoomLights(lights).pack();
+        assert_eq!(packed.len(), MAX_ROOM_LIGHTS);
+        assert!(
+            packed[..10].iter().all(|l| l.colour.w == 0.0),
+            "the fires first"
+        );
+        assert!(
+            packed[10..].iter().all(|l| l.colour.w == 1.0),
+            "then candles"
         );
     }
 

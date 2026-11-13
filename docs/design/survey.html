@@ -110,6 +110,30 @@ code { font: 500 0.9em var(--mono); }
 .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 10px; }
 .shots img { aspect-ratio: 16 / 10; object-fit: cover; }
 .shots a { display: block; }
+.cmp { display: grid; gap: 10px; min-width: 0; }
+.cmp-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cmp-bar .lbl { font: 500 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+.chip {
+  font: 500 13px/1 var(--mono); color: var(--ink); background: transparent; border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px; min-height: 36px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--brass-soft); border-color: var(--brass); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-width: 0; }
+.pane { display: grid; gap: 4px; min-width: 0; }
+.view {
+  overflow: auto; border-radius: 8px; background: #000; aspect-ratio: 16 / 10; min-width: 0;
+  overscroll-behavior: contain;
+}
+.view img { display: block; width: calc(var(--z, 1) * 100%); max-width: none; height: auto; border-radius: 0; }
+.view.px img { image-rendering: pixelated; }
+.pane-cap { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+.pane-cap a { color: var(--brass); white-space: nowrap; }
+.wipe { position: relative; }
+.wipe .top { position: absolute; inset: 0 auto auto 0; clip-path: inset(0 calc(100% - var(--x, 50%)) 0 0); }
+.wipe .line { position: absolute; top: 0; bottom: 0; left: var(--x, 50%); width: 2px; background: var(--brass); pointer-events: none; }
+.wipe-wrap { position: relative; width: calc(var(--z, 1) * 100%); }
+input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
+.cmp-note { margin: 0; font-size: 13px; color: var(--muted); }
 .qmeta { margin: 0; font: 500 12px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
 .qmeta a, .how a, .lede a { color: var(--brass); }
 .dec-list .d-id { font: 500 12px/1 var(--mono); color: var(--brass); margin-right: 8px; }
@@ -195,18 +219,40 @@ const SECTIONS = [
         ] },
     ] },
   { tag: 'T', name: 'Tech and performance',
-    lead: 'From lighting-perf (2026-11-12), toward your "get worst case to 60". On foot in the rain the frame waits on the GPU, and the rain itself (the haze and streaks drawn over the whole screen) was 1.5 ms of it. Each pair below is the same frame from the same build, the rain drawn at full size and then at half size, cropped where the two differ most.',
+    lead: 'From lighting-perf (2026-11-12), toward your "get worst case to 60". On foot in the rain the frame waits on the GPU, and the rain itself (the haze and streaks drawn over the whole screen) was 1.5 ms of it. Below, six frames from the same build, the rain drawn at full size and at half size: compare them side by side, with a slider, or as a difference.',
     qs: [
       { id: 'T15', q: 'Draw the rain at half size? It takes the rain from 1.49 ms to 0.45 ms of GPU, and Holbrook\'s lane in rain from 10.0 to 8.7 ms per frame (p99 20.7 to 18.6 ms). The rain is gathered on a quarter of the pixels and laid over the scene weighed by depth, so a wall\'s edge keeps no rain from behind it. By day almost every changed pixel moves by 2/255 or less; at night 17% move by more, because the rain\'s fine grain is now drawn per 2 x 2 pixels.',
         options: ['Half size (0.5), the setting kept', 'Full size, as before (1.0)'], rec: 0,
         why: 'It is the largest single cut left on foot in rain, and I cannot tell the two apart at play size. rain_render_scale in weather.ron puts the full-size rain back whenever you want it.',
         change: 'lighting-perf (task 2.9)', asked: '2026-11-12',
-        images: [
-          { src: 'img/t15-day-full.png', alt: 'Holbrook lane at 10:00 in rain, the rain drawn at full size', caption: 'By day, full size (today).' },
-          { src: 'img/t15-day-half.png', alt: 'The same frame with the rain drawn at half size', caption: 'By day, half size (recommended).' },
-          { src: 'img/t15-night-full.png', alt: 'Holbrook lane at 22:00 in rain, the sky over the roofs, the rain at full size', caption: 'At night, full size (today).' },
-          { src: 'img/t15-night-half.png', alt: 'The same frame with the rain drawn at half size', caption: 'At night, half size (recommended).' },
-        ] },
+        compare: {
+          base: 'img/t15/', a: 'Full size (today)', b: 'Half size (recommended)',
+          note: 'Every frame is 1440 x 900, straight from the game (--capture, same build, same frame 300; only rain_render_scale differs). Zoom in and drag either picture: both move together. "Difference x8" shows where full and half differ, brightened 8 times, beside the difference between two full-size runs of the same frame, which is the game\'s own run-to-run noise.',
+          scenes: [
+            { id: 'lane-night-south', label: 'Lane, 22:00' },
+            { id: 'lane-day-south', label: 'Lane, 10:00, south' },
+            { id: 'lane-day-north', label: 'Lane, 10:00, north' },
+            { id: 'puddle-wall', label: 'Puddle under a wall' },
+            { id: 'town-day', label: 'Town, 10:00' },
+            { id: 'shore-300m-rain', label: 'Shore from 300 m' },
+          ] } },
+      { id: 'T16', q: 'Trace wet ground\'s reflections at half size? On foot in rain the reflections (the ray that finds the houses, the walls and the sky in a puddle) were the largest piece of the frame left: tracing one pixel in each 2 x 2 and laying the result back by depth and direction takes Holbrook\'s lane from 8.3 to 7.0 ms per frame and its worst 1% from 16.8 to 12.7 ms (at 22:00 17.3 to 13.3; the town walk 17.2 to 12.7). With it, every test route stays above 60 fps for 99% of frames. The ripples still bend the sky at full size; what the reflection shows is now per 2 x 2 pixels, so 6-26% of a rainy frame\'s pixels move, mostly at the ripples\' scale. No halo at a wall\'s foot.',
+        options: ['Half size (0.5), the setting kept', 'Full size, as before (1.0)'], rec: 0,
+        why: 'It is what brings the rain to 60 fps at the worst 1%, and the reflected houses read the same. reflect_render_scale in lighting.ron puts the full-size traces back whenever you want them.',
+        change: 'lighting-perf (task 2.8)', asked: '2026-11-12',
+        compare: {
+          base: 'img/t16/', a: 'Full size (today)', b: 'Half size (recommended)',
+          note: 'Every frame is 1440 x 900, straight from the game (--capture, same build, same frame 300; only reflect_render_scale differs). Zoom in and drag either picture: both move together. "Difference x8" shows where full and half differ, brightened 8 times, beside the difference between two full-size runs of the same frame, the game\'s own run-to-run noise (the harbour from 300 m is not repeatable even at full size).',
+          scenes: [
+            { id: 'puddle-wall', label: 'Puddle under a wall' },
+            { id: 'lane-day-south', label: 'Lane, 10:00, south' },
+            { id: 'lane-day-north', label: 'Lane, 10:00, north' },
+            { id: 'lane-night-south', label: 'Lane, 22:00, south' },
+            { id: 'lane-night-north', label: 'Lane, 22:00, north' },
+            { id: 'town-rain', label: 'Holbrook from 25 m' },
+            { id: 'harbour-30m', label: 'Harbour from 30 m' },
+            { id: 'harbour-300m', label: 'Harbour from 300 m' },
+          ] } },
     ] },
 ];
 
@@ -342,6 +388,7 @@ function questionCard(q) {
     q.images ? el('div', { class: 'shots' }, q.images.map((im) => el('figure', {},
       el('a', { href: im.src, target: '_blank', rel: 'noopener' }, el('img', { src: im.src, alt: im.alt, loading: 'lazy' })),
       el('figcaption', { text: im.caption })))) : null,
+    q.compare ? compareBlock(q) : null,
     q.link ? el('p', { class: 'qmeta' }, el('a', { href: q.link.url, target: '_blank', rel: 'noopener' }, q.link.label)) : null,
     el('p', { class: 'qmeta', text: [q.change ? 'OpenSpec: ' + q.change : '', q.asked ? 'asked ' + q.asked : ''].filter(Boolean).join('  ·  ') }),
     el('div', { class: 'opts', role: 'group', 'aria-label': q.id + ' options' }, opts),
@@ -350,6 +397,69 @@ function questionCard(q) {
     status);
   cards[q.id] = { root, opts, textarea, status };
   return root;
+}
+
+// A full-size-against-half-size viewer: side by side with zoom and linked panning, a wipe slider, and the difference
+// beside the game's own run-to-run noise.
+function compareBlock(q) {
+  const c = q.compare;
+  const st = { scene: c.scenes[0].id, mode: 'side', zoom: 1 };
+  const box = el('div', { class: 'cmp' });
+  const stage = el('div');
+  const chips = (label, items, key) => {
+    const bs = items.map(([v, t]) => el('button', { class: 'chip', type: 'button', 'aria-pressed': String(st[key] === v),
+      onclick: () => { st[key] = v; bs.forEach((b, i) => b.setAttribute('aria-pressed', String(items[i][0] === v))); draw(); } }, t));
+    return el('div', { class: 'cmp-bar', role: 'group', 'aria-label': label }, el('span', { class: 'lbl', text: label }), bs);
+  };
+  const src = (kind) => c.base + st.scene + '-' + kind + '.png';
+  const pane = (kind, cap) => {
+    const view = el('div', { class: 'view' + (st.zoom > 1 ? ' px' : '') });
+    view.style.setProperty('--z', st.zoom);
+    view.append(el('img', { src: src(kind), alt: cap + ': ' + st.scene, loading: 'lazy' }));
+    return { view, node: el('div', { class: 'pane' }, view,
+      el('div', { class: 'pane-cap' }, el('span', { text: cap }),
+        el('a', { href: src(kind), target: '_blank', rel: 'noopener', text: 'open 1:1' }))) };
+  };
+  const link = (views) => {
+    let busy = false;
+    views.forEach((v) => v.addEventListener('scroll', () => {
+      if (busy) return; busy = true;
+      views.forEach((o) => { if (o !== v) { o.scrollLeft = v.scrollLeft; o.scrollTop = v.scrollTop; } });
+      requestAnimationFrame(() => { busy = false; });
+    }));
+  };
+  function draw() {
+    stage.replaceChildren();
+    if (st.mode === 'wipe') {
+      const view = el('div', { class: 'view' + (st.zoom > 1 ? ' px' : '') });
+      const wrap = el('div', { class: 'wipe-wrap wipe' });
+      wrap.style.setProperty('--z', st.zoom);
+      const under = el('img', { src: src('half'), alt: c.b, loading: 'lazy', style: 'width:100%' });
+      const top = el('img', { class: 'top', src: src('full'), alt: c.a, loading: 'lazy', style: 'width:100%' });
+      wrap.append(under, top, el('div', { class: 'line' }));
+      view.append(wrap);
+      const range = el('input', { class: 'wipe-range', type: 'range', min: '0', max: '100', value: '50',
+        'aria-label': 'Wipe between full size (left) and half size (right)' });
+      range.addEventListener('input', () => wrap.style.setProperty('--x', range.value + '%'));
+      stage.append(el('div', { class: 'pane' }, view,
+        el('div', { class: 'pane-cap' }, el('span', { text: 'Left of the line: ' + c.a + '. Right: ' + c.b + '.' }))), range);
+    } else {
+      const [ka, ca, kb, cb] = st.mode === 'diff'
+        ? ['diff', 'Full against half, x8', 'noise', 'Full against full (a second run), x8']
+        : ['full', c.a, 'half', c.b];
+      const p1 = pane(ka, ca), p2 = pane(kb, cb);
+      stage.append(el('div', { class: 'pair' }, p1.node, p2.node));
+      link([p1.view, p2.view]);
+    }
+  }
+  box.append(
+    chips('Scene', c.scenes.map((s) => [s.id, s.label]), 'scene'),
+    chips('View', [['side', 'Side by side'], ['wipe', 'Slider'], ['diff', 'Difference x8']], 'mode'),
+    chips('Zoom', [[1, 'Fit'], [2, '2x'], [4, '4x']], 'zoom'),
+    stage,
+    el('p', { class: 'cmp-note', text: c.note }));
+  draw();
+  return box;
 }
 
 function isAnswered(a) {

@@ -23,6 +23,7 @@ use crate::field_light::{
 };
 use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
+use crate::planet::shadow::{CasterChunk, TownCasting};
 use crate::saves::WorldSave;
 use crate::sites::WorldSites;
 use crate::walking::{EYE_HEIGHT, HALF_HEIGHT, Structures, Walker, WalkingState};
@@ -153,6 +154,13 @@ pub struct Laid {
     /// (`sail-the-cog` design 6). The town stands it empty: the cog is a
     /// craft (step 3, part 3).
     pub cog: Option<usize>,
+    /// Its dressing's faces in `meshes`, a run of vertices a texture
+    /// (`crab-breeze-lessons` rank 5).
+    pub props: BTreeMap<String, (usize, usize)>,
+    /// Its shadow casters, chunked ([`casting`]) on the cut's own task so a
+    /// town's standing frame does not (`descent-spikes`); `None` where it
+    /// was cut another way, and `spawn_town` chunks them then.
+    pub casting: Option<std::sync::Arc<TownCasting>>,
 }
 
 /// The drawn sea's surface, metres over the radius: the layers' sea level
@@ -262,6 +270,8 @@ pub fn build(
         lights: built.lights,
         dressing: (built.dressing, built.dressing_skipped),
         cog: built.cog,
+        props: built.props,
+        casting: None,
     })
 }
 
@@ -347,6 +357,39 @@ pub struct TownAssets {
     /// The jungle village (slice 4i).
     pub jungle: Template,
     pub repeats: Arc<BTreeMap<String, f32>>,
+    /// `assets/config/towns.ron`.
+    pub draw: TownDraw,
+}
+
+/// How a standing town is drawn: `assets/config/towns.ron`.
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+pub struct TownDraw {
+    /// How many of the sun's cascades, finest first, a dressing thing casts
+    /// into (`crab-breeze-lessons` rank 5): 1 to 4.
+    pub dressing_cascades: usize,
+}
+
+impl TownDraw {
+    pub fn validate(&self) -> Result<(), String> {
+        if !(1..=crate::planet::shadow::CASCADE_COUNT).contains(&self.dressing_cascades) {
+            return Err(format!(
+                "dressing_cascades is {}, not 1 to {}",
+                self.dressing_cascades,
+                crate::planet::shadow::CASCADE_COUNT
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// `assets/config/towns.ron`, checked.
+pub fn load_town_draw() -> TownDraw {
+    let path = asset("config/towns.ron");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let draw: TownDraw = ron::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    draw.validate()
+        .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    draw
 }
 
 impl TownAssets {
@@ -361,6 +404,7 @@ impl TownAssets {
             tundra: load_template("tundra"),
             jungle: load_template("jungle"),
             repeats: Arc::new(load_repeats()),
+            draw: load_town_draw(),
         }
     }
 
@@ -937,6 +981,7 @@ pub fn stand_in_range(world: &mut World) {
                 .cloned();
                 let id = h.site.id;
                 let (kits, repeat) = (kits.clone(), repeat.clone());
+                let cascades = assets.draw.dressing_cascades;
                 let task = AsyncComputeTaskPool::get().spawn(async move {
                     build(
                         &h.site,
@@ -947,6 +992,10 @@ pub fn stand_in_range(world: &mut World) {
                         &config,
                         sheet,
                     )
+                    .map(|mut laid| {
+                        laid.casting = Some(Arc::new(casting(&laid, cascades)));
+                        laid
+                    })
                 });
                 (id, task)
             })
@@ -1109,6 +1158,56 @@ pub(crate) fn repeat_in(world: &World) -> impl Fn(&str) -> f32 + use<> {
     move |m: &str| repeats.get(m).copied().filter(|r| *r > 0.0).unwrap_or(2.0)
 }
 
+/// The one material a town texture is drawn with (`crab-breeze-lessons`
+/// rank 2), by its image and whether it is cut out, kept for the run: every
+/// piece, door and craft's cut in it shares it, so the field-lit material
+/// made from it is shared too and its meshes batch. No image is a flame.
+#[derive(Resource, Default)]
+pub struct TownMaterials(
+    std::collections::HashMap<(Option<AssetId<Image>>, bool), Handle<StandardMaterial>>,
+);
+
+/// A town texture's material, made the first time it is asked for.
+pub(crate) fn town_material(
+    world: &mut World,
+    image: Option<Handle<Image>>,
+    cut: bool,
+) -> Handle<StandardMaterial> {
+    let key = (image.as_ref().map(Handle::id), cut);
+    if let Some(handle) = world
+        .get_resource::<TownMaterials>()
+        .and_then(|m| m.0.get(&key))
+    {
+        return handle.clone();
+    }
+    let material = world
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(match image {
+            Some(image) => StandardMaterial {
+                base_color_texture: Some(image),
+                perceptual_roughness: 0.93,
+                // A net is see-through between its cords (task 4.2c).
+                alpha_mode: if cut {
+                    AlphaMode::Mask(0.5)
+                } else {
+                    AlphaMode::Opaque
+                },
+                ..default()
+            },
+            None => StandardMaterial {
+                base_color: Color::linear_rgb(FLAME_RGB[0], FLAME_RGB[1], FLAME_RGB[2]),
+                unlit: true,
+                cull_mode: None,
+                ..default()
+            },
+        });
+    world
+        .get_resource_or_insert_with(TownMaterials::default)
+        .0
+        .insert(key, material.clone());
+    material
+}
+
 /// A cut's faces drawn under `parent` in the towns' textures, in the
 /// parent's frame, a flame unlit in [`FLAME_RGB`] as a town's is: the cog a
 /// craft carries. Each mesh drawn, by its texture's name.
@@ -1130,21 +1229,7 @@ pub(crate) fn spawn_meshes(
     let mut out = Vec::new();
     for (name, mesh, image) in parts {
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
-        let material = world
-            .resource_mut::<Assets<StandardMaterial>>()
-            .add(match image {
-                Some(image) => StandardMaterial {
-                    base_color_texture: Some(image),
-                    perceptual_roughness: 0.93,
-                    ..default()
-                },
-                None => StandardMaterial {
-                    base_color: Color::linear_rgb(FLAME_RGB[0], FLAME_RGB[1], FLAME_RGB[2]),
-                    unlit: true,
-                    cull_mode: None,
-                    ..default()
-                },
-            });
+        let material = town_material(world, image, false);
         let part = world
             .spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()))
             .id();
@@ -1227,13 +1312,7 @@ fn leaf_mesh(assets: &TownAssets, b: &BuildingSolids, door: usize, angle: f32) -
 /// Each door of a town's buildings as its own entity under the town's root.
 fn spawn_doors(world: &mut World, root: Entity, site: u32, solids: &[BuildingSolids]) {
     let image = texture(world.resource::<AssetServer>(), "timber");
-    let material = world
-        .resource_mut::<Assets<StandardMaterial>>()
-        .add(StandardMaterial {
-            base_color_texture: Some(image),
-            perceptual_roughness: 0.93,
-            ..default()
-        });
+    let material = town_material(world, Some(image), false);
     for (n, b) in solids.iter().enumerate() {
         for (k, d) in b.doors.iter().enumerate() {
             let angle = if d.open { OPEN_ANGLE } else { 0.0 };
@@ -1440,27 +1519,7 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
     for (room, mesh, image, cut) in pieces {
         let flame = image.is_none();
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
-        let material = world
-            .resource_mut::<Assets<StandardMaterial>>()
-            .add(match image {
-                Some(image) => StandardMaterial {
-                    base_color_texture: Some(image),
-                    perceptual_roughness: 0.93,
-                    // A net is see-through between its cords (task 4.2c).
-                    alpha_mode: if cut {
-                        AlphaMode::Mask(0.5)
-                    } else {
-                        AlphaMode::Opaque
-                    },
-                    ..default()
-                },
-                None => StandardMaterial {
-                    base_color: Color::linear_rgb(FLAME_RGB[0], FLAME_RGB[1], FLAME_RGB[2]),
-                    unlit: true,
-                    cull_mode: None,
-                    ..default()
-                },
-            });
+        let material = town_material(world, image, cut);
         let mut child = world.spawn((Mesh3d(mesh), MeshMaterial3d(material), Transform::default()));
         if flame {
             child.insert(TownFlame);
@@ -1486,11 +1545,18 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         let child = child.id();
         world.entity_mut(root).add_child(child);
     }
-    let casting = casting(laid);
+    let casting = laid.casting.clone().unwrap_or_else(|| {
+        let dressing_cascades = world
+            .get_resource::<TownAssets>()
+            .map_or(crate::planet::shadow::CASCADE_COUNT, |a| {
+                a.draw.dressing_cascades
+            });
+        std::sync::Arc::new(casting(laid, dressing_cascades))
+    });
     let mut casters =
         world.get_resource_or_insert_with(crate::planet::shadow::TownCasters::default);
     casters.0.retain(|(site, _)| *site != laid.site);
-    casters.0.push((laid.site, std::sync::Arc::new(casting)));
+    casters.0.push((laid.site, casting));
     root
 }
 
@@ -1498,20 +1564,65 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
 /// triangle of its outside and its rooms, a floor shading the room under it,
 /// and not its doors, which swing, nor what is cut out (a net), which would
 /// cast as a solid sheet.
-pub fn casting(laid: &Laid) -> Vec<[f32; 3]> {
+///
+/// Laid out in chunks of [`CASTER_CHUNK_M`] by where each triangle stands,
+/// each with its bounds, so a cascade draws only the chunks its box holds
+/// (`crab-breeze-lessons` rank 5). The dressing's triangles are chunked
+/// apart and cast into the finest `dressing_cascades` only. Every triangle
+/// is kept whole and drawn once.
+pub fn casting(laid: &Laid, dressing_cascades: usize) -> TownCasting {
     let cut = cut_textures();
-    laid.meshes
-        .iter()
-        .filter(|(name, _)| !cut.contains(*name))
-        .map(|(_, buf)| buf)
-        .chain(laid.rooms.iter().flat_map(|m| {
-            m.iter()
-                .filter(|(name, _)| name.as_str() != FLAME)
-                .map(|(_, buf)| buf)
-        }))
-        .flat_map(|m| m.positions.iter().copied())
-        .collect()
+    let all = crate::planet::shadow::CASCADE_COUNT as u8;
+    let prop_cascades = dressing_cascades.min(all as usize) as u8;
+    // Each triangle, and how many cascades it casts into.
+    let mut triangles: Vec<([[f32; 3]; 3], u8)> = Vec::new();
+    for (name, buf) in laid.meshes.iter().filter(|(name, _)| !cut.contains(*name)) {
+        let props = laid.props.get(name).copied();
+        for (i, t) in buf.positions.chunks_exact(3).enumerate() {
+            let prop = props.is_some_and(|(from, to)| (from..to).contains(&(i * 3)));
+            triangles.push(([t[0], t[1], t[2]], if prop { prop_cascades } else { all }));
+        }
+    }
+    for room in &laid.rooms {
+        for (_, buf) in room.iter().filter(|(name, _)| name.as_str() != FLAME) {
+            for t in buf.positions.chunks_exact(3) {
+                triangles.push(([t[0], t[1], t[2]], all));
+            }
+        }
+    }
+    // By chunk: its cascades, then the cell its centroid is in. A BTreeMap,
+    // so the order is the same on every run.
+    let mut by_chunk: BTreeMap<(u8, [i32; 3]), Vec<[[f32; 3]; 3]>> = BTreeMap::new();
+    for (t, cascades) in triangles {
+        let centre = (Vec3::from(t[0]) + Vec3::from(t[1]) + Vec3::from(t[2])) / 3.0;
+        let cell = (centre / CASTER_CHUNK_M).floor().as_ivec3().to_array();
+        by_chunk.entry((cascades, cell)).or_default().push(t);
+    }
+    let mut out = TownCasting::default();
+    for ((cascades, _), tris) in by_chunk {
+        let first = out.positions.len() as u32;
+        let (mut low, mut high) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+        for t in &tris {
+            for v in t {
+                low = low.min(Vec3::from(*v));
+                high = high.max(Vec3::from(*v));
+                out.positions.push(*v);
+            }
+        }
+        out.chunks.push(CasterChunk {
+            low,
+            high,
+            first,
+            count: out.positions.len() as u32 - first,
+            cascades,
+        });
+    }
+    out
 }
+
+/// How wide a town's caster chunk is, metres (`crab-breeze-lessons` rank 5):
+/// about the finest cascade's box, so it culls whole chunks there.
+pub const CASTER_CHUNK_M: f32 = 16.0;
 
 /// The pieces' name for a flame (`pbd_core::settlement::pieces`), which is
 /// drawn unlit in [`FLAME_RGB`] and casts nothing.

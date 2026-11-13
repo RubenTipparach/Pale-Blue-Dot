@@ -452,17 +452,21 @@ fn holbrooks_rooms_take_their_share_of_the_sky_and_the_town_casts() {
         .map(|b| b.positions.len())
         .sum::<usize>();
     assert!(flames > 0, "the hearths and sconces burn");
-    assert_eq!(casting(&laid).len(), outside + inside - flames);
+    assert_eq!(
+        casting(&laid, crate::planet::shadow::CASCADE_COUNT)
+            .positions
+            .len(),
+        outside + inside - flames
+    );
     // Decision 7a: a building's rooms carry its lights, a house's hearth
     // first, into their material.
-    let mut field = crate::field_light::FieldUniform::default();
-    crate::field_light::RoomLights(laid.lights[0].clone()).pack(&mut field);
-    assert!(field.look.w >= 2.0, "a hearth and a sconce at least");
-    assert_eq!(field.light_colour[0].w, 0.0, "a fire first");
-    for i in 0..field.look.w as usize {
-        let at = field.lights[i];
+    let lights = crate::field_light::RoomLights(laid.lights[0].clone()).pack();
+    assert!(lights.len() >= 2, "a hearth and a sconce at least");
+    assert_eq!(lights[0].colour.w, 0.0, "a fire first");
+    for light in &lights {
+        let at = light.at;
         assert!(at.w > 4.0 && (at.truncate().length() - 4800.0).abs() < 400.0);
-        assert!(field.light_span[i].x < 0.0 && field.light_span[i].y > 0.0);
+        assert!(light.span.x < 0.0 && light.span.y > 0.0);
     }
 
     let shut = SkyShare {
@@ -721,6 +725,7 @@ fn a_village_stands_as_the_walker_comes_and_is_taken_down_as_it_leaves() {
             tundra: load_template("tundra"),
             jungle: load_template("jungle"),
             repeats: Arc::new(load_repeats()),
+            draw: load_town_draw(),
         })
         .insert_resource(Towns {
             held: vec![held],
@@ -1132,7 +1137,71 @@ fn every_harbour_lays_on_its_sea_and_cuts() {
         );
         // `sail-the-cog` design 6, step 1: its cog at its mooring.
         assert!(laid.cog.is_some(), "{}: its cog", site.name);
+        a_towns_casters_are_its_triangles_in_chunks(&laid);
     }
+}
+
+/// `crab-breeze-lessons` rank 5: a town's casters, chunked, are every
+/// triangle the flat list held, once each, whole; each chunk's bounds hold
+/// its triangles; and the dressing's, and only the dressing's, cast into
+/// fewer cascades.
+fn a_towns_casters_are_its_triangles_in_chunks(laid: &Laid) {
+    let all = crate::planet::shadow::CASCADE_COUNT;
+    let flat = casting(laid, all);
+    let fewer = casting(laid, 2);
+    let key = |t: &[[f32; 3]]| {
+        t.iter()
+            .flat_map(|v| v.map(f32::to_bits))
+            .collect::<Vec<_>>()
+    };
+    let triangles = |c: &crate::planet::shadow::TownCasting| {
+        let mut t: Vec<_> = c.positions.chunks_exact(3).map(key).collect();
+        t.sort();
+        t
+    };
+    assert_eq!(
+        triangles(&flat),
+        triangles(&fewer),
+        "{}: the same triangles",
+        laid.name
+    );
+    let mut covered = 0;
+    for chunk in &fewer.chunks {
+        assert_eq!(
+            chunk.first as usize, covered,
+            "{}: chunks in order",
+            laid.name
+        );
+        assert_eq!(chunk.count % 3, 0, "{}: whole triangles", laid.name);
+        covered += chunk.count as usize;
+        for v in &fewer.positions[chunk.first as usize..(chunk.first + chunk.count) as usize] {
+            let v = Vec3::from(*v);
+            assert!(v.cmpge(chunk.low).all() && v.cmple(chunk.high).all());
+        }
+    }
+    assert_eq!(covered, fewer.positions.len());
+    let props: usize = laid.props.values().map(|(from, to)| to - from).sum();
+    let cut = cut_textures();
+    let cut_props: usize = laid
+        .props
+        .iter()
+        .filter(|(name, _)| cut.contains(*name))
+        .map(|(_, (from, to))| to - from)
+        .sum();
+    assert!(props > 0, "{}: its dressing is marked", laid.name);
+    let fewer_vertices: usize = fewer
+        .chunks
+        .iter()
+        .filter(|c| c.cascades == 2)
+        .map(|c| c.count as usize)
+        .sum();
+    assert_eq!(
+        fewer_vertices,
+        props - cut_props,
+        "{}: the dressing, cast nearer",
+        laid.name
+    );
+    assert!(flat.chunks.iter().all(|c| usize::from(c.cascades) == all));
 }
 
 /// Slice 4d: a world stores each harbour once, in schema 3, and a second

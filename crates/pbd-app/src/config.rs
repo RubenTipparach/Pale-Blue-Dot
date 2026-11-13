@@ -487,6 +487,12 @@ pub struct WeatherSettings {
     /// along each axis, 0.25..=1. A full-resolution composite lays it over
     /// the scene.
     pub cloud_render_scale: f32,
+    /// The resolution the rain volume's shells are gathered at, as a fraction
+    /// of the view's along each axis, 0.25..=1 (`lighting-perf` 2.9). Below
+    /// one they are gathered small and laid over the scene at full size,
+    /// weighed by depth so an edge takes no rain from past it; one gathers
+    /// them at full size, as before.
+    pub rain_render_scale: f32,
     /// The march's nearest step, metres. Steps grow with distance from the
     /// eye from here.
     pub cloud_step_m: f32,
@@ -671,6 +677,7 @@ impl Default for WeatherSettings {
             cloud_shear_mps: 25.0,
             cloud_cells: 0.6,
             cloud_render_scale: 0.4,
+            rain_render_scale: 0.5,
             cloud_step_m: 12.0,
             cloud_max_steps: 48,
             cloud_haze: 3.0,
@@ -824,6 +831,10 @@ impl Validated for WeatherSettings {
             .contains(&s.cloud_render_scale)
             .then_some(())
             .ok_or("cloud_render_scale must be within 0.25..=1")?;
+        (0.25..=1.0)
+            .contains(&s.rain_render_scale)
+            .then_some(())
+            .ok_or("rain_render_scale must be within 0.25..=1")?;
         positive("cloud_step_m", &[s.cloud_step_m])?;
         (8..=256)
             .contains(&s.cloud_max_steps)
@@ -1269,6 +1280,12 @@ pub struct LightingSettings {
     /// `PBD_REFLECT=0` forces it off for A/B runs.
     pub reflections: bool,
     pub reflection_reach_m: f32,
+    /// L8's traces (the walk and wet ground's screen trace) at this scale of
+    /// the view, 0.25..=1 (`lighting-perf` 2.8): under one, the terrain asks
+    /// and a pass of that size traces one pixel in each block, laid back over
+    /// by depth and ray; at one, the terrain traces every wet pixel inline,
+    /// as before. A view without MSAA always traces inline.
+    pub reflect_render_scale: f32,
     /// L4: the sun's bounce in the voxel field, and how strong it is drawn.
     /// `PBD_BOUNCE=0` forces it off for A/B runs.
     pub bounce: bool,
@@ -1304,6 +1321,7 @@ impl Default for LightingSettings {
             shadow_cover_soften: 2.0,
             reflections: true,
             reflection_reach_m: 48.0,
+            reflect_render_scale: 0.5,
             bounce: true,
             bounce_strength: 1.0,
             lamp_bake: true,
@@ -1340,6 +1358,10 @@ impl Validated for LightingSettings {
                 self.bounce_strength,
             ],
         )?;
+        (0.25..=1.0)
+            .contains(&self.reflect_render_scale)
+            .then_some(())
+            .ok_or("reflect_render_scale must be within 0.25..=1")?;
         finite("golden_balance", &self.golden_balance)?;
         finite("night_balance", &self.night_balance)
     }
@@ -1399,6 +1421,17 @@ impl LightingSettings {
     /// return nothing, as they do on the first frame.
     pub fn reflect_capture_on(&self) -> bool {
         self.reflect_base() && !REFLECT_OFF.capture
+    }
+
+    /// L8 (`lighting-perf` 2.8): whether the terrain leaves its traces to the
+    /// half-size pass. Both traces off, there is nothing to trace.
+    pub fn reflect_split_on(&self) -> bool {
+        self.reflect_scale() < 1.0 && (self.reflect_walk_on() || self.reflect_screen_on())
+    }
+
+    /// L8's trace scale, after the environment's say (`PBD_REFLECT_SCALE`).
+    pub fn reflect_scale(&self) -> f32 {
+        ENV.reflect_scale.unwrap_or(self.reflect_render_scale)
     }
 
     /// L8 as the model and the config have it, before `PBD_REFLECT`.
@@ -1475,6 +1508,9 @@ struct LightingEnv {
     soft_shadows_off: bool,
     lamp_bake_off: bool,
     bounce_off: bool,
+    /// `PBD_REFLECT_SCALE=<0.25..=1>` overrides `reflect_render_scale`, so
+    /// one exe runs both sizes interleaved (`lighting-perf` 2.8).
+    reflect_scale: Option<f32>,
 }
 
 static ENV: std::sync::LazyLock<LightingEnv> = std::sync::LazyLock::new(|| {
@@ -1488,6 +1524,10 @@ static ENV: std::sync::LazyLock<LightingEnv> = std::sync::LazyLock::new(|| {
         soft_shadows_off: zero("PBD_SOFT_SHADOWS"),
         lamp_bake_off: zero("PBD_LAMP_BAKE"),
         bounce_off: zero("PBD_BOUNCE"),
+        reflect_scale: std::env::var("PBD_REFLECT_SCALE")
+            .ok()
+            .and_then(|v| v.parse::<f32>().ok())
+            .filter(|v| (0.25..=1.0).contains(v)),
     }
 });
 

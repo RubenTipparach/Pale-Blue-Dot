@@ -309,6 +309,23 @@ p95 / p99 ms, `f15a647` then now:
 - **The walk** opens in a storm with the loading screen (a bug being fixed
   in `loading-screen`), so its numbers here are a walk in the rain.
 
+## The rain volume at half size (measured 2026-11-12)
+
+`docs/benchmarks/2026-11-12-rain-half/`. **The rain that is drawn by
+default is the volume** (`rain_renderer: Volume`: sixteen jittered steps of
+streak noise to the ground), not the shells; 2.10's cuts were to the
+shells, which is why they saved nothing. The half-size pass gathers either
+renderer's light and transmittance into a target at `rain_render_scale`
+(0.5) and lays it over the scene at full size, weighed by depth. One exe,
+the scale the only difference: `rain-stroll` p50 / p95 / p99 10.03 / 15.73
+/ 20.74 to **8.69 / 14.02 / 18.56** ms, the rain 1.49 to 0.45 ms of GPU;
+storm 6.03 / 10.40 / 13.88 to 5.73 / 9.57 / 12.90. The shots are hard to
+tell apart side by side, with no halo at an edge; most moved pixels move by
+2/255 or less, 17% by more at night, where the volume's grain is now per 2
+x 2 pixels. Kept, as a recommendation taken (ask only with screenshots):
+the shots are in `docs/screenshots/lighting-perf/2.9-rain-half/` for the
+owner, and `rain_render_scale: 1.0` puts the full-size pass back.
+
 ## Half resolution (owner, 2026-11-12)
 
 The owner: "consider like half resolutions for expensive stuff like bloom
@@ -364,6 +381,156 @@ and fog rendering". Priced against the columns above:
   depth-aware upsample where the terrain reads it. That is a new pass and
   a split of the terrain shader. It waits for ranks 1-2: if they leave
   L8 under ~0.5 ms, it is not worth the pass.
+
+## L8's traces at half size: the pass layout (task 2.8, plan 2026-11-12)
+
+What is left over the floor is on foot in the rain (stroll p99 18.56 ms by
+day, ~21 at 22:00; the town ~21), GPU-bound, and the largest piece of GPU
+left there is wet ground's two traces inside the terrain's fragment shader
+(the walk ~1.5 ms and the screen trace ~0.2 ms of the terrain pass's ~4 ms
+on the stroll, measured in 1.1 before 2.1 took ~0.4 ms off the walk).
+
+**Why it needs a pass of its own (read).** The traces run per wet fragment
+inside `fragment()` of `planet_surface.wgsl`. Tracing one pixel in four in
+place saves nothing: a warp waits for its slowest lane, and neighbouring rays
+in a puddle walk about as far as each other. The rays have to be packed
+densely into a pass of their own. The trace needs a wet pixel's position,
+its reflected ray (rippled), and its column slot. Only the terrain's fragment
+shader knows the last two, and the composite needs the fresnel weight and
+the sky/glint terms that the hit replaces. So the terrain writes them out
+beside its colour. The alternative, a half-size prepass that draws the
+terrain again, costs a second geometry pass (the sun's cascades show a
+terrain draw is ~0.5 ms) and has to repeat the wet code in a second entry
+point. It was not chosen.
+
+**Writing them out needs the terrain in a render pass of its own.** It draws
+today as a `Transparent3d` phase item (`queue_planet`, `distance: f32::MIN`,
+so first) inside Bevy's `main_transparent_pass_3d`. That pass has one colour
+attachment, so the terrain moves into a `ViewNode`, `planet_terrain`, which
+runs between `Node3d::MainTransmissivePass` and `Node3d::MainTransparentPass`.
+That keeps the order exactly: after the opaque towns, before every
+transparent mesh. The node owns the four indirect draws (surface, foliage,
+clutter, columns) that `DrawPlanetIndirect` issued, with the same pipeline
+specialised in `queue_planet` (now kept on the view, not added to the phase).
+
+**The passes, all in that node** (`planet_reflect.rs`; per view, sized with
+the view; MSAA is 4x on the camera, so the G-targets are too):
+
+1. **`planet_terrain`**: the terrain's pass. Colour (the view's MSAA target,
+   loaded, resolved as Bevy's passes do) plus, while `reflect_render_scale`
+   is under 1, two more targets, cleared each frame:
+   - `reflect_req` `Rgba16Uint` (MSAA, read at sample 0): the slot (two
+     halves, the top bit of the upper one says "a request") and the
+     reflected ray, octahedral, two `unorm16`;
+   - `reflect_delta` `Rgba16Float` (MSAA, resolved to a 1x copy):
+     `k*B` (rgb) and `k*fr` (a), where `fr` is the film's weight, `B =
+     fr*env + S + 0.8*L` (the sky the hit would replace, the sun glint `S`
+     and lamp glints `L` that the hit hides), and `k = 1 - 0.55*fog` (the
+     haze `finish()` lays over it).
+   The fragment shader writes them through `var<private>`s that the wet
+   path and `finish()` set; a request draws the miss (`hit = 0`), exactly
+   today's colour where nothing is hit. `fragment` (one target) stays as
+   today's entry point, and `fragment_split` wraps the same body.
+2. **`reflect_half`**: a full-screen pass at `reflect_render_scale` (0.5:
+   720 x 450 at 1440 x 900), new entry point `reflect_gather` in
+   `planet_surface.wgsl`, so `reflect_trace` and `ssr_trace` are the same
+   functions with the same bindings (groups 0-2 as the terrain's, group 3
+   the G-targets, the depth and a small uniform). Each texel takes the first
+   requesting pixel of its 2 x 2 (sample 0), rebuilds its position from the
+   depth (`body_from_clip`, made in f64 and relative to the eye), biases it
+   2 cm toward the eye (not along the normal, which is not written), reads
+   the cover there, and runs the walk and then the screen trace exactly as
+   the fragment did. Out: `reflect_hit` (`Rgba16Float`: colour, weight) and
+   `reflect_aux` (`Rgba16Float`: the ray, the distance from the eye; 0 = no
+   request).
+3. **`reflect_compose`**: a full-screen pass over the view's MSAA colour,
+   additive blend, new `reflect_compose.wgsl`. Per pixel with a request
+   (sample 0), the four half-size texels round it, each weighed bilinearly,
+   by depth (`exp(-|d_t - d| / (0.02 d + 0.1 m))`, as the rain's), and by
+   direction (`smoothstep(0.6, 0.95, dot(r_t, r))`, so a wall's ray does
+   not lend its hit to the floor at the wall's foot). With `hH` and `h` the
+   weighed means of `hit.rgb*hit.a` and `hit.a`, it adds `k*fr*hH - h*k*B`.
+   That is what the fragment's `color*(1-fr) + mix(env,H,h)*fr + S*(1-h) +
+   L*(1-0.8h)`, through `finish()`, adds over the miss, exactly, because
+   each term is linear in `h` and the MSAA resolve is linear. If no weight
+   is over 1e-3, nothing is added (the miss).
+
+**`reflect_render_scale`** (`lighting.ron`, 0.25..=1, default 0.5): at 1.0
+the terrain keeps one target and traces inline as today, and passes 2-3 do
+not run. That is the A/B in one exe, and the regression check for the move
+into `planet_terrain`: at 1.0 the shots must match the build before it to the
+pixel (`capture_repeat.py --against`).
+
+**The sea's trace stays in `water_compose`.** It is 0.14 ms of GPU in the
+storm and nothing on foot (1.1). A pass for it does not pay.
+
+**Frame log**: new columns `planet_terrain`, `reflect_half` and
+`reflect_compose`. `main_transparent_pass_3d` no longer holds the terrain.
+
+**Expected (estimate)**: a quarter of the rays and none in overdrawn
+fragments, against the extra targets' writes (MSAA-compressed, ~0.1 ms) and
+the compose (~0.1 ms). That is 1.0-1.4 ms of the stroll's GPU. Memory: two
+MSAA targets of 8 bytes a sample, ~83 MB at 1440 x 900, plus ~10 MB.
+
+**Look risk**: the hit is now per 2 x 2. The rings still bend the sky and
+the fresnel at full size, but what the reflection shows is softer. At an
+edge, the depth and direction weights keep a hit from crossing a silhouette.
+A pixel that only other surfaces' texels surround shows the sky (the miss).
+Shots (owner's look, since this moves pixels): the Holbrook lane in rain at
+10:00 and 22:00 both ways, a puddle under a wall, a harbour from 30 m and
+300 m, the town in rain, full against half, with a run-to-run noise pair.
+
+### Built and measured (2026-11-12)
+
+`docs/benchmarks/2026-11-12-reflect-half/`: one exe, `PBD_REFLECT_SCALE=1`
+against 0.5, 2 repeats interleaved, latency 2. p50 / p95 / p99 ms:
+
+| scenario | full (inline) | half | terrain GPU, full -> half (+ trace + compose) |
+| --- | ---: | ---: | --- |
+| rain-stroll, 10:00 | 8.27 / 12.94 / 16.79 | **7.03 / 10.46 / 12.68** | 3.75 -> 2.13 (+0.35 +0.05) |
+| rain-stroll, 22:00 | 8.52 / 14.34 / 17.28 | **7.14 / 11.04 / 13.26** | 3.77 -> 2.03 (+0.33 +0.05) |
+| town (rain) | 8.19 / 14.04 / 17.23 | **7.29 / 10.65 / 12.73** | 3.98 -> 2.85 (+0.26 +0.03) |
+| storm | 5.53 / 8.44 / 11.73 | **5.01 / 7.57 / 9.86** | 2.38 -> 1.44 (+0.09 +0.04) |
+| walk | 5.18 / 6.94 / 8.25 | 5.50 / 8.05 / 9.69 | 2.25 -> 2.13 (+0.02 +0.01) |
+
+- **The goal is met in this sitting**: p99 within 16.7 ms in every scenario.
+  On foot in rain the frame gains ~1.3 ms of GPU net, as estimated.
+- **The walk's difference is outside this change**: its slower half run's
+  extra time is the sun's cascades and the transparent pass. Its terrain pass
+  is faster, and the split's own passes cost 0.03 ms where little reflects.
+  The town walk is bimodal in both arms (its wet mode gains 4.5 ms at p99).
+- **One deviation from the plan**: the gather starts each ray 2 cm toward
+  the eye **and 2 cm up**. Toward the eye alone is a millimetre up at a
+  glancing view, and a floor rebuilt from depth a hair low started the walk
+  inside its own layer: the first shots were darker by 1.3/255 in the
+  middle distance, where the walk hit the ground beside it.
+- **At 1.0 the move is exact**: the lane by day and night and the harbour
+  match the build before it to the pixel.
+- **The look**: 6-26% of a rain scene's pixels move, mostly at the ripples'
+  scale (the reflection's content is per 2 x 2). No halo at the wall's foot
+  or the houses' silhouettes. Kept as a recommendation taken (ask only with
+  screenshots); survey T16; `reflect_render_scale: 1.0` puts it back.
+
+### Worst case 60, met (measured 2026-11-12)
+
+`docs/benchmarks/2026-11-12-worst-case-60/`
+(https://claude.ai/artifact/DiyFFNobHpBLsuCpvB5ssk): `f15a647` (main, its
+own latency 1) against the branch at `c05ae5f`, every scenario, 2 repeats.
+p50 / p95 / p99 ms, main then the branch:
+
+| scenario | `f15a647` | branch |
+| --- | ---: | ---: |
+| rain-stroll | 13.88 / 17.94 / 25.38 | 7.18 / 10.70 / 12.86 |
+| rain-stroll, 22:00 | 13.66 / 18.20 / 27.07 | 6.79 / 10.92 / 13.10 |
+| town (rain) | 16.37 / 20.17 / 23.94 | 7.32 / 11.30 / 14.22 |
+| storm | 9.55 / 15.42 / 22.69 | 5.01 / 7.54 / 9.85 |
+| clouds | 9.57 / 15.01 / 22.74 | 4.98 / 7.53 / 9.55 |
+| far-side | 6.14 / 11.03 / 14.38 | 3.78 / 5.92 / 6.95 |
+| walk | 9.14 / 11.43 / 14.45 | 5.65 / 8.38 / 9.93 |
+
+Every scenario is inside 16.7 ms at p99, so the tail classes are not
+re-run and no further lever is taken here. What is still over a budget is
+p95 against 120 fps (8.3 ms) on foot in rain and in the town.
 
 ## Ranked optimizations
 

@@ -144,6 +144,10 @@
     // and the most steps a ray takes (8..256). Measured on an RTX 3070 at
     // 1440x900; see openspec/changes/cloud-budget.
     cloud_render_scale: 0.4,
+    // The rain volume's shells are gathered at this share of the view's
+    // resolution per axis (0.25..1) and laid over the scene at full size,
+    // weighed by depth; 1 gathers them at full size (lighting-perf 2.9).
+    rain_render_scale: 0.5,
     cloud_step_m: 12.0,
     cloud_max_steps: 48,
     // How strongly the air in front of a cloud fades it, as a multiple of the

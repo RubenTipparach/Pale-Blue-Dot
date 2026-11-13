@@ -89,10 +89,67 @@ pub struct SunCascades {
     pub settings: Option<ShadowSettings>,
 }
 
-/// Each town's pieces, as the triangles that cast: its planet-frame positions,
-/// by site. A town adds itself when it is spawned (`towns.rs`).
+/// Each town's pieces, as the triangles that cast, by site. A town adds
+/// itself when it is spawned (`towns.rs`).
 #[derive(Resource, Clone, Default, ExtractResource)]
-pub struct TownCasters(pub Vec<(u32, Arc<Vec<[f32; 3]>>)>);
+pub struct TownCasters(pub Vec<(u32, Arc<TownCasting>)>);
+
+/// How many cascades there are, for the towns' settings.
+pub const CASCADE_COUNT: usize = CASCADES;
+
+/// One town's casters (`crab-breeze-lessons` rank 5): its triangles in the
+/// planet's frame, laid out chunk by chunk, each chunk with its bounds, so
+/// a cascade draws only the chunks its box holds.
+#[derive(Clone, Debug, Default)]
+pub struct TownCasting {
+    pub positions: Vec<[f32; 3]>,
+    pub chunks: Vec<CasterChunk>,
+}
+
+/// A run of a town's caster triangles standing together.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CasterChunk {
+    /// Its bounds in the planet's frame.
+    pub low: Vec3,
+    pub high: Vec3,
+    /// Its vertices in [`TownCasting::positions`].
+    pub first: u32,
+    pub count: u32,
+    /// How many cascades it casts into, finest first: all of them, or fewer
+    /// for a town's dressing.
+    pub cascades: u8,
+}
+
+impl CasterChunk {
+    /// Whether any of it can be drawn into a cascade's box: some corner's
+    /// clip position on the inner side of every face of the box. A chunk
+    /// wholly past one face is clipped whole by the rasterizer, so leaving
+    /// it out draws the same map.
+    pub fn in_box(&self, clip_from_body: &Mat4) -> bool {
+        let corners = (0..8).map(|i| {
+            let at = Vec3::new(
+                if i & 1 == 0 { self.low.x } else { self.high.x },
+                if i & 2 == 0 { self.low.y } else { self.high.y },
+                if i & 4 == 0 { self.low.z } else { self.high.z },
+            );
+            *clip_from_body * at.extend(1.0)
+        });
+        let (mut low, mut high) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+        for c in corners {
+            let c = c.truncate() / c.w;
+            low = low.min(c);
+            high = high.max(c);
+        }
+        // A little slack, so a chunk on a face is never left out.
+        const SLACK: f32 = 1e-3;
+        high.x >= -1.0 - SLACK
+            && low.x <= 1.0 + SLACK
+            && high.y >= -1.0 - SLACK
+            && low.y <= 1.0 + SLACK
+            && high.z >= -SLACK
+            && low.z <= 1.0 + SLACK
+    }
+}
 
 /// Make the maps and the cascades' buffer.
 fn create_maps(
@@ -338,9 +395,8 @@ fn initialize_shadow_pipelines(
 /// A town's triangles on the GPU.
 struct TownBuffer {
     site: u32,
-    source: Arc<Vec<[f32; 3]>>,
+    source: Arc<TownCasting>,
     buffer: Buffer,
-    vertices: u32,
 }
 
 /// What the render world keeps between frames: the matrices each map was
@@ -436,7 +492,7 @@ fn prepare_shadows(
             .any(|(site, source)| *site == t.site && Arc::ptr_eq(source, &t.source))
     });
     for (site, source) in &casters.0 {
-        if state.towns.iter().any(|t| t.site == *site) || source.is_empty() {
+        if state.towns.iter().any(|t| t.site == *site) || source.positions.is_empty() {
             continue;
         }
         state.towns.push(TownBuffer {
@@ -444,10 +500,9 @@ fn prepare_shadows(
             source: source.clone(),
             buffer: device.create_buffer_with_data(&BufferInitDescriptor {
                 label: Some("town caster"),
-                contents: bytemuck::cast_slice(source.as_slice()),
+                contents: bytemuck::cast_slice(source.positions.as_slice()),
                 usage: BufferUsages::VERTEX,
             }),
-            vertices: source.len() as u32,
         });
     }
     let settings = cascades.settings.unwrap_or_default();
@@ -670,9 +725,18 @@ pub(super) fn draw_cascades(
         pass.draw_indirect(&gpu.indirect, 64);
         pass.set_pipeline(town);
         pass.set_bind_group(0, &*gpu.casters[i].1, &[]);
+        // Only the chunks this cascade's box holds, and a town's dressing
+        // only into the finer cascades (`crab-breeze-lessons` rank 5).
+        let clip = state.drawn[i].map(|c| c.clip_from_body.as_mat4());
         for t in &state.towns {
             pass.set_vertex_buffer(0, (*t.buffer).slice(..));
-            pass.draw(0..t.vertices, 0..1);
+            for chunk in &t.source.chunks {
+                if usize::from(chunk.cascades) <= i || clip.is_some_and(|clip| !chunk.in_box(&clip))
+                {
+                    continue;
+                }
+                pass.draw(chunk.first..chunk.first + chunk.count, 0..1);
+            }
         }
     }
     span.end(ctx.command_encoder());
@@ -703,6 +767,29 @@ mod tests {
             "time_span(ctx.command_encoder(), \"{}\")",
             "planet_shadow"
         )));
+    }
+
+    /// A caster chunk is drawn into a cascade when any of it is in its box,
+    /// and left out only when all of it is past one face
+    /// (`crab-breeze-lessons` rank 5).
+    #[test]
+    fn a_caster_chunk_is_drawn_where_its_box_reaches() {
+        // A cascade 20 m across and 100 m deep, looking down -z.
+        let clip = Mat4::orthographic_rh(-10.0, 10.0, -10.0, 10.0, 0.0, 100.0);
+        let chunk = |low: Vec3, high: Vec3| CasterChunk {
+            low,
+            high,
+            first: 0,
+            count: 3,
+            cascades: 4,
+        };
+        assert!(chunk(Vec3::new(-1.0, -1.0, -5.0), Vec3::new(1.0, 1.0, -4.0)).in_box(&clip));
+        // Straddling the edge: in.
+        assert!(chunk(Vec3::new(9.0, -1.0, -5.0), Vec3::new(30.0, 1.0, -4.0)).in_box(&clip));
+        // Wholly to the side, behind the near face or past the far one: out.
+        assert!(!chunk(Vec3::new(11.0, -1.0, -5.0), Vec3::new(30.0, 1.0, -4.0)).in_box(&clip));
+        assert!(!chunk(Vec3::new(-1.0, -1.0, 1.0), Vec3::new(1.0, 1.0, 5.0)).in_box(&clip));
+        assert!(!chunk(Vec3::new(-1.0, -1.0, -300.0), Vec3::new(1.0, 1.0, -200.0)).in_box(&clip));
     }
 
     /// The town caster's shader parses and validates, and names the entry

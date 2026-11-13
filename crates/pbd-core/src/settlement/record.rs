@@ -547,6 +547,29 @@ pub struct Built {
     pub cog_meshes: Meshes,
     /// Which way its bow points, a planet-local unit tangent.
     pub cog_bow: Vec3,
+    /// Where its dressing's faces are in `meshes` (`crab-breeze-lessons`
+    /// rank 5): for each texture, the run of vertices its dressing things
+    /// added. They are small, and cast only into the finer cascades.
+    pub props: BTreeMap<String, (usize, usize)>,
+}
+
+/// The run of vertices each texture gained between two counts of `meshes`.
+fn added(before: &BTreeMap<String, usize>, meshes: &Meshes) -> BTreeMap<String, (usize, usize)> {
+    meshes
+        .iter()
+        .filter_map(|(name, buf)| {
+            let from = before.get(name).copied().unwrap_or(0);
+            (buf.positions.len() > from).then(|| (name.clone(), (from, buf.positions.len())))
+        })
+        .collect()
+}
+
+/// How many vertices each texture of `meshes` holds.
+fn counts(meshes: &Meshes) -> BTreeMap<String, usize> {
+    meshes
+        .iter()
+        .map(|(name, buf)| (name.clone(), buf.positions.len()))
+        .collect()
 }
 
 /// A town's chart and ground from its definition, without cutting a piece:
@@ -718,6 +741,7 @@ pub fn build(
         cog: None,
         cog_meshes: Meshes::new(),
         cog_bow: Vec3::ZERO,
+        props: BTreeMap::new(),
     })
 }
 
@@ -815,6 +839,7 @@ pub fn build_town(
             }
         }
         // Its dressing (task 4.2c), each thing on what is under it.
+        let before = counts(&built.meshes);
         let (things, skipped) = dressing::dressing(
             &mut built.meshes,
             repeat_m,
@@ -825,6 +850,7 @@ pub fn build_town(
             terrace,
             &under,
         );
+        built.props = added(&before, &built.meshes);
         built.dressing = things.len();
         built.dressing_skipped += skipped;
         cut.extend(things);
@@ -882,6 +908,7 @@ pub fn build_town(
                 None => built.dressing_skipped += 1,
             }
         }
+        let before = counts(&built.meshes);
         let (things, skipped) = dressing::dressing(
             &mut built.meshes,
             repeat_m,
@@ -892,6 +919,7 @@ pub fn build_town(
             zero,
             &under,
         );
+        built.props = added(&before, &built.meshes);
         built.dressing = things.len();
         built.dressing_skipped += skipped;
         cut.extend(things);

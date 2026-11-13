@@ -2819,15 +2819,18 @@ fn write_frame_log(
 
 /// The top-level GPU spans the frame log gives a column each
 /// (`gpu_<name>_ms`, `lighting-perf` 1.2), in frame order: Bevy's own passes
-/// and the game's. The terrain (and the towns) draw in Bevy's
-/// `main_transparent_pass_3d`, so the terrain's shading, wet ground's
-/// reflection walk and screen trace among it, is timed there. A pass that did
-/// not run in a frame reads 0; spans not named here are summed in
-/// `gpu_other_ms`.
-const PASS_COLUMNS: [&str; 17] = [
+/// and the game's. The terrain draws in its own pass, `planet_terrain`
+/// (`lighting-perf` 2.8; before it, inside `main_transparent_pass_3d`), with
+/// wet ground's traces in it at `reflect_render_scale: 1.0`, else in
+/// `reflect_half` and `reflect_compose`. A pass that did not run in a frame
+/// reads 0; spans not named here are summed in `gpu_other_ms`.
+const PASS_COLUMNS: [&str; 21] = [
     "planet_cull",
     "planet_shadow",
     "main_opaque_pass_3d",
+    "planet_terrain",
+    "reflect_half",
+    "reflect_compose",
     "main_transparent_pass_3d",
     "water_compose",
     "ssr_capture",
@@ -2835,6 +2838,7 @@ const PASS_COLUMNS: [&str; 17] = [
     "cloud_puffs",
     "cloud_resolve",
     "clouds",
+    "rain_half",
     "rain",
     "weather_overlay",
     "water_lens",
