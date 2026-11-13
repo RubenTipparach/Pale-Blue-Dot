@@ -142,6 +142,11 @@ tr:last-child td{border-bottom:0}
 .sailbar{display:flex;flex-wrap:wrap;gap:8px 14px}
 .seg button.go{background:var(--amber);color:var(--ground);border-color:var(--amber)}
 #compass{width:100%;height:auto;display:block;border-radius:3px}
+.advice{display:grid;gap:2px;border-left:3px solid #74effe;padding:4px 10px;background:rgba(116,239,254,.07)}
+.advice .h{font:700 18px var(--display);letter-spacing:.03em;color:#74effe}
+.advice .h.tack{color:var(--amber)}
+.advice .sl{font:600 15px var(--display);letter-spacing:.03em}
+.advice .v{font:12px var(--mono);color:var(--muted)}
 .gps{font-size:12.5px;color:var(--amber);white-space:pre-wrap;min-height:1.5em}
 .sailgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;align-items:start}
 #seamap{width:100%;height:auto;display:block;border-radius:4px;cursor:crosshair;image-rendering:pixelated;touch-action:none}
@@ -226,7 +231,7 @@ tr:last-child td{border-bottom:0}
 
 <section aria-labelledby="s4">
   <h2 id="s4"><span class="n">4</span>Sail it</h2>
-  <p>A sea chart drawn compass-north up, as the game's map is, with the wind as arrows: trades from the east-north-east in the south, westerlies in the north, a slack band between. Click the chart to add a waypoint, drag one to move it, right-click to take it away. Then press <b>Sail</b>. A and D put the helm over (a rudder is a foil: she turns only with way on). On a sailing ship W hauls the sheet in and S eases it; on a powered one W and S step the telegraph through astern, stop, slow, half and full. Nothing steers for you: a sailing ship cannot point closer than about 45 degrees to the wind, so to reach a waypoint upwind she must tack. A waypoint counts as reached within 30 m, and the next one takes over.</p>
+  <p>A sea chart drawn compass-north up, as the game's map is, with the wind as arrows: trades from the east-north-east in the south, westerlies in the north, a slack band between. Click the chart to add a waypoint, drag one to move it, right-click to take it away. Then press <b>Sail</b>. A and D put the helm over (a rudder is a foil: she turns only with way on). On a sailing ship W hauls the sheet in and S eases it; on a powered one W and S step the telegraph through astern, stop, slow, half and full. Nothing steers for you: a sailing ship cannot point closer than about 45 degrees to the wind, so to reach a waypoint upwind she must tack. A waypoint counts as reached within 30 m, and the next one takes over. The GPS plans the route a sailor would sail (the cyan dashes: straight when the mark can be laid on one board, close-hauled legs between the faint laylines when it is upwind, tack points as dots), marks the best heading on the compass bar (cyan) beside the waypoint (amber), and tells you which way to turn and how to trim. It advises; it never steers.</p>
   <div class="sailwrap" id="sailWrap" tabindex="0" aria-label="Sail it: click the chart for waypoints, A and D steer, W and S sheet or throttle">
     <div class="sailbar">
       <div class="seg" id="sailShip" role="group" aria-label="Ship"></div>
@@ -236,6 +241,7 @@ tr:last-child td{border-bottom:0}
     </div>
     <canvas id="compass" width="720" height="42" aria-label="Compass bar: the heading, and the active waypoint as a diamond"></canvas>
     <div class="gps mono" id="gps"></div>
+    <div class="advice" id="advice" aria-live="polite"></div>
     <div class="sailgrid">
       <canvas id="seamap" width="960" height="640" aria-label="Sea chart, north up"></canvas>
       <div class="sailside">
@@ -1382,6 +1388,22 @@ let dockApi = null;
   const keys = new Set();
   let running = false, warp = 8, night = Q.get("stime") === "night";
   function reset() { Object.assign(S, {x: START.x, y: START.y, psi: START.psi, u: 0, rud: 0, delta: 45, thr: 1, rowT: 0, heel: 0, lee: 0, t: 0, track: [[START.x, START.y]], aground: false, done: false}); ai = 0; from = {x: START.x, y: START.y}; }
+  // ---- the sail as a foil in the apparent wind: the one model the sim, the polar and the advice all use
+  function sailF(beta, delta, A) {
+    const alpha = beta - delta, luff = Math.min(1, Math.max(0, (beta - 20) / 12));   // the sail luffs inside about 25 degrees of apparent wind: about 45 degrees of true wind
+    let CL = alpha <= 0 ? 0 : alpha <= 15 ? 0.09 * alpha : Math.max(0, 1.35 - 0.035 * (alpha - 15));
+    CL *= luff * luff * (3 - 2 * luff);
+    const CD = 0.05 + 1.2 * Math.sin(Math.max(0, alpha) * deg) ** 2 + 0.1 * CL * CL, q = 0.5 * RHO_AIR * A * A * P.SA, b = beta * deg;
+    return {drive: q * (CL * Math.sin(b) - CD * Math.cos(b)), side: q * (CL * Math.cos(b) + CD * Math.sin(b)), alpha};
+  }
+  function apparent(hd, u, w) { const h = {e: Math.sin(hd * deg), n: Math.cos(hd * deg)}, ae = w.e - u * h.e, an = w.n - u * h.n, A = Math.hypot(ae, an) || 1e-6; return {A, beta: Math.acos(Math.max(-1, Math.min(1, (-ae * h.e - an * h.n) / A))) / deg}; }
+  function bestTrim(beta, A) { let bd = 0, bv = -Infinity; for (let d = 0; d <= 90; d += 3) { const v = sailF(beta, d, A).drive; if (v > bv) { bv = v; bd = d; } } return {delta: bd, drive: bv}; }
+  // the polar: the steady speed through the water on a heading, sails trimmed for the most drive
+  function polar(hd, w) {
+    const net = u => { const ap = apparent(hd, u, w); return bestTrim(ap.beta, ap.A).drive - (P.s.R(u) + 150 * u); };
+    if (net(0) <= 0) return 0;
+    let lo = 0, hi = 20; for (let i = 0; i < 16; i++) { const m = (lo + hi) / 2; if (net(m) > 0) lo = m; else hi = m; } return lo;
+  }
   // ---- one step of the physics
   function step(dt, ctl) {
     const w = wind(S.x, S.y), h = {e: Math.sin(S.psi * deg), n: Math.cos(S.psi * deg)}, right = {e: Math.cos(S.psi * deg), n: -Math.sin(S.psi * deg)};
@@ -1394,14 +1416,7 @@ let dockApi = null;
     if (P.sail && ctl.ease) S.delta = Math.min(90, S.delta + 25 * dt);
     if (!P.sail) S.delta = Math.max(0, Math.min(90, beta - 15));
     let drive = 0, side = 0;
-    if (P.SA > 0) {
-      const alpha = beta - S.delta, luff = Math.min(1, Math.max(0, (beta - 20) / 12));   // the sail luffs inside about 25 degrees of apparent wind: about 45 degrees of true wind
-      let CL = alpha <= 0 ? 0 : alpha <= 15 ? 0.09 * alpha : Math.max(0, 1.35 - 0.035 * (alpha - 15));
-      CL *= luff * luff * (3 - 2 * luff);
-      const CD = 0.05 + 1.2 * Math.sin(Math.max(0, alpha) * deg) ** 2 + 0.1 * CL * CL, q = 0.5 * RHO_AIR * A * A * P.SA, b = beta * deg;
-      drive = q * (CL * Math.sin(b) - CD * Math.cos(b)); side = q * (CL * Math.cos(b) + CD * Math.sin(b));
-      S.alpha = alpha;
-    }
+    if (P.SA > 0) { const f2 = sailF(beta, S.delta, A); drive = f2.drive; side = f2.side; S.alpha = f2.alpha; }
     let thrust = 0;
     if (P.power) {
       const frac = THR[S.thr][1];
@@ -1431,6 +1446,55 @@ let dockApi = null;
     return {brg, dist, xte, eta: S.sog > 0.2 ? dist / S.sog : Infinity};
   }
   const fmtT = s => !isFinite(s) ? "--" : s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round(s % 3600 / 60)} m` : `${Math.floor(s / 60)} m ${String(Math.round(s % 60)).padStart(2, "0")} s`;
+  // ---- the sailing route (decision 3a): straight if the mark can be laid on one board, else close-hauled (or gybing)
+  // legs between the laylines, tacking where the cross-track error reaches the lane; the helm advice steers the first leg
+  let plan = null;
+  function replan() {
+    plan = null; if (!P.ok || ai >= wps.length) return;
+    const mk = wps[ai], w = wind(S.x, S.y), brg = wrap360(Math.atan2(mk.x - S.x, mk.y - S.y) / deg), dist = Math.hypot(mk.x - S.x, mk.y - S.y);
+    const fromSide = hd => Math.sign(wrap180(w.from - hd)) || 1;   // +1: the wind comes from starboard
+    if (!P.SA || !P.sail) { const v = Math.max(S.u, 0.1); plan = {legs: [{x0: S.x, y0: S.y, x1: mk.x, y1: mk.y, hd: brg, v}], best: brg, vmgBest: v, straight: true, delta: null, laylines: [], w, brg, tackNow: false}; plan.eta = dist / v; return; }
+    const pol = []; for (let hd = 0; hd < 360; hd += 2) { const v = polar(hd, w); pol.push({hd, v, vmg: v * Math.cos((hd - brg) * deg), side: fromSide(hd)}); }
+    const best = pol.reduce((a, b) => b.vmg > a.vmg ? b : a), boards = [1, -1].map(sd => pol.filter(p => p.side === sd).reduce((a, b) => b.vmg > a.vmg ? b : a, {vmg: -Infinity}));
+    const straight = Math.abs(wrap180(best.hd - brg)) <= 3 || boards.some(b => !isFinite(b.vmg));
+    const legs = [];
+    if (straight) { const v = polar(brg, w); legs.push({x0: S.x, y0: S.y, x1: mk.x, y1: mk.y, hd: brg, v: Math.max(v, 0.1)}); }
+    else {
+      const cur = fromSide(S.psi), here = boards.find(b => b.side === cur), there = boards.find(b => b.side !== cur);
+      let b = here.vmg >= there.vmg * 0.9 ? here : there, other = b === here ? there : here, x = S.x, y = S.y;
+      const lane = Math.max(80, Math.min(260, dist * 0.25)), lx = (mk.x - S.x) / dist, ly = (mk.y - S.y) / dist;
+      for (let n = 0; n < 24; n++) {
+        const he = Math.sin(b.hd * deg), hn = Math.cos(b.hd * deg), oe = Math.sin(other.hd * deg), on = Math.cos(other.hd * deg);
+        // where along this board the mark comes onto the other board's layline
+        const det = he * (-on) - hn * (-oe), t = det ? ((mk.x - x) * (-on) - (mk.y - y) * (-oe)) / det : -1;
+        // where this board meets the edge of the lane
+        const cxs = (x - S.x) * ly - (y - S.y) * lx, rate = he * ly - hn * lx, tl = rate ? ((Math.sign(rate) * lane) - cxs) / rate : Infinity;
+        if (t >= 0 && t <= tl) { legs.push({x0: x, y0: y, x1: x + he * t, y1: y + hn * t, hd: b.hd, v: b.v}); x += he * t; y += hn * t; legs.push({x0: x, y0: y, x1: mk.x, y1: mk.y, hd: other.hd, v: other.v}); break; }
+        const tt = Math.max(0, tl); legs.push({x0: x, y0: y, x1: x + he * tt, y1: y + hn * tt, hd: b.hd, v: b.v}); x += he * tt; y += hn * tt; [b, other] = [other, b];
+        if (n === 23) legs.push({x0: x, y0: y, x1: mk.x, y1: mk.y, hd: b.hd, v: b.v});
+      }
+    }
+    const len = l => Math.hypot(l.x1 - l.x0, l.y1 - l.y0);
+    while (legs.length > 1 && len(legs[0]) < 15) legs.shift();   // a leg too short to sail: the tack is now
+    const first = legs[0], ap = apparent(first.hd, Math.max(S.u, first.v * 0.8), w);
+    plan = {legs, best: first.hd, vmgBest: first.v * Math.cos((first.hd - brg) * deg), straight, brg, w,
+      tackNow: !straight && fromSide(first.hd) !== fromSide(S.psi), delta: bestTrim(ap.beta, ap.A).delta,
+      eta: legs.reduce((a, l) => a + len(l) / Math.max(0.1, l.v), 0), laylines: straight ? [] : boards.map(b => b.hd)};
+  }
+  function advice() {
+    if (!plan) return null;
+    const turn = wrap180(plan.best - S.psi), side = turn > 0 ? "starboard" : "port", gp = gps(), vmgNow = S.sog * Math.cos((S.cog - gp.brg) * deg);
+    let helm;
+    if (plan.tackNow) { const through = Math.sign(turn) === Math.sign(wrap180(plan.w.from - S.psi)); helm = `${through ? "Tack" : "Gybe"} now: bring her ${through ? "through" : "away from"} the wind to ${side} (head ${String(Math.round(plan.best) % 360).padStart(3, "0")})`; }
+    else helm = Math.abs(turn) < 4 ? `Steady on ${String(Math.round(S.psi) % 360).padStart(3, "0")}` : `Turn ${Math.abs(Math.round(turn))}° to ${side} (head ${String(Math.round(plan.best) % 360).padStart(3, "0")})`;
+    let sail = "";
+    if (P.SA > 0 && P.sail) {
+      const d = plan.delta - S.delta;
+      sail = Math.abs(d) < 3 ? `Sail trimmed (${S.delta.toFixed(0)}°)` : d > 0 ? `Ease the sail ${Math.round(d)}° (to ${plan.delta}°)` : `Haul in ${Math.round(-d)}° (to ${plan.delta}°)`;
+      if (S.beta < 24) sail += ": in irons"; else if (S.alpha < 0) sail += ": luffing"; else if (S.alpha > 22) sail += ": stalled";
+    } else if (P.power) sail = `Telegraph: ${THR[S.thr][0]}`;
+    return {helm, sail, vmgNow, vmgBest: plan.vmgBest, tack: plan.tackNow};
+  }
   // ---- drawing
   const X = x => x * K, Y = y => (WY - y) * K;
   function drawMap() {
@@ -1450,6 +1514,15 @@ let dockApi = null;
     wps.forEach((w, i) => { c.beginPath(); c.arc(X(w.x), Y(w.y), R_WP * K + 3, 0, Math.PI * 2); c.fillStyle = i < ai ? "rgba(143,220,154,0.5)" : i === ai ? "rgba(232,176,64,0.9)" : "rgba(232,176,64,0.4)"; c.fill(); c.strokeStyle = "#161612"; c.lineWidth = 1.5; c.stroke(); c.fillStyle = "#161612"; c.font = "700 11px JetBrains Mono, monospace"; c.fillText(String(i + 1), X(w.x) - 3.5, Y(w.y) + 4); });
     // track
     c.strokeStyle = night ? "rgba(143,220,154,0.75)" : "rgba(20,40,30,0.85)"; c.lineWidth = 2; c.beginPath(); S.track.forEach(([x, y], i) => i ? c.lineTo(X(x), Y(y)) : c.moveTo(X(x), Y(y))); c.lineTo(X(S.x), Y(S.y)); c.stroke();
+    // the sailing route: laylines faint, legs dashed, tack points marked, and the best heading from the bow
+    if (plan) {
+      const mk = wps[ai];
+      c.strokeStyle = night ? "rgba(116,239,254,0.25)" : "rgba(255,255,255,0.4)"; c.lineWidth = 1; c.setLineDash([2, 6]);
+      for (const hd of plan.laylines) { c.beginPath(); c.moveTo(X(mk.x), Y(mk.y)); c.lineTo(X(mk.x - Math.sin(hd * deg) * 1600), Y(mk.y - Math.cos(hd * deg) * 1600)); c.stroke(); }
+      c.setLineDash([7, 4]); c.strokeStyle = "#74effe"; c.lineWidth = 2.2; c.beginPath(); plan.legs.forEach((l, i) => { if (!i) c.moveTo(X(l.x0), Y(l.y0)); c.lineTo(X(l.x1), Y(l.y1)); }); c.stroke(); c.setLineDash([]);
+      c.fillStyle = "#74effe"; plan.legs.slice(1).forEach(l => { c.beginPath(); c.arc(X(l.x0), Y(l.y0), 4, 0, Math.PI * 2); c.fill(); });
+      c.strokeStyle = "#74effe"; c.lineWidth = 3; c.beginPath(); c.moveTo(X(S.x), Y(S.y)); c.lineTo(X(S.x + Math.sin(plan.best * deg) * 180), Y(S.y + Math.cos(plan.best * deg) * 180)); c.stroke();
+    }
     // the ship, drawn large: a hull pointing along her heading, the boom to leeward, running lights at night
     c.save(); c.translate(X(S.x), Y(S.y)); c.rotate(S.psi * deg);
     if (night) for (const [lx, ly, col] of [[-5, -2, "255,60,60"], [5, -2, "60,255,110"], [0, 11, "255,255,255"]]) { const g = c.createRadialGradient(lx, ly, 0, lx, ly, 10); g.addColorStop(0, `rgba(${col},0.9)`); g.addColorStop(1, `rgba(${col},0)`); c.fillStyle = g; c.fillRect(lx - 10, ly - 10, 20, 20); }
@@ -1476,6 +1549,7 @@ let dockApi = null;
     }
     const gp = gps();
     if (gp) { const d = wrap180(gp.brg - head); if (Math.abs(d) <= 90) { const x = W / 2 + d * px; c.globalAlpha = 1; c.fillStyle = "#e8b040"; c.beginPath(); c.moveTo(x, 27); c.lineTo(x + 5, 33); c.lineTo(x, 39); c.lineTo(x - 5, 33); c.closePath(); c.fill(); } }
+    if (plan) { const d = wrap180(plan.best - head); if (Math.abs(d) <= 90) { const x = W / 2 + d * px; c.globalAlpha = 1; c.fillStyle = "#74effe"; c.beginPath(); c.moveTo(x, H - 2); c.lineTo(x + 6, H - 12); c.lineTo(x - 6, H - 12); c.closePath(); c.fill(); c.fillRect(x - 1, 2, 2, 7); } }
     c.globalAlpha = 1; c.fillStyle = "#e8b040"; c.fillRect(W / 2 - 1, 0, 2, 6);
   }
   function drawHeel() {
@@ -1506,11 +1580,14 @@ let dockApi = null;
   }
   function readout() {
     const gp = gps(), el = document.getElementById("gps"), st = document.getElementById("sailState");
-    el.textContent = gp ? `WP ${ai + 1}/${wps.length}  BRG ${gp.brg.toFixed(0).padStart(3, "0")}°  DIST ${gp.dist >= 1000 ? (gp.dist / 1000).toFixed(2) + " km" : gp.dist.toFixed(0) + " m"}  COG ${S.cog.toFixed(0).padStart(3, "0")}°  SOG ${S.sog.toFixed(1)} m/s (${(S.sog * 1.944).toFixed(1)} kn)  XTE ${Math.abs(gp.xte).toFixed(0)} m ${gp.xte > 1 ? "R" : gp.xte < -1 ? "L" : ""}  ETA ${fmtT(gp.eta)}` : wps.length ? `Route done: every waypoint reached in ${fmtT(S.t)}.` : "No route: click the map to add waypoints.";
+    el.textContent = gp ? `WP ${ai + 1}/${wps.length}  BRG ${gp.brg.toFixed(0).padStart(3, "0")}°  DIST ${gp.dist >= 1000 ? (gp.dist / 1000).toFixed(2) + " km" : gp.dist.toFixed(0) + " m"}  COG ${S.cog.toFixed(0).padStart(3, "0")}°  SOG ${S.sog.toFixed(1)} m/s (${(S.sog * 1.944).toFixed(1)} kn)  XTE ${Math.abs(gp.xte).toFixed(0)} m ${gp.xte > 1 ? "R" : gp.xte < -1 ? "L" : ""}  ETA ${fmtT(plan ? plan.eta : gp.eta)} by the route` : wps.length ? `Route done: every waypoint reached in ${fmtT(S.t)}.` : "No route: click the map to add waypoints.";
+    const ad = advice(), av = document.getElementById("advice");
+    av.innerHTML = ad ? `<div class="h ${ad.tack ? "tack" : ""}">${ad.helm}</div><div class="sl">${ad.sail}</div><div class="v">VMG now ${ad.vmgNow.toFixed(1)} m/s, on the best heading ${ad.vmgBest.toFixed(1)} m/s${plan && !plan.straight ? `; the route beats in ${plan.legs.length} legs` : ""}</div>` : "";
     const w = wind(S.x, S.y);
     st.innerHTML = `<b>${P.name}</b>: ${P.sail ? `${P.SA.toFixed(0)} m2 of sail` : P.row && !P.shaft ? `${P.row.toFixed(1)} kW of oars${S.rowT > 600 ? " (tired: half)" : ""}` : `${(P.shaft / 1000).toFixed(1)} MW to the shaft`}. Heading ${S.psi.toFixed(0)}°, rudder ${S.rud.toFixed(0)}°. True wind from ${w.from.toFixed(0)}° at ${w.spd.toFixed(1)} m/s; apparent ${S.aws.toFixed(1)} m/s at ${S.beta.toFixed(0)}° off the bow. Sim time ${fmtT(S.t)}${S.aground ? ". <b>Aground!</b>" : ""}.`;
   }
-  function draw() { drawMap(); drawCompass(); drawHeel(); readout(); }
+  let planAt = -1e9;
+  function draw() { const now = performance.now(); if (!running || now - planAt > 300) { replan(); planAt = now; } drawMap(); drawCompass(); drawHeel(); readout(); }
   // ---- controls
   const ctl = () => ({left: keys.has("a"), right: keys.has("d"), haul: keys.has("w"), ease: keys.has("s")});
   wrap.addEventListener("keydown", e => {
@@ -1556,12 +1633,12 @@ let dockApi = null;
   params(); reset();
   // ?sail=demo: a scripted helmsman beats toward the first waypoint, for screenshots only (the game has no autopilot at these levels)
   if (Q.get("sail") === "demo") {
-    const T = +(Q.get("demoT") || 520); let tack = Math.sign(wrap180(S.psi - wind(S.x, S.y).from)) || 1, steps = 0, lastX = 0, lastTack = -999;
+    const T = +(Q.get("demoT") || 520), stopTack = Q.has("demoTack"); let steps = 0, t0 = -99;
     while (S.t < T && !S.done && steps++ < 40000) {
-      const gp = gps(), w = wind(S.x, S.y); let target = gp.brg; const off = wrap180(gp.brg - w.from);
-      if (Math.abs(off) < 52) { target = wrap360(w.from + 52 * tack); const ax = Math.abs(gp.xte); if (ax > 160 && ax > lastX && S.t > lastTack + 90) { tack = -tack; lastTack = S.t; } lastX = ax; }
-      const err = wrap180(target - S.psi); const c = {left: err < -4, right: err > 4, haul: false, ease: false};
-      S.delta = Math.max(5, Math.min(90, S.beta - 14)); step(0.1, c);
+      if (S.t - t0 >= 2) { replan(); t0 = S.t; if (stopTack && S.t > 120 && plan && plan.tackNow) break; }
+      const err = plan ? wrap180(plan.best - S.psi) : 0, c = {left: err < -4, right: err > 4, haul: false, ease: false};
+      if (plan && plan.delta != null) S.delta = plan.delta;
+      step(0.1, c);
     }
   }
   draw();
