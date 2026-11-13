@@ -159,6 +159,28 @@ towards my waypoint".
 - **Advice only.** The player steers and trims. The readout shows what the
   best course gains: the VMG now, and the VMG on the best heading.
 
+### 2a. Easy to fly (the owner, 2026-11-13)
+
+The owner, flying the hangar mockup: "stalls happen too easily! make this
+game for easy to fly, ground not big enough to actually fly around. looks
+like my planes are cliping through the ground and buildings".
+
+- **Forgiving flight.** The flight model is arcade-assisted by default:
+  - the wings keep lift well past the stall angle (CLmax 1.8, with a soft
+    stall that drops the nose instead of the wing);
+  - auto-trim holds level flight when the stick is centred;
+  - bank and pitch are limited (60 and 35 degrees) unless an "Expert" switch
+    is on;
+  - the stall speed shown in the builder is still the honest number. The
+    assist only keeps the plane from falling out of the sky near it.
+- **Room to fly.** The airfield sits in a terrain area several kilometres
+  across (hex terrain, lower detail with distance), with a coast, hills
+  and a town to fly to.
+- **Nothing passes through solid things.** The terrain, the hangar,
+  buildings and parked craft collide with the plane's parts. Touching the
+  ground gently is a landing. Hitting something hard stops the flight with
+  a crash message and a reset to the runway, never a clip through.
+
 ### 3b. Airships
 
 The owner, 2026-11-13: "can you add airships as well?"
