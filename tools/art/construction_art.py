@@ -257,11 +257,128 @@ def print_head(sp):
     sp.plot(15, 25, WHITE, glow=True)
 
 
+def scaffold(sp):
+    # two poles, two ledgers with planks, a ladder, a lashing at each joint
+    for x in (4, 25):
+        sp.part(sp.rect(x, 1, x + 3, 30), R["wood"], "cyl_v", base=2)
+    for y in (11, 22):
+        sp.part(sp.rect(2, y, 29, y + 2), R["wood"], "rim", base=3)
+        sp.part(sp.rect(2, y - 2, 29, y - 1), R["sand"], "flat", base=2)
+        for x in (5, 26):
+            sp.part(sp.rect(x - 1, y - 1, x + 2, y + 3), R["bone"], "flat", base=1, seam=False)
+    for x in (13, 18):
+        sp.part(sp.rect(x, 12, x + 1, 30), R["wood"], "flat", base=1)
+    for y in range(14, 30, 4):
+        sp.fill(sp.rect(13, y, 19, y), R["wood"][3])
+    glint(sp, [(5, 2), (5, 3)])
+    sp.outline()
+
+
+def treadwheel(sp):
+    rim = sp.circle(15, 15, 13) & ~sp.circle(15, 15, 10)
+    sp.part(rim, R["wood"], "rim", base=2)
+    ys = np.arange(N)[:, None]
+    xs = np.arange(N)[None, :]
+    ang = np.arctan2(ys - 15, xs - 15)
+    sp.fill(rim & ((np.round(ang / (np.pi / 8)) % 2) == 0) & (np.hypot(xs - 15, ys - 15) > 11.5), R["wood"][0])
+    for a in range(0, 360, 45):
+        t = np.radians(a)
+        sp.part(sp.line([(15, 15), (15 + 10 * np.cos(t), 15 + 10 * np.sin(t))], 2), R["wood"], "flat", base=1)
+    sp.part(sp.circle(15, 15, 2), R["steel"], "sphere", base=2)
+    sp.part(sp.poly([(6, 31), (15, 15), (24, 31)]) & ~sp.poly([(9, 31), (15, 19), (21, 31)]), R["wood"], "flat", base=2)
+    # the walker inside
+    sp.part(sp.rect(18, 17, 21, 26), R["red"], "rim", base=2)
+    sp.part(sp.rect(18, 13, 21, 16), R["sand"], "rim", base=3)
+    glint(sp, [(6, 7), (7, 6)])
+    sp.outline()
+
+
+def timber_beam(sp):
+    top = sp.poly([(2, 12), (24, 4), (30, 7), (8, 15)])
+    front = sp.poly([(2, 12), (8, 15), (8, 22), (2, 19)])
+    side = sp.poly([(8, 15), (30, 7), (30, 14), (8, 22)])
+    sp.part(side, R["wood"], "rim", base=2)
+    sp.part(top, R["wood"], "flat", base=3)
+    sp.part(front, R["wood"], "flat", base=1)
+    sp.fill(sp.line([(10, 18), (28, 11)], 1) & side, R["wood"][1])
+    sp.fill(sp.circle(5, 16, 1) & front, R["wood"][3])
+    sp.part(sp.rect(17, 7, 19, 18), R["bone"], "flat", base=1, seam=False)   # the sling
+    glint(sp, [(12, 9), (13, 9)])
+    sp.outline()
+
+
+def ashlar_block(sp):
+    top = sp.poly([(6, 6), (28, 6), (24, 11), (2, 11)])
+    front = sp.rect(2, 12, 23, 28)
+    side = sp.poly([(24, 12), (28, 7), (28, 24), (24, 28)])
+    sp.part(front, R["stone"], "rim", base=3)
+    sp.part(side, R["stone"], "flat", base=2)
+    sp.part(top, R["stone"], "flat", base=4)
+    sp.fill(sp.rect(4, 14, 21, 14) | sp.rect(4, 14, 4, 26), R["stone"][4])
+    sp.fill(sp.rect(12, 18, 13, 19) | sp.rect(16, 23, 17, 23), R["stone"][1])
+    sp.part(sp.rect(12, 2, 13, 5), R["steel"], "flat", base=2)              # the lewis
+    glint(sp, [(8, 7), (9, 7)])
+    sp.outline()
+
+
+def thatch_bundle(sp):
+    body = sp.poly([(4, 8), (27, 4), (29, 22), (6, 27)])
+    sp.part(body, R["gold"], "rim", base=2)
+    xs = np.arange(N)[None, :]
+    ys = np.arange(N)[:, None]
+    sp.fill(body & (((xs * 2 + ys) % 5) == 0), R["gold"][1])
+    for x in (11, 21):
+        sp.part(sp.poly([(x, 5), (x + 3, 5), (x + 4, 26), (x + 1, 26)]) & body, R["wood"], "flat", base=1, seam=False)
+    glint(sp, [(7, 9), (8, 9)])
+    sp.outline()
+
+
+def wing_panel(sp):
+    panel = sp.poly([(2, 18), (8, 10), (30, 8), (30, 14), (6, 22)])
+    sp.part(panel, R["white"], "rim", base=3, depth=2)
+    xs = np.arange(N)[None, :]
+    sp.fill(panel & (xs % 5 == 0) & (xs > 8), R["white"][1])
+    sp.part(sp.rect(26, 7, 30, 15) & panel, R["red"], "flat", base=2)
+    sp.part(sp.rect(2, 23, 29, 26), R["teal"], "rim", base=2)              # the bed it lies on
+    glint(sp, [(9, 11), (10, 11)])
+    sp.outline()
+
+
+def propeller(sp):
+    hub = sp.circle(15, 15, 4)
+    b1 = sp.poly([(13, 12), (6, 2), (2, 4), (11, 14)])
+    b2 = sp.poly([(17, 18), (24, 28), (28, 26), (19, 16)])
+    sp.part(b1, R["dark"], "rim", base=3)
+    sp.part(b2, R["dark"], "rim", base=3)
+    sp.part(sp.poly([(6, 2), (2, 4), (4, 6), (8, 4)]), R["gold"], "flat", base=3)
+    sp.part(sp.poly([(24, 28), (28, 26), (26, 24), (22, 26)]), R["gold"], "flat", base=3)
+    sp.part(hub, R["red"], "sphere", base=2)
+    glint(sp, [(13, 13)])
+    sp.outline()
+
+
+def parts_bed(sp):
+    sp.part(sp.rect(2, 18, 29, 22), R["teal"], "rim", base=2)              # the bed
+    for x in (3, 26):
+        sp.part(sp.rect(x, 23, x + 2, 30), R["teal"], "flat", base=1)
+    for x in (4, 25):
+        sp.part(sp.rect(x, 4, x + 2, 17), R["paint"], "cyl_v", base=2)
+    sp.part(sp.rect(3, 3, 28, 5), R["paint"], "rim", base=2)
+    sp.part(sp.rect(13, 6, 18, 9), R["dark"], "rim", base=3)
+    sp.part(sp.rect(15, 10, 16, 14), R["steel"], "flat", base=2)
+    sp.part(sp.poly([(6, 17), (12, 15), (24, 15), (24, 17)]), R["white"], "flat", base=3)
+    glint(sp, [(4, 3), (5, 3)])
+    sp.outline()
+    sp.part(sp.rect(14, 14, 17, 15), R["hot"], "inset", glow=True)
+
+
 ICONS = {
     "assembly-bay": assembly_bay, "hex-printer": hex_printer, "tower-crane": tower_crane,
     "gantry-crane": gantry_crane, "crate": crate, "printstone": printstone, "wall-panel": wall_panel,
     "mast": mast, "wing-pair": wing_pair, "engine": engine, "hull-section": hull_section,
-    "blueprint": blueprint, "print-head": print_head,
+    "blueprint": blueprint, "print-head": print_head, "scaffold": scaffold, "treadwheel": treadwheel,
+    "timber-beam": timber_beam, "ashlar-block": ashlar_block, "thatch-bundle": thatch_bundle,
+    "wing-panel": wing_panel, "propeller": propeller, "parts-bed": parts_bed,
 }
 
 
@@ -386,6 +503,42 @@ def tex_red(sp):
     plates(sp, R["red"])
 
 
+def tex_panel(sp):
+    """A precast wall panel's face: warm pale concrete, a cast joint every 16 px, a few form ties."""
+    ramp = R["conc"]
+    sp.fill(full(sp), ramp[2])
+    sp.fill(SPECK, ramp[1])
+    u, v = XS % 32, YS % 16
+    sp.fill(v == 0, ramp[0])
+    sp.fill(v == 1, ramp[3])
+    sp.fill(((u == 8) | (u == 24)) & (v == 8), ramp[0])
+
+
+def tex_concrete(sp):
+    ramp = R["print"]
+    sp.fill(full(sp), ramp[3])
+    sp.fill(SPECK, ramp[2])
+    sp.fill((XS % 16 == 0), ramp[2])
+    sp.fill((XS % 16 == 0) & (YS % 4 == 0), ramp[1])
+
+
+def tex_glass(sp):
+    ramp = R["blue"]
+    sp.fill(full(sp), ramp[0])
+    d = (XS + YS) % 32
+    sp.fill((d == 6) | (d == 7), ramp[1])
+    sp.fill(d == 14, ramp[1])
+    sp.fill((XS == 0) | (YS == 0) | (XS == 31) | (YS == 31), R["print"][1])
+
+
+def tex_polymer(sp):
+    """A printed part's skin: pale blue-grey, a fine layer line every 2 px."""
+    ramp = R["white"]
+    sp.fill(full(sp), ramp[3])
+    sp.fill(YS % 2 == 0, ramp[2])
+    sp.fill(SPECK & (YS % 2 == 1), ramp[4])
+
+
 def tex_lattice(sp):
     """The crane's lattice, a cut-out: chords down both sides and across, a diagonal each panel.
     Alpha is 0 between the members, so the page draws it with alphaTest and both sides."""
@@ -406,6 +559,7 @@ TEXTURES = {
     "tex-printstone": tex_printstone, "tex-printstone-top": tex_printstone_top, "tex-hazard": tex_hazard,
     "tex-paint": tex_paint, "tex-teal": tex_teal, "tex-crate": tex_crate, "tex-container": tex_container,
     "tex-counterweight": tex_counterweight, "tex-white": tex_white, "tex-red": tex_red,
+    "tex-panel": tex_panel, "tex-concrete": tex_concrete, "tex-glass": tex_glass, "tex-polymer": tex_polymer,
 }
 CUTOUTS = {"tex-lattice": tex_lattice}
 
