@@ -63,6 +63,8 @@ Every page says which art is the game's and which is mockup-only.
 - Cache-bust texture URLs (`?v=<n>`) when they change.
 - Nothing spins on its own: no idle camera orbit, no turntable, no parked
   rotor turning (CLAUDE.md, "Nothing in a mockup spins on its own").
+- One 3D view on the page at a time: several views go in tabs, and only the
+  open tab draws (CLAUDE.md, "One 3D view at a time, in tabs").
 
 ## The gate before a page is published
 
