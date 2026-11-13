@@ -216,6 +216,21 @@ cell each unless noted. Numbers are mockup first guesses.
 - **Every view stays still until the viewer acts** (CLAUDE.md, "Nothing in
   a mockup spins on its own"). Play, Fly and Sail start on a press.
 
+### 6a. As the hangar mockup built it (M24, 2026-11-13)
+
+Recommendations taken (ask only with screenshots):
+- **Which cells are ailerons.** The ailerons are the trailing cell of the two
+  outermost wing rows each side. A tiltrotor without them gets a warning
+  only, since it still hovers.
+- **Mouse.** The mouse drags the camera, and W and S work the elevator.
+- **Throttle keys.** R and F work the throttle beside Shift and Ctrl,
+  because Ctrl+W closes a browser tab.
+- **Prop engine.** It is raised from 230 kW to 320 kW so a chibi plane
+  climbs at the game's 25 m/s^2. Sharky now makes 72 m/s with a range of
+  162 km.
+- **Flying ground.** The page's flight treats the ground beyond the field as
+  flat.
+
 ### 7. As the drydock mockup built it (M23, 2026-11-13)
 
 Recommendations taken (ask only with screenshots):

@@ -159,6 +159,15 @@ tr:last-child td{border-bottom:0}
 .pi{display:block;width:32px;height:32px;background-repeat:no-repeat;image-rendering:pixelated;pointer-events:none}
 .shipgrid .cell.painted::after{content:"";position:absolute;right:2px;top:2px;width:5px;height:5px;background:var(--amber);box-shadow:0 0 0 1px #000}
 .shipgrid.brush .cell.filled{cursor:cell}
+.shipgrid .cell.surf{box-shadow:inset 3px 0 0 #1096c3}
+.shipgrid .cell.surf::before{content:attr(data-s);position:absolute;left:4px;bottom:0;font:700 10px var(--mono);color:#74effe;text-shadow:0 1px 0 #000,1px 0 0 #000;pointer-events:none}
+.ov.fh{left:12px;bottom:64px;min-width:214px;font:600 12px/1.45 var(--mono);color:var(--ink);gap:4px}
+.ov.fh .row{display:flex;justify-content:space-between;gap:12px}
+.ov.fh .row span:first-child{color:var(--muted)}
+.ov.fh .stall{color:#fff;background:var(--warn);text-align:center;font-weight:700;letter-spacing:.12em;border-radius:3px}
+.ov.fh canvas{width:96px;height:64px;align-self:center;border:1px solid var(--line);border-radius:4px;image-rendering:auto}
+.ov.fh .keys{color:var(--muted);font-weight:400;font-size:11px;max-width:240px}
+@media (max-width:760px){.ov.fh{bottom:12px;min-width:0}.ov.fh .keys{display:none}}
 .sw button.unpaint{width:auto;padding:0 7px;font:600 11px var(--mono);color:var(--muted);display:inline-flex;align-items:center;background:var(--panel-2)}
 .palette{grid-template-columns:repeat(8,minmax(0,1fr))}
 .toolrow{display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:13.5px;color:var(--muted)}
@@ -193,7 +202,7 @@ tr:last-child td{border-bottom:0}
 
 <section aria-labelledby="s1">
   <h2 id="s1"><span class="n">1</span>The airfield</h2>
-  <p>A hangar of three bays with its roller doors up, an apron, a 230 m runway, a helipad, a windsock and a little tower with its beacon. Sharky and Gull are in their bays; Puffin and Dart wait on the apron; Bumble sits on the pad; the game's own Kestrel is parked beside them for scale. Drag to look around, scroll or pinch to zoom. At night every runway light, pad light, floodlight, hangar lamp and nav light lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p>
+  <p>A hangar of three bays with its roller doors up, an apron, a 230 m runway, a helipad, a windsock and a little tower with its beacon. Sharky and Gull are in their bays; Puffin and Dart wait on the apron; Bumble sits on the pad; the game's own Kestrel is parked beside them for scale. Drag to look around, scroll or pinch to zoom. <b>Fly it</b> takes the craft you are looking at (or your design from section 2) off the runway: W and S work the elevator, A and D the ailerons, Q and E the rudder, Shift and Ctrl (or R and F) the throttle; a helicopter flies on collective (Shift and Ctrl), cyclic (W, A, S, D) and its tail rotor (Q and E). Drag to look round it as it flies. At night every runway light, pad light, floodlight, hangar lamp and nav light lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p>
   <div class="stage">
     <canvas id="yard" aria-label="An airfield at night: a three-bay hangar with its doors open, five chibi aircraft, the Kestrel, a runway with edge lights, a helipad and a beacon tower."></canvas>
     <div class="loading" id="loading">Loading the airfield</div>
@@ -202,8 +211,10 @@ tr:last-child td{border-bottom:0}
       <div class="seg" id="timeSel" role="group" aria-label="Time of day">
         <button data-t="day" aria-pressed="false">Day</button><button data-t="dusk" aria-pressed="false">Dusk</button><button data-t="night" aria-pressed="true">Night</button>
       </div>
+      <div class="seg" role="group" aria-label="Flight"><button id="flyBtn" aria-pressed="false" title="Fly the craft you are looking at, or your design, off the runway">Fly it</button></div>
     </div>
     <div class="ov br" id="yardInfo"></div>
+    <div class="ov fh" id="flyHud" hidden aria-live="off"></div>
     <div class="hudline" aria-hidden="true">underfoot L0, column | airfield apron | 3 bays, 1 pad, runway 09/27</div>
     <div class="hudbar" id="hudbar" aria-label="Hotbar, as the game draws it"></div>
   </div>
@@ -219,6 +230,7 @@ tr:last-child td{border-bottom:0}
       <div class="toolrow"><label><input type="checkbox" id="mirror" checked> Mirror: port and starboard alike</label></div>
       <div class="livery"><span class="k">Brush</span><div class="sw" id="swBrush" role="group" aria-label="Brush colour: picking one takes the paint brush"></div></div>
       <div class="fwd"><span>tail</span><span>top view, 1 m cells, port up</span><span>nose &rarr;</span></div>
+      <div class="fwd" style="justify-content:flex-start;gap:10px"><span style="color:#74effe">A</span><span>aileron</span><span style="color:#74effe">E</span><span>elevator</span><span style="color:#74effe">R</span><span>rudder: the control surfaces (a helicopter steers with its rotors)</span></div>
       <div class="gridwrap"><div class="shipgrid" id="grid" aria-label="Aircraft grid, 13 by 11 cells"></div></div>
       <div class="eyebrow">Livery</div>
       <div class="livery" id="livery">
@@ -227,7 +239,7 @@ tr:last-child td{border-bottom:0}
         <span class="k">Roundel</span><div class="sw rd" id="swRound" role="group" aria-label="Roundel"></div>
         <span class="k">Nose</span><div class="toolrow"><label><input type="checkbox" id="shark"> Shark mouth</label><label>Number <input type="text" id="num" maxlength="3" inputmode="numeric" value="106"></label></div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pbtn go" role="button" tabindex="0" id="rollout">Roll out to the apron</span><span class="pbtn" role="button" tabindex="0" id="clear">Clear grid</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pbtn go" role="button" tabindex="0" id="rollout">Roll out to the apron</span><span class="pbtn" role="button" tabindex="0" id="flyDesign">Fly it</span><span class="pbtn" role="button" tabindex="0" id="clear">Clear grid</span></div>
     </div>
     <div class="bpane">
       <div class="pv"><canvas id="pv" aria-label="The aircraft on the grid, built in 3D on the hangar floor; drag to turn it"></canvas><div class="pvlabel" id="pvName"></div></div>
@@ -300,7 +312,7 @@ const G1 = 25, RHO = 1.225, CLMAX = 1.4, DOOR_W = 12, COLS = 13, ROWS = 11, MID 
 const MOD = {
   C:{name:"Cockpit", icon:"cockpit", kg:110, seats:1, cost:[["glass",3],["circuit",2],["steel-ingot",1],["cloth",1]], txt:"A seat and its pilot (70 kg counted in). At the front it makes a glass nose; further back, a big bubble canopy. Needs a clear view forward."},
   F:{name:"Fuselage", icon:"fuselage", kg:26, cost:[["steel-ingot",1],["polymer",1]], txt:"Body. Cells side by side make the fat chibi body; one cell wide is a tail boom."},
-  P:{name:"Prop engine", icon:"prop", kg:120, power:230, eta:0.8, sfc:0.25, cost:[["steel-ingot",3],["copper-ingot",2],["circuit",1]], txt:"230 kW in the nose and a fat three-blade prop. Nothing may sit ahead of it."},
+  P:{name:"Prop engine", icon:"prop", kg:125, power:320, eta:0.8, sfc:0.25, cost:[["steel-ingot",3],["copper-ingot",2],["circuit",1]], txt:"320 kW in the nose and a fat three-blade prop. Nothing may sit ahead of it."},
   J:{name:"Jet", icon:"jet", kg:130, power:420, eta:0.85, sfc:0.38, cost:[["steel-ingot",3],["alloy-plate",2],["circuit",2]], txt:"420 kW of thrust power at cruise, thirsty. Its exhaust needs a clear cell behind it."},
   W:{name:"Wing", icon:"wing", kg:16, wing:1, cost:[["steel-ingot",1],["cloth",1]], txt:"1 m2 of lift, thick and stubby. Its centre of lift is a quarter chord back from the leading edge."},
   H:{name:"Tailplane", icon:"tailplane", kg:8, tail:1, cost:[["steel-ingot",1]], txt:"Holds the nose level. Every plane with wings wants one behind them."},
@@ -475,10 +487,146 @@ function checks(rows) {
   // balance
   if (s.S && s.canRunway) { const d = s.cg - s.cl; out.push([d >= 0 && d <= 1.5 ? "ok" : "no", d < 0 ? `Centre of mass ${(-d).toFixed(2)} m behind the wing's lift: it pitches up and stalls.` : d > 1.5 ? `Centre of mass ${d.toFixed(2)} m ahead of the lift: too nose-heavy to rotate.` : `Centre of mass ${d.toFixed(2)} m ahead of the lift: stable.`]); }
   if (s.canHover) { const d = s.cg - s.axis; out.push([Math.abs(d) <= 0.6 ? "ok" : "no", Math.abs(d) <= 0.6 ? `Hangs level: centre of mass ${Math.abs(d).toFixed(2)} m from the rotors' axis.` : `Centre of mass ${Math.abs(d).toFixed(2)} m ${d > 0 ? "ahead of" : "behind"} the rotors: it tips over in the hover.`]); }
+  surfaceChecks(rows, s).forEach(o => out.push(o));
   out.push([s.width <= DOOR_W ? "ok" : "no", s.width <= DOOR_W ? `${s.width.toFixed(1)} m across: fits a ${DOOR_W} m bay door.` : `${s.width.toFixed(1)} m across: wider than the ${DOOR_W} m bay door.`]);
   return {out, bad, s};
 }
 const rotorsSay = s => s.thrust ? `Rotors lift ${s.hover.toFixed(2)} of its weight, under 1.1: it cannot hover, and it has no wing.` : "No wing and no rotor: it cannot fly.";
+// ======================= control surfaces and flight (no DOM, no three.js: node runs this block) =======================
+// The surfaces (steer-and-sail decision 2): the outer two wing cells of each side are the ailerons (in each
+// of the two outermost rows of a wing, its trailing cell), the tailplane cells the elevator, the fin cells the rudder.
+function surfaces(rows) {
+  const cells = cellsOf(rows), ail = [];
+  for (const side of [-1, 1]) {
+    const ys = [...new Set(cells.filter(k => k.c === "W" && Math.sign(k.y - MID) === side).map(k => k.y))].sort((a, b) => side * (b - a));
+    for (const y of ys.slice(0, 2)) { const row = cells.filter(k => k.c === "W" && k.y === y); const tr = row.reduce((a, k) => k.x < a.x ? k : a); ail.push({x: tr.x, y, side}); }
+  }
+  return {ail, elev: cells.filter(k => k.c === "H"), rud: cells.filter(k => k.c === "V")};
+}
+const surfaceAt = rows => { const s = surfaces(rows), m = {}; s.ail.forEach(k => m[k.x + "," + k.y] = "A"); s.elev.forEach(k => m[k.x + "," + k.y] = "E"); s.rud.forEach(k => m[k.x + "," + k.y] = "R"); return m; };
+// what kind of flyer: a helicopter has a main rotor and no wing; a tiltrotor has nacelles; a plane has wings
+const craftKind = s => s.S === 0 && s.thrust > 0 ? "heli" : (s.thrust > 0 ? "vtol" : "plane");
+function surfaceChecks(rows, s) {
+  const k = craftKind(s), out = [];
+  if (!s.S || k === "heli") return out;   // a helicopter steers with its rotors
+  const sf = surfaces(rows), wing = k === "vtol" ? " on its wing; it still hovers on its rotors" : "";
+  const st = k === "vtol" ? "warn" : "no";
+  out.push(sf.ail.length ? ["ok", `${sf.ail.length} aileron cells (the outer two each side) roll it.`] : [st, `No aileron: it cannot roll${wing}.`]);
+  out.push(sf.elev.length ? ["ok", `${sf.elev.length} elevator cells on the tailplane pitch it.`] : [st, `No elevator: it cannot pitch${wing}.`]);
+  out.push(sf.rud.length ? ["ok", `${sf.rud.length === 1 ? "A rudder" : sf.rud.length + " rudder cells"} on the fin yaw${sf.rud.length === 1 ? "s" : ""} it.`] : [st, `No rudder: it cannot yaw${wing}.`]);
+  return out;
+}
+
+// The flight model: a steady-state summary turned into a small 6-DoF integrator at the game's g. Body axes:
+// x forward (the nose), y up, z to starboard, the craft's own grid axes. Surfaces give q S dCL arm, so
+// nothing at rest; dCL is 0.05 a degree, up to 20 degrees.
+const ATRIM = 0.08, DCL = 0.05, DEFL = 20, CLA = 4.5, INCID = 4 * Math.PI / 180, ASTALL = 0.26;
+function flightModel(rows) {
+  const s = stats(rows), cells = cellsOf(rows), sf = surfaces(rows), kind = craftKind(s);
+  const mOf = k => MOD[k.c].kg + (MOD[k.c].fuel || 0), rx = k => k.x + 0.5 - s.cg, rz = k => k.y - MID;
+  const I = [0.6 * s.m, 0.6 * s.m, 0.6 * s.m];
+  cells.forEach(k => { const m = mOf(k), x = rx(k), z = rz(k); I[0] += m * z * z; I[1] += m * (x * x + z * z); I[2] += m * x * x; });
+  const mean = (a, f) => a.length ? a.reduce((t, k) => t + f(k), 0) / a.length : 0;
+  const fins = cells.filter(k => k.c === "V" || k.c === "T");
+  return {
+    s, kind, m: s.m, I, S: s.S, AR: s.wingSpan ? s.wingSpan * s.wingSpan / Math.max(1, s.S) : 4,
+    ail: sf.ail.map(k => ({arm: Math.abs(rz(k)), side: k.side})),
+    Se: sf.elev.length, armE: -mean(sf.elev, rx), Sr: sf.rud.length, armR: -mean(sf.rud, rx),
+    Sv: fins.length + 0.6, armV: fins.length ? -mean(fins, rx) : 1.5,
+    CdA: s.cd * s.A, Peff: s.peff, Tmax: s.thrust, hover: s.hover,
+  };
+}
+// quaternion [w, x, y, z]; rotate a body vector into the world and back
+const qmul = (a, b) => [a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3], a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2], a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1], a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0]];
+const qrot = (q, v) => { const r = qmul(qmul(q, [0, v[0], v[1], v[2]]), [q[0], -q[1], -q[2], -q[3]]); return [r[1], r[2], r[3]]; };
+const qinv = (q, v) => qrot([q[0], -q[1], -q[2], -q[3]], v);
+const qyaw = a => [Math.cos(a / 2), 0, Math.sin(a / 2), 0];
+function newFlight(model, at) {
+  return {p: at.p.slice(), v: [0, 0, 0], q: qyaw(at.yaw || 0), w: [0, 0, 0], power: 0, ground: true, defl: {ail: 0, elev: 0, rud: 0}, tilt: 0, stall: false, alpha: 0, airspeed: 0, hc: at.hc, rotorAngle: 0};
+}
+// inputs: pitch (+1 nose up: S), roll (+1 right: D), yaw (+1 left: Q), each -1..1; power changes with Shift/Ctrl
+function stepFlight(m, st, inp, dt) {
+  const RHO_ = RHO, g = G1;
+  st.power = Math.min(1, Math.max(0, st.power + inp.power * 0.5 * dt));
+  const vb = qinv(st.q, st.v), V = Math.hypot(...st.v);
+  const q = 0.5 * RHO_ * V * V;
+  const alpha = V > 1 ? Math.atan2(-vb[1], vb[0]) : 0, beta = V > 1 ? Math.atan2(vb[2], vb[0]) : 0;
+  st.alpha = alpha; st.airspeed = V;
+  const F = [0, -g * m.m, 0];
+  const tau = [0, 0, 0];
+  const fb = [0, 0, 0];   // body-frame forces, added to F at the end
+  // how much the craft flies on its wing (1) or its rotors (0)
+  const tilt = m.kind === "plane" ? 1 : m.kind === "heli" ? 0 : Math.min(1, Math.max(0, (V - 10) / 25));
+  st.tilt = tilt;
+  // thrust
+  if (m.kind === "plane") fb[0] += st.power * m.Peff / Math.max(V, 10);
+  else {
+    const T = st.power * m.Tmax, a = tilt * Math.PI / 2;
+    fb[1] += T * Math.cos(a);
+    fb[0] += m.kind === "vtol" ? Math.min(T * Math.sin(a), st.power * m.Peff / Math.max(V, 10)) : 0;
+  }
+  // the wing: lift across the flow, a stall past ASTALL, induced and parasite drag
+  let CL = 0;
+  if (m.S) {
+    const ae = alpha + INCID;
+    CL = Math.abs(ae) < ASTALL ? CLA * ae : Math.sign(ae) * CLA * ASTALL * 0.55;
+    st.stall = !st.ground && tilt > 0.5 && V > 3 && Math.abs(ae) >= ASTALL;
+    const L = q * m.S * CL;   // perpendicular to the flow in the body's x-y plane
+    if (V > 1) { const ux = vb[0] / V, uy = vb[1] / V; fb[0] += -uy * L; fb[1] += ux * L; }
+  } else st.stall = false;
+  const D = q * (m.CdA + (m.S ? m.S * CL * CL / (Math.PI * m.AR * 0.8) : 0)) + (m.kind !== "plane" ? 0.5 * RHO_ * 4 * V * V * (1 - tilt) : 0);
+  if (V > 0.01) for (let i = 0; i < 3; i++) fb[i] -= D * vb[i] / V;
+  fb[2] -= q * m.Sv * 2.0 * beta;   // the fin and the body push back on a sideslip
+  // the controls: surfaces work with q (nothing at rest), rotors with power
+  st.defl = {ail: inp.roll * DEFL, elev: inp.pitch * DEFL, rud: inp.yaw * DEFL};
+  const surf = tilt;
+  tau[0] += surf * q * DCL * st.defl.ail * m.ail.reduce((t, a) => t + a.arm, 0);
+  tau[2] += surf * q * m.Se * DCL * st.defl.elev * m.armE;
+  tau[1] += surf * q * m.Sr * DCL * st.defl.rud * m.armR;
+  // weathercock and pitch stability, from the tail; damping grows with q
+  tau[2] += -surf * q * m.Se * 4.0 * (alpha - ATRIM) * m.armE;
+  tau[1] += -surf * q * m.Sv * 3.0 * beta * m.armV;
+  const damp = [(1.2 + q / 250), (1.0 + q / 300), (1.2 + q / 250)];
+  const wdot = [0, 0, 0];
+  for (let i = 0; i < 3; i++) wdot[i] = tau[i] / m.I[i] - st.w[i] * damp[i] * surf;
+  // rotor control: cyclic and the tail rotor command rates, levelling when the stick is let go (the assist)
+  if (m.kind !== "plane" && st.power > 0.05) {
+    const up = qrot(st.q, [0, 1, 0]), fw = qrot(st.q, [1, 0, 0]), rt = qrot(st.q, [0, 0, 1]);
+    const pitchA = Math.asin(Math.max(-1, Math.min(1, fw[1]))), bankA = Math.atan2(-rt[1], up[1]);
+    const cmd = [inp.roll ? inp.roll * 1.0 : -bankA * 1.5, inp.yaw * 1.0, inp.pitch ? inp.pitch * 0.8 : -pitchA * 1.5];
+    for (let i = 0; i < 3; i++) wdot[i] += (1 - surf) * (cmd[i] - st.w[i]) * 3.5;
+  }
+  // integrate
+  const fw = qrot(st.q, fb);
+  for (let i = 0; i < 3; i++) { F[i] += fw[i]; st.v[i] += F[i] / m.m * dt; st.w[i] += wdot[i] * dt; }
+  for (let i = 0; i < 3; i++) st.p[i] += st.v[i] * dt;
+  const dq = qmul(st.q, [0, st.w[0], st.w[1], st.w[2]]);
+  for (let i = 0; i < 4; i++) st.q[i] += 0.5 * dq[i] * dt;
+  const n = Math.hypot(...st.q); for (let i = 0; i < 4; i++) st.q[i] /= n;
+  // the ground: wheels, skids and floats on the field's flat cells
+  st.ground = false;
+  if (st.p[1] <= st.hc) {
+    st.ground = true; st.p[1] = st.hc;
+    if (st.v[1] < 0) st.v[1] = 0;
+    const vbn = qinv(st.q, st.v);
+    vbn[2] *= Math.exp(-12 * dt); vbn[0] *= Math.exp(-(m.kind === "plane" ? 0.05 : 1.5) * dt); vbn[1] = Math.max(0, vbn[1]);
+    const back = qrot(st.q, vbn); st.v = back;
+    // keep it upright on its gear: no roll, the nose may rise (the tail sits) but not dig in
+    const fwv = qrot(st.q, [1, 0, 0]); let yaw = Math.atan2(-fwv[2], fwv[0]); let pit = Math.asin(Math.max(-1, Math.min(1, fwv[1])));
+    pit = Math.max(0, Math.min(0.25, pit));
+    if (V > 1) yaw += inp.yaw * 0.4 * dt;   // nose wheel steering with the rudder
+    st.q = qmul(qyaw(yaw), [Math.cos(pit / 2), 0, 0, Math.sin(pit / 2)]);
+    st.w[0] = 0; st.w[1] = 0; if (st.w[2] < 0 && pit <= 0) st.w[2] = 0;
+  }
+  st.rotorAngle += st.power * dt * 40;
+  return st;
+}
+const attitude = st => { const up = qrot(st.q, [0, 1, 0]), fw = qrot(st.q, [1, 0, 0]), rt = qrot(st.q, [0, 0, 1]); return {pitch: Math.asin(Math.max(-1, Math.min(1, fw[1]))), bank: Math.atan2(-rt[1], up[1]), heading: Math.atan2(fw[2], fw[0])}; };
+// a small autopilot for the scripted screenshots: holds a pitch and a bank with the same stick a player has
+function autopilot(st, pitchT, bankT) {
+  const a = attitude(st), cl = (x) => Math.max(-1, Math.min(1, x));
+  return {pitch: cl((pitchT - a.pitch) * 8 - st.w[2] * 1.5), roll: cl((bankT - a.bank) * 2.5 - st.w[0] * 0.6), yaw: 0, power: 0};
+}
 
 // ======================= the builder =======================
 const PAINT_NAMES = ["red", "orange", "sunny", "green", "teal", "blue", "white", "violet", "tan"];   // the order of every <part>-paints.png strip
@@ -504,7 +652,7 @@ const gridEl = document.getElementById("grid"), mirrorEl = document.getElementBy
 const listeners = [];
 const changed = () => { drawGrid(); listeners.forEach(f => f()); };
 function drawGrid() {
-  const {bad} = checks(rowsNow());
+  const {bad, s: gs} = checks(rowsNow()), SA = gs.m && craftKind(gs) !== "heli" ? surfaceAt(rowsNow()) : {};
   gridEl.innerHTML = ""; gridEl.classList.toggle("brush", tool === "paint");
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     const c = grid[y][x], d = document.createElement("div");
@@ -512,6 +660,7 @@ function drawGrid() {
     d.dataset.x = x; d.dataset.y = y; d.tabIndex = 0;
     const col = c === "." ? null : pieceColour(grid, paint, livery, x, y);
     if (c !== "." && paint[y][x]) d.classList.add("painted");
+    if (c !== "." && SA[x + "," + y]) { d.classList.add("surf"); d.dataset.s = SA[x + "," + y]; }
     d.setAttribute("aria-label", c === "." ? `empty cell ${x},${y}` : `${MOD[c].name}, ${col}${paint[y][x] ? " (painted)" : ""}, at ${x},${y}`);
     if (c !== ".") { d.title = `${MOD[c].name}, ${col}`; d.innerHTML = sprite(MOD[c].icon, col); }
     gridEl.appendChild(d);
@@ -660,7 +809,7 @@ function matSet(make) {
 }
 const planeUV = (w, h, flip) => { const g = new THREE.PlaneGeometry(w, h); if (flip) { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i)); } return g; };
 // rows -> a group; lampFn(x, y, z, colour, intensity, range, opts) adds a light riding the group
-function buildCraft(rows, liv, M, lampFn, paint) {
+function buildCraft(rows, liv, M, lampFn, paint, opts = {}) {
   const g = new THREE.Group(), spin = [], cells = cellsOf(rows);
   const LF = lampFn ? (x, y, z, c, i, r, o = {}) => lampFn(x, y, z, c, i, r, Object.assign({group: g}, o)) : null;
   if (!cells.length) return {g, spin};
@@ -700,23 +849,41 @@ function buildCraft(rows, liv, M, lampFn, paint) {
     add(octo(len * 0.55, cw * 0.55, ch * 0.5, cw, ch), M.glass(), X(x) - 0.8, y, c.z, 0, 0, 0);
     add(octo(len * 0.45, cw, ch, cw * 0.62, ch * 0.55), M.glass(), X(x) - 0.8 + len * 0.55, y, c.z);
   }
-  // wings and tailplanes: thick stubby slabs; the outermost cell of a wing in the trim colour
+  // wings and tailplanes: thick stubby slabs. A control surface is its cell's slab cut at a hinge, its
+  // trailing part on a pivot that the stick turns (up to 20 degrees); the preview marks the hinge in cyan.
+  const SA = craftKind(s) === "heli" ? {} : surfaceAt(rows), surf = {ail: [], elev: [], rud: []};
+  const mark = M.paint("blue");
+  const flap = (k, y, t, cut, list, extra) => {
+    const hx = X(k.x) + cut, m = col(k.x, k.y);
+    add(boxM(1 - cut, t, 1.0), m, hx + (1 - cut) / 2, y, Z(k.y));
+    const pv = new THREE.Group(); pv.position.set(hx, y, Z(k.y)); g.add(pv);
+    add(boxM(cut - 0.03, t * 0.72, 0.98), m, -(cut - 0.03) / 2 - 0.03, 0, 0, 0, 0, 0, pv);
+    if (opts.marks) add(boxM(0.09, t + 0.04, 1.03), mark, hx - 0.015, y, Z(k.y));
+    list.push(Object.assign({o: pv}, extra));
+  };
   for (const k of cells) {
-    const host = H[k.x + "," + k.y];
-    if (k.c === "W" || (host === "wing" && "GEKUO".includes(k.c))) {
-      add(boxM(1.0, WT, 1.0), col(k.x, k.y), X(k.x) + 0.5, wingY, Z(k.y));
-    }
-    if (k.c === "H") add(boxM(1.0, 0.2, 1.0), col(k.x, k.y), X(k.x) + 0.5, yc + (skids ? 0.25 : 0.05), Z(k.y));
+    const host = H[k.x + "," + k.y], sa = SA[k.x + "," + k.y];
+    if (k.c === "W" && sa === "A") flap(k, wingY, WT, 0.42, surf.ail, {side: Math.sign(k.y - MID)});
+    else if (k.c === "W" || (host === "wing" && "GEKUO".includes(k.c))) add(boxM(1.0, WT, 1.0), col(k.x, k.y), X(k.x) + 0.5, wingY, Z(k.y));
+    const yH = yc + (skids ? 0.25 : 0.05);
+    if (k.c === "H" && sa === "E") flap(k, yH, 0.2, 0.45, surf.elev, {});
+    else if (k.c === "H") add(boxM(1.0, 0.2, 1.0), col(k.x, k.y), X(k.x) + 0.5, yH, Z(k.y));
   }
   const top = x => yc + (BC[x] ? BC[x].h / 2 : 0.5);
   for (const k of cells) {
     const cx = X(k.x) + 0.5, cz = Z(k.y), c = BC[k.x];
     switch (k.c) {
       case "V": case "T": {   // a swept fin on the body, in the trim colour
-        const hh = k.c === "V" ? 1.35 : 1.0, sh = new THREE.Shape();
-        sh.moveTo(0, 0); sh.lineTo(1, 0); sh.lineTo(0.55, hh); sh.lineTo(0.08, hh * 1.04); sh.lineTo(0, 0);
+        const hh = k.c === "V" ? 1.35 : 1.0, sh = new THREE.Shape(), rud = SA[k.x + "," + k.y] === "R", r0 = rud ? 0.36 : 0;
+        sh.moveTo(r0, 0); sh.lineTo(1, 0); sh.lineTo(0.55, hh); sh.lineTo(Math.max(r0, 0.08), hh * 1.04); sh.lineTo(r0, 0);
         const fg = new THREE.ExtrudeGeometry(sh, {depth: 0.22, bevelEnabled: false}); fg.translate(0, 0, -0.11);
         add(fg, col(k.x, k.y), X(k.x), top(k.x) - 0.12, cz);
+        if (rud) {   // the rudder: the fin's trailing part on a vertical hinge
+          const pv = new THREE.Group(); pv.position.set(X(k.x) + r0, top(k.x) - 0.12, cz); g.add(pv);
+          add(boxM(r0 - 0.03, hh, 0.16), col(k.x, k.y), -(r0 - 0.03) / 2 - 0.03, hh / 2, 0, 0, 0, 0, pv);
+          if (opts.marks) add(boxM(0.09, hh + 0.04, 0.26), mark, X(k.x) + r0 - 0.015, top(k.x) - 0.12 + hh / 2, cz);
+          surf.rud.push({o: pv});
+        }
         if (k.c === "T") {   // the tail rotor, on the port side
           const hub = new THREE.Group(); hub.position.set(cx, top(k.x) + 0.35, cz - (c ? c.w / 2 : 0.5) - 0.3); g.add(hub);
           add(boxM(0.28, 1.7, 0.08), M.blade(), 0, 0, 0, 0, 0, 0, hub); add(boxM(0.3, 0.3, 0.2), M.iron(), 0, 0, 0.06, 0, 0, 0, hub);
@@ -834,7 +1001,7 @@ function buildCraft(rows, liv, M, lampFn, paint) {
     LF(xN, yN, zMax + 0.55, 0x30ff60, 1.4, 5, {size: 0.11});
     LF(X(back) - 0.2, yc + 0.5, 0, 0xffffff, 1.1, 4, {size: 0.1});
   }
-  return {g, spin, s};
+  return {g, spin, s, surf, yc};
 }
 
 // ======================= the airfield (three.js) =======================
@@ -1089,12 +1256,12 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   const SEL = [["all", "Whole field"], ["hangar", "Hangar"], ["sharky", "Sharky"], ["bumble", "Bumble"], ["puffin", "Puffin"], ["gull", "Gull"], ["dart", "Dart"], ["kestrel", "Kestrel"], ["yours", "Your design"]];
   document.getElementById("shipSel").innerHTML = SEL.map(([id, n]) => `<button data-s="${id}" aria-pressed="${id === "all"}">${n}</button>`).join("");
   const selPress = id => document.querySelectorAll("#shipSel button").forEach(o => o.setAttribute("aria-pressed", o.dataset.s === id));
-  document.querySelectorAll("#shipSel button").forEach(b => b.addEventListener("click", () => { focus(b.dataset.s); selPress(b.dataset.s); }));
+  document.querySelectorAll("#shipSel button").forEach(b => b.addEventListener("click", () => { endFly(); focus(b.dataset.s); selPress(b.dataset.s); }));
   const ptrs = new Map(); let pinch0 = 0;
   canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
   canvas.addEventListener("pointermove", e => {
     if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    if (ptrs.size === 1) { cam.yaw -= (e.clientX - px) * 0.006; cam.pitch = Math.min(1.45, Math.max(0.05, cam.pitch + (e.clientY - py) * 0.005)); }
+    if (ptrs.size === 1) { if (fly) fly.yawOff -= (e.clientX - px) * 0.006; else cam.yaw -= (e.clientX - px) * 0.006; cam.pitch = Math.min(1.45, Math.max(0.05, cam.pitch + (e.clientY - py) * 0.005)); }
     else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0) cam.dist = Math.min(320, Math.max(6, cam.dist * pinch0 / d)); pinch0 = d; }
   });
   const up = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
@@ -1104,13 +1271,106 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   let yours = null;
   function info() {
     const el = document.getElementById("yardInfo");
+    if (typeof fly !== "undefined" && fly) return;
     const desc = (name, s) => `<div><b>${name}</b>: ${Math.round(s.m)} kg, ${s.len.toFixed(0)} by ${s.width.toFixed(1)} m. ${s.canHover ? `Hovers at ${s.hover.toFixed(2)} of its weight` : `Stalls at ${s.stall.toFixed(0)} m/s`}, tops out at ${s.top.toFixed(0)} m/s, ${Math.round(s.range)} km on its fuel.</div>`;
     if (PRESETS[focused]) { el.innerHTML = desc(PRESETS[focused].name, stats(PRESETS[focused].rows)); return; }
     if (focused === "yours") { el.innerHTML = yours ? desc(yours.name, stats(yours.rows)) : `<div><b>Your design</b> rolls out here, in front of the middle bay. Draw one in section 2 and press <b>Roll out</b>.</div>`; return; }
     if (focused === "kestrel") { el.innerHTML = `<div><b>Kestrel</b>, the game's own tiltrotor (<code>assets/models/vehicles/kestrel</code>), 1,200 kg${kestrel.size ? `, ${kestrel.size.x.toFixed(1)} m long` : ""}. The chibi aircraft are measured against it and fly by its foil model.</div>`; return; }
     el.innerHTML = `<div><b>${LAMPS.length} lights</b> on the field, each lighting what is within its range (runway edge lights 6 m, pad lights 5 m, bay lamps 15 m, floodlights 19 m), all at once. <b>${time === "night" ? "Night" : time === "dusk" ? "Dusk" : "Day"}</b>: ${time === "day" ? "lamps off, sun shadows." : time === "dusk" ? "lamps coming on, low sun." : "moon at 0.035, lamps full."}</div>`;
   }
-  press("rollout", () => { if (!cellsOf(rowsNow()).length) return; yours = {rows: rowsNow(), name: designName, paint: paint.map(r => r.slice())}; place("yours", yours.rows, Object.assign({}, livery), yours.paint); setTime(time); focus("yours"); selPress("yours"); if (SHOT || STILL) { cam.target.copy(cam.goal.t); cam.dist = cam.goal.d; cam.goal = null; if (Q.get("ryaw")) cam.yaw = +Q.get("ryaw"); if (Q.get("rpitch")) cam.pitch = +Q.get("rpitch"); } kick(); document.querySelector(".stage").scrollIntoView({behavior: "smooth", block: "center"}); });
+  press("rollout", () => { if (!cellsOf(rowsNow()).length) return; yours = {rows: rowsNow(), name: designName, paint: paint.map(r => r.slice()), liv: Object.assign({}, livery)}; place("yours", yours.rows, Object.assign({}, livery), yours.paint); setTime(time); focus("yours"); selPress("yours"); if (SHOT || STILL) { cam.target.copy(cam.goal.t); cam.dist = cam.goal.d; cam.goal = null; if (Q.get("ryaw")) cam.yaw = +Q.get("ryaw"); if (Q.get("rpitch")) cam.pitch = +Q.get("rpitch"); } kick(); document.querySelector(".stage").scrollIntoView({behavior: "smooth", block: "center"}); });
+
+
+  // ---- Fly it (steer-and-sail decisions 2 and 6): the design off the runway, its surfaces on the stick
+  let fly = null;
+  const keys = new Set(), hud = document.getElementById("flyHud"), flyBtn = document.getElementById("flyBtn");
+  const FLYKEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "KeyR", "KeyF", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight"]);
+  window.addEventListener("keydown", e => { if (!fly || (e.target.closest && e.target.closest("input,textarea"))) return; if (FLYKEYS.has(e.code)) { keys.add(e.code); e.preventDefault(); } });
+  window.addEventListener("keyup", e => keys.delete(e.code));
+  window.addEventListener("blur", () => keys.clear());
+  const k = c => keys.has(c) ? 1 : 0;
+  const stick = () => ({pitch: k("KeyS") - k("KeyW"), roll: k("KeyD") - k("KeyA"), yaw: k("KeyQ") - k("KeyE"), power: Math.sign(k("ShiftLeft") + k("ShiftRight") + k("KeyR") - k("ControlLeft") - k("ControlRight") - k("KeyF"))});
+  function endFly() {
+    if (!fly) return;
+    scene.remove(fly.outer);
+    for (let i = LAMPS.length - 1; i >= 0; i--) if (LAMPS[i].group === fly.c.g) LAMPS.splice(i, 1);
+    if (fly.hide && CRAFT[fly.hide]) CRAFT[fly.hide].g.visible = true;
+    fly = null; keys.clear(); hud.hidden = true; kick(); flyBtn.textContent = "Fly it"; flyBtn.setAttribute("aria-pressed", "false"); info();
+  }
+  function startFly(src) {
+    endFly();
+    const cs = checks(src.rows), bad = cs.out.find(o => o[0] === "no");
+    if (!cs.s.m || bad) { document.getElementById("yardInfo").innerHTML = `<div><b>${src.name}</b> cannot fly yet: ${bad ? bad[1] : "the grid is empty."}</div>`; return false; }
+    const m = flightModel(src.rows), c = buildCraft(src.rows, src.liv, M, lamp, src.paint);
+    const outer = new THREE.Group(); c.g.position.set(-(m.s.cg - 6.5), -c.yc, 0); outer.add(c.g); scene.add(outer);
+    const onPad = m.kind !== "plane" && src.hide === "bumble";
+    const at = onPad ? {p: [PAD[0], c.yc, PAD[1]], yaw: Math.PI} : {p: [-RW.x + 8, c.yc, RW.z], yaw: 0};
+    if (src.hide && CRAFT[src.hide]) CRAFT[src.hide].g.visible = false;
+    fly = {m, c, outer, st: newFlight(m, Object.assign(at, {hc: c.yc})), hide: src.hide, name: src.name, yawOff: 0, n: 0};
+    cam.goal = null; cam.dist = 22; cam.pitch = 0.22; focused = "fly";
+    hud.hidden = false; flyBtn.textContent = "Stop flying"; flyBtn.setAttribute("aria-pressed", "true");
+    const kind = m.kind === "heli" ? "a helicopter: Shift (or R) raises the collective, Ctrl (or F) lowers it; W and S tilt the disc forward and back, A and D sideways; Q and E the tail rotor." : m.kind === "vtol" ? "a tiltrotor: Shift (or R) and Ctrl (or F) set the power; it lifts on its rotors, and as it speeds up the nacelles tilt forward and W, S, A, D, Q, E move from the rotors to the surfaces." : "a plane: Shift (or R) and Ctrl (or F) the throttle; at speed, S lifts the nose. W and S the elevator, A and D the ailerons, Q and E the rudder (and the nose wheel on the ground).";
+    document.getElementById("yardInfo").innerHTML = `<div><b>Flying ${src.name}</b>, ${kind} The surfaces push with the air, q S dCL arm, so on the ground at rest they do nothing.</div>`;
+    pose(); kick(); return true;
+  }
+  const deg = 180 / Math.PI;
+  function pose() {
+    const st = fly.st, c = fly.c;
+    fly.outer.position.set(st.p[0], st.p[1], st.p[2]); fly.outer.quaternion.set(st.q[1], st.q[2], st.q[3], st.q[0]);
+    // the stick moves the surfaces: up to 20 degrees, each in its own sense
+    const d = st.defl, r = Math.PI / 180;
+    c.surf.ail.forEach(a => a.o.rotation.z = -a.side * d.ail * r);
+    c.surf.elev.forEach(a => a.o.rotation.z = -d.elev * r);
+    c.surf.rud.forEach(a => a.o.rotation.y = -d.rud * r);
+    // props and rotors turn only while the engine runs
+    c.spin.forEach((sp, i) => sp.o.rotation[sp.axis] = 0.5 + i * 0.37 + st.rotorAngle * sp.rate / 6);
+  }
+  function drawHud() {
+    const st = fly.st, a = attitude(st), m = fly.m, D = st.defl;
+    const pw = Math.round(st.power * 100), sgn = v => (v > 0 ? "+" : "") + v.toFixed(0);
+    const row = (kk, v) => `<div class="row"><span>${kk}</span><span>${v}</span></div>`;
+    hud.innerHTML = `<canvas width="96" height="64" id="adi"></canvas>` +
+      row("Airspeed", `${st.airspeed.toFixed(0)} m/s`) + row("Height", `${Math.max(0, st.p[1] - st.hc).toFixed(0)} m`) +
+      row("Pitch / bank", `${sgn(a.pitch * deg)}&deg; / ${sgn(a.bank * deg)}&deg;`) + row("Heading", `${((90 - a.heading * deg) % 360 + 360).toFixed(0) % 360}&deg;`) +
+      row(m.kind === "heli" ? "Collective" : "Throttle", `${pw}%`) + (m.kind === "vtol" ? row("Nacelles", `${Math.round(st.tilt * 90)}&deg; forward`) : "") +
+      row("Ail / elev / rud", `${sgn(D.ail)} ${sgn(D.elev)} ${sgn(D.rud)}&deg;`) +
+      (m.S ? row("Stall at", `${m.s.stall.toFixed(0)} m/s`) : row("Hover at", `${Math.round(100 / Math.max(0.01, m.hover))}%`)) +
+      (st.stall ? `<div class="stall">STALL</div>` : "") +
+      `<div class="keys">${m.kind === "heli" ? "Shift/Ctrl collective, W A S D cyclic, Q E tail rotor" : "W S elevator, A D ailerons, Q E rudder, Shift/Ctrl throttle"}; drag to look round</div>`;
+    // the attitude ball: sky above the horizon, turned by the bank, moved by the pitch
+    const cv = document.getElementById("adi"), g2 = cv.getContext("2d"), w = 96, h = 64;
+    g2.save(); g2.translate(w / 2, h / 2); g2.rotate(-a.bank); g2.translate(0, a.pitch * deg * 1.2);
+    g2.fillStyle = "#3e7fb0"; g2.fillRect(-120, -120, 240, 120); g2.fillStyle = "#7d4636"; g2.fillRect(-120, 0, 240, 120);
+    g2.strokeStyle = "#fff"; g2.lineWidth = 1; g2.beginPath(); g2.moveTo(-60, 0); g2.lineTo(60, 0); g2.stroke(); g2.restore();
+    g2.strokeStyle = "#e8b040"; g2.lineWidth = 2; g2.beginPath(); g2.moveTo(w / 2 - 22, h / 2); g2.lineTo(w / 2 - 8, h / 2); g2.lineTo(w / 2, h / 2 + 5); g2.lineTo(w / 2 + 8, h / 2); g2.lineTo(w / 2 + 22, h / 2); g2.stroke();
+  }
+  function flyFrame(dt) {
+    if (!SHOT) { const n = Math.max(1, Math.ceil(dt * 120)), inp = stick(); for (let i = 0; i < n; i++) stepFlight(fly.m, fly.st, inp, dt / n); }
+    pose();
+    // the chase camera: behind the craft, turned by dragging; it follows the craft, it never turns on its own
+    const a = attitude(fly.st), want = Math.atan2(-Math.cos(a.heading), -Math.sin(a.heading)) + fly.yawOff;
+    let dy = want - cam.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); cam.yaw += dy * Math.min(1, dt * 4);
+    cam.target.set(fly.st.p[0], fly.st.p[1] + 1, fly.st.p[2]);
+    if (fly.n++ % 3 === 0) drawHud();
+  }
+  const flySource = () => {
+    if (PRESETS[focused]) return {rows: PRESETS[focused].rows, liv: PRESETS[focused].livery, paint: presetPaint(PRESETS[focused]), name: PRESETS[focused].name, hide: focused};
+    if (focused === "yours" && yours) return {rows: yours.rows, liv: yours.liv || livery, paint: yours.paint, name: yours.name, hide: "yours"};
+    return {rows: rowsNow(), liv: Object.assign({}, livery), paint: paint.map(r => r.slice()), name: designName};
+  };
+  flyBtn.addEventListener("click", () => { if (fly) endFly(); else startFly(flySource()); });
+  press("flyDesign", () => { if (startFly({rows: rowsNow(), liv: Object.assign({}, livery), paint: paint.map(r => r.slice()), name: designName})) document.querySelector(".stage").scrollIntoView({behavior: "smooth", block: "center"}); });
+  // scripted pictures for the screenshots: ?shot=fly&fly=<preset>&fscript=bank|approach
+  function flyScript(id, script) {
+    if (!startFly({rows: PRESETS[id].rows, liv: PRESETS[id].livery, paint: presetPaint(PRESETS[id]), name: PRESETS[id].name, hide: id})) return;
+    const st = fly.st, m = fly.m, put = (p, yaw, speed, power) => { st.p = p; st.q = qyaw(yaw); st.v = [Math.cos(yaw) * speed, 0, -Math.sin(yaw) * speed]; st.power = power; st.ground = false; };
+    let pt = 0, bt = 0, T = 1;
+    if (script === "approach") { put([-RW.x - 22, st.hc + 11, RW.z], 0, m.s.stall * 1.25, 0.35); pt = -0.03; T = 1.5; }
+    else { put([-70, 48, 8], 0.35, m.s.stall * 1.35, 0.9); pt = 0.07; bt = 0.75; T = 0.55; }
+    for (let t = 0; t < T; t += 1 / 120) { const ap = autopilot(st, pt, bt); ap.power = 0; stepFlight(m, st, ap, 1 / 120); }
+    st.rotorAngle = 3; fly.yawOff = script === "approach" ? 0.18 : -0.75; cam.pitch = script === "approach" ? 0.12 : 0.34; cam.dist = script === "approach" ? 20 : 19; selPress("");
+    const a = attitude(st); cam.yaw = Math.atan2(-Math.cos(a.heading), -Math.sin(a.heading)) + fly.yawOff;
+  }
 
   function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
   new ResizeObserver(resize).observe(canvas); resize();
@@ -1119,6 +1379,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   const clock = new THREE.Clock(), reduce = matchMedia("(prefers-reduced-motion: reduce)").matches, tmp = new THREE.Vector3();
   function frame() {
     const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
+    if (fly) flyFrame(dt);
     if (cam.goal) { cam.target.lerp(cam.goal.t, 1 - Math.exp(-dt * 4)); cam.dist += (cam.goal.d - cam.dist) * (1 - Math.exp(-dt * 4)); if (cam.target.distanceTo(cam.goal.t) < 0.05 && Math.abs(cam.dist - cam.goal.d) < 0.1) cam.goal = null; }
     camera.position.set(cam.target.x + cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.target.y + cam.dist * Math.sin(cam.pitch), cam.target.z + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw));
     camera.lookAt(cam.target); camera.updateMatrixWorld();
@@ -1135,7 +1396,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     }
     U.uLampCount.value = n;
     renderer.render(scene, camera);
-    if ((SHOT && ++shotFrames > 45) || (STILL && ++shotFrames > 3)) { if (SHOT) document.body.dataset.ready = "1"; running = false; return; }   // a screenshot: hold the picture
+    if ((SHOT && ++shotFrames > 45) || (STILL && !fly && ++shotFrames > 3)) { if (SHOT) document.body.dataset.ready = "1"; running = false; return; }   // a screenshot: hold the picture
     requestAnimationFrame(frame);
   }
   const SHOT = Q.has("shot"), STILL = Q.has("still"); let shotFrames = 0, running = true;
@@ -1145,7 +1406,8 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     if (started) return; started = true;
     placeAll(); setTime(TIMES[Q.get("time")] ? Q.get("time") : "night");
     document.getElementById("loading")?.remove();
-    if (SHOT) { document.body.classList.add("shot"); resize(); const id = Q.get("shot"); if (VIEW[id]) { focus(id); selPress(id); const g = cam.goal; cam.target.copy(g.t); cam.dist = g.d; cam.goal = null; } if (Q.get("yaw")) cam.yaw = +Q.get("yaw"); if (Q.get("pitch")) cam.pitch = +Q.get("pitch"); if (Q.get("dist")) cam.dist = +Q.get("dist"); }
+    if (SHOT && Q.get("fly") && PRESETS[Q.get("fly")]) { document.body.classList.add("shot"); resize(); flyScript(Q.get("fly"), Q.get("fscript") || "bank"); drawHud(); }
+    else if (SHOT) { document.body.classList.add("shot"); resize(); const id = Q.get("shot"); if (VIEW[id]) { focus(id); selPress(id); const g = cam.goal; cam.target.copy(g.t); cam.dist = g.d; cam.goal = null; } if (Q.get("yaw")) cam.yaw = +Q.get("yaw"); if (Q.get("pitch")) cam.pitch = +Q.get("pitch"); if (Q.get("dist")) cam.dist = +Q.get("dist"); }
     requestAnimationFrame(frame);
   };
   digitsReady.then(start);
@@ -1166,7 +1428,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   const floor = new THREE.Mesh(boxM(30, 0.2, 30), new THREE.MeshStandardMaterial({map: floorTex, roughness: 1})); floor.position.y = -0.1; floor.receiveShadow = true; scene.add(floor);
   const M = matSet(o => new THREE.MeshStandardMaterial(o));
   let craft = null, spin = [];
-  const rebuild = () => { if (craft) scene.remove(craft); const c = buildCraft(rowsNow(), livery, M, null, paint); craft = c.g; spin = c.spin; scene.add(craft); if (still && !pvRunning) { stillFrames = 0; pvRunning = true; delete document.body.dataset.pvReady; requestAnimationFrame(frame); } };   // a held preview draws the change
+  const rebuild = () => { if (craft) scene.remove(craft); const c = buildCraft(rowsNow(), livery, M, null, paint, {marks: true}); craft = c.g; spin = c.spin; scene.add(craft); if (still && !pvRunning) { stillFrames = 0; pvRunning = true; delete document.body.dataset.pvReady; requestAnimationFrame(frame); } };   // a held preview draws the change
   let pending = false;
   listeners.push(() => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; rebuild(); }); });
   const view = {yaw: 0.85, pitch: 0.42, dist: 17};
