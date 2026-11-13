@@ -110,6 +110,17 @@ towards my waypoint".
   angle that gives the most drive, for example "Ease the sail 10 deg (to
   35 deg)", "Haul in 5 deg" or "Trimmed". It also flags a sail that is
   luffing or stalled.
+- **A sailing route** (the owner: "a "sailing" route if you will"). Between
+  the ship and the active waypoint, the GPS plans and draws the course a
+  sailor would sail, not the straight line:
+  - straight where the waypoint can be laid on one board;
+  - upwind, a zigzag of close-hauled legs between the laylines, with each
+    tack point marked;
+  - deep downwind, gybing angles when broad reaching is faster than a dead
+    run.
+  It is replanned as the wind changes or the ship strays. The helm advice
+  steers along it, and the time to the waypoint is the route's time, not the
+  straight line's.
 - **Advice only.** The player steers and trims. The readout shows what the
   best course gains: the VMG now, and the VMG on the best heading.
 
