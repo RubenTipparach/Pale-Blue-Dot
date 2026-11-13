@@ -349,6 +349,19 @@ The presets:
 | Fission freighter | 4 MW | 10.4 m/s | 7,460 km |
 | Battery ferry | 800 kW | 7.6 m/s | 273 km |
 
+### 8. As the 3D sailing view was built (M23, 2026-11-13)
+
+Recommendations taken (ask only with screenshots):
+- **Islands.** The islands in the 3D view are hex columns 15 m across, the
+  chart's resolution, not world cells.
+- **One sail panel a mast.** Each mast's sail is drawn as one fore-and-aft
+  panel on a boom and gaff.
+- **Walking and swimming are simplified.** The on-foot walk uses the walk
+  cells with one-layer steps. Climbing back aboard is F along her side,
+  landing at the gangway.
+- **When sails furl.** They stay set while anyone is aboard, and furl only
+  when no one is.
+
 ## Risks
 
 - **Controls on the keyboard.** Four craft kinds now share W, A, S and D

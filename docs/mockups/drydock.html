@@ -152,7 +152,9 @@ tr:last-child td{border-bottom:0}
 #seamap{width:100%;height:auto;display:block;border-radius:4px;cursor:crosshair;image-rendering:pixelated;touch-action:none}
 .sailside{display:grid;gap:8px;min-width:0}
 #heel{width:100%;max-width:300px;height:auto;border-radius:4px;border:1px solid var(--line)}
-.helm button{font-size:13px}
+.helm button{font-size:15px;min-width:44px}
+.stage.s3{height:min(60vh,560px)}
+.prompt3{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);font:700 16px var(--display);letter-spacing:.05em;color:#161612;background:#e8b040;border-radius:4px;padding:5px 12px;pointer-events:none}
 @media (max-width:860px){.sailgrid{grid-template-columns:1fr}}
 @media (max-width:1000px){.builder{grid-template-columns:1fr}.mods{grid-template-columns:repeat(2,minmax(0,1fr))}.prog{grid-template-columns:1fr}}
 @media (max-width:560px){.mods{grid-template-columns:1fr}.palette{grid-template-columns:repeat(4,minmax(0,1fr))}.ov.br{display:none}.stage{height:62vh}}
@@ -231,7 +233,7 @@ tr:last-child td{border-bottom:0}
 
 <section aria-labelledby="s4">
   <h2 id="s4"><span class="n">4</span>Sail it</h2>
-  <p>A sea chart drawn compass-north up, as the game's map is, with the wind as arrows: trades from the east-north-east in the south, westerlies in the north, a slack band between. Click the chart to add a waypoint, drag one to move it, right-click to take it away. Then press <b>Sail</b>. A and D put the helm over (a rudder is a foil: she turns only with way on). On a sailing ship W hauls the sheet in and S eases it; on a powered one W and S step the telegraph through astern, stop, slow, half and full. Nothing steers for you: a sailing ship cannot point closer than about 45 degrees to the wind, so to reach a waypoint upwind she must tack. A waypoint counts as reached within 30 m, and the next one takes over. The GPS plans the route a sailor would sail (the cyan dashes: straight when the mark can be laid on one board, close-hauled legs between the faint laylines when it is upwind, tack points as dots), marks the best heading on the compass bar (cyan) beside the waypoint (amber), and tells you which way to turn and how to trim. It advises; it never steers.</p>
+  <p>A sea chart drawn compass-north up, as the game's map is, with the wind as arrows: trades from the east-north-east in the south, westerlies in the north, a slack band between. Click the chart to add a waypoint, drag one to move it, right-click to take it away. Then press <b>Sail</b>. You start on foot on her deck by the wheel, first person in her frame (WASD walk, drag to look). <b>F</b> at the wheel takes the helm, and the view becomes a chase camera behind her: <b>A</b> and <b>D</b> put the helm over (a rudder is a foil: she turns only with way on), and <b>&larr;</b> and <b>&rarr;</b> swing the sail toward port or starboard (on a powered ship <b>W</b> and <b>S</b> step the telegraph through astern, stop, slow, half and full). <b>F</b> again lets go: she sails on holding rudder and sail while you walk her deck. Walk off the deck where there is no rail and you are in the water: with no one aboard her sails furl and she comes to rest; swim to her side and press <b>F</b> to climb aboard. Nothing steers for you: a sailing ship cannot point closer than about 45 degrees to the wind, so to reach a waypoint upwind she must tack. A waypoint counts as reached within 30 m, and the next one takes over. The GPS plans the route a sailor would sail, laid as a glowing path on the water ahead of her bow with a chevron at the next turn (and on the chart, cyan dashes: straight when the mark can be laid on one board, close-hauled legs between the faint laylines when it is upwind, tack points as dots), marks the best heading on the compass bar (cyan) beside the waypoint (amber), and tells you which way to turn and how to trim. A curved arrow on the sail shows which way to swing it and how far, and turns into a tick when she is trimmed. It advises; it never steers.</p>
   <div class="sailwrap" id="sailWrap" tabindex="0" aria-label="Sail it: click the chart for waypoints, A and D steer, W and S sheet or throttle">
     <div class="sailbar">
       <div class="seg" id="sailShip" role="group" aria-label="Ship"></div>
@@ -242,11 +244,15 @@ tr:last-child td{border-bottom:0}
     <canvas id="compass" width="720" height="42" aria-label="Compass bar: the heading, and the active waypoint as a diamond"></canvas>
     <div class="gps mono" id="gps"></div>
     <div class="advice" id="advice" aria-live="polite"></div>
+    <div class="stage s3"><canvas id="sail3d" aria-label="The ship in 3D: behind her at the helm, on her deck on foot, or in the water"></canvas>
+      <div class="hudline" id="sail3dHud" aria-live="polite"></div>
+      <div class="prompt3" id="sail3dPrompt" hidden></div>
+    </div>
+    <div class="seg helm" id="helmPad"><button data-k="a">A</button><button data-k="d">D</button><button data-k="arrowleft">&larr;</button><button data-k="arrowright">&rarr;</button><button data-k="w">W</button><button data-k="s">S</button><button data-k="f" class="go">F</button></div>
     <div class="sailgrid">
       <canvas id="seamap" width="960" height="640" aria-label="Sea chart, north up"></canvas>
       <div class="sailside">
         <canvas id="heel" width="300" height="300" aria-label="The ship from astern, heeling, and from above, with her sail and the apparent wind"></canvas>
-        <div class="seg helm" id="helmPad"><button data-k="a">A helm to port</button><button data-k="w">W haul in / ahead</button><button data-k="s">S ease / astern</button><button data-k="d">D helm to starboard</button></div>
         <p class="muted" id="sailState" style="font-size:13px"></p>
       </div>
     </div>
@@ -939,7 +945,7 @@ function shipMats(W) {
     sail: W.std({map: tex("tex-sail", HW), side: THREE.DoubleSide, roughness: 1}), iron: W.std({map: tex("game/iron", 1)}), win, slate: W.std({map: tex("game/slate", 2)})};
   return W.SM;
 }
-function buildShip(W, g, s) {
+function buildShip(W, g, s, opts = {}) {
   const grp = new THREE.Group(), M = shipMats(W), cells = cellsOf(g);
   if (!cells.length) return grp;
   const xs = cells.map(q => cellX(q.c, q.r)), xmid = (Math.min(...xs) + Math.max(...xs)) / 2;
@@ -1008,6 +1014,7 @@ function buildShip(W, g, s) {
       }
     }
   }
+  if (!opts.noSails) {
   // sails: one square sail across the ship at each mast and layer, and staysails along the mast's row
   const groups = new Map();
   for (const q of cells) if (q.b === "S" && s.sailOK.has(id(q.c, q.r, q.k))) {
@@ -1025,6 +1032,7 @@ function buildShip(W, g, s) {
     if (k % 3 === 0) box("timber", 0.22, 0.22, z1 - z0 + 0.6, x - 0.1, k + 1, (z0 + z1) / 2);
   }
   for (const {k, z0, z1, x} of yardTop.values()) box("timber", 0.26, 0.26, z1 - z0 + 0.8, x - 0.1, k + 1, (z0 + z1) / 2);
+  }
   const mat = {strakes: M.strakes, plank: M.plank, timber: M.timber, stone: M.stone, win: M.win, sail: M.sail, iron: M.iron};
   for (const [k, G1] of Object.entries(G)) if (G1.p.length) grp.add(meshOf(G1, mat[k], k !== "sail"));
   return grp;
@@ -1377,17 +1385,18 @@ let dockApi = null;
   function params() {
     const g = which === "yours" ? grid : parse(SHIPS[which]), s = hydro(g);
     const masts = cellsOf(g).filter(q => q.b === "M"), mastH = masts.length ? Math.max(...masts.map(q => q.k)) - s.mainDeck : 0;
-    P = {name: which === "yours" ? "Your design" : SHIPS[which].name, s, m: (s.m || 1) * 1000 * 1.1, SA: s.SA || 0, L: Math.max(4, s.L || 4), shaft: s.shaft || 0, row: s.row || 0, GM: Math.max(0.2, s.GM || 1), ce: Math.max(2, mastH * 0.55 + 1)};
+    P = {g, name: which === "yours" ? "Your design" : SHIPS[which].name, s, m: (s.m || 1) * 1000 * 1.1, SA: s.SA || 0, L: Math.max(4, s.L || 4), shaft: s.shaft || 0, row: s.row || 0, GM: Math.max(0.2, s.GM || 1), ce: Math.max(2, mastH * 0.55 + 1)};
     P.sail = P.SA > 0 && !P.shaft && !P.row; P.power = P.shaft > 0 || P.row > 0; P.ok = !!s.m && !s.sinks && (P.SA > 0 || P.power);
   }
   // ---- the route, the ship, the controls
   const START = {x: 900, y: 300, psi: 20};
   let wps = [{x: 1939, y: 900}, {x: 1500, y: 1900}], ai = 0, from = {x: START.x, y: START.y};
-  const S = {x: START.x, y: START.y, psi: START.psi, u: 0, rud: 0, delta: 45, thr: 0, rowT: 0, heel: 0, lee: 0, t: 0, track: [], aground: false, beta: 0, alpha: 0, aws: 0, sog: 0, cog: 0, done: false, drive: 0};
+  const MODE = {m: "foot"};
+  const S = {furl: 1, x: START.x, y: START.y, psi: START.psi, u: 0, rud: 0, delta: 45, thr: 0, rowT: 0, heel: 0, lee: 0, t: 0, track: [], aground: false, beta: 0, alpha: 0, aws: 0, sog: 0, cog: 0, done: false, drive: 0};
   const THR = [["Astern", -0.4], ["Stop", 0], ["Slow ahead", 0.33], ["Half ahead", 0.66], ["Full ahead", 1]];
   const keys = new Set();
   let running = false, warp = 8, night = Q.get("stime") === "night";
-  function reset() { Object.assign(S, {x: START.x, y: START.y, psi: START.psi, u: 0, rud: 0, delta: 45, thr: 1, rowT: 0, heel: 0, lee: 0, t: 0, track: [[START.x, START.y]], aground: false, done: false}); ai = 0; from = {x: START.x, y: START.y}; }
+  function reset() { Object.assign(S, {x: START.x, y: START.y, psi: START.psi, u: 0, rud: 0, delta: 45, thr: 1, rowT: 0, heel: 0, lee: 0, t: 0, track: [[START.x, START.y]], aground: false, done: false, furl: 1}); ai = 0; from = {x: START.x, y: START.y}; }
   // ---- the sail as a foil in the apparent wind: the one model the sim, the polar and the advice all use
   function sailF(beta, delta, A) {
     const alpha = beta - delta, luff = Math.min(1, Math.max(0, (beta - 20) / 12));   // the sail luffs inside about 25 degrees of apparent wind: about 45 degrees of true wind
@@ -1410,13 +1419,18 @@ let dockApi = null;
     const aw = {e: w.e - S.u * h.e, n: w.n - S.u * h.n}, A = Math.hypot(aw.e, aw.n) || 1e-6, f = {e: -aw.e / A, n: -aw.n / A};
     const beta = Math.acos(Math.max(-1, Math.min(1, f.e * h.e + f.n * h.n))) / deg, fromRight = f.e * right.e + f.n * right.n > 0 ? 1 : -1;
     // helm: A and D put the wheel over; it comes back amidships when let go. The rudder is a foil: it turns her only with way on.
-    const want = ctl.left ? -35 : ctl.right ? 35 : 0; S.rud += Math.max(-40 * dt, Math.min(40 * dt, want - S.rud));
-    // sheet (W hauls in, S eases) for a sailing ship; a powered ship's sails, if any, trim themselves
-    if (P.sail && ctl.haul) S.delta = Math.max(0, S.delta - 25 * dt);
-    if (P.sail && ctl.ease) S.delta = Math.min(90, S.delta + 25 * dt);
+    if (!ctl.hold) { const want = ctl.left ? -35 : ctl.right ? 35 : 0; S.rud += Math.max(-40 * dt, Math.min(40 * dt, want - S.rud)); }   // nobody at the helm: she holds her rudder
+    // the sheet: Left and Right swing the sail toward port or starboard; it sets to leeward, so that is easing or hauling by which side the wind is on
+    const sgn = -fromRight;
+    if (P.sail && ctl.sl) S.delta = Math.max(0, Math.min(90, S.delta - sgn * 25 * dt));
+    if (P.sail && ctl.sr) S.delta = Math.max(0, Math.min(90, S.delta + sgn * 25 * dt));
+    // nobody aboard: the sails furl over about 3 s and the engines stop (decision 3a); a hand at the helm sets them again
+    const aboard = MODE.m !== "swim";
+    S.furl = Math.max(0, Math.min(1, S.furl + (aboard ? (MODE.m === "helm" || S.furl > 0 ? 1 : 0) : -1) * dt / 3));
+    if (!aboard) S.thr = 1;
     if (!P.sail) S.delta = Math.max(0, Math.min(90, beta - 15));
     let drive = 0, side = 0;
-    if (P.SA > 0) { const f2 = sailF(beta, S.delta, A); drive = f2.drive; side = f2.side; S.alpha = f2.alpha; }
+    if (P.SA > 0) { const f2 = sailF(beta, S.delta, A); drive = f2.drive * S.furl; side = f2.side * S.furl; S.alpha = f2.alpha; }
     let thrust = 0;
     if (P.power) {
       const frac = THR[S.thr][1];
@@ -1431,7 +1445,8 @@ let dockApi = null;
     const lee = Math.min(0.14, side / (60 * P.s.S * (S.u * S.u + 1) + 1)), heel = Math.min(35, Math.atan(side * P.ce / (P.m / 1.1 * G25 * P.GM)) / deg);
     S.lee = lee * -fromRight; S.heel = heel * -fromRight;
     const cog = S.psi * deg + S.lee, ve = S.u * Math.sin(cog), vnn = S.u * Math.cos(cog);
-    const nx = S.x + ve * dt, ny = S.y + vnn * dt;
+    const drift = aboard ? 0 : 0.03 * Math.min(1, 1 - S.u / 1.5);   // unattended: she drifts a little with the wind on her hull
+    const nx = S.x + (ve + drift * w.e) * dt, ny = S.y + (vnn + drift * w.n) * dt;
     if (isLand(nx, ny)) { S.u = 0; S.aground = true; } else { S.x = Math.max(0, Math.min(WX, nx)); S.y = Math.max(0, Math.min(WY, ny)); S.aground = false; }
     S.sog = Math.hypot(ve, vnn); S.cog = wrap360(Math.atan2(ve, vnn) / deg); S.beta = beta; S.aws = A; S.fromRight = fromRight; S.drive = drive; S.t += dt;
     const last = S.track[S.track.length - 1]; if (Math.hypot(S.x - last[0], S.y - last[1]) > 12) S.track.push([S.x, S.y]);
@@ -1490,7 +1505,8 @@ let dockApi = null;
     let sail = "";
     if (P.SA > 0 && P.sail) {
       const d = plan.delta - S.delta;
-      sail = Math.abs(d) < 3 ? `Sail trimmed (${S.delta.toFixed(0)}°)` : d > 0 ? `Ease the sail ${Math.round(d)}° (to ${plan.delta}°)` : `Haul in ${Math.round(-d)}° (to ${plan.delta}°)`;
+      const key = d * -(S.fromRight || 1) > 0 ? "→" : "←";
+      sail = Math.abs(d) < 3 ? `Sail trimmed (${S.delta.toFixed(0)}°)` : d > 0 ? `Ease the sail ${Math.round(d)}° (to ${plan.delta}°): ${key} swing` : `Haul in ${Math.round(-d)}° (to ${plan.delta}°): ${key} swing`;
       if (S.beta < 24) sail += ": in irons"; else if (S.alpha < 0) sail += ": luffing"; else if (S.alpha > 22) sail += ": stalled";
     } else if (P.power) sail = `Telegraph: ${THR[S.thr][0]}`;
     return {helm, sail, vmgNow, vmgBest: plan.vmgBest, tack: plan.tackNow};
@@ -1587,19 +1603,21 @@ let dockApi = null;
     st.innerHTML = `<b>${P.name}</b>: ${P.sail ? `${P.SA.toFixed(0)} m2 of sail` : P.row && !P.shaft ? `${P.row.toFixed(1)} kW of oars${S.rowT > 600 ? " (tired: half)" : ""}` : `${(P.shaft / 1000).toFixed(1)} MW to the shaft`}. Heading ${S.psi.toFixed(0)}°, rudder ${S.rud.toFixed(0)}°. True wind from ${w.from.toFixed(0)}° at ${w.spd.toFixed(1)} m/s; apparent ${S.aws.toFixed(1)} m/s at ${S.beta.toFixed(0)}° off the bow. Sim time ${fmtT(S.t)}${S.aground ? ". <b>Aground!</b>" : ""}.`;
   }
   let planAt = -1e9;
-  function draw() { const now = performance.now(); if (!running || now - planAt > 300) { replan(); planAt = now; } drawMap(); drawCompass(); drawHeel(); readout(); }
-  // ---- controls
-  const ctl = () => ({left: keys.has("a"), right: keys.has("d"), haul: keys.has("w"), ease: keys.has("s")});
-  wrap.addEventListener("keydown", e => {
-    const k = e.key.toLowerCase(); if (!"wasd".includes(k) || k.length !== 1) return; e.preventDefault();
-    if (P.power && !P.sail && !e.repeat) { if (k === "w") S.thr = Math.min(THR.length - 1, S.thr + 1); if (k === "s") S.thr = Math.max(0, S.thr - 1); }
-    keys.add(k); if (!running) draw();
-  });
+  function draw() { const now = performance.now(); if (!running || now - planAt > 300) { replan(); planAt = now; if (typeof buildRoute === "function") buildRoute(); } if (typeof kick === "function") kick(); drawMap(); drawCompass(); drawHeel(); readout(); }
+  // ---- controls: at the helm A/D steer, Left/Right swing the sail (W/S the telegraph on a powered ship); on foot or swimming WASD move; F takes or leaves the helm, or climbs aboard
+  const ctl = () => MODE.m === "helm" ? {left: keys.has("a"), right: keys.has("d"), sl: keys.has("arrowleft"), sr: keys.has("arrowright")} : {hold: true};
+  const KEYS = ["w", "a", "s", "d", "arrowleft", "arrowright", "f"];
+  function press(k, repeat) {
+    if (k === "f") { if (!repeat) act(); return; }
+    if (MODE.m === "helm" && P.power && !P.sail && !repeat) { if (k === "w") S.thr = Math.min(THR.length - 1, S.thr + 1); if (k === "s") S.thr = Math.max(0, S.thr - 1); }
+    keys.add(k); kick();
+  }
+  wrap.addEventListener("keydown", e => { const k = e.key.toLowerCase(); if (!KEYS.includes(k)) return; e.preventDefault(); press(k, e.repeat); });
   wrap.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
   wrap.addEventListener("blur", () => keys.clear());
   document.querySelectorAll("#helmPad button").forEach(b => {
     const k = b.dataset.k;
-    b.addEventListener("pointerdown", e => { e.preventDefault(); wrap.focus(); if (P.power && !P.sail) { if (k === "w") S.thr = Math.min(THR.length - 1, S.thr + 1); if (k === "s") S.thr = Math.max(0, S.thr - 1); } keys.add(k); if (!running) draw(); });
+    b.addEventListener("pointerdown", e => { e.preventDefault(); wrap.focus(); press(k, false); });
     for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, () => keys.delete(k));
   });
   // waypoints: click adds, drag moves, right-click removes
@@ -1613,26 +1631,196 @@ let dockApi = null;
   const sailBtn = document.getElementById("sailGo");
   const setRunning = r => { running = r; sailBtn.textContent = r ? "Pause" : "Sail"; sailBtn.setAttribute("aria-pressed", r); if (r) { wrap.focus(); last = performance.now(); requestAnimationFrame(loop); } };
   sailBtn.addEventListener("click", () => setRunning(!running));
-  document.getElementById("sailReset").addEventListener("click", () => { setRunning(false); reset(); draw(); });
+  document.getElementById("sailReset").addEventListener("click", () => { setRunning(false); reset(); MODE.m = "foot"; standAtHelm(); draw(); });
   document.getElementById("sailClear").addEventListener("click", () => { wps = []; ai = 0; draw(); });
   const shipEl = document.getElementById("sailShip");
   shipEl.innerHTML = [...Object.entries(SHIPS).map(([k, p]) => [k, p.name]), ["yours", "Your design"]].map(([k, n]) => `<button data-w="${k}" aria-pressed="${k === which}">${n}</button>`).join("");
-  shipEl.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { which = b.dataset.w; shipEl.querySelectorAll("button").forEach(o => o.setAttribute("aria-pressed", o === b)); params(); setRunning(false); reset(); draw(); }));
+  shipEl.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { which = b.dataset.w; shipEl.querySelectorAll("button").forEach(o => o.setAttribute("aria-pressed", o === b)); params(); setRunning(false); reset(); build3(); MODE.m = "foot"; standAtHelm(); draw(); }));
   document.querySelectorAll("#sailWarp button").forEach(b => b.addEventListener("click", () => { warp = +b.dataset.x; document.querySelectorAll("#sailWarp button").forEach(o => o.setAttribute("aria-pressed", o === b)); }));
-  document.querySelectorAll("#sailTime button").forEach(b => b.addEventListener("click", () => { night = b.dataset.t === "night"; document.querySelectorAll("#sailTime button").forEach(o => o.setAttribute("aria-pressed", o === b)); draw(); }));
+  document.querySelectorAll("#sailTime button").forEach(b => b.addEventListener("click", () => { night = b.dataset.t === "night"; document.querySelectorAll("#sailTime button").forEach(o => o.setAttribute("aria-pressed", o === b)); V.setTime(TIMES[night ? "night" : "day"]); ribMat.opacity = arrowMat.opacity = night ? 0.45 : 0.75; draw(); }));
   document.querySelectorAll("#sailTime button").forEach(o => o.setAttribute("aria-pressed", (o.dataset.t === "night") === night));
-  listeners.push(() => { if (which === "yours") { params(); draw(); } });
+  listeners.push(() => { if (which === "yours") { params(); build3(); draw(); } });
   let last = 0;
   function loop(now) {
     if (!running) return;
     const real = Math.min(0.1, (now - last) / 1000); last = now;
-    const n = Math.max(1, Math.round(real * warp / 0.05)); for (let i = 0; i < n && !S.done; i++) step(real * warp / n, ctl());
-    if (S.done) setRunning(false);
+    const n = Math.max(1, Math.round(real * warp / 0.05)); for (let i = 0; i < n; i++) step(real * warp / n, ctl());
     draw(); requestAnimationFrame(loop);
   }
-  params(); reset();
+  // ======================= the 3D sailing view: chase camera at the helm, first person on deck or in the water =======================
+  const cv3 = document.getElementById("sail3d"), hud3 = document.getElementById("sail3dHud"), prompt3 = document.getElementById("sail3dPrompt");
+  const V = makeWorld(cv3, {far: 2600}), scene3 = V.scene, cam3 = V.camera;
+  scene3.fog.near = 300;
+  const seaMat3 = V.lit(new THREE.MeshStandardMaterial({color: 0x2f7f96, roughness: 0.35, metalness: 0})); V.water = [seaMat3];
+  { const sea = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), seaMat3); sea.rotation.x = -Math.PI / 2; sea.position.set(WX / 2, 0, -WY / 2); scene3.add(sea); }
+  // the chart's coast and islands as hex columns (15 m across, the chart's resolution, not the world's cell)
+  { const HC = 15, hr = HC / Math.sqrt(3), Gl = Geo(), at3 = tex("game/atlas"); at3.repeat.set(1, 1); at3.wrapS = at3.wrapT = THREE.ClampToEdgeWrapping;
+    const auv = (sheet, tx, fu, fv) => { const sx = sheet % 4, sy = Math.floor(sheet / 4); fu = 0.01 + fu * 0.98; fv = 0.01 + fv * 0.98; return [(sx * 4 + tx + fu) / 16, 1 - (sy * 4 + fv) / 16]; };
+    const C6 = Array.from({length: 6}, (_, i) => { const a = Math.PI / 180 * (60 * i - 30); return [hr * Math.cos(a), hr * Math.sin(a)]; });
+    const colH = (x, y) => { const h = height(x, y); return h > 0 ? Math.max(1, Math.round(h * 4)) : -3; };
+    for (let r = 0; r * 1.5 * hr < WY + 40; r++) for (let q = -Math.ceil(r / 2) - 1; HC * (q + r / 2) < WX + 40; q++) {
+      const x = HC * (q + r / 2), y = r * 1.5 * hr, h = colH(x, y); if (h < 0) continue;
+      const sheet = h <= 2 ? 2 : 4;
+      for (let i = 0; i < 6; i++) {
+        const [ax, az] = C6[i], [bx, bz] = C6[(i + 1) % 6];
+        for (const [px, pz] of [[0, 0], [bx, bz], [ax, az]]) { Gl.p.push(x + px, h, -(y - pz)); Gl.n.push(0, 1, 0); Gl.u.push(...auv(sheet, 0, px / (2 * hr) + 0.5, pz / (2 * hr) + 0.5)); }
+        const a = Math.PI / 3 * i, nx = x + Math.cos(a) * HC, ny = y - Math.sin(a) * HC, nh = colH(nx, ny); if (nh >= h) continue;
+        const n = [Math.cos(a), 0, Math.sin(a)];
+        for (const [px, py, pz, u, v] of [[ax, h, az, 0, 0], [bx, h, bz, 1, 0], [bx, Math.max(nh, -3), bz, 1, 1], [ax, h, az, 0, 0], [bx, Math.max(nh, -3), bz, 1, 1], [ax, Math.max(nh, -3), az, 0, 1]]) { Gl.p.push(x + px, py, -(y - pz)); Gl.n.push(...n); Gl.u.push(...auv(sheet, 2, u, v)); }
+      }
+    }
+    scene3.add(meshOf(Gl, V.std({map: at3, roughness: 1, side: THREE.DoubleSide}), false));
+    for (const [tx, ty] of TOWNS) { V.lamp(tx, colH(tx, ty) + 3, -ty, 0xffc070, 3, 40, {size: 1.2}); }
+  }
+  // the route: a ribbon laid on the water, a chevron at the next turn, buoys at the waypoints
+  const ribMat = new THREE.MeshBasicMaterial({color: 0x46e0f5, transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide, fog: false});
+  const ribbon = new THREE.Mesh(new THREE.BufferGeometry(), ribMat); ribbon.renderOrder = 3; scene3.add(ribbon);
+  const chev = new THREE.Group(); scene3.add(chev);
+  for (const s2 of [-1, 1]) { const m = new THREE.Mesh(new THREE.BoxGeometry(16, 0.2, 3), ribMat); m.position.set(-5, 0.25, s2 * 5.5); m.rotation.y = s2 * 0.75; chev.add(m); }
+  const buoys = new THREE.Group(); scene3.add(buoys);
+  function buildRoute() {
+    const pts = [];
+    if (plan) { pts.push([S.x, S.y]); for (const l of plan.legs) pts.push([l.x1, l.y1]); }
+    const P2 = [], U2 = []; let acc = 0;
+    for (let i = 0; i + 1 < pts.length && acc < 1600; i++) {
+      const [x0, y0] = pts[i], [x1, y1] = pts[i + 1], len = Math.hypot(x1 - x0, y1 - y0); if (len < 0.1) continue;
+      const wR = Math.max(2.2, (zoom || 0) * 0.008), nx = -(y1 - y0) / len * wR, ny = (x1 - x0) / len * wR;
+      const q = [[x0 + nx, y0 + ny], [x0 - nx, y0 - ny], [x1 + nx, y1 + ny], [x1 - nx, y1 - ny]].map(([x, y]) => [x, 0.12, -y]);
+      for (const k of [0, 2, 1, 1, 2, 3]) P2.push(...q[k]); acc += len;
+    }
+    ribbon.geometry.dispose(); ribbon.geometry = new THREE.BufferGeometry(); ribbon.geometry.setAttribute("position", new THREE.Float32BufferAttribute(P2, 3));
+    chev.visible = !!(plan && plan.legs.length > 1);
+    if (chev.visible) { const l = plan.legs[1]; chev.position.set(l.x0, 0, -l.y0); chev.rotation.y = (90 - l.hd) * deg; chev.scale.setScalar(Math.max(1, (zoom || 0) / 90)); }
+    buoys.clear(); V.LAMPS = V.LAMPS.filter(L => L.group !== buoys); V.BULBS = V.BULBS.filter(L => L.group !== buoys);
+    wps.forEach((w, i) => { if (i < ai) return; const m = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.2, 4, 8), V.std({color: i === ai ? 0xe8b040 : 0x8a6a30})); m.position.set(w.x, 1.5, -w.y); buoys.add(m); V.lamp(w.x, 4, -w.y, 0xffb040, 2.4, 14, {group: buoys, size: 0.4}); });
+  }
+  // the ship as built, her sails turning with the sheet, and furling to the yard
+  const boat = new THREE.Group(), rocker = new THREE.Group(); boat.add(rocker); scene3.add(boat);
+  let ship3 = null, sails3 = [], vane = null, arrow = null, tick = null, arrowKey = "";
+  const arrowMat = new THREE.MeshBasicMaterial({color: 0x74effe, transparent: true, opacity: 0.9, depthTest: false}); 
+  function build3() {
+    if (ship3) { rocker.remove(ship3); V.dropGroup(ship3); }
+    const s = P.s, g = P.g; ship3 = buildShip(V, g, s, {noSails: true}); rocker.add(ship3); ship3.position.y = s.m && !s.sinks ? -s.d : 0;
+    sails3 = []; const xm = ship3.userData.xmid, M = shipMats(V);
+    const masts = new Map();
+    for (const q of cellsOf(g)) if (q.b === "S" && s.sailOK.has(id(q.c, q.r, q.k))) {
+      let best = null, bd = 1e9; for (let c = 0; c < COLS; c++) if (g[q.k][MID][c] === "M") { const d = Math.abs(cellX(c, MID) - cellX(q.c, q.r)); if (d < bd) { bd = d; best = c; } }
+      if (best == null) continue; const m = masts.get(best) || {k0: 99, k1: -1, r0: 9, r1: -9}; m.k0 = Math.min(m.k0, q.k); m.k1 = Math.max(m.k1, q.k); m.r0 = Math.min(m.r0, q.r); m.r1 = Math.max(m.r1, q.r); masts.set(best, m);
+    }
+    for (const [c, m] of masts) {
+      const chord = Math.max(4, Math.min(12, (m.r1 - m.r0) * 2.45 + 2.4)), hgt = m.k1 + 1 - m.k0, top = m.k1 + 1;
+      const piv = new THREE.Group(); piv.position.set(cellX(c, MID) - xm, 0, 0); ship3.add(piv);
+      const cloth = new THREE.Mesh(new THREE.PlaneGeometry(chord, hgt), M.sail); cloth.position.set(-chord / 2 - 0.3, top - hgt / 2, 0); piv.add(cloth);
+      const boom = new THREE.Mesh(new THREE.BoxGeometry(chord + 0.4, 0.22, 0.22), M.timber); boom.position.set(-chord / 2 - 0.3, m.k0, 0); piv.add(boom);
+      const gaff = new THREE.Mesh(new THREE.BoxGeometry(chord + 0.4, 0.22, 0.22), M.timber); gaff.position.set(-chord / 2 - 0.3, top, 0); piv.add(gaff);
+      sails3.push({piv, cloth, boom, chord, hgt, top, k0: m.k0});
+    }
+    // running lights and a masthead vane
+    const xs = cellsOf(g).filter(q => isSolid(q.b)).map(q => cellX(q.c, q.r) - xm), bow = Math.max(...xs), stern = Math.min(...xs), sh = s.sheer || 3;
+    V.lamp(bow - 1, sh + 0.8, -3, 0xff3030, 1.8, 6, {group: ship3, size: 0.18}); V.lamp(bow - 1, sh + 0.8, 3, 0x30ff60, 1.8, 6, {group: ship3, size: 0.18}); V.lamp(stern - 0.6, sh + 1, 0, 0xffffff, 1.6, 6, {group: ship3, size: 0.18});
+    const big = sails3.reduce((a, b) => !a || b.hgt * b.chord > a.hgt * a.chord ? b : a, null);
+    const mastTop = Math.max(0, ...cellsOf(g).filter(q => q.b === "M").map(q => q.k + 1));
+    vane = new THREE.Group(); vane.position.set(big ? big.piv.position.x : 0, mastTop + 0.3, 0); ship3.add(vane);
+    const st = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.35), new THREE.MeshBasicMaterial({color: 0xd12d41})); st.position.x = 0.9; vane.add(st); vane.visible = mastTop > 0;
+    arrow = new THREE.Mesh(new THREE.BufferGeometry(), arrowMat); arrow.renderOrder = 5; tick = new THREE.Group(); tick.renderOrder = 5;
+    for (const [w, x, y, r] of [[0.9, -0.35, -0.2, 0.8], [1.8, 0.35, 0.25, -0.9]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.25, 0.25), arrowMat); b.position.set(x, y, 0); b.rotation.z = r; tick.add(b); }
+    if (big) { big.piv.add(arrow); big.piv.add(tick); }
+    V.setTime(TIMES[night ? "night" : "day"]); ribMat.opacity = arrowMat.opacity = night ? 0.45 : 0.75;
+    W3.nodes = walk(g); W3.xm = xm;
+  }
+  // the walker: in the ship's frame on deck, or in the water
+  const W3 = {lx: 0, lz: 0, k: 0, yaw: 0, pitch: -0.1, wx: 0, wy: 0};
+  const cellAt = (lx, lz) => { const r0 = Math.round(lz / (1.5 * HR)) + MID; let best = null, bd = 1e9; for (let r = r0 - 1; r <= r0 + 1; r++) { const c = Math.round((lx + W3.xm) / HW - (shifted(r) ? 0.5 : 0)); for (const cc of [c - 1, c, c + 1]) { const d = Math.hypot(cellX(cc, r) - W3.xm - lx, cellZ(r) - lz); if (d < bd) { bd = d; best = [cc, r]; } } } return best; };
+  function standAtHelm() { const n = W3.nodes; if (n && n.goal) { W3.lx = cellX(n.goal[0], n.goal[1]) - W3.xm - 1.1; W3.lz = cellZ(n.goal[1]); W3.k = n.goal[2]; } W3.yaw = 0; W3.pitch = -0.08; }
+  const nearHelm = () => { const n = W3.nodes; return MODE.m === "foot" && n && n.goal && Math.hypot(cellX(n.goal[0], n.goal[1]) - W3.xm - W3.lx, cellZ(n.goal[1]) - W3.lz) < 2.2 && W3.k === n.goal[2]; };
+  const shipLocalToWorld = (lx, lz) => { const a = (90 - S.psi) * deg; return {x: S.x + lx * Math.cos(a) + lz * Math.sin(a), y: S.y - (-lx * Math.sin(a) + lz * Math.cos(a))}; };
+  const worldToShip = (x, y) => { const a = (90 - S.psi) * deg, dx = x - S.x, dz = -(y - S.y); return {lx: dx * Math.cos(a) - dz * Math.sin(a), lz: dx * Math.sin(a) + dz * Math.cos(a)}; };
+  const nearShip = () => { const p = worldToShip(W3.wx, W3.wy); return Math.abs(p.lx) < P.s.LOA / 2 + 3 && Math.abs(p.lz) < P.s.beam / 2 + 3; };
+  function act() {
+    if (MODE.m === "helm") { MODE.m = "foot"; standAtHelm(); }
+    else if (MODE.m === "foot" && nearHelm()) { MODE.m = "helm"; camYaw = S.psi; }
+    else if (MODE.m === "swim" && nearShip()) { const n = W3.nodes; if (n && n.start) { W3.lx = cellX(n.start[0], n.start[1]) - W3.xm; W3.lz = cellZ(n.start[1]); W3.k = n.start[2]; } MODE.m = "foot"; }
+    kick(); draw();
+  }
+  function moveWalker(dt) {
+    const f = (keys.has("w") ? 1 : 0) - (keys.has("s") ? 1 : 0), sd = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0); if (!f && !sd) return;
+    if (MODE.m === "swim") { const a = (S.psi * deg) + W3.yawW, sp = 1.4 * dt; W3.wx += (Math.sin(a) * f + Math.cos(a) * sd) * sp; W3.wy += (Math.cos(a) * f - Math.sin(a) * sd) * sp; return; }
+    const sp = 3 * dt, nlx = W3.lx + (Math.cos(W3.yaw) * f - Math.sin(W3.yaw) * -sd) * sp, nlz = W3.lz + (-Math.sin(W3.yaw) * f + Math.cos(W3.yaw) * sd) * sp;
+    const [c, r] = cellAt(nlx, nlz), g = P.g, here = cellAt(W3.lx, W3.lz), n = W3.nodes;
+    const column = Array.from({length: LAYERS}, (_, k) => at(g, c, r, k)).some(v => v !== ".");
+    if (!column) { if (at(g, here[0], here[1], W3.k) === "L") return; const wp = shipLocalToWorld(nlx, nlz); W3.wx = wp.x; W3.wy = wp.y; W3.yawW = W3.yaw; MODE.m = "swim"; return; }   // over the side
+    for (const k of [W3.k, W3.k + 1, W3.k - 1]) if (n.stand(c, r, k)) { W3.lx = nlx; W3.lz = nlz; W3.k = k; return; }
+  }
+  // camera: the chase camera behind her at the helm; first person on deck or in the water
+  let camYaw = S.psi, orbit = {dy: 0, dp: 0, drag: false}, last3 = performance.now(), dirty3 = true;
+  cv3.addEventListener("pointerdown", e => { cv3.setPointerCapture(e.pointerId); orbit.drag = true; orbit.x = e.clientX; orbit.y = e.clientY; wrap.focus(); });
+  cv3.addEventListener("pointermove", e => { if (!orbit.drag) return; const dx = e.clientX - orbit.x, dy = e.clientY - orbit.y; orbit.x = e.clientX; orbit.y = e.clientY;
+    if (MODE.m === "helm") { orbit.dy -= dx * 0.006; orbit.dp = Math.max(-0.3, Math.min(0.95, orbit.dp + dy * 0.004)); }
+    else if (MODE.m === "foot") { W3.yaw -= dx * 0.005; W3.pitch = Math.max(-1.3, Math.min(1.3, W3.pitch - dy * 0.005)); }
+    else { W3.yawW -= dx * 0.005; W3.pitch = Math.max(-1.0, Math.min(1.0, W3.pitch - dy * 0.005)); }
+    kick(); });
+  let zoom = Q.has("camdist") ? +Q.get("camdist") : 0; if (Q.has("campitch")) orbit.dp = +Q.get("campitch");
+  const keepPitch = Q.has("campitch");
+  cv3.addEventListener("wheel", e => { if (MODE.m !== "helm") return; e.preventDefault(); const base = Math.max(38, P.s.LOA * 2.3); zoom = Math.max(base * 0.6, Math.min(600, (zoom || base) * Math.exp(e.deltaY * 0.0012))); kick(); }, {passive: false});
+  const endDrag = () => { orbit.drag = false; kick(); }; cv3.addEventListener("pointerup", endDrag); cv3.addEventListener("pointercancel", endDrag);
+  function kick() { dirty3 = true; }
+  function render3(dt) {
+    if (!ship3) return;
+    boat.position.set(S.x, 0, -S.y); boat.rotation.y = (90 - S.psi) * deg; rocker.rotation.x = S.heel * deg;
+    // sails: swing to leeward by the sheet; furl toward the yard
+    const sgn = -(S.fromRight || 1);
+    for (const sl of sails3) { sl.piv.rotation.y = S.delta * deg * sgn; const f = Math.max(0.04, S.furl); sl.cloth.scale.y = f; sl.cloth.position.y = sl.top - sl.hgt * f / 2; sl.boom.position.y = sl.top - sl.hgt * f; }
+    if (vane) { const awa = (S.beta || 0) * (S.fromRight > 0 ? 1 : -1) * deg; vane.rotation.y = Math.PI - awa; }
+    // the sail arrow: swing which way, sized by the degrees; a tick when trimmed
+    const big = sails3.reduce((a, b) => !a || b.hgt * b.chord > a.hgt * a.chord ? b : a, null);
+    if (arrow) { arrow.visible = tick.visible = false; }
+    if (big && plan && plan.delta != null && MODE.m === "helm" && S.furl > 0.5) {
+      const d = plan.delta - S.delta, y = big.top - big.hgt * 0.45, R = big.chord + 0.8;
+      if (Math.abs(d) < 3) { tick.visible = true; tick.position.set(-R - 0.6, y, 0); tick.rotation.y = 0; }
+      else {
+        const key = Math.round(d) + "|" + y.toFixed(1); arrow.visible = true;
+        if (key !== arrowKey) { arrowKey = key; const a0 = 0, a1 = d * deg * sgn / (S.delta * deg * sgn || 1) * 0 + d * deg * sgn, n = Math.max(4, Math.ceil(Math.abs(d) / 3)); // in the pivot's frame: from the sail's line (angle 0) to the target
+          const pts = []; for (let i = 0; i <= n; i++) { const t = a0 + (a1 - a0) * i / n; pts.push(new THREE.Vector3(-Math.cos(t) * R, y, Math.sin(t) * R)); }
+          const curve = new THREE.CatmullRomCurve3(pts), tube = new THREE.TubeGeometry(curve, n * 2, 0.14, 6, false);
+          const end = pts[pts.length - 1], prev = pts[pts.length - 2], dir = end.clone().sub(prev).normalize(), cone = new THREE.ConeGeometry(0.45, 1.1, 8); cone.rotateZ(-Math.PI / 2);
+          const head = new THREE.Mesh(cone); head.position.copy(end); head.lookAt(end.clone().add(dir)); head.rotateY(-Math.PI / 2); head.updateMatrix();
+          const merged = tube.toNonIndexed(), cg = cone.clone().applyMatrix4(head.matrix).toNonIndexed();
+          const pos = new Float32Array(merged.attributes.position.array.length + cg.attributes.position.array.length); pos.set(merged.attributes.position.array); pos.set(cg.attributes.position.array, merged.attributes.position.array.length);
+          arrow.geometry.dispose(); arrow.geometry = new THREE.BufferGeometry(); arrow.geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); }
+      }
+    }
+    // the camera
+    if (MODE.m === "helm") {
+      camYaw += wrap180(S.psi - camYaw) * Math.min(1, dt * 2.5);
+      if (!orbit.drag && !keepPitch) { orbit.dy *= Math.exp(-dt * 3); orbit.dp *= Math.exp(-dt * 3); }
+      const yaw = (camYaw + 180) * deg + orbit.dy, pitch = Math.min(1.45, 0.5 + orbit.dp), dist = zoom || Math.max(38, P.s.LOA * 2.3), up = Math.max(6, (P.s.sheer || 4) + 4);
+      cam3.position.set(S.x + Math.sin(yaw) * Math.cos(pitch) * dist, up + Math.sin(pitch) * dist, -S.y - Math.cos(yaw) * Math.cos(pitch) * dist);
+      cam3.lookAt(S.x + Math.sin(camYaw * deg) * 12, up * 0.6, -S.y - Math.cos(camYaw * deg) * 12);
+      if (cam3.parent !== scene3) scene3.add(cam3);
+    } else if (MODE.m === "foot") {
+      if (cam3.parent !== ship3) ship3.add(cam3);
+      cam3.position.set(W3.lx, W3.k + 1.62, W3.lz); cam3.rotation.set(0, 0, 0); cam3.rotateY(W3.yaw - Math.PI / 2); cam3.rotateX(W3.pitch);
+    } else {
+      if (cam3.parent !== scene3) scene3.add(cam3);
+      cam3.position.set(W3.wx, 0.45, -W3.wy); cam3.rotation.set(0, 0, 0); cam3.rotateY(-(S.psi * deg + W3.yawW)); cam3.rotateX(W3.pitch);
+    }
+    const st = MODE.m === "helm" ? "At the helm" : MODE.m === "foot" ? "On foot, aboard" : "In the water";
+    hud3.textContent = `${st} | ${P.name} | ${S.sog.toFixed(1)} m/s | ${MODE.m === "helm" ? (P.sail ? "A/D helm, ←/→ swing the sail" : "A/D helm, W/S telegraph") : "WASD walk, drag to look"}${S.furl < 0.05 && P.SA > 0 ? " | No one aboard: sails furled" : MODE.m === "swim" ? " | No one aboard: sails furling" : ""}`;
+    const pr = MODE.m === "helm" ? "F: let go of the helm" : nearHelm() ? "F: take the helm" : MODE.m === "swim" ? (nearShip() ? "F: climb aboard" : "Swim to her side to climb aboard") : "";
+    prompt3.textContent = pr; prompt3.hidden = !pr;
+    V.render(performance.now() / 1000);
+  }
+  function tick3(now) {
+    const dt = Math.min(0.1, (now - last3) / 1000); last3 = now;
+    if (keys.size && MODE.m !== "helm") { moveWalker(dt); dirty3 = true; }
+    if (running || dirty3 || orbit.drag || Math.abs(orbit.dy) > 0.001) { render3(dt); dirty3 = false; }
+    if (!STILL) requestAnimationFrame(tick3);
+  }
+  requestAnimationFrame(tick3);
+  params(); reset(); build3(); standAtHelm();
   // ?sail=demo: a scripted helmsman beats toward the first waypoint, for screenshots only (the game has no autopilot at these levels)
   if (Q.get("sail") === "demo") {
+    MODE.m = "helm";
     const T = +(Q.get("demoT") || 520), stopTack = Q.has("demoTack"); let steps = 0, t0 = -99;
     while (S.t < T && !S.done && steps++ < 40000) {
       if (S.t - t0 >= 2) { replan(); t0 = S.t; if (stopTack && S.t > 120 && plan && plan.tackNow) break; }
@@ -1641,6 +1829,14 @@ let dockApi = null;
       step(0.1, c);
     }
   }
+  if (Q.get("sail") === "demo") camYaw = S.psi;
+  if (Q.get("sailmode") === "foot") { MODE.m = "foot"; standAtHelm(); }
+  if (Q.get("sailmode") === "swim") {   // fall over the side, and let her run on with no one aboard
+    MODE.m = "swim"; const p = shipLocalToWorld(-2, 6); W3.wx = p.x; W3.wy = p.y; W3.yawW = 0;
+    for (let i = 0; i < 900; i++) step(0.1, {hold: true});
+    const q = shipLocalToWorld(-P.s.LOA * 0.2, P.s.beam / 2 + 14); W3.wx = q.x; W3.wy = q.y; W3.yawW = -Math.PI / 2 - 0.25; W3.pitch = 0.08;
+  }
   draw();
+  if (STILL) { let n = 0; const again = () => { render3(0.016); if (++n < 4) setTimeout(again, 1500); else document.body.dataset.sailDone = "1"; }; setTimeout(again, 800); }
 })();
 </script>
