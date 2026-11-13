@@ -430,7 +430,10 @@ mod tests {
                             (a.radius_across_m, b.radius_across_m, "across"),
                             (a.radius_up_m, b.radius_up_m, "up"),
                         ] {
-                            assert!((x - y).abs() < 5.0, "billboard {k}'s {what} jumped {x} -> {y} at top {top}");
+                            assert!(
+                                (x - y).abs() < 5.0,
+                                "billboard {k}'s {what} jumped {x} -> {y} at top {top}"
+                            );
                         }
                         assert!(
                             (a.opacity - b.opacity).abs() < 0.02 * full,
