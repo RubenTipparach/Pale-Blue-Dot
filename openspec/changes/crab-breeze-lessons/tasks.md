@@ -37,14 +37,16 @@ republished (CLAUDE.md). A fix that changes a picture goes to the owner with
 - [ ] 3.1 Trace the town walk (`--features trace`, `tools/trace_rank.py`)
       and record the render-world spans for `FieldLit`: prepare, queue and
       batch.
-- [ ] 3.2 Split `FieldUniform`. The view-wide part goes in one extracted
-      uniform. The per-mesh part goes in a storage buffer indexed by
-      `MeshTag`.
-- [ ] 3.3 Town meshes that share a texture share one `FieldLitMaterial`.
+- [x] 3.2 Split `FieldUniform`. The view-wide part goes in a buffer
+      written each frame; the per-mesh part in a storage buffer indexed by
+      `MeshTag`; room lights in a third (design, "Rank 2 as built").
+- [x] 3.3 Town meshes that share a texture share one `FieldLitMaterial`.
       A field or light change writes a row, not a material.
-- [ ] 3.4 Shots of Ashenstead and Holbrook (10:00 and 22:00) before and
+- [x] 3.4 Shots of Ashenstead and Holbrook (10:00 and 22:00) before and
       after: identical, or the difference shown. Then the A/B on `town`
-      and `walk`.
+      (`docs/benchmarks/2026-11-12-town-batching`): p95 -1.0 ms, p99
+      -1.2 ms, p50 unchanged; five of six shots 0 pixels apart, the sixth
+      a flicker the old build has too. `walk` not run: it has no town.
 
 ## 4. Ground cache (rank 3)
 
@@ -59,9 +61,9 @@ republished (CLAUDE.md). A fix that changes a picture goes to the owner with
 ## 5. Captures and casters (rank 5)
 
 - [ ] 5.1 Price shadows in a town: `town` with `--no-shadows`.
-- [ ] 5.2 Cull town casters per cascade by bounds. Add a cast distance in
-      data for small town props. Shots at Ashenstead at 10:00 and 17:00.
-      A/B on `town` and `walk`.
+- [x] 5.2 Cull town casters per cascade by bounds. Add a cast distance in
+      data for small town props, as a count of cascades (design, "Rank 5 as
+      built"). Shots and the A/B on `town`.
 - [ ] 5.3 A census of closed solids among the `cull_mode: None` materials
       and casters. Draw any that never show their back one-sided.
 

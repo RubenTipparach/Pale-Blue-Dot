@@ -217,6 +217,15 @@ impl Plugin for PaleBlueDotPlugin {
             .init_resource::<FlightTelemetry>()
             .insert_resource(CelestialScene::vacuum())
             .insert_resource(Gravity(Vec3::ZERO))
+            // Avian optimizes its collider trees in place, not in a task on
+            // the async pool: the game's fine-set builds and town cuts fill
+            // that pool, and the step blocked on the task behind them for
+            // 13-47 ms at each landing (`descent-spikes`). Five colliders
+            // optimize in microseconds.
+            .insert_resource(ColliderTreeOptimization {
+                use_async_tasks: false,
+                ..default()
+            })
             // Avian has advanced its own clock before this schedule runs. Forces,
             // ephemerides and frame motion therefore share pause/time-scale rules.
             .add_systems(

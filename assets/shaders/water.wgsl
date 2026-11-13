@@ -1624,6 +1624,15 @@ fn rain_lamp_glow(eye: vec3<f32>, direction: vec3<f32>, a: f32, b: f32) -> vec3<
 
 fn rain_shells(scene: vec3<f32>, eye: vec3<f32>, direction: vec3<f32>, far: f32, range: f32,
                jitter: f32) -> vec4<f32> {
+    let gathered = rain_gather(eye, direction, far, range, jitter);
+    return vec4<f32>(scene*gathered.a + gathered.rgb, 1.0);
+}
+
+// What the shells along this ray gather (`lighting-perf` 2.9): rgb the light,
+// a the transmittance. `rain_shells` lays it over the scene at full size;
+// `rain_half` keeps it in a small target for `rain_compose`.
+fn rain_gather(eye: vec3<f32>, direction: vec3<f32>, far: f32, range: f32,
+               jitter: f32) -> vec4<f32> {
     let layer = cloud_layer();
     let base = view.cloud_clouds.x;
     let down = -safe_normal(eye);
@@ -1699,7 +1708,84 @@ fn rain_shells(scene: vec3<f32>, eye: vec3<f32>, direction: vec3<f32>, far: f32,
             transmittance *= 1.0 - absorbed;
         }
     }
-    return vec4<f32>(scene*transmittance + light, 1.0);
+    return vec4<f32>(light, transmittance);
+}
+
+// ---- The rain volume at a smaller size (`lighting-perf` 2.9) ------------------
+// The shells' light and transmittance are gathered into a small target (the
+// view at `rain_render_scale`), and `rain_compose` lays them over the scene
+// at full size: the four small texels round a pixel, each weighed bilinearly
+// and by how near its own depth is to the pixel's, so a wall's edge in front
+// of the rain takes none of the rain gathered past it.
+@group(3) @binding(15) var rain_half_tex: texture_2d<f32>;
+
+// Where the ray through `uv` stops for the rain: the ground, the sea, the
+// cloud base or the range; zero where no rain is drawn.
+fn rain_far(uv: vec2<f32>) -> f32 {
+    let range = view.rain_look.w;
+    if (range <= 0.0) { return 0.0; }
+    let ray = view_ray(uv);
+    let eye = ray.origin-view.planet_center.xyz;
+    let base = view.cloud_clouds.x;
+    if (length(eye) >= base) { return 0.0; }
+    var far = range;
+    let depth = load_depth(uv);
+    if (depth > 1e-7) {
+        far = min(far,length(reconstruct_local(uv,depth)-ray.origin));
+    }
+    let sea = cloud_sphere_hit(eye,ray.direction,view.planet_center.w);
+    if (sea.x > 0.0) { far = min(far,sea.x); }
+    let ceiling = cloud_sphere_hit(eye,ray.direction,base);
+    if (ceiling.y > 0.0) { far = min(far,ceiling.y); }
+    return select(0.0, far, far > 1.0);
+}
+
+@fragment
+fn rain_half(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let far = rain_far(in.uv);
+    if (far <= 0.0) { return vec4<f32>(0.0, 0.0, 0.0, 1.0); }
+    let ray = view_ray(in.uv);
+    let eye = ray.origin-view.planet_center.xyz;
+    if (view.rain_shell.w < 0.5) { return rain_volume(in.uv, eye, ray.direction, far); }
+    let pixel = in.position.xy;
+    let jitter = fract(52.9829189*fract(dot(pixel, vec2<f32>(0.06711056, 0.00583715))));
+    return rain_gather(eye, ray.direction, far, view.rain_look.w, jitter);
+}
+
+// The distance to what a pixel shows, for weighing the small texels by it.
+fn rain_depth_m(uv: vec2<f32>) -> f32 {
+    let depth = load_depth(uv);
+    if (depth <= 1e-7) { return 1.0e6; }
+    return length(reconstruct_local(uv, depth)-view_ray(uv).origin);
+}
+
+@fragment
+fn rain_compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    let uv = in.uv;
+    let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+    let size = vec2<f32>(textureDimensions(rain_half_tex));
+    let at = uv*size - 0.5;
+    let corner = floor(at);
+    let f = at - corner;
+    let here = rain_depth_m(uv);
+    var sum = vec4<f32>(0.0);
+    var weight = 0.0;
+    var nearest = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    var nearest_gap = 1.0e30;
+    for (var k = 0u; k < 4u; k++) {
+        let o = vec2<f32>(f32(k & 1u), f32(k >> 1u));
+        let texel = clamp(corner + o, vec2<f32>(0.0), size - 1.0);
+        let gathered = textureLoad(rain_half_tex, vec2<i32>(texel), 0);
+        let there = rain_depth_m((texel + 0.5)/size);
+        let gap = abs(there - here);
+        let bilinear = mix(1.0 - f.x, f.x, o.x)*mix(1.0 - f.y, f.y, o.y);
+        let w = bilinear*exp(-gap/(0.02*min(here, 1.0e4) + 0.1));
+        sum += gathered*w;
+        weight += w;
+        if (gap < nearest_gap) { nearest_gap = gap; nearest = gathered; }
+    }
+    let gathered = select(nearest, sum/max(weight, 1e-6), weight > 1e-3);
+    return vec4<f32>(scene*gathered.a + gathered.rgb, 1.0);
 }
 
 @fragment
@@ -1730,6 +1816,16 @@ fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let jitter = fract(52.9829189*fract(dot(pixel, vec2<f32>(0.06711056, 0.00583715))));
         return rain_shells(scene,eye,ray.direction,far,range,jitter);
     }
+    let gathered = rain_volume(uv, eye, ray.direction, far);
+    return vec4<f32>(scene*gathered.a + gathered.rgb, 1.0);
+}
+
+// The volume's sixteen jittered steps along the ray through `uv` up to
+// `far` (`rain_renderer: Volume`): rgb the light, a the transmittance, for
+// `rain` to lay over the scene at full size or `rain_half` to keep small
+// (`lighting-perf` 2.9).
+fn rain_volume(uv: vec2<f32>, eye: vec3<f32>, direction: vec3<f32>, far: f32) -> vec4<f32> {
+    let ray_direction = direction;
     let layer = cloud_layer();
     let steps = 16.0;
     let step_size = far/steps;
@@ -1740,7 +1836,7 @@ fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var light = vec3<f32>(0.0);
     for (var i = 0.0; i < steps; i += 1.0) {
         let t = step_size*(i+jitter);
-        let p = eye+ray.direction*t;
+        let p = eye+ray_direction*t;
         let here = rain_map_at(p);
         if (abs(here) < 1e-3) { continue; }
         let snow = here < 0.0;
@@ -1767,7 +1863,7 @@ fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         transmittance *= 1.0-absorbed;
         if (transmittance < 0.02) { break; }
     }
-    return vec4<f32>(scene*transmittance+light,1.0);
+    return vec4<f32>(light, transmittance);
 }
 
 // ---- The overlays ----------------------------------------------------------

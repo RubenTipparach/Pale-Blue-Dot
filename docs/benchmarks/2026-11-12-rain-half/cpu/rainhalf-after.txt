@@ -1,0 +1,19 @@
+﻿sample 2026-11-12T15:56:31, 8 logical cores, all processes together: 5.4% of the machine
+
+Name                                 CorePct
+----                                 -------
+Spotify                                 11.5
+powershell                               9.7
+steamwebhelper                           6.2
+chrome                                   5.1
+procexp64                                3.7
+claude                                   1.9
+explorer                                 1.7
+Discord                                  0.9
+SDXHelper                                0.5
+sihost                                   0.3
+parsecd                                  0.3
+GalaxyClient                             0.2
+GOG Galaxy Notifications Renderer        0.2
+BlueStacksServices                       0.2
+qbittorrent                              0.2

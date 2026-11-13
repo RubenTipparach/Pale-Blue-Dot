@@ -377,6 +377,7 @@ struct WaterPipelines {
     mist_layout: BindGroupLayoutDescriptor,
     /// The lens's fourth group: the mist the probe just wrote.
     lens_layout: BindGroupLayoutDescriptor,
+    rain_compose_layout: BindGroupLayoutDescriptor,
     /// The puffs' fourth group (`cloud-puffs`): this frame's instances.
     puff_layout: BindGroupLayoutDescriptor,
     /// The rain's fourth group (`lighting-model`, the rain fog lit): the sun's
@@ -639,6 +640,7 @@ fn initialize_pipelines(
         resolve_layout: resolve_layout(),
         mist_layout: mist_layout(),
         lens_layout: lens_layout(),
+        rain_compose_layout: rain_compose_layout(),
         puff_layout: puff_layout(),
         sampler: device.create_sampler(&SamplerDescriptor {
             label: Some("water scene sampler"),
@@ -660,9 +662,32 @@ enum Pass {
     CloudPuffs,
     Clouds,
     Rain,
+    /// The shells' light and transmittance, at `rain_render_scale`.
+    RainHalf,
+    /// The scene under the small target's rain, at full size.
+    RainCompose,
     Overlay,
     Lens,
     LensMist,
+}
+
+/// The rain volume's small target (`lighting-perf` 2.9): rgb the light the
+/// shells gather, a their transmittance.
+const RAIN_HALF_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+
+/// What the rain's full-size compose reads besides the scene: the small
+/// target.
+fn rain_compose_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "rain: the small target",
+        &BindGroupLayoutEntries::with_indices(
+            ShaderStages::FRAGMENT,
+            ((
+                15,
+                texture_2d(TextureSampleType::Float { filterable: false }),
+            ),),
+        ),
+    )
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -730,6 +755,16 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 self.fullscreen.to_vertex_state(),
                 "rain",
             ),
+            Pass::RainHalf => (
+                "Rain volume's shells, gathered small",
+                self.fullscreen.to_vertex_state(),
+                "rain_half",
+            ),
+            Pass::RainCompose => (
+                "Rain volume laid over the scene, weighed by depth",
+                self.fullscreen.to_vertex_state(),
+                "rain_compose",
+            ),
             Pass::Overlay => (
                 "Weather overlay over the planet",
                 self.fullscreen.to_vertex_state(),
@@ -756,6 +791,8 @@ impl SpecializedRenderPipeline for WaterPipelines {
             Pass::Lens
             | Pass::LensMist
             | Pass::Rain
+            | Pass::RainHalf
+            | Pass::RainCompose
             | Pass::CloudMarch
             | Pass::CloudResolve
             | Pass::CloudPuffs
@@ -797,12 +834,19 @@ impl SpecializedRenderPipeline for WaterPipelines {
                     super::weather_maps::layout(),
                     self.ssr_layout.clone(),
                 ]
-            } else if key.pass == Pass::Rain {
+            } else if matches!(key.pass, Pass::Rain | Pass::RainHalf) {
                 vec![
                     self.data_layout.clone(),
                     scene,
                     super::weather_maps::layout(),
                     self.rain_light_layout.clone(),
+                ]
+            } else if key.pass == Pass::RainCompose {
+                vec![
+                    self.data_layout.clone(),
+                    scene,
+                    super::weather_maps::layout(),
+                    self.rain_compose_layout.clone(),
                 ]
             } else if matches!(key.pass, Pass::Lens | Pass::LensMist) {
                 vec![
@@ -830,7 +874,13 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 // The march writes this frame's clouds, their distances and
                 // the near field's fog; the resolve writes the history and its
                 // distances (`cloud-history-clip`, `cloud-entry`).
-                targets: if key.pass == Pass::CloudResolve {
+                targets: if key.pass == Pass::RainHalf {
+                    vec![Some(ColorTargetState {
+                        format: RAIN_HALF_FORMAT,
+                        blend: None,
+                        write_mask: ColorWrites::ALL,
+                    })]
+                } else if key.pass == Pass::CloudResolve {
                     [CLOUD_HISTORY_FORMAT, CLOUD_DEPTH_FORMAT]
                         .map(|format| {
                             Some(ColorTargetState {
@@ -921,6 +971,13 @@ pub(super) struct WaterViewGpu {
     lens: CachedRenderPipelineId,
     lens_mist: CachedRenderPipelineId,
     rain: CachedRenderPipelineId,
+    rain_half_pipe: CachedRenderPipelineId,
+    rain_compose_pipe: CachedRenderPipelineId,
+    /// The rain's small target (`lighting-perf` 2.9) and its size; whether
+    /// this frame's rain is gathered there (shells on, a scale under one).
+    rain_half: TextureView,
+    rain_half_size: UVec2,
+    rain_half_on: bool,
     overlay: CachedRenderPipelineId,
     overlay_needed: bool,
     /// The precipitation map, rewritten each frame from `weather::RainMap`.
@@ -1393,6 +1450,11 @@ fn prepare_water_views(
             .ceil()
             .as_uvec2()
             .max(UVec2::ONE);
+        let rain_half_size = (size.as_vec2() * weather_settings.rain_render_scale)
+            .ceil()
+            .as_uvec2()
+            .max(UVec2::ONE);
+        let rain_half_on = weather_settings.rain_render_scale < 1.0;
         if let Some(mut gpu) = existing {
             let resized = gpu.history_size != history_size;
             if resized {
@@ -1441,6 +1503,11 @@ fn prepare_water_views(
             gpu.uniform.write_buffer(&device, &queue);
             gpu.lens_needed = lens_needed;
             gpu.rain_needed = rain_needed;
+            gpu.rain_half_on = rain_half_on;
+            if gpu.rain_half_size != rain_half_size {
+                gpu.rain_half = cloud_target(&device, rain_half_size, RAIN_HALF_FORMAT);
+                gpu.rain_half_size = rain_half_size;
+            }
             gpu.overlay_needed = overlay_needed;
             if let Some(map) = map {
                 queue.write_buffer(&gpu.rain_buffer, 0, bytemuck::cast_slice(&map.values));
@@ -1515,6 +1582,11 @@ fn prepare_water_views(
             lens: pipeline(Pass::Lens),
             lens_mist: pipeline(Pass::LensMist),
             rain: pipeline(Pass::Rain),
+            rain_half_pipe: pipeline(Pass::RainHalf),
+            rain_compose_pipe: pipeline(Pass::RainCompose),
+            rain_half: cloud_target(&device, rain_half_size, RAIN_HALF_FORMAT),
+            rain_half_size,
+            rain_half_on,
             overlay: pipeline(Pass::Overlay),
             overlay_needed,
             rain_buffer,
@@ -1991,6 +2063,21 @@ impl ViewNode for WaterCompositeNode {
                     )
                 })
         };
+        // The rain's small target, when it is used and both its pipelines are
+        // ready; otherwise the full-size pass draws the rain as before.
+        let rain_half = (water.rain_half_on && water.rain_needed)
+            .then(|| {
+                Some((
+                    cache.get_render_pipeline(water.rain_half_pipe)?,
+                    cache.get_render_pipeline(water.rain_compose_pipe)?,
+                ))
+            })
+            .flatten();
+        let rain_compose_group = device.create_bind_group(
+            Some("rain: the small target"),
+            &cache.get_bind_group_layout(&pipelines.rain_compose_layout),
+            &BindGroupEntries::with_indices(((15, &water.rain_half),)),
+        );
         let lens_group = device.create_bind_group(
             Some("lens mist"),
             &cache.get_bind_group_layout(&pipelines.lens_layout),
@@ -2024,6 +2111,40 @@ impl ViewNode for WaterCompositeNode {
             if !needed {
                 continue;
             }
+            let is_rain = label == "Rain volume";
+            // Gathered small first (`lighting-perf` 2.9), into its own target,
+            // reading the scene's depth; the compose below lays it over.
+            let mut pipeline = pipeline;
+            if is_rain && let (Some((half, compose)), Some(group)) = (rain_half, &rain_light_group)
+            {
+                let source = target.main_texture_view();
+                let scene = scene_bind_group(source);
+                let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                    label: Some("Rain volume, gathered small"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view: &water.rain_half,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Clear(LinearRgba::NONE.into()),
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                pass.set_bind_group(0, &water.data_bind_group, &[]);
+                pass.set_bind_group(1, &scene, &[]);
+                pass.set_bind_group(2, &maps.bind_group, &[]);
+                pass.set_bind_group(3, group, &[]);
+                let span = diagnostics.pass_span(&mut pass, "rain_half");
+                pass.set_render_pipeline(half);
+                pass.draw(0..3, 0..1);
+                span.end(&mut pass);
+                drop(pass);
+                pipeline = compose;
+            }
             let post = target.post_process_write();
             let scene = scene_bind_group(post.source);
             let is_clouds = label == "Clouds";
@@ -2053,9 +2174,9 @@ impl ViewNode for WaterCompositeNode {
                 pass.set_bind_group(3, &composite_group, &[]);
             } else if label == "Water lens" {
                 pass.set_bind_group(3, &lens_group, &[]);
-            } else if label == "Rain volume"
-                && let Some(group) = &rain_light_group
-            {
+            } else if is_rain && rain_half.is_some() && rain_light_group.is_some() {
+                pass.set_bind_group(3, &rain_compose_group, &[]);
+            } else if is_rain && let Some(group) = &rain_light_group {
                 pass.set_bind_group(3, group, &[]);
             }
             let span = diagnostics.pass_span(&mut pass, span_name);

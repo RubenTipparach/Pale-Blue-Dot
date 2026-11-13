@@ -110,6 +110,30 @@ code { font: 500 0.9em var(--mono); }
 .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 10px; }
 .shots img { aspect-ratio: 16 / 10; object-fit: cover; }
 .shots a { display: block; }
+.cmp { display: grid; gap: 10px; min-width: 0; }
+.cmp-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cmp-bar .lbl { font: 500 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+.chip {
+  font: 500 13px/1 var(--mono); color: var(--ink); background: transparent; border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px; min-height: 36px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--brass-soft); border-color: var(--brass); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-width: 0; }
+.pane { display: grid; gap: 4px; min-width: 0; }
+.view {
+  overflow: auto; border-radius: 8px; background: #000; aspect-ratio: 16 / 10; min-width: 0;
+  overscroll-behavior: contain;
+}
+.view img { display: block; width: calc(var(--z, 1) * 100%); max-width: none; height: auto; border-radius: 0; }
+.view.px img { image-rendering: pixelated; }
+.pane-cap { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+.pane-cap a { color: var(--brass); white-space: nowrap; }
+.wipe { position: relative; }
+.wipe .top { position: absolute; inset: 0 auto auto 0; clip-path: inset(0 calc(100% - var(--x, 50%)) 0 0); }
+.wipe .line { position: absolute; top: 0; bottom: 0; left: var(--x, 50%); width: 2px; background: var(--brass); pointer-events: none; }
+.wipe-wrap { position: relative; width: calc(var(--z, 1) * 100%); }
+input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
+.cmp-note { margin: 0; font-size: 13px; color: var(--muted); }
 .qmeta { margin: 0; font: 500 12px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
 .qmeta a, .how a, .lede a { color: var(--brass); }
 .dec-list .d-id { font: 500 12px/1 var(--mono); color: var(--brass); margin-right: 8px; }
@@ -163,10 +187,79 @@ const SECTIONS = [
           { src: 'img/g1-passage.png', alt: 'In the passage, looking into the town: the 1 m earth ledge across the street', caption: 'In the passage, looking in: the 1 m earth ledge across the street.' },
         ] },
     ] },
+  { tag: 'G', name: 'Ships and flight',
+    lead: 'From ship-tiers (2026-11-12), the mockup "Rockets to Starships" (M21 on the tracker, linked below). You asked for "some orbital stuff (the orbital mechanics in tenebris rust was pretty cool)" in the chemical tier. Tenebris flies its rockets Newtonian in a summed inverse-square field and draws patched conics with maneuver nodes on top. CLAUDE.md says ships use local gravity falloff and keeps patched conics, maneuver nodes and transfer windows out. The same rocket is flown both ways in the mockup\'s tab 2 (screenshots to follow: the GPU screenshot gate was not run during perf tuning).',
+    qs: [
+      { id: 'G4', q: 'How should chemical rockets meet orbits? In today\'s bounded field (full pull to 1.4 R, none past 1.8 R) a rocket reaches low orbit for 574 m/s, but orbits only fit below 8.6 km and do not close, and the moon at 26 km is a straight coast. In Tenebris\'s inverse-square field the same rocket reaches orbit for 535 m/s, ellipses close, and the moon is a 4 min 22 s arc. Either way the line ahead of the ship is the flight integrated forward, with Ap, Pe and T.',
+        options: ['A. Keep the invariant: rockets fly in today\'s bounded field', 'B. Rockets fly in Tenebris\'s orbital field, with the predicted line, no maneuver nodes; the fusion tier\'s nav computer plans', 'C. All of Tenebris: patched conics, sphere-of-influence hops and maneuver nodes'], rec: 1,
+        why: 'It is the orbital play you liked, with the part the invariant was written against (a second model of motion that has to agree with the integrator) left out; CLAUDE.md changes in one clause, in the commit that builds it.',
+        change: 'ship-tiers', asked: '2026-11-12',
+        link: { url: 'https://claude.ai/artifact/2Sb7mNRv4wauJh8WFoR9eD#orbit', label: 'Rockets to Starships, tab 2: flip "Inverse-square (B)" and "Today\'s band (A)"; tab 3 for the course to Lantern' } },
+    ] },
+  { tag: 'A', name: 'Art and look',
+    lead: 'From vehicle-yards (2026-11-12): the drydock (M23) and hangar (M24) mockups, linked below. Everything else on those pages and on the construction yard (M22) is taken as recommended; it is listed under Already decided. Shots rendered without a GPU.',
+    qs: [
+      { id: 'A1', q: 'How chibi should the aircraft be? As drawn, the canopy is about a third of the body, the fuselage is short and fat, the wings stubby and thick, the wheels and rotor blades oversized. The shape comes from the builder\'s 1 m cells; the chibi look is how each part is drawn, so it can be pushed either way without changing a design\'s numbers.',
+        options: ['As drawn', 'Chibbier: bigger canopies, rounder noses, even shorter wings', 'Less chibi: closer to true proportions'], rec: 0,
+        why: 'It reads as your references (the shark-mouth fighter and the utility helicopters) while every part stays a part you placed, so a design still flies by its own numbers.',
+        change: 'vehicle-yards (decision 4)', asked: '2026-11-12',
+        link: { url: 'https://claude.ai/artifact/HrLdbcwrwbAD7PN1KojKKu', label: 'Hangar and Chibi Aircraft: the airfield and the builder' },
+        images: [
+          { src: 'img/a1-presets.jpg', alt: 'The five chibi presets: Sharky the prop fighter, Bumble the helicopter, Puffin the tiltrotor, Gull the floatplane and Dart the jet', caption: 'The five presets by day.' },
+          { src: 'img/a1-builder.jpg', alt: 'The aircraft builder with Sharky on the grid and its 3D preview', caption: 'The builder: Sharky on the grid, its preview and its numbers.' },
+        ] },
+      { id: 'A2', q: 'Ocean ships are built from whole world cells, as you asked: 2.833 m hexes, 1 m a layer. Their sides are vertical hex walls, so a bow is a stepped point, and a hull is the same to port and starboard only with an odd number of rows (3 or 5). Rails, masts and lanterns are thin pieces on the cells, as in a house.',
+        options: ['Whole cells, as drawn', 'Whole cells, plus sloped hull pieces on the bow and bilge (look only; the cell still floats whole)', 'Smaller ship cells (breaks the one-cell rule)'], rec: 0,
+        why: 'Every cell of a ship is then a cell you can stand on, break and save like the ground. Sloped pieces can be added later without changing a saved ship, so nothing is lost by starting plain.',
+        change: 'vehicle-yards (decision 3)', asked: '2026-11-12',
+        link: { url: 'https://claude.ai/artifact/DLRzGBKMJzhhFdayrbCVdx', label: 'Drydock and Hex Ship Builder: the dock, the builder and the walk on deck' },
+        images: [
+          { src: 'img/a2-dock-day.jpg', alt: 'A three-masted hex-cell ship on its keel blocks in the dry dock, under the gantry crane', caption: 'The three-master in the dry dock by day.' },
+          { src: 'img/a2-afloat-night.jpg', alt: 'The ship afloat in the flooded dock at night, its lanterns lit', caption: 'Afloat in the flooded dock at night.' },
+        ] },
+    ] },
+  { tag: 'T', name: 'Tech and performance',
+    lead: 'From lighting-perf (2026-11-12), toward your "get worst case to 60". On foot in the rain the frame waits on the GPU, and the rain itself (the haze and streaks drawn over the whole screen) was 1.5 ms of it. Below, six frames from the same build, the rain drawn at full size and at half size: compare them side by side, with a slider, or as a difference.',
+    qs: [
+      { id: 'T15', q: 'Draw the rain at half size? It takes the rain from 1.49 ms to 0.45 ms of GPU, and Holbrook\'s lane in rain from 10.0 to 8.7 ms per frame (p99 20.7 to 18.6 ms). The rain is gathered on a quarter of the pixels and laid over the scene weighed by depth, so a wall\'s edge keeps no rain from behind it. By day almost every changed pixel moves by 2/255 or less; at night 17% move by more, because the rain\'s fine grain is now drawn per 2 x 2 pixels.',
+        options: ['Half size (0.5), the setting kept', 'Full size, as before (1.0)'], rec: 0,
+        why: 'It is the largest single cut left on foot in rain, and I cannot tell the two apart at play size. rain_render_scale in weather.ron puts the full-size rain back whenever you want it.',
+        change: 'lighting-perf (task 2.9)', asked: '2026-11-12',
+        compare: {
+          base: 'img/t15/', a: 'Full size (today)', b: 'Half size (recommended)',
+          note: 'Every frame is 1440 x 900, straight from the game (--capture, same build, same frame 300; only rain_render_scale differs). Zoom in and drag either picture: both move together. "Difference x8" shows where full and half differ, brightened 8 times, beside the difference between two full-size runs of the same frame, which is the game\'s own run-to-run noise.',
+          scenes: [
+            { id: 'lane-night-south', label: 'Lane, 22:00' },
+            { id: 'lane-day-south', label: 'Lane, 10:00, south' },
+            { id: 'lane-day-north', label: 'Lane, 10:00, north' },
+            { id: 'puddle-wall', label: 'Puddle under a wall' },
+            { id: 'town-day', label: 'Town, 10:00' },
+            { id: 'shore-300m-rain', label: 'Shore from 300 m' },
+          ] } },
+      { id: 'T16', q: 'Trace wet ground\'s reflections at half size? On foot in rain the reflections (the ray that finds the houses, the walls and the sky in a puddle) were the largest piece of the frame left: tracing one pixel in each 2 x 2 and laying the result back by depth and direction takes Holbrook\'s lane from 8.3 to 7.0 ms per frame and its worst 1% from 16.8 to 12.7 ms (at 22:00 17.3 to 13.3; the town walk 17.2 to 12.7). With it, every test route stays above 60 fps for 99% of frames. The ripples still bend the sky at full size; what the reflection shows is now per 2 x 2 pixels, so 6-26% of a rainy frame\'s pixels move, mostly at the ripples\' scale. No halo at a wall\'s foot.',
+        options: ['Half size (0.5), the setting kept', 'Full size, as before (1.0)'], rec: 0,
+        why: 'It is what brings the rain to 60 fps at the worst 1%, and the reflected houses read the same. reflect_render_scale in lighting.ron puts the full-size traces back whenever you want them.',
+        change: 'lighting-perf (task 2.8)', asked: '2026-11-12',
+        compare: {
+          base: 'img/t16/', a: 'Full size (today)', b: 'Half size (recommended)',
+          note: 'Every frame is 1440 x 900, straight from the game (--capture, same build, same frame 300; only reflect_render_scale differs). Zoom in and drag either picture: both move together. "Difference x8" shows where full and half differ, brightened 8 times, beside the difference between two full-size runs of the same frame, the game\'s own run-to-run noise (the harbour from 300 m is not repeatable even at full size).',
+          scenes: [
+            { id: 'puddle-wall', label: 'Puddle under a wall' },
+            { id: 'lane-day-south', label: 'Lane, 10:00, south' },
+            { id: 'lane-day-north', label: 'Lane, 10:00, north' },
+            { id: 'lane-night-south', label: 'Lane, 22:00, south' },
+            { id: 'lane-night-north', label: 'Lane, 22:00, north' },
+            { id: 'town-rain', label: 'Holbrook from 25 m' },
+            { id: 'harbour-30m', label: 'Harbour from 30 m' },
+            { id: 'harbour-300m', label: 'Harbour from 300 m' },
+          ] } },
+    ] },
 ];
 
 // The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
 const DECIDED = [
+  {"date": "2026-11-12", "id": "", "taken": true, "text": "Vehicle yards (ask only with screenshots): past the fabricator, an assembly bay hands large items over as crates in the world; a hex printer prints a building from the town's pieces one 1 m layer a pass, each layer saved as an edit by the printer; a tower crane lifts by its load chart (120 t m, 8 t hook) and refuses past it; ocean ships are hex cells in the ship's own flat frame, at least two cells in the beam, floated as seven sub-cells a cell, and a design floats out only when the helm can be walked to; aircraft are built at a hangar on a 1 m grid, mirrored, with a livery of your own (no real insignia); ships and aircraft are stored records that never change shape on their own.", "where": "vehicle-yards design, decisions 2 to 5"},
+  {"date": "2026-11-12", "id": "", "taken": true, "text": "Ship tiers (ask only with screenshots): every ship is built on the 2.833 m hex cell with 1 m layers (the VAB's stacks and the shipyard's modules alike); exhaust speeds at the world's scale (chemical 600 m/s, solid 480, nuclear thermal 1,500, fusion 8,000, antimatter 60,000); spent stages break up and are not saved; freighters move on rails away from players and fly near them; starships come last, after stations, with the multi-system engine work as its own change.", "where": "ship-tiers design, section 9"},
   {"date": "2026-11-12", "id": "", "text": "\"can you create a mockup tracking dock, and a survey html tracker?\": questions now come in this page, with the screenshots beside them; the Claude Doc survey is kept as the earlier record. Every mockup and page is listed on the mockup tracker, where you approve each one for build and then for the game.", "where": "CLAUDE.md \"Ask the owner with a survey\" and \"The mockup tracker\"; the html-survey and mockup-tracker skills"},
   {"date": "2026-10-02", "id": "L4", "text": "\"recommended\": a lamp's light fades where the sun reaches it. By day a torch or fire no longer turns open snow tan; it still lights a vault, a room, a cave and the night, and its flame still shows. Being built now, with before-and-after shots of the tundra camp and its gate.", "where": "lamps-and-lanterns decision 15, task 5.6; cities-in-the-world (\"Seen in the tundra's shots\")"},
   {"date": "2026-10-01", "id": "T14", "text": "\"crust\" (on its own page): no cave opens in the top three layers of a town's ground, so a lane or a floor is never a pit. Caves under a town stay, roofed. In saves made since the towns shipped, Holbrook's 4 cells and the other towns' fill in where nobody has dug; anything you dug stays dug. Being built now, with Holbrook's lane before and after.", "where": "cities-in-the-world (\"Finding: caves open into towns' ground\", task 0.22)"},
@@ -295,6 +388,7 @@ function questionCard(q) {
     q.images ? el('div', { class: 'shots' }, q.images.map((im) => el('figure', {},
       el('a', { href: im.src, target: '_blank', rel: 'noopener' }, el('img', { src: im.src, alt: im.alt, loading: 'lazy' })),
       el('figcaption', { text: im.caption })))) : null,
+    q.compare ? compareBlock(q) : null,
     q.link ? el('p', { class: 'qmeta' }, el('a', { href: q.link.url, target: '_blank', rel: 'noopener' }, q.link.label)) : null,
     el('p', { class: 'qmeta', text: [q.change ? 'OpenSpec: ' + q.change : '', q.asked ? 'asked ' + q.asked : ''].filter(Boolean).join('  ·  ') }),
     el('div', { class: 'opts', role: 'group', 'aria-label': q.id + ' options' }, opts),
@@ -303,6 +397,69 @@ function questionCard(q) {
     status);
   cards[q.id] = { root, opts, textarea, status };
   return root;
+}
+
+// A full-size-against-half-size viewer: side by side with zoom and linked panning, a wipe slider, and the difference
+// beside the game's own run-to-run noise.
+function compareBlock(q) {
+  const c = q.compare;
+  const st = { scene: c.scenes[0].id, mode: 'side', zoom: 1 };
+  const box = el('div', { class: 'cmp' });
+  const stage = el('div');
+  const chips = (label, items, key) => {
+    const bs = items.map(([v, t]) => el('button', { class: 'chip', type: 'button', 'aria-pressed': String(st[key] === v),
+      onclick: () => { st[key] = v; bs.forEach((b, i) => b.setAttribute('aria-pressed', String(items[i][0] === v))); draw(); } }, t));
+    return el('div', { class: 'cmp-bar', role: 'group', 'aria-label': label }, el('span', { class: 'lbl', text: label }), bs);
+  };
+  const src = (kind) => c.base + st.scene + '-' + kind + '.png';
+  const pane = (kind, cap) => {
+    const view = el('div', { class: 'view' + (st.zoom > 1 ? ' px' : '') });
+    view.style.setProperty('--z', st.zoom);
+    view.append(el('img', { src: src(kind), alt: cap + ': ' + st.scene, loading: 'lazy' }));
+    return { view, node: el('div', { class: 'pane' }, view,
+      el('div', { class: 'pane-cap' }, el('span', { text: cap }),
+        el('a', { href: src(kind), target: '_blank', rel: 'noopener', text: 'open 1:1' }))) };
+  };
+  const link = (views) => {
+    let busy = false;
+    views.forEach((v) => v.addEventListener('scroll', () => {
+      if (busy) return; busy = true;
+      views.forEach((o) => { if (o !== v) { o.scrollLeft = v.scrollLeft; o.scrollTop = v.scrollTop; } });
+      requestAnimationFrame(() => { busy = false; });
+    }));
+  };
+  function draw() {
+    stage.replaceChildren();
+    if (st.mode === 'wipe') {
+      const view = el('div', { class: 'view' + (st.zoom > 1 ? ' px' : '') });
+      const wrap = el('div', { class: 'wipe-wrap wipe' });
+      wrap.style.setProperty('--z', st.zoom);
+      const under = el('img', { src: src('half'), alt: c.b, loading: 'lazy', style: 'width:100%' });
+      const top = el('img', { class: 'top', src: src('full'), alt: c.a, loading: 'lazy', style: 'width:100%' });
+      wrap.append(under, top, el('div', { class: 'line' }));
+      view.append(wrap);
+      const range = el('input', { class: 'wipe-range', type: 'range', min: '0', max: '100', value: '50',
+        'aria-label': 'Wipe between full size (left) and half size (right)' });
+      range.addEventListener('input', () => wrap.style.setProperty('--x', range.value + '%'));
+      stage.append(el('div', { class: 'pane' }, view,
+        el('div', { class: 'pane-cap' }, el('span', { text: 'Left of the line: ' + c.a + '. Right: ' + c.b + '.' }))), range);
+    } else {
+      const [ka, ca, kb, cb] = st.mode === 'diff'
+        ? ['diff', 'Full against half, x8', 'noise', 'Full against full (a second run), x8']
+        : ['full', c.a, 'half', c.b];
+      const p1 = pane(ka, ca), p2 = pane(kb, cb);
+      stage.append(el('div', { class: 'pair' }, p1.node, p2.node));
+      link([p1.view, p2.view]);
+    }
+  }
+  box.append(
+    chips('Scene', c.scenes.map((s) => [s.id, s.label]), 'scene'),
+    chips('View', [['side', 'Side by side'], ['wipe', 'Slider'], ['diff', 'Difference x8']], 'mode'),
+    chips('Zoom', [[1, 'Fit'], [2, '2x'], [4, '4x']], 'zoom'),
+    stage,
+    el('p', { class: 'cmp-note', text: c.note }));
+  draw();
+  return box;
 }
 
 function isAnswered(a) {

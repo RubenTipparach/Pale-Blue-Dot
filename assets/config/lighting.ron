@@ -41,6 +41,9 @@
     // (voxels first, owner), this far, metres.
     reflections: true,
     reflection_reach_m: 48.0,
+    // L8's traces at this scale of the view (`lighting-perf` 2.8), laid back
+    // over by depth and ray; 1.0 traces every wet pixel inline.
+    reflect_render_scale: 0.5,
     // L4: the sun's bounce in the voxel field, and how strong it is drawn.
     bounce: true,
     bounce_strength: 1.0,

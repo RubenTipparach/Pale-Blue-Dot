@@ -23,6 +23,8 @@ mod contact;
 pub(crate) mod lattice;
 #[path = "planet_lod.rs"]
 pub(crate) mod lod;
+#[path = "planet_reflect.rs"]
+mod reflect;
 #[path = "planet_shadow.rs"]
 pub mod shadow;
 #[path = "planet_ssr.rs"]
@@ -50,8 +52,7 @@ pub use water::{EyeWater, EyeWaterState, emerge, submersion};
 
 use bevy::math::{DMat4, DVec3};
 use bevy::{
-    core_pipeline::core_3d::{CORE_3D_DEPTH_FORMAT, Transparent3d},
-    ecs::system::SystemParamItem,
+    core_pipeline::core_3d::CORE_3D_DEPTH_FORMAT,
     image::{ImageLoaderSettings, ImageSampler},
     prelude::*,
     render::{
@@ -61,10 +62,7 @@ use bevy::{
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::RenderAssets,
         render_graph::{self, RenderGraph, RenderLabel},
-        render_phase::{
-            AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
-            RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
-        },
+        render_phase::TrackedRenderPass,
         render_resource::{
             binding_types::{
                 storage_buffer_read_only_sized, storage_buffer_sized, texture_2d, uniform_buffer,
@@ -72,7 +70,7 @@ use bevy::{
             *,
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
-        sync_world::{MainEntity, SyncToRenderWorld},
+        sync_world::SyncToRenderWorld,
         texture::GpuImage,
         view::{ExtractedView, ViewTarget},
     },
@@ -288,7 +286,6 @@ impl Plugin for PlanetPlugin {
         weather_maps::build(app);
         let render_app = app.sub_app_mut(RenderApp);
         render_app
-            .add_render_command::<Transparent3d, DrawPlanet>()
             .init_resource::<SpecializedRenderPipelines<PlanetPipeline>>()
             .add_systems(RenderStartup, initialize_pipelines)
             .add_systems(
@@ -303,6 +300,7 @@ impl Plugin for PlanetPlugin {
             );
         water::build(render_app);
         ssr::build(render_app);
+        reflect::build(render_app);
         let mut graph = render_app.world_mut().resource_mut::<RenderGraph>();
         graph.add_node(PlanetComputeLabel, PlanetComputeNode::default());
         graph.add_node_edge(PlanetComputeLabel, bevy::render::graph::CameraDriverLabel);
@@ -1244,8 +1242,37 @@ fn initialize_pipelines(
 }
 
 impl SpecializedRenderPipeline for PlanetPipeline {
-    type Key = (u32, bool);
-    fn specialize(&self, (samples, hdr): Self::Key) -> RenderPipelineDescriptor {
+    /// MSAA samples, HDR, and whether L8's traces go to the half-size pass
+    /// (`lighting-perf` 2.8): then the fragment writes the request and what a
+    /// hit replaces beside the colour.
+    type Key = (u32, bool, bool);
+    fn specialize(&self, (samples, hdr, split): Self::Key) -> RenderPipelineDescriptor {
+        let color = Some(ColorTargetState {
+            format: if hdr {
+                ViewTarget::TEXTURE_FORMAT_HDR
+            } else {
+                TextureFormat::bevy_default()
+            },
+            blend: None,
+            write_mask: ColorWrites::ALL,
+        });
+        let targets = if split {
+            vec![
+                color,
+                Some(ColorTargetState {
+                    format: reflect::REQUEST_FORMAT,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                }),
+                Some(ColorTargetState {
+                    format: reflect::REPLACED_FORMAT,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                }),
+            ]
+        } else {
+            vec![color]
+        };
         RenderPipelineDescriptor {
             label: Some(Cow::Borrowed("Opaque GPU hex world")),
             layout: vec![
@@ -1260,16 +1287,12 @@ impl SpecializedRenderPipeline for PlanetPipeline {
             },
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
-                entry_point: Some(Cow::Borrowed("fragment")),
-                targets: vec![Some(ColorTargetState {
-                    format: if hdr {
-                        ViewTarget::TEXTURE_FORMAT_HDR
-                    } else {
-                        TextureFormat::bevy_default()
-                    },
-                    blend: None,
-                    write_mask: ColorWrites::ALL,
-                })],
+                entry_point: Some(Cow::Borrowed(if split {
+                    "fragment_split"
+                } else {
+                    "fragment"
+                })),
+                targets,
                 ..default()
             }),
             primitive: PrimitiveState {
@@ -1683,76 +1706,65 @@ fn prepare_views(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The terrain's pipeline for a view, and whether it leaves L8's traces to
+/// the half-size pass: `planet_reflect.rs`'s node draws with it.
+#[derive(Component)]
+struct PlanetDraw {
+    pipeline: CachedRenderPipelineId,
+    split: bool,
+}
+
+/// The terrain draws in a pass of its own (`lighting-perf` 2.8,
+/// `planet_reflect.rs`), between Bevy's transmissive and transparent passes:
+/// where it drew before as the transparent phase's first item, so after the
+/// opaque towns and before every transparent mesh.
 fn queue_planet(
-    draws: Res<DrawFunctions<Transparent3d>>,
+    mut commands: Commands,
     pipeline: Res<PlanetPipeline>,
     mut specialized: ResMut<SpecializedRenderPipelines<PlanetPipeline>>,
     cache: Res<PipelineCache>,
-    mut phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
-    views: Query<(&ExtractedView, &Msaa)>,
-    surfaces: Query<(Entity, &MainEntity), With<PlanetSurface>>,
+    lighting: Option<Res<crate::config::LightingSettings>>,
+    views: Query<(Entity, &ExtractedView, &Msaa)>,
+    surfaces: Query<(), With<PlanetSurface>>,
 ) {
-    let draw = draws.read().id::<DrawPlanet>();
-    for (view, msaa) in &views {
-        let Some(phase) = phases.get_mut(&view.retained_view_entity) else {
-            continue;
-        };
-        let pipeline = specialized.specialize(&cache, &pipeline, (msaa.samples(), view.hdr));
-        for (entity, main_entity) in &surfaces {
-            phase.add(Transparent3d {
-                // Bevy sorts this phase ascending with values increasing toward
-                // the camera, so the opaque globe goes first: at f32::MAX it
-                // drew LAST and painted over every transparent mesh in front
-                // of it, which is how the rain shower rendered as nothing.
-                distance: f32::MIN,
-                pipeline,
-                entity: (entity, *main_entity),
-                draw_function: draw,
-                batch_range: 0..1,
-                extra_index: PhaseItemExtraIndex::None,
-                indexed: false,
-            });
+    if surfaces.is_empty() {
+        for (entity, _, _) in &views {
+            commands.entity(entity).remove::<PlanetDraw>();
         }
+        return;
+    }
+    let split_on = lighting.is_some_and(|l| l.reflect_split_on());
+    for (entity, view, msaa) in &views {
+        // The half-size passes are built for the camera's MSAA and HDR
+        // target; any other view traces inline.
+        let split = split_on && msaa.samples() == reflect::SAMPLES && view.hdr;
+        let pipeline = specialized.specialize(&cache, &pipeline, (msaa.samples(), view.hdr, split));
+        commands
+            .entity(entity)
+            .insert(PlanetDraw { pipeline, split });
     }
 }
 
-type DrawPlanet = (SetItemPipeline, DrawPlanetIndirect);
-struct DrawPlanetIndirect;
-impl<P: PhaseItem> RenderCommand<P> for DrawPlanetIndirect {
-    type Param = (
-        Option<bevy::ecs::system::lifetimeless::SRes<weather_maps::WeatherMapGpu>>,
-        Option<bevy::ecs::system::lifetimeless::SRes<shadow::ShadowState>>,
-    );
-    type ViewQuery = Option<&'static PlanetViewGpu>;
-    type ItemQuery = ();
-    fn render<'w>(
-        _: &P,
-        view: Option<&'w PlanetViewGpu>,
-        _: Option<()>,
-        (maps, shadows): SystemParamItem<'w, '_, Self::Param>,
-        pass: &mut TrackedRenderPass<'w>,
-    ) -> RenderCommandResult {
-        let (Some(view), Some(maps), Some(shadows)) = (view, maps, shadows) else {
-            return RenderCommandResult::Skip;
-        };
-        let Some(receiver) = shadows.into_inner().receiver.as_ref() else {
-            return RenderCommandResult::Skip;
-        };
-        pass.set_bind_group(1, &maps.into_inner().bind_group, &[]);
-        pass.set_bind_group(2, receiver, &[]);
-        pass.set_bind_group(0, &view.draw_bind_group, &[]);
-        pass.draw_indirect(&view.indirect, 0);
-        pass.set_bind_group(0, &view.foliage_bind_group, &[]);
-        pass.draw_indirect(&view.indirect, 16);
-        pass.set_bind_group(0, &view.clutter_bind_group, &[]);
-        pass.draw_indirect(&view.indirect, 48);
-        // The inside of the world, last: everything before it is the surface,
-        // and a cave face is only ever seen through a hole in that surface.
-        pass.set_bind_group(0, &view.column_bind_group, &[]);
-        pass.draw_indirect(&view.indirect, 64);
-        RenderCommandResult::Success
-    }
+/// The terrain's four indirect draws: the surface, the foliage, the clutter
+/// and the columns, in that order.
+fn draw_terrain<'w>(
+    pass: &mut TrackedRenderPass<'w>,
+    view: &'w PlanetViewGpu,
+    maps: &'w weather_maps::WeatherMapGpu,
+    receiver: &'w BindGroup,
+) {
+    pass.set_bind_group(1, &maps.bind_group, &[]);
+    pass.set_bind_group(2, receiver, &[]);
+    pass.set_bind_group(0, &view.draw_bind_group, &[]);
+    pass.draw_indirect(&view.indirect, 0);
+    pass.set_bind_group(0, &view.foliage_bind_group, &[]);
+    pass.draw_indirect(&view.indirect, 16);
+    pass.set_bind_group(0, &view.clutter_bind_group, &[]);
+    pass.draw_indirect(&view.indirect, 48);
+    // The inside of the world, last: everything before it is the surface,
+    // and a cave face is only ever seen through a hole in that surface.
+    pass.set_bind_group(0, &view.column_bind_group, &[]);
+    pass.draw_indirect(&view.indirect, 64);
 }
 
 #[cfg(test)]

@@ -1,0 +1,1828 @@
+{
+  "meta": {
+    "when": "2026-11-12 14:53",
+    "revision": "619643c",
+    "dirty": true,
+    "variants": [
+      {
+        "name": "before",
+        "exe": "E:\\pbd-loading-screen\\before-pbd-app.exe",
+        "env": {},
+        "args": [
+          "--frame-latency",
+          "2"
+        ],
+        "assets": null
+      },
+      {
+        "name": "after",
+        "exe": "E:\\pbd-loading-screen\\target\\release\\pbd-app.exe",
+        "env": {},
+        "args": [
+          "--frame-latency",
+          "2"
+        ],
+        "assets": null
+      }
+    ],
+    "args": [
+      "--scenarios",
+      "town",
+      "--repeats",
+      "3",
+      "--out",
+      "output/perf/2026-11-12-town-batching",
+      "--variant",
+      "before|E:/pbd-loading-screen/before-pbd-app.exe|--frame-latency 2",
+      "--variant",
+      "after|E:/pbd-loading-screen/target/release/pbd-app.exe|--frame-latency 2"
+    ],
+    "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)"
+  },
+  "results": [
+    {
+      "scenario": "town",
+      "variant": "before",
+      "exe": "E:\\pbd-loading-screen\\before-pbd-app.exe",
+      "env": {},
+      "index": 0,
+      "seconds": 103.6,
+      "csv": "output\\perf\\2026-11-12-town-batching\\town_before_0.csv",
+      "log": "output\\perf\\2026-11-12-town-batching\\town_before_0.log",
+      "frame_ms": {
+        "n": 7534,
+        "mean": 10.058546057870963,
+        "p50": 9.999,
+        "p95": 17.251,
+        "p99": 22.947,
+        "p999": 42.691,
+        "max": 74.431,
+        "over_want": 4627,
+        "over_floor": 459
+      },
+      "missed": null,
+      "gpu_total_ms": {
+        "n": 7534,
+        "mean": 9.286111760021255,
+        "p50": 9.64,
+        "p95": 14.305,
+        "p99": 15.907,
+        "p999": 17.167,
+        "max": 18.314,
+        "over_want": 4971,
+        "over_floor": 30
+      },
+      "gpu_clouds_ms": {
+        "n": 7534,
+        "mean": 0.057470002654635054,
+        "p50": 0.063,
+        "p95": 0.071,
+        "p99": 0.072,
+        "p999": 0.422,
+        "max": 0.459,
+        "over_want": 0,
+        "over_floor": 0
+      },
+      "gpu_pass_ms": {
+        "cloud_march": {
+          "n": 7534,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_puffs": {
+          "n": 7534,
+          "mean": 0.04215078311653817,
+          "p50": 0.034,
+          "p95": 0.076,
+          "p99": 0.082,
+          "p999": 0.084,
+          "max": 0.085,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_resolve": {
+          "n": 7534,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lens_mist": {
+          "n": 7534,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lite_bloom": {
+          "n": 7534,
+          "mean": 0.09007061322006786,
+          "p50": 0.084,
+          "p95": 0.101,
+          "p99": 0.344,
+          "p999": 0.471,
+          "max": 0.605,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_opaque_pass_3d": {
+          "n": 7534,
+          "mean": 0.06498314308468249,
+          "p50": 0.026,
+          "p95": 0.205,
+          "p99": 0.343,
+          "p999": 0.544,
+          "max": 0.66,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_transparent_pass_3d": {
+          "n": 7534,
+          "mean": 4.841614414653572,
+          "p50": 4.539,
+          "p95": 9.045,
+          "p99": 10.066,
+          "p999": 10.76,
+          "max": 11.589,
+          "over_want": 615,
+          "over_floor": 0
+        },
+        "other": {
+          "n": 7534,
+          "mean": 0.04301911335280076,
+          "p50": 0.042,
+          "p95": 0.045,
+          "p99": 0.051,
+          "p999": 0.321,
+          "max": 0.456,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_cull": {
+          "n": 7534,
+          "mean": 0.19498593044862417,
+          "p50": 0.186,
+          "p95": 0.198,
+          "p99": 0.449,
+          "p999": 0.604,
+          "max": 0.692,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_shadow": {
+          "n": 7534,
+          "mean": 2.2241258295726065,
+          "p50": 2.137,
+          "p95": 3.306,
+          "p99": 4.127,
+          "p999": 4.418,
+          "max": 4.664,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "rain": {
+          "n": 7534,
+          "mean": 1.0461302097159593,
+          "p50": 1.366,
+          "p95": 1.789,
+          "p99": 1.995,
+          "p999": 2.059,
+          "max": 2.3,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "ssr_capture": {
+          "n": 7534,
+          "mean": 0.026327183435095002,
+          "p50": 0.029,
+          "p95": 0.033,
+          "p99": 0.036,
+          "p999": 0.037,
+          "max": 0.276,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "tonemapping": {
+          "n": 7534,
+          "mean": 0.02772152906822512,
+          "p50": 0.03,
+          "p95": 0.034,
+          "p99": 0.036,
+          "p999": 0.04,
+          "max": 0.321,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "upscaling": {
+          "n": 7534,
+          "mean": 0.02035771170692954,
+          "p50": 0.022,
+          "p95": 0.024,
+          "p99": 0.026,
+          "p999": 0.028,
+          "max": 0.374,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_compose": {
+          "n": 7534,
+          "mean": 0.3586980355720731,
+          "p50": 0.185,
+          "p95": 0.881,
+          "p99": 1.013,
+          "p999": 1.305,
+          "max": 1.355,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_lens": {
+          "n": 7534,
+          "mean": 0.2491198566498345,
+          "p50": 0.289,
+          "p95": 0.296,
+          "p99": 0.588,
+          "p999": 0.724,
+          "max": 0.963,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "weather_overlay": {
+          "n": 7534,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        }
+      },
+      "warm_up": {
+        "from_s": 16.65,
+        "marked_by": "ready",
+        "skip_s": 10.0
+      },
+      "rebuild_ms": [],
+      "spikes": [
+        [
+          "walked_m",
+          135.6,
+          40.034
+        ],
+        [
+          "walked_m",
+          135.6,
+          64.287
+        ],
+        [
+          "walked_m",
+          183.1,
+          58.506
+        ],
+        [
+          "walked_m",
+          191.4,
+          55.864
+        ],
+        [
+          "walked_m",
+          193.1,
+          48.427
+        ],
+        [
+          "walked_m",
+          193.1,
+          30.517
+        ],
+        [
+          "walked_m",
+          247.6,
+          45.2
+        ],
+        [
+          "walked_m",
+          320.2,
+          30.227
+        ],
+        [
+          "walked_m",
+          383.4,
+          39.663
+        ],
+        [
+          "walked_m",
+          396.7,
+          74.431
+        ],
+        [
+          "walked_m",
+          398.3,
+          65.788
+        ],
+        [
+          "walked_m",
+          398.3,
+          58.486
+        ],
+        [
+          "walked_m",
+          400.0,
+          42.691
+        ]
+      ],
+      "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+      "valid": true,
+      "problems": []
+    },
+    {
+      "scenario": "town",
+      "variant": "after",
+      "exe": "E:\\pbd-loading-screen\\target\\release\\pbd-app.exe",
+      "env": {},
+      "index": 0,
+      "seconds": 111.8,
+      "csv": "output\\perf\\2026-11-12-town-batching\\town_after_0.csv",
+      "log": "output\\perf\\2026-11-12-town-batching\\town_after_0.log",
+      "frame_ms": {
+        "n": 13243,
+        "mean": 6.367871932341666,
+        "p50": 6.122,
+        "p95": 9.716,
+        "p99": 12.561,
+        "p999": 18.414,
+        "max": 64.125,
+        "over_want": 1434,
+        "over_floor": 30
+      },
+      "missed": null,
+      "gpu_total_ms": {
+        "n": 13243,
+        "mean": 5.8558418787283895,
+        "p50": 5.623,
+        "p95": 8.928,
+        "p99": 11.007,
+        "p999": 13.435,
+        "max": 15.179,
+        "over_want": 809,
+        "over_floor": 0
+      },
+      "gpu_clouds_ms": {
+        "n": 13243,
+        "mean": 0.05996979536358688,
+        "p50": 0.059,
+        "p95": 0.065,
+        "p99": 0.07,
+        "p999": 0.306,
+        "max": 0.466,
+        "over_want": 0,
+        "over_floor": 0
+      },
+      "gpu_pass_ms": {
+        "cloud_march": {
+          "n": 13243,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_puffs": {
+          "n": 13243,
+          "mean": 0.025313071056406133,
+          "p50": 0.023,
+          "p95": 0.058,
+          "p99": 0.084,
+          "p999": 0.087,
+          "max": 0.256,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_resolve": {
+          "n": 13243,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lens_mist": {
+          "n": 13243,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lite_bloom": {
+          "n": 13243,
+          "mean": 0.07469334742883058,
+          "p50": 0.072,
+          "p95": 0.084,
+          "p99": 0.09,
+          "p999": 0.323,
+          "max": 0.479,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_opaque_pass_3d": {
+          "n": 13243,
+          "mean": 0.73639024390244,
+          "p50": 0.819,
+          "p95": 1.358,
+          "p99": 1.571,
+          "p999": 1.64,
+          "max": 1.92,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_transparent_pass_3d": {
+          "n": 13243,
+          "mean": 1.8375605225402163,
+          "p50": 1.513,
+          "p95": 4.58,
+          "p99": 6.378,
+          "p999": 8.698,
+          "max": 9.65,
+          "over_want": 19,
+          "over_floor": 0
+        },
+        "other": {
+          "n": 13243,
+          "mean": 0.04521815298648513,
+          "p50": 0.044,
+          "p95": 0.047,
+          "p99": 0.051,
+          "p999": 0.287,
+          "max": 0.471,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_cull": {
+          "n": 13243,
+          "mean": 0.19081801706559157,
+          "p50": 0.184,
+          "p95": 0.191,
+          "p99": 0.428,
+          "p999": 0.464,
+          "max": 0.61,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_shadow": {
+          "n": 13243,
+          "mean": 2.1746611794910393,
+          "p50": 2.152,
+          "p95": 3.192,
+          "p99": 3.34,
+          "p999": 3.857,
+          "max": 3.994,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "rain": {
+          "n": 13243,
+          "mean": 0.4167409197311788,
+          "p50": 0.193,
+          "p95": 1.388,
+          "p99": 1.419,
+          "p999": 1.857,
+          "max": 2.039,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "ssr_capture": {
+          "n": 13243,
+          "mean": 0.02002846786981883,
+          "p50": 0.019,
+          "p95": 0.028,
+          "p99": 0.031,
+          "p999": 0.032,
+          "max": 0.267,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "tonemapping": {
+          "n": 13243,
+          "mean": 0.023099146719019588,
+          "p50": 0.022,
+          "p95": 0.029,
+          "p99": 0.033,
+          "p999": 0.036,
+          "max": 0.292,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "upscaling": {
+          "n": 13243,
+          "mean": 0.017726874575246656,
+          "p50": 0.017,
+          "p95": 0.022,
+          "p99": 0.024,
+          "p999": 0.026,
+          "max": 0.244,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_compose": {
+          "n": 13243,
+          "mean": 0.1260558030657755,
+          "p50": 0.115,
+          "p95": 0.257,
+          "p99": 0.403,
+          "p999": 0.508,
+          "max": 0.546,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_lens": {
+          "n": 13243,
+          "mean": 0.10737219663217795,
+          "p50": 0.0,
+          "p95": 0.292,
+          "p99": 0.298,
+          "p999": 0.575,
+          "max": 0.725,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "weather_overlay": {
+          "n": 13243,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        }
+      },
+      "warm_up": {
+        "from_s": 16.54,
+        "marked_by": "ready",
+        "skip_s": 10.0
+      },
+      "rebuild_ms": [],
+      "spikes": [
+        [
+          "walked_m",
+          19.1,
+          36.267
+        ],
+        [
+          "walked_m",
+          35.7,
+          38.169
+        ],
+        [
+          "walked_m",
+          127.1,
+          35.219
+        ],
+        [
+          "walked_m",
+          254.6,
+          38.658
+        ],
+        [
+          "walked_m",
+          310.7,
+          33.726
+        ],
+        [
+          "walked_m",
+          312.4,
+          34.242
+        ],
+        [
+          "walked_m",
+          378.5,
+          64.125
+        ],
+        [
+          "walked_m",
+          378.5,
+          34.248
+        ]
+      ],
+      "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+      "valid": true,
+      "problems": []
+    },
+    {
+      "scenario": "town",
+      "variant": "after",
+      "exe": "E:\\pbd-loading-screen\\target\\release\\pbd-app.exe",
+      "env": {},
+      "index": 1,
+      "seconds": 100.6,
+      "csv": "output\\perf\\2026-11-12-town-batching\\town_after_1.csv",
+      "log": "output\\perf\\2026-11-12-town-batching\\town_after_1.log",
+      "frame_ms": {
+        "n": 7649,
+        "mean": 9.57621100797492,
+        "p50": 9.904,
+        "p95": 15.699,
+        "p99": 21.067,
+        "p999": 29.065,
+        "max": 98.919,
+        "over_want": 4554,
+        "over_floor": 255
+      },
+      "missed": null,
+      "gpu_total_ms": {
+        "n": 7649,
+        "mean": 8.97141521767553,
+        "p50": 9.709,
+        "p95": 14.062,
+        "p99": 15.572,
+        "p999": 16.633,
+        "max": 17.273,
+        "over_want": 4709,
+        "over_floor": 8
+      },
+      "gpu_clouds_ms": {
+        "n": 7649,
+        "mean": 0.06061367499019766,
+        "p50": 0.065,
+        "p95": 0.072,
+        "p99": 0.073,
+        "p999": 0.28,
+        "max": 0.341,
+        "over_want": 0,
+        "over_floor": 0
+      },
+      "gpu_pass_ms": {
+        "cloud_march": {
+          "n": 7649,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_puffs": {
+          "n": 7649,
+          "mean": 0.04289501895672643,
+          "p50": 0.036,
+          "p95": 0.077,
+          "p99": 0.084,
+          "p999": 0.092,
+          "max": 0.245,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_resolve": {
+          "n": 7649,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lens_mist": {
+          "n": 7649,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lite_bloom": {
+          "n": 7649,
+          "mean": 0.08126983919466466,
+          "p50": 0.084,
+          "p95": 0.089,
+          "p99": 0.094,
+          "p999": 0.34,
+          "max": 0.492,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_opaque_pass_3d": {
+          "n": 7649,
+          "mean": 0.09056857105503985,
+          "p50": 0.028,
+          "p95": 0.262,
+          "p99": 0.388,
+          "p999": 0.547,
+          "max": 0.615,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_transparent_pass_3d": {
+          "n": 7649,
+          "mean": 4.757144594064576,
+          "p50": 4.91,
+          "p95": 9.023,
+          "p99": 9.802,
+          "p999": 10.356,
+          "max": 11.358,
+          "over_want": 700,
+          "over_floor": 0
+        },
+        "other": {
+          "n": 7649,
+          "mean": 0.04235442541508774,
+          "p50": 0.042,
+          "p95": 0.045,
+          "p99": 0.049,
+          "p999": 0.267,
+          "max": 0.285,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_cull": {
+          "n": 7649,
+          "mean": 0.18710877238853102,
+          "p50": 0.184,
+          "p95": 0.193,
+          "p99": 0.386,
+          "p999": 0.432,
+          "max": 0.573,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_shadow": {
+          "n": 7649,
+          "mean": 2.1229012942868377,
+          "p50": 2.06,
+          "p95": 3.102,
+          "p99": 3.933,
+          "p999": 4.134,
+          "max": 4.325,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "rain": {
+          "n": 7649,
+          "mean": 0.9417578768466385,
+          "p50": 1.376,
+          "p95": 1.431,
+          "p99": 1.457,
+          "p999": 1.942,
+          "max": 2.023,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "ssr_capture": {
+          "n": 7649,
+          "mean": 0.02590234017518721,
+          "p50": 0.029,
+          "p95": 0.033,
+          "p99": 0.036,
+          "p999": 0.038,
+          "max": 0.251,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "tonemapping": {
+          "n": 7649,
+          "mean": 0.028233233102365734,
+          "p50": 0.031,
+          "p95": 0.035,
+          "p99": 0.036,
+          "p999": 0.04,
+          "max": 0.253,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "upscaling": {
+          "n": 7649,
+          "mean": 0.020440318995948007,
+          "p50": 0.022,
+          "p95": 0.025,
+          "p99": 0.026,
+          "p999": 0.028,
+          "max": 0.248,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_compose": {
+          "n": 7649,
+          "mean": 0.30350516407373557,
+          "p50": 0.179,
+          "p95": 0.763,
+          "p99": 0.987,
+          "p999": 1.215,
+          "max": 1.31,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_lens": {
+          "n": 7649,
+          "mean": 0.26725218982876076,
+          "p50": 0.291,
+          "p95": 0.298,
+          "p99": 0.551,
+          "p999": 0.575,
+          "max": 0.709,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "weather_overlay": {
+          "n": 7649,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        }
+      },
+      "warm_up": {
+        "from_s": 16.31,
+        "marked_by": "ready",
+        "skip_s": 10.0
+      },
+      "rebuild_ms": [],
+      "spikes": [
+        [
+          "walked_m",
+          105.6,
+          38.473
+        ],
+        [
+          "walked_m",
+          119.2,
+          41.219
+        ],
+        [
+          "walked_m",
+          252.7,
+          51.082
+        ],
+        [
+          "walked_m",
+          252.7,
+          33.003
+        ],
+        [
+          "walked_m",
+          373.9,
+          98.919
+        ],
+        [
+          "walked_m",
+          375.6,
+          42.096
+        ],
+        [
+          "walked_m",
+          393.8,
+          79.867
+        ],
+        [
+          "walked_m",
+          397.1,
+          81.253
+        ]
+      ],
+      "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+      "valid": true,
+      "problems": []
+    },
+    {
+      "scenario": "town",
+      "variant": "before",
+      "exe": "E:\\pbd-loading-screen\\before-pbd-app.exe",
+      "env": {},
+      "index": 1,
+      "seconds": 115.9,
+      "csv": "output\\perf\\2026-11-12-town-batching\\town_before_1.csv",
+      "log": "output\\perf\\2026-11-12-town-batching\\town_before_1.log",
+      "frame_ms": {
+        "n": 9131,
+        "mean": 9.721552622932853,
+        "p50": 9.617,
+        "p95": 16.557,
+        "p99": 21.844,
+        "p999": 36.25,
+        "max": 74.861,
+        "over_want": 5618,
+        "over_floor": 438
+      },
+      "missed": null,
+      "gpu_total_ms": {
+        "n": 9131,
+        "mean": 9.058439382323956,
+        "p50": 9.343,
+        "p95": 13.723,
+        "p99": 15.377,
+        "p999": 16.623,
+        "max": 21.878,
+        "over_want": 6170,
+        "over_floor": 8
+      },
+      "gpu_clouds_ms": {
+        "n": 9131,
+        "mean": 0.05239853247180156,
+        "p50": 0.059,
+        "p95": 0.072,
+        "p99": 0.073,
+        "p999": 0.075,
+        "max": 0.306,
+        "over_want": 0,
+        "over_floor": 0
+      },
+      "gpu_pass_ms": {
+        "cloud_march": {
+          "n": 9131,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_puffs": {
+          "n": 9131,
+          "mean": 0.040181579235571134,
+          "p50": 0.029,
+          "p95": 0.076,
+          "p99": 0.083,
+          "p999": 0.085,
+          "max": 0.258,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_resolve": {
+          "n": 9131,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lens_mist": {
+          "n": 9131,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lite_bloom": {
+          "n": 9131,
+          "mean": 0.08221695323622852,
+          "p50": 0.083,
+          "p95": 0.09,
+          "p99": 0.094,
+          "p999": 0.3,
+          "max": 0.457,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_opaque_pass_3d": {
+          "n": 9131,
+          "mean": 0.06795849304566828,
+          "p50": 0.026,
+          "p95": 0.186,
+          "p99": 0.334,
+          "p999": 0.455,
+          "max": 0.616,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_transparent_pass_3d": {
+          "n": 9131,
+          "mean": 4.670891249589291,
+          "p50": 4.423,
+          "p95": 8.653,
+          "p99": 9.535,
+          "p999": 10.253,
+          "max": 13.42,
+          "over_want": 610,
+          "over_floor": 0
+        },
+        "other": {
+          "n": 9131,
+          "mean": 0.04329974811083181,
+          "p50": 0.042,
+          "p95": 0.047,
+          "p99": 0.052,
+          "p999": 0.268,
+          "max": 0.29,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_cull": {
+          "n": 9131,
+          "mean": 0.19397612528747826,
+          "p50": 0.191,
+          "p95": 0.197,
+          "p99": 0.206,
+          "p999": 0.482,
+          "max": 0.608,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_shadow": {
+          "n": 9131,
+          "mean": 2.16912112583507,
+          "p50": 2.101,
+          "p95": 3.148,
+          "p99": 4.024,
+          "p999": 4.217,
+          "max": 5.464,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "rain": {
+          "n": 9131,
+          "mean": 1.0655209725112074,
+          "p50": 1.402,
+          "p95": 1.44,
+          "p99": 1.463,
+          "p999": 1.968,
+          "max": 2.814,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "ssr_capture": {
+          "n": 9131,
+          "mean": 0.026209396561165516,
+          "p50": 0.026,
+          "p95": 0.033,
+          "p99": 0.036,
+          "p999": 0.037,
+          "max": 0.04,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "tonemapping": {
+          "n": 9131,
+          "mean": 0.02724882269192957,
+          "p50": 0.025,
+          "p95": 0.034,
+          "p99": 0.036,
+          "p999": 0.039,
+          "max": 0.044,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "upscaling": {
+          "n": 9131,
+          "mean": 0.020058263059906625,
+          "p50": 0.018,
+          "p95": 0.025,
+          "p99": 0.026,
+          "p999": 0.028,
+          "max": 0.245,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_compose": {
+          "n": 9131,
+          "mean": 0.3829363706056299,
+          "p50": 0.19,
+          "p95": 0.793,
+          "p99": 1.171,
+          "p999": 1.411,
+          "max": 1.493,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_lens": {
+          "n": 9131,
+          "mean": 0.21725188916875593,
+          "p50": 0.29,
+          "p95": 0.296,
+          "p99": 0.543,
+          "p999": 0.561,
+          "max": 0.63,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "weather_overlay": {
+          "n": 9131,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        }
+      },
+      "warm_up": {
+        "from_s": 16.14,
+        "marked_by": "ready",
+        "skip_s": 10.0
+      },
+      "rebuild_ms": [],
+      "spikes": [
+        [
+          "walked_m",
+          100.4,
+          33.099
+        ],
+        [
+          "walked_m",
+          100.4,
+          36.25
+        ],
+        [
+          "walked_m",
+          189.8,
+          47.765
+        ],
+        [
+          "walked_m",
+          245.9,
+          43.972
+        ],
+        [
+          "walked_m",
+          250.9,
+          49.676
+        ],
+        [
+          "walked_m",
+          299.2,
+          54.327
+        ],
+        [
+          "walked_m",
+          302.5,
+          49.188
+        ],
+        [
+          "walked_m",
+          388.7,
+          38.642
+        ],
+        [
+          "walked_m",
+          390.3,
+          74.861
+        ],
+        [
+          "walked_m",
+          392.0,
+          74.663
+        ],
+        [
+          "walked_m",
+          395.3,
+          42.295
+        ],
+        [
+          "walked_m",
+          395.3,
+          38.969
+        ]
+      ],
+      "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+      "valid": true,
+      "problems": []
+    },
+    {
+      "scenario": "town",
+      "variant": "before",
+      "exe": "E:\\pbd-loading-screen\\before-pbd-app.exe",
+      "env": {},
+      "index": 2,
+      "seconds": 83.2,
+      "csv": "output\\perf\\2026-11-12-town-batching\\town_before_2.csv",
+      "log": "output\\perf\\2026-11-12-town-batching\\town_before_2.log",
+      "frame_ms": {
+        "n": 5751,
+        "mean": 9.656918970613797,
+        "p50": 9.742,
+        "p95": 16.93,
+        "p99": 22.431,
+        "p999": 29.096,
+        "max": 56.495,
+        "over_want": 3297,
+        "over_floor": 298
+      },
+      "missed": null,
+      "gpu_total_ms": {
+        "n": 5751,
+        "mean": 8.923569466179794,
+        "p50": 10.006,
+        "p95": 13.763,
+        "p99": 14.959,
+        "p999": 15.705,
+        "max": 16.078,
+        "over_want": 3602,
+        "over_floor": 0
+      },
+      "gpu_clouds_ms": {
+        "n": 5751,
+        "mean": 0.06419561815336716,
+        "p50": 0.066,
+        "p95": 0.07,
+        "p99": 0.071,
+        "p999": 0.072,
+        "max": 0.304,
+        "over_want": 0,
+        "over_floor": 0
+      },
+      "gpu_pass_ms": {
+        "cloud_march": {
+          "n": 5751,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_puffs": {
+          "n": 5751,
+          "mean": 0.05013510693792468,
+          "p50": 0.053,
+          "p95": 0.078,
+          "p99": 0.084,
+          "p999": 0.085,
+          "max": 0.268,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_resolve": {
+          "n": 5751,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lens_mist": {
+          "n": 5751,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lite_bloom": {
+          "n": 5751,
+          "mean": 0.08309320118240499,
+          "p50": 0.085,
+          "p95": 0.1,
+          "p99": 0.103,
+          "p999": 0.329,
+          "max": 0.392,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_opaque_pass_3d": {
+          "n": 5751,
+          "mean": 0.08119266214571344,
+          "p50": 0.012,
+          "p95": 0.242,
+          "p99": 0.372,
+          "p999": 0.52,
+          "max": 0.721,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_transparent_pass_3d": {
+          "n": 5751,
+          "mean": 4.855366718831482,
+          "p50": 5.586,
+          "p95": 8.764,
+          "p99": 9.387,
+          "p999": 9.837,
+          "max": 10.248,
+          "over_want": 492,
+          "over_floor": 0
+        },
+        "other": {
+          "n": 5751,
+          "mean": 0.04265379933924709,
+          "p50": 0.041,
+          "p95": 0.045,
+          "p99": 0.049,
+          "p999": 0.292,
+          "max": 1.616,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_cull": {
+          "n": 5751,
+          "mean": 0.18909181011997994,
+          "p50": 0.186,
+          "p95": 0.193,
+          "p99": 0.411,
+          "p999": 0.45,
+          "max": 0.676,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_shadow": {
+          "n": 5751,
+          "mean": 2.132220483394193,
+          "p50": 2.085,
+          "p95": 3.148,
+          "p99": 3.839,
+          "p999": 4.013,
+          "max": 4.406,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "rain": {
+          "n": 5751,
+          "mean": 0.9248402017040483,
+          "p50": 1.401,
+          "p95": 1.437,
+          "p99": 1.458,
+          "p999": 1.983,
+          "max": 2.091,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "ssr_capture": {
+          "n": 5751,
+          "mean": 0.026525299947834896,
+          "p50": 0.029,
+          "p95": 0.034,
+          "p99": 0.036,
+          "p999": 0.038,
+          "max": 0.04,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "tonemapping": {
+          "n": 5751,
+          "mean": 0.028677099634845327,
+          "p50": 0.031,
+          "p95": 0.035,
+          "p99": 0.037,
+          "p999": 0.04,
+          "max": 0.279,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "upscaling": {
+          "n": 5751,
+          "mean": 0.02167483915840846,
+          "p50": 0.023,
+          "p95": 0.026,
+          "p99": 0.027,
+          "p999": 0.029,
+          "max": 0.031,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_compose": {
+          "n": 5751,
+          "mean": 0.14800139106242263,
+          "p50": 0.173,
+          "p95": 0.227,
+          "p99": 0.267,
+          "p999": 0.458,
+          "max": 0.58,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_lens": {
+          "n": 5751,
+          "mean": 0.2763903668926884,
+          "p50": 0.29,
+          "p95": 0.294,
+          "p99": 0.299,
+          "p999": 0.571,
+          "max": 0.818,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "weather_overlay": {
+          "n": 5751,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        }
+      },
+      "warm_up": {
+        "from_s": 16.34,
+        "marked_by": "ready",
+        "skip_s": 10.0
+      },
+      "rebuild_ms": [],
+      "spikes": [
+        [
+          "walked_m",
+          85.8,
+          37.079
+        ],
+        [
+          "walked_m",
+          110.8,
+          35.505
+        ],
+        [
+          "walked_m",
+          117.4,
+          39.528
+        ],
+        [
+          "walked_m",
+          193.5,
+          52.38
+        ],
+        [
+          "walked_m",
+          203.1,
+          56.495
+        ],
+        [
+          "walked_m",
+          382.0,
+          42.686
+        ]
+      ],
+      "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+      "valid": true,
+      "problems": []
+    },
+    {
+      "scenario": "town",
+      "variant": "after",
+      "exe": "E:\\pbd-loading-screen\\target\\release\\pbd-app.exe",
+      "env": {},
+      "index": 2,
+      "seconds": 146.4,
+      "csv": "output\\perf\\2026-11-12-town-batching\\town_after_2.csv",
+      "log": "output\\perf\\2026-11-12-town-batching\\town_after_2.log",
+      "frame_ms": {
+        "n": 11876,
+        "mean": 9.947894240485013,
+        "p50": 9.873,
+        "p95": 15.857,
+        "p99": 20.954,
+        "p999": 42.583,
+        "max": 85.832,
+        "over_want": 8095,
+        "over_floor": 464
+      },
+      "missed": null,
+      "gpu_total_ms": {
+        "n": 11876,
+        "mean": 9.346489895587768,
+        "p50": 9.417,
+        "p95": 13.686,
+        "p99": 16.261,
+        "p999": 17.628,
+        "max": 18.828,
+        "over_want": 8242,
+        "over_floor": 75
+      },
+      "gpu_clouds_ms": {
+        "n": 11876,
+        "mean": 0.0489363422027632,
+        "p50": 0.059,
+        "p95": 0.071,
+        "p99": 0.074,
+        "p999": 0.076,
+        "max": 0.338,
+        "over_want": 0,
+        "over_floor": 0
+      },
+      "gpu_pass_ms": {
+        "cloud_march": {
+          "n": 11876,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_puffs": {
+          "n": 11876,
+          "mean": 0.03095554058605461,
+          "p50": 0.026,
+          "p95": 0.069,
+          "p99": 0.079,
+          "p999": 0.085,
+          "max": 0.306,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "cloud_resolve": {
+          "n": 11876,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lens_mist": {
+          "n": 11876,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "lite_bloom": {
+          "n": 11876,
+          "mean": 0.08221185584371839,
+          "p50": 0.082,
+          "p95": 0.089,
+          "p99": 0.094,
+          "p999": 0.347,
+          "max": 0.508,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_opaque_pass_3d": {
+          "n": 11876,
+          "mean": 0.09144425732570005,
+          "p50": 0.038,
+          "p95": 0.22,
+          "p99": 0.396,
+          "p999": 0.554,
+          "max": 0.631,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "main_transparent_pass_3d": {
+          "n": 11876,
+          "mean": 5.017285870663532,
+          "p50": 4.974,
+          "p95": 8.759,
+          "p99": 10.693,
+          "p999": 11.513,
+          "max": 12.251,
+          "over_want": 766,
+          "over_floor": 0
+        },
+        "other": {
+          "n": 11876,
+          "mean": 0.04453831256315298,
+          "p50": 0.043,
+          "p95": 0.047,
+          "p99": 0.054,
+          "p999": 0.29,
+          "max": 0.301,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_cull": {
+          "n": 11876,
+          "mean": 0.18813582014144506,
+          "p50": 0.186,
+          "p95": 0.194,
+          "p99": 0.201,
+          "p999": 0.446,
+          "max": 0.598,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "planet_shadow": {
+          "n": 11876,
+          "mean": 2.121482654092304,
+          "p50": 2.064,
+          "p95": 3.125,
+          "p99": 3.876,
+          "p999": 4.225,
+          "max": 4.638,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "rain": {
+          "n": 11876,
+          "mean": 1.1169253115527435,
+          "p50": 1.403,
+          "p95": 1.444,
+          "p99": 1.848,
+          "p999": 2.006,
+          "max": 2.863,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "ssr_capture": {
+          "n": 11876,
+          "mean": 0.025934658134051974,
+          "p50": 0.026,
+          "p95": 0.032,
+          "p99": 0.034,
+          "p999": 0.039,
+          "max": 0.042,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "tonemapping": {
+          "n": 11876,
+          "mean": 0.026255810037049045,
+          "p50": 0.025,
+          "p95": 0.033,
+          "p99": 0.034,
+          "p999": 0.037,
+          "max": 0.281,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "upscaling": {
+          "n": 11876,
+          "mean": 0.019651902997642967,
+          "p50": 0.018,
+          "p95": 0.024,
+          "p99": 0.025,
+          "p999": 0.027,
+          "max": 0.03,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_compose": {
+          "n": 11876,
+          "mean": 0.338491748063322,
+          "p50": 0.343,
+          "p95": 0.766,
+          "p99": 0.92,
+          "p999": 1.179,
+          "max": 1.416,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "water_lens": {
+          "n": 11876,
+          "mean": 0.19463211519031925,
+          "p50": 0.29,
+          "p95": 0.299,
+          "p99": 0.54,
+          "p999": 0.578,
+          "max": 0.901,
+          "over_want": 0,
+          "over_floor": 0
+        },
+        "weather_overlay": {
+          "n": 11876,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "p999": 0.0,
+          "max": 0.0,
+          "over_want": 0,
+          "over_floor": 0
+        }
+      },
+      "warm_up": {
+        "from_s": 17.13,
+        "marked_by": "ready",
+        "skip_s": 10.0
+      },
+      "rebuild_ms": [],
+      "spikes": [
+        [
+          "walked_m",
+          81.8,
+          52.559
+        ],
+        [
+          "walked_m",
+          100.4,
+          37.916
+        ],
+        [
+          "walked_m",
+          106.8,
+          49.156
+        ],
+        [
+          "walked_m",
+          147.2,
+          42.319
+        ],
+        [
+          "walked_m",
+          263.3,
+          34.735
+        ],
+        [
+          "walked_m",
+          286.6,
+          57.301
+        ],
+        [
+          "walked_m",
+          328.8,
+          47.816
+        ],
+        [
+          "walked_m",
+          335.4,
+          44.195
+        ],
+        [
+          "walked_m",
+          337.1,
+          80.733
+        ],
+        [
+          "walked_m",
+          345.1,
+          42.583
+        ],
+        [
+          "walked_m",
+          384.7,
+          83.375
+        ],
+        [
+          "walked_m",
+          386.3,
+          79.419
+        ],
+        [
+          "walked_m",
+          386.3,
+          39.666
+        ],
+        [
+          "walked_m",
+          386.3,
+          50.67
+        ],
+        [
+          "walked_m",
+          386.3,
+          85.832
+        ],
+        [
+          "walked_m",
+          389.6,
+          83.714
+        ],
+        [
+          "walked_m",
+          397.9,
+          80.635
+        ]
+      ],
+      "adapter": "NVIDIA GeForce RTX 3070 (Vulkan)",
+      "valid": true,
+      "problems": []
+    }
+  ]
+}

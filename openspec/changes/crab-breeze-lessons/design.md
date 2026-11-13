@@ -231,6 +231,64 @@ nothing heavy runs beside them, and reports go in `docs/benchmarks/`.
   (`--features trace`, `tools/trace_rank.py`), rank
   `prepare_erased_assets` and `batch_and_prepare` before and after.
 
+#### Rank 2 as built (2026-11-12)
+
+- **Three buffers, written in place.** `FieldLit` binds three storage
+  buffers made once with `COPY_DST`, the way the sun's cascades are:
+  - `scene` (binding 100): the view-wide part (centre, sun, model, SH),
+    written every frame;
+  - `rows` (104): one row a mesh, nine vec4s (bounds, fade, the corners'
+    sky and block, look, and where its room lights are), indexed by its
+    `MeshTag`;
+  - `room` (105): the room lights, three vec4s each. A mesh that carries
+    room lights keeps room for `MAX_ROOM_LIGHTS` of them, so a craft's
+    lantern rewrites its run in place.
+- **Why not an extracted uniform for the view part:** Bevy prepares a
+  material again when its asset changes, and a changed
+  `ShaderStorageBuffer` asset is uploaded as a new buffer
+  (`bevy_render-0.18.1/src/storage.rs:131-153`), which a material's bind
+  group does not follow. So the main world records what changed
+  (`FieldUploads`), the extract copies it into a render-world mirror, and
+  `write_the_field` writes the changed run of rows with
+  `RenderQueue::write_buffer`. A new buffer, met for the first time, is
+  written whole. The materials are never touched after they are made,
+  except to give them a buffer that has had to double.
+- **One material per base material.** `towns.rs` makes one
+  `StandardMaterial` per town texture and cut (`TownMaterials`), for its
+  pieces, its doors and a craft's cut parts. `take_the_field` makes one
+  `FieldLitMaterial` per base material and gives each mesh a row and its
+  tag.
+- **The shader.** `field_lit.wgsl` reads `rows[get_tag(instance_index)]`
+  into a private `field` once at the top of the fragment, so every term
+  below it is unchanged. The forward and prepass pipelines both hand the
+  fragment its instance index in Bevy 0.18.1, and the mesh buffer is
+  visible to the fragment stage.
+- **The sun.** It was written into a mesh's uniform only after moving
+  `SUN_STEP` (0.11 degrees), so that each move would not re-prepare 577
+  materials. It is now in `scene`, written exactly every frame, which costs
+  nothing. A real-time run sees the sun move smoothly over a town rather
+  than about once a second; a capture, whose clock stands, is unchanged.
+
+#### Rank 5 as built (2026-11-12)
+
+- **Chunks.** `towns::casting` lays each town's caster triangles out in
+  chunks of 16 m by where each triangle's centroid stands, each with its
+  bounds (`TownCasting`, `CasterChunk`). The shadow pass draws a chunk into
+  a cascade only when some of its box is inside that cascade's clip box.
+  The caster pipeline clips depth (no unclipped depth), so a chunk wholly
+  past one face draws nothing either way: the maps are the same.
+- **Props by cascade, not by metres.** A town's dressing things (stalls,
+  racks, pots, boats, barrels, cacti; `pbd_core::settlement` records the
+  run of vertices its dressing added to each texture, `Built::props`) cast
+  into the finest `dressing_cascades` only (`assets/config/towns.ron`, 3:
+  out to about 165 m on foot). A distance in metres would switch a shadow
+  on or off in one frame, which is the pop-in the owner ranked first; at a
+  cascade's edge the receivers already blend into the next, so the shadow
+  goes out across that band.
+- **Look.** With `dressing_cascades: 4` rank 5 draws the same maps; at 3 a
+  prop's shadow past the third cascade is gone, about a texel at 0.4 m a
+  texel. The shots compare both.
+
 ### 3. A ground-height tile cache for repeated callers
 
 - **PBD (measured).**
