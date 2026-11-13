@@ -16,7 +16,7 @@ use crate::config::LightingSettings;
 use crate::planet::{PlanetContact, PlanetFine, PlanetRenderFrame};
 use bevy::{
     core_pipeline::{
-        core_3d::graph::Node3d,
+        core_3d::graph::{Core3d, Node3d},
         fullscreen_material::{FullscreenMaterial, FullscreenMaterialPlugin},
         tonemapping::Tonemapping,
     },
@@ -24,7 +24,7 @@ use bevy::{
     prelude::*,
     render::{
         extract_component::ExtractComponent,
-        render_graph::{InternedRenderLabel, RenderLabel},
+        render_graph::{InternedRenderLabel, InternedRenderSubGraph, RenderLabel, RenderSubGraph},
         render_resource::ShaderType,
     },
     shader::ShaderRef,
@@ -52,6 +52,17 @@ impl FullscreenMaterial for ToneGrade {
             Self::node_label().intern(),
             Node3d::EndMainPassPostProcessing.intern(),
         ]
+    }
+
+    /// The node goes into the 3D graph once, when the plugin is built. Without
+    /// a sub-graph Bevy adds it again each time a camera gains the component,
+    /// and the second add replaces the node and loses its edge from
+    /// tonemapping: the grade could then run before the main pass, whose
+    /// colour it marked cleared, so the main pass loaded the last frame and
+    /// the translucent sky blended over it - the trails behind every star and
+    /// tree while the view turned (`tone-grade-order`).
+    fn sub_graph() -> Option<InternedRenderSubGraph> {
+        Some(Core3d.intern())
     }
 }
 
@@ -317,6 +328,23 @@ fn meter_and_grade(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `tone-grade-order`: without a sub-graph Bevy adds the grade's node
+    /// again for every camera that gains the component, and the second add
+    /// loses its edge from tonemapping, so the grade can run before the main
+    /// pass and the sky trails. Named, the node is added once, in order.
+    #[test]
+    fn the_grade_is_added_once_after_tonemapping() {
+        assert_eq!(ToneGrade::sub_graph(), Some(Core3d.intern()));
+        assert_eq!(
+            ToneGrade::node_edges(),
+            vec![
+                Node3d::Tonemapping.intern(),
+                ToneGrade::node_label().intern(),
+                Node3d::EndMainPassPostProcessing.intern(),
+            ]
+        );
+    }
 
     #[test]
     fn the_eye_opens_at_night_and_in_a_cave_but_only_so_far() {
