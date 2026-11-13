@@ -74,7 +74,7 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 | M21 | Rockets and Landers (was Rockets to Starships) | `ship-tiers.html` | ship-tiers | Drafted (2026-11-12, another session); revised 2026-11-13: no warp, rockets four rings wide with decks | https://claude.ai/artifact/4e3jLcjN4yH6NhJmyWKuY5 |
 | M22 | Cranes and Printers | `construction.html` | vehicle-yards | Drafted (2026-11-12); answers M3's note | https://claude.ai/artifact/3iCXM8dTvBb4s7ZDYmFwkn |
 | M23 | Drydock and Hex Ship Builder | `drydock.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/KeUTrW429tn9Vuo9dZy9Bb |
-| M24 | Hangar and Chibi Aircraft | `hangar.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/EvFLtkABNcoz9SeAqZduZK |
+| M24 | Hangar and Chibi Aircraft | `hangar.html` | vehicle-yards | Drafted (2026-11-12); the owner on the flight, 2026-11-13: "it feels pretty good so far", "I like it" (a note, not an approval) | https://claude.ai/artifact/EvFLtkABNcoz9SeAqZduZK |
 
 The thirteen of 2026-11-12 were published as one batch. Their commit (`d468860`) says "Fourteen",
 but it names thirteen subjects, and thirteen pages were published.
