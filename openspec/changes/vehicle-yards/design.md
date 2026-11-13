@@ -210,6 +210,14 @@ The page:
 4. **How the numbers follow**, the blocks, a progression from a two-cell
    sloop to a three-masted ship, the save rules, and the questions.
 
+Oars and the gangway (the owner, 2026-11-13: "why do these ships have so
+many planks? whats that all about? also planks should have a toggle to
+extend or not"). A bench station rows one oar a side, shipped along the rail
+unless she is rowing; a gangway cell runs out one plank, stood up against the
+rail unless toggled out (the dock's button, or G aboard), and it comes in
+when she gets under way. The sailing, rowing and walking rebuild of the same
+day is `steer-and-sail` design section 9.
+
 ### 4. M24: chibi aircraft, built in a hangar
 
 - **Chibi**: these are the owner's reference pictures read as proportions.
