@@ -18,8 +18,8 @@ struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
     water_absorption: vec4<f32>, water_deep: vec4<f32>, weather: vec4<f32>,
     rain: array<vec4<f32>,6>, // wet knobs; overcast sun, fill, fog per cover, fog in rain; sky blue cut, sky dim
-    lod_offsets: vec4<u32>, // x base count, y fine-region capacity
-    lod_counts: vec4<u32>,  // live records per fine level, coarsest first
+    lod_offsets: vec4<u32>, // x base count, y fine-region capacity, z the current set's half (`two-set-dissolve`)
+    lod_counts: vec4<u32>,  // live records per fine level of the current set, coarsest first
     lod: vec4<f32>,         // xyz player direction, w base level
     bands: vec4<f32>,       // cos(band radius / R) per fine level, coarsest first
     clutter: vec4<f32>,        // reach m, fade m, blades, base shade
@@ -32,8 +32,8 @@ struct Params {
     fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs; w one for a sun cascade (`sun-shadows`)
     lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
     bands_prev: vec4<f32>,     // and its band cosines
-    records_in: vec4<f32>,     // the records' ring per fine level (`detail-fade` section 4);
-    records_out: vec4<f32>,    // read by the visibility pass, laid out here to match
+    lod_counts_prev: vec4<u32>, // the dissolve's old set's counts (`two-set-dissolve`);
+    lod_spare: vec4<f32>,       // read by the visibility pass, laid out here to match
     anchor: vec4<f32>,         // `distance-lod-fade`: the fine set's anchor (`lod` is the fade centre),
     bands_in: vec4<f32>,       // the bands' cross-fade rings' inner edges, cosines,
     bands_prev_in: vec4<f32>,  // and those of the partition a landing dissolves from
@@ -776,7 +776,12 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // pass's cap IS its column's top, its height-field walls stand only off
     // the tier where nothing overhangs, and trees and clutter stand on the cap.
     var out_rain = 1.;
-    let lit_slot = column_slot(cell);
+    // An instance drawn for the old partition is a record of the set a landing
+    // dissolves from (`two-set-dissolve`), and the slot it carries is in that
+    // set's column tier, whose buffers the landing rewrote: it is drawn as
+    // the heightfield its record holds, with no column, for the dissolve's
+    // second.
+    let lit_slot = select(column_slot(cell), 0u, mark == PART_OLD);
     if vertex < 18u {
         let triangle = vertex/3u;
         let corner = vertex%3u;
@@ -817,7 +822,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // where a dig broke a column's side under an unchanged cap neither
         // half was anybody's: a hole to the sky from inside every pit.
         var columns_side = false;
-        let slot = column_slot(cell);
+        let slot = lit_slot;
         if slot != 0u && side < degree {
             columns_side = column_side(columns[slot-1u], side) != NO_NEIGHBOR;
         }
@@ -1670,42 +1675,6 @@ fn puddle_noise(p: vec2<f32>) -> f32 {
 const PUDDLE_MASK_MEAN: f32 = 0.5003;
 const PUDDLE_MASK_SPREAD: f32 = 0.1587;
 
-// Whether the records hold every cell the old partition can draw at
-// `direction` while a landing dissolves (`detail-fade` section 4,
-// `dissolve-coverage`). Across a band's cross-fade ring the old partition
-// draws two levels, so each fine level it can draw there is asked: one inside
-// its band's outer edge and outside the next finer band's inner ring edge,
-// round the old centre, each reach widened by two tiles because a cell's level
-// is decided at its owner and its centre, not at the pixel. Each such level's
-// ring of the records, a tile inside, must hold the point. The base is always
-// held. Where any level is not, the old half of the dither would be a hole.
-fn old_held(direction: vec3<f32>) -> bool {
-    let old = partition_of(PART_OLD);
-    let from_old = acos(clamp(dot(direction, old.anchor), -1.0, 1.0));
-    let along = dot(direction, params.anchor.xyz);
-    for (var level = base_level() + 1u; level <= finest_level(); level++) {
-        let out_cos = band_cos_in(old.bands, level);
-        if out_cos > 1.0 { continue; }
-        var inner = 0.0;
-        if level < finest_level() {
-            let in_cos = band_cos_in(old.bands_in, level + 1u);
-            if in_cos <= 1.0 { inner = acos(clamp(in_cos, -1.0, 1.0)) - 2.0*tile_angle(level); }
-        }
-        let outer = acos(clamp(out_cos, -1.0, 1.0)) + 2.0*tile_angle(level - 1u);
-        if from_old < outer && from_old >= inner {
-            let k = level - base_level() - 1u;
-            if !(along <= params.records_in[k] && along >= params.records_out[k]) { return false; }
-        }
-    }
-    return true;
-}
-
-// A level's mean tile width as an angle on the unit sphere: `1.2087 / 2^level`
-// (the Tenebris gold standard's measured constant).
-fn tile_angle(level: u32) -> f32 {
-    return 1.2087/f32(1u << level);
-}
-
 // An ordered 4 x 4 Bayer threshold for a pixel, 0..1: the screen-door mask a
 // fading piece is drawn through (`detail-fade`). Fixed to the screen, so a
 // piece that stands still at one fade holds one still pattern.
@@ -1745,17 +1714,14 @@ fn dropped(input: VertexOut) -> bool {
     // one elsewhere. Its own mask, interleaved gradient noise, so it does not
     // run in step with the distance cross-fade's.
     let dissolve = fract(52.9829189*fract(dot(input.clip.xy, vec2<f32>(0.06711056, 0.00583715))));
-    // Whether the old partition is there to draw this pixel's old half is
-    // judged at the pixel itself, not at the cell's centre (`town-flyover`,
-    // the owner's "gaps in the terrain"): a coarse new cell tested at its
-    // centre spans old cells past the records' ring, and its old half there
-    // showed the sky through the ground. Where the old cell is not held, the
-    // new cell keeps the pixel and the old one gives it up.
+    // The old half is drawn from the old set's own records, kept for the
+    // dissolve (`two-set-dissolve`), so it is always there: no pixel has to
+    // be kept by the new partition for want of the old one, and no ring of
+    // the landing switches at once.
     if input.part_mark != PART_BOTH {
         let new_half = dissolve < params.fade.y;
-        let held = old_held(radial);
-        if input.part_mark == PART_NEW && !new_half && held { return true; }
-        if input.part_mark == PART_OLD && (new_half || !held) { return true; }
+        if input.part_mark == PART_NEW && !new_half { return true; }
+        if input.part_mark == PART_OLD && new_half { return true; }
     }
     // The partition in this pixel's dither class (`distance-lod-fade`): the
     // cell is drawn where its owner is in its band (the nearer owner, for a

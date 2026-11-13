@@ -748,38 +748,21 @@ fn cover_ring(k: usize, anchor: Vec3, old: &Replaced, regen: f32) -> Option<[f32
     ])
 }
 
-/// The records' ring per fine level as the visibility pass tests it during a
-/// fade (`detail-fade` design section 4): cosines round the new anchor, inner
-/// and outer, each shrunk by one of that level's tiles, so a cell centre that
-/// passes is a cell the records hold. A level with no ring holds nothing
-/// (an outer cosine of 2, which no dot product reaches).
-pub fn records_cosines(rings: &[[f32; 2]; 4]) -> (Vec4, Vec4) {
-    let mut inner = [1.0f32; 4];
-    let mut outer = [2.0f32; 4];
-    for (k, &level) in FINE_LEVELS.iter().enumerate() {
-        let tile = tile_width_m(level);
-        let [from, to] = rings[k];
-        let from = if from > 0.0 { from + tile } else { 0.0 };
-        let to = to - tile;
-        if to > from {
-            inner[k] = (from / PLANET_RADIUS).cos();
-            outer[k] = (to / PLANET_RADIUS).cos();
-        }
-    }
-    (Vec4::from_array(inner), Vec4::from_array(outer))
-}
-
-/// Whether the set `new` holds every cell the partition `old` (the one the
-/// render world draws now) draws. Where it does not, the landing still
-/// cross-fades, and the visibility pass draws the new partition whole in the
-/// ring the records lack (`records_cosines`), so that ring switches at once
-/// and says so in the log. Level `k` of `old` is
-/// drawn between the complete radii of `k + 1` and `k` round its anchor; the
-/// new records of level `k` are a ring round the new anchor (`FineSet::rings`).
-/// With the anchors `d` apart, the old ring must lie inside the new. Returns
-/// the first level that does not, and by how far.
+/// Whether the set `new` holds every cell the partition `old` draws: what the
+/// cover (`cover_ring`) is laid to pass. Level `k` of `old` is drawn between
+/// the complete radii of `k + 1` and `k` round its anchor; the new records of
+/// level `k` are a ring round the new anchor (`FineSet::rings`). With the
+/// anchors `d` apart, the old ring must lie inside the new. Returns the first
+/// level that does not, and by how far.
+///
+/// Nothing at run time asks it since `two-set-dissolve`: a landing's dissolve
+/// draws the old partition from the old set's own records, which hold it
+/// whatever the new set holds. It stays as the cover's test until the cover
+/// itself retires (that change's task 5.3).
+#[cfg(test)]
 const FADE_SLACK_M: f32 = 0.5;
 
+#[cfg(test)]
 pub fn fade_covered(old: &LodParams, new: &FineSet) -> Result<(), String> {
     let radius = |cos: f32| {
         if cos <= 1.0 {
@@ -1149,6 +1132,31 @@ pub struct LodRefresh {
     /// another is not drawn: dropping a task cannot stop the threads already
     /// building it (`bigger-biomes` decision 8).
     epoch: u64,
+    /// A set that finished building while the last landing's dissolve still
+    /// ran: it waits for the dissolve to end (`two-set-dissolve`), because the
+    /// GPU keeps two sets, the one drawn and the one it dissolves from, and a
+    /// third landing would cut that short.
+    held: Option<Held>,
+    /// When the last set landed, on the game clock (what the render world's
+    /// dissolve is timed on: `PlanetClock` is this same elapsed time).
+    landed_s: Option<f32>,
+}
+
+/// A built set waiting to land (`LodRefresh::held`).
+struct Held {
+    set: Arc<FineSet>,
+    prepared: super::contact::PreparedFine,
+    /// How long its build took, seconds of wall clock.
+    took: f32,
+    /// When it finished, on the game clock.
+    built_s: f32,
+}
+
+/// How long a set that finished building at `now_s` waits before it lands:
+/// until the dissolve of the set that landed at `landed_s` has run its
+/// `fade_s` (`two-set-dissolve`). Zero when there is no dissolve to wait for.
+pub fn hold_for(landed_s: Option<f32>, now_s: f32, fade_s: f32) -> f32 {
+    landed_s.map_or(0.0, |landed| (fade_s - (now_s - landed)).max(0.0))
 }
 
 /// Where the bands are measured from: the active camera, which is at the
@@ -1173,6 +1181,7 @@ impl LodRefresh {
     /// planet under it is being replaced.
     pub fn abandon(&mut self) {
         self.task = None;
+        self.held = None;
         self.started = None;
         self.force = true;
     }
@@ -1183,11 +1192,12 @@ impl LodRefresh {
         began == now
     }
 
-    /// How long the in-flight rebuild has been running, if one is.
+    /// How long the in-flight rebuild has been running, if one is. A set held
+    /// for the last landing's dissolve is still in flight: it has not landed.
     pub fn in_flight_s(&self) -> Option<f32> {
-        self.task
-            .as_ref()
-            .and(self.started)
+        (self.task.is_some() || self.held.is_some())
+            .then_some(self.started)
+            .flatten()
             .map(|started| started.elapsed().as_secs_f32())
     }
 }
@@ -1212,6 +1222,7 @@ pub fn refresh_lod(
     mut near: ResMut<NearField>,
     air: Option<Res<crate::atmosphere::Air>>,
     lamps: Res<DuskLamps>,
+    time: Res<Time>,
 ) {
     let player = player_position(&cameras, frame.center.as_vec3());
     let direction = player.and_then(|p| p.try_normalize());
@@ -1231,29 +1242,62 @@ pub fn refresh_lod(
         }
     }
     if let Some(task) = refresh.task.as_mut() {
-        if let Some((set, prepared)) = block_on(poll_once(task)) {
-            let took = refresh.in_flight_s().unwrap_or(0.0);
-            refresh.task = None;
+        let Some((set, prepared)) = block_on(poll_once(task)) else {
+            return;
+        };
+        let took = refresh.in_flight_s().unwrap_or(0.0);
+        refresh.task = None;
+        if !LodRefresh::current(refresh.epoch, super::terrain::terrain_epoch()) {
             refresh.started = None;
-            if !LodRefresh::current(refresh.epoch, super::terrain::terrain_epoch()) {
-                info!("fine set begun on another planet discarded after {took:.1} s");
-                refresh.force = true;
-                return;
-            }
-            let behind = direction.map_or(0.0, |d| set.metres_from_anchor(d));
-            info!(
-                "fine set {} landed after {took:.1} s: {} columns, the player {behind:.0} m from its anchor",
-                fine.version + 1,
-                set.columns.columns.len()
-            );
-            let timer = std::time::Instant::now();
-            contact.set_prepared(prepared);
-            commands.insert_resource(PlanetFine {
-                set,
-                version: fine.version + 1,
-            });
-            spent("landing: contact tier", timer);
+            info!("fine set begun on another planet discarded after {took:.1} s");
+            refresh.force = true;
+            return;
         }
+        refresh.held = Some(Held {
+            set,
+            prepared,
+            took,
+            built_s: time.elapsed_secs(),
+        });
+    }
+    if let Some(held) = refresh.held.take() {
+        // The GPU keeps the set it draws and the one the last landing
+        // dissolves from; a set landing inside that dissolve waits for it to
+        // end rather than cut it short (`two-set-dissolve`). At most
+        // `lod_fade_s`, and only in flight: on foot sets land seconds apart.
+        let now_s = time.elapsed_secs();
+        if hold_for(refresh.landed_s, now_s, scatter.lod_fade_s) > 0.0 {
+            refresh.held = Some(held);
+            return;
+        }
+        let Held {
+            set,
+            prepared,
+            took,
+            built_s,
+        } = held;
+        refresh.started = None;
+        if now_s > built_s {
+            info!(
+                "LOD_FADE held: set {} waited {:.2} s for the last landing's dissolve",
+                fine.version + 1,
+                now_s - built_s
+            );
+        }
+        let behind = direction.map_or(0.0, |d| set.metres_from_anchor(d));
+        info!(
+            "fine set {} landed after {took:.1} s: {} columns, the player {behind:.0} m from its anchor",
+            fine.version + 1,
+            set.columns.columns.len()
+        );
+        let timer = std::time::Instant::now();
+        contact.set_prepared(prepared);
+        commands.insert_resource(PlanetFine {
+            set,
+            version: fine.version + 1,
+        });
+        refresh.landed_s = Some(now_s);
+        spent("landing: contact tier", timer);
         return;
     }
     let (Some(player), Some(direction)) = (player, direction) else {
@@ -1780,21 +1824,33 @@ mod near_field_tests {
         );
     }
 
-    /// The records' rings as the visibility pass tests them: a tile inside at
-    /// both edges, the finest level from the anchor out, and a level with no
-    /// ring holding nothing (`detail-fade` design section 4).
+    /// A set that finishes building inside the last landing's dissolve waits
+    /// for exactly the rest of it, and one that finishes after it does not
+    /// wait (`two-set-dissolve`): the GPU keeps two sets, and a third landing
+    /// would cut the dissolve short.
     #[test]
-    fn the_records_rings_are_tested_a_tile_inside() {
-        let cos = |m: f32| (m / PLANET_RADIUS).cos();
-        let (inner, outer) =
-            records_cosines(&[[1100.0, 2500.0], [500.0, 1300.0], [0.0, 0.0], [0.0, 350.0]]);
-        let t = |k: usize| tile_width_m(FINE_LEVELS[k]);
-        assert!((inner.x - cos(1100.0 + t(0))).abs() < 1e-6);
-        assert!((outer.x - cos(2500.0 - t(0))).abs() < 1e-6);
-        assert!((inner.y - cos(500.0 + t(1))).abs() < 1e-6);
-        assert_eq!(inner.w, 1.0, "the finest level starts at the anchor");
-        assert!((outer.w - cos(350.0 - t(3))).abs() < 1e-6);
-        assert_eq!(outer.z, 2.0, "a level not laid holds nothing");
+    fn a_set_landing_inside_a_dissolve_waits_for_it_to_end() {
+        let fade = 1.0;
+        assert_eq!(
+            hold_for(None, 5.0, fade),
+            0.0,
+            "no landing yet: none to wait for"
+        );
+        assert!((hold_for(Some(10.0), 10.25, fade) - 0.75).abs() < 1e-6);
+        assert_eq!(
+            hold_for(Some(10.0), 11.0, fade),
+            0.0,
+            "the dissolve has ended"
+        );
+        assert_eq!(hold_for(Some(10.0), 12.5, fade), 0.0);
+        assert_eq!(hold_for(Some(10.0), 10.1, 0.0), 0.0, "no dissolve: no hold");
+        // The render world's dissolve has ended on exactly the frame the hold
+        // releases: it is running while `now - landed < fade`, the hold while
+        // `fade - (now - landed) > 0`, the same comparison on the same clock.
+        for now in [10.999_f32, 11.0, 11.001] {
+            let running = now - 10.0 < fade;
+            assert_eq!(hold_for(Some(10.0), now, fade) > 0.0, running);
+        }
     }
 
     #[test]
@@ -1945,6 +2001,50 @@ mod fast_build_tests {
             bytemuck::cast_slice::<_, u8>(serial.columns.gpu_records()),
             bytemuck::cast_slice::<_, u8>(parallel.columns.gpu_records())
         );
+    }
+
+    /// A cell laid by two sets round different anchors is the same floats in
+    /// both: its direction, its owners and its corners. A landing's dissolve
+    /// lets a fine cell both partitions draw alike be drawn once, from the new
+    /// set, and its twin in the old set stand aside, each deciding from its own
+    /// record (`two-set-dissolve`); the decisions agree only if the records do.
+    #[test]
+    fn a_cell_is_the_same_floats_in_every_set_that_lays_it() {
+        let a = Vec3::new(0.8772014, 0.48012277, 0.0).normalize();
+        let b = Quat::from_axis_angle(a.any_orthonormal_vector(), 230.0 / PLANET_RADIUS) * a;
+        let settings = ColumnSettings::default();
+        let one = generate_fine_on(a, &settings, &Edits::new(), 4);
+        let two = generate_fine_on(b, &settings, &Edits::new(), 4);
+        let bits = |v: &[f32]| v[..3].iter().map(|f| f.to_bits()).collect::<Vec<_>>();
+        let mut shared = 0usize;
+        for (k, level) in FINE_LEVELS.iter().enumerate() {
+            let by_key: HashMap<u32, &GpuCell> = one.levels[k]
+                .iter()
+                .map(|cell| (cell.key(), cell))
+                .collect();
+            for cell in &two.levels[k] {
+                let Some(twin) = by_key.get(&cell.key()) else {
+                    continue;
+                };
+                shared += 1;
+                assert_eq!(
+                    cell.metadata[0], twin.metadata[0],
+                    "level {level}: degree or level"
+                );
+                assert_eq!(bits(&cell.direction_height), bits(&twin.direction_height));
+                assert_eq!(bits(&cell.owner_a), bits(&twin.owner_a));
+                assert_eq!(bits(&cell.owner_b), bits(&twin.owner_b));
+                // The same corners; the ring may start at another corner.
+                let ring = |c: &GpuCell| {
+                    let mut corners: Vec<Vec<u32>> =
+                        c.corners[..c.degree()].iter().map(|c| bits(c)).collect();
+                    corners.sort_unstable();
+                    corners
+                };
+                assert_eq!(ring(cell), ring(twin), "level {level}: the corners differ");
+            }
+        }
+        assert!(shared > 100_000, "the sets share only {shared} cells");
     }
 
     fn floor_of(cell: &GpuCell, side: usize) -> f32 {

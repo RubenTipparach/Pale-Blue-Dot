@@ -622,9 +622,10 @@ struct PlanetParams {
     // The terrain-wetness knobs from `weather.ron`, then the overcast ones.
     rain: [Vec4; 6],
     // Base record count and fine-region capacity; the fine regions follow the
-    // base at that stride.
+    // base at that stride, two halves of four (`two-set-dissolve`); z the half
+    // the current set is in, w spare.
     lod_offsets: UVec4,
-    // Live record count per fine level.
+    // Live record count per fine level of the current set.
     lod_counts: UVec4,
     // Player direction in the body frame; w the base level.
     lod: Vec4,
@@ -659,11 +660,11 @@ struct PlanetParams {
     // band cosines, as `lod` and `bands`.
     lod_prev: Vec4,
     bands_prev: Vec4,
-    // The records' ring per fine level round `lod`'s anchor, cosines, inner
-    // and outer, each a tile inside (`lod::records_cosines`): where a fade's
-    // old partition is not held, the new one is drawn whole.
-    records_in: Vec4,
-    records_out: Vec4,
+    // Live record count per fine level of the set the landing dissolves from,
+    // in the other half (`two-set-dissolve`); zero outside a dissolve, which
+    // leaves that half idle. Then a spare lane.
+    lod_counts_prev: UVec4,
+    lod_spare: Vec4,
     // `distance-lod-fade`: the fine set's anchor (what the records' rings are
     // measured from; `lod` is now the fade centre), and the inner edges of the
     // bands' cross-fade rings, cosines, for the partition and the one a
@@ -875,13 +876,21 @@ struct PlanetGpu {
     lamp_halves: [Option<((u64, u64), Vec3)>; 2],
     lamp_new: usize,
     lamp_landed_s: f32,
-    /// Record slots in the buffer: the base then four fine regions.
+    /// Record slots in the buffer: the base then two halves of four fine
+    /// regions (`two-set-dissolve`).
     slots: u32,
     base_count: u32,
     /// Which build of the base the buffer holds (`PlanetBase::generation`).
     base_generation: u64,
-    /// Live records per fine level, in `FINE_LEVELS` order.
+    /// Live records per fine level of the current set, in `FINE_LEVELS`
+    /// order.
     counts: [u32; 4],
+    /// The half of the fine regions the current set is in (0 or 1). The other
+    /// half holds the set the last landing replaced, which its dissolve draws
+    /// the old partition from (`two-set-dissolve`).
+    half: u32,
+    /// Live records per fine level of the set in the other half.
+    counts_prev: [u32; 4],
     /// The fine set version the regions hold.
     uploaded: u64,
     /// The partition the uploaded regions can serve: the anchor they were
@@ -889,14 +898,15 @@ struct PlanetGpu {
     /// written here, beside the buffer, so the rule that decides what to HIDE
     /// and the records that REPLACE it can never come from different frames.
     lod: lod::LodParams,
-    /// The partition the last landing replaced and when it landed, while its
-    /// cross-fade runs (`detail-fade`); none when the landing changed no
-    /// partition, or was the first.
-    lod_prev: Option<(lod::LodParams, std::time::Instant)>,
-    /// The uploaded records' ring per fine level round `lod`'s anchor,
-    /// metres: where the old partition's cells can be drawn from during a
-    /// fade (`lod::records_cosines`).
-    records: [[f32; 2]; 4],
+    /// The partition the last landing replaced and when it landed, on the
+    /// planet clock, while its dissolve runs (`detail-fade`,
+    /// `two-set-dissolve`); none when no landing has dissolved since startup
+    /// or a change of generator.
+    lod_prev: Option<(lod::LodParams, f32)>,
+    /// The next set that moves the partition lands at once: the first after
+    /// startup (behind the loading screen), and the first on a new generator,
+    /// whose other half holds another planet.
+    fresh: bool,
 }
 
 #[derive(Component)]
@@ -917,10 +927,13 @@ struct PlanetViewGpu {
     compute_bind_group: BindGroup,
     /// The fade centre (`distance-lod-fade`): the camera's ground point, held
     /// within the fine set's fit of its anchor and caught up at a bounded
-    /// speed after a landing; the version it was last fitted to; and where it
-    /// stood when that set landed, which the landing's dissolve starts from.
+    /// speed after a landing; the landing it last saw (its time on the planet
+    /// clock); and where it stood when that set landed, which the landing's
+    /// dissolve starts from. Keyed to the landing, not the version: an edit
+    /// during a dissolve makes a version and must not move the old partition
+    /// (`two-set-dissolve`).
     centre: Vec3,
-    fitted: u64,
+    fitted: Option<f32>,
     fade_from: Vec3,
     last: std::time::Instant,
     last_camera: Vec3,
@@ -936,6 +949,38 @@ struct PlanetViewGpu {
 /// The slowest the fade centre catches up with the camera after a landing,
 /// m/s; it goes at twice the camera's own speed when that is faster.
 const CENTRE_CATCH_UP_MPS: f32 = 30.0;
+
+/// Fine regions per half of the cell buffer, one per fine level.
+const FINE_REGIONS: u32 = lod::FINE_LEVELS.len() as u32;
+
+/// Where fine level `k` of half `half` starts in the cell buffer, in records.
+fn fine_region(base_count: u32, half: u32, k: usize) -> u64 {
+    u64::from(base_count)
+        + (u64::from(half) * u64::from(FINE_REGIONS) + k as u64) * u64::from(lod::FINE_CAPACITY)
+}
+
+/// What a fine set's upload does to the two halves (`two-set-dissolve`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Landing {
+    /// The partition did not move (an edit, a relight): written over the
+    /// current half in place; a running dissolve runs on.
+    InPlace,
+    /// It moved, at startup or on a new generator: drawn at once.
+    AtOnce,
+    /// It moved: written into the other half, and the old partition dissolves
+    /// out of the half it was drawn from.
+    Dissolve,
+}
+
+/// How a version lands, from whether it moved the partition and whether the
+/// buffer has a partition it may dissolve from.
+fn landing(moved: bool, fresh: bool) -> Landing {
+    match (moved, fresh) {
+        (false, _) => Landing::InPlace,
+        (true, true) => Landing::AtOnce,
+        (true, false) => Landing::Dissolve,
+    }
+}
 
 /// `from` turned toward `to` by at most `angle` radians, on the unit sphere.
 fn toward(from: Vec3, to: Vec3, angle: f32) -> Vec3 {
@@ -973,11 +1018,16 @@ fn upload_planet(
             );
             planet.base_generation = base.generation;
             planet.lod_prev = None;
+            planet.counts_prev = [0; 4];
+            planet.fresh = true;
         }
         return;
     }
     let base_count = base.cells.len() as u32;
-    let slots = base_count + 4 * lod::FINE_CAPACITY;
+    // Two halves of the four fine regions: the current set and the one the
+    // last landing replaced, which its dissolve still draws
+    // (`two-set-dissolve`).
+    let slots = base_count + 2 * FINE_REGIONS * lod::FINE_CAPACITY;
     // Zero-initialised: an empty slot has degree zero and the compute pass
     // skips it, so the fine regions are inert until their first upload.
     let cells = device.create_buffer(&BufferDescriptor {
@@ -1047,15 +1097,20 @@ fn upload_planet(
         base_count,
         base_generation: base.generation,
         counts: [0; 4],
+        half: 0,
+        counts_prev: [0; 4],
         uploaded: 0,
         lod: lod::LodParams::base_only(),
         lod_prev: None,
-        records: [[0.0; 2]; 4],
+        fresh: true,
     });
 }
 
 /// Rewrite the fine regions when a new fine set has landed. Each level's
 /// records go at its own offset; the count is what the compute pass reads.
+// Eight parameters: the seven it had, and the dissolve's length, which says
+// whether a landing would cut a running dissolve short (`two-set-dissolve`).
+#[allow(clippy::too_many_arguments)]
 fn upload_fine(
     fine: Option<Res<lod::PlanetFine>>,
     planet: Option<ResMut<PlanetGpu>>,
@@ -1064,6 +1119,7 @@ fn upload_fine(
     lamps: Option<Res<bounce::LampBakeField>>,
     clock: Res<PlanetClock>,
     lighting: Option<Res<crate::config::LightingSettings>>,
+    scatter: Option<Res<crate::config::ScatterSettings>>,
 ) {
     let (Some(fine), Some(mut planet)) = (fine, planet) else {
         return;
@@ -1100,9 +1156,34 @@ fn upload_fine(
         return;
     }
     let timer = std::time::Instant::now();
+    let old = planet.lod;
+    let new = lod::LodParams::of(&fine.set);
+    // An edit's new version, or the dusk relight's, keeps the anchor and the
+    // bands; a landing moves them.
+    let moved = old.player != new.player || old.bands != new.bands;
+    let how = landing(moved, planet.fresh);
+    if how == Landing::Dissolve {
+        // The set the old partition was drawn from stays where it is, in the
+        // half it was drawn from, for the dissolve to draw it whole
+        // (`two-set-dissolve`); the new set goes into the other half, which
+        // is idle once a dissolve has ended. `LodRefresh` holds a set that
+        // lands inside a dissolve until it has, so this never cuts one short.
+        let fade_s = scatter.as_ref().map_or(0.0, |s| s.lod_fade_s);
+        if let Some((_, landed)) = planet.lod_prev
+            && clock.0 - landed < fade_s
+        {
+            warn!(
+                "LOD_FADE cut short: set version {} landed {:.2} s into a {fade_s:.1} s dissolve",
+                fine.version,
+                clock.0 - landed
+            );
+        }
+        planet.counts_prev = planet.counts;
+        planet.half = 1 - planet.half;
+    }
     let stride = size_of::<GpuCell>() as u64;
     for (k, level) in fine.set.levels.iter().enumerate() {
-        let offset = (planet.base_count as u64 + k as u64 * lod::FINE_CAPACITY as u64) * stride;
+        let offset = fine_region(planet.base_count, planet.half, k) * stride;
         if !level.is_empty() {
             queue.write_buffer(
                 &planet.cells,
@@ -1134,26 +1215,29 @@ fn upload_fine(
         queue.write_buffer(&planet.centres, 0, bytemuck::cast_slice(&centres));
     }
     planet.uploaded = fine.version;
-    let old = planet.lod;
-    let new = lod::LodParams::of(&fine.set);
-    // Cross-fade from the partition drawn until now (`detail-fade`), where it
-    // moved (an edit's new version keeps the anchor and draws at once) and
-    // the new records still hold every cell it draws.
-    let moved = old.player != new.player || old.bands != new.bands;
-    let first = old.bands == lod::LodParams::base_only().bands;
-    planet.lod_prev = if moved && !first {
-        // Every landing fades (`detail-fade` design section 4). Where the new
-        // records do not hold what the old partition draws, the visibility
-        // pass draws the new partition there whole, so only that ring
-        // switches at once; before, the whole landing did.
-        if let Err(why) = lod::fade_covered(&old, &fine.set) {
-            info!("LOD_FADE partial: {why}; that ring switches at once");
+    match how {
+        // The partition is the one a running dissolve dissolves into: it runs
+        // on.
+        Landing::InPlace => {}
+        Landing::AtOnce => {
+            planet.lod_prev = None;
+            planet.counts_prev = [0; 4];
+            planet.fresh = false;
         }
-        Some((old, std::time::Instant::now()))
-    } else {
-        None
-    };
-    planet.records = fine.set.rings();
+        Landing::Dissolve => {
+            // Every landing dissolves the whole of the old partition, out of
+            // its own records (`two-set-dissolve`): no ring is drawn from the
+            // new partition alone, because none of the old one is drawn from
+            // the new records.
+            info!(
+                "LOD_FADE dissolve: set version {} into half {}, the old partition from half {}",
+                fine.version,
+                planet.half,
+                1 - planet.half
+            );
+            planet.lod_prev = Some((old, clock.0));
+        }
+    }
     planet.lod = new;
     lod::spent("render: fine-set upload", timer);
     // The other half of an edit's own log line: the version it made is the
@@ -1382,7 +1466,7 @@ fn prepare_views(
             };
         let w = &weather_settings;
         let lod = &planet.lod;
-        let (records_in, records_out) = lod::records_cosines(&planet.records);
+        let landing = planet.lod_prev.map(|(_, landed)| landed);
         // The fade centre (`distance-lod-fade`): the ground under the camera,
         // held within what the records hold round the anchor, and caught up
         // after a landing at twice the camera's speed rather than jumping.
@@ -1396,24 +1480,26 @@ fn prepare_views(
                 let speed = gpu.last_camera.distance(camera_position) / dt.max(1e-3);
                 let reach = (2.0 * speed).max(CENTRE_CATCH_UP_MPS) * dt / PLANET_RADIUS;
                 let centre = toward(anchor, toward(gpu.centre, target, reach), fit);
-                let landed = gpu.fitted != planet.uploaded;
+                let landed = gpu.fitted != landing;
                 (centre, if landed { gpu.centre } else { gpu.fade_from })
             }
             None => (target, target),
         };
-        // The landing's cross-fade (`detail-fade`): how far through it is.
-        // The partition it dissolves from stood round the fade centre as it was
-        // when the set landed (`distance-lod-fade`).
-        let (prev, prev_centre, fade_progress, fading) = match planet.lod_prev {
+        // The landing's cross-fade (`detail-fade`): how far through it is, on
+        // the planet clock (`two-set-dissolve`). The partition it dissolves
+        // from stood round the fade centre as it was when the set landed
+        // (`distance-lod-fade`), and is drawn from the other half's records,
+        // which are live only while it runs.
+        let (prev, prev_centre, fade_progress, fading, counts_prev) = match planet.lod_prev {
             Some((prev, landed)) if scatter.lod_fade_s > 0.0 => {
-                let t = landed.elapsed().as_secs_f32() / scatter.lod_fade_s;
+                let t = (clock.0 - landed) / scatter.lod_fade_s;
                 if t < 1.0 {
-                    (prev, fade_from, t, 1.0)
+                    (prev, fade_from, t.max(0.0), 1.0, planet.counts_prev)
                 } else {
-                    (*lod, centre, 1.0, 0.0)
+                    (*lod, centre, 1.0, 0.0, [0; 4])
                 }
             }
-            _ => (*lod, centre, 1.0, 0.0),
+            _ => (*lod, centre, 1.0, 0.0, [0; 4]),
         };
         trace!(
             "planet view {entity}: camera {camera_position:?}, lod player {:?}, base {} fine {:?}",
@@ -1470,7 +1556,7 @@ fn prepare_views(
                 // hazes toward and mirrors: the same greying the dome takes.
                 Vec4::new(w.overcast_sky_blue_cut, w.overcast_sky_dim, 0., 0.),
             ],
-            lod_offsets: UVec4::new(planet.base_count, lod::FINE_CAPACITY, 0, 0),
+            lod_offsets: UVec4::new(planet.base_count, lod::FINE_CAPACITY, planet.half, 0),
             lod_counts: UVec4::from_array(planet.counts),
             lod: centre.extend(lod::BASE_LEVEL as f32),
             bands: lod.bands,
@@ -1537,8 +1623,8 @@ fn prepare_views(
             fade: Vec4::new(scatter.tree_fade_m, fade_progress, fading, 0.0),
             lod_prev: prev_centre.extend(0.0),
             bands_prev: prev.bands,
-            records_in,
-            records_out,
+            lod_counts_prev: UVec4::from_array(counts_prev),
+            lod_spare: Vec4::ZERO,
             anchor: anchor.extend(0.0),
             bands_in: lod.bands_in,
             bands_prev_in: prev.bands_in,
@@ -1597,7 +1683,7 @@ fn prepare_views(
             gpu.uniform.set(params);
             gpu.uniform.write_buffer(&device, &queue);
             gpu.centre = centre;
-            gpu.fitted = planet.uploaded;
+            gpu.fitted = landing;
             gpu.fade_from = fade_from;
             gpu.last = now;
             gpu.last_camera = camera_position;
@@ -1697,7 +1783,7 @@ fn prepare_views(
             column_bind_group,
             compute_bind_group,
             centre,
-            fitted: planet.uploaded,
+            fitted: landing,
             fade_from,
             last: now,
             last_camera: camera_position,
@@ -1965,6 +2051,30 @@ mod tests {
         assert!(shipped > crate::walking::EYE_HEIGHT * 10.);
         // And the finest tier is the one the walker's eye is measured against.
         assert!(lod::tile_width_m(lod::FINEST_LEVEL) < crate::walking::EYE_HEIGHT * 2.);
+    }
+
+    /// How a fine set's version lands on the GPU (`two-set-dissolve`): one
+    /// that keeps the partition (an edit, a relight) goes over the current
+    /// half and leaves a running dissolve alone; one that moves it dissolves
+    /// from the other half, except the first after startup or a change of
+    /// generator. The two halves follow the base, four regions each, and never
+    /// overlap.
+    #[test]
+    fn a_landing_dissolves_from_the_half_it_leaves() {
+        assert_eq!(landing(false, false), Landing::InPlace);
+        assert_eq!(landing(false, true), Landing::InPlace);
+        assert_eq!(landing(true, true), Landing::AtOnce);
+        assert_eq!(landing(true, false), Landing::Dissolve);
+        let base = 163_842;
+        let cap = u64::from(lod::FINE_CAPACITY);
+        assert_eq!(fine_region(base, 0, 0), u64::from(base));
+        assert_eq!(fine_region(base, 0, 3), u64::from(base) + 3 * cap);
+        assert_eq!(fine_region(base, 1, 0), u64::from(base) + 4 * cap);
+        assert_eq!(
+            fine_region(base, 1, 3) + cap,
+            u64::from(base + 2 * FINE_REGIONS * lod::FINE_CAPACITY),
+            "the last region ends where the buffer does"
+        );
     }
 
     /// A load that switches the generator puts a new planet in place of the
