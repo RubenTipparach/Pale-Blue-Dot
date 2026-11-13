@@ -32,7 +32,7 @@ Rust 1.96.0, Bevy 0.18.1, Avian 0.6.1, and wgpu 27. Terrain seed:
 | `cargo test --manifest-path tools/validate_shaders/Cargo.toml --locked` | Three validator regression tests passed |
 | Actual S8 Avian default and polar circumnavigations | Both completed in headless and rendered runs; measured results below |
 | Final S8 orbit, coast, surface, night, pole, and both tour captures | Saved and inspected; no shader, pipeline, or GPU validation errors reported in their logs |
-| `run.bat --headless 600` launched from the repository's parent directory | Passed, exit code 0 |
+| `build-play.bat --headless 600` launched from the repository's parent directory | Passed, exit code 0 |
 | Actual-window input and screenshot smoke | Window-message cursor capture, W + Shift, and F12 produced a flight screenshot at 211 m/s; reset/release returned to 0 m/s at 252 m sea-level altitude |
 | `python tools/build_art_catalog.py` | Fourteen PNGs and 224 named material slots checked; manifest/gallery generated |
 | Offline gallery JavaScript and browser rendering | Script parsed; gallery rendered and inspected in headless Microsoft Edge |

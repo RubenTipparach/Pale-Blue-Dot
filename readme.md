@@ -11,10 +11,10 @@ use rocket orbital mechanics.
 
 ## Run
 
-On Windows, double-click [run.bat](run.bat). It builds the optimised `fast`
+On Windows, double-click [build-play.bat](build-play.bat). It builds the optimised `fast`
 profile (release without link-time optimisation, linked with the toolchain's
 `rust-lld`), opens the explorer and preserves the console afterward, so a small
-change rebuilds in seconds rather than minutes. `run.bat --full` builds the real
+change rebuilds in seconds rather than minutes. `build-play.bat --full` builds the real
 release executable instead: use it for performance numbers, recordings and
 regression checks. Rust and the native C/C++ linker tools must be installed.
 The first graphics build takes many minutes; unchanged launches reuse it.
@@ -29,17 +29,17 @@ selects cruise. X toggles inertial dampeners/hover assistance and B brakes. See
 [walking and flight controls](docs/flight-controls.md) for tuning and limits.
 
 ```bat
-run.bat
-run.bat --full
-run.bat --walk
-run.bat --fly
-run.bat --tour
-run.bat --tour --view pole
-run.bat --verify-flight
-run.bat --verify-flight --view pole
-run.bat --capture output/captures/walk.png --walk --frames 180
-run.bat --capture output/captures/orbit.png --view orbit --frames 180
-run.bat --headless 600
+build-play.bat
+build-play.bat --full
+build-play.bat --walk
+build-play.bat --fly
+build-play.bat --tour
+build-play.bat --tour --view pole
+build-play.bat --verify-flight
+build-play.bat --verify-flight --view pole
+build-play.bat --capture output/captures/walk.png --walk --frames 180
+build-play.bat --capture output/captures/orbit.png --view orbit --frames 180
+build-play.bat --headless 600
 ```
 
 Equivalent Cargo launch: `cargo run --release --locked -p pbd-app --` followed
