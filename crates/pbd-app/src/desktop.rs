@@ -73,6 +73,10 @@ pub struct Launch {
     /// `COAST_START`, `COAST_RIVER` and `COAST_DONE` and quits after that many
     /// metres along the ground (`--walk --at` puts it on the shore).
     pub coast_walk: Option<f32>,
+    /// `--clock-runs`: `--time` sets the hour the clock starts from but does
+    /// not stop it (a recording instrument: a walk from golden hour into the
+    /// night).
+    pub clock_runs: bool,
     /// `--stroll-leg SECONDS`: how long the stroll walks before it turns
     /// round (half the stroll when not given): a short leg paces one lane.
     pub stroll_leg: Option<f32>,
@@ -275,6 +279,7 @@ impl Launch {
             walk_distance: None,
             stroll: None,
             coast_walk: None,
+            clock_runs: false,
             stroll_leg: None,
             sail_for: None,
             frame_graph: false,
@@ -700,6 +705,7 @@ impl Launch {
                     );
                 }
                 "--fixed-dt" => result.fixed = true,
+                "--clock-runs" => result.clock_runs = true,
                 "--real-time" => result.real_time = true,
                 "--render-offset" => {
                     let mut components = [0.0; 3];
@@ -1048,7 +1054,8 @@ pub fn run(args: &[String]) {
     // picture is a function of its flags rather than of when it was taken.
     .insert_resource(pbd_app::sky::Sun {
         clock: sun_clock(&launch, saved_seconds),
-        running: launch.time.is_none() && launch.day.is_none() && launch.capture.is_none(),
+        running: (launch.time.is_none() && launch.day.is_none() || launch.clock_runs)
+            && launch.capture.is_none(),
     })
     .init_resource::<digging::Aim>()
     .init_resource::<digging::Mining>()

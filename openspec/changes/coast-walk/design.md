@@ -30,3 +30,14 @@ A test walks the same steering in 2 m steps over the height field from the
 chosen start for 2 km and checks: no step rises or falls more than 2.5 m, the
 sea is within 40 m on its side for most of the way, and at least one river is
 crossed.
+
+## The take
+
+`--clock-runs` (an instrument) lets `--time` set the hour the clock starts
+from without stopping it. A planet day is 2,880 s, so a game hour is 2 real
+minutes and the walk (about 6 minutes) spans 3 game hours: from `--time 8` at
+the start (sun 12 degrees up) it walks through sunset (about `--time 9`) into
+the night, so one take shows the low sun, the dusk sky, the stars and the
+water at each.
+
+`pbd-app --world <new> --walk --at 30 177.5 --time 8 --clock-runs --coast-walk 2000 --no-vsync --frame-log <csv> --frame-graph`
