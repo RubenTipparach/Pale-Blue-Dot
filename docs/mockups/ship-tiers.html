@@ -1033,6 +1033,11 @@ function startLaunch() {
     S: A.S.map(s => ({liq: s.liqProp, liq0: s.liqProp, srb: s.srbProp, srb0: s.srbProp, liqMdot: s.liqMdot, srbMdot: s.srbMdot, srbGone: false})),
     vel: new THREE.Vector3(), q: new THREE.Quaternion(), w: new THREE.Vector3(), cmd: new THREE.Vector3(), origin: new THREE.Vector3(0, 0, 0)};
   refreshFlight(W, true);
+  // frame the whole stack: its bounding sphere about the middle of its height
+  const top = Math.max(...A.cells.map(c => c.y)) + 1, rM = Math.max(0, ...A.cells.map(c => hexDist(c.q, c.r)));
+  L.center = new THREE.Vector3(0, top / 2, 0); L.radius = Math.hypot(top / 2, rM * HW + HR);
+  W.orbitCam.dist = Math.max(W.orbitCam.dist, L.radius / Math.sin(W.fov / 2 / DEG) * 1.15);
+  W.follow = W.rocket.localToWorld(L.center.clone()); W.followVel = new THREE.Vector3(); W.orbitCam.target.copy(W.follow);
   W.ghosts.clear();
   kick(1e9); renderCtl(); renderKeys();
 }
@@ -1138,7 +1143,6 @@ function flyStep(W, dt) {
   W.rocket.quaternion.copy(L.q);
   W.rocket.position.copy(L.cmW).sub(L.cm.clone().applyQuaternion(L.q)); W.rocket.position.y += W.base;
   const S = L.S[L.k], liqOn = S && S.liq > 0 && L.thr > 0, srbOn = S && S.srb > 0;
-  if (L.mode === "pad" && (liqOn || srbOn)) W.rocket.position.x += (Math.random() - 0.5) * 0.06;   // straining on the pad
   for (const e of L.eng) {
     const srb = e.m.userData.p === "srb", on = (srb ? srbOn : liqOn) && L.mode !== "crashed";
     if (e.m.gimbal) e.m.gimbal.rotation.set(e.dz, 0, -e.dx);
@@ -1150,7 +1154,9 @@ function flyStep(W, dt) {
     if (d.o.position.y > 1.2) { d.v.y -= g * dt; d.o.position.addScaledVector(d.v, dt); d.o.rotation.x += d.spin.x * dt; d.o.rotation.z += d.spin.z * dt; }
     else { d.o.position.y = 1.2; d.v.set(0, 0, 0); }
   }
-  if (!W.cam.fp) W.cam.target.lerp(L.cmW.clone().add(new THREE.Vector3(0, W.base, 0)), 0.12);
+  // the chase camera's goal: the middle of the stack's bounding sphere, in the world. The camera follows it
+  // with frame-rate independent smoothing (placeCamera) and keeps the viewer's own yaw and pitch.
+  W.rocket.updateMatrixWorld(); W.follow = W.rocket.localToWorld(L.center.clone());
   if (L.mode === "pad" && !(liqOn || srbOn) && L.t > 1) { L.msg = "no thrust: throttle up (Shift or Z)"; }
   if (L.mode === "pad" && L.t > 4 && (liqOn || srbOn) && L.S[0] && L.k === 0) L.stuckMsg = true;
   if (L.endAt && L.t > L.endAt) endLaunch();
@@ -1167,7 +1173,7 @@ function flightHud(W) {
 rates pitch <span class='c'>${sgn(L.w.x * DEG)}</span> yaw <span class='c'>${sgn(-L.w.z * DEG)}</span> roll <span class='c'>${sgn(L.w.y * DEG)}</span> deg/s   gimbal pitch ${sgn(-avg("dz"))} yaw ${sgn(-avg("dx"))} deg (limit ${lim.toFixed(0)})   roll by ${roll}${VAB.view === "inside" ? "\n<span class='g'>aboard</span>: standing on the deck in the rocket's frame" : ""}`;
 }
 function endLaunch() {
-  const W = WORLDS.vab; W.launch = null;
+  const W = WORLDS.vab; W.launch = null; W.follow = null;
   W.debris.forEach(d => W.scene.remove(d.o)); W.debris = [];
   W.rocket.position.set(0, W.base, 0); W.rocket.quaternion.identity();
   for (const k in KEYS) KEYS[k] = false;
@@ -1588,7 +1594,7 @@ function buildLanderWorld(name, sheet, kind) {
     const burning = F.mode === "up" || F.mode === "land";
     W.craft.flames.forEach(f => { f.visible = burning; f.scale.set(1 + 0.1 * Math.sin(t * 40), 0.85 + 0.25 * Math.random(), 1); });
     W.flameLamp.p.set(0, 1.9 + F.y - 1.5, 0); W.flameLamp.i = burning ? Math.max(0, 6 - F.y * 0.03) : 0;
-    W.cam.target.lerp(new THREE.Vector3(0, 4 + Math.min(F.y, 60) * 0.8, 0), 0.06);
+    W.follow = (W.follow || new THREE.Vector3()).set(0, 4 + Math.min(F.y, 60) * 0.8, 0);
   };
   const A = analyse(G1, cells instanceof Map ? cells : new Map(cells.map(c => [key(c.q, c.r, c.y), c.p])));
   W.hud = () => am ? `Cinder, basalt flats | antimatter lander <span class='g'>${W.fly.mode === "down" ? "landed from Pale Blue's surface" : W.fly.mode === "up" ? "lifting off" : "setting down"}</span>  alt ${Math.round(W.fly.y)} m\nsurface to surface 5 min 10 s, no orbit stop  delta-v used 9.8 of ${(A.total / 1000).toFixed(0)} km/s  TWR ${A.S[0].twr.toFixed(1)} at 1 g`
@@ -1970,26 +1976,41 @@ const STILL = Q.has("still");
 let framesLeft = STILL ? 6 : Infinity, looping = false, last = 0, t0 = 0;
 function kick(n = 3) { if (!STILL) return; framesLeft = Math.max(framesLeft, n); if (!looping && renderer) { looping = true; last = performance.now(); requestAnimationFrame(loop); } }
 const tmpE = new THREE.Vector3(), tmpD = new THREE.Vector3();
+// critically damped follow (the SmoothDamp form): frame-rate independent, never overshoots, so a camera
+// chasing a moving point holds a steady lag whatever the frame time
+function smoothDamp(cur, goal, vel, T, dt) {
+  const w = 2 / T, x = w * dt, e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const ch = cur.clone().sub(goal), tmp = vel.clone().addScaledVector(ch, w).multiplyScalar(dt);
+  vel.sub(tmp.clone().multiplyScalar(w)).multiplyScalar(e);
+  cur.copy(goal).add(ch.add(tmp).multiplyScalar(e));
+}
+// place the world's camera: aboard, at the walker's eye in the craft's frame; outside, on the viewer's
+// yaw, pitch and distance round a target that follows W.follow (a flight or a landing) smoothly
+function placeCamera(W, dt) {
+  const C = W.cam;
+  if (C.fp) {
+    if (!W.fpOn) { W.fpOn = true; W.camera.fov = 72; W.camera.near = 0.05; W.camera.updateProjectionMatrix(); }
+    tmpE.copy(C.eye); if (C.frame) { C.frame.updateMatrixWorld(); C.frame.localToWorld(tmpE); }
+    W.camera.position.copy(tmpE);
+    tmpD.set(Math.sin(C.yaw) * Math.cos(C.pitch), Math.sin(C.pitch), Math.cos(C.yaw) * Math.cos(C.pitch)).add(tmpE);
+    W.camera.lookAt(tmpD);
+  } else {
+    if (W.fpOn) { W.fpOn = false; W.camera.fov = W.fov; W.camera.near = W.near; W.camera.updateProjectionMatrix(); }
+    if (W.follow) { if (!W.followVel) W.followVel = new THREE.Vector3(); smoothDamp(C.target, W.follow, W.followVel, 0.35, dt); }
+    const cp = Math.cos(C.pitch);
+    W.camera.position.set(C.target.x + C.dist * cp * Math.sin(C.yaw), C.target.y + C.dist * Math.sin(C.pitch), C.target.z + C.dist * cp * Math.cos(C.yaw));
+    W.camera.lookAt(C.target);
+  }
+  W.camera.updateMatrixWorld();
+  return C;
+}
 function loop(now) {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; const t = (now - t0) / 1000;
   const W = active;
   if (W) {
     if (W.name === "orbit" && W.dirty) { W.dirty = false; W.reset(false); }
     W.update(dt, t);
-    const C = W.cam;
-    if (C.fp) {
-      if (!W.fpOn) { W.fpOn = true; W.camera.fov = 72; W.camera.near = 0.05; W.camera.updateProjectionMatrix(); }
-      tmpE.copy(C.eye); if (C.frame) { C.frame.updateMatrixWorld(); C.frame.localToWorld(tmpE); }
-      W.camera.position.copy(tmpE);
-      tmpD.set(Math.sin(C.yaw) * Math.cos(C.pitch), Math.sin(C.pitch), Math.cos(C.yaw) * Math.cos(C.pitch)).add(tmpE);
-      W.camera.lookAt(tmpD);
-    } else {
-      if (W.fpOn) { W.fpOn = false; W.camera.fov = W.fov; W.camera.near = W.near; W.camera.updateProjectionMatrix(); }
-      const cp = Math.cos(C.pitch);
-      W.camera.position.set(C.target.x + C.dist * cp * Math.sin(C.yaw), C.target.y + C.dist * Math.sin(C.pitch), C.target.z + C.dist * cp * Math.cos(C.yaw));
-      W.camera.lookAt(C.target);
-    }
-    W.camera.updateMatrixWorld();
+    const C = placeCamera(W, dt);
     if (W.moon) W.moon.visible = !C.fp;   // aboard, the hull shades you from the moon
     if (PM) PM.window.emissiveIntensity = W.time === "night" ? (C.fp ? 0.04 : 1.0) : 0.12;   // aboard at night a porthole shows the dark outside
     pushLamps(W);
