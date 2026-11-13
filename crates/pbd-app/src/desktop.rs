@@ -1045,6 +1045,7 @@ pub fn run(args: &[String]) {
     .insert_resource(launch.clone())
     .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
     .add_plugins(pbd_app::place::PlacePlugin)
+    .add_plugins(MaterialPlugin::<scene::StarMaterial>::default())
     .add_systems(
         Startup,
         (
