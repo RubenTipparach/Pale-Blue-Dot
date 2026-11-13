@@ -85,6 +85,13 @@ pub struct Launch {
     /// rain, for up to one frame more between input and photon. 1 stays for
     /// a player who prefers the lower latency.
     pub frame_latency: u32,
+    /// `--frame-limit 0|60|120`, `--render-scale PERCENT`, `--no-auto-step`:
+    /// the player's settings for this run, over the file in a plain run and
+    /// over the defaults in a capture or a benchmark (`player-settings`).
+    pub settings: pbd_app::settings::Overrides,
+    /// `--upscale nearest`: stretch a scaled view with nearest rather than
+    /// bilinear filtering, for the owner's comparison.
+    pub upscale_nearest: bool,
     /// `--capture-loading`: photograph the loading screen to `--capture`'s
     /// path while the planet builds, then exit (`loading-screen`).
     pub capture_loading: bool,
@@ -261,6 +268,8 @@ impl Launch {
             frame_graph: false,
             no_vsync: false,
             frame_latency: 2,
+            settings: pbd_app::settings::Overrides::default(),
+            upscale_nearest: false,
             capture_loading: false,
             view: "coast".into(),
             frames: 180,
@@ -524,6 +533,37 @@ impl Launch {
                         .expect("invalid frame latency");
                     assert!((1..=2).contains(&frames), "frame latency must be 1 or 2");
                     result.frame_latency = frames;
+                }
+                "--frame-limit" => {
+                    i += 1;
+                    result.settings.frame_limit = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .and_then(pbd_app::settings::FrameLimit::from_fps)
+                            .expect("--frame-limit takes 0, 60 or 120"),
+                    );
+                }
+                "--render-scale" => {
+                    i += 1;
+                    let percent: u32 = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--render-scale requires a percentage");
+                    assert!(
+                        (50..=100).contains(&percent),
+                        "--render-scale takes 50 to 100"
+                    );
+                    result.settings.render_scale = Some(percent);
+                }
+                "--no-auto-step" => result.settings.auto_step = Some(false),
+                "--upscale" => {
+                    i += 1;
+                    let filter = args.get(i).expect("--upscale requires bilinear or nearest");
+                    assert!(
+                        matches!(filter.as_str(), "bilinear" | "nearest"),
+                        "--upscale takes bilinear or nearest"
+                    );
+                    result.upscale_nearest = filter == "nearest";
                 }
                 "--capture-loading" => result.capture_loading = true,
                 "--walk-distance" => {
@@ -1108,7 +1148,9 @@ pub fn run(args: &[String]) {
             (measure_frames, write_frame_log).chain(),
             // The save is the loading thread's until the world opens.
             drain_saves.run_if(pbd_app::world_open),
-        ),
+        )
+            // The frame limiter holds the loop after these.
+            .in_set(pbd_app::settings::PacingSet),
     );
     if launch.frame_log.is_some() {
         // GPU time per render pass for the frame log (`perf-rig`), and a
@@ -1127,6 +1169,32 @@ pub fn run(args: &[String]) {
     // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
     // with Bevy's own sun and ambient, near black on every face in shade.
     app.add_plugins(pbd_app::field_light::FieldLightPlugin);
+    // The player's settings (`player-settings`): the file in a plain run;
+    // in a capture or a benchmark the defaults, so its picture or its numbers
+    // are its flags' alone. Read here, once the logger is up.
+    let (player, kept) = pbd_app::settings::for_launch(
+        launch.capture.is_some() || launch.frame_log.is_some(),
+        &launch.settings,
+    );
+    info!(
+        "PLAYER_SETTINGS frame_limit={} render_scale={}% auto_step={} file={}",
+        player.frame_limit.label(),
+        player.render_scale,
+        player.auto_step,
+        kept.path
+            .as_ref()
+            .map_or("none".into(), |p| p.display().to_string()),
+    );
+    app.insert_resource(player)
+        .insert_resource(kept)
+        .insert_resource(if launch.upscale_nearest {
+            pbd_app::settings::Upscale::Nearest
+        } else {
+            pbd_app::settings::Upscale::Bilinear
+        })
+        .add_plugins(pbd_app::settings::PlayerSettingsPlugin {
+            capture: launch.capture.is_some(),
+        });
     // `--no-shadows` in every run, a still as much as a walk: read only when
     // walking, a photo from above drew its shadows regardless.
     if launch.no_shadows {
@@ -1156,6 +1224,7 @@ pub fn run(args: &[String]) {
             turn: launch.turn.to_radians(),
             exact_start: launch.at.is_some(),
             start_up_m: launch.up,
+            auto_step: player.auto_step,
             ..default()
         })
         .add_plugins((

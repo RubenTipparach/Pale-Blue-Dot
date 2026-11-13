@@ -39,6 +39,22 @@ pub struct Structures(pub Vec<pbd_core::settlement::pieces::BuildingSolids>);
 /// one-metre layer, so a walker still steps off a ledge.
 const HOLD_M: f32 = 0.35;
 
+/// The tallest rise a walker climbs on its own with auto step off
+/// (`player-settings` design 5): a stair's, which is [`HOLD_M`]. Town and
+/// deck risers are 0.19 to 0.25 m; a terrain layer is a metre.
+pub const MANUAL_STEP_M: f32 = HOLD_M;
+
+impl WalkingConfig {
+    /// The tallest rise a grounded walker walks up without a jump.
+    pub fn climb_m(&self) -> f32 {
+        if self.auto_step {
+            self.step_height
+        } else {
+            self.step_height.min(MANUAL_STEP_M)
+        }
+    }
+}
+
 /// A piece the walker stands on that is not terrain: a town's, by its place
 /// in [`Structures`], or a ship's deck under sail, by its craft
 /// (`sail-the-cog` step 3).
@@ -161,6 +177,11 @@ pub struct WalkingConfig {
     pub sprint_speed: f32,
     pub jump_speed: f32,
     pub step_height: f32,
+    /// Auto step (`player-settings`): a grounded walker walks up a rise of
+    /// up to `step_height`, one terrain layer, without a key. Off, it walks
+    /// up only a stair's rise, [`MANUAL_STEP_M`], and a layer needs a jump.
+    /// How far up a floor is looked for stays `step_height` either way.
+    pub auto_step: bool,
     /// Height above the feet that decides the body is in water, in metres.
     pub water_body_check_height: f32,
     /// Speed multiplier while the body is in water.
@@ -203,6 +224,7 @@ impl Default for WalkingConfig {
             // asks the same constant, so a doorway the count offers is a
             // doorway this walker can take.
             step_height: crate::planet::column::STEP_M,
+            auto_step: true,
             // Tenebris's water block, measured off its lod.yaml. The feel these
             // make: hold the jump control to rise at about 4.2 m/s, release it
             // and sink at about 2.5 m/s, both being the terminal speeds of
@@ -1193,7 +1215,7 @@ fn sweep(
         let feet = candidate.length() - HALF_HEIGHT;
         let old_feet = accepted.length() - HALF_HEIGHT;
         let rise = support + CONTACT_SKIN - feet;
-        let can_step = was_grounded && support + CONTACT_SKIN - old_feet <= config.step_height;
+        let can_step = was_grounded && support + CONTACT_SKIN - old_feet <= config.climb_m();
         // A passage lower than the body is a wall, exactly as a tall rise
         // is: Tenebris's headroom check in `try_horizontal_step`, and what
         // stops a walker forcing their head into a low tunnel.
@@ -2268,6 +2290,103 @@ mod tests {
             (after - before).dot(-heading) > 1.0,
             "ledge trapped separating motion"
         );
+    }
+
+    /// Walk into a one-layer rise for a second, with auto step on
+    /// or off and with or without a jump at the start: how far above the
+    /// lower cap the feet end, and whether they are on the ground.
+    fn walk_into_a_layer(auto_step: bool, jump: bool) -> (f32, bool) {
+        let (terrain, start, heading) = PlanetContact::test_rise(0.9..=1.0);
+        let lower = terrain.sample(start).radius;
+        let mut app = app_with_terrain(terrain);
+        app.world_mut().resource_mut::<WalkingConfig>().auto_step = auto_step;
+        place_walker(
+            app.world_mut(),
+            start,
+            Some(Transform::IDENTITY.looking_to(heading, start).rotation),
+        );
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        keys.press(KeyCode::KeyW);
+        if jump {
+            keys.press(KeyCode::Space);
+        }
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::Space);
+        // A second of walking into it, then time to land: a full jump is
+        // about two and a half seconds in the air.
+        for _ in 0..60 {
+            app.update();
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::KeyW);
+        let body = app.world().resource::<WalkingState>().body;
+        for _ in 0..900 {
+            if app.world().get::<GroundState>(body).unwrap().grounded {
+                break;
+            }
+            app.update();
+        }
+        let feet = app.world().get::<Position>(body).unwrap().0.length() - HALF_HEIGHT;
+        let grounded = app.world().get::<GroundState>(body).unwrap().grounded;
+        (feet - CONTACT_SKIN - lower, grounded)
+    }
+
+    /// `player-settings` design 5: on (the default, today's walker) a layer
+    /// is walked up without a key.
+    #[test]
+    fn with_auto_step_on_a_walker_walks_up_a_layer() {
+        assert!(WalkingConfig::default().auto_step, "on by default");
+        let (up, grounded) = walk_into_a_layer(true, false);
+        assert!(
+            grounded && (0.85..1.2).contains(&up),
+            "feet {up} m over the lower cap"
+        );
+    }
+
+    /// Off, the same layer stops it, and a jump takes it up.
+    #[test]
+    fn with_auto_step_off_a_layer_stops_the_walker_until_it_jumps() {
+        let (up, grounded) = walk_into_a_layer(false, false);
+        assert!(grounded && up.abs() < 0.1, "feet {up} m over the lower cap");
+        let (up, grounded) = walk_into_a_layer(false, true);
+        assert!(
+            grounded && (0.85..1.2).contains(&up),
+            "jumped to {up} m over the lower cap"
+        );
+    }
+
+    /// Off, a flight of stairs still walks: its risers are under
+    /// [`MANUAL_STEP_M`].
+    #[test]
+    fn with_auto_step_off_a_walker_still_climbs_a_flight() {
+        use pbd_core::settlement::pieces::Surface;
+        let (terrain, flat, house) = village_house("Half-timbered house");
+        let Some(&Surface::Flight { foot, dir, .. }) = house
+            .surfaces
+            .iter()
+            .find(|s| matches!(s, Surface::Flight { .. }))
+        else {
+            panic!("a flight");
+        };
+        let side = Vec2::new(-dir.y, dir.x);
+        let mut app = app_with_terrain_at(terrain, flat);
+        app.world_mut().resource_mut::<WalkingConfig>().auto_step = false;
+        app.insert_resource(Structures(vec![house.clone()]));
+        let start = foot - dir * 1.0;
+        stand_in(&mut app, &house, start.x, 0.0, start.y);
+        let up = walk_house(
+            &mut app,
+            &house,
+            move |p| (dir - side * ((p - foot).dot(side) * 2.0)).normalize(),
+            |l| l.y >= 3.0 - 0.05,
+            300,
+        );
+        assert!(up.end.y >= 2.95, "reached {} m", up.end.y);
+        assert_eq!(up.airborne, 0, "ticks in the air going up");
     }
 
     /// `taller-mountains` decision 8, survey H4: a new version-6 world starts

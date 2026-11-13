@@ -493,6 +493,14 @@ impl PlanetContact {
     /// resampled continuous heights substitute for the renderer's columns.
     #[cfg(test)]
     pub(crate) fn test_terrace() -> (Self, Vec3, Vec3) {
+        Self::test_rise(6. ..=24.)
+    }
+
+    /// A real generated rise of `rise` metres between two dry caps, as
+    /// [`Self::test_terrace`] finds its terrace: one terrain layer for the
+    /// auto-step tests (`player-settings`).
+    #[cfg(test)]
+    pub(crate) fn test_rise(rise_m: std::ops::RangeInclusive<f32>) -> (Self, Vec3, Vec3) {
         let cells = super::topology::dual_sphere(5);
         let columns = Arc::new(super::lod::base_records(&cells));
         let contact = Self::new(columns.clone(), &cells);
@@ -503,7 +511,7 @@ impl PlanetContact {
             }
             for (side, &neighbor) in cell.neighbors.iter().enumerate() {
                 let rise = columns[neighbor].direction_height[3] - lower_height;
-                if !(6. ..=24.).contains(&rise) {
+                if !rise_m.contains(&rise) {
                     continue;
                 }
                 let a = cell.corners[side];
@@ -520,12 +528,12 @@ impl PlanetContact {
                 assert_eq!(higher.cell_id, neighbor as u32);
                 assert_eq!(lower.water_depth, 0.);
                 assert_eq!(higher.water_depth, 0.);
-                assert!(higher.radius - lower.radius > 5.5);
+                assert!(higher.radius - lower.radius > rise_m.start() - 0.5);
                 assert!(heading.dot(start).abs() < 1e-5);
                 return (contact, start, heading);
             }
         }
-        panic!("seeded preview should contain a dry 6–24 m terrace");
+        panic!("seeded preview should contain a dry rise of {rise_m:?} m");
     }
 }
 

@@ -21,6 +21,7 @@ use bevy::{
 };
 use pbd_app::controls::{BINDINGS, MenuOpen};
 use pbd_app::saves::{self, Slot, WorldSave};
+use pbd_app::settings::{PlayerSettings, SettingsFile};
 
 /// Which screen is open. One enum and not two flags, because two flags is how
 /// a settings page ends up open over a closed pause menu.
@@ -94,6 +95,12 @@ pub enum MenuAction {
     Species(u16),
     /// Turn bloom on or off (`press_graphics` acts).
     Bloom,
+    /// Cycle the frame limit: off, 60, 120 (`player-settings`).
+    FrameLimit,
+    /// Cycle the render scale through `settings::SCALES`.
+    RenderScale,
+    /// Turn auto step on or off.
+    AutoStep,
 }
 
 /// A panel the mouse wheel scrolls.
@@ -134,30 +141,79 @@ fn bloom_label(on: bool) -> String {
     )
 }
 
-/// A press on GRAPHICS' rows changes the player's choice and keeps it.
+/// What a player-settings row says (`player-settings`): the value, and what
+/// it means where that is not plain from the value.
+fn settings_label(action: MenuAction, player: &PlayerSettings) -> Option<String> {
+    Some(match action {
+        MenuAction::FrameLimit => format!("FRAME LIMIT: {}", player.frame_limit.label()),
+        MenuAction::RenderScale => format!(
+            "RENDER SCALE: {}%{}",
+            player.render_scale,
+            if player.render_scale == 100 {
+                ""
+            } else {
+                "  (HUD stays sharp)"
+            }
+        ),
+        MenuAction::AutoStep => format!(
+            "AUTO STEP: {}",
+            if player.auto_step {
+                "ON  (walk up a layer)"
+            } else {
+                "OFF  (jump to climb a layer)"
+            }
+        ),
+        _ => return None,
+    })
+}
+
+/// A press on GRAPHICS' and MOVEMENT's rows changes the player's choice and
+/// keeps it.
 pub fn press_graphics(
     rows: Query<(&Interaction, &MenuAction), Changed<Interaction>>,
     mut graphics: ResMut<pbd_app::tone::Graphics>,
+    mut player: ResMut<PlayerSettings>,
+    file: Res<SettingsFile>,
 ) {
     for (interaction, action) in &rows {
-        if (*interaction, *action) == (Interaction::Pressed, MenuAction::Bloom) {
-            graphics.bloom = !graphics.bloom;
-            graphics.keep();
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+        let mut changed = *player;
+        match action {
+            MenuAction::Bloom => {
+                graphics.bloom = !graphics.bloom;
+                graphics.keep();
+            }
+            MenuAction::FrameLimit => changed.frame_limit = changed.frame_limit.next(),
+            MenuAction::RenderScale => {
+                changed.render_scale = pbd_app::settings::next_scale(changed.render_scale)
+            }
+            MenuAction::AutoStep => changed.auto_step = !changed.auto_step,
+            _ => {}
+        }
+        if changed != *player {
+            *player = changed;
+            file.keep(&player);
         }
     }
 }
 
-/// The GRAPHICS rows say what is chosen.
+/// The GRAPHICS and MOVEMENT rows say what is chosen.
 pub fn label_graphics(
     graphics: Res<pbd_app::tone::Graphics>,
+    player: Res<PlayerSettings>,
     rows: Query<(&MenuAction, &Children)>,
     mut texts: Query<&mut Text>,
 ) {
-    let label = bloom_label(graphics.bloom);
     for (action, children) in &rows {
-        if *action != MenuAction::Bloom {
+        let label = if *action == MenuAction::Bloom {
+            bloom_label(graphics.bloom)
+        } else if let Some(label) = settings_label(*action, &player) {
+            label
+        } else {
             continue;
-        }
+        };
         for child in children.iter() {
             if let Ok(mut text) = texts.get_mut(child)
                 && text.0 != label
@@ -464,6 +520,19 @@ pub fn spawn(mut commands: Commands) {
                     ));
                     // First, above the long INPUT list, so it is always on screen. Its words are `bloom_label`'s, kept up by `label_graphics`.
                     button(panel, "BLOOM", MenuAction::Bloom);
+                    // `player-settings`: each row's words are
+                    // `settings_label`'s, kept up by `label_graphics`.
+                    button(panel, "FRAME LIMIT", MenuAction::FrameLimit);
+                    button(panel, "RENDER SCALE", MenuAction::RenderScale);
+                    panel.spawn((
+                        Text::new("MOVEMENT"),
+                        TextFont {
+                            font_size: 12.0,
+                            ..default()
+                        },
+                        TextColor(MINT),
+                    ));
+                    button(panel, "AUTO STEP", MenuAction::AutoStep);
                     panel.spawn((
                         Text::new("INPUT"),
                         TextFont {
@@ -938,7 +1007,10 @@ pub fn press(
             // The guide's own system turns the page.
             MenuAction::Species(_) => {}
             // `press_graphics` acts.
-            MenuAction::Bloom => {}
+            MenuAction::Bloom
+            | MenuAction::FrameLimit
+            | MenuAction::RenderScale
+            | MenuAction::AutoStep => {}
             MenuAction::Load(row) => {
                 let Some(slot) = index.slots.get(row).cloned() else {
                     continue;

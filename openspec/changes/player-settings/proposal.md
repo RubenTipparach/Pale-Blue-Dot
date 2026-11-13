@@ -47,8 +47,10 @@ cycles its value and says the value, like BLOOM does:
 | AUTO STEP | ON, OFF | ON (as today) | next tick |
 
 With defaults the game draws and runs exactly as it does now: no extra
-camera, no extra pass and no sleep. A benchmark sitting checks that (old
-exe against new, interleaved), and adds one run each at 60, 120 and 67 %.
+camera, no extra pass and no sleep. **The frame cost was not measured.** The
+owner, 2026-11-13: "ok skip the benchmark, just build so I can play". The
+planned sitting (old exe against new, interleaved, plus one run each at 60,
+120 and 67 %) stays an open task.
 
 ## Not in this change
 
