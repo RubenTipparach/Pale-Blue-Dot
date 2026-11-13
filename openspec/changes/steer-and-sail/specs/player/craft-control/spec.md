@@ -45,3 +45,13 @@ flows past it.
 - **WHEN** a sailing ship has no speed through the water and the helm is put
   over
 - **THEN** the ship does not turn
+
+### Requirement: A ship with no one aboard furls and stops
+When the last person leaves a ship, its sails SHALL furl and its engines SHALL
+stop, so that it comes to rest. It SHALL stay a stored record where it
+stopped, and SHALL sail again when someone boards and takes the helm.
+
+#### Scenario: Falling overboard
+- **WHEN** the only sailor aboard a ship under sail falls into the sea
+- **THEN** the sails furl within a few seconds, and the ship slows to rest
+  and drifts without driving away

@@ -143,8 +143,19 @@ towards my waypoint".
   takes the helm. The view becomes the chase camera, and A/D and the arrows
   steer and trim. F again lets go, and the player stands at the wheel on
   the moving deck. This is the cog's helm (`sail-the-cog` 4.1) applied to
-  every hex ship. A ship with nobody at the helm holds its rudder and sail
-  and sails on.
+  every hex ship. A ship with someone aboard but nobody at the helm holds
+  its rudder and sail and sails on.
+- **No one aboard, sails furled** (the owner, 2026-11-13: "falling off a
+  boat (a boat with no sailors) should cause the sails to fold bringing the
+  ship to a stop").
+  - When the last person leaves a ship, by falling or stepping off, its
+    sails furl over a few seconds and its engines go to stop. Drag brings
+    it to rest, where it drifts only with the current and the wind on its
+    hull.
+  - It is not lost: it stays a stored record where it stopped.
+  - Boarding it again and taking the helm sets sail as before.
+  - This is the "an unattended craft follows a written policy" rule the
+    vehicles already have.
 - **Advice only.** The player steers and trims. The readout shows what the
   best course gains: the VMG now, and the VMG on the best heading.
 
