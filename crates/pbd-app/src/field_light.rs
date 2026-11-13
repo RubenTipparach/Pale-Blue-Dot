@@ -93,7 +93,9 @@ pub struct FieldRow {
     /// The mesh's bounds in the render frame.
     pub low: Vec4,
     pub high: Vec4,
-    /// x how far it has faded out ([`Faded`]).
+    /// x how far it has faded out ([`Faded`]); on a town's outside, y how
+    /// far it has blended from the bake before to the one it carries and z
+    /// one (`baked-light-ease` 7.4).
     pub fade: Vec4,
     /// The field at the bounds' eight corners, corner `x + 2y + 4z`.
     pub sky: [Vec4; 2],
@@ -587,6 +589,29 @@ struct Corners {
     block: [Vec4; 2],
     /// The frame it was last used in, so a despawned mesh's entry goes.
     seen: u32,
+    /// What the corners showed when a new field moved them under a still
+    /// mesh, and when: they blend from it to `sky` and `block`
+    /// (`baked-light-ease` 7.6).
+    from: Option<(f32, [Vec4; 2], [Vec4; 2])>,
+}
+
+impl Corners {
+    /// What the corners show `now_s` seconds into the app: the field they
+    /// read, blended in from what they showed before it if a new field came
+    /// in under a still mesh.
+    fn shown(&self, now_s: f32) -> ([Vec4; 2], [Vec4; 2]) {
+        let Some((since, sky, block)) = self.from else {
+            return (self.sky, self.block);
+        };
+        let t = light::bake_blend(now_s - since);
+        (
+            [sky[0].lerp(self.sky[0], t), sky[1].lerp(self.sky[1], t)],
+            [
+                block[0].lerp(self.block[0], t),
+                block[1].lerp(self.block[1], t),
+            ],
+        )
+    }
 }
 
 /// Sample the field at every field-lit mesh's eight corners, each frame
@@ -607,6 +632,7 @@ fn light_from_the_field(
             Option<&Aabb>,
             Option<&SkyShare>,
             Option<&ChildOf>,
+            Option<&BakedField>,
         ),
         With<MeshMaterial3d<FieldLitMaterial>>,
     >,
@@ -614,7 +640,10 @@ fn light_from_the_field(
     sky_light: Option<Res<crate::tone::SkyLight>>,
     mut rows: ResMut<FieldRows>,
     mut read: Local<(u32, std::collections::HashMap<Entity, Corners>)>,
+    frame_count: Option<Res<crate::loading::FrameCount>>,
+    time: Option<Res<Time>>,
 ) {
+    let now_s = time.map_or(0.0, |t| t.elapsed_secs());
     let sky_light = sky_light.map(|s| *s).unwrap_or_default();
     let centre = frame
         .map(|frame| frame.center.as_vec3())
@@ -647,7 +676,10 @@ fn light_from_the_field(
     // it rewrote, each frame it passes 2 ms.
     let started = std::time::Instant::now();
     let (mut seen, mut rewritten) = (0usize, 0usize);
-    for (entity, transform, aabb, share, parent) in &meshes {
+    // MEASUREMENT (`baked-light-ease`): still meshes whose corners a new
+    // field moved this frame, and the most any corner moved.
+    let mut corners_moved = (0usize, 0.0f32);
+    for (entity, transform, aabb, share, parent, baked) in &meshes {
         let Some(slot) = rows.slots.get(&entity).copied() else {
             continue;
         };
@@ -673,6 +705,7 @@ fn light_from_the_field(
             sky: [Vec4::ONE; 2],
             block: [Vec4::ZERO; 2],
             seen: now,
+            from: None,
         });
         entry.seen = now;
         let still = entry
@@ -702,6 +735,10 @@ fn light_from_the_field(
             });
         }
         if !still || entry.key != key {
+            let relit = still && entry.key != key;
+            // What is on screen now, which a new field under a still mesh
+            // blends from (`baked-light-ease` 7.6).
+            let was = entry.shown(now_s);
             entry.key = key;
             for (i, at) in entry.points.iter().enumerate() {
                 let (sky, block) = match (&fine, &contact) {
@@ -711,13 +748,42 @@ fn light_from_the_field(
                 entry.sky[i / 4][i % 4] = sky;
                 entry.block[i / 4][i % 4] = block;
             }
+            if relit {
+                let moved = (0..2)
+                    .map(|k| {
+                        (entry.sky[k] - was.0[k])
+                            .abs()
+                            .max_element()
+                            .max((entry.block[k] - was.1[k]).abs().max_element())
+                    })
+                    .fold(0.0f32, f32::max);
+                if moved > 1e-3 {
+                    corners_moved.0 += 1;
+                    corners_moved.1 = corners_moved.1.max(moved);
+                    entry.from = Some((now_s, was.0, was.1));
+                }
+            } else {
+                // A mesh that moves takes its corners at once: its light
+                // follows it, continuously.
+                entry.from = None;
+            }
         }
+        let (sky, block) = entry.shown(now_s);
+        if entry
+            .from
+            .is_some_and(|(since, ..)| light::bake_blend(now_s - since) >= 1.0)
+        {
+            entry.from = None;
+        }
+        // A town's outside: how far it has blended from the bake before the
+        // one it carries, and that it carries one (`baked-light-ease` 7.4).
+        let (blend, carries) = baked.map_or((0.0, 0.0), |b| (b.blend(now_s), 1.0));
         let mut row = FieldRow {
             low: low.extend(0.0),
             high: high.extend(0.0),
-            fade: Vec4::new(gone, 0.0, 0.0, 0.0),
-            sky: entry.sky,
-            block: entry.block,
+            fade: Vec4::new(gone, blend, carries, 0.0),
+            sky,
+            block,
             look: current.look,
             lights: current.lights,
         };
@@ -739,6 +805,14 @@ fn light_from_the_field(
     // Every so often, forget the meshes that are gone.
     if now % 600 == 0 {
         cache.retain(|_, c| c.seen == now);
+    }
+    if corners_moved.0 > 0 {
+        info!(
+            "BAKED_LIGHT frame={} corners re-read under a new field: {} meshes moved, the most {:.3}",
+            frame_count.map_or(0, |c| c.0),
+            corners_moved.0,
+            corners_moved.1
+        );
     }
     crate::planet::lod::spent(
         &format!("field corners: {seen} meshes, {rewritten} rows rewritten"),
@@ -897,6 +971,19 @@ pub struct BakedField {
     bounds: Option<(Vec3, f32)>,
     /// A bake being made a slice a frame, swapped in whole when done.
     pending: Option<PendingBake>,
+    /// When the bake it carries was swapped in, seconds of the app's clock:
+    /// it blends from the one before it (its vertex colour) from then
+    /// (`baked-light-ease` 7.4). None before its first.
+    swapped_s: Option<f32>,
+}
+
+impl BakedField {
+    /// How far the mesh has blended from the bake before to the one it
+    /// carries, `now_s` seconds into the app: one when there is nothing to
+    /// blend from.
+    pub fn blend(&self, now_s: f32) -> f32 {
+        self.swapped_s.map_or(1.0, |s| light::bake_blend(now_s - s))
+    }
 }
 
 /// Where a bake's light came from.
@@ -918,6 +1005,43 @@ struct PendingBake {
 /// What a town's outside reads before it is baked: the shader takes the
 /// corners where it finds this.
 pub const UNBAKED: [f32; 2] = [-1.0, 0.0];
+
+/// The bake before, in a town's vertex colour, where there was none: the
+/// shader blends from the corners where it finds this (`baked-light-ease`
+/// 7.4). Alpha one, so the colour never thins a cut-out leaf in the shadow
+/// pass, which reads it as a tint.
+pub const UNBAKED_BEFORE: [f32; 4] = [-1.0, 0.0, 0.0, 1.0];
+
+/// The bake to keep in a town's vertex colour when a new one is swapped in
+/// (`baked-light-ease` 7.4): what the mesh shows now, which is the bake it
+/// carries (`shown`) blended from the one before it (`before`) by `blend`. A
+/// vertex not yet baked keeps the marker, and blends from the corners.
+pub fn bake_before(
+    shown: &[[f32; 2]],
+    before: &[[f32; 4]],
+    blend: f32,
+    count: usize,
+) -> Vec<[f32; 4]> {
+    (0..count)
+        .map(|i| {
+            let Some(&[sky, block]) = shown.get(i) else {
+                return UNBAKED_BEFORE;
+            };
+            if sky < 0.0 {
+                return UNBAKED_BEFORE;
+            }
+            match before.get(i) {
+                Some(was) if was[0] >= 0.0 && blend < 1.0 => [
+                    was[0] + (sky - was[0]) * blend,
+                    was[1] + (block - was[1]) * blend,
+                    0.0,
+                    1.0,
+                ],
+                _ => [sky, block, 0.0, 1.0],
+            }
+        })
+        .collect()
+}
 
 /// How far in front of its face a vertex reads the field, metres: in the
 /// air the face looks into, not the wall it is on.
@@ -983,7 +1107,11 @@ fn bake_town_outsides(
     contact: Option<Res<PlanetContact>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut outsides: Query<(&Mesh3d, &mut BakedField)>,
+    count: Option<Res<crate::loading::FrameCount>>,
+    time: Option<Res<Time>>,
 ) {
+    let frame = count.map_or(0, |c| c.0);
+    let now_s = time.map_or(0.0, |t| t.elapsed_secs());
     let (Some(fine), Some(contact)) = (fine, contact) else {
         return;
     };
@@ -1051,7 +1179,9 @@ fn bake_town_outsides(
         };
         if want == BakeSource::Open {
             // Open sky everywhere: no field to read, nothing to slice.
-            m.insert_attribute(Mesh::ATTRIBUTE_UV_1, vec![[1.0f32, 0.0]; count]);
+            let open = vec![[1.0f32, 0.0]; count];
+            log_bake_change(frame, true, uv_1(m), &open);
+            swap_bake(m, state, open, now_s);
             state.baked = Some(BakeSource::Open);
             state.pending = None;
             continue;
@@ -1089,13 +1219,80 @@ fn bake_town_outsides(
         if pending.done.len() == count {
             let done = std::mem::take(&mut pending.done);
             state.pending = None;
-            m.insert_attribute(Mesh::ATTRIBUTE_UV_1, done);
+            log_bake_change(frame, false, uv_1(m), &done);
+            swap_bake(m, state, done, now_s);
             state.baked = Some(want);
         }
     }
     if baked_vertices > 0 {
         crate::planet::lod::spent(&format!("town bake: {baked_vertices} vertices"), started);
     }
+}
+
+/// A mesh's baked `(sky, block)` per vertex, if it carries them.
+fn uv_1(mesh: &Mesh) -> Option<&[[f32; 2]]> {
+    match mesh.attribute(Mesh::ATTRIBUTE_UV_1)? {
+        bevy::mesh::VertexAttributeValues::Float32x2(values) => Some(values),
+        _ => None,
+    }
+}
+
+/// A town's bake before the one it carries, kept in its vertex colour.
+fn colours(mesh: &Mesh) -> Option<&[[f32; 4]]> {
+    match mesh.attribute(Mesh::ATTRIBUTE_COLOR)? {
+        bevy::mesh::VertexAttributeValues::Float32x4(values) => Some(values),
+        _ => None,
+    }
+}
+
+/// Swap a new bake into a town's outside without a step
+/// (`baked-light-ease` 7.4): what it shows now goes into its vertex colour,
+/// the new bake into `UV_1`, and it blends from the one to the other from
+/// `now_s`. Both attributes were there from its spawn, so the mesh's layout
+/// is the same before and after.
+fn swap_bake(mesh: &mut Mesh, state: &mut BakedField, new: Vec<[f32; 2]>, now_s: f32) {
+    let before = bake_before(
+        uv_1(mesh).unwrap_or(&[]),
+        colours(mesh).unwrap_or(&[]),
+        state.blend(now_s),
+        new.len(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, before);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_1, new);
+    state.swapped_s = Some(now_s);
+}
+
+/// MEASUREMENT (`baked-light-ease`): how far a town's swap moves its
+/// vertices' light, logged the frame it is swapped in. A vertex still
+/// unbaked before (it read the corners) is counted apart.
+fn log_bake_change(frame: u64, open: bool, old: Option<&[[f32; 2]]>, new: &[[f32; 2]]) {
+    let (mut sky_sum, mut sky_max, mut block_sum, mut block_max) = (0.0f64, 0.0f32, 0.0f64, 0.0f32);
+    let (mut compared, mut unbaked) = (0usize, 0usize);
+    for (i, now) in new.iter().enumerate() {
+        let Some(was) = old.and_then(|o| o.get(i)) else {
+            unbaked += 1;
+            continue;
+        };
+        if was[0] < 0.0 {
+            unbaked += 1;
+            continue;
+        }
+        let (ds, db) = ((now[0] - was[0]).abs(), (now[1] - was[1]).abs());
+        sky_sum += f64::from(ds);
+        block_sum += f64::from(db);
+        sky_max = sky_max.max(ds);
+        block_max = block_max.max(db);
+        compared += 1;
+    }
+    let n = compared.max(1) as f64;
+    info!(
+        "BAKED_LIGHT frame={frame} town bake swapped: {} vertices, open={open}, unbaked before {unbaked}, sky change mean {:.4} max {:.3}, lamp change mean {:.4} max {:.3}",
+        new.len(),
+        sky_sum / n,
+        sky_max,
+        block_sum / n,
+        block_max
+    );
 }
 
 /// Bevy's own ambient, what lights a PBR face turned from the sun, is the
@@ -1193,6 +1390,169 @@ mod tests {
         const { assert!(UNBAKED[0] < 0.0, "unbaked reads the corners") };
     }
 
+    /// `baked-light-ease` 7.4: a town's new bake goes in without a step. The
+    /// bake it carried goes into its vertex colour and it blends from there
+    /// over `BAKE_EASE_S`; a bake finished mid-blend starts from what was on
+    /// screen; a vertex never baked blends from the corners.
+    #[test]
+    fn a_towns_new_bake_keeps_the_one_before_and_blends_from_it() {
+        let ease = light::BAKE_EASE_S;
+        let mut mesh = Mesh::new(
+            bevy::mesh::PrimitiveTopology::TriangleList,
+            bevy::asset::RenderAssetUsages::default(),
+        )
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vec![[0.0f32; 3]; 3])
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, vec![UNBAKED; 3])
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![UNBAKED_BEFORE; 3]);
+        let mut state = BakedField::default();
+        assert_eq!(state.blend(0.0), 1.0, "nothing to blend from yet");
+
+        // The first bake blends from the corners (the marker).
+        swap_bake(&mut mesh, &mut state, vec![[1.0, 0.0]; 3], 10.0);
+        assert_eq!(colours(&mesh).unwrap(), &[UNBAKED_BEFORE; 3]);
+        assert_eq!(state.blend(10.0), 0.0, "the swap's frame shows the old");
+
+        // Dusk: the lamps come on. The open-sky bake is kept, and blended
+        // from, never swapped out in a frame.
+        swap_bake(&mut mesh, &mut state, vec![[1.0, 0.8]; 3], 20.0);
+        assert_eq!(colours(&mesh).unwrap(), &[[1.0, 0.0, 0.0, 1.0]; 3]);
+        assert_eq!(uv_1(&mesh).unwrap(), &[[1.0, 0.8]; 3]);
+        assert_eq!(state.blend(20.0), 0.0);
+        assert!((state.blend(20.0 + ease * 0.5) - 0.5).abs() < 1e-6);
+        assert_eq!(state.blend(20.0 + ease), 1.0);
+
+        // A bake finished half way through that blend starts from what was
+        // on screen: half way from no lamp to 0.8.
+        swap_bake(
+            &mut mesh,
+            &mut state,
+            vec![[1.0, 0.2]; 3],
+            20.0 + ease * 0.5,
+        );
+        let before = colours(&mesh).unwrap()[0];
+        assert!((before[1] - 0.4).abs() < 1e-5, "{before:?}");
+        assert_eq!(before[3], 1.0, "alpha one: never a tint in the shadow pass");
+
+        // The pure rule, vertex by vertex.
+        let kept = bake_before(
+            &[[1.0, 0.5], UNBAKED, [0.5, 0.0]],
+            &[[1.0, 0.0, 0.0, 1.0], UNBAKED_BEFORE, UNBAKED_BEFORE],
+            0.5,
+            4,
+        );
+        assert_eq!(kept[0], [1.0, 0.25, 0.0, 1.0], "mid-blend: what was shown");
+        assert_eq!(kept[1], UNBAKED_BEFORE, "never baked: the corners");
+        assert_eq!(kept[2], [0.5, 0.0, 0.0, 1.0], "from the corners: the bake");
+        assert_eq!(kept[3], UNBAKED_BEFORE, "a vertex past the old bake");
+        // And the shader blends it so, reading the colour as light.
+        let shader = include_str!("../../../assets/shaders/field_lit.wgsl").replace("\r\n", "\n");
+        for line in [
+            "if field.fade.z > 0.5 && field.fade.y < 1.0 {",
+            "let was = select(vec2<f32>(sky, block), in.color.xy, in.color.x >= 0.0);",
+            "baked = mix(was, baked, field.fade.y);",
+            "tinted.color = vec4<f32>(1.0);",
+            "var pbr_input = pbr_input_from_standard_material(tinted, is_front);",
+        ] {
+            assert!(
+                shader.contains(line),
+                "field_lit.wgsl should carry `{line}`"
+            );
+        }
+    }
+
+    /// `baked-light-ease` 7.6: corners a new field moved under a still mesh
+    /// blend from what they showed; with nothing to blend from they show the
+    /// field.
+    #[test]
+    fn corners_blend_from_what_they_showed() {
+        let ease = light::BAKE_EASE_S;
+        let mut corners = Corners {
+            raw: [Vec3::ZERO; 8],
+            points: [Vec3::ZERO; 8],
+            key: (0, 0, false),
+            sky: [Vec4::ONE; 2],
+            block: [Vec4::splat(0.8); 2],
+            seen: 0,
+            from: None,
+        };
+        assert_eq!(corners.shown(3.0), ([Vec4::ONE; 2], [Vec4::splat(0.8); 2]));
+        corners.from = Some((3.0, [Vec4::ONE; 2], [Vec4::ZERO; 2]));
+        assert_eq!(corners.shown(3.0).1, [Vec4::ZERO; 2], "the swap's frame");
+        let half = corners.shown(3.0 + ease * 0.5).1[0];
+        assert!(
+            (half - Vec4::splat(0.4)).abs().max_element() < 1e-5,
+            "{half}"
+        );
+        assert_eq!(corners.shown(3.0 + ease).1, [Vec4::splat(0.8); 2]);
+    }
+
+    /// `baked-light-ease` 7.4: a town's row carries how far its outside has
+    /// blended from the bake before, frame by frame, and says it carries one;
+    /// a mesh that is not a town's outside carries neither.
+    #[test]
+    fn a_towns_row_carries_its_blend() {
+        let mut world = World::new();
+        let mut standard = Assets::<StandardMaterial>::default();
+        let stone = standard.add(StandardMaterial::default());
+        world.insert_resource(standard);
+        world.insert_resource(Assets::<FieldLitMaterial>::default());
+        let mut buffers = Assets::<ShaderStorageBuffer>::default();
+        let rows = FieldRows::new(&mut buffers);
+        world.insert_resource(buffers);
+        world.insert_resource(rows);
+        world.insert_resource(crate::planet::shadow::SunShadowMaps {
+            map: Handle::default(),
+            cascades: Handle::default(),
+        });
+        let mut time = Time::<()>::default();
+        time.advance_by(std::time::Duration::from_secs(10));
+        world.insert_resource(time);
+        let root = world
+            .spawn((LitByField, LitLikeTerrain, Transform::default()))
+            .id();
+        let piece = |world: &mut World, baked: Option<BakedField>| {
+            let mut e = world.spawn((
+                MeshMaterial3d(stone.clone()),
+                Transform::default(),
+                GlobalTransform::default(),
+            ));
+            if let Some(baked) = baked {
+                e.insert(baked);
+            }
+            let e = e.id();
+            world.entity_mut(root).add_child(e);
+            e
+        };
+        let wall = piece(
+            &mut world,
+            Some(BakedField {
+                swapped_s: Some(10.0),
+                ..default()
+            }),
+        );
+        let ship = piece(&mut world, None);
+        let mut take = IntoSystem::into_system(take_the_field);
+        take.initialize(&mut world);
+        take.run((), &mut world).unwrap();
+        world.flush();
+        let mut lit = IntoSystem::into_system(light_from_the_field);
+        lit.initialize(&mut world);
+        lit.run((), &mut world).unwrap();
+        let fade = |world: &World, e| world.resource::<FieldRows>().row(e).unwrap().fade;
+        assert_eq!(fade(&world, wall), Vec4::new(0.0, 0.0, 1.0, 0.0));
+        assert_eq!(fade(&world, ship), Vec4::ZERO);
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs_f32(light::BAKE_EASE_S * 0.5));
+        lit.run((), &mut world).unwrap();
+        assert!((fade(&world, wall).y - 0.5).abs() < 1e-5);
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs(5));
+        lit.run((), &mut world).unwrap();
+        assert_eq!(fade(&world, wall).y, 1.0);
+    }
+
     /// A fading town is drawn through the terrain's own mask
     /// (`cities-in-the-world` slice 4a), so the two dissolve alike.
     #[test]
@@ -1273,11 +1633,13 @@ mod tests {
             );
         }
         // A town's outside reads the field baked into its vertices, where
-        // it has been baked (`BakedField`).
+        // it has been baked (`BakedField`), blended in from the bake before
+        // it (`baked-light-ease` 7.4).
         assert!(
             shader.contains("if in.uv_b.x >= 0.0 {")
-                && shader.contains("sky = in.uv_b.x;")
-                && shader.contains("block = in.uv_b.y;"),
+                && shader.contains("var baked = in.uv_b;")
+                && shader.contains("sky = baked.x;")
+                && shader.contains("block = baked.y;"),
             "field_lit.wgsl reads the baked field"
         );
         // A room face turned away from a building's light still takes its

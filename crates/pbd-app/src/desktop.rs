@@ -67,6 +67,16 @@ pub struct Launch {
     /// walk up and down a town's lane for a video (`--walk --at` puts it
     /// there).
     pub stroll: Option<f32>,
+    /// `--coast-walk METRES`: a recording instrument (`coast-walk`). The
+    /// walker walks (no sprint) along the shore with the sea on one side,
+    /// crosses the rivers it meets, keeps off cliffs and never digs; logs
+    /// `COAST_START`, `COAST_RIVER` and `COAST_DONE` and quits after that many
+    /// metres along the ground (`--walk --at` puts it on the shore).
+    pub coast_walk: Option<f32>,
+    /// `--clock-runs`: `--time` sets the hour the clock starts from but does
+    /// not stop it (a recording instrument: a walk from golden hour into the
+    /// night).
+    pub clock_runs: bool,
     /// `--stroll-leg SECONDS`: how long the stroll walks before it turns
     /// round (half the stroll when not given): a short leg paces one lane.
     pub stroll_leg: Option<f32>,
@@ -268,6 +278,8 @@ impl Launch {
             frame_log: None,
             walk_distance: None,
             stroll: None,
+            coast_walk: None,
+            clock_runs: false,
             stroll_leg: None,
             sail_for: None,
             frame_graph: false,
@@ -608,6 +620,19 @@ impl Launch {
                     result.stroll = Some(seconds);
                     result.walk = true;
                 }
+                "--coast-walk" => {
+                    i += 1;
+                    let metres: f32 = args
+                        .get(i)
+                        .and_then(|s| s.parse().ok())
+                        .expect("--coast-walk requires metres");
+                    assert!(
+                        metres.is_finite() && metres > 0.0,
+                        "--coast-walk takes metres"
+                    );
+                    result.coast_walk = Some(metres);
+                    result.walk = true;
+                }
                 "--stroll-leg" => {
                     i += 1;
                     let seconds: f32 = args
@@ -680,6 +705,7 @@ impl Launch {
                     );
                 }
                 "--fixed-dt" => result.fixed = true,
+                "--clock-runs" => result.clock_runs = true,
                 "--real-time" => result.real_time = true,
                 "--render-offset" => {
                     let mut components = [0.0; 3];
@@ -1028,7 +1054,11 @@ pub fn run(args: &[String]) {
     // picture is a function of its flags rather than of when it was taken.
     .insert_resource(pbd_app::sky::Sun {
         clock: sun_clock(&launch, saved_seconds),
-        running: launch.time.is_none() && launch.day.is_none() && launch.capture.is_none(),
+        // `PBD_CLOCK_RUNS` (`baked-light-ease`, a measurement switch) keeps it
+        // running in a capture too, at its own rate.
+        running: ((launch.time.is_none() && launch.day.is_none() || launch.clock_runs)
+            && launch.capture.is_none())
+            || pbd_app::sky::clock_runs().is_some(),
     })
     .init_resource::<digging::Aim>()
     .init_resource::<digging::Mining>()
@@ -1149,6 +1179,15 @@ pub fn run(args: &[String]) {
                 .run_if(pbd_app::loading::ready)
                 .after(pbd_app::loading::warm),
         ),
+    )
+    .add_systems(
+        Update,
+        landing_shots
+            .run_if(|launch: Res<Launch>| {
+                launch.capture.is_some() && std::env::var_os("PBD_LANDING_SHOTS").is_some()
+            })
+            .run_if(pbd_app::loading::ready)
+            .after(capture),
     )
     .init_resource::<menu::SaveIndex>()
     .init_resource::<menu::LoadRequest>()
@@ -1294,6 +1333,14 @@ pub fn run(args: &[String]) {
         }
         if launch.stroll.is_some() {
             app.add_systems(PreUpdate, stroll_script.after(bevy::input::InputSystems));
+        }
+        if launch.coast_walk.is_some() {
+            app.add_systems(
+                PreUpdate,
+                coast_script
+                    .after(bevy::input::InputSystems)
+                    .run_if(pbd_app::loading::ready),
+            );
         }
         if launch.swim {
             // The scripted keys have to be written where the real ones are:
@@ -2440,11 +2487,13 @@ fn walk_script(
     }
 }
 
-/// Metres along the ground between two points' directions.
+/// Metres along the ground between two points' directions. From the chord
+/// between the unit directions, not `angle_between`: its `acos` near 1 in
+/// `f32` reads a step under a metre as 0 or 1.66 m, which made a walk's count
+/// two to three times the ground it covered.
 fn ground_m(a: Vec3, b: Vec3) -> f32 {
-    a.normalize_or(Vec3::Y)
-        .angle_between(b.normalize_or(Vec3::Y))
-        * pbd_app::planet::PLANET_RADIUS
+    let chord = a.normalize_or(Vec3::Y).distance(b.normalize_or(Vec3::Y));
+    2.0 * (chord * 0.5).min(1.0).asin() * pbd_app::planet::PLANET_RADIUS
 }
 
 /// The `--stroll` instrument: walk ahead at walking pace for a video, hop
@@ -2565,6 +2614,227 @@ fn stroll_script(
     }
     if now.duration_since(started).as_secs_f32() >= seconds {
         info!("STROLL_DONE");
+        exit.write(AppExit::Success);
+    }
+}
+
+/// Where the coast walk is (`coast-walk`).
+#[derive(Default)]
+struct CoastWalk {
+    started: Option<Instant>,
+    /// The sea's side: +1 the left.
+    side: f32,
+    /// The heading the view is turning toward, and when it was chosen.
+    target: Option<Vec3>,
+    steered: Option<Instant>,
+    last: Option<(Vec3, Instant)>,
+    /// Where the stall clock last reset, and when.
+    anchor: Option<(Vec3, Instant)>,
+    walked_m: f32,
+    rivers: u32,
+    in_river: bool,
+    turns: u32,
+    /// Turns made without getting 4 m from where the first of them was.
+    trapped: u32,
+    trap_at: Option<Vec3>,
+    /// Backing out of a wedge until then.
+    backing: Option<Instant>,
+    /// The last `COAST_PACE` line: where, when, and the count then.
+    pace: Option<(Vec3, Instant, f32)>,
+    path_m: f32,
+    max_step_m: f32,
+    done: bool,
+}
+
+/// The `--coast-walk` instrument (`coast-walk`): walk the shore at walking
+/// pace, steering by `coast_walk::steer` every 0.2 s and turning the view
+/// toward its heading at no more than 50 degrees a second, hopping what
+/// stalls it and turning 40 degrees away from the sea after 1.5 s stuck;
+/// never sprints or digs. It starts when the loading screen lifts, swims at
+/// the surface in water (holding jump, which also climbs out at the bank)
+/// rather than walking the bed into a bank it cannot step, and counts only
+/// ground it gets 1.5 m on from, so shuffling against a bank is not walking.
+fn coast_script(
+    launch: Res<Launch>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    walkers: Query<&Position, With<pbd_app::walking::Walker>>,
+    mut exit: MessageWriter<AppExit>,
+    mut walk: Local<CoastWalk>,
+) {
+    use pbd_app::coast_walk;
+    let Some(goal) = launch.coast_walk else {
+        return;
+    };
+    if !state.active || walk.done {
+        return;
+    }
+    let Ok(position) = walkers.single() else {
+        return;
+    };
+    let here = position.0;
+    let up = here.normalize_or(Vec3::Y);
+    let now = Instant::now();
+    state.captured = true;
+    state.scripted = true;
+    if walk.started.is_none() {
+        let (heading, side) = coast_walk::shore_start(up).unwrap_or((state.view().0, 1.0));
+        walk.side = side;
+        state.face(up, heading);
+        walk.started = Some(now);
+        walk.anchor = Some((here, now));
+        info!(
+            "COAST_START {goal:.0} m, the sea on the {}",
+            if side > 0.0 { "left" } else { "right" }
+        );
+    }
+    let started = walk.started.unwrap_or(now);
+    keys.release(KeyCode::ShiftLeft);
+    // Backing out of a wedge: walk backwards with a hop, then a quarter turn.
+    if let Some(until) = walk.backing {
+        if now < until {
+            keys.release(KeyCode::KeyW);
+            keys.press(KeyCode::KeyS);
+            keys.press(KeyCode::Space);
+            return;
+        }
+        walk.backing = None;
+        keys.release(KeyCode::KeyS);
+        keys.release(KeyCode::Space);
+        let turned =
+            Quat::from_axis_angle(up, -walk.side * std::f32::consts::FRAC_PI_2) * state.view().0;
+        state.face(up, turned);
+        walk.target = Some(turned);
+        walk.steered = Some(now);
+        walk.anchor = Some((here, now));
+    }
+    keys.press(KeyCode::KeyW);
+    // Ground covered, as the walk measures it: a fall, a jump or a rebase is
+    // not walking.
+    if let Some((last, at)) = walk.last {
+        let step = ground_m(here, last);
+        walk.path_m += step;
+        walk.max_step_m = walk.max_step_m.max(step);
+        // Turn toward the chosen heading, no faster than a walker looks round.
+        if let Some(target) = walk.target {
+            let dt = now.duration_since(at).as_secs_f32();
+            let heading = state.view().0;
+            let target = (target - up * target.dot(up)).normalize_or(heading);
+            let angle = heading.angle_between(target);
+            let sign = up.dot(heading.cross(target)).signum();
+            let turn = angle.min(50f32.to_radians() * dt) * sign;
+            if turn.abs() > 1e-5 {
+                state.face(up, Quat::from_axis_angle(up, turn) * heading);
+            }
+        }
+    }
+    walk.last = Some((here, now));
+    if walk
+        .steered
+        .is_none_or(|t| now.duration_since(t).as_secs_f32() >= 0.2)
+    {
+        walk.steered = Some(now);
+        walk.target = match coast_walk::steer(up, state.view().0, walk.side) {
+            Some(choice) => Some(choice.heading),
+            None => Some(
+                Quat::from_axis_angle(up, -walk.side * std::f32::consts::FRAC_PI_2)
+                    * state.view().0,
+            ),
+        };
+    }
+    let in_river = pbd_app::planet::surface_height(up) < 0.0 && coast_walk::in_river(up);
+    if in_river && !walk.in_river {
+        walk.rivers += 1;
+        info!(
+            "COAST_RIVER {} at {:.0} m walked",
+            walk.rivers, walk.walked_m
+        );
+    }
+    walk.in_river = in_river;
+    // Out of a trap once 4 m from where it began.
+    if walk.trap_at.is_some_and(|at| ground_m(here, at) > 4.0) {
+        walk.trapped = 0;
+        walk.trap_at = None;
+    }
+    let (anchor, since) = walk.anchor.unwrap_or((here, now));
+    let swimming = pbd_app::planet::surface_height(up) < 0.0;
+    // Along the ground: a hop against a wall rises 3 m and is not progress.
+    let step = ground_m(here, anchor);
+    if step > 1.5 {
+        if step < 5.0 {
+            walk.walked_m += step;
+        }
+        walk.anchor = Some((here, now));
+        if swimming {
+            keys.press(KeyCode::Space);
+        } else {
+            keys.release(KeyCode::Space);
+        }
+    } else {
+        let stalled = now.duration_since(since).as_secs_f32();
+        // Trapped (a bank the height field said was lower, a tree): three
+        // turns in, hold jump, which climbs out of water; four, back out.
+        if swimming || walk.trapped >= 3 || (stalled > 0.5 && (stalled % 0.7) < 0.05) {
+            keys.press(KeyCode::Space);
+        } else {
+            keys.release(KeyCode::Space);
+        }
+        if walk.trapped >= 4 {
+            walk.backing = Some(now + std::time::Duration::from_millis(1500));
+            walk.trapped = 0;
+            walk.trap_at = None;
+            info!("COAST_BACK backing out at {:.0} m walked", walk.walked_m);
+        }
+        // A tree or a step the height field cannot see: turn away from the
+        // sea and walk on, quickly, as a walker steps round it.
+        if stalled > 1.5 {
+            let away = Quat::from_axis_angle(up, -walk.side * 40f32.to_radians()) * state.view().0;
+            state.face(up, away);
+            walk.target = Some(away);
+            walk.steered = Some(now);
+            walk.turns += 1;
+            walk.trapped += 1;
+            walk.trap_at.get_or_insert(here);
+            walk.anchor = Some((here, now));
+            let (lat, lon) = pbd_core::geo::lat_lon(up).degrees();
+            info!(
+                "COAST_TURN stalled 1.5 s at {:.0} m walked, at {lat:.4} {lon:.4}, {} in this spot",
+                walk.walked_m, walk.trapped
+            );
+        }
+    }
+    // Every 10 s, the pace: ground counted against the straight line, and
+    // whether the walker is in water, so the count can be checked.
+    let walked = walk.walked_m;
+    let (at, then, counted) = *walk.pace.get_or_insert((here, now, walked));
+    let dt = now.duration_since(then).as_secs_f32();
+    if dt >= 10.0 {
+        info!(
+            "COAST_PACE {:.1} m/s counted, {:.1} m/s straight ({:.1} m/s through space), {:.1} m from the centre, {}",
+            (walk.walked_m - counted) / dt,
+            ground_m(here, at) / dt,
+            here.distance(at) / dt,
+            here.length(),
+            if swimming { "swimming" } else { "on land" }
+        );
+        info!(
+            "COAST_PATH {:.1} m/s frame by frame, the largest frame step {:.2} m",
+            walk.path_m / dt,
+            walk.max_step_m,
+        );
+        walk.pace = Some((here, now, walk.walked_m));
+        walk.path_m = 0.0;
+        walk.max_step_m = 0.0;
+    }
+    if walk.walked_m >= goal {
+        walk.done = true;
+        info!(
+            "COAST_DONE {:.0} m in {:.1} s, {} rivers, {} turns",
+            walk.walked_m,
+            now.duration_since(started).as_secs_f32(),
+            walk.rivers,
+            walk.turns
+        );
         exit.write(AppExit::Success);
     }
 }
@@ -2751,6 +3021,88 @@ fn fish_script(
     }
 }
 
+/// Frames kept before a watched landing, every frame for this many after it,
+/// then every `LANDING_SHOT_STRIDE`th to `LANDING_SHOT_LAST` (`landing_shots`).
+const LANDING_SHOT_BEFORE: u32 = 4;
+const LANDING_SHOT_EVERY: u32 = 8;
+const LANDING_SHOT_STRIDE: u32 = 6;
+const LANDING_SHOT_LAST: u32 = 70;
+
+/// A fine set `landing_shots` watches, and the frame it landed on once it has.
+type WatchedLanding = (u64, Option<u32>);
+
+/// MEASUREMENT (`two-set-dissolve` design section 5): with
+/// `PBD_LANDING_SHOTS=27,28` in a capture, frames round the landing of fine
+/// set 27 (and 28) are saved beside the `--capture` path as
+/// `landing-<set>-f<frame>.png`, with a `LANDING_SHOT` line naming the set
+/// drawn: the last `LANDING_SHOT_BEFORE` while it builds, every frame for
+/// `LANDING_SHOT_EVERY` after it lands, then every `LANDING_SHOT_STRIDE`th to
+/// `LANDING_SHOT_LAST` (a second of game time and a little more). A landing
+/// comes when its build ends, which is the wall clock's, so the frames round
+/// one have to come out of one run. It changes nothing drawn.
+fn landing_shots(
+    mut commands: Commands,
+    launch: Res<Launch>,
+    state: Res<CaptureState>,
+    fine: Option<Res<pbd_app::planet::PlanetFine>>,
+    refresh: Res<pbd_app::planet::LodRefresh>,
+    mut watched: Local<Option<Vec<WatchedLanding>>>,
+) {
+    let (Some(fine), Some(path)) = (fine, launch.capture.as_ref()) else {
+        return;
+    };
+    let watched = watched.get_or_insert_with(|| {
+        std::env::var("PBD_LANDING_SHOTS")
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|set| set.trim().parse().ok())
+            .map(|set| (set, None))
+            .collect()
+    });
+    let dir = path.parent().map(PathBuf::from).unwrap_or_default();
+    for (set, landed) in watched.iter_mut() {
+        if fine.version == *set && landed.is_none() {
+            *landed = Some(state.frame);
+        }
+        let since = landed.map(|frame| state.frame - frame);
+        let building = fine.version + 1 == *set && refresh.in_flight_s().is_some();
+        let after = since.is_some_and(|since| {
+            since < LANDING_SHOT_EVERY
+                || (since <= LANDING_SHOT_LAST && since.is_multiple_of(LANDING_SHOT_STRIDE))
+        });
+        if !(building || after) {
+            continue;
+        }
+        let prefix = format!("landing-{set}-f");
+        if building {
+            // Only the last few frames of a build are kept: the disk is not
+            // the place to hold three seconds of 5 MB frames nobody reads. A
+            // frame is saved a few frames after it is asked for, so the older
+            // ones are swept each frame rather than deleted by name once.
+            let keep_from = state.frame.saturating_sub(LANDING_SHOT_BEFORE);
+            for file in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                let name = file.file_name().to_string_lossy().into_owned();
+                let frame = name
+                    .strip_prefix(&prefix)
+                    .and_then(|rest| rest.strip_suffix(".png"))
+                    .and_then(|frame| frame.parse::<u32>().ok());
+                if frame.is_some_and(|frame| frame < keep_from) {
+                    let _ = std::fs::remove_file(file.path());
+                }
+            }
+        }
+        let shot = dir.join(format!("{prefix}{:05}.png", state.frame));
+        info!(
+            "LANDING_SHOT set {set} frame {} drawing set {} frames since its landing {since:?}",
+            state.frame, fine.version
+        );
+        commands
+            .spawn(Screenshot::primary_window())
+            .observe(bevy::render::view::screenshot::save_to_disk(shot));
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn capture(
     mut commands: Commands,
     launch: Res<Launch>,
@@ -2759,8 +3111,37 @@ fn capture(
     stats: Res<FrameStats>,
     progress: Res<TourProgress>,
     mut exit: MessageWriter<AppExit>,
+    count: Option<Res<pbd_app::loading::FrameCount>>,
+    mut burst: Local<Option<Option<(PathBuf, u64, u64)>>>,
 ) {
     state.frame += 1;
+    // MEASUREMENT (`baked-light-ease`): `PBD_CAPTURE_RUN=<dir>,<first>,<count>`
+    // saves every frame from the capture's frame `first` (counted from the
+    // world's first open frame, as `--frames` is, so a run that loads slowly
+    // saves the same stretch) for `count` frames, so a swap can be seen frame
+    // by frame. Each is named by the frame log's frame number, which the
+    // `BAKED_LIGHT` lines give.
+    let run = burst.get_or_insert_with(|| {
+        let spec = std::env::var("PBD_CAPTURE_RUN").ok()?;
+        let mut parts = spec.split(',');
+        let dir = PathBuf::from(parts.next()?.trim());
+        let first = parts.next()?.trim().parse().ok()?;
+        let count: u64 = parts.next()?.trim().parse().ok()?;
+        std::fs::create_dir_all(&dir).ok()?;
+        Some((dir, first, first + count))
+    });
+    if let (Some((dir, first, end)), Some(count)) = (run.as_ref(), count.as_ref())
+        && (*first..*end).contains(&u64::from(state.frame))
+    {
+        let path = dir.join(format!("f{:06}.png", count.0));
+        commands.spawn(Screenshot::primary_window()).observe(
+            move |event: On<ScreenshotCaptured>| {
+                if let Ok(image) = event.image.clone().try_into_dynamic() {
+                    let _ = image.to_rgb8().save(&path);
+                }
+            },
+        );
+    }
     let automatic = launch.capture.is_some() && state.frame >= launch.frames && !state.requested;
     if automatic || input.just_pressed(KeyCode::F12) {
         let path = if automatic {

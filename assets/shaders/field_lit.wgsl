@@ -59,7 +59,8 @@ struct Field {
     // The mesh's bounds in the render frame.
     low: vec4<f32>,
     high: vec4<f32>,
-    // x how far it has faded out.
+    // x how far it has faded out; on a town's outside (z one) y how far it
+    // has blended from the bake before to the one it carries.
     fade: vec4<f32>,
     // The field at the bounds' eight corners, corner `x + 2y + 4z`: sky in
     // `sky[i / 4][i % 4]`, block in `block[i / 4][i % 4]`, each 0..1.
@@ -251,7 +252,15 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     if bayer4(in.position.xy) < field.fade.x {
         discard;
     }
-    var pbr_input = pbr_input_from_standard_material(in, is_front);
+    var tinted = in;
+#ifdef VERTEX_COLORS
+    // A town's outside carries light in its vertex colour (the bake before
+    // the one it carries, `baked-light-ease` 7.4), never a tint.
+    if field.fade.z > 0.5 {
+        tinted.color = vec4<f32>(1.0);
+    }
+#endif
+    var pbr_input = pbr_input_from_standard_material(tinted, is_front);
     pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
 #ifdef PREPASS_PIPELINE
     let out = deferred_output(in, pbr_input);
@@ -266,8 +275,18 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     // face looks into the air (`cities-in-the-world`, "Finding: the stair
     // towers have no light"); the corners until it is baked.
     if in.uv_b.x >= 0.0 {
-        sky = in.uv_b.x;
-        block = in.uv_b.y;
+        var baked = in.uv_b;
+#ifdef VERTEX_COLORS
+        // Blended in from the bake it carried before, or from the corners
+        // where it carried none, never swapped in a frame
+        // (`baked-light-ease` 7.4): `fade.y` of the way.
+        if field.fade.z > 0.5 && field.fade.y < 1.0 {
+            let was = select(vec2<f32>(sky, block), in.color.xy, in.color.x >= 0.0);
+            baked = mix(was, baked, field.fade.y);
+        }
+#endif
+        sky = baked.x;
+        block = baked.y;
     }
 #endif
     let body = in.world_position.xyz - scene.centre.xyz;

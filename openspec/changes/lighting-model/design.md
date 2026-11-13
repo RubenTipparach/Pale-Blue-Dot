@@ -365,7 +365,9 @@ for A/B runs). Where the game differs from the mockup:
   - Both terms are blended across the hex border.
   - There are two bakes on the GPU, and the newest fades in over the older.
     The flood lights what no lamp of the bake reaches, including the glowing
-    flowers, which are not baked.
+    flowers, which are not baked. (Since `baked-light-ease`: the fade is a
+    1 s smoothstep, and a set round a new anchor lands with its own bake
+    instead of drawing the flood until one comes back.)
   - `PBD_LAMP_BAKE=0`.
 - **L8**: the walk is `reflect_trace`, with the column centres as a new
   binding. The screen trace reads the previous frame's colour and distances,
