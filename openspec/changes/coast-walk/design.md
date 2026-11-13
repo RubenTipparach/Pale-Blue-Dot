@@ -19,8 +19,10 @@ from 75 degrees left to 75 right in 15 degree steps is looked along at 4, 8,
 The view turns toward the chosen heading at no more than 50 degrees a second,
 so the camera reads as a walker looking where it goes. Stalled on a step the
 height field cannot see (an edit, a tree), it hops, as the stroll does; 1.5 s
-stuck, it turns 40 degrees away from the sea and walks on. The recording runs
-with `--frame-log`, whose settings have auto step on.
+stuck, it turns 40 degrees away from the sea and walks on; trapped in one
+spot (three turns there) it holds jump, and at four it backs out, walking
+backwards with a hop for 1.5 s, then turns a quarter. It never digs. The
+recording runs with `--frame-log`, whose settings have auto step on.
 
 ## Proven before it is filmed
 
