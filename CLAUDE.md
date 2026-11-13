@@ -241,6 +241,22 @@ use is compiled, and play starts only after that. A pipeline compiled after
 prewarm. Every launch path keeps this: a normal start, `--load`, any render
 scale or other player setting.
 
+## What the owner means by "rain shadow" (owner, 2026-11-13)
+
+**Standing definition from the user:** "rain shadow" is "everything
+pertaining to the heavy volumetric rain fx": "the animated fx that runs in
+the background of rain, it is the rain fog itself included". In the code
+that is the rain volume, the full-screen rain pass and everything that feeds
+it: the rain fog (haze), the animated streaks on its shells, its lighting
+(sky, sun with the cascades' shafts, lamps, lightning) and its half-size
+target and compose (`rain`, `rain_half`, `rain_compose` in `water.wgsl`;
+`rain_needed` in `planet_water.rs`). It is not the near shower (the CPU
+streak mesh in `weather.rs`), the wet ground, or the drops on the lens, which
+the owner calls the rain drops.
+
+The player's RAIN SHADOW setting (`player-settings` 8) turns all of it off,
+and is off by default.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything

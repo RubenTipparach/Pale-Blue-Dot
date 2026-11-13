@@ -1,6 +1,6 @@
 //! The player's own settings (`player-settings`): a frame limit, a render
-//! scale, auto step and the rain's sun shadows, kept in a versioned file in
-//! the user's config directory.
+//! scale, auto step and the rain shadow (the rain volume), kept in a
+//! versioned file in the user's config directory.
 //!
 //! These are the PLAYER's. The tunables in `assets/config/*.ron` are the
 //! developer's and stay where they are. The file is not under `saves/`, names
@@ -108,8 +108,9 @@ pub struct PlayerSettings {
     pub render_scale: u32,
     /// A grounded walker walks up one terrain layer without a key.
     pub auto_step: bool,
-    /// The lit rain's sun shadows: the shafts trees and eaves cast through
-    /// it, six shadow-map samples per stretch of rain near the eye.
+    /// The rain volume, which the owner calls the rain shadow: the rain fog
+    /// and the animated streaks behind the near rain (the full-screen rain
+    /// pass). Off, the near shower, the wet ground and the lens still draw.
     pub rain_shadows: bool,
 }
 
@@ -570,7 +571,7 @@ pub fn follow_auto_step(
     }
 }
 
-/// The rain's sun shadows follow the setting, for the render world
+/// The rain volume follows the setting, for the render world
 /// (`planet_water::RainShadows`).
 pub fn follow_rain_shadows(
     settings: Res<PlayerSettings>,

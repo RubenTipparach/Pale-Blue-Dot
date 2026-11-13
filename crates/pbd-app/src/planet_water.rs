@@ -154,15 +154,12 @@ pub(super) struct WaterView {
     /// the houses and the trees as the wet ground does.
     ssr_clip: Mat4,
     ssr_eye: Vec4,
-    /// x one when the lit rain takes the sun's shadow maps (the player's
-    /// RAIN SHADOWS); yzw spare.
-    rain_light: Vec4,
 }
 
-/// Whether the lit rain takes the sun's shadow maps: the shafts trees and
-/// eaves cast through it (`player-settings` 8). The player's choice, off by
-/// default; on where nothing has chosen (a capture, a test), as before the
-/// setting existed.
+/// Whether the rain volume draws: the rain fog and the animated streaks on
+/// its shells behind the near rain, which the owner calls the rain shadow
+/// (`player-settings` 8). The player's choice, off by default; on where
+/// nothing has chosen (a capture, a test), as before the setting existed.
 #[derive(Resource, Clone, Copy, ExtractResource)]
 pub struct RainShadows(pub bool);
 
@@ -1407,7 +1404,6 @@ fn prepare_water_views(
             } else {
                 Vec4::ZERO
             },
-            rain_light: Vec4::new(if rain_shadows { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0),
         };
         // The puffs under the shown weather, far to near from this eye
         // (`cloud-puffs`).
@@ -1462,7 +1458,10 @@ fn prepare_water_views(
         let map = rain_map.as_deref().filter(|map| {
             !map.values.is_empty() && map.values.iter().any(|value| value.abs() > 1e-3)
         });
+        // RAIN SHADOW off (the player's setting): no rain volume at all;
+        // the near shower, the wet ground and the lens stay.
         let rain_needed = map.is_some()
+            && rain_shadows
             && camera.length() < clouds.clouds.x
             && weather_settings.rain_volume_range_m > 0.0;
         let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
@@ -2322,7 +2321,7 @@ mod tests {
         // The lit rain's lamps are one array of eight lanes (`lighting-model`).
         let lamps = block.matches("array<vec4<f32>, 8>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * lamps;
-        assert_eq!((mat4, vec4, lamps), (4, 61, 1));
+        assert_eq!((mat4, vec4, lamps), (4, 60, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");

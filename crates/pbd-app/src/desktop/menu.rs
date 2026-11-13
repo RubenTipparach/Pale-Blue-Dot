@@ -101,7 +101,7 @@ pub enum MenuAction {
     RenderScale,
     /// Turn auto step on or off.
     AutoStep,
-    /// Turn the rain's sun shadows on or off.
+    /// Turn the rain shadow (the rain volume) on or off.
     RainShadows,
 }
 
@@ -166,11 +166,11 @@ fn settings_label(action: MenuAction, player: &PlayerSettings) -> Option<String>
             }
         ),
         MenuAction::RainShadows => format!(
-            "RAIN SHADOWS: {}",
+            "RAIN SHADOW: {}",
             if player.rain_shadows {
-                "ON  (shafts through the rain)"
+                "ON  (rain fog and streaks)"
             } else {
-                "OFF"
+                "OFF  (no rain fog)"
             }
         ),
         _ => return None,
@@ -535,7 +535,7 @@ pub fn spawn(mut commands: Commands) {
                     // `settings_label`'s, kept up by `label_graphics`.
                     button(panel, "FRAME LIMIT", MenuAction::FrameLimit);
                     button(panel, "RENDER SCALE", MenuAction::RenderScale);
-                    button(panel, "RAIN SHADOWS", MenuAction::RainShadows);
+                    button(panel, "RAIN SHADOW", MenuAction::RainShadows);
                     panel.spawn((
                         Text::new("MOVEMENT"),
                         TextFont {
