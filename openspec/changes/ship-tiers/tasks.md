@@ -11,7 +11,7 @@ Planning only. Nothing below starts until the owner asks for it (CLAUDE.md,
       (Its starship, warp and star map were taken out on 2026-11-12: "Let's
       not do warp".) Art per `docs/mockups/ART-DIRECTION.md`
       (`tools/art/ship_tiers_art.py`).
-- [ ] 0.2a The owner's review (2026-11-12): no warp; the assembly grid four
+- [x] 0.2a The owner's review (2026-11-12): no warp; the assembly grid four
       rings out with crew decks, ladders and hatches inside; more presets.
       The mockup's VAB and tier 3 tab redone to match, and republished.
 - [x] 0.3 GPU screenshots of every tab, day and night where there is ground,

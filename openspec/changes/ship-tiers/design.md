@@ -97,6 +97,17 @@ delta; picking C adds a conic solver and nodes and removes most of the clause.
   layers. The checks add: the command pod can be walked to from the hatch,
   and every crew deck is reached by a ladder. A walker stands on the decks in
   the rocket's frame, as on the cog's deck, on the pad and in flight.
+- **As the mockup builds it** (recommendations taken, ask only with
+  screenshots): interior masses deck 0.15 t, cabin 0.4, ladder 0.05, hatch
+  0.3, airlock 0.5, hull 0.15; a hatch or airlock is two layers tall,
+  standing on a deck, and a cabin counts as headroom where a hull wall does
+  not; the core's decoupler splits its whole layer, and decouplers elsewhere
+  on that layer only draw the separation ring. A stack holds together when
+  every cell touches the core column through other cells. Presets: Small
+  hop, First orbit, Too heavy, Lantern lander, Crew rocket (ring 2, two
+  decks), Heavy lifter (ring 3, cargo deck, airlock), Colony lander (ring 4,
+  752 cells, three decks, fifteen cabins; its upper stage lands on a light
+  world like Lantern, not Pale Blue) and Antimatter lander.
 - **Parts, one cell each** (mockup numbers; tonnes, kN, m/s):
 
   | Part | Where | Mass | Propellant | Thrust | Exhaust |
@@ -173,7 +184,9 @@ Tier 1 reaches: low orbit (535 m/s), Lantern's orbit on a Hohmann arc
 
 ## 6. Tier 3: antimatter
 
-- **Landers anywhere.** An antimatter core gives 60 km/s of delta-v at a TWR of
+- **Landers anywhere.** An antimatter core (1,000 kN, 60 km/s exhaust, 1.0 t;
+  the mockup's four-core lander makes 55 km/s at a TWR of 3.3) gives about
+  60 km/s of delta-v at a TWR of
   3 at 1 g: a lander flies surface to surface (Pale Blue to Cinder, 5 min 10 s,
   9.8 km/s) with no orbit stop.
 - **No warp.** The owner, 2026-11-12: "Let's not do warp." There are no

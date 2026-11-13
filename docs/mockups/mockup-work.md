@@ -19,6 +19,7 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 5 | 2026-11-12 | M20 Pits, Plants and Power (industry) added. |
 | 6 | 2026-11-12 | M21 Rockets to Starships (ship-tiers), published from another session. |
 | 7 | 2026-11-12 | M22 Cranes and Printers, M23 Drydock and Hex Ship Builder and M24 Hangar and Chibi Aircraft (vehicle-yards). |
+| 8 | 2026-11-13 | M21 renamed Rockets and Landers (no warp, bigger walkable rockets). |
 
 Every page on it links back to it: an "All Pale Blue Dot mockups (the tracker)" line under the
 page's title (the thirteen mockups of 2026-11-12, and the survey). The earlier mockups (M14 to M19)
@@ -51,7 +52,7 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 | M18 | Rod, Shovel and School | `fishing.html` | fishing-and-equipment | Drafted (2026-09-24) | https://claude.ai/artifact/9XiEvkxSFJMtqaktg4eovj |
 | M19 | Kestrel, Tern and Loon | `vehicles.html` | vehicles, vehicle-models | Approved for game, recorded: approved, and the Rust port built (vehicles design) | https://claude.ai/artifact/UJebv7EdJUg1NLpvfVHi3D |
 | M20 | Pits, Plants and Power | `industry.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/JBcP2Js3bdQ2uApN3xUnHV |
-| M21 | Rockets to Starships | `ship-tiers.html` | ship-tiers | Drafted (2026-11-12), published from another session | https://claude.ai/artifact/2Sb7mNRv4wauJh8WFoR9eD |
+| M21 | Rockets and Landers (was Rockets to Starships) | `ship-tiers.html` | ship-tiers | Drafted (2026-11-12, another session); revised 2026-11-13: no warp, rockets four rings wide with decks | https://claude.ai/artifact/2Sb7mNRv4wauJh8WFoR9eD |
 | M22 | Cranes and Printers | `construction.html` | vehicle-yards | Drafted (2026-11-12); answers M3's note | https://claude.ai/artifact/2LjxDc7LuNFX6yjPbMLMwc |
 | M23 | Drydock and Hex Ship Builder | `drydock.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/DLRzGBKMJzhhFdayrbCVdx |
 | M24 | Hangar and Chibi Aircraft | `hangar.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/HrLdbcwrwbAD7PN1KojKKu |
