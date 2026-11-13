@@ -262,3 +262,24 @@ fn rain_detail_is_gated_near_the_eye_in_the_new_model_only() {
         assert!(after.contains(skipped), "missing `{skipped}`");
     }
 }
+
+/// `dusk-sky`: seen from the ground the dome is lit on the ground's twilight,
+/// not through the small planet's shadow, which kept high air lit to 34
+/// degrees under and drew its edge across the sky.
+#[test]
+fn the_sky_near_the_ground_keeps_the_grounds_twilight() {
+    let src = include_str!("../../../assets/shaders/sky_atmosphere.wgsl");
+    for line in [
+        "let twilight = smoothstep(-0.12,0.0,sun_height);",
+        "let near_ground = 1.0-smoothstep(shell*0.3,shell,altitude);",
+        "let visible_sun = mix(sun_visibility(p,sun),twilight,near_ground);",
+    ] {
+        assert!(src.contains(line), "missing `{line}`");
+    }
+    // The ground's sky light leaves over the same range (`sun_high`).
+    let core = include_str!("../../pbd-core/src/sky_light.rs");
+    assert!(
+        core.contains("let k = smooth(-0.12, 0.0, e)"),
+        "the ground's twilight moved; move the sky's with it"
+    );
+}
