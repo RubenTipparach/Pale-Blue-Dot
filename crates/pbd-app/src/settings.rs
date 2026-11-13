@@ -99,7 +99,7 @@ pub fn next_scale(percent: u32) -> u32 {
     SCALES[(at + 1) % SCALES.len()]
 }
 
-/// What the player chose. Every default is today's behaviour.
+/// What the player chose.
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlayerSettings {
     pub frame_limit: FrameLimit,
@@ -109,14 +109,28 @@ pub struct PlayerSettings {
     pub auto_step: bool,
 }
 
+/// A new player's settings, the owner's choice (2026-11-13, "default to
+/// this settings"): 60 fps, 85 %, auto step off.
 impl Default for PlayerSettings {
     fn default() -> Self {
         Self {
-            frame_limit: FrameLimit::Off,
-            render_scale: 100,
-            auto_step: true,
+            frame_limit: FrameLimit::Fps60,
+            render_scale: 85,
+            auto_step: false,
         }
     }
+}
+
+impl PlayerSettings {
+    /// What a capture or a benchmark runs with before its flags: the engine
+    /// as it was before these settings existed (uncapped, full size, auto
+    /// step on), so no picture or perf number moved when the player's
+    /// defaults did.
+    pub const ISOLATED: Self = Self {
+        frame_limit: FrameLimit::Off,
+        render_scale: 100,
+        auto_step: true,
+    };
 }
 
 /// The file as written. Every field has a default, so a file that lacks one
@@ -284,7 +298,7 @@ impl SettingsFile {
 pub fn for_launch(isolated: bool, overrides: &Overrides) -> (PlayerSettings, SettingsFile) {
     if isolated {
         return (
-            PlayerSettings::default().with(overrides),
+            PlayerSettings::ISOLATED.with(overrides),
             SettingsFile::default(),
         );
     }
@@ -500,7 +514,13 @@ pub fn apply_render_scale(
                 order: 1,
                 ..default()
             },
-            Msaa::Off,
+            // Bevy's default MSAA, as every other 2D camera on the window
+            // has (the loading screen's): Bevy keys a 2D camera's depth
+            // texture by its target alone, so two on one window share one,
+            // made at whichever's sample count came first. With `Msaa::Off`
+            // here, a launch at a reduced scale met the loading screen's 4x
+            // depth with a 1x colour and wgpu refused the pass.
+            Msaa::default(),
             Tonemapping::None,
             DebandDither::Disabled,
             IsDefaultUiCamera,
@@ -580,12 +600,17 @@ mod tests {
     }
 
     #[test]
-    fn the_defaults_are_todays_game() {
+    fn a_new_player_gets_the_owners_defaults_and_a_benchmark_todays_engine() {
+        // The owner's choice, 2026-11-13: "default to this settings".
         let s = PlayerSettings::default();
-        assert_eq!(s.frame_limit, FrameLimit::Off);
-        assert_eq!(s.frame_limit.period(), None);
-        assert_eq!(s.render_scale, 100);
-        assert!(s.auto_step);
+        assert_eq!(s.frame_limit, FrameLimit::Fps60);
+        assert_eq!(s.render_scale, 85);
+        assert!(!s.auto_step);
+        // Captures and benchmarks keep the engine as it was.
+        let i = PlayerSettings::ISOLATED;
+        assert_eq!(i.frame_limit.period(), None);
+        assert_eq!(i.render_scale, 100);
+        assert!(i.auto_step);
     }
 
     #[test]
@@ -686,7 +711,7 @@ mod tests {
         assert!(!run.auto_step);
         // A capture or a benchmark reads no file and keeps nothing.
         let (isolated, keep) = for_launch(true, &Overrides::default());
-        assert_eq!(isolated, PlayerSettings::default());
+        assert_eq!(isolated, PlayerSettings::ISOLATED);
         assert!(keep.path.is_none());
     }
 

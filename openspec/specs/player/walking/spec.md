@@ -93,7 +93,8 @@ them along the planet's up, so a deck that heels does not tip the walker
 
 ### Requirement: Auto step is the player's choice
 
-With auto step on, which is the default, a grounded walker SHALL walk up a
+Auto step SHALL be off for a new player (the owner's choice, 2026-11-13).
+With auto step on, a grounded walker SHALL walk up a
 rise of one terrain layer without a key. With it off, a grounded walker
 SHALL walk up only rises no taller than a stair's (0.35 m), and a terrain
 layer SHALL stop it until it jumps.

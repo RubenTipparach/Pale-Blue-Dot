@@ -6,6 +6,13 @@ screenshots" rule. They are not the owner's words. The one choice that can be
 shown in pictures, the upscale filter, goes to the survey with its
 screenshots (decision 6).
 
+**New players' defaults, the owner's choice (2026-11-13, "default to this
+settings"):** frame limit 60, render scale 85 %, auto step OFF, bloom ON
+(bloom was already on by default off a Mac). These replace the "today's
+behaviour" defaults in sections 3 to 5 for a player. Captures and
+`--frame-log` runs keep today's engine (`PlayerSettings::ISOLATED`: uncapped,
+100 %, auto step on) under their flags, so no capture or benchmark moved.
+
 ## 1. The menu: the settings page that already exists
 
 **Recommendation taken (ask only with screenshots).** `Escape` opens the
@@ -192,6 +199,15 @@ working, a lot of ghosting"), and fixed:**
   retargets a camera, and runs before `CameraUpdateSystems`, so the new
   target is sized the frame it is set. Whether this is also the ghosting
   is to be confirmed by a capture against the `47e9c07` exe.
+- **A crash launching at a reduced scale** (`cfd4a32`, "Attachments have
+  differing sample counts"). Bevy keys a 2D camera's depth texture by its
+  render target alone, not its MSAA. At launch the loading screen's
+  `Camera2d` (Bevy's default 4x) and the present camera (`Msaa::Off`) were
+  both on the window, so they shared a 4x depth while the present pass drew
+  1x colour. It never showed in play because the scale was changed after
+  loading. The present camera now takes the default MSAA, like every other 2D
+  camera on the window. The cost is a 4x colour buffer at window size for one
+  sprite and the UI.
 
 ## 5. Auto step: ON, OFF
 

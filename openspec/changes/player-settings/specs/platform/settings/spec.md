@@ -36,7 +36,8 @@ world.
 ### Requirement: Captures and benchmarks take their settings from their flags
 
 A run with `--capture` or `--frame-log` SHALL NOT read the player's settings
-file. It SHALL take the defaults, overridden only by `--frame-limit`,
+file. It SHALL take the engine as it was before these settings (uncapped,
+100 percent, auto step on), overridden only by `--frame-limit`,
 `--render-scale` and `--no-auto-step`.
 
 #### Scenario: A benchmark on a player's machine
@@ -48,7 +49,8 @@ file. It SHALL take the defaults, overridden only by `--frame-limit`,
 ### Requirement: The frame rate can be capped at 60 or 120
 
 The player SHALL be able to cap the frame rate at 60 or 120 frames a second,
-or leave it uncapped, which is the default. A cap SHALL hold the mean frame
+or leave it uncapped. A new player's default SHALL be 60 (the owner's choice,
+2026-11-13). A cap SHALL hold the mean frame
 period at the cap without drifting, and SHALL NOT run frames early to make
 up for a late one.
 
@@ -67,12 +69,13 @@ up for a late one.
 ### Requirement: The 3D view can render at a fraction of the window
 
 The player SHALL be able to render the 3D view at 100, 85, 75, 67 or 50
-percent of the window's size, with 100 the default. Below 100 percent the
+percent of the window's size. A new player's default SHALL be 85 (the
+owner's choice, 2026-11-13). Below 100 percent the
 view SHALL be stretched to fill the window, and the HUD and menus SHALL still
 draw at the window's full resolution. At 100 percent the view SHALL render to
 the window directly, with no extra camera or pass.
 
-#### Scenario: The default draws as before
+#### Scenario: Full size draws as before
 
 - **WHEN** the render scale is 100 percent
 - **THEN** every 3D camera targets the window and no present camera exists
