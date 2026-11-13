@@ -480,6 +480,37 @@ Shots (owner's look, since this moves pixels): the Holbrook lane in rain at
 10:00 and 22:00 both ways, a puddle under a wall, a harbour from 30 m and
 300 m, the town in rain, full against half, with a run-to-run noise pair.
 
+### Built and measured (2026-11-12)
+
+`docs/benchmarks/2026-11-12-reflect-half/`: one exe, `PBD_REFLECT_SCALE=1`
+against 0.5, 2 repeats interleaved, latency 2. p50 / p95 / p99 ms:
+
+| scenario | full (inline) | half | terrain GPU, full -> half (+ trace + compose) |
+| --- | ---: | ---: | --- |
+| rain-stroll, 10:00 | 8.27 / 12.94 / 16.79 | **7.03 / 10.46 / 12.68** | 3.75 -> 2.13 (+0.35 +0.05) |
+| rain-stroll, 22:00 | 8.52 / 14.34 / 17.28 | **7.14 / 11.04 / 13.26** | 3.77 -> 2.03 (+0.33 +0.05) |
+| town (rain) | 8.19 / 14.04 / 17.23 | **7.29 / 10.65 / 12.73** | 3.98 -> 2.85 (+0.26 +0.03) |
+| storm | 5.53 / 8.44 / 11.73 | **5.01 / 7.57 / 9.86** | 2.38 -> 1.44 (+0.09 +0.04) |
+| walk | 5.18 / 6.94 / 8.25 | 5.50 / 8.05 / 9.69 | 2.25 -> 2.13 (+0.02 +0.01) |
+
+- **The goal is met in this sitting**: p99 within 16.7 ms in every scenario.
+  On foot in rain the frame gains ~1.3 ms of GPU net, as estimated.
+- **The walk's difference is outside this change**: its slower half run's
+  extra time is the sun's cascades and the transparent pass. Its terrain pass
+  is faster, and the split's own passes cost 0.03 ms where little reflects.
+  The town walk is bimodal in both arms (its wet mode gains 4.5 ms at p99).
+- **One deviation from the plan**: the gather starts each ray 2 cm toward
+  the eye **and 2 cm up**. Toward the eye alone is a millimetre up at a
+  glancing view, and a floor rebuilt from depth a hair low started the walk
+  inside its own layer: the first shots were darker by 1.3/255 in the
+  middle distance, where the walk hit the ground beside it.
+- **At 1.0 the move is exact**: the lane by day and night and the harbour
+  match the build before it to the pixel.
+- **The look**: 6-26% of a rain scene's pixels move, mostly at the ripples'
+  scale (the reflection's content is per 2 x 2). No halo at the wall's foot
+  or the houses' silhouettes. Kept as a recommendation taken (ask only with
+  screenshots); survey T16; `reflect_render_scale: 1.0` puts it back.
+
 ## Ranked optimizations
 
 **Re-ranked on the split (decision 1)**, 2026-11-12. In order of work:

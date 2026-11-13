@@ -83,12 +83,42 @@ fn the_sea_module_compiles() {
 #[test]
 fn the_planet_surface_shader_compiles_with_the_entry_points_its_pipeline_names() {
     let entries = validated_entry_points("planet_surface.wgsl", &planet_surface_source());
-    for entry in ["vertex", "fragment", "shadow_fragment"] {
+    for entry in [
+        "vertex",
+        "fragment",
+        "shadow_fragment",
+        // `lighting-perf` 2.8: the terrain that leaves its traces, and the
+        // half-size pass that runs them (`planet_reflect.rs`).
+        "fragment_split",
+        "reflect_gather",
+    ] {
         assert!(
             entries.iter().any(|name| name == entry),
             "planet_surface.wgsl declares {entries:?}, and the draw pipeline asks for `{entry}`"
         );
     }
+}
+
+/// `reflect_compose.wgsl` as Bevy's composer hands it to naga: its import of
+/// the full-screen vertex's output replaced by that struct.
+pub(crate) fn reflect_compose_source() -> String {
+    let source = include_str!("../../../assets/shaders/reflect_compose.wgsl");
+    let import = "#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput";
+    assert!(
+        source.contains(import),
+        "reflect_compose.wgsl's import moved; update the splice"
+    );
+    source.replacen(
+        import,
+        "struct FullscreenVertexOutput { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32> }",
+        1,
+    )
+}
+
+#[test]
+fn the_reflection_compose_compiles_with_the_entry_point_its_pipeline_names() {
+    let entries = validated_entry_points("reflect_compose.wgsl", &reflect_compose_source());
+    assert!(entries.iter().any(|name| name == "fragment"), "{entries:?}");
 }
 
 #[test]

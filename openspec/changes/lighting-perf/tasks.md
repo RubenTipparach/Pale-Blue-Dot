@@ -72,7 +72,7 @@
       reach (rank 6), only if landing timings show it costs (the night
       sitting did not: -0.04 ms).
 
-- [ ] 2.8 Half resolution (owner, 2026-11-12: "consider like half
+- [x] 2.8 Half resolution (owner, 2026-11-12: "consider like half
       resolutions for expensive stuff like bloom and fog rendering"):
       price every full-screen pass from the per-pass columns (1.2), then
       move the reflection traces (L8, the one expensive full-resolution
@@ -86,6 +86,11 @@
       traces one pixel per 2 x 2; `reflect_compose` adds the hit back by
       depth and direction; `reflect_render_scale: 1.0` keeps today's
       inline traces.
+      (Built: one exe, full against half, `rain-stroll` 8.27 / 12.94 /
+      16.79 to 7.03 / 10.46 / 12.68 ms, at 22:00 17.28 to 13.26 p99, the
+      town 17.23 to 12.73, the storm 11.73 to 9.86; every scenario inside
+      16.7 ms at p99. Shots in `docs/screenshots/lighting-perf/
+      2.8-reflect-half/`, survey T16; recommendation taken.)
 - [x] 2.9 Fog and atmosphere at half resolution (the rain volume, the
       compose's distance fog) only where 1.2's columns show a pass costs
       more than the spread; bloom is already built from a quarter-size

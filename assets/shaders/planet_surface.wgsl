@@ -2153,6 +2153,63 @@ fn ssr_trace(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
     return vec4(0.0);
 }
 
+// ---- `lighting-perf` 2.8: L8's traces at half size ----------------------
+// `reflect_gather` runs at `reflect_render_scale` of the view after the
+// terrain's pass (`planet_reflect.rs`). Each texel takes the first wet pixel
+// of its 2 x 2 that asked (`fragment_split`, sample 0), puts it back where
+// it stands from the depth, and runs the same walk and screen trace the
+// fragment ran inline. Out: the hit, and the ray and distance it was traced
+// for, so the compose weighs it by both. The camera is MSAA; at one sample
+// the terrain traces inline and this does not run.
+struct ReflectView {
+    // Body from clip, less the eye: a pixel's position relative to the eye.
+    body_from_clip: mat4x4<f32>,
+    // xyz the eye (body frame); w the half-size target's scale.
+    eye: vec4<f32>,
+    // xy the full size, zw the half size, pixels.
+    size: vec4<f32>,
+}
+@group(3) @binding(0) var reflect_request: texture_multisampled_2d<u32>;
+@group(3) @binding(1) var reflect_depth: texture_depth_multisampled_2d;
+@group(3) @binding(2) var<uniform> reflect_view: ReflectView;
+
+struct GatherOut {
+    @location(0) hit: vec4<f32>,
+    @location(1) ray: vec4<f32>,
+}
+@fragment
+fn reflect_gather(@builtin(position) at: vec4<f32>) -> GatherOut {
+    let full = vec2<i32>(reflect_view.size.xy);
+    let base = vec2<i32>(floor(at.xy/reflect_view.eye.w));
+    var offsets = array<vec2<i32>,4>(vec2(0,0), vec2(1,1), vec2(1,0), vec2(0,1));
+    var px = vec2<i32>(-1);
+    var req = vec4<u32>(0u);
+    for (var k = 0; k < 4; k++) {
+        let q = min(base + offsets[k], full - 1);
+        let r = textureLoad(reflect_request, q, 0);
+        if (r.y & REQUEST_FLAG) != 0u { px = q; req = r; break; }
+    }
+    if px.x < 0 { return GatherOut(vec4(0.0), vec4(0.0)); }
+    let slot = req.x | ((req.y & 0x7fffu) << 16u);
+    let dir = oct_decode(req.zw);
+    let depth = textureLoad(reflect_depth, px, 0);
+    let ndc = vec2((f32(px.x) + 0.5)/reflect_view.size.x*2.0 - 1.0,
+                   1.0 - (f32(px.y) + 0.5)/reflect_view.size.y*2.0);
+    let h = reflect_view.body_from_clip*vec4(ndc, depth, 1.0);
+    let rel = h.xyz/h.w;
+    let p = reflect_view.eye.xyz + rel;
+    // The fragment stepped 2 cm along its normal, which is not written out.
+    // A step toward the eye leaves the face whichever way it faces, and one
+    // up clears a floor's layer as the normal's did: at a glancing view the
+    // first alone is a millimetre up, and a floor rebuilt from the depth a
+    // hair low starts the walk inside its own solid layer.
+    let origin = p - normalized(rel)*0.02 + normalized(p)*0.02;
+    let cover = clamp(textureSampleLevel(weather_cloud,weather_sampler,normalized(p),0.0).x,0.,1.);
+    var hit = reflect_trace(origin, dir, slot, params.sun.xyz, cover);
+    if hit.a <= 0.0 { hit = ssr_trace(origin, dir); }
+    return GatherOut(hit, vec4(dir, length(rel)));
+}
+
 // The distance haze and the limb, the last of every terrain fragment.
 fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
           distance_to_camera: f32, sun_elevation: f32, daylight: f32, cover: f32,
@@ -2173,6 +2230,9 @@ fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
         *mix(1.,params.rain[4].w,clamp(params.weather.y,0.,1.));
     let fog = (1.-exp(-distance_to_camera*haze_density))*air*daylight*skylight;
     color=mix(color,ground_sky(sun_elevation,cover),fog*0.55);
+    // `lighting-perf` 2.8: what the haze leaves of anything added before it,
+    // for the half-size reflections' compose.
+    split_k = 1.-fog*0.55;
     let rim = pow(1.-clamp(dot(radial,toward_camera),0.,1.),4.);
     color+=vec3(0.07,0.16,0.25)*rim*(0.25+0.75*daylight)*(1.-air)*0.55*skylight;
     return vec4(color,1.);
@@ -2185,6 +2245,51 @@ fn shadow_fragment(input: VertexOut) {
 
 @fragment
 fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
+    return shade_terrain(input);
+}
+
+// `lighting-perf` 2.8: the terrain with L8's traces left to a half-size pass
+// (`planet_reflect.rs`). The colour is the miss (no hit), as `fragment` draws
+// it where nothing is hit; beside it, a wet pixel's request (its column slot
+// and its reflected ray) and what a hit would replace, through the haze, so
+// `reflect_compose.wgsl` adds `k*fr*H*h - h*k*B` back exactly.
+struct SplitOut {
+    @location(0) color: vec4<f32>,
+    @location(1) request: vec4<u32>,
+    @location(2) replaced: vec4<f32>,
+}
+@fragment
+fn fragment_split(input: VertexOut) -> SplitOut {
+    split_on = true;
+    let color = shade_terrain(input);
+    return SplitOut(color, split_request, vec4(split_b*split_k, split_fr*split_k));
+}
+
+// What `fragment_split` writes, set where `shade` decides it.
+var<private> split_on: bool = false;
+var<private> split_request: vec4<u32> = vec4<u32>(0u);
+var<private> split_fr: f32 = 0.0;
+var<private> split_b: vec3<f32> = vec3<f32>(0.0);
+var<private> split_k: f32 = 1.0;
+// A unit vector to two `unorm16` (octahedral) and back.
+fn oct_encode(v: vec3<f32>) -> vec2<u32> {
+    var p = v.xy/(abs(v.x) + abs(v.y) + abs(v.z));
+    if v.z < 0.0 {
+        p = (1.0 - abs(p.yx))*select(vec2(-1.0), vec2(1.0), p >= vec2(0.0));
+    }
+    return vec2<u32>(round(clamp(p*0.5 + 0.5, vec2(0.0), vec2(1.0))*65535.0));
+}
+fn oct_decode(e: vec2<u32>) -> vec3<f32> {
+    let p = vec2<f32>(e)/65535.0*2.0 - 1.0;
+    var v = vec3(p, 1.0 - abs(p.x) - abs(p.y));
+    if v.z < 0.0 {
+        v = vec3((1.0 - abs(v.yx))*select(vec2(-1.0), vec2(1.0), v.xy >= vec2(0.0)), v.z);
+    }
+    return normalized(v);
+}
+const REQUEST_FLAG: u32 = 0x8000u;
+
+fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // A pixel's footprint on the ground, metres: taken before anything can
     // branch, since a derivative needs every pixel of its quad. The new wet
     // film fades rings under it and widens its lobe by it (specular AA).
@@ -2605,19 +2710,28 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
             // L8: what the reflected ray really reaches, where it finds it.
             let fr = fresnel*(1.-rough)*k_mirror*mix(0.45,1.,puddle)*wet;
             var hit = vec4(0.);
-            if fr > 0.03 {
+            let request = fr > 0.03 && split_on;
+            if request {
+                // Traced at half size (`lighting-perf` 2.8): this pixel draws
+                // the miss and asks.
+                let ray = oct_encode(r);
+                split_request = vec4(input.slot & 0xffffu,
+                    ((input.slot >> 16u) & 0x7fffu) | REQUEST_FLAG, ray.x, ray.y);
+            } else if fr > 0.03 {
                 hit = reflect_trace(input.position+n*0.02, r, input.slot, sun, here_cover);
                 // Voxels first (owner); the screen where they find nothing.
                 if hit.a <= 0.0 { hit = ssr_trace(input.position+n*0.02, r); }
             }
+            let env_miss = env;
             env = mix(env,hit.rgb,hit.a);
             color = color*(1.-fr)+env*fr;
             // The key light's glint, wider under cover so a storm keeps a soft
             // sheen; hidden where the reflection finds a surface in front of it.
             let a_key = max(a,0.02+0.25*here_cover);
             let key = sun_air(sun_elevation)*sun_dim*sunlight;
-            color += min(spec_light(wet_n,toward_camera,sun,key*3.14159,a_key),vec3(3.))
-                *shade*wet*(1.-hit.a);
+            let glint = min(spec_light(wet_n,toward_camera,sun,key*3.14159,a_key),vec3(3.))
+                *shade*wet;
+            color += glint*(1.-hit.a);
             // Each lamp's own highlight, where its light reaches this face (the
             // field's block channel says so: none through a wall).
             var ls = vec3(0.);
@@ -2631,8 +2745,13 @@ fn fragment(input: VertexOut) -> @location(0) vec4<f32> {
                         TORCH_TINT*TORCH_GAIN*lamp_at.w*11.6/(4.84+d*d)*(1.-d/16.),max(a,0.02));
                 }
             }
-            color += min(ls,vec3(6.))*params.wet.z*wet*lamp_share(skylight,daylight)
-                *clamp(lamp*3.,0.,1.)*(1.-0.8*hit.a);
+            let lamp_glints = min(ls,vec3(6.))*params.wet.z*wet*lamp_share(skylight,daylight)
+                *clamp(lamp*3.,0.,1.);
+            color += lamp_glints*(1.-0.8*hit.a);
+            if request {
+                split_fr = fr;
+                split_b = fr*env_miss + glint + 0.8*lamp_glints;
+            }
             return finish(color, radial, toward_camera, distance_to_camera, sun_elevation, daylight, cover, skylight);
         }
         let r_up = dot(r,wet_up);

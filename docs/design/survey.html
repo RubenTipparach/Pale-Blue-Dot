@@ -236,6 +236,23 @@ const SECTIONS = [
             { id: 'town-day', label: 'Town, 10:00' },
             { id: 'shore-300m-rain', label: 'Shore from 300 m' },
           ] } },
+      { id: 'T16', q: 'Trace wet ground\'s reflections at half size? On foot in rain the reflections (the ray that finds the houses, the walls and the sky in a puddle) were the largest piece of the frame left: tracing one pixel in each 2 x 2 and laying the result back by depth and direction takes Holbrook\'s lane from 8.3 to 7.0 ms per frame and its worst 1% from 16.8 to 12.7 ms (at 22:00 17.3 to 13.3; the town walk 17.2 to 12.7). With it, every test route stays above 60 fps for 99% of frames. The ripples still bend the sky at full size; what the reflection shows is now per 2 x 2 pixels, so 6-26% of a rainy frame\'s pixels move, mostly at the ripples\' scale. No halo at a wall\'s foot.',
+        options: ['Half size (0.5), the setting kept', 'Full size, as before (1.0)'], rec: 0,
+        why: 'It is what brings the rain to 60 fps at the worst 1%, and the reflected houses read the same. reflect_render_scale in lighting.ron puts the full-size traces back whenever you want them.',
+        change: 'lighting-perf (task 2.8)', asked: '2026-11-12',
+        compare: {
+          base: 'img/t16/', a: 'Full size (today)', b: 'Half size (recommended)',
+          note: 'Every frame is 1440 x 900, straight from the game (--capture, same build, same frame 300; only reflect_render_scale differs). Zoom in and drag either picture: both move together. "Difference x8" shows where full and half differ, brightened 8 times, beside the difference between two full-size runs of the same frame, the game\'s own run-to-run noise (the harbour from 300 m is not repeatable even at full size).',
+          scenes: [
+            { id: 'puddle-wall', label: 'Puddle under a wall' },
+            { id: 'lane-day-south', label: 'Lane, 10:00, south' },
+            { id: 'lane-day-north', label: 'Lane, 10:00, north' },
+            { id: 'lane-night-south', label: 'Lane, 22:00, south' },
+            { id: 'lane-night-north', label: 'Lane, 22:00, north' },
+            { id: 'town-rain', label: 'Holbrook from 25 m' },
+            { id: 'harbour-30m', label: 'Harbour from 30 m' },
+            { id: 'harbour-300m', label: 'Harbour from 300 m' },
+          ] } },
     ] },
 ];
 
