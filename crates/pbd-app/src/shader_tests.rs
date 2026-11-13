@@ -283,3 +283,21 @@ fn the_sky_near_the_ground_keeps_the_grounds_twilight() {
         "the ground's twilight moved; move the sky's with it"
     );
 }
+
+/// `water-lit`: the water's body and murk are albedos lit by the light on open
+/// water, not colours drawn as they are under a day/night floor.
+#[test]
+fn the_water_is_lit_not_luminous() {
+    let src = include_str!("../../../assets/shaders/water.wgsl");
+    for line in [
+        "return view.deep_color.rgb*view.water_light.rgb*exp(-absorption*max(eye_depth,0.0));",
+        "let transmitted = mix(albedo*water_lit,scene,exp(-absorption*path_length));",
+        "var reflected = water_sky_radiance(water_sky_frame(reflected_ray,radial,sun_direction));",
+    ] {
+        assert!(src.contains(line), "missing `{line}`");
+    }
+    assert!(
+        !src.contains("view.absorption.w"),
+        "the night floor is gone"
+    );
+}

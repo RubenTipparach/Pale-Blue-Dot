@@ -2467,6 +2467,8 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // darker for a cloud over the hill it is dug into.
     var color = albedo*(fill*max(AMBIENT_FLOOR,mix(night,1.,daylight)*skylight*fill_dim)
         + vec3(1.12,1.03,0.87)*direct*skylight)*gain;
+    // The light this face takes, for the seabed's tint below (`water-lit`).
+    var face_light = vec3(1.0);
     if params.light.x > 0.5 {
         // `lighting-model` L1 + L2: the sun takes the colour of the air it came
         // through at THIS face's own elevation, and the shade is lit by the sky
@@ -2475,7 +2477,8 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         // fill: the sky's own light says what a wall and a cap get.
         let amb = max(max(sh_irradiance(sky_frame(n, radial, sun), here_cover), vec3(0.0))*skylight,
             vec3(0.006, 0.008, 0.011));
-        color = albedo*(amb + sun_air(sun_elevation)*max(dot(n,sun),0.0)*sun_dim*shade*skylight);
+        face_light = amb + sun_air(sun_elevation)*max(dot(n,sun),0.0)*sun_dim*shade*skylight;
+        color = albedo*face_light;
         // L4: the sun thrown back off the faces round this one (baked in the
         // field), as dim as the cloud makes the sun here. The field does not
         // say where it came from, and most of the air over a floor was lit by
@@ -2557,7 +2560,10 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let water_depth = max(water_surface - length(input.position), 0.);
     if water_depth > 0. {
         let attenuation = exp(-params.water_absorption.rgb*water_depth);
-        color = mix(color*attenuation, params.water_deep.rgb*attenuation,
+        // The water's deep albedo lit as this face is (`water-lit`): the deep
+        // colour is an albedo now, and bare it would be a near-black seabed
+        // under the new model, as unlit it glowed under the old one.
+        color = mix(color*attenuation, params.water_deep.rgb*face_light*attenuation,
             (1.-dot(attenuation,vec3(1./3.)))*0.5);
     }
     // Rain wetness, gated by whether rain REACHES this face - the column's

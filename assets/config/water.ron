@@ -25,12 +25,15 @@
     refract_amount: 0.04,
     refract_max_uv: 0.03,
     max_path_m: 200.0,
-    absorption_per_m: (0.90, 0.25, 0.08),
-    deep_color: (0.0, 0.12, 0.28),
-    sky_horizon_color: (0.10, 0.36, 0.72),
-    sky_zenith_color: (0.03, 0.18, 0.55),
-    night_sky_color: (0.035, 0.070, 0.100),
-    sky_horizon_strength: 0.22,
+    // The water is lit, not luminous (`water-lit`, after crab-breeze's
+    // water-look): the deep sea a near-black navy that the sky it mirrors
+    // colours, teal shallows easing to it over 14 m of water, and clear
+    // water (Pope and Fry, blue-green halved after Lee 2015).
+    absorption_per_m: (0.32, 0.035, 0.012),
+    deep_color: (0.004, 0.018, 0.040),
+    shallow_color: (0.020, 0.090, 0.075),
+    shallow_depth_m: 14.0,
+    sky_horizon_strength: 0.7,
     foam_crest_lo: 0.35,
     foam_crest_hi: 0.60,
     foam_crest_weight: 0.55,
@@ -42,7 +45,6 @@
     specular_intensity: 0.06,
     specular_power: 140.0,
     sun_tint: (1.10, 1.15, 1.20),
-    night_floor: 0.18,
     fog_max: 0.82,
     rain_ripple_scale: 3.0,
     rain_ripple_strength: 6.0,

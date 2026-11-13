@@ -29,11 +29,11 @@ struct WaterView {
     waves: vec4<f32>,         // xyz spare, w the ripples' steepness (the swell is `sea`)
     ripple: vec4<f32>,        // ripple scale cells/m, ripple speed, rain ripple cells/m, rain ripple strength
     refraction: vec4<f32>,    // strength, max uv offset, slope cap, max path m
-    absorption: vec4<f32>,    // rgb per metre, w night floor
-    deep_color: vec4<f32>,    // rgb, w falling-face flow speed
-    horizon_color: vec4<f32>, // rgb, w horizon (grazing) reflection floor
-    zenith_color: vec4<f32>,
-    night_sky: vec4<f32>,     // rgb the sky the sheet mirrors at night, w atmosphere radius m
+    absorption: vec4<f32>,    // rgb per metre, w spare
+    deep_color: vec4<f32>,    // rgb the deep's albedo, w falling-face flow speed
+    shallow: vec4<f32>,       // rgb the shallows' albedo, w horizon (grazing) reflection floor
+    water_light: vec4<f32>,   // rgb the light on open water at the camera, w shallows' depth m
+    haze: vec4<f32>,          // the terrain's cloud_fog_add, rain_fog_mult, overcast blue cut, overcast dim
     foam_color: vec4<f32>,    // rgb, w foam intensity
     foam_crest: vec4<f32>,    // lo, hi, weight, spare
     foam_slope: vec4<f32>,    // lo, hi, weight, spare
@@ -116,6 +116,10 @@ struct WaterView {
     // and its eye (w one once there is one, and reflections are on).
     ssr_clip: mat4x4<f32>,
     ssr_eye: vec4<f32>,
+    // `water-lit`: the cover and the rain over the camera (the haze's); the
+    // sky's nine L2 coefficients at the camera, mixed by the cover.
+    haze_weather: vec4<f32>,
+    sky_sh: array<vec4<f32>, 9>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -372,58 +376,65 @@ fn reconstruct_local(uv: vec2<f32>, depth: f32) -> vec3<f32> {
     // Callers avoid depth=0 infinite-far reconstruction.
     return homogeneous.xyz/max(abs(homogeneous.w),1e-8)*sign(homogeneous.w);
 }
-// The far water seen from inside it. The deep colour is what the surface reads
-// at the waterline; under it the light has crossed the eye's own depth of
-// water, so the murk darkens with depth as the seabed under it already does
-// (the terrain attenuates by its water depth), and at night it takes the same
-// ambient floor the surface body takes. Left at the bare deep colour it was
-// one blue at half a metre and at eight, and a lit room under a dark sky.
+
+// The water's murk at `eye_depth` metres under its surface: the deep's albedo
+// lit by the light on open water, dimmed by the water above (`water-lit`).
+// Lit, not luminous: it darkens with the land at dusk, under cloud and at
+// night. It was a fixed deep colour scaled only by a day/night floor, a
+// glowing blue under a black sky.
 fn murk(eye_depth: f32, radial: vec3<f32>) -> vec3<f32> {
     let absorption = max(view.absorption.rgb,vec3<f32>(0.0));
-    let sun_elevation = dot(radial,safe_normal(view.sun.xyz));
-    let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),sun_elevation);
-    let lit = mix(clamp(view.absorption.w,0.,1.),1.0,daylight);
-    return view.deep_color.rgb*exp(-absorption*max(eye_depth,0.0))*lit;
+    return view.deep_color.rgb*view.water_light.rgb*exp(-absorption*max(eye_depth,0.0));
 }
 
-// The sky the sheet mirrors at night, along the reflected ray. This engine's
-// night sky is its upper atmosphere lit over the limb, a twilight that fades
-// away from the terminator and is black past it: three to one across one
-// frame, measured. One colour in every direction was brighter than the sky on
-// the side away from the sun and a glowing sheet under a black one. So the
-// reflection asks the sky's own question (`sun_visibility` in the sky shader)
-// of the point where the reflected ray leaves the atmosphere: does the sun's
-// ray from there clear the planet. Lit, it is the night colour scaled by how
-// much the ray faces the sun, which is where the twilight is; unlit, nothing.
-fn night_sky(reflected: vec3<f32>, camera_body: vec3<f32>, sun: vec3<f32>) -> vec3<f32> {
-    let ground = view.planet_center.w;
-    let shell = max(view.night_sky.w,ground+1.0);
-    // Exit distance of the reflected ray from the shell; the camera is inside it.
-    let b = dot(camera_body,reflected);
-    let c = dot(camera_body,camera_body)-shell*shell;
-    let t = -b+sqrt(max(b*b-c,0.0));
-    let top = camera_body+reflected*t;
-    let along = dot(top,sun);
-    let clearance = length(top-sun*along)-ground;
-    let lit = select(1.0,smoothstep(0.0,shell-ground,clearance),along < 0.0);
-    let facing = 0.35+0.65*smoothstep(-0.6,0.6,dot(reflected,sun));
-    return view.night_sky.rgb*lit*facing;
+// The terrain's sky frame (`sky_frame` in `planet_surface.wgsl`): a
+// direction in the local frame the sky's coefficients are in, y up and the
+// sun in the x-y plane.
+fn water_sky_frame(n: vec3<f32>, up: vec3<f32>, sun: vec3<f32>) -> vec3<f32> {
+    let sx = sun - up*dot(sun, up);
+    let l = length(sx);
+    let ax = select(safe_normal(cross(up, vec3<f32>(0.0, 0.0, 1.0)) + vec3<f32>(1e-4, 0.0, 0.0)), sx/l, l > 1e-4);
+    let az = cross(ax, up);
+    return vec3<f32>(dot(n, ax), dot(n, up), dot(n, az));
 }
 
-// The terrain's own haze, so the sheet and the ground fog out together. The
-// terrain shader still carries these as literals; lifting them into one
-// uniform is task 2 of preview-scale-and-shader-parity, and until then the
-// values here are the same numbers fed from Rust.
+// The sky's radiance toward a local direction, out of the camera's nine
+// coefficients (`sh_radiance` in `planet_surface.wgsl`, which the wet ground
+// mirrors): what the sheet reflects where nothing nearer is found. It greys
+// under cloud and darkens at dusk and at night with the sky itself.
+fn water_sky_radiance(d: vec3<f32>) -> vec3<f32> {
+    let x = d.x; let y = d.y; let z = d.z;
+    let b = array<f32, 9>(0.282095, 1.5*0.488603*y, 1.5*0.488603*z, 1.5*0.488603*x,
+        4.0*1.092548*x*y, 4.0*1.092548*y*z, 4.0*0.315392*(3.0*z*z - 1.0), 4.0*1.092548*x*z, 4.0*0.546274*(x*x - y*y));
+    var e = vec3<f32>(0.0);
+    for (var k = 0u; k < 9u; k++) {
+        e += view.sky_sh[k].xyz*b[k];
+    }
+    return max(e, vec3<f32>(0.0));
+}
+
+// The terrain's haze colour (`ground_sky` in `planet_surface.wgsl`): the
+// clear sky's colour greyed and dimmed by the cover.
+fn water_ground_sky(sun_elevation: f32, cover: f32) -> vec3<f32> {
+    let clear = mix(vec3<f32>(0.10,0.20,0.29),vec3<f32>(0.32,0.49,0.57),max(sun_elevation,0.));
+    let grey = vec3<f32>(dot(clear,vec3<f32>(0.2126,0.7152,0.0722)));
+    return mix(clear,grey,cover*view.haze.z)*(1.-cover*view.haze.w);
+}
+
+// The terrain's own haze (`finish` in `planet_surface.wgsl`), so the sheet and
+// the shore beside it fog to one colour: the same density, thickened by the
+// cover and the rain, toward the same overcast-greyed sky. w the share.
 fn distance_fog(local_position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>) -> vec4<f32> {
     let camera_body = view.camera_time.xyz - view.planet_center.xyz;
     let altitude = max(length(camera_body) - view.planet_center.w, 0.0);
-    let air = exp(-altitude/max(view.fog_day.w,1.0));
+    let air = exp(-altitude/1050.0);
     let sun_elevation = dot(radial,sun);
     let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),sun_elevation);
+    let cover = clamp(view.haze_weather.x,0.0,1.0);
+    let density = 0.00036*(1.0+cover*view.haze.x)*mix(1.0,view.haze.y,clamp(view.haze_weather.y,0.0,1.0));
     let d = length(view.camera_time.xyz - local_position);
-    let amount = (1.0-exp(-d*max(view.fog_night.w,0.0)))*air*daylight*view.limits.w;
-    let sky = mix(view.fog_night.rgb,view.fog_day.rgb,max(sun_elevation,0.0));
-    return vec4<f32>(sky, min(amount, clamp(view.limits.x,0.0,0.99)));
+    let amount = (1.0-exp(-d*density))*air*daylight*0.55;
+    return vec4<f32>(water_ground_sky(sun_elevation,cover), amount);
 }
 
 @fragment
@@ -504,9 +515,13 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let camera_distance = length(to_camera);
     let look = safe_normal(to_camera);
     var path_length = max(view.refraction.w,0.0);
+    // How deep the water is under this pixel: the shallows' colour eases to
+    // the deep's over `water_light.w` of it. Open sea seen to the sky is deep.
+    var depth_under = 1.0e4;
     if (refracted_depth > 1e-7) {
         let background = reconstruct_local(refracted_uv,refracted_depth);
         path_length = min(path_length,max(length(background-view.camera_time.xyz)-camera_distance,0.0));
+        depth_under = max(length(in.body_position)-length(background-view.planet_center.xyz),0.0);
     }
     let absorption = max(view.absorption.rgb,vec3<f32>(0.));
     // Seen from below: decided by where the camera is, not by the polygon's
@@ -527,40 +542,36 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let reflected_ray = reflect(-look,normal);
     let reflection_height = clamp(dot(reflected_ray,radial),0.,1.);
     let fresnel = (0.02+0.98*pow(1.0-max(dot(look,normal),0.0),5.0))
-        * mix(clamp(view.horizon_color.w,0.,1.),1.,reflection_height);
-    // A reflection is of the SKY, so it is the sky's colour, not an authored
-    // daytime gradient under an ambient floor. Left that way the sea was a lit
-    // blue sheet under a black sky, brighter than the land beside it. It takes
-    // the same day/night sky the distance fog already mixes, which is one
-    // colour written down once and used by both.
-    let sun_elevation = dot(radial,sun_direction);
-    let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),sun_elevation);
-    let day_sky = mix(view.horizon_color.rgb,view.zenith_color.rgb,reflection_height);
-    var reflected = mix(night_sky(reflected_ray,camera_body,sun_direction),day_sky,daylight);
+        * mix(clamp(view.shallow.w,0.,1.),1.,reflection_height);
+    // A reflection is of the SKY, so it is the sky's own radiance along the
+    // reflected ray (`water-lit`): grey under cloud, dark at night, warm at
+    // dusk. It was two authored day blues and a night colour, saturated and
+    // blind to the cover.
+    var reflected = water_sky_radiance(water_sky_frame(reflected_ray,radial,sun_direction));
     // What the reflected ray really meets on the screen: the shore, a house,
     // the trees (`lighting-model` L8). Only where the mirror shows.
     if (fresnel > 0.02) {
         let hit = sea_ssr(in.body_position + radial*0.05, reflected_ray);
         reflected = mix(reflected, hit.rgb, hit.a);
     }
-    let transmitted = mix(view.deep_color.rgb,scene,exp(-absorption*path_length));
+    // The water's own colour is an albedo lit by the light on open water, as
+    // far as the sky reaches the cell (`water-lit`); what is seen through it
+    // is already lit.
+    let water_lit = view.water_light.rgb*clamp(in.sky_light,0.,1.);
+    let albedo = mix(view.shallow.rgb,view.deep_color.rgb,smoothstep(0.0,max(view.water_light.w,1e-3),depth_under));
+    let transmitted = mix(albedo*water_lit,scene,exp(-absorption*path_length));
     let crest = smoothstep(view.foam_crest.x,max(view.foam_crest.y,view.foam_crest.x+1e-4),height)*view.foam_crest.z;
     let slope = smoothstep(view.foam_slope.x,max(view.foam_slope.y,view.foam_slope.x+1e-4),raw_slope)*view.foam_slope.z;
     let foam = clamp(max(crest,slope)*view.foam_color.w,0.,1.);
-    // The night floor is an AMBIENT level: it belongs to the light that reaches
-    // the water body and the foam on it, and not to the reflection, which
-    // carries the sky's own level already. Applied to both, as it was, the sea
-    // at night was dimmed twice and went black at the horizon, where a mirror
-    // should be closest to the sky it mirrors. At day it is one, so nothing
-    // above the terminator moves.
-    let lit = mix(clamp(view.absorption.w,0.,1.),1.,daylight*clamp(in.sky_light,0.,1.));
-    var color = mix(mix(transmitted*lit,reflected,fresnel),view.foam_color.rgb*lit,foam);
+    // Foam is lit as the water is; the glint is the sun as it reaches the
+    // water, after the air and the cloud (`rain_sun`), gone at night.
+    var color = mix(mix(transmitted,reflected,fresnel),view.foam_color.rgb*water_lit,foam);
     let half_vector = safe_normal(look+sun_direction);
     color += view.sun_tint.rgb
         *pow(max(dot(normal,half_vector),0.),max(view.sun_tint.w,1.))
-        *view.sun.w*lit;
+        *view.sun.w*view.rain_sun.rgb*clamp(in.sky_light,0.,1.);
     let fog = distance_fog(in.local_position,radial,sun_direction);
-    let fogged = mix(color,fog.rgb,fog.a);
+    let fogged = mix(color,fog.rgb,fog.a*clamp(in.sky_light,0.,1.));
     // The clouds over this water are the clouds pass's, drawn after the sheet
     // over everything against depth.
     return vec4<f32>(fogged,1.);

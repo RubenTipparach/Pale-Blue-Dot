@@ -65,12 +65,21 @@ pub(super) struct WaterView {
     waves: Vec4,
     ripple: Vec4,
     refraction: Vec4,
+    /// rgb absorption per metre; w spare.
     absorption: Vec4,
+    /// rgb the deep water's albedo; w the falling-water flow speed.
     deep_color: Vec4,
-    horizon_color: Vec4,
-    zenith_color: Vec4,
-    /// The sky the sheet mirrors at night; the day gradient ramps to it.
-    night_sky: Vec4,
+    /// `water-lit`: rgb the shallows' albedo; w the Fresnel's horizon floor.
+    shallow: Vec4,
+    /// rgb the light on open water at the camera, the terrain's for a cap
+    /// under open sky (the sky's L2 irradiance up, plus the sun after the air
+    /// as dim as the cloud makes it); w the depth over which the shallows
+    /// become the deep, m.
+    water_light: Vec4,
+    /// The terrain's haze terms (`finish` in `planet_surface.wgsl`):
+    /// `cloud_fog_add`, `rain_fog_mult`, `overcast_sky_blue_cut`,
+    /// `overcast_sky_dim`.
+    haze: Vec4,
     foam_color: Vec4,
     foam_crest: Vec4,
     foam_slope: Vec4,
@@ -154,6 +163,26 @@ pub(super) struct WaterView {
     /// the houses and the trees as the wet ground does.
     ssr_clip: Mat4,
     ssr_eye: Vec4,
+    /// `water-lit`: the cover and the rain over the camera, for the haze; zw
+    /// spare.
+    haze_weather: Vec4,
+    /// The sky's nine L2 coefficients at the camera, mixed by the cover
+    /// (`sky_sh_pair`): the sky the sheet mirrors where the screen trace
+    /// finds nothing nearer (`sh_radiance`).
+    sky_sh: [Vec4; 9],
+}
+
+/// The light on open water and the sky's coefficients, both by the cover:
+/// the terrain's light for a cap under open sky (`water-lit`). `e` is the
+/// sine of the sun's elevation at the camera.
+fn water_light(e: f32, cover: f32) -> (Vec3, [Vec4; 9]) {
+    let cover = cover.clamp(0.0, 1.0);
+    let pair = super::sky_sh_pair(e);
+    let sh: [Vec4; 9] = std::array::from_fn(|k| pair[k].lerp(pair[k + 9], cover));
+    let coeffs: [[f32; 3]; 9] = std::array::from_fn(|k| sh[k].truncate().to_array());
+    let sky = Vec3::from_array(pbd_core::sky_light::sh_irradiance(&coeffs, [0.0, 1.0, 0.0]));
+    let sun = Vec3::from_array(pbd_core::sky_light::sun_air(e)) * e.max(0.0) * (1.0 - 0.85 * cover);
+    (sky.max(Vec3::ZERO) + sun, sh)
 }
 
 /// Whether the rain volume draws: the rain fog and the animated streaks on
@@ -1257,6 +1286,7 @@ fn prepare_water_views(
                     ),
                 )
             });
+        let (open_water_light, sky_sh) = water_light(sun.elevation(camera), weather.cover);
         let params = WaterView {
             clip_from_local: clip_from_body,
             local_from_clip: clip_from_body.as_dmat4().inverse().as_mat4(),
@@ -1279,11 +1309,16 @@ fn prepare_water_views(
                 s.slope_max,
                 s.max_path_m,
             ),
-            absorption: v3(s.absorption_per_m).extend(s.night_floor),
+            absorption: v3(s.absorption_per_m).extend(0.0),
             deep_color: v3(s.deep_color).extend(s.flow_uv_speed_falling),
-            horizon_color: v3(s.sky_horizon_color).extend(s.sky_horizon_strength),
-            zenith_color: v3(s.sky_zenith_color).extend(0.0),
-            night_sky: v3(s.night_sky_color).extend(crate::sky::ATMOSPHERE_RADIUS),
+            shallow: v3(s.shallow_color).extend(s.sky_horizon_strength),
+            water_light: open_water_light.extend(s.shallow_depth_m),
+            haze: Vec4::new(
+                weather_settings.cloud_fog_add,
+                weather_settings.rain_fog_mult,
+                weather_settings.overcast_sky_blue_cut,
+                weather_settings.overcast_sky_dim,
+            ),
             foam_color: v3(s.foam_color).extend(s.foam_intensity),
             foam_crest: Vec4::new(s.foam_crest_lo, s.foam_crest_hi, s.foam_crest_weight, 0.0),
             foam_slope: Vec4::new(s.foam_slope_lo, s.foam_slope_hi, s.foam_slope_weight, 0.0),
@@ -1396,6 +1431,8 @@ fn prepare_water_views(
                 .map(|fine| super::near_lamps(&fine.set.columns, camera, 32.0))
                 .unwrap_or([Vec4::ZERO; super::NEAR_LAMPS]),
             ssr_clip: planet_view.ssr_clip,
+            haze_weather: Vec4::new(weather.cover, weather.rain, 0.0, 0.0),
+            sky_sh,
             ssr_eye: if lighting
                 .as_ref()
                 .is_some_and(|l| l.reflect_sea_on() && l.reflect_capture_on())
@@ -2311,6 +2348,19 @@ mod tests {
     }
 
     #[test]
+    fn the_light_on_open_water_falls_with_the_sun_and_under_cloud() {
+        let luma = |v: Vec3| v.dot(Vec3::new(0.2126, 0.7152, 0.0722));
+        let (noon, _) = water_light(0.9, 0.0);
+        let (overcast, _) = water_light(0.9, 1.0);
+        let (dusk, _) = water_light(0.02, 0.0);
+        let (night, _) = water_light(-0.5, 0.0);
+        assert!(luma(overcast) < 0.5 * luma(noon), "{overcast} {noon}");
+        assert!(luma(dusk) < 0.5 * luma(noon), "{dusk} {noon}");
+        assert!(luma(night) < 0.05 * luma(noon), "{night} {noon}");
+        assert!(luma(night) > 0.0, "a night is never black");
+    }
+
+    #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {
         // Four mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
         // shipped shader rather than remembered.
@@ -2320,8 +2370,10 @@ mod tests {
         let mat4 = block.matches("mat4x4<f32>").count();
         // The lit rain's lamps are one array of eight lanes (`lighting-model`).
         let lamps = block.matches("array<vec4<f32>, 8>").count();
-        let vec4 = block.matches("vec4<f32>").count() + 7 * lamps;
-        assert_eq!((mat4, vec4, lamps), (4, 60, 1));
+        // And the sky's nine coefficients (`water-lit`).
+        let sh = block.matches("array<vec4<f32>, 9>").count();
+        let vec4 = block.matches("vec4<f32>").count() + 7 * lamps + 8 * sh;
+        assert_eq!((mat4, vec4, lamps, sh), (4, 70, 1, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");
