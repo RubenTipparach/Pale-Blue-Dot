@@ -1335,7 +1335,12 @@ pub fn run(args: &[String]) {
             app.add_systems(PreUpdate, stroll_script.after(bevy::input::InputSystems));
         }
         if launch.coast_walk.is_some() {
-            app.add_systems(PreUpdate, coast_script.after(bevy::input::InputSystems));
+            app.add_systems(
+                PreUpdate,
+                coast_script
+                    .after(bevy::input::InputSystems)
+                    .run_if(pbd_app::loading::ready),
+            );
         }
         if launch.swim {
             // The scripted keys have to be written where the real ones are:
@@ -2639,7 +2644,10 @@ struct CoastWalk {
 /// pace, steering by `coast_walk::steer` every 0.2 s and turning the view
 /// toward its heading at no more than 50 degrees a second, hopping what
 /// stalls it and turning 40 degrees away from the sea after 1.5 s stuck;
-/// never sprints or digs.
+/// never sprints or digs. It starts when the loading screen lifts, swims at
+/// the surface in water (holding jump, which also climbs out at the bank)
+/// rather than walking the bed into a bank it cannot step, and counts only
+/// ground it gets 1.5 m on from, so shuffling against a bank is not walking.
 fn coast_script(
     launch: Res<Launch>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
@@ -2697,11 +2705,7 @@ fn coast_script(
     keys.press(KeyCode::KeyW);
     // Ground covered, as the walk measures it: a fall, a jump or a rebase is
     // not walking.
-    if let Some((last, at)) = walk.last {
-        let step = ground_m(here, last);
-        if step < 5.0 {
-            walk.walked_m += step;
-        }
+    if let Some((_, at)) = walk.last {
         // Turn toward the chosen heading, no faster than a walker looks round.
         if let Some(target) = walk.target {
             let dt = now.duration_since(at).as_secs_f32();
@@ -2744,14 +2748,23 @@ fn coast_script(
         walk.trap_at = None;
     }
     let (anchor, since) = walk.anchor.unwrap_or((here, now));
+    let swimming = pbd_app::planet::surface_height(up) < 0.0;
     if here.distance(anchor) > 1.5 {
+        let step = ground_m(here, anchor);
+        if step < 5.0 {
+            walk.walked_m += step;
+        }
         walk.anchor = Some((here, now));
-        keys.release(KeyCode::Space);
+        if swimming {
+            keys.press(KeyCode::Space);
+        } else {
+            keys.release(KeyCode::Space);
+        }
     } else {
         let stalled = now.duration_since(since).as_secs_f32();
         // Trapped (a bank the height field said was lower, a tree): three
         // turns in, hold jump, which climbs out of water; four, back out.
-        if walk.trapped >= 3 || (stalled > 0.5 && (stalled % 0.7) < 0.05) {
+        if swimming || walk.trapped >= 3 || (stalled > 0.5 && (stalled % 0.7) < 0.05) {
             keys.press(KeyCode::Space);
         } else {
             keys.release(KeyCode::Space);
