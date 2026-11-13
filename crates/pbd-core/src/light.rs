@@ -97,6 +97,24 @@ pub fn lamp_share(sky: f32, daylight: f32) -> f32 {
     1.0 - daylight.clamp(0.0, 1.0) * sky.clamp(0.0, 1.0)
 }
 
+/// Seconds a baked light takes to replace the one before it
+/// (`baked-light-ease`): the lamp bake, a town's outside, a field-lit
+/// thing's corners and the field across dusk all blend over this, so no
+/// surface's light steps in one frame.
+pub const BAKE_EASE_S: f32 = 1.0;
+
+/// How much of a new bake shows `since_s` seconds after it was swapped in:
+/// zero at the swap, one from [`BAKE_EASE_S`] on, a smoothstep between so the
+/// change has no kink at either end. The rest is the bake before it. A
+/// negative or non-finite time is the swap itself.
+pub fn bake_blend(since_s: f32) -> f32 {
+    if !since_s.is_finite() {
+        return if since_s > 0.0 { 1.0 } else { 0.0 };
+    }
+    let t = (since_s / BAKE_EASE_S).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// What a block level (0..1) adds, as linear RGB over a white surface: the
 /// terrain shader's `TORCH_TINT * lamp_strength(lamp) * TORCH_GAIN`, before
 /// [`lamp_share`].
@@ -540,6 +558,37 @@ pub fn wall_corner(
 mod tests {
     use super::*;
     use crate::terrain::Material;
+
+    /// `baked-light-ease`: a new bake shows none of itself on the swap and
+    /// all of itself from `BAKE_EASE_S` on, rises in between, and no frame at
+    /// 60 Hz moves it more than a twentieth of the step: a light eases, it
+    /// never steps.
+    #[test]
+    fn a_new_bake_eases_in_and_never_steps() {
+        assert_eq!(bake_blend(0.0), 0.0);
+        assert_eq!(bake_blend(-1.0), 0.0, "before the swap");
+        assert_eq!(bake_blend(BAKE_EASE_S), 1.0);
+        assert_eq!(bake_blend(BAKE_EASE_S * 3.0), 1.0);
+        assert_eq!(bake_blend(f32::INFINITY), 1.0, "long ago");
+        assert_eq!(bake_blend(f32::NAN), 0.0);
+        assert!((bake_blend(BAKE_EASE_S * 0.5) - 0.5).abs() < 1e-6);
+        let frame = 1.0 / 60.0;
+        let mut last = 0.0f32;
+        let mut largest = 0.0f32;
+        for k in 1..=(BAKE_EASE_S / frame).ceil() as usize + 2 {
+            let now = bake_blend(k as f32 * frame);
+            assert!(now >= last, "it only rises: {last} then {now}");
+            largest = largest.max(now - last);
+            last = now;
+        }
+        assert_eq!(last, 1.0);
+        assert!(
+            largest <= 1.0 / 20.0,
+            "a 60 Hz frame moved {largest} of the step"
+        );
+        // The first frame after the swap is a sliver of the step, not it.
+        assert!(bake_blend(frame) < 0.01, "{}", bake_blend(frame));
+    }
 
     /// Solid to `top` inclusive, air above.
     fn ground(top: usize) -> Column {

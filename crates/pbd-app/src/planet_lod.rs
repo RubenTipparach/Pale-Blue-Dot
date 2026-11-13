@@ -1034,6 +1034,14 @@ pub struct DuskLamps {
     pub lit: bool,
 }
 
+/// The fine-set version the last dusk or dawn relight made
+/// (`baked-light-ease` 7.3): the GPU blends the light field into that version
+/// from the one before it, where it blends nothing else.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq, ExtractResource)]
+pub struct DuskRelight {
+    pub version: u64,
+}
+
 /// Light the street lamps at dusk and put them out at dawn, where the fine
 /// set is anchored.
 ///
@@ -1047,6 +1055,7 @@ pub fn switch_dusk_lamps(
     fine: Option<ResMut<PlanetFine>>,
     contact: Option<ResMut<crate::planet::PlanetContact>>,
     count: Option<Res<crate::loading::FrameCount>>,
+    relight: Option<ResMut<DuskRelight>>,
 ) {
     let (Some(sun), Some(mut fine)) = (sun, fine) else {
         return;
@@ -1073,6 +1082,10 @@ pub fn switch_dusk_lamps(
         }
         fine.set = relit;
         fine.version += 1;
+        // Blended in on the GPU from the field it replaces (7.3).
+        if let Some(mut relight) = relight {
+            relight.version = fine.version;
+        }
         spent("dusk lamps: re-baking the field", started);
         // MEASUREMENT (`baked-light-ease`): when the relit field goes up.
         info!(
@@ -1122,7 +1135,13 @@ impl NearField {
 #[derive(Resource, Default)]
 pub struct LodRefresh {
     /// The set and its contact tier, both built on the pool.
-    task: Option<Task<(Arc<FineSet>, super::contact::PreparedFine)>>,
+    task: Option<
+        Task<(
+            Arc<FineSet>,
+            super::contact::PreparedFine,
+            super::bounce::SetLight,
+        )>,
+    >,
     /// When the in-flight task was spawned.
     started: Option<std::time::Instant>,
     /// Rebuild the tier whatever the player has or has not walked.
@@ -1153,6 +1172,8 @@ pub struct LodRefresh {
 struct Held {
     set: Arc<FineSet>,
     prepared: super::contact::PreparedFine,
+    /// Its bounce and lamp bake, which land with it (`baked-light-ease` 7.2).
+    light: super::bounce::SetLight,
     /// How long its build took, seconds of wall clock.
     took: f32,
     /// When it finished, on the game clock.
@@ -1214,8 +1235,9 @@ impl LodRefresh {
 /// contact, when it lands. One rebuild in flight at a time.
 // Eight parameters: the seven the rebuild already needed, and the save, whose
 // edits a set built without would quietly undig. A struct of them would be a
-// struct with one caller.
-#[allow(clippy::too_many_arguments)]
+// struct with one caller. The set's own light (`baked-light-ease`) comes in
+// as one tuple, under Bevy's sixteen.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn refresh_lod(
     mut commands: Commands,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
@@ -1231,6 +1253,14 @@ pub fn refresh_lod(
     lamps: Res<DuskLamps>,
     time: Res<Time>,
     count: Option<Res<crate::loading::FrameCount>>,
+    // `baked-light-ease` 7.2: what the set's task bakes beside it, and where
+    // the landing draws it.
+    (sun, lighting, mut bounce, mut lamp_bake): (
+        Option<Res<crate::sky::Sun>>,
+        Option<Res<crate::config::LightingSettings>>,
+        ResMut<super::bounce::BounceField>,
+        ResMut<super::bounce::LampBakeField>,
+    ),
 ) {
     let player = player_position(&cameras, frame.center.as_vec3());
     let direction = player.and_then(|p| p.try_normalize());
@@ -1250,7 +1280,7 @@ pub fn refresh_lod(
         }
     }
     if let Some(task) = refresh.task.as_mut() {
-        let Some((set, prepared)) = block_on(poll_once(task)) else {
+        let Some((set, prepared, light)) = block_on(poll_once(task)) else {
             return;
         };
         let took = refresh.in_flight_s().unwrap_or(0.0);
@@ -1264,6 +1294,7 @@ pub fn refresh_lod(
         refresh.held = Some(Held {
             set,
             prepared,
+            light,
             took,
             built_s: time.elapsed_secs(),
         });
@@ -1281,6 +1312,7 @@ pub fn refresh_lod(
         let Held {
             set,
             prepared,
+            light,
             took,
             built_s,
         } = held;
@@ -1307,6 +1339,16 @@ pub fn refresh_lod(
         );
         let timer = std::time::Instant::now();
         contact.set_prepared(prepared);
+        // Its bounce and lamp bake go up in the same frame as its records
+        // (`baked-light-ease` 7.2): no frame without them.
+        super::bounce::publish_with_set(
+            light,
+            fine.version + 1,
+            set.anchor,
+            now_s,
+            &mut bounce,
+            &mut lamp_bake,
+        );
         commands.insert_resource(PlanetFine {
             set,
             version: fine.version + 1,
@@ -1356,6 +1398,14 @@ pub fn refresh_lod(
         // Baked for the lamps as they are now, off the frame; a set that lands
         // after the clock crossed is re-baked by `switch_dusk_lamps`.
         let dusk = lamps.lit;
+        // And with its own light: the bounce for the sun as it is now (it
+        // moves a fraction of a degree in a build) and the lamps.
+        let bake_sun = lighting
+            .as_ref()
+            .is_some_and(|l| l.bounce_on())
+            .then(|| sun.as_ref().map(|s| s.direction()))
+            .flatten();
+        let bake_lamps = lighting.as_ref().is_some_and(|l| l.lamp_bake_on());
         refresh.task = Some(AsyncComputeTaskPool::get().spawn(async move {
             let mut set = generate_fine_live(
                 direction,
@@ -1368,9 +1418,11 @@ pub fn refresh_lod(
                 width,
             );
             set.columns.set_dusk(dusk);
+            let light =
+                super::bounce::bake_with_set(&set.columns, set.anchor, bake_sun, bake_lamps);
             let set = Arc::new(set);
             let prepared = super::PlanetContact::prepare_fine(&set);
-            (set, prepared)
+            (set, prepared, light)
         }));
     }
 }

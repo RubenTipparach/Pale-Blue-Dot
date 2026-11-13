@@ -46,6 +46,7 @@ struct Params {
     ssr_clip: mat4x4<f32>,     // L8 (10.2): the screen trace history's clip_from_body
     ssr_eye: vec4<f32>,        // and its eye; w one once there is a history
     rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m
+    light_ease: vec4<f32>,     // `baked-light-ease` 7.3: x the light field's newest half blended in 0..1, y that half, z one while the other is blended from
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -436,13 +437,27 @@ fn light_layer(altitude: f32) -> u32 {
 // world both are.
 // Sky in the high nibble, block in the low: `pbd_core::light::Light`'s own
 // byte. Two channels because only ONE of them goes out at night.
-fn light_at(slot: u32, layer: u32) -> vec2<f32> {
-    if slot == 0u { return vec2(1.0, 0.0); }
-    if layer >= LIGHT_LAYERS { return vec2(1.0, 0.0); }
-    let word = (slot - 1u) * LIGHT_WORDS + layer / LIGHT_PER_WORD;
+//
+// The buffer holds two fields of `LIGHT_HALF_WORDS` (`baked-light-ease` 7.3):
+// the one drawn, `params.light_ease.y`, and across a dusk or dawn relight the
+// one before it, blended from by `light_ease.x` while `light_ease.z` says it
+// is there, so the street lamps come on over a second, not in a frame.
+const LIGHT_HALF_WORDS: u32 = 2064384u;
+fn light_cell(half: u32, slot: u32, layer: u32) -> vec2<f32> {
+    let word = half * LIGHT_HALF_WORDS + (slot - 1u) * LIGHT_WORDS + layer / LIGHT_PER_WORD;
     if word >= arrayLength(&light) { return vec2(1.0, 0.0); }
     let byte = (light[word] >> ((layer % LIGHT_PER_WORD) * 8u)) & 0xffu;
     return vec2(f32(byte >> 4u), f32(byte & 0xfu)) / LIGHT_MAX;
+}
+fn light_at(slot: u32, layer: u32) -> vec2<f32> {
+    if slot == 0u { return vec2(1.0, 0.0); }
+    if layer >= LIGHT_LAYERS { return vec2(1.0, 0.0); }
+    let newest = min(u32(params.light_ease.y), 1u);
+    let now = light_cell(newest, slot, layer);
+    if params.light_ease.z > 0.5 && params.light_ease.x < 1.0 {
+        return mix(light_cell(1u - newest, slot, layer), now, params.light_ease.x);
+    }
+    return now;
 }
 
 fn sky_at(slot: u32, layer: u32) -> f32 {

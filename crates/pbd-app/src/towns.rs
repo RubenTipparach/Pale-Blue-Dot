@@ -19,7 +19,7 @@
 //! kinds follow, a kind at a time.
 
 use crate::field_light::{
-    BakedField, Faded, LitByField, LitLikeTerrain, RoomLights, SkyShare, UNBAKED,
+    BakedField, Faded, LitByField, LitLikeTerrain, RoomLights, SkyShare, UNBAKED, UNBAKED_BEFORE,
 };
 use crate::planet::PlanetRenderFrame;
 use crate::planet::lattice::Lattice;
@@ -1469,14 +1469,22 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         let assets = world.resource::<AssetServer>();
         let cut = cut_textures();
         // The outside takes the field vertex by vertex once baked
-        // (`BakedField`), its second UV channel unbaked until then.
+        // (`BakedField`), its second UV channel unbaked until then; and the
+        // bake before that in its vertex colour, which it blends from
+        // (`baked-light-ease` 7.4). Both are there from the start, so the
+        // mesh's layout never changes and no pipeline is made mid-flight.
         laid.meshes
             .iter()
             .map(|(name, buf)| {
-                let mesh = to_mesh(buf).with_inserted_attribute(
-                    Mesh::ATTRIBUTE_UV_1,
-                    vec![UNBAKED; buf.positions.len()],
-                );
+                let mesh = to_mesh(buf)
+                    .with_inserted_attribute(
+                        Mesh::ATTRIBUTE_UV_1,
+                        vec![UNBAKED; buf.positions.len()],
+                    )
+                    .with_inserted_attribute(
+                        Mesh::ATTRIBUTE_COLOR,
+                        vec![UNBAKED_BEFORE; buf.positions.len()],
+                    );
                 (mesh, texture(assets, name), cut.contains(name))
             })
             .collect()

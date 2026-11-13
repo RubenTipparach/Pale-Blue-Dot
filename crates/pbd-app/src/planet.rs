@@ -266,10 +266,18 @@ impl Plugin for PlanetPlugin {
             ExtractComponentPlugin::<PlanetSurface>::default(),
             ExtractResourcePlugin::<bounce::BounceField>::default(),
             ExtractResourcePlugin::<bounce::LampBakeField>::default(),
+            ExtractResourcePlugin::<lod::DuskRelight>::default(),
         ))
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
-        .add_systems(Update, (bounce::update_bounce, bounce::update_lamp_bake))
+        .init_resource::<lod::DuskRelight>()
+        // After the landing, which publishes the set's own bakes
+        // (`baked-light-ease` 7.2): a bake begun before it would be of the
+        // set it replaced.
+        .add_systems(
+            Update,
+            (bounce::update_bounce, bounce::update_lamp_bake).after(lod::refresh_lod),
+        )
         .init_resource::<PlanetClock>()
         .init_resource::<water::RainShadows>()
         .init_resource::<PlanetRenderFrame>()
@@ -701,6 +709,51 @@ struct PlanetParams {
     // `wet-near-detail`: x how far from the eye rain's fine detail is drawn,
     // metres; y the band it fades out over before that; zw spare.
     rain_near: Vec4,
+    // `baked-light-ease` 7.3: the light field across a dusk or dawn relight:
+    // x how far the newest half has blended in, 0..1; y which half is the
+    // newest; z one while the other half holds the field it blends from; w
+    // spare.
+    light_ease: Vec4,
+}
+
+/// Words of one half of the light buffer: a level per cell, four to a word,
+/// every slot of the column tier (`baked-light-ease` 7.3).
+const LIGHT_HALF_WORDS: usize = column::COLUMN_CAPACITY as usize * column::LIGHT_WORDS;
+
+/// How far the newest lamp bake shows over the one before it
+/// (`baked-light-ease`): whole from its first frame when it came with its
+/// set's landing (7.2), else the rule's blend from when it landed (7.7).
+fn lamp_fade(at_once: bool, landed_s: f32, now_s: f32) -> f32 {
+    if at_once {
+        1.0
+    } else {
+        pbd_core::light::bake_blend(now_s - landed_s)
+    }
+}
+
+/// The light field's blend across a relight, as `PlanetParams::light_ease`
+/// carries it (`baked-light-ease` 7.3): the newest half, and the other blended
+/// from while `blending`.
+fn light_ease_state(newest: usize, blending: bool, from_s: f32, now_s: f32) -> Vec4 {
+    let blend = if blending {
+        pbd_core::light::bake_blend(now_s - from_s)
+    } else {
+        1.0
+    };
+    Vec4::new(blend, newest as f32, if blending { 1.0 } else { 0.0 }, 0.0)
+}
+
+/// Where a relit field goes on the GPU (`baked-light-ease` 7.3): into the
+/// other half, blended from the one drawn now, only for a dusk or dawn relight
+/// of the set drawn the frame before (the same columns, the version right
+/// after it); anything else (an edit, a landing) overwrites the newest half
+/// and is drawn whole at once. The half written, and whether it blends.
+fn light_half(newest: usize, relight: bool, follows: bool, same_anchor: bool) -> (usize, bool) {
+    if relight && follows && same_anchor {
+        (1 - newest, true)
+    } else {
+        (newest, false)
+    }
 }
 
 /// L7: the lamp bake's cross-fade, as `PlanetParams::lamp_bake` carries it.
@@ -721,7 +774,7 @@ fn lamp_bake_state(
     };
     let new = planet.lamp_new;
     Vec4::new(
-        ((now_s - planet.lamp_landed_s) / 0.5).clamp(0.0, 1.0),
+        lamp_fade(planet.lamp_at_once, planet.lamp_landed_s, now_s),
         if valid(1 - new) { 1.0 } else { 0.0 },
         if valid(new) { 1.0 } else { 0.0 },
         new as f32,
@@ -729,8 +782,9 @@ fn lamp_bake_state(
 }
 
 /// L4: how strongly the bounce is drawn: none where the bake held is for a
-/// set laid round another anchor, faded in over half a second after a bake
-/// for a new anchor lands, and at full strength otherwise.
+/// set laid round another anchor, blended in by the rule after a bake for an
+/// anchor no bounce was drawn for lands, and at full strength otherwise (a
+/// set that brought its own bounce is drawn whole from its landing frame).
 fn bounce_gain(
     lighting: &crate::config::LightingSettings,
     fine: Option<&lod::PlanetFine>,
@@ -747,7 +801,7 @@ fn bounce_gain(
         return 0.0;
     }
     let fade = if field.fades {
-        ((now_s - field.landed_s) / 0.5).clamp(0.0, 1.0)
+        pbd_core::light::bake_blend(now_s - field.landed_s)
     } else {
         1.0
     };
@@ -876,6 +930,16 @@ struct PlanetGpu {
     lamp_halves: [Option<((u64, u64), Vec3)>; 2],
     lamp_new: usize,
     lamp_landed_s: f32,
+    /// Whether the newest lamp bake came with its set's landing, and shows
+    /// whole from its first frame (`baked-light-ease` 7.2).
+    lamp_at_once: bool,
+    /// `baked-light-ease` 7.3: the light buffer's newest half, whether the
+    /// other is blended from (a dusk or dawn relight), since when, and the
+    /// anchor of the set the newest was written for.
+    light_new: usize,
+    light_blending: bool,
+    light_from_s: f32,
+    light_anchor: Option<Vec3>,
     /// Record slots in the buffer: the base then two halves of four fine
     /// regions (`two-set-dissolve`).
     slots: u32,
@@ -1040,9 +1104,11 @@ fn upload_planet(
     // Zero-initialised: a slot nothing has written is DARK, which is the safe
     // way round. A light buffer defaulting to full daylight would light every
     // cave in the tier on the frame before its bake arrived.
+    // Two halves (`baked-light-ease` 7.3): the field drawn, and across a dusk
+    // or dawn relight the field before it, which the shader blends from.
     let light = device.create_buffer(&BufferDescriptor {
-        label: Some("Persistent planet voxel sky light for the column tier"),
-        size: column::COLUMN_CAPACITY as u64 * column::LIGHT_WORDS as u64 * 4,
+        label: Some("Persistent planet voxel light for the column tier, two halves"),
+        size: 2 * LIGHT_HALF_WORDS as u64 * 4,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -1091,6 +1157,11 @@ fn upload_planet(
         lamp_halves: [None, None],
         lamp_new: 0,
         lamp_landed_s: 0.0,
+        lamp_at_once: false,
+        light_new: 0,
+        light_blending: false,
+        light_from_s: 0.0,
+        light_anchor: None,
         cells,
         columns,
         slots,
@@ -1108,8 +1179,9 @@ fn upload_planet(
 
 /// Rewrite the fine regions when a new fine set has landed. Each level's
 /// records go at its own offset; the count is what the compute pass reads.
-// Eight parameters: the seven it had, and the dissolve's length, which says
-// whether a landing would cut a running dissolve short (`two-set-dissolve`).
+// Nine parameters: the seven it had, the dissolve's length, which says
+// whether a landing would cut a running dissolve short (`two-set-dissolve`),
+// and the dusk relight's version, whose light blends in (`baked-light-ease`).
 #[allow(clippy::too_many_arguments)]
 fn upload_fine(
     fine: Option<Res<lod::PlanetFine>>,
@@ -1120,6 +1192,7 @@ fn upload_fine(
     clock: Res<PlanetClock>,
     lighting: Option<Res<crate::config::LightingSettings>>,
     scatter: Option<Res<crate::config::ScatterSettings>>,
+    relight: Option<Res<lod::DuskRelight>>,
 ) {
     let (Some(fine), Some(mut planet)) = (fine, planet) else {
         return;
@@ -1135,7 +1208,8 @@ fn upload_fine(
         planet.bounce_version = bounce.version;
     }
     // L7: a new lamp bake goes into the older half, and the shader fades to
-    // it from the other over half a second.
+    // it from the other by the rule (`baked-light-ease` 7.7), or shows it
+    // whole at once where it came with its set's landing (7.2).
     if let Some(lamps) = lamps
         && !lamps.gpu.is_empty()
         && planet.lamp_halves[planet.lamp_new].map(|h| h.0) != Some(lamps.version)
@@ -1151,10 +1225,12 @@ fn upload_fine(
         planet.lamp_halves[half] = Some((lamps.version, lamps.anchor));
         planet.lamp_new = half;
         planet.lamp_landed_s = clock.0;
+        planet.lamp_at_once = lamps.with_set;
     }
     if planet.uploaded == fine.version {
         return;
     }
+    let follows = planet.uploaded.checked_add(1) == Some(fine.version);
     let timer = std::time::Instant::now();
     let old = planet.lod;
     let new = lod::LodParams::of(&fine.set);
@@ -1205,8 +1281,29 @@ fn upload_fine(
         // The light goes up with the records that decide what it lights. Two
         // uploads a frame apart would draw one frame of the new geometry lit
         // by the old world.
+        //
+        // A dusk or dawn relight of the set drawn until now goes into the
+        // other half and is blended in from this one (`baked-light-ease`
+        // 7.3); anything else overwrites the newest half and is whole at once.
         let light = fine.set.columns.gpu_light();
-        queue.write_buffer(&planet.light, 0, bytemuck::cast_slice(&light));
+        let (half, blending) = light_half(
+            planet.light_new,
+            relight.is_some_and(|r| r.version == fine.version),
+            follows,
+            planet
+                .light_anchor
+                .is_some_and(|a| a.distance(fine.set.anchor) < 1e-3),
+        );
+        let words = &light[..light.len().min(LIGHT_HALF_WORDS)];
+        queue.write_buffer(
+            &planet.light,
+            (half * LIGHT_HALF_WORDS * 4) as u64,
+            bytemuck::cast_slice(words),
+        );
+        planet.light_new = half;
+        planet.light_blending = blending;
+        planet.light_from_s = clock.0;
+        planet.light_anchor = Some(fine.set.anchor);
         // And the materials, for the same reason: a face drawn from a stale
         // layer is a placed stone wearing the earth that was there before.
         let materials = fine.set.columns.gpu_materials();
@@ -1667,6 +1764,12 @@ fn prepare_views(
                 .as_ref()
                 .map_or(Mat4::IDENTITY, |gpu| gpu.last_clip),
             rain_near: Vec4::new(w.rain_detail_reach_m, w.rain_detail_fade_m, 0.0, 0.0),
+            light_ease: light_ease_state(
+                planet.light_new,
+                planet.light_blending,
+                planet.light_from_s,
+                clock.0,
+            ),
             // w: there is a history to read, so not while the capture is off.
             ssr_eye: existing.as_ref().map_or(Vec4::ZERO, |gpu| {
                 gpu.last_camera.extend(if lighting.reflect_capture_on() {
@@ -2010,6 +2113,69 @@ impl render_graph::Node for PlanetComputeNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `baked-light-ease` 7.2 and 7.7: a lamp bake that came with its set's
+    /// landing is whole from its first frame (the set before drew the same
+    /// light there); any other blends in by the rule, from nothing on the
+    /// frame it lands to all of it `BAKE_EASE_S` later.
+    #[test]
+    fn a_landing_lamp_bake_is_whole_at_once_and_a_relit_one_blends() {
+        let ease = pbd_core::light::BAKE_EASE_S;
+        assert_eq!(lamp_fade(true, 10.0, 10.0), 1.0, "with its set");
+        assert_eq!(lamp_fade(false, 10.0, 10.0), 0.0, "a relight's, landing");
+        let half = lamp_fade(false, 10.0, 10.0 + ease * 0.5);
+        assert!((half - 0.5).abs() < 1e-6, "{half}");
+        assert_eq!(lamp_fade(false, 10.0, 10.0 + ease), 1.0);
+        // Never the old half second's linear ramp: a 60 Hz frame is a sliver.
+        assert!(lamp_fade(false, 10.0, 10.0 + 1.0 / 60.0) < 0.01);
+    }
+
+    /// `baked-light-ease` 7.3: only a dusk or dawn relight of the set drawn
+    /// the frame before goes into the other half and blends; an edit, a
+    /// landing round a new anchor, or a relight that skipped a version
+    /// overwrites the newest half and is whole at once, so a dug face never
+    /// fades from the rock's dark.
+    #[test]
+    fn only_a_dusk_relight_blends_the_light_field() {
+        assert_eq!(light_half(0, true, true, true), (1, true), "dusk");
+        assert_eq!(light_half(1, true, true, true), (0, true), "dawn");
+        assert_eq!(light_half(0, false, true, true), (0, false), "an edit");
+        assert_eq!(light_half(1, true, false, true), (1, false), "skipped");
+        assert_eq!(light_half(0, true, true, false), (0, false), "moved");
+        let ease = pbd_core::light::BAKE_EASE_S;
+        assert_eq!(
+            light_ease_state(1, true, 5.0, 5.0),
+            Vec4::new(0.0, 1.0, 1.0, 0.0),
+            "the relight's frame shows the field before it"
+        );
+        assert_eq!(light_ease_state(1, true, 5.0, 5.0 + ease).x, 1.0);
+        assert_eq!(
+            light_ease_state(0, false, 5.0, 5.0),
+            Vec4::new(1.0, 0.0, 0.0, 0.0),
+            "an edit is whole at once"
+        );
+        // The shader blends the two halves the way this says.
+        let shader =
+            include_str!("../../../assets/shaders/planet_surface.wgsl").replace("\r\n", "\n");
+        for line in [
+            format!("const LIGHT_HALF_WORDS: u32 = {LIGHT_HALF_WORDS}u;"),
+            "light_ease: vec4<f32>,".to_string(),
+            "let newest = min(u32(params.light_ease.y), 1u);".to_string(),
+            "if params.light_ease.z > 0.5 && params.light_ease.x < 1.0 {".to_string(),
+            "return mix(light_cell(1u - newest, slot, layer), now, params.light_ease.x);"
+                .to_string(),
+        ] {
+            assert!(
+                shader.contains(&line),
+                "planet_surface.wgsl should carry `{line}`"
+            );
+        }
+        let visibility = include_str!("../../../assets/shaders/planet_visibility.wgsl");
+        assert!(
+            visibility.contains("light_ease: vec4<f32>,"),
+            "the visibility pass reads the same uniform"
+        );
+    }
 
     /// The scale readout has to be a measurement, not a remembered number, and
     /// the cheap way to keep it honest is that the dual halves its edge on every

@@ -40,6 +40,7 @@ struct Params {
     ssr_clip: mat4x4<f32>,
     ssr_eye: vec4<f32>,
     rain_near: vec4<f32>,
+    light_ease: vec4<f32>,
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }

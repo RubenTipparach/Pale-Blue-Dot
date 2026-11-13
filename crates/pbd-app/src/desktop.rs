@@ -3056,6 +3056,7 @@ fn landing_shots(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn capture(
     mut commands: Commands,
     launch: Res<Launch>,
@@ -3069,8 +3070,11 @@ fn capture(
 ) {
     state.frame += 1;
     // MEASUREMENT (`baked-light-ease`): `PBD_CAPTURE_RUN=<dir>,<first>,<count>`
-    // saves every frame from `first` (the frame log's frame number) for
-    // `count` frames, so a swap can be seen frame by frame.
+    // saves every frame from the capture's frame `first` (counted from the
+    // world's first open frame, as `--frames` is, so a run that loads slowly
+    // saves the same stretch) for `count` frames, so a swap can be seen frame
+    // by frame. Each is named by the frame log's frame number, which the
+    // `BAKED_LIGHT` lines give.
     let run = burst.get_or_insert_with(|| {
         let spec = std::env::var("PBD_CAPTURE_RUN").ok()?;
         let mut parts = spec.split(',');
@@ -3081,7 +3085,7 @@ fn capture(
         Some((dir, first, first + count))
     });
     if let (Some((dir, first, end)), Some(count)) = (run.as_ref(), count.as_ref())
-        && (*first..*end).contains(&count.0)
+        && (*first..*end).contains(&u64::from(state.frame))
     {
         let path = dir.join(format!("f{:06}.png", count.0));
         commands.spawn(Screenshot::primary_window()).observe(
