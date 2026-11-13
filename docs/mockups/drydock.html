@@ -142,12 +142,12 @@ tr:last-child td{border-bottom:0}
 .sailbar{display:flex;flex-wrap:wrap;gap:8px 14px}
 .seg button.go{background:var(--amber);color:var(--ground);border-color:var(--amber)}
 #compass{width:100%;height:auto;display:block;border-radius:3px}
-.advice{display:grid;gap:2px;border-left:3px solid #74effe;padding:4px 10px;background:rgba(116,239,254,.07)}
-.advice .h{font:700 18px var(--display);letter-spacing:.03em;color:#74effe}
+.advice{display:grid;gap:1px;border-left:3px solid #74effe;padding:3px 8px;background:rgba(116,239,254,.07)}
+.advice .h{font:700 16px var(--display);letter-spacing:.03em;color:#74effe}
 .advice .h.tack{color:var(--amber)}
-.advice .sl{font:600 15px var(--display);letter-spacing:.03em}
+.advice .sl{font:600 14px var(--display);letter-spacing:.03em}
 .advice .v{font:12px var(--mono);color:var(--muted)}
-.gps{font-size:12.5px;color:var(--amber);white-space:pre-wrap;min-height:1.5em}
+.gps{font-size:11.5px;color:var(--amber);white-space:pre-wrap;min-height:1.5em}
 .sailgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;align-items:start}
 #seamap{width:100%;height:auto;display:block;border-radius:4px;cursor:crosshair;image-rendering:pixelated;touch-action:none}
 .sailside{display:grid;gap:8px;min-width:0}
@@ -156,24 +156,72 @@ tr:last-child td{border-bottom:0}
 .stage.s3{height:min(60vh,560px)}
 .prompt3{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);font:700 16px var(--display);letter-spacing:.05em;color:#161612;background:#e8b040;border-radius:4px;padding:5px 12px;pointer-events:none}
 @media (max-width:860px){.sailgrid{grid-template-columns:1fr}}
+.wrap{gap:14px !important}
+header.compact{gap:6px}
+header.compact h1{font-size:clamp(26px,4vw,40px)}
+details.about,details.sdesc{font-size:14px;color:var(--muted)}
+details.about summary,details.sdesc summary{cursor:pointer;font:600 13px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--sky)}
+details.about[open],details.sdesc[open]{display:grid;gap:10px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line-2);position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--ground);padding-top:4px}
+.tabs button{all:unset;cursor:pointer;font:600 16px var(--display);letter-spacing:.05em;padding:8px 14px;border:1px solid transparent;border-bottom:0;border-radius:5px 5px 0 0;color:var(--muted)}
+.tabs button[aria-selected="true"]{color:var(--amber);border-color:var(--line-2);background:var(--panel)}
+.tabs button:focus-visible{outline:2px solid var(--amber)}
+.tabpanel{display:grid;gap:16px}
+.tabpanel section{gap:10px}
+[hidden]{display:none !important}
+@media (min-width:1001px){
+.palette{grid-template-columns:repeat(10,minmax(0,1fr));gap:4px}
+.palette button{font-size:10px;padding:2px 1px}
+.palette button img{width:24px;height:24px}
+#presets button{padding-block:3px;font-size:13px}
+.bside{max-height:calc(100vh - 176px);overflow:auto}
+.bside .stats{gap:2px 12px}
+}
+.wrap{padding-block:8px 16px !important}
+header.compact{display:flex;flex-wrap:wrap;align-items:center;gap:2px 14px}
+header.compact h1{font-size:clamp(24px,3.2vw,32px)}
+header.compact details.about{flex-basis:100%}
+.tabpanel>section>h2{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.tabpanel section{gap:8px}
+#compass{height:26px !important}
+.sailbar .seg button{padding-block:4px}
+.gpsrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:8px;align-items:start}
+.sailmain{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:10px;align-items:start}
+.sailmain .stage.s3{height:clamp(300px,calc(100vh - 378px),560px);min-height:300px}
+.sailside{display:grid;gap:6px;min-width:0}
+.sailside #heel{max-width:150px}
+.playov{position:absolute;inset:0;z-index:2;display:grid;place-content:center;gap:8px;text-align:center;background:rgba(6,10,14,.62);color:var(--ink);font-size:14px;cursor:pointer;padding:16px}
+.playov b{font:700 28px var(--display);letter-spacing:.06em;color:var(--amber)}
+.playov kbd,.advice kbd{font:600 12px var(--mono);border:1px solid var(--line-2);border-radius:3px;padding:0 5px}
+#helmPad{position:absolute;left:8px;bottom:8px;gap:4px;z-index:3}
+#helmPad button{background:rgba(10,14,18,.75);min-width:40px;padding:7px 10px;touch-action:none;user-select:none;-webkit-user-select:none}
+#helmPad button.on{border-color:var(--amber);color:var(--amber)}
+.prompt3{bottom:58px !important}
+@media (max-width:900px){.sailmain{grid-template-columns:1fr}.gpsrow{grid-template-columns:1fr}.sailside{grid-template-columns:1fr 160px}}
 @media (max-width:1000px){.builder{grid-template-columns:1fr}.mods{grid-template-columns:repeat(2,minmax(0,1fr))}.prog{grid-template-columns:1fr}}
 @media (max-width:560px){.mods{grid-template-columns:1fr}.palette{grid-template-columns:repeat(4,minmax(0,1fr))}.ov.br{display:none}.stage{height:62vh}}
 </style>
 
 <div class="wrap">
 
-<header class="lede">
+<header class="lede compact">
   <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-12</span><span class="tag plain">M23</span></div>
   <h1>Drydock and Hex Ship Builder</h1>
   <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+  <details class="about"><summary>About this mockup: the owner's words, the idea, and which art is the game's</summary>
   <blockquote>"we need drydocks to build ships too ... I would prefer ocean ships to be made of hex blocks as well so i, as a player can walk around as the ship sails about" <span class="muted">(the owner, 2026-11-12)</span></blockquote>
   <p>An ocean ship here is made of the world's own cell: 2.833 m across and 1 m a layer, the cell you dig on every planet. Its rails, mast, helm and lanterns are the town's pieces, on cell edges and in cells as a house's are, so walking a ship is walking a building that moves. You lay the keel dry in a stone dock below the sea, build her layer by layer, flood the dock and float her out. Every number she sails with follows from her cells.</p>
   <p class="honest"><b>About the art.</b> <b>The game's own</b> (byte-identical copies in <code>drydock/game/</code>, see its README): the ground is the terrain atlas's beach and fields sheets on 2.833 m hex columns with 1 m layers; the dock's floor, altars and copings are the settlement textures stone and granite, the keel blocks and masts timber, the decks plank, the ballast fieldstone, the gate and rails iron, the pump house stone and slate, all at their <code>repeat_m</code>; the Tern and the Loon at the jetty are the game's vehicle models (<code>assets/models/vehicles</code>); the hand and the post lantern in the hotbar are the game's icons. <b>Mockup-only:</b> the block icons and four textures (tarred hull strakes, sail canvas, the gantry's painted lattice, a deckhouse wall with a window) are pixel art drawn in code with the balatro-pixel-art kit (<code>tools/art/drydock_art.py</code>), sampled nearest with no mipmaps. The ships are built from the builder's own cells, so what you draw in section 2 is exactly what floats out of the dock.</p>
+  </details>
 </header>
 
+<nav class="tabs" role="tablist" aria-label="Parts of the mockup">
+  <button role="tab" data-tab="dock">Drydock</button><button role="tab" data-tab="builder">Ship builder</button><button role="tab" data-tab="sail">Sail it</button><button role="tab" data-tab="walk">Walk the deck</button><button role="tab" data-tab="how">How it works</button>
+</nav>
+<div class="tabpanel" id="tab-dock" role="tabpanel">
 <section aria-labelledby="s1">
   <h2 id="s1"><span class="n">1</span>The drydock</h2>
-  <p>A basin of hex columns cut into the shore, seven layers below the sea, its walls stepping down in altars of granite. A caisson gate closes it to the sea, a pump house drains it and a gantry crane runs on rails along both copings. The ship sits on keel blocks. Drag the water through the dock's five states: she settles onto her blocks as it drains, lifts off them when it reaches her solved draft, and warps out through the gate past the Tern and the Loon at the jetty. Set the time to night: every floodlight, coping lamp, pump house window, welding flash and the ship's own lanterns light what is near them; the moon stays dim.</p>
+  <details class="sdesc"><summary>What this shows, and how to use it</summary><p>A basin of hex columns cut into the shore, seven layers below the sea, its walls stepping down in altars of granite. A caisson gate closes it to the sea, a pump house drains it and a gantry crane runs on rails along both copings. The ship sits on keel blocks. Drag the water through the dock's five states: she settles onto her blocks as it drains, lifts off them when it reaches her solved draft, and warps out through the gate past the Tern and the Loon at the jetty. Set the time to night: every floodlight, coping lamp, pump house window, welding flash and the ship's own lanterns light what is near them; the moon stays dim.</p></details>
   <div class="stage main" id="dockStage">
     <canvas id="dock" aria-label="A stone drydock cut into a beach, with a hex-cell ship on keel blocks, a gantry crane, a pump house and a jetty with two small boats."></canvas>
     <div class="loading" id="loading">Loading the dock</div>
@@ -192,10 +240,11 @@ tr:last-child td{border-bottom:0}
     <div class="hudbar" id="hudbar" aria-label="Hotbar, as the game draws it"></div>
   </div>
 </section>
-
+</div>
+<div class="tabpanel" id="tab-builder" role="tabpanel" hidden>
 <section aria-labelledby="s2">
   <h2 id="s2"><span class="n">2</span>The ship builder</h2>
-  <p>Opened at the dock's office. One layer at a time, from the keel up: pick a block, paint cells; right-click or the eraser clears one. The bow is to the right. Rows alternate by half a cell, as the world's do, so a hull is the same to port and starboard when it has an odd number of rows (three or five). The faint icons are the layer below; green cells are where a walker can stand. Every number on the right is worked out from the cells as you draw, and the profile below draws all of them with the waterline the builder solved.</p>
+  <details class="sdesc"><summary>What this shows, and how to use it</summary><p>Opened at the dock's office. One layer at a time, from the keel up: pick a block, paint cells; right-click or the eraser clears one. The bow is to the right. Rows alternate by half a cell, as the world's do, so a hull is the same to port and starboard when it has an odd number of rows (three or five). The faint icons are the layer below; green cells are where a walker can stand. Every number on the right is worked out from the cells as you draw, and the profile below draws all of them with the waterline the builder solved.</p></details>
   <div class="builder">
     <div class="bpane">
       <div class="seg" id="presets" role="group" aria-label="Load a ship"></div>
@@ -203,11 +252,12 @@ tr:last-child td{border-bottom:0}
       <div class="layers" id="layers" role="group" aria-label="Layer"></div>
       <div class="fwd"><span>aft</span><span id="layerName">layer</span><span>bow &rarr;</span></div>
       <div class="gridwrap"><svg id="hex" aria-label="Ship grid for one layer, 12 cells by 5 rows"></svg></div>
-      <canvas class="profile" id="profile" width="880" height="330" aria-label="Side profile of every cell with the waterline"></canvas>
-      <div class="legend" id="legend"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pbtn go" role="button" tabindex="0" id="floatOut">Float it out (put her in the dock)</span><span class="pbtn" role="button" tabindex="0" id="clear">Clear</span></div>
     </div>
-    <div class="bpane">
+    <div class="bpane bside">
+      <div class="eyebrow">Side profile, with the waterline</div>
+      <canvas class="profile" id="profile" width="880" height="330" aria-label="Side profile of every cell with the waterline"></canvas>
+      <div class="legend" id="legend"></div>
       <div class="eyebrow">Follows from the cells</div>
       <div class="stats" id="stats"></div>
       <div class="eyebrow">Checks</div>
@@ -215,10 +265,40 @@ tr:last-child td{border-bottom:0}
     </div>
   </div>
 </section>
-
+</div>
+<div class="tabpanel" id="tab-sail" role="tabpanel" hidden>
+<section aria-labelledby="s4">
+  <h2 id="s4"><span class="n">4</span>Sail it</h2>
+  <details class="sdesc"><summary>What this shows, and how to use it</summary><p>A sea chart drawn compass-north up, as the game's map is, with the wind as arrows: trades from the east-north-east in the south, westerlies in the north, a slack band between. Click the chart to add a waypoint, drag one to move it, right-click to take it away. Then press <b>Sail</b>. You start on foot on her deck by the wheel, first person in her frame (WASD walk, drag to look). <b>F</b> at the wheel takes the helm, and the view becomes a chase camera behind her: <b>A</b> and <b>D</b> put the helm over (a rudder is a foil: she turns only with way on), and <b>&larr;</b> and <b>&rarr;</b> swing the sail toward port or starboard (on a powered ship <b>W</b> and <b>S</b> step the telegraph through astern, stop, slow, half and full). <b>F</b> again lets go: she sails on holding rudder and sail while you walk her deck. Walk off the deck where there is no rail and you are in the water: with no one aboard her sails furl and she comes to rest; swim to her side and press <b>F</b> to climb aboard. Nothing steers for you: a sailing ship cannot point closer than about 45 degrees to the wind, so to reach a waypoint upwind she must tack. A waypoint counts as reached within 30 m, and the next one takes over. The GPS plans the route a sailor would sail, laid as a glowing path on the water ahead of her bow with a chevron at the next turn (and on the chart, cyan dashes: straight when the mark can be laid on one board, close-hauled legs between the faint laylines when it is upwind, tack points as dots), marks the best heading on the compass bar (cyan) beside the waypoint (amber), and tells you which way to turn and how to trim. A curved arrow on the sail shows which way to swing it and how far, and turns into a tick when she is trimmed. It advises; it never steers.</p></details>
+  <div class="sailwrap" id="sailWrap" tabindex="0" aria-label="Sail it: click the chart for waypoints, A and D steer, W and S sheet or throttle">
+    <div class="sailbar">
+      <div class="seg" id="sailShip" role="group" aria-label="Ship"></div>
+      <div class="seg"><button id="sailGo" class="go" aria-pressed="false">Sail</button><button id="sailReset">Reset</button><button id="sailClear">Clear route</button></div>
+      <div class="seg" id="sailWarp" role="group" aria-label="Time"><button data-x="1" aria-pressed="false">x1</button><button data-x="8" aria-pressed="true">x8</button><button data-x="32" aria-pressed="false">x32</button></div>
+      <div class="seg" id="sailTime" role="group" aria-label="Time of day"><button data-t="day">Day</button><button data-t="night">Night</button></div>
+    </div>
+    <canvas id="compass" width="720" height="34" aria-label="Compass bar: the heading, the active waypoint (amber) and the best heading (cyan)"></canvas>
+    <div class="gpsrow"><div class="gps mono" id="gps"></div><div class="advice" id="advice" aria-live="polite"></div></div>
+    <div class="sailmain">
+      <div class="stage s3"><canvas id="sail3d" aria-label="The ship in 3D: behind her at the helm, on her deck on foot, or in the water"></canvas>
+        <div class="hudline" id="sail3dHud" aria-live="polite"></div>
+        <div class="prompt3" id="sail3dPrompt" hidden></div>
+        <div class="playov" id="playOv"><b>Click to play</b><span>You are on her deck by the wheel. Press <kbd>F</kbd> to take the helm: she sets sail.</span><span><kbd>A</kbd> <kbd>D</kbd> helm &middot; <kbd>&larr;</kbd> <kbd>&rarr;</kbd> swing the sail &middot; <kbd>W</kbd> <kbd>S</kbd> walk (or the telegraph) &middot; <kbd>F</kbd> take or leave the helm</span></div>
+        <div class="seg helm" id="helmPad"><button data-k="a">A</button><button data-k="d">D</button><button data-k="arrowleft">&larr;</button><button data-k="arrowright">&rarr;</button><button data-k="w">W</button><button data-k="s">S</button><button data-k="f" class="go">F</button></div>
+      </div>
+      <div class="sailside">
+        <canvas id="seamap" width="960" height="640" aria-label="Sea chart, north up: click to add a waypoint, drag to move, right-click to remove"></canvas>
+        <canvas id="heel" width="300" height="300" aria-label="The ship from astern, heeling, and from above, with her sail and the apparent wind"></canvas>
+        <p class="muted" id="sailState" style="font-size:12px"></p>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+<div class="tabpanel" id="tab-walk" role="tabpanel" hidden>
 <section aria-labelledby="s3">
   <h2 id="s3"><span class="n">3</span>Walk the deck</h2>
-  <p>The same ship, at sea, sailing a slow circle. You stand on her deck in her own frame: the walker keeps its place on the planks while she turns, so the island and its lighthouse slide round the horizon. This is the cog's rule, already built (<code>sail-the-cog</code> 3.1 and 3.2: the walker stands on a craft's deck in the craft's frame, through a turn and under way). Drag to look; mouse look is raw. Pick where to stand from the places the builder's walk check reached. She sails because she is under way; section 4 is where you take the helm.</p>
+  <details class="sdesc"><summary>What this shows, and how to use it</summary><p>The same ship, at sea, sailing a slow circle. You stand on her deck in her own frame: the walker keeps its place on the planks while she turns, so the island and its lighthouse slide round the horizon. This is the cog's rule, already built (<code>sail-the-cog</code> 3.1 and 3.2: the walker stands on a craft's deck in the craft's frame, through a turn and under way). Drag to look; mouse look is raw. Pick where to stand from the places the builder's walk check reached. She sails because she is under way; section 4 is where you take the helm.</p></details>
   <div class="stage" id="walkStage">
     <canvas id="walk" aria-label="First-person view from a ship's deck at sea, with lanterns, the sails overhead and an island on the horizon."></canvas>
     <div class="ov tl">
@@ -230,35 +310,8 @@ tr:last-child td{border-bottom:0}
     <div class="hudline" aria-hidden="true" id="walkHud"></div>
   </div>
 </section>
-
-<section aria-labelledby="s4">
-  <h2 id="s4"><span class="n">4</span>Sail it</h2>
-  <p>A sea chart drawn compass-north up, as the game's map is, with the wind as arrows: trades from the east-north-east in the south, westerlies in the north, a slack band between. Click the chart to add a waypoint, drag one to move it, right-click to take it away. Then press <b>Sail</b>. You start on foot on her deck by the wheel, first person in her frame (WASD walk, drag to look). <b>F</b> at the wheel takes the helm, and the view becomes a chase camera behind her: <b>A</b> and <b>D</b> put the helm over (a rudder is a foil: she turns only with way on), and <b>&larr;</b> and <b>&rarr;</b> swing the sail toward port or starboard (on a powered ship <b>W</b> and <b>S</b> step the telegraph through astern, stop, slow, half and full). <b>F</b> again lets go: she sails on holding rudder and sail while you walk her deck. Walk off the deck where there is no rail and you are in the water: with no one aboard her sails furl and she comes to rest; swim to her side and press <b>F</b> to climb aboard. Nothing steers for you: a sailing ship cannot point closer than about 45 degrees to the wind, so to reach a waypoint upwind she must tack. A waypoint counts as reached within 30 m, and the next one takes over. The GPS plans the route a sailor would sail, laid as a glowing path on the water ahead of her bow with a chevron at the next turn (and on the chart, cyan dashes: straight when the mark can be laid on one board, close-hauled legs between the faint laylines when it is upwind, tack points as dots), marks the best heading on the compass bar (cyan) beside the waypoint (amber), and tells you which way to turn and how to trim. A curved arrow on the sail shows which way to swing it and how far, and turns into a tick when she is trimmed. It advises; it never steers.</p>
-  <div class="sailwrap" id="sailWrap" tabindex="0" aria-label="Sail it: click the chart for waypoints, A and D steer, W and S sheet or throttle">
-    <div class="sailbar">
-      <div class="seg" id="sailShip" role="group" aria-label="Ship"></div>
-      <div class="seg"><button id="sailGo" class="go" aria-pressed="false">Sail</button><button id="sailReset">Reset</button><button id="sailClear">Clear route</button></div>
-      <div class="seg" id="sailWarp" role="group" aria-label="Time"><button data-x="1" aria-pressed="false">x1</button><button data-x="8" aria-pressed="true">x8</button><button data-x="32" aria-pressed="false">x32</button></div>
-      <div class="seg" id="sailTime" role="group" aria-label="Time of day"><button data-t="day">Day</button><button data-t="night">Night</button></div>
-    </div>
-    <canvas id="compass" width="720" height="42" aria-label="Compass bar: the heading, and the active waypoint as a diamond"></canvas>
-    <div class="gps mono" id="gps"></div>
-    <div class="advice" id="advice" aria-live="polite"></div>
-    <div class="stage s3"><canvas id="sail3d" aria-label="The ship in 3D: behind her at the helm, on her deck on foot, or in the water"></canvas>
-      <div class="hudline" id="sail3dHud" aria-live="polite"></div>
-      <div class="prompt3" id="sail3dPrompt" hidden></div>
-    </div>
-    <div class="seg helm" id="helmPad"><button data-k="a">A</button><button data-k="d">D</button><button data-k="arrowleft">&larr;</button><button data-k="arrowright">&rarr;</button><button data-k="w">W</button><button data-k="s">S</button><button data-k="f" class="go">F</button></div>
-    <div class="sailgrid">
-      <canvas id="seamap" width="960" height="640" aria-label="Sea chart, north up"></canvas>
-      <div class="sailside">
-        <canvas id="heel" width="300" height="300" aria-label="The ship from astern, heeling, and from above, with her sail and the apparent wind"></canvas>
-        <p class="muted" id="sailState" style="font-size:13px"></p>
-      </div>
-    </div>
-  </div>
-</section>
-
+</div>
+<div class="tabpanel" id="tab-how" role="tabpanel" hidden>
 <section aria-labelledby="s5">
   <h2 id="s5"><span class="n">5</span>How the numbers follow from the cells</h2>
   <p>A full cell is 6.95 m<sup>3</sup>, so it displaces 7.12 t of sea. The game's 1 g is 25 m/s<sup>2</sup> (<code>SURFACE_GRAVITY_MPS2_PER_G</code>), and craft feel it. The builder integrates each cell exactly; the game floats each hex cell as seven sub-cells (its centre and six round it at half the circumradius, each about 1.07 m across and 0.5 m tall), which meets <code>hull::float</code>'s rule of a buoyancy cell at most a third of the beam for any ship two rows or more in the beam.</p>
@@ -280,19 +333,16 @@ tr:last-child td{border-bottom:0}
     </tbody>
   </table></div>
 </section>
-
 <section aria-labelledby="s6">
   <h2 id="s6"><span class="n">6</span>Blocks and pieces</h2>
   <p>Blocks fill cells; pieces stand in them or hang on their edges, as a town's do. The last twelve are the power levels: oars, steam, oil, fission and batteries. Made at the fabricator and the assembly bay from planks, timber, stone, canvas, rope and iron, and the engines from M20's chains.</p>
   <div class="mods" id="mods"></div>
 </section>
-
 <section aria-labelledby="s7">
   <h2 id="s7"><span class="n">7</span>Six levels of ship power</h2>
   <p>One preset a level, each built from the blocks above. Each is the ship that pays for the next; the trader and the three-master are sailing ships for carrying.</p>
   <div class="prog" id="prog"></div>
 </section>
-
 <section aria-labelledby="s8">
   <h2 id="s8"><span class="n">8</span>Saves, and what stays true</h2>
   <div class="mods" style="grid-template-columns:repeat(3,minmax(0,1fr))">
@@ -301,12 +351,12 @@ tr:last-child td{border-bottom:0}
     <div class="card"><h3>The block set is versioned</h3><p>A saved ship names her block set's version. A retuned block keeps its old numbers for ships already built, or migrates them forward on open; a removed block stays readable. A player's ship never changes shape on its own.</p></div>
   </div>
 </section>
-
 <section aria-labelledby="s9">
   <h2 id="s9"><span class="n">9</span>Decisions and questions for the owner</h2>
   <p class="muted">Recommendations are mine, not the owner's words. The ones marked with a picture have the dock and the builder above to look at; the rest are taken as recommended (ask only with screenshots).</p>
   <div class="dec" id="decisions"></div>
 </section>
+</div>
 
 </div>
 
@@ -678,6 +728,19 @@ const SHIPS = {
 
 // ======================= the builder =======================
 const Q = new URLSearchParams(location.search), STILL = Q.has("still");   // ?still: render a few frames and stop (screenshots without a GPU)
+// ---- tabs: one part of the mockup at a time; the tab is the URL's bare hash (#dock, #builder, #sail, #walk, #how)
+const TABS = ["dock", "builder", "sail", "walk", "how"];
+let TAB = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "dock";
+function setTab(t, push = true) {
+  if (!TABS.includes(t)) return; TAB = t; document.body.dataset.tab = t;
+  TABS.forEach(n => { const p = document.getElementById("tab-" + n); if (p) p.hidden = n !== t; });
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+  if (push) try { history.replaceState(null, "", location.pathname + location.search + "#" + t); } catch (e) {}
+  window.dispatchEvent(new Event("pbdtab"));
+}
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+window.addEventListener("hashchange", () => setTab(location.hash.slice(1), false));
+setTab(TAB, false);
 let current = Q.get("ship") && SHIPS[Q.get("ship")] ? Q.get("ship") : "trader";
 let grid = parse(SHIPS[current]);
 let S = hydro(grid), CH = checks(grid, S);
@@ -718,7 +781,7 @@ pal.innerHTML = PALETTE_KEYS.map(k => `<button data-k="${k}" aria-pressed="${k =
   `<button data-k="." aria-pressed="false" title="Eraser"><svg width="32" height="32" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 28 L22 10 L32 18 L20 32 Z" fill="#e06a7a" stroke="#6b2430" stroke-width="2"/></svg>Eraser<kbd>0</kbd></button>`;
 const setTool = k => { tool = k; pal.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === k)); };
 pal.querySelectorAll("button").forEach(b => b.addEventListener("click", () => setTool(b.dataset.k)));
-window.addEventListener("keydown", e => { if (!document.activeElement?.closest?.(".builder")) return; const k = e.key.toUpperCase(); if (BLK[k]) setTool(k); if (k === "0") setTool("."); if (e.key === "PageUp") setLayer(Math.min(LAYERS - 1, layer + 1)); if (e.key === "PageDown") setLayer(Math.max(0, layer - 1)); });
+window.addEventListener("keydown", e => { if (TAB !== "builder" || !document.activeElement?.closest?.(".builder")) return; const k = e.key.toUpperCase(); if (BLK[k]) setTool(k); if (k === "0") setTool("."); if (e.key === "PageUp") setLayer(Math.min(LAYERS - 1, layer + 1)); if (e.key === "PageDown") setLayer(Math.max(0, layer - 1)); });
 const layersEl = document.getElementById("layers");
 function setLayer(k) { layer = k; drawLayers(); drawHex(); }
 function layerName(k) { return k === 0 ? "keel" : k === S.mainDeck ? "main deck" : k < S.mainDeck ? "below deck" : k === S.mainDeck + 1 ? "on deck" : "above deck"; }
@@ -910,6 +973,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     for (const L of W.BULBS) L.bulb.material.color.copy(L.c).multiplyScalar(T.lamps > 0.05 ? 1 : 0.35);
     for (const m of W.WIN) m.emissiveIntensity = T.win * (m.userData.k || 1);
     if (W.water) { W.water.forEach(m => { m.color.setHex(T.sea); }); }
+    if (W.SEAS) { const name = Object.keys(TIMES).find(k => TIMES[k] === T) || "day"; W.SEAS.forEach(sea => sea.setTime(name, T)); }
   };
   return W;
 }
@@ -1038,6 +1102,97 @@ function buildShip(W, g, s, opts = {}) {
   return grp;
 }
 
+// ======================= the sea: a water shader after M19's (vehicles.html) and the game's sea.wgsl =======================
+// Waves are a sum of deep-water sines (omega = sqrt(g k), the game's g of 25 m/s^2); seaH() is the same sum in JS, so a ship
+// rides the water she is drawn on. Colour runs from shallow to deep by the depth under the surface (a baked depth map),
+// with a Fresnel sky, a sun glint by day, a dim moon path at night, every lamp lighting the water near it (the lit() model),
+// and foam on crests, at the shore, at the bow and in the wake, in 0.5 m pixels like the game's nearest-sampled textures.
+const WAVES = [[0.28, 34, 0.30, 0.95, 0.0], [0.18, 21, -0.55, 0.83, 1.7], [0.10, 13, 0.82, 0.57, 3.1], [0.05, 7.5, -0.2, -0.98, 0.6]].map(([a, lam, dx, dz, ph]) => { const k = 2 * Math.PI / lam, l = Math.hypot(dx, dz); return {a, k, dx: dx / l, dz: dz / l, w: Math.sqrt(25 * k), ph}; });
+function seaH(x, z, t, amp) { let h = 0; for (const W1 of WAVES) h += W1.a * amp * Math.sin(W1.k * (W1.dx * x + W1.dz * z) - W1.w * t + W1.ph); return h; }
+const SEA_SKY = {day: [0x6fa3d0, 0xbcd6e6, 1, 0, 0.55], dusk: [0x5a4a62, 0xc08a6a, 0.45, 0.1, 0.25], night: [0x04070d, 0x0b1220, 0, 0.5, 0.025]};
+function makeSea(W, o = {}) {
+  const amp = o.amp ?? 1, U = Object.assign({}, W.U, {
+    uT: {value: 0}, uAmp: {value: amp}, uCenter: {value: new THREE.Vector2()}, uLevel: {value: 0},
+    uSky: {value: new THREE.Color()}, uHor: {value: new THREE.Color()}, uSun: {value: new THREE.Vector3(0.5, 0.8, 0.3).normalize()}, uSunI: {value: 1}, uMoon: {value: new THREE.Vector3(0.4, 0.5, -0.6).normalize()}, uMoonI: {value: 0}, uAmb: {value: 0.5},
+    uDepth: {value: o.depthTex || null}, uDRect: {value: new THREE.Vector4(...(o.depthRect || [0, 0, 1, 1]))}, uHasD: {value: o.depthTex ? 1 : 0},
+    uHole: {value: new THREE.Vector4(...(o.hole || [0, 0, 0, 0]))}, uShip: {value: new THREE.Vector4(0, 0, 1, 0)}, uShipS: {value: new THREE.Vector3(0, 3, 8)},
+    uFogC: {value: new THREE.Color()}, uFog: {value: new THREE.Vector2(300, 2000)}});
+  const wv = WAVES.map(w1 => `eta += ${w1.a.toFixed(3)} * uAmp * sin(${w1.k.toFixed(4)} * dot(vec2(${w1.dx.toFixed(4)}, ${w1.dz.toFixed(4)}), p) - ${w1.w.toFixed(4)} * uT + ${w1.ph.toFixed(2)}); g += ${w1.a.toFixed(3)} * uAmp * ${w1.k.toFixed(4)} * vec2(${w1.dx.toFixed(4)}, ${w1.dz.toFixed(4)}) * cos(${w1.k.toFixed(4)} * dot(vec2(${w1.dx.toFixed(4)}, ${w1.dz.toFixed(4)}), p) - ${w1.w.toFixed(4)} * uT + ${w1.ph.toFixed(2)});`).join("\n    ");
+  const mat = new THREE.ShaderMaterial({uniforms: U, transparent: !!o.transparent, depthWrite: !o.transparent,
+    vertexShader: `uniform float uT; uniform float uAmp; uniform vec2 uCenter; uniform float uLevel;
+  varying vec3 vW; varying vec3 vN; varying float vCrest;
+  void main() {
+    vec2 p = position.xz + uCenter; float eta = 0.0; vec2 g = vec2(0.0);
+    ${wv}
+    vW = vec3(p.x, uLevel + eta, p.y); vN = normalize(vec3(-g.x, 1.0, -g.y)); vCrest = eta / max(0.01, 0.6 * uAmp);
+    gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0);
+  }`,
+    fragmentShader: `uniform vec3 uSky; uniform vec3 uHor; uniform vec3 uSun; uniform float uSunI; uniform vec3 uMoon; uniform float uMoonI; uniform float uAmb;
+  uniform sampler2D uDepth; uniform vec4 uDRect; uniform float uHasD; uniform float uLevel; uniform vec4 uHole; uniform vec4 uShip; uniform vec3 uShipS;
+  uniform vec3 uFogC; uniform vec2 uFog; uniform float uT;
+  uniform vec3 uLampPos[${MAXL}]; uniform vec4 uLampCol[${MAXL}]; uniform int uLampCount; uniform float uLampOn;
+  varying vec3 vW; varying vec3 vN; varying float vCrest;
+  float hash(vec2 q) { return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
+  void main() {
+    if (vW.x > uHole.x && vW.x < uHole.z && vW.z > uHole.y && vW.z < uHole.w) discard;
+    float depth = 40.0;
+    if (uHasD > 0.5) { vec2 uv = (vW.xz - uDRect.xy) / (uDRect.zw - uDRect.xy); if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) depth = uLevel + texture2D(uDepth, uv).r * 50.0 - 10.0; }
+    if (depth < -0.3) discard;
+    vec3 n = normalize(vN), v = normalize(cameraPosition - vW);
+    vec3 deep = vec3(0.015, 0.09, 0.17), shallow = vec3(0.11, 0.48, 0.52);
+    vec3 base = mix(shallow, deep, smoothstep(0.5, 16.0, depth));
+    vec3 col = base * (uAmb + 0.55 * uSunI * max(dot(n, uSun), 0.0));
+    vec3 r = reflect(-v, n); vec3 sky = mix(uHor, uSky, clamp(r.y * 2.5, 0.0, 1.0));
+    float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+    col = mix(col, sky, fres * 0.8);
+    col += vec3(1.0, 0.95, 0.85) * pow(max(dot(reflect(-uSun, n), v), 0.0), 180.0) * 1.6 * uSunI;
+    col += vec3(0.75, 0.82, 1.0) * pow(max(dot(reflect(-uMoon, n), v), 0.0), 40.0) * 0.35 * uMoonI;
+    // lamps: each lights the water near it and throws a short glint toward the eye
+    vec3 P = (viewMatrix * vec4(vW, 1.0)).xyz, nv = normalize((viewMatrix * vec4(n, 0.0)).xyz), V = normalize(-P);
+    for (int i = 0; i < ${MAXL}; i++) {
+      if (i >= uLampCount) break;
+      vec3 Lv = uLampPos[i] - P; float d = length(Lv), rr = uLampCol[i].w * 1.3; if (d > rr) continue;
+      float f = 1.0 - d / rr; f *= f; vec3 L = Lv / max(d, 1e-3);
+      col += (base * 0.9 * max(dot(nv, L), 0.0) + pow(max(dot(reflect(-L, nv), V), 0.0), 24.0) * 0.6) * uLampCol[i].rgb * f * uLampOn;
+    }
+    // foam: crests, the shore, the bow wave and the wake; in 0.5 m pixels
+    vec2 px = floor(vW.xz * 2.0); float nse = hash(px + floor(uT * 2.0) * 0.0);
+    float foam = smoothstep(0.75, 1.0, vCrest) * 0.5 + (1.0 - smoothstep(0.0, 1.4, depth)) * (0.45 + 0.5 * nse);
+    vec2 dir = uShip.zw, rel = vW.xz - uShip.xy; float along = dot(rel, dir), side = dot(rel, vec2(-dir.y, dir.x)), spd = clamp(uShip.w / 3.0, 0.0, 1.0);
+    float hb = uShipS.y, hl = uShipS.z;
+    float bow = step(abs(side), hb + 1.6) * (1.0 - smoothstep(0.0, 3.0 + 3.0 * spd, abs(along - hl))) * spd;
+    float behind = -along - hl, wide = hb + max(behind, 0.0) * 0.36, len = 25.0 + uShip.w * 30.0;
+    float edge = 1.0 - smoothstep(0.0, 1.2, abs(abs(side) - wide)), trail = 1.0 - smoothstep(0.0, hb * 0.8, abs(side));
+    float wake = step(0.0, behind) * (1.0 - smoothstep(0.0, len, behind)) * spd * (0.55 * edge + 0.6 * trail);
+    foam += max(bow, 0.0) * 0.8 + max(wake, 0.0) * (0.35 + 0.45 * nse);
+    foam = clamp(foam * step(0.35, nse + foam * 0.5), 0.0, 0.85);
+    vec3 foamC = vec3(0.86, 0.92, 0.94) * (uAmb + 0.7 * uSunI) + vec3(0.04);
+    col = mix(col, foamC, foam);
+    float fd = length(cameraPosition - vW); col = mix(col, uFogC, smoothstep(uFog.x, uFog.y, fd));
+    gl_FragColor = vec4(col, ${o.transparent ? "0.92" : "1.0"});
+  }`});
+  let geo;
+  if (o.rect) { const [x0, z0, x1, z1] = o.rect; geo = new THREE.PlaneGeometry(x1 - x0, z1 - z0, Math.ceil((x1 - x0) / 1.5), Math.ceil((z1 - z0) / 1.5)); geo.rotateX(-Math.PI / 2); geo.translate((x0 + x1) / 2, 0, (z0 + z1) / 2); }
+  else { const NR = o.rings || 80, NS = 96, pos = [], idx = [], R = o.radius || 1800, rad = i => R * Math.pow(i / NR, 2.4);
+    for (let i = 0; i <= NR; i++) for (let j = 0; j < NS; j++) { const a = j / NS * Math.PI * 2, r = rad(i); pos.push(Math.cos(a) * r, 0, Math.sin(a) * r); }
+    for (let i = 0; i < NR; i++) for (let j = 0; j < NS; j++) { const a = i * NS + j, b = i * NS + (j + 1) % NS, c = a + NS, d = b + NS; idx.push(a, b, c, b, d, c); }
+    geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); }
+  const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.renderOrder = 2; W.scene.add(mesh);
+  const S = {mesh, U, amp, follow: !o.rect,
+    setTime(name, Tm) { const s = SEA_SKY[name] || SEA_SKY.day; U.uSky.value.setHex(s[0]); U.uHor.value.setHex(s[1]); U.uSunI.value = s[2]; U.uMoonI.value = s[3]; U.uAmb.value = s[4]; U.uSun.value.set(...Tm.sunPos).normalize(); U.uFogC.value.setHex(Tm.fog); },
+    update(t, cam) { U.uT.value = t; if (S.follow) U.uCenter.value.set(Math.round(cam.x / 4) * 4, Math.round(cam.z / 4) * 4); U.uFog.value.set(W.scene.fog.near, W.scene.fog.far); },
+    ship(x, z, hdgRad, spd, hb, hl) { U.uShip.value.set(x, z, Math.cos(hdgRad), Math.sin(hdgRad)); U.uShip.value.w = spd; U.uShipS.value.set(0, hb, hl); },
+    h: (x, z, t) => seaH(x, z, t, amp)};
+  (W.SEAS || (W.SEAS = [])).push(S);
+  return S;
+}
+// a baked depth map for the shader: depth below sea level (m), -10 to 40, in a red channel
+function depthTexture(fn, x0, z0, x1, z1, n) {
+  const data = new Uint8Array(n * n * 4);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const x = x0 + (i + 0.5) / n * (x1 - x0), z = z0 + (j + 0.5) / n * (z1 - z0), d = fn(x, z), o = (j * n + i) * 4; data[o] = Math.max(0, Math.min(255, Math.round((d + 10) / 50 * 255))); data[o + 3] = 255; }
+  const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat); t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t;
+}
+
 // ======================= the drydock (three.js) =======================
 const DOCK = {head: -24, gate: 18, half: 7.4, floor: -7, block: 1};
 const hsh = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -1093,14 +1248,12 @@ let dockApi = null;
   const GM = {atlas: W.std({map: ATLAS, roughness: 1}), stone: W.std({map: tex("game/stone", 2)}), granite: W.std({map: tex("game/granite", 2)})};
   for (const [k, G] of Object.entries(GG)) scene.add(meshOf(G, GM[k], false));
   // ---- the sea, with a hole where the dock is, and the dock's own water
-  const seaMat = W.lit(new THREE.MeshStandardMaterial({color: 0x2f7f96, transparent: true, opacity: 0.82, roughness: 0.35, metalness: 0, depthWrite: false}));
-  const dockMat = W.lit(new THREE.MeshStandardMaterial({color: 0x2f7f96, transparent: true, opacity: 0.84, roughness: 0.35, metalness: 0, depthWrite: false}));
-  W.water = [seaMat, dockMat];
-  const hole = [DOCK.head - 11, DOCK.gate - 0.3, -15.8, 15.8];
-  const sh = new THREE.Shape(); sh.moveTo(-500, -500); sh.lineTo(500, -500); sh.lineTo(500, 500); sh.lineTo(-500, 500); sh.lineTo(-500, -500);
-  const hp = new THREE.Path(); hp.moveTo(hole[0], hole[2]); hp.lineTo(hole[0], hole[3]); hp.lineTo(hole[1], hole[3]); hp.lineTo(hole[1], hole[2]); hp.lineTo(hole[0], hole[2]); sh.holes.push(hp);
-  const sea = new THREE.Mesh(new THREE.ShapeGeometry(sh), seaMat); sea.rotation.x = -Math.PI / 2; sea.position.y = 0; sea.renderOrder = 2; scene.add(sea);
-  const dw = new THREE.Mesh(new THREE.PlaneGeometry(hole[1] - hole[0], hole[3] - hole[2]), dockMat); dw.rotation.x = -Math.PI / 2; dw.position.set((hole[0] + hole[1]) / 2, 0, 0); dw.renderOrder = 2; scene.add(dw);
+  // ---- the sea (the water shader), with a hole where the dock is, and the dock's own water at its level
+  const hole = [DOCK.head - 11, DOCK.gate - 0.3, -15.8, 15.8], DR = [-230, -230, 230, 230];
+  const dTex = depthTexture((x, z) => -worldCell(x, z).h, ...DR, 256);
+  const sea = makeSea(W, {depthTex: dTex, depthRect: DR, hole: [hole[0], hole[2], hole[1], hole[3]], amp: 0.6, radius: 1200});
+  const dockSea = makeSea(W, {rect: [hole[0], hole[2], hole[1], hole[3]], depthTex: dTex, depthRect: DR, amp: 0.12});
+  const dw = dockSea.mesh;
   // ---- the caisson gate, hinged on the channel's north wall
   const hinge = new THREE.Group(); hinge.position.set(DOCK.gate, 0, 8.6); scene.add(hinge);
   const gate = new THREE.Group(); hinge.add(gate);
@@ -1190,17 +1343,17 @@ let dockApi = null;
   slider.addEventListener("input", () => { water = slider.value / 1000; playing = false; playBtn.setAttribute("aria-pressed", "false"); update(true); });
   const playBtn = document.getElementById("play"); let playing = false;
   playBtn.addEventListener("click", () => { playing = !playing; playBtn.setAttribute("aria-pressed", playing); });
-  let shipState = "";
+  let shipState = "", shipBase = {y: 0, afloat: false, spd: 0};
   function update() {
     if (!ship || !shipS.m) return;
     const lvl = WL(water), st = STAGE(water), minK = Math.min(...cellsOf(shipG).map(q => q.k));
-    dw.visible = lvl > DOCK.floor + 0.02; dw.position.y = lvl;
+    dw.visible = lvl > DOCK.floor + 0.02; dockSea.U.uLevel.value = lvl;
     const rest = DOCK.floor + DOCK.block - minK, float = lvl - shipS.d;
     let y = rest, x = DOCK.x0;
     const gateT = st === 4 ? Math.min(1, (water - 0.84) / 0.06) : 0, outT = st === 4 ? Math.max(0, (water - 0.9) / 0.1) : 0;
     if (!shipS.sinks && float > rest) y = float;
     x += outT * (DOCK.gate + 46 - DOCK.x0);
-    ship.position.set(x, y, outT > 0 ? -1.2 * Math.min(1, outT * 3) : 0);
+    ship.position.set(x, y, outT > 0 ? -1.2 * Math.min(1, outT * 3) : 0); shipBase = {y, afloat: y > rest + 0.001, spd: outT > 0 ? 1.6 : 0};
     hinge.rotation.y = -gateT * Math.PI / 2; gate.position.y = gateT * 1.2;
     staging.visible = blocks.visible = true; staging.visible = st === 2 || (st === 1 && lvl < -5.5) || (st === 3 && lvl < -6);
     weld.forEach(L => { L.i0 = st === 2 ? 3.2 : 0; if (L.bulb) L.bulb.visible = st === 2; });
@@ -1255,11 +1408,13 @@ let dockApi = null;
     if (playing && !reduce) gtime += dt; const gx = -4 + 9 * Math.sin(gtime / 30);
     gantry.position.set(gx, 0, 0); trolley.position.z = 3 * Math.cos(gtime / 17);
     const hookY = 13.5; cable.scale.y = 25 - hookY; cable.position.set(0, (25 + hookY) / 2, trolley.position.z); spar.position.set(0, hookY - 0.4, trolley.position.z); spar.rotation.y = 0.3 + 0.05 * Math.sin(gtime / 3);
+    for (const s2 of [sea, dockSea]) { s2.update(t, camera.position); if (ship && shipS) s2.ship(ship.position.x, ship.position.z, 0, shipBase.spd, shipS.beam / 2, shipS.LOA / 2); }
+    if (ship && shipBase.afloat) { const sx = ship.position.x, sz = ship.position.z, h = (ship.position.x > DOCK.gate ? sea : dockSea).h; ship.position.y = shipBase.y + h(sx, sz, t); ship.rotation.x = (h(sx, sz + 3, t) - h(sx, sz - 3, t)) / 6; ship.rotation.z = (h(sx + 6, sz, t) - h(sx - 6, sz, t)) / 12; }
     W.render(t);
   }
   let started = false; const start = () => { if (started) return; started = true; document.getElementById("loading")?.remove(); requestAnimationFrame(frame); };
   MANAGER.onLoad = start; setTimeout(start, 8000);
-  press(document.getElementById("floatOut"), () => { dockShipName = edited ? "Your design" : SHIPS[current].name; place(grid, S); if (water > 0.84) dockApi.setWater(0.5); focus("ship"); document.getElementById("dockStage").scrollIntoView({behavior: "smooth", block: "center"}); });
+  press(document.getElementById("floatOut"), () => { setTab("dock"); dockShipName = edited ? "Your design" : SHIPS[current].name; place(grid, S); if (water > 0.84) dockApi.setWater(0.5); focus("ship"); document.getElementById("dockStage").scrollIntoView({behavior: "smooth", block: "center"}); });
 })();
 
 // ======================= walk the deck (three.js) =======================
@@ -1267,8 +1422,7 @@ let dockApi = null;
   const canvas = document.getElementById("walk");
   if (!window.THREE) return;
   const W = makeWorld(canvas, {far: 2400}), {scene, camera} = W;
-  const seaMat = W.lit(new THREE.MeshStandardMaterial({color: 0x2f7f96, roughness: 0.35, metalness: 0})); W.water = [seaMat];
-  const sea = new THREE.Mesh(new THREE.CircleGeometry(2200, 64), seaMat); sea.rotation.x = -Math.PI / 2; scene.add(sea);
+  const sea = makeSea(W, {amp: 1, radius: 2000});
   // an island with a lighthouse, so the turn shows on the horizon
   const ISL = [430, -250], G = {atlas: Geo(), stone: Geo()};
   const ATLAS = tex("game/atlas"); ATLAS.repeat.set(1, 1); ATLAS.wrapS = ATLAS.wrapT = THREE.ClampToEdgeWrapping;
@@ -1342,7 +1496,9 @@ let dockApi = null;
     if (!reduce) th += v / R * dt;
     const vx = -Math.sin(th), vz = Math.cos(th);
     boat.position.set(R * Math.cos(th), 0, R * Math.sin(th)); boat.rotation.y = Math.atan2(-vz, vx);
-    rocker.rotation.x = reduce ? 0 : 0.035 * Math.sin(t * 0.7); rocker.rotation.z = reduce ? 0 : 0.012 * Math.sin(t * 0.45);
+    const bx = boat.position.x, bz = boat.position.z, hh = sea.h, L2 = 6;
+    boat.position.y = hh(bx, bz, t); rocker.rotation.x = (hh(bx - vz * 3, bz + vx * 3, t) - hh(bx + vz * 3, bz - vx * 3, t)) / 6; rocker.rotation.z = (hh(bx + vx * L2, bz + vz * L2, t) - hh(bx - vx * L2, bz - vz * L2, t)) / (2 * L2);
+    sea.update(t, camera.getWorldPosition(new THREE.Vector3())); sea.ship(bx, bz, Math.atan2(vz, vx), v, (s.beam || 6) / 2, (s.LOA || 15) / 2);
     if (spot && spots[spot]) camera.position.copy(spots[spot][1]);
     camera.rotation.set(0, 0, 0); camera.rotateY(look.yaw - Math.PI / 2); camera.rotateX(look.pitch);
     const hd = ((90 - Math.atan2(vz, vx) * 180 / Math.PI) % 360 + 360) % 360, sp = spots[spot];
@@ -1396,7 +1552,7 @@ let dockApi = null;
   const THR = [["Astern", -0.4], ["Stop", 0], ["Slow ahead", 0.33], ["Half ahead", 0.66], ["Full ahead", 1]];
   const keys = new Set();
   let running = false, warp = 8, night = Q.get("stime") === "night";
-  function reset() { Object.assign(S, {x: START.x, y: START.y, psi: START.psi, u: 0, rud: 0, delta: 45, thr: 1, rowT: 0, heel: 0, lee: 0, t: 0, track: [[START.x, START.y]], aground: false, done: false, furl: 1}); ai = 0; from = {x: START.x, y: START.y}; }
+  function reset() { Object.assign(S, {x: START.x, y: START.y, psi: START.psi, u: P && P.sail ? 2 : 0, rud: 0, delta: 45, thr: 1, rowT: 0, heel: 0, lee: 0, t: 0, track: [[START.x, START.y]], aground: false, done: false, furl: 1}); ai = 0; from = {x: START.x, y: START.y}; }
   // ---- the sail as a foil in the apparent wind: the one model the sim, the polar and the advice all use
   function sailF(beta, delta, A) {
     const alpha = beta - delta, luff = Math.min(1, Math.max(0, (beta - 20) / 12));   // the sail luffs inside about 25 degrees of apparent wind: about 45 degrees of true wind
@@ -1595,6 +1751,7 @@ let dockApi = null;
     c.fillText(P.SA > 0 ? `sail ${S.delta.toFixed(0)}° off the centreline` : "telegraph", 8, H / 2 + 16); c.fillStyle = "#e8b040"; c.fillText(label, 8, H - 8);
   }
   function readout() {
+    wrap.dataset.psi = S.psi.toFixed(2); wrap.dataset.delta = S.delta.toFixed(2); wrap.dataset.mode = MODE.m; wrap.dataset.running = running;
     const gp = gps(), el = document.getElementById("gps"), st = document.getElementById("sailState");
     el.textContent = gp ? `WP ${ai + 1}/${wps.length}  BRG ${gp.brg.toFixed(0).padStart(3, "0")}°  DIST ${gp.dist >= 1000 ? (gp.dist / 1000).toFixed(2) + " km" : gp.dist.toFixed(0) + " m"}  COG ${S.cog.toFixed(0).padStart(3, "0")}°  SOG ${S.sog.toFixed(1)} m/s (${(S.sog * 1.944).toFixed(1)} kn)  XTE ${Math.abs(gp.xte).toFixed(0)} m ${gp.xte > 1 ? "R" : gp.xte < -1 ? "L" : ""}  ETA ${fmtT(plan ? plan.eta : gp.eta)} by the route` : wps.length ? `Route done: every waypoint reached in ${fmtT(S.t)}.` : "No route: click the map to add waypoints.";
     const ad = advice(), av = document.getElementById("advice");
@@ -1605,31 +1762,60 @@ let dockApi = null;
   let planAt = -1e9;
   function draw() { const now = performance.now(); if (!running || now - planAt > 300) { replan(); planAt = now; if (typeof buildRoute === "function") buildRoute(); } if (typeof kick === "function") kick(); drawMap(); drawCompass(); drawHeel(); readout(); }
   // ---- controls: at the helm A/D steer, Left/Right swing the sail (W/S the telegraph on a powered ship); on foot or swimming WASD move; F takes or leaves the helm, or climbs aboard
-  const ctl = () => MODE.m === "helm" ? {left: keys.has("a"), right: keys.has("d"), sl: keys.has("arrowleft"), sr: keys.has("arrowright")} : {hold: true};
+  const ctl = () => ({hold: true});
   const KEYS = ["w", "a", "s", "d", "arrowleft", "arrowright", "f"];
+  // how long each key was held since the last frame, so a short press is never lost however slow the frame
+  const downAt = {}, acc = {};
+  let lastCtl = performance.now();
+  function held(k, now) { let ms = acc[k] || 0; if (downAt[k] != null) ms += now - Math.max(downAt[k], lastCtl); return ms; }
+  function release(k) { const now = performance.now(); if (downAt[k] != null) { acc[k] = (acc[k] || 0) + now - Math.max(downAt[k], lastCtl); delete downAt[k]; } keys.delete(k); }
+  // the helm and the sheet move in real time, whatever the time warp: A/D put the wheel over (it comes back amidships when let go),
+  // Left/Right swing the sail toward port or starboard
+  function controls(now) {
+    const dt = Math.max(1e-3, (now - lastCtl) / 1000), f = k => Math.min(1, held(k, now) / 1000 / dt);
+    const fa = f("a"), fd = f("d"), fl = f("arrowleft"), fr = f("arrowright"), fw = f("w"), fs = f("s");
+    if (MODE.m === "helm") {
+      const want = 35 * (fd - fa); S.rud += Math.max(-70 * dt, Math.min(70 * dt, want - S.rud));
+      const sgn = -(S.fromRight || 1); if (P.sail) S.delta = Math.max(0, Math.min(90, S.delta + sgn * 35 * dt * (fr - fl)));
+    }
+    for (const k in acc) acc[k] = 0; lastCtl = now;
+    return {fw, fs, fa, fd, dt};
+  }
   function press(k, repeat) {
+    if (!repeat && downAt[k] == null) downAt[k] = performance.now();
     if (k === "f") { if (!repeat) act(); return; }
     if (MODE.m === "helm" && P.power && !P.sail && !repeat) { if (k === "w") S.thr = Math.min(THR.length - 1, S.thr + 1); if (k === "s") S.thr = Math.max(0, S.thr - 1); }
     keys.add(k); kick();
   }
-  wrap.addEventListener("keydown", e => { const k = e.key.toLowerCase(); if (!KEYS.includes(k)) return; e.preventDefault(); press(k, e.repeat); });
-  wrap.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
-  wrap.addEventListener("blur", () => keys.clear());
+  // keys go to the boat whenever the Sail it tab is showing: no focus needed, and arrows and space never scroll the page
+  const typing = e => /^(input|textarea|select)$/i.test(e.target.tagName || "") || e.target.isContentEditable;
+  document.addEventListener("keydown", e => {
+    if (TAB !== "sail" || typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key.toLowerCase(); if (k === " " || k.startsWith("arrow") || k === "pageup" || k === "pagedown") e.preventDefault();
+    if (!KEYS.includes(k)) return; e.preventDefault(); hideOv(); press(k, e.repeat);
+  });
+  document.addEventListener("keyup", e => { release(e.key.toLowerCase()); padShow(); });
+  window.addEventListener("blur", () => { [...keys].forEach(release); padShow(); });
+  const padShow = () => document.querySelectorAll("#helmPad button").forEach(b => b.classList.toggle("on", keys.has(b.dataset.k)));
+  // the on-screen keys: press and hold, mouse or touch
   document.querySelectorAll("#helmPad button").forEach(b => {
     const k = b.dataset.k;
-    b.addEventListener("pointerdown", e => { e.preventDefault(); wrap.focus(); press(k, false); });
-    for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, () => keys.delete(k));
+    b.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); hideOv(); try { b.setPointerCapture(e.pointerId); } catch (x) {} press(k, false); padShow(); });
+    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) b.addEventListener(ev, () => { release(k); padShow(); });
   });
+  const ov = document.getElementById("playOv"), hideOv = () => { ov.hidden = true; };
+  ov.addEventListener("pointerdown", e => { e.preventDefault(); hideOv(); kick(); });
+  if (Q.has("sail") || Q.has("sailmode")) hideOv();
   // waypoints: click adds, drag moves, right-click removes
   const toWorld = e => { const r = map.getBoundingClientRect(); return {x: (e.clientX - r.left) * map.width / r.width / K, y: WY - (e.clientY - r.top) * map.height / r.height / K}; };
   const near = p => wps.findIndex(w => Math.hypot(w.x - p.x, w.y - p.y) < 14 / K * (map.width / map.getBoundingClientRect().width));
   let dragI = -1, moved = false;
   map.addEventListener("contextmenu", e => { e.preventDefault(); const i = near(toWorld(e)); if (i >= 0) { wps.splice(i, 1); if (i < ai) ai--; ai = Math.min(ai, wps.length); draw(); } });
-  map.addEventListener("pointerdown", e => { if (e.button !== 0) return; wrap.focus(); const p = toWorld(e); dragI = near(p); moved = false; if (dragI >= 0) map.setPointerCapture(e.pointerId); });
+  map.addEventListener("pointerdown", e => { if (e.button !== 0) return; wrap.focus({preventScroll: true}); const p = toWorld(e); dragI = near(p); moved = false; if (dragI >= 0) map.setPointerCapture(e.pointerId); });
   map.addEventListener("pointermove", e => { if (dragI < 0) return; const p = toWorld(e); wps[dragI].x = Math.max(0, Math.min(WX, p.x)); wps[dragI].y = Math.max(0, Math.min(WY, p.y)); moved = true; draw(); });
   map.addEventListener("pointerup", e => { if (e.button !== 0) return; if (dragI < 0) { const p = toWorld(e); if (!isLand(p.x, p.y)) { wps.push(p); if (S.done) S.done = false; } } dragI = -1; draw(); });
   const sailBtn = document.getElementById("sailGo");
-  const setRunning = r => { running = r; sailBtn.textContent = r ? "Pause" : "Sail"; sailBtn.setAttribute("aria-pressed", r); if (r) { wrap.focus(); last = performance.now(); requestAnimationFrame(loop); } };
+  const setRunning = r => { running = r; sailBtn.textContent = r ? "Pause" : "Sail"; sailBtn.setAttribute("aria-pressed", r); if (r) { wrap.focus({preventScroll: true}); last = performance.now(); requestAnimationFrame(loop); } };
   sailBtn.addEventListener("click", () => setRunning(!running));
   document.getElementById("sailReset").addEventListener("click", () => { setRunning(false); reset(); MODE.m = "foot"; standAtHelm(); draw(); });
   document.getElementById("sailClear").addEventListener("click", () => { wps = []; ai = 0; draw(); });
@@ -1643,7 +1829,7 @@ let dockApi = null;
   let last = 0;
   function loop(now) {
     if (!running) return;
-    const real = Math.min(0.1, (now - last) / 1000); last = now;
+    const real = Math.min(0.25, (now - last) / 1000); last = now;
     const n = Math.max(1, Math.round(real * warp / 0.05)); for (let i = 0; i < n; i++) step(real * warp / n, ctl());
     draw(); requestAnimationFrame(loop);
   }
@@ -1651,8 +1837,8 @@ let dockApi = null;
   const cv3 = document.getElementById("sail3d"), hud3 = document.getElementById("sail3dHud"), prompt3 = document.getElementById("sail3dPrompt");
   const V = makeWorld(cv3, {far: 2600}), scene3 = V.scene, cam3 = V.camera;
   scene3.fog.near = 300;
-  const seaMat3 = V.lit(new THREE.MeshStandardMaterial({color: 0x2f7f96, roughness: 0.35, metalness: 0})); V.water = [seaMat3];
-  { const sea = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), seaMat3); sea.rotation.x = -Math.PI / 2; sea.position.set(WX / 2, 0, -WY / 2); scene3.add(sea); }
+  const SDR = [-300, -WY - 300, WX + 300, 300];
+  const sea3 = makeSea(V, {amp: 1, radius: 2200, depthTex: depthTexture((x, z) => -height(x, -z) * 6, ...SDR, 256), depthRect: SDR});
   // the chart's coast and islands as hex columns (15 m across, the chart's resolution, not the world's cell)
   { const HC = 15, hr = HC / Math.sqrt(3), Gl = Geo(), at3 = tex("game/atlas"); at3.repeat.set(1, 1); at3.wrapS = at3.wrapT = THREE.ClampToEdgeWrapping;
     const auv = (sheet, tx, fu, fv) => { const sx = sheet % 4, sy = Math.floor(sheet / 4); fu = 0.01 + fu * 0.98; fv = 0.01 + fv * 0.98; return [(sx * 4 + tx + fu) / 16, 1 - (sy * 4 + fv) / 16]; };
@@ -1737,13 +1923,14 @@ let dockApi = null;
   const worldToShip = (x, y) => { const a = (90 - S.psi) * deg, dx = x - S.x, dz = -(y - S.y); return {lx: dx * Math.cos(a) - dz * Math.sin(a), lz: dx * Math.sin(a) + dz * Math.cos(a)}; };
   const nearShip = () => { const p = worldToShip(W3.wx, W3.wy); return Math.abs(p.lx) < P.s.LOA / 2 + 3 && Math.abs(p.lz) < P.s.beam / 2 + 3; };
   function act() {
+    if (MODE.m !== "helm") { const cc = controls(performance.now()); if (cc.fw || cc.fs || cc.fa || cc.fd) moveWalker(cc); }   // finish any walking first
     if (MODE.m === "helm") { MODE.m = "foot"; standAtHelm(); }
-    else if (MODE.m === "foot" && nearHelm()) { MODE.m = "helm"; camYaw = S.psi; }
+    else if (MODE.m === "foot" && nearHelm()) { MODE.m = "helm"; camYaw = S.psi; if (!running) setRunning(true); }
     else if (MODE.m === "swim" && nearShip()) { const n = W3.nodes; if (n && n.start) { W3.lx = cellX(n.start[0], n.start[1]) - W3.xm; W3.lz = cellZ(n.start[1]); W3.k = n.start[2]; } MODE.m = "foot"; }
     kick(); draw();
   }
-  function moveWalker(dt) {
-    const f = (keys.has("w") ? 1 : 0) - (keys.has("s") ? 1 : 0), sd = (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0); if (!f && !sd) return;
+  function moveWalker(cc) {
+    const dt = cc.dt, f = cc.fw - cc.fs, sd = cc.fd - cc.fa; if (!f && !sd) return;
     if (MODE.m === "swim") { const a = (S.psi * deg) + W3.yawW, sp = 1.4 * dt; W3.wx += (Math.sin(a) * f + Math.cos(a) * sd) * sp; W3.wy += (Math.cos(a) * f - Math.sin(a) * sd) * sp; return; }
     const sp = 3 * dt, nlx = W3.lx + (Math.cos(W3.yaw) * f - Math.sin(W3.yaw) * -sd) * sp, nlz = W3.lz + (-Math.sin(W3.yaw) * f + Math.cos(W3.yaw) * sd) * sp;
     const [c, r] = cellAt(nlx, nlz), g = P.g, here = cellAt(W3.lx, W3.lz), n = W3.nodes;
@@ -1753,7 +1940,7 @@ let dockApi = null;
   }
   // camera: the chase camera behind her at the helm; first person on deck or in the water
   let camYaw = S.psi, orbit = {dy: 0, dp: 0, drag: false}, last3 = performance.now(), dirty3 = true;
-  cv3.addEventListener("pointerdown", e => { cv3.setPointerCapture(e.pointerId); orbit.drag = true; orbit.x = e.clientX; orbit.y = e.clientY; wrap.focus(); });
+  cv3.addEventListener("pointerdown", e => { cv3.setPointerCapture(e.pointerId); orbit.drag = true; orbit.x = e.clientX; orbit.y = e.clientY; wrap.focus({preventScroll: true}); });
   cv3.addEventListener("pointermove", e => { if (!orbit.drag) return; const dx = e.clientX - orbit.x, dy = e.clientY - orbit.y; orbit.x = e.clientX; orbit.y = e.clientY;
     if (MODE.m === "helm") { orbit.dy -= dx * 0.006; orbit.dp = Math.max(-0.3, Math.min(0.95, orbit.dp + dy * 0.004)); }
     else if (MODE.m === "foot") { W3.yaw -= dx * 0.005; W3.pitch = Math.max(-1.3, Math.min(1.3, W3.pitch - dy * 0.005)); }
@@ -1766,7 +1953,11 @@ let dockApi = null;
   function kick() { dirty3 = true; }
   function render3(dt) {
     if (!ship3) return;
-    boat.position.set(S.x, 0, -S.y); boat.rotation.y = (90 - S.psi) * deg; rocker.rotation.x = S.heel * deg;
+    const tw = performance.now() / 1000, hp = S.psi * deg, fx = Math.sin(hp), fz = -Math.cos(hp), hh = sea3.h, L2 = Math.max(4, P.s.LOA / 2 || 6);
+    boat.position.set(S.x, hh(S.x, -S.y, tw), -S.y); boat.rotation.y = (90 - S.psi) * deg;
+    rocker.rotation.x = S.heel * deg + (hh(S.x - fz * 3, -S.y + fx * 3, tw) - hh(S.x + fz * 3, -S.y - fx * 3, tw)) / 6;
+    rocker.rotation.z = (hh(S.x + fx * L2, -S.y + fz * L2, tw) - hh(S.x - fx * L2, -S.y - fz * L2, tw)) / (2 * L2);
+    sea3.update(tw, cam3.getWorldPosition(new THREE.Vector3())); sea3.ship(S.x, -S.y, Math.atan2(fz, fx), S.sog, (P.s.beam || 6) / 2, (P.s.LOA || 15) / 2);
     // sails: swing to leeward by the sheet; furl toward the yard
     const sgn = -(S.fromRight || 1);
     for (const sl of sails3) { sl.piv.rotation.y = S.delta * deg * sgn; const f = Math.max(0.04, S.furl); sl.cloth.scale.y = f; sl.cloth.position.y = sl.top - sl.hgt * f / 2; sl.boom.position.y = sl.top - sl.hgt * f; }
@@ -1791,7 +1982,7 @@ let dockApi = null;
     }
     // the camera
     if (MODE.m === "helm") {
-      camYaw += wrap180(S.psi - camYaw) * Math.min(1, dt * 2.5);
+      camYaw += wrap180(S.psi - camYaw) * (STILL ? 1 : Math.min(1, dt * 2.5));
       if (!orbit.drag && !keepPitch) { orbit.dy *= Math.exp(-dt * 3); orbit.dp *= Math.exp(-dt * 3); }
       const yaw = (camYaw + 180) * deg + orbit.dy, pitch = Math.min(1.45, 0.5 + orbit.dp), dist = zoom || Math.max(38, P.s.LOA * 2.3), up = Math.max(6, (P.s.sheer || 4) + 4);
       cam3.position.set(S.x + Math.sin(yaw) * Math.cos(pitch) * dist, up + Math.sin(pitch) * dist, -S.y - Math.cos(yaw) * Math.cos(pitch) * dist);
@@ -1802,7 +1993,7 @@ let dockApi = null;
       cam3.position.set(W3.lx, W3.k + 1.62, W3.lz); cam3.rotation.set(0, 0, 0); cam3.rotateY(W3.yaw - Math.PI / 2); cam3.rotateX(W3.pitch);
     } else {
       if (cam3.parent !== scene3) scene3.add(cam3);
-      cam3.position.set(W3.wx, 0.45, -W3.wy); cam3.rotation.set(0, 0, 0); cam3.rotateY(-(S.psi * deg + W3.yawW)); cam3.rotateX(W3.pitch);
+      cam3.position.set(W3.wx, 0.45 + hh(W3.wx, -W3.wy, tw), -W3.wy); cam3.rotation.set(0, 0, 0); cam3.rotateY(-(S.psi * deg + W3.yawW)); cam3.rotateX(W3.pitch);
     }
     const st = MODE.m === "helm" ? "At the helm" : MODE.m === "foot" ? "On foot, aboard" : "In the water";
     hud3.textContent = `${st} | ${P.name} | ${S.sog.toFixed(1)} m/s | ${MODE.m === "helm" ? (P.sail ? "A/D helm, ←/→ swing the sail" : "A/D helm, W/S telegraph") : "WASD walk, drag to look"}${S.furl < 0.05 && P.SA > 0 ? " | No one aboard: sails furled" : MODE.m === "swim" ? " | No one aboard: sails furling" : ""}`;
@@ -1812,8 +2003,8 @@ let dockApi = null;
   }
   function tick3(now) {
     const dt = Math.min(0.1, (now - last3) / 1000); last3 = now;
-    if (keys.size && MODE.m !== "helm") { moveWalker(dt); dirty3 = true; }
-    if (running || dirty3 || orbit.drag || Math.abs(orbit.dy) > 0.001) { render3(dt); dirty3 = false; }
+    const c = controls(now); if (MODE.m !== "helm" && (c.fw || c.fs || c.fa || c.fd)) moveWalker(c);
+    if (TAB === "sail") { render3(dt); dirty3 = false; }
     if (!STILL) requestAnimationFrame(tick3);
   }
   requestAnimationFrame(tick3);
