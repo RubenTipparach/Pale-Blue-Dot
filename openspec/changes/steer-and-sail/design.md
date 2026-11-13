@@ -133,6 +133,11 @@ towards my waypoint".
     sized by how far. It turns into a tick when the sail is trimmed.
   - At night the path and the arrow glow faintly, and the ship's lanterns
     light the deck.
+- **Two keys each** (the owner, 2026-11-13: "only need two keys for each,
+  A/D, left and right, a 3rd person chase view of the boat"). A and D turn
+  the helm, and the left and right arrows swing the sail. A powered ship
+  keeps the throttle on W and S. The view is a third-person chase camera
+  behind the boat.
 - **Advice only.** The player steers and trims. The readout shows what the
   best course gains: the VMG now, and the VMG on the best heading.
 
