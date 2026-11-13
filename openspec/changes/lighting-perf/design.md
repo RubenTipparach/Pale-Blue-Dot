@@ -511,6 +511,27 @@ against 0.5, 2 repeats interleaved, latency 2. p50 / p95 / p99 ms:
   or the houses' silhouettes. Kept as a recommendation taken (ask only with
   screenshots); survey T16; `reflect_render_scale: 1.0` puts it back.
 
+### Worst case 60, met (measured 2026-11-12)
+
+`docs/benchmarks/2026-11-12-worst-case-60/`
+(https://claude.ai/artifact/DiyFFNobHpBLsuCpvB5ssk): `f15a647` (main, its
+own latency 1) against the branch at `c05ae5f`, every scenario, 2 repeats.
+p50 / p95 / p99 ms, main then the branch:
+
+| scenario | `f15a647` | branch |
+| --- | ---: | ---: |
+| rain-stroll | 13.88 / 17.94 / 25.38 | 7.18 / 10.70 / 12.86 |
+| rain-stroll, 22:00 | 13.66 / 18.20 / 27.07 | 6.79 / 10.92 / 13.10 |
+| town (rain) | 16.37 / 20.17 / 23.94 | 7.32 / 11.30 / 14.22 |
+| storm | 9.55 / 15.42 / 22.69 | 5.01 / 7.54 / 9.85 |
+| clouds | 9.57 / 15.01 / 22.74 | 4.98 / 7.53 / 9.55 |
+| far-side | 6.14 / 11.03 / 14.38 | 3.78 / 5.92 / 6.95 |
+| walk | 9.14 / 11.43 / 14.45 | 5.65 / 8.38 / 9.93 |
+
+Every scenario is inside 16.7 ms at p99, so the tail classes are not
+re-run and no further lever is taken here. What is still over a budget is
+p95 against 120 fps (8.3 ms) on foot in rain and in the town.
+
 ## Ranked optimizations
 
 **Re-ranked on the split (decision 1)**, 2026-11-12. In order of work:
