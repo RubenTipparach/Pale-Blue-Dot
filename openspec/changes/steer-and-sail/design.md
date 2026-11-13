@@ -89,6 +89,30 @@ The mockups compute their numbers from these. Nothing here is built.
   route and the ship's track. No autopilot steers for the player at these
   levels; a later tier can add one.
 
+### 3a. The GPS advises the helm and the sail
+
+The owner, 2026-11-13: "the ship gps system should tell me what direction to
+turn my ship and what direction to turn the sail to get the optimal speed
+towards my waypoint".
+
+- **Best heading.** From the ship's own polar at the present true wind, the
+  GPS finds the heading with the most velocity made good (VMG) toward the
+  active waypoint: speed through the water times the cosine of the angle
+  between heading and bearing. Upwind, that is a close-hauled course on one
+  tack. The GPS picks the tack that keeps the cross-track error smaller,
+  and says when to tack: when the other tack's VMG becomes the better one.
+  Powered ships head straight for the waypoint.
+- **Helm advice.** It names the turn in words and degrees, for example
+  "Turn 25 deg to port (head 040)", "Steady", or "Tack now: bring her
+  through the wind to starboard". The compass bar marks the best heading as
+  well as the waypoint.
+- **Sail advice.** For the apparent wind at the best heading, the sheet
+  angle that gives the most drive, for example "Ease the sail 10 deg (to
+  35 deg)", "Haul in 5 deg" or "Trimmed". It also flags a sail that is
+  luffing or stalled.
+- **Advice only.** The player steers and trims. The readout shows what the
+  best course gains: the VMG now, and the VMG on the best heading.
+
 ### 4. Six levels of ship power
 
 Each level is a block or a pair of blocks in the drydock's hex builder, one

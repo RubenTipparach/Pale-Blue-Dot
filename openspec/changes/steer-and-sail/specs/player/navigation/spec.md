@@ -27,3 +27,19 @@ waypoint.
 #### Scenario: The bar and the readout agree
 - **WHEN** the readout gives the waypoint at bearing 090
 - **THEN** the compass bar's waypoint marker sits under E
+
+### Requirement: The GPS advises the best heading and sail trim
+While a route is active on a sailing ship, the GPS SHALL give the heading
+with the most velocity made good toward the active waypoint from the ship's
+polar at the present wind. It SHALL say which way and how far to turn the
+helm, when to tack, and which way and how far to trim the sail for the most
+drive. It SHALL NOT steer or trim by itself.
+
+#### Scenario: A waypoint dead upwind
+- **WHEN** the active waypoint lies straight into the wind
+- **THEN** the GPS advises a close-hauled heading on one tack, not the
+  bearing, and later advises a tack
+
+#### Scenario: Sail over-trimmed
+- **WHEN** the sail is hauled in past the best angle for the apparent wind
+- **THEN** the GPS advises easing it, by how many degrees
