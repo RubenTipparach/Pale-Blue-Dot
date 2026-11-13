@@ -44,6 +44,9 @@ SCENES = {
     "lane": LANE + ["--time", "11"] + DRY,
     "shore": QUAY + ["--time", "11"] + DRY,
     "lane-day": LANE + ["--time", "10"] + DRY,
+    # The storm route's descent (`descent-spikes`): pass --frames 2600, low over
+    # the ground before touchdown.
+    "storm-descent": ["--route", "scenic", "--rain", "1", "--time", "10"],
     "lane-night": LANE + ["--time", "22"] + DRY,
     "ash-day": ASHENSTEAD + ["--time", "10"] + DRY,
     "ash-night": ASHENSTEAD + ["--time", "22"] + DRY,

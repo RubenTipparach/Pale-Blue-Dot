@@ -157,6 +157,10 @@ pub struct Laid {
     /// Its dressing's faces in `meshes`, a run of vertices a texture
     /// (`crab-breeze-lessons` rank 5).
     pub props: BTreeMap<String, (usize, usize)>,
+    /// Its shadow casters, chunked ([`casting`]) on the cut's own task so a
+    /// town's standing frame does not (`descent-spikes`); `None` where it
+    /// was cut another way, and `spawn_town` chunks them then.
+    pub casting: Option<std::sync::Arc<TownCasting>>,
 }
 
 /// The drawn sea's surface, metres over the radius: the layers' sea level
@@ -267,6 +271,7 @@ pub fn build(
         dressing: (built.dressing, built.dressing_skipped),
         cog: built.cog,
         props: built.props,
+        casting: None,
     })
 }
 
@@ -976,6 +981,7 @@ pub fn stand_in_range(world: &mut World) {
                 .cloned();
                 let id = h.site.id;
                 let (kits, repeat) = (kits.clone(), repeat.clone());
+                let cascades = assets.draw.dressing_cascades;
                 let task = AsyncComputeTaskPool::get().spawn(async move {
                     build(
                         &h.site,
@@ -986,6 +992,10 @@ pub fn stand_in_range(world: &mut World) {
                         &config,
                         sheet,
                     )
+                    .map(|mut laid| {
+                        laid.casting = Some(Arc::new(casting(&laid, cascades)));
+                        laid
+                    })
                 });
                 (id, task)
             })
@@ -1535,16 +1545,18 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         let child = child.id();
         world.entity_mut(root).add_child(child);
     }
-    let dressing_cascades = world
-        .get_resource::<TownAssets>()
-        .map_or(crate::planet::shadow::CASCADE_COUNT, |a| {
-            a.draw.dressing_cascades
-        });
-    let casting = casting(laid, dressing_cascades);
+    let casting = laid.casting.clone().unwrap_or_else(|| {
+        let dressing_cascades = world
+            .get_resource::<TownAssets>()
+            .map_or(crate::planet::shadow::CASCADE_COUNT, |a| {
+                a.draw.dressing_cascades
+            });
+        std::sync::Arc::new(casting(laid, dressing_cascades))
+    });
     let mut casters =
         world.get_resource_or_insert_with(crate::planet::shadow::TownCasters::default);
     casters.0.retain(|(site, _)| *site != laid.site);
-    casters.0.push((laid.site, std::sync::Arc::new(casting)));
+    casters.0.push((laid.site, casting));
     root
 }
 
