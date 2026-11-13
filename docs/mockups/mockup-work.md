@@ -23,6 +23,7 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 9 | 2026-11-13 | M22 to M24 restored after a republish from main dropped them; M20, M22, M23 and M24 summaries brought up to their latest versions. |
 | 10 | 2026-11-13 | M22 to M24 restored on the live page. |
 | 11 | 2026-11-13 | M24 version 6: airships, easy flight, more lift, a bigger world, collisions. |
+| 12 | 2026-11-13 | One 3D view at a time, in tabs: M24 v7, M1 v6, M5 v7, M9 v4, M17 v11. |
 
 Every page on it links back to it: an "All Pale Blue Dot mockups (the tracker)" line under the
 page's title (the thirteen mockups of 2026-11-12, and the survey). The earlier mockups (M14 to M19)

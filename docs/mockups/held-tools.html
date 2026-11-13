@@ -66,21 +66,50 @@
   textarea { width: 100%; max-width: 100%; min-height: 64px; resize: vertical; font: 12px/1.4 "IBM Plex Mono", monospace; color: var(--text); background: #0e1215; border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
   ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
   li { color: var(--muted); max-width: 74ch; }
+  /* tabs: one part of the mockup at a time, so only one 3D view is ever on the page (owner, 2026-11-13) */
+  body { padding-block: 8px 32px; }
+  .wrap { gap: 12px; }
+  details.about { font-size: 14px; color: var(--muted); }
+  details.about summary { cursor: pointer; font: 500 12px "IBM Plex Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brass); }
+  details.about[open] { display: grid; gap: 8px; }
+  .ptabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--ground); padding-top: 4px; }
+  .ptabs button { all: unset; cursor: pointer; font: 700 16px "Pixelify Sans", "IBM Plex Mono", monospace; letter-spacing: 0.04em; padding: 8px 14px; border: 1px solid transparent; border-bottom: 0; border-radius: 5px 5px 0 0; color: var(--muted); }
+  .ptabs button[aria-selected="true"] { color: var(--brass); border-color: var(--line); background: var(--panel); }
+  .ptabs button:focus-visible { outline: 2px solid var(--brass); }
+  .tabpanel { display: grid; gap: 14px; }
+  [hidden] { display: none !important; }
+  .panel[data-fit="max"] { overflow: auto; }
+  .toolsgrid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+  .turn.live { aspect-ratio: 1; touch-action: none; }
+  .turn.live canvas { cursor: grab; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-content: start; overflow: auto; }
+  .snap { aspect-ratio: 4 / 3; width: 100%; border-radius: 4px; background: radial-gradient(circle at 50% 40%, #26303a, #151a1f 70%); display: grid; place-items: center; overflow: hidden; }
+  .snap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  @media (max-width: 900px) { .toolsgrid { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { .ptabs button { padding: 6px 9px; font-size: 14px; } }
 </style>
 
 <div class="wrap">
   <header>
     <h1>Hex Tool Bench</h1>
+    <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+    <details class="about"><summary>About this mockup</summary>
     <p>A mockup of the four held tools, <strong>drawn on the hex grid</strong>, and <strong>held in a stubby hex hand</strong>. The grid is <strong>4× finer</strong> than the first draft: a hex is a quarter as wide, so a tool is sixteen times as many hexes. Each handle lies exactly on row&nbsp;0, so it is straight at any density. Each hex also has its own depth, so a handle is thick and round and a blade is thin. Nothing here is in the game yet.</p>
+    </details>
   </header>
 
+  <nav class="ptabs" role="tablist" aria-label="Parts of the mockup">
+    <button role="tab" data-tab="in-hand">In hand</button><button role="tab" data-tab="tools">The four tools</button><button role="tab" data-tab="blender">Checked in Blender</button><button role="tab" data-tab="game">Into the game</button>
+  </nav>
+
+  <div id="tab-in-hand" class="tabpanel" role="tabpanel">
   <section class="top">
     <div class="panel">
       <div class="panel-head">
         <h2>In hand</h2>
-        <div class="tabs" id="tabs"></div>
+        <div class="seg" id="toolpick" role="group" aria-label="Tool"></div>
       </div>
-      <div class="held"><canvas id="held"></canvas><div class="crosshair"></div></div>
+      <div class="held" data-fit="h" data-reserve="104"><canvas id="held"></canvas><div class="crosshair"></div></div>
       <div class="checks">
         <label><input type="checkbox" id="chop"> Chop</label>
         <label><input type="checkbox" id="sway" checked> Idle sway</label>
@@ -91,7 +120,7 @@
       <p class="stat">The right hand grips each tool the way the reference photos do: the pick, axe and shovel upright on long handles with the head pointing ahead, and the rod standing at 80°. At 2×, every tool is twice as long and twice as thick as the in-game size today.</p>
     </div>
 
-    <div class="panel">
+    <div class="panel" data-fit="max">
       <div class="panel-head">
         <h2>Hex grid: <span id="edit-name">Pickaxe</span></h2>
         <span class="stat" id="edit-stat"></span>
@@ -113,14 +142,28 @@
     </div>
   </section>
 
-  <section class="grid4" id="cards"></section>
+  </div>
 
+  <div id="tab-tools" class="tabpanel" role="tabpanel" hidden>
+  <section class="toolsgrid">
+    <div class="panel">
+      <div class="panel-head"><h2>Turn it: <span id="turn-name">Pickaxe</span></h2><span class="stat">drag to turn</span></div>
+      <div class="turn live" data-fit="h" data-reserve="36"><canvas id="turnCanvas" aria-label="The selected tool in 3D, drag to turn"></canvas></div>
+      <p class="stat" id="turn-stat"></p>
+    </div>
+    <div class="grid2" id="cards" data-fit="max"></div>
+  </section>
+  </div>
+
+  <div id="tab-blender" class="tabpanel" role="tabpanel" hidden>
   <section class="panel">
     <h2>Checked in Blender</h2>
     <p>The same hexes, poses and hand, rendered in Blender (Cycles). Top: the first-person view of each tool at 2× (<code>gen_held_tools.py --render</code>). Bottom: the posed right fist from six sides (<code>gen_held_hand.py --render</code>).</p>
     <img src="held-tools/blender-views.jpg" alt="Blender renders: four first-person views of the pickaxe, shovel, axe and rod held in a hex hand, and five views of the hand gripping the pickaxe" style="width:100%;max-width:100%;border-radius:4px">
   </section>
+  </div>
 
+  <div id="tab-game" class="tabpanel" role="tabpanel" hidden>
   <section class="panel">
     <h2>How this would go into the game</h2>
     <ul>
@@ -133,11 +176,49 @@
       <li>The rod has no line or float, because the game draws the real line from the rod tip.</li>
     </ul>
   </section>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (() => {
+  // ---- Tabs: one part of the mockup at a time, so only one 3D view is ever on
+  // the page (owner, 2026-11-13). The open tab is the URL's bare hash (#in-hand,
+  // #tools, #blender, #game). A tab's renderer is made the first time it opens,
+  // and its frame loop runs only while it is showing.
+  const TABS = ["in-hand", "tools", "blender", "game"];
+  const TAB_HOOKS = {};
+  const tabOf = h => { h = String(h || "").replace(/^#/, ""); return TABS.includes(h) ? h : null; };
+  let TAB = tabOf(location.hash) || "in-hand";
+  function fitTab() {
+    // On a wide screen the open tab's 3D view and the panel beside it fill the window below the tab bar.
+    const wide = window.matchMedia("(min-width: 901px)").matches;
+    for (const el of document.querySelectorAll(`#tab-${TAB} [data-fit]`)) {
+      const mode = el.dataset.fit || "h";
+      el.style.height = el.style.maxHeight = ""; if (mode === "h") el.style.aspectRatio = "";
+      if (!wide) continue;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      const room = window.innerHeight - top - 16 - (+el.dataset.reserve || 0);
+      const h = Math.round(Math.max(260, mode === "h" ? Math.min(room, (el.clientWidth || 9999) * 0.9) : room));
+      if (mode === "h") { el.style.aspectRatio = "auto"; el.style.height = h + "px"; } else el.style.maxHeight = h + "px";
+    }
+  }
+  function setTab(t, push = true) {
+    if (!TABS.includes(t)) return;
+    const prev = TAB; TAB = t;
+    TABS.forEach(n => { const el = document.getElementById("tab-" + n); if (el) el.hidden = n !== t; });
+    document.querySelectorAll(".ptabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+    if (push) try { history.replaceState(null, "", location.pathname + location.search + "#" + t); } catch (_) {}
+    if (prev !== t && TAB_HOOKS[prev] && TAB_HOOKS[prev].hide) TAB_HOOKS[prev].hide();
+    fitTab();
+    if (TAB_HOOKS[t] && TAB_HOOKS[t].show) TAB_HOOKS[t].show();
+  }
+  document.querySelectorAll(".ptabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  window.addEventListener("hashchange", () => { const t = tabOf(location.hash); if (t) setTab(t, false); });
+  window.addEventListener("resize", fitTab);
+  document.querySelector("details.about").addEventListener("toggle", fitTab);
+  setTab(TAB, false);
+
   // Everything about the tools and the hand comes from tools/gen_held_tools.py,
   // the same data Blender renders to check the look: the hexes at each
   // density, each tool's held pose at each size, and the hand's prisms.
@@ -274,8 +355,8 @@
   }
 
   const heldCanvas = document.getElementById("held");
-  const heldRenderer = new THREE.WebGLRenderer({ canvas: heldCanvas, antialias: true });
-  heldRenderer.outputEncoding = THREE.sRGBEncoding;
+  let heldRenderer = null;   // made when the In hand tab first opens
+  const makeHeldRenderer = () => { heldRenderer = new THREE.WebGLRenderer({ canvas: heldCanvas, antialias: true }); heldRenderer.outputEncoding = THREE.sRGBEncoding; };
   const heldScene = new THREE.Scene();
   const heldCam = new THREE.PerspectiveCamera(70, 16 / 10, 0.02, 500);
   {
@@ -301,45 +382,70 @@
   heldScene.add(heldCam);
   let pose = null, skin = SKINS[0];
 
-  // ---- Turntables.
+  // ---- Turntables. One live view, in the "The four tools" tab, turns the
+  // selected tool (drag to turn; each tool keeps its own angle). The four cards
+  // are still images of each tool, drawn once by one shared offscreen renderer
+  // that is then let go, and drawn again only after an edit changes a tool.
   const turns = [];
   const cards = document.getElementById("cards");
+  const turnCanvas = document.getElementById("turnCanvas");
+  const turnScene = new THREE.Scene(), turnCam = new THREE.PerspectiveCamera(32, 1, 0.1, 400), turnPivot = new THREE.Group();
+  turnScene.add(turnPivot);
+  let turnRenderer = null, turnDrag = null;   // made when the tools tab first opens
+  const makeTurnRenderer = () => { turnRenderer = new THREE.WebGLRenderer({ canvas: turnCanvas, antialias: true, alpha: true }); turnRenderer.outputEncoding = THREE.sRGBEncoding; };
+  const curTurn = () => turns.find(x => x.t.id === current);
+  turnCanvas.addEventListener("pointerdown", e => { const tt = curTurn(); turnDrag = [e.clientX, e.clientY, tt.yaw, tt.pitch]; turnCanvas.setPointerCapture(e.pointerId); });
+  turnCanvas.addEventListener("pointermove", e => {
+    if (!turnDrag) return;
+    const tt = curTurn();
+    tt.yaw = turnDrag[2] + (e.clientX - turnDrag[0]) * 0.01;
+    tt.pitch = Math.max(-1.3, Math.min(1.3, turnDrag[3] + (e.clientY - turnDrag[1]) * 0.01));
+  });
+  turnCanvas.addEventListener("pointerup", () => { turnDrag = null; });
   for (const t of TOOLS) {
     const card = document.createElement("article");
     card.className = "card";
-    card.innerHTML = `<h3>${t.name}</h3><div class="turn"><canvas aria-label="${t.name} in 3D, drag to turn"></canvas></div><div class="stat" data-stat></div>`;
+    card.innerHTML = `<h3>${t.name}</h3><div class="snap"><img alt="${t.name}, drawn from its hexes"></div><div class="stat" data-stat></div>`;
     cards.appendChild(card);
-    const canvas = card.querySelector("canvas");
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    renderer.outputEncoding = THREE.sRGBEncoding;
-    const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(32, 1, 0.1, 400), pivot = new THREE.Group();
-    scene.add(pivot);
-    const turn = { t, card, canvas, renderer, scene, cam, pivot, mesh: null, yaw: 0.5, pitch: 0.25, drag: null, span: 10 };
-    canvas.addEventListener("pointerdown", e => { turn.drag = [e.clientX, e.clientY, turn.yaw, turn.pitch]; canvas.setPointerCapture(e.pointerId); });
-    canvas.addEventListener("pointermove", e => {
-      if (!turn.drag) return;
-      turn.yaw = turn.drag[2] + (e.clientX - turn.drag[0]) * 0.01;
-      turn.pitch = Math.max(-1.3, Math.min(1.3, turn.drag[3] + (e.clientY - turn.drag[1]) * 0.01));
-    });
-    canvas.addEventListener("pointerup", () => { turn.drag = null; });
+    const turn = { t, card, img: card.querySelector("img"), mesh: null, yaw: 0.5, pitch: 0.25, span: 10, dirty: true };
     card.addEventListener("click", () => select(t.id));
     turns.push(turn);
+  }
+  const aimTurn = (tt, cam) => {
+    const d = tt.span * 2.1;
+    cam.position.set(Math.sin(tt.yaw) * Math.cos(tt.pitch) * d, Math.sin(tt.pitch) * d, Math.cos(tt.yaw) * Math.cos(tt.pitch) * d);
+    cam.lookAt(0, 0, 0);
+  };
+  const showInPivot = (mesh) => { while (turnPivot.children.length) turnPivot.remove(turnPivot.children[0]); if (mesh) turnPivot.add(mesh); };
+  function drawCards() {
+    const dirty = turns.filter(tt => tt.dirty && tt.mesh);
+    if (!dirty.length) return;
+    const W = 320, H = 240, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const r = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true, preserveDrawingBuffer: true });
+    r.outputEncoding = THREE.sRGBEncoding; r.setSize(W, H, false);
+    const cam = new THREE.PerspectiveCamera(32, W / H, 0.1, 400);
+    for (const tt of dirty) {
+      showInPivot(tt.mesh); aimTurn({ yaw: 0.5, pitch: 0.25, span: tt.span }, cam);
+      r.render(turnScene, cam); tt.img.src = cv.toDataURL("image/png"); tt.dirty = false;
+    }
+    showInPivot(curTurn() && curTurn().mesh);
+    r.dispose(); r.forceContextLoss();
   }
 
   function rebuild(id) {
     const m = models[id], s = 1 / density;
     const turn = turns.find(x => x.t.id === id);
-    if (turn.mesh) { turn.pivot.remove(turn.mesh); turn.mesh.geometry.dispose(); }
+    if (turn.mesh) { if (turn.mesh.parent) turn.mesh.parent.remove(turn.mesh); turn.mesh.geometry.dispose(); }
     const g = buildGeometry(m, s);
     g.computeBoundingBox();
     const c = new THREE.Vector3(), sz = new THREE.Vector3();
     g.boundingBox.getCenter(c); g.boundingBox.getSize(sz);
     turn.mesh = new THREE.Mesh(g, material);
     turn.mesh.position.copy(c).multiplyScalar(-1);
-    turn.pivot.add(turn.mesh);
     turn.span = Math.max(sz.x, sz.y, 4);
+    turn.dirty = true;
     turn.card.querySelector("[data-stat]").textContent = `${m.size.toLocaleString()} hexes · ${TOOL[id].note}`;
-    if (id === current) rebuildHeld();
+    if (id === current) { showInPivot(turn.mesh); updateTurnInfo(); rebuildHeld(); }   // the card's still is redrawn when the tools tab next opens
   }
   function rebuildHeld() {
     while (heldRoot.children.length) {
@@ -472,7 +578,7 @@
   });
 
   // ---- Selection.
-  const tabs = document.getElementById("tabs");
+  const tabs = document.getElementById("toolpick");
   const tabButtons = TOOLS.map(t => {
     const b = document.createElement("button");
     b.textContent = t.name;
@@ -488,7 +594,13 @@
       turns[i].card.setAttribute("aria-current", String(t.id === id));
     });
     document.getElementById("edit-name").textContent = TOOL[id].name;
+    showInPivot(curTurn().mesh); updateTurnInfo();
     rebuildHeld(); drawEditor();
+  }
+  function updateTurnInfo() {
+    const tt = curTurn(); if (!tt) return;
+    document.getElementById("turn-name").textContent = TOOL[current].name;
+    document.getElementById("turn-stat").textContent = tt.card.querySelector("[data-stat]").textContent;
   }
 
   // ---- Frames.
@@ -504,7 +616,9 @@
   }
   let phase = 0, then = performance.now();
   const X = new THREE.Vector3(1, 0, 0);
+  let heldRunning = false, heldRaf = 0, turnRunning = false, turnRaf = 0;
   function frame(now) {
+    if (!heldRunning) return;
     const dt = Math.min(0.05, (now - then) / 1000); then = now;
     const t = now / 1000;
     fit(heldRenderer, heldCam, heldCanvas);
@@ -520,21 +634,30 @@
       holder.position.copy(pose.grip).add(sw).add(new THREE.Vector3(0, -0.06 * c, 0));
     }
     heldRenderer.render(heldScene, heldCam);
-    for (const tt of turns) {
-      fit(tt.renderer, tt.cam, tt.canvas);
-      const d = tt.span * 2.1;
-      tt.cam.position.set(Math.sin(tt.yaw) * Math.cos(tt.pitch) * d, Math.sin(tt.pitch) * d, Math.cos(tt.yaw) * Math.cos(tt.pitch) * d);
-      tt.cam.lookAt(0, 0, 0);
-      tt.renderer.render(tt.scene, tt.cam);
-    }
-    requestAnimationFrame(frame);
+    heldRaf = requestAnimationFrame(frame);
   }
+  function turnFrame() {
+    if (!turnRunning) return;
+    fit(turnRenderer, turnCam, turnCanvas);
+    const tt = curTurn();
+    if (tt) aimTurn(tt, turnCam);
+    turnRenderer.render(turnScene, turnCam);
+    turnRaf = requestAnimationFrame(turnFrame);
+  }
+  TAB_HOOKS["in-hand"] = {
+    show() { if (!heldRenderer) makeHeldRenderer(); layoutEditor(); if (!heldRunning) { heldRunning = true; then = performance.now(); heldRaf = requestAnimationFrame(frame); } },
+    hide() { heldRunning = false; cancelAnimationFrame(heldRaf); },
+  };
+  TAB_HOOKS.tools = {
+    show() { drawCards(); if (!turnRenderer) makeTurnRenderer(); if (!turnRunning) { turnRunning = true; turnRaf = requestAnimationFrame(turnFrame); } },
+    hide() { turnRunning = false; cancelAnimationFrame(turnRaf); },
+  };
 
   for (const t of TOOLS) load(t.id);
   for (const t of TOOLS) rebuild(t.id);
   select("pickaxe");
   layoutEditor();
   window.addEventListener("resize", layoutEditor);
-  requestAnimationFrame(frame);
+  setTab(TAB, false);   // again, now both views have registered: makes the open tab's renderer and starts its loop
 })();
 </script>
