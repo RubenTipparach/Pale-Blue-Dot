@@ -40,7 +40,6 @@ R, plates, glint_star, XS, YS, SPECK = SC.R, SC.plates, SC.glint_star, SC.XS, SC
 R = dict(R)
 R.update({
     "magenta": ["#2f1525", "#9e3ba2", "#c34988", "#dd576d", "#fffefe"],
-    "warp": ["#230c44", "#4f1d83", "#7d2dbd", "#9e3ba2", "#d2f8ff"],
     "fusion": ["#15578a", "#1096c3", "#74effe", "#d2f8ff", "#fffefe"],
     "yellow": ["#8d4526", "#c56d25", "#fb902f", "#faaf5c"],
     "green": ["#003227", "#297537", "#559642", "#9bb675"],
@@ -161,19 +160,6 @@ def antimatter(sp):
     glint_star(sp, 16, 15, R["magenta"])
 
 
-def warp(sp):
-    """A warp ring: a violet field in a ring of plates."""
-    ring = sp.circle(16, 16, 14) & ~sp.circle(16, 16, 9)
-    sp.part(ring, R["metal"], "sphere", base=3)
-    for k in range(6):
-        import math
-        a = k * math.pi / 3
-        sp.fill(sp.circle(round(16 + 11.5 * math.cos(a)), round(16 + 11.5 * math.sin(a)), 1) & ring, R["warp"][1])
-    sp.outline()
-    sp.part(sp.circle(16, 16, 8), R["warp"], "inset", glow=True)
-    sp.plots([(16, 16), (15, 16), (17, 16)], GLINT, glow=True)
-
-
 def navcomp(sp):
     """The nav computer: a screen with a plotted course."""
     sp.part(sp.rect(2, 4, 29, 24), R["white"], "rim", base=3)
@@ -212,22 +198,105 @@ def lander(sp):
     sp.part(sp.poly([(13, 22), (18, 22), (16, 27), (15, 27)]), R["fusion"], "inset", glow=True)
 
 
-def starship(sp):
-    """A starship: a long hull, a warp ring amidships, an antimatter glow aft."""
-    sp.part(sp.poly([(2, 11), (21, 10), (30, 14), (30, 17), (21, 21), (2, 20)]), R["white"], "cyl_h", base=3)
-    ring = sp.rect(11, 4, 15, 27)
-    sp.part(ring, R["metal"], "rim", base=3)
+def fusionship(sp):
+    """A fusion ship seen side on: a long white hull, a cabin window forward, the cyan drive aft."""
+    sp.part(sp.poly([(4, 11), (21, 10), (30, 14), (30, 17), (21, 21), (4, 20)]), R["white"], "cyl_h", base=3)
+    sp.part(sp.rect(9, 7, 17, 10) | sp.rect(9, 21, 17, 24), R["dark"], "rim", base=2)
     sp.part(sp.rect(24, 14, 27, 16), R["cyan"], "rim", base=2)
-    sp.plots([(4, 13), (5, 13)], GLINT)
+    sp.part(sp.rect(2, 12, 4, 19), R["metal"], "rim", base=2)
+    sp.plots([(6, 13), (7, 13)], GLINT)
     sp.outline()
-    sp.fill(sp.rect(12, 6, 14, 9) | sp.rect(12, 22, 14, 25), R["warp"][2], glow=True)
-    sp.part(sp.taper(1, 15, 0, 15, 5, 3), R["magenta"], "inset", glow=True)
+    sp.part(sp.taper(1, 15, 0, 15, 5, 3), R["fusion"], "inset", glow=True)
+
+
+# ---------------------------------------------------------------- inside a rocket: one cell each
+
+
+def deck(sp):
+    """A crew deck: a hex floor plate of grating seen from above, a painted edge."""
+    hexm = sp.poly([(9, 3), (22, 3), (29, 16), (22, 28), (9, 28), (2, 16)])
+    sp.part(hexm, R["metal"], "rim", base=3, depth=2)
+    inner = sp.poly([(11, 7), (20, 7), (25, 16), (20, 24), (11, 24), (6, 16)])
+    sp.part(inner, R["metal"], "flat", base=2)
+    sp.fill(inner & ((XS % 3) == 0), R["metal"][1])
+    sp.fill(inner & ((YS % 3) == 0), R["metal"][1])
+    sp.fill(hexm & ~inner & (((XS + YS) // 2) % 2 == 0), R["hazard"][2])
+    sp.plots([(10, 4), (11, 4)], GLINT)
+    sp.outline()
+
+
+def cabin(sp):
+    """A cabin: a timber bunk with a blanket and pillow, a round window and a warm lamp above."""
+    sp.part(sp.rect(2, 3, 29, 28), R["white"], "flat", base=2)
+    sp.part(sp.circle(10, 9, 4), R["cyan"], "sphere", base=2)
+    sp.plots([(9, 7)], GLINT)
+    sp.part(sp.rect(3, 17, 28, 20), R["wood"], "rim", base=2)
+    sp.part(sp.rect(3, 21, 28, 27), R["wood"], "rim", base=1)
+    sp.part(sp.rect(15, 14, 27, 18), R["red"], "rim", base=2)
+    sp.part(sp.rect(4, 14, 10, 17), R["paper"], "rim", base=1)
+    sp.outline()
+    sp.part(sp.rect(20, 6, 24, 8), R["gold"], "inset", glow=True)
+    sp.plot(22, 7, GLINT, glow=True)
+
+
+def ladder(sp):
+    """A ladder between decks: two steel rails and five rungs, a yellow step at the top."""
+    rails = sp.rect(7, 1, 10, 30) | sp.rect(21, 1, 24, 30)
+    sp.part(rails, R["metal"], "cyl_v", base=3)
+    for y in (4, 10, 16, 22, 28):
+        sp.part(sp.rect(11, y, 20, y + 1), R["steel"], "rim", base=2)
+    sp.part(sp.rect(11, 4, 20, 5), R["hazard"], "rim", base=2)
+    sp.plots([(8, 2), (8, 3)], GLINT)
+    sp.outline()
+
+
+def hatch(sp):
+    """An outer hatch: a round door with a locking wheel, set in a white frame, a green lamp."""
+    sp.part(sp.rect(3, 2, 28, 29), R["white"], "rim", base=3, depth=2)
+    door = sp.circle(15, 17, 10)
+    sp.part(door, R["metal"], "sphere", base=2)
+    wheel = sp.circle(15, 17, 5) & ~sp.circle(15, 17, 3)
+    sp.part(wheel, R["gold"], "rim", base=2)
+    sp.fill(sp.rect(15, 12, 15, 22) | sp.rect(10, 17, 20, 17), R["gold"][1])
+    sp.plots([(10, 11), (11, 10)], GLINT)
+    sp.outline()
+    sp.fill(sp.rect(24, 4, 26, 6), R["green"][3], glow=True)
+
+
+def airlock(sp):
+    """An airlock: two sliding doors in a frame, hazard stripes under them, a red lamp over them."""
+    frame = sp.rect(2, 2, 29, 29)
+    sp.part(frame, R["white"], "rim", base=3, depth=2)
+    sp.part(sp.rect(6, 7, 15, 25), R["steel"], "cyl_v", base=2)
+    sp.part(sp.rect(16, 7, 25, 25), R["steel"], "cyl_v", base=2)
+    sp.fill(sp.rect(13, 13, 14, 18) | sp.rect(17, 13, 18, 18), R["dark"][2])
+    band = sp.rect(4, 26, 27, 28)
+    sp.fill(band & (((XS + YS) // 2) % 2 == 0), R["ink"][1])
+    sp.fill(band & (((XS + YS) // 2) % 2 == 1), R["hazard"][2])
+    sp.plots([(7, 8), (7, 9)], GLINT)
+    sp.outline()
+    sp.fill(sp.rect(14, 3, 17, 5), R["red"][3], glow=True)
+
+
+def hull(sp):
+    """A hull wall cell: riveted plates with a porthole."""
+    body = sp.rect(3, 2, 28, 29)
+    sp.part(body, R["white"], "cyl_v", base=2)
+    sp.fill(body & ((YS % 9) == 2), R["white"][0])
+    sp.fill(body & ((XS == 15)), R["white"][1])
+    for y in (5, 14, 23):
+        sp.plots([(6, y), (25, y)], R["white"][4])
+    sp.part(sp.circle(15, 15, 5), R["dark"], "rim", base=1)
+    sp.part(sp.circle(15, 15, 3), R["cyan"], "sphere", base=2)
+    sp.plots([(14, 13)], GLINT)
+    sp.outline()
 
 
 ICONS = {
     "pod": pod, "tank": tank, "engine-chem": engine_chem, "engine-ntr": engine_ntr, "decoupler": decoupler,
-    "booster": booster, "fin": fin, "legs": legs, "fusion": fusion, "antimatter": antimatter, "warp": warp,
-    "navcomp": navcomp, "freighter": freighter, "lander": lander, "starship": starship,
+    "booster": booster, "fin": fin, "legs": legs, "fusion": fusion, "antimatter": antimatter,
+    "navcomp": navcomp, "freighter": freighter, "lander": lander, "fusionship": fusionship,
+    "deck": deck, "cabin": cabin, "ladder": ladder, "hatch": hatch, "airlock": airlock, "hull": hull,
 }
 
 # ---------------------------------------------------------------- part textures (32 x 32, seamless)
@@ -304,17 +373,34 @@ def tex_am(sp):
     sp.fill(((XS % 16) == 7) & ((YS % 16) == 7), R["magenta"][3])
 
 
-def tex_warp(sp):
-    edges = SC.hex_edges()
-    sp.fill(sp.rect(0, 0, 31, 31), R["warp"][1])
-    sp.fill(SPECK, R["warp"][2])
-    sp.fill(edges, R["warp"][3])
+def tex_hull(sp):
+    """The hull wall: grey plates, a darker seam every 16 px, rivet lines."""
+    plates(sp, R["metal"], cell=16)
+
+
+def tex_deck(sp):
+    """A deck's floor: steel grating, a 4 px lattice."""
+    m = R["metal"]
+    sp.fill(sp.rect(0, 0, 31, 31), m[2])
+    sp.fill(SPECK, m[3])
+    sp.fill((XS % 4) == 0, m[1])
+    sp.fill((YS % 4) == 0, m[1])
+    sp.fill(((XS % 4) == 1) & ((YS % 4) == 1), m[4])
+    sp.fill((XS % 16) == 0, m[0])
+
+
+def tex_cabin(sp):
+    """A cabin's blanket: a red and cream check."""
+    sp.fill(sp.rect(0, 0, 31, 31), R["red"][1])
+    sp.fill(((XS // 4) + (YS // 4)) % 2 == 0, R["red"][2])
+    sp.fill((XS % 8) == 0, R["bone"][1])
+    sp.fill((YS % 8) == 0, R["bone"][1])
 
 
 TEXTURES = {
     "tex-pod": tex_pod, "tex-tank": tex_tank, "tex-engine": tex_engine, "tex-hazard": tex_hazard,
     "tex-fin": tex_fin, "tex-booster": tex_booster, "tex-ntr": tex_ntr, "tex-fusion": tex_fusion,
-    "tex-am": tex_am, "tex-warp": tex_warp,
+    "tex-am": tex_am, "tex-hull": tex_hull, "tex-deck": tex_deck, "tex-cabin": tex_cabin,
 }
 
 # ---------------------------------------------------------------- the game's own files

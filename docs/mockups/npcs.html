@@ -161,6 +161,22 @@ button{font:inherit;color:inherit}
 .q p{font-size:14px;color:var(--muted)}
 .q .rec b{color:var(--ok)}
 footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+/* tabs: one part of the mockup at a time, so only one 3D view is ever on the page (owner, 2026-11-13) */
+.wrap{gap:12px}
+header.top{gap:6px;padding-top:14px}
+header.top h1{font-size:clamp(26px,3.6vw,38px)}
+details.about{font-size:14px;color:var(--muted)}
+details.about summary{cursor:pointer;font:600 13px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--sky)}
+details.about[open]{display:grid;gap:10px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--ground);padding-top:4px}
+.tabs button{all:unset;cursor:pointer;font:600 16px var(--display);letter-spacing:.05em;padding:8px 14px;border:1px solid transparent;border-bottom:0;border-radius:5px 5px 0 0;color:var(--muted)}
+.tabs button[aria-selected="true"]{color:var(--amber);border-color:var(--line);background:var(--panel-solid)}
+.tabs button:focus-visible{outline:2px solid var(--amber)}
+.tabpanel{gap:12px}
+.tabpanel .sec-head h2{font-size:24px}
+[hidden]{display:none !important}
+@media (max-width:760px){.stage[data-fit]{height:auto !important}}
+@media (max-width:560px){.tabs button{padding:6px 9px;font-size:14px}}
 #err{position:fixed;left:8px;bottom:8px;max-width:60ch;background:#400;color:#fff;font:12px var(--mono);padding:6px;white-space:pre-wrap;z-index:9}
 </style>
 
@@ -169,13 +185,19 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <div class="eyebrow">Pale Blue Dot &middot; design mockup &middot; <span class="badge">Proposal, not built</span></div>
     <h1>Townsfolk and the peoples of the worlds</h1>
     <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+    <details class="about"><summary>About this mockup: the idea, and which art is the game's</summary>
     <p class="lede">Who lives in the towns, what they do with their day, and how you talk, trade and fall out with them. The square below runs a whole day on <b>world time</b>, which only moves while the game is played. It is 22:30 and the lamps are lit. Click anyone to see who they are.</p>
     <p class="note">This extends <span class="src">openspec/changes/townsfolk</span>, which builds people as the towns mockup has them (walkers, workers, idlers, a gate guard) and leaves schedules, talk and trade out of scope. Everything here past that is <b>proposed</b>. The square is <b>the game's village template</b> (<span class="src">assets/settlements/v1/village.json</span>, copied byte for byte), built the way <span class="src">towns.html</span> and the engine cut it: hex columns 2.833 m across and 1 m a layer with the terrain atlas's own tiles, walls on every outside edge per storey with its doors and windows, gable and cone roofs, the game's trees (<span class="src">planet_surface.wgsl</span>). Walls and roofs are the game's settlement textures, sampled nearest at the manifest's scale. <b>Mockup-only</b>: the stalls, well, brazier, forge, kiosk and the four lamp posts round the green (cut from the game's materials; the kiosk's metal panel is drawn), and the townsfolk, hexagonal prisms as <span class="src">townsfolk</span> design 2 builds them, wearing cloth, face and hair tiles drawn with the pixel-art kit and tinted per person. The portraits (48 px) and icons (16 px) are <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="src">tools/art/npcs_art.py</span>), shown at whole-number scales with no smoothing; the kiosk's metal panel is a 32 px tile from the same kit.</p>
+    </details>
   </header>
 
-  <section aria-labelledby="sq-h">
+  <nav class="tabs" role="tablist" aria-label="Parts of the mockup">
+    <button role="tab" data-tab="square">The square at night</button><button role="tab" data-tab="people">Peoples</button><button role="tab" data-tab="jobs">Roles</button><button role="tab" data-tab="figures">Character sheets</button><button role="tab" data-tab="days">Daily schedules</button><button role="tab" data-tab="talk">Talk and standing</button><button role="tab" data-tab="towns">In towns</button><button role="tab" data-tab="decisions">Decisions</button>
+  </nav>
+
+  <section id="tab-square" class="tabpanel" role="tabpanel" aria-labelledby="sq-h">
     <div class="sec-head"><div class="eyebrow">1 &middot; The square at night</div><h2 id="sq-h">Hollin Cross, a fields town on Tenebris</h2></div>
-    <div class="stage" id="stage">
+    <div class="stage" id="stage" data-fit>
       <canvas id="sq" tabindex="0" aria-label="A hex-cell town square at night, lit by lanterns, lit windows, a brazier and the smith's forge, with townsfolk going about their schedules."></canvas>
       <div class="panel clock" aria-label="World clock">
         <div class="row" style="justify-content:space-between"><span class="eyebrow">World time</span><span class="small" id="dayname">Day 41</span></div>
@@ -200,24 +222,24 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <p class="note">Lit at night as CLAUDE.md asks: each lantern, lit window, the brazier and the forge lights what is near it, wherever the camera is, with towns.html's falloff <span class="src">(1 - (d/R)^2)^2</span>, so each lamp throws a pool on the ground as the game's do. The moon is held at 0.035, as dark as the game's night, so the ground between the pools reads near black. The light is worked out per pixel, so the people who move are lit by the same lights as the walls. The clock runs a game hour every three seconds here so a day fits in a minute and a bit.</p>
   </section>
 
-  <section aria-labelledby="pp-h">
+  <section id="tab-people" class="tabpanel" role="tabpanel" aria-labelledby="pp-h" hidden>
     <div class="sec-head"><div class="eyebrow">2 &middot; Peoples per habitable world</div><h2 id="pp-h">One kind of person, many peoples</h2>
       <p class="lede">Only Tenebris and Sequoia have air. The game-design catalogue already keeps life to its own planet, and people follow the same rule: a people belongs to a biome's settlements and takes its clothes and colours from that biome's materials, as the towns take their kits. Airless bodies have no natives at all.</p></div>
     <div class="peoples" id="peoples"></div>
   </section>
 
-  <section aria-labelledby="rl-h">
+  <section id="tab-jobs" class="tabpanel" role="tabpanel" aria-labelledby="rl-h" hidden>
     <div class="sec-head"><div class="eyebrow">3 &middot; Roles</div><h2 id="rl-h">Eight jobs a town or station needs</h2>
       <p class="lede">A role decides where a person works, what they carry, what they will do for you, and their day. A town draws its roles from its template: a harbour has fishers, a cliff village has miners, every walled town has guards on its gates.</p></div>
     <div class="roles" id="roles"></div>
   </section>
 
-  <section aria-labelledby="cs-h">
+  <section id="tab-figures" class="tabpanel" role="tabpanel" aria-labelledby="cs-h" hidden>
     <div class="sec-head"><div class="eyebrow">4 &middot; Character sheets</div><h2 id="cs-h">Variation: body, clothes, palette</h2>
       <p class="lede">Built from hexagonal prisms that read as cubes, as the owner chose (survey T2). Every figure is rolled from the settlement's seed and the person's index, so a town's people are the same on every visit and every machine. Roll another town to see the spread.</p></div>
     <div class="lineup">
       <canvas id="lu" aria-label="A lineup of townsfolk figures from six peoples, each rolled with different height, build, skin, hair and clothes."></canvas>
-      <div class="panel"><button class="btn" id="reroll">Roll another town</button><button class="btn" id="spin" aria-pressed="true">Turn</button></div>
+      <div class="panel"><button class="btn" id="reroll">Roll another town</button><button class="btn" id="spin" aria-pressed="false">Turn</button></div>
       <div class="labels" id="luLabels"></div>
     </div>
     <div class="parts">
@@ -228,7 +250,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     </div>
   </section>
 
-  <section aria-labelledby="sc-h">
+  <section id="tab-days" class="tabpanel" role="tabpanel" aria-labelledby="sc-h" hidden>
     <div class="sec-head"><div class="eyebrow">5 &middot; Daily schedules</div><h2 id="sc-h">A day on world time</h2>
       <p class="lede">Each role has a day; each person shifts it by up to half an hour from their seed so a town does not move in lockstep. World time passes only while the world is played (owner, 2026-09-27). Quit at 22:30 and come back a week later and it is still 22:30, the smith still at the inn. Nothing is simulated while the game is closed, so nothing needs catching up.</p></div>
     <div class="legend"><span><i class="a-sleep"></i>Asleep at home</span><span><i class="a-work"></i>At work</span><span><i class="a-away"></i>Away (fields, sea, mine)</span><span><i class="a-inn"></i>At the inn</span><span><i class="a-patrol"></i>Patrol</span><span><i class="a-idle"></i>Idle about town</span><span><i class="a-lurk"></i>Lurking</span></div>
@@ -236,7 +258,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <p class="note">A schedule is a law, not a record: where a person is at 14:00 follows from the seed and the clock, so it is never saved (world-persistence: what the rules decide is derived). What <b>is</b> saved is what you did to them: standing, quests, a debt, a theft. Those are stored records authored by the player.</p>
   </section>
 
-  <section aria-labelledby="ui-h">
+  <section id="tab-talk" class="tabpanel" role="tabpanel" aria-labelledby="ui-h" hidden>
     <div class="sec-head"><div class="eyebrow">6 &middot; Talking, quests, standing</div><h2 id="ui-h">The conversation, the job board and who likes you</h2>
       <p class="lede">E on a person opens talk, as E opens a door today. Talk is short: a line, three or four answers, and the doors it opens (trade, a job, a rumour). Mouse look stops while the panel is up; the world clock does not.</p></div>
     <div class="mocks">
@@ -278,7 +300,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     </div>
   </section>
 
-  <section aria-labelledby="tw-h">
+  <section id="tab-towns" class="tabpanel" role="tabpanel" aria-labelledby="tw-h" hidden>
     <div class="sec-head"><div class="eyebrow">7 &middot; How they live in towns</div><h2 id="tw-h">Homes, posts and paths come from the settlement</h2></div>
     <div class="tbl"><table>
       <thead><tr><th>Thing</th><th>Where it comes from</th><th>Saved?</th><th>Change</th></tr></thead>
@@ -294,7 +316,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <p class="note">Solid and lit as <span class="src">townsfolk</span> has it: a 0.28 m circle from the feet to 1.9 m that the walker slides round, and the light field sampled at the body's corners. At night the square keeps a few people out: the night guard, the innkeeper's last customers, the smuggler. Most are home, and their windows are the lit ones.</p>
   </section>
 
-  <section aria-labelledby="q-h">
+  <section id="tab-decisions" class="tabpanel" role="tabpanel" aria-labelledby="q-h" hidden>
     <div class="sec-head"><div class="eyebrow">8 &middot; Decisions / questions for the owner</div><h2 id="q-h">What needs your call</h2></div>
     <div class="qs">
       <div class="q"><h3>N1 &middot; One species or several?</h3><p>Everyone here is one kind of person, split into peoples by world and biome. The alternative is a second species on Sequoia (the catalogue's Shellkin and Crane are animals today).</p><p class="rec"><b>Recommendation:</b> one species, peoples by biome. It keeps one figure rig, and the difference is in the clothes and palette you can see in section 4.</p></div>
@@ -316,6 +338,41 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
 "use strict";
 window.addEventListener("error", e => { const el = document.getElementById("err"); el.hidden = false; el.textContent += (e.message || e) + " @" + (e.lineno || "") + "\n"; });
 const $ = id => document.getElementById(id);
+// ===================================================================
+// Tabs: one part of the mockup at a time, so only one 3D view is ever on the page (owner, 2026-11-13).
+// The open tab is the URL's bare hash (#square, #people, #jobs, #figures, #days, #talk, #towns,
+// #decisions). The square's and the lineup's renderers are each made the first time their tab opens,
+// and each frame loop runs only while its tab is showing.
+// ===================================================================
+const TABS = ["square", "people", "jobs", "figures", "days", "talk", "towns", "decisions"];
+const TAB_HOOKS = {};   // tab -> { show(), hide() }
+const tabOf = h => { h = String(h || "").replace(/^#/, ""); return TABS.includes(h) ? h : null; };
+let TAB = tabOf(location.hash) || "square";
+function fitTab() {
+  // On a wide screen the square fills the window below the tab bar, so nothing needs a scroll.
+  const wide = matchMedia("(min-width:861px)").matches;
+  for (const el of document.querySelectorAll(`#tab-${TAB} [data-fit]`)) {
+    el.style.height = "";
+    if (!wide) continue;
+    const top = el.getBoundingClientRect().top + scrollY;
+    el.style.height = Math.round(Math.max(+(el.dataset.min || 420), Math.min(innerHeight - top - 16 - (+el.dataset.reserve || 0), el.clientWidth * 0.9))) + "px";
+  }
+}
+function setTab(t, push = true) {
+  if (!TABS.includes(t)) return;
+  const prev = TAB; TAB = t; document.body.dataset.tab = t;
+  TABS.forEach(n => { const p = document.getElementById("tab-" + n); if (p) p.hidden = n !== t; });
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+  if (push) try { history.replaceState(null, "", location.pathname + location.search + "#" + t); } catch (e) {}
+  if (prev !== t && TAB_HOOKS[prev] && TAB_HOOKS[prev].hide) TAB_HOOKS[prev].hide();
+  fitTab();
+  if (TAB_HOOKS[t] && TAB_HOOKS[t].show) TAB_HOOKS[t].show();
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+addEventListener("hashchange", () => { const t = tabOf(location.hash); if (t) setTab(t, false); });
+addEventListener("resize", fitTab);
+document.querySelector("details.about").addEventListener("toggle", fitTab);
+setTab(TAB, false);
 // ===================================================================
 // Scale: the engine's cell. 2.833 m flat to flat, 1 m a layer, 3 m a storey.
 // ===================================================================
@@ -372,9 +429,12 @@ function rollSpec(people, role, seed) {
 // Hollin Cross: the square
 // ===================================================================
 const canvas = $("sq");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.outputEncoding = THREE.sRGBEncoding;
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+let renderer = null;   // made when the square's tab first opens
+function makeRenderer() {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+}
 const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x0e1424, 80, 200);
 const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 500);
 const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
@@ -583,17 +643,22 @@ $("toNight").addEventListener("click", () => { setHour(22.5); placeAll(true); })
 $("toDay").addEventListener("click", () => { setHour(12.5); placeAll(true); });
 $("quit").addEventListener("click", () => { STATE.play = false; $("play").setAttribute("aria-pressed", false); $("play").textContent = "Play day"; toast("Game closed for 8 hours. World clock: still " + $("clock").textContent + ". Nobody moved."); });
 
-function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (!renderer || !w) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener("resize", resize);
-let last = performance.now(), T = 0;
+let last = performance.now(), T = 0, sqRunning = false, sqRaf = 0;
 function frame(now) {
+  if (!sqRunning) return;
   const dt = clamp((now - last) / 1000, 0, 0.1); last = now; T += dt;
   if (STATE.play) setHour(STATE.hour + dt / 3);
   for (const n of NPCS) stepNpc(n, dt, T);
   for (const f of FLAMES) f.m.scale.set(1, 0.8 + 0.3 * Math.sin(T * 9 + f.ph) * Math.sin(T * 5.3 + f.ph * 2), 1);
   if (FOCUS) { ORB.tx = FOCUS.x; ORB.tz = FOCUS.z; ORB.ty = groundY(FOCUS.x, FOCUS.z) + 1.2; }
-  placeCam(); renderer.render(scene, camera); requestAnimationFrame(frame);
+  placeCam(); renderer.render(scene, camera); sqRaf = requestAnimationFrame(frame);
 }
+TAB_HOOKS.square = {
+  show() { if (!renderer) makeRenderer(); resize(); if (!sqRunning) { sqRunning = true; last = performance.now(); sqRaf = requestAnimationFrame(frame); } },
+  hide() { sqRunning = false; cancelAnimationFrame(sqRaf); },
+};
 
 // ===================================================================
 // The page around it
@@ -614,7 +679,8 @@ const REPLY = { trade: "\"Nails, hinges, a good axe head. Iron I'll buy at four 
 for (const b of document.querySelectorAll("#dlgOpts button")) b.addEventListener("click", () => { $("dlgLine").textContent = REPLY[b.dataset.r]; });
 
 // ---- the lineup: six peoples, four each ------------------------------------
-const lu = $("lu"), lr = new THREE.WebGLRenderer({ canvas: lu, antialias: true }); lr.setPixelRatio(Math.min(2, devicePixelRatio)); lr.outputEncoding = THREE.sRGBEncoding;
+const lu = $("lu"); let lr = null;   // made when the Character sheets tab first opens
+function makeLineupRenderer() { lr = new THREE.WebGLRenderer({ canvas: lu, antialias: true }); lr.setPixelRatio(Math.min(2, devicePixelRatio)); lr.outputEncoding = THREE.sRGBEncoding; }
 const ls = new THREE.Scene(); ls.background = new THREE.Color(0x141210);
 const lc = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
 ls.add(new THREE.HemisphereLight(0xfff0d8, 0x2a2420, 0.7)); const key = new THREE.DirectionalLight(0xffe0b0, 1.1); key.position.set(-4, 6, 8); ls.add(key);
@@ -630,17 +696,23 @@ function lineup() {
   }));
   $("luLabels").innerHTML = LU_PEOPLES.map(p => `<span>${PEOPLES[p].name}</span>`).join("");
 }
-let spin = true;
+let spin = false;
 $("reroll").addEventListener("click", () => { townSeed++; lineup(); });
 $("spin").addEventListener("click", () => { spin = !spin; $("spin").setAttribute("aria-pressed", spin); });
-function luResize() { const w = lu.clientWidth, h = lu.clientHeight; lr.setSize(w, h, false); lc.aspect = w / h; const dist = Math.max(14, 10.8 / (Math.tan(15 * Math.PI / 180) * lc.aspect)); lc.position.set(0, 2.6 + dist * 0.08, dist); lc.lookAt(0, 1.0, 0); lc.updateProjectionMatrix(); }
+function luResize() { const w = lu.clientWidth, h = lu.clientHeight; if (!lr || !w) return; lr.setSize(w, h, false); lc.aspect = w / h; const dist = Math.max(14, 10.8 / (Math.tan(15 * Math.PI / 180) * lc.aspect)); lc.position.set(0, 2.6 + dist * 0.08, dist); lc.lookAt(0, 1.0, 0); lc.updateProjectionMatrix(); }
 addEventListener("resize", luResize);
-function luFrame(now) { if (spin) LU.forEach((g, i) => g.rotation.y += 0.008); lr.render(ls, lc); requestAnimationFrame(luFrame); }
+let luRunning = false, luRaf = 0;
+function luFrame(now) { if (!luRunning) return; if (spin) LU.forEach((g, i) => g.rotation.y += 0.008); lr.render(ls, lc); luRaf = requestAnimationFrame(luFrame); }
+TAB_HOOKS.figures = {
+  show() { if (!lr) makeLineupRenderer(); luResize(); if (!luRunning) { luRunning = true; luRaf = requestAnimationFrame(luFrame); } },
+  hide() { luRunning = false; cancelAnimationFrame(luRaf); },
+};
 
 const Q = new URLSearchParams(location.search);
-resize(); setHour(Q.has("hour") ? +Q.get("hour") : 22.5); placeAll(true);
+setHour(Q.has("hour") ? +Q.get("hour") : 22.5); placeAll(true);
 for (const k of ["dist", "yaw", "pitch", "tx", "tz"]) if (Q.has(k)) ORB[k] = +Q.get(k);
-const FOCUS = Q.has("focus") ? NPCS[+Q.get("focus")] : null; STATE.sel = NPCS[1]; showCard(NPCS[1]); requestAnimationFrame(frame);
-lineup(); luResize(); requestAnimationFrame(luFrame);
+const FOCUS = Q.has("focus") ? NPCS[+Q.get("focus")] : null; STATE.sel = NPCS[1]; showCard(NPCS[1]);
+lineup();
+setTab(TAB, false);   // again, now both views have registered: makes the open tab's renderer and starts its loop
 window.__npcs = { NPCS, LIGHTS, setHour, scene };
 </script>

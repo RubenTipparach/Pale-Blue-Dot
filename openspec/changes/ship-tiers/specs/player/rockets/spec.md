@@ -50,11 +50,27 @@ spends: a rocket that shows enough delta-v for a burn SHALL be able to fly it.
 
 ### Requirement: Tiers unlock parts by the power built
 Parts SHALL belong to a tier: chemical and nuclear thermal parts to tier 1,
-fusion drives and the nav computer to tier 2, antimatter cores and warp rings
-to tier 3. A part of a tier the player has not unlocked SHALL be shown locked
+fusion drives and the nav computer to tier 2, antimatter cores to tier 3. A part of a tier the player has not unlocked SHALL be shown locked
 and SHALL NOT be placed. Unlocking SHALL follow from what the player has built
 on the power ladder.
 
 #### Scenario: A locked part
 - **WHEN** a player without a fusion plant selects the fusion drive
 - **THEN** the assembly building names what unlocks it and places nothing
+
+### Requirement: A large rocket has decks to walk
+The assembly grid SHALL reach four rings of cells out from the core column.
+Crew decks, cabins, ladders, hatches and airlocks SHALL be cells of the
+stack. A walkable floor SHALL have two clear layers above it. The assembly
+building SHALL refuse a stack whose command pod cannot be walked to from a
+hatch over decks and ladders, and SHALL name the check. A walker SHALL stand
+on the decks in the rocket's frame, on the pad and in flight.
+
+#### Scenario: An unreachable pod
+- **WHEN** a stack has a crew deck under its command pod with no ladder up
+- **THEN** the assembly building refuses it with "the pod cannot be walked
+  to from the hatch"
+
+#### Scenario: Standing on a deck at lift-off
+- **WHEN** a walker stands on a crew deck as the rocket lifts off
+- **THEN** the walker stays on the same deck cell as the rocket climbs

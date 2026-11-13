@@ -1,0 +1,1092 @@
+<title>Cranes and Printers</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the yard opens the page as a 3D stage with its controls in a side panel (the print slider, the crane's cab controls and its load chart); then the assembly bay's queue, the printer's pass plan, the ladder and the decisions. House style of ship-crafting.html and industry.html: one dark look by choice. */
+:root{
+  color-scheme: dark;
+  --ground:#0b1014;
+  --panel:#111a20;
+  --panel-2:#0d151a;
+  --line:rgba(130,175,180,.24);
+  --line-2:rgba(150,190,195,.5);
+  --ink:#e4ecee;
+  --muted:#94a8ad;
+  --amber:#e8b040;
+  --ember:#ff8a3d;
+  --sky:#8fc3d8;
+  --warn:#ff6b57;
+  --ok:#8fdc9a;
+  --hud:#ebf7f2;
+  --hudline:rgba(140,191,189,.5);
+  --hudbg:rgba(5,15,20,.72);
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--ground)}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15.5px;line-height:1.55}
+.wrap{max-width:1280px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px;display:grid;gap:44px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;margin:0;text-wrap:balance}
+h1{font-size:clamp(34px,6vw,58px)}
+h2{font-size:28px;display:flex;gap:12px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-size:13px;color:var(--amber);font-weight:600;letter-spacing:0}
+h3{font-size:19px;font-weight:600}
+p{margin:0;max-width:74ch}
+.eyebrow{font-family:var(--mono);font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:12px;color:#6fc3b8}
+.tag{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--amber);color:var(--amber)}
+.tag.plain{border-color:var(--line-2);color:var(--muted)}
+section{display:grid;gap:16px;min-width:0}
+.lede{display:grid;gap:14px}
+.lede p{font-size:17px}
+blockquote{margin:0;border-left:3px solid var(--amber);padding:4px 0 4px 14px;font-size:17px;max-width:74ch}
+blockquote cite{display:block;font-style:normal;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px}
+.honest{border:1px dashed var(--line-2);border-radius:6px;padding:12px 14px;color:var(--muted);font-size:14px;max-width:none}
+.honest b{color:var(--ink);font-weight:600}
+code,.mono{font-family:var(--mono);font-size:.86em}
+code{color:var(--sky)}
+a{color:var(--amber)}
+.muted{color:var(--muted)}
+button{font:inherit;color:inherit}
+img{image-rendering:pixelated}
+.seg{display:flex;flex-wrap:wrap;gap:5px}
+.seg button,.pbtn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:4px 9px;font-family:var(--display);font-size:14.5px;letter-spacing:.05em;text-align:center;color:var(--ink);background:rgba(18,17,13,.6)}
+.seg button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.14)}
+.seg button:hover,.pbtn:hover{border-color:rgba(240,180,60,.55)}
+.seg button:focus-visible,.pbtn:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.pbtn.go{background:var(--amber);color:var(--ground);border-color:var(--amber)}
+.pbtn[disabled]{opacity:.4;pointer-events:none}
+
+/* the yard: a stage and its side panel */
+.view{display:grid;grid-template-columns:minmax(0,1fr) 300px;border:1px solid var(--line-2);border-radius:8px;overflow:hidden;background:var(--panel-2);height:min(78vh,720px);min-height:540px}
+.stage{position:relative;min-width:0;overflow:hidden;background:#0b0d12}
+#yard{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#yard:active{cursor:grabbing}
+.stage .loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--display);letter-spacing:.1em;color:var(--muted)}
+.side{padding:12px;display:grid;gap:14px;align-content:start;overflow:auto;min-width:0;border-left:1px solid var(--line);background:var(--panel)}
+.field{display:grid;gap:6px}
+.field > .k{display:flex;align-items:center;gap:6px;font-family:var(--display);letter-spacing:.12em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.ctl{display:grid;grid-template-columns:52px minmax(0,1fr) 54px;gap:6px;align-items:center;font-size:13px}
+.ctl span:last-child{font-family:var(--mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--amber)}
+.readout{font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.45}
+.readout b{color:var(--ink);font-weight:600}
+#chart{width:100%;height:auto;background:#0d1216;border:1px solid var(--line);border-radius:4px;display:block}
+.verdict{font-size:13px;border-left:3px solid var(--ok);padding:2px 0 2px 8px}
+.verdict.no{border-left-color:var(--warn)}
+.verdict b{font-family:var(--mono);font-size:12px}
+/* the game's HUD (crates/pbd-app/src/desktop/slots.rs): ten 44 px slots, 4 px apart, 22 px off the bottom; the debug line top left */
+.dbg{position:absolute;left:8px;top:6px;font:600 12px/1.3 var(--mono);color:var(--hud);text-shadow:0 1px 0 #000,1px 0 0 #000;pointer-events:none;max-width:calc(100% - 16px)}
+.hotbar{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:4px;pointer-events:none}
+.hotbar .hs{position:relative;flex:0 0 44px;width:44px;height:44px;border:1px solid var(--hudline);background:var(--hudbg);display:grid;place-items:center}
+.hotbar .hs.sel{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
+.hotbar img{width:32px;height:32px;display:block}
+.hotbar .c{position:absolute;right:3px;bottom:1px;font:10px var(--mono);color:var(--hud);text-shadow:0 1px 0 #000}
+.cross{position:absolute;left:50%;top:50%;width:2px;height:2px;background:var(--hud);pointer-events:none}
+.shot .view{position:fixed;inset:0;height:auto;min-height:0;z-index:50;border-radius:0;border:0;grid-template-columns:1fr}
+.shot .side,.shot .ov{display:none}
+.ov{position:absolute;background:rgba(13,21,26,.84);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:8px;display:grid;gap:6px}
+.ov.tr{right:10px;top:28px;max-width:min(360px,calc(100% - 20px))}
+.ov .seg button{font-size:13.5px;padding:3px 8px}
+
+/* the assembly bay */
+.bay{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px;align-items:start}
+.recipes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:8px;align-content:start;min-width:0}
+.card .head{display:flex;gap:10px;align-items:center}
+.card .head img{width:64px;height:64px;flex:none}
+.card p{font-size:13.5px;color:var(--muted)}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:13px}
+.card dt{color:var(--muted);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:11.5px;padding-top:2px}
+.card dd{margin:0;font-family:var(--mono);font-size:12px}
+.card dd.over{color:var(--warn)}
+.bom{display:flex;flex-wrap:wrap;gap:5px}
+.chipitem{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:4px;padding:2px 8px 2px 3px;background:var(--panel-2);font-size:13px;white-space:nowrap}
+.chipitem img{width:32px;height:32px}
+.chipitem b{font-family:var(--mono);font-size:12px}
+.queue{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:10px;min-width:0}
+.qrow{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:8px;align-items:center}
+.qrow img{width:32px;height:32px}
+.qrow .nm{font-size:14px}
+.qrow .st{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.qbar{height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-top:3px}
+.qbar i{display:block;height:100%;background:var(--sky)}
+.qrow.done .qbar i{background:var(--ok)}
+
+/* pass plan */
+.plan{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:start}
+#planCv{width:100%;height:auto;max-width:100%;background:#0d1216;border:1px solid var(--line);border-radius:6px;display:block}
+.pstats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}
+.stat{display:grid;gap:1px;min-width:0}
+.stat .k{font-family:var(--display);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat .v small{font-size:11px;font-weight:400;color:var(--muted);margin-left:3px}
+
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-family:var(--display);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:12px;color:var(--muted);background:var(--panel)}
+tr:last-child td{border-bottom:0}
+td img{width:32px;height:32px;vertical-align:middle;margin-right:6px}
+.rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dec{display:grid;gap:10px}
+.dec .q{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:grid;gap:6px}
+.dec .q h3{font-size:18px}
+.dec .q p{font-size:14.5px;color:var(--muted)}
+.dec .q .rec{color:var(--ink)}
+.dec .q .rec b{color:var(--amber);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:13px;margin-right:6px}
+
+@media (max-width:980px){
+  .view{grid-template-columns:1fr;height:auto}
+  .stage{height:62vh;min-height:380px}
+  .side{border-left:0;border-top:1px solid var(--line)}
+  .bay,.plan{grid-template-columns:1fr}
+  .rules{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  .recipes,.pstats{grid-template-columns:1fr}
+  .hotbar{display:none}
+}
+</style>
+
+<style>
+.ov .seg{max-width:340px}
+#craneSel{margin-bottom:2px}
+.ladder-way{font-family:var(--mono);font-size:12px;white-space:nowrap}
+[hidden]{display:none!important}
+</style>
+
+<div class="wrap">
+
+<header class="lede">
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-12</span></div>
+  <h1>Cranes and Printers</h1>
+  <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+  <blockquote>"Would like to see what more advanced fabricators look like for building large items, cranes and 3d printers for assembling buildings"<cite>The owner, reviewing Forge and Fabricator (M3) on the tracker, 2026-11-12</cite></blockquote>
+  <blockquote>"you should have medeival cranes/scaffolds for building older style houses too, those metal cranes are for building new homes, and 3d printer is kind of for smaller homes and general assembly of like planes and parts and stuff."<cite>The owner, on this page's first version, 2026-11-12</cite></blockquote>
+  <p>Past the fabricator, a yard for what is too big to carry, built three ways side by side. <b>The old way</b>: a half-timbered house of the towns' own kit rising inside a timber scaffold, its beams lifted by a treadwheel crane that someone walks. <b>The new way</b>: a three-storey house set in precast panels under a steel tower crane driven from its cab. <b>Printed</b>: a hex printer laying a small home one 1 m layer a pass, and a parts printer printing a wing panel and a propeller for the assembly bay, which turns parts into the large items that planes, boats and buildings are made of.</p>
+  <p class="honest"><b>About the art.</b> <b>The game's own</b> (byte-identical copies in <code>construction/game/</code>, see its README): the ground is the terrain atlas's fields sheet (<code>assets/tilesets/atlas.png</code>) on 2.833 m hex columns with 1 m layers, the plots topped with its crumbly dirt tile; the old house's stone storey, half-timbered panels, timber frame, plank floors and the scaffold's timber, plank and rope, the thatch, the apron, the bay's brick and slate, the office's boards and the masts are the settlement textures stone, halftimber, timber, plank, rope, thatch, flag, rubble, brick, slate, boards and iron at their <code>repeat_m</code>; the hand, the brazier and the lantern post in the hotbar are the game's icons. <b>Mockup-only:</b> the machine and item icons and the printstone, panel, concrete, glass, polymer, crane paint, lattice, crate, container, counterweight, hazard and plate tiles are pixel art drawn in code with the balatro-pixel-art kit (<code>tools/art/construction_art.py</code>), 32 x 32 and sampled nearest; the recipe item icons are the crafting mockup's; the worker in the treadwheel is the towns mockup's person, flat-coloured as it is there. Every house here is the town's cut: walls on cell edges, floors in cells, three layers a storey.</p>
+</header>
+
+<section aria-labelledby="s1">
+  <h2 id="s1"><span class="n">1</span>The yard: three ways to build</h2>
+  <p>West to east: <b>old</b>, <b>printed</b>, <b>new</b>, with the assembly bay and the parts bed behind the printer. Drag to look around, scroll or pinch to zoom; nothing moves until you move it. The print slider runs the small home from bare plot to roof in four passes, and the parts bed with it; Play runs both. The crane controls switch between the treadwheel and the tower crane: each has its own load chart and refuses a load past it, with the numbers. Walk the wheel turns the treadwheel and winds its rope. At night the brazier and the lanterns light the old site, floodlights and work lamps the new one, the print heads glow, and the ground between the pools stays dark.</p>
+  <div class="view">
+    <div class="stage">
+      <canvas id="yard" aria-label="A construction yard with three sites: a half-timbered house in a timber scaffold with a treadwheel crane; a hex printer printing a small home beside a parts printer bed; a panel-built house under a steel tower crane. An assembly bay, a laydown of crates and a site office."></canvas>
+      <div class="loading" id="loading">Loading the yard</div>
+      <div class="dbg" id="dbg" aria-hidden="true"></div>
+      <div class="cross" aria-hidden="true"></div>
+      <div class="hotbar" id="hotbar" aria-label="Hotbar, as the game draws it"></div>
+      <div class="ov tr">
+        <div class="seg" id="viewSel" role="group" aria-label="Look at"></div>
+        <div class="seg" id="timeSel" role="group" aria-label="Time of day"><button data-t="day" aria-pressed="false">Day</button><button data-t="dusk" aria-pressed="false">Dusk</button><button data-t="night" aria-pressed="true">Night</button></div>
+      </div>
+    </div>
+    <aside class="side" aria-label="Yard controls">
+      <div class="field"><span class="k"><img src="construction/print-head.png?v=1" alt="" width="32" height="32">Hex printer and parts bed</span>
+        <input type="range" id="print" min="0" max="400" step="1" value="230" aria-label="Print progress, four passes">
+        <div style="display:flex;gap:6px;align-items:center"><span class="pbtn" role="button" tabindex="0" id="play">Play</span><span class="pbtn" role="button" tabindex="0" id="restart">Bare plot</span></div>
+        <div class="readout" id="printTxt"></div>
+      </div>
+      <div class="field"><span class="k"><img id="craneIcon" src="construction/treadwheel.png?v=1" alt="" width="32" height="32">Cranes</span>
+        <div class="seg" id="craneSel" role="group" aria-label="Crane"><button data-c="wheel" aria-pressed="true">Treadwheel</button><button data-c="tower" aria-pressed="false">Tower crane</button></div>
+        <div class="seg" id="loadSel" role="group" aria-label="On the hook"></div>
+        <label class="ctl"><span>Slew</span><input type="range" id="slew" min="0" max="359" step="1"><span id="slewV"></span></label>
+        <label class="ctl"><span id="reachK">Reach</span><input type="range" id="trolley" min="3" max="7" step="0.1"><span id="trolleyV"></span></label>
+        <label class="ctl"><span>Hoist</span><input type="range" id="hoist" min="1" max="12" step="0.1"><span id="hoistV"></span></label>
+        <div style="display:flex;gap:6px"><span class="pbtn" role="button" tabindex="0" id="walk">Walk the wheel</span></div>
+        <canvas id="chart" width="552" height="230" aria-label="The crane's load chart: what it may lift at each radius"></canvas>
+        <div class="verdict" id="verdict"></div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<section aria-labelledby="s2">
+  <h2 id="s2"><span class="n">2</span>The assembly bay</h2>
+  <p>A large fabricator in a shed with its own bridge crane. Its recipes are big: each makes one item with a mass and a footprint in cells, delivered as a crate on the bay floor for a crane, a cart or a vehicle to take. Printed parts come in from the parts bed outside its door. It draws power from the grid (<a href="https://claude.ai/artifact/JBcP2Js3bdQ2uApN3xUnHV">Pits, Plants and Power</a>) and its other inputs are the fabricator's (<a href="https://claude.ai/artifact/6hj8UvbLY9TUsn7591sKKg">Forge and Fabricator</a>). Queue a few; finished ones can be hooked on the tower crane above. Time runs a minute a second.</p>
+  <div class="bay">
+    <div class="recipes" id="recipes"></div>
+    <div class="queue"><div class="eyebrow">The bay's queue</div><div id="queue" style="display:grid;gap:10px"></div><p class="muted" style="font-size:13px">One item at a time, in order. A crate stands where it was made until something moves it; it is saved where it stands.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="s3">
+  <h2 id="s3"><span class="n">3</span>The printer's pass plan</h2>
+  <p>One pass is one 1 m layer of the small home, seen from above: three cells, one storey, a roof. The head traces every wall line of the layer, eight beads of 12.5 cm on each, and travels between lines without printing (dashed). Walls are 0.3 m thick on the cell edges the blueprint names, with gaps where the door and the windows go; the floor and the roof fill the cells.</p>
+  <div class="plan">
+    <canvas id="planCv" width="1040" height="760" aria-label="The small home's footprint from above, with one layer's walls and the head's path"></canvas>
+    <div style="display:grid;gap:12px;min-width:0">
+      <div class="seg" id="passSel" role="group" aria-label="Pass"></div>
+      <div class="pstats" id="pstats"></div>
+      <div class="readout" id="passTxt"></div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="s4">
+  <h2 id="s4"><span class="n">4</span>The ladder, and what is saved</h2>
+  <div class="tablebox"><table>
+    <thead><tr><th>Way, tier</th><th>Machine</th><th>Makes</th><th>Needs</th></tr></thead>
+    <tbody id="ladder"></tbody>
+  </table></div>
+  <div class="rules">
+    <div class="card"><h3>A built course is a world edit</h3><p>Every piece the player sets from the scaffold, every panel the tower crane lands and every layer the printer finishes enters the durable path as an edit, naming its author: the player, or the printer by its ID on its owner's behalf. A change the world makes never overwrites the player's.</p></div>
+    <div class="card"><h3>A stopped job keeps what it built</h3><p>Out of printstone, out of power, or the game closed: the printed layers that finished are real and saved, and the one under way is laid again from its start. A half-raised house keeps every piece already set, and its scaffold stands until it is taken down.</p></div>
+    <div class="card"><h3>Crates and scaffolds are records</h3><p>A large item has a stable ID, a mass and a footprint in cells, and is saved where it stands; set down, it snaps to the cut, and lifted into a building's frame it becomes that building's piece. A scaffold is pieces too: poles, planks and ladders, saved and struck like any other.</p></div>
+  </div>
+  <p class="muted" style="font-size:14px">Whichever way a house went up, it is made of the same pieces a hand-built house is (<code>player-building</code>), so the game keeps one kind of building, not three. A blueprint changed later never reprints or rebuilds a house already standing: what was built is what the save holds.</p>
+</section>
+
+<section aria-labelledby="s5">
+  <h2 id="s5"><span class="n">5</span>Decisions</h2>
+  <p class="muted">Recommendations are mine, not the owner's words. The ones marked with a picture have the yard, the pass plan or a load chart above to look at; the rest are recorded in the change as recommendation taken (ask only with screenshots).</p>
+  <div class="dec" id="decisions"></div>
+</section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const Q = new URLSearchParams(location.search);
+const OWN = n => `construction/${n}.png?v=1`;
+const GAME = n => `construction/game/${n}.png`;
+const ITEM = n => n.startsWith("own:") ? OWN(n.slice(4)) : `crafting/${n}.png?v=2`;
+const ITEM_NAMES = {"own:printstone": "Printstone", "own:wing-panel": "Wing panel", "own:propeller": "Propeller", "steel-ingot": "Steel", "glass": "Glass", "stone": "Stone", "clay": "Clay", "sand": "Sand", "log": "Log", "rope": "Rope", "alloy-plate": "Alloy plate", "circuit": "Circuit", "polymer": "Polymer", "copper-ingot": "Copper", "bronze-ingot": "Bronze", "planks": "Planks"};
+const press = (el, f) => { el.addEventListener("click", f); el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); f(); } }); };
+
+// ======================= the assembly bay's recipes =======================
+const RECIPES = [
+  {id: "panel", name: "Wall panel", icon: "wall-panel", m: 2.6, foot: "1 cell edge, 3 layers", time: 4, kw: 12, inputs: [["own:printstone", 12], ["steel-ingot", 2], ["glass", 2]], txt: "One storey of precast wall for one cell edge, its window cast in. The tower crane sets it on its edge in a new house."},
+  {id: "stone", name: "Crate of printstone", icon: "printstone", m: 4.0, foot: "1 cell", time: 1, kw: 6, inputs: [["stone", 20], ["clay", 6], ["sand", 6]], txt: "Sixteen sacks of 0.25 m\u00b3 for the printer's hopper, mixed here so the printer never waits on a pack."},
+  {id: "mast", name: "Ship's mast", icon: "mast", m: 1.8, foot: "1 x 4 cells, laid flat", time: 6, kw: 8, inputs: [["log", 6], ["rope", 4], ["steel-ingot", 2]], txt: "A mast and its yard for a hull in the drydock (Drydock and Hex Ship Builder)."},
+  {id: "wing", name: "Wing pair", icon: "wing-pair", m: 3.2, foot: "1 x 3 cells", time: 9, kw: 20, inputs: [["own:wing-panel", 2], ["alloy-plate", 2], ["circuit", 2]], txt: "Two wing panels from the parts bed on their spar box, for an aircraft in the hangar (Hangar and Chibi Aircraft)."},
+  {id: "engine", name: "Engine", icon: "engine", m: 6.0, foot: "1 cell", time: 12, kw: 30, inputs: [["steel-ingot", 8], ["copper-ingot", 4], ["circuit", 3], ["own:propeller", 1]], txt: "A boat's or an aircraft's engine on its bearers, its printed propeller fitted. Six tonnes: it leaves the bay on the bay's own crane and a cart."},
+  {id: "keel", name: "Keel and frames", icon: "hull-section", m: 9.5, foot: "2 cells", time: 15, kw: 18, inputs: [["planks", 20], ["steel-ingot", 4], ["rope", 2]], txt: "Two keel cells framed and pinned, a ship's spine. Over the tower crane's 8 t hook: the drydock's gantry lifts it."},
+];
+const RBY = Object.fromEntries(RECIPES.map(r => [r.id, r]));
+
+// ======================= the cut =======================
+const HW = 2.833, HR = HW / Math.sqrt(3);
+const hexXZ = (q, r) => [HW * (q + r / 2), HR * 1.5 * r];
+const toAxial = (x, z) => { const r = Math.round(z / (1.5 * HR)); return [Math.round(x / HW - r / 2), r]; };
+const corner = i => { const a = Math.PI / 180 * (60 * i - 30); return [HR * Math.cos(a), HR * Math.sin(a)]; };
+function edgesOf(foot) {
+  const inF = (q, r) => foot.some(([a, b]) => a === q && b === r), out = [], seen = new Set();
+  for (const [q, r] of foot) {
+    const [cx, cz] = hexXZ(q, r);
+    for (let i = 0; i < 6; i++) {
+      const a = corner(i), b = corner((i + 1) % 6), [nq, nr] = toAxial(cx + a[0] + b[0], cz + a[1] + b[1]), outer = !inF(nq, nr);
+      const key = outer ? `${q},${r}:${i}` : [`${q},${r}`, `${nq},${nr}`].sort().join("|");
+      if (seen.has(key)) continue; seen.add(key);
+      out.push({p0: [cx + a[0], cz + a[1]], p1: [cx + b[0], cz + b[1]], outer, i, c: [cx, cz], mid: [cx + (a[0] + b[0]) / 2, cz + (a[1] + b[1]) / 2]});
+    }
+  }
+  return out;
+}
+
+// ======================= the printed small home: three cells, one storey, four passes =======================
+const FOOT = [[0, 0], [1, 0], [0, 1]];
+const OUTER = edgesOf(FOOT).filter(e => e.outer);
+const CENT = FOOT.reduce((a, [q, r]) => { const [x, z] = hexXZ(q, r); return [a[0] + x / FOOT.length, a[1] + z / FOOT.length]; }, [0, 0]);
+OUTER.sort((a, b) => Math.atan2(a.mid[1] - CENT[1], a.mid[0] - CENT[0]) - Math.atan2(b.mid[1] - CENT[1], b.mid[0] - CENT[0]));
+const DOOR = OUTER.reduce((best, e) => (e.mid[1] - Math.abs(e.mid[0] - CENT[0]) * 0.3 > best.mid[1] - Math.abs(best.mid[0] - CENT[0]) * 0.3 ? e : best), OUTER[0]);
+const WINS = new Set(OUTER.filter((e, i) => e !== DOOR && i % 4 === 1));
+const BOUND = (() => { const xs = [], zs = []; FOOT.forEach(([q, r]) => { const [x, z] = hexXZ(q, r); for (let i = 0; i < 6; i++) { const [a, b] = corner(i); xs.push(x + a); zs.push(z + b); } }); return {x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs)}; })();
+const RAIL_Z = [BOUND.z0 - 2, BOUND.z1 + 2], PARK = [BOUND.x0 - 2.5, BOUND.z0 - 2];
+const PASSES = (() => {
+  const P = [], cells = (y0, y1) => FOOT.map(([q, r]) => ({kind: "cell", c: hexXZ(q, r), y0, y1}));
+  const walls = (y, gaps, h = 1) => OUTER.filter(e => !gaps.has(e)).map(e => ({kind: "wall", e, y0: y, y1: y + h}));
+  P.push({name: "Floor and layer 1", ys: "0 to 1", sub: "floor in the three cells, walls y 0 to 1 m, the door open", items: [...cells(0, 0.2), ...walls(0, new Set([DOOR]))]});
+  P.push({name: "Layer 2", ys: "1 to 2", sub: "walls y 1 to 2 m, the door and windows open", items: walls(1, new Set([DOOR, ...WINS]))});
+  P.push({name: "Layer 3", ys: "2 to 3", sub: "walls y 2 to 3 m, the lintels closed", items: walls(2, new Set())});
+  P.push({name: "Roof", ys: "3 to 3.7", sub: "roof in the three cells at y 3 m, a parapet to 3.7 m", items: [...cells(3.0, 3.2), ...walls(3.2, new Set(), 0.5)]});
+  const BEAD_RATE = 0.3 * 0.125 * 0.2;   // m3/s: a 0.3 m by 12.5 cm bead at 0.2 m/s
+  for (const pass of P) {
+    let at = PARK.slice(); const left = pass.items.slice(), order = [];
+    const ends = it => it.kind === "wall" ? [it.e.p0, it.e.p1] : [[it.c[0] - HR * 0.6, it.c[1]], [it.c[0] - HR * 0.6, it.c[1]]];
+    while (left.length) {
+      let bi = 0, bd = 1e9, flip = false;
+      left.forEach((it, i) => { const [a, b] = ends(it); const da = Math.hypot(a[0] - at[0], a[1] - at[1]), db = Math.hypot(b[0] - at[0], b[1] - at[1]); if (da < bd) { bd = da; bi = i; flip = false; } if (db < bd) { bd = db; bi = i; flip = true; } });
+      const it = left.splice(bi, 1)[0], [a, b] = ends(it);
+      it.from = flip ? b : a; it.to = flip ? a : b; it.travel = bd;
+      it.vol = it.kind === "wall" ? HR * 0.3 * (it.y1 - it.y0) : 6.95 * (it.y1 - it.y0);
+      order.push(it); at = it.to;
+    }
+    pass.items = order;
+    let t = 0; for (const it of order) { it.t0 = t + it.travel / 1.0; it.t1 = it.t0 + it.vol / BEAD_RATE; t = it.t1; }
+    pass.T = t; pass.vol = order.reduce((a, it) => a + it.vol, 0);
+    pass.wallLen = order.filter(it => it.kind === "wall").length * HR;
+  }
+  return P;
+})();
+const NP = PASSES.length, PMAX = NP * 100;
+
+// ======================= section 2: the bay =======================
+$("recipes").innerHTML = RECIPES.map(r => `<div class="card"><div class="head"><img src="${OWN(r.icon)}" alt="" width="64" height="64"><div><span class="eyebrow">${r.m.toFixed(1)} t</span><h3>${r.name}</h3></div></div><p>${r.txt}</p><dl><dt>Footprint</dt><dd>${r.foot}</dd><dt>Time</dt><dd>${r.time} min, ${r.kw} kW</dd><dt>Tower crane</dt><dd${r.m > 8 ? ' class="over"' : ""}>${r.m > 8 ? "over the 8 t hook" : `out to ${Math.min(40, 120 / r.m).toFixed(1)} m`}</dd></dl><div class="bom">${r.inputs.map(([i, n]) => `<span class="chipitem"><img src="${ITEM(i)}" alt="" width="32" height="32">${ITEM_NAMES[i]}<b>${n}</b></span>`).join("")}</div><span class="pbtn" role="button" tabindex="0" data-q="${r.id}">Queue</span></div>`).join("");
+let QUEUE = [{id: "panel", left: 0}, {id: "engine", left: 7.2}, {id: "wing", left: 9}];
+function drawQueue() {
+  $("queue").innerHTML = QUEUE.map((q, i) => { const r = RBY[q.id], f = 1 - q.left / r.time, done = q.left <= 0; return `<div class="qrow${done ? " done" : ""}"><img src="${OWN(r.icon)}" alt="" width="32" height="32"><div><div class="nm">${r.name} <span class="st">${r.m.toFixed(1)} t</span></div><div class="qbar"><i style="width:${(Math.max(0, Math.min(1, f)) * 100).toFixed(1)}%"></i></div><div class="st">${done ? "crated on the bay floor" : i === QUEUE.findIndex(o => o.left > 0) ? `${q.left.toFixed(1)} min left` : "waiting"}</div></div>${done && q.id !== "keel" ? `<span class="pbtn" role="button" tabindex="0" data-hook="${q.id}">Hook it</span>` : ""}</div>`; }).join("") || `<p class="muted">Nothing queued.</p>`;
+  $("queue").querySelectorAll("[data-hook]").forEach(b => press(b, () => { window.setLoad && window.setLoad(b.dataset.hook); document.querySelector(".view").scrollIntoView({behavior: "smooth", block: "center"}); }));
+}
+document.querySelectorAll("[data-q]").forEach(b => press(b, () => { QUEUE.push({id: b.dataset.q, left: RBY[b.dataset.q].time}); if (QUEUE.length > 7) QUEUE.splice(QUEUE.findIndex(q => q.left <= 0), 1); drawQueue(); }));
+drawQueue();
+if (!Q.has("shot")) setInterval(() => { const q = QUEUE.find(o => o.left > 0); if (q) { q.left = Math.max(0, q.left - 0.25); drawQueue(); } }, 250);
+
+// ======================= section 3: the pass plan =======================
+let planPass = 1;
+$("passSel").innerHTML = PASSES.map((p, i) => `<button data-p="${i}" aria-pressed="${i === planPass}">${i === NP - 1 ? "Roof" : "Layer " + (i + 1)}</button>`).join("");
+$("passSel").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { planPass = +b.dataset.p; $("passSel").querySelectorAll("button").forEach(o => o.setAttribute("aria-pressed", o === b)); drawPlan(); }));
+function drawPlan() {
+  const cv = $("planCv"), g = cv.getContext("2d"), W = cv.width, H = cv.height, S = 62, ox = W * 0.5 - CENT[0] * S, oy = H * 0.47 - CENT[1] * S;
+  const X = x => ox + x * S, Y = z => oy + z * S;
+  const inF = (q, r) => FOOT.some(([a, b]) => a === q && b === r);
+  g.fillStyle = "#0d1216"; g.fillRect(0, 0, W, H);
+  g.lineWidth = 1;
+  for (let q = -5; q <= 5; q++) for (let r = -5; r <= 5; r++) {
+    const [cx, cz] = hexXZ(q, r); if (Math.hypot(cx - CENT[0], cz - CENT[1]) > 9) continue;
+    g.beginPath(); for (let i = 0; i <= 6; i++) { const [a, b] = corner(i % 6); i ? g.lineTo(X(cx + a), Y(cz + b)) : g.moveTo(X(cx + a), Y(cz + b)); }
+    g.strokeStyle = inF(q, r) ? "rgba(226,206,160,.35)" : "rgba(143,195,216,.12)"; g.stroke();
+  }
+  g.fillStyle = "rgba(160,159,145,.5)"; for (const z of RAIL_Z) g.fillRect(X(BOUND.x0 - 4), Y(z) - 3, (BOUND.x1 - BOUND.x0 + 8) * S, 6);
+  g.font = "600 20px 'JetBrains Mono', monospace"; g.fillStyle = "#94a8ad"; g.fillText("rail", X(BOUND.x1 + 2.6), Y(RAIL_Z[0]) - 10); g.fillText("rail", X(BOUND.x1 + 2.6), Y(RAIL_Z[1]) - 10);
+  const pass = PASSES[planPass];
+  for (let k = 0; k < planPass; k++) for (const it of PASSES[k].items) if (it.kind === "wall") { g.strokeStyle = "rgba(160,159,145,.18)"; g.lineWidth = 0.3 * S; g.lineCap = "butt"; g.beginPath(); g.moveTo(X(it.e.p0[0]), Y(it.e.p0[1])); g.lineTo(X(it.e.p1[0]), Y(it.e.p1[1])); g.stroke(); }
+  for (const it of pass.items) {
+    if (it.kind === "cell") { g.beginPath(); for (let i = 0; i <= 6; i++) { const [a, b] = corner(i % 6); i ? g.lineTo(X(it.c[0] + a * 0.97), Y(it.c[1] + b * 0.97)) : g.moveTo(X(it.c[0] + a * 0.97), Y(it.c[1] + b * 0.97)); } g.fillStyle = "rgba(191,202,215,.55)"; g.fill(); }
+    else { g.strokeStyle = "#bfcad7"; g.lineWidth = 0.3 * S; g.lineCap = "butt"; g.beginPath(); g.moveTo(X(it.e.p0[0]), Y(it.e.p0[1])); g.lineTo(X(it.e.p1[0]), Y(it.e.p1[1])); g.stroke(); }
+  }
+  const gaps = [];
+  if (planPass === 0 || planPass === 1) gaps.push([DOOR, "door"]);
+  if (planPass === 1) WINS.forEach(e => gaps.push([e, "window"]));
+  for (const [e, what] of gaps) { g.setLineDash([8, 6]); g.strokeStyle = "#e8b040"; g.lineWidth = 3; g.beginPath(); g.moveTo(X(e.p0[0]), Y(e.p0[1])); g.lineTo(X(e.p1[0]), Y(e.p1[1])); g.stroke(); g.setLineDash([]); g.fillStyle = "#e8b040"; const k = 1.35; g.fillText(what, X(CENT[0] + (e.mid[0] - CENT[0]) * k) - 28, Y(CENT[1] + (e.mid[1] - CENT[1]) * k) + 6); }
+  let at = PARK.slice();
+  g.fillStyle = "#ff8a3d"; g.beginPath(); g.arc(X(at[0]), Y(at[1]), 7, 0, Math.PI * 2); g.fill(); g.fillText("park", X(at[0]) + 10, Y(at[1]) - 10);
+  pass.items.forEach((it, n) => {
+    g.setLineDash([5, 6]); g.strokeStyle = "rgba(143,195,216,.75)"; g.lineWidth = 2; g.beginPath(); g.moveTo(X(at[0]), Y(at[1])); g.lineTo(X(it.from[0]), Y(it.from[1])); g.stroke(); g.setLineDash([]);
+    if (it.kind === "wall") {
+      g.strokeStyle = "#ff8a3d"; g.lineWidth = 2.5; g.beginPath(); g.moveTo(X(it.from[0]), Y(it.from[1])); g.lineTo(X(it.to[0]), Y(it.to[1])); g.stroke();
+      const mx = (it.from[0] + it.to[0]) / 2, mz = (it.from[1] + it.to[1]) / 2, a = Math.atan2(it.to[1] - it.from[1], it.to[0] - it.from[0]);
+      g.save(); g.translate(X(mx), Y(mz)); g.rotate(a); g.fillStyle = "#ff8a3d"; g.beginPath(); g.moveTo(8, 0); g.lineTo(-5, -6); g.lineTo(-5, 6); g.closePath(); g.fill(); g.restore();
+      g.fillStyle = "#e4ecee"; g.font = "600 16px 'JetBrains Mono', monospace"; const nx = -Math.sin(a), nz = Math.cos(a); g.fillText(String(n + 1), X(mx + nx * 0.42) - 8, Y(mz + nz * 0.42) + 6); g.font = "600 20px 'JetBrains Mono', monospace";
+    } else {
+      g.strokeStyle = "#ff8a3d"; g.lineWidth = 2; g.beginPath();
+      for (let k = 0; k < 4; k++) { const s = 0.85 - k * 0.2; for (let i = 0; i <= 6; i++) { const [a, b] = corner(i % 6); const px = X(it.c[0] + a * s), pz = Y(it.c[1] + b * s); (k === 0 && i === 0) ? g.moveTo(px, pz) : g.lineTo(px, pz); } }
+      g.stroke();
+    }
+    at = it.to;
+  });
+  g.fillStyle = "#94a8ad"; g.font = "600 20px 'JetBrains Mono', monospace"; g.fillText(`pass ${planPass + 1} of ${NP} \u00b7 ${pass.name.toLowerCase()} \u00b7 forward (+z) is down the page`, 20, H - 20);
+  g.fillText("2.833 m cells", W - 190, 32);
+  const vol = pass.vol, mins = pass.T / 60;
+  const st = (k, v, u) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}<small>${u}</small></span></div>`;
+  $("pstats").innerHTML = [
+    st("Layer, y", pass.ys, "m"), st("Lines and cells", pass.items.length, ""),
+    st("Wall line", pass.wallLen.toFixed(1), "m"), st("Printstone", vol.toFixed(1), `m\u00b3, ${Math.ceil(vol / 0.25)} sacks`),
+    st("Head time", mins.toFixed(0), "min at 0.2 m/s"), st("Home so far", PASSES.slice(0, planPass + 1).reduce((a, p) => a + p.vol, 0).toFixed(1), "m\u00b3"),
+  ].join("");
+  $("passTxt").innerHTML = `<b>${pass.name}</b>: ${pass.sub}. One world edit when it finishes, the printer its author. A sack of printstone is 0.25 m\u00b3; the hopper holds 64. The whole home takes ${PASSES.reduce((a, p) => a + p.T, 0) / 3600 < 10 ? (PASSES.reduce((a, p) => a + p.T, 0) / 3600).toFixed(1) : Math.round(PASSES.reduce((a, p) => a + p.T, 0) / 3600)} hours of head time and ${Math.ceil(PASSES.reduce((a, p) => a + p.vol, 0) / 0.25)} sacks.`;
+}
+drawPlan();
+
+// ======================= sections 4 and 5 =======================
+$("ladder").innerHTML = [
+  ["Old", "scaffold", "Timber scaffold", "A place to stand while a house rises course by course, for any of the towns' kits: poles at cell corners, plank decks on layer lines, ladders between, lashed with rope", "Poles, planks and rope; struck piece by piece when the house is done"],
+  ["Old", "treadwheel", "Treadwheel crane", "Lifts beams and blocks close in: 1.5 t out to 4 m, 0.86 t at its 7 m reach (rated 6 t m)", "Timber, rope and an iron hook; someone to walk the wheel, a worker or the player"],
+  ["1-3", "@workbench", "Workbench, forge, fabricator", "Pack-sized items (Forge and Fabricator)", "Hands, then a forge's heat, then circuits"],
+  ["4", "assembly-bay", "Assembly bay", "Large items as crates in the world: a wall panel, a mast, a wing pair, an engine, a keel section", "Fabricator parts, printed parts from the parts bed, power from the grid"],
+  ["5, printed", "hex-printer", "Hex printer", "Small homes, one 1 m layer a pass, printed into the plot's cells from a blueprint", "A blueprint (Hex House Builder), printstone by hopper, power"],
+  ["5, printed", "parts-bed", "Parts printer bed", "Aircraft and vehicle parts: a wing panel, a propeller, a fuselage section, for the assembly bay and the hangar", "Polymer and alloy feed, power"],
+  ["5, new", "tower-crane", "Tower crane", "New homes set in precast panels; lifts within its chart: 8 t out to 15 m, 3 t at its 40 m tip (rated 120 t m)", "A footing of four stone cells; a cab you sit in"],
+  ["5", "gantry-crane", "Gantry crane", "Lifts along its rails, over a bay or a drydock, up to 20 t", "Rails on cell edges, both sides"],
+].map(([t, ic, m, mk, nd]) => `<tr><td class="ladder-way">${t}</td><td><img src="${ic[0] === "@" ? `crafting/${ic.slice(1)}.png?v=2` : OWN(ic)}" alt="" width="32" height="32">${m}</td><td>${mk}</td><td>${nd}</td></tr>`).join("");
+const DEC = [
+  ["C1. The printer prints the town's pieces, not solid blocks", true, "A wall of whole cells is 2.833 m thick, the problem the towns' cut was made to solve. Printing walls on cell edges and floors in cells gives a printed home the same rooms, doors and windows as a built one.", "Pieces. Look at the small home on the printed site."],
+  ["C2. One layer a pass, three passes a storey", true, "The layer is the world's 1 m. A pass is one layer, so a stopped print stops on a layer line and every finished layer is a whole edit.", "As drawn in the pass plan: four passes for a one-storey home with its roof. The printer is for small homes; bigger houses go up the old way or the new."],
+  ["C3. A crane's chart is a moment", true, "A crane is limited by what its jib can carry at a radius, not by one number. Both cranes here follow the same rule with their own numbers.", "The tower crane: 120 t m and an 8 t hook. The treadwheel: 6 t m and a 1.5 t hook. Each refuses past its chart with the number; put the ashlar block on the treadwheel and run its reach out."],
+  ["C4. Large items are crates in the world", false, "A mast or an engine in a pack slot would make cranes pointless. A crate has a mass and a footprint and must be moved.", "Crates, saved where they stand, lifted by crane or carried by a vehicle."],
+  ["C5. A stopped print keeps its layers", false, "Running out of printstone or power should cost time, never what was built.", "Finished layers are saved edits; the layer under way is laid again from its start."],
+  ["C6. Who authored a printed layer", false, "The world is not only changed by the player (CLAUDE.md). A printer works while the player is elsewhere.", "The printer, by its ID, on its owner's behalf; one edit per layer through the durable path."],
+  ["C7. Power", false, "The printers and the bay are the first machines big enough to need the grid. The old way needs none.", "They draw from the grid of Pits, Plants and Power; with too little supply they slow by the same share as every machine on the network."],
+  ["C8. Driving the tower crane", false, "The cab is a seat like a craft's.", "Slew, trolley and hoist on the craft keys; mouse look stays raw and never turns the crane."],
+  ["C9. Three ways to build, one cut", true, "The owner: old cranes and scaffolds for older houses, the steel crane for new homes, the printer for small homes and parts.", "Three sites side by side. Each builds the same pieces on the same cut, so a house is the same record whichever way it went up; the way only changes the speed, the size and what it needs."],
+  ["C10. The scaffold is pieces", true, "Old houses need somewhere to stand to set the next course.", "Poles at cell corners, plank decks on layer lines, ladders between, rope lashings: the player climbs it and builds from it, and strikes it piece by piece. Look at the old site."],
+  ["C11. Who walks the wheel", false, "A treadwheel crane is only as strong as its walker.", "A worker hired in a town, or the player stepping in; the hoist runs at the walker's pace and needs no power."],
+  ["C12. The parts bed", true, "The owner: the printer is also for general assembly of planes and parts.", "A smaller gantry over a flat bed prints parts (wing panels, propellers, fuselage sections) that go into the assembly bay's recipes. Look at it in front of the bay."],
+];
+$("decisions").innerHTML = DEC.map(([q, pic, ctx, rec]) => `<div class="q"><h3>${q}${pic ? ` <span class="tag" style="vertical-align:middle;margin-left:6px">has a picture</span>` : ""}</h3><p>${ctx}</p><p class="rec"><b>Recommend</b>${rec}</p></div>`).join("");
+
+$("hotbar").innerHTML = `<div class="hs sel"><img src="${GAME("hand")}" alt="Bare hand (the game's icon)"></div>` +
+  [[OWN("timber-beam"), 4], [OWN("ashlar-block"), 6], [OWN("thatch-bundle"), 12], [OWN("blueprint"), 1], [OWN("printstone"), 64], [OWN("wall-panel"), 2], [OWN("crate"), 3], [GAME("brazier"), 2], [GAME("lantern_post"), 6]].map(([src, c]) => `<div class="hs"><img src="${src}" alt=""><span class="c">${c}</span></div>`).join("");
+
+// ======================= the cranes' numbers =======================
+const LOADS = {
+  ridge: {name: "Ridge beam", m: 0.4}, tie: {name: "Tie beam", m: 0.6}, ashlar: {name: "Ashlar block", m: 1.2}, thatch: {name: "Thatch bundles", m: 0.3},
+  panel: {name: "Wall panel", m: 2.6}, stone: {name: "Crate of printstone", m: 4.0}, mast: {name: "Ship's mast", m: 1.8}, wing: {name: "Wing pair", m: 3.2}, engine: {name: "Engine", m: 6.0}, keel: {name: "Keel and frames", m: 9.5},
+};
+const CR = {
+  wheel: {id: "wheel", name: "treadwheel crane", rated: 6, hook: 1.5, rMin: 3, rMax: 7, hMin: 1, hMax: 12, step: 0.1, reach: "Reach", loads: ["ridge", "tie", "ashlar", "thatch", "panel"], load: "ridge", slew: 90, rReq: 6.6, h: 11.8, xMax: 8, yMax: 2, xStep: 2, yStep: 0.5},
+  tower: {id: "tower", name: "tower crane", rated: 120, hook: 8, rMin: 4, rMax: 40, hMin: 2, hMax: 28, step: 0.5, reach: "Trolley", loads: ["panel", "stone", "mast", "wing", "engine", "keel"], load: "panel", slew: 90, rReq: 15, h: 11.5, xMax: 40, yMax: 10, xStep: 10, yStep: 2},
+};
+let ACTIVE = CR[Q.get("crane")] ? Q.get("crane") : "wheel";
+const capOf = (c, r) => Math.min(c.hook, c.rated / r);
+
+// ======================= the yard (three.js) =======================
+(function yard() {
+  if (!window.THREE) { $("loading").textContent = "three.js did not load"; return; }
+  const canvas = $("yard");
+  const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+  renderer.setPixelRatio(Math.min(+(Q.get("pr") || 2), window.devicePixelRatio || 1));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 900);
+
+  // ---- textures: nearest, no mipmaps, repeated per metre
+  const manager = new THREE.LoadingManager(), loader = new THREE.TextureLoader(manager), TEX = {};
+  const texM = (src, repM = 1) => { const key = src + "@" + repM; if (TEX[key]) return TEX[key]; const t = loader.load(src); t.encoding = THREE.sRGBEncoding; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / repM, 1 / repM); return (TEX[key] = t); };
+
+  // ---- lamps: every light lights what is near it, wherever the camera is (ship-crafting's shader)
+  const MAXL = 64, LAMPS = [];
+  const U = {uLampPos: {value: Array.from({length: MAXL}, () => new THREE.Vector3())}, uLampCol: {value: Array.from({length: MAXL}, () => new THREE.Vector4())}, uLampCount: {value: 0}, uLampOn: {value: 1}};
+  function lit(mat) {
+    mat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, U);
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", `#include <common>
+uniform vec3 uLampPos[${MAXL}];
+uniform vec4 uLampCol[${MAXL}];
+uniform int uLampCount;
+uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <lights_fragment_end>
+{
+  vec3 P = -vViewPosition;
+  for (int i = 0; i < ${MAXL}; i++) {
+    if (i >= uLampCount) break;
+    vec3 Lv = uLampPos[i] - P;
+    float d = length(Lv);
+    float r = uLampCol[i].w;
+    if (d > r) continue;
+    float f = 1.0 - d / r;
+    float att = f * f;
+    float nl = max(dot(normal, Lv / max(d, 1e-3)), 0.0);
+    reflectedLight.directDiffuse += diffuseColor.rgb * uLampCol[i].rgb * att * (0.15 + 0.85 * nl) * uLampOn;
+  }
+}`);
+    };
+    mat.customProgramCacheKey = () => "lamps" + (mat.alphaTest ? "a" : "");
+    return mat;
+  }
+  const std = o => lit(new THREE.MeshStandardMaterial(Object.assign({roughness: 0.92, metalness: 0}, o)));
+  const BULBS = [];
+  function lamp(x, y, z, color, intensity, range, opts = {}) {
+    const L = {p: new THREE.Vector3(x, y, z), c: new THREE.Color(color), i: intensity, r: range, group: opts.group || null, always: !!opts.always};
+    LAMPS.push(L);
+    if (opts.bulb !== false) { const bs = (opts.size || 0.18) * 2; const b = new THREE.Mesh(new THREE.BoxGeometry(bs, bs, bs), new THREE.MeshBasicMaterial({color})); b.position.set(x, y, z); (opts.group || scene).add(b); L.bulb = b; BULBS.push(L); }
+    return L;
+  }
+  // a box with UVs in metres, so a texture's repeat_m holds on every face
+  function mbox(w, h, d) {
+    const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+    for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, uv.getX(i) * dims[f][0], uv.getY(i) * dims[f][1]); }
+    return g;
+  }
+  const add = (geo, mat, x, y, z, parent = scene, ry = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true; parent.add(m); return m; };
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  function setRod(m, a, b) { const d = b.clone().sub(a), L = Math.max(0.01, d.length()); m.position.copy(a).add(b).multiplyScalar(0.5); m.scale.set(1, 1, L); m.quaternion.setFromUnitVectors(V3(0, 0, 1), d.normalize()); }
+  function rod(a, b, t, mat, parent = scene) { const m = new THREE.Mesh(mbox(t, t, 1), mat); setRod(m, a, b); m.castShadow = true; parent.add(m); return m; }
+  // a hex prism (one cell, y 0 to h) with UVs in metres; group 0 the top, group 1 the sides
+  function hexPrism(h, inset = 1) {
+    const p = [], n = [], u = [], g = new THREE.BufferGeometry();
+    for (let i = 0; i < 6; i++) { const a = corner(i), b = corner((i + 1) % 6); for (const [x, z] of [[0, 0], [b[0] * inset, b[1] * inset], [a[0] * inset, a[1] * inset]]) { p.push(x, h, z); n.push(0, 1, 0); u.push(x, -z); } }
+    const top = p.length / 3;
+    for (let i = 0; i < 6; i++) {
+      const a = corner(i).map(v => v * inset), b = corner((i + 1) % 6).map(v => v * inset), nx = (a[0] + b[0]) / 2, nz = (a[1] + b[1]) / 2, l = Math.hypot(nx, nz), L = HR * inset;
+      for (const [x, y, z, uu] of [[a[0], h, a[1], 0], [b[0], 0, b[1], L], [b[0], h, b[1], L], [a[0], h, a[1], 0], [a[0], 0, a[1], 0], [b[0], 0, b[1], L]]) { p.push(x, y, z); n.push(nx / l, 0, nz / l); u.push(uu, y); }
+    }
+    g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(n, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(u, 2));
+    g.addGroup(0, top, 0); g.addGroup(top, p.length / 3 - top, 1);
+    return g;
+  }
+  const cellSlab = (cx, cz, y0, h, mats, parent) => { const m = new THREE.Mesh(hexPrism(h, 0.995), mats); m.position.set(cx, y0, cz); m.castShadow = m.receiveShadow = true; parent.add(m); return m; };
+  // a piece on a cell edge: the group's x runs along the edge, z along its outward normal
+  function onEdge(e, parent, y = 0) { const g = new THREE.Group(), dx = e.p1[0] - e.p0[0], dz = e.p1[1] - e.p0[1]; g.position.set(e.mid[0], y, e.mid[1]); g.rotation.y = Math.atan2(-dz, dx); const nx = e.mid[0] - e.c[0], nz = e.mid[1] - e.c[1], tx = dx, tz = dz; if (tx * nz - tz * nx < 0) g.rotation.y += Math.PI; parent.add(g); return g; }
+  // a wall with a hole: len along x, h up, t thick, the hole {x0, x1, y0, y1}
+  function holeWall(g, len, h, t, mat, hole) {
+    const parts = [[-len / 2, hole.x0, 0, h], [hole.x1, len / 2, 0, h], [hole.x0, hole.x1, 0, hole.y0], [hole.x0, hole.x1, hole.y1, h]];
+    for (const [x0, x1, y0, y1] of parts) if (x1 - x0 > 0.01 && y1 - y0 > 0.01) add(mbox(x1 - x0, y1 - y0, t), mat, (x0 + x1) / 2, (y0 + y1) / 2, 0, g);
+  }
+
+  // ---- sky, sun, moon
+  const hemi = new THREE.HemisphereLight(0xbcd6ee, 0x3d3a2c, 0.5); scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 1.0); sun.position.set(-70, 110, 50); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, {left: -80, right: 80, top: 80, bottom: -80, near: 10, far: 380}); sun.shadow.bias = -0.0005;
+  scene.add(sun);
+  const moon = new THREE.DirectionalLight(0x9fb4e0, 0.0); moon.position.set(90, 140, -60); scene.add(moon);
+  const starGeo = new THREE.BufferGeometry(); { const a = []; let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647; for (let i = 0; i < 1500; i++) { const t = rnd() * Math.PI * 2, uu = rnd() * 0.95 + 0.05, r = 600; a.push(r * Math.cos(t) * Math.sqrt(1 - uu * uu), r * uu, r * Math.sin(t) * Math.sqrt(1 - uu * uu)); } starGeo.setAttribute("position", new THREE.Float32BufferAttribute(a, 3)); }
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color: 0xdfe6ff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0})); scene.add(stars);
+  const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(14, 32), new THREE.MeshBasicMaterial({color: 0xdfe4f0, fog: false})); moonDisc.position.set(300, 380, -420); moonDisc.lookAt(0, 0, 0); scene.add(moonDisc);
+  scene.fog = new THREE.Fog(0x9bb7cc, 160, 600);
+
+  // ---- where things stand
+  const [oX, oZ] = hexXZ(-14, 2), [pX, pZ] = hexXZ(-2, 2), [nX, nZ] = hexXZ(10, 2);
+  const OLD = V3(oX, 0, oZ), PRT = V3(pX, 0, pZ), NEW = V3(nX, 0, nZ), PB = V3(-2, 0, -12.5);
+  const OLD_C = V3(oX + HW, 0, oZ + 2.5), PRT_C = V3(pX + CENT[0], 0, pZ + CENT[1]), NEW_C = V3(nX + 2.1, 0, nZ + 1.2);
+  const CRANE_CELLS = [[12, -3], [13, -3], [12, -2], [13, -2]];
+  const CRANE = (() => { let x = 0, z = 0; CRANE_CELLS.forEach(([q, r]) => { const [a, b] = hexXZ(q, r); x += a / 4; z += b / 4; }); return V3(x, 0, z); })();
+  const BAY = {x0: -14, x1: 10, z0: -36, z1: -22};
+  const LAY = {x0: -30, x1: -16, z0: -20, z1: -9};
+  const APRON = {x0: -22, x1: 54, z0: -42, z1: 26};
+
+  // ---- ground: the game's hex columns (2.833 m flat to flat, 1 m layers), the fields sheet of the
+  // terrain atlas read as planet_surface.wgsl does; paving and pads are the settlement textures
+  const RINGS = 62;
+  const hsh = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const vn = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, uu = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz); const a = hsh(xi, zi), b = hsh(xi + 1, zi), c = hsh(xi, zi + 1), d = hsh(xi + 1, zi + 1); return a + (b - a) * uu + (c - a) * v + (a - b - c + d) * uu * v; };
+  const inR = (R, x, z) => x > R.x0 && x < R.x1 && z > R.z0 && z < R.z1;
+  const kindAt = (q, r, x, z) => {
+    if (CRANE_CELLS.some(([a, b]) => a === q && b === r)) return "stone";
+    if (Math.hypot(x - OLD_C.x, z - OLD_C.z) < 11) return "plot";
+    if (Math.hypot(x - PRT_C.x, z - PRT_C.z) < 8) return "plot";
+    if (Math.hypot(x - NEW_C.x, z - NEW_C.z) < 11.5) return "rubble";
+    if (inR(BAY, x, z) || inR(APRON, x, z)) return "flag";
+    return "grass";
+  };
+  const CELL = new Map();
+  for (let q = -RINGS; q <= RINGS; q++) for (let r = -RINGS; r <= RINGS; r++) {
+    if (Math.abs(q + r) > RINGS) continue;
+    const [x, z] = hexXZ(q, r), k = kindAt(q, r, x, z);
+    let h = k === "stone" ? 1 : 0;
+    if (k === "grass") { const dx = Math.max(0, x - APRON.x1, APRON.x0 - x), dz = Math.max(0, z - APRON.z1, APRON.z0 - z); const d = Math.min(Math.hypot(dx, dz), Math.max(0, Math.hypot(x - OLD_C.x, z - OLD_C.z) - 17)); h = Math.max(0, Math.round(d / 9 + (vn(x / 22, z / 22) - 0.5) * 3 * Math.min(1, d / 20) + (vn(x / 60, z / 60) - 0.4) * d / 12)); }
+    CELL.set(q + "," + r, {x, z, k, h});
+  }
+  const ATLAS = texM(GAME("atlas"), 1); ATLAS.repeat.set(1, 1); ATLAS.wrapS = ATLAS.wrapT = THREE.ClampToEdgeWrapping;
+  const FIELDS = 4;   // the fields sheet, planet_terrain.rs TILESETS order
+  const auv = (tx, ty, fu, fv) => { const sx = FIELDS % 4, sy = Math.floor(FIELDS / 4); fu = 0.01 + fu * 0.98; fv = 0.01 + fv * 0.98; return [(sx * 4 + tx + fu) / 16, 1 - (sy * 4 + ty + fv) / 16]; };
+  const GEO = {}; const geo = k => GEO[k] || (GEO[k] = {p: [], n: [], u: []});
+  const REP = {flag: 2.5, rubble: 2, stone: 2};   // repeat_m, assets/textures/settlement/manifest.ron
+  const NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+  for (const [key, c] of CELL) {
+    const [q, r] = key.split(",").map(Number), atl = c.k === "grass" || c.k === "plot", G = geo(atl ? "atlas" : c.k);
+    const top = (px, pz) => atl ? auv(c.k === "plot" ? 2 : 0, 0, (px - c.x) / (2 * HR) + 0.5, (pz - c.z) / (2 * HR) + 0.5) : [px / REP[c.k], -pz / REP[c.k]];
+    for (let i = 0; i < 6; i++) {
+      const [ax, az] = corner(i), [bx, bz] = corner((i + 1) % 6);
+      for (const [px, pz] of [[c.x, c.z], [c.x + bx, c.z + bz], [c.x + ax, c.z + az]]) { G.p.push(px, c.h, pz); G.n.push(0, 1, 0); G.u.push(...top(px, pz)); }
+      const mx = c.x + (ax + bx), mz = c.z + (az + bz);
+      let nb = null; for (const [dq, dr] of NB) { const o = CELL.get((q + dq) + "," + (r + dr)); if (o && Math.hypot(o.x - mx, o.z - mz) < HR) nb = o; }
+      const low = nb ? nb.h : c.h - 3; if (low >= c.h) continue;
+      const nx = (ax + bx) / 2, nz = (az + bz) / 2, l = Math.hypot(nx, nz);
+      if (c.k === "stone") { const S = geo("stone"); for (const [px, py, pz, uu, vv] of [[ax, c.h, az, 0, c.h], [bx, low, bz, HR, low], [bx, c.h, bz, HR, c.h], [ax, c.h, az, 0, c.h], [ax, low, az, 0, low], [bx, low, bz, HR, low]]) { S.p.push(c.x + px, py, c.z + pz); S.n.push(nx / l, 0, nz / l); S.u.push(uu / 2, vv / 2); } continue; }
+      const S = geo("atlas");
+      for (let y = c.h; y > low; y--) {
+        const tile = y === c.h && c.k === "grass" ? 1 : 2;
+        for (const [px, py, pz, uu, v] of [[ax, y, az, 0, 0], [bx, y - 1, bz, 1, 1], [bx, y, bz, 1, 0], [ax, y, az, 0, 0], [ax, y - 1, az, 0, 1], [bx, y - 1, bz, 1, 1]]) { S.p.push(c.x + px, py, c.z + pz); S.n.push(nx / l, 0, nz / l); S.u.push(...auv(tile, 0, uu, v)); }
+      }
+    }
+  }
+  const groundMat = {atlas: std({map: ATLAS, roughness: 1, side: THREE.DoubleSide}), flag: std({map: texM(GAME("flag"), 1), roughness: 1}), rubble: std({map: texM(GAME("rubble"), 1), roughness: 1}), stone: std({map: texM(GAME("stone"), 1), roughness: 1})};
+  for (const [k, G] of Object.entries(GEO)) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(G.p, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(G.n, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(G.u, 2));
+    const m = new THREE.Mesh(g, groundMat[k]); m.receiveShadow = true; scene.add(m);
+  }
+
+  // ---- materials
+  const M = {
+    print: std({map: texM(OWN("tex-printstone"), 1)}), printTop: std({map: texM(OWN("tex-printstone-top"), 2)}),
+    wet: std({map: texM(OWN("tex-printstone"), 1), color: 0x8a8578}), wetTop: std({map: texM(OWN("tex-printstone-top"), 2), color: 0x8a8578}),
+    paint: std({map: texM(OWN("tex-paint"), 2), roughness: 0.75}), teal: std({map: texM(OWN("tex-teal"), 2), roughness: 0.75}),
+    lattice: std({map: texM(OWN("tex-lattice"), 2), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75}),
+    hazard: std({map: texM(OWN("tex-hazard"), 1)}), crate: std({map: texM(OWN("tex-crate"), 2.2)}), container: std({map: texM(OWN("tex-container"), 1)}),
+    cw: std({map: texM(OWN("tex-counterweight"), 2)}), white: std({map: texM(OWN("tex-white"), 2)}), red: std({map: texM(OWN("tex-red"), 2)}),
+    panel: std({map: texM(OWN("tex-panel"), 2)}), concrete: std({map: texM(OWN("tex-concrete"), 2)}), glass: std({map: texM(OWN("tex-glass"), 1.5), roughness: 0.4}), polymer: std({map: texM(OWN("tex-polymer"), 1)}),
+    iron: std({map: texM(GAME("iron"), 1), roughness: 0.7}), brick: std({map: texM(GAME("brick"), 2)}), slate: std({map: texM(GAME("slate"), 2)}),
+    boards: std({map: texM(GAME("boards"), 2)}), plank: std({map: texM(GAME("plank"), 2)}), timber: std({map: texM(GAME("timber"), 1)}), stone: std({map: texM(GAME("stone"), 2)}),
+    rope: std({map: texM(GAME("rope"), 1)}), thatch: std({map: texM(GAME("thatch"), 2)}),
+    half: (() => { const t = loader.load(GAME("halftimber")); t.encoding = THREE.sRGBEncoding; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return std({map: t}); })(),
+    line: new THREE.MeshBasicMaterial({color: 0x161612}),
+  };
+  const WINDOW_MATS = [];
+  const winMat = (k = 1) => { const m = new THREE.MeshStandardMaterial({color: 0x2a2a2a, emissive: 0xffc878, emissiveIntensity: 0}); m.userData.k = k; WINDOW_MATS.push(m); return m; };
+  const WIN = winMat(), WORKWIN = winMat(0.55);
+  const flatCol = c => std({color: new THREE.Color(c).convertSRGBToLinear()});
+
+  // ================= the old way: a half-timbered house in a timber scaffold, a treadwheel crane =================
+  const gOld = new THREE.Group(); gOld.position.copy(OLD); scene.add(gOld);
+  const OLD_FOOT = [[0, 0], [1, 0], [2, 0]], OLDE = edgesOf(OLD_FOOT).filter(e => e.outer);
+  const oFront = OLDE.filter(e => e.mid[1] > 0.4).sort((a, b) => a.mid[0] - b.mid[0]), oBack = OLDE.filter(e => e.mid[1] < -0.4), oEnds = OLDE.filter(e => Math.abs(e.mid[1]) <= 0.4);
+  // the ground storey: stone walls on every outer edge, the door and two small windows on the front
+  for (const e of OLDE) {
+    const g = onEdge(e, gOld), k = oFront.indexOf(e), len = HR + 0.29;
+    if (k === 2) holeWall(g, len, 3, 0.5, M.stone, {x0: -0.5, x1: 0.5, y0: 0, y1: 2.1});
+    else if (k === 0 || k === 5 || (oBack.indexOf(e) === 2)) { holeWall(g, len, 3, 0.5, M.stone, {x0: -0.35, x1: 0.35, y0: 1.3, y1: 2.1}); }
+    else add(mbox(len, 3, 0.5), M.stone, 0, 1.5, 0, g);
+  }
+  // the upper floor in the cells, then the upper storey's frame: posts at the corners, sills and plates on the edges
+  for (const [q, r] of OLD_FOOT) { const [cx, cz] = hexXZ(q, r); cellSlab(cx, cz, 2.82, 0.18, [M.plank, M.timber], gOld); }
+  const oCorners = new Map(); OLDE.forEach(e => [e.p0, e.p1].forEach(p => oCorners.set(p[0].toFixed(2) + "," + p[1].toFixed(2), p)));
+  for (const [x, z] of oCorners.values()) add(mbox(0.26, 3, 0.26), M.timber, x, 4.5, z, gOld);
+  OLDE.forEach(e => { const g = onEdge(e, gOld); add(mbox(HR + 0.15, 0.24, 0.26), M.timber, 0, 3.12, 0, g); add(mbox(HR + 0.15, 0.24, 0.26), M.timber, 0, 5.88, 0, g); });
+  // half-timbered panels: the back and the ends filled, two of the six front bays filled, the rest open with their braces
+  for (const e of OLDE) {
+    const k = oFront.indexOf(e), g = onEdge(e, gOld);
+    if (k < 0 || k === 1 || k === 4) add(new THREE.BoxGeometry(HR - 0.16, 2.52, 0.2), M.half, 0, 4.5, 0, g);
+    else rod(V3(-HR / 2 + 0.1, 3.25, 0), V3(HR / 2 - 0.1, 5.75, 0), 0.16, M.timber, g);
+  }
+  // the roof's three trusses up; the ridge beam is on the treadwheel's hook
+  const eave = HR + 0.45, RIDGE_Y = 9.0;
+  for (const x of [-HW / 2 + 0.2, HW, 2.5 * HW - 0.2]) {
+    rod(V3(x, 6.0, -eave), V3(x, RIDGE_Y, 0), 0.2, M.timber, gOld); rod(V3(x, 6.0, eave), V3(x, RIDGE_Y, 0), 0.2, M.timber, gOld);
+    rod(V3(x, 6.05, -eave), V3(x, 6.05, eave), 0.24, M.timber, gOld); rod(V3(x, 6.05, 0), V3(x, RIDGE_Y, 0), 0.18, M.timber, gOld);
+  }
+  rod(V3(-HW / 2 + 0.2, 6.15, -eave + 0.1), V3(2.5 * HW - 0.2, 6.15, -eave + 0.1), 0.2, M.timber, gOld);   // the wall plate at the back eave
+  rod(V3(-HW / 2 + 0.2, 6.15, eave - 0.1), V3(2.5 * HW - 0.2, 6.15, eave - 0.1), 0.2, M.timber, gOld);
+  // the scaffold: poles at the far corners of the front ring of cells, ledgers and putlogs on layer lines, plank decks, ladders, lashings
+  const RING = [[-1, 1], [0, 1], [1, 1], [2, 1]], poles = new Map();
+  for (const [q, r] of RING) { const [cx, cz] = hexXZ(q, r); for (const i of [1, 2, 3]) { const [a, b] = corner(i); poles.set((cx + a).toFixed(2) + "," + (cz + b).toFixed(2), [cx + a, cz + b]); } }
+  for (const [x, z] of poles.values()) { add(mbox(0.22, 8.2, 0.22), M.timber, x, 4.1, z, gOld); for (const y of [2.86, 5.86]) add(mbox(0.34, 0.26, 0.34), M.rope, x, y, z, gOld); }
+  RING.forEach(([q, r], k) => {
+    const [cx, cz] = hexXZ(q, r), c = i => { const [a, b] = corner(i); return [cx + a, cz + b]; };
+    for (const y of [2.86, 5.86]) { for (const [i, j] of [[1, 2], [2, 3]]) rod(V3(c(i)[0], y, c(i)[1]), V3(c(j)[0], y, c(j)[1]), 0.16, M.timber, gOld); rod(V3(c(2)[0], y - 0.04, c(2)[1]), V3(c(5)[0], y - 0.04, c(5)[1] - 0.2), 0.14, M.timber, gOld); }
+    cellSlab(cx, cz, 2.92, 0.08, [M.plank, M.plank], gOld);
+    if (k === 1 || k === 2) cellSlab(cx, cz, 5.92, 0.08, [M.plank, M.plank], gOld);
+    if (k === 0 || k === 3) rod(V3(c(1)[0], 0.2, c(1)[1]), V3(c(3)[0], 2.8, c(3)[1]), 0.12, M.timber, gOld);
+  });
+  function ladder(a, b, y0, y1, parent) {
+    const dir = V3(b[0] - a[0], 0, b[1] - a[1]).normalize(), side = V3(-dir.z, 0, dir.x).multiplyScalar(0.25);
+    const A = V3(a[0], y0, a[1]), B = V3(b[0], y1, b[1]);
+    for (const s of [-1, 1]) rod(A.clone().addScaledVector(side, s), B.clone().addScaledVector(side, s), 0.08, M.timber, parent);
+    const n = Math.floor((y1 - y0) / 0.3); for (let k = 1; k < n; k++) { const t = k / n, P = A.clone().lerp(B, t); rod(P.clone().addScaledVector(side, -1.1), P.clone().addScaledVector(side, 1.1), 0.05, M.timber, parent); }
+  }
+  { const [cx, cz] = hexXZ(-1, 1); ladder([cx - 1.4, cz + 1.9], [cx - 0.6, cz + 0.9], 0, 3.6, gOld); }
+  { const [cx, cz] = hexXZ(1, 1); ladder([cx + 0.2, cz + 0.6], [cx + 0.2, cz - 0.1], 3.0, 6.6, gOld); }
+  // materials waiting: ashlar, timber, thatch
+  for (let k = 0; k < 6; k++) add(mbox(1.0, 0.65, 0.7), M.stone, 8.6 + (k % 3) * 1.05, 0.33 + Math.floor(k / 3) * 0.66, 7.4, gOld);
+  for (let k = 0; k < 4; k++) add(mbox(6.2, 0.3, 0.3), M.timber, -2.6, 0.15 + Math.floor(k / 2) * 0.3, 8.8 + (k % 2) * 0.34, gOld, 0.25);
+  for (let k = 0; k < 6; k++) add(mbox(1.2, 0.45, 0.5), M.thatch, -3.6, 0.23 + Math.floor(k / 3) * 0.46, -1.0 + (k % 3) * 0.55, gOld, Math.PI / 2);
+  // the brazier and a lantern on the scaffold: what lights the old site at night
+  { const b = new THREE.Group(); b.position.set(-1.6, 0, 6.2); gOld.add(b);
+    for (let k = 0; k < 3; k++) { const a = k / 3 * Math.PI * 2; rod(V3(Math.cos(a) * 0.42, 0, Math.sin(a) * 0.42), V3(Math.cos(a) * 0.25, 0.85, Math.sin(a) * 0.25), 0.07, M.iron, b); }
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.3, 0.32, 8), M.iron); bowl.position.y = 1.0; b.add(bowl);
+    const coal = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.1, 0.62), new THREE.MeshBasicMaterial({color: 0xff6a1e})); coal.position.y = 1.17; b.add(coal);
+    for (const [x, z, h] of [[0.05, 0.02, 0.45], [-0.14, 0.1, 0.32], [0.12, -0.12, 0.28]]) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.16, h, 0.16), new THREE.MeshBasicMaterial({color: 0xffb04a})); f.position.set(x, 1.2 + h / 2, z); b.add(f); }
+    lamp(-1.6, 1.7, 6.2, 0xff9a40, 3.0, 10.5, {group: gOld, bulb: false}); }
+  { const [cx, cz] = hexXZ(1, 1), [a, b] = corner(2); add(mbox(0.3, 0.42, 0.3), M.iron, cx + a, 2.35, cz + b + 0.2, gOld); lamp(cx + a, 2.3, cz + b + 0.38, 0xffc070, 2.2, 7.5, {group: gOld, size: 0.12}); }
+  { const [cx, cz] = hexXZ(0, 1), [a, b] = corner(2); add(mbox(0.3, 0.42, 0.3), M.iron, cx + a, 7.25, cz + b + 0.2, gOld); lamp(cx + a, 7.2, cz + b + 0.38, 0xffc070, 2.4, 8.5, {group: gOld, size: 0.12}); }
+
+  // the treadwheel crane: a post on crossed sills, a luffing, slewing jib, the wheel beside it on trestles, a walker inside
+  const TW = V3(HW, 0, -6.6), JIB_L = 8.0, PIVOT = 8.2, WHEEL = V3(4.6, 2.25, 0), WR = 2.0;
+  const gTW = new THREE.Group(); gTW.position.copy(TW); gOld.add(gTW);
+  add(mbox(5.2, 0.36, 0.42), M.timber, 0, 0.18, 0, gTW); add(mbox(0.42, 0.36, 5.2), M.timber, 0, 0.18, 0, gTW);
+  add(mbox(0.46, PIVOT + 0.6, 0.46), M.timber, 0, (PIVOT + 0.6) / 2, 0, gTW);
+  for (const [x, z] of [[2.3, 0], [-2.3, 0], [0, 2.3], [0, -2.3]]) rod(V3(x, 0.36, z), V3(0, 3.2, 0), 0.2, M.timber, gTW);
+  const twSlew = new THREE.Group(); twSlew.position.y = PIVOT; gTW.add(twSlew);
+  add(mbox(0.7, 0.5, 0.7), M.timber, 0, 0, 0, twSlew);
+  const twLuff = new THREE.Group(); twSlew.add(twLuff);
+  add(mbox(JIB_L, 0.32, 0.32), M.timber, JIB_L / 2, 0, 0, twLuff);
+  add(mbox(0.5, 0.18, 0.5), M.timber, JIB_L * 0.55, -0.24, 0, twLuff);
+  const sheave = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.16, 10), M.timber); sheave.rotation.x = Math.PI / 2; sheave.position.set(JIB_L, 0, 0); twLuff.add(sheave);
+  const stay = rod(V3(0, 0.6, 0), V3(1, 1, 0), 0.06, M.rope, twSlew), twFall = rod(V3(0, 0, 0), V3(0, -1, 0), 0.06, M.rope, twSlew), twRun = rod(V3(0, 0, 0), V3(1, 0, 0), 0.05, M.rope, twSlew);
+  rod(V3(WHEEL.x, WHEEL.y, 0), V3(0.3, PIVOT, 0), 0.06, M.rope, gTW);
+  const twHook = new THREE.Group(); twSlew.add(twHook);
+  add(mbox(0.32, 0.42, 0.22), M.iron, 0, 0, 0, twHook);
+  const twLoad = new THREE.Group(); twHook.add(twLoad);
+  const wheel = new THREE.Group(); wheel.position.copy(WHEEL); gTW.add(wheel);
+  for (const z of [-0.6, 0.6]) {
+    for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2; const s = add(mbox(2 * Math.PI * WR / 16 + 0.04, 0.18, 0.14), M.timber, Math.cos(a) * WR, Math.sin(a) * WR, z, wheel); s.rotation.z = a + Math.PI / 2; }
+    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2; rod(V3(0, 0, z), V3(Math.cos(a) * (WR - 0.05), Math.sin(a) * (WR - 0.05), z), 0.1, M.timber, wheel); }
+  }
+  for (let k = 0; k < 28; k++) { const a = k / 28 * Math.PI * 2; const s = add(mbox(0.2, 0.06, 1.34), M.plank, Math.cos(a) * (WR - 0.12), Math.sin(a) * (WR - 0.12), 0, wheel); s.rotation.z = a; }
+  { const ax = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 2.4, 8), M.timber); ax.rotation.x = Math.PI / 2; wheel.add(ax); }
+  for (const z of [-1.1, 1.1]) { rod(V3(WHEEL.x - 1.5, 0, z), V3(WHEEL.x, WHEEL.y + 0.1, z), 0.18, M.timber, gTW); rod(V3(WHEEL.x + 1.5, 0, z), V3(WHEEL.x, WHEEL.y + 0.1, z), 0.18, M.timber, gTW); add(mbox(2.6, 0.18, 0.18), M.timber, WHEEL.x, 0.7, z, gTW); }
+  // the walker: the towns mockup's person, flat-coloured as it is there
+  { const p = new THREE.Group(), mk = (w, h, d, col, x, y, z) => add(new THREE.BoxGeometry(w, h, d), flatCol(col), x, y, z, p);
+    mk(0.18, 0.8, 0.2, 0x4a3b2c, 0, 0.4, -0.11); mk(0.18, 0.8, 0.2, 0x4a3b2c, 0.12, 0.42, 0.11); mk(0.28, 0.72, 0.5, 0x8a3324, 0, 1.16, 0); mk(0.3, 0.12, 0.52, 0x3a2a1c, 0, 0.86, 0);
+    mk(0.3, 0.32, 0.3, 0xc99a74, 0, 1.7, 0); mk(0.32, 0.1, 0.32, 0x3b2a1e, 0, 1.87, 0); mk(0.16, 0.62, 0.14, 0x8a3324, 0.1, 1.2, -0.33); mk(0.16, 0.62, 0.14, 0x8a3324, -0.05, 1.2, 0.33);
+    p.position.set(WHEEL.x + 0.25, WHEEL.y - WR + 0.2, 0); p.rotation.z = 0.12; gTW.add(p); }
+  lamp(0.45, 3.4, 0.45, 0xffc070, 1.8, 6.5, {group: gTW, size: 0.12});
+
+  // ================= printed: the hex printer and its small home, the parts bed =================
+  const gP = new THREE.Group(); gP.position.copy(PRT); scene.add(gP);
+  const WALL_GEO = mbox(HR + 0.17, 1, 0.3), HALF_GEO = mbox(HR + 0.17, 0.5, 0.3), PRISMS = {};
+  const ITEMS = [];
+  PASSES.forEach((pass, pi) => pass.items.forEach(it => {
+    let mesh;
+    if (it.kind === "wall") {
+      mesh = new THREE.Mesh(it.y1 - it.y0 < 0.9 ? HALF_GEO : WALL_GEO, M.print);
+      const dx = it.to[0] - it.from[0], dz = it.to[1] - it.from[1]; it.L = Math.hypot(dx, dz); it.dir = [dx / it.L, dz / it.L];
+      mesh.rotation.y = Math.atan2(-dz, dx); mesh.position.y = (it.y0 + it.y1) / 2;
+    } else {
+      const h = it.y1 - it.y0, key = h.toFixed(2);
+      mesh = new THREE.Mesh(PRISMS[key] || (PRISMS[key] = hexPrism(h, 0.995)), [M.printTop, M.print]);
+      mesh.position.set(it.c[0], it.y0, it.c[1]);
+    }
+    mesh.castShadow = mesh.receiveShadow = true; mesh.visible = false; gP.add(mesh);
+    ITEMS.push({it, pi, mesh});
+  }));
+  const RX0 = BOUND.x0 - 4, RX1 = BOUND.x1 + 4, BR_Y = 6.2;
+  for (const z of RAIL_Z) { add(mbox(RX1 - RX0, 0.3, 0.45), M.iron, (RX0 + RX1) / 2, 0.15, z, gP); for (let x = RX0 + 0.5; x <= RX1; x += 2.5) add(mbox(0.5, 0.12, 1.2), M.plank, x, 0.06, z, gP); }
+  const bridge = new THREE.Group(); gP.add(bridge);
+  for (const z of RAIL_Z) { for (const dx of [-0.8, 0.8]) add(mbox(0.4, BR_Y - 0.3, 0.4), M.teal, dx, BR_Y / 2, z, bridge); add(mbox(2.2, 0.55, 0.85), M.teal, 0, 0.55, z, bridge); add(mbox(2.0, 0.3, 0.3), M.teal, 0, BR_Y * 0.55, z, bridge); }
+  add(mbox(0.9, 0.8, RAIL_Z[1] - RAIL_Z[0] + 1), M.paint, 0, BR_Y + 0.35, (RAIL_Z[0] + RAIL_Z[1]) / 2, bridge);
+  add(mbox(0.22, 0.22, RAIL_Z[1] - RAIL_Z[0]), M.hazard, 0.5, BR_Y, (RAIL_Z[0] + RAIL_Z[1]) / 2, bridge);
+  const carriage = new THREE.Group(); bridge.add(carriage);
+  add(mbox(1.4, 0.9, 1.2), M.paint, 0, BR_Y - 0.25, 0, carriage);
+  const ram = add(mbox(0.3, 1, 0.3), M.iron, 0, 3, 0, carriage);
+  const head = new THREE.Group(); carriage.add(head);
+  add(mbox(0.7, 0.55, 0.7), M.paint, 0, 0.5, 0, head); add(mbox(0.36, 0.28, 0.36), M.iron, 0, 0.1, 0, head);
+  const nozzle = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial({color: 0xffa04a})); nozzle.position.y = -0.06; head.add(nozzle);
+  lamp(0, -0.2, 0, 0xff8a3d, 2.6, 6, {group: head, bulb: false, always: true});
+  lamp(0, BR_Y - 0.3, 0.75, 0xffd8a0, 1.3, 8, {group: carriage, size: 0.14});
+  // the hopper
+  const silo = new THREE.Group(); silo.position.set(RX0 - 3.2, 0, RAIL_Z[0] + 1); gP.add(silo);
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) add(mbox(0.3, 3, 0.3), M.iron, dx, 1.5, dz, silo);
+  { const b = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 4.2, 6), M.teal); b.position.y = 5.1; b.castShadow = true; silo.add(b); const c = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 0.35, 1.3, 6), M.teal); c.position.y = 2.35; silo.add(c); }
+  add(mbox(3.4, 0.3, 3.4), M.hazard, 0, 7.35, 0, silo);
+  rod(V3(RX0 - 3.2, 1.5, RAIL_Z[0] + 1), V3(RX0 + 0.4, 0.4, RAIL_Z[0] + 0.3), 0.26, M.line, gP);
+  lamp(RX0 - 3.2, 3.0, RAIL_Z[0] + 3.2, 0xffc070, 2.0, 7.5, {group: gP, size: 0.15});
+  for (const a of [0.5, 1.6, 2.7, 3.8, 4.9]) add(mbox(2.2, 0.8, 0.3), M.hazard, CENT[0] + Math.cos(a) * 9.4, 0.4, CENT[1] + Math.sin(a) * 9.4, gP, -a + Math.PI / 2);
+
+  // the parts bed: a small gantry over a flat bed, printing a wing panel and a propeller for the assembly bay
+  const gB = new THREE.Group(); gB.position.copy(PB); scene.add(gB);
+  add(mbox(7.2, 0.9, 3.4), M.teal, 0, 0.45, 0, gB); add(mbox(6.8, 0.06, 3.0), M.iron, 0, 0.93, 0, gB);
+  for (const z of [-1.82, 1.82]) add(mbox(7.4, 0.12, 0.14), M.iron, 0, 0.96, z, gB);
+  const bBridge = new THREE.Group(); gB.add(bBridge);
+  for (const z of [-1.82, 1.82]) add(mbox(0.22, 2.3, 0.22), M.paint, 0, 2.1, z, bBridge);
+  add(mbox(0.32, 0.32, 4.0), M.paint, 0, 3.3, 0, bBridge);
+  const bCar = new THREE.Group(); bBridge.add(bCar);
+  add(mbox(0.5, 0.42, 0.5), M.dark || M.iron, 0, 3.05, 0, bCar);
+  const bRam = add(mbox(0.14, 1, 0.14), M.iron, 0, 2, 0, bCar);
+  const bHead = new THREE.Group(); bCar.add(bHead);
+  add(mbox(0.3, 0.26, 0.3), M.paint, 0, 0.2, 0, bHead);
+  const bNoz = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.12), new THREE.MeshBasicMaterial({color: 0xffa04a})); bNoz.position.y = 0.02; bHead.add(bNoz);
+  lamp(0, 0, 0, 0xff8a3d, 2.0, 4.5, {group: bHead, bulb: false, always: true});
+  lamp(-3.9, 2.6, 2.1, 0xffd08a, 2.0, 7.5, {group: gB, size: 0.14}); add(mbox(0.16, 2.6, 0.16), M.iron, -3.9, 1.3, 2.1, gB);
+  const WING_L = 4.6, wing = add(mbox(1, 0.16, 1.25), M.polymer, 0, 1.04, -0.75, gB);
+  const propHub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.2, 8), M.polymer); propHub.position.set(2.2, 1.06, 0.85); gB.add(propHub);
+  const blade1 = add(mbox(1.35, 0.1, 0.3), M.polymer, 2.2 - 0.78, 1.02, 0.85 + 0.12, gB); blade1.rotation.y = 0.18;
+  const blade2 = add(mbox(1.35, 0.1, 0.3), M.polymer, 2.2, 1.02, 0.85, gB);
+  // a finished wing panel and propeller on a cart at the bay door
+  { const c = new THREE.Group(); c.position.set(-6.5, 0, -19.2); scene.add(c); add(mbox(2.6, 0.12, 1.5), M.iron, 0, 0.7, 0, c); for (const [x, z] of [[-1.1, -0.6], [1.1, -0.6], [-1.1, 0.6], [1.1, 0.6]]) add(mbox(0.3, 0.3, 0.12), M.iron, x, 0.32, z, c); add(mbox(2.4, 0.16, 1.2), M.polymer, 0, 0.84, 0, c); add(mbox(0.5, 0.17, 1.2), M.red, 1.0, 0.85, 0, c); add(mbox(1.6, 0.1, 0.28), M.polymer, -0.2, 1.0, 0.1, c); add(mbox(0.3, 0.2, 0.3), M.polymer, -0.2, 1.05, 0.1, c); }
+
+  function setPrint(v) {
+    const pi = Math.min(NP - 1, Math.floor(v / 100)), f = v >= PMAX ? 1 : (v % 100) / 100, pass = PASSES[pi], T = pass.T * f;
+    let hx = PARK[0], hz = PARK[1], hy = BR_Y - 1.4, cur = null;
+    for (const o of ITEMS) {
+      const it = o.it;
+      if (o.pi < pi || v >= PMAX) { o.mesh.visible = true; o.mesh.scale.set(1, 1, 1); setMat(o, false); if (it.kind === "wall") placeWall(o, 1); continue; }
+      if (o.pi > pi) { o.mesh.visible = false; continue; }
+      const t = (T - it.t0) / (it.t1 - it.t0);
+      if (t <= 0) { o.mesh.visible = false; continue; }
+      o.mesh.visible = true; setMat(o, true);
+      const tt = Math.min(1, t);
+      if (it.kind === "wall") placeWall(o, tt); else o.mesh.scale.set(1, Math.max(0.02, tt), 1);
+      if (t < 1) cur = {o, tt};
+    }
+    if (v < PMAX) {
+      if (cur) { const it = cur.o.it; if (it.kind === "wall") { hx = it.from[0] + it.dir[0] * it.L * cur.tt; hz = it.from[1] + it.dir[1] * it.L * cur.tt; } else { const k = Math.floor(cur.tt * 24), s = 0.85 - Math.floor(k / 6) * 0.2, [a, b] = corner(k % 6); hx = it.c[0] + a * s; hz = it.c[1] + b * s; } hy = it.y0 + (it.y1 - it.y0) * (it.kind === "wall" ? 1 : cur.tt) + 0.12; }
+      else { const nxt = pass.items.find(it => (T - it.t0) < 0), prv = [...pass.items].reverse().find(it => T >= it.t1); if (nxt) { const p0 = prv ? prv.to : PARK, p1 = nxt.from, k = prv ? Math.min(1, Math.max(0, (T - prv.t1) / Math.max(1e-6, nxt.t0 - prv.t1))) : 1; hx = p0[0] + (p1[0] - p0[0]) * k; hz = p0[1] + (p1[1] - p0[1]) * k; hy = nxt.y1 + 0.4; } else if (prv) { hx = prv.to[0]; hz = prv.to[1]; hy = prv.y1 + 0.4; } }
+    }
+    bridge.position.x = hx; carriage.position.z = hz; head.position.y = hy;
+    const top = BR_Y - 0.7, len = Math.max(0.2, top - (hy + 0.78)); ram.scale.y = len; ram.position.y = hy + 0.78 + len / 2;
+    nozzle.visible = v < PMAX;
+    // the parts bed runs with it: the wing panel first, then the propeller's second blade
+    const fr = v / PMAX, pw = Math.min(1, 0.25 + fr * 1.1), pb = Math.max(0, Math.min(1, fr * 1.6 - 0.45));
+    wing.scale.x = WING_L * pw; wing.position.x = -3.1 + WING_L * pw / 2;
+    blade2.visible = pb > 0.02; blade2.scale.x = Math.max(0.02, pb); blade2.position.x = 2.2 + 0.1 + 1.35 * pb / 2;
+    let bx, bz; if (pw < 1) { bx = -3.1 + WING_L * pw; bz = -0.75; } else if (pb < 1) { bx = 2.3 + 1.35 * pb; bz = 0.85; } else { bx = -3.4; bz = 1.4; }
+    bBridge.position.x = bx; bCar.position.z = bz; const bh = 1.16; bHead.position.y = bh; const bl = Math.max(0.1, 2.85 - (bh + 0.33)); bRam.scale.y = bl; bRam.position.y = bh + 0.33 + bl / 2; bNoz.visible = pb < 1;
+    const done = PASSES.slice(0, pi).length;
+    $("printTxt").innerHTML = v >= PMAX ? `<b>Printed.</b> ${NP} passes, ${PASSES.reduce((a, p) => a + p.vol, 0).toFixed(1)} m\u00b3 of printstone, ${NP} world edits. The parts bed has a wing panel and a propeller ready for the bay.` : `<b>Pass ${pi + 1} of ${NP}</b>: ${pass.name.toLowerCase()}, ${pass.sub}. ${Math.round(f * 100)}% of the pass, line ${Math.min(pass.items.length, pass.items.filter(it => T >= it.t0).length || 1)} of ${pass.items.length}. ${done} finished layer${done === 1 ? "" : "s"} saved. Parts bed: wing panel ${Math.round(pw * 100)}%, propeller ${Math.round(50 + pb * 50)}%.`;
+    window.PRINT_PASS = pi; status();
+  }
+  function placeWall(o, t) { const it = o.it; o.mesh.scale.x = Math.max(0.02, t); o.mesh.position.x = it.from[0] + it.dir[0] * it.L * t / 2; o.mesh.position.z = it.from[1] + it.dir[1] * it.L * t / 2; }
+  function setMat(o, wet) { if (o.it.kind === "wall") o.mesh.material = wet ? M.wet : M.print; else o.mesh.material = wet ? [M.wetTop, M.wet] : [M.printTop, M.print]; }
+
+  // ================= the new way: a three-storey house in precast panels under the steel tower crane =================
+  const gNew = new THREE.Group(); gNew.position.copy(NEW); scene.add(gNew);
+  const NEW_FOOT = [[0, 0], [1, 0], [2, 0], [-1, 1], [0, 1], [1, 1]], NEWE = edgesOf(NEW_FOOT).filter(e => e.outer);
+  const NCENT = NEW_FOOT.reduce((a, [q, r]) => { const [x, z] = hexXZ(q, r); return [a[0] + x / 6, a[1] + z / 6]; }, [0, 0]);
+  NEWE.sort((a, b) => Math.atan2(a.mid[1] - NCENT[1], a.mid[0] - NCENT[0]) - Math.atan2(b.mid[1] - NCENT[1], b.mid[0] - NCENT[0]));
+  for (let s = 0; s < 3; s++) for (const [q, r] of NEW_FOOT) { const [cx, cz] = hexXZ(q, r); cellSlab(cx, cz, s * 3, 0.25, [M.concrete, M.concrete], gNew); }
+  const front3 = NEWE.filter(e => e.mid[1] > NCENT[1] + 1).sort((a, b) => b.mid[1] - a.mid[1]);
+  const GAP = front3[0], GAP2 = NEWE[(NEWE.indexOf(GAP) + 1) % NEWE.length];
+  { const gq = toAxial(GAP.c[0], GAP.c[1]).join(","); for (const [q, r] of NEW_FOOT) { if (`${q},${r}` === gq) continue; const [cx, cz] = hexXZ(q, r); cellSlab(cx, cz, 9.0, 0.25, [M.concrete, M.concrete], gNew); } }
+  NEWE.forEach((e, k) => {
+    for (let s = 0; s < 3; s++) {
+      if (s === 2 && (e === GAP || e === GAP2)) {
+        const g = onEdge(e, gNew, s * 3 + 0.25);
+        for (const y of [0.5, 1.05]) add(mbox(HR, 0.07, 0.07), M.hazard, 0, y, 0.1, g);
+        add(mbox(0.08, 1.1, 0.08), M.hazard, -HR / 2, 0.55, 0.1, g);
+        continue;
+      }
+      const g = onEdge(e, gNew, s * 3 + 0.25), len = HR + 0.15;
+      if (k % 3 === 2) { add(mbox(len, 2.73, 0.25), M.panel, 0, 1.365, 0, g); continue; }
+      holeWall(g, len, 2.73, 0.25, M.panel, {x0: -0.45, x1: 0.45, y0: 0.8, y1: 2.2});
+      const lit = s === 0 && k % 2 === 0;
+      const w = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.4), lit ? WORKWIN : M.glass); w.position.set(0, 1.5, 0.05); g.add(w);
+      const w2 = w.clone(); w2.position.z = -0.05; w2.rotation.y = Math.PI; g.add(w2);
+    }
+  });
+  lamp(NCENT[0], 1.8, NCENT[1], 0xffe2b8, 2.0, 8.5, {group: gNew, bulb: false});
+  lamp(NCENT[0] - 1, 7.6, NCENT[1], 0xffe2b8, 2.2, 9, {group: gNew, size: 0.16});
+  for (let k = 0; k < 4; k++) add(mbox(HR + 0.12, 0.25, 2.73), M.panel, -6.8, 0.13 + k * 0.26, 4.4, gNew, 0.3);   // panels waiting, laid flat
+  // the tower crane on its four stone cells, its cab controls in the panel
+  const MAST_TOP = 31, JIB = 41;
+  add(mbox(2, MAST_TOP - 1, 2), M.lattice, CRANE.x, 1 + (MAST_TOP - 1) / 2, CRANE.z);
+  add(mbox(2.6, 0.5, 2.6), M.paint, CRANE.x, 1.25, CRANE.z);
+  const slew = new THREE.Group(); slew.position.set(CRANE.x, MAST_TOP, CRANE.z); scene.add(slew);
+  add(mbox(2.8, 1.0, 2.8), M.paint, 0, 0.5, 0, slew);
+  add(mbox(JIB - 1, 1.8, 1.6), M.lattice, 1 + (JIB - 1) / 2, 1.9, 0, slew);
+  add(mbox(12, 1.2, 1.8), M.lattice, -7, 1.6, 0, slew);
+  add(mbox(9, 0.12, 1.8), M.iron, -7.5, 1.0, 0, slew);
+  for (const x of [-11.6, -9.4]) add(mbox(2, 2.6, 2.2), M.cw, x, -0.4, 0, slew);
+  const catHead = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 1.3, 7, 4, 1, true), M.paint); catHead.position.set(0, 4.5, 0); catHead.rotation.y = Math.PI / 4; catHead.castShadow = true; slew.add(catHead);
+  for (const [x, y] of [[28, 2.8], [14, 2.8]]) rod(V3(0, 8, 0), V3(x, y, 0), 0.07, M.line, slew);
+  rod(V3(0, 8, 0), V3(-12.6, 2.2, 0), 0.07, M.line, slew);
+  add(mbox(2.2, 2.0, 1.9), M.white, 1.7, -0.3, 1.95, slew);
+  { const w = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.0), WIN); w.position.set(2.81, -0.1, 1.95); w.rotation.y = Math.PI / 2; slew.add(w); const w2 = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.9), WIN); w2.position.set(1.7, -0.05, 2.91); slew.add(w2); }
+  lamp(3.4, 0, 1.95, 0xffd08a, 1.6, 5, {group: slew, bulb: false});
+  lamp(0, 8.25, 0, 0xff2a2a, 1.6, 5, {group: slew, size: 0.2});
+  lamp(JIB + 0.1, 2.95, 0, 0xff2a2a, 1.6, 5, {group: slew, size: 0.2});
+  lamp(-13.1, 2.35, 0, 0xff2a2a, 1.6, 5, {group: slew, size: 0.2});
+  const trolley = new THREE.Group(); slew.add(trolley);
+  add(mbox(1.4, 0.5, 1.7), M.paint, 0, 0.75, 0, trolley);
+  const hoistLine = add(mbox(0.08, 1, 0.08), M.line, 0, 0, 0, trolley);
+  const hookG = new THREE.Group(); trolley.add(hookG);
+  add(mbox(0.8, 0.9, 0.55), M.hazard, 0, 0, 0, hookG);
+  const loadHolder = new THREE.Group(); hookG.add(loadHolder);
+  // aim the tower crane at the gap in the third storey, unless the address says otherwise
+  { const gx = NEW.x + GAP.mid[0] - CRANE.x, gz = NEW.z + GAP.mid[1] - CRANE.z; CR.tower.slew = Math.round((Math.atan2(gz, gx) * 180 / Math.PI + 360) % 360); CR.tower.rReq = Math.round(Math.hypot(gx, gz) * 2) / 2; CR.tower.h = 6.25 + 4.6 + 0.8; }
+
+  // the loads, built from boxes, hung from the hook (y 0) downward
+  function makeLoad(id, noSling) {
+    const g = new THREE.Group(); if (!id) return g;
+    const sling = pts => { if (!noSling) pts.forEach(p => rod(V3(0, -0.2, 0), V3(...p), 0.05, M.rope, g)); };
+    if (id === "panel") { const w = HR + 0.12; add(mbox(w, 0.75, 0.25), M.panel, 0, -1.83, 0, g); add(mbox(w, 0.8, 0.25), M.panel, 0, -4.2, 0, g); add(mbox(0.35, 1.4, 0.25), M.panel, -w / 2 + 0.175, -2.9, 0, g); add(mbox(0.35, 1.4, 0.25), M.panel, w / 2 - 0.175, -2.9, 0, g); add(mbox(w - 0.7, 1.4, 0.05), M.glass, 0, -2.9, 0, g); sling([[-0.5, -1.45, 0], [0.5, -1.45, 0]]); }
+    if (id === "stone") { add(mbox(2.2, 2.2, 2.2), M.crate, 0, -2.6, 0, g); sling([[-1, -1.5, -1], [1, -1.5, 1], [-1, -1.5, 1], [1, -1.5, -1]]); }
+    if (id === "mast") { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 11, 8), M.plank); p.rotation.z = Math.PI / 2; p.position.y = -2.2; p.castShadow = true; g.add(p); const y = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 6, 8), M.plank); y.rotation.x = Math.PI / 2; y.position.set(3.5, -2.2, 0); g.add(y); sling([[-2.5, -2, 0], [2.5, -2, 0]]); }
+    if (id === "wing") { add(mbox(1.3, 0.8, 1.8), M.paint, 0, -2.3, 0, g); for (const s of [-1, 1]) { add(mbox(3.8, 0.35, 1.7), M.white, s * 2.55, -2.3, 0, g); add(mbox(0.7, 0.36, 1.7), M.red, s * 4.8, -2.3, 0, g); } sling([[-0.6, -1.9, 0], [0.6, -1.9, 0]]); }
+    if (id === "engine") { add(mbox(1.8, 1.4, 1.6), M.iron, 0, -2.6, 0, g); add(mbox(1.4, 0.4, 1.0), M.paint, 0, -1.7, 0, g); add(mbox(0.5, 0.6, 0.6), M.red, 1.15, -2.6, 0, g); add(mbox(0.15, 3.0, 0.3), M.polymer, 1.45, -2.6, 0, g); add(mbox(2.4, 0.3, 1.8), M.plank, 0, -3.45, 0, g); sling([[-0.7, -1.5, -0.6], [0.7, -1.5, 0.6]]); }
+    if (id === "ridge") { add(mbox(0.26, 0.26, 3 * HW + 0.6), M.timber, 0, -1.6, 0, g); sling([[0, -1.5, -1.8], [0, -1.5, 1.8]]); }
+    if (id === "tie") { add(mbox(0.34, 0.4, 6.6), M.timber, 0, -1.7, 0, g); sling([[0, -1.5, -1.6], [0, -1.5, 1.6]]); }
+    if (id === "ashlar") { add(mbox(1.0, 0.7, 0.66), M.stone, 0, -1.3, 0, g); add(mbox(0.12, 0.2, 0.12), M.iron, 0, -0.85, 0, g); rod(V3(0, -0.2, 0), V3(0, -0.8, 0), 0.05, M.iron, g); }
+    if (id === "thatch") { for (let k = 0; k < 3; k++) add(mbox(1.2, 0.45, 0.5), M.thatch, 0, -1.5, -0.55 + k * 0.55, g, Math.PI / 2 * 0); sling([[-0.5, -1.27, -0.8], [0.5, -1.27, 0.8]]); }
+    return g;
+  }
+  // ---- the cranes: one panel drives whichever is picked
+  function verdictOf(c) {
+    const L = LOADS[c.load], m = L.m; let r = Math.max(c.rMin, Math.min(c.rMax, c.rReq)), ok = true, txt;
+    if (m > c.hook) { ok = false; txt = `<b>Refused:</b> the ${L.name.toLowerCase()} is ${m.toFixed(1)} t and the ${c.name}'s hook takes ${c.hook.toFixed(1)} t.${c.id === "wheel" ? " That is the steel crane's work." : " It stays on the laydown for the drydock's gantry."}`; }
+    else { const rMax = Math.min(c.rMax, c.rated / m); if (r > rMax + 1e-6) { ok = false; txt = `<b>Refused past ${rMax.toFixed(1)} m:</b> at ${r.toFixed(1)} m the chart allows ${capOf(c, r).toFixed(2)} t and the ${L.name.toLowerCase()} is ${m.toFixed(1)} t. The ${c.id === "wheel" ? "jib stops" : "trolley stops"} at ${rMax.toFixed(1)} m.`; r = rMax; } else txt = `<b>Lifting ${m.toFixed(1)} t at ${r.toFixed(1)} m:</b> the ${c.name}'s chart allows ${capOf(c, r).toFixed(2)} t there.`; }
+    c.r = r; c.ok = ok; c.txt = txt; return m;
+  }
+  function applyTower() {
+    const c = CR.tower, m = verdictOf(c);
+    slew.rotation.y = -c.slew * Math.PI / 180; trolley.position.x = c.r;
+    const hookY = Math.min(MAST_TOP - 1.2, Math.max(1, c.h)) - MAST_TOP;
+    hookG.position.y = hookY; const lineLen = Math.max(0.1, 0.05 - hookY); hoistLine.scale.y = lineLen; hoistLine.position.y = 0.5 - lineLen / 2;
+    loadHolder.clear(); if (m <= c.hook) loadHolder.add(makeLoad(c.load));
+  }
+  function applyWheel() {
+    const c = CR.wheel, m = verdictOf(c);
+    twSlew.rotation.y = -c.slew * Math.PI / 180;
+    const th = Math.acos(Math.min(1, c.r / JIB_L)); twLuff.rotation.z = th;
+    const tip = V3(JIB_L * Math.cos(th), JIB_L * Math.sin(th), 0), hy = Math.min(PIVOT + tip.y - 0.8, Math.max(c.hMin, c.h)) - PIVOT;
+    setRod(stay, V3(0, 0.55, 0), tip); setRod(twRun, V3(0.3, 0.2, 0), tip.clone().add(V3(0, 0.2, 0)));
+    twHook.position.set(tip.x, hy, 0); setRod(twFall, tip.clone().add(V3(0, -0.25, 0)), V3(tip.x, hy + 0.21, 0));
+    twLoad.clear(); if (m <= c.hook) twLoad.add(makeLoad(c.load));
+    wheel.rotation.z = -(c.h - c.hMin) / 0.24;
+  }
+  function drawChart(c) {
+    const cv = $("chart"), g = cv.getContext("2d"), W = cv.width, H = cv.height, L = 70, B = 40, T = 16, Rr = 18, m = LOADS[c.load].m;
+    const X = x => L + x / c.xMax * (W - L - Rr), Y = t => H - B - t / c.yMax * (H - B - T);
+    g.fillStyle = "#0d1216"; g.fillRect(0, 0, W, H);
+    g.font = "600 18px 'JetBrains Mono', monospace"; g.fillStyle = "#94a8ad"; g.strokeStyle = "rgba(143,195,216,.15)"; g.lineWidth = 1; g.textAlign = "right";
+    for (let t = 0; t <= c.yMax + 1e-6; t += c.yStep) { g.beginPath(); g.moveTo(X(0), Y(t)); g.lineTo(X(c.xMax), Y(t)); g.stroke(); g.fillText(Math.abs(t - c.yMax) < 1e-6 ? `${t} t` : String(+t.toFixed(1)), L - 8, Y(t) + 6); }
+    g.textAlign = "center";
+    for (let x = 0; x <= c.xMax + 1e-6; x += c.xStep) { g.beginPath(); g.moveTo(X(x), Y(0)); g.lineTo(X(x), Y(c.yMax)); g.stroke(); g.fillText(Math.abs(x - c.xMax) < 1e-6 ? `${x} m` : String(x), Math.min(X(x), W - 26), H - 14); }
+    g.textAlign = "left";
+    g.fillStyle = "rgba(255,107,87,.12)"; g.beginPath(); g.moveTo(X(c.rMin), Y(c.yMax)); for (let x = c.rMin; x <= c.rMax + 1e-6; x += c.xMax / 160) g.lineTo(X(x), Y(capOf(c, x))); g.lineTo(X(c.rMax), Y(c.yMax)); g.closePath(); g.fill();
+    g.strokeStyle = "#e8b040"; g.lineWidth = 3; g.beginPath(); for (let x = c.rMin; x <= c.rMax + 1e-6; x += c.xMax / 320) { const p = [X(x), Y(capOf(c, x))]; x === c.rMin ? g.moveTo(...p) : g.lineTo(...p); } g.stroke();
+    g.setLineDash([8, 6]); g.strokeStyle = "rgba(228,236,238,.6)"; g.lineWidth = 2; g.beginPath(); g.moveTo(X(0), Y(Math.min(c.yMax, m))); g.lineTo(X(c.xMax), Y(Math.min(c.yMax, m))); g.stroke(); g.setLineDash([]);
+    g.fillStyle = c.ok ? "#8fdc9a" : "#ff6b57"; g.beginPath(); g.arc(X(c.r), Y(Math.min(c.yMax * 0.98, m)), 8, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#e8b040"; g.fillText(`${c.rated} t m, ${c.hook} t hook`, X(c.xMax * 0.42), Y(c.hook) - 10);
+  }
+  function renderCranePanel() {
+    const c = CR[ACTIVE];
+    document.querySelectorAll("#craneSel button").forEach(b => b.setAttribute("aria-pressed", b.dataset.c === ACTIVE));
+    $("craneIcon").src = OWN(ACTIVE === "wheel" ? "treadwheel" : "tower-crane");
+    $("loadSel").innerHTML = c.loads.map(id => `<button data-l="${id}" aria-pressed="${id === c.load}" title="${LOADS[id].name}, ${LOADS[id].m} t">${LOADS[id].name.replace("Ship's mast", "Mast").split(" ")[0]} ${LOADS[id].m}t</button>`).join("");
+    $("loadSel").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { c.load = b.dataset.l; renderCranePanel(); craneUpdate(); }));
+    const sl = $("trolley"), ho = $("hoist");
+    $("reachK").textContent = c.reach; sl.min = c.rMin; sl.max = c.rMax; sl.step = c.step; ho.min = c.hMin; ho.max = c.hMax; ho.step = c.step;
+    $("slew").value = c.slew; sl.value = c.rReq; ho.value = c.h;
+    $("walk").hidden = ACTIVE !== "wheel";
+  }
+  function craneUpdate() {
+    applyTower(); applyWheel();
+    const c = CR[ACTIVE];
+    $("slewV").textContent = c.slew + "\u00b0"; $("trolleyV").textContent = c.r.toFixed(1) + " m"; $("hoistV").textContent = (+c.h).toFixed(1) + " m";
+    const v = $("verdict"); v.innerHTML = c.txt; v.className = "verdict" + (c.ok ? "" : " no");
+    drawChart(c); status();
+  }
+  if (Q.has("load") && CR[ACTIVE].loads.includes(Q.get("load"))) CR[ACTIVE].load = Q.get("load");
+  for (const [k, key] of [["slew", "slew"], ["trolley", "rReq"], ["hoist", "h"]]) if (Q.has(k)) CR[ACTIVE][key] = +Q.get(k);
+  window.setLoad = id => { ACTIVE = "tower"; if (CR.tower.loads.includes(id)) CR.tower.load = id; renderCranePanel(); craneUpdate(); focus("hook"); };
+  document.querySelectorAll("#craneSel button").forEach(b => b.addEventListener("click", () => { ACTIVE = b.dataset.c; walking = false; $("walk").textContent = "Walk the wheel"; renderCranePanel(); craneUpdate(); }));
+  for (const [id, key] of [["slew", "slew"], ["trolley", "rReq"], ["hoist", "h"]]) $(id).addEventListener("input", e => { CR[ACTIVE][key] = +e.target.value; if (id === "hoist" && ACTIVE === "wheel") { walking = false; $("walk").textContent = "Walk the wheel"; } craneUpdate(); });
+  let walking = false, walkDir = 1;
+  press($("walk"), () => { walking = !walking; $("walk").textContent = walking ? "Stop walking" : "Walk the wheel"; });
+
+  // ---- the assembly bay: brick walls round a wide door, a slate roof, a bridge crane inside
+  const bx = (BAY.x0 + BAY.x1) / 2, bz = (BAY.z0 + BAY.z1) / 2, bw = BAY.x1 - BAY.x0, bd = BAY.z1 - BAY.z0, WALL_H = 9, DOOR_W = 11, DOOR_H = 7;
+  add(mbox(bw, WALL_H, 0.6), M.brick, bx, WALL_H / 2, BAY.z0);
+  for (const x of [BAY.x0, BAY.x1]) add(mbox(0.6, WALL_H, bd), M.brick, x, WALL_H / 2, bz);
+  const sideW = (bw - DOOR_W) / 2;
+  for (const s of [-1, 1]) add(mbox(sideW, WALL_H, 0.6), M.brick, bx + s * (DOOR_W / 2 + sideW / 2), WALL_H / 2, BAY.z1);
+  add(mbox(DOOR_W, WALL_H - DOOR_H, 0.6), M.brick, bx, DOOR_H + (WALL_H - DOOR_H) / 2, BAY.z1);
+  add(mbox(DOOR_W + 0.2, 0.3, 0.7), M.hazard, bx, DOOR_H + 0.15, BAY.z1 + 0.05);
+  { const sh = new THREE.Shape(); sh.moveTo(-bd / 2 - 0.6, 0); sh.lineTo(bd / 2 + 0.6, 0); sh.lineTo(0, 4.5); sh.lineTo(-bd / 2 - 0.6, 0); const r = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, {depth: bw + 1.2, bevelEnabled: false}), std({map: texM(GAME("slate"), 2)})); r.rotation.y = Math.PI / 2; r.position.set(BAY.x0 - 0.6, WALL_H, bz); r.castShadow = true; scene.add(r); }
+  for (const x of [BAY.x0 + 3, BAY.x0 + 7, BAY.x1 - 7, BAY.x1 - 3]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.4), WIN); w.position.set(x, 7.6, BAY.z1 + 0.31); scene.add(w); }
+  for (const z of [BAY.z0 + 3.5, bz, BAY.z1 - 3.5]) for (const [x, s] of [[BAY.x0 - 0.31, -1], [BAY.x1 + 0.31, 1]]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.4), WIN); w.position.set(x, 6.6, z); w.rotation.y = s * Math.PI / 2; scene.add(w); }
+  for (const x of [BAY.x0 + 5, bx, BAY.x1 - 5]) lamp(x, 7.6, bz, 0xffc87a, 2.6, 13, {size: 0.3});
+  lamp(bx - DOOR_W / 2 - 1.2, 6, BAY.z1 + 0.7, 0xffd08a, 2.4, 10, {size: 0.22});
+  lamp(bx + DOOR_W / 2 + 1.2, 6, BAY.z1 + 0.7, 0xffd08a, 2.4, 10, {size: 0.22});
+  for (const z of [BAY.z0 + 1.5, BAY.z1 - 1.5]) add(mbox(bw - 1.2, 0.6, 0.5), M.paint, bx, 7.2, z);
+  add(mbox(0.8, 0.7, bd - 3), M.paint, bx - 4, 7.6, bz);
+  add(mbox(1.2, 0.8, 1.4), M.iron, bx - 4, 7.0, bz + 1);
+  rod(V3(bx - 4, 6.6, bz + 1), V3(bx - 4, 3.85, bz + 1), 0.07, M.line);
+  { const g = makeLoad("wing"); g.position.set(bx - 4, 3.85 + 0.2, bz + 1); scene.add(g); }
+  { const g = makeLoad("engine", true); g.position.set(bx + 6, 3.6, bz - 2); scene.add(g); }
+  add(mbox(4, 1.2, 3), M.teal, bx + 7, 0.6, BAY.z0 + 2.5);
+
+  // ---- the laydown: crates, a container, a keel section on dunnage
+  for (const [x, y, z] of [[-19.5, 1.1, -19], [-17.1, 1.1, -19], [-19.5, 3.3, -19], [-19.5, 1.1, -16.6]]) add(mbox(2.2, 2.2, 2.2), M.crate, x, y, z);
+  add(mbox(6.1, 2.6, 2.4), M.container, -16, 1.3, -10.5);
+  for (const x of [-15.5, -12.5]) add(mbox(0.3, 0.3, 2.6), M.plank, x, 0.15, -16.5);
+  add(mbox(5.6, 0.6, 0.6), M.plank, -14, 0.6, -16.5);
+  for (const x of [-16, -14, -12]) { add(mbox(0.3, 1.6, 0.3), M.plank, x, 1.6, -17.4); add(mbox(0.3, 1.6, 0.3), M.plank, x, 1.6, -15.6); add(mbox(0.3, 0.3, 2.1), M.plank, x, 0.95, -16.5); }
+  lamp(-17.5, 3.4, -13.2, 0xffc070, 2.4, 8.5, {size: 0.18}); add(mbox(0.25, 3.4, 0.25), M.timber, -17.5, 1.7, -13.5);
+
+  // ---- the site office
+  const OF = V3(14, 0, 18);
+  add(mbox(7, 3.4, 4), M.boards, OF.x, 1.7, OF.z);
+  { const sh = new THREE.Shape(); sh.moveTo(-2.4, 0); sh.lineTo(2.4, 0); sh.lineTo(0, 1.6); sh.lineTo(-2.4, 0); const r = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, {depth: 7.6, bevelEnabled: false}), std({map: texM(GAME("slate"), 2)})); r.rotation.y = Math.PI / 2; r.position.set(OF.x - 3.8, 3.4, OF.z); r.castShadow = true; scene.add(r); }
+  for (const x of [-2.2, 0.4, 2.4]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(x === 0.4 ? 1.0 : 1.4, x === 0.4 ? 2.2 : 1.0), x === 0.4 ? winMat() : WIN); w.position.set(OF.x + x, x === 0.4 ? 1.1 : 1.9, OF.z + 2.01); scene.add(w); }
+  lamp(OF.x - 0.5, 1.8, OF.z + 3.4, 0xffc878, 2.2, 7, {bulb: false});
+  lamp(OF.x + 1.3, 2.7, OF.z + 2.25, 0xffd08a, 2, 7, {size: 0.15});
+
+  // ---- floodlight masts on the new and printed sides only, lantern posts along the paths
+  for (const [x, z] of [[-6, 17], [19, 13], [8, -16], [47, -4]]) { add(mbox(0.5, 14, 0.5), M.iron, x, 7, z); add(mbox(2.0, 0.5, 0.9), M.iron, x, 14.2, z); lamp(x, 13.7, z, 0xffc880, 1.9, 19, {size: 0.42}); }
+  for (const [x, z] of [[-16, 0], [12, 2], [27, 21]]) { add(mbox(0.25, 3.2, 0.25), M.timber, x, 1.6, z); add(mbox(0.5, 0.6, 0.5), M.iron, x, 3.45, z); lamp(x, 3.35, z, 0xffb347, 2.4, 7.5, {size: 0.16}); }
+
+  // ---- time of day (ship-crafting's)
+  const TIMES = {
+    day:  {sky: 0x9cc4e4, fog: 0xb4cbd8, hemi: 0.55, sun: 1.05, sunCol: 0xfff1dc, sunPos: [-70, 110, 50], moon: 0, lamps: 0, win: 0, stars: 0, moonDisc: false},
+    dusk: {sky: 0x8a6f72, fog: 0x8d7068, hemi: 0.22, sun: 0.55, sunCol: 0xff9a5a, sunPos: [-150, 22, 40], moon: 0.04, lamps: 0.55, win: 0.6, stars: 0.25, moonDisc: true},
+    night:{sky: 0x070b14, fog: 0x0a0e18, hemi: 0.015, sun: 0, sunCol: 0xffffff, sunPos: [-70, 110, 50], moon: 0.026, lamps: 1, win: 1.2, stars: 0.9, moonDisc: true},
+  };
+  let time = "night";
+  function setTime(t) {
+    time = t; const T = TIMES[t];
+    scene.background = new THREE.Color(T.sky); scene.fog.color.setHex(T.fog);
+    hemi.intensity = T.hemi; sun.intensity = T.sun; sun.color.setHex(T.sunCol); sun.position.set(...T.sunPos); sun.castShadow = T.sun > 0.2;
+    moon.intensity = T.moon; stars.material.opacity = T.stars; moonDisc.visible = T.moonDisc;
+    for (const L of BULBS) L.bulb.material.color.copy(L.c).multiplyScalar(T.lamps > 0.05 ? 1 : 0.35);
+    WINDOW_MATS.forEach(m => m.emissiveIntensity = T.win * m.userData.k);
+    document.querySelectorAll("#timeSel button").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === t));
+    status();
+  }
+  document.querySelectorAll("#timeSel button").forEach(b => b.addEventListener("click", () => setTime(b.dataset.t)));
+
+  // ---- camera: it turns only when dragged
+  const hookWorld = V3(0, 0, 0);
+  const crTarget = (() => { const a = CR.tower.slew * Math.PI / 180, d = [Math.cos(a), Math.sin(a)]; return {t: [CRANE.x + d[0] * 10, 22, CRANE.z + d[1] * 10], yaw: Math.atan2(d[1], -d[0])}; })();
+  const VIEWS = {
+    all: {t: [6, 5, -6], d: 112, yaw: 0.12, pitch: 0.5},
+    old: {t: [OLD.x + HW + 1.5, 5.2, OLD.z + 0.5], d: 30, yaw: 0.62, pitch: 0.2},
+    wheel: {t: [OLD.x + HW + 3.2, 4.6, OLD.z - 5.5], d: 18, yaw: 2.1, pitch: 0.16},
+    printed: {t: [PRT.x + CENT[0], 2.4, PRT.z + CENT[1]], d: 21, yaw: 0.55, pitch: 0.46},
+    parts: {t: [PB.x, 1.3, PB.z], d: 11, yaw: 0.45, pitch: 0.55},
+    neu: {t: [NEW.x + 2, 6, NEW.z + 1.5], d: 31, yaw: 0.5, pitch: 0.2},
+    crane: {t: crTarget.t, d: 52, yaw: crTarget.yaw, pitch: 0.16},
+    hook: {t: null, d: 22, yaw: null, pitch: 0.3},
+    bay: {t: [bx, 4, BAY.z1 - 4], d: 34, yaw: 0.1, pitch: 0.3},
+  };
+  const cam = {target: V3(...VIEWS.all.t), yaw: +(Q.get("yaw") ?? VIEWS.all.yaw), pitch: +(Q.get("pitch") ?? VIEWS.all.pitch), dist: +(Q.get("dist") ?? VIEWS.all.d), goal: null};
+  let focused = "all";
+  function hookPos(out) { (ACTIVE === "wheel" ? twHook : hookG).getWorldPosition(out); return out; }
+  function focus(id, snap) {
+    const V = VIEWS[id]; focused = id;
+    const t = V.t ? V3(...V.t) : hookPos(V3(0, 0, 0));
+    cam.goal = {t, d: V.d}; if (snap) { if (V.yaw != null) cam.yaw = V.yaw; cam.pitch = V.pitch; cam.target.copy(t); cam.dist = V.d; cam.goal = null; } else if (V.yaw != null) cam.goalYaw = V.yaw;
+    document.querySelectorAll("#viewSel button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === id));
+  }
+  const SEL = [["all", "Whole yard"], ["old", "Old way"], ["wheel", "Treadwheel"], ["printed", "Printed"], ["parts", "Parts bed"], ["neu", "New way"], ["crane", "Tower crane"], ["hook", "The hook"], ["bay", "Assembly bay"]];
+  $("viewSel").innerHTML = SEL.map(([id, n]) => `<button data-v="${id}" aria-pressed="${id === "all"}">${n}</button>`).join("");
+  document.querySelectorAll("#viewSel button").forEach(b => b.addEventListener("click", () => focus(b.dataset.v)));
+  const ptrs = new Map(); let pinch0 = 0;
+  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); cam.goalYaw = null; if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+  canvas.addEventListener("pointermove", e => {
+    if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 1) { cam.yaw -= (e.clientX - px) * 0.006; cam.pitch = Math.min(1.45, Math.max(0.04, cam.pitch + (e.clientY - py) * 0.005)); }
+    else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0) cam.dist = Math.min(300, Math.max(6, cam.dist * pinch0 / d)); pinch0 = d; }
+  });
+  const up = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
+  canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+  canvas.addEventListener("wheel", e => { e.preventDefault(); cam.dist = Math.min(300, Math.max(6, cam.dist * Math.exp(e.deltaY * 0.0012))); if (cam.goal) cam.goal.d = cam.dist; }, {passive: false});
+
+  function status() {
+    const c = CR[ACTIVE], L = LOADS[c.load];
+    $("dbg").textContent = `underfoot L0, column | construction yard | print pass ${Math.min(NP, (window.PRINT_PASS ?? 0) + 1)}/${NP} | ${c.name}: ${L.m <= c.hook ? L.m.toFixed(1) + " t" : "empty"} at ${(c.r ?? 0).toFixed(1)} m | ${time}`;
+  }
+
+  // ---- print controls: nothing prints until Play
+  let playing = false;
+  const printIn = $("print");
+  printIn.value = Q.has("print") ? +Q.get("print") : 230;
+  printIn.addEventListener("input", () => { playing = false; $("play").textContent = "Play"; setPrint(+printIn.value); });
+  press($("play"), () => { playing = !playing; if (playing && +printIn.value >= PMAX) printIn.value = 0; $("play").textContent = playing ? "Pause" : "Play"; });
+  press($("restart"), () => { playing = false; $("play").textContent = "Play"; printIn.value = 0; setPrint(0); });
+
+  function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  new ResizeObserver(resize).observe(canvas); resize();
+  const shot = Q.has("shot");
+  if (shot) { document.body.classList.add("shot"); resize(); }
+  renderCranePanel(); setPrint(+printIn.value); craneUpdate();
+  setTime(TIMES[Q.get("time")] ? Q.get("time") : "night");
+  if (shot && Q.get("shot") && VIEWS[Q.get("shot")]) { scene.updateMatrixWorld(); focus(Q.get("shot"), true); if (Q.has("yaw")) cam.yaw = +Q.get("yaw"); if (Q.has("pitch")) cam.pitch = +Q.get("pitch"); if (Q.has("dist")) cam.dist = +Q.get("dist"); }
+  $("loading").remove();
+
+  const clock = new THREE.Clock(), tmp = V3(0, 0, 0);
+  window.__frames = 0;
+  function frame() {
+    const dt = Math.min(0.05, clock.getDelta());
+    if (playing) { let v = +printIn.value + dt * 10; if (v >= PMAX) { v = PMAX; playing = false; $("play").textContent = "Play"; } printIn.value = v; setPrint(v); }
+    if (walking) { const c = CR.wheel; let h = +c.h + walkDir * dt * 0.5; if (h >= c.hMax - 0.5) { h = c.hMax - 0.5; walkDir = -1; } if (h <= c.hMin + 0.5) { h = c.hMin + 0.5; walkDir = 1; } c.h = +h.toFixed(3); if (ACTIVE === "wheel") $("hoist").value = c.h; craneUpdate(); }
+    if (focused === "hook") { hookPos(hookWorld); if (!cam.goal) cam.target.lerp(hookWorld, 1 - Math.exp(-dt * 6)); else cam.goal.t.copy(hookWorld); }
+    if (cam.goal) { cam.target.lerp(cam.goal.t, 1 - Math.exp(-dt * 4)); cam.dist += (cam.goal.d - cam.dist) * (1 - Math.exp(-dt * 4)); if (cam.target.distanceTo(cam.goal.t) < 0.05 && Math.abs(cam.dist - cam.goal.d) < 0.1) cam.goal = null; }
+    if (cam.goalYaw != null) { cam.yaw += (cam.goalYaw - cam.yaw) * (1 - Math.exp(-dt * 3)); if (Math.abs(cam.goalYaw - cam.yaw) < 0.002) cam.goalYaw = null; }
+    camera.position.set(cam.target.x + cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.target.y + cam.dist * Math.sin(cam.pitch), cam.target.z + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw));
+    camera.lookAt(cam.target); camera.updateMatrixWorld();
+    scene.updateMatrixWorld();
+    const n = Math.min(MAXL, LAMPS.length), on = TIMES[time].lamps;
+    let k = 0;
+    for (let i = 0; i < n; i++) {
+      const L = LAMPS[i], s = L.always ? Math.max(on, 0.35) : on; if (s <= 0.01) continue;
+      tmp.copy(L.p); if (L.group) L.group.localToWorld(tmp);
+      U.uLampPos.value[k].copy(tmp).applyMatrix4(camera.matrixWorldInverse);
+      U.uLampCol.value[k].set(L.c.r * L.i * s, L.c.g * L.i * s, L.c.b * L.i * s, L.r); k++;
+    }
+    U.uLampCount.value = k;
+    renderer.render(scene, camera); window.__frames++;
+    requestAnimationFrame(frame);
+  }
+  let started = false;
+  const start = () => { if (started) return; started = true; requestAnimationFrame(frame); };
+  manager.onLoad = start; setTimeout(start, 10000);
+})();
+</script>
