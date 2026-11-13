@@ -17,7 +17,7 @@
 
 ## 3. Landing hitch
 - [x] 3.1 Key the town bake on the field it reads, not the set's pointer (coverage by `ColumnTier::reaches`; time-sliced, swapped whole; 67-75 ms to at most 3.1 ms a frame, measured). Still to write: the test that a landing 2 km away leaves a bake and an edit in a town's margin re-bakes it. Test: a landing 2 km away does not re-bake; an edit in a town's margin does.
-- [ ] 3.2 Bake off the main thread, and ease the light so it never steps.
+- [ ] 3.2 Bake off the main thread, and ease the light so it never steps. (The ease is done: `baked-light-ease` 7.4, a town keeps its bake before and blends from it over 1 s, measured there. The bake is still 2 ms slices on the main thread.)
 - [ ] 3.3 Benchmark `clouds` and `walk`, old exe against new.
 
 ## 4. World open

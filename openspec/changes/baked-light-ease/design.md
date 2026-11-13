@@ -221,3 +221,38 @@ The lamp bake's cross-fade becomes `BAKE_EASE_S`'s smoothstep instead of
 - Field-lit corners ease under a new field and snap when the mesh moves
   (`field_light`).
 - The shaders carry the blends (shader-text tests beside the existing ones).
+
+## 8. As built, measured after (2026-11-13)
+
+The same runs with the change (`6b900dc`), the same patches, aligned on each
+swap (`docs/screenshots/baked-light-ease/`). "Step" is the change between the
+frame before the swap and the swap's own frame; "largest" is the largest
+change between any two frames in the 60 after it.
+
+| Swap | Patch | Step before | Step after | Largest before | Largest after |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Night landing (design 2) | lit ground, lower half | +24.9 | +0.5 (the walk) | | |
+| Day landing (design 3) | shaded sand terrace | -11.0 | -2.4 (the walk: -1.9 to -2.1 a frame round it) | | |
+| Day landing | red clay faces | -8.4 | +0.5 | | |
+| Dusk (design 4) | town wall | +1.1 (corners) | +0.0 | 5.3 | 0.3 |
+| Dusk | sandstone wall | +0.5 | +0.1 | 5.9 | 0.2 |
+| Dusk | grass by the lantern post (the lamp bake's fade) | 0 | 0 | 2.2 | 1.2 |
+
+The settled picture is unchanged: 176 frames after the relight the two runs'
+frames differ by 0.0001 levels on average. The walking runs' largest steps
+are the walker hopping down a step at about +18 frames, in both runs, and
+are left out.
+
+Not changed, and why:
+
+- The bounce's 2-degree re-bakes (design 3: nothing measured).
+- The flood cut at the tier's edge and the dusk relight's long frame
+  (design 6).
+- A lamp's own glass and flame light in the relight's frame, as a placed
+  lamp does.
+- A town bake finished during the blend from the corners (its first, as it
+  stands up) starts from its bake, not from the corners' blend: it happens
+  in the town's own dither-in, and the CPU does not hold the corners per
+  vertex.
+- The town bake itself still runs in 2 ms slices on the main thread
+  (`frame-budget` 3.2's other half).
