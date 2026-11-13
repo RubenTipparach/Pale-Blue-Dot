@@ -228,6 +228,19 @@ comment edit, 20 s for a changed constant in `walking.rs`), where
 captures. When the owner wants to play, build `fast`, skip tests, clippy and
 captures, and say when it is ready.
 
+## A loading screen on boot (owner, 2026-11-12)
+
+**Standing instruction from the user:** "You should have a loading screen to
+prewarm/cache shaders", and on 2026-11-13, after a launch that opened on a
+black window with a white bar: "startup screen is blank, there should be
+loading screen". From the first frame the window shows, the game shows its
+loading screen: never a black or blank window, and no unpainted strip. It
+stays up while the world is prepared and every render pipeline the game will
+use is compiled, and play starts only after that. A pipeline compiled after
+`READY` (logged as `LATE_PIPELINE <label>`) is a bug to fix by adding it to the
+prewarm. Every launch path keeps this: a normal start, `--load`, any render
+scale or other player setting.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
