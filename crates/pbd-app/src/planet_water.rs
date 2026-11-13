@@ -1407,16 +1407,7 @@ fn prepare_water_views(
             } else {
                 Vec4::ZERO
             },
-            rain_light: Vec4::new(
-                if rain_shadows {
-                    1.0
-                } else {
-                    0.0
-                },
-                0.0,
-                0.0,
-                0.0,
-            ),
+            rain_light: Vec4::new(if rain_shadows { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0),
         };
         // The puffs under the shown weather, far to near from this eye
         // (`cloud-puffs`).
