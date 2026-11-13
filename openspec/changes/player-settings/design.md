@@ -175,6 +175,24 @@ UI-only), so nothing has to map between image and window coordinates. A
 later caller that projects through the 3D camera into the UI must scale by
 `window / image`, and the module says so.
 
+**Found in play (owner, 2026-11-13, build `47e9c07`: "ui buttons not
+working, a lot of ghosting"), and fixed:**
+
+- **Dead buttons.** `walking.rs` puts `IsDefaultUiCamera` on the active
+  view's camera, so below 100 % the HUD stayed on a camera that renders to
+  the image. `ui_focus_system` takes cursor positions only from cameras that
+  render to a window, so no button saw the pointer. The menu still drew,
+  stretched with the view. Now the present camera holds the marker while the
+  view is scaled; it is taken off any 3D camera a mode switch puts it on, and
+  given back to the active view at 100 %. A test pins both.
+- **The view's size after a change of target.** Bevy recomputes a camera's
+  target size only on a window event, an image event or a projection change,
+  never on a new `RenderTarget` alone. Going back to 100 % left the camera
+  sized for the image. The scale now touches `Projection` whenever it
+  retargets a camera, and runs before `CameraUpdateSystems`, so the new
+  target is sized the frame it is set. Whether this is also the ghosting
+  is to be confirmed by a capture against the `47e9c07` exe.
+
 ## 5. Auto step: ON, OFF
 
 **Default ON**, which is today: a rise up to `column::STEP_M` (1.05 m, one

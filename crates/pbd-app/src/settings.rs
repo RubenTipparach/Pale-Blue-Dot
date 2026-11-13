@@ -17,6 +17,7 @@ use bevy::{
     image::ImageSampler,
     prelude::*,
     render::render_resource::TextureFormat,
+    ui::IsDefaultUiCamera,
     window::{PrimaryWindow, WindowRef},
 };
 use serde::{Deserialize, Serialize};
@@ -383,6 +384,17 @@ pub struct ScaledView {
     size: UVec2,
 }
 
+/// A 3D camera as the render scale handles it: its target, its projection
+/// (touched to make Bevy recompute the target's size), whether it is the
+/// view, and whether it holds the HUD.
+type ViewCamera = (
+    Entity,
+    &'static mut RenderTarget,
+    &'static mut Projection,
+    &'static Camera,
+    Has<IsDefaultUiCamera>,
+);
+
 /// The present camera and its sprite, which come and go together.
 type Presenting = Or<(With<PresentCamera>, With<PresentSprite>)>;
 
@@ -429,7 +441,7 @@ pub fn apply_render_scale(
     windows: Query<&Window, With<PrimaryWindow>>,
     mut images: ResMut<Assets<Image>>,
     mut view: ResMut<ScaledView>,
-    mut cameras: Query<&mut RenderTarget, With<Camera3d>>,
+    mut cameras: Query<ViewCamera, With<Camera3d>>,
     present: Query<Entity, Presenting>,
     mut sprites: Query<&mut Sprite, With<PresentSprite>>,
 ) {
@@ -438,8 +450,17 @@ pub fn apply_render_scale(
     };
     if settings.render_scale >= 100 {
         if view.image.take().is_some() {
-            for mut target in &mut cameras {
+            for (entity, mut target, mut projection, camera, _) in &mut cameras {
                 *target = RenderTarget::Window(WindowRef::Primary);
+                // Bevy recomputes a camera's target size on a window or image
+                // event or a projection change, never on a new target alone:
+                // without this the view kept the image's size in the window.
+                projection.set_changed();
+                // The HUD goes back to the view's camera (`walking.rs` keeps
+                // it on the active one).
+                if camera.is_active {
+                    commands.entity(entity).insert(IsDefaultUiCamera);
+                }
             }
             for entity in &present {
                 commands.entity(entity).despawn();
@@ -457,9 +478,17 @@ pub fn apply_render_scale(
         }
     }
     let handle = view.image.clone().expect("made above");
-    for mut target in &mut cameras {
+    for (entity, mut target, mut projection, _, ui) in &mut cameras {
         if target.as_image() != Some(&handle) {
             *target = RenderTarget::Image(ImageRenderTarget::from(handle.clone()));
+            projection.set_changed();
+        }
+        // The HUD is the present camera's while the view is scaled: a camera
+        // that renders to an image never sees the cursor, so a menu drawn by
+        // one takes no clicks (`ui_focus_system`). A mode switch puts the
+        // marker back on the active view; it is taken off again here.
+        if ui {
+            commands.entity(entity).remove::<IsDefaultUiCamera>();
         }
     }
     let fill = window.size();
@@ -474,6 +503,7 @@ pub fn apply_render_scale(
             Msaa::Off,
             Tonemapping::None,
             DebandDither::Disabled,
+            IsDefaultUiCamera,
             PresentCamera,
         ));
         commands.spawn((
@@ -519,7 +549,15 @@ impl Plugin for PlayerSettingsPlugin {
             .init_resource::<Upscale>()
             .init_resource::<ScaledView>()
             .init_resource::<FramePacer>()
-            .add_systems(PostUpdate, (apply_render_scale, follow_auto_step));
+            .add_systems(
+                PostUpdate,
+                (
+                    // Before Bevy sizes the cameras, so a new target is sized
+                    // the frame it is set.
+                    apply_render_scale.before(bevy::camera::CameraUpdateSystems),
+                    follow_auto_step,
+                ),
+            );
         if !self.capture {
             // After everything else in the frame, the frame log included.
             app.add_systems(Last, pace_frames.after(PacingSet));
@@ -725,7 +763,9 @@ mod tests {
         let mut window = Window::default();
         window.resolution.set_physical_resolution(1440, 900);
         app.world_mut().spawn((window, PrimaryWindow));
-        app.world_mut().spawn(Camera3d::default());
+        // The view's camera holds the HUD, as `walking.rs` leaves it.
+        app.world_mut()
+            .spawn((Camera3d::default(), IsDefaultUiCamera));
         app
     }
 
@@ -770,12 +810,21 @@ mod tests {
             .size();
         assert_eq!(size, UVec2::new(965, 603));
         assert_eq!(size, scaled_size(UVec2::new(1440, 900), 67));
+        // The HUD is on the present camera, which sees the cursor, and not
+        // on the view's, which renders to an image and would take no clicks.
+        let mut holders = app
+            .world_mut()
+            .query_filtered::<(Has<PresentCamera>, Has<Camera3d>), With<IsDefaultUiCamera>>();
+        let held: Vec<_> = holders.iter(app.world()).collect();
+        assert_eq!(held, vec![(true, false)], "the HUD's camera while scaled");
         app.world_mut()
             .resource_mut::<PlayerSettings>()
             .render_scale = 100;
         app.update();
         app.update();
         assert_eq!(presents(&mut app), 0);
+        let held: Vec<_> = holders.iter(app.world()).collect();
+        assert_eq!(held, vec![(false, true)], "the HUD back on the view");
         assert!(matches!(
             targets(&mut app)[0],
             RenderTarget::Window(WindowRef::Primary)
