@@ -138,6 +138,13 @@ towards my waypoint".
   the helm, and the left and right arrows swing the sail. A powered ship
   keeps the throttle on W and S. The view is a third-person chase camera
   behind the boat.
+- **Taking the helm** (the owner, 2026-11-13: "I can exit/enter piloting
+  mode by getting on the helm (the wheel)"). On foot on deck, F at the wheel
+  takes the helm. The view becomes the chase camera, and A/D and the arrows
+  steer and trim. F again lets go, and the player stands at the wheel on
+  the moving deck. This is the cog's helm (`sail-the-cog` 4.1) applied to
+  every hex ship. A ship with nobody at the helm holds its rudder and sail
+  and sails on.
 - **Advice only.** The player steers and trims. The readout shows what the
   best course gains: the VMG now, and the VMG on the best heading.
 
