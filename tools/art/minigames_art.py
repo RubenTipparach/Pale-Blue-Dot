@@ -5,9 +5,12 @@
     python tools/art/minigames_art.py --sheet OUT.png # and a contact sheet beside the kit's references
 
 Groups: the ore sorter's ores and drill, the Reactor Roll's reel symbols (also the four suits of
-Orbit 21), dice, chips, a card back, the race ships, and the job board's badges. Every sprite is
-32 x 32 at native size except the card back (22 x 32, a card's 66 x 96 at 3x); the page shows them
-only at whole-number scales with nearest-neighbour sampling.
+Orbit 21), dice, chips, a card back, the race ships, and the job board's badges; and (2026-11-13)
+the casino's themed machines (Deep Vein dv_*, Halcyon Frontier pl_*, Smuggler's Hold sm_*), the
+Star Chart keno markers (kn_*, 16 x 16), small card pips (pip_*, 16 x 16), the dealer button and
+the four Hold'em opponents' portraits (ai_*). Every sprite is 32 x 32 at native size except the
+card back (22 x 32, a card's 66 x 96 at 3x), the 16 x 16 markers and pips, and pl_wild_col (32 x 96,
+a whole reel); the page shows them only at whole-number scales with nearest-neighbour sampling.
 """
 
 import math
@@ -337,6 +340,333 @@ def cargo():
     return sp
 
 
+# ---- Deep Vein (5 x 3 video slot, ore and mining) --------------------------------------------------
+
+def dv_geode():
+    """The scatter: a split geode, violet crystals in a rock rind."""
+    sp = Sprite(N, N)
+    sp.part(lumpy(sp, 16, 17, 14, 12, n=12, jag=0.12, seed=3), ROCK, 'sphere')
+    sp.part(sp.ellipse(7, 9, 25, 25), ['#230c44', '#4f1d83'], 'flat', base=0)
+    for pts in ([(9, 22), (11, 12), (14, 20)], [(13, 23), (16, 10), (19, 23)], [(18, 21), (21, 12), (23, 22)],
+                [(10, 24), (13, 17), (16, 24)], [(16, 24), (19, 17), (22, 24)]):
+        sp.part(sp.poly(pts), RAMPS['violet'][1:], 'cyl_v')
+    sp.plots([(15, 13), (11, 15)], WHITE)
+    sp.outline()
+    spark(sp, 27, 5, '#c34988')
+    spark(sp, 4, 27, '#c34988')
+    return sp
+
+
+def dv_pick():
+    """A miner's pick: a steel head on a wooden haft."""
+    sp = Sprite(N, N)
+    sp.part(sp.line([(8, 28), (22, 9)], 3), RAMPS['wood'], 'rim')
+    head = sp.poly([(4, 10), (10, 5), (17, 4), (24, 5), (30, 9), (28, 11), (22, 9), (17, 8), (11, 9), (6, 12)])
+    sp.part(head, RAMPS['metal'], 'cyl_h')
+    sp.part(sp.rect(19, 4, 23, 11), RAMPS['soot'], 'rim')
+    sp.plots([(12, 6), (13, 6)], WHITE)
+    sp.outline()
+    return sp
+
+
+def dv_cart():
+    """An ore cart heaped with amber ore."""
+    sp = Sprite(N, N)
+    for x, y in ((10, 10), (16, 8), (22, 10)):
+        sp.part(sp.circle(x, y, 4), RAMPS['amber'], 'sphere')
+    sp.part(sp.poly([(3, 12), (29, 12), (26, 24), (6, 24)]), RAMPS['rust'], 'rim', depth=2)
+    sp.fill(sp.rect(5, 16, 27, 16), '#2e0d06')
+    for x in (8, 23):
+        sp.part(sp.circle(x, 26, 3), RAMPS['soot'], 'sphere')
+        sp.plot(x, 26, '#a09f91')
+    sp.plots([(14, 6), (5, 13)], WHITE)
+    sp.outline()
+    return sp
+
+
+def dv_lamp():
+    """A miner's lantern, lit."""
+    sp = Sprite(N, N)
+    sp.part(sp.rect(13, 1, 18, 3) & ~sp.rect(15, 2, 16, 3), RAMPS['steel'], 'rim')
+    sp.part(sp.rect(9, 4, 22, 7), RAMPS['brass'], 'cyl_v')
+    sp.part(sp.rect(10, 8, 21, 24), ['#0c2f44', '#204f63', '#53998b'], 'cyl_v')
+    sp.part(sp.rect(8, 25, 23, 29), RAMPS['brass'], 'cyl_v')
+    for x in (10, 21):
+        sp.fill(sp.rect(x, 8, x, 24), '#733126')
+    sp.outline()
+    sp.part(sp.ellipse(12, 11, 19, 22), RAMPS['flame'], 'inset', glow=True)
+    sp.plots([(15, 15), (15, 16)], WHITE, glow=True)
+    return sp
+
+
+# ---- Halcyon Frontier (5 x 3 video slot, the Halcyon worlds) -------------------------------------
+
+def planet(ramp, extra=None, ring=None):
+    def draw():
+        sp = Sprite(N, N)
+        if ring:
+            sp.part(sp.ellipse(1, 13, 30, 20) & ~sp.ellipse(5, 15, 26, 18), ring, 'flat', base=1)
+        body = sp.circle(16, 16, 11)
+        sp.part(body, ramp, 'sphere')
+        if extra:
+            extra(sp, body)
+        if ring:
+            front = sp.ellipse(1, 13, 30, 20) & ~sp.ellipse(5, 15, 26, 18) & sp.rect(0, 17, 31, 31)
+            sp.part(front, ring, 'flat', base=2)
+        sp.plots([(11, 9), (10, 10)], WHITE)
+        sp.outline()
+        return sp
+    return draw
+
+
+def _verdance(sp, body):
+    for pts in ([(9, 12), (14, 9), (17, 13), (13, 17), (9, 16)], [(17, 18), (23, 16), (25, 21), (20, 25)]):
+        sp.part(sp.poly(pts) & body, RAMPS['blue'][1:], 'flat', base=1, seam=False)
+
+
+def _cinder(sp, body):
+    for pts in ([(8, 12), (14, 15), (12, 21)], [(16, 9), (19, 16), (25, 19)], [(14, 22), (20, 20), (22, 25)]):
+        sp.fill(sp.line(pts, 1) & body, '#fe6420')
+    sp.plots([(14, 15), (19, 16)], '#faaf5c')
+
+
+def _rime(sp, body):
+    sp.part(sp.rect(0, 0, 31, 9) & body, ['#bfcad7', WHITE], 'flat', base=1, seam=False)
+    sp.part(sp.rect(0, 24, 31, 31) & body, ['#92a3b2', '#bfcad7'], 'flat', base=1, seam=False)
+    sp.fill(sp.line([(8, 16), (14, 14), (20, 17), (25, 15)], 1) & body, '#1096c3')
+
+
+def _tidewater(sp, body):
+    for pts in ([(7, 13), (13, 11), (19, 13)], [(12, 19), (19, 17), (25, 19)], [(9, 23), (15, 23)]):
+        sp.fill(sp.line(pts, 2) & body, '#d2f8ff')
+
+
+def _moon(sp, body):
+    for x, y, r in ((12, 13, 2), (19, 18, 3), (13, 21, 1), (21, 11, 1)):
+        sp.part(sp.circle(x, y, r) & body, ['#434137', '#a09f91'], 'flat', base=0, seam=False)
+        sp.plot(x + 1, y + 1, '#bfcad7')
+
+
+def pl_halcyon():
+    """The wild: Halcyon, the system's sun, a hot disc with eight rays."""
+    sp = Sprite(N, N)
+    rays = sp.star(16, 16, 15, 8, points=8, turn=-90)
+    sp.part(rays, ['#c56d25', '#fb902f', '#faaf5c'], 'inset', glow=True)
+    sp.part(sp.circle(16, 16, 9), RAMPS['gold'], 'sphere')
+    sp.plots([(12, 11), (13, 11), (12, 12)], WHITE)
+    return sp
+
+
+def pl_wild_col():
+    """The expanded wild: Halcyon's light filling a whole reel (32 x 96, three cells)."""
+    sp = Sprite(N, 96)
+    sp.dither(sp.rect(3, 0, 28, 95), '#c56d25', '#fb902f', 0.5, glow=True)
+    sp.dither(sp.rect(8, 0, 23, 95), '#fb902f', '#faaf5c', 0.5, glow=True)
+    sp.fill(sp.rect(13, 0, 18, 95), '#faaf5c', glow=True)
+    sp.part(sp.star(16, 48, 15, 8, points=8), ['#c56d25', '#fb902f', '#faaf5c'], 'inset', glow=True)
+    sp.part(sp.circle(16, 48, 9), RAMPS['gold'], 'sphere', glow=True)
+    sp.plots([(12, 43), (13, 43), (12, 44)], WHITE, glow=True)
+    for y in (12, 80):
+        spark(sp, 16, y)
+    return sp
+
+
+# ---- Smuggler's Hold (3 x 3 classic, contraband) -------------------------------------------------
+
+def sm_cutter():
+    """The wild: a smuggler's cutter, soot-black with a red stripe."""
+    sp = Sprite(N, N)
+    sp.part(sp.poly([(9, 12), (17, 12), (12, 4), (7, 4)]), RAMPS['red'], 'rim')
+    sp.part(sp.poly([(5, 11), (24, 11), (31, 16), (24, 21), (5, 21)]), RAMPS['soot'], 'cyl_h')
+    sp.part(sp.poly([(19, 12), (24, 12), (28, 15), (19, 15)]), ['#4a051e', '#a61e1f', '#fa3a64'], 'flat', base=2)
+    sp.part(sp.rect(6, 17, 24, 18), RAMPS['red'], 'flat', base=2, seam=False)
+    sp.part(sp.poly([(9, 21), (17, 21), (12, 28), (7, 28)]), RAMPS['red'], 'rim')
+    sp.plots([(21, 13), (22, 13)], WHITE)
+    sp.outline()
+    sp.part(sp.taper(3, 16, -3, 16, 6, 2), ['#4f1d83', '#7d2dbd', '#c34988', '#fffefe'], 'inset', glow=True)
+    return sp
+
+
+def sm_vial():
+    """Contraband: a glowing vial with a steel cap."""
+    sp = Sprite(N, N)
+    sp.part(sp.rect(12, 2, 19, 6), RAMPS['steel'], 'cyl_v')
+    sp.part(sp.rect(13, 7, 18, 10), RAMPS['paper'], 'cyl_v')
+    sp.part(sp.circle(16, 20, 10) | sp.rect(12, 9, 19, 14), RAMPS['paper'][:2], 'flat', base=0)
+    sp.outline()
+    sp.part(sp.circle(16, 21, 8), ['#05582d', '#297537', '#559642', '#9bb675', '#c1f1d8'], 'inset', glow=True)
+    sp.plots([(11, 16), (11, 17), (12, 15)], WHITE, glow=True)
+    spark(sp, 26, 6, '#84e3b5')
+    return sp
+
+
+def sm_badge():
+    """Customs: a navy shield with a gold hex."""
+    sp = Sprite(N, N)
+    sp.part(sp.poly([(4, 4), (28, 4), (28, 16), (16, 29), (4, 16)]), RAMPS['blue'], 'rim', depth=2)
+    hexa = sp.poly([(16 + 6 * math.cos(math.radians(a)), 14 + 6 * math.sin(math.radians(a))) for a in range(30, 390, 60)])
+    sp.part(hexa, RAMPS['gold'][:4], 'rim', seam_color='#191954')
+    sp.plots([(7, 6), (6, 7)], WHITE)
+    sp.outline()
+    return sp
+
+
+def sm_stash():
+    """The scatter: a lockbox, lid up, credit chips inside."""
+    sp = Sprite(N, N)
+    sp.part(sp.poly([(5, 13), (8, 4), (27, 4), (27, 13)]), RAMPS['metal'][:4], 'rim')
+    sp.part(sp.rect(4, 13, 27, 28), RAMPS['metal'], 'rim', depth=2)
+    sp.part(sp.rect(6, 11, 25, 15), RAMPS['gold'][:4], 'flat', base=3)
+    sp.part(sp.rect(13, 19, 18, 23), RAMPS['brass'], 'rim', seam_color='#1f3b52')
+    sp.plots([(7, 6), (5, 15)], WHITE)
+    sp.outline()
+    spark(sp, 10, 9)
+    spark(sp, 22, 8)
+    return sp
+
+
+# ---- Star Chart keno markers (16 x 16) and card pips ---------------------------------------------
+
+def kn_pick():
+    """The player's pick: a mint hex marker."""
+    sp = Sprite(16, 16)
+    hexa = sp.poly([(7.5 + 7 * math.cos(math.radians(a)), 7.5 + 7 * math.sin(math.radians(a))) for a in range(30, 390, 60)])
+    sp.part(hexa & ~sp.poly([(7.5 + 4 * math.cos(math.radians(a)), 7.5 + 4 * math.sin(math.radians(a))) for a in range(30, 390, 60)]),
+            RAMPS['glass'][1:], 'rim')
+    sp.outline()
+    return sp
+
+
+def kn_drawn():
+    """A drawn sector: a cyan probe ping."""
+    sp = Sprite(16, 16)
+    sp.part(sp.star(7.5, 7.5, 7, 3, points=4, turn=-90), RAMPS['cyan'][1:], 'inset', glow=True)
+    sp.plot(7, 7, WHITE, glow=True)
+    return sp
+
+
+def kn_hit():
+    """A hit: the probe found the player's star, a gold burst."""
+    sp = Sprite(16, 16)
+    sp.part(sp.star(7.5, 7.5, 8, 3, points=8, turn=-90), ['#c56d25', '#fb902f', '#faaf5c', WHITE], 'inset', glow=True)
+    sp.plots([(7, 7), (8, 7), (7, 8)], WHITE, glow=True)
+    return sp
+
+
+def pip(src):
+    """A 16 x 16 card pip, drawn again small from the suit's shape (never resampled)."""
+    def draw():
+        sp = Sprite(16, 16)
+        if src == 'ore':
+            sp.part(sp.poly([(4, 14), (5, 6), (8, 1), (11, 6), (11, 14)]), RAMPS['amber'], 'cyl_v')
+            sp.plot(7, 4, WHITE)
+        elif src == 'ice':
+            sp.part(sp.circle(7.5, 9.5, 5) | sp.poly([(3, 8), (7.5, 1), (12, 8)]), RAMPS['cyan'][:-1], 'sphere')
+            sp.plot(5, 7, WHITE)
+        elif src == 'fuel':
+            sp.part(sp.rect(4, 3, 11, 14), RAMPS['green'], 'cyl_v')
+            sp.part(sp.rect(3, 1, 12, 3), RAMPS['brass'], 'cyl_v')
+            sp.fill(sp.poly([(8, 5), (5, 9), (8, 9), (7, 12), (10, 8), (8, 8), (9, 5)]), '#faaf5c')
+        else:
+            sp.part(sp.circle(7.5, 7.5, 7) & ~sp.circle(7.5, 7.5, 4), RAMPS['metal'], 'sphere')
+            sp.outline()
+            sp.part(sp.circle(7.5, 7.5, 3), ['#297537', '#559642', '#9bb675', '#c1f1d8'], 'inset', glow=True)
+            return sp
+        sp.outline()
+        return sp
+    return draw
+
+
+def dealer_btn():
+    """The dealer button: a white puck with a black D."""
+    sp = Sprite(16, 16)
+    sp.part(sp.circle(7.5, 7.5, 7), RAMPS['paper'], 'sphere')
+    d = (sp.rect(5, 4, 6, 11) | sp.rect(5, 4, 8, 5) | sp.rect(5, 10, 8, 11) | sp.rect(9, 5, 10, 10))
+    sp.fill(d, '#161612')
+    sp.outline()
+    return sp
+
+
+# ---- Hold'em opponents (32 x 32 portraits) -------------------------------------------------------
+
+SKIN_A = ['#7d4636', '#a8633e', '#e69d69', '#eab798']
+SKIN_B = ['#522b2f', '#7d4636', '#a8633e', '#e69d69']
+
+
+def face(sp, skin, cx=16):
+    sp.part(sp.rect(cx - 9, 26, cx + 9, 31), RAMPS['soot'], 'rim')
+    sp.part(sp.ellipse(cx - 8, 7, cx + 8, 26), skin, 'sphere')
+
+
+def eyes(sp, y, color='#161612', cx=16):
+    for x in (cx - 4, cx + 3):
+        sp.fill(sp.rect(x, y, x + 1, y + 1), color)
+
+
+def ai_harrow():
+    """Old Harrow, a retired driller: hard hat, grey beard. Tight and patient."""
+    sp = Sprite(N, N)
+    face(sp, SKIN_A)
+    sp.part(sp.ellipse(7, 15, 25, 29) & ~sp.rect(0, 0, 31, 19), ['#434137', '#a09f91', '#bfcad7'], 'rim')
+    sp.part(sp.rect(12, 20, 19, 21), SKIN_A, 'flat', base=1, seam=False)
+    sp.fill(sp.rect(13, 21, 18, 21), '#41322c')
+    sp.part(sp.ellipse(6, 2, 26, 14) & sp.rect(0, 0, 31, 10), RAMPS['gold'][:4], 'sphere')
+    sp.part(sp.rect(4, 10, 27, 11), RAMPS['brass'], 'flat', base=1)
+    eyes(sp, 14)
+    sp.plots([(11, 4), (12, 4)], WHITE)
+    sp.outline()
+    sp.part(sp.circle(16, 6, 2), RAMPS['flame'][1:], 'inset', glow=True)
+    return sp
+
+
+def ai_wren():
+    """Wren Askew, smuggler: red hair, an eye patch. Loose, aggressive, bluffs."""
+    sp = Sprite(N, N)
+    sp.part(sp.ellipse(5, 3, 27, 27), ['#4a051e', '#841c1d', '#d4462b', '#fe6420'], 'sphere')
+    face(sp, SKIN_A)
+    sp.part(sp.poly([(7, 6), (25, 6), (25, 11), (17, 9), (8, 13)]), ['#4a051e', '#841c1d', '#d4462b', '#fe6420'], 'rim')
+    sp.fill(sp.rect(11, 15, 12, 16), '#161612')
+    sp.part(sp.rect(18, 14, 21, 17), RAMPS['ink'], 'flat', base=1, seam=False)
+    sp.fill(sp.line([(8, 11), (24, 17)], 1) & sp.ellipse(8, 7, 24, 26), '#161612')
+    sp.fill(sp.rect(13, 22, 18, 22), '#841c1d')
+    sp.plot(15, 22, '#fa3a64')
+    sp.outline()
+    return sp
+
+
+def ai_dace():
+    """Officer Dace, off duty from Gatehouse Kappa: peaked cap. Tight and aggressive."""
+    sp = Sprite(N, N)
+    face(sp, SKIN_B)
+    sp.part(sp.rect(7, 26, 25, 31), RAMPS['blue'][:3], 'rim')
+    sp.part(sp.rect(14, 26, 17, 31), RAMPS['gold'][1:4], 'flat', base=1)
+    sp.part(sp.ellipse(5, 2, 27, 10), RAMPS['blue'][:3], 'sphere')
+    sp.part(sp.rect(7, 9, 25, 11), RAMPS['ink'], 'flat', base=1)
+    sp.part(sp.rect(14, 4, 17, 7), RAMPS['gold'][1:4], 'rim', seam_color='#191954')
+    eyes(sp, 15)
+    sp.fill(sp.rect(12, 21, 19, 21), '#522b2f')
+    sp.outline()
+    return sp
+
+
+def ai_bolt():
+    """Bolt, a cargo loader drone: steel head, cyan eyes. Calls everything."""
+    sp = Sprite(N, N)
+    sp.part(sp.rect(10, 26, 21, 31), RAMPS['soot'], 'rim')
+    sp.part(sp.rect(15, 1, 16, 5), RAMPS['steel'], 'rim')
+    sp.part(sp.rect(5, 6, 26, 25), RAMPS['metal'], 'rim', depth=2)
+    sp.part(sp.rect(8, 11, 23, 18), RAMPS['night'], 'flat', base=0)
+    sp.part(sp.rect(9, 20, 22, 22), RAMPS['soot'], 'flat', base=1)
+    for x in (10, 13, 16, 19):
+        sp.plot(x, 21, '#a09f91')
+    sp.plots([(7, 8), (8, 8)], WHITE)
+    sp.outline()
+    for x in (10, 18):
+        sp.part(sp.rect(x, 13, x + 3, 15), RAMPS['cyan'][1:], 'inset', glow=True)
+    sp.plot(15, 0, '#fa3a64', glow=True)
+    return sp
+
+
 SPRITES = {
     "ore_iron": ore_iron, "ore_copper": ore_copper, "ore_gold": ore_gold, "ore_ice": ore_ice,
     "slag": slag, "drill": drill,
@@ -349,6 +679,18 @@ SPRITES = {
     "racer_red": racer(RAMPS['red']), "racer_blue": racer(RAMPS['blue']),
     "racer_green": racer(RAMPS['green']), "racer_yellow": racer(RAMPS['gold'][:4]),
     "bounty": bounty, "salvage": salvage, "cargo": cargo,
+    # casino 2026-11-13: themed slot machines, keno, card pips, Hold'em
+    "dv_geode": dv_geode, "dv_pick": dv_pick, "dv_cart": dv_cart, "dv_lamp": dv_lamp,
+    "pl_verdance": planet(RAMPS['green'], _verdance), "pl_cinder": planet(['#1c020d', '#4a051e', '#841c1d', '#d4462b'], _cinder),
+    "pl_rime": planet(RAMPS['cyan'][1:], _rime), "pl_tidewater": planet(RAMPS['blue'], _tidewater),
+    "pl_ochre": planet(['#41322c', '#725244', '#ab8465', '#cfaa81'], ring=['#733126', '#c56d25', '#faaf5c']),
+    "pl_moon": planet(['#2c2c25', '#434137', '#a09f91', '#bfcad7'], _moon),
+    "pl_halcyon": pl_halcyon, "pl_wild_col": pl_wild_col,
+    "sm_cutter": sm_cutter, "sm_vial": sm_vial, "sm_badge": sm_badge, "sm_stash": sm_stash,
+    "kn_pick": kn_pick, "kn_drawn": kn_drawn, "kn_hit": kn_hit,
+    "pip_ore": pip('ore'), "pip_ice": pip('ice'), "pip_fuel": pip('fuel'), "pip_core": pip('core'),
+    "dealer_btn": dealer_btn,
+    "ai_harrow": ai_harrow, "ai_wren": ai_wren, "ai_dace": ai_dace, "ai_bolt": ai_bolt,
 }
 
 REFS = ["all_in", "emp_burst", "cluster_bombs", "armour_plating", "drop_tanks", "cruise_missile"]
