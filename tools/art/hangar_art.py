@@ -275,6 +275,76 @@ ICONS = {
 }
 
 
+# ---- airship parts (the Airship tab, 2 m cells): the same paint swaps
+def gas_cell(sp, P):
+    env = sp.ellipse(1, 7, 30, 26)
+    sp.part(env, P, "cyl_h", base=2)
+    for x in (9, 16, 23):
+        sp.fill(sp.line([(x, 8), (x, 25)], 1) & env, P[1])
+    sp.part(sp.rect(4, 15, 27, 17) & env, R["white"], "flat", base=3)
+    sp.plots([(8, 10), (9, 10), (10, 9)], GLINT)
+    sp.outline()
+
+
+def gondola(sp, P):
+    sp.part(sp.rect(4, 2, 27, 6), R["steel"], "rim", base=2)
+    for x in (8, 23):
+        sp.part(sp.rect(x, 6, x + 1, 11), R["steel"], "flat", base=2)
+    car = sp.poly([(2, 11), (26, 11), (30, 16), (28, 25), (4, 25), (2, 21)])
+    sp.part(car, P, "cyl_h", base=2)
+    for x in (6, 12, 18):
+        sp.part(sp.rect(x, 14, x + 3, 18), R["gold"], "flat", base=3)
+    sp.part(sp.poly([(24, 12), (27, 12), (29, 16), (24, 16)]), R["cyan"], "flat", base=3)
+    sp.plots([(5, 12), (6, 12)], GLINT)
+    sp.outline()
+
+
+def engine_pod(sp, P):
+    sp.part(sp.rect(10, 1, 13, 10), R["steel"], "cyl_v", base=2)
+    pod = sp.poly([(3, 12), (20, 10), (24, 14), (24, 20), (20, 24), (3, 22)])
+    sp.part(pod, P, "cyl_h", base=2)
+    sp.part(sp.rect(3, 14, 6, 20), R["dark"], "flat", base=1)
+    sp.part(sp.poly([(24, 15), (28, 17), (24, 19)]), R["white"], "flat", base=3)
+    sp.part(sp.taper(27, 17, 27, 3, 4, 3), R["soot"], "rim", base=2)
+    sp.part(sp.taper(27, 17, 27, 31, 4, 3), R["soot"], "rim", base=2)
+    sp.plots([(6, 13), (7, 13)], GLINT)
+    sp.outline()
+
+
+def airship_fin(sp, P):
+    f = sp.poly([(3, 29), (12, 4), (26, 4), (29, 29)])
+    sp.part(f, P, "rim", base=2, depth=2)
+    sp.part(sp.poly([(22, 4), (26, 4), (29, 29), (24, 29)]), R["white"], "rim", base=3)
+    sp.fill(sp.rect(21, 5, 21, 28) & f, R["dark"][1])
+    sp.plots([(13, 6), (14, 6)], GLINT)
+    sp.outline()
+
+
+def ballast(sp, P):
+    sp.part(sp.rect(8, 2, 23, 6), R["steel"], "rim", base=2)
+    tank = sp.poly([(5, 8), (26, 8), (29, 13), (29, 24), (26, 29), (5, 29), (2, 24), (2, 13)])
+    sp.part(tank, P, "cyl_h", base=2)
+    sp.part(sp.rect(4, 18, 27, 24) & tank, R["blue"], "flat", base=2)
+    sp.part(sp.rect(4, 18, 27, 18) & tank, R["cyan"], "flat", base=3)
+    for x in (9, 15, 21):
+        sp.plot(x, 27, R["cyan"][4], glow=False)
+    sp.plots([(6, 10), (7, 10)], GLINT)
+    sp.outline()
+
+
+def mooring_cone(sp, P):
+    cone = sp.poly([(3, 6), (14, 6), (29, 16), (14, 26), (3, 26)])
+    sp.part(cone, P, "cyl_h", base=2)
+    sp.part(sp.rect(3, 6, 6, 26), R["white"], "flat", base=3)
+    sp.part(sp.circle(27, 16, 3), R["steel"], "sphere", base=3)
+    sp.plots([(9, 8), (10, 8)], GLINT)
+    sp.outline()
+
+
+ICONS.update({"gas-cell": gas_cell, "gondola": gondola, "engine-pod": engine_pod, "airship-fin": airship_fin,
+              "ballast": ballast, "mooring-cone": mooring_cone})
+
+
 # ---------------------------------------------------------------- livery decals
 
 def shark_mouth():

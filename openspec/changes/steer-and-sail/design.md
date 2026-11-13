@@ -331,8 +331,38 @@ Recommendations taken (ask only with screenshots):
 - **Prop engine.** It is raised from 230 kW to 320 kW so a chibi plane
   climbs at the game's 25 m/s^2. Sharky now makes 72 m/s with a range of
   162 km.
-- **Flying ground.** The page's flight treats the ground beyond the field as
-  flat.
+- **Flying ground.** Superseded below: the ground is now kilometres of hex
+  hills.
+
+Then, on "stalls happen too easily", "ground not big enough", "planes are
+cliping through the ground and buildings" and "really shity lift" (the
+owner, 2026-11-13), as built (recommendations taken, ask only with
+screenshots):
+- **Lift.** A wing cell counts as 3 m^2 at CLmax 1.8. Stall speeds:
+  Sharky 21.4, Gull 21.3, Dart 22.0, Puffin 22.8 m/s. Take-off roll at 70%
+  throttle: Sharky 35.7 m, Gull 39.0 m, Dart 29.7 m (24.5, 26.5 and 21.0 m
+  with Shift held).
+- **Assists, on by default.** With the assists on, W and S ask for a
+  6 m/s descent and an 8 m/s climb rather than moving the elevator, so a
+  held W never flies into the ground. A/D hold a bank up to 45 deg, never
+  past 60; pitch stays inside +/-35 deg; auto-rudder; soft stall. Expert
+  turns all of it off.
+- **Room.** Hex hills in 1 m layers to about 7 km, coarser columns past
+  200 m, a coast and sea to the north, and two lit towns (Wendle 2.3 km
+  east, Saltby 2 km west-north-west with a quay).
+- **Collision.** The craft is a cloud of points at its parts' corners,
+  tested every step against the ground as drawn and against solid boxes
+  (hangar, shed, tower, masts, houses, parked craft). A step that would
+  enter is undone; a gentle touch on the wheels is a landing, a fast one
+  "CRASHED into ..." and a reset 2 s later. The hangar and shed are solid,
+  so nothing taxis into them. A Playwright player test
+  (`tools/mockups/hangar_flight_test.js`) flies a 60 s circuit on W, Shift,
+  A and D only and crashes into the hangar, the hills, a house and the
+  Kestrel with no point ever inside.
+- **Puffin.** Its wing is three cells deep with a second nose tank, since
+  the old layout failed its own balance check.
+- **Airships.** They climb at up to about 9 m/s on their free lift; Puff
+  has 365 kg spare.
 
 ### 6b. As the rockets mockup built it (M21, 2026-11-13)
 
