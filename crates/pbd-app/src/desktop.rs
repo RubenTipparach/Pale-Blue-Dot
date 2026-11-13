@@ -921,7 +921,7 @@ pub fn run(args: &[String]) {
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "Pale Blue Dot | Planet Explorer".into(),
-                    resolution: (1440, 900).into(),
+                    resolution: window_size().into(),
                     present_mode: if launch.capture.is_some() || launch.no_vsync {
                         PresentMode::AutoNoVsync
                     } else {
@@ -1775,6 +1775,30 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
     default
 }
 
+/// The window's size in points: 1440 x 900, or `PBD_WINDOW=<w>x<h>`, a
+/// measurement switch (`frame-budget` 5c) that prices the pixel count with the
+/// same view. It is not a render scale: the UI shrinks with it.
+fn window_size() -> (u32, u32) {
+    std::env::var("PBD_WINDOW")
+        .ok()
+        .and_then(|v| {
+            let (w, h) = v.trim().split_once('x')?;
+            Some((w.parse().ok()?, h.parse().ok()?))
+        })
+        .filter(|&(w, h): &(u32, u32)| (64..=8192).contains(&w) && (64..=8192).contains(&h))
+        .unwrap_or((1440, 900))
+}
+
+/// The camera's samples: 4, or `PBD_MSAA=<1|2|4>`, a measurement switch
+/// (`frame-budget` 5c) that prices the multisampling.
+fn msaa_samples() -> Msaa {
+    match std::env::var("PBD_MSAA").ok().as_deref().map(str::trim) {
+        Some("1") => Msaa::Off,
+        Some("2") => Msaa::Sample2,
+        _ => Msaa::Sample4,
+    }
+}
+
 fn configure_camera(
     mut commands: Commands,
     mut cameras: Query<(Entity, &mut Camera3d), Added<Camera3d>>,
@@ -1788,7 +1812,7 @@ fn configure_camera(
         commands.entity(entity).insert((
             Hdr,
             Tonemapping::TonyMcMapface,
-            Msaa::Sample4,
+            msaa_samples(),
             Projection::Perspective(PerspectiveProjection {
                 near: 0.05,
                 far: 500_000.0,

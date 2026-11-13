@@ -356,6 +356,8 @@ branch before it and the branch with frame latency 2 and the L8 fixes, every
 scenario, at night, with vsync, and the slow frames classified;
 `docs/benchmarks/2026-11-12-lighting-perf/`) is
 https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH.
+The one-part-off breakdown (where the frame goes, the same Mac) is
+https://claude.ai/artifact/3hvQJvSQJJhAQX7hUjHzQn.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 

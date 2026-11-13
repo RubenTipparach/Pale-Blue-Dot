@@ -11,6 +11,8 @@
 - [x] 2.5 A measurement test: `build_planet` at 1 and N threads, with and without town ground installed (design 2c).
 - [ ] 2.6 A `clouds-running` scenario with the clock running (design 3).
 - [ ] 2.7 Log when each render pipeline becomes ready (`PipelineCache`), to split the start-up frames of 1.7-1.9 s and 0.9 s between pipeline compiles and the first planet build, and to catch any pipeline first compiled mid-flight (first rain, first dive). If any is, compile it at load, behind the start-up.
+- [ ] 2.9 (design 5c) `PBD_WINDOW=<w>x<h>` and `PBD_MSAA=<1|2|4>` switches, measurement only.
+- [ ] 2.10 (design 5c) The pixels-and-samples sitting on `clouds`, `rain-stroll` and `walk`, and the rain-pass split on `rain-stroll`; report in `docs/benchmarks/`.
 - [ ] 2.8 A CPU profile (`samply`, release with debug symbols) of `clouds` near the ground and `walk`, to find the main thread's hot loops before any data-layout or SIMD work (shower rebuild, fine-set upload, planet build, puff build).
 
 ## 3. Landing hitch
