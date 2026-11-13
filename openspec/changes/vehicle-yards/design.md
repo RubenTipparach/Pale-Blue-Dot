@@ -300,16 +300,16 @@ judged by eye go to the survey with the page's screenshots:
 Everything else is "recommendation taken (ask only with screenshots)".
 
 Asked on 2026-11-12 as **A1** (chibi proportions) and **A2** (whole-cell hulls)
-in the survey (https://claude.ai/artifact/3ViY6udhFkkx5Wzx4jn3w5), each with
+in the survey (https://claude.ai/artifact/S3hRQL12WLctoD21jar1yT), each with
 the mockups' screenshots. The rest of decisions 2 to 4, and the decisions
 each page lists (C1 to C8, D1 to D6 and H1 to H6 on the pages), are
 recommendations taken (ask only with screenshots), recorded under the
 survey's Already decided.
 
 The mockups' links:
-- M22 Cranes and Printers: https://claude.ai/artifact/2LjxDc7LuNFX6yjPbMLMwc
-- M23 Drydock and Hex Ship Builder: https://claude.ai/artifact/DLRzGBKMJzhhFdayrbCVdx
-- M24 Hangar and Chibi Aircraft: https://claude.ai/artifact/HrLdbcwrwbAD7PN1KojKKu
+- M22 Cranes and Printers: https://claude.ai/artifact/3iCXM8dTvBb4s7ZDYmFwkn
+- M23 Drydock and Hex Ship Builder: https://claude.ai/artifact/KeUTrW429tn9Vuo9dZy9Bb
+- M24 Hangar and Chibi Aircraft: https://claude.ai/artifact/EvFLtkABNcoz9SeAqZduZK
 
 ## Risks
 

@@ -142,7 +142,7 @@ answer, and answers are folded back into the OpenSpec changes they shape.
 **The survey is an HTML page (owner, 2026-11-12):** "can you create a mockup
 tracking dock, and a survey html tracker? both of these skills are found in
 fleet command repo". Questions go into
-https://claude.ai/artifact/3ViY6udhFkkx5Wzx4jn3w5 (`docs/design/survey.html`),
+https://claude.ai/artifact/S3hRQL12WLctoD21jar1yT (`docs/design/survey.html`),
 whose database holds the answers; the `html-survey` skill
 (`.claude/skills/html-survey`) says how to ask, read the answers back with
 `ArtifactData`, and move them to "Already decided". Keep republishing that
@@ -373,16 +373,16 @@ The `lighting-model` cost on the desktop (RTX 3070; main before the merge,
 the new model and `PBD_LIGHTING=today`, then by part and at night;
 `docs/benchmarks/2026-11-12-lighting-model-clean/`, a quiet machine; the
 2026-11-11 sitting it replaces was contaminated; plan in `lighting-perf`)
-is https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9.
+is https://claude.ai/artifact/EqzrbQjpB7HxEQ3QDogBAv.
 The `lighting-perf` close (main's lighting, `f15a647`, against the branch
 after 2.8's half-size reflections: every scenario inside 16.7 ms at p99;
 `docs/benchmarks/2026-11-12-worst-case-60/`) is
-https://claude.ai/artifact/DiyFFNobHpBLsuCpvB5ssk.
+https://claude.ai/artifact/DahhhtX5wbwTxPUAnkppZA.
 The `lighting-perf` checkpoint (the desktop, main's `f15a647` against the
 branch before it and the branch with frame latency 2 and the L8 fixes, every
 scenario, at night, with vsync, and the slow frames classified;
 `docs/benchmarks/2026-11-12-lighting-perf/`) is
-https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH.
+https://claude.ai/artifact/1LQaNTQW3d2sdngM2Uj8oc.
 The one-part-off breakdown (where the frame goes, the same Mac) is
 https://claude.ai/artifact/3hvQJvSQJJhAQX7hUjHzQn.
 

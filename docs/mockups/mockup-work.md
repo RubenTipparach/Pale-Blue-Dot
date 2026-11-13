@@ -25,6 +25,21 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 11 | 2026-11-13 | M24 version 6: airships, easy flight, more lift, a bigger world, collisions. |
 | 12 | 2026-11-13 | One 3D view at a time, in tabs: M24 v7, M1 v6, M5 v7, M9 v4, M17 v11. |
 
+**New account (2026-11-13).** The owner moved to another claude.ai account. The artifacts made this
+week were published there as new ones, from the pages committed here: M1 to M13, M20 to M24, the
+survey and the three benchmark reports of 2026-11-12. Their links below, in the tracker's lists, in
+CLAUDE.md and in the OpenSpec changes are the new ones. On the owner's word ("make sure not to publish
+the tracker in this session"; "I only care about the artifacts we made this week"), the tracker was
+**not** republished: its page here carries the new links, but its live link above is still the old
+account's, and so is every page's "All Pale Blue Dot mockups (the tracker)" line until it is. The
+older pages (M14 to M19, the guide, the earlier benchmarks and gate pages) keep their old-account
+links. The old tracker's reviews and the old survey's answers could not be read from the new account
+and stayed behind; the stages recorded below stand. The survey's pictures now go up from
+`docs/screenshots/` (`img/g1-*` the town-gates "after" shots, `img/a1-*` and `img/a2-*` the hangar
+and drydock shots, `img/t15` and `img/t16` the lighting-perf full-res sets), in two publishes, since
+together they pass the 64 MB limit of one. A published page cannot serve `.glb`: ship-crafting,
+drydock and hangar go up with base64 `.glb.txt` copies, which their loaders fall back to.
+
 Every page on it links back to it: an "All Pale Blue Dot mockups (the tracker)" line under the
 page's title (the thirteen mockups of 2026-11-12, and the survey). The earlier mockups (M14 to M19)
 predate the tracker and do not have that line yet; add it the next time each is republished.
@@ -36,30 +51,30 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 
 | Id | Mockup | Page | OpenSpec | Stage | Link |
 | --- | --- | --- | --- | --- | --- |
-| M1 | The Halcyon System | `planets.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/7gnj2sgXFmYnMzNWEPE7pG |
-| M2 | Halcyon Transit | `travel.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/7PCRHRjCkBk3mesWsd6Dfq |
-| M3 | Forge and Fabricator | `crafting.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/6hj8UvbLY9TUsn7591sKKg |
-| M4 | Shipyard and Ship Builder | `ship-crafting.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/ANihdavwCucwXDCq2YzFvY |
-| M5 | Townsfolk and Peoples | `npcs.html` | townsfolk (extends it) | Drafted (2026-11-12) | https://claude.ai/artifact/LECf4Jk3ESP54w5JV55LMc |
-| M6 | Hex House Builder | `building.html` | player-building | Drafted (2026-11-12) | https://claude.ai/artifact/NPvmoZMkdg6HEc91Vngicp |
-| M7 | Herds, Hunters and Glowmoths | `animals.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/GWCsAqGcVi75rHPYVGLye7 |
-| M8 | Furrows and Greenhouses | `farming.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/4uqkQQB55Hq8dbEc52scwD |
-| M9 | Fish Lab and Aquariums | `fish.html` | fishing-and-equipment (extends it) | Drafted (2026-11-12) | https://claude.ai/artifact/VbVmuUHVTUczkiMYGHEZSn |
-| M10 | Stations and Outposts | `stations.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/7tPp8n2btkNzx1tgeQF7P4 |
-| M11 | The Long Fall: Games and Jobs | `minigames.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/M6bJTTQmSRcfZoGyjAZZvD |
-| M12 | Exchange Terminal | `market.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/MepSVNts31YTwsZ4QmZhPK |
-| M13 | Foliage Detail Playground | `foliage.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/PnPpDKgcqqbGyBHdXxsiBF |
+| M1 | The Halcyon System | `planets.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/RKNCXCKChRuNhbg37t9TeE |
+| M2 | Halcyon Transit | `travel.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/Rc38usecSUMT2RFF9ur6RZ |
+| M3 | Forge and Fabricator | `crafting.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/KEMNicnnXHyoQZ24kWRDep |
+| M4 | Shipyard and Ship Builder | `ship-crafting.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/VwFbs16wbr76CSWyrvUGLn |
+| M5 | Townsfolk and Peoples | `npcs.html` | townsfolk (extends it) | Drafted (2026-11-12) | https://claude.ai/artifact/RQ8WAnXoJMC5K8dftXWXqS |
+| M6 | Hex House Builder | `building.html` | player-building | Drafted (2026-11-12) | https://claude.ai/artifact/Jp6s6FcNR9fBJ1QzBKXWme |
+| M7 | Herds, Hunters and Glowmoths | `animals.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/4nZhbMyd6TxusGacLoz1KA |
+| M8 | Furrows and Greenhouses | `farming.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/SY1htt7APWUsfQjDVcd94X |
+| M9 | Fish Lab and Aquariums | `fish.html` | fishing-and-equipment (extends it) | Drafted (2026-11-12) | https://claude.ai/artifact/KiVnkJ5QK2A8RG4DiUTsWH |
+| M10 | Stations and Outposts | `stations.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/KcdhQayNyjEv767JYpWRhk |
+| M11 | The Long Fall: Games and Jobs | `minigames.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/ALUjY74NxgYAdXmywbmBeQ |
+| M12 | Exchange Terminal | `market.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/XnafkzQo2nAo71ed9y8ZgN |
+| M13 | Foliage Detail Playground | `foliage.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/1QMj6cp1ykHNi1cEPxpBPu |
 | M14 | Pale Blue Dot Lighting | `lighting.html` | lighting-model | Drafted (2026-10-29) | https://claude.ai/artifact/LLzP5j8G8k3Do9j4Z7Qyaj |
 | M15 | Tenebris Towns | `towns.html` | tenebris-towns | Drafted; the towns in the game are built from it, every feature on the roadmap (survey, 2026-09-27) | https://claude.ai/artifact/59zS9ERBTkrVrzPedfoUL2 |
 | M16 | Tenebris World Map | `world-map.html` | world-map, city-sites | Approved for build, recorded: "good approve" (survey M6, 2026-09-27); sites "approve" (C4, C5, 2026-09-29) | https://claude.ai/artifact/G7QY9BYXYMH8tgaEv8E7az |
 | M17 | Hex Tool Bench | `held-tools.html` | hex-held-tools (archived) | Approved for game, recorded: "Perfect", built and archived 2026-09-26 | https://claude.ai/artifact/YEf1BuLEk9Dppk55znZ5gr |
 | M18 | Rod, Shovel and School | `fishing.html` | fishing-and-equipment | Drafted (2026-09-24) | https://claude.ai/artifact/9XiEvkxSFJMtqaktg4eovj |
 | M19 | Kestrel, Tern and Loon | `vehicles.html` | vehicles, vehicle-models | Approved for game, recorded: approved, and the Rust port built (vehicles design) | https://claude.ai/artifact/UJebv7EdJUg1NLpvfVHi3D |
-| M20 | Pits, Plants and Power | `industry.html` | steer-and-sail (oil) | Drafted (2026-11-12; version 3 adds oil, 2026-11-13; GPU screenshot gate not run) | https://claude.ai/artifact/JBcP2Js3bdQ2uApN3xUnHV |
-| M21 | Rockets and Landers (was Rockets to Starships) | `ship-tiers.html` | ship-tiers | Drafted (2026-11-12, another session); revised 2026-11-13: no warp, rockets four rings wide with decks | https://claude.ai/artifact/2Sb7mNRv4wauJh8WFoR9eD |
-| M22 | Cranes and Printers | `construction.html` | vehicle-yards | Drafted (2026-11-12); answers M3's note | https://claude.ai/artifact/2LjxDc7LuNFX6yjPbMLMwc |
-| M23 | Drydock and Hex Ship Builder | `drydock.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/DLRzGBKMJzhhFdayrbCVdx |
-| M24 | Hangar and Chibi Aircraft | `hangar.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/HrLdbcwrwbAD7PN1KojKKu |
+| M20 | Pits, Plants and Power | `industry.html` | steer-and-sail (oil) | Drafted (2026-11-12; version 3 adds oil, 2026-11-13; GPU screenshot gate not run) | https://claude.ai/artifact/9F2Tqi41EFA9tsbTRgxiJD |
+| M21 | Rockets and Landers (was Rockets to Starships) | `ship-tiers.html` | ship-tiers | Drafted (2026-11-12, another session); revised 2026-11-13: no warp, rockets four rings wide with decks | https://claude.ai/artifact/4e3jLcjN4yH6NhJmyWKuY5 |
+| M22 | Cranes and Printers | `construction.html` | vehicle-yards | Drafted (2026-11-12); answers M3's note | https://claude.ai/artifact/3iCXM8dTvBb4s7ZDYmFwkn |
+| M23 | Drydock and Hex Ship Builder | `drydock.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/KeUTrW429tn9Vuo9dZy9Bb |
+| M24 | Hangar and Chibi Aircraft | `hangar.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/EvFLtkABNcoz9SeAqZduZK |
 
 The thirteen of 2026-11-12 were published as one batch. Their commit (`d468860`) says "Fourteen",
 but it names thirteen subjects, and thirteen pages were published.
