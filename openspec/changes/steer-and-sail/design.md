@@ -121,6 +121,18 @@ towards my waypoint".
   It is replanned as the wind changes or the ship strays. The helm advice
   steers along it, and the time to the waypoint is the route's time, not the
   straight line's.
+- **Shown on the water and on the sail** (the owner, 2026-11-13: "in the
+  sailing thing I expect to see a path on the water guiding me towards a
+  heading, and something on the sail to suggest the direction to rotate
+  it"). Sailing is seen in 3D from behind the ship, with the chart beside
+  it.
+  - The planned route is a glowing path laid on the water's surface ahead
+    of the bow, bending onto each tack. A chevron at the next turn points
+    the new heading.
+  - A curved arrow on the sail shows which way to swing it, ease or haul,
+    sized by how far. It turns into a tick when the sail is trimmed.
+  - At night the path and the arrow glow faintly, and the ship's lanterns
+    light the deck.
 - **Advice only.** The player steers and trims. The readout shows what the
   best course gains: the VMG now, and the VMG on the best heading.
 
