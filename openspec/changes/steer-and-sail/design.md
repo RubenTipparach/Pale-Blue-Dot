@@ -169,7 +169,9 @@ like my planes are cliping through the ground and buildings".
   - the wings keep lift well past the stall angle (CLmax 1.8, with a soft
     stall that drops the nose instead of the wing);
   - auto-trim holds level flight when the stick is centred;
-  - bank and pitch are limited (60 and 35 degrees) unless an "Expert" switch
+  - (superseded: the bank and pitch limits and the Expert switch were dropped
+    on the owner's word; see "No assists" under 6a) bank and pitch are
+    limited (60 and 35 degrees) unless an "Expert" switch
     is on;
   - the stall speed shown in the builder is still the honest number. The
     assist only keeps the plane from falling out of the sky near it.
@@ -342,11 +344,23 @@ screenshots):
   Sharky 21.4, Gull 21.3, Dart 22.0, Puffin 22.8 m/s. Take-off roll at 70%
   throttle: Sharky 35.7 m, Gull 39.0 m, Dart 29.7 m (24.5, 26.5 and 21.0 m
   with Shift held).
-- **Assists, on by default.** With the assists on, W and S ask for a
-  6 m/s descent and an 8 m/s climb rather than moving the elevator, so a
-  held W never flies into the ground. A/D hold a bank up to 45 deg, never
-  past 60; pitch stays inside +/-35 deg; auto-rudder; soft stall. Expert
-  turns all of it off.
+- **No assists (the owner, 2026-11-13).** The first build added assists:
+  W and S set a climb rate, bank and pitch were limited, and the plane
+  levelled itself. The owner rejected them: "I DIDNT SAY RESTRICT MY
+  CONTROLS", "DO NOT AUTO ROLL,PITCH,YAW", "LET THE PLAYER ACTUALY FLY THE
+  PLANE", "MAKE FLYING EASIER MEANS FIX THE DAMN FLIGHT MODEL". So the stick
+  moves the surfaces and nothing else does, and the Expert switch is gone.
+  Flying is made easy by the model instead:
+  - lift eases into CLmax and holds it to 35 deg of angle of attack (it was
+    about 15), so a held S climbs rather than stalls;
+  - the prop engine makes 420 kW (it was 320): Sharky climbs at about
+    8 m/s with S held at full throttle, and gently at 70% hands off;
+  - heavier rotational damping, so a held key gives a steady rate (about
+    50 deg/s of roll, about 20 deg/s of pitch);
+  - a rudder three times as strong;
+  - dihedral as a physical term (a sideslip rolls the wings against it), so
+    a banked, pulled turn holds about 55 deg instead of rolling over.
+  A Controls window on the airfield lists every key in plain words.
 - **Room.** Hex hills in 1 m layers to about 7 km, coarser columns past
   200 m, a coast and sea to the north, and two lit towns (Wendle 2.3 km
   east, Saltby 2 km west-north-west with a quay).

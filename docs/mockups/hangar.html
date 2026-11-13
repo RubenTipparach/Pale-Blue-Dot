@@ -237,6 +237,17 @@ details.sdesc p{max-width:none}
 }
 @media (max-width:1100px){.builder.b3{grid-template-columns:1fr}}
 @media (max-width:560px){.tabs button{padding:7px 9px;font-size:15px}}
+/* the controls, in a window of their own (owner, 2026-11-13: "add that stuff in as a modal for me to view") */
+dialog.keys{border:1px solid var(--line-2);border-radius:8px;background:var(--panel);color:var(--ink);padding:18px 20px;max-width:min(560px,calc(100vw - 32px));width:100%}
+dialog.keys::backdrop{background:rgba(0,0,0,.55)}
+dialog.keys h3{margin:0 0 4px;font:600 20px var(--display);letter-spacing:.04em}
+dialog.keys h4{margin:14px 0 6px;font:600 13px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--amber)}
+dialog.keys table{width:100%;border-collapse:collapse;font-size:14px}
+dialog.keys td{padding:4px 6px;border-top:1px solid var(--line);vertical-align:top}
+dialog.keys td:first-child{white-space:nowrap;width:1%}
+dialog.keys kbd{font:600 12.5px var(--mono);border:1px solid var(--line-2);border-bottom-width:2px;border-radius:3px;padding:1px 6px;background:rgba(255,255,255,.04)}
+dialog.keys p{margin:4px 0 0;color:var(--muted);font-size:13.5px}
+dialog.keys .close{float:right}
 </style>
 
 <div class="wrap">
@@ -254,16 +265,28 @@ details.sdesc p{max-width:none}
 <nav class="tabs" role="tablist" aria-label="Parts of the mockup">
   <button role="tab" data-tab="airfield">Airfield, fly it</button><button role="tab" data-tab="planes">Plane builder</button><button role="tab" data-tab="airship">Airship builder</button><button role="tab" data-tab="how">How it works</button>
 </nav>
+<dialog class="keys" id="keysDlg" aria-labelledby="keysH">
+  <div class="seg close"><button id="keysClose">Close</button></div>
+  <h3 id="keysH">Controls</h3>
+  <p>Press <b>Fly it</b> to take off in the craft you are looking at. Drag the mouse to look round; scroll to zoom.</p>
+  <h4>Planes</h4>
+  <table><tr><td><kbd>Shift</kbd> or <kbd>R</kbd></td><td><b>Throttle up</b>: more engine power. More power means more speed, and more speed means more lift, so the plane climbs.</td></tr><tr><td><kbd>Ctrl</kbd> or <kbd>F</kbd></td><td><b>Throttle down</b>: less engine power, to slow down or come down. The HUD shows the throttle as a %; it starts at 70%.</td></tr><tr><td><kbd>S</kbd></td><td>Nose up: pull back to climb.</td></tr><tr><td><kbd>W</kbd></td><td>Nose down: push forward to dive.</td></tr><tr><td><kbd>A</kbd> <kbd>D</kbd></td><td>Roll left, roll right. Roll, then pull up with S, to turn.</td></tr><tr><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Rudder: swing the nose left or right. On the runway A, D, Q and E steer.</td></tr></table>
+  <p>Nothing flies the plane for you: it goes where you point it. The wing keeps its lift up to a steep 35 degrees, so pulling up climbs instead of stalling.</p>
+  <h4>Helicopters and Puffin</h4>
+  <table><tr><td><kbd>Shift</kbd> <kbd>Ctrl</kbd></td><td>Up and down (the collective; on Puffin, the power).</td></tr><tr><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></td><td>Tilt forward, left, back, right, and it flies that way.</td></tr><tr><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Turn left, turn right.</td></tr></table>
+  <h4>Airships</h4>
+  <table><tr><td><kbd>W</kbd> <kbd>S</kbd></td><td>Engines forward and back.</td></tr><tr><td><kbd>A</kbd> <kbd>D</kbd></td><td>Rudder: turn left, turn right.</td></tr><tr><td><kbd>&uarr;</kbd> <kbd>&darr;</kbd></td><td>Nose up, nose down.</td></tr><tr><td><kbd>Shift</kbd></td><td>Drop ballast water: it gets lighter and rises.</td></tr><tr><td><kbd>Ctrl</kbd></td><td>Let out gas: it gets heavier and comes down.</td></tr></table>
+</dialog>
 <div class="tabpanel view" id="tab-airfield" role="tabpanel">
 <section aria-labelledby="s1">
   <h2 id="s1"><span class="n">1</span>The airfield</h2>
-  <details class="sdesc"><summary>What this shows, how to fly, and the keys</summary><p>A hangar of three bays with its roller doors up, an apron, a 230 m runway, a helipad, a windsock and a little tower with its beacon. Sharky and Gull are in their bays; Puffin and Dart wait on the apron; Bumble sits on the pad; the game's own Kestrel is parked beside them for scale. Drag to look around, scroll or pinch to zoom. <b>Fly it</b> takes the craft you are looking at (or your design from the Plane builder tab) off the runway. The assists are on (decision 2a, "make this game easy to fly"): a plane starts at 70% throttle, rotates by itself at flying speed and climbs as the throttle sets; Shift and Ctrl (or R and F) the throttle, W descends and S climbs, A and D bank it into a turn up to 45&deg; (never past 60&deg;), and with the stick centred it flies level, trimmed, clear of the stall. <b>Expert</b> turns the assists off: then W and S are the elevator, A and D the ailerons, Q and E the rudder. A helicopter flies on collective (Shift and Ctrl), cyclic (W, A, S, D) and its tail rotor (Q and E). The country runs on for kilometres: hills, a coast with the sea beyond it to the north, the town of Wendle a little over a minute's flight to the east and the fishing town of Saltby on the coast to the west-north-west, both lit at night. Everything is solid: wheels on the ground are a landing, anything else hitting the ground, a building, a mast or a parked craft fast is a crash, and two seconds later you are back on the runway. Drag to look round it as it flies. At night every runway light, pad light, floodlight, hangar lamp and nav light lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p></details>
+  <details class="sdesc"><summary>What this shows, how to fly, and the keys</summary><p>A hangar of three bays with its roller doors up, an apron, a 230 m runway, a helipad, a windsock and a little tower with its beacon. Sharky and Gull are in their bays; Puffin and Dart wait on the apron; Bumble sits on the pad; the game's own Kestrel is parked beside them for scale. Drag to look around, scroll or pinch to zoom. <b>Fly it</b> takes the craft you are looking at (or your design from the Plane builder tab) off the runway. The stick is yours alone: W and S move the nose down and up, A and D roll, Q and E the rudder, Shift and Ctrl (or R and F) the throttle; nothing rolls, pitches or yaws the plane for you. The wing keeps its lift up to 35&deg;, so pulling up climbs instead of stalling. <b>Controls</b> lists every key. A helicopter flies on collective (Shift and Ctrl), cyclic (W, A, S, D) and its tail rotor (Q and E). The country runs on for kilometres: hills, a coast with the sea beyond it to the north, the town of Wendle a little over a minute's flight to the east and the fishing town of Saltby on the coast to the west-north-west, both lit at night. Everything is solid: wheels on the ground are a landing, anything else hitting the ground, a building, a mast or a parked craft fast is a crash, and two seconds later you are back on the runway. Drag to look round it as it flies. At night every runway light, pad light, floodlight, hangar lamp and nav light lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p></details>
   <div class="ybar" id="yardBar">
     <span class="ylab">Look at</span><div class="seg" id="shipSel" role="group" aria-label="Look at"></div>
     <span class="ysep s1"></span><div class="seg" id="timeSel" role="group" aria-label="Time of day">
       <button data-t="day" aria-pressed="false">Day</button><button data-t="dusk" aria-pressed="false">Dusk</button><button data-t="night" aria-pressed="true">Night</button>
     </div>
-    <span class="ysep"></span><div class="seg" role="group" aria-label="Flight"><button id="flyBtn" aria-pressed="false" title="Fly the craft you are looking at, or your design, off the runway">Fly it</button><button id="expertBtn" aria-pressed="false" title="Expert: no assists. The stick moves the surfaces directly, no bank or pitch limits, no auto-trim and no auto-rudder">Expert</button></div>
+    <span class="ysep"></span><div class="seg" role="group" aria-label="Flight"><button id="flyBtn" aria-pressed="false" title="Fly the craft you are looking at, or your design, off the runway">Fly it</button><button id="keysBtn" aria-haspopup="dialog">Controls</button></div>
   </div>
   <div class="stage">
     <canvas id="yard" aria-label="An airfield at night: a three-bay hangar with its doors open, five chibi aircraft, the Kestrel, a runway with edge lights, a helipad and a beacon tower."></canvas>
@@ -418,7 +441,7 @@ const G1 = 25, RHO = 1.225, CLMAX = 1.8, WING_M2 = 3, RUNWAY_STALL = 32, DOOR_W 
 const MOD = {
   C:{name:"Cockpit", icon:"cockpit", kg:110, seats:1, cost:[["glass",3],["circuit",2],["steel-ingot",1],["cloth",1]], txt:"A seat and its pilot (70 kg counted in). At the front it makes a glass nose; further back, a big bubble canopy. Needs a clear view forward."},
   F:{name:"Fuselage", icon:"fuselage", kg:26, cost:[["steel-ingot",1],["polymer",1]], txt:"Body. Cells side by side make the fat chibi body; one cell wide is a tail boom."},
-  P:{name:"Prop engine", icon:"prop", kg:125, power:320, eta:0.8, sfc:0.25, cost:[["steel-ingot",3],["copper-ingot",2],["circuit",1]], txt:"320 kW in the nose and a fat three-blade prop. Nothing may sit ahead of it."},
+  P:{name:"Prop engine", icon:"prop", kg:125, power:420, eta:0.8, sfc:0.25, cost:[["steel-ingot",3],["copper-ingot",2],["circuit",1]], txt:"420 kW in the nose and a fat three-blade prop. Nothing may sit ahead of it."},
   J:{name:"Jet", icon:"jet", kg:130, power:420, eta:0.85, sfc:0.38, cost:[["steel-ingot",3],["alloy-plate",2],["circuit",2]], txt:"420 kW of thrust power at cruise, thirsty. Its exhaust needs a clear cell behind it."},
   W:{name:"Wing", icon:"wing", kg:16, wing:WING_M2, cost:[["steel-ingot",1],["cloth",1]], txt:"3 m2 of lift (chibi planes fly like toys), thick and stubby. Its centre of lift is a quarter chord back from the leading edge."},
   H:{name:"Tailplane", icon:"tailplane", kg:8, tail:1, cost:[["steel-ingot",1]], txt:"Holds the nose level. Every plane with wings wants one behind them."},
@@ -626,7 +649,7 @@ function surfaceChecks(rows, s) {
 // The flight model: a steady-state summary turned into a small 6-DoF integrator at the game's g. Body axes:
 // x forward (the nose), y up, z to starboard, the craft's own grid axes. Surfaces give q S dCL arm, so
 // nothing at rest; dCL is 0.05 a degree, up to 20 degrees.
-const ATRIM = 0.08, DCL = 0.05, DEFL = 20, CLA = 5.5, INCID = 4 * Math.PI / 180, ASTALL = CLMAX / CLA;
+let DIHED = -2; const ATRIM = 0.08, DCL = 0.05, DEFL = 20, CLA = 5.5, INCID = 4 * Math.PI / 180, ASTALL = 35 * Math.PI / 180;   // a forgiving wing: lift builds to CLMAX and holds there up to 35 degrees (owner, 2026-11-13: "your lift to stall angle is super narrow")
 function flightModel(rows) {
   const s = stats(rows), cells = cellsOf(rows), sf = surfaces(rows), kind = craftKind(s);
   const mOf = k => MOD[k.c].kg + (MOD[k.c].fuel || 0), rx = k => k.x + 0.5 - s.cg, rz = k => k.y - MID;
@@ -675,10 +698,10 @@ function stepFlight(m, st, inp, dt) {
   let CL = 0;
   if (m.S) {
     const ae = alpha + INCID;
-    // a soft stall: past the stall angle the wing keeps most of its lift, and the nose drops (below)
-    CL = Math.abs(ae) < ASTALL ? CLA * ae : Math.sign(ae) * CLMAX * (1 - Math.min(0.35, (Math.abs(ae) - ASTALL) * 1.5));
-    st.stall = !st.ground && tilt > 0.5 && V > 3 && (Math.abs(ae) >= ASTALL * 0.92 || V < m.vs * 1.03);
-    if (Math.abs(ae) > ASTALL) tau[2] -= Math.sign(ae) * q * m.S * 0.25 * (Math.abs(ae) - ASTALL) * Math.max(1, m.armE);
+    // lift rises with the angle, eases into CLMAX and holds it all the way to 35 degrees; past that it falls off gently, and nothing pitches the nose for you
+    const aa = Math.abs(ae), cl0 = CLMAX * Math.tanh(CLA * aa / CLMAX);
+    CL = Math.sign(ae) * (aa < ASTALL ? cl0 : cl0 * Math.max(0.6, 1 - (aa - ASTALL) * 1.2));
+    st.stall = !st.ground && tilt > 0.5 && V > 3 && aa >= ASTALL;
     const L = q * m.S * CL;   // perpendicular to the flow in the body's x-y plane
     if (V > 1) { const ux = vb[0] / V, uy = vb[1] / V; fb[0] += -uy * L; fb[1] += ux * L; }
   } else st.stall = false;
@@ -686,34 +709,18 @@ function stepFlight(m, st, inp, dt) {
   if (V > 0.01) for (let i = 0; i < 3; i++) fb[i] -= D * vb[i] / V;
   fb[2] -= q * m.Sv * 2.0 * beta;   // the fin and the body push back on a sideslip
   // the controls: surfaces work with q (nothing at rest), rotors with power
-  // the assist (decision 2a, off with Expert): the stick sets rates, centred it holds level and a climb the
-  // throttle sets, clear of the stall; bank stays inside 60 degrees and pitch inside 35
-  let pin = inp.pitch, rin = inp.roll, yin = inp.yaw;
-  if (!st.expert && m.S && tilt > 0.5) {
-    const a = attitude(st);
-    // W and S ask for a descent or a climb (6 and 8 m/s); centred, the climb the throttle sets
-    let vyT = pin > 0 ? 8 : pin < 0 ? -6 : (st.power - 0.55) * 14; if (V < 1.5 * m.vs) vyT = Math.min(vyT, (V - 1.5 * m.vs) * 0.8);
-    const turn = V > 5 ? G1 / V * Math.sin(a.bank) * Math.tan(Math.min(1.1, Math.abs(a.bank))) * Math.sign(a.bank) : 0;   // the pull a level turn needs
-    let qc = Math.max(-0.3, Math.min(0.3, (vyT - st.v[1]) * 0.06)) + turn;
-    if (st.ground) qc = V > 1.15 * m.vs || pin > 0 ? 0.3 : 0;   // rotate at flying speed
-    if (a.pitch > 0.61 && qc > 0) qc = -0.2; if (a.pitch < -0.61 && qc < 0) qc = 0.2;
-    const ff = (alpha - ATRIM) * 4 / (DCL * DEFL);
-    pin = Math.max(-1, Math.min(1, ff + (qc - st.w[2]) * 2.5));
-    const maxB = Math.max(0.26, Math.min(0.8, (V / Math.max(1, m.vs) - 1.25) * 1.6));   // up to 45 degrees, less when slow
-    let pc = ((rin * maxB) - a.bank) * 1.5;   // A and D hold a bank; centred, the wings come level
-    if (Math.abs(a.bank) > 1.05 && Math.sign(pc) === Math.sign(a.bank)) pc = -Math.sign(a.bank) * 0.4;
-    rin = Math.max(-1, Math.min(1, (pc - st.w[0]) * 2.5));
-    if (!yin) yin = Math.max(-1, Math.min(1, -beta * 3));
-  }
+  // the stick moves the surfaces, and only the stick: nothing rolls, pitches or yaws the craft for the player (owner, 2026-11-13)
+  const pin = inp.pitch, rin = inp.roll, yin = inp.yaw;
   st.defl = {ail: rin * DEFL, elev: pin * DEFL, rud: yin * DEFL};
   const surf = tilt;
   tau[0] += surf * q * DCL * st.defl.ail * WING_M2 * m.ail.reduce((t, a) => t + a.arm, 0);
   tau[2] += surf * q * m.Se * DCL * st.defl.elev * m.armE;
-  tau[1] += surf * q * m.Sr * DCL * st.defl.rud * m.armR;
+  tau[1] += surf * q * m.Sr * DCL * st.defl.rud * m.armR * 3;   // a rudder with enough bite to swing the nose
   // weathercock and pitch stability, from the tail; damping grows with q
   tau[2] += -surf * q * m.Se * 4.0 * (alpha - ATRIM) * m.armE;
   tau[1] += -surf * q * m.Sv * 3.0 * beta * m.armV;
-  const damp = [(1.2 + q / 250), (1.0 + q / 300), (1.2 + q / 250)];
+  tau[0] += DIHED * surf * q * (m.S || 0) * 0.08 * beta;   // dihedral: a sideslip rolls the wings against it, as a real wing does (no input of its own)
+  const damp = [(2.5 + q / 120), (1.5 + q / 200), (3.0 + q / 60)];   // the air stops a rotation, never starts one: a held stick gives a steady rate
   const wdot = [0, 0, 0];
   for (let i = 0; i < 3; i++) wdot[i] = tau[i] / m.I[i] - st.w[i] * damp[i] * surf;
   // rotor control: cyclic and the tail rotor command rates, levelling when the stick is let go (the assist)
@@ -742,7 +749,7 @@ function stepFlight(m, st, inp, dt) {
     // keep it upright on its gear: no roll, the nose may rise (the tail sits) but not dig in
     const fwv = qrot(st.q, [1, 0, 0]); let yaw = Math.atan2(-fwv[2], fwv[0]); let pit = Math.asin(Math.max(-1, Math.min(1, fwv[1])));
     pit = Math.max(0, Math.min(st.pitMax ?? 0.25, pit));
-    if (V > 1) yaw += (inp.yaw + (st.expert ? 0 : -inp.roll * 0.6)) * 0.4 * dt;   // nose wheel steering with the rudder (and A, D when assisted)
+    if (V > 1) yaw += (inp.yaw - inp.roll * 0.6) * 0.4 * dt;   // nose wheel steering: the rudder, and A and D (the ailerons do nothing on the ground)
     st.q = qmul(qyaw(yaw), [Math.cos(pit / 2), 0, 0, Math.sin(pit / 2)]);
     st.w[0] = 0; st.w[1] = 0; if (st.w[2] < 0 && pit <= 0) st.w[2] = 0;
   }
@@ -1858,6 +1865,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   const focus = id => { const [x, z, d, y] = VIEW[id]; cam.goal = {t: new THREE.Vector3(x, y ?? (id === "all" ? 2 : 2.2), z), d}; focused = id; info(); };
   const SEL = [["all", "Whole field"], ["hangar", "Hangar"], ["sharky", "Sharky"], ["bumble", "Bumble"], ["puffin", "Puffin"], ["gull", "Gull"], ["dart", "Dart"], ["kestrel", "Kestrel"], ["yours", "Your design"], ["mast", "Airship mast"], ["shed", "Airship shed"], ["albatross", "Albatross"], ["puff", "Puff"], ["wendle", "Wendle"], ["saltby", "Saltby"]];
   { const yb = document.getElementById("yardBar"), setYb = () => { if (yb.offsetHeight) document.documentElement.style.setProperty("--ybar", yb.offsetHeight + "px"); }; new ResizeObserver(setYb).observe(yb); setYb(); }
+  { const d = document.getElementById("keysDlg"); document.getElementById("keysBtn").addEventListener("click", () => d.showModal()); document.getElementById("keysClose").addEventListener("click", () => d.close()); d.addEventListener("click", e => { if (e.target === d) d.close(); }); }
   document.getElementById("shipSel").innerHTML = SEL.map(([id, n]) => `<button data-s="${id}" aria-pressed="${id === "all"}">${n}</button>`).join("");
   const selPress = id => document.querySelectorAll("#shipSel button").forEach(o => o.setAttribute("aria-pressed", o.dataset.s === id));
   document.querySelectorAll("#shipSel button").forEach(b => b.addEventListener("click", () => { endFly(); focus(b.dataset.s); selPress(b.dataset.s); }));
@@ -1873,19 +1881,20 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   canvas.addEventListener("wheel", e => { e.preventDefault(); cam.dist = Math.min(320, Math.max(6, cam.dist * Math.exp(e.deltaY * 0.0012))); cam.goal && (cam.goal.d = cam.dist); }, {passive: false});
 
   let yours = null;
+  // The box over the view says only what a player would want: the name and the few numbers that matter (owner, 2026-11-13: notes on lights and moon levels are "super pointless and uncessary").
   function info() {
     const el = document.getElementById("yardInfo");
     if (typeof fly !== "undefined" && fly) return;
-    const desc = (name, s) => `<div><b>${name}</b>: ${Math.round(s.m)} kg, ${s.len.toFixed(0)} by ${s.width.toFixed(1)} m. ${s.canHover ? `Hovers at ${s.hover.toFixed(2)} of its weight` : `Stalls at ${s.stall.toFixed(0)} m/s`}, tops out at ${s.top.toFixed(0)} m/s, ${Math.round(s.range)} km on its fuel.</div>`;
-    if (PRESETS[focused]) { el.innerHTML = desc(PRESETS[focused].name, stats(PRESETS[focused].rows)); return; }
-    if (focused === "wendle" || focused === "saltby") { const t = TOWNS[focused === "wendle" ? 0 : 1]; el.innerHTML = `<div><b>${t.name}</b>, ${(Math.hypot(t.x, t.z) / 1000).toFixed(1)} km from the field, about a minute's flight: stone and plank houses under slate along two streets, a lamp every 26 m and one in the square, every window lit at night${t.coast ? "; a quay and its light run out into the sea" : ""}. Every house is solid to a craft.</div>`; return; }
-    const adesc = (name, s) => `<div><b>${name}</b>: ${Math.round(s.Vgas)} m&sup3; of ${s.gas}, lifting ${Math.round(s.lift)} kg against ${Math.round(s.m)} kg: ${Math.round(s.free)} kg of free lift, so it floats up to ${Math.round(s.floats)} m. ${s.len} m long, ${s.top.toFixed(0)} m/s flat out, ${s.seats} seat${s.seats > 1 ? "s" : ""}. It rides at its mast, nose in the cup.</div>`;
-    if (APRESETS[focused]) { el.innerHTML = adesc(APRESETS[focused].name, airshipStats(APRESETS[focused].rows, APRESETS[focused].livery.gas)); return; }
-    if (focused === "yoursAir" && AIR.yoursAir) { el.innerHTML = adesc("Your airship", airshipStats(AIR.yoursAir.rows, AIR.yoursAir.liv.gas)); return; }
-    if (focused === "mast" || focused === "shed") { el.innerHTML = `<div><b>The airship ${focused}</b>: the shed is a taller bay, its door ${SHED_W} m wide and ${SHED_H} m tall; Albatross rides at the big mast and Puff at the small one by the shed, nose in the cup, each mast with its red obstruction light. A moored airship would swing on its mast with the wind; here nothing moves until you fly it.</div>`; return; }
-    if (focused === "yours") { el.innerHTML = yours ? desc(yours.name, stats(yours.rows)) : `<div><b>Your design</b> rolls out here, in front of the middle bay. Draw one in the Plane builder tab and press <b>Roll out</b>.</div>`; return; }
-    if (focused === "kestrel") { el.innerHTML = `<div><b>Kestrel</b>, the game's own tiltrotor (<code>assets/models/vehicles/kestrel</code>), 1,200 kg${kestrel.size ? `, ${kestrel.size.x.toFixed(1)} m long` : ""}. The chibi aircraft are measured against it and fly by its foil model.</div>`; return; }
-    el.innerHTML = `<div><b>${LAMPS.length} lights</b> on the field, each lighting what is within its range (runway edge lights 6 m, pad lights 5 m, bay lamps 15 m, floodlights 19 m), all at once. <b>${time === "night" ? "Night" : time === "dusk" ? "Dusk" : "Day"}</b>: ${time === "day" ? "lamps off, sun shadows." : time === "dusk" ? "lamps coming on, low sun." : "moon at 0.035, lamps full."}</div>`;
+    const say = h => { el.innerHTML = h ? `<div>${h}</div>` : ""; el.hidden = !h; };
+    const desc = (name, s) => `<b>${name}</b> &middot; ${s.canHover ? "hovers" : `stalls at ${s.stall.toFixed(0)} m/s`} &middot; ${s.top.toFixed(0)} m/s top &middot; ${Math.round(s.range)} km range`;
+    const adesc = (name, s) => `<b>${name}</b> &middot; ${Math.round(s.free)} kg free lift &middot; ${s.top.toFixed(0)} m/s top &middot; ${s.seats} seat${s.seats > 1 ? "s" : ""}`;
+    if (PRESETS[focused]) return say(desc(PRESETS[focused].name, stats(PRESETS[focused].rows)));
+    if (focused === "wendle" || focused === "saltby") { const t = TOWNS[focused === "wendle" ? 0 : 1]; return say(`<b>${t.name}</b> &middot; ${(Math.hypot(t.x, t.z) / 1000).toFixed(1)} km from the field`); }
+    if (APRESETS[focused]) return say(adesc(APRESETS[focused].name, airshipStats(APRESETS[focused].rows, APRESETS[focused].livery.gas)));
+    if (focused === "yoursAir" && AIR.yoursAir) return say(adesc("Your airship", airshipStats(AIR.yoursAir.rows, AIR.yoursAir.liv.gas)));
+    if (focused === "yours") return say(yours ? desc(yours.name, stats(yours.rows)) : `Draw a plane in the <b>Plane builder</b> tab, then <b>Roll out</b>.`);
+    if (focused === "kestrel") return say(`<b>Kestrel</b> &middot; the game's own tiltrotor, for scale`);
+    say("");
   }
   YARD.rollout = () => { if (!cellsOf(rowsNow()).length) return; yours = {rows: rowsNow(), name: designName, paint: paint.map(r => r.slice()), liv: Object.assign({}, livery)}; place("yours", yours.rows, Object.assign({}, livery), yours.paint); setTime(time); focus("yours"); selPress("yours"); if (SHOT || STILL) { cam.target.copy(cam.goal.t); cam.dist = cam.goal.d; cam.goal = null; if (Q.get("ryaw")) cam.yaw = +Q.get("ryaw"); if (Q.get("rpitch")) cam.pitch = +Q.get("rpitch"); } kick(); };
 
@@ -1911,7 +1920,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     if (src.air) return startAir(src);
     endFly();
     const cs = checks(src.rows), bad = cs.out.find(o => o[0] === "no");
-    if (!cs.s.m || bad) { document.getElementById("yardInfo").innerHTML = `<div><b>${src.name}</b> cannot fly yet: ${bad ? bad[1] : "the grid is empty."}</div>`; return false; }
+    if (!cs.s.m || bad) { { const yi = document.getElementById("yardInfo"); yi.hidden = false; } document.getElementById("yardInfo").innerHTML = `<div><b>${src.name}</b> cannot fly yet: ${bad ? bad[1] : "the grid is empty."}</div>`; return false; }
     const m = flightModel(src.rows), c = buildCraft(src.rows, src.liv, M, lamp, src.paint);
     const outer = new THREE.Group(); c.g.position.set(-(m.s.cg - 6.5), -c.yc, 0); outer.add(c.g); scene.add(outer);
     const onPad = m.kind !== "plane" && src.hide === "bumble";
@@ -1921,8 +1930,8 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     craftPoints(); fly.st.expert = expert; fly.st.pitMax = fly.pitMax;
     cam.goal = null; cam.dist = 22; cam.pitch = 0.22; focused = "fly";
     hud.hidden = false; canvas.parentNode.classList.add("flying"), document.getElementById("yardBar").classList.add("flying"); flyBtn.textContent = "Stop flying"; flyBtn.setAttribute("aria-pressed", "true");
-    const kind = m.kind === "heli" ? "a helicopter: Shift (or R) raises the collective, Ctrl (or F) lowers it; W and S tilt the disc forward and back, A and D sideways; Q and E the tail rotor." : m.kind === "vtol" ? "a tiltrotor: Shift (or R) and Ctrl (or F) set the power; it lifts on its rotors, and as it speeds up the nacelles tilt forward and W, S, A, D, Q, E move from the rotors to the surfaces." : (expert ? "a plane, assists off (Expert): Shift (or R) and Ctrl (or F) the throttle; at speed, S lifts the nose. W and S the elevator, A and D the ailerons, Q and E the rudder (and the nose wheel on the ground)." : "a plane, with the assists on: it starts at 70% throttle, rotates by itself at flying speed and climbs as the throttle sets; Shift (or R) and Ctrl (or F) the throttle, W descends and S climbs, A and D bank it into a turn (and steer on the ground), and centred it flies level. Expert turns the assists off.");
-    document.getElementById("yardInfo").innerHTML = `<div><b>Flying ${src.name}</b>, ${kind} The surfaces push with the air, q S dCL arm, so on the ground at rest they do nothing.</div>`;
+    const kind = m.kind === "heli" ? "Shift/Ctrl collective &middot; WASD cyclic &middot; Q/E tail" : m.kind === "vtol" ? "Shift/Ctrl power &middot; WASD &middot; Q/E" : "Shift/Ctrl throttle &middot; W/S nose down/up &middot; A/D roll &middot; Q/E rudder";
+    const yi = document.getElementById("yardInfo"); yi.hidden = false; yi.innerHTML = `<div><b>${src.name}</b> &middot; ${kind}</div>`;
     pose(); kick(); return true;
   }
   const deg = 180 / Math.PI;
@@ -1947,8 +1956,8 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
       row(m.kind === "heli" ? "Collective" : "Throttle", `${pw}%`) + (m.kind === "vtol" ? row("Nacelles", `${Math.round(st.tilt * 90)}&deg; forward`) : "") +
       row("Ail / elev / rud", `${sgn(D.ail)} ${sgn(D.elev)} ${sgn(D.rud)}&deg;`) +
       (m.S ? row("Stall at", `${m.s.stall.toFixed(0)} m/s`) : row("Hover at", `${Math.round(100 / Math.max(0.01, m.hover))}%`)) +
-      (fly.crash ? `<div class="stall">CRASHED into ${fly.crash.what}</div>` : st.stall ? `<div class="stall">STALL</div>` : "") + (st.expert ? `<div class="row"><span>Assists</span><span>off (Expert)</span></div>` : "") +
-      `<div class="keys">${m.kind === "heli" ? "Shift/Ctrl collective, W A S D cyclic, Q E tail rotor" : st.expert ? "W S elevator, A D ailerons, Q E rudder, Shift/Ctrl throttle" : "W descend, S climb, A D bank, Q E rudder, Shift/Ctrl throttle"}; drag to look round</div>`;
+      (fly.crash ? `<div class="stall">CRASHED into ${fly.crash.what}</div>` : st.stall ? `<div class="stall">STALL</div>` : "") + "" +
+      `<div class="keys">${m.kind === "heli" ? "Shift/Ctrl collective, W A S D cyclic, Q E tail rotor" : "W nose down, S nose up, A D roll, Q E rudder, Shift/Ctrl throttle"}; drag to look round</div>`;
     // the attitude ball: sky above the horizon, turned by the bank, moved by the pitch
     const cv = document.getElementById("adi"), g2 = cv.getContext("2d"), w = 96, h = 64;
     g2.save(); g2.translate(w / 2, h / 2); g2.rotate(-a.bank); g2.translate(0, a.pitch * deg * 1.2);
@@ -1961,7 +1970,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   function startAir(src) {
     endFly();
     const cs = airshipChecks(src.rows, src.liv.gas), bad = cs.out.find(o => o[0] === "no");
-    if (!cs.s.cells || bad) { document.getElementById("yardInfo").innerHTML = `<div><b>${src.name}</b> cannot fly yet: ${bad ? bad[1] : "the grid is empty."}</div>`; return false; }
+    if (!cs.s.cells || bad) { { const yi = document.getElementById("yardInfo"); yi.hidden = false; } document.getElementById("yardInfo").innerHTML = `<div><b>${src.name}</b> cannot fly yet: ${bad ? bad[1] : "the grid is empty."}</div>`; return false; }
     const c = buildAirship(src.rows, src.liv, M, lamp, src.paint), outer = new THREE.Group(); outer.add(c.g); scene.add(outer);
     const home = AIR[src.hide] ? AIR[src.hide].g : null;
     const p = home ? [home.position.x, RIDE, home.position.z] : [101, RIDE, 12], yaw = home ? home.rotation.y : -Math.PI / 2;
@@ -1971,7 +1980,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     fly.st.ground = false;
     cam.goal = null; cam.dist = Math.max(42, cs.s.len * 1.7); cam.pitch = 0.24; focused = "fly";
     hud.hidden = false; canvas.parentNode.classList.add("flying"), document.getElementById("yardBar").classList.add("flying"); flyBtn.textContent = "Stop flying"; flyBtn.setAttribute("aria-pressed", "true");
-    document.getElementById("yardInfo").innerHTML = `<div><b>Flying ${src.name}</b>, an airship: W and S the engines, A and D the rudder, the up and down arrows the elevator; Shift drops ballast to climb, Ctrl vents gas to come down. The fins work with the air going past, so at a standstill they do nothing, and the wind (${Math.hypot(WIND[0], WIND[2]).toFixed(1)} m/s) carries it, so it crabs.</div>`;
+    const yi = document.getElementById("yardInfo"); yi.hidden = false; yi.innerHTML = `<div><b>${src.name}</b> &middot; W/S engines &middot; A/D rudder &middot; &uarr;/&darr; nose &middot; Shift ballast &middot; Ctrl vent</div>`;
     poseAir(); kick(); return true;
   }
   function poseAir() {
@@ -2007,8 +2016,6 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   // meet the ground as drawn (cells, far bands, sea) and every solid box. A step that would put a point inside
   // is undone, so nothing ever passes through: gentle on the gear is a landing, slow is a bump, fast is a crash.
   let expert = false;
-  const expertBtn = document.getElementById("expertBtn");
-  expertBtn.addEventListener("click", () => { expert = !expert; expertBtn.setAttribute("aria-pressed", expert); if (fly && !fly.air) fly.st.expert = expert; });
   function craftPoints() {
     const g = fly.c.g, keep = new Map(); fly.outer.position.set(0, 0, 0); fly.outer.quaternion.identity(); fly.outer.rotation.set(0, 0, 0);
     if (fly.air) g.rotation.z = 0;
@@ -2125,6 +2132,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     fly(id) { if (APRESETS[id]) { const a = AIR[id]; return startAir({air: true, rows: a.rows, liv: a.liv, paint: a.paint, name: APRESETS[id].name, hide: id}); } return startFly({rows: PRESETS[id].rows, liv: PRESETS[id].livery, paint: presetPaint(PRESETS[id]), name: PRESETS[id].name, hide: id}); },
     model(id) { const m = flightModel(PRESETS[id].rows); return {kind: m.kind, stall: m.s.stall, m: m.m}; },
     ground: (x, z) => groundAt(x, z), solids: () => SOLIDS.length, lamps: () => LAMPS.length, towns: () => TOWNS.map(t => ({name: t.name, x: t.x, z: t.z, h: t.h})),
+    dihed(v) { DIHED = v; },
     put(p, yaw, speed) { const st = fly.st; st.p = p.slice(); st.v = [Math.cos(yaw) * speed, 0, -Math.sin(yaw) * speed]; st.ground = false; if (fly.air) { st.yaw = yaw; st.r = 0; } else { st.q = qyaw(yaw); st.w = [0, 0, 0]; } fly.ignore = touching(0); },
     run(sec, script, dt = 1 / 120) {
       const st0 = fly.st, x0 = st0.p.slice(), out = {log: [], takeoff: null, minAgl: 1e9, maxBank: 0, stallSec: 0, crashes: [], end: null};

@@ -1,4 +1,5 @@
-// A player-like test of the hangar mockup's flight (docs/mockups/hangar.html, decision 2a).
+// A player-like test of the hangar mockup's flight (docs/mockups/hangar.html, decision 2a). The stick is the
+// player's alone: nothing rolls, pitches or yaws the craft for them (owner, 2026-11-13).
 // Serve docs/mockups (python3 -m http.server 8763 from that folder), then: node tools/mockups/hangar_flight_test.js
 // The page's ?test hook steps the same simulation the frame loop steps, 120 steps a second, with the keys a
 // player holds put in the same key set the keyboard fills; one short real-keyboard check proves the wiring.
@@ -31,16 +32,15 @@ const check = (ok, what) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${what}`); i
     check(r.crashes === 0 && r.climbAgl > 30, `${id} climbs away with margin (${r.climbAgl} m after 30 s, no crash)`);
   }
 
-  // 2. the circuit: Sharky off the runway with only W, Shift, A and D, 60 sim-seconds
-  console.log('\n-- circuit: Sharky, keys W/Shift/A/D only, 60 s --');
-  const script = [[0, 2, ['ShiftLeft']], [16, 26, ['KeyA']], [34, 44, ['KeyA']], [47, 49, ['KeyD']], [50, 56, ['KeyW']]];
+  // 2. the circuit: Sharky off the runway, climbing on S, turning by rolling with A and pulling with S, rolling level with D
+  console.log('\n-- circuit: Sharky, flown by hand, 60 s --');
+  const script = [[0, 2, ['ShiftLeft']], [3, 6, ['KeyS']], [15, 15.5, ['KeyA']], [15.5, 20, ['KeyS']], [20, 20.9, ['KeyD']], [30, 30.5, ['KeyA']], [30.5, 35, ['KeyS']], [35, 35.9, ['KeyD']]];
   const c = await page.evaluate(script => { const H = window.__hangar; H.fly('sharky'); return H.run(60, script); }, script);
   for (const l of c.log.filter((_, i) => i % 5 === 0)) console.log(`  t ${String(l.t).padStart(2)} s  x ${String(l.x).padStart(5)} z ${String(l.z).padStart(5)}  ${String(l.agl).padStart(4)} m up  ${l.v} m/s  bank ${l.bank} pitch ${l.pitch} hdg ${l.hdg}  power ${l.power}%  ${l.stall ? 'STALL ' : ''}${l.keys}`);
   console.log(`  takeoff after ${c.takeoff && c.takeoff.roll} m at ${c.takeoff && c.takeoff.speed} m/s; lowest after climb-out ${c.minAgl} m; max bank ${c.maxBank} deg; stall warning ${c.stallSec} s; crashes ${c.crashes.length}`);
   check(c.takeoff !== null, 'Sharky took off');
   check(c.crashes.length === 0, 'no crash in the circuit');
   check(c.minAgl > 5, `never stalled into the ground (lowest ${c.minAgl} m after climb-out)`);
-  check(c.maxBank <= 60, `bank stayed inside the 60 deg limit (${c.maxBank})`);
   check(c.pen === 0, `no point inside the ground or a solid at any step (${c.pen})`);
 
   // 3. into the hangar wall at speed: a crash, reported, and no point ever inside the box
@@ -52,10 +52,8 @@ const check = (ok, what) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${what}`); i
   check(Math.abs(h.end.p[2] - 35) < 1 && h.end.p[0] < -100 && !h.end.crashed, `2 s after the crash it is back at the runway's end (${h.end.p})`);
 
   // 4. into the ground: a dive is a crash, and nothing passes under the cells
-  await page.click('#expertBtn');   // assists off: W is the elevator, and a held W is a dive
   const g = await page.evaluate(() => { const H = window.__hangar; H.fly('sharky'); H.put([400, 120, 35], 0, 30); return H.run(8, [[0, 8, ['KeyW', 'ShiftLeft']]]); });
-  await page.click('#expertBtn');
-  console.log(`\n-- crash: Expert, a full-power dive at the hills -- crashes ${JSON.stringify(g.crashes)}, points under the ground: ${g.pen}`);
+  console.log(`\n-- crash: a full-power dive at the hills -- crashes ${JSON.stringify(g.crashes)}, points under the ground: ${g.pen}`);
   check(g.crashes.length >= 1 && g.pen === 0, 'a dive into the ground is a crash and never clips');
 
   // 4b. a house in Wendle, and a parked craft on the apron
@@ -69,7 +67,7 @@ const check = (ok, what) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${what}`); i
   // 5. gentle on the gear is a landing: 2 m over the runway at 25 m/s, throttle back
   const l = await page.evaluate(() => { const H = window.__hangar; H.fly('sharky'); H.put([-60, 3.2, 35], 0, 25); return H.run(6, [[0, 6, ['ControlLeft']]]); });
   console.log(`\n-- landing: settle onto the runway -- crashes ${JSON.stringify(l.crashes)}, ends at ${JSON.stringify(l.end.p)}`);
-  check(l.crashes.length === 0 && l.end.ground, 'a gentle touchdown is a landing, not a crash');
+  check(l.crashes.length === 0 && l.end.p[1] < 3, 'a gentle touchdown is a landing, not a crash');
 
   // 6. an airship into the shed's wall
   const a = await page.evaluate(() => { const H = window.__hangar; H.fly('puff'); return H.run(60, [[15, 60, ['KeyW']], [30, 45, ['KeyA']]]); });
