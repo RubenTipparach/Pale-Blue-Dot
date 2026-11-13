@@ -323,6 +323,11 @@ pub struct FrameCount(pub u64);
 #[derive(Resource, Clone, Copy)]
 pub struct Launched(pub Instant);
 
+/// A stand-in shown behind the screen so the warm-up builds a material and
+/// vertex layout it would not otherwise see (decision 6); gone at `READY`.
+#[derive(Component)]
+struct PrewarmProxy;
+
 #[derive(Component)]
 struct LoadingRoot;
 #[derive(Component)]
@@ -388,6 +393,14 @@ impl Plugin for LoadingPlugin {
                     .before(crate::sky::run_clock),
             )
             .add_systems(
+                Update,
+                (
+                    show_unseen::<StandardMaterial>,
+                    show_unseen::<crate::field_light::FieldLitMaterial>,
+                )
+                    .run_if(resource_exists::<Warming>),
+            )
+            .add_systems(
                 PostUpdate,
                 look_round
                     .run_if(resource_exists::<Warming>)
@@ -412,12 +425,14 @@ fn run_main_gated(world: &mut World, mut started: Local<bool>) {
                 world.resource_mut::<Time<Virtual>>().unpause();
             }
         } else {
-            for label in [
-                First.intern(),
-                Loading.intern(),
-                PostUpdate.intern(),
-                Last.intern(),
-            ] {
+            let _ = world.try_run_schedule(First);
+            // Bevy finishes asset loads (the screen's own UI shaders and
+            // font among them) in `PreUpdate`, which the gate skips: without
+            // this the screen's pipelines never compile and the window stays
+            // black until the world opens. Only the asset step is run, not
+            // all of `PreUpdate`, whose game systems want the open world.
+            bevy::asset::handle_internal_asset_events(world);
+            for label in [Loading.intern(), PostUpdate.intern(), Last.intern()] {
                 let _ = world.try_run_schedule(label);
             }
             return;
@@ -583,13 +598,12 @@ fn drive_loading(world: &mut World) {
         });
         return;
     }
-    let (step, seconds, done, total) = {
+    let (step, seconds, done) = {
         let p = world.resource::<Preparing>();
         (
             p.progress.step(),
             p.progress.seconds(),
             p.thread.as_ref().is_some_and(JoinHandle::is_finished),
-            p.started.elapsed().as_secs_f32(),
         )
     };
     let fraction = if step == Step::Planet {
@@ -597,7 +611,9 @@ fn drive_loading(world: &mut World) {
     } else {
         0.5
     };
-    paint(world, step, fraction, format!("{total:.1} s"));
+    // No clock on the screen (owner, 2026-11-13: "dont show seconds on
+    // loading screen"); the times go to the log's `READY` line.
+    paint(world, step, fraction, String::new());
     if !done {
         return;
     }
@@ -719,17 +735,8 @@ pub fn warm(world: &mut World) {
     } else {
         (Step::Standing, 0.5)
     };
+    paint(world, step, fraction, String::new());
     let world_s = world.get_resource::<Preparing>().map_or(0.0, |p| p.world_s);
-    paint(
-        world,
-        step,
-        fraction,
-        format!(
-            "{} / {total} pipelines   {:.1} s",
-            total.saturating_sub(waiting),
-            world_s + elapsed.as_secs_f32()
-        ),
-    );
     let done = immediate || (frames >= MIN_WARM_FRAMES && !compiling && towns_settled);
     let capped = elapsed > WARM_CAP;
     if !done && !capped {
@@ -756,6 +763,17 @@ pub fn warm(world: &mut World) {
     for root in roots.iter(world).collect::<Vec<_>>() {
         world.entity_mut(root).despawn();
     }
+    let mut proxies = world.query_filtered::<Entity, With<PrewarmProxy>>();
+    let proxies = proxies.iter(world).collect::<Vec<_>>();
+    if !proxies.is_empty() {
+        info!(
+            "loading: {} prewarm proxies shown behind the screen",
+            proxies.len()
+        );
+    }
+    for proxy in proxies {
+        world.despawn(proxy);
+    }
     if world.contains_resource::<crate::towns::RespawnInTown>()
         && world.contains_resource::<crate::walking::WalkingState>()
     {
@@ -770,6 +788,89 @@ pub fn warm(world: &mut World) {
         launched.elapsed().as_secs_f64(),
         warming.started.elapsed().as_secs_f64()
     );
+    if let Some(place) = crate::place::of_world(world) {
+        info!("PLACE ready {}", place.line());
+    }
+}
+
+/// What a mesh entity's pipeline is built for, as far as the warm-up can
+/// tell: its material, and its vertex layout (or, for a mesh whose vertices
+/// live only on the GPU, the mesh itself).
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum Layout {
+    Attributes(
+        Vec<bevy::mesh::MeshVertexAttributeId>,
+        bevy::mesh::PrimitiveTopology,
+    ),
+    Mesh(AssetId<Mesh>),
+}
+
+/// Decision 6: Bevy builds a material's pipeline for a mesh only once that
+/// mesh is visible, so whatever is hidden, culled or out of range while the
+/// world warms (the shower with no rain near, a mesh behind every heading of
+/// the look round) was built after `READY`, in play. Each warm frame, every
+/// material and vertex layout not yet shown gets one proxy: the same mesh and
+/// material, tiny and unculled in front of the active camera, behind the
+/// opaque screen. The proxies go at `READY`.
+#[allow(clippy::type_complexity)]
+fn show_unseen<M: Material>(
+    mut commands: Commands,
+    warming: Res<Warming>,
+    mut shown: Local<std::collections::HashSet<(AssetId<M>, Layout)>>,
+    meshes: Res<Assets<Mesh>>,
+    entities: Query<
+        (
+            &Mesh3d,
+            &MeshMaterial3d<M>,
+            Has<bevy::light::NotShadowCaster>,
+            Has<bevy::light::NotShadowReceiver>,
+        ),
+        Without<PrewarmProxy>,
+    >,
+    cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
+) {
+    // A capture does not warm (decision 5).
+    if warming.immediate {
+        return;
+    }
+    let Some(eye) = cameras
+        .iter()
+        .find(|(camera, _)| camera.is_active)
+        .map(|(_, at)| at.translation() + at.forward() * 2.0)
+    else {
+        return;
+    };
+    for (mesh, material, no_cast, no_receive) in &entities {
+        let Some(data) = meshes.get(&mesh.0) else {
+            continue;
+        };
+        let layout = match data.try_attributes() {
+            Ok(attributes) => {
+                let mut ids: Vec<_> = attributes.map(|(a, _)| a.id).collect();
+                ids.sort();
+                Layout::Attributes(ids, data.primitive_topology())
+            }
+            Err(_) => Layout::Mesh(mesh.0.id()),
+        };
+        if !shown.insert((material.0.id(), layout)) {
+            continue;
+        }
+        let mut proxy = commands.spawn((
+            Name::new("Prewarm proxy"),
+            PrewarmProxy,
+            Mesh3d(mesh.0.clone()),
+            MeshMaterial3d(material.0.clone()),
+            Transform::from_translation(eye).with_scale(Vec3::splat(1e-4)),
+            Visibility::Visible,
+            bevy::camera::visibility::NoFrustumCulling,
+        ));
+        if no_cast {
+            proxy.insert(bevy::light::NotShadowCaster);
+        }
+        if no_receive {
+            proxy.insert(bevy::light::NotShadowReceiver);
+        }
+    }
 }
 
 /// Turn the active 3D cameras through four headings behind the screen, so
@@ -832,12 +933,40 @@ fn watch_pipelines(cache: Res<PipelineCache>, watch: Res<PipelineWatch>, mut see
     w.waiting.store(waiting as u32, Ordering::Release);
     if w.ready.load(Ordering::Acquire) {
         for pipeline in cache.pipelines().skip(*seen) {
-            let label = match &pipeline.descriptor {
-                PipelineDescriptor::RenderPipelineDescriptor(d) => d.label.clone(),
-                PipelineDescriptor::ComputePipelineDescriptor(d) => d.label.clone(),
+            // The label alone names Bevy's material pipelines only by kind;
+            // the defs and the vertex attributes say which mesh and material
+            // asked for it, so the prewarm can be told what it missed.
+            let (label, what) = match &pipeline.descriptor {
+                PipelineDescriptor::RenderPipelineDescriptor(d) => {
+                    let attributes: Vec<String> = d
+                        .vertex
+                        .buffers
+                        .iter()
+                        .flat_map(|b| b.attributes.iter())
+                        .map(|a| format!("{}:{:?}", a.shader_location, a.format))
+                        .collect();
+                    let defs: Vec<String> = d
+                        .vertex
+                        .shader_defs
+                        .iter()
+                        .map(|def| format!("{def:?}"))
+                        .collect();
+                    (
+                        d.label.clone(),
+                        format!(
+                            "vertex [{}] defs [{}] samples {}",
+                            attributes.join(" "),
+                            defs.join(" "),
+                            d.multisample.count
+                        ),
+                    )
+                }
+                PipelineDescriptor::ComputePipelineDescriptor(d) => {
+                    (d.label.clone(), String::new())
+                }
             };
             info!(
-                "LATE_PIPELINE {}",
+                "LATE_PIPELINE {} {what}",
                 label.as_deref().unwrap_or("(unlabelled)")
             );
         }

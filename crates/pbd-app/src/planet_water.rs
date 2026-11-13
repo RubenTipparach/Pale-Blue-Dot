@@ -65,12 +65,21 @@ pub(super) struct WaterView {
     waves: Vec4,
     ripple: Vec4,
     refraction: Vec4,
+    /// rgb absorption per metre; w spare.
     absorption: Vec4,
+    /// rgb the deep water's albedo; w the falling-water flow speed.
     deep_color: Vec4,
-    horizon_color: Vec4,
-    zenith_color: Vec4,
-    /// The sky the sheet mirrors at night; the day gradient ramps to it.
-    night_sky: Vec4,
+    /// `water-lit`: rgb the shallows' albedo; w the Fresnel's horizon floor.
+    shallow: Vec4,
+    /// rgb the light on open water at the camera, the terrain's for a cap
+    /// under open sky (the sky's L2 irradiance up, plus the sun after the air
+    /// as dim as the cloud makes it); w the depth over which the shallows
+    /// become the deep, m.
+    water_light: Vec4,
+    /// The terrain's haze terms (`finish` in `planet_surface.wgsl`):
+    /// `cloud_fog_add`, `rain_fog_mult`, `overcast_sky_blue_cut`,
+    /// `overcast_sky_dim`.
+    haze: Vec4,
     foam_color: Vec4,
     foam_crest: Vec4,
     foam_slope: Vec4,
@@ -130,6 +139,10 @@ pub(super) struct WaterView {
     /// lifts the image toward its own brightness; w the drops' scale
     /// (`rain_lens_scale`).
     mist_look: Vec4,
+    /// A lens drop's edge (`lens-drop-refraction`): x the light it loses
+    /// there (`rain_lens_rim`), y the sky's light it gathers on the lower
+    /// part (`rain_lens_glint`); zw spare.
+    lens_look: Vec4,
     /// The puffs' look (`cloud-puffs`): the sun's wrap, a white and a storm
     /// column's base shade, the silver lining.
     cloud_puff: Vec4,
@@ -154,6 +167,39 @@ pub(super) struct WaterView {
     /// the houses and the trees as the wet ground does.
     ssr_clip: Mat4,
     ssr_eye: Vec4,
+    /// `water-lit`: the cover and the rain over the camera, for the haze; zw
+    /// spare.
+    haze_weather: Vec4,
+    /// The sky's nine L2 coefficients at the camera, mixed by the cover
+    /// (`sky_sh_pair`): the sky the sheet mirrors where the screen trace
+    /// finds nothing nearer (`sh_radiance`).
+    sky_sh: [Vec4; 9],
+}
+
+/// The light on open water and the sky's coefficients, both by the cover:
+/// the terrain's light for a cap under open sky (`water-lit`). `e` is the
+/// sine of the sun's elevation at the camera.
+fn water_light(e: f32, cover: f32) -> (Vec3, [Vec4; 9]) {
+    let cover = cover.clamp(0.0, 1.0);
+    let pair = super::sky_sh_pair(e);
+    let sh: [Vec4; 9] = std::array::from_fn(|k| pair[k].lerp(pair[k + 9], cover));
+    let coeffs: [[f32; 3]; 9] = std::array::from_fn(|k| sh[k].truncate().to_array());
+    let sky = Vec3::from_array(pbd_core::sky_light::sh_irradiance(&coeffs, [0.0, 1.0, 0.0]));
+    let sun = Vec3::from_array(pbd_core::sky_light::sun_air(e)) * e.max(0.0) * (1.0 - 0.85 * cover);
+    (sky.max(Vec3::ZERO) + sun, sh)
+}
+
+/// Whether the rain volume draws: the rain fog and the animated streaks on
+/// its shells behind the near rain, which the owner calls the rain shadow
+/// (`player-settings` 8). The player's choice, off by default; on where
+/// nothing has chosen (a capture, a test), as before the setting existed.
+#[derive(Resource, Clone, Copy, ExtractResource)]
+pub struct RainShadows(pub bool);
+
+impl Default for RainShadows {
+    fn default() -> Self {
+        Self(true)
+    }
 }
 
 /// Where the shells' fall wraps, m: a multiple of every shell's streak cycle
@@ -194,6 +240,11 @@ const CLOUD_HISTORY_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 /// cloud is, g where the march stopped (the scene or the sea). What the
 /// composite's depth-aware upsample compares with each pixel's own.
 const CLOUD_DEPTH_FORMAT: TextureFormat = TextureFormat::Rg16Float;
+
+/// The format of the puffs' coverage as the air leaves it (`puff-haze`), the
+/// history's size: one channel, blended "over" by each puff's own coverage,
+/// which the history's alpha cannot also be.
+const PUFF_COVER_FORMAT: TextureFormat = TextureFormat::R16Float;
 
 /// The lens mist (`lens-weather`): one texel, full float, because it creeps
 /// by a few thousandths a frame and a half float would stall short of one.
@@ -447,6 +498,11 @@ fn composite_layout() -> BindGroupLayoutDescriptor {
                 ),
                 // The near field's fog, sampled bilinearly (`cloud-entry`).
                 (7, texture_2d(TextureSampleType::Float { filterable: true })),
+                // The puffs' coverage as the air leaves it (`puff-haze`).
+                (
+                    16,
+                    texture_2d(TextureSampleType::Float { filterable: false }),
+                ),
             ),
         ),
     )
@@ -906,7 +962,9 @@ impl SpecializedRenderPipeline for WaterPipelines {
                     .to_vec()
                 } else if key.pass == Pass::CloudPuffs {
                     // Premultiplied light "over" what is behind; the nearest
-                    // puff's distance and the scene's stop under it.
+                    // puff's distance and the scene's stop under it; and the
+                    // coverage the air leaves, "over" by each puff's own
+                    // coverage like the light (`puff-haze`).
                     let min = BlendComponent {
                         src_factor: BlendFactor::One,
                         dst_factor: BlendFactor::One,
@@ -924,6 +982,11 @@ impl SpecializedRenderPipeline for WaterPipelines {
                                 color: min,
                                 alpha: min,
                             }),
+                            write_mask: ColorWrites::ALL,
+                        }),
+                        Some(ColorTargetState {
+                            format: PUFF_COVER_FORMAT,
+                            blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                             write_mask: ColorWrites::ALL,
                         }),
                     ]
@@ -1004,6 +1067,10 @@ pub(super) struct WaterViewGpu {
     /// history, the history's size (`cloud-history-clip`): its clouds, their
     /// distances, and the near field's fog (`cloud-entry`).
     current: [TextureView; 3],
+    /// The puffs' coverage as the air leaves it, the history's size: the
+    /// puff pass writes it and the composite reads it in place of the
+    /// history's alpha under the puffs (`puff-haze`).
+    puff_cover: TextureView,
     /// The previous frame's camera and projection, for reprojecting the
     /// history and for telling a jump from a step.
     prev_clip: Mat4,
@@ -1078,6 +1145,7 @@ pub(super) struct WaterSky<'w> {
     sea: Res<'w, crate::sea::SeaNow>,
     lighting: Option<Res<'w, crate::config::LightingSettings>>,
     fine: Option<Res<'w, super::lod::PlanetFine>>,
+    rain_shadows: Option<Res<'w, RainShadows>>,
 }
 
 /// The sky's mean radiance for a sun at elevation sine `e` under `cover`:
@@ -1127,8 +1195,10 @@ fn prepare_water_views(
         sea: sea_now,
         lighting,
         fine,
+        rain_shadows,
     } = sky;
     let lit_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
+    let rain_shadows = rain_shadows.is_none_or(|r| r.0);
     // `lighting-model`: under the new model the rain's rings on the water are
     // as many as it is raining (the terrain's own rule), not one a cell.
     let rings_follow_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
@@ -1241,6 +1311,7 @@ fn prepare_water_views(
                     ),
                 )
             });
+        let (open_water_light, sky_sh) = water_light(sun.elevation(camera), weather.cover);
         let params = WaterView {
             clip_from_local: clip_from_body,
             local_from_clip: clip_from_body.as_dmat4().inverse().as_mat4(),
@@ -1263,11 +1334,16 @@ fn prepare_water_views(
                 s.slope_max,
                 s.max_path_m,
             ),
-            absorption: v3(s.absorption_per_m).extend(s.night_floor),
+            absorption: v3(s.absorption_per_m).extend(0.0),
             deep_color: v3(s.deep_color).extend(s.flow_uv_speed_falling),
-            horizon_color: v3(s.sky_horizon_color).extend(s.sky_horizon_strength),
-            zenith_color: v3(s.sky_zenith_color).extend(0.0),
-            night_sky: v3(s.night_sky_color).extend(crate::sky::ATMOSPHERE_RADIUS),
+            shallow: v3(s.shallow_color).extend(s.sky_horizon_strength),
+            water_light: open_water_light.extend(s.shallow_depth_m),
+            haze: Vec4::new(
+                weather_settings.cloud_fog_add,
+                weather_settings.rain_fog_mult,
+                weather_settings.overcast_sky_blue_cut,
+                weather_settings.overcast_sky_dim,
+            ),
             foam_color: v3(s.foam_color).extend(s.foam_intensity),
             foam_crest: Vec4::new(s.foam_crest_lo, s.foam_crest_hi, s.foam_crest_weight, 0.0),
             foam_slope: Vec4::new(s.foam_slope_lo, s.foam_slope_hi, s.foam_slope_weight, 0.0),
@@ -1278,7 +1354,7 @@ fn prepare_water_views(
             fx: Vec4::new(s.underwater_distortion, state, sea_rain, drips),
             lens: Vec4::new(
                 weather_settings.rain_lens_density,
-                weather_settings.rain_lens_refract,
+                weather_settings.rain_lens_bend,
                 weather_settings.rain_lens_speed,
                 weather_settings.rain_lens_size,
             ),
@@ -1347,6 +1423,12 @@ fn prepare_water_views(
                 weather_settings.lens_mist_whiten,
                 weather_settings.rain_lens_scale,
             ),
+            lens_look: Vec4::new(
+                weather_settings.rain_lens_rim,
+                weather_settings.rain_lens_glint,
+                0.0,
+                0.0,
+            ),
             cloud_puff: Vec4::new(
                 weather_settings.cloud_puff_wrap,
                 weather_settings.cloud_puff_base_shade,
@@ -1380,6 +1462,8 @@ fn prepare_water_views(
                 .map(|fine| super::near_lamps(&fine.set.columns, camera, 32.0))
                 .unwrap_or([Vec4::ZERO; super::NEAR_LAMPS]),
             ssr_clip: planet_view.ssr_clip,
+            haze_weather: Vec4::new(weather.cover, weather.rain, 0.0, 0.0),
+            sky_sh,
             ssr_eye: if lighting
                 .as_ref()
                 .is_some_and(|l| l.reflect_sea_on() && l.reflect_capture_on())
@@ -1442,7 +1526,10 @@ fn prepare_water_views(
         let map = rain_map.as_deref().filter(|map| {
             !map.values.is_empty() && map.values.iter().any(|value| value.abs() > 1e-3)
         });
+        // RAIN SHADOW off (the player's setting): no rain volume at all;
+        // the near shower, the wet ground and the lens stay.
         let rain_needed = map.is_some()
+            && rain_shadows
             && camera.length() < clouds.clouds.x
             && weather_settings.rain_volume_range_m > 0.0;
         let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));
@@ -1461,6 +1548,7 @@ fn prepare_water_views(
                 gpu.history = cloud_history(&device, history_size);
                 gpu.cloud_depth = cloud_distances(&device, history_size);
                 gpu.current = cloud_current(&device, history_size);
+                gpu.puff_cover = cloud_target(&device, history_size, PUFF_COVER_FORMAT);
                 gpu.history_size = history_size;
             }
             // The history is usable when the pass wrote it on the previous
@@ -1605,6 +1693,7 @@ fn prepare_water_views(
             history_size,
             cloud_depth: cloud_distances(&device, history_size),
             current: cloud_current(&device, history_size),
+            puff_cover: cloud_target(&device, history_size, PUFF_COVER_FORMAT),
             prev_clip: clip_from_body,
             prev_camera: camera,
             clouds_ran: !overlay_needed,
@@ -1865,6 +1954,7 @@ impl ViewNode for WaterCompositeNode {
                 (1, &pipelines.sampler),
                 (4, depth_write),
                 (7, &water.current[2]),
+                (16, &water.puff_cover),
             )),
         );
         if clouds_on {
@@ -1932,19 +2022,22 @@ impl ViewNode for WaterCompositeNode {
                 ];
                 let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
                     label: Some("Cloud puffs"),
-                    color_attachments: &[(history_write, clears[0]), (depth_write, clears[1])].map(
-                        |(view, clear)| {
-                            Some(RenderPassColorAttachment {
-                                view,
-                                depth_slice: None,
-                                resolve_target: None,
-                                ops: Operations {
-                                    load: LoadOp::Clear(clear.into()),
-                                    store: StoreOp::Store,
-                                },
-                            })
-                        },
-                    ),
+                    color_attachments: &[
+                        (history_write, clears[0]),
+                        (depth_write, clears[1]),
+                        (&water.puff_cover, clears[0]),
+                    ]
+                    .map(|(view, clear)| {
+                        Some(RenderPassColorAttachment {
+                            view,
+                            depth_slice: None,
+                            resolve_target: None,
+                            ops: Operations {
+                                load: LoadOp::Clear(clear.into()),
+                                store: StoreOp::Store,
+                            },
+                        })
+                    }),
                     depth_stencil_attachment: None,
                     timestamp_writes: timer.and_then(|t| t.writes(1)),
                     occlusion_query_set: None,
@@ -2292,6 +2385,19 @@ mod tests {
     }
 
     #[test]
+    fn the_light_on_open_water_falls_with_the_sun_and_under_cloud() {
+        let luma = |v: Vec3| v.dot(Vec3::new(0.2126, 0.7152, 0.0722));
+        let (noon, _) = water_light(0.9, 0.0);
+        let (overcast, _) = water_light(0.9, 1.0);
+        let (dusk, _) = water_light(0.02, 0.0);
+        let (night, _) = water_light(-0.5, 0.0);
+        assert!(luma(overcast) < 0.5 * luma(noon), "{overcast} {noon}");
+        assert!(luma(dusk) < 0.5 * luma(noon), "{dusk} {noon}");
+        assert!(luma(night) < 0.05 * luma(noon), "{night} {noon}");
+        assert!(luma(night) > 0.0, "a night is never black");
+    }
+
+    #[test]
     fn the_uniform_matches_the_wgsl_struct_size() {
         // Four mat4 and the vec4 lanes in water.wgsl's WaterView, read off the
         // shipped shader rather than remembered.
@@ -2301,8 +2407,10 @@ mod tests {
         let mat4 = block.matches("mat4x4<f32>").count();
         // The lit rain's lamps are one array of eight lanes (`lighting-model`).
         let lamps = block.matches("array<vec4<f32>, 8>").count();
-        let vec4 = block.matches("vec4<f32>").count() + 7 * lamps;
-        assert_eq!((mat4, vec4, lamps), (4, 60, 1));
+        // And the sky's nine coefficients (`water-lit`).
+        let sh = block.matches("array<vec4<f32>, 9>").count();
+        let vec4 = block.matches("vec4<f32>").count() + 7 * lamps + 8 * sh;
+        assert_eq!((mat4, vec4, lamps, sh), (4, 71, 1, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");

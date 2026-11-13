@@ -14,7 +14,7 @@ in `CLAUDE.md` because each one was learned by getting a number wrong.
 ## The rules
 
 1. **Measure the release build** (`cargo build --release -p pbd-app`, or
-   `run.bat --full`). The `fast` profile (no LTO) is for iterating, not numbers.
+   `build-play.bat --full`). The `fast` profile (no LTO) is for iterating, not numbers.
 2. **Nothing else runs while it samples.** No build, no second game, no
    recording. A release build compiling beside a walk made it read 37 ms at
    p50 against 4.6 ms alone. The suite refuses to start while `cargo`,

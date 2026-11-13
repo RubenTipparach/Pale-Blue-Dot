@@ -6,9 +6,9 @@ Press R to switch between walking and assisted flight. The planet is 8 km in
 diameter, with a closed spherical hex surface including twelve pentagons.
 
 ```powershell
-.\run.bat
-.\run.bat --walk
-.\run.bat --fly
+.\build-play.bat
+.\build-play.bat --walk
+.\build-play.bat --fly
 ```
 
 ## Camera and controls
@@ -119,14 +119,14 @@ not a guarantee for arbitrary teleports or unbounded simulation steps.
 ## Tours, captures, and verification
 
 ```powershell
-.\run.bat --tour
-.\run.bat --tour --view pole
-.\run.bat --verify-flight
-.\run.bat --verify-flight --view pole
-.\run.bat --capture output/captures/walk.png --walk --frames 180
-.\run.bat --capture output/captures/orbit.png --view orbit --frames 180
-.\run.bat --tour --fixed-dt --capture output/captures/tour.png --frames 1800
-.\run.bat --capture output/captures/tern.png --aboard tern --frames 240
+.\build-play.bat --tour
+.\build-play.bat --tour --view pole
+.\build-play.bat --verify-flight
+.\build-play.bat --verify-flight --view pole
+.\build-play.bat --capture output/captures/walk.png --walk --frames 180
+.\build-play.bat --capture output/captures/orbit.png --view orbit --frames 180
+.\build-play.bat --tour --fixed-dt --capture output/captures/tour.png --frames 1800
+.\build-play.bat --capture output/captures/tern.png --aboard tern --frames 240
 ```
 
 `--walk` explicitly selects the default walking mode and captures its ground

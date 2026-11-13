@@ -49,4 +49,6 @@
 - [ ] 5.2 The perf suite counts its warm-up from `READY`.
 - [ ] 5.3 Prewarm what `LATE_PIPELINE` names (map screen, vehicles, water
       from below, rain at night) by showing each once behind the screen.
+  - [x] 5.3a `LATE_PIPELINE` names the vertex layout and shader defs (decision 6).
+  - [x] 5.3b One proxy per material and vertex layout behind the screen (decision 6). On the Mac, no `LATE_PIPELINE` in a new world, `--load` still, `--load` turning, rain at night turning, or the scenic flight (67 proxies; 91 pipelines before `READY` against 86; time to playable unchanged).
 - [ ] 5.4 The step's video, for the owner's batch.

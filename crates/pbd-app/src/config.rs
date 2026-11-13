@@ -109,19 +109,17 @@ pub struct WaterSettings {
     pub max_path_m: f32,
     /// RGB absorption per metre.
     pub absorption_per_m: [f32; 3],
-    /// Colour water converges to at infinite depth, linear RGB.
+    /// The deep water's albedo, linear RGB: what it gives back of the light
+    /// that reaches it (`water-lit`). Real deep sea returns a few percent of
+    /// the blue; from above its colour is mostly the sky it mirrors.
     pub deep_color: [f32; 3],
-    /// Reflected sky at the horizon, linear RGB.
-    pub sky_horizon_color: [f32; 3],
-    /// Reflected sky at the zenith, linear RGB.
-    pub sky_zenith_color: [f32; 3],
-    /// The sky the sheet mirrors at night, linear RGB. The two colours above
-    /// are the daytime gradient; this is what they ramp to across the
-    /// terminator. It is authored against the sky this engine actually draws
-    /// at night, which is dimmer than the fog's night colour, and it is the
-    /// knob to turn if the sea reads as lit under a dark sky.
-    pub night_sky_color: [f32; 3],
-    /// Fresnel floor for grazing reflection, 0..1.
+    /// The shallows' albedo, linear RGB, easing to `deep_color` over
+    /// `shallow_depth_m` of water under the pixel.
+    pub shallow_color: [f32; 3],
+    /// Water depth at which the shallows' colour has become the deep's, m.
+    pub shallow_depth_m: f32,
+    /// Fresnel floor for grazing reflection, 0..1: how much of the sky the
+    /// far sea carries.
     pub sky_horizon_strength: f32,
     pub foam_crest_lo: f32,
     pub foam_crest_hi: f32,
@@ -137,8 +135,6 @@ pub struct WaterSettings {
     pub specular_power: f32,
     /// Multiplier on the specular highlight, linear RGB.
     pub sun_tint: [f32; 3],
-    /// Night-side brightness floor, 0..1.
-    pub night_floor: f32,
     /// Ceiling on the distance-fog mix so far water never fully becomes sky.
     pub fog_max: f32,
     /// Rain ripple cells per metre on the surface.
@@ -176,12 +172,11 @@ impl Default for WaterSettings {
             refract_amount: 0.04,
             refract_max_uv: 0.03,
             max_path_m: 200.0,
-            absorption_per_m: [0.90, 0.25, 0.08],
-            deep_color: [0.0, 0.12, 0.28],
-            sky_horizon_color: [0.10, 0.36, 0.72],
-            sky_zenith_color: [0.03, 0.18, 0.55],
-            night_sky_color: [0.035, 0.070, 0.100],
-            sky_horizon_strength: 0.22,
+            absorption_per_m: [0.32, 0.035, 0.012],
+            deep_color: [0.004, 0.018, 0.040],
+            shallow_color: [0.020, 0.090, 0.075],
+            shallow_depth_m: 14.0,
+            sky_horizon_strength: 0.7,
             foam_crest_lo: 0.35,
             foam_crest_hi: 0.60,
             foam_crest_weight: 0.55,
@@ -193,7 +188,6 @@ impl Default for WaterSettings {
             specular_intensity: 0.06,
             specular_power: 140.0,
             sun_tint: [1.10, 1.15, 1.20],
-            night_floor: 0.18,
             fog_max: 0.82,
             rain_ripple_scale: 3.0,
             rain_ripple_strength: 6.0,
@@ -240,9 +234,10 @@ impl Validated for WaterSettings {
         s.sea.validate()?;
         non_negative("absorption_per_m", &s.absorption_per_m)?;
         non_negative("deep_color", &s.deep_color)?;
-        non_negative("sky_horizon_color", &s.sky_horizon_color)?;
-        non_negative("sky_zenith_color", &s.sky_zenith_color)?;
-        non_negative("night_sky_color", &s.night_sky_color)?;
+        non_negative("shallow_color", &s.shallow_color)?;
+        (s.shallow_depth_m.is_finite() && s.shallow_depth_m > 0.0)
+            .then_some(())
+            .ok_or("shallow_depth_m must be a positive depth")?;
         non_negative("foam_color", &s.foam_color)?;
         non_negative("sun_tint", &s.sun_tint)?;
         for (name, value) in [
@@ -250,7 +245,6 @@ impl Validated for WaterSettings {
             ("foam_crest_weight", s.foam_crest_weight),
             ("foam_slope_weight", s.foam_slope_weight),
             ("foam_intensity", s.foam_intensity),
-            ("night_floor", s.night_floor),
             ("fog_max", s.fog_max),
             ("wet_blur", s.wet_blur),
         ] {
@@ -354,8 +348,21 @@ pub struct WeatherSettings {
     pub shower_max_streaks: u32,
     /// Lens droplet coverage (below 1 culls, above 1 stacks layers).
     pub rain_lens_density: f32,
-    /// Lens droplet refraction strength.
-    pub rain_lens_refract: f32,
+    /// How far a lens drop bends what is behind it toward its centre
+    /// (`lens-drop-refraction`): at its middle, this share of a pixel's
+    /// distance from the centre, and none at its rim, for every size of drop.
+    /// Below 1 a drop is an upright magnifier (0.5 doubles its middle); up
+    /// to 2 it inverts within its outline. 0..=2, so no sample leaves its drop.
+    pub rain_lens_bend: f32,
+    /// How much of the light a lens drop loses at its edge, where its alpha
+    /// passes a half (`lens-drop-refraction`), 0..=1: what shows a drop
+    /// against a flat sky. 0 draws no edge.
+    pub rain_lens_rim: f32,
+    /// How much of the sky's mean light a lens drop gathers on the lower part
+    /// of its edge (`lens-drop-refraction`), a gain, not negative: the bright
+    /// underside of a drop on glass, what shows it over dark ground. A lens
+    /// gathers light, so it may pass 1. 0 draws none.
+    pub rain_lens_glint: f32,
     /// Lens droplet animation speed.
     pub rain_lens_speed: f32,
     /// Lens droplet grid frequency: higher is smaller drops.
@@ -619,7 +626,9 @@ impl Default for WeatherSettings {
             shower_column_m: 46.0,
             shower_max_streaks: 1700,
             rain_lens_density: 1.4,
-            rain_lens_refract: 1.7,
+            rain_lens_bend: 0.5,
+            rain_lens_rim: 0.2,
+            rain_lens_glint: 1.0,
             rain_lens_speed: 1.0,
             rain_lens_size: 0.7,
             rain_lens_scale: 2.0,
@@ -733,7 +742,6 @@ impl Validated for WeatherSettings {
                 s.shower_radius_m,
                 s.shower_column_m,
                 s.rain_lens_density,
-                s.rain_lens_refract,
                 s.rain_lens_speed,
                 s.rain_lens_size,
                 s.lens_mist_fog_s,
@@ -866,6 +874,14 @@ impl Validated for WeatherSettings {
             .then_some(())
             .ok_or("cloud_puff_silver must not be negative")?;
         positive("rain_lens_scale", &[s.rain_lens_scale])?;
+        finite("rain_lens_bend", &[s.rain_lens_bend])?;
+        (0.0..=2.0)
+            .contains(&s.rain_lens_bend)
+            .then_some(())
+            .ok_or("rain_lens_bend must be within 0..=2: past 2 a drop samples outside itself")?;
+        finite("rain_lens_rim", &[s.rain_lens_rim])?;
+        unit("rain_lens_rim", s.rain_lens_rim)?;
+        non_negative("rain_lens_glint", &[s.rain_lens_glint])?;
         unit("lens_mist_strength", s.lens_mist_strength)?;
         unit("lens_mist_whiten", s.lens_mist_whiten)?;
         (s.cloud_shear >= 1.0)
@@ -1659,5 +1675,30 @@ mod tests {
         assert!(with(20.0, -1.0).validate().is_err());
         assert!(with(f32::NAN, 4.0).validate().is_err());
         assert!(with(20.0, f32::NAN).validate().is_err());
+    }
+
+    /// `lens-drop-refraction`: past a bend of 2 a drop samples the scene from
+    /// outside itself; the rim is a share of light lost; the glint a gain.
+    #[test]
+    fn the_lens_drops_knobs_hold_their_ranges() {
+        let with = |bend: f32, rim: f32, glint: f32| WeatherSettings {
+            rain_lens_bend: bend,
+            rain_lens_rim: rim,
+            rain_lens_glint: glint,
+            ..WeatherSettings::default()
+        };
+        with(0.0, 0.0, 0.0).validate().unwrap();
+        with(2.0, 1.0, 3.0).validate().unwrap();
+        assert!(with(-0.1, 0.2, 1.0).validate().is_err());
+        assert!(with(2.1, 0.2, 1.0).validate().is_err());
+        assert!(with(f32::NAN, 0.2, 1.0).validate().is_err());
+        assert!(with(0.5, -0.1, 1.0).validate().is_err());
+        assert!(with(0.5, 1.1, 1.0).validate().is_err());
+        assert!(with(0.5, f32::NAN, 1.0).validate().is_err());
+        assert!(with(0.5, 0.2, -0.1).validate().is_err());
+        assert!(with(0.5, 0.2, f32::NAN).validate().is_err());
+        assert!(with(0.5, 0.2, f32::INFINITY).validate().is_err());
+        // Tenebris's unnormalised knob is gone, not silently ignored.
+        assert!(ron::from_str::<WeatherSettings>("(rain_lens_refract: 1.7)").is_err());
     }
 }

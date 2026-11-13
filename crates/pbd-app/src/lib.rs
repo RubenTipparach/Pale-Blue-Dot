@@ -28,11 +28,15 @@ pub mod loading;
 #[cfg(feature = "desktop")]
 pub mod overlay;
 #[cfg(feature = "desktop")]
+pub mod place;
+#[cfg(feature = "desktop")]
 pub mod planet;
 #[cfg(feature = "desktop")]
 pub mod saves;
 #[cfg(feature = "desktop")]
 pub mod sea;
+#[cfg(feature = "desktop")]
+pub mod settings;
 #[cfg(feature = "desktop")]
 pub mod sites;
 #[cfg(feature = "desktop")]
@@ -49,6 +53,8 @@ pub mod walking;
 pub mod weather;
 pub mod world_map;
 
+#[cfg(all(test, feature = "desktop"))]
+mod lens_gpu_tests;
 #[cfg(all(test, feature = "desktop"))]
 mod map_gpu_tests;
 #[cfg(all(test, feature = "desktop"))]

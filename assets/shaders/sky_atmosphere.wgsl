@@ -68,6 +68,20 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     if (end <= start) { discard; }
 
     let step_size = (end-start)/16.0;
+    // One twilight for the sky and the ground (`dusk-sky`). On a planet this
+    // small, air a few hundred metres up stays in sunlight until the sun is
+    // 20-34 degrees under (acos(R / (R + h))), so the dome, lit sample by
+    // sample through the planet's shadow, glowed for hours over a ground the
+    // SH (`pbd_core::sky_light`) already lit as night, and the shadow's edge
+    // crossed the sky as a hard line. Near the ground each sample's sunlight
+    // is the camera's twilight instead, over the ground's own range (gone at
+    // sine -0.12, 6.9 degrees under); from high up, the band the daylight
+    // veil uses, the dome keeps its shadow and the terminator from orbit.
+    let up = normalize(camera);
+    let sun_height = dot(up,sun);
+    let altitude = max(length(camera)-sky.center_radius.w,0.0);
+    let near_ground = 1.0-smoothstep(shell*0.3,shell,altitude);
+    let twilight = smoothstep(-0.12,0.0,sun_height);
     let beta_r = sky.scatter.xyz * sky.atmosphere.z;
     let beta_m = sky.atmosphere.w;
     var view_depth = 0.0;
@@ -77,7 +91,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
         let p = camera+direction*(start+step_size*(f32(i)+0.5));
         let segment = air_density(p)*step_size/shell;
         view_depth += segment;
-        let visible_sun = sun_visibility(p,sun);
+        let visible_sun = mix(sun_visibility(p,sun),twilight,near_ground);
         if (visible_sun <= 0.0) { continue; }
         let light_depth = sun_depth(p,sun);
         let transmission = exp(-(beta_r+vec3<f32>(beta_m))*(view_depth+light_depth));
@@ -89,13 +103,19 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     let mie_phase = (1.0-g*g)/(12.5663706*pow(max(1.0+g*g-2.0*g*cosine,0.001),1.5));
     var scattered = integrated*(beta_r*rayleigh_phase+vec3<f32>(beta_m*mie_phase))*sky.sun.w;
 
-    let up = normalize(camera);
-    let sun_height = dot(up,sun);
-    let dusk = (1.0-smoothstep(0.0,0.2,sun_height))*smoothstep(-0.28,-0.06,sun_height);
+    // The dusk tint, and near the ground over the ground's twilight band
+    // (sine 0 to -0.2, to 11.5 degrees under) rather than to 16, where the
+    // ground had long been night. The horizon's glow is on the sun's side: a
+    // ring of it all round the horizon read as an orange arch.
+    let dusk_end = mix(-0.28,-0.2,near_ground);
+    let dusk = (1.0-smoothstep(0.0,0.2,sun_height))*smoothstep(dusk_end,-0.06*(1.0-near_ground),sun_height);
     let horizon = pow(clamp(1.0-abs(dot(direction,up)),0.0,1.0),5.0);
-    let low_camera = 1.0-smoothstep(80.0,700.0,length(camera)-sky.center_radius.w);
+    let low_camera = 1.0-smoothstep(80.0,700.0,altitude);
+    let across = direction-up*dot(direction,up);
+    let toward = sun-up*sun_height;
+    let sun_side = smoothstep(-0.3,1.0,dot(across,toward)*inverseSqrt(max(dot(across,across)*dot(toward,toward),1e-8)));
     scattered = mix(scattered,scattered*vec3<f32>(2.1,0.65,0.24),dusk*0.65);
-    scattered += vec3<f32>(0.8,0.24,0.055)*dusk*horizon*low_camera*0.18;
+    scattered += vec3<f32>(0.8,0.24,0.055)*dusk*horizon*low_camera*0.18*mix(1.0,sun_side,near_ground);
     let average_beta = dot(beta_r,vec3<f32>(1.0/3.0))+beta_m;
     var opacity = clamp(1.0-exp(-view_depth*average_beta),0.0,0.94);
     // Art-directed daylight veil keeps bright stars out of the surface sky.

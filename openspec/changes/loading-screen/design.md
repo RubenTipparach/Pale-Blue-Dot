@@ -156,6 +156,34 @@ Measured with `tools/capture_repeat.py` (each scene captured twice,
 Holbrook lane 0 pixels differed and a harbour from 30 m (rain, night) 44.6%
 (578,454 of 1,296,000, worst 77/255); with it, 0 and 0.
 
+## Decision 6: what the warm-up cannot see is shown to it (2026-11-13)
+
+Bevy builds a material's pipeline for a mesh only once that mesh is visible
+to a view. The warm-up draws what is visible from the spawn and four
+headings, so anything hidden, culled or out of range while it runs is
+compiled after `READY`. On the Mac (`--load`, 85 %, 100 % and 50 % render
+scale, still and turning), with the `LATE_PIPELINE` line now naming each
+pipeline's vertex layout and shader defs:
+
+- `pbr_alpha_blend_mesh_pipeline`, positions, normals and colours: the near
+  shower (`weather.rs`), hidden whenever it has no streak or shaft to draw,
+  as through a clear warm-up; built the first time a rain cell comes in range.
+- `pbr_opaque_mesh_pipeline`, positions, normals and UVs: a plain textured
+  mesh no heading of the look-round had in view.
+
+So for the warm-up, every 3D mesh entity of the game's material types
+(`StandardMaterial`, `FieldLitMaterial`) is shown once: one proxy per distinct
+material and vertex layout, carrying the entity's mesh and material and its
+shadow flags, tiny and unculled in front of the active camera, behind the
+opaque screen. They are despawned at `READY`. A mesh first spawned after
+`READY` (a town reached later, an item first held) is not covered and still
+logs `LATE_PIPELINE`, which is the list for the next step.
+
+A capture keeps decision 5: it does not warm, and its pipelines compile in
+the counted frames, so a capture's log names water and cloud pipelines as
+late by design. Recommendation taken (ask only with screenshots): a capture
+stays deterministic rather than warmed.
+
 ## Found in the build: a new world started on a town's terrace
 
 Before the screen, a new world's walker was set down at `Startup` on a

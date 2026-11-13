@@ -15,3 +15,4 @@ __pycache__/
 # swallowed `crates/pbd-app/src/saves/` - the module that writes them - which
 # would have committed a tree that does not build.
 /saves/
+logs/

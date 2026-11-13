@@ -413,6 +413,72 @@ against new exe in one sitting, focused (4.1).
   scenario shows a cost.
 - **Measure:** the new scenario, old exe against new.
 
+## 5. The pixels and the samples (2026-11-10)
+
+The owner, 2026-11-10: "analyze performance characteristics, and lets try to
+improve performance on this game."
+
+### 5a. What the 2026-10-29 breakdown leaves
+
+`docs/benchmarks/2026-10-29-breakdown` switched one part off at a time on
+one build (`6f85efe`; M4 Max, 1440 x 900 window, uncapped, GPU apps closed).
+Full frame at p50: clouds flight 17.16 ms, rain stroll 19.25, 1 km walk
+12.83. What each part saved: the rain passes 0.10 / 6.54 / 1.03 ms, the new
+lighting 2.16 / 5.41 / 1.69 (reflections 1.42 / 3.85 / 0.70 of it), the
+clouds 1.98 / 0.35 / 0.00. With any one of them off the flight is still
+about 15 ms, so roughly 13 ms of it is none of the parts that can be
+switched off (measured as a residue, not isolated).
+
+### 5b. What every frame pays before any part (from code)
+
+- The window is 1440 x 900 points on a 2x Retina display, so the surface is
+  2880 x 1800 = 5.18 Mpx (the recordings are 1856 px high: 1800 plus the
+  title bar). Bevy's scale-factor override does not change this; it only
+  rescales the UI.
+- The camera is `Hdr` and `Msaa::Sample4` (`desktop.rs::configure_camera`).
+  The main pass writes 20.7 M samples of Rgba16Float colour and depth, and
+  Bevy stores the multisampled colour and resolves it, because later passes
+  load it. The MSAA was never priced; section 3 counted only the
+  single-sample ping-pong.
+- Every full-screen pass after it reads one 5.18 Mpx Rgba16F texture and
+  writes the other: water compose and cap, the cloud composite, the screen
+  trace's capture, the rain volume, the lens, bloom's downsample, the tone
+  grade and the final blit. Several of them also sample the multisampled
+  depth.
+
+So the residue of 5a is likely fill and bandwidth that scale with the pixel
+count and the sample count (inferred). Two instruments test that before
+anything is changed.
+
+### 5c. Instruments (measure only; no default moves)
+
+- `PBD_WINDOW=<w>x<h>`: the window's size in points. Same field of view,
+  fewer pixels. `720x450` is a quarter of the pixels, the cost a render scale
+  of 0.5 would leave. This is not the render scale of 4.6: it shrinks the UI
+  too, and is only for measuring.
+- `PBD_MSAA=<1|2|4>`: the camera's sample count. The composite and the screen
+  trace already build single-sample pipelines beside the multisampled ones.
+- `PBD_PASS_OFF` (existing) one pass at a time on the rain stroll (`rain`,
+  `lens`, `shower`), to split 5a's 6.54 ms.
+
+The sitting: `clouds`, `rain-stroll` and `walk` with variants `full`,
+`quarter-px` (`PBD_WINDOW=720x450`) and `msaa1` (`PBD_MSAA=1`); then
+`rain-stroll` alone with `full`, `rain-off`, `lens-off` and `shower-off`.
+Two runs each, interleaved, GPU apps closed.
+
+### 5d. What follows from the result
+
+- **If a quarter of the pixels takes most of the 13 ms away**, the frame is
+  fill-bound and the levers are the pixel count (4.6, the owner's choice on
+  screenshots) and the per-pixel passes. Full-screen passes that are soft by
+  nature, such as the rain volume, can run at a reduced resolution as the
+  cloud march does (0.4), with no visible change and no owner choice needed.
+- **If MSAA 1 saves a lot**, the choices are 2x MSAA or none, again the
+  owner's on screenshots (hex edges), and cheaper ways to keep the samples
+  (the composite reading one depth sample).
+- **If neither moves it**, the residue is the CPU or the vertex side, and
+  2.8 (a CPU profile) comes next.
+
 ### Ruled out or deferred
 
 - Fewer rebuild threads at altitude. A rebuild in flight costs nothing

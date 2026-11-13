@@ -85,6 +85,13 @@ pub struct Launch {
     /// rain, for up to one frame more between input and photon. 1 stays for
     /// a player who prefers the lower latency.
     pub frame_latency: u32,
+    /// `--frame-limit 0|60|120`, `--render-scale PERCENT`, `--no-auto-step`:
+    /// the player's settings for this run, over the file in a plain run and
+    /// over the defaults in a capture or a benchmark (`player-settings`).
+    pub settings: pbd_app::settings::Overrides,
+    /// `--upscale nearest`: stretch a scaled view with nearest rather than
+    /// bilinear filtering, for the owner's comparison.
+    pub upscale_nearest: bool,
     /// `--capture-loading`: photograph the loading screen to `--capture`'s
     /// path while the planet builds, then exit (`loading-screen`).
     pub capture_loading: bool,
@@ -99,6 +106,11 @@ pub struct Launch {
     /// `--route clouds`: the scenic route through several separate clouds.
     pub route_broken: bool,
     pub fixed: bool,
+    /// `--real-time`: a `--capture` on the real clock, after the normal
+    /// warm-up, instead of fixed steps from `READY` (an instrument: what play
+    /// shows, frame pacing and all, where a fixed-step capture shows what a
+    /// fixed frame shows).
+    pub real_time: bool,
     pub fly: bool,
     pub walk: bool,
     /// Walk mode, placed at the shoreline and holding forward, so a capture can
@@ -261,6 +273,8 @@ impl Launch {
             frame_graph: false,
             no_vsync: false,
             frame_latency: 2,
+            settings: pbd_app::settings::Overrides::default(),
+            upscale_nearest: false,
             capture_loading: false,
             view: "coast".into(),
             frames: 180,
@@ -273,6 +287,7 @@ impl Launch {
             route_kind: pbd_app::flight_view::RouteKind::FarSide,
             route_broken: false,
             fixed: false,
+            real_time: false,
             fly: false,
             walk: false,
             swim: false,
@@ -525,6 +540,46 @@ impl Launch {
                     assert!((1..=2).contains(&frames), "frame latency must be 1 or 2");
                     result.frame_latency = frames;
                 }
+                "--frame-limit" => {
+                    i += 1;
+                    result.settings.frame_limit = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .and_then(pbd_app::settings::FrameLimit::from_fps)
+                            .expect("--frame-limit takes 0, 60 or 120"),
+                    );
+                }
+                "--render-scale" => {
+                    i += 1;
+                    let percent: u32 = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--render-scale requires a percentage");
+                    assert!(
+                        (50..=100).contains(&percent),
+                        "--render-scale takes 50 to 100"
+                    );
+                    result.settings.render_scale = Some(percent);
+                }
+                "--no-auto-step" => result.settings.auto_step = Some(false),
+                "--rain-shadows" => {
+                    i += 1;
+                    let state = args.get(i).expect("--rain-shadows requires on or off");
+                    result.settings.rain_shadows = Some(match state.as_str() {
+                        "on" => true,
+                        "off" => false,
+                        _ => panic!("--rain-shadows takes on or off"),
+                    });
+                }
+                "--upscale" => {
+                    i += 1;
+                    let filter = args.get(i).expect("--upscale requires bilinear or nearest");
+                    assert!(
+                        matches!(filter.as_str(), "bilinear" | "nearest"),
+                        "--upscale takes bilinear or nearest"
+                    );
+                    result.upscale_nearest = filter == "nearest";
+                }
                 "--capture-loading" => result.capture_loading = true,
                 "--walk-distance" => {
                     i += 1;
@@ -625,6 +680,7 @@ impl Launch {
                     );
                 }
                 "--fixed-dt" => result.fixed = true,
+                "--real-time" => result.real_time = true,
                 "--render-offset" => {
                     let mut components = [0.0; 3];
                     for component in &mut components {
@@ -865,7 +921,7 @@ pub fn run(args: &[String]) {
             .set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "Pale Blue Dot | Planet Explorer".into(),
-                    resolution: (1440, 900).into(),
+                    resolution: window_size().into(),
                     present_mode: if launch.capture.is_some() || launch.no_vsync {
                         PresentMode::AutoNoVsync
                     } else {
@@ -997,6 +1053,8 @@ pub fn run(args: &[String]) {
     })
     .insert_resource(launch.clone())
     .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
+    .add_plugins(pbd_app::place::PlacePlugin)
+    .add_plugins(MaterialPlugin::<scene::StarMaterial>::default())
     .add_systems(
         Startup,
         (
@@ -1108,7 +1166,9 @@ pub fn run(args: &[String]) {
             (measure_frames, write_frame_log).chain(),
             // The save is the loading thread's until the world opens.
             drain_saves.run_if(pbd_app::world_open),
-        ),
+        )
+            // The frame limiter holds the loop after these.
+            .in_set(pbd_app::settings::PacingSet),
     );
     if launch.frame_log.is_some() {
         // GPU time per render pass for the frame log (`perf-rig`), and a
@@ -1127,6 +1187,33 @@ pub fn run(args: &[String]) {
     // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
     // with Bevy's own sun and ambient, near black on every face in shade.
     app.add_plugins(pbd_app::field_light::FieldLightPlugin);
+    // The player's settings (`player-settings`): the file in a plain run;
+    // in a capture or a benchmark the defaults, so its picture or its numbers
+    // are its flags' alone. Read here, once the logger is up.
+    let (player, kept) = pbd_app::settings::for_launch(
+        launch.capture.is_some() || launch.frame_log.is_some(),
+        &launch.settings,
+    );
+    info!(
+        "PLAYER_SETTINGS frame_limit={} render_scale={}% auto_step={} rain_shadows={} file={}",
+        player.frame_limit.label(),
+        player.render_scale,
+        player.auto_step,
+        player.rain_shadows,
+        kept.path
+            .as_ref()
+            .map_or("none".into(), |p| p.display().to_string()),
+    );
+    app.insert_resource(player)
+        .insert_resource(kept)
+        .insert_resource(if launch.upscale_nearest {
+            pbd_app::settings::Upscale::Nearest
+        } else {
+            pbd_app::settings::Upscale::Bilinear
+        })
+        .add_plugins(pbd_app::settings::PlayerSettingsPlugin {
+            capture: launch.capture.is_some(),
+        });
     // `--no-shadows` in every run, a still as much as a walk: read only when
     // walking, a photo from above drew its shadows regardless.
     if launch.no_shadows {
@@ -1156,6 +1243,7 @@ pub fn run(args: &[String]) {
             turn: launch.turn.to_radians(),
             exact_start: launch.at.is_some(),
             start_up_m: launch.up,
+            auto_step: player.auto_step,
             ..default()
         })
         .add_plugins((
@@ -1218,14 +1306,14 @@ pub fn run(args: &[String]) {
             app.add_systems(PreUpdate, swim_script.after(bevy::input::InputSystems));
         }
     }
-    if launch.fixed || launch.capture.is_some() {
+    if launch.fixed || (launch.capture.is_some() && !launch.real_time) {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(step));
     }
     // The loading screen (`loading-screen`): added last, because it takes
     // over `Main` from the plugins that made it.
     app.add_plugins(pbd_app::loading::LoadingPlugin {
         launched,
-        capture: launch.capture.is_some(),
+        capture: launch.capture.is_some() && !launch.real_time,
     });
     if launch.capture_loading
         && let Some(path) = &launch.capture
@@ -1687,6 +1775,30 @@ fn spawn_direction(launch: &Launch) -> Vec3 {
     default
 }
 
+/// The window's size in points: 1440 x 900, or `PBD_WINDOW=<w>x<h>`, a
+/// measurement switch (`frame-budget` 5c) that prices the pixel count with the
+/// same view. It is not a render scale: the UI shrinks with it.
+fn window_size() -> (u32, u32) {
+    std::env::var("PBD_WINDOW")
+        .ok()
+        .and_then(|v| {
+            let (w, h) = v.trim().split_once('x')?;
+            Some((w.parse().ok()?, h.parse().ok()?))
+        })
+        .filter(|&(w, h): &(u32, u32)| (64..=8192).contains(&w) && (64..=8192).contains(&h))
+        .unwrap_or((1440, 900))
+}
+
+/// The camera's samples: 4, or `PBD_MSAA=<1|2|4>`, a measurement switch
+/// (`frame-budget` 5c) that prices the multisampling.
+fn msaa_samples() -> Msaa {
+    match std::env::var("PBD_MSAA").ok().as_deref().map(str::trim) {
+        Some("1") => Msaa::Off,
+        Some("2") => Msaa::Sample2,
+        _ => Msaa::Sample4,
+    }
+}
+
 fn configure_camera(
     mut commands: Commands,
     mut cameras: Query<(Entity, &mut Camera3d), Added<Camera3d>>,
@@ -1700,7 +1812,7 @@ fn configure_camera(
         commands.entity(entity).insert((
             Hdr,
             Tonemapping::TonyMcMapface,
-            Msaa::Sample4,
+            msaa_samples(),
             Projection::Perspective(PerspectiveProjection {
                 near: 0.05,
                 far: 500_000.0,
@@ -2696,6 +2808,14 @@ fn capture(
             state.requested = true;
         }
         println!("CAPTURE_REQUEST {} frame={}", path.display(), state.frame);
+        // Where it was taken (`position-readout`), so the shot can be taken
+        // again with `--at`.
+        let named = path.display().to_string();
+        commands.queue(move |world: &mut World| {
+            if let Some(place) = pbd_app::place::of_world(world) {
+                info!("PLACE capture {named} {}", place.line());
+            }
+        });
     }
     if launch.capture.is_some() && state.saved && state.frame >= state.finish_frame {
         if launch.tour {

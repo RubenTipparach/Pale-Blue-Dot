@@ -48,7 +48,7 @@ pub use terrain::{
     nearest_ground_near, river_channel, snow_slot, surface_code, surface_height, switch_generator,
     terrain_config, terrain_epoch, terrain_radius, tileset_slot,
 };
-pub use water::{EyeWater, EyeWaterState, emerge, submersion};
+pub use water::{EyeWater, EyeWaterState, RainShadows, emerge, submersion};
 
 use bevy::math::{DMat4, DVec3};
 use bevy::{
@@ -261,6 +261,7 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<crate::sky::Sun>::default(),
             ExtractResourcePlugin::<PlanetArt>::default(),
             ExtractResourcePlugin::<water::EyeWaterState>::default(),
+            ExtractResourcePlugin::<water::RainShadows>::default(),
             ExtractResourcePlugin::<PlanetRenderFrame>::default(),
             ExtractComponentPlugin::<PlanetSurface>::default(),
             ExtractResourcePlugin::<bounce::BounceField>::default(),
@@ -270,6 +271,7 @@ impl Plugin for PlanetPlugin {
         .init_resource::<bounce::LampBakeField>()
         .add_systems(Update, (bounce::update_bounce, bounce::update_lamp_bake))
         .init_resource::<PlanetClock>()
+        .init_resource::<water::RainShadows>()
         .init_resource::<PlanetRenderFrame>()
         .init_resource::<lod::LodRefresh>()
         .init_resource::<lod::NearField>()

@@ -153,6 +153,44 @@ pub(crate) fn wgsl_struct_size(label: &str, source: &str, name: &str) -> u32 {
     layouter[handle].size
 }
 
+/// The lens drops' section of `water.wgsl` (`lens-drop-refraction`): the drop
+/// field, its mapping from the lens's uv and where a pixel looks through it,
+/// from the "Rain on glass" banner to the refraction that samples the scene.
+/// It reads only the view's `lens`, `screen` and `mist_look` lanes, so with a
+/// stand-in uniform for those it is WGSL that naga reads on its own and a GPU
+/// test runs (`lens_gpu_tests`). The stand-in's `probe` lane is the test's.
+pub(crate) fn lens_drops_source() -> String {
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let start = water
+        .find("// ---- Rain on glass")
+        .expect("water.wgsl's lens drops section moved; update the slice");
+    let end = start
+        + water[start..]
+            .find("// `wipe` receives")
+            .expect("water.wgsl's refraction through the drops moved; update the slice");
+    format!(
+        "struct LensView {{ lens: vec4<f32>, screen: vec4<f32>, mist_look: vec4<f32>, probe: vec4<f32> }}\n\
+         @group(0) @binding(0) var<uniform> view: LensView;\n{}",
+        &water[start..end]
+    )
+}
+
+/// The lens drops read no lane of the view but the three the stand-in has,
+/// and the shipped lens samples the scene where `rd_lens` says, toward the
+/// drop's centre: `uv + offset`, never Tenebris's `uv - n`.
+#[test]
+fn the_lens_drops_compile_on_their_own_and_the_lens_looks_where_they_say() {
+    validated_entry_points("water.wgsl's lens drops", &lens_drops_source());
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let start = water
+        .find("fn refract_through_drops(")
+        .expect("the refraction is gone");
+    let body = &water[start..start + water[start..].find("\n}\n").unwrap()];
+    assert!(body.contains("let lens = rd_lens(drop_uv,t,l0,l1,l2);"));
+    assert!(body.contains("clamp(uv+lens.offset,vec2(0.),vec2(1.))"));
+    assert!(!body.contains("uv-n"), "Tenebris's outward sample is back");
+}
+
 /// The drawn sea is the table the hulls float on, read from the uniform: the
 /// water pass's vertex stage displaces by `sea_surface(view.sea, ...)` and
 /// writes no wave of its own. A literal sine left in it would be a second sea
@@ -260,5 +298,171 @@ fn rain_detail_is_gated_near_the_eye_in_the_new_model_only() {
         "side_w*near_detail",
     ] {
         assert!(after.contains(skipped), "missing `{skipped}`");
+    }
+}
+
+/// `dusk-sky`: seen from the ground the dome is lit on the ground's twilight,
+/// not through the small planet's shadow, which kept high air lit to 34
+/// degrees under and drew its edge across the sky.
+#[test]
+fn the_sky_near_the_ground_keeps_the_grounds_twilight() {
+    let src = include_str!("../../../assets/shaders/sky_atmosphere.wgsl");
+    for line in [
+        "let twilight = smoothstep(-0.12,0.0,sun_height);",
+        "let near_ground = 1.0-smoothstep(shell*0.3,shell,altitude);",
+        "let visible_sun = mix(sun_visibility(p,sun),twilight,near_ground);",
+    ] {
+        assert!(src.contains(line), "missing `{line}`");
+    }
+    // The ground's sky light leaves over the same range (`sun_high`).
+    let core = include_str!("../../pbd-core/src/sky_light.rs");
+    assert!(
+        core.contains("let k = smooth(-0.12, 0.0, e)"),
+        "the ground's twilight moved; move the sky's with it"
+    );
+}
+
+/// `water-lit`: the water's body and murk are albedos lit by the light on open
+/// water, not colours drawn as they are under a day/night floor.
+#[test]
+fn the_water_is_lit_not_luminous() {
+    let src = include_str!("../../../assets/shaders/water.wgsl");
+    for line in [
+        "return view.deep_color.rgb*view.water_light.rgb*exp(-absorption*max(eye_depth,0.0));",
+        "let transmitted = mix(albedo*water_lit,scene,exp(-absorption*path_length));",
+        "var reflected = water_sky_radiance(water_sky_frame(reflected_ray,radial,sun_direction));",
+    ] {
+        assert!(src.contains(line), "missing `{line}`");
+    }
+    assert!(
+        !src.contains("view.absorption.w"),
+        "the night floor is gone"
+    );
+}
+
+/// One function's body in a WGSL source, from `fn name(` to its closing brace
+/// at the start of a line.
+fn wgsl_fn_body<'a>(src: &'a str, name: &str) -> &'a str {
+    let start = src
+        .find(&format!("fn {name}("))
+        .unwrap_or_else(|| panic!("`fn {name}` is gone"));
+    let end = src[start..]
+        .find("\n}\n")
+        .unwrap_or_else(|| panic!("`fn {name}` does not end"));
+    &src[start..start + end]
+}
+
+/// `puff-haze`: each puff is hazed to its own distance in its own pass, writes
+/// its hazed light and its own coverage to the history and its hazed coverage
+/// to the puff cover, and the composite takes that cover and hazes only the
+/// march. Hazed once for the texel at the nearest puff's distance, a near
+/// puff's edge drew an outline over the puff behind it.
+#[test]
+fn each_puff_is_hazed_once_to_its_own_distance() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    assert!(src.contains("@group(3) @binding(16) var cloud_puff_cover: texture_2d<f32>;"));
+    assert!(
+        src.contains("@location(2) cover: vec4<f32>,"),
+        "PuffOut writes the cover"
+    );
+
+    let puff = wgsl_fn_body(&src, "cloud_puff_fragment");
+    let discard = puff
+        .find("if (a < 0.004) { discard; }")
+        .expect("the discard is on the plain coverage");
+    let seen = puff
+        .find("let seen = a*cloud_air(eye, look, dist);")
+        .expect("the air is measured to this puff, along this ray");
+    assert!(
+        discard < seen,
+        "the distances are written wherever the puff is"
+    );
+    for line in [
+        "out.cloud = vec4<f32>(lit*seen, a);",
+        "out.cover = vec4<f32>(seen, 0.0, 0.0, a);",
+    ] {
+        assert!(puff.contains(line), "missing `{line}`");
+    }
+
+    let upsampled = wgsl_fn_body(&src, "cloud_upsampled");
+    assert!(upsampled.contains(
+        "if (view.cloud_puff_fade.w > 0.5) { cloud.w = textureLoad(cloud_puff_cover, texel, 0).r; }"
+    ));
+
+    let composite = wgsl_fn_body(&src, "clouds");
+    let gate = composite
+        .find("if (view.cloud_puff_fade.w < 0.5) {")
+        .expect("the composite hazes the march alone");
+    let air = composite
+        .find("air = cloud_air(eye, ray.direction,")
+        .expect("the march's haze is kept");
+    assert!(gate < air);
+    assert!(composite.contains("let cloud = upsampled*air;"));
+    assert!(
+        !composite.contains("upsampled*cloud_air("),
+        "the composite must not haze the puffs a second time"
+    );
+}
+
+/// `puff-haze` design 3a, mirrored: what the puff pass's blend states and the
+/// composite make of a near puff A over a far puff B, against what the old
+/// one-distance haze made. The puff pass blends both colour targets
+/// premultiplied "over" (`dst' = src + (1 - src.a) dst`); the fragment writes
+/// `(lit*seen, a)` and `(seen, 0, 0, a)` with `seen = a*T`; the composite lays
+/// `S (1 - cover) + light` over the scene.
+#[test]
+fn the_puff_blend_is_the_air_over_each_puff_with_no_step() {
+    // The shipped haze from the spawn, 25 degrees up (design 2): a puff
+    // 800 m out keeps 0.50, one 1600 m out 0.32. Sky and puff light are
+    // brightness on a 0..1 scale; the far puff is whole.
+    let (sky, lit_a, lit_b, air_a, air_b, a_b) = (0.25, 0.9, 0.9, 0.50, 0.32, 1.0);
+    // A puff writes nothing below the discard's coverage.
+    let discard = 0.004;
+    let over = |dst: f32, src: f32, src_a: f32| src + (1.0 - src_a) * dst;
+    let new = |a_a: f32| -> f32 {
+        let a_a = if a_a < discard { 0.0 } else { a_a };
+        // Far to near, as the instances are sorted.
+        let light = over(
+            over(0.0, lit_b * a_b * air_b, a_b),
+            lit_a * a_a * air_a,
+            a_a,
+        );
+        let cover = over(over(0.0, a_b * air_b, a_b), a_a * air_a, a_a);
+        sky * (1.0 - cover) + light
+    };
+    let old = |a_a: f32| -> f32 {
+        let a_a = if a_a < discard { 0.0 } else { a_a };
+        // One haze for the texel, at the nearest distance any puff wrote.
+        let air = if a_a > 0.0 { air_a } else { air_b };
+        let light = over(lit_b * a_b, lit_a * a_a, a_a) * air;
+        let cover = over(a_b, a_a, a_a) * air;
+        sky * (1.0 - cover) + light
+    };
+    let b_alone = sky * (1.0 - a_b * air_b) + lit_b * a_b * air_b;
+    let a_alone = sky * (1.0 - air_a) + lit_a * air_a;
+
+    // At the near puff's edge, just inside and just outside its footprint.
+    let (inside, outside) = (discard * 1.01, discard * 0.99);
+    assert!(
+        (new(inside) - new(outside)).abs() < 0.002,
+        "no step at the edge"
+    );
+    assert!((new(outside) - b_alone).abs() < 1e-6);
+    assert!(
+        (old(inside) - old(outside)).abs() > 0.1,
+        "the old haze stepped there: {} against {}",
+        old(inside),
+        old(outside)
+    );
+    // Inside a whole near puff it is the near puff alone, as the old haze
+    // drew it, and nothing of the far one comes through.
+    assert!((new(1.0) - a_alone).abs() < 1e-6);
+    assert!((new(1.0) - old(1.0)).abs() < 1e-6);
+    // And from the edge inward it moves smoothly between the two.
+    let mut last = new(inside);
+    for k in 1..=100 {
+        let next = new(inside + (1.0 - inside) * k as f32 / 100.0);
+        assert!((next - last).abs() < 0.01, "a step inside the puff");
+        last = next;
     }
 }

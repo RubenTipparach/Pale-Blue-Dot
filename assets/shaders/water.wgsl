@@ -29,11 +29,11 @@ struct WaterView {
     waves: vec4<f32>,         // xyz spare, w the ripples' steepness (the swell is `sea`)
     ripple: vec4<f32>,        // ripple scale cells/m, ripple speed, rain ripple cells/m, rain ripple strength
     refraction: vec4<f32>,    // strength, max uv offset, slope cap, max path m
-    absorption: vec4<f32>,    // rgb per metre, w night floor
-    deep_color: vec4<f32>,    // rgb, w falling-face flow speed
-    horizon_color: vec4<f32>, // rgb, w horizon (grazing) reflection floor
-    zenith_color: vec4<f32>,
-    night_sky: vec4<f32>,     // rgb the sky the sheet mirrors at night, w atmosphere radius m
+    absorption: vec4<f32>,    // rgb per metre, w spare
+    deep_color: vec4<f32>,    // rgb the deep's albedo, w falling-face flow speed
+    shallow: vec4<f32>,       // rgb the shallows' albedo, w horizon (grazing) reflection floor
+    water_light: vec4<f32>,   // rgb the light on open water at the camera, w shallows' depth m
+    haze: vec4<f32>,          // the terrain's cloud_fog_add, rain_fog_mult, overcast blue cut, overcast dim
     foam_color: vec4<f32>,    // rgb, w foam intensity
     foam_crest: vec4<f32>,    // lo, hi, weight, spare
     foam_slope: vec4<f32>,    // lo, hi, weight, spare
@@ -42,7 +42,7 @@ struct WaterView {
     fog_day: vec4<f32>,       // rgb sky colour by day, w fog height m
     limits: vec4<f32>,        // fog ceiling, terminator lo, terminator hi, fog mix
     fx: vec4<f32>,            // underwater distortion, submersion 0/0.5/1, rain, emerge
-    lens: vec4<f32>,          // droplet density, refraction, speed, size
+    lens: vec4<f32>,          // droplet density, bend (rain_lens_bend), speed, size
     screen: vec4<f32>,        // aspect, surface band m, wet blur, detail fade
     lod: vec4<f32>,           // xyz player direction, w base level
     bands: vec4<f32>,         // cos(band radius / R) per fine level, coarsest first
@@ -94,6 +94,10 @@ struct WaterView {
     // the image toward its own brightness, and the drops' scale.
     mist: vec4<f32>,
     mist_look: vec4<f32>,
+    // A lens drop's edge (`lens-drop-refraction`): x the light it loses
+    // there (`rain_lens_rim`), y the sky's light it gathers on the lower part
+    // (`rain_lens_glint`); zw spare.
+    lens_look: vec4<f32>,
     // The puffs (`cloud-puffs`): the sun's wrap, a white and a storm column's
     // base shade, the silver lining; then the edge erosion, the fade in front
     // of the ground (m), the fade-in from the eye (m), and one when the puffs
@@ -116,6 +120,10 @@ struct WaterView {
     // and its eye (w one once there is one, and reflections are on).
     ssr_clip: mat4x4<f32>,
     ssr_eye: vec4<f32>,
+    // `water-lit`: the cover and the rain over the camera (the haze's); the
+    // sky's nine L2 coefficients at the camera, mixed by the cover.
+    haze_weather: vec4<f32>,
+    sky_sh: array<vec4<f32>, 9>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -152,6 +160,9 @@ struct WaterView {
 @group(3) @binding(6) var cloud_depth_now: texture_2d<f32>;
 // The composite's: the near field's fog, lit colour and extinction per metre.
 @group(3) @binding(7) var cloud_near: texture_2d<f32>;
+// The composite's, under the puffs (`puff-haze`): their coverage as the air
+// leaves it, in r. The history's alpha is then the plain coverage.
+@group(3) @binding(16) var cloud_puff_cover: texture_2d<f32>;
 // The lens mist (`lens-weather`), one texel: the probe reads the previous
 // frame's and writes this frame's, which the lens reads.
 @group(3) @binding(8) var lens_mist_prev: texture_2d<f32>;
@@ -372,58 +383,65 @@ fn reconstruct_local(uv: vec2<f32>, depth: f32) -> vec3<f32> {
     // Callers avoid depth=0 infinite-far reconstruction.
     return homogeneous.xyz/max(abs(homogeneous.w),1e-8)*sign(homogeneous.w);
 }
-// The far water seen from inside it. The deep colour is what the surface reads
-// at the waterline; under it the light has crossed the eye's own depth of
-// water, so the murk darkens with depth as the seabed under it already does
-// (the terrain attenuates by its water depth), and at night it takes the same
-// ambient floor the surface body takes. Left at the bare deep colour it was
-// one blue at half a metre and at eight, and a lit room under a dark sky.
+
+// The water's murk at `eye_depth` metres under its surface: the deep's albedo
+// lit by the light on open water, dimmed by the water above (`water-lit`).
+// Lit, not luminous: it darkens with the land at dusk, under cloud and at
+// night. It was a fixed deep colour scaled only by a day/night floor, a
+// glowing blue under a black sky.
 fn murk(eye_depth: f32, radial: vec3<f32>) -> vec3<f32> {
     let absorption = max(view.absorption.rgb,vec3<f32>(0.0));
-    let sun_elevation = dot(radial,safe_normal(view.sun.xyz));
-    let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),sun_elevation);
-    let lit = mix(clamp(view.absorption.w,0.,1.),1.0,daylight);
-    return view.deep_color.rgb*exp(-absorption*max(eye_depth,0.0))*lit;
+    return view.deep_color.rgb*view.water_light.rgb*exp(-absorption*max(eye_depth,0.0));
 }
 
-// The sky the sheet mirrors at night, along the reflected ray. This engine's
-// night sky is its upper atmosphere lit over the limb, a twilight that fades
-// away from the terminator and is black past it: three to one across one
-// frame, measured. One colour in every direction was brighter than the sky on
-// the side away from the sun and a glowing sheet under a black one. So the
-// reflection asks the sky's own question (`sun_visibility` in the sky shader)
-// of the point where the reflected ray leaves the atmosphere: does the sun's
-// ray from there clear the planet. Lit, it is the night colour scaled by how
-// much the ray faces the sun, which is where the twilight is; unlit, nothing.
-fn night_sky(reflected: vec3<f32>, camera_body: vec3<f32>, sun: vec3<f32>) -> vec3<f32> {
-    let ground = view.planet_center.w;
-    let shell = max(view.night_sky.w,ground+1.0);
-    // Exit distance of the reflected ray from the shell; the camera is inside it.
-    let b = dot(camera_body,reflected);
-    let c = dot(camera_body,camera_body)-shell*shell;
-    let t = -b+sqrt(max(b*b-c,0.0));
-    let top = camera_body+reflected*t;
-    let along = dot(top,sun);
-    let clearance = length(top-sun*along)-ground;
-    let lit = select(1.0,smoothstep(0.0,shell-ground,clearance),along < 0.0);
-    let facing = 0.35+0.65*smoothstep(-0.6,0.6,dot(reflected,sun));
-    return view.night_sky.rgb*lit*facing;
+// The terrain's sky frame (`sky_frame` in `planet_surface.wgsl`): a
+// direction in the local frame the sky's coefficients are in, y up and the
+// sun in the x-y plane.
+fn water_sky_frame(n: vec3<f32>, up: vec3<f32>, sun: vec3<f32>) -> vec3<f32> {
+    let sx = sun - up*dot(sun, up);
+    let l = length(sx);
+    let ax = select(safe_normal(cross(up, vec3<f32>(0.0, 0.0, 1.0)) + vec3<f32>(1e-4, 0.0, 0.0)), sx/l, l > 1e-4);
+    let az = cross(ax, up);
+    return vec3<f32>(dot(n, ax), dot(n, up), dot(n, az));
 }
 
-// The terrain's own haze, so the sheet and the ground fog out together. The
-// terrain shader still carries these as literals; lifting them into one
-// uniform is task 2 of preview-scale-and-shader-parity, and until then the
-// values here are the same numbers fed from Rust.
+// The sky's radiance toward a local direction, out of the camera's nine
+// coefficients (`sh_radiance` in `planet_surface.wgsl`, which the wet ground
+// mirrors): what the sheet reflects where nothing nearer is found. It greys
+// under cloud and darkens at dusk and at night with the sky itself.
+fn water_sky_radiance(d: vec3<f32>) -> vec3<f32> {
+    let x = d.x; let y = d.y; let z = d.z;
+    let b = array<f32, 9>(0.282095, 1.5*0.488603*y, 1.5*0.488603*z, 1.5*0.488603*x,
+        4.0*1.092548*x*y, 4.0*1.092548*y*z, 4.0*0.315392*(3.0*z*z - 1.0), 4.0*1.092548*x*z, 4.0*0.546274*(x*x - y*y));
+    var e = vec3<f32>(0.0);
+    for (var k = 0u; k < 9u; k++) {
+        e += view.sky_sh[k].xyz*b[k];
+    }
+    return max(e, vec3<f32>(0.0));
+}
+
+// The terrain's haze colour (`ground_sky` in `planet_surface.wgsl`): the
+// clear sky's colour greyed and dimmed by the cover.
+fn water_ground_sky(sun_elevation: f32, cover: f32) -> vec3<f32> {
+    let clear = mix(vec3<f32>(0.10,0.20,0.29),vec3<f32>(0.32,0.49,0.57),max(sun_elevation,0.));
+    let grey = vec3<f32>(dot(clear,vec3<f32>(0.2126,0.7152,0.0722)));
+    return mix(clear,grey,cover*view.haze.z)*(1.-cover*view.haze.w);
+}
+
+// The terrain's own haze (`finish` in `planet_surface.wgsl`), so the sheet and
+// the shore beside it fog to one colour: the same density, thickened by the
+// cover and the rain, toward the same overcast-greyed sky. w the share.
 fn distance_fog(local_position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>) -> vec4<f32> {
     let camera_body = view.camera_time.xyz - view.planet_center.xyz;
     let altitude = max(length(camera_body) - view.planet_center.w, 0.0);
-    let air = exp(-altitude/max(view.fog_day.w,1.0));
+    let air = exp(-altitude/1050.0);
     let sun_elevation = dot(radial,sun);
     let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),sun_elevation);
+    let cover = clamp(view.haze_weather.x,0.0,1.0);
+    let density = 0.00036*(1.0+cover*view.haze.x)*mix(1.0,view.haze.y,clamp(view.haze_weather.y,0.0,1.0));
     let d = length(view.camera_time.xyz - local_position);
-    let amount = (1.0-exp(-d*max(view.fog_night.w,0.0)))*air*daylight*view.limits.w;
-    let sky = mix(view.fog_night.rgb,view.fog_day.rgb,max(sun_elevation,0.0));
-    return vec4<f32>(sky, min(amount, clamp(view.limits.x,0.0,0.99)));
+    let amount = (1.0-exp(-d*density))*air*daylight*0.55;
+    return vec4<f32>(water_ground_sky(sun_elevation,cover), amount);
 }
 
 @fragment
@@ -504,9 +522,13 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let camera_distance = length(to_camera);
     let look = safe_normal(to_camera);
     var path_length = max(view.refraction.w,0.0);
+    // How deep the water is under this pixel: the shallows' colour eases to
+    // the deep's over `water_light.w` of it. Open sea seen to the sky is deep.
+    var depth_under = 1.0e4;
     if (refracted_depth > 1e-7) {
         let background = reconstruct_local(refracted_uv,refracted_depth);
         path_length = min(path_length,max(length(background-view.camera_time.xyz)-camera_distance,0.0));
+        depth_under = max(length(in.body_position)-length(background-view.planet_center.xyz),0.0);
     }
     let absorption = max(view.absorption.rgb,vec3<f32>(0.));
     // Seen from below: decided by where the camera is, not by the polygon's
@@ -527,40 +549,36 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let reflected_ray = reflect(-look,normal);
     let reflection_height = clamp(dot(reflected_ray,radial),0.,1.);
     let fresnel = (0.02+0.98*pow(1.0-max(dot(look,normal),0.0),5.0))
-        * mix(clamp(view.horizon_color.w,0.,1.),1.,reflection_height);
-    // A reflection is of the SKY, so it is the sky's colour, not an authored
-    // daytime gradient under an ambient floor. Left that way the sea was a lit
-    // blue sheet under a black sky, brighter than the land beside it. It takes
-    // the same day/night sky the distance fog already mixes, which is one
-    // colour written down once and used by both.
-    let sun_elevation = dot(radial,sun_direction);
-    let daylight = smoothstep(view.limits.y,max(view.limits.z,view.limits.y+1e-4),sun_elevation);
-    let day_sky = mix(view.horizon_color.rgb,view.zenith_color.rgb,reflection_height);
-    var reflected = mix(night_sky(reflected_ray,camera_body,sun_direction),day_sky,daylight);
+        * mix(clamp(view.shallow.w,0.,1.),1.,reflection_height);
+    // A reflection is of the SKY, so it is the sky's own radiance along the
+    // reflected ray (`water-lit`): grey under cloud, dark at night, warm at
+    // dusk. It was two authored day blues and a night colour, saturated and
+    // blind to the cover.
+    var reflected = water_sky_radiance(water_sky_frame(reflected_ray,radial,sun_direction));
     // What the reflected ray really meets on the screen: the shore, a house,
     // the trees (`lighting-model` L8). Only where the mirror shows.
     if (fresnel > 0.02) {
         let hit = sea_ssr(in.body_position + radial*0.05, reflected_ray);
         reflected = mix(reflected, hit.rgb, hit.a);
     }
-    let transmitted = mix(view.deep_color.rgb,scene,exp(-absorption*path_length));
+    // The water's own colour is an albedo lit by the light on open water, as
+    // far as the sky reaches the cell (`water-lit`); what is seen through it
+    // is already lit.
+    let water_lit = view.water_light.rgb*clamp(in.sky_light,0.,1.);
+    let albedo = mix(view.shallow.rgb,view.deep_color.rgb,smoothstep(0.0,max(view.water_light.w,1e-3),depth_under));
+    let transmitted = mix(albedo*water_lit,scene,exp(-absorption*path_length));
     let crest = smoothstep(view.foam_crest.x,max(view.foam_crest.y,view.foam_crest.x+1e-4),height)*view.foam_crest.z;
     let slope = smoothstep(view.foam_slope.x,max(view.foam_slope.y,view.foam_slope.x+1e-4),raw_slope)*view.foam_slope.z;
     let foam = clamp(max(crest,slope)*view.foam_color.w,0.,1.);
-    // The night floor is an AMBIENT level: it belongs to the light that reaches
-    // the water body and the foam on it, and not to the reflection, which
-    // carries the sky's own level already. Applied to both, as it was, the sea
-    // at night was dimmed twice and went black at the horizon, where a mirror
-    // should be closest to the sky it mirrors. At day it is one, so nothing
-    // above the terminator moves.
-    let lit = mix(clamp(view.absorption.w,0.,1.),1.,daylight*clamp(in.sky_light,0.,1.));
-    var color = mix(mix(transmitted*lit,reflected,fresnel),view.foam_color.rgb*lit,foam);
+    // Foam is lit as the water is; the glint is the sun as it reaches the
+    // water, after the air and the cloud (`rain_sun`), gone at night.
+    var color = mix(mix(transmitted,reflected,fresnel),view.foam_color.rgb*water_lit,foam);
     let half_vector = safe_normal(look+sun_direction);
     color += view.sun_tint.rgb
         *pow(max(dot(normal,half_vector),0.),max(view.sun_tint.w,1.))
-        *view.sun.w*lit;
+        *view.sun.w*view.rain_sun.rgb*clamp(in.sky_light,0.,1.);
     let fog = distance_fog(in.local_position,radial,sun_direction);
-    let fogged = mix(color,fog.rgb,fog.a);
+    let fogged = mix(color,fog.rgb,fog.a*clamp(in.sky_light,0.,1.));
     // The clouds over this water are the clouds pass's, drawn after the sheet
     // over everything against depth.
     return vec4<f32>(fogged,1.);
@@ -717,7 +735,9 @@ fn rd_n13(p: f32) -> vec3<f32> {
 }
 fn rd_n(t: f32) -> f32 { return fract(sin(t*12345.564)*7658.76); }
 fn rd_saw(b: f32, t: f32) -> f32 { return smoothstep(0.0,b,t)*smoothstep(1.0,b,t); }
-fn rd_drop_layer(uv_in: vec2<f32>, t: f32) -> vec2<f32> {
+// x the main drop, y its trail's beads (apart for the lens's radii,
+// `lens-drop-refraction`), z the trail.
+fn rd_drop_layer(uv_in: vec2<f32>, t: f32) -> vec3<f32> {
     var uv = uv_in;
     let whole = uv_in;
     uv.y += t*0.75;
@@ -752,8 +772,7 @@ fn rd_drop_layer(uv_in: vec2<f32>, t: f32) -> vec2<f32> {
     y = fract(y*10.0)+(st.y-0.5);
     let dd = length(st-vec2<f32>(x,y));
     droplets = smoothstep(0.3,0.0,dd);
-    let m = main_drop+droplets*r*trail_front;
-    return vec2<f32>(m,trail)*(keep*fade);
+    return vec3<f32>(main_drop,droplets*r*trail_front,trail)*(keep*fade);
 }
 fn rd_static_drops(uv_in: vec2<f32>, t: f32) -> f32 {
     var uv = uv_in*40.0*max(view.lens.w,0.05);
@@ -766,37 +785,91 @@ fn rd_static_drops(uv_in: vec2<f32>, t: f32) -> f32 {
     let fade = rd_saw(0.025,fract(t+n.z));
     return smoothstep(0.3,0.0,d)*fract(n.z*10.0)*fade*keep;
 }
-fn rd_drops(uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32) -> vec2<f32> {
+// Each kind of drop's radius in the drop space at `rain_lens_size` 1, where
+// its field reaches zero: the static drop's 0.3 of a 1/40 cell; a layer's
+// drop's 0.4 of a 1/12 cell (its distance the same across and down), and its
+// beads' 0.3 of it across. The far layer's are 1.85 times smaller.
+const RD_RADII: vec3<f32> = vec3<f32>(0.3/40.0, 0.4/12.0, 0.3/12.0);
+// The drop field at a point (`lens-drop-refraction`): x the coverage the drops
+// add up to (a pixel shows a drop where it passes 0.3), y the lens height, z
+// the trail. The height weighs each kind of drop by the square of its radius,
+// and the static drops by their height over `l0`'s (it reaches 2), so every
+// drop's slope is the same share of its own size.
+fn rd_drop_parts(uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32) -> vec3<f32> {
     let s = rd_static_drops(uv,t)*l0;
-    let m1 = rd_drop_layer(uv,t)*l1;
-    let m2 = rd_drop_layer(uv*1.85,t)*l2;
-    var c = s+m1.x+m2.x;
+    var near = rd_drop_layer(uv,t)*l1;
+    var far = rd_drop_layer(uv*1.85,t)*l2;
+    let trail = max(near.z*l0,far.z*l1);
     // Density above one stacks same-size layers rather than shrinking drops.
     let extra = clamp(view.lens.x-1.0,0.0,2.0);
     if (extra > 0.001) {
-        let m3 = rd_drop_layer(uv+vec2<f32>(0.50,0.37),t);
-        let m4 = rd_drop_layer(uv*1.85+vec2<f32>(0.27,0.61),t);
-        c += (m3.x*l1+m4.x*l2)*min(extra,1.0);
+        near += rd_drop_layer(uv+vec2<f32>(0.50,0.37),t)*(l1*min(extra,1.0));
+        far += rd_drop_layer(uv*1.85+vec2<f32>(0.27,0.61),t)*(l2*min(extra,1.0));
     }
-    c = smoothstep(0.3,1.0,c);
-    return vec2<f32>(c,max(m1.y*l0,m2.y*l1));
+    let r = RD_RADII/max(view.lens.w,0.05);
+    let w = r*r;
+    let h = w.x*s/max(l0,1.0) + dot(near.xy,w.yz) + dot(far.xy,w.yz)/(1.85*1.85);
+    return vec3<f32>(s+near.x+near.y+far.x+far.y, h, trail);
+}
+// The lens's uv (y down) in the reference's frame: centred, y up, in screen
+// heights. Tenebris's drop space; the lens multiplies it by `rain_lens_scale`.
+fn rd_space(uv: vec2<f32>) -> vec2<f32> {
+    return vec2<f32>((uv.x-0.5)*max(view.screen.x,0.1), 0.5-uv.y);
+}
+// A lens pixel through the drops (`lens-drop-refraction`): where it looks,
+// as an offset in the lens's uv; the drop field there (`rd_drop_parts`); and
+// how far the drop's surface there faces down, 0..1, from its slope.
+struct RdLens {
+    offset: vec2<f32>,
+    field: vec3<f32>,
+    lower: f32,
+}
+// The slope of the lens height bends a pixel toward its drop's centre: every
+// drop, whatever its size, by `rain_lens_bend` times the pixel's distance from
+// the centre at its middle, and by none at its rim. Below 1 an upright
+// magnifier; up to 2 the sample never leaves the drop. Across a cell's seam
+// the field steps; no pixel in a drop bends further than the bend times the
+// largest drop's radius, so that caps it.
+fn rd_lens(drop_uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32) -> RdLens {
+    let e = 0.001;
+    let here = rd_drop_parts(drop_uv,t,l0,l1,l2);
+    let across = rd_drop_parts(drop_uv+vec2<f32>(e,0.0),t,l0,l1,l2);
+    let up = rd_drop_parts(drop_uv+vec2<f32>(0.0,e),t,l0,l1,l2);
+    let slope = vec2<f32>(across.y-here.y, up.y-here.y)/e;
+    let bend = clamp(view.lens.y,0.0,2.0);
+    // A unit bump's R^2 slope is 6 u(1-u) R: a sixth of it is (1-u) times
+    // the distance from the centre.
+    var o = slope*(bend/6.0);
+    let reach = bend*RD_RADII.y/max(view.lens.w,0.05);
+    let len = length(o);
+    if (len > reach) { o *= reach/len; }
+    var lens: RdLens;
+    // Back from the drop space to the uv: undo the scale, the aspect and the
+    // flip of `rd_space`.
+    lens.offset = vec2<f32>(o.x/max(view.screen.x,0.1), -o.y)/max(view.mist_look.w,0.05);
+    lens.field = here;
+    // The slope points up the drop, toward its middle: up at its lower edge.
+    lens.lower = clamp(slope.y*inverseSqrt(max(dot(slope,slope),1e-20)),0.0,1.0);
+    return lens;
 }
 // `wipe` receives how much of the glass the drops and their trails have run
 // over here: what clears the mist (`lens-weather`).
 fn refract_through_drops(uv: vec2<f32>, drop_uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32,
         wipe: ptr<function, f32>) -> vec4<f32> {
-    let c = rd_drops(drop_uv,t,l0,l1,l2);
-    let e = vec2<f32>(0.001,0.0);
-    let cx = rd_drops(drop_uv+e,t,l0,l1,l2).x;
-    let cy = rd_drops(drop_uv+e.yx,t,l0,l1,l2).x;
-    // A gradient in the y-up drop frame, negated in y for the y-down sample.
-    // Divided by the drops' scale, so each drop still bends the same share
-    // of its own width however small it is drawn (`lens-weather`).
-    let n = vec2<f32>(cx-c.x,-(cy-c.x));
-    let bend = view.lens.y/max(view.mist_look.w, 0.05);
-    let refracted = textureSampleLevel(scene_color,scene_sampler,clamp(uv-n*bend,vec2(0.),vec2(1.)),0.0).rgb;
-    *wipe = max(*wipe, clamp(max(c.x, c.y), 0.0, 1.0));
-    return vec4<f32>(refracted, clamp(c.x,0.0,1.0));
+    let lens = rd_lens(drop_uv,t,l0,l1,l2);
+    let c = smoothstep(0.3,1.0,lens.field.x);
+    // The edge (`lens-drop-refraction`): where the drop's alpha passes a half
+    // its surface is steep, and light is lost there; what shows a drop against
+    // a flat sky. The sky's light, bent through the drop, gathers on the
+    // lower part of that edge: the sky's mean radiance, so it goes with the
+    // day. Nothing at a drop's middle, nothing outside it.
+    let band = 4.0*c*(1.0-c);
+    let rim = clamp(view.lens_look.x,0.0,1.0);
+    let glint = max(view.lens_look.y,0.0);
+    let behind = textureSampleLevel(scene_color,scene_sampler,clamp(uv+lens.offset,vec2(0.),vec2(1.)),0.0).rgb;
+    let refracted = behind*(1.0-rim*band) + view.rain_sky.rgb*(glint*band*lens.lower);
+    *wipe = max(*wipe, clamp(max(c, lens.field.z), 0.0, 1.0));
+    return vec4<f32>(refracted, clamp(c,0.0,1.0));
 }
 
 // The mist's beads: a field of tiny drops, `mist_look.x` per screen height,
@@ -857,12 +930,10 @@ fn lens(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // The drop math is the reference's, whose full-screen v_uv is y-UP ("high
     // y = high on screen"); Bevy's fullscreen uv is y-down, and in it the same
     // monotonic fall climbed. The lens works in the reference's frame.
-    var drop_uv = vec2<f32>(uv.x-0.5, 0.5-uv.y);
-    drop_uv.x *= max(view.screen.x,0.1);
+    let tenebris_uv = rd_space(uv);
     // The drops `rain_lens_scale` times smaller than Tenebris's, trails and
     // beads with them (`lens-weather`).
-    let tenebris_uv = drop_uv;
-    drop_uv *= max(view.mist_look.w, 0.05);
+    let drop_uv = tenebris_uv*max(view.mist_look.w, 0.05);
     let t = view.camera_time.w*0.2*view.lens.z;
     // The rain on the camera, not on the sea: under a roof it is none.
     let rain = clamp(view.rain.x,0.0,1.0);
@@ -1229,7 +1300,10 @@ fn cloud_upsampled(uv: vec2<f32>, far: f32, distance: ptr<function, f32>) -> vec
         let w = select(1.0-f.x, f.x, o.x == 1)*select(1.0-f.y, f.y, o.y == 1);
         let depth = textureLoad(cloud_depth, texel, 0).rg;
         let kept = select(0.0, 1.0, cloud_texel_sees(depth, far));
-        let cloud = textureLoad(cloud_history, texel, 0);
+        var cloud = textureLoad(cloud_history, texel, 0);
+        // Under the puffs, the coverage the air leaves is kept apart from the
+        // light (`puff-haze`).
+        if (view.cloud_puff_fade.w > 0.5) { cloud.w = textureLoad(cloud_puff_cover, texel, 0).r; }
         sum += cloud*w*kept;
         weight += w*kept;
         let held_at = cloud_texel_distance(depth.x);
@@ -1287,9 +1361,16 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // this pixel's own entry into the layer: measured to zero, the haze was
     // none, and every such texel at a cloud's edge stood out unhazed, a bright
     // rim round a limb cloud seen through thick air (`cloud-edges`).
+    // The puffs come hazed, each to its own distance, from their own pass
+    // (`puff-haze`); with the puffs configured the history holds nothing
+    // else, so the air here is the march's alone.
     var at = 0.0;
     let upsampled = cloud_upsampled(uv, far, &at);
-    let cloud = upsampled*cloud_air(eye, ray.direction, min(select(span.x, at, at > 0.0), far));
+    var air = 1.0;
+    if (view.cloud_puff_fade.w < 0.5) {
+        air = cloud_air(eye, ray.direction, min(select(span.x, at, at > 0.0), far));
+    }
+    let cloud = upsampled*air;
     let behind = scene*(1.0-cloud.w)+cloud.rgb;
     // The first metres from the eye, to this pixel's own stop, are the
     // cloud's fog seen in front of everything else: it thickens as the eye
@@ -1390,11 +1471,16 @@ fn cloud_near_reach(layer: CloudLayer) -> f32 {
 }
 
 struct PuffOut {
-    // Premultiplied light and coverage, blended "over".
+    // Premultiplied light, as the air in front of the puff leaves it, and
+    // the puff's own coverage, blended "over" (`puff-haze`).
     @location(0) cloud: vec4<f32>,
     // The puff's distance and the scene's stop along this ray, both kept at
     // their nearest (blend Min); cleared to the far cap.
     @location(1) depth: vec2<f32>,
+    // The coverage the air leaves in r, blended "over" by the puff's own
+    // coverage in a: the far puffs are hidden by the near puff, not by its
+    // haze (`puff-haze`).
+    @location(2) cover: vec4<f32>,
 }
 
 @fragment
@@ -1485,10 +1571,26 @@ fn cloud_puff_fragment(in: PuffVaryings) -> PuffOut {
         * smoothstep(0.15, 0.5, dot(look, safe_normal(eye)));
     let floor_cut = mix(smoothstep(puff.layer.x - band, puff.layer.x + band*0.5, length(surface)), 1.0, from_below);
     let a = clamp(dens*puff.shape.w*near*soft*floor_cut*outside, 0.0, 1.0);
+    // The distances are written where the puff is, hazed or not, so the
+    // silhouette tests read them as before (`puff-haze`).
     if (a < 0.004) { discard; }
+    // Each puff is hazed by the air in front of IT, to its own distance along
+    // this ray (`puff-haze`). Hazed once for the whole texel at the nearest
+    // puff's distance, a far puff seen through a near one's thin edge took
+    // the near one's lighter haze and stepped back to its own at the edge: an
+    // outline round every puff in front of another. Measured at the
+    // billboard's corners instead, which lie further off than the puff, the
+    // air came out a little thick on every puff.
+    // It adds its light and coverage as the air leaves them, and hides what
+    // is behind it by its own coverage: the air adds its light over the puff,
+    // it does not make the puff transparent to the cloud behind. Hidden by
+    // the hazed coverage, every stack of puffs came out brighter inside, and
+    // a deep one at the horizon would come out opaque.
+    let seen = a*cloud_air(eye, look, dist);
     var out: PuffOut;
-    out.cloud = vec4<f32>(lit*a, a);
+    out.cloud = vec4<f32>(lit*seen, a);
     out.depth = vec2<f32>(dist, far);
+    out.cover = vec4<f32>(seen, 0.0, 0.0, a);
     return out;
 }
 

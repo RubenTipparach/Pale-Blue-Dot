@@ -1,4 +1,13 @@
-use bevy::{asset::RenderAssetUsages, mesh::PrimitiveTopology, prelude::*};
+use bevy::{
+    asset::RenderAssetUsages,
+    mesh::{MeshVertexBufferLayoutRef, PrimitiveTopology},
+    pbr::{MaterialPipeline, MaterialPipelineKey},
+    prelude::*,
+    render::render_resource::{
+        AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError,
+    },
+    shader::ShaderRef,
+};
 use pbd_core::{DQuat, orbit::CircularOrbit};
 
 #[derive(Component)]
@@ -8,10 +17,65 @@ pub struct MoonOrbit(CircularOrbit);
 #[derive(Component)]
 pub struct Stars;
 
+/// The stars' material (`steady-stars`): quads sized in screen pixels by
+/// `stars.wgsl`, so a star never falls between pixels and flickers.
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Default)]
+pub struct StarMaterial {}
+
+impl Material for StarMaterial {
+    fn vertex_shader() -> ShaderRef {
+        "shaders/stars.wgsl".into()
+    }
+
+    fn fragment_shader() -> ShaderRef {
+        "shaders/stars.wgsl".into()
+    }
+
+    fn enable_prepass() -> bool {
+        false
+    }
+
+    fn enable_shadows() -> bool {
+        false
+    }
+
+    fn specialize(
+        _pipeline: &MaterialPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        layout: &MeshVertexBufferLayoutRef,
+        _key: MaterialPipelineKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        descriptor.vertex.buffers = vec![layout.0.get_layout(&[
+            Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
+            Mesh::ATTRIBUTE_UV_0.at_shader_location(1),
+            Mesh::ATTRIBUTE_COLOR.at_shader_location(2),
+        ])?];
+        descriptor.primitive.cull_mode = None;
+        Ok(())
+    }
+}
+
+/// A star `metres` in half-width at the star sphere, as the field was laid
+/// out: the half-width of its quad in screen pixels and its intensity. One
+/// pixel is 110 m there (1,800 px over a 60 degree field of view, 180 km out).
+/// It is drawn as a Gaussian at least 0.8 px wide (the quad three widths
+/// out), which sums to the same light at any offset between pixel centres;
+/// the light its true footprint held is spread over the Gaussian, so a faint
+/// star stays faint.
+fn star_pixels(metres: f32) -> (f32, f32) {
+    const METRES_PER_PIXEL: f32 = 110.0;
+    let sigma = (0.66 * metres / METRES_PER_PIXEL).max(0.8);
+    let footprint = (2.0 * metres / METRES_PER_PIXEL).powi(2);
+    let area = std::f32::consts::TAU * sigma * sigma;
+    (3.0 * sigma, (footprint / area).min(1.0))
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut star_materials: ResMut<Assets<StarMaterial>>,
     frame: Res<pbd_app::PhysicsFrame>,
     sun: Res<pbd_app::sky::Sun>,
 ) {
@@ -39,6 +103,7 @@ pub fn setup(
         MoonOrbit(CircularOrbit::new(26000.0, 8000.0, 3.8, DQuat::from_rotation_x(0.35)).unwrap()),
     ));
     let mut positions = Vec::new();
+    let mut corners = Vec::new();
     let mut colors = Vec::new();
     for i in 0..1400_u32 {
         let hash = |v: u32| {
@@ -53,15 +118,20 @@ pub fn setup(
             y,
             (1.0 - y * y).sqrt() * angle.sin(),
         );
-        let tangent = direction.any_orthonormal_vector();
-        let bitangent = direction.cross(tangent);
         let size = 20.0 + hash(i * 3 + 11).powi(8) * 150.0;
         let center = direction * 180_000.0;
+        let (half, intensity) = star_pixels(size);
         let tint = if i % 5 == 0 {
-            [0.56, 0.72, 1.0, 1.0]
+            [0.56, 0.72, 1.0]
         } else {
-            [0.9, 0.88, 0.75, 1.0]
+            [0.9, 0.88, 0.75]
         };
+        let tint = [
+            tint[0] * intensity,
+            tint[1] * intensity,
+            tint[2] * intensity,
+            1.0,
+        ];
         for (x, y) in [
             (-1.0, -1.0),
             (1.0, -1.0),
@@ -70,26 +140,21 @@ pub fn setup(
             (1.0, 1.0),
             (-1.0, 1.0),
         ] {
-            positions.push((center + (tangent * x + bitangent * y) * size).to_array());
+            positions.push(center.to_array());
+            corners.push([x * half, y * half]);
             colors.push(tint);
         }
     }
-    let count = positions.len();
     let star_mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 1.0, 0.0]; count])
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, corners)
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     commands.spawn((
         Mesh3d(meshes.add(star_mesh)),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::WHITE,
-            unlit: true,
-            cull_mode: None,
-            ..default()
-        })),
+        MeshMaterial3d(star_materials.add(StarMaterial::default())),
         bevy::camera::visibility::NoFrustumCulling,
         Transform::from_translation(offset),
         Stars,

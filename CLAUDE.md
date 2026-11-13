@@ -212,6 +212,51 @@ Nothing heavy runs beside a benchmark: a browser rendering on the CPU or the
 GPU, a build or a second game makes the numbers worthless (perf-measure rule
 2). Run mockup screenshots before or after a perf sitting, not during it.
 
+## Build with `fast`, always; `--release` only for performance (owner, 2026-11-13)
+
+**Standing instruction from the user:** "build with fast ALWAYS unless doing
+performance runs", and "only use release for performance". Every build for
+playing, play-testing, fixing, verifying or capturing a look is
+`cargo build --profile fast -p pbd-app` (`target/fast/pbd-app.exe`, the
+same profile `build-play.bat` uses). It is incremental and skips link-time
+optimisation, so a small change rebuilds in seconds (about 10 s for a
+comment edit, 20 s for a changed constant in `walking.rs`), where
+`--release` takes 9-15 minutes.
+
+`--release` (`build-play.bat --full`) is for performance work only:
+`tools/perf_suite.py`, `--frame-log` numbers, benchmark reports and their
+captures. When the owner wants to play, build `fast`, skip tests, clippy and
+captures, and say when it is ready.
+
+## A loading screen on boot (owner, 2026-11-12)
+
+**Standing instruction from the user:** "You should have a loading screen to
+prewarm/cache shaders", and on 2026-11-13, after a launch that opened on a
+black window with a white bar: "startup screen is blank, there should be
+loading screen". From the first frame the window shows, the game shows its
+loading screen: never a black or blank window, and no unpainted strip. It
+stays up while the world is prepared and every render pipeline the game will
+use is compiled, and play starts only after that. A pipeline compiled after
+`READY` (logged as `LATE_PIPELINE <label>`) is a bug to fix by adding it to the
+prewarm. Every launch path keeps this: a normal start, `--load`, any render
+scale or other player setting.
+
+## What the owner means by "rain shadow" (owner, 2026-11-13)
+
+**Standing definition from the user:** "rain shadow" is "everything
+pertaining to the heavy volumetric rain fx": "the animated fx that runs in
+the background of rain, it is the rain fog itself included". In the code
+that is the rain volume, the full-screen rain pass and everything that feeds
+it: the rain fog (haze), the animated streaks on its shells, its lighting
+(sky, sun with the cascades' shafts, lamps, lightning) and its half-size
+target and compose (`rain`, `rain_half`, `rain_compose` in `water.wgsl`;
+`rain_needed` in `planet_water.rs`). It is not the near shower (the CPU
+streak mesh in `weather.rs`), the wet ground, or the drops on the lens, which
+the owner calls the rain drops.
+
+The player's RAIN SHADOW setting (`player-settings` 8) turns all of it off,
+and is off by default.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
@@ -311,6 +356,8 @@ branch before it and the branch with frame latency 2 and the L8 fixes, every
 scenario, at night, with vsync, and the slow frames classified;
 `docs/benchmarks/2026-11-12-lighting-perf/`) is
 https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH.
+The one-part-off breakdown (where the frame goes, the same Mac) is
+https://claude.ai/artifact/3hvQJvSQJJhAQX7hUjHzQn.
 
 ## Hex size is fixed across every planet: the Tenebris gold standard
 

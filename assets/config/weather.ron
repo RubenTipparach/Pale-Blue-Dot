@@ -41,9 +41,24 @@
     shower_column_m: 46.0,
     shower_max_streaks: 1700,
     rain_lens_density: 1.4,
-    rain_lens_refract: 1.7,
     rain_lens_speed: 1.0,
     rain_lens_size: 0.7,
+    // How far a lens drop bends what is behind it toward its centre
+    // (lens-drop-refraction): at its middle this share of a pixel's distance
+    // from the centre, at its rim none, whatever its size. Below 1 an upright
+    // magnifier (0.5 doubles the middle); up to 2 it inverts inside its
+    // outline, and never samples outside it. Replaces Tenebris's unnormalised
+    // rain_lens_refract 1.7, which reached 70-450 px past 6-27 px drops.
+    rain_lens_bend: 0.5,
+    // How much of the light a lens drop loses at its edge, where its alpha
+    // passes a half (lens-drop-refraction), 0..1: what shows a drop against
+    // a flat sky. 0 draws no edge.
+    rain_lens_rim: 0.2,
+    // How much of the sky's mean light a lens drop gathers on the lower part
+    // of its edge (lens-drop-refraction), a gain, not negative: the bright
+    // underside of a drop on glass, what shows it over dark ground. 0 draws
+    // none.
+    rain_lens_glint: 1.0,
     // The drops on the lens this many times smaller than Tenebris's, trails,
     // beads and refraction with them (lens-weather): at 1440x900 its big drop
     // was about 55 px across, at 2 about 27.
