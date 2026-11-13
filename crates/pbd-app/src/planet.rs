@@ -1712,9 +1712,11 @@ fn prepare_views(
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
+        // Two entries a cell as well: the sea sheet dissolves with the ground
+        // at a landing (`two-set-dissolve`).
         let water = device.create_buffer(&BufferDescriptor {
             label: Some("GPU visible water cell IDs"),
-            size: planet.slots as u64 * 4,
+            size: planet.slots as u64 * 8,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });

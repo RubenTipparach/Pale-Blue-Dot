@@ -47,7 +47,10 @@ struct WaterView {
     lod: vec4<f32>,           // xyz player direction, w base level
     bands: vec4<f32>,         // cos(band radius / R) per fine level, coarsest first
     bands_in: vec4<f32>,      // the bands' cross-fade rings' inner edges (`distance-lod-fade`)
-    rain: vec4<f32>,          // x the rain on the LENS (zero under a roof), y frame s, z airspeed, w one when the rings follow the rain (`lighting-model`)
+    lod_prev: vec4<f32>,      // the partition a landing dissolves from: xyz its centre, w the dissolve's progress (`two-set-dissolve`)
+    bands_prev: vec4<f32>,    // and its bands
+    bands_prev_in: vec4<f32>, // and their rings' inner edges
+    rain: vec4<f32>,         // x the rain on the LENS (zero under a roof), y frame s, z airspeed, w one when the rings follow the rain (`lighting-model`)
     // The cloud layer, `pbd::clouds::CloudLayer`'s four lanes as the sky has
     // them this frame, so the sheet can put the same clouds over itself.
     cloud_clouds: vec4<f32>,
@@ -187,6 +190,9 @@ struct VertexOut {
     // The owners' fades and the finer band's fade at the centre, as the
     // terrain carries them (`distance-lod-fade`).
     @location(9) @interpolate(flat) fade_t: vec3<f32>,
+    // Which partition the sheet is drawn for while a landing dissolves, as
+    // the terrain marks it (`two-set-dissolve`): 0 both, 1 the new, 2 the old.
+    @location(10) @interpolate(flat) part_mark: u32,
 }
 fn safe_normal(v: vec3<f32>) -> vec3<f32> { return v * inverseSqrt(max(dot(v,v),1e-12)); }
 
@@ -297,7 +303,11 @@ fn rain_ripple_grad(uv: vec2<f32>, t: f32) -> vec2<f32> {
 // the cap from its centre. A pentagon's sixth triangle collapses to the centre.
 @vertex
 fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> VertexOut {
-    let id = water[instance];
+    // A cell's index, and in the top two bits the partition the sheet is
+    // drawn for, as the terrain's list entries carry it (`two-set-dissolve`).
+    let listed = water[instance];
+    let mark = listed >> 30u;
+    let id = listed & 0x3fffffffu;
     let cell = cells[id];
     let degree = cell.metadata.x & 0xffu;
     let level = cell.metadata.x >> 8u;
@@ -333,8 +343,16 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.owner_a = cell.owner_a.xyz;
     out.owner_b = cell.owner_b.xyz;
     let finest = u32(view.lod.w) + 4u;
-    out.fade_t = vec3<f32>(water_band_t(cell.owner_a.xyz, level), water_band_t(cell.owner_b.xyz, level),
-        select(0.0, water_band_t(cell.direction_height.xyz, level + 1u), level < finest));
+    // Split by the partition it is drawn for: the old one's centre and bands
+    // for a sheet the old set lists, the current ones otherwise.
+    let old = mark == 2u;
+    let centre = select(view.lod.xyz, view.lod_prev.xyz, old);
+    let bands = select(view.bands, view.bands_prev, old);
+    let bands_in = select(view.bands_in, view.bands_prev_in, old);
+    out.fade_t = vec3<f32>(water_band_t(cell.owner_a.xyz, level, centre, bands, bands_in),
+        water_band_t(cell.owner_b.xyz, level, centre, bands, bands_in),
+        select(0.0, water_band_t(cell.direction_height.xyz, level + 1u, centre, bands, bands_in), level < finest));
+    out.part_mark = mark;
     return out;
 }
 fn water_band_cos(level: u32) -> f32 {
@@ -347,15 +365,16 @@ fn water_lane(lanes: vec4<f32>, level: u32) -> f32 {
     if (k == 2u) { return lanes.z; }
     return lanes.w;
 }
-// How far into fine level `level`'s band, across its cross-fade ring: the
-// terrain's `band_t` (`distance-lod-fade`).
-fn water_band_t(direction: vec3<f32>, level: u32) -> f32 {
+// How far into fine level `level`'s band, across its cross-fade ring, for the
+// partition round `centre`: the terrain's `band_t` (`distance-lod-fade`).
+fn water_band_t(direction: vec3<f32>, level: u32, centre: vec3<f32>, bands: vec4<f32>,
+    bands_in: vec4<f32>) -> f32 {
     if (level <= u32(view.lod.w)) { return 1.0; }
     if (level > u32(view.lod.w) + 4u) { return 0.0; }
-    let out_cos = water_lane(view.bands, level);
+    let out_cos = water_lane(bands, level);
     if (out_cos > 1.0) { return 0.0; }
-    let in_cos = water_lane(view.bands_in, level);
-    let d = dot(direction, view.lod.xyz);
+    let in_cos = water_lane(bands_in, level);
+    let d = dot(direction, centre);
     let span = in_cos - out_cos;
     if (span <= 1e-9) { return select(0.0, 1.0, d > out_cos); }
     return clamp((d - out_cos)/span, 0.0, 1.0);
@@ -451,6 +470,16 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // class (`distance-lod-fade`): the sheet is drawn where its owner (the
     // nearer, for a split midpoint cell) is in its band and the finer band
     // has not taken its centre.
+    // A landing's dissolve (`two-set-dissolve`): a sheet listed for one
+    // partition keeps that partition's half of the pixels, by the terrain's
+    // own mask, so the sea and the seabed under it dissolve in the same
+    // pixels.
+    if (in.part_mark != 0u) {
+        let dissolve = fract(52.9829189*fract(dot(in.clip.xy, vec2<f32>(0.06711056, 0.00583715))));
+        let new_half = dissolve < view.lod_prev.w;
+        if (in.part_mark == 1u && !new_half) { discard; }
+        if (in.part_mark == 2u && new_half) { discard; }
+    }
     let m = water_bayer4(in.clip.xy);
     if (in.fade_t.z > m) { discard; }
     if (in.level > u32(view.lod.w)) {

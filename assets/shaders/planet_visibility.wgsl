@@ -427,7 +427,8 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // The terrain and foliage lists take a cell twice while a landing
     // cross-fades, once per partition (`detail-fade`), so they hold two.
     if arrayLength(&cells)<count || arrayLength(&visible)<2u*count || arrayLength(&foliage)<2u*count || arrayLength(&column)<count { return; }
-    if !cascade && (arrayLength(&water)<count || arrayLength(&clutter)<count) { return; }
+    // The sea list takes a cell twice as well, once per partition.
+    if !cascade && (arrayLength(&water)<2u*count || arrayLength(&clutter)<count) { return; }
     if id.x >= count { return; }
     let kind = slot_kind(id.x);
     if kind == SLOT_DEAD { return; }
@@ -482,9 +483,11 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
             }
         }
     }
-    // The sea sheet, the clutter and the columns are drawn for the current
-    // partition only; the foliage below is drawn for both.
-    if now && !cascade && cell.direction_height.w < 0.0 {
+    // The sea sheet over a submerged cell is listed by the ground's rows, so
+    // at a landing it dissolves with the seabed under it rather than taking
+    // the new partition's coastline at once (`two-set-dissolve`). The clutter
+    // and the columns are drawn for the current partition only.
+    if !cascade && cell.direction_height.w < 0.0 {
         let sea = params.water_absorption.w;
         let sheet = cell.direction_height.xyz*sea;
         var reach = 0.0;
@@ -493,8 +496,13 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
         }
         // The swell lifts a vertex by at most a few metres; 4 m covers it.
         if in_frustum(sheet, reach + 4.0) {
-            let slot = atomicAdd(&args[2].instance_count,1u);
-            water[slot] = id.x;
+            let entries = emit(id.x, ground);
+            for (var e = 0u; e < 2u; e++) {
+                if entries[e] != 0xffffffffu {
+                    let slot = atomicAdd(&args[2].instance_count,1u);
+                    water[slot] = entries[e];
+                }
+            }
         }
     }
     // The largest authored tree fits inside 15 m of its base. Keep a tree
