@@ -1,7 +1,7 @@
 # dusk-sky: one twilight for the sky and the ground
 
-Fixed-step captures on the Mac (`--profile fast`), frame 120, each from a new
-world: `--at 20 40` (map 20.000S 40.000E), on foot, eye 48.6 m above sea
+Fixed-step captures on the Mac (`--profile fast`), frame 120, in one world made by the
+first run and reopened by the rest (the same spot each time): `--at 20 40` (map 20.000S 40.000E), on foot, eye 48.6 m above sea
 level and 1.6 m above the ground, facing the sun's bearing 10 degrees up,
 `Weather here: cover 0.00, rain 0.00`.
 

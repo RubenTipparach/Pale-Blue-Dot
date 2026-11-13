@@ -5,8 +5,9 @@ stars into dotted arcs, trees and clouds into stepped trails. Cause and bisect:
 `openspec/changes/tone-grade-order/design.md`.
 
 All four are fixed-step captures on the Mac (Apple M4 Max, Metal, window
-1440 x 900 at 2x, `--profile fast`), frame 240 after `READY`, from a new world
-each time, turning 45 degrees a second (0.75 degrees a frame).
+1440 x 900 at 2x, `--profile fast`), frame 240 after `READY`, in one world
+made by the first run and reopened by the rest (the same spot, time and
+logged weather each time), turning 45 degrees a second (0.75 degrees a frame).
 
 - **before**: `claude/perf-tuning` with only the fix taken out (the tone
   grade's node re-added per camera, as at `b76c3a9`).

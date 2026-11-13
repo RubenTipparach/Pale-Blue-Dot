@@ -1,7 +1,7 @@
 # steady-stars: stars that do not flicker
 
-Six consecutive fixed-step frames (120 to 125) of one night launch on the
-Mac (`--profile fast`): `--at 20 40` (map 20.000S 40.000E), on foot, eye
+Six consecutive fixed-step frames (120 to 125), one launch each in one
+world made by the first run and reopened by the rest, on the Mac (`--profile fast`): `--at 20 40` (map 20.000S 40.000E), on foot, eye
 48.6 m above sea level and 1.6 m above the ground, 02:00 (sun 30.5 degrees
 under), `Weather here: cover 0.00, rain 0.00`, looking 60 degrees up and
 turning 3 degrees a second.
