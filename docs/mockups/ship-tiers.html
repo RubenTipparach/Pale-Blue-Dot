@@ -83,7 +83,18 @@ button{font:inherit}
 .lbl{position:absolute;transform:translate(-50%,-120%);font:600 11px var(--mono);white-space:nowrap;pointer-events:none;text-shadow:0 1px 0 #000,1px 0 0 #000,-1px 0 0 #000}
 .shot .stage{position:fixed;inset:0;height:auto;min-height:0;z-index:50;border-radius:0}
 .shot .ov.br{display:none}
-@media (max-width:760px){.hudbar .hs{width:34px;height:34px}.hudbar .hs.sel{width:38px;height:38px}.hudbar .hs img{width:32px;height:32px}.ov.br{display:none}.tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ov.bl{left:12px;bottom:12px}
+.keys{gap:5px;max-width:212px}
+.keys .kt{font:600 11px var(--mono);color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.keys.live .kt{color:var(--amber)}
+.keys .kk{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.keys button{all:unset;cursor:pointer;display:grid;justify-items:center;border:1px solid var(--line);border-radius:4px;padding:3px 2px;background:rgba(5,8,12,.6);touch-action:none;user-select:none}
+.keys button b{font:600 13px var(--mono);color:var(--ink)}
+.keys button span{font:500 9.5px var(--mono);color:var(--muted)}
+.keys button[disabled]{opacity:.5;cursor:default}
+.keys button[aria-pressed="true"]{border-color:var(--amber);background:rgba(240,180,60,.2)}
+.keys button:focus-visible{outline:2px solid var(--amber)}
+@media (max-width:760px){.hudbar .hs{width:34px;height:34px}.hudbar .hs.sel{width:38px;height:38px}.hudbar .hs img{width:32px;height:32px}.ov.br{display:none}.keys{max-width:170px}.keys button span{display:none}.tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 /* working panel under the stage */
 .work{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:14px;align-items:start}
@@ -186,6 +197,7 @@ form.addroute select{font:inherit;font-size:13.5px;background:var(--panel-2);col
     <div class="ov tr" id="ctl"></div>
     <div class="ov br" id="info"></div>
     <div class="hudbar" id="hudbar" aria-label="Hotbar, as the game draws it"></div>
+    <div class="ov bl keys" id="keys" role="group" aria-label="Flight keys" hidden></div>
   </div>
   <div class="work" id="work"></div>
 </section>
@@ -690,12 +702,19 @@ function partMesh(p, ctx = {}) {
   const add = (geo, mat, y, extra) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; m.castShadow = m.receiveShadow = true; if (extra) extra(m); g.add(m); return m; };
   const prism = (r, h, mat, y, top = r) => add(prismGeo(r, h, top), mat, y + h / 2);
   const a = ctx.angle || 0;                      // the cell's direction out from the core
+  // an engine's bell and plume hang from a pivot at the bell's throat, so the nozzle swivels in its gimbal
+  // and the plume follows (g.gimbal: rotation.x tilts it toward -z, rotation.z toward -x)
+  const gimbal = (pivot, rBell, rThroat, mat, flame, len, f0, f1) => {
+    const gb = new THREE.Group(); gb.position.y = pivot; g.add(g.gimbal = gb);
+    if (mat) { const b = new THREE.Mesh(prismGeo(rBell, pivot, rThroat), mat); b.position.y = -pivot / 2; b.castShadow = b.receiveShadow = true; gb.add(b); }
+    const f = flameMesh(flame, len, f0, f1); f.position.y -= pivot; gb.add(f); g.flames.push(f);
+  };
   const radial = (geo, mat, y, d, m2) => add(geo, mat, y, m => { m.position.x = Math.cos(a) * d; m.position.z = Math.sin(a) * d; m.rotation.y = Math.PI / 2 - a; if (m2) m2(m); });
   switch (p) {
     case "pod": prism(HR * 0.98, 0.25, M.dark, 0); prism(HR * 0.95, 0.75, M.pod, 0.25, HR * 0.42); add(boxGeo(0.5, 0.22, 0.08), M.glass, 0.62, m => m.position.z = HR * 0.66); break;
     case "tank": prism(HR, 1, M.tank, 0); break;
-    case "chem": { prism(HR * 0.9, 0.35, M.pod, 0.65); prism(HR * 0.82, 0.65, M.engine, 0, HR * 0.42); const f = flameMesh(FLAME.chem, 3.2, HR * 0.7, HR * 0.15); g.add(f); g.flames.push(f); break; }
-    case "ntr": { prism(HR * 0.75, 0.55, M.ntr, 0.45); prism(HR * 0.6, 0.45, M.engine, 0, HR * 0.4); const f = flameMesh(FLAME.ntr, 2.6, HR * 0.5, HR * 0.1); g.add(f); g.flames.push(f); break; }
+    case "chem": { prism(HR * 0.9, 0.35, M.pod, 0.65); gimbal(0.65, HR * 0.82, HR * 0.42, M.engine, FLAME.chem, 3.2, HR * 0.7, HR * 0.15); break; }
+    case "ntr": { prism(HR * 0.75, 0.55, M.ntr, 0.45); gimbal(0.45, HR * 0.6, HR * 0.4, M.engine, FLAME.ntr, 2.6, HR * 0.5, HR * 0.1); break; }
     case "dec": prism(HR, 0.3, M.hazard, 0); prism(HR * 0.7, 0.7, M.dark, 0.3); break;
     case "srb": {
       prism(HR * 0.78, 1, M.booster, 0);
@@ -707,8 +726,8 @@ function partMesh(p, ctx = {}) {
     case "legs": { const s = new THREE.Group(); s.rotation.y = Math.PI / 2 - a; g.add(s);
       const st = new THREE.Mesh(boxGeo(0.18, 1.6, 0.18), M.dark); st.position.set(0, 0.1, -HR * 0.1); st.rotation.x = -0.55; s.add(st);
       const ft = new THREE.Mesh(prismGeo(0.45, 0.12, 0.4), M.dark); ft.position.set(0, -0.6, HR * 0.38); s.add(ft); st.castShadow = ft.castShadow = true; break; }
-    case "fusion": { prism(HR, 0.6, M.fusion, 0.4); prism(HR * 0.7, 0.4, M.engine, 0, HR * 0.95); const f = flameMesh(FLAME.fusion, 9, HR * 0.5, HR * 0.08); g.add(f); g.flames.push(f); break; }
-    case "am": { prism(HR, 1, M.am, 0); const f = flameMesh(FLAME.am, 5, HR * 0.55, HR * 0.1); g.add(f); g.flames.push(f); break; }
+    case "fusion": { prism(HR, 0.6, M.fusion, 0.4); gimbal(0.4, HR * 0.7, HR * 0.95, M.engine, FLAME.fusion, 9, HR * 0.5, HR * 0.08); break; }
+    case "am": { prism(HR, 1, M.am, 0); gimbal(0, 0, 0, null, FLAME.am, 5, HR * 0.55, HR * 0.1); break; }
     // ---- inside a rocket
     case "deck": prism(HR, 0.16, M.deck, 0.84); prism(HR * 0.97, 0.12, M.dark, 0.72); break;
     case "hull": {
@@ -887,35 +906,11 @@ function buildVab() {
     // cut-away: the walls on the camera's half of the stack are hidden, so the decks show
     const cx = W.camera.position.x - W.rocket.position.x, cz = W.camera.position.z - W.rocket.position.z;
     for (const m of W.rocket.parts) { const k = m.userData.kind; if (k === "wall" || k === "door") m.visible = !(VAB.view === "cut" && m.userData.x * cx + m.userData.z * cz > -0.5 * Math.hypot(cx, cz)); }
-    const L = W.launch;
-    if (!L) { W.flameLamp.i = 0; return; }
-    L.t += dt;
-    if (L.stuck) {
-      W.rocket.position.x = (Math.random() - 0.5) * 0.08; W.flameLamp.p.set(0, W.base, 0); W.flameLamp.i = 3.5;
-      if (L.t > 3) endLaunch();
-      return;
-    }
-    const sub = 10, h = dt / sub, g = BODIES[VAB.body].g;
-    for (let i = 0; i < sub; i++) {
-      const ph = L.phases[L.k];
-      let a = -g;
-      if (ph && ph.F > 0) { a += ph.F / L.m; const use = Math.min(ph.prop, ph.mdot * h); ph.prop -= use; L.m -= use; }
-      if (ph && ph.prop <= 1e-6) { stageSep(L, ph); L.k++; }
-      L.v += a * h; L.y += L.v * h; if (L.y < 0) { L.y = 0; L.v = Math.max(0, L.v); }
-      L.x += L.vx * h; if (L.y > 25) L.vx = Math.min(L.vx + 1.4 * h, 30);
-    }
-    W.rocket.position.set(L.x, W.base + L.y, 0);
-    W.rocket.rotation.z = -Math.min(0.5, L.vx / 60);
-    const ph = L.phases[L.k], on = ph && ph.F > 0;
-    W.rocket.flames.forEach(f => f.visible = on && !f.userData.gone && f.userData.stage === ph.stage && (!f.userData.srb || ph.srb));
-    W.flameLamp.p.set(L.x, W.base + L.y - 2, 0); W.flameLamp.i = on ? 5 : 0;
-    for (const d of W.debris) { d.v -= g * dt; d.o.position.y += d.v * dt; d.o.position.x += d.vx * dt; d.o.rotation.z += d.spin * dt; if (d.o.position.y < 1) { d.o.position.y = 1; d.v = 0; d.vx *= 0.9; d.spin = 0; } }
-    if (!W.cam.fp) { W.cam.target.lerp(new THREE.Vector3(L.x, W.base + L.y + W.fitH * 0.45, 0), 0.08); W.cam.dist = Math.min(W.orbitCam.max, W.fitD + L.y * 0.5); }
-    if (L.t > 16 || L.y > 900) endLaunch();
+    if (W.launch) flyStep(W, dt); else W.flameLamp.i = 0;
   };
   W.hud = () => {
     const A = analyse(BODIES[VAB.body].g), L = W.launch;
-    if (L) return `launch preview | alt ${Math.round(L.y)} m  v ${Math.round(L.v)} m/s  stage ${Math.min(L.k + 1, A.S.length)}/${A.S.length}${L.stuck ? "  <span class='w'>TWR under 1: it cannot lift off</span>" : ""}${VAB.view === "inside" ? "\n<span class='g'>aboard</span>: standing on the deck in the rocket's frame as it climbs" : ""}`;
+    if (L) return flightHud(W);
     if (VAB.view === "inside") { const sp = W.spot; return sp ? `aboard | ${PRESETS[VAB.preset] && !VAB.edited ? PRESETS[VAB.preset].name : "your stack"}  deck L${sp.y - 1}, standing at q ${sp.q}, r ${sp.r}  in the rocket's frame on the pad\n${W.time === "night" ? "night: the deck lamps and the cabins' lamps; the moon through the portholes" : "day: sunlight through the portholes"}  | drag to look` : "aboard | no deck a walker can stand on in this stack"; }
     const s0 = A.S[0], rM = A.cells.length ? Math.max(...A.cells.map(c => hexDist(c.q, c.r))) : 0;
     return `assembly building | hex stack ${A.cells.length} cells, ring ${rM} (${((2 * rM + 1) * HW).toFixed(1)} m across)  mass ${A.mass.toFixed(1)} t  stages ${A.S.length}\nTWR ${s0 ? `<span class='${s0.twr >= 1 ? "g" : "w"}'>${s0.twr.toFixed(2)}</span>` : "-"} at ${BODIES[VAB.body].name}  delta-v <span class='c'>${Math.round(A.total).toLocaleString()} m/s</span>  | editing L${VAB.layer}  ${VAB.sel === "erase" ? "eraser" : PARTS[VAB.sel].name}, symmetry ${VAB.sym}x`;
@@ -985,35 +980,220 @@ function paintCell(q, r, y, erase) {
   if (n) changed();
   return n > 0;
 }
-function stageSep(L, ph) {
-  const W = WORLDS.vab;
-  // what this phase drops: spent boosters, or the whole stage below the decoupler
-  const drop = W.rocket.parts.filter(m => !m.userData.gone && m.userData.stage === ph.stage && (ph.srb ? m.userData.p === "srb" : true));
-  if (!ph.drop || !drop.length) return;
-  L.m -= ph.drop;
-  for (const m of drop) {
-    m.userData.gone = true; m.flames.forEach(f => f.userData.gone = true);
-    const wp = new THREE.Vector3(); m.getWorldPosition(wp); W.rocket.remove(m); m.position.copy(wp); W.scene.add(m);
-    W.debris.push({o: m, v: L.v * 0.9, vx: (m.position.x - L.x) * 0.6 + L.vx, spin: (Math.random() - 0.5) * 1.2});
+// =====================================================================================
+// the launch preview, flown: thrust vectoring (steer-and-sail decision 1)
+// Each engine's nozzle swivels within its gimbal limit and lags the stick by 0.15 s; the side force
+// it makes, at its distance from the centre of mass, is the torque that turns the stack. Turn rate is
+// torque over the moment of inertia of the cells still on it (each cell's mass x distance squared).
+// Fins push back against the airflow in air, and do nothing in vacuum. With the stick centred on an
+// axis the dampeners gimbal against the spin and hold the attitude.
+// Body axes: +y up the nose, pitch about +x, roll about +y, yaw about +z.
+// =====================================================================================
+const GIMBAL = {chem: 6, ntr: 3, srb: 0, fusion: 2, am: 4};   // degrees each way
+const LAG = 0.15;                                             // s, the nozzle following the stick
+const FIN_AREA = 1.3;                                         // m2 per fin cell
+const KEYS = {};
+const DEG = 180 / Math.PI;
+// mass, centre of mass and the three moments of inertia of a set of cells {p, x, y, z}, in tonnes and
+// metres, about the centre of mass; frac(c) is the share of its propellant still in it
+function massProps(cells, frac = () => 1) {
+  let m = 0; const cm = new THREE.Vector3();
+  const it = cells.map(c => { const P = PARTS[c.p], mm = P.m + (P.prop || 0) * frac(c); m += mm; cm.x += mm * c.x; cm.y += mm * (c.y + 0.5); cm.z += mm * c.z; return [mm, c.x, c.y + 0.5, c.z]; });
+  if (m > 0) cm.divideScalar(m);
+  const sxz = 1 / 12 + HR * HR / 4, sy = HR * HR / 2;   // a cell's own inertia per tonne: a hex prism 1 m tall
+  const I = new THREE.Vector3(1e-3, 1e-3, 1e-3);
+  for (const [mm, x, y, z] of it) { const dx = x - cm.x, dy = y - cm.y, dz = z - cm.z; I.x += mm * (dy * dy + dz * dz + sxz); I.y += mm * (dx * dx + dz * dz + sy); I.z += mm * (dx * dx + dy * dy + sxz); }
+  return {m, cm, I};
+}
+// per stage, at ignition with everything above it: the pitch (and yaw) turn rate at full gimbal, deg/s2,
+// and the roll rate when two or more gimballed engines sit off the axis
+function turnRates(map = CELLS) {
+  const cells = cellList(map).map(c => { const [x, z] = hexXZ(c.q, c.r); return Object.assign(c, {x, z}); });
+  const decs = cells.filter(c => c.core && c.p === "dec").map(c => c.y), stageOf = y => decs.filter(d => d < y).length;
+  const K = decs.length + 1, out = [];
+  for (let k = 0; k < K; k++) {
+    const on = cells.filter(c => stageOf(c.y) >= k), mp = massProps(on);
+    let tq = 0, troll = 0, off = 0, eng = 0;
+    for (const c of on) {
+      if (stageOf(c.y) !== k || !PARTS[c.p].engine || !GIMBAL[c.p]) continue;
+      const side = PARTS[c.p].F * Math.sin(GIMBAL[c.p] / DEG), rr = Math.hypot(c.x - mp.cm.x, c.z - mp.cm.z);
+      eng++; tq += side * Math.max(0, mp.cm.y - c.y); if (rr > 0.5) { troll += side * rr; off++; }
+    }
+    out.push({pitch: tq / mp.I.x * DEG, roll: off >= 2 ? troll / mp.I.y * DEG : 0, off, eng, fins: on.filter(c => c.p === "fin").length, I: mp.I, m: mp.m});
   }
+  return out;
 }
 function startLaunch() {
   const W = WORLDS.vab; if (!W || W.launch) return;
   const A = analyse(BODIES[VAB.body].g);
   W.rebuild();
-  const stageOf = (() => { const decs = A.cells.filter(c => c.core && c.p === "dec").map(c => c.y); return y => decs.filter(d => d < y).length; })();
-  W.rocket.parts.forEach(m => { m.userData.stage = stageOf(m.userData.y); m.flames.forEach(f => { f.userData.stage = m.userData.stage; f.userData.srb = m.userData.p === "srb"; }); });
-  W.launch = {t: 0, y: 0, v: 0, x: 0, vx: 0, m: A.mass, k: 0, phases: A.phases.map(p => Object.assign({}, p)), stuck: !(A.S[0] && A.S[0].twr >= 1)};
+  const decs = A.cells.filter(c => c.core && c.p === "dec").map(c => c.y), stageOf = y => decs.filter(d => d < y).length;
+  W.rocket.parts.forEach(m => { m.userData.stage = stageOf(m.userData.y); m.flames.forEach(f => { f.userData.stage = m.userData.stage; f.userData.srb = m.userData.p === "srb"; f.visible = false; }); });
+  const L = W.launch = {t: 0, k: 0, thr: 1, mode: "pad", msg: "",
+    S: A.S.map(s => ({liq: s.liqProp, liq0: s.liqProp, srb: s.srbProp, srb0: s.srbProp, liqMdot: s.liqMdot, srbMdot: s.srbMdot, srbGone: false})),
+    vel: new THREE.Vector3(), q: new THREE.Quaternion(), w: new THREE.Vector3(), cmd: new THREE.Vector3(), origin: new THREE.Vector3(0, 0, 0)};
+  refreshFlight(W, true);
   W.ghosts.clear();
-  if (W.launch.stuck) W.rocket.flames.forEach(f => f.visible = (f.userData.stage === 0));
-  kick(1e9); renderCtl();
+  kick(1e9); renderCtl(); renderKeys();
+}
+// what is still on the rocket: its engines, fins, mass and inertia
+function refreshFlight(W, first) {
+  const L = W.launch, parts = W.rocket.parts.filter(m => !m.userData.gone);
+  const frac = c => { const s = L.S[c.stage]; return c.p === "srb" ? (s.srb0 ? Math.max(0, s.srb) / s.srb0 : 0) : (s.liq0 ? Math.max(0, s.liq) / s.liq0 : 0); };
+  const mp = massProps(parts.map(m => m.userData), frac);
+  // keep the rocket's origin where it is when the centre of mass moves (fuel burnt, a stage dropped)
+  const origin = first ? new THREE.Vector3(0, 0, 0) : L.cmW.clone().sub(L.cm.clone().applyQuaternion(L.q));
+  L.m = mp.m; L.I = mp.I; L.cm = mp.cm; L.cmW = origin.clone().add(mp.cm.clone().applyQuaternion(L.q));
+  const old = new Map((L.eng || []).map(e => [e.m, e]));
+  L.eng = parts.filter(m => GIMBAL[m.userData.p] !== undefined && m.userData.stage === L.k).map(m => old.get(m) || {m, P: PARTS[m.userData.p], lim: GIMBAL[m.userData.p] / DEG, dx: 0, dz: 0});
+  L.eng.forEach(e => { const c = e.m.userData; e.r = new THREE.Vector3(c.x - mp.cm.x, c.y - mp.cm.y, c.z - mp.cm.z); e.rr = Math.hypot(e.r.x, e.r.z); });
+  L.off = L.eng.filter(e => e.lim > 0 && e.rr > 0.5).length;
+  L.fins = parts.filter(m => m.userData.p === "fin").map(m => { const c = m.userData; return new THREE.Vector3(c.x - mp.cm.x, c.y + 0.5 - mp.cm.y, c.z - mp.cm.z); });
+  // full-gimbal angular accelerations, for the dampeners to know how hard they can push
+  let ax = 0, ay = 0;
+  for (const e of L.eng) { const side = e.P.F * Math.sin(e.lim); ax += side * Math.abs(e.r.y); if (e.rr > 0.5) ay += side * e.rr; }
+  L.alpha = new THREE.Vector3(ax / L.I.x, L.off >= 2 ? ay / L.I.y : 0, ax / L.I.z);
+}
+function dropParts(W, list) {
+  const L = W.launch;
+  for (const m of list) {
+    m.userData.gone = true; m.flames.forEach(f => { f.userData.gone = true; f.visible = false; });
+    const wp = new THREE.Vector3(), wq = new THREE.Quaternion(); m.getWorldPosition(wp); m.getWorldQuaternion(wq);
+    W.rocket.remove(m); m.position.copy(wp); m.quaternion.copy(wq); W.scene.add(m);
+    const out = wp.clone().sub(W.rocket.position).setY(0).normalize().multiplyScalar(2);
+    W.debris.push({o: m, v: L.vel.clone().add(out), spin: new THREE.Vector3((Math.random() - 0.5), 0, (Math.random() - 0.5)).multiplyScalar(1.4)});
+  }
+  refreshFlight(W);
+}
+const clamp1 = v => Math.max(-1, Math.min(1, v));
+function flyStep(W, dt) {
+  const L = W.launch; L.t += dt;
+  const g = BODIES[VAB.body].g, sub = 8, h = dt / sub, lagA = 1 - Math.exp(-h / LAG);
+  // the stick: keys, or the on-screen keys; a held key is full deflection
+  const stick = new THREE.Vector3((KEYS.KeyW ? 1 : 0) - (KEYS.KeyS ? 1 : 0), (KEYS.KeyQ ? 1 : 0) - (KEYS.KeyE ? 1 : 0), (KEYS.KeyA ? 1 : 0) - (KEYS.KeyD ? 1 : 0));
+  if (KEYS.Shift) L.thr = Math.min(1, L.thr + 0.6 * dt); if (KEYS.Ctrl) L.thr = Math.max(0, L.thr - 0.6 * dt);
+  if (KEYS.KeyZ) L.thr = 1; if (KEYS.KeyX) L.thr = 0;
+  for (let i = 0; i < sub && (L.mode === "pad" || L.mode === "flying"); i++) {
+    const S = L.S[L.k];
+    // dampeners: an axis with the stick centred is gimballed against its own spin
+    const cmd = L.cmd.set(
+      stick.x || (L.alpha.x ? clamp1(-L.w.x / (L.alpha.x * 0.25)) : 0),
+      stick.y || (L.alpha.y ? clamp1(-L.w.y / (L.alpha.y * 0.25)) : 0),
+      stick.z || (L.alpha.z ? clamp1(-L.w.z / (L.alpha.z * 0.25)) : 0));
+    const F = new THREE.Vector3(), tau = new THREE.Vector3(), tmp = new THREE.Vector3();
+    const liqOn = S && S.liq > 0 && L.thr > 0, srbOn = S && S.srb > 0;
+    for (const e of L.eng) {
+      const srb = e.m.userData.p === "srb", T = srb ? (srbOn ? e.P.F : 0) : (liqOn ? e.P.F * L.thr : 0);
+      // the nozzle's wanted deflection: x tilts the thrust toward +x (yaw, and roll off the axis), z toward +z (pitch, and roll)
+      let wx = 0, wz = 0;
+      if (e.lim > 0) {
+        const sg = e.r.y < 0 ? -1 : 1, rl = L.off >= 2 && e.rr > 0.5 ? 1 / Math.max(1, e.rr) : 0;
+        wz = clamp1(cmd.x * sg - cmd.y * e.r.x * rl); wx = clamp1(-cmd.z * sg + cmd.y * e.r.z * rl);
+        const n = Math.hypot(wx, wz); if (n > 1) { wx /= n; wz /= n; }
+      }
+      e.dx += (wx * e.lim - e.dx) * lagA; e.dz += (wz * e.lim - e.dz) * lagA;
+      if (!T) continue;
+      tmp.set(T * Math.sin(e.dx), T * Math.cos(Math.hypot(e.dx, e.dz)), T * Math.sin(e.dz));
+      F.add(tmp); tau.add(new THREE.Vector3().crossVectors(e.r, tmp));
+    }
+    // fins: foils on the ring; in air they push against the flow across them (and roll on Q/E when no
+    // engines can), in vacuum they do nothing
+    const alt = L.cmW.y, rho = 1.225 * Math.exp(-Math.max(0, alt) / 3000), qinv = L.q.clone().invert();
+    const vb = L.vel.clone().applyQuaternion(qinv), speed = vb.length();
+    if (L.fins.length && speed > 1 && L.mode !== "pad") {
+      for (const r of L.fins) {
+        const v = vb.clone().add(new THREE.Vector3().crossVectors(L.w, r)), lat = new THREE.Vector3(v.x, 0, v.z);
+        const f = lat.multiplyScalar(-Math.PI * rho * FIN_AREA * speed / 1000);   // kN: lift slope 2 pi, angle = lateral / speed
+        tau.add(new THREE.Vector3().crossVectors(r, f));
+        if (L.off < 2 && stick.y) tau.y += stick.y * 0.5 * rho * speed * speed * FIN_AREA * 0.4 * Math.hypot(r.x, r.z) / 1000;
+      }
+    }
+    // spend propellant; drop spent boosters, then the stage at its decoupler
+    if (S) {
+      if (srbOn) S.srb -= S.srbMdot * h;
+      if (liqOn) S.liq -= S.liqMdot * L.thr * h;
+      if (S.srb0 && S.srb <= 0 && !S.srbGone) { S.srbGone = true; dropParts(W, W.rocket.parts.filter(m => !m.userData.gone && m.userData.stage === L.k && m.userData.p === "srb")); L.msg = "boosters away"; }
+      if (S.srb <= 0 && S.liq <= 0 && L.k < L.S.length - 1) { const k = L.k; L.k++; dropParts(W, W.rocket.parts.filter(m => !m.userData.gone && m.userData.stage === k)); L.msg = `stage ${k + 1} away`; }
+      else if (S.srb <= 0 && S.liq <= 0 && L.k === L.S.length - 1 && !L.dry) { L.dry = true; L.msg = "out of fuel: coasting"; }
+    }
+    // integrate: forces in the world, torques in the body
+    const Fw = F.applyQuaternion(L.q).divideScalar(L.m); Fw.y -= g;
+    const grounded = L.mode === "pad";
+    if (grounded && Fw.y <= 0) { Fw.set(0, 0, 0); }
+    else if (grounded) L.mode = "flying";
+    if (L.mode === "flying") {
+      L.w.x += tau.x / L.I.x * h; L.w.y += tau.y / L.I.y * h; L.w.z += tau.z / L.I.z * h;
+      const wl = L.w.length(); if (wl > 1e-9) L.q.multiply(new THREE.Quaternion().setFromAxisAngle(L.w.clone().divideScalar(wl), wl * h)).normalize();
+    }
+    L.vel.addScaledVector(Fw, h); L.cmW.addScaledVector(L.vel, h);
+    // the ground: the rocket's foot (its origin) stops on the pad
+    const foot = L.cmW.clone().sub(L.cm.clone().applyQuaternion(L.q));
+    if (L.mode === "flying" && foot.y < 0 && L.vel.y < 0) {
+      const hit = L.vel.length(); L.cmW.y -= foot.y; L.vel.set(0, 0, 0); L.w.set(0, 0, 0);
+      L.mode = hit > 8 ? "crashed" : "landed"; L.msg = hit > 8 ? `hit the ground at ${Math.round(hit)} m/s` : "down"; L.endAt = L.t + 3;
+    }
+  }
+  if (Math.floor(L.t * 4) !== Math.floor((L.t - dt) * 4)) refreshFlight(W);   // propellant burnt moves the centre of mass
+  // pose the rocket from its centre of mass, swivel the nozzles, light the plumes
+  W.rocket.quaternion.copy(L.q);
+  W.rocket.position.copy(L.cmW).sub(L.cm.clone().applyQuaternion(L.q)); W.rocket.position.y += W.base;
+  const S = L.S[L.k], liqOn = S && S.liq > 0 && L.thr > 0, srbOn = S && S.srb > 0;
+  if (L.mode === "pad" && (liqOn || srbOn)) W.rocket.position.x += (Math.random() - 0.5) * 0.06;   // straining on the pad
+  for (const e of L.eng) {
+    const srb = e.m.userData.p === "srb", on = (srb ? srbOn : liqOn) && L.mode !== "crashed";
+    if (e.m.gimbal) e.m.gimbal.rotation.set(e.dz, 0, -e.dx);
+    e.m.flames.forEach(f => { f.visible = on; if (on && !srb) f.scale.y *= 0.35 + 0.65 * L.thr; });
+  }
+  const foot = W.rocket.position;
+  W.flameLamp.p.set(foot.x, foot.y - 1.5, foot.z); W.flameLamp.i = (liqOn || srbOn) && L.mode !== "crashed" ? 2 + 4 * (srbOn ? 1 : L.thr) : 0;
+  for (const d of W.debris) {
+    if (d.o.position.y > 1.2) { d.v.y -= g * dt; d.o.position.addScaledVector(d.v, dt); d.o.rotation.x += d.spin.x * dt; d.o.rotation.z += d.spin.z * dt; }
+    else { d.o.position.y = 1.2; d.v.set(0, 0, 0); }
+  }
+  if (!W.cam.fp) W.cam.target.lerp(L.cmW.clone().add(new THREE.Vector3(0, W.base, 0)), 0.12);
+  if (L.mode === "pad" && !(liqOn || srbOn) && L.t > 1) { L.msg = "no thrust: throttle up (Shift or Z)"; }
+  if (L.mode === "pad" && L.t > 4 && (liqOn || srbOn) && L.S[0] && L.k === 0) L.stuckMsg = true;
+  if (L.endAt && L.t > L.endAt) endLaunch();
+  const fz = +Q.get("freeze"); if (STILL && fz && L.t >= fz) { framesLeft = 1; }
+}
+function flightHud(W) {
+  const L = W.launch, gl = L.eng.filter(e => e.lim > 0), avg = k => gl.length ? gl.reduce((a, e) => a + e[k], 0) / gl.length * DEG : 0;
+  const lim = gl.length ? Math.max(...gl.map(e => e.lim)) * DEG : 0, v = L.vel.length();
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(L.q), tilt = Math.acos(Math.max(-1, Math.min(1, up.y))) * DEG;
+  const sgn = x => (x >= 0 ? "+" : "") + x.toFixed(1);
+  const roll = L.off >= 2 ? `engines (${L.off} off the axis)` : L.fins.length ? "fins only, in air" : "none";
+  const alt = L.cmW.y - L.cm.clone().applyQuaternion(L.q).y;
+  return `flight | alt ${Math.max(0, Math.round(alt))} m  v ${Math.round(v)} m/s  throttle ${Math.round(L.thr * 100)}%  stage ${L.k + 1}/${L.S.length}  tilt ${Math.round(tilt)} deg  ${L.mode === "pad" ? (L.stuckMsg ? "<span class='w'>on the pad: thrust under its weight, it cannot lift off</span>" : "on the pad") : L.mode === "crashed" ? "<span class='w'>" + L.msg + "</span>" : "<span class='a'>" + L.msg + "</span>"}
+rates pitch <span class='c'>${sgn(L.w.x * DEG)}</span> yaw <span class='c'>${sgn(-L.w.z * DEG)}</span> roll <span class='c'>${sgn(L.w.y * DEG)}</span> deg/s   gimbal pitch ${sgn(-avg("dz"))} yaw ${sgn(-avg("dx"))} deg (limit ${lim.toFixed(0)})   roll by ${roll}${VAB.view === "inside" ? "\n<span class='g'>aboard</span>: standing on the deck in the rocket's frame" : ""}`;
 }
 function endLaunch() {
   const W = WORLDS.vab; W.launch = null;
   W.debris.forEach(d => W.scene.remove(d.o)); W.debris = [];
-  W.rocket.position.set(0, W.base, 0); W.rocket.rotation.z = 0;
-  W.rebuild(true); renderCtl(); kick(4);
+  W.rocket.position.set(0, W.base, 0); W.rocket.quaternion.identity();
+  for (const k in KEYS) KEYS[k] = false;
+  W.rebuild(true); renderCtl(); renderKeys(); kick(4);
 }
+// the keys, on screen: held with the pointer as well as the keyboard
+const FLY_KEYS = [["KeyW", "W", "pitch"], ["KeyS", "S", "pitch"], ["KeyA", "A", "yaw"], ["KeyD", "D", "yaw"], ["KeyQ", "Q", "roll"], ["KeyE", "E", "roll"], ["Shift", "Shift", "throttle +"], ["Ctrl", "Ctrl", "throttle -"]];
+function renderKeys() {
+  const el = $("keys"); if (!el) return;
+  const W = WORLDS.vab, on = TAB === "vab" && W && W.launch;
+  el.hidden = TAB !== "vab";
+  el.classList.toggle("live", !!on);
+  el.innerHTML = `<div class="kt">${on ? "Flying: hold to steer" : "Launch, then steer"}</div><div class="kk">${FLY_KEYS.map(([c, k, t]) => `<button data-k="${c}" title="${t}" aria-pressed="${!!KEYS[c]}"${on ? "" : " disabled"}><b>${k}</b><span>${t}</span></button>`).join("")}</div>`;
+  el.querySelectorAll("button").forEach(b => {
+    const set = v => { KEYS[b.dataset.k] = v; b.setAttribute("aria-pressed", v); kick(2); };
+    b.onpointerdown = e => { e.preventDefault(); set(true); }; b.onpointerup = b.onpointerleave = b.onpointercancel = () => set(false);
+  });
+}
+const keyCode = e => e.key === "Shift" ? "Shift" : e.key === "Control" ? "Ctrl" : e.code;
+window.addEventListener("keydown", e => {
+  if (TAB !== "vab" || !WORLDS.vab || !WORLDS.vab.launch || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  const k = keyCode(e); if (["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "KeyZ", "KeyX", "Shift", "Ctrl"].includes(k)) { KEYS[k] = true; if (k !== "Ctrl") e.preventDefault(); }
+});
+window.addEventListener("keyup", e => { KEYS[keyCode(e)] = false; });
+window.addEventListener("blur", () => { for (const k in KEYS) KEYS[k] = false; });
+
 function setView(v) {
   const W = WORLDS.vab; VAB.view = v;
   if (W) { W.cam = v === "inside" ? W.fpCam : W.orbitCam; W.reghost(); }
@@ -1487,7 +1667,7 @@ function renderCtl() {
     h = seg("timeSel", [["day", "Day"], ["night", "Night"]], W ? W.time : "day", "Time of day") + seg("viewSel", [["outside", "Outside"], ["cut", "Cut-away"], ["inside", "Inside"]], VAB.view, "View");
     if (VAB.view === "inside") h += wk && wk.storeys.length ? seg("standSel", wk.storeys.map((s, i) => [String(i), `Deck L${s.y}`]), String(VAB.stand), "Stand on") : `<span class="muted" style="font-size:13px">No deck to stand on</span>`;
     else h += seg("symSel", SYM(), String(VAB.sym), "Symmetry");
-    h += `<div class="seg"><button class="pbtn go" id="launchB">${W && W.launch ? "Launching" : "Launch preview"}</button>${VAB.view === "inside" ? "" : `<button class="pbtn" id="eraseB" aria-pressed="${VAB.sel === "erase"}">Eraser</button>`}</div>`;
+    h += `<div class="seg"><button class="pbtn go" id="launchB">${W && W.launch ? "End flight" : "Launch"}</button>${VAB.view === "inside" ? "" : `<button class="pbtn" id="eraseB" aria-pressed="${VAB.sel === "erase"}">Eraser</button>`}</div>`;
   } else if (TAB === "orbit") {
     h = seg("fieldSel", [["inverse", "Inverse-square (B)"], ["anchor", "Today's band (A)"]], ORB.field, "Gravity field")
       + `<div class="seg"><button class="pbtn go" id="relaunch">Launch again</button><button class="pbtn" id="pro">Prograde +20</button><button class="pbtn" id="retro">Retrograde -20</button></div>`
@@ -1505,7 +1685,7 @@ function renderCtl() {
   bindSeg("viewSel", v => setView(v));
   bindSeg("standSel", v => { VAB.stand = +v; placeWalker(WORLDS.vab); renderCtl(); });
   bindSeg("symSel", v => { VAB.sym = +v; renderCtl(); refreshVab(); });
-  if ($("launchB")) $("launchB").onclick = startLaunch;
+  if ($("launchB")) $("launchB").onclick = () => WORLDS.vab.launch ? endLaunch() : startLaunch();
   if ($("eraseB")) $("eraseB").onclick = () => { VAB.sel = VAB.sel === "erase" ? "deck" : "erase"; renderCtl(); renderHotbar(); refreshVab(); };
   bindSeg("fieldSel", v => { ORB.field = v; WORLDS.orbit.reset(false); renderCtl(); });
   bindSeg("speedSel", v => { ORB.speed = +v; renderCtl(); });
@@ -1521,7 +1701,7 @@ function renderCtl() {
 }
 function renderInfo() {
   const T = {
-    vab: VAB.view === "inside" ? "<b>Aboard, on the pad.</b> You stand on a deck the walk check reached, in the rocket's frame: launch the preview and you ride it up. Drag to look; nothing moves until you do." : "<b>Edit a layer</b> in the editor under the stage, or click a ghost cell here to place the selected part on the layer being edited; right-click or the eraser takes one off. Drag to look round, scroll to zoom. Cut-away hides the walls on your side so the decks show.",
+    vab: VAB.view === "inside" ? "<b>Aboard, on the pad.</b> You stand on a deck the walk check reached, in the rocket's frame: launch the preview and you ride it up. Drag to look; nothing moves until you do." : "<b>Edit a layer</b> in the editor under the stage, or click a ghost cell here to place the selected part on the layer being edited; right-click or the eraser takes one off. Drag to look round, scroll to zoom. Cut-away hides the walls on your side so the decks show. Press Launch and fly it: W and S pitch, A and D yaw, Q and E roll, Shift and Ctrl throttle; the nozzles swivel in their gimbals.",
     orbit: "<b>To scale</b>: Pale Blue is 4.8 km across the middle, low orbit 960 m up. The cyan line is the path the ship will fly, integrated forward through the same field it flies in; orange means it escapes or comes down.",
     fusion: FUS.view === "freight" ? "<b>Freighters</b> fly the nav computer's courses between stops, with no pilot. Add a route in the panel below." : FUS.view === "lander" ? "<b>Landers</b> lift off to low orbit to meet the fusion ship, which never lands. Set it to night: the pad lamps and the exhaust light the ground." : "<b>The nav computer</b> plots a near-straight course: burn, flip at the midpoint, brake. The dashed line is what a chemical rocket flies instead.",
     antimatter: AM.view === "course" ? "<b>The nav computer</b> plots a lander's course from one surface to another: lift off, burn, flip, brake, set down. The dashed line is the fusion tier's way: lander up, ship across, lander down." : "<b>The antimatter lander</b> from the assembly building's examples, on Cinder after flying from Pale Blue's surface with no orbit stop. Its deck, cabins and airlock are cells like any other.",
@@ -1553,6 +1733,7 @@ function layerName(y) {
   const stand = Wk ? Wk.P.filter(p => p[2] === y).length : 0;
   return `L${y}, ${y} to ${y + 1} m above the pad: ${parts.length ? parts.join(", ") : "empty"}${stand ? `; a walker stands here in ${stand} ${plural(stand, "cell")}` : ""}`;
 }
+const fmtTurn = v => v >= 100 ? Math.round(v).toLocaleString() : v >= 10 ? v.toFixed(0) : v.toFixed(1);
 function renderVabWork() {
   WORK.innerHTML = `<div class="pane">
       <div class="eyebrow">Layer editor: one layer at a time, seen from above</div>
@@ -1603,7 +1784,7 @@ function renderVabWork() {
 }
 function refreshVab() {
   if (TAB !== "vab" || !$("hexed")) return;
-  const g = BODIES[VAB.body].g, A = analyse(g), C = checks(A, g);
+  const g = BODIES[VAB.body].g, A = analyse(g), C = checks(A, g), TR = turnRates();
   const Wk = WORLDS.vab && WORLDS.vab.rocket ? WORLDS.vab.rocket.walk : walkOf();
   const J = joined(), y = VAB.layer;
   const top = A.cells.length ? Math.max(...A.cells.map(c => c.y)) : 0;
@@ -1628,9 +1809,10 @@ function refreshVab() {
   bindSeg("presetSel", v => { loadPreset(v); VAB.edited = false; VAB.stand = 0; if (WORLDS.vab) { if (WORLDS.vab.launch) endLaunch(); WORLDS.vab.rebuild(true); } setLayer(VAB.layer, true); refreshVab(); renderCtl(); if (WORLDS.orbit) WORLDS.orbit.dirty = true; });
   $("bodyBox").innerHTML = seg("bodySel", Object.entries(BODIES).map(([k, b]) => [k, `${b.name} ${(b.g / G1).toFixed(2)} g`]), VAB.body, "Body");
   bindSeg("bodySel", v => { VAB.body = v; refreshVab(); });
-  $("stageTable").innerHTML = `<table><thead><tr><th>Stage</th><th>Engines</th><th>Mass at light</th><th>Thrust</th><th>TWR</th><th>Burn</th><th>Delta-v</th></tr></thead><tbody>
-      ${A.S.map(s => { const n = {}; s.engines.forEach(e => n[e] = (n[e] || 0) + 1); return `<tr><td>${s.i + 1}</td><td>${Object.entries(n).map(([e, c]) => `${c} ${PARTS[e].name.toLowerCase()}`).join(", ") || "-"}${s.srbF ? `${s.engines.length ? " + " : ""}${s.srbF / 200} booster cells` : ""}</td><td class="n">${s.m0.toFixed(1)} t</td><td class="n">${Math.round(s.F).toLocaleString()} kN</td><td class="n ${s.twr >= 1 ? "good" : (s.i ? "" : "bad")}">${s.twr.toFixed(2)}</td><td class="n">${s.t.toFixed(1)} s</td><td class="n">${Math.round(s.dv).toLocaleString()} m/s</td></tr>`; }).join("")}
-      <tr><td colspan="6"><b>Total</b></td><td class="n"><b>${Math.round(A.total).toLocaleString()} m/s</b></td></tr></tbody></table>`;
+  $("stageTable").innerHTML = `<table><thead><tr><th>Stage</th><th>Engines</th><th>Mass at light</th><th>Thrust</th><th>TWR</th><th>Burn</th><th>Delta-v</th><th title="Pitch or yaw, at full gimbal, with every stage above it">Turn</th></tr></thead><tbody>
+      ${A.S.map(s => { const n = {}, tr = TR[s.i]; s.engines.forEach(e => n[e] = (n[e] || 0) + 1); return `<tr><td>${s.i + 1}</td><td>${Object.entries(n).map(([e, c]) => `${c} ${PARTS[e].name.toLowerCase()}`).join(", ") || "-"}${s.srbF ? `${s.engines.length ? " + " : ""}${s.srbF / 200} booster cells` : ""}</td><td class="n">${s.m0.toFixed(1)} t</td><td class="n">${Math.round(s.F).toLocaleString()} kN</td><td class="n ${s.twr >= 1 ? "good" : (s.i ? "" : "bad")}">${s.twr.toFixed(2)}</td><td class="n">${s.t.toFixed(1)} s</td><td class="n">${Math.round(s.dv).toLocaleString()} m/s</td><td class="n" title="${tr.off >= 2 ? `roll ${fmtTurn(tr.roll)} deg/s2 from ${tr.off} engines off the axis` : tr.fins ? "roll from fins only, in air" : "no roll"}">${tr.eng ? fmtTurn(tr.pitch) + " &deg;/s&sup2;" : "-"}</td></tr>`; }).join("")}
+      <tr><td colspan="6"><b>Total</b></td><td class="n"><b>${Math.round(A.total).toLocaleString()} m/s</b></td><td></td></tr></tbody></table>
+      <p class="muted" style="font-size:13px;margin-top:6px">Turn: how fast the stage swings its nose at full gimbal (chemical 6&deg;, nuclear thermal 3&deg;, boosters fixed, fusion 2&deg;, antimatter 4&deg;): the engines' side thrust times their distance below the centre of mass, over the moment of inertia of every cell still on (mass x distance squared). Roll needs two engines off the axis, else fins in air. This stack: ${TR.map((t, i) => `stage ${i + 1} roll ${t.off >= 2 ? fmtTurn(t.roll) + " &deg;/s&sup2;" : t.fins ? "by fins in air" : "none"}`).join(", ")}.</p>`;
   const req = [["Low orbit, Pale Blue", 540], ["+ to Lantern's orbit", 680], ["+ land on Lantern", 790], ["+ home again", 1040]];
   $("dvBars").innerHTML = req.map(([n, v]) => `<div class="bar"><span>${n}</span><span class="t"><i class="${A.total < v ? "short" : ""}" style="width:${Math.min(100, A.total / v * 100)}%"></i></span><span class="v">${v} m/s</span></div>`).join("");
   $("checks").innerHTML = C.map(([k, t]) => `<div class="${k}">${t}</div>`).join("");
@@ -1743,7 +1925,7 @@ function updateRouteRows() {
 }
 
 function go() {
-  ensureWorlds(); renderCtl(); renderHotbar(); renderWork();
+  ensureWorlds(); renderCtl(); renderHotbar(); renderWork(); renderKeys();
   document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === TAB));
   canvas.classList.toggle("place", TAB === "vab" && VAB.view !== "inside");
   kick(4);
@@ -1848,7 +2030,8 @@ function start() {
   if (Q.get("stand")) VAB.stand = +Q.get("stand");
   go();
   if (TAB === "vab" && ["cut", "inside"].includes(Q.get("view"))) { if (VAB.stand) placeWalker(WORLDS.vab); setView(Q.get("view")); }
-  if (Q.get("launch") && TAB === "vab") setTimeout(startLaunch, 200);
+  if (TAB === "vab" && Q.get("cyaw")) Object.assign(WORLDS.vab.orbitCam, {yaw: +Q.get("cyaw"), pitch: +(Q.get("cpitch") || 0.2), dist: WORLDS.vab.orbitCam.dist * +(Q.get("cdist") || 1)});
+  if (Q.get("launch") && TAB === "vab") setTimeout(() => { startLaunch(); (Q.get("hold") || "").split(",").filter(Boolean).forEach(k => KEYS[k] = true); renderKeys(); }, 200);
   $("loading").hidden = true;
   last = t0 = performance.now(); looping = true;
   requestAnimationFrame(loop);

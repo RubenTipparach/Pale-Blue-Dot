@@ -231,6 +231,22 @@ Recommendations taken (ask only with screenshots):
 - **Flying ground.** The page's flight treats the ground beyond the field as
   flat.
 
+### 6b. As the rockets mockup built it (M21, 2026-11-13)
+
+Recommendations taken (ask only with screenshots):
+- **The preview is not the orbital integrator.** The launch preview flies
+  in flat gravity above the pad, and only the rocket's foot touches the
+  ground.
+- **No turning on the pad.** A rocket on the pad does not turn until its
+  thrust exceeds its weight.
+- **Fin roll.** Fins add a small roll term when no engines can roll the
+  stack.
+- **No cap on turn rate.** The turn rate is left as the formula gives it.
+  The small hop turns at 529 deg/s^2 and the ring-4 colony lander at 10 and
+  3.6 deg/s^2 by stage. After 1.9 s with W held, the colony lander has
+  tilted 17 degrees against the crew rocket's 35.
+- **Throttle keys.** Z and X give full throttle and cut it.
+
 ### 7. As the drydock mockup built it (M23, 2026-11-13)
 
 Recommendations taken (ask only with screenshots):
