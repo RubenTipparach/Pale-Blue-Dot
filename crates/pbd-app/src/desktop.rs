@@ -2743,14 +2743,15 @@ fn coast_script(
     }
     walk.in_river = in_river;
     // Out of a trap once 4 m from where it began.
-    if walk.trap_at.is_some_and(|at| here.distance(at) > 4.0) {
+    if walk.trap_at.is_some_and(|at| ground_m(here, at) > 4.0) {
         walk.trapped = 0;
         walk.trap_at = None;
     }
     let (anchor, since) = walk.anchor.unwrap_or((here, now));
     let swimming = pbd_app::planet::surface_height(up) < 0.0;
-    if here.distance(anchor) > 1.5 {
-        let step = ground_m(here, anchor);
+    // Along the ground: a hop against a wall rises 3 m and is not progress.
+    let step = ground_m(here, anchor);
+    if step > 1.5 {
         if step < 5.0 {
             walk.walked_m += step;
         }
