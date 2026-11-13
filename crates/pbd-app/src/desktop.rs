@@ -67,6 +67,12 @@ pub struct Launch {
     /// walk up and down a town's lane for a video (`--walk --at` puts it
     /// there).
     pub stroll: Option<f32>,
+    /// `--coast-walk METRES`: a recording instrument (`coast-walk`). The
+    /// walker walks (no sprint) along the shore with the sea on one side,
+    /// crosses the rivers it meets, keeps off cliffs and never digs; logs
+    /// `COAST_START`, `COAST_RIVER` and `COAST_DONE` and quits after that many
+    /// metres along the ground (`--walk --at` puts it on the shore).
+    pub coast_walk: Option<f32>,
     /// `--stroll-leg SECONDS`: how long the stroll walks before it turns
     /// round (half the stroll when not given): a short leg paces one lane.
     pub stroll_leg: Option<f32>,
@@ -268,6 +274,7 @@ impl Launch {
             frame_log: None,
             walk_distance: None,
             stroll: None,
+            coast_walk: None,
             stroll_leg: None,
             sail_for: None,
             frame_graph: false,
@@ -606,6 +613,19 @@ impl Launch {
                         "--stroll takes seconds"
                     );
                     result.stroll = Some(seconds);
+                    result.walk = true;
+                }
+                "--coast-walk" => {
+                    i += 1;
+                    let metres: f32 = args
+                        .get(i)
+                        .and_then(|s| s.parse().ok())
+                        .expect("--coast-walk requires metres");
+                    assert!(
+                        metres.is_finite() && metres > 0.0,
+                        "--coast-walk takes metres"
+                    );
+                    result.coast_walk = Some(metres);
                     result.walk = true;
                 }
                 "--stroll-leg" => {
@@ -1294,6 +1314,9 @@ pub fn run(args: &[String]) {
         }
         if launch.stroll.is_some() {
             app.add_systems(PreUpdate, stroll_script.after(bevy::input::InputSystems));
+        }
+        if launch.coast_walk.is_some() {
+            app.add_systems(PreUpdate, coast_script.after(bevy::input::InputSystems));
         }
         if launch.swim {
             // The scripted keys have to be written where the real ones are:
@@ -2565,6 +2588,145 @@ fn stroll_script(
     }
     if now.duration_since(started).as_secs_f32() >= seconds {
         info!("STROLL_DONE");
+        exit.write(AppExit::Success);
+    }
+}
+
+/// Where the coast walk is (`coast-walk`).
+#[derive(Default)]
+struct CoastWalk {
+    started: Option<Instant>,
+    /// The sea's side: +1 the left.
+    side: f32,
+    /// The heading the view is turning toward, and when it was chosen.
+    target: Option<Vec3>,
+    steered: Option<Instant>,
+    last: Option<(Vec3, Instant)>,
+    /// Where the stall clock last reset, and when.
+    anchor: Option<(Vec3, Instant)>,
+    walked_m: f32,
+    rivers: u32,
+    in_river: bool,
+    turns: u32,
+    done: bool,
+}
+
+/// The `--coast-walk` instrument (`coast-walk`): walk the shore at walking
+/// pace, steering by `coast_walk::steer` every 0.2 s and turning the view
+/// toward its heading at no more than 50 degrees a second, hopping what
+/// stalls it and turning away from the sea after three seconds stuck; never
+/// sprints or digs.
+fn coast_script(
+    launch: Res<Launch>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    walkers: Query<&Position, With<pbd_app::walking::Walker>>,
+    mut exit: MessageWriter<AppExit>,
+    mut walk: Local<CoastWalk>,
+) {
+    use pbd_app::coast_walk;
+    let Some(goal) = launch.coast_walk else {
+        return;
+    };
+    if !state.active || walk.done {
+        return;
+    }
+    let Ok(position) = walkers.single() else {
+        return;
+    };
+    let here = position.0;
+    let up = here.normalize_or(Vec3::Y);
+    let now = Instant::now();
+    state.captured = true;
+    state.scripted = true;
+    if walk.started.is_none() {
+        let (heading, side) = coast_walk::shore_start(up).unwrap_or((state.view().0, 1.0));
+        walk.side = side;
+        state.face(up, heading);
+        walk.started = Some(now);
+        walk.anchor = Some((here, now));
+        info!(
+            "COAST_START {goal:.0} m, the sea on the {}",
+            if side > 0.0 { "left" } else { "right" }
+        );
+    }
+    let started = walk.started.unwrap_or(now);
+    keys.release(KeyCode::ShiftLeft);
+    keys.press(KeyCode::KeyW);
+    // Ground covered, as the walk measures it: a fall, a jump or a rebase is
+    // not walking.
+    if let Some((last, at)) = walk.last {
+        let step = ground_m(here, last);
+        if step < 5.0 {
+            walk.walked_m += step;
+        }
+        // Turn toward the chosen heading, no faster than a walker looks round.
+        if let Some(target) = walk.target {
+            let dt = now.duration_since(at).as_secs_f32();
+            let heading = state.view().0;
+            let target = (target - up * target.dot(up)).normalize_or(heading);
+            let angle = heading.angle_between(target);
+            let sign = up.dot(heading.cross(target)).signum();
+            let turn = angle.min(50f32.to_radians() * dt) * sign;
+            if turn.abs() > 1e-5 {
+                state.face(up, Quat::from_axis_angle(up, turn) * heading);
+            }
+        }
+    }
+    walk.last = Some((here, now));
+    if walk
+        .steered
+        .is_none_or(|t| now.duration_since(t).as_secs_f32() >= 0.2)
+    {
+        walk.steered = Some(now);
+        walk.target = match coast_walk::steer(up, state.view().0, walk.side) {
+            Some(choice) => Some(choice.heading),
+            None => Some(
+                Quat::from_axis_angle(up, -walk.side * std::f32::consts::FRAC_PI_2)
+                    * state.view().0,
+            ),
+        };
+    }
+    let in_river = pbd_app::planet::surface_height(up) < 0.0 && coast_walk::in_river(up);
+    if in_river && !walk.in_river {
+        walk.rivers += 1;
+        info!(
+            "COAST_RIVER {} at {:.0} m walked",
+            walk.rivers, walk.walked_m
+        );
+    }
+    walk.in_river = in_river;
+    let (anchor, since) = walk.anchor.unwrap_or((here, now));
+    if here.distance(anchor) > 1.5 {
+        walk.anchor = Some((here, now));
+        keys.release(KeyCode::Space);
+    } else {
+        let stalled = now.duration_since(since).as_secs_f32();
+        if stalled > 0.5 && (stalled % 0.7) < 0.05 {
+            keys.press(KeyCode::Space);
+        } else {
+            keys.release(KeyCode::Space);
+        }
+        if stalled > 3.0 {
+            let away = Quat::from_axis_angle(up, -walk.side * std::f32::consts::FRAC_PI_4)
+                * state.view().0;
+            state.face(up, away);
+            walk.target = Some(away);
+            walk.steered = Some(now);
+            walk.turns += 1;
+            walk.anchor = Some((here, now));
+            info!("COAST_TURN stalled 3 s at {:.0} m walked", walk.walked_m);
+        }
+    }
+    if walk.walked_m >= goal {
+        walk.done = true;
+        info!(
+            "COAST_DONE {:.0} m in {:.1} s, {} rivers, {} turns",
+            walk.walked_m,
+            now.duration_since(started).as_secs_f32(),
+            walk.rivers,
+            walk.turns
+        );
         exit.write(AppExit::Success);
     }
 }
