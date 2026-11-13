@@ -159,6 +159,44 @@ towards my waypoint".
 - **Advice only.** The player steers and trims. The readout shows what the
   best course gains: the VMG now, and the VMG on the best heading.
 
+### 3b. Airships
+
+The owner, 2026-11-13: "can you add airships as well?"
+
+- **Built in the hangar**, in an airship shed (a taller bay) on the same
+  builder as the planes, in an Airship tab with 2 m cells. An airship is
+  too long for the 1 m grid: a chibi one is about 24 m.
+- **Parts**:
+  - gas cells, whose envelope is lofted from their footprint, tall as the
+    hull is wide, about 0.7 full;
+  - a gondola with the cockpit;
+  - engine pods with props;
+  - fins with rudder and elevator;
+  - ballast tanks;
+  - a mooring cone at the nose.
+- **Lift is buoyancy.** It is `(rho_air - rho_gas) x V x g`:
+  - helium is 0.17 kg/m^3 and hydrogen 0.09, against air at 1.225;
+  - the game's g scales the lift and the weight alike, so about 1.05 kg of
+    lift a cubic metre of helium carries over from Earth;
+  - air thins with height, so an airship has a pressure height where it
+    floats.
+  The builder shows the gross lift, the weight, the free lift and the
+  ceiling, and checks that free lift is positive with its ballast aboard.
+- **Controls**, two keys each as the owner asked for boats:
+  - A and D, the rudder;
+  - W and S, the engines;
+  - the up and down arrows, the elevator;
+  - Shift drops ballast and Ctrl vents gas, to trim up or down for good.
+  The fins' authority grows with airspeed, as a plane's surfaces do.
+  The wind drifts it: an airship's airspeed is small against the wind, so
+  it crabs.
+- **Taking the controls** is by the gondola's wheel, as a ship's helm. An
+  airship with no one aboard holds its height, cuts its engines and drifts
+  with the wind. A moored one swings on its mast.
+- **In the mockup (M24)**: two presets, a small chibi blimp and a rigid
+  ship with a passenger gondola. They are moored at a mast by the airship
+  shed, lit at night, and Fly it works for them too.
+
 ### 4. Six levels of ship power
 
 Each level is a block or a pair of blocks in the drydock's hex builder, one

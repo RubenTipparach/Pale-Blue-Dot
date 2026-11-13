@@ -55,3 +55,14 @@ stopped, and SHALL sail again when someone boards and takes the helm.
 - **WHEN** the only sailor aboard a ship under sail falls into the sea
 - **THEN** the sails furl within a few seconds, and the ship slows to rest
   and drifts without driving away
+
+### Requirement: An airship floats by its gas
+An airship's lift SHALL be the buoyancy of its gas cells, the difference of
+the air's and the gas's densities times their volume times gravity, and the
+air SHALL thin with height so that the airship floats at a pressure height.
+The builder SHALL refuse an airship whose free lift is not positive with its
+ballast aboard.
+
+#### Scenario: Dropping ballast climbs
+- **WHEN** an airship floating level drops ballast
+- **THEN** it climbs until the thinner air balances its lighter weight
