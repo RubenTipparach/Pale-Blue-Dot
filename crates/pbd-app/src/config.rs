@@ -348,8 +348,21 @@ pub struct WeatherSettings {
     pub shower_max_streaks: u32,
     /// Lens droplet coverage (below 1 culls, above 1 stacks layers).
     pub rain_lens_density: f32,
-    /// Lens droplet refraction strength.
-    pub rain_lens_refract: f32,
+    /// How far a lens drop bends what is behind it toward its centre
+    /// (`lens-drop-refraction`): at its middle, this share of a pixel's
+    /// distance from the centre, and none at its rim, for every size of drop.
+    /// Below 1 a drop is an upright magnifier (0.5 doubles its middle); up
+    /// to 2 it inverts within its outline. 0..=2, so no sample leaves its drop.
+    pub rain_lens_bend: f32,
+    /// How much of the light a lens drop loses at its edge, where its alpha
+    /// passes a half (`lens-drop-refraction`), 0..=1: what shows a drop
+    /// against a flat sky. 0 draws no edge.
+    pub rain_lens_rim: f32,
+    /// How much of the sky's mean light a lens drop gathers on the lower part
+    /// of its edge (`lens-drop-refraction`), a gain, not negative: the bright
+    /// underside of a drop on glass, what shows it over dark ground. A lens
+    /// gathers light, so it may pass 1. 0 draws none.
+    pub rain_lens_glint: f32,
     /// Lens droplet animation speed.
     pub rain_lens_speed: f32,
     /// Lens droplet grid frequency: higher is smaller drops.
@@ -613,7 +626,9 @@ impl Default for WeatherSettings {
             shower_column_m: 46.0,
             shower_max_streaks: 1700,
             rain_lens_density: 1.4,
-            rain_lens_refract: 1.7,
+            rain_lens_bend: 0.5,
+            rain_lens_rim: 0.2,
+            rain_lens_glint: 1.0,
             rain_lens_speed: 1.0,
             rain_lens_size: 0.7,
             rain_lens_scale: 2.0,
@@ -727,7 +742,6 @@ impl Validated for WeatherSettings {
                 s.shower_radius_m,
                 s.shower_column_m,
                 s.rain_lens_density,
-                s.rain_lens_refract,
                 s.rain_lens_speed,
                 s.rain_lens_size,
                 s.lens_mist_fog_s,
@@ -860,6 +874,14 @@ impl Validated for WeatherSettings {
             .then_some(())
             .ok_or("cloud_puff_silver must not be negative")?;
         positive("rain_lens_scale", &[s.rain_lens_scale])?;
+        finite("rain_lens_bend", &[s.rain_lens_bend])?;
+        (0.0..=2.0)
+            .contains(&s.rain_lens_bend)
+            .then_some(())
+            .ok_or("rain_lens_bend must be within 0..=2: past 2 a drop samples outside itself")?;
+        finite("rain_lens_rim", &[s.rain_lens_rim])?;
+        unit("rain_lens_rim", s.rain_lens_rim)?;
+        non_negative("rain_lens_glint", &[s.rain_lens_glint])?;
         unit("lens_mist_strength", s.lens_mist_strength)?;
         unit("lens_mist_whiten", s.lens_mist_whiten)?;
         (s.cloud_shear >= 1.0)
@@ -1653,5 +1675,30 @@ mod tests {
         assert!(with(20.0, -1.0).validate().is_err());
         assert!(with(f32::NAN, 4.0).validate().is_err());
         assert!(with(20.0, f32::NAN).validate().is_err());
+    }
+
+    /// `lens-drop-refraction`: past a bend of 2 a drop samples the scene from
+    /// outside itself; the rim is a share of light lost; the glint a gain.
+    #[test]
+    fn the_lens_drops_knobs_hold_their_ranges() {
+        let with = |bend: f32, rim: f32, glint: f32| WeatherSettings {
+            rain_lens_bend: bend,
+            rain_lens_rim: rim,
+            rain_lens_glint: glint,
+            ..WeatherSettings::default()
+        };
+        with(0.0, 0.0, 0.0).validate().unwrap();
+        with(2.0, 1.0, 3.0).validate().unwrap();
+        assert!(with(-0.1, 0.2, 1.0).validate().is_err());
+        assert!(with(2.1, 0.2, 1.0).validate().is_err());
+        assert!(with(f32::NAN, 0.2, 1.0).validate().is_err());
+        assert!(with(0.5, -0.1, 1.0).validate().is_err());
+        assert!(with(0.5, 1.1, 1.0).validate().is_err());
+        assert!(with(0.5, f32::NAN, 1.0).validate().is_err());
+        assert!(with(0.5, 0.2, -0.1).validate().is_err());
+        assert!(with(0.5, 0.2, f32::NAN).validate().is_err());
+        assert!(with(0.5, 0.2, f32::INFINITY).validate().is_err());
+        // Tenebris's unnormalised knob is gone, not silently ignored.
+        assert!(ron::from_str::<WeatherSettings>("(rain_lens_refract: 1.7)").is_err());
     }
 }

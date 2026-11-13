@@ -153,6 +153,44 @@ pub(crate) fn wgsl_struct_size(label: &str, source: &str, name: &str) -> u32 {
     layouter[handle].size
 }
 
+/// The lens drops' section of `water.wgsl` (`lens-drop-refraction`): the drop
+/// field, its mapping from the lens's uv and where a pixel looks through it,
+/// from the "Rain on glass" banner to the refraction that samples the scene.
+/// It reads only the view's `lens`, `screen` and `mist_look` lanes, so with a
+/// stand-in uniform for those it is WGSL that naga reads on its own and a GPU
+/// test runs (`lens_gpu_tests`). The stand-in's `probe` lane is the test's.
+pub(crate) fn lens_drops_source() -> String {
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let start = water
+        .find("// ---- Rain on glass")
+        .expect("water.wgsl's lens drops section moved; update the slice");
+    let end = start
+        + water[start..]
+            .find("// `wipe` receives")
+            .expect("water.wgsl's refraction through the drops moved; update the slice");
+    format!(
+        "struct LensView {{ lens: vec4<f32>, screen: vec4<f32>, mist_look: vec4<f32>, probe: vec4<f32> }}\n\
+         @group(0) @binding(0) var<uniform> view: LensView;\n{}",
+        &water[start..end]
+    )
+}
+
+/// The lens drops read no lane of the view but the three the stand-in has,
+/// and the shipped lens samples the scene where `rd_lens` says, toward the
+/// drop's centre: `uv + offset`, never Tenebris's `uv - n`.
+#[test]
+fn the_lens_drops_compile_on_their_own_and_the_lens_looks_where_they_say() {
+    validated_entry_points("water.wgsl's lens drops", &lens_drops_source());
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let start = water
+        .find("fn refract_through_drops(")
+        .expect("the refraction is gone");
+    let body = &water[start..start + water[start..].find("\n}\n").unwrap()];
+    assert!(body.contains("let lens = rd_lens(drop_uv,t,l0,l1,l2);"));
+    assert!(body.contains("clamp(uv+lens.offset,vec2(0.),vec2(1.))"));
+    assert!(!body.contains("uv-n"), "Tenebris's outward sample is back");
+}
+
 /// The drawn sea is the table the hulls float on, read from the uniform: the
 /// water pass's vertex stage displaces by `sea_surface(view.sea, ...)` and
 /// writes no wave of its own. A literal sine left in it would be a second sea

@@ -54,6 +54,8 @@ pub mod weather;
 pub mod world_map;
 
 #[cfg(all(test, feature = "desktop"))]
+mod lens_gpu_tests;
+#[cfg(all(test, feature = "desktop"))]
 mod map_gpu_tests;
 #[cfg(all(test, feature = "desktop"))]
 mod sea_gpu_tests;

@@ -42,7 +42,7 @@ struct WaterView {
     fog_day: vec4<f32>,       // rgb sky colour by day, w fog height m
     limits: vec4<f32>,        // fog ceiling, terminator lo, terminator hi, fog mix
     fx: vec4<f32>,            // underwater distortion, submersion 0/0.5/1, rain, emerge
-    lens: vec4<f32>,          // droplet density, refraction, speed, size
+    lens: vec4<f32>,          // droplet density, bend (rain_lens_bend), speed, size
     screen: vec4<f32>,        // aspect, surface band m, wet blur, detail fade
     lod: vec4<f32>,           // xyz player direction, w base level
     bands: vec4<f32>,         // cos(band radius / R) per fine level, coarsest first
@@ -94,6 +94,10 @@ struct WaterView {
     // the image toward its own brightness, and the drops' scale.
     mist: vec4<f32>,
     mist_look: vec4<f32>,
+    // A lens drop's edge (`lens-drop-refraction`): x the light it loses
+    // there (`rain_lens_rim`), y the sky's light it gathers on the lower part
+    // (`rain_lens_glint`); zw spare.
+    lens_look: vec4<f32>,
     // The puffs (`cloud-puffs`): the sun's wrap, a white and a storm column's
     // base shade, the silver lining; then the edge erosion, the fade in front
     // of the ground (m), the fade-in from the eye (m), and one when the puffs
@@ -728,7 +732,9 @@ fn rd_n13(p: f32) -> vec3<f32> {
 }
 fn rd_n(t: f32) -> f32 { return fract(sin(t*12345.564)*7658.76); }
 fn rd_saw(b: f32, t: f32) -> f32 { return smoothstep(0.0,b,t)*smoothstep(1.0,b,t); }
-fn rd_drop_layer(uv_in: vec2<f32>, t: f32) -> vec2<f32> {
+// x the main drop, y its trail's beads (apart for the lens's radii,
+// `lens-drop-refraction`), z the trail.
+fn rd_drop_layer(uv_in: vec2<f32>, t: f32) -> vec3<f32> {
     var uv = uv_in;
     let whole = uv_in;
     uv.y += t*0.75;
@@ -763,8 +769,7 @@ fn rd_drop_layer(uv_in: vec2<f32>, t: f32) -> vec2<f32> {
     y = fract(y*10.0)+(st.y-0.5);
     let dd = length(st-vec2<f32>(x,y));
     droplets = smoothstep(0.3,0.0,dd);
-    let m = main_drop+droplets*r*trail_front;
-    return vec2<f32>(m,trail)*(keep*fade);
+    return vec3<f32>(main_drop,droplets*r*trail_front,trail)*(keep*fade);
 }
 fn rd_static_drops(uv_in: vec2<f32>, t: f32) -> f32 {
     var uv = uv_in*40.0*max(view.lens.w,0.05);
@@ -777,37 +782,91 @@ fn rd_static_drops(uv_in: vec2<f32>, t: f32) -> f32 {
     let fade = rd_saw(0.025,fract(t+n.z));
     return smoothstep(0.3,0.0,d)*fract(n.z*10.0)*fade*keep;
 }
-fn rd_drops(uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32) -> vec2<f32> {
+// Each kind of drop's radius in the drop space at `rain_lens_size` 1, where
+// its field reaches zero: the static drop's 0.3 of a 1/40 cell; a layer's
+// drop's 0.4 of a 1/12 cell (its distance the same across and down), and its
+// beads' 0.3 of it across. The far layer's are 1.85 times smaller.
+const RD_RADII: vec3<f32> = vec3<f32>(0.3/40.0, 0.4/12.0, 0.3/12.0);
+// The drop field at a point (`lens-drop-refraction`): x the coverage the drops
+// add up to (a pixel shows a drop where it passes 0.3), y the lens height, z
+// the trail. The height weighs each kind of drop by the square of its radius,
+// and the static drops by their height over `l0`'s (it reaches 2), so every
+// drop's slope is the same share of its own size.
+fn rd_drop_parts(uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32) -> vec3<f32> {
     let s = rd_static_drops(uv,t)*l0;
-    let m1 = rd_drop_layer(uv,t)*l1;
-    let m2 = rd_drop_layer(uv*1.85,t)*l2;
-    var c = s+m1.x+m2.x;
+    var near = rd_drop_layer(uv,t)*l1;
+    var far = rd_drop_layer(uv*1.85,t)*l2;
+    let trail = max(near.z*l0,far.z*l1);
     // Density above one stacks same-size layers rather than shrinking drops.
     let extra = clamp(view.lens.x-1.0,0.0,2.0);
     if (extra > 0.001) {
-        let m3 = rd_drop_layer(uv+vec2<f32>(0.50,0.37),t);
-        let m4 = rd_drop_layer(uv*1.85+vec2<f32>(0.27,0.61),t);
-        c += (m3.x*l1+m4.x*l2)*min(extra,1.0);
+        near += rd_drop_layer(uv+vec2<f32>(0.50,0.37),t)*(l1*min(extra,1.0));
+        far += rd_drop_layer(uv*1.85+vec2<f32>(0.27,0.61),t)*(l2*min(extra,1.0));
     }
-    c = smoothstep(0.3,1.0,c);
-    return vec2<f32>(c,max(m1.y*l0,m2.y*l1));
+    let r = RD_RADII/max(view.lens.w,0.05);
+    let w = r*r;
+    let h = w.x*s/max(l0,1.0) + dot(near.xy,w.yz) + dot(far.xy,w.yz)/(1.85*1.85);
+    return vec3<f32>(s+near.x+near.y+far.x+far.y, h, trail);
+}
+// The lens's uv (y down) in the reference's frame: centred, y up, in screen
+// heights. Tenebris's drop space; the lens multiplies it by `rain_lens_scale`.
+fn rd_space(uv: vec2<f32>) -> vec2<f32> {
+    return vec2<f32>((uv.x-0.5)*max(view.screen.x,0.1), 0.5-uv.y);
+}
+// A lens pixel through the drops (`lens-drop-refraction`): where it looks,
+// as an offset in the lens's uv; the drop field there (`rd_drop_parts`); and
+// how far the drop's surface there faces down, 0..1, from its slope.
+struct RdLens {
+    offset: vec2<f32>,
+    field: vec3<f32>,
+    lower: f32,
+}
+// The slope of the lens height bends a pixel toward its drop's centre: every
+// drop, whatever its size, by `rain_lens_bend` times the pixel's distance from
+// the centre at its middle, and by none at its rim. Below 1 an upright
+// magnifier; up to 2 the sample never leaves the drop. Across a cell's seam
+// the field steps; no pixel in a drop bends further than the bend times the
+// largest drop's radius, so that caps it.
+fn rd_lens(drop_uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32) -> RdLens {
+    let e = 0.001;
+    let here = rd_drop_parts(drop_uv,t,l0,l1,l2);
+    let across = rd_drop_parts(drop_uv+vec2<f32>(e,0.0),t,l0,l1,l2);
+    let up = rd_drop_parts(drop_uv+vec2<f32>(0.0,e),t,l0,l1,l2);
+    let slope = vec2<f32>(across.y-here.y, up.y-here.y)/e;
+    let bend = clamp(view.lens.y,0.0,2.0);
+    // A unit bump's R^2 slope is 6 u(1-u) R: a sixth of it is (1-u) times
+    // the distance from the centre.
+    var o = slope*(bend/6.0);
+    let reach = bend*RD_RADII.y/max(view.lens.w,0.05);
+    let len = length(o);
+    if (len > reach) { o *= reach/len; }
+    var lens: RdLens;
+    // Back from the drop space to the uv: undo the scale, the aspect and the
+    // flip of `rd_space`.
+    lens.offset = vec2<f32>(o.x/max(view.screen.x,0.1), -o.y)/max(view.mist_look.w,0.05);
+    lens.field = here;
+    // The slope points up the drop, toward its middle: up at its lower edge.
+    lens.lower = clamp(slope.y*inverseSqrt(max(dot(slope,slope),1e-20)),0.0,1.0);
+    return lens;
 }
 // `wipe` receives how much of the glass the drops and their trails have run
 // over here: what clears the mist (`lens-weather`).
 fn refract_through_drops(uv: vec2<f32>, drop_uv: vec2<f32>, t: f32, l0: f32, l1: f32, l2: f32,
         wipe: ptr<function, f32>) -> vec4<f32> {
-    let c = rd_drops(drop_uv,t,l0,l1,l2);
-    let e = vec2<f32>(0.001,0.0);
-    let cx = rd_drops(drop_uv+e,t,l0,l1,l2).x;
-    let cy = rd_drops(drop_uv+e.yx,t,l0,l1,l2).x;
-    // A gradient in the y-up drop frame, negated in y for the y-down sample.
-    // Divided by the drops' scale, so each drop still bends the same share
-    // of its own width however small it is drawn (`lens-weather`).
-    let n = vec2<f32>(cx-c.x,-(cy-c.x));
-    let bend = view.lens.y/max(view.mist_look.w, 0.05);
-    let refracted = textureSampleLevel(scene_color,scene_sampler,clamp(uv-n*bend,vec2(0.),vec2(1.)),0.0).rgb;
-    *wipe = max(*wipe, clamp(max(c.x, c.y), 0.0, 1.0));
-    return vec4<f32>(refracted, clamp(c.x,0.0,1.0));
+    let lens = rd_lens(drop_uv,t,l0,l1,l2);
+    let c = smoothstep(0.3,1.0,lens.field.x);
+    // The edge (`lens-drop-refraction`): where the drop's alpha passes a half
+    // its surface is steep, and light is lost there; what shows a drop against
+    // a flat sky. The sky's light, bent through the drop, gathers on the
+    // lower part of that edge: the sky's mean radiance, so it goes with the
+    // day. Nothing at a drop's middle, nothing outside it.
+    let band = 4.0*c*(1.0-c);
+    let rim = clamp(view.lens_look.x,0.0,1.0);
+    let glint = max(view.lens_look.y,0.0);
+    let behind = textureSampleLevel(scene_color,scene_sampler,clamp(uv+lens.offset,vec2(0.),vec2(1.)),0.0).rgb;
+    let refracted = behind*(1.0-rim*band) + view.rain_sky.rgb*(glint*band*lens.lower);
+    *wipe = max(*wipe, clamp(max(c, lens.field.z), 0.0, 1.0));
+    return vec4<f32>(refracted, clamp(c,0.0,1.0));
 }
 
 // The mist's beads: a field of tiny drops, `mist_look.x` per screen height,
@@ -868,12 +927,10 @@ fn lens(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // The drop math is the reference's, whose full-screen v_uv is y-UP ("high
     // y = high on screen"); Bevy's fullscreen uv is y-down, and in it the same
     // monotonic fall climbed. The lens works in the reference's frame.
-    var drop_uv = vec2<f32>(uv.x-0.5, 0.5-uv.y);
-    drop_uv.x *= max(view.screen.x,0.1);
+    let tenebris_uv = rd_space(uv);
     // The drops `rain_lens_scale` times smaller than Tenebris's, trails and
     // beads with them (`lens-weather`).
-    let tenebris_uv = drop_uv;
-    drop_uv *= max(view.mist_look.w, 0.05);
+    let drop_uv = tenebris_uv*max(view.mist_look.w, 0.05);
     let t = view.camera_time.w*0.2*view.lens.z;
     // The rain on the camera, not on the sea: under a roof it is none.
     let rain = clamp(view.rain.x,0.0,1.0);

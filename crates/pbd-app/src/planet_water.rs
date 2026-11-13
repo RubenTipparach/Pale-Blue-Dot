@@ -139,6 +139,10 @@ pub(super) struct WaterView {
     /// lifts the image toward its own brightness; w the drops' scale
     /// (`rain_lens_scale`).
     mist_look: Vec4,
+    /// A lens drop's edge (`lens-drop-refraction`): x the light it loses
+    /// there (`rain_lens_rim`), y the sky's light it gathers on the lower
+    /// part (`rain_lens_glint`); zw spare.
+    lens_look: Vec4,
     /// The puffs' look (`cloud-puffs`): the sun's wrap, a white and a storm
     /// column's base shade, the silver lining.
     cloud_puff: Vec4,
@@ -1329,7 +1333,7 @@ fn prepare_water_views(
             fx: Vec4::new(s.underwater_distortion, state, sea_rain, drips),
             lens: Vec4::new(
                 weather_settings.rain_lens_density,
-                weather_settings.rain_lens_refract,
+                weather_settings.rain_lens_bend,
                 weather_settings.rain_lens_speed,
                 weather_settings.rain_lens_size,
             ),
@@ -1397,6 +1401,12 @@ fn prepare_water_views(
                 weather_settings.lens_mist_blur,
                 weather_settings.lens_mist_whiten,
                 weather_settings.rain_lens_scale,
+            ),
+            lens_look: Vec4::new(
+                weather_settings.rain_lens_rim,
+                weather_settings.rain_lens_glint,
+                0.0,
+                0.0,
             ),
             cloud_puff: Vec4::new(
                 weather_settings.cloud_puff_wrap,
@@ -2373,7 +2383,7 @@ mod tests {
         // And the sky's nine coefficients (`water-lit`).
         let sh = block.matches("array<vec4<f32>, 9>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * lamps + 8 * sh;
-        assert_eq!((mat4, vec4, lamps, sh), (4, 70, 1, 1));
+        assert_eq!((mat4, vec4, lamps, sh), (4, 71, 1, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");
