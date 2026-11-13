@@ -20,6 +20,7 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 6 | 2026-11-12 | M21 Rockets to Starships (ship-tiers) added from another session; M20 republished as version 2. |
 | 7 | 2026-11-12 | M22 Cranes and Printers, M23 Drydock and Hex Ship Builder and M24 Hangar and Chibi Aircraft (vehicle-yards). |
 | 8 | 2026-11-13 | M21 renamed Rockets and Landers (no warp, bigger walkable rockets). |
+| 9 | 2026-11-13 | M22 to M24 restored after a republish from main dropped them; M20, M22, M23 and M24 summaries brought up to their latest versions. |
 
 Every page on it links back to it: an "All Pale Blue Dot mockups (the tracker)" line under the
 page's title (the thirteen mockups of 2026-11-12, and the survey). The earlier mockups (M14 to M19)
