@@ -173,6 +173,14 @@ like my planes are cliping through the ground and buildings".
     is on;
   - the stall speed shown in the builder is still the honest number. The
     assist only keeps the plane from falling out of the sky near it.
+- **Plenty of lift** (the owner: "your planes by default have really shity
+  lift"). At the game's 25 m/s^2, a chibi plane with 1 m^2 a wing cell
+  stalled at 42 to 52 m/s. Chibi aircraft fly like toys instead:
+  - a wing cell counts as 3 m^2 of lift;
+  - CLmax is 1.8.
+  So the presets stall at about 18 to 24 m/s, leave the ground in a short
+  roll, and climb at full throttle with room to spare. The builder shows
+  the same numbers it flies by.
 - **Room to fly.** The airfield sits in a terrain area several kilometres
   across (hex terrain, lower detail with distance), with a coast, hills
   and a town to fly to.
