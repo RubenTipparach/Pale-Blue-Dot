@@ -106,6 +106,11 @@ pub struct Launch {
     /// `--route clouds`: the scenic route through several separate clouds.
     pub route_broken: bool,
     pub fixed: bool,
+    /// `--real-time`: a `--capture` on the real clock, after the normal
+    /// warm-up, instead of fixed steps from `READY` (an instrument: what play
+    /// shows, frame pacing and all, where a fixed-step capture shows what a
+    /// fixed frame shows).
+    pub real_time: bool,
     pub fly: bool,
     pub walk: bool,
     /// Walk mode, placed at the shoreline and holding forward, so a capture can
@@ -282,6 +287,7 @@ impl Launch {
             route_kind: pbd_app::flight_view::RouteKind::FarSide,
             route_broken: false,
             fixed: false,
+            real_time: false,
             fly: false,
             walk: false,
             swim: false,
@@ -665,6 +671,7 @@ impl Launch {
                     );
                 }
                 "--fixed-dt" => result.fixed = true,
+                "--real-time" => result.real_time = true,
                 "--render-offset" => {
                     let mut components = [0.0; 3];
                     for component in &mut components {
@@ -1288,14 +1295,14 @@ pub fn run(args: &[String]) {
             app.add_systems(PreUpdate, swim_script.after(bevy::input::InputSystems));
         }
     }
-    if launch.fixed || launch.capture.is_some() {
+    if launch.fixed || (launch.capture.is_some() && !launch.real_time) {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(step));
     }
     // The loading screen (`loading-screen`): added last, because it takes
     // over `Main` from the plugins that made it.
     app.add_plugins(pbd_app::loading::LoadingPlugin {
         launched,
-        capture: launch.capture.is_some(),
+        capture: launch.capture.is_some() && !launch.real_time,
     });
     if launch.capture_loading
         && let Some(path) = &launch.capture

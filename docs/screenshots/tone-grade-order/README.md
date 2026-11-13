@@ -23,3 +23,16 @@ where each was taken.
 The after frames are also graded differently: with the node out of order the
 grade could run before the main pass, so the frame on screen could miss its
 exposure and display transform; after the fix it gets them every frame.
+
+## In real time
+
+`realtime-before-night.jpg`, `realtime-after-night.jpg`,
+`realtime-before-after-night.jpg`: the night launch on the real clock, not
+fixed steps (`--real-time`, an instrument: the normal warm-up, then the shot
+at frame 600), `--frame-log` on. The same spot, time and weather as the night
+row above; the heading differs because the real clock turned it a different
+amount by frame 600. Median frame 16.7 ms over the last 200 frames in both
+(60 fps); the Mac's screen was locked. Before: dotted star arcs and stepped
+copies of both trees. After: none.
+
+`pbd-app --world <new> --walk --at 20 40 --time 2 --pitch 40 --turn 45 --frames 600 --real-time --frame-log <csv> --capture <png>`
