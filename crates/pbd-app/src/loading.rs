@@ -412,12 +412,14 @@ fn run_main_gated(world: &mut World, mut started: Local<bool>) {
                 world.resource_mut::<Time<Virtual>>().unpause();
             }
         } else {
-            for label in [
-                First.intern(),
-                Loading.intern(),
-                PostUpdate.intern(),
-                Last.intern(),
-            ] {
+            let _ = world.try_run_schedule(First);
+            // Bevy finishes asset loads (the screen's own UI shaders and
+            // font among them) in `PreUpdate`, which the gate skips: without
+            // this the screen's pipelines never compile and the window stays
+            // black until the world opens. Only the asset step is run, not
+            // all of `PreUpdate`, whose game systems want the open world.
+            bevy::asset::handle_internal_asset_events(world);
+            for label in [Loading.intern(), PostUpdate.intern(), Last.intern()] {
                 let _ = world.try_run_schedule(label);
             }
             return;
@@ -583,13 +585,12 @@ fn drive_loading(world: &mut World) {
         });
         return;
     }
-    let (step, seconds, done, total) = {
+    let (step, seconds, done) = {
         let p = world.resource::<Preparing>();
         (
             p.progress.step(),
             p.progress.seconds(),
             p.thread.as_ref().is_some_and(JoinHandle::is_finished),
-            p.started.elapsed().as_secs_f32(),
         )
     };
     let fraction = if step == Step::Planet {
@@ -597,7 +598,9 @@ fn drive_loading(world: &mut World) {
     } else {
         0.5
     };
-    paint(world, step, fraction, format!("{total:.1} s"));
+    // No clock on the screen (owner, 2026-11-13: "dont show seconds on
+    // loading screen"); the times go to the log's `READY` line.
+    paint(world, step, fraction, String::new());
     if !done {
         return;
     }
@@ -719,17 +722,8 @@ pub fn warm(world: &mut World) {
     } else {
         (Step::Standing, 0.5)
     };
+    paint(world, step, fraction, String::new());
     let world_s = world.get_resource::<Preparing>().map_or(0.0, |p| p.world_s);
-    paint(
-        world,
-        step,
-        fraction,
-        format!(
-            "{} / {total} pipelines   {:.1} s",
-            total.saturating_sub(waiting),
-            world_s + elapsed.as_secs_f32()
-        ),
-    );
     let done = immediate || (frames >= MIN_WARM_FRAMES && !compiling && towns_settled);
     let capped = elapsed > WARM_CAP;
     if !done && !capped {
