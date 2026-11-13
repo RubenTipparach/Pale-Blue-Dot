@@ -40,7 +40,103 @@ nothing a player sees:
 | Town outside | `field_light.rs::bake_town_outsides` | a set reaching the town lands, a relight; the tier stops reaching it | sliced at 2 ms a frame, `UV_1` swapped whole; open sky swapped whole at once |
 | Field-lit corners | `light_from_the_field` | the set or its light version changes | the row rewritten that frame |
 
-Sections 2 to 6 measure each (to be filled from the runs).
+Sections 2 to 6 measure each. The runs are fixed-step captures
+(`--capture`, 60 Hz steps) in a 480 x 300 point window (`PBD_WINDOW`, 960 x
+600 pixels) with `PBD_CAPTURE_RUN` saving every frame; "luma" is the mean
+Rec. 709 luma (0..255, of the sRGB pixels) of a patch of the picture. The
+fresh world, place and command of each are in
+`docs/screenshots/baked-light-ease/README.md`. The bakes' own costs, from the
+`BAKED_LIGHT ... took` lines: a bounce bake of 3,193-3,595 columns 3.6-9.8 ms
+(29.6 ms once, under a rebuild), a lamp bake 3.4-6.2 ms, on a worker.
+
+## 2. The lamp bake at a landing (measured: the largest)
+
+A night walk through a row of lights in the desert near Tahal (`--time
+22.5 --lamps 60 --walk-distance 300`). Sets land every 175-218 frames
+(about 3 s at a sprint), each round a new anchor.
+
+| Frame | What | Lit ground (lower half), luma |
+| --- | --- | ---: |
+| 372 | the old set and its lamp bake | 105.9 |
+| 373 | the new set lands; neither half of the lamp bake holds its slots, so the flood is drawn | **130.8 (+24.9 in one frame)** |
+| 375 | the new set's lamp bake lands (2 frames later), fading in over 0.5 s from the flood | 130.9 |
+| 384 | the fade nearly done | 108.4 |
+
+So every landing near a lamp at night jumps the lamp-lit ground by about a
+quarter, for two frames, and walks it back over half a second: a flash. The
+flood (no direction, no shadow) is much brighter than the bake beside a lamp.
+
+## 3. The sun's bounce at a landing (measured), and its 2-degree steps (measured: none)
+
+**At a landing.** The same walk by day (`--time 18.5`). On the landing frame
+`bounce_gain` drops to zero (the bounce held is for the old anchor) and the
+new bake lands two frames later, fading in over 0.5 s:
+
+| Landing frame | Sand terrace walls in shade, luma | Red clay faces, luma |
+| --- | ---: | ---: |
+| 377 to 378 | 106.0 to 95.0 (**-11.0**) | 60.9 to 52.5 (**-8.4**) |
+
+The whole frame: 19% of pixels darker by more than 6 levels in that frame
+(`-2.7` mean). Each later landing of the walk darkens by 4.1 and 3.2 luma
+over the lower half. So every landing by day dims every shaded face in one
+frame and brings it back over half a second.
+
+**The 2-degree re-bakes.** The sun's bounce is baked again every 2 degrees
+(every 16 s at the clock's own pace, every 262 frames at `PBD_CLOCK_RUNS=4`)
+and shown at once. On the shaded walls of a sand pit at 18:30 (the bounce's
+best case: sand's albedo, a low sun) the re-bake frames 426 and 688 show no
+step at all: the walls brighten 0.03-0.04 luma a frame on either side of
+them as the sun moves, and the re-bake adds nothing measurable. On a meadow
+at 19:00 the same. **Not a pop; left as it is** (decision 7.5).
+
+## 4. Dusk and dawn (measured)
+
+At Holbrook, facing a lantern post and the town (`--time 20.45`, the clock at
+its own pace, lamps lit at hour 20.51):
+
+| Frame | What | Luma |
+| --- | --- | --- |
+| 582 | `switch_dusk_lamps` relights the field (`SPENT 18.4 ms` on the main thread) | lantern glass and the town's windows light in this frame; the open grass does not move (-0.04): at the switch the sun is still 3 degrees up and `lamp_share` keeps a lamp's light off sunlit ground |
+| 582 | 54-89 field-lit meshes' corners read the new field | corners move by up to 0.73 of a lamp level in one frame |
+| 584 | the lamp bake for the relit field lands | the grass beside the post brightens +2.0 a frame for 30 frames (the bake's linear 0.5 s fade: eased, but fast) |
+| 583-601 | the towns' outsides finish their sliced bakes, one mesh at a time | a sandstone wall +5.8 and a town wall +5.3 in one frame (591); in the alley view, a stone tower **+12.4** in one frame (481) |
+
+So at dusk the town's walls light up in steps, one mesh at a time, 1 to 19
+frames after the ground beside them. The flood's own step on open ground is
+nil at the switch hour, but under an eave or in a cave, where `lamp_share`
+is one, the flood steps from dark to lit in the relight frame (from code:
+nothing under the old bake's reach covers a dusk-lit lantern, so the flood
+is drawn there until the new bake lands).
+
+## 5. Towns while walking at night (measured from the log)
+
+A night walk from Holbrook toward Linenleigh (`--time 22.5 --yaw 180
+--walk-distance 700`). Every landing whose tier reaches a standing town
+re-bakes it and swaps each mesh in whole. The largest change of any vertex's
+lamp level at a swap, per mesh: 0.60, 0.43, 0.54, 0.64, 0.60 (one landing),
+0.81, 0.59, 0.67, 0.81, 0.82 (the next), and 0.13-0.17 when the tier left
+the town and it went back to open sky. Those are changes between two fields
+that both reach the town: a lamp near the edge of the old tier lights less,
+because the flood treats what is off the tier as rock (section 6).
+
+## 6. Found, and not this change's
+
+**The flood is cut at the tier's edge.** `light::bake` treats a cell off the
+tier as solid, so a lamp within its reach of the edge lights less in a set
+that ends near it than in one that does not. Section 5's town changes are
+this. In the terrain it is the lamp-lit ground near the tier's edge
+brightening when the next set lands. The slots differ between the two sets,
+so the shader cannot blend across it; the fix is in the bake (a margin ring
+lit but not drawn) and belongs to the light field's own change. Recorded,
+not fixed here.
+
+**The dusk relight costs one long frame**: 15.3-18.4 ms on the main thread
+(`SPENT ... dusk lamps: re-baking the field`), twice a day. A frame-budget
+item.
+
+**A lamp's own glass and flame** switch on with the record's state bit in the
+relight frame, as a lamp placed does. The light it casts is what this change
+eases.
 
 ## 7. Decisions
 
@@ -72,10 +168,56 @@ slots are the same before and after, only the lamps changed. An edit changes
 what is solid, and a dug face's old light is the rock's darkness: faded from,
 it would flash dark. The light spec requires an edit's light at once.
 
+The GPU's light buffer gets two halves. `switch_dusk_lamps` names the version
+it made (`DuskRelight`); `upload_fine` writes that version's field into the
+other half and starts the blend, and `light_at` mixes the two halves while it
+runs. Any other upload (an edit, a landing) writes the newest half and ends a
+blend in progress at once: the other half no longer matches the columns.
+Memory: the light buffer goes from 7.9 to 15.8 MiB at capacity; the second
+read happens only in the second a blend runs, twice a day.
+
 ### 7.4 Towns keep their last bake
 
 A town's outside carries its bake in `UV_1` and, from this change, the bake
 before it in the vertex colour (`COLOR`, sky and lamp in `xy`). The vertex
 colour is given at spawn, so the mesh's layout never changes and no pipeline
 is specialised mid-flight. `field_lit.wgsl` reads `COLOR` as light, never as
-a tint, on a row marked as a town's outside.
+a tint, on a row marked as a town's outside (`fade.z`), and blends by the
+row's `fade.y`, which `light_from_the_field` writes from the time of the
+swap. A swap during a blend starts from what was on screen: the CPU mixes the
+two by the blend's progress into `COLOR` before writing the new `UV_1`.
+Memory: 16 bytes a vertex of a town's outside (2.5 MB for a walled town).
+The bake itself is unchanged: 2 ms slices on the main thread.
+
+### 7.5 The bounce's 2-degree re-bakes are left
+
+Section 3 measured nothing at them, so the bounce keeps one buffer and its
+re-bakes still show at once. Only its landing changes (7.2).
+
+### 7.6 Field-lit corners ease
+
+When a new field (a landing, a relight) moves the corners of a mesh that has
+not moved, its row blends from the corners it showed to the new ones by the
+same rule. A mesh that moves takes its new corners at once, as now: its
+light follows it continuously.
+
+### 7.7 The lamp bake's fade is the rule's
+
+The lamp bake's cross-fade becomes `BAKE_EASE_S`'s smoothstep instead of
+0.5 s linear: section 4's +2.0 luma a frame for 30 frames becomes at most
+1.5 luma a frame over 60.
+
+### 7.8 Tests
+
+- The rule: zero at the swap, one at `BAKE_EASE_S` and after, rising, and
+  no 60 Hz frame moves more than a twentieth of the step (`pbd_core::light`).
+- A landing publishes its set's bounce and lamp bake with it: the bounce's
+  gain is whole on the landing frame and the lamp bake shows at once
+  (`planet_bounce`, `planet`).
+- A dusk relight blends the light field's halves; an edit does not
+  (`planet`).
+- A town's swap keeps the bake before it, and a swap mid-blend starts from
+  what was shown (`field_light`).
+- Field-lit corners ease under a new field and snap when the mesh moves
+  (`field_light`).
+- The shaders carry the blends (shader-text tests beside the existing ones).

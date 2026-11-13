@@ -614,6 +614,7 @@ fn light_from_the_field(
     sky_light: Option<Res<crate::tone::SkyLight>>,
     mut rows: ResMut<FieldRows>,
     mut read: Local<(u32, std::collections::HashMap<Entity, Corners>)>,
+    frame_count: Option<Res<crate::loading::FrameCount>>,
 ) {
     let sky_light = sky_light.map(|s| *s).unwrap_or_default();
     let centre = frame
@@ -647,6 +648,9 @@ fn light_from_the_field(
     // it rewrote, each frame it passes 2 ms.
     let started = std::time::Instant::now();
     let (mut seen, mut rewritten) = (0usize, 0usize);
+    // MEASUREMENT (`baked-light-ease`): still meshes whose corners a new
+    // field moved this frame, and the most any corner moved.
+    let mut corners_moved = (0usize, 0.0f32);
     for (entity, transform, aabb, share, parent) in &meshes {
         let Some(slot) = rows.slots.get(&entity).copied() else {
             continue;
@@ -702,6 +706,8 @@ fn light_from_the_field(
             });
         }
         if !still || entry.key != key {
+            let relit = still && entry.key != key;
+            let was = (entry.sky, entry.block);
             entry.key = key;
             for (i, at) in entry.points.iter().enumerate() {
                 let (sky, block) = match (&fine, &contact) {
@@ -710,6 +716,20 @@ fn light_from_the_field(
                 };
                 entry.sky[i / 4][i % 4] = sky;
                 entry.block[i / 4][i % 4] = block;
+            }
+            if relit {
+                let moved = (0..2)
+                    .map(|k| {
+                        (entry.sky[k] - was.0[k])
+                            .abs()
+                            .max_element()
+                            .max((entry.block[k] - was.1[k]).abs().max_element())
+                    })
+                    .fold(0.0f32, f32::max);
+                if moved > 1e-3 {
+                    corners_moved.0 += 1;
+                    corners_moved.1 = corners_moved.1.max(moved);
+                }
             }
         }
         let mut row = FieldRow {
@@ -739,6 +759,14 @@ fn light_from_the_field(
     // Every so often, forget the meshes that are gone.
     if now % 600 == 0 {
         cache.retain(|_, c| c.seen == now);
+    }
+    if corners_moved.0 > 0 {
+        info!(
+            "BAKED_LIGHT frame={} corners re-read under a new field: {} meshes moved, the most {:.3}",
+            frame_count.map_or(0, |c| c.0),
+            corners_moved.0,
+            corners_moved.1
+        );
     }
     crate::planet::lod::spent(
         &format!("field corners: {seen} meshes, {rewritten} rows rewritten"),
@@ -983,7 +1011,9 @@ fn bake_town_outsides(
     contact: Option<Res<PlanetContact>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut outsides: Query<(&Mesh3d, &mut BakedField)>,
+    count: Option<Res<crate::loading::FrameCount>>,
 ) {
+    let frame = count.map_or(0, |c| c.0);
     let (Some(fine), Some(contact)) = (fine, contact) else {
         return;
     };
@@ -1051,7 +1081,9 @@ fn bake_town_outsides(
         };
         if want == BakeSource::Open {
             // Open sky everywhere: no field to read, nothing to slice.
-            m.insert_attribute(Mesh::ATTRIBUTE_UV_1, vec![[1.0f32, 0.0]; count]);
+            let open = vec![[1.0f32, 0.0]; count];
+            log_bake_change(frame, true, uv_1(m), &open);
+            m.insert_attribute(Mesh::ATTRIBUTE_UV_1, open);
             state.baked = Some(BakeSource::Open);
             state.pending = None;
             continue;
@@ -1089,6 +1121,7 @@ fn bake_town_outsides(
         if pending.done.len() == count {
             let done = std::mem::take(&mut pending.done);
             state.pending = None;
+            log_bake_change(frame, false, uv_1(m), &done);
             m.insert_attribute(Mesh::ATTRIBUTE_UV_1, done);
             state.baked = Some(want);
         }
@@ -1096,6 +1129,47 @@ fn bake_town_outsides(
     if baked_vertices > 0 {
         crate::planet::lod::spent(&format!("town bake: {baked_vertices} vertices"), started);
     }
+}
+
+/// A mesh's baked `(sky, block)` per vertex, if it carries them.
+fn uv_1(mesh: &Mesh) -> Option<&[[f32; 2]]> {
+    match mesh.attribute(Mesh::ATTRIBUTE_UV_1)? {
+        bevy::mesh::VertexAttributeValues::Float32x2(values) => Some(values),
+        _ => None,
+    }
+}
+
+/// MEASUREMENT (`baked-light-ease`): how far a town's swap moves its
+/// vertices' light, logged the frame it is swapped in. A vertex still
+/// unbaked before (it read the corners) is counted apart.
+fn log_bake_change(frame: u64, open: bool, old: Option<&[[f32; 2]]>, new: &[[f32; 2]]) {
+    let (mut sky_sum, mut sky_max, mut block_sum, mut block_max) = (0.0f64, 0.0f32, 0.0f64, 0.0f32);
+    let (mut compared, mut unbaked) = (0usize, 0usize);
+    for (i, now) in new.iter().enumerate() {
+        let Some(was) = old.and_then(|o| o.get(i)) else {
+            unbaked += 1;
+            continue;
+        };
+        if was[0] < 0.0 {
+            unbaked += 1;
+            continue;
+        }
+        let (ds, db) = ((now[0] - was[0]).abs(), (now[1] - was[1]).abs());
+        sky_sum += f64::from(ds);
+        block_sum += f64::from(db);
+        sky_max = sky_max.max(ds);
+        block_max = block_max.max(db);
+        compared += 1;
+    }
+    let n = compared.max(1) as f64;
+    info!(
+        "BAKED_LIGHT frame={frame} town bake swapped: {} vertices, open={open}, unbaked before {unbaked}, sky change mean {:.4} max {:.3}, lamp change mean {:.4} max {:.3}",
+        new.len(),
+        sky_sum / n,
+        sky_max,
+        block_sum / n,
+        block_max
+    );
 }
 
 /// Bevy's own ambient, what lights a PBR face turned from the sun, is the

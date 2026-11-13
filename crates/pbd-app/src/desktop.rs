@@ -1054,8 +1054,11 @@ pub fn run(args: &[String]) {
     // picture is a function of its flags rather than of when it was taken.
     .insert_resource(pbd_app::sky::Sun {
         clock: sun_clock(&launch, saved_seconds),
-        running: (launch.time.is_none() && launch.day.is_none() || launch.clock_runs)
-            && launch.capture.is_none(),
+        // `PBD_CLOCK_RUNS` (`baked-light-ease`, a measurement switch) keeps it
+        // running in a capture too, at its own rate.
+        running: ((launch.time.is_none() && launch.day.is_none() || launch.clock_runs)
+            && launch.capture.is_none())
+            || pbd_app::sky::clock_runs().is_some(),
     })
     .init_resource::<digging::Aim>()
     .init_resource::<digging::Mining>()
@@ -3061,8 +3064,34 @@ fn capture(
     stats: Res<FrameStats>,
     progress: Res<TourProgress>,
     mut exit: MessageWriter<AppExit>,
+    count: Option<Res<pbd_app::loading::FrameCount>>,
+    mut burst: Local<Option<Option<(PathBuf, u64, u64)>>>,
 ) {
     state.frame += 1;
+    // MEASUREMENT (`baked-light-ease`): `PBD_CAPTURE_RUN=<dir>,<first>,<count>`
+    // saves every frame from `first` (the frame log's frame number) for
+    // `count` frames, so a swap can be seen frame by frame.
+    let run = burst.get_or_insert_with(|| {
+        let spec = std::env::var("PBD_CAPTURE_RUN").ok()?;
+        let mut parts = spec.split(',');
+        let dir = PathBuf::from(parts.next()?.trim());
+        let first = parts.next()?.trim().parse().ok()?;
+        let count: u64 = parts.next()?.trim().parse().ok()?;
+        std::fs::create_dir_all(&dir).ok()?;
+        Some((dir, first, first + count))
+    });
+    if let (Some((dir, first, end)), Some(count)) = (run.as_ref(), count.as_ref())
+        && (*first..*end).contains(&count.0)
+    {
+        let path = dir.join(format!("f{:06}.png", count.0));
+        commands.spawn(Screenshot::primary_window()).observe(
+            move |event: On<ScreenshotCaptured>| {
+                if let Ok(image) = event.image.clone().try_into_dynamic() {
+                    let _ = image.to_rgb8().save(&path);
+                }
+            },
+        );
+    }
     let automatic = launch.capture.is_some() && state.frame >= launch.frames && !state.requested;
     if automatic || input.just_pressed(KeyCode::F12) {
         let path = if automatic {

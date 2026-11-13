@@ -1,25 +1,32 @@
 ## ADDED Requirements
 
 ### Requirement: Baked light eases from the bake before it
-When a baked light replaces the one before it - the sun's bounce, the lamp
-bake, a town's outside, a field-lit thing's corners, or the field across dusk
-and dawn - every surface it lights SHALL show the old bake blended to the new
-over `BAKE_EASE_S` by a smoothstep of the time since the swap, and SHALL NOT
-change by more than a twentieth of the step between two frames at 60 Hz.
+When a baked light replaces the one before it - the lamp bake, a town's
+outside, a field-lit thing's corners under a new field, or the light field
+across dusk and dawn - every surface it lights SHALL show the old bake
+blended to the new over `BAKE_EASE_S` by a smoothstep of the time since the
+swap, and SHALL NOT change by more than a twentieth of the step between two
+frames at 60 Hz.
 
-#### Scenario: The sun moves two degrees
-- **WHEN** the sun's bounce is baked again for a sun two degrees on
-- **THEN** a shaded wall's bounce blends from the old bake to the new over
-  `BAKE_EASE_S`, and no frame shows the new one whole the frame after the old
+#### Scenario: The rule
+- **WHEN** a bake is swapped in
+- **THEN** its share is zero on the swap and one from `BAKE_EASE_S` on,
+  rising between, and no 60 Hz frame moves it more than a twentieth
 
 #### Scenario: A town is baked again
 - **WHEN** a town's outside finishes a bake, or the tier stops reaching it
 - **THEN** its walls blend from the light they carried to the new light, and
-  the bake they carried is kept until the blend is done
+  a bake finished mid-blend starts from what was on screen
 
 #### Scenario: Dusk
-- **WHEN** the clock crosses dusk near a row of dusk-lit lanterns
-- **THEN** the ground round them brightens over `DUSK_EASE_S`, not in a frame
+- **WHEN** the clock crosses dusk and the field is relit with the dusk-lit
+  lanterns burning
+- **THEN** the light field blends from the field before the relight to the
+  one after over `BAKE_EASE_S`, not in a frame
+
+#### Scenario: A ship under a new field
+- **WHEN** the field changes under a field-lit mesh that has not moved
+- **THEN** its corners blend from what they showed to the new field
 
 ### Requirement: A landing brings its own baked light
 A fine set laid round a new anchor SHALL land with its sun's bounce and its
@@ -38,6 +45,6 @@ a frame without the bounce or with the lamp flood standing in for the bake.
 A dig, a placed block or a placed or removed lamp SHALL change the field's
 light on its own frame, without easing, so a dug face never flashes dark.
 
-#### Scenario: A lantern placed at night
-- **WHEN** the player places a lantern in the dark
-- **THEN** the light round it is there on that frame
+#### Scenario: An edit during a dusk blend
+- **WHEN** an edit lands while the light field is blending across dusk
+- **THEN** the edit's field is drawn whole on that frame and the blend ends

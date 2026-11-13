@@ -49,10 +49,11 @@ Five bakes reach the screen by a swap:
   (1 s, smoothstep), never in one frame. Where the old bake cannot be read
   any more (it was laid round another anchor), the new set brings its own
   bake with it, so there is nothing to step from.
-- L4: two halves on the GPU, as L7 has; the bounce for a new set is baked in
-  the same pool task as the set and lands with it.
+- L4: the bounce for a new set is baked in the same pool task as the set and
+  lands with it. Its 2-degree re-bakes were measured and show nothing, so
+  they are left as they are.
 - L7: the lamp bake for a new set lands with it too, and is shown at once
-  over a set whose last bake it continues.
+  over a set whose last bake it continues; its cross-fade takes the rule.
 - Dusk and dawn: the light field keeps the field before the relight beside
   the new one and blends the two over `DUSK_EASE_S`. An edit (a dig, a lamp
   placed) still lights at once, as the light spec requires.
@@ -74,6 +75,7 @@ Five bakes reach the screen by a swap:
 `planet_bounce.rs`, `planet.rs` (`upload_fine`, `PlanetParams`),
 `planet_lod.rs` (the set's task, `switch_dusk_lamps`), `field_light.rs`,
 `towns.rs`, `planet_surface.wgsl`, `field_lit.wgsl`. GPU memory: the light
-field and the bounce gain a second half (about 8 MiB and 1 MiB at capacity).
+field gains a second half (7.9 MiB at capacity); a town's outside 16 bytes a
+vertex.
 GPU time: the second read only during a fade. Frame cost is not measured by
 `perf_suite.py` here (the owner runs it); the bake tasks' times are logged.

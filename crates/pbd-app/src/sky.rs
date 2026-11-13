@@ -75,11 +75,22 @@ impl Sun {
 
 /// Advance the clock. One writer, so the hour cannot differ between systems
 /// inside a frame.
-pub fn run_clock(time: Res<Time>, mut sun: ResMut<Sun>) {
+pub fn run_clock(time: Res<Time>, mut sun: ResMut<Sun>, mut rate: Local<Option<f32>>) {
     if sun.running {
-        let step = time.delta_secs();
-        sun.clock.advance(step);
+        let rate = *rate.get_or_insert_with(|| clock_runs().unwrap_or(1.0));
+        sun.clock.advance(time.delta_secs() * rate);
     }
+}
+
+/// MEASUREMENT (`baked-light-ease`): `PBD_CLOCK_RUNS=<rate>` keeps the clock
+/// running in a capture or a run with `--time`, at `rate` times its own pace,
+/// so a fixed-step capture can cross the sun's re-bakes and dusk. Unset, the
+/// clock runs at its own pace where it runs at all.
+pub fn clock_runs() -> Option<f32> {
+    std::env::var("PBD_CLOCK_RUNS")
+        .ok()
+        .and_then(|rate| rate.trim().parse::<f32>().ok())
+        .filter(|rate| rate.is_finite() && *rate > 0.0)
 }
 
 /// The radius the sky treats as solid ground: the water sheet, which sits

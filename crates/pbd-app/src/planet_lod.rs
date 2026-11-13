@@ -1046,6 +1046,7 @@ pub fn switch_dusk_lamps(
     mut lamps: ResMut<DuskLamps>,
     fine: Option<ResMut<PlanetFine>>,
     contact: Option<ResMut<crate::planet::PlanetContact>>,
+    count: Option<Res<crate::loading::FrameCount>>,
 ) {
     let (Some(sun), Some(mut fine)) = (sun, fine) else {
         return;
@@ -1073,6 +1074,12 @@ pub fn switch_dusk_lamps(
         fine.set = relit;
         fine.version += 1;
         spent("dusk lamps: re-baking the field", started);
+        // MEASUREMENT (`baked-light-ease`): when the relit field goes up.
+        info!(
+            "BAKED_LIGHT frame={} dusk relight lit={lit} set v{}",
+            count.map_or(0, |c| c.0),
+            fine.version
+        );
     }
 }
 
@@ -1223,6 +1230,7 @@ pub fn refresh_lod(
     air: Option<Res<crate::atmosphere::Air>>,
     lamps: Res<DuskLamps>,
     time: Res<Time>,
+    count: Option<Res<crate::loading::FrameCount>>,
 ) {
     let player = player_position(&cameras, frame.center.as_vec3());
     let direction = player.and_then(|p| p.try_normalize());
@@ -1289,6 +1297,13 @@ pub fn refresh_lod(
             "fine set {} landed after {took:.1} s: {} columns, the player {behind:.0} m from its anchor",
             fine.version + 1,
             set.columns.columns.len()
+        );
+        // MEASUREMENT (`baked-light-ease`): the frame a set's light goes up.
+        info!(
+            "BAKED_LIGHT frame={} set landed v{} new_anchor={}",
+            count.map_or(0, |c| c.0),
+            fine.version + 1,
+            set.anchor.distance(fine.set.anchor) > 1e-3
         );
         let timer = std::time::Instant::now();
         contact.set_prepared(prepared);

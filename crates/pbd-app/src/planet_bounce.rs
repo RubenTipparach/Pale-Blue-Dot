@@ -62,6 +62,7 @@ pub(super) fn update_bounce(
     lighting: Res<crate::config::LightingSettings>,
     mut field: ResMut<BounceField>,
     mut baking: Local<Baking>,
+    count: Option<Res<crate::loading::FrameCount>>,
 ) {
     let (Some(fine), Some(sun)) = (fine, sun) else {
         return;
@@ -72,6 +73,12 @@ pub(super) fn update_bounce(
         baking.task = None;
         if version == fine.version {
             let new_anchor = anchor.distance(field.anchor) > 1e-3;
+            // MEASUREMENT (`baked-light-ease`): when a bounce reaches the GPU.
+            info!(
+                "BAKED_LIGHT frame={} bounce v{version} new_anchor={new_anchor} sun_moved_deg={:.2}",
+                count.map_or(0, |c| c.0),
+                baking.sun.angle_between(toward).to_degrees()
+            );
             *field = BounceField {
                 version,
                 anchor,
@@ -97,7 +104,14 @@ pub(super) fn update_bounce(
     let e = set.anchor.normalize_or(Vec3::Y).dot(toward);
     let light = Vec3::from_array(pbd_core::sky_light::sun_air(e));
     baking.task = Some(AsyncComputeTaskPool::get().spawn(async move {
+        let started = std::time::Instant::now();
         let field = set.columns.bake_bounce(toward, light);
+        // MEASUREMENT (`baked-light-ease`): what a bounce bake costs a worker.
+        info!(
+            "BAKED_LIGHT bounce bake of {} columns took {:.1} ms",
+            set.columns.columns.len(),
+            started.elapsed().as_secs_f64() * 1000.0
+        );
         (
             version,
             set.anchor,
@@ -152,6 +166,7 @@ pub(super) fn update_lamp_bake(
     lighting: Res<crate::config::LightingSettings>,
     mut field: ResMut<LampBakeField>,
     mut baking: Local<LampBaking>,
+    count: Option<Res<crate::loading::FrameCount>>,
 ) {
     let Some(fine) = fine else {
         return;
@@ -161,6 +176,13 @@ pub(super) fn update_lamp_bake(
         && let Some((version, anchor, gpu)) = block_on(future::poll_once(task))
     {
         baking.task = None;
+        // MEASUREMENT (`baked-light-ease`): when a lamp bake reaches the GPU.
+        info!(
+            "BAKED_LIGHT frame={} lamp bake v{version:?} new_anchor={} (set v{})",
+            count.map_or(0, |c| c.0),
+            anchor.distance(field.anchor) > 1e-3,
+            fine.version
+        );
         *field = LampBakeField {
             version,
             anchor,
@@ -172,7 +194,15 @@ pub(super) fn update_lamp_bake(
     }
     let set = fine.set.clone();
     baking.task = Some(AsyncComputeTaskPool::get().spawn(async move {
+        let started = std::time::Instant::now();
         let baked = set.columns.bake_lamps();
+        // MEASUREMENT (`baked-light-ease`): what a lamp bake costs a worker.
+        info!(
+            "BAKED_LIGHT lamp bake of {} columns, {} lamps took {:.1} ms",
+            set.columns.columns.len(),
+            baked.lamps.len(),
+            started.elapsed().as_secs_f64() * 1000.0
+        );
         (
             want,
             set.anchor,
