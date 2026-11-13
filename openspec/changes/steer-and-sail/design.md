@@ -178,6 +178,35 @@ cell each unless noted. Numbers are mockup first guesses.
 - **Every view stays still until the viewer acts** (CLAUDE.md, "Nothing in
   a mockup spins on its own"). Play, Fly and Sail start on a press.
 
+### 7. As the drydock mockup built it (M23, 2026-11-13)
+
+Recommendations taken (ask only with screenshots):
+- **Wave term.** The drag factor is the larger of 1 and
+  `(v / (0.9 v_hull))^4`, so drag rises smoothly. Read literally, decision
+  4's wave term would have dropped at the threshold.
+- **Turbine.** A turbine passes up to 4 MW, so one serves a boiler pair or a
+  reactor pair.
+- **Telegraph and sheet.** On a ship with an engine, W and S work the
+  telegraph and the sails trim themselves. A pure sailing ship sheets on
+  W and S.
+- **Bunker.** A coal bunker holds 4 t.
+- **Sail limit.** The sail luffs inside 25 degrees of apparent wind, tuned
+  so a ship points no closer than about 45 degrees true. That is a stand-in
+  for what the foil model gives.
+- **Heel.** Hex hulls are stiff enough that heel is near zero.
+- **The chart.** "Sail it" is a 2D chart of 3.6 x 2.4 km, rastered at 15 m.
+
+The presets:
+
+| Preset | Power | Top speed | Range |
+| --- | --- | --- | --- |
+| Rowing launch | 7 kW | 2.0 m/s | |
+| Sloop | sail | 6.0 m/s on a reach | |
+| Steam packet | 400 kW | 6.0 m/s | 357 km |
+| Oil coaster | 600 kW | 6.6 m/s | 381 km |
+| Fission freighter | 4 MW | 10.4 m/s | 7,460 km |
+| Battery ferry | 800 kW | 7.6 m/s | 273 km |
+
 ## Risks
 
 - **Controls on the keyboard.** Four craft kinds now share W, A, S and D

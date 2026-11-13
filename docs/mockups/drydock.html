@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Drydock and Hex Ship Builder</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -136,6 +137,18 @@ tr:last-child td{border-bottom:0}
 .dec .q p{font-size:14.5px;color:var(--muted)}
 .dec .q .rec{color:var(--ink)}
 .dec .q .rec b{color:var(--amber);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:13px;margin-right:6px}
+.sailwrap{display:grid;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px;outline:none}
+.sailwrap:focus-visible{outline:2px solid var(--amber)}
+.sailbar{display:flex;flex-wrap:wrap;gap:8px 14px}
+.seg button.go{background:var(--amber);color:var(--ground);border-color:var(--amber)}
+#compass{width:100%;height:auto;display:block;border-radius:3px}
+.gps{font-size:12.5px;color:var(--amber);white-space:pre-wrap;min-height:1.5em}
+.sailgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;align-items:start}
+#seamap{width:100%;height:auto;display:block;border-radius:4px;cursor:crosshair;image-rendering:pixelated;touch-action:none}
+.sailside{display:grid;gap:8px;min-width:0}
+#heel{width:100%;max-width:300px;height:auto;border-radius:4px;border:1px solid var(--line)}
+.helm button{font-size:13px}
+@media (max-width:860px){.sailgrid{grid-template-columns:1fr}}
 @media (max-width:1000px){.builder{grid-template-columns:1fr}.mods{grid-template-columns:repeat(2,minmax(0,1fr))}.prog{grid-template-columns:1fr}}
 @media (max-width:560px){.mods{grid-template-columns:1fr}.palette{grid-template-columns:repeat(4,minmax(0,1fr))}.ov.br{display:none}.stage{height:62vh}}
 </style>
@@ -198,7 +211,7 @@ tr:last-child td{border-bottom:0}
 
 <section aria-labelledby="s3">
   <h2 id="s3"><span class="n">3</span>Walk the deck</h2>
-  <p>The same ship, at sea, sailing a slow circle. You stand on her deck in her own frame: the walker keeps its place on the planks while she turns, so the island and its lighthouse slide round the horizon. This is the cog's rule, already built (<code>sail-the-cog</code> 3.1 and 3.2: the walker stands on a craft's deck in the craft's frame, through a turn and under way). Drag to look; mouse look is raw. Pick where to stand from the places the builder's walk check reached.</p>
+  <p>The same ship, at sea, sailing a slow circle. You stand on her deck in her own frame: the walker keeps its place on the planks while she turns, so the island and its lighthouse slide round the horizon. This is the cog's rule, already built (<code>sail-the-cog</code> 3.1 and 3.2: the walker stands on a craft's deck in the craft's frame, through a turn and under way). Drag to look; mouse look is raw. Pick where to stand from the places the builder's walk check reached. She sails because she is under way; section 4 is where you take the helm.</p>
   <div class="stage" id="walkStage">
     <canvas id="walk" aria-label="First-person view from a ship's deck at sea, with lanterns, the sails overhead and an island on the horizon."></canvas>
     <div class="ov tl">
@@ -212,7 +225,30 @@ tr:last-child td{border-bottom:0}
 </section>
 
 <section aria-labelledby="s4">
-  <h2 id="s4"><span class="n">4</span>How the numbers follow from the cells</h2>
+  <h2 id="s4"><span class="n">4</span>Sail it</h2>
+  <p>A sea chart drawn compass-north up, as the game's map is, with the wind as arrows: trades from the east-north-east in the south, westerlies in the north, a slack band between. Click the chart to add a waypoint, drag one to move it, right-click to take it away. Then press <b>Sail</b>. A and D put the helm over (a rudder is a foil: she turns only with way on). On a sailing ship W hauls the sheet in and S eases it; on a powered one W and S step the telegraph through astern, stop, slow, half and full. Nothing steers for you: a sailing ship cannot point closer than about 45 degrees to the wind, so to reach a waypoint upwind she must tack. A waypoint counts as reached within 30 m, and the next one takes over.</p>
+  <div class="sailwrap" id="sailWrap" tabindex="0" aria-label="Sail it: click the chart for waypoints, A and D steer, W and S sheet or throttle">
+    <div class="sailbar">
+      <div class="seg" id="sailShip" role="group" aria-label="Ship"></div>
+      <div class="seg"><button id="sailGo" class="go" aria-pressed="false">Sail</button><button id="sailReset">Reset</button><button id="sailClear">Clear route</button></div>
+      <div class="seg" id="sailWarp" role="group" aria-label="Time"><button data-x="1" aria-pressed="false">x1</button><button data-x="8" aria-pressed="true">x8</button><button data-x="32" aria-pressed="false">x32</button></div>
+      <div class="seg" id="sailTime" role="group" aria-label="Time of day"><button data-t="day">Day</button><button data-t="night">Night</button></div>
+    </div>
+    <canvas id="compass" width="720" height="42" aria-label="Compass bar: the heading, and the active waypoint as a diamond"></canvas>
+    <div class="gps mono" id="gps"></div>
+    <div class="sailgrid">
+      <canvas id="seamap" width="960" height="640" aria-label="Sea chart, north up"></canvas>
+      <div class="sailside">
+        <canvas id="heel" width="300" height="300" aria-label="The ship from astern, heeling, and from above, with her sail and the apparent wind"></canvas>
+        <div class="seg helm" id="helmPad"><button data-k="a">A helm to port</button><button data-k="w">W haul in / ahead</button><button data-k="s">S ease / astern</button><button data-k="d">D helm to starboard</button></div>
+        <p class="muted" id="sailState" style="font-size:13px"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="s5">
+  <h2 id="s5"><span class="n">5</span>How the numbers follow from the cells</h2>
   <p>A full cell is 6.95 m<sup>3</sup>, so it displaces 7.12 t of sea. The game's 1 g is 25 m/s<sup>2</sup> (<code>SURFACE_GRAVITY_MPS2_PER_G</code>), and craft feel it. The builder integrates each cell exactly; the game floats each hex cell as seven sub-cells (its centre and six round it at half the circumradius, each about 1.07 m across and 0.5 m tall), which meets <code>hull::float</code>'s rule of a buoyancy cell at most a third of the beam for any ship two rows or more in the beam.</p>
   <div class="tablebox"><table>
     <thead><tr><th>Number</th><th>From the cells</th><th>Why</th></tr></thead>
@@ -225,25 +261,28 @@ tr:last-child td{border-bottom:0}
       <tr><td>Sail area</td><td>2.83 m<sup>2</sup> per sail cell (2.833 m wide, a layer tall), joined to a mast on its layer above the main deck</td><td>Square sails run across the ship at the mast; cells in the mast's own row are staysails along it.</td></tr>
       <tr><td>Hull speed</td><td>&radic;(g L / 2&pi;) at g = 25 m/s<sup>2</sup>: 2.0 &radic;L m/s for a waterline of L metres</td><td>The speed of a wave as long as the ship. Past it the hull climbs its own bow wave.</td></tr>
       <tr><td>Speed on a reach</td><td>hull speed &times; min(1, SA/D &divide; 18), SA/D the sail area over the displaced volume to the 2/3</td><td>The sail-area-to-displacement ratio sailors use; 18 is a fast yacht at hull speed.</td></tr>
+      <tr><td>Power</td><td>oar benches 1.2 kW each; boilers 200 kW a cell and reactors 2 MW a cell, through turbines of up to 4 MW; diesels 600 kW; electric motors 800 kW; all of it to the propellers, 4 MW each</td><td>Six levels (<code>steer-and-sail</code> decision 4): oars, sail, steam, oil, fission, battery.</td></tr>
+      <tr><td>Top speed</td><td>where P &times; 0.6 = R v, with R = &frac12; &rho; C<sub>f</sub> S v<sup>2</sup> (C<sub>f</sub> 0.01, S the wetted area of the submerged cells), times (v / 0.9 v<sub>hull</sub>)<sup>4</sup> past 0.9 of hull speed</td><td>Past hull speed the wave term climbs so steeply that more power buys little.</td></tr>
+      <tr><td>Fuel and range</td><td>coal 0.12 t an hour per 100 kW (4 t a bunker); fuel oil 25 kg an hour per 100 kW (1.2 t a tank); 200 hours a set of rods; 2 MWh a battery bank. Range is the top speed times the hours at full power</td><td>An engine needs its fuel aboard; the builder says what she carries.</td></tr>
       <tr><td>Hold, berths</td><td>6.95 m<sup>3</sup> a hold cell; two berths a cabin cell</td><td>The same stack moves as the pack, one hold per ship.</td></tr>
     </tbody>
   </table></div>
 </section>
 
-<section aria-labelledby="s5">
-  <h2 id="s5"><span class="n">5</span>Blocks and pieces</h2>
-  <p>Eight blocks fill cells; eight pieces stand in them or hang on their edges, as a town's do. Made at the fabricator and the assembly bay from planks, timber, stone, canvas, rope and iron.</p>
+<section aria-labelledby="s6">
+  <h2 id="s6"><span class="n">6</span>Blocks and pieces</h2>
+  <p>Blocks fill cells; pieces stand in them or hang on their edges, as a town's do. The last twelve are the power levels: oars, steam, oil, fission and batteries. Made at the fabricator and the assembly bay from planks, timber, stone, canvas, rope and iron, and the engines from M20's chains.</p>
   <div class="mods" id="mods"></div>
 </section>
 
-<section aria-labelledby="s6">
-  <h2 id="s6"><span class="n">6</span>From a sloop to a three-master</h2>
-  <p>Each one is the ship that pays for the next.</p>
+<section aria-labelledby="s7">
+  <h2 id="s7"><span class="n">7</span>Six levels of ship power</h2>
+  <p>One preset a level, each built from the blocks above. Each is the ship that pays for the next; the trader and the three-master are sailing ships for carrying.</p>
   <div class="prog" id="prog"></div>
 </section>
 
-<section aria-labelledby="s7">
-  <h2 id="s7"><span class="n">7</span>Saves, and what stays true</h2>
+<section aria-labelledby="s8">
+  <h2 id="s8"><span class="n">8</span>Saves, and what stays true</h2>
   <div class="mods" style="grid-template-columns:repeat(3,minmax(0,1fr))">
     <div class="card"><h3>A ship is a stored record</h3><p>Her stable ID, her cells keyed <code>(q, r, layer)</code> in her own frame on a flat axial grid (bow along +q), her pieces, her pose in a named frame, her hold and her flooding are saved when the keel is laid and every time they change. Leaving the helm changes who holds it, never whether she exists.</p></div>
     <div class="card"><h3>Every block is an edit</h3><p>Placing or breaking a ship's block is an edit in the ship's frame through the durable path, naming its author, as digging is. The dock is world cells; the ship never is, so floating her out converts nothing.</p></div>
@@ -251,8 +290,8 @@ tr:last-child td{border-bottom:0}
   </div>
 </section>
 
-<section aria-labelledby="s8">
-  <h2 id="s8"><span class="n">8</span>Decisions and questions for the owner</h2>
+<section aria-labelledby="s9">
+  <h2 id="s9"><span class="n">9</span>Decisions and questions for the owner</h2>
   <p class="muted">Recommendations are mine, not the owner's words. The ones marked with a picture have the dock and the builder above to look at; the rest are taken as recommended (ask only with screenshots).</p>
   <div class="dec" id="decisions"></div>
 </section>
@@ -264,7 +303,7 @@ tr:last-child td{border-bottom:0}
 <script>
 // ======================= the ship: hex cells in its own frame =======================
 const HW = 2.833, HR = HW / Math.sqrt(3), CELL_A = Math.sqrt(3) / 2 * HW * HW, RHO = 1.025, G = 25;
-const COLS = 12, ROWS = 5, LAYERS = 16, MID = 2;
+const COLS = 12, ROWS = 5, LAYERS = 16, MID = 2, CF = 0.01, ETA = 0.6;
 const I_HEX = 5 * Math.sqrt(3) / 16 * HR ** 4;   // a hexagon's own second moment, m^4
 const shifted = r => ((r - MID) & 1) !== 0;
 const cellX = (c, r) => HW * (c + (shifted(r) ? 0.5 : 0));
@@ -292,12 +331,24 @@ const BLK = {
   A: {n: "Capstan", icon: "capstan", m: 0.6, kind: "fit", txt: "Weighs the anchor and warps the ship out of the dock."},
   L: {n: "Rail", icon: "rail", m: 0.06, kind: "fit", txt: "Rails on the cell's open edges (pieces, as a balcony's are). Walkers do not go over the side."},
   N: {n: "Lantern", icon: "lantern", m: 0.03, kind: "fit", light: true, txt: "A lantern on a post. Lights the deck within 7 m at night."},
+  Q: {n: "Oar bench", icon: "oar-bench", m: 0.4, kind: "fit", lvl: 1, txt: "Two rowers and their oars, 1.2 kW between them: hard for 10 minutes, then half. Level 1."},
+  Y: {n: "Boiler", icon: "boiler", m: 3.0, kind: "mach", lvl: 3, txt: "Half a boiler: they come in pairs, 6 t and 400 kW of steam the pair. Needs a funnel above it to the open air, and coal. Level 3."},
+  T: {n: "Steam turbine", icon: "turbine", m: 3.0, kind: "mach", lvl: 3, txt: "Turns the steam of boilers or a reactor into shaft power, up to 4 MW. Drives a propeller."},
+  Z: {n: "Coal bunker", icon: "coal-bunker", m: 6.0, kind: "mach", lvl: 3, txt: "2 t of iron and 4 t of coal. A boiler burns 0.12 t of coal an hour per 100 kW (or 0.2 t of wood)."},
+  F: {n: "Funnel", icon: "funnel", m: 0.5, kind: "pole", lvl: 3, txt: "Carries a boiler's smoke up through the decks. Must reach the open air."},
+  V: {n: "Diesel engine", icon: "diesel", m: 3.0, kind: "mach", lvl: 4, txt: "600 kW on fuel oil from the refinery (M20). Burns 25 kg an hour per 100 kW. Level 4."},
+  J: {n: "Oil tank", icon: "oil-tank", m: 2.7, kind: "mach", lvl: 4, txt: "1.5 t of tank holding 1.2 t of fuel oil."},
+  X: {n: "Reactor", icon: "reactor", m: 15.0, kind: "mach", lvl: 5, txt: "Half a fission reactor: a pair makes 4 MW of steam for a turbine, 200 hours of full power on one set of rods. Shield it on every side. Level 5."},
+  I: {n: "Shielding", icon: "shielding", m: 4.0, kind: "solid", lvl: 5, txt: "Lead and concrete. Every cell round a reactor must be shielding (or the reactor)."},
+  P: {n: "Battery bank", icon: "battery", m: 4.0, kind: "mach", lvl: 6, txt: "2 MWh, charged at a dock from the grid (M20). Silent, no fuel aboard. Level 6."},
+  "1": {n: "Electric motor", icon: "motor", m: 1.0, kind: "mach", lvl: 6, txt: "800 kW from the batteries to a propeller."},
+  "2": {n: "Propeller", icon: "propeller", m: 0.4, kind: "fin", lvl: 3, txt: "Aft, below the waterline, on a shaft from a hull or machinery cell. Up to 4 MW. Every engine needs one."},
   G: {n: "Gangway", icon: "gangway", m: 0.08, kind: "fit", txt: "The gap in the rail where a walker boards, with its plank."},
 };
-const PALETTE_KEYS = "KHBWDOCUMSREALNG".split("");
+const PALETTE_KEYS = "KHBWDOCUMSREALNG".split("").concat("QYTZFVJXIP12".split(""));
 const isSolid = k => BLK[k] && BLK[k].kind === "solid";
 const isClear = k => !k || k === "." || ["space", "fit"].includes(BLK[k].kind);
-const inSet = k => BLK[k] && (BLK[k].kind === "space" || BLK[k].kind === "pole");
+const inSet = k => BLK[k] && ["space", "pole", "mach"].includes(BLK[k].kind);
 const blank = () => Array.from({length: LAYERS}, () => Array.from({length: ROWS}, () => new Array(COLS).fill(".")));
 function parse(p) {   // a preset: {layer: [5 strings of 12]}
   const g = blank();
@@ -384,6 +435,30 @@ function hydro(g) {
   s.vReach = s.vHull * Math.min(1, s.SAD / 18);
   s.hold = cells.filter(q => q.b === "O").length * CELL_A;
   s.berths = cells.filter(q => q.b === "C").length * 2;
+  // power (steer-and-sail decision 4): the prime movers, the shaft, the resistance and the top speed
+  const n = c => cells.filter(q => q.b === c).length;
+  const N = {Q: n("Q"), Y: n("Y"), T: n("T"), Z: n("Z"), V: n("V"), J: n("J"), X: n("X"), P: n("P"), m: n("1"), p: n("2")};
+  s.N = N;
+  const steam = Math.min(N.Y * 200 + N.X * 2000, N.T * 4000), diesel = N.V * 600, elec = N.P ? N.m * 800 : 0;
+  s.shaft = N.p ? Math.min(steam + diesel + elec, N.p * 4000) : 0;
+  s.row = N.Q * 1.2; s.P = s.shaft + s.row;
+  const ends = [];
+  if (N.Y && steam) ends.push(N.Z * 4 / (0.0012 * N.Y * 200));
+  if (N.X && steam) ends.push(200);
+  if (diesel && N.p) ends.push(N.J * 1.2 / (0.00025 * diesel));
+  if (elec && N.p) ends.push(N.P * 2000 / elec);
+  s.endH = s.shaft ? Math.min(...ends) : s.row ? Infinity : 0;
+  s.fuel = [N.Z ? `${N.Z * 4} t coal` : "", N.J ? `${(N.J * 1.2).toFixed(1)} t oil` : "", N.X ? "rods for 200 h" : "", N.P ? `${N.P * 2} MWh` : ""].filter(Boolean).join(", ") || (s.row ? "the crew" : "none");
+  // wetted area: the submerged faces of the buoyant cells
+  let S = 0;
+  const buoy = new Set(B.map(q => id(q.c, q.r, q.k)));
+  for (const q of B) { const sub = Math.min(1, Math.max(0, d - q.k)); if (sub <= 0) continue; if (!buoy.has(id(q.c, q.r, q.k - 1))) S += CELL_A; for (const [a2, b2] of nbrs(q.c, q.r)) if (!buoy.has(id(a2, b2, q.k))) S += HR * sub; }
+  s.S = S;
+  s.R = v => 0.5 * 1025 * CF * S * v * v * Math.max(1, Math.pow(v / (0.9 * s.vHull), 4));
+  s.vTop = 0;
+  if (s.P > 0 && S > 0 && !s.sinks) { let lo = 0, hi = 40; for (let i = 0; i < 40; i++) { const v = (lo + hi) / 2; if (s.R(v) * v < s.P * 1000 * ETA) lo = v; else hi = v; } s.vTop = lo; }
+  s.rangeKm = isFinite(s.endH) ? s.vTop * s.endH * 3.6 : Infinity;
+  s.level = Math.max(0, ...cells.map(q => BLK[q.b].lvl || 0), s.SA > 0 ? 2 : 0);
   return s;
 }
 
@@ -451,12 +526,44 @@ function checks(g, s) {
   else out.push(["ok", "Headroom: every floor has two clear layers or a ladder."]);
   if (!w.start) out.push(["no", "No gangway: nowhere to board."]);
   else out.push([w.ok ? "ok" : "no", w.ok ? `A walker gets from the gangway to the helm (${w.reach.size} places to stand).` : "A walker cannot get from the gangway to the helm."]);
+  // power checks (steer-and-sail decision 4)
+  const N = s.N, engines = N.Y + N.X + N.V + N.m;
+  if (N.Y || N.X || N.V || N.m || N.T || N.p) {
+    if (N.Y % 2 || N.X % 2) out.push(["no", `${N.Y % 2 ? "A boiler" : "A reactor"} is two cells; one is missing its other half.`]);
+    if (N.Y && !N.Z) out.push(["no", "Boilers but no coal bunker: no fuel aboard."]);
+    if (N.V && !N.J) out.push(["no", "A diesel engine but no oil tank: no fuel aboard."]);
+    if (N.m && !N.P) out.push(["no", "An electric motor but no battery bank."]);
+    if ((N.Y || N.X) && !N.T) out.push(["no", "Steam but no turbine to turn it into shaft power."]);
+    if (engines && !N.p) out.push(["no", "Engines but no propeller."]);
+    const boilers = cells.filter(q => q.b === "Y");
+    if (boilers.length) {
+      const vent = boilers.some(q => { let k = q.k + 1; while (at(g, q.c, q.r, k) === "Y") k++; if (at(g, q.c, q.r, k) !== "F") return false; while (at(g, q.c, q.r, k) === "F") k++; return at(g, q.c, q.r, k) === "."; });
+      if (!vent) boilers.forEach(q => bad.add(id(q.c, q.r, q.k)));
+      out.push([vent ? "ok" : "no", vent ? "A funnel from the boilers to the open air." : "No funnel above the boilers reaching the open air."]);
+    }
+    const core = cells.filter(q => q.b === "X");
+    if (core.length) {
+      const bare = core.filter(q => nbrs(q.c, q.r).map(([a2, b2]) => at(g, a2, b2, q.k)).concat([at(g, q.c, q.r, q.k + 1)]).some(v => v !== "X" && v !== "I"));
+      bare.forEach(q => bad.add(id(q.c, q.r, q.k)));
+      out.push([bare.length ? "no" : "ok", bare.length ? `${bare.length} reactor cell${bare.length > 1 ? "s" : ""} not shielded on every side and above.` : "The reactor is shielded on every side and above."]);
+    }
+    const props = cells.filter(q => q.b === "2");
+    props.forEach(q => { const shaft = isSolid(at(g, q.c + 1, q.r, q.k)) || inSet(at(g, q.c + 1, q.r, q.k)), aft = cellX(q.c, q.r) <= xmin + (xmax - xmin) / 3 + 0.01, wet = q.k < s.d; if (!(shaft && aft && wet)) { bad.add(id(q.c, q.r, q.k)); out.push(["no", !wet ? "A propeller above the waterline." : !aft ? "A propeller not aft." : "A propeller with no shaft: it needs a hull or machinery cell forward of it."]); } });
+    if (props.length && !out.some(o => o[1].startsWith("A propeller"))) out.push(["ok", `${props.length} propeller${props.length > 1 ? "s" : ""} aft, below the waterline.`]);
+    if (s.shaft) out.push(["ok", `${s.shaft >= 1000 ? (s.shaft / 1000).toFixed(1) + " MW" : s.shaft.toFixed(0) + " kW"} to the shaft: ${s.vTop.toFixed(1)} m/s flat out, ${isFinite(s.endH) ? s.endH.toFixed(0) + " h" : "no limit"} on ${s.fuel}.`]);
+  }
+  if (N.Q) out.push(["ok", `${N.Q} oar bench${N.Q > 1 ? "es" : ""}, ${N.Q * 2} rowers: ${s.row.toFixed(1)} kW for 10 minutes, then half.`]);
   const fits = s.LOA <= 10 * HW + 0.01 && s.rows <= 5 && (s.sinks ? false : s.d <= 7);
   out.push([fits ? "ok" : "warn", fits ? "Fits the dock: 10 cells, 5 rows, 7 layers of draft." : "Too big for this dock (10 cells long, 5 rows, 7 layers of draft)."]);
   return {out, bad, walk: w};
 }
 const SHIPS = {
-  sloop: {name: "Sloop", role: "Coaster, three rows", layers: {
+  launch: {name: "Rowing launch", role: "Level 1: oars", layers: {
+    0: ["............","....HHHH....","...RKKKKK...","....HHHH....","............"],
+    1: ["............","....DDDD....","....DDDDD...","....DDDD....","............"],
+    2: ["............","....GQQQ....","....E..LN...","....LQQQ....","............"],
+  }},
+  sloop: {name: "Sloop", role: "Level 2: sail", layers: {
     0: ["............","....HHH.....","..RKKKKKK...","....HHH.....","............"],
     1: ["............","...HHHHH....","...HBOMOH...","...HHHHH....","............"],
     2: ["............","...DDDDD....","...DDUMDD...","...DDDDD....","............"],
@@ -474,7 +581,52 @@ const SHIPS = {
     14: ["............","......S.....","......M.....","......S.....","............"],
     15: ["............","............","......M.....","............","............"],
   }},
-  trader: {name: "Trader", role: "A cog-sized carrier", layers: {
+  steam: {name: "Steam packet", role: "Level 3: steam turbine", layers: {
+    0: ["............","............",".2KKKKKKKK..","............","............"],
+    1: ["............","..HHHHHHH...",".RHBTYZBOH..","..HHHHHHH...","............"],
+    2: ["............","..HHHHHHH...","..HOOYZOOH..","..HHHHHHH...","............"],
+    3: ["............","..HHHHHHH...","..HOOFOOOH..","..HHHHHHH...","............"],
+    4: ["............","..DDDDDDD...","..DDDFDDUD..","..DDDDDDD...","............"],
+    5: ["............","..CCDLGLL...","..CCDF...N..","..CCLLLLL...","............"],
+    6: ["............","..CCD.......","..CC.F......","..CC........","............"],
+    7: ["............","..DD........","..DD.F......","..DD........","............"],
+    8: ["............","..LN........","..EL.F......","..LN........","............"],
+  }},
+  oil: {name: "Oil coaster", role: "Level 4: diesel", layers: {
+    0: ["............","............",".2KKKKKKKKK.","............","............"],
+    1: ["............","..HHHHHHHH..",".RHVJJBBOOH.","..HHHHHHHH..","............"],
+    2: ["............","..HHHHHHHH..","..HWOOOOOOH.","..HHHHHHHH..","............"],
+    3: ["............","..HHHHHHHH..","..HWOOOOOOH.","..HHHHHHHH..","............"],
+    4: ["............","..DDDDDDDD..","..DDDDDDDUD.","..DDDDDDDD..","............"],
+    5: ["............","..CCDLGLLL..","..CCD...F.N.","..CCLLLLLL..","............"],
+    6: ["............","..CCD.......","..CC....F...","..CC........","............"],
+    7: ["............","..DD........","..DD....F...","..DD........","............"],
+    8: ["............","..LN........","..EL........","..LN........","............"],
+  }},
+  fission: {name: "Fission freighter", role: "Level 5: fission", layers: {
+    0: ["............","............","2KKKKKKKKKK.","............","............"],
+    1: ["............",".HHIIHHHHH..","RHTIXIBBOOH.",".HHIIHHHHH..","............"],
+    2: ["...HHHHHHH..",".HHIIOOOOH..",".HOIXIOOOOH.",".HHIIOOOOH..","...HHHHHHH.."],
+    3: ["...HHHHHHH..",".HHOOOOOOH..",".HOOIOOOOOH.",".HHOOOOOOH..","...HHHHHHH.."],
+    4: ["...HHHHHHH..",".HHOOOOOOH..",".HOOOOOOOOH.",".HHOOOOOOH..","...HHHHHHH.."],
+    5: ["...DDDDDDD..",".DDDDDDDDD..",".DDDDDDUDDD.",".DDDDDDDDD..","...DDDDDDD.."],
+    6: ["...LLLGLLL..",".CCD........",".CCD......N.",".CC.........","...LLLNLLL.."],
+    7: ["............",".CCD........",".CC.........",".CC.........","............"],
+    8: ["............",".DD.........",".DD.........",".DD.........","............"],
+    9: ["............",".LL.........",".EN.........",".LL.........","............"],
+  }},
+  battery: {name: "Battery ferry", role: "Level 6: battery", layers: {
+    0: ["............","............",".2KKKKKKKK..","............","............"],
+    1: ["............","..HHHHHHH...",".RH1PPPPOH..","..HHHHHHH...","............"],
+    2: ["............","..HHHHHHH...","..HWOOOOOH..","..HHHHHHH...","............"],
+    3: ["............","..HHHHHHH...","..HWOOOOOH..","..HHHHHHH...","............"],
+    4: ["............","..DDDDDDD...","..DDDDDDUD..","..DDDDDDD...","............"],
+    5: ["............","..CCDLGLL...","..CCD....N..","..CCLLLLL...","............"],
+    6: ["............","..CCD.......","..CC........","..CC........","............"],
+    7: ["............","..DD........","..DD........","..DD........","............"],
+    8: ["............","..LN........","..EL........","..LN........","............"],
+  }},
+  trader: {name: "Trader", role: "Sail: a cog-sized carrier", layers: {
     0: ["............","............",".RKKKKKKK...","............","............"],
     1: ["............","..HHHHHH....",".RHBBMBBH...","..HHHHHH....","............"],
     2: ["............","..HHHHHH....","..HOOMOOH...","..HHHHHH....","............"],
@@ -492,7 +644,7 @@ const SHIPS = {
     14: [".....S......",".....S......",".....M......",".....S......",".....S......"],
     15: ["............","............",".....M......","............","............"],
   }},
-  threemaster: {name: "Three-master", role: "Fills the dock", layers: {
+  threemaster: {name: "Three-master", role: "Sail: fills the dock", layers: {
     0: ["............","............","RKKKKKKKKKK.","............","............"],
     1: ["............","..HHHHHHHH..","RHBMBBMBMBH.","..HHHHHHHH..","............"],
     2: ["...HHHHHHH..",".HHOOWOOOH..",".HOMOWMOMOH.",".HHOOWOOOH..","...HHHHHHH.."],
@@ -548,12 +700,13 @@ svg.addEventListener("pointerdown", e => { painting = e.button === 2 || tool ===
 svg.addEventListener("pointermove", e => { if (painting) paintAt(document.elementFromPoint(e.clientX, e.clientY), painting === "erase"); });
 window.addEventListener("pointerup", () => painting = null);
 svg.addEventListener("keydown", e => { if (e.target.tagName !== "polygon") return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); paintAt(e.target, false); } if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); paintAt(e.target, true); } });
+const SHORT = {Q: "Oars", T: "Turbine", Z: "Bunker", V: "Diesel", J: "Oil tank", P: "Battery", "1": "Motor", "2": "Propeller", U: "Hatch"};
 const pal = document.getElementById("palette");
-pal.innerHTML = PALETTE_KEYS.map(k => `<button data-k="${k}" aria-pressed="${k === tool}" title="${BLK[k].n}"><img src="${icon(k)}" alt="" width="32" height="32">${BLK[k].n.split(" ")[0]}<kbd>${k}</kbd></button>`).join("") +
-  `<button data-k="." aria-pressed="false" title="Eraser"><svg width="32" height="32" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 28 L22 10 L32 18 L20 32 Z" fill="#e06a7a" stroke="#6b2430" stroke-width="2"/></svg>Eraser<kbd>X</kbd></button>`;
+pal.innerHTML = PALETTE_KEYS.map(k => `<button data-k="${k}" aria-pressed="${k === tool}" title="${BLK[k].n}"><img src="${icon(k)}" alt="" width="32" height="32">${SHORT[k] || BLK[k].n.split(" ")[0]}<kbd>${k}</kbd></button>`).join("") +
+  `<button data-k="." aria-pressed="false" title="Eraser"><svg width="32" height="32" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 28 L22 10 L32 18 L20 32 Z" fill="#e06a7a" stroke="#6b2430" stroke-width="2"/></svg>Eraser<kbd>0</kbd></button>`;
 const setTool = k => { tool = k; pal.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === k)); };
 pal.querySelectorAll("button").forEach(b => b.addEventListener("click", () => setTool(b.dataset.k)));
-window.addEventListener("keydown", e => { if (!document.activeElement?.closest?.(".builder")) return; const k = e.key.toUpperCase(); if (BLK[k]) setTool(k); if (k === "X") setTool("."); if (e.key === "PageUp") setLayer(Math.min(LAYERS - 1, layer + 1)); if (e.key === "PageDown") setLayer(Math.max(0, layer - 1)); });
+window.addEventListener("keydown", e => { if (!document.activeElement?.closest?.(".builder")) return; const k = e.key.toUpperCase(); if (BLK[k]) setTool(k); if (k === "0") setTool("."); if (e.key === "PageUp") setLayer(Math.min(LAYERS - 1, layer + 1)); if (e.key === "PageDown") setLayer(Math.max(0, layer - 1)); });
 const layersEl = document.getElementById("layers");
 function setLayer(k) { layer = k; drawLayers(); drawHex(); }
 function layerName(k) { return k === 0 ? "keel" : k === S.mainDeck ? "main deck" : k < S.mainDeck ? "below deck" : k === S.mainDeck + 1 ? "on deck" : "above deck"; }
@@ -570,7 +723,7 @@ const press = (el, f) => { el.addEventListener("click", f); el.addEventListener(
 press(document.getElementById("clear"), () => { grid = blank(); edited = true; refresh(); });
 
 // ---- the side profile: every cell, rows behind dimmer, the waterline, G, B and M
-const PCOL = {K: "#7a5634", H: "#2b2a24", B: "#7d7a70", W: "#8a6a44", D: "#b98d5e", O: "#3b3226", C: "#c9d3dc", U: "#a07a4e", M: "#9a6c3e", S: "#e2c79a", R: "#2b2a24", E: "#d8a050", A: "#a07a4e", L: "#a07a4e", N: "#ffc060", G: "#a07a4e"};
+const PCOL = {Q: "#a07a4e", Y: "#7d8a96", T: "#5d778d", Z: "#3a2a22", F: "#d12d41", V: "#559642", J: "#c56d25", X: "#74effe", I: "#a09f91", P: "#1096c3", "1": "#5d778d", "2": "#fb902f", K: "#7a5634", H: "#2b2a24", B: "#7d7a70", W: "#8a6a44", D: "#b98d5e", O: "#3b3226", C: "#c9d3dc", U: "#a07a4e", M: "#9a6c3e", S: "#e2c79a", R: "#2b2a24", E: "#d8a050", A: "#a07a4e", L: "#a07a4e", N: "#ffc060", G: "#a07a4e"};
 function drawProfile(cv, g, s, opts = {}) {
   const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, pad = 22;
   ctx.fillStyle = "#0d1317"; ctx.fillRect(0, 0, W, H);
@@ -620,6 +773,8 @@ function renderStats() {
     st("KB, BM, KG", s.sinks ? "-" : `${s.KB.toFixed(2)} ${s.BM.toFixed(2)} ${s.KG.toFixed(2)}`, "m"), st("Sail area", s.SA.toFixed(1), `m2, ${s.sailOK.size} cells`),
     st("Hull speed", s.vHull.toFixed(1), `m/s, ${(s.vHull * 1.944).toFixed(1)} kn`), st("On a reach", s.vReach.toFixed(1), `m/s, SA/D ${s.SAD.toFixed(1)}`, s.vReach / Math.max(0.01, s.vHull)),
     st("Hold", s.hold.toFixed(0), "m3"), st("Berths", s.berths, ""),
+    st("Power", s.P >= 1000 ? (s.P / 1000).toFixed(1) : s.P.toFixed(s.P < 20 ? 1 : 0), s.P >= 1000 ? "MW" : "kW"), st("Top speed", s.vTop.toFixed(1), s.vTop ? `m/s, ${(s.vTop * 1.944).toFixed(1)} kn under power` : "no engine", s.vTop / 12),
+    st("Fuel aboard", s.fuel, ""), st("Range", !s.P ? "-" : isFinite(s.rangeKm) ? s.rangeKm.toFixed(0) : "no limit", !s.P ? "" : isFinite(s.rangeKm) ? `km, ${s.endH.toFixed(0)} h flat out` : "oars: half after 10 min"),
   ].join("");
   document.getElementById("checks").innerHTML = CH.out.map(([k, t]) => `<div class="${k}">${t}</div>`).join("");
 }
@@ -635,11 +790,14 @@ setLayer(S.mainDeck || 0);
 // ======================= blocks, progression, decisions =======================
 document.getElementById("mods").innerHTML = PALETTE_KEYS.map(k => { const d = BLK[k]; return `<div class="card"><div class="head"><img src="${icon(k)}" alt="" width="64" height="64"><div><span class="eyebrow">Key ${k}, ${d.kind === "solid" ? "block, sealed" : d.kind === "space" ? "block, space" : d.kind === "pole" ? "block, pole" : "piece"}</span><h3>${d.n}</h3></div></div><p>${d.txt}</p><dl><dt>Mass</dt><dd>${d.m} t</dd></dl></div>`; }).join("");
 const PROG = [
-  ["sloop", "1", "Three rows amidships, the narrowest a hex hull may be, and one tall mast with a staysail. Light and quick for her size; her hold is a crawl space under the deck.", ["Coasting trade and fishing", "The first ship a player lays down"]],
-  ["trader", "2", "A cog's size: one square sail, a deep hold through a hatch and ladder, and an aftcastle of cabins up two steps. Slow, as a cog is, but she carries.", ["A hold you walk into", "Twelve cabins' worth of berths aft"]],
-  ["threemaster", "3", "Ten cells and five rows: the most this dock takes. Three masts, a jib, two holds parted by a bulkhead, castles fore and aft.", ["Hundreds of cubic metres of hold", "Fast enough to cross an ocean"]],
+  ["launch", "1", "Four oar benches, eight rowers: 7 kW for ten minutes, then half. Small, open, and no fuel but the crew.", ["About 2 m/s", "Coastal ferrying, fishing"]],
+  ["sloop", "2", "One tall mast with a staysail. Free power from the wind, but she must tack to go upwind.", ["No fuel at all", "The polar decides where she can go"]],
+  ["steam", "3", "A pair of boiler cells under a funnel, a turbine and two coal bunkers: 400 kW to a propeller.", ["Coal (or wood) from the pits", "Goes upwind as easily as down"]],
+  ["oil", "4", "A diesel and two oil tanks: more power for less weight than steam, but it needs the refinery.", ["Fuel oil from M20's refinery", "A long coastal range"]],
+  ["fission", "5", "Two reactor cells under shielding on every side, a turbine: 4 MW for 200 hours on one set of rods.", ["The fastest and the heaviest", "Crosses oceans without a stop"]],
+  ["battery", "6", "Four battery banks and an electric motor: 800 kW, silent, charged at a dock from the grid.", ["No fuel aboard", "Ten hours flat out, then the dock"]],
 ];
-document.getElementById("prog").innerHTML = PROG.map(([id, n, txt, li]) => { const p = SHIPS[id], s = hydro(parse(p)); return `<div class="step"><div class="who"><b>${p.name}</b><span>STEP ${n}</span></div><span class="eyebrow">${p.role}</span><canvas class="profile" data-p="${id}" width="520" height="260"></canvas><p>${txt}</p><ul>${li.map(x => `<li>${x}</li>`).join("")}<li class="mono">${s.m.toFixed(0)} t, draft ${s.draft.toFixed(2)} m, GM ${s.GM.toFixed(1)} m, ${s.SA.toFixed(0)} m2, ${s.vReach.toFixed(1)} m/s on a reach, hold ${s.hold.toFixed(0)} m3</li></ul></div>`; }).join("");
+document.getElementById("prog").innerHTML = PROG.map(([id, n, txt, li]) => { const p = SHIPS[id], s = hydro(parse(p)); return `<div class="step"><div class="who"><b>${p.name}</b><span>STEP ${n}</span></div><span class="eyebrow">${p.role}</span><canvas class="profile" data-p="${id}" width="520" height="260"></canvas><p>${txt}</p><ul>${li.map(x => `<li>${x}</li>`).join("")}<li class="mono">${s.m.toFixed(0)} t, draft ${s.draft.toFixed(2)} m, GM ${s.GM.toFixed(1)} m, ${s.P ? `${s.P >= 1000 ? (s.P / 1000).toFixed(1) + " MW" : s.P.toFixed(0) + " kW"}, ${s.vTop.toFixed(1)} m/s, ${isFinite(s.rangeKm) ? s.rangeKm.toFixed(0) + " km" : "no fuel limit"}` : `${s.SA.toFixed(0)} m2 of sail, ${s.vReach.toFixed(1)} m/s on a reach`}</li></ul></div>`; }).join("");
 document.querySelectorAll("#prog canvas").forEach(cv => { const g = parse(SHIPS[cv.dataset.p]); drawProfile(cv, g, hydro(g), {small: true}); });
 const DEC = [
   ["D1. How blocky may a hull read?", true, "A hull of whole 2.833 m cells cannot curve: the bow is a stepped point and the sides zigzag where the rows alternate. That is the owner's ask (\"made of hex blocks\"), and the dock and builder above show how it reads by day and at night.", "Whole cells for hull and deck. Soften the line with pieces only: rails on the cell edges now, a bowsprit and a figurehead later. Ask the owner with the screenshots."],
@@ -648,6 +806,9 @@ const DEC = [
   ["D4. Sails reach along their yard", false, "The design says a sail cell is next to a mast. With only the cells beside the mast, the 17 m sloop carries 57 m2 and makes 2.4 m/s on a reach; with her yard two cells each side and a staysail along it, 147 m2 and 6.0 m/s.", "A sail cell is joined to a mast through other sail cells on its layer, so a yard can span the ship. Fold this into the design."],
   ["D5. Hex ships float high", false, "A hull of cells is all flat bottom: the sloop draws 0.45 m and the three-master 1.4 m. Ballast sinks a ship to her lines and lowers her centre of mass.", "Keep the physics honest. Ballast is the player's choice; the freeboard check catches an overloaded ship."],
   ["D6. Where a keel can be laid", false, "A ship is built dry, so the cells below her waterline can be placed. Afloat, nobody can place a block under water.", "Lay keels in a drydock (or on a slip, later). Afloat, blocks above the waterline can be added and any block repaired; a breach below it floods its compartment until she is docked."],
+  ["D7. Resistance past hull speed", false, "Decision 4 says the wave term multiplies by (v / v_hull)^4 above 0.9 v_hull; taken literally the resistance would drop at 0.9 v_hull.", "Multiply by the larger of 1 and (v / 0.9 v_hull)^4, so it is continuous and climbs steeply. Every top speed here uses that."],
+  ["D8. Steam and fission share the turbine", false, "A boiler pair makes 400 kW of steam and a reactor pair 4 MW; the design gives the turbine no rating of its own.", "A turbine passes up to 4 MW of steam, so one serves either; boilers and reactors are each two cells, checked in pairs."],
+  ["D9. W and S mean the sheet or the telegraph", false, "Sailing ships trim with W and S; powered ships step the telegraph. A ship with both would need one or the other.", "A ship with an engine uses W and S for the telegraph and trims her sails herself; a pure sailing ship uses them for the sheet."],
 ];
 document.getElementById("decisions").innerHTML = DEC.map(([q, pic, ctx, rec]) => `<div class="q"><h3>${q}${pic ? ` <span class="tag" style="vertical-align:middle;margin-left:6px">has a picture</span>` : ""}</h3><p>${ctx}</p><p class="rec"><b>Recommend</b>${rec}</p></div>`).join("");
 
@@ -784,10 +945,26 @@ function buildShip(W, g, s) {
   for (const q of cells) {
     const {b, c, r, k} = q, x = X(c, r), z = Z(r), kind = BLK[b].kind;
     if (kind === "solid") {
-      const side = b === "K" || b === "W" ? "timber" : b === "B" ? "stone" : "strakes", top = b === "K" ? "timber" : b === "B" ? "stone" : "plank";
+      const side = b === "K" || b === "W" ? "timber" : b === "B" || b === "I" ? "stone" : "strakes", top = b === "K" ? "timber" : b === "B" || b === "I" ? "stone" : "plank";
       if (!isSolid(at(g, c, r, k + 1))) hexTop(G[top], x, k + 1, z);
       if (!isSolid(at(g, c, r, k - 1))) hexTop(G[side], x, k, z, -1);
       for (let i = 0; i < 6; i++) { const [a2, b2] = nbrDir(c, r, i), v = at(g, a2, b2, k); if (isSolid(v)) continue; hexSide(G[outside(v) ? side : side === "strakes" ? "plank" : side], x, z, i, k, k + 1); }
+    } else if ("YTZVJXP1".includes(b)) {
+      if (!W.MACH) W.MACH = {};
+      const col = {Y: 0x8a96a2, T: 0x6d87a0, Z: 0x5a3a2c, V: 0x5aa04a, J: 0x2a2a28, X: 0x9ad8e8, P: 0x2a7ab0, "1": 0x6d87a0}[b];
+      if (!W.MACH[b]) W.MACH[b] = W.std({map: tex("game/iron", 1), color: col, emissive: b === "X" ? 0x2a8aa0 : 0, emissiveIntensity: b === "X" ? 0.4 : 0});
+      const m = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.92, 2.1), W.MACH[b]); m.position.set(x, k + 0.46, z); m.castShadow = m.receiveShadow = true; grp.add(m);
+      if (b === "Y" && !"Y".includes(at(g, c, r, k + 1))) W.lamp(x, k + 0.6, z, 0xff7a30, 1.2, 3.5, {group: grp, bulb: false});
+    } else if (b === "F") {
+      if (!W.FUN) { W.FUN = W.std({color: 0xa83030}); W.FUNTOP = W.std({color: 0x161612}); }
+      const top = at(g, c, r, k + 1) !== "F", m = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 1, 10), top ? W.FUNTOP : W.FUN); m.position.set(x, k + 0.5, z); m.castShadow = true; grp.add(m);
+    } else if (b === "2") {
+      box("iron", 1.2, 0.18, 0.18, x + 0.8, k + 0.5, z);
+      for (let j = 0; j < 3; j++) { const bl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 0.35), M.iron); bl.position.set(x + 0.3, k + 0.5 + Math.cos(j * 2.094) * 0.42, z + Math.sin(j * 2.094) * 0.42); bl.rotation.x = j * 2.094; grp.add(bl); }
+    } else if (b === "Q") {
+      box("timber", 2.0, 0.12, 0.6, x, k + 0.45, z);
+      const sz = z === 0 ? 1 : Math.sign(z);
+      for (const dx of [-0.5, 0.5]) { const oar = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 4.2), M.timber); oar.position.set(x + dx, k + 0.25, z + sz * 2.4); oar.rotation.x = sz * 0.35; oar.castShadow = true; grp.add(oar); }
     } else if (b === "C") {
       for (let i = 0; i < 6; i++) { const [a2, b2] = nbrDir(c, r, i), v = at(g, a2, b2, k); if (outside(v)) hexSide(G.win, x, z, i, k, k + 1, true); }
       const up = at(g, c, r, k + 1); if (!isSolid(up) && up !== "C") hexTop(G.plank, x, k + 1, z);
@@ -1050,7 +1227,7 @@ let dockApi = null;
   dockApi = {place: (g, s, name) => { dockShipName = name; place(g, s); }, focus, setWater: v => { water = v; slider.value = Math.round(v * 1000); update(true); }};
   const clock = new THREE.Clock(), reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let visible = true; new IntersectionObserver(es => es.forEach(e => visible = e.isIntersecting)).observe(canvas);
-  let frames = 0;
+  let frames = 0, gtime = 0;   // the crane moves only while the cycle plays (nothing in a mockup moves on its own)
   function frame() {
     if (STILL && frames > 3) { document.body.dataset.dockDone = "1"; return; }
     requestAnimationFrame(frame);
@@ -1061,9 +1238,9 @@ let dockApi = null;
     if (cam.goal) { if (view === "ship") cam.goal.t.copy(ship.position).add(new THREE.Vector3(0, 6, 0)); cam.target.lerp(cam.goal.t, 1 - Math.exp(-dt * 4)); cam.dist += (cam.goal.d - cam.dist) * (1 - Math.exp(-dt * 4)); if (cam.target.distanceTo(cam.goal.t) < 0.05 && Math.abs(cam.dist - cam.goal.d) < 0.1 && !playing) cam.goal = null; }
     camera.position.set(cam.target.x + cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw), cam.target.y + cam.dist * Math.sin(cam.pitch), cam.target.z + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw));
     camera.lookAt(cam.target);
-    const gx = reduce || shot ? -4 : -4 + 9 * Math.sin(t / 30);
-    gantry.position.set(gx, 0, 0); trolley.position.z = reduce || shot ? 3 : 3 * Math.sin(t / 17);
-    const hookY = 13.5; cable.scale.y = 25 - hookY; cable.position.set(0, (25 + hookY) / 2, trolley.position.z); spar.position.set(0, hookY - 0.4, trolley.position.z); spar.rotation.y = reduce || shot ? 0.3 : 0.3 + 0.05 * Math.sin(t / 3);
+    if (playing && !reduce) gtime += dt; const gx = -4 + 9 * Math.sin(gtime / 30);
+    gantry.position.set(gx, 0, 0); trolley.position.z = 3 * Math.cos(gtime / 17);
+    const hookY = 13.5; cable.scale.y = 25 - hookY; cable.position.set(0, (25 + hookY) / 2, trolley.position.z); spar.position.set(0, hookY - 0.4, trolley.position.z); spar.rotation.y = 0.3 + 0.05 * Math.sin(gtime / 3);
     W.render(t);
   }
   let started = false; const start = () => { if (started) return; started = true; document.getElementById("loading")?.remove(); requestAnimationFrame(frame); };
@@ -1147,7 +1324,7 @@ let dockApi = null;
     requestAnimationFrame(frame);
     if (!visible) { clock.getDelta(); return; }
     frames++;
-    const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime, v = Math.max(1.2, s.vReach || 0);
+    const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime, v = Math.max(1.2, s.vReach || 0, 0.7 * (s.vTop || 0));
     if (!reduce) th += v / R * dt;
     const vx = -Math.sin(th), vz = Math.cos(th);
     boat.position.set(R * Math.cos(th), 0, R * Math.sin(th)); boat.rotation.y = Math.atan2(-vz, vx);
@@ -1159,5 +1336,234 @@ let dockApi = null;
     W.render(t);
   }
   requestAnimationFrame(frame);
+})();
+
+// ======================= Sail it (steer-and-sail decision 3) =======================
+(function sailIt() {
+  const map = document.getElementById("seamap"), mctx = map.getContext("2d"), comp = document.getElementById("compass"), cctx = comp.getContext("2d");
+  const heelC = document.getElementById("heel"), hctx = heelC.getContext("2d"), wrap = document.getElementById("sailWrap");
+  const WX = 3600, WY = 2400, K = map.width / WX, G25 = 25, RHO_AIR = 1.225, R_WP = 30;
+  const deg = Math.PI / 180, wrap360 = a => ((a % 360) + 360) % 360, wrap180 = a => ((a + 540) % 360) - 180;
+  // ---- the sea: a west coast and four islands, rasterised 15 m a pixel like the game's map
+  const ISLES = [[2700, 600, 260], [1200, 1450, 200], [3100, 1900, 340], [2300, 2250, 180]];
+  const nz = (x, y) => vn(x / 140, y / 140) - 0.5;
+  const height = (x, y) => { let h = (320 + 120 * Math.sin(y / 260) + 80 * Math.sin(y / 97 + 1) - x) / 70; for (const [cx, cy, r] of ISLES) h = Math.max(h, (r - Math.hypot(x - cx, y - cy) + 70 * nz(x, y)) / 60); return h + 0.4 * nz(x * 2, y * 2); };
+  const base = document.createElement("canvas"), PX = 15; base.width = WX / PX; base.height = WY / PX;
+  { const b = base.getContext("2d"), im = b.createImageData(base.width, base.height);
+    for (let j = 0; j < base.height; j++) for (let i = 0; i < base.width; i++) {
+      const x = (i + 0.5) * PX, y = WY - (j + 0.5) * PX, h = height(x, y), o = (j * base.width + i) * 4;
+      const c = h > 1.6 ? [74, 118, 52] : h > 0.55 ? [96, 142, 64] : h > 0 ? [214, 196, 140] : h > -1.2 ? [58, 132, 150] : h > -4 ? [36, 98, 128] : [24, 70, 104];
+      im.data.set([c[0], c[1], c[2], 255], o);
+    }
+    b.putImageData(im, 0, 0); }
+  const isLand = (x, y) => height(x, y) > 0;
+  const TOWNS = [[380, 520], [470, 1260], [300, 2050], [2690, 640], [3080, 1880], [1210, 1470]];
+  // ---- wind: trades from the east-north-east in the south, westerlies in the north, a slacker band between (a stand-in, design Risks)
+  function wind(x, y) {
+    const t = y / WY, s = Math.min(1, Math.max(0, (t - 0.3) / 0.4)), blend = s * s * (3 - 2 * s);
+    const from = 60 + 190 * blend + 12 * Math.sin(x / 700 + y / 900);
+    const spd = 7.5 + 1.2 * Math.sin(x / 900 + y / 600) - 3 * Math.exp(-(((t - 0.5) / 0.13) ** 2));
+    const to = (from + 180) * deg; return {from: wrap360(from), spd, e: Math.sin(to) * spd, n: Math.cos(to) * spd};
+  }
+  // ---- the ship's numbers, from her cells
+  let which = Q.get("sailship") && (SHIPS[Q.get("sailship")] || Q.get("sailship") === "yours") ? Q.get("sailship") : "sloop";
+  let P;   // params
+  function params() {
+    const g = which === "yours" ? grid : parse(SHIPS[which]), s = hydro(g);
+    const masts = cellsOf(g).filter(q => q.b === "M"), mastH = masts.length ? Math.max(...masts.map(q => q.k)) - s.mainDeck : 0;
+    P = {name: which === "yours" ? "Your design" : SHIPS[which].name, s, m: (s.m || 1) * 1000 * 1.1, SA: s.SA || 0, L: Math.max(4, s.L || 4), shaft: s.shaft || 0, row: s.row || 0, GM: Math.max(0.2, s.GM || 1), ce: Math.max(2, mastH * 0.55 + 1)};
+    P.sail = P.SA > 0 && !P.shaft && !P.row; P.power = P.shaft > 0 || P.row > 0; P.ok = !!s.m && !s.sinks && (P.SA > 0 || P.power);
+  }
+  // ---- the route, the ship, the controls
+  const START = {x: 900, y: 300, psi: 20};
+  let wps = [{x: 1939, y: 900}, {x: 1500, y: 1900}], ai = 0, from = {x: START.x, y: START.y};
+  const S = {x: START.x, y: START.y, psi: START.psi, u: 0, rud: 0, delta: 45, thr: 0, rowT: 0, heel: 0, lee: 0, t: 0, track: [], aground: false, beta: 0, alpha: 0, aws: 0, sog: 0, cog: 0, done: false, drive: 0};
+  const THR = [["Astern", -0.4], ["Stop", 0], ["Slow ahead", 0.33], ["Half ahead", 0.66], ["Full ahead", 1]];
+  const keys = new Set();
+  let running = false, warp = 8, night = Q.get("stime") === "night";
+  function reset() { Object.assign(S, {x: START.x, y: START.y, psi: START.psi, u: 0, rud: 0, delta: 45, thr: 1, rowT: 0, heel: 0, lee: 0, t: 0, track: [[START.x, START.y]], aground: false, done: false}); ai = 0; from = {x: START.x, y: START.y}; }
+  // ---- one step of the physics
+  function step(dt, ctl) {
+    const w = wind(S.x, S.y), h = {e: Math.sin(S.psi * deg), n: Math.cos(S.psi * deg)}, right = {e: Math.cos(S.psi * deg), n: -Math.sin(S.psi * deg)};
+    const aw = {e: w.e - S.u * h.e, n: w.n - S.u * h.n}, A = Math.hypot(aw.e, aw.n) || 1e-6, f = {e: -aw.e / A, n: -aw.n / A};
+    const beta = Math.acos(Math.max(-1, Math.min(1, f.e * h.e + f.n * h.n))) / deg, fromRight = f.e * right.e + f.n * right.n > 0 ? 1 : -1;
+    // helm: A and D put the wheel over; it comes back amidships when let go. The rudder is a foil: it turns her only with way on.
+    const want = ctl.left ? -35 : ctl.right ? 35 : 0; S.rud += Math.max(-40 * dt, Math.min(40 * dt, want - S.rud));
+    // sheet (W hauls in, S eases) for a sailing ship; a powered ship's sails, if any, trim themselves
+    if (P.sail && ctl.haul) S.delta = Math.max(0, S.delta - 25 * dt);
+    if (P.sail && ctl.ease) S.delta = Math.min(90, S.delta + 25 * dt);
+    if (!P.sail) S.delta = Math.max(0, Math.min(90, beta - 15));
+    let drive = 0, side = 0;
+    if (P.SA > 0) {
+      const alpha = beta - S.delta, luff = Math.min(1, Math.max(0, (beta - 20) / 12));   // the sail luffs inside about 25 degrees of apparent wind: about 45 degrees of true wind
+      let CL = alpha <= 0 ? 0 : alpha <= 15 ? 0.09 * alpha : Math.max(0, 1.35 - 0.035 * (alpha - 15));
+      CL *= luff * luff * (3 - 2 * luff);
+      const CD = 0.05 + 1.2 * Math.sin(Math.max(0, alpha) * deg) ** 2 + 0.1 * CL * CL, q = 0.5 * RHO_AIR * A * A * P.SA, b = beta * deg;
+      drive = q * (CL * Math.sin(b) - CD * Math.cos(b)); side = q * (CL * Math.cos(b) + CD * Math.sin(b));
+      S.alpha = alpha;
+    }
+    let thrust = 0;
+    if (P.power) {
+      const frac = THR[S.thr][1];
+      if (P.row && frac) S.rowT += dt;
+      const kw = P.shaft * frac + P.row * frac * (S.rowT > 600 ? 0.5 : 1);
+      thrust = kw * 1000 * ETA / Math.max(1, Math.abs(S.u));
+    }
+    const res = Math.sign(S.u) * P.s.R(Math.abs(S.u)) + 150 * S.u;
+    S.u += (drive + thrust - res) / P.m * dt;
+    S.psi = wrap360(S.psi + (S.u * Math.tan(S.rud * deg) / (0.9 * P.L)) / deg * dt);
+    // leeway and heel from the side force
+    const lee = Math.min(0.14, side / (60 * P.s.S * (S.u * S.u + 1) + 1)), heel = Math.min(35, Math.atan(side * P.ce / (P.m / 1.1 * G25 * P.GM)) / deg);
+    S.lee = lee * -fromRight; S.heel = heel * -fromRight;
+    const cog = S.psi * deg + S.lee, ve = S.u * Math.sin(cog), vnn = S.u * Math.cos(cog);
+    const nx = S.x + ve * dt, ny = S.y + vnn * dt;
+    if (isLand(nx, ny)) { S.u = 0; S.aground = true; } else { S.x = Math.max(0, Math.min(WX, nx)); S.y = Math.max(0, Math.min(WY, ny)); S.aground = false; }
+    S.sog = Math.hypot(ve, vnn); S.cog = wrap360(Math.atan2(ve, vnn) / deg); S.beta = beta; S.aws = A; S.fromRight = fromRight; S.drive = drive; S.t += dt;
+    const last = S.track[S.track.length - 1]; if (Math.hypot(S.x - last[0], S.y - last[1]) > 12) S.track.push([S.x, S.y]);
+    if (ai < wps.length && Math.hypot(wps[ai].x - S.x, wps[ai].y - S.y) < R_WP) { from = {x: wps[ai].x, y: wps[ai].y}; ai++; }
+    S.done = ai >= wps.length;
+  }
+  // ---- GPS
+  function gps() {
+    if (!wps.length || ai >= wps.length) return null;
+    const w = wps[ai], dx = w.x - S.x, dy = w.y - S.y, dist = Math.hypot(dx, dy), brg = wrap360(Math.atan2(dx, dy) / deg);
+    const lx = w.x - from.x, ly = w.y - from.y, ll = Math.hypot(lx, ly) || 1, xte = ((S.x - from.x) * ly - (S.y - from.y) * lx) / ll;
+    return {brg, dist, xte, eta: S.sog > 0.2 ? dist / S.sog : Infinity};
+  }
+  const fmtT = s => !isFinite(s) ? "--" : s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round(s % 3600 / 60)} m` : `${Math.floor(s / 60)} m ${String(Math.round(s % 60)).padStart(2, "0")} s`;
+  // ---- drawing
+  const X = x => x * K, Y = y => (WY - y) * K;
+  function drawMap() {
+    const c = mctx, W = map.width, H = map.height;
+    c.imageSmoothingEnabled = false; c.drawImage(base, 0, 0, W, H);
+    if (night) { c.fillStyle = "rgba(2,6,18,0.72)"; c.fillRect(0, 0, W, H); for (const [tx, ty] of TOWNS) { const g = c.createRadialGradient(X(tx), Y(ty), 0, X(tx), Y(ty), 14); g.addColorStop(0, "rgba(255,190,110,0.85)"); g.addColorStop(1, "rgba(255,190,110,0)"); c.fillStyle = g; c.fillRect(X(tx) - 14, Y(ty) - 14, 28, 28); c.fillStyle = "#ffd28a"; c.fillRect(X(tx) - 2, Y(ty) - 2, 4, 4); } }
+    // wind arrows
+    c.strokeStyle = night ? "rgba(160,190,220,0.35)" : "rgba(235,245,255,0.6)"; c.fillStyle = c.strokeStyle; c.lineWidth = 1.5;
+    for (let gy = 100; gy < WY; gy += 240) for (let gx = 120; gx < WX; gx += 240) {
+      if (isLand(gx, gy)) continue; const w = wind(gx, gy), a = (w.from + 180) * deg, len = 8 + w.spd * 3.2, x0 = X(gx), y0 = Y(gy), dx = Math.sin(a) * len / 2, dy = -Math.cos(a) * len / 2;
+      c.beginPath(); c.moveTo(x0 - dx, y0 - dy); c.lineTo(x0 + dx, y0 + dy); c.stroke();
+      c.beginPath(); c.moveTo(x0 + dx, y0 + dy); c.lineTo(x0 + dx - Math.sin(a - 0.45) * 7, y0 + dy + Math.cos(a - 0.45) * 7); c.lineTo(x0 + dx - Math.sin(a + 0.45) * 7, y0 + dy + Math.cos(a + 0.45) * 7); c.fill();
+    }
+    // route
+    c.setLineDash([6, 5]); c.strokeStyle = night ? "rgba(232,176,64,0.7)" : "rgba(255,214,120,0.95)"; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(X(from.x), Y(from.y)); for (let i = ai; i < wps.length; i++) c.lineTo(X(wps[i].x), Y(wps[i].y)); c.stroke(); c.setLineDash([]);
+    wps.forEach((w, i) => { c.beginPath(); c.arc(X(w.x), Y(w.y), R_WP * K + 3, 0, Math.PI * 2); c.fillStyle = i < ai ? "rgba(143,220,154,0.5)" : i === ai ? "rgba(232,176,64,0.9)" : "rgba(232,176,64,0.4)"; c.fill(); c.strokeStyle = "#161612"; c.lineWidth = 1.5; c.stroke(); c.fillStyle = "#161612"; c.font = "700 11px JetBrains Mono, monospace"; c.fillText(String(i + 1), X(w.x) - 3.5, Y(w.y) + 4); });
+    // track
+    c.strokeStyle = night ? "rgba(143,220,154,0.75)" : "rgba(20,40,30,0.85)"; c.lineWidth = 2; c.beginPath(); S.track.forEach(([x, y], i) => i ? c.lineTo(X(x), Y(y)) : c.moveTo(X(x), Y(y))); c.lineTo(X(S.x), Y(S.y)); c.stroke();
+    // the ship, drawn large: a hull pointing along her heading, the boom to leeward, running lights at night
+    c.save(); c.translate(X(S.x), Y(S.y)); c.rotate(S.psi * deg);
+    if (night) for (const [lx, ly, col] of [[-5, -2, "255,60,60"], [5, -2, "60,255,110"], [0, 11, "255,255,255"]]) { const g = c.createRadialGradient(lx, ly, 0, lx, ly, 10); g.addColorStop(0, `rgba(${col},0.9)`); g.addColorStop(1, `rgba(${col},0)`); c.fillStyle = g; c.fillRect(lx - 10, ly - 10, 20, 20); }
+    c.fillStyle = night ? "#2a2018" : "#3a2a1c"; c.strokeStyle = "#e8d6b0"; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(0, -13); c.lineTo(6, -3); c.lineTo(6, 10); c.lineTo(-6, 10); c.lineTo(-6, -3); c.closePath(); c.fill(); c.stroke();
+    if (P.SA > 0) { const side = S.fromRight > 0 ? -1 : 1, a = S.delta * deg * side; c.strokeStyle = "#f2e4c4"; c.lineWidth = 3; c.beginPath(); c.moveTo(0, -3); c.lineTo(Math.sin(a) * 13, -3 + Math.cos(a) * 13); c.stroke(); }
+    if (night) { c.fillStyle = "#ff4040"; c.fillRect(-7, -3, 3, 3); c.fillStyle = "#40ff70"; c.fillRect(4, -3, 3, 3); c.fillStyle = "#fff"; c.fillRect(-1.5, 9, 3, 3); }
+    c.restore();
+    // north arrow and scale
+    c.fillStyle = night ? "rgba(10,14,20,0.8)" : "rgba(10,14,20,0.65)"; c.fillRect(8, 8, 120, 46);
+    c.fillStyle = "#e8b040"; c.font = "700 13px JetBrains Mono, monospace"; c.fillText("N", 20, 26); c.beginPath(); c.moveTo(24, 30); c.lineTo(19, 46); c.lineTo(29, 46); c.closePath(); c.fill();
+    c.fillStyle = "#e4ecee"; c.fillRect(42, 40, 500 * K, 3); c.font = "600 11px JetBrains Mono, monospace"; c.fillText("500 m", 42, 34);
+    if (!P.ok) { c.fillStyle = "rgba(10,14,20,0.85)"; c.fillRect(W / 2 - 200, H / 2 - 20, 400, 40); c.fillStyle = "#ff6b57"; c.font = "600 14px Barlow, sans-serif"; c.fillText("This ship has no sail and no engine (or does not float).", W / 2 - 185, H / 2 + 5); }
+  }
+  function drawCompass() {
+    const c = cctx, W = comp.width, H = comp.height, span = 180, px = W / span;
+    c.clearRect(0, 0, W, H); c.fillStyle = "rgba(8,12,16,0.75)"; c.fillRect(0, 0, W, H); c.fillStyle = "rgba(230,236,238,0.5)"; c.fillRect(0, 0, W, 1); c.fillRect(0, H - 1, W, 1);
+    const head = S.psi, NAMES = {0: "N", 45: "NE", 90: "E", 135: "SE", 180: "S", 225: "SW", 270: "W", 315: "NW"};
+    for (let a = 0; a < 360; a += 15) {
+      const d = wrap180(a - head); if (Math.abs(d) > 90) continue; const x = W / 2 + d * px, fade = Math.min(1, (90 - Math.abs(d)) / 22);
+      c.globalAlpha = fade;
+      if (NAMES[a]) { c.fillStyle = a === 0 ? "#e8b040" : "#e4ecee"; c.font = a % 90 ? "600 11px JetBrains Mono, monospace" : "700 15px JetBrains Mono, monospace"; const tw = c.measureText(NAMES[a]).width; c.fillText(NAMES[a], x - tw / 2, 20); }
+      else { c.fillStyle = "rgba(230,236,238,0.7)"; c.fillRect(x - 0.5, 9, 1, 7); }
+    }
+    const gp = gps();
+    if (gp) { const d = wrap180(gp.brg - head); if (Math.abs(d) <= 90) { const x = W / 2 + d * px; c.globalAlpha = 1; c.fillStyle = "#e8b040"; c.beginPath(); c.moveTo(x, 27); c.lineTo(x + 5, 33); c.lineTo(x, 39); c.lineTo(x - 5, 33); c.closePath(); c.fill(); } }
+    c.globalAlpha = 1; c.fillStyle = "#e8b040"; c.fillRect(W / 2 - 1, 0, 2, 6);
+  }
+  function drawHeel() {
+    const c = hctx, W = heelC.width, H = heelC.height; c.clearRect(0, 0, W, H);
+    c.fillStyle = night ? "#060a12" : "#9cc4e4"; c.fillRect(0, 0, W, H / 2); c.fillStyle = night ? "#0b2230" : "#2f7f96"; c.fillRect(0, H * 0.36, W, H * 0.14);
+    // from astern: the hull heels to leeward
+    c.save(); c.translate(W / 2, H * 0.36); c.rotate(S.heel * deg);
+    c.fillStyle = "#2b2a24"; c.fillRect(-46, -14, 92, 26); c.fillStyle = "#b98d5e"; c.fillRect(-46, -18, 92, 5);
+    if (P.SA > 0) { c.fillStyle = "#9a6c3e"; c.fillRect(-2, -110, 4, 94); c.fillStyle = "#e2c79a"; c.fillRect(-36, -100, 72, 70); }
+    else { c.fillStyle = "#a61e1f"; c.fillRect(-8, -60, 16, 44); c.fillStyle = "#161612"; c.fillRect(-8, -60, 16, 8); }
+    if (night) { c.fillStyle = "#ffd28a"; c.fillRect(-3, -26, 6, 6); }
+    c.restore();
+    c.fillStyle = night ? "#e4ecee" : "#0b1014"; c.font = "600 12px JetBrains Mono, monospace"; c.fillText(`from astern: heel ${Math.abs(S.heel).toFixed(0)}° ${S.heel > 0.5 ? "to starboard" : S.heel < -0.5 ? "to port" : ""}`, 8, 16);
+    // from above: the bow up, the boom to leeward, the apparent wind
+    c.fillStyle = "#0d1317"; c.fillRect(0, H / 2, W, H / 2);
+    const cx = W / 2, cy = H * 0.76;
+    c.fillStyle = "#3a2a1c"; c.strokeStyle = "#e8d6b0"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(cx, cy - 46); c.lineTo(cx + 18, cy - 16); c.lineTo(cx + 18, cy + 36); c.lineTo(cx - 18, cy + 36); c.lineTo(cx - 18, cy - 16); c.closePath(); c.fill(); c.stroke();
+    const awa = S.beta * (S.fromRight > 0 ? 1 : -1);
+    c.strokeStyle = "#8fc3d8"; c.fillStyle = "#8fc3d8"; c.lineWidth = 2; const ax = cx + Math.sin(awa * deg) * 62, ay = cy - Math.cos(awa * deg) * 62;
+    c.beginPath(); c.moveTo(ax, ay); c.lineTo(cx + Math.sin(awa * deg) * 32, cy - Math.cos(awa * deg) * 32); c.stroke();
+    c.font = "600 11px JetBrains Mono, monospace"; c.fillText("apparent wind", Math.min(W - 98, Math.max(4, ax - 40)), Math.max(H / 2 + 34, Math.min(H - 24, ay - 6)));
+    let label;
+    if (P.SA > 0) { const side = S.fromRight > 0 ? -1 : 1, a = S.delta * deg * side; c.strokeStyle = "#f2e4c4"; c.lineWidth = 4; c.beginPath(); c.moveTo(cx, cy - 10); c.lineTo(cx + Math.sin(a) * 40, cy - 10 + Math.cos(a) * 40); c.stroke();
+      label = S.beta < 24 ? "in irons: too close to the wind" : S.alpha < 0 ? "luffing: haul in (W)" : S.alpha > 22 ? "stalled: ease out (S)" : "drawing"; }
+    else label = P.power ? THR[S.thr][0] : "no drive";
+    c.fillStyle = "#e4ecee"; c.font = "600 12px JetBrains Mono, monospace";
+    c.fillText(P.SA > 0 ? `sail ${S.delta.toFixed(0)}° off the centreline` : "telegraph", 8, H / 2 + 16); c.fillStyle = "#e8b040"; c.fillText(label, 8, H - 8);
+  }
+  function readout() {
+    const gp = gps(), el = document.getElementById("gps"), st = document.getElementById("sailState");
+    el.textContent = gp ? `WP ${ai + 1}/${wps.length}  BRG ${gp.brg.toFixed(0).padStart(3, "0")}°  DIST ${gp.dist >= 1000 ? (gp.dist / 1000).toFixed(2) + " km" : gp.dist.toFixed(0) + " m"}  COG ${S.cog.toFixed(0).padStart(3, "0")}°  SOG ${S.sog.toFixed(1)} m/s (${(S.sog * 1.944).toFixed(1)} kn)  XTE ${Math.abs(gp.xte).toFixed(0)} m ${gp.xte > 1 ? "R" : gp.xte < -1 ? "L" : ""}  ETA ${fmtT(gp.eta)}` : wps.length ? `Route done: every waypoint reached in ${fmtT(S.t)}.` : "No route: click the map to add waypoints.";
+    const w = wind(S.x, S.y);
+    st.innerHTML = `<b>${P.name}</b>: ${P.sail ? `${P.SA.toFixed(0)} m2 of sail` : P.row && !P.shaft ? `${P.row.toFixed(1)} kW of oars${S.rowT > 600 ? " (tired: half)" : ""}` : `${(P.shaft / 1000).toFixed(1)} MW to the shaft`}. Heading ${S.psi.toFixed(0)}°, rudder ${S.rud.toFixed(0)}°. True wind from ${w.from.toFixed(0)}° at ${w.spd.toFixed(1)} m/s; apparent ${S.aws.toFixed(1)} m/s at ${S.beta.toFixed(0)}° off the bow. Sim time ${fmtT(S.t)}${S.aground ? ". <b>Aground!</b>" : ""}.`;
+  }
+  function draw() { drawMap(); drawCompass(); drawHeel(); readout(); }
+  // ---- controls
+  const ctl = () => ({left: keys.has("a"), right: keys.has("d"), haul: keys.has("w"), ease: keys.has("s")});
+  wrap.addEventListener("keydown", e => {
+    const k = e.key.toLowerCase(); if (!"wasd".includes(k) || k.length !== 1) return; e.preventDefault();
+    if (P.power && !P.sail && !e.repeat) { if (k === "w") S.thr = Math.min(THR.length - 1, S.thr + 1); if (k === "s") S.thr = Math.max(0, S.thr - 1); }
+    keys.add(k); if (!running) draw();
+  });
+  wrap.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
+  wrap.addEventListener("blur", () => keys.clear());
+  document.querySelectorAll("#helmPad button").forEach(b => {
+    const k = b.dataset.k;
+    b.addEventListener("pointerdown", e => { e.preventDefault(); wrap.focus(); if (P.power && !P.sail) { if (k === "w") S.thr = Math.min(THR.length - 1, S.thr + 1); if (k === "s") S.thr = Math.max(0, S.thr - 1); } keys.add(k); if (!running) draw(); });
+    for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, () => keys.delete(k));
+  });
+  // waypoints: click adds, drag moves, right-click removes
+  const toWorld = e => { const r = map.getBoundingClientRect(); return {x: (e.clientX - r.left) * map.width / r.width / K, y: WY - (e.clientY - r.top) * map.height / r.height / K}; };
+  const near = p => wps.findIndex(w => Math.hypot(w.x - p.x, w.y - p.y) < 14 / K * (map.width / map.getBoundingClientRect().width));
+  let dragI = -1, moved = false;
+  map.addEventListener("contextmenu", e => { e.preventDefault(); const i = near(toWorld(e)); if (i >= 0) { wps.splice(i, 1); if (i < ai) ai--; ai = Math.min(ai, wps.length); draw(); } });
+  map.addEventListener("pointerdown", e => { if (e.button !== 0) return; wrap.focus(); const p = toWorld(e); dragI = near(p); moved = false; if (dragI >= 0) map.setPointerCapture(e.pointerId); });
+  map.addEventListener("pointermove", e => { if (dragI < 0) return; const p = toWorld(e); wps[dragI].x = Math.max(0, Math.min(WX, p.x)); wps[dragI].y = Math.max(0, Math.min(WY, p.y)); moved = true; draw(); });
+  map.addEventListener("pointerup", e => { if (e.button !== 0) return; if (dragI < 0) { const p = toWorld(e); if (!isLand(p.x, p.y)) { wps.push(p); if (S.done) S.done = false; } } dragI = -1; draw(); });
+  const sailBtn = document.getElementById("sailGo");
+  const setRunning = r => { running = r; sailBtn.textContent = r ? "Pause" : "Sail"; sailBtn.setAttribute("aria-pressed", r); if (r) { wrap.focus(); last = performance.now(); requestAnimationFrame(loop); } };
+  sailBtn.addEventListener("click", () => setRunning(!running));
+  document.getElementById("sailReset").addEventListener("click", () => { setRunning(false); reset(); draw(); });
+  document.getElementById("sailClear").addEventListener("click", () => { wps = []; ai = 0; draw(); });
+  const shipEl = document.getElementById("sailShip");
+  shipEl.innerHTML = [...Object.entries(SHIPS).map(([k, p]) => [k, p.name]), ["yours", "Your design"]].map(([k, n]) => `<button data-w="${k}" aria-pressed="${k === which}">${n}</button>`).join("");
+  shipEl.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { which = b.dataset.w; shipEl.querySelectorAll("button").forEach(o => o.setAttribute("aria-pressed", o === b)); params(); setRunning(false); reset(); draw(); }));
+  document.querySelectorAll("#sailWarp button").forEach(b => b.addEventListener("click", () => { warp = +b.dataset.x; document.querySelectorAll("#sailWarp button").forEach(o => o.setAttribute("aria-pressed", o === b)); }));
+  document.querySelectorAll("#sailTime button").forEach(b => b.addEventListener("click", () => { night = b.dataset.t === "night"; document.querySelectorAll("#sailTime button").forEach(o => o.setAttribute("aria-pressed", o === b)); draw(); }));
+  document.querySelectorAll("#sailTime button").forEach(o => o.setAttribute("aria-pressed", (o.dataset.t === "night") === night));
+  listeners.push(() => { if (which === "yours") { params(); draw(); } });
+  let last = 0;
+  function loop(now) {
+    if (!running) return;
+    const real = Math.min(0.1, (now - last) / 1000); last = now;
+    const n = Math.max(1, Math.round(real * warp / 0.05)); for (let i = 0; i < n && !S.done; i++) step(real * warp / n, ctl());
+    if (S.done) setRunning(false);
+    draw(); requestAnimationFrame(loop);
+  }
+  params(); reset();
+  // ?sail=demo: a scripted helmsman beats toward the first waypoint, for screenshots only (the game has no autopilot at these levels)
+  if (Q.get("sail") === "demo") {
+    const T = +(Q.get("demoT") || 520); let tack = Math.sign(wrap180(S.psi - wind(S.x, S.y).from)) || 1, steps = 0, lastX = 0, lastTack = -999;
+    while (S.t < T && !S.done && steps++ < 40000) {
+      const gp = gps(), w = wind(S.x, S.y); let target = gp.brg; const off = wrap180(gp.brg - w.from);
+      if (Math.abs(off) < 52) { target = wrap360(w.from + 52 * tack); const ax = Math.abs(gp.xte); if (ax > 160 && ax > lastX && S.t > lastTack + 90) { tack = -tack; lastTack = S.t; } lastX = ax; }
+      const err = wrap180(target - S.psi); const c = {left: err < -4, right: err > 4, haul: false, ease: false};
+      S.delta = Math.max(5, Math.min(90, S.beta - 14)); step(0.1, c);
+    }
+  }
+  draw();
 })();
 </script>

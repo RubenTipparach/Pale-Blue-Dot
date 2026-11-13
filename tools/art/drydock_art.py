@@ -228,10 +228,138 @@ def gangway(sp):
     sp.outline()
 
 
+# ---------------------------------------------------------------- power blocks (steer-and-sail decision 4)
+
+def oar_bench(sp):
+    sp.part(sp.rect(4, 18, 27, 21), R["wood"], "rim", base=2)
+    for x in (6, 24):
+        sp.part(sp.rect(x, 22, x + 2, 29), R["wood"], "flat", base=1)
+    sp.part(sp.line([(3, 30), (28, 4)], 2), R["wood"], "flat", base=2)
+    sp.part(sp.poly([(24, 2), (30, 2), (30, 9), (26, 9)]), R["wood"], "rim", base=2)
+    sp.plots([(8, 19), (9, 19)], GLINT)
+    sp.outline()
+
+
+def boiler(sp):
+    sp.part(sp.rect(4, 8, 27, 28), R["steel"], "cyl_h", base=1)
+    sp.part(sp.ellipse(2, 6, 9, 30), R["steel"], "rim", base=2)
+    for x in (12, 19, 26):
+        sp.fill(sp.rect(x, 9, x, 27), R["steel"][0])
+    sp.part(sp.rect(11, 19, 18, 25), R["flame"], "inset", glow=False)
+    sp.fill(sp.rect(11, 19, 18, 19), R["ink"][1])
+    sp.part(sp.rect(18, 2, 22, 8), R["steel"], "rim")
+    sp.plots([(6, 10), (7, 10)], GLINT)
+    sp.outline()
+
+
+def turbine(sp):
+    sp.part(sp.poly([(3, 12), (20, 6), (20, 26), (3, 20)]), R["metal"], "rim", base=2)
+    sp.part(sp.rect(20, 10, 29, 22), R["metal"], "cyl_h", base=1)
+    for x in (7, 11, 15):
+        sp.fill(sp.line([(x, 11 - (x - 3) // 3), (x, 21 + (x - 3) // 3)], 1), R["metal"][0])
+    sp.part(sp.rect(24, 14, 30, 18), R["gold"], "cyl_h", base=2)
+    sp.plots([(6, 13), (7, 13)], GLINT)
+    sp.outline()
+
+
+def coal_bunker(sp):
+    sp.part(sp.poly([(3, 10), (28, 10), (25, 29), (6, 29)]), R["rust"], "rim", base=1)
+    for cx, cy in [(9, 9), (14, 7), (19, 8), (24, 9), (12, 11), (21, 11)]:
+        sp.part(sp.ellipse(cx - 3, cy - 2, cx + 3, cy + 2), R["soot"], "sphere", base=2)
+    sp.fill(sp.rect(6, 18, 25, 19), R["rust"][0])
+    sp.plots([(14, 6)], GLINT)
+    sp.outline()
+
+
+def funnel(sp):
+    sp.part(sp.rect(9, 8, 22, 30), R["red"], "cyl_v", base=2)
+    sp.part(sp.rect(9, 8, 22, 12), R["ink"], "cyl_v", base=2)
+    sp.part(sp.rect(9, 20, 22, 22), R["gold"], "cyl_v", base=2)
+    sp.part(sp.ellipse(8, 5, 23, 10), R["ink"], "flat", base=0)
+    for cx, cy, r in [(14, 3, 2), (19, 2, 2)]:
+        sp.part(sp.circle(cx, cy, r), R["soot"], "sphere", base=2)
+    sp.plots([(11, 14), (11, 15)], GLINT)
+    sp.outline()
+
+
+def diesel(sp):
+    sp.part(sp.rect(3, 12, 28, 28), R["green"], "rim", base=2)
+    for x in (6, 11, 16, 21):
+        sp.part(sp.rect(x, 5, x + 3, 12), R["steel"], "rim", base=2)
+    sp.part(sp.rect(4, 3, 26, 5), R["steel"], "cyl_h", base=1)
+    sp.fill(sp.rect(5, 20, 26, 21), R["green"][0])
+    sp.part(sp.circle(24, 24, 3), R["steel"], "sphere", base=2)
+    sp.plots([(5, 13), (6, 13)], GLINT)
+    sp.outline()
+
+
+def oil_tank(sp):
+    sp.part(sp.rect(5, 6, 26, 28), R["ink"], "cyl_v", base=2)
+    sp.part(sp.ellipse(5, 3, 26, 9), R["steel"], "rim", base=2)
+    sp.part(sp.rect(5, 14, 26, 19), R["amber"], "cyl_v", base=2)
+    sp.part(sp.poly([(15, 15), (17, 15), (19, 18), (13, 18)]), R["ink"], "flat", base=1)
+    sp.plots([(8, 10), (8, 11)], GLINT)
+    sp.outline()
+
+
+def reactor(sp):
+    sp.part(sp.rect(5, 6, 26, 29), R["metal"], "cyl_v", base=2)
+    sp.part(sp.ellipse(5, 3, 26, 10), R["metal"], "rim", base=3)
+    sp.part(sp.circle(15, 18, 6), R["cyan"], "inset", glow=False)
+    blade = sp.empty()
+    for a in (90, 210, 330):
+        ca, sa = np.cos(np.radians(a)), np.sin(np.radians(a))
+        blade |= sp.poly([(15, 18), (int(15 + 5 * np.cos(np.radians(a - 25))), int(18 - 5 * np.sin(np.radians(a - 25)))), (int(15 + 5 * np.cos(np.radians(a + 25))), int(18 - 5 * np.sin(np.radians(a + 25))))])
+    sp.fill(blade & sp.circle(15, 18, 5), R["gold"][3])
+    sp.plots([(8, 9), (9, 9)], GLINT)
+    sp.outline()
+
+
+def shielding(sp):
+    hex_block(sp, R["stone"], R["stone"], h=12)
+    stripe = ((XS + YS) // 3) % 2 == 0
+    band = sp.rect(3, 22, 29, 26)
+    sp.fill(band & stripe, R["gold"][3])
+    sp.fill(band & ~stripe, R["ink"][1])
+    sp.plots([(9, 8)], GLINT)
+    sp.outline()
+
+
+def battery(sp):
+    sp.part(sp.rect(4, 8, 27, 29), R["blue"], "rim", base=1)
+    for x in (8, 18):
+        sp.part(sp.rect(x, 4, x + 5, 8), R["steel"], "rim", base=2)
+    sp.part(sp.poly([(17, 11), (11, 20), (16, 20), (13, 27), (21, 17), (16, 17), (19, 11)]), R["gold"], "flat", base=3)
+    sp.plots([(6, 10), (7, 10)], GLINT)
+    sp.outline()
+
+
+def motor(sp):
+    sp.part(sp.rect(4, 8, 24, 27), R["metal"], "cyl_h", base=2)
+    for y in (11, 15, 19, 23):
+        sp.fill(sp.rect(6, y, 22, y), R["metal"][0])
+    sp.part(sp.rect(24, 15, 30, 19), R["steel"], "cyl_h", base=2)
+    sp.part(sp.rect(8, 4, 16, 8), R["blue"], "rim", base=2)
+    sp.plots([(6, 9), (7, 9)], GLINT)
+    sp.outline()
+
+
+def propeller(sp):
+    sp.part(sp.rect(2, 14, 13, 17), R["steel"], "cyl_h", base=2)
+    blades = sp.ellipse(14, 2, 21, 15) | sp.ellipse(14, 16, 21, 29) | sp.ellipse(20, 11, 30, 20)
+    sp.part(blades, R["gold"], "rim", base=2)
+    sp.part(sp.circle(17, 15, 3), R["brass"], "sphere", base=2)
+    sp.plots([(16, 5), (16, 6)], GLINT)
+    sp.outline()
+
+
 ICONS = {
     "keel": keel, "hull": hull, "ballast": ballast, "bulkhead": bulkhead, "deck": deck, "hold": hold,
     "cabin": cabin, "hatch": hatch, "mast": mast, "sail": sail, "rudder": rudder, "helm": helm,
     "capstan": capstan, "rail": rail, "lantern": lantern, "gangway": gangway,
+    "oar-bench": oar_bench, "boiler": boiler, "turbine": turbine, "coal-bunker": coal_bunker, "funnel": funnel,
+    "diesel": diesel, "oil-tank": oil_tank, "reactor": reactor, "shielding": shielding, "battery": battery,
+    "motor": motor, "propeller": propeller,
 }
 
 
