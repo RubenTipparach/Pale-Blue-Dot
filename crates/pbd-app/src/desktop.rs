@@ -2617,17 +2617,24 @@ struct CoastWalk {
     rivers: u32,
     in_river: bool,
     turns: u32,
+    /// Turns made without getting 4 m from where the first of them was.
+    trapped: u32,
+    trap_at: Option<Vec3>,
     done: bool,
 }
 
 /// The `--coast-walk` instrument (`coast-walk`): walk the shore at walking
 /// pace, steering by `coast_walk::steer` every 0.2 s and turning the view
 /// toward its heading at no more than 50 degrees a second, hopping what
-/// stalls it and turning away from the sea after three seconds stuck; never
-/// sprints or digs.
+/// stalls it and turning 40 degrees away from the sea after 1.5 s stuck;
+/// never sprints or digs.
+// Eight parameters: `walk_script`'s reason.
+#[allow(clippy::too_many_arguments)]
 fn coast_script(
     launch: Res<Launch>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut mouse: ResMut<ButtonInput<MouseButton>>,
+    mut tools: ResMut<pbd_app::fish::ToolSlot>,
     mut state: ResMut<pbd_app::walking::WalkingState>,
     walkers: Query<&Position, With<pbd_app::walking::Walker>>,
     mut exit: MessageWriter<AppExit>,
@@ -2705,26 +2712,46 @@ fn coast_script(
         );
     }
     walk.in_river = in_river;
+    // Out of a trap once 4 m from where it began.
+    if walk.trap_at.is_some_and(|at| here.distance(at) > 4.0) {
+        walk.trapped = 0;
+        walk.trap_at = None;
+        mouse.release(MouseButton::Left);
+    }
     let (anchor, since) = walk.anchor.unwrap_or((here, now));
     if here.distance(anchor) > 1.5 {
         walk.anchor = Some((here, now));
         keys.release(KeyCode::Space);
     } else {
         let stalled = now.duration_since(since).as_secs_f32();
-        if stalled > 0.5 && (stalled % 0.7) < 0.05 {
+        // Trapped (a bank the height field said was lower, a pit): the last
+        // resorts, in order. Three turns in: hold jump, which climbs out of
+        // water. Six: dig ahead with the pickaxe, as the 1 km walk does.
+        if walk.trapped >= 3 || (stalled > 0.5 && (stalled % 0.7) < 0.05) {
             keys.press(KeyCode::Space);
         } else {
             keys.release(KeyCode::Space);
         }
-        if stalled > 3.0 {
-            let away = Quat::from_axis_angle(up, -walk.side * std::f32::consts::FRAC_PI_4)
-                * state.view().0;
+        if walk.trapped >= 6 {
+            tools.hold(pbd_core::inventory::Tool::Pickaxe);
+            mouse.press(MouseButton::Left);
+        }
+        // A tree or a step the height field cannot see: turn away from the
+        // sea and walk on, quickly, as a walker steps round it.
+        if stalled > 1.5 {
+            let away = Quat::from_axis_angle(up, -walk.side * 40f32.to_radians()) * state.view().0;
             state.face(up, away);
             walk.target = Some(away);
             walk.steered = Some(now);
             walk.turns += 1;
+            walk.trapped += 1;
+            walk.trap_at.get_or_insert(here);
             walk.anchor = Some((here, now));
-            info!("COAST_TURN stalled 3 s at {:.0} m walked", walk.walked_m);
+            let (lat, lon) = pbd_core::geo::lat_lon(up).degrees();
+            info!(
+                "COAST_TURN stalled 1.5 s at {:.0} m walked, at {lat:.4} {lon:.4}, {} in this spot",
+                walk.walked_m, walk.trapped
+            );
         }
     }
     if walk.walked_m >= goal {

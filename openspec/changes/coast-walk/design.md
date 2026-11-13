@@ -6,7 +6,9 @@ Every 0.2 s, from the walker's direction and heading, each candidate heading
 from 75 degrees left to 75 right in 15 degree steps is looked along at 4, 8,
 14 and 22 m (on the sphere), reading `surface_height`:
 
-- a cliff: any 4-8 m stretch rising or falling more than 3 m is ruled out;
+- a cliff: any stretch between reads rising or falling more than 3 m is
+  ruled out; one rising more than 1.5 m (more than auto step's one layer and
+  a hop) costs 10 a metre over, so it is taken only where nothing flatter is;
 - water (height under sea level) is a river if land comes back within 30 m
   along the heading, crossed; else it is the sea, ruled out;
 - of what is left, the score is how far the point 8 m out sits from 2.5 m
@@ -16,8 +18,9 @@ from 75 degrees left to 75 right in 15 degree steps is looked along at 4, 8,
 
 The view turns toward the chosen heading at no more than 50 degrees a second,
 so the camera reads as a walker looking where it goes. Stalled on a step the
-height field cannot see (an edit, a tree), it hops, as the stroll does; three
-seconds stuck, it turns a quarter away from the sea.
+height field cannot see (an edit, a tree), it hops, as the stroll does; 1.5 s
+stuck, it turns 40 degrees away from the sea and walks on. The recording runs
+with `--frame-log`, whose settings have auto step on.
 
 ## Proven before it is filmed
 
