@@ -758,7 +758,7 @@ fn cover_ring(k: usize, anchor: Vec3, old: &Replaced, regen: f32) -> Option<[f32
 /// Nothing at run time asks it since `two-set-dissolve`: a landing's dissolve
 /// draws the old partition from the old set's own records, which hold it
 /// whatever the new set holds. It stays as the cover's test until the cover
-/// itself retires (that change's task 5.3).
+/// itself retires (that change's task 5.2).
 #[cfg(test)]
 const FADE_SLACK_M: f32 = 0.5;
 

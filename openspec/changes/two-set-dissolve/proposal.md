@@ -61,7 +61,7 @@ Five more ways a landing switches ground in one frame, none of them logged:
    base. Everything the old partition drew the frame before a landing is drawn
    in its half of the dissolve, whatever the new set holds: no coverage
    condition, no ring drawn whole. `old_held`, the records' rings in the
-   uniform and `fade_covered` retire.
+   uniform and the `LOD_FADE partial` line retire.
 2. **A dissolve is never cut short.** A set that finishes building while the
    last landing's dissolve runs waits (at most `lod_fade_s`) and is swapped in
    when it ends; an edit or a relight writes over the current half in place
@@ -69,8 +69,8 @@ Five more ways a landing switches ground in one frame, none of them logged:
 3. **Every landing dissolves** but the set that ends startup (behind the
    loading screen) and the first set on a new generator; the first set after
    an empty one dissolves out of the base.
-4. **Trees dissolve too** wherever the two partitions draw their cell
-   differently.
+4. **Trees and the sea sheet dissolve too** wherever the two partitions draw
+   their cell differently.
 5. **The dissolve runs on the game clock**, as the lamp bake's already does.
 
 No generation, terrain height, saved record or digest changes. The records
@@ -78,7 +78,7 @@ a set lays are the same bytes as before.
 
 ## Cost
 
-About 63 MB more GPU memory (50 MB of records, 13 MB of per-slot lists), a
+About 65 MB more GPU memory (50 MB of records, 15 MB of per-slot lists), a
 visibility dispatch over 688k slots instead of 426k (the idle half returns on
 its first test), and for `lod_fade_s` after a landing the cells the two
 partitions draw differently are drawn twice, as they already are. Frame time
@@ -86,6 +86,6 @@ is not measured here (no perf suite in this session); the owner runs it.
 
 ## Out of scope
 
-The voxel column tier (90 m round the anchor, rebuilt at every landing) and
-the sea sheet still switch at a landing; each is measured in the design and
-left to its own change.
+The voxel column tier (90 m round the anchor, rebuilt at every landing) still
+switches at a landing; it is measured in the design and left to its own
+change.

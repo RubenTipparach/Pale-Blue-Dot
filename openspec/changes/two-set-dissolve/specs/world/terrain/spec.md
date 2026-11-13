@@ -22,6 +22,11 @@ whatever the new set's records hold.
 - **WHEN** a set lands whose records stop short of the band the old partition drew
 - **THEN** that band dissolves like the rest of the landing, and nothing is drawn whole from the new partition alone
 
+#### Scenario: The sea over a band's ring
+
+- **WHEN** a set lands and the old and new partitions draw a submerged cell differently
+- **THEN** the sea sheet over it dissolves in the same pixels as the seabed under it, and no coastline takes the new shape in one frame
+
 #### Scenario: A cell both partitions draw alike
 
 - **WHEN** a fine cell is drawn the same by the old and the new partition

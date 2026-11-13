@@ -140,11 +140,12 @@ Everything the old partition drew the frame before the landing is in the old
 half, because that is where it was drawn from; so the old half of the
 dissolve is the old picture, cell for cell, and the new half the new one. There
 is nothing to check and no ring to draw whole: `old_held`, the `whole` rule,
-`records_cosines`, `fade_covered` and `PlanetGpu::records` retire.
+`records_cosines` and `PlanetGpu::records` retire, and `fade_covered` stays
+only as the test of the cover (section 4).
 
 The column list and the clutter take only base and current-half slots, as they
-take only the current partition today. The sea sheet is listed for the current
-partition only, as today (section 6).
+take only the current partition today. The sea sheet over a submerged cell is
+listed by the ground's rows (section 2, "The sea sheet").
 
 Trees take the same three rows with `has_nearby_foliage` for `drawn` and
 `alike` as for the ground, so a tree the two partitions draw differently is
@@ -163,6 +164,22 @@ listed once per partition and dissolves (section 1, item 4).
   two partitions draw differently inside the old tier's 90 m, for under a
   second, in flight low enough to have a level 11; on foot the partitions agree
   there and the cell is drawn once, from the current half, with its column.
+
+### The sea sheet
+
+The sheet over a submerged cell was listed for the new partition only, so at
+a landing a coastline inside a band's ring took the new partition's shape at
+once, and from high up the whole sea under the camera changed its cells (and
+with them its waves, which a cell's spacing filters, and its depth colour) in
+one frame while the seabed under it dissolved. It takes the ground's rows: a
+sheet both partitions draw alike is listed once; otherwise once per
+partition, marked, from the record of that partition's set. `water.wgsl`
+splits a marked sheet by its own partition's centre and bands (the old ones
+ride three new `WaterView` lanes, copied from the terrain's own uniform) and
+keeps its half of the pixels by the terrain's dissolve mask, so the sea and
+the seabed under it dissolve in the same pixels. The sea list takes two
+entries a slot, like the ground's. Its own commit, as `water.wgsl` is shared
+with the cloud work.
 
 ### A dissolve is never cut short
 
@@ -209,8 +226,8 @@ sequence shows the dissolve the player would see.
 ## 3. Cost
 
 - **Memory:** 262,144 more record slots of 192 bytes, 50.3 MB, and the per-slot
-  lists the main view (28 bytes a slot) and the sun cascades (20) allocate,
-  12.6 MB: about 63 MB of GPU memory.
+  lists the main view (32 bytes a slot, the sea list now two entries) and the
+  sun cascades (20) allocate, 15.3 MB: about 65 MB of GPU memory.
 - **The visibility dispatch** covers 688,130 slots instead of 425,986. The
   idle half returns on its first test (a division and a compare).
 - **The dissolve's double draw** is the cells the two partitions draw
@@ -224,30 +241,35 @@ desktop, old exe against new.
 ## 4. What it retires, and what it does not
 
 Retired: `old_held` and `tile_angle` in both shaders and the test that held
-the copies equal; `records_cosines`; `fade_covered` and its `LOD_FADE partial`
-line; the `whole` listing rule; `PlanetGpu::records`.
+the copies equal (now a test that the partition rule is the same text in
+both); `records_cosines`; the `LOD_FADE partial` line (`fade_covered` stays,
+test-only, as the cover's checker); the `whole` listing rule;
+`PlanetGpu::records`. The log says `LOD_FADE dissolve` for each landing that
+dissolves, `LOD_FADE held` for a set that waited, and `LOD_FADE cut short` if
+one ever cuts a dissolve short.
 
 Kept: `cover_ring` and the floors baked for the replaced partition
 (`floor_rule`'s `also`). Nothing reads them any more (the old partition is
 drawn from its own records, with its own floors), so they only cost build
 time; retiring them changes how long a build takes, which is the perf suite's
-question, and is a follow-up (task 7), not part of this change.
+question, and is a follow-up (task 5.2), not part of this change.
 
 ## 5. Instruments and evidence
 
 **Landing frames** (`PBD_LANDING_SHOTS=<sets>`, a measurement instrument
-only): from the frame set N is asked for until 40 frames after it lands, every
-frame is saved next to the `--capture` path as `landing-<N>-f<frame>.png`, and
-a `LANDING_SHOT` line logs the frame, the set version drawn and the frames
-since the landing. A landing happens when the build ends, which is wall-clock
-and not repeatable frame for frame between runs, so the sequence round a
-landing has to come out of one run. It changes nothing drawn.
+only): frames round the landing of set N are saved next to the `--capture`
+path as `landing-<N>-f<frame>.png` (the last four of its build, every frame
+for eight after it lands, then every sixth to 70), and a `LANDING_SHOT` line
+logs the frame, the set version drawn and the frames since the landing. A
+landing happens when the build ends, which is wall-clock and not repeatable
+frame for frame between runs, so the sequence round a landing has to come out
+of one run. It changes nothing drawn.
 
-Evidence, in `docs/screenshots/two-set-dissolve/`: the frames round a failing
-landing of the scenic flight before the change (the ring switching between two
-frames) and the same landing after (dissolving over the following frames),
-crops and difference images, and the landing and `LOD_FADE` counts of the
-scenic flight and the walk after the change.
+Evidence, in `docs/screenshots/two-set-dissolve/`: the far-side flight's
+landing at 2.5 km (the set that empties the fine levels) before the change and
+after it, crops at full resolution, the landing pair with its difference
+image, and the dissolve's progress; the landing counts of the three runs
+are in "What building it found".
 
 ## 6. Left open
 
@@ -255,9 +277,69 @@ scenic flight and the walk after the change.
   where a cave mouth lowers a record at the tier's edge, and the voxel light on
   the caps, change in one frame 50 to 90 m ahead of a walker (`detail-fade`
   section 3). Dissolving it needs the old tier kept as the old records now are.
-- **The sea sheet** is listed for the current partition only, so at a landing a
-  coastline inside a band's ring takes the new partition's shape at once. It can
-  take the same halves (list the old half's water cells OLD and dissolve in
-  `water.wgsl`).
 - **The cover**: retire `cover_ring` and the replaced partition's floors once
   the perf suite says what the build gains.
+
+## What building it found
+
+**Every landing dissolves.** The same runs as section 1, the fast build on
+the M4 Max Mac, fixed-step captures, a fresh world each:
+
+| Run | Before: landings, `partial` | After: landings, dissolved, `partial`, held |
+| --- | --- | --- |
+| far-side flight | 20, 2 (and the refill through 2.4 km undissolved) | 19, 19, 0, 10 (0.15 to 0.72 s) |
+| scenic flight | 33, 6 (two runs alike) | 31, 31, 0, 8 (0.08 to 0.38 s) |
+| 1 km walk | 38, 1 (the first set after the spawn) | 29, 29, 0, 0 |
+
+(A version that moves no partition, a relight or an edit, is not a landing and
+is not counted. The walk after the change took another path, ten stall turns
+against three: its stall timer is the wall clock's, and the machine was busy
+with a test run during it; its first landing, the set after the spawn that
+fell 334 m short before, dissolves.)
+
+**The landing that empties the fine levels**, at 2,522 m on the far-side
+climb, frame 1,777 of the capture. Before, the island below goes from level-8
+hexes to the base's in that one frame: inside the crop 13.1% of the pixels
+change between frames 1,776 and 1,777, against 9.0 to 9.3% for each of the
+frames after (motion and the distance dither's own shimmer); over the whole
+frame 3.3% against 2.7 to 2.9%. After, the same landing changes 9.4% of the
+crop, as every frame round it does (9.4 to 9.6%), and the island dissolves
+from level 8 to the base over the next 60 frames, one second of game time.
+The descent's first set, back through 2.4 km, which before landed with no
+dissolve at all (0.75% of the frame against 0.62%: the 118 m level-8 disc
+appearing), dissolves too.
+
+**The hold.** On the far-side descent sets build in 0.2 to 0.9 s and land
+inside the last dissolve: ten of nineteen were held, 0.15 to 0.72 s, none
+longer than the dissolve. On the scenic flight 8 of 31 were held, 0.08 to
+0.38 s, in the climb through 300 to 400 m and the last descent; on the walk,
+none. A capture overstates the holds: it steps slower than real time (the
+scenic flight's 45.9 s took 83 s of wall clock) while a build takes wall-clock
+time, so sets land closer together in game time than they do in play. In play
+there will be fewer, and each is at most the rest of one dissolve, on a set
+already one build behind.
+
+**The test** (`a_dissolve_draws_both_partitions_whole_on_real_fine_sets`, on
+the M4 Max's GPU, real sets laid round a fixed anchor and one 41 to 300 m on,
+the old fade centre trailing toward the new as the game has it): in all six
+landings the dissolve's old half lists exactly the old partition's cells and trees and
+its new half exactly the new one's. Three of the six are landings whose
+records fall short of the old partition (`fade_covered` fails: by 98 m at
+level 8 on the fast descent, the whole of level 11 on the climb past 300 m,
+the whole of level 8 on the climb past 2.5 km), the ones that switched a ring
+at once before. A step on foot lists all 212,117 cells once for both; the
+fast descent lists 98,747 once, 111,960 for the new partition and 107,907 for
+the old, which is the dissolve's double draw at its largest.
+
+**One tree in a step on foot** of 12,264 is drawn for both partitions from the
+new set's record while the old partition had no tree there: its cell entered
+the column tier, whose reconcile rewrote its record's surface (height and top
+material, `reconcile_surface`), and that grew a tree. That is the tier
+switching at a landing (section 6), not the partition; the test sets such
+trees aside and counts them.
+
+**A trap in the method.** The binary reads its shaders from the source tree
+when it starts. One "before" capture of the far side was launched after the
+shaders had been edited: the old Rust with the new shaders, which is neither
+build. It was discarded and flown again with the original shaders put back
+for that run's start.
