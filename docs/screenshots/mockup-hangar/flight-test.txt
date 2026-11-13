@@ -58,8 +58,32 @@ PASS  Puff leaves its mast and flies without touching anything
 PASS  an airship into the shed is a crash and never passes into it
 
 -- keyboard: Shift held 1.5 s in real time -> Throttle
-75%
+77%
 PASS  the keys reach the flight model
+
+-- effects: airflow lines, wingtip trails, prop swirl, rotor dust --
+sharky  parked: 0 lines, trail 0 | 13 m/s: 0 lines | cruise: 31 lines, trail 0.377 x 0.081 m, 1.1 g | hard turn: trail 0.915 x 0.22 m, 1.2 g, 7.7 deg | 2 tips, 1 prop
+PASS  sharky: nothing on the ground at a standstill
+PASS  sharky: no airflow lines below the speed they start at
+PASS  sharky: lines and faint trails in cruise (31 lines, trail 0.377)
+PASS  sharky: the trails grow in a hard pull (0.377 -> 0.915)
+gull    parked: 0 lines, trail 0 | 13 m/s: 0 lines | cruise: 29 lines, trail 0.349 x 0.071 m, 1.1 g | hard turn: trail 0.914 x 0.22 m, 1.21 g, 7.5 deg | 4 tips, 1 prop
+PASS  gull: nothing on the ground at a standstill
+PASS  gull: no airflow lines below the speed they start at
+PASS  gull: lines and faint trails in cruise (29 lines, trail 0.349)
+PASS  gull: the trails grow in a hard pull (0.349 -> 0.914)
+dart    parked: 0 lines, trail 0 | 13 m/s: 0 lines | cruise: 31 lines, trail 0.3 x 0.075 m, 1.08 g | hard turn: trail 0.615 x 0.128 m, 1.26 g, 4.2 deg | 2 tips, 0 props
+PASS  dart: nothing on the ground at a standstill
+PASS  dart: no airflow lines below the speed they start at
+PASS  dart: lines and faint trails in cruise (31 lines, trail 0.3)
+PASS  dart: the trails grow in a hard pull (0.3 -> 0.615)
+bumble hover: 55 dust motes, 0 lines | puffin hover: 48 dust | Puff (airship): 0 lines, 0 dust, trail 0
+PASS  a rotor in a low hover blows dust, and makes no airflow lines
+PASS  an airship has no effects
+PASS  a design flown from the builder finds its own wingtips, tailplane tips and prop (4 tips, 1 prop)
+PASS  the Effects button (and the box in Controls) turns them off and on
+3000 effect frames (a step and a layout each), warmed up: heap grew 70240 bytes (an empty loop of 3000: 24816), 28 us a frame (software rendering; not the game's speed)
+PASS  an effects frame allocates nothing to speak of (70240 bytes over 3000 frames, 23 a frame)
 PASS  no console errors
 
 ALL PASSED
