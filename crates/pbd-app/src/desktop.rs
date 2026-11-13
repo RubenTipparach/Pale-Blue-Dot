@@ -2487,11 +2487,13 @@ fn walk_script(
     }
 }
 
-/// Metres along the ground between two points' directions.
+/// Metres along the ground between two points' directions. From the chord
+/// between the unit directions, not `angle_between`: its `acos` near 1 in
+/// `f32` reads a step under a metre as 0 or 1.66 m, which made a walk's count
+/// two to three times the ground it covered.
 fn ground_m(a: Vec3, b: Vec3) -> f32 {
-    a.normalize_or(Vec3::Y)
-        .angle_between(b.normalize_or(Vec3::Y))
-        * pbd_app::planet::PLANET_RADIUS
+    let chord = a.normalize_or(Vec3::Y).distance(b.normalize_or(Vec3::Y));
+    2.0 * (chord * 0.5).min(1.0).asin() * pbd_app::planet::PLANET_RADIUS
 }
 
 /// The `--stroll` instrument: walk ahead at walking pace for a video, hop
@@ -2637,6 +2639,10 @@ struct CoastWalk {
     trap_at: Option<Vec3>,
     /// Backing out of a wedge until then.
     backing: Option<Instant>,
+    /// The last `COAST_PACE` line: where, when, and the count then.
+    pace: Option<(Vec3, Instant, f32)>,
+    path_m: f32,
+    max_step_m: f32,
     done: bool,
 }
 
@@ -2705,7 +2711,10 @@ fn coast_script(
     keys.press(KeyCode::KeyW);
     // Ground covered, as the walk measures it: a fall, a jump or a rebase is
     // not walking.
-    if let Some((_, at)) = walk.last {
+    if let Some((last, at)) = walk.last {
+        let step = ground_m(here, last);
+        walk.path_m += step;
+        walk.max_step_m = walk.max_step_m.max(step);
         // Turn toward the chosen heading, no faster than a walker looks round.
         if let Some(target) = walk.target {
             let dt = now.duration_since(at).as_secs_f32();
@@ -2793,6 +2802,29 @@ fn coast_script(
                 walk.walked_m, walk.trapped
             );
         }
+    }
+    // Every 10 s, the pace: ground counted against the straight line, and
+    // whether the walker is in water, so the count can be checked.
+    let walked = walk.walked_m;
+    let (at, then, counted) = *walk.pace.get_or_insert((here, now, walked));
+    let dt = now.duration_since(then).as_secs_f32();
+    if dt >= 10.0 {
+        info!(
+            "COAST_PACE {:.1} m/s counted, {:.1} m/s straight ({:.1} m/s through space), {:.1} m from the centre, {}",
+            (walk.walked_m - counted) / dt,
+            ground_m(here, at) / dt,
+            here.distance(at) / dt,
+            here.length(),
+            if swimming { "swimming" } else { "on land" }
+        );
+        info!(
+            "COAST_PATH {:.1} m/s frame by frame, the largest frame step {:.2} m",
+            walk.path_m / dt,
+            walk.max_step_m,
+        );
+        walk.pace = Some((here, now, walk.walked_m));
+        walk.path_m = 0.0;
+        walk.max_step_m = 0.0;
     }
     if walk.walked_m >= goal {
         walk.done = true;
