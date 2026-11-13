@@ -12,6 +12,28 @@ the GPU when there is one").
 
 The shots taken before the country round the field (decision 2a) show the field's edge falling away to a flat plain; the `fly-*`, `airship-flying-day` and `town-*` shots have the hills, the coast and the towns.
 
+**The tabs (2026-11-13).** The page is now in four tabs, so only one 3D view is
+ever on the page (the owner: "make sure to apply the "tabs" idea, so we always
+only ever see 1 3d renderer on page at a time"): `#airfield` (the airfield and
+Fly it), `#planes` (the plane builder), `#airship` (the airship builder) and
+`#how` (how the numbers follow, the parts, the rules, saves and decisions). The
+`tab-<name>.jpg` shots are each tab opened from its `#anchor` with `?still`, at
+1280 x 800 and **device scale 1**, again SwiftShader shots from a cloud
+container with no GPU: they show the layout, never the speed. Every other shot
+below predates the tabs and shows the old one-long-page layout.
+
+| File | What it shows |
+| --- | --- |
+| `tab-airfield.jpg` | `#airfield`: the night airfield filling the window under the tab bar, its view, time and Fly it / Expert controls at the top right, the info box and hotbar at the bottom. |
+| `tab-planes.jpg` | `#planes`: the plane builder in three columns, all in one screen: examples, parts, mirror, brush and Roll out / Fly it / Clear on the left; the 13 x 11 grid and the livery in the middle; the 3D preview, the numbers and the checks on the right (the numbers and checks scroll inside their column). |
+| `tab-airship.jpg` | `#airship`: the airship builder the same way: parts and actions, the 18 x 7 grid of 2 m cells with livery and gas, the preview and its numbers. |
+| `tab-how.jpg` | `#how`: the reading tab, no 3D view: the table of how the numbers follow from the parts, then the parts (planes and airships), the rules, saves and the decisions. |
+
+The `?shot=` and `?still&preset=` links below still work: `?shot` opens the
+airfield tab, and a builder shot now needs its anchor (`?still&preset=bumble#planes`,
+`?still&apreset=albatross#airship`; the old `?tab=airship` still opens the
+airship tab).
+
 Each shot is the page with `?shot=<view>&time=<day|night>` (the stage fills the
 window and holds one picture; the rotors are stopped at fixed angles), or the
 builder section with `?still&preset=<id>`. Nothing on the page turns on its own; the rotors stand at fixed angles.

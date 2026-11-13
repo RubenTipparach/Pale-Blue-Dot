@@ -171,7 +171,6 @@ tr:last-child td{border-bottom:0}
 @media (max-width:760px){.ov.fh{bottom:12px;min-width:0}.ov.fh .keys{display:none}}
 [hidden]{display:none!important}
 .agrid{grid-template-columns:repeat(18,34px)!important;grid-auto-rows:34px!important}
-#kitTabs button{font-size:16px;padding:6px 14px}
 .sw button.gas{width:auto;padding:0 8px;font:600 12px var(--mono);color:var(--ink);background:var(--panel-2);display:inline-flex;align-items:center}
 .sw button.unpaint{width:auto;padding:0 7px;font:600 11px var(--mono);color:var(--muted);display:inline-flex;align-items:center;background:var(--panel-2)}
 .palette{grid-template-columns:repeat(8,minmax(0,1fr))}
@@ -193,21 +192,65 @@ tr:last-child td{border-bottom:0}
   .shipgrid{grid-template-columns:repeat(13,34px);grid-auto-rows:34px}
   .palette{grid-template-columns:repeat(4,minmax(0,1fr))}
 }
+/* tabs (the owner, 2026-11-13: "we always only ever see 1 3d renderer on page at a time"): one part of the mockup at a time,
+   as drydock.html has them; each 3D tab fits a 1280 x 800 window with its controls in view */
+.wrap{gap:14px !important;padding-block:8px 16px !important}
+header.compact{display:flex;flex-wrap:wrap;align-items:center;gap:2px 14px}
+header.compact h1{font-size:clamp(24px,3.2vw,32px)}
+header.compact details.about{flex-basis:100%}
+details.about,details.sdesc{font-size:14px;color:var(--muted)}
+details.about summary,details.sdesc summary{cursor:pointer;font:600 13px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--sky)}
+details.about[open],details.sdesc[open]{display:grid;gap:10px}
+details.about p{font-size:14.5px}
+details.sdesc p{max-width:none}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line-2);position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--ground);padding-top:4px}
+.tabs button{all:unset;cursor:pointer;font:600 16px var(--display);letter-spacing:.05em;padding:8px 14px;border:1px solid transparent;border-bottom:0;border-radius:5px 5px 0 0;color:var(--muted)}
+.tabs button[aria-selected="true"]{color:var(--amber);border-color:var(--line-2);background:var(--panel)}
+.tabs button:focus-visible{outline:2px solid var(--amber)}
+.tabpanel{display:grid;gap:16px}
+.tabpanel section{gap:8px}
+.tabpanel.view>section>h2{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+#tab-how{gap:36px}
+#tab-airfield .stage{height:clamp(380px,calc(100vh - 186px),900px)}
+.builder.b3{gap:10px}
+#pNote,#aNote{color:var(--warn);font-size:13px}
+.builder.b3 .bpane{gap:8px;padding:10px}
+@media (min-width:1101px){
+  .builder.b3{grid-template-columns:270px max-content minmax(0,1fr)}
+  .builder.b3 .palette{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+  .builder.b3 .palette button{font-size:10.5px;padding:2px 1px}
+  .builder.b3 .bside{max-height:calc(100vh - 178px);overflow:auto;grid-auto-rows:max-content}
+  .builder.b3 .shipgrid{grid-template-columns:repeat(13,34px);grid-auto-rows:34px}
+  #airKit .builder.b3{grid-template-columns:236px max-content minmax(0,1fr)}
+  #airKit .builder.b3 .palette{grid-template-columns:repeat(4,minmax(0,1fr))}
+  #airKit .bside .stat .v{white-space:normal}
+  .builder.b3 .stat .v{font-size:15px}
+  .builder.b3 .bside .stats{gap:2px 12px}
+  #presets button,#aPresets button{padding-block:3px;font-size:13.5px}
+}
+@media (max-width:1100px){.builder.b3{grid-template-columns:1fr}}
+@media (max-width:560px){.tabs button{padding:7px 9px;font-size:15px}}
 </style>
 
 <div class="wrap">
 
-<header class="lede">
+<header class="lede compact">
   <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-12</span><span class="tag plain">M24</span></div>
   <h1>Hangar and Chibi Aircraft</h1>
   <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+  <details class="about"><summary>About this mockup: the owner's words, the idea, and which art is the game's</summary>
   <p>The owner: <i>"more mockups for planes, helicopters, vtols. make air vehicles these cute little chibi versions. they require a hangar, and the player has a ui similar to your ship builder that lets them put these together".</i> So: a hangar on the edge of a field, five little aircraft, and a builder. Every number an aircraft flies with follows from its parts and the game's own gravity of 25 m/s&sup2;, and each one is flown by the same foil model the game's Kestrel already flies by.</p>
   <p class="honest"><b>About the art.</b> <b>The game's own</b> (byte-identical copies in <code>hangar/game/</code>, see its README): the hex ground is the terrain atlas's fields sheet (<code>assets/tilesets/atlas.png</code>) on 2.833 m hex columns with 1 m layers; the apron, the helipad, the hangar's walls and roof, the struts and masts are the settlement textures granite, flag, stone, slate, iron and plank at their <code>repeat_m</code>; the Kestrel on the apron is the game's model (<code>assets/models/vehicles/kestrel</code>); the hand in the hotbar is the game's icon. <b>Mockup-only:</b> the part icons, the livery paints, the shark mouth, the three roundels, the digits, the canopy glass, rotor blades, tyres, the roller doors, the runway's asphalt and markings and the windsock are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/hangar_art.py</code>): 32 x 32 sprites shown at whole-number scales, 32 x 32 tiles sampled nearest with no mipmaps. The aircraft are octagonal prisms and boxes built from the builder's own grid, so what you draw below is exactly what rolls out of the door. The roundels are the player's own; there is no real air force's insignia here.</p>
+  </details>
 </header>
 
+<nav class="tabs" role="tablist" aria-label="Parts of the mockup">
+  <button role="tab" data-tab="airfield">Airfield, fly it</button><button role="tab" data-tab="planes">Plane builder</button><button role="tab" data-tab="airship">Airship builder</button><button role="tab" data-tab="how">How it works</button>
+</nav>
+<div class="tabpanel view" id="tab-airfield" role="tabpanel">
 <section aria-labelledby="s1">
   <h2 id="s1"><span class="n">1</span>The airfield</h2>
-  <p>A hangar of three bays with its roller doors up, an apron, a 230 m runway, a helipad, a windsock and a little tower with its beacon. Sharky and Gull are in their bays; Puffin and Dart wait on the apron; Bumble sits on the pad; the game's own Kestrel is parked beside them for scale. Drag to look around, scroll or pinch to zoom. <b>Fly it</b> takes the craft you are looking at (or your design from section 2) off the runway. The assists are on (decision 2a, "make this game easy to fly"): a plane starts at 70% throttle, rotates by itself at flying speed and climbs as the throttle sets; Shift and Ctrl (or R and F) the throttle, W descends and S climbs, A and D bank it into a turn up to 45&deg; (never past 60&deg;), and with the stick centred it flies level, trimmed, clear of the stall. <b>Expert</b> turns the assists off: then W and S are the elevator, A and D the ailerons, Q and E the rudder. A helicopter flies on collective (Shift and Ctrl), cyclic (W, A, S, D) and its tail rotor (Q and E). The country runs on for kilometres: hills, a coast with the sea beyond it to the north, the town of Wendle a little over a minute's flight to the east and the fishing town of Saltby on the coast to the west-north-west, both lit at night. Everything is solid: wheels on the ground are a landing, anything else hitting the ground, a building, a mast or a parked craft fast is a crash, and two seconds later you are back on the runway. Drag to look round it as it flies. At night every runway light, pad light, floodlight, hangar lamp and nav light lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p>
+  <details class="sdesc"><summary>What this shows, how to fly, and the keys</summary><p>A hangar of three bays with its roller doors up, an apron, a 230 m runway, a helipad, a windsock and a little tower with its beacon. Sharky and Gull are in their bays; Puffin and Dart wait on the apron; Bumble sits on the pad; the game's own Kestrel is parked beside them for scale. Drag to look around, scroll or pinch to zoom. <b>Fly it</b> takes the craft you are looking at (or your design from the Plane builder tab) off the runway. The assists are on (decision 2a, "make this game easy to fly"): a plane starts at 70% throttle, rotates by itself at flying speed and climbs as the throttle sets; Shift and Ctrl (or R and F) the throttle, W descends and S climbs, A and D bank it into a turn up to 45&deg; (never past 60&deg;), and with the stick centred it flies level, trimmed, clear of the stall. <b>Expert</b> turns the assists off: then W and S are the elevator, A and D the ailerons, Q and E the rudder. A helicopter flies on collective (Shift and Ctrl), cyclic (W, A, S, D) and its tail rotor (Q and E). The country runs on for kilometres: hills, a coast with the sea beyond it to the north, the town of Wendle a little over a minute's flight to the east and the fishing town of Saltby on the coast to the west-north-west, both lit at night. Everything is solid: wheels on the ground are a landing, anything else hitting the ground, a building, a mast or a parked craft fast is a crash, and two seconds later you are back on the runway. Drag to look round it as it flies. At night every runway light, pad light, floodlight, hangar lamp and nav light lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p></details>
   <div class="stage">
     <canvas id="yard" aria-label="An airfield at night: a three-bay hangar with its doors open, five chibi aircraft, the Kestrel, a runway with edge lights, a helipad and a beacon tower."></canvas>
     <div class="loading" id="loading">Loading the airfield</div>
@@ -224,31 +267,34 @@ tr:last-child td{border-bottom:0}
     <div class="hudbar" id="hudbar" aria-label="Hotbar, as the game draws it"></div>
   </div>
 </section>
+</div>
 
+<div class="tabpanel view" id="tab-planes" role="tabpanel" hidden>
 <section aria-labelledby="s2">
-  <h2 id="s2"><span class="n">2</span>The aircraft builder</h2>
-  <div class="seg" id="kitTabs" role="group" aria-label="What to build"><button data-tab="plane" aria-pressed="true">Planes, helicopters, VTOLs</button><button data-tab="airship" aria-pressed="false">Airship</button></div>
+  <h2 id="s2"><span class="n">2</span>The aircraft builder: planes, helicopters, VTOLs</h2>
   <div id="planeKit">
-  <p>Opened at the workbench in a hangar bay. Pick a part, paint cells; right-click or the eraser clears one. Mirror painting puts every part on both sides at once. The nose faces right and port is up. A cell is 1 m: aircraft are small, so their shapes need the finer grid that a ship's 2 m modules do not. The preview is built from the grid as you draw, in your livery, and every number on the right is worked out from the parts. Each piece on the grid is drawn in its colour: the livery's base, or its trim on the cowl, fins, tailplanes, floats and wing tips. The paint brush (B) colours single pieces from the same swatches, over the livery there; right-click with it, or its <i>livery</i> swatch, gives a piece back to the livery. Paint is free, like the livery, so the bill of materials does not change.</p>
-  <div class="builder">
-    <div class="bpane">
+  <details class="sdesc"><summary>What this is, and how to use it</summary><p>Opened at the workbench in a hangar bay. Pick a part, paint cells; right-click or the eraser clears one. Mirror painting puts every part on both sides at once. The nose faces right and port is up. A cell is 1 m: aircraft are small, so their shapes need the finer grid that a ship's 2 m modules do not. The preview is built from the grid as you draw, in your livery, and every number on the right is worked out from the parts. Each piece on the grid is drawn in its colour: the livery's base, or its trim on the cowl, fins, tailplanes, floats and wing tips. The paint brush (B) colours single pieces from the same swatches, over the livery there; right-click with it, or its <i>livery</i> swatch, gives a piece back to the livery. Paint is free, like the livery, so the bill of materials does not change.</p></details>
+  <div class="builder b3">
+    <div class="bpane btools">
       <div class="seg" id="presets" role="group" aria-label="Load an example"></div>
       <div class="palette" id="palette" role="group" aria-label="Parts"></div>
       <div class="toolrow"><label><input type="checkbox" id="mirror" checked> Mirror: port and starboard alike</label></div>
       <div class="livery"><span class="k">Brush</span><div class="sw" id="swBrush" role="group" aria-label="Brush colour: picking one takes the paint brush"></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pbtn go" role="button" tabindex="0" id="rollout">Roll out to the apron</span><span class="pbtn" role="button" tabindex="0" id="flyDesign">Fly it</span><span class="pbtn" role="button" tabindex="0" id="clear">Clear grid</span></div>
+      <div class="checks" id="pNote" role="status" hidden></div>
+    </div>
+    <div class="bpane bgrid">
       <div class="fwd"><span>tail</span><span>top view, 1 m cells, port up</span><span>nose &rarr;</span></div>
-      <div class="fwd" style="justify-content:flex-start;gap:10px"><span style="color:#74effe">A</span><span>aileron</span><span style="color:#74effe">E</span><span>elevator</span><span style="color:#74effe">R</span><span>rudder: the control surfaces (a helicopter steers with its rotors)</span></div>
       <div class="gridwrap"><div class="shipgrid" id="grid" aria-label="Aircraft grid, 13 by 11 cells"></div></div>
-      <div class="eyebrow">Livery</div>
+      <div class="fwd" style="justify-content:flex-start;gap:10px;flex-wrap:wrap"><span style="color:#74effe">A</span><span>aileron</span><span style="color:#74effe">E</span><span>elevator</span><span style="color:#74effe">R</span><span>rudder: the control surfaces (a helicopter steers with its rotors)</span></div>
       <div class="livery" id="livery">
         <span class="k">Base</span><div class="sw" id="swBase" role="group" aria-label="Base colour"></div>
         <span class="k">Trim</span><div class="sw" id="swTrim" role="group" aria-label="Trim colour"></div>
         <span class="k">Roundel</span><div class="sw rd" id="swRound" role="group" aria-label="Roundel"></div>
         <span class="k">Nose</span><div class="toolrow"><label><input type="checkbox" id="shark"> Shark mouth</label><label>Number <input type="text" id="num" maxlength="3" inputmode="numeric" value="106"></label></div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pbtn go" role="button" tabindex="0" id="rollout">Roll out to the apron</span><span class="pbtn" role="button" tabindex="0" id="flyDesign">Fly it</span><span class="pbtn" role="button" tabindex="0" id="clear">Clear grid</span></div>
     </div>
-    <div class="bpane">
+    <div class="bpane bside">
       <div class="pv"><canvas id="pv" aria-label="The aircraft on the grid, built in 3D on the hangar floor; drag to turn it"></canvas><div class="pvlabel" id="pvName"></div></div>
       <div class="eyebrow">Follows from the parts</div>
       <div class="stats" id="stats"></div>
@@ -259,14 +305,24 @@ tr:last-child td{border-bottom:0}
     </div>
   </div>
   </div>
-  <div id="airKit" hidden>
-  <p>Opened at the workbench in the airship shed. An airship is too long for the 1 m grid (a chibi one is about 24 m), so its cells are 2 m. Gas cells make the envelope: it is lofted from their footprint, as tall as it is wide, about 0.7 full on the ground, so it floats up to the height where the gas fills it. The gondola and the ballast hang under it; engine pods go out to the sides; a fin on the centre line is the upper and lower fins with the rudder, a fin out to the side is a flat fin with the elevator; the mooring cone goes on the nose. Lift is buoyancy, (&rho;<sub>air</sub> &minus; &rho;<sub>gas</sub>) V g: the game's g scales the lift and the weight alike, so a cubic metre of helium carries about 1.05 kg here as on Earth. The paint works as on the planes.</p>
-  <div class="builder">
-    <div class="bpane">
+</section>
+</div>
+
+<div class="tabpanel view" id="tab-airship" role="tabpanel" hidden>
+<section aria-labelledby="s2a">
+  <h2 id="s2a"><span class="n">2</span>The airship builder</h2>
+  <div id="airKit">
+  <details class="sdesc"><summary>What this is, and how to use it</summary><p>Opened at the workbench in the airship shed. An airship is too long for the 1 m grid (a chibi one is about 24 m), so its cells are 2 m. Gas cells make the envelope: it is lofted from their footprint, as tall as it is wide, about 0.7 full on the ground, so it floats up to the height where the gas fills it. The gondola and the ballast hang under it; engine pods go out to the sides; a fin on the centre line is the upper and lower fins with the rudder, a fin out to the side is a flat fin with the elevator; the mooring cone goes on the nose. Lift is buoyancy, (&rho;<sub>air</sub> &minus; &rho;<sub>gas</sub>) V g: the game's g scales the lift and the weight alike, so a cubic metre of helium carries about 1.05 kg here as on Earth. The paint works as on the planes.</p></details>
+  <div class="builder b3">
+    <div class="bpane btools">
       <div class="seg" id="aPresets" role="group" aria-label="Load an example"></div>
       <div class="palette" id="aPalette" role="group" aria-label="Airship parts"></div>
       <div class="toolrow"><label><input type="checkbox" id="aMirror" checked> Mirror: port and starboard alike</label></div>
       <div class="livery"><span class="k">Brush</span><div class="sw" id="aBrush" role="group" aria-label="Brush colour"></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pbtn go" role="button" tabindex="0" id="aRollout">Moor at the small mast</span><span class="pbtn" role="button" tabindex="0" id="aFly">Fly it</span><span class="pbtn" role="button" tabindex="0" id="aClear">Clear grid</span></div>
+      <div class="checks" id="aNote" role="status" hidden></div>
+    </div>
+    <div class="bpane bgrid">
       <div class="fwd"><span>tail</span><span>top view, 2 m cells, port up</span><span>nose &rarr;</span></div>
       <div class="gridwrap"><div class="shipgrid agrid" id="aGrid" aria-label="Airship grid, 18 by 7 cells of 2 m"></div></div>
       <div class="eyebrow">Livery and gas</div>
@@ -276,9 +332,8 @@ tr:last-child td{border-bottom:0}
         <span class="k">Gas</span><div class="sw" id="aGas" role="group" aria-label="Lifting gas"><button class="gas" data-v="helium">helium</button><button class="gas" data-v="hydrogen">hydrogen</button></div>
         <span class="k">Number</span><div class="toolrow"><input type="text" id="aNum" maxlength="3" inputmode="numeric" value="12"></div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="pbtn go" role="button" tabindex="0" id="aRollout">Moor at the small mast</span><span class="pbtn" role="button" tabindex="0" id="aFly">Fly it</span><span class="pbtn" role="button" tabindex="0" id="aClear">Clear grid</span></div>
     </div>
-    <div class="bpane">
+    <div class="bpane bside">
       <div class="pv"><canvas id="apv" aria-label="The airship on the grid, built in 3D; drag to turn it"></canvas><div class="pvlabel" id="apvName"></div></div>
       <div class="eyebrow">Follows from the parts</div>
       <div class="stats" id="aStats"></div>
@@ -288,9 +343,11 @@ tr:last-child td{border-bottom:0}
       <div class="bom" id="aBom"></div>
     </div>
   </div>
-  <div class="mods" id="aMods" style="margin-top:12px"></div>
   </div>
 </section>
+</div>
+
+<div class="tabpanel" id="tab-how" role="tabpanel" hidden>
 
 <section aria-labelledby="s3">
   <h2 id="s3"><span class="n">3</span>How the numbers follow from the parts</h2>
@@ -314,6 +371,8 @@ tr:last-child td{border-bottom:0}
   <h2 id="s4"><span class="n">4</span>Parts</h2>
   <p>Each is made at the fabricator (recipes on the <a href="https://claude.ai/artifact/6hj8UvbLY9TUsn7591sKKg">crafting page</a>). Jets, main rotors and their alloy plate need star iron from the asteroids, so the first aircraft are prop planes and floatplanes.</p>
   <div class="mods" id="mods"></div>
+  <h3>Airship parts</h3>
+  <div class="mods" id="aMods"></div>
 </section>
 
 <section aria-labelledby="s5">
@@ -340,6 +399,7 @@ tr:last-child td{border-bottom:0}
   <p class="muted">Recommendations are mine, not the owner's words. The one marked with a picture goes to the survey with this page's screenshots; the rest are taken as recommended (ask only with screenshots).</p>
   <div class="dec" id="decisions"></div>
 </section>
+</div>
 
 </div>
 
@@ -832,6 +892,8 @@ const sprite = (icon, colour) => `<span class="pi" style="background-image:url(h
 const ROUNDELS = [["dot", "Pale blue dot"], ["sun", "Sun"], ["chevron", "Chevron"]];
 const ITEM_NAMES = {"glass":"Glass","circuit":"Circuit","steel-ingot":"Steel","cloth":"Cloth","planks":"Planks","polymer":"Polymer","copper-ingot":"Copper","bronze-ingot":"Bronze","alloy-plate":"Alloy plate"};
 const Q = new URLSearchParams(location.search);
+let TAB = "airfield";   // the open tab; the tabs themselves are wired at the end of the script, once every view is defined
+const YARD = {}; let yardResolve; const yardReady = new Promise(r => yardResolve = r);   // the airfield's actions, once its view is made
 const startPreset = PRESETS[Q.get("preset")] ? Q.get("preset") : "sharky";
 let grid = PRESETS[startPreset].rows.map(r => r.split(""));
 let livery = Object.assign({}, PRESETS[startPreset].livery);
@@ -1023,14 +1085,6 @@ document.querySelectorAll("#aPresets button").forEach(b => b.addEventListener("c
 press("aClear", () => { agrid = Array.from({length: A_ROWS}, () => new Array(A_COLS).fill(".")); apaint = aBlank(); aName = "Your airship"; aChanged(); });
 document.getElementById("aMods").innerHTML = Object.entries(AMOD).map(([k, d]) => `<div class="card"><div class="head"><img src="hangar/${d.icon}.png?v=1" alt="" width="64" height="64"><div><span class="eyebrow">Airship, key ${k}</span><h3>${d.name}</h3></div></div><p>${d.txt}</p><dl><dt>Mass</dt><dd>${d.kg + (d.water || 0)} kg</dd>${d.power ? `<dt>Power</dt><dd>${d.power} kW</dd>` : ""}<dt>Made of</dt><dd>${d.cost.map(([i, n]) => `${n} ${ITEM_NAMES[i].toLowerCase()}`).join(", ")}</dd></dl></div>`).join("");
 aLivery(); aDraw();
-// the tabs: planes or the airship
-function showKit(t) {
-  document.getElementById("planeKit").hidden = t !== "plane"; document.getElementById("airKit").hidden = t !== "airship";
-  document.querySelectorAll("#kitTabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.tab === t));
-  aListeners.forEach(f => f()); listeners.forEach(f => f());
-}
-document.querySelectorAll("#kitTabs button").forEach(b => b.addEventListener("click", () => showKit(b.dataset.tab)));
-if (Q.get("tab") === "airship") showKit("airship");
 
 // ======================= aircraft in 3D, from the grid =======================
 const OCT_K = 1 / Math.cos(Math.PI / 8);
@@ -1374,7 +1428,7 @@ function buildAirship(rows, liv, M, lampFn, paint, opts = {}) {
 }
 
 // ======================= the airfield (three.js) =======================
-(function yard() {
+function yard() {   // made the first time the Airfield tab opens; its loop stops while another tab shows
   const canvas = document.getElementById("yard");
   const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -1821,18 +1875,18 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     if (APRESETS[focused]) { el.innerHTML = adesc(APRESETS[focused].name, airshipStats(APRESETS[focused].rows, APRESETS[focused].livery.gas)); return; }
     if (focused === "yoursAir" && AIR.yoursAir) { el.innerHTML = adesc("Your airship", airshipStats(AIR.yoursAir.rows, AIR.yoursAir.liv.gas)); return; }
     if (focused === "mast" || focused === "shed") { el.innerHTML = `<div><b>The airship ${focused}</b>: the shed is a taller bay, its door ${SHED_W} m wide and ${SHED_H} m tall; Albatross rides at the big mast and Puff at the small one by the shed, nose in the cup, each mast with its red obstruction light. A moored airship would swing on its mast with the wind; here nothing moves until you fly it.</div>`; return; }
-    if (focused === "yours") { el.innerHTML = yours ? desc(yours.name, stats(yours.rows)) : `<div><b>Your design</b> rolls out here, in front of the middle bay. Draw one in section 2 and press <b>Roll out</b>.</div>`; return; }
+    if (focused === "yours") { el.innerHTML = yours ? desc(yours.name, stats(yours.rows)) : `<div><b>Your design</b> rolls out here, in front of the middle bay. Draw one in the Plane builder tab and press <b>Roll out</b>.</div>`; return; }
     if (focused === "kestrel") { el.innerHTML = `<div><b>Kestrel</b>, the game's own tiltrotor (<code>assets/models/vehicles/kestrel</code>), 1,200 kg${kestrel.size ? `, ${kestrel.size.x.toFixed(1)} m long` : ""}. The chibi aircraft are measured against it and fly by its foil model.</div>`; return; }
     el.innerHTML = `<div><b>${LAMPS.length} lights</b> on the field, each lighting what is within its range (runway edge lights 6 m, pad lights 5 m, bay lamps 15 m, floodlights 19 m), all at once. <b>${time === "night" ? "Night" : time === "dusk" ? "Dusk" : "Day"}</b>: ${time === "day" ? "lamps off, sun shadows." : time === "dusk" ? "lamps coming on, low sun." : "moon at 0.035, lamps full."}</div>`;
   }
-  press("rollout", () => { if (!cellsOf(rowsNow()).length) return; yours = {rows: rowsNow(), name: designName, paint: paint.map(r => r.slice()), liv: Object.assign({}, livery)}; place("yours", yours.rows, Object.assign({}, livery), yours.paint); setTime(time); focus("yours"); selPress("yours"); if (SHOT || STILL) { cam.target.copy(cam.goal.t); cam.dist = cam.goal.d; cam.goal = null; if (Q.get("ryaw")) cam.yaw = +Q.get("ryaw"); if (Q.get("rpitch")) cam.pitch = +Q.get("rpitch"); } kick(); document.querySelector(".stage").scrollIntoView({behavior: "smooth", block: "center"}); });
+  YARD.rollout = () => { if (!cellsOf(rowsNow()).length) return; yours = {rows: rowsNow(), name: designName, paint: paint.map(r => r.slice()), liv: Object.assign({}, livery)}; place("yours", yours.rows, Object.assign({}, livery), yours.paint); setTime(time); focus("yours"); selPress("yours"); if (SHOT || STILL) { cam.target.copy(cam.goal.t); cam.dist = cam.goal.d; cam.goal = null; if (Q.get("ryaw")) cam.yaw = +Q.get("ryaw"); if (Q.get("rpitch")) cam.pitch = +Q.get("rpitch"); } kick(); };
 
 
   // ---- Fly it (steer-and-sail decisions 2 and 6): the design off the runway, its surfaces on the stick
   let fly = null;
   const keys = new Set(), hud = document.getElementById("flyHud"), flyBtn = document.getElementById("flyBtn");
   const FLYKEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "KeyR", "KeyF", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "ArrowUp", "ArrowDown"]);
-  window.addEventListener("keydown", e => { if (!fly || (e.target.closest && e.target.closest("input,textarea"))) return; if (FLYKEYS.has(e.code)) { keys.add(e.code); e.preventDefault(); } });
+  window.addEventListener("keydown", e => { if (!fly || TAB !== "airfield" || (e.target.closest && e.target.closest("input,textarea"))) return; if (FLYKEYS.has(e.code)) { keys.add(e.code); e.preventDefault(); } });
   window.addEventListener("keyup", e => keys.delete(e.code));
   window.addEventListener("blur", () => keys.clear());
   const k = c => keys.has(c) ? 1 : 0;
@@ -1939,8 +1993,8 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     cam.target.set(fly.st.p[0], fly.st.p[1] + fly.c.yc, fly.st.p[2]);
     if (fly.n++ % 3 === 0) drawAirHud();
   }
-  press("aFly", () => { if (startFly({air: true, rows: arows(), liv: Object.assign({}, aliv), paint: apaint.map(r => r.slice()), name: aName, hide: AIR.yoursAir ? "yoursAir" : "puff"})) document.querySelector(".stage").scrollIntoView({behavior: "smooth", block: "center"}); });
-  press("aRollout", () => { if (!cellsOf(arows()).length) return; endFly(); if (AIR.puff) AIR.puff.g.visible = false; placeAir("yoursAir", arows(), Object.assign({}, aliv), apaint.map(r => r.slice())); setTime(time); focus("yoursAir"); selPress("puff"); if (SHOT || STILL) { cam.target.copy(cam.goal.t); cam.dist = cam.goal.d; cam.goal = null; } kick(); document.querySelector(".stage").scrollIntoView({behavior: "smooth", block: "center"}); });
+  YARD.aFly = () => startFly({air: true, rows: arows(), liv: Object.assign({}, aliv), paint: apaint.map(r => r.slice()), name: aName, hide: AIR.yoursAir ? "yoursAir" : "puff"});
+  YARD.aRollout = () => { if (!cellsOf(arows()).length) return; endFly(); if (AIR.puff) AIR.puff.g.visible = false; placeAir("yoursAir", arows(), Object.assign({}, aliv), apaint.map(r => r.slice())); setTime(time); focus("yoursAir"); selPress("puff"); if (SHOT || STILL) { cam.target.copy(cam.goal.t); cam.dist = cam.goal.d; cam.goal = null; } kick(); };
   // ---- collision (decision 2a): the craft is a cloud of points, the corners of its parts; each step they
   // meet the ground as drawn (cells, far bands, sea) and every solid box. A step that would put a point inside
   // is undone, so nothing ever passes through: gentle on the gear is a landing, slow is a bump, fast is a crash.
@@ -2057,7 +2111,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     return {rows: rowsNow(), liv: Object.assign({}, livery), paint: paint.map(r => r.slice()), name: designName};
   };
   flyBtn.addEventListener("click", () => { if (fly) endFly(); else startFly(flySource()); });
-  press("flyDesign", () => { if (startFly({rows: rowsNow(), liv: Object.assign({}, livery), paint: paint.map(r => r.slice()), name: designName})) document.querySelector(".stage").scrollIntoView({behavior: "smooth", block: "center"}); });
+  YARD.flyDesign = () => startFly({rows: rowsNow(), liv: Object.assign({}, livery), paint: paint.map(r => r.slice()), name: designName});
   // the player test (?test): fly a preset with the keys a player has, many steps at a time, and report
   if (Q.has("test")) window.__hangar = {
     fly(id) { if (APRESETS[id]) { const a = AIR[id]; return startAir({air: true, rows: a.rows, liv: a.liv, paint: a.paint, name: APRESETS[id].name, hide: id}); } return startFly({rows: PRESETS[id].rows, liv: PRESETS[id].livery, paint: presetPaint(PRESETS[id]), name: PRESETS[id].name, hide: id}); },
@@ -2113,12 +2167,13 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     const a = attitude(st); cam.yaw = Math.atan2(-Math.cos(a.heading), -Math.sin(a.heading)) + fly.yawOff;
   }
 
-  function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
   new ResizeObserver(resize).observe(canvas); resize();
   document.getElementById("hudbar").innerHTML = `<div class="hs sel"><img src="hangar/game/hand.png" alt="Bare hand (the game's icon)"></div>` +
     [["cockpit", 1], ["fuselage", 6], ["wing", 16], ["prop", 1], ["rotor", 1], ["nacelle", 2], ["gear", 2], ["fuel", 2], ["livery", 1]].map(([n, c]) => `<div class="hs"><img src="hangar/${n}.png?v=1" alt="${n}"><span class="c">${c}</span></div>`).join("");
   const clock = new THREE.Clock(), reduce = matchMedia("(prefers-reduced-motion: reduce)").matches, tmp = new THREE.Vector3();
   function frame() {
+    if (TAB !== "airfield") { running = false; return; }   // another tab: the loop rests (a flight waits where it was)
     const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
     if (fly) flyFrame(dt);
     if (cam.goal) { cam.target.lerp(cam.goal.t, 1 - Math.exp(-dt * 4)); cam.dist += (cam.goal.d - cam.dist) * (1 - Math.exp(-dt * 4)); if (cam.target.distanceTo(cam.goal.t) < 0.05 && Math.abs(cam.dist - cam.goal.d) < 0.1) cam.goal = null; }
@@ -2144,7 +2199,8 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     requestAnimationFrame(frame);
   }
   const SHOT = Q.has("shot"), STILL = Q.has("still"); let shotFrames = 0, running = true;
-  const kick = () => { shotFrames = 0; if (!running) { running = true; requestAnimationFrame(frame); } };   // a held picture draws again after a roll-out
+  const kick = () => { shotFrames = 0; if (!running) { running = true; clock.getDelta(); requestAnimationFrame(frame); } };   // a held picture draws again after a roll-out
+  window.addEventListener("pbdtab", () => { keys.clear(); if (TAB === "airfield") { resize(); if (started) kick(); } });
   let started = false;
   const start = () => {
     if (started) return; started = true;
@@ -2152,13 +2208,13 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     document.getElementById("loading")?.remove();
     if (SHOT && Q.get("fly") && (PRESETS[Q.get("fly")] || APRESETS[Q.get("fly")])) { document.body.classList.add("shot"); resize(); flyScript(Q.get("fly"), Q.get("fscript") || "bank"); if (fly && !fly.air) drawHud(); }
     else if (SHOT) { document.body.classList.add("shot"); resize(); const id = Q.get("shot"); if (VIEW[id]) { focus(id); selPress(id); const g = cam.goal; cam.target.copy(g.t); cam.dist = g.d; cam.goal = null; } if (Q.get("yaw")) cam.yaw = +Q.get("yaw"); if (Q.get("pitch")) cam.pitch = +Q.get("pitch"); if (Q.get("dist")) cam.dist = +Q.get("dist"); }
-    requestAnimationFrame(frame);
+    requestAnimationFrame(frame); yardResolve();
   };
   digitsReady.then(start);
-})();
+}
 
 // ======================= the builder's live preview =======================
-(function preview() {
+function preview() {   // made the first time the Plane builder tab opens; drawn only while it shows
   const canvas = document.getElementById("pv");
   const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -2172,20 +2228,22 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   const floor = new THREE.Mesh(boxM(30, 0.2, 30), new THREE.MeshStandardMaterial({map: floorTex, roughness: 1})); floor.position.y = -0.1; floor.receiveShadow = true; scene.add(floor);
   const M = matSet(o => new THREE.MeshStandardMaterial(o));
   let craft = null, spin = [];
-  const rebuild = () => { if (craft) scene.remove(craft); const c = buildCraft(rowsNow(), livery, M, null, paint, {marks: true}); craft = c.g; spin = c.spin; scene.add(craft); if (still && !pvRunning) { stillFrames = 0; pvRunning = true; delete document.body.dataset.pvReady; requestAnimationFrame(frame); } };   // a held preview draws the change
+  const rebuild = () => { if (craft) scene.remove(craft); const c = buildCraft(rowsNow(), livery, M, null, paint, {marks: true}); craft = c.g; spin = c.spin; scene.add(craft); go(); };   // a held preview draws the change
+  const go = () => { stillFrames = 0; delete document.body.dataset.pvReady; if (!pvRunning) { pvRunning = true; requestAnimationFrame(frame); } };
   let pending = false;
-  listeners.push(() => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; rebuild(); }); });
+  listeners.push(() => { if (pending || TAB !== "planes") return; pending = true; requestAnimationFrame(() => { pending = false; rebuild(); }); });
   const view = {yaw: 0.85, pitch: 0.42, dist: 17};
   const ptr = {on: false, x: 0, y: 0};
   canvas.addEventListener("pointerdown", e => { ptr.on = true; ptr.x = e.clientX; ptr.y = e.clientY; canvas.setPointerCapture(e.pointerId); });
   canvas.addEventListener("pointermove", e => { if (!ptr.on) return; view.yaw -= (e.clientX - ptr.x) * 0.008; view.pitch = Math.min(1.3, Math.max(0.05, view.pitch + (e.clientY - ptr.y) * 0.006)); ptr.x = e.clientX; ptr.y = e.clientY; });
   canvas.addEventListener("pointerup", () => ptr.on = false);
   canvas.addEventListener("wheel", e => { e.preventDefault(); view.dist = Math.min(40, Math.max(7, view.dist * Math.exp(e.deltaY * 0.0012))); }, {passive: false});
-  function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  function resize() { const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
   new ResizeObserver(resize).observe(canvas); resize();
   const clock = new THREE.Clock(), reduce = matchMedia("(prefers-reduced-motion: reduce)").matches, still = Q.has("still");
   if (Q.get("pyaw")) view.yaw = +Q.get("pyaw");
   function frame() {
+    if (TAB !== "planes") { pvRunning = false; return; }   // another tab: the preview rests
     const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
     camera.position.set(view.dist * Math.cos(view.pitch) * Math.sin(view.yaw), 1.6 + view.dist * Math.sin(view.pitch), view.dist * Math.cos(view.pitch) * Math.cos(view.yaw));
     camera.lookAt(0, 1.6, 0);
@@ -2194,12 +2252,12 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     if (still && ++stillFrames > 30) { document.body.dataset.pvReady = "1"; pvRunning = false; return; }
     requestAnimationFrame(frame);
   }
-  let stillFrames = 0, pvRunning = true;
-  if (!Q.has("shot")) digitsReady.then(() => { rebuild(); requestAnimationFrame(frame); });
-})();
+  let stillFrames = 0, pvRunning = false;
+  window.addEventListener("pbdtab", () => { if (TAB === "planes") digitsReady.then(() => { resize(); rebuild(); }); });   // shown: draw what the grid holds now
+}
 
 // ======================= the airship builder's preview =======================
-(function apreview() {
+function apreview() {   // made the first time the Airship builder tab opens; drawn only while it shows
   const canvas = document.getElementById("apv");
   const renderer = new THREE.WebGLRenderer({canvas, antialias: true});
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); renderer.outputEncoding = THREE.sRGBEncoding; renderer.shadowMap.enabled = true;
@@ -2212,7 +2270,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   const M = matSet(o => new THREE.MeshStandardMaterial(o));
   let craft = null, ty = 5;
   const still = Q.has("still"); let frames = 0, running = false;
-  const visible = () => !document.getElementById("airKit").hidden;
+  const visible = () => TAB === "airship";
   const go = () => { frames = 0; if (!running) { running = true; delete document.body.dataset.apvReady; requestAnimationFrame(frame); } };
   const rebuild = () => { if (craft) scene.remove(craft); const c = buildAirship(arows(), aliv, M, null, apaint, {marks: true}); craft = c.g; ty = c.yc; scene.add(craft); go(); };
   let pending = false;
@@ -2234,6 +2292,34 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     if (++frames > (still ? 20 : 60) && !ptr.on) { running = false; document.body.dataset.apvReady = "1"; return; }   // nothing moves on its own: draw, then rest
     requestAnimationFrame(frame);
   }
-  digitsReady.then(() => { if (visible()) { resize(); rebuild(); } });
-})();
+  window.addEventListener("pbdtab", () => { if (visible()) digitsReady.then(() => { resize(); rebuild(); }); });
+}
+
+// ======================= the tabs =======================
+// One part of the mockup at a time (the owner, 2026-11-13: "we always only ever see 1 3d renderer on page at a time"),
+// as drydock.html has them. The tab is the URL's bare hash (#airfield, #planes, #airship, #how; #fly opens the airfield).
+// A tab's 3D view is made the first time it opens, and its loop stops while another tab shows.
+const TABS = ["airfield", "planes", "airship", "how"], TAB_ALIAS = {fly: "airfield"};
+const VIEW_INIT = {airfield: yard, planes: preview, airship: apreview}, VIEW_MADE = {};
+const hashTab = () => { const h = location.hash.slice(1); return TABS.includes(h) ? h : TAB_ALIAS[h] || null; };
+function setTab(t, push = true) {
+  if (!TABS.includes(t)) return; TAB = t; document.body.dataset.tab = t;
+  TABS.forEach(n => { const p = document.getElementById("tab-" + n); if (p) p.hidden = n !== t; });
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+  if (push) try { history.replaceState(null, "", location.pathname + location.search + "#" + t); } catch (e) {}
+  if (VIEW_INIT[t] && !VIEW_MADE[t]) { VIEW_MADE[t] = true; VIEW_INIT[t](); }
+  window.dispatchEvent(new Event("pbdtab"));
+}
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+window.addEventListener("hashchange", () => { const t = hashTab(); if (t) setTab(t, false); });
+// Roll out and Fly it from a builder open the airfield, where it happens; a design that cannot fly stays in its builder and says why
+const flyNote = (id, msg) => { const el = document.getElementById(id); el.textContent = msg; el.hidden = !msg; };
+const toYard = (act, note, refuse) => { const why = refuse(); flyNote(note, why || ""); if (why) return; setTab("airfield"); yardReady.then(() => YARD[act]()); };
+const planeRefusal = () => { const cs = checks(rowsNow()), bad = cs.out.find(o => o[0] === "no"); return !cs.s.m ? "the grid is empty." : bad ? bad[1] : null; };
+const airRefusal = () => { const cs = airshipChecks(arows(), aliv.gas), bad = cs.out.find(o => o[0] === "no"); return !cs.s.cells ? "the grid is empty." : bad ? bad[1] : null; };
+press("rollout", () => toYard("rollout", "pNote", () => cellsOf(rowsNow()).length ? null : "the grid is empty."));
+press("flyDesign", () => toYard("flyDesign", "pNote", () => { const w = planeRefusal(); return w && "Cannot fly yet: " + w; }));
+press("aRollout", () => toYard("aRollout", "aNote", () => cellsOf(arows()).length ? null : "the grid is empty."));
+press("aFly", () => toYard("aFly", "aNote", () => { const w = airRefusal(); return w && "Cannot fly yet: " + w; }));
+setTab(Q.has("shot") ? "airfield" : hashTab() || (Q.get("tab") === "airship" ? "airship" : "airfield"), false);
 </script>
