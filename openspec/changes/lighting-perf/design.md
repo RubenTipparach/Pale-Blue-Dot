@@ -382,6 +382,104 @@ and fog rendering". Priced against the columns above:
   a split of the terrain shader. It waits for ranks 1-2: if they leave
   L8 under ~0.5 ms, it is not worth the pass.
 
+## L8's traces at half size: the pass layout (task 2.8, plan 2026-11-12)
+
+What is left over the floor is on foot in the rain (stroll p99 18.56 ms by
+day, ~21 at 22:00; the town ~21), GPU-bound, and the largest piece of GPU
+left there is wet ground's two traces inside the terrain's fragment shader
+(the walk ~1.5 ms and the screen trace ~0.2 ms of the terrain pass's ~4 ms
+on the stroll, measured in 1.1 before 2.1 took ~0.4 ms off the walk).
+
+**Why it needs a pass of its own (read).** The traces run per wet fragment
+inside `fragment()` of `planet_surface.wgsl`. Tracing one pixel in four in
+place saves nothing: a warp waits for its slowest lane, and neighbouring rays
+in a puddle walk about as far as each other. The rays have to be packed
+densely into a pass of their own. The trace needs a wet pixel's position,
+its reflected ray (rippled), and its column slot. Only the terrain's fragment
+shader knows the last two, and the composite needs the fresnel weight and
+the sky/glint terms that the hit replaces. So the terrain writes them out
+beside its colour. The alternative, a half-size prepass that draws the
+terrain again, costs a second geometry pass (the sun's cascades show a
+terrain draw is ~0.5 ms) and has to repeat the wet code in a second entry
+point. It was not chosen.
+
+**Writing them out needs the terrain in a render pass of its own.** It draws
+today as a `Transparent3d` phase item (`queue_planet`, `distance: f32::MIN`,
+so first) inside Bevy's `main_transparent_pass_3d`. That pass has one colour
+attachment, so the terrain moves into a `ViewNode`, `planet_terrain`, which
+runs between `Node3d::MainTransmissivePass` and `Node3d::MainTransparentPass`.
+That keeps the order exactly: after the opaque towns, before every
+transparent mesh. The node owns the four indirect draws (surface, foliage,
+clutter, columns) that `DrawPlanetIndirect` issued, with the same pipeline
+specialised in `queue_planet` (now kept on the view, not added to the phase).
+
+**The passes, all in that node** (`planet_reflect.rs`; per view, sized with
+the view; MSAA is 4x on the camera, so the G-targets are too):
+
+1. **`planet_terrain`**: the terrain's pass. Colour (the view's MSAA target,
+   loaded, resolved as Bevy's passes do) plus, while `reflect_render_scale`
+   is under 1, two more targets, cleared each frame:
+   - `reflect_req` `Rgba16Uint` (MSAA, read at sample 0): the slot (two
+     halves, the top bit of the upper one says "a request") and the
+     reflected ray, octahedral, two `unorm16`;
+   - `reflect_delta` `Rgba16Float` (MSAA, resolved to a 1x copy):
+     `k*B` (rgb) and `k*fr` (a), where `fr` is the film's weight, `B =
+     fr*env + S + 0.8*L` (the sky the hit would replace, the sun glint `S`
+     and lamp glints `L` that the hit hides), and `k = 1 - 0.55*fog` (the
+     haze `finish()` lays over it).
+   The fragment shader writes them through `var<private>`s that the wet
+   path and `finish()` set; a request draws the miss (`hit = 0`), exactly
+   today's colour where nothing is hit. `fragment` (one target) stays as
+   today's entry point, and `fragment_split` wraps the same body.
+2. **`reflect_half`**: a full-screen pass at `reflect_render_scale` (0.5:
+   720 x 450 at 1440 x 900), new entry point `reflect_gather` in
+   `planet_surface.wgsl`, so `reflect_trace` and `ssr_trace` are the same
+   functions with the same bindings (groups 0-2 as the terrain's, group 3
+   the G-targets, the depth and a small uniform). Each texel takes the first
+   requesting pixel of its 2 x 2 (sample 0), rebuilds its position from the
+   depth (`body_from_clip`, made in f64 and relative to the eye), biases it
+   2 cm toward the eye (not along the normal, which is not written), reads
+   the cover there, and runs the walk and then the screen trace exactly as
+   the fragment did. Out: `reflect_hit` (`Rgba16Float`: colour, weight) and
+   `reflect_aux` (`Rgba16Float`: the ray, the distance from the eye; 0 = no
+   request).
+3. **`reflect_compose`**: a full-screen pass over the view's MSAA colour,
+   additive blend, new `reflect_compose.wgsl`. Per pixel with a request
+   (sample 0), the four half-size texels round it, each weighed bilinearly,
+   by depth (`exp(-|d_t - d| / (0.02 d + 0.1 m))`, as the rain's), and by
+   direction (`smoothstep(0.6, 0.95, dot(r_t, r))`, so a wall's ray does
+   not lend its hit to the floor at the wall's foot). With `hH` and `h` the
+   weighed means of `hit.rgb*hit.a` and `hit.a`, it adds `k*fr*hH - h*k*B`.
+   That is what the fragment's `color*(1-fr) + mix(env,H,h)*fr + S*(1-h) +
+   L*(1-0.8h)`, through `finish()`, adds over the miss, exactly, because
+   each term is linear in `h` and the MSAA resolve is linear. If no weight
+   is over 1e-3, nothing is added (the miss).
+
+**`reflect_render_scale`** (`lighting.ron`, 0.25..=1, default 0.5): at 1.0
+the terrain keeps one target and traces inline as today, and passes 2-3 do
+not run. That is the A/B in one exe, and the regression check for the move
+into `planet_terrain`: at 1.0 the shots must match the build before it to the
+pixel (`capture_repeat.py --against`).
+
+**The sea's trace stays in `water_compose`.** It is 0.14 ms of GPU in the
+storm and nothing on foot (1.1). A pass for it does not pay.
+
+**Frame log**: new columns `planet_terrain`, `reflect_half` and
+`reflect_compose`. `main_transparent_pass_3d` no longer holds the terrain.
+
+**Expected (estimate)**: a quarter of the rays and none in overdrawn
+fragments, against the extra targets' writes (MSAA-compressed, ~0.1 ms) and
+the compose (~0.1 ms). That is 1.0-1.4 ms of the stroll's GPU. Memory: two
+MSAA targets of 8 bytes a sample, ~83 MB at 1440 x 900, plus ~10 MB.
+
+**Look risk**: the hit is now per 2 x 2. The rings still bend the sky and
+the fresnel at full size, but what the reflection shows is softer. At an
+edge, the depth and direction weights keep a hit from crossing a silhouette.
+A pixel that only other surfaces' texels surround shows the sky (the miss).
+Shots (owner's look, since this moves pixels): the Holbrook lane in rain at
+10:00 and 22:00 both ways, a puddle under a wall, a harbour from 30 m and
+300 m, the town in rain, full against half, with a run-to-run noise pair.
+
 ## Ranked optimizations
 
 **Re-ranked on the split (decision 1)**, 2026-11-12. In order of work:

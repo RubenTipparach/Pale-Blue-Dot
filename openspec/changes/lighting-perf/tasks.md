@@ -80,6 +80,12 @@
       depth-aware upsample, so a puddle's edge against a wall does not
       halo. Shots: the Holbrook lane in rain at 10:00 and 22:00, a puddle
       under a wall, pixel-diffed; measure `rain-stroll`, `storm`, `walk`.
+      Plan (design, "L8's traces at half size: the pass layout"): the
+      terrain moves into its own node `planet_terrain` writing two more
+      targets (the request, and what the hit replaces); `reflect_half`
+      traces one pixel per 2 x 2; `reflect_compose` adds the hit back by
+      depth and direction; `reflect_render_scale: 1.0` keeps today's
+      inline traces.
 - [x] 2.9 Fog and atmosphere at half resolution (the rain volume, the
       compose's distance fog) only where 1.2's columns show a pass costs
       more than the spread; bloom is already built from a quarter-size
