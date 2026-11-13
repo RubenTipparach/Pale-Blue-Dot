@@ -72,16 +72,62 @@ upsample's silhouette test keeps every texel over the sky (`far` is the
 
 ## 3. The fix: each puff hazed to its own distance
 
-The physically right picture is each puff faded by the air in front of IT,
-then laid over the puffs behind:
+### 3a. What the blend must be
+
+The composite's haze is "fade the cloud into what is behind it": a pixel is
+`L = S (1 - alpha) + C`, with `S` the scene behind (the sky, the ground) and
+`(C, alpha)` the cloud's premultiplied light and coverage, both scaled by the
+air `T`. That is the air's own light taken as `S`. With two puffs, near `A`
+in front of far `B`, each faded by the air in front of it:
 
 ```text
-A' = T(d_A) * (c_A, a_A)          B' = T(d_B) * (c_B, a_B)
-seen = A' + (1 - T(d_A) a_A) * B'
+C     = T_A a_A lit_A + (1 - a_A) T_B a_B lit_B
+alpha = T_A a_A       + (1 - a_A) T_B a_B
 ```
 
-As `a_A` goes to 0 at the near puff's edge, `seen` goes to `B'`, which is what
-the far puff shows alone: no step, whatever threshold the discard uses.
+The far puff is hidden by the near puff's own coverage `a_A`, not by its
+hazed coverage `T_A a_A`: the air in front of `A` adds its light over `A`, it
+does not make `A` transparent to `B`. Drawn far to near, every puff adds
+`(T a lit, T a)` and scales what is already there by `(1 - a)`.
+
+- As `a_A` goes to 0 at the near puff's edge, `(C, alpha)` goes to `B`'s own:
+  no step, whatever threshold the discard uses.
+- As `a_A` goes to 1 inside the near puff, it goes to `A`'s own, exactly what
+  the old one-distance haze drew there. A puff alone is drawn as before.
+
+A CPU mirror of the three blends (sky 0.25, both puffs 0.9 lit, `T_A` 0.50,
+`T_B` 0.32, `B` opaque), the pixel's value as the near puff's coverage rises:
+
+```text
+a_A          0.000  0.003  0.005  0.300  0.700  1.000
+physical     0.458  0.458  0.459  0.493  0.540  0.575
+plain over   0.458  0.459  0.459  0.524  0.613  0.679
+old          0.458  0.458  0.575  0.575  0.575  0.575
+```
+
+### 3b. A first try, measured: hazed puffs laid plainly "over"
+
+The first build wrote `(T a lit, T a)` through the existing premultiplied
+"over", so each puff scaled what was behind it by `1 - T a`. The outline went
+(the row in section 1 read a flat 161-163), but the difference image against
+the before showed every stack of puffs up to 42 levels brighter inside, and
+24-37 % of the frame changed by more than 2 levels: a hazed near puff let the
+far puff through where it should let the air's light through (the "plain
+over" row above). A deep stack near the horizon would add up toward an opaque
+white deck however thick the air, against priority 4. Kept as
+`docs/screenshots/puff-haze/try1-*`; not shipped.
+
+### 3c. Three targets
+
+Fixed-function blending takes a target's blend factor from that target's own
+alpha output, so one target cannot add `T a` and scale by `1 - a`. The hazed
+coverage goes into a target of its own:
+
+| target | format | writes | blend | holds |
+| --- | --- | --- | --- | --- |
+| history | `Rgba16Float` | `(T a lit, a)` | premultiplied over | rgb `C`; alpha the plain coverage |
+| distances | `Rg16Float` | `(dist, far)` | `Min` | unchanged |
+| puff cover (new) | `R16Float`, the history's size | `(T a, 0, 0, a)` | premultiplied over | r `alpha` |
 
 - `cloud_puff_vertex` measures the air to each corner of the billboard,
   `cloud_air(eye, to/|to|, |to|)` with `to` the corner from the eye, and
@@ -89,13 +135,13 @@ the far puff shows alone: no step, whatever threshold the discard uses.
   corners lie at almost the same distance and the air across it is smooth;
   six vertices a puff carry it, not every fragment.
 - `cloud_puff_fragment` keeps its discard test on the unhazed coverage `a`
-  (so the distances target is written exactly where it is today) and writes
-  `(lit*a*air, a*air)`.
-- `clouds` (the composite) multiplies by `cloud_air` only when the history is
-  the march's (`view.cloud_puff_fade.w < 0.5`). When the puffs draw the
-  clouds, everything in the history is puffs, already hazed: with the puffs
-  configured, the march returns before marching, so even a frame where the
-  map overlay stops the puffs and the resolve runs holds only puffs or none.
+  (so the distances target is written exactly where it is today).
+- The composite (`clouds`, through `cloud_upsampled`) takes the puff cover's
+  `alpha` in place of the history's alpha at the same texels and weights, and
+  multiplies by `cloud_air` only when the history is the march's
+  (`view.cloud_puff_fade.w < 0.5`). The composite runs only when the puffs
+  drew this frame (both need no map overlay and clouds on), so it never reads
+  a stale cover.
 
 What does not change:
 
@@ -106,18 +152,24 @@ What does not change:
 - **When a puff appears.** The opacity ramps (`near`, `soft`, `outside`, the
   cover fade on the CPU) are untouched, so there is no new pop-in
   (priority 1).
-- **A puff alone.** Where only one puff covers a pixel, its haze was its own
-  distance before and is now: the frames differ only where puffs overlap
-  (the difference image in `docs/screenshots/puff-haze/`).
-- **The march renderer.** Its composite path is the same code as before.
+- **A puff alone, and inside an opaque near puff.** Drawn as before (3a); the
+  frames differ where a puff is partly transparent over another.
+- **The march renderer.** Its composite path is the same code as before; the
+  new target is bound but not read.
 
 ## 4. Alternatives
 
 - **Coverage-weighted distance** (blend the distances "over" by coverage, so
   the haze distance slides from the far puff's to the near one's as the near
   one thickens). It removes the hard step but still hazes the far puff to a
-  mean distance, and it changes the distance every silhouette test reads,
-  which is what keeps the clouds off the terrain. Rejected.
+  mean distance, it needs an extra "over" channel all the same, and it
+  changes the distance every silhouette test reads, which is what keeps the
+  clouds off the terrain. Rejected.
+- **Fog each puff toward the scene's colour** (the usual particle fog): the
+  same result with two targets, but the puff pass would read the scene at the
+  0.4 scale, and a hazed cloud in front of a hill would carry the hill's
+  silhouette at the coarse texel. Rejected.
+- **Hazed puffs laid plainly "over"**: 3b. Rejected.
 - **Haze per fragment** in the puff pass: exact, but five `exp`s for every
   puff fragment, overdraw included. The billboard's air is smooth enough to
   interpolate from its corners.
@@ -129,9 +181,10 @@ What does not change:
 - The same two shots, same args, same frame, before and after; crops and a
   difference image in `docs/screenshots/puff-haze/`.
 - `shader_tests.rs`: the puff vertex measures the air, the puff fragment
-  multiplies its output by it, and the composite hazes only the march.
-- The game draws: no shader error in the capture's log.
+  writes the light and the cover as 3a, and the composite takes the cover and
+  hazes only the march; the CPU mirror of 3a.
+- The game draws: no shader or pipeline error in the capture's log.
 - Frame time is not measured here (`perf_suite.py` is the owner's, on real
   hardware). The composite no longer integrates the haze for each
   full-resolution pixel under the puffs; the puffs integrate it six times
-  each.
+  each, and write one more 16-bit channel at the 0.4 scale.

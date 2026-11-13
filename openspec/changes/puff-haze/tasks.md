@@ -4,9 +4,10 @@
 - [x] 1.1 Reproduce the outline and find its cause (the haze off: no outline); proposal, design, spec delta.
 
 ## 2. Fix
-- [ ] 2.1 `cloud_puff_vertex` measures `cloud_air` to each corner and passes it on; `cloud_puff_fragment` writes `(lit*a*air, a*air)` and keeps its discard on `a`.
-- [ ] 2.2 The composite hazes the history only when the march drew it.
-- [ ] 2.3 `shader_tests.rs` pins all three.
+- [ ] 2.1 `cloud_puff_vertex` measures `cloud_air` to each corner and passes it on; `cloud_puff_fragment` writes `(lit*a*air, a)` to the history and `(a*air, 0, 0, a)` to the puff cover, and keeps its discard on `a`.
+- [ ] 2.2 The puff cover target (`R16Float`, the history's size): made and resized with the history, cleared and blended premultiplied "over" in the puff pass, bound to the composite.
+- [ ] 2.3 The composite takes the puff cover's coverage under the puffs, and hazes the history only when the march drew it.
+- [ ] 2.4 `shader_tests.rs` pins the shader lines and mirrors the blend (design 3a).
 
 ## 3. Verify
 - [ ] 3.1 fmt, clippy, the tests; `openspec validate puff-haze`.

@@ -46,12 +46,18 @@ not the cause: with the haze off, the same frame has no line at all.
 - **Each puff is hazed by the air in front of it, in its own pass.** The
   puff's vertex stage measures the air to each corner of its billboard
   (`cloud_air`, the same function the composite uses), and the fragment
-  multiplies the puff's light and coverage by it before the "over" blend.
-  A near puff over a far one is then each faded to its own distance, and
-  where the near one's coverage goes to nothing, so does its effect.
+  scales the puff's light and coverage by it.
+- **A near puff hides the far one by its own coverage, not its hazed
+  coverage.** The air in front of a puff adds its light over it; it does not
+  make the puff transparent to the cloud behind. Fixed-function blending
+  takes one factor per target from that target's alpha, so the hazed
+  coverage is kept in a third, one-channel target at the history's size
+  (design 3c). Laid plainly "over" instead, every stack of puffs came out up
+  to 42 levels brighter inside (measured, design 3b).
 - **The composite stops hazing the puffs' history** (it would haze them
-  twice). The march renderer is unchanged: its history still carries one
-  distance a texel and the composite still hazes it.
+  twice) and reads their coverage from the new target. The march renderer is
+  unchanged: its history still carries one distance a texel and the
+  composite still hazes it.
 - The distances target and every test that reads it (the ghosting tests,
   the upsample's silhouette test) are unchanged.
 
