@@ -1170,6 +1170,15 @@ pub fn run(args: &[String]) {
                 .after(pbd_app::loading::warm),
         ),
     )
+    .add_systems(
+        Update,
+        landing_shots
+            .run_if(|launch: Res<Launch>| {
+                launch.capture.is_some() && std::env::var_os("PBD_LANDING_SHOTS").is_some()
+            })
+            .run_if(pbd_app::loading::ready)
+            .after(capture),
+    )
     .init_resource::<menu::SaveIndex>()
     .init_resource::<menu::LoadRequest>()
     .add_systems(
@@ -2910,6 +2919,87 @@ fn fish_script(
             schools.join(", "),
             status.text
         );
+    }
+}
+
+/// Frames kept before a watched landing, every frame for this many after it,
+/// then every `LANDING_SHOT_STRIDE`th to `LANDING_SHOT_LAST` (`landing_shots`).
+const LANDING_SHOT_BEFORE: u32 = 4;
+const LANDING_SHOT_EVERY: u32 = 8;
+const LANDING_SHOT_STRIDE: u32 = 6;
+const LANDING_SHOT_LAST: u32 = 70;
+
+/// A fine set `landing_shots` watches, and the frame it landed on once it has.
+type WatchedLanding = (u64, Option<u32>);
+
+/// MEASUREMENT (`two-set-dissolve` design section 5): with
+/// `PBD_LANDING_SHOTS=27,28` in a capture, frames round the landing of fine
+/// set 27 (and 28) are saved beside the `--capture` path as
+/// `landing-<set>-f<frame>.png`, with a `LANDING_SHOT` line naming the set
+/// drawn: the last `LANDING_SHOT_BEFORE` while it builds, every frame for
+/// `LANDING_SHOT_EVERY` after it lands, then every `LANDING_SHOT_STRIDE`th to
+/// `LANDING_SHOT_LAST` (a second of game time and a little more). A landing
+/// comes when its build ends, which is the wall clock's, so the frames round
+/// one have to come out of one run. It changes nothing drawn.
+fn landing_shots(
+    mut commands: Commands,
+    launch: Res<Launch>,
+    state: Res<CaptureState>,
+    fine: Option<Res<pbd_app::planet::PlanetFine>>,
+    refresh: Res<pbd_app::planet::LodRefresh>,
+    mut watched: Local<Option<Vec<WatchedLanding>>>,
+) {
+    let (Some(fine), Some(path)) = (fine, launch.capture.as_ref()) else {
+        return;
+    };
+    let watched = watched.get_or_insert_with(|| {
+        std::env::var("PBD_LANDING_SHOTS")
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|set| set.trim().parse().ok())
+            .map(|set| (set, None))
+            .collect()
+    });
+    let dir = path.parent().map(PathBuf::from).unwrap_or_default();
+    for (set, landed) in watched.iter_mut() {
+        if fine.version == *set && landed.is_none() {
+            *landed = Some(state.frame);
+        }
+        let since = landed.map(|frame| state.frame - frame);
+        let building = fine.version + 1 == *set && refresh.in_flight_s().is_some();
+        let after = since.is_some_and(|since| {
+            since < LANDING_SHOT_EVERY
+                || (since <= LANDING_SHOT_LAST && since.is_multiple_of(LANDING_SHOT_STRIDE))
+        });
+        if !(building || after) {
+            continue;
+        }
+        let prefix = format!("landing-{set}-f");
+        if building {
+            // Only the last few frames of a build are kept: the disk is not
+            // the place to hold three seconds of 5 MB frames nobody reads. A
+            // frame is saved a few frames after it is asked for, so the older
+            // ones are swept each frame rather than deleted by name once.
+            let keep_from = state.frame.saturating_sub(LANDING_SHOT_BEFORE);
+            for file in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+                let name = file.file_name().to_string_lossy().into_owned();
+                let frame = name
+                    .strip_prefix(&prefix)
+                    .and_then(|rest| rest.strip_suffix(".png"))
+                    .and_then(|frame| frame.parse::<u32>().ok());
+                if frame.is_some_and(|frame| frame < keep_from) {
+                    let _ = std::fs::remove_file(file.path());
+                }
+            }
+        }
+        let shot = dir.join(format!("{prefix}{:05}.png", state.frame));
+        info!(
+            "LANDING_SHOT set {set} frame {} drawing set {} frames since its landing {since:?}",
+            state.frame, fine.version
+        );
+        commands
+            .spawn(Screenshot::primary_window())
+            .observe(bevy::render::view::screenshot::save_to_disk(shot));
     }
 }
 
