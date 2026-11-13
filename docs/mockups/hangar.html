@@ -57,7 +57,13 @@ button{font:inherit}
 #yard:active{cursor:grabbing}
 .ov{position:absolute;background:rgba(18,17,13,.84);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:10px;display:grid;gap:8px}
 .ov.tl{right:12px;top:30px;max-width:calc(100% - 24px);z-index:2}
-.stage.flying #shipSel{display:none}
+.ybar.flying #shipSel,.ybar.flying .ylab,.ybar.flying .ysep.s1{display:none}
+/* the airfield's controls sit in a bar above the view, never over it (owner, 2026-11-13: "its blocking the view screen") */
+.ybar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.ybar .seg{gap:4px}
+.ybar .seg button{padding:3px 8px;font-size:13.5px}
+.ylab{font:600 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ysep{width:1px;align-self:stretch;background:var(--line)}
 /* the game's HUD: the monospace debug line, top left, and the hotbar, bottom centre */
 .hudline{position:absolute;left:8px;top:6px;font:600 12px var(--mono);color:#fff;text-shadow:0 1px 0 #000,1px 0 0 #000;pointer-events:none}
 .hudbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:6px;align-items:center;pointer-events:none}
@@ -211,7 +217,8 @@ details.sdesc p{max-width:none}
 .tabpanel section{gap:8px}
 .tabpanel.view>section>h2{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 #tab-how{gap:36px}
-#tab-airfield .stage{height:clamp(380px,calc(100vh - 186px),900px)}
+#tab-airfield section{gap:8px}
+#tab-airfield .stage{height:clamp(360px,calc(100vh - var(--ybar,40px) - 196px),900px)}
 .builder.b3{gap:10px}
 #pNote,#aNote{color:var(--warn);font-size:13px}
 .builder.b3 .bpane{gap:8px;padding:10px}
@@ -251,16 +258,16 @@ details.sdesc p{max-width:none}
 <section aria-labelledby="s1">
   <h2 id="s1"><span class="n">1</span>The airfield</h2>
   <details class="sdesc"><summary>What this shows, how to fly, and the keys</summary><p>A hangar of three bays with its roller doors up, an apron, a 230 m runway, a helipad, a windsock and a little tower with its beacon. Sharky and Gull are in their bays; Puffin and Dart wait on the apron; Bumble sits on the pad; the game's own Kestrel is parked beside them for scale. Drag to look around, scroll or pinch to zoom. <b>Fly it</b> takes the craft you are looking at (or your design from the Plane builder tab) off the runway. The assists are on (decision 2a, "make this game easy to fly"): a plane starts at 70% throttle, rotates by itself at flying speed and climbs as the throttle sets; Shift and Ctrl (or R and F) the throttle, W descends and S climbs, A and D bank it into a turn up to 45&deg; (never past 60&deg;), and with the stick centred it flies level, trimmed, clear of the stall. <b>Expert</b> turns the assists off: then W and S are the elevator, A and D the ailerons, Q and E the rudder. A helicopter flies on collective (Shift and Ctrl), cyclic (W, A, S, D) and its tail rotor (Q and E). The country runs on for kilometres: hills, a coast with the sea beyond it to the north, the town of Wendle a little over a minute's flight to the east and the fishing town of Saltby on the coast to the west-north-west, both lit at night. Everything is solid: wheels on the ground are a landing, anything else hitting the ground, a building, a mast or a parked craft fast is a crash, and two seconds later you are back on the runway. Drag to look round it as it flies. At night every runway light, pad light, floodlight, hangar lamp and nav light lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p></details>
+  <div class="ybar" id="yardBar">
+    <span class="ylab">Look at</span><div class="seg" id="shipSel" role="group" aria-label="Look at"></div>
+    <span class="ysep s1"></span><div class="seg" id="timeSel" role="group" aria-label="Time of day">
+      <button data-t="day" aria-pressed="false">Day</button><button data-t="dusk" aria-pressed="false">Dusk</button><button data-t="night" aria-pressed="true">Night</button>
+    </div>
+    <span class="ysep"></span><div class="seg" role="group" aria-label="Flight"><button id="flyBtn" aria-pressed="false" title="Fly the craft you are looking at, or your design, off the runway">Fly it</button><button id="expertBtn" aria-pressed="false" title="Expert: no assists. The stick moves the surfaces directly, no bank or pitch limits, no auto-trim and no auto-rudder">Expert</button></div>
+  </div>
   <div class="stage">
     <canvas id="yard" aria-label="An airfield at night: a three-bay hangar with its doors open, five chibi aircraft, the Kestrel, a runway with edge lights, a helipad and a beacon tower."></canvas>
     <div class="loading" id="loading">Loading the airfield</div>
-    <div class="ov tl">
-      <div class="seg" id="shipSel" role="group" aria-label="Look at"></div>
-      <div class="seg" id="timeSel" role="group" aria-label="Time of day">
-        <button data-t="day" aria-pressed="false">Day</button><button data-t="dusk" aria-pressed="false">Dusk</button><button data-t="night" aria-pressed="true">Night</button>
-      </div>
-      <div class="seg" role="group" aria-label="Flight"><button id="flyBtn" aria-pressed="false" title="Fly the craft you are looking at, or your design, off the runway">Fly it</button><button id="expertBtn" aria-pressed="false" title="Expert: no assists. The stick moves the surfaces directly, no bank or pitch limits, no auto-trim and no auto-rudder">Expert</button></div>
-    </div>
     <div class="ov br" id="yardInfo"></div>
     <div class="ov fh" id="flyHud" hidden aria-live="off"></div>
     <div class="hudline" aria-hidden="true">underfoot L0, column | airfield apron | 3 bays, 1 pad, runway 09/27</div>
@@ -1850,6 +1857,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   TOWNS.forEach(t => VIEW[t.name.toLowerCase()] = [t.x, t.z, 150, t.h + 4]);
   const focus = id => { const [x, z, d, y] = VIEW[id]; cam.goal = {t: new THREE.Vector3(x, y ?? (id === "all" ? 2 : 2.2), z), d}; focused = id; info(); };
   const SEL = [["all", "Whole field"], ["hangar", "Hangar"], ["sharky", "Sharky"], ["bumble", "Bumble"], ["puffin", "Puffin"], ["gull", "Gull"], ["dart", "Dart"], ["kestrel", "Kestrel"], ["yours", "Your design"], ["mast", "Airship mast"], ["shed", "Airship shed"], ["albatross", "Albatross"], ["puff", "Puff"], ["wendle", "Wendle"], ["saltby", "Saltby"]];
+  { const yb = document.getElementById("yardBar"), setYb = () => { if (yb.offsetHeight) document.documentElement.style.setProperty("--ybar", yb.offsetHeight + "px"); }; new ResizeObserver(setYb).observe(yb); setYb(); }
   document.getElementById("shipSel").innerHTML = SEL.map(([id, n]) => `<button data-s="${id}" aria-pressed="${id === "all"}">${n}</button>`).join("");
   const selPress = id => document.querySelectorAll("#shipSel button").forEach(o => o.setAttribute("aria-pressed", o.dataset.s === id));
   document.querySelectorAll("#shipSel button").forEach(b => b.addEventListener("click", () => { endFly(); focus(b.dataset.s); selPress(b.dataset.s); }));
@@ -1897,7 +1905,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     for (let i = LAMPS.length - 1; i >= 0; i--) if (LAMPS[i].group === fly.c.g) LAMPS.splice(i, 1);
     if (fly.hide && CRAFT[fly.hide] && !fly.air) CRAFT[fly.hide].g.visible = true;
     if (fly.air && fly.hide && AIR[fly.hide]) AIR[fly.hide].g.visible = true;
-    fly = null; keys.clear(); hud.hidden = true; canvas.parentNode.classList.remove("flying"); kick(); flyBtn.textContent = "Fly it"; flyBtn.setAttribute("aria-pressed", "false"); info();
+    fly = null; keys.clear(); hud.hidden = true; canvas.parentNode.classList.remove("flying"), document.getElementById("yardBar").classList.remove("flying"); kick(); flyBtn.textContent = "Fly it"; flyBtn.setAttribute("aria-pressed", "false"); info();
   }
   function startFly(src) {
     if (src.air) return startAir(src);
@@ -1912,7 +1920,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     fly = {m, c, outer, st: newFlight(m, Object.assign(at, {hc: c.yc})), hide: src.hide, name: src.name, yawOff: 0, n: 0, home: at, crash: null};
     craftPoints(); fly.st.expert = expert; fly.st.pitMax = fly.pitMax;
     cam.goal = null; cam.dist = 22; cam.pitch = 0.22; focused = "fly";
-    hud.hidden = false; canvas.parentNode.classList.add("flying"); flyBtn.textContent = "Stop flying"; flyBtn.setAttribute("aria-pressed", "true");
+    hud.hidden = false; canvas.parentNode.classList.add("flying"), document.getElementById("yardBar").classList.add("flying"); flyBtn.textContent = "Stop flying"; flyBtn.setAttribute("aria-pressed", "true");
     const kind = m.kind === "heli" ? "a helicopter: Shift (or R) raises the collective, Ctrl (or F) lowers it; W and S tilt the disc forward and back, A and D sideways; Q and E the tail rotor." : m.kind === "vtol" ? "a tiltrotor: Shift (or R) and Ctrl (or F) set the power; it lifts on its rotors, and as it speeds up the nacelles tilt forward and W, S, A, D, Q, E move from the rotors to the surfaces." : (expert ? "a plane, assists off (Expert): Shift (or R) and Ctrl (or F) the throttle; at speed, S lifts the nose. W and S the elevator, A and D the ailerons, Q and E the rudder (and the nose wheel on the ground)." : "a plane, with the assists on: it starts at 70% throttle, rotates by itself at flying speed and climbs as the throttle sets; Shift (or R) and Ctrl (or F) the throttle, W descends and S climbs, A and D bank it into a turn (and steer on the ground), and centred it flies level. Expert turns the assists off.");
     document.getElementById("yardInfo").innerHTML = `<div><b>Flying ${src.name}</b>, ${kind} The surfaces push with the air, q S dCL arm, so on the ground at rest they do nothing.</div>`;
     pose(); kick(); return true;
@@ -1962,7 +1970,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     craftPoints();
     fly.st.ground = false;
     cam.goal = null; cam.dist = Math.max(42, cs.s.len * 1.7); cam.pitch = 0.24; focused = "fly";
-    hud.hidden = false; canvas.parentNode.classList.add("flying"); flyBtn.textContent = "Stop flying"; flyBtn.setAttribute("aria-pressed", "true");
+    hud.hidden = false; canvas.parentNode.classList.add("flying"), document.getElementById("yardBar").classList.add("flying"); flyBtn.textContent = "Stop flying"; flyBtn.setAttribute("aria-pressed", "true");
     document.getElementById("yardInfo").innerHTML = `<div><b>Flying ${src.name}</b>, an airship: W and S the engines, A and D the rudder, the up and down arrows the elevator; Shift drops ballast to climb, Ctrl vents gas to come down. The fins work with the air going past, so at a standstill they do nothing, and the wind (${Math.hypot(WIND[0], WIND[2]).toFixed(1)} m/s) carries it, so it crabs.</div>`;
     poseAir(); kick(); return true;
   }
