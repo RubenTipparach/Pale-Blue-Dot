@@ -2,15 +2,18 @@
 
 ## 1. The outline, shown
 
-Default spawn, 24.117 -2.964 (map 24.117S 2.964W), 65.6 m elevation, 1.6 m
-above ground, `--time 12` (sun 61.4 degrees up), `--weather-at 1800` (cover
-0.55, rain 0.01), 35 degrees up. Full launch lines in
+Default spawn, 24.117 -2.964 (map 24.117S 2.964W), `--time 12` (sun 61.4
+degrees up), `--weather-at 1800` (cover 0.55, rain 0.01). From the ground,
+65.6 m elevation and 1.6 m above ground, 35 degrees up; and from 900 m above
+the same ground (964.0 m elevation) looking at the deck along the limb. Built
+on `claude/perf-tuning` a8376bd; full launch lines in
 `docs/screenshots/puff-haze/README.md`.
 
 | | before | `cloud_haze: 0` (diagnostic) |
 | --- | --- | --- |
 | north, yaw 90 | `north-crop-before.png` | `north-crop-haze-off.png` |
 | south, yaw 270 | `south-crop-before.png` | `south-crop-haze-off.png` |
+| high, 900 m up, yaw 90 | `high-crop-before.png` | `high-crop-haze-off.png` |
 
 `north-crop-before.png` is a 700 x 500 crop at full resolution (2880 x 1800,
 crop at 1950,850). A front puff's silhouette runs as a curve from the top
@@ -27,6 +30,9 @@ then drops 14 levels in about 6 pixels, which is one march texel at the 0.4
 render scale, bilinearly upsampled. With the haze off the same row is flat.
 `south-crop-before.png` shows the same thing several times over, with the
 step as a staircase where a silhouette runs nearly level across the texels.
+`high-crop-before.png` shows it at the limb: a nearer puff stands out of the
+hazed deck behind it with a hard edge (left), and a cut corner (top right),
+the "hard outline" priority 4 asks to be rid of.
 
 ## 2. Why
 
@@ -108,14 +114,14 @@ old          0.458  0.458  0.575  0.575  0.575  0.575
 ### 3b. A first try, measured: hazed puffs laid plainly "over"
 
 The first build wrote `(T a lit, T a)` through the existing premultiplied
-"over", so each puff scaled what was behind it by `1 - T a`. The outline went
-(the row in section 1 read a flat 161-163), but the difference image against
-the before showed every stack of puffs up to 42 levels brighter inside, and
-24-37 % of the frame changed by more than 2 levels: a hazed near puff let the
-far puff through where it should let the air's light through (the "plain
-over" row above). A deep stack near the horizon would add up toward an opaque
-white deck however thick the air, against priority 4. Kept as
-`docs/screenshots/puff-haze/try1-*`; not shipped.
+"over", so each puff scaled what was behind it by `1 - T a`. The outline went,
+but against the before every stack of puffs came out brighter inside, by up
+to 48 levels (north), 44 (south) and 32 (high), over 16 %, 20 % and 6 % of the
+frame by more than 4 levels: a hazed near puff let the far puff through where
+it should let the air's light through (the "plain over" row above). A deep
+stack near the horizon would add up toward an opaque white deck however thick
+the air, against priority 4. Kept as `docs/screenshots/puff-haze/try1-*`
+(red brighter); not shipped.
 
 ### 3c. Three targets
 
@@ -129,13 +135,14 @@ coverage goes into a target of its own:
 | distances | `Rg16Float` | `(dist, far)` | `Min` | unchanged |
 | puff cover (new) | `R16Float`, the history's size | `(T a, 0, 0, a)` | premultiplied over | r `alpha` |
 
-- `cloud_puff_vertex` measures the air to each corner of the billboard,
-  `cloud_air(eye, to/|to|, |to|)` with `to` the corner from the eye, and
-  passes it to the fragment as `air`. A billboard faces the eye, so its
-  corners lie at almost the same distance and the air across it is smooth;
-  six vertices a puff carry it, not every fragment.
 - `cloud_puff_fragment` keeps its discard test on the unhazed coverage `a`
-  (so the distances target is written exactly where it is today).
+  (so the distances target is written exactly where it is today), then
+  measures the air to the puff along its own ray, `cloud_air(eye, look,
+  dist)`, the function and the integral the composite used per pixel.
+  Measured at the billboard's six vertices and interpolated instead, the air
+  came out up to 5 levels thick over 13-25 % of the ground frames, single
+  puffs included: a billboard's corners lie further off than the puff it
+  carries (section 4).
 - The composite (`clouds`, through `cloud_upsampled`) takes the puff cover's
   `alpha` in place of the history's alpha at the same texels and weights, and
   multiplies by `cloud_air` only when the history is the march's
@@ -170,21 +177,33 @@ What does not change:
   0.4 scale, and a hazed cloud in front of a hill would carry the hill's
   silhouette at the coarse texel. Rejected.
 - **Hazed puffs laid plainly "over"**: 3b. Rejected.
-- **Haze per fragment** in the puff pass: exact, but five `exp`s for every
-  puff fragment, overdraw included. The billboard's air is smooth enough to
-  interpolate from its corners.
+- **Haze per vertex**: the air measured at the billboard's corners and
+  interpolated, six integrals a puff instead of one per visible fragment.
+  Measured against the per-fragment air, same frames: up to 5 levels darker
+  over 13 % (north) and 25 % (south) of the frame, and 2 at the high shot.
+  The corners lie `sqrt(2)` radii off the puff's centre, so their air is
+  thicker than the puff's own. Rejected: a puff alone would no longer be
+  drawn as before.
 - **Lower `cloud_haze`**: hides the step and loses the horizon haze
   (priority 4). Rejected.
 
 ## 5. Verification
 
-- The same two shots, same args, same frame, before and after; crops and a
-  difference image in `docs/screenshots/puff-haze/`.
+- The same three shots, same args, same frame, before and after; crops and
+  a difference image each in `docs/screenshots/puff-haze/`. Measured
+  (brightness, after minus before): north max +1 / -18, 17 % of the frame
+  moved by more than 2; south +1 / -27, 27 %; high +3 / -51, 9 %. Nothing
+  brightens; the darkening is the far puffs inside near puffs' footprints
+  taking their own haze. The row of section 1 after: `161 ... 164 | 165 165
+  164 165`, no step.
+- The capture is deterministic: the high shot taken twice on the baseline
+  differs in 14 pixels by one level, the ground shot not at all.
 - `shader_tests.rs`: the puff vertex measures the air, the puff fragment
   writes the light and the cover as 3a, and the composite takes the cover and
   hazes only the march; the CPU mirror of 3a.
 - The game draws: no shader or pipeline error in the capture's log.
 - Frame time is not measured here (`perf_suite.py` is the owner's, on real
-  hardware). The composite no longer integrates the haze for each
-  full-resolution pixel under the puffs; the puffs integrate it six times
-  each, and write one more 16-bit channel at the 0.4 scale.
+  hardware). The composite no longer integrates the haze (five samples) for
+  each full-resolution pixel in the cloud layer under the puffs; each visible
+  puff fragment integrates it once at the 0.4 scale, overdraw included, and
+  writes one more 16-bit channel.

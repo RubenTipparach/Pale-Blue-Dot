@@ -339,3 +339,130 @@ fn the_water_is_lit_not_luminous() {
         "the night floor is gone"
     );
 }
+
+/// One function's body in a WGSL source, from `fn name(` to its closing brace
+/// at the start of a line.
+fn wgsl_fn_body<'a>(src: &'a str, name: &str) -> &'a str {
+    let start = src
+        .find(&format!("fn {name}("))
+        .unwrap_or_else(|| panic!("`fn {name}` is gone"));
+    let end = src[start..]
+        .find("\n}\n")
+        .unwrap_or_else(|| panic!("`fn {name}` does not end"));
+    &src[start..start + end]
+}
+
+/// `puff-haze`: each puff is hazed to its own distance in its own pass, writes
+/// its hazed light and its own coverage to the history and its hazed coverage
+/// to the puff cover, and the composite takes that cover and hazes only the
+/// march. Hazed once for the texel at the nearest puff's distance, a near
+/// puff's edge drew an outline over the puff behind it.
+#[test]
+fn each_puff_is_hazed_once_to_its_own_distance() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    assert!(src.contains("@group(3) @binding(16) var cloud_puff_cover: texture_2d<f32>;"));
+    assert!(
+        src.contains("@location(2) cover: vec4<f32>,"),
+        "PuffOut writes the cover"
+    );
+
+    let puff = wgsl_fn_body(&src, "cloud_puff_fragment");
+    let discard = puff
+        .find("if (a < 0.004) { discard; }")
+        .expect("the discard is on the plain coverage");
+    let seen = puff
+        .find("let seen = a*cloud_air(eye, look, dist);")
+        .expect("the air is measured to this puff, along this ray");
+    assert!(
+        discard < seen,
+        "the distances are written wherever the puff is"
+    );
+    for line in [
+        "out.cloud = vec4<f32>(lit*seen, a);",
+        "out.cover = vec4<f32>(seen, 0.0, 0.0, a);",
+    ] {
+        assert!(puff.contains(line), "missing `{line}`");
+    }
+
+    let upsampled = wgsl_fn_body(&src, "cloud_upsampled");
+    assert!(upsampled.contains(
+        "if (view.cloud_puff_fade.w > 0.5) { cloud.w = textureLoad(cloud_puff_cover, texel, 0).r; }"
+    ));
+
+    let composite = wgsl_fn_body(&src, "clouds");
+    let gate = composite
+        .find("if (view.cloud_puff_fade.w < 0.5) {")
+        .expect("the composite hazes the march alone");
+    let air = composite
+        .find("air = cloud_air(eye, ray.direction,")
+        .expect("the march's haze is kept");
+    assert!(gate < air);
+    assert!(composite.contains("let cloud = upsampled*air;"));
+    assert!(
+        !composite.contains("upsampled*cloud_air("),
+        "the composite must not haze the puffs a second time"
+    );
+}
+
+/// `puff-haze` design 3a, mirrored: what the puff pass's blend states and the
+/// composite make of a near puff A over a far puff B, against what the old
+/// one-distance haze made. The puff pass blends both colour targets
+/// premultiplied "over" (`dst' = src + (1 - src.a) dst`); the fragment writes
+/// `(lit*seen, a)` and `(seen, 0, 0, a)` with `seen = a*T`; the composite lays
+/// `S (1 - cover) + light` over the scene.
+#[test]
+fn the_puff_blend_is_the_air_over_each_puff_with_no_step() {
+    // The shipped haze from the spawn, 25 degrees up (design 2): a puff
+    // 800 m out keeps 0.50, one 1600 m out 0.32. Sky and puff light are
+    // brightness on a 0..1 scale; the far puff is whole.
+    let (sky, lit_a, lit_b, air_a, air_b, a_b) = (0.25, 0.9, 0.9, 0.50, 0.32, 1.0);
+    // A puff writes nothing below the discard's coverage.
+    let discard = 0.004;
+    let over = |dst: f32, src: f32, src_a: f32| src + (1.0 - src_a) * dst;
+    let new = |a_a: f32| -> f32 {
+        let a_a = if a_a < discard { 0.0 } else { a_a };
+        // Far to near, as the instances are sorted.
+        let light = over(
+            over(0.0, lit_b * a_b * air_b, a_b),
+            lit_a * a_a * air_a,
+            a_a,
+        );
+        let cover = over(over(0.0, a_b * air_b, a_b), a_a * air_a, a_a);
+        sky * (1.0 - cover) + light
+    };
+    let old = |a_a: f32| -> f32 {
+        let a_a = if a_a < discard { 0.0 } else { a_a };
+        // One haze for the texel, at the nearest distance any puff wrote.
+        let air = if a_a > 0.0 { air_a } else { air_b };
+        let light = over(lit_b * a_b, lit_a * a_a, a_a) * air;
+        let cover = over(a_b, a_a, a_a) * air;
+        sky * (1.0 - cover) + light
+    };
+    let b_alone = sky * (1.0 - a_b * air_b) + lit_b * a_b * air_b;
+    let a_alone = sky * (1.0 - air_a) + lit_a * air_a;
+
+    // At the near puff's edge, just inside and just outside its footprint.
+    let (inside, outside) = (discard * 1.01, discard * 0.99);
+    assert!(
+        (new(inside) - new(outside)).abs() < 0.002,
+        "no step at the edge"
+    );
+    assert!((new(outside) - b_alone).abs() < 1e-6);
+    assert!(
+        (old(inside) - old(outside)).abs() > 0.1,
+        "the old haze stepped there: {} against {}",
+        old(inside),
+        old(outside)
+    );
+    // Inside a whole near puff it is the near puff alone, as the old haze
+    // drew it, and nothing of the far one comes through.
+    assert!((new(1.0) - a_alone).abs() < 1e-6);
+    assert!((new(1.0) - old(1.0)).abs() < 1e-6);
+    // And from the edge inward it moves smoothly between the two.
+    let mut last = new(inside);
+    for k in 1..=100 {
+        let next = new(inside + (1.0 - inside) * k as f32 / 100.0);
+        assert!((next - last).abs() < 0.01, "a step inside the puff");
+        last = next;
+    }
+}

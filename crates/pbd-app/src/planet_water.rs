@@ -241,6 +241,11 @@ const CLOUD_HISTORY_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 /// composite's depth-aware upsample compares with each pixel's own.
 const CLOUD_DEPTH_FORMAT: TextureFormat = TextureFormat::Rg16Float;
 
+/// The format of the puffs' coverage as the air leaves it (`puff-haze`), the
+/// history's size: one channel, blended "over" by each puff's own coverage,
+/// which the history's alpha cannot also be.
+const PUFF_COVER_FORMAT: TextureFormat = TextureFormat::R16Float;
+
 /// The lens mist (`lens-weather`): one texel, full float, because it creeps
 /// by a few thousandths a frame and a half float would stall short of one.
 const MIST_FORMAT: TextureFormat = TextureFormat::R32Float;
@@ -493,6 +498,11 @@ fn composite_layout() -> BindGroupLayoutDescriptor {
                 ),
                 // The near field's fog, sampled bilinearly (`cloud-entry`).
                 (7, texture_2d(TextureSampleType::Float { filterable: true })),
+                // The puffs' coverage as the air leaves it (`puff-haze`).
+                (
+                    16,
+                    texture_2d(TextureSampleType::Float { filterable: false }),
+                ),
             ),
         ),
     )
@@ -952,7 +962,9 @@ impl SpecializedRenderPipeline for WaterPipelines {
                     .to_vec()
                 } else if key.pass == Pass::CloudPuffs {
                     // Premultiplied light "over" what is behind; the nearest
-                    // puff's distance and the scene's stop under it.
+                    // puff's distance and the scene's stop under it; and the
+                    // coverage the air leaves, "over" by each puff's own
+                    // coverage like the light (`puff-haze`).
                     let min = BlendComponent {
                         src_factor: BlendFactor::One,
                         dst_factor: BlendFactor::One,
@@ -970,6 +982,11 @@ impl SpecializedRenderPipeline for WaterPipelines {
                                 color: min,
                                 alpha: min,
                             }),
+                            write_mask: ColorWrites::ALL,
+                        }),
+                        Some(ColorTargetState {
+                            format: PUFF_COVER_FORMAT,
+                            blend: Some(BlendState::PREMULTIPLIED_ALPHA_BLENDING),
                             write_mask: ColorWrites::ALL,
                         }),
                     ]
@@ -1050,6 +1067,10 @@ pub(super) struct WaterViewGpu {
     /// history, the history's size (`cloud-history-clip`): its clouds, their
     /// distances, and the near field's fog (`cloud-entry`).
     current: [TextureView; 3],
+    /// The puffs' coverage as the air leaves it, the history's size: the
+    /// puff pass writes it and the composite reads it in place of the
+    /// history's alpha under the puffs (`puff-haze`).
+    puff_cover: TextureView,
     /// The previous frame's camera and projection, for reprojecting the
     /// history and for telling a jump from a step.
     prev_clip: Mat4,
@@ -1527,6 +1548,7 @@ fn prepare_water_views(
                 gpu.history = cloud_history(&device, history_size);
                 gpu.cloud_depth = cloud_distances(&device, history_size);
                 gpu.current = cloud_current(&device, history_size);
+                gpu.puff_cover = cloud_target(&device, history_size, PUFF_COVER_FORMAT);
                 gpu.history_size = history_size;
             }
             // The history is usable when the pass wrote it on the previous
@@ -1671,6 +1693,7 @@ fn prepare_water_views(
             history_size,
             cloud_depth: cloud_distances(&device, history_size),
             current: cloud_current(&device, history_size),
+            puff_cover: cloud_target(&device, history_size, PUFF_COVER_FORMAT),
             prev_clip: clip_from_body,
             prev_camera: camera,
             clouds_ran: !overlay_needed,
@@ -1931,6 +1954,7 @@ impl ViewNode for WaterCompositeNode {
                 (1, &pipelines.sampler),
                 (4, depth_write),
                 (7, &water.current[2]),
+                (16, &water.puff_cover),
             )),
         );
         if clouds_on {
@@ -1998,19 +2022,22 @@ impl ViewNode for WaterCompositeNode {
                 ];
                 let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
                     label: Some("Cloud puffs"),
-                    color_attachments: &[(history_write, clears[0]), (depth_write, clears[1])].map(
-                        |(view, clear)| {
-                            Some(RenderPassColorAttachment {
-                                view,
-                                depth_slice: None,
-                                resolve_target: None,
-                                ops: Operations {
-                                    load: LoadOp::Clear(clear.into()),
-                                    store: StoreOp::Store,
-                                },
-                            })
-                        },
-                    ),
+                    color_attachments: &[
+                        (history_write, clears[0]),
+                        (depth_write, clears[1]),
+                        (&water.puff_cover, clears[0]),
+                    ]
+                    .map(|(view, clear)| {
+                        Some(RenderPassColorAttachment {
+                            view,
+                            depth_slice: None,
+                            resolve_target: None,
+                            ops: Operations {
+                                load: LoadOp::Clear(clear.into()),
+                                store: StoreOp::Store,
+                            },
+                        })
+                    }),
                     depth_stencil_attachment: None,
                     timestamp_writes: timer.and_then(|t| t.writes(1)),
                     occlusion_query_set: None,

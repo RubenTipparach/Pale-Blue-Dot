@@ -160,6 +160,9 @@ struct WaterView {
 @group(3) @binding(6) var cloud_depth_now: texture_2d<f32>;
 // The composite's: the near field's fog, lit colour and extinction per metre.
 @group(3) @binding(7) var cloud_near: texture_2d<f32>;
+// The composite's, under the puffs (`puff-haze`): their coverage as the air
+// leaves it, in r. The history's alpha is then the plain coverage.
+@group(3) @binding(16) var cloud_puff_cover: texture_2d<f32>;
 // The lens mist (`lens-weather`), one texel: the probe reads the previous
 // frame's and writes this frame's, which the lens reads.
 @group(3) @binding(8) var lens_mist_prev: texture_2d<f32>;
@@ -1297,7 +1300,10 @@ fn cloud_upsampled(uv: vec2<f32>, far: f32, distance: ptr<function, f32>) -> vec
         let w = select(1.0-f.x, f.x, o.x == 1)*select(1.0-f.y, f.y, o.y == 1);
         let depth = textureLoad(cloud_depth, texel, 0).rg;
         let kept = select(0.0, 1.0, cloud_texel_sees(depth, far));
-        let cloud = textureLoad(cloud_history, texel, 0);
+        var cloud = textureLoad(cloud_history, texel, 0);
+        // Under the puffs, the coverage the air leaves is kept apart from the
+        // light (`puff-haze`).
+        if (view.cloud_puff_fade.w > 0.5) { cloud.w = textureLoad(cloud_puff_cover, texel, 0).r; }
         sum += cloud*w*kept;
         weight += w*kept;
         let held_at = cloud_texel_distance(depth.x);
@@ -1355,9 +1361,16 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // this pixel's own entry into the layer: measured to zero, the haze was
     // none, and every such texel at a cloud's edge stood out unhazed, a bright
     // rim round a limb cloud seen through thick air (`cloud-edges`).
+    // The puffs come hazed, each to its own distance, from their own pass
+    // (`puff-haze`); with the puffs configured the history holds nothing
+    // else, so the air here is the march's alone.
     var at = 0.0;
     let upsampled = cloud_upsampled(uv, far, &at);
-    let cloud = upsampled*cloud_air(eye, ray.direction, min(select(span.x, at, at > 0.0), far));
+    var air = 1.0;
+    if (view.cloud_puff_fade.w < 0.5) {
+        air = cloud_air(eye, ray.direction, min(select(span.x, at, at > 0.0), far));
+    }
+    let cloud = upsampled*air;
     let behind = scene*(1.0-cloud.w)+cloud.rgb;
     // The first metres from the eye, to this pixel's own stop, are the
     // cloud's fog seen in front of everything else: it thickens as the eye
@@ -1458,11 +1471,16 @@ fn cloud_near_reach(layer: CloudLayer) -> f32 {
 }
 
 struct PuffOut {
-    // Premultiplied light and coverage, blended "over".
+    // Premultiplied light, as the air in front of the puff leaves it, and
+    // the puff's own coverage, blended "over" (`puff-haze`).
     @location(0) cloud: vec4<f32>,
     // The puff's distance and the scene's stop along this ray, both kept at
     // their nearest (blend Min); cleared to the far cap.
     @location(1) depth: vec2<f32>,
+    // The coverage the air leaves in r, blended "over" by the puff's own
+    // coverage in a: the far puffs are hidden by the near puff, not by its
+    // haze (`puff-haze`).
+    @location(2) cover: vec4<f32>,
 }
 
 @fragment
@@ -1553,10 +1571,26 @@ fn cloud_puff_fragment(in: PuffVaryings) -> PuffOut {
         * smoothstep(0.15, 0.5, dot(look, safe_normal(eye)));
     let floor_cut = mix(smoothstep(puff.layer.x - band, puff.layer.x + band*0.5, length(surface)), 1.0, from_below);
     let a = clamp(dens*puff.shape.w*near*soft*floor_cut*outside, 0.0, 1.0);
+    // The distances are written where the puff is, hazed or not, so the
+    // silhouette tests read them as before (`puff-haze`).
     if (a < 0.004) { discard; }
+    // Each puff is hazed by the air in front of IT, to its own distance along
+    // this ray (`puff-haze`). Hazed once for the whole texel at the nearest
+    // puff's distance, a far puff seen through a near one's thin edge took
+    // the near one's lighter haze and stepped back to its own at the edge: an
+    // outline round every puff in front of another. Measured at the
+    // billboard's corners instead, which lie further off than the puff, the
+    // air came out a little thick on every puff.
+    // It adds its light and coverage as the air leaves them, and hides what
+    // is behind it by its own coverage: the air adds its light over the puff,
+    // it does not make the puff transparent to the cloud behind. Hidden by
+    // the hazed coverage, every stack of puffs came out brighter inside, and
+    // a deep one at the horizon would come out opaque.
+    let seen = a*cloud_air(eye, look, dist);
     var out: PuffOut;
-    out.cloud = vec4<f32>(lit*a, a);
+    out.cloud = vec4<f32>(lit*seen, a);
     out.depth = vec2<f32>(dist, far);
+    out.cover = vec4<f32>(seen, 0.0, 0.0, a);
     return out;
 }
 
