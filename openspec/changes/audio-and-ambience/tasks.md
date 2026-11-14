@@ -9,12 +9,15 @@
 
 ## 2. Tools and the first sounds
 
-- [ ] 2.1 Port `tools/audio/` from Fleet Command `08374c4` (`fetch_cc0.py`,
+- [x] 2.1 Port `tools/audio/` from Fleet Command `08374c4` (`fetch_cc0.py`,
   `cut_cc0.py`, `gen_sfx.py` with its building blocks and no sounds,
   `inspect_sfx.py`, `render_sfx.sh`, `list_sources.py`, `gen_sfx_page.py`,
   `audio_page.py`), with empty `cc0_packs.json` and `cc0_cues.json`. Record
   it in `.claude/skills/PROVENANCE.md`. Verify: `render_sfx.sh` runs on the
-  Mac and writes nothing.
+  Mac and writes nothing. Done 2026-11-14: it printed "no cues yet ...
+  nothing written" and left the tree clean. Added on the way (PROVENANCE.md
+  says why): `encode_ogg.py` (the Mac's ffmpeg has no libvorbis), Freesound
+  CC0 in the fetcher, `takes` in the cutter, 48 kHz.
 - [ ] 2.2 Find and cut the first set (design section 4 and 5): every step and
   dig family, water, the craft loops, fishing, menus, thunder, fire, and the
   beds. CC0 only. Verify:

@@ -17,10 +17,14 @@ differ, this note wins.
 - **The design is `openspec/changes/audio-and-ambience`.** Read its `design.md` before making a cue: it names
   the buses, the cue list, the ambience beds and the distance law. Nothing is wired into the game until that
   change is applied.
-- **The tools are not ported yet.** `tools/audio/` (`fetch_cc0.py`, `cut_cc0.py`, `gen_sfx.py`,
-  `inspect_sfx.py`, `render_sfx.sh`, `list_sources.py`, `gen_sfx_page.py`, `audio_page.py`) comes from Fleet
-  Command `08374c4` in task 2.1 of that change, with `cc0_packs.json` and `cc0_cues.json` started empty: no
-  Fleet Command cue or pack list is carried over, because none of its sounds belong on a planet.
+- **The tools are ported** (`audio-and-ambience` task 2.1, from Fleet Command `08374c4`; what changed is in
+  `.claude/skills/PROVENANCE.md`): `tools/audio/fetch_cc0.py`, `cut_cc0.py`, `gen_sfx.py`, `inspect_sfx.py`,
+  `render_sfx.sh`, `list_sources.py`, `gen_sfx_page.py`, `audio_page.py`, and `encode_ogg.py` (new: the Mac's
+  ffmpeg has no libvorbis). No Fleet Command cue or pack was carried over. Originals are fetched to
+  `output/sfx-src` (git-ignored), not `/opt/sfx-src`. A Freesound sound is `freesound/<id>` in
+  `cc0_packs.json` and `freesound/<id>:<id>.mp3` in a layer; the fetcher refuses it unless its page links CC0.
+  A cue with `takes` writes `<cue>_1 .. _N`. The Sounds page's MP3s are in `docs/mockups/sounds/`, and
+  `docs/mockups/sounds.files.json` is the publish's `files` map.
 - **The engine is kira, not Godot's and not rodio.** The game plays sounds through kira (design section 1),
   which filters live: a muffled copy for caves, under water or a closed cabin is a low pass on a bus, not a
   second file. Crab Breeze's `muffled/` and `far/` copies (rodio had no filter) are not made here; Fleet
