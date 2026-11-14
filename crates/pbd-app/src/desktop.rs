@@ -272,6 +272,10 @@ pub struct Launch {
     /// rebind for this run only, so a capture, which reads no settings file,
     /// can show one and its clash. An instrument; nothing is kept.
     pub rebinds: Vec<(String, String)>,
+    /// `--cursor X Y`: hold the pointer at this window position (logical px)
+    /// every frame, so a capture can show what hovering shows (a slot's
+    /// tooltip). An instrument for a headless run, which has no mouse.
+    pub cursor: Option<Vec2>,
     /// How the map opens, for its captures: `--map-mpp <metres>` is its zoom
     /// as metres a screen pixel at the centre, `--map-overlay <name>` a
     /// weather overlay, `--map-layer <name>` a raster layer such as
@@ -347,6 +351,7 @@ impl Launch {
             settings_tab: 0,
             input_tab: 0,
             rebinds: Vec::new(),
+            cursor: None,
         };
         let mut i = 0;
         while i < args.len() {
@@ -497,6 +502,15 @@ impl Launch {
                         .position(|t| t.label().eq_ignore_ascii_case(&name.replace('-', " ")))
                         .expect("--input-tab takes on-foot, hands, flying, vehicles or menus")
                         as u8;
+                }
+                "--cursor" => {
+                    let at = |k: usize| -> f32 {
+                        args.get(i + k)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--cursor takes X Y in logical px")
+                    };
+                    result.cursor = Some(Vec2::new(at(1), at(2)));
+                    i += 2;
                 }
                 "--rebind" => {
                     i += 1;
@@ -1416,6 +1430,18 @@ pub fn run(args: &[String]) {
     }
     if launch.fixed || (launch.capture.is_some() && !launch.real_time) {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(step));
+    }
+    if let Some(at) = launch.cursor {
+        app.add_systems(
+            First,
+            move |mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>| {
+                for mut window in &mut windows {
+                    if window.cursor_position() != Some(at) {
+                        window.set_cursor_position(Some(at));
+                    }
+                }
+            },
+        );
     }
     // The UI kit (`stone-and-wood-ui`): its pieces, fonts and scale are in
     // place in `finish`, before the loading screen's first frame.

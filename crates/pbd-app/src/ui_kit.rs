@@ -1359,4 +1359,29 @@ mod tests {
         app.update();
         assert_eq!(shown(&mut app).0, Display::None, "nothing hovered");
     }
+
+    /// An instrument for the "corners 28 px, pixel exact at scale 2"
+    /// capture (`docs/screenshots/stone-and-wood-ui/README.md`): writes the
+    /// oak and stone frames as the game bakes them at scale 2 to
+    /// `target/kit-dump/`, for `tools/art/measure_corners.py` to find in a
+    /// capture. Run with `--ignored`; it asserts nothing the other tests do
+    /// not.
+    #[test]
+    #[ignore]
+    fn dump_the_frames_baked_at_scale_two() {
+        let slices = Slices::load();
+        let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/kit-dump");
+        std::fs::create_dir_all(&out).unwrap();
+        for (name, path) in [
+            ("oak-frame", "ui/oak/frame.png"),
+            ("stone-frame", "ui/stone/frame.png"),
+        ] {
+            let pixels = decode(&assets_dir().join(path));
+            let image = bake(&pixels, slices.render_px, 2, None);
+            let size = image.size();
+            let data = image.data.clone().expect("baked on the CPU");
+            let png = RgbaImage::from_raw(size.x, size.y, data).expect("rgba8");
+            png.save(out.join(format!("{name}@2.png"))).unwrap();
+        }
+    }
 }
