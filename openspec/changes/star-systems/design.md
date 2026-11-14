@@ -294,3 +294,13 @@ system are kept and every moon orbits clear of the outer ring edge. The page
 checks it on load (an error in the console if a moon's orbit, less its drawn
 radius, reaches the ring). The solar-system distances stay not to scale, as
 before. Unringed Glaucus keeps its enlarged look.
+
+## Verdance wears Tenebris's surface set (owner, 2026-11-14)
+
+The owner: "can you have verdance use my old texture set from tenbris-rust?". Verdance's surface in
+the mockup now lays Tenebris's own tiles (the byte-identical copies in `docs/mockups/planets/tenebris/`)
+on its columns, untinted: `dirt` at and under the water line, `jungle_grass` over `jungle_dirt_grass`
+on the low ground, `grass` over `dirt_grass` from 3 m up, `dirt` below and `rocks` for stone. In the
+game this is Verdance's block palette naming Tenebris's surface blocks; Verdance is not built, so no
+save is touched.
+

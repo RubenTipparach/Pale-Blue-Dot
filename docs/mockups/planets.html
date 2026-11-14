@@ -432,7 +432,7 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
     </div>
     <p class="note"><b>The game's own art</b>, copied byte-identical into <span class="mono">planets/game/</span> (its README names each source): the vignettes' hex columns wear the terrain atlas (<span class="mono">assets/tilesets/atlas.png</span>), each cell its biome sheet's ground on top, the ground-into-earth tile on the first metre of wall, earth then stone below, as <span class="mono">planet_surface.wgsl</span> picks them; trees are the game's hex-prism trees in the sheet's wood and leaf tiles; houses, habs, posts and decks wear the settlement materials (<span class="mono">assets/textures/settlement</span>); the landed ship is the Kestrel and the boat the Tern (<span class="mono">assets/models/vehicles</span>, loaded with GLTFLoader); the hotbar shows the game's item icons and atlas block tiles. All of it is sampled nearest without mipmaps. Bodies the game does not have yet borrow the nearest sheet: Cinder is the basalt sheet with its own sulfur and lava tiles, Hollow is sporewood, Murk the desert sheet tinted.</p>
     <p class="note"><b>Mockup-only art</b>: the surface maps, night-light maps, portraits and resource icons are <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="mono">.claude/skills/balatro-pixel-art</span>): a tiny native canvas, one bold subject, three to five tones a material lit from the top left, a dark seam between parts, a 1 px outline, single-pixel glints, no anti-aliasing, and every colour from the Sweaft-64 palette (the kit refuses to save a pixel off it). Maps are 128 x 64, drawn per pixel from noise on the sphere so the globes have no seam, with Bayer dithering for soft edges. Portraits are 48 x 48 (each body's own map wrapped on a lit disc, its night lights on the dark side), icons 32 x 32, all shown at whole-number scales. The script is <span class="mono">tools/art/planets_art.py</span>; it took three passes against contact sheets beside six of the solitaire collection's sprites (fixes: thinner cloud decks, solid polar ice on Lantern, one crack network on Rime, larger ice crystals, a lit shoulder that keeps each colour's hue).</p>
-    <p class="note"><b>Tenebris's bodies and the neighbours (star-systems, 2026-11-14).</b> Sequoia, Crag, Frostbite and their moons wear <b>Tenebris's own textures</b>, byte-identical copies from <span class="mono">tenebris-rs/assets/textures</span> in <span class="mono">planets/tenebris/</span> (README there), with Tenebris's runtime tints; their animals are boxes wearing Tenebris's animal atlas. The home world, which is Tenebris, keeps the game's own art. Tallow's and Gemel's worlds wear the game's own atlas sheets, tinted. Mockup-only, drawn with the same kit by <span class="mono">tools/art/star_systems_art.py</span> (which imports this page's script and writes only new files): 14 maps and their lights maps, 17 portraits (three of them stars), 21 species icons, 6 resource icons and the box textures for the nine species Tenebris did not build. Two passes against a contact sheet beside the solitaire collection's sprites (fix: Gloomhopper got its mushroom-cap back). The gas giants' airship and cloud decks are drawn in the page: the envelope wears the game's cloth, the gondola its iron and plaster, the decks a noise of each giant's own map colours.</p>
+    <p class="note"><b>Tenebris's bodies and the neighbours (star-systems, 2026-11-14).</b> Verdance (by the owner's ask, 2026-11-14), Sequoia, Crag, Frostbite and their moons wear <b>Tenebris's own textures</b>, byte-identical copies from <span class="mono">tenebris-rs/assets/textures</span> in <span class="mono">planets/tenebris/</span> (README there), with Tenebris's runtime tints; their animals are boxes wearing Tenebris's animal atlas. The home world, which is Tenebris, keeps the game's own art. Tallow's and Gemel's worlds wear the game's own atlas sheets, tinted. Mockup-only, drawn with the same kit by <span class="mono">tools/art/star_systems_art.py</span> (which imports this page's script and writes only new files): 14 maps and their lights maps, 17 portraits (three of them stars), 21 species icons, 6 resource icons and the box textures for the nine species Tenebris did not build. Two passes against a contact sheet beside the solitaire collection's sprites (fix: Gloomhopper got its mushroom-cap back). The gas giants' airship and cloud decks are drawn in the page: the envelope wears the game's cloth, the gondola its iron and plaster, the decks a noise of each giant's own map colours.</p>
     <div class="two">
       <figure class="sheet"><div class="pxrow" id="pxPortraits"></div><figcaption>The thirty portraits at 2x (native 48 px): Aubade's twenty (the star, its first twelve bodies, then Tenebris's seven), then Tallow's and Gemel's.</figcaption></figure>
       <figure class="sheet"><div class="pxrow" id="pxRes"></div><figcaption>The seventeen resource icons at 2x (native 32 px); the last six are the neighbours'.</figcaption>
@@ -1333,10 +1333,10 @@ const VIG = {
   },
   verdance() {
     terrain({
-      sheet: (x, z, h) => h <= 0 ? "swamp" : "jungle", trees: "jungle",
+      // Tenebris's own tiles: mud at the water, its jungle on the low ground, its grass higher up
+      sheet: (x, z, h) => h <= 0 ? TEB.mud() : h >= 3 ? TEB.grass() : TEB.jungle(), trees: "jungle",
       height: (x, z) => -0.4 + fbm(x * 0.04, z * 0.04 + 7) * 5,
-      top: (x, z, h) => h <= 0 ? lin(0x5a5a2a) : lin(hash(x, z) > 0.5 ? 0x2f7a34 : 0x3a8a3a),
-      side: (y, d) => d === 0 ? lin(0x4a3a24) : lin(y % 2 ? 0x6a4a34 : 0x5e4430),
+      top: () => WHITE, side: () => WHITE,
     });
     water(0.5, 0x2a6a5a);
     for (const [x, z, s] of [[-8, -8, 1], [10, -6, 1.1], [-14, 8, 0.9], [14, 10, 1]]) tree(x, z, "kapok", s);
@@ -1636,6 +1636,11 @@ const TEB = {
   moon: (t) => LAY(TT("moon", t), TT("moon", t), TT("moon", t), TT("moon", t)),
   rock: (t) => LAY(TT("rocks", t), TT("rocks", t), TT("rocks", t), TT("rocks", t)),
   frost: () => LAY(TT("snow"), TT("ice", "frost"), TT("ice", "frost"), TT("ice", "frost")),
+  // Verdance wears Tenebris's own surface set (owner, 2026-11-14: "can you have verdance use my
+  // old texture set from tenbris-rust?"): its jungle, grass, dirt and rock tiles, untinted.
+  jungle: () => LAY(TT("jungle_grass"), TT("jungle_dirt_grass"), TT("dirt"), TT("rocks")),
+  grass: () => LAY(TT("grass"), TT("dirt_grass"), TT("dirt"), TT("rocks")),
+  mud: () => LAY(TT("dirt"), TT("dirt"), TT("dirt"), TT("rocks")),
 };
 
 // An animal built from boxes, as Tenebris's animals.rs builds them: body, head and legs, each box
