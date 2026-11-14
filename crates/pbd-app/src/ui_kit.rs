@@ -977,18 +977,121 @@ pub fn paint_plaques(
     }
 }
 
+/// What the kit shows beside the pointer while it is over this node (which
+/// needs an `Interaction`): an item's name and count, what is in hand. Empty
+/// shows nothing. Shown only while a menu holds the pointer: in play there
+/// is no cursor to show it by.
+#[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
+pub struct Tooltip(pub String);
+
+/// The one tooltip: a stone `tooltip` piece over every panel.
+#[derive(Component)]
+pub struct TooltipBox;
+
+/// The tooltip's words.
+#[derive(Component)]
+pub struct TooltipWords;
+
+/// How far the tooltip sits from the pointer, native px.
+const TOOLTIP_OFFSET: f32 = 8.0;
+
+/// Spawn the tooltip, hidden.
+pub fn spawn_tooltip(mut commands: Commands, kit: Res<UiKit>) {
+    commands
+        .spawn((
+            kit.nine(Set::Stone, "tooltip"),
+            KitPiece("tooltip".into()),
+            Node {
+                position_type: PositionType::Absolute,
+                padding: UiRect::new(px(6), px(6), px(3), px(3)),
+                display: Display::None,
+                ..default()
+            },
+            GlobalZIndex(40),
+            TooltipBox,
+        ))
+        .with_children(|tip| {
+            tip.spawn((
+                Text::default(),
+                TextFont {
+                    font_size: 10.0,
+                    ..default()
+                },
+                TextColor(TEXT),
+                text_shadow(),
+                TooltipWords,
+            ));
+        });
+}
+
+/// Where the tooltip goes for a pointer at `cursor` (logical px) in a
+/// window `window` wide, at UI scale `scale`: below and right of the pointer,
+/// or below and left of it in the window's right quarter, so it stays on
+/// screen. Native px, as `left` or `right`.
+pub fn tooltip_at(cursor: Vec2, window: f32, scale: f32) -> (Option<f32>, Option<f32>, f32) {
+    let scale = scale.max(1e-3);
+    let top = cursor.y / scale + TOOLTIP_OFFSET;
+    if cursor.x > window * 0.75 {
+        (None, Some((window - cursor.x) / scale + TOOLTIP_OFFSET), top)
+    } else {
+        (Some(cursor.x / scale + TOOLTIP_OFFSET), None, top)
+    }
+}
+
+/// Show the hovered node's tooltip by the pointer, or none.
+#[allow(clippy::type_complexity)]
+pub fn show_tooltip(
+    menu: Option<Res<crate::controls::MenuOpen>>,
+    hovered: Query<(&Interaction, &Tooltip, &InheritedVisibility)>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    scale: Option<Res<UiScale>>,
+    mut boxes: Query<&mut Node, With<TooltipBox>>,
+    mut words: Query<&mut Text, With<TooltipWords>>,
+) {
+    let free = menu.is_some_and(|m| m.0);
+    let over = hovered
+        .iter()
+        .find(|(i, tip, shown)| **i != Interaction::None && !tip.0.is_empty() && shown.get())
+        .map(|(_, tip, _)| tip.0.clone());
+    let cursor = windows
+        .single()
+        .ok()
+        .and_then(|w| w.cursor_position().map(|c| (c, w.width())));
+    let (Some(text), Some((cursor, width)), true) = (over, cursor, free) else {
+        for mut node in &mut boxes {
+            if node.display != Display::None {
+                node.display = Display::None;
+            }
+        }
+        return;
+    };
+    let (left, right, top) = tooltip_at(cursor, width, scale.map_or(1.0, |s| s.0));
+    for mut node in &mut boxes {
+        node.display = Display::Flex;
+        node.left = left.map_or(Val::Auto, px);
+        node.right = right.map_or(Val::Auto, px);
+        node.top = px(top);
+    }
+    for mut words in &mut words {
+        if words.0 != text {
+            words.0 = text.clone();
+        }
+    }
+}
+
 /// Install the kit before the first frame and keep it following the window.
 pub struct UiKitPlugin;
 
 impl Plugin for UiKitPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            PostUpdate,
-            (follow_window, paint_plaques, draw_kit_text)
-                .chain()
-                .before(UiSystems::Prepare)
-                .run_if(resource_exists::<UiKit>),
-        );
+        app.add_systems(Startup, spawn_tooltip.run_if(resource_exists::<UiKit>))
+            .add_systems(
+                PostUpdate,
+                (follow_window, paint_plaques, show_tooltip, draw_kit_text)
+                    .chain()
+                    .before(UiSystems::Prepare)
+                    .run_if(resource_exists::<UiKit>),
+            );
     }
 
     fn finish(&self, app: &mut App) {
@@ -1186,5 +1289,57 @@ mod tests {
             let c = contrast(a, b);
             assert!(c >= 4.5, "{what}: {c:.2}:1");
         }
+    }
+
+    /// The tooltip sits by the pointer, left of it near the right edge, in
+    /// native px; it shows only over a node with words while a menu holds
+    /// the pointer.
+    #[test]
+    fn a_tooltip_shows_by_the_pointer_only_while_a_menu_holds_it() {
+        assert_eq!(tooltip_at(Vec2::new(100.0, 60.0), 1440.0, 2.0), (Some(58.0), None, 38.0));
+        assert_eq!(tooltip_at(Vec2::new(1400.0, 60.0), 1440.0, 2.0), (None, Some(28.0), 38.0));
+
+        let mut app = App::new();
+        install_bare(&mut app);
+        app.insert_resource(crate::controls::MenuOpen(true))
+            .insert_resource(UiScale(2.0))
+            .add_systems(Startup, spawn_tooltip)
+            .add_systems(Update, show_tooltip);
+        let mut window = Window::default();
+        window.set_cursor_position(Some(Vec2::new(100.0, 60.0)));
+        app.world_mut().spawn((window, PrimaryWindow));
+        let slot = app
+            .world_mut()
+            .spawn((
+                Node::default(),
+                Interaction::Hovered,
+                Tooltip("Stone x 12".into()),
+                InheritedVisibility::VISIBLE,
+            ))
+            .id();
+        app.update();
+        let shown = |app: &mut App| {
+            let world = app.world_mut();
+            let node = world
+                .query_filtered::<&Node, With<TooltipBox>>()
+                .single(world)
+                .unwrap()
+                .clone();
+            let words = world
+                .query_filtered::<&Text, With<TooltipWords>>()
+                .single(world)
+                .unwrap()
+                .0
+                .clone();
+            (node.display, node.left, words)
+        };
+        assert_eq!(shown(&mut app), (Display::Flex, px(58.0), "Stone x 12".to_string()));
+        app.world_mut().resource_mut::<crate::controls::MenuOpen>().0 = false;
+        app.update();
+        assert_eq!(shown(&mut app).0, Display::None, "no tooltip in play");
+        app.world_mut().resource_mut::<crate::controls::MenuOpen>().0 = true;
+        *app.world_mut().get_mut::<Interaction>(slot).unwrap() = Interaction::None;
+        app.update();
+        assert_eq!(shown(&mut app).0, Display::None, "nothing hovered");
     }
 }

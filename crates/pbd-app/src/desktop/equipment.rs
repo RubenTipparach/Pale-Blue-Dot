@@ -17,7 +17,7 @@ use bevy::prelude::*;
 use pbd_app::controls::PickerKey;
 use pbd_app::fish::ToolSlot;
 use pbd_app::saves::WorldSave;
-use pbd_app::ui_kit::{self, KitPiece, KitText, Set, UiKit};
+use pbd_app::ui_kit::{self, KitPiece, KitText, Set, Tooltip, UiKit};
 use pbd_core::inventory::Tool;
 
 /// The picker's highlight while G is held: a tool, or `None` for bare hands.
@@ -97,6 +97,10 @@ pub fn spawn(
                 ..default()
             },
             kit.whole(Set::Stone, "slot-idle"),
+            // Hovered while the pack has the pointer: what is in hand.
+            Interaction::default(),
+            Tooltip(hand_tip(None)),
+            ToolSlotCell,
         ))
         .with_children(|cell| {
             cell.spawn((
@@ -217,7 +221,18 @@ pub fn pick(
     }
 }
 
+/// The tool slot itself, which carries its tooltip.
+#[derive(Component)]
+pub struct ToolSlotCell;
+
+/// What the tool slot's tooltip says: the tool in hand and what it is for.
+pub fn hand_tip(held: Option<Tool>) -> String {
+    let (name, purpose) = held.map_or(("Bare hands", "breaks nothing"), |t| (t.name(), t.purpose()));
+    format!("{name}: {purpose}")
+}
+
 /// Paint the tool slot and the picker from the resources.
+#[allow(clippy::too_many_arguments)]
 pub fn paint(
     key: Res<PickerKey>,
     tools: Res<ToolSlot>,
@@ -226,7 +241,14 @@ pub fn paint(
     mut slot: Query<&mut ImageNode, (With<ToolIcon>, Without<PickerIcon>)>,
     mut column: Query<&mut Node, With<PickerColumn>>,
     mut rows: Query<(&PickerRow, &mut Node, &mut BackgroundColor), Without<PickerColumn>>,
+    mut tips: Query<&mut Tooltip, With<ToolSlotCell>>,
 ) {
+    for mut tip in &mut tips {
+        let want = hand_tip(tools.held());
+        if tip.0 != want {
+            tip.0 = want;
+        }
+    }
     for mut image in &mut slot {
         let want = icons.in_hand(tools.held());
         if image.image != want {
