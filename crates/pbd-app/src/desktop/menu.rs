@@ -943,6 +943,10 @@ fn check_row(
 /// The width of a settings slider's groove, native px.
 const SETTING_SLIDER: f32 = 70.0;
 
+/// Between a settings slider's groove and its value, native px: the grip's
+/// overhang past the groove's end (half its 9 px, rounded up) and 4 clear.
+const SLIDER_VALUE_GAP: f32 = 9.0;
+
 /// A row whose stone slider steps through values, the value beside it.
 fn slider_row(
     rows: &mut ChildSpawnerCommands,
@@ -953,7 +957,11 @@ fn slider_row(
 ) {
     setting_row(rows, label, note, |row| {
         row.spawn(Node {
-            column_gap: px(4),
+            // The grip (9 px, centred on its step) stands 5 px past the
+            // groove's end at the top value: the gap keeps 4 px clear of the
+            // value beside it (the coordinator's review of the first
+            // capture, where the grip covered "100%").
+            column_gap: px(SLIDER_VALUE_GAP),
             align_items: AlignItems::Center,
             flex_shrink: 0.0,
             ..default()
