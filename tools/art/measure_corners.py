@@ -13,8 +13,10 @@ capture, and reports for each block size N around 28:
 * where that place is, so the panel's drawn width is the distance between
   the two corners plus N.
 
-A corner drawn at its native size matches all its opaque texels at N = 28 and
-not beyond, where the stretched side begins. Usage:
+A corner drawn at its native size matches all its opaque texels at N = 28.
+Past 28 the stretched sides begin: near the top-left the top side's first
+columns can still sample the same texels, so the bottom-right block, where
+both sides stretch toward it, is the one that shows the edge. Usage:
 
     python3 tools/art/measure_corners.py <capture.png> <baked frame@2.png> \
         [--margin 14] [--scale 2] [--tolerance 2]
@@ -48,7 +50,7 @@ def best_place(screen, block, opaque, tolerance):
         want = block[ys, xs].astype(int)
         share = float(np.mean(np.all(np.abs(drawn - want) <= tolerance, axis=1)))
         if share > best_share:
-            best, best_share = (left, top), share
+            best, best_share = (int(left), int(top)), share
             if share == 1.0:
                 break
     return best, best_share
@@ -86,9 +88,9 @@ def main():
         print(f"panel drawn {br[0] + corner - tl[0]} x {br[1] + corner - tl[1]} px "
               f"from ({tl[0]}, {tl[1]})")
     exact = tl_share == 1.0 and br_share == 1.0
-    beyond = max(found[(corner + 2, "top-left")][1], found[(corner + 2, "bottom-right")][1])
-    print(f"corners {corner} px pixel exact: {exact}; at {corner + 2} px the best match is "
-          f"{beyond * 100:.2f} % (the stretched side)")
+    beyond = found[(corner + 2, "bottom-right")][1]
+    print(f"corners {corner} px pixel exact: {exact}; the bottom-right block at {corner + 2} px "
+          f"matches {beyond * 100:.2f} % (the stretched sides begin)")
     return 0 if exact else 1
 
 

@@ -38,6 +38,7 @@ pub fn spawn(mut commands: Commands) {
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn show(
     aboard: Res<Aboard>,
     view: Res<VehicleView>,
