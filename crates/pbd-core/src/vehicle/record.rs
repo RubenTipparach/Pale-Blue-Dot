@@ -100,8 +100,16 @@ impl Craft {
         specs: Arc<VehicleSpecs>,
         hulls: Hulls,
     ) -> Result<Craft, String> {
-        let kind = Kind::from_key(&record.kind)
-            .ok_or_else(|| format!("unknown craft kind '{}'", record.kind))?;
+        let kind = match Kind::parse(&record.kind) {
+            Some(super::KindKey::Live(kind)) => kind,
+            Some(super::KindKey::Retired) => {
+                return Err(format!(
+                    "craft {} is a retired '{}', kept as its record",
+                    record.id, record.kind
+                ));
+            }
+            None => return Err(format!("unknown craft kind '{}'", record.kind)),
+        };
         if record.frame != PLANET_FRAME {
             return Err(format!(
                 "craft {} is in unknown frame '{}'",

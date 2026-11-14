@@ -79,6 +79,10 @@ pub struct Fleet {
     /// Craft stowed as their records, far from the viewer (`cities-in-the-world`
     /// task 4.2b): in the save, not in the world, until the viewer comes near.
     pub stowed: Vec<pbd_core::vehicle::record::VehicleRecord>,
+    /// Records of a kind the game has retired (`retire-kestrel`): held aside
+    /// as the save read them, never in the world, and written back after the
+    /// live ones, unchanged, on every rewrite.
+    pub retired: Vec<pbd_core::vehicle::record::VehicleRecord>,
 }
 
 impl Fleet {
@@ -91,20 +95,25 @@ impl Fleet {
             dirty: false,
             spawned: false,
             stowed: Vec::new(),
+            retired: Vec::new(),
         }
     }
 
     /// The whole fleet as the save file holds it: the craft in the world and
-    /// the ones stowed.
+    /// the ones stowed, by ID, then the retired records as they were read.
+    /// `next_id` is never below a held record's ID, so no new craft takes
+    /// one.
     pub fn file<'a>(&self, crafts: impl Iterator<Item = &'a Craft>) -> VehicleFile {
         let mut vehicles: Vec<_> = crafts
             .map(Craft::record)
             .chain(self.stowed.iter().cloned())
             .collect();
         vehicles.sort_by_key(|record| record.id);
+        vehicles.extend(self.retired.iter().cloned());
+        let held = self.retired.iter().map(|r| r.id + 1).max().unwrap_or(1);
         VehicleFile {
             version: RECORD_VERSION,
-            next_id: self.next_id,
+            next_id: self.next_id.max(held),
             vehicles,
         }
     }
@@ -816,6 +825,7 @@ pub fn put_away(world: &mut World) -> Option<VehicleFile> {
     fleet.dirty = false;
     fleet.next_id = 1;
     fleet.stowed.clear();
+    fleet.retired.clear();
     file
 }
 

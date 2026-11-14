@@ -85,8 +85,36 @@ impl Kind {
     }
 
     pub fn from_key(key: &str) -> Option<Kind> {
-        Kind::ALL.into_iter().find(|k| k.key() == key)
+        match Kind::parse(key)? {
+            KindKey::Live(kind) => Some(kind),
+            KindKey::Retired => None,
+        }
     }
+
+    /// The saved names of kinds this build has retired (`retire-kestrel`):
+    /// a save's record of one is held aside as read, never drawn, boarded or
+    /// stepped, and written back unchanged.
+    pub const RETIRED: [&'static str; 1] = ["kestrel"];
+
+    /// A saved name: a kind this build flies, a retired one, or `None` for
+    /// one it has never known.
+    pub fn parse(key: &str) -> Option<KindKey> {
+        if Kind::RETIRED.contains(&key) {
+            return Some(KindKey::Retired);
+        }
+        Kind::ALL
+            .into_iter()
+            .find(|k| k.key() == key)
+            .map(KindKey::Live)
+    }
+}
+
+/// What a saved kind name is to this build.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KindKey {
+    Live(Kind),
+    /// A kind the game has retired: its records are kept, not flown.
+    Retired,
 }
 
 /// The world round one craft for one tick, sampled by the app.

@@ -75,9 +75,9 @@ fn walker(app: &mut App) -> Vec3 {
     query.single(app.world()).unwrap().0
 }
 
-/// A new world's three craft each stand where they can work: the Kestrel on
-/// dry ground near the player, each boat afloat, at anchor, in water deep
-/// enough for it.
+/// A new world's fleet is the boats (`retire-kestrel`): the Tern and the
+/// Loon, each afloat, at anchor, in water deep enough for it, and no
+/// aircraft.
 #[test]
 fn a_new_world_places_each_craft_where_it_can_work() {
     let mut app = app(crate::saves::WorldSave::memory_only());
@@ -85,31 +85,14 @@ fn a_new_world_places_each_craft_where_it_can_work() {
     assert!(app.world().resource::<Fleet>().spawned);
     let all = crafts(&mut app);
     let kinds: Vec<Kind> = all.iter().map(|(_, c)| c.kind).collect();
-    assert_eq!(
-        kinds,
-        [Kind::Kestrel, Kind::Tern, Kind::Loon],
-        "all three, in ID order"
-    );
-    let player = walker(&mut app);
+    assert_eq!(kinds, [Kind::Tern, Kind::Loon], "the two boats, in ID order");
     let sea = app.world().resource::<Sea>().clone();
     for (_, craft) in &all {
         let at = craft.reference_position().as_vec3();
         let depth = sea.depth_at(at.normalize());
-        match craft.kind {
-            Kind::Kestrel => {
-                assert_eq!(depth, 0.0, "on dry ground");
-                assert!(at.distance(player) < 50.0, "and near the player");
-                assert!(craft.mooring.is_none());
-            }
-            Kind::Tern | Kind::Loon => {
-                let need = if craft.kind == Kind::Tern { 3.0 } else { 1.2 };
-                assert!(depth >= need, "{} in {depth} m", craft.kind.name());
-                assert!(craft.mooring.is_some_and(|m| m.anchored), "and at anchor");
-            }
-            Kind::Cog | Kind::Rowboat => {
-                unreachable!("a harbour moors it, not the starting fleet")
-            }
-        }
+        let need = if craft.kind == Kind::Tern { 3.0 } else { 1.2 };
+        assert!(depth >= need, "{} in {depth} m", craft.kind.name());
+        assert!(craft.mooring.is_some_and(|m| m.anchored), "and at anchor");
     }
     // And they stay afloat and upright: a berth judged on a coarser seabed
     // than the one the hull meets runs the keel aground on the first tick.
@@ -124,14 +107,12 @@ fn a_new_world_places_each_craft_where_it_can_work() {
             "{} is heeled: {upright:.3}",
             craft.kind.name()
         );
-        if craft.kind != Kind::Kestrel {
-            let lift = craft.reference_position().length() - sea.radius as f64;
-            assert!(
-                lift.abs() < 0.5,
-                "{} floats at the sea: {lift:.2} m",
-                craft.kind.name()
-            );
-        }
+        let lift = craft.reference_position().length() - sea.radius as f64;
+        assert!(
+            lift.abs() < 0.5,
+            "{} floats at the sea: {lift:.2} m",
+            craft.kind.name()
+        );
     }
     // The new fleet is written, not left owed.
     assert!(!app.world().resource::<Fleet>().dirty);
@@ -140,22 +121,24 @@ fn a_new_world_places_each_craft_where_it_can_work() {
         .resource::<crate::saves::WorldSave>()
         .vehicles
         .clone();
-    assert_eq!(saved.map(|f| f.vehicles.len()), Some(3));
+    assert_eq!(saved.map(|f| f.vehicles.len()), Some(2));
 }
 
-/// Board, drive, step off: the craft changes occupancy and never existence.
-/// It stays where it was left, keeps its ID, is written to the save, and
-/// comes back from that save after the world is put away.
+/// Board, get under way, step off: the craft changes occupancy and never
+/// existence. It stays where the unattended policy puts it, keeps its ID, is
+/// written to the save, and comes back from that save after the world is put
+/// away. The Tern stands for any craft (it was the Kestrel, in the air,
+/// until `retire-kestrel`).
 #[test]
 fn a_craft_left_behind_stays_boardable_and_comes_back_from_its_save() {
     let mut app = app(crate::saves::WorldSave::memory_only());
     app.update();
-    let (entity, kestrel) = crafts(&mut app)
+    let (entity, tern) = crafts(&mut app)
         .into_iter()
-        .find(|(_, c)| c.kind == Kind::Kestrel)
+        .find(|(_, c)| c.kind == Kind::Tern)
         .unwrap();
     // Walk up to it and board.
-    board_from(&mut app, kestrel.exit().as_vec3());
+    board_from(&mut app, tern.exit().as_vec3());
     assert_eq!(app.world().resource::<Aboard>().0, Some(entity), "F boards");
     assert!(!app.world().resource::<WalkingState>().active);
     let mut cameras = app
@@ -165,19 +148,24 @@ fn a_craft_left_behind_stays_boardable_and_comes_back_from_its_save() {
         cameras.single(app.world()).unwrap().is_active,
         "its camera is the view"
     );
-    // Power up and lift off for a couple of seconds.
-    app.world_mut()
-        .resource_mut::<ButtonInput<KeyCode>>()
-        .press(KeyCode::Space);
-    for _ in 0..150 {
+    // Weigh anchor and get under way: two metres a second along the bow,
+    // for a couple of seconds.
+    tap(&mut app, KeyCode::KeyT);
+    {
+        let mut vehicle = app.world_mut().get_mut::<Vehicle>(entity).unwrap();
+        let craft = &mut vehicle.craft;
+        assert!(craft.mooring.is_none(), "T weighs the anchor");
+        craft.body.velocity = craft.body.axis(pbd_core::vehicle::FORWARD) * 2.0;
+    }
+    for _ in 0..60 {
         app.update();
     }
-    app.world_mut()
-        .resource_mut::<ButtonInput<KeyCode>>()
-        .release(KeyCode::Space);
-    let flown = crafts(&mut app)[0].1.clone();
-    let lifted = flown.reference_position().length() - kestrel.reference_position().length();
-    assert!(lifted > 2.0, "power lifts it: {lifted:.2} m");
+    let sailed = app.world().get::<Vehicle>(entity).unwrap().craft.clone();
+    let moved = sailed
+        .reference_position()
+        .distance(tern.reference_position());
+    assert!(moved > 0.5, "under way: {moved:.2} m");
+    assert!(sailed.body.velocity.length() > 0.1, "still making way");
     // Step off.
     tap(&mut app, KeyCode::KeyF);
     assert_eq!(app.world().resource::<Aboard>().0, None);
@@ -186,8 +174,8 @@ fn a_craft_left_behind_stays_boardable_and_comes_back_from_its_save() {
         "back on foot"
     );
     let left = crafts(&mut app);
-    assert_eq!(left.len(), 3, "nothing was despawned");
-    let (still, craft) = left.iter().find(|(_, c)| c.id == kestrel.id).unwrap();
+    assert_eq!(left.len(), 2, "nothing was despawned");
+    let (still, craft) = left.iter().find(|(_, c)| c.id == tern.id).unwrap();
     assert_eq!(*still, entity, "the same craft");
     assert!(!craft.occupied);
     assert!(
@@ -202,7 +190,7 @@ fn a_craft_left_behind_stays_boardable_and_comes_back_from_its_save() {
         .clone()
         .expect("the fleet is saved");
     assert_eq!(saved.version, RECORD_VERSION);
-    let record = saved.vehicles.iter().find(|r| r.id == kestrel.id).unwrap();
+    let record = saved.vehicles.iter().find(|r| r.id == tern.id).unwrap();
     // Put the world away and bring it back: same IDs, same poses.
     let now = crafts(&mut app);
     let file = put_away(app.world_mut()).expect("a spawned fleet");
@@ -216,15 +204,15 @@ fn a_craft_left_behind_stays_boardable_and_comes_back_from_its_save() {
         back.iter().map(|(_, c)| c.id).collect::<Vec<_>>(),
         now.iter().map(|(_, c)| c.id).collect::<Vec<_>>()
     );
-    let restored = &back.iter().find(|(_, c)| c.id == kestrel.id).unwrap().1;
+    let restored = &back.iter().find(|(_, c)| c.id == tern.id).unwrap().1;
     let at = pbd_core::DVec3::from(record.position);
     assert!(
         restored.reference_position().distance(at) < 0.5,
         "back where it was left"
     );
-    assert!(app.world().resource::<Fleet>().next_id > kestrel.id);
+    assert!(app.world().resource::<Fleet>().next_id > tern.id);
     // And F boards it where it was left.
-    let (entity, craft) = back.into_iter().find(|(_, c)| c.id == kestrel.id).unwrap();
+    let (entity, craft) = back.into_iter().find(|(_, c)| c.id == tern.id).unwrap();
     board_from(&mut app, craft.exit().as_vec3());
     assert_eq!(
         app.world().resource::<Aboard>().0,
@@ -397,19 +385,7 @@ fn each_craft_maps_its_controls_and_menus_suppress_keys_and_look() {
         app.update();
         let input = app.world().resource::<VehicleControls>().0;
         match craft.kind {
-            Kind::Kestrel => {
-                assert_eq!(
-                    (
-                        input.pitch,
-                        input.roll,
-                        input.yaw,
-                        input.collective,
-                        input.tilt
-                    ),
-                    (-1.0, -1.0, -1.0, 1.0, -1.0)
-                );
-                assert!(!input.bail);
-            }
+            Kind::Kestrel => unreachable!("retired: never placed"),
             Kind::Tern => assert_eq!(
                 (input.steer, input.sheet, input.crew, input.bail),
                 (1.0, 1.0, -1.0, true)
@@ -513,43 +489,6 @@ fn holding_g_beside_a_craft_boards_nothing() {
     stand_at(&mut app, at);
     app.update();
     assert_eq!(app.world().resource::<Aboard>().0, None, "G boards nothing");
-}
-
-/// A capture's hold keeps the Kestrel where it was put, 20 m up where it could
-/// not stay by itself, at rest; let go, it falls (`lamps-and-lanterns` task
-/// 3.3's cave rig).
-#[test]
-fn a_held_kestrel_stays_where_the_capture_put_it() {
-    let mut app = app(crate::saves::WorldSave::memory_only());
-    app.update();
-    let kestrel = |app: &mut App| {
-        crafts(app)
-            .into_iter()
-            .find(|(_, c)| c.kind == Kind::Kestrel)
-            .map(|(_, c)| c)
-            .expect("the fleet has a Kestrel")
-    };
-    let parked = kestrel(&mut app);
-    let at = parked.body.position + parked.body.position.normalize() * 20.0;
-    let facing = parked.body.orientation;
-    app.insert_resource(CraftHold(Some((at, facing))));
-    for _ in 0..120 {
-        app.update();
-    }
-    let held = kestrel(&mut app);
-    assert!(
-        held.body.position.distance(at) < 1e-6,
-        "held at {at}, found at {}",
-        held.body.position
-    );
-    assert_eq!(held.body.velocity, DVec3::ZERO);
-    assert!(held.body.orientation.abs_diff_eq(facing, 1e-9));
-    app.insert_resource(CraftHold(None));
-    for _ in 0..120 {
-        app.update();
-    }
-    let fell = at.length() - kestrel(&mut app).body.position.length();
-    assert!(fell > 1.0, "let go, it falls: {fell:.2} m");
 }
 
 /// Task 4.2b: a craft left far away is stowed as its record, still in the
@@ -1221,4 +1160,85 @@ fn a_resting_craft_far_off_sleeps_and_is_checked() {
     v.rested = false;
     assert!(!sleeps(&mut v, false, far));
     assert_eq!(v.dozing, 0);
+}
+
+/// The vehicle file of a world made before `retire-kestrel`, as that build
+/// wrote it to the disk: a Kestrel, a Tern and a Loon, layout 1 (tasks.md
+/// 1.1; how it was made is in `fixtures/README.md`).
+const KESTREL_ERA: &str = include_str!("fixtures/kestrel-era-vehicles.ron");
+
+/// One record's text in a vehicle file as written: from the `(` that opens
+/// it to the `),` that closes it, found by its kind.
+fn record_text<'a>(file: &'a str, kind: &str) -> &'a str {
+    let at = file
+        .find(&format!("kind: \"{kind}\""))
+        .unwrap_or_else(|| panic!("no {kind} in the file"));
+    let start = file[..at].rfind("(\n").expect("the record opens");
+    let end = at + file[at..].find("\n        ),").expect("the record closes");
+    &file[start..end]
+}
+
+/// Tasks.md 1.2 (`retire-kestrel` decision 1): a world saved with a Kestrel
+/// opens with its two boats and no Kestrel in it; the Kestrel's record is
+/// held aside, and after a boat is moved and the fleet written again it is in
+/// the file byte for byte as it was read, and no new craft can take its ID.
+#[test]
+fn a_world_saved_with_a_kestrel_opens_with_its_boats_and_keeps_the_record() {
+    let old: VehicleFile = ron::from_str(KESTREL_ERA).expect("layout 1 still reads");
+    assert_eq!(old.version, 1);
+    assert_eq!(RECORD_VERSION, 1, "no layout change");
+    let kestrel = old
+        .vehicles
+        .iter()
+        .find(|r| r.kind == "kestrel")
+        .expect("the fixture has a Kestrel")
+        .clone();
+    let root = std::env::temp_dir().join(format!("pbd-retire-kestrel-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let slot = crate::saves::create(&root, "Kestrel era", 1).unwrap();
+    let path = root.join(&slot.id).join(crate::saves::VEHICLES);
+    std::fs::write(&path, KESTREL_ERA).unwrap();
+    let mut app = app(crate::saves::WorldSave::open(root.clone(), slot));
+    app.update();
+    // Its two boats, no Kestrel in the world and none drawn.
+    let all = crafts(&mut app);
+    let kinds: Vec<Kind> = all.iter().map(|(_, c)| c.kind).collect();
+    assert_eq!(kinds, [Kind::Tern, Kind::Loon], "the world opens with two craft");
+    let mut names = app.world_mut().query::<&Name>();
+    assert!(
+        names.iter(app.world()).all(|n| n.as_str() != "Kestrel"),
+        "no Kestrel is drawn"
+    );
+    let fleet = app.world().resource::<Fleet>();
+    assert_eq!(fleet.retired, [kestrel.clone()], "held aside as read");
+    assert!(fleet.next_id > kestrel.id, "its ID is never given again");
+    // Move the Tern and save.
+    let (entity, tern) = all.into_iter().find(|(_, c)| c.kind == Kind::Tern).unwrap();
+    {
+        let mut vehicle = app.world_mut().get_mut::<Vehicle>(entity).unwrap();
+        let moved = tern.reference_position()
+            + tern.body.axis(pbd_core::vehicle::FORWARD) * 3.0;
+        vehicle.craft.set_reference_pose(moved, tern.body.orientation);
+    }
+    app.world_mut().resource_mut::<Fleet>().dirty = true;
+    app.update();
+    app.world().resource::<crate::saves::WorldSave>().drain();
+    let written = std::fs::read_to_string(&path).unwrap();
+    let file: VehicleFile = ron::from_str(&written).unwrap();
+    assert_eq!(file.version, 1);
+    let tern_now = file.vehicles.iter().find(|r| r.id == tern.id).unwrap();
+    let was = old.vehicles.iter().find(|r| r.id == tern.id).unwrap();
+    assert_ne!(tern_now.position, was.position, "the Tern's move is saved");
+    assert_eq!(
+        record_text(&written, "kestrel"),
+        record_text(KESTREL_ERA, "kestrel"),
+        "the Kestrel's record is byte-identical"
+    );
+    assert_eq!(file.vehicles.last(), Some(&kestrel), "after the live ones");
+    assert!(file.next_id > kestrel.id, "next_id never falls below it");
+    assert!(file.vehicles.iter().all(|r| r.id <= file.next_id));
+    // And a world put away and opened again keeps it the same way.
+    let put = put_away(app.world_mut()).expect("a spawned fleet");
+    assert_eq!(put.vehicles.last(), Some(&kestrel));
+    let _ = std::fs::remove_dir_all(&root);
 }

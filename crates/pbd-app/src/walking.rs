@@ -716,7 +716,8 @@ pub fn restore(world: &mut World, pose: RestoredPose) {
 
 /// Where a new world's walker starts, from the spawn direction: the nearest
 /// dry land, and on a generator with ranges (version 6 on) the nearest level
-/// ground to that, found as the Kestrel's pad is (`taller-mountains`
+/// ground to that, a level plain (`place::level_plain`, the rule the
+/// retired Kestrel's pad was found by, kept exactly; `taller-mountains`
 /// decision 8, survey H4). Worlds of versions 4 and 5 keep the start they
 /// had (CLAUDE.md, "Saved games survive every change").
 pub fn new_world_start(ground: &PlanetContact, sea_radius: f32, direction: Vec3) -> Vec3 {
@@ -2404,7 +2405,7 @@ mod tests {
         let start = start_for_version(6, &ground, sea, spawn);
         assert!(
             crate::vehicles::place::level_plain(sea, start),
-            "the start is a level plain with the Kestrel's pad round it"
+            "the start is a level plain with level spots round it"
         );
         assert!(
             !crate::vehicles::place::level_plain(sea, land),
