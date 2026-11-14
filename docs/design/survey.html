@@ -186,6 +186,13 @@ const SECTIONS = [
           { src: 'img/g1-outside.png', alt: 'Ashenstead\'s north gate from outside: the passage walled on both sides, the earth ledge beyond it', caption: 'From outside: the passage walled on both sides, the ledge beyond it.' },
           { src: 'img/g1-passage.png', alt: 'In the passage, looking into the town: the 1 m earth ledge across the street', caption: 'In the passage, looking in: the 1 m earth ledge across the street.' },
         ] },
+      { id: 'W20', q: 'Marenstrand\'s main pier crosses one sand bank where the beach stands 1 m above the deck. Every other pier in the six harbours now lies on the sand or stands on its posts, and nothing clips (pier-landfall). Here the planks are laid over the bank, so 0.75 m of boardwalk sits a metre above the rest, like a raised box with a post at each corner. You can walk over it like a terrain step.',
+        options: ['Keep the planks on the bank', 'Put a short stair up and down at each end', 'Leave a gap in the planks where the bank is'], rec: 1,
+        why: 'A stair reads as built for the bank and is walked without a hop; a gap breaks the walk along the pier.',
+        change: 'pier-landfall', asked: '2026-11-14',
+        images: [
+          { src: 'img/w20-marenstrand-bank.jpg', alt: 'Marenstrand pier before and after: before, sand covers the planks; after, a raised box of planks over the sand bank', caption: 'Top: before (the sand over the planks). Bottom: now (the planks raised over the bank).' },
+        ] },
     ] },
   { tag: 'G', name: 'Ships and flight',
     lead: 'From ship-tiers (2026-11-12), the mockup "Rockets to Starships" (M21 on the tracker, linked below). You asked for "some orbital stuff (the orbital mechanics in tenebris rust was pretty cool)" in the chemical tier. Tenebris flies its rockets Newtonian in a summed inverse-square field and draws patched conics with maneuver nodes on top. CLAUDE.md says ships use local gravity falloff and keeps patched conics, maneuver nodes and transfer windows out. The same rocket is flown both ways in the mockup\'s tab 2 (screenshots to follow: the GPU screenshot gate was not run during perf tuning).',
