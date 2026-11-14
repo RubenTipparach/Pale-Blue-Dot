@@ -259,7 +259,7 @@ pub struct Launch {
     /// a load does to a running game: an old world's planet switched in
     /// place, say (`bigger-biomes` task 2.2c). The save must already exist.
     pub load: Option<String>,
-    /// `--menu pause|settings|saves|pack|map` opens that screen at startup. A headless run has
+    /// `--menu pause|settings|saves|pack|map|guide` opens that screen at startup. A headless run has
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
     pub menu: Option<String>,
@@ -475,13 +475,13 @@ impl Launch {
                     i += 1;
                     let screen = args
                         .get(i)
-                        .expect("--menu requires pause, settings, saves, pack or map");
+                        .expect("--menu requires pause, settings, saves, pack, map or guide");
                     assert!(
                         matches!(
                             screen.as_str(),
-                            "pause" | "settings" | "saves" | "pack" | "map"
+                            "pause" | "settings" | "saves" | "pack" | "map" | "guide"
                         ),
-                        "--menu takes pause, settings, saves, pack or map"
+                        "--menu takes pause, settings, saves, pack, map or guide"
                     );
                     result.menu = Some(screen.clone());
                 }

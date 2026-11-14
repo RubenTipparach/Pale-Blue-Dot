@@ -428,6 +428,7 @@ pub fn opening_screen(menu: Option<&str>, world_named: bool, capture: bool) -> S
         Some("saves") => Screen::Saves,
         Some("pack") => Screen::Pack,
         Some("map") => Screen::Map,
+        Some("guide") => Screen::Guide,
         _ if !world_named && !capture => Screen::Saves,
         _ => Screen::Playing,
     }

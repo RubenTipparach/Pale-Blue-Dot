@@ -1025,21 +1025,23 @@ pub fn spawn_tooltip(mut commands: Commands, kit: Res<UiKit>) {
 }
 
 /// Where the tooltip goes for a pointer at `cursor` (logical px) in a
-/// window `window` wide, at UI scale `scale`: below and right of the pointer,
-/// or below and left of it in the window's right quarter, so it stays on
-/// screen. Native px, as `left` or `right`.
-pub fn tooltip_at(cursor: Vec2, window: f32, scale: f32) -> (Option<f32>, Option<f32>, f32) {
+/// window of `window` (logical px), at UI scale `scale`: below and right of
+/// the pointer; left of it in the window's right quarter and above it in the
+/// bottom fifth (the hotbar), so it stays on screen. Native px, as
+/// `[left, right, top, bottom]`, each set or `None`.
+pub fn tooltip_at(cursor: Vec2, window: Vec2, scale: f32) -> [Option<f32>; 4] {
     let scale = scale.max(1e-3);
-    let top = cursor.y / scale + TOOLTIP_OFFSET;
-    if cursor.x > window * 0.75 {
-        (
-            None,
-            Some((window - cursor.x) / scale + TOOLTIP_OFFSET),
-            top,
-        )
+    let (left, right) = if cursor.x > window.x * 0.75 {
+        (None, Some((window.x - cursor.x) / scale + TOOLTIP_OFFSET))
     } else {
-        (Some(cursor.x / scale + TOOLTIP_OFFSET), None, top)
-    }
+        (Some(cursor.x / scale + TOOLTIP_OFFSET), None)
+    };
+    let (top, bottom) = if cursor.y > window.y * 0.8 {
+        (None, Some((window.y - cursor.y) / scale + TOOLTIP_OFFSET))
+    } else {
+        (Some(cursor.y / scale + TOOLTIP_OFFSET), None)
+    };
+    [left, right, top, bottom]
 }
 
 /// Show the hovered node's tooltip by the pointer, or none.
@@ -1060,7 +1062,7 @@ pub fn show_tooltip(
     let cursor = windows
         .single()
         .ok()
-        .and_then(|w| w.cursor_position().map(|c| (c, w.width())));
+        .and_then(|w| w.cursor_position().map(|c| (c, w.size())));
     let (Some(text), Some((cursor, width)), true) = (over, cursor, free) else {
         for mut node in &mut boxes {
             if node.display != Display::None {
@@ -1069,12 +1071,13 @@ pub fn show_tooltip(
         }
         return;
     };
-    let (left, right, top) = tooltip_at(cursor, width, scale.map_or(1.0, |s| s.0));
+    let [left, right, top, bottom] = tooltip_at(cursor, width, scale.map_or(1.0, |s| s.0));
     for mut node in &mut boxes {
         node.display = Display::Flex;
         node.left = left.map_or(Val::Auto, px);
         node.right = right.map_or(Val::Auto, px);
-        node.top = px(top);
+        node.top = top.map_or(Val::Auto, px);
+        node.bottom = bottom.map_or(Val::Auto, px);
     }
     for mut words in &mut words {
         if words.0 != text {
@@ -1300,13 +1303,19 @@ mod tests {
     /// the pointer.
     #[test]
     fn a_tooltip_shows_by_the_pointer_only_while_a_menu_holds_it() {
+        let window = Vec2::new(1440.0, 900.0);
         assert_eq!(
-            tooltip_at(Vec2::new(100.0, 60.0), 1440.0, 2.0),
-            (Some(58.0), None, 38.0)
+            tooltip_at(Vec2::new(100.0, 60.0), window, 2.0),
+            [Some(58.0), None, Some(38.0), None]
         );
         assert_eq!(
-            tooltip_at(Vec2::new(1400.0, 60.0), 1440.0, 2.0),
-            (None, Some(28.0), 38.0)
+            tooltip_at(Vec2::new(1400.0, 60.0), window, 2.0),
+            [None, Some(28.0), Some(38.0), None]
+        );
+        // Over the hotbar it stands above the pointer.
+        assert_eq!(
+            tooltip_at(Vec2::new(448.0, 860.0), window, 2.0),
+            [Some(232.0), None, None, Some(28.0)]
         );
 
         let mut app = App::new();
