@@ -682,6 +682,9 @@ pub struct KitText {
     pub colour: Color,
     /// A one-pixel shadow under the letters, as carved.
     pub shadow: Option<Color>,
+    /// The shadow drawn all round the letters, a one-pixel outline, for a
+    /// count laid over an icon.
+    pub outline: bool,
     pub size: u32,
 }
 
@@ -691,8 +694,16 @@ impl KitText {
             text: text.into(),
             colour,
             shadow: None,
+            outline: false,
             size: 1,
         }
+    }
+
+    /// A one-pixel outline all round in `colour` (the slot counts).
+    pub fn outline(mut self, colour: Color) -> Self {
+        self.shadow = Some(colour);
+        self.outline = true;
+        self
     }
 
     pub fn shadow(mut self, shadow: Color) -> Self {
@@ -711,6 +722,7 @@ impl KitText {
 pub struct KitTextBuilt {
     text: String,
     shadow: bool,
+    outline: bool,
     size: u32,
 }
 
@@ -745,7 +757,10 @@ pub fn draw_kit_text(
     let font = &kit.font;
     for (entity, text, mut node, built, children) in &mut texts {
         let same = built.is_some_and(|b| {
-            b.text == text.text && b.shadow == text.shadow.is_some() && b.size == text.size
+            b.text == text.text
+                && b.shadow == text.shadow.is_some()
+                && b.outline == text.outline
+                && b.size == text.size
         });
         if same {
             // Only the colour moved.
@@ -769,12 +784,13 @@ pub fn draw_kit_text(
         node.flex_direction = FlexDirection::Row;
         node.column_gap = px(font.spacing as f32 * s);
         node.flex_shrink = 0.0;
-        let tall = (font.height + u32::from(text.shadow.is_some())) as f32 * s;
+        let tall = (font.height + u32::from(text.shadow.is_some() && !text.outline)) as f32 * s;
         node.height = px(tall);
         commands.entity(entity).despawn_related::<Children>();
         commands.entity(entity).insert(KitTextBuilt {
             text: text.text.clone(),
             shadow: text.shadow.is_some(),
+            outline: text.outline,
             size: text.size,
         });
         commands.entity(entity).with_children(|row| {
@@ -796,9 +812,9 @@ pub fn draw_kit_text(
                     layout: font.layout.clone(),
                     index,
                 };
-                let leaf = |top: f32| Node {
+                let leaf = |left: f32, top: f32| Node {
                     position_type: PositionType::Absolute,
-                    left: px(0),
+                    left: px(left),
                     top: px(top),
                     width: px(w as f32 * s),
                     height: px(font.height as f32 * s),
@@ -812,17 +828,24 @@ pub fn draw_kit_text(
                 })
                 .with_children(|cell| {
                     if let Some(shadow) = text.shadow {
-                        cell.spawn((
-                            ImageNode::from_atlas_image(font.image.clone(), atlas())
-                                .with_color(shadow),
-                            leaf(s),
-                            KitGlyph { shadow: true },
-                        ));
+                        let offsets: &[(f32, f32)] = if text.outline {
+                            &[(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)]
+                        } else {
+                            &[(0.0, 1.0)]
+                        };
+                        for (dx, dy) in offsets {
+                            cell.spawn((
+                                ImageNode::from_atlas_image(font.image.clone(), atlas())
+                                    .with_color(shadow),
+                                leaf(dx * s, dy * s),
+                                KitGlyph { shadow: true },
+                            ));
+                        }
                     }
                     cell.spawn((
                         ImageNode::from_atlas_image(font.image.clone(), atlas())
                             .with_color(text.colour),
-                        leaf(0.0),
+                        leaf(0.0, 0.0),
                         KitGlyph { shadow: false },
                     ));
                 });

@@ -53,7 +53,9 @@ pub fn setup(mut commands: Commands) {
         Node {
             position_type: PositionType::Absolute,
             left: px(4),
-            top: px(3),
+            // Under the compass strip and its town line, so the two never
+            // overlap at any window width.
+            top: px(36),
             ..default()
         },
         NearFieldText,

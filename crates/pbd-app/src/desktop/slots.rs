@@ -254,11 +254,13 @@ pub fn cell(
             SlotIcon(index),
         ));
         cell.spawn((
-            KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+            // In the slot's bottom-right corner, over the rim rather than the
+            // icon, outlined in ink so it reads on any tile.
+            KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
             Node {
                 position_type: PositionType::Absolute,
                 bottom: px(1),
-                right: px(2),
+                right: px(1),
                 ..default()
             },
             SlotCount(index),

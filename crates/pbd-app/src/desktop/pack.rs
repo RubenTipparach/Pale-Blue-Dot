@@ -174,7 +174,7 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, kit: Res<UiKit>) {
         ))
         .with_children(|icon| {
             icon.spawn((
-                KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
+                KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
                 Node {
                     position_type: PositionType::Absolute,
                     bottom: px(-3),
