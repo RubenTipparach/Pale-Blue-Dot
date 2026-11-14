@@ -259,6 +259,11 @@ pub struct Launch {
     /// a load does to a running game: an old world's planet switched in
     /// place, say (`bigger-biomes` task 2.2c). The save must already exist.
     pub load: Option<String>,
+    /// `--new-world <name>`: a capture instrument (`new-world-arrival`). A
+    /// third of the way to the shot, make a world of that name and enter it as
+    /// the saves page's NEW WORLD does, so a capture shows what making a new
+    /// world while one is open does to a running game.
+    pub new_world: Option<String>,
     /// `--menu pause|settings|saves|pack|map` opens that screen at startup. A headless run has
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
@@ -321,6 +326,7 @@ impl Launch {
             up: 0.0,
             world: None,
             load: None,
+            new_world: None,
             time: None,
             day: None,
             overlay: None,
@@ -453,6 +459,11 @@ impl Launch {
                 "--load" => {
                     i += 1;
                     result.load = Some(args.get(i).expect("--load requires a name").clone());
+                }
+                "--new-world" => {
+                    i += 1;
+                    result.new_world =
+                        Some(args.get(i).expect("--new-world requires a name").clone());
                 }
                 "--menu" => {
                     i += 1;
@@ -1435,12 +1446,27 @@ fn load_on_cue(
     mut load: ResMut<menu::LoadRequest>,
     mut asked: Local<bool>,
 ) {
-    let Some(name) = launch.load.as_deref() else {
-        return;
-    };
     if *asked || state.frame < launch.frames / 3 {
         return;
     }
+    if let Some(name) = launch.new_world.as_deref() {
+        *asked = true;
+        let seed = pbd_core::planet_gen::TerrainConfig::TENEBRIS.seed;
+        match saves::create(std::path::Path::new(saves::ROOT), name, seed) {
+            Ok(slot) => {
+                info!(
+                    "--new-world: made '{name}' ({}) at frame {}",
+                    slot.id, state.frame
+                );
+                load.0 = Some(slot);
+            }
+            Err(error) => warn!("--new-world: could not make '{name}': {error}"),
+        }
+        return;
+    }
+    let Some(name) = launch.load.as_deref() else {
+        return;
+    };
     *asked = true;
     let id = saves::slot_id(name);
     match saves::list(std::path::Path::new(saves::ROOT))
@@ -1465,6 +1491,7 @@ fn load_world(world: &mut World) {
     let Some(slot) = world.resource_mut::<menu::LoadRequest>().0.take() else {
         return;
     };
+    info!("WORLD_SWITCH before {}", switch_line(world));
     let name = slot.file.name.clone();
     // The craft of the world being left are written into it before the queue
     // is drained, and are gone from the scene before the next world's arrive.
@@ -1573,6 +1600,56 @@ fn load_world(world: &mut World) {
     // The list shows which world is open, so it is drawn again now one is.
     world.resource_mut::<menu::SaveIndex>().set_changed();
     info!("loaded world '{name}'");
+    info!("WORLD_SWITCH after {}", switch_line(world));
+}
+
+/// One line of what world is open and where the player is in it, for the
+/// `WORLD_SWITCH` log (`new-world-arrival`, a measurement instrument).
+fn switch_line(world: &mut World) -> String {
+    let save = world.resource::<WorldSave>();
+    let slot = save.slot().map_or_else(
+        || "memory-only".to_string(),
+        |s| format!("'{}' ({})", s.file.name, s.id),
+    );
+    let saved = save.pose.map_or_else(
+        || "none".to_string(),
+        |p| {
+            format!(
+                "{:.1},{:.1},{:.1}",
+                p.position.x, p.position.y, p.position.z
+            )
+        },
+    );
+    let head = format!(
+        "world {slot} seed {} generator {} edits {} saved_pose {saved}",
+        save.identity.seed,
+        save.identity.generator,
+        save.edits.len()
+    );
+    let mut walkers =
+        world.query_filtered::<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>();
+    let walker = walkers.iter(world).next().map_or_else(
+        || "none".to_string(),
+        |p| {
+            let ll = pbd_core::geo::lat_lon(p.0.normalize_or(Vec3::Y));
+            format!(
+                "{:.1},{:.1},{:.1} (lat {:.4} lon {:.4})",
+                p.0.x,
+                p.0.y,
+                p.0.z,
+                ll.lat.to_degrees(),
+                ll.lon.to_degrees()
+            )
+        },
+    );
+    let spawn = world
+        .get_resource::<pbd_app::walking::WalkingState>()
+        .map_or_else(
+            || "none".to_string(),
+            |s| format!("{:.4?}", s.spawn_direction()),
+        );
+    let clock = world.resource::<pbd_app::sky::Sun>().clock.seconds;
+    format!("{head} walker {walker} spawn_dir {spawn} clock_s {clock:.0}")
 }
 
 /// Write the pose on a timer, and whenever a menu opens.

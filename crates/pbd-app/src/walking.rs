@@ -326,6 +326,12 @@ impl WalkingState {
         (self.heading, self.pitch)
     }
 
+    /// Where [`respawn`] puts the walker: the direction this world's walker
+    /// started from (for a restored world, where its pose was).
+    pub fn spawn_direction(&self) -> Vec3 {
+        self.spawn_direction
+    }
+
     /// Point the walker at `target` while standing on `up`. The capture
     /// scripts need it; gameplay turns with the mouse.
     pub fn face(&mut self, up: Vec3, target: Vec3) {
