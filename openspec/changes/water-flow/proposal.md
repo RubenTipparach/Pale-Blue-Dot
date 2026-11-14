@@ -50,6 +50,6 @@ mockup stays the LGPL port.
 
 ## Impact
 
-- New: `docs/mockups/water-flow.html` (mockup M26), on the tracker.
+- New: `docs/mockups/water-flow.html` (mockup M28), on the tracker.
 - No game code. No change to generation, so no generator version, and no
   save format change until task 3.

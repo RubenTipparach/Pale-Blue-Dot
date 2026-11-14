@@ -78,6 +78,7 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 | M25 | Seas, Rivers and Marshes | `ocean.html` | ocean-environments | Drafted (2026-11-14); three owner questions with screenshots on the page (tides, creatures as pixel cards, deep zones) | https://claude.ai/artifact/JsniCJdwG8b7faX1LRXULR |
 | M26 | Pens, Nests and Pedigrees | `husbandry.html` | animal-husbandry | Drafted (2026-11-14); three owner questions with screenshots on the page (Kingdom by form or by world, can a fox take a hen, breeding ticks or arrows) | https://claude.ai/artifact/KQV8S91JncntnsZ1sQZCYE |
 | M27 | Hearth and Kitchen | `cooking.html` | cooking | Drafted (2026-11-14); three owner questions with screenshots on the page (buffs or a hunger bar, fifteen stations or five, heat as the cook's choice) | https://claude.ai/artifact/3DQ2FBq5wwUeUmn8mng5Ke |
+| M28 | Water That Flows | `water-flow.html` | water-flow | Drafted (2026-11-14); the owner asked for it ("bring in code from Luanti ... in a water flow demo mockup"); renew at three and range 8 taken as recommendations, with a toggle and a slider on the page | https://claude.ai/artifact/EPXp1JDqhcYez8zHVbfw74 |
 
 The thirteen of 2026-11-12 were published as one batch. Their commit (`d468860`) says "Fourteen",
 but it names thirteen subjects, and thirteen pages were published.
