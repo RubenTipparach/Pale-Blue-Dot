@@ -161,7 +161,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <div class="eyebrow">Pale Blue Dot &middot; design mockup &middot; <span class="badge">Proposal, not built</span></div>
     <h1>Pits, plants and power</h1>
     <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
-    <p class="lede">Industry on the hex grid: an open pit cut a layer at a time, the machines that turn its ore into plates, a siphon that cleans lake water and, much later, a mast that draws matter out of the ether, the power ladder that runs all of it, from a coal plant to fusion, antimatter and a Dyson swarm round the star, and oil: a field under the ground, a pumpjack over it, a distillation column and an oil plant on the ladder. Drag to turn, wheel to zoom. Night is on the toggle; at night only lamps, furnaces, flares and windows light the ground. Machines stand still until <b>Run machines</b> is pressed.</p>
+    <p class="lede">Industry on the hex grid: an open pit cut a layer at a time, the machines that turn its ore into plates, a siphon that cleans lake water and, much later, a mast that draws matter out of the ether, the power ladder that runs all of it, from a coal plant to fusion, antimatter and a Dyson swarm round the star, and oil: a field under the ground, a pumpjack over it, a drilling rig, an offshore platform that is a rig and a power plant in one, a distillation column and an oil plant on the ladder. Five tiers dig the pit (hired townsfolk, an excavator, a quarry frame, a bucket-wheel, a drone hive), and section 6 moves it all: wires, pipes, belts, pneumatic tubes and freighters. Drag to turn, wheel to zoom. Night is on the toggle; at night only lamps, furnaces, flares and windows light the ground. Machines stand still until <b>Run machines</b> is pressed.</p>
   </header>
 
   <div class="tabs" role="tablist" aria-label="Sections">
@@ -170,6 +170,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <button class="btn tab" role="tab" data-tab="ether"><img src="industry/siphon.png" alt="" width="32" height="32">3 Ether mining</button>
     <button class="btn tab" role="tab" data-tab="power"><img src="industry/wind.png" alt="" width="32" height="32">4 Power, to the Dyson swarm</button>
     <button class="btn tab" role="tab" data-tab="oil"><img src="industry/pumpjack.png?v=2" alt="" width="32" height="32">5 Oil</button>
+    <button class="btn tab" role="tab" data-tab="transport"><img src="industry/belt.png?v=2" alt="" width="32" height="32">6 Transport</button>
     <span class="sp"></span>
     <button class="btn" id="tRun" aria-pressed="false" title="Machines stand still until this is pressed">Run machines</button>
     <button class="btn" id="tDay" aria-pressed="true">Day 14:00</button><button class="btn" id="tNight" aria-pressed="false">Night 22:00</button>
@@ -194,7 +195,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <p class="note"><b>The game's own, copied byte for byte</b> (<span class="src">docs/mockups/industry/game/README.md</span>): every hex column's top and side is a tile of the terrain atlas (<span class="src">assets/tilesets/atlas.png</span>): the fields sheet's grass, dirt, limestone and <b>copper ore in limestone</b>; the mountains sheet's slate, granite and <b>iron ore</b>; the redwood sheet's <b>ancient charcoal</b> as the coal seam; the basalt wastes' ash, basalt and sulfur round the geothermal plant; the beach sheet at the lake. Walls, yards and the spoil heap are the settlement textures (<span class="src">assets/textures/settlement</span>, at the manifest's <span class="src">repeat_m</span>); the trees and lamp posts are built as the game builds them; the pickaxe, shovel, hand, torch, lantern and brazier are the game's item icons. <b>Mockup-only</b>, pixel art drawn in code with the balatro-pixel-art kit (Sweaft-64): the machine, generator and item icons, and the machine paint, belt, concrete, hazard stripe, white cladding, furnace grate and ether textures (<span class="src">tools/art/industry_art.py</span>); the oil chain's pumpjack, column, oil plant, crude, fuel oil, diesel and asphalt icons and the asphalt, flare-stack band and lit-window textures are drawn the same way in the same script; the oil field and the map under it are noise from a seed, computed in the page, as the game would derive them; the raw ore, coal and ingot icons, and the polymer standing for polymer feed, are the crafting mockup's (<span class="src">tools/art/crafting_art.py</span>); the habitat metal and glass are the building mockup's; the home world's map in the space view is the planets mockup's, and the star's pixel surface is drawn in the page from Sweaft-64 tones. Water is a flat tint, as the game draws it. Numbers are first guesses, chosen to be easy to change.</p>
   </section>
 
-  <footer>Mockup for the owner, 2026-11-12, made to <span class="src">docs/mockups/ART-DIRECTION.md</span>. Proposal only: nothing on this page is built behaviour. No OpenSpec change yet; it would sit beside the crafting mockup's. Oil (section 5, the oil plant in section 4) added 2026-11-13 to <span class="src">openspec/changes/steer-and-sail/design.md</span>, decisions 5 and 6.</footer>
+  <footer>Mockup for the owner, 2026-11-12, made to <span class="src">docs/mockups/ART-DIRECTION.md</span>. Proposal only: nothing on this page is built behaviour. No OpenSpec change yet; it would sit beside the crafting mockup's. Oil (section 5, the oil plant in section 4) added 2026-11-13 to <span class="src">openspec/changes/steer-and-sail/design.md</span>, decisions 5 and 6. Mining tiers, the drilling rig, the offshore platform, the carriers and freighters (section 6) added 2026-11-14 to <span class="src">openspec/changes/industry-tiers</span>.</footer>
 </div>
 <div id="err" hidden></div>
 
@@ -302,7 +303,7 @@ const LAMPMAT = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
 const WATER = PBD.litMaterial(null, 0x2a6a92, { transparent: true, opacity: 0.8, roughness: 0.3, depthWrite: false });
 const PUFF = { smoke: PBD.litMaterial(null, 0x3a3833, { transparent: true, opacity: 0.75 }), steam: PBD.litMaterial(null, 0xdfe6ea, { transparent: true, opacity: 0.6 }), ether: new THREE.MeshBasicMaterial({ color: 0xdd576d, transparent: true, opacity: 0.9 }) };
 const CUBE = new THREE.BoxGeometry(1, 1, 1);
-const ST = { tab: "mining", night: false, gen: "wind", wind: 9, flow: 70, stage: 1, target: "iron", t: 0, swarm: 12, space: false, run: false, mt: 0, oilView: "overview", overlay: true, oilDays: 0 };
+const ST = { tab: "mining", night: false, gen: "wind", wind: 9, flow: 70, stage: 1, target: "iron", t: 0, swarm: 12, space: false, run: false, mt: 0, oilView: "overview", overlay: true, oilDays: 0, mineTier: "excavator", crew: "hired" };
 
 // A puff stream: boxes that rise, grow and wrap (smoke, steam, motes)
 function puffs(S, x, y, z, material, o = {}) {
@@ -326,7 +327,7 @@ function belt(S, A, B, o = {}) {
   return m;
 }
 // A tag pinned to a point in the world, in the HUD's style
-function tag(S, text, x, y, z, cls = "") { S.tags.push({ text, p: new THREE.Vector3(x, y, z), cls }); }
+function tag(S, text, x, y, z, cls = "") { const o = { text, p: new THREE.Vector3(x, y, z), cls }; S.tags.push(o); return o; }
 // A stack of hex (or n-gon) prisms: tanks, towers, the block dome
 function stackPrism(GS, top, side, x, z, rings) { for (const [r0, y0, y1, n = 6] of rings) GS.prism(top, side, poly(x, z, r0, n, Math.PI / 6), y0, y1, { bottom: top }); }
 // anim: what the world moves (smoke, water, wind, fire), always; mach: machines at work, only while Run is pressed
@@ -369,7 +370,7 @@ function buildMineGround(S) {
     top: (q, r, h) => h > 0 ? "rubble" : h === 0 ? "a:4:0" : strataTile(q, r, h),
     side: (q, r, y, h) => y > 0 ? "rubble" : (y === 0 && h === 0 ? "a:4:1" : strataTile(q, r, y)),
   });
-  for (let q = -MINE.N; q <= MINE.N; q++) for (let r = -MINE.N; r <= MINE.N; r++) { const d = hexDist(q, r); if (d > 10 && d < MINE.N && mineGroundH(q, r) === 0 && Math.abs(hz(q, r)) > 4 && !(q > 8 && r < -3) && H2(q * 3 + 7, r * 5 + 11) < 0.2) treeAt(GS, q, r, 0); }
+  for (let q = -MINE.N; q <= MINE.N; q++) for (let r = -MINE.N; r <= MINE.N; r++) { const d = hexDist(q, r); if (d > 10 && d < MINE.N && mineGroundH(q, r) === 0 && Math.abs(hz(q, r)) > 4 && !(q > 8 && r < -3) && !(hz(q, r) > 20 && Math.abs(hx(q, r)) < 18) && !(hx(q, r) < -18 && Math.abs(hz(q, r) - 7) < 9) && H2(q * 3 + 7, r * 5 + 11) < 0.2) treeAt(GS, q, r, 0); }
   addMeshes(GS, MINE_GROUND); S.group.add(MINE_GROUND); S.pick = MINE_GROUND.children;
 }
 function buildMarks(S) {
@@ -396,9 +397,8 @@ function buildMining() {
   const stick = new THREE.Group(); stick.position.set(4.3, 0, 0); boom.add(stick);
   { const GS = new PBD.GeoSet(); GS.box("m:tex_paint", 1.4, -0.2, 0, 2.8, 0.4, 0.4); GS.box("iron", 2.9, -0.5, 0, 0.8, 0.9, 1.1); addMeshes(GS, stick); }
   S.mach.push(t => { house.rotation.y = -0.4 + Math.sin(t * 0.35) * 0.9; boom.rotation.z = 0.25 + Math.sin(t * 0.7) * 0.18; stick.rotation.z = -1.0 + Math.sin(t * 0.7 + 1.2) * 0.35; });
-  S.lights.push({ x: x0 + 1.8, y: y0 + 2.6, z: z0 + 0.8, c: lin(0xfff0c8), p: 1.6, R: 7 });
-  S.flames.push([x0 + 1.4, y0 + 3.5, z0 + 0.6]);
-  tag(S, "Digger, 1 cell a minute", x0, y0 + 5.3, z0, "warm");
+  grpLamp(S, rig, "excavator", x0 + 1.8, y0 + 2.6, z0 + 0.8, { c: lin(0xfff0c8), p: 1.6, R: 7 });
+  tag(S, "Excavator, 1 cell per 40 s", x0, y0 + 5.3, z0, "warm").tier = "excavator";
   // the belt out of the pit to the hopper
   const A = [hx(1, 0), -6.4, 0.3], B = [hx(9, 0) + 1.0, 3.6, 0.3];
   belt(S, A, B, { ground: (x, z) => { const [q, r] = cellAt(x, z); return mineGroundH(q, r); }, items: ["a:4:4", "a:10:15", "a:8:4", "a:10:15"], speed: 1.1 });
@@ -412,8 +412,9 @@ function buildMining() {
   // lamps round the rim, a flood mast over the pit
   for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + 0.5, [q, r] = cellAt(Math.cos(a) * 24.5, Math.sin(a) * 24.5); if (mineGroundH(q, r) === 0) lampPost(S, S.lgs || (S.lgs = new PBD.GeoSet()), hx(q, r), 0, hz(q, r)); }
   { const GS = S.lgs, mx = hx(-4, 9), mz = hz(-4, 9); GS.prism("timber", "timber", poly(mx, mz, 0.16), 0, 8); GS.box("iron", mx + 0.6, 7.8, mz, 1.4, 0.12, 0.3); addMeshes(GS, S.group); S.lights.push({ x: mx + 2.5, y: 6.0, z: mz - 3.2, c: lin(0xfff4d8), p: 1.6, R: 14 }); S.flames.push([mx + 1.1, 7.7, mz]); }
+  addMiningTiers(S, rig);
   finish(S);
-  S.cam = { tx: 2, ty: -3, tz: 0, dist: 46, yaw: 0.35, pitch: 0.62 };
+  S.cam = { tx: 2, ty: -3, tz: 4, dist: 58, yaw: 0.35, pitch: 0.62 };
   S.status = () => `pit L${Math.min(...[...MINE.dug.keys()].map(k => mineH(...k.split(",").map(Number))), -7)} | ${MINE.marked.size} cells marked | fields + mountains strata`;
   S.hot = [["g:pickaxe", "Pickaxe"], ["m:marker", "Survey flag: mark cells", 24], ["g:shovel", "Shovel"], ["c:copper-ore", "Copper ore", 37], ["c:coal", "Coal", 52], ["c:iron-ore", "Iron ore", 18], ["c:stone", "Stone", 99], ["g:lantern_post", "Lantern post", 8], ["g:torch", "Torch", 16], ["g:hand", "Hand"]];
   S.sel = 1;
@@ -668,10 +669,11 @@ function buildOil() {
   for (const [x, z] of [[hx(4, 1) + 0.6, hz(4, 1)], [hx(6, -3), hz(6, -3) - 1.0], [hx(7, 0) + 1.0, hz(7, 0)]]) lampPost(S, GS, x, 0.2, z);
   // the column's draw-off lamp, high on the column, as a refinery lights its ladders
   S.lights.push({ x: C1[0] + 1.3, y: 3.4, z: C1[1] + 0.6, c: lin(0xfff0c8), p: 0.8, R: 4 }); S.flames.push([C1[0] + 1.15, 3.4, C1[1] + 0.55]);
+  const RIG = addDrillingRig(S, GS);
   addMeshes(GS, S.group); finish(S);
   tag(S, "Pumpjack, 3.0 t/day", wx, 3.6, wz, "warm"); S.wellTag = S.tags.length - 1; tag(S, "Crude tank", tx, 3.3, tz);
   tag(S, "Distillation column: 2 cells, 4 layers", C1[0], 9.2, C1[1], "warm"); tag(S, "Crude heater", C2[0] - 0.4, 2.4, C2[1] + 0.6); tag(S, "Flare stack", FX, 11.4, FZ, "warm"); tag(S, "Control room", CR[0], 3.6, CR[1]);
-  S.cams = { overview: { tx: 2, ty: 0, tz: 0, dist: 50, yaw: 0.25, pitch: 0.62 }, well: { tx: wx + 0.6, ty: 1.4, tz: wz + 0.5, dist: 14, yaw: 0.55, pitch: 0.36 }, refinery: { tx: C1[0] + 1.5, ty: 2.5, tz: C1[1] + 0.5, dist: 25, yaw: 0.35, pitch: 0.42 } };
+  S.cams = { overview: { tx: 2, ty: 0, tz: 0, dist: 50, yaw: 0.25, pitch: 0.62 }, well: { tx: wx + 0.6, ty: 1.4, tz: wz + 0.5, dist: 14, yaw: 0.55, pitch: 0.36 }, refinery: { tx: C1[0] + 1.5, ty: 2.5, tz: C1[1] + 0.5, dist: 25, yaw: 0.35, pitch: 0.42 }, rig: { tx: RIG[0], ty: 8, tz: RIG[1], dist: 38, yaw: 0.7, pitch: 0.3 } };
   S.cam = S.cams[ST.oilView] || S.cams.overview;
   S.status = () => `oil field L0 | ${BIOME_NAME[biomeAt(OIL.ox, OIL.oz)]} | pressure ${WELL.p.toFixed(2)} under the well | ${ST.run ? "running" : "machines still"}`;
   S.hot = [["m:pumpjack", "Pumpjack", 1], ["m:oil-refinery", "Distillation column", 1], ["m:oil-plant", "Oil plant", 1], ["m:crude", "Crude oil", 40], ["m:fuel-oil", "Fuel oil", 18], ["m:diesel", "Diesel", 10], ["c:polymer", "Polymer feed", 6], ["m:asphalt", "Asphalt", 6], ["m:pole", "Power pole", 12], ["g:hand", "Hand"]];
@@ -686,6 +688,7 @@ function setRun(v) { ST.run = v; const b = $("tRun"); b.setAttribute("aria-press
 // ===================================================================
 const GENS = {
   oil: { name: "Oil plant", icon: "oil-plant", tier: "Mid", out: () => 1000, fuel: "Fuel oil from the distillation column (section 5): 250 kg a game hour at full load, 25 kg an hour per 100 kW, the ship oil engine's rate", foot: "12 cells: boiler and turbine hall, 2 storeys; 2 tank cells; stack 15 m", rule: "Anywhere on solid ground, fed by pipe or by tanker. Smoke: no town within 6 cells.", note: "The coal plant's layout on fuel oil: tanks for a hopper, burners for a grate, a steel stack. 1,000 kW: above the coal plant, below fission; five pumpjacks keep it at full load." },
+  platform: { name: "Offshore platform", icon: "platform", tier: "Mid", out: () => 3100, fuel: "Its own gas: the 6 wells' associated gas runs the turbines, 4,000 kW gross; 900 kW runs the platform", foot: "A deck of about 30 cells on 4 legs, over 10 to 60 m of shelf sea", rule: "Over an oil field on the shelf sea. Power comes ashore by sea cable to a substation.", note: "A rig and a power plant in one: 6 wells, gas turbines on the deck, 3,100 kW sent ashore, crude to a tanker every 4 days." },
   coal: { name: "Coal plant", icon: "coal-plant", tier: "Mid", out: () => 600, fuel: "Coal, 1 per 8 s at full load (450 per game hour)", foot: "7 cells, 2 storeys; stack 12 m", rule: "Anywhere on solid ground. Smoke: no town within 6 cells.", note: "The first steady power: a boiler hall, a coal hopper fed by belt, a brick stack." },
   wind: { name: "Wind turbines", icon: "wind", tier: "Mid", out: () => 3 * windKW(ST.wind), fuel: "None. Output with the wind: cut in 3 m/s, rated 12 m/s, cut out 25 m/s", foot: "1 cell each, 14 m tall; 3 cells apart", rule: "On a rise: the cell must stand 2 layers above every cell within 3. Rotor clear of trees.", note: "Three turbines on a hill. The slider is the wind; weather sets it in the game." },
   geo: { name: "Geothermal", icon: "geothermal", tier: "Mid-late", out: () => 400, fuel: "None. Steady day and night", foot: "4 cells over a vent", rule: "Only over a hot vent: basalt wastes or a volcanic world's sulfur cells, found by their steam.", note: "Wells over the vents, steam piped to a turbine house." },
@@ -696,7 +699,7 @@ const GENS = {
   antimatter: { name: "Antimatter plant", icon: "antimatter", tier: "Late", out: () => (GRID.cons.collider ? 16000 : 0), fuel: "Antimatter cells from the collider: 1 a game hour at full output", foot: "19 cells inside a 2-cell berm of basalt", rule: "Shielding berm all round, 3 layers high; no building within 4 cells.", note: "Containment vessels behind heavy shielding. A battery, not a source: 20,000 kW at the collider makes a cell that gives back 16,000 kW for an hour, anywhere you carry it." },
   dyson: { name: "Dyson swarm", icon: "dyson", tier: "End", out: () => Math.round(20000 * ST.swarm), fuel: "Sunlight. Each drone: 2 alloy plate, 1 circuit, 1 ether shard; 100,000 drones for the whole swarm", foot: "Launch rail 40 m, drone factory 7 cells, ground receiver 19 cells", rule: "Launch site with clear sky; a receiver anywhere the relays can see.", note: "The top of the ladder: a drone factory launches collectors to orbit the star; relay stations beam the power down to a receiver field." },
 };
-const TIERS = [["I", "Coal and oil", ["coal", "oil"]], ["II", "Wind, water, heat", ["wind", "hydro", "geo"]], ["III", "Fission", ["nuclear"]], ["IV", "Fusion", ["fusion"]], ["V", "Antimatter", ["collider", "antimatter"]], ["VI", "Dyson swarm", ["dyson"]]];
+const TIERS = [["I", "Coal and oil", ["coal", "oil", "platform"]], ["II", "Wind, water, heat", ["wind", "hydro", "geo"]], ["III", "Fission", ["nuclear"]], ["IV", "Fusion", ["fusion"]], ["V", "Antimatter", ["collider", "antimatter"]], ["VI", "Dyson swarm", ["dyson"]]];
 const GEN_ORDER = TIERS.flatMap(t => t[2]);   // coal, oil, then wind: oil sits between coal and wind
 const windKW = v => v < 3 || v > 25 ? 0 : Math.round(150 * Math.min(1, Math.pow((v - 3) / 9, 3)));
 function genGround(S, o) { const GS = S.lgs; columns(GS, { N: 12, skirt: -4, ...o }); }
@@ -931,19 +934,288 @@ function buildSwarm() {
 }
 
 // ===================================================================
+// 2026-11-14 (openspec/changes/industry-tiers): five authors of the same dig, the drilling rig, the
+// offshore platform, freighters and the four carriers. Everything here stands still until Run.
+// ===================================================================
+// a thin box between two points, as a mesh in parent (struts, cables, braces)
+function rod(parent, k, a, b, w = 0.12) { const m = new THREE.Mesh(CUBE, mat(k)); m.castShadow = true; rodBetween(m, a, b, w); parent.add(m); return m; }
+// a lamp that belongs to one mining tier (or other switchable group): its light carries the tag, its bulb rides the group
+function grpLamp(S, grp, tagk, x, y, z, o = {}) { const L = { x, y, z, ...LAMP, ...o, tier: tagk }; S.lights.push(L); const b = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 0.2), LAMPMAT); b.position.set(x, y, z); grp.add(b); return L; }
+const liveLights = () => CUR.lights.filter(l => !l.tier || l.tier === (CUR.name === "mining" ? ST.mineTier : CUR.name === "transport" ? ST.crew : l.tier));
+// a townsfolk worker of blocks: legs, coat, head, hard hat, and an arm holding a tool that swings
+function person(parent, x, y, z, ang, o = {}) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ang; parent.add(g);
+  const GS = new PBD.GeoSet(), coat = o.coat || "m:tex_white#4f6f9a";
+  GS.box("boards", -0.13, 0, 0, 0.2, 0.8, 0.24); GS.box("boards", 0.13, 0, 0, 0.2, 0.8, 0.24);
+  GS.box(coat, 0, 0.8, 0, 0.6, 0.72, 0.34); GS.box("m:tex_white#e3b48c", 0, 1.52, 0, 0.42, 0.42, 0.42);
+  GS.box(o.hat || "m:tex_paint", 0, 1.94, 0, 0.5, 0.14, 0.5); addMeshes(GS, g);
+  const arm = new THREE.Group(); arm.position.set(0.38, 1.4, 0); g.add(arm);
+  const A = new PBD.GeoSet(); A.box(coat, 0, -0.62, 0, 0.18, 0.62, 0.2);
+  if (o.tool !== false) { A.box("timber", 0, -0.7, 0.45, 0.07, 0.07, 1.0); A.box("iron", 0, -0.72, 0.95, 0.5, 0.12, 0.1); }
+  addMeshes(A, arm); arm.rotation.x = -0.3; return { g, arm };
+}
+
+// ---- 1. the five mining tiers: who digs, how fast, how hard a rock, on what
+const MT = {
+  crew: { name: "Hired crew", icon: "m:worker", rate: 180, par: 4, hard: 2.2, runs: "Wages: 4 coins a worker a game day", unlock: "From the start", reach: "Any marked cell they can walk to", note: "Four townsfolk with picks and a barrow. They work by day; a lit pit and double wages keep a night shift." },
+  excavator: { name: "Excavator", icon: "m:excavator", rate: 40, par: 1, hard: 3.0, runs: "Diesel, 12 kg a game hour", unlock: "Tier I: oil", reach: "3 cells round where it stands; it drives to the marks", note: "M20's digger, named for what it is: tracks, a turning house, boom, stick and bucket." },
+  quarry: { name: "Quarry frame", icon: "m:quarry", rate: 8, par: 1, hard: 3.0, runs: "120 kW", unlock: "Tier I to II grid", reach: "Every cell inside its frame, radius 3 here (up to 4), down to layer -24", note: "An orange gantry round a hex of cells, the drill head on its rails. Building the frame is the mark: it takes every cell inside, a layer at a time." },
+  wheel: { name: "Bucket-wheel excavator", icon: "m:bucketwheel", rate: 1.5, par: 1, hard: 3.0, runs: "4,000 kW down a trailing cable", unlock: "Tier III: fission", reach: "A bench face up to 30 m from its crawlers; it walks the bench", note: "A 37-cell machine: crawlers, a mast and its cables, a boom with the wheel, a counterweight. 40 cells a minute." },
+  drones: { name: "Mining drones", icon: "m:hive", rate: 45, par: 12, hard: 9, runs: "30 kW a drone charging, 360 kW", unlock: "Tier IV: fusion", reach: "Any marked cell within 300 m of the hive: cliffs, overhangs, a cave roof, a small moon", note: "A hive of 12. Each flies to a marked cell, cuts it and carries it home." },
+};
+const MT_ORDER = ["crew", "excavator", "quarry", "wheel", "drones"];
+const QUARRY_R = 3;
+function addMiningTiers(S, rig) {
+  S.tiers = {}; const T = S.tiers;
+  // the excavator: M20's digger, now one tier among five
+  T.excavator = rig;
+  // crew: four workers at the first marked cells, a tent, a pay chest, a barrow, two lanterns
+  T.crew = new THREE.Group(); S.group.add(T.crew);
+  { const cells = [...MINE.marked].map(k => k.split(",").map(Number)).sort((a, b) => hx(...a) - hx(...b)).filter((c, i) => i % 3 === 0).slice(0, 4);
+    S.crew = cells.map(([q, r], i) => { const p = person(T.crew, hx(q, r) + 0.6, mineGroundH(q, r), hz(q, r) + 0.4, Math.atan2(hx(q, r), hz(q, r)) + Math.PI, { coat: ["m:tex_white#4f6f9a", "m:tex_white#7d4f3a", "m:tex_white#5a7a4a", "m:tex_white#6a5a7a"][i] }); return p; });
+    const GS = new PBD.GeoSet(), tq = -3, tr = -11, tx = hx(tq, tr), tz = hz(tq, tr);
+    GS.box("m:tex_white#d9c8a0", tx, 0, tz, 3.0, 1.8, 2.4); GS.box("m:tex_white#bfa878", tx, 1.8, tz, 3.2, 0.5, 1.4); GS.box("timber", tx, 2.3, tz, 3.4, 0.14, 0.14);
+    GS.box("boards", tx + 2.4, 0, tz + 0.4, 0.9, 0.6, 0.6); GS.box("iron", tx + 2.4, 0.6, tz + 0.4, 0.95, 0.08, 0.65);   // the pay chest
+    GS.box("iron", tx - 2.6, 0.35, tz + 1.2, 1.1, 0.45, 0.7); GS.box("timber", tx - 3.4, 0.3, tz + 1.2, 0.8, 0.06, 0.06);   // a barrow
+    PBD.lampPost(GS, tx + 1.2, 0, tz + 1.8); grpLamp(S, T.crew, "crew", tx + 1.65, 2.25, tz + 1.8);
+    const [lq, lr] = [4, -9]; PBD.lampPost(GS, hx(lq, lr), 0, hz(lq, lr)); grpLamp(S, T.crew, "crew", hx(lq, lr) + 0.45, 2.25, hz(lq, lr));
+    addMeshes(GS, T.crew);
+    S.mach.push(t => { if (ST.mineTier === "crew") S.crew.forEach((p, i) => { p.arm.rotation.x = -0.3 - 1.4 * Math.max(0, Math.sin(t * 2.2 + i * 1.7)); }); });
+    tag(S, "Hired crew: 4 townsfolk, 1 cell per 3 min each", tx, 4.2, tz, "warm").tier = "crew"; }
+  // quarry frame: six posts round a hex of radius 3 over the pit, a top rail, a gantry beam, the carriage and drill
+  T.quarry = new THREE.Group(); S.group.add(T.quarry);
+  { const GS = new PBD.GeoSet(), Rr = (QUARRY_R + 0.6) * W, top = 3.2, posts = [];
+    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + Math.PI / 6, x = Math.cos(a) * Rr, z = Math.sin(a) * Rr, [q, r] = cellAt(x, z), y0 = mineGroundH(q, r); posts.push([x, z]); GS.box("m:tex_paint", x, y0, z, 0.7, top - y0, 0.7); GS.box("m:tex_hazard", x, top - 0.9, z, 0.74, 0.3, 0.74); }
+    for (let k = 0; k < 6; k++) { const [a, b] = [posts[k], posts[(k + 1) % 6]]; GS.box("m:tex_paint", (a[0] + b[0]) / 2, top, (a[1] + b[1]) / 2, Math.hypot(b[0] - a[0], b[1] - a[1]) + 0.7, 0.6, 0.6, Math.atan2(b[1] - a[1], b[0] - a[0])); }
+    addMeshes(GS, T.quarry);
+    const beam = new THREE.Group(); T.quarry.add(beam); { const B = new PBD.GeoSet(); B.box("m:tex_paint", 0, top + 0.6, 0, 2 * Rr * 0.9, 0.5, 0.5); addMeshes(B, beam); }
+    const car = new THREE.Group(); beam.add(car); { const C = new PBD.GeoSet(); C.box("iron", 0, top + 0.4, 0, 1.2, 0.9, 1.2); C.box("m:tex_hazard", 0, top + 1.3, 0, 1.24, 0.12, 1.24); addMeshes(C, car); }
+    const shaft = new THREE.Mesh(CUBE, mat("b:tex_metal#9fe8ff")); shaft.castShadow = true; car.add(shaft);
+    const bit = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.1, 6), mat("iron")); bit.rotation.x = Math.PI; car.add(bit);
+    const place = (bx, bz) => { beam.position.z = bz; car.position.x = bx; const [q, r] = cellAt(bx, bz), g = mineGroundH(q, r); shaft.scale.set(0.32, top + 0.4 - g - 1.1, 0.32); shaft.position.set(0, (top + 0.4 + g + 1.1) / 2, 0); bit.position.set(0, g + 0.55, 0); };
+    place(1.5, 1.0);
+    S.mach.push(t => { if (ST.mineTier === "quarry") { place(Math.sin(t * 0.45) * Rr * 0.6, Math.sin(t * 0.29 + 1) * Rr * 0.6); bit.rotation.y = t * 8; } });
+    grpLamp(S, T.quarry, "quarry", posts[1][0], top + 1.2, posts[1][1], { p: 1.6, R: 10 }); grpLamp(S, T.quarry, "quarry", posts[4][0], top + 1.2, posts[4][1], { p: 1.6, R: 10 });
+    tag(S, "Quarry frame: 61 cells inside, 1 every 8 s, 120 kW", 0, top + 3.2, 0, "warm").tier = "quarry"; }
+  // bucket-wheel excavator on the south rim, its boom out over the pit, the wheel on the bench face
+  T.wheel = new THREE.Group(); S.group.add(T.wheel);
+  { const bx = -2, bz = 33, house = new THREE.Group(), GS = new PBD.GeoSet(); T.wheel.position.set(bx, 0, bz);
+    for (const [dx, dz] of [[-3.2, -3], [3.2, -3], [-3.2, 3], [3.2, 3]]) { GS.box("m:tex_belt", dx, 0, dz, 2.4, 1.3, 4.6); GS.box("iron", dx, 0.2, dz, 2.6, 0.9, 4.8); }
+    GS.box("b:tex_metal", 0, 1.3, 0, 8.6, 1.4, 8.6); stackPrism(GS, "iron", "iron", 0, 0, [[3.4, 2.7, 3.3, 12]]);
+    addMeshes(GS, T.wheel); house.position.y = 3.3; T.wheel.add(house);
+    { const H = new PBD.GeoSet(); H.box("b:tex_metal", 0, 0, 0.5, 6.4, 3.4, 7.0); H.box("glow:m:tex_window", 3.21, 1.2, -1.5, 0.04, 1.0, 2.6); H.box("m:tex_hazard", 0, 3.4, 0.5, 6.5, 0.3, 7.1);
+      for (const s of [-1, 1]) H.box("b:tex_metal", s * 2.2, 3.4, 1.5, 0.6, 16, 0.6); H.box("b:tex_metal", 0, 19.2, 1.5, 5.0, 0.8, 1.0);   // the mast
+      H.box("brick#5d778d", 0, 1.0, 13, 4.0, 3.0, 3.0); addMeshes(H, house); }                                                                // the counterweight
+    rod(house, "b:tex_metal", [0, 3.0, 3.5], [0, 3.6, 12], 0.8);                                                                            // counterweight arm
+    const boomEnd = [0, -2.4, -19.5]; rod(house, "b:tex_metal", [0, 2.4, -3], boomEnd, 1.5); rod(house, "m:tex_hazard", [0, 3.3, -3], [boomEnd[0], boomEnd[1] + 0.8, boomEnd[2]], 0.3);
+    for (const s of [-1, 1]) { rod(house, "iron", [s * 2.2, 19.6, 1.5], [s * 0.6, boomEnd[1] + 1.2, boomEnd[2] + 1.0], 0.08); rod(house, "iron", [s * 2.2, 19.6, 1.5], [s * 1.2, 4.6, 13], 0.08); }
+    const wheel = new THREE.Group(); wheel.position.set(1.6, boomEnd[1], boomEnd[2]); house.add(wheel);
+    { const Wg = new PBD.GeoSet(); for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6; Wg.box("m:tex_paint#a8633e", 0, Math.sin(a) * 3.4 - 0.5, Math.cos(a) * 3.4, 0.9, 1.0, 1.0, 0); }
+      addMeshes(Wg, wheel); const hub = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.0, 0.5, 12), mat("iron")); hub.rotation.z = Math.PI / 2; wheel.add(hub); }
+    S.mach.push(t => { if (ST.mineTier === "wheel") { wheel.rotation.x = -t * 0.9; house.rotation.y = Math.sin(t * 0.12) * 0.22; } });
+    // its trailing cable to the grid, across the field to a pole
+    { const C = new PBD.GeoSet(); C.box("m:tex_belt", 5.5, 0.05, 8, 0.3, 0.2, 9, 0.4); C.prism("timber", "timber", poly(9, 12.5, 0.18), 0, 6); C.box("iron", 9, 5.8, 12.5, 1.2, 0.1, 0.1); addMeshes(C, T.wheel); }
+    grpLamp(S, T.wheel, "wheel", bx + 3.4, 7.6, bz - 2, { p: 1.8, R: 16 }); grpLamp(S, T.wheel, "wheel", bx - 3.4, 7.6, bz - 2, { p: 1.8, R: 16 }); grpLamp(S, T.wheel, "wheel", bx, 2.0, bz - 19, { p: 1.6, R: 12 });
+    tag(S, "Bucket-wheel excavator: 40 cells a minute, 4,000 kW", bx, 25, bz, "warm").tier = "wheel"; }
+  // the drone hive on the west rim; drones park on its roof and fly to the marks while it runs
+  T.drones = new THREE.Group(); S.group.add(T.drones);
+  { const [cq, cr] = [-11, 3], X = hx(cq, cr), Z = hz(cq, cr), GS = new PBD.GeoSet();
+    stackPrism(GS, "b:tex_metal", "b:tex_metal", X, Z, [[3.4, 0, 2.8], [3.0, 2.8, 3.2]]);
+    for (let k = 0; k < 6; k += 2) { const a = k * Math.PI / 3, x = X + Math.cos(a) * 3.0, z = Z + Math.sin(a) * 3.0; GS.box("glow:m:tex_window#ffd08a", x, 0.5, z, 1.4, 1.4, 1.4, a); }
+    addMeshes(GS, T.drones); grpLamp(S, T.drones, "drones", X + 3.8, 2.4, Z, { p: 1.2, R: 7 });
+    const cells = [...MINE.marked].map(k => k.split(",").map(Number)), ds = [];
+    for (let i = 0; i < 6; i++) { const d = new THREE.Group(), D = new PBD.GeoSet(); D.box("m:tex_panel", 0, 0, 0, 0.9, 0.3, 0.9); for (const [sx, sz] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]]) D.box("iron", sx, 0.3, sz, 0.6, 0.05, 0.12); D.box("glow:m:tex_white#74effe", 0, -0.12, 0, 0.3, 0.12, 0.3); addMeshes(D, d); T.drones.add(d);
+      const home = [X + Math.cos(i) * 1.6, 3.35, Z + Math.sin(i) * 1.6], [q, r] = cells[(i * 5) % cells.length], dest = [hx(q, r), mineGroundH(q, r) + 0.6, hz(q, r)]; d.position.set(...home); ds.push({ d, home, dest }); }
+    S.mach.push(t => { if (ST.mineTier !== "drones") return; ds.forEach(({ d, home, dest }, i) => { const ph = ((t * 0.08 + i / 6) % 1), f = ph < 0.4 ? ph / 0.4 : ph < 0.6 ? 1 : 1 - (ph - 0.6) / 0.4, h = Math.sin(f * Math.PI) * 8; d.position.set(home[0] + (dest[0] - home[0]) * f, home[1] + (dest[1] - home[1]) * f + h, home[2] + (dest[2] - home[2]) * f); d.rotation.y = t * 0.5 + i; }); });
+    tag(S, "Drone hive: 12 drones, 360 kW", X, 5.2, Z, "warm").tier = "drones"; }
+  T.excavator.userData.tier = "excavator";
+  setMineTier(ST.mineTier, S);
+}
+function setMineTier(k, S = CUR) {
+  ST.mineTier = k; if (!S || !S.tiers) return;
+  for (const [n, g] of Object.entries(S.tiers)) g.visible = n === k;
+  if (S === CUR) { PBD.setLights(liveLights()); status(); }
+}
+
+// ---- 2. the drilling rig: a lattice derrick on its substructure; the travelling block rises and falls while it drills
+function derrick(S, parent, x, y, z, Hd, o = {}) {
+  const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g);
+  const GS = new PBD.GeoSet(), b = o.base || 2.2, t = 0.55;
+  if (!o.noSub) { GS.box("m:tex_paint", 0, 0, 0, 5.2, 2.4, 5.2); GS.box("m:tex_hazard", 0, 2.4, 0, 5.3, 0.15, 5.3); }
+  const y0 = o.noSub ? 0 : 2.55; addMeshes(GS, g);
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  for (const [sx, sz] of corners) rod(g, "iron", [sx * b, y0, sz * b], [sx * t, y0 + Hd, sz * t], 0.18);
+  for (let h = 4; h < Hd; h += 4) { const w = b + (t - b) * h / Hd; for (let i = 0; i < 4; i++) { const [a1, a2] = [corners[i], corners[(i + 1) % 4]]; rod(g, "iron", [a1[0] * w, y0 + h, a1[1] * w], [a2[0] * w, y0 + h, a2[1] * w], 0.1); const w2 = b + (t - b) * (h - 4) / Hd; rod(g, "iron", [a1[0] * w2, y0 + h - 4, a1[1] * w2], [a2[0] * w, y0 + h, a2[1] * w], 0.07); } }
+  const C = new PBD.GeoSet(); C.box("m:tex_paint#d12d41", 0, y0 + Hd, 0, 1.6, 0.8, 1.6); addMeshes(C, g);
+  const block = new THREE.Mesh(CUBE, mat("m:tex_paint")); block.scale.set(0.8, 1.0, 0.8); g.add(block);
+  const pipe = new THREE.Mesh(CUBE, mat("b:tex_metal")); g.add(pipe);
+  const pose = tt => { const hb = y0 + 2 + (Hd - 5) * (0.5 + 0.5 * Math.sin(tt * 0.35)); block.position.set(0, hb, 0); pipe.scale.set(0.16, hb - y0 + 0.4, 0.16); pipe.position.set(0, (hb + y0 - 0.4) / 2, 0); pipe.rotation.y = tt * 3; };
+  pose(1.2); S.mach.push(pose);
+  return { g, y0, top: y0 + Hd };
+}
+function addDrillingRig(S, GS) {
+  // on the field's second-strongest cell, well away from the pumpjack
+  let rc = [-9, 7], best = -1; for (let q = -12; q <= 12; q++) for (let r = -12; r <= 12; r++) { const d = hexDist(q, r); if (d < 8 || d > 11 || hx(q, r) > -6) continue; const v = oilAt(hx(q, r), hz(q, r)); if (v > best) { best = v; rc = [q, r]; } }
+  const x = hx(...rc), z = hz(...rc), y = 0.0; S.rigCell = rc; S.rigP = best;
+  const R0 = derrick(S, S.group, x, y, z, 20);
+  GS.box("b:tex_metal", x + 5.2, 0, z - 1.0, 3.6, 2.6, 2.8); GS.box("glow:m:tex_window", x + 7.01, 1.0, z - 1.0, 0.04, 0.9, 1.6);       // generator and drawworks shed
+  for (let i = 0; i < 6; i++) GS.box("b:tex_metal", x - 4.2, 0.2 + Math.floor(i / 3) * 0.36, z - 1.4 + (i % 3) * 0.45, 7.0, 0.32, 0.32, 0);   // pipe rack
+  GS.box("iron", x - 4.2, 0, z - 0.95, 7.4, 0.2, 1.6);
+  const mud = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 3.2), PBD.litMaterial(null, 0x5e4228, { transparent: true, opacity: 0.92 })); mud.rotation.x = -Math.PI / 2; mud.position.set(x + 1, 0.15, z + 4.6); S.group.add(mud);
+  GS.box("iron", x + 1, 0, z + 4.6, 4.9, 0.12, 3.5);
+  S.lights.push({ x: x + 1.8, y: 9, z: z + 1.8, c: lin(0xfff0c8), p: 1.6, R: 12 }, { x: x - 1.8, y: 15, z: z - 1.8, c: lin(0xfff0c8), p: 1.2, R: 9 }, { x: x + 7.6, y: 1.6, z: z - 1.0, c: lin(0xffc070), p: 0.8, R: 3.4 });
+  S.flames.push([x + 1.4, 9, z + 1.4], [x - 1.4, 15, z - 1.4]);
+  { const bcn = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({ color: 0xff3030 })); bcn.position.set(x, R0.top + 1.0, z); S.group.add(bcn); }
+  tag(S, "Drilling rig: a well in 2 game days, 300 kW", x, R0.top + 2.6, z, "warm");
+  return [x, z];
+}
+
+// ---- the offshore platform: a rig and a power plant in one (the owner, 2026-11-14)
+function buildOffshore() {
+  const S = newScene("offshore"), GS = S.lgs = new PBD.GeoSet(), N = 15;
+  // the shelf: seabed 14 m down here (the shelf runs 10 to 60 m), the shore to the east with the substation
+  const land = (q, r) => hx(q, r) > 26;
+  const H = (q, r) => land(q, r) ? (hx(q, r) > 30 ? 2 : 1) : -14 + Math.round(fbm(hx(q, r) / 20, hz(q, r) / 20, 5) * 3) + (hx(q, r) > 16 ? Math.round((hx(q, r) - 16) * 1.3) : 0);
+  columns(GS, { N, H: (q, r) => Math.min(H(q, r), 2), skirt: -18, top: (q, r, h) => h > 1 ? "a:4:0" : h > -2 ? "a:2:0" : "a:2:3", side: (q, r, y, h) => y > 1 ? "a:4:1" : "a:2:3" });
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), WATER); sea.rotation.x = -Math.PI / 2; sea.position.set(-40, 0, 0); S.group.add(sea);
+  // legs, braces, the deck
+  const PX = -6, PZ = 0, DY = 11, legs = [[-7, -5], [7, -5], [7, 5], [-7, 5]];
+  for (const [dx, dz] of legs) { const x = PX + dx, z = PZ + dz, [q, r] = cellAt(x, z); stackPrism(GS, "m:tex_paint#8d4526", "m:tex_paint#a8633e", x, z, [[1.3, H(q, r), DY, 12]]); GS.box("m:tex_hazard", x, -0.4, z, 2.7, 0.8, 2.7); }
+  for (let i = 0; i < 4; i++) { const [a, b] = [legs[i], legs[(i + 1) % 4]]; for (const yy of [-8, -2, 4]) rod(S.group, "m:tex_paint#8d4526", [PX + a[0], yy, PZ + a[1]], [PX + b[0], yy + 5, PZ + b[1]], 0.45); }
+  GS.box("iron", PX, DY, PZ, 22, 0.8, 16); GS.box("m:tex_hazard", PX, DY + 0.8, PZ + 7.95, 22, 0.25, 0.1); GS.box("m:tex_hazard", PX, DY + 0.8, PZ - 7.95, 22, 0.25, 0.1);
+  // quarters with lit windows and the helipad on top; the turbine hall and its stacks; lifeboats; the crane
+  const QX = PX - 7, QZ = PZ + 3; GS.box("m:tex_white", QX, DY + 0.8, QZ, 7.5, 6.4, 8); for (const yy of [1.6, 3.6, 5.4]) GS.box("glow:m:tex_window", QX + 3.76, DY + 0.8 + yy - 0.6, QZ, 0.04, 0.9, 6.2);
+  GS.prism("m:tex_asphalt", "iron", poly(QX, QZ, 4.6, 6, Math.PI / 6), DY + 7.2, DY + 7.5); GS.box("m:tex_white", QX, DY + 7.5, QZ, 0.5, 0.04, 3.0); GS.box("m:tex_white", QX - 1.0, DY + 7.5, QZ, 0.4, 0.04, 2.4); GS.box("m:tex_white", QX + 1.0, DY + 7.5, QZ, 0.4, 0.04, 2.4); GS.box("m:tex_white", QX, DY + 7.5, QZ, 2.0, 0.041, 0.4);
+  for (const zz of [-3, 0.5]) GS.box("m:tex_paint#fe6420", QX - 4.3, DY + 2.2, QZ + zz, 1.4, 1.2, 2.8);
+  const TX = PX + 5, TZ = PZ - 3.5; GS.box("b:tex_metal", TX, DY + 0.8, TZ, 8, 4.2, 6); GS.box("glow:m:tex_window", TX - 4.01, DY + 2.4, TZ, 0.04, 1.0, 3.6);
+  for (const dx of [-1.8, 1.8]) stackPrism(GS, "iron", "b:tex_metal", TX + dx, TZ, [[0.7, DY + 5, DY + 9.5]]);
+  puffs(S, TX - 1.8, DY + 10, TZ, PUFF.steam, { n: 8, life: 4, rise: 6, size: 0.7, rate: () => ST.run ? 1 : 0 }); puffs(S, TX + 1.8, DY + 10, TZ, PUFF.steam, { n: 8, life: 4, rise: 6, size: 0.7, rate: () => ST.run ? 1 : 0 });
+  GS.box("iron", PX + 8, DY + 0.8, PZ + 5, 1.2, 4.5, 1.2); rod(S.group, "m:tex_paint", [PX + 8, DY + 5.2, PZ + 5], [PX + 15, DY + 9, PZ + 7], 0.5);
+  // the derrick over the risers: six risers down to the seabed
+  const DR = derrick(S, S.group, PX + 1, DY + 0.8, PZ + 3, 15, { noSub: true, base: 1.8 });
+  for (let i = 0; i < 6; i++) { const x = PX + 0.2 + (i % 3) * 0.8, z = PZ + 2.4 + Math.floor(i / 3) * 1.2, [q, r] = cellAt(x, z); rod(S.group, "b:tex_metal", [x, DY, z], [x, H(q, r), z], 0.22); }
+  // the flare boom and its flame
+  const FB0 = [PX - 11, DY + 2, PZ - 7], FB1 = [PX - 20, DY + 10, PZ - 12]; rod(S.group, "iron", FB0, FB1, 0.5);
+  { const fl = []; for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(new THREE.BoxGeometry(1.1 - i * 0.3, 1, 1.1 - i * 0.3), mat(i === 2 ? "glow:m:tex_white#fff4c8" : i ? "glow:m:tex_grate#ffd080" : "glow:m:tex_grate")); S.group.add(f); fl.push(f); }
+    S.lights.push({ x: FB1[0], y: FB1[1] + 1.5, z: FB1[2], c: lin(0xff8a3d), p: 1.8, R: 26 });
+    S.anim.push(t => fl.forEach((f, i) => { const k = 0.75 + 0.35 * Math.abs(Math.sin(t * (6 + i * 2.3) + i) * Math.sin(t * 2.7 + i)); f.scale.y = (2.0 - i * 0.45) * k; f.position.set(FB1[0] + Math.sin(t * 3 + i) * 0.1, FB1[1] + 0.2 + f.scale.y / 2, FB1[2]); })); }
+  // the sea cable: down a leg, along the seabed, ashore to the substation
+  { const pts = [[PX + 7, DY, PZ + 5]]; pts.push([PX + 7, H(...cellAt(PX + 7, PZ + 5)) + 0.2, PZ + 5]);
+    for (let x = PX + 10; x <= 30; x += 3) { const [q, r] = cellAt(x, PZ + 6); pts.push([x, Math.max(H(q, r), -14) + 0.2, PZ + 6]); }
+    for (let i = 0; i < pts.length - 1; i++) rod(S.group, "m:tex_belt", pts[i], pts[i + 1], 0.35);
+    const SX = 36, SZ = PZ + 6, SY = 2; GS.box("m:tex_concrete", SX, SY, SZ, 9, 0.2, 8); for (const dz of [-2, 1.5]) GS.box("b:tex_metal", SX - 1, SY + 0.2, SZ + dz, 3, 2.4, 2); GS.box("m:tex_hazard", SX + 3.5, SY + 0.2, SZ, 0.2, 1.4, 7.8);
+    derrick(S, S.group, SX + 2.5, SY + 0.2, SZ - 1, 12, { noSub: true, base: 1.0 });
+    S.lights.push({ x: SX, y: SY + 4, z: SZ + 3.4, ...LAMP, p: 1.4, R: 8 }); PBD.lampPost(GS, SX - 0.45, SY + 0.2, SZ + 3.4); S.flames.push([SX, SY + 2.45, SZ + 3.4]);
+    tag(S, "Shore substation: the sea cable joins the land grid", SX, SY + 6, SZ); }
+  // the tanker alongside, loading crude from the leg tanks through a hose
+  { const KX = PX - 2, KZ = PZ - 21, L = 40; GS.box("m:tex_paint#a61e1f", KX, -2.5, KZ, L, 4.6, 8, 0); GS.box("iron", KX, 2.1, KZ, L - 1, 0.25, 7.4);
+    for (let i = 0; i < 5; i++) GS.box("b:tex_metal", KX - 15 + i * 6.5, 2.35, KZ, 4.6, 0.8, 5.4); GS.box("b:tex_metal", KX - 2, 2.35, KZ + 0.4, L - 8, 0.3, 0.4);
+    GS.box("m:tex_white", KX + 15.5, 2.35, KZ, 5, 6, 7); GS.box("glow:m:tex_window", KX + 13, 6.4, KZ, 0.04, 1.0, 5.6); GS.box("iron", KX + 16.5, 8.35, KZ, 1.4, 2.4, 1.4);
+    rod(S.group, "m:tex_belt", [PX - 3, DY, PZ - 7.5], [KX - 2, 3.2, KZ + 2.5], 0.4);
+    S.lights.push({ x: KX + 12, y: 7, z: KZ, c: lin(0xffc070), p: 1.0, R: 6 });
+    tag(S, "Tanker: empties the leg tanks every 4 days", KX, 10, KZ); }
+  // deck floodlights, quarters' light, navigation lights on two legs
+  for (const [dx, dz] of [[-9, -6], [9, -6], [9, 6], [-2, 7]]) { S.lights.push({ x: PX + dx, y: DY + 3.4, z: PZ + dz, c: lin(0xfff0c8), p: 1.4, R: 11 }); S.flames.push([PX + dx, DY + 3.4, PZ + dz]); GS.box("iron", PX + dx, DY + 0.8, PZ + dz, 0.18, 2.5, 0.18); }
+  S.lights.push({ x: QX + 4.6, y: DY + 3, z: QZ, c: lin(0xffc070), p: 0.9, R: 5 });
+  for (const [i, c] of [[0, 0xff3030], [2, 0x30ff60]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), new THREE.MeshBasicMaterial({ color: c })); b.position.set(PX + legs[i][0], 1.4, PZ + legs[i][1] + (legs[i][1] > 0 ? 1.4 : -1.4)); S.group.add(b); }
+  addMeshes(GS, S.group); finish(S);
+  tag(S, "Offshore platform: 6 wells, 18 t of crude a day", PX, DY + DR.top - DY + 3, PZ + 3, "warm");
+  tag(S, "Gas turbines: 4,000 kW gross, 900 kW own use", TX, DY + 11.5, TZ, "warm");
+  tag(S, "Sea cable: 3,100 kW to the shore", 14, -9, PZ + 6);
+  tag(S, "Flare", FB1[0], FB1[1] + 4, FB1[2]); tag(S, "Quarters for 12, helipad", QX, DY + 9.5, QZ);
+  S.cams = { platform: { tx: PX + 4, ty: 6, tz: PZ - 4, dist: 74, yaw: 0.45, pitch: 0.42 }, overview: { tx: PX + 4, ty: 6, tz: PZ - 4, dist: 74, yaw: 0.45, pitch: 0.42 } };
+  S.fog = [110, 300];
+  S.status = () => `offshore platform | shelf sea, seabed 14 m down | ${ST.run ? "drilling and generating" : "machines still"}`;
+  S.hot = [["m:platform", "Offshore platform", 1], ["m:derrick", "Drilling rig", 1], ["m:tanker", "Tanker", 1], ["m:crude", "Crude oil", 40], ["m:wire", "Sea cable", 30], ["m:pole", "Power pole", 6], ["g:hand", "Hand"]];
+  S.sel = 0;
+  return S;
+}
+
+// ---- 6. Transport: wires, pipes, belts and pneumatic tubes side by side, and the dock with a freighter
+function buildTransport() {
+  const S = newScene("transport"), GS = S.lgs = new PBD.GeoSet(), N = 14;
+  const quay = (q, r) => hz(q, r) > 14.5;
+  const H = (q, r) => quay(q, r) ? -3 : 0;
+  columns(GS, { N, H, skirt: -4, top: (q, r, h) => h < 0 ? "a:2:3" : Math.abs(hz(q, r)) < 16 && Math.abs(hx(q, r)) < 30 ? "m:tex_concrete" : "a:4:0", side: (q, r, y, h) => "m:tex_concrete" });
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(140, 40), WATER); water.rotation.x = -Math.PI / 2; water.position.set(0, -0.6, 36); S.group.add(water);
+  const lamp = (x, z) => lampPost(S, GS, x, 0, z);
+  // wires: wood poles 4 cells apart with three sagging conductors, a substation, steel pylons beyond
+  { const zW = -15, poles = []; for (let x = -30; x <= 6; x += 4 * W) { GS.prism("timber", "timber", poly(x, zW, 0.18), 0, 7); GS.box("timber", x, 6.6, zW, 0.14, 0.14, 2.0); poles.push(x); }
+    const sag = (a, b, y, z, k = 0.6, m = "iron") => { const n = 6; for (let i = 0; i < n; i++) { const f0 = i / n, f1 = (i + 1) / n, s = f => -k * 4 * f * (1 - f); rod(S.group, m, [a + (b - a) * f0, y + s(f0), z], [a + (b - a) * f1, y + s(f1), z], 0.035); } };
+    for (let i = 0; i < poles.length - 1; i++) for (const dz of [-0.85, 0, 0.85]) sag(poles[i], poles[i + 1], 6.8, zW + dz);
+    GS.box("m:tex_concrete", 14, 0, zW, 8, 0.2, 7); for (const dz of [-1.6, 1.6]) GS.box("b:tex_metal", 13, 0.2, zW + dz, 3, 2.4, 2); GS.box("m:tex_hazard", 17.9, 0.2, zW, 0.2, 1.4, 6.8);
+    sag(poles[poles.length - 1], 12, 6.8, zW, 0.4);
+    for (const x of [22, 40]) derrick(S, S.group, x, 0, zW, 16, { noSub: true, base: 1.6 });
+    for (const dz of [-1.6, 0, 1.6]) sag(16, 22, 13, zW + dz, 0.5), sag(22, 40, 16, zW + dz, 1.4);
+    tag(S, "Wires: poles 4 cells apart, 2,000 kW a line", -12, 9, zW); tag(S, "Pylons: 50,000 kW, 10 cells apart", 31, 19, zW); tag(S, "Substation", 14, 4, zW); }
+  // pipes: a water tank to a smelter's cooling, fuel oil and diesel tanks to a filling station; pumps; flow marks while running
+  { const zP = -6, run = (pts, band, col) => { for (let i = 0; i < pts.length - 1; i++) { const [a, b] = [pts[i], pts[i + 1]]; GS.box("b:tex_metal", (a[0] + b[0]) / 2, a[1] - 0.25, (a[2] + b[2]) / 2, Math.hypot(b[0] - a[0], b[2] - a[2]) + 0.5, 0.5, 0.5, Math.atan2(b[2] - a[2], b[0] - a[0]));
+          for (let x = 0; x <= 1; x += 0.25) { const px = a[0] + (b[0] - a[0]) * x, pz = a[2] + (b[2] - a[2]) * x; GS.box("iron", px, 0, pz, 0.14, a[1] - 0.25, 0.14); GS.box(band, px, a[1] - 0.27, pz, 0.3, 0.54, 0.54, Math.atan2(b[2] - a[2], b[0] - a[0])); } }
+        const marks = []; for (let i = 0; i < 10; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.08, 0.2), new THREE.MeshBasicMaterial({ color: col })); S.group.add(m); marks.push(m); }
+        const segL = pts.slice(1).map((p, i) => Math.hypot(p[0] - pts[i][0], p[2] - pts[i][2])), Ltot = segL.reduce((a, b) => a + b, 0);
+        const at = d => { let i = 0; while (i < segL.length - 1 && d > segL[i]) d -= segL[i++]; const f = Math.min(1, d / segL[i]), a = pts[i], b = pts[i + 1]; return [a[0] + (b[0] - a[0]) * f, a[1] + 0.06, a[2] + (b[2] - a[2]) * f]; };
+        marks.forEach((m, i) => m.position.set(...at(Ltot * i / 10)));
+        S.mach.push(t => marks.forEach((m, i) => m.position.set(...at((t * 2.0 + Ltot * i / 10) % Ltot)))); };
+    stackPrism(GS, "m:tex_white", "m:tex_white", -26, zP - 1, [[1.4, 0, 4.0], [0.6, 4.0, 4.2]]); stackPrism(GS, null, "glow:m:tex_white#1096c3", -26, zP - 1, [[1.45, 2.4, 2.8]]);
+    run([[-24.6, 1.2, zP - 1], [-6, 1.2, zP - 1], [-6, 1.2, zP + 2]], "m:tex_white#1096c3", 0x74effe);
+    GS.box("b:tex_metal", -18, 0, zP - 2.2, 1.2, 1.2, 1.0); tag(S, "Pump, 10 kW (one each 20 cells)", -18, 2.4, zP - 2.6);
+    for (const [x, band] of [[2, "m:tex_flare"], [6, "m:tex_paint"]]) { stackPrism(GS, "m:tex_white", "m:tex_white", x, zP - 1, [[1.3, 0, 3.4], [0.5, 3.4, 3.6]]); stackPrism(GS, null, band, x, zP - 1, [[1.35, 1.8, 2.2]]); }
+    run([[7.4, 1.0, zP - 1], [21, 1.0, zP - 1], [21, 1.0, zP + 1.5]], "m:tex_flare", 0xfb902f);
+    GS.box("iron", 22, 4.0, zP + 2.5, 7, 0.3, 4); for (const dx of [-3, 3]) GS.box("iron", 22 + dx, 0, zP + 2.5, 0.25, 4.0, 0.25); for (const dx of [-1.5, 1.5]) { GS.box("m:tex_white#d12d41", 22 + dx, 0, zP + 2.5, 0.8, 1.6, 0.6); GS.box("glow:m:tex_window", 22 + dx, 1.0, zP + 2.81, 0.5, 0.4, 0.02); }
+    S.lights.push({ x: 22, y: 3.6, z: zP + 2.5, c: lin(0xfff0c8), p: 1.2, R: 7 });
+    tag(S, "Pipes: water (blue), fuel oil (orange); one fluid a network", -12, 3.4, zP - 1); tag(S, "Filling station", 22, 5.6, zP + 2.5); tag(S, "Fuel oil and diesel tanks", 4, 5, zP - 1); tag(S, "Clean water tank", -26, 5.6, zP - 1); }
+  // belts: ore from a pit hopper to a smelter
+  { const zB = 2; GS.box("m:tex_paint", -26, 0, zB, 2.6, 2.4, 2.6); GS.box("brick", -2, 0, zB, 3.2, 3, 3); GS.box("glow:m:tex_grate", -3.62, 0.4, zB, 0.04, 0.9, 1.4);
+    S.lights.push({ x: -4.4, y: 0.9, z: zB, c: lin(0xff8a3d), p: 1.3, R: 4 });
+    belt(S, [-24.6, 2.5, zB], [-3.6, 2.5, zB], { ground: () => 0, items: ["a:4:4", "a:10:15", "a:8:4"], speed: 1.2 });
+    tag(S, "Conveyor belt: 2 items a second, 0.2 kW a cell", -14, 4.4, zB); }
+  // pneumatic tubes: two stations, a glass tube on stands through a warehouse; capsules shoot along while running
+  { const zT = 9, y = 2.6, A = -24, B = 20, glass = PBD.litMaterial(null, 0x9fe8ff, { transparent: true, opacity: 0.35, depthWrite: false });
+    const tubeM = new THREE.Mesh(new THREE.BoxGeometry(B - A, 0.55, 0.55), glass); tubeM.position.set((A + B) / 2, y, zT); S.group.add(tubeM);
+    for (let x = A + 2; x < B; x += 4) GS.box("iron", x, 0, zT, 0.12, y - 0.28, 0.12);
+    GS.box("m:tex_concrete", -2, 0, zT + 0.5, 8, 4.2, 5); GS.box("slate", -2, 4.2, zT + 0.5, 8.4, 0.3, 5.4); GS.box("glow:m:tex_window", -2, 1.4, zT + 3.01, 2.0, 1.0, 0.02);
+    for (const x of [A, B]) { GS.box("b:tex_metal", x, 0, zT, 1.6, 3.2, 1.6); GS.box("glow:m:tex_white#9bb675", x, 3.2, zT, 0.3, 0.3, 0.3); S.lights.push({ x, y: 3.6, z: zT + 1.2, c: lin(0xffc070), p: 0.9, R: 4.5 }); }
+    const caps = []; for (let i = 0; i < 3; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.36, 0.36), mat("m:tex_paint#e8b040")); S.group.add(c); caps.push(c); c.position.set(A + 1 + i * 0.9, y, zT); }
+    S.mach.push(t => caps.forEach((c, i) => { const f = ((t * 0.35 + i / 3) % 1); c.position.set(A + 1 + (B - A - 2) * f, y, zT); }));
+    tag(S, "Pneumatic tube: a capsule a second, 15 m/s, to a named station", -2, 6, zT); tag(S, "Send station", A, 4.2, zT); tag(S, "Receive station", B, 4.2, zT); }
+  // the dock: quay crane, a container ship moored; its crew on deck when hired, a radio mast when automated
+  { const SZ = 24, SX = 0, L = 44; GS.box("m:tex_paint#3e3551", SX, -3.6, SZ, L, 4.6, 9); GS.box("iron", SX, 1.0, SZ, L - 1, 0.25, 8.4);
+    const cols = ["m:tex_paint#d12d41", "m:tex_paint#559642", "m:tex_paint#2a5ea8", "m:tex_paint", "m:tex_white"];
+    for (let i = 0; i < 7; i++) for (let j = 0; j < 3; j++) for (let k = 0; k < 2; k++) GS.box(cols[(i * 3 + j + k) % 5], SX - 18 + i * 4.4, 1.25 + k * 2.4, SZ - 2.6 + j * 2.6, 4.2, 2.35, 2.45);
+    GS.box("m:tex_white", SX + 17.5, 1.25, SZ, 5, 7, 7.6); GS.box("glow:m:tex_window", SX + 15, 6.4, SZ, 0.04, 1.0, 6.4); GS.box("iron", SX + 18.5, 8.25, SZ, 1.4, 2.4, 1.4);
+    for (const x of [-12, 8]) { GS.box("m:tex_paint", x, 0, 15.6, 0.8, 16, 0.8); GS.box("m:tex_paint", x, 0, 32, 0.8, 16, 0.8); GS.box("m:tex_paint", x, 16, 23.8, 1.0, 1.0, 18); }
+    GS.box("m:tex_paint", -2, 15.2, 23.8, 21, 0.8, 1.0); GS.box("iron", -2, 13.2, 23.8, 1.6, 2.0, 1.6);
+    S.lights.push({ x: SX + 14, y: 7, z: SZ, c: lin(0xffc070), p: 1.0, R: 6 }, { x: -2, y: 14, z: 22, c: lin(0xfff0c8), p: 1.4, R: 14 });
+    S.crewG = new THREE.Group(); S.group.add(S.crewG); S.autoG = new THREE.Group(); S.group.add(S.autoG);
+    for (let i = 0; i < 4; i++) person(S.crewG, SX - 20 + i * 1.5 + (i > 1 ? 34 : 0), 1.25, SZ + 3.6, Math.PI, { tool: false, hat: "m:tex_white#2a5ea8", coat: "m:tex_white#3e586e" });
+    { const A2 = new PBD.GeoSet(); A2.box("iron", SX + 17.5, 8.25, SZ, 0.2, 6, 0.2); A2.box("iron", SX + 17.5, 13.5, SZ, 2.2, 0.15, 0.15); A2.box("glow:m:tex_white#74effe", SX + 17.5, 14.2, SZ, 0.4, 0.4, 0.4); addMeshes(A2, S.autoG); }
+    tag(S, "Freighter: 42 containers, 20 t each", SX - 4, 9, SZ, "warm"); S.crewTag = S.tags.length; tag(S, "", SX + 17.5, 15.5, SZ);
+    for (const x of [-24, 16]) lamp(x, 13.8); }
+  for (const [x, z] of [[-30, -10], [-8, -10], [12, 6], [-30, 12]]) lamp(x, z);
+  addMeshes(GS, S.group); finish(S);
+  S.cam = { tx: -2, ty: 1, tz: 2, dist: 72, yaw: 3.45, pitch: 0.68 };
+  S.status = () => `transport yard | wires, pipes, belts, tubes, the dock | freighter ${ST.crew === "hired" ? "crewed by 4 hired townsfolk" : "automated"} | ${ST.run ? "running" : "machines still"}`;
+  S.hot = [["m:wire", "Wire spool", 40], ["m:pole", "Power pole", 12], ["m:pipe", "Pipe", 64], ["m:tube", "Pneumatic tube", 48], ["m:belt", "Conveyor belt", 64], ["m:tank", "Tank", 4], ["m:printer", "Hex printer", 1], ["m:launchpad", "Launch pad", 1], ["m:freighter", "Freighter", 1], ["g:hand", "Hand"]];
+  S.sel = 2;
+  setCrew(ST.crew, S);
+  return S;
+}
+function setCrew(v, S = CUR) { ST.crew = v; if (!S || !S.crewG) return; S.crewG.visible = v === "hired"; S.autoG.visible = v === "auto"; S.tags[S.crewTag].text = v === "hired" ? "Hired crew: 4 sailors, 6 coins each a day" : "Automated: radio pilothouse (tier III), no crew"; if (S === CUR) { const el = $("tg" + S.crewTag); if (el) el.textContent = S.tags[S.crewTag].text; status(); } }
+
+// ===================================================================
 // Scenes, time of day, camera
 // ===================================================================
 const SCENES = {};
 let CUR = null;
-const sceneId = () => ST.tab === "power" ? "power-" + ST.gen + (ST.gen === "dyson" && ST.space ? "-space" : "") : ST.tab;
-function getScene(id) { if (!SCENES[id]) { SCENES[id] = id === "mining" ? buildMining() : id === "oil" ? buildOil() : id === "refining" ? buildRefining() : id === "ether" ? buildEther() : id === "power-dyson-space" ? buildSwarm() : buildPower(id.slice(6)); SCENES[id].group.visible = false; scene.add(SCENES[id].group); } return SCENES[id]; }
+const sceneId = () => ST.tab === "power" ? (ST.gen === "platform" ? "offshore" : "power-" + ST.gen + (ST.gen === "dyson" && ST.space ? "-space" : "")) : ST.tab === "oil" && ST.oilView === "platform" ? "offshore" : ST.tab;
+function getScene(id) { if (!SCENES[id]) { SCENES[id] = id === "mining" ? buildMining() : id === "offshore" ? buildOffshore() : id === "transport" ? buildTransport() : id === "oil" ? buildOil() : id === "refining" ? buildRefining() : id === "ether" ? buildEther() : id === "power-dyson-space" ? buildSwarm() : buildPower(id.slice(6)); SCENES[id].group.visible = false; scene.add(SCENES[id].group); } return SCENES[id]; }
 const ORB = { tx: 0, ty: 0, tz: 0, dist: 40, yaw: 0.5, pitch: 0.5 };
 function show() {
   if (CUR) CUR.group.visible = false;
   CUR = getScene(sceneId()); CUR.group.visible = true; Object.assign(ORB, CUR.cams ? CUR.cams[ST.oilView] || CUR.cams.overview : CUR.cam); placeCam();
   if (CUR.overlay) CUR.overlay.visible = ST.overlay;
   $("tags").innerHTML = CUR.tags.map((t, i) => `<div class="tag3d ${t.cls}" id="tg${i}">${t.text}</div>`).join("");
-  PBD.setLights(CUR.lights); applyTime(); hotbar(); status();
+  PBD.setLights(liveLights()); applyTime(); hotbar(); status();
 }
 const cA = new THREE.Color();
 function applyTime() {
@@ -1007,10 +1279,13 @@ const TILEURL = {};
 const tileImg = t => `<span class="tile" data-tile="${t}" style="display:inline-block"></span>`;
 async function paintTiles(root = document) { for (const el of root.querySelectorAll("[data-tile]")) { const t = el.dataset.tile, [, s, i] = t.split(":"); TILEURL[t] = TILEURL[t] || await atlasURL(+s, +i); el.style.backgroundImage = `url(${TILEURL[t]})`; } }
 const img = (k, s = 32) => `<img src="${ICON(k)}" alt="" width="${s}" height="${s}">`;
+// the cells the current tier would take next: the marks, or for the quarry frame every cell inside it
+function tierCells() { if (ST.mineTier !== "quarry") return [...MINE.marked]; const o = []; for (let q = -QUARRY_R; q <= QUARRY_R; q++) for (let r = -QUARRY_R; r <= QUARRY_R; r++) if (hexDist(q, r) <= QUARRY_R) o.push(key(q, r)); return o; }
 function markedYield() {
-  const out = {}, add = (n, v) => out[n] = (out[n] || 0) + v; let secs = 0;
-  for (const k of MINE.marked) { const [q, r] = k.split(",").map(Number), h = mineH(q, r); if (h <= -9) continue; const L = layerOf(h), ore = isOre(q, r, h); if (ore) { add(L.oreItem, L.on); add("Stone", 1); secs += L.ohard * 20; } else { add(L.item, L.n); secs += L.hard * 20; } }
-  return { out, secs };
+  const T = MT[ST.mineTier], out = {}, add = (n, v) => out[n] = (out[n] || 0) + v; let n = 0, left = 0; const dig = [];
+  for (const k of tierCells()) { const [q, r] = k.split(",").map(Number), h = mineH(q, r); if (h <= -9) continue; const L = layerOf(h), ore = isOre(q, r, h), hard = ore ? L.ohard : L.hard;
+    if (hard > T.hard) { left++; continue; } n++; dig.push(k); if (ore) { add(L.oreItem, L.on); add("Stone", 1); } else add(L.item, L.n); }
+  return { out, secs: n * T.rate / T.par, left, dig };
 }
 const ITEMICON = { "Dirt": "a:4:2", "Stone": "c:stone", "Copper ore": "c:copper-ore", "Coal": "c:coal", "Iron ore": "c:iron-ore" };
 const itemChip = (n, v) => { const ic = ITEMICON[n]; return `<div class="row"><span>${ic.startsWith("a:") ? tileImg(ic) : img(ic)}</span><span>${n}</span><span class="v">${v}</span></div>`; };
@@ -1018,14 +1293,24 @@ function side() {
   const el = $("side");
   if (ST.tab === "mining") {
     const { out, secs } = markedYield();
-    el.innerHTML = `<div class="keys"><b style="color:var(--ink)">Click cells</b> to mark them (cyan), as the survey flag in slot 2 does in game. The digger takes every marked cell one layer down, in the order marked. Drag to turn, right-drag to pan, wheel to zoom.</div>
-      <div class="field"><span>This mark, next layer</span><div class="rows">${Object.entries(out).map(([n, v]) => itemChip(n, v)).join("") || `<div class="keys">Nothing marked.</div>`}</div>
-      <dl class="stats"><dt>Cells</dt><dd>${MINE.marked.size}</dd><dt>Digger time</dt><dd>${Math.round(secs / 60)} min</dd><dt>Belt load</dt><dd>${(Object.values(out).reduce((a, b) => a + b, 0) / Math.max(1, secs / 60)).toFixed(1)} items/min</dd></dl></div>
-      <div class="seg"><button class="btn" id="dig">Dig marked layer</button><button class="btn" id="clr">Clear marks</button></div>
+    const T = MT[ST.mineTier], { left } = markedYield();
+    el.innerHTML = `<div class="field"><span>Who digs: five tiers</span><div class="gens" style="grid-template-columns:repeat(5,1fr)">${MT_ORDER.map((k, i) => `<button data-mt="${k}" aria-pressed="${k === ST.mineTier}" title="${MT[k].name}">${img(MT[k].icon)}${i + 1}</button>`).join("")}</div>
+      <div class="mpanel"><h3>${T.name} &middot; ${T.unlock}</h3><p class="keys">${T.note}</p><dl class="stats"><dt>Rate</dt><dd>${T.par > 1 ? `1 cell per ${T.rate} s each, ${T.par} at once` : `1 cell per ${T.rate} s`}</dd><dt>Hardest rock</dt><dd>${T.hard > 5 ? "any" : T.hard.toFixed(1)}</dd><dt>Reach</dt><dd style="font-family:var(--body);text-align:left">${T.reach}</dd><dt>Runs on</dt><dd style="font-family:var(--body);text-align:left">${T.runs}</dd></dl></div></div>
+      <div class="keys"><b style="color:var(--ink)">Click cells</b> to mark them (cyan), as the survey flag in slot 2 does in game. ${ST.mineTier === "quarry" ? "The quarry frame ignores the marks: it takes every cell inside its frame." : "The " + T.name.toLowerCase() + " takes every marked cell one layer down."} Press Run machines to see it work. Drag to turn, right-drag to pan, wheel to zoom.</div>
+      <div class="field"><span>${ST.mineTier === "quarry" ? "Inside the frame" : "This mark"}, next layer${left ? ` &middot; <b style="color:var(--warn)">${left} too hard for this tier, left marked</b>` : ""}</span><div class="rows">${Object.entries(out).map(([n, v]) => itemChip(n, v)).join("") || `<div class="keys">Nothing marked.</div>`}</div>
+      <dl class="stats"><dt>Cells</dt><dd>${MINE.marked.size}</dd><dt>Time</dt><dd>${secs < 120 ? Math.round(secs) + " s" : Math.round(secs / 60) + " min"}</dd><dt>Belt load</dt><dd>${(Object.values(out).reduce((a, b) => a + b, 0) / Math.max(1, secs / 60)).toFixed(1)} items/min</dd></dl></div>
+      <div class="seg"><button class="btn" id="dig">Dig ${ST.mineTier === "quarry" ? "a layer inside the frame" : "marked layer"}</button><button class="btn" id="clr">Clear marks</button></div>
       <div class="field"><span>Dug so far</span><div class="rows">${Object.entries(MINE.total).map(([n, v]) => itemChip(n, v)).join("") || `<div class="keys">Nothing yet. Press "Dig marked layer".</div>`}</div></div>
       <div class="field"><span>The strata, top down</span><div class="rows">${LAYERS.slice(0, 9).map(L => `<div class="row"><span>${tileImg(L.ore || L.tile)}</span><span>L${L.y} ${L.ore ? L.oreName : L.name}</span><span class="v">${L.ore ? L.on + " ore + 1 stone" : L.n + " " + L.item.toLowerCase()}</span></div>`).join("")}</div></div>`;
-    $("dig").addEventListener("click", () => { const { out } = markedYield(); for (const [n, v] of Object.entries(out)) MINE.total[n] = (MINE.total[n] || 0) + v; for (const k of MINE.marked) { const [q, r] = k.split(",").map(Number); if (mineH(q, r) > -9) MINE.dug.set(k, (MINE.dug.get(k) || 0) + 1); } buildMineGround(CUR); buildMarks(CUR); side(); status(); });
+    for (const b of el.querySelectorAll("[data-mt]")) b.addEventListener("click", () => { ST.mineTier = b.dataset.mt; history.replaceState(null, "", "#" + hashFor()); setMineTier(ST.mineTier); side(); sheets(); });
+    $("dig").addEventListener("click", () => { const { out, dig } = markedYield(); for (const [n, v] of Object.entries(out)) MINE.total[n] = (MINE.total[n] || 0) + v; for (const k of dig) MINE.dug.set(k, (MINE.dug.get(k) || 0) + 1); buildMineGround(CUR); buildMarks(CUR); side(); status(); });
     $("clr").addEventListener("click", () => { MINE.marked.clear(); buildMarks(CUR); side(); status(); });
+  } else if (ST.tab === "transport") {
+    el.innerHTML = `<div class="field"><span>The freighter's crew</span><div class="seg"><button class="btn" id="crH" aria-pressed="${ST.crew === "hired"}">Hired townsfolk</button><button class="btn" id="crA" aria-pressed="${ST.crew === "auto"}">Automated (tier III)</button></div><p class="keys">Same ship, same route record: only who sails it changes. Hired, 4 sailors at 6 coins a day each; automated, a radio pilothouse.</p></div>
+      <div class="field"><span>The four carriers</span>${CARRIERS.map(([ic, n, what, cap]) => `<div style="display:flex;gap:8px;align-items:flex-start;margin:6px 0">${img(ic)}<div><b>${n}</b> &middot; <span class="num" style="font-family:var(--mono,monospace);font-size:12px">${cap}</span><br><small style="color:var(--muted)">${what}</small></div></div>`).join("")}</div>
+      <p class="keys">Press Run machines: water and fuel marks move in the pipes, ore on the belt, capsules in the tube. Wires carry no marks: the grid is in section 4.</p>`;
+    $("crH").addEventListener("click", () => { setCrew("hired"); history.replaceState(null, "", "#" + hashFor()); side(); });
+    $("crA").addEventListener("click", () => { setCrew("auto"); history.replaceState(null, "", "#" + hashFor()); side(); });
   } else if (ST.tab === "refining") {
     el.innerHTML = `<div class="field"><span>Machine panel (E at a machine)</span>${MACH.map(([k, n, i, o, kw, s]) => `<div class="mpanel"><h3>${n} &middot; ${kw} kW</h3><div class="io"><div class="slot">${img(i[0])}<span class="n">${i[1]}</span></div><div><div class="meter"><i data-run="${s}" style="width:40%"></i></div><div class="keys" style="font-size:11px">${s} s a cycle</div></div><div class="slot">${img(o[0])}<span class="n">${o[1]}</span></div></div></div>`).join("")}</div>
       <dl class="stats"><dt>Drawn</dt><dd>310 kW</dd><dt>Copper plate</dt><dd>4.6 / min</dd><dt>Coal</dt><dd>3 / min</dd></dl>`;
@@ -1043,7 +1328,9 @@ function side() {
     $("st2").addEventListener("click", () => { ST.stage = 2; Object.assign(ORB, { tx: hx(7, 0), ty: 6, tz: 0, dist: 26, yaw: 0.9, pitch: 0.32 }); placeCam(); side(); status(); });
   } else if (ST.tab === "oil") {
     const SPLIT = [["m:fuel-oil", "Fuel oil", 0.45], ["m:diesel", "Diesel", 0.25], ["c:polymer", "Polymer feed", 0.15], ["m:asphalt", "Residue (asphalt)", 0.15]];
-    el.innerHTML = `<div class="field"><span>Look at</span><div class="gens" style="grid-template-columns:repeat(3,1fr)">${[["overview", "The field"], ["well", "The well"], ["refinery", "The column"]].map(([v, l]) => `<button data-ov="${v}" aria-pressed="${ST.oilView === v}">${l}</button>`).join("")}</div></div>
+    el.innerHTML = `<div class="field"><span>Look at</span><div class="gens" style="grid-template-columns:repeat(3,1fr)">${[["overview", "The field"], ["well", "The well"], ["refinery", "The column"], ["rig", "Drilling rig"], ["platform", "Offshore platform"]].map(([v, l]) => `<button data-ov="${v}" aria-pressed="${ST.oilView === v}">${l}</button>`).join("")}</div></div>
+      ${ST.oilView === "platform" ? `<div class="mpanel"><h3>Offshore platform &middot; a rig and a power plant in one</h3><dl class="stats"><dt>Wells</dt><dd>6, 18 t of crude a day</dd><dt>Gas turbines</dt><dd>4,000 kW gross</dd><dt>Own use</dt><dd>900 kW</dd><dt>To the shore</dt><dd>3,100 kW by sea cable</dd><dt>Leg tanks</dt><dd>2,000 t, a tanker every 4 days</dd><dt>Placed</dt><dd style="font-family:var(--body);text-align:left">On the shelf sea over the field, 10 to 60 m deep</dd></dl><p class="keys">Its gas never comes ashore: it is burnt on the platform. Power comes ashore by cable, crude by tanker. Press Run machines: the derrick drills, the turbines exhaust.</p></div>` : ""}
+      ${ST.oilView === "rig" ? `<div class="mpanel"><h3>Drilling rig &middot; 300 kW</h3><dl class="stats"><dt>Drills</dt><dd>a well in 2 game days</dd><dt>Then</dt><dd style="font-family:var(--body);text-align:left">moves on; the well takes a pumpjack</dd><dt>Pressure here</dt><dd>${CUR && CUR.rigP != null ? CUR.rigP.toFixed(2) : "-"}</dd></dl></div>` : ""}
       <div class="field"><span>Map &middot; oil overlay (after a survey drill)</span><canvas id="oilmap" width="${OIL.MW}" height="${OIL.MH}" style="width:${OIL.MW * 3}px;max-width:100%;image-rendering:pixelated;border:1px solid var(--hudline)" aria-label="A map of the region with the oil field overlay; the white square is the scene"></canvas>
         <div class="seg"><button class="btn" id="ovOn" aria-pressed="${ST.overlay}">Oil overlay on</button><button class="btn" id="ovOff" aria-pressed="${!ST.overlay}">Off</button></div>
         <div class="keys">One pixel is 50 m. Violet is reservoir pressure, brighter is stronger; the white square is the view. Oil lies under ${(OIL.covered * 100).toFixed(1)}% of this map, none under the high mountains (pale grey) or the deep sea.</div>
@@ -1108,6 +1395,8 @@ function sheets() {
         <div class="card"><div class="head">${img("c:copper-ore", 64)}<div><div class="eyebrow">Yield</div><h3>Per cell, per layer</h3></div></div><p>A cell of plain rock gives 1 stone, a coal seam 4 coal, an ore cell 3 ore and 1 stone. A bench ring of 48 cells at layer -3 gives about 60 copper ore. Spoil (stone, dirt) goes to the heap unless the player takes it.</p></div>
       </div>
       <div class="tbl"><table><thead><tr><th>Layer</th><th>Block (game tile)</th><th>Drops</th><th>Hardness</th><th>Digger time</th></tr></thead><tbody>${LAYERS.slice(0, 9).map(L => `<tr><td class="num">L${L.y}</td><td><span class="chip">${tileImg(L.tile)}${L.name}</span>${L.ore ? `<span class="chip">${tileImg(L.ore)}${L.oreName}</span>` : ""}</td><td>${L.n} ${L.item.toLowerCase()}${L.ore ? `; ore cell ${L.on} ${L.oreItem.toLowerCase()} + 1 stone` : ""}</td><td class="num">${L.hard.toFixed(1)}${L.ore ? " / " + L.ohard.toFixed(1) : ""}</td><td class="num">${Math.round(L.hard * 20)} s${L.ore ? " / " + Math.round(L.ohard * 20) + " s" : ""}</td></tr>`).join("")}</tbody></table></div>
+      <h3 style="margin-top:24px">Five authors of the same dig</h3><p class="note">Every tier digs only marked cells (the quarry its frame, which the player marks by placing it), and every dug cell is an edit naming its author, on the player's durable path. A cell harder than the tier can break stays marked and named.</p>
+      <div class="tbl"><table><thead><tr><th>Tier</th><th>Rate</th><th>Hardest</th><th>Reach</th><th>Runs on</th><th>Unlock</th></tr></thead><tbody>${MT_ORDER.map((k, i) => { const T = MT[k]; return `<tr><td><span class="chip">${img(T.icon)}${i + 1} ${T.name}</span></td><td class="num">${T.par > 1 ? `${T.rate} s &times; ${T.par}` : `${T.rate} s`}</td><td class="num">${T.hard > 5 ? "any" : T.hard.toFixed(1)}</td><td style="font-size:13px">${T.reach}</td><td style="font-size:13px">${T.runs}</td><td style="font-size:13px;color:var(--muted)">${T.unlock}</td></tr>`; }).join("")}</tbody></table></div>
       <p class="note">Old saves: today's ground has one <span class="src">Ore</span> material and no seams. Seams are a change to generation, so they come with a new generator version for new worlds; an old world's <span class="src">Ore</span> cells dig as mixed ore (crafting C6), and its pit is cut from the ground it already has.</p></section>`,
     refining: `<section><div class="sec-head"><div class="eyebrow">2 &middot; Crafting and refining</div><h2>Ore to plate</h2><p class="lede">Four block machines in a row, fed by belt or by hand, each a station with an input slot, an output slot and a power draw. The chain is the crafting mockup's forge, made bigger and powered: a forge still smelts by hand at the start of the game; the smelter does it by the hundred.</p></div>
       <div class="flow" aria-label="The chain, in the HUD's slots">${[["c:copper-ore", "Copper ore", "from the pit"], ["m:crusher", "Crusher", "40 kW"], ["m:crushed-copper", "Crushed ore", "x1.5"], ["m:smelter", "Smelter", "120 kW + coal"], ["c:copper-ingot", "Ingot", ""], ["m:refinery", "Refinery", "90 kW"], ["c:steel-ingot", "Steel", "from iron"], ["m:press", "Press", "60 kW"], ["m:copper-plate", "Plate", "x3"]].map(([k, n, s], i) => `${i ? `<span class="ar">&rarr;</span>` : ""}<div class="st"><div class="slot">${img(k, 64)}</div>${n}<small>${s}</small></div>`).join("")}</div>
@@ -1132,10 +1421,24 @@ function sheets() {
         <div class="card"><div class="head">${img("m:crude", 64)}<div><div class="eyebrow">The field</div><h3>Reservoir pressure</h3></div></div><dl><dt>Is</dt><dd>A 2D field from the world seed, 0 to 1; not a block, never saved</dd><dt>Where</dt><dd>About 6% of the surface; fields, desert, swamp and the shelf sea most, hills half, high mountains and deep sea none</dd><dt>Found by</dt><dd>The map's Oil overlay once a survey drill is built, and a dowsing readout of the pressure underfoot</dd></dl></div>
         <div class="card"><div class="head">${img("m:pumpjack", 64)}<div><div class="eyebrow">Draw</div><h3>Pumpjack</h3></div></div><dl><dt>Place</dt><dd>On one cell over the field; offshore, a rig on piles</dd><dt>Gives</dt><dd>Up to 3 t of crude a day: 3 &times; the pressure under it, falling as its share of the field is drawn down</dd><dt>Saved</dt><dd>A well is a stored record (position, drawn total) naming whoever built it; the field it reads is not</dd><dt>Power</dt><dd>15 kW</dd></dl></div>
         <div class="card"><div class="head">${img("m:oil-refinery", 64)}<div><div class="eyebrow">Recipe</div><h3>Distillation column</h3></div></div><dl><dt>Size</dt><dd>2 cells, 4 layers: the column and its crude heater</dd><dt>In</dt><dd><span class="chip">${img("m:crude")}1 t Crude</span></dd><dt>Out</dt><dd><span class="chip">${img("m:fuel-oil")}0.45 t Fuel oil</span><span class="chip">${img("m:diesel")}0.25 t Diesel</span><span class="chip">${img("c:polymer")}0.15 t Polymer feed</span><span class="chip">${img("m:asphalt")}0.15 t Residue (asphalt)</span></dd><dt>Time, power</dt><dd>20 s a tonne, 150 kW</dd><dt>Night</dt><dd>The flare stack burns what it cannot use; the brightest light on the plain</dd></dl></div>
+        <div class="card"><div class="head">${img("m:derrick", 64)}<div><div class="eyebrow">Find and drill</div><h3>Drilling rig</h3></div></div><dl><dt>Drills</dt><dd>A well in 2 game days, 300 kW</dd><dt>Then</dt><dd>Moves on; a pumpjack takes the well</dd><dt>Look</dt><dd>A lattice derrick, its travelling block rising and falling while it drills</dd></dl></div>
+        <div class="card"><div class="head">${img("m:platform", 64)}<div><div class="eyebrow">Offshore &middot; rig + power plant</div><h3>Oil platform</h3></div></div><dl><dt>Wells</dt><dd>6 risers, 18 t of crude a day</dd><dt>Power</dt><dd>Gas turbines, 4,000 kW gross; 900 kW own use; 3,100 kW ashore by sea cable</dd><dt>Crude</dt><dd>2,000 t in the legs; a tanker every 4 days</dd><dt>Ladder</dt><dd>Tier I, beside the oil plant (section 4)</dd></dl></div>
+        <div class="card"><div class="head">${img("m:tanker", 64)}<div><div class="eyebrow">Freight</div><h3>The tanker</h3></div></div><dl><dt>Carries</dt><dd>Crude from the platform to the shore tanks, on a route record</dd><dt>Crew</dt><dd>Hired at first, automated at tier III (section 6)</dd></dl></div>
         <div class="card"><div class="head">${img("m:oil-plant", 64)}<div><div class="eyebrow">Tier I &middot; Mid</div><h3>Oil plant</h3></div></div><dl><dt>Output</dt><dd>1,000 kW, a boiler and turbine on fuel oil</dd><dt>Burns</dt><dd>About 250 kg of fuel oil a game hour at full load, 6 t a day</dd><dt>Ladder</dt><dd>Between coal and wind (section 4)</dd><dt>Smoke</dt><dd>Like the coal plant's: no town within 6 cells</dd></dl></div>
       </div>
       <div class="tbl"><table><thead><tr><th>Machine</th><th>In</th><th>Out</th><th>Time</th><th>Power</th><th>Note</th></tr></thead><tbody>${OIL_RECIPES.map(([m, mi, ins, outs, t, kw, note]) => `<tr><td><span class="chip">${img(mi)}${m}</span></td><td>${ins.map(ocell).join("") || "&ndash;"}</td><td>${outs.map(ocell).join("") || "power"}</td><td class="num">${t}</td><td class="num">${kw}</td><td style="color:var(--muted);font-size:13px">${note}</td></tr>`).join("")}</tbody></table></div>
       <p class="note"><b>The numbers balance:</b> at 25 kg of fuel oil an hour per 100 kW, the 1,000 kW plant burns 6 t of fuel oil a day. A pumpjack at its best gives 3 t of crude a day, so 1.35 t of fuel oil: about five wells keep one plant at full load, fewer as it runs at part load. Old saves: the field is derived, so an old world has oil where a new one with the same seed does.</p></section>`,
+    transport: `<section><div class="sec-head"><div class="eyebrow">6 &middot; Transport and loads</div><h2>Wires, pipes, belts, tubes, freighters</h2><p class="lede">Four carriers move what the industry makes: wires carry electricity, pipes carry fluids (water, crude, fuel, liquid oxygen), belts carry stacks, pneumatic tubes carry goods in capsules. A network carries one kind of thing; a second fluid needs a second pipe. Between towns and worlds, freighters carry it on route records: hired crews first, automated pilothouses at tier III.</p></div>
+      <div class="tbl"><table><thead><tr><th>Carrier</th><th>Carries</th><th>Capacity</th></tr></thead><tbody>${CARRIERS.map(([ic, n, what, cap]) => `<tr><td><span class="chip">${img(ic)}${n}</span></td><td>${what}</td><td class="num">${cap}</td></tr>`).join("")}</tbody></table></div>
+      <div class="cards">
+        <div class="card"><div class="head">${img("m:freighter", 64)}<div><div class="eyebrow">Hired</div><h3>A crewed freighter</h3></div></div><dl><dt>Crew</dt><dd>4 townsfolk at 6 coins a day each</dd><dt>Holds</dt><dd>Container cells of 20 t, tank cells of 40 t</dd><dt>Route</dt><dd>The ship-tiers route record: stops, cargo, return</dd></dl></div>
+        <div class="card"><div class="head">${img("m:freighter", 64)}<div><div class="eyebrow">Tier III</div><h3>Automated</h3></div></div><dl><dt>Pilot</dt><dd>A radio pilothouse; no wages, no crew quarters</dd><dt>Same</dt><dd>Ship, route and cargo; only who sails it changes</dd></dl></div>
+      </div>
+      <h3 style="margin-top:24px">Loads on the grid</h3><p class="note">The machines the owner named, on the grid in section 4: switch them on and off there.</p>
+      <div class="tbl"><table><thead><tr><th>Load</th><th>Draws</th></tr></thead><tbody>${CONS.slice(10).map(([k, n, kw, ic]) => `<tr><td><span class="chip">${img("m:" + (ic || k))}${n}</span></td><td class="num">${kw ? kw.toLocaleString("en") + " kW" : "diesel, 12 kg/h"}</td></tr>`).join("")}</tbody></table></div>
+      <h3 style="margin-top:24px">The fuel system</h3>
+      <div class="flow" aria-label="Propellant from crude and air">${[["m:crude", "Crude", "pipe"], ["m:oil-refinery", "Column", "150 kW"], ["m:diesel", "Diesel cut", "1 t"], ["m:lox", "Air separation", "300 kW, 1 t LOX/h"], ["m:tank", "Depot", "30 kW"], ["m:launchpad", "Launch pad", "200 kW"]].map(([k, n, sub], i) => `${i ? `<span class="ar">${i === 3 ? "+" : "&rarr;"}</span>` : ""}<div class="st"><div class="slot">${img(k, 64)}</div>${n}<small>${sub}</small></div>`).join("")}</div>
+      <p class="note">A rocket's propellant is 1 t of the diesel cut to 2.4 t of liquid oxygen, piped to the depot and from the depot to the pad. Everything here runs only while the world is played.</p></section>`,
   };
   S.innerHTML = blocks[ST.tab] + `<section style="margin-top:28px"><div class="sec-head"><div class="eyebrow">Decisions</div><h2>Recommendations taken</h2><p class="lede">Nothing here is asked of the owner: none of it has a choice to look at side by side. Each is recorded as "recommendation taken (ask only with screenshots)" and can be overturned on the tracker.</p></div><div class="qs">${DEC.map(([q, r]) => `<div class="q"><h3>${q}</h3><p class="rec"><b>Taken:</b> ${r}</p></div>`).join("")}</div></section>`;
   paintTiles(S); if (ST.tab === "power") grid();
@@ -1155,11 +1458,25 @@ const DEC = [
   ["I5. The ether extractor is late game", "It needs an off-world seed shard and 400 kW, so it comes after a ship and after nuclear or geothermal; it never replaces the pit for early ore."],
   ["I6. Antimatter is a battery", "The collider spends more than the plant returns (20,000 kW in, 16,000 kW out). Its worth is density and carrying: a cell runs a ship or an outpost far from any grid."],
   ["I8. Oil is a field, not cells", "Reservoir pressure is derived from the seed like the climate, so oil needs no new generator version and an old world has the same fields as a new one. A well is a stored record; the field it reads is not (steer-and-sail, decision 5)."],
+  ["I9. Five mining tiers, one dig rule", "Hired crew, excavator, quarry frame, bucket-wheel and drone hive all dig only marked cells and name themselves as the author (industry-tiers decision 1)."],
+  ["I10. The offshore platform is tier I power", "It burns its own gas and sends 3,100 kW ashore by sea cable, so it sits on the ladder beside the oil plant, and in the oil section as a rig."],
+  ["I11. One kind of thing per carrier network", "A pipe network holds one fluid; a belt carries stacks; a tube carries capsules; a wire carries power. Mixing needs a second network, so nothing is ever contaminated."],
+  ["I12. Freighters: hired, then automated", "The same ship and route record; tier III swaps the crew for a radio pilothouse and drops the wages."],
   ["I7. The Dyson swarm is the last tier", "Built in stages from the ground: launch site, the first thousand drones, relays and a receiver, then a swarm that builds itself. Output grows with the swarm, up to 2,000,000 kW; the star visibly dims as it fills."],
 ];
 // ---- the power grid view
-const GRID = { gens: { coal: true, oil: false, wind: true, geo: false, hydro: true, nuclear: false, fusion: false, antimatter: false, dyson: false }, cons: { crusher: true, smelter: true, refinery: true, press: true, siphon: true, filter: true, pumpjack: true, "oil-refinery": true, extractor: false, collider: false } };
-const CONS = [["crusher", "Crusher", 40], ["smelter", "Smelter", 120], ["refinery", "Refinery", 90], ["press", "Rolling press", 60], ["siphon", "Siphon pump", 15], ["filter", "Filter tower", 5], ["pumpjack", "Pumpjack", 15], ["oil-refinery", "Distillation column", 150], ["extractor", "Ether extractor", 400], ["collider", "Collider", 20000]];
+const GRID = { gens: { coal: true, oil: false, platform: false, wind: true, geo: false, hydro: true, nuclear: false, fusion: false, antimatter: false, dyson: false }, cons: { crusher: true, smelter: true, refinery: true, press: true, siphon: true, filter: true, pumpjack: true, "oil-refinery": true, extractor: false, collider: false, excavator: true, quarry: false, bucketwheel: false, hive: false, printer: true, belt: true, tube: false, pipe: true, derrick: false, lox: false, launchpad: false, depot: false } };
+const CONS = [["crusher", "Crusher", 40], ["smelter", "Smelter", 120], ["refinery", "Refinery", 90], ["press", "Rolling press", 60], ["siphon", "Siphon pump", 15], ["filter", "Filter tower", 5], ["pumpjack", "Pumpjack", 15], ["oil-refinery", "Distillation column", 150], ["extractor", "Ether extractor", 400], ["collider", "Collider", 20000],
+  // 2026-11-14, industry-tiers section 5: the loads the owner named. The excavator burns diesel, so it draws nothing here.
+  ["excavator", "Excavator (diesel)", 0], ["quarry", "Quarry frame", 120], ["bucketwheel", "Bucket-wheel excavator", 4000], ["hive", "Drone hive, 12 drones", 360], ["printer", "3D printer", 60],
+  ["belt", "Belts, 100 cells", 20], ["tube", "Pneumatic tubes, 2 stations", 30], ["pipe", "Pipe pumps, 5", 50], ["derrick", "Drilling rig", 300], ["lox", "Air separation (LOX)", 300], ["launchpad", "Launch pad", 200], ["depot", "Fuel depot", 30, "tank"]];
+// The four carriers (industry-tiers section 4): one kind of thing per network
+const CARRIERS = [
+  ["m:wire", "Wire", "Electricity, on poles (4 cells) or pylons", "2,000 kW a line; 50,000 on pylons"],
+  ["m:pipe", "Pipe", "Water, crude, fuel oil, diesel, LOX: one fluid a network", "0.5 t/s; 2 t/s large; a pump every 20 cells"],
+  ["m:belt", "Conveyor belt", "Ore, stone, coal, anything in stacks", "2 items/s, 0.2 kW a cell"],
+  ["m:tube", "Pneumatic tube", "Goods in capsules, station to station", "1 capsule/s of 5 items, 15 m/s"],
+];
 function grid() {
   const svg = $("grid"); if (!svg) return;
   const Wd = 900, gk = GEN_ORDER.filter(k => !GENS[k].consumer), Hh = Math.max(gk.length, CONS.length) * 50 + 20;
@@ -1172,7 +1489,7 @@ function grid() {
   poles.forEach(x => o.push(`<image href="industry/pole.png" x="${x - 16}" y="${busY - 30}" width="32" height="32"/>`));
   o.push(`<text class="m" x="${poles[1]}" y="${busY + 22}" text-anchor="middle">poles, 4 cells apart</text>`);
   gk.forEach((k, i) => { const y = 20 + i * 50, g = GENS[k]; o.push(`<g class="node ${GRID.gens[k] ? "" : "off"}" tabindex="0" role="button" data-gen="${k}" aria-pressed="${GRID.gens[k]}" aria-label="${g.name}"><rect x="10" y="${y}" width="220" height="40"/><image href="industry/${g.icon}.png" x="14" y="${y + 4}" width="32" height="32"/><text x="52" y="${y + 17}">${g.name}</text><text class="m" x="52" y="${y + 32}">${GRID.gens[k] ? g.out().toLocaleString("en") + " kW" + (k === "antimatter" && !GRID.cons.collider ? " (no cells: run the collider)" : "") : "off"}</text></g>`); });
-  CONS.forEach(([k, n, kw], i) => { const y = 20 + i * (Hh - 40) / CONS.length; o.push(`<g class="node ${GRID.cons[k] ? "" : "off"}" tabindex="0" role="button" data-con="${k}" aria-pressed="${GRID.cons[k]}" aria-label="${n}"><rect x="660" y="${y}" width="230" height="36"/><image href="industry/${k === "filter" ? "filter" : k}.png" x="663" y="${y + 2}" width="32" height="32"/><text x="701" y="${y + 15}">${n}</text><text class="m" x="701" y="${y + 29}">${GRID.cons[k] ? kw.toLocaleString("en") + " kW" + (supply < demand ? ", at " + Math.round(supply / demand * 100) + "%" : "") : "off"}</text></g>`); });
+  CONS.forEach(([k, n, kw], i) => { const y = 20 + i * (Hh - 40) / CONS.length; o.push(`<g class="node ${GRID.cons[k] ? "" : "off"}" tabindex="0" role="button" data-con="${k}" aria-pressed="${GRID.cons[k]}" aria-label="${n}"><rect x="660" y="${y}" width="230" height="36"/><image href="industry/${CONS[i][3] || k}.png" x="663" y="${y + 2}" width="32" height="32"/><text x="701" y="${y + 15}">${n}</text><text class="m" x="701" y="${y + 29}">${GRID.cons[k] ? kw.toLocaleString("en") + " kW" + (supply < demand ? ", at " + Math.round(supply / demand * 100) + "%" : "") : "off"}</text></g>`); });
   { const ai = gk.indexOf("antimatter"), ay = 20 + ai * 50, ci = CONS.findIndex(c => c[0] === "collider"), cy2 = 20 + ci * (Hh - 40) / CONS.length + 36, on = GRID.cons.collider;
     o.push(`<path class="wire ${on ? "on" : ""}" style="stroke:#c34988" d="M775,${cy2} C775,${Hh + 26} 236,${Hh + 26} 232,${ay + 30}"/><text x="460" y="${Hh + 22}" text-anchor="middle" style="fill:#f3c6e0">antimatter cells, 1 a game hour: collider to antimatter plant (20,000 kW in, 16,000 kW back)</text>`); }
   svg.innerHTML = o.join("");
@@ -1186,18 +1503,20 @@ function grid() {
 // ===================================================================
 function route() {
   const parts = (location.hash.slice(1) || "mining").split("-");
-  ST.tab = ["mining", "refining", "ether", "power", "oil"].includes(parts[0]) ? parts[0] : "mining";
-  if (ST.tab === "oil") ST.oilView = ["well", "refinery"].includes(parts[1]) ? parts[1] : "overview";
+  ST.tab = ["mining", "refining", "ether", "power", "oil", "transport"].includes(parts[0]) ? parts[0] : "mining";
+  if (ST.tab === "oil") ST.oilView = ["well", "refinery", "rig", "platform"].includes(parts[1]) ? parts[1] : "overview";
+  if (ST.tab === "mining") ST.mineTier = MT[parts[1]] ? parts[1] : "excavator";
+  if (ST.tab === "transport") ST.crew = parts.includes("auto") ? "auto" : "hired";
   if (parts.includes("run") && !ST.run) setRun(true);
   if (ST.tab === "power" && GENS[parts[1]]) ST.gen = parts[1];
   ST.space = ST.tab === "power" && ST.gen === "dyson" && parts.includes("space");
   if (ST.tab === "ether" && parts[1] === "extractor") ST.stage = 2;
   ST.night = parts.includes("night");
   for (const b of document.querySelectorAll("[data-tab]")) { b.setAttribute("aria-pressed", b.dataset.tab === ST.tab); b.setAttribute("aria-selected", b.dataset.tab === ST.tab); }
-  show(); side(); sheets();
+  show(); if (CUR.tiers) setMineTier(ST.mineTier); if (CUR.crewG) setCrew(ST.crew); side(); sheets();
   if (ST.tab === "ether" && ST.stage === 2) $("st2").click();
 }
-const hashFor = () => ST.tab + (ST.tab === "oil" && ST.oilView !== "overview" ? "-" + ST.oilView : "") + (ST.tab === "power" ? "-" + ST.gen + (ST.gen === "dyson" && ST.space ? "-space" : "") : "") + (ST.night ? "-night" : "");
+const hashFor = () => ST.tab + (ST.tab === "mining" ? "-" + ST.mineTier : "") + (ST.tab === "transport" && ST.crew === "auto" ? "-auto" : "") + (ST.tab === "oil" && ST.oilView !== "overview" ? "-" + ST.oilView : "") + (ST.tab === "power" ? "-" + ST.gen + (ST.gen === "dyson" && ST.space ? "-space" : "") : "") + (ST.night ? "-night" : "");
 for (const b of document.querySelectorAll("[data-tab]")) b.addEventListener("click", () => { ST.tab = b.dataset.tab; location.hash = hashFor(); });
 $("tRun").addEventListener("click", () => setRun(!ST.run));
 $("tDay").addEventListener("click", () => { ST.night = false; history.replaceState(null, "", "#" + hashFor()); applyTime(); status(); });
@@ -1218,7 +1537,7 @@ function frame(now) {
     if (CUR.etherLight) PBD.setLights(CUR.lights);
     if (CUR.beam) { CUR.beam.visible = ST.swarm > 2; CUR.beam.material.opacity = 0.25 + 0.5 * ST.swarm / 100; }
     const b = canvas.getBoundingClientRect();
-    CUR.tags.forEach((t, i) => { const el = $("tg" + i); if (!el) return; v3.copy(t.p).project(camera); const vis = v3.z < 1 && Math.abs(v3.x) < 1.05 && Math.abs(v3.y) < 1.05; el.hidden = !vis || !t.text; el.style.left = ((v3.x + 1) / 2 * b.width) + "px"; el.style.top = ((1 - v3.y) / 2 * b.height) + "px"; });
+    CUR.tags.forEach((t, i) => { const el = $("tg" + i); if (!el) return; v3.copy(t.p).project(camera); const vis = v3.z < 1 && Math.abs(v3.x) < 1.05 && Math.abs(v3.y) < 1.05; el.hidden = !vis || !t.text || (t.tier && CUR.name === "mining" && t.tier !== ST.mineTier); el.style.left = ((v3.x + 1) / 2 * b.width) + "px"; el.style.top = ((1 - v3.y) / 2 * b.height) + "px"; });
     for (const el of document.querySelectorAll("[data-run]")) { const s = +el.dataset.run; el.style.width = ((ST.mt / s) % 1 * 100) + "%"; }
   }
   renderer.render(scene, camera); requestAnimationFrame(frame);
