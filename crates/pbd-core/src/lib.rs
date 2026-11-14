@@ -25,6 +25,7 @@ pub mod inventory;
 pub mod lamp_bake;
 pub mod light;
 pub mod map;
+pub mod night_lights;
 pub mod orbit;
 pub mod overlay;
 pub mod planet_gen;

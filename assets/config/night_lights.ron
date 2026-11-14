@@ -1,0 +1,39 @@
+// The lights of the night side seen from afar (`night-lights-from-space`,
+// `pbd_core::night_lights`). Read once at startup and checked; a value that
+// does not validate is a startup error naming this file.
+(
+    // How each kind of settlement shows from afar: how far its points of
+    // light reach from its centre, metres, and its brightness at full night
+    // (a walled town is one). A cave town is under its rock and shows nothing.
+    kinds: {
+        Walled: (radius_m: 150.0, brightness: 1.0),
+        Harbour: (radius_m: 110.0, brightness: 0.8),
+        Village: (radius_m: 90.0, brightness: 0.6),
+        Desert: (radius_m: 80.0, brightness: 0.5),
+        Tundra: (radius_m: 80.0, brightness: 0.5),
+        Jungle: (radius_m: 80.0, brightness: 0.5),
+        Swamp: (radius_m: 80.0, brightness: 0.5),
+        Cliff: (radius_m: 80.0, brightness: 0.5),
+        Cave: (radius_m: 0.0, brightness: 0.0),
+    },
+    // The capital: its kind's radius and brightness times these.
+    capital_radius: 1.3,
+    capital_brightness: 1.25,
+    // About one lit point per this many metres square at a town's centre.
+    town_spacing_m: 12.0,
+    // A far light is gone within `near_out_m` of the camera and whole past
+    // `near_in_m`. A town stands within 1200 m (`towns::STAND_M`), so its own
+    // lanterns and windows are drawn where its far light is not. (At 700 m
+    // the far points showed faintly over a standing town's own, from 900 m.)
+    near_out_m: 1200.0,
+    near_in_m: 2200.0,
+    // The player's lights: a group of at least `player_threshold` of them,
+    // in grid cubes of `player_link_m` that touch, is a far light of its own,
+    // at least `player_min_radius_m` wide, whole at `player_full_count`.
+    player_threshold: 12,
+    player_link_m: 64.0,
+    player_min_radius_m: 30.0,
+    player_brightness: 0.8,
+    player_full_count: 60,
+    player_spacing_m: 8.0,
+)

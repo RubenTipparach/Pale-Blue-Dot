@@ -13,9 +13,9 @@ new pipeline, no new binding:
   (`planet_water.rs`), so a cloud deck over a town hides its lights by the
   cloud's own opacity. The ground's haze (`finish`) dims them by distance.
   On top of that, the lights at a pixel are thinned by the weather map's cover
-  there (`weather_cloud`, x cover, w optical depth), the same pair `cloud_sun`
-  reads, so a town under a deck is dark even where the clouds pass draws its
-  thin far shell.
+  there (`weather_cloud`'s x, which the ground's cloud shadows read too), so a
+  town under a deck is dark even where the clouds pass draws a thin far shell
+  of it.
 - **The night side only.** Light is added, never lit: the sun does not touch
   it, so it shows by contrast only where the ground is dark.
 
@@ -51,10 +51,13 @@ strength = brightness(kind or count) * night(e) * near(d)
   little earlier (`daylight::DUSK_ON`, 0.05), when they are too faint against
   the dusk ground to be seen from far anyway.
 - `d` is the camera's distance to the light's centre, and
-  `near(d) = smoothstep(near_out_m, near_in_m, d)`, 700 m to 2000 m. A town
-  stands within 1200 m (`towns::STAND_M`), so the far lights are gone where
-  the town's own lanterns and windows are drawn, and are whole well before
-  they are needed from altitude. They never double the real lamps.
+  `near(d) = smoothstep(near_out_m, near_in_m, d)`, 1200 m to 2200 m. A
+  town stands within 1200 m (`towns::STAND_M`), so the far lights are gone
+  where the town's own lanterns and windows are drawn, and are whole well
+  before they are needed from altitude. They never double the real lamps.
+  (A first try faded them over 700 m to 2000 m; from 900 m above a town its
+  far points showed faintly over its own, so the fade starts where the town
+  stands.)
 
 Lights of strength nought (the day side, the near ones) are left out, and the
 list keeps the 64 strongest, ties by order of making, so the list is stable
@@ -67,18 +70,29 @@ For each light, a pixel first tests `dot(radial, direction) > cos(reach)`:
 one dot per light per pixel, which is all most pixels pay. Inside the reach:
 
 - **Points.** The tangent plane at the light is cut into a grid of `spacing`
-  (12 m for a town). Each grid cell holds at most one lit point, by a hash of
-  the cell and the light's seed, with a chance that falls off from the centre
-  (`exp(-2 (r/R)^2)`, R the light's radius), at a random place in the cell and
-  a random brightness. A pixel sums the 3 x 3 cells round it. Each point is a
-  soft blob of radius `max(2.5 m, 1.5 x the pixel's footprint)` (the
-  footprint is `foot`, taken at the top of `shade_terrain`), and its
-  brightness is divided by how far the blob was widened, so from afar a point
-  stays a pixel-sized spark rather than a disc and a town keeps its total.
-- **Glow.** Under the points, a soft warm glow over the same density, a
-  fifth of a point's brightness, which is the "lit patch of ground" of
-  survey C3 and what a town is when its points are below a pixel.
-- **Colour.** Sodium-warm, `(1.0, 0.70, 0.36)`, the lamp tint's family.
+  (12 m for a town, 8 m for the player's). Each grid cell holds at most one
+  lit point, by a hash of the cell and the light's seed, with a chance of
+  `0.5 x quarter x exp(-2.5 (r/R)^2)` (R the light's radius): likelier toward
+  the centre, and likelier in some quarters (blocks of four cells, `quarter`
+  a hash between 0.25 and 1.25) than others, so a town is ragged rather than
+  a disc. The point sits at a random place in its cell with a random
+  brightness. A pixel sums the 3 x 3 cells round it. Each point is a soft
+  blob of radius `max(2.5 m, 1.5 x the pixel's footprint)` (the footprint is
+  `foot`, taken at the top of `shade_terrain`), and its brightness is divided
+  by how far the blob was widened, so from afar a point stays a pixel-sized
+  spark rather than a disc. Where a pixel spans several cells, the sum is
+  blended into its expected value, so the far town does not shimmer.
+- **Glow.** Under the points, a faint warm glow, `0.02 x exp(-4 (r/R)^2)` of a
+  point: the "lit patch of ground" of survey C3, with the bloom of the points
+  doing most of it. The light is faded out over the last quarter of its reach,
+  so it never ends on a ring.
+- **Colour and gain.** Sodium-warm, `(1.0, 0.70, 0.36)`, times 3 (HDR: the
+  display transform has room above white and the bloom picks it up).
+- **Not under the sea.** A pixel below the water sheet draws none: the sea
+  drawn over a harbour's quay would tint those lights as seabed.
+- **Under a deck.** The weather map's cover at the pixel takes up to 97% of
+  it (`1 - 0.97 smoothstep(0.2, 0.85, cover)`), and the clouds pass then draws
+  the deck over what is left.
 
 ## 4. Brightness by kind
 

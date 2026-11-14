@@ -268,6 +268,7 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<bounce::LampBakeField>::default(),
             ExtractResourcePlugin::<lod::DuskRelight>::default(),
         ))
+        .add_plugins(crate::night_lights::NightLightsPlugin)
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
         .init_resource::<lod::DuskRelight>()
@@ -734,6 +735,12 @@ struct PlanetParams {
     // newest; z one while the other half holds the field it blends from; w
     // spare.
     light_ease: Vec4,
+    // `night-lights-from-space`: x how many far lights `night_lights` holds,
+    // yzw spare; then two vec4 a light (`night_lights::FarLights::pack`).
+    // Last, so the visibility pass, which reads a prefix of this uniform,
+    // never sees them.
+    night: Vec4,
+    night_lights: [Vec4; 2 * crate::night_lights::MAX_FAR_LIGHTS],
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1539,6 +1546,8 @@ pub(crate) struct Tunables<'w> {
     /// Whether an overlay is showing: the map hides the clouds, and so their
     /// shadows.
     maps: Res<'w, weather_maps::WeatherMapsNow>,
+    /// The night side's far lights (`night-lights-from-space`).
+    far: Option<Res<'w, crate::night_lights::FarLights>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1621,6 +1630,13 @@ fn prepare_views(
         trace!(
             "planet view {entity}: camera {camera_position:?}, lod player {:?}, base {} fine {:?}",
             lod.player, planet.base_count, planet.counts
+        );
+        let (night, night_lights) = tunables.far.as_ref().map_or(
+            (
+                Vec4::ZERO,
+                [Vec4::ZERO; 2 * crate::night_lights::MAX_FAR_LIGHTS],
+            ),
+            |far| far.pack(sun.direction(), camera_position, PLANET_RADIUS),
         );
         let params = PlanetParams {
             clip_from_body,
@@ -1790,6 +1806,8 @@ fn prepare_views(
                 planet.light_from_s,
                 clock.0,
             ),
+            night,
+            night_lights,
             // w: there is a history to read, so not while the capture is off.
             ssr_eye: existing.as_ref().map_or(Vec4::ZERO, |gpu| {
                 gpu.last_camera.extend(if lighting.reflect_capture_on() {

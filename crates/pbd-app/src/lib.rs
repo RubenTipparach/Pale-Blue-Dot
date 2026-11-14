@@ -28,6 +28,8 @@ pub mod hotbar;
 #[cfg(feature = "desktop")]
 pub mod loading;
 #[cfg(feature = "desktop")]
+pub mod night_lights;
+#[cfg(feature = "desktop")]
 pub mod overlay;
 #[cfg(feature = "desktop")]
 pub mod place;

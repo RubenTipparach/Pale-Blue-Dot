@@ -47,6 +47,8 @@ struct Params {
     ssr_eye: vec4<f32>,        // and its eye; w one once there is a history
     rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m
     light_ease: vec4<f32>,     // `baked-light-ease` 7.3: x the light field's newest half blended in 0..1, y that half, z one while the other is blended from
+    night: vec4<f32>,          // `night-lights-from-space`: x how many far lights `night_lights` holds
+    night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -270,6 +272,9 @@ const GLOW_LIT_BIT: u32 = 0x20000000u;
 // A glowing flower's head by day: pale, and cooler than the white and warm
 // blooms, so the species is known before dark.
 const BLOOM_CODE: u32 = 244u;
+// How bright a glowing flower's head burns: a quarter of what it was, the
+// owner's "1/4 brightness on the flower lights" (`night-lights-from-space`).
+const GLOW_HEAD_GAIN: f32 = 0.25;
 // A flame also carries how far up it is, 0 at its root and 1 at its tip, as
 // `LAMP_FLAME + FLAME_RISE * rise`, so it shades from root to tip without a
 // varying of its own.
@@ -2204,10 +2209,93 @@ fn reflect_gather(@builtin(position) at: vec4<f32>) -> GatherOut {
 }
 
 // The distance haze and the limb, the last of every terrain fragment.
+// ---- `night-lights-from-space`: the night side's far lights -------------
+//
+// Each settlement, and each group of the player's lights past the threshold,
+// is a warm cluster of points over a soft glow, added to the ground before
+// its haze (`finish`), so the clouds drawn over the ground hide it. The CPU
+// decides each light's strength now (the sky's night term there, gone near
+// the camera where the town itself stands): `night_lights::FarLights::pack`.
+var<private> far_glow: vec3<f32> = vec3<f32>(0.0);
+const FAR_LIGHT_TINT: vec3<f32> = vec3<f32>(1.0, 0.70, 0.36);
+// How bright a point of a light of strength one is, HDR.
+const FAR_LIGHT_GAIN: f32 = 3.0;
+// A point's own size, metres; a pixel's footprint widens it.
+const FAR_POINT_M: f32 = 2.5;
+// The share of a town's grid cells, at its centre, that hold a lit point.
+const FAR_LIT_SHARE: f32 = 0.5;
+// The glow under the points, as a share of a point: what a town is from so
+// far off that its points are under a pixel.
+const FAR_GLOW_SHARE: f32 = 0.02;
+fn far_night_lights(position: vec3<f32>, foot: f32) -> vec3<f32> {
+    let count = min(u32(params.night.x), 64u);
+    if count == 0u { return vec3(0.0); }
+    // Not under the sea: the water drawn over a harbour's quay would tint
+    // its lights as the seabed.
+    if length(position) < params.water_absorption.w { return vec3(0.0); }
+    let radial = normalized(position);
+    // A point's blob: its own size, or 1.5 pixels where that is wider. A
+    // widened point is dimmer by as much, so a far town reads as sparks.
+    let blob = max(FAR_POINT_M, foot*1.5);
+    let dilute = FAR_POINT_M/blob;
+    var sum = 0.0;
+    for (var i = 0u; i < count; i++) {
+        let a = params.night_lights[2u*i];
+        let c = dot(radial, a.xyz);
+        if c < a.w { continue; }
+        let b = params.night_lights[2u*i + 1u];
+        let radius = max(b.x, 1.0);
+        let spacing = max(b.w, 1.0);
+        let seed = u32(b.z);
+        // The light's tangent plane, metres from its centre.
+        let up = a.xyz;
+        let axis = select(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), abs(up.y) > 0.9);
+        let e1 = normalized(cross(axis, up));
+        let e2 = cross(up, e1);
+        let off = (radial - up*c)*params.settings.x;
+        let uv = vec2(dot(off, e1), dot(off, e2));
+        let rr = length(uv)/radius;
+        // Gone at the edge of its reach, so it never ends on a ring.
+        let edge = 1.0 - smoothstep(0.75, 1.0, sqrt(max(1.0 - c, 0.0)/max(1.0 - a.w, 1e-9)));
+        // Up close, the points themselves: one at most in each cell of the
+        // grid, by the cell's hash, likelier toward the centre and in some
+        // quarters (blocks of four cells) than others, so a town is ragged
+        // rather than a disc.
+        var points = 0.0;
+        let base = floor(uv/spacing);
+        for (var dy = -1; dy <= 1; dy++) {
+            for (var dx = -1; dx <= 1; dx++) {
+                let cell = base + vec2(f32(dx), f32(dy));
+                let ci = vec2<i32>(cell);
+                let h = hash((seed*0x9e3779b9u) ^ (bitcast<u32>(ci.x)*0x85ebca6bu)
+                    ^ (bitcast<u32>(ci.y)*0xc2b2ae35u));
+                let q = hash((seed*0x27d4eb2fu) ^ (bitcast<u32>(ci.x >> 2u)*0x165667b1u)
+                    ^ (bitcast<u32>(ci.y >> 2u)*0xd3a2646cu));
+                let quarter = 0.25 + f32(q & 1023u)/1023.0;
+                let cr = length((cell + 0.5)*spacing)/radius;
+                if f32(h & 1023u)/1023.0 > FAR_LIT_SHARE*quarter*exp(-2.5*cr*cr) { continue; }
+                let at = (cell + vec2(f32((h >> 10u) & 255u), f32((h >> 18u) & 255u))/255.0)*spacing;
+                let d = length(uv - at)/blob;
+                points += (0.6 + 0.8*f32((h >> 26u) & 63u)/63.0)*exp(-2.0*d*d);
+            }
+        }
+        // From afar, where a pixel holds several cells, what they average to.
+        let mean = FAR_LIT_SHARE*0.75*exp(-2.5*rr*rr)*1.5708*(blob/spacing)*(blob/spacing);
+        let p = mix(points, mean, smoothstep(0.5, 1.5, blob/spacing));
+        sum += b.y*edge*(p*dilute + FAR_GLOW_SHARE*exp(-4.0*rr*rr));
+    }
+    if sum <= 0.0 { return vec3(0.0); }
+    // A deck over the light hides most of it, by the cover the weather maps
+    // hold there, before the clouds pass draws the deck itself over it.
+    let cover = textureSampleLevel(weather_cloud, weather_sampler, radial, 0.0).x;
+    return FAR_LIGHT_TINT*(FAR_LIGHT_GAIN*sum*(1.0 - 0.97*smoothstep(0.2, 0.85, cover)));
+}
+
 fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
           distance_to_camera: f32, sun_elevation: f32, daylight: f32, cover: f32,
           skylight: f32) -> vec4<f32> {
-    var color = lit;
+    // The far lights go under the haze like the ground they stand on.
+    var color = lit + far_glow;
     // Tenebris-style limb and distance haze, all in the same body-local frame.
     let altitude = max(length(params.camera.xyz)-params.settings.x,0.);
     let air = exp(-altitude/1050.);
@@ -2293,6 +2381,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let sun = params.sun.xyz;
     let toward_camera = normalized(params.camera.xyz-input.position);
     let distance_to_camera = distance(input.position,params.camera.xyz);
+    far_glow = far_night_lights(input.position, foot);
     let sun_elevation = dot(radial,sun);
     let daylight = smoothstep(-0.13,0.20,sun_elevation);
     // Overcast: the cover over the player takes the sun down by
@@ -2515,7 +2604,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // A glowing flower's head at night: its own cool light, whatever the
     // field around it holds.
     if lamp > LAMP_BLOOM - 0.25 {
-        color = vec3(0.62, 1.0, 0.88)*(0.85 + 0.3*grain);
+        color = vec3(0.62, 1.0, 0.88)*(0.85 + 0.3*grain)*GLOW_HEAD_GAIN;
     } else if input.kind == KIND_LAMP && lamp > LAMP_PANES - 0.5 {
         if lamp > LAMP_FLAME - 0.5 {
             let height = clamp((lamp - LAMP_FLAME)/FLAME_RISE, 0.0, 1.0);

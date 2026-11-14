@@ -7,10 +7,12 @@
 //! turns it.
 
 /// How bright a glowing flower is on the field's 0..15 scale: enough to light
-/// its own cell and, faintly, the ones beside it, which with a step across
-/// costing three levels ([`crate::light::ACROSS`]) is about a cell and a
-/// half of meadow.
-pub const GLOW_FLOWER_LEVEL: u8 = 6;
+/// its own cell faintly, and with a step across costing three levels
+/// ([`crate::light::ACROSS`]) no further. It was 6 (about a cell and a half
+/// of meadow) until the owner asked for a quarter of the brightness
+/// (`night-lights-from-space`): the field's flood curve gives 0.41 at level 6
+/// and 0.13 at level 3, the nearest whole level to a quarter.
+pub const GLOW_FLOWER_LEVEL: u8 = 3;
 
 /// A salt of its own, so which cells glow owes nothing to anything else
 /// hashed off the same key.
@@ -50,6 +52,22 @@ mod tests {
                 "{share} for a chance of {chance}"
             );
         }
+    }
+
+    /// A smaller share keeps a subset of the cells a larger one chose: the
+    /// owner's quarter (`night-lights-from-space`) thins the glowers, it
+    /// does not move them.
+    #[test]
+    fn a_smaller_share_keeps_a_subset_of_the_glowers() {
+        let keys = 1_000_000u32..1_200_000;
+        let old: Vec<u32> = keys.clone().filter(|&k| glows(k, 0.04)).collect();
+        let new: Vec<u32> = keys.filter(|&k| glows(k, 0.01)).collect();
+        assert!(new.iter().all(|&k| glows(k, 0.04)));
+        let share = new.len() as f32 / old.len() as f32;
+        assert!(
+            (share - 0.25).abs() < 0.02,
+            "{share} of the old glowers stay"
+        );
     }
 
     /// Nothing glows at a chance of nought, everything at one, and a key

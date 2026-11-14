@@ -31,6 +31,14 @@ fn smooth(a: f32, b: f32, x: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
+/// How much it is night where the sun stands at elevation `e` (a cosine),
+/// 0..1: nought until the sun is a degree above the horizon, whole once it
+/// is about seven degrees below. The moonlit sky fades in by it, and so do
+/// the far lights of the towns (`night-lights-from-space`).
+pub fn night(e: f32) -> f32 {
+    1.0 - smooth(-0.12, 0.02, e)
+}
+
 /// Air masses along a ray `e` (sine of its elevation) above the horizon:
 /// Kasten and Young's, one at the zenith, about 38 at the horizon.
 pub fn airmass(e: f32) -> f32 {
@@ -92,7 +100,7 @@ pub fn sky_radiance(d: [f32; 3], s: [f32; 3], cover: f32) -> [f32; 3] {
         let illum = sa[i].max(0.0).powf(0.75) * (1.0 - hi) + sh[i].max(0.0).powf(0.75) * hi;
         illum * (tr * 0.75 * (1.0 + mu * mu) * KR + tm * pm * KM) + twilight[i] * tw + starlight[i]
     });
-    let night = 1.0 - smooth(-0.12, 0.02, s[1]);
+    let night = night(s[1]);
     let moon_sky = [0.008, 0.011, 0.020];
     let deck_glow = [0.026, 0.029, 0.038];
     for i in 0..3 {

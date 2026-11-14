@@ -1123,7 +1123,7 @@ impl Default for ColumnSettings {
             worm_start_depth_m: worms.start_depth_m,
             worm_steer_scale_m: worms.steer_scale_m,
             cave_floor_layers: worms.floor_layers as u32,
-            glow_flower_chance: 0.04,
+            glow_flower_chance: 0.01,
         }
     }
 }
