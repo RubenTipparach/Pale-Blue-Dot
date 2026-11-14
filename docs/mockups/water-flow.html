@@ -1,0 +1,579 @@
+<title>Hex Water Flow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one three.js stage with the game's HUD and a side panel of tools and presets, the rule and its numbers under it. House style of building.html and industry.html: dark ground, amber accent, condensed display face, the game's HUD greens. Single dark look by choice. */
+:root{
+  color-scheme: dark;
+  --ground:#0d0f0c;
+  --panel:rgba(18,17,13,.9);
+  --panel-solid:#17150f;
+  --raise:#1f1c16;
+  --line:rgba(226,206,160,.17);
+  --ink:#ece4d2;
+  --muted:#a89d86;
+  --amber:#f0b43c;
+  --ember:#ff8a3d;
+  --sky:#8fc3d8;
+  --hud:#ebf7f2;
+  --hudline:rgba(140,191,189,.5);
+  --hudbg:rgba(5,15,20,.72);
+  --ether:#c34988;
+  --warn:#ff6b57;
+  --ok:#8fdc9a;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+html{background:var(--ground)}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+.wrap{max-width:1280px;margin:0 auto;display:grid;gap:28px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;text-wrap:balance;margin:0}
+h1{font-size:clamp(32px,4.4vw,48px)}
+h2{font-size:26px}
+h3{font-size:18px;font-weight:600}
+p{margin:0;max-width:74ch}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.badge{display:inline-block;font-family:var(--display);font-size:13px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--amber);color:var(--amber);border-radius:2px;vertical-align:middle}
+.badge.late{border-color:var(--ether);color:var(--ether)}
+header.top{display:grid;gap:8px;padding-top:24px}
+.lede{color:var(--muted);font-size:15.5px}
+.lede b,.note b{color:var(--ink);font-weight:600}
+.note{font-size:13px;color:var(--muted);border-left:2px solid var(--line);padding-left:12px;max-width:none}
+.src{font-family:var(--mono);font-size:12px;color:var(--sky)}
+button{font:inherit;color:inherit}
+.btn{cursor:pointer;background:transparent;border:1px solid var(--line);border-radius:4px;padding:5px 9px;font-family:var(--display);font-size:14px;letter-spacing:.05em;color:var(--ink)}
+.btn:hover{border-color:rgba(240,180,60,.55)}
+.btn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tabs .tab{display:inline-flex;gap:6px;align-items:center;font-size:16px;padding:4px 12px 4px 4px}
+.tabs .tab img{width:32px;height:32px;image-rendering:pixelated}
+.tabs .sp{flex:1}
+/* the world view */
+.view{display:grid;grid-template-columns:minmax(0,1fr) 300px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel-solid);height:min(78vh,720px);min-height:520px}
+.stage{position:relative;min-width:0;overflow:hidden}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none;outline:none;cursor:grab}
+.side{padding:12px;display:grid;gap:12px;align-content:start;overflow:auto;min-width:0;border-left:1px solid var(--line)}
+/* the game HUD (crates/pbd-app/src/desktop/slots.rs): ten 44 px slots, 4 px apart, 22 px off the bottom; the debug line top left */
+.dbg{position:absolute;left:8px;top:6px;font:12px/1.3 var(--mono);color:var(--hud);text-shadow:0 1px 0 #000,1px 0 0 #000;pointer-events:none;white-space:pre-wrap;max-width:calc(100% - 16px)}
+.hotbar{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:4px;max-width:calc(100% - 16px);overflow-x:auto}
+.hotbar button{all:unset;cursor:pointer;position:relative;flex:0 0 44px;width:44px;height:44px;box-sizing:border-box;border:1px solid var(--hudline);background:var(--hudbg);display:grid;place-items:center}
+.hotbar button[aria-pressed="true"]{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
+.hotbar button:focus-visible{outline:2px solid var(--amber)}
+.hotbar img{image-rendering:pixelated;display:block;width:32px;height:32px}
+.hotbar .n{position:absolute;right:3px;bottom:1px;font:10px var(--mono);color:var(--hud);text-shadow:0 1px 0 #000}
+.held{position:absolute;left:50%;bottom:72px;transform:translateX(-50%);font:12px var(--mono);color:var(--hud);text-shadow:0 1px 0 #000;pointer-events:none;white-space:nowrap}
+.cross{position:absolute;left:50%;top:50%;width:2px;height:2px;background:var(--hud);pointer-events:none}
+.tag3d{position:absolute;left:0;top:0;font:11px/1.3 var(--mono);color:var(--hud);background:rgba(5,15,20,.8);border:1px solid var(--hudline);padding:1px 6px;white-space:nowrap;pointer-events:none;transform:translate(-50%,-100%)}
+.tag3d.late{border-color:var(--ether);color:#f3c6e0}
+.tag3d.warm{border-color:rgba(255,138,61,.6)}
+/* side panel */
+.field{display:grid;gap:5px}
+.field > span{font-family:var(--display);letter-spacing:.1em;text-transform:uppercase;font-size:11.5px;color:var(--muted)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.stats{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px;margin:0}
+.stats dt{color:var(--muted)}
+.stats dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.keys{font-size:12px;color:var(--muted);line-height:1.5}
+.keys kbd{font-family:var(--mono);color:var(--amber);font-size:11px}
+.rows{display:grid;gap:3px}
+.row{display:grid;grid-template-columns:32px 1fr auto;gap:8px;align-items:center;font-size:13px}
+.row img,.row .tile{width:32px;height:32px;image-rendering:pixelated;background-size:32px 32px}
+.row .v{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums;color:var(--hud)}
+.row.dim{opacity:.45}
+.gens{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.gens button{all:unset;cursor:pointer;display:grid;justify-items:center;gap:1px;padding:5px 2px;border:1px solid var(--line);border-radius:4px;font-family:var(--display);font-size:12.5px;letter-spacing:.03em;text-align:center}
+.gens button img{width:32px;height:32px;image-rendering:pixelated}
+.gens button[aria-pressed="true"]{border-color:var(--amber);background:rgba(240,180,60,.12);color:var(--amber)}
+.gens button:focus-visible{outline:2px solid var(--amber)}
+input[type=range]{width:100%;accent-color:var(--amber)}
+.meter{height:8px;background:rgba(255,255,255,.08);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--amber);width:0}
+.mpanel{border:1px solid var(--hudline);background:var(--hudbg);padding:8px;display:grid;gap:6px}
+.mpanel .io{display:grid;grid-template-columns:44px 1fr 44px;gap:6px;align-items:center}
+.slot{position:relative;width:44px;height:44px;box-sizing:border-box;border:1px solid var(--hudline);background:rgba(5,15,20,.85);display:grid;place-items:center}
+.slot img{width:32px;height:32px;image-rendering:pixelated}
+.slot .n{position:absolute;right:3px;bottom:1px;font:10px var(--mono);color:var(--hud);text-shadow:0 1px 0 #000}
+.mpanel h3{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#6fc3b8}
+@media (max-width:1000px){
+  .view{grid-template-columns:1fr;height:auto;min-height:0}
+  .stage{height:62vh;min-height:360px}
+  .side{border-left:0;border-top:1px solid var(--line)}
+}
+/* sheets */
+section{display:grid;gap:14px;min-width:0}
+.sec-head{display:grid;gap:6px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+.tbl table{border-collapse:collapse;width:100%;min-width:680px;font-size:13.5px}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600;background:var(--raise)}
+.tbl td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:3px;padding:1px 7px 1px 2px;background:var(--raise);font-size:13px;white-space:nowrap;margin:1px 2px}
+.chip img,.chip .tile{width:32px;height:32px;image-rendering:pixelated;background-size:32px 32px}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:12px;border:1px solid var(--hudline);background:var(--hudbg)}
+.flow .st{display:grid;justify-items:center;gap:3px;font:11px var(--mono);color:var(--hud);text-align:center;min-width:64px}
+.flow .st .slot{width:64px;height:64px}
+.flow .st .slot img{width:64px;height:64px}
+.flow .st small{color:var(--muted)}
+.flow .ar{font:16px var(--mono);color:var(--amber)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:6px;background:var(--panel-solid);padding:12px;display:grid;gap:8px;align-content:start}
+.card .head{display:flex;gap:10px;align-items:center}
+.card .head img{width:64px;height:64px;image-rendering:pixelated;flex:none}
+.card p{font-size:13.5px;color:var(--muted)}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:13px}
+.card dt{color:var(--muted);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:11.5px;padding-top:2px}
+.card dd{margin:0}
+.card.late{border-color:rgba(195,73,136,.5)}
+.gridbox{overflow-x:auto;border:1px solid var(--hudline);background:#060d10;border-radius:4px}
+#grid{display:block}
+#grid image{image-rendering:pixelated}
+#grid text{font-family:var(--mono);font-size:11px;fill:var(--hud)}
+#grid text.m{fill:var(--muted)}
+#grid .wire{fill:none;stroke:#8d6a3a;stroke-width:2}
+#grid .wire.on{stroke:var(--amber);stroke-dasharray:6 6;animation:flowdash 1s linear infinite}
+#grid .node{cursor:pointer}
+#grid .node rect{fill:rgba(5,15,20,.9);stroke:var(--hudline)}
+#grid .node.off rect{stroke:rgba(255,255,255,.12)}
+#grid .node.off image,#grid .node.off text{opacity:.4}
+#grid .node:focus{outline:none}
+#grid .node:focus rect{stroke:var(--amber);stroke-width:2}
+@keyframes flowdash{to{stroke-dashoffset:-12}}
+.sd{display:grid;gap:4px;font:12px var(--mono)}
+.sdbar{position:relative;height:18px;background:rgba(255,255,255,.06);border:1px solid var(--hudline)}
+.sdbar i{position:absolute;left:0;top:0;bottom:0}
+.sdbar .sup{background:rgba(143,220,154,.5)}
+.sdbar .dem{background:transparent;border-right:3px solid var(--warn)}
+.qs{display:grid;gap:10px}
+.q{border:1px solid var(--line);border-radius:6px;padding:12px 14px;background:var(--panel-solid);display:grid;gap:6px}
+.q p{font-size:14px;color:var(--muted)}
+.rec b{color:var(--ok)}
+footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+#err{position:fixed;left:8px;bottom:8px;max-width:60ch;background:#400;color:#fff;font:12px var(--mono);padding:6px;white-space:pre-wrap;z-index:9}
+@media (prefers-reduced-motion:reduce){#grid .wire.on{animation:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Pale Blue Dot &middot; design mockup M28 &middot; <span class="badge">Proposal, not built</span></div>
+    <h1>Water that flows</h1>
+    <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+    <p class="lede">Today the game's water is one still material, filled up to sea level when the world is made, and nothing ever moves it. This page runs Luanti's liquid rule, ported to our hex cells, on a patch with a sea, a beach, a plain with a dry basin, a ledge and a plateau. Pour a source, dig a channel, drop a block in the stream. Water falls first, then spreads seven cells, a level lower each cell, and recedes when its source goes. It moves one tick a second, as Luanti's does, and only after <b>Run water</b> or a preset.</p>
+  </header>
+
+  <div class="tabs" role="toolbar" aria-label="Water and time">
+    <span class="sp"></span>
+    <button class="btn" id="tRun" aria-pressed="false" title="Water stands still until this is pressed">Run water</button>
+    <button class="btn" id="tDay" aria-pressed="true">Day 14:00</button><button class="btn" id="tNight" aria-pressed="false">Night 22:00</button>
+  </div>
+
+  <div class="view">
+    <div class="stage" id="stage">
+      <canvas id="cv" tabindex="0" aria-label="The water-flow patch. Drag to turn, wheel to zoom, click to use the held slot."></canvas>
+      <div id="tags"></div>
+      <div class="dbg" id="topline"></div>
+      <div class="cross"></div>
+      <div class="held" id="held"></div>
+      <div class="hotbar" id="hotbar" role="toolbar" aria-label="Hotbar"></div>
+    </div>
+    <aside class="side" id="side" aria-label="Presets and settings"></aside>
+  </div>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">The rule</div><h2>Luanti's liquid transform, on eight neighbours</h2>
+      <p class="lede">Each cell of water is a <b>source</b> or a <b>flowing</b> cell with a level from 7 (beside a source) to 0 (the thinnest film), and a flag for falling. Only queued cells are looked at. An edit queues a cell and its neighbours, and a cell that changes queues the neighbours it can reach. A tick takes the queue once.</p></div>
+    <div class="tbl"><table><thead><tr><th>A queued cell with</th><th>Becomes</th><th>Luanti's code</th></tr></thead><tbody>
+      <tr><td>3 sources beside or above it (2 in Luanti)</td><td>a source: the pool renews</td><td class="num">num_sources &gt;= 2</td></tr>
+      <tr><td>1 source beside or above it</td><td>flowing, level 7</td><td class="num">LIQUID_LEVEL_MAX</td></tr>
+      <tr><td>flowing water above it</td><td>its level + 4, at most 7</td><td class="num">WATER_DROP_BOOST 4</td></tr>
+      <tr><td>flowing water beside it, not falling</td><td>the highest neighbour's level &minus; 1</td><td class="num">get_max_liquid_level</td></tr>
+      <tr><td>air or flowing water under it</td><td>falling: it offers nothing sideways, so water drops before it spreads</td><td class="num">LIQUID_FLOW_DOWN_MASK</td></tr>
+      <tr><td>no level within the range</td><td>air again: the water recedes</td><td class="num">liquid_range 8</td></tr>
+    </tbody></table></div>
+    <div class="cards">
+      <div class="card"><div class="head"><div><div class="eyebrow">Hex</div><h3>Eight neighbours, not six</h3></div></div><p>Up, six sides and down, in Luanti's order (upper, then the sides, then lower). A pentagon cell has five sides and the same rule.</p></div>
+      <div class="card"><div class="head"><div><div class="eyebrow">Hex</div><h3>Renew at three</h3></div></div><p>Two hex cells side by side share two neighbours, so Luanti's threshold of two floods any plain from a single pair (the preset shows it). Three fills a pool's corners and leaves a row or a triangle of sources alone, which is what two of four does on Luanti's squares.</p></div>
+      <div class="card"><div class="head"><div><div class="eyebrow">Hex</div><h3>Seven cells is 20 m</h3></div></div><p>A cell is 2.833 m across, so a sheet spreads 20 m from its source where Luanti's spreads 7 m. The range slider shortens it. Each flowing cell's top stands at (level + 1) / 8 of its 1 m layer, a flat hexagon, so a sheet steps down by eighths.</p></div>
+      <div class="card"><div class="head"><div><div class="eyebrow">Saves</div><h3>Only edits start water</h3></div></div><p>Generated water is all source and never queued, so opening a world never moves its water. Sources are saved as edits; settled flowing water follows from the sources and the ground, which "Settle from scratch" checks.</p></div>
+    </div>
+  </section>
+
+  <footer>Mockup for the owner, 2026-11-14 (<span class="src">openspec/changes/water-flow</span>), made to <span class="src">docs/mockups/ART-DIRECTION.md</span>. Proposal only: the game has no flowing water today. <b>Licence:</b> the flow rule in this page is a port of Luanti's <span class="src">ServerMap::transformLiquidsLocal</span> and <span class="src">get_max_liquid_level</span> (<span class="src">src/servermap.cpp</span>, commit a10dc8d, 2026-11-09), Copyright (C) 2010-2024 celeron55, Perttu Ahola and contributors, under the GNU Lesser General Public License 2.1 or later; the port is offered under the same licence, whose text is <a href="water-flow/COPYING.LESSER" style="color:var(--sky)">published beside this page</a>. Art: the ground is the terrain atlas's fields, beach and mountains tiles on 2.833 m hex columns with 1 m layers; trees and lamp posts are built as the game builds them; the pickaxe and hand are the game's item icons; water is a flat tint, lighter as its level falls, as the game tints its water.</footer>
+</div>
+<div id="err" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="building/scene-kit.js?v=1"></script>
+<script>
+"use strict";
+window.addEventListener("error", e => { const el = document.getElementById("err"); el.hidden = false; el.textContent += (e.message || e) + " @" + (e.lineno || "") + "\n"; });
+const $ = id => document.getElementById(id);
+// ===================================================================
+// The game's cell: 2.833 m flat to flat, 1 m a layer. Axial (q, r).
+// ===================================================================
+const W = 2.833, R = W / Math.sqrt(3), ROW = 1.5 * R;
+const hx = (q, r) => W * (q + r / 2), hz = (q, r) => ROW * r;
+const DIRS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+const hexDist = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+const corner = (q, r, k) => { const a = (60 * k - 30) * Math.PI / 180; return [hx(q, r) + R * Math.cos(a), hz(q, r) + R * Math.sin(a)]; };
+const hexPts = (q, r) => [0, 1, 2, 3, 4, 5].map(k => corner(q, r, k));
+const poly = (cx, cz, r, n = 6, rot = 0) => { const p = []; for (let k = 0; k < n; k++) { const a = rot + k * 2 * Math.PI / n; p.push([cx + r * Math.cos(a), cz + r * Math.sin(a)]); } return p; };
+function axRound(q, r) { const s = -q - r; let rq = Math.round(q), rr = Math.round(r); const rs = Math.round(s), dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s); if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs; return [rq, rr]; }
+const cellAt = (x, z) => { const r = z / ROW; return axRound(x / W - r / 2, r); };
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const H2 = PBD.hash2, lin = h => new THREE.Color(h).convertSRGBToLinear();
+const key = (q, r) => q + "," + r;
+
+// ===================================================================
+// Materials. "a:<sheet>:<tile>" is a terrain atlas tile (sheet order of planet_terrain.rs),
+// "m:<name>" this page's pixel textures, "b:<name>" the building mockup's, anything else
+// a settlement texture copied to industry/game at its manifest repeat_m. "<key>#rrggbb" tints.
+// "glow:<key>" is self-lit (a furnace mouth, a vent, the ether), brighter at night.
+// ===================================================================
+const SHEET = { basalt: 1, beach: 2, fields: 4, mountains: 8, redwood: 10 };
+const ATLAS = new Image(); const atlasWait = []; let atlasOK = false;
+ATLAS.onload = () => { atlasOK = true; atlasWait.splice(0).forEach(f => f()); };
+ATLAS.src = "industry/game/atlas.png?v=1";
+const whenAtlas = f => atlasOK ? f() : atlasWait.push(f);
+const prep = t => { t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t; };
+const TEXC = {};
+function atlasTex(s, i) {
+  const k = s + ":" + i; if (TEXC[k]) return TEXC[k];
+  const cv = document.createElement("canvas"); cv.width = cv.height = 32; const t = prep(new THREE.CanvasTexture(cv));
+  whenAtlas(() => { cv.getContext("2d").drawImage(ATLAS, (s % 4) * 128 + (i % 4) * 32, Math.floor(s / 4) * 128 + Math.floor(i / 4) * 32, 32, 32, 0, 0, 32, 32); t.needsUpdate = true; });
+  return (TEXC[k] = t);
+}
+const atlasURL = (s, i) => new Promise(res => whenAtlas(() => { const cv = document.createElement("canvas"); cv.width = cv.height = 32; cv.getContext("2d").drawImage(ATLAS, (s % 4) * 128 + (i % 4) * 32, Math.floor(s / 4) * 128 + Math.floor(i / 4) * 32, 32, 32, 0, 0, 32, 32); res(cv.toDataURL()); }));
+const loader = new THREE.TextureLoader();
+const fileOf = k => k.startsWith("m:") ? "industry/" + k.slice(2) + ".png?v=2" : k.startsWith("b:") ? "building/" + k.slice(2) + ".png?v=2" : "industry/game/" + k + ".png?v=1";
+function texOf(k) { if (k.startsWith("a:")) { const [, s, i] = k.split(":"); return atlasTex(+s, +i); } return TEXC[k] || (TEXC[k] = prep(loader.load(fileOf(k)))); }
+const REP = { brick: 2, cobble: 2, flag: 2.5, iron: 1, plank: 2, timber: 1, rubble: 2, basalt: 2, granite: 2, sand: 2, boards: 2, stone: 2, slate: 2, fieldstone: 2 };
+const repOf = k => { k = k.replace(/^glow:/, "").split("#")[0]; return k.startsWith("a:") ? 2 : k.startsWith("m:") ? 2 : k.startsWith("b:") ? 1.5 : (REP[k] || 2); };
+const MATS = {}, GLOWS = [], OVMATS = [];
+function mat(k) {
+  if (MATS[k]) return MATS[k];
+  if (k.startsWith("glow:")) {
+    const [b, c] = k.slice(5).split("#"), m = new THREE.MeshBasicMaterial({ map: texOf(b), color: c ? new THREE.Color("#" + c) : 0xffffff });
+    m.userData.base = m.color.clone(); if (b.includes("tex_window")) m.userData.day = new THREE.Color(0x46525e); GLOWS.push(m); return (MATS[k] = m);
+  }
+  const [b, c] = k.split("#"), dbl = /a:4:8|leaves/.test(b) ? { side: THREE.DoubleSide } : {};
+  return (MATS[k] = PBD.litMaterial(texOf(b), c ? new THREE.Color("#" + c) : 0xffffff, dbl));
+}
+function addMeshes(GS, parent, cast = true) {
+  for (const [k, g] of Object.entries(GS.G)) { const m = new THREE.Mesh(g.build(repOf(k)), mat(k)); m.castShadow = cast && !k.startsWith("glow:"); m.receiveShadow = true; m.userData.mat = k; parent.add(m); }
+  return parent;
+}
+// a fresh (unshared) texture, for belts whose offset moves
+function freshTex(k) { return prep(loader.load(fileOf(k))); }
+
+// ===================================================================
+// Ground: hex columns, 1 m layers, the atlas's top and side tiles
+// ===================================================================
+// o = { N, H(q,r) -> top or null, top(q,r,h), side(q,r,y,h) for the layer [y-1, y], skirt }
+function columns(GS, o) {
+  for (let q = -o.N; q <= o.N; q++) for (let r = -o.N; r <= o.N; r++) {
+    if (hexDist(q, r) > o.N) continue; const h = o.H(q, r); if (h == null) continue;
+    const x = hx(q, r), z = hz(q, r);
+    GS.g(o.top(q, r, h)).face(hexPts(q, r).map(p => [p[0], h, p[1]]), [0, 1, 0], PBD.cellUV(x, z));
+    for (let k = 0; k < 6; k++) {
+      const nq = q + DIRS[k][0], nr = r + DIRS[k][1], hn = hexDist(nq, nr) > o.N ? null : o.H(nq, nr), h2 = hn == null ? o.skirt : hn; if (h2 >= h) continue;
+      const A = corner(q, r, k), B = corner(q, r, k + 1), a = k * Math.PI / 3;
+      for (let y = h; y > h2 + 1e-3;) {
+        const top = Math.ceil(y - 1e-6), y0 = Math.max(h2, top - 1);
+        GS.g(o.side(q, r, top, h)).face([[A[0], y0, A[1]], [B[0], y0, B[1]], [B[0], y, B[1]], [A[0], y, A[1]]], [Math.cos(a), 0, Math.sin(a)], PBD.sideUV(A, B, top));
+        y = y0;
+      }
+    }
+  }
+}
+const treeAt = (GS, q, r, h, sheet = SHEET.fields) => PBD.tree(GS, hexPts(q, r), hx(q, r), hz(q, r), h, q * 131 + r * 7, "a:" + sheet + ":6", "a:" + sheet + ":8");
+// a lamp post (the town's: timber post, arm, iron lantern) and its warm pool
+const LAMP = { c: lin(0xffc878), p: 1.4, R: 5.2 };
+function lampPost(S, GS, x, y, z) { PBD.lampPost(GS, x, y, z); S.lights.push({ x: x + 0.45, y: y + 2.25, z, ...LAMP }); S.flames.push([x + 0.45, y + 2.25, z]); }
+
+// ===================================================================
+// Renderer, sky, light
+// ===================================================================
+const canvas = $("cv");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.outputEncoding = THREE.sRGBEncoding; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x0e1424, 70, 190);
+const camera = new THREE.PerspectiveCamera(46, 1, 0.3, 700);
+const sun = new THREE.DirectionalLight(0xffffff, 1); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -36, right: 36, top: 36, bottom: -36, near: 1, far: 260 }); sun.shadow.bias = -0.0006; scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.2); scene.add(hemi);
+const stars = (() => { const n = 900, p = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const a = H2(i, 1) * 6.283, e = 0.05 + H2(i, 2) * 1.4; p[3 * i] = Math.cos(a) * Math.cos(e) * 450; p[3 * i + 1] = Math.sin(e) * 450; p[3 * i + 2] = Math.sin(a) * Math.cos(e) * 450; } const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(p, 3)); const m = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.3, sizeAttenuation: false, fog: false, transparent: true })); scene.add(m); return m; })();
+const LAMPMAT = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
+const WATER = PBD.litMaterial(null, 0x2a6a92, { transparent: true, opacity: 0.8, roughness: 0.3, depthWrite: false });
+const PUFF = { smoke: PBD.litMaterial(null, 0x3a3833, { transparent: true, opacity: 0.75 }), steam: PBD.litMaterial(null, 0xdfe6ea, { transparent: true, opacity: 0.6 }), ether: new THREE.MeshBasicMaterial({ color: 0xdd576d, transparent: true, opacity: 0.9 }) };
+const CUBE = new THREE.BoxGeometry(1, 1, 1);
+
+// ===================================================================
+// The liquid rule. A port of Luanti's ServerMap::transformLiquidsLocal and get_max_liquid_level
+// (src/servermap.cpp at a10dc8dbff3b0af8295ae55df44f65b1d9ee92c7), adapted to the hex grid.
+//   Luanti: Copyright (C) 2010-2024 celeron55, Perttu Ahola <celeron55@gmail.com> and contributors.
+//   SPDX-License-Identifier: LGPL-2.1-or-later. This port is offered under the same licence;
+//   the licence text is published beside this page as water-flow/COPYING.LESSER.
+// What changed for hex (openspec/changes/water-flow, design 1 to 4): eight neighbours (up, six
+// sides, down) for Luanti's six; the renew threshold is a setting, 3 on hex (Luanti's 2 runs away
+// here, the preset shows it); one liquid kind, so the liquid_kind bookkeeping falls away; cells
+// outside the patch are solid, not CONTENT_IGNORE. Viscosity is water's, 1, so it is left out.
+// ===================================================================
+const LIQUID_LEVEL_MAX = 7, LIQUID_LEVEL_SOURCE = 8, WATER_DROP_BOOST = 4;
+const AIR = 0, SOLID = 1, FLOW = 2, SRC = 3;
+const UPPER = 0, SAME = 1, LOWER = 2;
+const N = 12, Y0 = -6, Y1 = 13, NY = Y1 - Y0 + 1, SIDE = 2 * N + 1, NCELL = SIDE * SIDE * NY;
+const kind = new Uint8Array(NCELL), lvl = new Uint8Array(NCELL), down = new Uint8Array(NCELL), cmat = new Uint8Array(NCELL);
+const idx = (q, r, y) => ((q + N) * SIDE + (r + N)) * NY + (y - Y0);
+const inside = (q, r, y) => hexDist(q, r) <= N && y >= Y0 && y <= Y1;
+const unidx = i => { const y = i % NY + Y0, t = (i / NY) | 0; return [((t / SIDE) | 0) - N, t % SIDE - N, y]; };
+// Luanti's order: upper before same level before lower
+const NB8 = [[0, 0, 1, UPPER], ...DIRS.map(([a, b]) => [a, b, 0, SAME]), [0, 0, -1, LOWER]];
+const SIM = { range: 8, renew: 3, queue: [], inQ: new Uint8Array(NCELL), tick: 0, changed: 0, lastChanged: 0, LOOP_MAX: 100000 };
+// Luanti's UniqueQueue: a push of a cell already waiting does nothing
+function qpush(i) { if (!SIM.inQ[i]) { SIM.inQ[i] = 1; SIM.queue.push(i); } }
+function qpop() { const i = SIM.queue.shift(); SIM.inQ[i] = 0; return i; }
+function get_max_liquid_level(nbLvl, nbDown, t, cur) {
+  let max = cur;
+  if (t === UPPER) {
+    if (nbLvl + WATER_DROP_BOOST > cur) { max = LIQUID_LEVEL_MAX; if (nbLvl + WATER_DROP_BOOST < LIQUID_LEVEL_MAX) max = nbLvl + WATER_DROP_BOOST; }
+    else if (nbLvl > cur) max = nbLvl;
+  } else if (t === SAME) {
+    if (!nbDown && nbLvl > 0 && nbLvl - 1 > max) max = nbLvl - 1;
+  }
+  return max;
+}
+const flows = [], airs = [];
+function transformOne(p0) {
+  const k0 = kind[p0];
+  if (k0 === SOLID) return false;                          // LIQUID_NONE and not floodable
+  const [q, r, y] = unidx(p0);
+  let num_sources = 0, flowing_down = false; flows.length = 0; airs.length = 0;
+  for (const [dq, dr, dy, t] of NB8) {
+    const nq = q + dq, nr = r + dr, ny = y + dy;
+    if (!inside(nq, nr, ny)) continue;                     // outside the patch: a neutral
+    const n = idx(nq, nr, ny), kn = kind[n];
+    if (kn === AIR) {                                      // floodable
+      airs.push([n, t]);
+      if (t !== UPPER && k0 !== AIR) qpush(n);
+      if (t === LOWER) flowing_down = true;
+    } else if (kn === SRC) {
+      if (t !== LOWER) num_sources++;                      // do not count the source below
+    } else if (kn === FLOW) {
+      flows.push([n, t]);
+      if (t === LOWER) flowing_down = true;
+    }                                                      // SOLID: a neutral
+  }
+  // decide on the type (and possibly level) of the current cell
+  const range = Math.min(SIM.range, LIQUID_LEVEL_MAX + 1);
+  let newK, newL = -1;
+  if (num_sources >= SIM.renew || k0 === SRC) newK = SRC;
+  else if (num_sources >= 1) { newL = LIQUID_LEVEL_MAX; newK = newL >= LIQUID_LEVEL_MAX + 1 - range ? FLOW : AIR; }
+  else {
+    let max = -1; for (const [n, t] of flows) max = get_max_liquid_level(lvl[n], down[n], t, max);
+    newL = max; newK = max >= LIQUID_LEVEL_MAX + 1 - range ? FLOW : AIR;
+  }
+  // has anything changed?
+  if (newK === k0 && (k0 !== FLOW || (lvl[p0] === newL && !!down[p0] === flowing_down))) return false;
+  kind[p0] = newK;
+  if (newK === FLOW) { lvl[p0] = newL & 7; down[p0] = flowing_down ? 1 : 0; } else { lvl[p0] = 0; down[p0] = 0; }
+  // enqueue neighbours
+  if (newK === SRC || newK === FLOW) { for (const [n, t] of flows) if (t !== UPPER) qpush(n); for (const [n, t] of airs) if (t !== UPPER) qpush(n); }
+  else for (const [n] of flows) qpush(n);                 // this flow has turned to air; neighbouring flows may follow
+  return true;
+}
+// one tick: the whole queue at most once, as transformLiquids rate-limits it
+function tick() {
+  const max = Math.min(SIM.queue.length, SIM.LOOP_MAX); let changed = 0;
+  for (let c = 0; c < max && SIM.queue.length; c++) if (transformOne(qpop())) changed++;
+  SIM.tick++; SIM.lastChanged = changed; return changed;
+}
+// an edit queues the cell and its eight neighbours
+function touch(q, r, y) { for (const [dq, dr, dy] of [[0, 0, 0], ...NB8]) if (inside(q + dq, r + dr, y + dy)) qpush(idx(q + dq, r + dr, y + dy)); }
+
+// ===================================================================
+// The patch: the sea to the west, a beach, a plain with a dry basin, a ledge and a plateau east
+// ===================================================================
+const M = { grass: 1, sand: 2, dirt: 3, stone: 4, placed: 5 };
+const SEA_TOP = 0;                                        // the sea's surface: sources fill up to layer -1
+function groundH(q, r) {
+  const x = hx(q, r), z = hz(q, r);
+  if (x < -17) return -5;
+  if (x < -9) return Math.min(0, Math.round(-5 + (x + 17) / 8 * 5.6));
+  if (hexDist(q - 1, r - 1) <= 2) return -2;                 // the basin
+  if (x > 17 && z > -6) return 9;                           // the plateau
+  if (x > 9) return 6;                                       // the ledge
+  return 0;
+}
+const isBeach = (q, r) => hx(q, r) < -6;
+function resetWorld() {
+  kind.fill(AIR); lvl.fill(0); down.fill(0); cmat.fill(0); SIM.queue.length = 0; SIM.inQ.fill(0); SIM.tick = 0; SIM.lastChanged = 0;
+  for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) { if (hexDist(q, r) > N) continue; const H = groundH(q, r);
+    for (let y = Y0; y < H; y++) { const i = idx(q, r, y); kind[i] = SOLID; cmat[i] = y === H - 1 ? (isBeach(q, r) ? M.sand : M.grass) : y >= H - 3 ? (isBeach(q, r) ? M.sand : M.dirt) : M.stone; }
+    if (isBeach(q, r)) for (let y = H; y < SEA_TOP; y++) kind[idx(q, r, y)] = SRC; }   // the sea: sources, never queued (design 5); the basin inland starts dry
+}
+const surf = i => { const [q, r, y] = unidx(i), up = inside(q, r, y + 1) ? kind[idx(q, r, y + 1)] : AIR; if (up === SRC || up === FLOW) return y + 1; return kind[i] === SRC || down[i] ? y + 0.94 : y + (lvl[i] + 1) / 8; };
+
+// ===================================================================
+// Drawing: the ground is rebuilt on an edit, the water every tick that changed it
+// ===================================================================
+const TILE = { [M.grass]: ["a:4:0", "a:4:1"], [M.sand]: ["a:2:0", "a:2:1"], [M.dirt]: ["a:4:2", "a:4:2"], [M.stone]: ["a:8:3", "a:8:3"], [M.placed]: ["a:8:6", "a:8:6"] };
+let GROUND = null;
+const TREES = [[-6, 9], [-8, 10], [3, 9], [6, 8], [-1, -10], [4, -11], [9, 2], [10, 1], [-3, -8]];
+function buildGround() {
+  if (GROUND) { scene.remove(GROUND); GROUND.traverse(o => o.geometry && o.geometry.dispose()); }
+  GROUND = new THREE.Group(); const GS = new PBD.GeoSet();
+  for (let i = 0; i < NCELL; i++) { if (kind[i] !== SOLID) continue; const [q, r, y] = unidx(i); if (hexDist(q, r) > N) continue;
+    const x = hx(q, r), z = hz(q, r), topOpen = !inside(q, r, y + 1) || kind[idx(q, r, y + 1)] !== SOLID, T = TILE[cmat[i]];
+    if (topOpen) GS.g(T[0]).face(hexPts(q, r).map(p => [p[0], y + 1, p[1]]), [0, 1, 0], PBD.cellUV(x, z));
+    for (let k = 0; k < 6; k++) { const nq = q + DIRS[k][0], nr = r + DIRS[k][1]; if (inside(nq, nr, y) && kind[idx(nq, nr, y)] === SOLID) continue;
+      const A = corner(q, r, k), B = corner(q, r, k + 1), a = k * Math.PI / 3;
+      GS.g(topOpen && cmat[i] === M.grass ? T[1] : cmat[i] === M.grass ? "a:4:2" : T[1]).face([[A[0], y, A[1]], [B[0], y, B[1]], [B[0], y + 1, B[1]], [A[0], y + 1, A[1]]], [Math.cos(a), 0, Math.sin(a)], PBD.sideUV(A, B, y + 1)); } }
+  for (const [q, r] of TREES) { let top = Y0; while (top <= Y1 && kind[idx(q, r, top)] === SOLID) top++; if (top === groundH(q, r)) treeAt(GS, q, r, top); }
+  addMeshes(GS, GROUND); scene.add(GROUND); PICK[0] = GROUND;
+}
+const WMAT = PBD.litMaterial(null, 0xffffff, { vertexColors: true, transparent: true, opacity: 0.84, roughness: 0.3, depthWrite: false });
+const WMESH = new THREE.Mesh(new THREE.BufferGeometry(), WMAT); WMESH.renderOrder = 2; scene.add(WMESH);
+const PICK = [null, WMESH];
+const C_SRC = new THREE.Color(0x2a6a92), C_FLOW = new THREE.Color(0x4a9cbc), C_FALL = new THREE.Color(0x9fd2e4), cc = new THREE.Color();
+function buildWater() {
+  const P = [], Cl = [];
+  const tri = (a, b, c, col) => { P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) Cl.push(col.r, col.g, col.b); };
+  for (let i = 0; i < NCELL; i++) { const k = kind[i]; if (k !== SRC && k !== FLOW) continue; const [q, r, y] = unidx(i), h = surf(i), x = hx(q, r), z = hz(q, r);
+    if (k === SRC) cc.copy(C_SRC); else if (down[i]) cc.copy(C_FALL); else cc.copy(C_SRC).lerp(C_FLOW, 1 - lvl[i] / 7);
+    const up = inside(q, r, y + 1) ? kind[idx(q, r, y + 1)] : AIR;
+    if (up !== SRC && up !== FLOW) { const H = hexPts(q, r); for (let k2 = 0; k2 < 6; k2++) { const a = H[k2], b = H[(k2 + 1) % 6]; tri([x, h, z], [b[0], h, b[1]], [a[0], h, a[1]], cc); } }
+    for (let s = 0; s < 6; s++) { const nq = q + DIRS[s][0], nr = r + DIRS[s][1]; let lo = y;
+      if (inside(nq, nr, y)) { const n = idx(nq, nr, y), kn = kind[n]; if (kn === SOLID) continue; if (kn === SRC || kn === FLOW) { lo = Math.max(y, surf(n)); if (lo >= h - 0.01) continue; } }
+      const A = corner(q, r, s), B = corner(q, r, s + 1); tri([A[0], lo, A[1]], [B[0], lo, B[1]], [B[0], h, B[1]], cc); tri([A[0], lo, A[1]], [B[0], h, B[1]], [A[0], h, A[1]], cc); } }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(Cl, 3)); g.computeVertexNormals();
+  WMESH.geometry.dispose(); WMESH.geometry = g;
+}
+// the sea beyond the patch, a flat tint at the sea's surface, as the game draws it
+// (a sheet with the patch cut out of it, so it never shows inside the patch's dry ground)
+{ const sh = new THREE.Shape([[-300, -300], [300, -300], [300, 300], [-300, 300]].map(([a, b]) => new THREE.Vector2(a, b)));
+  sh.holes.push(new THREE.Path([[-N, 0], [-N, N], [0, N], [N, 0], [N, -N], [0, -N]].map(([q, r]) => new THREE.Vector2(hx(q, r), -hz(q, r)))));
+  const sea = new THREE.Mesh(new THREE.ShapeGeometry(sh), WATER); sea.rotation.x = -Math.PI / 2; sea.position.y = SEA_TOP - 0.12; scene.add(sea); }
+// lamps: the ledge's spring, the fall's foot, the basin, the beach; each lights the water near it at night
+const LIGHTS = [], FLAMES = [];
+{ const GS = new PBD.GeoSet(), S = { lights: LIGHTS, flames: FLAMES };
+  for (const [q, r] of [[6, 0], [3, 3], [-1, 4], [-5, 2], [9, -5], [-2, -4], [1, -6]]) { const H = groundH(q, r); lampPost(S, GS, hx(q, r) + 0.6, H, hz(q, r)); }
+  addMeshes(GS, scene); for (const [x, y, z] of FLAMES) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 0.2), LAMPMAT); b.position.set(x, y, z); scene.add(b); } }
+PBD.setLights(LIGHTS);
+const TAGS = [["The sea: sources to sea level", hx(-11, 0), 1.5, hz(-11, 0)], ["Basin, 2 layers below the plain", hx(1, 1), 0.5, hz(1, 1)], ["Ledge, 6 layers", hx(6, -1), 7.5, hz(6, -1)], ["Plateau, 9 layers", hx(9, -3), 10.5, hz(9, -3)]];
+$("tags").innerHTML = TAGS.map((t, i) => `<div class="tag3d" id="tg${i}">${t[0]}</div>`).join("");
+
+// ===================================================================
+// Edits, tools, presets
+// ===================================================================
+const ST = { night: false, run: false, rate: 1, tool: 0, acc: 0 };
+const TOOLS = [["industry/clean-water.png?v=2", "Water source: pour a source on what you click"], ["industry/game/items/pickaxe.png", "Pickaxe: dig a block, or take water out"], ["industry/game/granite.png?v=1", "Granite block: place one, it pushes flowing water aside"], ["industry/game/items/hand.png", "Hand: look only"]];
+function setCell(q, r, y, k, m = 0) { if (!inside(q, r, y)) return false; const i = idx(q, r, y); kind[i] = k; lvl[i] = 0; down[i] = 0; cmat[i] = m; touch(q, r, y); return true; }
+const pour = (q, r, y) => { const i = idx(q, r, y); if (!inside(q, r, y) || kind[i] === SOLID) return false; return setCell(q, r, y, SRC); };
+const dig = (q, r, y) => inside(q, r, y) && kind[idx(q, r, y)] !== AIR && setCell(q, r, y, AIR);
+const place = (q, r, y) => { if (!inside(q, r, y) || kind[idx(q, r, y)] === SOLID || kind[idx(q, r, y)] === SRC) return false; return setCell(q, r, y, SOLID, M.placed); };
+const topOf = (q, r) => { let y = Y1; while (y > Y0 && kind[idx(q, r, y)] !== SOLID) y--; return y + 1; };
+const PRESETS = {
+  spring: { cam: { tx: 14, ty: 3, tz: -6, dist: 44, yaw: -1.15, pitch: 0.42 }, name: "Spring on the ledge", note: "One source poured on the ledge's edge. It falls first, spreads seven cells, pours off the cliff and spreads again on the plain.", run: () => pour(7, -2, topOf(7, -2)) },
+  channel: { cam: { tx: -4, ty: -1, tz: 3, dist: 34, yaw: 0.35, pitch: 0.75 }, name: "Channel from the sea", note: "Dig a channel one layer deep from the beach to the dry basin. The sea runs in and the basin fills, every cell one level lower than the last.", run: () => { for (let q = -9; q <= 0; q++) { const r = q < -2 ? 1 : 1; for (const y of [-1]) dig(q, r, y); } } },
+  basin: { cam: { tx: 3, ty: -1, tz: 3, dist: 26, yaw: 0.5, pitch: 0.8 }, name: "Three sources make a pool", note: "Three sources poured round the basin's middle cell, every other side. The middle touches three, so it renews; then each cell between two of the three touches three and renews too: a pool of seven sources that holds. The basin's outer ring stays flowing, one level below. A triangle of three, or a row, would not grow.", run: () => { for (const k of [0, 2, 4]) pour(1 + DIRS[k][0], 1 + DIRS[k][1], -2); } },
+  pair: { cam: { tx: -3, ty: 0, tz: -10, dist: 46, yaw: 0.4, pitch: 0.7 }, name: "Two sources stay a pair", note: "Two sources side by side on the plain, with the hex threshold of three. The sheet spreads to its range and stops: no new source forms.", run: () => { ST_SET.renew(3); pour(-2, -5, 0); pour(-1, -5, 0); } },
+  runaway: { cam: { tx: -3, ty: 0, tz: -6, dist: 60, yaw: 0.4, pitch: 0.75 }, name: "Luanti's threshold on hex", note: "The same two sources with Luanti's own threshold of two. On hex, two touching cells share two neighbours, so each shared cell becomes a source, which makes new pairs: the plain floods to its edge.", run: () => { ST_SET.renew(2); pour(-2, -5, 0); pour(-1, -5, 0); } },
+  recede: { cam: { tx: 14, ty: 3, tz: -6, dist: 44, yaw: -1.15, pitch: 0.42 }, name: "Take the spring away", note: "The ledge's spring, settled, then its source dug out. The flow recedes level by level, from the top down, as Luanti's does.", run: () => { const y = topOf(7, -2); pour(7, -2, y); settle(400); dig(7, -2, y); } },
+};
+const ST_SET = { renew: v => { SIM.renew = v; const b = $("renew"); if (b) b.value = v; }, range: v => { SIM.range = v; } };
+function applyPreset(k) { resetWorld(); SIM.renew = 3; SIM.range = +($("range") ? $("range").value : 8); PRESETS[k].run(); ST.preset = k; if (PRESETS[k].cam) { Object.assign(ORB, PRESETS[k].cam); placeCam(); } buildGround(); buildWater(); setRun(true); side(); }
+function settle(maxTicks = 2000) { let n = 0; while (SIM.queue.length && n < maxTicks) { tick(); n++; } return n; }
+// design 6: settling is a function of the sources and the solids. Re-run every source from scratch and compare.
+function compareScratch() {
+  const K = kind.slice(), L = lvl.slice(), Dn = down.slice();
+  for (let i = 0; i < NCELL; i++) if (kind[i] === FLOW) { kind[i] = AIR; lvl[i] = 0; down[i] = 0; }
+  SIM.queue.length = 0; SIM.inQ.fill(0); for (let i = 0; i < NCELL; i++) if (kind[i] === SRC) { const [q, r, y] = unidx(i); touch(q, r, y); }
+  const ticks = settle(5000); let diff = 0; for (let i = 0; i < NCELL; i++) if (kind[i] !== K[i] || lvl[i] !== L[i] || down[i] !== Dn[i]) diff++;
+  kind.set(K); lvl.set(L); down.set(Dn); SIM.queue.length = 0; SIM.inQ.fill(0);
+  return { diff, ticks };
+}
+const count = () => { let s = 0, f = 0, d = 0; for (let i = 0; i < NCELL; i++) { if (kind[i] === SRC) s++; else if (kind[i] === FLOW) { f++; if (down[i]) d++; } } return { s, f, d }; };
+window.__water = { tick, settle, compareScratch, count, applyPreset, pour, dig, place, SIM, PRESETS, state: () => ({ tick: SIM.tick, queue: SIM.queue.length, ...count(), renew: SIM.renew, range: SIM.range }) };
+
+// ===================================================================
+// The page: side panel, hotbar, time of day, camera, loop
+// ===================================================================
+function setRun(v) { ST.run = v; const b = $("tRun"); b.setAttribute("aria-pressed", v); b.textContent = v ? "Pause water" : "Run water"; }
+function hotbar() {
+  $("hotbar").innerHTML = TOOLS.map(([src, l], i) => `<button data-i="${i}" aria-pressed="${i === ST.tool}" title="${l}" aria-label="${l}"><img src="${src}" alt="" width="32" height="32"></button>`).join("");
+  $("held").textContent = TOOLS[ST.tool][1];
+  for (const b of $("hotbar").children) b.addEventListener("click", () => { ST.tool = +b.dataset.i; hotbar(); });
+}
+function readout() {
+  const c = count();
+  $("ro").innerHTML = `<dt>Tick</dt><dd>${SIM.tick}</dd><dt>Queued</dt><dd>${SIM.queue.length}</dd><dt>Changed last tick</dt><dd>${SIM.lastChanged}</dd><dt>Sources</dt><dd>${c.s}</dd><dt>Flowing</dt><dd>${c.f} (${c.d} falling)</dd>`;
+  $("topline").textContent = `water-flow patch | ${SIM.queue.length ? "flowing, " + SIM.queue.length + " cells queued" : "settled"} | renew ${SIM.renew}, range ${SIM.range} | ${ST.run ? "running " + ST.rate + " tick/s" : "paused"} | ${ST.night ? "22:00" : "14:00"}`;
+}
+function side() {
+  const P = PRESETS[ST.preset];
+  $("side").innerHTML = `<div class="field"><span>Presets: each resets the patch</span><div class="rows">${Object.entries(PRESETS).map(([k, p]) => `<button class="btn" data-p="${k}" aria-pressed="${k === ST.preset}" style="text-align:left">${p.name}</button>`).join("")}</div>${P ? `<p class="keys">${P.note}</p>` : `<p class="keys">The patch as generated: the sea is sources up to sea level and nothing is queued, so nothing moves until you edit.</p>`}</div>
+    <div class="field"><span>Speed</span><div class="seg" style="grid-template-columns:repeat(3,1fr)">${[1, 4, 16].map(v => `<button class="btn" data-r="${v}" aria-pressed="${v === ST.rate}">${v} tick/s</button>`).join("")}</div><div class="seg"><button class="btn" id="step">Step one tick</button><button class="btn" id="reset">Reset the patch</button></div></div>
+    <div class="field"><span>Renew a source at <b>${SIM.renew}</b> sources around a cell</span><div class="seg"><button class="btn" id="rn3" aria-pressed="${SIM.renew === 3}">3 (hex)</button><button class="btn" id="rn2" aria-pressed="${SIM.renew === 2}">2 (Luanti)</button></div></div>
+    <div class="field"><span>Range <b id="rv">${SIM.range}</b> levels (Luanti's water: 8)</span><input type="range" id="range" min="1" max="8" value="${SIM.range}"></div>
+    <div class="field"><span>Now</span><dl class="stats" id="ro"></dl></div>
+    <div class="field"><span>Settling is a function of the sources</span><button class="btn" id="cmp">Settle from scratch and compare</button><p class="keys" id="cmpo">Re-runs every source with the flowing water cleared, and counts the cells that differ from the water you see. Design 6 needs nought.</p></div>
+    <div class="keys"><b style="color:var(--ink)">Click</b> with the slot held: pour, dig or place. Drag to turn, right-drag to pan, wheel to zoom.</div>`;
+  for (const b of $("side").querySelectorAll("[data-p]")) b.addEventListener("click", () => applyPreset(b.dataset.p));
+  for (const b of $("side").querySelectorAll("[data-r]")) b.addEventListener("click", () => { ST.rate = +b.dataset.r; side(); });
+  $("step").addEventListener("click", () => { setRun(false); tick(); buildWater(); readout(); });
+  $("reset").addEventListener("click", () => { ST.preset = null; resetWorld(); buildGround(); buildWater(); setRun(false); side(); });
+  $("rn3").addEventListener("click", () => { SIM.renew = 3; side(); }); $("rn2").addEventListener("click", () => { SIM.renew = 2; side(); });
+  $("range").addEventListener("input", e => { SIM.range = +e.target.value; $("rv").textContent = SIM.range; for (let i = 0; i < NCELL; i++) if (kind[i] === FLOW || kind[i] === SRC) qpush(i); });
+  $("cmp").addEventListener("click", () => { const was = ST.run; setRun(false); const pend = settle(5000); const { diff, ticks } = compareScratch(); $("cmpo").innerHTML = `${pend ? `Settled the water first (${pend} ticks). ` : ""}From scratch it settled in ${ticks} ticks: <b style="color:${diff ? "var(--warn)" : "var(--ok)"}">${diff} cells differ</b>${diff ? "" : ", so the settled water follows from the sources alone"}.`; buildWater(); readout(); setRun(was); });
+  readout();
+}
+const cA = new THREE.Color();
+function applyTime() {
+  const n = ST.night; cA.set(n ? 0x0e1424 : 0x9fc6e2); scene.background = cA.clone(); scene.fog.color.copy(cA); scene.fog.near = 90; scene.fog.far = 240;
+  if (n) { sun.color.set(0x8fa6d8); sun.intensity = 0.018; sun.position.set(-30, 60, 40); hemi.intensity = 0.004; hemi.color.set(0x34405a); hemi.groundColor.set(0x1a1a22); }
+  else { sun.color.set(0xfff0d8); sun.intensity = 1.4; sun.position.set(45, 55, 30); hemi.intensity = 0.45; hemi.color.set(0xc8dcea); hemi.groundColor.set(0x5a5040); }
+  PBD.LU.uLamp.value = n ? 1.15 : 0; LAMPMAT.color.set(n ? 0xffd9a0 : 0x6a655a); stars.material.opacity = n ? 1 : 0;
+  $("tDay").setAttribute("aria-pressed", !n); $("tNight").setAttribute("aria-pressed", n); readout();
+}
+const ORB = { tx: 2, ty: 0, tz: 0, dist: 66, yaw: 0.55, pitch: 0.66 };
+function placeCam() { const cp = Math.cos(ORB.pitch); camera.position.set(ORB.tx + Math.sin(ORB.yaw) * cp * ORB.dist, ORB.ty + Math.sin(ORB.pitch) * ORB.dist, ORB.tz + Math.cos(ORB.yaw) * cp * ORB.dist); camera.lookAt(ORB.tx, ORB.ty, ORB.tz); }
+{
+  const pts = new Map(); let moved = 0;
+  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY, e.button, e.shiftKey]); moved = 0; });
+  canvas.addEventListener("pointermove", e => { const p = pts.get(e.pointerId); if (!p) return; const dx = e.clientX - p[0], dy = e.clientY - p[1]; moved += Math.abs(dx) + Math.abs(dy); if (moved < 6) return;
+    if (p[2] === 2 || p[3]) { const s = ORB.dist * 0.0016; ORB.tx -= (Math.cos(ORB.yaw) * dx - Math.sin(ORB.yaw) * dy) * s; ORB.tz -= (-Math.sin(ORB.yaw) * dx - Math.cos(ORB.yaw) * dy) * s; }
+    else { ORB.yaw -= dx * 0.006; ORB.pitch = clamp(ORB.pitch + dy * 0.005, 0.08, 1.45); } p[0] = e.clientX; p[1] = e.clientY; placeCam(); });
+  canvas.addEventListener("pointerup", e => { const p = pts.get(e.pointerId); pts.delete(e.pointerId); if (p && moved < 6 && p[2] === 0) click(e); });
+  canvas.addEventListener("pointercancel", e => pts.delete(e.pointerId));
+  canvas.addEventListener("contextmenu", e => e.preventDefault());
+  canvas.addEventListener("wheel", e => { e.preventDefault(); ORB.dist = clamp(ORB.dist * Math.exp(e.deltaY * 0.0012), 10, 140); placeCam(); }, { passive: false });
+}
+const ray = new THREE.Raycaster();
+function click(e) {
+  if (ST.tool === 3) return;
+  const b = canvas.getBoundingClientRect(); ray.setFromCamera({ x: (e.clientX - b.left) / b.width * 2 - 1, y: -(e.clientY - b.top) / b.height * 2 + 1 }, camera);
+  const hit = ray.intersectObjects([GROUND, WMESH], true)[0]; if (!hit) return;
+  const n = hit.face.normal, s = ST.tool === 1 ? -0.04 : 0.04, p = hit.point.clone().addScaledVector(n, s), [q, r] = cellAt(p.x, p.z), y = Math.floor(p.y);
+  const ok = ST.tool === 0 ? pour(q, r, y) : ST.tool === 1 ? dig(q, r, y) : place(q, r, y);
+  if (ok) { if (ST.tool !== 0) buildGround(); buildWater(); readout(); }
+}
+function resize() { const b = canvas.parentElement.getBoundingClientRect(); renderer.setSize(b.width, b.height, false); camera.aspect = b.width / Math.max(1, b.height); camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(canvas.parentElement);
+$("tRun").addEventListener("click", () => setRun(!ST.run));
+$("tDay").addEventListener("click", () => { ST.night = false; history.replaceState(null, "", "#" + (ST.night ? "night" : "day")); applyTime(); });
+$("tNight").addEventListener("click", () => { ST.night = true; history.replaceState(null, "", "#night"); applyTime(); });
+let last = performance.now(); const v3 = new THREE.Vector3();
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (ST.run && SIM.queue.length) { ST.acc += dt * ST.rate; let n = 0; while (ST.acc >= 1 && n < 32) { ST.acc -= 1; tick(); n++; } if (n) { buildWater(); readout(); } } else ST.acc = 0;
+  const b = canvas.getBoundingClientRect();
+  TAGS.forEach((t, i) => { const el = $("tg" + i); v3.set(t[1], t[2], t[3]).project(camera); el.hidden = !(v3.z < 1 && Math.abs(v3.x) < 1.05 && Math.abs(v3.y) < 1.05); el.style.left = ((v3.x + 1) / 2 * b.width) + "px"; el.style.top = ((1 - v3.y) / 2 * b.height) + "px"; });
+  renderer.render(scene, camera); requestAnimationFrame(frame);
+}
+ST.night = location.hash === "#night";
+resetWorld(); buildGround(); buildWater(); hotbar(); side(); applyTime(); resize(); placeCam(); requestAnimationFrame(frame);
+
+</script>

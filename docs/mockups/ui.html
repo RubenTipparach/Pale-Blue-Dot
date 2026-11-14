@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stone and Timber</title>
+<meta name="description" content="Pale Blue Dot's desktop UI in slate-blue stone and rough rock, with carved oak only as a small accent: the kit in every state, then each game screen before and after.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=VT323&display=swap">
+<style>
+/* Tokens. The UI's colours are the kit's (tools/art/ui_art.py, every one Sweaft-64); the game UI
+   has one look by day and by night, so light and dark page schemes share them. */
+:root {
+  --ink: #010000; --seam: #170916; --face: #1f3b52; --well: #011c34;
+  --text: #eab798; --text-dim: #cfaa81; --title: #faaf5c; --label: #fffefe; --label-dim: #92a3b2; --tab-dim: #bfcad7;
+  --cut: #011c34; --north: #4a051e; --oak-label: #010000; --stone-mid: #5d778d;
+  --oak-0: #2f1525; --oak-1: #41322c; --oak-2: #725244; --oak-3: #ab8465; --oak-4: #cfaa81;
+  --stone-0: #011c34; --stone-1: #1f3b52; --stone-2: #3e586e; --stone-3: #92a3b2; --stone-4: #bfcad7;
+  --rune: #84e3b5; --rune-dim: #53998b;
+  --page: #010e1a; --page-2: #011c34; --page-line: #1f3b52; --page-text: #bfcad7; --page-dim: #92a3b2;
+  --s: 2; --k: 1;
+  --display: "Pixelify Sans", "VT323", ui-monospace, monospace;
+  --body: "VT323", ui-monospace, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #010e1a; } }
+:root[data-theme="dark"] { --page: #010e1a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--page-text); font: 18px/1.35 var(--body); overflow-x: hidden; }
+a { color: var(--rune); }
+code { font: 0.95em/1 var(--body); color: var(--text-dim); }
+.row > * { max-width: 100%; }
+.row .nine { max-width: 100%; }
+img, .px { image-rendering: pixelated; }
+header.top { padding: 14px 16px 8px; border-bottom: 1px solid var(--page-line); }
+header.top h1 { font: 600 28px/1.1 var(--display); color: var(--title); margin: 0; letter-spacing: 1px;
+  text-shadow: 0 2px 0 var(--ink); }
+header.top p { margin: 4px 0 0; color: var(--page-dim); max-width: 980px; }
+.pbd-tracker { font: 500 14px/1.4 var(--body); }
+nav.tabs { display: flex; flex-wrap: wrap; gap: 2px 4px; padding: 10px 16px 0; border-bottom: 4px solid var(--stone-2); }
+nav.tabs a { display: inline-block; text-decoration: none; color: var(--tab-dim);
+  font: 600 16px/1 var(--display); padding: 10px 12px 8px; image-rendering: pixelated;
+  border-style: solid; border-width: 14px 14px 0 14px; border-image: url(ui/tab-shut.png) 7 7 0 7 fill stretch;
+  margin: 0; min-height: 36px; }
+nav.tabs a[aria-selected="true"] { border-image-source: url(ui/tab-open.png); color: var(--label); }
+nav.tabs a span { position: relative; top: -6px; }
+nav.tabs a:focus-visible { outline: 2px solid var(--rune); outline-offset: 1px; }
+main { padding: 12px 16px 40px; }
+section.tab { display: none; }
+section.tab.open { display: block; }
+h2 { font: 600 22px/1.2 var(--display); color: var(--title); margin: 18px 0 6px; }
+h3 { font: 600 17px/1.2 var(--display); color: var(--text-dim); margin: 14px 0 4px; }
+p.note { color: var(--page-dim); margin: 4px 0 8px; max-width: 980px; }
+.row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.card { background: var(--page-2); border: 1px solid var(--page-line); padding: 10px; }
+.card .cap { font: 15px/1.2 var(--body); color: var(--page-dim); margin-top: 6px; }
+.seg { display: inline-flex; gap: 4px; margin: 4px 0 8px; }
+.seg button { font: 16px var(--body); background: var(--page-2); color: var(--page-text); border: 1px solid var(--page-line); padding: 6px 12px; min-height: 36px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--page-line); color: var(--rune); }
+
+/* ---- 9-slice pieces: border widths are the slice margins times the integer UI scale --s ---- */
+.nine { border-style: solid; image-rendering: pixelated; }
+.p-frame { border-width: calc(14px * var(--s)); border-image: url(ui/frame.png) 14 fill stretch; }
+.p-rock { border-width: calc(14px * var(--s)); border-image: url(ui/rock.png) 14 fill repeat; }
+.p-oakframe { border-width: calc(14px * var(--s)); border-image: url(ui/oak/frame.png) 14 fill stretch; }
+.p-lintel { border-style: solid; border-width: calc(5px * var(--s)) calc(9px * var(--s)); border-image: url(ui/lintel.png) 5 9 fill stretch;
+  image-rendering: pixelated; display: inline-flex; align-items: center; justify-content: center; min-height: calc(16px * var(--s));
+  font: 600 calc(8px * var(--s))/1 var(--display); color: var(--oak-label); letter-spacing: calc(0.5px * var(--s)); text-transform: uppercase;
+  padding: 0 calc(2px * var(--s)); white-space: nowrap; }
+/* The lintel sits on the rock frame's top edge, over the menu: the timber accent (design.md, "Timber as accent"). */
+.lintel-row { display: flex; justify-content: center; margin: calc(-15px * var(--s)) 0 calc(4px * var(--s)); }
+.p-brock { border-width: calc(14px * var(--s)); border-image: url(ui/blender-rock.png) 14 fill repeat; }
+.p-tip { border-width: calc(6px * var(--s)); border-image: url(ui/tooltip.png) 6 fill stretch; }
+.p-map { border-width: calc(22px * var(--s)); border-image: url(ui/map-frame.png) 22 fill stretch; }
+.p-portrait { border-width: calc(8px * var(--s)); border-image: url(ui/portrait.png) 8 fill stretch; }
+.p-compass { border-width: calc(9px * var(--s)) calc(10px * var(--s)); border-image: url(ui/compass.png) 9 10 fill stretch; }
+.p-bar { border-width: calc(4px * var(--s)); border-image: url(ui/bar.png) 4 fill stretch; }
+.p-track-v { border-width: calc(4px * var(--s)); border-image: url(ui/scroll-track.png) 4 fill stretch; }
+.p-track-h { border-width: calc(3px * var(--s)); border-image: url(ui/slider-track.png) 3 fill stretch; }
+.p-thumb { border-width: calc(4px * var(--s)); border-image: url(ui/scroll-thumb.png) 4 fill stretch; }
+.face { color: var(--text); font: calc(10px * var(--s))/1.1 var(--body); }
+.carved { font: 600 calc(8px * var(--s))/1 var(--display); color: var(--title); letter-spacing: calc(0.5px * var(--s));
+  text-transform: uppercase; text-shadow: 0 calc(1px * var(--s)) 0 var(--ink); }
+
+/* Buttons: raised stone plaques, every state from the kit; the label is inlaid chalk. */
+.btn { border-style: solid; border-width: calc(8px * var(--s)); border-image: url(ui/button-idle.png) 8 fill stretch;
+  image-rendering: pixelated; background: none; color: var(--label); cursor: pointer;
+  font: 600 calc(8px * var(--s))/1 var(--display); letter-spacing: calc(0.5px * var(--s)); text-transform: uppercase;
+  height: calc(22px * var(--s)); min-width: calc(48px * var(--s)); padding: 0 calc(2px * var(--s)); display: inline-flex;
+  align-items: center; justify-content: center; }
+.btn > span { position: relative; top: calc(0.5px * var(--s)); }
+.btn:hover, .btn.is-hover { border-image-source: url(ui/button-hover.png); }
+.btn:active, .btn.is-pressed { border-image-source: url(ui/button-pressed.png); }
+.btn:active > span, .btn.is-pressed > span { top: calc(1.5px * var(--s)); }
+.btn:disabled, .btn.is-disabled { border-image-source: url(ui/button-disabled.png); color: var(--label-dim); cursor: default; }
+.btn > span { text-shadow: 0 calc(1px * var(--s)) 0 var(--stone-0); }
+.btn.oak { border-image-source: url(ui/oak/button-idle.png); color: var(--oak-label); }
+.btn.oak > span { text-shadow: none; }
+.btn:focus-visible, .btn.is-focus { outline: none; border-image-source: url(ui/button-focus.png); }
+
+/* Slots */
+.slot { position: relative; width: calc(24px * var(--s)); height: calc(24px * var(--s)); background: url(ui/slot-idle.png) 0 0 / 100% 100%;
+  image-rendering: pixelated; flex: none; }
+.slot.sel { background-image: url(ui/slot-selected.png); }
+.slot.hov, .slot.click:hover { background-image: url(ui/slot-hover.png); }
+.slot.off { background-image: url(ui/slot-disabled.png); }
+.slot.r-uncommon { background-image: url(ui/slot-uncommon.png); } .slot.r-rare { background-image: url(ui/slot-rare.png); }
+.slot.r-epic { background-image: url(ui/slot-epic.png); } .slot.r-legendary { background-image: url(ui/slot-legendary.png); }
+.slot .ic { position: absolute; left: calc(4px * var(--s)); top: calc(4px * var(--s)); width: calc(16px * var(--s)); height: calc(16px * var(--s)); image-rendering: pixelated; }
+.slot .ic.tile { background-image: url(ui/game/atlas.png); background-size: calc(256px * var(--s)) calc(256px * var(--s)); }
+.slot .n { position: absolute; right: calc(3px * var(--s)); bottom: calc(1px * var(--s)); font: calc(9px * var(--s))/1 var(--body); color: var(--text);
+  text-shadow: calc(1px * var(--s)) calc(1px * var(--s)) 0 var(--ink); }
+.slot.click { cursor: pointer; }
+.slots { display: flex; }
+.grid10 { display: grid; grid-template-columns: repeat(10, calc(24px * var(--s))); }
+
+/* Scenes: a real game screenshot at 1440 x 900, shown at k = 1 or 1/2 with the UI drawn over it at
+   --s = 2k: the game's own proportion, pixel art at whole scales. The game is desktop only (owner,
+   2026-11-14: "phones cant run this"), so a scene never reflows: on a narrow page it scrolls inside
+   its own box and the page itself never scrolls sideways. */
+.scenebox { max-width: 100%; overflow-x: auto; }
+.scene { position: relative; overflow: hidden; background: #000 center / cover no-repeat; flex: none; }
+.scene .ui { position: absolute; inset: 0; }
+.scene .tag { position: absolute; left: 6px; top: 6px; font: 15px var(--body); background: rgba(1,14,26,.85); color: var(--page-text); padding: 2px 6px; z-index: 5; }
+.cross { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; background: rgba(224,240,232,.75); }
+.hud-hotbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(20px * var(--k)); }
+.hud-compass { position: absolute; left: 50%; transform: translateX(-50%); top: calc(2px * var(--k)); width: calc(280px * var(--s)); height: calc(18px * var(--s)); }
+.hud-compass .inner { position: absolute; inset: calc(-9px * var(--s)) calc(-6px * var(--s)); overflow: hidden; }
+/* The compass letters are VT323, not Pixelify Sans: Pixelify's capital E has a rounded back that reads as a 3 at a glance. */
+.hud-compass .mark { position: absolute; top: calc(2px * var(--s)); font: calc(10px * var(--s))/1 var(--body); color: var(--cut); transform: translateX(-50%); }
+.hud-compass .mark.n { color: var(--north); }
+.hud-compass .tick { position: absolute; top: calc(4px * var(--s)); width: calc(1px * var(--s)); height: calc(4px * var(--s)); background: var(--cut); }
+.hud-compass .town { position: absolute; top: calc(-3px * var(--s)); width: calc(5px * var(--s)); height: calc(5px * var(--s)); background: url(ui/compass-town.png) 0 0/100% 100%; image-rendering: pixelated; transform: translateX(-50%); }
+.hud-compass .ptr { position: absolute; left: 50%; top: calc(-10px * var(--s)); width: calc(7px * var(--s)); height: calc(6px * var(--s)); transform: translateX(-50%); background: url(ui/compass-pointer.png) 0 0/100% 100%; image-rendering: pixelated; }
+.hud-name { position: absolute; left: 50%; transform: translateX(-50%); top: calc(2px * var(--k) + 19px * var(--s)); font: calc(9px * var(--s))/1 var(--body); color: var(--text); text-shadow: calc(1px * var(--s)) calc(1px * var(--s)) 0 var(--ink); white-space: nowrap; }
+.centre { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.held { position: fixed; pointer-events: none; z-index: 50; display: none; }
+.tok { display: inline-flex; align-items: center; gap: 8px; margin: 2px 12px 2px 0; font-size: 16px; }
+.tok i { width: 22px; height: 22px; display: inline-block; border: 1px solid #000; }
+table.t { border-collapse: collapse; font-size: 16px; }
+table.t td, table.t th { border-bottom: 1px solid var(--page-line); padding: 3px 8px; text-align: left; vertical-align: top; }
+.big2 { --s: 2; } .big3 { --s: 3; } .big1 { --s: 1; }
+.ask { border-left: 4px solid var(--title); padding: 6px 10px; background: var(--page-2); margin: 8px 0; max-width: 980px; }
+.ask.done { border-left-color: var(--rune); }
+.scroller { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 480px) { header.top h1 { font-size: 24px; } nav.tabs a { font-size: 14px; padding: 10px 6px 8px; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Stone and Timber</h1>
+  <p class="pbd-tracker"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+  <p>The owner, 2026-11-14: <em>"develop ui for this game, do something like with rock and carved wood"</em>; then <em>"I like the stone kit more, can you make the stone more blue?"</em>; then <em>"phones cant run this lol, mostly stone with some occasion timber for accent"</em>. So: <b>slate-blue stone and rough rock first</b>, carved oak only as three small accents, as pixel art at whole-number scales, sampled nearest. <b>Desktop only</b>: the UI scale is a whole number from the window's height. The quiet screen stays quiet: in play only the crosshair, the hotbar and the compass. Design: <code>openspec/changes/stone-and-wood-ui</code>.</p>
+  <p>Art: the screenshots, the block tiles (<code>assets/tilesets/atlas.png</code>) and the item icons are the <b>game's</b>; every panel, plaque, slot and bar is <b>mockup-only</b>, drawn by <code>tools/art/ui_art.py</code> (or rendered by <code>tools/art/ui_panels_blend.py</code> where marked). No 3D view on this page.</p>
+</header>
+<nav class="tabs" role="tablist" aria-label="Screens">
+  <a href="#kit" role="tab"><span>Kit</span></a>
+  <a href="#hud" role="tab"><span>HUD</span></a>
+  <a href="#pack" role="tab"><span>Pack</span></a>
+  <a href="#menu" role="tab"><span>Pause</span></a>
+  <a href="#map" role="tab"><span>Map</span></a>
+  <a href="#station" role="tab"><span>Station</span></a>
+  <a href="#talk" role="tab"><span>Talk</span></a>
+  <a href="#loading" role="tab"><span>Loading</span></a>
+</nav>
+<main>
+
+<!-- ================================ KIT ================================ -->
+<section class="tab" id="kit" role="tabpanel">
+  <h2>Stone first, timber as accent</h2>
+  <div class="ask done"><b>Decided (owner, 2026-11-14).</b> On Q2, <em>"I like the stone kit more, can you make the stone more blue?"</em>: menus are framed in the rough-rock slab, in slate blue. Then <em>"phones cant run this lol, mostly stone with some occasion timber for accent"</em>: every piece below is stone by default (plaques, tabs, the compass strip, scrollbar, slider, checkboxes, tooltip, bars, map frame, portrait), and carved oak is kept for three small accents. The phone layouts are gone: the game is desktop only.</div>
+  <div class="row" id="accents">
+    <div class="card big2"><div class="nine p-rock face" style="width:300px;padding:4px"><div class="lintel-row"><div class="p-lintel">Paused</div></div><div style="display:grid;gap:6px"><button class="btn is-focus"><span>Resume</span></button><button class="btn"><span>Settings</span></button><button class="btn"><span>Quit</span></button></div></div><div class="cap">After: a menu in rock, stone plaques, the title on an oak lintel</div></div>
+    <div class="card big2"><div class="nine p-oakframe face" style="width:300px;padding:4px"><div class="carved">Paused</div><div style="display:grid;gap:6px;margin-top:10px"><button class="btn oak"><span>Resume</span></button><button class="btn oak"><span>Settings</span></button><button class="btn oak"><span>Quit</span></button></div></div><div class="cap">Before: the first draft in oak (kept: <code>ui_art.py --oak</code>, <code>ui/oak/</code>)</div></div>
+  </div>
+  <h3>The three timber accents, and nothing else in oak</h3>
+  <div class="row big2" style="align-items:flex-end">
+    <div class="card"><div class="p-lintel">Settings</div><div class="cap">1. The title lintel: an oak board on the menu frame's top edge, the title cut into it</div></div>
+    <div class="card"><div style="display:flex;gap:2px" id="accentTabs"></div><div class="cap">2. The open tab's oak cap (shut tabs are plain stone)</div></div>
+    <div class="card"><div style="position:relative;width:280px;max-width:100%;height:60px;overflow:hidden"><div class="hud-compass nine p-compass" style="transform:none;left:0;top:22px;width:280px" id="accentCompass"></div></div><div class="cap">3. The compass pointer, an oak wedge with an iron tip</div></div>
+  </div>
+  <p class="note">Iron and brass stay as small fittings (studs, brackets, bands, the towns' studs); the rune stays the one glow (focus and selection).</p>
+
+  <h2>Q1: drawn or rendered? (still open)</h2>
+  <div class="ask"><b>Q1. Drawn or rendered?</b> The rough-rock slab drawn pixel by pixel (left) and modelled in Blender, rendered, then pixelated to the kit's colours (right). The drawn one reads as blocks at 2x; the rendered one carries more grain and relief but goes noisy. <b>Recommendation: drawn</b>, with the Blender render kept as the reference for shading. Screenshot: <code>docs/screenshots/mockup-ui/q1-drawn-vs-rendered.png</code>.</div>
+  <div class="row" id="q1">
+    <div class="card big2"><div class="nine p-rock" style="width:192px;height:144px"></div><div class="cap">drawn rock, 2x</div></div>
+    <div class="card big2"><div class="nine p-brock" style="width:192px;height:144px"></div><div class="cap">rendered rock + pixelated, 2x</div></div>
+    <div class="card"><img src="ui/blender-rock-render.png" width="144" height="144" alt="Blender render of the rock slab" style="image-rendering:auto"><div class="cap">the smooth Cycles render (reference only; CPU, no GPU here)</div></div>
+  </div>
+
+  <h2>Materials and tokens</h2>
+  <p class="note">Every colour is a Sweaft-64 entry (the kit's <code>save()</code> refuses anything else). They replace <code>menu.rs</code>'s INK / MINT / PANEL_FILL / EDGE and the copies of them in <code>pack.rs</code> and <code>loading.rs</code>. Labels on stone are inlaid chalk (<code>LABEL</code>); letters on the light compass stone are cut dark (<code>CUT</code>); only the lintel's title is cut into oak (<code>OAK_LABEL</code>).</p>
+  <div id="tokens"></div>
+  <table class="t" id="contrast" style="margin-top:8px"></table>
+
+  <h2>Type</h2>
+  <p class="note">Display: <b>Pixelify Sans</b> (carved titles and plaque labels, upper case). Body: <b>VT323</b> (counts, lines of talk, settings). Both on Google Fonts under the OFL; the game would ship the two TTFs in <code>assets/fonts/</code>. Sizes are whole multiples of the UI scale.</p>
+  <div class="row big2">
+    <div class="nine p-rock face" style="width:420px"><div class="carved" style="font-size:calc(12px*var(--s))">Pale Blue Dot</div><div class="carved">Settings &middot; Input &middot; Pack</div><p style="margin:8px 0 0">Ore for the gate hinges. Bring six iron and I will see the gate hung by nightfall.</p><p style="margin:4px 0 0;color:var(--text-dim)">Secondary text, and counts: 64 16 3</p></div>
+  </div>
+
+  <h2>Panels at three sizes (9-slice)</h2>
+  <p class="note">The rough-rock slab frames every menu; its sides repeat every 20 px. The dressed-stone moulding frames drawers and sub-panels: mitres, quoin joints and iron brackets sit in its 14 px corners, its sides carry only lines that run along them. The lintel stretches along its grain. Centres are one flat colour.</p>
+  <div class="row big2" id="sizes">
+    <div class="nine p-rock" style="width:96px;height:96px"></div>
+    <div class="nine p-rock" style="width:256px;height:128px"></div>
+    <div class="nine p-rock" style="width:400px;height:200px"></div>
+    <div class="nine p-frame" style="width:96px;height:96px"></div>
+    <div class="nine p-frame" style="width:256px;height:128px"></div>
+    <div class="nine p-frame" style="width:400px;height:200px"></div>
+    <div class="p-lintel" style="width:80px"></div>
+    <div class="p-lintel" style="width:160px"></div>
+    <div class="p-lintel" style="width:320px;min-height:48px"></div>
+  </div>
+
+  <h2>Buttons</h2>
+  <p class="note">A raised stone plaque, 22 px tall (44 at 2x), its label inlaid in chalk. Hover lifts it to a lighter stone and the iron studs to brass; pressed sinks it a pixel and turns its light round; disabled is dead dark stone with no light and no studs; focus cuts a rune round it. Try them.</p>
+  <div class="row big2" id="buttons">
+    <button class="btn"><span>Idle</span></button>
+    <button class="btn is-hover"><span>Hover</span></button>
+    <button class="btn is-pressed"><span>Pressed</span></button>
+    <button class="btn" disabled><span>Disabled</span></button>
+    <button class="btn is-focus"><span>Focus</span></button>
+    <button class="btn"><span>Live: try me</span></button>
+  </div>
+
+  <h2>Slots and item frames</h2>
+  <div class="row big2" id="slotrow">
+    <div><div class="slot"></div><div class="cap">idle</div></div>
+    <div><div class="slot hov"></div><div class="cap">hover</div></div>
+    <div><div class="slot sel"></div><div class="cap">selected</div></div>
+    <div><div class="slot off"></div><div class="cap">disabled</div></div>
+    <div><div class="slot r-uncommon"></div><div class="cap">uncommon</div></div>
+    <div><div class="slot r-rare"></div><div class="cap">rare</div></div>
+    <div><div class="slot r-epic"></div><div class="cap">epic</div></div>
+    <div><div class="slot r-legendary"></div><div class="cap">legendary</div></div>
+  </div>
+  <p class="note">Rarity frames are offered for the mockups' loot (the game has no rarity yet): gems in the block's corners and a coloured rim. The well is 16 x 16, the game's icon size, so an icon sits pixel for pixel.</p>
+
+  <h2>Tabs, scrollbar, slider, checkboxes, tooltip</h2>
+  <div class="row big2">
+    <div class="nine p-rock face" style="width:420px">
+      <div style="display:flex;gap:2px;margin:-4px 0 6px" id="kitTabs"></div>
+      <div style="display:flex;gap:8px">
+        <div class="scroller" id="kitList" style="height:112px;flex:1"></div>
+        <div class="nine p-track-v" style="width:16px;height:112px;position:relative" id="kitTrack"><div class="nine p-thumb" id="kitThumb" style="position:absolute;left:-8px;width:16px;height:32px;top:-8px;cursor:grab"></div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+        <span style="flex:none">Render scale</span>
+        <div class="nine p-track-h" id="slTrack" style="flex:1;height:16px;position:relative;cursor:pointer"><div id="slFill" style="position:absolute;left:0;top:0;height:4px;background:var(--rune-dim)"></div><img id="slKnob" src="ui/slider-knob.png" class="px" alt="" style="position:absolute;top:-10px;width:18px;height:26px"></div>
+        <span id="slVal" style="width:3em">100%</span>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap" id="checks"></div>
+      <div style="margin-top:10px;position:relative">Hover the torch: <span class="slot click" id="tipSlot" style="display:inline-block;vertical-align:middle"><img class="ic" src="ui/game/torch.png" alt="Torch"></span>
+        <div class="nine p-tip face" id="tip" style="position:absolute;left:120px;top:-10px;display:none;white-space:nowrap">Torch &middot; 16</div></div>
+    </div>
+  </div>
+
+  <h2>Bars, compass, map frame, portrait, emblem, icons</h2>
+  <div class="row big2">
+    <div style="display:grid;gap:6px">
+      <div class="nine p-bar" style="width:200px;height:20px"><div style="height:8px;margin:-2px -2px;width:70%;background:url(ui/fill-health.png) 0 0/100% 100%;image-rendering:pixelated"></div></div>
+      <div class="nine p-bar" style="width:200px;height:20px"><div style="height:8px;margin:-2px -2px;width:45%;background:url(ui/fill-stamina.png) 0 0/100% 100%;image-rendering:pixelated"></div></div>
+      <div class="nine p-bar" style="width:200px;height:20px"><div style="height:8px;margin:-2px -2px;width:90%;background:url(ui/fill-breath.png) 0 0/100% 100%;image-rendering:pixelated"></div></div>
+      <div class="nine p-bar" style="width:200px;height:20px"><div style="height:8px;margin:-2px -2px;width:30%;background:url(ui/fill-progress.png) 0 0/100% 100%;image-rendering:pixelated"></div></div>
+      <div class="cap">health, stamina, breath, progress</div>
+    </div>
+    <div style="position:relative;width:560px;max-width:100%;height:60px;overflow:hidden"><div class="hud-compass nine p-compass" style="transform:none;left:0;top:22px" id="kitCompass"></div></div>
+    <div class="nine p-map" style="width:176px;height:176px;background:url(ui/game/map-before.jpg) center/300% no-repeat;background-origin:border-box"></div>
+    <div class="nine p-portrait" style="width:112px;height:112px;overflow:hidden"><img src="npcs/smith.png" class="px" alt="The smith" style="width:96px;height:96px;margin:-8px"></div>
+    <img src="ui/emblem.png" class="px" width="96" height="96" alt="Loading emblem">
+    <div style="display:flex;gap:8px;align-items:center;background:var(--face);padding:6px">
+      <img src="ui/icon-close.png" class="px" width="22" height="22" alt="close"><img src="ui/icon-back.png" class="px" width="22" height="22" alt="back"><img src="ui/icon-gear.png" class="px" width="22" height="22" alt="settings"><img src="ui/icon-map.png" class="px" width="22" height="22" alt="map"><img src="ui/icon-pack.png" class="px" width="22" height="22" alt="pack">
+    </div>
+  </div>
+</section>
+
+<!-- ================================ HUD ================================ -->
+<section class="tab" id="hud" role="tabpanel">
+  <h2>The HUD in play, by day and by night</h2>
+  <p class="note">Real game shots (<code>compass-bar/compass-noon-north.png</code>, <code>cities-in-the-world/game-4a-dunmouth-above-night.jpg</code>). Before: today's translucent teal squares and text strip. After: the same three controls in stone (the compass pointer the one bit of oak), nothing else. The UI is unlit: it reads the same over noon sand and over a dark town, because every piece carries its own dark outline and an opaque face.</p>
+  <div class="seg" data-for="hud"><button aria-pressed="false" data-v="before">Before</button><button aria-pressed="true" data-v="after">After</button></div>
+  <div class="row" id="hudScenes"></div>
+</section>
+
+<!-- ================================ PACK ================================ -->
+<section class="tab" id="pack" role="tabpanel">
+  <h2>The pack</h2>
+  <p class="note">Thirty slots and the hotbar under them (<code>inventory-grid</code>). A click picks a stack up, a second click puts it down; try it. The title is carved; the hint line is gone (the controls are in Settings, Input).</p>
+  <div class="seg" data-for="pack"><button aria-pressed="false" data-v="before">Before</button><button aria-pressed="true" data-v="after">After</button></div>
+  <div class="row" id="packScenes"></div>
+</section>
+
+<!-- ================================ MENU ================================ -->
+<section class="tab" id="menu" role="tabpanel">
+  <h2>Pause and settings</h2>
+  <p class="note">The after shots sit over the same spawn view without today's panel (<code>hud-after.png</code>). Pause: resume, settings, quit (the <code>menus-and-a-quiet-screen</code> spec). Settings: tabs, the player settings as sliders and checkboxes, the bindings in a scrolling list.</p>
+  <div class="seg" data-for="menu"><button aria-pressed="false" data-v="before">Before</button><button aria-pressed="true" data-v="after">After</button></div>
+  <div class="row" id="menuScenes"></div>
+</section>
+
+<!-- ================================ MAP ================================ -->
+<section class="tab" id="map" role="tabpanel">
+  <h2>The world map</h2>
+  <p class="note">The map is the game's render; around it a dressed-stone moulding with rough-rock corner blocks. The overlay list, today a text panel open over the top left, becomes a drawer of stone toggles in the dressed-stone sub-panel frame, shut by default (shown open here, over the same corner).</p>
+  <div class="seg" data-for="map"><button aria-pressed="false" data-v="before">Before</button><button aria-pressed="true" data-v="after">After</button></div>
+  <div class="row" id="mapScenes"></div>
+</section>
+
+<!-- ================================ STATION ================================ -->
+<section class="tab" id="station" role="tabpanel">
+  <h2>A crafting station, and the hearth</h2>
+  <p class="note">The station panels of the crafting (M3) and cooking (M27) mockups in the kit: a recipe list that scrolls, inputs, fuel, a progress bar, the output. Icons are the game's (tools, lights, fish, block tiles); recipes shown are illustrative. No before: the game has no station screen yet.</p>
+  <div class="seg" data-for="station"><button aria-pressed="true" data-v="forge">Forge</button><button aria-pressed="false" data-v="hearth">Hearth</button></div>
+  <div class="row" id="stationScenes"></div>
+</section>
+
+<!-- ================================ TALK ================================ -->
+<section class="tab" id="talk" role="tabpanel">
+  <h2>Talk and trade</h2>
+  <p class="note">The townsfolk mockup's (M5) conversation and the market's (M12) barter, at night in Dunmouth: the box sits low and leaves the street visible. The portraits are the npcs mockup's art.</p>
+  <div class="seg" data-for="talk"><button aria-pressed="true" data-v="talk">Talk</button><button aria-pressed="false" data-v="trade">Trade</button></div>
+  <div class="row" id="talkScenes"></div>
+</section>
+
+<!-- ================================ LOADING ================================ -->
+<section class="tab" id="loading" role="tabpanel">
+  <h2>The loading screen</h2>
+  <p class="note">From the first frame (CLAUDE.md, "A loading screen on boot"): the emblem cut in a rock slab, the name carved, the step, and a rune bar that fills as the world is prepared and the shaders warm.</p>
+  <div class="seg" data-for="loading"><button aria-pressed="false" data-v="before">Before</button><button aria-pressed="true" data-v="after">After</button></div>
+  <div class="row" id="loadingScenes"></div>
+</section>
+
+</main>
+<div class="held" id="held"></div>
+
+<script>
+'use strict';
+// ---------------------------------------------------------------- items (the game's art)
+const T = (c, r) => ({ tile: [c, r] });
+const I = (n) => ({ img: 'ui/game/' + n + '.png', name: n });
+const ITEMS = {
+  grass: T(0, 4), dirt: T(1, 5), cobble: T(3, 4), sand: T(8, 0), planks: T(1, 7), log: T(2, 5), brick: T(1, 11), snow: T(4, 4),
+  hand: I('hand'), pickaxe: I('pickaxe'), axe: I('axe'), shovel: I('shovel'), rod: I('rod'), torch: I('torch'),
+  lantern: I('lantern_post'), wall: I('lantern_wall'), candle: I('candle'), brazier: I('brazier'),
+  perch: I('perch'), minnow: I('minnow'), eel: I('eel'), silverfin: I('silverfin'),
+};
+function slotEl(item, count, cls) {
+  const s = document.createElement('div');
+  s.className = 'slot' + (cls ? ' ' + cls : '');
+  if (item) {
+    const it = ITEMS[item];
+    const ic = document.createElement('div');
+    ic.className = 'ic' + (it.tile ? ' tile' : '');
+    if (it.tile) {
+      ic.style.backgroundPosition = `calc(${-it.tile[0] * 16}px * var(--s)) calc(${-it.tile[1] * 16}px * var(--s))`;
+    } else {
+      ic.style.background = `url(${it.img}) 0 0 / 100% 100%`;
+    }
+    ic.setAttribute('role', 'img');
+    ic.setAttribute('aria-label', item);
+    s.appendChild(ic);
+    if (count > 1) { const n = document.createElement('span'); n.className = 'n'; n.textContent = count; s.appendChild(n); }
+  }
+  return s;
+}
+const HOTBAR = [['grass', 64], ['dirt', 64], ['cobble', 48], ['sand', 32], ['torch', 16], ['lantern', 4], ['pickaxe', 1], ['axe', 1], ['rod', 1], [null, 0]];
+function hotbar(sel) {
+  const d = document.createElement('div');
+  d.className = 'slots';
+  HOTBAR.forEach(([it, n], i) => d.appendChild(slotEl(it, n, i === sel ? 'sel' : '')));
+  // The tool slot (what is in hand) stands apart to the left, as it does in the game.
+  const tool = slotEl('hand', 1, '');
+  tool.style.marginRight = 'calc(4px * var(--s))';
+  d.prepend(tool);
+  return d;
+}
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'style') e.style.cssText = v; else if (k === 'class') e.className = v; else e.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+const btn = (label, extra) => h('button', { class: 'btn' + (extra ? ' ' + extra : '') }, h('span', {}, label));
+// A menu's title on the oak lintel, set on the rock frame's top edge (the first timber accent).
+const lintel = (title) => h('div', { class: 'lintel-row' }, h('div', { class: 'p-lintel' }, title));
+
+// ---------------------------------------------------------------- compass
+function compass(el, heading) {
+  el.innerHTML = '';
+  const inner = h('div', { class: 'inner' });
+  el.append(inner, h('div', { class: 'ptr' }));
+  const W = el.clientWidth || 560;
+  const names = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const pxPerDeg = W / 200;
+  for (let a = -180; a <= 540; a += 15) {
+    const off = ((a - heading + 540) % 360) - 180;
+    if (Math.abs(off) > 95) continue;
+    const x = W / 2 + off * pxPerDeg;
+    if (a % 45 === 0) {
+      const nm = names[((a % 360) + 360) % 360 / 45];
+      // Placed on a whole pixel (no translateX(-50%), which put odd-width letters on a half pixel and blurred them).
+      const m = h('div', { class: 'mark' + (nm === 'N' ? ' n' : ''), style: `left:${Math.round(x)}px;transform:none` }, nm);
+      inner.append(m);
+      m.style.left = Math.round(x - m.offsetWidth / 2) + 'px';
+    } else {
+      inner.append(h('div', { class: 'tick', style: `left:${Math.round(x)}px` }));
+    }
+  }
+  for (const t of [-22, 38]) {
+    const x = W / 2 + (t - 0) * pxPerDeg;
+    inner.append(h('div', { class: 'town', style: `left:${Math.round(x)}px;top:calc(11px * var(--s))` }));
+  }
+}
+
+// ---------------------------------------------------------------- scenes at the game's proportion
+// A 1440 x 900 window at UI scale 2 (desktop only: floor(900 / 450) = 2). On a page narrower than
+// 1440 px the scene is shown at half size with the UI at 1x, the same proportion; on one narrower
+// than 720 px it stays 720 px wide and scrolls inside its own box (the page never scrolls sideways).
+const BASE_W = 1440, BASE_H = 900;
+function sceneScale() {
+  const w = document.querySelector('main').clientWidth - 2;
+  return w >= BASE_W ? 1 : 0.5;
+}
+function scene(bg, label) {
+  const k = sceneScale();
+  const s = Math.round(2 * k);
+  const sc = h('div', { class: 'scene', style: `width:${BASE_W * k}px;height:${BASE_H * k}px;background-image:url(${bg});--k:${k};--s:${s}` });
+  const ui = h('div', { class: 'ui' });
+  sc.append(ui, h('div', { class: 'tag' }, label));
+  const el = h('div', { class: 'scenebox' }, sc);
+  return { el, ui, k, s };
+}
+function hudOver(ui, k, sel, heading, town) {
+  ui.append(h('div', { class: 'cross' }));
+  const hb = hotbar(sel); hb.classList.add('hud-hotbar'); ui.append(hb);
+  const c = h('div', { class: 'hud-compass nine p-compass' });
+  ui.append(c);
+  if (town) ui.append(h('div', { class: 'hud-name' }, town));
+  requestAnimationFrame(() => compass(c, heading));
+}
+const state = { hud: 'after', pack: 'after', menu: 'after', map: 'after', station: 'forge', talk: 'talk', loading: 'after' };
+
+function renderHud() {
+  const box = document.getElementById('hudScenes'); box.innerHTML = '';
+  for (const [bg, lab, sel, head, town] of [['ui/game/day-desert.jpg', 'Noon, the desert', 6, 0, 'Tahal  2.2 km'], ['ui/game/night-dunmouth.jpg', 'Night, Dunmouth', 4, 120, 'Dunmouth  80 m']]) {
+    const sc = scene(bg, (state.hud === 'before' ? 'Before: ' : 'After: ') + lab);
+    if (state.hud === 'after') hudOver(sc.ui, sc.k, sel, head, town);
+    box.append(sc.el);
+  }
+}
+
+// ---------------------------------------------------------------- pack
+const PACK = Array(30).fill(null).map(() => [null, 0]);
+[[0, 'planks', 40], [1, 'log', 12], [2, 'brick', 64], [3, 'snow', 9], [5, 'candle', 6], [6, 'brazier', 1], [10, 'perch', 3], [11, 'minnow', 7], [12, 'eel', 1], [13, 'silverfin', 2], [20, 'shovel', 1], [21, 'wall', 2]].forEach(([i, it, n]) => { PACK[i] = [it, n]; });
+let heldFrom = -1;
+function packPanel() {
+  const all = PACK.concat(HOTBAR);
+  const grid = h('div', { class: 'grid10' });
+  const hot = h('div', { class: 'grid10', style: 'margin-top:calc(6px*var(--s))' });
+  all.forEach(([it, n], i) => {
+    const s = slotEl(heldFrom === i ? null : it, n, 'click' + (i === 30 + 4 ? ' sel' : ''));
+    s.tabIndex = 0;
+    s.onclick = (ev) => { ev.stopPropagation(); clickSlot(i); };
+    (i < 30 ? grid : hot).append(s);
+  });
+  const p = h('div', { class: 'nine p-rock face', style: 'display:inline-block' },
+    lintel('Pack'),
+    h('div', { style: 'display:flex;justify-content:flex-end;align-items:center;margin:calc(-14px*var(--s)) 0 calc(3px*var(--s))' },
+      h('img', { src: 'ui/icon-close.png', class: 'px', alt: 'close', style: 'width:calc(11px*var(--s));height:calc(11px*var(--s))' })),
+    grid, h('div', { class: 'carved', style: 'margin-top:calc(5px*var(--s));color:var(--text-dim);font-size:calc(7px*var(--s))' }, 'Hotbar'), hot);
+  return p;
+}
+function clickSlot(i) {
+  const all = () => (i < 30 ? PACK : HOTBAR);
+  const arr = i < 30 ? PACK : HOTBAR, j = i < 30 ? i : i - 30;
+  if (heldFrom < 0) { if (arr[j][0]) heldFrom = i; }
+  else {
+    const fa = heldFrom < 30 ? PACK : HOTBAR, fj = heldFrom < 30 ? heldFrom : heldFrom - 30;
+    const tmp = arr[j]; arr[j] = fa[fj]; fa[fj] = tmp; heldFrom = -1;
+  }
+  void all;
+  renderPack();
+  const held = document.getElementById('held');
+  held.innerHTML = '';
+  if (heldFrom >= 0) {
+    const fa = heldFrom < 30 ? PACK : HOTBAR, fj = heldFrom < 30 ? heldFrom : heldFrom - 30;
+    const s = slotEl(fa[fj][0], fa[fj][1]); s.style.background = 'none';
+    held.style.setProperty('--s', document.querySelector('#packScenes .scene')?.style.getPropertyValue('--s') || 2);
+    held.append(s); held.style.display = 'block';
+  } else held.style.display = 'none';
+}
+document.addEventListener('mousemove', (e) => { const hd = document.getElementById('held'); hd.style.left = (e.clientX - 20) + 'px'; hd.style.top = (e.clientY - 20) + 'px'; });
+function renderPack() {
+  const box = document.getElementById('packScenes'); box.innerHTML = '';
+  const sc = scene(state.pack === 'before' ? 'ui/game/pack-before.jpg' : 'ui/game/day-meadow.jpg', state.pack === 'before' ? 'Before: the pack today' : 'After (over the spawn view, hud-after.png)');
+  if (state.pack === 'after') {
+    sc.ui.append(h('div', { class: 'centre', style: 'background:none' }, packPanel()));
+    // cover today's hotbar under the panel with the new one
+    const hb = hotbar(4); hb.classList.add('hud-hotbar'); sc.ui.append(hb);
+    sc.ui.style.background = 'rgba(1,14,26,.0)';
+  }
+  box.append(sc.el);
+}
+
+// ---------------------------------------------------------------- pause and settings
+const BINDS = [['W A S D', 'move'], ['Space', 'jump, rise in water'], ['Shift', 'sprint'], ['Left click', 'dig'], ['Right click', 'place'], ['1 - 0', 'select a slot'], ['Wheel', 'step through slots'], ['F', 'walk or fly'], ['I', 'pack'], ['M', 'map'], ['J', 'guide'], ['Esc', 'menu'], ['F12', 'screenshot']];
+function pausePanel() {
+  return h('div', { class: 'nine p-rock face', style: 'width:calc(96px*var(--s))' },
+    lintel('Paused'),
+    h('div', { style: 'display:grid;gap:calc(3px*var(--s))' }, btn('Resume', 'is-focus'), btn('Settings'), btn('Quit')));
+}
+function settingsPanel() {
+  const tabs = h('div', { style: 'display:flex;gap:calc(1px*var(--s));margin-bottom:calc(4px*var(--s))' });
+  ['Input', 'Picture', 'Weather'].forEach((t, i) => tabs.append(h('div', { style: `border-style:solid;border-width:calc(7px*var(--s)) calc(7px*var(--s)) 0;border-image:url(ui/${i === 1 ? 'tab-open' : 'tab-shut'}.png) 7 7 0 fill stretch;image-rendering:pixelated;padding:0 calc(3px*var(--s)) calc(3px*var(--s))` }, h('span', { class: 'carved', style: `color:var(${i === 1 ? '--label' : '--tab-dim'});text-shadow:0 calc(1px*var(--s)) 0 var(--stone-0)` }, t))));
+  const row = (label, ctl) => h('div', { style: 'display:flex;align-items:center;justify-content:space-between;gap:calc(6px*var(--s));min-height:calc(14px*var(--s))' }, h('span', {}, label), ctl);
+  const slider = (pct) => h('div', { class: 'nine p-track-h', style: `width:calc(70px*var(--s));height:calc(8px*var(--s));position:relative` },
+    h('div', { style: `position:absolute;left:0;top:0;height:calc(2px*var(--s));width:${pct}%;background:var(--rune-dim)` }),
+    h('img', { src: 'ui/slider-knob.png', class: 'px', alt: '', style: `position:absolute;left:calc(${pct}% - 4.5px*var(--s));top:calc(-5px*var(--s));width:calc(9px*var(--s));height:calc(13px*var(--s))` }));
+  const check = (on) => h('img', { src: `ui/check-${on ? 'on' : 'off'}.png`, class: 'px', alt: on ? 'on' : 'off', style: 'width:calc(12px*var(--s));height:calc(12px*var(--s))' });
+  return h('div', { class: 'nine p-rock face', style: 'width:calc(200px*var(--s))' },
+    lintel('Settings'), tabs,
+    h('div', { style: 'display:grid;gap:calc(3px*var(--s))' },
+      row('Render scale', slider(100)), row('Frame limit', slider(60)), row('Step up blocks', check(true)), row('Rain shadow', check(false))),
+    h('div', { class: 'carved', style: 'margin:calc(6px*var(--s)) 0 calc(2px*var(--s));color:var(--text-dim);font-size:calc(7px*var(--s))' }, 'On foot'),
+    h('div', { style: 'display:flex;gap:calc(4px*var(--s))' },
+      h('div', { style: 'flex:1;height:calc(52px*var(--s));overflow:hidden' }, ...BINDS.slice(0, 6).map(([k, v]) => h('div', { style: 'display:flex;justify-content:space-between' }, h('span', { style: 'color:var(--title)' }, k), h('span', {}, v)))),
+      h('div', { class: 'nine p-track-v', style: 'width:calc(8px*var(--s));height:calc(52px*var(--s));position:relative' }, h('div', { class: 'nine p-thumb', style: 'position:absolute;left:calc(-4px*var(--s));top:calc(-4px*var(--s));width:calc(8px*var(--s));height:calc(20px*var(--s))' }))),
+    h('div', { style: 'margin-top:calc(6px*var(--s));display:flex;justify-content:flex-end' }, btn('Back')));
+}
+function renderMenu() {
+  const box = document.getElementById('menuScenes'); box.innerHTML = '';
+  const a = scene(state.menu === 'before' ? 'ui/game/pause-before.jpg' : 'ui/game/day-meadow.jpg', state.menu === 'before' ? 'Before: paused' : 'After: paused');
+  const b = scene(state.menu === 'before' ? 'ui/game/settings-before.jpg' : 'ui/game/day-meadow.jpg', state.menu === 'before' ? 'Before: settings' : 'After: settings');
+  if (state.menu === 'after') {
+    a.ui.append(h('div', { class: 'centre' }, pausePanel()));
+    b.ui.append(h('div', { class: 'centre' }, settingsPanel()));
+    for (const sc of [a, b]) { const hb = hotbar(-1); hb.classList.add('hud-hotbar'); sc.ui.append(hb); }
+  }
+  box.append(a.el, b.el);
+}
+
+// ---------------------------------------------------------------- map
+function renderMap() {
+  const box = document.getElementById('mapScenes'); box.innerHTML = '';
+  const sc = scene('ui/game/map-before.jpg', state.map === 'before' ? 'Before: the map today' : 'After: framed, the overlays in a drawer');
+  if (state.map === 'after') {
+    // The frame sits at the window's edge, its centre left open (no fill) so the map shows through.
+    sc.ui.append(h('div', { class: 'nine', style: 'position:absolute;inset:0;border-width:calc(22px*var(--s));border-image:url(ui/map-frame.png) 22 stretch;pointer-events:none' }));
+    const toggles = ['The planet', 'Biomes', 'Wind', 'Jet', 'Currents', 'Cloud', 'Rain', 'Humidity', 'Sunlight', 'Heat', 'Night side', 'Clouds'];
+    const drawer = h('div', { class: 'nine p-frame face', style: 'position:absolute;left:calc(22px*var(--s));top:calc(22px*var(--s));width:calc(144px*var(--s))' },
+      h('div', { style: 'display:flex;justify-content:space-between;align-items:center' }, h('div', { class: 'carved' }, 'Overlays'),
+        h('img', { src: 'ui/icon-close.png', class: 'px', alt: 'close', style: 'width:calc(11px*var(--s));height:calc(11px*var(--s))' })),
+      h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:calc(2px*var(--s));margin-top:calc(4px*var(--s))' },
+        ...toggles.map((t, i) => btn(t, i === 1 ? 'is-pressed' : ''))));
+    sc.ui.append(drawer);
+    sc.ui.append(h('div', { class: 'tag', style: 'left:auto;right:calc(24px*var(--s));top:calc(24px*var(--s))' }, 'drawer shown open; shut by default'));
+    sc.ui.append(h('div', { class: 'nine p-tip face', style: 'position:absolute;right:calc(22px*var(--s) + 4px);bottom:calc(22px*var(--s) + 4px)' }, '28.6N 0.0W'));
+  }
+  box.append(sc.el);
+}
+
+// ---------------------------------------------------------------- stations
+function stationPanel(kind) {
+  const forge = kind === 'forge';
+  const recipes = forge ? [['torch', 'Torch'], ['lantern', 'Lantern, post'], ['wall', 'Lantern, wall'], ['brazier', 'Brazier'], ['pickaxe', 'Pickaxe'], ['axe', 'Axe'], ['shovel', 'Shovel']]
+    : [['perch', 'Grilled perch'], ['silverfin', 'Smoked silverfin'], ['eel', 'Eel stew'], ['minnow', 'Fried minnows']];
+  const list = h('div', { style: 'display:grid;gap:calc(1px*var(--s));height:calc(104px*var(--s));overflow:hidden;flex:1' },
+    ...recipes.map(([it, nm], i) => h('div', { style: `display:flex;align-items:center;gap:calc(4px*var(--s));${i === 1 ? 'color:var(--title)' : ''}` }, slotEl(it, 0, i === 1 ? 'sel' : ''), h('span', {}, nm))));
+  const ins = forge ? [['planks', 2], ['cobble', 4], ['torch', 1]] : [['perch', 2], ['silverfin', 1], [null, 0]];
+  const out = forge ? ['lantern', 1] : ['silverfin', 2];
+  const bar = (pct) => h('div', { class: 'nine p-bar', style: 'width:calc(48px*var(--s));height:calc(10px*var(--s))' }, h('div', { style: `height:calc(4px*var(--s));margin:calc(-1px*var(--s));width:${pct}%;background:url(ui/fill-${forge ? 'stamina' : 'progress'}.png) 0 0/100% 100%;image-rendering:pixelated` }));
+  const work = h('div', { style: 'display:grid;gap:calc(4px*var(--s));justify-items:center;align-content:start' },
+    h('div', { class: 'slots' }, ...ins.map(([i, n]) => slotEl(i, n))),
+    h('div', { style: 'display:flex;align-items:center;gap:calc(4px*var(--s))' }, h('span', { style: 'color:var(--text-dim)' }, forge ? 'Fuel' : 'Wood'), slotEl(forge ? 'log' : 'log', 3)),
+    bar(forge ? 60 : 35),
+    slotEl(out[0], out[1], 'r-uncommon'),
+    btn(forge ? 'Craft' : 'Cook'));
+  return h('div', { class: 'nine p-rock face', style: 'width:calc(220px*var(--s))' },
+    lintel(forge ? 'Forge' : 'Hearth and pot'),
+    h('div', { style: 'display:flex;gap:calc(6px*var(--s))' }, list,
+      h('div', { class: 'nine p-track-v', style: 'width:calc(8px*var(--s));height:calc(104px*var(--s));position:relative;flex:none' }, h('div', { class: 'nine p-thumb', style: 'position:absolute;left:calc(-4px*var(--s));top:calc(16px*var(--s));width:calc(8px*var(--s));height:calc(28px*var(--s))' })),
+      work));
+}
+function renderStation() {
+  const box = document.getElementById('stationScenes'); box.innerHTML = '';
+  const sc = scene(state.station === 'forge' ? 'ui/game/day-meadow.jpg' : 'ui/game/night-dunmouth.jpg', state.station === 'forge' ? 'The forge, by day' : 'The hearth, at night');
+  sc.ui.append(h('div', { class: 'centre' }, stationPanel(state.station)));
+  const hb = hotbar(-1); hb.classList.add('hud-hotbar'); sc.ui.append(hb);
+  box.append(sc.el);
+}
+
+// ---------------------------------------------------------------- talk and trade
+function talkPanel() {
+  return h('div', { style: 'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(76px*var(--k) + 30px*var(--s));display:flex;gap:calc(4px*var(--s));align-items:flex-end' },
+    h('div', { class: 'nine p-portrait', style: 'width:calc(64px*var(--s));height:calc(64px*var(--s));overflow:hidden;flex:none' }, h('img', { src: 'npcs/smith.png', class: 'px', alt: 'Hale, the smith', style: 'width:calc(48px*var(--s));height:calc(48px*var(--s))' })),
+    h('div', { class: 'nine p-rock face', style: 'width:calc(260px*var(--s))' },
+      h('div', { class: 'carved', style: 'margin-bottom:calc(3px*var(--s))' }, 'Hale, the smith'),
+      h('div', {}, 'Ore for the gate hinges. Bring six iron and the gate is hung by nightfall.'),
+      h('div', { style: 'display:flex;gap:calc(3px*var(--s));margin-top:calc(5px*var(--s));flex-wrap:wrap' }, btn('I will', 'is-focus'), btn('Trade'), btn('Later'))));
+}
+function tradePanel() {
+  const mine = [['cobble', 48], ['perch', 3], ['planks', 40], ['candle', 6], [null, 0], [null, 0], [null, 0], [null, 0]];
+  const theirs = [['pickaxe', 1], ['axe', 1], ['lantern', 2], ['brazier', 1], ['torch', 16], [null, 0], [null, 0], [null, 0]];
+  const g = (arr) => h('div', { style: 'display:grid;grid-template-columns:repeat(4,calc(24px*var(--s)))' }, ...arr.map(([i, n]) => slotEl(i, n)));
+  return h('div', { class: 'centre' }, h('div', { class: 'nine p-rock face' },
+    lintel('Barter with Ysolde'),
+    h('div', { style: 'display:flex;align-items:center;gap:calc(4px*var(--s));margin-bottom:calc(4px*var(--s))' }, h('img', { src: 'npcs/trader.png', class: 'px', alt: 'the trader', style: 'width:calc(24px*var(--s));height:calc(24px*var(--s))' }), h('div', { style: 'color:var(--text-dim)' }, 'Ysolde, the trader')),
+    h('div', { style: 'display:flex;gap:calc(8px*var(--s));align-items:flex-start' },
+      h('div', {}, h('div', { style: 'color:var(--text-dim)' }, 'Yours'), g(mine)),
+      h('div', { style: 'display:grid;gap:calc(3px*var(--s));justify-items:center;padding-top:calc(16px*var(--s))' }, slotEl('cobble', 12, 'hov'), h('img', { src: 'ui/icon-back.png', class: 'px', alt: 'for', style: 'width:calc(11px*var(--s));height:calc(11px*var(--s));transform:scaleX(-1)' }), slotEl('lantern', 1, 'r-rare')),
+      h('div', {}, h('div', { style: 'color:var(--text-dim)' }, 'Hers'), g(theirs))),
+    h('div', { style: 'display:flex;justify-content:flex-end;gap:calc(3px*var(--s));margin-top:calc(5px*var(--s))' }, btn('Back'), btn('Trade', 'is-hover'))));
+}
+function renderTalk() {
+  const box = document.getElementById('talkScenes'); box.innerHTML = '';
+  const sc = scene('ui/game/night-dunmouth.jpg', state.talk === 'talk' ? 'Talk, at night' : 'Trade, at night');
+  sc.ui.append(state.talk === 'talk' ? talkPanel() : tradePanel());
+  const hb = hotbar(4); hb.classList.add('hud-hotbar'); sc.ui.append(hb);
+  box.append(sc.el);
+}
+
+// ---------------------------------------------------------------- loading
+function renderLoading() {
+  const box = document.getElementById('loadingScenes'); box.innerHTML = '';
+  const sc = scene('ui/game/loading-before.jpg', state.loading === 'before' ? 'Before: the loading screen today' : 'After');
+  if (state.loading === 'after') {
+    sc.ui.style.background = '#010e1a';
+    sc.ui.append(h('div', { class: 'centre' }, h('div', { class: 'nine p-rock face', style: 'width:calc(150px*var(--s));text-align:center' },
+      h('img', { src: 'ui/emblem.png', class: 'px', alt: '', style: 'width:calc(48px*var(--s));height:calc(48px*var(--s))' }),
+      h('div', { class: 'carved', style: 'font-size:calc(12px*var(--s));margin:calc(3px*var(--s)) 0' }, 'Pale Blue Dot'),
+      h('div', { style: 'color:var(--text-dim);margin-bottom:calc(4px*var(--s))' }, 'Building the planet'),
+      h('div', { class: 'nine p-bar', style: 'width:100%;height:calc(10px*var(--s))' }, h('div', { style: 'height:calc(4px*var(--s));margin:calc(-1px*var(--s));width:45%;background:url(ui/fill-progress.png) 0 0/100% 100%;image-rendering:pixelated' })))));
+  }
+  box.append(sc.el);
+}
+
+// ---------------------------------------------------------------- kit extras
+function kitExtras() {
+  const tok = document.getElementById('tokens');
+  const T = [['INK', '#010000'], ['SEAM', '#170916'], ['FACE', '#1f3b52'], ['WELL', '#011c34'], ['TEXT', '#eab798'], ['TEXT_DIM', '#cfaa81'], ['TITLE', '#faaf5c'], ['LABEL (inlaid chalk)', '#fffefe'], ['LABEL_DIM', '#92a3b2'], ['TAB_DIM', '#bfcad7'], ['CUT', '#011c34'], ['NORTH', '#4a051e'], ['OAK_LABEL', '#010000'], ['RUNE', '#84e3b5'],
+    ['STONE 0..4 (+ STONE_MID #5d778d)', '#011c34 #1f3b52 #3e586e #5d778d #92a3b2 #bfcad7'], ['ROCK 0..4', '#010e1a #1f3b52 #3e586e #5d778d #92a3b2'], ['OAK 0..4 (accents only)', '#2f1525 #41322c #725244 #ab8465 #cfaa81'], ['IRON (fittings)', '#010000 #161612 #2c2c25 #434137 #a09f91'], ['BRASS (fittings)', '#733126 #c56d25 #fb902f #faaf5c'],
+    ['HEALTH', '#4a051e #a61e1f #d12d41 #fa3a64'], ['STAMINA', '#733126 #c56d25 #fb902f #faaf5c'], ['BREATH', '#0c2f44 #15578a #1096c3 #74effe']];
+  for (const [n, cs] of T) tok.append(h('span', { class: 'tok' }, ...cs.split(' ').map((c) => h('i', { style: `background:${c}`, title: c })), n));
+  const ct = document.getElementById('contrast');
+  ct.append(h('tr', {}, h('th', {}, 'Pair (WCAG contrast, measured by ui_art.py)'), h('th', {}, 'Ratio')));
+  fetch('ui/slices.json').then((r) => r.json()).then((j) => { for (const [k, v] of Object.entries(j.contrast)) ct.append(h('tr', {}, h('td', {}, k), h('td', {}, v + ':1'))); }).catch(() => {});
+  // tabs demo (the open one wears the oak cap)
+  const tabRow = (kt, names) => names.forEach((t, i) => {
+    const lab = h('span', { class: 'carved', style: `color:var(${i === 0 ? '--label' : '--tab-dim'});text-shadow:0 2px 0 var(--stone-0)` }, t);
+    const d = h('div', { style: `cursor:pointer;border-style:solid;border-width:14px 14px 0;border-image:url(ui/${i === 0 ? 'tab-open' : 'tab-shut'}.png) 7 7 0 fill stretch;image-rendering:pixelated;padding:0 6px 6px` }, lab);
+    d.onclick = () => { [...kt.children].forEach((c, j) => { c.style.borderImageSource = `url(ui/${j === i ? 'tab-open' : 'tab-shut'}.png)`; c.firstChild.style.color = `var(${j === i ? '--label' : '--tab-dim'})`; }); };
+    kt.append(d);
+  });
+  tabRow(document.getElementById('kitTabs'), ['Input', 'Picture', 'Sound']);
+  tabRow(document.getElementById('accentTabs'), ['Input', 'Picture']);
+  // scroll list demo
+  const list = document.getElementById('kitList');
+  const inner = h('div', {}, ...BINDS.map(([k, v]) => h('div', { style: 'display:flex;justify-content:space-between;gap:8px' }, h('span', { style: 'color:var(--title)' }, k), h('span', {}, v))));
+  list.append(inner);
+  const thumb = document.getElementById('kitThumb'), track = document.getElementById('kitTrack');
+  let off = 0;
+  const setOff = (o) => {
+    const max = Math.max(0, inner.scrollHeight - list.clientHeight); off = Math.max(0, Math.min(max, o));
+    inner.style.transform = `translateY(${-Math.round(off / 2) * 2}px)`;
+    const travel = track.clientHeight - 32; thumb.style.top = (-8 + Math.round((max ? off / max : 0) * travel / 2) * 2) + 'px';
+  };
+  list.addEventListener('wheel', (e) => { e.preventDefault(); setOff(off + e.deltaY * 0.5); }, { passive: false });
+  let drag = null;
+  thumb.addEventListener('pointerdown', (e) => { drag = { y: e.clientY, o: off }; thumb.setPointerCapture(e.pointerId); });
+  thumb.addEventListener('pointermove', (e) => { if (!drag) return; const max = Math.max(1, inner.scrollHeight - list.clientHeight); setOff(drag.o + (e.clientY - drag.y) * max / (track.clientHeight - 32)); });
+  thumb.addEventListener('pointerup', () => { drag = null; });
+  // slider demo
+  const tr = document.getElementById('slTrack'), knob = document.getElementById('slKnob'), fill = document.getElementById('slFill'), val = document.getElementById('slVal');
+  const setSl = (t) => { t = Math.max(0, Math.min(1, t)); const w = tr.clientWidth; const x = Math.round(t * w / 2) * 2; knob.style.left = (x - 9) + 'px'; fill.style.width = x + 'px'; val.textContent = Math.round(50 + t * 50) + '%'; };
+  let sd = false;
+  tr.addEventListener('pointerdown', (e) => { sd = true; tr.setPointerCapture(e.pointerId); const r = tr.getBoundingClientRect(); setSl((e.clientX - r.left) / r.width); });
+  tr.addEventListener('pointermove', (e) => { if (!sd) return; const r = tr.getBoundingClientRect(); setSl((e.clientX - r.left) / r.width); });
+  tr.addEventListener('pointerup', () => { sd = false; });
+  requestAnimationFrame(() => setSl(1));
+  // checkboxes
+  const ch = document.getElementById('checks');
+  [['Step up blocks', true], ['Rain shadow', false], ['Show compass', true]].forEach(([n, on]) => {
+    const img = h('img', { src: `ui/check-${on ? 'on' : 'off'}.png`, class: 'px', alt: '', style: 'width:24px;height:24px' });
+    const lab = h('button', { style: 'all:unset;display:inline-flex;gap:8px;align-items:center;cursor:pointer;min-height:44px', role: 'checkbox', 'aria-checked': String(on) }, img, n);
+    lab.onclick = () => { on = !on; img.src = `ui/check-${on ? 'on' : 'off'}.png`; lab.setAttribute('aria-checked', String(on)); };
+    ch.append(lab);
+  });
+  // tooltip
+  const ts = document.getElementById('tipSlot'), tip = document.getElementById('tip');
+  ts.onmouseenter = () => { tip.style.display = 'block'; }; ts.onmouseleave = () => { tip.style.display = 'none'; };
+  compass(document.getElementById('kitCompass'), 20);
+  compass(document.getElementById('accentCompass'), 0);
+}
+
+// ---------------------------------------------------------------- tabs (one open at a time, linkable)
+const RENDER = { hud: renderHud, pack: renderPack, menu: renderMenu, map: renderMap, station: renderStation, talk: renderTalk, loading: renderLoading };
+const made = new Set();
+function openTab() {
+  const id = (location.hash || '#kit').slice(1);
+  const ok = document.getElementById(id) && document.getElementById(id).classList.contains('tab') ? id : 'kit';
+  document.querySelectorAll('section.tab').forEach((s) => s.classList.toggle('open', s.id === ok));
+  document.querySelectorAll('nav.tabs a').forEach((a) => a.setAttribute('aria-selected', String(a.getAttribute('href') === '#' + ok)));
+  if (!made.has(ok)) { made.add(ok); if (ok === 'kit') kitExtras(); }
+  if (RENDER[ok]) RENDER[ok]();
+}
+document.querySelectorAll('.seg').forEach((seg) => {
+  seg.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const key = seg.dataset.for; state[key] = b.dataset.v;
+    seg.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    RENDER[key]();
+  });
+});
+window.addEventListener('hashchange', openTab);
+let rz = 0;
+window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(openTab, 150); });
+document.fonts && document.fonts.ready.then(() => { const id = (location.hash || '#kit').slice(1); if (RENDER[id]) RENDER[id](); });
+openTab();
+</script>
+</body>
+</html>

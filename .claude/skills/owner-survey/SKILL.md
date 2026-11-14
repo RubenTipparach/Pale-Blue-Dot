@@ -9,7 +9,7 @@ metadata:
 # Ask the owner with a survey, not a chat list
 
 > **Superseded (2026-11-12).** Questions now go into the HTML survey,
-> https://claude.ai/artifact/3ViY6udhFkkx5Wzx4jn3w5 (`docs/design/survey.html`), run by the
+> https://claude.ai/artifact/S3hRQL12WLctoD21jar1yT (`docs/design/survey.html`), run by the
 > `html-survey` skill (`.claude/skills/html-survey`). The owner, 2026-11-12: "can you create a
 > mockup tracking dock, and a survey html tracker? both of these skills are found in fleet command
 > repo". The Claude Doc below is kept as the earlier record and is no longer edited; its open

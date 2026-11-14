@@ -92,7 +92,9 @@ select{background:var(--deep);border:1px solid var(--line-strong);border-radius:
 .ind{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
 .ind button{all:unset;cursor:pointer;display:grid;gap:2px;border:1px solid var(--line);border-radius:4px;background:var(--deep);padding:2px}
 .ind button:hover,.ind button:focus-visible{border-color:var(--amber)}
-.ind canvas{width:100%;aspect-ratio:16/9;display:block}
+.ind canvas,.ind img{width:100%;height:auto;aspect-ratio:16/9;display:block}
+/* a baked thumbnail is a 320 x 180 render shown at about half size, smoothed as the live canvas was, not pixelated */
+.ind img{image-rendering:auto}
 .ind small{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ind small i{font-style:normal;color:var(--amber)}
 @media (max-width:700px){.srow{grid-template-columns:1fr}.ind{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -245,6 +247,7 @@ details.about[open]{display:grid;gap:10px}
 <section id="tab-sheet" class="tabpanel" role="tabpanel" hidden>
   <div class="sechead"><span class="eyebrow">2 &middot; Variation</span><h2>Species sheet</h2>
   <p>Six individuals of every species, seeds 0 to 5 of one school. Each row is drawn at one scale, so the size spread is real: the largest fish in a row can be half again the length of the smallest. Amber marks a rare colour morph (1 in 64). Click a fish to open it in the lab.</p></div>
+  <p class="small">These thumbnails are baked: PNGs in <code>fish/sheet/</code>, made by <code>tools/mockups/bake_fish_sheet.js</code> from this page's own renderer, so the sheet opens no 3D view. The lab still renders live.</p>
   <div class="sheet" id="sheetRows"></div>
 </section>
 
@@ -875,11 +878,19 @@ live("lenR", "len"); live("depR", "depth"); live("widR", "width"); live("finR", 
 live("profSel", "prof", v => v); live("tailSel", "tail", v => v); live("patSel", "pat", v => v);
 roll("perch", 3);
 
-// ------------------------------------------------------------------ species sheet (one offscreen renderer)
+// ------------------------------------------------------------------ species sheet (baked thumbnails)
+// The sheet shows PNGs baked from this renderer by tools/mockups/bake_fish_sheet.js (fish/sheet/<species>-<seed>.png,
+// <species>-<seed>-<morph>.png for a rare morph), so opening it makes no WebGL context. A thumbnail whose PNG is missing
+// falls back to the live render below. With ?bake in the URL every thumbnail is rendered live and window.__fishBake
+// resolves to [{ file, png }] (png a data URL), which is what the bake script saves. Re-run the bake after changing the
+// generator, and bump SHEET_V so browsers fetch the new images.
+const BAKE = new URLSearchParams(location.search).has("bake");
+const SHEET_V = 1;
+const sheetFile = g => `${g.sp.id}-${g.seed}${g.morph ? "-" + g.morph : ""}.png`;
 const sheet = (() => {
   const W = 320, H = 180;
   const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
-  let renderer = null, pending = 0;   // one offscreen renderer, made when the sheet first opens and let go once every thumbnail is drawn
+  let renderer = null, pending = 0;   // one offscreen renderer, made only if a thumbnail has to be drawn live, let go once every one is drawn
   function begin(n){ pending += n; if (!renderer){ renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, alpha: false }); renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.setSize(W, H, false); } }
   function done(){ if (--pending > 0 || !renderer) return; renderer.dispose(); renderer.forceContextLoss(); renderer = null; }
   const scene = new THREE.Scene(); scene.background = new THREE.Color("#0c2230");
@@ -887,7 +898,9 @@ const sheet = (() => {
   const key = new THREE.DirectionalLight("#fff4e0", 1.3); key.position.set(-2, 3, 3); scene.add(key);
   const cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 50);
   function render(g, frame, target){
-    const f = buildFish(g); f.scale.setScalar(g.len); f.rotation.set(PROFILES[g.prof].flat ? 0.95 : 0.12, -0.35, 0); scene.add(f); swim(f, 0.4, 1);
+    const f = buildFish(g); f.scale.setScalar(g.len); f.rotation.set(PROFILES[g.prof].flat ? 0.95 : 0.12, -0.35, 0); scene.add(f);
+    f.userData.phase = mulberry32(g.patSeed + 3)() * 6.28;   // the swim pose from the fish's seed, so a bake is repeatable
+    swim(f, 0.4, 1);
     const dist = frame * 1.02 / (2 * Math.tan(THREE.MathUtils.degToRad(15)) * cam.aspect);
     cam.near = dist / 40; cam.far = dist * 6; cam.updateProjectionMatrix();
     cam.position.set(0, frame * 0.04, dist); cam.lookAt(0, 0, 0);
@@ -896,28 +909,43 @@ const sheet = (() => {
     scene.remove(f); disposeFish(f);
     done();
   }
-  return { render, begin };
+  return { render, begin, W, H };
 })();
+// The six individuals a row shows, and the frame (in metres) the whole row is drawn at.
+function sheetRow(sp){
+  const frame = sp.L * 1.25 * (PROFILES[sp.prof].flat ? 1.6 : sp.lure ? 1.45 : 1.2);
+  const gs = [0, 1, 2, 3, 4, 5].map(s => genome(sp, s + 11));
+  if (sp.id === "reef") gs[4] = genome(sp, 15, true);       // show one rare morph on the sheet
+  if (sp.id === "minnow") gs[2] = genome(sp, 13, true);
+  return { frame, gs };
+}
 function buildSheet(){
-  const host = $("sheetRows");
+  const host = $("sheetRows"), baked = [];
   SPECIES.forEach((sp, si) => {
     const row = document.createElement("div"); row.className = "srow";
     row.innerHTML = `<div class="who"><img src="${iconSrc(sp.id)}" alt=""><div><b>${sp.name}</b><small>${fmtLen(sp.L * 0.85)} to ${fmtLen(sp.L * 1.25)}</small></div></div><div class="ind"></div>`;
     host.appendChild(row);
     const ind = row.querySelector(".ind");
-    const frame = sp.L * 1.25 * (PROFILES[sp.prof].flat ? 1.6 : sp.lure ? 1.45 : 1.2);
-    const gs = [0, 1, 2, 3, 4, 5].map(s => genome(sp, s + 11));
-    if (sp.id === "reef") gs[4] = genome(sp, 15, true);       // show one rare morph on the sheet
-    if (sp.id === "minnow") gs[2] = genome(sp, 13, true);
+    const { frame, gs } = sheetRow(sp);
     gs.forEach(g => {
       const b = document.createElement("button"); b.title = `Open in the lab`;
-      const cv = document.createElement("canvas"); cv.width = 320; cv.height = 180; b.appendChild(cv);
+      const live = () => {   // draw this one with the renderer, into a canvas in the image's place
+        const cv = document.createElement("canvas"); cv.width = sheet.W; cv.height = sheet.H;
+        b.replaceChild(cv, b.firstChild);
+        sheet.begin(1);
+        return new Promise(res => setTimeout(() => { sheet.render(g, frame, cv); res(cv); }, 60 + si * 40));
+      };
+      const alt = `${sp.name}, seed ${g.seed}, ${fmtLen(g.len)}${g.morph ? `, ${g.morph} morph` : ""}`;
+      const img = new Image(sheet.W, sheet.H); img.alt = alt; img.decoding = "async";
+      b.appendChild(img);
       const cap = document.createElement("small"); cap.innerHTML = `#${g.seed} · ${fmtLen(g.len)}${g.morph ? ` · <i>${g.morph}</i>` : ""}`; b.appendChild(cap);
       b.onclick = () => { cur = g; syncControls(); lab.show(g); setTab("lab"); scrollTo(0, 0); };
       ind.appendChild(b);
-      sheet.begin(1); setTimeout(() => sheet.render(g, frame, cv), 60 + si * 40);
+      if (BAKE) baked.push(live().then(cv => ({ file: sheetFile(g), png: cv.toDataURL("image/png") })));
+      else { img.onerror = () => { img.onerror = null; live(); }; img.src = `fish/sheet/${sheetFile(g)}?v=${SHEET_V}`; }
     });
   });
+  if (BAKE) window.__fishBake = Promise.all(baked);
 }
 let sheetBuilt = false;
 TAB_HOOKS.sheet = { show(){ if (!sheetBuilt){ sheetBuilt = true; buildSheet(); } } };

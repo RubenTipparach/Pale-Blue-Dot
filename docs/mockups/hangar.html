@@ -72,7 +72,7 @@ button{font:inherit}
 .hudbar .hs img{width:32px;height:32px;image-rendering:pixelated}
 .hudbar .hs .c{position:absolute;right:2px;bottom:0;font:600 10px var(--mono);color:#fff;text-shadow:0 1px 0 #000}
 @media (max-width:760px){.hudbar{display:none}}
-.shot .stage{position:fixed;inset:0;height:auto;min-height:0;z-index:50;border-radius:0}
+.shot .stage,.shot #tab-airfield .stage{position:fixed;inset:0;height:auto;min-height:0;z-index:50;border-radius:0}
 .ov.br{right:12px;bottom:12px;max-width:min(360px,calc(100% - 24px));font-size:13px;color:var(--muted)}
 .ov.br b{color:var(--ink);font-weight:600}
 .stage .loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--display);letter-spacing:.1em;color:var(--muted)}
@@ -274,19 +274,21 @@ dialog.keys .close{float:right}
   <p>Nothing flies the plane for you: it goes where you point it. The wing keeps its lift up to a steep 35 degrees, so pulling up climbs instead of stalling.</p>
   <h4>Helicopters and Puffin</h4>
   <table><tr><td><kbd>Shift</kbd> <kbd>Ctrl</kbd></td><td>Up and down (the collective; on Puffin, the power).</td></tr><tr><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></td><td>Tilt forward, left, back, right, and it flies that way.</td></tr><tr><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Turn left, turn right.</td></tr></table>
+  <h4>Effects</h4>
+  <p><label><input type="checkbox" id="fxChk" checked> Airflow lines, wingtip trails, prop swirl and rotor dust</label>. Lines stream past along the wind you fly through, more and longer the faster you go; a trail leaves each wingtip at speed and thickens as you pull G in a turn; a hovering rotor blows dust off the ground. The <b>Effects</b> button above the view turns them off too.</p>
   <h4>Airships</h4>
   <table><tr><td><kbd>W</kbd> <kbd>S</kbd></td><td>Engines forward and back.</td></tr><tr><td><kbd>A</kbd> <kbd>D</kbd></td><td>Rudder: turn left, turn right.</td></tr><tr><td><kbd>&uarr;</kbd> <kbd>&darr;</kbd></td><td>Nose up, nose down.</td></tr><tr><td><kbd>Shift</kbd></td><td>Drop ballast water: it gets lighter and rises.</td></tr><tr><td><kbd>Ctrl</kbd></td><td>Let out gas: it gets heavier and comes down.</td></tr></table>
 </dialog>
 <div class="tabpanel view" id="tab-airfield" role="tabpanel">
 <section aria-labelledby="s1">
   <h2 id="s1"><span class="n">1</span>The airfield</h2>
-  <details class="sdesc"><summary>What this shows, how to fly, and the keys</summary><p>A hangar of three bays with its roller doors up, an apron, a 230 m runway, a helipad, a windsock and a little tower with its beacon. Sharky and Gull are in their bays; Puffin and Dart wait on the apron; Bumble sits on the pad; the game's own Kestrel is parked beside them for scale. Drag to look around, scroll or pinch to zoom. <b>Fly it</b> takes the craft you are looking at (or your design from the Plane builder tab) off the runway. The stick is yours alone: W and S move the nose down and up, A and D roll, Q and E the rudder, Shift and Ctrl (or R and F) the throttle; nothing rolls, pitches or yaws the plane for you. The wing keeps its lift up to 35&deg;, so pulling up climbs instead of stalling. <b>Controls</b> lists every key. A helicopter flies on collective (Shift and Ctrl), cyclic (W, A, S, D) and its tail rotor (Q and E). The country runs on for kilometres: hills, a coast with the sea beyond it to the north, the town of Wendle a little over a minute's flight to the east and the fishing town of Saltby on the coast to the west-north-west, both lit at night. Everything is solid: wheels on the ground are a landing, anything else hitting the ground, a building, a mast or a parked craft fast is a crash, and two seconds later you are back on the runway. Drag to look round it as it flies. At night every runway light, pad light, floodlight, hangar lamp and nav light lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p></details>
+  <details class="sdesc"><summary>What this shows, how to fly, and the keys</summary><p>A hangar of three bays with its roller doors up, an apron, a 230 m runway, a helipad, a windsock and a little tower with its beacon. Sharky and Gull are in their bays; Puffin and Dart wait on the apron; Bumble sits on the pad; the game's own Kestrel is parked beside them for scale. Drag to look around, scroll or pinch to zoom. <b>Fly it</b> takes the craft you are looking at (or your design from the Plane builder tab) off the runway. The stick is yours alone: W and S move the nose down and up, A and D roll, Q and E the rudder, Shift and Ctrl (or R and F) the throttle; nothing rolls, pitches or yaws the plane for you. The wing keeps its lift up to 35&deg;, so pulling up climbs instead of stalling. <b>Controls</b> lists every key. A helicopter flies on collective (Shift and Ctrl), cyclic (W, A, S, D) and its tail rotor (Q and E). The country runs on for kilometres: hills, a coast with the sea beyond it to the north, the town of Wendle a little over a minute's flight to the east and the fishing town of Saltby on the coast to the west-north-west, both lit at night. Everything is solid: wheels on the ground are a landing, anything else hitting the ground, a building, a mast or a parked craft fast is a crash, and two seconds later you are back on the runway. Drag to look round it as it flies. Lines of the airflow stream past as you go faster, a trail leaves each wingtip and thickens as you pull G, a prop leaves a faint swirl and a hovering rotor blows dust off the ground; the <b>Effects</b> button turns them off. At night every runway light, pad light, floodlight, hangar lamp and nav light lights what is near it, wherever the camera is, and the moon stays dim enough that they read.</p></details>
   <div class="ybar" id="yardBar">
     <span class="ylab">Look at</span><div class="seg" id="shipSel" role="group" aria-label="Look at"></div>
     <span class="ysep s1"></span><div class="seg" id="timeSel" role="group" aria-label="Time of day">
       <button data-t="day" aria-pressed="false">Day</button><button data-t="dusk" aria-pressed="false">Dusk</button><button data-t="night" aria-pressed="true">Night</button>
     </div>
-    <span class="ysep"></span><div class="seg" role="group" aria-label="Flight"><button id="flyBtn" aria-pressed="false" title="Fly the craft you are looking at, or your design, off the runway">Fly it</button><button id="keysBtn" aria-haspopup="dialog">Controls</button></div>
+    <span class="ysep"></span><div class="seg" role="group" aria-label="Flight"><button id="flyBtn" aria-pressed="false" title="Fly the craft you are looking at, or your design, off the runway">Fly it</button><button id="keysBtn" aria-haspopup="dialog">Controls</button><button id="fxBtn" aria-pressed="true" title="Airflow lines, wingtip trails, prop swirl and rotor dust while flying">Effects</button></div>
   </div>
   <div class="stage">
     <canvas id="yard" aria-label="An airfield at night: a three-bay hangar with its doors open, five chibi aircraft, the Kestrel, a runway with edge lights, a helipad and a beacon tower."></canvas>
@@ -399,7 +401,7 @@ dialog.keys .close{float:right}
 
 <section aria-labelledby="s4">
   <h2 id="s4"><span class="n">4</span>Parts</h2>
-  <p>Each is made at the fabricator (recipes on the <a href="https://claude.ai/artifact/6hj8UvbLY9TUsn7591sKKg">crafting page</a>). Jets, main rotors and their alloy plate need star iron from the asteroids, so the first aircraft are prop planes and floatplanes.</p>
+  <p>Each is made at the fabricator (recipes on the <a href="https://claude.ai/artifact/KEMNicnnXHyoQZ24kWRDep">crafting page</a>). Jets, main rotors and their alloy plate need star iron from the asteroids, so the first aircraft are prop planes and floatplanes.</p>
   <div class="mods" id="mods"></div>
   <h3>Airship parts</h3>
   <div class="mods" id="aMods"></div>
@@ -1927,7 +1929,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     const at = onPad ? {p: [PAD[0], c.yc, PAD[1]], yaw: Math.PI} : {p: [-RW.x + 8, c.yc, RW.z], yaw: 0};
     if (src.hide && CRAFT[src.hide]) CRAFT[src.hide].g.visible = false;
     fly = {m, c, outer, st: newFlight(m, Object.assign(at, {hc: c.yc})), hide: src.hide, name: src.name, yawOff: 0, n: 0, home: at, crash: null};
-    craftPoints(); fly.st.expert = expert; fly.st.pitMax = fly.pitMax;
+    craftPoints(); fly.st.expert = expert; fly.st.pitMax = fly.pitMax; fxSetup();
     cam.goal = null; cam.dist = 22; cam.pitch = 0.22; focused = "fly";
     hud.hidden = false; canvas.parentNode.classList.add("flying"), document.getElementById("yardBar").classList.add("flying"); flyBtn.textContent = "Stop flying"; flyBtn.setAttribute("aria-pressed", "true");
     const kind = m.kind === "heli" ? "Shift/Ctrl collective &middot; WASD cyclic &middot; Q/E tail" : m.kind === "vtol" ? "Shift/Ctrl power &middot; WASD &middot; Q/E" : "Shift/Ctrl throttle &middot; W/S nose down/up &middot; A/D roll &middot; Q/E rudder";
@@ -1976,7 +1978,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     const p = home ? [home.position.x, RIDE, home.position.z] : [101, RIDE, 12], yaw = home ? home.rotation.y : -Math.PI / 2;
     if (home) home.visible = false;
     fly = {air: true, s: cs.s, c, outer, st: newAirship(cs.s, {p, yaw}), hide: src.hide, name: src.name, yawOff: 0, n: 0, home: {p, yaw}, crash: null};
-    craftPoints();
+    craftPoints(); fxSetup();
     fly.st.ground = false;
     cam.goal = null; cam.dist = Math.max(42, cs.s.len * 1.7); cam.pitch = 0.24; focused = "fly";
     hud.hidden = false; canvas.parentNode.classList.add("flying"), document.getElementById("yardBar").classList.add("flying"); flyBtn.textContent = "Stop flying"; flyBtn.setAttribute("aria-pressed", "true");
@@ -2082,7 +2084,8 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   }
   const what = c => c.sea ? "the sea" : "the ground";
   // one step of the flight, with the world in it
-  function simStep(dt) {
+  function simStep(dt) { simFlight(dt); if (fly) fxStep(dt); }   // the flight, then what the effects read from it
+  function simFlight(dt) {
     if (fly.crash) { fly.crash.t -= dt; if (fly.crash.t <= 0) resetFly(); return; }
     const st = fly.st, before = snap(st), vy0 = st.v[1], wasG = st.ground;
     // the ground the craft rests on: the highest cell under its wheels (or its gondola)
@@ -2107,6 +2110,265 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     const c = contacts(), inside = [...c.inside].filter(b => !fly.ignore.has(b));
     const d = Math.max(c.body, c.gear); if (inside.length || d > 0.06) { fly.pen++; fly.penMax = Math.max(fly.penMax, d); }
   }
+
+  // ---- flight effects (owner, 2026-11-13: "some air flow lines when flying and wing tip lines would help sell the
+  // flight"): speed streaks in the relative wind, a vapour trail off each wingtip (and each tailplane tip) that
+  // grows as the wing is loaded, rotor downwash dust, a faint swirl behind a prop. They read the flight and never
+  // write it: nothing here feeds the model. Trails and streaks are made in flight time (each simulation step), so
+  // the scripted runs and the screenshots carry them too; a frame only lays them out for the camera. Every buffer
+  // is made once and only rewritten (and no Math.hypot, whose result is a fresh heap number each call). Their strength comes in four flat steps, as a pixel-art ramp does, never a smooth gradient.
+  let fxOn = true; try { fxOn = localStorage.getItem("hangar.fx") !== "0"; } catch (e) {}
+  const TN = 4, TS = 80, TLIFE = 1.2, SN = 56, PN = 2, PH = 2, PS = 14, DN = 72;
+  const FXV = `attribute float aA;
+uniform vec3 uLampPos[${MAXL}];
+uniform vec4 uLampCol[${MAXL}];
+uniform int uLampCount;
+uniform float uLampOn, uSize;
+uniform vec3 uAmb;
+varying vec4 vC;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vec3 L = uAmb;
+  for (int i = 0; i < ${MAXL}; i++) {
+    if (i >= uLampCount) break;
+    vec3 d = uLampPos[i] - mv.xyz; float r = uLampCol[i].w, dl = length(d);
+    if (dl > r) continue;
+    float f = 1.0 - dl / r; L += uLampCol[i].rgb * f * f * uLampOn;
+  }
+  vC = vec4(L, aA);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = uSize > 0.0 ? clamp(uSize * 700.0 / max(-mv.z, 0.1), 1.0, 10.0) : 1.0;
+  gl_PointSize = floor(gl_PointSize + 0.5);
+}`;
+  const FXF = `uniform vec3 uTint;
+varying vec4 vC;
+void main() {
+  float a = floor(vC.a * 4.0 + 0.35) / 4.0;   // four flat steps of strength, never a smooth gradient: pixel-art tones
+  if (a <= 0.0) discard;
+  gl_FragColor = vec4(pow(min(vC.rgb * uTint, vec3(1.0)), vec3(1.0 / 2.2)), a * 0.85);   // lit in linear light, shown in sRGB as the scene is
+}`;
+  const fxMat = (tint, size) => new THREE.ShaderMaterial({vertexShader: FXV, fragmentShader: FXF, side: THREE.DoubleSide, depthWrite: false, transparent: true,
+    uniforms: {uLampPos: U.uLampPos, uLampCol: U.uLampCol, uLampCount: U.uLampCount, uLampOn: U.uLampOn, uSize: {value: size}, uAmb: {value: new THREE.Color(1, 1, 1)}, uTint: {value: new THREE.Color(tint)}}});
+  const fxGeo = (verts, index) => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(verts * 3), 3).setUsage(THREE.DynamicDrawUsage)); g.setAttribute("aA", new THREE.BufferAttribute(new Float32Array(verts), 1).setUsage(THREE.DynamicDrawUsage)); if (index) g.setIndex(new THREE.BufferAttribute(index, 1)); return g; };
+  // the trails: TN camera-facing ribbons of TS points each, the newest point on the tip itself
+  const ribIdx = new Uint16Array(TN * (TS - 1) * 6);
+  for (let t = 0, o = 0; t < TN; t++) for (let j = 0; j < TS - 1; j++) { const b = (t * TS + j) * 2; ribIdx.set([b, b + 1, b + 2, b + 1, b + 3, b + 2], o); o += 6; }
+  // the streaks: SN thin camera-facing quads; the prop swirl: 1 px lines
+  const strIdx = new Uint16Array(SN * 6);
+  for (let i = 0; i < SN; i++) strIdx.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4 + 1, i * 4 + 3, i * 4 + 2], i * 6);
+  const ribbon = new THREE.Mesh(fxGeo(TN * TS * 2, ribIdx), fxMat(0xf2f8ff, 0)), streaks = new THREE.Mesh(fxGeo(SN * 4, strIdx), fxMat(0xffffff, 0)), lines = new THREE.LineSegments(fxGeo(PN * PH * PS * 2), fxMat(0xffffff, 0)), dust = new THREE.Points(fxGeo(DN), fxMat(0xd8c49a, 0.32));
+  const FX_OBJS = [ribbon, streaks, lines, dust];
+  for (const o of FX_OBJS) { o.frustumCulled = false; o.visible = false; o.renderOrder = 3; scene.add(o); }
+  const FXS = {ready: false, lastSt: null, pv: new Float64Array(3), up: new Float64Array(3), o: new Float64Array(3), camOff: new Float64Array([0, 6, 20]),
+    tips: Array.from({length: TN}, () => ({on: false, l: new Float64Array(3), k: 1, p: new Float32Array((TS - 1) * 3), t: new Float32Array(TS - 1), a: new Float32Array(TS - 1), w: new Float32Array(TS - 1), head: 0, n: 0})),
+    sp: new Float32Array(SN * 3), sd: new Float32Array(SN * 3), sl: new Float32Array(SN), sw: new Float32Array(SN), sage: new Float32Array(SN).fill(9), slife: new Float32Array(SN).fill(1), samp: new Float32Array(SN),
+    props: Array.from({length: PN}, () => ({on: false, l: new Float64Array(3), r: 1.15})),
+    dp: new Float32Array(DN * 3), dv: new Float32Array(DN * 3), dage: new Float32Array(DN).fill(9), dlife: new Float32Array(DN).fill(1), damp: new Float32Array(DN),
+    halfSpan: 3, r0: 0.6, r1: 5, vLo: 18, vHi: 36, dust: 0, rotorR: 3, nLive: 0, dLive: 0};
+  // the running numbers live in one typed array: a number written to an object's field or a closure's variable is a fresh heap object each time
+  const FN = new Float64Array(10);   // 0 flight time, 1-4 step and spawn accumulators, 5 load factor, 6 angle of attack, 7 wing work, 8 speed, 9 the dice
+  const rnd = () => { FN[9] = (FN[9] * 1664525 + 1013904223) >>> 0; return FN[9] / 4294967296; };   // its own dice: the same flight leaves the same streaks
+  const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
+  // a body vector into the world, written into o: no array is made
+  function rotInto(q, x, y, z, o) {
+    const w = q[0], qx = q[1], qy = q[2], qz = q[3], tx = 2 * (qy * z - qz * y), ty = 2 * (qz * x - qx * z), tz = 2 * (qx * y - qy * x);
+    o[0] = x + w * tx + (qy * tz - qz * ty); o[1] = y + w * ty + (qz * tx - qx * tz); o[2] = z + w * tz + (qx * ty - qy * tx);
+  }
+  function fxClear() {
+    const f = FXS; FN[0] = 0; FN[1] = FN[2] = FN[3] = FN[4] = 0; FN[5] = 1; FN[6] = 0; FN[7] = FN[8] = 0; FN[9] = 1;
+    f.tips.forEach(t => { t.n = 0; t.head = 0; }); f.sage.fill(9); f.dage.fill(9);
+    if (fly && fly.st) { f.lastSt = fly.st; f.pv[0] = fly.st.v[0]; f.pv[1] = fly.st.v[1]; f.pv[2] = fly.st.v[2]; }
+  }
+  // where the effects start on this craft, found from its own built parts: the wingtips are the points of the
+  // widest span (at their trailing edge), the tailplane tips the widest points in the rear third
+  function fxSetup() {
+    const f = FXS; f.ready = false; fxClear();
+    f.tips.forEach(t => t.on = false); f.props.forEach(p => p.on = false);
+    if (!fly || fly.air) return;
+    const P = fly.pts, m = fly.m;
+    let zMax = 0, zMin = 0, xMin = 1e9, xMax = -1e9;
+    for (const q of P) { zMax = Math.max(zMax, q[2]); zMin = Math.min(zMin, q[2]); xMin = Math.min(xMin, q[0]); xMax = Math.max(xMax, q[0]); }
+    f.halfSpan = Math.max(zMax, -zMin, 1); f.r0 = 0.7; f.r1 = f.halfSpan * 1.1 + 1;
+    let ti = 0;
+    const tipOf = (side, ext, pts, k) => {
+      let x = 1e9, y = 0, n = 0;
+      for (const q of pts) if (side * q[2] > ext - 0.3) { x = Math.min(x, q[0]); y += q[1]; n++; }
+      if (!n || ti >= TN) return; const t = f.tips[ti++]; t.on = true; t.k = k; t.l[0] = x + 0.05; t.l[1] = y / n; t.l[2] = side * ext;
+    };
+    if (m.S && m.kind !== "heli") {
+      const rear = P.filter(q => q[0] < xMin + 0.3 * (xMax - xMin));
+      for (const side of [1, -1]) {
+        const ext = side > 0 ? zMax : -zMin; tipOf(side, ext, P, 1);
+        let e2 = 0; for (const q of rear) e2 = Math.max(e2, side * q[2]);
+        if (e2 > 0.9 && e2 < ext * 0.85) tipOf(side, e2, rear, 0.55);
+      }
+    }
+    // props (the "x" spinners) and their discs, from the built hubs
+    fly.outer.updateMatrixWorld(true); let pi = 0; const v = new THREE.Vector3();
+    for (const sp of fly.c.spin) if (sp.axis === "x" && pi < PN) { sp.o.getWorldPosition(v); fly.outer.worldToLocal(v); const p = f.props[pi++]; p.on = true; p.l[0] = v.x - 0.25; p.l[1] = v.y; p.l[2] = v.z; }
+    f.vLo = m.kind === "plane" ? m.s.stall * 0.85 : 10; f.vHi = m.kind === "plane" ? m.s.stall * 1.75 : 32;
+    f.dust = m.kind === "heli" ? 1 : m.kind === "vtol" ? 0.8 : 0; f.rotorR = Math.max(2, f.halfSpan);
+    f.ready = true;
+  }
+  // a streak round the airframe (near 0) or round the camera (near 1): only a small whole number is passed, as a
+  // call that is not inlined boxes every fractional argument
+  function spawnStreak(near) {
+    const f = FXS, st = fly.st, sv = st.v, V = Math.sqrt(sv[0] * sv[0] + sv[1] * sv[1] + sv[2] * sv[2]), vx = sv[0] / V, vy = sv[1] / V, vz = sv[2] / V;
+    const cx = st.p[0] + (near ? f.camOff[0] : 0), cy = st.p[1] + (near ? f.camOff[1] : 0), cz = st.p[2] + (near ? f.camOff[2] : 0);
+    const rad0 = near ? 1.4 : f.r0, rad1 = near ? 4.2 : f.r1, ahead = near ? 1 + V * 0.25 * rnd() : (0.1 + 0.25 * rnd()) * V * 0.3 + 1;
+    const amp = FN[8] * (near ? 0.6 + 0.35 * rnd() : 0.75 + 0.3 * rnd()), life = near ? 0.25 + 0.15 * rnd() : 0.3 + 0.2 * rnd(), width = near ? 0.018 : 0.04;
+    let i = -1; for (let j = 0; j < SN; j++) if (f.sage[j] >= f.slife[j]) { i = j; break; } if (i < 0) return;
+    // two directions across the wind
+    const ax = Math.abs(vy) < 0.9 ? 0 : 1, ay = 1 - ax;   // e1 = v x (a helper axis), e2 = v x e1
+    let e1x = -vz * ay, e1y = vz * ax, e1z = vx * ay - vy * ax;
+    const n1 = Math.sqrt(e1x * e1x + e1y * e1y + e1z * e1z) || 1; e1x /= n1; e1y /= n1; e1z /= n1;
+    const e2x = vy * e1z - vz * e1y, e2y = vz * e1x - vx * e1z, e2z = vx * e1y - vy * e1x;
+    const r = rad0 + (rad1 - rad0) * Math.sqrt(rnd()), th = rnd() * Math.PI * 2, c = Math.cos(th) * r, s = Math.sin(th) * r;
+    f.sp[i * 3] = cx + vx * ahead + e1x * c + e2x * s; f.sp[i * 3 + 1] = cy + vy * ahead + e1y * c + e2y * s; f.sp[i * 3 + 2] = cz + vz * ahead + e1z * c + e2z * s;
+    f.sd[i * 3] = vx; f.sd[i * 3 + 1] = vy; f.sd[i * 3 + 2] = vz; f.sl[i] = V * (0.06 + 0.05 * rnd());
+    f.sage[i] = 0; f.slife[i] = life; f.samp[i] = amp; f.sw[i] = width;
+  }
+  // one step of flight time: the load on the wing, a trail point each 1/60 s, new streaks and dust
+  function fxStep(dt) {
+    const f = FXS; if (!f.ready || !fly || fly.air) return;
+    const st = fly.st;
+    if (st !== f.lastSt) fxClear();   // back at the runway after a crash: the old trails do not follow
+    FN[0] += dt;
+    for (let i = 0; i < SN; i++) f.sage[i] += dt;
+    for (let i = 0; i < DN; i++) if (f.dage[i] < f.dlife[i]) { f.dage[i] += dt; const k = Math.exp(-2.2 * dt); f.dv[i * 3] *= k; f.dv[i * 3 + 2] *= k; f.dv[i * 3 + 1] -= 1.2 * dt; for (let c = 0; c < 3; c++) f.dp[i * 3 + c] += f.dv[i * 3 + c] * dt; }
+    // the load factor from how the velocity itself changes, along the craft's up: what a G meter reads
+    rotInto(st.q, 0, 1, 0, f.up);
+    let n = ((st.v[0] - f.pv[0]) * f.up[0] + (st.v[1] - f.pv[1] + G1 * dt) * f.up[1] + (st.v[2] - f.pv[2]) * f.up[2]) / (G1 * dt);
+    f.pv[0] = st.v[0]; f.pv[1] = st.v[1]; f.pv[2] = st.v[2];
+    if (st.ground || fly.crash || !isFinite(n)) n = 1;
+    n = Math.max(-3, Math.min(9, n)); FN[5] += (n - FN[5]) * (1 - Math.exp(-dt * 6));
+    FN[6] += ((st.ground || fly.crash ? 0 : st.alpha || 0) - FN[6]) * (1 - Math.exp(-dt * 6));   // the wing's angle to the wind, as the model left it
+    const V = Math.sqrt(st.v[0] * st.v[0] + st.v[1] * st.v[1] + st.v[2] * st.v[2]), live = !fly.crash && !st.ground;
+    FN[8] = live ? clamp01((V - f.vLo) / (f.vHi - f.vLo)) : 0; FN[8] = FN[8] * FN[8] * (3 - 2 * FN[8]);
+    FN[7] = clamp01(Math.max((FN[5] - 1.1) / 0.45, (FN[6] * 180 / Math.PI - 2.2) / 4.5));   // how hard the wing is working: G pulled, or its angle to the wind
+    FN[1] += dt; if (FN[1] < 1 / 60) return; const step = FN[1]; FN[1] = 0;
+    // wingtip trails: faint at speed, thick and bright when the wing is pulled hard, even as the pull bleeds the speed off
+    const wingOn = fly.m.kind === "vtol" ? st.tilt : 1, ta = (0.3 * FN[8] + 0.7 * FN[7] * clamp01(FN[8] * 2.5)) * wingOn, tw = 0.05 + 0.17 * FN[7];
+    for (let i = 0; i < TN; i++) {
+      const t = f.tips[i]; if (!t.on) continue;
+      rotInto(st.q, t.l[0], t.l[1], t.l[2], f.o); const x = st.p[0] + f.o[0], y = st.p[1] + f.o[1], z = st.p[2] + f.o[2];
+      if (t.n) { const h = ((t.head + TS - 2) % (TS - 1)) * 3; if (Math.sqrt((x - t.p[h]) * (x - t.p[h]) + (y - t.p[h + 1]) * (y - t.p[h + 1]) + (z - t.p[h + 2]) * (z - t.p[h + 2])) > 30) t.n = 0; }
+      const h = t.head; t.p[h * 3] = x; t.p[h * 3 + 1] = y; t.p[h * 3 + 2] = z; t.t[h] = FN[0]; t.a[h] = ta * t.k; t.w[h] = tw * (0.6 + 0.4 * t.k);
+      t.head = (h + 1) % (TS - 1); t.n = Math.min(TS - 1, t.n + 1);
+    }
+    // airflow streaks: still in the air, met as the craft flies through it, so they stream past along the relative wind
+    if (FN[8] > 0.01) {
+      FN[2] += step * 48 * FN[8]; FN[3] += step * 30 * FN[8];
+      while (FN[2] >= 1) { FN[2] -= 1; spawnStreak(0); }
+      while (FN[3] >= 1) { FN[3] -= 1; spawnStreak(1); }
+    } else { FN[2] = FN[3] = 0; }
+    // rotor downwash: dust (or spray over the sea) blown out along the ground under a hovering rotor
+    if (f.dust && st.power > 0.2 && !fly.crash) {
+      const g0 = groundAt(st.p[0], st.p[2]), agl = st.p[1] - Math.max(g0, -0.45), reach = f.rotorR * 3 + 6;
+      const s = f.dust * clamp01((st.power - 0.2) / 0.5) * clamp01(1 - agl / reach) * (fly.m.kind === "vtol" ? 1 - st.tilt : 1);
+      FN[4] += step * 70 * s;
+      while (FN[4] >= 1) {
+        FN[4] -= 1; let i = -1; for (let j = 0; j < DN; j++) if (f.dage[j] >= f.dlife[j]) { i = j; break; } if (i < 0) break;
+        const th = rnd() * Math.PI * 2, r = f.rotorR * (0.3 + 0.7 * rnd()), x = st.p[0] + Math.cos(th) * r, z = st.p[2] + Math.sin(th) * r, g = groundAt(x, z), sp = 4 + 6 * rnd();
+        f.dp[i * 3] = x; f.dp[i * 3 + 1] = Math.max(g, -0.4) + 0.2; f.dp[i * 3 + 2] = z;
+        f.dv[i * 3] = Math.cos(th) * sp; f.dv[i * 3 + 1] = 0.4 + 1.4 * rnd(); f.dv[i * 3 + 2] = Math.sin(th) * sp;
+        f.dage[i] = 0; f.dlife[i] = 0.6 + 0.6 * rnd(); f.damp[i] = 0.35 + 0.4 * s;
+      }
+    } else FN[4] = 0;
+  }
+  const FX_CTR = new Float32Array(TS * 3), FX_CW = new Float32Array(TS), FX_CA = new Float32Array(TS);
+  const FX_AMB = {day: [0.85, 0.88, 0.92], dusk: [0.3, 0.25, 0.24], night: [0.035, 0.04, 0.06]};   // linear: the sky's light on a pale vapour; at night the moon's, and the lamps do the rest
+  // the frame: lay the trails, streaks, swirl and dust out for this camera
+  function fxDraw() {
+    const f = FXS, show = !!(fxOn && f.ready && fly && !fly.air);
+    ribbon.visible = streaks.visible = lines.visible = dust.visible = show; if (!show) return;
+    const st = fly.st, C = camera.position, A = FX_AMB[time];
+    for (let i = 0; i < FX_OBJS.length; i++) FX_OBJS[i].material.uniforms.uAmb.value.setRGB(A[0], A[1], A[2]);
+    f.camOff[0] = C.x - st.p[0]; f.camOff[1] = C.y - st.p[1]; f.camOff[2] = C.z - st.p[2];
+    // ribbons: the centre line first (point 0 is the tip where it is drawn now, then the stored points, newest
+    // first), then two vertices across each point, perpendicular to the trail and to the line to the camera
+    const rp = ribbon.geometry.attributes.position.array, ra = ribbon.geometry.attributes.aA.array, ctr = FX_CTR, cw = FX_CW, ca = FX_CA;
+    let live = 0;
+    for (let ti = 0; ti < TN; ti++) {
+      const t = f.tips[ti], base = ti * TS * 2;
+      let cnt = 0;
+      if (t.on && t.n) {
+        rotInto(st.q, t.l[0], t.l[1], t.l[2], f.o);
+        const newest = (t.head + TS - 2) % (TS - 1); cnt = t.n + 1;
+        for (let j = 0; j < cnt; j++) {
+          const k = j === 0 ? newest : (newest - (j - 1) + (TS - 1)) % (TS - 1), age = j === 0 ? 0 : FN[0] - t.t[k];
+          if (j === 0) { ctr[0] = st.p[0] + f.o[0]; ctr[1] = st.p[1] + f.o[1]; ctr[2] = st.p[2] + f.o[2]; }
+          else { ctr[j * 3] = t.p[k * 3]; ctr[j * 3 + 1] = t.p[k * 3 + 1]; ctr[j * 3 + 2] = t.p[k * 3 + 2]; }
+          const fade = Math.max(0, 1 - age / TLIFE);
+          ca[j] = t.a[k] * fade * Math.sqrt(fade) * Math.min(1, j * 0.5);   // starts just off the tip, thins to nothing
+          cw[j] = t.w[k] * (1 + age * 0.7);   // and spreads a little as it ages
+          if (ca[j] > 0.02) live++;
+        }
+      }
+      for (let j = 0; j < TS; j++) {
+        const jj = Math.min(j, Math.max(0, cnt - 1)), ic = base + j * 2;
+        if (!cnt) { ra[ic] = ra[ic + 1] = 0; for (let c = 0; c < 6; c++) rp[ic * 3 + c] = 0; continue; }
+        const j0 = Math.max(0, jj - 1), j1 = Math.min(cnt - 1, jj + 1);
+        const tx = ctr[j1 * 3] - ctr[j0 * 3], ty = ctr[j1 * 3 + 1] - ctr[j0 * 3 + 1], tz = ctr[j1 * 3 + 2] - ctr[j0 * 3 + 2];
+        const px = ctr[jj * 3], py = ctr[jj * 3 + 1], pz = ctr[jj * 3 + 2], cx = C.x - px, cy = C.y - py, cz = C.z - pz;
+        let sx = ty * cz - tz * cy, sy = tz * cx - tx * cz, sz = tx * cy - ty * cx; const sl = Math.sqrt(sx * sx + sy * sy + sz * sz), w = sl > 1e-6 ? cw[jj] / sl : 0;
+        sx *= w; sy *= w; sz *= w;
+        rp[ic * 3] = px + sx; rp[ic * 3 + 1] = py + sy; rp[ic * 3 + 2] = pz + sz;
+        rp[ic * 3 + 3] = px - sx; rp[ic * 3 + 4] = py - sy; rp[ic * 3 + 5] = pz - sz;
+        ra[ic] = ra[ic + 1] = j < cnt ? ca[j] : 0;
+      }
+    }
+    f.nLive = live;
+    ribbon.geometry.attributes.position.needsUpdate = ribbon.geometry.attributes.aA.needsUpdate = true;
+    // streaks: bright at the end the wind carries forward, gone at the other, in and out over their short life
+    const qp = streaks.geometry.attributes.position.array, qa = streaks.geometry.attributes.aA.array;
+    for (let i = 0; i < SN; i++) {
+      const u = f.sage[i] / f.slife[i], a = u < 1 ? f.samp[i] * Math.sin(Math.PI * u) : 0;
+      const hx = f.sp[i * 3], hy = f.sp[i * 3 + 1], hz = f.sp[i * 3 + 2], dx = f.sd[i * 3], dy = f.sd[i * 3 + 1], dz = f.sd[i * 3 + 2], L = f.sl[i];
+      const cx = C.x - hx, cy = C.y - hy, cz = C.z - hz; let sx = dy * cz - dz * cy, sy = dz * cx - dx * cz, sz = dx * cy - dy * cx;
+      const sl = Math.sqrt(sx * sx + sy * sy + sz * sz), w = sl > 1e-6 ? f.sw[i] / sl : 0; sx *= w; sy *= w; sz *= w;
+      const o = i * 12;
+      qp[o] = hx + sx; qp[o + 1] = hy + sy; qp[o + 2] = hz + sz; qp[o + 3] = hx - sx; qp[o + 4] = hy - sy; qp[o + 5] = hz - sz;
+      qp[o + 6] = hx + dx * L + sx; qp[o + 7] = hy + dy * L + sy; qp[o + 8] = hz + dz * L + sz; qp[o + 9] = hx + dx * L - sx; qp[o + 10] = hy + dy * L - sy; qp[o + 11] = hz + dz * L - sz;
+      qa[i * 4] = qa[i * 4 + 1] = a; qa[i * 4 + 2] = qa[i * 4 + 3] = 0;
+    }
+    streaks.geometry.attributes.position.needsUpdate = streaks.geometry.attributes.aA.needsUpdate = true;
+    const lp = lines.geometry.attributes.position.array, la = lines.geometry.attributes.aA.array;
+    // the swirl behind each prop: two faint helices turning with it, drawn only with power on
+    const pw = clamp01((st.power - 0.15) / 0.6) * 0.38, ph = -st.rotorAngle * 0.25;
+    for (let pi = 0, s = 0; pi < PN; pi++) {
+      const p = f.props[pi];
+      for (let hx = 0; hx < PH; hx++) for (let k = 0; k < PS; k++, s++) {
+        for (let e = 0; e < 2; e++) {
+          const kk = k + e, ang = ph + hx * Math.PI + kk * 0.62, r = p.r * (0.92 - 0.025 * kk);
+          rotInto(st.q, p.l[0] - kk * (0.3 + 0.25 * FN[8]), p.l[1] + Math.cos(ang) * r, p.l[2] + Math.sin(ang) * r, f.o);
+          lp[s * 6 + e * 3] = st.p[0] + f.o[0]; lp[s * 6 + e * 3 + 1] = st.p[1] + f.o[1]; lp[s * 6 + e * 3 + 2] = st.p[2] + f.o[2];
+          la[s * 2 + e] = p.on ? pw * (1 - kk / (PS + 1)) : 0;
+        }
+      }
+    }
+    lines.geometry.attributes.position.needsUpdate = lines.geometry.attributes.aA.needsUpdate = true;
+    // dust
+    const dp = dust.geometry.attributes.position.array, da = dust.geometry.attributes.aA.array; let dl = 0;
+    for (let i = 0; i < DN; i++) {
+      const u = f.dage[i] / f.dlife[i]; da[i] = u < 1 ? f.damp[i] * (1 - u) * Math.min(1, u * 6) : 0; if (da[i] > 0.02) dl++;
+      dp[i * 3] = f.dp[i * 3]; dp[i * 3 + 1] = f.dp[i * 3 + 1]; dp[i * 3 + 2] = f.dp[i * 3 + 2];
+    }
+    f.dLive = dl;
+    dust.geometry.attributes.position.needsUpdate = dust.geometry.attributes.aA.needsUpdate = true;
+  }
+  // what the test reads: how strong the trails are now, how many streaks and dust motes are alive
+  function fxStats() {
+    const f = FXS; let tA = 0, tW = 0, tn = 0, s = 0, d = 0;
+    for (const t of f.tips) if (t.on) { tn++; for (let j = 0; j < t.n; j++) { const fade = Math.max(0, 1 - (FN[0] - t.t[j]) / TLIFE); if (t.a[j] * fade > tA) tA = t.a[j] * fade; if (fade > 0 && t.a[j] > 0.02) tW = Math.max(tW, t.w[j]); } }
+    for (let i = 0; i < SN; i++) if (f.sage[i] < f.slife[i]) s++;
+    for (let i = 0; i < DN; i++) if (f.dage[i] < f.dlife[i]) d++;
+    return {on: fxOn, ready: f.ready, tips: tn, props: f.props.filter(p => p.on).length, trail: +tA.toFixed(3), width: +tW.toFixed(3), streaks: s, dust: d, g: +FN[5].toFixed(2), aoa: +(FN[6] * 180 / Math.PI).toFixed(1), speedF: +FN[8].toFixed(2)};
+  }
+  const fxBtn = document.getElementById("fxBtn"), fxChk = document.getElementById("fxChk");
+  function setFx(on) { fxOn = on; fxBtn.setAttribute("aria-pressed", String(on)); fxChk.checked = on; try { localStorage.setItem("hangar.fx", on ? "1" : "0"); } catch (e) {} kick(); }
+  fxBtn.addEventListener("click", () => setFx(!fxOn)); fxChk.addEventListener("change", () => setFx(fxChk.checked));
+  fxBtn.setAttribute("aria-pressed", String(fxOn)); fxChk.checked = fxOn;
 
   function flyFrame(dt) {
     if (fly.air) return flyAirFrame(dt);
@@ -2133,6 +2395,8 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     model(id) { const m = flightModel(PRESETS[id].rows); return {kind: m.kind, stall: m.s.stall, m: m.m}; },
     ground: (x, z) => groundAt(x, z), solids: () => SOLIDS.length, lamps: () => LAMPS.length, towns: () => TOWNS.map(t => ({name: t.name, x: t.x, z: t.z, h: t.h})),
     dihed(v) { DIHED = v; },
+    fx: () => fxStats(), fxOn: on => setFx(on), fxDraw: () => fxDraw(),
+    fxBench(n) { const t0 = performance.now(); for (let i = 0; i < n; i++) { fxStep(1 / 120); fxDraw(); } return performance.now() - t0; },
     put(p, yaw, speed) { const st = fly.st; st.p = p.slice(); st.v = [Math.cos(yaw) * speed, 0, -Math.sin(yaw) * speed]; st.ground = false; if (fly.air) { st.yaw = yaw; st.r = 0; } else { st.q = qyaw(yaw); st.w = [0, 0, 0]; } fly.ignore = touching(0); },
     run(sec, script, dt = 1 / 120) {
       const st0 = fly.st, x0 = st0.p.slice(), out = {log: [], takeoff: null, minAgl: 1e9, maxBank: 0, stallSec: 0, crashes: [], end: null};
@@ -2170,15 +2434,29 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
     const st = fly.st, m = fly.m, put = (p, yaw, speed, power) => { st.p = p; st.q = qyaw(yaw); st.v = [Math.cos(yaw) * speed, 0, -Math.sin(yaw) * speed]; st.power = power; st.ground = false; };
     // the takeoff and the turn over the hills are flown by the simulation itself, with a player's keys
     const hold = (sec, codes) => { keys.clear(); codes.forEach(c => keys.add(c)); for (let t = 0; t < sec; t += 1 / 120) simStep(1 / 120); keys.clear(); };
+    if (script === "hover") {   // a helicopter (or Puffin) lifted into a low hover off its spot: the downwash blows dust off the ground
+      hold(2.4, ["ShiftLeft"]); fly.yawOff = 0.7; cam.pitch = 0.3; cam.dist = 22;
+      selPress(""); const a = attitude(fly.st); cam.yaw = Math.atan2(-Math.cos(a.heading), -Math.sin(a.heading)) + fly.yawOff; pose(); return;
+    }
     if (script === "takeoff" || script === "hills") {
       if (script === "takeoff") { hold(3.5, ["ShiftLeft"]); fly.yawOff = 0.62; cam.pitch = 0.16; cam.dist = 24; }
       else { put([430, 80, -230], 0.2, 32, 1); hold(2.2, ["KeyA"]); fly.yawOff = -0.55; cam.pitch = 0.3; cam.dist = 30; }
       selPress(""); const a = attitude(fly.st); cam.yaw = Math.atan2(-Math.cos(a.heading), -Math.sin(a.heading)) + fly.yawOff; pose(); return;
     }
+    // the effects' pictures: cruise straight and level; a hard banked turn, high over the hills or low along the lit runway
+    if (script === "cruise" || script === "turn" || script === "lowturn") {
+      const turn = script !== "cruise", low = script === "lowturn", vs = m.s.stall || 20;
+      put(low ? [-110, 24, 30] : [300, 90, -160], low ? 0 : 0.3, vs * (turn ? 1.75 : 1.5), turn ? 1 : 0.8);
+      const camAt = () => { const a = attitude(fly.st); fly.yawOff = turn ? (low ? -0.8 : -0.6) : 0.55; cam.pitch = turn ? 0.3 : 0.16; cam.dist = turn ? 24 : 19; cam.yaw = Math.atan2(-Math.cos(a.heading), -Math.sin(a.heading)) + fly.yawOff; const cp = Math.cos(cam.pitch); FXS.camOff[0] = cam.dist * cp * Math.sin(cam.yaw); FXS.camOff[1] = cam.dist * Math.sin(cam.pitch) + 1; FXS.camOff[2] = cam.dist * cp * Math.cos(cam.yaw); };
+      const roll = "KeyA";   // a left turn: over the hills, or off the runway over the apron's lamps, above the floodlight masts
+      if (turn) { hold(0.85, [roll, "ShiftLeft"]); hold(0.8, ["KeyS", "ShiftLeft"]); camAt(); hold(0.6, ["KeyS", "ShiftLeft"]); }   // rolled in, then pulled on S: a player's keys
+      else for (let t = 0; t < 2; t += 1 / 120) { if (Math.abs(t - 1.4) < 1 / 240) camAt(); const ap = autopilot(st, 0.02, 0); ap.power = 0; stepFlight(m, st, ap, 1 / 120); fxStep(1 / 120); }
+      st.rotorAngle = 3; camAt(); cam.target.set(fly.st.p[0], fly.st.p[1] + 1, fly.st.p[2]); selPress(""); pose(); return;
+    }
     let pt = 0, bt = 0, T = 1;
     if (script === "approach") { put([-RW.x - 22, st.hc + 11, RW.z], 0, m.s.stall * 1.25, 0.35); pt = -0.03; T = 1.5; }
     else { put([-70, 48, 8], 0.35, m.s.stall * 1.35, 0.9); pt = 0.07; bt = 0.75; T = 0.55; }
-    for (let t = 0; t < T; t += 1 / 120) { const ap = autopilot(st, pt, bt); ap.power = 0; stepFlight(m, st, ap, 1 / 120); }
+    for (let t = 0; t < T; t += 1 / 120) { const ap = autopilot(st, pt, bt); ap.power = 0; stepFlight(m, st, ap, 1 / 120); fxStep(1 / 120); }
     st.rotorAngle = 3; fly.yawOff = script === "approach" ? 0.18 : -0.75; cam.pitch = script === "approach" ? 0.12 : 0.34; cam.dist = script === "approach" ? 20 : 19; selPress("");
     const a = attitude(st); cam.yaw = Math.atan2(-Math.cos(a.heading), -Math.sin(a.heading)) + fly.yawOff;
   }
@@ -2210,6 +2488,7 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
       U.uLampCol.value[i].set(L.c.r * L.i, L.c.g * L.i, L.c.b * L.i, L.r);
     }
     U.uLampCount.value = n;
+    fxDraw();
     renderer.render(scene, camera);
     if ((SHOT && ++shotFrames > 45) || (STILL && !fly && ++shotFrames > 3)) { if (SHOT) document.body.dataset.ready = "1"; running = false; return; }   // a screenshot: hold the picture
     requestAnimationFrame(frame);

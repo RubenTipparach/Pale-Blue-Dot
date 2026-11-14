@@ -142,6 +142,8 @@ img{image-rendering:pixelated}
 .msg{font-size:14px !important}
 
 .table{background:var(--panel) !important;border:1px solid var(--line) !important}
+/* a table's controls stay on screen while any of the table is: they pin to the bottom edge (the felt can be taller than the window) */
+.table > .ctrl{position:sticky;bottom:0;z-index:6;background:var(--panel);padding-block:8px;padding-bottom:max(8px, env(safe-area-inset-bottom, 0px));border-top:1px solid var(--line)}
 .reel{background:var(--slot-fill) !important;border:1px solid var(--slot-edge) !important}
 .reel.win{border-color:#fad973 !important;box-shadow:none !important}
 canvas.game{background:#050f14 !important;image-rendering:pixelated}
@@ -150,7 +152,113 @@ canvas.game{background:#050f14 !important;image-rendering:pixelated}
 .card{font-family:var(--mono) !important}
 .odds,.tot{color:var(--ink) !important;font-family:var(--mono)}
 h1 span{color:var(--mint)}
+
+/* ---- The casino, 2026-11-13: tabs, slot cabinets, a blackjack table, the keno chart and the Hold'em table. */
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+.tabs [role="tab"][aria-selected="true"]{border-color:#fad973 !important;color:#fad973 !important;background:rgba(250,217,115,.12) !important}
+.tabpanel{display:grid;gap:14px;min-width:0}
+.tabpanel[hidden]{display:none}
+.machines{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.mach{display:grid !important;grid-template-columns:32px 1fr;gap:2px 10px;align-items:center;text-align:left !important;padding:8px 10px !important}
+.mach img{width:32px;height:32px;grid-row:span 2}
+.mach small{display:block;color:var(--muted);font-size:11px;text-transform:none;letter-spacing:0;font-family:var(--body)}
+.mach[aria-pressed="true"] small{color:#fad973}
+.cab{display:flex;justify-content:center;background:#02070a;border:1px solid var(--slot-edge);padding:8px;overflow:hidden;min-width:0}
+.cab canvas{display:block;image-rendering:pixelated;max-width:100%}
+.meter{display:flex;flex-wrap:wrap;gap:6px 26px;align-items:end}
+.meter .v{font-size:22px}
+.meter .v.lit{color:#fad973}
+h4{margin:0 0 6px;font-family:var(--display);font-weight:500;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.paylist{display:grid;gap:4px;font-size:13px}
+.paylist .row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:8px;align-items:center}
+.paylist img{width:32px;height:32px}
+.paylist .x{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.paylist .row.win{color:#fad973}
+.lines{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:5px}
+.ln{border:1px solid var(--slot-edge);padding:3px;display:grid;gap:2px;font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:center}
+.ln.win{border-color:#fad973;color:#fad973;background:rgba(250,217,115,.08)}
+.ln svg{width:100%;height:auto;display:block}
+details{border:1px solid var(--slot-edge);padding:8px 10px}
+details summary{cursor:pointer;font-family:var(--mono);color:var(--mint);font-size:13px}
+details[open] summary{margin-bottom:8px}
+.math{font-size:13.5px;display:grid;gap:8px}
+.math code{font-family:var(--mono);font-size:12.5px}
+
+/* cards: the four suits are ore, coolant, fuel and core */
+.card{width:66px;height:96px;background:#f6efe0;color:#1a1410;border:2px solid #2b2218;position:relative;box-sizing:border-box;font-family:var(--mono) !important;font-weight:700;font-size:17px;line-height:1;flex:none;display:block !important;padding:0 !important}
+.card .r{position:absolute;left:4px;top:4px}
+.card .pip{position:absolute;left:3px;top:23px;width:16px;height:16px}
+.card .big{position:absolute;left:24px;top:40px;width:32px;height:32px}
+.card .r2{position:absolute;right:4px;bottom:4px;transform:rotate(180deg)}
+.card.su-ore,.card.su-fuel{color:#a61e1f}
+.card.su-ice,.card.su-core{color:#011c34}
+.card.back{background:none;border:none}
+.card.back img{position:absolute;inset:0;width:100%;height:100%}
+.card.sm{width:44px;height:64px;font-size:14px}
+.card.sm .pip{left:12px;top:30px}
+.card.sm .big,.card.sm .r2{display:none}
+.card.win{outline:2px solid #fad973;outline-offset:1px}
+.card.dim{filter:brightness(.55)}
+.felt{background:#07261c;border:1px solid var(--line);padding:12px;display:grid;gap:10px;position:relative;min-width:0}
+.feltnote{text-align:center;font-family:var(--mono);color:#7accc4;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;border-block:1px dashed rgba(122,204,196,.45);padding:5px 4px}
+.shoe{position:absolute;right:12px;top:12px;display:grid;justify-items:center;gap:2px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.shoe .card{width:44px;height:64px}
+.hands{display:flex;flex-wrap:wrap;gap:14px;min-height:122px;align-items:flex-start}
+.bjhand{display:grid;gap:4px;padding:6px;border:1px solid transparent;min-width:120px}
+.bjhand.active{border-color:#fad973}
+.fan{display:flex;min-height:96px;align-items:center}
+.fan .card:not(:first-child){margin-left:-34px}
+.fan.sm .card:not(:first-child){margin-left:-14px}
+.lbl{font-family:var(--mono);font-size:13px;color:var(--ink)}
+.lbl .muted{font-size:12px}
+
+/* Star Chart keno */
+.kgrid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:3px;background:#010e1a;padding:6px;border:1px solid var(--line);max-width:560px}
+.kc{all:unset;position:relative;aspect-ratio:1;display:grid;place-items:center;font-family:var(--mono);font-size:12px;color:#5d778d;background:#011c34;border:1px solid #1f3b52;cursor:pointer;box-sizing:border-box;overflow:visible}
+.kc:hover{border-color:#53998b}
+.kc:focus-visible{outline:2px solid #fad973;outline-offset:1px}
+.kc img{position:absolute;width:32px;height:32px;left:50%;top:50%;margin:-16px 0 0 -16px;pointer-events:none}
+.kc.mark span{position:absolute;left:2px;top:1px;font-size:9.5px;z-index:1}
+.kc.pick{color:#c1f1d8;border-color:#53998b}
+.kc.drawn{color:#d2f8ff;background:#0c2f44}
+.kc.hit{color:#fad973;background:#2e0d06;border-color:#fad973}
+.kc.ping::after{content:"";position:absolute;inset:-2px;border:2px solid #74effe;animation:ping .45s steps(5) forwards;pointer-events:none}
+.kc.hit.ping::after{border-color:#fad973}
+@keyframes ping{from{transform:scale(1);opacity:1}to{transform:scale(1.9);opacity:0}}
+@media (max-width:520px){.kc img{width:16px;height:16px;margin:-8px 0 0 -8px}.kc{font-size:10px}}
+.kdrawn{display:flex;flex-wrap:wrap;gap:4px;min-height:26px}
+.kdrawn span{font-family:var(--mono);font-size:12px;padding:2px 5px;border:1px solid #1f3b52;color:#d2f8ff}
+.kdrawn span.hit{border-color:#fad973;color:#fad973}
+.kpay{font-size:13px}
+.kpay tr.on td{color:#fad973}
+
+/* Hold'em */
+.pk-ai{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:760px){.pk-ai{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.seat{border:1px solid var(--slot-edge);background:rgba(5,15,20,.72);padding:8px;display:grid;gap:5px;position:relative;min-width:0}
+.seat.turn{border-color:#fad973;box-shadow:inset 0 0 0 1px #fad973}
+.seat.out{opacity:.55}
+.seat.won{border-color:#79e0a0;box-shadow:inset 0 0 0 1px #79e0a0}
+.seat .top{display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px;align-items:center}
+.seat .top img.face{width:64px;height:64px;background:var(--slot-fill)}
+.seat .nm{font-family:var(--mono);font-weight:600;color:var(--ink);font-size:14px}
+.seat .per{font-size:11.5px;color:var(--muted);line-height:1.3}
+.seat .stk{font-family:var(--mono);font-size:13px}
+.seat .act{font-family:var(--mono);font-size:12px;color:#fad973;min-height:16px}
+.seat .dbtn{position:absolute;right:6px;top:6px;width:32px;height:32px}
+.seat .cards{display:flex;gap:4px;min-height:64px;align-items:center}
+.pkboard{display:grid;justify-items:center;gap:6px;padding:12px}
+.pkboard .fan .card:not(:first-child){margin-left:6px}
+@media (max-width:520px){.pkboard .fan .card:not(:first-child){margin-left:-10px}}
+.pot{font-family:var(--mono);font-size:15px;color:#fad973}
+.pkme{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.pkme .cards{min-height:96px}
+.pklog{font-family:var(--mono);font-size:12px;color:var(--muted);max-height:132px;overflow:auto;border:1px solid var(--slot-edge);padding:6px 8px;display:grid;gap:1px;align-content:start}
+.pklog b{color:var(--ink);font-weight:500}
+.fly{position:fixed;z-index:20;pointer-events:none;width:32px;height:32px;image-rendering:pixelated}
+@media (prefers-reduced-motion: reduce){.kc.ping::after{animation:none;opacity:0}}
 </style>
+
 
 <div class="wallet" aria-label="Wallet">
   <div class="in">
@@ -160,6 +268,7 @@ h1 span{color:var(--mint)}
     <div class="stat"><span class="k">Wagered</span><span class="v" id="wBet">0</span></div>
     <div class="stat"><span class="k">House expects to keep</span><span class="v" id="wEdge">0.0</span></div>
     <div class="stat"><span class="k">Earned working</span><span class="v" id="wWork">0</span></div>
+    <div class="stat"><span class="k">Chips at table</span><span class="v" id="wTable">0</span></div>
     <span class="sp"></span>
     <button class="b" id="wReset">Reset to 500</button>
   </div>
@@ -172,13 +281,13 @@ h1 span{color:var(--mint)}
       <span class="eyebrow">Meridian Exchange, ring deck, spinward of the lift</span>
       <h1>The Long Fall <span>bar, casino and job board</span></h1>
       <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
-      <p class="lede">Ways to make money on a station that are not hauling cargo between markets: a shift at the ore sorter, contracts off the board, and the games in the bar. Five of them are playable below with one wallet. Every game shows its odds and the house's edge on the table, because the player is owed the truth about a bet.</p>
+      <p class="lede">Ways to make money on a station that are not hauling cargo between markets: a shift at the ore sorter, contracts off the board, and the games in the bar. All of them are playable below with one wallet: the shift, four slot machines, blackjack, keno, Hold'em against the regulars, dice and the race book. Every game shows its odds and the house's edge on the table, because the player is owed the truth about a bet.</p>
     </div>
     <div class="art" aria-hidden="true">
       <img src="minigames/sym_star.png" alt=""><img src="minigames/die_6.png" alt=""><img src="minigames/chip_50.png" alt=""><img src="minigames/card_back.png" alt=""><img src="minigames/racer_red.png" alt=""><img src="minigames/drill.png" alt="">
     </div>
   </section>
-  <div class="banner"><span class="tag">Proposal, not built</span><span>None of this is in the engine. The art is pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/minigames_art.py</code>): 32 x 32 sprites shown only at whole-number scales, nearest neighbour.</span></div>
+  <div class="banner"><span class="tag">Proposal, not built</span><span>None of this is in the engine. The art is pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/minigames_art.py</code>): 32 x 32 sprites (16 x 16 for keno markers and card pips) shown only at whole-number scales, nearest neighbour. None of it is the game's own art.</span></div>
 
   <!-- ============================================================ jobs -->
   <section aria-labelledby="h-jobs">
@@ -201,19 +310,99 @@ h1 span{color:var(--mint)}
     </div>
   </section>
 
+
   <!-- ============================================================ casino -->
   <section aria-labelledby="h-bar">
     <span class="eyebrow">Playable: the bar</span>
     <h2 id="h-bar">The games</h2>
-    <div class="two">
+    <p>One wallet for every table. Each game is in its own tab, and only the open tab animates. Every table prints its return and its edge, worked out by this page from the game's own rules: the reel strips, the shoe, the keno chart.</p>
+    <div class="tabs" role="tablist" aria-label="Casino games" id="casinoTabs">
+      <button class="b" role="tab" id="t-slots" aria-controls="tab-slots" aria-selected="true">Slots</button>
+      <button class="b" role="tab" id="t-bj" aria-controls="tab-bj" aria-selected="false" tabindex="-1">Orbit 21</button>
+      <button class="b" role="tab" id="t-keno" aria-controls="tab-keno" aria-selected="false" tabindex="-1">Star Chart keno</button>
+      <button class="b" role="tab" id="t-poker" aria-controls="tab-poker" aria-selected="false" tabindex="-1">Hold'em</button>
+      <button class="b" role="tab" id="t-dice" aria-controls="tab-dice" aria-selected="false" tabindex="-1">Hazard Dock</button>
+      <button class="b" role="tab" id="t-race" aria-controls="tab-race" aria-selected="false" tabindex="-1">Race book</button>
+    </div>
+
+    <!-- ---------------------------------------------------- slots -->
+    <div class="tabpanel" role="tabpanel" id="tab-slots" aria-labelledby="t-slots">
+      <div class="machines" id="machPick" aria-label="Choose a machine"></div>
       <div class="table">
-        <header><h3>Reactor Roll</h3><span class="odds" id="slotOdds">return --</span></header>
-        <div class="reels" id="reels"></div>
-        <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="slotBet"></span><button class="b main" id="slotGo">Pull</button></div>
-        <div class="msg" id="slotMsg">Three reels, twenty stops each.</div>
-        <div class="pay" id="paytable"></div>
+        <header><h3 id="mName">Reactor Roll</h3><span class="odds" id="mOdds">return --</span></header>
+        <p class="muted" id="mBlurb" style="font-size:13.5px"></p>
+        <div class="cab"><canvas id="slotCv" width="560" height="520" aria-label="Slot machine reels"></canvas></div>
+        <div class="meter">
+          <div class="stat"><span class="k">Win</span><span class="v" id="mWin">0</span></div>
+          <div class="stat"><span class="k">Line bet</span><span class="v" id="mLine">1</span></div>
+          <div class="stat" id="mFreeBox" hidden><span class="k">Free spins</span><span class="v lit" id="mFree">0</span></div>
+          <span class="sp" style="flex:1"></span>
+          <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="mBet"></span><button class="b main" id="mSpin">Spin</button></div>
+        </div>
+        <div class="msg" id="mMsg" aria-live="polite">Pick a stake and spin.</div>
+        <div class="two">
+          <div><h4>Pays</h4><div class="paylist" id="mPay"></div></div>
+          <div><h4 id="mLinesH">Paylines</h4><div class="lines" id="mLines"></div></div>
+        </div>
+        <details><summary>Reel strips and the maths</summary><div class="math" id="mMath"></div></details>
       </div>
+    </div>
+
+    <!-- ---------------------------------------------------- blackjack -->
+    <div class="tabpanel" role="tabpanel" id="tab-bj" aria-labelledby="t-bj" hidden>
       <div class="table">
+        <header><h3>Orbit 21</h3><span class="odds" id="bjOdds">house edge 0.41% with basic strategy</span></header>
+        <div class="felt">
+          <div class="shoe" aria-label="The shoe"><div class="card back sm"><img src="minigames/card_back.png" alt=""></div><span id="bjLeft">312 cards</span></div>
+          <div style="display:grid;gap:4px"><span class="lbl" id="dTot">Dealer</span><div class="fan" id="dealer"></div></div>
+          <div class="feltnote">Blackjack pays 3 to 2 &middot; dealer stands on all 17s &middot; dealer peeks</div>
+          <div class="hands" id="pHands"></div>
+        </div>
+        <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="bjBet"></span><button class="b main" id="bjDeal">Deal</button><button class="b" id="bjHit" disabled>Hit</button><button class="b" id="bjStand" disabled>Stand</button><button class="b" id="bjDouble" disabled>Double</button><button class="b" id="bjSplit" disabled>Split</button><button class="b" id="bjHint" aria-pressed="false">Strategy hint</button></div>
+        <div class="msg" id="bjMsg" aria-live="polite">Blackjack by another name. Suits are ore, coolant, fuel and core.</div>
+        <p class="muted" style="font-size:13px">Six decks in a shoe, reshuffled when the cut card (three quarters in) comes out. Dealer stands on every 17, soft or hard, and peeks for blackjack under an Ace or a ten, so you only lose your first stake to a dealer's natural. Blackjack pays 3:2. Double on any two cards, also after a split. Split pairs of the same value up to four hands; split Aces take one card each and cannot be split again. No insurance, no surrender. <span id="bjEdgeNote"></span></p>
+      </div>
+    </div>
+
+    <!-- ---------------------------------------------------- keno -->
+    <div class="tabpanel" role="tabpanel" id="tab-keno" aria-labelledby="t-keno" hidden>
+      <div class="table">
+        <header><h3>Star Chart</h3><span class="odds" id="kOdds">returns --</span></header>
+        <p class="muted" style="font-size:13.5px">The Aubade survey grid: 80 sectors of sky. Mark 1 to 10 sectors, then the survey probe pings 20 of the 80 at random. The more of your sectors it finds, the more it pays.</p>
+        <div class="two">
+          <div style="display:grid;gap:10px;min-width:0">
+            <div class="kgrid" id="kGrid" aria-label="Survey chart, 80 sectors"></div>
+            <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="kBet"></span><button class="b" id="kQuick">Quick pick</button><button class="b" id="kClear">Clear</button><button class="b main" id="kGo">Launch probe</button></div>
+            <div class="kdrawn" id="kDrawn" aria-label="Sectors the probe pinged"></div>
+            <div class="msg" id="kMsg" aria-live="polite">Mark up to 10 sectors.</div>
+          </div>
+          <div style="display:grid;gap:10px;align-content:start;min-width:0">
+            <div><h4 id="kPayH">Pays for 0 marked</h4><div class="scroll"><table class="t kpay" id="kPay"></table></div></div>
+            <details><summary>Return by sectors marked, and the maths</summary><div class="math" id="kMath"></div></details>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------------------------------------------------- poker -->
+    <div class="tabpanel" role="tabpanel" id="tab-poker" aria-labelledby="t-poker" hidden>
+      <div class="table">
+        <header><h3>Hold'em at the Long Fall</h3><span class="odds">no-limit, blinds 2/4 &middot; rake 5% of a pot that sees a flop, at most 12</span></header>
+        <p class="muted" style="font-size:13.5px">Texas Hold'em against four regulars. Buy in for 200 cr of chips, stand up to cash the stack back into the wallet. The house's take is the rake, not an edge: over many hands you win or lose by how you play against them.</p>
+        <div class="pk-ai" id="pkAI"></div>
+        <div class="felt pkboard"><div class="fan" id="pkBoard" aria-label="The board"></div><div class="pot" id="pkPot">Pot 0</div><div class="muted" id="pkStreet" style="font-family:var(--mono);font-size:12px">Waiting for a player</div></div>
+        <div class="pkme" id="pkMe"></div>
+        <div class="ctrl"><button class="b main" id="pkSit">Buy in 200 cr</button><button class="b" id="pkNext" disabled>Deal next hand</button><button class="b" id="pkStand" disabled>Stand up, cash out</button></div>
+        <div class="ctrl" id="pkActs"><button class="b" id="pkFold" disabled>Fold</button><button class="b main" id="pkCall" disabled>Check</button><button class="b" id="pkMin" disabled>Min raise</button><button class="b" id="pkHalf" disabled>Half pot</button><button class="b" id="pkPotB" disabled>Pot</button><button class="b" id="pkAll" disabled>All in</button></div>
+        <div class="msg" id="pkMsg" aria-live="polite">Buy in to take the empty seat.</div>
+        <div class="pklog" id="pkLog" aria-label="Hand log"></div>
+        <p class="muted" style="font-size:13px">How they think: each opponent estimates its chance of winning by dealing out the rest of the hand a few hundred times against the players still in, compares that with the price of calling (the pot odds), and then leans on its nature. Old Harrow waits for strong hands and rarely raises. Wren Askew plays many hands, raises often and bluffs about one bet in five. Officer Dace plays few hands but plays them hard. Bolt calls almost anything and almost never raises. Side pots are kept for all-in players; split pots share the odd chip from the button's left.</p>
+      </div>
+    </div>
+
+    <!-- ---------------------------------------------------- dice -->
+    <div class="tabpanel" role="tabpanel" id="tab-dice" aria-labelledby="t-dice" hidden>
+      <div class="table" style="max-width:640px">
         <header><h3>Hazard Dock (dice)</h3><span class="odds">house edge 16.7% on every bet</span></header>
         <div class="dice"><img id="d1" src="minigames/die_3.png" alt="die showing 3"><img id="d2" src="minigames/die_4.png" alt="die showing 4"></div>
         <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="diceBet"></span></div>
@@ -221,23 +410,20 @@ h1 span{color:var(--mint)}
         <div class="msg" id="diceMsg">The dockworkers' game. Two dice, three bets.</div>
         <p class="muted" style="font-size:13px">Under 7: 15 of 36 rolls. Seven: 6 of 36. Over 7: 15 of 36. Every bet returns 30 of every 36 credits staked, on average. It is the worst game in the bar and the most popular.</p>
       </div>
-      <div class="table">
-        <header><h3>Orbit 21</h3><span class="odds">house edge about 1.0% with perfect play</span></header>
-        <div><span class="tot" id="dTot">Dealer</span><div class="hand" id="dealer"></div></div>
-        <div><span class="tot" id="pTot">You</span><div class="hand" id="player"></div></div>
-        <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="bjBet"></span><button class="b main" id="bjDeal">Deal</button><button class="b" id="bjHit" disabled>Hit</button><button class="b" id="bjStand" disabled>Stand</button><button class="b" id="bjDouble" disabled>Double</button></div>
-        <div class="msg" id="bjMsg">Blackjack by another name. Suits are ore, coolant, fuel and core.</div>
-        <p class="muted" style="font-size:13px">Dealer stands on 17, a natural 21 pays 3:2, double on any two cards, no splits, cards drawn from an endless shoe. 1.0% is measured: 2 million simulated hands of basic strategy under exactly these rules.</p>
-      </div>
+    </div>
+
+    <!-- ---------------------------------------------------- race -->
+    <div class="tabpanel" role="tabpanel" id="tab-race" aria-labelledby="t-race" hidden>
       <div class="table">
         <header><h3>The race book</h3><span class="odds">book margin 12%</span></header>
-        <canvas class="game" id="race" width="720" height="250" aria-label="Ship race"></canvas>
+        <canvas class="game" id="race" width="720" height="250" aria-label="Ship race" style="max-width:720px"></canvas>
         <div class="ctrl lanes" id="raceRunners"></div>
         <div class="ctrl"><span class="muted">Stake</span><span class="ctrl" id="raceBet"></span><button class="b main" id="raceGo">Race</button><button class="b" id="raceNew">New card</button></div>
         <div class="msg" id="raceMsg">Pick a ship. Odds are set from each pilot's form, less the book's margin.</div>
       </div>
     </div>
   </section>
+
 
   <!-- ============================================================ odds -->
   <section aria-labelledby="h-odds">
@@ -290,14 +476,19 @@ h1 span{color:var(--mint)}
     <span class="eyebrow">For the owner</span>
     <h2 id="h-q">Decisions / questions for the owner</h2>
     <div class="q">
+      <article><h3>Decided: the casino's games (owner, 2026-11-13)</h3><p>The owner's words: "casino needs more slots themes, more complex slot machines, make them like actual rolls, or 5 columns with 3 rows with lines, the traditional 3x3 is also cool too, but gotta animate it good. I also want some black jack, keno (themed to our game of course) and maybe something more competitive like poker with AI".</p><p>So the bar has: four themed slot machines, two classic 3 x 3 (Reactor Roll, Smuggler's Hold) and two 5 x 3 video machines with paylines (Deep Vein, Aubade Frontier), all spinning as real reel strips; Orbit 21 as a full blackjack table; Star Chart, keno on the Aubade survey grid; and Hold'em against four NPC regulars with their own natures.</p></article>
+      <article><h3>Taken: Hold'em takes a rake, with real credits</h3><p>Options: (a) chips only, a practice table with nothing at stake; (b) a real buy-in from the wallet, the house taking a rake from each pot.</p><p class="rec">Recommendation taken (ask only with screenshots): (b). The buy-in is 200 cr, blinds 2/4, and the rake is 5% of any pot that sees a flop, at most 12 chips (three big blinds), as card rooms charge. It keeps poker in the same economy as the other games and makes the rake the credit sink, as question 3 below recommends for player tables. The NPCs' stacks are their own money; to stop a strong player farming them, a station's regulars should have a daily bankroll that runs out (proposed, not modelled here).</p></article>
+      <article><h3>Taken: the returns the machines are tuned to</h3><p class="rec">Recommendation taken (ask only with screenshots): classic machines return about 93 to 94%, video machines about 95 to 96% (they cost more a spin and swing harder), keno 87 to 90% (keno is a lottery, and it is the cheapest game to play: 10 cr a draw), blackjack 99.6% for a player who plays it right. Every figure is computed by the page from the game's actual strips, shoe and chart, never typed in, so a retuned strip cannot leave a stale number on a table.</p></article>
+      <article><h3>Open: keno's top prize against the table limits</h3><p>Ten of ten pays 50,000 times the stake (1 in 8.9 million draws), so a 50 cr ticket could win 2.5 million cr. Options: cap a draw's pay at the station's bank (the house can only pay what it holds), or lower the top pays, which lowers the return.</p><p class="rec">Recommendation: cap any single payout at the station's bank, and print the cap on the chart. The odds stay true; a station that cannot cover a jackpot says so before the ticket is bought.</p></article>
+      <article><h3>Open: are the machines things in the world?</h3><p class="rec">Recommendation: yes. Each machine is a block-built cabinet in the bar that the player walks up to and uses, with the reels drawn on its screen like the canvas here; the tables (Orbit 21, Hold'em) are furniture with NPC dealers and players sitting at them. Mockup next, if the owner wants it.</p></article>
       <article><h3>1. Is there gambling in the game at all?</h3><p>Options: (a) yes, with real odds shown; (b) only for in-game items, never credits; (c) none.</p><p class="rec">Recommendation: (a), with the odds printed on every table as here. It is a credit sink and a story generator. If the game will ever be rated for young players, gate it behind a setting and replace the casino with the job board's games.</p></article>
-      <article><h3>2. Which minigames ship first?</h3><p>The ore sorter, Reactor Roll, Hazard Dock, Orbit 21 and the race book are all playable here.</p><p class="rec">Recommendation: the ore sorter and Hazard Dock first (both tiny, both teach the economy), then the race book, because it can later use real NPC ships racing on real tracks round the station.</p></article>
-      <article><h3>3. Can players play each other?</h3><p>Options: house games only; player-versus-player card tables with a 5% rake; anything goes at the smuggler den.</p><p class="rec">Recommendation: house games first; player tables later at the den only, with the rake as the sink. Player-versus-player gambling needs the same durable transaction path as trades.</p></article>
+      <article><h3>2. Which minigames ship first?</h3><p>The ore sorter, four slot machines, Orbit 21, Star Chart, Hold'em, Hazard Dock and the race book are all playable here.</p><p class="rec">Recommendation: the ore sorter and Hazard Dock first (both tiny, both teach the economy), then one classic and one video slot (they share one reel engine), then Orbit 21 and Star Chart, then the race book, because it can later use real NPC ships racing on real tracks round the station. Hold'em last: its NPC opponents want the most testing.</p></article>
+      <article><h3>3. Can players play each other?</h3><p>Options: house games only; player-versus-player card tables with a 5% rake; anything goes at the smuggler den.</p><p class="rec">Recommendation: house games first; player tables later at the den only, with the rake as the sink (the same rake as the NPC Hold'em table). Player-versus-player gambling needs the same durable transaction path as trades.</p></article>
       <article><h3>4. How big are the limits?</h3><p class="rec">Recommendation: per-game limits by station kind (trade hub 200 cr, mining outpost 50 cr, smuggler den 2,000 cr), and a daily loss cap the player can set, which the game honours.</p></article>
       <article><h3>5. Do mining shifts pay from the market?</h3><p class="rec">Recommendation: yes. The ore sorter's pay per rock is the outpost's buy price for that ore, scaled to a shift, so a rich vein event or a crash in iron shows up in the job's pay too.</p></article>
     </div>
   </section>
-  <footer>Mockup for Pale Blue Dot. Five games run in this page with one wallet; odds for Reactor Roll are computed from its reel strips by the page itself, and the Orbit 21 edge was measured by simulation. Art: pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style. Nothing here is built.</footer>
+  <footer>Mockup for Pale Blue Dot. Ten games run in this page with one wallet. The slot machines' returns are exact, computed from their reel strips by the page; the 5 x 3 machines' hit rates are estimated by a seeded simulation of 200,000 spins each, run on load. Keno is exact (hypergeometric). The Orbit 21 edge was measured by simulating 100 million hands. Art: pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/minigames_art.py</code>); none of it is the game's own art. Nothing here is built.</footer>
 </div>
 </main>
 
@@ -391,44 +582,347 @@ function oreDraw(dt) {
   if (!SORT.on && SORT.t === 0) { og.fillStyle = "#a89d8e"; og.font = "500 12px 'Fira Mono', monospace"; og.fillText("Rocks ride the belt right to left.", 250, 198); og.fillText("Route each one while it is in the scanner.", 250, 214); }
 }
 
-// ------------------------------------------------------------------ Reactor Roll
-const SYM = [ // the reel strip: 20 stops, weights per symbol
-  { k: "sym_star", n: "Star", w: 1 }, { k: "sym_core", n: "Core", w: 2 }, { k: "sym_fuel", n: "Fuel", w: 3 },
-  { k: "sym_ice", n: "Coolant", w: 4 }, { k: "sym_ore", n: "Ore", w: 5 }, { k: "sym_meltdown", n: "Meltdown", w: 5 },
-];
-const STOPS = SYM.reduce((a, s) => a + s.w, 0);
-const THREE = { sym_star: 250, sym_core: 70, sym_fuel: 30, sym_ice: 15, sym_ore: 10, sym_meltdown: 0 };
-function slotPay(r) { // r: three symbol keys; returns multiple of the stake returned
-  const c = k => r.filter(x => x === k).length;
-  if (c("sym_meltdown") >= 2) return 0;
-  if (r[0] === r[1] && r[1] === r[2]) return THREE[r[0]];
-  if (c("sym_star") === 2) return 12;
-  if (c("sym_star") === 1) return 2;
-  if (c("sym_core") === 2) return 4;
-  return 0;
+// ------------------------------------------------------------------ tabs (only the open tab animates)
+let TAB = "slots";
+const RMQ = matchMedia("(prefers-reduced-motion: reduce)"); let RM = RMQ.matches; RMQ.addEventListener?.("change", e => { RM = e.matches; });
+const TABS = [...document.querySelectorAll('#casinoTabs [role="tab"]')];
+function openTab(id, focus) {
+  TABS.forEach(t => { const on = t.id === "t-" + id; t.setAttribute("aria-selected", on); t.tabIndex = on ? 0 : -1; $(t.getAttribute("aria-controls")).hidden = !on; if (on && focus) t.focus(); });
+  TAB = id; if (id === "slots") sizeCanvas();
+  try { localStorage.setItem("mg-tab", id); } catch (e) { /* storage may be blocked */ }
 }
-const SLOT = (function () { let rtp = 0, hit = 0; for (const a of SYM) for (const b of SYM) for (const c of SYM) { const p = a.w * b.w * c.w / STOPS ** 3, v = slotPay([a.k, b.k, c.k]); rtp += p * v; hit += v > 0 ? p : 0; } return { rtp, hit }; })();
-$("slotOdds").textContent = `returns ${(SLOT.rtp * 100).toFixed(1)}%, edge ${((1 - SLOT.rtp) * 100).toFixed(1)}%`;
-$("paytable").innerHTML = [
-  ...SYM.filter(s => s.k !== "sym_meltdown").map(s => [`<span><img src="minigames/${s.k}.png" alt=""><img src="minigames/${s.k}.png" alt=""><img src="minigames/${s.k}.png" alt=""></span>`, `three ${s.n}`, THREE[s.k] + "x"]),
-  [`<span><img src="minigames/sym_star.png" alt=""><img src="minigames/sym_star.png" alt=""></span>`, "any two Stars", "12x"],
-  [`<span><img src="minigames/sym_core.png" alt=""><img src="minigames/sym_core.png" alt=""></span>`, "any two Cores", "4x"],
-  [`<span><img src="minigames/sym_star.png" alt=""></span>`, "any one Star", "2x"],
-  [`<span><img src="minigames/sym_meltdown.png" alt=""><img src="minigames/sym_meltdown.png" alt=""></span>`, "two Meltdowns void the pull", "0"],
-].map(r => `${r[0]}<span>${r[1]}</span><span class="x">${r[2]}</span>`).join("") + `<span></span><span class="muted">pays a winning line 1 in ${(1 / SLOT.hit).toFixed(1)} pulls</span><span></span>`;
-$("reels").innerHTML = [0, 1, 2].map(i => `<div class="reel" id="reel${i}"><img src="minigames/${SYM[i + 2].k}.png" alt="${SYM[i + 2].n}"></div>`).join("");
-const slotBet = betPicker("slotBet", [5, 10, 25], 10);
-function pick() { let r = rand() * STOPS; for (const s of SYM) { if ((r -= s.w) < 0) return s; } return SYM[SYM.length - 1]; }
-$("slotGo").onclick = () => {
-  const bet = slotBet(); if (!stake(bet, 1 - SLOT.rtp)) { $("slotMsg").textContent = "Not enough credits."; return; }
-  $("slotGo").disabled = true; const res = [pick(), pick(), pick()];
-  document.querySelectorAll(".reel").forEach(r => r.classList.remove("win"));
-  [0, 1, 2].forEach(i => {
-    const el = $("reel" + i).querySelector("img"); let n = 0;
-    const iv = setInterval(() => { const s = SYM[Math.floor(rand() * SYM.length)]; el.src = `minigames/${s.k}.png`; if (++n > 8 + i * 5) { clearInterval(iv); el.src = `minigames/${res[i].k}.png`; el.alt = res[i].n;
-      if (i === 2) { const m = slotPay(res.map(s => s.k)); if (m > 0) { win(bet * m); document.querySelectorAll(".reel").forEach(r => r.classList.add("win")); $("slotMsg").textContent = `Pays ${m}x: +${bet * m} cr.`; } else $("slotMsg").textContent = res.filter(s => s.k === "sym_meltdown").length >= 2 ? "Meltdown. The reactor eats the stake." : "Nothing."; $("slotGo").disabled = false; } } }, 60);
+TABS.forEach((t, i) => {
+  t.onclick = () => openTab(t.id.slice(2));
+  t.onkeydown = e => { const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0; if (d) { e.preventDefault(); openTab(TABS[(i + d + TABS.length) % TABS.length].id.slice(2), true); } };
+});
+const sleepRaw = ms => new Promise(r => setTimeout(r, ms));
+// a pause that also waits while its table's tab is closed, so a hidden table does not play on by itself
+async function pause(ms, tab) { await sleepRaw(RM ? Math.min(ms, 90) : ms); while (TAB !== tab) await sleepRaw(200); }
+
+// ------------------------------------------------------------------ slot maths
+// The page works every machine's return out of its own strips and paytable on load. A strip is its
+// symbol counts laid out by a seeded shuffle (its own seed per reel), so the strips the maths reads are
+// the strips that spin, and no two reels run in the same order.
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function buildStrip(counts, order, seed) {
+  const strip = order.flatMap(s => Array(counts[s] || 0).fill(s)), rnd = mulberry32(seed);
+  for (let i = strip.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [strip[i], strip[j]] = [strip[j], strip[i]]; }
+  return strip;
+}
+const windowAt = (strip, stop) => { const n = strip.length; return [strip[(stop - 1 + n) % n], strip[stop], strip[(stop + 1) % n]]; };
+const effective = (M, grid) => M.expand ? grid.map(col => col.includes(M.wild) ? [M.wild, M.wild, M.wild] : col) : grid;
+function linePay(M, syms) { // left to right; returns the multiple of the line bet
+  const W = M.wild; let t = null, run = 0, wrun = 0;
+  for (const s of syms) { if (s === W) { if (t === null) wrun++; run++; continue; } if (s === M.scatter) break; if (t === null) { t = s; run++; continue; } if (s === t) { run++; continue; } break; }
+  let best = 0, bs = null, bc = 0;
+  const pw = (M.pays[W] && M.pays[W][wrun]) || 0; if (pw > best) { best = pw; bs = W; bc = wrun; }
+  if (t !== null) { let p = (M.pays[t] && M.pays[t][run]) || 0; if (p && M.wildMult) { let nw = 0; for (let i = 0; i < run; i++) if (syms[i] === W) nw++; p *= M.wildMult ** nw; } if (p > best) { best = p; bs = t; bc = run; } }
+  if (best === 0 && M.mixed) for (const m of M.mixed) if (syms.slice(0, m.n).every(s => m.set.includes(s) || s === W) && m.pay > best) { best = m.pay; bs = "mix"; bc = m.n; }
+  return { pay: best, sym: bs, count: bc };
+}
+function evaluate(M, stops) {
+  const raw = M.reels.map((strip, r) => windowAt(strip, stops[r])), grid = effective(M, raw), L = M.lines.length, wins = [];
+  let tot = 0;
+  M.lines.forEach((line, i) => { const p = linePay(M, line.map((row, r) => grid[r][row])); if (p.pay > 0) { wins.push({ line: i, mult: p.pay, count: p.count, sym: p.sym }); tot += p.pay / L; } });
+  let sc = 0; if (M.scatter) for (const col of raw) if (col.includes(M.scatter)) sc++;
+  const sp = M.scatter ? (M.scatterPays[sc] || 0) : 0;
+  return { raw, grid, wins, scatterCount: sc, scatterPay: sp, total: tot + sp, free: M.free && sc >= M.free.need ? M.free.count : 0 };
+}
+// Exact: a line takes one row from each reel, and each reel stops uniformly at random and on its own,
+// so a line's return is a sum over the reels' independent symbol distributions at that line's rows.
+function exactRTP(M) {
+  const R = M.reels.length, L = M.lines.length;
+  const dists = M.reels.map(strip => { const rows = [new Map(), new Map(), new Map()], n = strip.length;
+    for (let s = 0; s < n; s++) { const w = effective(M, [windowAt(strip, s)])[0]; for (let r = 0; r < 3; r++) rows[r].set(w[r], (rows[r].get(w[r]) || 0) + 1 / n); }
+    return rows.map(m => [...m.entries()]); });
+  let lineEV = 0; const syms = new Array(R);
+  for (const line of M.lines) { const D = line.map((row, r) => dists[r][row]);
+    (function rec(r, p) { if (r === R) { lineEV += p * linePay(M, syms).pay / L; return; } for (const [s, q] of D[r]) { syms[r] = s; rec(r + 1, p * q); } })(0, 1); }
+  let scEV = 0, q = 0, dist = [1];
+  if (M.scatter) {
+    for (const strip of M.reels) { let c = 0; for (let s = 0; s < strip.length; s++) if (windowAt(strip, s).includes(M.scatter)) c++; const p = c / strip.length;
+      const nd = new Array(dist.length + 1).fill(0); dist.forEach((v, k) => { nd[k] += v * (1 - p); nd[k + 1] += v * p; }); dist = nd; }
+    dist.forEach((v, k) => { scEV += v * (M.scatterPays[k] || 0); });
+    if (M.free) for (let k = M.free.need; k < dist.length; k++) q += dist[k];
+  }
+  let rtp = lineEV + scEV, freeEV = 0, nFree = 0;
+  if (M.free) { nFree = M.free.count / (1 - M.free.count * q); freeEV = q * nFree * M.free.mult * (lineEV + scEV); rtp += freeEV; }
+  return { rtp, lineEV, scEV, freeEV, q, nFree, dist };
+}
+function exactFull(M) { // every stop combination of a three-reel machine: exact return and hit rate
+  const n = M.reels.map(s => s.length), st = [0, 0, 0]; let rtp = 0, hit = 0;
+  for (st[0] = 0; st[0] < n[0]; st[0]++) for (st[1] = 0; st[1] < n[1]; st[1]++) for (st[2] = 0; st[2] < n[2]; st[2]++) { const e = evaluate(M, st); rtp += e.total; if (e.total > 0) hit++; }
+  const tot = n[0] * n[1] * n[2]; return { rtp: rtp / tot, hit: hit / tot, combos: tot };
+}
+function monteCarlo(M, spins, seed, done) { // seeded, free spins played out; run in slices so the page stays live
+  const rnd = mulberry32(seed), st = new Array(M.reels.length); let i = 0, paid = 0, sq = 0, hits = 0, feats = 0;
+  const spin = () => { for (let r = 0; r < st.length; r++) st[r] = Math.floor(rnd() * M.reels[r].length); return evaluate(M, st); };
+  (function slice() { const end = Math.min(spins, i + 20000);
+    for (; i < end; i++) { const e = spin(); let won = e.total; if (e.free) { feats++; let left = e.free; while (left > 0) { left--; const f = spin(); won += f.total * M.free.mult; left += f.free; } } paid += won; sq += won * won; if (won > 0) hits++; }
+    if (i < spins) setTimeout(slice, 0); else done({ rtp: paid / spins, se: Math.sqrt((sq / spins - (paid / spins) ** 2) / spins), hit: hits / spins, feats: feats / spins, spins, seed }); })();
+}
+
+// ------------------------------------------------------------------ the machines
+const L3A = [[1, 1, 1], [0, 0, 0], [2, 2, 2], [0, 1, 2], [2, 1, 0]];
+const L3B = [...L3A, [1, 0, 1], [1, 2, 1], [0, 1, 0]];
+const L20 = [[1, 1, 1, 1, 1], [0, 0, 0, 0, 0], [2, 2, 2, 2, 2], [0, 1, 2, 1, 0], [2, 1, 0, 1, 2], [0, 0, 1, 2, 2], [2, 2, 1, 0, 0], [1, 0, 0, 0, 1], [1, 2, 2, 2, 1], [0, 1, 1, 1, 0],
+  [2, 1, 1, 1, 2], [1, 0, 1, 0, 1], [1, 2, 1, 2, 1], [0, 1, 0, 1, 0], [2, 1, 2, 1, 2], [1, 1, 0, 1, 1], [1, 1, 2, 1, 1], [0, 0, 2, 0, 0], [2, 2, 0, 2, 2], [0, 2, 0, 2, 0]];
+const L25 = [...L20, [2, 0, 2, 0, 2], [0, 2, 2, 2, 0], [2, 0, 0, 0, 2], [1, 0, 2, 0, 1], [1, 2, 0, 2, 1]];
+const LINE_COL = ["#fad973", "#74effe", "#fa3a64", "#84e3b5", "#fb902f", "#c34988", "#9bb675", "#1096c3", "#eab798", "#d12d41", "#c1f1d8", "#faaf5c", "#9e3ba2", "#53998b", "#e69d69",
+  "#dd576d", "#d2f8ff", "#559642", "#7d2dbd", "#cfaa81", "#fffefe", "#92a3b2", "#ab8465", "#fe6420", "#bfcad7"];
+const P3 = (a, b, c) => ({ 3: a, 4: b, 5: c });
+const ORDER = ["sym_star", "sym_core", "sym_fuel", "sym_ice", "sym_ore", "sym_meltdown", "sm_cutter", "sm_stash", "sm_vial", "chip_100", "cargo", "sm_badge", "salvage", "drill", "dv_geode",
+  "ore_gold", "ore_copper", "ore_ice", "ore_iron", "dv_cart", "dv_lamp", "dv_pick", "pl_aubade", "pl_verdance", "pl_tidewater", "pl_ochre", "pl_cinder", "pl_rime", "pl_moon"];
+const NAMES = { sym_star: "Star", sym_core: "Core", sym_fuel: "Fuel", sym_ice: "Coolant", sym_ore: "Ore", sym_meltdown: "Meltdown", sm_cutter: "Cutter", sm_stash: "Stash", sm_vial: "Contraband",
+  chip_100: "Credits", cargo: "Cargo", sm_badge: "Customs", salvage: "Salvage", drill: "Drill", dv_geode: "Geode", ore_gold: "Gold", ore_copper: "Copper", ore_ice: "Ice", ore_iron: "Iron",
+  dv_cart: "Cart", dv_lamp: "Lamp", dv_pick: "Pick", pl_aubade: "Aubade", pl_verdance: "Verdance", pl_tidewater: "Tidewater", pl_ochre: "Ochre", pl_cinder: "Cinder", pl_rime: "Rime",
+  pl_moon: "Moon", mix: "mixed Fuel, Coolant and Ore" };
+const same = c => [c, c, c];
+const MACHINES = [
+  { id: "reactor", name: "Reactor Roll", fmt: "classic 3 x 3, 5 lines", icon: "sym_core", stakes: [5, 10, 25],
+    blurb: "The bar's oldest cabinet: three reels, three rows, five lines (the rows and both diagonals). The Star is wild. Any three of Fuel, Coolant and Ore, mixed, pays 3. The Meltdown pays nothing.",
+    lines: L3A, wild: "sym_star", pays: { sym_star: { 3: 200 }, sym_core: { 3: 75 }, sym_fuel: { 3: 30 }, sym_ice: { 3: 18 }, sym_ore: { 3: 12 } },
+    mixed: [{ set: ["sym_fuel", "sym_ice", "sym_ore"], n: 3, pay: 3 }],
+    counts: same({ sym_star: 1, sym_core: 2, sym_fuel: 3, sym_ice: 3, sym_ore: 4, sym_meltdown: 9 }),
+    antic: (M, cols, r) => r === 2 && M.lines.some(l => [cols[0][l[0]], cols[1][l[1]]].every(s => s === "sym_star" || s === "sym_core")),
+    anticWhy: "two Stars or Cores on a line" },
+  { id: "smuggler", name: "Smuggler's Hold", fmt: "classic 3 x 3, 8 lines", icon: "sm_cutter", stakes: [8, 16, 40],
+    blurb: "A den machine: three reels, eight lines. The Cutter is wild and doubles any win it is part of (two Cutters, four times). Stashes pay anywhere: two return the stake, three pay 10 times it. Salvage pays nothing.",
+    lines: L3B, wild: "sm_cutter", wildMult: 2, scatter: "sm_stash", scatterPays: { 2: 1, 3: 10 },
+    pays: { sm_cutter: { 3: 100 }, sm_vial: { 3: 40 }, chip_100: { 3: 22 }, cargo: { 3: 11 }, sm_badge: { 3: 4 } },
+    counts: same({ sm_cutter: 1, sm_stash: 1, sm_vial: 2, chip_100: 3, cargo: 5, sm_badge: 6, salvage: 5 }),
+    antic: (M, cols) => cols.filter(c => c.includes("sm_stash")).length >= 2, anticWhy: "two Stashes showing" },
+  { id: "deepvein", name: "Deep Vein", fmt: "video 5 x 3, 20 lines", icon: "dv_geode", stakes: [20, 40, 100],
+    blurb: "Five reels, three rows, twenty lines, paid left to right from the first reel. The Drill is wild. Geodes pay anywhere, and three or more start 8 free spins at double pay; three more Geodes in the free spins add 8 more.",
+    lines: L20, wild: "drill", scatter: "dv_geode", scatterPays: { 3: 2, 4: 10, 5: 50 }, free: { need: 3, count: 8, mult: 2 },
+    pays: { drill: P3(60, 250, 1200), ore_gold: P3(35, 120, 450), ore_copper: P3(25, 70, 250), ore_ice: P3(18, 45, 175), ore_iron: P3(12, 35, 120), dv_cart: P3(9, 25, 90), dv_lamp: P3(5, 18, 60), dv_pick: P3(5, 12, 45) },
+    counts: [0, 1, 2, 3, 4].map(r => ({ drill: r === 0 ? 1 : 2, dv_geode: 1, ore_gold: 2, ore_copper: 3, ore_ice: 3, ore_iron: 4, dv_cart: 5, dv_lamp: 5, dv_pick: 6 })),
+    antic: (M, cols) => cols.filter(c => c.includes("dv_geode")).length >= 2, anticWhy: "two Geodes showing: free spins possible" },
+  { id: "aubade", name: "Aubade Frontier", fmt: "video 5 x 3, 25 lines", icon: "pl_aubade", stakes: [25, 50, 100],
+    blurb: "The frontier worlds on five reels and twenty-five lines. Aubade, the system's sun, lands only on the middle three reels; when it lands it is wild and fills its whole reel with light.",
+    lines: L25, wild: "pl_aubade", expand: true,
+    pays: { pl_verdance: P3(25, 100, 400), pl_tidewater: P3(15, 50, 200), pl_ochre: P3(10, 30, 120), pl_cinder: P3(8, 20, 80), pl_rime: P3(4, 15, 50), pl_moon: P3(2, 10, 30) },
+    counts: [0, 1, 2, 3, 4].map(r => ({ pl_aubade: r >= 1 && r <= 3 ? 1 : 0, pl_verdance: 2, pl_tidewater: 3, pl_ochre: 4, pl_cinder: 5, pl_rime: 6, pl_moon: 7 })),
+    antic: (M, cols) => cols.filter(c => c.includes("pl_aubade")).length >= 2, anticWhy: "two suns lit" },
+];
+const MC_SPINS = 200000, MC_SEED = 20261113;
+for (const M of MACHINES) {
+  M.reels = M.counts.map((c, r) => buildStrip(c, ORDER, [...M.id].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) + r * 1013)); M.R = M.reels.length; M.math = exactRTP(M);
+  if (M.R === 3) { const f = exactFull(M); M.hit = f.hit; M.hitExact = true; M.combos = f.combos; }
+  M.S = { pos: M.reels.map((s, r) => (3 + r * 5) % s.length), phi: M.reels.map(() => 0), reels: M.reels.map(() => ({ mode: "idle", v: 0 })), phase: "idle", wins: [], stops: null, bet: M.stakes[0], fs: { left: 0, mult: 1, total: 0, played: 0, got: 0 } };
+  M.S.stops = M.S.pos.slice(); [0, 1, 2, 3, 4].slice(0, M.R).forEach(r => { M.S.pos[r] = M.S.stops[r]; });
+  M.S.ev = evaluate(M, M.S.stops);
+}
+
+// ------------------------------------------------------------------ the cabinet on a canvas
+const SL = { M: MACHINES[0], k: 4, dirty: true, force: null };
+const cv = $("slotCv"), sg = cv.getContext("2d");
+const G = { px: 8, py: 8, cw: 40, ch: 38, gap: 2 };   // native pixels; the canvas draws them at a whole-number scale k
+const fmt = n => Math.round(n).toLocaleString();
+function sizeCanvas() {
+  const M = SL.M, w = 2 * G.px + M.R * G.cw + (M.R - 1) * G.gap, h = 2 * G.py + 3 * G.ch;
+  const avail = Math.max(200, cv.parentElement.clientWidth - 18);
+  SL.k = Math.max(1, Math.min(4, Math.floor(avail / w)));
+  cv.width = w * SL.k; cv.height = h * SL.k; sg.imageSmoothingEnabled = false; SL.dirty = true;
+}
+addEventListener("resize", () => { const k = SL.k; sizeCanvas(); if (k !== SL.k) SL.dirty = true; });
+const cellXY = (r, row) => [G.px + r * (G.cw + G.gap), G.py + row * G.ch];
+function pickMachine(M) {
+  if (SL.M.S.phase !== "idle" && SL.M.S.phase !== "win") return;
+  if (SL.M.S.fs.left > 0) return;
+  SL.M = M; sizeCanvas();
+  $("machPick").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === M.id));
+  $("mName").textContent = M.name; $("mBlurb").textContent = M.blurb;
+  $("mBet").innerHTML = M.stakes.map(v => `<button class="b" aria-pressed="${v === M.S.bet}" data-v="${v}">${v}</button>`).join("");
+  $("mBet").querySelectorAll("button").forEach(b => b.onclick = () => { if (M.S.phase === "spin" || M.S.fs.left) return; M.S.bet = +b.dataset.v; $("mBet").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); slotInfo(); });
+  $("mWin").textContent = "0"; $("mWin").classList.remove("lit"); $("mMsg").textContent = "Pick a stake and spin.";
+  slotInfo(); paylines(); slotOdds(); slotMath();
+}
+function slotInfo() {
+  const M = SL.M, lb = M.S.bet / M.lines.length;
+  $("mLine").textContent = lb.toLocaleString();
+  const row = (k, name, pays, note) => `<div class="row" data-sym="${k}"><img src="minigames/${k}.png" alt=""><span>${name}${note ? ` <span class="muted">${note}</span>` : ""}</span><span class="x">${pays}</span></div>`;
+  const pay = (k) => Object.entries(M.pays[k]).map(([n, x]) => (M.R === 3 ? "" : n + ": ") + x * lb).join(" &middot; ");
+  let h = "";
+  for (const k of Object.keys(M.pays)) h += row(k, (M.R === 3 ? "three " : "") + NAMES[k], pay(k) + " cr", k === M.wild ? (M.expand ? "wild, fills its reel" : M.wildMult ? "wild, doubles a win" : "wild") : "");
+  if (M.mixed) h += `<div class="row" data-sym="mix"><span></span><span>any three of Fuel, Coolant, Ore</span><span class="x">${M.mixed[0].pay * lb} cr</span></div>`;
+  if (M.scatter) h += row(M.scatter, NAMES[M.scatter], Object.entries(M.scatterPays).map(([n, x]) => n + ": " + x * M.S.bet).join(" &middot; ") + " cr", "anywhere" + (M.free ? `, 3+ start ${M.free.count} free spins at ${M.free.mult}x` : ""));
+  if (M.id === "reactor") h += row("sym_meltdown", "Meltdown", "0", "a blank");
+  if (M.id === "smuggler") h += row("salvage", "Salvage", "0", "a blank");
+  $("mPay").innerHTML = h + `<p class="muted" style="font-size:12px;margin-top:4px">Credits at a ${M.S.bet} cr stake (${lb} cr a line). ${M.R === 5 ? "Lines pay the longest run from the left reel; only the best win on each line counts." : "A line pays three of a kind across it."}</p>`;
+}
+function paylines() {
+  const M = SL.M, R = M.R;
+  $("mLinesH").textContent = `${M.lines.length} paylines`;
+  $("mLines").innerHTML = M.lines.map((l, i) => { const w = R * 8, pts = l.map((row, r) => `${r * 8 + 4},${row * 8 + 4}`).join(" ");
+    const cells = l.map((row, r) => `<rect x="${r * 8 + 1}" y="${row * 8 + 1}" width="6" height="6" fill="${LINE_COL[i]}" opacity=".35"/>`).join("");
+    return `<div class="ln" data-line="${i}"><svg viewBox="0 0 ${w} 24" aria-hidden="true"><rect width="${w}" height="24" fill="#02070a"/>${[...Array(R)].map((_, r) => [0, 1, 2].map(y => `<rect x="${r * 8 + 1}" y="${y * 8 + 1}" width="6" height="6" fill="#1f3b52"/>`).join("")).join("")}${cells}<polyline points="${pts}" fill="none" stroke="${LINE_COL[i]}" stroke-width="1.6"/></svg>${i + 1}</div>`; }).join("");
+}
+const pct = x => (x * 100).toFixed(2) + "%";
+function slotOdds() {
+  const M = SL.M;
+  $("mOdds").textContent = `returns ${pct(M.math.rtp)} (exact), edge ${pct(1 - M.math.rtp)}` + (M.hit ? `, a win 1 in ${(1 / M.hit).toFixed(2)}` + (M.hitExact ? "" : " (est.)") : ", hit rate: simulating");
+}
+function slotMath() {
+  const M = SL.M, syms = [...new Set(M.reels.flat())];
+  const cnt = syms.map(s => `<tr><td><img src="minigames/${s}.png" alt="" width="32" height="32" style="vertical-align:middle"> ${NAMES[s]}</td>${M.reels.map(st => `<td class="num">${st.filter(x => x === s).length}</td>`).join("")}</tr>`).join("");
+  const m = M.math;
+  $("mMath").innerHTML = `<div class="scroll"><table class="t"><thead><tr><th>Symbol</th>${M.reels.map((s, r) => `<th class="num">Reel ${r + 1}</th>`).join("")}</tr></thead><tbody>${cnt}<tr><td>Stops</td>${M.reels.map(s => `<td class="num">${s.length}</td>`).join("")}</tr></tbody></table></div>
+  <p>Each reel stops at one of its stops, every stop equally likely, and the three rows show that stop and its two neighbours. ${M.R === 3
+    ? `The return is <b>exact</b>: the page plays every one of the ${M.combos.toLocaleString()} stop combinations through every line. Return ${pct(m.rtp)}; a spin pays something 1 in ${(1 / M.hit).toFixed(2)}${M.scatter ? `; the scatter pays ${pct(m.scEV)} of that` : ""}.`
+    : `The return is <b>exact</b>: a line takes one row from each reel, and each reel stops on its own, so each line's return is a sum over the five reels' symbol odds at that line's rows${M.expand ? " (with the sun first spread over its whole reel)" : ""}. Lines return ${pct(m.lineEV)}${M.scatter ? `, Geodes ${pct(m.scEV)}, and the free spins ${pct(m.freeEV)}: three or more Geodes come 1 in ${(1 / m.q).toFixed(1)} spins, and a feature lasts ${m.nFree.toFixed(2)} spins on average (8, plus 8 more each time the 1-in-${(1 / m.q).toFixed(0)} retrigger lands)` : ""}. Total ${pct(m.rtp)}.`}</p>
+  ${M.R === 5 ? `<p id="mMC">${M.mc ? `<b>Estimated</b> by a seeded simulation (${M.mc.spins.toLocaleString()} spins, seed ${M.mc.seed}, free spins played out): a spin pays something 1 in ${(1 / M.mc.hit).toFixed(2)}${M.free ? `, free spins start 1 in ${(1 / M.mc.feats).toFixed(0)}` : ""}; the simulated return is ${pct(M.mc.rtp)} &plusmn; ${pct(M.mc.se)} (one standard error), ${(Math.abs(M.mc.rtp - M.math.rtp) / M.mc.se).toFixed(1)} standard errors from the exact figure: a slot's return is a noisy thing to sample, which is why the page computes it exactly.` : "Simulating 200,000 spins for the hit rate..."}</p>` : ""}`;
+}
+$("machPick").innerHTML = MACHINES.map(M => `<button class="b mach" data-id="${M.id}" aria-pressed="false"><img src="minigames/${M.icon}.png" alt=""><span>${M.name}</span><small>${M.fmt}</small></button>`).join("");
+$("machPick").querySelectorAll("button").forEach(b => b.onclick = () => pickMachine(MACHINES.find(M => M.id === b.dataset.id)));
+// the 5 x 3 hit rates are estimated by simulation, in slices, after the page is up
+(function mcNext(i) { const M = MACHINES.filter(m => m.R === 5)[i]; if (!M) { oddsTable(); return; }
+  monteCarlo(M, MC_SPINS, MC_SEED, r => { M.mc = r; M.hit = r.hit; if (SL.M === M) { slotOdds(); slotMath(); } mcNext(i + 1); }); })(0);
+
+// ------------------------------------------------------------------ spinning
+const V = 19;                    // stops a second at full speed
+function spin(free) {
+  const M = SL.M, S = M.S, t = performance.now() / 1000;
+  if (S.phase === "spin" || S.phase === "expand") return;
+  if (!free) { if (S.fs.left > 0) return; if (!stake(S.bet, 1 - M.math.rtp)) { $("mMsg").textContent = "Not enough credits."; return; } S.fs.mult = 1; }
+  else { S.fs.left--; S.fs.played++; }
+  S.stops = SL.force || M.reels.map(s => Math.floor(rand() * s.length)); SL.force = null;
+  S.ev = evaluate(M, S.stops); S.wins = []; S.expandT0 = 0; S.big = false; S.particles = [];
+  const raw = S.ev.raw, base = RM ? 0.15 : (M.R === 3 ? 0.75 : 0.7), stag = RM ? 0.06 : (M.R === 3 ? 0.32 : 0.24), extra = RM ? 0.15 : 1.1;
+  let add = 0; S.anticAny = "";
+  S.reels.forEach((R_, r) => { const a = r > 0 && M.antic(M, raw.slice(0, r), r); if (a) { add += extra; S.anticAny = M.anticWhy; }
+    Object.assign(R_, { mode: "spin", v: 0, antic: a, stopAt: t + base + r * stag + add, landT: 0 }); });
+  S.phase = "spin"; S.t0 = t; SL.dirty = true;
+  $("mSpin").disabled = true; $("mWin").textContent = "0"; $("mWin").classList.remove("lit");
+  $("mLines").querySelectorAll(".ln").forEach(x => x.classList.remove("win")); $("mPay").querySelectorAll(".row").forEach(x => x.classList.remove("win"));
+  $("mMsg").textContent = free ? `Free spin ${S.fs.played} of ${S.fs.played + S.fs.left}, pays ${S.fs.mult}x.` : "Spinning...";
+}
+$("mSpin").onclick = () => spin(false);
+function beginStop(M, R_, r, t) {
+  const n = M.reels[r].length, D0 = RM ? 0.8 : 3.2, v = Math.max(R_.v, RM ? 8 : 6);
+  const T = Math.round(R_.pos - D0);
+  // the strip's phase is chosen here, while the reel is a blur, so the planned stop arrives within D0
+  M.S.phi[r] = ((M.S.stops[r] - T) % n + n) % n;
+  const ov = RM ? 0 : 0.24, D = R_.pos - T + ov;
+  Object.assign(R_, { mode: "stop", p0: R_.pos, T, ov, D, dur: 2 * D / v, ts: t });
+}
+function updateReels(M, t, dt) {
+  const S = M.S;
+  S.reels.forEach((R_, r) => {
+    R_.pos = S.pos[r];
+    if (R_.mode === "spin") {
+      const prevDone = r === 0 || S.reels[r - 1].mode === "idle";
+      const vt = R_.antic && prevDone ? V * 0.42 : V;
+      if (t - S.t0 < 0.12 && !RM) R_.pos += dt * 2.2;          // a short wind-up, the strip pulled back before it drops
+      else { R_.v = R_.v < vt ? Math.min(vt, R_.v + 90 * dt) : Math.max(vt, R_.v - 40 * dt); R_.pos -= R_.v * dt; }
+      if (t >= R_.stopAt && prevDone && t - S.t0 > 0.2) beginStop(M, R_, r, t);
+    } else if (R_.mode === "stop") {
+      const u = Math.min(1, (t - R_.ts) / R_.dur); R_.pos = R_.p0 - R_.D * (1 - (1 - u) * (1 - u)); R_.v = (1 - u) * 2 * R_.D / R_.dur;
+      if (u >= 1) { R_.mode = R_.ov ? "bounce" : "idle"; R_.ts = t; R_.v = 0; if (!R_.ov) { R_.pos = R_.T; R_.landT = t; } }
+    } else if (R_.mode === "bounce") {
+      const u = Math.min(1, (t - R_.ts) / 0.17); R_.pos = R_.T - R_.ov + R_.ov * (1 - (1 - u) ** 3);
+      if (u >= 1) { R_.mode = "idle"; R_.pos = R_.T; R_.landT = t; }
+    }
+    S.pos[r] = R_.pos;
   });
-};
+  if (S.reels.every(R_ => R_.mode === "idle")) {
+    if (M.expand && S.ev.raw.some(c => c.includes(M.wild))) { S.phase = "expand"; S.expandT0 = t; } else settle(M, t);
+  }
+}
+function settle(M, t) {
+  const S = M.S, e = S.ev, lb = S.bet / M.lines.length, mult = S.fs.played && (S.fs.left > 0 || S.inFree) ? M.free.mult : 1;
+  const credits = (e.wins.reduce((a, w) => a + w.mult * lb, 0) + e.scatterPay * S.bet) * mult;
+  S.wins = e.wins; S.phase = "win"; S.winT0 = t; S.credits = credits; S.payMult = mult;
+  if (credits > 0) win(credits);
+  S.count = { to: credits, t0: t, dur: RM ? 0.01 : Math.min(2.4, 0.5 + Math.log10(1 + credits / S.bet) * 1.2) };
+  S.big = credits >= S.bet * 15;
+  if (S.big && !RM) for (let i = 0; i < 40; i++) S.particles.push({ x: 0.5, y: 0.5, vx: (rand() - 0.5) * 1.4, vy: -rand() * 1.2 - 0.2, life: 1 + rand(), c: LINE_COL[i % 6] });
+  $("mLines").querySelectorAll(".ln").forEach(x => x.classList.toggle("win", e.wins.some(w => w.line === +x.dataset.line)));
+  $("mPay").querySelectorAll(".row").forEach(x => x.classList.toggle("win", e.wins.some(w => w.sym === x.dataset.sym) || (e.scatterPay > 0 && x.dataset.sym === M.scatter)));
+  let msg = credits > 0 ? `${e.wins.length ? `${e.wins.length} line${e.wins.length > 1 ? "s" : ""}` : ""}${e.wins.length && e.scatterPay ? " and " : ""}${e.scatterPay ? `${e.scatterCount} ${NAMES[M.scatter]}s` : ""} pay ${fmt(credits)} cr${mult > 1 ? ` (at ${mult}x)` : ""}.` : "Nothing this time.";
+  if (S.fs.played) S.fs.total += credits;
+  if (e.free) {
+    if (S.inFree) { S.fs.left += e.free; msg += ` Three Geodes again: ${e.free} more free spins.`; }
+    else { S.inFree = true; S.fs = { left: e.free, mult: M.free.mult, total: 0, played: 0 }; msg += ` ${e.scatterCount} Geodes: ${e.free} free spins at ${M.free.mult}x pay.`; }
+  }
+  if (S.inFree && S.fs.left === 0 && S.fs.played) { msg += ` Free spins over: they paid ${fmt(S.fs.total)} cr.`; S.inFree = false; S.fs.played = 0; }
+  S.autoAt = S.fs.left > 0 ? t + (RM ? 0.5 : credits > 0 ? 2.2 : 1.1) : 0;
+  $("mFreeBox").hidden = !(S.fs.left > 0 || S.inFree); $("mFree").textContent = S.fs.left;
+  $("mSpin").disabled = S.fs.left > 0; $("machPick").querySelectorAll("button").forEach(b => b.disabled = S.fs.left > 0);
+  $("mMsg").textContent = msg; S.baseMsg = msg; S.shownLine = -2;
+}
+
+// ------------------------------------------------------------------ drawing the cabinet
+function drawSlot(t, dt) {
+  const M = SL.M, S = M.S, k = SL.k, g = sg, W = cv.width, H = cv.height;
+  g.fillStyle = "#02070a"; g.fillRect(0, 0, W, H);
+  // which wins are lit now: all of them for a moment, then one line at a time
+  let lit = []; const showAll = S.phase === "win" && t - S.winT0 < 1.4;
+  if (S.phase === "win" && S.wins.length) { if (showAll || RM) lit = S.wins; else { const i = Math.floor((t - S.winT0 - 1.4) / 1.15) % S.wins.length; lit = [S.wins[i]];
+      if (S.shownLine !== i) { S.shownLine = i; const w = S.wins[i]; $("mMsg").textContent = `${S.baseMsg}  Line ${w.line + 1}: ${w.sym === "mix" ? "three " : w.count + " x "}${NAMES[w.sym]}, ${fmt(w.mult * S.bet / M.lines.length * S.payMult)} cr.`; } } }
+  const litCells = new Set(); lit.forEach(w => M.lines[w.line].slice(0, w.count).forEach((row, r) => litCells.add(r * 3 + row)));
+  if (S.phase === "win" && S.ev.scatterPay > 0) S.ev.raw.forEach((col, r) => col.forEach((s, row) => { if (s === M.scatter) litCells.add(r * 3 + row); }));
+  const pulse = RM ? 0 : Math.round(Math.abs(Math.sin((t - (S.winT0 || 0)) * 7)) * 2);
+  for (let r = 0; r < M.R; r++) {
+    const [x0, y0] = cellXY(r, 0), X = x0 * k, Y = y0 * k, w = G.cw * k, h = 3 * G.ch * k, R_ = S.reels[r], n = M.reels[r].length;
+    g.fillStyle = "#0b1418"; g.fillRect(X, Y, w, h); g.fillStyle = "#0f1d22"; g.fillRect(X, Y + G.ch * k, w, G.ch * k);
+    g.save(); g.beginPath(); g.rect(X, Y, w, h); g.clip();
+    const pos = S.pos[r], base = Math.floor(pos), fast = !RM && R_.v > 5;
+    for (let i = base - 2; i <= base + 3; i++) {
+      const d = i - pos; if (d <= -2 || d >= 2) continue;
+      const sym = M.reels[r][((i + S.phi[r]) % n + n) % n], im = img(sym); if (!im.complete) continue;
+      const sx = X + (G.cw - 32) / 2 * k, sy = Y + Math.round(((1 + d) * G.ch + (G.ch - 32) / 2) * k);
+      const row = Math.round(1 + d), on = S.phase === "win" && Math.abs(d - Math.round(d)) < 0.01 && litCells.has(r * 3 + row);
+      if (fast) { const trail = Math.min(1, R_.v / V) * G.ch * 0.45 * k;     // motion blur: the symbol smeared up its own path
+        g.globalAlpha = 0.22; g.drawImage(im, sx, Math.round(sy - trail), 32 * k, 32 * k); g.globalAlpha = 0.4; g.drawImage(im, sx, Math.round(sy - trail / 2), 32 * k, 32 * k); g.globalAlpha = 0.75; }
+      g.drawImage(im, sx, sy - (on ? pulse * k : 0), 32 * k, 32 * k); g.globalAlpha = 1;
+    }
+    // the expanded sun: Aubade's light grows out from the middle row to fill the reel
+    if (M.expand && (S.phase === "expand" || S.phase === "win") && S.ev.raw[r].includes(M.wild)) {
+      const p = RM ? 1 : Math.min(1, (t - S.expandT0) / 0.4), im = img("pl_wild_col"), hh = Math.max(1, Math.round(3 * G.ch * p));
+      if (im.complete) { const top = Math.round((3 * G.ch - hh) / 2); g.drawImage(im, 0, Math.round(96 * top / (3 * G.ch)), 32, Math.max(1, Math.round(96 * hh / (3 * G.ch))), X + (G.cw - 32) / 2 * k, Y + top * k, 32 * k, hh * k); }
+    }
+    // the curve of the drum: the top and bottom rows shade off in hard steps
+    [[0, .5], [3, .3], [6, .14]].forEach(([o, a]) => { g.fillStyle = `rgba(0,0,0,${a})`; g.fillRect(X, Y + o * k, w, 3 * k); g.fillRect(X, Y + h - (o + 3) * k, w, 3 * k); });
+    g.restore();
+    if (R_.landT && t - R_.landT < 0.12 && !RM) { g.fillStyle = "rgba(255,255,255,.08)"; g.fillRect(X, Y, w, h); }
+    // anticipation: the reel still running when a bonus is possible glows and slows
+    if (R_.antic && R_.mode !== "idle" && (r === 0 || S.reels[r - 1].mode === "idle")) { g.strokeStyle = (Math.floor(t * 8) % 2) ? "#fad973" : "#fb902f"; g.lineWidth = 2 * k; g.strokeRect(X + k, Y + k, w - 2 * k, h - 2 * k); }
+  }
+  // winning lines and their cells
+  if (S.phase === "win") {
+    const showT = RM ? 1 : Math.min(1, (t - S.winT0) / 0.45);
+    for (const wn of lit) {
+      const L = M.lines[wn.line], col = LINE_COL[wn.line], pts = L.map((row, r) => { const [x, y] = cellXY(r, row); return [(x + G.cw / 2) * k, (y + G.ch / 2) * k]; });
+      // the line is drawn out from the left reel
+      const segs = (pts.length - 1) * (showAll ? showT : 1);
+      g.lineJoin = "miter"; [[5, "#02070a"], [2, col]].forEach(([lw, c]) => { g.strokeStyle = c; g.lineWidth = lw * k; g.beginPath(); g.moveTo(...pts[0]);
+        for (let i = 1; i < pts.length; i++) { const f = Math.min(1, Math.max(0, segs - (i - 1))); if (f <= 0) break; g.lineTo(pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f); } g.stroke(); });
+      L.slice(0, wn.count).forEach((row, r) => { const [x, y] = cellXY(r, row); g.strokeStyle = col; g.lineWidth = k; g.strokeRect((x + 1) * k + k / 2, (y + 1) * k + k / 2, (G.cw - 2) * k - k, (G.ch - 2) * k - k); });
+      g.fillStyle = col; g.fillRect(0, pts[0][1] - 3 * k, 5 * k, 6 * k); g.fillRect(W - 5 * k, pts[pts.length - 1][1] - 3 * k, 5 * k, 6 * k);
+    }
+    if (S.ev.scatterPay > 0) S.ev.raw.forEach((col, r) => col.forEach((s, row) => { if (s !== M.scatter) return; const [x, y] = cellXY(r, row); g.strokeStyle = (Math.floor(t * 6) % 2) ? "#fad973" : "#c34988"; g.lineWidth = k; g.strokeRect((x + 1) * k, (y + 1) * k, (G.cw - 2) * k, (G.ch - 2) * k); }));
+    // count-up of the win
+    if (S.count) { const u = Math.min(1, (t - S.count.t0) / S.count.dur), v = S.count.to * (1 - (1 - u) ** 3); $("mWin").textContent = fmt(v); $("mWin").classList.toggle("lit", S.count.to > 0); if (u >= 1) S.count = null; }
+    if (S.big) { const s = Math.max(2, k * 3); g.font = `700 ${s * 6}px 'Fira Mono', monospace`; g.textAlign = "center"; const txt = S.credits >= S.bet * 50 ? "HUGE WIN" : "BIG WIN";
+      g.fillStyle = "#02070a"; g.fillText(txt, W / 2 + k, H / 2 + s * 2 + k); g.fillStyle = (Math.floor(t * 5) % 2) ? "#fad973" : "#fb902f"; g.fillText(txt, W / 2, H / 2 + s * 2); g.textAlign = "start"; }
+    for (const p of S.particles || []) { p.life -= dt; p.vy += dt * 1.2; p.x += p.vx * dt * 0.5; p.y += p.vy * dt * 0.5; if (p.life > 0) { g.fillStyle = p.c; g.fillRect(Math.round(p.x * W / k) * k, Math.round(p.y * H / k) * k, 2 * k, 2 * k); } }
+    if (S.particles) S.particles = S.particles.filter(p => p.life > 0);
+  }
+  if (S.phase === "spin" && S.anticAny && S.reels.some(R_ => R_.antic && R_.mode !== "idle")) { g.font = `600 ${5 * k}px 'Fira Mono', monospace`; g.fillStyle = "#fad973"; g.textAlign = "center"; g.fillText(S.anticAny.toUpperCase(), W / 2, H - 2 * k); g.textAlign = "start"; }
+}
+function slotFrame(now, dt) {
+  const M = SL.M, S = M.S, t = now / 1000;
+  if (S.phase === "spin") updateReels(M, t, dt);
+  if (S.phase === "expand" && t - S.expandT0 > (RM ? 0.05 : 0.45)) settle(M, t);
+  if (S.phase === "win" && S.autoAt && t >= S.autoAt) { S.autoAt = 0; spin(true); }
+  if (S.phase === "win" && !S.autoAt && S.fs.left === 0) $("mSpin").disabled = false;
+  if (S.phase !== "idle" || SL.dirty) { drawSlot(t, dt); SL.dirty = false; }
+  // a losing spin with nothing left to show goes quiet: no redraw until something changes
+  if (S.phase === "win" && !S.wins.length && !S.ev.scatterPay && !S.autoAt && !S.count && !(S.particles || []).length) S.phase = "idle";
+}
+[...new Set(MACHINES.flatMap(M => M.reels.flat())), "pl_wild_col"].forEach(n => { const im = img(n); im.addEventListener("load", () => { SL.dirty = true; }); });
+pickMachine(MACHINES[0]);
 
 // ------------------------------------------------------------------ Hazard Dock
 const diceBet = betPicker("diceBet", [5, 10, 25, 50], 10);
@@ -444,40 +938,420 @@ document.querySelectorAll("[data-dice]").forEach(b => b.onclick = () => {
       document.querySelectorAll("[data-dice]").forEach(x => x.disabled = false); } }, 70);
 });
 
+// ------------------------------------------------------------------ cards (shared by Orbit 21 and Hold'em)
+const SUITS = ["sym_ore", "sym_ice", "sym_fuel", "sym_core"], SUIT_SHORT = ["ore", "ice", "fuel", "core"], SUIT_NAME = ["Ore", "Coolant", "Fuel", "Core"];
+const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+function cardEl(c, opts = {}) {
+  const el = document.createElement("div");
+  if (!c || opts.hidden) { el.className = "card back" + (opts.sm ? " sm" : ""); el.innerHTML = `<img src="minigames/card_back.png" alt="">`; el.setAttribute("aria-label", "face-down card"); return el; }
+  el.className = `card su-${SUIT_SHORT[c.s]}` + (opts.sm ? " sm" : "");
+  el.setAttribute("aria-label", `${c.r} of ${SUIT_NAME[c.s]}`);
+  el.innerHTML = `<span class="r">${c.r}</span><img class="pip" src="minigames/pip_${SUIT_SHORT[c.s]}.png" alt=""><img class="big" src="minigames/${SUITS[c.s]}.png" alt=""><span class="r2">${c.r}</span>`;
+  return el;
+}
+// a card flies from the shoe (or deck) to where it lands
+function flyIn(el, from) {
+  if (RM || !from) return;
+  const a = from.getBoundingClientRect(), b = el.getBoundingClientRect();
+  el.animate([{ transform: `translate(${a.left - b.left}px,${a.top - b.top}px) rotate(-10deg)`, opacity: 0.4 }, { transform: "none", opacity: 1 }], { duration: 280, easing: "cubic-bezier(.2,.8,.25,1)" });
+}
+function flipTo(el, c, opts = {}) { // turn a face-down card over
+  const face = cardEl(c, opts);
+  if (RM) { el.replaceWith(face); return face; }
+  el.animate([{ transform: "scaleX(1)" }, { transform: "scaleX(0)" }], { duration: 110, easing: "ease-in" }).onfinish = () => { el.replaceWith(face); face.animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], { duration: 110, easing: "ease-out" }); };
+  return face;
+}
+
 // ------------------------------------------------------------------ Orbit 21
-const SUITS = ["sym_ore", "sym_ice", "sym_fuel", "sym_core"], RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
-const BJ = { p: [], d: [], bet: 0, live: false };
+// Basic strategy for six decks, dealer stands on soft 17, double after split allowed (the hint and the
+// simulation that measured the edge use this same table). Card values: A = 1, faces = 10.
+function bjStrategy(vals, up, canDouble, canSplit) {
+  const u = up === 1 ? 11 : up;
+  if (canSplit && vals.length === 2 && vals[0] === vals[1]) { const v = vals[0];
+    if (v === 1 || v === 8) return "P"; if (v === 9 && ((u >= 2 && u <= 6) || u === 8 || u === 9)) return "P";
+    if (v === 7 && u <= 7) return "P"; if (v === 6 && u <= 6) return "P"; if (v === 4 && (u === 5 || u === 6)) return "P"; if ((v === 2 || v === 3) && u <= 7) return "P"; }
+  let t = 0, a = 0; for (const c of vals) { t += c; if (c === 1) a++; }
+  const soft = a > 0 && t + 10 <= 21, tot = soft ? t + 10 : t;
+  if (soft) { if (tot >= 19) return "S"; if (tot === 18) return u >= 3 && u <= 6 ? (canDouble ? "D" : "S") : u <= 8 ? "S" : "H";
+    if (tot === 17) return u >= 3 && u <= 6 && canDouble ? "D" : "H"; if (tot >= 15) return u >= 4 && u <= 6 && canDouble ? "D" : "H"; return u >= 5 && u <= 6 && canDouble ? "D" : "H"; }
+  if (tot >= 17) return "S"; if (tot >= 13) return u <= 6 ? "S" : "H"; if (tot === 12) return u >= 4 && u <= 6 ? "S" : "H";
+  if (tot === 11) return u <= 10 && canDouble ? "D" : "H"; if (tot === 10) return u <= 9 && canDouble ? "D" : "H"; if (tot === 9) return u >= 3 && u <= 6 && canDouble ? "D" : "H"; return "H";
+}
+const BJ_EDGE = 0.00415;   // measured: 100 million hands of the strategy above under these rules (standard error 0.012%)
+$("bjEdgeNote").textContent = "The edge, 0.41%, is measured: 100 million simulated hands of basic strategy under exactly these rules (standard error 0.01%). A player who guesses loses 2 to 5%.";
+const bjv = c => c.r === "A" ? 1 : ["J", "Q", "K"].includes(c.r) ? 10 : +c.r;
+function bjTotal(cards) { let t = 0, a = false; for (const c of cards) { t += bjv(c); if (c.r === "A") a = true; } const soft = a && t + 10 <= 21; return { t: soft ? t + 10 : t, soft }; }
+const BJ = { shoe: [], cut: 0, hands: [], dealer: [], active: -1, busy: false, hint: false };
+function bjShuffle() { BJ.shoe = []; for (let d = 0; d < 6; d++) for (let s = 0; s < 4; s++) for (const r of RANKS) BJ.shoe.push({ r, s });
+  for (let i = BJ.shoe.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [BJ.shoe[i], BJ.shoe[j]] = [BJ.shoe[j], BJ.shoe[i]]; } BJ.cut = Math.round(BJ.shoe.length * 0.25); }
+bjShuffle();
 const bjBet = betPicker("bjBet", [10, 25, 50, 100], 25);
-const draw = () => ({ r: RANKS[Math.floor(rand() * 13)], s: SUITS[Math.floor(rand() * 4)] });
-const val = c => c.r === "A" ? 1 : ["J", "Q", "K"].includes(c.r) ? 10 : +c.r;
-function total(h) { let t = h.reduce((a, c) => a + val(c), 0); const soft = h.some(c => c.r === "A") && t + 10 <= 21; return { t: soft ? t + 10 : t, soft }; }
-const cardHTML = (c, hidden) => hidden ? `<div class="card back"><img src="minigames/card_back.png" alt="face-down card"></div>` : `<div class="card" aria-label="${c.r}"><span>${c.r}</span><img src="minigames/${c.s}.png" alt=""></div>`;
-function bjPaint(reveal) {
-  $("player").innerHTML = BJ.p.map(c => cardHTML(c)).join(""); $("dealer").innerHTML = BJ.d.map((c, i) => cardHTML(c, i === 1 && !reveal)).join("");
-  const pt = total(BJ.p); $("pTot").textContent = BJ.p.length ? `You: ${pt.soft ? "soft " : ""}${pt.t}` : "You";
-  $("dTot").textContent = BJ.d.length ? (reveal ? `Dealer: ${total(BJ.d).t}` : `Dealer shows ${BJ.d[0].r}`) : "Dealer";
-  ["bjHit", "bjStand"].forEach(id => $(id).disabled = !BJ.live); $("bjDouble").disabled = !(BJ.live && BJ.p.length === 2 && W.cr >= BJ.bet); $("bjDeal").disabled = BJ.live;
+const shoeEl = document.querySelector(".shoe .card");
+function bjDraw() { const c = BJ.shoe.pop(); $("bjLeft").textContent = BJ.shoe.length + " cards"; return c; }
+function bjLabel(h, i) {
+  const t = bjTotal(h.cards), bj = h.cards.length === 2 && t.t === 21 && !h.split;
+  return `<span class="lbl">${BJ.hands.length > 1 ? `Hand ${i + 1}: ` : "You: "}${h.cards.length ? (bj ? "blackjack" : (t.soft && t.t < 21 ? "soft " : "") + t.t) : ""} <span class="muted">stake ${h.bet}${h.doubled ? ", doubled" : ""}${h.result ? " &middot; " + h.result : ""}</span></span>`;
 }
-function bjEnd(msg, pay) { BJ.live = false; if (pay) win(pay); bjPaint(true); $("bjMsg").textContent = msg; }
-function bjDealer() {
-  while (total(BJ.d).t < 17) BJ.d.push(draw());
-  const p = total(BJ.p).t, d = total(BJ.d).t;
-  if (d > 21) bjEnd(`Dealer busts with ${d}. You win ${BJ.bet} cr.`, BJ.bet * 2);
-  else if (p > d) bjEnd(`${p} beats ${d}. You win ${BJ.bet} cr.`, BJ.bet * 2);
-  else if (p === d) bjEnd(`Push at ${p}. Stake back.`, BJ.bet);
-  else bjEnd(`Dealer's ${d} beats your ${p}.`, 0);
+function bjRenderHands() { // rebuild the labels; card elements are kept so their animations run
+  BJ.hands.forEach((h, i) => { h.el.classList.toggle("active", i === BJ.active); h.el.querySelector(".lblw").innerHTML = bjLabel(h, i); });
+  const up = BJ.dealer[0]; $("dTot").textContent = !BJ.dealer.length ? "Dealer" : BJ.holeUp ? `Dealer: ${bjTotal(BJ.dealer).t}` : `Dealer shows ${up.r}`;
 }
-$("bjDeal").onclick = () => {
-  const bet = bjBet(); if (!stake(bet, 0.010)) { $("bjMsg").textContent = "Not enough credits."; return; }
-  Object.assign(BJ, { bet, p: [draw(), draw()], d: [draw(), draw()], live: true });
-  const pn = total(BJ.p).t === 21, dn = total(BJ.d).t === 21;
-  if (pn || dn) { if (pn && dn) bjEnd("Both natural 21. Push.", bet); else if (pn) bjEnd(`Natural 21: pays 3:2, +${bet * 1.5} cr.`, bet * 2.5); else bjEnd("Dealer has a natural 21.", 0); return; }
-  $("bjMsg").textContent = "Hit, stand or double."; bjPaint(false);
+function bjNewHand(bet, cards = []) { const el = document.createElement("div"); el.className = "bjhand"; el.innerHTML = `<div class="lblw"></div><div class="fan"></div>`; $("pHands").appendChild(el); return { cards, bet, el, done: false, doubled: false, split: false, aces: false, result: "" }; }
+async function bjDealTo(h, card) { h.cards.push(card); const el = cardEl(card); h.el.querySelector(".fan").appendChild(el); flyIn(el, shoeEl); bjRenderHands(); await pause(260, "bj"); }
+async function bjDealDealer(card, hidden) { BJ.dealer.push(card); const el = cardEl(card, { hidden }); $("dealer").appendChild(el); if (hidden) BJ.holeEl = el; flyIn(el, shoeEl); bjRenderHands(); await pause(260, "bj"); }
+function bjButtons() {
+  const h = BJ.hands[BJ.active], live = !BJ.busy && h && !h.done;
+  $("bjHit").disabled = !live; $("bjStand").disabled = !live;
+  $("bjDouble").disabled = !(live && h.cards.length === 2 && W.cr >= h.bet);
+  $("bjSplit").disabled = !(live && h.cards.length === 2 && bjv(h.cards[0]) === bjv(h.cards[1]) && BJ.hands.length < 4 && !h.aces && W.cr >= h.bet);
+  $("bjDeal").disabled = BJ.busy || BJ.active >= 0;
+  if (BJ.hint && live) { const a = bjStrategy(h.cards.map(bjv), bjv(BJ.dealer[0]), !$("bjDouble").disabled, !$("bjSplit").disabled);
+    $("bjMsg").textContent = "Basic strategy says: " + { H: "hit", S: "stand", D: "double", P: "split" }[a] + "."; }
+}
+$("bjHint").onclick = () => { BJ.hint = !BJ.hint; $("bjHint").setAttribute("aria-pressed", BJ.hint); bjButtons(); };
+$("bjDeal").onclick = async () => {
+  const bet = bjBet(); if (BJ.busy || BJ.active >= 0) return;
+  if (!stake(bet, BJ_EDGE)) { $("bjMsg").textContent = "Not enough credits."; return; }
+  BJ.busy = true; bjButtons();
+  if (BJ.shoe.length <= BJ.cut) { $("bjMsg").textContent = "The cut card is out: the dealer shuffles a fresh shoe."; bjShuffle(); await pause(500, "bj"); }
+  $("pHands").innerHTML = ""; $("dealer").innerHTML = ""; BJ.dealer = []; BJ.holeUp = false;
+  BJ.hands = [bjNewHand(bet)]; BJ.active = 0; $("bjMsg").textContent = "Dealing.";
+  const h = BJ.hands[0];
+  await bjDealTo(h, bjDraw()); await bjDealDealer(bjDraw(), false); await bjDealTo(h, bjDraw()); await bjDealDealer(bjDraw(), true);
+  const pbj = bjTotal(h.cards).t === 21, up = bjv(BJ.dealer[0]), dbj = bjTotal(BJ.dealer).t === 21;
+  if ((up === 1 || up === 10) && !pbj) { $("bjMsg").textContent = "Dealer peeks for blackjack..."; await pause(450, "bj"); }
+  if (dbj || pbj) {
+    await bjReveal();
+    if (pbj && dbj) bjFinish([[h, "push", bet]], "Both have blackjack: a push.");
+    else if (pbj) bjFinish([[h, "blackjack", bet * 2.5]], `Blackjack pays 3:2: +${bet * 1.5} cr.`);
+    else bjFinish([[h, "lose", 0]], "Dealer has blackjack.");
+    return;
+  }
+  BJ.busy = false; $("bjMsg").textContent = "Hit, stand, double" + ($("bjSplit").disabled ? "." : " or split."); bjRenderHands(); bjButtons();
 };
-$("bjHit").onclick = () => { BJ.p.push(draw()); const t = total(BJ.p).t; if (t > 21) bjEnd(`Bust at ${t}.`, 0); else if (t === 21) bjDealer(); else bjPaint(false); };
-$("bjStand").onclick = () => bjDealer();
-$("bjDouble").onclick = () => { if (!stake(BJ.bet, 0.010)) return; BJ.bet *= 2; BJ.p.push(draw()); const t = total(BJ.p).t; if (t > 21) bjEnd(`Doubled and bust at ${t}.`, 0); else bjDealer(); };
-bjPaint(false);
+async function bjReveal() { if (BJ.holeUp) return; BJ.holeUp = true; flipTo(BJ.holeEl, BJ.dealer[1]); bjRenderHands(); await pause(320, "bj"); }
+async function bjNext() { // move to the next hand still to play, or let the dealer play
+  const h = BJ.hands[BJ.active]; h.done = true;
+  BJ.active++;
+  while (BJ.active < BJ.hands.length) {
+    const n = BJ.hands[BJ.active]; bjRenderHands();
+    if (n.cards.length === 1) { BJ.busy = true; bjButtons(); await bjDealTo(n, bjDraw()); BJ.busy = false; }
+    if (n.aces || bjTotal(n.cards).t === 21) { n.done = true; BJ.active++; continue; }
+    bjButtons(); return;
+  }
+  await bjDealerPlays();
+}
+async function bjDealerPlays() {
+  BJ.busy = true; BJ.active = BJ.hands.length; bjButtons(); bjRenderHands();
+  await bjReveal();
+  const live = BJ.hands.some(h => bjTotal(h.cards).t <= 21);
+  while (live && bjTotal(BJ.dealer).t < 17) { $("bjMsg").textContent = `Dealer has ${bjTotal(BJ.dealer).t}, draws.`; await pause(380, "bj"); BJ.dealer.push(bjDraw()); const el = cardEl(BJ.dealer[BJ.dealer.length - 1]); $("dealer").appendChild(el); flyIn(el, shoeEl); bjRenderHands(); await pause(300, "bj"); }
+  const d = bjTotal(BJ.dealer).t, out = BJ.hands.map(h => { const t = bjTotal(h.cards).t;
+    if (t > 21) return [h, "bust", 0]; if (d > 21 || t > d) return [h, "win", h.bet * 2]; if (t === d) return [h, "push", h.bet]; return [h, "lose", 0]; });
+  const paid = out.reduce((a, o) => a + o[2], 0), staked = BJ.hands.reduce((a, h) => a + h.bet, 0);
+  bjFinish(out, `${d > 21 ? `Dealer busts with ${d}.` : `Dealer stands on ${d}.`} ` + (paid > staked ? `You win ${paid - staked} cr.` : paid === staked ? "You break even." : `You lose ${staked - paid} cr.`));
+}
+function bjFinish(out, msg) {
+  let pay = 0; out.forEach(([h, res, p]) => { h.result = res; pay += p; }); if (pay) win(pay);
+  BJ.active = -1; BJ.busy = false; bjRenderHands(); BJ.hands.forEach(h => h.el.classList.remove("active")); bjButtons(); $("bjMsg").textContent = msg;
+}
+$("bjHit").onclick = async () => { const h = BJ.hands[BJ.active]; if (!h || BJ.busy) return; BJ.busy = true; bjButtons(); await bjDealTo(h, bjDraw()); BJ.busy = false;
+  const t = bjTotal(h.cards).t; if (t > 21) { $("bjMsg").textContent = `Bust at ${t}.`; await bjNext(); } else if (t === 21) await bjNext(); else bjButtons(); };
+$("bjStand").onclick = async () => { if (BJ.busy || BJ.active < 0) return; await bjNext(); };
+$("bjDouble").onclick = async () => { const h = BJ.hands[BJ.active]; if (!h || BJ.busy || !stake(h.bet, BJ_EDGE)) return; h.bet *= 2; h.doubled = true; BJ.busy = true; bjButtons(); await bjDealTo(h, bjDraw()); BJ.busy = false; await bjNext(); };
+$("bjSplit").onclick = async () => {
+  const h = BJ.hands[BJ.active]; if (!h || BJ.busy || !stake(h.bet, BJ_EDGE)) return;
+  const second = h.cards.pop(), n = bjNewHand(h.bet, [second]); n.split = h.split = true; n.aces = h.aces = second.r === "A";
+  h.el.after(n.el); BJ.hands.splice(BJ.active + 1, 0, n);
+  const fan = h.el.querySelector(".fan"); n.el.querySelector(".fan").appendChild(fan.lastElementChild);
+  BJ.busy = true; bjButtons(); await bjDealTo(h, bjDraw()); BJ.busy = false;
+  if (h.aces || bjTotal(h.cards).t === 21) await bjNext(); else { $("bjMsg").textContent = "Split. Playing the first hand."; bjButtons(); }
+};
+bjButtons();
+
+// ------------------------------------------------------------------ Star Chart keno
+// Pays are what a 1 cr stake returns (stake included), by sectors marked (n) and sectors the probe finds (k).
+const KPAY = { 1: { 1: 3.6 }, 2: { 1: 1, 2: 8.5 }, 3: { 2: 2, 3: 44 }, 4: { 2: 1, 3: 7, 4: 120 }, 5: { 3: 3, 4: 15, 5: 700 }, 6: { 3: 1, 4: 7, 5: 95, 6: 2000 },
+  7: { 3: 1, 4: 3, 5: 20, 6: 350, 7: 5000 }, 8: { 4: 2, 5: 14, 6: 95, 7: 1100, 8: 15000 }, 9: { 4: 1, 5: 6, 6: 44, 7: 300, 8: 4000, 9: 25000 },
+  10: { 0: 2, 5: 3, 6: 20, 7: 140, 8: 1000, 9: 5000, 10: 50000 } };
+const choose = (n, k) => { if (k < 0 || k > n) return 0; let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return r; };
+const kP = (n, k) => choose(n, k) * choose(80 - n, 20 - k) / choose(80, 20);     // hypergeometric: k of my n among the 20 drawn
+const KRTP = {}, KHIT = {};
+for (let n = 1; n <= 10; n++) { let r = 0, h = 0; for (const [k, v] of Object.entries(KPAY[n])) { r += kP(n, +k) * v; h += kP(n, +k); } KRTP[n] = r; KHIT[n] = h; }
+const KLO = Math.min(...Object.values(KRTP)), KHI = Math.max(...Object.values(KRTP));
+$("kOdds").textContent = `returns ${pct(KLO)} to ${pct(KHI)} by sectors marked (exact)`;
+const KN = { picks: new Set(), drawn: [], busy: false };
+const kBet = betPicker("kBet", [10, 20, 50], 10);   // stakes in tens, so a 3.6x or 8.5x pay is whole credits
+$("kGrid").innerHTML = Array.from({ length: 80 }, (_, i) => `<button class="kc" data-n="${i + 1}" aria-pressed="false" aria-label="Sector ${i + 1}"><span>${i + 1}</span></button>`).join("");
+const kCell = n => $("kGrid").children[n - 1];
+function kPaint() {
+  for (let n = 1; n <= 80; n++) {
+    const c = kCell(n), p = KN.picks.has(n), d = KN.drawn.includes(n), st = p && d ? "hit" : d ? "drawn" : p ? "pick" : "";
+    if (c.dataset.st === st) continue; c.dataset.st = st;
+    c.className = "kc" + (st ? " mark " + st : ""); c.setAttribute("aria-pressed", p);
+    c.querySelector("img")?.remove(); if (st) c.insertAdjacentHTML("beforeend", `<img src="minigames/kn_${st === "pick" ? "pick" : st}.png" alt="">`);
+  }
+  const n = KN.picks.size; $("kPayH").textContent = n ? `Pays for ${n} marked, at a ${kBet()} cr stake` : "Pays: mark 1 to 10 sectors";
+  const hits = KN.drawn.length === 20 ? KN.drawn.filter(x => KN.picks.has(x)).length : -1;
+  $("kPay").innerHTML = n ? `<thead><tr><th>Found</th><th class="num">Pays</th><th class="num">Chance</th><th class="num">Returns</th></tr></thead><tbody>` +
+    Object.keys(KPAY[n]).map(Number).sort((a, b) => b - a).map(k => `<tr class="${k === hits ? "on" : ""}"><td>${k} of ${n}</td><td class="num">${(KPAY[n][k] * kBet()).toLocaleString()} cr</td><td class="num">1 in ${(1 / kP(n, k)).toLocaleString(undefined, { maximumFractionDigits: (1 / kP(n, k)) < 100 ? 2 : 0 })}</td><td class="num">${pct(kP(n, k) * KPAY[n][k])}</td></tr>`).join("") +
+    `<tr><td><b>Total</b></td><td></td><td class="num">a win 1 in ${(1 / KHIT[n]).toFixed(2)}</td><td class="num"><b>${pct(KRTP[n])}</b></td></tr></tbody>` : "";
+}
+$("kGrid").querySelectorAll(".kc").forEach(c => c.onclick = () => {
+  if (KN.busy) return; const n = +c.dataset.n;
+  if (KN.drawn.length) { KN.drawn = []; $("kDrawn").innerHTML = ""; }
+  if (KN.picks.has(n)) KN.picks.delete(n); else if (KN.picks.size < 10) KN.picks.add(n); else { $("kMsg").textContent = "Ten sectors is the most."; return; }
+  $("kMsg").textContent = `${KN.picks.size} marked.`; kPaint();
+});
+$("kBet").addEventListener("click", () => kPaint());
+$("kClear").onclick = () => { if (KN.busy) return; KN.picks.clear(); KN.drawn = []; $("kDrawn").innerHTML = ""; $("kMsg").textContent = "Mark up to 10 sectors."; kPaint(); };
+$("kQuick").onclick = () => { if (KN.busy) return; const n = KN.picks.size || 6; KN.picks.clear(); KN.drawn = []; $("kDrawn").innerHTML = "";
+  while (KN.picks.size < n) KN.picks.add(1 + Math.floor(rand() * 80)); $("kMsg").textContent = `Quick pick: ${n} sectors.`; kPaint(); };
+$("kGo").onclick = async () => {
+  const n = KN.picks.size, bet = kBet(); if (KN.busy) return;
+  if (!n) { $("kMsg").textContent = "Mark at least one sector."; return; }
+  if (!stake(bet, 1 - KRTP[n])) { $("kMsg").textContent = "Not enough credits."; return; }
+  KN.busy = true; ["kGo", "kQuick", "kClear"].forEach(id => $(id).disabled = true);
+  const pool = Array.from({ length: 80 }, (_, i) => i + 1); for (let i = 79; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const draw = pool.slice(0, 20); KN.drawn = []; $("kDrawn").innerHTML = ""; kPaint(); $("kMsg").textContent = "The probe sweeps the chart...";
+  let found = 0;
+  for (const x of draw) {
+    await pause(150, "keno");
+    KN.drawn.push(x); const hit = KN.picks.has(x); if (hit) found++;
+    kPaint(); const c = kCell(x); c.classList.remove("ping"); void c.offsetWidth; c.classList.add("ping");
+    $("kDrawn").insertAdjacentHTML("beforeend", `<span class="${hit ? "hit" : ""}">${x}</span>`);
+    $("kMsg").textContent = `Ping ${KN.drawn.length} of 20: sector ${x}${hit ? ", one of yours" : ""}. Found ${found} of ${n}.`;
+  }
+  const pay = Math.round((KPAY[n][found] || 0) * bet * 100) / 100;
+  if (pay) win(pay);
+  kPaint(); $("kMsg").textContent = `The probe found ${found} of your ${n}. ` + (pay ? `Pays ${pay.toLocaleString()} cr.` : "No pay.");
+  KN.busy = false; ["kGo", "kQuick", "kClear"].forEach(id => $(id).disabled = false);
+};
+$("kMath").innerHTML = `<p>The chance the probe finds exactly <i>k</i> of your <i>n</i> sectors is hypergeometric: <code>P(k) = C(n,k) &middot; C(80&minus;n, 20&minus;k) / C(80,20)</code>, where <code>C(a,b)</code> counts the ways to choose <i>b</i> of <i>a</i>. The return is the sum of <code>P(k) &times; pay(k)</code>; the page works every figure out on load.</p>
+<div class="scroll"><table class="t"><thead><tr><th>Marked</th><th class="num">Return</th><th class="num">Edge</th><th class="num">A win</th><th class="num">Top pay</th><th class="num">Top pay odds</th></tr></thead><tbody>${
+  Object.keys(KPAY).map(Number).map(n => { const top = Math.max(...Object.keys(KPAY[n]).map(Number)); return `<tr><td>${n}</td><td class="num">${pct(KRTP[n])}</td><td class="num">${pct(1 - KRTP[n])}</td><td class="num">1 in ${(1 / KHIT[n]).toFixed(2)}</td><td class="num">${KPAY[n][top].toLocaleString()}x</td><td class="num">1 in ${Math.round(1 / kP(n, top)).toLocaleString()}</td></tr>`; }).join("")
+}</tbody></table></div>`;
+kPaint();
+
+// ------------------------------------------------------------------ Hold'em
+// Cards are 0..51: rank = c >> 2 (0 = deuce .. 12 = ace), suit = c & 3 (ore, coolant, fuel, core).
+const PR = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"], PR_NAME = ["twos", "threes", "fours", "fives", "sixes", "sevens", "eights", "nines", "tens", "jacks", "queens", "kings", "aces"];
+const HAND_NAME = ["high card", "a pair", "two pair", "three of a kind", "a straight", "a flush", "a full house", "four of a kind", "a straight flush"];
+const pcard = c => ({ r: PR[c >> 2], s: c & 3 });
+function rank5(cs) { // a single number: bigger is better
+  const r = cs.map(c => c >> 2).sort((a, b) => b - a), flush = cs.every(c => (c & 3) === (cs[0] & 3));
+  const cnt = {}; r.forEach(x => cnt[x] = (cnt[x] || 0) + 1);
+  const groups = Object.entries(cnt).map(([x, n]) => [n, +x]).sort((a, b) => b[0] - a[0] || b[1] - a[1]);
+  const uniq = [...new Set(r)]; let straight = -1;
+  if (uniq.length === 5) { if (uniq[0] - uniq[4] === 4) straight = uniq[0]; else if (uniq[0] === 12 && uniq[1] === 3) straight = 3; }
+  let cat, keys;
+  if (straight >= 0 && flush) { cat = 8; keys = [straight]; }
+  else if (groups[0][0] === 4) { cat = 7; keys = [groups[0][1], groups[1][1]]; }
+  else if (groups[0][0] === 3 && groups[1][0] === 2) { cat = 6; keys = [groups[0][1], groups[1][1]]; }
+  else if (flush) { cat = 5; keys = r; }
+  else if (straight >= 0) { cat = 4; keys = [straight]; }
+  else if (groups[0][0] === 3) { cat = 3; keys = groups.map(g => g[1]); }
+  else if (groups[0][0] === 2 && groups[1][0] === 2) { cat = 2; keys = groups.map(g => g[1]); }
+  else if (groups[0][0] === 2) { cat = 1; keys = groups.map(g => g[1]); }
+  else { cat = 0; keys = r; }
+  let s = cat; for (let i = 0; i < 5; i++) s = s * 16 + (keys[i] ?? 0); return s;
+}
+const COMB = []; for (let a = 0; a < 7; a++) for (let b = a + 1; b < 7; b++) COMB.push([a, b]);   // the two cards left out of seven
+function best(cards) { // best five of up to seven: {score, five}
+  if (cards.length <= 5) return { score: rank5(cards), five: cards };
+  let bs = -1, bf = null; const n = cards.length;
+  for (const [a, b] of COMB) { if (a >= n || b >= n) continue; const f = cards.filter((_, i) => i !== a && i !== b); if (n === 6 && b !== 6) continue; const s = rank5(f); if (s > bs) { bs = s; bf = f; } }
+  if (n === 6) for (let a = 0; a < 6; a++) { const f = cards.filter((_, i) => i !== a); const s = rank5(f); if (s > bs) { bs = s; bf = f; } }
+  return { score: bs, five: bf };
+}
+const catOf = s => Math.floor(s / 16 ** 5);
+function describe(s) { const cat = catOf(s), k1 = Math.floor(s / 16 ** 4) % 16, k2 = Math.floor(s / 16 ** 3) % 16; return HAND_NAME[cat] + (cat === 0 ? `, ${PR[k1]} high` : cat === 1 || cat === 3 || cat === 7 ? `, ${PR_NAME[k1]}` : cat === 2 ? `, ${PR_NAME[k1]} and ${PR_NAME[k2]}` : cat === 4 || cat === 5 || cat === 8 ? `, ${PR[k1]} high` : cat === 6 ? `, ${PR_NAME[k1]} full` : ""); }
+// chance to win, by dealing the rest out `sims` times against `opp` unknown hands
+function equity(hole, board, opp, sims) {
+  const known = new Set([...hole, ...board]), rest = []; for (let c = 0; c < 52; c++) if (!known.has(c)) rest.push(c);
+  let score = 0; const need = opp * 2 + (5 - board.length);
+  for (let s = 0; s < sims; s++) {
+    for (let i = 0; i < need; i++) { const j = i + Math.floor(rand() * (rest.length - i)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+    const b = board.concat(rest.slice(opp * 2, need)), me = best(hole.concat(b)).score;
+    let top = true, ties = 0;
+    for (let o = 0; o < opp; o++) { const v = best([rest[o * 2], rest[o * 2 + 1], ...b]).score; if (v > me) { top = false; break; } if (v === me) ties++; }
+    if (top) score += 1 / (1 + ties);
+  }
+  return score / sims;
+}
+const PK_SB = 2, PK_BB = 4, PK_BUY = 200, PK_RAKE = 0.05, PK_CAP = 12;
+const SEATS = [
+  { name: "You", human: true },
+  { name: "Old Harrow", img: "ai_harrow", tag: "Retired driller. Tight and passive: plays few hands, rarely raises.", p: { pre: 1.45, tight: 0.08, aggr: 0.25, bluff: 0.02, size: 0.55 } },
+  { name: "Wren Askew", img: "ai_wren", tag: "Smuggler. Loose and aggressive: raises often, bluffs.", p: { pre: 0.85, tight: -0.04, aggr: 0.75, bluff: 0.2, size: 0.9 } },
+  { name: "Officer Dace", img: "ai_dace", tag: "Customs, off duty. Tight and aggressive: few hands, played hard.", p: { pre: 1.3, tight: 0.03, aggr: 0.65, bluff: 0.07, size: 0.75 } },
+  { name: "Bolt", img: "ai_bolt", tag: "Loader drone. Loose and passive: calls almost anything.", p: { pre: 0.75, tight: -0.1, aggr: 0.1, bluff: 0.02, size: 0.5 } },
+].map((s, id) => Object.assign(s, { id, stack: s.human ? 0 : PK_BUY, sitting: !s.human, cards: [], inHand: false, folded: true, allin: false, bet: 0, total: 0, acted: false, act: "" }));
+const PK = { button: 0, board: [], deck: [], curBet: 0, lastRaise: PK_BB, turn: -1, running: false, buyin: 0, waiting: null, log: [], winners: new Set(), showdown: false, street: "" };
+const ME = SEATS[0];
+const potTotal = () => SEATS.reduce((a, s) => a + s.total, 0);
+const live = () => SEATS.filter(s => s.inHand && !s.folded);
+const nextSeat = (i, test) => { for (let k = 1; k <= 5; k++) { const j = (i + k) % 5; if (test(SEATS[j])) return j; } return -1; };
+function pkLog(html) { PK.log.push(html); if (PK.log.length > 60) PK.log.shift(); $("pkLog").innerHTML = PK.log.map(x => `<div>${x}</div>`).join(""); $("pkLog").scrollTop = 1e6; }
+function seatHTML(s) {
+  const show = s.human || (PK.showdown && !s.folded && s.inHand);
+  return `<div class="seat${PK.turn === s.id ? " turn" : ""}${s.inHand && s.folded ? " out" : ""}${PK.winners.has(s.id) ? " won" : ""}" id="seat${s.id}">
+    ${PK.button === s.id && s.inHand ? `<img class="dbtn" src="minigames/dealer_btn.png" alt="dealer button">` : ""}
+    <div class="top">${s.human ? `<span></span>` : `<img class="face" src="minigames/${s.img}.png" alt="">`}<div style="min-width:0"><div class="nm">${s.name}</div>${s.tag ? `<div class="per">${s.tag}</div>` : ""}</div></div>
+    <div class="stk">${s.sitting ? `stack ${s.stack}` : "not seated"}${s.bet ? ` &middot; bet ${s.bet}` : ""}${s.allin ? " &middot; all in" : ""}</div>
+    <div class="cards"></div><div class="act">${s.act}</div></div>`;
+}
+function pkRender(dealt) { // dealt: cards just dealt, to fly in from the deck
+  $("pkAI").innerHTML = SEATS.slice(1).map(seatHTML).join(""); $("pkMe").innerHTML = seatHTML(ME);
+  $("seat0").querySelector(".top").style.gridTemplateColumns = "1fr"; $("seat0").querySelector(".top > span").remove();
+  for (const s of SEATS) {
+    const box = $("seat" + s.id).querySelector(".cards"); if (!s.inHand) continue;
+    const show = s.human || (PK.showdown && !s.folded);
+    const best5 = PK.bestFive || [];
+    s.cards.forEach(c => { const el = cardEl(pcard(c), { sm: !s.human, hidden: !show }); if (show && PK.showdown && best5.includes(c) && PK.winners.has(s.id)) el.classList.add("win"); if (s.folded) el.classList.add("dim"); box.appendChild(el); if (dealt && dealt.includes(c)) flyIn(el, $("pkBoard")); });
+  }
+  const bd = $("pkBoard"); bd.innerHTML = "";
+  PK.board.forEach(c => { const el = cardEl(pcard(c)); if (PK.showdown && (PK.bestFive || []).includes(c)) el.classList.add("win"); bd.appendChild(el); if (dealt && dealt.includes(c)) flyIn(el, $("pkPot")); });
+  for (let i = PK.board.length; i < 5; i++) { const ph = document.createElement("div"); ph.className = "card"; ph.style.cssText = "background:transparent;border:1px dashed rgba(122,204,196,.35)"; ph.setAttribute("aria-hidden", "true"); bd.appendChild(ph); }
+  $("pkPot").textContent = `Pot ${potTotal()}`; paintTable(ME.stack); $("pkStreet").textContent = PK.street || (ME.sitting ? "Between hands" : "Waiting for a player");
+  $("pkSit").disabled = PK.running; $("pkSit").textContent = ME.sitting ? `Top up 200 cr (stack ${ME.stack})` : "Buy in 200 cr";
+  $("pkNext").disabled = PK.running || !ME.sitting || ME.stack <= 0; $("pkStand").disabled = PK.running || !ME.sitting;
+}
+function pkButtons(on) {
+  const toCall = PK.curBet - ME.bet, pot = potTotal(), maxTo = ME.bet + ME.stack, minTo = Math.min(maxTo, PK.curBet + Math.max(PK.lastRaise, PK_BB));
+  const can = on && maxTo > PK.curBet, word = PK.curBet === 0 ? "Bet" : "Raise to";
+  if (!on) { [["pkFold", "Fold"], ["pkCall", "Check / call"], ["pkMin", "Min raise"], ["pkHalf", "Half pot"], ["pkPotB", "Pot"], ["pkAll", "All in"]].forEach(([id, t]) => { $(id).disabled = true; $(id).textContent = t; }); return; }
+  $("pkFold").disabled = !on || toCall <= 0; $("pkCall").disabled = !on;
+  $("pkCall").textContent = toCall <= 0 ? "Check" : toCall >= ME.stack ? `Call all in (${ME.stack})` : `Call ${toCall}`;
+  const sz = f => Math.min(maxTo, Math.max(minTo, PK.curBet + Math.round((pot + toCall) * f)));
+  [["pkMin", minTo, "Min"], ["pkHalf", sz(0.5), "Half pot"], ["pkPotB", sz(1), "Pot"]].forEach(([id, to, nm]) => { $(id).disabled = !can || to >= maxTo; $(id).dataset.to = to; $(id).textContent = `${nm}: ${word.toLowerCase()} ${to}`; });
+  $("pkAll").disabled = !can; $("pkAll").dataset.to = maxTo; $("pkAll").textContent = `All in (${maxTo})`;
+}
+function humanAct() { return new Promise(res => { PK.waiting = res; pkButtons(true); $("pkMsg").textContent = PK.curBet - ME.bet > 0 ? `Your turn: ${PK.curBet - ME.bet} to call, pot ${potTotal()}.` : "Your turn: check or bet."; }); }
+const pkAnswer = a => { if (!PK.waiting) return; const r = PK.waiting; PK.waiting = null; pkButtons(false); r(a); };
+$("pkFold").onclick = () => pkAnswer({ a: "fold" });
+$("pkCall").onclick = () => pkAnswer({ a: PK.curBet - ME.bet > 0 ? "call" : "check" });
+["pkMin", "pkHalf", "pkPotB", "pkAll"].forEach(id => $(id).onclick = () => pkAnswer({ a: "raise", to: +$(id).dataset.to }));
+async function aiAct(s) {
+  s.act = "thinking..."; pkRender(); await pause(450 + rand() * 450, "poker");
+  const opp = live().length - 1, pre = PK.board.length === 0, eq = equity(s.cards, PK.board, opp, pre ? 220 : 320);
+  const toCall = PK.curBet - s.bet, pot = potTotal(), odds = toCall > 0 ? toCall / (pot + toCall) : 0, fair = 1 / (opp + 1), p = s.p, r = rand();
+  const maxTo = s.bet + s.stack, canRaise = maxTo > PK.curBet, minTo = PK.curBet + Math.max(PK.lastRaise, PK_BB);
+  const raiseTo = f => ({ a: "raise", to: Math.min(maxTo, Math.max(minTo, PK.curBet + Math.round((pot + toCall) * p.size * f))) });
+  s.eq = eq;
+  if (pre) { // before the flop: play a hand whose chance beats this player's bar; the bar rises when someone has raised
+    const bar = fair * p.pre * (toCall > PK_BB * 2 ? 1.25 : 1) + (toCall > s.stack * 0.4 ? 0.12 : 0);
+    if (eq > bar * 1.45 && r < 0.3 + p.aggr * 0.7 && canRaise) return raiseTo(0.8 + rand() * 0.6);
+    if (toCall <= 0) return r < p.bluff ? raiseTo(0.6) : { a: "check" };
+    if (eq >= bar || (toCall <= PK_SB && eq >= bar * 0.8)) return { a: "call" };
+    return r < p.bluff * 0.5 && canRaise ? raiseTo(1) : { a: "fold" };
+  }
+  const strong = eq > fair + 0.22 - p.aggr * 0.08;
+  if (toCall <= 0) {
+    if (strong && r < 0.35 + p.aggr * 0.6 && canRaise) return raiseTo(0.6 + rand() * 0.5);
+    if (r < p.bluff && canRaise) return raiseTo(0.5 + rand() * 0.3);   // a bluff: a bet with little behind it
+    return { a: "check" };
+  }
+  const need = odds + p.tight + (toCall >= s.stack ? 0.06 : 0);
+  if (eq > fair + 0.3 && r < p.aggr * 0.85 && canRaise) return raiseTo(0.8 + rand() * 0.6);
+  if (eq >= need) return { a: "call" };
+  if (r < p.bluff * 0.5 && canRaise && toCall < pot * 0.5) return raiseTo(1);
+  return { a: "fold" };
+}
+function put(s, amt) { amt = Math.min(amt, s.stack); s.stack -= amt; s.bet += amt; s.total += amt; if (s.stack === 0) s.allin = true; if (s.human) { W.bet += amt; paint(); } }
+function apply(s, d) {
+  const toCall = PK.curBet - s.bet;
+  if (d.a === "fold") { s.folded = true; s.act = "folds"; }
+  else if (d.a === "check" || (d.a === "call" && toCall <= 0)) s.act = "checks";
+  else if (d.a === "call") { put(s, toCall); s.act = s.allin ? `calls all in (${s.total})` : `calls ${toCall}`; }
+  else { const to = Math.min(d.to, s.bet + s.stack), inc = to - PK.curBet, opened = PK.curBet === 0; put(s, to - s.bet);
+    if (inc > 0) { if (inc >= PK.lastRaise) PK.lastRaise = inc; PK.curBet = to; SEATS.forEach(o => { if (o !== s) o.acted = false; }); }
+    s.act = s.allin ? `all in for ${s.bet}` : opened ? `bets ${to}` : `raises to ${to}`; }
+  s.acted = true; pkLog(`<b>${s.name}</b> ${s.act}`);
+}
+async function bettingRound(start) {
+  SEATS.forEach(s => { s.acted = false; });
+  let i = start;
+  for (let guard = 0; guard < 400; guard++) {
+    if (live().length <= 1) return;
+    const actors = live().filter(s => !s.allin), owe = actors.filter(s => !s.acted || s.bet < PK.curBet);
+    if (!owe.length) return;
+    if (actors.length === 1 && actors[0].bet >= PK.curBet) return;
+    const s = SEATS[i];
+    if (s.inHand && !s.folded && !s.allin && (!s.acted || s.bet < PK.curBet)) {
+      PK.turn = s.id; pkRender();
+      const d = s.human ? await humanAct() : await aiAct(s);
+      apply(s, d); PK.turn = -1; pkRender(); await pause(s.human ? 150 : 320, "poker");
+    }
+    i = (i + 1) % 5;
+  }
+}
+async function pkHand() {
+  PK.running = true; PK.showdown = false; PK.winners = new Set(); PK.bestFive = null; PK.board = []; PK.curBet = 0;
+  SEATS.slice(1).forEach(s => { if (s.stack < PK_BB) { s.stack += PK_BUY; pkLog(`${s.name} buys more chips (${PK_BUY}).`); } });
+  SEATS.forEach(s => Object.assign(s, { inHand: s.sitting && s.stack > 0, folded: !(s.sitting && s.stack > 0), allin: false, bet: 0, total: 0, cards: [], act: "" }));
+  PK.button = nextSeat(PK.button, s => s.inHand);
+  PK.deck = Array.from({ length: 52 }, (_, i) => i); for (let i = 51; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [PK.deck[i], PK.deck[j]] = [PK.deck[j], PK.deck[i]]; }
+  const sb = nextSeat(PK.button, s => s.inHand), bb = nextSeat(sb, s => s.inHand);
+  pkLog(`<b>New hand.</b> ${SEATS[PK.button].name} has the button.`);
+  put(SEATS[sb], PK_SB); SEATS[sb].act = `small blind ${PK_SB}`; put(SEATS[bb], PK_BB); SEATS[bb].act = `big blind ${PK_BB}`;
+  PK.curBet = PK_BB; PK.lastRaise = PK_BB; PK.street = "Pre-flop"; $("pkMsg").textContent = "Dealing.";
+  for (let round = 0; round < 2; round++) for (let k = 0, i = sb; k < 5; k++, i = (i + 1) % 5) { const s = SEATS[i]; if (!s.inHand) continue; const c = PK.deck.pop(); s.cards.push(c); pkRender([c]); await pause(120, "poker"); }
+  await bettingRound(nextSeat(bb, () => true));
+  for (const [n, name] of [[3, "Flop"], [1, "Turn"], [1, "River"]]) {
+    if (live().length <= 1) break;
+    SEATS.forEach(s => { s.bet = 0; if (!s.folded) s.act = s.allin ? "all in" : ""; }); PK.curBet = 0; PK.lastRaise = PK_BB; PK.street = name;
+    const dealt = []; for (let k = 0; k < n; k++) { const c = PK.deck.pop(); PK.board.push(c); dealt.push(c); }
+    pkLog(`${name}: ${dealt.map(c => { const x = pcard(c); return x.r + " " + SUIT_NAME[x.s]; }).join(", ")}`);
+    pkRender(dealt); await pause(500, "poker");
+    if (live().filter(s => !s.allin).length >= 2) await bettingRound(nextSeat(PK.button, () => true));
+  }
+  pkAward(); PK.running = false; PK.turn = -1; pkRender();
+  if (ME.stack <= 0) $("pkMsg").textContent += " You are out of chips: buy in again, or stand up.";
+}
+function pkAward() {
+  const pot = potTotal(), contenders = live(), flop = PK.board.length >= 3;
+  const rake = flop ? Math.min(PK_CAP, Math.floor(pot * PK_RAKE)) : 0;
+  if (ME.inHand && rake) { W.edge += rake * ME.total / pot; paint(); }       // the player's share of what the house took
+  SEATS.forEach(s => { s.bet = 0; });
+  if (contenders.length === 1) { const w = contenders[0]; w.stack += pot - rake; PK.winners.add(w.id); w.act = `wins ${pot - rake}`;
+    $("pkMsg").textContent = `${w.human ? "You win" : w.name + " wins"} ${pot - rake} uncontested.` + (rake ? ` Rake ${rake}.` : " No flop, no rake.");
+    pkLog(`<b>${w.name}</b> wins ${pot - rake}${rake ? ` (rake ${rake})` : ""}.`); PK.street = "Hand over"; SEATS.forEach(s => s.total = 0); return; }
+  PK.showdown = true; PK.street = "Showdown";
+  const sc = new Map(contenders.map(s => [s.id, best(s.cards.concat(PK.board))]));
+  // side pots: each level of what the all-in players put in makes a pot only those who matched it can win
+  const levels = [...new Set(contenders.map(s => s.total))].sort((a, b) => a - b); let prev = 0, rakeLeft = rake; const got = new Map(); let mainBest = null;
+  for (const lv of levels) {
+    let amt = SEATS.reduce((a, s) => a + Math.max(0, Math.min(s.total, lv) - prev), 0); const take = Math.min(rakeLeft, amt); amt -= take; rakeLeft -= take;
+    const elig = contenders.filter(s => s.total >= lv), top = Math.max(...elig.map(s => sc.get(s.id).score)), ws = elig.filter(s => sc.get(s.id).score === top);
+    if (!mainBest) mainBest = { ws, score: top };
+    const order = []; for (let k = 1; k <= 5; k++) { const s = SEATS[(PK.button + k) % 5]; if (ws.includes(s)) order.push(s); }
+    const share = Math.floor(amt / ws.length); let odd = amt - share * ws.length;
+    order.forEach(s => { const g = share + (odd-- > 0 ? 1 : 0); got.set(s.id, (got.get(s.id) || 0) + g); });
+    prev = lv;
+  }
+  got.forEach((g, id) => { SEATS[id].stack += g; if (g > 0) PK.winners.add(id); });
+  contenders.forEach(s => { s.act = describe(sc.get(s.id).score) + (got.get(s.id) ? ` &middot; wins ${got.get(s.id)}` : ""); });
+  PK.bestFive = sc.get(mainBest.ws[0].id).five;
+  const names = mainBest.ws.map(s => s.human ? "you" : s.name).join(" and ");
+  $("pkMsg").textContent = `Showdown: ${names[0].toUpperCase() + names.slice(1)} ${mainBest.ws.length > 1 ? "split" : mainBest.ws[0].human ? "win" : "wins"} with ${describe(mainBest.score)}.` + (rake ? ` Rake ${rake}.` : "");
+  contenders.forEach(s => pkLog(`${s.name}: ${s.cards.map(c => { const x = pcard(c); return x.r + " " + SUIT_NAME[x.s]; }).join(", ")} &rarr; ${describe(sc.get(s.id).score)}${got.get(s.id) ? `, <b>wins ${got.get(s.id)}</b>` : ""}`));
+  SEATS.forEach(s => s.total = 0);
+}
+$("pkSit").onclick = () => {
+  if (PK.running) return; if (W.cr < PK_BUY) { $("pkMsg").textContent = "Not enough credits for the buy-in."; return; }
+  W.cr -= PK_BUY; PK.buyin += PK_BUY; paintTable(ME.stack + PK_BUY); ME.stack += PK_BUY; ME.sitting = true;
+  $("pkMsg").textContent = `You take the seat with ${ME.stack} in chips.`; pkLog(`You buy ${PK_BUY} in chips.`); pkRender(); if (!PK.played) { PK.played = true; pkHand(); }
+};
+$("pkNext").onclick = () => { if (!PK.running && ME.sitting && ME.stack > 0) pkHand(); };
+$("pkStand").onclick = () => {
+  if (PK.running || !ME.sitting) return; const back = ME.stack;
+  W.cr += back; W.net += back - PK.buyin; paint(); pkLog(`You cash out ${back} (bought in for ${PK.buyin}).`);
+  $("pkMsg").textContent = `You cash out ${back} cr: ${back - PK.buyin >= 0 ? "up" : "down"} ${Math.abs(back - PK.buyin)} at this table.`;
+  ME.stack = 0; ME.sitting = false; PK.buyin = 0; PK.played = false; paintTable(0); SEATS.forEach(s => { s.inHand = false; s.cards = []; s.act = ""; }); PK.board = []; PK.street = ""; pkRender();
+};
+function paintTable(n) { $("wTable").textContent = n.toLocaleString(); }
+pkButtons(false); pkRender();
 
 // ------------------------------------------------------------------ race book
 const RUNNERS = [
@@ -528,17 +1402,33 @@ function raceDraw(dt) {
 }
 newCard();
 
-// ------------------------------------------------------------------ odds table
-$("oddsTable").innerHTML = [
-  ["Reactor Roll", "Every bar", (SLOT.rtp * 100).toFixed(1) + "%", ((1 - SLOT.rtp) * 100).toFixed(1) + "%", "25 cr", "Computed from the reel strips above by this page"],
-  ["Hazard Dock", "Every bar, docks", "83.3%", "16.7%", "50 cr", "Exact: 30 of 36 for every bet"],
-  ["Orbit 21", "Trade hubs", "99.0%", "1.0%", "100 cr", "Perfect basic strategy; a casual player loses 3 to 5%"],
-  ["Race book", "Trade hubs, the den", "88%", "12%", "100 cr", "Margin built into the odds; rounded to 0.1"],
-  ["Ore sorter", "Mining outposts", "n/a", "none", "n/a", "A job, not a bet: skill pays, no stake"],
-].map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td class="num">${r[2]}</td><td class="num">${r[3]}</td><td class="num">${r[4]}</td><td class="muted">${r[5]}</td></tr>`).join("");
+// ------------------------------------------------------------------ odds table (every figure from the rules above)
+function oddsTable() {
+  const slotRow = M => [M.name, M.fmt, pct(M.math.rtp), pct(1 - M.math.rtp), M.stakes[M.stakes.length - 1] + " cr",
+    `Exact, from its strips and paytable${M.hit ? `; a win 1 in ${(1 / M.hit).toFixed(2)}${M.hitExact ? " (exact)" : " (estimated, 200,000 seeded spins)"}` : "; hit rate simulating"}`];
+  $("oddsTable").innerHTML = [
+    ...MACHINES.map(slotRow),
+    ["Orbit 21", "Blackjack, 6 decks", pct(1 - BJ_EDGE), pct(BJ_EDGE), "100 cr", "Basic strategy, measured over 100 million hands; a casual player loses 2 to 5%"],
+    ["Star Chart", "Keno, 80 sectors", `${pct(KLO)} to ${pct(KHI)}`, `${pct(1 - KHI)} to ${pct(1 - KLO)}`, "50 cr", "Exact (hypergeometric), by how many sectors are marked"],
+    ["Hold'em", "Poker against four NPCs", "skill", "rake", "200 cr buy-in", "No house edge on the cards: the house takes 5% of every pot that sees a flop, at most 12 chips"],
+    ["Hazard Dock", "Dice", "83.3%", "16.7%", "50 cr", "Exact: 30 of 36 for every bet"],
+    ["Race book", "Ship races", "88%", "12%", "100 cr", "Margin built into the odds; rounded to 0.1"],
+    ["Ore sorter", "A shift, not a bet", "n/a", "none", "n/a", "A job: skill pays, no stake"],
+  ].map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td class="num">${r[2]}</td><td class="num">${r[3]}</td><td class="num">${r[4]}</td><td class="muted">${r[5]}</td></tr>`).join("");
+}
+oddsTable();
 
 // ------------------------------------------------------------------ loop
 let last = performance.now();
-function loop(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; oreDraw(dt); raceDraw(dt); requestAnimationFrame(loop); }
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  oreDraw(dt);
+  if (TAB === "race") raceDraw(dt);
+  if (TAB === "slots") slotFrame(now, dt);
+  requestAnimationFrame(loop);
+}
 paint(); requestAnimationFrame(loop);
+{ let t0 = (location.hash || "").slice(1); if (!TABS.some(t => t.id === "t-" + t0)) { try { t0 = localStorage.getItem("mg-tab") || "slots"; } catch (e) { t0 = "slots"; } } openTab(TABS.some(t => t.id === "t-" + t0) ? t0 : "slots"); }
+// test hooks (used by the headless check): pick a machine, force the next spin's stops, read state
+window.MG = { MACHINES, SL, BJ, KN, PK, SEATS, W, openTab, pickMachine: id => pickMachine(MACHINES.find(M => M.id === id)), force: stops => { SL.force = stops; }, spin: () => spin(false), evaluate };
 </script>

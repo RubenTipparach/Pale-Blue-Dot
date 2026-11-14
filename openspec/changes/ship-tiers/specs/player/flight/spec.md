@@ -19,7 +19,7 @@ on-rails orbits; ships MAY NOT.
 - **AND** no orbital element solver participates
 
 #### Scenario: A rocket's predicted path
-- **WHEN** a rocket coasts in low orbit round Pale Blue and its predicted path is drawn
+- **WHEN** a rocket coasts in low orbit round Tenebris and its predicted path is drawn
 - **THEN** the path is the orbital field integrated forward from the rocket's state with the game's step
 - **AND** the rocket, left alone, flies along it
 

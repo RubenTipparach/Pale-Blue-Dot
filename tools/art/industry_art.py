@@ -740,6 +740,273 @@ ICONS = {
 REFS = ["furnace_barge", "armour_plating", "emp_burst", "drop_tanks", "glass_seraph"]
 
 
+# ---- 2026-11-14: mining tiers, the rig and the platform, freighters, the four carriers (industry-tiers)
+def worker():
+    """A hired townsfolk miner: hard hat, a pick over the shoulder, a barrow beside him."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(18, 22, 30, 26), R["iron"], "rim")                               # the barrow's tub
+    sp.part(sp.circle(21, 28, 2.5), R["soot"], "sphere")                             # its wheel
+    sp.part(sp.rect(7, 14, 14, 24), R["blue"], "rim")                                # coat
+    sp.part(sp.rect(8, 24, 10, 30) | sp.rect(11, 24, 13, 30), R["wood"], "flat", base=1)   # legs
+    sp.part(sp.circle(10.5, 10, 3.5), R["sand"], "sphere")                           # face
+    sp.part(sp.rect(6, 5, 15, 8), R["gold"], "rim")                                  # hard hat
+    sp.part(sp.line([(4, 22), (17, 6)], 2), R["wood"], "flat", base=2)               # pick handle
+    sp.part(sp.poly([(13, 3), (21, 6), (20, 8), (14, 6)]), R["iron"], "rim")        # pick head
+    sp.plot(7, 6, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def excavator():
+    """A tracked excavator: tracks, cab, boom and bucket in machine paint."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(2, 24, 20, 29), R["soot"], "rim")                                # tracks
+    sp.part(sp.rect(4, 15, 17, 23), R["paint"], "rim")                               # house
+    sp.part(sp.rect(11, 9, 17, 16), R["paint"], "rim")                               # cab
+    sp.fill(sp.rect(13, 11, 16, 14), "#74effe")                                      # cab glass
+    sp.part(sp.line([(16, 16), (25, 6)], 3), R["paint"], "flat", base=2)            # boom
+    sp.part(sp.line([(25, 6), (28, 18)], 2), R["paint"], "flat", base=2)            # stick
+    sp.part(sp.poly([(24, 18), (31, 18), (30, 24), (25, 23)]), R["iron"], "rim")    # bucket
+    sp.plot(5, 16, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def quarry():
+    """The quarry frame: an orange gantry over a square hole, the drill head hanging from its cross rail."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(5, 18, 27, 29), R["soot"], "inset")                              # the hole
+    for x in (3, 26):
+        sp.part(sp.rect(x, 5, x + 2, 28), R["paint"], "flat", base=2)                # legs
+    sp.part(sp.rect(3, 4, 28, 6), R["paint"], "rim")                                 # top rail
+    sp.part(sp.rect(14, 6, 17, 8), R["iron"], "rim")                                 # carriage
+    sp.part(sp.rect(15, 8, 16, 20), R["cyan"], "flat", base=2)                       # the drill shaft
+    sp.part(sp.poly([(13, 20), (18, 20), (15.5, 25)]), R["iron"], "rim")            # bit
+    sp.fill(sp.rect(4, 5, 4, 5), WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def bucketwheel():
+    """The bucket-wheel excavator: crawlers, a tall mast with cables, a long boom, the toothed wheel."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(1, 26, 16, 30), R["soot"], "rim")                                # crawlers
+    sp.part(sp.rect(3, 20, 14, 26), R["metal"], "rim")                               # house
+    sp.part(sp.rect(7, 4, 9, 20), R["metal"], "flat", base=2)                        # mast
+    sp.part(sp.line([(9, 5), (25, 14)], 1) | sp.line([(8, 5), (2, 16)], 1), R["steel"], "flat", base=1, seam=False)   # cables
+    sp.part(sp.line([(10, 20), (24, 16)], 2), R["metal"], "flat", base=2)           # boom
+    sp.part(sp.line([(1, 18), (5, 18)], 2), R["metal"], "flat", base=1)             # counterweight arm
+    sp.part(sp.circle(25, 18, 6), R["rust"], "sphere")                               # the wheel
+    for a in range(0, 360, 45):
+        x, y = 25 + 6.5 * math.cos(math.radians(a)), 18 + 6.5 * math.sin(math.radians(a))
+        sp.plot(int(round(x)), int(round(y)), "#2c2c25")                            # buckets' teeth
+    sp.fill(sp.circle(25, 18, 2), "#2c2c25")
+    sp.plot(4, 21, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def hive():
+    """The drone hive: a hex hangar with three bays lit, a drone lifting off its roof."""
+    sp = Sprite(32, 32)
+    sp.part(sp.poly(hexagon(16, 22, 13, 0.55)), R["steel"], "rim")                   # the hex roof
+    sp.part(sp.rect(5, 22, 27, 29), R["metal"], "rim")                               # walls
+    for x in (8, 15, 22):
+        sp.fill(sp.rect(x, 24, x + 3, 27), "#faaf5c")                                # lit bays
+    sp.part(sp.rect(12, 6, 20, 9), R["blue"], "rim")                                 # a drone
+    sp.part(sp.rect(9, 5, 11, 6) | sp.rect(21, 5, 23, 6), R["steel"], "flat", base=2)   # its rotors
+    sp.plot(15, 10, "#fa3a64")
+    sp.plot(7, 20, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def derrick():
+    """The onshore drilling rig: a lattice derrick on a substructure, the pipe rack beside it."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(4, 23, 26, 29), R["paint"], "rim")                               # substructure
+    sp.part(sp.line([(8, 23), (14, 2)], 2) | sp.line([(22, 23), (16, 2)], 2), R["iron"], "flat", base=2)
+    for y in (8, 13, 18):
+        x0, x1 = 8 + (23 - y) * 6 / 21, 22 - (23 - y) * 6 / 21
+        sp.part(sp.line([(x0, y), (x1, y)], 1), R["iron"], "flat", base=2, seam=False)
+    sp.part(sp.rect(13, 1, 17, 3), R["redpaint"], "rim")                             # crown block
+    sp.part(sp.rect(24, 26, 31, 29), R["metal"], "cyl_h")                            # pipe rack
+    sp.plot(5, 24, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def platform():
+    """The offshore platform: legs in the sea, a deck of modules, a derrick, a turbine stack, the flare."""
+    sp = Sprite(32, 32)
+    sp.fill(sp.rect(0, 26, 31, 31), "#15578a")                                       # the sea
+    for x in (6, 22):
+        sp.part(sp.rect(x, 17, x + 3, 30), R["rust"], "rim")                         # legs
+    sp.part(sp.rect(3, 14, 28, 18), R["metal"], "rim")                               # the deck
+    sp.part(sp.rect(4, 9, 12, 14), R["white"], "rim")                                # quarters
+    sp.fill(sp.rect(6, 11, 10, 11), "#faaf5c")                                       # lit windows
+    sp.part(sp.line([(15, 14), (17, 2)], 1) | sp.line([(20, 14), (18, 2)], 1), R["iron"], "flat", base=2)   # derrick
+    sp.part(sp.rect(22, 8, 25, 14), R["steel"], "rim")                               # turbine stack
+    sp.part(sp.line([(26, 14), (30, 5)], 1), R["iron"], "flat", base=2)             # flare boom
+    sp.part(sp.circle(30, 3, 1.8), R["flame"], "sphere", glow=True)                  # the flare
+    sp.plot(5, 10, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def _hexpod(sp, x, y, w, h, ramp, tank=False):
+    """A hex pod seen from the side: two faces of the prism, the lit one left, a seam down the edge between."""
+    m = w // 2
+    sp.part(sp.rect(x, y, x + m - 1, y + h), ramp, "flat", base=3)                 # lit face
+    sp.part(sp.rect(x + m, y, x + w, y + h), ramp, "flat", base=1)                 # shaded face
+    if tank:
+        sp.fill(sp.rect(x, y + h // 2, x + w, y + h // 2), "#a61e1f")              # the tank pod's band
+    else:
+        sp.fill(sp.rect(x, y, x + w, y), "#3e3551")                                # the goods pod's rims
+        sp.fill(sp.rect(x, y + h, x + w, y + h), "#3e3551")
+
+
+def _hexhull(sp, ramp, y0=19, y1=26):
+    """A hull of whole hex cells: the bow steps up a cell at a time instead of curving."""
+    sp.part(sp.rect(4, y0, 30, y1) | sp.rect(2, y0, 3, y1 - 3) | sp.rect(1, y0, 1, y1 - 5), ramp, "rim")
+    for x in (8, 14, 20, 26):
+        sp.fill(sp.rect(x, y0 + 2, x, y1 - 1), "#2b1f35")                          # the cell joins on the side
+
+
+def tanker():
+    """A tanker: a hex-cell freighter carrying tank pods, the bridge of cells aft."""
+    sp = Sprite(32, 32)
+    sp.fill(sp.rect(0, 25, 31, 31), "#15578a")
+    _hexhull(sp, R["redpaint"])
+    for x in (3, 9, 15):
+        _hexpod(sp, x, 13, 5, 5, R["white"], tank=True)
+    sp.part(sp.rect(22, 7, 29, 18), R["white"], "rim")                               # bridge
+    sp.fill(sp.rect(23, 9, 28, 9), "#74effe")
+    sp.part(sp.rect(26, 4, 27, 6), R["soot"], "flat", base=1)                        # funnel
+    sp.plot(4, 20, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def freighter():
+    """A freighter of whole hex cells, goods pods two high on deck, the bridge of cells aft."""
+    sp = Sprite(32, 32)
+    sp.fill(sp.rect(0, 25, 31, 31), "#15578a")
+    _hexhull(sp, R["soot"])
+    cols = [R["red"], R["green"], R["blue"], R["gold"]]
+    for i, x in enumerate((3, 9, 15)):
+        for j, y in enumerate((13, 7)):
+            _hexpod(sp, x, y, 5, 5, cols[(i + j) % 4])
+    sp.part(sp.rect(22, 7, 29, 18), R["white"], "rim")                               # bridge
+    sp.fill(sp.rect(23, 9, 28, 9), "#74effe")
+    sp.plot(4, 20, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def pod():
+    """The hex pod: a hexagonal prism one cell across, 2 layers tall, seen three-quarters from above."""
+    sp = Sprite(32, 32)
+    top = sp.poly([(9, 6), (16, 3), (23, 6), (23, 10), (16, 13), (9, 10)])
+    left = sp.poly([(9, 10), (16, 13), (16, 28), (9, 25)])
+    right = sp.poly([(16, 13), (23, 10), (23, 25), (16, 28)])
+    sp.part(left, R["blue"], "flat", base=3)
+    sp.part(right, R["blue"], "flat", base=1)
+    sp.part(top, R["steel"], "flat", base=3)
+    for y in (12, 22):
+        sp.fill(sp.poly([(9, y), (16, y + 3), (23, y), (23, y + 1), (16, y + 4), (9, y + 1)]), "#3e3551")   # rims
+    sp.plot(11, 7, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def pipe():
+    """A pipe run: a flanged elbow on a stand, a valve wheel, a blue water band."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(2, 12, 20, 18), R["steel"], "cyl_h")                             # run
+    sp.part(sp.rect(16, 12, 22, 29), R["steel"], "rim")                              # elbow down
+    sp.part(sp.rect(7, 11, 8, 19) | sp.rect(15, 20, 23, 21), R["metal"], "flat", base=1)   # flanges
+    sp.fill(sp.rect(10, 14, 13, 16), "#1096c3")                                      # the fluid's band
+    sp.part(sp.circle(5, 8, 3.5), R["red"], "rim")                                   # valve wheel
+    sp.part(sp.rect(4, 10, 5, 12), R["metal"], "flat", base=1)
+    sp.plot(3, 13, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def tube():
+    """A pneumatic tube: a glass pipe with a brass capsule in it, a send station's mouth."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(1, 11, 24, 19), R["glass"], "cyl_h")                            # the tube
+    sp.part(sp.rect(9, 12, 17, 18), R["brass"], "cyl_h")                             # the capsule
+    sp.part(sp.rect(22, 6, 30, 26), R["metal"], "rim")                               # station
+    sp.fill(sp.rect(24, 12, 28, 18), "#2c2c25")                                      # its mouth
+    sp.plot(27, 8, "#9bb675", glow=True)                                             # ready lamp
+    sp.plot(3, 12, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def belt():
+    """A conveyor belt section with ore riding it, on two legs."""
+    sp = Sprite(32, 32)
+    sp.part(sp.poly([(1, 20), (31, 12), (31, 16), (1, 24)]), R["soot"], "rim")      # the belt
+    for x in (4, 12, 20, 28):
+        y = 21 - (x - 1) * 8 / 30
+        sp.plot(x, int(y), "#434137")                                                 # cleats
+    sp.part(sp.circle(9, 17, 2.5), R["copper"], "sphere")                            # ore
+    sp.part(sp.circle(20, 14, 2.5), R["soot"], "sphere")                             # coal
+    sp.part(sp.rect(5, 23, 6, 30) | sp.rect(25, 16, 26, 30), R["iron"], "flat", base=2)   # legs
+    sp.plot(8, 16, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def printer():
+    """The hex printer (M22): a gantry over a print bed, a nozzle laying a hex wall."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(2, 26, 29, 29), R["metal"], "rim")                               # bed
+    sp.part(sp.poly(hexagon(16, 22, 9, 0.45)), R["sand"], "rim")                     # printed hex course
+    for x in (3, 27):
+        sp.part(sp.rect(x, 4, x + 2, 26), R["steel"], "flat", base=2)
+    sp.part(sp.rect(3, 4, 29, 6), R["steel"], "rim")
+    sp.part(sp.rect(14, 6, 18, 13), R["paint"], "rim")                               # head
+    sp.plot(16, 15, "#fe6420", glow=True)
+    sp.plot(4, 5, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def launchpad():
+    """A launch pad: a tower, a rocket on the pad, fuel tanks and their pipes."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(1, 27, 30, 30), R["metal"], "rim")                               # pad
+    sp.part(sp.rect(4, 4, 7, 27), R["red"], "flat", base=2)                          # tower
+    sp.part(sp.rect(12, 6, 17, 26), R["white"], "cyl_h")                             # rocket
+    sp.part(sp.poly([(12, 6), (17, 6), (14.5, 1)]), R["red"], "rim")
+    sp.part(sp.circle(25, 21, 4), R["white"], "sphere")                              # oxygen sphere
+    sp.part(sp.rect(18, 24, 22, 25), R["steel"], "flat", base=1)                     # fuel line
+    sp.plot(13, 8, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def lox():
+    """Liquid oxygen: a pale blue canister frosted white."""
+    sp = Sprite(32, 32)
+    sp.part(sp.rect(9, 6, 22, 29), R["cyan"], "cyl_h")
+    sp.part(sp.rect(12, 2, 19, 6), R["steel"], "rim")
+    sp.fill(sp.rect(10, 15, 21, 18), WHITE)
+    sp.plot(11, 8, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+ICONS.update({"worker": worker, "excavator": excavator, "quarry": quarry, "bucketwheel": bucketwheel, "hive": hive,
+              "derrick": derrick, "platform": platform, "tanker": tanker, "freighter": freighter, "pod": pod,
+              "pipe": pipe, "tube": tube, "belt": belt, "printer": printer, "launchpad": launchpad, "lox": lox})
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     items = []

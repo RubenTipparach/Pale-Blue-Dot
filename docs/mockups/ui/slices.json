@@ -1,0 +1,358 @@
+{
+ "source": "tools/art/ui_art.py",
+ "palette": "Sweaft-64",
+ "material": "stone first",
+ "timber_accents": [
+  "lintel",
+  "tab-open (cap)",
+  "compass-pointer"
+ ],
+ "pieces": {
+  "rock": {
+   "w": 48,
+   "h": 48,
+   "slice": 14,
+   "sides": "tile",
+   "centre": "stretch",
+   "note": "rough-rock slab, the menu frame; sides tile (period 20 px)"
+  },
+  "frame": {
+   "w": 48,
+   "h": 48,
+   "slice": 14,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "dressed-stone moulding round the face: drawers and sub-panels"
+  },
+  "lintel": {
+   "w": 40,
+   "h": 16,
+   "slice": [
+    5,
+    9,
+    5,
+    9
+   ],
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "timber accent: the carved oak title board over a menu"
+  },
+  "slot-idle": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-hover": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-selected": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-disabled": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-uncommon": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, uncommon"
+  },
+  "slot-rare": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, rare"
+  },
+  "slot-epic": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, epic"
+  },
+  "slot-legendary": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, legendary"
+  },
+  "button-idle": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "raised stone plaque"
+  },
+  "button-hover": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "raised stone plaque"
+  },
+  "button-pressed": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "raised stone plaque"
+  },
+  "button-disabled": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "raised stone plaque"
+  },
+  "button-focus": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "raised stone plaque"
+  },
+  "tab-open": {
+   "w": 40,
+   "h": 18,
+   "slice": 7,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "stone; timber accent: the oak cap"
+  },
+  "tab-shut": {
+   "w": 40,
+   "h": 18,
+   "slice": 7,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "scroll-track": {
+   "w": 8,
+   "h": 24,
+   "slice": 4,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "scroll-thumb": {
+   "w": 8,
+   "h": 16,
+   "slice": 4,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "slider-track": {
+   "w": 32,
+   "h": 8,
+   "slice": 3,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "slider-knob": {
+   "w": 9,
+   "h": 13
+  },
+  "check-off": {
+   "w": 12,
+   "h": 12
+  },
+  "check-on": {
+   "w": 12,
+   "h": 12
+  },
+  "tooltip": {
+   "w": 24,
+   "h": 18,
+   "slice": 6,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "bar": {
+   "w": 40,
+   "h": 10,
+   "slice": 4,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "channel x 4..35, y 2..7; fill drawn in x 5..34, y 3..6"
+  },
+  "fill-health": {
+   "w": 2,
+   "h": 4
+  },
+  "fill-stamina": {
+   "w": 2,
+   "h": 4
+  },
+  "fill-breath": {
+   "w": 2,
+   "h": 4
+  },
+  "fill-progress": {
+   "w": 2,
+   "h": 4
+  },
+  "compass": {
+   "w": 80,
+   "h": 18,
+   "slice": [
+    9,
+    10,
+    9,
+    10
+   ],
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "slices top, right, bottom, left: it stretches along x only"
+  },
+  "compass-pointer": {
+   "w": 7,
+   "h": 6,
+   "note": "timber accent: oak wedge, iron tip"
+  },
+  "compass-town": {
+   "w": 5,
+   "h": 5
+  },
+  "map-frame": {
+   "w": 64,
+   "h": 64,
+   "slice": 22,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "portrait": {
+   "w": 32,
+   "h": 32,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "emblem": {
+   "w": 48,
+   "h": 48
+  },
+  "icon-close": {
+   "w": 11,
+   "h": 11,
+   "note": "inlaid light, for a stone face"
+  },
+  "icon-back": {
+   "w": 11,
+   "h": 11,
+   "note": "inlaid light, for a stone face"
+  },
+  "icon-gear": {
+   "w": 11,
+   "h": 11,
+   "note": "inlaid light, for a stone face"
+  },
+  "icon-map": {
+   "w": 11,
+   "h": 11,
+   "note": "inlaid light, for a stone face"
+  },
+  "icon-pack": {
+   "w": 11,
+   "h": 11,
+   "note": "inlaid light, for a stone face"
+  }
+ },
+ "tokens": {
+  "INK": "#010000",
+  "SEAM": "#170916",
+  "FACE": "#1f3b52",
+  "WELL": "#011c34",
+  "TEXT": "#eab798",
+  "TEXT_DIM": "#cfaa81",
+  "TITLE": "#faaf5c",
+  "LABEL": "#fffefe",
+  "LABEL_DIM": "#92a3b2",
+  "TAB_DIM": "#bfcad7",
+  "CUT": "#011c34",
+  "NORTH": "#4a051e",
+  "OAK_LABEL": "#010000",
+  "STONE_MID": "#5d778d"
+ },
+ "ramps": {
+  "STONE": [
+   "#011c34",
+   "#1f3b52",
+   "#3e586e",
+   "#92a3b2",
+   "#bfcad7"
+  ],
+  "ROCK": [
+   "#010e1a",
+   "#1f3b52",
+   "#3e586e",
+   "#5d778d",
+   "#92a3b2"
+  ],
+  "WOOD": [
+   "#2f1525",
+   "#41322c",
+   "#725244",
+   "#ab8465",
+   "#cfaa81"
+  ],
+  "IRON": [
+   "#010000",
+   "#161612",
+   "#2c2c25",
+   "#434137",
+   "#a09f91"
+  ],
+  "BRASS": [
+   "#733126",
+   "#c56d25",
+   "#fb902f",
+   "#faaf5c"
+  ],
+  "RUNE": [
+   "#204f63",
+   "#53998b",
+   "#84e3b5",
+   "#c1f1d8"
+  ],
+  "HEALTH": [
+   "#4a051e",
+   "#a61e1f",
+   "#d12d41",
+   "#fa3a64"
+  ],
+  "STAMINA": [
+   "#733126",
+   "#c56d25",
+   "#fb902f",
+   "#faaf5c"
+  ],
+  "BREATH": [
+   "#0c2f44",
+   "#15578a",
+   "#1096c3",
+   "#74effe"
+  ]
+ },
+ "contrast": {
+  "TEXT on FACE (body text on a panel)": 6.49,
+  "TEXT_DIM on FACE (secondary text)": 5.38,
+  "TITLE on FACE (carved titles, key names)": 6.29,
+  "TEXT on WELL (slot counts, the map's tooltip)": 9.63,
+  "LABEL on button-idle / focus (STONE[2])": 7.38,
+  "LABEL on button-hover (STONE_MID)": 4.65,
+  "LABEL on button-pressed (STONE[1])": 11.55,
+  "LABEL_DIM on button-disabled (STONE[0])": 6.66,
+  "LABEL on tab-open (STONE[2])": 7.38,
+  "TAB_DIM on tab-shut (STONE[1])": 7.0,
+  "CUT on the compass strip (STONE[3]): letters, ticks": 6.66,
+  "NORTH on the compass strip (STONE[3]): the N": 6.09,
+  "OAK_LABEL on the lintel (WOOD[3]): menu titles": 6.21,
+  "icon inlay STONE[4] on FACE": 7.0,
+  "RUNE[2] on WELL (focus ring, selection)": 11.2
+ }
+}
