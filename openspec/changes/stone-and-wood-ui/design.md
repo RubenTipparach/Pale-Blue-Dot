@@ -750,3 +750,25 @@ default would change what a player sees on opening the map, so it is a
 **recommendation, not done**: shut by default, opened by a DRAWER plaque on
 the frame and by a key, with the choice remembered for the run. Recorded in
 `tasks.md` section 2 so the owner can take it or leave it.
+
+## Crafting in the pack (owner, 2026-11-14; mockup only)
+
+The owner: "the pack should also include some kind of basic crafting system, with a drop down list,
+and a button to look at crafting trees/recipes". The M29 mockup now shows it
+(`docs/mockups/ui/game-ui.js`, `craftRow()` and `recipes()`; `docs/screenshots/mockup-ui/pack-crafting.jpg`):
+
+- **Below the hotbar, a Craft row:**
+  - a stone drop-down of what the hands can make, where a recipe short of something is greyed;
+  - what it takes, as wells lit or dark against what is carried;
+  - an arrow, the result, and Craft.
+- **Recipes** opens a rock panel with every made thing as a grid of wells. Picking one shows its tree:
+  each ingredient under it, indented, with where it is made ("by hand", "at the forge, coal") or
+  "found, have N", down to what is dug or caught.
+  - "Craft in the pack" takes a by-hand recipe back to the drop-down.
+  - Back, Esc or E returns to the pack.
+- **The rock:** the pack grows to 268 x 204 native px for the row. Its rock is the approved base rock,
+  rendered at that size (`pack-craft` in `tools/art/ui_panels_blend.py`).
+- **The recipes are mockup data:** planks, torches, shovel, axe and rod by hand, plus the stations'
+  own recipes. The game has no crafting yet.
+- **Not built:** this is a design shown in the mockup, not a requirement. It joins the game through
+  its own change when the owner asks for crafting there.

@@ -680,12 +680,17 @@
   "sample": 6.6,
   "kit-48": 1.0,
   "kit-128": 2.9,
-  "kit-200": 7.2
+  "kit-200": 7.2,
+  "pack-craft": 31.4
  },
  "rock_panels": {
   "pack": [
    268,
    152
+  ],
+  "pack-craft": [
+   268,
+   204
   ],
   "station": [
    230,
@@ -834,6 +839,18 @@
    }
   },
   "kit-200": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  },
+  "pack-craft": {
    "px": {
     "TEXT": 6.49,
     "TEXT_DIM": 5.38,

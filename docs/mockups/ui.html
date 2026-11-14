@@ -142,6 +142,13 @@ table.t td, table.t th { border-bottom: 1px solid var(--page-line); padding: 3px
 .slot.r-epic { background-image: var(--i-slot-epic); } .slot.r-legendary { background-image: var(--i-slot-legendary); }
 .slot .ic { position: absolute; left: calc(4px * var(--s)); top: calc(4px * var(--s)); width: calc(16px * var(--s)); height: calc(16px * var(--s)); image-rendering: pixelated; }
 .slot .ic.tile { background-image: url(ui/game/atlas.png); background-size: calc(256px * var(--s)) calc(256px * var(--s)); }
+/* the pack's crafting: a small icon beside a name (the drop-down, its list, the recipe tree) */
+.ddi { position: relative; display: inline-block; flex: none; width: calc(12px * var(--s)); height: calc(12px * var(--s)); }
+.ddi .ic { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.ddi .ic.tile { background-image: url(ui/game/atlas.png); background-size: calc(192px * var(--s)) calc(192px * var(--s)); background-position: calc(var(--tx) * -12px * var(--s)) calc(var(--ty) * -12px * var(--s)) !important; }
+.btn.dd .pt { white-space: nowrap; }
+.ddcaret { flex: none; width: 0; height: 0; margin-right: calc(3px * var(--s)); border-left: calc(4px * var(--s)) solid transparent; border-right: calc(4px * var(--s)) solid transparent; border-top: calc(4px * var(--s)) solid currentColor; }
+.elbow { flex: none; width: calc(5px * var(--s)); height: calc(7px * var(--s)); margin-top: calc(-7px * var(--s)); border-left: calc(1px * var(--s)) solid var(--text-dim); border-bottom: calc(1px * var(--s)) solid var(--text-dim); }
 .slot .n { position: absolute; right: calc(2px * var(--s)); bottom: calc(1px * var(--s)); color: var(--text); --pt-shadow: var(--ink); }
 .slot .n .pt svg { height: calc(8px * var(--s)); }
 .slot.click { cursor: pointer; }
