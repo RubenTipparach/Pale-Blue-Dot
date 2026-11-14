@@ -185,7 +185,7 @@
     cloud_puff_base_shade: 0.45,
     cloud_puff_storm_shade: 0.75,
     cloud_puff_silver: 1.6,
-    cloud_puff_optical_depth: 15.0,
+    cloud_puff_optical_depth: 4.0,
     cloud_puff_erosion: 0.55,
     cloud_puff_soft_m: 60.0,
     cloud_puff_near_m: 120.0,

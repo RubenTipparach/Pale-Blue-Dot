@@ -1615,7 +1615,18 @@ fn cloud_puff_fragment(in: PuffVaryings) -> PuffOut {
     // it does not make the puff transparent to the cloud behind. Hidden by
     // the hazed coverage, every stack of puffs came out brighter inside, and
     // a deep one at the horizon would come out opaque.
-    let seen = a*cloud_air(eye, look, dist);
+    // Fading into what is behind stands for the air's light only where the
+    // sky is behind. Where the ray stops on the ground or the sea, the
+    // surface shows only the share of that air it is itself seen through:
+    // the air between the puff and the surface (`space-clouds`). From orbit
+    // the sea just under a cloud is seen through the same air the cloud is,
+    // and faded into it the cloud went half transparent.
+    var air = cloud_air(eye, look, dist);
+    if (far < CLOUD_FAR_CAP_M*0.999) {
+        let behind = cloud_air(in.body, look, max(far - dist, 0.0));
+        air = 1.0 - (1.0 - behind)*(1.0 - air);
+    }
+    let seen = a*air;
     var out: PuffOut;
     out.cloud = vec4<f32>(lit*seen, a);
     out.depth = vec2<f32>(dist, far);

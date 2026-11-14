@@ -102,16 +102,82 @@ fn hash(index: u32, lane: u32) -> f32 {
     (h >> 8) as f32 / (1u32 << 24) as f32
 }
 
+/// The clump field's two octaves: their cells on the cloud layer, metres, and
+/// their weights (`space-clouds` design 3).
+pub const CLUMP_CELLS_M: [f32; 2] = [1_100.0, 550.0];
+pub const CLUMP_WEIGHTS: [f32; 2] = [0.65, 0.35];
+/// How much of a site's carry order and of its size the clump field decides.
+pub const CLUMP_CARRY: f32 = 0.55;
+pub const CLUMP_SIZE: f32 = 0.5;
+
+/// A stable hash of a lattice point to `0..1`.
+fn hash3(x: i32, y: i32, z: i32, lane: u32) -> f32 {
+    let i = (x as u32)
+        .wrapping_mul(0x8DA6_B343)
+        .wrapping_add((y as u32).wrapping_mul(0xD816_3841))
+        .wrapping_add((z as u32).wrapping_mul(0xCB1A_B31F));
+    hash(i, lane)
+}
+
+/// Value noise, 0..1, smoothstepped trilinear on the integer lattice.
+fn value_noise(p: Vec3, lane: u32) -> f32 {
+    let f = p.floor();
+    let t = p - f;
+    let s = t * t * (Vec3::splat(3.0) - 2.0 * t);
+    let (x, y, z) = (f.x as i32, f.y as i32, f.z as i32);
+    let at = |dx: i32, dy: i32, dz: i32| hash3(x + dx, y + dy, z + dz, lane);
+    let lerp = |a: f32, b: f32, k: f32| a + (b - a) * k;
+    let x00 = lerp(at(0, 0, 0), at(1, 0, 0), s.x);
+    let x10 = lerp(at(0, 1, 0), at(1, 1, 0), s.x);
+    let x01 = lerp(at(0, 0, 1), at(1, 0, 1), s.x);
+    let x11 = lerp(at(0, 1, 1), at(1, 1, 1), s.x);
+    lerp(lerp(x00, x10, s.y), lerp(x01, x11, s.y), s.z)
+}
+
+/// Where cloud gathers, 0..1: a smooth field over the sphere, about a
+/// kilometre across, read at `direction` on a layer of `radius_m`.
+pub fn clump(direction: Vec3, radius_m: f32) -> f32 {
+    CLUMP_CELLS_M
+        .iter()
+        .zip(CLUMP_WEIGHTS)
+        .enumerate()
+        .map(|(k, (cell, w))| w * value_noise(direction * (radius_m / cell), 7 + k as u32))
+        .sum()
+}
+
+/// Each key's rank among them, as `(rank + 0.5) / n`: exactly uniform over
+/// 0..1 whatever the keys' own spread. Ties go by index, so it is stable.
+fn ranked(keys: &[f32]) -> Vec<f32> {
+    let mut order: Vec<u32> = (0..keys.len() as u32).collect();
+    order.sort_by(|&a, &b| {
+        keys[a as usize]
+            .total_cmp(&keys[b as usize])
+            .then(a.cmp(&b))
+    });
+    let n = keys.len().max(1) as f32;
+    let mut out = vec![0.0; keys.len()];
+    for (rank, &i) in order.iter().enumerate() {
+        out[i as usize] = (rank as f32 + 0.5) / n;
+    }
+    out
+}
+
 /// The sites over a body of `radius_m`, about `spacing_m` apart: a Fibonacci
-/// lattice of `4 pi R^2 / s^2` directions, each nudged by up to a third of the
+/// lattice of `4 pi R^2 / s^2` directions, each nudged by up to half the
 /// spacing so the lattice's spirals do not show.
+///
+/// Which sites carry cloud first, and how big their puffs are, is ranked
+/// from a mix of each site's own hash and the clump field (`space-clouds`):
+/// the thresholds and sizes stay uniform over 0..1, so the share carrying
+/// cloud is the cover, but the carriers gather and the big ones stand
+/// among them.
 pub fn sites(radius_m: f32, spacing_m: f32) -> Vec<Site> {
     let count = (4.0 * std::f32::consts::PI * radius_m * radius_m / (spacing_m * spacing_m))
         .round()
         .max(1.0) as u32;
     let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
-    let nudge = spacing_m / radius_m / 3.0;
-    (0..count)
+    let nudge = spacing_m / radius_m / 2.0;
+    let directions: Vec<Vec3> = (0..count)
         .map(|i| {
             let y = 1.0 - 2.0 * (i as f32 + 0.5) / count as f32;
             let ring = (1.0 - y * y).max(0.0).sqrt();
@@ -119,14 +185,40 @@ pub fn sites(radius_m: f32, spacing_m: f32) -> Vec<Site> {
             let d = Vec3::new(ring * a.cos(), y, ring * a.sin());
             let (u, v) = d.any_orthonormal_pair();
             let push = (hash(i, 3) * 2.0 - 1.0) * u + (hash(i, 4) * 2.0 - 1.0) * v;
-            Site {
-                direction: (d + push * nudge).normalize(),
-                threshold: hash(i, 0),
-                size: hash(i, 1),
-                seed: hash(i, 2) * 100.0,
-            }
+            (d + push * nudge).normalize()
+        })
+        .collect();
+    // Ranked too, so the field weighs what it is meant to against a hash
+    // whatever its own spread.
+    let clumps = ranked(
+        &directions
+            .iter()
+            .map(|&d| clump(d, radius_m))
+            .collect::<Vec<_>>(),
+    );
+    let carry: Vec<f32> = (0..count)
+        .map(|i| (1.0 - CLUMP_CARRY) * hash(i, 0) + CLUMP_CARRY * (1.0 - clumps[i as usize]))
+        .collect();
+    let size: Vec<f32> = (0..count)
+        .map(|i| (1.0 - CLUMP_SIZE) * hash(i, 1) + CLUMP_SIZE * clumps[i as usize])
+        .collect();
+    let (thresholds, sizes) = (ranked(&carry), ranked(&size));
+    (0..count as usize)
+        .map(|i| Site {
+            direction: directions[i],
+            threshold: thresholds[i],
+            size: sizes[i],
+            seed: hash(i as u32, 2) * 100.0,
         })
         .collect()
+}
+
+/// A puff's radius against the spacing's share, from its site's `size`:
+/// 0.5 to 1.8, many small and a few large, with the mean square of the old
+/// `0.8 + 0.4 size` (`space-clouds` design 3).
+pub fn size_factor(size: f32) -> f32 {
+    let u = size.clamp(0.0, 1.0);
+    0.5 + 1.3 * u * u
 }
 
 /// How much of a puff a site carries under `cover`, 0..1: nothing below its
@@ -161,7 +253,7 @@ pub fn puffs_at(site: &Site, look: Look, layer: &Layer, out: &mut Vec<Puff>) {
     }
     // About two puffs over a point at full cover: wider, and four or five
     // overlapping puffs stacked to an opaque sheet whatever their opacity.
-    let r = layer.spacing_m * (0.5 + 0.35 * cover) * (0.8 + 0.4 * site.size);
+    let r = layer.spacing_m * (0.5 + 0.35 * cover) * size_factor(site.size);
     // Kept a tenth under the layer's top, so a tower's top billboard stays
     // inside the shell the composite lays cloud over.
     let height = (top * layer.thickness_m * 0.9).max(MIN_HEIGHT_M);
@@ -506,6 +598,58 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// `space-clouds`: under one cover the puffs run from small to large,
+    /// not all of a size.
+    #[test]
+    fn puffs_come_in_many_sizes() {
+        let mut radii: Vec<f32> = sites(4_800.0, 250.0)
+            .iter()
+            .filter_map(|s| {
+                let mut out = Vec::new();
+                let site = Site {
+                    threshold: 0.0,
+                    ..*s
+                };
+                puffs_at(&site, look(0.6), &LAYER, &mut out);
+                out.first().map(|p| p.radius_across_m)
+            })
+            .collect();
+        radii.sort_by(f32::total_cmp);
+        let at = |q: f32| radii[((radii.len() - 1) as f32 * q) as usize];
+        let spread = at(0.9) / at(0.1);
+        eprintln!("p90/p10 radius {spread}");
+        assert!(spread > 2.5, "p90/p10 {spread}");
+    }
+
+    /// `space-clouds`: under a partial cover the carrying sites gather, and
+    /// the share carrying still follows the cover.
+    #[test]
+    fn puffs_gather_in_clumps() {
+        let sites = sites(4_800.0, 250.0);
+        let cover = 0.3;
+        let carried: Vec<bool> = sites.iter().map(|s| presence(s, cover) > 0.5).collect();
+        let share = carried.iter().filter(|&&c| c).count() as f32 / sites.len() as f32;
+        assert!((share - cover).abs() < 0.03, "{share}");
+        // Each carrier's six nearest sites: how many carry too.
+        let (mut together, mut seen) = (0usize, 0usize);
+        for (i, s) in sites.iter().enumerate().filter(|(i, _)| carried[*i]) {
+            let mut near: Vec<(f32, usize)> = sites
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(j, t)| (-s.direction.dot(t.direction), j))
+                .collect();
+            near.select_nth_unstable_by(6, |a, b| a.0.total_cmp(&b.0));
+            for &(_, j) in &near[..6] {
+                seen += 1;
+                together += carried[j] as usize;
+            }
+        }
+        let gathered = together as f32 / seen as f32;
+        eprintln!("neighbours carrying {gathered}");
+        assert!(gathered > 0.45, "neighbours carrying {gathered}");
     }
 
     #[test]

@@ -697,7 +697,7 @@ impl Default for WeatherSettings {
             cloud_puff_base_shade: 0.45,
             cloud_puff_storm_shade: 0.75,
             cloud_puff_silver: 1.6,
-            cloud_puff_optical_depth: 15.0,
+            cloud_puff_optical_depth: 4.0,
             cloud_puff_erosion: 0.55,
             cloud_puff_soft_m: 60.0,
             cloud_puff_near_m: 120.0,
@@ -1700,5 +1700,39 @@ mod tests {
         assert!(with(0.5, 0.2, f32::INFINITY).validate().is_err());
         // Tenebris's unnormalised knob is gone, not silently ignored.
         assert!(ron::from_str::<WeatherSettings>("(rain_lens_refract: 1.7)").is_err());
+    }
+
+    /// `space-clouds`: with the shipped settings a column of the shown maps'
+    /// median optical depth (7) is drawn mostly opaque; a thin one stays thin.
+    #[test]
+    fn a_median_cloud_column_is_mostly_opaque() {
+        use pbd_core::cloud_puffs::{Layer, Look, Site, puffs_at};
+        let s: WeatherSettings = ron::from_str(WEATHER_RON).unwrap();
+        let layer = Layer {
+            base_radius_m: crate::sky::CLOUD_RADIUS,
+            thickness_m: crate::sky::CLOUD_THICKNESS,
+            spacing_m: s.cloud_puff_spacing_m,
+            opacity: s.cloud_puff_opacity,
+            deck_floor: s.cloud_deck_floor,
+            optical_depth_scale: s.cloud_puff_optical_depth,
+        };
+        let site = Site {
+            direction: bevy::math::Vec3::Y,
+            threshold: 0.0,
+            size: 0.5,
+            seed: 0.0,
+        };
+        let opacity = |od: f32| {
+            let mut out = Vec::new();
+            let look = Look {
+                cover: 1.0,
+                top: 1.0,
+                optical_depth: od,
+            };
+            puffs_at(&site, look, &layer, &mut out);
+            out[0].opacity
+        };
+        assert!(opacity(7.0) >= 0.75, "{}", opacity(7.0));
+        assert!(opacity(1.0) < 0.3, "{}", opacity(1.0));
     }
 }

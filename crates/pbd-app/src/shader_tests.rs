@@ -379,8 +379,9 @@ fn each_puff_is_hazed_once_to_its_own_distance() {
         .find("if (a < 0.004) { discard; }")
         .expect("the discard is on the plain coverage");
     let seen = puff
-        .find("let seen = a*cloud_air(eye, look, dist);")
+        .find("var air = cloud_air(eye, look, dist);")
         .expect("the air is measured to this puff, along this ray");
+    assert!(puff.contains("let seen = a*air;"));
     assert!(
         discard < seen,
         "the distances are written wherever the puff is"
@@ -410,6 +411,29 @@ fn each_puff_is_hazed_once_to_its_own_distance() {
         !composite.contains("upsampled*cloud_air("),
         "the composite must not haze the puffs a second time"
     );
+}
+
+/// `space-clouds` design 2: a puff whose ray stops on a surface is faded only
+/// by the share of the air in front of it that the air behind it, to that
+/// surface, would also hide; with the sky behind it fades as before.
+#[test]
+fn a_puff_over_a_surface_fades_only_by_the_air_it_does_not_share() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let puff = wgsl_fn_body(&src, "cloud_puff_fragment");
+    let to_puff = puff
+        .find("var air = cloud_air(eye, look, dist);")
+        .expect("the air to the puff");
+    let gate = puff
+        .find("if (far < CLOUD_FAR_CAP_M*0.999) {")
+        .expect("only short of the far cap");
+    let behind = puff
+        .find("let behind = cloud_air(in.body, look, max(far - dist, 0.0));")
+        .expect("the air from the puff to the ray's stop");
+    let mixed = puff
+        .find("air = 1.0 - (1.0 - behind)*(1.0 - air);")
+        .expect("the haze scaled by the air behind");
+    let seen = puff.find("let seen = a*air;").expect("the coverage seen");
+    assert!(to_puff < gate && gate < behind && behind < mixed && mixed < seen);
 }
 
 /// `puff-haze` design 3a, mirrored: what the puff pass's blend states and the

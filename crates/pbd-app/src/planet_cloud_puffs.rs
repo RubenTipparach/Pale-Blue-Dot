@@ -297,8 +297,10 @@ mod tests {
         for v in &mut maps.cloud {
             *v = [0.6, 0.2, 0.0, 30.0];
         }
-        sites.build(1, &maps, &maps, 0.0, eye, None, &settings, &mut out);
-        let share = out.len() as f32 / sites.sites.len() as f32;
+        let counts = sites.build(1, &maps, &maps, 0.0, eye, None, &settings, &mut out);
+        // Counted as built: from the layer most of them lie past the horizon
+        // (`space-clouds`; the cull came after this test).
+        let share = counts.built as f32 / sites.sites.len() as f32;
         assert!(share > 0.5 && share < 0.75, "{share}");
         let d: Vec<f32> = out
             .iter()

@@ -99,7 +99,7 @@ and the stack still grows continuously (`a_tower_grows_and_shrinks_without_re_fo
 holds: it fixes the site).
 
 Measured by tests (section 5): the ratio of the 90th to the 10th percentile
-radius under one cover goes from 1.31 to above 2.5; with a cover of 0.3,
+radius under one cover goes from 1.38 to above 2.5 (3.0 measured); with a cover of 0.3,
 the share of a carried site's nearest neighbours that are carried goes from
 about the cover (0.3) to well above it.
 
