@@ -90,6 +90,21 @@ Things that move because the world moves them keep moving: a station ring
 spinning for gravity, a wind turbine in the wind, a craft being flown, a ship
 under sail, workers at work.
 
+## Descriptive text goes in modals (owner, 2026-11-14)
+
+**Standing instruction from the user:** "Too much text on screen. Descriptive
+Text on all mockups belong in modals". A mockup's screen shows the thing
+itself: the scene, the UI, the controls and their short labels. Everything
+that explains it goes in a modal opened from a small info button:
+- the intro and "which art is whose" notes, captions, design notes, decision
+  rows, odds and maths tables, "in the engine" sections and long how-to text;
+- the modal closes with its ✕, Esc or a tap outside, and is readable on a
+  phone;
+- a short title per tab and one-line labels on controls may stay on screen;
+- the tracker link stays visible near the top.
+New mockups are built this way; an older mockup moves its text into modals
+the next time it is republished.
+
 ## One 3D view at a time, in tabs (owner, 2026-11-13)
 
 **Standing instruction from the user:** "make sure to apply the "tabs"
