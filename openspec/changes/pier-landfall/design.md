@@ -51,18 +51,34 @@ Every other stretch has its ground at least a metre under the deck. So the
 owner's shot is not one harbour's bad luck: every pier that reaches the quay
 does this at its landward end, in every harbour.
 
-## Decision: a stretch lies on the ground when the ground reaches it
+## Decision: planks lie on the ground where the ground reaches them
 
-A pier stretch's deck height is the higher of:
+The pier is cut where the ground under it changes, not in fixed lengths
+(`harbour::stretches`):
 
-- the template's deck, `terrace + from[1]`, and
-- the highest ground under the stretch (across its width, along its length
-  and its laps) plus `DECK_M`, where that ground reaches the template's deck.
+- The ground is read every 0.25 m along the pier, across its width (five
+  points, edge to edge), from the column's own heights.
+- Each 0.25 m interval takes a top: the template's deck, `terrace + from[1]`,
+  where the highest ground at its two ends is under the planks' underside;
+  otherwise that ground plus `DECK_M` (0.12 m), so the planks lie on it.
+- Intervals of one top join into a run, and a run is cut into flat pieces of
+  about 2.2 m, as the whole pier was before. A pier whose ground never
+  reaches its planks is one run, cut exactly as it always was.
+- A piece on piles has a pile pair at its start, and at its end where the
+  next piece is at another height or there is none. A piece on the ground
+  gets none (a pile stops where the ground is, `pile` skips it).
 
-So a stretch over the beach lies on it, its planks' underside on the sand and
-their top 0.12 m over it, as boards laid on a beach do; every stretch over the
-water is where it was. The landward end now reads as a boardwalk on the sand
-running out to the planks on piles.
+So the beach rows at 1 m carry the boardwalk on the sand, 0.12 m proud, as
+boards laid on a beach are, and the planks step down onto their piles where
+the beach drops to 0 m. Every piece over the water is where it was.
+
+A first cut of this kept the fixed 2.2 m stretches and lifted a whole stretch
+when any of its ground reached the deck. At Marenstrand that raised the
+whole 2.2 m stretch from 13.1 to 15.3 m along the main pier to 2.12 m,
+most of it over ground at 1 m. Cutting at the ground's own changes keeps
+the raised piece to the 0.75 m (12.42 to 13.17 m) the bank is under, with
+the boardwalk on the 1 m sand either side of it (the instrument prints each
+pier's cut).
 
 Alternatives weighed:
 
@@ -82,19 +98,24 @@ Alternatives weighed:
 
 What it costs:
 
-- **A 0.12 m step** where a lifted stretch meets one that is not, and from the
-  quay onto the planks. The walker climbs up to 0.35 m without a jump
-  (`walking::HOLD_M`), and town and deck risers are 0.19 to 0.25 m.
-- **Marenstrand's bank.** One stretch of its main pier crosses ground a metre
-  over the deck (the planet's ground in the margin, where the template has
-  beach a layer lower). It lies on the bank, 1.12 m over the stretches either
-  side: a walker climbs onto it as onto a terrain layer. It is the one place
-  in the six harbours; it is a stretch on the sand instead of planks buried
-  in it.
+- **A 0.12 m step** where the boardwalk on the sand meets the planks on
+  piles, and from the quay onto the boardwalk. The walker climbs up to
+  0.35 m without a jump (`walking::HOLD_M`); town and deck risers are 0.19
+  to 0.25 m.
+- **Marenstrand's bank.** One place on its main pier crosses ground a metre
+  over the deck (the planet's ground in the margin, ring 2, where the
+  template has beach a layer lower). The planks over it lie on the bank,
+  a metre over the boardwalk either side, for the 0.75 m the bank is under
+  the deck. From the pier it reads as a raised box of planks with a post at
+  each corner: no plank is in the sand any more, but it is not pretty. A
+  walker climbs it as a terrain layer. It is the one such place in the six
+  harbours, and the open question this change leaves (the bank shot):
+  planks on the sand bar as now, a gap in the planks where the bank is, or
+  a short stair. Recommendation: leave it until the owner has seen the shot.
 
-The stretch's height is one function, `harbour::stretch_top`, used both to cut
-the pier and by the dressing's stand query (`dressing::stand`), so a crate
-on a lifted stretch stands on its planks.
+The cut is one function, `harbour::stretches`, used both to cut the pier and
+by the dressing's stand query (`dressing::stand`, through `harbour::top_at`),
+so a crate on the boardwalk stands on its planks.
 
 ## Saves
 
@@ -108,6 +129,30 @@ on a lifted stretch stands on its planks.
   generator change, and needs no new version. A world saved before it opens
   with the same harbour, its planks now on the sand.
 
-## The speckle on the water round the piles
+## Not this change: the speckle on the water round the piles
 
-See "Not this change" below (filled in from the captures).
+The owner's shot also shows the sea between the piers covered in bright
+green-cyan per-pixel speckle, noisier than the open sea. It is a different
+cause, in the sea's shader (`water.wgsl`, the sheet's fragment), and is not
+fixed here. Measured on Holinghaven's shallows at night with boats and piles
+(`docs/screenshots/pier-landfall/`, the speckle crops, same spot and frame):
+
+- **Not the sea's screen reflection.** `PBD_REFLECT=sea` (the sea's trace
+  off) leaves the speckle as it was.
+- **Mostly the refraction.** `refract_amount: 0.0` in `water.ron` (a
+  temporary edit, not committed) takes out most of the dark and bright
+  per-pixel noise. The refraction offsets each pixel's look through the
+  water by the ripple normal, which the rain rings make change from pixel to
+  pixel. The sampled point then lands on the seabed one pixel and on a hull,
+  a pile or a hex column's side the next, and both the colour seen and the
+  depth the shallows' colour is chosen from (`depth_under`, `path_length`)
+  jump with it. The green-cyan is the shallows' own albedo (`shallow_color`)
+  where the water read as shallow. The open sea has nothing near the
+  surface for its samples to jump between, so it stays smooth.
+- What is left with refraction off is a finer, fainter sparkle in the same
+  place, not examined further.
+
+A fix belongs in its own change: filter the refraction offset by the
+ripple's pixel footprint as the specular already is (`detail`), or reject a
+refracted sample whose depth jumps from its neighbours'. Either changes the
+sea's look everywhere and wants its own before and after.

@@ -1,5 +1,6 @@
 use super::chart::{Patch, chart};
 use super::ground::{GroundAt, TownGround};
+use super::pieces::harbour as pier_cut;
 use super::pieces::{Meshes, cut_building};
 use super::*;
 use crate::topology::dual_sphere;
@@ -2163,8 +2164,9 @@ fn feet_on(b: &record::Built, p: Vec3) -> Option<f32> {
 }
 
 /// Slice 4d: the walker along the harbour's main pier from the quay to its
-/// head, the feet on the planks at 1 m over the sea all the way and the
-/// body in nothing of the pier's.
+/// head, the feet on the planks at 1 m over the sea all the way, but on
+/// the beach, where the planks lie 0.12 m over the sand (`pier-landfall`),
+/// and the body in nothing of the pier's.
 #[test]
 fn a_walker_goes_down_the_main_pier_to_its_head() {
     let (template, _, b) = cut_harbour();
@@ -2178,6 +2180,13 @@ fn a_walker_goes_down_the_main_pier_to_its_head() {
         })
         .expect("a pier");
     let deck = RADIUS_M + pier.from[1];
+    let cell_m = template.grid.cell_m;
+    let natural = coast();
+    let ground = |d: Vec3| {
+        let n = natural(d).floor();
+        b.ground.at(d).map_or(n, |g| g.height(n))
+    };
+    let cut = pier_cut::stretches(patch, &b.chart, pier, cell_m, 0.0, &ground);
     let steps = 120;
     for k in 0..=steps {
         let t = k as f32 / steps as f32;
@@ -2192,8 +2201,19 @@ fn a_walker_goes_down_the_main_pier_to_its_head() {
                 t * (pier.to[2] - pier.from[2]).abs()
             )
         });
+        // At a joint, the stretch lapping over the other holds the feet.
+        let s = pier_cut::along(pier, x, z);
+        let tops: Vec<f32> = [s - 0.06, s, s + 0.06]
+            .iter()
+            .filter_map(|&s| pier_cut::top_at(&cut, s))
+            .collect();
         assert!(
-            (feet - deck).abs() < 0.03,
+            tops.iter()
+                .all(|&t| t == pier.from[1] || t == pier.from[1] + 0.12),
+            "{tops:?}"
+        );
+        assert!(
+            tops.iter().any(|&t| (feet - (RADIUS_M + t)).abs() < 0.03),
             "the deck at {} m",
             feet - RADIUS_M
         );
@@ -2206,6 +2226,74 @@ fn a_walker_goes_down_the_main_pier_to_its_head() {
             "held on the pier at {t:.2}"
         );
     }
+}
+
+/// `pier-landfall`: no stretch of any pier's planks lies under the ground
+/// beneath it. Where the ground reaches the deck (the beach the export
+/// rounds up to the deck's layer) the stretch lies on it; every other
+/// stretch stands at the template's deck. The test coast has both.
+#[test]
+fn a_piers_planks_lie_on_the_beach_never_in_it() {
+    let (template, town, b) = cut_harbour();
+    let (patch, _) = patch();
+    let cell_m = template.grid.cell_m;
+    let terrace = town.terrace as f32;
+    let natural = coast();
+    let ground = |d: Vec3| {
+        let n = natural(d).floor();
+        b.ground.at(d).map_or(n, |g| g.height(n))
+    };
+    let (mut lying, mut standing) = (0, 0);
+    for pier in &template.piers {
+        let len = pier_cut::along(pier, pier.to[0], pier.to[2]);
+        let (ux, uz) = (
+            (pier.to[0] - pier.from[0]) / len,
+            (pier.to[2] - pier.from[2]) / len,
+        );
+        let cut = pier_cut::stretches(patch, &b.chart, pier, cell_m, terrace, &ground);
+        assert!((cut[0].s0).abs() < 1e-4 && (cut[cut.len() - 1].s1 - len).abs() < 1e-3);
+        for w in cut.windows(2) {
+            assert!((w[0].s1 - w[1].s0).abs() < 1e-4, "a gap in the pier");
+            assert!(
+                w[0].s1 - w[0].s0 <= 2.2 * 1.5,
+                "a stretch too long to stay flat"
+            );
+        }
+        for &pier_cut::Stretch { s0, s1, top_m: top } in &cut {
+            // The highest ground under the stretch, sampled finer than the
+            // cut reads it.
+            let mut high = f32::MIN;
+            for i in 0..=40 {
+                let s = s0 + (s1 - s0) * i as f32 / 40.0;
+                for j in 0..=8 {
+                    let w = (j as f32 / 8.0 - 0.5) * pier.width_m;
+                    let (x, z) = (
+                        pier.from[0] + ux * s - uz * w,
+                        pier.from[2] + uz * s + ux * w,
+                    );
+                    if let Some(d) = sea::point(&b.chart, patch, x, z, cell_m) {
+                        high = high.max(ground(d));
+                    }
+                }
+            }
+            assert!(
+                top - 0.12 >= high - 1e-4,
+                "planks under the ground: {top} over {high}"
+            );
+            if high > terrace + pier.from[1] - 0.12 {
+                assert_eq!(top, high + 0.12);
+                lying += 1;
+            } else {
+                assert_eq!(top, terrace + pier.from[1]);
+                standing += 1;
+            }
+        }
+    }
+    println!("{lying} stretches lie on the beach, {standing} stand on piles");
+    assert!(
+        lying > 0 && standing > lying,
+        "{lying} lying, {standing} standing"
+    );
 }
 
 /// Slice 4d: a boathouse has no wall on its seaward edges, so the walker

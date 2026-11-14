@@ -2459,7 +2459,80 @@ fn print_the_ground_under_the_harbour_piers() {
                     site.name,
                     text.join(" ")
                 );
+                // And how the pier is cut now: each piece, its top.
+                let under = |d: Vec3| {
+                    let n = nat(d);
+                    ground.at(d).map_or(n, |g| g.height(n))
+                };
+                let terrace = town.terrace as f32;
+                let cut = pbd_core::settlement::pieces::harbour::stretches(
+                    &patch, &chart, p, cell_m, terrace, &under,
+                );
+                let text: Vec<String> = cut
+                    .iter()
+                    .map(|t| format!("{:.2}-{:.2} at {:.2}", t.s0, t.s1, t.top_m))
+                    .collect();
+                println!("   cut: {}", text.join(", "));
             }
         }
+    }
+}
+
+/// `pier-landfall`: on every harbour of the shipped seed, every pier
+/// stretch's planks are over the ground under it (read finer than the cut
+/// reads it): on the beach they lie on it, and over the water they stand at
+/// the template's deck, a metre over the sea.
+#[test]
+fn every_harbours_piers_lie_on_their_ground_never_in_it() {
+    use pbd_core::settlement::pieces::harbour;
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let cell_m = template.grid.cell_m;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, ground) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let nat = natural(&config);
+        let under = |d: Vec3| {
+            let n = nat(d);
+            ground.at(d).map_or(n, |g| g.height(n))
+        };
+        let terrace = town.terrace as f32;
+        let (mut lying, mut standing) = (0, 0);
+        for p in &template.piers {
+            let len = harbour::along(p, p.to[0], p.to[2]);
+            let (ux, uz) = ((p.to[0] - p.from[0]) / len, (p.to[2] - p.from[2]) / len);
+            for t in harbour::stretches(&patch, &chart, p, cell_m, terrace, &under) {
+                let (s0, s1, top) = (t.s0, t.s1, t.top_m);
+                let mut high = f32::MIN;
+                for i in 0..=40 {
+                    let s = s0 + (s1 - s0) * i as f32 / 40.0;
+                    for j in 0..=8 {
+                        let w = (j as f32 / 8.0 - 0.5) * p.width_m;
+                        let (x, z) = (p.from[0] + ux * s - uz * w, p.from[2] + uz * s + ux * w);
+                        if let Some(d) = sea::point(&chart, &patch, x, z, cell_m) {
+                            high = high.max(under(d));
+                        }
+                    }
+                }
+                assert!(
+                    top - 0.12 >= high - 1e-4,
+                    "{}: planks at {top} under the ground at {high}",
+                    site.name
+                );
+                if top > terrace + p.from[1] {
+                    lying += 1;
+                } else {
+                    assert_eq!(top, terrace + p.from[1], "{}", site.name);
+                    standing += 1;
+                }
+            }
+        }
+        println!(
+            "{}: {lying} pier stretches lie on the beach, {standing} stand on piles",
+            site.name
+        );
+        assert!(lying > 0 && standing > lying, "{}", site.name);
     }
 }
