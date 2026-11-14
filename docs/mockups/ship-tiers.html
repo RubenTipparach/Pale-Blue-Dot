@@ -1712,7 +1712,7 @@ function buildLanderWorld(name, sheet, kind) {
   };
   const A = analyse(G1, cells instanceof Map ? cells : new Map(cells.map(c => [key(c.q, c.r, c.y), c.p])));
   W.hud = () => am ? `Cinder, basalt flats | antimatter lander <span class='g'>${W.fly.mode === "down" ? "landed from Tenebris's surface" : W.fly.mode === "up" ? "lifting off" : "setting down"}</span>  alt ${Math.round(W.fly.y)} m\nsurface to surface 5 min 10 s, no orbit stop  delta-v used 9.8 of ${(A.total / 1000).toFixed(0)} km/s  TWR ${A.S[0].twr.toFixed(1)} at 1 g`
-    : `Highport field, Tenebris | lander  alt ${Math.round(W.fly.y)} m  ${W.fly.mode === "pad" ? "on the pad" : "climbing to low orbit"}\nTWR 1.26 at 1 g  delta-v 860 m/s: to orbit (540); refuelled up there for the way down (450)`;
+    : `The launch field, Tenebris | lander  alt ${Math.round(W.fly.y)} m  ${W.fly.mode === "pad" ? "on the pad" : "climbing to low orbit"}\nTWR 1.26 at 1 g  delta-v 860 m/s: to orbit (540); refuelled up there for the way down (450)`;
   return W;
 }
 
@@ -2384,7 +2384,7 @@ function buildAmCourse() {
   const fz = line(0x59e6f2, 2, {dashed: true, dash: 0.6, gap: 0.4, opacity: 0.6}); setLine(fz, [o0, o0.clone().lerp(o1, 0.5).add(new THREE.Vector3(0, 0, 3)), o1]); W.scene.add(fz);
   const oA = ring(5.6, 0x59e6f2, 0.3, ex, ez); oA.position.copy(pb.position); const oB = ring(4.4, 0x59e6f2, 0.3, ex, ez); oB.position.copy(ci.position); W.scene.add(oA, oB);
   W.lander = shipSprite(0xfa59bf, "lander"); W.lander.position.copy(mid.clone().lerp(s1, 0.35)); W.scene.add(W.lander);
-  W.label("Tenebris: the Highport field", "", null, "#8fc3d8").pos = pb.position.clone().add(new THREE.Vector3(0, 0, 6.2));
+  W.label("Tenebris: the launch field", "", null, "#8fc3d8").pos = pb.position.clone().add(new THREE.Vector3(0, 0, 6.2));
   W.label("Cinder: the basalt flats", "", null, "#e8b040").pos = ci.position.clone().add(new THREE.Vector3(0, 0, 5.2));
   W.label("lift off at 3 g, burn", "", null, "#fa59bf").pos = s1.clone().lerp(mid, 0.5).add(new THREE.Vector3(0, 0, -1.6));
   W.label("flip", "", flip, "#ffe38a");

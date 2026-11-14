@@ -6,11 +6,11 @@ Planning only. Nothing below the mockup starts until the owner asks for it
 ## 0. The write-up and the mockup
 - [x] 0.1 This change: the owner's words, the five mining tiers, the rig and
       the platform, freighters, the four carriers, the loads.
-- [ ] 0.2 M20 (`docs/mockups/industry.html`): the mining tier switch, the
+- [x] 0.2 M20 (`docs/mockups/industry.html`): the mining tier switch, the
       drilling rig and offshore platform views, a Transport section, the
       platform and loads on the power grid; icons by
       `tools/art/industry_art.py`; lit at night; nothing moves until Run.
-- [ ] 0.3 Screenshots in `docs/screenshots/mockup-industry/` (headless,
+- [x] 0.3 Screenshots in `docs/screenshots/mockup-industry/` (headless,
       SwiftShader, said so), M20 republished, its tracker entry updated in the
       repo.
 - [ ] 0.4 The owner approves the mockup for build on the tracker.
