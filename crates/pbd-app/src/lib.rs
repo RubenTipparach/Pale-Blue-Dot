@@ -218,9 +218,14 @@ impl Plugin for PaleBlueDotPlugin {
         #[cfg(feature = "desktop")]
         app.init_resource::<controls::MenuOpen>()
             .init_resource::<controls::PickerKey>()
+            .init_resource::<controls::KeyBinds>()
             .add_systems(
                 PreUpdate,
-                controls::read_picker_key.after(bevy::input::InputSystems),
+                (
+                    // First, so every reader after it reads the rebinds.
+                    controls::remap_keys.after(bevy::input::InputSystems),
+                    controls::read_picker_key.after(controls::remap_keys),
+                ),
             );
         app.init_resource::<SimulationClock>()
             .init_resource::<PhysicsFrame>()

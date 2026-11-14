@@ -46,12 +46,15 @@ pub fn show(
     vehicles: Query<&Vehicle>,
     walkers: Query<&Position, With<Walker>>,
     mut text: Query<(&mut Text, &mut Visibility), With<VehicleText>>,
+    binds: Option<Res<crate::controls::KeyBinds>>,
 ) {
+    let none = crate::controls::KeyBinds::default();
+    let binds = binds.as_deref().unwrap_or(&none);
     let Ok((mut text, mut visibility)) = text.single_mut() else {
         return;
     };
     let line = match aboard.0.and_then(|e| vehicles.get(e).ok()) {
-        Some(vehicle) => panel(vehicle, view.seat),
+        Some(vehicle) => panel(vehicle, view.seat, binds),
         None => walking
             .filter(|w| w.active)
             .and_then(|_| walkers.single().ok())
@@ -62,7 +65,12 @@ pub fn show(
                     .map(|v| (v, v.craft.body.position.distance(at)))
                     .filter(|(v, d)| *d <= v.craft.seat().reach_m as f64)
                     .min_by(|a, b| a.1.total_cmp(&b.1))
-                    .map(|(v, _)| format!("[F] board the {}", v.craft.kind.name()))
+                    .map(|(v, _)| {
+                        let board = crate::controls::slots()
+                            .find(|s| s.name() == "vehicles:KeyF")
+                            .map_or("F", |s| crate::controls::key_label(binds.key(&s)));
+                        format!("[{board}] board the {}", v.craft.kind.name())
+                    })
             })
             .unwrap_or_default(),
     };
@@ -77,7 +85,7 @@ pub fn show(
 }
 
 /// The instruments and the keys for the craft aboard.
-fn panel(vehicle: &Vehicle, seat: bool) -> String {
+fn panel(vehicle: &Vehicle, seat: bool, binds: &crate::controls::KeyBinds) -> String {
     let craft = &vehicle.craft;
     let mut s = String::new();
     let moored = match craft.mooring {
@@ -247,12 +255,12 @@ fn panel(vehicle: &Vehicle, seat: bool) -> String {
     let _ = writeln!(
         s,
         "{}",
-        crate::controls::line(&craft.kind.name().to_uppercase())
+        crate::controls::line(&craft.kind.name().to_uppercase(), binds)
     );
     let _ = write!(
         s,
         "{}   ({} view)",
-        crate::controls::line("VEHICLES"),
+        crate::controls::line("VEHICLES", binds),
         if seat { "seat" } else { "chase" }
     );
     s
@@ -311,7 +319,7 @@ mod tests {
                 sail_state: SailState::Stalled,
                 ..default()
             });
-            let text = panel(&v, false);
+            let text = panel(&v, false, &Default::default());
             for value in [
                 "water  2.0 m/s",
                 "ground  3.0 m/s",
@@ -330,7 +338,7 @@ mod tests {
             length: 10.0,
             anchored: true,
         });
-        assert!(panel(&v, false).contains("Weigh anchor to get underway"));
+        assert!(panel(&v, false, &Default::default()).contains("Weigh anchor to get underway"));
     }
 
     #[test]
@@ -341,7 +349,7 @@ mod tests {
                 climb_hold: hold,
                 ..default()
             });
-            assert!(panel(&v, false).contains(label));
+            assert!(panel(&v, false, &Default::default()).contains(label));
         }
         let mut v = vehicle(Kind::Loon);
         v.craft.telemetry = Telemetry::Loon(LoonTelemetry {
@@ -350,7 +358,7 @@ mod tests {
             speed: 2.0,
             ..default()
         });
-        let text = panel(&v, false);
+        let text = panel(&v, false, &Default::default());
         for value in [
             "stern rudder",
             "water  1.0",

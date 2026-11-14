@@ -1231,7 +1231,7 @@ pub fn run(args: &[String]) {
     // The player's settings (`player-settings`): the file in a plain run;
     // in a capture or a benchmark the defaults, so its picture or its numbers
     // are its flags' alone. Read here, once the logger is up.
-    let (player, kept) = pbd_app::settings::for_launch(
+    let (player, keys, kept) = pbd_app::settings::for_launch(
         launch.capture.is_some() || launch.frame_log.is_some(),
         &launch.settings,
     );
@@ -1245,7 +1245,11 @@ pub fn run(args: &[String]) {
             .as_ref()
             .map_or("none".into(), |p| p.display().to_string()),
     );
+    if !keys.is_empty() {
+        info!("PLAYER_KEYS {:?}", keys.to_names());
+    }
     app.insert_resource(player)
+        .insert_resource(keys)
         .insert_resource(kept)
         .insert_resource(if launch.upscale_nearest {
             pbd_app::settings::Upscale::Nearest
