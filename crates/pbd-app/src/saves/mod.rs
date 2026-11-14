@@ -1121,6 +1121,95 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// NEW WORLD while a world is open (`new-world-arrival`): the open world
+    /// is written and drained, the new one is its own directory and opens
+    /// with no edits, no pose, no clock and no weather, and nothing done in
+    /// it touches a byte of the old world's files.
+    #[test]
+    fn a_new_world_made_while_one_is_open_is_its_own_and_leaves_the_old_alone() {
+        let root = temporary("new-while-open");
+        let old = create(&root, "Old", 4242).unwrap();
+        let mut carried = Slots::new();
+        carried.give(Item::Block(Material::Dirt), 1);
+        let mut open = WorldSave::open(root.clone(), old.clone());
+        assert!(open.accept(
+            Edit {
+                cell: 77,
+                layer: 200,
+                material: Material::Air,
+            },
+            None,
+            &carried
+        ));
+        open.snapshot(
+            Pose {
+                position: Vec3::new(4279.3, 2305.0, 112.1),
+                heading: Vec3::X,
+                pitch: 0.0,
+                selected: 1,
+            },
+            1440.0,
+        );
+        open.snapshot_weather(vec![1, 2, 3]);
+        open.drain();
+        let files = |id: &str| -> Vec<(PathBuf, Vec<u8>)> {
+            let mut all: Vec<_> = std::fs::read_dir(root.join(id))
+                .unwrap()
+                .map(|e| {
+                    let path = e.unwrap().path();
+                    let bytes = std::fs::read(&path).unwrap();
+                    (path, bytes)
+                })
+                .collect();
+            all.sort();
+            all
+        };
+        let before = files(&old.id);
+        // The new world is made while the old is still open, and opened in
+        // its place.
+        let new = create(&root, "Old", 4242).unwrap();
+        assert_ne!(
+            new.id, old.id,
+            "its own directory, even under the same name"
+        );
+        drop(open);
+        let mut fresh = WorldSave::open(root.clone(), new.clone());
+        assert!(fresh.edits.is_empty(), "none of the old world's edits");
+        assert!(fresh.pose.is_none(), "no pose: it starts at the spawn");
+        assert!(fresh.world_seconds.is_none(), "and on the new-world clock");
+        assert!(fresh.weather.is_none(), "under its own sky");
+        assert!(fresh.accept(
+            Edit {
+                cell: 78,
+                layer: 200,
+                material: Material::Air,
+            },
+            None,
+            &carried
+        ));
+        fresh.snapshot(
+            Pose {
+                position: Vec3::new(1.0, 2.0, 3.0),
+                heading: Vec3::X,
+                pitch: 0.0,
+                selected: 0,
+            },
+            10.0,
+        );
+        fresh.drain();
+        drop(fresh);
+        assert_eq!(files(&old.id), before, "the old world's files untouched");
+        let listed = list(&root).into_iter().find(|s| s.id == old.id).unwrap();
+        let reopened = WorldSave::open(root.clone(), listed);
+        assert_eq!(reopened.edits.for_cell(77), &[(200, Material::Air)]);
+        assert!(reopened.edits.for_cell(78).is_empty());
+        assert_eq!(
+            reopened.pose.map(|p| p.position),
+            Some(Vec3::new(4279.3, 2305.0, 112.1))
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// A new world is made with its identity, written before its world file,
     /// naming this build's versions; the list reads it back
     /// (`world-persistence` 2.1).

@@ -1,0 +1,46 @@
+2026-11-14T09:13:27.285013Z  INFO pbd_app::loading: loading: the world is being prepared
+2026-11-14T09:13:31.627544Z  INFO pbd_app::loading: READY playable 4.51 s after launch at frame 165 (world 3.42 s, warm 0.93 s, 49 pipelines)
+2026-11-14T09:13:31.627555Z  INFO pbd_app::loading: PLACE ready at 28.300 1.500 (map 28.300S 1.500E) | 65.6 m elevation | 1.6 m above ground
+2026-11-14T09:13:31.740346Z  INFO pbd_app::place: PLACE spawn at 28.300 1.500 (map 28.300S 1.500E) | 62.6 m elevation | -1.4 m above ground
+2026-11-14T09:13:43.377786Z  INFO pbd_app::desktop: PLACE capture /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/old-make.png at 28.300 1.500 (map 28.300S 1.500E) | 62.6 m elevation | -1.4 m above ground
+2026-11-14T09:13:44.421349Z  INFO pbd_app::loading: loading: the world is being prepared
+2026-11-14T09:13:45.906117Z  INFO pbd_app::planet: 3 edits across 1 cells loaded from the save
+2026-11-14T09:13:46.193958Z  INFO pbd_app::loading: READY playable 2.62 s after launch at frame 75 (world 1.47 s, warm 0.31 s, 49 pipelines)
+2026-11-14T09:13:46.193971Z  INFO pbd_app::loading: PLACE ready at 28.300 1.500 (map 28.300S 1.500E) | 62.6 m elevation | -1.4 m above ground
+2026-11-14T09:13:46.315849Z  INFO pbd_app::place: PLACE spawn at 28.300 1.500 (map 28.300S 1.500E) | 62.6 m elevation | -1.4 m above ground
+2026-11-14T09:13:51.277143Z  INFO bevy_render::view::window::screenshot: Screenshot saved to /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/after-switch-leaving.png
+2026-11-14T09:13:51.390707Z  INFO pbd_app::desktop: --new-world: made 'nw-new-a5' (nw-new-a5) at frame 300
+2026-11-14T09:13:51.390739Z  INFO pbd_app::desktop: WORLD_SWITCH before world 'nw-old-a5' (nw-old-a5) seed 1592598566 generator 6 edits 3 saved_pose 4279.3,2305.0,112.1 walker 4279.3,2305.0,112.1 (lat 28.3000 lon 1.5000) spawn_dir Vec3(0.8802, 0.4741, 0.0230) clock_s 1440
+2026-11-14T09:13:51.405909Z  INFO pbd_app::loading: loading: another world is being prepared
+2026-11-14T09:13:51.405989Z  INFO pbd_app::saves: world 'nw-new-a5' loaded: 0 edits across 0 cells
+2026-11-14T09:13:54.211519Z  INFO pbd_app::loading: loading: the switch's screen photographed to /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/after-switch-loading.png
+2026-11-14T09:13:56.303328Z  INFO pbd_app::desktop: loaded world 'nw-new-a5' (new)
+2026-11-14T09:13:56.304163Z  INFO pbd_app::desktop: WORLD_SWITCH after world 'nw-new-a5' (nw-new-a5) seed 1592598566 generator 6 edits 0 saved_pose none walker 4434.3,1987.8,-229.6 (lat 24.1171 lon -2.9638) spawn_dir Vec3(0.9115, 0.4086, -0.0472) clock_s 1440
+2026-11-14T09:13:56.440010Z  INFO pbd_app::loading: READY playable 12.87 s after launch at frame 546 (world 3.87 s, warm 1.15 s, 81 pipelines)
+2026-11-14T09:13:56.440026Z  INFO pbd_app::loading: PLACE ready at 28.300 1.500 (map 28.300S 1.500E) | 62.6 m elevation | -1.4 m above ground
+2026-11-14T09:13:56.446546Z  INFO bevy_render::view::window::screenshot: Screenshot saved to /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/after-switch-loading.png
+2026-11-14T09:13:56.462831Z  INFO pbd_app::desktop::arrival: ARRIVE banner 'NW-NEW-A5' A NEW WORLD
+2026-11-14T09:13:57.540804Z  INFO pbd_app::desktop::arrival: ARRIVE banner photographed to /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/after-switch-arrival.png
+2026-11-14T09:13:57.605002Z  INFO bevy_render::view::window::screenshot: Screenshot saved to /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/after-switch-arrival.png
+CAPTURE_REQUEST /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/after-switch.png frame=900
+2026-11-14T09:14:08.671116Z  INFO pbd_app::desktop: PLACE capture /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/after-switch.png at 24.117 -2.964 (map 24.117S 2.964W) | 65.6 m elevation | 1.6 m above ground
+CAPTURE_SAVED /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/after-switch.png
+2026-11-14T09:14:09.790349Z  INFO pbd_app::loading: loading: the world is being prepared
+2026-11-14T09:14:11.245125Z  INFO pbd_app::planet: 3 edits across 1 cells loaded from the save
+2026-11-14T09:14:11.644119Z  INFO pbd_app::place: PLACE spawn at 28.300 1.500 (map 28.300S 1.500E) | 62.6 m elevation | -1.4 m above ground
+2026-11-14T09:14:12.582648Z  INFO pbd_app::loading: loading: 73 prewarm proxies shown behind the screen
+2026-11-14T09:14:12.582694Z  INFO pbd_app::loading: READY playable 3.68 s after launch at frame 125 (world 1.44 s, warm 1.36 s, 76 pipelines)
+2026-11-14T09:14:12.582703Z  INFO pbd_app::loading: PLACE ready at 28.300 1.500 (map 28.300S 1.500E) | 62.6 m elevation | -1.4 m above ground
+2026-11-14T09:14:17.594520Z  INFO pbd_app::desktop: --new-world: made 'nw-rt-a5' (nw-rt-a5) at frame 300
+2026-11-14T09:14:17.594550Z  INFO pbd_app::desktop: WORLD_SWITCH before world 'nw-old-a5' (nw-old-a5) seed 1592598566 generator 6 edits 3 saved_pose 4279.3,2305.0,112.1 walker 4279.3,2305.0,112.1 (lat 28.3000 lon 1.5000) spawn_dir Vec3(0.8802, 0.4741, 0.0230) clock_s 1440
+2026-11-14T09:14:17.609931Z  INFO pbd_app::loading: loading: another world is being prepared
+2026-11-14T09:14:17.610015Z  INFO pbd_app::saves: world 'nw-rt-a5' loaded: 0 edits across 0 cells
+2026-11-14T09:14:20.213040Z  INFO pbd_app::loading: loading: the switch's screen photographed to /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/rt-loading.png
+2026-11-14T09:14:21.715356Z  INFO pbd_app::desktop: loaded world 'nw-rt-a5' (new)
+2026-11-14T09:14:21.715381Z  INFO pbd_app::desktop: WORLD_SWITCH after world 'nw-rt-a5' (nw-rt-a5) seed 1592598566 generator 6 edits 0 saved_pose none walker 4434.3,1987.8,-229.6 (lat 24.1171 lon -2.9638) spawn_dir Vec3(0.9115, 0.4086, -0.0472) clock_s 1440
+2026-11-14T09:14:22.888724Z  INFO pbd_app::loading: loading: 272 prewarm proxies shown behind the screen
+2026-11-14T09:14:22.888826Z  INFO pbd_app::loading: READY playable 13.98 s after launch at frame 646 (world 3.18 s, warm 2.09 s, 93 pipelines)
+2026-11-14T09:14:22.888841Z  INFO pbd_app::loading: PLACE ready at 24.117 -2.964 (map 24.117S 2.964W) | 65.6 m elevation | 1.6 m above ground
+2026-11-14T09:14:22.906931Z  INFO pbd_app::desktop::arrival: ARRIVE banner 'NW-RT-A5' A NEW WORLD
+2026-11-14T09:14:23.906233Z  INFO pbd_app::desktop::arrival: ARRIVE banner photographed to /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/rt-arrival.png
+2026-11-14T09:14:32.878247Z  INFO pbd_app::desktop: PLACE capture /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2db38c8-e45c-46b9-9a73-96fefc6ae18e/scratchpad/repro/after5/rt.png at 24.117 -2.964 (map 24.117S 2.964W) | 65.6 m elevation | 1.6 m above ground

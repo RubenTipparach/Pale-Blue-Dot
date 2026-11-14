@@ -384,6 +384,7 @@ impl Plugin for LoadingPlugin {
                     drive_loading,
                     bevy::window::close_when_requested,
                     capture_loading,
+                    capture_switch,
                 )
                     .chain(),
             )
@@ -564,6 +565,69 @@ fn paint(world: &mut World, step: Step, fraction: f32, detail: String) {
     }
 }
 
+/// A world being opened from the saves page rather than at launch
+/// (`new-world-arrival` decision 1): what is prepared is put in place of the
+/// open world's, and `Startup` is not run again.
+#[derive(Resource)]
+struct Switching;
+
+/// Left by a switch when its world is in place, for the desktop to restore
+/// what it owns (the hotbar, the clock, the walker) on the first open frame,
+/// behind the screen. `fresh` is a world with no saved pose: a new one.
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct Arrived {
+    pub fresh: bool,
+}
+
+/// Open `slot` in place of the open world, through the loading screen
+/// (`new-world-arrival` decisions 1 and 7): the game's schedules are held as
+/// at launch, and a thread opens the save and prepares it as a launch does,
+/// built round where its player was, or round `new_world` for a world with
+/// no pose. The caller writes and drains the leaving world first.
+pub fn begin_switch(
+    world: &mut World,
+    root: std::path::PathBuf,
+    slot: crate::saves::Slot,
+    new_world: Vec3,
+) {
+    spawn_screen(world);
+    let near = slot
+        .file
+        .position
+        .map_or(new_world, |p| Vec3::from(p).normalize_or(new_world));
+    let inputs = Inputs {
+        rules: world.resource::<SitesRules>().0.clone(),
+        assets: world.resource::<TownAssets>().clone(),
+        columns: world.resource::<ColumnSettings>().clone(),
+        scatter: world.resource::<ScatterSettings>().clone(),
+        near,
+    };
+    let progress = Arc::new(Progress::default());
+    let thread = {
+        let progress = progress.clone();
+        std::thread::Builder::new()
+            .name("loading".into())
+            .spawn(move || prepare(WorldSave::open(root, slot), inputs, &progress))
+            .expect("the loading thread")
+    };
+    info!("loading: another world is being prepared");
+    world.insert_resource(Preparing {
+        thread: Some(thread),
+        progress,
+        started: Instant::now(),
+        world_s: 0.0,
+    });
+    world.insert_resource(Switching);
+    world.insert_resource(WorldLoading { open_next: false });
+    // What compiles behind this screen is not late: `READY` says so again
+    // when it lifts.
+    world
+        .resource::<PipelineWatch>()
+        .0
+        .ready
+        .store(false, Ordering::Release);
+}
+
 /// While the world is prepared: start the thread, show what it is doing,
 /// and when it is done put what it made in place for `Startup`.
 fn drive_loading(world: &mut World) {
@@ -632,11 +696,21 @@ fn drive_loading(world: &mut World) {
         Err(panic) => std::panic::resume_unwind(panic),
     };
     world.insert_resource(WorldSites::opened(&save, sites));
-    if let Some(towns) = towns {
-        world.insert_resource(towns);
+    if world.remove_resource::<Switching>().is_some() {
+        // In place of the open world's: its towns taken down, its save
+        // dropped (which drains and joins its writer), its planet replaced.
+        crate::towns::replace(world, towns.unwrap_or_default());
+        let fresh = save.pose.is_none();
+        world.insert_resource(save);
+        crate::planet::install_prepared(world, planet);
+        world.insert_resource(Arrived { fresh });
+    } else {
+        if let Some(towns) = towns {
+            world.insert_resource(towns);
+        }
+        world.insert_resource(save);
+        world.insert_resource(planet);
     }
-    world.insert_resource(save);
-    world.insert_resource(planet);
     // The world clock is held by `warm` from its first frame, not here:
     // `Startup` must see it as the launch set it, or the air opens as a
     // capture's (`Air::in_place`) and steps on the main thread for the rest
@@ -659,6 +733,35 @@ fn drive_loading(world: &mut World) {
     for root in roots.iter(world).collect::<Vec<_>>() {
         world.entity_mut(root).remove::<UiTargetCamera>();
     }
+}
+
+/// `--new-world` in a capture (`new-world-arrival`, an instrument): the
+/// loading screen of a switch photographed once while the planet builds, to
+/// this path, without ending the run.
+#[derive(Resource, Clone)]
+pub struct CaptureSwitch(pub std::path::PathBuf);
+
+fn capture_switch(
+    mut commands: Commands,
+    shot: Option<Res<CaptureSwitch>>,
+    switching: Option<Res<Switching>>,
+    preparing: Option<Res<Preparing>>,
+    mut asked: Local<bool>,
+) {
+    let (Some(shot), Some(_), Some(preparing)) = (shot, switching, preparing) else {
+        return;
+    };
+    if *asked || preparing.progress.step() != Step::Planet || preparing.progress.seconds() < 0.2 {
+        return;
+    }
+    *asked = true;
+    info!(
+        "loading: the switch's screen photographed to {}",
+        shot.0.display()
+    );
+    commands
+        .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
+        .observe(bevy::render::view::screenshot::save_to_disk(shot.0.clone()));
 }
 
 /// `--capture-loading`: the screen photographed while the planet builds.

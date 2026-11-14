@@ -664,6 +664,27 @@ pub fn build_towns(world: &mut World) {
     settle(world);
 }
 
+/// Take down the towns standing and put in the ones the loading thread read
+/// or laid for the world just opened (`new-world-arrival` decision 2): its
+/// ground is installed already, by the thread, and they stand as they come
+/// into range as at launch.
+pub fn replace(world: &mut World, towns: Towns) {
+    let old: Vec<Entity> = world
+        .resource::<Towns>()
+        .standing
+        .iter()
+        .map(|t| t.entity)
+        .collect();
+    for entity in old {
+        if let Ok(e) = world.get_entity_mut(entity) {
+            e.despawn();
+        }
+    }
+    world.insert_resource(Structures::default());
+    world.insert_resource(crate::planet::shadow::TownCasters::default());
+    world.insert_resource(towns);
+}
+
 /// A new site list: take down the old towns, and read or lay every site's
 /// town that has a template.
 fn start_towns(world: &mut World, sites: &[Site], ids: Vec<u32>) {

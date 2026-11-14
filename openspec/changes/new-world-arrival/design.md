@@ -25,7 +25,7 @@
 
 3. **Where the walker stands.** A world with a pose stands where it was. A
    world without one stands where a launch puts a new world: the launch's
-   spawn direction (`NewWorldSpawn`, saved from the launch before anything
+   spawn direction (`NewWorldStart`, saved from the launch before anything
    is restored), the same level-ground search and four metres off the trunk
    (`walking::new_world_up`, the code `setup_walking` used inline, now shared),
    and `WalkingState::spawn_direction` becomes that, so the reset key also
