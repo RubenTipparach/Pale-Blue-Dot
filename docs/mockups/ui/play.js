@@ -336,7 +336,7 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
       const spots = [];
       for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
         const i = idx(c, r); if (S.land.MAT[i] !== 'grass' || S.land.WET[i]) continue;
-        const k = flower ? (hash2(c, r * 3) < 0.25 ? 1 : 0) : 4;
+        const k = flower ? (hash2(c, r * 3) < 0.25 ? 1 : 0) : (S.touch ? 2 : 4);
         for (let j = 0; j < k; j++) spots.push([cx(c, r) + (hash2(c * 7 + j, r) - 0.5) * 2.2, S.land.TOP[i], cz(c, r) + (hash2(c, r * 5 + j) - 0.5) * 2.2, hash2(c + j, r + j) * 6.28]);
       }
       const im = new THREE.InstancedMesh(geo, m, spots.length), M4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
@@ -410,9 +410,9 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
   function step(dt) {
     const pl = S.player, k = S.keys, ui = S.ui;
     if (!ui.menuOpen) {
-      const f = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0), s = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0), sp = k.ShiftLeft ? 6.2 : 4.0;
+      const f = (k.KeyW ? 1 : 0) - (k.KeyS ? 1 : 0) - S.joy.y, s = (k.KeyD ? 1 : 0) - (k.KeyA ? 1 : 0) + S.joy.x, sp = k.ShiftLeft ? 6.2 : 4.0;
       const fx = -Math.sin(pl.yaw), fz = -Math.cos(pl.yaw), rx = Math.cos(pl.yaw), rz = -Math.sin(pl.yaw);
-      let vx = (fx * f + rx * s), vz = (fz * f + rz * s); const l = Math.hypot(vx, vz); if (l) { vx = vx / l * sp; vz = vz / l * sp; }
+      let vx = (fx * f + rx * s), vz = (fz * f + rz * s); const l = Math.hypot(vx, vz); if (l) { const m = Math.min(1, l); vx = vx / l * sp * m; vz = vz / l * sp * m; }
       const nx = pl.x + vx * dt, nz = pl.z + vz * dt;
       if (!blocked(nx, pl.z, pl.y)) pl.x = nx; if (!blocked(pl.x, nz, pl.y)) pl.z = nz;
       if (k.Space && pl.ground) { pl.vy = 7.2; pl.ground = false; }
@@ -524,20 +524,45 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
   // ------------------------------------------------------------------ build and input
   function build() {
     const box = document.getElementById('playScenes');
-    const k = window.innerWidth - 40 >= 1440 ? 1 : 0.5;
+    const touch = !!window.PBDUI.COARSE;
+    const k = !touch && window.innerWidth - 40 >= 1440 ? 1 : 0.5;
     const sc = h('div', { class: 'scene', tabindex: '0', 'aria-label': 'The Play demo: click to walk', style: `width:${1440 * k}px;height:${900 * k}px;--k:${k};--s:${Math.round(2 * k)};cursor:crosshair` });
     const canvas = h('canvas', { class: 'gl' }); const ui = h('div', { class: 'ui' });
-    sc.append(canvas, ui, h('div', { class: 'hint', id: 'playHint' }, 'click to walk: WASD, Space, mouse; E use, Esc pause, I pack, M map'));
-    box.append(h('div', { class: 'scenebox' }, sc));
+    sc.append(canvas, ui, h('div', { class: 'hint', id: 'playHint' }, touch ? 'left: walk; drag right: look; buttons: jump, use, dig, place' : 'click to walk: WASD, Space, mouse; E use, Esc pause, I pack, M map'));
+    // The view scales as one picture to fit the page, or the whole screen in fullscreen.
+    const inner = h('div', { class: 'scenebox', style: `width:${1440 * k}px;max-width:none;overflow:hidden;transform-origin:0 0` }, sc);
+    const wrap = h('div', { class: 'playwrap' }, inner);
+    const fsBtn = h('button', { class: 'fsbtn', type: 'button', 'aria-label': 'Fullscreen' }, 'Fullscreen');
+    wrap.append(fsBtn);
+    if (touch) box.append(h('div', { class: 'rotate-hint' }, 'Turn the phone sideways and tap Fullscreen to play.'));
+    box.append(wrap);
+    const fit = () => {
+      const full = wrap.classList.contains('fs') || document.fullscreenElement === wrap;
+      const aw = full ? window.innerWidth : Math.min(window.PBDUI.mainWidth(), box.clientWidth || 1e9), ah = full ? window.innerHeight : Infinity;
+      const f = full ? Math.min(aw / (1440 * k), ah / (900 * k)) : Math.min(1, aw / (1440 * k));
+      inner.style.transform = f === 1 ? '' : `scale(${f})`;
+      if (!full) { wrap.style.width = Math.floor(1440 * k * f) + 'px'; wrap.style.height = Math.ceil(900 * k * f) + 'px'; inner.style.position = ''; }
+      else { wrap.style.width = ''; wrap.style.height = ''; inner.style.position = 'absolute'; inner.style.left = Math.round((aw - 1440 * k * f) / 2) + 'px'; inner.style.top = Math.round((ah - 900 * k * f) / 2) + 'px'; }
+      fsBtn.textContent = full ? '\u2715 Exit' : 'Fullscreen';
+    };
+    fsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const full = wrap.classList.contains('fs') || document.fullscreenElement === wrap;
+      if (full) { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); wrap.classList.remove('fs'); fit(); return; }
+      const fallback = () => { wrap.classList.add('fs'); fit(); };
+      if (wrap.requestFullscreen) wrap.requestFullscreen().then(fit).catch(fallback); else fallback();
+    });
+    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) wrap.classList.remove('fs'); fit(); });
+    window.addEventListener('resize', () => fit());
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(1); renderer.setSize(1440 * k, 900 * k, false);
+    renderer.setPixelRatio(1); renderer.setSize(1440 * k, 900 * k, false); // pixel ratio 1 everywhere, so a phone's GPU draws 720 x 450
     renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0xb8d4ec, 55, 210);
     const camera = new THREE.PerspectiveCamera(70, 1440 / 900, 0.1, 900);
-    S = { renderer, scene, camera, sc, canvas, keys: {}, t: 0, frames: 0, running: {}, stats: { digs: 0, used: [] }, focus: new THREE.Vector3(48, 3, 44), town: [380, -920] };
+    S = { touch, wrap, fit, renderer, scene, camera, sc, canvas, keys: {}, joy: { x: 0, y: 0 }, t: 0, frames: 0, running: {}, stats: { digs: 0, used: [] }, focus: new THREE.Vector3(48, 3, 44), town: [380, -920] };
     S.land = makeLand();
-    S.sunL = new THREE.DirectionalLight(0xffffff, 2.5); S.sunL.castShadow = true; S.sunL.shadow.mapSize.set(2048, 2048);
+    S.sunL = new THREE.DirectionalLight(0xffffff, 2.5); S.sunL.castShadow = true; S.sunL.shadow.mapSize.set(touch ? 1024 : 2048, touch ? 1024 : 2048);
     Object.assign(S.sunL.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, near: 1, far: 220 }); S.sunL.shadow.bias = -0.0006; S.sunL.shadow.normalBias = 0.03;
     scene.add(S.sunL, S.sunL.target);
     S.hemi = new THREE.HemisphereLight(0x9cc0ee, 0x4a5a30, 0.8); scene.add(S.hemi);
@@ -549,7 +574,7 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
     S.ui = new GameUI(ui, {
       box: sc, mode: 'play', screen: 'hud', town: 'Dunmouth 1 km', mapBg: 'ui/game/map-before.jpg', captured: () => S.locked || document.activeElement === sc,
       onRun: (kind, on) => { S.running[kind] = on; if (kind === 'press' && !on) S.beltT = 2.5; },
-      onScreen: (scr) => { if (scr !== 'hud') { S.keys = {}; if (document.pointerLockElement) { S.menuRelease = true; document.exitPointerLock(); } } },
+      onScreen: (scr) => { if (S.pad) S.pad.classList.toggle('menu', scr !== 'hud'); if (scr !== 'hud') { S.keys = {}; if (document.pointerLockElement) { S.menuRelease = true; document.exitPointerLock(); } } },
     });
     const keydown = (e) => {
       if (e.defaultPrevented) return;
@@ -564,6 +589,7 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
     let drag = null;
     canvas.addEventListener('mousedown', (e) => {
       sc.focus({ preventScroll: true });
+      if (S.touch) return; // touch plays with the on-screen controls
       if (S.ui.menuOpen) return;
       if (S.locked) { if (e.button === 0) dig(); if (e.button === 2) place(); return; }
       drag = { x: e.clientX, y: e.clientY, moved: 0, b: e.button };
@@ -592,7 +618,29 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
     seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; rng.value = b.dataset.t; setTime(+b.dataset.t); seg.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); });
     rng.addEventListener('input', () => { setTime(+rng.value); seg.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', 'false')); });
     setTime(+rng.value);
+    if (touch) touchControls(wrap);
+    fit();
     step(0);
+  }
+  // On a touch screen: a stick on the left to walk, a drag on the right to look, and buttons.
+  function touchControls(wrap) {
+    const stick = h('div', { class: 'stick', 'aria-label': 'walk' }, h('i', {})), look = h('div', { class: 'look', 'aria-label': 'look' });
+    const B = (lab, fn) => h('button', { type: 'button', 'data-t': lab.toLowerCase(), onclick: (e) => { e.stopPropagation(); fn(); } }, lab);
+    const pad = h('div', { class: 'touchpad' }, look, stick, h('div', { class: 'tbtns' },
+      B('Jump', () => { S.keys.Space = true; setTimeout(() => { S.keys.Space = false; }, 150); }), B('Use', () => use(S.near || nearMachine())),
+      B('Dig', () => dig()), B('Place', () => place()), B('Pack', () => S.ui.go(S.ui.st.screen === 'pack' ? 'hud' : 'pack')),
+      B('Map', () => S.ui.go(S.ui.st.screen === 'map' ? 'hud' : 'map')), B('Pause', () => S.ui.go(S.ui.menuOpen ? 'hud' : 'pause'))));
+    wrap.append(pad); S.pad = pad;
+    let sid = null, c0 = null;
+    stick.addEventListener('pointerdown', (e) => { sid = e.pointerId; stick.setPointerCapture(e.pointerId); const r = stick.getBoundingClientRect(); c0 = [r.left + r.width / 2, r.top + r.height / 2]; move(e); });
+    const move = (e) => { if (e.pointerId !== sid) return; const dx = (e.clientX - c0[0]) / 50, dy = (e.clientY - c0[1]) / 50, l = Math.max(1, Math.hypot(dx, dy)); S.joy.x = dx / l; S.joy.y = dy / l; stick.firstChild.style.transform = `translate(${S.joy.x * 40}px, ${S.joy.y * 40}px)`; };
+    stick.addEventListener('pointermove', move);
+    const end = (e) => { if (e.pointerId !== sid) return; sid = null; S.joy.x = S.joy.y = 0; stick.firstChild.style.transform = ''; };
+    stick.addEventListener('pointerup', end); stick.addEventListener('pointercancel', end);
+    let lid = null, lp = null;
+    look.addEventListener('pointerdown', (e) => { lid = e.pointerId; look.setPointerCapture(e.pointerId); lp = [e.clientX, e.clientY]; });
+    look.addEventListener('pointermove', (e) => { if (e.pointerId !== lid) return; S.player.yaw -= (e.clientX - lp[0]) * 0.006; S.player.pitch = Math.max(-1.45, Math.min(1.45, S.player.pitch - (e.clientY - lp[1]) * 0.006)); lp = [e.clientX, e.clientY]; });
+    look.addEventListener('pointerup', () => { lid = null; }); look.addEventListener('pointercancel', () => { lid = null; });
   }
   window.PBDPlay = {
     open() { if (!S) build(); if (S.on) return; S.on = true; last = 0; S.raf = requestAnimationFrame(frame); },

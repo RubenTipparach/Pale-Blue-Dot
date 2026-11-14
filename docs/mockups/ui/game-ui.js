@@ -237,7 +237,7 @@
 
   class GameUI {
     constructor(host, o = {}) {
-      this.host = host; this.o = o; this.box = o.box || host;
+      this.host = host; this.o = o; this.box = o.box || host; this.box.__ui = this;
       this.inv = o.inv || newInv();
       this.st = {
         screen: o.screen || 'hud', back: null, settingsTab: o.settingsTab || 'picture', inputTab: 'foot',
@@ -304,8 +304,8 @@
     }
     moveHeld(e) {
       const hd = this.host.querySelector('.held'); if (!hd) return;
-      const r = this.host.getBoundingClientRect();
-      hd.style.left = (e.clientX - r.left + 6) + 'px'; hd.style.top = (e.clientY - r.top + 6) + 'px';
+      const r = this.host.getBoundingClientRect(), f = r.width / (this.host.offsetWidth || r.width);
+      hd.style.left = ((e.clientX - r.left) / f + 6) + 'px'; hd.style.top = ((e.clientY - r.top) / f + 6) + 'px';
     }
 
     // ---------------------------------------------------------------- rendering
@@ -338,22 +338,32 @@
       this.inv.hot.forEach((c, i) => {
         const s = slotEl(c, i === this.inv.sel ? 'sel' : '');
         if (this.st.screen === 'pack') { s.classList.add('click'); this.slotEvents(s, this.inv.hot, i); }
+        else if (this.st.screen === 'hud') s.addEventListener('click', (e) => { e.stopPropagation(); this.inv.sel = i; this.render(); });
         d.append(s);
       });
       return d;
     }
     slotEvents(s, arr, i) {
       s.tabIndex = 0;
-      s.addEventListener('click', (e) => { e.stopPropagation(); this.clickSlot(arr, i, false); });
+      s.addEventListener('click', (e) => {
+        e.stopPropagation(); this.clickSlot(arr, i, false);
+        if (COARSE) { const c = (this.held || arr[i]); if (c) { this.toast(`${ITEMS[c[0]].name} \u00b7 ${c[1]}`); } }
+      });
       s.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); this.clickSlot(arr, i, true); });
       s.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.clickSlot(arr, i, false); } });
       s.addEventListener('mouseenter', () => {
         const c = arr[i]; if (!c || this.held) return;
         const tip = h('div', { class: 'tipfloat nine p-tip face' }, P(`${ITEMS[c[0]].name} · ${c[1]}`));
         const r = s.getBoundingClientRect(), hr = this.host.getBoundingClientRect();
-        tip.style.left = (r.right - hr.left + 4) + 'px'; tip.style.top = (r.top - hr.top - 4) + 'px';
+        const f = hr.width / (this.host.offsetWidth || hr.width);
+        tip.style.left = ((r.right - hr.left) / f + 4) + 'px'; tip.style.top = ((r.top - hr.top) / f - 4) + 'px';
         tip.dataset.tip = '1'; this.host.append(tip);
       });
+      // touch: a long press is the right click (take half); a tap shows the tooltip as well
+      let lp = null;
+      s.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; lp = setTimeout(() => { lp = 'done'; this.clickSlot(arr, i, true); }, 480); });
+      s.addEventListener('pointerup', (e) => { if (e.pointerType !== 'touch') return; if (lp && lp !== 'done') clearTimeout(lp); });
+      s.addEventListener('click', (e) => { if (lp === 'done') { lp = null; e.stopImmediatePropagation(); } }, true);
       s.addEventListener('mouseleave', () => this.host.querySelectorAll('[data-tip]').forEach((t) => t.remove()));
     }
     clickSlot(arr, i, right) {
@@ -612,6 +622,8 @@
 
   // ------------------------------------------------------------------ scenes
   const BASE_W = 1440, BASE_H = 900;
+  const COARSE = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  const mainWidth = () => document.querySelector('main').clientWidth - 2;
   function sceneScale() { const w = document.querySelector('main').clientWidth - 2; return w >= BASE_W ? 1 : 0.5; }
   function scene(bg, label, o = {}) {
     const k = o.k || sceneScale(), s = Math.round(2 * k);
@@ -627,6 +639,22 @@
       el = h('div', { class: 'scenebox', style: `position:relative;width:${cw}px;max-width:100%;height:${ch}px;overflow:hidden` }, sc);
     }
     if (o.look) el.dataset.look = o.look;
+    // A page narrower than the scene (a phone): the whole scene is scaled down to fit, as one picture
+    // (the game itself is desktop only; this is the mockup page). Pixel art stays pixelated.
+    const w0 = o.crop ? o.crop[0] : BASE_W * k, h0 = o.crop ? o.crop[1] : BASE_H * k, avail = mainWidth() - (o.pad || 0);
+    if (avail < w0) {
+      const f = avail / w0;
+      el.style.cssText += `;width:${w0}px;max-width:none;overflow:hidden;transform:scale(${f});transform-origin:0 0`;
+      el = h('div', { class: 'fitbox', style: `width:${Math.floor(avail)}px;height:${Math.ceil(h0 * f)}px;overflow:hidden` }, el);
+      if (o.look) el.dataset.look = o.look;
+    }
+    // Touch: the keys a scene answers to, as buttons under it (slots are tapped directly)
+    if (COARSE && o.keys !== false) {
+      const key = (code) => () => { if (sc.__ui) sc.__ui.key({ code, preventDefault() {}, stopPropagation() {} }); };
+      el = h('div', { class: 'withkeys' }, el, h('div', { class: 'keybar' },
+        h('button', { type: 'button', onclick: key('Escape') }, 'Esc / Back'), h('button', { type: 'button', onclick: key('KeyI') }, 'I  Pack'), h('button', { type: 'button', onclick: key('KeyM') }, 'M  Map')));
+      if (o.look) el.dataset.look = o.look;
+    }
     return { el, sc, ui, k, s };
   }
 
@@ -711,7 +739,7 @@
     for (const [screen, crop, lab] of [['hud', [600, 150, 420, 750], 'HUD (hotbar)'], ['pack', [600, 430, 420, 236], 'Pack']]) {
       const row = h('div', { class: 'row', 'data-q1': screen });
       for (const look of ['drawn', 'rendered', 'smooth']) {
-        const sc = scene('ui/game/day-meadow.jpg', look, { k: 1, crop, look, hint: false });
+        const sc = scene('ui/game/day-meadow.jpg', look, { k: 1, crop, look, hint: false, pad: 28 });
         const u = new GameUI(sc.ui, { box: sc.sc, screen, heading: 20 }); u.inv.sel = 4; u.render();
         row.append(h('div', { class: 'card' }, sc.el, h('div', { class: 'cap' }, `${lab}: ${look === 'drawn' ? 'drawn rock' : look === 'rendered' ? 'rendered rock (pixelated)' : 'smooth rock (Cycles)'}`)));
       }
@@ -720,7 +748,7 @@
     // timber out of play, rock in play
     const split = document.getElementById('splitRow');
     for (const [screen, crop, cap] of [['pause', [380, 300, 530, 300], 'Out of play: pause in carved oak'], ['station', [700, 380, 370, 260], 'In play: a machine in rock and stone']]) {
-      const sc = scene('ui/game/day-meadow.jpg', cap, { k: 1, crop, hint: false });
+      const sc = scene('ui/game/day-meadow.jpg', cap, { k: 1, crop, hint: false, pad: 28 });
       new GameUI(sc.ui, { box: sc.sc, screen, station: 'forge' });
       split.append(h('div', { class: 'card' }, sc.el, h('div', { class: 'cap' }, cap)));
     }
@@ -782,9 +810,10 @@
   }));
   window.addEventListener('hashchange', openTab);
   let rz = 0, lastK = 0;
-  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { const k = sceneScale(); if (k !== lastK) { lastK = k; const id = (location.hash || '#play').slice(1); if (id !== 'play' && id !== 'kit' && R[id]) R[id](); } }, 150); });
+  let lastW = 0;
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { const k = sceneScale(), w = mainWidth(); if (k !== lastK || (w !== lastW && w < 1440)) { lastK = k; lastW = w; const id = (location.hash || '#play').slice(1); if (id !== 'play' && id !== 'kit' && R[id]) R[id](); } }, 150); });
 
-  window.PBDUI = { GameUI, P, h, btn, slotEl, ITEMS, BLOCKS, newInv, STATIONS, scene, compass, setLook, get look() { return LOOK; }, UIS };
+  window.PBDUI = { COARSE, mainWidth, GameUI, P, h, btn, slotEl, ITEMS, BLOCKS, newInv, STATIONS, scene, compass, setLook, get look() { return LOOK; }, UIS };
   Promise.all([
     fetch('ui/font/kit-font.json').then((r) => r.json()).then((f) => { FONT = f; }).catch(() => { /* fallback text */ }),
     fetch('ui/rendered/slices.json').then((r) => r.json()).then((j) => { ROCKS = j.rock_panels || {}; }).catch(() => { /* drawn rock only */ }),
