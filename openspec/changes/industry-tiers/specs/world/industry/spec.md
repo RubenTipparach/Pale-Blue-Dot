@@ -28,3 +28,19 @@ items.
 #### Scenario: Two fluids into one pipe
 - **WHEN** a pipe network holding diesel is joined to a water tank without a valve
 - **THEN** the join is refused and names the fluid already in the network
+
+### Requirement: Freighters are hex-built and carry hex pods
+
+A freighter's hull SHALL be built of whole hex cells in the drydock builder.
+Its cargo SHALL travel in hex pods, each one cell across and 2 layers tall.
+A goods pod SHALL hold up to 10 t of stacks, and a tank pod SHALL hold up to
+10 t of one fluid. Each pod SHALL be a stored record that keeps its contents
+when it moves between ship, quay and crane.
+
+#### Scenario: Loading a pod
+
+- **WHEN** a quay crane lifts a goods pod from the pod yard onto a free deck
+  cell of a moored freighter
+- **THEN** the pod locks to that cell and its record names the freighter as
+  its carrier, and the freighter's builder check counts its mass
+

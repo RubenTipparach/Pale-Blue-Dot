@@ -50,3 +50,15 @@ on the oil tab is the 2D overlay map.
 | `tiers-power-platform.png` | The platform on the power ladder, tier I beside coal and oil: 3,100 kW ashore. |
 | `tiers-transport-run.png` | Section 6, running: wires on poles and pylons, water and fuel pipes with their pump, the belt from a hopper, the pneumatic tube between stations, and the freighter at the quay with its hired crew. |
 | `tiers-transport-auto-run-night.png` | The same at night with the freighter automated (a radio pilothouse, no crew). |
+
+## Hex-built freighters and hex pods (2026-11-14; industry-tiers design 3)
+
+The owner: "freighter should use hex based construction syustem, and cargo should be hex pods". Headless
+Chromium on SwiftShader (no GPU), 1280 × 800 at 2x.
+
+| Shot | Shows |
+| --- | --- |
+| `pods-freighter-hex.png` | The freighter at the quay, close: a hull of 73 whole hex cells (a stepped bow, the bridge built of cells aft), 70 goods pods (two high beside the middle row, one high at the rails) and a middle row of 11 tank pods, each pod a hex prism one cell across and 2 layers tall. |
+| `pods-freighter-hex-night.png` | The same automated at 22:00: the bridge windows, the radio mast and the quay crane's floodlight. |
+| `pods-tanker-hex.png` | The tanker at the offshore platform: the same hex hull, carrying 16 tank pods (160 t), the hose from the leg tanks. |
+| `pods-icons.png` | The redrawn freighter and tanker icons and the new pod icon, 8x nearest (`tools/art/industry_art.py`). |

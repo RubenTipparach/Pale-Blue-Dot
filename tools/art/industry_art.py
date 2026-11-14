@@ -854,33 +854,68 @@ def platform():
     return sp.image()
 
 
+def _hexpod(sp, x, y, w, h, ramp, tank=False):
+    """A hex pod seen from the side: two faces of the prism, the lit one left, a seam down the edge between."""
+    m = w // 2
+    sp.part(sp.rect(x, y, x + m - 1, y + h), ramp, "flat", base=3)                 # lit face
+    sp.part(sp.rect(x + m, y, x + w, y + h), ramp, "flat", base=1)                 # shaded face
+    if tank:
+        sp.fill(sp.rect(x, y + h // 2, x + w, y + h // 2), "#a61e1f")              # the tank pod's band
+    else:
+        sp.fill(sp.rect(x, y, x + w, y), "#3e3551")                                # the goods pod's rims
+        sp.fill(sp.rect(x, y + h, x + w, y + h), "#3e3551")
+
+
+def _hexhull(sp, ramp, y0=19, y1=26):
+    """A hull of whole hex cells: the bow steps up a cell at a time instead of curving."""
+    sp.part(sp.rect(4, y0, 30, y1) | sp.rect(2, y0, 3, y1 - 3) | sp.rect(1, y0, 1, y1 - 5), ramp, "rim")
+    for x in (8, 14, 20, 26):
+        sp.fill(sp.rect(x, y0 + 2, x, y1 - 1), "#2b1f35")                          # the cell joins on the side
+
+
 def tanker():
-    """A tanker: a long low red hull, the deck's pipe runs, the bridge aft."""
+    """A tanker: a hex-cell freighter carrying tank pods, the bridge of cells aft."""
     sp = Sprite(32, 32)
     sp.fill(sp.rect(0, 25, 31, 31), "#15578a")
-    sp.part(sp.poly([(1, 18), (30, 18), (27, 26), (3, 26)]), R["redpaint"], "rim")   # hull
-    sp.part(sp.rect(3, 15, 25, 18), R["metal"], "rim")                               # deck and its tanks
-    sp.part(sp.rect(4, 14, 22, 14), R["steel"], "flat", base=2, seam=False)          # the pipe run
-    sp.part(sp.rect(24, 8, 29, 18), R["white"], "rim")                               # bridge
-    sp.fill(sp.rect(25, 10, 28, 10), "#74effe")
-    sp.part(sp.rect(26, 5, 27, 8), R["soot"], "flat", base=1)                        # funnel
-    sp.plot(4, 19, WHITE)
+    _hexhull(sp, R["redpaint"])
+    for x in (3, 9, 15):
+        _hexpod(sp, x, 13, 5, 5, R["white"], tank=True)
+    sp.part(sp.rect(22, 7, 29, 18), R["white"], "rim")                               # bridge
+    sp.fill(sp.rect(23, 9, 28, 9), "#74effe")
+    sp.part(sp.rect(26, 4, 27, 6), R["soot"], "flat", base=1)                        # funnel
+    sp.plot(4, 20, WHITE)
     sp.outline()
     return sp.image()
 
 
 def freighter():
-    """A container ship: dark hull, stacked boxes in three colours, the bridge aft."""
+    """A freighter of whole hex cells, goods pods two high on deck, the bridge of cells aft."""
     sp = Sprite(32, 32)
     sp.fill(sp.rect(0, 25, 31, 31), "#15578a")
-    sp.part(sp.poly([(1, 19), (30, 19), (28, 26), (3, 26)]), R["soot"], "rim")       # hull
+    _hexhull(sp, R["soot"])
     cols = [R["red"], R["green"], R["blue"], R["gold"]]
-    for i, x in enumerate(range(3, 21, 5)):
-        for j, y in enumerate((15, 11)):
-            sp.part(sp.rect(x, y, x + 4, y + 3), cols[(i + j) % 4], "rim")          # containers
-    sp.part(sp.rect(23, 8, 28, 19), R["white"], "rim")                               # bridge
-    sp.fill(sp.rect(24, 10, 27, 10), "#74effe")
-    sp.plot(4, 12, WHITE)
+    for i, x in enumerate((3, 9, 15)):
+        for j, y in enumerate((13, 7)):
+            _hexpod(sp, x, y, 5, 5, cols[(i + j) % 4])
+    sp.part(sp.rect(22, 7, 29, 18), R["white"], "rim")                               # bridge
+    sp.fill(sp.rect(23, 9, 28, 9), "#74effe")
+    sp.plot(4, 20, WHITE)
+    sp.outline()
+    return sp.image()
+
+
+def pod():
+    """The hex pod: a hexagonal prism one cell across, 2 layers tall, seen three-quarters from above."""
+    sp = Sprite(32, 32)
+    top = sp.poly([(9, 6), (16, 3), (23, 6), (23, 10), (16, 13), (9, 10)])
+    left = sp.poly([(9, 10), (16, 13), (16, 28), (9, 25)])
+    right = sp.poly([(16, 13), (23, 10), (23, 25), (16, 28)])
+    sp.part(left, R["blue"], "flat", base=3)
+    sp.part(right, R["blue"], "flat", base=1)
+    sp.part(top, R["steel"], "flat", base=3)
+    for y in (12, 22):
+        sp.fill(sp.poly([(9, y), (16, y + 3), (23, y), (23, y + 1), (16, y + 4), (9, y + 1)]), "#3e3551")   # rims
+    sp.plot(11, 7, WHITE)
     sp.outline()
     return sp.image()
 
@@ -968,7 +1003,7 @@ def lox():
 
 
 ICONS.update({"worker": worker, "excavator": excavator, "quarry": quarry, "bucketwheel": bucketwheel, "hive": hive,
-              "derrick": derrick, "platform": platform, "tanker": tanker, "freighter": freighter,
+              "derrick": derrick, "platform": platform, "tanker": tanker, "freighter": freighter, "pod": pod,
               "pipe": pipe, "tube": tube, "belt": belt, "printer": printer, "launchpad": launchpad, "lox": lox})
 
 

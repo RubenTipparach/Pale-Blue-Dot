@@ -81,10 +81,41 @@ adds the two machines the owner named.
 
 ## 3. Freighters: hired crews, then automated
 
-A freighter is a ship from the drydock (M23) with cargo cells: container
-cells (one container a cell, 20 t of goods) or tank cells (40 t of crude or
-fuel a cell). It sails a **route**, the same stored record as ship-tiers'
-space freighters: its ID, its stops, what it loads and unloads, a schedule.
+The owner, 2026-11-14: "freighter should use hex based construction
+system, and cargo should be hex pods".
+
+A freighter is a ship built in the drydock's hex builder (M23), cell by cell,
+like every other hull there: whole 2.833 m cells and 1 m layers, a stepped
+bow, the bridge built of cells aft. It is not a lofted hull. It sails a
+**route**, the same stored record as ship-tiers' space freighters: its ID,
+its stops, what it loads and unloads, and a schedule.
+
+**Cargo travels in hex pods**, not boxes:
+- **The pod.** A pod is a hexagonal prism one cell across, inset to 2.6 m
+  flat to flat so neighbours clear, and 2 layers tall. That is about
+  11.7 m³.
+- **Two kinds.**
+  - A goods pod holds stacks up to 10 t.
+  - A tank pod holds 10 t of crude, fuel oil, diesel or water: one fluid,
+    the pipe rule (section 4).
+- **Stacking.** A pod stands on one deck cell and locks to the cell under it.
+  Pods stack two high on deck, so a deck cell carries up to 20 t. The
+  builder's check counts the pods against the hull's buoyancy: a full cell
+  of hull displaces 7.12 t of sea (drydock design).
+- **A pod is a stored record.** It has an ID, a kind, contents and an owner.
+  It moves between a ship's deck, a quay's pod yard and a crane hook, and is
+  never a cell of the ship. A pod lifted off a sinking or scrapped ship
+  keeps its record.
+- **Same pod in space (proposed).** A rocket's cargo cell (ship-tiers) is
+  one cell across, so it takes the same pod, and goods move ship to rocket
+  without repacking. This is named here, and it is ship-tiers' to adopt.
+- **A tanker is a freighter loaded with tank pods**, not a second kind of
+  ship. The platform's tanker carries 16 tank pods (160 t) and calls every
+  4 days for the 72 t made since. The leg tanks' 2,000 t is the buffer when
+  it is late.
+
+Recommendation taken (ask only with screenshots): pods 2 layers tall and
+2 high on deck.
 
 - **Hired crew first.** A crew of 4 to 8 townsfolk sailors, hired at a port
   town, 6 coins each a game day. Near a player the ship sails its route in the
@@ -97,8 +128,9 @@ space freighters: its ID, its stops, what it loads and unloads, a schedule.
 - **Cargo** loads and unloads through the durable save path, authored by the
   freighter, and never takes from a player's own store (CLAUDE.md, "The
   player is not the only author of change").
-- **Kinds drawn**: a container ship for goods and a tanker for crude; the
-  tanker is what empties the platform's leg tanks.
+- **Drawn in the mockup**: a hex-cell freighter at the quay carrying goods
+  pods and a row of tank pods, and the tanker at the platform carrying tank
+  pods. The tanker is what empties the platform's leg tanks.
 
 ## 4. The four carriers
 

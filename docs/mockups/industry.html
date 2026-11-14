@@ -1108,12 +1108,13 @@ function buildOffshore() {
     S.lights.push({ x: SX, y: SY + 4, z: SZ + 3.4, ...LAMP, p: 1.4, R: 8 }); PBD.lampPost(GS, SX - 0.45, SY + 0.2, SZ + 3.4); S.flames.push([SX, SY + 2.45, SZ + 3.4]);
     tag(S, "Shore substation: the sea cable joins the land grid", SX, SY + 6, SZ); }
   // the tanker alongside, loading crude from the leg tanks through a hose
-  { const KX = PX - 2, KZ = PZ - 21, L = 40; GS.box("m:tex_paint#a61e1f", KX, -2.5, KZ, L, 4.6, 8, 0); GS.box("iron", KX, 2.1, KZ, L - 1, 0.25, 7.4);
-    for (let i = 0; i < 5; i++) GS.box("b:tex_metal", KX - 15 + i * 6.5, 2.35, KZ, 4.6, 0.8, 5.4); GS.box("b:tex_metal", KX - 2, 2.35, KZ + 0.4, L - 8, 0.3, 0.4);
-    GS.box("m:tex_white", KX + 15.5, 2.35, KZ, 5, 6, 7); GS.box("glow:m:tex_window", KX + 13, 6.4, KZ, 0.04, 1.0, 5.6); GS.box("iron", KX + 16.5, 8.35, KZ, 1.4, 2.4, 1.4);
-    rod(S.group, "m:tex_belt", [PX - 3, DY, PZ - 7.5], [KX - 2, 3.2, KZ + 2.5], 0.4);
+  { const KX = PX - 2, KZ = PZ - 21, L = 40;
+    const tk = hexHull(GS, KX, KZ, { rows: 1, len: L, keel: -2.5, wl: 0.2, deck: 2.35, bridgeH: 6, side: "m:tex_paint#a61e1f", below: "m:tex_paint#3e3551" });
+    let n = 0; for (const [x, z] of tk.free) if (n < 16) { hexPod(GS, x, tk.deck, z, "tank"); n++; }
+    GS.box("iron", tk.xBridge, tk.top, KZ, 1.4, 1.0, 1.4);
+    rod(S.group, "m:tex_belt", [PX - 3, DY, PZ - 7.5], [KX - 2, tk.deck + 2.2, KZ + 1.2], 0.4);
     S.lights.push({ x: KX + 12, y: 7, z: KZ, c: lin(0xffc070), p: 1.0, R: 6 });
-    tag(S, "Tanker: empties the leg tanks every 4 days", KX, 10, KZ); }
+    tag(S, "Tanker: a hex freighter with 16 tank pods (160 t); calls every 4 days for the 72 t made since", KX, 10, KZ); }
   // deck floodlights, quarters' light, navigation lights on two legs
   for (const [dx, dz] of [[-9, -6], [9, -6], [9, 6], [-2, 7]]) { S.lights.push({ x: PX + dx, y: DY + 3.4, z: PZ + dz, c: lin(0xfff0c8), p: 1.4, R: 11 }); S.flames.push([PX + dx, DY + 3.4, PZ + dz]); GS.box("iron", PX + dx, DY + 0.8, PZ + dz, 0.18, 2.5, 0.18); }
   S.lights.push({ x: QX + 4.6, y: DY + 3, z: QZ, c: lin(0xffc070), p: 0.9, R: 5 });
@@ -1131,6 +1132,24 @@ function buildOffshore() {
   return S;
 }
 
+// ---- hex-built ships (industry-tiers 3): a hull of whole 2.833 m cells, as the drydock builder (M23) lays them,
+// rows along x, a stepped bow at -x, the bridge built of cells aft; cargo in hex pods, one cell across, 2 layers tall
+const POD_R = R * 2.6 / W;   // inset to 2.6 m flat to flat so neighbouring pods clear
+function hexHull(GS, ox, oz, o) {
+  const rows = o.rows, L = o.len, keel = o.keel, deck = o.deck, wl = o.wl, cells = [];
+  for (let r = -rows; r <= rows; r++) for (let q = -40; q <= 40; q++) { const x = W * (q + r / 2); if (x < -L / 2 + Math.abs(r) * W * 0.75 || x > L / 2) continue; cells.push([ox + x, oz + ROW * r, r, x]); }
+  for (const [x, z] of cells) { const P = poly(x, z, R, 6, Math.PI / 6); GS.prism(null, o.below || "m:tex_paint#a61e1f", P, keel, wl); GS.prism("iron", o.side, P, wl, deck, { bottom: "iron" }); }
+  const xmax = Math.max(...cells.map(c => c[3])), aft = c => c[3] > xmax - 2 * W && Math.abs(c[2]) <= 1;
+  const bridge = cells.filter(aft); for (const [x, z] of bridge) GS.prism("iron", "m:tex_white", poly(x, z, R, 6, Math.PI / 6), deck, deck + o.bridgeH, { bottom: "iron" });
+  const front = Math.min(...bridge.map(c => c[0])); for (const [x, z] of bridge) if (Math.abs(x - front) < 0.1) GS.box("glow:m:tex_window", x - W / 2 - 0.03, deck + o.bridgeH - 2.0, z, 0.04, 1.0, 1.6);
+  return { cells, free: cells.filter(c => !aft(c)), deck, top: deck + o.bridgeH, xBridge: front + W };
+}
+const POD_GOODS = ["m:tex_paint#d12d41", "m:tex_paint#559642", "m:tex_paint#2a5ea8", "m:tex_paint", "m:tex_paint#7d2dbd"];
+function hexPod(GS, x, y, z, kind, i = 0) {
+  const P = poly(x, z, POD_R, 6, Math.PI / 6), P2 = poly(x, z, POD_R + 0.06, 6, Math.PI / 6);
+  if (kind === "tank") { GS.prism("b:tex_metal", "m:tex_white", P, y, y + 2, { bottom: "iron" }); GS.prism(null, "m:tex_flare", P2, y + 0.8, y + 1.2); GS.box("iron", x, y + 2, z, 0.3, 0.25, 0.3); }
+  else { GS.prism("iron", POD_GOODS[i % POD_GOODS.length], P, y, y + 2, { bottom: "iron" }); for (const yy of [y, y + 1.85]) GS.prism(null, "iron", P2, yy, yy + 0.15); }
+}
 // ---- 6. Transport: wires, pipes, belts and pneumatic tubes side by side, and the dock with a freighter
 function buildTransport() {
   const S = newScene("transport"), GS = S.lgs = new PBD.GeoSet(), N = 14;
@@ -1178,18 +1197,19 @@ function buildTransport() {
     const caps = []; for (let i = 0; i < 3; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.36, 0.36), mat("m:tex_paint#e8b040")); S.group.add(c); caps.push(c); c.position.set(A + 1 + i * 0.9, y, zT); }
     S.mach.push(t => caps.forEach((c, i) => { const f = ((t * 0.35 + i / 3) % 1); c.position.set(A + 1 + (B - A - 2) * f, y, zT); }));
     tag(S, "Pneumatic tube: a capsule a second, 15 m/s, to a named station", -2, 6, zT); tag(S, "Send station", A, 4.2, zT); tag(S, "Receive station", B, 4.2, zT); }
-  // the dock: quay crane, a container ship moored; its crew on deck when hired, a radio mast when automated
-  { const SZ = 24, SX = 0, L = 44; GS.box("m:tex_paint#3e3551", SX, -3.6, SZ, L, 4.6, 9); GS.box("iron", SX, 1.0, SZ, L - 1, 0.25, 8.4);
-    const cols = ["m:tex_paint#d12d41", "m:tex_paint#559642", "m:tex_paint#2a5ea8", "m:tex_paint", "m:tex_white"];
-    for (let i = 0; i < 7; i++) for (let j = 0; j < 3; j++) for (let k = 0; k < 2; k++) GS.box(cols[(i * 3 + j + k) % 5], SX - 18 + i * 4.4, 1.25 + k * 2.4, SZ - 2.6 + j * 2.6, 4.2, 2.35, 2.45);
-    GS.box("m:tex_white", SX + 17.5, 1.25, SZ, 5, 7, 7.6); GS.box("glow:m:tex_window", SX + 15, 6.4, SZ, 0.04, 1.0, 6.4); GS.box("iron", SX + 18.5, 8.25, SZ, 1.4, 2.4, 1.4);
+  // the dock: quay crane, a hex-built freighter moored with its hex pods; its crew on deck when hired, a radio mast when automated
+  { const SZ = 24, SX = 0, L = 44;
+    const ship = hexHull(GS, SX, SZ, { rows: 2, len: L, keel: -3.6, wl: -0.6, deck: 1.25, bridgeH: 7, side: "m:tex_paint#3e3551" });
+    // goods pods two high beside the middle row and one high at the rails, a row of tank pods down the middle; bow cells left clear for the crew
+    let nG = 0, nT = 0; for (const [x, z, r] of ship.free) { if (x < SX - 15.5) continue; if (r === 0) { hexPod(GS, x, ship.deck, z, "tank"); nT++; } else for (const k of Math.abs(r) === 1 ? [0, 1] : [0]) hexPod(GS, x, ship.deck + k * 2.05, z, "goods", nG++ + k); }
+    GS.box("iron", ship.xBridge, ship.top, SZ, 1.4, 1.0, 1.4);
     for (const x of [-12, 8]) { GS.box("m:tex_paint", x, 0, 15.6, 0.8, 16, 0.8); GS.box("m:tex_paint", x, 0, 32, 0.8, 16, 0.8); GS.box("m:tex_paint", x, 16, 23.8, 1.0, 1.0, 18); }
     GS.box("m:tex_paint", -2, 15.2, 23.8, 21, 0.8, 1.0); GS.box("iron", -2, 13.2, 23.8, 1.6, 2.0, 1.6);
     S.lights.push({ x: SX + 14, y: 7, z: SZ, c: lin(0xffc070), p: 1.0, R: 6 }, { x: -2, y: 14, z: 22, c: lin(0xfff0c8), p: 1.4, R: 14 });
     S.crewG = new THREE.Group(); S.group.add(S.crewG); S.autoG = new THREE.Group(); S.group.add(S.autoG);
-    for (let i = 0; i < 4; i++) person(S.crewG, SX - 20 + i * 1.5 + (i > 1 ? 34 : 0), 1.25, SZ + 3.6, Math.PI, { tool: false, hat: "m:tex_white#2a5ea8", coat: "m:tex_white#3e586e" });
+    for (let i = 0; i < 4; i++) person(S.crewG, SX - 18.5 + i * 1.2 + (i > 1 ? 30.5 : 0), 1.25, SZ + (i > 1 ? 4.9 : 2.4), Math.PI, { tool: false, hat: "m:tex_white#2a5ea8", coat: "m:tex_white#3e586e" });
     { const A2 = new PBD.GeoSet(); A2.box("iron", SX + 17.5, 8.25, SZ, 0.2, 6, 0.2); A2.box("iron", SX + 17.5, 13.5, SZ, 2.2, 0.15, 0.15); A2.box("glow:m:tex_white#74effe", SX + 17.5, 14.2, SZ, 0.4, 0.4, 0.4); addMeshes(A2, S.autoG); }
-    tag(S, "Freighter: 42 containers, 20 t each", SX - 4, 9, SZ, "warm"); S.crewTag = S.tags.length; tag(S, "", SX + 17.5, 15.5, SZ);
+    tag(S, `Freighter: ${ship.cells.length} hex cells, ${nG} goods pods + ${nT} tank pods, 10 t each`, SX - 4, 7.5, SZ, "warm"); S.podCount = [nG, nT]; S.crewTag = S.tags.length; tag(S, "", SX + 17.5, 15.5, SZ);
     for (const x of [-24, 16]) lamp(x, 13.8); }
   for (const [x, z] of [[-30, -10], [-8, -10], [12, 6], [-30, 12]]) lamp(x, z);
   addMeshes(GS, S.group); finish(S);
@@ -1327,6 +1347,7 @@ function side() {
     $("st1").addEventListener("click", () => { ST.stage = 1; Object.assign(ORB, { tx: 0, ty: 1.5, tz: -1, dist: 30, yaw: 0.35, pitch: 0.5 }); placeCam(); side(); status(); });
     $("st2").addEventListener("click", () => { ST.stage = 2; Object.assign(ORB, { tx: hx(7, 0), ty: 6, tz: 0, dist: 26, yaw: 0.9, pitch: 0.32 }); placeCam(); side(); status(); });
   } else if (ST.tab === "oil") {
+    oilInit();   // the platform view can open first, by its link, before the field scene has set the field up
     const SPLIT = [["m:fuel-oil", "Fuel oil", 0.45], ["m:diesel", "Diesel", 0.25], ["c:polymer", "Polymer feed", 0.15], ["m:asphalt", "Residue (asphalt)", 0.15]];
     el.innerHTML = `<div class="field"><span>Look at</span><div class="gens" style="grid-template-columns:repeat(3,1fr)">${[["overview", "The field"], ["well", "The well"], ["refinery", "The column"], ["rig", "Drilling rig"], ["platform", "Offshore platform"]].map(([v, l]) => `<button data-ov="${v}" aria-pressed="${ST.oilView === v}">${l}</button>`).join("")}</div></div>
       ${ST.oilView === "platform" ? `<div class="mpanel"><h3>Offshore platform &middot; a rig and a power plant in one</h3><dl class="stats"><dt>Wells</dt><dd>6, 18 t of crude a day</dd><dt>Gas turbines</dt><dd>4,000 kW gross</dd><dt>Own use</dt><dd>900 kW</dd><dt>To the shore</dt><dd>3,100 kW by sea cable</dd><dt>Leg tanks</dt><dd>2,000 t, a tanker every 4 days</dd><dt>Placed</dt><dd style="font-family:var(--body);text-align:left">On the shelf sea over the field, 10 to 60 m deep</dd></dl><p class="keys">Its gas never comes ashore: it is burnt on the platform. Power comes ashore by cable, crude by tanker. Press Run machines: the derrick drills, the turbines exhaust.</p></div>` : ""}
@@ -1423,7 +1444,7 @@ function sheets() {
         <div class="card"><div class="head">${img("m:oil-refinery", 64)}<div><div class="eyebrow">Recipe</div><h3>Distillation column</h3></div></div><dl><dt>Size</dt><dd>2 cells, 4 layers: the column and its crude heater</dd><dt>In</dt><dd><span class="chip">${img("m:crude")}1 t Crude</span></dd><dt>Out</dt><dd><span class="chip">${img("m:fuel-oil")}0.45 t Fuel oil</span><span class="chip">${img("m:diesel")}0.25 t Diesel</span><span class="chip">${img("c:polymer")}0.15 t Polymer feed</span><span class="chip">${img("m:asphalt")}0.15 t Residue (asphalt)</span></dd><dt>Time, power</dt><dd>20 s a tonne, 150 kW</dd><dt>Night</dt><dd>The flare stack burns what it cannot use; the brightest light on the plain</dd></dl></div>
         <div class="card"><div class="head">${img("m:derrick", 64)}<div><div class="eyebrow">Find and drill</div><h3>Drilling rig</h3></div></div><dl><dt>Drills</dt><dd>A well in 2 game days, 300 kW</dd><dt>Then</dt><dd>Moves on; a pumpjack takes the well</dd><dt>Look</dt><dd>A lattice derrick, its travelling block rising and falling while it drills</dd></dl></div>
         <div class="card"><div class="head">${img("m:platform", 64)}<div><div class="eyebrow">Offshore &middot; rig + power plant</div><h3>Oil platform</h3></div></div><dl><dt>Wells</dt><dd>6 risers, 18 t of crude a day</dd><dt>Power</dt><dd>Gas turbines, 4,000 kW gross; 900 kW own use; 3,100 kW ashore by sea cable</dd><dt>Crude</dt><dd>2,000 t in the legs; a tanker every 4 days</dd><dt>Ladder</dt><dd>Tier I, beside the oil plant (section 4)</dd></dl></div>
-        <div class="card"><div class="head">${img("m:tanker", 64)}<div><div class="eyebrow">Freight</div><h3>The tanker</h3></div></div><dl><dt>Carries</dt><dd>Crude from the platform to the shore tanks, on a route record</dd><dt>Crew</dt><dd>Hired at first, automated at tier III (section 6)</dd></dl></div>
+        <div class="card"><div class="head">${img("m:tanker", 64)}<div><div class="eyebrow">Freight</div><h3>The tanker</h3></div></div><dl><dt>Is</dt><dd>A hex-built freighter loaded with 16 tank pods, 160 t</dd><dt>Carries</dt><dd>Crude from the platform to the shore tanks, on a route record; calls every 4 days for the 72 t made since</dd><dt>Crew</dt><dd>Hired at first, automated at tier III (section 6)</dd></dl></div>
         <div class="card"><div class="head">${img("m:oil-plant", 64)}<div><div class="eyebrow">Tier I &middot; Mid</div><h3>Oil plant</h3></div></div><dl><dt>Output</dt><dd>1,000 kW, a boiler and turbine on fuel oil</dd><dt>Burns</dt><dd>About 250 kg of fuel oil a game hour at full load, 6 t a day</dd><dt>Ladder</dt><dd>Between coal and wind (section 4)</dd><dt>Smoke</dt><dd>Like the coal plant's: no town within 6 cells</dd></dl></div>
       </div>
       <div class="tbl"><table><thead><tr><th>Machine</th><th>In</th><th>Out</th><th>Time</th><th>Power</th><th>Note</th></tr></thead><tbody>${OIL_RECIPES.map(([m, mi, ins, outs, t, kw, note]) => `<tr><td><span class="chip">${img(mi)}${m}</span></td><td>${ins.map(ocell).join("") || "&ndash;"}</td><td>${outs.map(ocell).join("") || "power"}</td><td class="num">${t}</td><td class="num">${kw}</td><td style="color:var(--muted);font-size:13px">${note}</td></tr>`).join("")}</tbody></table></div>
@@ -1431,8 +1452,9 @@ function sheets() {
     transport: `<section><div class="sec-head"><div class="eyebrow">6 &middot; Transport and loads</div><h2>Wires, pipes, belts, tubes, freighters</h2><p class="lede">Four carriers move what the industry makes: wires carry electricity, pipes carry fluids (water, crude, fuel, liquid oxygen), belts carry stacks, pneumatic tubes carry goods in capsules. A network carries one kind of thing; a second fluid needs a second pipe. Between towns and worlds, freighters carry it on route records: hired crews first, automated pilothouses at tier III.</p></div>
       <div class="tbl"><table><thead><tr><th>Carrier</th><th>Carries</th><th>Capacity</th></tr></thead><tbody>${CARRIERS.map(([ic, n, what, cap]) => `<tr><td><span class="chip">${img(ic)}${n}</span></td><td>${what}</td><td class="num">${cap}</td></tr>`).join("")}</tbody></table></div>
       <div class="cards">
-        <div class="card"><div class="head">${img("m:freighter", 64)}<div><div class="eyebrow">Hired</div><h3>A crewed freighter</h3></div></div><dl><dt>Crew</dt><dd>4 townsfolk at 6 coins a day each</dd><dt>Holds</dt><dd>Container cells of 20 t, tank cells of 40 t</dd><dt>Route</dt><dd>The ship-tiers route record: stops, cargo, return</dd></dl></div>
+        <div class="card"><div class="head">${img("m:freighter", 64)}<div><div class="eyebrow">Hired</div><h3>A crewed freighter</h3></div></div><dl><dt>Crew</dt><dd>4 townsfolk at 6 coins a day each</dd><dt>Hull</dt><dd>Whole hex cells from the drydock builder (M23), the bridge built of cells aft</dd><dt>Holds</dt><dd>Hex pods on its deck cells, two high: goods or tank, 10 t a pod</dd><dt>Route</dt><dd>The ship-tiers route record: stops, cargo, return</dd></dl></div>
         <div class="card"><div class="head">${img("m:freighter", 64)}<div><div class="eyebrow">Tier III</div><h3>Automated</h3></div></div><dl><dt>Pilot</dt><dd>A radio pilothouse; no wages, no crew quarters</dd><dt>Same</dt><dd>Ship, route and cargo; only who sails it changes</dd></dl></div>
+        <div class="card"><div class="head">${img("m:pod", 64)}<div><div class="eyebrow">Cargo</div><h3>The hex pod</h3></div></div><dl><dt>Shape</dt><dd>A hex prism one cell across (2.6 m flat to flat, so neighbours clear) and 2 layers tall, about 11.7 m&sup3;</dd><dt>Kinds</dt><dd>Goods pod: stacks up to 10 t. Tank pod: 10 t of one fluid (crude, fuel oil, diesel, water)</dd><dt>On a ship</dt><dd>Locks to one deck cell; two high; counted against the hull's buoyancy</dd><dt>Saved</dt><dd>A stored record (ID, kind, contents, owner) that moves ship to quay to crane; never a cell of the ship</dd><dt>In space</dt><dd>Proposed: a rocket's cargo cell is one cell across, so it takes the same pod</dd></dl></div>
       </div>
       <h3 style="margin-top:24px">Loads on the grid</h3><p class="note">The machines the owner named, on the grid in section 4: switch them on and off there.</p>
       <div class="tbl"><table><thead><tr><th>Load</th><th>Draws</th></tr></thead><tbody>${CONS.slice(10).map(([k, n, kw, ic]) => `<tr><td><span class="chip">${img("m:" + (ic || k))}${n}</span></td><td class="num">${kw ? kw.toLocaleString("en") + " kW" : "diesel, 12 kg/h"}</td></tr>`).join("")}</tbody></table></div>
@@ -1462,6 +1484,7 @@ const DEC = [
   ["I10. The offshore platform is tier I power", "It burns its own gas and sends 3,100 kW ashore by sea cable, so it sits on the ladder beside the oil plant, and in the oil section as a rig."],
   ["I11. One kind of thing per carrier network", "A pipe network holds one fluid; a belt carries stacks; a tube carries capsules; a wire carries power. Mixing needs a second network, so nothing is ever contaminated."],
   ["I12. Freighters: hired, then automated", "The same ship and route record; tier III swaps the crew for a radio pilothouse and drops the wages."],
+  ["I13. Freighters are hex-built; cargo is hex pods", "The owner: \"freighter should use hex based construction system, and cargo should be hex pods\". Hulls are whole cells from the drydock builder; a pod is one cell across and 2 layers tall, 10 t, goods or tank, stacked two high. A tanker is a freighter carrying tank pods (industry-tiers 3)."],
   ["I7. The Dyson swarm is the last tier", "Built in stages from the ground: launch site, the first thousand drones, relays and a receiver, then a swarm that builds itself. Output grows with the swarm, up to 2,000,000 kW; the star visibly dims as it fills."],
 ];
 // ---- the power grid view
