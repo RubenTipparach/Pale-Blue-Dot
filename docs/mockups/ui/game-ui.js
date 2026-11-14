@@ -270,12 +270,7 @@
         st.rebind = null; this.render(); return true;
       }
       const k = e.code;
-      if (k === 'Escape') {
-        e.preventDefault();
-        const back = { hud: 'pause', pause: 'hud', settings: this.o.title ? 'title' : 'pause', saves: this.o.title ? 'title' : 'pause', title: 'title' }[st.screen] || 'hud';
-        if (st.screen === 'settings' && st.back) this.go(st.back); else this.go(back);
-        return true;
-      }
+      if (k === 'Escape') { e.preventDefault(); this.back(); return true; }
       if ((k === 'KeyI' || k === 'Tab') && ['hud', 'pack'].includes(st.screen)) { e.preventDefault(); this.go(st.screen === 'pack' ? 'hud' : 'pack'); return true; }
       if (k === 'KeyM' && ['hud', 'map'].includes(st.screen)) { e.preventDefault(); this.go(st.screen === 'map' ? 'hud' : 'map'); return true; }
       if (k.startsWith('Digit') && ['hud', 'pack'].includes(st.screen)) { this.inv.sel = (parseInt(k.slice(5), 10) + 9) % 10; this.render(); return true; }
@@ -309,6 +304,13 @@
     }
 
     // ---------------------------------------------------------------- rendering
+    // What Esc does, for the visible close button too (the owner, on a phone, 2026-11-14: "There's no
+    // button to close or exit use modal").
+    back() {
+      const st = this.st;
+      const back = { hud: 'pause', pause: 'hud', settings: this.o.title ? 'title' : 'pause', saves: this.o.title ? 'title' : 'pause', title: 'title' }[st.screen] || 'hud';
+      if (st.screen === 'settings' && st.back) this.go(st.back); else this.go(back);
+    }
     render() {
       const st = this.st, u = this.host; u.innerHTML = '';
       const sc = st.screen;
@@ -324,7 +326,19 @@
       }
       const panel = ({ pause: () => this.pause(), settings: () => this.settings(), saves: () => this.saves(), title: () => this.title(), pack: () => this.pack(), map: () => this.map(),
         station: () => this.station(), chest: () => this.chestPanel(), talk: () => this.talk(), trade: () => this.trade(), loading: () => this.loading() })[sc];
-      if (panel) u.append(panel());
+      if (panel) {
+        const el = panel(); u.append(el);
+        // Every open panel can be shut without a keyboard (the owner, on a phone, 2026-11-14:
+        // "There's no button to close or exit use modal"): an X in the panel's own top-right corner,
+        // unless the panel already carries one. It does what Esc does.
+        const has = el.querySelector('[aria-label^="close"], [aria-label^="Close"]');
+        if (!['title', 'loading'].includes(sc) && !has) {
+          if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+          el.append(h('button', { type: 'button', class: 'ui-x', 'aria-label': 'Close', title: 'Close (Esc)',
+            style: 'position:absolute;top:calc(-6px*var(--s));right:calc(-6px*var(--s));z-index:40;width:calc(20px*var(--s));height:calc(20px*var(--s));min-width:36px;min-height:36px;padding:0;border:2px solid #92a3b2;border-radius:6px;background:#011c34;color:#eab798;font:700 calc(14px*var(--s))/1 VT323,monospace;box-shadow:0 2px 6px #000a;cursor:pointer;touch-action:manipulation',
+            onclick: (e) => { e.stopPropagation(); this.back(); } }, '\u2715'));
+        }
+      }
       if (st.prompt && sc === 'hud') u.append(h('div', { class: 'prompt nine p-tip face' }, P(st.prompt)));
       if (st.toast) u.append(h('div', { class: 'toast nine p-tip face' }, P(st.toast)));
       if (this.held) { const hd = h('div', { class: 'held' }, slotEl(this.held, '')); hd.firstChild.style.background = 'none'; u.append(hd); }
@@ -847,8 +861,22 @@
   })();
 
   window.PBDUI = { openInfo, COARSE, mainWidth, GameUI, P, h, btn, slotEl, ITEMS, BLOCKS, newInv, STATIONS, scene, compass, setLook, get look() { return LOOK; }, UIS };
-  Promise.all([
-    fetch('ui/font/kit-font.json').then((r) => r.json()).then((f) => { FONT = f; }).catch(() => { /* fallback text */ }),
-    fetch('ui/rendered/slices.json').then((r) => r.json()).then((j) => { ROCKS = j.rock_panels || {}; }).catch(() => { /* drawn rock only */ }),
-  ]).finally(() => { lastK = sceneScale(); openTab(); });
+  // The font and the rock panel sizes are inlined (copies of ui/font/kit-font.json and the
+  // "rock_panels" of ui/rendered/slices.json), so the page draws at once instead of waiting on two
+  // fetches (the owner, 2026-11-14: "there's some weird delay in loading ui").
+  FONT = {"source":"tools/art/ui_art.py","height":7,"spacing":1,"space":3,"case":"upper (lower case is drawn as upper)","glyphs":{"A":{"x":0,"w":5,"rows":[".###.","#...#","#...#","#####","#...#","#...#","#...#"]},"B":{"x":6,"w":5,"rows":["####.","#...#","#...#","####.","#...#","#...#","####."]},"C":{"x":12,"w":5,"rows":[".####","#....","#....","#....","#....","#....",".####"]},"D":{"x":18,"w":5,"rows":["####.","#...#","#...#","#...#","#...#","#...#","####."]},"E":{"x":24,"w":5,"rows":["#####","#....","#....","####.","#....","#....","#####"]},"F":{"x":30,"w":5,"rows":["#####","#....","#....","####.","#....","#....","#...."]},"G":{"x":36,"w":5,"rows":[".####","#....","#....","#.###","#...#","#...#",".###."]},"H":{"x":42,"w":5,"rows":["#...#","#...#","#...#","#####","#...#","#...#","#...#"]},"I":{"x":48,"w":3,"rows":["###",".#.",".#.",".#.",".#.",".#.","###"]},"J":{"x":52,"w":5,"rows":["..###","...#.","...#.","...#.","#..#.","#..#.",".##.."]},"K":{"x":58,"w":5,"rows":["#...#","#..#.","#.#..","##...","#.#..","#..#.","#...#"]},"L":{"x":64,"w":5,"rows":["#....","#....","#....","#....","#....","#....","#####"]},"M":{"x":70,"w":5,"rows":["#...#","##.##","#.#.#","#.#.#","#...#","#...#","#...#"]},"N":{"x":76,"w":5,"rows":["#...#","##..#","#.#.#","#..##","#...#","#...#","#...#"]},"O":{"x":82,"w":5,"rows":[".###.","#...#","#...#","#...#","#...#","#...#",".###."]},"P":{"x":88,"w":5,"rows":["####.","#...#","#...#","####.","#....","#....","#...."]},"Q":{"x":94,"w":5,"rows":[".###.","#...#","#...#","#...#","#.#.#","#..#.",".##.#"]},"R":{"x":100,"w":5,"rows":["####.","#...#","#...#","####.","#.#..","#..#.","#...#"]},"S":{"x":106,"w":5,"rows":[".####","#....","#....",".###.","....#","....#","####."]},"T":{"x":112,"w":5,"rows":["#####","..#..","..#..","..#..","..#..","..#..","..#.."]},"U":{"x":118,"w":5,"rows":["#...#","#...#","#...#","#...#","#...#","#...#",".###."]},"V":{"x":124,"w":5,"rows":["#...#","#...#","#...#","#...#",".#.#.",".#.#.","..#.."]},"W":{"x":130,"w":5,"rows":["#...#","#...#","#...#","#.#.#","#.#.#","##.##","#...#"]},"X":{"x":136,"w":5,"rows":["#...#",".#.#.",".#.#.","..#..",".#.#.",".#.#.","#...#"]},"Y":{"x":142,"w":5,"rows":["#...#","#...#",".#.#.","..#..","..#..","..#..","..#.."]},"Z":{"x":148,"w":5,"rows":["#####","....#","...#.","..#..",".#...","#....","#####"]},"0":{"x":154,"w":5,"rows":[".###.","#...#","#..##","#.#.#","##..#","#...#",".###."]},"1":{"x":160,"w":3,"rows":[".#.","##.",".#.",".#.",".#.",".#.","###"]},"2":{"x":164,"w":5,"rows":[".###.","#...#","....#","...#.","..#..",".#...","#####"]},"3":{"x":170,"w":5,"rows":["####.","....#","....#",".###.","....#","....#","####."]},"4":{"x":176,"w":5,"rows":["...#.","..##.",".#.#.","#..#.","#####","...#.","...#."]},"5":{"x":182,"w":5,"rows":["#####","#....","####.","....#","....#","#...#",".###."]},"6":{"x":188,"w":5,"rows":[".###.","#....","#....","####.","#...#","#...#",".###."]},"7":{"x":194,"w":5,"rows":["#####","....#","...#.","..#..","..#..","..#..","..#.."]},"8":{"x":200,"w":5,"rows":[".###.","#...#","#...#",".###.","#...#","#...#",".###."]},"9":{"x":206,"w":5,"rows":[".###.","#...#","#...#",".####","....#","....#",".###."]}," ":{"x":212,"w":3,"rows":["...","...","...","...","...","...","..."]},".":{"x":216,"w":1,"rows":[".",".",".",".",".",".","#"]},",":{"x":218,"w":2,"rows":["..","..","..","..","..",".#","#."]},":":{"x":221,"w":1,"rows":[".",".","#",".",".","#","."]},";":{"x":223,"w":2,"rows":["..","..",".#","..","..",".#","#."]},"!":{"x":226,"w":1,"rows":["#","#","#","#","#",".","#"]},"?":{"x":228,"w":5,"rows":[".###.","#...#","....#","...#.","..#..",".....","..#.."]},"'":{"x":234,"w":1,"rows":["#","#",".",".",".",".","."]},"\"":{"x":236,"w":3,"rows":["#.#","#.#","...","...","...","...","..."]},"-":{"x":240,"w":3,"rows":["...","...","...","###","...","...","..."]},"+":{"x":244,"w":5,"rows":[".....","..#..","..#..","#####","..#..","..#..","....."]},"=":{"x":250,"w":4,"rows":["....","....","####","....","####","....","...."]},"/":{"x":255,"w":5,"rows":["....#","....#","...#.","..#..",".#...","#....","#...."]},"(":{"x":261,"w":2,"rows":[".#","#.","#.","#.","#.","#.",".#"]},")":{"x":264,"w":2,"rows":["#.",".#",".#",".#",".#",".#","#."]},"&":{"x":267,"w":5,"rows":[".##..","#..#.","#.#..",".#...","#.#.#","#..#.",".##.#"]},"%":{"x":273,"w":5,"rows":["##..#","##..#","...#.","..#..",".#...","#..##","#..##"]},"#":{"x":279,"w":5,"rows":[".#.#.",".#.#.","#####",".#.#.","#####",".#.#.",".#.#."]},"<":{"x":285,"w":4,"rows":["...#","..#.",".#..","#...",".#..","..#.","...#"]},">":{"x":290,"w":4,"rows":["#...",".#..","..#.","...#","..#.",".#..","#..."]},"_":{"x":295,"w":4,"rows":["....","....","....","....","....","....","####"]},"\u00b7":{"x":300,"w":1,"rows":[".",".",".","#",".",".","."]},"\u2191":{"x":302,"w":5,"rows":["..#..",".###.","#.#.#","..#..","..#..","..#..","..#.."]},"\u2193":{"x":308,"w":5,"rows":["..#..","..#..","..#..","..#..","#.#.#",".###.","..#.."]},"\u2190":{"x":314,"w":7,"rows":[".......","..#....",".#.....","#######",".#.....","..#....","......."]},"\u2192":{"x":322,"w":7,"rows":[".......","....#..",".....#.","#######",".....#.","....#..","......."]}}};
+  ROCKS = {"pack":[268,152],"station":[230,156],"chest":[372,168],"talk":[270,124],"trade":[308,148],"loading":[150,148],"sample":[192,96],"kit-48":[48,48],"kit-128":[128,64],"kit-200":[200,100]};
+  // Fetch every kit piece and rock frame of the open look now, and the other looks when idle, so a
+  // panel never appears before its art.
+  const KEEP = [];
+  function preload(l) {
+    const L = LOOKS[l]; if (!L) return;
+    const src = STONE.map((n) => L.dir + n + '.png').concat(OAK.map((n) => L.oak + n + '.png'));
+    if (l !== 'drawn') for (const [w, hh] of Object.values(ROCKS)) src.push(`ui/rendered/${l === 'smooth' ? 'hires/' : ''}rock/rock-${w}x${hh}.png`);
+    for (const u of src) { const i = new Image(); i.decoding = 'async'; i.src = u; KEEP.push(i); }
+  }
+  preload(LOOK);
+  document.addEventListener('pbd-look', (e) => preload(e.detail));
+  setTimeout(() => Object.keys(LOOKS).filter((l) => l !== LOOK).forEach(preload), 1500);
+  lastK = sceneScale(); openTab();
 })();
