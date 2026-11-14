@@ -86,7 +86,7 @@ commit that builds it, with its test.
   thrust, TWR and delta-v per stage.
 - **Tier 1, chemical and nuclear rockets.** TWR over 1 to leave the pad,
   delta-v to reach orbit; solid boosters, a nuclear thermal upper stage fed by
-  the industry chain's fuel rods. Orbit Pale Blue, reach Lantern on an arc.
+  the industry chain's fuel rods. Orbit Tenebris, reach Lantern on an arc.
 - **Tier 2, fusion.** Ships built in orbit that never land; a nav computer that
   plots and flies burn-flip-brake courses; automated freighters on routes;
   landers that lift to low orbit to meet them.

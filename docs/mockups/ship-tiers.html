@@ -259,11 +259,11 @@ form.addroute select{font:inherit;font-size:13.5px;background:var(--panel-2);col
 // =====================================================================================
 const G1 = 25;                         // m/s^2: the game's 1 g (SURFACE_GRAVITY_MPS2_PER_G)
 const BODIES = {
-  pale: {name: "Pale Blue", R: 4800, g: 25},
+  pale: {name: "Tenebris", R: 4800, g: 25},
   lantern: {name: "Lantern", R: 1200, g: 9},
   verdance: {name: "Verdance", R: 2400, g: 22.5},
 };
-const MU = 25 * 4800 * 4800;           // Pale Blue, m^3/s^2
+const MU = 25 * 4800 * 4800;           // Tenebris, m^3/s^2
 const LO_ALT = 960;                    // low orbit: 1.2 R, the first band of travel.html
 const PARTS = {
   pod:   {name: "Command pod", icon: "pod", m: 1.3, where: "core", txt: "Seats, controls and the heat shield under it. The top of the core column; on a crewed rocket the ladder up the core comes out under it."},
@@ -1421,7 +1421,7 @@ function setLine(l, pts) {
 }
 
 // =====================================================================================
-// tab 2: the chemical tier in orbit round Pale Blue, to scale (1 unit = 1 km)
+// tab 2: the chemical tier in orbit round Tenebris, to scale (1 unit = 1 km)
 // =====================================================================================
 const ORB = {field: "inverse", speed: 4, launchAnim: false};
 const gravAt = (x, y, field) => {
@@ -1544,7 +1544,7 @@ function buildOrbit() {
   };
   W.hud = () => {
     const s = W.state, pr = W.pred || {}, r = Math.hypot(s.x, s.y), v = Math.hypot(s.vx, s.vy);
-    const orbitLine = W.flight.mode === "crashed" ? `<span class='w'>fell back: not enough delta-v for orbit</span>` : pr.bound ? `<span class='c'>orbit [Pale Blue]  Ap ${fmtM(pr.apR - 4800)}  Pe ${fmtM(pr.peR - 4800)}  T ${Math.round(pr.period)} s</span>` : pr.impact ? `<span class='o'>SUBORBITAL [Pale Blue]  Ap ${fmtM(pr.apR - 4800)}  impact</span>` : `<span class='o'>ESCAPE [Pale Blue]  Pe ${fmtM(pr.peR - 4800)}</span>`;
+    const orbitLine = W.flight.mode === "crashed" ? `<span class='w'>fell back: not enough delta-v for orbit</span>` : pr.bound ? `<span class='c'>orbit [Tenebris]  Ap ${fmtM(pr.apR - 4800)}  Pe ${fmtM(pr.peR - 4800)}  T ${Math.round(pr.period)} s</span>` : pr.impact ? `<span class='o'>SUBORBITAL [Tenebris]  Ap ${fmtM(pr.apR - 4800)}  impact</span>` : `<span class='o'>ESCAPE [Tenebris]  Pe ${fmtM(pr.peR - 4800)}</span>`;
     return `${orbitLine}\nalt ${fmtM(r - 4800)}  v ${Math.round(v)} m/s  stage ${Math.min(s.k + 1, W.flight.phases.length)}  delta-v left ${Math.round(dvLeft(s)).toLocaleString()} m/s\nfield: ${ORB.field === "inverse" ? "<span class='a'>inverse-square from the body (proposal B)</span>" : "<span class='a'>today's anchor band: full to 1.4 R, none past 1.8 R</span>"}  time x${ORB.speed}`;
   };
   W.burn = dv => {
@@ -1595,7 +1595,7 @@ const STOPS = {"Highport": [-14, 1.6, 2], "Lantern mine": [-8, 1, -7], "Verdance
 function buildFusion() {
   const W = makeWorld("fusion"); spaceBase(W);
   W.camera.near = 0.01; W.camera.far = 6000;
-  // --- to scale: Pale Blue and Lantern, 1 unit = 1 km
+  // --- to scale: Tenebris and Lantern, 1 unit = 1 km
   W.moonSys = new THREE.Group(); W.scene.add(W.moonSys);
   const pb = hexGlobe(W, {level: 4, radius: 4.8, biome: BIOMES.home, layer: 0.035, lights: true}); W.moonSys.add(pb, airShell(5.25, 0x5aa8ff, W.sunDir));
   const ln = hexGlobe(W, {level: 3, radius: 1.2, biome: BIOMES.lantern, layer: 0.03}); ln.position.set(-26 * Math.cos(2.4), 0, -26 * Math.sin(2.4)); W.moonSys.add(ln);
@@ -1612,11 +1612,11 @@ function buildFusion() {
   const flip = marker(0xffe38a); flip.position.copy(mid); W.moonSys.add(flip);
   W.l1 = W.label("chemical: Hohmann arc 4 min 22 s, 88 + 52 m/s", "", null, "#e8d966"); W.l1.pos = hoh[70].clone();
   W.l2 = W.label("fusion: burn 32 s, flip, brake 32 s", "", null, "#59e6f2"); W.l2.pos = mid.clone().add(new THREE.Vector3(0, 1.4, 0));
-  W.l3 = W.label("Lantern, 26 km", "", ln, "#b3b8d9"); W.l4 = W.label("Pale Blue", "", null, "#8fc3d8"); W.l4.pos = new THREE.Vector3(0, 5.8, 0);
+  W.l3 = W.label("Lantern, 26 km", "", ln, "#b3b8d9"); W.l4 = W.label("Tenebris", "", null, "#8fc3d8"); W.l4.pos = new THREE.Vector3(0, 5.8, 0);
   W.lFlip = W.label("flip", "", flip, "#ffe38a");
   W.chemShip = shipSprite(0xe8d966); W.fusShip = shipSprite(0x59e6f2); W.moonSys.add(W.chemShip, W.fusShip);
   W.hoh = hoh; W.fpath = [d0, mid, d1];
-  // --- schematic: the star, Pale Blue and Verdance pulled together; stations; freighters
+  // --- schematic: the star, Tenebris and Verdance pulled together; stations; freighters
   W.sys = new THREE.Group(); W.scene.add(W.sys);
   const star = new THREE.Sprite(glowMat(0xffe8b0)); star.scale.setScalar(26); star.position.set(-2, 0, -46); W.sys.add(star);
   const starCore = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 1), new THREE.MeshBasicMaterial({color: 0xfff1c8})); starCore.position.copy(star.position); W.sys.add(starCore);
@@ -1624,8 +1624,8 @@ function buildFusion() {
   const vd = hexGlobe(W, {level: 3, radius: 2.0, biome: BIOMES.verdance, layer: 0.03, ocean: 0x1b5a5a}); vd.position.set(18, 0, 6); W.sys.add(vd);
   const ln2 = hexGlobe(W, {level: 2, radius: 0.6, biome: BIOMES.lantern, layer: 0.02}); ln2.position.set(-8, 0, -7); W.sys.add(ln2);
   for (const [r, op] of [[46.2, 0.4], [55, 0.4]]) { const c = ring(r, 0x7390bf, op, ex, ez); c.position.copy(star.position); W.sys.add(c); }
-  W.sysL = [W.label("Pale Blue", "", pb2, "#8fc3d8"), W.label("Verdance", "", vd, "#9cf0d0"), W.label("Lantern", "", ln2, "#b3b8d9"), W.label("Aubade (the star)", "", starCore, "#ffe8b0")];
-  // chemical to Verdance: climb out of Pale Blue's well on a curl, then a long straight coast
+  W.sysL = [W.label("Tenebris", "", pb2, "#8fc3d8"), W.label("Verdance", "", vd, "#9cf0d0"), W.label("Lantern", "", ln2, "#b3b8d9"), W.label("Aubade (the star)", "", starCore, "#ffe8b0")];
+  // chemical to Verdance: climb out of Tenebris's well on a curl, then a long straight coast
   const curl = []; for (let i = 0; i <= 40; i++) { const t = i / 40, th = Math.PI * 1.1 * t; curl.push(new THREE.Vector3(-16 + Math.cos(Math.PI - th) * (3 + 3 * t * t), 0, Math.sin(Math.PI - th) * (3 + 3 * t * t) * -1)); }
   const end = new THREE.Vector3(15.6, 0, 5.2); const last = curl[curl.length - 1]; for (let i = 1; i <= 30; i++) curl.push(last.clone().lerp(end, i / 30));
   W.chem2 = line(0xe8d966, 80, {dashed: true, dash: 0.8, gap: 0.5}); setLine(W.chem2, curl); W.sys.add(W.chem2);
@@ -1662,8 +1662,8 @@ function buildFusion() {
     if (show === "freight" && Math.floor(FUS.t * 2) !== Math.floor((FUS.t - dt) * 2)) updateRouteRows();
   };
   W.hud = () => FUS.view === "freight" ? `freight board | ${ROUTES.length} routes  ${ROUTES.length} freighters flying  <span class='g'>automated</span>\nstation track <span class='g'>green</span>; each run is the nav computer's course, flown for real near a player, on rails away from one`
-    : FUS.to === "lantern" ? `nav computer | Pale Blue low orbit -> Lantern  <span class='c'>course plotted</span>\n<span class='a'>chemical Hohmann arc</span>: 4 min 22 s, 140 m/s   <span class='c'>fusion</span> burn 32 s <span class='p'>brake</span> 32 s: 1 min 4 s, 1.27 km/s   (to scale, 1 km a unit)`
-    : `nav computer | Pale Blue -> Verdance, 200 km  <span class='c'>course plotted</span>\n<span class='a'>chemical</span>: 11 min, 434 m/s, arrive at 300 m/s   <span class='c'>fusion</span>: 3 min 20 s, 4.0 km/s at 20 m/s^2   (schematic: bodies enlarged)`;
+    : FUS.to === "lantern" ? `nav computer | Tenebris low orbit -> Lantern  <span class='c'>course plotted</span>\n<span class='a'>chemical Hohmann arc</span>: 4 min 22 s, 140 m/s   <span class='c'>fusion</span> burn 32 s <span class='p'>brake</span> 32 s: 1 min 4 s, 1.27 km/s   (to scale, 1 km a unit)`
+    : `nav computer | Tenebris -> Verdance, 200 km  <span class='c'>course plotted</span>\n<span class='a'>chemical</span>: 11 min, 434 m/s, arrive at 300 m/s   <span class='c'>fusion</span>: 3 min 20 s, 4.0 km/s at 20 m/s^2   (schematic: bodies enlarged)`;
   return W;
 }
 const brachT = t => t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
@@ -1711,8 +1711,8 @@ function buildLanderWorld(name, sheet, kind) {
     W.follow = (W.follow || new THREE.Vector3()).set(0, 4 + Math.min(F.y, 60) * 0.8, 0);
   };
   const A = analyse(G1, cells instanceof Map ? cells : new Map(cells.map(c => [key(c.q, c.r, c.y), c.p])));
-  W.hud = () => am ? `Cinder, basalt flats | antimatter lander <span class='g'>${W.fly.mode === "down" ? "landed from Pale Blue's surface" : W.fly.mode === "up" ? "lifting off" : "setting down"}</span>  alt ${Math.round(W.fly.y)} m\nsurface to surface 5 min 10 s, no orbit stop  delta-v used 9.8 of ${(A.total / 1000).toFixed(0)} km/s  TWR ${A.S[0].twr.toFixed(1)} at 1 g`
-    : `Highport field, Pale Blue | lander  alt ${Math.round(W.fly.y)} m  ${W.fly.mode === "pad" ? "on the pad" : "climbing to low orbit"}\nTWR 1.26 at 1 g  delta-v 860 m/s: to orbit (540); refuelled up there for the way down (450)`;
+  W.hud = () => am ? `Cinder, basalt flats | antimatter lander <span class='g'>${W.fly.mode === "down" ? "landed from Tenebris's surface" : W.fly.mode === "up" ? "lifting off" : "setting down"}</span>  alt ${Math.round(W.fly.y)} m\nsurface to surface 5 min 10 s, no orbit stop  delta-v used 9.8 of ${(A.total / 1000).toFixed(0)} km/s  TWR ${A.S[0].twr.toFixed(1)} at 1 g`
+    : `Highport field, Tenebris | lander  alt ${Math.round(W.fly.y)} m  ${W.fly.mode === "pad" ? "on the pad" : "climbing to low orbit"}\nTWR 1.26 at 1 g  delta-v 860 m/s: to orbit (540); refuelled up there for the way down (450)`;
   return W;
 }
 
@@ -1727,9 +1727,10 @@ function buildLanderWorld(name, sheet, kind) {
 const PSYS = [
   {id: "aubade", name: "Aubade", star: true, mu: 1.28e7, R: 8000, color: 0xffe8b0},
   {id: "ochre", name: "Ochre", parent: "aubade", a: 180e3, ph: 2.3, R: 1200, g: 0.70, air: 0xffc496, biome: "ochre", level: 4, layer: 0.004, color: 0xffc496},
-  {id: "pale", name: "Pale Blue", parent: "aubade", a: 300e3, ph: 0, R: 4800, g: 1.0, air: 0x5aa8ff, biome: "home", level: 5, layer: 0.01, lights: true, color: 0x8fc3d8},
+  {id: "pale", name: "Tenebris", parent: "aubade", a: 300e3, ph: 0, R: 4800, g: 1.0, air: 0x5aa8ff, biome: "home", level: 5, layer: 0.01, lights: true, color: 0x8fc3d8},
   {id: "lantern", name: "Lantern", parent: "pale", a: 26e3, ph: 2.4, R: 1200, g: 0.35, biome: "lantern", level: 4, layer: 0.004, color: 0xb3b8d9, lo: 300},
   {id: "taper", name: "Taper", parent: "pale", a: 16e3, ph: 0.9, R: 600, g: 0.40, biome: "taper", level: 4, layer: 0.002, color: 0xd8c8a0, lo: 150},
+  {id: "sequoia", name: "Sequoia", parent: "aubade", a: 380e3, ph: 0.42, R: 4800, g: 1.1, air: 0xe6a070, biome: "sequoia", level: 4, layer: 0.008, color: 0xe6a070, lo: 900},
   {id: "verdance", name: "Verdance", parent: "aubade", a: 450e3, ph: 0.36, R: 2400, g: 0.90, air: 0x9cf0d0, biome: "verdance", level: 4, layer: 0.006, ocean: 0x1b5a5a, color: 0x9cf0d0, lo: 500},
   {id: "pebble", name: "Pebble", parent: "aubade", a: 650e3, ph: 1.3, R: 300, g: 0.15, biome: "taper", level: 3, layer: 0.002, color: 0xa09080, lo: 150},
   {id: "amber", name: "Amber", parent: "aubade", a: 1000e3, ph: 3.5, R: 19200, g: 1.6, gas: true, air: 0xffd8a0, color: 0xffd8a0},
@@ -1745,6 +1746,7 @@ PSYS.forEach(b => {
 });
 BIOMES.taper = p => ({sheet: SHEET.asteroid, h: 1 + Math.floor(fbm(p, 61, 2.6) * 3)});
 BIOMES.ochre = p => { const e = fbm(p, 31, 2); return {sheet: e > 0.6 ? SHEET.mountains : SHEET.desert, h: 1 + Math.floor(e * 6)}; };
+BIOMES.sequoia = p => { const e = fbm(p, 53, 1.7), lat = Math.abs(p.y); if (e < 0.42) return {ocean: true}; return {sheet: lat > 0.8 ? SHEET.tundra : e > 0.62 ? SHEET.mountains : SHEET.redwood, h: 1 + Math.floor((e - 0.42) * 12)}; };
 BIOMES.rime = p => ({sheet: SHEET.frozen, h: 1 + Math.floor(fbm(p, 71, 2.2) * 4)});
 // every body's position (or velocity) at time t, parents first, into out[3i..3i+2]
 function posAll(t, out) {
@@ -1764,7 +1766,7 @@ function velAll(t, out) {
   return out;
 }
 const PA = new Float64Array(3 * NBOD), PV = new Float64Array(3 * NBOD);
-const CLOSE = PSYS.map(b => b.star ? 0 : b.moon ? 3 * b.hill : 40 * b.R);   // what counts as passing close
+const CLOSE = PSYS.map(b => b.star ? 0 : b.moon ? 3 * b.hill : 10 * b.R);   // what counts as passing close
 // the body a ship is "round": the star or planet that pulls hardest, or one of that planet's moons whose
 // Hill sphere the ship is inside. Used for readouts and node frames only; the motion is the summed field.
 function domOf(p, P) {
@@ -1774,7 +1776,7 @@ function domOf(p, P) {
   return best;
 }
 // the field a ship feels. The bodies ride rails that know only their parents, so a ship that felt every
-// body's full pull would be dragged off a moon by Amber's 0.03 m/s^2 at Pale Blue, which Taper's rail never
+// body's full pull would be dragged off a moon by Amber's 0.03 m/s^2 at Tenebris, which Taper's rail never
 // feels (measured: an orbit round Taper hits the ground inside two turns). So the ship is integrated in the
 // frame of the body it is round (domOf), which rides that body's rail: that body's own pull, plus every
 // other body's tide (its pull on the ship less its pull on the frame body), plus the rail's own
@@ -1847,6 +1849,7 @@ function contact(S, P, V) {
     const ux = S.v[0] - V[3 * i], uy = S.v[1] - V[3 * i + 1], uz = S.v[2] - V[3 * i + 2], rel = Math.hypot(ux, uy, uz);
     if ((ux * dx + uy * dy + uz * dz) / d > 0 && d >= b.Rc) continue;   // climbing away (off a pad, out of the air)
     if (b.star) { S.end = {what: "star", body: i, rel}; return true; }
+    if (b.gas) { S.end = {what: "giant", body: i, rel}; return true; }   // no landing on a gas giant: the air thickens into a hydrogen ocean
     if (b.air) { S.end = {what: i === BI.pale ? "home" : "air", body: i, rel}; return true; }
     if (rel < 6) { S.on = i; S.off = [dx / d * b.Rc, dy / d * b.Rc, dz / d * b.Rc]; S.mode = "landed"; S.end = {what: "landed", body: i, rel}; return true; }
     S.end = {what: "crash", body: i, rel}; return true;
@@ -1929,7 +1932,7 @@ function readout(pr, t0) {
   const hits = !period && i >= pr.n && pr.end && pr.end.body === ref;
   return {ref, ap, pe, apI, peI, period, bound: !!period, leaves, nextRef: leaves ? pr.dom[i] : -1, hits, end: pr.end, endI: i};
 }
-// the ascent from Pale Blue's pad: tab 2's gravity turn, flown in the planner's field at 0.05 s
+// the ascent from Tenebris's pad: tab 2's gravity turn, flown in the planner's field at 0.05 s
 function ascentStep(S, dt, P, V) {
   const pi = BI.pale, b = PSYS[pi];
   const r = [S.p[0] - P[3 * pi], S.p[1] - P[3 * pi + 1], S.p[2] - P[3 * pi + 2]], u = [S.v[0] - V[3 * pi], S.v[1] - V[3 * pi + 1], S.v[2] - V[3 * pi + 2]];
@@ -1952,7 +1955,7 @@ function ascentStep(S, dt, P, V) {
   shipStep(S, dt, acc, P, V);
   return acc;
 }
-// start on Pale Blue's pad (the launch site faces the star's side), or fly the ascent at once into orbit
+// start on Tenebris's pad (the launch site faces the star's side), or fly the ascent at once into orbit
 function padShip() { const S = newShip(); posAll(0, PA); velAll(0, PV); const pi = BI.pale; S.on = pi; S.off = [PSYS[pi].Rc, 0, 0]; for (let k = 0; k < 3; k++) { S.p[k] = PA[3 * pi + k] + S.off[k]; S.v[k] = PV[3 * pi + k]; } return S; }
 function orbitShip(trail) {
   const S = padShip(); S.mode = "ascent"; const P = new Float64Array(3 * NBOD), V = new Float64Array(3 * NBOD);
@@ -1987,7 +1990,7 @@ function navPlan(S0, target, {aim, dvMin, dvMax, span, horizon, capture}) {
     }
     nodes[1].dv[0] = bestC ? bestC.dv : base - 4;
     // round it off: at the next periapsis after the capture, burn retrograde down to circular speed there.
-    // A low, round orbit is the one Pale Blue's tide leaves alone (an eccentric one is pumped into the ground).
+    // A low, round orbit is the one Tenebris's tide leaves alone (an eccentric one is pumped into the ground).
     const pc = predictPath(S0, nodes, {horizon: 600}), Q = new Float64Array(3 * NBOD), QV = new Float64Array(3 * NBOD);
     let s2 = 0; while (s2 < pc.n && pc.seg[s2] < 2) s2++;
     let prevD = -1, phase = 0, tp = null;   // phase 0: climbing to apoapsis, 1: falling to the next periapsis
@@ -2029,7 +2032,7 @@ function readoutAfter(pr, seg) {
 }
 
 const PLAN = {scope: "home", focus: "pale", warp: 1, sas: "node", nodes: [], horizon: 900, S: null, trail: [], pred: null, ro: null, dirty: true, lastPred: 0, burning: false, msg: "", sel: 0};
-const FOCI = {home: [["pale", "Pale Blue"], ["taper", "Taper"], ["lantern", "Lantern"], ["ship", "Ship"]], system: [["aubade", "Aubade"], ["pale", "Pale Blue"], ["verdance", "Verdance"], ["ochre", "Ochre"], ["amber", "Amber"], ["ship", "Ship"]]};
+const FOCI = {home: [["pale", "Tenebris"], ["taper", "Taper"], ["lantern", "Lantern"], ["ship", "Ship"]], system: [["aubade", "Aubade"], ["pale", "Tenebris"], ["sequoia", "Sequoia"], ["verdance", "Verdance"], ["ochre", "Ochre"], ["amber", "Amber"], ["ship", "Ship"]]};
 const WARPS = [1, 4, 16, 64, 256, 1000];
 const fmtT = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}` : `${m}:${String(ss).padStart(2, "0")}`; };
 const fmtD = m => Math.abs(m) >= 100000 ? Math.round(m / 1000).toLocaleString() + " km" : Math.abs(m) >= 10000 ? (m / 1000).toFixed(1) + " km" : Math.round(m).toLocaleString() + " m";
@@ -2056,7 +2059,7 @@ function buildPlanner() {
     g.lbl = W.label(b.name, "", g, "#" + new THREE.Color(b.color).getHexString());
     return g;
   });
-  // town lights on Pale Blue's night side (away from Aubade at t = 0)
+  // town lights on Tenebris's night side (away from Aubade at t = 0)
   { const pg = W.bodyG[BI.pale].children[0]; if (pg.townLights) setPoints(pg.townLights, pg.townPos.filter(v => v.x / v.length() > 0.1)); }
   // dots so a body reads at any distance, and its rail round its parent
   W.dots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({size: 5, sizeAttenuation: false, vertexColors: true}));
@@ -2165,7 +2168,7 @@ function planUpdate(W, dt) {
   PLAN.burning = thrusting;
   // a node passed without its burn is dropped
   while (PLAN.nodes.length && !PLAN.nodes[0].active && S.t > PLAN.nodes[0].t + burnTime(S, nodeMag(PLAN.nodes[0]))) { PLAN.nodes.shift(); PLAN.msg = "a node went by unburnt"; PLAN.dirty = true; renderPlanWork(); }
-  if (S.end && !PLAN.endShown) { PLAN.endShown = true; const b = PSYS[S.end.body]; PLAN.msg = S.end.what === "home" ? `home: through ${b.name}'s air on the pod's heat shield (${Math.round(S.end.rel)} m/s)` : S.end.what === "crash" ? `hit ${b.name} at ${Math.round(S.end.rel)} m/s` : S.end.what === "air" ? `down through ${b.name}'s air` : `into the star`; PLAN.warp = 1; renderCtl(); }
+  if (S.end && !PLAN.endShown) { PLAN.endShown = true; const b = PSYS[S.end.body]; PLAN.msg = S.end.what === "home" ? `home: through ${b.name}'s air on the pod's heat shield (${Math.round(S.end.rel)} m/s)` : S.end.what === "crash" ? `hit ${b.name} at ${Math.round(S.end.rel)} m/s` : S.end.what === "air" ? `down through ${b.name}'s air` : S.end.what === "giant" ? `into ${b.name}: no ground, the air thickens into a hydrogen ocean (a gas giant is orbited, never landed on)` : `into the star`; PLAN.warp = 1; renderCtl(); }
   if (S.on >= 0 && !PLAN.landedShown) { PLAN.landedShown = true; PLAN.msg = `landed on ${PSYS[S.on].name}`; PLAN.warp = 1; PLAN.dirty = true; renderCtl(); }
   if (S.on < 0) PLAN.landedShown = false;
   if (PLAN.dirty || thrusting || S.t - PLAN.lastPred > (PLAN.scope === "system" ? 120 : 20)) replan(thrusting);
@@ -2266,9 +2269,9 @@ function planHud() {
   const here = domOf(S.p, PA), hb = PSYS[here], alt = Math.hypot(S.p[0] - PA[3 * here], S.p[1] - PA[3 * here + 1], S.p[2] - PA[3 * here + 2]) - hb.R, vr = Math.hypot(S.v[0] - PV[3 * here], S.v[1] - PV[3 * here + 1], S.v[2] - PV[3 * here + 2]);
   let l1;
   if (S.on >= 0) l1 = `<span class='g'>landed [${PSYS[S.on].name}]</span>  hold B with SAS radial out (or any hold) to lift off`;
-  else if (S.end) l1 = S.end.what === "home" ? `<span class='g'>home [Pale Blue]  re-entry on the heat shield</span>` : `<span class='w'>${PLAN.msg}</span>`;
-  else if (S.mode === "pad") l1 = `on the pad [Pale Blue]  press Launch`;
-  else if (S.mode !== "free") l1 = `<span class='a'>ascent [Pale Blue]  gravity turn (tab 2's)</span>`;
+  else if (S.end) l1 = S.end.what === "home" ? `<span class='g'>home [Tenebris]  re-entry on the heat shield</span>` : `<span class='w'>${PLAN.msg}</span>`;
+  else if (S.mode === "pad") l1 = `on the pad [Tenebris]  press Launch`;
+  else if (S.mode !== "free") l1 = `<span class='a'>ascent [Tenebris]  gravity turn (tab 2's)</span>`;
   else if (!ro) l1 = "";
   else if (ro.bound) l1 = `<span class='c'>orbit [${PSYS[ro.ref].name}]  Ap ${fmtD(ro.ap - PSYS[ro.ref].R)}  Pe ${fmtD(ro.pe - PSYS[ro.ref].R)}  T ${fmtT(ro.period)}</span>`;
   else if (ro.hits) { const co = PLAN.coast; l1 = `<span class='o'>SUBORBITAL [${PSYS[ro.ref].name}]  ${co.end && co.end.what === "landed" ? "touches down" : co.end && (co.end.what === "home" || co.end.what === "air") ? "into the air" : "impact"} in ${fmtT(co.tEnd - S.t)}</span>`; }
@@ -2293,7 +2296,7 @@ function renderPlanWork() {
       <div class="eyebrow">Flight plan</div>
       <div class="seg"><button class="pbtn" id="pReset">Reset: in low orbit</button><button class="pbtn" id="pPad">Reset: on the pad</button><button class="pbtn" id="pClear">Clear nodes</button></div>
       <div class="eyebrow">The nav computer's suggestion (a tier-2 part; its nodes are ordinary nodes)</div>
-      <div class="seg"><button class="pbtn" id="navTaper">Transfer to Taper</button><button class="pbtn" id="navHome">Return to Pale Blue</button><button class="pbtn" id="navLantern">Transfer to Lantern</button><button class="pbtn" id="navVerd">Out to Verdance</button></div>
+      <div class="seg"><button class="pbtn" id="navTaper">Transfer to Taper</button><button class="pbtn" id="navHome">Return to Tenebris</button><button class="pbtn" id="navLantern">Transfer to Lantern</button><button class="pbtn" id="navSeq">Out to Sequoia</button><button class="pbtn" id="navVerd">Out to Verdance</button></div>
       <p class="muted" style="font-size:13px">Click the line in the view to put a node there; drag its handles (yellow prograde and retrograde, purple normal, cyan radial) and the line moves as you drag, or nudge it here. Hold <b>B</b> (or the on-screen Burn) when a node comes up: the ship points along it and burns until it is done. SAS holds point it prograde, retrograde, radial out or normal for burns by hand: a landing is a retrograde burn held to the ground, a lift-off is radial out.</p>
       <div class="bars"><div class="bar"><span>Delta-v: need ${Math.round(need)} of ${Math.round(have)} m/s</span><span class="t"><i class="${need > have ? "short" : ""}" style="width:${Math.min(100, have ? need / have * 100 : 0)}%"></i></span><span class="v">${Math.round(have - need)} left</span></div></div>
       ${nodeRows || `<p class="muted" style="font-size:13.5px">No nodes yet.</p>`}
@@ -2302,8 +2305,8 @@ function renderPlanWork() {
       <div class="eyebrow">Ahead on the line</div>
       <div class="tablebox"><table><thead><tr><th>Body</th><th>Closest</th><th>When</th><th>Relative speed</th></tr></thead><tbody>${enc.length ? enc.map(e => `<tr><td>${PSYS[e.i].name}</td><td class="n">${e.d < PSYS[e.i].R ? "impact" : fmtD(e.d - PSYS[e.i].R) + " up"}</td><td class="n">in ${fmtT(e.t - S.t)}</td><td class="n">${Math.round(e.v)} m/s</td></tr>`).join("") : `<tr><td colspan="4" class="muted">No body passed close within the line's ${fmtT(PLAN.pred ? PLAN.pred.tEnd - S.t : 0)}.</td></tr>`}</tbody></table></div>
       <div class="eyebrow">The bodies near home</div>
-      <div class="tablebox"><table><thead><tr><th></th><th>Radius</th><th>Gravity</th><th>From Pale Blue</th><th>Low orbit</th></tr></thead><tbody>
-        <tr><td>Pale Blue</td><td class="n">4,800 m</td><td class="n">1.00 g</td><td class="n">-</td><td class="n">960 m, 316 m/s, 1:54</td></tr>
+      <div class="tablebox"><table><thead><tr><th></th><th>Radius</th><th>Gravity</th><th>From Tenebris</th><th>Low orbit</th></tr></thead><tbody>
+        <tr><td>Tenebris</td><td class="n">4,800 m</td><td class="n">1.00 g</td><td class="n">-</td><td class="n">960 m, 316 m/s, 1:54</td></tr>
         <tr><td><b>Taper</b> (test moon)</td><td class="n">600 m (L8)</td><td class="n">0.40 g</td><td class="n">16 km, rail 8:50</td><td class="n">150 m, 69 m/s, 1:08</td></tr>
         <tr><td>Lantern</td><td class="n">1,200 m (L9)</td><td class="n">0.35 g</td><td class="n">26 km, rail 18:18</td><td class="n">300 m, 92 m/s</td></tr></tbody></table></div>
       <div class="eyebrow">Measured on this page's integrator</div>
@@ -2319,6 +2322,7 @@ function renderPlanWork() {
   $("navHome").onclick = () => nav("pale");
   $("navLantern").onclick = () => nav("lantern");
   $("navVerd").onclick = () => nav("verdance");
+  $("navSeq").onclick = () => nav("sequoia");
   WORK.querySelectorAll(".nb").forEach(b => b.onclick = () => { const n = PLAN.nodes[+b.dataset.k]; n.dv[+b.dataset.ax] += +b.dataset.d; PLAN.sel = +b.dataset.k; PLAN.dirty = true; replan(); });
   WORK.querySelectorAll(".nt").forEach(b => b.onclick = () => { const n = PLAN.nodes[+b.dataset.k]; n.t = Math.max(S.t + 3, n.t + +b.dataset.d); PLAN.dirty = true; replan(); });
   WORK.querySelectorAll(".ndel").forEach(b => b.onclick = () => { PLAN.nodes.splice(+b.dataset.k, 1); PLAN.dirty = true; replan(); });
@@ -2326,14 +2330,14 @@ function renderPlanWork() {
 }
 // measured 2026-11-14 by a script driving this page's own flight code in headless Chromium (no GPU)
 let PLAN_MEASURED = [
-  ["Pad to low orbit (First orbit, gravity turn)", "23 s, 548 m/s; Ap 989 m, Pe 884 m, T 1:54"],
+  ["Pad to low orbit (First orbit, gravity turn)", "23 s, 548 m/s; Ap 989 m, Pe 886 m, T 1:54"],
   ["A coasting ship against its line, 60 s on", "0 m apart (the line is the flight)"],
-  ["A 25 m/s prograde node", "moves the line 10.1 km two minutes on; Ap 3,135 m"],
-  ["Low orbit to Taper (the nav computer's nodes, flown)", "72 + 38 + 2 m/s = 113 m/s; orbit Ap 211 m, Pe 131 m, T 1:12"],
-  ["That orbit, left alone", "still round Taper 2 h 40 min later (Ap 261 m, Pe 153 m)"],
-  ["Down onto Taper (a scripted retrograde burn)", "206 m/s, landed under 6 m/s"],
-  ["Taper orbit to home", "29 m/s; into Pale Blue's air 2:11 later at 412 m/s"],
-  ["One prediction (this container's CPU)", "6 to 10 ms for 15 min near home; 75 to 110 ms for 4 h across the system"],
+  ["A 25 m/s prograde node", "moves the line 10.1 km two minutes on; Ap 3,138 m"],
+  ["Low orbit to Taper (the nav computer's nodes, flown)", "61 + 15 + 1 m/s = 77 m/s; orbit Ap 111 m, Pe 72 m, T 1:01"],
+  ["That orbit, left alone", "still round Taper 2 h 40 min later (Ap 121 m, Pe 82 m)"],
+  ["Down onto Taper (a scripted retrograde burn)", "151 m/s, landed under 6 m/s"],
+  ["Taper orbit to home", "43 m/s; into Tenebris's air 2:03 later at 413 m/s"],
+  ["One prediction (this container's CPU)", "6 to 12 ms for 15 min near home; 75 to 110 ms for 4 h across the system"],
 ].map(([a, b]) => `<tr><td>${a}</td><td class="n" style="white-space:normal">${b}</td></tr>`).join("");
 // plan with the nav computer from the ship's state now
 function planNav(target) {
@@ -2343,11 +2347,11 @@ function planNav(target) {
   let o;
   if (target === "pale") o = {aim: tb.R + 60, dvMin: 5, dvMax: 140, span: T * 1.05, horizon: 700, capture: false};
   else if (tb.moon && tb.pi === here) { const syn = 1 / Math.abs(1 / T - tb.w / (2 * Math.PI)); o = {aim: tb.R + tb.lo, dvMin: 20, dvMax: 160, span: Math.min(900, T + syn), horizon: 900, capture: true}; }
-  else o = {aim: tb.R + tb.lo, dvMin: 120, dvMax: 420, span: T * 1.05, horizon: 4 * 3600, capture: true};
+  else o = {aim: tb.R + tb.lo, dvMin: 130, dvMax: 700, span: T * 1.05, horizon: 6 * 3600, capture: true};
   const res = navPlan(S, target, o);
   PLAN.nodes = res.nodes; PLAN.sel = 0; PLAN.dirty = true; replan();
   const ro2 = readoutAfter(PLAN.pred, PLAN.nodes.length);
-  return target === "pale" ? `Return plotted: node 1 ${nodeMag(PLAN.nodes[0]).toFixed(1)} m/s; Pale Blue periapsis ${fmtD(res.miss)} up, in the air.` : `Plotted: depart ${nodeMag(PLAN.nodes[0]).toFixed(1)} m/s, pass ${tb.name} ${fmtD(res.miss)} up, capture ${nodeMag(PLAN.nodes[1]).toFixed(1)} m/s${PLAN.nodes[2] ? `, round it off ${nodeMag(PLAN.nodes[2]).toFixed(1)} m/s` : ""}${ro2 && ro2.bound && ro2.ref === BI[target] ? ": in orbit round " + tb.name : ""}.`;
+  return target === "pale" ? `Return plotted: node 1 ${nodeMag(PLAN.nodes[0]).toFixed(1)} m/s; Tenebris periapsis ${fmtD(res.miss)} up, in the air.` : `Plotted: depart ${nodeMag(PLAN.nodes[0]).toFixed(1)} m/s, pass ${tb.name} ${fmtD(res.miss)} up, capture ${nodeMag(PLAN.nodes[1]).toFixed(1)} m/s${PLAN.nodes[2] ? `, round it off ${nodeMag(PLAN.nodes[2]).toFixed(1)} m/s` : ""}${ro2 && ro2.bound && ro2.ref === BI[target] ? ": in orbit round " + tb.name : ""}.`;
 }
 
 // =====================================================================================
@@ -2357,7 +2361,7 @@ const AM = {view: "lander", time: "night"};
 function buildAmCourse() {
   const W = makeWorld("amcourse"); spaceBase(W);
   W.camera.near = 0.01; W.camera.far = 6000;
-  // schematic: the star, Pale Blue and Cinder pulled together; bodies enlarged, distances not to scale
+  // schematic: the star, Tenebris and Cinder pulled together; bodies enlarged, distances not to scale
   const star = new THREE.Sprite(glowMat(0xffe8b0)); star.scale.setScalar(26); star.position.set(-4, 0, -48); W.scene.add(star);
   const starCore = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 1), new THREE.MeshBasicMaterial({color: 0xfff1c8})); starCore.position.copy(star.position); W.scene.add(starCore);
   const pb = hexGlobe(W, {level: 4, radius: 4.2, biome: BIOMES.home, layer: 0.05, lights: true}); pb.position.set(-17, 0, 0); W.scene.add(pb);
@@ -2380,7 +2384,7 @@ function buildAmCourse() {
   const fz = line(0x59e6f2, 2, {dashed: true, dash: 0.6, gap: 0.4, opacity: 0.6}); setLine(fz, [o0, o0.clone().lerp(o1, 0.5).add(new THREE.Vector3(0, 0, 3)), o1]); W.scene.add(fz);
   const oA = ring(5.6, 0x59e6f2, 0.3, ex, ez); oA.position.copy(pb.position); const oB = ring(4.4, 0x59e6f2, 0.3, ex, ez); oB.position.copy(ci.position); W.scene.add(oA, oB);
   W.lander = shipSprite(0xfa59bf, "lander"); W.lander.position.copy(mid.clone().lerp(s1, 0.35)); W.scene.add(W.lander);
-  W.label("Pale Blue: the Highport field", "", null, "#8fc3d8").pos = pb.position.clone().add(new THREE.Vector3(0, 0, 6.2));
+  W.label("Tenebris: the Highport field", "", null, "#8fc3d8").pos = pb.position.clone().add(new THREE.Vector3(0, 0, 6.2));
   W.label("Cinder: the basalt flats", "", null, "#e8b040").pos = ci.position.clone().add(new THREE.Vector3(0, 0, 5.2));
   W.label("lift off at 3 g, burn", "", null, "#fa59bf").pos = s1.clone().lerp(mid, 0.5).add(new THREE.Vector3(0, 0, -1.6));
   W.label("flip", "", flip, "#ffe38a");
@@ -2388,7 +2392,7 @@ function buildAmCourse() {
   W.label("fusion tier: lander up, ship across, lander down", "", null, "#59e6f2").pos = o0.clone().lerp(o1, 0.5).add(new THREE.Vector3(0, 0.8, 3));
   W.label("Lantern", "", ln, "#b3b8d9"); W.label("Aubade (the star)", "", starCore, "#ffe8b0");
   W.cam = {target: new THREE.Vector3(0, 0, 2), yaw: 0.08, pitch: 0.95, dist: 40, min: 6, max: 200};
-  W.hud = () => `nav computer | Pale Blue surface -> Cinder surface  <span class='p'>antimatter lander</span>\nburn 2 min 35 s, flip, brake 2 min 35 s: 5 min 10 s, 9.8 km/s\nno orbit at either end   (schematic: bodies enlarged)`;
+  W.hud = () => `nav computer | Tenebris surface -> Cinder surface  <span class='p'>antimatter lander</span>\nburn 2 min 35 s, flip, brake 2 min 35 s: 5 min 10 s, 9.8 km/s\nno orbit at either end   (schematic: bodies enlarged)`;
   return W;
 }
 
@@ -2431,7 +2435,7 @@ function renderCtl() {
       + seg("speedSel", [["1", "x1"], ["4", "x4"], ["16", "x16"]], String(ORB.speed), "Time speed");
   } else if (TAB === "plan") {
     const S = PLAN.S;
-    h = seg("pscope", [["home", "Pale Blue and Taper"], ["system", "Aubade system"]], PLAN.scope, "Scope")
+    h = seg("pscope", [["home", "Tenebris and Taper"], ["system", "Aubade system"]], PLAN.scope, "Scope")
       + seg("pfocus", FOCI[PLAN.scope], PLAN.focus, "Focus")
       + seg("pwarp", WARPS.map(w => [String(w), "x" + w]), String(PLAN.warp), "Time warp")
       + seg("psas", [["node", "Node"], ["pro", "Prograde"], ["retro", "Retrograde"], ["rad", "Radial out"], ["nor", "Normal"]], PLAN.sas, "SAS hold")
@@ -2475,10 +2479,10 @@ function renderCtl() {
 function renderInfo() {
   const T = {
     vab: VAB.view === "inside" ? "<b>Aboard, on the pad.</b> You stand on a deck the walk check reached, in the rocket's frame: launch the preview and you ride it up. Drag to look; nothing moves until you do." : "<b>Edit a layer</b> in the editor under the stage, or click a ghost cell here to place the selected part on the layer being edited; right-click or the eraser takes one off. Drag to look round, scroll to zoom. Cut-away hides the walls on your side so the decks show. Press Launch and fly it: W and S pitch, A and D yaw, Q and E roll, Shift and Ctrl throttle; the nozzles swivel in their gimbals.",
-    orbit: "<b>To scale</b>: Pale Blue is 4.8 km across the middle, low orbit 960 m up. The cyan line is the path the ship will fly, integrated forward through the same field it flies in; orange means it escapes or comes down.",
+    orbit: "<b>To scale</b>: Tenebris is 4.8 km across the middle, low orbit 960 m up. The cyan line is the path the ship will fly, integrated forward through the same field it flies in; orange means it escapes or comes down.",
     fusion: FUS.view === "freight" ? "<b>Freighters</b> fly the nav computer's courses between stops, with no pilot. Add a route in the panel below." : FUS.view === "lander" ? "<b>Landers</b> lift off to low orbit to meet the fusion ship, which never lands. Set it to night: the pad lamps and the exhaust light the ground." : "<b>The nav computer</b> plots a near-straight course: burn, flip at the midpoint, brake. The dashed line is what a chemical rocket flies instead.",
     plan: "<b>The planner.</b> Every body on its rails, the ship in their pull (in the frame of the body it is round, so the rails and the field agree), the line ahead that same integration run forward. Drag to turn, scroll to zoom from metres to the whole system. Click the line to place a node; drag its handles. Focus Taper to see an orbit round it close.",
-    antimatter: AM.view === "course" ? "<b>The nav computer</b> plots a lander's course from one surface to another: lift off, burn, flip, brake, set down. The dashed line is the fusion tier's way: lander up, ship across, lander down." : "<b>The antimatter lander</b> from the assembly building's examples, on Cinder after flying from Pale Blue's surface with no orbit stop. Its deck, cabins and airlock are cells like any other.",
+    antimatter: AM.view === "course" ? "<b>The nav computer</b> plots a lander's course from one surface to another: lift off, burn, flip, brake, set down. The dashed line is the fusion tier's way: lander up, ship across, lander down." : "<b>The antimatter lander</b> from the assembly building's examples, on Cinder after flying from Tenebris's surface with no orbit stop. Its deck, cabins and airlock are cells like any other.",
   };
   INFO.innerHTML = T[TAB];
 }
@@ -2588,7 +2592,7 @@ function refreshVab() {
       ${A.S.map(s => { const n = {}, tr = TR[s.i]; s.engines.forEach(e => n[e] = (n[e] || 0) + 1); return `<tr><td>${s.i + 1}</td><td>${Object.entries(n).map(([e, c]) => `${c} ${PARTS[e].name.toLowerCase()}`).join(", ") || "-"}${s.srbF ? `${s.engines.length ? " + " : ""}${s.srbF / 200} booster cells` : ""}</td><td class="n">${s.m0.toFixed(1)} t</td><td class="n">${Math.round(s.F).toLocaleString()} kN</td><td class="n ${s.twr >= 1 ? "good" : (s.i ? "" : "bad")}">${s.twr.toFixed(2)}</td><td class="n">${s.t.toFixed(1)} s</td><td class="n">${Math.round(s.dv).toLocaleString()} m/s</td><td class="n" title="${tr.off >= 2 ? `roll ${fmtTurn(tr.roll)} deg/s2 from ${tr.off} engines off the axis` : tr.fins ? "roll from fins only, in air" : "no roll"}">${tr.eng ? fmtTurn(tr.pitch) + " &deg;/s&sup2;" : "-"}</td></tr>`; }).join("")}
       <tr><td colspan="6"><b>Total</b></td><td class="n"><b>${Math.round(A.total).toLocaleString()} m/s</b></td><td></td></tr></tbody></table>
       <p class="muted" style="font-size:13px;margin-top:6px">Turn: how fast the stage swings its nose at full gimbal (chemical 6&deg;, nuclear thermal 3&deg;, boosters fixed, fusion 2&deg;, antimatter 4&deg;): the engines' side thrust times their distance below the centre of mass, over the moment of inertia of every cell still on (mass x distance squared). Roll needs two engines off the axis, else fins in air. This stack: ${TR.map((t, i) => `stage ${i + 1} roll ${t.off >= 2 ? fmtTurn(t.roll) + " &deg;/s&sup2;" : t.fins ? "by fins in air" : "none"}`).join(", ")}.</p>`;
-  const req = [["Low orbit, Pale Blue", 540], ["+ to Lantern's orbit", 680], ["+ land on Lantern", 790], ["+ home again", 1040]];
+  const req = [["Low orbit, Tenebris", 540], ["+ to Lantern's orbit", 680], ["+ land on Lantern", 790], ["+ home again", 1040]];
   $("dvBars").innerHTML = req.map(([n, v]) => `<div class="bar"><span>${n}</span><span class="t"><i class="${A.total < v ? "short" : ""}" style="width:${Math.min(100, A.total / v * 100)}%"></i></span><span class="v">${v} m/s</span></div>`).join("");
   $("checks").innerHTML = C.map(([k, t]) => `<div class="${k}">${t}</div>`).join("");
   drawStack($("stackProf"), Wk);
@@ -2662,7 +2666,7 @@ function renderWork() {
       $("addRoute").onsubmit = e => { e.preventDefault(); const from = $("rFrom").value, to = $("rTo").value; if (from === to) { flashInfo("A route needs two different stops."); return; } ROUTES.push({ship: "Dray " + (ROUTES.length + 1), from, to, cargo: $("rCargo").value, trip: 180 + Math.round(Math.random() * 120), p: 0}); WORLDS.fusion.syncRoutes(); updateRouteRows(); };
     } else if (FUS.view === "lander") {
       WORK.innerHTML = `<div class="pane"><div class="eyebrow">The lander</div><div class="tablebox"><table><tbody>
-        <tr><td>Stack</td><td>Chemical engine, three tanks, the pod, three legs: 8 cells</td></tr><tr><td>Mass full / dry</td><td class="n">16.6 t / 4.0 t</td></tr><tr><td>TWR at Pale Blue</td><td class="n">1.26 on the pad</td></tr><tr><td>Delta-v</td><td class="n">860 m/s</td></tr><tr><td>Surface to low orbit</td><td class="n">540 m/s</td></tr><tr><td>Low orbit to surface</td><td class="n">450 m/s (a powered landing), after a refuel in orbit</td></tr></tbody></table></div></div>
+        <tr><td>Stack</td><td>Chemical engine, three tanks, the pod, three legs: 8 cells</td></tr><tr><td>Mass full / dry</td><td class="n">16.6 t / 4.0 t</td></tr><tr><td>TWR at Tenebris</td><td class="n">1.26 on the pad</td></tr><tr><td>Delta-v</td><td class="n">860 m/s</td></tr><tr><td>Surface to low orbit</td><td class="n">540 m/s</td></tr><tr><td>Low orbit to surface</td><td class="n">450 m/s (a powered landing), after a refuel in orbit</td></tr></tbody></table></div></div>
         <div class="pane"><div class="eyebrow">Why the fusion ship stays up</div><p class="muted" style="font-size:14px">A fusion drive pushes 400 kN at 8 km/s exhaust: a ship that crosses the system in minutes but cannot lift its own weight off a 1 g world, and whose exhaust would cook the pad. So the tier splits the job the way the owner put it: the fusion ship crosses, the lander goes up and down. A freighter on the Highport route tops the lander's tanks up in orbit, so one tankful only has to get it up.</p></div>`;
     } else {
       WORK.innerHTML = `<div class="pane"><div class="eyebrow">Two ways to the same place</div><div class="tablebox"><table><thead><tr><th></th><th>Chemical</th><th>Fusion, nav computer</th></tr></thead><tbody>
@@ -2676,7 +2680,7 @@ function renderWork() {
     const map = PRESETS.amlander.build(), A = analyse(G1, map), Wk = walkOf(map), cnt = p => [...map.values()].filter(v => v === p).length;
     const dry = A.mass - [...map.values()].reduce((a, p) => a + (PARTS[p].prop || 0), 0);
     if (AM.view === "course") {
-      WORK.innerHTML = `<div class="pane"><div class="eyebrow">Pale Blue's surface to Cinder's</div><div class="tablebox"><table><thead><tr><th></th><th>Fusion tier</th><th>Antimatter lander</th></tr></thead><tbody>
+      WORK.innerHTML = `<div class="pane"><div class="eyebrow">Tenebris's surface to Cinder's</div><div class="tablebox"><table><thead><tr><th></th><th>Fusion tier</th><th>Antimatter lander</th></tr></thead><tbody>
         <tr><td>Craft</td><td>A lander, a fusion ship, a lander</td><td>One lander</td></tr>
         <tr><td>Legs</td><td>Surface to low orbit (540 m/s), across (4 km/s), low orbit to surface (450 m/s)</td><td>Lift off, burn, flip, brake, set down</td></tr>
         <tr><td>Time</td><td class="n">about 9 min with two transfers</td><td class="n">5 min 10 s</td></tr>
@@ -2690,7 +2694,7 @@ function renderWork() {
         <tr><td>TWR at 1 g</td><td class="n">${A.S[0].twr.toFixed(1)}</td></tr>
         <tr><td>Delta-v</td><td class="n">${(A.total / 1000).toFixed(0)} km/s</td></tr>
         <tr><td>Walk check</td><td>${Wk.podReached ? `airlock to pod over ${Wk.reached.size} places: passes` : "fails"}</td></tr>
-        <tr><td>Pale Blue surface to Cinder surface</td><td class="n">5 min 10 s, 9.8 km/s</td></tr></tbody></table></div></div>
+        <tr><td>Tenebris surface to Cinder surface</td><td class="n">5 min 10 s, 9.8 km/s</td></tr></tbody></table></div></div>
       <div class="pane"><div class="eyebrow">What changes</div><p class="muted" style="font-size:14px">The lander is the ship. It lifts off at three times its weight, flies the nav computer's course to another world's surface and sets down; orbits become optional. Its exhaust is the brightest thing in the night: the magenta pool on the basalt is the drive, and the deck's lamps show through its portholes. This is the top tier: there is no warp drive and no other star system.</p></div>`;
     }
   }
@@ -2838,7 +2842,7 @@ function start() {
 // =====================================================================================
 $("ladder").innerHTML = [
   ["kestrel", "game/hand", "Before the tiers", "Air and sea", "Built now", ["Kestrel tilt-rotor, Tern sailboat, Loon canoe", "Assisted flight in the air; nothing reaches space", "Stay useful at every tier"]],
-  ["chem", "engine-chem", "Tier 1", "Chemical and nuclear rockets", "Power: coal to fission", ["Hex stacks in the assembly building, nothing else", "TWR over 1 to leave the pad; delta-v to reach orbit", "Staging, boosters, the nuclear upper stage (fuel rods)", "Orbit Pale Blue; reach Lantern and land; come home in the pod"]],
+  ["chem", "engine-chem", "Tier 1", "Chemical and nuclear rockets", "Power: coal to fission", ["Hex stacks in the assembly building, nothing else", "TWR over 1 to leave the pad; delta-v to reach orbit", "Staging, boosters, the nuclear upper stage (fuel rods)", "Orbit Tenebris; reach Lantern and land; come home in the pod"]],
   ["fus", "fusion", "Tier 2", "Fusion", "Power: a fusion plant", ["Ships built in orbit at a station; they never land", "The nav computer plots and flies near-straight courses", "Freighters run routes on their own", "Landers lift off to low orbit to meet them"]],
   ["am", "antimatter", "Tier 3", "Antimatter", "Power: the collider", ["Landers go from any surface to any surface, no orbit stop", "The top tier: no warp, no other star systems", "Every world in the one system within minutes"]],
 ].map(([id, icon, tier, name, pw, li]) => `<div class="card"><div class="head"><img src="${PX}${icon}.png${V}" alt=""><div><div class="eyebrow">${tier}</div><h3>${name}</h3><div class="pw">${pw}</div></div></div><ul>${li.map(x => `<li>${x}</li>`).join("")}</ul></div>`).join("");
@@ -2849,9 +2853,11 @@ $("opts").innerHTML = [
 ].map(([h, tag, p, rec]) => `<div class="opt${rec ? " rec" : ""}">${tag ? `<span class="tag">${tag}</span>` : ""}<h3>${h}</h3><p>${p}</p></div>`).join("")
   + `<p class="muted" style="grid-column:1/-1;font-size:14px">B changes the invariant in one place: "ships use local gravity falloff" becomes "assisted ships use the bounded anchor field; rockets use the orbital field". Patched conics, maneuver nodes, transfer-window requirements and ship-to-ship gravity stay out. This is the survey's question G4, with tab 2's screenshots in both fields and tab 3's course beside it.</p>`;
 const DEC = [
+  ["Tenebris and Sequoia (the owner, 2026-11-14)", "\"pale blue = tenebris, so call it that, sequoia is the sister planet\"", "The owner's call: the home world is Tenebris (the game is still Pale Blue Dot), and Sequoia, its wooded sister (4,800 m, 1.1 g, thick dusty air), rides the next orbit out from Aubade at 380 km, a destination in the planner. Its orbit is this mockup's placement until the planets mockup settles it."],
+  ["No landing on gas giants (the owner, 2026-11-14)", "\"there is no landing on gas giants, some kind of air ship could deploy in the atmosphere though, but at a certain point in the atmosphere should just be an ocean of hydrogen\"", "The owner's call: Amber can be a transfer and capture target and orbited, and its moons landed on, but a line into Amber ends in its hydrogen ocean, never on ground. An airship deployed from orbit belongs to the planets mockup's giant descent."],
   ["G4a. Maneuver nodes on the integrated line? (asked, with the planner's screenshots)", "You asked for navigation nodes to plot paths and burns (2026-11-14). CLAUDE.md keeps maneuver nodes out, and G4's recommended B had none. The planner has them, in the mockup only.", "Allow them: nodes are finite burns planned on the line the integrator draws and flown by hand; patched conics, sphere-of-influence solvers, transfer-window requirements and ship-to-ship gravity stay out. The rule's wording changes only on your answer, in the commit that builds it."],
-  ["The ship's frame (2026-11-14)", "The bodies ride rails that know only their parents. A ship feeling every body's full pull is dragged off a moon orbit by Amber's 0.03 m/s&sup2; at Pale Blue, which Taper's rail never feels: measured, an orbit round Taper hit the ground inside two turns.", "Recommendation taken (ask only with screenshots): the ship is integrated in the frame of the body it is round, riding that body's rail: that body's pull plus every other body's tide. One integrator, no conics; the frame only changes which rail is the reference."],
-  ["Taper, the test moon (2026-11-14)", "A small body close to home to practise orbit transitions.", "Recommendation taken (ask only with screenshots): 600 m (Goldberg level 8, on the ladder), 0.4 g, 16 km from Pale Blue on a rail that agrees with the field, airless and lifeless. Mockup data: whether the game gets a Taper is the planets change's call."],
+  ["The ship's frame (2026-11-14)", "The bodies ride rails that know only their parents. A ship feeling every body's full pull is dragged off a moon orbit by Amber's 0.03 m/s&sup2; at Tenebris, which Taper's rail never feels: measured, an orbit round Taper hit the ground inside two turns.", "Recommendation taken (ask only with screenshots): the ship is integrated in the frame of the body it is round, riding that body's rail: that body's pull plus every other body's tide. One integrator, no conics; the frame only changes which rail is the reference."],
+  ["Taper, the test moon (2026-11-14)", "A small body close to home to practise orbit transitions.", "Recommendation taken (ask only with screenshots): 600 m (Goldberg level 8, on the ladder), 0.4 g, 16 km from Tenebris on a rail that agrees with the field, airless and lifeless. Mockup data: whether the game gets a Taper is the planets change's call."],
   ["The launch field (2026-11-14)", "A larger ground area round the pad, kept cheap.", "Recommendation taken (ask only with screenshots): 80 rings of the game's cells (about 200 m), a far ring of cells twelve times wider to 2.4 km as scenery, Pad B 190 m out, walking on the near ring."],
   ["G4. How do chemical rockets meet orbits? (asked, with screenshots)", "A keep the invariant, B Tenebris's orbital field without nodes, C all of Tenebris.", "B. It is the orbital play Tenebris has, with the part that made the invariant necessary (a second, analytic model of motion) left out. Until you answer, the plan is written for B and marked provisional."],
   ["One build grid", "The VAB builds hex stacks; the shipyard mockup builds on 2 m squares.", "Recommendation taken (ask only with screenshots): both on the 2.833 m hex cell with 1 m layers, so a part is a unit of the world like a block."],
