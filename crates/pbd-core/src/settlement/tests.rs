@@ -3964,3 +3964,140 @@ fn print_the_towns_vertex_counts() {
         );
     }
 }
+
+/// Measurement instrument (`roof-speckle`): every pair of faces in a village
+/// building that face the same way within `GAP` of each other and overlap,
+/// the geometry a depth buffer can fight over.
+#[test]
+#[ignore]
+fn measure_faces_that_can_fight() {
+    const GAP: f32 = 0.03;
+    let (patch, at) = patch();
+    let village = village();
+    let kits = kits();
+    let (_, east) = crate::geo::north_east(patch.cells[*at].direction);
+    let d0 = patch.side_toward(*at, east);
+    let chart = chart(patch, (25, 17), *at, d0, &wanted(&village)).expect("charted");
+    let mut tally: std::collections::BTreeMap<String, (usize, f32, f32, Vec3)> = Default::default();
+    for b in &village.buildings {
+        let kit = kits.get(&b.kit).unwrap();
+        let mut meshes = Meshes::new();
+        let cut = cut_building(
+            &mut meshes,
+            &|_: &str| 2.0,
+            patch,
+            &chart,
+            b,
+            kit,
+            RADIUS_M,
+            10.0,
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let f = cut.frame;
+        let mut tris: Vec<([Vec3; 3], String)> = Vec::new();
+        for (set, tag) in [(&meshes, "out"), (&cut.rooms, "room")] {
+            for (name, m) in set {
+                for t in m.positions.chunks(3) {
+                    let v: [Vec3; 3] = [0, 1, 2].map(|k| f.local(Vec3::from_array(t[k])));
+                    tris.push((v, format!("{tag}:{name}")));
+                }
+            }
+        }
+        let normal = |t: &[Vec3; 3]| (t[1] - t[0]).cross(t[2] - t[0]).normalize_or_zero();
+        let inside = |t: &[Vec3; 3], n: Vec3, p: Vec3| {
+            (0..3).all(|k| (t[(k + 1) % 3] - t[k]).cross(p - t[k]).dot(n) > 1e-4)
+        };
+        for i in 0..tris.len() {
+            let (a, an) = (&tris[i].0, normal(&tris[i].0));
+            if an == Vec3::ZERO {
+                continue;
+            }
+            for j in i + 1..tris.len() {
+                let (c, cn) = (&tris[j].0, normal(&tris[j].0));
+                if an.dot(cn) < 0.995 {
+                    continue;
+                }
+                let gap = (c[0] - a[0]).dot(an);
+                if gap.abs() > GAP {
+                    continue;
+                }
+                // Points well inside `a`, dropped onto `c`'s plane.
+                let mut hit = 0;
+                let mut at_p = Vec3::ZERO;
+                for u in 1..8 {
+                    for v in 1..8 - u {
+                        let (s, t) = (u as f32 / 8.0, v as f32 / 8.0);
+                        let p = a[0] + (a[1] - a[0]) * s + (a[2] - a[0]) * t;
+                        let q = p - cn * (p - c[0]).dot(cn);
+                        if inside(c, cn, q) {
+                            hit += 1;
+                            at_p = p;
+                        }
+                    }
+                }
+                if hit > 0 {
+                    let mut names = [tris[i].1.clone(), tris[j].1.clone()];
+                    names.sort();
+                    let key = format!(
+                        "{} | {} vs {} | n {:.2} {:.2} {:.2}",
+                        b.name, names[0], names[1], an.x, an.y, an.z
+                    );
+                    let e = tally.entry(key).or_insert((0, f32::MAX, 0.0, at_p));
+                    e.0 += 1;
+                    e.1 = e.1.min(gap.abs());
+                    e.2 = e.2.max(gap.abs());
+                    e.3 = at_p;
+                }
+            }
+        }
+    }
+    for (k, (n, lo, hi, p)) in &tally {
+        println!("{k}: {n} pairs, gap {lo:.4}..{hi:.4} m, e.g. at {p:.2}");
+    }
+}
+
+/// Measurement instrument (`roof-speckle`): every room face lying on the
+/// edge of the band of height a room light lights, within its reach.
+#[test]
+#[ignore]
+fn measure_faces_on_a_lights_band_edge() {
+    let (village, cut) = cut_village();
+    for (b, s) in village.buildings.iter().zip(&cut) {
+        let f = s.frame;
+        let mut on_edge: std::collections::BTreeMap<String, usize> = Default::default();
+        for l in &s.lights {
+            let at = f.local(l.at);
+            let edges = [at.y - l.below_m, at.y + l.above_m];
+            for (name, m) in &s.rooms {
+                for t in m.positions.chunks(3) {
+                    let v: Vec<Vec3> = t.iter().map(|p| f.local(Vec3::from_array(*p))).collect();
+                    let n = (v[1] - v[0]).cross(v[2] - v[0]).normalize_or_zero();
+                    let c = (v[0] + v[1] + v[2]) / 3.0;
+                    if (c - at).length() > l.kind.reach_m() {
+                        continue;
+                    }
+                    for (k, e) in edges.iter().enumerate() {
+                        let lo = v.iter().map(|p| p.y).fold(f32::MAX, f32::min);
+                        let hi = v.iter().map(|p| p.y).fold(f32::MIN, f32::max);
+                        if lo - 0.003 <= *e && *e <= hi + 0.003 && n.y.abs() > 0.9 {
+                            *on_edge
+                                .entry(format!(
+                                    "{:?} at y {:.2} band {} {:.3}: {name} face y {:.3} n.y {:.0}",
+                                    l.kind,
+                                    at.y,
+                                    ["bottom", "top"][k],
+                                    e,
+                                    c.y,
+                                    n.y
+                                ))
+                                .or_default() += 1;
+                        }
+                    }
+                }
+            }
+        }
+        for (k, n) in on_edge {
+            println!("{}: {k} ({n} triangles)", b.name);
+        }
+    }
+}
