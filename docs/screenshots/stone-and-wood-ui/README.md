@@ -29,7 +29,7 @@ Compared against the mockup's Smooth look (`docs/mockups/ui.html`,
 `docs/screenshots/mockup-ui/compare/`): the pause, pack, compass, hotbar and
 loading slab match it piece for piece. Known differences, on purpose: the
 settings page keeps the game's own controls (value plaques, not sliders, for
-the frame limit and render scale; no rebinding, which is new behaviour), the
+the frame limit and render scale; no rebinding, which is new behaviour; section 2 below adds both), the
 loading slab has no Play button (the game starts itself), and the map's
 drawer is always open.
 
@@ -85,6 +85,7 @@ slot for its tooltip).
 | `s2-map-{day,night}.jpg` | `--menu map --map-mpp 12` | The map frame and its drawer, open by default as before (shutting it by default is a recommendation, not done) |
 | `s2-guide-{day,night}.jpg` | `--menu guide` | The field guide on its stone |
 | `s2-loading-{day,night}.jpg` | `--capture-loading` (and `--time`) | The loading slab while the planet builds |
+| `s2-realtime-input-day.jpg` | `--menu settings --settings-tab input --real-time --frames 60` | The LATE_PIPELINE check below |
 
 ### Corners: 28 px, pixel exact at scale 2
 
@@ -95,8 +96,36 @@ writes it to `target/kit-dump/`):
 
     python3 tools/art/measure_corners.py <capture.png> target/kit-dump/oak-frame@2.png --tolerance 0
 
-CORNERS_RESULT
+With no tolerance at all, every opaque texel of both 28 x 28 corner blocks
+is drawn exactly, and the panel is drawn 648 px wide, its 324 native px at
+scale 2. At 30 px the bottom-right block, where both stretched sides meet
+it, matches 13.6 %: the corner ends at 28 px. (The top-left block still
+matches 95 % at 30 px because the top side's first columns sample nearly
+the same texels.) Measured on the PNG; the JPGs here are for looking at.
+
+```
+capture s2-settings-input-day (the PNG before JPG) 1440x900
+baked target/kit-dump/oak-frame@2.png 96x96, corner 14 native px x 2 = 28 px
+  N=26 top-left     opaque  667  match 100.00 %  at (396, 163)
+  N=26 bottom-right opaque  667  match 100.00 %  at (1018, 711)
+  N=28 top-left     opaque  775  match 100.00 %  at (396, 163)
+  N=28 bottom-right opaque  775  match 100.00 %  at (1016, 709)
+  N=30 top-left     opaque  891  match  94.95 %  at (396, 163)
+  N=30 bottom-right opaque  891  match  13.58 %  at (444, 707)
+  N=32 top-left     opaque 1015  match  90.54 %  at (396, 163)
+  N=32 bottom-right opaque 1015  match  18.92 %  at (899, 705)
+panel drawn 648 x 574 px from (396, 163)
+corners 28 px pixel exact: True; the bottom-right block at 30 px matches 13.58 % (the stretched sides begin)
+```
 
 ### LATE_PIPELINE
 
-LATE_RESULT
+`s2-realtime-input-day.jpg` is the Input page with `--real-time --frames
+60`: the launch warms behind the loading screen as a player's does. Its log:
+`READY playable 161.89 s after launch ... (world 68.79 s, warm 92.80 s, 78
+pipelines)`, no `LATE_PIPELINE` before it, and one after it,
+`screenshot-to-screen`, the capture's own instrument. Nothing the UI draws
+(the sub-tabs, the caps, the sliders, the tooltip's stone) compiles late. On
+lavapipe the warm runs into its 90 s cap, so this is a check, not a proof.
+The fixed-step shots above lift the loading screen without warming and so
+log late pipelines as every `--capture` does (section 1 above).
