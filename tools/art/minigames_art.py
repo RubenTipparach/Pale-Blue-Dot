@@ -6,7 +6,7 @@
 
 Groups: the ore sorter's ores and drill, the Reactor Roll's reel symbols (also the four suits of
 Orbit 21), dice, chips, a card back, the race ships, and the job board's badges; and (2026-11-13)
-the casino's themed machines (Deep Vein dv_*, Halcyon Frontier pl_*, Smuggler's Hold sm_*), the
+the casino's themed machines (Deep Vein dv_*, Aubade Frontier pl_*, Smuggler's Hold sm_*), the
 Star Chart keno markers (kn_*, 16 x 16), small card pips (pip_*, 16 x 16), the dealer button and
 the four Hold'em opponents' portraits (ai_*). Every sprite is 32 x 32 at native size except the
 card back (22 x 32, a card's 66 x 96 at 3x), the 16 x 16 markers and pips, and pl_wild_col (32 x 96,
@@ -399,7 +399,7 @@ def dv_lamp():
     return sp
 
 
-# ---- Halcyon Frontier (5 x 3 video slot, the Halcyon worlds) -------------------------------------
+# ---- Aubade Frontier (5 x 3 video slot, the Aubade worlds) -------------------------------------
 
 def planet(ramp, extra=None, ring=None):
     def draw():
@@ -447,8 +447,8 @@ def _moon(sp, body):
         sp.plot(x + 1, y + 1, '#bfcad7')
 
 
-def pl_halcyon():
-    """The wild: Halcyon, the system's sun, a hot disc with eight rays."""
+def pl_aubade():
+    """The wild: Aubade, the system's sun, a hot disc with eight rays."""
     sp = Sprite(N, N)
     rays = sp.star(16, 16, 15, 8, points=8, turn=-90)
     sp.part(rays, ['#c56d25', '#fb902f', '#faaf5c'], 'inset', glow=True)
@@ -458,7 +458,7 @@ def pl_halcyon():
 
 
 def pl_wild_col():
-    """The expanded wild: Halcyon's light filling a whole reel (32 x 96, three cells)."""
+    """The expanded wild: Aubade's light filling a whole reel (32 x 96, three cells)."""
     sp = Sprite(N, 96)
     sp.dither(sp.rect(3, 0, 28, 95), '#c56d25', '#fb902f', 0.5, glow=True)
     sp.dither(sp.rect(8, 0, 23, 95), '#fb902f', '#faaf5c', 0.5, glow=True)
@@ -685,7 +685,7 @@ SPRITES = {
     "pl_rime": planet(RAMPS['cyan'][1:], _rime), "pl_tidewater": planet(RAMPS['blue'], _tidewater),
     "pl_ochre": planet(['#41322c', '#725244', '#ab8465', '#cfaa81'], ring=['#733126', '#c56d25', '#faaf5c']),
     "pl_moon": planet(['#2c2c25', '#434137', '#a09f91', '#bfcad7'], _moon),
-    "pl_halcyon": pl_halcyon, "pl_wild_col": pl_wild_col,
+    "pl_aubade": pl_aubade, "pl_wild_col": pl_wild_col,
     "sm_cutter": sm_cutter, "sm_vial": sm_vial, "sm_badge": sm_badge, "sm_stash": sm_stash,
     "kn_pick": kn_pick, "kn_drawn": kn_drawn, "kn_hit": kn_hit,
     "pip_ore": pip('ore'), "pip_ice": pip('ice'), "pip_fuel": pip('fuel'), "pip_core": pip('core'),

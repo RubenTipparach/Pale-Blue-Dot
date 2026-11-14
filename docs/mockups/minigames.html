@@ -366,7 +366,7 @@ details[open] summary{margin-bottom:8px}
     <div class="tabpanel" role="tabpanel" id="tab-keno" aria-labelledby="t-keno" hidden>
       <div class="table">
         <header><h3>Star Chart</h3><span class="odds" id="kOdds">returns --</span></header>
-        <p class="muted" style="font-size:13.5px">The Halcyon survey grid: 80 sectors of sky. Mark 1 to 10 sectors, then the survey probe pings 20 of the 80 at random. The more of your sectors it finds, the more it pays.</p>
+        <p class="muted" style="font-size:13.5px">The Aubade survey grid: 80 sectors of sky. Mark 1 to 10 sectors, then the survey probe pings 20 of the 80 at random. The more of your sectors it finds, the more it pays.</p>
         <div class="two">
           <div style="display:grid;gap:10px;min-width:0">
             <div class="kgrid" id="kGrid" aria-label="Survey chart, 80 sectors"></div>
@@ -474,7 +474,7 @@ details[open] summary{margin-bottom:8px}
     <span class="eyebrow">For the owner</span>
     <h2 id="h-q">Decisions / questions for the owner</h2>
     <div class="q">
-      <article><h3>Decided: the casino's games (owner, 2026-11-13)</h3><p>The owner's words: "casino needs more slots themes, more complex slot machines, make them like actual rolls, or 5 columns with 3 rows with lines, the traditional 3x3 is also cool too, but gotta animate it good. I also want some black jack, keno (themed to our game of course) and maybe something more competitive like poker with AI".</p><p>So the bar has: four themed slot machines, two classic 3 x 3 (Reactor Roll, Smuggler's Hold) and two 5 x 3 video machines with paylines (Deep Vein, Halcyon Frontier), all spinning as real reel strips; Orbit 21 as a full blackjack table; Star Chart, keno on the Halcyon survey grid; and Hold'em against four NPC regulars with their own natures.</p></article>
+      <article><h3>Decided: the casino's games (owner, 2026-11-13)</h3><p>The owner's words: "casino needs more slots themes, more complex slot machines, make them like actual rolls, or 5 columns with 3 rows with lines, the traditional 3x3 is also cool too, but gotta animate it good. I also want some black jack, keno (themed to our game of course) and maybe something more competitive like poker with AI".</p><p>So the bar has: four themed slot machines, two classic 3 x 3 (Reactor Roll, Smuggler's Hold) and two 5 x 3 video machines with paylines (Deep Vein, Aubade Frontier), all spinning as real reel strips; Orbit 21 as a full blackjack table; Star Chart, keno on the Aubade survey grid; and Hold'em against four NPC regulars with their own natures.</p></article>
       <article><h3>Taken: Hold'em takes a rake, with real credits</h3><p>Options: (a) chips only, a practice table with nothing at stake; (b) a real buy-in from the wallet, the house taking a rake from each pot.</p><p class="rec">Recommendation taken (ask only with screenshots): (b). The buy-in is 200 cr, blinds 2/4, and the rake is 5% of any pot that sees a flop, at most 12 chips (three big blinds), as card rooms charge. It keeps poker in the same economy as the other games and makes the rake the credit sink, as question 3 below recommends for player tables. The NPCs' stacks are their own money; to stop a strong player farming them, a station's regulars should have a daily bankroll that runs out (proposed, not modelled here).</p></article>
       <article><h3>Taken: the returns the machines are tuned to</h3><p class="rec">Recommendation taken (ask only with screenshots): classic machines return about 93 to 94%, video machines about 95 to 96% (they cost more a spin and swing harder), keno 87 to 90% (keno is a lottery, and it is the cheapest game to play: 10 cr a draw), blackjack 99.6% for a player who plays it right. Every figure is computed by the page from the game's actual strips, shoe and chart, never typed in, so a retuned strip cannot leave a stale number on a table.</p></article>
       <article><h3>Open: keno's top prize against the table limits</h3><p>Ten of ten pays 50,000 times the stake (1 in 8.9 million draws), so a 50 cr ticket could win 2.5 million cr. Options: cap a draw's pay at the station's bank (the house can only pay what it holds), or lower the top pays, which lowers the return.</p><p class="rec">Recommendation: cap any single payout at the station's bank, and print the cap on the chart. The odds stay true; a station that cannot cover a jackpot says so before the ticket is bought.</p></article>
@@ -670,10 +670,10 @@ const LINE_COL = ["#fad973", "#74effe", "#fa3a64", "#84e3b5", "#fb902f", "#c3498
   "#dd576d", "#d2f8ff", "#559642", "#7d2dbd", "#cfaa81", "#fffefe", "#92a3b2", "#ab8465", "#fe6420", "#bfcad7"];
 const P3 = (a, b, c) => ({ 3: a, 4: b, 5: c });
 const ORDER = ["sym_star", "sym_core", "sym_fuel", "sym_ice", "sym_ore", "sym_meltdown", "sm_cutter", "sm_stash", "sm_vial", "chip_100", "cargo", "sm_badge", "salvage", "drill", "dv_geode",
-  "ore_gold", "ore_copper", "ore_ice", "ore_iron", "dv_cart", "dv_lamp", "dv_pick", "pl_halcyon", "pl_verdance", "pl_tidewater", "pl_ochre", "pl_cinder", "pl_rime", "pl_moon"];
+  "ore_gold", "ore_copper", "ore_ice", "ore_iron", "dv_cart", "dv_lamp", "dv_pick", "pl_aubade", "pl_verdance", "pl_tidewater", "pl_ochre", "pl_cinder", "pl_rime", "pl_moon"];
 const NAMES = { sym_star: "Star", sym_core: "Core", sym_fuel: "Fuel", sym_ice: "Coolant", sym_ore: "Ore", sym_meltdown: "Meltdown", sm_cutter: "Cutter", sm_stash: "Stash", sm_vial: "Contraband",
   chip_100: "Credits", cargo: "Cargo", sm_badge: "Customs", salvage: "Salvage", drill: "Drill", dv_geode: "Geode", ore_gold: "Gold", ore_copper: "Copper", ore_ice: "Ice", ore_iron: "Iron",
-  dv_cart: "Cart", dv_lamp: "Lamp", dv_pick: "Pick", pl_halcyon: "Halcyon", pl_verdance: "Verdance", pl_tidewater: "Tidewater", pl_ochre: "Ochre", pl_cinder: "Cinder", pl_rime: "Rime",
+  dv_cart: "Cart", dv_lamp: "Lamp", dv_pick: "Pick", pl_aubade: "Aubade", pl_verdance: "Verdance", pl_tidewater: "Tidewater", pl_ochre: "Ochre", pl_cinder: "Cinder", pl_rime: "Rime",
   pl_moon: "Moon", mix: "mixed Fuel, Coolant and Ore" };
 const same = c => [c, c, c];
 const MACHINES = [
@@ -696,12 +696,12 @@ const MACHINES = [
     pays: { drill: P3(60, 250, 1200), ore_gold: P3(35, 120, 450), ore_copper: P3(25, 70, 250), ore_ice: P3(18, 45, 175), ore_iron: P3(12, 35, 120), dv_cart: P3(9, 25, 90), dv_lamp: P3(5, 18, 60), dv_pick: P3(5, 12, 45) },
     counts: [0, 1, 2, 3, 4].map(r => ({ drill: r === 0 ? 1 : 2, dv_geode: 1, ore_gold: 2, ore_copper: 3, ore_ice: 3, ore_iron: 4, dv_cart: 5, dv_lamp: 5, dv_pick: 6 })),
     antic: (M, cols) => cols.filter(c => c.includes("dv_geode")).length >= 2, anticWhy: "two Geodes showing: free spins possible" },
-  { id: "halcyon", name: "Halcyon Frontier", fmt: "video 5 x 3, 25 lines", icon: "pl_halcyon", stakes: [25, 50, 100],
-    blurb: "The frontier worlds on five reels and twenty-five lines. Halcyon, the system's sun, lands only on the middle three reels; when it lands it is wild and fills its whole reel with light.",
-    lines: L25, wild: "pl_halcyon", expand: true,
+  { id: "aubade", name: "Aubade Frontier", fmt: "video 5 x 3, 25 lines", icon: "pl_aubade", stakes: [25, 50, 100],
+    blurb: "The frontier worlds on five reels and twenty-five lines. Aubade, the system's sun, lands only on the middle three reels; when it lands it is wild and fills its whole reel with light.",
+    lines: L25, wild: "pl_aubade", expand: true,
     pays: { pl_verdance: P3(25, 100, 400), pl_tidewater: P3(15, 50, 200), pl_ochre: P3(10, 30, 120), pl_cinder: P3(8, 20, 80), pl_rime: P3(4, 15, 50), pl_moon: P3(2, 10, 30) },
-    counts: [0, 1, 2, 3, 4].map(r => ({ pl_halcyon: r >= 1 && r <= 3 ? 1 : 0, pl_verdance: 2, pl_tidewater: 3, pl_ochre: 4, pl_cinder: 5, pl_rime: 6, pl_moon: 7 })),
-    antic: (M, cols) => cols.filter(c => c.includes("pl_halcyon")).length >= 2, anticWhy: "two suns lit" },
+    counts: [0, 1, 2, 3, 4].map(r => ({ pl_aubade: r >= 1 && r <= 3 ? 1 : 0, pl_verdance: 2, pl_tidewater: 3, pl_ochre: 4, pl_cinder: 5, pl_rime: 6, pl_moon: 7 })),
+    antic: (M, cols) => cols.filter(c => c.includes("pl_aubade")).length >= 2, anticWhy: "two suns lit" },
 ];
 const MC_SPINS = 200000, MC_SEED = 20261113;
 for (const M of MACHINES) {
@@ -875,7 +875,7 @@ function drawSlot(t, dt) {
         g.globalAlpha = 0.22; g.drawImage(im, sx, Math.round(sy - trail), 32 * k, 32 * k); g.globalAlpha = 0.4; g.drawImage(im, sx, Math.round(sy - trail / 2), 32 * k, 32 * k); g.globalAlpha = 0.75; }
       g.drawImage(im, sx, sy - (on ? pulse * k : 0), 32 * k, 32 * k); g.globalAlpha = 1;
     }
-    // the expanded sun: Halcyon's light grows out from the middle row to fill the reel
+    // the expanded sun: Aubade's light grows out from the middle row to fill the reel
     if (M.expand && (S.phase === "expand" || S.phase === "win") && S.ev.raw[r].includes(M.wild)) {
       const p = RM ? 1 : Math.min(1, (t - S.expandT0) / 0.4), im = img("pl_wild_col"), hh = Math.max(1, Math.round(3 * G.ch * p));
       if (im.complete) { const top = Math.round((3 * G.ch - hh) / 2); g.drawImage(im, 0, Math.round(96 * top / (3 * G.ch)), 32, Math.max(1, Math.round(96 * hh / (3 * G.ch))), X + (G.cw - 32) / 2 * k, Y + top * k, 32 * k, hh * k); }

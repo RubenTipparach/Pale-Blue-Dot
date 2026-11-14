@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>The Halcyon System</title>
+<title>The Aubade System</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -172,25 +172,42 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
 @media (max-width:820px){#tab-body .insp{grid-template-columns:1fr}}
 @media (max-width:560px){.tabs button{padding:6px 9px;font-size:14px}}
 
+/* star-systems (2026-11-14): the star map, the neighbours' orbit views and the Tenebris worlds */
+.svgrid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px;align-items:start}
+.svgrid .orbit{border:1px solid var(--line);border-radius:6px}
+.svinfo{display:grid;gap:10px;align-content:start;overflow:auto;min-width:0}
+.svinfo .nm,#tenFacts .nm{font-family:var(--display);font-size:22px;font-weight:600;line-height:1}
+.svinfo .kd,#tenFacts .kd{font-size:13px;color:var(--muted)}
+.svinfo .one{color:var(--muted);font-size:14px}
+.svinfo .chips,#tenFacts .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.svbtns{display:flex;gap:6px;flex-wrap:wrap}
+.spx{display:flex;flex-wrap:wrap;gap:6px}
+.spx figure{margin:0;display:grid;justify-items:center;width:76px;font-size:11.5px;text-align:center;line-height:1.2}
+.spx img,.fhead img,.pxrow img{image-rendering:pixelated}
+.spx small{color:var(--muted);font-size:10.5px}
+.orbit .lbl small{display:block;font-size:11px;color:var(--muted);text-align:center}
+.tengrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px;align-items:start}
+.tengrid > *{min-width:0}
+#tenFacts{display:grid;gap:10px;align-content:start}
+@media (max-width:860px){.svgrid,.tengrid{grid-template-columns:1fr}}
 </style>
 
 <header class="top wrap">
   <div class="eyebrow">Pale Blue Dot &middot; design mockup &middot; planets &middot; <span style="color:var(--amber)">Proposal, not built</span></div>
-  <h1>The Halcyon System</h1>
+  <h1>The Aubade System</h1>
   <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
   <details class="about"><summary>About this mockup: the system, and what is proposed</summary>
-  <p class="lede">Twelve bodies round one star: <b>three worlds you can live on</b>, two gas giants you skim for fuel, and seven moons and rocks that each play differently: an airless moon in the home sky, a volcanic one, an ice shell, a hazy methane moon, a hollow one full of caves, an ocean moon that always faces its giant, and a 300 m asteroid. Every body with ground is made of the same <b>2.833 m hex cells</b>, because its radius sits on the ladder <span class="mono">R = 300 m &times; 2<sup>L&minus;7</sup></span>.</p>
+  <p class="lede">Twelve bodies round one star: <b>three worlds you can live on</b>, two gas giants you skim for fuel, and seven moons and rocks that each play differently: an airless moon in the home sky, a volcanic one, an ice shell, a hazy methane moon, a hollow one full of caves, an ocean moon that always faces its giant, and a 300 m asteroid. <b>Three neighbouring stars</b> are on the star map: Nocturne, which holds Tenebris's worlds ported (Sequoia first), and two new systems, Tallow and Gemel, reached by proposed star lanes. Every body with ground is made of the same <b>2.833 m hex cells</b>, because its radius sits on the ladder <span class="mono">R = 300 m &times; 2<sup>L&minus;7</sup></span>.</p>
   <div class="banner" role="note"><b>Proposal</b><span>None of this is built. The game today has one planet (the 4,800 m home world, generator <span class="mono">TENEBRIS</span> v5) and an 850 m placeholder moon sphere. Names, sizes, gravities and rosters below are recommendations for the owner to accept or change; the decisions are listed at the end.</span></div>
   </details>
 </header>
 
 <nav class="tabs wrap" role="tablist" aria-label="Parts of the mockup">
-  <button role="tab" data-tab="system">Orbit view</button><button role="tab" data-tab="body">Selected body</button><button role="tab" data-tab="surface">Surface</button><button role="tab" data-tab="bodies">The deck</button><button role="tab" data-tab="ladder">The ladder</button><button role="tab" data-tab="notes">Lighting and art</button><button role="tab" data-tab="decisions">Decisions</button>
+  <button role="tab" data-tab="system">Orbit view</button><button role="tab" data-tab="body">Selected body</button><button role="tab" data-tab="surface">Surface</button><button role="tab" data-tab="starmap">Star map</button><button role="tab" data-tab="nocturne">Nocturne</button><button role="tab" data-tab="tallow">Tallow</button><button role="tab" data-tab="gemel">Gemel</button><button role="tab" data-tab="tenworlds">Tenebris worlds</button><button role="tab" data-tab="bodies">The deck</button><button role="tab" data-tab="ladder">The ladder</button><button role="tab" data-tab="notes">Lighting and art</button><button role="tab" data-tab="decisions">Decisions</button>
 </nav>
 
 <div id="tab-system" class="tabpanel" role="tabpanel">
 <div class="orbit" id="orbit" data-fit>
-  <canvas id="orbitCanvas" tabindex="0" aria-label="Three-dimensional orbit view of the Halcyon system. Drag to turn, scroll or pinch to zoom, click a body to inspect it."></canvas>
   <div class="labels" id="labels"></div>
   <div class="okey">Orbits are analytic and on rails: each body's position is a function of world time alone. <b style="color:var(--ink);font-weight:500">Not to scale</b>: sizes are enlarged and moon orbits spread so you can see them. True numbers are on the cards. The night side shows each world's own lights.</div>
   <div class="ohud">
@@ -213,7 +230,7 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
       <label class="pick">Body <select class="bodypick" aria-label="Body to inspect"></select></label>
     </div>
     <div class="insp">
-      <div class="globe" data-fit="maxw"><canvas id="globeCanvas" aria-label="The selected body, lit from the left, its night side on the right"></canvas></div>
+      <div class="globe" data-fit="maxw"></div>
       <div class="facts" data-fit="max">
         <div class="fhead"><img id="iPortrait" alt="" src="planets/portrait_home.png?v=3"><div><div id="iKind" class="kd"></div><div class="chips" id="iChips"></div></div></div>
         <table class="stats" id="iStats"></table>
@@ -230,8 +247,8 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
       <div><div class="eyebrow">A patch of its surface, on the real 2.833 m hex grid</div><h2 id="sName">Pale Blue</h2></div>
       <label class="pick">Body <select class="bodypick" aria-label="Body whose surface to show"></select></label>
     </div>
-    <div class="vigwrap">
-      <div class="vig" id="vig" data-fit data-reserve="78"><canvas id="vigCanvas" tabindex="0" aria-label="A lit surface vignette of the selected body on the hex grid. Drag to turn."></canvas><div class="novig" id="noVig" hidden></div><div class="ghud" aria-hidden="true"><div class="gdbg" id="vDbg"></div><div class="gbar" id="vBar"></div></div></div>
+    <div id="surfVigHost"><div class="vigwrap" id="vigwrap">
+      <div class="vig" id="vig" data-fit data-reserve="78"><div class="novig" id="noVig" hidden></div><div class="ghud" aria-hidden="true"><div class="gdbg" id="vDbg"></div><div class="gbar" id="vBar"></div></div></div>
       <div class="vigbar">
         <button class="btn" id="tDay">Day</button>
         <button class="btn" id="tDusk">Dusk</button>
@@ -240,7 +257,94 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
         <output id="vigTimeOut" for="vigTime">22:00</output>
       </div>
       <p class="vigcap" id="vigCap"></p>
+    </div></div>
+  </div>
+</section>
+
+
+<div id="tab-starmap" class="tabpanel" role="tabpanel" hidden>
+<section>
+  <div class="wrap">
+    <div class="phead">
+      <div><div class="eyebrow">Aubade and its neighbours &middot; proposed, not built</div><h2>The local star map</h2></div>
     </div>
+    <div class="svgrid">
+      <div class="orbit" id="smHost" data-fit data-reserve="0"><div class="labels"></div>
+        <div class="okey">Distances in light years, Aubade at the centre. Rings every 2 ly lie in Aubade's plane; a dashed drop line puts each star above or below it. The cyan dashes are the proposed star lanes. Drag to turn, scroll or pinch to zoom; click a star.</div>
+      </div>
+      <div class="facts svinfo" id="smInfo" data-fit="max"></div>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="wrap">
+    <div class="two">
+      <div style="display:grid;gap:10px;align-content:start">
+        <div class="eyebrow">How you get there</div><h2>Star lanes: the travel page's lanes, between stars</h2>
+        <p class="note">Nothing here is a warp drive. Ships keep the Newtonian flight, limits and dampeners of the travel page (<span class="mono">travel.html</span>), and the fusion and antimatter tiers of <span class="mono">ship-tiers.html</span> never fly faster than their thrust allows. What crosses light years is a <b>lane</b>, the same idea as the travel page's lane gates, which already carry a ship from one gate to its partner "with nothing simulated in between". A <b>star lane</b> is a pair of such gates, one at the edge of each system, <span class="mono">1,800 km</span> from its star (past Glaucus at Aubade). Fly in aligned and slow; the passage takes <b>30 s of play per light year</b>; the ship comes out of the far gate in that star's frame at the speed it went in. The game's systems are already drawn small (Pale Blue orbits 300 km from Aubade), so the light years are the map's distances, not a speed any ship reaches.</p>
+        <p class="note">The <b>first</b> passage to a star carries a gate kit one way, uncrewed: a seed run. The kit builds the far gate, and only then is the lane open both ways, so nobody is ever stranded. Gates are a late goal: they take the antimatter collider's power (the third ship tier) and platinum, which is why Lode matters. World time passes in a passage as in any other play.</p>
+      </div>
+      <div class="tablewrap"><table class="grid" id="laneTable"></table></div>
+    </div>
+  </div>
+</section>
+</div>
+
+<div id="tab-nocturne" class="tabpanel" role="tabpanel" hidden>
+<section>
+  <div class="wrap">
+    <div class="phead"><div><div class="eyebrow">A neighbour, 4.6 ly &middot; Tenebris's worlds, ported</div><h2>The Nocturne System</h2></div></div>
+    <p class="sub">The star Tenebris called "Sun", named, with every body Tenebris defines (<span class="mono">tenebris-core/src/planet.rs</span>): its main planet, the sister world Sequoia, barren Crag, icy Frostbite, six moons and the ten-rock belt, in Tenebris's own order round the star (<span class="mono">orbit.rs</span>: Crag 22 km, Tenebris 30, the belt 34 to 38, Sequoia 40, Frostbite 55, here ten times further out). Each keeps its name, look, gravity and life; its radius moves onto the ladder. See the Tenebris worlds tab for the mapping and the surfaces.</p>
+    <div class="svgrid">
+      <div class="orbit" id="sv-nocturne" data-fit><div class="labels"></div><div class="ohud"><span class="day" id="svDay-nocturne">Day 0</span><button class="btn spd" data-s="0">Pause</button><button class="btn spd" data-s="0.25">&frac14; day/s</button><button class="btn spd" data-s="2">2 days/s</button></div></div>
+      <div class="facts svinfo" id="svInfo-nocturne" data-fit="max"></div>
+    </div>
+  </div>
+</section>
+</div>
+
+<div id="tab-tallow" class="tabpanel" role="tabpanel" hidden>
+<section>
+  <div class="wrap">
+    <div class="phead"><div><div class="eyebrow">A neighbour, 6.3 ly &middot; new</div><h2>The Tallow System</h2></div></div>
+    <p class="sub">A red dwarf, 3% of Aubade's light, so its living zone sits only 45 to 70 km out and its worlds there turn one face to it. It flares. Why go: <b>Wick</b>, the one world with a twilight ring of black-leaved life between a scorched dayside and a night of ice; <b>emberglass</b>, dust fused by flares on the iron world Sconce; and Censer, a dark red giant to skim. Airless Sconce and Snuff have no sky, weather or life.</p>
+    <div class="svgrid">
+      <div class="orbit" id="sv-tallow" data-fit><div class="labels"></div><div class="ohud"><span class="day" id="svDay-tallow">Day 0</span><button class="btn spd" data-s="0">Pause</button><button class="btn spd" data-s="0.25">&frac14; day/s</button><button class="btn spd" data-s="2">2 days/s</button></div></div>
+      <div class="facts svinfo" id="svInfo-tallow" data-fit="max"></div>
+    </div>
+  </div>
+</section>
+</div>
+
+<div id="tab-gemel" class="tabpanel" role="tabpanel" hidden>
+<section>
+  <div class="wrap">
+    <div class="phead"><div><div class="eyebrow">A neighbour, 8.1 ly &middot; new</div><h2>The Gemel System</h2></div></div>
+    <p class="sub">An orange dwarf, Gemel A, with a white-dwarf companion, Gemel B, riding far out: two suns in every sky, one of them a hard white point. Why go: <b>Fallow</b>, a cold golden steppe with lakes and glaciers and nobody on it, the open land for the player's own towns and herds; <b>platinum</b> on the metal rock Lode; and slate from Shale. Shale and Lode are airless and lifeless.</p>
+    <div class="svgrid">
+      <div class="orbit" id="sv-gemel" data-fit><div class="labels"></div><div class="ohud"><span class="day" id="svDay-gemel">Day 0</span><button class="btn spd" data-s="0">Pause</button><button class="btn spd" data-s="0.25">&frac14; day/s</button><button class="btn spd" data-s="2">2 days/s</button></div></div>
+      <div class="facts svinfo" id="svInfo-gemel" data-fit="max"></div>
+    </div>
+  </div>
+</section>
+</div>
+
+<section id="tab-tenworlds" class="tabpanel" role="tabpanel" hidden>
+  <div class="wrap">
+    <div class="phead">
+      <div><div class="eyebrow">Ported from Tenebris &middot; mockup only, no game code</div><h2>The Tenebris worlds</h2></div>
+      <label class="pick">World <select id="tenPick" aria-label="Ported world to show"></select></label>
+    </div>
+    <div class="tengrid">
+      <div id="tenVigHost"></div>
+      <div class="facts" id="tenFacts"></div>
+    </div>
+    <h3 style="margin-top:8px">Onto the ladder</h3>
+    <p class="note">In Tenebris only the main planet held the 2.833 m cell: its other bodies took whatever level <span class="mono">subdivisions_for_radius</span> gave (held at 7), so their cells ran from 0.68 m to 3.40 m. Here every body has the same cell. The rule: <b>eight times the Tenebris radius, down to the rung at or below it, never under 300 m</b>, so Tenebris itself lands on 2,400 m (L10) and every body keeps its size order. One exception: <b>Sequoia goes one rung up</b>, to 4,800 m, because "the bigger sister" is its identity (360 m against Tenebris's 300 in the Rust port, twice Earth's radius in the TypeScript original). Gravity is Tenebris's own.</p>
+    <div class="tablewrap"><table class="grid" id="tenMap"></table></div>
+    <h3 style="margin-top:8px">Tenebris's textures, as copied</h3>
+    <p class="note">Byte-identical copies of <span class="mono">tenebris-rs/assets/textures</span> at commit <span class="mono">ef98651</span>, in <span class="mono">planets/tenebris/</span> (its README names each). None was a Git LFS stub, so none is a stand-in. The vignettes wear them nearest-sampled, 16 px a tile, with Tenebris's own runtime tints (Crag's rust, Frostbite's glacier, the belt's carbon, the classic leaves). The animals are boxes wearing Tenebris's animal atlas (<span class="mono">animals.png</span>, one 32 px column per species); the four planned Sequoia species and the new systems' animals wear mockup-only columns drawn in the same layout.</p>
+    <div class="pxrow" id="pxTen"></div>
   </div>
 </section>
 
@@ -293,9 +397,12 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
     </div>
     <p class="note"><b>The game's own art</b>, copied byte-identical into <span class="mono">planets/game/</span> (its README names each source): the vignettes' hex columns wear the terrain atlas (<span class="mono">assets/tilesets/atlas.png</span>), each cell its biome sheet's ground on top, the ground-into-earth tile on the first metre of wall, earth then stone below, as <span class="mono">planet_surface.wgsl</span> picks them; trees are the game's hex-prism trees in the sheet's wood and leaf tiles; houses, habs, posts and decks wear the settlement materials (<span class="mono">assets/textures/settlement</span>); the landed ship is the Kestrel and the boat the Tern (<span class="mono">assets/models/vehicles</span>, loaded with GLTFLoader); the hotbar shows the game's item icons and atlas block tiles. All of it is sampled nearest without mipmaps. Bodies the game does not have yet borrow the nearest sheet: Cinder is the basalt sheet with its own sulfur and lava tiles, Hollow is sporewood, Murk the desert sheet tinted.</p>
     <p class="note"><b>Mockup-only art</b>: the surface maps, night-light maps, portraits and resource icons are <b>pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<span class="mono">.claude/skills/balatro-pixel-art</span>): a tiny native canvas, one bold subject, three to five tones a material lit from the top left, a dark seam between parts, a 1 px outline, single-pixel glints, no anti-aliasing, and every colour from the Sweaft-64 palette (the kit refuses to save a pixel off it). Maps are 128 x 64, drawn per pixel from noise on the sphere so the globes have no seam, with Bayer dithering for soft edges. Portraits are 48 x 48 (each body's own map wrapped on a lit disc, its night lights on the dark side), icons 32 x 32, all shown at whole-number scales. The script is <span class="mono">tools/art/planets_art.py</span>; it took three passes against contact sheets beside six of the solitaire collection's sprites (fixes: thinner cloud decks, solid polar ice on Lantern, one crack network on Rime, larger ice crystals, a lit shoulder that keeps each colour's hue).</p>
+    <p class="note"><b>The neighbours (star-systems, 2026-11-14).</b> The ported Tenebris worlds wear <b>Tenebris's own textures</b>, byte-identical copies from <span class="mono">tenebris-rs/assets/textures</span> in <span class="mono">planets/tenebris/</span> (README there), with Tenebris's runtime tints; their animals are boxes wearing Tenebris's animal atlas. Tallow's and Gemel's worlds wear the game's own atlas sheets, tinted. Mockup-only, drawn with the same kit by <span class="mono">tools/art/star_systems_art.py</span> (which imports this page's script and writes only new files): the 18 new maps and lights maps, 22 portraits (four of them stars), 21 species icons, 6 resource icons and the box textures for the nine species Tenebris did not build. Two passes against a contact sheet beside the solitaire collection's sprites (fix: Gloomhopper got its mushroom-cap back).</p>
     <div class="two">
-      <figure class="sheet"><div class="pxrow" id="pxPortraits"></div><figcaption>The thirteen portraits at 2x (native 48 px).</figcaption></figure>
-      <figure class="sheet"><div class="pxrow" id="pxRes"></div><figcaption>The eleven resource icons at 2x (native 32 px).</figcaption></figure>
+      <figure class="sheet"><div class="pxrow" id="pxPortraits"></div><figcaption>The thirty-five portraits at 2x (native 48 px): Aubade's thirteen, then Nocturne's, Tallow's and Gemel's.</figcaption></figure>
+      <figure class="sheet"><div class="pxrow" id="pxRes"></div><figcaption>The seventeen resource icons at 2x (native 32 px); the last six are the neighbours'.</figcaption>
+      </figure>
+      <figure class="sheet"><div class="pxrow" id="pxSpecies"></div><figcaption>The neighbours' species at 2x (native 32 px): Sequoia's nine (five built in Tenebris, four planned there), Tenebris's six, Wick's three, Fallow's three. <span class="mono">tools/art/star_systems_art.py</span>.</figcaption></figure>
     </div>
   </div>
 </section>
@@ -311,7 +418,7 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
     <div class="tablewrap"><table class="grid">
       <thead><tr><th>#</th><th>Question</th><th>Options</th><th>Recommendation</th></tr></thead>
       <tbody>
-        <tr><td>P1</td><td>Names: the star "Halcyon", the home world "Pale Blue", and the rest.</td><td>Keep; rename any.</td><td class="rec">Keep as working names; rename freely, nothing is saved under them yet.</td></tr>
+        <tr><td>P1</td><td>Names: the star "Aubade" (renamed on 2026-11-14, see S1), the home world "Pale Blue", and the rest.</td><td>Keep; rename any.</td><td class="rec">Keep as working names; rename freely, nothing is saved under them yet.</td></tr>
         <tr><td>P2</td><td>Today's 850 m moon sphere is off the ladder. Which rung does Lantern take?</td><td>600 m (L8, 0.66 M cells) or 1,200 m (L9, 2.6 M cells).</td><td class="rec">1,200 m. It looks about as big in the home sky as today's sphere does (5.3&deg; at 26 km against 3.7&deg;) and has room to mine.</td></tr>
         <tr><td>P3</td><td>Are the gas giants landable?</td><td>No surface (skim only); a floor at the cloud tops; a solid core far down.</td><td class="rec">No surface and no cells. The cloud tops are a hard floor that crushes a hull which sinks below it. You skim them for fuel and dock at a floating platform.</td></tr>
         <tr><td>P4</td><td>Life on Hollow. Its surface is airless, but sealed caverns could hold air.</td><td>Lifeless everywhere (strict); a cavern-only roster with the surface still lifeless.</td><td class="rec">Cavern-only roster (glow fungus, cave crickets), declared per cavern in the body's data, so the "airless is lifeless" rule still holds for every surface.</td></tr>
@@ -320,12 +427,20 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
         <tr><td>P7</td><td>Cell budget: how many bodies at each rung.</td><td>As shown (one L11, three L10, four L9, one L8, one L7); more large worlds.</td><td class="rec">As shown. One 4,800 m world, and the other two habitable worlds at 2,400 m and 1,200 m, keep generation and saves small.</td></tr>
         <tr><td>P8</td><td>Gravity per body.</td><td>Derived from mass; declared per body.</td><td class="rec">Declared as <span class="mono">gravity_g</span> in each body's data, against the shared 25 m/s&sup2; constant, as <span class="mono">gravity-model</span> already says. The numbers here are picks for feel, not physics.</td></tr>
         <tr><td>P9</td><td>Saves: every new body is generated by a versioned generator.</td><td>Version per body; one shared version.</td><td class="rec">A generator id and version per body, starting at v1, carried for ever as the saves rule asks. Adding a body never touches an existing world.</td></tr>
+        <tr><td>S1</td><td>A more original name for the home star: the owner, 2026-11-14, "you use that name a LOT in my games".</td><td>Aubade (a dawn song); others.</td><td class="rec">Aubade. Recommendation taken (ask only with screenshots).</td></tr>
+        <tr><td>S2</td><td>Where Tenebris's worlds live.</td><td>Spread through Aubade; one neighbour holding them all, in Tenebris's own order.</td><td class="rec">One neighbour, Nocturne (Tenebris's unnamed "Sun", named), with every body in Tenebris's order, so the family stays a family. Recommendation taken (ask only with screenshots).</td></tr>
+        <tr><td>S3</td><td>How a ship crosses light years. The owner on 2026-11-12, recorded in the ship-tiers change: antimatter "starships ... can travel between stars using warp drives", withdrawn the same day: "Let's not do warp." The travel page has lanes (gate to gate, nothing simulated between). The ship tiers page itself never mentions warp or other stars.</td><td>Star lanes (gate pairs, a structure in the world); a warp drive on the ship (withdrawn by the owner); very long Newtonian flights.</td><td class="rec">Star lanes: the travel page's gates, built 1,800 km from each star, 30 s of passage per light year, the first passage an uncrewed seed run that builds the far gate. No warp drive and no faster ship. Recommendation taken (ask only with screenshots); it sits closest to the line the owner drew, so the star map's screenshot goes with it.</td></tr>
+        <tr><td>S4</td><td>Mapping Tenebris radii onto the ladder.</td><td>Keep the cell count Tenebris used (almost everything L7, 300 m); nearest rung to the radius; eight times the radius, down to a rung.</td><td class="rec">Eight times, down to a rung, never under 300 m, Sequoia one rung up for its identity (Tenebris tab, "Onto the ladder"). Recommendation taken (ask only with screenshots).</td></tr>
+        <tr><td>S5</td><td>Two moons called Rime: Amber's (this page, 2026-11-12) and Frostbite's (Tenebris).</td><td>Keep both; rename one.</td><td class="rec">Frostbite's keeps Tenebris's name. Amber's is a mockup name from two days ago with nothing saved under it; rename it when M1 is next revised. Both stand until then, shown with their system. Recommendation taken (ask only with screenshots).</td></tr>
+        <tr><td>S6</td><td>Which Sequoia species to show. Tenebris built four bipeds and birds (sparkit, shellkin, crane, raptor) and the sea serpent; SEQUOIA_PLAN.md plans ten more.</td><td>Built only; built and planned.</td><td class="rec">Both, labelled: the five built, and four of the planned drawn here (gloomhopper, sporeling, barkstrider, mossback). Recommendation taken (ask only with screenshots).</td></tr>
+        <tr><td>S7</td><td>Sequoia's trees: as built in Tenebris (one column, 10 to 13 m) or SEQUOIA_PLAN's giants (12 to 24 blocks, a trunk two blocks thick).</td><td>As built; giants; both.</td><td class="rec">Both in the grove: the giants are what makes Sequoia read from orbit. This is the one to look at in the screenshots.</td></tr>
+        <tr><td>S8</td><td>Saves. Every new body is a new world with its own generator id at v1; the Tenebris ports are new generators (they do not change Pale Blue's TENEBRIS v5); a body's system is part of its world id.</td><td>&mdash;</td><td class="rec">As stated: nothing here touches an existing save.</td></tr>
       </tbody>
     </table></div>
   </div>
 </section>
 
-<footer class="wrap">Mockup page for the planets design. Three.js r128. Art: <span class="mono">tools/art/planets_art.py</span>, output in <span class="mono">docs/mockups/planets/</span>. Related designs: <span class="mono">orbit-and-seasons</span>, <span class="mono">gravity-model</span>, <span class="mono">per-body-rendering</span>, <span class="mono">planet-spin</span>, <span class="mono">far-side-flight</span>.</footer>
+<footer class="wrap">Mockup page for the planets design. Three.js r128. Art: <span class="mono">tools/art/planets_art.py</span> and <span class="mono">tools/art/star_systems_art.py</span>, output in <span class="mono">docs/mockups/planets/</span>. Related designs: <span class="mono">orbit-and-seasons</span>, <span class="mono">gravity-model</span>, <span class="mono">per-body-rendering</span>, <span class="mono">planet-spin</span>, <span class="mono">far-side-flight</span>.</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -339,8 +454,8 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
 // tab's renderer is made the first time the tab opens, and the one frame
 // loop runs only while a 3D tab is showing, drawing only that tab's view.
 // =====================================================================
-const TABS = ["system", "body", "surface", "bodies", "ladder", "notes", "decisions"];
-const TAB_ALIAS = { orbit: "system", inspect: "body", vig: "surface", night: "notes", art: "notes" };
+const TABS = ["system", "body", "surface", "starmap", "nocturne", "tallow", "gemel", "tenworlds", "bodies", "ladder", "notes", "decisions"];
+const TAB_ALIAS = { orbit: "system", inspect: "body", vig: "surface", night: "notes", art: "notes", stars: "starmap", "tenebris-worlds": "tenworlds" };
 const TAB_HOOKS = {};   // tab -> { show(), hide() }
 const tabOf = h => { h = String(h || "").replace(/^#/, ""); return TABS.includes(h) ? h : TAB_ALIAS[h] || null; };
 let TAB = tabOf(location.hash) || "system";
@@ -381,7 +496,7 @@ setTab(TAB, false);
 const DAY_MIN = 48, G1 = 25.0, JUMP = 12.0, TILE_K = 1.2087;
 const yearOf = a => 100 * Math.pow(a / 300, 1.5);       // days: the home year is 100 days at 300 km
 const B = [
-  { id: "star", name: "Halcyon", kind: "Star", parent: null, dR: 7, dA: 0, R: null, L: null, g: null, air: false, color: 0xffd27a,
+  { id: "star", name: "Aubade", kind: "Star", parent: null, dR: 7, dA: 0, R: null, L: null, g: null, air: false, color: 0xffd27a,
     one: "A yellow dwarf. No surface; a hull heats inside 60 km.", res: [], biomes: [], life: [], doing: ["Steer round it: routes bend to keep 60 km clear"], vig: null },
   { id: "ochre", name: "Ochre", kind: "Habitable world, the inner one", parent: "star", a: 180, dA: 26, dR: 1.7, R: 1200, L: 9, g: 0.70, day: 60, air: "thin, dry", airC: 0xffc496, sky: 0xe8b48c,
     one: "A rust desert of canyons, salt flats and oasis towns.", res: ["iron", "obsidian", "water"],
@@ -445,7 +560,133 @@ const B = [
     life: ["Palm, beach grass", "Silverfin, ray, deepback, sea serpent", "Sea birds", "Townsfolk in stilt fishing villages"],
     doing: ["Sail and fish", "The big tides strand and float your boat", "Glaucus never moves in the sky"] },
 ];
+// =====================================================================
+// The neighbours (star-systems, 2026-11-14). Three nearby stars, each its own
+// system and frame. Nocturne holds Tenebris's worlds, ported: every one keeps its
+// name, look and life; its radius moves onto the ladder (`ten` is what Tenebris
+// had: radius, gravity). Tallow and Gemel are new. Positions are light years
+// from Aubade; orbits are km and days of play, as the Aubade bodies' are.
+// =====================================================================
+const SYSTEMS = {
+  aubade: { name: "Aubade", star: "star", type: "G2 V, yellow", lum: 1.0, hz: "250 to 400 km", ly: [0, 0, 0], color: 0xffd27a,
+    why: "Home: the system the game starts in." },
+  nocturne: { name: "Nocturne", star: "s_nocturne", type: "G6 V, warm yellow", lum: 0.85, hz: "230 to 370 km", ly: [3.9, 1.1, -2.2], color: 0xffc860,
+    why: "Tenebris's worlds, ported: Sequoia's giant redwoods and two-legged animals, the gold-standard planet itself, Crag and Frostbite." },
+  tallow: { name: "Tallow", star: "s_tallow", type: "M2 V, red dwarf", lum: 0.03, hz: "45 to 70 km", ly: [-4.8, -1.6, 3.7], color: 0xff7048,
+    why: "A dim red star: Wick's twilight ring of black-leaved life, and flare-forged emberglass on Sconce." },
+  gemel: { name: "Gemel", star: "s_gemel", type: "K2 V, orange, with a white-dwarf companion", lum: 0.35, hz: "145 to 230 km", ly: [1.5, 2.4, 7.6], color: 0xffb060,
+    why: "Two suns: Fallow, an empty golden steppe to settle under them, and platinum on the metal rock Lode." },
+};
+const SYS_ORDER = ["aubade", "nocturne", "tallow", "gemel"];
+const NEW_BODIES = [
+  // ---- Nocturne: the Tenebris worlds ------------------------------------------------------------
+  { id: "s_nocturne", art: "nocturne", sys: "nocturne", name: "Nocturne", kind: "Star, G6 V", isStar: true, parent: null, dR: 6, dA: 0, color: 0xffc860,
+    one: "Warm yellow, a little dimmer than Aubade. In Tenebris it was only ever \"Sun\".", res: [], biomes: [], life: [],
+    doing: ["Arrive at its star lane's gate, 1,800 km out", "Steer round it: 60 km keep-out, as at Aubade"],
+    noSurface: "Nocturne has no surface to stand on. In Tenebris this star was simply \"Sun\"; here it gets a name, and the same 60 km keep-out as Aubade." },
+  { id: "crag", sys: "nocturne", name: "Crag", kind: "Barren planet, the inner one", parent: "s_nocturne", a: 220, T: 80, dA: 20, dR: 1.5, R: 1200, L: 9, g: 0.6, day: 34, air: false,
+    ten: { r: 190, g: 0.6, was: "barren rusty-red planet (moon.png tinted 1.30, 0.55, 0.35)" },
+    one: "Rust-red rock under a black sky: Tenebris's barren planet.", res: ["iron", "regolith"],
+    biomes: ["Rust plains (CragRock)", "Craters", "Red highlands"], life: [],
+    doing: ["Mine iron in the rust", "Quartz, its moon, hangs in the sky", "The nearest airless world to the star lane's gate"] },
+  { id: "quartz", sys: "nocturne", name: "Quartz", kind: "Moon of Crag", parent: "crag", a: 32, T: 12, locked: true, dA: 4, dR: 0.5, R: 300, L: 7, g: 0.2, air: false,
+    ten: { r: 44, g: 0.2, was: "barren moon (moon rock)" },
+    one: "A small pale moon flecked with bright grains.", res: ["regolith", "iron"], biomes: ["Pale regolith", "Glinting grain fields"], life: [],
+    doing: ["Walk round it in 7 minutes", "Low-gravity mining: a jump clears 14 m"] },
+  { id: "tenebris", sys: "nocturne", name: "Tenebris", kind: "Habitable world, the gold standard", parent: "s_nocturne", a: 300, T: 100, dA: 30, dR: 2.2, R: 2400, L: 10, g: 1.0, day: 48, air: "Earthlike", airC: 0x86c8ff, sky: 0x8fc3e8,
+    ten: { r: 300, g: 1.0, was: "the main planet: Earthlike, the 2.833 m cell measured on it" },
+    one: "The world the cell was measured on: pasture, desert, jungle, tundra and blue seas.", res: ["timber", "iron", "fish", "water"],
+    weather: "Tenebris's weather: clouds, rain and snow",
+    biomes: ["Ocean", "Beach", "Fields (yellow-green pasture)", "Desert, with red crag outcrops", "Jungle", "Swamp", "Mountains", "Tundra (pines in the snow)"],
+    life: ["Broadleaf trees (a 4-block trunk under a two-layer crown), tundra pines, cactus", "Critter, cat, sheep, chicken, cow, bird, frog, lizard, penguin; the stalker at night", "Fish, large reef fish, eel, ray, turtle"],
+    doing: ["Stand where the gold-standard cell was measured: it is every body's cell", "Farm and ranch the classic barnyard", "Mind the stalkers after dark"],
+    species: ["critter", "stalker", "sheep", "frog", "lizard", "penguin"] },
+  { id: "luna", sys: "nocturne", name: "Luna", kind: "Moon of Tenebris", parent: "tenebris", a: 24, T: 8, locked: true, dA: 4.5, dR: 0.8, R: 600, L: 8, g: 0.4, air: false,
+    ten: { r: 80, g: 0.4, was: "barren grey moon" },
+    one: "Tenebris's grey moon, the larger of two.", res: ["regolith", "ice"], biomes: ["Grey regolith", "Craters"], life: [],
+    doing: ["The first hop from Tenebris: 24 km", "Ice in the polar craters"] },
+  { id: "selene", sys: "nocturne", name: "Selene", kind: "Moon of Tenebris", parent: "tenebris", a: 40, T: 14, locked: true, dA: 6.5, dR: 0.5, R: 300, L: 7, g: 0.25, air: false,
+    ten: { r: 50, g: 0.25, was: "barren dark moon" },
+    one: "A dark little moon, the outer of Tenebris's two.", res: ["regolith", "iron"], biomes: ["Dark regolith", "Craters"], life: [],
+    doing: ["Strip it for iron", "Watch Tenebris rise over a 30 m horizon"] },
+  { id: "nbelt", sys: "nocturne", name: "The belt", kind: "Asteroids A to J, ten rocks", parent: "s_nocturne", a: 360, T: 115, dA: 38, dR: 0.55, R: 300, L: 7, g: 0.05, day: 14, air: false,
+    ten: { r: 14, rText: "10 to 22", g: 0.05, was: "ten asteroids, A to J (dim grey carbonaceous rock, rocks.png tinted 0.70, 0.68, 0.65)" },
+    one: "Ten dim carbon rocks between Tenebris and Sequoia, each a 300 m body here.", res: ["iron", "regolith"], biomes: ["Carbon rubble", "Metal flecks"], life: [],
+    doing: ["Stake a claim on one of ten rocks", "Gravity 0.05 g: a jump can leave the rock"] },
+  { id: "sequoia", sys: "nocturne", name: "Sequoia", kind: "Habitable world, the wooded sister", parent: "s_nocturne", a: 400, T: 150, dA: 46, dR: 3.0, R: 4800, L: 11, g: 1.1, day: 53, air: "thick, dusty brown", airC: 0xe6a070, sky: 0xc8a078,
+    ten: { r: 360, g: 1.1, was: "the green sister planet: an archipelago, brown air, green water, giant redwoods and mushrooms, two-legged animals" },
+    one: "An older, wetter, woodier world: giant redwoods, glowing fungus flats, rivers, green seas.", res: ["redwood", "spores", "fish", "water"],
+    weather: "Brown cloud decks; river mist; spore haze over the Sporewood",
+    biomes: ["Redwood groves (tan sod: Sequoia has no green grass)", "Fungal forest: pale mycelium, giant mushrooms", "Alien jungle, canopy-locked, glow-vines", "River lands: channels, silt banks, reeds", "Wasteland, the dry band: sand and red crag, nothing grows", "Slate mountains, snow only on the peaks", "Archipelago seas of green water (55 to 60% of the disc)"],
+    life: ["Giant redwoods (a bare bole, a rust-red crown), giant mushrooms (rose caps), dense jungle trees, glow-vines, ferns",
+      "Built in Tenebris: sparkit, shellkin, crane, raptor; the sea serpent, in Sequoia's green water only",
+      "Planned in Tenebris (SEQUOIA_PLAN.md), drawn here: gloomhopper, sporeling, barkstrider, mossback; not yet drawn: fernwhistle, canopyclaw, mirefoot, duskstalker, silthog, slatehorn"],
+    doing: ["Fell a giant redwood for 8 to 15 logs: timber is the planet's export", "Bridge the rivers with that wood", "Walk the Sporewood at night, when the mycelium glows", "Fish for the sea serpent in the green water"],
+    species: ["sparkit", "shellkin", "crane", "raptor", "serpent", "gloomhopper", "sporeling", "barkstrider", "mossback"] },
+  { id: "verdant", sys: "nocturne", name: "Verdant", kind: "Moon of Sequoia", parent: "sequoia", a: 28, T: 10, locked: true, dA: 5, dR: 0.5, R: 300, L: 7, g: 0.3, air: false,
+    ten: { r: 60, g: 0.3, was: "barren moon (despite the name: moon rock)" },
+    one: "Grey-olive rock. The name is Tenebris's; the moon was always barren.", res: ["regolith", "iron"], biomes: ["Olive-grey regolith", "Craters"], life: [],
+    doing: ["See Sequoia's brown limb fill the sky", "Mine it; nothing grows"] },
+  { id: "sprout", sys: "nocturne", name: "Sprout", kind: "Moon of Sequoia, the smallest", parent: "sequoia", a: 44, T: 17, locked: true, dA: 7, dR: 0.45, R: 300, L: 7, g: 0.15, air: false,
+    ten: { r: 36, g: 0.15, was: "the smallest moon, barren" },
+    one: "A lumpy pebble of a moon.", res: ["regolith"], biomes: ["Rubble"], life: [], doing: ["A beacon and a claim; a jump clears 19 m"] },
+  { id: "frostbite", sys: "nocturne", name: "Frostbite", kind: "Icy planet, the outer one", parent: "s_nocturne", a: 550, T: 260, dA: 64, dR: 1.6, R: 1200, L: 9, g: 0.8, day: 72, air: false,
+    ten: { r: 220, g: 0.8, was: "icy outer planet: snow crust over deep glacial ice (ice.png tinted 0.55, 0.80, 1.25)" },
+    one: "Snow over deep blue glacier ice, cracked from pole to pole. No air.", res: ["ice", "water"],
+    biomes: ["Snow crust", "Glacial blue ice", "Crevasse fields"], life: [],
+    doing: ["Drill glacier ice for water and fuel", "Its moon Rime sits low in a black sky"] },
+  { id: "tenrime", art: "tenrime", sys: "nocturne", name: "Rime", kind: "Moon of Frostbite (Tenebris's Rime; not Amber's)", parent: "frostbite", a: 48, T: 22, locked: true, dA: 5, dR: 0.5, R: 300, L: 7, g: 0.15, air: false,
+    ten: { r: 40, g: 0.15, was: "icy moon" },
+    one: "A small ice moon. Aubade has a Rime too: see decision S5.", res: ["ice"], biomes: ["Ice plains", "Craters"], life: [], doing: ["Cut ice", "The coldest claim in the system"] },
+  // ---- Tallow: a red dwarf ----------------------------------------------------------------------
+  { id: "s_tallow", art: "tallow", sys: "tallow", name: "Tallow", kind: "Star, M2 V red dwarf", isStar: true, parent: null, dR: 5, dA: 0, color: 0xff7048,
+    one: "A dim red dwarf that flares. Its living zone is close in, so its worlds turn one face to it.", res: [], biomes: [], life: [],
+    doing: ["Watch for flares: a hull in the open takes a dose", "Keep 30 km clear"],
+    noSurface: "Tallow has no surface. It flares every few days of play: a ship or a walker in the open takes a radiation dose, so outposts are dug in." },
+  { id: "sconce", sys: "tallow", name: "Sconce", kind: "Iron world, the inner one", parent: "s_tallow", a: 30, T: 12, locked: true, dA: 14, dR: 1.4, R: 1200, L: 9, g: 0.55, air: false,
+    one: "A flare-stripped iron world. Molten seams glow on it, day and night.", res: ["iron", "emberglass"],
+    biomes: ["Black iron plains", "Molten seams", "Emberglass flats where flares fused the dust"], life: [],
+    doing: ["Mine iron straight off the surface", "Gather emberglass, fused by the flares", "Work between flares; dig in when one comes"] },
+  { id: "wick", sys: "tallow", name: "Wick", kind: "Habitable world, tidally locked", parent: "s_tallow", a: 56, T: 30, locked: true, dA: 26, dR: 2.4, R: 2400, L: 10, g: 0.85, air: "thin, cold, always moving", airC: 0xe69d69, sky: 0x9a6a5a,
+    one: "One face to its red sun: a scorched dayside, an ice nightside, and life in the twilight ring between.", res: ["blackwood", "water", "ice"],
+    weather: "A wind that never stops, night side to day side; storms over the sunward point; flares light the sky",
+    biomes: ["Sunward scorch (dust and dunes)", "The twilight ring: blackleaf forest", "Ring seas", "Night ice"],
+    life: ["Blackleaf trees (black, to drink the red light), lanternbloom (glows at night-side dusk), wickreed", "Tallowback (a pale slow grazer), dimwing (a dark glider riding the wind)"],
+    doing: ["Live in the ring, where the sun sits on the horizon for ever", "Walk sunward into the scorch, or nightward onto the ice", "Cut blackwood, the hardest timber in the neighbourhood"],
+    species: ["tallowback", "dimwing", "lanternbloom"] },
+  { id: "censer", sys: "tallow", name: "Censer", kind: "Gas giant, deep red", parent: "s_tallow", a: 160, T: 140, dA: 46, dR: 4.2, R: 9600, L: 12, nocells: true, g: 1.2, day: 40, air: "hydrogen, red haze", airC: 0xd4462b,
+    one: "A dark red giant. No ground: skim it for fuel.", res: ["helium3", "methane"], weather: "Slow red bands; one orange storm",
+    biomes: ["Cloud bands", "The orange storm"], life: [], doing: ["Skim the cloud tops", "Dock at its skimmer platform", "One moon, Snuff"] },
+  { id: "snuff", sys: "tallow", name: "Snuff", kind: "Moon of Censer", parent: "censer", a: 40, T: 5, locked: true, dA: 7, dR: 0.7, R: 600, L: 8, g: 0.25, air: false,
+    one: "Ice blackened by soot from Censer's haze.", res: ["ice", "regolith"], biomes: ["Sooty ice", "Clean ice in the craters"], life: [],
+    doing: ["Cut ice for the skimmers' fuel", "Censer fills a third of the sky"] },
+  // ---- Gemel: an orange dwarf and a white dwarf ------------------------------------------------
+  { id: "s_gemel", art: "gemel", sys: "gemel", name: "Gemel", kind: "Star, K2 V orange (Gemel A)", isStar: true, parent: null, dR: 5.5, dA: 0, color: 0xffb060,
+    one: "An orange dwarf with a white-dwarf companion: two suns in every sky.", res: [], biomes: [], life: [],
+    doing: ["Steer round it: 50 km keep-out"], noSurface: "Gemel A has no surface. Its companion, Gemel B, rides far out as a hard white point in every sky of the system." },
+  { id: "s_gemelb", art: "gemelb", sys: "gemel", name: "Gemel B", kind: "Star, white-dwarf companion", isStar: true, parent: "s_gemel", a: 420, T: 900, dA: 78, dR: 1.2, color: 0xd2f8ff,
+    one: "A dead star's hot core, Earth-sized and dim. It casts a faint second shadow.", res: [], biomes: [], life: [],
+    doing: ["Its glare blinds sensors inside 20 km"], noSurface: "Gemel B is a white dwarf: no surface you could stand on, and a glare that blinds sensors inside 20 km." },
+  { id: "shale", sys: "gemel", name: "Shale", kind: "Rock world, the inner one", parent: "s_gemel", a: 90, T: 40, dA: 18, dR: 1.4, R: 1200, L: 9, g: 0.6, day: 60, air: false,
+    one: "Layered slate pulled into terraces and 60 m cliffs by the two stars' tides.", res: ["iron", "regolith"],
+    biomes: ["Slate terraces", "Tide cliffs", "Rubble fans"], life: [], doing: ["Quarry slate by the layer", "Climb the tide cliffs"] },
+  { id: "fallow", sys: "gemel", name: "Fallow", kind: "Habitable world, the open one", parent: "s_gemel", a: 175, T: 110, dA: 32, dR: 2.4, R: 2400, L: 10, g: 0.9, day: 44, air: "cold, dry, Earthlike", airC: 0x9cd8ff, sky: 0x9cc0dc,
+    one: "A golden steppe with lakes and glaciers, nobody living on it yet: land to settle.", res: ["fleece", "timber", "water", "fish"],
+    weather: "Dry wind; snow on the highlands; clear nights with two lights in the sky",
+    biomes: ["Golden steppe", "Cold desert", "Lake country", "Glacier highlands"],
+    life: ["Steppe grass, stone pines", "Drover herds (woolly grazers), scythewing (a hawk), burrowkit (a two-legged digger)", "Lake fish", "No townsfolk: the first towns are the player's"],
+    doing: ["Settle open land: the only habitable world here with no one on it", "Ranch drovers for fleece", "Two shadows at dusk: Gemel B is a white point bright enough to cast one"],
+    species: ["drover", "scythewing", "burrowkit"] },
+  { id: "lode", sys: "gemel", name: "Lode", kind: "Metal asteroid", parent: "s_gemel", a: 240, T: 170, dA: 44, dR: 0.6, R: 300, L: 7, g: 0.05, day: 18, air: false,
+    one: "A 300 m lump of iron and platinum, the core of a world that never formed.", res: ["platinum", "iron"],
+    biomes: ["Metal plates", "Platinum veins"], life: [], doing: ["Mine platinum: the collider's parts need it", "A jump can leave the rock"] },
+];
+for (const b of B) b.sys = "aubade";
+B.push(...NEW_BODIES);
 const BY = Object.fromEntries(B.map(b => [b.id, b]));
+BY.star.isStar = true; BY.star.art = "star";
+BY.star.noSurface = "Aubade has no surface to stand on. Routes keep 60 km clear of it: closer, a hull heats and the dampeners cannot hold a course in the glare.";
+const BA = B.filter(b => b.sys === "aubade");   // the Aubade orbit view draws these; the neighbours have their own views
 for (const b of B) {
   if (b.parent === "star") b.T = yearOf(b.a);
   b.phase = ((b.id.charCodeAt(0) * 37 + b.id.length * 101) % 360) * Math.PI / 180;
@@ -472,7 +713,7 @@ function tex(path) {
   if (!TEX[path]) { const t = loader.load(path + AV); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; TEX[path] = t; }
   return TEX[path];
 }
-const LIGHTS_OF = new Set(["home", "verdance", "ochre", "cinder", "murk", "hollow", "tidewater"]);
+const LIGHTS_OF = new Set(["home", "verdance", "ochre", "cinder", "murk", "hollow", "tidewater", "tenebris", "sequoia", "sconce", "wick", "fallow"]);
 const BLACK = (() => { const c = document.createElement("canvas"); c.width = c.height = 2; const t = new THREE.CanvasTexture(c); return t; })();
 const PLANET_VS = `varying vec3 vN; varying vec3 vW; varying vec2 vUv;
 void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
@@ -539,9 +780,21 @@ function starField(n, r, size) {
 // =====================================================================
 // The orbit view.
 // =====================================================================
-const orbitEl = document.getElementById("orbit"), oc = document.getElementById("orbitCanvas");
-let R1 = null;   // made when the Orbit view tab first opens
-function makeR1() { R1 = new THREE.WebGLRenderer({ canvas: oc, antialias: true }); R1.setPixelRatio(Math.min(devicePixelRatio, 2)); }
+// ONE WebGL context for the whole page: a single canvas and renderer, made when the first 3D tab
+// opens and moved into whichever tab's view is open (owner, 2026-11-13: only one 3D renderer on the
+// page at a time). Every view's pointer handlers check the open tab before they act.
+const GLC = document.createElement("canvas");
+GLC.className = "glc"; GLC.tabIndex = 0; GLC.style.touchAction = "none";
+let RR = null;
+function gl() { if (!RR) { RR = new THREE.WebGLRenderer({ canvas: GLC, antialias: true, alpha: true }); RR.setPixelRatio(Math.min(devicePixelRatio, 2)); } return RR; }
+function mountGL(host, label) {
+  if (GLC.parentElement !== host) host.insertBefore(GLC, host.firstChild);
+  GLC.style.visibility = ""; GLC.setAttribute("aria-label", label || "");
+  return gl();
+}
+const orbitEl = document.getElementById("orbit"), oc = GLC;
+let R1 = null, R2 = null, R3 = null;
+function makeR1() { R1 = mountGL(orbitEl, "Three-dimensional orbit view of the Aubade system. Drag to turn, scroll or pinch to zoom, click a body to inspect it."); }
 const S1 = new THREE.Scene(), C1 = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
 S1.add(starField(1600, 2000, 1.6));
 const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(7, 32, 16), new THREE.MeshBasicMaterial({ color: 0xffe2a0 }));
@@ -550,7 +803,7 @@ const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), 
 sunGlow.scale.set(60, 60, 1); S1.add(sunGlow);
 const NODES = {};
 const pickables = [];
-for (const b of B) {
+for (const b of BA) {
   if (b.id === "star") { NODES.star = { group: sunMesh, mesh: sunMesh, b }; sunMesh.userData.id = "star"; pickables.push(sunMesh); continue; }
   const group = new THREE.Group();
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(b.dR, 48, 24), planetMaterial(b, false));
@@ -573,7 +826,7 @@ for (const b of B) {
 }
 // labels
 const labelsEl = document.getElementById("labels");
-for (const b of B) {
+for (const b of BA) {
   const d = document.createElement("div");
   d.className = "lbl" + (b.parent && b.parent !== "star" ? " moon" : "");
   d.textContent = b.name; d.dataset.id = b.id;
@@ -584,7 +837,7 @@ for (const b of B) {
 let worldDay = 12, daysPerSec = 0.25;
 const _v = new THREE.Vector3();
 function placeAll(day) {
-  for (const b of B) {
+  for (const b of BA) {
     if (b.id === "star") continue;
     const n = NODES[b.id];
     const ang = b.phase + 2 * Math.PI * day / b.T;
@@ -598,15 +851,17 @@ function placeAll(day) {
 }
 // order matters: parents before moons
 B.sort((x, y) => (x.parent === "star" || !x.parent ? 0 : 1) - (y.parent === "star" || !y.parent ? 0 : 1));
+BA.sort((x, y) => (x.parent === "star" || !x.parent ? 0 : 1) - (y.parent === "star" || !y.parent ? 0 : 1));
 
 // camera: yaw, pitch, distance round a target that follows the selection
 const cam = { yaw: 0.6, pitch: 0.62, dist: 260, target: new THREE.Vector3(), follow: null, wantDist: 260 };
 let drag = null;
 const ptrs = new Map();
-oc.addEventListener("pointerdown", e => { oc.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); drag = { x: e.clientX, y: e.clientY, moved: 0 }; oc.style.cursor = "grabbing"; });
+oc.addEventListener("pointerdown", e => { if (TAB !== "system") return; oc.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); drag = { x: e.clientX, y: e.clientY, moved: 0 }; oc.style.cursor = "grabbing"; });
 oc.addEventListener("pointermove", e => {
   if (!ptrs.has(e.pointerId)) return;
   const prev = ptrs.get(e.pointerId);
+  if (TAB !== "system") { ptrs.clear(); drag = null; return; }
   if (ptrs.size === 2) {
     const other = [...ptrs.entries()].find(([k]) => k !== e.pointerId)[1];
     const d0 = Math.hypot(prev.x - other.x, prev.y - other.y), d1 = Math.hypot(e.clientX - other.x, e.clientY - other.y);
@@ -625,7 +880,7 @@ function endPtr(e) {
   if (ptrs.size === 0) drag = null;
 }
 oc.addEventListener("pointerup", endPtr); oc.addEventListener("pointercancel", endPtr);
-oc.addEventListener("wheel", e => { e.preventDefault(); cam.wantDist = THREE.MathUtils.clamp(cam.wantDist * Math.exp(e.deltaY * 0.0012), 6, 600); }, { passive: false });
+oc.addEventListener("wheel", e => { if (TAB !== "system") return; e.preventDefault(); cam.wantDist = THREE.MathUtils.clamp(cam.wantDist * Math.exp(e.deltaY * 0.0012), 6, 600); }, { passive: false });
 const ray = new THREE.Raycaster();
 function pick(e) {
   const r = oc.getBoundingClientRect();
@@ -651,9 +906,8 @@ function sizeOrbit() {
 // =====================================================================
 // The inspector globe.
 // =====================================================================
-const gc = document.getElementById("globeCanvas");
-let R2 = null;   // made when the Selected body tab first opens (alpha: the globe sits on the panel's own gradient)
-function makeR2() { R2 = new THREE.WebGLRenderer({ canvas: gc, antialias: true, alpha: true }); R2.setPixelRatio(Math.min(devicePixelRatio, 2)); }
+const gc = GLC, globeEl = document.querySelector("#tab-body .globe");
+function makeR2() { R2 = mountGL(globeEl, "The selected body, lit from the left, its night side on the right"); }
 const S2 = new THREE.Scene(), C2 = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
 C2.position.set(0, 0.35, 4.3); C2.lookAt(0, 0, 0);
 S2.add(starField(500, 40, 1.2));
@@ -661,9 +915,9 @@ let globe = null, globeRing = null;
 function setGlobe(b) {
   if (globe) { S2.remove(globe); globe = null; }
   if (globeRing) { S2.remove(globeRing); globeRing = null; }
-  if (b.id === "star") {
+  if (b.isStar) {
     globe = new THREE.Group();
-    globe.add(new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.MeshBasicMaterial({ color: 0xffe2a0 })));
+    globe.add(new THREE.Mesh(new THREE.SphereGeometry(b.id === "s_gemelb" ? 0.4 : 1, 48, 24), new THREE.MeshBasicMaterial({ color: b.id === "star" ? 0xffe2a0 : b.color })));
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false })); s.scale.set(4.2, 4.2, 1); globe.add(s);
   } else {
     globe = new THREE.Mesh(new THREE.SphereGeometry(b.id === "pebble" ? 0.8 : 1, 64, 32), planetMaterial(b, true));
@@ -683,9 +937,10 @@ function setGlobe(b) {
 // bent by the body's own curvature, lit by its sun, moon and lamps.
 // =====================================================================
 const W = 2.833, SQ3 = Math.sqrt(3), HEXR = W / SQ3;
-const vc = document.getElementById("vigCanvas");
-let R3 = null, vigClear = new THREE.Color(0);   // made when the Surface tab first opens
-function makeR3() { R3 = new THREE.WebGLRenderer({ canvas: vc, antialias: true }); R3.setPixelRatio(Math.min(devicePixelRatio, 2)); R3.setClearColor(vigClear); }
+const vc = GLC, vigEl = document.getElementById("vig");
+const VIG_TABS = new Set(["surface", "tenworlds"]);
+let vigClear = new THREE.Color(0);
+function makeR3() { R3 = mountGL(vigEl, "A lit surface vignette of the selected body on the hex grid. Drag to turn."); if (!vigEnv) GLC.style.visibility = "hidden"; }
 const S3 = new THREE.Scene(), C3 = new THREE.PerspectiveCamera(48, 16 / 9, 0.3, 3000);
 const lin = c => [Math.pow(((c >> 16) & 255) / 255, 2.2), Math.pow(((c >> 8) & 255) / 255, 2.2), Math.pow((c & 255) / 255, 2.2)];
 // ---- the game's textures: the terrain atlas, the settlement materials, the vehicles' own atlases.
@@ -738,7 +993,7 @@ varying vec3 vC; varying vec3 vN; varying vec3 vF; varying vec3 vL; varying floa
 void main(){ vC = color; vN = normal; vF = fire; vL = lamp; vT = tile; vU = tuv; vec4 mv = modelViewMatrix * vec4(position, 1.0); vD = length(mv.xyz); gl_Position = projectionMatrix * mv; }`;
 const VIG_FS = `uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 moonDir; uniform vec3 moonCol; uniform vec3 skyAmb; uniform vec3 gndAmb;
 uniform float uLamp; uniform vec3 fogCol; uniform float fogDen; uniform float alpha; uniform float flick;
-uniform sampler2D atlas; uniform sampler2D mats; uniform sampler2D veh0; uniform sampler2D veh1;
+uniform sampler2D atlas; uniform sampler2D mats; uniform sampler2D veh0; uniform sampler2D veh1; uniform sampler2D ten; uniform sampler2D anim; uniform sampler2D fauna;
 varying vec3 vC; varying vec3 vN; varying vec3 vF; varying vec3 vL; varying float vD; varying vec3 vT; varying vec2 vU;
 vec3 albedo(){
   if (vT.z < 0.5) return vC;
@@ -747,7 +1002,14 @@ vec3 albedo(){
   if (vT.z < 1.5) t = texture2D(atlas, (vT.xy + f * 32.0) / 512.0);
   else if (vT.z < 2.5) t = texture2D(mats, (vT.xy + f * 32.0) / 256.0);
   else if (vT.z < 3.5) t = texture2D(veh0, vU);
-  else t = texture2D(veh1, vU);
+  else if (vT.z < 4.5) t = texture2D(veh1, vU);
+  else if (vT.z < 5.5) t = texture2D(ten, (vT.xy + f * 16.0) / 128.0);
+  else {
+    // an animal box: its species' column, and the body, head or leg band of it (animals.rs part_uv)
+    float v0 = vT.y < 0.5 ? 0.02 : (vT.y < 1.5 ? 0.53 : 0.78), v1 = vT.y < 0.5 ? 0.47 : (vT.y < 1.5 ? 0.72 : 0.97);
+    if (vT.z < 6.5) t = texture2D(anim, vec2((vT.x + f.x) / 24.0, v0 + f.y * (v1 - v0)));
+    else t = texture2D(fauna, vec2((vT.x + f.x) / 9.0, v0 + f.y * (v1 - v0)));
+  }
   return pow(t.rgb, vec3(2.2)) * vC;
 }
 void main(){
@@ -767,7 +1029,7 @@ function vigMaterial(alpha) {
       moonDir: { value: new THREE.Vector3(-0.3, 0.8, -0.4).normalize() }, moonCol: { value: new THREE.Vector3() },
       skyAmb: { value: new THREE.Vector3(0.2, 0.25, 0.3) }, gndAmb: { value: new THREE.Vector3(0.05, 0.05, 0.05) },
       uLamp: { value: 1 }, fogCol: { value: new THREE.Vector3() }, fogDen: { value: 0 }, alpha: { value: alpha }, flick: { value: 1 },
-      atlas: { value: ATLAS_T }, mats: { value: MATS_T }, veh0: { value: VEH_T[0] }, veh1: { value: VEH_T[1] },
+      atlas: { value: ATLAS_T }, mats: { value: MATS_T }, veh0: { value: VEH_T[0] }, veh1: { value: VEH_T[1] }, ten: { value: TEN_T }, anim: { value: ANIM_T }, fauna: { value: FAUNA_T },
     },
     vertexShader: VIG_VS, fragmentShader: VIG_FS, transparent: alpha < 1, depthWrite: alpha >= 1, side: THREE.DoubleSide,
   });
@@ -856,7 +1118,8 @@ function terrain(o) {
     const corner = k => { const a = (-30 + 60 * k) * Math.PI / 180; return [c.x + HEXR * Math.cos(a), c.z + HEXR * Math.sin(a)]; };
     const sh = o.sheet ? o.sheet(c.x, c.z, c.h) : null, tint = o.tint ? o.tint(c.x, c.z, c.h) : null;
     const col = o.top(c.x, c.z, c.h), em = o.emit ? o.emit(c.x, c.z, c.h) : null;
-    const topSpec = specOf(sh, ...(o.topTile ? o.topTile(c.x, c.z, c.h) : [0, 0]), tint);
+    const lay = sh && sh.layers, layOf = (k) => Object.assign({}, lay[k], tint ? { tint } : {});
+    const topSpec = lay ? layOf("top") : specOf(sh, ...(o.topTile ? o.topTile(c.x, c.z, c.h) : [0, 0]), tint);
     for (let k = 0; k < 6; k++) {
       const [ax, az] = corner(k), [bx, bz] = corner(k + 1);
       // the top's UV is the cell's own: one tile across the hex, centred
@@ -868,7 +1131,7 @@ function terrain(o) {
       for (let y = c.h; y > floor; y--) {
         const d = c.h - y, slot = d === 0 ? [1, 0] : d < 3 ? [2, 0] : [3, 0];
         const sideSh = o.sideSheet ? o.sideSheet(c.x, c.z, c.h, y) : sh;
-        const sp = specOf(sideSh, slot[0], slot[1], tint);
+        const sp = lay ? layOf(d === 0 ? "side" : d < 3 ? "earth" : "stone") : specOf(sideSh, slot[0], slot[1], tint);
         V.bag.quad([ax, y, az], [bx, y, bz], [bx, y - 1, bz], [ax, y - 1, az], sp ? WHITE : o.side(y, d), hint, null, null, sp, [[0, 0], [1, 0], [1, 1], [0, 1]]);
       }
     }
@@ -1183,7 +1446,7 @@ const VIG = {
       dome(-3, -3, 3.2, { c: 0xe4e0d4 });
     }
     ship(3, 5, 2.2, 0);
-    return { sky: b.id === "amber" ? 0xe8c08a : 0x9ad8ea, dusk: 0xd07040, haze: 0.004, fog: b.id === "amber" ? 0xd8a870 : 0x8ac8da, clouds: b.id, skyBody: null };
+    return { sky: { amber: 0xe8c08a, glaucus: 0x9ad8ea, censer: 0xa85040 }[b.id], dusk: 0xd07040, haze: 0.004, fog: { amber: 0xd8a870, glaucus: 0x8ac8da, censer: 0x8a3a30 }[b.id], clouds: b.id, sunCol: b.id === "censer" ? 0xff8060 : undefined, skyBody: null };
   },
 };
 
@@ -1222,8 +1485,8 @@ function buildVignette(b) {
   for (const o of vigObjs) { S3.remove(o); if (o.geometry) o.geometry.dispose(); }
   vigObjs = []; glowSprites = [];
   const noVig = document.getElementById("noVig");
-  if (!b.vig && b.id === "star") { vigEnv = null; vc.hidden = true; noVig.hidden = false; noVig.textContent = "Halcyon has no surface to stand on. Routes keep 60 km clear of it: closer, a hull heats and the dampeners cannot hold a course in the glare."; return; }
-  vc.hidden = false; noVig.hidden = true;
+  if (!b.vig && b.isStar) { vigEnv = null; if (VIG_TABS.has(TAB)) GLC.style.visibility = "hidden"; noVig.hidden = false; noVig.textContent = b.noSurface || `${b.name} has no surface to stand on.`; return; }
+  if (VIG_TABS.has(TAB)) GLC.style.visibility = ""; noVig.hidden = true;
   V = { bag: new Bag(), water: new Bag(), lights: [], cells: new Map() };
   vigEnv = (b.nocells ? VIG.giant(b) : VIG[b.id]());
   const Rb = b.nocells ? 1e9 : b.R;
@@ -1259,17 +1522,22 @@ function buildVignette(b) {
     if (sb.rings) { const r = ringMesh(vigEnv.skyBody.size * 1.35, vigEnv.skyBody.size * 2.3); r.position.copy(d); S3.add(r); vigObjs.push(r); }
     S3.add(skyBodyMesh); vigObjs.push(skyBodyMesh);
   } else skyBodyMesh = null;
+  // another sun as a hard point of light (Gemel B in the skies of Gemel's worlds)
+  for (const p of (V.extraStars || [])) {
+    const c = new THREE.Color(p.colour), s2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(`rgba(${c.r * 255 | 0},${c.g * 255 | 0},${c.b * 255 | 0},1)`, "rgba(0,0,0,0)"), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+    s2.position.copy(new THREE.Vector3(...p.dir).normalize().multiplyScalar(1900)); s2.scale.set(p.size * 3, p.size * 3, 1); S3.add(s2); vigObjs.push(s2);
+  }
   vigStars = starField(900, 2400, 1.4); S3.add(vigStars); vigObjs.push(vigStars);
   vigSun = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture("rgba(255,250,235,1)", "rgba(255,230,180,0)"), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
   vigSun.scale.set(260, 260, 1); S3.add(vigSun); vigObjs.push(vigSun);
-  vigCam.dist = b.nocells ? 30 : b.id === "pebble" ? 40 : 46;
+  vigCam.dist = b.nocells ? 30 : b.R <= 300 ? 40 : b.id === "sequoia" ? 58 : 46;
   hudLine(b);
   setTime(+timeEl.value);
 }
 const vigCam = { yaw: 0.8, pitch: 0.36, dist: 46, auto: true };
 {
   let last = null;
-  vc.addEventListener("pointerdown", e => { vc.setPointerCapture(e.pointerId); last = { x: e.clientX, y: e.clientY }; vigCam.auto = false; });
+  vc.addEventListener("pointerdown", e => { if (!VIG_TABS.has(TAB)) return; vc.setPointerCapture(e.pointerId); last = { x: e.clientX, y: e.clientY }; vigCam.auto = false; });
   vc.addEventListener("pointermove", e => { if (!last) return; vigCam.yaw -= (e.clientX - last.x) * 0.007; vigCam.pitch = THREE.MathUtils.clamp(vigCam.pitch + (e.clientY - last.y) * 0.005, 0.08, 1.3); last = { x: e.clientX, y: e.clientY }; });
   const up = () => { last = null; }; vc.addEventListener("pointerup", up); vc.addEventListener("pointercancel", up);
 }
@@ -1283,7 +1551,7 @@ function setTime(h) {
   const sd = new THREE.Vector3(Math.cos(th) * 0.8, elev, 0.42).normalize();
   const day = smooth(-0.06, 0.25, elev), dusk = Math.max(0, 1 - Math.abs(elev) * 4) * (vigEnv.airless ? 0 : 1);
   const U = vigMat.uniforms;
-  const sunC = new THREE.Color(0xfff4e0).lerp(new THREE.Color(vigEnv.dusk || 0xffb070), dusk * 0.7);
+  const sunC = new THREE.Color(vigEnv.sunCol || 0xfff4e0).lerp(new THREE.Color(vigEnv.dusk || 0xffb070), dusk * 0.7);
   const sI = elev > 0 ? 2.4 * smooth(0, 0.18, elev) : 0;
   U.sunDir.value.copy(sd); U.sunCol.value.set(Math.pow(sunC.r, 2.2) * sI, Math.pow(sunC.g, 2.2) * sI, Math.pow(sunC.b, 2.2) * sI);
   // the moon (or the giant's shine, or the home world's): dim, so the lamps read
@@ -1301,7 +1569,7 @@ function setTime(h) {
     const night = new THREE.Color(0x05070d), duskC = new THREE.Color(vigEnv.dusk || 0xe08a50);
     bg = night.clone().lerp(sky, day).lerp(duskC, dusk * 0.55);
   }
-  vigClear = bg; if (R3) R3.setClearColor(bg);
+  vigClear = bg;
   const fogC = vigEnv.airless ? new THREE.Color(0) : (vigEnv.fog ? new THREE.Color(vigEnv.fog).lerp(new THREE.Color(0x06080e), 1 - day).lerp(new THREE.Color(vigEnv.dusk || 0xe08a50), dusk * 0.3) : bg);
   U.fogCol.value.set(Math.pow(fogC.r, 2.2), Math.pow(fogC.g, 2.2), Math.pow(fogC.b, 2.2));
   U.fogDen.value = vigEnv.airless ? 0 : vigEnv.haze || 0.01;
@@ -1332,18 +1600,538 @@ const CAPTION = {
   amber: "The skimmer platform: a deck of hex cells hovering at Amber's cloud tops, lamps round the rail, the scoop below, a ship docked.",
   glaucus: "The same kind of platform over Glaucus's paler clouds.",
 };
+// =====================================================================
+// Tenebris's own textures (planets/tenebris/, byte-identical copies, see its
+// README), packed at load into one 128 px canvas, eight 16 px tiles a row, pixel
+// for pixel. TT(name, tint) is a tile of it; `tint` is Tenebris's own per-channel
+// atlas tint (renderer.rs ATLAS_TINTS), taken to linear.
+// =====================================================================
+const TEN = "planets/tenebris/";
+const TEN_NAMES = ["planet_seq_grass", "planet_seq_grass_dirt", "planet_seq_dirt", "planet_seq_sand", "planet_seq_snow", "planet_seq_snow_dirt", "planet_seq_side", "planet_seq_top",
+  "planet_seq_leaves", "planet_seq_mycelium", "planet_seq_shroom_cap", "grass", "dirt_grass", "dirt", "sand", "rocks",
+  "snow", "dirt_snow", "wood", "ice", "moon", "water", "jungle_grass", "jungle_dirt_grass",
+  "dry_grass", "dry_dirt_grass", "cactus"];
+const tenCanvas = document.createElement("canvas"); tenCanvas.width = tenCanvas.height = 128;
+const TEN_T = nearestTex(new THREE.CanvasTexture(tenCanvas));
+TEN_NAMES.forEach((n, i) => { const im = new Image(); im.onload = () => { const x = tenCanvas.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(im, (i % 8) * 16, Math.floor(i / 8) * 16); TEN_T.needsUpdate = true; }; im.src = TEN + n + ".png" + AV; });
+// Tenebris's animal atlas (24 columns of 32 px, one per AnimalKind wire id; body, head and legs
+// bands), and the mockup-only columns for species Tenebris did not build, in the same layout.
+const ANIM_T = nearestTex(new THREE.TextureLoader().load(TEN + "animals.png" + AV));
+const FAUNA_T = nearestTex(new THREE.TextureLoader().load("planets/species/fauna_tex.png" + AV));
+const FAUNA_COLS = ["gloomhopper", "sporeling", "barkstrider", "mossback", "tallowback", "dimwing", "drover", "scythewing", "burrowkit"];
+const TEN_WIRE = { critter: 0, stalker: 1, cat: 2, sheep: 3, chicken: 4, cow: 5, bird: 6, frog: 8, lizard: 9, penguin: 10, serpent: 15, raptor: 16, crane: 17, sparkit: 18, shellkin: 19 };
+const TT_TINT = { crag: [1.30, 0.55, 0.35], frost: [0.55, 0.80, 1.25], asteroid: [0.70, 0.68, 0.65], leaves: [0.65, 1.05, 0.50], pale: [1.25, 1.2, 1.12] };
+function TT(name, tint) {
+  const i = TEN_NAMES.indexOf(name), t = typeof tint === "string" ? TT_TINT[tint] : tint;
+  return { s: 5, ox: (i % 8) * 16, oy: Math.floor(i / 8) * 16, ru: HEXR_, rv: 1, rt: 2.833, tint: t ? t.map(v => Math.pow(v, 2.2)) : undefined };
+}
+// A Tenebris column: its top, its first metre of wall, its earth and its stone (blocks.rs FaceCap).
+const LAY = (top, side, earth, stone) => ({ layers: { top, side, earth, stone } });
+const SEQ = {
+  grass: () => LAY(TT("planet_seq_grass"), TT("planet_seq_grass_dirt"), TT("planet_seq_dirt"), TT("rocks")),
+  myc: () => LAY(TT("planet_seq_mycelium"), TT("planet_seq_dirt"), TT("planet_seq_dirt"), TT("rocks")),
+  sand: () => LAY(TT("planet_seq_sand"), TT("planet_seq_sand"), TT("planet_seq_sand"), TT("rocks")),
+  snow: () => LAY(TT("planet_seq_snow"), TT("planet_seq_snow_dirt"), TT("planet_seq_dirt"), TT("rocks")),
+};
+const TEB = {
+  fields: () => LAY(TT("dry_grass"), TT("dry_dirt_grass"), TT("dirt"), TT("rocks")),
+  grass: () => LAY(TT("grass"), TT("dirt_grass"), TT("dirt"), TT("rocks")),
+  sand: () => LAY(TT("sand"), TT("sand"), TT("sand"), TT("rocks")),
+  snow: () => LAY(TT("snow"), TT("dirt_snow"), TT("dirt"), TT("rocks")),
+  moon: (t) => LAY(TT("moon", t), TT("moon", t), TT("moon", t), TT("moon", t)),
+  rock: (t) => LAY(TT("rocks", t), TT("rocks", t), TT("rocks", t), TT("rocks", t)),
+  frost: () => LAY(TT("snow"), TT("ice", "frost"), TT("ice", "frost"), TT("ice", "frost")),
+};
+
+// An animal built from boxes, as Tenebris's animals.rs builds them: body, head and legs, each box
+// wearing its species' band of the atlas. `src` "ten" is Tenebris's atlas, "pbd" the mockup's.
+function animalSpec(kind, part) {
+  const ten = kind in TEN_WIRE;
+  return { s: ten ? 6 : 7, ox: ten ? TEN_WIRE[kind] : FAUNA_COLS.indexOf(kind), oy: part, ru: 0.45, rv: 0.45, rt: 0.45 };
+}
+function beast(x, z, kind, o = {}) {
+  const y = o.y ?? topAt(x, z), ry = o.ry || 0, s = o.s || 1, biped = !!o.biped, bird = !!o.bird;
+  const c = Math.cos(ry), sn = Math.sin(ry);
+  const at = (f, sd) => [x + f * c + sd * sn, z - f * sn + sd * c];
+  const legH = (o.legs ?? (biped ? 0.35 : 0.4)) * s, bw = (o.w ?? 0.45) * s, bl = (o.l ?? (biped ? 0.45 : 0.9)) * s, bh = (o.h ?? 0.45) * s, hs = (o.head ?? 0.36) * s;
+  const B = animalSpec(kind, 0), H = animalSpec(kind, 1), Lg = animalSpec(kind, 2);
+  const legs = biped ? [[0, -bw * 0.28], [0, bw * 0.28]] : [[bl * 0.35, -bw * 0.32], [bl * 0.35, bw * 0.32], [-bl * 0.35, -bw * 0.32], [-bl * 0.35, bw * 0.32]];
+  for (const [f, sd] of legs) { const [lx, lz] = at(f, sd); V.bag.three(new THREE.BoxGeometry(0.12 * s * (biped ? 1.3 : 1), legH, 0.12 * s * (biped ? 1.3 : 1)), M4(lx, y + legH / 2, lz, ry), WHITE, null, null, Lg); }
+  V.bag.three(new THREE.BoxGeometry(bl, bh, bw), M4(x, y + legH + bh / 2, z, ry), WHITE, null, null, B);
+  const [hx, hz] = biped ? at(0.05 * s, 0) : at(bl / 2 + hs * 0.3, 0);
+  const hy = biped ? y + legH + bh + hs / 2 - 0.04 : y + legH + bh * 0.75 + hs * 0.4 + (o.neck || 0) * s;
+  if (o.neck) { const [nx, nz] = at(bl / 2, 0); V.bag.three(new THREE.BoxGeometry(0.12 * s, o.neck * s, 0.12 * s), M4(nx, y + legH + bh + o.neck * s / 2 - 0.1, nz, ry), WHITE, null, null, B); }
+  V.bag.three(new THREE.BoxGeometry(hs * (bird ? 1.4 : 1), hs, hs), M4(hx, hy, hz, ry), WHITE, null, null, H);
+  if (o.shell) V.bag.three(new THREE.BoxGeometry(bl * 1.1, bh * 0.7, bw * 1.15), M4(x, y + legH + bh, z, ry), WHITE, null, null, o.shell);
+  if (o.ears) for (const sd of [-1, 1]) { const [ex, ez] = at(biped ? 0.05 * s : bl / 2 + hs * 0.3, sd * hs * 0.3); V.bag.three(new THREE.BoxGeometry(0.08 * s, hs * 0.9, 0.1 * s), M4(ex, hy + hs * 0.8, ez, ry), WHITE, null, null, H); }
+  if (o.wings) for (const sd of [-1, 1]) { const [wx, wz] = at(0, sd * (bw / 2 + 0.35 * s)); V.bag.three(new THREE.BoxGeometry(bl * 0.8, 0.06 * s, 0.7 * s), M4(wx, y + legH + bh * 0.8, wz, ry, 1, 1, 1, sd * 0.25), WHITE, null, null, B); }
+  if (o.glow) { V.bag.three(new THREE.BoxGeometry(0.1, 0.1, 0.1), M4(hx, hy + hs * 0.2, hz, ry), lin(o.glow), [1.6, 0.9, 0.3]); light(hx, hy, hz, "fire", o.glow, 3, 0.45); }
+}
+
+// Sequoia's trees, after world.rs: a redwood bares the lower two thirds of its bole and carries a
+// rust-red cone on the top third and two cells over it; a giant mushroom caps a pale stem with
+// three layers of rose cap. `giant` draws the proposed giants (SEQUOIA_PLAN: 12 to 24 blocks, a trunk
+// that fills the cell at its base, a crown over the neighbours) beside the as-built single column.
+function redwood(x, z, o = {}) {
+  const [q, r] = axialAt(x, z), X = cx(q, r), Z = cz(r), y = topAt(X, Z), h = hash(q * 1.3, r * 2.7);
+  const bark = TT("planet_seq_side"), leaf = TT("planet_seq_leaves");
+  if (o.giant) {
+    const H = 22 + Math.round(h * 2), bole = Math.round(H * 2 / 3);
+    hexPrism(X, Z, y - 1, y + 2, HEXR * 1.25, HEXR * 0.95, bark);          // buttress
+    hexPrism(X, Z, y + 2, y + bole, HEXR * 0.95, HEXR * 0.55, bark);
+    const seg = 4, top = y + H + 2;
+    for (let k = 0; k < seg; k++) {
+      const y0 = y + bole + (top - y - bole) * k / seg, y1 = y + bole + (top - y - bole) * (k + 1) / seg;
+      hexPrism(X, Z, y0, y1, HEXR * (2.7 - k * 0.6), HEXR * (1.9 - k * 0.45), leaf);
+    }
+    hexPrism(X, Z, top, top + 2, HEXR * 0.55, HEXR * 0.08, leaf);
+    return { X, Z, y, top };
+  }
+  const trunk = 3 + (h > 0.5 ? 1 : 0) + 6 + Math.floor(h * 4), bole = Math.round(trunk * 2 / 3), top = y + trunk + 2;
+  hexPrism(X, Z, y, y + bole, HEXR * 0.32, HEXR * 0.28, bark);
+  hexPrism(X, Z, y + bole, y + bole + (top - y - bole) / 2, HEXR * 0.95, HEXR * 0.6, leaf);
+  hexPrism(X, Z, y + bole + (top - y - bole) / 2, top, HEXR * 0.6, HEXR * 0.15, leaf);
+  return { X, Z, y, top };
+}
+function mushroom(x, z, o = {}) {
+  const [q, r] = axialAt(x, z), X = cx(q, r), Z = cz(r), y = topAt(X, Z), h = hash(q * 2.1, r * 1.7);
+  const stem = TT("wood", "pale"), cap = TT("planet_seq_shroom_cap");
+  const trunk = (o.giant ? 12 : 3 + (h > 0.5 ? 1 : 0) + 4 + Math.floor(h * 4)), k = o.giant ? 2.2 : 1;
+  hexPrism(X, Z, y, y + trunk, HEXR * 0.3 * (o.giant ? 1.8 : 1), HEXR * 0.24 * (o.giant ? 1.8 : 1), stem);
+  hexPrism(X, Z, y + trunk, y + trunk + 1, HEXR * 0.9 * k, HEXR * 1.05 * k, cap);
+  hexPrism(X, Z, y + trunk + 1, y + trunk + 2, HEXR * 1.05 * k, HEXR * 0.85 * k, cap);
+  hexPrism(X, Z, y + trunk + 2, y + trunk + 3, HEXR * 0.85 * k, HEXR * 0.35 * k, cap);
+  // spores glow faintly under the cap at night
+  light(X, y + trunk - 0.3, Z, "lamp", 0xc070ff, o.giant ? 7 : 4.5, o.giant ? 0.7 : 0.45);
+}
+function broadleaf(x, z, sc = 1) {   // Tenebris's classic tree: a 4-block trunk, a two-layer crown
+  const [q, r] = axialAt(x, z), X = cx(q, r), Z = cz(r), y = topAt(X, Z), h = hash(q * 1.7, r * 2.3);
+  const wood = TT("wood"), leaf = TT("grass", "leaves"), t = 3 + (h > 0.5 ? 1 : 0);
+  hexPrism(X, Z, y, y + t, HEXR * 0.2, HEXR * 0.2, wood);
+  hexPrism(X, Z, y + t - 1, y + t + 1, HEXR * 0.85, HEXR * 0.85, leaf);
+  hexPrism(X, Z, y + t + 1, y + t + 2, HEXR * 0.6, HEXR * 0.6, leaf);
+}
+function tenPine(x, z) {
+  const [q, r] = axialAt(x, z), X = cx(q, r), Z = cz(r), y = topAt(X, Z);
+  hexPrism(X, Z, y, y + 1, HEXR * 0.2, HEXR * 0.2, TT("wood"));
+  hexPrism(X, Z, y + 1, y + 4, HEXR * 0.8, HEXR * 0.45, TT("grass", "leaves"));
+  hexPrism(X, Z, y + 4, y + 7, HEXR * 0.45, HEXR * 0.1, TT("grass", "leaves"));
+}
+function tenCactus(x, z) { const [q, r] = axialAt(x, z), X = cx(q, r), Z = cz(r), y = topAt(X, Z); hexPrism(X, Z, y, y + 3, HEXR * 0.3, HEXR * 0.3, TT("cactus")); }
+function torch(x, z) {   // Tenebris's torch: a stick and a flame, burning all night
+  const y = topAt(x, z);
+  cyl(x, y, z, 0.05, 1.3, 0x5a4430, { m: MT("timber") });
+  box(x, y + 1.3, z, 0.16, 0.2, 0.16, 0xffd9a0, { ef: EF });
+  light(x, y + 1.4, z, "fire", 0xff9a48, 7, 0.9);
+}
+function glowVine(x, y, z, len) {
+  for (let k = 0; k < len; k++) box(x + Math.sin(k) * 0.12, y - k * 0.55 - 0.5, z, 0.09, 0.45, 0.09, 0x84e3b5, { ef: [0.5, 1.4, 1.2] });
+  light(x, y - len * 0.3, z, "fire", 0x84e3b5, 5, 0.55);
+}
+function blackleaf(x, z, sc = 1) {   // Wick: black crowns that drink the red light
+  const [q, r] = axialAt(x, z), X = cx(q, r), Z = cz(r), y = topAt(X, Z), h = hash(q, r);
+  const wood = AT("swamp", 2, 1, [0.35, 0.25, 0.28]), leaf = AT("swamp", 0, 2, [0.16, 0.06, 0.09]);
+  const t = 4 + Math.round(h * 2);
+  hexPrism(X, Z, y, y + t, HEXR * 0.24, HEXR * 0.2, wood);
+  hexPrism(X, Z, y + t, y + t + 1, HEXR * 1.25 * sc, HEXR * 1.25 * sc, leaf);
+  hexPrism(X, Z, y + t + 1, y + t + 2, HEXR * 0.9 * sc, HEXR * 0.5 * sc, leaf);
+}
+function lanternbloom(x, z) {
+  const y = topAt(x, z);
+  cyl(x, y, z, 0.05, 1.4, 0x2f1525, { m: AT("swamp", 2, 1, [0.3, 0.2, 0.22]) });
+  box(x, y + 1.4, z, 0.34, 0.34, 0.34, 0xfaaf5c, { ef: [2.6, 1.5, 0.5] });
+  light(x, y + 1.5, z, "fire", 0xfb902f, 6, 0.8);
+}
+// A body hung in a vignette sky as a hard point of light (Gemel B in Fallow's sky).
+function starPoint(dir, colour, size) { V.extraStars = V.extraStars || []; V.extraStars.push({ dir, colour, size }); }
+// An airless claim: a beacon mast, a hab, a ship or a rover, lit at night.
+function claim(o = {}) {
+  if (o.dome !== false) dome(o.dx ?? -6, o.dz ?? 2, o.r || 3.2, { c: o.c || 0xd8d4c8 });
+  mast(o.mx ?? -1, o.mz ?? -4, 6);
+  if (o.rover) rover(4, 6, 0.6);
+  if (o.ship) ship(-12, -8, 0.5);
+}
+
+Object.assign(VIG, {
+  tenebris() {
+    terrain({
+      sheet: (x, z, h) => h <= 0 ? TEB.sand() : x < -14 ? TEB.sand() : h > 6 ? TEB.snow() : TEB.fields(),
+      height: (x, z) => 1 + fbm(x * 0.03 + 4, z * 0.03) * 7 - Math.max(0, (x + z) * 0.06) - (Math.hypot(x - 6, z + 4) < 7 ? 3 : 0),
+      top: () => WHITE, side: () => WHITE,
+    });
+    water(0.3, 0x2a78b0);
+    hut(-5, 6, 4.6, 3.8, 2.6, 0xd8ccb0, 0x9a4a32, { ry: 0.4, wallM: MT("plank"), roofM: MT("thatch") });
+    for (const [x, z] of [[-1, 3], [-8, 2], [-3, 10]]) torch(x, z);
+    fire(2, 8);
+    for (const [x, z] of [[10, 10], [14, -10], [-10, -12], [4, -16], [16, 2]]) broadleaf(x, z);
+    for (const [x, z] of [[-18, -4], [-17, 6]]) tenCactus(x, z);
+    tenPine(9, 16);
+    beast(-2, -6, "sheep", { ry: 0.5 }); beast(1, -8, "sheep", { ry: 2.4 }); beast(-6, -9, "cow", { s: 1.4, ry: 1.2 });
+    beast(4, 2, "critter", { ry: -0.6 }); beast(-9, 9, "chicken", { biped: true, s: 0.6, ry: 1 });
+    beast(18, -14, "stalker", { s: 1.3, ry: 2.4, legs: 0.6, glow: 0xd12d41 });
+    return { sky: 0x8fc3e8, dusk: 0xf09a5a, haze: 0.012, skyBody: { id: "luna", dir: [-0.5, 0.12, -0.84], size: 70 } };
+  },
+  sequoia() {
+    const river = (x, z) => Math.abs(x * 0.55 - z * 0.9 + Math.sin(x * 0.15) * 3 + 2) < 3.2;
+    const myc = (x, z) => x - z * 0.3 > 6;
+    terrain({
+      sheet: (x, z, h) => h <= 0 ? SEQ.sand() : myc(x, z) ? SEQ.myc() : SEQ.grass(),
+      height: (x, z) => river(x, z) ? -1 : 1 + fbm(x * 0.035, z * 0.035 + 2) * 5,
+      top: () => WHITE, side: () => WHITE,
+      emit: (x, z, h) => h > 0 && myc(x, z) && hash(x * 0.7, z * 1.3) > 0.55 ? { el: [0.05, 0.02, 0.08] } : null,
+    });
+    water(0.2, 0x2a6655);
+    // the redwood grove: two as built in Tenebris, one proposed giant
+    const g = redwood(-13, -9, { giant: true });
+    redwood(-5, -16); redwood(-19, 4); redwood(-22, -14);
+    glowVine(g.X + 2.6, g.top - 7, g.Z + 1, 6); glowVine(g.X - 2.4, g.top - 8, g.Z - 1.4, 5);
+    // the Sporewood across the river: giant mushrooms on the mycelium
+    mushroom(14, -6, { giant: true }); mushroom(10, -14); mushroom(19, 4); mushroom(13, 8);
+    // a camp on the near bank, lamps and a fire
+    hut(-6, 6, 4, 3.4, 2.4, 0x9a7a52, 0x6a7a3a, { ry: 0.6, wallM: MT("plank"), roofM: MT("thatch") });
+    lampPost(-2, 4); lampPost(-10, 10); fire(-3, 10);
+    // the animals: Sequoia's own (fauna.rs) and two planned ones
+    beast(-1, -3, "sparkit", { biped: true, s: 0.8, ears: true, ry: 0.7 });
+    beast(-9, -1, "shellkin", { biped: true, s: 0.8, shell: animalSpec("shellkin", 0), ry: 2.2 });
+    beast(3, -2.5, "crane", { s: 1.1, legs: 0.9, neck: 0.7, bird: true, ry: -0.9, y: 0.2 });
+    beast(9, -2, "gloomhopper", { biped: true, s: 0.9, ry: 2.8 });
+    beast(17, -12, "mossback", { s: 2.4, ry: 0.3, shell: animalSpec("mossback", 0) });
+    beast(-16, 12, "barkstrider", { biped: true, s: 1.5, legs: 0.7, ry: -1.4 });
+    return { sky: 0xc8a078, dusk: 0xd07040, haze: 0.0105, fog: 0xa88060, skyBody: { id: "verdant", dir: [-0.3, 0.12, -0.94], size: 60 }, sunCol: 0xffe0c0 };
+  },
+  crag() {
+    terrain({ sheet: () => TEB.moon("crag"), height: (x, z) => { let h = fbm(x * 0.03, z * 0.03) * 5; for (const [a, b, r] of [[9, -5, 8], [-12, 12, 6]]) { const d = Math.hypot(x - a, z - b); if (d < r) h -= 3 * (1 - (d / r) ** 2); } return h; }, top: () => WHITE, side: () => WHITE });
+    claim({ rover: true, ship: true });
+    return { sky: 0, airless: true, skyBody: { id: "quartz", dir: [-0.45, 0.1, -0.87], size: 60 } };
+  },
+  frostbite() {
+    terrain({ sheet: (x, z, h) => h < 0 ? LAY(TT("ice", "frost"), TT("ice", "frost"), TT("ice", "frost"), TT("ice", "frost")) : TEB.frost(),
+      height: (x, z) => { const crack = Math.abs(x * 0.5 - z + Math.sin(z * 0.25) * 3) < 2.2 ? -3 : 0; return 1 + fbm(x * 0.035, z * 0.035) * 3 + crack; }, top: () => WHITE, side: () => WHITE });
+    { const x = -5, z = -6, y = topAt(x, z); for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) V.bag.three(new THREE.CylinderGeometry(0.12, 0.12, 9, 6), M4(x + a * 0.9, y + 4.4, z + b * 0.9, 0, 1, 1, 1, a * 0.12), lin(0xc8a040), null, null, MT("iron")); box(x, y + 8.5, z, 1.6, 1.0, 1.6, 0x8a8a90); box(x, y + 4.6, z, 0.5, 0.4, 0.5, 0xffffff, { el: [4, 4, 3.6] }); light(x, y + 4, z, "lamp", 0xe8f0ff, 14, 1.2); }
+    dome(5, 4, 3);
+    return { sky: 0, airless: true, skyBody: { id: "tenrime", dir: [0.5, 0.14, -0.85], size: 70 } };
+  },
+  luna() { return barrenVig(TEB.moon(), "tenebris", 420, { rover: true }); },
+  selene() { return barrenVig(TEB.moon([0.62, 0.62, 0.66]), "tenebris", 260, {}); },
+  verdant() { return barrenVig(TEB.moon([0.8, 0.86, 0.66]), "sequoia", 560, {}); },
+  sprout() { return barrenVig(TEB.moon([0.9, 0.88, 0.82]), "sequoia", 380, { lumpy: true }); },
+  quartz() { return barrenVig(TEB.moon([1.15, 1.15, 1.2]), "crag", 300, { glints: 0xd2f8ff }); },
+  tenrime() { return barrenVig(TEB.frost(), "frostbite", 300, {}); },
+  nbelt() { return barrenVig(TEB.rock("asteroid"), null, 0, { lumpy: true }); },
+  sconce() {
+    const seam = (x, z) => Math.abs(fbm(x * 0.05 + 3, z * 0.05) - 0.5) < 0.035;
+    terrain({ sheet: (x, z) => seam(x, z) ? "basalt_wastes" : "basalt_wastes", topTile: (x, z) => seam(x, z) ? [3, 3] : [0, 0], tint: (x, z) => seam(x, z) ? null : [0.55, 0.45, 0.42],
+      height: (x, z) => seam(x, z) ? -1 : fbm(x * 0.04, z * 0.04) * 4, top: () => WHITE, side: () => WHITE,
+      emit: (x, z) => seam(x, z) ? { ef: [3.2, 1.0, 0.25] } : null });
+    for (const c of V.cells.values()) if (seam(c.x, c.z) && hash(c.q, c.r) > 0.5) light(c.x, c.h + 0.8, c.z, "fire", 0xff6020, 8, 0.6);
+    for (const [x, z] of [[6, 6], [9, 3], [3, 10]]) crystal(x, z, 1.2, 0xfe6420, [2.4, 0.9, 0.3]);
+    claim({ rover: true, dx: -8, dz: -6, mx: -3, mz: -10 });
+    return { sky: 0, airless: true, skyBody: null, sunCol: 0xff8060 };
+  },
+  wick() {
+    terrain({ sheet: (x, z, h) => h < 0 ? "swamp" : x > 14 ? "lunar_regolith" : "swamp", tint: (x, z, h) => x > 14 ? [1.05, 0.78, 0.62] : [0.45, 0.3, 0.32],
+      height: (x, z) => { const sea = Math.hypot(x + 10, z - 10) < 8; return sea ? -2 : 1 + fbm(x * 0.04, z * 0.04) * 4 + Math.max(0, x - 14) * 0.15; }, top: () => WHITE, side: () => WHITE });
+    water(-1.5, 0x203848, 12);
+    for (const [x, z, s] of [[-14, -6, 1], [-6, -14, 1.1], [4, -12, 0.9], [-2, 12, 1], [8, 14, 1]]) blackleaf(x, z, s);
+    for (const [x, z] of [[-4, -4], [2, -6], [-9, 0], [6, 6], [-1, 5]]) lanternbloom(x, z);
+    hut(-2, -1, 4, 3.4, 2.4, 0x8a6a5a, 0x4a3030, { ry: 0.3, wallM: MT("stone"), roofM: MT("shingle") });
+    lampPost(3, 0);
+    beast(10, -4, "tallowback", { s: 1.8, ry: 2.6 }); beast(12, 2, "tallowback", { s: 1.5, ry: 2.0 });
+    beast(-8, 8, "dimwing", { s: 0.9, wings: true, bird: true, y: 4, ry: 1.0 });
+    return { sky: 0x9a6a5a, dusk: 0xd4462b, haze: 0.016, fog: 0x7a4a40, sunCol: 0xff7048, skyBody: null };
+  },
+  snuff() { return barrenVig(LAY(TT("ice", [0.7, 0.72, 0.78]), TT("ice", [0.6, 0.6, 0.66]), TT("ice", [0.5, 0.5, 0.55]), TT("rocks", "asteroid")), "censer", 640, {}); },
+  shale() {
+    terrain({ sheet: () => "lunar_regolith", tint: (x, z, h) => (h % 2 ? [0.62, 0.72, 0.92] : [0.5, 0.58, 0.78]),
+      height: (x, z) => Math.floor((fbm(x * 0.03, z * 0.03) * 10 + (x * 0.25)) / 2) * 2 - 3, top: () => WHITE, side: () => WHITE, base: -12 });
+    claim({ ship: true });
+    starPoint([-0.62, 0.13, -0.77], 0xd2f8ff, 30);
+    return { sky: 0, airless: true, skyBody: null, sunCol: 0xffc890 };
+  },
+  fallow() {
+    terrain({ sheet: (x, z, h) => h <= 0 ? "beach" : h > 6 ? "tundra" : "fields", tint: (x, z, h) => h > 0 && h <= 6 ? [1.35, 1.0, 0.45] : null,
+      height: (x, z) => { const lake = Math.hypot(x - 10, z + 8) < 8; return lake ? -2 : 1 + fbm(x * 0.03, z * 0.03 + 9) * 6 - Math.max(0, z * 0.05); }, top: () => WHITE, side: () => WHITE, trees: "tundra" });
+    water(-0.6, 0x1f5a8a, 12);
+    for (const [x, z] of [[-14, -12], [-18, 2], [-10, 16], [16, 12]]) tree(x, z, "pine");
+    hut(-5, -1, 4.4, 3.6, 2.6, 0xc8b898, 0x6a4a32, { ry: -0.4, wallM: MT("plank"), roofM: MT("thatch") });
+    fire(-1, 3); lampPost(-9, 2);
+    for (const [x, z, r] of [[4, 8, 0.4], [7, 11, 1.2], [1, 12, 2.2], [9, 6, 0.1]]) beast(x, z, "drover", { s: 1.5, ry: r });
+    beast(-12, 8, "burrowkit", { biped: true, s: 0.7, ears: true, ry: 0.8 });
+    beast(2, -10, "scythewing", { s: 0.9, wings: true, bird: true, y: 7, ry: -0.6 });
+    starPoint([-0.62, 0.13, -0.77], 0xd2f8ff, 34);
+    return { sky: 0x9cc0dc, dusk: 0xf0a060, haze: 0.009, sunCol: 0xffe0b0, skyBody: null };
+  },
+  lode() {
+    terrain({ sheet: () => "asteroid", tint: () => [0.85, 0.92, 1.1], N: 9, height: (x, z) => fbm(x * 0.06, z * 0.06) * 5 - 1, top: () => WHITE, side: () => WHITE });
+    for (const c of V.cells.values()) if (hash(c.q * 3, c.r) > 0.9) box(c.x, c.h, c.z, 0.5, 0.25, 0.5, 0xe8eef8, { m: MT("iron") });
+    claim({ dome: false, mx: 0, mz: 0, ship: true });
+    { const x = 5, z = -3, y = topAt(x, z); box(x, y, z, 2.4, 1.6, 2.4, 0xc8a040); box(x, y + 1.6, z, 0.8, 1.2, 0.8, 0x8a8a90); light(x, y + 2, z - 1.6, "lamp", 0xe8f0ff, 7, 0.8); box(x, y + 1.0, z - 1.22, 0.4, 0.3, 0.06, 0xffffff, { el: [3, 3, 2.6] }); }
+    starPoint([-0.6, 0.14, -0.78], 0xd2f8ff, 30);
+    return { sky: 0, airless: true, skyBody: null, sunCol: 0xffc890 };
+  },
+});
+function barrenVig(sheet, parent, size, o) {
+  terrain({ sheet: () => sheet, N: o.lumpy ? 9 : 10,
+    height: (x, z) => { let h = fbm(x * 0.035, z * 0.035) * (o.lumpy ? 5 : 3.5); for (const [a, b, r] of [[8, -6, 7], [-12, 9, 5]]) { const d = Math.hypot(x - a, z - b); if (d < r) h -= 2.5 * (1 - (d / r) ** 2); } return h; },
+    top: () => WHITE, side: () => WHITE });
+  if (o.glints) for (const c of V.cells.values()) if (hash(c.q * 5, c.r * 3) > 0.9) box(c.x, c.h, c.z, 0.18, 0.12, 0.18, o.glints, { ef: [0.5, 0.6, 0.7] });
+  claim({ rover: o.rover, dx: -5, dz: 3, r: 2.8 });
+  return { sky: 0, airless: true, skyBody: parent ? { id: parent, dir: [-0.4, 0.1, -0.9], size } : null };
+}
+Object.assign(CAPTION, {
+  tenebris: "A homestead on Tenebris's yellow-green pasture, in Tenebris's own textures: torches and a fire, the classic broadleaf trees, cactus on the sand, a pine on the snow line. Sheep, a cow, a critter and a chicken graze; a stalker waits at the edge for dark. Luna in the sky.",
+  sequoia: "Sequoia in Tenebris's own textures. Left: the redwood grove on tan sod, three redwoods as Tenebris builds them (bare bole, rust-red crown) and one proposed giant (22 m, glow-vines in its crown). Across the green river: the Sporewood, giant mushrooms on mycelium that glows at night. A camp with lamps; a sparkit, a shellkin, a crane wading, a gloomhopper, a mossback and a barkstrider.",
+  crag: "Crag's rust (Tenebris's moon tile in its Crag tint), an outpost, a rover and a ship. Quartz in a black sky.",
+  frostbite: "A drill rig over a crevasse in Frostbite's glacier ice (Tenebris's snow over its Frost-tinted ice), a hab beside it. Rime low in the sky.",
+  luna: "A hab, a beacon and a rover on Luna's grey regolith; Tenebris in the sky.", selene: "A claim on dark Selene; Tenebris overhead.",
+  verdant: "Grey-olive Verdant with Sequoia's brown limb in its sky.", sprout: "A claim on lumpy Sprout, Sequoia's smallest moon.",
+  quartz: "Pale Quartz, its grains glinting; Crag in the sky.", tenrime: "Ice on Frostbite's moon Rime.",
+  nbelt: "A claim on one of the ten belt rocks, in Tenebris's asteroid tint.",
+  sconce: "Black iron plains split by molten seams that light everything near them; emberglass crystals; a dug-in outpost. Tallow is a red disc.",
+  wick: "Wick's twilight ring: blackleaf trees, lanternblooms glowing, a stone hut, tallowbacks grazing, a dimwing on the wind, a ring sea. The sunward scorch rises on the right. In the ring the sun never moves; the slider lights the patch as if you walked sunward or nightward.",
+  snuff: "Sooty ice on Snuff; Censer fills the sky.", censer: "Censer's skimmer platform over red cloud.",
+  shale: "Slate terraces on Shale, a ship landed on one. Gemel B is the white point in the sky.",
+  fallow: "A settler's hut on Fallow's golden steppe by a lake: a fire, a lamp, a drover herd, a burrowkit, a scythewing overhead. Gemel B is the hard white point in the sky.",
+  lode: "A mining claim on Lode, the metal rock: platinum plates in the ground, a drill, a ship. Gemel B overhead.",
+});
+
+// =====================================================================
+// The neighbours' orbit views (Nocturne, Tallow, Gemel) and the star map. Each is
+// a scene drawn by the one shared renderer, only while its tab is open. Drag to
+// turn, scroll or pinch to zoom; the camera stays where it is left. The bodies
+// move along their rails with world time (the same clock and speed buttons as the
+// Aubade view): that is the world moving them, not the camera.
+// =====================================================================
+function dragCam(host, tab, st, onClick) {
+  const pts = new Map(); let moved = 0;
+  host.addEventListener("pointerdown", e => { if (TAB !== tab || e.target !== GLC) return; GLC.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0; });
+  host.addEventListener("pointermove", e => {
+    if (TAB !== tab || !pts.has(e.pointerId)) return;
+    const p = pts.get(e.pointerId);
+    if (pts.size === 2) {
+      const o = [...pts.entries()].find(([k]) => k !== e.pointerId)[1];
+      const d0 = Math.hypot(p.x - o.x, p.y - o.y), d1 = Math.hypot(e.clientX - o.x, e.clientY - o.y);
+      if (d0 > 0) st.dist = THREE.MathUtils.clamp(st.dist * d0 / d1, st.min, st.max);
+    } else {
+      const dx = e.clientX - p.x, dy = e.clientY - p.y; moved += Math.abs(dx) + Math.abs(dy);
+      st.yaw -= dx * 0.006; st.pitch = THREE.MathUtils.clamp(st.pitch + dy * 0.005, -1.4, 1.45);
+    }
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  });
+  const up = e => { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); if (moved < 6 && pts.size === 0 && onClick) onClick(e); };
+  host.addEventListener("pointerup", up); host.addEventListener("pointercancel", up);
+  host.addEventListener("wheel", e => { if (TAB !== tab) return; e.preventDefault(); st.dist = THREE.MathUtils.clamp(st.dist * Math.exp(e.deltaY * 0.0012), st.min, st.max); }, { passive: false });
+}
+function placeCam(C, st, target) {
+  C.position.set(target.x + st.dist * Math.cos(st.pitch) * Math.sin(st.yaw), target.y + st.dist * Math.sin(st.pitch), target.z + st.dist * Math.cos(st.pitch) * Math.cos(st.yaw));
+  C.lookAt(target);
+}
+function labelAt(el, v, C, host) {
+  _v.copy(v).project(C);
+  const show = _v.z < 1 && Math.abs(_v.x) < 1.05 && Math.abs(_v.y) < 1.05;
+  el.style.display = show ? "" : "none";
+  if (show) { el.style.left = ((_v.x + 1) / 2 * host.clientWidth) + "px"; el.style.top = ((1 - _v.y) / 2 * host.clientHeight) + "px"; }
+}
+
+const SYSV = {};
+function makeSystemView(sys) {
+  const host = document.getElementById("sv-" + sys), labels = host.querySelector(".labels");
+  const S = new THREE.Scene(), C = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+  S.add(starField(1400, 2000, 1.5));
+  const nodes = {}, picks = [];
+  const bodies = B.filter(b => b.sys === sys);
+  for (const b of bodies) {
+    const group = new THREE.Group();
+    let mesh;
+    if (b.isStar) {
+      mesh = new THREE.Mesh(new THREE.SphereGeometry(b.dR, 32, 16), new THREE.MeshBasicMaterial({ color: b.color }));
+      const c = new THREE.Color(b.color);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(`rgba(${c.r * 255 | 0},${c.g * 255 | 0},${c.b * 255 | 0},1)`, "rgba(0,0,0,0)"), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      glow.scale.set(b.dR * 8, b.dR * 8, 1); group.add(glow);
+    } else {
+      mesh = new THREE.Mesh(new THREE.SphereGeometry(b.dR, 48, 24), planetMaterial(b, false));
+      if (b.id === "nbelt") mesh.visible = false;   // the belt is drawn as its ring of rocks
+    }
+    mesh.userData.id = b.id; group.add(mesh); picks.push(mesh); S.add(group);
+    let line = null;
+    if (b.parent) {
+      const pts = [];
+      for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * b.dA, 0, Math.sin(a) * b.dA)); }
+      const planet = BY[b.parent].isStar;
+      line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: planet ? 0x56627e : 0x3c4660, transparent: true, opacity: planet ? 0.75 : 0.6 }));
+      S.add(line);
+    }
+    const d = document.createElement("div");
+    d.className = "lbl" + (b.parent && !BY[b.parent].isStar ? " moon" : "");
+    d.textContent = b.name; d.dataset.id = b.id;
+    d.addEventListener("click", () => svSelect(sys, b.id));
+    labels.appendChild(d);
+    nodes[b.id] = { group, mesh, line, b, label: d };
+  }
+  const belt = bodies.find(b => b.id === "nbelt");
+  if (belt) {
+    const g = new THREE.BufferGeometry(), p = [];
+    for (let i = 0; i < 1400; i++) { const a = Math.random() * Math.PI * 2, r = belt.dA - 3 + Math.random() * 6; p.push(Math.cos(a) * r, (Math.random() - 0.5) * 1.4, Math.sin(a) * r); }
+    g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
+    S.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0x7a7570, size: 0.35, transparent: true, opacity: 0.8 })));
+  }
+  for (const b of bodies) if (b.rings) nodes[b.id].group.add(ringMesh(b.dR * 1.35, b.dR * 2.3));
+  bodies.sort((x, y) => (x.parent && !BY[x.parent].isStar ? 1 : 0) - (y.parent && !BY[y.parent].isStar ? 1 : 0));
+  for (const b of bodies) b.phase = b.phase ?? ((b.id.charCodeAt(0) * 37 + b.id.length * 101) % 360) * Math.PI / 180;
+  const st = { yaw: 0.6, pitch: 0.62, dist: Math.max(...bodies.map(b => b.dA || 0)) * 1.9 + 20, min: 6, max: 600 };
+  const v = { sys, host, S, C, nodes, bodies, st, picks, target: new THREE.Vector3(), follow: null };
+  dragCam(host, sys, st, e => {
+    const r = host.getBoundingClientRect(), ray = new THREE.Raycaster();
+    ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, C);
+    const hit = ray.intersectObjects(picks, false)[0];
+    if (hit) svSelect(sys, hit.object.userData.id);
+  });
+  SYSV[sys] = v;
+  svSelect(sys, SYSTEMS[sys].star, true);
+  return v;
+}
+function svPlace(v, day) {
+  for (const b of v.bodies) {
+    const n = v.nodes[b.id];
+    if (!b.parent) { n.group.position.set(0, 0, 0); continue; }
+    const T = b.T || 100, ang = b.phase + 2 * Math.PI * day / T, pp = v.nodes[b.parent].group.position;
+    n.group.position.set(pp.x + Math.cos(ang) * b.dA, 0, pp.z - Math.sin(ang) * b.dA);
+    n.line.position.copy(pp);
+    if (!b.isStar) { n.mesh.rotation.y = b.locked ? ang + Math.PI : 2 * Math.PI * day * (DAY_MIN / (b.day || DAY_MIN)); n.mesh.material.uniforms.sunPos.value.set(0, 0, 0); }
+  }
+}
+function drawSystem(sys, dt) {
+  const v = SYSV[sys], el = v.host;
+  svPlace(v, worldDay);
+  RR.setClearColor(0x000000, 1);
+  if (sizeTo(RR, GLC, el)) { v.C.aspect = el.clientWidth / el.clientHeight; v.C.updateProjectionMatrix(); }
+  const want = v.follow && v.nodes[v.follow].b.parent ? v.nodes[v.follow].group.position : new THREE.Vector3();
+  v.target.lerp(want, Math.min(1, dt * 4));
+  placeCam(v.C, v.st, v.target);
+  RR.render(v.S, v.C);
+  for (const b of v.bodies) {
+    const n = v.nodes[b.id], moon = b.parent && !BY[b.parent].isStar;
+    _v.copy(n.group.position); _v.y += b.dR || 5;
+    labelAt(n.label, _v, v.C, el);
+    if (moon && v.st.dist > 110 && v.follow !== b.parent && v.follow !== b.id) n.label.style.display = "none";
+  }
+  document.getElementById("svDay-" + sys).textContent = `Day ${fmt(worldDay, 1)}`;
+}
+function svSelect(sys, id, quiet) {
+  const b = BY[id], v = SYSV[sys];
+  if (v) { v.follow = b.parent ? id : null; for (const n of Object.values(v.nodes)) n.label.classList.toggle("sel", n.b.id === id); if (!quiet) v.st.dist = b.parent ? Math.max(14, b.dR * 8 + 10) : Math.max(...v.bodies.map(x => x.dA || 0)) * 1.9 + 20; }
+  const p = document.getElementById("svInfo-" + sys);
+  const tenRow = b.ten ? `<tr><th>In Tenebris</th><td>${b.ten.rText || fmt(b.ten.r)} m, ${fmt(b.ten.g, 2)} g: ${b.ten.was}</td></tr>` : "";
+  p.innerHTML = `<div class="fhead"><img src="planets/portrait_${b.art || b.id}.png${AV}" alt="" width="96" height="96"><div><div class="nm">${b.name}</div><div class="kd">${b.kind}</div><div class="chips">${chipsFor(b)}</div></div></div>
+    <p class="one">${b.one}</p><table class="stats">${tenRow}${statsFor(b).map(([k, x]) => `<tr><th>${k}</th><td>${x}</td></tr>`).join("")}</table>
+    ${b.species ? `<div class="spx">${b.species.map(s => `<figure><img src="planets/species/${s}.png${AV}" alt="" width="64" height="64">${SPECIES_NAMES[s] || s}</figure>`).join("")}</div>` : ""}
+    <div class="res">${(b.res || []).map(resFig).join("")}</div>
+    <div class="svbtns">${b.isStar ? "" : `<button class="btn" data-go="body">Selected body</button><button class="btn" data-go="surface">Its surface</button>`}${b.ten ? `<button class="btn" data-go="tenworlds">Tenebris worlds</button>` : ""}</div>`;
+  p.querySelectorAll("[data-go]").forEach(x => x.addEventListener("click", () => { select(id, false); if (x.dataset.go === "tenworlds") tenPick.value = id; setTab(x.dataset.go); scrollTo(0, 0); }));
+}
+
+// ---- the star map: Aubade and its neighbours, light years apart --------------------------------
+let SM = null;
+const LY = 10;   // scene units per light year
+function makeStarMap() {
+  const host = document.getElementById("smHost"), labels = host.querySelector(".labels");
+  const S = new THREE.Scene(), C = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+  S.add(starField(1800, 1500, 1.3));
+  // a faint disc grid in Aubade's plane, rings every 2 ly, so heights read
+  for (let r = 2; r <= 10; r += 2) {
+    const pts = []; for (let i = 0; i <= 96; i++) { const a = i / 96 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * r * LY, 0, Math.sin(a) * r * LY)); }
+    S.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x2a3550, transparent: true, opacity: r % 4 ? 0.5 : 0.8 })));
+  }
+  // dim unnamed stars within 12 ly, for depth (seeded, so they do not move between visits)
+  let s = 11; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const bg = new THREE.BufferGeometry(), bp = [];
+  for (let i = 0; i < 60; i++) { const r = 4 + rnd() * 8, a = rnd() * Math.PI * 2, y = (rnd() - 0.5) * 6; bp.push(Math.cos(a) * r * LY, y * LY, Math.sin(a) * r * LY); }
+  bg.setAttribute("position", new THREE.Float32BufferAttribute(bp, 3));
+  S.add(new THREE.Points(bg, new THREE.PointsMaterial({ color: 0x8890a8, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0.7 })));
+  const nodes = {};
+  for (const k of SYS_ORDER) {
+    const sy = SYSTEMS[k], p = new THREE.Vector3(sy.ly[0] * LY, sy.ly[1] * LY, sy.ly[2] * LY), c = new THREE.Color(sy.color);
+    const core = new THREE.Mesh(new THREE.SphereGeometry(k === "tallow" ? 0.9 : 1.3, 24, 12), new THREE.MeshBasicMaterial({ color: sy.color }));
+    core.position.copy(p); core.userData.id = k; S.add(core);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(`rgba(${c.r * 255 | 0},${c.g * 255 | 0},${c.b * 255 | 0},1)`, "rgba(0,0,0,0)"), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    glow.scale.set(12, 12, 1); glow.position.copy(p); S.add(glow);
+    if (k === "gemel") { const b2 = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8), new THREE.MeshBasicMaterial({ color: 0xd2f8ff })); b2.position.copy(p).add(new THREE.Vector3(2.4, 0.6, 0)); S.add(b2); }
+    // a drop line to the plane, and its foot
+    if (Math.abs(p.y) > 0.1) {
+      S.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p, new THREE.Vector3(p.x, 0, p.z)]), new THREE.LineDashedMaterial({ color: 0x56627e, dashSize: 1, gapSize: 1 })).computeLineDistances());
+      const foot = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.9, 16), new THREE.MeshBasicMaterial({ color: 0x56627e, side: THREE.DoubleSide })); foot.rotation.x = -Math.PI / 2; foot.position.set(p.x, 0, p.z); S.add(foot);
+    }
+    // the proposed star lane from Aubade
+    if (k !== "aubade") S.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), p]), new THREE.LineDashedMaterial({ color: 0x5ad2f0, dashSize: 2, gapSize: 1.4, transparent: true, opacity: 0.8 })).computeLineDistances());
+    const d = document.createElement("div");
+    d.className = "lbl"; d.dataset.id = k;
+    d.innerHTML = `${sy.name}<small>${k === "aubade" ? "home" : fmt(lyDist("aubade", k), 1) + " ly"}</small>`;
+    d.addEventListener("click", () => smSelect(k));
+    labels.appendChild(d);
+    nodes[k] = { p, d, core };
+  }
+  const st = { yaw: 0.35, pitch: 0.55, dist: 190, min: 30, max: 500 };
+  SM = { host, S, C, nodes, st };
+  dragCam(host, "starmap", st, e => {
+    const r = host.getBoundingClientRect(), ray = new THREE.Raycaster();
+    ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, C);
+    const hit = ray.intersectObjects(Object.values(nodes).map(n => n.core), false)[0];
+    if (hit) smSelect(hit.object.userData.id);
+  });
+  smSelect("nocturne");
+}
+function lyDist(a, b) { const p = SYSTEMS[a].ly, q = SYSTEMS[b].ly; return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); }
+const LANE_S_PER_LY = 30;   // a star lane's passage: 30 s of play per light year (decision S3)
+function laneTime(ly) { const s = Math.round(ly * LANE_S_PER_LY); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
+function smSelect(k) {
+  for (const [id, n] of Object.entries(SM.nodes)) n.d.classList.toggle("sel", id === k);
+  const sy = SYSTEMS[k], bodies = B.filter(b => b.sys === k && !b.isStar);
+  document.getElementById("smInfo").innerHTML = `<div class="fhead"><img src="planets/portrait_${BY[sy.star].art || sy.star}.png${AV}" alt="" width="96" height="96"><div><div class="nm">${sy.name}</div><div class="kd">${sy.type}</div></div></div>
+    <table class="stats"><tr><th>From Aubade</th><td>${k === "aubade" ? "home" : fmt(lyDist("aubade", k), 1) + " ly"}</td></tr><tr><th>Luminosity</th><td>${fmt(sy.lum, sy.lum < 0.1 ? 2 : 2)} &times; Aubade</td></tr><tr><th>Living zone</th><td>${sy.hz} from the star (game km)</td></tr>
+    ${k === "aubade" ? "" : `<tr><th>Star lane</th><td>proposed: ${laneTime(lyDist("aubade", k))} of passage, gate to gate</td></tr>`}<tr><th>Bodies</th><td>${bodies.length}</td></tr></table>
+    <p class="one">${sy.why}</p>
+    <div class="pxrow" style="background:transparent;border:0;padding:0">${bodies.map(b => `<img src="planets/portrait_${b.art || b.id}.png${AV}" width="48" height="48" alt="${b.name}" title="${b.name}">`).join("")}</div>
+    <div class="svbtns"><button class="btn" data-go="${k === "aubade" ? "system" : k}">Open ${sy.name}</button></div>`;
+  document.querySelector("#smInfo [data-go]").addEventListener("click", e => { setTab(e.target.dataset.go); scrollTo(0, 0); });
+}
+function drawStarMap() {
+  const el = SM.host;
+  RR.setClearColor(0x000000, 1);
+  if (sizeTo(RR, GLC, el)) { SM.C.aspect = el.clientWidth / el.clientHeight; SM.C.updateProjectionMatrix(); }
+  placeCam(SM.C, SM.st, new THREE.Vector3(0, 0, 18));
+  RR.render(SM.S, SM.C);
+  for (const n of Object.values(SM.nodes)) { _v.copy(n.p); _v.y += 2.4; labelAt(n.d, _v, SM.C, el); }
+}
+
+// ---- the Tenebris worlds tab: a ported world's surface, its roster and its source --------------
+const tenPick = document.getElementById("tenPick");
+const SPECIES_NAMES = { sparkit: "Sparkit", shellkin: "Shellkin", crane: "Crane", raptor: "Raptor", serpent: "Sea serpent", gloomhopper: "Gloomhopper", sporeling: "Sporeling", barkstrider: "Barkstrider", mossback: "Mossback",
+  critter: "Critter", stalker: "Stalker", sheep: "Sheep", frog: "Frog", lizard: "Lizard", penguin: "Penguin", tallowback: "Tallowback", dimwing: "Dimwing", lanternbloom: "Lanternbloom", drover: "Drover", scythewing: "Scythewing", burrowkit: "Burrowkit" };
+const SPECIES_NOTE = { sparkit: "built", shellkin: "built", crane: "built", raptor: "built", serpent: "built", gloomhopper: "planned", sporeling: "planned", barkstrider: "planned", mossback: "planned",
+  critter: "built", stalker: "built", sheep: "built", frog: "built", lizard: "built", penguin: "built" };
+function tenInfo(id) {
+  const b = BY[id];
+  const tl = b.ten ? tenTile(b.ten.r) : null;
+  document.getElementById("tenFacts").innerHTML = `<div class="fhead"><img src="planets/portrait_${b.id}.png${AV}" alt="" width="96" height="96"><div><div class="nm">${b.name}</div><div class="kd">${b.kind}</div><div class="chips">${chipsFor(b)}</div></div></div>
+    <table class="stats"><tr><th>In Tenebris</th><td>${b.ten.rText || fmt(b.ten.r)} m at L${tl.L}: ${fmt(tl.w, 2)} m cells</td></tr><tr><th>Here</th><td>${fmt(b.R)} m at L${b.L}: ${fmt(tileW(b), 3)} m cells</td></tr><tr><th>Gravity</th><td>${fmt(b.g, 2)} g, as in Tenebris</td></tr><tr><th>Was</th><td>${b.ten.was}</td></tr></table>
+    ${b.species ? `<h4 class="eyebrow" style="margin:4px 0 0">Its life</h4><div class="spx">${b.species.map(s => `<figure><img src="planets/species/${s}.png${AV}" alt="" width="64" height="64">${SPECIES_NAMES[s]}<small>${SPECIES_NOTE[s] === "planned" ? "planned in Tenebris" : "built in Tenebris"}</small></figure>`).join("")}</div>` : `<p class="vigcap">Lifeless: airless, as it was in Tenebris (fauna.rs gives life only to Tenebris and Sequoia).</p>`}`;
+}
+// Tenebris's own rule for its level (planet.rs subdivisions_for_radius): ceil(log2(1.05 R)) held to 3..7.
+function tenTile(r) { const L = Math.min(7, Math.max(3, Math.ceil(Math.log2(1.05 * r)))); return { L, w: TILE_K * r / Math.pow(2, L) }; }
+
 function resFig(r) {
-  const NAMES = { ice: "Water ice", iron: "Iron ore", sulfur: "Sulfur", helium3: "Helium-3", methane: "Methane", timber: "Timber", fish: "Fish", glowcrystal: "Glowcrystal", obsidian: "Volcanic glass", regolith: "Regolith", water: "Water" };
+  const NAMES = { redwood: "Redwood logs", spores: "Spores", blackwood: "Blackwood", emberglass: "Emberglass", platinum: "Platinum", fleece: "Fleece", ice: "Water ice", iron: "Iron ore", sulfur: "Sulfur", helium3: "Helium-3", methane: "Methane", timber: "Timber", fish: "Fish", glowcrystal: "Glowcrystal", obsidian: "Volcanic glass", regolith: "Regolith", water: "Water" };
   return `<figure><img src="planets/res_${r}.png${AV}" alt="">${NAMES[r]}</figure>`;
 }
 function chipsFor(b) {
-  if (b.id === "star") return `<span class="chip none">No surface</span>`;
+  if (b.isStar) return `<span class="chip none">No surface</span>`;
   const air = b.air ? `<span class="chip air">Air: ${b.air}</span>` : `<span class="chip none">Airless</span>`;
   const life = b.life && b.life.length && !(b.life[0] || "").startsWith("None") ? `<span class="chip life">Life</span>` : b.caverns ? `<span class="chip prop">Cave life? P4</span>` : `<span class="chip none">Lifeless</span>`;
   return air + life + (b.nocells ? `<span class="chip none">No cells</span>` : "");
 }
 function statsFor(b) {
-  if (b.id === "star") return [["Orbit", "centre of the system"], ["Keep-out", "60 km"], ["Display", "not to scale"]];
+  if (b.isStar) return b.parent ? [["System", SYSTEMS[b.sys].name], ["Orbits " + BY[b.parent].name, `${fmt(b.a)} km &middot; ${fmt(b.T)} days`], ["Display", "not to scale"]]
+    : [["System", SYSTEMS[b.sys].name], ["Type", SYSTEMS[b.sys].type], ["Light", `${fmt(SYSTEMS[b.sys].lum, 2)} &times; Aubade`], ["Living zone", SYSTEMS[b.sys].hz], ["From Aubade", b.sys === "aubade" ? "home" : fmt(lyDist("aubade", b.sys), 1) + " ly"], ["Display", "not to scale"]];
   const rows = [];
   rows.push(["Radius", `${fmt(b.R)} m${b.nocells ? " (cloud tops)" : ""}`]);
   rows.push(["Ladder", b.nocells ? `rung L${b.L}, no cells` : `L${b.L} &middot; ${cellsTxt(b.L)} cells`]);
@@ -1358,11 +2146,12 @@ function statsFor(b) {
   return rows;
 }
 const deck = document.getElementById("deck");
-for (const b of B.slice().sort((x, y) => (x.parent === "star" ? x.a : x.parent ? BY[x.parent].a + x.a / 1000 : -1) - (y.parent === "star" ? y.a : y.parent ? BY[y.parent].a + y.a / 1000 : -1))) {
+const deckKey = b => SYS_ORDER.indexOf(b.sys) * 1e5 + (!b.parent ? -1 : BY[b.parent].isStar && !b.isStar ? b.a : b.isStar ? 9e4 : BY[b.parent].a + b.a / 1000);
+for (const b of B.slice().sort((x, y) => deckKey(x) - deckKey(y))) {
   const el = document.createElement("button");
   el.className = "card"; el.dataset.id = b.id;
-  const nums = b.id === "star" ? "" : `<div class="nums"><span><small>Radius</small>${fmt(b.R)} m</span><span><small>Gravity</small>${fmt(b.g, 2)} g</span><span><small>Level</small>L${b.L}</span></div>`;
-  el.innerHTML = `<div class="ch"><img class="pt" src="planets/portrait_${b.id}.png${AV}" alt=""><div><div class="nm">${b.name}</div><div class="kd">${b.kind}</div></div></div>
+  const nums = b.isStar ? "" : `<div class="nums"><span><small>Radius</small>${fmt(b.R)} m</span><span><small>Gravity</small>${fmt(b.g, 2)} g</span><span><small>Level</small>L${b.L}</span></div>`;
+  el.innerHTML = `<div class="ch"><img class="pt" src="planets/portrait_${b.art || b.id}.png${AV}" alt=""><div><div class="nm">${b.name}</div><div class="kd">${b.kind}${b.sys !== "aubade" ? " &middot; " + SYSTEMS[b.sys].name : ""}</div></div></div>
     <div class="row">${chipsFor(b)}</div><p class="one">${b.one}</p>
     <div>${nums}<div class="ri" style="margin-top:6px">${(b.res || []).map(r => `<img src="planets/res_${r}.png${AV}" alt="${r}" title="${r}">`).join("")}</div></div>`;
   el.addEventListener("click", () => { select(b.id, false); setTab("body"); scrollTo(0, 0); });
@@ -1374,16 +2163,18 @@ function select(id, fromOrbit) {
   document.getElementById("iName").textContent = b.name; document.getElementById("sName").textContent = b.name;
   for (const p of document.querySelectorAll(".bodypick")) p.value = id;
   document.getElementById("iKind").textContent = b.kind;
-  document.getElementById("iPortrait").src = `planets/portrait_${b.id}.png${AV}`;
+  document.getElementById("iPortrait").src = `planets/portrait_${b.art || b.id}.png${AV}`;
   document.getElementById("iChips").innerHTML = chipsFor(b);
   document.getElementById("iStats").innerHTML = statsFor(b).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("");
   const L = (t, a) => a && a.length ? `<div><h4>${t}</h4><ul>${a.map(x => `<li>${x}</li>`).join("")}</ul></div>` : "";
-  document.getElementById("iLists").innerHTML = L("Biomes", b.biomes) + L("Life roster", b.life && b.life.length ? b.life : b.id === "star" ? [] : ["None: " + (b.air ? "proposed lifeless" : "airless bodies are lifeless")]) + L("What you do there", b.doing);
+  document.getElementById("iLists").innerHTML = L("Biomes", b.biomes) + L("Life roster", b.life && b.life.length ? b.life : b.isStar ? [] : ["None: " + (b.air ? "proposed lifeless" : "airless bodies are lifeless")]) + L("What you do there", b.doing);
   document.getElementById("iRes").innerHTML = (b.res || []).map(resFig).join("") || `<span class="vigcap">None.</span>`;
   document.getElementById("vigCap").textContent = CAPTION[b.id] || "";
   for (const c of deck.children) c.setAttribute("aria-current", c.dataset.id === id ? "true" : "false");
-  for (const bb of B) NODES[bb.id].label.classList.toggle("sel", bb.id === id);
-  cam.follow = id; cam.wantDist = id === "star" ? 120 : Math.max(10, b.dR * 7 + (b.parent === "star" && id !== "pebble" ? 8 : 4));
+  for (const bb of BA) NODES[bb.id].label.classList.toggle("sel", bb.id === id);
+  if (b.sys === "aubade") { cam.follow = id; cam.wantDist = id === "star" ? 120 : Math.max(10, b.dR * 7 + (b.parent === "star" && id !== "pebble" ? 8 : 4)); }
+  else if (SYSV[b.sys]) svSelect(b.sys, id, true);
+  if (b.ten) { tenPick.value = id; tenInfo(id); }
   setGlobe(b); buildVignette(b);
 }
 
@@ -1401,11 +2192,14 @@ function frame(now) {
   dayOut.textContent = `Day ${fmt(worldDay, 1)} · home year ${fmt(worldDay / 100 + 1, 0)}`;
   if (TAB === "system") drawOrbit(dt);
   else if (TAB === "body") drawGlobe();
-  else if (TAB === "surface") drawVignette(dt, now);
+  else if (TAB === "surface" || TAB === "tenworlds") drawVignette(dt, now);
+  else if (TAB === "starmap") drawStarMap();
+  else if (SYSV[TAB]) drawSystem(TAB, dt);
   raf = requestAnimationFrame(frame);
 }
 function drawOrbit(dt) {
   // orbit camera
+  R1.setClearColor(0x000000, 1);
   if (sizeTo(R1, oc, orbitEl)) { C1.aspect = orbitEl.clientWidth / orbitEl.clientHeight; C1.updateProjectionMatrix(); }
   const want = cam.follow && cam.follow !== "star" ? NODES[cam.follow].group.position : new THREE.Vector3();
   cam.target.lerp(want, Math.min(1, dt * 4));
@@ -1414,7 +2208,7 @@ function drawOrbit(dt) {
   C1.lookAt(cam.target);
   R1.render(S1, C1);
   const w = orbitEl.clientWidth, h = orbitEl.clientHeight;
-  for (const b of B) {
+  for (const b of BA) {
     const n = NODES[b.id], el = n.label;
     _v.copy(b.id === "star" ? sunMesh.position : n.group.position); _v.y += (b.dR || 7);
     _v.project(C1);
@@ -1425,13 +2219,13 @@ function drawOrbit(dt) {
   }
 }
 function drawGlobe() {
-  const gEl = gc.parentElement;
+  const gEl = globeEl; R2.setClearColor(0x000000, 0);
   if (sizeTo(R2, gc, gEl)) { C2.aspect = gEl.clientWidth / gEl.clientHeight; C2.updateProjectionMatrix(); }
   R2.render(S2, C2);
 }
 function drawVignette(dt, now) {
   if (vigEnv) {
-    const vEl = vc.parentElement;
+    const vEl = vigEl; R3.setClearColor(vigClear, 1);
     if (sizeTo(R3, vc, vEl)) { C3.aspect = vEl.clientWidth / vEl.clientHeight; C3.updateProjectionMatrix(); }
     C3.position.set(vigCam.dist * Math.cos(vigCam.pitch) * Math.sin(vigCam.yaw), vigCam.dist * Math.sin(vigCam.pitch) + 1, vigCam.dist * Math.cos(vigCam.pitch) * Math.cos(vigCam.yaw));
     C3.lookAt(0, 3, 0);
@@ -1440,7 +2234,14 @@ function drawVignette(dt, now) {
     R3.render(S3, C3);
   }
 }
-const MAKE = { system: () => R1 || makeR1(), body: () => R2 || makeR2(), surface: () => R3 || makeR3() };
+const vigwrapEl = document.getElementById("vigwrap"), surfVigHost = document.getElementById("surfVigHost");
+const MAKE = {
+  system: makeR1, body: makeR2,
+  surface: () => { surfVigHost.appendChild(vigwrapEl); makeR3(); },
+  tenworlds: () => { document.getElementById("tenVigHost").appendChild(vigwrapEl); if (selected !== tenPick.value) select(tenPick.value, false); makeR3(); tenInfo(tenPick.value); },
+  starmap: () => { mountGL(document.getElementById("smHost"), "Three-dimensional star map: Aubade and its three neighbours, light years apart. Drag to turn, scroll to zoom, click a star."); if (!SM) makeStarMap(); },
+};
+for (const k of ["nocturne", "tallow", "gemel"]) MAKE[k] = () => { mountGL(document.getElementById("sv-" + k), `Three-dimensional orbit view of the ${SYSTEMS[k].name} system. Drag to turn, scroll to zoom, click a body.`); if (!SYSV[k]) makeSystemView(k); };
 for (const t of Object.keys(MAKE)) TAB_HOOKS[t] = {
   show() { MAKE[t](); if (!running) { running = true; lastT = performance.now(); raf = requestAnimationFrame(frame); } },
   hide() { running = false; cancelAnimationFrame(raf); },
@@ -1450,7 +2251,7 @@ for (const t of Object.keys(MAKE)) TAB_HOOKS[t] = {
   const rows = [];
   for (let L = 7; L <= 13; L++) {
     const R = 300 * Math.pow(2, L - 7), on = B.filter(b => b.L === L);
-    rows.push(`<tr><td class="n">L${L}</td><td class="n">${fmt(R)} m</td><td class="n">${L <= 12 || on.some(b => !b.nocells) ? fmt(TILE_K * R / Math.pow(2, L), 3) + " m" : "&mdash;"}</td><td class="n">${on.every(b => b.nocells) && on.length ? "no cells" : cellsTxt(L)}</td><td>${on.map(b => b.name + (b.nocells ? " (cloud tops)" : "")).join(", ") || (L === 7 ? "" : "&mdash;")}${L === 7 ? (on.length ? "; " : "") + "Tenebris's own gold-standard planet" : ""}</td></tr>`);
+    rows.push(`<tr><td class="n">L${L}</td><td class="n">${fmt(R)} m</td><td class="n">${L <= 12 || on.some(b => !b.nocells) ? fmt(TILE_K * R / Math.pow(2, L), 3) + " m" : "&mdash;"}</td><td class="n">${on.every(b => b.nocells) && on.length ? "no cells" : cellsTxt(L)}</td><td>${on.map(b => b.name + (b.nocells ? " (cloud tops)" : "") + (b.sys !== "aubade" ? ` <span class="mono" style="color:var(--muted)">${SYSTEMS[b.sys].name}</span>` : "")).join(", ") || (L === 7 ? "" : "&mdash;")}${L === 7 ? (on.length ? "; " : "") + "Tenebris's own gold-standard planet" : ""}</td></tr>`);
   }
   document.getElementById("ladderTable").innerHTML = `<thead><tr><th>Level</th><th style="text-align:right">Radius</th><th style="text-align:right">Tile width</th><th style="text-align:right">Cells</th><th>Bodies on this rung</th></tr></thead><tbody>${rows.join("")}</tbody>`;
 }
@@ -1459,10 +2260,32 @@ const fromHash = () => { const id = location.hash.slice(1); return BY[id] ? id :
 const qt = new URLSearchParams(location.search).get("t");   // ?t=10.5 sets the vignette's hour (for captures)
 if (qt !== null && isFinite(+qt)) timeEl.value = +qt;
 for (const p of document.querySelectorAll(".bodypick")) {
-  p.innerHTML = B.map(b => `<option value="${b.id}">${b.name}</option>`).join("");
+  p.innerHTML = SYS_ORDER.map(k => `<optgroup label="${SYSTEMS[k].name}">${B.filter(b => b.sys === k).sort((x, y) => deckKey(x) - deckKey(y)).map(b => `<option value="${b.id}">${b.name}</option>`).join("")}</optgroup>`).join("");
   p.addEventListener("change", () => select(p.value, false));
 }
-select(fromHash() || "home", false);
+// ---- the neighbours: pickers, tables and speed buttons ----
+{
+  const ported = B.filter(b => b.ten).sort((x, y) => deckKey(x) - deckKey(y));
+  const order = ["sequoia", "tenebris", "crag", "frostbite"];
+  ported.sort((x, y) => ((order.indexOf(x.id) + 1) || 9) - ((order.indexOf(y.id) + 1) || 9));
+  tenPick.innerHTML = ported.map(b => `<option value="${b.id}">${b.name}</option>`).join("");
+  tenPick.value = "sequoia";
+  tenPick.addEventListener("change", () => { select(tenPick.value, false); });
+  const tl = b => tenTile(b.ten.r);
+  document.getElementById("tenMap").innerHTML = `<thead><tr><th>Body</th><th>In Tenebris</th><th style="text-align:right">Radius</th><th style="text-align:right">Its cell</th><th style="text-align:right">8 &times; R</th><th style="text-align:right">Here</th><th style="text-align:right">Cell</th><th>Where</th></tr></thead><tbody>` +
+    ported.map(b => `<tr><td>${b.name}</td><td>${b.ten.was}</td><td class="n">${b.ten.rText || fmt(b.ten.r)} m</td><td class="n">L${tl(b).L}, ${fmt(tl(b).w, 2)} m</td><td class="n">${b.ten.rText ? "80 to 176" : fmt(b.ten.r * 8)} m</td><td class="n">${fmt(b.R)} m, L${b.L}${b.id === "sequoia" ? " (one rung up)" : ""}</td><td class="n">${fmt(tileW(b), 3)} m</td><td>${b.kind.replace(/ \(.*\)/, "")}, ${SYSTEMS[b.sys].name}, ${fmt(b.a)} km</td></tr>`).join("") + `</tbody>`;
+  document.getElementById("pxTen").innerHTML = TEN_NAMES.map(n => `<img src="${TEN}${n}.png${AV}" width="64" height="64" alt="${n}" title="${n}.png">`).join("") + `<img src="${TEN}animals.png${AV}" width="768" height="32" style="max-width:100%;height:auto" alt="animals.png" title="animals.png (24 species columns)">`;
+  const sysRows = SYS_ORDER.filter(k => k !== "aubade");
+  document.getElementById("laneTable").innerHTML = `<thead><tr><th>Lane</th><th style="text-align:right">Light years</th><th style="text-align:right">Passage</th><th>What is there</th></tr></thead><tbody>` +
+    sysRows.map(k => `<tr><td>Aubade &ndash; ${SYSTEMS[k].name}</td><td class="n">${fmt(lyDist("aubade", k), 1)}</td><td class="n">${laneTime(lyDist("aubade", k))}</td><td>${SYSTEMS[k].why}</td></tr>`).join("") +
+    [["nocturne", "tallow"], ["nocturne", "gemel"], ["tallow", "gemel"]].map(([a, c]) => `<tr><td>${SYSTEMS[a].name} &ndash; ${SYSTEMS[c].name}</td><td class="n">${fmt(lyDist(a, c), 1)}</td><td class="n">${laneTime(lyDist(a, c))}</td><td style="color:var(--muted)">only if built: lanes run from Aubade first</td></tr>`).join("") + `</tbody>`;
+  // every speed button on the page moves the one world clock
+  const allSpd = [...document.querySelectorAll("#spd0,#spd1,#spd2,#spd3,.btn.spd")];
+  const syncSpd = () => allSpd.forEach(x => x.setAttribute("aria-pressed", +x.dataset.s === daysPerSec ? "true" : "false"));
+  allSpd.forEach(x => x.addEventListener("click", () => { daysPerSec = +x.dataset.s; syncSpd(); }));
+  syncSpd();
+}
+{ const qb = new URLSearchParams(location.search).get("body"); select(fromHash() || (qb && BY[qb] ? qb : "home"), false); }
 document.getElementById("toBody").addEventListener("click", () => setTab("body"));
 document.getElementById("toSurface").addEventListener("click", () => setTab("surface"));
 addEventListener("hashchange", () => { const id = fromHash(); if (id) { select(id, false); setTab("body", false); } else { const t = tabOf(location.hash); if (t) setTab(t, false); } });
@@ -1472,8 +2295,9 @@ else if (fromHash()) setTab("body", false);
 else setTab(TAB, false);
 
 // the art section's sprite rows, at whole-number scales
-document.getElementById("pxPortraits").innerHTML = ["star","home","verdance","ochre","lantern","rime","cinder","murk","hollow","tidewater","pebble","amber","glaucus"].map(n => `<img src="planets/portrait_${n}.png${AV}" width="96" height="96" alt="${n}" title="${n}">`).join("");
-document.getElementById("pxRes").innerHTML = ["ice","iron","sulfur","helium3","methane","timber","fish","glowcrystal","obsidian","regolith","water"].map(n => `<img src="planets/res_${n}.png${AV}" width="64" height="64" alt="${n}" title="${n}">`).join("");
+document.getElementById("pxSpecies").innerHTML = Object.keys(SPECIES_NAMES).map(n => `<img src="planets/species/${n}.png${AV}" width="64" height="64" alt="${n}" title="${SPECIES_NAMES[n]}">`).join("");
+document.getElementById("pxPortraits").innerHTML = ["star","home","verdance","ochre","lantern","rime","cinder","murk","hollow","tidewater","pebble","amber","glaucus","nocturne","tenebris","luna","selene","sequoia","verdant","sprout","crag","quartz","frostbite","tenrime","nbelt","tallow","sconce","wick","censer","snuff","gemel","gemelb","shale","fallow","lode"].map(n => `<img src="planets/portrait_${n}.png${AV}" width="96" height="96" alt="${n}" title="${n}">`).join("");
+document.getElementById("pxRes").innerHTML = ["ice","iron","sulfur","helium3","methane","timber","fish","glowcrystal","obsidian","regolith","water","redwood","spores","blackwood","emberglass","platinum","fleece"].map(n => `<img src="planets/res_${n}.png${AV}" width="64" height="64" alt="${n}" title="${n}">`).join("");
 
 // The game's HUD over the vignette: the debug line and the hotbar as desktop/slots.rs draws
 // them (44 px slots, 4 px apart, 1 px borders), with the game's own icons: blocks are the

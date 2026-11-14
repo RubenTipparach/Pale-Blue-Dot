@@ -51,8 +51,8 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 
 | Id | Mockup | Page | OpenSpec | Stage | Link |
 | --- | --- | --- | --- | --- | --- |
-| M1 | The Halcyon System | `planets.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/RKNCXCKChRuNhbg37t9TeE |
-| M2 | Halcyon Transit | `travel.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/Rc38usecSUMT2RFF9ur6RZ |
+| M1 | The Aubade System | `planets.html` | `star-systems` | Drafted (2026-11-12) | https://claude.ai/artifact/RKNCXCKChRuNhbg37t9TeE |
+| M2 | Aubade Transit | `travel.html` | `star-systems` (star lanes) | Drafted (2026-11-12) | https://claude.ai/artifact/Rc38usecSUMT2RFF9ur6RZ |
 | M3 | Forge and Fabricator | `crafting.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/KEMNicnnXHyoQZ24kWRDep |
 | M4 | Shipyard and Ship Builder | `ship-crafting.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/VwFbs16wbr76CSWyrvUGLn |
 | M5 | Townsfolk and Peoples | `npcs.html` | townsfolk (extends it) | Drafted (2026-11-12) | https://claude.ai/artifact/RQ8WAnXoJMC5K8dftXWXqS |

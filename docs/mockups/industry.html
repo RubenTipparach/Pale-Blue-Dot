@@ -923,7 +923,7 @@ function buildSwarm() {
       if (on) segs.push(g.position.x * 0.32, g.position.y * 0.32, g.position.z * 0.32, g.position.x, g.position.y, g.position.z); });
     inLines.geometry.setAttribute("position", new THREE.Float32BufferAttribute(segs, 3));
   });
-  tag(S, "Halcyon", 0, 9, 0); tag(S, "Pale Blue: the ground receiver", 58, 5.5, 14); tag(S, "Relay stations", 58, 12, 14, "warm"); tag(S, "END GAME &middot; Collector drones", 0, 21, 0, "late");
+  tag(S, "Aubade", 0, 9, 0); tag(S, "Pale Blue: the ground receiver", 58, 5.5, 14); tag(S, "Relay stations", 58, 12, 14, "warm"); tag(S, "END GAME &middot; Collector drones", 0, 21, 0, "late");
   S.cam = { tx: 26, ty: 0, tz: 6, dist: 80, yaw: 0.25, pitch: 0.42 };
   S.status = () => `space view | swarm ${Math.round(ST.swarm)}% = ${Math.round(ST.swarm * 1000).toLocaleString("en")} drones | ${GENS.dyson.out().toLocaleString("en")} kW at the receiver`;
   powerHot(S, "dyson");
