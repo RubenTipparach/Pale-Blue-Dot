@@ -31,6 +31,15 @@ The owner, 2026-11-12, verbatim:
 Withdrawn the same day: "Let's not do warp." Starships, warp and other star
 systems are out of this change.
 
+The owner, 2026-11-14: "update the rocket sim to have a larger ground area,
+and maybe a small planet to test orbit transitions around, and a solar system
+with navigation nodes to plot flight paths and rocket burns". The mockup gets a
+launch field 2.4 km across (the game's cells near the pad, a cheap far ring),
+Wick, a 600 m test moon 14 km out, and a planner tab: the whole system, a
+predicted line integrated forward, and maneuver nodes. Nodes contradict the
+flight invariant; they are in the mockup only, and the invariant is asked
+about (survey G4a, design 11.4).
+
 Today a ship is one craft flown by assisted Newtonian flight with a bounded
 gravity field, and the earlier mockups (`ship-crafting.html`, `travel.html`)
 give every ship the same abilities from the start. The tiers turn space travel
@@ -92,6 +101,11 @@ commit that builds it, with its test.
 - Engine work the tiers need: an orbital field for rockets (if B), and
   freighter routes as stored records that move goods through the durable
   save path.
+
+- **The planner (mockup, 2026-11-14):** maneuver nodes with prograde, normal
+  and radial handles on the integrated line, chained, flown by hand; Wick to
+  practise launch, orbit, transfer, capture, landing and return; the Aubade
+  system to scale. Provisional on G4a; not in the spec deltas.
 
 ## What does not change
 

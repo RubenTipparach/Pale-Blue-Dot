@@ -18,6 +18,14 @@ Planning only. Nothing below starts until the owner asks for it (CLAUDE.md,
       in `docs/screenshots/mockup-ship-tiers/`.
 - [x] 0.4 Published, on the tracker, G4 in the survey with tab 2 and tab 3's
       screenshots.
+- [x] 0.4a The owner's ask of 2026-11-14 (design 11): the launch field with a
+      far LOD ring, Pad B and a walk view; Wick, the 600 m test moon; the
+      planner tab with the Aubade system, the integrated line and maneuver
+      nodes; Halcyon renamed Aubade. Verified in headless Chromium
+      (SwiftShader), screenshots in `docs/screenshots/mockup-ship-tiers/`,
+      republished.
+- [ ] 0.4b G4a in the survey with the planner's screenshots: may maneuver
+      nodes on the integrated line join the invariant? Folded in when answered.
 - [ ] 0.5 The owner's answer to G4 folded in; the provisional flight delta
       kept, changed or dropped to match.
 - [ ] 0.6 The owner approves the mockup for build on the tracker.

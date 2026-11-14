@@ -55,7 +55,7 @@ button{font:inherit}
 .pbtn[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
 
 /* tier tabs */
-.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .tab{all:unset;cursor:pointer;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--panel)}
 .tab img{grid-row:span 2;width:32px;height:32px}
 .tab b{font-family:var(--display);font-size:18px;letter-spacing:.03em}
@@ -173,11 +173,13 @@ form.addroute select{font:inherit;font-size:13.5px;background:var(--panel-2);col
 <div class="wrap">
 
 <header class="lede">
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-12</span><span class="tag plain">OpenSpec: ship-tiers</span></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-12; planner 2026-11-14</span><span class="tag plain">OpenSpec: ship-tiers</span></div>
   <h1>Rockets and Landers</h1>
   <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
   <p>Three tiers of ship, each unlocked by the next rung of the power ladder. <b>Chemical and nuclear rockets</b> are stacked from hex cells in the assembly building and fly to orbit on thrust-to-weight and delta-v. <b>Fusion</b> ships stay in space, fly courses their nav computer plots, run freight on their own, and meet landers in low orbit. <b>Antimatter</b> makes the lander the ship: it flies from one world's surface to another's with no orbit stop, anywhere in the system. There is no warp: <q>Let's not do warp</q> (the owner, 2026-11-12).</p>
   <p>The assembly building's grid reaches <b>four rings</b> out from the core, a stack up to nine cells (25.5 m) across, so a big rocket has decks to walk: crew decks, cabins, ladders, hatches and airlocks are cells like the tanks, checked so the pod can be walked to from the hatch. <q>Make me some more rocket building presets. Allow larger rockets with more leg room to walk around in. (3-4 radius? Blocks)</q> (the owner, 2026-11-12). Pick <b>Colony lander</b>, set it to night and go <b>Inside</b>.</p>
+  <p><b>New, 2026-11-14:</b> <q>update the rocket sim to have a larger ground area, and maybe a small planet to test orbit transitions around, and a solar system with navigation nodes to plot flight paths and rocket burns</q> (the owner). The launch field now runs 2.4 km out (the game's cells for 200 m round the pad, a cheap far ring beyond), with <b>Pad B</b> 190 m out to hop to and a <b>Walk the field</b> view. The new <b>Planner</b> tab has <b>Wick</b>, a 600 m test moon 16 km from home, the whole <b>Aubade</b> system to scale, and <b>maneuver nodes</b> on a predicted line that is the flight itself run forward: launch, orbit, transfer, capture, land on Wick, come home.</p>
+  <p class="honest"><b>Maneuver nodes go against CLAUDE.md as written</b> ("Do not restore rocket patched conics, maneuver nodes, transfer-window requirements, or n-body ship simulation"). You asked for them, so they are in this mockup only; the rule changes only on your word. It is the survey's question G4a, with the planner's screenshots.</p>
   <p class="honest"><b>One thing here needs your call, and it is the reason for the screenshots in the survey.</b> CLAUDE.md says ships fly Newtonian with local gravity falloff and that patched conics, maneuver nodes and transfer windows stay out. The chemical tier's "orbital stuff" pulls against that. Tab 2 flies the same rocket both ways: <b>today's bounded field</b> and <b>the inverse-square field Tenebris flies its rockets in</b>. The recommendation is at the bottom of the page.</p>
 </header>
 
@@ -188,6 +190,7 @@ form.addroute select{font:inherit;font-size:13.5px;background:var(--panel-2);col
     <button class="tab" role="tab" data-tab="orbit" aria-selected="false"><img src="ship-tiers/engine-chem.png?v=1" alt=""><b>Chemical: orbit</b><span>tier 1 &middot; fission</span></button>
     <button class="tab" role="tab" data-tab="fusion" aria-selected="false"><img src="ship-tiers/fusion.png?v=1" alt=""><b>Fusion</b><span>tier 2 &middot; fusion power</span></button>
     <button class="tab" role="tab" data-tab="antimatter" aria-selected="false"><img src="ship-tiers/antimatter.png?v=1" alt=""><b>Antimatter</b><span>tier 3 &middot; the collider</span></button>
+    <button class="tab" role="tab" data-tab="plan" aria-selected="false"><img src="ship-tiers/navcomp.png?v=1" alt=""><b>Planner</b><span>nodes &middot; Wick &middot; Aubade</span></button>
   </div>
   <div class="stage" id="stage">
     <canvas id="view" aria-label="The current tier's 3D view"></canvas>
@@ -225,7 +228,7 @@ form.addroute select{font:inherit;font-size:13.5px;background:var(--panel-2);col
     <tbody>
       <tr><td>Kestrel, Tern, Loon (<code>assets/models/vehicles</code>)</td><td>Before the tiers: the air and sea craft of the home world, built now. The Kestrel's tilt-rotor hover is assisted flight in the air; none of them reaches space. They stay useful at every tier (a Kestrel parks by the launch pad in tab 1).</td></tr>
       <tr><td>Shipyard and Ship Builder (<code>ship-crafting.html</code>)</td><td>Its module grid becomes the fusion-tier ship builder, on the same hex cells as the assembly building (2.833 m across, 1 m layers) instead of 2 m squares, so one grid builds everything. Its <code>FlightLimits</code> from parts carry over for assisted ships.</td></tr>
-      <tr><td>Halcyon Transit (<code>travel.html</code>)</td><td>Its transit drive (accelerate, coast, flip, brake) is the fusion tier's nav-computer course. Its free hover compensation becomes a tier-2 lander and tier-3 feature: a chemical rocket's engines must beat its weight, which is the point of thrust-to-weight.</td></tr>
+      <tr><td>Aubade Transit (<code>travel.html</code>)</td><td>Its transit drive (accelerate, coast, flip, brake) is the fusion tier's nav-computer course. Its free hover compensation becomes a tier-2 lander and tier-3 feature: a chemical rocket's engines must beat its weight, which is the point of thrust-to-weight.</td></tr>
       <tr><td>Pits, plants and power (<code>industry.html</code>)</td><td>The power ladder: fission fuel rods feed the nuclear thermal engine; a fusion plant makes the fusion drive and its pellets; the collider makes antimatter cells. Freighters move that industry's goods between worlds.</td></tr>
       <tr><td>Stations and Outposts (<code>stations.html</code>)</td><td>Highport and the docks are where fusion ships live and where freighter routes stop.</td></tr>
     </tbody>
@@ -235,14 +238,14 @@ form.addroute select{font:inherit;font-size:13.5px;background:var(--panel-2);col
 <section aria-labelledby="h-dec">
   <div class="eyebrow">Decisions</div>
   <h2 id="h-dec">Asked, and recommendations taken</h2>
-  <p class="muted">One question goes to the survey with tab 2's and tab 3's screenshots beside it. The rest have nothing to compare side by side, so each is recorded as "recommendation taken (ask only with screenshots)" and can be overturned on the tracker.</p>
+  <p class="muted">Two questions go to the survey with screenshots beside them: G4 (tab 2's and tab 3's) and G4a (the planner's). The rest have nothing to compare side by side, so each is recorded as "recommendation taken (ask only with screenshots)" and can be overturned on the tracker.</p>
   <div class="dec" id="decisions"></div>
 </section>
 
 <section aria-labelledby="h-art">
   <div class="eyebrow">Where the art comes from</div>
   <h2 id="h-art">The game's own, and what is new</h2>
-  <p class="honest"><b>The game's own</b> (byte-identical copies in <code>ship-tiers/game/</code>, see its README): every hex column, on the launch field, the landing sites and each globe from orbit, wears the terrain atlas (<code>assets/tilesets/atlas.png</code>; fields, lunar regolith, basalt, frozen, desert, jungle and mountain sheets) on 2.833 m cells with 1 m layers; the pad, gantry, apron, rim and hall are the settlement textures iron, granite, stone and slate at their <code>repeat_m</code>; the Kestrel by the pad is the game's model; hotbar items are the game's icons. <b>Mockup-only:</b> the part icons and part textures are pixel art in the solitaire collection's style, drawn by <code>tools/art/ship_tiers_art.py</code> with the balatro-pixel-art kit (32 x 32, Sweaft-64, sampled nearest with no mipmaps). Rockets, landers and freighters are hex cells built by the page from those parts, decks and cabins included; a cabin's bunk is the game's plank texture. Globes from orbit use cells 64 times wider than the game's so they read at that distance; the orbit, the moon's distance and every number in tab 2 are to scale. Water and the air shell are flat tints, as the game draws them.</p>
+  <p class="honest"><b>The game's own</b> (byte-identical copies in <code>ship-tiers/game/</code>, see its README): every hex column, on the launch field, the landing sites and each globe from orbit, wears the terrain atlas (<code>assets/tilesets/atlas.png</code>; fields, lunar regolith, basalt, frozen, desert, jungle and mountain sheets) on 2.833 m cells with 1 m layers; the pad, gantry, apron, rim and hall are the settlement textures iron, granite, stone and slate at their <code>repeat_m</code>; the Kestrel by the pad is the game's model; hotbar items are the game's icons. <b>Mockup-only:</b> the part icons and part textures are pixel art in the solitaire collection's style, drawn by <code>tools/art/ship_tiers_art.py</code> with the balatro-pixel-art kit (32 x 32, Sweaft-64, sampled nearest with no mipmaps). Rockets, landers and freighters are hex cells built by the page from those parts, decks and cabins included; a cabin's bunk is the game's plank texture. Globes from orbit use cells 64 times wider than the game's so they read at that distance; the orbit, the moon's distance and every number in tab 2 are to scale. Water and the air shell are flat tints, as the game draws them. <b>The launch field's far ring</b> (past about 200 m) uses cells twelve times wider than the game's, a stand-in for a far-terrain tier; the near ring is the game's cells. <b>In the planner</b> every body is to scale in size and distance; its globes use cells 16 to 64 times wider than the game's so they read, Amber is a banded tint (it has no ground), and the ship is the First orbit stack's upper stage at its true size.</p>
 </section>
 
 </div>
@@ -587,7 +590,7 @@ function pushLamps(W) {
     if (n >= MAXL) break;
     const on = L.on === 2 ? 1 : (W.lampsOn ?? 1); if (on <= 0.01 || L.i <= 0) continue;
     // aboard, the hull and the decks stand between you and every lamp but your own deck's (lamps cast no shadows)
-    if (W.cam.fp && (L.tag !== "craft" || (W.spot && Math.abs(L.p.y - W.spot.y - 1.4) > 1.7))) continue;
+    if (W.cam.aboard && (L.tag !== "craft" || (W.spot && Math.abs(L.p.y - W.spot.y - 1.4) > 1.7))) continue;
     tmpV.copy(L.p); if (L.parent) L.parent.localToWorld(tmpV);
     U.uLampPos.value[n].copy(tmpV).applyMatrix4(view);
     U.uLampCol.value[n].set(L.c.r * L.i * on, L.c.g * L.i * on, L.c.b * L.i * on, L.r); n++;
@@ -602,28 +605,41 @@ const SHEET = {asteroid: 0, basalt: 1, beach: 2, desert: 3, fields: 4, frozen: 5
 const REP = {granite: 2, iron: 1, stone: 2, slate: 2, plank: 2};
 const hsh = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const vn = (x, z) => { const xi = Math.floor(x), zi = Math.floor(z), fx = x - xi, fz = z - zi, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz); const a = hsh(xi, zi), b = hsh(xi + 1, zi), c = hsh(xi, zi + 1), d = hsh(xi + 1, zi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; };
-function hexGround(W, {rings, sheet, kindAt}) {
+// a hex cell's axial coordinates from a point on the ground, for cells w across (flat to flat)
+function hexAt(x, z, w = HW) {
+  const hr = w / Math.sqrt(3), rf = z / (1.5 * hr), qf = x / w - rf / 2, sf = -qf - rf;
+  let q = Math.round(qf), r = Math.round(rf), s2 = Math.round(sf);
+  const dq = Math.abs(q - qf), dr = Math.abs(r - rf), ds = Math.abs(s2 - sf);
+  if (dq > dr && dq > ds) q = -r - s2; else if (dr > ds) r = -q - s2;
+  return [q, r];
+}
+// hex columns on the ground. w is the cell's width (HW for the game's cells; a far LOD ring uses wider
+// ones); skip(x, z) leaves a cell out; sink lowers a cell's top (so a far ring never shows through the
+// near one); kindAt may return its own atlas sheet
+function hexGround(W, {rings, sheet, kindAt, w = HW, skip = null, sink = null, name = "ground"}) {
   const CELL = new Map(), GEO = {}, geo = k => GEO[k] || (GEO[k] = {p: [], n: [], u: []});
+  const HR = w / Math.sqrt(3), xz = (q, r) => [w * (q + r / 2), HR * 1.5 * r];
   for (let q = -rings; q <= rings; q++) for (let r = -rings; r <= rings; r++) {
     if (Math.abs(q + r) > rings) continue;
-    const [x, z] = hexXZ(q, r); CELL.set(q + "," + r, Object.assign({x, z}, kindAt(x, z)));
+    const [x, z] = xz(q, r); if (skip && skip(x, z)) continue;
+    const c = Object.assign({x, z}, kindAt(x, z)); if (sink) c.h -= sink(x, z); CELL.set(q + "," + r, c);
   }
   const corner = i => { const a = Math.PI / 180 * (60 * i - 30); return [HR * Math.cos(a), HR * Math.sin(a)]; };
   for (const [k, c] of CELL) {
-    const [q, r] = k.split(",").map(Number), G = geo(c.k === "atlas" ? "atlas" : c.k);
-    const top = (px, pz) => c.k === "atlas" ? auv(sheet, 0, 0, (px - c.x) / (2 * HR) + 0.5, (pz - c.z) / (2 * HR) + 0.5) : [px / REP[c.k], -pz / REP[c.k]];
+    const [q, r] = k.split(",").map(Number), G = geo(c.k === "atlas" ? "atlas" : c.k), sh = c.sheet ?? sheet;
+    const top = (px, pz) => c.k === "atlas" ? auv(sh, 0, 0, (px - c.x) / (2 * HR) + 0.5, (pz - c.z) / (2 * HR) + 0.5) : [px / REP[c.k], -pz / REP[c.k]];
     for (let i = 0; i < 6; i++) {
       const [ax, az] = corner(i), [bx, bz] = corner((i + 1) % 6);
       for (const [px, pz] of [[c.x, c.z], [c.x + bx, c.z + bz], [c.x + ax, c.z + az]]) { G.p.push(px, c.h, pz); G.n.push(0, 1, 0); G.u.push(...top(px, pz)); }
       const mx = c.x + (ax + bx), mz = c.z + (az + bz);
       let nb = null; for (const [dq, dr] of NB) { const o = CELL.get((q + dq) + "," + (r + dr)); if (o && Math.hypot(o.x - mx, o.z - mz) < HR) nb = o; }
-      const low = nb ? nb.h : c.h - 3; if (low >= c.h) continue;
+      const low = nb ? nb.h : c.h - (c.skirt || 3); if (low >= c.h) continue;
       const nx = (ax + bx) / 2, nz = (az + bz) / 2, l = Math.hypot(nx, nz), S = c.k === "atlas" ? geo("atlas") : geo(c.k + "w");
       for (let y = c.h; y > low; y--) {
-        const tile = y === c.h ? 1 : 2;
+        const tile = y >= c.h - 1 + 1e-6 ? 1 : 2;
         for (const [px, py, pz, u, v] of [[ax, y, az, 0, 0], [bx, y - 1, bz, 1, 1], [bx, y, bz, 1, 0], [ax, y, az, 0, 0], [ax, y - 1, az, 0, 1], [bx, y - 1, bz, 1, 1]]) {
           S.p.push(c.x + px, py, c.z + pz); S.n.push(nx / l, 0, nz / l);
-          S.u.push(...(c.k === "atlas" ? auv(sheet, tile, 0, u, v) : [u * HR / REP[c.k], (py) / REP[c.k]]));
+          S.u.push(...(c.k === "atlas" ? auv(sh, tile, 0, u, v) : [u * HR / REP[c.k], (py) / REP[c.k]]));
         }
       }
     }
@@ -633,8 +649,9 @@ function hexGround(W, {rings, sheet, kindAt}) {
     const base = k.replace(/w$/, "");
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(G.p, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(G.n, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(G.u, 2));
-    const m = new THREE.Mesh(g, mats[base] || (mats[base] = std({map: tex(GAME + base), roughness: 1, side: THREE.DoubleSide}))); m.receiveShadow = true; W.scene.add(m);
+    const m = new THREE.Mesh(g, mats[base] || (mats[base] = std({map: tex(GAME + base), roughness: 1, side: THREE.DoubleSide}))); m.receiveShadow = true; m.name = name; W.scene.add(m);
   }
+  CELL.w = w;
   return CELL;
 }
 
@@ -656,7 +673,7 @@ function groundSky(W, sheetFog) {
   W.setTime = t => { W.time = t; W.applyTime(); renderCtl(); };
   W.applyTime = () => {
     const t = W.time, T = W.times[t]; if (!T) return;
-    s.background = new THREE.Color(T.sky); s.fog.color.setHex(T.fog);
+    s.background = new THREE.Color(T.sky); s.fog.color.setHex(T.fog); if (T.fogFar) { s.fog.near = T.fogNear; s.fog.far = T.fogFar; }
     W.hemi.intensity = T.hemi; W.sun.intensity = T.sun; W.sun.castShadow = T.sun > 0.2; W.moon.intensity = T.moon; W.stars.material.opacity = T.stars;
     W.lampsOn = T.lamps;
     for (const L of W.lamps) { if (L.sprite) L.sprite.visible = L.on === 2 || T.lamps > 0.05; if (L.bulb && L.on !== 2) L.bulb.material.color.copy(L.c).multiplyScalar(T.lamps > 0.05 ? 1 : 0.35); }
@@ -815,7 +832,8 @@ function padWorld(name, {sheet, layout}) {
   groundSky(W);
   W.emissive = [];
   const padR = layout === "vab" ? 15 : 9;   // the VAB's pad takes a ring-4 stack, 25 m across, with room round it
-  hexGround(W, {rings: 44, sheet, kindAt: (x, z) => {
+  if (layout === "vab") { launchField(W, sheet, padR); }
+  else hexGround(W, {rings: 44, sheet, kindAt: (x, z) => {
     const d = Math.hypot(x, z);
     if (d < padR) return {k: "stone", h: 1};
     if (d < padR + 2.4) return {k: "iron", h: 1};
@@ -824,9 +842,47 @@ function padWorld(name, {sheet, layout}) {
     const dd = Math.max(0, d - (layout === "vab" ? 60 : 26));
     return {k: "atlas", h: Math.max(0, Math.round(dd / 8 + (vn(x / 18, z / 18) - 0.5) * 3 * Math.min(1, dd / 16) + (vn(x / 50, z / 50) - 0.4) * dd / 10))};
   }});
+  W.groundAt = W.groundAt || ((x, z) => 0);
   // pad rim lamps: six warm pools
   for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + Math.PI / 6; W.lamp(Math.cos(a) * (padR + 1.2), 1.4, Math.sin(a) * (padR + 1.2), 0xffb347, 2.0, 9, {size: 0.2, halo: 1.6}); }
   return W;
+}
+// ---- the launch field (2026-11-14: "a larger ground area"). Near the pad, the game's own cells: 80 rings
+// of 2.833 m columns, 1 m layers, about 227 m out. Beyond, a far LOD ring of the same ground on cells twelve
+// times wider (34 m), out to 2.4 km, one mesh, sunk where it overlaps the near ring. Pad B, 190 m out, is
+// somewhere to hop to and land on.
+const FIELD = {near: 80, farW: HW * 12, farR: 2400, padB: {x: 152, z: -114, r: 9}};
+const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+function fieldH(x, z) {
+  const d = Math.hypot(x, z), ramp = smooth(60, 170, d);
+  let h = ((vn(x / 46, z / 46) - 0.5) * 8 + (vn(x / 15, z / 15) - 0.5) * 2.2) * ramp + 1.2 * ramp;
+  h += Math.max(0, d - 650) / 34 * (0.45 + vn(x / 260, z / 260));                 // the hills that ring the field
+  const db = Math.hypot(x - FIELD.padB.x, z - FIELD.padB.z); h *= smooth(FIELD.padB.r + 4, 34, db);
+  return Math.max(0, Math.round(h));
+}
+function fieldKind(x, z, padR) {
+  const d = Math.hypot(x, z), db = Math.hypot(x - FIELD.padB.x, z - FIELD.padB.z);
+  if (d < padR) return {k: "stone", h: 1};
+  if (d < padR + 2.4) return {k: "iron", h: 1};
+  if (x > -46 && x < 46 && z > -34 && z < 34) return {k: "granite", h: 0};
+  if (db < FIELD.padB.r) return {k: "stone", h: 1};
+  if (db < FIELD.padB.r + 2.4) return {k: "iron", h: 1};
+  const h = fieldH(x, z);
+  return {k: "atlas", h, sheet: h >= 12 ? SHEET.mountains : undefined};
+}
+function launchField(W, sheet, padR) {
+  const near = hexGround(W, {rings: FIELD.near, sheet, kindAt: (x, z) => fieldKind(x, z, padR), name: "near"});
+  const nearR = FIELD.near * HW * 0.86;      // the near ring's inscribed radius, about 195 m
+  const far = hexGround(W, {rings: Math.ceil(FIELD.farR / FIELD.farW), sheet, w: FIELD.farW, name: "far",
+    skip: (x, z) => Math.hypot(x, z) < nearR - FIELD.farW || Math.hypot(x, z) > FIELD.farR,
+    kindAt: (x, z) => { const h = fieldH(x, z); return {k: "atlas", h, sheet: h >= 12 ? SHEET.mountains : undefined, skirt: 6}; },
+    sink: (x, z) => Math.hypot(x, z) < nearR + FIELD.farW ? 1.3 : 0});
+  W.nearCells = near; W.farCells = far;
+  // the ground's top under a point: the near ring's column, else the far ring's
+  W.groundAt = (x, z) => {
+    let [q, r] = hexAt(x, z); let c = near.get(q + "," + r); if (c) return c.h;
+    [q, r] = hexAt(x, z, FIELD.farW); c = far.get(q + "," + r); return c ? c.h : fieldH(x, z);
+  };
 }
 function buildVab() {
   const W = padWorld("vab", {sheet: SHEET.fields, layout: "vab"});
@@ -843,6 +899,19 @@ function buildVab() {
   for (const [x, z] of [[-30, 20], [-10, 34], [32, -20], [-30, -22]]) {
     const mast = new THREE.Mesh(new THREE.BoxGeometry(0.6, 20, 0.6), iron); mast.position.set(x, 10, z); mast.castShadow = true; W.scene.add(mast);
     W.lamp(x * 0.92, 19.5, z * 0.92, 0xfff0d0, 3.0, 34, {size: 0.4, halo: 3});
+  }
+  // Pad B, 190 m out: its own rim lamps and a beacon mast, somewhere for a hop to come down
+  { const {x, z, r} = FIELD.padB;
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; W.lamp(x + Math.cos(a) * (r + 1.2), 1.4, z + Math.sin(a) * (r + 1.2), 0xffb347, 2.0, 9, {size: 0.2, halo: 1.6}); }
+    const mast = new THREE.Mesh(new THREE.BoxGeometry(0.5, 12, 0.5), iron); mast.position.set(x + r + 4, 6, z); mast.castShadow = true; W.scene.add(mast);
+    W.lamp(x + r + 4, 12.4, z, 0xff3030, 1.6, 6, {size: 0.25, halo: 2.2, always: true});
+    W.padBL = W.label("Pad B, 190 m", "", null, "#e8b040"); W.padBL.pos = new THREE.Vector3(x, 4, z);
+  }
+  // range posts along the way out, every 250 m, each with a lamp
+  for (const [d, a] of [[250, 0.4], [500, 0.4], [1000, 0.4], [250, 2.6], [500, 2.6]]) {
+    const x = Math.cos(a) * d, z = -Math.sin(a) * d, y = W.groundAt(x, z);
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4, 0.4), iron); post.position.set(x, y + 2, z); W.scene.add(post);
+    W.lamp(x, y + 4.3, z, 0xffc070, 2.2, 14, {size: 0.22, halo: 2});
   }
   // a flame trench of stone past the pad's edge
   const trench = new THREE.Mesh(new THREE.BoxGeometry(5, 0.6, 12), stone); trench.position.set(-4, 0.7, 22); W.scene.add(trench);
@@ -862,8 +931,13 @@ function buildVab() {
   W.ghostEdge = new THREE.LineBasicMaterial({color: 0x8fc3d8, transparent: true, opacity: 0.32});
   W.ghostEdgeGeo = new THREE.EdgesGeometry(W.ghostGeo);
   W.base = 1;   // the pad's top
-  W.orbitCam = {target: new THREE.Vector3(0, 5.5, 0), yaw: 0.55, pitch: 0.26, dist: 27, min: 8, max: 240};
-  W.fpCam = {fp: true, eye: new THREE.Vector3(), yaw: 0, pitch: -0.1, frame: null};
+  W.orbitCam = {target: new THREE.Vector3(0, 5.5, 0), yaw: 0.55, pitch: 0.26, dist: 27, min: 8, max: 900};
+  W.fpCam = {fp: true, aboard: true, eye: new THREE.Vector3(), yaw: 0, pitch: -0.1, frame: null};
+  // a walker on the field: on the apron by the gantry, looking at the stack
+  W.walkCam = {fp: true, eye: new THREE.Vector3(-26, 0, 26), yaw: 0, pitch: 0.12, frame: null, vy: 0};
+  W.walkCam.eye.y = W.groundAt(-26, 26) + 1.62; W.walkCam.yaw = Math.atan2(26, -26);
+  W.far = 4200; W.camera.far = 4200; W.camera.updateProjectionMatrix();
+  W.times.day.fogNear = 260; W.times.day.fogFar = 2300; W.times.night.fogNear = 160; W.times.night.fogFar = 1500;
   W.cam = W.orbitCam;
   W.rebuild = fit => {
     if (W.rocket) W.scene.remove(W.rocket);
@@ -876,7 +950,7 @@ function buildVab() {
   };
   W.reghost = () => {
     W.ghosts.clear();
-    if (W.launch || VAB.view === "inside") return;
+    if (W.launch || VAB.view === "inside" || VAB.view === "walk") return;
     const y = VAB.layer, has = (q, r, yy) => CELLS.has(key(q, r, yy));
     for (const [q, r] of DISC) {
       if (has(q, r, y)) continue;
@@ -888,7 +962,7 @@ function buildVab() {
   };
   W.rebuild(true);
   W.click = (ray, button) => {
-    if (W.launch || VAB.view === "inside") return;
+    if (W.launch || VAB.view === "inside" || VAB.view === "walk") return;
     const vis = W.rocket.children.filter(o => o.visible);
     const hitsP = ray.intersectObjects(vis, true).filter(h => h.object.visible);
     const hitsG = ray.intersectObjects(W.ghosts.children.filter(o => o.isMesh), false);
@@ -907,10 +981,13 @@ function buildVab() {
     const cx = W.camera.position.x - W.rocket.position.x, cz = W.camera.position.z - W.rocket.position.z;
     for (const m of W.rocket.parts) { const k = m.userData.kind; if (k === "wall" || k === "door") m.visible = !(VAB.view === "cut" && m.userData.x * cx + m.userData.z * cz > -0.5 * Math.hypot(cx, cz)); }
     if (W.launch) flyStep(W, dt); else W.flameLamp.i = 0;
+    if (VAB.view === "walk") walkStep(W, dt);
   };
   W.hud = () => {
     const A = analyse(BODIES[VAB.body].g), L = W.launch;
     if (L) return flightHud(W);
+    if (VAB.view === "walk") { const e = W.walkCam.eye, g = W.groundAt(e.x, e.z), d = Math.hypot(e.x, e.z), db = Math.hypot(e.x - FIELD.padB.x, e.z - FIELD.padB.z), far = d > FIELD.near * HW * 0.86;
+      return `walking the launch field | ${Math.round(d)} m from the pad, ${Math.round(db)} m from Pad B  ground L${g} (${g} m)  on the game's cells, 2.833 m\nwalk anywhere on the near ring (80 cells, about 200 m out); past it the far ring to 2.4 km is scenery  | WASD walk, Shift run, drag to look`; }
     if (VAB.view === "inside") { const sp = W.spot; return sp ? `aboard | ${PRESETS[VAB.preset] && !VAB.edited ? PRESETS[VAB.preset].name : "your stack"}  deck L${sp.y - 1}, standing at q ${sp.q}, r ${sp.r}  in the rocket's frame on the pad\n${W.time === "night" ? "night: the deck lamps and the cabins' lamps; the moon through the portholes" : "day: sunlight through the portholes"}  | drag to look` : "aboard | no deck a walker can stand on in this stack"; }
     const s0 = A.S[0], rM = A.cells.length ? Math.max(...A.cells.map(c => hexDist(c.q, c.r))) : 0;
     return `assembly building | hex stack ${A.cells.length} cells, ring ${rM} (${((2 * rM + 1) * HW).toFixed(1)} m across)  mass ${A.mass.toFixed(1)} t  stages ${A.S.length}\nTWR ${s0 ? `<span class='${s0.twr >= 1 ? "g" : "w"}'>${s0.twr.toFixed(2)}</span>` : "-"} at ${BODIES[VAB.body].name}  delta-v <span class='c'>${Math.round(A.total).toLocaleString()} m/s</span>  | editing L${VAB.layer}  ${VAB.sel === "erase" ? "eraser" : PARTS[VAB.sel].name}, symmetry ${VAB.sym}x`;
@@ -1133,9 +1210,11 @@ function flyStep(W, dt) {
     L.vel.addScaledVector(Fw, h); L.cmW.addScaledVector(L.vel, h);
     // the ground: the rocket's foot (its origin) stops on the pad
     const foot = L.cmW.clone().sub(L.cm.clone().applyQuaternion(L.q));
-    if (L.mode === "flying" && foot.y < 0 && L.vel.y < 0) {
-      const hit = L.vel.length(); L.cmW.y -= foot.y; L.vel.set(0, 0, 0); L.w.set(0, 0, 0);
-      L.mode = hit > 8 ? "crashed" : "landed"; L.msg = hit > 8 ? `hit the ground at ${Math.round(hit)} m/s` : "down"; L.endAt = L.t + 3;
+    const gy = W.groundAt(foot.x, foot.z) - W.base;   // the top of the column the foot is over
+    if (L.mode === "flying" && foot.y < gy && L.vel.y < 0) {
+      const hit = L.vel.length(); L.cmW.y += gy - foot.y; L.vel.set(0, 0, 0); L.w.set(0, 0, 0);
+      const fromB = Math.hypot(foot.x - FIELD.padB.x, foot.z - FIELD.padB.z), fromA = Math.hypot(foot.x, foot.z);
+      L.mode = hit > 8 ? "crashed" : "landed"; L.msg = hit > 8 ? `hit the ground at ${Math.round(hit)} m/s` : fromB < FIELD.padB.r ? `down on Pad B at ${hit.toFixed(1)} m/s` : fromA < 15 ? `down on the pad at ${hit.toFixed(1)} m/s` : `down on the field, ${Math.round(fromA)} m out, at ${hit.toFixed(1)} m/s`; L.endAt = L.t + (hit > 8 ? 3 : 6);
     }
   }
   if (Math.floor(L.t * 4) !== Math.floor((L.t - dt) * 4)) refreshFlight(W);   // propellant burnt moves the centre of mass
@@ -1151,8 +1230,9 @@ function flyStep(W, dt) {
   const foot = W.rocket.position;
   W.flameLamp.p.set(foot.x, foot.y - 1.5, foot.z); W.flameLamp.i = (liqOn || srbOn) && L.mode !== "crashed" ? 2 + 4 * (srbOn ? 1 : L.thr) : 0;
   for (const d of W.debris) {
-    if (d.o.position.y > 1.2) { d.v.y -= g * dt; d.o.position.addScaledVector(d.v, dt); d.o.rotation.x += d.spin.x * dt; d.o.rotation.z += d.spin.z * dt; }
-    else { d.o.position.y = 1.2; d.v.set(0, 0, 0); }
+    const dg = W.groundAt(d.o.position.x, d.o.position.z) + 0.2;
+    if (d.o.position.y > dg) { d.v.y -= g * dt; d.o.position.addScaledVector(d.v, dt); d.o.rotation.x += d.spin.x * dt; d.o.rotation.z += d.spin.z * dt; }
+    else { d.o.position.y = dg; d.v.set(0, 0, 0); }
   }
   // the chase camera's goal: the middle of the stack's bounding sphere, in the world. The camera follows it
   // with frame-rate independent smoothing (placeCamera) and keeps the viewer's own yaw and pitch.
@@ -1169,7 +1249,8 @@ function flightHud(W) {
   const sgn = x => (x >= 0 ? "+" : "") + x.toFixed(1);
   const roll = L.off >= 2 ? `engines (${L.off} off the axis)` : L.fins.length ? "fins only, in air" : "none";
   const alt = L.cmW.y - L.cm.clone().applyQuaternion(L.q).y;
-  return `flight | alt ${Math.max(0, Math.round(alt))} m  v ${Math.round(v)} m/s  throttle ${Math.round(L.thr * 100)}%  stage ${L.k + 1}/${L.S.length}  tilt ${Math.round(tilt)} deg  ${L.mode === "pad" ? (L.stuckMsg ? "<span class='w'>on the pad: thrust under its weight, it cannot lift off</span>" : "on the pad") : L.mode === "crashed" ? "<span class='w'>" + L.msg + "</span>" : "<span class='a'>" + L.msg + "</span>"}
+  const ft = W.rocket.position, down = Math.hypot(ft.x, ft.z), toB = Math.hypot(ft.x - FIELD.padB.x, ft.z - FIELD.padB.z);
+  return `flight | alt ${Math.max(0, Math.round(alt))} m  downrange ${Math.round(down)} m  Pad B ${Math.round(toB)} m  v ${Math.round(v)} m/s  throttle ${Math.round(L.thr * 100)}%  stage ${L.k + 1}/${L.S.length}  tilt ${Math.round(tilt)} deg  ${L.mode === "pad" ? (L.stuckMsg ? "<span class='w'>on the pad: thrust under its weight, it cannot lift off</span>" : "on the pad") : L.mode === "crashed" ? "<span class='w'>" + L.msg + "</span>" : "<span class='a'>" + L.msg + "</span>"}
 rates pitch <span class='c'>${sgn(L.w.x * DEG)}</span> yaw <span class='c'>${sgn(-L.w.z * DEG)}</span> roll <span class='c'>${sgn(L.w.y * DEG)}</span> deg/s   gimbal pitch ${sgn(-avg("dz"))} yaw ${sgn(-avg("dx"))} deg (limit ${lim.toFixed(0)})   roll by ${roll}${VAB.view === "inside" ? "\n<span class='g'>aboard</span>: standing on the deck in the rocket's frame" : ""}`;
 }
 function endLaunch() {
@@ -1180,13 +1261,20 @@ function endLaunch() {
   W.rebuild(true); renderCtl(); renderKeys(); kick(4);
 }
 // the keys, on screen: held with the pointer as well as the keyboard
+const WALK_KEYS = [["KeyW", "W", "forward"], ["KeyS", "S", "back"], ["KeyA", "A", "left"], ["KeyD", "D", "right"], ["Shift", "Shift", "run"]];
 const FLY_KEYS = [["KeyW", "W", "pitch"], ["KeyS", "S", "pitch"], ["KeyA", "A", "yaw"], ["KeyD", "D", "yaw"], ["KeyQ", "Q", "roll"], ["KeyE", "E", "roll"], ["Shift", "Shift", "throttle +"], ["Ctrl", "Ctrl", "throttle -"]];
 function renderKeys() {
   const el = $("keys"); if (!el) return;
-  const W = WORLDS.vab, on = TAB === "vab" && W && W.launch;
+  const W = WORLDS.vab, walk = VAB.view === "walk" && !(W && W.launch), on = TAB === "vab" && W && (W.launch || walk);
+  if (TAB === "plan") {
+    el.hidden = false; el.classList.add("live");
+    el.innerHTML = `<div class="kt">Hold to burn</div><div class="kk"><button data-k="KeyB" aria-pressed="${!!KEYS.KeyB}"><b>B</b><span>burn</span></button></div>`;
+    el.querySelectorAll("button").forEach(b => { const set = v => { KEYS[b.dataset.k] = v; b.setAttribute("aria-pressed", v); kick(2); }; b.onpointerdown = e => { e.preventDefault(); set(true); }; b.onpointerup = b.onpointerleave = b.onpointercancel = () => set(false); });
+    return;
+  }
   el.hidden = TAB !== "vab";
   el.classList.toggle("live", !!on);
-  el.innerHTML = `<div class="kt">${on ? "Flying: hold to steer" : "Launch, then steer"}</div><div class="kk">${FLY_KEYS.map(([c, k, t]) => `<button data-k="${c}" title="${t}" aria-pressed="${!!KEYS[c]}"${on ? "" : " disabled"}><b>${k}</b><span>${t}</span></button>`).join("")}</div>`;
+  el.innerHTML = `<div class="kt">${walk ? "Walking: hold to move" : on ? "Flying: hold to steer" : "Launch, then steer"}</div><div class="kk">${(walk ? WALK_KEYS : FLY_KEYS).map(([c, k, t]) => `<button data-k="${c}" title="${t}" aria-pressed="${!!KEYS[c]}"${on ? "" : " disabled"}><b>${k}</b><span>${t}</span></button>`).join("")}</div>`;
   el.querySelectorAll("button").forEach(b => {
     const set = v => { KEYS[b.dataset.k] = v; b.setAttribute("aria-pressed", v); kick(2); };
     b.onpointerdown = e => { e.preventDefault(); set(true); }; b.onpointerup = b.onpointerleave = b.onpointercancel = () => set(false);
@@ -1194,18 +1282,44 @@ function renderKeys() {
 }
 const keyCode = e => e.key === "Shift" ? "Shift" : e.key === "Control" ? "Ctrl" : e.code;
 window.addEventListener("keydown", e => {
-  if (TAB !== "vab" || !WORLDS.vab || !WORLDS.vab.launch || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (TAB !== "vab" || !WORLDS.vab || !(WORLDS.vab.launch || VAB.view === "walk") || e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
   const k = keyCode(e); if (["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "KeyZ", "KeyX", "Shift", "Ctrl"].includes(k)) { KEYS[k] = true; if (k !== "Ctrl") e.preventDefault(); }
 });
+window.addEventListener("keydown", e => { if (TAB === "plan" && e.code === "KeyB" && e.target.tagName !== "INPUT") { KEYS.KeyB = true; e.preventDefault(); } });
 window.addEventListener("keyup", e => { KEYS[keyCode(e)] = false; });
 window.addEventListener("blur", () => { for (const k in KEYS) KEYS[k] = false; });
 
 function setView(v) {
   const W = WORLDS.vab; VAB.view = v;
-  if (W) { W.cam = v === "inside" ? W.fpCam : W.orbitCam; W.reghost(); }
-  canvas.classList.toggle("place", TAB === "vab" && v !== "inside");
-  renderCtl(); kick(4);
+  if (W) { W.cam = v === "inside" ? W.fpCam : v === "walk" ? W.walkCam : W.orbitCam; W.reghost(); }
+  canvas.classList.toggle("place", TAB === "vab" && v !== "inside" && v !== "walk");
+  renderCtl(); renderKeys(); kick(4);
 }
+// walking the field: WASD on the ground, Shift to run; a 1 m layer is a step up, any drop is a step down.
+// Mouse look is the raw drag, as everywhere. The stack on the pad is in the way.
+const WALK = {speed: 4.5, run: 9, eye: 1.62, step: 1.05};
+function walkStep(W, dt) {
+  const C = W.walkCam, f = (KEYS.KeyW ? 1 : 0) - (KEYS.KeyS ? 1 : 0), sd = (KEYS.KeyD ? 1 : 0) - (KEYS.KeyA ? 1 : 0);
+  const sp = (KEYS.Shift ? WALK.run : WALK.speed) * dt, fx = Math.sin(C.yaw), fz = Math.cos(C.yaw);
+  const foot = C.eye.y - WALK.eye;
+  if (f || sd) {
+    const n = Math.hypot(f, sd), dx = (f * fx - sd * fz) / n * sp, dz = (f * fz + sd * fx) / n * sp;
+    const blocked = (x, z) => {
+      if (W.groundAt(x, z) - foot > WALK.step) return true;
+      if (W.launch) return false;
+      const [q, r] = hexAt(x - W.rocket.position.x, z - W.rocket.position.z);
+      return foot < W.base + 3 && [0, 1, 2].some(y => CELLS.has(key(q, r, Math.floor(foot - W.base) + y)));
+    };
+    if (!blocked(C.eye.x + dx, C.eye.z + dz)) { C.eye.x += dx; C.eye.z += dz; }
+    else if (!blocked(C.eye.x + dx, C.eye.z)) C.eye.x += dx;
+    else if (!blocked(C.eye.x, C.eye.z + dz)) C.eye.z += dz;
+    const lim = FIELD.near * HW * 0.86 - 3, rr = Math.hypot(C.eye.x, C.eye.z); if (rr > lim) { C.eye.x *= lim / rr; C.eye.z *= lim / rr; }
+  }
+  const g = W.groundAt(C.eye.x, C.eye.z);
+  if (g >= foot) { C.eye.y = g + WALK.eye; C.vy = 0; }
+  else { C.vy -= 25 * dt; C.eye.y = Math.max(g + WALK.eye, C.eye.y + C.vy * dt); if (C.eye.y === g + WALK.eye) C.vy = 0; }
+}
+function walkTo(x, z, yaw) { const W = WORLDS.vab, C = W.walkCam; C.eye.set(x, W.groundAt(x, z) + WALK.eye, z); C.vy = 0; if (yaw !== undefined) C.yaw = yaw; kick(4); }
 
 // =====================================================================================
 // globes from orbit: a Goldberg sphere of hex cells (12 pentagons), each cell a column
@@ -1510,7 +1624,7 @@ function buildFusion() {
   const vd = hexGlobe(W, {level: 3, radius: 2.0, biome: BIOMES.verdance, layer: 0.03, ocean: 0x1b5a5a}); vd.position.set(18, 0, 6); W.sys.add(vd);
   const ln2 = hexGlobe(W, {level: 2, radius: 0.6, biome: BIOMES.lantern, layer: 0.02}); ln2.position.set(-8, 0, -7); W.sys.add(ln2);
   for (const [r, op] of [[46.2, 0.4], [55, 0.4]]) { const c = ring(r, 0x7390bf, op, ex, ez); c.position.copy(star.position); W.sys.add(c); }
-  W.sysL = [W.label("Pale Blue", "", pb2, "#8fc3d8"), W.label("Verdance", "", vd, "#9cf0d0"), W.label("Lantern", "", ln2, "#b3b8d9"), W.label("Halcyon (the star)", "", starCore, "#ffe8b0")];
+  W.sysL = [W.label("Pale Blue", "", pb2, "#8fc3d8"), W.label("Verdance", "", vd, "#9cf0d0"), W.label("Lantern", "", ln2, "#b3b8d9"), W.label("Aubade (the star)", "", starCore, "#ffe8b0")];
   // chemical to Verdance: climb out of Pale Blue's well on a curl, then a long straight coast
   const curl = []; for (let i = 0; i <= 40; i++) { const t = i / 40, th = Math.PI * 1.1 * t; curl.push(new THREE.Vector3(-16 + Math.cos(Math.PI - th) * (3 + 3 * t * t), 0, Math.sin(Math.PI - th) * (3 + 3 * t * t) * -1)); }
   const end = new THREE.Vector3(15.6, 0, 5.2); const last = curl[curl.length - 1]; for (let i = 1; i <= 30; i++) curl.push(last.clone().lerp(end, i / 30));
@@ -1603,6 +1717,640 @@ function buildLanderWorld(name, sheet, kind) {
 }
 
 // =====================================================================================
+// tab 5: the planner (2026-11-14: "a small planet to test orbit transitions around, and a solar system
+// with navigation nodes to plot flight paths and rocket burns"). Every body rides a circular rail that
+// agrees with the field; the ship is integrated (semi-implicit Euler) in the summed inverse-square pull
+// of every body; the predicted line is that same step run forward; maneuver nodes are finite burns the
+// same step flies. No conics, no spheres of influence. Positions are metres in f64; the scene is rebased
+// on the focused body every frame and drawn at 1 km a unit.
+// =====================================================================================
+const PSYS = [
+  {id: "aubade", name: "Aubade", star: true, mu: 1.28e7, R: 8000, color: 0xffe8b0},
+  {id: "ochre", name: "Ochre", parent: "aubade", a: 180e3, ph: 2.3, R: 1200, g: 0.70, air: 0xffc496, biome: "ochre", level: 4, layer: 0.004, color: 0xffc496},
+  {id: "pale", name: "Pale Blue", parent: "aubade", a: 300e3, ph: 0, R: 4800, g: 1.0, air: 0x5aa8ff, biome: "home", level: 5, layer: 0.01, lights: true, color: 0x8fc3d8},
+  {id: "lantern", name: "Lantern", parent: "pale", a: 26e3, ph: 2.4, R: 1200, g: 0.35, biome: "lantern", level: 4, layer: 0.004, color: 0xb3b8d9, lo: 300},
+  {id: "wick", name: "Wick", parent: "pale", a: 16e3, ph: 0.9, R: 600, g: 0.40, biome: "wick", level: 4, layer: 0.002, color: 0xd8c8a0, lo: 150},
+  {id: "verdance", name: "Verdance", parent: "aubade", a: 450e3, ph: 0.36, R: 2400, g: 0.90, air: 0x9cf0d0, biome: "verdance", level: 4, layer: 0.006, ocean: 0x1b5a5a, color: 0x9cf0d0, lo: 500},
+  {id: "pebble", name: "Pebble", parent: "aubade", a: 650e3, ph: 1.3, R: 300, g: 0.15, biome: "wick", level: 3, layer: 0.002, color: 0xa09080, lo: 150},
+  {id: "amber", name: "Amber", parent: "aubade", a: 1000e3, ph: 3.5, R: 19200, g: 1.6, gas: true, air: 0xffd8a0, color: 0xffd8a0},
+  {id: "cinder", name: "Cinder", parent: "amber", a: 60e3, ph: 1.0, R: 1200, g: 0.45, biome: "cinder", level: 4, layer: 0.004, color: 0xe8b040, lo: 300},
+  {id: "rime", name: "Rime", parent: "amber", a: 95e3, ph: 4.1, R: 1200, g: 0.40, biome: "rime", level: 4, layer: 0.004, color: 0xcfe6f0, lo: 300},
+];
+const NBOD = PSYS.length, BI = {};
+PSYS.forEach((b, i) => { BI[b.id] = i; b.i = i; if (!b.star) b.mu = b.g * G1 * b.R * b.R; });
+PSYS.forEach(b => {
+  b.pi = b.parent ? BI[b.parent] : -1;
+  if (b.pi >= 0) { const P = PSYS[b.pi]; b.w = Math.sqrt(P.mu / (b.a ** 3)); b.moon = !!P.parent; b.hill = b.a * Math.cbrt(b.mu / (3 * P.mu)); }
+  b.Rc = b.R + (b.layer ? 2 : 0);       // the ground a ship touches: the cell tops, about 2 m over the radius
+});
+BIOMES.wick = p => ({sheet: SHEET.asteroid, h: 1 + Math.floor(fbm(p, 61, 2.6) * 3)});
+BIOMES.ochre = p => { const e = fbm(p, 31, 2); return {sheet: e > 0.6 ? SHEET.mountains : SHEET.desert, h: 1 + Math.floor(e * 6)}; };
+BIOMES.rime = p => ({sheet: SHEET.frozen, h: 1 + Math.floor(fbm(p, 71, 2.2) * 4)});
+// every body's position (or velocity) at time t, parents first, into out[3i..3i+2]
+function posAll(t, out) {
+  for (let i = 0; i < NBOD; i++) {
+    const b = PSYS[i]; if (b.pi < 0) { out[3 * i] = out[3 * i + 1] = out[3 * i + 2] = 0; continue; }
+    const th = b.ph + b.w * t, j = 3 * b.pi;
+    out[3 * i] = out[j] + b.a * Math.cos(th); out[3 * i + 1] = out[j + 1]; out[3 * i + 2] = out[j + 2] - b.a * Math.sin(th);
+  }
+  return out;
+}
+function velAll(t, out) {
+  for (let i = 0; i < NBOD; i++) {
+    const b = PSYS[i]; if (b.pi < 0) { out[3 * i] = out[3 * i + 1] = out[3 * i + 2] = 0; continue; }
+    const th = b.ph + b.w * t, j = 3 * b.pi, s = b.a * b.w;
+    out[3 * i] = out[j] - s * Math.sin(th); out[3 * i + 1] = out[j + 1]; out[3 * i + 2] = out[j + 2] - s * Math.cos(th);
+  }
+  return out;
+}
+const PA = new Float64Array(3 * NBOD), PV = new Float64Array(3 * NBOD);
+const CLOSE = PSYS.map(b => b.star ? 0 : b.moon ? 3 * b.hill : 40 * b.R);   // what counts as passing close
+// the body a ship is "round": the star or planet that pulls hardest, or one of that planet's moons whose
+// Hill sphere the ship is inside. Used for readouts and node frames only; the motion is the summed field.
+function domOf(p, P) {
+  let best = 0, bp = -1;
+  for (let i = 0; i < NBOD; i++) { const b = PSYS[i]; if (b.moon) continue; const dx = P[3 * i] - p[0], dy = P[3 * i + 1] - p[1], dz = P[3 * i + 2] - p[2]; const g = b.mu / (dx * dx + dy * dy + dz * dz); if (g > bp) { bp = g; best = i; } }
+  for (let i = 0; i < NBOD; i++) { const b = PSYS[i]; if (!b.moon || b.pi !== best) continue; if (Math.hypot(P[3 * i] - p[0], P[3 * i + 1] - p[1], P[3 * i + 2] - p[2]) < b.hill) return i; }
+  return best;
+}
+// the field a ship feels. The bodies ride rails that know only their parents, so a ship that felt every
+// body's full pull would be dragged off a moon by Amber's 0.03 m/s^2 at Pale Blue, which Wick's rail never
+// feels (measured: an orbit round Wick hits the ground inside two turns). So the ship is integrated in the
+// frame of the body it is round (domOf), which rides that body's rail: that body's own pull, plus every
+// other body's tide (its pull on the ship less its pull on the frame body), plus the rail's own
+// acceleration. Far from every planet the frame is the star's and the pulls are summed as they are.
+const GF = new Float64Array(3);
+function railAcc(i, P, out) {   // the acceleration of body i along its rail: its parent's, plus w^2 toward the parent
+  out[0] = out[1] = out[2] = 0;
+  for (let b = PSYS[i]; b.pi >= 0; b = PSYS[b.pi]) { const w2 = b.w * b.w, j = 3 * b.i, k = 3 * b.pi; out[0] -= w2 * (P[j] - P[k]); out[1] -= w2 * (P[j + 1] - P[k + 1]); out[2] -= w2 * (P[j + 2] - P[k + 2]); }
+  return out;
+}
+function fieldAt(p, t, P) {
+  const F = domOf(p, P), out = [0, 0, 0];
+  if (F > 0) railAcc(F, P, out);
+  const fx = P[3 * F], fy = P[3 * F + 1], fz = P[3 * F + 2];
+  for (let i = 0; i < NBOD; i++) {
+    const mu = PSYS[i].mu;
+    let dx = P[3 * i] - p[0], dy = P[3 * i + 1] - p[1], dz = P[3 * i + 2] - p[2], d2 = dx * dx + dy * dy + dz * dz, f = mu / (d2 * Math.sqrt(d2));
+    out[0] += dx * f; out[1] += dy * f; out[2] += dz * f;
+    if (i === F || F === 0) continue;
+    dx = P[3 * i] - fx; dy = P[3 * i + 1] - fy; dz = P[3 * i + 2] - fz; d2 = dx * dx + dy * dy + dz * dz; f = mu / (d2 * Math.sqrt(d2));
+    out[0] -= dx * f; out[1] -= dy * f; out[2] -= dz * f;
+  }
+  return out;
+}
+// one step of the ship, the same in flight and in prediction. dt follows the nearest body's orbital
+// timescale: a fiftieth of sqrt(d^3 / mu), 0.02 to 30 s
+function dtRule(p, P) {
+  let m = 30;
+  for (let i = 0; i < NBOD; i++) { const dx = P[3 * i] - p[0], dy = P[3 * i + 1] - p[1], dz = P[3 * i + 2] - p[2], d = Math.sqrt(dx * dx + dy * dy + dz * dz); m = Math.min(m, 0.02 * d * Math.sqrt(d / PSYS[i].mu)); }
+  return Math.max(0.02, m);
+}
+const PLANSHIP = () => analyse(G1, PRESETS.orbit.build()).phases.map(p => ({F: p.F, mdot: p.mdot, prop: p.prop, drop: p.drop}));
+const newShip = () => { const ph = PLANSHIP(), A = analyse(G1, PRESETS.orbit.build()); return {p: [0, 0, 0], v: [0, 0, 0], t: 0, m: A.mass, ph, k: 0, on: -1, off: [0, 0, 0], mode: "pad", end: null}; };
+const cloneShip = S => ({p: S.p.slice(), v: S.v.slice(), t: S.t, m: S.m, ph: S.ph.map(p => Object.assign({}, p)), k: S.k, on: S.on, off: S.off.slice(), mode: S.mode, end: S.end, ap: S.ap});
+// thrust for dt at throttle thr: spends propellant, drops a spent stage; returns the acceleration in m/s^2
+function thrustStep(S, dt, thr = 1) {
+  let p = S.ph[S.k];
+  while (p && !(p.F > 0 && p.prop > 1e-9)) { S.m -= p.drop; p.drop = 0; S.k++; p = S.ph[S.k]; }
+  if (!p) return 0;
+  const a = p.F * thr / S.m, use = Math.min(p.prop, p.mdot * thr * dt); p.prop -= use; S.m -= use;
+  if (p.prop <= 1e-9) { S.m -= p.drop; p.drop = 0; S.k++; }
+  return a;
+}
+function shipDv(S) {
+  let m = S.m, dv = 0;
+  for (let k = S.k; k < S.ph.length; k++) { const p = S.ph[k]; if (p.F > 0 && p.prop > 0) { const ve = p.F / p.mdot; dv += ve * Math.log(m / (m - p.prop)); m -= p.prop; } m -= p.drop; }
+  return dv;
+}
+// burn time for dv from now (on the current stage), from the rocket equation
+function burnTime(S, dv) {
+  let m = S.m, t = 0, left = dv;
+  for (let k = S.k; k < S.ph.length && left > 0; k++) { const p = S.ph[k]; if (!(p.F > 0 && p.prop > 0)) { m -= p.drop; continue; } const ve = p.F / p.mdot, can = ve * Math.log(m / (m - p.prop)); const use = Math.min(can, left), m1 = m / Math.exp(use / ve); t += (m - m1) / p.mdot; left -= use; m = m1 - (use >= can ? p.drop : 0); }
+  return t;
+}
+// a node's frame at a state, round the body the ship is round there: prograde, normal, radial out
+function frameAt(p, v, P, V, ref = domOf(p, P)) {
+  const r = [p[0] - P[3 * ref], p[1] - P[3 * ref + 1], p[2] - P[3 * ref + 2]], u = [v[0] - V[3 * ref], v[1] - V[3 * ref + 1], v[2] - V[3 * ref + 2]];
+  const n = (a) => { const l = Math.hypot(...a) || 1; return a.map(x => x / l); };
+  const pro = n(u), nor = n([r[1] * u[2] - r[2] * u[1], r[2] * u[0] - r[0] * u[2], r[0] * u[1] - r[1] * u[0]]);
+  const rad = n([nor[1] * pro[2] - nor[2] * pro[1], nor[2] * pro[0] - nor[0] * pro[2], nor[0] * pro[1] - nor[1] * pro[0]]);
+  return {pro, nor, rad, ref, r, u};
+}
+const nodeDir = (F, dv) => { const d = [0, 1, 2].map(i => F.pro[i] * dv[0] + F.nor[i] * dv[1] + F.rad[i] * dv[2]); const l = Math.hypot(...d) || 1; return d.map(x => x / l); };
+const nodeMag = n => Math.hypot(n.dv[0], n.dv[1], n.dv[2]);
+// a touch on a body: under 6 m/s lands; faster crashes; into an air world it is the pod's heat shield
+function contact(S, P, V) {
+  for (let i = 0; i < NBOD; i++) {
+    const b = PSYS[i], dx = S.p[0] - P[3 * i], dy = S.p[1] - P[3 * i + 1], dz = S.p[2] - P[3 * i + 2], d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d >= b.Rc + (b.air && !b.gas ? 150 : 0)) continue;
+    const ux = S.v[0] - V[3 * i], uy = S.v[1] - V[3 * i + 1], uz = S.v[2] - V[3 * i + 2], rel = Math.hypot(ux, uy, uz);
+    if ((ux * dx + uy * dy + uz * dz) / d > 0 && d >= b.Rc) continue;   // climbing away (off a pad, out of the air)
+    if (b.star) { S.end = {what: "star", body: i, rel}; return true; }
+    if (b.air) { S.end = {what: i === BI.pale ? "home" : "air", body: i, rel}; return true; }
+    if (rel < 6) { S.on = i; S.off = [dx / d * b.Rc, dy / d * b.Rc, dz / d * b.Rc]; S.mode = "landed"; S.end = {what: "landed", body: i, rel}; return true; }
+    S.end = {what: "crash", body: i, rel}; return true;
+  }
+  return false;
+}
+// advance one step with acceleration acc (or none). Landed, the ship rides its body until thrust beats its weight.
+function shipStep(S, dt, acc, P, V) {
+  if (S.on >= 0) {
+    const i = S.on, b = PSYS[i], l = Math.hypot(...S.off), up = S.off.map(x => x / l);
+    const push = acc ? acc[0] * up[0] + acc[1] * up[1] + acc[2] * up[2] : 0;
+    if (push > b.mu / (b.Rc * b.Rc) * 1.02) { S.on = -1; S.end = null; if (S.mode === "landed") S.mode = "free"; }
+    else { S.t += dt; posAll(S.t, P); velAll(S.t, V); for (let k = 0; k < 3; k++) { S.p[k] = P[3 * i + k] + S.off[k]; S.v[k] = V[3 * i + k]; } return; }
+  }
+  const g = fieldAt(S.p, S.t, P); let ax = g[0], ay = g[1], az = g[2];
+  if (acc) { ax += acc[0]; ay += acc[1]; az += acc[2]; }
+  S.v[0] += ax * dt; S.v[1] += ay * dt; S.v[2] += az * dt;
+  S.p[0] += S.v[0] * dt; S.p[1] += S.v[1] * dt; S.p[2] += S.v[2] * dt; S.t += dt;
+  posAll(S.t, P); velAll(S.t, V);
+  if (!S.end) contact(S, P, V);
+  if (S.end && S.on >= 0) { const i = S.on; for (let k = 0; k < 3; k++) { S.p[k] = P[3 * i + k] + S.off[k]; S.v[k] = V[3 * i + k]; } S.end = null; }
+}
+// the predicted line: the same step run forward, flying each node as a finite burn centred on its time
+// along the node's direction fixed where the burn starts
+function predictPath(S0, nodes, {horizon = 900, maxSteps = 30000, light = false} = {}) {
+  const S = cloneShip(S0), P = new Float64Array(3 * NBOD), V = new Float64Array(3 * NBOD);
+  posAll(S.t, P); velAll(S.t, V);
+  const N = light ? 0 : Math.min(maxSteps, 30000) + 2;
+  const out = {t: light ? null : new Float64Array(N), p: light ? null : new Float64Array(3 * N), seg: light ? null : new Uint8Array(N), dom: light ? null : new Int8Array(N), n: 0,
+    ca: new Float64Array(NBOD).fill(Infinity), caT: new Float64Array(NBOD), caV: new Float64Array(NBOD), nodeAt: [], end: null, tEnd: 0};
+  const push = (seg) => { if (light) return; const n = out.n; if (n >= N) return; out.t[n] = S.t; out.p[3 * n] = S.p[0]; out.p[3 * n + 1] = S.p[1]; out.p[3 * n + 2] = S.p[2]; out.seg[n] = seg; out.dom[n] = domOf(S.p, P); out.n++; };
+  push(0);
+  let ni = 0, burn = null, seg = 0, steps = 0; const lock = new Uint8Array(NBOD);
+  const tEnd = S.t + horizon + (nodes.length ? Math.max(0, nodes[nodes.length - 1].t - S.t) : 0);
+  while (S.t < tEnd && steps++ < maxSteps && !S.end) {
+    if (!burn && ni < nodes.length) {
+      const n = nodes[ni], left = n.active ? n.left : nodeMag(n), tb = burnTime(S, left);
+      if (n.active || S.t >= n.t - tb / 2) {
+        const F = frameAt(S.p, S.v, P, V);
+        burn = {left, dir: n.active ? n.flyDir : nodeDir(F, n.dv)};
+        out.nodeAt[ni] = {p: S.p.slice(), F, t: S.t, tb};
+        if (left <= 0.05) { burn = null; ni++; seg = ni; continue; }
+      }
+    }
+    let dt = dtRule(S.p, P), acc = null;
+    if (burn) {
+      dt = Math.min(dt, 0.05);
+      const a = thrustStep(S, dt);
+      if (a <= 0) { burn = null; ni = nodes.length; seg = Math.min(255, ni); }
+      else { acc = burn.dir.map(x => x * a); burn.left -= a * dt; if (burn.left <= 0.05) { burn = null; ni++; seg = ni; } }
+    }
+    shipStep(S, dt, acc, P, V);
+    // each body's first close pass: the closest point until the line starts to draw away from it again
+    for (let i = 1; i < NBOD; i++) {
+      if (lock[i]) continue;
+      const d = Math.hypot(S.p[0] - P[3 * i], S.p[1] - P[3 * i + 1], S.p[2] - P[3 * i + 2]);
+      if (d < out.ca[i]) { out.ca[i] = d; out.caT[i] = S.t; out.caV[i] = Math.hypot(S.v[0] - V[3 * i], S.v[1] - V[3 * i + 1], S.v[2] - V[3 * i + 2]); }
+      else if (out.ca[i] < CLOSE[i] && d > out.ca[i] * 1.05 + 50) lock[i] = 1;
+    }
+    push(burn ? Math.max(seg, 1) : seg);
+    if (S.on >= 0 && !burn && ni >= nodes.length) { out.end = {what: "landed", body: S.on, rel: 0}; break; }
+  }
+  out.end = out.end || S.end; out.tEnd = S.t; out.final = S;
+  return out;
+}
+// the readout, off the line: Ap, Pe and T round the body the ship is round now, until a node or a change of body
+function readout(pr, t0) {
+  if (!pr.n) return null;
+  const ref = pr.dom[0], P = new Float64Array(3 * NBOD);
+  let ap = -1, pe = Infinity, apI = 0, peI = 0, sw = 0, prev = null, period = null, i = 0;
+  for (i = 0; i < pr.n; i++) {
+    if (pr.seg[i] !== 0 || pr.dom[i] !== ref) break;
+    posAll(pr.t[i], P);
+    const x = pr.p[3 * i] - P[3 * ref], z = pr.p[3 * i + 2] - P[3 * ref + 2], y = pr.p[3 * i + 1] - P[3 * ref + 1], d = Math.hypot(x, y, z);
+    if (d > ap) { ap = d; apI = i; } if (d < pe) { pe = d; peI = i; }
+    const a = Math.atan2(z, x); if (prev !== null) { let da = a - prev; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI; sw += da; } prev = a;
+    if (Math.abs(sw) >= 2 * Math.PI) { period = pr.t[i] - t0; break; }
+  }
+  const leaves = !period && i < pr.n && pr.seg[i] === 0 && pr.dom[i] !== ref;
+  const hits = !period && i >= pr.n && pr.end && pr.end.body === ref;
+  return {ref, ap, pe, apI, peI, period, bound: !!period, leaves, nextRef: leaves ? pr.dom[i] : -1, hits, end: pr.end, endI: i};
+}
+// the ascent from Pale Blue's pad: tab 2's gravity turn, flown in the planner's field at 0.05 s
+function ascentStep(S, dt, P, V) {
+  const pi = BI.pale, b = PSYS[pi];
+  const r = [S.p[0] - P[3 * pi], S.p[1] - P[3 * pi + 1], S.p[2] - P[3 * pi + 2]], u = [S.v[0] - V[3 * pi], S.v[1] - V[3 * pi + 1], S.v[2] - V[3 * pi + 2]];
+  const rl = Math.hypot(...r), rh = r.map(x => x / rl), tt = [rh[2], 0, -rh[0]];   // tangent: up x radial, the way the moons go
+  const alt = rl - b.R, vr = u[0] * rh[0] + u[1] * rh[1] + u[2] * rh[2], vt = u[0] * tt[0] + u[2] * tt[2];
+  let dir = null;
+  if (S.mode === "pad") S.mode = "ascent";
+  if (S.mode === "ascent") {
+    const th = Math.min(Math.PI / 2 * 0.98, Math.PI / 2 * Math.sqrt(Math.max(0, alt - 40) / 1300));
+    dir = [0, 1, 2].map(k => Math.cos(th) * rh[k] + Math.sin(th) * tt[k]);
+    if (S.t >= (S.nextCheck || 0)) { S.nextCheck = S.t + 0.25; const pr = predictPath(S, [], {horizon: 200, maxSteps: 600, light: false}); let mx = 0; const Q = new Float64Array(3 * NBOD); for (let i = 0; i < pr.n; i++) { posAll(pr.t[i], Q); mx = Math.max(mx, Math.hypot(pr.p[3 * i] - Q[3 * pi], pr.p[3 * i + 1] - Q[3 * pi + 1], pr.p[3 * i + 2] - Q[3 * pi + 2])); } if (mx >= b.R + LO_ALT) { S.mode = "coastup"; S.msg = "engines off at the predicted apoapsis"; } }
+  } else if (S.mode === "coastup") { if (vr <= 2) S.mode = "circ"; }
+  else if (S.mode === "circ") {
+    // burn along the velocity still to gain: circular speed, level, at the height the ship is at
+    const vc = Math.sqrt(b.mu / rl), need = [vc * tt[0] - u[0], -u[1], vc * tt[2] - u[2]], nl = Math.hypot(...need);
+    if (nl < 0.5) { S.mode = "free"; S.msg = "in low orbit"; } else dir = need.map(x => x / nl);
+  }
+  let acc = null;
+  if (dir) { const a = thrustStep(S, dt); if (a > 0) acc = dir.map(x => x * a); else if (S.mode !== "free") { S.mode = "free"; S.msg = "out of propellant"; } }
+  shipStep(S, dt, acc, P, V);
+  return acc;
+}
+// start on Pale Blue's pad (the launch site faces the star's side), or fly the ascent at once into orbit
+function padShip() { const S = newShip(); posAll(0, PA); velAll(0, PV); const pi = BI.pale; S.on = pi; S.off = [PSYS[pi].Rc, 0, 0]; for (let k = 0; k < 3; k++) { S.p[k] = PA[3 * pi + k] + S.off[k]; S.v[k] = PV[3 * pi + k]; } return S; }
+function orbitShip(trail) {
+  const S = padShip(); S.mode = "ascent"; const P = new Float64Array(3 * NBOD), V = new Float64Array(3 * NBOD);
+  for (let i = 0; i < 20000 && S.mode !== "free"; i++) { posAll(S.t, P); velAll(S.t, V); ascentStep(S, 0.05, P, V); if (trail && i % 10 === 0) trail.push([S.p[0], S.p[1], S.p[2], S.t]); if (S.end) break; }
+  S.mode = "free"; return S;
+}
+
+// ---- the nav computer's suggestion (tier 2): a node time over one orbit and a prograde delta-v that
+// passes the target at its low-orbit height, plus the capture burn at the closest point
+function navPlan(S0, target, {aim, dvMin, dvMax, span, horizon, capture}) {
+  const ti = BI[target], tb = PSYS[ti];
+  const score = pr => { const ca = pr.ca[ti], miss = Math.abs(ca - aim); return ca < tb.Rc && !tb.air ? miss + 4000 : miss; };
+  let best = null;
+  const tryOne = (tn, dv) => { const pr = predictPath(S0, [{t: tn, dv: [dv, 0, 0]}], {horizon, maxSteps: 12000, light: true}); const sc = score(pr) * 0.2 + dv + (capture ? Math.max(0, pr.caV[ti] - Math.sqrt(tb.mu / Math.max(tb.R, pr.ca[ti]))) : 0); if (!best || sc < best.sc) best = {sc, tn, dv, pr}; };
+  const t0 = S0.t + 15;
+  for (let i = 0; i <= 36; i++) for (let j = 0; j <= 20; j++) tryOne(t0 + span * i / 36, dvMin + (dvMax - dvMin) * j / 20);
+  for (let pass = 0, ts = span / 36, ds = (dvMax - dvMin) / 20; pass < 3; pass++, ts /= 3, ds /= 3) {
+    const c = best; for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) tryOne(Math.max(S0.t + 5, c.tn + i * ts / 2), Math.max(1, c.dv + j * ds / 2));
+  }
+  const nodes = [{t: best.tn, dv: [best.dv, 0, 0]}];
+  if (capture) {
+    const pr = best.pr, r = pr.ca[ti], vrel = pr.caV[ti], vc = Math.sqrt(tb.mu / r);
+    nodes.push({t: pr.caT[ti], dv: [-(vrel - vc), 0, 0]});
+    // trim the capture: the burn that leaves the roundest orbit round the target (the highest periapsis)
+    const base = nodes[1].dv[0]; let bestC = null;
+    // ranked by how long the orbit lasts in the full field (the planet's tide works on a moon orbit), then by periapsis
+    for (let d = -20; d <= 12; d += 2) {
+      nodes[1].dv[0] = base + d; const pr = predictPath(S0, nodes, {horizon: 1200}), ro = readoutAfter(pr, nodes.length);
+      if (!ro || ro.ref !== ti || !ro.bound) continue;
+      const last = pr.end ? pr.tEnd : 1e9, sc = Math.min(last, 1e9) + ro.pe;
+      if (!bestC || sc > bestC.sc) bestC = {sc, dv: nodes[1].dv[0]};
+    }
+    nodes[1].dv[0] = bestC ? bestC.dv : base - 4;
+    // round it off: at the next periapsis after the capture, burn retrograde down to circular speed there.
+    // A low, round orbit is the one Pale Blue's tide leaves alone (an eccentric one is pumped into the ground).
+    const pc = predictPath(S0, nodes, {horizon: 600}), Q = new Float64Array(3 * NBOD), QV = new Float64Array(3 * NBOD);
+    let s2 = 0; while (s2 < pc.n && pc.seg[s2] < 2) s2++;
+    let prevD = -1, phase = 0, tp = null;   // phase 0: climbing to apoapsis, 1: falling to the next periapsis
+    for (let i = s2; i < pc.n; i++) {
+      posAll(pc.t[i], Q); const d = Math.hypot(pc.p[3 * i] - Q[3 * ti], pc.p[3 * i + 1] - Q[3 * ti + 1], pc.p[3 * i + 2] - Q[3 * ti + 2]);
+      if (phase === 0) { if (d > prevD) prevD = d; else if (d < prevD - 30) { phase = 1; prevD = d; tp = {t: pc.t[i], r: d, i}; } }
+      else { if (d < tp.r) tp = {t: pc.t[i], r: d, i}; else if (d > tp.r + 30) break; }
+    }
+    if (tp) {
+      // the speed there, relative to the target, from neighbouring samples
+      const i = tp.i, dt = pc.t[i + 1] - pc.t[i]; posAll(pc.t[i], Q); velAll(pc.t[i], QV);
+      const v = [0, 1, 2].map(k => (pc.p[3 * (i + 1) + k] - pc.p[3 * i + k]) / dt - QV[3 * ti + k]);
+      const base3 = -(Math.hypot(...v) - Math.sqrt(tb.mu / tp.r));
+      nodes.push({t: tp.t, dv: [base3, 0, 0]}); let best3 = null;
+      for (let d = -6; d <= 6; d += 1.5) {
+        nodes[2].dv[0] = base3 + d; const pr = predictPath(S0, nodes, {horizon: 1800, maxSteps: 30000}), ro = readoutAfter(pr, 3);
+        if (!ro || ro.ref !== ti || !ro.bound) continue;
+        const sc = (pr.end ? pr.tEnd : 1e9) + ro.pe - (ro.ap - ro.pe);
+        if (!best3 || sc > best3.sc) best3 = {sc, dv: nodes[2].dv[0]};
+      }
+      if (best3) nodes[2].dv[0] = best3.dv; else nodes.pop();
+    }
+  }
+  return {nodes, miss: best.pr.ca[ti] - tb.R};
+}
+// the readout of the line after its last node (for checking a capture)
+function readoutAfter(pr, seg) {
+  let s = 0; while (s < pr.n && pr.seg[s] !== seg) s++;
+  if (s >= pr.n) return null;
+  const ref = pr.dom[s], P = new Float64Array(3 * NBOD); let sw = 0, prev = null, ap = -1, pe = Infinity;
+  for (let i = s; i < pr.n; i++) {
+    if (pr.dom[i] !== ref) return {ref, bound: false, ap, pe};
+    posAll(pr.t[i], P); const x = pr.p[3 * i] - P[3 * ref], y = pr.p[3 * i + 1] - P[3 * ref + 1], z = pr.p[3 * i + 2] - P[3 * ref + 2], d = Math.hypot(x, y, z);
+    ap = Math.max(ap, d); pe = Math.min(pe, d);
+    const a = Math.atan2(z, x); if (prev !== null) { let da = a - prev; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI; sw += da; } prev = a;
+    if (Math.abs(sw) >= 2 * Math.PI) return {ref, bound: true, ap, pe, period: pr.t[i] - pr.t[s]};
+  }
+  return {ref, bound: false, ap, pe, end: pr.end};
+}
+
+const PLAN = {scope: "home", focus: "pale", warp: 1, sas: "node", nodes: [], horizon: 900, S: null, trail: [], pred: null, ro: null, dirty: true, lastPred: 0, burning: false, msg: "", sel: 0};
+const FOCI = {home: [["pale", "Pale Blue"], ["wick", "Wick"], ["lantern", "Lantern"], ["ship", "Ship"]], system: [["aubade", "Aubade"], ["pale", "Pale Blue"], ["verdance", "Verdance"], ["ochre", "Ochre"], ["amber", "Amber"], ["ship", "Ship"]]};
+const WARPS = [1, 4, 16, 64, 256, 1000];
+const fmtT = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}` : `${m}:${String(ss).padStart(2, "0")}`; };
+const fmtD = m => Math.abs(m) >= 100000 ? Math.round(m / 1000).toLocaleString() + " km" : Math.abs(m) >= 10000 ? (m / 1000).toFixed(1) + " km" : Math.round(m).toLocaleString() + " m";
+
+function buildPlanner() {
+  const W = makeWorld("plan"); spaceBase(W, {starCount: 3000});
+  W.sunDir = new THREE.Vector3(1, 0, 0);
+  W.amb.intensity = 0.09;
+  W.bodyG = PSYS.map(b => {
+    const g = new THREE.Group(); W.scene.add(g);
+    if (b.star) {
+      g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(b.R / 1000, 1), new THREE.MeshBasicMaterial({color: 0xfff1c8})));
+      const s = new THREE.Sprite(glowMat(0xffe8b0)); s.scale.setScalar(b.R / 1000 * 9); g.add(s);
+    } else if (b.gas) {
+      const c = document.createElement("canvas"); c.width = 16; c.height = 32; const x = c.getContext("2d");
+      const band = [0xd9a066, 0xeec39a, 0xc08048, 0xf2d7b0, 0xb87a48, 0xe8b880, 0xd9a066, 0xf0cfa0];
+      for (let y = 0; y < 32; y++) { x.fillStyle = "#" + band[Math.floor(y / 4) % band.length].toString(16).padStart(6, "0"); x.fillRect(0, y, 16, 1); }
+      const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.encoding = THREE.sRGBEncoding;
+      g.add(new THREE.Mesh(new THREE.SphereGeometry(b.R / 1000, 48, 24), new THREE.MeshLambertMaterial({map: t})));
+    } else {
+      g.add(hexGlobe(W, {level: b.level, radius: b.R / 1000, biome: BIOMES[b.biome], layer: b.layer, lights: b.lights, ocean: b.ocean || 0x1d4f7a}));
+    }
+    if (b.air) g.add(airShell(b.R / 1000 * 1.06, b.air, W.sunDir));
+    g.lbl = W.label(b.name, "", g, "#" + new THREE.Color(b.color).getHexString());
+    return g;
+  });
+  // town lights on Pale Blue's night side (away from Aubade at t = 0)
+  { const pg = W.bodyG[BI.pale].children[0]; if (pg.townLights) setPoints(pg.townLights, pg.townPos.filter(v => v.x / v.length() > 0.1)); }
+  // dots so a body reads at any distance, and its rail round its parent
+  W.dots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({size: 5, sizeAttenuation: false, vertexColors: true}));
+  W.dots.geometry.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(3 * NBOD), 3));
+  W.dots.geometry.setAttribute("color", new THREE.Float32BufferAttribute(PSYS.flatMap(b => new THREE.Color(b.color).toArray()), 3)); W.dots.frustumCulled = false; W.scene.add(W.dots);
+  const ex = new THREE.Vector3(1, 0, 0), ez = new THREE.Vector3(0, 0, -1);
+  W.rails = PSYS.map(b => { if (b.pi < 0) return null; const l = ring(b.a / 1000, b.moon ? 0xb3b8d9 : 0x7390bf, b.id === "wick" ? 0.5 : 0.3, ex, ez, 256); W.scene.add(l); return l; });
+  // the line ahead (vertex colours: cyan bound, orange escape or impact, purple after a node) and the flown trail
+  const NP = 30002;
+  W.path = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({vertexColors: true}));
+  W.path.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * NP), 3)); W.path.geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(3 * NP), 3)); W.path.frustumCulled = false; W.scene.add(W.path);
+  W.trailL = line(0xe8b040, 4002, {opacity: 0.75}); W.scene.add(W.trailL);
+  W.apM = marker(0x59e6f2); W.peM = marker(0x59e6f2); W.scene.add(W.apM, W.peM);
+  W.apL = W.label("Ap", "", W.apM, "#59e6f2"); W.peL = W.label("Pe", "", W.peM, "#59e6f2");
+  W.ghosts = [0, 1, 2, 3].map(() => { const s = marker(0xfa59bf); W.scene.add(s); s.visible = false; const L = W.label("", "", s, "#fa59bf"); return {s, L}; });
+  // the ship: the First orbit stack's upper stage at its true size, and an icon that reads at any distance
+  W.ship = new THREE.Group(); W.scene.add(W.ship);
+  const top = (() => { const cells = cellList(PRESETS.orbit.build()), d = Math.max(...cells.filter(c => c.core && c.p === "dec").map(c => c.y)); return cells.filter(c => c.y > d).map(c => Object.assign({}, c, {y: c.y - d - 1})); })();
+  W.craft = buildCraft(top); W.craft.scale.setScalar(0.001); W.ship.add(W.craft);
+  const it = tex(PX + "engine-ntr", 1, 1); it.wrapS = it.wrapT = THREE.ClampToEdgeWrapping;
+  W.shipIcon = new THREE.Sprite(new THREE.SpriteMaterial({map: it, alphaTest: 0.5, sizeAttenuation: false, depthTest: false})); W.shipIcon.scale.set(0.035, 0.035, 1); W.shipIcon.renderOrder = 5; W.ship.add(W.shipIcon);
+  W.shipL = W.label("ship", "", W.ship, "#ffffff");
+  // node gizmos: a centre and six handles each (prograde/retrograde yellow, normal/anti-normal purple, radial out/in cyan)
+  const HAND = [[0, 1, 0xe8d966, "pro"], [0, -1, 0xe8d966, "retro"], [1, 1, 0xb861f2, "normal"], [1, -1, 0xb861f2, "anti"], [2, 1, 0x59e6f2, "rad out"], [2, -1, 0x59e6f2, "rad in"]];
+  W.giz = Array.from({length: 6}, (_, k) => {
+    const g = new THREE.Group(); W.scene.add(g); g.visible = false;
+    const c = new THREE.Sprite(glowMat(0xffffff)); g.add(c);
+    const hs = HAND.map(([ax, sg, col, nm]) => { const s = new THREE.Sprite(glowMat(col)); s.userData = {node: k, ax, sg, nm}; g.add(s); const ln = line(col, 2, {opacity: 0.8}); g.add(ln); return {s, ln, ax, sg}; });
+    const L = W.label("", "", c, "#ffffff");
+    return {g, c, hs, L};
+  });
+  W.cam = {target: new THREE.Vector3(), yaw: 0.5, pitch: 0.75, dist: 34, min: 0.02, max: 6000};
+  if (PLAN.scope === "system") Object.assign(W.cam, {dist: 1900, pitch: 1.0});
+  if (PLAN.focus !== "pale" && PLAN.focus !== "aubade") { const b = PSYS[BI[PLAN.focus]]; W.cam.dist = PLAN.focus === "ship" ? 1.5 : Math.max(4, b.R / 1000 * (b.id === "wick" ? 5 : 7)); }
+  W.fov = 50;
+  W.reset = (how) => {
+    PLAN.trail = []; PLAN.nodes = []; PLAN.msg = ""; PLAN.warp = 1;
+    PLAN.S = how === "pad" ? padShip() : orbitShip(PLAN.trail);
+    PLAN.dirty = true; replan(); renderPlanWork(); renderCtl();
+  };
+  W.update = (dt) => planUpdate(W, dt);
+  W.hud = () => planHud();
+  W.click = (ray) => planClick(W, ray);
+  W.press = (ray) => {
+    const hs = W.giz.filter(z => z.g.visible).flatMap(z => z.hs.map(h => h.s));
+    const hit = ray.intersectObjects(hs, false)[0]; if (!hit) return false;
+    W.drag = hit.object.userData; return true;
+  };
+  W.dragMove = (dx, dy, fine) => {
+    const d = W.drag, n = PLAN.nodes[d.node]; if (!n) return;
+    n.dv[d.ax] += d.sg * (dx - dy) * (fine ? 0.04 : 0.25); n.dv[d.ax] = Math.round(n.dv[d.ax] * 100) / 100;
+    PLAN.dirty = true; replan(true);
+  };
+  W.release = () => { W.drag = null; renderPlanWork(); };
+  W.reset(Q.get("plan") === "pad" ? "pad" : "orbit");
+  return W;
+}
+// predict from the ship's state; the readout off the new line
+function replan(quick) {
+  const S = PLAN.S; if (!S) return;
+  PLAN.nodes.sort((a, b) => a.t - b.t);
+  const hor = PLAN.scope === "system" ? Math.max(PLAN.horizon, 4 * 3600) : PLAN.horizon;
+  PLAN.pred = predictPath(S, PLAN.nodes, {horizon: hor, maxSteps: quick ? 12000 : 30000});
+  // Ap, Pe and T are the orbit the ship is on now: read off the line with no nodes
+  PLAN.coast = PLAN.nodes.length ? predictPath(S, [], {horizon: PLAN.scope === "system" ? 3 * 3600 : 900, maxSteps: 8000}) : PLAN.pred;
+  PLAN.ro = readout(PLAN.coast, S.t);
+  PLAN.dirty = false; PLAN.lastPred = S.t;
+  if (!quick) renderPlanWork();
+}
+// flying: the same step the line was drawn with. Warp drops to x1 ten seconds before a node's burn.
+function planUpdate(W, dt) {
+  const S = PLAN.S; if (!S) return;
+  if (!KEYS.KeyB && !PLAN.burnHeld) PLAN.latch = false;
+  const burnKey = !!(KEYS.KeyB || PLAN.burnHeld) && !PLAN.latch;
+  let simT = dt * (S.mode === "ascent" || S.mode === "coastup" || S.mode === "circ" ? Math.min(PLAN.warp, 4) : PLAN.warp);
+  const n0 = PLAN.nodes[0];
+  if (n0 && !n0.active && PLAN.warp > 1) { const tb = burnTime(S, nodeMag(n0)); if (S.t + simT > n0.t - tb / 2 - 10) { PLAN.warp = 1; simT = dt; PLAN.msg = "node ahead: warp off"; renderCtl(); } }
+  // whole steps only: sim time owed carries over, so the flight takes exactly the steps the line took
+  PLAN.owe = Math.min((PLAN.owe || 0) + simT, 4000 * 30); simT = PLAN.owe;
+  let steps = 0, thrusting = false;
+  while (simT > 0 && steps++ < 4000 && !S.end) {
+    posAll(S.t, PA); velAll(S.t, PV);
+    if (S.mode === "pad" && !PLAN.launch) break;
+    if (S.mode === "pad" || S.mode === "ascent" || S.mode === "coastup" || S.mode === "circ") { if (simT < 0.05) break; const acc = ascentStep(S, 0.05, PA, PV); thrusting = !!acc; simT -= 0.05; if (steps % 4 === 0) pushTrail(S); if (S.mode === "free") { PLAN.dirty = true; renderCtl(); } continue; }
+    let dt2 = dtRule(S.p, PA), acc = null, doneNow = false;
+    const nW = PLAN.nodes[0], waiting = burnKey && PLAN.sas === "node" && nW && !nW.active && S.t < nW.t - burnTime(S, nodeMag(nW)) / 2;
+    if (burnKey && !waiting && S.ph[S.k] !== undefined) dt2 = Math.min(dt2, 0.05);
+    if (dt2 > simT) break;
+    if (waiting) PLAN.msg = `B held: the burn starts in ${(nW.t - burnTime(S, nodeMag(nW)) / 2 - S.t).toFixed(1)} s`;
+    if (burnKey && !waiting && S.ph[S.k] !== undefined) {
+      let dir = null; const F = frameAt(S.p, S.v, PA, PV);
+      const n = PLAN.nodes[0];
+      if (PLAN.sas === "node" && n) { if (!n.active) { n.active = true; n.left = nodeMag(n); n.flyDir = nodeDir(F, n.dv); } dir = n.flyDir; }
+      else if (PLAN.sas === "pro") dir = F.pro; else if (PLAN.sas === "retro") dir = F.pro.map(x => -x); else if (PLAN.sas === "rad") dir = F.rad; else if (PLAN.sas === "nor") dir = F.nor;
+      if (S.on >= 0 && PLAN.sas !== "node") { const l = Math.hypot(...S.off); dir = S.off.map(x => x / l); }
+      if (dir) {
+        const a = thrustStep(S, dt2); if (a > 0) { acc = dir.map(x => x * a); thrusting = true; W.shipDir = dir; }
+        if (PLAN.sas === "node" && n && a > 0) { n.left -= a * dt2; if (n.left <= 0.05) { PLAN.nodes.shift(); PLAN.msg = "node done"; PLAN.latch = true; PLAN.dirty = true; doneNow = true; } }
+      }
+    }
+    shipStep(S, dt2, acc, PA, PV); simT -= dt2;
+    if (steps % 8 === 0) pushTrail(S);
+    if (doneNow) { renderPlanWork(); break; }
+  }
+  PLAN.owe = S.end || (S.mode === "pad" && !PLAN.launch) ? 0 : Math.max(0, simT);
+  PLAN.burning = thrusting;
+  // a node passed without its burn is dropped
+  while (PLAN.nodes.length && !PLAN.nodes[0].active && S.t > PLAN.nodes[0].t + burnTime(S, nodeMag(PLAN.nodes[0]))) { PLAN.nodes.shift(); PLAN.msg = "a node went by unburnt"; PLAN.dirty = true; renderPlanWork(); }
+  if (S.end && !PLAN.endShown) { PLAN.endShown = true; const b = PSYS[S.end.body]; PLAN.msg = S.end.what === "home" ? `home: through ${b.name}'s air on the pod's heat shield (${Math.round(S.end.rel)} m/s)` : S.end.what === "crash" ? `hit ${b.name} at ${Math.round(S.end.rel)} m/s` : S.end.what === "air" ? `down through ${b.name}'s air` : `into the star`; PLAN.warp = 1; renderCtl(); }
+  if (S.on >= 0 && !PLAN.landedShown) { PLAN.landedShown = true; PLAN.msg = `landed on ${PSYS[S.on].name}`; PLAN.warp = 1; PLAN.dirty = true; renderCtl(); }
+  if (S.on < 0) PLAN.landedShown = false;
+  if (PLAN.dirty || thrusting || S.t - PLAN.lastPred > (PLAN.scope === "system" ? 120 : 20)) replan(thrusting);
+  planDraw(W, thrusting);
+}
+function pushTrail(S) { PLAN.trail.push([S.p[0], S.p[1], S.p[2], S.t]); if (PLAN.trail.length > 4000) PLAN.trail.splice(0, PLAN.trail.length - 4000); }
+// the frame the line is drawn in: the focused body (or, focused on the ship, the body it is round), with
+// the scene's origin at the focus now
+function planFrame() {
+  const S = PLAN.S; posAll(S.t, PA);
+  const fb = PLAN.focus === "ship" ? domOf(S.p, PA) : BI[PLAN.focus];
+  const O = PLAN.focus === "ship" ? S.p.slice() : [PA[3 * fb], PA[3 * fb + 1], PA[3 * fb + 2]];
+  return {fb, O, now: [PA[3 * fb], PA[3 * fb + 1], PA[3 * fb + 2]]};
+}
+const Pt = new Float64Array(3 * NBOD);
+function toScene(p, t, Fr, out = new THREE.Vector3()) {
+  posAll(t, Pt); const j = 3 * Fr.fb;
+  return out.set((p[0] - Pt[j] + Fr.now[0] - Fr.O[0]) / 1000, (p[1] - Pt[j + 1] + Fr.now[1] - Fr.O[1]) / 1000, (p[2] - Pt[j + 2] + Fr.now[2] - Fr.O[2]) / 1000);
+}
+const COL = {bound: new THREE.Color(0x59e6f2), loose: new THREE.Color(0xf2993f), node: new THREE.Color(0xb861f2)};
+function planDraw(W, thrusting) {
+  const S = PLAN.S, Fr = planFrame(), cd = W.camera.position.length();
+  posAll(S.t, PA);
+  PSYS.forEach((b, i) => {
+    const g = W.bodyG[i]; g.position.set((PA[3 * i] - Fr.O[0]) / 1000, (PA[3 * i + 1] - Fr.O[1]) / 1000, (PA[3 * i + 2] - Fr.O[2]) / 1000);
+    W.dots.geometry.attributes.position.setXYZ(i, g.position.x, g.position.y, g.position.z);
+    if (W.rails[i]) W.rails[i].position.set((PA[3 * b.pi] - Fr.O[0]) / 1000, (PA[3 * b.pi + 1] - Fr.O[1]) / 1000, (PA[3 * b.pi + 2] - Fr.O[2]) / 1000);
+    g.lbl.show = !b.moon || W.cam.dist < 500 || PLAN.focus === b.id;
+  });
+  W.dots.geometry.attributes.position.needsUpdate = true;
+  // light from Aubade
+  W.sunDir.set(-Fr.O[0], -Fr.O[1], -Fr.O[2]).normalize(); if (!isFinite(W.sunDir.x) || W.sunDir.lengthSq() < 0.5) W.sunDir.set(1, 0.3, 0).normalize();
+  W.sun.position.copy(W.sunDir).multiplyScalar(100);
+  // the line
+  const pr = PLAN.pred, ro = PLAN.ro, co = PLAN.coast;
+  if (pr && pr.n && (W.pathKey !== pr || W.pathFb !== Fr.fb)) {
+    W.pathKey = pr; W.pathFb = Fr.fb; const F0 = {fb: Fr.fb, O: Fr.now, now: Fr.now};
+    const pos = W.path.geometry.attributes.position, col = W.path.geometry.attributes.color, v = new THREE.Vector3();
+    const stride = Math.max(1, Math.ceil(pr.n / 30000)); let k = 0;
+    const base = ro && ro.bound ? COL.bound : COL.loose;
+    const ro0 = PLAN.ro, cut0 = ro0 && ro0.bound && !PLAN.nodes.length ? ro0.endI + 1 : pr.n;
+    for (let i = 0; i < Math.min(pr.n, cut0 + stride); i += stride) { toScene([pr.p[3 * i], pr.p[3 * i + 1], pr.p[3 * i + 2]], pr.t[i], F0, v); pos.setXYZ(k, v.x, v.y, v.z); const c = pr.seg[i] ? COL.node : base; col.setXYZ(k, c.r, c.g, c.b); k++; }
+    pos.needsUpdate = col.needsUpdate = true; W.path.geometry.setDrawRange(0, k); W.pathN = k; W.pathStride = stride;
+  }
+  W.path.position.set((Fr.now[0] - Fr.O[0]) / 1000, (Fr.now[1] - Fr.O[1]) / 1000, (Fr.now[2] - Fr.O[2]) / 1000);
+  setLine(W.trailL, PLAN.trail.map(q => toScene(q, q[3], Fr)));
+  // Ap and Pe
+  const sh = o => o.scale.setScalar(Math.max(1e-4, o.position.distanceTo(W.camera.position) * 0.03));
+  if (ro && co && co.n && ro.ap > 0 && (ro.bound || ro.hits)) {
+    const at = i => toScene([co.p[3 * i], co.p[3 * i + 1], co.p[3 * i + 2]], co.t[i], Fr);
+    W.apM.visible = ro.bound; W.peM.visible = true;
+    W.apM.position.copy(at(ro.apI)); W.peM.position.copy(at(ro.peI)); sh(W.apM); sh(W.peM);
+    const R = PSYS[ro.ref].R; W.apL.el.textContent = `Ap ${fmtD(ro.ap - R)}`; W.peL.el.textContent = ro.hits ? "impact" : `Pe ${fmtD(ro.pe - R)}`;
+  } else { W.apM.visible = W.peM.visible = false; }
+  // encounters: the closest points to the bodies the line passes, and those bodies' ghosts then
+  const enc = planEncounters(); W.enc = enc;
+  W.ghosts.forEach((g, k) => { const e = enc[k]; g.s.visible = !!e; g.L.show = !!e; if (!e) return; const b = PSYS[e.i]; posAll(e.t, Pt); toScene([Pt[3 * e.i], Pt[3 * e.i + 1], Pt[3 * e.i + 2]], e.t, Fr, g.s.position); sh(g.s); g.L.el.textContent = `${b.name} then: ${e.d < b.R ? "impact" : "closest " + fmtD(e.d - b.R) + " up"}, in ${fmtT(e.t - S.t)}`; });
+  // node gizmos at their predicted points, with the frame of the body the ship is round there
+  W.giz.forEach((z, k) => {
+    const n = PLAN.nodes[k], at = pr && pr.nodeAt[k]; z.g.visible = !!(n && at); z.L.show = z.g.visible; if (!z.g.visible) return;
+    const c = toScene(at.p, at.t, Fr); z.g.position.copy(c); const s = c.distanceTo(W.camera.position);
+    z.c.scale.setScalar(s * 0.035);
+    const ax = [at.F.pro, at.F.nor, at.F.rad];
+    z.hs.forEach(h => { const d = ax[h.ax].map(x => x * h.sg * s * 0.12); h.s.position.set(d[0], d[1], d[2]); h.s.scale.setScalar(s * (PLAN.sel === k ? 0.04 : 0.032)); setLine(h.ln, [new THREE.Vector3(), h.s.position]); });
+    z.L.el.textContent = `node ${k + 1}: ${nodeMag(n).toFixed(1)} m/s, in ${fmtT(n.t - S.t)}`;
+  });
+  // the ship
+  toScene(S.p, S.t, Fr, W.ship.position);
+  const dir = W.shipDir && thrusting ? W.shipDir : (() => { const F = frameAt(S.p, S.v, PA, velAll(S.t, PV)); return S.on >= 0 ? S.off.map(x => x / Math.hypot(...S.off)) : F.pro; })();
+  W.ship.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...dir));
+  W.craft.flames.forEach(f => { f.visible = thrusting && (f.userData.part === "ntr" || f.userData.part === "chem" || f.userData.part === "srb"); });
+  W.shipIcon.visible = cd > 3;
+  // the camera's clip planes follow its distance (1 km a unit, from metres to the whole system)
+  const near = Math.max(1e-5, W.cam.dist * 0.002), far = W.cam.dist * 60 + 4000;
+  if (Math.abs(W.camera.near - near) > near * 0.1 || W.camera.far !== far) { W.camera.near = W.near = near; W.camera.far = far; W.camera.updateProjectionMatrix(); }
+  W.stars.position.copy(W.camera.position); W.stars.scale.setScalar(far * 0.45 / 1800);
+}
+function planEncounters() {
+  const pr = PLAN.pred, S = PLAN.S; if (!pr) return [];
+  posAll(S.t, PA); const here = domOf(S.p, PA), out = [];
+  for (let i = 1; i < NBOD; i++) { const b = PSYS[i]; if (i === here || b.star) continue; if (pr.ca[i] < CLOSE[i] && pr.caT[i] > S.t + 1) out.push({i, d: pr.ca[i], t: pr.caT[i], v: pr.caV[i]}); }
+  return out.sort((a, b) => a.t - b.t).slice(0, 4);
+}
+// click the line to put a node there
+function planClick(W, ray) {
+  const pr = PLAN.pred; if (!pr || !W.pathN) return;
+  const pos = W.path.geometry.attributes.position, v = new THREE.Vector3(); let best = -1, bd = 0.02;
+  for (let k = 0; k < W.pathN; k++) { v.fromBufferAttribute(pos, k).add(W.path.position); const along = v.clone().sub(ray.ray.origin).dot(ray.ray.direction); if (along <= 0) continue; const d = ray.ray.distanceToPoint(v) / along; if (d < bd) { bd = d; best = k; } }
+  if (best < 0) return;
+  const i = Math.min(pr.n - 1, best * W.pathStride), t = pr.t[i];
+  if (t < PLAN.S.t + 3) { flashInfo("Too close to now for a node: pick a point further along the line."); return; }
+  PLAN.nodes.push({t, dv: [0, 0, 0]}); PLAN.nodes.sort((a, b) => a.t - b.t); PLAN.sel = PLAN.nodes.findIndex(n => n.t === t);
+  PLAN.dirty = true; replan(); flashInfo("Node placed: drag its handles, or nudge it in the panel below.");
+}
+function planHud() {
+  const S = PLAN.S; if (!S) return "";
+  const ro = PLAN.ro, pr = PLAN.pred; posAll(S.t, PA); velAll(S.t, PV);
+  const here = domOf(S.p, PA), hb = PSYS[here], alt = Math.hypot(S.p[0] - PA[3 * here], S.p[1] - PA[3 * here + 1], S.p[2] - PA[3 * here + 2]) - hb.R, vr = Math.hypot(S.v[0] - PV[3 * here], S.v[1] - PV[3 * here + 1], S.v[2] - PV[3 * here + 2]);
+  let l1;
+  if (S.on >= 0) l1 = `<span class='g'>landed [${PSYS[S.on].name}]</span>  hold B with SAS radial out (or any hold) to lift off`;
+  else if (S.end) l1 = S.end.what === "home" ? `<span class='g'>home [Pale Blue]  re-entry on the heat shield</span>` : `<span class='w'>${PLAN.msg}</span>`;
+  else if (S.mode === "pad") l1 = `on the pad [Pale Blue]  press Launch`;
+  else if (S.mode !== "free") l1 = `<span class='a'>ascent [Pale Blue]  gravity turn (tab 2's)</span>`;
+  else if (!ro) l1 = "";
+  else if (ro.bound) l1 = `<span class='c'>orbit [${PSYS[ro.ref].name}]  Ap ${fmtD(ro.ap - PSYS[ro.ref].R)}  Pe ${fmtD(ro.pe - PSYS[ro.ref].R)}  T ${fmtT(ro.period)}</span>`;
+  else if (ro.hits) { const co = PLAN.coast; l1 = `<span class='o'>SUBORBITAL [${PSYS[ro.ref].name}]  ${co.end && co.end.what === "landed" ? "touches down" : co.end && (co.end.what === "home" || co.end.what === "air") ? "into the air" : "impact"} in ${fmtT(co.tEnd - S.t)}</span>`; }
+  else if (ro.leaves) l1 = `<span class='o'>ESCAPE [${PSYS[ro.ref].name}]  into ${PSYS[ro.nextRef].name}'s pull</span>`;
+  else l1 = `<span class='o'>ESCAPE [${PSYS[ro.ref].name}]  Pe ${fmtD(ro.pe - PSYS[ro.ref].R)}</span>`;
+  const n = PLAN.nodes[0];
+  const l2 = `T+${fmtT(S.t)}  warp x${PLAN.warp}  alt ${fmtD(alt)} over ${hb.name}  v ${Math.round(vr)} m/s  delta-v left <span class='c'>${Math.round(shipDv(S)).toLocaleString()} m/s</span>  SAS ${PLAN.sas}${PLAN.burning ? "  <span class='a'>BURNING</span>" : ""}`;
+  const enc = (PLAN.pred ? planEncounters() : [])[0];
+  const l3 = (n ? `<span class='p'>node 1 in ${fmtT(n.t - S.t)}  ${n.active ? `${n.left.toFixed(1)} m/s left` : `${nodeMag(n).toFixed(1)} m/s`}  burn ${burnTime(S, n.active ? n.left : nodeMag(n)).toFixed(1)} s</span>` : "no nodes: click the line to place one") + (enc ? `   <span style="color:#fa59bf">${PSYS[enc.i].name} encounter: ${enc.d < PSYS[enc.i].R ? "impact" : "closest " + fmtD(enc.d - PSYS[enc.i].R) + " up"} in ${fmtT(enc.t - S.t)}</span>` : "") + (PLAN.msg && !S.end ? `   <span class='a'>${PLAN.msg}</span>` : "");
+  return `${l1}\n${l2}\n${l3}`;
+}
+// the panel under the view: the flight plan, its nodes, and the readouts
+function renderPlanWork() {
+  if (TAB !== "plan" || !PLAN.S) return;
+  const S = PLAN.S, need = PLAN.nodes.reduce((a, n) => a + (n.active ? n.left : nodeMag(n)), 0), have = shipDv(S);
+  const enc = planEncounters();
+  const nodeRows = PLAN.nodes.map((n, k) => `<div class="pane" style="padding:8px;gap:6px${PLAN.sel === k ? ";border-color:var(--amber)" : ""}" data-node="${k}">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font-family:var(--display);font-size:16px">Node ${k + 1}</b><span class="mono muted">T+${fmtT(n.t)} (in ${fmtT(n.t - S.t)})  ${nodeMag(n).toFixed(1)} m/s  burn ${burnTime(S, nodeMag(n)).toFixed(1)} s</span></div>
+      ${[["Prograde", "#e8d966"], ["Normal", "#b861f2"], ["Radial out", "#59e6f2"]].map(([nm, c], ax) => `<div style="display:grid;grid-template-columns:88px repeat(2,auto) 64px repeat(2,auto);gap:4px;align-items:center;font-size:13px"><span style="color:${c}">${nm}</span><button class="pbtn nb" data-k="${k}" data-ax="${ax}" data-d="-10">-10</button><button class="pbtn nb" data-k="${k}" data-ax="${ax}" data-d="-1">-1</button><span class="mono" style="text-align:right">${n.dv[ax].toFixed(1)}</span><button class="pbtn nb" data-k="${k}" data-ax="${ax}" data-d="1">+1</button><button class="pbtn nb" data-k="${k}" data-ax="${ax}" data-d="10">+10</button></div>`).join("")}
+      <div class="seg"><button class="pbtn nt" data-k="${k}" data-d="-10">Earlier 10 s</button><button class="pbtn nt" data-k="${k}" data-d="10">Later 10 s</button><button class="pbtn nwarp" data-k="${k}">Warp to it</button><button class="pbtn ndel" data-k="${k}">Delete</button></div></div>`).join("");
+  WORK.innerHTML = `<div class="pane">
+      <div class="eyebrow">Flight plan</div>
+      <div class="seg"><button class="pbtn" id="pReset">Reset: in low orbit</button><button class="pbtn" id="pPad">Reset: on the pad</button><button class="pbtn" id="pClear">Clear nodes</button></div>
+      <div class="eyebrow">The nav computer's suggestion (a tier-2 part; its nodes are ordinary nodes)</div>
+      <div class="seg"><button class="pbtn" id="navWick">Transfer to Wick</button><button class="pbtn" id="navHome">Return to Pale Blue</button><button class="pbtn" id="navLantern">Transfer to Lantern</button><button class="pbtn" id="navVerd">Out to Verdance</button></div>
+      <p class="muted" style="font-size:13px">Click the line in the view to put a node there; drag its handles (yellow prograde and retrograde, purple normal, cyan radial) and the line moves as you drag, or nudge it here. Hold <b>B</b> (or the on-screen Burn) when a node comes up: the ship points along it and burns until it is done. SAS holds point it prograde, retrograde, radial out or normal for burns by hand: a landing is a retrograde burn held to the ground, a lift-off is radial out.</p>
+      <div class="bars"><div class="bar"><span>Delta-v: need ${Math.round(need)} of ${Math.round(have)} m/s</span><span class="t"><i class="${need > have ? "short" : ""}" style="width:${Math.min(100, have ? need / have * 100 : 0)}%"></i></span><span class="v">${Math.round(have - need)} left</span></div></div>
+      ${nodeRows || `<p class="muted" style="font-size:13.5px">No nodes yet.</p>`}
+    </div>
+    <div class="pane">
+      <div class="eyebrow">Ahead on the line</div>
+      <div class="tablebox"><table><thead><tr><th>Body</th><th>Closest</th><th>When</th><th>Relative speed</th></tr></thead><tbody>${enc.length ? enc.map(e => `<tr><td>${PSYS[e.i].name}</td><td class="n">${e.d < PSYS[e.i].R ? "impact" : fmtD(e.d - PSYS[e.i].R) + " up"}</td><td class="n">in ${fmtT(e.t - S.t)}</td><td class="n">${Math.round(e.v)} m/s</td></tr>`).join("") : `<tr><td colspan="4" class="muted">No body passed close within the line's ${fmtT(PLAN.pred ? PLAN.pred.tEnd - S.t : 0)}.</td></tr>`}</tbody></table></div>
+      <div class="eyebrow">The bodies near home</div>
+      <div class="tablebox"><table><thead><tr><th></th><th>Radius</th><th>Gravity</th><th>From Pale Blue</th><th>Low orbit</th></tr></thead><tbody>
+        <tr><td>Pale Blue</td><td class="n">4,800 m</td><td class="n">1.00 g</td><td class="n">-</td><td class="n">960 m, 316 m/s, 1:54</td></tr>
+        <tr><td><b>Wick</b> (test moon)</td><td class="n">600 m (L8)</td><td class="n">0.40 g</td><td class="n">16 km, rail 8:50</td><td class="n">150 m, 69 m/s, 1:08</td></tr>
+        <tr><td>Lantern</td><td class="n">1,200 m (L9)</td><td class="n">0.35 g</td><td class="n">26 km, rail 18:18</td><td class="n">300 m, 92 m/s</td></tr></tbody></table></div>
+      <div class="eyebrow">Measured on this page's integrator</div>
+      <div class="tablebox"><table><tbody id="planMeasured">${PLAN_MEASURED}</tbody></table></div>
+      <p class="honest"><b>Maneuver nodes go against CLAUDE.md as written</b> ("Do not restore rocket patched conics, maneuver nodes, transfer-window requirements, or n-body ship simulation"). You asked for navigation nodes, so they are here, in the mockup only; the rule changes only on your word. The rest of the rule's ship model is kept: the line is the same Newtonian step the ship flies, run forward, with every body pulling and none solved as a conic. Asked in the survey as G4a, with these screenshots.</p>
+    </div>`;
+  const W = WORLDS.plan;
+  $("pReset").onclick = () => { PLAN.endShown = false; W.reset("orbit"); };
+  $("pPad").onclick = () => { PLAN.endShown = false; PLAN.launch = false; W.reset("pad"); };
+  $("pClear").onclick = () => { PLAN.nodes = []; PLAN.dirty = true; replan(); };
+  const nav = (tgt, o) => { flashInfo("The nav computer is searching node times and burns..."); setTimeout(() => { const r = planNav(tgt, o); flashInfo(r); }, 30); };
+  $("navWick").onclick = () => nav("wick");
+  $("navHome").onclick = () => nav("pale");
+  $("navLantern").onclick = () => nav("lantern");
+  $("navVerd").onclick = () => nav("verdance");
+  WORK.querySelectorAll(".nb").forEach(b => b.onclick = () => { const n = PLAN.nodes[+b.dataset.k]; n.dv[+b.dataset.ax] += +b.dataset.d; PLAN.sel = +b.dataset.k; PLAN.dirty = true; replan(); });
+  WORK.querySelectorAll(".nt").forEach(b => b.onclick = () => { const n = PLAN.nodes[+b.dataset.k]; n.t = Math.max(S.t + 3, n.t + +b.dataset.d); PLAN.dirty = true; replan(); });
+  WORK.querySelectorAll(".ndel").forEach(b => b.onclick = () => { PLAN.nodes.splice(+b.dataset.k, 1); PLAN.dirty = true; replan(); });
+  WORK.querySelectorAll(".nwarp").forEach(b => b.onclick = () => { PLAN.warp = 1000; renderCtl(); });
+}
+// measured 2026-11-14 by a script driving this page's own flight code in headless Chromium (no GPU)
+let PLAN_MEASURED = [
+  ["Pad to low orbit (First orbit, gravity turn)", "23 s, 548 m/s; Ap 989 m, Pe 884 m, T 1:54"],
+  ["A coasting ship against its line, 60 s on", "0 m apart (the line is the flight)"],
+  ["A 25 m/s prograde node", "moves the line 10.1 km two minutes on; Ap 3,135 m"],
+  ["Low orbit to Wick (the nav computer's nodes, flown)", "72 + 38 + 2 m/s = 113 m/s; orbit Ap 211 m, Pe 131 m, T 1:12"],
+  ["That orbit, left alone", "still round Wick 2 h 40 min later (Ap 261 m, Pe 153 m)"],
+  ["Down onto Wick (a scripted retrograde burn)", "206 m/s, landed under 6 m/s"],
+  ["Wick orbit to home", "29 m/s; into Pale Blue's air 2:11 later at 412 m/s"],
+  ["One prediction (this container's CPU)", "6 to 10 ms for 15 min near home; 75 to 110 ms for 4 h across the system"],
+].map(([a, b]) => `<tr><td>${a}</td><td class="n" style="white-space:normal">${b}</td></tr>`).join("");
+// plan with the nav computer from the ship's state now
+function planNav(target) {
+  const S = PLAN.S; posAll(S.t, PA); const here = domOf(S.p, PA), hb = PSYS[here], tb = PSYS[BI[target]];
+  if (S.on >= 0 || S.mode !== "free") return "Get into orbit first: the nav computer plans from an orbit.";
+  const r = Math.hypot(S.p[0] - PA[3 * here], S.p[1] - PA[3 * here + 1], S.p[2] - PA[3 * here + 2]), T = 2 * Math.PI * Math.sqrt(r ** 3 / hb.mu);
+  let o;
+  if (target === "pale") o = {aim: tb.R + 60, dvMin: 5, dvMax: 140, span: T * 1.05, horizon: 700, capture: false};
+  else if (tb.moon && tb.pi === here) { const syn = 1 / Math.abs(1 / T - tb.w / (2 * Math.PI)); o = {aim: tb.R + tb.lo, dvMin: 20, dvMax: 160, span: Math.min(900, T + syn), horizon: 900, capture: true}; }
+  else o = {aim: tb.R + tb.lo, dvMin: 120, dvMax: 420, span: T * 1.05, horizon: 4 * 3600, capture: true};
+  const res = navPlan(S, target, o);
+  PLAN.nodes = res.nodes; PLAN.sel = 0; PLAN.dirty = true; replan();
+  const ro2 = readoutAfter(PLAN.pred, PLAN.nodes.length);
+  return target === "pale" ? `Return plotted: node 1 ${nodeMag(PLAN.nodes[0]).toFixed(1)} m/s; Pale Blue periapsis ${fmtD(res.miss)} up, in the air.` : `Plotted: depart ${nodeMag(PLAN.nodes[0]).toFixed(1)} m/s, pass ${tb.name} ${fmtD(res.miss)} up, capture ${nodeMag(PLAN.nodes[1]).toFixed(1)} m/s${PLAN.nodes[2] ? `, round it off ${nodeMag(PLAN.nodes[2]).toFixed(1)} m/s` : ""}${ro2 && ro2.bound && ro2.ref === BI[target] ? ": in orbit round " + tb.name : ""}.`;
+}
+
+// =====================================================================================
 // tab 4: antimatter. The lander is the ship: surface to surface anywhere in the system
 // =====================================================================================
 const AM = {view: "lander", time: "night"};
@@ -1638,7 +2386,7 @@ function buildAmCourse() {
   W.label("flip", "", flip, "#ffe38a");
   W.label("brake, set down", "", null, "#b861f2").pos = mid.clone().lerp(e1, 0.5).add(new THREE.Vector3(0, 0, -1.6));
   W.label("fusion tier: lander up, ship across, lander down", "", null, "#59e6f2").pos = o0.clone().lerp(o1, 0.5).add(new THREE.Vector3(0, 0.8, 3));
-  W.label("Lantern", "", ln, "#b3b8d9"); W.label("Halcyon (the star)", "", starCore, "#ffe8b0");
+  W.label("Lantern", "", ln, "#b3b8d9"); W.label("Aubade (the star)", "", starCore, "#ffe8b0");
   W.cam = {target: new THREE.Vector3(0, 0, 2), yaw: 0.08, pitch: 0.95, dist: 40, min: 6, max: 200};
   W.hud = () => `nav computer | Pale Blue surface -> Cinder surface  <span class='p'>antimatter lander</span>\nburn 2 min 35 s, flip, brake 2 min 35 s: 5 min 10 s, 9.8 km/s\nno orbit at either end   (schematic: bodies enlarged)`;
   return W;
@@ -1655,11 +2403,13 @@ function curWorld() {
   if (TAB === "vab") return WORLDS.vab;
   if (TAB === "orbit") return WORLDS.orbit;
   if (TAB === "fusion") return FUS.view === "lander" ? WORLDS.flander : WORLDS.fusion;
+  if (TAB === "plan") return WORLDS.plan;
   return AM.view === "course" ? WORLDS.amcourse : WORLDS.alander;
 }
 function ensureWorlds() {
   if (TAB === "vab" && !WORLDS.vab) { buildVab(); WORLDS.vab.setTime(Q.get("time") || "day"); }
   if (TAB === "orbit" && !WORLDS.orbit) buildOrbit();
+  if (TAB === "plan" && !WORLDS.plan) buildPlanner();
   if (TAB === "fusion") { if (!WORLDS.fusion) buildFusion(); if (FUS.view === "lander" && !WORLDS.flander) { buildLanderWorld("flander", SHEET.fields, "lander"); WORLDS.flander.setTime(FUS.time); } }
   if (TAB === "antimatter") { if (AM.view === "course" && !WORLDS.amcourse) buildAmCourse(); if (AM.view === "lander" && !WORLDS.alander) { buildLanderWorld("alander", SHEET.basalt, "am"); WORLDS.alander.setTime(AM.time); } }
   const W = curWorld();
@@ -1670,14 +2420,22 @@ function renderCtl() {
   let h = "";
   if (TAB === "vab") {
     const W = WORLDS.vab, wk = W && W.rocket && W.rocket.walk;
-    h = seg("timeSel", [["day", "Day"], ["night", "Night"]], W ? W.time : "day", "Time of day") + seg("viewSel", [["outside", "Outside"], ["cut", "Cut-away"], ["inside", "Inside"]], VAB.view, "View");
+    h = seg("timeSel", [["day", "Day"], ["night", "Night"]], W ? W.time : "day", "Time of day") + seg("viewSel", [["outside", "Outside"], ["cut", "Cut-away"], ["inside", "Inside"], ["walk", "Walk the field"]], VAB.view, "View");
     if (VAB.view === "inside") h += wk && wk.storeys.length ? seg("standSel", wk.storeys.map((s, i) => [String(i), `Deck L${s.y}`]), String(VAB.stand), "Stand on") : `<span class="muted" style="font-size:13px">No deck to stand on</span>`;
+    else if (VAB.view === "walk") h += `<div class="seg"><button class="pbtn" id="toPad">To the pad</button><button class="pbtn" id="toB">To Pad B</button><button class="pbtn" id="toHill">To the edge</button></div>`;
     else h += seg("symSel", SYM(), String(VAB.sym), "Symmetry");
-    h += `<div class="seg"><button class="pbtn go" id="launchB">${W && W.launch ? "End flight" : "Launch"}</button>${VAB.view === "inside" ? "" : `<button class="pbtn" id="eraseB" aria-pressed="${VAB.sel === "erase"}">Eraser</button>`}</div>`;
+    h += `<div class="seg"><button class="pbtn go" id="launchB">${W && W.launch ? "End flight" : "Launch"}</button>${VAB.view === "inside" || VAB.view === "walk" ? "" : `<button class="pbtn" id="eraseB" aria-pressed="${VAB.sel === "erase"}">Eraser</button>`}</div>`;
   } else if (TAB === "orbit") {
     h = seg("fieldSel", [["inverse", "Inverse-square (B)"], ["anchor", "Today's band (A)"]], ORB.field, "Gravity field")
       + `<div class="seg"><button class="pbtn go" id="relaunch">Launch again</button><button class="pbtn" id="pro">Prograde +20</button><button class="pbtn" id="retro">Retrograde -20</button></div>`
       + seg("speedSel", [["1", "x1"], ["4", "x4"], ["16", "x16"]], String(ORB.speed), "Time speed");
+  } else if (TAB === "plan") {
+    const S = PLAN.S;
+    h = seg("pscope", [["home", "Pale Blue and Wick"], ["system", "Aubade system"]], PLAN.scope, "Scope")
+      + seg("pfocus", FOCI[PLAN.scope], PLAN.focus, "Focus")
+      + seg("pwarp", WARPS.map(w => [String(w), "x" + w]), String(PLAN.warp), "Time warp")
+      + seg("psas", [["node", "Node"], ["pro", "Prograde"], ["retro", "Retrograde"], ["rad", "Radial out"], ["nor", "Normal"]], PLAN.sas, "SAS hold")
+      + `<div class="seg">${S && S.mode === "pad" && !PLAN.launch ? `<button class="pbtn go" id="pLaunch">Launch</button>` : ""}<button class="pbtn go" id="pBurn">Hold to burn (B)</button></div>`;
   } else if (TAB === "fusion") {
     h = seg("fview", [["course", "Nav computer"], ["freight", "Freighters"], ["lander", "Lander"]], FUS.view, "View");
     if (FUS.view === "course") h += seg("fto", [["lantern", "To Lantern (to scale)"], ["verdance", "To Verdance"]], FUS.to, "Destination");
@@ -1691,6 +2449,9 @@ function renderCtl() {
   bindSeg("viewSel", v => setView(v));
   bindSeg("standSel", v => { VAB.stand = +v; placeWalker(WORLDS.vab); renderCtl(); });
   bindSeg("symSel", v => { VAB.sym = +v; renderCtl(); refreshVab(); });
+  if ($("toPad")) $("toPad").onclick = () => walkTo(-26, 26, Math.atan2(26, -26));
+  if ($("toB")) $("toB").onclick = () => walkTo(FIELD.padB.x - 18, FIELD.padB.z + 14, Math.atan2(18, -14));
+  if ($("toHill")) $("toHill").onclick = () => walkTo(Math.cos(0.4) * 186, -Math.sin(0.4) * 186, Math.atan2(Math.cos(0.4), -Math.sin(0.4)));
   if ($("launchB")) $("launchB").onclick = () => WORLDS.vab.launch ? endLaunch() : startLaunch();
   if ($("eraseB")) $("eraseB").onclick = () => { VAB.sel = VAB.sel === "erase" ? "deck" : "erase"; renderCtl(); renderHotbar(); refreshVab(); };
   bindSeg("fieldSel", v => { ORB.field = v; WORLDS.orbit.reset(false); renderCtl(); });
@@ -1698,6 +2459,12 @@ function renderCtl() {
   if ($("relaunch")) $("relaunch").onclick = () => WORLDS.orbit.reset(true);
   if ($("pro")) $("pro").onclick = () => WORLDS.orbit.burn(20);
   if ($("retro")) $("retro").onclick = () => WORLDS.orbit.burn(-20);
+  bindSeg("pscope", v => { PLAN.scope = v; PLAN.focus = v === "system" ? "aubade" : "pale"; Object.assign(WORLDS.plan.cam, v === "system" ? {dist: 1900, pitch: 1.0} : {dist: 34, pitch: 0.75}); PLAN.dirty = true; renderCtl(); });
+  bindSeg("pfocus", v => { PLAN.focus = v; const b = PSYS[BI[v]]; WORLDS.plan.cam.dist = v === "ship" ? 1.5 : v === "aubade" ? 1900 : Math.max(4, b.R / 1000 * (b.id === "wick" ? 5 : 7)); renderCtl(); });
+  bindSeg("pwarp", v => { PLAN.warp = +v; renderCtl(); });
+  bindSeg("psas", v => { PLAN.sas = v; renderCtl(); });
+  if ($("pLaunch")) $("pLaunch").onclick = () => { PLAN.launch = true; renderCtl(); };
+  if ($("pBurn")) { const b = $("pBurn"), set = v => { PLAN.burnHeld = v; kick(2); }; b.onpointerdown = e => { e.preventDefault(); set(true); }; b.onpointerup = b.onpointerleave = b.onpointercancel = () => set(false); }
   bindSeg("fview", v => { FUS.view = v; go(); });
   bindSeg("fto", v => { FUS.to = v; go(); });
   bindSeg("ftime", v => { FUS.time = v; WORLDS.flander.setTime(v); });
@@ -1710,6 +2477,7 @@ function renderInfo() {
     vab: VAB.view === "inside" ? "<b>Aboard, on the pad.</b> You stand on a deck the walk check reached, in the rocket's frame: launch the preview and you ride it up. Drag to look; nothing moves until you do." : "<b>Edit a layer</b> in the editor under the stage, or click a ghost cell here to place the selected part on the layer being edited; right-click or the eraser takes one off. Drag to look round, scroll to zoom. Cut-away hides the walls on your side so the decks show. Press Launch and fly it: W and S pitch, A and D yaw, Q and E roll, Shift and Ctrl throttle; the nozzles swivel in their gimbals.",
     orbit: "<b>To scale</b>: Pale Blue is 4.8 km across the middle, low orbit 960 m up. The cyan line is the path the ship will fly, integrated forward through the same field it flies in; orange means it escapes or comes down.",
     fusion: FUS.view === "freight" ? "<b>Freighters</b> fly the nav computer's courses between stops, with no pilot. Add a route in the panel below." : FUS.view === "lander" ? "<b>Landers</b> lift off to low orbit to meet the fusion ship, which never lands. Set it to night: the pad lamps and the exhaust light the ground." : "<b>The nav computer</b> plots a near-straight course: burn, flip at the midpoint, brake. The dashed line is what a chemical rocket flies instead.",
+    plan: "<b>The planner.</b> Every body on its rails, the ship in their pull (in the frame of the body it is round, so the rails and the field agree), the line ahead that same integration run forward. Drag to turn, scroll to zoom from metres to the whole system. Click the line to place a node; drag its handles. Focus Wick to see an orbit round it close.",
     antimatter: AM.view === "course" ? "<b>The nav computer</b> plots a lander's course from one surface to another: lift off, burn, flip, brake, set down. The dashed line is the fusion tier's way: lander up, ship across, lander down." : "<b>The antimatter lander</b> from the assembly building's examples, on Cinder after flying from Pale Blue's surface with no orbit stop. Its deck, cabins and airlock are cells like any other.",
   };
   INFO.innerHTML = T[TAB];
@@ -1717,6 +2485,7 @@ function renderInfo() {
 function hotbarGroup() { return GROUPS.inside.includes(VAB.sel) ? GROUPS.inside : GROUPS.rocket; }
 function renderHotbar() {
   const HB = $("hudbar");
+  if (TAB === "plan") { HB.innerHTML = ""; return; }
   if (TAB !== "vab") { const items = [["game/hand", "Hand"], ["game/pickaxe", "Pickaxe"], ["game/lantern_post", "Lantern post"], ["game/torch", "Torch"]]; HB.innerHTML = items.map(([i, n], k) => `<span class="hs${k === 0 ? " sel" : ""}" title="${n}"><span class="k">${k + 1}</span><img src="${PX}${i}.png${V}" alt="${n}"></span>`).join(""); return; }
   HB.innerHTML = hotbarGroup().map((p, k) => `<button class="hs${VAB.sel === p ? " sel" : ""}" data-p="${p}" title="${PARTS[p].name}"><span class="k">${k + 1}</span><img src="${PX}${PARTS[p].icon}.png${V}" alt="${PARTS[p].name}"></button>`).join("");
   HB.querySelectorAll("button").forEach(b => b.onclick = () => selPart(b.dataset.p));
@@ -1861,6 +2630,7 @@ function drawStack(cv, Wk) {
 
 function renderWork() {
   if (TAB === "vab") { renderVabWork(); return; }
+  if (TAB === "plan") { renderPlanWork(); return; }
   if (TAB === "orbit") {
     const W = WORLDS.orbit, f = W.flight;
     WORK.innerHTML = `<div class="pane">
@@ -1936,7 +2706,7 @@ function go() {
   canvas.classList.toggle("place", TAB === "vab" && VAB.view !== "inside");
   kick(4);
 }
-const TABS = ["vab", "orbit", "fusion", "antimatter"];
+const TABS = ["vab", "orbit", "fusion", "antimatter", "plan"];
 document.querySelectorAll(".tab").forEach(b => b.onclick = () => { TAB = b.dataset.tab; try { history.replaceState(null, "", "#" + TAB); } catch (e) {} go(); });
 window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (TABS.includes(h) && h !== TAB) { TAB = h; go(); } });
 window.addEventListener("keydown", e => {
@@ -1953,18 +2723,21 @@ window.addEventListener("resize", resize);
 // camera: drag to orbit (or to look, aboard), wheel or pinch to zoom; a click (no drag) goes to the world
 const ptrs = new Map(); let pinch0 = 0, down = null;
 canvas.addEventListener("contextmenu", e => e.preventDefault());
-canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); down = {x: e.clientX, y: e.clientY, b: e.button, moved: 0}; if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+const rayAt = e => { const r = canvas.getBoundingClientRect(), ray = new THREE.Raycaster(); ray.setFromCamera({x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1}, active.camera); return ray; };
+canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); down = {x: e.clientX, y: e.clientY, b: e.button, moved: 0, drag: !!(active && active.press && e.button === 0 && active.press(rayAt(e)))}; if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
 canvas.addEventListener("pointermove", e => {
   if (!ptrs.has(e.pointerId) || !active) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
   const C = active.cam;
   if (ptrs.size === 2) { if (C.fp) return; const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0) C.dist = Math.max(C.min, Math.min(C.max, C.dist * pinch0 / d)); pinch0 = d; kick(2); return; }
   if (down) down.moved += Math.abs(e.clientX - px) + Math.abs(e.clientY - py);
+  if (down && down.drag) { active.dragMove(e.clientX - px, e.clientY - py, e.shiftKey); kick(2); return; }
   // raw displacement, no easing: aboard it turns your head, outside it swings the camera round the target
   C.yaw -= (e.clientX - px) * (C.fp ? 0.005 : 0.006); C.pitch = Math.max(-1.3, Math.min(1.45, C.pitch + (e.clientY - py) * (C.fp ? -0.005 : 0.005)));
   kick(2);
 });
 canvas.addEventListener("pointerup", e => {
   ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0;
+  if (down && down.drag) { active.release(); down = null; return; }
   if (down && down.moved < 6 && active && active.click) { const r = canvas.getBoundingClientRect(), ray = new THREE.Raycaster(); ray.setFromCamera({x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1}, active.camera); active.click(ray, down.b); }
   down = null;
 });
@@ -2011,8 +2784,8 @@ function loop(now) {
     if (W.name === "orbit" && W.dirty) { W.dirty = false; W.reset(false); }
     W.update(dt, t);
     const C = placeCamera(W, dt);
-    if (W.moon) W.moon.visible = !C.fp;   // aboard, the hull shades you from the moon
-    if (PM) PM.window.emissiveIntensity = W.time === "night" ? (C.fp ? 0.04 : 1.0) : 0.12;   // aboard at night a porthole shows the dark outside
+    if (W.moon) W.moon.visible = !C.aboard;   // aboard, the hull shades you from the moon
+    if (PM) PM.window.emissiveIntensity = W.time === "night" ? (C.aboard ? 0.04 : 1.0) : 0.12;   // aboard at night a porthole shows the dark outside
     pushLamps(W);
     renderer.render(W.scene, W.camera);
     $("hud").innerHTML = W.hud();
@@ -2043,6 +2816,8 @@ function start() {
   if (Q.get("sub")) { if (TAB === "fusion") FUS.view = Q.get("sub"); if (TAB === "antimatter") AM.view = Q.get("sub"); }
   if (Q.get("to")) FUS.to = Q.get("to");
   if (Q.get("field")) ORB.field = Q.get("field");
+  if (Q.get("scope")) { PLAN.scope = Q.get("scope"); PLAN.focus = PLAN.scope === "system" ? "aubade" : "pale"; }
+  if (Q.get("focus")) PLAN.focus = Q.get("focus");
   if (Q.get("time")) FUS.time = AM.time = Q.get("time");
   loadPreset(Q.get("preset") && PRESETS[Q.get("preset")] ? Q.get("preset") : "colony"); VAB.edited = false;
   if (Q.get("layer")) VAB.layer = +Q.get("layer");
@@ -2050,7 +2825,7 @@ function start() {
   if (Q.get("sel") && PARTS[Q.get("sel")]) VAB.sel = Q.get("sel");
   if (Q.get("stand")) VAB.stand = +Q.get("stand");
   go();
-  if (TAB === "vab" && ["cut", "inside"].includes(Q.get("view"))) { if (VAB.stand) placeWalker(WORLDS.vab); setView(Q.get("view")); }
+  if (TAB === "vab" && ["cut", "inside", "walk"].includes(Q.get("view"))) { if (VAB.stand) placeWalker(WORLDS.vab); setView(Q.get("view")); }
   if (TAB === "vab" && Q.get("cyaw")) Object.assign(WORLDS.vab.orbitCam, {yaw: +Q.get("cyaw"), pitch: +(Q.get("cpitch") || 0.2), dist: WORLDS.vab.orbitCam.dist * +(Q.get("cdist") || 1)});
   if (Q.get("launch") && TAB === "vab") setTimeout(() => { startLaunch(); (Q.get("hold") || "").split(",").filter(Boolean).forEach(k => KEYS[k] = true); renderKeys(); }, 200);
   $("loading").hidden = true;
@@ -2074,6 +2849,10 @@ $("opts").innerHTML = [
 ].map(([h, tag, p, rec]) => `<div class="opt${rec ? " rec" : ""}">${tag ? `<span class="tag">${tag}</span>` : ""}<h3>${h}</h3><p>${p}</p></div>`).join("")
   + `<p class="muted" style="grid-column:1/-1;font-size:14px">B changes the invariant in one place: "ships use local gravity falloff" becomes "assisted ships use the bounded anchor field; rockets use the orbital field". Patched conics, maneuver nodes, transfer-window requirements and ship-to-ship gravity stay out. This is the survey's question G4, with tab 2's screenshots in both fields and tab 3's course beside it.</p>`;
 const DEC = [
+  ["G4a. Maneuver nodes on the integrated line? (asked, with the planner's screenshots)", "You asked for navigation nodes to plot paths and burns (2026-11-14). CLAUDE.md keeps maneuver nodes out, and G4's recommended B had none. The planner has them, in the mockup only.", "Allow them: nodes are finite burns planned on the line the integrator draws and flown by hand; patched conics, sphere-of-influence solvers, transfer-window requirements and ship-to-ship gravity stay out. The rule's wording changes only on your answer, in the commit that builds it."],
+  ["The ship's frame (2026-11-14)", "The bodies ride rails that know only their parents. A ship feeling every body's full pull is dragged off a moon orbit by Amber's 0.03 m/s&sup2; at Pale Blue, which Wick's rail never feels: measured, an orbit round Wick hit the ground inside two turns.", "Recommendation taken (ask only with screenshots): the ship is integrated in the frame of the body it is round, riding that body's rail: that body's pull plus every other body's tide. One integrator, no conics; the frame only changes which rail is the reference."],
+  ["Wick, the test moon (2026-11-14)", "A small body close to home to practise orbit transitions.", "Recommendation taken (ask only with screenshots): 600 m (Goldberg level 8, on the ladder), 0.4 g, 16 km from Pale Blue on a rail that agrees with the field, airless and lifeless. Mockup data: whether the game gets a Wick is the planets change's call."],
+  ["The launch field (2026-11-14)", "A larger ground area round the pad, kept cheap.", "Recommendation taken (ask only with screenshots): 80 rings of the game's cells (about 200 m), a far ring of cells twelve times wider to 2.4 km as scenery, Pad B 190 m out, walking on the near ring."],
   ["G4. How do chemical rockets meet orbits? (asked, with screenshots)", "A keep the invariant, B Tenebris's orbital field without nodes, C all of Tenebris.", "B. It is the orbital play Tenebris has, with the part that made the invariant necessary (a second, analytic model of motion) left out. Until you answer, the plan is written for B and marked provisional."],
   ["One build grid", "The VAB builds hex stacks; the shipyard mockup builds on 2 m squares.", "Recommendation taken (ask only with screenshots): both on the 2.833 m hex cell with 1 m layers, so a part is a unit of the world like a block."],
   ["Exhaust speeds are the world's scale", "Real kerosene engines exhaust at about 3 km/s; low orbit here is 316 m/s.", "Recommendation taken: chemical 600 m/s, solid 480, nuclear thermal 1,500, fusion 8,000, antimatter 60,000, so a tank of fuel matters as it does in Kerbal and staging pays."],
@@ -2084,7 +2863,7 @@ const DEC = [
   ["Staging a wide stack", "A decoupler is one cell; a ring-3 stack splits across 37.", "Recommendation taken (ask only with screenshots): the core column's decoupler splits the whole stack at its layer, as before; other decouplers on that layer make it a separation ring and only add mass."],
   ["A hatch is two cells tall", "A cell is 1 m; a walker needs two.", "Recommendation taken (ask only with screenshots): a hatch or airlock is painted on two layers, standing on a deck; a cabin counts as headroom, a hull wall does not."],
 ];
-$("decisions").innerHTML = DEC.map(([q, ctx, rec]) => `<div class="q"><h3>${q}</h3><p>${ctx}</p><p class="rec"><b>${q.startsWith("G4") ? "Recommend" : "Taken"}</b>${rec}</p></div>`).join("");
+$("decisions").innerHTML = DEC.map(([q, ctx, rec]) => `<div class="q"><h3>${q}</h3><p>${ctx}</p><p class="rec"><b>${/^G4/.test(q) ? "Recommend" : "Taken"}</b>${rec}</p></div>`).join("");
 
 start();
 </script>
