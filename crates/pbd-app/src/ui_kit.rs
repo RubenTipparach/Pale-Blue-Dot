@@ -486,8 +486,12 @@ pub fn font_image(pixels: RgbaImage) -> Image {
     image
 }
 
+/// The font's atlas layout, each glyph's character and width in atlas order,
+/// and its height, spacing and space advance.
+pub type FontTable = (TextureAtlasLayout, Vec<(char, u32)>, [u32; 3]);
+
 /// The kit font's glyph table from `kit-font.json`.
-pub fn font_layout(json: &str) -> Result<(TextureAtlasLayout, Vec<(char, u32)>, [u32; 3]), String> {
+pub fn font_layout(json: &str) -> Result<FontTable, String> {
     let v: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
     let height = v["height"].as_u64().ok_or("height")? as u32;
     let spacing = v["spacing"].as_u64().ok_or("spacing")? as u32;
