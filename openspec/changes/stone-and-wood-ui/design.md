@@ -1,4 +1,4 @@
-# Design: the UI in stone and rough rock, with carved oak as accent
+# Design: rock and stone in play, carved oak out of play
 
 The owner, 2026-11-14: **"pull in UI skills from my fleet-command repo, and
 develop ui for this game, do something like with rock and carved wood"**;
@@ -6,8 +6,15 @@ then **"I like the stone kit more, can you make the stone more blue?"**; then
 **"phones cant run this lol, mostly stone with some occasion timber for
 accent"**.
 
-Mockup: `docs/mockups/ui.html` ("Stone and Timber"), tabs Kit, HUD, Pack,
-Pause, Map, Station, Talk, Loading. Its shots are in
+Then, the same day: **"show me the game with that 3d rendered look"**, **"yea
+the 3d rendered look as a whole kit, also make the menus interactive please"**,
+**"make a 3js demo"**, **"main menu I think should use the timber stuff, but the
+game I like the rock stuff"** and **"pause menu = timber too"** (all recorded in
+"The owner's answers" below).
+
+Mockup: `docs/mockups/ui.html` ("Stone and Timber"), tabs Play, Main menu, Kit,
+HUD, Pack, Pause, Map, Station, Talk, Loading, with a page-wide look switch
+Drawn | Rendered (pixelated) | Smooth (Cycles). Its shots are in
 `docs/screenshots/mockup-ui/`. Status: **proposed**. Nothing here is built in
 the game; the kit's art, the two scripts and the mockup are. The owner's
 answers of 2026-11-14 are folded in throughout and recorded at the end
@@ -73,43 +80,37 @@ bar; the kit covers all of them with the same pieces.
   game; one height field with material masks, no primitives stuck on. Used for
   the rendered variant (section 7).
 
-## 3. Materials: stone first, timber as accent
+## 3. Materials: rock in play, timber out of play
 
-The default material of every piece is stone (owner: "mostly stone with some
-occasion timber for accent"). Carved oak appears in exactly three small places
-(section 3a); iron and brass stay as small fittings.
+The owner, 2026-11-14: **"main menu I think should use the timber stuff, but
+the game I like the rock stuff, just need to determine which rock thing to
+use"**, then **"pause menu = timber too"**. So the kit has two sets:
+
+| Where | Set | Pieces |
+| --- | --- | --- |
+| **Out of play**: the main menu (title), pause, settings, saves | **Timber**: the carved-oak set (`ui_art.py --oak`, `docs/mockups/ui/oak/`) | oak frame round a stone face, oak plaques in five states, oak tabs (top level and Input's sub-tabs), oak scroll thumb and slider knob, oak-rimmed tooltip used as the key cap, the oak lintel for the title |
+| **In play**: HUD (hotbar, compass, crosshair), pack, map, machines and stations, talk and trade, chests, the loading slab | **Rock and stone**: rough rock frames, slate-blue dressed stone inside | rock slab, stone plaques, slots, tabs, bars, scroll, slider, checkboxes, the compass strip (oak pointer), map frame, portrait, tooltip; the oak lintel carries a panel's title |
 
 | Material | Where | Ramp (Sweaft-64, dark to light) |
 | --- | --- | --- |
-| Rough rock | The menu frame (the slab every menu, the pack, a station, talk and trade sit in), the loading slab, the map frame's corner blocks, the emblem | `#010e1a #1f3b52 #3e586e #5d778d #92a3b2` |
-| Dressed stone | Panel faces; button plaques (every state); tabs; the compass strip; slots; scroll track and thumb; slider track and knob; checkboxes; tooltips; bar frames; the map frame's moulding; the portrait frame; the sub-panel frame (`frame`, for drawers); the icons | `#011c34 #1f3b52 #3e586e #92a3b2 #bfcad7`, plus `STONE_MID` `#5d778d` between the middle two (a hovered plaque, a raised thumb) |
-| Carved oak (accent only) | The title lintel, the open tab's cap, the compass pointer (section 3a) | `#2f1525 #41322c #725244 #ab8465 #cfaa81` |
-| Iron (fittings) | Studs on plaques, frame brackets, bar studs, bands on the scroll thumb and slider knob, the compass end bands, the lintel's pegs, the pointer's tip | `#010000 #161612 #2c2c25 #434137 #a09f91` |
-| Brass (fittings) | Hovered studs, town studs on the compass, its end bosses | `#733126 #c56d25 #fb902f #faaf5c` |
-| Rune glow | Focus and selection only (the mint the game uses today) | `#204f63 #53998b #84e3b5 #c1f1d8` |
+| Rough rock | In-play panel frames (pack, stations, chest, talk, trade), the loading slab, the map frame's corner blocks, the emblem | `#010e1a #1f3b52 #3e586e #5d778d #92a3b2` |
+| Dressed stone | Faces text sits on; in-play plaques, tabs, compass strip, slots, scroll, slider, checkboxes, tooltips, bar frames, the map's moulding, the portrait frame, the sub-panel frame | `#011c34 #1f3b52 #3e586e #92a3b2 #bfcad7`, plus `STONE_MID` `#5d778d` |
+| Carved oak | The timber menus; in play only the title lintel, the open tab's cap and the compass pointer | `#2f1525 #41322c #725244 #ab8465 #cfaa81` |
+| Iron, brass | Fittings: studs, brackets, bands, pegs; brass on hover and town studs | `#010000 #161612 #2c2c25 #434137 #a09f91`; `#733126 #c56d25 #fb902f #faaf5c` |
+| Rune glow | Focus and selection only | `#204f63 #53998b #84e3b5 #c1f1d8` |
 
-Rules from the art direction kept: lit from the top left, a 1 px `#010000`
-outline round every piece, a dark seam between two materials, alpha 0 or 255,
-every colour from the palette (the kit's `save()` refuses anything else).
-Rough rock (chipped, tiling) is a menu's outer frame; dressed stone (cut,
-square) is everything the hand touches inside it.
+Rules from the art direction kept: lit from the top left, a dark seam between
+two materials, alpha 0 or 255 in the pixel looks, every colour from the
+palette. The drawn kit keeps its 1 px `#010000` outline; the rendered and
+smooth looks have **no outline** (owner: "the original didn't have a black
+outline").
 
-### 3a. Timber as accent
+### 3a. Timber in play
 
-Three uses, each small, each where wood earns it (a thing a carpenter would
-fit to a stone wall). Nothing else is oak.
-
-| Accent | Piece | Size (native) | Why wood here |
-| --- | --- | --- | --- |
-| 1. The title lintel | `lintel` (9-slice 5/9/5/9, stretches along its grain) | 40 x 16, 32 px tall at 2x | A carved board pegged over the menu's stone frame with the title cut into it: the one warm note on a menu, and it names the screen |
-| 2. The open tab's cap | `tab-open` (rows 1..4 of 18) | a 3 px oak strip and its seam | Marks which tab is open without a second glow; shut tabs are plain stone |
-| 3. The compass pointer | `compass-pointer` | 7 x 6, oak wedge with an iron tip | The one moving mark in the HUD, warm against the light stone strip |
-
-The first draft's oak pieces (oak frame, plaques, tabs, compass strip, map
-frame, tooltip, portrait, thumb, knob, icons, and the iron bar and pointer)
-are kept as the `oak_*` and `iron_*` functions in `tools/art/ui_art.py` and
-written by `ui_art.py --oak` into `docs/mockups/ui/oak/`; the Kit tab shows the
-oak pause menu beside the stone one as the before.
+In play, oak stays three small accents (the title lintel pegged over a rock
+frame, the open tab's cap, the compass pointer), as decided earlier ("mostly
+stone with some occasion timber for accent"). Out of play, the whole menu is
+oak.
 
 ## 4. Tokens (what replaces `INK`, `MINT`, `PANEL_FILL`, `EDGE`)
 
@@ -171,15 +172,22 @@ Rarity frames are offered for the mockups' loot; the game has no rarity yet.
 
 ### Typography
 
-- **Pixelify Sans** (Google Fonts, OFL): carved titles and plaque labels, upper
-  case, letter-spaced half a pixel, a 1 px dark shadow below for the cut.
-- **VT323** (Google Fonts, OFL): counts, lines of talk, settings rows, the
-  bindings list, and the compass letters (Pixelify's capital E has a rounded
-  back that reads as a 3 on the strip; VT323's does not).
-- Sizes are whole multiples of the UI scale (labels 8 px x scale, body 10 px x
-  scale). If Bevy's text rasteriser blurs either face at those sizes, the
-  fallback is a bitmap font drawn with the kit (recommendation taken: try the
-  TTFs first; ask only with screenshots).
+- **The kit's own pixel font** for every title, plaque and tab label, section
+  label, compass letter and key cap. The owner, 2026-11-14, of a "PACK" lintel
+  that read as "PAOK" in Pixelify Sans: **"the c there is kinda weird, which
+  you'd fix it"**. `ui_art.py` draws it: 5 x 7 capitals, digits and
+  punctuation, a 1 px stroke, open C and G, a flat-backed E, an open S, a
+  slashed 0 against a round O, a flagged 1 against a serifed I
+  (`docs/mockups/ui/font/kit-font.png` + `kit-font.json`, each glyph's x, width
+  and rows). The page draws it as whole pixels (an inline SVG of the glyph runs,
+  filled with the element's colour, a 1 px shadow under it), so its scale is
+  always the UI scale. Glyph sheet: `docs/screenshots/mockup-ui/ui-font-glyphs.png`;
+  the lintel before and after: `pack-title-before-after.png`.
+- **VT323** (Google Fonts, OFL) stays for body text: lines of talk, settings
+  rows, recipe names.
+- In the game the kit font is a Bevy bitmap font: the PNG as an image atlas,
+  the JSON's metrics as the glyph table, drawn at the integer UI scale with
+  nearest sampling (section 8).
 
 ## 6. Scale, sampling, night; desktop only
 
@@ -202,24 +210,123 @@ Rarity frames are offered for the mockups' loot; the game has no rarity yet.
 - **Motion**: none of its own. A pressed plaque sinks a pixel; hover lifts a
   tone. No idle animation (CLAUDE.md, "Nothing in a mockup spins on its own").
 
-## 7. Drawn against rendered (the panel-textures route)
+## 7. Three looks of one kit: drawn, rendered, smooth
 
-`tools/art/ui_panels_blend.py` models the frame and the rock slab as height
-fields in numpy (moulding profile by distance to the edge, so the mitres come
-free; fbm rock; grain and strata varying only across each edge so a stretched
-side is unchanged), renders them in Cycles face-on with a sun from the upper
-left (bpy 4.5.16 wheel, Python 3.11, **CPU only: this cloud container has no
-GPU**, 24 samples, about 3 s a panel), then area-averages in linear light to
-48 x 48 and snaps to the kit's own colours.
+The owner, 2026-11-14: **"show me the game with that 3d rendered look"**, **"yea
+the 3d rendered look as a whole kit"**, then of the three rock frames on the Kit
+tab (drawn, rendered and pixelated, the smooth Cycles render): **"do all
+three"**. Every piece exists three ways and the mockup's switch swaps the whole
+page, the Play demo included:
 
-They differ: the rendered rock is noisy at 2x where the drawn one reads as
-blocks; the rendered frame's grain is finer and its face snapped to a brown
-(`#41322c`). Since the menus are stone (section 3), the comparison on the page
-is the rock slab only, re-rendered in the slate-blue rock ramp
-(`--only rock`, about 5 s on the CPU); the rendered oak frame
-(`blender-frame*.png`) stays on disk and off the page. **Recommendation:
-drawn**, with the renders kept as a shading reference. This is owner question
-Q1, still open.
+| Look | Made by | Files | Sampling |
+| --- | --- | --- | --- |
+| Drawn | `tools/art/ui_art.py`, pixel by pixel | `docs/mockups/ui/*.png`, `ui/oak/*.png` | nearest, whole-number scale |
+| Rendered | `tools/art/ui_panels_blend.py`: modelled in Blender, rendered, reduced to the drawn piece's pixels and snapped to its material's Sweaft-64 ramp, no outline | `ui/rendered/*.png`, `ui/rendered/oak/*.png`, the rock per panel in `ui/rendered/rock/` | nearest, whole-number scale |
+| Smooth | the same renders, not reduced | `ui/rendered/hires/` (8x, so every 9-slice margin is the drawn one times 8), the rock per panel in `ui/rendered/hires/rock/` (4x) | linear |
+
+**Smooth breaks the art direction's rule** that UI art is pixel art sampled
+nearest. It is offered because the owner asked to see it, and it stays a
+question (Q1), not a decision.
+
+### 7a. The base rock (approved 2026-11-14)
+
+The owner liked the first smooth rock render (`rock_field`, the frame in Q1's
+first comparison): **"I liked this version, please keep this version, but I want
+one without the lines!"**, **"also shadow tiling can be better"**, **"I want to
+make sure you make the base one good before committing"**, **"i wanted to see
+that one without the lines, prioritize this render"**, **"get me a good sample
+first before you make the kit"**, and of an attempt that added one: **"that is
+wrong — the original didn't have a black outline"**. The parent session made the
+sample from the original script with two changes only, and the owner approved
+it: **"Ok good continue with the mockups"** (2026-11-14;
+`docs/screenshots/mockup-ui/base-rock-approved.png`). The base rock is that
+sample, exactly:
+
+- **The first render's field, light, camera and colours, unchanged**:
+  `rock_field()` (fbm relief at 0.12 and 0.5 a pixel, the rim's rounded fall to
+  a chipped silhouette, the step onto the lip, the slate-blue rock blend), the
+  sun at Euler (-40, -28, 0) degrees at 3.2, a 0.35 sky, Blender's default
+  specular, roughness 0.7, an orthographic camera face-on, Cycles on the CPU (no
+  GPU here), 24 samples.
+- **Change 1: the strata rings are removed.** `sin(d * 3.1) > 0.92` drew rings
+  at fixed distances from the edge: straight streaks along the rim.
+- **Change 2: each panel is rendered at its own size**
+  (`rock_field(W, H)`, `--w/--h` in the sample), not as a 48 px tile. The old
+  frame was a 9-slice whose 20 px sides repeated, so the rim's bumps and the
+  shadow the lip casts on the face repeated every tile, and the tiled centre
+  carried the top of that shadow down the face as a faint dashed line. Rendered
+  at its size, nothing repeats.
+- **No outline in any look.** The smooth rock is the render's own alpha edge;
+  the pixelated rock is the render reduced, alpha cut at one half, no INK ring.
+
+The in-play rock panels and their sizes (native px, borders included; the
+script's `ROCK_PANELS`, written to `ui/rendered/slices.json` as `rock_panels`;
+the page sizes each panel exactly):
+
+| Panel | Size | | Panel | Size |
+| --- | --- | --- | --- | --- |
+| pack | 268 x 152 | | trade | 308 x 148 |
+| station (forge, hearth, bench, mill, press) | 230 x 156 | | loading slab | 150 x 148 |
+| chest | 372 x 168 | | the approved sample | 192 x 96 |
+| talk | 270 x 124 | | kit demos | 48 x 48, 128 x 64, 200 x 100 |
+
+The tooltip, the map's drawer frame and the map frame are dressed-stone
+9-slices whose sides vary only across themselves, so they stretch with nothing
+to repeat. The drawn look keeps the drawn 48 px slab as a 9-slice (its 20 px
+sides now carry irregular cracks and speckle, not dashes; below).
+
+**In the game**, a rock panel is either baked at its size (most panels have one
+size at a given UI scale), or, for one that must grow at run time, baked once
+with a long edge (longer than the panel can get) that is only ever cropped,
+never tiled. No visible repeat is the rule.
+
+### 7b. Every other piece carries the same material
+
+Plaques, slots, tabs, bars, scroll, slider, checkboxes, the compass strip, the
+dressed-stone frame, the map frame, the portrait, the emblem, the icons and the
+oak set are each modelled as one height field with material masks (the
+`blender-ui-panels` / `blender-organic-panels` method: rolled edges, sunk wells,
+cut grooves, forged studs, an oak grain that runs along the board), at the drawn
+piece's size and layout, and rendered under the base rock's light. Their stone
+carries rock_field's surface: the same two fbm layers and the same light-dark
+blend, full in the corners and varying only across a stretching band, so a
+stretched side stays plain. The relief is exaggerated 1.7x so a one-pixel bevel
+still turns a tone after the snap. The faces text sits on are flat.
+
+### 7c. The drawn rock's lines
+
+The owner: **"how come the rock one has lines in it?"**. The drawn slab had
+evenly spaced dashes on rows 5 and 42 (and the matching columns), repeating
+every 20 px with the tile, which read as a stitched line. `rock_panel()` now
+lays out short cracks at varied angles and lengths (1 to 4 px), pits and
+light and dark speckle per side, at varied depths across the rim, still once
+per 20 px so the sides tile.
+
+### 7d. Contrast in every look
+
+`ui_panels_blend.py` measures each text pair on every rendered piece: in the
+pixelated look against the commonest colour of the text area and any colour
+covering a tenth of it, in the smooth look against the 10th, 50th and 90th
+luminance percentile. A pair under 4.5:1 is fixed by changing the face's value
+(the albedo under the text, or one step along its ramp in the pixel look),
+never by dropping the rule. Two pieces needed it: the stone plaque's disabled
+face (darkened to 0.444 of its albedo) and the compass strip (lightened to
+1.15). The oak disabled plaque is WOOD[0], a step darker than the drawn one.
+The worst pairs: smooth TEXT_DIM on the rock face 4.99 to 5.0, LABEL on the
+hovered plaque 4.57 to 4.65. Every number is in `ui/rendered/slices.json`.
+
+### 7e. Re-running the bake, and what it costs
+
+    python3.11 -m venv <dir> && <dir>/bin/pip install "bpy==4.5.*" pillow numpy
+    <dir>/bin/python tools/art/ui_panels_blend.py [--samples 24]          # the whole kit and every rock panel
+    <dir>/bin/python tools/art/ui_panels_blend.py --only rock --rocks pack # one rock panel
+    <dir>/bin/python tools/art/ui_panels_blend.py --only button-idle,oak/frame
+
+The whole bake is about 4 minutes on this container's 4 CPU cores (no GPU; on
+the owner's desktop it runs on the GPU): 0.1 to 25 s a piece, the largest rock
+panel (372 x 168) 25 s. **At run time it costs nothing**: the rendered and
+smooth looks are static textures like the drawn ones, loaded once; a smooth
+texture is larger (8x or 4x a side), which is memory, not frame time.
 
 ## 8. Where each piece lands in the game (after the go-ahead)
 
@@ -241,44 +348,48 @@ crate at the first task, and again if `bevy-0-20` lands first.
 | Map | `map_screen.rs` | The map frame at the window edge (`nine(MapFrame)`, no centre fill); the overlay panel becomes a drawer of plaques in `nine(Frame)`, shut by default, opened by a plaque |
 | Tooltips | `pack.rs`, `slots.rs` | `nine(Tooltip)` on hover, item name and count |
 | Loading | `loading.rs` | `nine(Rock)` slab, emblem, carved name, the step in VT323, the bar as `bar` + `fill-progress`; the UI images and both fonts join the prewarm so the first frame already shows them |
-| Fonts | `assets/fonts/` + every `TextFont` | Two TTFs with their OFL texts; `UiKit` holds the handles |
+| Fonts | `assets/ui/kit-font.png` + `.json`, `assets/fonts/VT323` | The kit font as a Bevy bitmap font: the PNG an image atlas sampled nearest, the JSON's glyph rows and widths its metrics, drawn at the integer UI scale; VT323 (OFL) as a `TextFont` for body text |
+| Rock panels | `ui_kit.rs`, the rendered look | One baked rock texture per in-play panel size (`rock_panels`), or a long baked edge only ever cropped; never a tiled rock edge |
+| Timber menus | `menu.rs` (pause, settings, saves), the title screen | The oak set: `nine(OakFrame)`, oak plaques and tabs; Input split into sub-tabs (On foot, Hands, Flying, Vehicles, Menus), each row action, key cap, Change |
 | Station, talk, trade | the crafting, cooking, townsfolk and market changes | Built from the same kit when those screens are built; nothing new here |
 
 ## 9. Decisions
 
-1. **Menus framed in rough rock, in slate blue.** The owner's answer to Q2
-   (2026-11-14, "I like the stone kit more, can you make the stone more
-   blue?").
-2. **Mostly stone; carved oak only as three small accents** (section 3a). The
-   owner, 2026-11-14: "mostly stone with some occasion timber for accent".
-3. **Desktop only; no phone layouts.** The owner, 2026-11-14: "phones cant run
-   this lol". The UI scale is a whole number from the window height.
-4. **Drawn pixel art, not rendered-then-pixelated.** Recommendation, still open
-   as Q1, with screenshots.
-5. **One glowing accent, the rune.** Selection and focus only; the mint stays
-   the one glowing colour. Recommendation taken (ask only with screenshots).
-6. **Labels inlaid light in stone.** No dark ink reaches 4.5:1 on mid stone, so
-   plaque labels are chalk (`LABEL`) and only the lintel's title is cut dark.
-   Recommendation taken (ask only with screenshots), measured in section 4.
-7. **Pixelify Sans + VT323**, VT323 for the compass letters. Recommendation
-   taken (ask only with screenshots).
-8. **Integer UI scale from the window height, nearest sampling.** The art
-   direction's rule, not a choice.
-9. **No night dimming of the UI.** Recommendation taken (ask only with
-   screenshots); both HUD shots are in the mockup.
-10. **The quiet screen holds.** In play: crosshair, hotbar, compass. The
-    instrument line stays until `near-field-streaming` takes it.
+1. **Rock in play, timber out of play.** The owner, 2026-11-14: "main menu I
+   think should use the timber stuff, but the game I like the rock stuff",
+   "pause menu = timber too".
+2. **Slate-blue stone and rock.** The owner's answer to Q2 ("I like the stone
+   kit more, can you make the stone more blue?").
+3. **Desktop only; no phone layouts.** "phones cant run this lol".
+4. **The base rock is the approved sample** (section 7a): the first render
+   minus the strata rings, rendered at each panel's size, no outline. The
+   owner, "Ok good continue with the mockups".
+5. **The kit's own pixel font** for titles, labels, tabs, compass letters and
+   key caps; VT323 for body text. "the c there is kinda weird, which you'd fix
+   it".
+6. **Settings, Input in sub-tabs.** "organize the input menu better with tabs
+   or something instead of big uber list": On foot, Hands, Flying, Vehicles,
+   Menus; one row per action (action, key cap, Change; a clash noted on the
+   row); Reset tab. Rows and keys are the game's (`controls.rs` BINDINGS); two
+   proposed rows are marked proposed (crouch / sink, drop stack).
+7. **One glowing accent, the rune.** Recommendation taken (ask only with
+   screenshots).
+8. **Labels inlaid light in stone, cut dark in oak.** Measured (section 4).
+9. **Integer UI scale from the window height, nearest sampling** for the drawn
+   and rendered looks. The smooth look is the exception the owner asked to see;
+   it is Q1, not decided.
+10. **No night dimming of the UI.** Recommendation taken.
+11. **The quiet screen holds.** In play: crosshair, hotbar, compass.
 
 ## 10. Owner questions (each with screenshots)
 
 | Id | Question | Screenshots | Status |
 | --- | --- | --- | --- |
-| Q1 | Drawn or rendered-then-pixelated panels? | `docs/screenshots/mockup-ui/q1-drawn-vs-rendered.png` (the rock slab both ways, both in the slate-blue rock) and the Kit tab | **Open.** Recommendation: drawn |
-| Q2 | Menus framed in oak round stone, or in rough rock? | `docs/screenshots/mockup-ui/q2-oak-vs-rock.png` (kept as the record of the question) | **Answered: stone** (owner, 2026-11-14), then "mostly stone with some occasion timber for accent" |
+| Q1 | **Which rock for the game: drawn rock, rendered rock (pixelated), or smooth rock (Cycles)?** (the owner: "just need to determine which rock thing to use") | `docs/screenshots/mockup-ui/q1-which-rock-hud.jpg`, `q1-which-rock-pack.jpg` (in-play screens only, the three side by side, after both rock-line fixes); the Kit tab | **Open.** Recommendation: rendered rock (pixelated), the approved base rock in the game's pixel style. Smooth breaks the nearest-sampling rule |
+| Q2 | Menus framed in oak round stone, or in rough rock? | `q2-oak-vs-rock.png` | **Answered: stone** (2026-11-14), then rock in play and timber out of play |
 
-Q1 belongs in the survey (`docs/design/survey.html`, the `html-survey` skill)
-beside its screenshot when the page is published; Q2 moves to its "Already
-decided".
+Q1 goes in the survey (`docs/design/survey.html`) beside its screenshots when the
+page is published; Q2 moves to "Already decided".
 
 ## 11. Order of work (after the go-ahead)
 
@@ -342,3 +453,57 @@ for accent"**. Folded in as:
 - Q1 stays open. The rendered rock was re-rendered in the slate-blue rock ramp
   (`ui_panels_blend.py --only rock`, Cycles on the CPU) so the comparison is
   fair; the rendered oak frame is no longer shown.
+
+### The whole kit rendered, interactive, and a demo (2026-11-14)
+
+The owner's words, in order, all 2026-11-14:
+
+1. **"show me the game with that 3d rendered look"**: every tab of the mockup
+   can be shown in the rendered look (section 7).
+2. **"yea the 3d rendered look as a whole kit, also make the menus interactive
+   please"**: every piece rendered; every menu works on the page (pause: Resume,
+   Saves, Settings, Quit with an in-page confirm; settings: tabs, sliders that
+   drag, checkboxes, Rain shadow off by default, Back; the pack: pick up, put
+   down, right click for half, hover for name and count, 1-0 and the wheel; the
+   map's drawer and overlay rows; stations: a recipe, its ingredients from the
+   pack's real counts, a Make button that runs the bar and drops the result into
+   the pack; talk choices; trade with a running total; the loading bar). Keys act
+   only while a game screen has focus, so the page still scrolls.
+3. **"make a 3js demo"**, then **"a simple world scene that is beautifully
+   rendered that I can walk around in, interact with machines and stuff, open my
+   inventory"**: the Play tab (`docs/mockups/ui/play.js`, three.js r128, one
+   renderer made when the tab opens and stopped on other tabs). A hex hillside at
+   the game's cell (2.833 m, 1 m layers) with a stream and pond, trees, a stone
+   workshop, a straw hut, a lookout, lamp posts and a campfire; a sky with a sun
+   and clouds, one shadow-casting light (the sun, or a dim moon at night), a
+   hemisphere fill, fog in the sky's colour, ACES and sRGB, animated water with
+   the sky in it, vertex ambient occlusion on the columns, instanced grass and
+   flowers, sparks, smoke and motes; golden hour by default, Day, Dusk, Night and
+   a time slider, and at night every lamp, window and fire lights what is near
+   it. First-person walking (WASD, Space, mouse with pointer lock, drag to look
+   where the lock is refused), gravity, no walking through columns; left click
+   digs into the pack, right click places the held block; E uses what is in
+   front: the bench, the forge and bellows (it glows hotter and throws sparks
+   while it smelts), the hearth (smoke while it cooks), the water mill (the
+   stream turns its wheel), the brick press feeding a chest along a conveyor, the
+   chest, and Wren the smith. The frame rate was not measured (no GPU here).
+4. **"do all three"**: the look switch is Drawn | Rendered (pixelated) | Smooth.
+5. **"how come the rock one has lines in it?"**, then **"the 3d rendered one"**:
+   section 7c (the drawn rock) and 7a (the render).
+6. **"main menu I think should use the timber stuff, but the game I like the rock
+   stuff, just need to determine which rock thing to use"**: timber out of play,
+   rock in play (section 3); Q1 is now only "which rock".
+7. **"pause menu = timber too, and organize the input menu better with tabs or
+   something instead of big uber list"**: pause and settings in oak; Input in
+   sub-tabs (decision 6).
+8. **"the c there is kinda weird, which you'd fix it"**: the kit font
+   (Typography).
+9. **"I liked this version, please keep this version, but I want one without the
+   lines!"**, **"also shadow tiling can be better"**, **"I want to make sure you
+   make the base one good before committing"**, **"i wanted to see that one
+   without the lines, prioritize this render"**, **"get me a good sample first
+   before you make the kit"**, **"that is wrong — the original didn't have a
+   black outline"**: section 7a.
+10. **"Ok good continue with the mockups"**: the base rock approved, from the
+    parent session's sample (`base-rock-approved.png`); the kit carried its
+    material after that, and not before.

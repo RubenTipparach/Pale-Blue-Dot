@@ -23,6 +23,15 @@ to keep the page small:
 | `settings-before.jpg` | `docs/screenshots/menu-settings.png` |
 | `loading-before.jpg` | `docs/screenshots/loading-screen/building-the-planet.png` |
 
+A still of the mockup's own Play demo (not a game capture):
+
+| File | Source |
+| --- | --- |
+| `title-backdrop.jpg` | the Play tab (`ui/play.js`) at golden hour, the camera still, no UI, captured headless (SwiftShader) by the page's checks; the Main menu tab's backdrop |
+
 Everything else in `docs/mockups/ui/` is mockup-only art: `tools/art/ui_art.py`
-draws the kit's PNGs and `slices.json`; `tools/art/ui_panels_blend.py` renders
-`blender-*.png`.
+draws the kit's PNGs, `slices.json`, the kit font (`font/`) and four item icons
+(`items/`); `tools/art/ui_panels_blend.py` renders the rendered and smooth kit
+(`rendered/`, `rendered/hires/`) and the first two renders `blender-*.png`. The
+Play demo also loads `building/scene-kit.js` and its textures in
+`building/game/` (provenance in that folder's README).

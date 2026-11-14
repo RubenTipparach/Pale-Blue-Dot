@@ -24,6 +24,16 @@ and pressed states. It reads as a debug overlay sitting on a pixel-art world
 
 The world is pixel art sampled nearest at whole texels; its UI should be too.
 
+**Later the same day (2026-11-14)** the owner set the split and the look:
+"main menu I think should use the timber stuff, but the game I like the rock
+stuff, just need to determine which rock thing to use", "pause menu = timber
+too", and asked to see the whole kit rendered in Blender, every menu working,
+and a three.js demo to walk in ("show me the game with that 3d rendered look",
+"also make the menus interactive please", "make a 3js demo"). The base rock
+render was approved from a sample ("Ok good continue with the mockups"). The
+design (`design.md`, sections 3 and 7, "The owner's answers") has it all; what
+follows is the first proposal as written.
+
 ## What changes
 
 A UI kit in stone with a few carved-wood accents, drawn as pixel art in the

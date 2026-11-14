@@ -259,16 +259,47 @@ def rock_panel():
     for i, (tl, br) in enumerate(((ROCK[0], ROCK[3]), (ROCK[1], ROCK[3]), (ROCK[1], ROCK[2]))):
         c.ring(9 + i, 9 + i, 38 - i, 38 - i, tl, tl, br, br)
     c.rect(12, 12, 35, 35, FACE)
-    # Strata lines in the rim: along the edges only (so they stretch or tile cleanly), broken in
-    # the corners into cracks.
-    for x in range(14, 34):
-        if (x - 14) % 20 in (2, 3, 4, 7, 8, 15, 16, 17):
-            c.put(x, 5, ROCK[1])
-            c.put(x, 42, ROCK[1])
-    for y in range(14, 34):
-        if (y - 14) % 20 in (1, 2, 3, 9, 10, 14, 15, 16):
-            c.put(5, y, ROCK[1])
-            c.put(42, y, ROCK[1])
+    # Rim texture: short cracks at odd angles and of varied length, pits, chips and light/dark
+    # speckle, laid out once per 20 px period along each side (so the sides still tile) and placed
+    # at varied depths across the rim, never on one row. It replaced evenly spaced dashes on rows 5
+    # and 42 that read as a stitched line (owner, 2026-11-14: "how come the rock one has lines in
+    # it?"). Each side has its own layout, so no two sides repeat each other either.
+    def rim(u, v, side):
+        """u along the side (period 20, origin at the slice line 14), v in from the edge."""
+        if side == 0:
+            return [(14 + u + 20 * k, v) for k in (-1, 0, 1)]
+        if side == 1:
+            return [(W - 1 - v, 14 + u + 20 * k) for k in (-1, 0, 1)]
+        if side == 2:
+            return [(14 + u + 20 * k, W - 1 - v) for k in (-1, 0, 1)]
+        return [(v, 14 + u + 20 * k) for k in (-1, 0, 1)]
+
+    def mark(u, v, side, col):
+        for x, y in rim(u % 20, v, side):
+            # stay out of the corner squares (their own breaks) and off the lit and shaded edge
+            if 9 <= x <= W - 10 or 9 <= y <= W - 10:
+                if 0 <= x < W and 0 <= y < W and inside[y, x] and c.get(x, y) == ROCK[2]:
+                    c.put(x, y, col)
+
+    LAYOUT = [
+        # (cracks as (u, v, du, dv, length), pits as (u, v), light speckle, dark speckle), per side
+        ([(1, 4, 1, 1, 3), (11, 6, 1, -1, 2), (16, 3, 1, 0, 1)], [(7, 5), (14, 7)], [(4, 3), (9, 6), (18, 5)], [(13, 4), (5, 7)]),
+        ([(3, 5, 1, -1, 4), (13, 3, 1, 1, 2)], [(9, 6), (17, 4)], [(1, 7), (7, 3), (15, 6)], [(11, 5), (19, 7)]),
+        ([(5, 6, 1, -1, 2), (12, 3, 1, 1, 4)], [(2, 4), (18, 6)], [(9, 7), (15, 3), (0, 6)], [(7, 4), (17, 5)]),
+        ([(0, 3, 1, 1, 2), (8, 7, 1, -1, 3), (15, 4, 1, 1, 1)], [(5, 5), (12, 6)], [(3, 6), (11, 3), (19, 4)], [(14, 6), (6, 3)]),
+    ]
+    for side, (cracks, pits, light, dark) in enumerate(LAYOUT):
+        for u, v, du, dv, n in cracks:
+            for i in range(n):
+                mark(u + du * i, v + dv * i, side, ROCK[0])
+                mark(u + du * i, v + dv * i + 1, side, ROCK[3])  # the lit lip below the cut
+        for u, v in pits:
+            mark(u, v, side, ROCK[0])
+            mark(u + 1, v + 1, side, ROCK[4])
+        for u, v in light:
+            mark(u, v, side, ROCK[3])
+        for u, v in dark:
+            mark(u, v, side, ROCK[1])
     for x, y in ((4, 4), (5, 5), (6, 5), (7, 6), (41, 3), (41, 4), (42, 5), (5, 41), (6, 41), (6, 42),
                  (40, 42), (41, 41), (42, 41), (43, 40)):
         c.put(x, y, ROCK[0])
@@ -1013,6 +1044,145 @@ def stone_portrait():
     return c
 
 
+# ---------------------------------------------------------------------------------------------
+# The kit's pixel font: 5 x 7 capitals, digits and punctuation, a one-pixel stroke. The owner,
+# 2026-11-14, of a "PACK" lintel that read as "PAOK" in Pixelify Sans: "the c there is kinda weird,
+# which you'd fix it". Drawn for the kit so every letter is told apart at 1x and 2x: C and G open,
+# E with a flat back (never a 3), S open at both ends, a slashed 0 against a round O, a flagged 1
+# against a serifed I. Used for titles on the lintel, plaque and tab labels, section labels, the
+# compass letters and key caps; body text stays VT323. Written as font/kit-font.png (one row of
+# glyphs, LABEL on transparent) and font/kit-font.json (each glyph's x, width and rows), so a page
+# draws it pixel for pixel and the game can load it as a bitmap font atlas.
+# ---------------------------------------------------------------------------------------------
+FONT_H = 7
+FONT = {
+    "A": [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+    "B": ["####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."],
+    "C": [".####", "#....", "#....", "#....", "#....", "#....", ".####"],
+    "D": ["####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####."],
+    "E": ["#####", "#....", "#....", "####.", "#....", "#....", "#####"],
+    "F": ["#####", "#....", "#....", "####.", "#....", "#....", "#...."],
+    "G": [".####", "#....", "#....", "#.###", "#...#", "#...#", ".###."],
+    "H": ["#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+    "I": ["###", ".#.", ".#.", ".#.", ".#.", ".#.", "###"],
+    "J": ["..###", "...#.", "...#.", "...#.", "#..#.", "#..#.", ".##.."],
+    "K": ["#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#"],
+    "L": ["#....", "#....", "#....", "#....", "#....", "#....", "#####"],
+    "M": ["#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"],
+    "N": ["#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"],
+    "O": [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+    "P": ["####.", "#...#", "#...#", "####.", "#....", "#....", "#...."],
+    "Q": [".###.", "#...#", "#...#", "#...#", "#.#.#", "#..#.", ".##.#"],
+    "R": ["####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"],
+    "S": [".####", "#....", "#....", ".###.", "....#", "....#", "####."],
+    "T": ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."],
+    "U": ["#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+    "V": ["#...#", "#...#", "#...#", "#...#", ".#.#.", ".#.#.", "..#.."],
+    "W": ["#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"],
+    "X": ["#...#", ".#.#.", ".#.#.", "..#..", ".#.#.", ".#.#.", "#...#"],
+    "Y": ["#...#", "#...#", ".#.#.", "..#..", "..#..", "..#..", "..#.."],
+    "Z": ["#####", "....#", "...#.", "..#..", ".#...", "#....", "#####"],
+    "0": [".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."],
+    "1": [".#.", "##.", ".#.", ".#.", ".#.", ".#.", "###"],
+    "2": [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
+    "3": ["####.", "....#", "....#", ".###.", "....#", "....#", "####."],
+    "4": ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
+    "5": ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
+    "6": [".###.", "#....", "#....", "####.", "#...#", "#...#", ".###."],
+    "7": ["#####", "....#", "...#.", "..#..", "..#..", "..#..", "..#.."],
+    "8": [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
+    "9": [".###.", "#...#", "#...#", ".####", "....#", "....#", ".###."],
+    " ": ["...", "...", "...", "...", "...", "...", "..."],
+    ".": [".", ".", ".", ".", ".", ".", "#"],
+    ",": ["..", "..", "..", "..", "..", ".#", "#."],
+    ":": [".", ".", "#", ".", ".", "#", "."],
+    ";": ["..", "..", ".#", "..", "..", ".#", "#."],
+    "!": ["#", "#", "#", "#", "#", ".", "#"],
+    "?": [".###.", "#...#", "....#", "...#.", "..#..", ".....", "..#.."],
+    "'": ["#", "#", ".", ".", ".", ".", "."],
+    '"': ["#.#", "#.#", "...", "...", "...", "...", "..."],
+    "-": ["...", "...", "...", "###", "...", "...", "..."],
+    "+": [".....", "..#..", "..#..", "#####", "..#..", "..#..", "....."],
+    "=": ["....", "....", "####", "....", "####", "....", "...."],
+    "/": ["....#", "....#", "...#.", "..#..", ".#...", "#....", "#...."],
+    "(": [".#", "#.", "#.", "#.", "#.", "#.", ".#"],
+    ")": ["#.", ".#", ".#", ".#", ".#", ".#", "#."],
+    "&": [".##..", "#..#.", "#.#..", ".#...", "#.#.#", "#..#.", ".##.#"],
+    "%": ["##..#", "##..#", "...#.", "..#..", ".#...", "#..##", "#..##"],
+    "#": [".#.#.", ".#.#.", "#####", ".#.#.", "#####", ".#.#.", ".#.#."],
+    "<": ["...#", "..#.", ".#..", "#...", ".#..", "..#.", "...#"],
+    ">": ["#...", ".#..", "..#.", "...#", "..#.", ".#..", "#..."],
+    "_": ["....", "....", "....", "....", "....", "....", "####"],
+    "·": [".", ".", ".", "#", ".", ".", "."],
+    "↑": ["..#..", ".###.", "#.#.#", "..#..", "..#..", "..#..", "..#.."],
+    "↓": ["..#..", "..#..", "..#..", "..#..", "#.#.#", ".###.", "..#.."],
+    "←": [".......", "..#....", ".#.....", "#######", ".#.....", "..#....", "......."],
+    "→": [".......", "....#..", ".....#.", "#######", ".....#.", "....#..", "......."],
+}
+assert all(len(g) == FONT_H and len({len(r) for r in g}) == 1 for g in FONT.values())
+
+
+def write_font(out):
+    """The glyph sheet (one row, a pixel apart, LABEL on transparent) and its metrics."""
+    os.makedirs(out, exist_ok=True)
+    x, meta = 0, {}
+    total = sum(len(g[0]) + 1 for g in FONT.values())
+    c = Canvas(total, FONT_H)
+    for ch, rows in FONT.items():
+        w = len(rows[0])
+        for yy, r in enumerate(rows):
+            for xx, b in enumerate(r):
+                if b == "#":
+                    c.put(x + xx, yy, LABEL)
+        meta[ch] = {"x": x, "w": w, "rows": rows}
+        x += w + 1
+    save(c.image(), os.path.join(out, "kit-font.png"), source="tools/art/ui_art.py")
+    with open(os.path.join(out, "kit-font.json"), "w") as f:
+        json.dump({"source": "tools/art/ui_art.py", "height": FONT_H, "spacing": 1, "space": 3,
+                   "case": "upper (lower case is drawn as upper)", "glyphs": meta}, f, ensure_ascii=False, indent=0)
+    return c
+
+
+# ---------------------------------------------------------------------------------------------
+# Four mockup-only item icons for the Play demo's machines (the game has no smelting or milling
+# items yet): an iron ingot, a sheaf of grain, a sack of flour, a loaf. 16 x 16, the game's item
+# size, lit from the top left, 1 px outline, Sweaft-64 only. Written into docs/mockups/ui/items/.
+# ---------------------------------------------------------------------------------------------
+ITEM_ART = {
+    "ingot": (["................", "................", "................", "................",
+               "................", "....OOOOOOOO....", "...OhhhhhhhmO...", "..OhhhhhhhmmmO..",
+               ".OmmmmmmmmmmddO.", ".OmmmmmmmmmmddO.", ".OddddddddddddO.", "..OOOOOOOOOOOO..",
+               "................", "................", "................", "................"],
+              {"O": INK, "h": "#bfcad7", "m": "#92a3b2", "d": "#5d778d"}),
+    "grain": (["........h.......", "......h.hm......", ".....hm.hm.h....", ".....hm.hmhm....",
+               "......m.hm.m....", "...h..m.hm.m.h..", "...hm.m.m..mhm..", "....m.mm.m.m.m..",
+               ".....mmmmmmm....", "......ddddd.....", "......sSsSs.....", "......ddddd.....",
+               "......d.d.d.....", ".....d..d..d....", ".....d..d..d....", "................"],
+              {"h": "#faaf5c", "m": "#c56d25", "d": "#733126", "s": "#ab8465", "S": "#725244"}),
+    "flour": (["................", "......OOOO......", ".....OsSSsO.....", "......OssO......",
+               ".....OhhhmO.....", "....OhhhhhmO....", "...OhhhhhhhmO...", "...OhhwwwhhmO...",
+               "...OhhwwwhhmO...", "...OhhhhhhmmO...", "...OhhhhhmmmO...", "...OmmmmmmmdO...",
+               "....OddddddO....", ".....OOOOOO.....", "................", "................"],
+              {"O": INK, "h": "#eab798", "m": "#cfaa81", "d": "#ab8465", "s": "#725244", "S": "#41322c", "w": "#fffefe"}),
+    "bread": (["................", "................", "................", "................",
+               "................", ".....OOOOOO.....", "...OOhhhhhmOO...", "..OhhSmhSmmmmO..",
+               ".OhmmmSmmmSmmdO.", ".OmmmmmmmmmmddO.", ".OmmmmmmmmmdddO.", "..OddddddddddO..",
+               "...OOOOOOOOOO...", "................", "................", "................"],
+              {"O": INK, "h": "#faaf5c", "m": "#c56d25", "d": "#733126", "S": "#fb902f"}),
+}
+
+
+def write_items(out):
+    os.makedirs(out, exist_ok=True)
+    for name, (rows, cols) in ITEM_ART.items():
+        c = Canvas(16, 16)
+        for y, r in enumerate(rows):
+            for x, ch in enumerate(r):
+                if ch != ".":
+                    c.put(x, y, cols[ch])
+        save(c.image(), os.path.join(out, f"{name}.png"), source="tools/art/ui_art.py")
+
+
 PIECES = {}
 OAK_PIECES = {}
 
@@ -1104,6 +1274,13 @@ PAIRS = [
     ("OAK_LABEL on the lintel (WOOD[3]): menu titles", OAK_LABEL, WOOD[3]),
     ("icon inlay STONE[4] on FACE", STONE[4], FACE),
     ("RUNE[2] on WELL (focus ring, selection)", RUNE[2], WELL),
+    # The timber menus (main menu, pause, settings: owner, 2026-11-14, "main menu I think should use
+    # the timber stuff", "pause menu = timber too") read on the oak set in ui/oak/:
+    ("OAK_LABEL on an oak plaque, idle / pressed / focus (WOOD[3])", OAK_LABEL, WOOD[3]),
+    ("OAK_LABEL on an oak plaque, hover (WOOD[4])", OAK_LABEL, WOOD[4]),
+    ("LABEL_DIM on an oak plaque, disabled (WOOD_DIM[2])", LABEL_DIM, WOOD_DIM[2]),
+    ("OAK_LABEL on the open oak tab (WOOD[3])", OAK_LABEL, WOOD[3]),
+    ("LABEL on a shut oak tab (WOOD[2])", LABEL, WOOD[2]),
 ]
 
 
@@ -1139,6 +1316,8 @@ def main():
     bad = [n for n, v in checks.items() if v < 4.5]
     if bad:
         sys.exit(f"contrast below 4.5:1: {bad}")
+    write_font(os.path.join(OUT, "font"))
+    write_items(os.path.join(OUT, "items"))
     if "--oak" in sys.argv:
         build_oak()
         odir = os.path.join(OUT, "oak")

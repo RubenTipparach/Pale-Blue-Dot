@@ -353,6 +353,11 @@
   "NORTH on the compass strip (STONE[3]): the N": 6.09,
   "OAK_LABEL on the lintel (WOOD[3]): menu titles": 6.21,
   "icon inlay STONE[4] on FACE": 7.0,
-  "RUNE[2] on WELL (focus ring, selection)": 11.2
+  "RUNE[2] on WELL (focus ring, selection)": 11.2,
+  "OAK_LABEL on an oak plaque, idle / pressed / focus (WOOD[3])": 6.21,
+  "OAK_LABEL on an oak plaque, hover (WOOD[4])": 9.71,
+  "LABEL_DIM on an oak plaque, disabled (WOOD_DIM[2])": 4.72,
+  "OAK_LABEL on the open oak tab (WOOD[3])": 6.21,
+  "LABEL on a shut oak tab (WOOD[2])": 6.94
  }
 }
