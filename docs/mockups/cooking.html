@@ -1,0 +1,1519 @@
+<meta charset="utf-8">
+<title>Hearth and Kitchen</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* House style of ocean.html and crafting.html: one wide 3D stage per kitchen tab, then the cooking panel (M3's station
+   panel and pack), the recipe book, the chains and the reference tabs. Dark by design: the kitchens are judged at night
+   as much as by day. */
+:root{
+  color-scheme: dark;
+  --ground:#100d0a; --panel:#1a1510; --panel-2:#120f0b;
+  --line:rgba(226,200,160,.18); --line-2:rgba(226,200,160,.42);
+  --ink:#efe6d6; --muted:#a99c88; --amber:#f0b43c; --sky:#8fc3d8; --warn:#ff6b57; --ok:#8fdc9a; --ember:#ff8a3c;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--ground)}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body);font-size:15.5px;line-height:1.55;overflow-x:hidden}
+.wrap{max-width:1280px;margin:0 auto;padding:8px max(16px,env(safe-area-inset-right,0px)) 32px max(16px,env(safe-area-inset-left,0px));display:grid;gap:12px;min-width:0}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;margin:0;text-wrap:balance}
+h1{font-size:clamp(24px,3.4vw,34px)}
+h2{font-size:26px}
+h3{font-size:18px;font-weight:600}
+p{margin:0;max-width:78ch}
+a{color:var(--amber)}
+code,.mono{font-family:var(--mono);font-size:.86em}
+code{color:var(--sky);overflow-wrap:anywhere}
+.muted{color:var(--muted)}
+.tag{display:inline-block;font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--amber);color:var(--amber)}
+.tag.plain{border-color:var(--line-2);color:var(--muted)}
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px}
+header.top details{flex-basis:100%}
+blockquote{margin:0;border-left:3px solid var(--amber);padding:3px 0 3px 12px;font-size:15.5px;max-width:78ch}
+.honest{border:1px dashed var(--line-2);border-radius:6px;padding:10px 12px;color:var(--muted);font-size:14px;max-width:none}
+.honest b{color:var(--ink);font-weight:600}
+details.about,details.sdesc{font-size:14px;color:var(--muted)}
+details summary{cursor:pointer;font:600 13px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--sky)}
+details[open]{display:grid;gap:8px}
+img{image-rendering:pixelated}
+/* whole-number scales only: the game's item icons are 16 px, M3's materials 32 px, M7's portraits 36 px, so where a
+   24 px item would sit they are drawn at the nearest whole multiple instead (marked by markScales() below) */
+img.g16{width:16px !important;height:16px !important;margin:4px}
+img.g32{width:32px !important;height:32px !important;margin:-4px}
+.slot img.g16,.slot img.g32{margin:0}
+@media (min-width:1100px){.slot img.g16{width:48px !important;height:48px !important}}
+.detail .out .big img.g16,.detail .out .big img.g32{width:64px !important;height:64px !important;margin:0}
+img.g16.i48,.rc .head img.g16,.buff img.g16{width:48px !important;height:48px !important;margin:0}
+img.g32.i48,.rc .head img.g32,.buff img.g32{width:32px !important;height:32px !important;margin:8px}
+img.g16.i32,.sttabs img.g16,.stlist img.g16,.legend img.g16,.rc .meta img.st32.g16,.chip img.g16{width:32px !important;height:32px !important;margin:0}
+.pick .head img.g16,#stIcon.g16{width:64px !important;height:64px !important;margin:0}
+
+/* tabs: labelled rows, one 3D view live at a time */
+.tabs{display:grid;gap:3px;position:sticky;top:0;z-index:20;background:var(--ground);padding:4px 0 0;border-bottom:1px solid var(--line-2)}
+.trow{display:flex;flex-wrap:wrap;align-items:center;gap:3px}
+.trow .lab{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);width:76px;flex:none}
+.trow.k3 .lab{color:var(--ember)}
+.tabs button{all:unset;cursor:pointer;font:600 15px var(--display);letter-spacing:.04em;padding:4px 10px;border:1px solid transparent;border-radius:4px;color:var(--muted)}
+.tabs button[aria-selected="true"]{color:var(--amber);border-color:var(--line-2);background:var(--panel)}
+.tabs button:hover{color:var(--ink)}
+.tabs button:focus-visible{outline:2px solid var(--amber)}
+@media (max-width:600px){.trow .lab{width:100%}.tabs{position:static}.tabs button{font-size:14px;padding:3px 7px}}
+.tabpanel{display:grid;gap:10px;min-width:0}
+[hidden]{display:none !important}
+
+/* the stage */
+.envgrid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;align-items:start}
+@media (max-width:1000px){.envgrid{grid-template-columns:minmax(0,1fr)}}
+.stage{position:relative;height:clamp(340px,calc(100vh - 210px),720px);border-radius:8px;overflow:hidden;border:1px solid var(--line-2);background:#07090b;min-width:0}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline:none}
+.stage canvas:active{cursor:grabbing}
+.ov{position:absolute;background:rgba(14,11,8,.82);border:1px solid var(--line);border-radius:6px;padding:7px;display:grid;gap:6px;z-index:2}
+.ov.bl{left:8px;bottom:8px;width:min(400px,calc(100% - 16px))}
+.ov.bl input[type=range]{width:100%;accent-color:var(--amber);margin:0}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button,.pbtn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:3px 9px;font-family:var(--display);font-size:14px;letter-spacing:.04em;color:var(--ink);background:rgba(18,15,11,.6)}
+.seg button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.14)}
+.seg button:hover,.pbtn:hover{border-color:rgba(240,180,60,.55)}
+.seg button:focus-visible,.pbtn:focus-visible{outline:2px solid var(--amber)}
+.pbtn[aria-disabled="true"]{opacity:.4;cursor:not-allowed}
+.hudline{position:absolute;left:8px;top:6px;font:600 11.5px var(--mono);color:#fff;text-shadow:0 1px 0 #000,1px 0 0 #000;pointer-events:none;white-space:pre;z-index:1;max-width:calc(100% - 16px);overflow:hidden}
+.hint{position:absolute;right:8px;top:6px;font:500 11px var(--mono);color:rgba(255,255,255,.7);text-shadow:0 1px 0 #000;pointer-events:none;z-index:1}
+.lab2{font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;gap:8px}
+.lab2 b{color:var(--amber);font-weight:600}
+@media (max-width:600px){.hint{display:none}.hudline{font-size:10px}.stage{height:62vh}}
+.shot .stage{position:fixed;inset:0;height:auto;z-index:50;border-radius:0}
+.shot .ov.bl{display:none}
+
+/* the side panel */
+.side{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px;display:grid;gap:10px;min-width:0;font-size:14px}
+.side h3{font-size:17px}
+.side dl{margin:0;display:grid;gap:7px}
+.side dt{font:600 11.5px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.side dd{margin:0;color:var(--ink)}
+.stlist{display:grid;gap:3px}
+.stlist button{all:unset;cursor:pointer;display:grid;grid-template-columns:32px 1fr auto;gap:8px;align-items:center;padding:3px 6px;border:1px solid transparent;border-radius:4px}
+.stlist button img{width:32px;height:32px}
+.stlist button small{font:600 10.5px var(--mono);color:var(--muted)}
+.stlist button[aria-pressed="true"]{border-color:var(--amber);background:rgba(240,180,60,.10)}
+.stlist button:focus-visible{outline:2px solid var(--amber)}
+.pick{border:1px solid var(--line-2);border-radius:6px;padding:8px;display:grid;gap:6px;background:var(--panel-2)}
+.pick .head{display:flex;gap:10px;align-items:center}
+.pick .head img{width:64px;height:64px;flex:none}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:3px;padding:1px 6px 1px 2px;font-size:12.5px;background:var(--panel-2);white-space:nowrap}
+.chip img{width:24px;height:24px}
+.fx{font:600 10.5px var(--mono);padding:1px 6px;border-radius:2px;border:1px solid;white-space:nowrap}
+.fx.stride{color:#8fdc9a;border-color:#8fdc9a}.fx.steady{color:#8fc3d8;border-color:#8fc3d8}.fx.keen{color:#f0b43c;border-color:#f0b43c}
+.fx.warm{color:#ff8a3c;border-color:#ff8a3c}.fx.glow{color:#74effe;border-color:#74effe}.fx.none{color:var(--muted);border-color:var(--line-2)}
+.st{font:600 10px var(--mono);border-radius:2px;padding:0 4px;letter-spacing:.04em}
+.st.today{color:#100d0a;background:var(--ok)} .st.prop{color:#100d0a;background:var(--amber)} .st.m{color:var(--ink);border:1px solid var(--line-2)}
+
+/* the cooking panel: M3's station panel and pack, over the running world */
+.screen{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line-2);background:
+  linear-gradient(180deg,rgba(10,8,6,.55),rgba(10,8,6,.86)),
+  radial-gradient(ellipse at 22% 88%,rgba(255,138,61,.38),transparent 46%),
+  linear-gradient(180deg,#2a2622 0%,#3d342b 45%,#221b14 46%,#17120d 100%);padding:16px;display:grid;gap:12px;min-width:0}
+.screen .scrlabel{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.ui{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:1000px){.ui{grid-template-columns:minmax(0,1fr)}}
+.station{background:rgba(16,20,22,.94);border:1px solid var(--line-2);border-radius:0;padding:12px;display:grid;gap:10px;min-width:0}
+.station header{display:flex;align-items:center;gap:10px}
+.station header img{width:64px;height:64px}
+.station header h3{font-size:16px;font-family:var(--mono);text-transform:uppercase;color:#e8a860;letter-spacing:.06em}
+.sttabs{display:flex;flex-wrap:wrap;gap:3px}
+.sttabs button{all:unset;cursor:pointer;display:grid;place-items:center;border:1px solid var(--line);padding:2px}
+.sttabs button img{width:32px;height:32px}
+.sttabs button[aria-pressed="true"]{border-color:var(--amber);background:rgba(240,180,60,.14)}
+.sttabs button:focus-visible{outline:2px solid var(--amber)}
+.split{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:10px}
+@media (max-width:600px){.split{grid-template-columns:minmax(0,1fr)}}
+.recipes{display:grid;gap:2px;max-height:360px;overflow:auto;padding-right:2px;align-content:start}
+.recipes button{all:unset;cursor:pointer;display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:center;padding:3px 6px;border-radius:4px;border:1px solid transparent}
+.recipes button img{width:24px;height:24px}
+.recipes button span{font-size:14px;line-height:1.2}
+.recipes button small{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.recipes button.short span{color:var(--muted)}
+.recipes button.short img,.recipes button.lock img{opacity:.45}
+.recipes button.lock span{color:var(--muted);font-style:italic}
+.recipes button[aria-selected="true"]{border-color:var(--amber);background:rgba(240,180,60,.10)}
+.recipes button:focus-visible{outline:2px solid var(--amber)}
+.detail{display:grid;gap:8px;align-content:start;border-left:1px solid var(--line);padding-left:10px;min-width:0}
+@media (max-width:600px){.detail{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:8px}}
+.detail .out{display:flex;gap:10px;align-items:center}
+.detail .out .big{width:76px;height:76px;flex:none;border:1px solid rgba(150,190,195,.55);background:rgba(10,18,22,.72);display:grid;place-items:center}
+.detail .out .big img{width:72px;height:72px}
+.detail .out b{font-family:var(--display);font-size:20px;font-weight:600;line-height:1.1}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.ins{display:grid;gap:3px}
+.ins div{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:center;font-size:13.5px}
+.ins img{width:24px;height:24px}
+.have{font-family:var(--mono);font-size:12px}
+.have.no{color:var(--warn)} .have.yes{color:var(--ok)}
+.fresh{font:600 10px var(--mono);padding:0 4px;border-radius:2px;margin-left:4px}
+.fresh.f0{background:#3c8a4a;color:#fff}.fresh.f1{background:#a8862c;color:#100d0a}.fresh.f2{background:#a8443c;color:#fff}.fresh.fn{background:#3e586e;color:#fff}
+.qual{display:grid;gap:3px;font-size:13px;background:rgba(10,18,22,.6);border:1px solid var(--line);padding:6px 8px}
+.qual .stars{font-size:18px;color:var(--amber);letter-spacing:2px}
+.qual .stars i{color:#4a4236;font-style:normal}
+.qual li{margin-left:16px}
+.qual ul{margin:0;padding:0}
+.actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.btn{all:unset;cursor:pointer;border:1px solid var(--amber);color:var(--amber);background:rgba(240,180,60,.12);padding:4px 12px;font-family:var(--display);font-size:15px;letter-spacing:.06em}
+.btn.ghost{border-color:var(--line-2);color:var(--ink);background:transparent}
+.btn[aria-disabled="true"]{opacity:.4;cursor:not-allowed}
+.btn:focus-visible{outline:2px solid var(--amber)}
+.queue{display:grid;gap:4px}
+.qrow{display:grid;grid-template-columns:24px 1fr;gap:8px;align-items:center;font-size:13px}
+.qrow img{width:24px;height:24px}
+.bar{height:5px;background:rgba(255,255,255,.12)}
+.bar i{display:block;height:100%;background:var(--amber)}
+.packpanel{background:rgba(16,20,22,.94);border:1px solid var(--line-2);border-radius:0;padding:12px;display:grid;gap:8px;min-width:0}
+.slots{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:3px}
+.slot{all:unset;cursor:pointer;position:relative;aspect-ratio:1;border:1px solid rgba(150,190,195,.55);background:rgba(10,18,22,.72);display:grid;place-items:center;min-width:0}
+.slot img{width:24px;height:24px}
+@media (min-width:1100px){.slot img{width:48px;height:48px}}
+.slot .c{position:absolute;right:2px;bottom:1px;font-family:var(--mono);font-size:11px;font-weight:600;color:#fff;text-shadow:0 1px 0 #000,0 0 3px #000}
+.slot .q{position:absolute;left:2px;top:0;font-size:10px;color:var(--amber);text-shadow:0 1px 0 #000;letter-spacing:-1px}
+.slot .fb{position:absolute;left:2px;right:2px;bottom:0;height:2px}
+.slot.sel{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
+.slot.flash{animation:flash .9s}
+.slot:focus-visible{outline:2px solid var(--amber)}
+@keyframes flash{0%{background:rgba(240,180,60,.5)}100%{background:rgba(10,18,22,.72)}}
+@media (prefers-reduced-motion: reduce){.slot.flash{animation:none}}
+.hotbar{padding-top:8px;border-top:1px solid var(--line)}
+@media (max-width:600px){.slots{gap:2px}.slot .c{font-size:9px}.slot .q{display:none}}
+.hint2{font-size:12.5px;color:var(--muted)}
+kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line-2);border-radius:3px;padding:0 4px}
+/* the game HUD mock: buffs over the hotbar */
+.hud{display:grid;gap:6px;justify-items:center;padding:10px;border:1px solid var(--line);background:rgba(0,0,0,.35)}
+.buffs{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;min-height:52px}
+.buff{display:grid;grid-template-columns:48px auto;gap:6px;align-items:center;background:rgba(10,22,22,.82);border:1px solid #5d7a78;padding:2px 8px 2px 2px;font:12px ui-monospace,Consolas,monospace;color:#fff}
+.buff img{width:48px;height:48px}
+.buff b{display:block;font-weight:600}
+.hunger{width:min(320px,100%);display:grid;gap:3px;font:12px ui-monospace,Consolas,monospace;color:#fff}
+.hunger .track{height:12px;border:1px solid #5d7a78;background:rgba(10,22,22,.82);position:relative}
+.hunger .track i{position:absolute;left:0;top:0;bottom:0;background:repeating-linear-gradient(90deg,#d4462b 0 10px,#a61e1f 10px 12px)}
+.minibar{display:flex;gap:3px}
+.minibar span{width:36px;height:36px;border:1px solid #5d7a78;background:rgba(10,22,22,.82);display:grid;place-items:center}
+.minibar span img{width:24px;height:24px}
+.minibar span.sel{border:2px solid #e8a83a}
+
+/* tables, cards, book */
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:6px;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 9px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-family:var(--display);font-weight:600;letter-spacing:.1em;text-transform:uppercase;font-size:12px;color:var(--muted);background:var(--panel)}
+tr:last-child td{border-bottom:0}
+td.stages{white-space:nowrap}
+td.stages img{width:64px;height:64px;vertical-align:bottom}
+td img.prod{width:48px;height:48px;vertical-align:middle}
+td img.i24{width:24px;height:24px;vertical-align:middle}
+td img.i48{width:48px;height:48px;vertical-align:middle}
+td b{font-family:var(--display);font-size:16px;letter-spacing:.03em}
+.filters{display:flex;flex-wrap:wrap;gap:4px}
+.book{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.rc{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:9px;display:grid;gap:6px;align-content:start;min-width:0}
+.rc .head{display:flex;gap:8px;align-items:center}
+.rc .head img{width:48px;height:48px;flex:none;background:var(--panel-2);border:1px solid var(--line);border-radius:4px}
+.rc .head .nm{display:grid;gap:1px;min-width:0}
+.rc .head b{font-family:var(--display);font-size:17px;letter-spacing:.02em;line-height:1.1}
+.rc .meta{display:flex;flex-wrap:wrap;gap:4px 10px;font:12px var(--mono);color:var(--muted);align-items:center}
+.rc .meta img{width:24px;height:24px;vertical-align:middle}
+.rc .meta img.st32{width:32px;height:32px}
+td img.i32{width:32px;height:32px;vertical-align:middle}
+td img.i36{width:36px;height:36px;vertical-align:middle}
+.rc .ing{display:flex;flex-wrap:wrap;gap:3px}
+.rc .ing span{display:inline-flex;align-items:center;gap:2px;font:11.5px var(--mono);border:1px solid var(--line);border-radius:3px;padding:0 4px 0 1px;background:var(--panel-2)}
+.rc .ing img{width:24px;height:24px}
+.rc p{font-size:13px;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:6px;align-content:start;min-width:0}
+.card p{font-size:14px;color:var(--muted)}
+.card h3{font-size:17px}
+.dec{display:grid;gap:8px}
+.dec .q{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:5px}
+.dec .q p{font-size:14px;color:var(--muted)}
+.dec .q .rec{color:var(--ink)}
+.dec .q .rec b{color:var(--amber);font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:13px;margin-right:6px}
+.dec .q.ask{border-color:var(--amber)}
+/* chains */
+.chainbox{overflow:auto;border:1px solid var(--line);border-radius:6px;background:radial-gradient(ellipse at 30% 0%,#211a12,#120f0b 70%);max-height:78vh}
+#chain{display:block}
+#chain .edge{fill:none;stroke-width:1.4;opacity:.42}
+#chain .edge.hot{opacity:1;stroke-width:2.4}
+#chain .edge.cold{opacity:.06}
+#chain .node rect{fill:#1d1812;stroke:rgba(226,200,160,.25)}
+#chain .node.hot rect{stroke:var(--amber);fill:#2a2214}
+#chain .node.cold{opacity:.25}
+#chain .node text{fill:var(--ink);font-family:var(--body);font-size:12px}
+#chain .col{fill:var(--muted);font-family:var(--display);font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+#chain .node{cursor:pointer}
+#chain .node:focus{outline:none}
+#chain .node:focus rect{stroke:var(--amber);stroke-width:2}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.legend img{width:32px;height:32px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.cols>div{min-width:0;display:grid;gap:8px;align-content:start}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-14</span>
+  <h1>Hearth and Kitchen</h1>
+  <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace;flex-basis:100%"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+  <details class="about"><summary>About this mockup: the owner's words, the idea, and which art is the game's</summary>
+  <blockquote>"Mock up food recipes, bakery (more farming?) stir fry, pizza, noodles, pasta, different kinds of meat, and fish, calamari and shrimp (more sea life?)" <span class="muted">(the owner, 2026-11-14)</span></blockquote>
+  <p>Cooking on Tenebris (the home world, in the Aubade system) as a system: the kitchen stations from a campfire to a ship's galley, built and placed on the hex grid like any station in the crafting mockup (M3); recipes with real chains, from the field (M8's crops and twelve new ones), the pen (M7's animals; domestication and breeding are the husbandry mockup's, drafted alongside this one) and the sea (the fish the game catches today and M25's water life) through the quern, the churn, the barrel and the smoker to the dish; and what food does once it is eaten. Four kitchens are 3D scenes on the game's 2.833 m cells and 1 m layers, by day and lit at night only by their own fires, ovens, lanterns and candles. Drag to look, scroll to zoom, shift-drag to pan; click a station to cook at it. Fire flickers and smoke rises because the world moves them; nothing else moves on its own.</p>
+  <p class="honest"><b>Today in the game:</b> nothing here is built. The only food-like thing the game has is a caught fish, an <code>Item::Fish(u16)</code> that stacks to 16 and does nothing; there is no hunger, health, breath or cold, and the HUD deliberately shows no status bar for a mechanic that does not exist (<code>hotbar-and-game-hud</code>). What food would change is chosen from what the game does have: sprinting and swimming, digging, fishing and lamps.</p>
+  <p class="honest"><b>About the art.</b> <b>The game's own</b> (byte-identical copies in <code>cooking/game/</code>, see its README): every ground cell outside is a tile of the terrain atlas (<code>assets/tilesets/atlas.png</code>, the fields sheet), drawn as <code>planet_surface.wgsl</code> picks a column's top and side; walls, floors, ovens, hearths, tables, shelves, barrels and stoves wear the settlement textures (brick, clay, stone, flagstone, cobble, plank, boards, timber, plaster, whitewash, tile, slate, iron, barrel, linen) at their <code>repeat_m</code>; the fish are the game's item icons (<code>assets/items/fish</code>), and so are the candle, lanterns and hand. <b>From other mockups</b> (byte-identical, each folder has its source): M3's materials (<code>cooking/m3/</code>), M7's animals and their meat, milk and egg drops (<code>cooking/m7/</code>), M8's seven crops (<code>cooking/m8/</code>) and M25's squid, shrimp, octopus, clams, lobster, crabs and kelp (<code>cooking/m25/</code>). <b>Mockup-only:</b> every dish, ingredient, meat cut, fillet, kitchen station icon, the twelve new crops and their growth stages, the three proposed catchables and the kitchen textures and cards (fire, embers, crust, dough, hanging herbs, fish and noodles) are pixel art drawn in code with the balatro-pixel-art kit (<code>tools/art/cooking_art.py</code>, Sweaft-64, hard alpha), sampled nearest with no mipmaps. Stations and props are boxes and hex prisms, the way the game builds things; food on a table is a pixel card.</p>
+  <p class="honest"><b>How it was checked.</b> The screenshots in <code>docs/screenshots/mockup-cooking/</code> were rendered in a cloud container with no GPU (headless Chromium on SwiftShader), so they show the look, never how smoothly it runs.</p>
+  </details>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Parts of the mockup">
+  <div class="trow k3"><span class="lab">Kitchens</span><button role="tab" data-tab="yard">Kitchen yard</button><button role="tab" data-tab="bakery">Bakery</button><button role="tab" data-tab="kitchen">Inn kitchen</button><button role="tab" data-tab="galley">Ship's galley</button></div>
+  <div class="trow"><span class="lab">Cooking</span><button role="tab" data-tab="cook">At the stove</button><button role="tab" data-tab="book">Recipe book</button><button role="tab" data-tab="chains">Field to plate</button></div>
+  <div class="trow"><span class="lab">Sources</span><button role="tab" data-tab="crops">New crops</button><button role="tab" data-tab="ranch">Meat, milk and eggs</button><button role="tab" data-tab="sea">Fish and seafood</button></div>
+  <div class="trow"><span class="lab">Design</span><button role="tab" data-tab="food">What food does</button><button role="tab" data-tab="decide">Decisions</button></div>
+</nav>
+
+<div id="scenePanels"></div>
+
+<!-- ======================= At the stove ======================= -->
+<div class="tabpanel" id="tab-cook" role="tabpanel" hidden>
+  <h2>At the stove</h2>
+  <p>A working mock of the station panel, M3's design with a kitchen's three extra things: <b>heat</b>, <b>freshness</b> and <b>quality</b>. Pick a station and a recipe; the ingredients leave the pack, the job runs its time, and the dish lands by the pack's give order with its stars. Each stack shows how fresh it is (the bar along its foot). Click a dish in the pack and press Eat to see what it does in the HUD. <kbd>Wait a day</kbd> moves the world clock on a day of play, so you can watch food go stale and spoiled food turn to compost. In this mock the innkeeper's, the fisher's and the farmer's recipes are already learned; the rest show how learning works.</p>
+  <div class="screen">
+    <span class="scrlabel">mock: a station's panel over the running world, E at a placed station to open, Esc to close</span>
+    <div class="ui">
+      <div class="station">
+        <header><img id="stIcon" src="cooking/st_hearth.png?v=1" alt="" width="64" height="64"><div><div class="eyebrow" id="stTier">Station</div><h3 id="stName">Hearth and pot</h3></div></header>
+        <div class="sttabs" id="stTabs" role="group" aria-label="Station (mockup only: in game a station opens its own panel)"></div>
+        <div class="split">
+          <div class="recipes" id="recipeList" role="listbox" aria-label="Recipes"></div>
+          <div class="detail" id="detail"></div>
+        </div>
+        <div class="queue" id="queue" aria-live="polite"></div>
+      </div>
+      <div class="packpanel">
+        <div class="eyebrow">Pack <span class="muted" id="clock" style="text-transform:none;letter-spacing:0;font-family:var(--mono);font-size:11px"></span></div>
+        <div class="slots" id="pack"></div>
+        <div class="slots hotbar" id="hotbar"></div>
+        <div class="actions"><span class="btn" role="button" tabindex="0" id="eatBtn" aria-disabled="true">Eat</span><span class="btn ghost" role="button" tabindex="0" id="waitBtn">Wait a day</span><span class="hint2" id="selInfo">Select a slot.</span></div>
+        <p class="hint2"><kbd>I</kbd> pack &nbsp; <kbd>E</kbd> use station &nbsp; <kbd>1</kbd>-<kbd>0</kbd> hotbar &nbsp; <kbd>F</kbd> eat what is in hand &nbsp; <kbd>Esc</kbd> close.</p>
+      </div>
+    </div>
+    <div class="hud" id="hud">
+      <div class="seg" id="hudMode" role="group" aria-label="HUD model"><button data-m="buffs" aria-pressed="true">Proposed: meals give buffs</button><button data-m="hunger" aria-pressed="false">Alternative: a hunger bar</button></div>
+      <div class="buffs" id="buffs" aria-live="polite"></div>
+      <div class="minibar" id="minibar" aria-hidden="true"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= Recipe book ======================= -->
+<div class="tabpanel" id="tab-book" role="tabpanel" hidden>
+  <h2>The recipe book</h2>
+  <p>Every recipe in this proposal: what it makes, where, how long and how hot, what goes in, what it does once eaten and how long it keeps. Times are seconds at the station (a job runs only while the world is played, as M3's do). Keeps is in game days: a day is 48 minutes of play (<code>orbit-and-seasons</code>), and "keeps" is how long until stale, so a 1-day fish wants cooking or salting within the hour you caught it. Effects are explained under <a href="#food">What food does</a>.</p>
+  <div class="filters seg" id="bookFilter" role="group" aria-label="Filter recipes"></div>
+  <div class="book" id="book"></div>
+</div>
+
+<!-- ======================= Field to plate ======================= -->
+<div class="tabpanel" id="tab-chains" role="tabpanel" hidden>
+  <h2>Field to plate</h2>
+  <p>Where every dish comes from: what grows, grazes and swims on the left, what the quern, the churn, the barrel, the press and the rack make of it in the middle, and the dish on the right. Hover or tab to a node to light up what it needs and what it feeds; the line's colour is the station that makes the step. Pick a family to see its chains alone.</p>
+  <div class="filters seg" id="chainFilter" role="group" aria-label="Show chains for"></div>
+  <div class="legend" id="chainLegend"></div>
+  <div class="chainbox"><svg id="chain" role="img" aria-label="Ingredient chains: raw food on the left feeds processed ingredients, which feed dishes on the right."></svg></div>
+</div>
+
+<!-- ======================= New crops ======================= -->
+<div class="tabpanel" id="tab-crops" role="tabpanel" hidden>
+  <h2>New crops (the "more farming?")</h2>
+  <p>Twelve crops the recipes need, drawn in M8's layout (four stages on a 32 px canvas: the seeded mound, sprout, growing, ripe; the produce on 24 px) so they sit in M8's plot beside wheat, rice, chili, turnip, sun melon, frost kale and glowcap. They follow M8's rules unchanged: a climate and seasons outdoors, water each day, frost kills all but the hardy, a greenhouse grows anything anywhere. This is a proposal to M8, not an edit to it.</p>
+  <div class="legend" aria-label="M8's crops, ripe, for comparison"><span class="muted" style="font-size:13px">Beside M8's own, ripe:</span><span><img src="cooking/m8/wheat_3.png?v=1" alt="Wheat, ripe (M8)" width="64" height="64" style="width:64px;height:64px">Wheat</span><span><img src="cooking/m8/rice_3.png?v=1" alt="Rice, ripe (M8)" width="64" height="64" style="width:64px;height:64px">Rice</span><span><img src="cooking/m8/chili_3.png?v=1" alt="Chili, ripe (M8)" width="64" height="64" style="width:64px;height:64px">Chili</span><span><img src="cooking/m8/turnip_3.png?v=1" alt="Turnip, ripe (M8)" width="64" height="64" style="width:64px;height:64px">Turnip</span><span><img src="cooking/m8/sun_melon_3.png?v=1" alt="Sun melon, ripe (M8)" width="64" height="64" style="width:64px;height:64px">Sun melon</span><span><img src="cooking/m8/frost_kale_3.png?v=1" alt="Frost kale, ripe (M8)" width="64" height="64" style="width:64px;height:64px">Frost kale</span><span><img src="cooking/m8/glowcap_3.png?v=1" alt="Glowcap, ripe (M8)" width="64" height="64" style="width:64px;height:64px">Glowcap</span></div>
+  <div class="tablebox"><table id="cropTable"><thead><tr><th>Crop</th><th>Stages</th><th>Climate outdoors (Tenebris biomes)</th><th>Seasons</th><th>Days</th><th>Water</th><th>Yield</th><th>Goes into</th></tr></thead><tbody></tbody></table></div>
+  <div class="cols">
+    <div><h3>How they join M8</h3><p>Appended to M8's crop roster, which is append-only like the fish roster (a planted crop is saved by its index). Each is a seed the player plants; none appears in the ground on its own, so <b>no generator changes</b> and no save is touched: seeds come from the farmer and the trader (M5) and from the market (M12).</p><p>Two are <b>perennials</b>, a rule M8 does not have yet: olive trees and tea bushes stay after harvest and fruit again (olives every 6 days, tea every 3). A young olive is killed by frost; a grown one is not.</p></div>
+    <div><h3>Two sugars, by climate</h3><p>Sugar cane grows hot and wet; sugar beet grows temperate and cold. Both boil down at the hearth to the same sugar, so a cold-world baker is never stuck. The same goes for oil: olives on hot dry coasts, soy in the temperate belt; both go through the press.</p></div>
+    <div><h3>On Sequoia and the moons</h3><p>Crops are an explicit roster per planet (M8's recommendation; CLAUDE.md: no accidental species fallback). These are Tenebris's. On Sequoia, Tenebris seed grows only in a greenhouse; Sequoia's own food (its fungal forest's rose caps, its tan-sod grains) waits for its own roster. On an airless body, only the sealed greenhouse and the galley's stores feed you.</p></div>
+  </div>
+</div>
+
+<!-- ======================= Ranch ======================= -->
+<div class="tabpanel" id="tab-ranch" role="tabpanel" hidden>
+  <h2>Meat, milk and eggs</h2>
+  <p>Which animal gives what, and what each becomes. The animals are M7's; <b>taming, pens, breeding and new domestic stock are the husbandry mockup's</b>, drafted alongside this one, so this page only names the products. M7's one meat drop <img src="cooking/m7/drop_meat.png?v=1" alt="M7 meat drop" width="24" height="24" style="vertical-align:middle"> becomes a cut by animal, and a cut has four states: <b>raw</b> (keeps a day), <b>cooked</b> (two days), <b>smoked</b> and <b>cured</b> (a month). A gap where M7 has no animal for a meat the owner named is marked.</p>
+  <div class="tablebox"><table id="ranchTable"><thead><tr><th>Animal</th><th>From</th><th>Gives</th><th>Raw, cooked, smoked, cured</th><th>Goes into</th></tr></thead><tbody></tbody></table></div>
+  <p class="honest"><b>From the husbandry draft</b> (<code>animal-husbandry</code>, drafted alongside; its names may change): it proposes a domestic pig, the <b>rootling</b> (from the tusk boar), which would be the pork here; <b>yard hens and yard dabblers</b> for hen and duck eggs; and <b>clover bees</b>, whose honey would sweeten as sugar does (a honey recipe waits for that draft to land). Meat comes from its butcher's block as these cuts; every dish made from them is this page's.</p>
+  <p class="honest"><b>Hunting stays a choice</b> (M7): everything but meat and hide comes from a tamed animal without killing it. A player who never hunts eats eggs, milk, butter, cheese, bread, pasta, fish and everything from the field, and misses only the meat dishes.</p>
+</div>
+
+<!-- ======================= Sea ======================= -->
+<div class="tabpanel" id="tab-sea" role="tabpanel" hidden>
+  <h2>Fish and seafood</h2>
+  <p>The fish the game catches today are the first real ingredient: any caught fish cuts into two fillets by hand. M25's water life gives the rest. Squid is calamari; the shrimp, prawns, clams, mussels, lobster, crab and crayfish go to the pot, the grill and the fryer. Three catchables are missing for the dishes the owner named, and are proposed below (to M25, not edited into it).</p>
+  <div class="tablebox"><table id="seaTable"><thead><tr><th>Catch</th><th>From</th><th>Where and how</th><th>Becomes</th><th>Dishes</th></tr></thead><tbody></tbody></table></div>
+  <h3>Raw fish</h3>
+  <p>Sushi takes only a fish that is safe raw: silverfin, deepback and redrun (cold, clean water). M25 already says the bloatfin is poisonous unless cleaned; it is never served raw, and cleaning it is a recipe of its own for later. The kelp frond, cut from M25's forests and dried on the rack, is the sheet that wraps it.</p>
+</div>
+
+<!-- ======================= What food does ======================= -->
+<div class="tabpanel" id="tab-food" role="tabpanel" hidden>
+  <h2>What food does</h2>
+  <div class="cols">
+    <div class="card"><h3>Meals give buffs; nothing drains</h3><p>There is <b>no hunger bar</b>. Eating a dish gives its effect for some minutes of play; up to <b>three dishes</b> work at once (a full belly), and a fourth replaces the one with least time left. The same effect does not stack: the best one counts. Not eating costs nothing.</p><p>Why: the game is a calm explorer with no death, no health and no survival clock; world time passes only while it is played, and a long flight to Sequoia should not be nagged by a stomach. A hunger bar punishes the player for doing something else; a buff rewards the player who cooks. The HUD gains buff icons only once there are buffs (<code>hotbar-and-game-hud</code>: no bar for a mechanic that does not exist).</p></div>
+    <div class="card"><h3>Freshness and keeping</h3><p>Every food stack remembers the world time it was made; its age is played time, never time with the game closed. Past its keep it is <b>stale</b> (it still cooks, at a lower star), and at twice its keep it <b>spoils into compost</b> (M8's fertiliser), so nothing just vanishes. When two stacks of the same food merge, the stack keeps the older time.</p><p>Keeping it longer: <b>salt</b> (the barrel, a month), <b>smoke</b> (the smoker, a month), <b>drying</b> (the rack: jerky, pasta, tea, kelp, forever), <b>pickling and brine</b> (two months), <b>ice</b> (an icebox fourfold; on a frozen world, a box outdoors in winter does the same), and <b>cans</b> (the galley, forever, for long voyages).</p></div>
+    <div class="card"><h3>Quality, without dice</h3><p>One to three stars, worked out, never rolled (M3: the same recipe always makes the same thing, so a multiplayer server has one rule to check):</p><ul class="muted" style="margin:0;padding-left:18px;font-size:14px"><li>the <b>freshest band</b> of the oldest ingredient: fresh +2, good +1, stale +0;</li><li>the <b>right heat</b> for the recipe: +1;</li><li><b>practice</b>: +1 once you have cooked it five times.</li></ul><p>Four points is three stars, two or three is two, less is one. Stars stretch the effect (x1, x1.5, x2) and the price.</p></div>
+    <div class="card"><h3>Learning recipes</h3><p>A new world knows the campfire's basics. The rest is learned: <b>from townsfolk</b> (the innkeeper's stew and pies, the fisher's chowder and calamari, the farmer's bread and cheese, a baker and a noodle cook proposed as new town roles to M5), <b>from recipe books</b> sold at stalls and found in ruins, and <b>by discovery</b>: put a recipe's ingredients in a station you know and it is learned. Known recipes are part of the save, a list of ids.</p></div>
+    <div class="card"><h3>Selling</h3><p>Food sells to the innkeeper and at market stalls, priced by its stars and freshness. Towns pay for what their land does not grow (a desert town for fish, a coast for bread). Stations and outposts grow nothing, so <b>provisions</b> (cans, hardtack, jerky, cheese) are proposed as a ninth good on M12's exchange: a hauler's run from a farming world to a station.</p></div>
+    <div class="card"><h3>Saves and the inventory</h3><p>A food is a new <code>Item::Food(u16)</code>, an index into an append-only food roster, as <code>Item::Fish(u16)</code> is; a stack adds its made-at world time and its stars. Today's caught fish stay <code>Fish</code> and are an ingredient as they are, so <b>no save migrates</b>: a world with no food in it opens exactly as before. A placed kitchen station is a stored record on the durable path like M3's, and a cooking job advances only while the world is played.</p></div>
+  </div>
+  <h3>The effects</h3>
+  <div class="tablebox"><table id="fxTable"><thead><tr><th>Effect</th><th>What it does</th><th>In the game today</th><th>Typical dishes</th></tr></thead><tbody></tbody></table></div>
+  <h3>Kitchen stations by tier</h3>
+  <div class="tablebox"><table id="stTable"><thead><tr><th>Station</th><th>Tier</th><th>Built from (M3's materials)</th><th>Burns</th><th>Makes</th><th>At night</th></tr></thead><tbody></tbody></table></div>
+</div>
+
+<!-- ======================= Decisions ======================= -->
+<div class="tabpanel" id="tab-decide" role="tabpanel" hidden>
+  <h2>Decisions and questions for the owner</h2>
+  <p>Three are questions, each with screenshots in <code>docs/screenshots/mockup-cooking/</code>. The rest are recommendations taken (ask only with screenshots), so they are never mistaken for the owner's own words.</p>
+  <div class="dec" id="decisions"></div>
+</div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+const SHOT = /[?&]shot\b/.test(location.search);
+if (SHOT) document.documentElement.classList.add("shot");
+const V = "?v=1";
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// =====================================================================================================
+// Data: items, stations, effects, recipes
+// =====================================================================================================
+// [id, name, image under cooking/, source, keeps in game days (0 = forever)]
+const ITEM_ROWS = [
+  // M8's crops
+  ["wheat", "Wheat", "m8/produce_wheat", "m8", 0], ["rice", "Rice", "m8/produce_rice", "m8", 0], ["chili", "Chili", "m8/produce_chili", "m8", 8],
+  ["turnip", "Turnip", "m8/produce_turnip", "m8", 10], ["sun_melon", "Sun melon", "m8/produce_sun_melon", "m8", 6], ["frost_kale", "Frost kale", "m8/produce_frost_kale", "m8", 6],
+  ["glowcap", "Glowcap", "m8/produce_glowcap", "m8", 4],
+  // new crops
+  ["tomato", "Tomato", "produce_tomato", "new", 6], ["durum", "Durum wheat", "produce_durum", "new", 0], ["soy", "Soy beans", "produce_soy", "new", 0],
+  ["bok_choy", "Bok choy", "produce_bok_choy", "new", 5], ["onion", "Onion", "produce_onion", "new", 20], ["garlic", "Garlic", "produce_garlic", "new", 30],
+  ["sugar_cane", "Sugar cane", "produce_sugar_cane", "new", 8], ["sugar_beet", "Sugar beet", "produce_sugar_beet", "new", 15], ["herbs", "Herbs", "produce_herbs", "new", 4],
+  ["potato", "Potato", "produce_potato", "new", 20], ["olive", "Olives", "produce_olive", "new", 8], ["tea", "Tea leaf", "produce_tea", "new", 3],
+  // ranch (M7's drops)
+  ["egg", "Egg", "m7/drop_egg", "m7", 6], ["milk", "Milk", "m7/drop_milk", "m7", 2],
+  // sea
+  ["fish", "Fish (any caught)", "game/fish-silverfin", "game", 1], ["squid", "Glow squid", "m25/squid", "m25", 1], ["octopus", "Den octopus", "m25/octopus", "m25", 1],
+  ["lobster", "Rock lobster", "m25/lobster", "m25", 1], ["crab", "Stone crab", "m25/crab", "m25", 1], ["crayfish", "Crayfish", "m25/crayfish", "m25", 1],
+  ["urchin", "Sea urchin roe", "m25/urchin", "m25", 1], ["kelp", "Kelp frond", "kelp_frond", "new", 3],
+  ["prawn", "Sand prawn", "sand_prawn", "new", 1], ["sand_clam", "Sand clam", "sand_clam", "new", 1], ["rock_mussel", "Rock mussel", "rock_mussel", "new", 1],
+  ["seawater", "Sea water", "seawater", "new", 0],
+  // M3's materials (fuel, cans)
+  ["log", "Log (fuel)", "m3/log", "m3", 0], ["coal", "Coal (fuel)", "m3/coal", "m3", 0], ["iron_ingot", "Iron ingot (tin plate)", "m3/iron-ingot", "m3", 0],
+  ["compost", "Compost", "m8/compost", "m8", 0],
+  // processed
+  ["flour", "Flour", "flour", "new", 0], ["semolina", "Semolina", "semolina", "new", 0], ["dough", "Bread dough", "dough", "new", 1], ["pasta_dough", "Egg pasta dough", "pasta_dough", "new", 1],
+  ["leaven", "Sourdough leaven", "leaven", "new", 4], ["butter", "Butter", "butter", "new", 8], ["cheese", "Cheese", "cheese", "new", 20], ["sugar", "Sugar", "sugar", "new", 0],
+  ["salt", "Salt", "salt", "new", 0], ["oil", "Oil", "oil", "new", 0], ["soy_sauce", "Soy sauce", "soy_sauce", "new", 0], ["tomato_sauce", "Tomato sauce", "tomato_sauce", "new", 6],
+  ["stock", "Stock", "stock", "new", 3], ["batter", "Batter", "batter", "new", 1], ["noodles_wheat", "Wheat noodles", "noodles_wheat", "new", 2], ["noodles_rice", "Rice noodles", "noodles_rice", "new", 2],
+  ["pasta_dried", "Dried spaghetti", "pasta_dried", "new", 0], ["rice_cooked", "Cooked rice", "rice_cooked", "new", 2], ["tea_leaves", "Dried tea", "tea_leaves", "new", 0],
+  ["pickles", "Pickles", "pickles", "new", 60], ["olives_brined", "Brined olives", "olives_brined", "new", 60], ["kelp_sheets", "Kelp sheets", "kelp_sheets", "new", 0],
+  ["sausage", "Sausages", "sausage", "new", 6], ["bacon", "Bacon", "bacon", "new", 30], ["jerky", "Jerky", "jerky", "new", 0],
+  ["fillet_raw", "Fish fillet", "fillet_raw", "new", 1], ["fillet_cooked", "Grilled fillet", "fillet_cooked", "new", 2], ["fillet_smoked", "Smoked fish", "fillet_smoked", "new", 30], ["fillet_salted", "Salt fish", "fillet_salted", "new", 60],
+  // dishes
+  ["flatbread", "Flatbread", "flatbread", "new", 2], ["bread", "Sourdough loaf", "bread", "new", 3], ["rolls", "Butter rolls", "rolls", "new", 3], ["pastry", "Crescent pastry", "pastry", "new", 2],
+  ["melon_pie", "Sun melon pie", "melon_pie", "new", 3], ["meat_pie", "Meat pie", "meat_pie", "new", 3], ["cake", "Layer cake", "cake", "new", 3], ["sweet_bun", "Sweet bun", "sweet_bun", "new", 3],
+  ["pizza", "Pizza, tomato and herb", "pizza", "new", 2], ["pizza_meat", "Pizza, sausage", "pizza_meat", "new", 2], ["pizza_sea", "Pizza, prawn and squid", "pizza_sea", "new", 1],
+  ["spaghetti", "Spaghetti in tomato", "spaghetti", "new", 2], ["ravioli", "Cheese ravioli", "ravioli", "new", 2], ["lasagne", "Lasagne", "lasagne", "new", 3],
+  ["ramen", "Ramen", "ramen", "new", 1], ["noodle_soup", "Rice noodle soup", "noodle_soup", "new", 1],
+  ["stir_fry_veg", "Vegetable stir fry", "stir_fry_veg", "new", 1], ["stir_fry_shrimp", "Prawn stir fry", "stir_fry_shrimp", "new", 1], ["fried_rice", "Fried rice", "fried_rice", "new", 2],
+  ["spit_roast", "Spit-roast hen", "spit_roast", "new", 2], ["grilled_steak", "Steak and potato", "grilled_steak", "new", 2], ["stew", "Plodder stew", "stew", "new", 3],
+  ["skewers", "Mutton skewers", "skewers", "new", 2], ["sausage_mash", "Sausage and mash", "sausage_mash", "new", 2],
+  ["grilled_fish", "Grilled fish", "grilled_fish", "new", 2], ["fish_chips", "Fish and chips", "fish_chips", "new", 1], ["sushi", "Sushi", "sushi", "new", 1],
+  ["calamari", "Calamari", "calamari", "new", 1], ["shrimp_skewer", "Garlic prawn skewer", "shrimp_skewer", "new", 1], ["tempura", "Prawn tempura", "tempura", "new", 1],
+  ["crab_boil", "Crab boil", "crab_boil", "new", 1], ["lobster_dish", "Lobster in butter", "lobster", "new", 1], ["chowder", "Clam chowder in a loaf", "chowder", "new", 2],
+  ["octopus_dish", "Grilled octopus", "octopus", "new", 1], ["mussel_pot", "Mussels in ale", "mussel_pot", "new", 1],
+  ["veg_soup", "Tomato soup", "veg_soup", "new", 3], ["kale_soup", "Frost kale soup", "kale_soup", "new", 3], ["porridge", "Porridge", "porridge", "new", 2], ["glowcap_soup", "Glowcap broth", "glowcap_soup", "new", 2],
+  ["chips", "Chips", "chips", "new", 1], ["baked_potato", "Baked potato", "baked_potato", "new", 2], ["salad", "Bok choy salad", "salad", "new", 1],
+  ["omelette", "Cheese omelette", "omelette", "new", 1], ["cheese_toast", "Cheese toast", "cheese_toast", "new", 2],
+  ["tea_cup", "Tea", "tea", "new", 1], ["melon_juice", "Melon juice", "melon_juice", "new", 1], ["ale", "Ale", "ale", "new", 20],
+  ["hardtack", "Hardtack", "hardtack", "new", 0], ["ration", "Ration can", "ration", "new", 0],
+];
+const ITEMS = {};
+for (const [id, name, img, src, keep] of ITEM_ROWS) ITEMS[id] = { id, name, img, src, keep };
+const CUTS = { poultry: "Poultry", pork: "Pork", beef: "Beef", mutton: "Mutton", game: "Game" };
+const STATE_KEEP = { raw: 1, cooked: 2, smoked: 30, cured: 30 };
+for (const [c, cn] of Object.entries(CUTS)) for (const st of ["raw", "cooked", "smoked", "cured"])
+  ITEMS[`meat_${c}_${st}`] = { id: `meat_${c}_${st}`, name: `${cn}, ${st === "raw" ? "raw" : st}`, img: `meat_${c}_${st}`, src: "new", keep: STATE_KEEP[st] };
+const icon = id => "cooking/" + (ITEMS[id] ? ITEMS[id].img : "flour") + ".png" + V;
+const nm = id => ITEMS[id] ? ITEMS[id].name : id;
+
+const STATIONS = {
+  hand:    { name: "By hand", tier: 0, img: "game/tool-hand", heat: 0, fuel: null, cost: "nothing: in the pack", light: "none", color: "#bfcad7", what: "Fillets, sushi, salads, juice" },
+  campfire:{ name: "Campfire and spit", tier: 0, img: "st_campfire", heat: 1, fuel: "log", cost: [["stone", 4], ["log", 2]], light: "fire, warm, 8 m", color: "#fe6420", what: "Roasts, grills, skewers, flatbread" },
+  rack:    { name: "Drying rack", tier: 0, img: "st_rack", heat: 0, fuel: null, cost: [["log", 3], ["planks", 2]], light: "none", color: "#cfaa81", what: "Jerky, dried pasta, tea, kelp sheets (slower in rain)" },
+  quern:   { name: "Quern", tier: 1, img: "st_quern", heat: 0, fuel: null, cost: [["stone", 6], ["log", 1]], light: "none", color: "#a09f91", what: "Flour and semolina" },
+  hearth:  { name: "Hearth and pot", tier: 1, img: "st_hearth", heat: 1, fuel: "log", cost: [["stone", 10], ["iron_ingot", 1]], light: "fire, warm, 7 m", color: "#c56d25", what: "Soups, stews, stock, sauces, boils, sugar, salt, tea" },
+  barrel:  { name: "Brine and ferment barrel", tier: 1, img: "st_barrel", heat: 0, fuel: null, cost: [["planks", 6], ["iron_ingot", 1]], light: "none", color: "#53998b", what: "Cures, salt fish, pickles, soy sauce, ale, leaven" },
+  dairy:   { name: "Churn and cheese press", tier: 1, img: "st_dairy", heat: 0, fuel: null, cost: [["planks", 6], ["iron_ingot", 1]], light: "none", color: "#faaf5c", what: "Butter and cheese" },
+  oven:    { name: "Brick bake oven", tier: 2, img: "st_oven", heat: 1, fuel: "log", cost: [["brick", 20], ["clay", 6]], light: "oven mouth, hot orange, 7 m", color: "#d4462b", what: "Bread, rolls, pastry, pies, cake, lasagne, hardtack" },
+  smoker:  { name: "Smoker", tier: 2, img: "st_smoker", heat: 1, fuel: "log", cost: [["planks", 10], ["iron_ingot", 2]], light: "a low ember glow", color: "#733126", what: "Smoked meat and fish, sausages" },
+  pasta:   { name: "Pasta and noodle table", tier: 2, img: "st_pasta", heat: 0, fuel: null, cost: [["planks", 8], ["log", 2]], light: "none", color: "#eab798", what: "Dough, pasta dough, noodles, ravioli, batter" },
+  pizza:   { name: "Pizza oven", tier: 2, img: "st_pizza", heat: 1, fuel: "log", cost: [["brick", 16], ["clay", 10], ["stone", 4]], light: "wide mouth, hot orange, 8 m", color: "#fb902f", what: "Pizza and flatbread, hotter and faster than the bake oven" },
+  press:   { name: "Oil press", tier: 2, img: "st_press", heat: 0, fuel: null, cost: [["planks", 8], ["iron_ingot", 2]], light: "none", color: "#559642", what: "Olive and soy oil" },
+  stove:   { name: "Iron stove and wok", tier: 3, img: "st_stove", heat: 1, fuel: "coal", cost: [["iron_ingot", 8], ["copper_ingot", 2]], light: "firebox window, 4 m", color: "#1096c3", what: "Stir fries, fried rice, steaks, omelettes, spaghetti" },
+  fryer:   { name: "Fryer", tier: 3, img: "st_fryer", heat: 1, fuel: "coal", cost: [["iron_ingot", 6], ["copper_ingot", 2]], light: "none", color: "#faaf5c", what: "Calamari, fish and chips, tempura, chips" },
+  icebox:  { name: "Icebox", tier: 2, img: "st_icebox", heat: 0, fuel: null, cost: [["planks", 8], ["glass", 2]], light: "none", color: "#74effe", what: "Keeps what is in it four times as long (needs ice)" },
+  galley:  { name: "Ship's galley", tier: 4, img: "st_galley", heat: 1, fuel: "power", cost: "a ship module (M4, M23): iron, copper and a circuit", light: "the ship's own lights", color: "#7d2dbd", what: "Any hearth, oven, stove or fryer recipe on ship power; cans; a freezer" },
+};
+ITEMS.planks = { id: "planks", name: "Planks", img: "m3/planks", src: "m3", keep: 0 }; ITEMS.stone = { id: "stone", name: "Stone", img: "m3/stone", src: "m3", keep: 0 };
+ITEMS.brick = { id: "brick", name: "Brick", img: "m3/brick", src: "m3", keep: 0 }; ITEMS.clay = { id: "clay", name: "Clay", img: "m3/clay", src: "m3", keep: 0 };
+ITEMS.glass = { id: "glass", name: "Glass", img: "m3/glass", src: "m3", keep: 0 }; ITEMS.copper_ingot = { id: "copper_ingot", name: "Copper ingot", img: "m3/copper-ingot", src: "m3", keep: 0 };
+const stIcon = id => "cooking/" + STATIONS[id].img + ".png" + V;
+
+const EFFECTS = {
+  stride: { name: "Stride", what: "Sprint and swim 15% faster.", today: "Walking, sprinting (14 m/s) and swimming are built.", ok: true },
+  steady: { name: "Steady hands", what: "Your line holds 20% more tension and a hooked fish tires faster.", today: "Fishing's tension and the fish's stamina are built (pbd_core::fishing).", ok: true },
+  keen:   { name: "Keen", what: "Dig and mine 15% faster.", today: "Digging and break times are built (dig-and-place).", ok: true },
+  warm:   { name: "Warmth", what: "Cold does not slow you on a frozen world or in a winter night.", today: "No cold exists yet: this waits for one, and does nothing until then.", ok: false },
+  glow:   { name: "Glow", what: "You give off a small light, 4 m, like a candle on you.", today: "Lamps that light what is near them are built (lighting-model).", ok: true },
+  none:   { name: "None", what: "An ingredient or a store: no effect of its own.", today: "", ok: true },
+};
+
+// Recipes: [out, count, station, seconds, heat (0 none, 1 low, 2 medium, 3 high), ins, effect, minutes, family, learned from]
+const FAM = { bakery: "Bakery", pizza: "Pizza and pasta", noodles: "Noodles and stir fry", meat: "Meat", sea: "Fish and seafood", soup: "Soups and stews", drink: "Drinks and sides", basics: "Basics and preserves" };
+const RECIPES = [];
+function rc(out, n, st, s, heat, ins, fx, min, fam, learn) { RECIPES.push({ out, n, st, s, heat, ins, fx, min, fam, learn }); }
+// basics
+rc("fillet_raw", 2, "hand", 3, 0, [["fish", 1]], "none", 0, "basics", "known");
+rc("flour", 2, "quern", 6, 0, [["wheat", 2]], "none", 0, "basics", "known");
+rc("semolina", 2, "quern", 6, 0, [["durum", 2]], "none", 0, "basics", "farmer");
+rc("sugar", 1, "hearth", 12, 2, [["sugar_cane", 3]], "none", 0, "basics", "trader");
+rc("sugar", 1, "hearth", 12, 2, [["sugar_beet", 3]], "none", 0, "basics", "trader");
+rc("salt", 2, "hearth", 14, 3, [["seawater", 2]], "none", 0, "basics", "fisher");
+rc("stock", 2, "hearth", 12, 1, [["meat_poultry_raw", 1], ["onion", 1], ["herbs", 1]], "none", 0, "basics", "innkeeper");
+rc("tomato_sauce", 2, "hearth", 10, 1, [["tomato", 3], ["onion", 1], ["garlic", 1], ["oil", 1]], "none", 0, "basics", "innkeeper");
+rc("rice_cooked", 2, "hearth", 8, 2, [["rice", 2]], "none", 0, "basics", "known");
+rc("butter", 1, "dairy", 8, 0, [["milk", 2]], "none", 0, "basics", "farmer");
+rc("cheese", 1, "dairy", 20, 0, [["milk", 3], ["salt", 1]], "keen", 4, "basics", "farmer");
+rc("oil", 2, "press", 10, 0, [["olive", 4]], "none", 0, "basics", "trader");
+rc("oil", 1, "press", 10, 0, [["soy", 4]], "none", 0, "basics", "trader");
+rc("leaven", 1, "barrel", 10, 0, [["flour", 1]], "none", 0, "bakery", "baker");
+rc("soy_sauce", 2, "barrel", 20, 0, [["soy", 2], ["wheat", 1], ["salt", 1]], "none", 0, "basics", "noodle cook");
+rc("pickles", 2, "barrel", 12, 0, [["turnip", 1], ["chili", 1], ["salt", 1]], "keen", 3, "basics", "innkeeper");
+rc("olives_brined", 2, "barrel", 12, 0, [["olive", 4], ["salt", 1]], "stride", 3, "basics", "trader");
+rc("fillet_salted", 2, "barrel", 14, 0, [["fillet_raw", 2], ["salt", 1]], "none", 0, "sea", "fisher");
+rc("bacon", 2, "barrel", 14, 0, [["meat_pork_raw", 1], ["salt", 1]], "none", 0, "meat", "innkeeper");
+rc("ale", 3, "barrel", 20, 0, [["wheat", 3], ["sugar", 1]], "steady", 6, "drink", "innkeeper");
+rc("jerky", 3, "rack", 16, 0, [["meat_beef_raw", 1], ["salt", 1]], "stride", 6, "meat", "known");
+rc("pasta_dried", 2, "rack", 12, 0, [["pasta_dough", 1]], "none", 0, "pizza", "baker");
+rc("tea_leaves", 2, "rack", 10, 0, [["tea", 2]], "none", 0, "drink", "trader");
+rc("kelp_sheets", 2, "rack", 10, 0, [["kelp", 2]], "none", 0, "sea", "fisher");
+rc("dough", 2, "pasta", 6, 0, [["flour", 2], ["leaven", 1]], "none", 0, "bakery", "known");
+rc("pasta_dough", 2, "pasta", 6, 0, [["semolina", 2], ["egg", 1]], "none", 0, "pizza", "baker");
+rc("noodles_wheat", 2, "pasta", 8, 0, [["flour", 2], ["salt", 1]], "none", 0, "noodles", "noodle cook");
+rc("noodles_rice", 2, "pasta", 8, 0, [["rice", 2]], "none", 0, "noodles", "noodle cook");
+rc("batter", 2, "pasta", 4, 0, [["flour", 1], ["egg", 1]], "none", 0, "basics", "innkeeper");
+// bakery
+rc("bread", 2, "oven", 14, 2, [["dough", 2]], "stride", 6, "bakery", "known");
+rc("rolls", 3, "oven", 10, 2, [["dough", 1], ["butter", 1], ["egg", 1]], "stride", 6, "bakery", "baker");
+rc("pastry", 2, "oven", 12, 3, [["dough", 1], ["butter", 2], ["sugar", 1]], "stride", 8, "bakery", "baker");
+rc("melon_pie", 1, "oven", 16, 2, [["dough", 1], ["sun_melon", 1], ["sugar", 1], ["butter", 1]], "stride", 14, "bakery", "baker");
+rc("meat_pie", 1, "oven", 16, 2, [["dough", 1], ["stew", 1]], "warm", 16, "bakery", "innkeeper");
+rc("cake", 1, "oven", 20, 1, [["flour", 2], ["egg", 2], ["milk", 1], ["butter", 1], ["sugar", 2]], "keen", 20, "bakery", "baker");
+rc("sweet_bun", 2, "oven", 10, 2, [["dough", 1], ["sugar", 1], ["milk", 1]], "stride", 8, "bakery", "baker");
+rc("hardtack", 4, "oven", 16, 1, [["flour", 2], ["salt", 1]], "none", 0, "bakery", "trader");
+rc("baked_potato", 1, "oven", 12, 2, [["potato", 1], ["butter", 1]], "stride", 6, "drink", "known");
+rc("cheese_toast", 1, "oven", 6, 3, [["bread", 1], ["cheese", 1]], "keen", 6, "bakery", "innkeeper");
+rc("lasagne", 1, "oven", 18, 2, [["pasta_dough", 1], ["tomato_sauce", 1], ["meat_beef_raw", 1], ["cheese", 1], ["milk", 1]], "warm", 18, "pizza", "innkeeper");
+// pizza and pasta
+rc("flatbread", 2, "pizza", 5, 3, [["flour", 1], ["oil", 1]], "stride", 4, "pizza", "known");
+rc("flatbread", 1, "campfire", 6, 2, [["flour", 1]], "stride", 3, "pizza", "known");
+rc("pizza", 1, "pizza", 8, 3, [["dough", 1], ["tomato_sauce", 1], ["cheese", 1], ["herbs", 1]], "keen", 12, "pizza", "baker");
+rc("pizza_meat", 1, "pizza", 8, 3, [["dough", 1], ["tomato_sauce", 1], ["cheese", 1], ["sausage", 1]], "stride", 14, "pizza", "baker");
+rc("pizza_sea", 1, "pizza", 8, 3, [["dough", 1], ["tomato_sauce", 1], ["cheese", 1], ["prawn", 1], ["squid", 1]], "steady", 14, "pizza", "fisher");
+rc("spaghetti", 1, "stove", 10, 2, [["pasta_dried", 1], ["tomato_sauce", 1], ["cheese", 1]], "keen", 12, "pizza", "innkeeper");
+rc("ravioli", 2, "pasta", 10, 0, [["pasta_dough", 1], ["cheese", 1], ["herbs", 1]], "keen", 10, "pizza", "baker");
+// noodles and stir fry
+rc("ramen", 1, "hearth", 14, 2, [["noodles_wheat", 1], ["stock", 1], ["egg", 1], ["meat_pork_raw", 1], ["soy_sauce", 1]], "keen", 16, "noodles", "noodle cook");
+rc("noodle_soup", 1, "hearth", 12, 2, [["noodles_rice", 1], ["stock", 1], ["meat_beef_raw", 1], ["herbs", 1]], "stride", 14, "noodles", "noodle cook");
+rc("stir_fry_veg", 1, "stove", 6, 3, [["bok_choy", 1], ["onion", 1], ["chili", 1], ["soy_sauce", 1], ["oil", 1]], "stride", 10, "noodles", "noodle cook");
+rc("stir_fry_shrimp", 1, "stove", 6, 3, [["prawn", 2], ["bok_choy", 1], ["garlic", 1], ["chili", 1], ["soy_sauce", 1]], "steady", 14, "noodles", "noodle cook");
+rc("fried_rice", 1, "stove", 6, 3, [["rice_cooked", 1], ["egg", 1], ["onion", 1], ["soy_sauce", 1], ["bacon", 1]], "stride", 12, "noodles", "noodle cook");
+// meat
+rc("meat_poultry_cooked", 1, "campfire", 8, 2, [["meat_poultry_raw", 1]], "stride", 4, "meat", "known");
+rc("meat_pork_cooked", 1, "campfire", 8, 2, [["meat_pork_raw", 1]], "stride", 4, "meat", "known");
+rc("meat_beef_cooked", 1, "campfire", 8, 2, [["meat_beef_raw", 1]], "stride", 5, "meat", "known");
+rc("meat_mutton_cooked", 1, "campfire", 8, 2, [["meat_mutton_raw", 1]], "warm", 5, "meat", "known");
+rc("meat_game_cooked", 1, "campfire", 8, 2, [["meat_game_raw", 1]], "stride", 5, "meat", "known");
+for (const c of Object.keys(CUTS)) rc(`meat_${c}_smoked`, 1, "smoker", 18, 1, [[`meat_${c}_raw`, 1]], "stride", 6, "meat", "innkeeper");
+for (const c of Object.keys(CUTS)) rc(`meat_${c}_cured`, 1, "barrel", 16, 0, [[`meat_${c}_raw`, 1], ["salt", 1]], "none", 0, "meat", "innkeeper");
+rc("sausage", 3, "smoker", 14, 1, [["meat_pork_raw", 1], ["salt", 1], ["herbs", 1]], "stride", 6, "meat", "innkeeper");
+rc("spit_roast", 1, "campfire", 16, 2, [["meat_poultry_raw", 2], ["herbs", 1]], "stride", 14, "meat", "known");
+rc("skewers", 2, "campfire", 8, 3, [["meat_mutton_raw", 1], ["onion", 1]], "warm", 10, "meat", "trader");
+rc("grilled_steak", 1, "stove", 8, 3, [["meat_beef_raw", 1], ["potato", 1], ["butter", 1]], "stride", 16, "meat", "innkeeper");
+rc("sausage_mash", 1, "stove", 10, 2, [["sausage", 2], ["potato", 2], ["butter", 1], ["milk", 1]], "warm", 14, "meat", "innkeeper");
+rc("stew", 2, "hearth", 18, 1, [["meat_beef_raw", 1], ["potato", 1], ["onion", 1], ["turnip", 1], ["stock", 1]], "warm", 16, "soup", "innkeeper");
+// fish and seafood
+rc("fillet_cooked", 1, "campfire", 6, 2, [["fillet_raw", 1]], "steady", 4, "sea", "known");
+rc("fillet_smoked", 2, "smoker", 18, 1, [["fillet_raw", 2]], "steady", 6, "sea", "fisher");
+rc("grilled_fish", 1, "campfire", 8, 2, [["fish", 1], ["salt", 1]], "steady", 10, "sea", "known");
+rc("fish_chips", 1, "fryer", 10, 3, [["fish", 1], ["potato", 2], ["batter", 1], ["oil", 1]], "steady", 16, "sea", "fisher");
+rc("sushi", 2, "hand", 8, 0, [["fish", 1], ["rice_cooked", 1], ["kelp_sheets", 1]], "keen", 12, "sea", "fisher");
+rc("calamari", 1, "fryer", 6, 3, [["squid", 1], ["batter", 1], ["oil", 1]], "steady", 12, "sea", "fisher");
+rc("shrimp_skewer", 1, "campfire", 6, 3, [["prawn", 3], ["garlic", 1]], "steady", 10, "sea", "fisher");
+rc("tempura", 1, "fryer", 6, 3, [["prawn", 2], ["batter", 1], ["oil", 1]], "steady", 12, "sea", "noodle cook");
+rc("crab_boil", 1, "hearth", 10, 3, [["crab", 1], ["salt", 1], ["herbs", 1]], "steady", 12, "sea", "fisher");
+rc("crab_boil", 1, "hearth", 10, 3, [["crayfish", 3], ["salt", 1], ["herbs", 1]], "steady", 10, "sea", "fisher");
+rc("lobster_dish", 1, "stove", 10, 2, [["lobster", 1], ["butter", 1]], "steady", 20, "sea", "fisher");
+rc("chowder", 1, "hearth", 14, 1, [["sand_clam", 3], ["potato", 1], ["milk", 1], ["onion", 1], ["bread", 1]], "warm", 18, "sea", "fisher");
+rc("octopus_dish", 1, "campfire", 10, 3, [["octopus", 1], ["oil", 1], ["garlic", 1]], "steady", 14, "sea", "fisher");
+rc("mussel_pot", 1, "hearth", 8, 3, [["rock_mussel", 6], ["garlic", 1], ["ale", 1], ["butter", 1]], "steady", 14, "sea", "fisher");
+// soups
+rc("veg_soup", 2, "hearth", 12, 1, [["tomato", 2], ["onion", 1], ["stock", 1]], "warm", 10, "soup", "known");
+rc("kale_soup", 2, "hearth", 12, 1, [["frost_kale", 2], ["potato", 1], ["stock", 1]], "warm", 14, "soup", "farmer");
+rc("porridge", 1, "hearth", 8, 1, [["wheat", 2], ["milk", 1], ["sugar", 1]], "stride", 8, "soup", "known");
+rc("glowcap_soup", 1, "hearth", 10, 1, [["glowcap", 2], ["stock", 1]], "glow", 12, "soup", "trader");
+// drinks and sides
+rc("chips", 2, "fryer", 6, 3, [["potato", 2], ["oil", 1], ["salt", 1]], "stride", 6, "drink", "innkeeper");
+rc("salad", 1, "hand", 4, 0, [["bok_choy", 1], ["tomato", 1], ["oil", 1]], "stride", 6, "drink", "known");
+rc("omelette", 1, "stove", 5, 2, [["egg", 2], ["cheese", 1], ["herbs", 1]], "keen", 10, "drink", "innkeeper");
+rc("tea_cup", 2, "hearth", 4, 3, [["tea_leaves", 1]], "keen", 6, "drink", "trader");
+rc("melon_juice", 2, "hand", 4, 0, [["sun_melon", 1]], "stride", 4, "drink", "known");
+rc("ration", 2, "galley", 12, 2, [["stew", 1], ["iron_ingot", 1]], "warm", 12, "basics", "known");
+RECIPES.forEach((r, i) => r.i = i);
+const HEAT = ["", "low", "medium", "high"];
+const LEARN = { known: "known from the start", innkeeper: "the innkeeper (M5)", farmer: "a farmer (M5)", fisher: "a fisher (M5)", trader: "a trader's book (M5, M12)", baker: "a baker (new town role, proposed to M5)", "noodle cook": "a noodle cook (new town role, proposed to M5)" };
+const FXTAG = (fx, min) => fx === "none" ? `<span class="fx none">no effect</span>` : `<span class="fx ${fx}">${EFFECTS[fx].name}${min ? " " + min + " min" : ""}</span>`;
+const keepTxt = k => k === 0 ? "keeps for good" : `keeps ${k} day${k === 1 ? "" : "s"}`;
+
+const srcPx = src => /cooking\/game\//.test(src) ? 16 : /cooking\/m3\//.test(src) ? 32 : 0;
+function svgIcon(id) { const p = srcPx(icon(id)), sz = p === 16 ? 16 : p === 32 ? 32 : 24, o = 1 + (24 - sz) / 2; return `<image href="${icon(id)}" x="${o}" y="${o}" width="${sz}" height="${sz}" style="image-rendering:pixelated"/>`; }
+function markScales(root) { (root.querySelectorAll ? root : document).querySelectorAll("img").forEach(i => { const p = srcPx(i.getAttribute("src") || ""); i.classList.toggle("g16", p === 16); i.classList.toggle("g32", p === 32); }); }
+new MutationObserver(ms => { for (const m of ms) { if (m.type === "attributes") markScales(m.target.parentNode || document); else m.addedNodes.forEach(n => n.nodeType === 1 && markScales(n.tagName === "IMG" ? n.parentNode : n)); } }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["src"] });
+
+// =====================================================================================================
+// Tabs
+// =====================================================================================================
+const SCENE_IDS = ["yard", "bakery", "kitchen", "galley"];
+const TABS = [...SCENE_IDS, "cook", "book", "chains", "crops", "ranch", "sea", "food", "decide"];
+let TAB = null;
+function setTab(t, push = true) {
+  if (!TABS.includes(t)) t = "yard";
+  TAB = t; document.body.dataset.tab = t;
+  TABS.forEach(n => { const p = document.getElementById("tab-" + n); if (p) p.hidden = n !== t; });
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+  if (push) try { history.replaceState(null, "", location.pathname + location.search + "#" + t); } catch (e) {}
+  onTab(t);
+}
+
+// =====================================================================================================
+// 2D: the cooking panel (M3's station panel and pack, plus heat, freshness and quality)
+// =====================================================================================================
+const COOK = { station: "hearth", recipe: null, heat: 2, day: 10, selected: -1, hud: "buffs" };
+const PRACTICE = { bread: 12, stew: 6, porridge: 7, grilled_fish: 5, flatbread: 9 };
+const KNOWN = new Set(RECIPES.filter(r => r.learn === "known" || ["innkeeper", "fisher", "farmer"].includes(r.learn)).map(r => r.i));
+const slots = new Array(40).fill(null);   // 0-9 hotbar, 10-39 pack (inventory-grid)
+// [id, count, made at (world day), stars]
+const SEED = [["log", 12], ["coal", 8], ["fish", 3, 9.8], ["stew", 2, 9, 2], ["bread", 2, 9.5, 3], null, null, null, null, null,
+  ["wheat", 12, 8], ["flour", 6, 4], ["semolina", 4, 4], ["dough", 2, 9.6], ["leaven", 1, 9], ["egg", 8, 8], ["milk", 4, 9.3], ["butter", 3, 6], ["cheese", 3, 2], ["sugar", 4, 1],
+  ["salt", 9, 1], ["oil", 4, 1], ["tomato", 8, 8.5], ["onion", 6, 4], ["garlic", 4, 4], ["herbs", 6, 9], ["potato", 8, 5], ["bok_choy", 3, 8], ["chili", 4, 7], ["rice", 8, 2],
+  ["soy_sauce", 2, 2], ["tomato_sauce", 2, 7], ["stock", 2, 8.6], ["squid", 2, 9.7], ["prawn", 6, 9.2], ["sand_clam", 4, 9.6], ["meat_beef_raw", 2, 9.5], ["meat_poultry_raw", 2, 9.1], ["meat_pork_raw", 2, 9.7], ["batter", 1, 9.8]];
+SEED.forEach((s, i) => { if (s) slots[i] = { id: s[0], n: s[1], made: s[2] ?? 0, q: s[3] || 0 }; });
+const STACK = id => ["log", "coal", "salt", "flour", "wheat", "rice"].includes(id) ? 64 : id === "fish" ? 16 : 32;
+function band(s) {   // 0 fresh, 1 good, 2 stale, 3 spoiled, -1 keeps for good
+  const k = ITEMS[s.id] ? ITEMS[s.id].keep : 0; if (!k) return -1;
+  const f = (COOK.day - s.made) / k; return f < 0.34 ? 0 : f < 0.67 ? 1 : f < 1 ? 1 : f < 2 ? 2 : 3;
+}
+const BAND = ["fresh", "good", "stale", "spoiled"], BANDC = ["#3c8a4a", "#a8862c", "#a8443c", "#555"];
+const count = id => slots.reduce((a, s) => a + (s && s.id === id ? s.n : 0), 0);
+function oldest(id) { let o = null; for (const s of slots) if (s && s.id === id && (!o || s.made < o.made)) o = s; return o; }
+function take(id, n) { for (let i = 39; i >= 0 && n > 0; i--) { const s = slots[i]; if (s && s.id === id) { const k = Math.min(n, s.n); s.n -= k; n -= k; if (!s.n) slots[i] = null; } } }
+function give(id, n, made, q = 0) {
+  const max = STACK(id), touched = [];
+  for (let i = 0; i < 40 && n > 0; i++) { const s = slots[i]; if (s && s.id === id && s.q === q && s.n < max) { const k = Math.min(n, max - s.n); s.n += k; n -= k; s.made = Math.min(s.made, made); touched.push(i); } }
+  for (const [a, b] of [[0, 10], [10, 40]]) for (let i = a; i < b && n > 0; i++) if (!slots[i]) { const k = Math.min(n, max); slots[i] = { id, n: k, made, q }; n -= k; touched.push(i); }
+  return touched;
+}
+const canMake = r => KNOWN.has(r.i) && r.ins.every(([i, n]) => count(i) >= n) && (!STATIONS[r.st].fuel || STATIONS[r.st].fuel === "power" || count(STATIONS[r.st].fuel) >= 1);
+function quality(r) {
+  const why = []; let pts = 0;
+  let worst = 0;
+  for (const [i] of r.ins) { const s = oldest(i); if (s) worst = Math.max(worst, Math.max(0, band(s))); }
+  const fp = [2, 1, 0, 0][worst]; pts += fp; why.push(`Ingredients: oldest is <b>${BAND[worst]}</b> (+${fp})`);
+  if (r.heat) { const ok = COOK.heat === r.heat; pts += ok ? 1 : 0; why.push(`Heat: ${HEAT[COOK.heat]}, ${ok ? "<b>right</b> (+1)" : `wants <b>${HEAT[r.heat]}</b> (+0)`}`); }
+  else { pts += 1; why.push("No heat to get wrong (+1)"); }
+  const p = PRACTICE[r.out] || 0; pts += p >= 5 ? 1 : 0; why.push(`Practice: cooked ${p} time${p === 1 ? "" : "s"} ${p >= 5 ? "(+1)" : "(+1 at five)"}`);
+  return { stars: pts >= 4 ? 3 : pts >= 2 ? 2 : 1, why };
+}
+const starTxt = n => "★".repeat(n) + `<i>${"★".repeat(3 - n)}</i>`;
+function renderStTabs() {
+  const ids = Object.keys(STATIONS).filter(s => s !== "icebox" && RECIPES.some(r => r.st === s));
+  document.getElementById("stTabs").innerHTML = ids.map(id => `<button aria-pressed="${id === COOK.station}" data-st="${id}" title="${STATIONS[id].name}"><img src="${stIcon(id)}" alt="${STATIONS[id].name}" width="32" height="32"></button>`).join("");
+  document.querySelectorAll("#stTabs button").forEach(b => b.addEventListener("click", () => { COOK.station = b.dataset.st; COOK.recipe = null; renderCook(); }));
+  const S = STATIONS[COOK.station];
+  document.getElementById("stIcon").src = stIcon(COOK.station); document.getElementById("stName").textContent = S.name;
+  document.getElementById("stTier").textContent = `Station, tier ${S.tier}` + (S.fuel ? ` · burns ${S.fuel === "power" ? "ship power" : nm(S.fuel).replace(" (fuel)", "").toLowerCase()}` : "");
+}
+function renderRecipes() {
+  const list = RECIPES.filter(r => r.st === COOK.station).sort((a, b) => (KNOWN.has(b.i) - KNOWN.has(a.i)) || a.i - b.i);
+  if (!COOK.recipe || !list.includes(COOK.recipe)) { COOK.recipe = list.find(canMake) || list[0]; if (COOK.recipe && COOK.recipe.heat) COOK.heat = COOK.recipe.heat; }
+  document.getElementById("recipeList").innerHTML = list.map(r => { const known = KNOWN.has(r.i); return `<button role="option" aria-selected="${r === COOK.recipe}" class="${!known ? "lock" : canMake(r) ? "" : "short"}" data-k="${r.i}"><img src="${icon(r.out)}" alt="" width="24" height="24"><span>${known ? nm(r.out) : nm(r.out) + " (not learned)"}${r.n > 1 ? ` x${r.n}` : ""}</span><small>${r.s} s</small></button>`; }).join("");
+  document.querySelectorAll("#recipeList button").forEach(b => b.addEventListener("click", () => { COOK.recipe = RECIPES[+b.dataset.k]; if (COOK.recipe.heat) COOK.heat = COOK.recipe.heat; renderCook(); }));
+}
+function renderDetail() {
+  const r = COOK.recipe, el = document.getElementById("detail"); if (!r) { el.innerHTML = ""; return; }
+  const known = KNOWN.has(r.i), ok = canMake(r), S = STATIONS[r.st], q = quality(r);
+  const fuel = S.fuel && S.fuel !== "power" ? `<div><img src="${icon(S.fuel)}" alt="" width="24" height="24"><span>${nm(S.fuel)} <span class="muted">(fuel, M3)</span></span><span class="have ${count(S.fuel) >= 1 ? "yes" : "no"}">${count(S.fuel)}/1</span></div>` : "";
+  el.innerHTML = `
+    <div class="out"><div class="big"><img src="${icon(r.out)}" alt="" width="72" height="72"></div><div><div class="eyebrow">Makes</div><b>${nm(r.out)}${r.n > 1 ? ` x${r.n}` : ""}</b><div class="muted mono" style="font-size:12px">${r.s} s · ${keepTxt(ITEMS[r.out].keep)}</div><div style="margin-top:3px">${FXTAG(r.fx, r.min)}</div></div></div>
+    <div class="eyebrow">Needs</div>
+    <div class="ins">${r.ins.map(([i, n]) => { const h = count(i), s = oldest(i), b = s ? band(s) : -1; return `<div><img src="${icon(i)}" alt="" width="24" height="24"><span>${nm(i)}${s && b >= 0 ? `<span class="fresh f${Math.min(b, 2)}">${BAND[b]}</span>` : s ? `<span class="fresh fn">keeps</span>` : ""}</span><span class="have ${h >= n ? "yes" : "no"}">${h}/${n}</span></div>`; }).join("")}${fuel}</div>
+    ${r.heat ? `<div class="eyebrow">Heat</div><div class="seg" id="heatSeg" role="group" aria-label="Heat">${[1, 2, 3].map(h => `<button data-h="${h}" aria-pressed="${COOK.heat === h}">${HEAT[h]}</button>`).join("")}</div>` : ""}
+    <div class="qual"><div><span class="eyebrow">Quality</span> <span class="stars">${starTxt(q.stars)}</span></div><ul>${q.why.map(w => `<li>${w}</li>`).join("")}</ul></div>
+    <div class="actions">${known ? `<span class="btn" role="button" tabindex="0" id="cook1" aria-disabled="${!ok}">Cook</span>` : `<span class="btn ghost" role="button" tabindex="0" id="learn">Learn it (as if from ${LEARN[r.learn]})</span>`}</div>`;
+  document.querySelectorAll("#heatSeg button").forEach(b => b.addEventListener("click", () => { COOK.heat = +b.dataset.h; renderDetail(); }));
+  const act = (id, f) => { const e = document.getElementById(id); if (!e) return; e.addEventListener("click", () => e.getAttribute("aria-disabled") !== "true" && f()); e.addEventListener("keydown", ev => { if ((ev.key === "Enter" || ev.key === " ") && e.getAttribute("aria-disabled") !== "true") { ev.preventDefault(); f(); } }); };
+  act("cook1", () => { const stars = quality(r).stars; r.ins.forEach(([i, n]) => take(i, n)); if (S.fuel && S.fuel !== "power") take(S.fuel, 1); queue.push({ r, t: 0, stars }); renderCook(); });
+  act("learn", () => { KNOWN.add(r.i); renderCook(); });
+}
+const queue = [];
+function renderQueue() {
+  document.getElementById("queue").innerHTML = queue.length ? `<div class="eyebrow">Cooking</div>` + queue.map((q, k) => `<div class="qrow"><img src="${icon(q.r.out)}" alt="" width="24" height="24"><div><div>${nm(q.r.out)}${q.r.n > 1 ? ` x${q.r.n}` : ""} <span style="color:var(--amber)">${"★".repeat(q.stars)}</span> <span class="muted mono" style="font-size:11px">${k ? "waiting" : Math.ceil(q.r.s * (1 - q.t)) + " s"}</span></div><div class="bar"><i style="width:${(q.t * 100).toFixed(0)}%"></i></div></div></div>`).join("") : `<div class="hint2">Nothing cooking. A job runs only while the world is played, and is saved with the station.</div>`;
+}
+function slotHTML(s, i) {
+  if (!s) return `<button class="slot${i === COOK.selected ? " sel" : ""}" data-i="${i}" aria-label="empty slot"></button>`;
+  const b = band(s);
+  return `<button class="slot${i === COOK.selected ? " sel" : ""}" data-i="${i}" title="${nm(s.id)}${b >= 0 ? ", " + BAND[b] : ""}" aria-label="${nm(s.id)}, ${s.n}"><img src="${icon(s.id)}" alt="" width="24" height="24">${s.n > 1 ? `<span class="c">${s.n}</span>` : ""}${s.q ? `<span class="q">${"★".repeat(s.q)}</span>` : ""}${b >= 0 ? `<span class="fb" style="background:${BANDC[b]}"></span>` : ""}</button>`;
+}
+function renderSlots(flash = []) {
+  document.getElementById("hotbar").innerHTML = slots.slice(0, 10).map((s, i) => slotHTML(s, i)).join("");
+  document.getElementById("pack").innerHTML = slots.slice(10).map((s, i) => slotHTML(s, i + 10)).join("");
+  flash.forEach(i => document.querySelector(`.slot[data-i="${i}"]`)?.classList.add("flash"));
+  document.querySelectorAll("#pack .slot, #hotbar .slot").forEach(el => el.addEventListener("click", () => { COOK.selected = +el.dataset.i; renderSlots(); renderSel(); }));
+  document.getElementById("clock").textContent = `world day ${COOK.day.toFixed(1)}`;
+  renderMini();
+}
+function fxOf(id) { const r = RECIPES.find(r => r.out === id && r.fx !== "none"); return r ? { fx: r.fx, min: r.min } : null; }
+function renderSel() {
+  const s = slots[COOK.selected], e = document.getElementById("eatBtn"), info = document.getElementById("selInfo");
+  if (!s) { e.setAttribute("aria-disabled", "true"); info.textContent = "Select a slot."; return; }
+  const f = fxOf(s.id), b = band(s);
+  e.setAttribute("aria-disabled", String(!f));
+  info.innerHTML = `${nm(s.id)}${s.q ? " " + "★".repeat(s.q) : ""}: ${b >= 0 ? BAND[b] : "keeps for good"}${f ? `, ${FXTAG(f.fx, Math.round(f.min * [1, 1, 1.5, 2][s.q || 1]))}` : ", no effect of its own"}`;
+}
+const BUFFS = [];
+function eat() {
+  const s = slots[COOK.selected], f = s && fxOf(s.id); if (!f) return;
+  const mins = f.min * [1, 1, 1.5, 2][s.q || 1];
+  const same = BUFFS.findIndex(b => b.fx === f.fx);
+  const nb = { id: s.id, fx: f.fx, left: mins * 60 };
+  if (same >= 0) { if (BUFFS[same].left < nb.left) BUFFS[same] = nb; }
+  else { if (BUFFS.length >= 3) { BUFFS.sort((a, b) => b.left - a.left); BUFFS.pop(); } BUFFS.push(nb); }
+  s.n--; if (!s.n) slots[COOK.selected] = null;
+  renderSlots(); renderSel(); renderBuffs();
+}
+function renderBuffs() {
+  const el = document.getElementById("buffs");
+  if (COOK.hud === "hunger") { el.innerHTML = `<div class="hunger"><span>Hunger</span><div class="track"><i style="width:62%"></i></div><span class="muted">drains while you play; empty slows you, then hurts</span></div>`; return; }
+  el.innerHTML = BUFFS.length ? BUFFS.map(b => { const m = Math.floor(b.left / 60), sec = Math.floor(b.left % 60); return `<div class="buff"><img src="${icon(b.id)}" alt=""><div><b>${EFFECTS[b.fx].name}</b>${m}:${String(sec).padStart(2, "0")} left</div></div>`; }).join("") : `<span class="hint2" style="align-self:center">No meal working. Up to three at once; not eating costs nothing.</span>`;
+}
+function renderMini() { document.getElementById("minibar").innerHTML = slots.slice(0, 10).map((s, i) => `<span class="${i === (COOK.selected >= 0 && COOK.selected < 10 ? COOK.selected : 0) ? "sel" : ""}">${s ? `<img src="${icon(s.id)}" alt="">` : ""}</span>`).join(""); }
+function waitDay() {
+  COOK.day += 1;
+  let rot = 0;
+  for (let i = 0; i < 40; i++) { const s = slots[i]; if (s && band(s) === 3) { rot += s.n; slots[i] = null; } }
+  const touched = rot ? give("compost", rot, COOK.day) : [];
+  renderCook(touched);
+}
+function renderCook(flash = []) { renderStTabs(); renderRecipes(); renderDetail(); renderQueue(); renderSlots(flash); renderSel(); renderBuffs(); }
+document.getElementById("eatBtn").addEventListener("click", () => document.getElementById("eatBtn").getAttribute("aria-disabled") === "false" && eat());
+document.getElementById("waitBtn").addEventListener("click", waitDay);
+document.querySelectorAll("#hudMode button").forEach(b => b.addEventListener("click", () => { COOK.hud = b.dataset.m; document.querySelectorAll("#hudMode button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); renderBuffs(); }));
+let cookLast = performance.now(), cookAcc = 0;
+function cookTick(now) {
+  const dt = Math.min(0.25, (now - cookLast) / 1000); cookLast = now;
+  if (TAB === "cook") {
+    if (queue.length) {
+      const q = queue[0]; q.t += dt / q.r.s;
+      if (q.t >= 1) { queue.shift(); PRACTICE[q.r.out] = (PRACTICE[q.r.out] || 0) + 1; const touched = give(q.r.out, q.r.n, COOK.day, q.stars); renderRecipes(); renderDetail(); renderSlots(touched); }
+      renderQueue();
+    }
+    cookAcc += dt;
+    if (cookAcc > 1 && BUFFS.length) { cookAcc = 0; BUFFS.forEach(b => b.left -= 1); for (let i = BUFFS.length - 1; i >= 0; i--) if (BUFFS[i].left <= 0) BUFFS.splice(i, 1); renderBuffs(); }
+  }
+  requestAnimationFrame(cookTick);
+}
+
+// =====================================================================================================
+// 2D: the recipe book, chains, tables, decisions
+// =====================================================================================================
+let BOOKF = "all";
+function renderBook() {
+  document.getElementById("bookFilter").innerHTML = [["all", "All"], ...Object.entries(FAM)].map(([k, v]) => `<button data-f="${k}" aria-pressed="${k === BOOKF}">${v}</button>`).join("");
+  document.querySelectorAll("#bookFilter button").forEach(b => b.addEventListener("click", () => { BOOKF = b.dataset.f; renderBook(); }));
+  const FO = ["bakery", "pizza", "noodles", "meat", "sea", "soup", "drink", "basics"];
+  const list = RECIPES.filter(r => BOOKF === "all" || r.fam === BOOKF).slice().sort((a, b) => FO.indexOf(a.fam) - FO.indexOf(b.fam));
+  document.getElementById("book").innerHTML = list.map(r => `<div class="rc"><div class="head"><img src="${icon(r.out)}" alt="" width="48" height="48"><div class="nm"><b>${nm(r.out)}${r.n > 1 ? ` <span class="muted mono" style="font-size:12px">x${r.n}</span>` : ""}</b><span class="muted" style="font-size:12px">${FAM[r.fam]}</span></div></div>
+    <div class="meta"><span><img class="st32" src="${stIcon(r.st)}" alt="" width="32" height="32"> ${STATIONS[r.st].name}</span><span>${r.s} s${r.heat ? ", " + HEAT[r.heat] + " heat" : ""}</span></div>
+    <div class="ing">${r.ins.map(([i, n]) => `<span title="${nm(i)}"><img src="${icon(i)}" alt="${nm(i)}" width="24" height="24">${n}</span>`).join("")}</div>
+    <div class="meta">${FXTAG(r.fx, r.min)}<span>${keepTxt(ITEMS[r.out].keep)}</span></div>
+    <p>${r.learn === "known" ? "Known from the start." : "Learned from " + LEARN[r.learn] + "."}</p></div>`).join("");
+}
+
+let CHAINF = "pizza";
+function renderChains() {
+  document.getElementById("chainFilter").innerHTML = [...Object.entries(FAM), ["all", "Everything"]].map(([k, v]) => `<button data-f="${k}" aria-pressed="${k === CHAINF}">${v}</button>`).join("");
+  document.querySelectorAll("#chainFilter button").forEach(b => b.addEventListener("click", () => { CHAINF = b.dataset.f; renderChains(); }));
+  const used = new Set(), edges = [];
+  const recs = RECIPES.filter(r => r.st !== "galley");
+  const roots = recs.filter(r => CHAINF === "all" || r.fam === CHAINF);
+  const byOut = {}; recs.forEach(r => (byOut[r.out] = byOut[r.out] || []).push(r));
+  const seenR = new Set();
+  const walk = r => { if (seenR.has(r.i)) return; seenR.add(r.i); used.add(r.out); for (const [i] of r.ins) { used.add(i); edges.push([i, r.out, r.st]); if (byOut[i]) byOut[i].forEach(walk); } };
+  roots.forEach(walk);
+  const depth = {}; const dOf = (id, guard = 0) => { if (depth[id] !== undefined) return depth[id]; if (!byOut[id] || guard > 8) return (depth[id] = 0); depth[id] = 0; let d = 99; for (const r of byOut[id]) d = Math.min(d, 1 + Math.max(...r.ins.map(([i]) => dOf(i, guard + 1)))); return (depth[id] = d); };
+  const nodes = [...used].map(id => ({ id, d: dOf(id) }));
+  const maxD = Math.max(...nodes.map(n => n.d));
+  // columns: raw sources, then processing depths; dishes (nothing uses them) go to the last column
+  nodes.forEach(n => { n.col = n.d === 0 ? 0 : (recs.some(r => r.ins.some(([i]) => i === n.id) && used.has(r.out)) ? n.d : maxD); });
+  const srcOrder = { m8: 0, new: 1, m7: 2, game: 3, m25: 4, m3: 5 };
+  const cols = []; nodes.forEach(n => (cols[n.col] = cols[n.col] || []).push(n));
+  const CW = 196, RH = 32, TOP = 34, colsN = cols.length;
+  let maxRows = 0;
+  cols.forEach((c, ci) => { if (!c) return; c.sort((a, b) => ci === 0 ? (srcOrder[ITEMS[a.id].src] - srcOrder[ITEMS[b.id].src]) || nm(a.id).localeCompare(nm(b.id)) : nm(a.id).localeCompare(nm(b.id))); c.forEach((n, k) => { n.x = 10 + ci * CW; n.y = TOP + k * RH; }); maxRows = Math.max(maxRows, c.length); });
+  const W = colsN * CW + 10, H = TOP + maxRows * RH + 10;
+  const pos = {}; nodes.forEach(n => pos[n.id] = n);
+  const titles = ["Grown, raised, caught", ...Array.from({ length: Math.max(0, colsN - 2) }, (_, i) => "Processed " + (i + 1)), "Dishes"];
+  let svg = titles.slice(0, colsN).map((t, i) => `<text class="col" x="${10 + i * CW}" y="20">${i === colsN - 1 && colsN > 1 ? "Dishes" : t}</text>`).join("");
+  const seenE = new Set();
+  svg += edges.filter(([a, b, st]) => { const k = a + ">" + b; if (seenE.has(k)) return false; seenE.add(k); return pos[a] && pos[b]; }).map(([a, b, st]) => { const A = pos[a], B = pos[b]; const x1 = A.x + 176, y1 = A.y + 13, x2 = B.x, y2 = B.y + 13, mx = (x1 + x2) / 2; return `<path class="edge" data-a="${a}" data-b="${b}" stroke="${STATIONS[st].color}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/>`; }).join("");
+  svg += nodes.map(n => `<g class="node" tabindex="0" data-id="${n.id}" transform="translate(${n.x},${n.y})"><rect width="176" height="26" rx="3"/>${svgIcon(n.id)}<text x="30" y="17">${nm(n.id).length > 22 ? nm(n.id).slice(0, 21) + "…" : nm(n.id)}</text></g>`).join("");
+  const el = document.getElementById("chain"); el.setAttribute("width", W); el.setAttribute("height", H); el.setAttribute("viewBox", `0 0 ${W} ${H}`); el.innerHTML = svg;
+  const ups = {}, downs = {}; seenE.forEach(k => { const [a, b] = k.split(">"); (downs[a] = downs[a] || []).push(b); (ups[b] = ups[b] || []).push(a); });
+  const light = id => { const hot = new Set([id]); const go = (m, x) => (m[x] || []).forEach(y => { if (!hot.has(y)) { hot.add(y); go(m, y); } }); go(ups, id); go(downs, id);
+    el.querySelectorAll(".node").forEach(g => { g.classList.toggle("hot", hot.has(g.dataset.id)); g.classList.toggle("cold", !hot.has(g.dataset.id)); });
+    el.querySelectorAll(".edge").forEach(p => { const on = hot.has(p.dataset.a) && hot.has(p.dataset.b); p.classList.toggle("hot", on); p.classList.toggle("cold", !on); }); };
+  const clear = () => el.querySelectorAll(".hot,.cold").forEach(x => x.classList.remove("hot", "cold"));
+  el.querySelectorAll(".node").forEach(g => { g.addEventListener("mouseenter", () => light(g.dataset.id)); g.addEventListener("focus", () => light(g.dataset.id)); g.addEventListener("mouseleave", clear); g.addEventListener("blur", clear); });
+  const sts = [...new Set(edges.map(e => e[2]))];
+  document.getElementById("chainLegend").innerHTML = sts.map(s => `<span><svg width="22" height="8" aria-hidden="true"><line x1="0" y1="4" x2="22" y2="4" stroke="${STATIONS[s].color}" stroke-width="3"/></svg><img src="${stIcon(s)}" alt="">${STATIONS[s].name}</span>`).join("");
+}
+
+const SEASON_NAMES = ["summer", "autumn", "winter", "spring"];
+const NEWCROPS = [
+  ["tomato", "Tomato", "hot, temperate", "fields, jungle edge; climbs a cane", [0, 3], 6, "normal", 4, "sauce, pizza, soup, salad"],
+  ["durum", "Durum wheat", "temperate, dry", "fields, low mountains, desert edge; takes four dry days before it wilts, not three", [0, 3], 7, "light", 3, "semolina: pasta"],
+  ["soy", "Soy", "temperate, hot", "fields, jungle", [0, 1, 3], 6, "normal", 3, "soy sauce, oil"],
+  ["bok_choy", "Bok choy", "temperate, cold", "fields, tundra edge; bolts in high summer", [1, 3], 3, "thirsty", 2, "stir fry, salad"],
+  ["onion", "Onion", "temperate, cold", "fields, tundra edge", [0, 1, 3], 6, "normal", 3, "most savoury dishes"],
+  ["garlic", "Garlic", "temperate, cold", "fields, mountains; planted in autumn, frost-hardy", [1, 2, 3], 8, "normal", 3, "skewers, sauces, seafood"],
+  ["sugar_cane", "Sugar cane", "hot, wet", "jungle, swamp edge", [0, 1, 2, 3], 8, "thirsty", 3, "sugar (the hot world's)"],
+  ["sugar_beet", "Sugar beet", "temperate, cold", "fields, tundra", [0, 1, 3], 7, "normal", 2, "sugar (the cold world's)"],
+  ["herbs", "Herbs", "temperate, hot", "anywhere warm; cut and comes again two days later", [0, 1, 3], 4, "normal", 3, "nearly everything"],
+  ["potato", "Potato", "temperate, cold", "fields, mountains, tundra edge", [0, 1, 3], 5, "normal", 4, "chips, stew, mash"],
+  ["olive", "Olive (tree)", "hot, dry", "desert edge, coast, low mountains; perennial, deep roots, never wilts", [0, 1, 2, 3], 12, "light", 4, "oil, brined olives"],
+  ["tea", "Tea (bush)", "hot, wet", "jungle hills, mountains in the tropics; perennial", [0, 1, 3], 10, "thirsty", 3, "tea"],
+];
+function renderCrops() {
+  const SN = s => s.length === 4 ? "all year" : s.map(i => SEASON_NAMES[i]).join(", ");
+  document.querySelector("#cropTable tbody").innerHTML = NEWCROPS.map(([id, name, cl, where, sea, days, water, y, into]) => `<tr><td><img class="prod" src="cooking/produce_${id}.png${V}" alt="" width="48" height="48"> <b>${name}</b></td><td class="stages">${[0, 1, 2, 3].map(s => `<img src="cooking/crop_${id}_${s}.png${V}" alt="${name}, stage ${s}" width="64" height="64">`).join("")}</td><td>${cl}<br><span class="muted">${where}</span></td><td>${SN(sea)}</td><td>${days}${["olive", "tea"].includes(id) ? "<br><span class='muted'>then every " + (id === "olive" ? 6 : 3) + "</span>" : ""}</td><td>${water}</td><td>${y}</td><td>${into}</td></tr>`).join("");
+}
+const RANCH = [
+  ["hen", "Meadow hen", "M7, tame", ["egg", "meat_poultry_raw"], "poultry", "eggs into everything baked; spit-roast hen, stock"],
+  ["plodder", "Plodder", "M7, tame (cattle)", ["milk", "meat_beef_raw"], "beef", "milk, butter, cheese; steak, stew, ramen's beef, jerky, lasagne"],
+  ["woolback", "Woolback", "M7, tame (wool)", ["meat_mutton_raw"], "mutton", "skewers, a warming roast"],
+  ["ridge_goat", "Ridge goat", "M7, tame", ["milk"], null, "milk for a hard cheese (M7); M7 gives it no meat"],
+  ["sand_strider", "Sand strider", "M7, tame (desert)", ["milk"], null, "the desert's milk and cheese"],
+  ["tusk_boar", "Tusk boar", "M7, wild", ["meat_pork_raw"], "pork", "bacon, sausages, ramen, pizza; a domestic pig is the husbandry mockup's"],
+  ["meadow_hare", "Meadow hare", "M7, wild", ["meat_game_raw"], "game", "a small game haunch"],
+  ["snow_hare", "Snow hare", "M7, wild", ["meat_game_raw"], "game", "the tundra's game"],
+  ["shagback", "Shagback", "M7, wild, migrates", ["meat_game_raw"], "game", "the north's big game: the nearest thing to venison Tenebris has"],
+  ["mire_lurker", "Mire lurker", "M7, wild", ["meat_game_raw"], "game", "a marsh tail, smoked"],
+  ["gull", "Gull", "M7, wild", ["egg"], null, "eggs from the cliffs"],
+];
+function renderRanch() {
+  const rows = RANCH.map(([img, name, from, gives, cut, into]) => `<tr><td><img class="i36" src="cooking/m7/${img}.png${V}" alt="" width="36" height="36"> <b>${name}</b></td><td>${from}</td><td>${gives.map(g => `<img class="i24" src="${icon(g)}" alt="${nm(g)}" title="${nm(g)}" width="24" height="24">`).join(" ")}</td><td style="white-space:nowrap">${cut ? ["raw", "cooked", "smoked", "cured"].map(s => `<img class="i48" src="${icon(`meat_${cut}_${s}`)}" alt="${CUTS[cut]}, ${s}" title="${CUTS[cut]}, ${s}" width="48" height="48">`).join("") : '<span class="muted">no meat</span>'}</td><td>${into}</td></tr>`);
+  rows.push(`<tr><td><b>Venison</b></td><td><span class="st prop">gap</span></td><td colspan="3">No deer lives on Tenebris in M7. The shagback's haunch stands in; a deer, or any new wild or domestic animal, belongs to the animals and husbandry mockups, not this one.</td></tr>`);
+  rows.push(`<tr><td><b>Duck eggs</b></td><td>M25, wild</td><td><img class="i24" src="cooking/m25/dabbler_hen.png${V}" alt="Reed dabbler" width="24" height="24"> <img class="i24" src="${icon("egg")}" alt="Egg" width="24" height="24"></td><td colspan="2">The reed dabbler's eggs from the marsh, gathered (M25: ducks are not hunted).</td></tr>`);
+  document.querySelector("#ranchTable tbody").innerHTML = rows.join("");
+}
+const SEA = [
+  ["game/fish-silverfin", "Any caught fish", "game", `Today: the rod <img class="i24" src="cooking/game/tool-rod.png${V}" alt="rod" width="24" height="24"> catches eight species: ${["silverfin", "perch", "eel", "deepback", "ray", "reef", "minnow", "serpent"].map(f => `<img class="i24" src="cooking/game/fish-${f}.png${V}" alt="${f}" title="${f}" width="24" height="24">`).join(" ")}`, ["fillet_raw"], "grilled fish, fish and chips, sushi (silverfin, deepback, redrun only), smoked and salt fish"],
+  ["m25/redrun", "Redrun", "M25", "Runs upriver each autumn; rich, safe raw", ["fish"], "sushi, smoked fish"],
+  ["m25/squid", "Glow squid", "M25", "Deep water, rising to the shelf at night: jig it from a boat under a lamp", ["squid"], "calamari, seafood pizza"],
+  ["m25/octopus", "Den octopus", "M25", "Reef and wrecks; a pot by its den", ["octopus"], "grilled octopus"],
+  ["m25/shrimp", "Cleaner shrimp", "M25", "Reef pools; a finger long, so a handful is bait more than dinner", ["prawn"], "stands in for prawns, three to one"],
+  ["sand_prawn", "Sand prawn", "proposed", "Coastal sand, 1 to 15 m: a hand net at low tide, or a trawl", ["prawn"], "tempura, skewers, stir fry, pizza"],
+  ["m25/clam", "Pearl clam", "M25", "Warm reef, a knife; a pearl in one in twenty", ["sand_clam"], "chowder (one does for three sand clams)"],
+  ["sand_clam", "Sand clam", "proposed", "Temperate beaches, dug with the shovel at low tide, the way bait is dug today (M18)", ["sand_clam"], "clam chowder"],
+  ["rock_mussel", "Rock mussel", "proposed", "Coastal rock between the tides, by hand; M25's mussels live only at vents and in rivers", ["rock_mussel"], "mussels in ale"],
+  ["m25/lobster", "Rock lobster", "M25", "A pot baited with fish, overnight", ["lobster"], "lobster in butter"],
+  ["m25/crab", "Stone crab", "M25", "A pot among boulders", ["crab"], "crab boil"],
+  ["m7/shore_crab", "Shore crab", "M7", "By hand at low tide (M7's drop: shell and meat)", ["crab"], "crab boil, two for one stone crab"],
+  ["m25/trout", "Leaping trout", "M25", "Rod with a fly, in river pools", ["fish"], "grilled fish, smoked fish"],
+  ["m25/crayfish", "Crayfish", "M25", "A river trap overnight", ["crayfish"], "crayfish boil"],
+  ["m25/urchin", "Sea urchin", "M25", "By hand, gloved, in the kelp", ["urchin"], "roe on sushi (later)"],
+  ["m25/abalone", "Kelp abalone", "M25", "A pry bar on kelp rock", [], "a grill dish later; not in this first set"],
+  ["m25/ventmussel", "Vent mussel", "M25", "By hand from a submersible at the vents; strong", [], "stews later; the rock mussel is the kitchen's"],
+  ["m25/cucumber", "Sea cucumber", "M25", "By hand on sand", [], "dried as a trade good (M12), not cooked here"],
+  ["m25/krill", "Krill", "M25", "A fine net under the ice", [], "bait and fish meal, not a dish"],
+  ["kelp_frond", "Kelp", "M25", "Cut from the kelp forest's fronds", ["kelp", "kelp_sheets"], "dried into sheets for sushi"],
+  ["seawater", "Sea water", "any sea", "A pot filled at the shore", ["seawater", "salt"], "boiled down for salt"],
+];
+function renderSea() {
+  document.querySelector("#seaTable tbody").innerHTML = SEA.map(([img, name, from, how, becomes, dishes]) => `<tr><td><img class="i48" src="cooking/${img}.png${V}" alt="" width="48" height="48"> <b>${name}</b></td><td>${from === "proposed" ? '<span class="st prop">proposed</span>' : from === "game" ? '<span class="st today">in the game</span>' : `<span class="st m">${from}</span>`}</td><td>${how}</td><td>${becomes.length ? "" : '<span class="muted">not yet</span>'}${becomes.map(b => `<img class="i24" src="${icon(b)}" alt="${nm(b)}" title="${nm(b)}" width="24" height="24">`).join(" ")}</td><td>${dishes}</td></tr>`).join("");
+}
+function renderFood() {
+  document.querySelector("#fxTable tbody").innerHTML = Object.entries(EFFECTS).filter(([k]) => k !== "none").map(([k, e]) => `<tr><td>${FXTAG(k, 0)}</td><td>${e.what}</td><td>${e.ok ? '<span class="st today">system built</span> ' : '<span class="st prop">waits</span> '}${e.today}</td><td>${RECIPES.filter(r => r.fx === k && r.min >= 10).slice(0, 5).map(r => `<img class="i24" src="${icon(r.out)}" alt="${nm(r.out)}" title="${nm(r.out)}" width="24" height="24">`).join(" ")}</td></tr>`).join("");
+  document.querySelector("#stTable tbody").innerHTML = Object.entries(STATIONS).sort((a, b) => a[1].tier - b[1].tier).map(([id, s]) => `<tr><td style="white-space:nowrap"><img class="i32" src="${stIcon(id)}" alt="" width="32" height="32"> <b>${s.name}</b></td><td>${s.tier}</td><td>${Array.isArray(s.cost) ? s.cost.map(([i, n]) => `<img class="i24" src="${icon(i)}" alt="${nm(i)}" title="${nm(i)}" width="24" height="24">${n}`).join(" ") : s.cost}</td><td>${s.fuel ? (s.fuel === "power" ? "ship power" : `<img class="i24" src="${icon(s.fuel)}" alt="${nm(s.fuel)}" width="24" height="24">`) : "-"}</td><td>${s.what}</td><td>${s.light}</td></tr>`).join("");
+}
+const DEC = [
+  ["Q1. Meals give buffs, or a hunger bar?", true, "The proposal: no hunger; a meal gives one of five effects for some minutes, up to three at once, and not eating costs nothing. The alternative is a hunger bar that drains while you play and slows, then hurts, when empty. See <code>cook-hud-buffs.png</code> beside <code>cook-hud-hunger.png</code>.", "Buffs. The game is a calm explorer with no health or death and world time that stops when it is closed; a drain would nag every long flight and swim."],
+  ["Q2. Many stations, or a few?", true, "Fifteen kitchen stations, each one thing you build and place: a kitchen grows a station at a time, and a town's kitchens look like what they cook. The alternative folds them into five (fire, oven, stove, prep table, barrel). See <code>kitchen-day.png</code>, <code>bakery-day.png</code> and <code>yard-night.png</code>.", "Keep them separate, as M3 keeps its six: each is cheap, each lights or smokes differently, and the galley is the one that does everything, late."],
+  ["Q3. Heat as a choice at the station", true, "A heated recipe asks for low, medium or high, and the right one is a star. It is the only cooking 'skill' there is; there is no timing minigame and no random roll. See <code>cook-panel.png</code>.", "Keep heat as a choice. It teaches each recipe once, costs one click, and never fails a dish outright."],
+  ["D4. New crops are seeds, not new ground", false, "Twelve new crops for M8.", "Recommendation taken (ask only with screenshots): bought or traded as seed and planted by the player; nothing appears in the generated world, so no generator version changes and no save is touched. Appended to M8's roster."],
+  ["D5. Spoiled food turns to compost", false, "Food that goes off.", "Recommendation taken (ask only with screenshots): stale at its keep (cooks at a lower star), compost at twice its keep, so nothing a player made simply disappears; age counts only played time."],
+  ["D6. Quality is worked out, never rolled", false, "One to three stars.", "Recommendation taken (ask only with screenshots): from freshness, heat and practice, deterministic like M3's tools, so a server has one rule to check."],
+  ["D7. Food is a new item kind, fish stay fish", false, "The inventory.", "Recommendation taken (ask only with screenshots): <code>Item::Food(u16)</code> into an append-only food roster, with a made-at time and stars on the stack; a caught <code>Fish</code> is an ingredient as it is today, so no save migrates."],
+  ["D8. Fuel is an ingredient", false, "How stations burn.", "Recommendation taken (ask only with screenshots): as M3 recommends for the forge, a heated recipe takes one log (or coal) per cook; nothing burns while the player is away."],
+  ["D9. Meat comes from the husbandry and animals mockups", false, "Pork, beef, mutton, poultry, game.", "Recommendation taken (ask only with screenshots): this page names cuts and states only. Which animals are kept, bred and slaughtered is the husbandry mockup's; the venison gap is theirs to fill or leave."],
+  ["D10. Three new catchables, proposed to M25", false, "Calamari, prawns and chowder need them.", "Recommendation taken (ask only with screenshots): a sand prawn (coastal, net), a sand clam (dug at low tide with the shovel) and a rock mussel (coastal rock by hand), appended to the fauna roster. The glow squid already rises to the shelf at night, so calamari needs no new squid."],
+  ["D11. Effects only for systems that exist", false, "What a buff may touch.", "Recommendation taken (ask only with screenshots): stride, steady hands, keen and glow work on walking, fishing, digging and lights, all built; warmth waits for a cold mechanic and does nothing until one exists. No breath or health is added for food's sake."],
+  ["D12. Kitchens are cut away", false, "How an interior is shown.", "Recommendation taken (ask only with screenshots): the roof lifted off and the near walls dropped to sill height as you orbit, so a kitchen can be read from outside; in the game you walk in."],
+];
+function renderDec() {
+  document.getElementById("decisions").innerHTML = DEC.map(([q, pic, ctx, rec]) => `<div class="q${pic ? " ask" : ""}"><h3>${q}${pic ? ` <span class="tag" style="vertical-align:middle;margin-left:6px">question, with screenshots</span>` : ""}</h3><p>${ctx}</p><p class="rec"><b>${pic ? "Recommend" : "Taken"}</b>${rec}</p></div>`).join("");
+}
+
+// =====================================================================================================
+// 3D: one renderer for the whole page, moved into whichever kitchen tab is open
+// =====================================================================================================
+const SCENES_META = {
+  yard: { name: "Kitchen yard", lede: "A farmstead's outdoor kitchen on Tenebris's fields: the first stations a new world builds (campfire and spit, drying rack, quern, barrels, a smoker) and a pizza oven under the open sky. At night the fire, the oven's mouth, a table's candles and two lantern posts light it; between them the ground is dark.", stations: ["campfire", "rack", "quern", "barrel", "smoker", "pizza"], lights: "the campfire, the pizza oven's mouth, the smoker's embers, candles on the table, two lantern posts" },
+  bakery: { name: "Bakery", lede: "A town bakery of six cells, cut away: the brick bake oven with its chimney, the kneading table with dough and flour sacks, proving shelves of loaves, a quern for the town's flour, the churn and press, and a counter of bread, pastry and cake by the door. At night the oven's mouth is the brightest thing on the street.", stations: ["oven", "pasta", "quern", "dairy"], lights: "the oven's mouth and its embers, a hanging lantern, candles on the counter, the lantern by the door, the window" },
+  kitchen: { name: "Inn kitchen", lede: "The kitchen behind a town's inn (The Plough in M5), cut away: the hearth and its pot, the iron stove and wok, the fryer, the pasta and noodle table hung with drying noodles, the oil press, an icebox and a larder of jars, and the pass where dishes go out.", stations: ["hearth", "stove", "fryer", "pasta", "press", "icebox", "barrel"], lights: "the hearth, the stove's firebox, two hanging lanterns, candles on the pass" },
+  galley: { name: "Ship's galley", lede: "A galley in a ship's hex-cell hull: one powered unit that does what the hearth, the oven, the stove and the fryer do, a freezer, a fold-down table and a rack of ration cans for a long run to Sequoia. Ships keep a day: the cabin lights dim to a red night cycle, and the hob and the freezer's lamps light the rest.", stations: ["galley", "icebox"], lights: "the cabin strip lights (white by the ship's day, dim red by its night), the hob, the oven window, the freezer's lamps" },
+};
+function buildScenePanels() {
+  document.getElementById("scenePanels").innerHTML = SCENE_IDS.map(id => { const m = SCENES_META[id]; return `
+<div class="tabpanel" id="tab-${id}" role="tabpanel" hidden>
+  <h2>${m.name}</h2>
+  <p>${m.lede}</p>
+  <div class="envgrid">
+    <div class="stage" data-scene="${id}">
+      <div class="hudline" data-hud="${id}"></div>
+      <div class="hint">drag look · wheel zoom · shift-drag pan · click a station</div>
+      <div class="ov bl">
+        <div class="lab2"><span>${id === "galley" ? "Ship's clock" : "Time of day"}</span><b data-hout="${id}">11:00</b></div>
+        <input type="range" min="0" max="24" step="0.1" value="11" data-hour="${id}" aria-label="Time of day">
+        <div class="seg"><button data-tod="${id}" data-h="11" aria-pressed="true">Day</button><button data-tod="${id}" data-h="18.6" aria-pressed="false">Dusk</button><button data-tod="${id}" data-h="22.5" aria-pressed="false">Night</button></div>
+      </div>
+    </div>
+    <div class="side">
+      <dl><dt>Stations here (click to look, or click one in the view)</dt><dd class="stlist" data-stlist="${id}">${m.stations.map(s => `<button data-scene="${id}" data-st="${s}" aria-pressed="false"><img src="${stIcon(s)}" alt="" width="32" height="32"><span>${STATIONS[s].name}</span><small>T${STATIONS[s].tier}</small></button>`).join("")}</dd>
+      <dt>Lit at night by</dt><dd><span class="chips" style="margin-bottom:4px">${({ yard: [["candle", "candle"], ["lantern_post", "lantern post"]], bakery: [["candle", "candle"], ["lantern_hanging", "hanging lantern"], ["lantern_post", "lantern post"]], kitchen: [["candle", "candle"], ["lantern_hanging", "hanging lantern"]], galley: [] })[id].map(([f, n]) => `<span class="chip"><img src="cooking/game/light-${f}.png${V}" alt="" width="24" height="24">${n}</span>`).join("")}</span>${m.lights}</dd></dl>
+      <div class="pick" data-pick="${id}"><span class="hint2">Pick a station to see what it makes.</span></div>
+    </div>
+  </div>
+</div>`; }).join("");
+}
+
+const MAXL = 24;
+const U = {
+  uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) },
+  uSky: { value: new THREE.Color() }, uGround: { value: new THREE.Color() }, uFogCol: { value: new THREE.Color() }, uFogFar: { value: 160 },
+  uLampPos: { value: Array.from({ length: MAXL }, () => new THREE.Vector3()) }, uLampCol: { value: Array.from({ length: MAXL }, () => new THREE.Vector3()) },
+  uLampReach: { value: new Array(MAXL).fill(1) }, uLampN: { value: 0 },
+};
+const VS = `
+attribute vec3 aTile;
+varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying vec3 vTile;
+void main(){
+  vUv = uv; vTile = aTile;
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const FS = `
+uniform vec3 uColor; uniform float uOpacity; uniform sampler2D uMap; uniform float uMode; uniform float uUpNormal; uniform float uRep; uniform vec3 uTile; uniform float uGlow; uniform vec2 uUvRep;
+uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uSky; uniform vec3 uGround; uniform vec3 uFogCol; uniform float uFogFar;
+uniform vec3 uLampPos[${MAXL}]; uniform vec3 uLampCol[${MAXL}]; uniform float uLampReach[${MAXL}]; uniform int uLampN;
+varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying vec3 vTile;
+// The game's atlas, read the way planet_surface.wgsl's pixel_tile does: four sheets across and down, each a 4x4 grid
+// of 32-texel tiles, point-sampled.
+vec3 atlasTile(vec2 uv, vec3 t0) {
+  vec3 t = floor(t0 + 0.5);
+  vec2 px = (floor(fract(uv) * 32.0) + 0.5) / 32.0;
+  vec2 sheet = vec2(mod(t.x, 4.0), floor(t.x / 4.0)) * 0.25;
+  vec2 s = sheet + (t.yz + px) / 16.0;
+  return texture2D(uMap, vec2(s.x, 1.0 - s.y)).rgb;
+}
+void main(){
+  vec4 base = vec4(uColor, uOpacity);
+  if (uMode > 0.5 && uMode < 1.5) { vec4 t = texture2D(uMap, vUv * uUvRep); if (t.a < 0.5) discard; base.rgb *= t.rgb; }
+  if (uMode > 1.5 && uMode < 2.5) { // a settlement texture, repeat_m metres a repeat, on the face's own plane
+    vec3 an = abs(vN); vec2 w = an.y > max(an.x, an.z) ? vW.xz : (an.x > an.z ? vW.zy : vW.xy);
+    base.rgb *= texture2D(uMap, vec2(w.x, -w.y) / uRep).rgb;
+  }
+  if (uMode > 2.5 && uMode < 3.5) base.rgb *= atlasTile(vUv, uTile);
+  if (uMode > 3.5) base.rgb *= atlasTile(vUv, vTile);
+  float fog = smoothstep(uFogFar * 0.35, uFogFar, length(vW - cameraPosition));
+  if (uGlow > 0.5) { gl_FragColor = vec4(mix(base.rgb * uGlow, uFogCol, fog * 0.5), 1.0); return; }   // light: never lit, never outlined
+  vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
+  if (uUpNormal > 0.5) n = normalize(vec3(n.x * 0.3, 1.0, n.z * 0.3));
+  vec3 light = mix(uGround, uSky, n.y * 0.5 + 0.5) + uSunCol * max(dot(n, uSunDir), 0.0);
+  for (int i = 0; i < ${MAXL}; i++) {
+    if (i >= uLampN) break;
+    vec3 d = uLampPos[i] - vW; float r = length(d);
+    float f = clamp(1.0 - r / uLampReach[i], 0.0, 1.0); f *= f;
+    light += uLampCol[i] * f * (0.3 + 0.7 * max(dot(n, d / max(r, 0.001)), 0.0));
+  }
+  gl_FragColor = vec4(mix(base.rgb * light, uFogCol, fog), base.a);
+}`;
+function litMat(o = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: Object.assign({
+      uColor: { value: new THREE.Color(o.color ?? 0xffffff) }, uOpacity: { value: o.opacity ?? 1 },
+      uMap: { value: o.map || null }, uMode: { value: o.mode ?? (o.map ? 1 : 0) }, uUpNormal: { value: o.up ? 1 : 0 },
+      uRep: { value: o.rep ?? 1 }, uTile: { value: new THREE.Vector3(...(o.tile || [0, 0, 0])) }, uGlow: { value: o.glow ?? 0 }, uUvRep: { value: new THREE.Vector2(...(o.uvrep || [1, 1])) },
+    }, U),
+    vertexShader: VS, fragmentShader: FS, transparent: (o.opacity ?? 1) < 1, depthWrite: (o.opacity ?? 1) >= 1, side: o.side ?? THREE.FrontSide,
+  });
+}
+const loader = new THREE.TextureLoader();
+const TEX = {};
+function tex(path, wrap = true) {   // nearest, no mipmaps
+  const k = path + wrap; if (TEX[k]) return TEX[k];
+  const t = loader.load("cooking/" + path + ".png" + V, () => { if (ACTIVE) ACTIVE.dirty = true; });
+  t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  if (wrap) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return (TEX[k] = t);
+}
+const SETTLE = { brick: 2, brickdark: 2, clay: 2, claytile: 2, stone: 2, fieldstone: 2, cobble: 2, flag: 2.5, plank: 2, boards: 2, timber: 1, plaster: 2, whitewash: 2, tile: 2, slate: 2, thatch: 2, shingle: 2, iron: 1, linen: 1 };
+const MATS = {};
+const gameMat = (name, tint = 0xffffff) => { const k = "s:" + name + "/" + tint; return MATS[k] || (MATS[k] = litMat({ map: tex("game/" + name), mode: 2, rep: SETTLE[name], color: tint })); };
+const flatMat = (c) => MATS["c" + c] || (MATS["c" + c] = litMat({ color: c }));
+const glowMat = (c, g = 1) => MATS["g" + c + g] || (MATS["g" + c + g] = litMat({ color: c, glow: g }));
+const texMat = (name, o = {}) => { const k = "t:" + name + JSON.stringify(o); return MATS[k] || (MATS[k] = litMat(Object.assign({ map: tex(name, !o.clamp), mode: 1 }, o))); };
+const ATLAS = () => tex("game/atlas");
+const tileMat = tile => { const k = "a" + tile.join(); return MATS[k] || (MATS[k] = litMat({ map: ATLAS(), mode: 3, tile })); };
+
+// ---- hex cells: 2.833 m across the flats, 1 m layers (the Tenebris gold standard)
+const CW = 2.833, RH = CW / Math.sqrt(3);
+const hexXZ = (q, r) => [CW * (q + r / 2), RH * 1.5 * r];
+const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+const TOPG = new THREE.CircleGeometry(RH, 6); TOPG.rotateX(-Math.PI / 2); TOPG.rotateY(Math.PI / 6);
+const FIELDS = 4;
+function sideGeo(slot) {
+  const pos = [], nor = [], uv = [], til = [];
+  for (let i = 0; i < 6; i++) {
+    const a0 = Math.PI / 180 * (60 * i - 30), a1 = a0 + Math.PI / 3;
+    const ax = RH * Math.cos(a0), az = RH * Math.sin(a0), bx = RH * Math.cos(a1), bz = RH * Math.sin(a1);
+    const nx = Math.cos(a0 + Math.PI / 6), nz = Math.sin(a0 + Math.PI / 6);
+    for (let k = 0; k < 3; k++) {
+      const y1 = -k, y0 = -k - 1, t = k === 0 ? [slot, 1, 0] : [slot, 2, 0];
+      const q = [[ax, y1, az, 0, 0], [bx, y0, bz, 0.999, 0.999], [bx, y1, bz, 0.999, 0], [ax, y1, az, 0, 0], [ax, y0, az, 0, 0.999], [bx, y0, bz, 0.999, 0.999]];
+      for (const [x, y, z, u, v] of q) { pos.push(x, y, z); nor.push(nx, 0, nz); uv.push(u, v); til.push(...t); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute("aTile", new THREE.Float32BufferAttribute(til, 3));
+  return g;
+}
+const PLANE = new THREE.PlaneGeometry(1, 1); PLANE.translate(0, 0.5, 0);
+
+// ---- a scene and its building blocks
+function newWorld(id, stage) {
+  const W = { id, stage, scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(46, 1, 0.1, 600), lamps: [], fires: [], smokes: [], walls: [], bills: [], stations: {}, t: 0, hour: 11, outdoor: id === "yard", center: new THREE.Vector3() };
+  W.cam = { yaw: 0.7, pitch: 0.62, dist: 22, target: new THREE.Vector3(0, 0.8, 0), minD: 4, maxD: 60 };
+  W.root = new THREE.Group(); W.scene.add(W.root);
+  return W;
+}
+function box(W, w, h, d, x, y, z, mat, parent) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); (parent || W.root).add(m); return m; }
+function cyl(W, rt, rb, h, seg, x, y, z, mat, parent) { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat); m.position.set(x, y, z); (parent || W.root).add(m); return m; }
+function lamp(W, x, y, z, color, power, reach, kind = "lamp", mesh = null) { const L = { pos: new THREE.Vector3(x, y, z), col: new THREE.Color(color), power, reach, kind, mesh, on: mesh ? mesh.material.uniforms.uColor.value.clone() : null }; W.lamps.push(L); return L; }
+function group(W, x, z, rot = 0, st = null) { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rot; W.root.add(g); if (st) { g.userData.station = st; W.stations[st] = W.stations[st] || g; } return g; }
+// a world point from a group's local coordinates (for lamps, which live in world space)
+const wp = (g, x, y, z) => { g.updateMatrixWorld(true); return new THREE.Vector3(x, y, z).applyMatrix4(g.matrixWorld); };
+function card(W, texName, w, h, x, y, z, parent, o = {}) {   // a cut-out card: alpha-tested, depth-written, never blended
+  const m = new THREE.Mesh(PLANE, texMat(texName, Object.assign({ clamp: true, side: THREE.DoubleSide }, o))); m.scale.set(w, h, 1); m.position.set(x, y, z); (parent || W.root).add(m); return m;
+}
+function bill(W, id, x, y, z, s = 0.42) {   // a food card standing on a table, turned toward the viewer as it is drawn
+  const m = new THREE.Mesh(PLANE, MATS["food:" + id] || (MATS["food:" + id] = litMat({ map: tex(ITEMS[id].img, false), mode: 1, side: THREE.DoubleSide, up: 1 })));
+  m.scale.set(s, s, 1); m.position.set(x, y, z); W.root.add(m); W.bills.push(m); return m;
+}
+function fire(W, x, y, z, size, parent, power = 3.2, reach = 8, always = true) {
+  const g = new THREE.Group(); g.position.set(x, y, z); (parent || W.root).add(g);
+  const em = new THREE.Mesh(new THREE.CylinderGeometry(size * 0.55, size * 0.6, 0.08, 6), texMat("tex_embers", { glow: 1.0, uvrep: [1, 1] })); g.add(em);
+  const fl = [];
+  for (const a of [0, Math.PI / 3, -Math.PI / 3]) { const c = card(W, "card_flame", size, size * 1.1, 0, 0.02, 0, g, { glow: 1.15 }); c.rotation.y = a; fl.push(c); }
+  const p = wp(g, 0, size * 0.6, 0);
+  const L = lamp(W, p.x, p.y, p.z, 0xff8a3c, power, reach, always ? "fire" : "lamp");
+  W.fires.push({ g, fl, L, base: power, seed: Math.random() * 10 });
+  return g;
+}
+function smoke(W, x, y, z, n = 4, s = 0.8) { for (let i = 0; i < n; i++) { const c = card(W, "card_smoke", s, s, x, y, z); W.smokes.push({ c, x, y, z, k: i / n, s }); W.bills.push(c); } }
+function candle(W, x, y, z) {
+  box(W, 0.06, 0.16, 0.06, x, y + 0.08, z, flatMat(0xeae0cc));
+  const f = box(W, 0.04, 0.07, 0.04, x, y + 0.2, z, glowMat(0xffd27a, 1)); f.visible = false;
+  const L = lamp(W, x, y + 0.25, z, 0xffb060, 0.7, 2.6, "candle"); L.flame = f;
+}
+function lanternPost(W, x, z) {
+  const wood = gameMat("timber");
+  box(W, 0.14, 2.4, 0.14, x, 1.2, z, wood); box(W, 0.5, 0.1, 0.1, x + 0.2, 2.35, z, wood);
+  const b = box(W, 0.26, 0.34, 0.26, x + 0.42, 2.1, z, glowMat(0xffc070, 1));
+  const L = lamp(W, x + 0.42, 2.0, z, 0xffc070, 2.4, 6.5, "lamp"); L.glowMesh = b;
+}
+function hangLantern(W, x, y, z, power = 2.2, reach = 6.5) {
+  box(W, 0.03, 0.6, 0.03, x, y + 0.45, z, gameMat("iron"));
+  const b = box(W, 0.24, 0.3, 0.24, x, y, z, glowMat(0xffc070, 1));
+  const L = lamp(W, x, y - 0.1, z, 0xffc070, power, reach, "lamp"); L.glowMesh = b;
+}
+// ground: hex columns within `rings`, outdoors the fields sheet; `floor` gives a cell's top a settlement texture
+function ground(W, rings, floor = () => null) {
+  const SIDEG = sideGeo(FIELDS), sideM = litMat({ map: ATLAS(), mode: 4, side: THREE.DoubleSide });
+  const cells = new Map();
+  for (let q = -rings; q <= rings; q++) for (let r = -rings; r <= rings; r++) {
+    if (Math.abs(q + r) > rings) continue;
+    const [x, z] = hexXZ(q, r), f = floor(q, r);
+    const top = new THREE.Mesh(TOPG, f ? gameMat(f) : tileMat([FIELDS, 0, 0])); top.position.set(x, 0, z); W.root.add(top);
+    const ring = Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+    if (ring === rings) { const s = new THREE.Mesh(SIDEG, sideM); s.position.set(x, 0, z); W.root.add(s); }
+    cells.set(q + "," + r, { q, r, x, z });
+  }
+  return cells;
+}
+// walls on the cell edges round a building (M6: walls on edges, a storey every three layers)
+function walls(W, cellsIn, mat, opts = {}) {
+  const inside = new Set(cellsIn.map(([q, r]) => q + "," + r));
+  const H = opts.h ?? 3, doors = new Set(opts.doors || []), wins = new Set(opts.windows || []);
+  let cx = 0, cz = 0; cellsIn.forEach(([q, r]) => { const [x, z] = hexXZ(q, r); cx += x; cz += z; }); cx /= cellsIn.length; cz /= cellsIn.length;
+  W.center.set(cx, 0, cz);
+  for (const [q, r] of cellsIn) {
+    const [x, z] = hexXZ(q, r);
+    DIRS.forEach(([dq, dr], k) => {
+      if (inside.has((q + dq) + "," + (r + dr))) return;
+      const [nx, nz] = hexXZ(q + dq, r + dr), th = Math.atan2(nz - z, nx - x);
+      const a = [x + RH * Math.cos(th - Math.PI / 6), z + RH * Math.sin(th - Math.PI / 6)], b = [x + RH * Math.cos(th + Math.PI / 6), z + RH * Math.sin(th + Math.PI / 6)];
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2, len = Math.hypot(b[0] - a[0], b[1] - a[1]) + 0.12, rot = -Math.atan2(b[1] - a[1], b[0] - a[0]);
+      const g = new THREE.Group(); g.position.set(mx, 0, mz); g.rotation.y = rot; W.root.add(g);
+      const key = `${q},${r},${k}`;
+      if (doors.has(key)) { box(W, len, 0.6, 0.2, 0, H - 0.3, 0, mat, g); box(W, 0.12, H - 0.6, 0.22, -len / 2 + 0.06, (H - 0.6) / 2, 0, gameMat("timber"), g); box(W, 0.12, H - 0.6, 0.22, len / 2 - 0.06, (H - 0.6) / 2, 0, gameMat("timber"), g); }
+      else if (wins.has(key)) {
+        box(W, len, 1.0, 0.2, 0, 0.5, 0, mat, g); box(W, len, H - 2.0, 0.2, 0, 2.0 + (H - 2.0) / 2, 0, mat, g);
+        box(W, 0.3, 1.0, 0.2, -len / 2 + 0.15, 1.5, 0, mat, g); box(W, 0.3, 1.0, 0.2, len / 2 - 0.15, 1.5, 0, mat, g);
+        const gl = box(W, len - 0.6, 1.0, 0.06, 0, 1.5, 0, glowMat(0x2a3440, 1), g); W.windows = W.windows || []; W.windows.push(gl);
+      } else box(W, len, H, 0.2, 0, H / 2, 0, mat, g);
+      box(W, len, 0.12, 0.26, 0, H, 0, opts.cap || gameMat("timber"), g);
+      W.walls.push({ g, nx: Math.cos(th), nz: Math.sin(th) });
+    });
+  }
+}
+
+// ---- station props, each a group the size of the cell it stands on
+function pCampfire(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "campfire");
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; box(W, 0.32, 0.22, 0.26, Math.cos(a) * 0.62, 0.11, Math.sin(a) * 0.62, gameMat("fieldstone"), g).rotation.y = -a; }
+  for (const a of [0.3, 1.9]) { const l = box(W, 0.9, 0.12, 0.12, 0, 0.12, 0, gameMat("timber"), g); l.rotation.y = a; }
+  fire(W, 0, 0.1, 0, 0.75, g, 3.4, 9);
+  for (const s of [-1, 1]) { box(W, 0.08, 1.15, 0.08, s * 0.95, 0.57, 0, gameMat("timber"), g); box(W, 0.05, 0.22, 0.05, s * 0.95, 1.18, 0.06, gameMat("timber"), g); }
+  box(W, 2.1, 0.04, 0.04, 0, 1.12, 0, gameMat("iron"), g);
+  box(W, 0.55, 0.36, 0.4, 0, 1.12, 0, texMat("tex_crust", { uvrep: [1, 1] }), g);
+  return g;
+}
+function pRack(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "rack");
+  for (const s of [-1, 1]) box(W, 0.1, 2.0, 0.1, s * 1.0, 1.0, 0, gameMat("timber"), g);
+  for (const y of [1.9, 1.15]) box(W, 2.1, 0.06, 0.06, 0, y, 0, gameMat("timber"), g);
+  card(W, "card_fish", 1.8, 0.75, 0, 1.12, 0.02, g); card(W, "card_herbs", 1.8, 0.7, 0, 0.42, -0.02, g);
+  const c2 = card(W, "card_noodles", 1.6, 0.6, 0, 1.30, 0.3, g); c2.visible = false;
+  return g;
+}
+function pQuern(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "quern");
+  cyl(W, 0.62, 0.66, 0.5, 10, 0, 0.25, 0, gameMat("stone"), g); cyl(W, 0.56, 0.56, 0.28, 10, 0, 0.64, 0, gameMat("stone"), g);
+  box(W, 0.07, 0.6, 0.07, 0.35, 1.0, 0, gameMat("timber"), g);
+  box(W, 0.45, 0.6, 0.35, 0.95, 0.3, 0.35, gameMat("linen"), g); box(W, 0.4, 0.5, 0.32, 0.9, 0.25, -0.25, gameMat("linen", 0xe0d8c0), g);
+  return g;
+}
+function pBarrels(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "barrel"), bm = texMat("game/barrel", { uvrep: [1, 1] });
+  for (const [bx, bz, h] of [[-0.55, -0.3, 1.0], [0.5, -0.35, 1.0], [0, 0.5, 0.8]]) { cyl(W, 0.36, 0.33, h, 10, bx, h / 2, bz, bm, g); cyl(W, 0.33, 0.33, 0.02, 10, bx, h + 0.01, bz, gameMat("plank"), g); }
+  cyl(W, 0.42, 0.38, 0.4, 10, 1.0, 0.2, 0.5, gameMat("plank"), g); cyl(W, 0.38, 0.38, 0.02, 10, 1.0, 0.36, 0.5, flatMat(0x4a7a80), g);
+  return g;
+}
+function pSmoker(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "smoker");
+  box(W, 1.6, 2.0, 1.4, 0, 1.0, 0, gameMat("plank"), g);
+  g.add(prismRoof(1.1, 1.9, 0.5, 0, 2.0, 0, gameMat("slate"), Math.PI / 2));
+  box(W, 0.3, 1.1, 0.3, 0.45, 2.9, 0, gameMat("iron"), g);
+  box(W, 0.8, 0.5, 0.06, 0, 0.3, 0.71, glowMat(0x2a0a04, 1), g);
+  const em = box(W, 0.6, 0.12, 0.04, 0, 0.12, 0.73, texMat("tex_embers", { glow: 1 }), g);
+  const p = wp(g, 0, 0.3, 1.0); lamp(W, p.x, p.y, p.z, 0xff6a2c, 0.8, 2.6, "fire");
+  const s = wp(g, 0.45, 3.5, 0); smoke(W, s.x, s.y, s.z, 3, 0.55);
+  return g;
+}
+// a pitched roof: a three-sided prism lying along its ridge, ridge up (as the farming mockup builds the farmhouse's)
+function prismRoof(r, len, k, x, y, z, mat, rot = 0) {
+  const g = new THREE.CylinderGeometry(r, r, len, 3);
+  g.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)));
+  const m = new THREE.Mesh(g, mat); m.scale.y = k; m.position.set(x, y + r * 0.5 * k, z); m.rotation.y = rot; return m;
+}
+function domeOven(W, g, mat, base, rs, mouthW, power, reach, chim) {
+  // a stepped dome of hex prisms: blocks on the grid, never a smooth sphere
+  cyl(W, 1.3, 1.3, 0.9, 6, 0, 0.45, 0, gameMat(base), g);
+  let y = 0.9;
+  for (const [r, h] of rs) { cyl(W, r, r, h, 6, 0, y + h / 2, 0, gameMat(mat), g); y += h; }
+  box(W, mouthW + 0.3, 0.75, 0.6, 0, 1.25, 1.0, gameMat(mat), g);
+  box(W, mouthW, 0.5, 0.1, 0, 1.2, 1.31, glowMat(0x140402, 1), g);
+  const em = box(W, mouthW - 0.1, 0.06, 0.4, 0, 0.97, 1.05, texMat("tex_embers", { glow: 1.1 }), g);
+  const c = card(W, "card_flame", mouthW * 0.6, 0.38, 0, 0.98, 1.2, g, { glow: 1.1 });
+  if (chim) { box(W, 0.4, 2.4, 0.4, 0, y + 0.8, -0.5, gameMat(chim), g); const s = wp(g, 0, y + 2.2, -0.5); smoke(W, s.x, s.y, s.z, 3, 0.5); }
+  const p = wp(g, 0, 1.25, 1.7); const L = lamp(W, p.x, p.y, p.z, 0xff7a30, power, reach, "fire");
+  W.fires.push({ g, fl: [c], L, base: power, seed: Math.random() * 10 });
+}
+function pOven(W, x, z, rot = 0) { const g = group(W, x, z, rot, "oven"); domeOven(W, g, "brick", "fieldstone", [[1.2, 0.5], [1.05, 0.4], [0.82, 0.35], [0.5, 0.3]], 0.7, 2.8, 7.5, "brickdark"); return g; }
+function pPizza(W, x, z, rot = 0) { const g = group(W, x, z, rot, "pizza"); domeOven(W, g, "clay", "stone", [[1.22, 0.6], [1.08, 0.45], [0.86, 0.4], [0.55, 0.3]], 0.95, 3.2, 8.5, "claytile"); return g; }
+function table(W, x, z, w, d, rot = 0, st = null, parent = null) {
+  const g = parent || group(W, x, z, rot, st);
+  box(W, w, 0.08, d, 0, 0.86, 0, gameMat("plank"), g);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(W, 0.08, 0.82, 0.08, sx * (w / 2 - 0.1), 0.41, sz * (d / 2 - 0.1), gameMat("timber"), g);
+  return g;
+}
+function pPasta(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "pasta");
+  table(W, 0, 0, 1.9, 0.9, 0, null, g);
+  box(W, 0.5, 0.22, 0.42, -0.45, 1.01, 0, texMat("tex_dough"), g);
+  const pin = cyl(W, 0.05, 0.05, 0.6, 8, 0.3, 0.95, 0.1, gameMat("plank"), g); pin.rotation.z = Math.PI / 2;
+  box(W, 0.36, 0.05, 0.3, 0.55, 0.92, -0.2, texMat("tex_dough", { color: 0xf8d090 }), g);
+  for (const s of [-1, 1]) box(W, 0.06, 1.0, 0.06, s * 0.85, 1.4, -0.38, gameMat("timber"), g);
+  box(W, 1.8, 0.05, 0.05, 0, 1.88, -0.38, gameMat("timber"), g);
+  card(W, "card_noodles", 1.6, 0.8, 0, 1.1, -0.38, g);
+  return g;
+}
+function pDairy(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "dairy");
+  cyl(W, 0.22, 0.28, 0.9, 8, -0.5, 0.45, 0, gameMat("plank"), g); box(W, 0.04, 0.5, 0.04, -0.5, 1.1, 0, gameMat("timber"), g);
+  for (const s of [-1, 1]) box(W, 0.08, 1.3, 0.08, 0.5 + s * 0.35, 0.65, 0, gameMat("timber"), g);
+  box(W, 0.86, 0.1, 0.2, 0.5, 1.28, 0, gameMat("timber"), g); box(W, 0.05, 0.4, 0.05, 0.5, 1.05, 0, gameMat("iron"), g);
+  box(W, 0.5, 0.06, 0.5, 0.5, 0.82, 0, gameMat("plank"), g); cyl(W, 0.2, 0.2, 0.22, 8, 0.5, 0.68, 0, flatMat(0xe8a830), g);
+  box(W, 0.7, 0.5, 0.6, 0.5, 0.28, 0, gameMat("plank"), g);
+  return g;
+}
+function pHearth(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "hearth");
+  box(W, 2.3, 1.5, 0.4, 0, 0.75, -0.65, gameMat("stone"), g);
+  box(W, 1.3, 1.0, 0.02, 0, 0.5, -0.44, glowMat(0x0c0402, 1), g);
+  for (const sx of [-1, 1]) box(W, 0.5, 1.5, 0.62, sx * 0.9, 0.75, -0.16, gameMat("stone"), g);
+  box(W, 2.3, 0.5, 0.62, 0, 1.25, -0.16, gameMat("stone"), g);
+  box(W, 2.45, 0.16, 0.74, 0, 1.58, -0.18, gameMat("fieldstone"), g);
+  box(W, 1.0, 1.7, 0.7, 0, 2.5, -0.5, gameMat("brickdark"), g);
+  fire(W, 0, 0.04, -0.15, 0.62, g, 3.0, 7.5);
+  box(W, 1.3, 0.04, 0.04, 0, 0.92, -0.15, gameMat("iron"), g);
+  box(W, 0.03, 0.2, 0.03, 0, 0.82, -0.15, gameMat("iron"), g);
+  cyl(W, 0.3, 0.24, 0.36, 8, 0, 0.56, -0.15, gameMat("iron"), g);
+  return g;
+}
+function pStove(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "stove");
+  box(W, 1.5, 0.85, 0.8, 0, 0.43, 0, gameMat("iron"), g);
+  box(W, 1.6, 0.06, 0.9, 0, 0.88, 0, gameMat("iron", 0xb0b0b8), g);
+  const fb = box(W, 0.5, 0.25, 0.04, -0.35, 0.4, 0.41, texMat("tex_embers", { glow: 1 }), g);
+  cyl(W, 0.1, 0.1, 2.0, 8, 0.55, 1.9, -0.3, gameMat("iron"), g);
+  const wok = cyl(W, 0.42, 0.14, 0.16, 8, -0.3, 0.98, 0, gameMat("iron", 0x707078), g);
+  cyl(W, 0.36, 0.36, 0.02, 8, -0.3, 1.05, 0, texMat("tex_dough", { color: 0x90c070 }), g);
+  box(W, 0.5, 0.04, 0.04, -0.85, 1.02, 0, gameMat("plank"), g);
+  cyl(W, 0.2, 0.2, 0.3, 8, 0.3, 1.06, 0.05, gameMat("iron"), g);
+  const p = wp(g, -0.35, 0.4, 0.9); const L = lamp(W, p.x, p.y, p.z, 0xff6a2c, 1.2, 3.6, "fire"); W.fires.push({ g, fl: [], L, base: 1.2, seed: 3 });
+  return g;
+}
+function pFryer(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "fryer"), st = texMat("tex_steel", { uvrep: [2, 2] });
+  box(W, 1.1, 0.95, 0.8, 0, 0.48, 0, st, g);
+  box(W, 0.9, 0.04, 0.6, 0, 0.96, 0, flatMat(0xc89a30), g);
+  box(W, 0.5, 0.22, 0.4, 0.1, 1.12, 0, gameMat("iron", 0xc0c0c8), g); box(W, 0.6, 0.04, 0.04, 0.55, 1.2, 0, gameMat("plank"), g);
+  return g;
+}
+function pPress(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "press");
+  for (const s of [-1, 1]) box(W, 0.14, 1.8, 0.14, s * 0.55, 0.9, 0, gameMat("timber"), g);
+  box(W, 1.3, 0.18, 0.3, 0, 1.8, 0, gameMat("timber"), g);
+  cyl(W, 0.06, 0.06, 0.8, 8, 0, 1.35, 0, gameMat("iron"), g);
+  box(W, 0.7, 0.08, 0.08, 0, 1.55, 0, gameMat("iron"), g);
+  cyl(W, 0.32, 0.32, 0.5, 8, 0, 0.55, 0, gameMat("plank"), g); cyl(W, 0.5, 0.5, 0.12, 8, 0, 0.24, 0, gameMat("plank"), g);
+  cyl(W, 0.12, 0.12, 0.25, 8, 0.6, 0.13, 0.3, flatMat(0x8aa040), g);
+  return g;
+}
+function pIcebox(W, x, z, rot = 0) {
+  const g = group(W, x, z, rot, "icebox");
+  box(W, 1.0, 1.5, 0.7, 0, 0.75, 0, gameMat("plank"), g);
+  for (const y of [0.45, 1.1]) { box(W, 0.86, 0.55, 0.04, 0, y, 0.36, gameMat("boards"), g); box(W, 0.06, 0.12, 0.04, 0.32, y, 0.39, gameMat("iron"), g); }
+  box(W, 0.9, 0.12, 0.6, 0, 1.56, 0, flatMat(0xb8e8f4), g);
+  return g;
+}
+function shelves(W, x, z, rot, ids, w = 1.8) {
+  const g = group(W, x, z, rot);
+  for (const s of [-1, 1]) box(W, 0.08, 2.1, 0.4, s * w / 2, 1.05, 0, gameMat("timber"), g);
+  [0.5, 1.15, 1.8].forEach((y, row) => {
+    box(W, w, 0.05, 0.42, 0, y, 0, gameMat("plank"), g);
+    const per = Math.ceil(ids.length / 3), slice = ids.slice(row * per, row * per + per);
+    slice.forEach((id, k) => { const p = wp(g, -w / 2 + (k + 0.5) * w / slice.length, y + 0.03, 0); bill(W, id, p.x, p.y, p.z, 0.4); });
+  });
+  return g;
+}
+function foodOn(W, g, ids, y = 0.9, w = 1.6, d = 0.6) {
+  ids.forEach((id, k) => { const fx = -w / 2 + (k + 0.5) * w / ids.length, fz = (k % 2 ? 0.12 : -0.12) * d; const p = wp(g, fx, y, fz); bill(W, id, p.x, p.y, p.z, 0.42); });
+}
+
+// ---- the four kitchens
+function sceneYard(stage) {
+  const W = newWorld("yard", stage);
+  const pave = new Set(["0,0", "1,0", "0,1", "-1,1", "-1,0", "0,-1", "1,-1", "2,-1", "-2,1"]);
+  ground(W, 6, (q, r) => pave.has(q + "," + r) ? "flag" : null);
+  const at = (q, r) => hexXZ(q, r);
+  let p;
+  p = at(0, 0); pCampfire(W, p[0], p[1], 0.2);
+  p = at(2, -1); pRack(W, p[0], p[1], -0.4);
+  p = at(-1, -1); pQuern(W, p[0], p[1], 0.6);
+  p = at(1, 1); pBarrels(W, p[0], p[1], 0.3);
+  p = at(-2, 1); pSmoker(W, p[0], p[1], 0.9);
+  p = at(1, -2); pPizza(W, p[0] + 0.3, p[1], 0.15);
+  p = at(2, 1); { const g = table(W, p[0], p[1] + 0.3, 1.9, 0.9, 0.5); for (const s of [-1, 1]) box(W, 1.8, 0.07, 0.3, 0, 0.48, s * 0.75, gameMat("plank"), g); foodOn(W, g, ["pizza", "bread", "ale", "skewers"]); const c1 = wp(g, -0.75, 0.9, 0), c2 = wp(g, 0.75, 0.9, 0); candle(W, c1.x, c1.y, c1.z); candle(W, c2.x, c2.y, c2.z); }
+  // the farmhouse's back wall, its door and window glowing onto the yard
+  { const [x, z] = at(-1, -3); box(W, 7.0, 3.0, 0.3, x, 1.5, z, gameMat("plaster")); W.root.add(prismRoof(2.6, 7.6, 0.75, x, 3.0, z - 1.8, gameMat("thatch")));
+    box(W, 7.0, 3.0, 3.6, x, 1.5, z - 1.95, gameMat("plaster"));
+    box(W, 1.0, 2.0, 0.08, x + 1.6, 1.0, z + 0.17, gameMat("boards")); const win = box(W, 1.0, 0.8, 0.08, x - 1.5, 1.7, z + 0.17, glowMat(0x2a3440, 1)); W.windows = [win];
+    lamp(W, x - 1.5, 1.7, z + 0.8, 0xffb060, 0.7, 3.4, "window"); }
+  p = at(3, -3); lanternPost(W, p[0], p[1]);
+  p = at(-3, 1); lanternPost(W, p[0] - 0.6, p[1] + 1.2);
+  W.cam.target.set(0, 0.6, 0.6); W.cam.dist = 21; W.cam.yaw = 0.35; W.cam.pitch = 0.6;
+  return finish(W);
+}
+function sceneBakery(stage) {
+  const W = newWorld("bakery", stage);
+  const inside = [[0, 0], [1, 0], [0, 1], [1, -1], [-1, 1], [-1, 0]];
+  const ins = new Set(inside.map(c => c.join()));
+  ground(W, 5, (q, r) => ins.has(q + "," + r) ? "flag" : ((q === 0 && r === 2) || (q === 1 && r === 1) ? "cobble" : null));
+  walls(W, inside, gameMat("plaster"), { doors: ["0,1,5"], windows: ["1,0,0", "-1,1,4"] });
+  const at = (q, r) => hexXZ(q, r);
+  let p;
+  p = at(-1, 0); pOven(W, p[0] - 0.1, p[1] - 0.3, 0.55);
+  p = at(0, 0); pPasta(W, p[0] + 0.1, p[1] + 0.2, 0);
+  { const g = W.stations.pasta; const a = wp(g, -0.75, 0.9, 0.25); bill(W, "flour", a.x, a.y, a.z, 0.4); }
+  p = at(1, -1); shelves(W, p[0] + 0.2, p[1] - 0.6, 0, ["bread", "bread", "rolls", "bread", "pastry", "rolls", "sweet_bun", "bread", "melon_pie"], 2.0);
+  p = at(1, 0); { const g = group(W, p[0] + 0.1, p[1] + 0.3, Math.PI / 2); box(W, 1.8, 0.95, 0.6, 0, 0.48, 0, gameMat("boards"), g); box(W, 1.9, 0.06, 0.7, 0, 0.98, 0, gameMat("plank"), g); foodOn(W, g, ["cake", "pastry", "meat_pie", "sweet_bun"], 1.01); const c1 = wp(g, -0.85, 1.01, 0.2); candle(W, c1.x, c1.y, c1.z); const c2 = wp(g, 0.85, 1.01, 0.2); candle(W, c2.x, c2.y, c2.z); }
+  p = at(0, 1); pQuern(W, p[0] - 0.7, p[1] + 0.1, 0.2);
+  p = at(-1, 1); pDairy(W, p[0] + 0.1, p[1], 2.4);
+  { const [x, z] = at(0, 0); hangLantern(W, x + 0.5, 2.3, z - 0.3, 2.0, 6); }
+  { const [x, z] = at(0, 2); lanternPost(W, x + 1.3, z - 0.2); }
+  // window glow outside
+  { const [x, z] = at(2, 0); lamp(W, x - 0.6, 1.5, z, 0xffb060, 0.8, 3.2, "window"); const [x2, z2] = at(-2, 2); lamp(W, x2 + 0.6, 1.5, z2 - 0.3, 0xffb060, 0.8, 3.2, "window"); }
+  W.cam.target.set(W.center.x, 0.9, W.center.z); W.cam.dist = 17; W.cam.yaw = 0.25; W.cam.pitch = 0.72;
+  return finish(W);
+}
+function sceneKitchen(stage) {
+  const W = newWorld("kitchen", stage);
+  const inside = [[0, 0], [1, 0], [0, 1], [1, -1], [-1, 1], [-1, 0], [0, -1], [2, -1], [-1, 2], [-2, 1]];
+  const ins = new Set(inside.map(c => c.join()));
+  ground(W, 5, (q, r) => ins.has(q + "," + r) ? "tile" : null);
+  walls(W, inside, gameMat("whitewash"), { doors: ["-1,2,5"], windows: ["2,-1,0", "-2,1,3"] });
+  const at = (q, r) => hexXZ(q, r);
+  let p;
+  p = at(0, -1); pHearth(W, p[0], p[1] - 0.25, 0);
+  p = at(1, -1); pStove(W, p[0] + 0.2, p[1] - 0.2, 0);
+  p = at(2, -1); pFryer(W, p[0], p[1], -0.5);
+  p = at(-1, 0); pPasta(W, p[0] - 0.2, p[1], 1.0);
+  p = at(-2, 1); pPress(W, p[0], p[1], 1.2);
+  p = at(1, 0); pIcebox(W, p[0] + 0.6, p[1] + 0.2, -Math.PI / 2);
+  p = at(0, 1); { const g = table(W, p[0], p[1], 2.0, 0.9, 0.0); foodOn(W, g, ["ramen", "calamari", "stir_fry_shrimp", "spaghetti", "fish_chips"]); const c = wp(g, 0, 0.9, 0.3); candle(W, c.x, c.y, c.z); }
+  p = at(-1, 2); shelves(W, p[0] - 0.6, p[1] - 0.2, 1.05, ["pickles", "olives_brined", "oil", "soy_sauce", "tomato_sauce", "stock", "flour", "salt", "sugar"], 1.6);
+  p = at(1, 0); pBarrels(W, p[0] - 0.4, p[1] + 1.4, 0.4); W.stations.barrel.scale.setScalar(0.85);
+  { const [x, z] = at(0, 0); hangLantern(W, x, 2.35, z, 2.0, 6); const [x2, z2] = at(0, 1); hangLantern(W, x2 + 0.5, 2.35, z2 + 0.3, 1.8, 5.5); }
+  { const [x, z] = at(3, -1); lamp(W, x - 0.8, 1.5, z, 0xffb060, 0.8, 3.2, "window"); }
+  W.cam.target.set(W.center.x, 0.8, W.center.z); W.cam.dist = 20; W.cam.yaw = 0.15; W.cam.pitch = 0.78;
+  return finish(W);
+}
+function sceneGalley(stage) {
+  const W = newWorld("galley", stage); W.space = true;
+  const inside = [[0, 0], [1, 0], [0, 1], [1, -1], [-1, 1], [-1, 0], [0, -1]];
+  const panel = texMat("tex_panel", { uvrep: [1, 1] }), steel = texMat("tex_steel", { uvrep: [1, 1] });
+  for (const [q, r] of inside) { const [x, z] = hexXZ(q, r); const t = new THREE.Mesh(TOPG, MATS.galleyFloor || (MATS.galleyFloor = litMat({ map: tex("tex_panel"), mode: 2, rep: 1.4, color: 0xb0b8c0 }))); t.position.set(x, 0, z); W.root.add(t);
+    const s = new THREE.Mesh(new THREE.CylinderGeometry(RH, RH, 1.0, 6), gameMat("iron", 0x707880)); s.rotation.y = Math.PI / 6; s.position.set(x, -0.52, z); W.root.add(s); }
+  walls(W, inside, MATS.galleyWall || (MATS.galleyWall = litMat({ map: tex("tex_panel"), mode: 2, rep: 1.6 })), { h: 3, doors: ["0,1,5"], windows: [], cap: gameMat("iron", 0x9098a0) });
+  const at = (q, r) => hexXZ(q, r);
+  // the galley unit
+  let p = at(0, -1);
+  { const g = group(W, p[0], p[1] - 0.35, 0, "galley");
+    box(W, 2.4, 0.9, 0.75, 0, 0.45, 0, panel, g); box(W, 2.5, 0.06, 0.8, 0, 0.93, 0, steel, g);
+    for (const s of [-1, 1]) { const ring = box(W, 0.4, 0.02, 0.4, s * 0.6, 0.97, 0, glowMat(0xff5a20, 0.9), g); W.hob = (W.hob || []).concat(ring); }
+    const ovw = box(W, 0.8, 0.4, 0.04, -0.5, 0.45, 0.39, glowMat(0xff7a30, 0.85), g);
+    box(W, 2.4, 0.7, 0.4, 0, 2.2, -0.15, panel, g);
+    bill(W, "stew", p[0] + 0.6, 0.97, p[1] - 0.35, 0.4);
+    const a = wp(g, -0.5, 0.6, 0.8); lamp(W, a.x, a.y, a.z, 0xff6a2c, 1.8, 4.2, "fire");
+    const b = wp(g, 0.6, 1.3, 0.4); lamp(W, b.x, b.y, b.z, 0xff6a2c, 1.4, 3.6, "fire"); }
+  p = at(1, -1);
+  { const g = group(W, p[0] + 0.3, p[1] - 0.2, -0.5, "icebox"); box(W, 1.1, 2.1, 0.7, 0, 1.05, 0, steel, g); box(W, 0.9, 1.0, 0.04, 0, 1.4, 0.36, flatMat(0x9cc8d8), g);
+    const led = box(W, 0.1, 0.06, 0.03, 0.35, 1.95, 0.37, glowMat(0x60ff90, 1), g); const q = wp(g, 0, 1.6, 0.8); lamp(W, q.x, q.y, q.z, 0x80d8ff, 0.5, 2.4, "fire"); }
+  p = at(-1, 0); shelves(W, p[0] - 0.5, p[1], Math.PI / 2 + 0.5, ["ration", "ration", "ration", "hardtack", "jerky", "ration", "cheese", "ration", "tea_leaves"], 1.6);
+  p = at(0, 1); { const g = group(W, p[0] + 0.3, p[1], 0); box(W, 1.4, 0.06, 0.8, 0, 0.8, 0, steel, g); box(W, 0.1, 0.8, 0.1, 0, 0.4, 0, gameMat("iron"), g); foodOn(W, g, ["ration", "tea_cup", "hardtack"], 0.83, 1.2); }
+  // the cabin strips: white by the ship's day, dim red by its night
+  W.strips = [];
+  for (const [q, r] of [[0, 0], [1, -1], [-1, 1]]) { const [x, z] = hexXZ(q, r); const m = box(W, 1.2, 0.06, 0.16, x, 2.95, z, glowMat(0xe8f0ff, 1)); const L = lamp(W, x, 2.7, z, 0xe8f0ff, 1.6, 6, "strip", null); L.strip = m; W.strips.push(L); }
+  // stars outside the hull
+  { const g = new THREE.BufferGeometry(), pts = []; for (let i = 0; i < 600; i++) { const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u); pts.push(s * Math.cos(a) * 300, u * 300, s * Math.sin(a) * 300); } g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); W.scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.4, sizeAttenuation: false }))); }
+  W.cam.target.set(0.2, 0.9, -0.6); W.cam.dist = 12.5; W.cam.yaw = 0.25; W.cam.pitch = 0.82;
+  return finish(W);
+}
+function finish(W) {
+  W.camera.position.set(0, 10, 20);
+  W.update = (t, dt) => {
+    for (const f of W.fires) { const k = 0.85 + 0.15 * Math.sin(t * 9 + f.seed) * Math.sin(t * 5.3 + f.seed * 2); f.L.power = f.base * k; f.fl.forEach((c, i) => c.scale.y = (c.userData.h || (c.userData.h = c.scale.y)) * (0.9 + 0.12 * Math.sin(t * 11 + i + f.seed))); }
+    for (const s of W.smokes) { const k = (s.k + t * 0.12) % 1; s.c.position.set(s.x + k * 0.5, s.y + k * 2.2, s.z + k * 0.25); s.c.scale.setScalar(s.s * (0.6 + k * 1.1)); s.c.visible = k < 0.92; }
+    // food cards and smoke face the viewer's yaw (they are pixel cards, as the game's ground clutter is)
+    const yaw = Math.atan2(W.camera.position.x - W.cam.target.x, W.camera.position.z - W.cam.target.z);
+    for (const b of W.bills) b.rotation.y = yaw;
+    // cut away: walls between the viewer and the room drop to sill height
+    const cx = W.camera.position.x - W.center.x, cz = W.camera.position.z - W.center.z, cl = Math.hypot(cx, cz) || 1;
+    for (const w of W.walls) w.g.scale.y = (w.nx * cx + w.nz * cz) / cl > 0.2 ? 0.34 : 1;
+  };
+  W.render = () => { sky(W); RENDERER.render(W.scene, W.camera); };
+  return W;
+}
+
+// ---- sky, sun, moon and lamps
+const C = h => new THREE.Color(h);
+function sky(W) {
+  const a = (W.hour - 6) / 24 * Math.PI * 2, el = Math.sin(a);
+  const day = W.space ? 0 : Math.max(0, Math.min(1, el * 4 + 0.15)), dusk = W.space ? 0 : Math.max(0, 1 - Math.abs(el) * 5);
+  if (day > 0) { U.uSunDir.value.set(Math.cos(a) * 0.8, Math.max(el, 0.12), 0.45).normalize(); U.uSunCol.value.copy(C(0xfff1d8)).lerp(C(0xff9a5a), dusk).multiplyScalar(1.1 * day); }
+  else { U.uSunDir.value.set(-0.3, 0.8, -0.5).normalize(); U.uSunCol.value.copy(C(0x8098c8)).multiplyScalar(W.space ? 0 : 0.03); }   // the moon, dim enough that the lamps read
+  const bg = W.space ? C(0x010205) : C(0x0a1020).lerp(C(0x9cc6e4), day).lerp(C(0xe08a5a), dusk * 0.45);
+  W.scene.background = bg; U.uFogCol.value.copy(bg); U.uFogFar.value = W.space ? 1e4 : 150;
+  U.uSky.value.copy(C(0x02040a)).lerp(C(0x8aa6c8), day).multiplyScalar(0.55).add(C(0x0b0f18).multiplyScalar(0.25 * day + 0.04));
+  U.uGround.value.copy(C(0x020202)).lerp(C(0x6a5a40), day).multiplyScalar(0.35);
+  const lampsOn = el < 0.12;
+  const shipNight = W.hour < 6 || W.hour > 20;
+  let n = 0;
+  for (const L of W.lamps) {
+    let on = L.kind === "fire" || lampsOn;
+    let col = L.col, pw = L.power * (L.kind === "fire" ? 1 - 0.75 * day : 1);   // a fire's light is lost in full sun
+    if (L.kind === "strip") { on = true; col = shipNight ? C(0xff4030) : C(0xe8f0ff); pw = shipNight ? 0.6 : 1.6; L.strip.material = glowMat(shipNight ? 0x802018 : 0xe8f0ff, 1); }
+    if (L.glowMesh) L.glowMesh.material = on ? glowMat(0xffc070, 1) : flatMat(0x4a3a28);
+    if (L.flame) L.flame.visible = on;
+    if (!on || n >= MAXL) continue;
+    U.uLampPos.value[n].copy(L.pos); U.uLampCol.value[n].set(col.r * pw, col.g * pw, col.b * pw); U.uLampReach.value[n] = L.reach; n++;
+  }
+  U.uLampN.value = n;
+  if (W.windows) for (const w of W.windows) w.material = lampsOn ? glowMat(0xc08040, 1) : glowMat(0x2a3440, 1);
+  if (W.space) { /* the ship's own lights, all the time */ }
+  return el;
+}
+
+// ---- renderer, controls, loop
+let RENDERER = null, CANVAS = null, ACTIVE = null, RAF = 0, LAST = 0;
+const BUILT = {};
+const SCENES = { yard: sceneYard, bakery: sceneBakery, kitchen: sceneKitchen, galley: sceneGalley };
+function ensureRenderer() {
+  if (RENDERER) return;
+  CANVAS = document.createElement("canvas"); CANVAS.tabIndex = 0; CANVAS.setAttribute("aria-label", "The 3D view of the open kitchen: drag to look, scroll to zoom, shift-drag to pan, click a station");
+  RENDERER = new THREE.WebGLRenderer({ canvas: CANVAS, antialias: !SHOT, preserveDrawingBuffer: SHOT });
+  RENDERER.setPixelRatio(SHOT ? 1 : Math.min(2, window.devicePixelRatio || 1));
+  window.__pbd = { contexts: 1, frames: 0 };
+  bindControls(CANVAS);
+  new ResizeObserver(() => { if (ACTIVE) resize(); }).observe(CANVAS);
+}
+function resize() { const w = CANVAS.clientWidth, h = CANVAS.clientHeight; if (!w || !h) return; RENDERER.setSize(w, h, false); ACTIVE.camera.aspect = w / h; ACTIVE.camera.updateProjectionMatrix(); }
+function onTab(t) {
+  if (!SCENE_IDS.includes(t)) {
+    stopLoop(); ACTIVE = null; if (CANVAS && CANVAS.parentNode) CANVAS.parentNode.removeChild(CANVAS); if (window.__pbd) window.__pbd.active = null;
+    if (t === "cook") renderCook(); if (t === "book") renderBook(); if (t === "chains") renderChains();
+    return;
+  }
+  ensureRenderer();
+  const stage = document.querySelector(`.stage[data-scene="${t}"]`);
+  if (!BUILT[t]) BUILT[t] = SCENES[t](stage);
+  ACTIVE = BUILT[t];
+  stage.insertBefore(CANVAS, stage.firstChild);
+  window.__pbd.active = t;
+  resize(); startLoop();
+}
+function startLoop() { if (!RAF) { LAST = performance.now(); RAF = requestAnimationFrame(loop); } }
+function stopLoop() { if (RAF) cancelAnimationFrame(RAF); RAF = 0; }
+document.addEventListener("visibilitychange", () => { if (document.hidden) stopLoop(); else if (ACTIVE) startLoop(); });
+function placeCamera(W) { const c = W.cam, cp = Math.cos(c.pitch); W.camera.position.set(c.target.x + c.dist * cp * Math.sin(c.yaw), c.target.y + c.dist * Math.sin(c.pitch), c.target.z + c.dist * cp * Math.cos(c.yaw)); W.camera.lookAt(c.target); }
+function loop(now) {
+  RAF = requestAnimationFrame(loop);
+  if (!ACTIVE) return;
+  const dt = Math.min(0.06, (now - LAST) / 1000); LAST = now;
+  const W = ACTIVE; W.t += dt;
+  placeCamera(W); W.update(W.t, dt); W.render();
+  if ((W.t % 0.5) < dt) { const hh = Math.floor(W.hour), mm = Math.floor((W.hour - hh) * 60); document.querySelector(`[data-hud="${W.id}"]`).textContent = `${SCENES_META[W.id].name.toLowerCase()} | ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")} | ${U.uLampN.value} lights | cell 2.833 m, layer 1 m`; }
+  window.__pbd.frames++; window.__pbd.t = W.t;
+}
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+function bindControls(cv) {
+  let drag = null, moved = 0; const pts = new Map();
+  cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; moved = 0; cv.focus({ preventScroll: true }); });
+  cv.addEventListener("pointermove", e => {
+    if (!drag || !ACTIVE) return; const c = ACTIVE.cam;
+    if (pts.size === 2) { const prev = [...pts.values()]; pts.set(e.pointerId, [e.clientX, e.clientY]); const now = [...pts.values()]; const d0 = Math.hypot(prev[0][0] - prev[1][0], prev[0][1] - prev[1][1]), d1 = Math.hypot(now[0][0] - now[1][0], now[0][1] - now[1][1]); if (d0 > 0 && d1 > 0) c.dist = clamp(c.dist * d0 / d1, c.minD, c.maxD); moved = 99; return; }
+    pts.set(e.pointerId, [e.clientX, e.clientY]);
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
+    if (drag.pan) { const s = c.dist * 0.0016; c.target.x -= (Math.cos(c.yaw) * dx) * s; c.target.z -= (-Math.sin(c.yaw) * dx) * s; c.target.y = clamp(c.target.y + dy * s, 0, 6); }
+    else { c.yaw -= dx * 0.005; c.pitch = clamp(c.pitch + dy * 0.004, 0.08, 1.45); }
+  });
+  const up = e => { pts.delete(e.pointerId); if (!pts.size) { if (drag && moved < 5 && e.type === "pointerup") pickAt(e); drag = null; } };
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  cv.addEventListener("contextmenu", e => e.preventDefault());
+  cv.addEventListener("wheel", e => { if (!ACTIVE) return; e.preventDefault(); const c = ACTIVE.cam; c.dist = clamp(c.dist * Math.exp(e.deltaY * 0.0012), c.minD, c.maxD); }, { passive: false });
+}
+function pickAt(e) {
+  const W = ACTIVE, r = CANVAS.getBoundingClientRect(); mouse.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(mouse, W.camera);
+  for (const h of ray.intersectObjects(W.root.children, true)) { let o = h.object; while (o && !o.userData.station) o = o.parent; if (o) { showPick(W.id, o.userData.station); return; } }
+}
+function showPick(scene, st, look = false) {
+  const S = STATIONS[st], W = BUILT[scene];
+  document.querySelectorAll(`[data-stlist="${scene}"] button`).forEach(b => b.setAttribute("aria-pressed", String(b.dataset.st === st)));
+  const rs = RECIPES.filter(r => r.st === st);
+  document.querySelector(`[data-pick="${scene}"]`).innerHTML = `<div class="head"><img src="${stIcon(st)}" alt="" width="64" height="64"><div><div class="eyebrow">Tier ${S.tier}${S.fuel ? " · burns " + (S.fuel === "power" ? "ship power" : nm(S.fuel).replace(" (fuel)", "").toLowerCase()) : ""}</div><h3>${S.name}</h3></div></div>
+    <p class="hint2">${S.what}. Built from ${Array.isArray(S.cost) ? S.cost.map(([i, n]) => `${n} ${nm(i).toLowerCase()}`).join(", ") : S.cost}.</p>
+    ${rs.length ? `<div class="chips">${rs.slice(0, 14).map(r => `<span class="chip"><img src="${icon(r.out)}" alt="">${nm(r.out)}</span>`).join("")}${rs.length > 14 ? `<span class="chip">+${rs.length - 14} more</span>` : ""}</div><a class="pbtn" href="#cook" data-cookst="${st}">Cook here</a>` : `<p class="hint2">It cooks nothing: it keeps what is in it four times as long.</p>`}`;
+  const a = document.querySelector(`[data-pick="${scene}"] [data-cookst]`); if (a) a.addEventListener("click", ev => { ev.preventDefault(); COOK.station = st; COOK.recipe = null; setTab("cook"); });
+  if (look && W && W.stations[st]) { const p = new THREE.Vector3(); W.stations[st].getWorldPosition(p); W.cam.target.set(p.x, 0.9, p.z); W.cam.dist = Math.min(W.cam.dist, 11); }
+}
+function setHour(id, h) {
+  h = (h + 24) % 24; const W = BUILT[id]; if (W) W.hour = h;
+  document.querySelector(`[data-hour="${id}"]`).value = h;
+  const hh = Math.floor(h), mm = Math.floor((h - hh) * 60); document.querySelector(`[data-hout="${id}"]`).textContent = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+  document.querySelectorAll(`[data-tod="${id}"]`).forEach(b => b.setAttribute("aria-pressed", String(Math.abs(+b.dataset.h - h) < 0.05)));
+}
+
+// =====================================================================================================
+// Go
+// =====================================================================================================
+buildScenePanels(); renderCrops(); renderRanch(); renderSea(); renderFood(); renderDec();
+document.querySelectorAll("[data-hour]").forEach(el => el.addEventListener("input", () => setHour(el.dataset.hour, +el.value)));
+document.querySelectorAll("[data-tod]").forEach(b => b.addEventListener("click", () => setHour(b.dataset.tod, +b.dataset.h)));
+document.querySelectorAll(".stlist button").forEach(b => b.addEventListener("click", () => showPick(b.dataset.scene, b.dataset.st, true)));
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+window.addEventListener("hashchange", () => setTab(location.hash.slice(1), false));
+document.addEventListener("keydown", e => { if (TAB === "cook" && (e.key === "f" || e.key === "F") && e.target.tagName !== "INPUT") eat(); });
+setTab(location.hash.slice(1) || "yard", false);
+requestAnimationFrame(cookTick);
+</script>
