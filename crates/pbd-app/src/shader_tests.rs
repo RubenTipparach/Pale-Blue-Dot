@@ -217,15 +217,23 @@ fn the_water_vertex_draws_the_sea_table_and_no_literal_waves() {
     }
 }
 
-/// The landing dissolve's coverage rule (`dissolve-coverage`): the visibility
-/// pass asks it of a cell's centre and the surface pass of each pixel, so the
-/// two copies are one rule only while they are the same text.
+/// The partition rule (`detail-fade`, `distance-lod-fade`): the visibility
+/// pass lists a cell for a partition by it and the surface pass builds and
+/// keeps the cell's pixels by it, so the two copies are one rule only while
+/// they are the same text. A landing's dissolve draws each partition from its
+/// own set's records on that agreement (`two-set-dissolve`).
 #[test]
-fn the_dissolve_coverage_rule_is_the_same_in_both_passes() {
+fn the_partition_rule_is_the_same_in_both_passes() {
     let visibility =
         include_str!("../../../assets/shaders/planet_visibility.wgsl").replace("\r\n", "\n");
     let surface = include_str!("../../../assets/shaders/planet_surface.wgsl").replace("\r\n", "\n");
-    for name in ["fn old_held(", "fn tile_angle("] {
+    for name in [
+        "fn partition_of(",
+        "fn band_t(",
+        "fn band_cos_in(",
+        "fn owner_fine_in(",
+        "fn covered_by_finer_in(",
+    ] {
         let body = |source: &str| {
             let start = source.find(name).expect("the function is defined");
             let end = source[start..].find("\n}\n").expect("the function ends");

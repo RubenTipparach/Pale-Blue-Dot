@@ -95,6 +95,13 @@ pub(super) struct WaterView {
     /// The bands' cross-fade rings' inner edges, cosines, round `lod`, which
     /// is the terrain's fade centre (`distance-lod-fade`).
     bands_in: Vec4,
+    /// The partition a landing dissolves from, as the terrain has it
+    /// (`two-set-dissolve`): its fade centre, w the dissolve's progress 0..1
+    /// (one outside a dissolve, when no sheet is marked); its bands and their
+    /// rings' inner edges.
+    lod_prev: Vec4,
+    bands_prev: Vec4,
+    bands_prev_in: Vec4,
     /// The rain on the LENS; then the frame's seconds and the eye's airspeed,
     /// m/s, which the lens mist runs on (`lens-weather`); w spare. Its own
     /// lane rather than `fx.z`, which is the rain on the SEA: a camera in a
@@ -1367,6 +1374,15 @@ fn prepare_water_views(
             lod: planet_view.centre.extend(super::lod::BASE_LEVEL as f32),
             bands: planet.lod.bands,
             bands_in: planet.lod.bands_in,
+            // The landing's dissolve, the terrain's own lanes: a sheet listed
+            // for the old partition is split by it and keeps the old half of
+            // the pixels, as the seabed under it does (`two-set-dissolve`).
+            lod_prev: {
+                let terrain = planet_view.uniform.get();
+                terrain.lod_prev.truncate().extend(terrain.fade.y)
+            },
+            bands_prev: planet_view.uniform.get().bands_prev,
+            bands_prev_in: planet_view.uniform.get().bands_prev_in,
             rain: Vec4::new(
                 lens_rain,
                 frame_s,
@@ -2410,7 +2426,7 @@ mod tests {
         // And the sky's nine coefficients (`water-lit`).
         let sh = block.matches("array<vec4<f32>, 9>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * lamps + 8 * sh;
-        assert_eq!((mat4, vec4, lamps, sh), (4, 71, 1, 1));
+        assert_eq!((mat4, vec4, lamps, sh), (4, 74, 1, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");

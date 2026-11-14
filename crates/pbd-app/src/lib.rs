@@ -6,6 +6,8 @@ pub mod atmosphere;
 #[cfg(feature = "desktop")]
 pub mod bloom;
 #[cfg(feature = "desktop")]
+pub mod coast_walk;
+#[cfg(feature = "desktop")]
 pub mod compass;
 #[cfg(feature = "desktop")]
 pub mod config;

@@ -12,8 +12,8 @@ struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
     water_absorption: vec4<f32>, water_deep: vec4<f32>, weather: vec4<f32>,
     rain: array<vec4<f32>,6>, // wet knobs; overcast sun, fill, fog per cover, fog in rain; sky blue cut, sky dim
-    lod_offsets: vec4<u32>, // x base count, y fine-region capacity
-    lod_counts: vec4<u32>,  // live records per fine level, coarsest first
+    lod_offsets: vec4<u32>, // x base count, y fine-region capacity, z the current set's half (`two-set-dissolve`)
+    lod_counts: vec4<u32>,  // live records per fine level of the current set, coarsest first
     lod: vec4<f32>,         // xyz player direction, w base level
     bands: vec4<f32>,       // cos(band radius / R) per fine level, coarsest first
     clutter: vec4<f32>,        // reach m, fade m, blades, base shade
@@ -26,8 +26,8 @@ struct Params {
     fade: vec4<f32>,           // `detail-fade`: tree fade m, cross-fade progress 0..1, one while it runs; w one for a sun cascade (`sun-shadows`)
     lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
     bands_prev: vec4<f32>,     // and its band cosines
-    records_in: vec4<f32>,     // the records' ring per fine level round `anchor`, cosines, a tile inside:
-    records_out: vec4<f32>,    // inner and outer (`detail-fade` section 4)
+    lod_counts_prev: vec4<u32>, // and of the set a landing dissolves from, in the other half; zero outside one
+    lod_spare: vec4<f32>,
     anchor: vec4<f32>,         // `distance-lod-fade`: the fine set's anchor (`lod` is the fade centre),
     bands_in: vec4<f32>,       // the bands' cross-fade rings' inner edges, cosines,
     bands_prev_in: vec4<f32>,  // and those of the partition a landing dissolves from
@@ -40,6 +40,7 @@ struct Params {
     ssr_clip: mat4x4<f32>,
     ssr_eye: vec4<f32>,
     rain_near: vec4<f32>,
+    light_ease: vec4<f32>,
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
@@ -278,17 +279,32 @@ fn has_column(cell: Cell, center: vec3<f32>) -> bool {
     return dot(cell.direction_height.xyz,camera_dir) > params.column.w;
 }
 
-// A record slot is live when it is in the base or below its fine level's
-// live count; the rest of a fine region is stale from an earlier set.
-fn slot_live(slot: u32) -> bool {
+// What a record slot holds (`two-set-dissolve`): the base; the current fine
+// set (NOW); the set the running landing dissolves from (BEFORE), in the other
+// half of the fine regions; or nothing live (DEAD), the rest of a region being
+// stale from an earlier set. The old half's counts are zero outside a
+// dissolve, so it is all DEAD then.
+const SLOT_DEAD: u32 = 0u;
+const SLOT_BASE: u32 = 1u;
+const SLOT_NOW: u32 = 2u;
+const SLOT_BEFORE: u32 = 3u;
+fn count_of(counts: vec4<u32>, k: u32) -> u32 {
+    if k == 0u { return counts.x; }
+    if k == 1u { return counts.y; }
+    if k == 2u { return counts.z; }
+    return counts.w;
+}
+fn slot_kind(slot: u32) -> u32 {
     let base = params.lod_offsets.x;
-    if slot < base { return true; }
-    let k = (slot - base) / params.lod_offsets.y;
+    if slot < base { return SLOT_BASE; }
+    let region = (slot - base) / params.lod_offsets.y;
     let within = (slot - base) % params.lod_offsets.y;
-    if k == 0u { return within < params.lod_counts.x; }
-    if k == 1u { return within < params.lod_counts.y; }
-    if k == 2u { return within < params.lod_counts.z; }
-    return within < params.lod_counts.w;
+    if region >= 8u { return SLOT_DEAD; }
+    let k = region % 4u;
+    if region / 4u == params.lod_offsets.z {
+        return select(SLOT_DEAD, SLOT_NOW, within < count_of(params.lod_counts, k));
+    }
+    return select(SLOT_DEAD, SLOT_BEFORE, within < count_of(params.lod_counts_prev, k));
 }
 
 // The partition rule: a tile draws at its level when the next finer band does
@@ -334,47 +350,38 @@ fn same_in_both(cell: Cell, a: Partition, b: Partition) -> bool {
     return true;
 }
 
-// Whether the records hold every cell the old partition can draw at
-// `direction` while a landing dissolves (`detail-fade` section 4,
-// `dissolve-coverage`). Across a band's cross-fade ring the old partition
-// draws two levels, so each fine level it can draw there is asked: one inside
-// its band's outer edge and outside the next finer band's inner ring edge,
-// round the old centre, each reach widened by two tiles because a cell's level
-// is decided at its owner and its centre, not at the pixel. Each such level's
-// ring of the records, a tile inside, must hold the point. The base is always
-// held. Where any level is not, the old half of the dither would be a hole.
-fn old_held(direction: vec3<f32>) -> bool {
-    let old = partition_of(PART_OLD);
-    let from_old = acos(clamp(dot(direction, old.anchor), -1.0, 1.0));
-    let along = dot(direction, params.anchor.xyz);
-    for (var level = base_level() + 1u; level <= finest_level(); level++) {
-        let out_cos = band_cos_in(old.bands, level);
-        if out_cos > 1.0 { continue; }
-        var inner = 0.0;
-        if level < finest_level() {
-            let in_cos = band_cos_in(old.bands_in, level + 1u);
-            if in_cos <= 1.0 { inner = acos(clamp(in_cos, -1.0, 1.0)) - 2.0*tile_angle(level); }
-        }
-        let outer = acos(clamp(out_cos, -1.0, 1.0)) + 2.0*tile_angle(level - 1u);
-        if from_old < outer && from_old >= inner {
-            let k = level - base_level() - 1u;
-            if !(along <= params.records_in[k] && along >= params.records_out[k]) { return false; }
-        }
-    }
-    return true;
-}
-
-// A level's mean tile width as an angle on the unit sphere: `1.2087 / 2^level`
-// (the Tenebris gold standard's measured constant).
-fn tile_angle(level: u32) -> f32 {
-    return 1.2087/f32(1u << level);
-}
-
 // The list entry for a cell: its index, and which partition it is drawn for
-// in the top bits. Outside a cross-fade every entry is PART_BOTH.
-fn entry(index: u32, now: bool, before: bool, same: bool) -> u32 {
-    if now && before && same { return index; }
-    return index | (select(PART_OLD, PART_NEW, now) << PART_SHIFT);
+// in the top bits (PART_BOTH, PART_NEW or PART_OLD). Outside a dissolve every
+// entry is PART_BOTH.
+fn entry(index: u32, mark: u32) -> u32 {
+    return index | (mark << PART_SHIFT);
+}
+
+// What one slot lists while a landing dissolves (`two-set-dissolve`), given
+// whether the new and the old partition draw its cell and whether they draw
+// it alike: one entry marked BOTH, or a NEW and an OLD one, or none. A base
+// cell is drawn for either partition from its one record. A cell of the
+// current set is drawn for the new partition; one of the old set, in the
+// other half, for the old partition, which it held the frame before the
+// landing. A fine cell both draw alike is drawn once, from the current set,
+// and its twin in the old set stands aside: each twin answers from its own
+// record, and a cell's position, corners and owners are the same floats in
+// every set (`planet_lattice`), so the two answers agree.
+struct Listing { now: bool, before: bool, both: bool }
+fn listing(kind: u32, fading: bool, draws_now: bool, draws_before: bool, alike: bool) -> Listing {
+    let both = !fading || (draws_now && draws_before && alike);
+    if kind == SLOT_NOW { return Listing(draws_now && !both, false, draws_now && both); }
+    if kind == SLOT_BEFORE { return Listing(false, fading && draws_before && !both, false); }
+    // The base, or a slot an older test fixture lists with no halves.
+    return Listing(draws_now && !both, fading && draws_before && !both, both && (draws_now || draws_before));
+}
+fn emit(index: u32, list: Listing) -> array<u32, 2> {
+    // Unused entries are u32::MAX; the caller skips them.
+    var out = array<u32, 2>(0xffffffffu, 0xffffffffu);
+    if list.both { out[0] = entry(index, PART_BOTH); return out; }
+    if list.now { out[0] = entry(index, PART_NEW); }
+    if list.before { out[1] = entry(index, PART_OLD); }
+    return out;
 }
 
 fn in_frustum(center: vec3<f32>, radius: f32) -> bool {
@@ -421,23 +428,29 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // The terrain and foliage lists take a cell twice while a landing
     // cross-fades, once per partition (`detail-fade`), so they hold two.
     if arrayLength(&cells)<count || arrayLength(&visible)<2u*count || arrayLength(&foliage)<2u*count || arrayLength(&column)<count { return; }
-    if !cascade && (arrayLength(&water)<count || arrayLength(&clutter)<count) { return; }
+    // The sea list takes a cell twice as well, once per partition.
+    if !cascade && (arrayLength(&water)<2u*count || arrayLength(&clutter)<count) { return; }
     if id.x >= count { return; }
-    if !slot_live(id.x) { return; }
+    let kind = slot_kind(id.x);
+    if kind == SLOT_DEAD { return; }
     let cell = cells[id.x];
     let degree = cell.metadata.x & 0xffu;
     if degree<5u || degree>6u { return; }
     let now_part = partition_of(PART_NEW);
     let before_part = partition_of(PART_OLD);
     let fading = params.fade.z > 0.5;
-    let now = drawn(cell, now_part);
-    let before = fading && drawn(cell, before_part);
-    if !now && !before { return; }
-    // A cell only the new partition draws, where the old partition's cells
-    // are not among the records, is drawn whole: that ring switches at the
-    // landing and the rest of it fades (`detail-fade` design section 4).
-    let whole = fading && now && !before && !old_held(cell.direction_height.xyz);
-    let same = !fading || whole || (now && before && same_in_both(cell, now_part, before_part));
+    let draws_now = drawn(cell, now_part);
+    let draws_before = fading && drawn(cell, before_part);
+    let alike = draws_now && draws_before && same_in_both(cell, now_part, before_part);
+    let ground = listing(kind, fading, draws_now, draws_before, alike);
+    // Nothing of this slot is drawn: neither partition draws its cell, or it
+    // is the old set's twin of a cell the current set draws for both. Its
+    // tree, if any, goes with it (a tree two partitions draw alike is the
+    // current set's to list).
+    if !(ground.now || ground.before || ground.both) { return; }
+    // Only the current set and the base draw for the new partition: the sea
+    // sheet, the clutter and the columns are the new partition's alone.
+    let now = draws_now && kind != SLOT_BEFORE;
     let radius = params.settings.x;
     let camera_radius = length(params.camera.xyz);
     // The angular horizons of camera and raised terrain overlap. Include a
@@ -462,24 +475,20 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // sheet over a submerged cell is listed separately at the sheet radius.
     let surface_radius = radius + cell.direction_height.w;
     let center = cell.direction_height.xyz*surface_radius;
-    if in_frustum(center,terrain_bound(cell,center,surface_radius)) {
-        if same {
-            let slot = atomicAdd(&args[0].instance_count,1u);
-            visible[slot] = id.x;
-        } else {
-            if now {
+    if (ground.now || ground.before || ground.both) && in_frustum(center,terrain_bound(cell,center,surface_radius)) {
+        let entries = emit(id.x, ground);
+        for (var e = 0u; e < 2u; e++) {
+            if entries[e] != 0xffffffffu {
                 let slot = atomicAdd(&args[0].instance_count,1u);
-                visible[slot] = entry(id.x, true, false, false);
-            }
-            if before {
-                let slot = atomicAdd(&args[0].instance_count,1u);
-                visible[slot] = entry(id.x, false, true, false);
+                visible[slot] = entries[e];
             }
         }
     }
-    // The sea sheet, the clutter and the columns are drawn for the current
-    // partition only; the foliage below is drawn for both.
-    if now && !cascade && cell.direction_height.w < 0.0 {
+    // The sea sheet over a submerged cell is listed by the ground's rows, so
+    // at a landing it dissolves with the seabed under it rather than taking
+    // the new partition's coastline at once (`two-set-dissolve`). The clutter
+    // and the columns are drawn for the current partition only.
+    if !cascade && cell.direction_height.w < 0.0 {
         let sea = params.water_absorption.w;
         let sheet = cell.direction_height.xyz*sea;
         var reach = 0.0;
@@ -488,21 +497,30 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
         }
         // The swell lifts a vertex by at most a few metres; 4 m covers it.
         if in_frustum(sheet, reach + 4.0) {
-            let slot = atomicAdd(&args[2].instance_count,1u);
-            water[slot] = id.x;
+            let entries = emit(id.x, ground);
+            for (var e = 0u; e < 2u; e++) {
+                if entries[e] != 0xffffffffu {
+                    let slot = atomicAdd(&args[2].instance_count,1u);
+                    water[slot] = entries[e];
+                }
+            }
         }
     }
     // The largest authored tree fits inside 15 m of its base. Keep a tree
     // whose crown enters the frustum even when its terrain cap is outside.
+    // A tree is listed by the ground's rows: once for both partitions only
+    // where they draw its cell alike, so its dither dissolves at a landing
+    // rather than jumping to the new partition's (`two-set-dissolve`).
     let tree_now = has_nearby_foliage(cell,center,now_part);
-    let tree_before = fading && before && has_nearby_foliage(cell,center,before_part);
-    if (tree_now || tree_before) && in_frustum(center,15.) {
-        if tree_now && (tree_before || !fading || whole) {
-            let slot = atomicAdd(&args[1].instance_count,1u);
-            foliage[slot] = id.x;
-        } else {
-            let slot = atomicAdd(&args[1].instance_count,1u);
-            foliage[slot] = entry(id.x, tree_now, tree_before, false);
+    let tree_before = draws_before && has_nearby_foliage(cell,center,before_part);
+    let trees = listing(kind, fading, tree_now, tree_before, alike);
+    if (trees.now || trees.before || trees.both) && in_frustum(center,15.) {
+        let entries = emit(id.x, trees);
+        for (var e = 0u; e < 2u; e++) {
+            if entries[e] != 0xffffffffu {
+                let slot = atomicAdd(&args[1].instance_count,1u);
+                foliage[slot] = entries[e];
+            }
         }
     }
     // A clutter bound is the cell's own hexagon and the tallest piece standing
