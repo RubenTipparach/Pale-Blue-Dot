@@ -175,25 +175,6 @@ input.wipe-range { width: 100%; accent-color: var(--brass); min-height: 32px; }
 // The questions. Answers live in the db collection `answers`, one document per question id. Every question carries the
 // pictures it turns on (`images`, published beside the page) or a `link` to a mockup: the owner's "ask only with screenshots".
 const SECTIONS = [
-  { tag: 'W', name: 'World and towns',
-    lead: 'From town-gates (2026-10-08). The gate passage is now walled on both sides; before the fix you could see through the walls beside it into the stone. Left as it is: the ledge below. Both shots are Ashenstead\'s north gate at 10:00 in rain.',
-    qs: [
-      { id: 'G1', q: 'Just inside the north gate of every walled town, the street climbs 1 m in one step, as bare earth. You can walk up it, with 3.5 cm to spare on the 1.05 m step, but not while in the air. It is the mockup\'s "wall lane steps" turned into one block.',
-        options: ['Leave it', 'Make it a stone stair of 2 to 4 steps', 'Level the street to the gate'], rec: 1,
-        why: 'It reads as a way in, and a run of 0.25 to 0.5 m steps never catches a jump. It is a new town template version, so towns already laid in saved worlds keep theirs.',
-        change: 'town-gates', asked: '2026-10-08 in the first survey, carried over',
-        images: [
-          { src: 'img/g1-outside.png', alt: 'Ashenstead\'s north gate from outside: the passage walled on both sides, the earth ledge beyond it', caption: 'From outside: the passage walled on both sides, the ledge beyond it.' },
-          { src: 'img/g1-passage.png', alt: 'In the passage, looking into the town: the 1 m earth ledge across the street', caption: 'In the passage, looking in: the 1 m earth ledge across the street.' },
-        ] },
-      { id: 'W20', q: 'Marenstrand\'s main pier crosses one sand bank where the beach stands 1 m above the deck. Every other pier in the six harbours now lies on the sand or stands on its posts, and nothing clips (pier-landfall). Here the planks are laid over the bank, so 0.75 m of boardwalk sits a metre above the rest, like a raised box with a post at each corner. You can walk over it like a terrain step.',
-        options: ['Keep the planks on the bank', 'Put a short stair up and down at each end', 'Leave a gap in the planks where the bank is'], rec: 1,
-        why: 'A stair reads as built for the bank and is walked without a hop; a gap breaks the walk along the pier.',
-        change: 'pier-landfall', asked: '2026-11-14',
-        images: [
-          { src: 'img/w20-marenstrand-bank.jpg', alt: 'Marenstrand pier before and after: before, sand covers the planks; after, a raised box of planks over the sand bank', caption: 'Top: before (the sand over the planks). Bottom: now (the planks raised over the bank).' },
-        ] },
-    ] },
   { tag: 'G', name: 'Ships and flight',
     lead: 'From ship-tiers (2026-11-12), the mockup "Rockets to Starships" (M21 on the tracker, linked below). You asked for "some orbital stuff (the orbital mechanics in tenebris rust was pretty cool)" in the chemical tier. Tenebris flies its rockets Newtonian in a summed inverse-square field and draws patched conics with maneuver nodes on top. CLAUDE.md says ships use local gravity falloff and keeps patched conics, maneuver nodes and transfer windows out. The same rocket is flown both ways in the mockup\'s tab 2 (screenshots to follow: the GPU screenshot gate was not run during perf tuning).',
     qs: [
@@ -265,6 +246,7 @@ const SECTIONS = [
 
 // The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
 const DECIDED = [
+  {"date": "2026-11-14", "id": "G1, W20", "text": "G1 answered in the survey on 2026-11-12: \"Make it a stone stair of 2 to 4 steps\"; then, on 2026-11-14, \"where theres a step on a path there should be staris\", which answers W20 too: every town path that steps up a riser gets a stair: stone street steps and flights in the walled towns and harbours (the north gate's 1 m riser among them), and a timber stair at each end of Marenstrand's sand bank on its pier. Built from the stored town each time it stands, so saved towns gain only their stairs; a riser you have dug or built on is left as it is.", "where": "path-stairs (proposal, design); town-gates task 3.1; pier-landfall task 1.6"},
   {"date": "2026-11-12", "id": "", "taken": true, "text": "Vehicle yards (ask only with screenshots): past the fabricator, an assembly bay hands large items over as crates in the world; a hex printer prints a building from the town's pieces one 1 m layer a pass, each layer saved as an edit by the printer; a tower crane lifts by its load chart (120 t m, 8 t hook) and refuses past it; ocean ships are hex cells in the ship's own flat frame, at least two cells in the beam, floated as seven sub-cells a cell, and a design floats out only when the helm can be walked to; aircraft are built at a hangar on a 1 m grid, mirrored, with a livery of your own (no real insignia); ships and aircraft are stored records that never change shape on their own.", "where": "vehicle-yards design, decisions 2 to 5"},
   {"date": "2026-11-12", "id": "", "taken": true, "text": "Ship tiers (ask only with screenshots): every ship is built on the 2.833 m hex cell with 1 m layers (the VAB's stacks and the shipyard's modules alike); exhaust speeds at the world's scale (chemical 600 m/s, solid 480, nuclear thermal 1,500, fusion 8,000, antimatter 60,000); spent stages break up and are not saved; freighters move on rails away from players and fly near them; starships come last, after stations, with the multi-system engine work as its own change.", "where": "ship-tiers design, section 9"},
   {"date": "2026-11-12", "id": "", "text": "\"can you create a mockup tracking dock, and a survey html tracker?\": questions now come in this page, with the screenshots beside them; the Claude Doc survey is kept as the earlier record. Every mockup and page is listed on the mockup tracker, where you approve each one for build and then for the game.", "where": "CLAUDE.md \"Ask the owner with a survey\" and \"The mockup tracker\"; the html-survey and mockup-tracker skills"},
