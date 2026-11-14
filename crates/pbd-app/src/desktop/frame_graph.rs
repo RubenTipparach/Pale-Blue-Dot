@@ -15,8 +15,8 @@ use super::FrameStats;
 
 /// Frames shown, and the graph's size in pixels.
 const BARS: usize = 240;
-const BAR_W: f32 = 1.5;
-const GRAPH_H: f32 = 100.0;
+const BAR_W: f32 = 0.5;
+const GRAPH_H: f32 = 50.0;
 /// The frame time at the top of the graph, ms; taller frames are clipped and
 /// drawn solid red.
 const TOP_MS: f32 = 50.0;
@@ -39,11 +39,11 @@ pub fn setup(mut commands: Commands, launch: Res<super::Launch>) {
             FrameGraph,
             Node {
                 position_type: PositionType::Absolute,
-                right: px(8),
-                top: px(6),
-                width: px(width + 8.0),
-                height: px(GRAPH_H + 26.0),
-                padding: UiRect::all(px(4)),
+                right: px(4),
+                top: px(3),
+                width: px(width + 4.0),
+                height: px(GRAPH_H + 13.0),
+                padding: UiRect::all(px(2)),
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
@@ -59,12 +59,12 @@ pub fn setup(mut commands: Commands, launch: Res<super::Launch>) {
                 FrameGraphText,
                 Text::new(""),
                 TextFont {
-                    font_size: 11.0,
+                    font_size: 8.0,
                     ..default()
                 },
                 TextColor(Color::srgb(0.92, 0.97, 0.95)),
                 Node {
-                    height: px(16),
+                    height: px(8),
                     ..default()
                 },
             ));

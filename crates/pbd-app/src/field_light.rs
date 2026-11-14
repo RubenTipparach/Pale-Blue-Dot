@@ -549,7 +549,7 @@ fn drop_the_field(
         }
     }
     *frames = frames.wrapping_add(1);
-    if *frames % 600 == 0 {
+    if (*frames).is_multiple_of(600) {
         rows.shared.retain(|base, _| standard.get(*base).is_some());
     }
 }
@@ -822,13 +822,15 @@ fn light_from_the_field(
 
 /// Pack a mesh's room lights again when they change: a light a craft carries
 /// moves with it (`sail-the-cog` step 3, part 4).
-fn repack_room_lights(
-    meshes: Query<
-        (Entity, &RoomLights),
-        (Changed<RoomLights>, With<MeshMaterial3d<FieldLitMaterial>>),
-    >,
-    mut rows: ResMut<FieldRows>,
-) {
+/// The field-lit meshes whose room lights changed this frame.
+type ChangedRoomLights<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static RoomLights),
+    (Changed<RoomLights>, With<MeshMaterial3d<FieldLitMaterial>>),
+>;
+
+fn repack_room_lights(meshes: ChangedRoomLights, mut rows: ResMut<FieldRows>) {
     for (entity, lights) in &meshes {
         let Some(slot) = rows.slots.get(&entity).copied() else {
             continue;

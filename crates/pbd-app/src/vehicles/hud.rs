@@ -20,16 +20,16 @@ pub fn spawn(mut commands: Commands) {
     commands.spawn((
         Text::new(""),
         TextFont {
-            font_size: 13.0,
+            font_size: 10.0,
             ..default()
         },
         TextColor(Color::srgb(0.92, 0.97, 0.95)),
-        TextShadow::default(),
+        crate::ui_kit::text_shadow(),
         Node {
             position_type: PositionType::Absolute,
-            left: px(10),
-            bottom: px(64),
-            padding: UiRect::all(px(9)),
+            left: px(5),
+            bottom: px(40),
+            padding: UiRect::all(px(5)),
             ..default()
         },
         BackgroundColor(Color::srgba(0.02, 0.035, 0.05, 0.88)),

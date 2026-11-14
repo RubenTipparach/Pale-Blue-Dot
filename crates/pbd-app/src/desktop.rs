@@ -1108,6 +1108,7 @@ pub fn run(args: &[String]) {
     .insert_resource(opening)
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
+    .init_resource::<menu::SettingsTab>()
     .add_systems(Startup, menu::spawn)
     .add_systems(
         PostStartup,
@@ -1144,6 +1145,7 @@ pub fn run(args: &[String]) {
         (
             menu::press_graphics,
             menu::label_graphics,
+            menu::settings_tabs,
             menu::wheel_scroll,
         )
             .chain(),
@@ -1356,6 +1358,9 @@ pub fn run(args: &[String]) {
     if launch.fixed || (launch.capture.is_some() && !launch.real_time) {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(step));
     }
+    // The UI kit (`stone-and-wood-ui`): its pieces, fonts and scale are in
+    // place in `finish`, before the loading screen's first frame.
+    app.add_plugins(pbd_app::ui_kit::UiKitPlugin);
     // The loading screen (`loading-screen`): added last, because it takes
     // over `Main` from the plugins that made it.
     app.add_plugins(pbd_app::loading::LoadingPlugin {

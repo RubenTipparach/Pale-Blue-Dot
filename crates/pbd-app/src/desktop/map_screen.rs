@@ -17,7 +17,7 @@
 //! A capture (the clock pinned) builds what it shows in place, so its
 //! picture is a function of its flags.
 
-use super::menu::{self, EDGE, INK, MINT, PANEL_FILL, Panel, Screen};
+use super::menu::{self, Panel, Screen};
 use avian3d::prelude::Position;
 use bevy::asset::RenderAssetUsages;
 use bevy::image::ImageSampler;
@@ -38,6 +38,7 @@ use pbd_app::overlay::{OverlayMode, RAMPS, overlay_rgba, overlay_texels};
 use pbd_app::planet::{PLANET_RADIUS, terrain_config};
 use pbd_app::saves::WorldSave;
 use pbd_app::sky::Sun;
+use pbd_app::ui_kit::{self, KitPiece, KitText, Plaque, Set, UiKit, plaque, plaque_label};
 use pbd_app::vehicles::Vehicle;
 use pbd_app::walking::{Walker, WalkingReadout};
 use pbd_app::world_map::{
@@ -547,7 +548,9 @@ pub fn spawn(
     mut bases: ResMut<Assets<MapImageMaterial>>,
     layers: Res<MapLayers>,
     launch: Option<Res<MapLaunch>>,
+    kit: Res<UiKit>,
 ) {
+    let kit = &*kit;
     let base = bases.add(MapImageMaterial {
         image: Handle::default(),
         grey: grey_of(false),
@@ -641,8 +644,8 @@ pub fn spawn(
                             ImageNode::new(icons.craft.clone()),
                             hidden(Node {
                                 position_type: PositionType::Absolute,
-                                width: px(18),
-                                height: px(18),
+                                width: px(10),
+                                height: px(10),
                                 ..default()
                             }),
                         ));
@@ -651,111 +654,99 @@ pub fn spawn(
                             ImageNode::new(icons.arrow.clone()),
                             hidden(Node {
                                 position_type: PositionType::Absolute,
-                                width: px(34),
-                                height: px(34),
+                                width: px(17),
+                                height: px(17),
                                 ..default()
                             }),
                         ));
                     });
             });
-            legend(root, &layers);
+            // The map's frame at the window's edge: the stone moulding with
+            // the rough-rock corner blocks, no face over the map
+            // (`stone-and-wood-ui`, the Map tab).
             root.spawn((
+                kit.nine(Set::Stone, "map-frame"),
+                KitPiece("map-frame".into()),
+                full(),
+                FocusPolicy::Pass,
+            ));
+            legend(root, kit, &layers);
+            root.spawn((
+                kit.nine(Set::Stone, "tooltip"),
+                KitPiece("tooltip".into()),
                 Node {
                     position_type: PositionType::Absolute,
-                    right: px(12),
-                    bottom: px(12),
-                    padding: UiRect::axes(px(10), px(6)),
-                    border: UiRect::all(px(1)),
+                    right: px(24),
+                    bottom: px(24),
+                    padding: UiRect::new(px(6), px(6), px(4), px(4)),
                     ..default()
                 },
-                BorderColor::all(EDGE),
-                BackgroundColor(PANEL_FILL),
             ))
             .with_children(|corner| {
                 corner.spawn((
                     MapReadout,
                     Text::new(""),
                     TextFont {
-                        font_size: 12.0,
+                        font_size: 10.0,
                         ..default()
                     },
-                    TextColor(INK),
+                    TextColor(ui_kit::TEXT),
                 ));
             });
         });
     commands.insert_resource(icons);
 }
 
-fn legend(root: &mut ChildSpawnerCommands, layers: &MapLayers) {
+fn legend(root: &mut ChildSpawnerCommands, kit: &UiKit, layers: &MapLayers) {
     let heading = |panel: &mut ChildSpawnerCommands, text: &str| {
         panel.spawn((
-            Text::new(text.to_string()),
-            TextFont {
-                font_size: 11.0,
-                ..default()
-            },
-            TextColor(MINT),
+            KitText::new(text, ui_kit::TITLE).shadow(ui_kit::INK),
             Node {
-                margin: UiRect::top(px(6)),
+                margin: UiRect::top(px(3)),
                 ..default()
             },
         ));
     };
+    // Stone plaques; a chosen one stays pressed (`paint_legend`).
     let button = |row: &mut ChildSpawnerCommands, label: &str, what: MapButton| {
-        row.spawn((
-            Button,
-            what,
-            Node {
-                padding: UiRect::axes(px(8), px(4)),
-                border: UiRect::all(px(1)),
-                ..default()
-            },
-            BorderColor::all(EDGE),
-            BackgroundColor(Color::srgba(0.06, 0.13, 0.15, 0.9)),
-        ))
-        .with_children(|b| {
-            b.spawn((
-                Text::new(label.to_string()),
-                TextFont {
-                    font_size: 12.0,
-                    ..default()
-                },
-                TextColor(INK),
-            ));
-        });
+        row.spawn((plaque(kit, Set::Stone, 30.0), what))
+            .with_children(|b| {
+                b.spawn(plaque_label(Set::Stone, label));
+            });
     };
     let wrap = Node {
         flex_wrap: FlexWrap::Wrap,
-        column_gap: px(4),
-        row_gap: px(4),
+        column_gap: px(2),
+        row_gap: px(2),
         ..default()
     };
+    // The drawer: an in-play sub-panel in the dressed-stone moulding, inside
+    // the map frame's corner.
     root.spawn((
+        kit.nine(Set::Stone, "frame"),
+        KitPiece("frame".into()),
         Node {
             position_type: PositionType::Absolute,
-            left: px(12),
-            top: px(12),
-            width: px(300),
+            left: px(22),
+            top: px(22),
+            width: px(196),
             flex_direction: FlexDirection::Column,
-            row_gap: px(5),
-            padding: UiRect::all(px(12)),
-            border: UiRect::all(px(1)),
+            row_gap: px(2),
+            padding: UiRect::all(px(14)),
             ..default()
         },
-        BorderColor::all(EDGE),
-        BackgroundColor(PANEL_FILL),
         FocusPolicy::Block,
         Interaction::default(),
     ))
     .with_children(|panel| {
-        panel.spawn(menu::title("MAP"));
+        menu::lintel(panel, kit, "MAP");
         panel.spawn((
             Text::new("M close  Esc close  wheel zoom  drag pan  Home find me"),
             TextFont {
-                font_size: 10.0,
+                font_size: 9.0,
                 ..default()
             },
-            TextColor(INK),
+            TextColor(ui_kit::TEXT_DIM),
         ));
         heading(panel, "OVERLAY");
         panel.spawn(wrap.clone()).with_children(|row| {
@@ -768,7 +759,7 @@ fn legend(root: &mut ChildSpawnerCommands, layers: &MapLayers) {
                 );
             }
         });
-        heading(panel, "WEATHER, AT THE HOUR ON THE CLOCK");
+        heading(panel, "WEATHER AT THE HOUR");
         panel.spawn(wrap.clone()).with_children(|row| {
             for overlay in Overlay::ALL {
                 button(
@@ -788,25 +779,25 @@ fn legend(root: &mut ChildSpawnerCommands, layers: &MapLayers) {
             MapNote,
             Text::new(""),
             TextFont {
-                font_size: 10.0,
+                font_size: 9.0,
                 ..default()
             },
-            TextColor(INK),
+            TextColor(ui_kit::TEXT),
         ));
         panel.spawn((
             super::map_sites::SitesNote,
             Text::new(""),
             TextFont {
-                font_size: 10.0,
+                font_size: 9.0,
                 ..default()
             },
-            TextColor(INK),
+            TextColor(ui_kit::TEXT),
         ));
         panel.spawn((
             MapKey,
             Node {
                 flex_direction: FlexDirection::Column,
-                row_gap: px(3),
+                row_gap: px(1),
                 ..default()
             },
         ));
@@ -818,10 +809,10 @@ fn key_text(text: impl Into<String>) -> impl Bundle {
     (
         Text::new(text.into()),
         TextFont {
-            font_size: 10.0,
+            font_size: 9.0,
             ..default()
         },
-        TextColor(INK),
+        TextColor(ui_kit::TEXT),
     )
 }
 
@@ -891,15 +882,15 @@ pub fn paint_key(
             commands.entity(key).with_children(|rows| {
                 for (row, (name, [r, g, b])) in layer.key.iter().enumerate() {
                     rows.spawn(Node {
-                        column_gap: px(6),
+                        column_gap: px(3),
                         align_items: AlignItems::Center,
                         ..default()
                     })
                     .with_children(|line| {
                         line.spawn((
                             Node {
-                                width: px(14),
-                                height: px(10),
+                                width: px(7),
+                                height: px(5),
                                 border: UiRect::all(px(1)),
                                 ..default()
                             },
@@ -929,11 +920,11 @@ pub fn paint_key(
             commands.entity(key).with_children(|rows| {
                 rows.spawn((
                     Node {
-                        height: px(10),
+                        height: px(5),
                         border: UiRect::all(px(1)),
                         ..default()
                     },
-                    BorderColor::all(EDGE),
+                    BorderColor::all(ui_kit::WELL),
                     BackgroundGradient::from(LinearGradient::to_right(stops)),
                 ));
                 rows.spawn(Node {
@@ -1006,29 +997,22 @@ pub fn to_globe(
 pub fn paint_legend(
     choice: Res<MapChoice>,
     layers: Res<MapLayers>,
-    mut buttons: Query<(&MapButton, &mut BackgroundColor, &mut BorderColor)>,
+    mut buttons: Query<(&MapButton, &mut Plaque)>,
     mut notes: Query<&mut Text, With<MapNote>>,
 ) {
     if !choice.is_changed() {
         return;
     }
-    for (button, mut fill, mut border) in &mut buttons {
+    for (button, mut plaque) in &mut buttons {
         let on = match *button {
             MapButton::Overlay(overlay) => choice.overlay == overlay,
             MapButton::Night => choice.night,
             MapButton::Clouds => choice.clouds,
             MapButton::OnGlobe => choice.on_globe,
         };
-        fill.0 = if on {
-            Color::srgba(0.35, 0.28, 0.1, 0.95)
-        } else {
-            Color::srgba(0.06, 0.13, 0.15, 0.9)
-        };
-        *border = BorderColor::all(if on {
-            Color::srgb(0.95, 0.75, 0.3)
-        } else {
-            EDGE
-        });
+        if plaque.latched != on {
+            plaque.latched = on;
+        }
     }
     for mut text in &mut notes {
         text.0 = match choice.overlay {
@@ -1290,11 +1274,14 @@ pub fn wanted_tiles(view: MapView, size: Vec2, level: usize) -> Vec<(TileKey, i3
     tiles
 }
 
-fn place(node: &mut Node, left: f32, top: f32, width: f32, height: f32) {
-    node.left = px(left);
-    node.top = px(top);
-    node.width = px(width);
-    node.height = px(height);
+/// Put a node at a rectangle in window pixels. The map lays itself out in
+/// the window's own pixels; a node is in native UI pixels, `s` of them to
+/// one (`ui_kit`'s whole-number UI scale).
+fn place(node: &mut Node, s: f32, left: f32, top: f32, width: f32, height: f32) {
+    node.left = px(left / s);
+    node.top = px(top / s);
+    node.width = px(width / s);
+    node.height = px(height / s);
     node.position_type = PositionType::Absolute;
 }
 
@@ -1344,10 +1331,12 @@ pub fn lay_out(
     mut copies: Query<(&LayerCopy, &mut ImageNode, &mut Node), Without<BaseCopy>>,
     tile_layer: Query<Entity, With<TileLayer>>,
     mut tiles: TileQuery,
+    ui_scale: Option<Res<UiScale>>,
 ) {
     if *screen != Screen::Map {
         return;
     }
+    let s = ui_scale.map_or(1.0, |u| u.0.max(1e-3));
     let Ok(window) = windows.single() else {
         return;
     };
@@ -1365,7 +1354,7 @@ pub fn lay_out(
         set_image(&mut images, &live.base, base, grey);
         for (copy, mut node) in &mut bases {
             node.display = Display::Flex;
-            place(&mut node, x_of(copy.0 as f32), top, w, h);
+            place(&mut node, s, x_of(copy.0 as f32), top, w, h);
         }
     }
     let layer = match choice.overlay {
@@ -1380,7 +1369,7 @@ pub fn lay_out(
                 // south: drawn turned, as the base is.
                 image.flip_y = true;
                 node.display = Display::Flex;
-                place(&mut node, x_of(copy.0 as f32), top, w, h);
+                place(&mut node, s, x_of(copy.0 as f32), top, w, h);
             }
             None => node.display = Display::None,
         }
@@ -1422,6 +1411,7 @@ pub fn lay_out(
                     set_image(&mut images, &material.0, &handle, grey);
                     place(
                         &mut node,
+                        s,
                         at_left - 0.5,
                         at_top - 0.5,
                         side_x + 1.0,
@@ -1433,6 +1423,7 @@ pub fn lay_out(
                 let mut node = Node::default();
                 place(
                     &mut node,
+                    s,
                     at_left - 0.5,
                     at_top - 0.5,
                     side_x + 1.0,
@@ -1564,10 +1555,12 @@ pub fn markers(
     layer: Query<Entity, With<MarkerLayer>>,
     mut marks: Query<(Entity, &MapMarker, &mut Node, &mut UiTransform)>,
     mut readout: Query<&mut Text, With<MapReadout>>,
+    ui_scale: Option<Res<UiScale>>,
 ) {
     if *screen != Screen::Map {
         return;
     }
+    let s = ui_scale.map_or(1.0, |u| u.0.max(1e-3));
     let Ok(window) = windows.single() else {
         return;
     };
@@ -1616,8 +1609,8 @@ pub fn markers(
             (Val::Px(w), Val::Px(h)) => (w, h),
             _ => (20.0, 20.0),
         };
-        node.left = px(pixel.x - w / 2.0);
-        node.top = px(pixel.y - h / 2.0);
+        node.left = px(pixel.x / s - w / 2.0);
+        node.top = px(pixel.y / s - h / 2.0);
         node.display = Display::Flex;
         if let Some(heading) = heading {
             turn.rotation = Rot2::radians(heading);
@@ -1632,8 +1625,8 @@ pub fn markers(
                         ImageNode::new(icons.craft.clone()),
                         Node {
                             position_type: PositionType::Absolute,
-                            width: px(14),
-                            height: px(14),
+                            width: px(8),
+                            height: px(8),
                             display: Display::None,
                             ..default()
                         },
@@ -2135,6 +2128,7 @@ mod tests {
     #[test]
     fn a_registered_layer_appears_in_the_legend() {
         let mut app = App::new();
+        pbd_app::ui_kit::install_bare(&mut app);
         app.init_resource::<Assets<Image>>()
             .init_resource::<Assets<MapLiveMaterial>>()
             .init_resource::<Assets<MapImageMaterial>>()
@@ -2155,13 +2149,17 @@ mod tests {
         for (button, children) in buttons.iter(app.world()) {
             if *button == MapButton::Overlay(MapOverlay::Layer(0)) {
                 for child in children.iter() {
-                    if let Some(text) = app.world().get::<Text>(child) {
-                        texts.push(text.0.clone());
+                    if let Some(text) = app.world().get::<KitText>(child) {
+                        texts.push(text.text.clone());
                     }
                 }
             }
         }
-        assert_eq!(texts, vec!["Test layer".to_string()]);
+        assert_eq!(
+            texts,
+            vec!["Test layer".to_string()],
+            "its plaque, in the kit's font"
+        );
     }
 
     /// The legend's weather buttons are one group, and "Show on globe" puts
@@ -2233,8 +2231,9 @@ mod tests {
     fn drawn_map() -> App {
         use pbd_core::daylight::Clock;
         let mut app = App::new();
-        app.add_plugins(MinimalPlugins)
-            .init_resource::<Assets<Image>>()
+        app.add_plugins(MinimalPlugins);
+        pbd_app::ui_kit::install_bare(&mut app);
+        app.init_resource::<Assets<Image>>()
             .init_resource::<Assets<MapLiveMaterial>>()
             .init_resource::<Assets<MapImageMaterial>>()
             .insert_resource(Screen::Map)

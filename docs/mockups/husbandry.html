@@ -1,0 +1,1790 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pens, Nests and Pedigrees</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* The house style of the mockups (animals.html, farming.html): dark ground, amber for what you can press, one deliberate dark look. */
+:root{
+  color-scheme: dark;
+  --ground:#0e100c; --panel:rgba(10,22,22,.86); --panel-solid:#18170f; --raise:#1f1d15; --line:rgba(226,206,160,.17);
+  --ink:#ece4d2; --muted:#a89d86; --amber:#f0b43c; --sky:#8fc3d8; --moss:#8fdc9a; --warn:#ff6b57; --glow:#c6ff78; --rose:#e98aa0;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif; --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{background:var(--ground);color:var(--ink);margin:0}
+body{font-family:var(--body);font-size:15px;line-height:1.55;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 60px}
+.wrap{max-width:1200px;margin:0 auto;display:grid;gap:22px;min-width:0}
+h1,h2,h3,h4{font-family:var(--display);font-weight:700;letter-spacing:.02em;line-height:1.05;text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,5vw,46px)} h2{font-size:26px;margin-bottom:8px} h3{font-size:19px;letter-spacing:.03em;margin-bottom:6px} h4{font-size:16px;letter-spacing:.04em}
+p{margin:0 0 10px;max-width:76ch} a{color:var(--sky)} code{font-family:var(--mono);font-size:12.5px;color:var(--sky);overflow-wrap:anywhere}
+.eyebrow{font-family:var(--display);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.pill{display:inline-block;font-family:var(--display);font-weight:600;letter-spacing:.12em;text-transform:uppercase;font-size:12px;padding:3px 9px;border-radius:3px;border:1px solid var(--amber);color:var(--amber)}
+header.top{display:grid;gap:10px} header.top .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.lede{font-size:17px;max-width:74ch} .muted{color:var(--muted)} .small{font-size:13px}
+img{image-rendering:pixelated}
+details.about{border:1px solid var(--line);border-radius:6px;padding:8px 12px;background:var(--raise)} details.about summary{cursor:pointer;font-family:var(--display);font-size:16px;letter-spacing:.04em}
+details.about p{font-size:14px;color:var(--muted);margin-top:8px}
+
+/* tabs: one part of the mockup at a time, so only one 3D view is ever on the page */
+nav.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line);padding-bottom:6px}
+nav.tabs button{all:unset;cursor:pointer;font-family:var(--display);font-size:16px;letter-spacing:.05em;padding:6px 11px;border:1px solid var(--line);border-radius:4px 4px 0 0;color:var(--muted)}
+nav.tabs button[aria-selected="true"]{color:var(--amber);border-color:var(--amber);background:rgba(240,180,60,.10)}
+nav.tabs button:hover{color:var(--ink)} nav.tabs button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+nav.tabs .grp{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);align-self:center;padding:0 4px 0 8px}
+.tabpanel{display:grid;gap:14px;min-width:0}
+.tabpanel[hidden]{display:none}
+
+/* 3D stage */
+.stage{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#000;height:min(74vh,700px);min-height:440px}
+.stage canvas.gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.panel{position:absolute;background:var(--panel);border:1px solid #5d7a78;border-radius:0;z-index:2}
+.ctl{top:26px;left:8px;padding:9px;display:grid;gap:7px;width:min(290px,calc(100% - 16px))}
+.ctl .seg{display:flex;flex-wrap:wrap;gap:4px}
+.btn{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:4px;padding:3px 8px;font-family:var(--display);font-size:14px;letter-spacing:.05em;color:var(--ink);background:rgba(0,0,0,.15)}
+.btn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+.btn:hover{border-color:rgba(240,180,60,.55)} .btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.btn[disabled]{opacity:.4;cursor:default}
+.btn.go{border-color:var(--amber);color:var(--amber)}
+.ctl label{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:6px}
+.ctl output{font-family:var(--mono);color:var(--ink);font-size:12px}
+input[type=range]{width:100%;accent-color:var(--amber);margin:0}
+select,input[type=search],input[type=number]{background:var(--panel-solid);color:var(--ink);border:1px solid var(--line);border-radius:3px;padding:5px;font-family:var(--body);font-size:14px;min-width:0}
+.who{right:8px;top:26px;padding:9px 11px;width:min(280px,calc(100% - 16px));display:grid;gap:5px;font-size:13px;max-height:calc(100% - 100px);overflow:auto}
+.who>*{min-width:0} .who .hd{display:flex;gap:8px;align-items:center} .who .hd img{width:72px;height:72px;flex:none}
+.who .k{font-family:var(--display);letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--muted)}
+.who b.nm{font-family:var(--display);font-size:19px;letter-spacing:.03em;display:block}
+.who .line{display:block;font-family:var(--mono);font-size:11px;color:var(--sky);overflow-wrap:anywhere;background:rgba(0,0,0,.25);padding:4px 6px}
+.dbg{position:absolute;left:8px;top:5px;font-family:ui-monospace,Consolas,"DejaVu Sans Mono",monospace;font-size:12px;color:#fff;text-shadow:1px 1px 0 #000;pointer-events:none;white-space:nowrap;overflow:hidden;max-width:calc(100% - 16px);z-index:2}
+.hotbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:5px;max-width:calc(100% - 16px);flex-wrap:wrap;justify-content:center;z-index:2}
+.hotbar .slot{position:relative;width:44px;height:44px;display:grid;place-items:center;background:rgba(10,22,22,.82);border:1px solid #5d7a78}
+.hotbar .slot img{width:24px;height:24px} .hotbar .slot.big img{width:36px;height:36px}
+.hotbar .slot .n{position:absolute;right:3px;bottom:1px;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#fff;text-shadow:1px 1px 0 #000}
+.hotbar .slot.sel{border:2px solid #e8a83a}
+.toast{left:50%;bottom:64px;transform:translateX(-50%);padding:10px 16px;text-align:center;max-width:min(380px,calc(100% - 24px));font-size:14px;opacity:0;transition:opacity .35s;pointer-events:none}
+.toast b{font-family:var(--display);font-size:20px;display:block}
+.meter{height:12px;border:1px solid #5d7a78;background:rgba(0,0,0,.4);position:relative}
+.meter i{position:absolute;inset:0 auto 0 0;background:var(--amber)}
+.tag3d{position:absolute;z-index:1;font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#fff;text-shadow:1px 1px 0 #000;white-space:nowrap;transform:translate(-50%,-100%);pointer-events:none;text-align:center;line-height:1.25}
+@media (max-width:760px){
+  .stage{height:84vh;min-height:560px}
+  .who{top:auto;bottom:62px;right:8px;max-height:40%}
+  .ctl{max-height:46%;overflow:auto}
+  .hotbar .slot{width:38px;height:38px}
+}
+
+/* reading blocks */
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:18px}
+.cols>div{min-width:0}
+.note{border-left:3px solid var(--amber);padding:8px 12px;background:var(--raise);border-radius:0 6px 6px 0;font-size:14px}
+.note p:last-child{margin:0}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:6px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--display);letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--muted);font-weight:600}
+tr:last-child td{border-bottom:none} td img{vertical-align:middle}
+td.num,th.num{text-align:right;font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+.tag{display:inline-block;font-family:var(--display);font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;padding:0 6px;border-radius:2px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.tag.dom{color:var(--amber);border-color:rgba(240,180,60,.55)} .tag.tame{color:var(--moss);border-color:rgba(143,220,154,.5)}
+.tag.wild{color:var(--muted)} .tag.prot{color:var(--sky);border-color:rgba(143,195,216,.5)} .tag.pred{color:var(--warn);border-color:rgba(255,107,87,.5)}
+.tag.src{color:#cbbfa6}
+ol.q{display:grid;gap:14px;padding-left:22px;margin:0} ol.q li{max-width:84ch} ol.q b{font-family:var(--display);font-size:18px;letter-spacing:.02em}
+.rec{color:var(--moss)}
+.mono{font-family:var(--mono);font-size:12px}
+pre.code{font-family:var(--mono);font-size:12px;color:var(--sky);background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:10px;overflow-x:auto;margin:0;white-space:pre}
+
+/* Kingdom */
+.kgrid{display:grid;grid-template-columns:minmax(0,330px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.kgrid{grid-template-columns:minmax(0,1fr)}}
+.tree{background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:10px 10px 10px 6px;font-size:14px}
+.tree ul{list-style:none;margin:0;padding-left:16px;position:relative}
+.tree>ul{padding-left:4px}
+.tree li{position:relative;padding:2px 0 2px 12px}
+.tree ul ul li::before{content:"";position:absolute;left:0;top:0;bottom:0;border-left:1px solid rgba(226,206,160,.3)}
+.tree ul ul li:last-child::before{bottom:auto;height:14px}
+.tree ul ul li::after{content:"";position:absolute;left:0;top:14px;width:9px;border-top:1px solid rgba(226,206,160,.3)}
+.tree button{all:unset;cursor:pointer;font-family:var(--display);font-size:16px;letter-spacing:.03em;padding:1px 5px;border-radius:3px}
+.tree button[aria-pressed="true"]{color:var(--amber);background:rgba(240,180,60,.12)}
+.tree button:focus-visible{outline:2px solid var(--amber)}
+.tree .ct{font-family:var(--mono);font-size:11px;color:var(--muted)} .tree .strip{display:flex;gap:2px;margin:1px 0 2px 5px;flex-wrap:wrap} .tree .strip img{width:24px;height:24px;object-fit:contain}
+.tree .alien>button{color:#c9a8ff}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+.filters label{display:grid;gap:2px;font-size:11px;font-family:var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(255px,100%),1fr));gap:9px;margin-top:10px}
+.card{background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:9px;display:grid;grid-template-columns:72px minmax(0,1fr);gap:3px 10px;align-items:start;min-width:0}
+.card .ic{width:72px;height:72px;display:grid;place-items:center;background:rgba(0,0,0,.22);border-radius:4px}
+.card h4{font-size:17px} .card .meta{font-size:12.5px;color:var(--muted);grid-column:2} .card .tags{display:flex;flex-wrap:wrap;gap:3px;grid-column:2}
+.card .gives{display:flex;gap:2px;grid-column:1 / span 2;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)} .card .gives img{width:24px;height:24px}
+.card .txt{grid-column:1 / span 2;font-size:12.5px;color:var(--muted);margin:0}
+
+/* Breeding */
+.bgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:16px;align-items:start}
+@media (max-width:900px){.bgrid{grid-template-columns:minmax(0,1fr)}}
+.herd{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(150px,100%),1fr));gap:6px}
+.ind{all:unset;cursor:pointer;background:var(--raise);border:1px solid var(--line);border-radius:5px;padding:5px 7px;display:grid;grid-template-columns:36px 1fr;gap:0 6px;font-size:12.5px;min-width:0}
+.ind img{width:36px;height:36px;grid-row:span 2} .ind b{font-family:var(--display);font-size:15px;letter-spacing:.03em}
+.ind.sire{border-color:var(--sky);box-shadow:0 0 0 1px var(--sky) inset} .ind.dam{border-color:var(--rose);box-shadow:0 0 0 1px var(--rose) inset}
+.ind:focus-visible{outline:2px solid var(--amber)}
+.sw{display:inline-block;width:10px;height:10px;border:1px solid #000;vertical-align:-1px;margin-right:3px}
+.pred{background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:10px;display:grid;gap:8px}
+.trait{display:grid;grid-template-columns:86px minmax(0,1fr) 118px;gap:8px;align-items:center;font-size:13px}
+.trait .bar{position:relative;height:22px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
+.trait .band{position:absolute;top:0;bottom:0;background:rgba(240,180,60,.22);border-left:1px solid var(--amber);border-right:1px solid var(--amber)}
+.trait .tick{position:absolute;top:3px;bottom:3px;width:3px;margin-left:-1px;background:var(--amber)}
+.trait .pm{position:absolute;top:-4px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;margin-left:-5px}
+.trait .pm.s{border-top:7px solid var(--sky)} .trait .pm.d{border-top:7px solid var(--rose);top:auto;bottom:-4px;border-top:0;border-bottom:7px solid var(--rose)}
+.trait .v{font-family:var(--mono);font-size:11.5px;text-align:right}
+.odds{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px}
+.odds span{background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:3px;padding:1px 6px}
+.kids{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(170px,100%),1fr));gap:6px}
+.kid{background:rgba(0,0,0,.2);border:1px solid var(--line);border-radius:5px;padding:6px;font-size:12px;display:grid;gap:2px}
+.kid .mut{color:var(--glow)} .kid .morph{color:var(--amber)}
+.mini{display:grid;grid-template-columns:44px 1fr;gap:1px 4px;align-items:center;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.mini i{display:block;height:5px;background:var(--amber)}
+.ped{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-items:center;font-size:12px}
+.ped .col{display:grid;gap:6px}
+.ped .p{border:1px solid var(--line);border-radius:4px;padding:4px 6px;background:var(--raise);min-width:0}
+.ped .p.s{border-left:3px solid var(--sky)} .ped .p.d{border-left:3px solid var(--rose)} .ped .p.end{opacity:.65}
+.warn{color:var(--warn)}
+.chart{background:var(--raise);border:1px solid var(--line);border-radius:6px;padding:10px;position:relative}
+.chart svg{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)} .legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px}
+.tip{position:absolute;pointer-events:none;background:#0b0d0a;border:1px solid var(--line);padding:4px 8px;font-size:12px;border-radius:4px;opacity:0;transition:opacity .1s;z-index:5;white-space:nowrap}
+
+/* Economy */
+.herdin{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr));gap:6px}
+.herdin label{display:grid;grid-template-columns:36px 1fr 64px;gap:6px;align-items:center;background:var(--raise);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-size:13px}
+.herdin img{width:36px;height:36px}
+.ebars{display:grid;gap:4px}
+.erow{display:grid;grid-template-columns:150px minmax(0,1fr) 80px;gap:8px;align-items:center;font-size:13px}
+.erow .b{height:14px;border-radius:0 4px 4px 0} .erow .v{font-family:var(--mono);font-size:12px;text-align:right}
+.erow img{width:24px;height:24px;vertical-align:middle;margin-right:4px}
+@media (max-width:520px){.erow{grid-template-columns:118px minmax(0,1fr) 64px}.trait{grid-template-columns:78px minmax(0,1fr) 60px}}
+footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="row"><span class="pill">Proposal, not built</span><span class="eyebrow">Design mockup &middot; 2026-11-14 &middot; <code>animal-husbandry</code></span></div>
+  <h1>Pens, Nests and Pedigrees</h1>
+  <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk">All Pale Blue Dot mockups (the tracker)</a></p>
+  <p class="lede">The animal kingdom of every world in one tree, and keeping animals on Tenebris: taming wild ones, pens and coops, what each needs and gives, eggs that hatch, young that grow, and breeding that passes traits from both parents. The owner: <i>"we need a whole animal kingdom and domestication of animals, eggs, breeding".</i> None of it is in the game yet; today the game's only animals are eight fish.</p>
+  <details class="about"><summary>About this mockup, and which art is whose</summary>
+    <p>It extends the animals mockup (M7, <code>animals.html</code>: its species, biomes, taming by a trust meter and drops), the seas and rivers mockup (M25, <code>ocean.html</code>: its 41 water creatures and ducks with eggs), the fish lab (M9: a creature rolled from a species and a seed, rare morphs 1 in 64), the planets mockup (M1: Sequoia's, Wick's and Fallow's species) and farming (M8: pens beside the fields, compost from muck). It contradicts none of them, and redraws none of their art. Dishes made from meat, eggs, milk and honey are in the cooking mockup, drafted beside this one; this page lists them only as products.</p>
+    <p><b>The game's own art</b>, copied byte-identical into <code>husbandry/game/</code>: the hex ground is the shipped terrain atlas (<code>assets/tilesets/atlas.png</code>, the fields sheet read the way <code>planet_surface.wgsl</code> reads it); fences, coop, barn, stable, sty, hives and the farmhouse are settlement textures (<code>assets/textures/settlement/</code>) at their <code>repeat_m</code>; the eight fish in the Kingdom are the game's item icons (<code>assets/items/fish</code>); the HUD is the game's debug line and hotbar slots. <b>Other mockups' art</b>, copied byte-identical: M7's portraits, hides and drops (<code>husbandry/m7/</code>), M25's creatures (<code>m25/</code>), M9's fish (<code>m9/</code>), M1's species and Fallow's fleece (<code>m1/</code>), M8's wheat, turnip, kale and compost (<code>m8/</code>). <b>Mockup-only, new here</b>: the domestic breeds and new species (yard hen, cockerel, chick, rootling, fellrunner, herd hound, hedge cat, yard dabbler, clover bee, field mouse), their hides, the products, tools and needs icons, and the straw and mud floors, all pixel art drawn in code with the balatro-pixel-art kit (<code>tools/art/husbandry_art.py</code>, which reuses M7's body-plan functions): Sweaft-64 colours, hard alpha, shown only at whole-number scales. Water, glass and the sky are flat colour, as the game draws them. The 3D animals are built from boxes, as M7 builds them, each box wearing its hide.</p>
+    <p class="small">Rendered for review in a cloud container with no GPU (Chromium on SwiftShader): the screenshots say how it looks, never how fast it runs.</p>
+  </details>
+  <nav class="tabs" role="tablist" aria-label="Parts of the mockup">
+    <span class="grp">3D</span><button role="tab" data-tab="farm">Farmstead</button><button role="tab" data-tab="tame">Taming</button><button role="tab" data-tab="hatch">Hatchery</button>
+    <span class="grp">Guide</span><button role="tab" data-tab="kingdom">Kingdom</button><button role="tab" data-tab="breed">Breeding</button><button role="tab" data-tab="economy">Economy</button><button role="tab" data-tab="engine">In the engine</button><button role="tab" data-tab="decisions">Decisions</button>
+  </nav>
+</header>
+
+<!-- ================================================================== FARMSTEAD -->
+<section id="tab-farm" class="tabpanel" role="tabpanel">
+  <div class="stage" id="stage-farm">
+    <div class="dbg" id="farmDbg">farmstead | fields | 10:00</div>
+    <div class="panel ctl">
+      <label>Time of day <output id="farmTimeOut">10:00</output></label>
+      <input type="range" id="farmTime" min="0" max="24" step="0.25" value="10" aria-label="Time of day">
+      <div class="seg"><button class="btn" data-ft="10">Day</button><button class="btn" data-ft="18.6">Dusk</button><button class="btn" data-ft="22.5">Night</button><button class="btn" id="farmClock" aria-pressed="false">Run the clock</button></div>
+      <div class="seg"><button class="btn" id="coopShut" aria-pressed="true">Coop shut at dusk</button><button class="btn" id="houndOn" aria-pressed="true">Hound on guard</button></div>
+      <div class="small muted" id="farmNote">Drag to look, scroll or pinch to zoom. Click an animal or a building.</div>
+    </div>
+    <div class="panel who" id="farmWho"><span class="k">The farm</span><b class="nm">Hollin Farm, Tenebris fields</b><span>36 animals in 5 pens, a pond and the yard. Click one to see its record, needs and genome, or a building to see what it holds.</span></div>
+    <div class="panel toast" id="farmToast"></div>
+    <div class="hotbar" id="farmHot"></div>
+  </div>
+  <div class="cols">
+    <div><h3>What you are looking at</h3><p>A farmstead on Tenebris's fields, on hex cells 2.833 m across and 1 m a layer. Around the farmhouse: a <b>coop</b> and its run (yard hens and a cockerel pecking), a <b>barn</b> and pasture (plodders grazing), a <b>sheep pasture</b> (woolbacks and two ridge goats, worked by a herd hound), a <b>sty</b> (a rootling sow with her piglets in a line behind her), a <b>pond</b> with yard dabblers and their duck house, a <b>stable</b> and paddock with two fellrunners, <b>hives</b> beside the wheat, troughs in every pen, a kennel and a compost bin. A hedge cat keeps the barn.</p></div>
+    <div><h3>At night</h3><p>Hens go in and the coop shuts; grazers lie down together; ducks sleep on the water. The lanterns at each gate, the coop and barn doors, the stable and the farmhouse windows each light a tight pool; the moon is dim and the ground between is dark. After dark a <b>red fox</b> (M7) comes for the coop. A shut coop is safe, and the hound runs it off. Turn the hound off or leave the coop open to see what the owner is asked in Q2.</p></div>
+  </div>
+</section>
+
+<!-- ================================================================== TAMING -->
+<section id="tab-tame" class="tabpanel" role="tabpanel" hidden>
+  <div class="stage" id="stage-tame">
+    <div class="dbg" id="tameDbg">taming | fields | 10:00</div>
+    <div class="panel ctl" id="tameCtl">
+      <label for="tameSp">Wild animal</label>
+      <select id="tameSp"></select>
+      <div class="small" id="tameHow"></div>
+      <label>Trust <output id="tameTrustOut">0 / 100</output></label>
+      <div class="meter" aria-hidden="true"><i id="tameTrust" style="width:0%"></i></div>
+      <div class="seg"><button class="btn go" id="tCrouch">Approach crouched</button><button class="btn" id="tStand">Walk up standing</button></div>
+      <div class="seg"><button class="btn go" id="tFeed" disabled>Offer food</button><button class="btn" id="tLead" disabled>Lead to the pen</button><button class="btn" id="tReset">Reset</button></div>
+      <div class="seg"><button class="btn" data-tt="10">Day</button><button class="btn" data-tt="19">Dusk</button><button class="btn" data-tt="22.5">Night</button></div>
+    </div>
+    <div class="panel who" id="tameWho"></div>
+    <div class="panel toast" id="tameToast"></div>
+    <div class="hotbar" id="tameHot"></div>
+  </div>
+  <div class="cols">
+    <div><h3>Feeding a trust meter (M7's rule, with numbers)</h3><p>Crouch with the animal's favourite food in hand and it lets you to arm's reach (1.5 m). Each feed fills its trust by its species' gain times its temperament factor (1.3 for a calm one, 0.6 for a wild one, from its genome). Stand or run inside its fear radius (9 m, M7's) and it bolts and loses 10. Full trust: it follows you for a minute, or while it wears a lead; through a pen's gate it is yours, and its record is written at once on the durable path.</p></div>
+    <div><h3>The other four ways</h3><p><b>Raise young:</b> boarlets from a sounder become rootlings; pups from a pale wolf den, visited while the pack hunts at dusk, become herd hounds. <b>Hatch:</b> an egg from a wild nest hatches tame, which is how ducks are kept (a wild dabbler is protected, M25; its egg is not). <b>Swarm:</b> a spring swarm on a branch moves into an empty hive at dusk with a smoker. <b>Moves in:</b> a barn with feed draws field mice, and a dish of milk draws a hedge cat, which is never penned. <b>Wild only:</b> predators, migrants, hares, swarms of light and every fish (tanks are M9's). Try the red fox in the list.</p></div>
+  </div>
+</section>
+
+<!-- ================================================================== HATCHERY -->
+<section id="tab-hatch" class="tabpanel" role="tabpanel" hidden>
+  <div class="stage" id="stage-hatch">
+    <div class="dbg" id="hatchDbg">coop | day 0</div>
+    <div class="panel ctl">
+      <label>World day since the eggs were set <output id="hatchDayOut">day 0</output></label>
+      <input type="range" id="hatchDay" min="0" max="14" step="0.1" value="0" aria-label="Days since the eggs were set">
+      <div class="seg"><button class="btn" data-hd="0">Set</button><button class="btn" data-hd="2.8">Pipping</button><button class="btn" data-hd="3.2">Hatched</button><button class="btn" data-hd="7">Day 7</button><button class="btn" data-hd="13">Day 13</button></div>
+      <div class="seg"><button class="btn" data-ht="11">Day</button><button class="btn" data-ht="22.5">Night</button><button class="btn" id="incOn" aria-pressed="true">Incubator lamp</button></div>
+      <div class="small muted">A broody hen sits on 6 eggs at the back; the incubator holds 4 hen's and 2 duck eggs. The rows at the front are each animal's life stages at true size.</div>
+    </div>
+    <div class="panel who" id="hatchWho"></div>
+    <div class="hotbar" id="hatchHot"></div>
+  </div>
+  <div class="cols">
+    <div><h3>Eggs</h3><p>A hen lays in a nest box once a day. With a <b>cockerel</b> in the coop her egg is <b>fertile</b>: an item that carries its seed and both parents' ids, as M9 keeps a fish's seed in its slot. A fertile egg hatches under a <b>broody hen</b> (a hen with the broody trait sits on up to 8 and stops laying) or in an <b>incubator</b> (6 eggs, needs its lamp lit with oil or tallow). Hen's eggs take 3 world days, duck eggs 4; an egg left cold for a day will not hatch and is an egg to eat.</p></div>
+    <div><h3>Young</h3><p>Stages come from the birth day and the world day, so nothing about growth is saved. A chick is a pullet at 5 days and a laying hen at 10; a world day is 48 minutes of play (M8), so that is eight hours. Mammals carry their young: a woolback 5 days for one or two lambs, a plodder 8 for a calf, a rootling 4 for a litter of 4 to 8, a fellrunner 10 for a foal. Young follow their mother.</p></div>
+  </div>
+</section>
+
+<!-- ================================================================== KINGDOM -->
+<section id="tab-kingdom" class="tabpanel" role="tabpanel" hidden>
+  <div><h2>The animal kingdom</h2><p>Every animal on every world, from the game, M7, M25, M9, M1 and this page, in one tree grouped by <b>body form</b>. Life arose separately on each world, so a Sequoian crane is bird-form, not kin to Tenebris's birds; three alien branches fit no Tenebris class. Click a branch to filter, or filter by world, biome, class and role.</p></div>
+  <div class="kgrid">
+    <div class="tree" id="ktree"></div>
+    <div>
+      <div class="filters">
+        <label>World<select id="fWorld"></select></label>
+        <label>Biome<select id="fBiome"></select></label>
+        <label>Class<select id="fClass"></select></label>
+        <label>Role<select id="fRole"></select></label>
+        <label>Temperament<select id="fTemp"></select></label>
+        <label>Search<input type="search" id="fText" placeholder="name" size="10"></label>
+      </div>
+      <p class="small muted" id="kCount" style="margin:8px 0 0"></p>
+      <div class="cards" id="kcards"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== BREEDING -->
+<section id="tab-breed" class="tabpanel" role="tabpanel" hidden>
+  <div><h2>Breeding</h2><p>Pick a sire and a dam from the herd. The screen shows every offspring the pair can give, before you pair them: each gene's four equally likely values (ticks) and the range they span, the coat, pattern and rare-morph odds, and the cost of a close pairing. Roll a few births to see it hold; click anyone for their pedigree.</p></div>
+  <div class="filters"><label>Species<select id="bSp"></select></label><span class="small muted" id="bHint">Click once for the sire (blue), again on a female for the dam (rose).</span></div>
+  <div class="bgrid">
+    <div>
+      <h3>The herd</h3>
+      <div class="herd" id="bHerd"></div>
+      <h3 style="margin-top:14px">Pedigree <span class="muted small" id="pedWho"></span></h3>
+      <div class="ped" id="bPed"></div>
+    </div>
+    <div class="pred">
+      <h3 id="bPairT">The pair</h3>
+      <div id="bPair" class="small"></div>
+      <div id="bTraits" style="display:grid;gap:8px"></div>
+      <div class="odds" id="bOdds"></div>
+      <div class="seg"><button class="btn go" id="bRoll">Roll 6 births</button><span class="small muted" id="bRollNote"></span></div>
+      <div class="kids" id="bKids"></div>
+    </div>
+  </div>
+  <div>
+    <h3>Selective breeding, ten generations</h3>
+    <p>The same inheritance run forward: a woolback herd bred for wool, keeping the best ram and ewes of each generation. A <b>closed herd</b> breeds only its own young; <b>rotating rams</b> buys in one unrelated ram each generation. Both raise the yield; the closed herd pays for it in inbreeding, which lowers hardiness.</p>
+    <div class="cols">
+      <div class="chart" id="selYield"></div>
+      <div class="chart" id="selF"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== ECONOMY -->
+<section id="tab-economy" class="tabpanel" role="tabpanel" hidden>
+  <div><h2>The husbandry economy</h2><p>What a herd eats and gives in a world day, by season, and how many of M8's crop cells it takes to feed. Change the counts. Products are scaled by each animal's yield gene; these are a herd of middling yield (1.0), all content. Meat, eggs, milk and honey are ingredients for the cooking mockup, which has the dishes.</p></div>
+  <div class="filters"><label>Season<select id="eSeason"><option value="0">Summer (day 0)</option><option value="1">Autumn (day 25)</option><option value="2">Winter (day 50)</option><option value="3">Spring (day 75)</option></select></label><span class="small muted">A year is 100 days (<code>orbit-and-seasons</code>). Grass grows in every season but winter; in winter grazers eat hay.</span></div>
+  <div class="herdin" id="eHerd"></div>
+  <div class="cols">
+    <div class="chart"><h3>Needs a day</h3><div class="legend"><span><i style="background:var(--amber)"></i>input, a day</span></div><div class="ebars" id="eIn"></div></div>
+    <div class="chart"><h3>Gives a day</h3><div class="legend"><span><i style="background:var(--moss)"></i>output, a day</span></div><div class="ebars" id="eOut"></div></div>
+  </div>
+  <div class="note" id="eLand"></div>
+  <h3>Per animal</h3>
+  <div class="tbl"><table id="eTable"></table></div>
+</section>
+
+<!-- ================================================================== ENGINE -->
+<section id="tab-engine" class="tabpanel" role="tabpanel" hidden>
+  <div><h2>In the engine</h2><p>How it would be built, beside what the game does today. The full design is <code>openspec/changes/animal-husbandry/design.md</code>.</p></div>
+  <div class="tbl"><table>
+    <tr><th>Piece</th><th>Today</th><th>Proposed</th></tr>
+    <tr><td>Species</td><td>Eight fish on <code>home</code> in <code>assets/config/fauna.ron</code>, append-only; a caught fish is <code>Item::Fish(index)</code></td><td>Land and air species appended to each living body's roster (Tenebris, Sequoia, Wick, Fallow), each with a <code>class</code> and a <code>status</code>; airless bodies stay empty</td></tr>
+    <tr><td>Husbandry data</td><td>None</td><td><code>assets/config/husbandry.ron</code>: per species the way it is tamed, favourite food, trust gain, needs, space, products and periods, gestation or incubation, life stages, coat and pattern lists; validated at load</td></tr>
+    <tr><td>Rules</td><td>None</td><td><code>pbd_core::husbandry</code>: genome, inheritance, kinship and F, needs and mood, the product schedule, the <code>husbandry</code> process. Pure and deterministic, no Bevy</td></tr>
+    <tr><td>Pens</td><td>None</td><td>Derived from fence and gate pieces on hex edges (<code>player-building</code>): a closed loop with a gate; never stored</td></tr>
+    <tr><td>Animals in the world</td><td>Schools of fish in packed arrays</td><td>Within 150 m of the player: ECS entities stepped at a fixed rate (M7's cap of 40 wild, plus 60 penned); farther pens are numbers</td></tr>
+    <tr><td>Saving</td><td>A fish in a slot</td><td>Each kept animal is a <code>rec animal:a&lt;n&gt;</code> record on the <code>world-persistence</code> journal, with its genome, parents and owner</td></tr>
+  </table></div>
+  <div class="cols">
+    <div>
+      <h3>What the journal says</h3>
+      <p>Every line names who wrote it. The player taming, naming, moving and butchering is <code>@p</code>. The farm's own changes are the <code>husbandry</code> world process, run by the steward each in-game hour, and it yields: a proposal that would change a field the player wrote, or a piece the player placed, is refused whole.</p>
+<pre class="code">rec animal:a1042 {v:1 sp:home/27 sex:f born:1834.25
+  gen:[.62 .48|.71 .40|.30 .55|.66 .52|c0 c2|p1 p0|m0 m1]
+  sire:a1007 dam:a0991 name:"Nettle" pen:p88213 owner:p0
+  state:alive via:born took:{wool:1830.00}} @whusbandry:p88213
+rec animal:a1042 {... name:"Nettle" ...}           @p
+put nest:c51120/2 fertile_egg{seed:91f3 sire:a0950 dam:a1011} @whusbandry:p51120
+rec animal:a1043 {... state:tamed via:feed ...}     @p
+rec animal:a0877 {... state:ended:butchered ...}    @p</pre>
+    </div>
+    <div>
+      <h3>Saved games survive</h3>
+      <p><b>Wild animals are derived</b> from the world seed, the herd's seed and the clock, and never saved; retuning them never touches a save. <b>A kept animal is a fact</b>: its genome is written when it is tamed (rolled from its wild seed) and never re-derived, so a later change to how genomes roll cannot change it. Its species is saved as its body and roster index, which is append-only. The record has its own schema version in <code>identity.ron</code>: a later gene arrives with a default on open, and the old version stays readable. Ended animals keep their records, so no pedigree breaks. Husbandry changes no terrain, so no generator version moves.</p>
+      <h3>Towns</h3>
+      <p>A town's livestock is the town's: records written by its process (<code>@wtown:&lt;settlement&gt;</code>). Taking one is refused, as M25 says. Buying one from the farmer (M5) moves its owner to the player in one <code>@p</code> line.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================== DECISIONS -->
+<section id="tab-decisions" class="tabpanel" role="tabpanel" hidden>
+  <h2>Decisions / questions for the owner</h2>
+  <p>Three questions have something to look at; they go in the survey with their screenshots. The rest are recommendations taken (ask only with screenshots), recorded in the change so they are never mistaken for the owner's words.</p>
+  <ol class="q">
+    <li><b>Q1. The Kingdom by body form, with three alien branches, or by world?</b> Look at the <a href="#kingdom">Kingdom</a> tab. <span class="rec">Recommendation: by form, with world as a filter</span>, so a drover and a woolback read as kept the same way. Screenshot <code>docs/screenshots/mockup-husbandry/kingdom.jpg</code>.</li>
+    <li><b>Q2. Can a fox take a hen?</b> At night on the <a href="#farm-night">Farmstead</a>, turn the hound off and open the coop. <span class="rec">Recommendation: a fox can take one hen from an open, unlit run, never from a shut coop or past a hound</span>; the hen's record ends "taken by a fox". A loss the player can always prevent. Screenshots <code>farm-night.jpg</code>, <code>farm-night-fox.jpg</code>.</li>
+    <li><b>Q3. The breeding screen: ticks on a range, or arrows?</b> Look at the <a href="#breed">Breeding</a> tab. <span class="rec">Recommendation: every possible value as ticks on its range, as drawn</span>, with a better/same/worse arrow beside each as a summary. Screenshot <code>breeding.jpg</code>.</li>
+  </ol>
+  <h3 style="margin-top:12px">Recommendations taken (ask only with screenshots)</h3>
+  <div class="tbl"><table>
+    <tr><th>Question</th><th>Taken</th></tr>
+    <tr><td>Do animals die of neglect?</td><td>Never. After 5 days without food an animal strays and waits nearby, still a record; food brings it back. As M8's crops never die from absence.</td></tr>
+    <tr><td>Do animals die of age?</td><td>Not in the first version. Past its prime (a hen at 120 days, others at 300) its yield halves.</td></tr>
+    <tr><td>Slaughter</td><td>Chosen at a butcher's block in a barn; the screen fades, nothing is animated. Cuts, hide and horn are products. Yard dabblers are never butchered (M25's protection follows the line).</td></tr>
+    <tr><td>How do pairs mate?</td><td>No action: a qualifying pair conceives at the steward's morning check.</td></tr>
+    <tr><td>The genome</td><td>Seven genes with two explicit alleles each, stored in the record; replaces M7's "the young's seed mixes its parents'", which gives no rule a player can breed toward.</td></tr>
+    <tr><td>Wild only</td><td>Predators, migrants (shagback, lark), hares, fireflies and glowmoths, and every fish. Protected (M25): reef turtle, sea otter, seal, river otter, wild reed dabblers.</td></tr>
+    <tr><td>Ducks</td><td>Kept by hatching a wild nest's egg; catching a wild duck stays refused.</td></tr>
+    <tr><td>Hostile animals</td><td>None (M7's recommendation): the fox takes from the coop at most, never attacks the player.</td></tr>
+    <tr><td>The Sequoia serpent's name</td><td>M1's Sequoia "sea serpent" and the game's Tenebris sea serpent are two species with one name; the Kingdom lists Sequoia's as "Sea serpent (Sequoia)" until the planets change names it.</td></tr>
+    <tr><td>The glassback</td><td>M9's under-ice fish of "an ice moon" sits against CLAUDE.md's "frozen worlds are lifeless"; listed as M9 drew it and flagged, for M9 to settle.</td></tr>
+  </table></div>
+</section>
+
+<footer>Mockup for Pale Blue Dot, 2026-11-14, <code>openspec/changes/animal-husbandry</code>. three.js r128. The game's art is copied byte for byte into <code>husbandry/game/</code>; M7's, M25's, M9's, M1's and M8's into their folders, each listed in <code>husbandry/README.md</code>. New art: pixel art drawn in code with the balatro-pixel-art kit (<code>tools/art/husbandry_art.py</code>). Rendered in review on SwiftShader (no GPU); frame cost not measured.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+// =====================================================================================================
+// Pens, Nests and Pedigrees: the husbandry mockup. Everything below is this page's own code.
+// =====================================================================================================
+const $ = id => document.getElementById(id);
+const AV = "?v=1";
+const ART = p => "husbandry/" + p + ".png" + AV;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hashStr(s){ let h = 2166136261; for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+const fmtT = h => { h = ((h % 24) + 24) % 24; const m = Math.round((h % 1) * 60); return String(Math.floor(h) + (m === 60 ? 1 : 0)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ------------------------------------------------------------------ tabs: one part at a time, so only one 3D view is ever on
+// the page (owner, 2026-11-13). The open tab is the URL's bare hash; #farm-night opens the farm at night. A 3D tab's scene is
+// built the first time it opens; the page has one WebGL renderer, made when the first 3D tab opens, whose canvas moves into
+// the open tab's stage; its frame loop runs only while a 3D tab is showing.
+const TABS = ["farm", "tame", "hatch", "kingdom", "breed", "economy", "engine", "decisions"];
+const TAB_HOOKS = {};
+const tabOf = h => { h = String(h || "").replace(/^#/, ""); if (TABS.includes(h)) return h; const b = h.split("-")[0]; return TABS.includes(b) ? b : null; };
+let TAB = null;
+function setTab(t, push = true){
+  if (!TABS.includes(t)) return;
+  const prev = TAB; TAB = t;
+  TABS.forEach(n => { const p = $("tab-" + n); if (p) p.hidden = n !== t; });
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+  if (push) try { history.replaceState(null, "", location.pathname + location.search + "#" + t); } catch (e) {}
+  if (prev && prev !== t && TAB_HOOKS[prev] && TAB_HOOKS[prev].hide) TAB_HOOKS[prev].hide();
+  if (TAB_HOOKS[t] && TAB_HOOKS[t].show) TAB_HOOKS[t].show(prev !== t);
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+addEventListener("hashchange", () => { const t = tabOf(location.hash); if (t) { setTab(t, false); hashVariant(); } });
+function hashVariant(){ const h = location.hash.replace(/^#/, ""); if (h === "farm-night" && VIEWS.farm) VIEWS.farm.setTime(22.5); if (h === "tame-night" && VIEWS.tame) VIEWS.tame.setTime(22.5); }
+
+// ------------------------------------------------------------------ the one renderer
+let renderer = null, current = null, raf = 0, lastT = 0;
+const VIEWS = {}, MAKERS = {};
+function getRenderer(){
+  if (renderer) return renderer;
+  const c = document.createElement("canvas"); c.className = "gl";
+  renderer = new THREE.WebGLRenderer({ canvas: c, antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  controls(c);
+  return renderer;
+}
+function sizeView(){
+  if (!current || !renderer) return;
+  const w = current.stage.clientWidth, h = current.stage.clientHeight;
+  renderer.setSize(w, h, false); current.camera.aspect = w / Math.max(1, h); current.camera.updateProjectionMatrix();
+}
+addEventListener("resize", sizeView);
+function showView(name){
+  const V = VIEWS[name] || (VIEWS[name] = MAKERS[name]());
+  const r = getRenderer();
+  V.stage.prepend(r.domElement);
+  current = V; sizeView(); V.place();
+  if (!raf){ lastT = performance.now(); raf = requestAnimationFrame(loop); }
+}
+function hideView(){ current = null; if (raf) cancelAnimationFrame(raf); raf = 0; }
+function loop(t){
+  raf = requestAnimationFrame(loop);
+  const dt = Math.min(0.05, Math.max(0, (t - lastT) / 1000)); lastT = t;
+  if (!current) return;
+  stepView(current, dt);
+  renderer.render(current.scene, current.camera);
+  if (current.after) current.after();
+}
+function stepView(V, dt){ V.time += dt; V.update(dt); }
+for (const t of ["farm", "tame", "hatch"]) TAB_HOOKS[t] = { show(){ showView(t); hashVariant(); }, hide: hideView };
+
+// orbit control on the shared canvas: drag turns, wheel or pinch zooms. Nothing moves the camera but the viewer.
+function controls(canvas){
+  const ptrs = new Map(); let moved = 0, pinch = 0;
+  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); moved = 0; });
+  canvas.addEventListener("pointermove", e => {
+    if (!ptrs.has(e.pointerId) || !current) return;
+    const [x, y] = ptrs.get(e.pointerId); const dx = e.clientX - x, dy = e.clientY - y; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    const o = current.orbit;
+    if (ptrs.size === 1){ o.yaw -= dx * 0.006; o.pitch = clamp(o.pitch + dy * 0.005, o.minPitch ?? 0.1, 1.45); moved += Math.abs(dx) + Math.abs(dy); current.place(); }
+    else if (ptrs.size === 2){ const p = [...ptrs.values()]; const d = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]); if (pinch) { o.dist = clamp(o.dist * pinch / d, o.min, o.max); current.place(); } pinch = d; moved = 99; }
+  });
+  const up = e => { ptrs.delete(e.pointerId); pinch = 0; if (moved < 5 && e.type === "pointerup" && current && current.click) current.click(e); };
+  canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+  canvas.addEventListener("wheel", e => { if (!current) return; e.preventDefault(); const o = current.orbit; o.dist = clamp(o.dist * (1 + Math.sign(e.deltaY) * 0.1), o.min, o.max); current.place(); }, { passive: false });
+}
+function newView(name, o){
+  const stage = $("stage-" + name);
+  const V = { name, stage, scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(46, 1, 0.1, 600), time: 0, lamps: [], hour: 10,
+    orbit: Object.assign({ yaw: 0.6, pitch: 0.75, dist: 34, target: new THREE.Vector3(), min: 6, max: 90 }, o), U: makeU() };
+  V.place = () => { const p = V.orbit, cp = Math.cos(p.pitch); V.camera.position.set(p.target.x + p.dist * cp * Math.sin(p.yaw), p.target.y + p.dist * Math.sin(p.pitch), p.target.z + p.dist * cp * Math.cos(p.yaw)); V.camera.lookAt(p.target); };
+  V.ray = (e, objs) => { const r = V.stage.getBoundingClientRect(); const m = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); const rc = new THREE.Raycaster(); rc.setFromCamera(m, V.camera); return rc.intersectObjects(objs, true); };
+  return V;
+}
+
+// =====================================================================================================
+// Lighting: one shader; every lamp is in one uniform array, so each lights what is near it wherever the camera is.
+// =====================================================================================================
+const MAXL = 24;
+function makeU(){
+  return {
+    uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(1, 1, 1) },
+    uSky: { value: new THREE.Color() }, uGround: { value: new THREE.Color() }, uFogCol: { value: new THREE.Color() }, uFogFar: { value: 170 },
+    uLampPos: { value: Array.from({ length: MAXL }, () => new THREE.Vector3()) }, uLampCol: { value: Array.from({ length: MAXL }, () => new THREE.Vector3()) },
+    uLampReach: { value: new Array(MAXL).fill(1) }, uLampN: { value: 0 }, uNight: { value: 0 },
+  };
+}
+const VS = `
+attribute vec3 aTile;
+varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying vec3 vTile;
+void main(){
+  vUv = uv; vTile = aTile;
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+const FS = `
+uniform vec3 uColor; uniform vec3 uEmissive; uniform float uOpacity; uniform sampler2D uMap; uniform float uMode; uniform float uRep; uniform vec3 uTile; uniform float uCell; uniform float uNightEmit;
+uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uSky; uniform vec3 uGround; uniform vec3 uFogCol; uniform float uFogFar; uniform float uNight;
+uniform vec3 uLampPos[${MAXL}]; uniform vec3 uLampCol[${MAXL}]; uniform float uLampReach[${MAXL}]; uniform int uLampN;
+varying vec3 vW; varying vec3 vN; varying vec2 vUv; varying vec3 vTile;
+// The game's atlas, read the way planet_surface.wgsl's pixel_tile does: four sheets across and down, each a 4x4 grid of 32-texel tiles.
+vec3 atlasTile(vec2 uv, vec3 t0){
+  vec3 t = floor(t0 + 0.5);
+  vec2 px = (floor(fract(uv) * 32.0) + 0.5) / 32.0;
+  vec2 sheet = vec2(mod(t.x, 4.0), floor(t.x / 4.0)) * 0.25;
+  vec2 s = sheet + (t.yz + px) / 16.0;
+  return texture2D(uMap, vec2(s.x, 1.0 - s.y)).rgb;
+}
+void main(){
+  vec4 base = vec4(uColor, uOpacity);
+  if (uMode > 0.5 && uMode < 1.5) { vec4 t = texture2D(uMap, vUv); if (t.a < 0.5) discard; base.rgb *= t.rgb; }
+  if (uMode > 1.5 && uMode < 2.5) { // a settlement texture, repeat_m metres a repeat, on the face's own plane
+    vec3 an = abs(vN); vec2 w = an.y > max(an.x, an.z) ? vW.xz : (an.x > an.z ? vW.zy : vW.xy);
+    base.rgb *= texture2D(uMap, vec2(w.x, -w.y) / uRep).rgb;
+  }
+  if (uMode > 2.5 && uMode < 3.5) base.rgb *= atlasTile(vUv, uTile);
+  if (uMode > 3.5 && uMode < 4.5) base.rgb *= atlasTile(vUv, vTile);
+  if (uMode > 4.5 && uMode < 5.5) { // a hide strip: eight 32 px tiles, a tile a metre at uRep 1
+    vec2 px = (floor(fract(vUv * uRep) * 32.0) + 0.5) / 32.0;
+    base.rgb *= texture2D(uMap, vec2((uCell + px.x) / 8.0, px.y)).rgb;
+  }
+  if (uMode > 5.5) { vec2 px = (floor(fract(vUv * uRep) * 32.0) + 0.5) / 32.0; base.rgb *= texture2D(uMap, px).rgb; } // a 32 px floor tile, uRep a metre
+  vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
+  vec3 light = mix(uGround, uSky, n.y * 0.5 + 0.5) + uSunCol * max(dot(n, uSunDir), 0.0);
+  for (int i = 0; i < ${MAXL}; i++) {
+    if (i >= uLampN) break;
+    vec3 d = uLampPos[i] - vW; float r = length(d);
+    float f = clamp(1.0 - r / uLampReach[i], 0.0, 1.0); f *= f;
+    light += uLampCol[i] * f * (0.3 + 0.7 * max(dot(n, d / max(r, 0.001)), 0.0));
+  }
+  vec3 col = base.rgb * light + uEmissive * (1.0 + uNight * uNightEmit);
+  float fog = smoothstep(uFogFar * 0.35, uFogFar, length(vW - cameraPosition));
+  gl_FragColor = vec4(mix(col, uFogCol, fog), base.a);
+}`;
+function litMat(V, o = {}){
+  return new THREE.ShaderMaterial({
+    uniforms: Object.assign({
+      uColor: { value: new THREE.Color(o.color ?? 0xffffff) }, uEmissive: { value: new THREE.Color(o.emissive ?? 0) }, uOpacity: { value: o.opacity ?? 1 },
+      uMap: { value: o.map || null }, uMode: { value: o.mode ?? (o.map ? 1 : 0) }, uRep: { value: o.rep ?? 1 },
+      uTile: { value: new THREE.Vector3(...(o.tile || [0, 0, 0])) }, uCell: { value: o.cell ?? 0 }, uNightEmit: { value: o.nightEmit ?? 0 },
+    }, V.U),
+    vertexShader: VS, fragmentShader: FS, transparent: (o.opacity ?? 1) < 1, depthWrite: (o.opacity ?? 1) >= 1, side: o.side ?? THREE.FrontSide,
+  });
+}
+// Sky, sun, moon and lamps by the hour. Night is dark: the moon dim enough that each lamp's pool reads, dark ground between.
+function light(V, hour){
+  V.hour = hour;
+  const U = V.U, C = c => new THREE.Color(c);
+  const sunUp = Math.sin((hour - 6) / 12 * Math.PI);         // >0 from 06:00 to 18:00
+  const day = smooth(-0.08, 0.22, sunUp), dusk = smooth(-0.25, 0.05, sunUp) * (1 - smooth(0.05, 0.35, sunUp));
+  const a = (hour - 6) / 12 * Math.PI;
+  if (sunUp > -0.05) U.uSunDir.value.set(Math.cos(a) * 0.8, Math.max(0.08, Math.sin(a)), -0.45).normalize();
+  else U.uSunDir.value.set(-0.3, 0.8, -0.5).normalize();
+  const sky = C(0x060a14).lerp(C(0x9cc6e4), day); sky.lerp(C(0xd08050), dusk * 0.6);
+  U.uSky.value.copy(sky).multiplyScalar(lerp(0.07, 0.62, day));
+  U.uGround.value.copy(C(0x6a5a3a)).multiplyScalar(lerp(0.02, 0.38, day));
+  U.uSunCol.value.copy(C(0xfff0d8).lerp(C(0xffa060), dusk)).multiplyScalar(lerp(0, 0.95, day));
+  if (day < 0.05) U.uSunCol.value.copy(C(0x8098c8)).multiplyScalar(0.035);   // the moon
+  U.uFogCol.value.copy(sky).multiplyScalar(lerp(0.25, 1, day));
+  V.scene.background = U.uFogCol.value.clone();
+  const lit = 1 - smooth(-0.15, 0.12, sunUp);   // lamps on from dusk to dawn
+  U.uNight.value = lit;
+  U.uLampN.value = Math.min(MAXL, V.lamps.length);
+  V.lamps.slice(0, MAXL).forEach((l, i) => {
+    const on = l.always ? 1 : lit * (l.on === false ? 0 : 1);
+    U.uLampPos.value[i].copy(l.pos); U.uLampReach.value[i] = l.reach;
+    U.uLampCol.value[i].set(l.col.r * l.power * on, l.col.g * l.power * on, l.col.b * l.power * on);
+    if (l.mesh) l.mesh.material.color.copy(on > 0.02 ? l.col : C(0x3a3020));
+  });
+  return { day, lit };
+}
+
+// =====================================================================================================
+// Textures and the hex grid
+// =====================================================================================================
+const loader = new THREE.TextureLoader();
+const TEX = {};
+function tex(path, rep = false){
+  if (TEX[path]) return TEX[path];
+  const t = loader.load(ART(path));
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;   // pixel art: no smoothing, no mipmaps
+  if (rep) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return (TEX[path] = t);
+}
+// settlement textures and their repeat_m (assets/textures/settlement/manifest.ron)
+const REPEAT = { timber: 1, plank: 2, boards: 2, thatch: 2, plaster: 2, whitewash: 2, fieldstone: 2, iron: 1, poles: 2, shingle: 2, leaves: 2, bark: 1, rope: 1, barrel: 1, reed: 2, linen: 1, wool: 1 };
+function gameMat(V, name, tint = 0xffffff){ const k = "g:" + name + tint; V.M = V.M || {}; return V.M[k] || (V.M[k] = litMat(V, { map: tex("game/" + name, true), mode: 2, rep: REPEAT[name], color: tint })); }
+const SLOT = { fields: 4, tundra: 13, beach: 2 };
+function tileMat(V, tile, tint = 0xffffff){ const k = "t:" + tile.join() + tint; V.M = V.M || {}; return V.M[k] || (V.M[k] = litMat(V, { map: tex("game/atlas"), mode: 3, tile, color: tint })); }
+function floorMat(V, name, rep = 1){ const k = "f:" + name; V.M = V.M || {}; return V.M[k] || (V.M[k] = litMat(V, { map: tex(name, true), mode: 6, rep })); }
+function flatMat(V, c, o = {}){ return litMat(V, Object.assign({ color: c }, o)); }
+
+const W = 2.833, RH = W / Math.sqrt(3);
+const hexXZ = (q, r) => [W * (q + r / 2), RH * 1.5 * r];
+const NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];       // the neighbour across edge i (edge normal at 60i degrees)
+const VTX = i => { const a = Math.PI / 180 * (60 * i - 30); return [RH * Math.cos(a), RH * Math.sin(a)]; };
+const key = (q, r) => q + "," + r;
+const hdist = (a, b) => (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[0] + a[1] - b[0] - b[1])) / 2;
+function cellAt(x, z){ const r = z / (RH * 1.5), q = x / W - r / 2; let rq = Math.round(q), rr = Math.round(r), rs = Math.round(-q - r); const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs + q + r); if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs; return [rq, rr]; }
+const TOPG = (() => { const g = new THREE.CircleGeometry(RH, 6); g.rotateX(-Math.PI / 2); g.rotateY(Math.PI / 6); return g; })();
+// A hex column's sides, a quad per face per metre: the first metre is the sheet's (1,0), earth (2,0) below, as the terrain shader's face_tile.
+const SIDEG = {};
+function sideGeo(slot, depth = 3){
+  const k = slot + ":" + depth; if (SIDEG[k]) return SIDEG[k];
+  const pos = [], nor = [], uv = [], til = [];
+  for (let i = 0; i < 6; i++){
+    const [ax, az] = VTX(i), [bx, bz] = VTX(i + 1), nx = Math.cos(Math.PI / 3 * i), nz = Math.sin(Math.PI / 3 * i);
+    for (let k2 = 0; k2 < depth; k2++){
+      const y1 = -k2, y0 = -k2 - 1, t = k2 === 0 ? [slot, 1, 0] : [slot, 2, 0];
+      const q = [[ax, y1, az, 0, 0], [bx, y0, bz, 0.999, 0.999], [bx, y1, bz, 0.999, 0], [ax, y1, az, 0, 0], [ax, y0, az, 0, 0.999], [bx, y0, bz, 0.999, 0.999]];
+      for (const [x, y, z, u, v] of q){ pos.push(x, y, z); nor.push(nx, 0, nz); uv.push(u, v); til.push(...t); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute("aTile", new THREE.Float32BufferAttribute(til, 3));
+  return (SIDEG[k] = g);
+}
+// Ground: a map of cells { q, r, h, top: material }. Water cells sit a layer down under a flat sheet, as the game draws water.
+function ground(V, cells, slot = SLOT.fields){
+  const sideM = litMat(V, { map: tex("game/atlas"), mode: 4 });
+  const waterM = flatMat(V, 0x2f6a8c, { opacity: 0.82 });
+  const WG = new THREE.CylinderGeometry(RH, RH, 0.04, 6); WG.rotateY(Math.PI / 6);
+  for (const c of cells.values()){
+    const [x, z] = hexXZ(c.q, c.r); c.x = x; c.z = z;
+    const top = new THREE.Mesh(TOPG, c.top || tileMat(V, [slot, 0, 0])); top.position.set(x, c.h, z); top.userData.cell = c; V.scene.add(top);
+    const side = new THREE.Mesh(sideGeo(slot), sideM); side.position.set(x, c.h, z); V.scene.add(side);
+    if (c.water){ const w = new THREE.Mesh(WG, waterM); w.position.set(x, c.h + 0.72, z); V.scene.add(w); c.wy = c.h + 0.74; }
+  }
+}
+const GEO = {};
+function boxGeo(w, h, d){   // UVs in metres, so a hide tile covers a metre at every size
+  const k = w.toFixed(3) + "," + h.toFixed(3) + "," + d.toFixed(3); if (GEO[k]) return GEO[k];
+  const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++){ const j = f * 4 + i; uv.setXY(j, uv.getX(j) * dims[f][0], uv.getY(j) * dims[f][1]); }
+  return (GEO[k] = g);
+}
+function bx(parent, mat, w, h, d, x, y, z){ const m = new THREE.Mesh(boxGeo(w, h, d), mat); m.position.set(x, y, z); parent.add(m); return m; }
+function lamp(V, x, y, z, color, power, reach, mesh = null, o = {}){ const l = Object.assign({ pos: new THREE.Vector3(x, y, z), col: new THREE.Color(color), power, reach, mesh }, o); V.lamps.push(l); return l; }
+function lanternPost(V, x, y, z, ry = 0){
+  const wood = gameMat(V, "timber"), g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; V.scene.add(g);
+  bx(g, wood, 0.14, 2.4, 0.14, 0, 1.2, 0); bx(g, wood, 0.5, 0.1, 0.1, 0.2, 2.35, 0);
+  const b = bx(g, new THREE.MeshBasicMaterial({ color: 0xffc070 }), 0.24, 0.32, 0.24, 0.42, 2.1, 0);
+  const p = new THREE.Vector3(0.42, 2.0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry).add(new THREE.Vector3(x, y, z));
+  return lamp(V, p.x, p.y, p.z, 0xffc070, 2.4, 6.5, b);   // a tight warm pool, dark between posts as in the game
+}
+function wallLamp(V, x, y, z, reach = 5.5, power = 2.0){
+  const b = bx(V.scene, new THREE.MeshBasicMaterial({ color: 0xffc070 }), 0.2, 0.26, 0.2, x, y, z);
+  return lamp(V, x, y, z, 0xffc070, power, reach, b);
+}
+function windowGlow(V, parent, w, h, x, y, z, ry = 0){
+  const m = litMat(V, { color: 0x101010, emissive: 0x000000 });
+  const win = bx(parent, m, w, h, 0.06, x, y, z); win.rotation.y = ry; win.userData.win = m;
+  (V.windows = V.windows || []).push(m);
+  return win;
+}
+// A straight-walled building with a pitched roof (ridge along local x), on the hex grid as the game builds them.
+function building(V, o){
+  const g = new THREE.Group(); g.position.set(o.x, o.y || 0, o.z); g.rotation.y = o.ry || 0; V.scene.add(g);
+  const wm = gameMat(V, o.wall), rm = gameMat(V, o.roof);
+  bx(g, wm, o.w, o.h, o.d, 0, o.h / 2, 0);
+  const rh = o.rh ?? o.d * 0.42, half = o.d / 2 + 0.25, slope = Math.hypot(half, rh), ang = Math.atan2(rh, half);
+  for (const s of [-1, 1]){ const r = bx(g, rm, o.w + 0.4, 0.14, slope, 0, o.h + rh / 2 + 0.04, s * half / 2); r.rotation.x = s * ang; }
+  const gr = rh / 1.5, gab = new THREE.CylinderGeometry(gr, gr, o.w - 0.02, 3, 1); // a triangular prism, apex up: the gables
+  gab.rotateZ(Math.PI / 2); gab.rotateX(-Math.PI / 2);
+  const gm = new THREE.Mesh(gab, wm); gm.scale.set(1, 1, (o.d / 2) / (gr * 0.866)); gm.position.set(0, o.h + gr * 0.5, 0); g.add(gm);
+  g.userData.building = o.id; g.traverse(m => m.userData.building = o.id);
+  return g;
+}
+// A hex-prism tree: the game's Tenebris tree, a trunk on the cell centre and two leaf layers.
+function tree(V, x, y, z, s = 1){
+  const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * s, 0.34 * s, 3.2 * s, 6), gameMat(V, "bark")); tr.position.set(x, y + 1.6 * s, z); V.scene.add(tr);
+  const lm = gameMat(V, "leaves", 0xa8c890);
+  for (const [r, h, yy] of [[RH * 0.95, 1.3, 3.4], [RH * 0.62, 1.1, 4.6]]){ const c = new THREE.Mesh(new THREE.CylinderGeometry(r * s, r * s, h * s, 6), lm); c.rotation.y = Math.PI / 6; c.position.set(x, y + yy * s, z); V.scene.add(c); }
+}
+// Fences on the hex edges round a set of cells: a post at each corner, two rails per edge, a plank gate where asked.
+function pen(V, cells, gates = [], o = {}){
+  const set = new Set(cells.map(c => key(c[0], c[1]))), posts = new Map(), wood = gameMat(V, o.wood || "timber"), rail = gameMat(V, "poles"), gm = gameMat(V, "boards");
+  const y0 = o.y || 0, out = [];
+  for (const [q, r] of cells) for (let i = 0; i < 6; i++){
+    const n = [q + NB[i][0], r + NB[i][1]]; if (set.has(key(n[0], n[1]))) continue;
+    const [cx, cz] = hexXZ(q, r), [ax, az] = VTX(i), [bx2, bz] = VTX(i + 1);
+    const A = [cx + ax, cz + az], Bv = [cx + bx2, cz + bz];
+    for (const P of [A, Bv]){ const k2 = P[0].toFixed(2) + "," + P[1].toFixed(2); if (!posts.has(k2)) { posts.set(k2, P); bx(V.scene, wood, 0.16, 1.25, 0.16, P[0], y0 + 0.62, P[1]); } }
+    const mx = (A[0] + Bv[0]) / 2, mz = (A[1] + Bv[1]) / 2, len = Math.hypot(Bv[0] - A[0], Bv[1] - A[1]), ry = -Math.atan2(Bv[1] - A[1], Bv[0] - A[0]);
+    const isGate = gates.some(g => g[0] === q && g[1] === r && g[2] === i);
+    if (isGate){
+      const gg = new THREE.Group(); gg.position.set(mx, y0, mz); gg.rotation.y = ry; V.scene.add(gg);
+      bx(gg, gm, len - 0.2, 0.12, 0.06, 0, 0.35, 0); bx(gg, gm, len - 0.2, 0.12, 0.06, 0, 1.0, 0); bx(gg, gm, len - 0.2, 0.12, 0.06, 0, 0.68, 0);
+      const br = bx(gg, gm, Math.hypot(len - 0.3, 0.65), 0.1, 0.05, 0, 0.68, 0.01); br.rotation.z = Math.atan2(0.65, len - 0.3);
+      const nx = Math.cos(Math.PI / 3 * i), nz = Math.sin(Math.PI / 3 * i);
+      out.push({ x: mx, z: mz, nx, nz, ry });
+    } else for (const h of [0.45, 0.95]){ const m = bx(V.scene, rail, len, 0.09, 0.07, mx, y0 + h, mz); m.rotation.y = ry; }
+  }
+  return out;   // the gates, with their outward normals
+}
+function trough(V, x, y, z, ry, water = true){
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; V.scene.add(g);
+  const pm = gameMat(V, "plank");
+  bx(g, pm, 1.4, 0.08, 0.5, 0, 0.2, 0); bx(g, pm, 1.4, 0.3, 0.06, 0, 0.35, 0.22); bx(g, pm, 1.4, 0.3, 0.06, 0, 0.35, -0.22); bx(g, pm, 0.06, 0.3, 0.5, 0.67, 0.35, 0); bx(g, pm, 0.06, 0.3, 0.5, -0.67, 0.35, 0);
+  bx(g, gameMat(V, "timber"), 0.1, 0.2, 0.1, 0.55, 0.1, 0); bx(g, gameMat(V, "timber"), 0.1, 0.2, 0.1, -0.55, 0.1, 0);
+  if (water) bx(g, flatMat(V, 0x2f6a8c), 1.28, 0.02, 0.38, 0, 0.44, 0); else bx(g, floorMat(V, "tex_straw", 1), 1.28, 0.1, 0.38, 0, 0.42, 0);
+  return g;
+}
+// A sprite card pair (the game's ground clutter: two crossed cut-out cards, alpha-tested, never blended)
+function cards(V, img, x, y, z, s = 1){
+  const m = litMat(V, { map: tex(img), side: THREE.DoubleSide });
+  for (const a of [0.4, 0.4 + Math.PI / 2]){ const p = new THREE.Mesh(new THREE.PlaneGeometry(s, s), m); p.position.set(x, y + s / 2, z); p.rotation.y = a; V.scene.add(p); }
+}
+function toast(el, html, ms = 2400){ el.innerHTML = html; el.style.opacity = 1; clearTimeout(el._t); el._t = setTimeout(() => el.style.opacity = 0, ms); }
+</script>
+
+<script>
+"use strict";
+// =====================================================================================================
+// Animals: built from boxes, as M7 builds them, each box wearing a tile of its hide strip
+// (0 body, 1 legs, 2 head, 3 horns/comb, 4 tail, 5 mane/wing, 6 snout/beak, 7 ears/belly). Sizes are metres.
+// =====================================================================================================
+const KINDS = {
+  woolback:   { name: "Woolback", plan: "quad", hide: "m7/hide_woolback", icon: "m7/woolback", p: { L: 1.15, H: 0.75, leg: 0.42, neck: 0.12, head: 0.3, wool: 1, ears: "flop", tail: "stub" }, walk: 0.8 },
+  plodder:    { name: "Plodder", plan: "quad", hide: "m7/hide_plodder", icon: "m7/plodder", p: { L: 2.0, H: 1.0, leg: 0.8, neck: 0.2, head: 0.38, snout: 0.6, horns: "spike", ears: "flop", tail: "tuft" }, walk: 0.6 },
+  ridge_goat: { name: "Ridge goat", plan: "quad", hide: "m7/hide_ridge_goat", icon: "m7/ridge_goat", p: { L: 1.1, H: 0.6, leg: 0.55, neck: 0.25, head: 0.28, snout: 0.6, horns: "curl", ears: "point", tail: "stub" }, walk: 0.8 },
+  red_fox:    { name: "Red fox", plan: "quad", hide: "m7/hide_red_fox", icon: "m7/red_fox", p: { L: 0.9, H: 0.42, leg: 0.38, neck: 0.14, head: 0.24, snout: 1, ears: "point", tail: "bush" }, eyes: 1, walk: 1.2 },
+  rootling:   { name: "Rootling", plan: "quad", hide: "hide_rootling", icon: "rootling", p: { L: 1.25, H: 0.72, leg: 0.3, neck: 0.04, head: 0.38, snout: 0.7, ears: "flop", tail: "thin" }, walk: 0.7 },
+  fellrunner: { name: "Fellrunner", plan: "quad", hide: "hide_fellrunner", icon: "fellrunner", p: { L: 1.9, H: 0.8, leg: 1.15, neck: 0.75, head: 0.32, snout: 1.3, ears: "point", tail: "tuft", mane: 1 }, walk: 0.9 },
+  herd_hound: { name: "Herd hound", plan: "quad", hide: "hide_herd_hound", icon: "herd_hound", p: { L: 0.95, H: 0.42, leg: 0.45, neck: 0.15, head: 0.26, snout: 1, ears: "point", tail: "bush" }, walk: 1.4 },
+  hedge_cat:  { name: "Hedge cat", plan: "quad", hide: "hide_hedge_cat", icon: "hedge_cat", p: { L: 0.55, H: 0.26, leg: 0.22, neck: 0.06, head: 0.2, snout: 0.3, ears: "point", tail: "long" }, eyes: 1, walk: 0.7 },
+  yard_hen:   { name: "Yard hen", plan: "bird", hide: "hide_yard_hen", icon: "yard_hen", p: { L: 0.42, crest: 1 }, walk: 0.6 },
+  hen:        { name: "Meadow hen", plan: "bird", hide: "m7/hide_hen", icon: "m7/hen", p: { L: 0.42, crest: 1 }, walk: 0.6 },
+  cockerel:   { name: "Cockerel", plan: "bird", hide: "hide_cockerel", icon: "cockerel", p: { L: 0.5, crest: 1.6, tailUp: 1 }, walk: 0.6 },
+  chick:      { name: "Chick", plan: "bird", hide: "hide_chick", icon: "chick", p: { L: 0.42 }, walk: 0.5 },
+  yard_dabbler: { name: "Yard dabbler", plan: "bird", hide: "hide_yard_dabbler", icon: "yard_dabbler", p: { L: 0.48, duck: 1 }, walk: 0.4 },
+};
+function hideMats(V, kind, tint = 0xffffff){
+  V.HM = V.HM || {}; const k = kind + ":" + tint; if (V.HM[k]) return V.HM[k];
+  const map = tex(KINDS[kind].hide);
+  return (V.HM[k] = Array.from({ length: 8 }, (_, i) => litMat(V, { map, mode: 5, cell: i, rep: i === 0 ? 0.9 : 1.3, color: tint })));
+}
+function eyeMat(V, glow){ const m = litMat(V, { color: 0x0a0a08 }); if (glow){ m.uniforms.uEmissive.value.set(0x203a10); m.uniforms.uNightEmit.value = 5; } return m; }
+
+function buildQuad(V, kind, k, tint){
+  const K = KINDS[kind], P = K.p, M = hideMats(V, kind, tint);
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const L = P.L * k, H = P.H * k, leg = P.leg * k, w = H * 0.82;
+  const legs = [];
+  for (const fx of [L * 0.33, -L * 0.33]) for (const s of [-1, 1]){
+    const piv = new THREE.Group(); piv.position.set(fx, leg, s * w * 0.3); body.add(piv);
+    bx(piv, M[1], Math.max(0.05, H * 0.2), leg, Math.max(0.05, H * 0.2), 0, -leg / 2, 0); legs.push(piv);
+  }
+  bx(body, M[0], L, H, w, 0, leg + H / 2, 0);
+  if (P.wool){ bx(body, M[0], L * 1.08, H * 0.55, w * 1.14, 0, leg + H * 0.68, 0); bx(body, M[0], L * 0.4, H * 0.3, w * 0.9, L * 0.1, leg + H * 1.05, 0); }
+  const hp = new THREE.Group(); hp.position.set(L * 0.44, leg + H * 0.72, 0); body.add(hp);
+  const nl = P.neck * k + H * 0.3, up = P.neck > 0.4 ? 0.95 : 0.55;
+  const nk = new THREE.Group(); nk.rotation.z = up; hp.add(nk);
+  bx(nk, M[0], nl, H * 0.36, w * 0.42, nl / 2, 0, 0);
+  if (P.mane) bx(nk, M[5], nl * 0.95, H * 0.14, w * 0.18, nl / 2, H * 0.22, 0);
+  const hd = new THREE.Group(); hd.position.set(nl, 0, 0); hd.rotation.z = -up; nk.add(hd);
+  const hr = P.head * k;
+  bx(hd, M[2], hr * 1.25, hr, hr * 0.9, hr * 0.3, 0, 0);
+  if (P.snout) bx(hd, M[6], hr * 0.55 * P.snout + 0.02, hr * 0.56, hr * 0.62, hr * 0.92 + hr * 0.27 * P.snout, -hr * 0.16, 0);
+  for (const s of [-1, 1]){
+    if (P.ears === "flop"){ const e = bx(hd, M[7], hr * 0.32, hr * 0.12, hr * 0.42, hr * 0.05, hr * 0.32, s * hr * 0.6); e.rotation.x = s * 0.7; }
+    else if (P.ears === "point") bx(hd, M[7], hr * 0.22, hr * 0.48, hr * 0.18, hr * 0.0, hr * 0.68, s * hr * 0.28);
+    if (P.horns === "spike"){ const h = bx(hd, M[3], hr * 0.14, hr * 0.62, hr * 0.14, -hr * 0.05, hr * 0.78, s * hr * 0.36); h.rotation.x = -s * 0.45; }
+    if (P.horns === "curl"){ bx(hd, M[3], hr * 0.6, hr * 0.2, hr * 0.2, -hr * 0.3, hr * 0.6, s * hr * 0.36); bx(hd, M[3], hr * 0.2, hr * 0.55, hr * 0.2, -hr * 0.6, hr * 0.32, s * hr * 0.4); }
+    bx(hd, eyeMat(V, K.eyes), hr * 0.16, hr * 0.16, hr * 0.06, hr * 0.62, hr * 0.18, s * hr * 0.46);
+  }
+  if (P.tail === "stub") bx(body, M[4], H * 0.26, H * 0.26, H * 0.26, -L * 0.53, leg + H * 0.78, 0);
+  else if (P.tail === "bush"){ const t = bx(body, M[4], L * 0.5, H * 0.32, H * 0.32, -L * 0.66, leg + H * 0.45, 0); t.rotation.z = 0.45; bx(body, M[5], L * 0.16, H * 0.3, H * 0.3, -L * 0.92, leg + H * 0.22, 0); }
+  else if (P.tail === "long"){ const t = bx(body, M[4], L * 0.75, H * 0.14, H * 0.14, -L * 0.75, leg + H * 1.0, 0); t.rotation.z = -0.9; }
+  else { const t = bx(body, M[4], L * 0.36, H * 0.12, H * 0.12, -L * 0.6, leg + H * 0.55, 0); t.rotation.z = 1.0; if (P.tail === "tuft") bx(body, M[5], H * 0.2, H * 0.3, H * 0.2, -L * 0.7, leg + H * 0.22, 0); }
+  return { g, body, legs, nk, up, leg, L, H, plan: "quad" };
+}
+function buildBird(V, kind, k, tint){
+  const K = KINDS[kind], P = K.p, M = hideMats(V, kind, tint);
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const L = P.L * k, legH = P.duck ? L * 0.16 : L * 0.42;
+  const legs = [];
+  for (const s of [-1, 1]){
+    const piv = new THREE.Group(); piv.position.set(0, legH, s * L * 0.1); body.add(piv);
+    bx(piv, M[1], L * 0.07, legH, L * 0.07, 0, -legH / 2, 0); bx(piv, M[1], L * 0.22, L * 0.04, L * 0.14, L * 0.06, -legH + 0.01, 0); legs.push(piv);
+  }
+  const bl = P.duck ? L * 1.1 : L, bh = P.duck ? L * 0.45 : L * 0.58;
+  bx(body, M[0], bl, bh, L * 0.55, 0, legH + bh / 2, 0);
+  bx(body, M[7], bl * 0.6, L * 0.14, L * 0.5, L * 0.06, legH + L * 0.04, 0);
+  for (const s of [-1, 1]) bx(body, M[5], bl * 0.62, bh * 0.6, L * 0.06, -L * 0.04, legH + bh * 0.58, s * L * 0.29);
+  const tl = bx(body, M[4], L * 0.4, L * 0.1, L * 0.34, -bl * 0.55, legH + bh * (P.tailUp ? 1.05 : 0.8), 0); tl.rotation.z = P.tailUp ? 0.9 : 0.35;
+  if (P.tailUp) { const t2 = bx(body, M[4], L * 0.3, L * 0.08, L * 0.1, -bl * 0.6, legH + bh * 1.3, 0); t2.rotation.z = 1.3; }
+  const hp = new THREE.Group(); hp.position.set(bl * 0.38, legH + bh * 0.8, 0); body.add(hp);
+  const hs = L * (P.duck ? 0.34 : 0.36);
+  bx(hp, M[2], hs, hs, hs * 0.9, hs * 0.25, hs * 0.55, 0);
+  if (P.duck) bx(hp, M[6], hs * 0.65, hs * 0.18, hs * 0.55, hs * 0.75, hs * 0.42, 0);
+  else bx(hp, M[6], hs * 0.4, hs * 0.22, hs * 0.26, hs * 0.62, hs * 0.5, 0);
+  if (P.crest){ bx(hp, M[3], hs * 0.55 * P.crest, hs * 0.3 * P.crest, hs * 0.12, hs * 0.18, hs * 1.12, 0); bx(hp, M[3], hs * 0.14, hs * 0.26 * P.crest, hs * 0.1, hs * 0.48, hs * 0.18, 0); }
+  for (const s of [-1, 1]) bx(hp, eyeMat(V), hs * 0.14, hs * 0.14, hs * 0.04, hs * 0.38, hs * 0.66, s * hs * 0.46);
+  return { g, body, legs, nk: hp, up: 0, leg: legH, L, H: bh, plan: "bird", duck: !!P.duck };
+}
+function buildAnimal(V, kind, k = 1, tint = 0xffffff){
+  const a = (KINDS[kind].plan === "bird" ? buildBird : buildQuad)(V, kind, k, tint);
+  a.kind = kind; a.k = k; a.phase = Math.random() * 6; a.headT = 0; a.head = 0; a.lie = 0; a.lieT = 0;
+  a.g.traverse(m => m.userData.animal = a);
+  V.scene.add(a.g);
+  return a;
+}
+// Pose an animal each frame: walk cycle from its speed, head down to graze or peck, lying down at night.
+function pose(a, dt, speed){
+  a.phase += dt * speed * (a.plan === "bird" ? 14 : 5.5) / Math.max(0.25, a.k);
+  const sw = Math.min(0.7, speed * (a.plan === "bird" ? 1.6 : 0.6));
+  a.legs.forEach((l, i) => { l.rotation.z = a.lie > 0.5 && a.plan === "quad" ? (i < 2 ? -1.35 : 1.35) * a.lie : Math.sin(a.phase + (a.plan === "bird" ? i * Math.PI : (i === 0 || i === 3 ? 0 : Math.PI))) * sw; });
+  a.head = lerp(a.head, a.headT, Math.min(1, dt * 6));
+  a.lie = lerp(a.lie, a.lieT, Math.min(1, dt * 2));
+  if (a.plan === "quad") a.nk.rotation.z = lerp(a.up, -0.75, a.head);
+  else a.nk.rotation.z = -1.1 * a.head;
+  a.body.position.y = -a.leg * 0.85 * a.lie * (a.plan === "quad" ? 1 : 0.6);
+}
+// Steer toward a point at a speed; returns the distance left.
+function steer(a, tx, tz, spd, dt){
+  const p = a.g.position, dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz);
+  if (d > 0.05){ const s = Math.min(d, spd * dt); p.x += dx / d * s; p.z += dz / d * s; turn(a, Math.atan2(-dz, dx), dt); }
+  return d;
+}
+function turn(a, yaw, dt){ let d = yaw - a.g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); a.g.rotation.y += d * Math.min(1, dt * 5); }
+// a random point inside a random cell of a list, kept off the cell's edge
+function pointIn(cells, rnd, margin = 0.7){ const c = cells[Math.floor(rnd() * cells.length)]; const [x, z] = hexXZ(c[0], c[1]); const a = rnd() * 6.283, r = Math.sqrt(rnd()) * RH * margin; return [x + Math.cos(a) * r, z + Math.sin(a) * r]; }
+// a box-built person (the player in the taming view), in the game's settlement cloth
+function person(V){
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const cloth = gameMat(V, "linen", 0x9ab0c8), trous = gameMat(V, "wool", 0x8a7050), skin = flatMat(V, 0xd8a47a), hair = flatMat(V, 0x3b2a1e);
+  const legs = [];
+  for (const s of [-1, 1]){ const p = new THREE.Group(); p.position.set(0, 0.9, s * 0.12); body.add(p); bx(p, trous, 0.2, 0.9, 0.2, 0, -0.45, 0); legs.push(p); }
+  const torso = new THREE.Group(); torso.position.set(0, 0.9, 0); body.add(torso);
+  bx(torso, cloth, 0.3, 0.62, 0.46, 0, 0.31, 0);
+  bx(torso, skin, 0.28, 0.28, 0.28, 0.02, 0.8, 0); bx(torso, hair, 0.3, 0.1, 0.3, -0.01, 0.97, 0);
+  const arms = [];
+  for (const s of [-1, 1]){ const p = new THREE.Group(); p.position.set(0, 0.58, s * 0.3); torso.add(p); bx(p, cloth, 0.14, 0.56, 0.14, 0, -0.26, 0); arms.push(p); }
+  V.scene.add(g);
+  return { g, body, legs, torso, arms, phase: 0, crouch: 0 };
+}
+function posePerson(P, dt, speed){
+  P.phase += dt * speed * 6;
+  const sw = Math.min(0.6, speed * 0.5);
+  P.legs.forEach((l, i) => l.rotation.z = Math.sin(P.phase + i * Math.PI) * sw);
+  P.torso.rotation.z = -0.55 * P.crouch; P.torso.position.y = 0.9 - 0.35 * P.crouch; P.legs.forEach(l => l.position.y = 0.9 - 0.35 * P.crouch);
+  P.legs.forEach(l => l.scale.y = 1 - 0.38 * P.crouch);
+}
+</script>
+
+<script>
+"use strict";
+// =====================================================================================================
+// Genetics: seven genes, two alleles each. Four quantitative (allele 0..1, expressed as the mean), coat and pattern (an index
+// into the species' list, the earlier dominant), and a recessive morph (two copies show it). One allele of each gene from each
+// parent, picked by hash(sire, dam, birth count, gene); each allele mutates 1 time in 32. Deterministic, so a replay agrees.
+// =====================================================================================================
+const QGENES = [
+  { id: "size", name: "Size", fmt: v => Math.round((0.85 + 0.4 * v) * 100) + "%", hint: "of the species' length, 85 to 125% (M9's range)" },
+  { id: "yield", name: "Yield", fmt: v => "×" + (0.6 + 0.8 * v).toFixed(2), hint: "every product scaled 0.6 to 1.4" },
+  { id: "temper", name: "Temper", fmt: v => (v < 0.35 ? "calm " : v > 0.65 ? "wild " : "even ") + (1.3 - 0.7 * v).toFixed(2), hint: "trust factor when taming, 1.3 calm to 0.6 wild" },
+  { id: "hardy", name: "Hardiness", fmt: v => Math.round(v * 100) + "", hint: "health lost to cold, heat and want; lowered by inbreeding" },
+];
+const BREEDS = {
+  woolback: { name: "Woolback", icon: "m7/woolback", male: "ram", female: "ewe", coats: [["cream", "#eab798"], ["grey", "#a09f91"], ["brown", "#725244"], ["black", "#2c2c25"]], pats: ["plain", "patched", "spotted"], morph: ["golden fleece", "#faaf5c"],
+    names: ["Nettle", "Bramble", "Hob", "Tansy", "Clover", "Moss", "Wren", "Burr", "Sorrel", "Flint", "Heather", "Dock", "Thistle", "Briar", "Yarrow", "Rush"] },
+  yard_hen: { name: "Yard hen", icon: "yard_hen", micon: "cockerel", male: "cockerel", female: "hen", coats: [["buff", "#cfaa81"], ["white", "#fffefe"], ["red", "#a8633e"], ["black", "#2c2c25"]], pats: ["plain", "speckled", "barred"], morph: ["lavender", "#69608b"],
+    names: ["Pip", "Marigold", "Rusty", "Dot", "Speck", "Ginger", "Pearl", "Bran", "Hazel", "Corn", "Fennel", "Poppy", "Crest", "Barley", "Oat", "Wheatear"] },
+  plodder: { name: "Plodder", icon: "m7/plodder", male: "bull", female: "cow", coats: [["rust", "#a8633e"], ["dun", "#cfaa81"], ["black", "#2c2c25"], ["cream", "#eab798"]], pats: ["spotted", "belted", "plain"], morph: ["white", "#fffefe"],
+    names: ["Bracken", "Daisy", "Ox", "Buttercup", "Rowan", "Meadow", "Tor", "Honey", "Cob", "Willow", "Hay", "Primrose", "Boulder", "Sage", "Thorn", "Heath"] },
+  rootling: { name: "Rootling", icon: "rootling", male: "boar", female: "sow", coats: [["pink", "#dd576d"], ["ginger", "#c56d25"], ["black", "#2c2c25"]], pats: ["plain", "saddle", "spotted"], morph: ["gold", "#faaf5c"],
+    names: ["Truffle", "Acorn", "Mud", "Beet", "Parsnip", "Snout", "Russet", "Mallow", "Tuber", "Fig", "Root", "Plum", "Grub", "Mash", "Swede", "Kale"] },
+  herd_hound: { name: "Herd hound", icon: "herd_hound", male: "dog", female: "bitch", coats: [["black and white", "#2c2c25"], ["red", "#a8633e"], ["grey", "#92a3b2"]], pats: ["collar", "plain", "merle"], morph: ["white", "#fffefe"],
+    names: ["Bess", "Fly", "Moss", "Cap", "Nell", "Ben", "Gyp", "Roy", "Meg", "Shep", "Tess", "Glen", "Lass", "Drum", "Rook", "Brack"] },
+};
+function rollGenome(seed, sp){
+  const r = mulberry32(seed), B = BREEDS[sp] || BREEDS.woolback, g = {};
+  for (const q of QGENES) g[q.id] = [0.15 + 0.7 * (r() + r()) / 2, 0.15 + 0.7 * (r() + r()) / 2];
+  const pick = n => { const x = r(); return x < 0.45 ? 0 : Math.min(n - 1, 1 + Math.floor((x - 0.45) / 0.55 * (n - 1))); };
+  g.coat = [pick(B.coats.length), pick(B.coats.length)]; g.pat = [pick(B.pats.length), pick(B.pats.length)];
+  g.morph = [r() < 0.125 ? 1 : 0, r() < 0.125 ? 1 : 0];   // one allele in eight: one wild animal in 64 shows it, M9's rate
+  return g;
+}
+const expQ = (g, id) => (g[id][0] + g[id][1]) / 2;
+const expCoat = g => Math.min(g.coat[0], g.coat[1]);
+const expPat = g => Math.min(g.pat[0], g.pat[1]);
+const showsMorph = g => g.morph[0] && g.morph[1];
+function inherit(sire, dam, n, sp){
+  const B = BREEDS[sp], g = {}, muts = [];
+  const pickA = (gene, idx) => { const h = hashStr(sire.id + "|" + dam.id + "|" + n + "|" + gene + "|" + idx); return h; };
+  for (const gene of ["size", "yield", "temper", "hardy", "coat", "pat", "morph"]){
+    const hs = pickA(gene, 0), hd = pickA(gene, 1);
+    let a = sire.g[gene][hs & 1], b = dam.g[gene][hd & 1];
+    const mut = (x, h) => {
+      if (((h >>> 4) & 31) !== 0) return x;
+      muts.push(gene); const r = ((h >>> 9) & 1023) / 1023;
+      if (gene === "coat") return (x + 1 + Math.floor(r * (B.coats.length - 1))) % B.coats.length;
+      if (gene === "pat") return (x + 1 + Math.floor(r * (B.pats.length - 1))) % B.pats.length;
+      if (gene === "morph") return 1 - x;
+      return clamp(x + (r - 0.5) * 0.3, 0, 1);
+    };
+    g[gene] = [mut(a, hs), mut(b, hd)];
+  }
+  const sex = (hashStr(sire.id + dam.id + n + "sex") & 1) ? "m" : "f";
+  return { g, muts, sex };
+}
+// Kinship and Wright's inbreeding coefficient, by the recursive method over the stored parents' ids.
+function makeKin(REC){
+  const memo = new Map();
+  const F = id => { const r = REC[id]; return r && r.sire && r.dam ? kin(r.sire, r.dam) : 0; };
+  function kin(a, b){
+    if (!a || !b || !REC[a] || !REC[b]) return 0;
+    if (a === b) return 0.5 * (1 + F(a));
+    const k2 = a < b ? a + "|" + b : b + "|" + a; if (memo.has(k2)) return memo.get(k2);
+    const A = REC[a], Bb = REC[b], y = A.born >= Bb.born ? A : Bb, o = y === A ? b : a;
+    const v = (y.sire || y.dam) ? 0.5 * (kin(y.sire, o) + kin(y.dam, o)) : 0;
+    memo.set(k2, v); return v;
+  }
+  return { kin, F };
+}
+
+// ------------------------------------------------------------------ a herd per species, with three generations of pedigree
+function makeHerd(sp){
+  const B = BREEDS[sp], REC = {}, out = [];
+  let nid = 801 + Object.keys(BREEDS).indexOf(sp) * 100, ni = 0;
+  const add = (o) => { o.id = "a" + String(nid++).padStart(4, "0"); o.name = B.names[ni++ % B.names.length]; REC[o.id] = o; out.push(o); return o; };
+  const f = [];
+  for (let i = 0; i < 6; i++) f.push(add({ sex: i % 2 ? "f" : "m", born: 1700 + i, g: rollGenome(hashStr(sp + "founder" + i), sp), gen: 0, state: i < 2 ? "ended" : "alive" }));
+  f[0].g.morph = [1, 0]; f[3].g.morph = [0, 1];   // two carriers in the founders, so the morph can turn up
+  const breed = (s, d, n, sexWant) => { let k = 0, c; do { c = inherit(s, d, n + k * 7, sp); k++; } while (sexWant && c.sex !== sexWant && k < 20); return add({ sex: sexWant || c.sex, born: Math.max(s.born, d.born) + 55, g: c.g, sire: s.id, dam: d.id, gen: Math.max(s.gen, d.gen) + 1, state: "alive", muts: c.muts }); };
+  const g1 = [breed(f[0], f[1], 0, "m"), breed(f[0], f[1], 1, "f"), breed(f[2], f[3], 0, "m"), breed(f[2], f[3], 1, "f"), breed(f[4], f[5], 0, "f")];
+  const g2 = [breed(g1[0], g1[3], 0, "f"), breed(g1[0], g1[3], 1, "m"), breed(g1[2], g1[1], 0, "f"), breed(g1[2], g1[4], 0, "f")];
+  return { REC, list: out, K: makeKin(REC), births: {} };
+}
+const HERDS = {};
+const herdOf = sp => HERDS[sp] || (HERDS[sp] = makeHerd(sp));
+
+// ------------------------------------------------------------------ the breeding screen
+const BS = { sp: "woolback", sire: null, dam: null, ped: null, kids: [] };
+function coatLabel(sp, g){ const B = BREEDS[sp]; if (showsMorph(g)) return `<span class="sw" style="background:${B.morph[1]}"></span>${B.morph[0]} <span class="tag dom">morph</span>`; const c = B.coats[expCoat(g)]; return `<span class="sw" style="background:${c[1]}"></span>${c[0]}, ${B.pats[expPat(g)]}`; }
+function iconOf(sp, sex){ const B = BREEDS[sp]; return ART(sex === "m" && B.micon ? B.micon : B.icon); }
+function drawBreed(){
+  const H = herdOf(BS.sp), B = BREEDS[BS.sp];
+  const alive = H.list.filter(a => a.state === "alive");
+  if (!BS.sire || !H.REC[BS.sire]) BS.sire = alive.find(a => a.sex === "m" && a.gen === 1).id;
+  if (!BS.dam || !H.REC[BS.dam]) BS.dam = alive.find(a => a.sex === "f" && a.gen === 1 && H.REC[a.id].sire === H.REC[BS.sire].sire).id;   // starts on a brother and sister, to show the cost
+  $("bHerd").innerHTML = alive.map(a => `<button class="ind ${a.id === BS.sire ? "sire" : a.id === BS.dam ? "dam" : ""}" data-id="${a.id}"><img src="${iconOf(BS.sp, a.sex)}" alt="" width="36" height="36"><b>${esc(a.name)} <span class="muted small">${a.sex === "m" ? B.male : B.female}</span></b><span class="muted">${a.id} &middot; gen ${a.gen}<br>${coatLabel(BS.sp, a.g)}</span></button>`).join("");
+  $("bHerd").querySelectorAll(".ind").forEach(b => b.addEventListener("click", () => {
+    const a = H.REC[b.dataset.id];
+    if (a.sex === "m") BS.sire = a.id; else BS.dam = a.id;
+    BS.ped = a.id; BS.kids = []; drawBreed();
+  }));
+  const s = H.REC[BS.sire], d = H.REC[BS.dam];
+  const Fk = H.K.kin(s.id, d.id);
+  $("bPairT").textContent = `${s.name} × ${d.name}`;
+  $("bPair").innerHTML = `Sire <b style="color:var(--sky)">${esc(s.name)}</b> (${s.id}) and dam <b style="color:var(--rose)">${esc(d.name)}</b> (${d.id}). ` +
+    `Inbreeding coefficient of their young <b class="${Fk > 0.0625 ? "warn" : ""}">F = ${Fk.toFixed(3)}</b>` + (Fk > 0.0625 ? ` <span class="warn">close kin: the young's hardiness falls by ${(0.5 * Fk).toFixed(3)} and a litter by ${Math.round(Fk * 100)}%</span>` : Fk > 0 ? " (distant kin)" : " (unrelated)") + ".";
+  // every possible value of each quantitative gene: four allele pairs, each one in four
+  $("bTraits").innerHTML = QGENES.map(q => {
+    const vals = [], pen = q.id === "hardy" ? 0.5 * Fk : 0;
+    for (const a of s.g[q.id]) for (const b of d.g[q.id]) vals.push(clamp((a + b) / 2 - pen, 0, 1));
+    const lo = Math.min(...vals), hi = Math.max(...vals), sv = expQ(s.g, q.id), dv = expQ(d.g, q.id), mid = (sv + dv) / 2;
+    const mean = vals.reduce((x, y) => x + y) / 4, arrow = mean > Math.max(sv, dv) + 0.01 ? "▲" : mean < Math.min(sv, dv) - 0.01 ? "▼" : "◆";
+    return `<div class="trait" title="${q.hint}"><span>${q.name}</span><div class="bar"><div class="band" style="left:${lo * 100}%;width:${Math.max(0.6, (hi - lo) * 100)}%"></div>${vals.map(v => `<i class="tick" style="left:${v * 100}%"></i>`).join("")}<i class="pm s" style="left:${sv * 100}%"></i><i class="pm d" style="left:${dv * 100}%"></i></div><span class="v">${q.fmt(lo)}&ndash;${q.fmt(hi).replace(/^(calm|wild|even) /, "")} ${arrow}</span></div>`;
+  }).join("") + `<div class="legend"><span><i style="background:var(--sky)"></i>sire</span><span><i style="background:var(--rose)"></i>dam</span><span><i style="background:var(--amber)"></i>the four possible young, one in four each; the band is their range</span><span>▲ above both parents, ◆ between, ▼ below</span></div>`;
+  // discrete odds
+  const odds = (gene, list) => { const c = {}; for (const a of s.g[gene]) for (const b of d.g[gene]) { const k = Math.min(a, b); c[k] = (c[k] || 0) + 1; } return Object.entries(c).map(([k, n]) => `<span>${gene === "coat" ? `<span class="sw" style="background:${list[k][1]}"></span>${list[k][0]}` : list[k]} ${n * 25}%</span>`).join(""); };
+  let mm = 0; for (const a of s.g.morph) for (const b of d.g.morph) if (a && b) mm++;
+  const carriers = [s, d].map(x => x.g.morph.some(v => v) ? "carrier" : "no copy");
+  $("bOdds").innerHTML = `<b class="small">Coat</b>${odds("coat", B.coats)}<b class="small">Pattern</b>${odds("pat", B.pats)}<b class="small">${B.morph[0]}</b><span>${mm * 25}% <span class="muted">(sire ${carriers[0]}, dam ${carriers[1]}; the screen knows, the player sees it once a pedigree proves it)</span></span>`;
+  // rolled births
+  $("bKids").innerHTML = BS.kids.map(k => `<div class="kid"><div style="display:flex;gap:6px;align-items:center"><img src="${iconOf(BS.sp, k.sex)}" width="36" height="36" alt=""><div><b>${k.sex === "m" ? B.male : B.female}</b> ${k.id}<br>${coatLabel(BS.sp, k.g)}</div></div>
+    <div class="mini">${QGENES.map(q => { const v = clamp(expQ(k.g, q.id) - (q.id === "hardy" ? 0.5 * Fk : 0), 0, 1); return `<span>${q.id}</span><i style="width:${v * 100}%"></i>`; }).join("")}</div>
+    ${k.muts.length ? `<span class="mut">mutation: ${k.muts.join(", ")}</span>` : ""}${showsMorph(k.g) ? `<span class="morph">rare morph: ${B.morph[0]}</span>` : ""}</div>`).join("");
+  $("bRollNote").textContent = BS.kids.length ? `births ${BS.kids[0].n + 1} to ${BS.kids[BS.kids.length - 1].n + 1} of this pair; every value inside its band unless a mutation says so` : "";
+  drawPed();
+}
+function drawPed(){
+  const H = herdOf(BS.sp), B = BREEDS[BS.sp], id = BS.ped || BS.dam, a = H.REC[id] || BS.kids.find(k => k.id === id);
+  if (!a) return;
+  const box = (x, cls) => x ? `<div class="p ${cls} ${x.state === "ended" ? "end" : ""}"><b>${esc(x.name || "unnamed")}</b> ${x.id}<br><span class="muted">${x.sex === "m" ? B.male : B.female}${x.state === "ended" ? ", ended (record kept)" : ""}</span><br>${coatLabel(BS.sp, x.g)}</div>` : `<div class="p ${cls}"><span class="muted">wild-caught founder: parents unknown</span></div>`;
+  const s = H.REC[a.sire], d = H.REC[a.dam];
+  const gp = p => p ? [H.REC[p.sire], H.REC[p.dam]] : [null, null];
+  const [ss, sd] = gp(s), [ds, dd] = gp(d);
+  $("pedWho").textContent = `of ${a.name || a.id} (F = ${(a.sire && a.dam ? H.K.kin(a.sire, a.dam) : 0).toFixed(3)})`;
+  $("bPed").innerHTML = `<div class="col">${box(a, a.sex === "m" ? "s" : "d")}</div><div class="col">${box(s, "s")}${box(d, "d")}</div><div class="col">${box(ss, "s")}${box(sd, "d")}${box(ds, "s")}${box(dd, "d")}</div>`;
+}
+function rollKids(){
+  const H = herdOf(BS.sp), s = H.REC[BS.sire], d = H.REC[BS.dam];
+  const pk = s.id + d.id, n0 = H.births[pk] || 0;
+  BS.kids = [];
+  for (let i = 0; i < 6; i++){
+    const n = n0 + i, c = inherit(s, d, n, BS.sp);
+    const kid = { id: "a" + (2000 + (hashStr(pk + n) % 7000)), name: "", sex: c.sex, g: c.g, muts: c.muts, sire: s.id, dam: d.id, n, born: Math.max(s.born, d.born) + 60 };
+    BS.kids.push(kid);
+  }
+  H.births[pk] = n0 + 6;
+  drawBreed();
+}
+// ------------------------------------------------------------------ ten generations of selection, two ways (the same inherit())
+function selection(){
+  const run = rotate => {
+    const REC = {}; let nid = 0;
+    const mk = (g, sex, born, sire, dam) => { const o = { id: "s" + (rotate ? "r" : "c") + nid++, g, sex, born, sire, dam }; REC[o.id] = o; return o; };
+    let pop = []; for (let i = 0; i < 8; i++) pop.push(mk(rollGenome(hashStr("sel" + i), "woolback"), i % 2 ? "f" : "m", 0));
+    const K = makeKin(REC), out = [];
+    for (let gen = 0; gen <= 10; gen++){
+      const mean = pop.reduce((t, a) => t + expQ(a.g, "yield"), 0) / pop.length;
+      const meanF = pop.reduce((t, a) => t + (a.sire ? K.kin(a.sire, a.dam) : 0), 0) / pop.length;
+      out.push({ gen, y: 0.6 + 0.8 * mean, F: meanF });
+      if (gen === 10) break;
+      const by = (a, b) => expQ(b.g, "yield") - expQ(a.g, "yield");
+      let ram = pop.filter(a => a.sex === "m").sort(by)[0];
+      if (rotate){ const market = Array.from({ length: 6 }, (_, k) => mk(rollGenome(hashStr("ram" + gen + "/" + k), "woolback"), "m", gen * 10)); ram = market.sort(by)[0]; }   // the best of six unrelated rams at market
+      const ewes = pop.filter(a => a.sex === "f").sort(by).slice(0, 3);
+      const next = [];
+      ewes.forEach((e, ei) => { for (let k = 0; k < 4; k++){ const c = inherit(ram, e, k + ei * 10, "woolback"); next.push(mk(c.g, k % 2 ? "f" : "m", (gen + 1) * 10, ram.id, e.id)); } });
+      pop = next;
+    }
+    return out;
+  };
+  const closed = run(false), rot = run(true);
+  lineChart($("selYield"), "Mean wool yield of each generation", [{ name: "closed herd", col: "var(--amber)", pts: closed.map(p => p.y) }, { name: "rotating rams", col: "var(--sky)", pts: rot.map(p => p.y) }], 0.6, 1.4, v => "×" + v.toFixed(2));
+  lineChart($("selF"), "Mean inbreeding coefficient F", [{ name: "closed herd", col: "var(--amber)", pts: closed.map(p => p.F) }, { name: "rotating rams", col: "var(--sky)", pts: rot.map(p => p.F) }], 0, 1.0, v => v.toFixed(2));
+}
+// A small SVG line chart: one axis, 2 px lines, a legend and direct labels, a crosshair and tooltip on hover.
+function lineChart(el, title, series, y0, y1, fmt){
+  const Wd = 540, Ht = 236, L = 46, R = 128, T = 14, Bt = 36, n = series[0].pts.length;
+  const X = i => L + (Wd - L - R) * i / (n - 1), Y = v => T + (Ht - T - Bt) * (1 - (v - y0) / (y1 - y0));
+  let s = `<svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="${esc(title)}">`;
+  for (let k = 0; k <= 4; k++){ const v = y0 + (y1 - y0) * k / 4; s += `<line x1="${L}" x2="${Wd - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(226,206,160,.12)"/><text x="${L - 6}" y="${Y(v) + 4}" fill="#a89d86" font-size="11" text-anchor="end">${fmt(v)}</text>`; }
+  for (let i = 0; i < n; i += 2) s += `<text x="${X(i)}" y="${Ht - 10}" fill="#a89d86" font-size="11" text-anchor="middle">${i}</text>`;
+  s += `<text x="${(L + Wd - R) / 2}" y="${Ht - 2}" fill="#a89d86" font-size="11" text-anchor="middle">generation</text>`;
+  series.forEach(se => { s += `<polyline fill="none" stroke="${se.col}" stroke-width="2" stroke-linejoin="round" points="${se.pts.map((v, i) => X(i) + "," + Y(v)).join(" ")}"/>`; const lv = se.pts[n - 1]; s += `<text x="${X(n - 1) + 6}" y="${Y(lv) + 4}" fill="#ece4d2" font-size="11">${se.name} ${fmt(lv)}</text>`; });
+  s += `<line class="xh" x1="0" x2="0" y1="${T}" y2="${Ht - Bt}" stroke="#ece4d2" stroke-opacity="0" />`;
+  series.forEach((se, k) => s += `<circle class="dot${k}" r="4" fill="${se.col}" stroke="#1f1d15" stroke-width="2" opacity="0"/>`);
+  s += `<rect x="${L}" y="${T}" width="${Wd - L - R}" height="${Ht - T - Bt}" fill="transparent"/></svg>`;
+  el.innerHTML = `<h4>${esc(title)}</h4><div class="legend">${series.map(se => `<span><i style="background:${se.col}"></i>${se.name}</span>`).join("")}</div>${s}<div class="tip"></div>`;
+  const svg = el.querySelector("svg"), tip = el.querySelector(".tip"), xh = svg.querySelector(".xh");
+  svg.addEventListener("pointermove", e => {
+    const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * Wd, i = clamp(Math.round((x - L) / (Wd - L - R) * (n - 1)), 0, n - 1);
+    xh.setAttribute("x1", X(i)); xh.setAttribute("x2", X(i)); xh.setAttribute("stroke-opacity", 0.35);
+    series.forEach((se, k) => { const c = svg.querySelector(".dot" + k); c.setAttribute("cx", X(i)); c.setAttribute("cy", Y(se.pts[i])); c.setAttribute("opacity", 1); });
+    tip.innerHTML = `generation ${i}<br>` + series.map(se => `${se.name}: <b>${fmt(se.pts[i])}</b>`).join("<br>");
+    const er = el.getBoundingClientRect(); tip.style.left = Math.min(er.width - 150, e.clientX - er.left + 12) + "px"; tip.style.top = (e.clientY - er.top + 12) + "px"; tip.style.opacity = 1;
+  });
+  svg.addEventListener("pointerleave", () => { tip.style.opacity = 0; xh.setAttribute("stroke-opacity", 0); svg.querySelectorAll("circle").forEach(c => c.setAttribute("opacity", 0)); });
+}
+let breedBuilt = false;
+TAB_HOOKS.breed = { show(){
+  if (!breedBuilt){
+    breedBuilt = true;
+    $("bSp").innerHTML = Object.entries(BREEDS).map(([k, b]) => `<option value="${k}">${b.name}</option>`).join("");
+    $("bSp").addEventListener("change", () => { BS.sp = $("bSp").value; BS.sire = BS.dam = BS.ped = null; BS.kids = []; drawBreed(); });
+    $("bRoll").addEventListener("click", rollKids);
+    selection();
+  }
+  drawBreed();
+} };
+</script>
+
+<script>
+"use strict";
+// =====================================================================================================
+// The farmstead: Tenebris fields, hex cells 2.833 m across. Pens are fence loops on cell edges with a gate and a lantern.
+// =====================================================================================================
+const NEED_ICONS = ["need_food", "need_water", "need_shelter", "need_space"];
+function hotbar(el, slots){ el.innerHTML = slots.map(s => `<div class="slot ${s.big ? "big" : ""} ${s.sel ? "sel" : ""}" title="${esc(s.t || "")}"><img src="${ART(s.i)}" alt="${esc(s.t || "")}">${s.n !== undefined ? `<span class="n">${s.n}</span>` : ""}</div>`).join(""); }
+function genomeHTML(g, sp){
+  return `<div class="mini" style="grid-template-columns:96px 1fr">${QGENES.map(q => `<span>${q.name} ${q.fmt(expQ(g, q.id)).replace(/^(calm|wild|even) /, "")}</span><i style="width:${expQ(g, q.id) * 100}%"></i>`).join("")}</div>` + (BREEDS[sp] ? `<span>${coatLabel(sp, g)}</span>` : "");
+}
+MAKERS.farm = function(){
+  const V = newView("farm", { yaw: 0.35, pitch: 0.82, dist: 46, target: new THREE.Vector3(0, 0, -1) });
+  const S = V.scene, rnd = mulberry32(7);
+  V.pick = [];
+  // ---- cells
+  const RINGS = 8, cells = new Map();
+  const PENS = {
+    coop: { cells: [[-3, 0], [-4, 1], [-3, 1]], all: [[-3, 0], [-4, 0], [-4, 1], [-3, 1]], gate: [-3, 0, 0], name: "Coop run" },
+    sheep: { cells: [[2, -5], [3, -5], [2, -4], [1, -4], [1, -5], [2, -6], [3, -6]], gate: [2, -4, 1], name: "Sheep pasture" },
+    cattle: { cells: [[-3, -4], [-2, -4], [-3, -3], [-4, -3], [-4, -4], [-3, -5], [-2, -5]], gate: [-2, -4, 0], name: "Barn pasture" },
+    sty: { cells: [[4, 0], [5, 0]], gate: [4, 0, 3], name: "Sty" },
+    paddock: { cells: [[-3, 4], [-2, 4], [-3, 5]], gate: [-2, 4, 4], name: "Paddock" },
+  };
+  const POND = [[1, 3], [2, 3], [1, 4]], CROPS = [[5, -3], [6, -3], [5, -4], [6, -4], [4, -3]];
+  const PATH = [[-1, 0], [-2, 0], [2, 0], [3, 0], [0, 1], [0, -1], [1, -1], [1, -2], [2, -3], [-1, -1], [-1, -2], [-1, -4], [0, 2], [0, 3], [-1, 3], [-2, 3], [-1, 2], [3, -1], [4, -1]];
+  const inL = (L, q, r) => L.some(c => c[0] === q && c[1] === r);
+  for (let q = -RINGS; q <= RINGS; q++) for (let r = -RINGS; r <= RINGS; r++){
+    if (Math.abs(q + r) > RINGS) continue;
+    const c = { q, r, h: 0 };
+    if (inL(POND, q, r)){ c.water = 1; c.h = -1; }
+    else if (inL(CROPS, q, r)) c.top = tileMat(V, [SLOT.fields, 2, 3]);
+    else if (inL(PENS.sty.cells, q, r)) c.top = floorMat(V, "tex_mud", 1);
+    else if (inL(PATH, q, r)) c.top = tileMat(V, [SLOT.fields, 2, 0], 0xd8c8b0);
+    if (hdist([q, r], [0, 0]) === RINGS && (q * 7 + r * 3) % 5 === 0) c.h = 1;
+    cells.set(key(q, r), c);
+  }
+  ground(V, cells);
+  const C = (q, r) => hexXZ(q, r);
+  // ---- pens, gates and their lanterns
+  const gates = {};
+  for (const [id, P] of Object.entries(PENS)){
+    const g = pen(V, P.all || P.cells, [P.gate])[0];
+    gates[id] = g;
+    if (g) lanternPost(V, g.x + g.nx * 0.55 + g.nz * 0.9, 0, g.z + g.nz * 0.55 - g.nx * 0.9, -Math.atan2(g.nz, g.nx));
+  }
+  // ---- the farmhouse
+  { const [x, z] = C(0, 0); const o = { id: "farmhouse", x: x + W / 2, z, w: 5.2, d: 4.0, h: 2.8, wall: "plaster", roof: "thatch" };
+    const g = building(V, o); V.pick.push(g);
+    bx(g, gameMat(V, "boards"), 0.9, 1.9, 0.1, 0, 0.95, 2.02);
+    windowGlow(V, g, 0.9, 0.8, -1.6, 1.6, 2.02); windowGlow(V, g, 0.9, 0.8, 1.6, 1.6, 2.02); windowGlow(V, g, 0.9, 0.8, -1.2, 1.6, -2.02);
+    wallLamp(V, x + W / 2 + 0.8, 2.3, z + 2.2, 5.0, 1.8);
+    lamp(V, x + W / 2 - 1.6, 1.4, z + 2.6, 0xffb060, 0.6, 3.2); lamp(V, x + W / 2 + 1.6, 1.4, z + 2.6, 0xffb060, 0.6, 3.2); }
+  // ---- coop on its cell in the run, door facing the run
+  { const [x, z] = C(-4, 0); const g = building(V, { id: "coop", x, z, w: 2.2, d: 1.8, h: 1.6, wall: "whitewash", roof: "shingle", ry: 0 }); V.pick.push(g);
+    V.coopDoor = bx(g, gameMat(V, "boards"), 0.6, 0.7, 0.08, 0.6, 0.35, 0.94);
+    const ramp = bx(g, gameMat(V, "plank"), 0.5, 0.06, 1.0, 0.6, 0.2, 1.3); ramp.rotation.x = 0.35;
+    for (let i = 0; i < 3; i++) bx(g, gameMat(V, "boards"), 0.5, 0.45, 0.5, -0.65 + i * 0.6, 0.42, -1.15);   // nest boxes on the back wall
+    wallLamp(V, x + 1.1, 1.5, z + 1.0, 4.5, 1.6);
+    V.coopIn = [x + 0.6, z + 1.9]; }
+  // ---- the barn, pasture beside it
+  { const [x, z] = C(-1, -3); const g = building(V, { id: "barn", x, z, w: 4.4, d: 3.6, h: 3.0, wall: "boards", roof: "shingle", ry: Math.PI / 2 + 0.52 }); V.pick.push(g);
+    bx(g, flatMat(V, 0x16120c), 1.6, 2.2, 0.06, 0, 1.1, 1.82);
+    g.updateMatrixWorld(true); const lp = g.localToWorld(new THREE.Vector3(1.1, 2.5, 1.95)), dp = g.localToWorld(new THREE.Vector3(0, 0, 2.8));
+    wallLamp(V, lp.x, lp.y, lp.z, 5.5, 1.8);
+    V.barnDoor = [dp.x, dp.z]; }
+  // ---- stable and paddock
+  { const [x, z] = C(-4, 4); const g = building(V, { id: "stable", x, z, w: 2.8, d: 2.4, h: 2.4, wall: "plank", roof: "thatch", ry: Math.PI / 2 }); V.pick.push(g);
+    bx(g, flatMat(V, 0x16120c), 1.0, 1.9, 0.06, -0.6, 0.95, 1.22); bx(g, flatMat(V, 0x16120c), 1.0, 1.9, 0.06, 0.6, 0.95, 1.22);
+    g.updateMatrixWorld(true); const lp = g.localToWorld(new THREE.Vector3(0, 2.1, 1.35)); wallLamp(V, lp.x, lp.y, lp.z, 5.0, 1.8); }
+  // ---- sty lean-to
+  { const [x, z] = C(5, 0); const g = new THREE.Group(); g.position.set(x + 0.4, 0, z); S.add(g); g.traverse(m => m.userData.building = "sty");
+    for (const [px, pz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) bx(g, gameMat(V, "timber"), 0.12, 1.2, 0.12, px, 0.6, pz);
+    const rf = bx(g, gameMat(V, "thatch"), 2.0, 0.12, 2.0, 0, 1.25, 0); rf.rotation.z = 0.2; g.traverse(m => m.userData.building = "sty"); V.pick.push(g); }
+  // ---- duck house by the pond
+  { const [x, z] = C(0, 4); const g = building(V, { id: "duckhouse", x, z, w: 1.4, d: 1.2, h: 0.9, wall: "boards", roof: "shingle", rh: 0.4 }); V.pick.push(g); }
+  // ---- hives beside the wheat
+  { const [x, z] = C(4, -2); const hm = gameMat(V, "boards"), rm = gameMat(V, "whitewash");
+    V.hives = [];
+    for (let i = 0; i < 3; i++){ const g = new THREE.Group(); g.position.set(x - 0.9 + i * 0.9, 0, z + (i % 2) * 0.4); S.add(g);
+      bx(g, gameMat(V, "timber"), 0.5, 0.35, 0.5, 0, 0.18, 0); bx(g, hm, 0.55, 0.55, 0.5, 0, 0.62, 0); bx(g, hm, 0.55, 0.3, 0.5, 0, 1.05, 0); bx(g, rm, 0.66, 0.08, 0.6, 0, 1.24, 0);
+      bx(g, flatMat(V, 0x0c0a06), 0.2, 0.05, 0.02, 0, 0.4, 0.26); g.traverse(m => m.userData.building = "hive"); V.pick.push(g); V.hives.push(g.position.clone()); }
+    for (const [q, r] of CROPS){ const [cx, cz] = C(q, r); for (const [dx, dz] of [[-0.6, -0.4], [0.6, 0.3], [-0.1, 0.8], [0.3, -0.8]]) cards(V, "m8/wheat_3", cx + dx, 0, cz + dz, 0.9); } }
+  // ---- kennel, compost bin, troughs, trees
+  { const [x, z] = C(0, -3); const g = building(V, { id: "kennel", x, z, w: 1.0, d: 0.9, h: 0.7, wall: "boards", roof: "shingle", rh: 0.35, ry: 0.5 }); V.pick.push(g); V.kennel = [x + 0.5, z + 0.8]; }
+  { const [x, z] = C(-2, 2); const g = new THREE.Group(); g.position.set(x, 0, z); S.add(g); const bm = gameMat(V, "boards");
+    bx(g, bm, 1.6, 0.7, 0.08, 0, 0.35, -0.6); bx(g, bm, 0.08, 0.7, 1.2, -0.8, 0.35, 0); bx(g, bm, 0.08, 0.7, 1.2, 0.8, 0.35, 0);
+    bx(g, floorMat(V, "tex_mud", 1), 1.5, 0.55, 1.1, 0, 0.28, 0); g.traverse(m => m.userData.building = "compost"); V.pick.push(g); }
+  for (const [q, r, ry, w] of [[-3, 1, 0.3, 1], [1, -5, 1.2, 1], [-4, -3, 0.5, 1], [4, 0, 1.0, 0], [-3, 5, 0.2, 1]]){ const [x, z] = C(q, r); trough(V, x + 0.4, 0, z + 0.4, ry, !!w); }
+  for (const [q, r, s] of [[-7, 3, 1.1], [6, 2, 1], [7, -6, 1.2], [-6, -1, 0.9], [3, 5, 1], [-1, 6, 1.1], [-5, -3 - 0, 0], [-2, 8, 1], [8, -2, 0.9]]){ if (!s) continue; const c = cells.get(key(q, r)); if (!c) continue; const [x, z] = C(q, r); tree(V, x, c.h, z, s); }
+
+  // =================================================================================================== the animals
+  const A = [];
+  let nid = 1000;
+  const add = (kind, k, o) => { const a = buildAnimal(V, kind, k, o.tint); Object.assign(a, o); a.id = "a" + nid++; a.seed = hashStr(a.id); a.gsp = BREEDS[o.breed || kind] ? (o.breed || kind) : null; a.gen = rollGenome(a.seed, a.gsp || "woolback"); a.sex = o.sex || (a.seed & 1 ? "m" : "f"); a.t = rnd() * 8; const p = o.at || pointIn(o.cells, rnd); a.g.position.set(p[0], o.y || 0, p[1]); a.g.rotation.y = rnd() * 6.28; A.push(a); V.pick.push(a.g); return a; };
+  const hens = []; for (let i = 0; i < 6; i++) hens.push(add("yard_hen", 0.95 + rnd() * 0.12, { cells: PENS.coop.cells, role: "peck", breed: "yard_hen", sex: "f", pen: "coop" }));
+  hens.push(add("cockerel", 1, { cells: PENS.coop.cells, role: "peck", breed: "yard_hen", sex: "m", pen: "coop" }));
+  const cows = []; for (let i = 0; i < 3; i++) cows.push(add("plodder", 0.92 + rnd() * 0.15, { cells: PENS.cattle.cells, role: "graze", pen: "cattle", sex: i ? "f" : "m" }));
+  add("plodder", 0.42, { cells: PENS.cattle.cells, role: "follow", lead: cows[1], pen: "cattle", stage: "calf, day 3" });
+  const flock = []; for (let i = 0; i < 6; i++) flock.push(add("woolback", 0.92 + rnd() * 0.16, { cells: PENS.sheep.cells, role: "flock", pen: "sheep", off: [Math.cos(i * 1.05) * 1.3, Math.sin(i * 1.05) * 1.3] }));
+  for (let i = 0; i < 2; i++) flock.push(add("woolback", 0.48, { cells: PENS.sheep.cells, role: "flock", pen: "sheep", off: [Math.cos(i * 2 + 0.5) * 0.7, Math.sin(i * 2 + 0.5) * 0.7], stage: "lamb, day 4" }));
+  for (let i = 0; i < 2; i++) add("ridge_goat", 1, { cells: PENS.sheep.cells, role: "graze", pen: "sheep" });
+  const sow = add("rootling", 1, { cells: PENS.sty.cells, role: "graze", breed: "rootling", sex: "f", pen: "sty" });
+  let prev = sow; for (let i = 0; i < 5; i++) prev = add("rootling", 0.3, { cells: PENS.sty.cells, role: "follow", lead: prev, breed: "rootling", pen: "sty", gap: i ? 0.45 : 0.9, stage: "piglet, day 2" });
+  const ducks = []; for (let i = 0; i < 5; i++){ const d = add("yard_dabbler", 1, { cells: POND, role: "swim", y: -0.26, pen: "pond" }); ducks.push(d); }
+  add("fellrunner", 1, { cells: PENS.paddock.cells, role: "graze", pen: "paddock" });
+  add("fellrunner", 0.97, { cells: PENS.paddock.cells, role: "idle", pen: "paddock", at: [C(-4, 4)[0] + 1.4, C(-4, 4)[1] + 0.2], tint: 0xe8d8c8 });
+  const hound = add("herd_hound", 1, { cells: PENS.sheep.cells, role: "herd", breed: "herd_hound", pen: "sheep", name: "Bess" });
+  const cat = add("hedge_cat", 1, { cells: [[-1, -2], [-2, -2]], role: "prowl", pen: null, name: "Tansy" });
+  const fox = add("red_fox", 1, { cells: [[-8, 3]], role: "fox", pen: null }); fox.g.visible = false; V.pick.pop();
+  V.animals = A;
+  // bees: tiny bright motes between the hives and the wheat, by day only
+  const beeM = new THREE.MeshBasicMaterial({ color: 0xfaaf5c }); const bees = [];
+  for (let i = 0; i < 18; i++){ const m = new THREE.Mesh(boxGeo(0.07, 0.05, 0.07), beeM); S.add(m); bees.push({ m, h: i % 3, c: CROPS[i % CROPS.length], ph: rnd() * 6.28, sp: 0.15 + rnd() * 0.1 }); }
+
+  // =================================================================================================== behaviour
+  const flockGoal = { p: pointIn(PENS.sheep.cells, rnd, 0.3), t: 0 };
+  const foxS = { st: "away", t: 0, spawn: C(-8, 2) };
+  const isNight = () => V.hour < 6.2 || V.hour >= 19.3;
+  V.update = dt => {
+    const night = isNight(), shut = $("coopShut").getAttribute("aria-pressed") === "true", guard = $("houndOn").getAttribute("aria-pressed") === "true";
+    if ($("farmClock").getAttribute("aria-pressed") === "true") V.setTime((V.hour + dt / 4) % 24);   // an hour every 4 s
+    flockGoal.t -= dt; if (flockGoal.t < 0){ flockGoal.t = 10 + rnd() * 6; flockGoal.p = pointIn(PENS.sheep.cells, rnd, 0.35); }
+    let fx = 0, fz = 0; flock.forEach(s => { fx += s.g.position.x; fz += s.g.position.z; }); fx /= flock.length; fz /= flock.length;
+    for (const a of A){
+      a.t -= dt; let spd = 0;
+      const K = KINDS[a.kind];
+      if (a.role === "fox") continue;
+      if (night && a.role !== "swim" && a.role !== "herd" && a.role !== "prowl"){
+        if (a.pen === "coop" && shut){ const d = steer(a, V.coopIn[0], V.coopIn[1], K.walk * 1.5, dt); spd = d > 0.1 ? K.walk : 0; a.g.visible = d > 0.25; }
+        else { a.lieT = a.plan === "quad" ? 1 : 0.6; a.headT = 0; }
+        pose(a, dt, spd); continue;
+      }
+      a.g.visible = true; a.lieT = 0;
+      if (a.role === "peck" || a.role === "graze" || a.role === "idle"){
+        if (!a.tgt || a.t < 0){ a.tgt = a.role === "idle" ? null : pointIn(a.cells, rnd); a.t = (a.role === "peck" ? 2 : 6) + rnd() * 6; a.walking = true; }
+        if (a.tgt && a.walking){ const d = steer(a, a.tgt[0], a.tgt[1], K.walk, dt); spd = K.walk; a.headT = 0; if (d < 0.1) a.walking = false; }
+        else a.headT = a.role === "peck" ? (Math.sin(a.t * 9 + a.seed) > 0.3 ? 1 : 0.2) : a.role === "graze" ? 1 : 0;
+      } else if (a.role === "follow"){
+        const L = a.lead.g.position, back = a.gap || 1.0 + a.k;
+        const yaw = a.lead.g.rotation.y, tx = L.x - Math.cos(yaw) * back, tz = L.z + Math.sin(yaw) * back;
+        const d = Math.hypot(tx - a.g.position.x, tz - a.g.position.z);
+        if (d > 0.2){ steer(a, tx, tz, K.walk * Math.min(2.2, 0.6 + d), dt); spd = K.walk; a.headT = 0; } else a.headT = a.lead.headT;
+      } else if (a.role === "flock"){
+        const tx = flockGoal.p[0] + a.off[0], tz = flockGoal.p[1] + a.off[1];
+        const d = steer(a, tx, tz, K.walk, dt); spd = d > 0.3 ? K.walk : 0; a.headT = d > 0.3 ? 0 : 1;
+      } else if (a.role === "swim"){
+        if (!a.tgt || a.t < 0){ a.tgt = pointIn(POND, rnd, 0.6); a.t = 4 + rnd() * 6; }
+        const d = steer(a, a.tgt[0], a.tgt[1], night ? 0 : 0.35, dt);
+        a.body.rotation.z = !night && d < 0.15 && Math.sin(a.t * 1.3 + a.seed) > 0.75 ? -1.2 : 0;   // tipping up to feed
+      } else if (a.role === "herd"){
+        // the hound works the flock by day, keeps the kennel at night unless a fox comes
+        if (night){ if (foxS.st !== "chased"){ const d = steer(a, V.kennel[0], V.kennel[1], 1.4, dt); spd = d > 0.1 ? 1.4 : 0; a.lieT = d < 0.2 ? 1 : 0; } }
+        else { const ang = V.time * 0.35, tx = fx + Math.cos(ang) * 3.0, tz = fz + Math.sin(ang) * 3.0; const d = steer(a, tx, tz, 1.6, dt); spd = d > 0.1 ? 1.6 : 0; a.lieT = 0; }
+      } else if (a.role === "prowl"){
+        if (!a.tgt || a.t < 0){ a.tgt = rnd() < 0.5 ? [V.barnDoor[0] + rnd(), V.barnDoor[1] + rnd()] : pointIn([[-2, 2], [-1, 2]], rnd); a.t = 5 + rnd() * 6; }
+        const d = steer(a, a.tgt[0], a.tgt[1], K.walk, dt); spd = d > 0.1 ? K.walk : 0;
+      }
+      pose(a, dt, spd);
+    }
+    // ---- the fox
+    const fp = fox.g.position, target = [V.coopIn[0] - 3.4, V.coopIn[1] + 1.2];
+    foxS.t -= dt;
+    if (!night){ fox.g.visible = false; foxS.st = "away"; foxS.t = 3; }
+    else {
+      if (foxS.st === "away" && foxS.t < 0){ foxS.st = "come"; fp.set(foxS.spawn[0], 0, foxS.spawn[1]); fox.g.visible = true; }
+      if (foxS.st === "come"){ const d = steer(fox, target[0], target[1], 1.4, dt); pose(fox, dt, 1.4); if (d < 0.2){ foxS.st = "sniff"; foxS.t = 3.5; } }
+      else if (foxS.st === "sniff"){ fox.headT = 1; pose(fox, dt, 0);
+        if (foxS.t < 0){
+          if (guard){ foxS.st = "chased"; toast($("farmToast"), "<b>The hound runs it off</b>A lit gate and a hound on guard: the fox never reaches the coop.", 3200); }
+          else if (shut){ foxS.st = "leave"; toast($("farmToast"), "<b>The coop is shut</b>The hens are inside: the fox circles and gives up.", 3200); }
+          else { foxS.st = "lurk"; foxS.t = 6; toast($("farmToast"), "<b>Open run, no hound</b>Q2 for the owner: can the fox take a hen here? Recommendation: yes, one, and never from a shut coop.", 5200); }
+        } }
+      else if (foxS.st === "lurk"){ const d = steer(fox, V.coopIn[0] - 1.0, V.coopIn[1] + 0.6, 1.0, dt); fox.headT = d < 0.2 ? 1 : 0; pose(fox, dt, d > 0.1 ? 1 : 0); if (foxS.t < 0) foxS.st = "leave"; }
+      else if (foxS.st === "chased"){ const d = steer(fox, foxS.spawn[0] - 4, foxS.spawn[1], 4.5, dt); fox.headT = 0; pose(fox, dt, 4.5);
+        steer(hound, fp.x + 1.2, fp.z, 4.2, dt); hound.lieT = 0; pose(hound, dt, 4.2);
+        if (d < 0.3){ fox.g.visible = false; foxS.st = "away"; foxS.t = 14; } }
+      else if (foxS.st === "leave"){ const d = steer(fox, foxS.spawn[0] - 4, foxS.spawn[1], 2.4, dt); fox.headT = 0; pose(fox, dt, 2.4); if (d < 0.3){ fox.g.visible = false; foxS.st = "away"; foxS.t = 14; } }
+    }
+    // coop door: shut from dusk to dawn if asked
+    V.coopDoor.position.x = night && shut ? 0.6 : 1.15;
+    // bees
+    const day = !night && V.hour > 7 && V.hour < 18.5;
+    bees.forEach(b => { b.m.visible = day; if (!day) return; b.ph += dt * b.sp; const hv = V.hives[b.h], [cx, cz] = C(b.c[0], b.c[1]); const u = 0.5 - 0.5 * Math.cos(b.ph); b.m.position.set(lerp(hv.x, cx, u) + Math.sin(b.ph * 7) * 0.4, 0.9 + Math.sin(b.ph * 5) * 0.3, lerp(hv.z + 0.3, cz, u) + Math.cos(b.ph * 6) * 0.4); });
+    if (V.sel) V.selRing.position.set(V.sel.g.position.x, 0.03 + (V.sel.role === "swim" ? -0.25 : 0), V.sel.g.position.z), V.selRing.visible = V.sel.g.visible;
+  };
+  // selection ring
+  V.selRing = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.82, 6), new THREE.MeshBasicMaterial({ color: 0xf0b43c, side: THREE.DoubleSide })); V.selRing.rotation.x = -Math.PI / 2; V.selRing.visible = false; S.add(V.selRing);
+
+  // =================================================================================================== HUD, clicks, time
+  const PRODUCTS = h => { const f = clamp((h - 6) / 12, 0, 1); return [
+    { i: "m7/drop_egg", t: "Eggs in the nests", n: Math.round(6 * smooth(0.05, 0.5, f)) }, { i: "fertile_egg", t: "Fertile eggs (a cockerel in the coop)", n: Math.round(6 * smooth(0.05, 0.5, f)) },
+    { i: "m7/drop_milk", t: "Milk waiting (two plodders in milk)", n: f > 0.05 ? 2 : 0 }, { i: "m7/drop_wool", t: "Fleeces ready to shear (day 4 of 4)", n: 6 },
+    { i: "duck_egg", t: "Duck eggs", n: Math.round(3 * smooth(0.1, 0.6, f)) }, { i: "honey", t: "Honey in the hives", n: 1 }, { i: "manure", t: "Manure to the compost bin", n: Math.round(18 * f) },
+    { i: "tool_pail", t: "Pail (selected)", sel: true }, { i: "tool_shears", t: "Shears" }, { i: "tool_smoker", t: "Smoker, for the hives" }]; };
+  V.setTime = h => {
+    light(V, h);
+    (V.windows || []).forEach(m => m.uniforms.uEmissive.value.set(0xffb060).multiplyScalar(0.9 * V.U.uNight.value));
+    $("farmTime").value = h; $("farmTimeOut").textContent = fmtT(h);
+    $("farmDbg").textContent = `farmstead | fields L0, column | ${fmtT(h)} | day 1834, northern summer | ${A.length - 1} animals, 5 pens | lamps ${V.lamps.length}`;
+    hotbar($("farmHot"), PRODUCTS(h));
+    document.querySelectorAll("[data-ft]").forEach(b => b.setAttribute("aria-pressed", Math.abs(+b.dataset.ft - h) < 0.01));
+  };
+  const BINFO = {
+    farmhouse: ["Farmhouse", "Plaster and thatch. Windows lit at night. The farm's records are written from here only in the sense that the player is the author: every animal tamed, named or moved is an @p line."],
+    coop: ["Coop", "1 cell, 6 nest boxes, a roost, a door that shuts from dusk to dawn. 6 yard hens and a cockerel, so today's eggs are fertile: they can be eaten or set under a broody hen or in an incubator (see the Hatchery)."],
+    barn: ["Barn", "3 plodders and a calf. Stalls, a hay loft (winter feed), the butcher's block. Two cows are in milk: 1 pail each a day for 40 days after a calf. A hedge cat keeps its mice down."],
+    stable: ["Stable", "Two stalls and tack. Fellrunners: ridden at 9 m/s, pull a plough or a cart. A wild one is tamed by feeding, then broken in on a lead."],
+    sty: ["Sty", "A rootling sow and her litter of 5 (day 2). Rootlings root a pen cell into tilled soil; 2 manure a day each."],
+    duckhouse: ["Duck house", "Yard dabblers, hatched from wild reed dabbler eggs (catching a wild one is refused, M25). An egg every 2 days; down every 8."],
+    hive: ["Hive", "A clover bee colony, one record (its queen's genome). Honey every 3 days in spring and summer, wax every 6. Crops within 3 cells yield one more."],
+    kennel: ["Kennel", "Bess, the herd hound: raised from a pale wolf pup. Works the flock by day, guards the pens at night."],
+    compost: ["Compost bin", "4 manure and 3 days make 1 compost, M8's fertiliser: a crop on it grows half again as fast and yields one more."],
+  };
+  V.click = e => {
+    const hit = V.ray(e, V.pick)[0];
+    if (!hit){ V.sel = null; V.selRing.visible = false; return; }
+    const a = hit.object.userData.animal, b = hit.object.userData.building;
+    if (a) V.select(a);
+    else if (b && BINFO[b]){
+      V.sel = null; V.selRing.visible = false;
+      $("farmWho").innerHTML = `<span class="k">Building</span><b class="nm">${BINFO[b][0]}</b><span>${BINFO[b][1]}</span>`;
+    }
+  };
+  V.select = a => {
+    {
+      V.sel = a; const K = KINDS[a.kind], sp = a.gsp;
+      const P = a.pen ? (PENS[a.pen] ? PENS[a.pen].name : a.pen === "pond" ? "Pond" : a.pen) : "roams the yard";
+      const mood = 75 + (a.seed % 25), hl = 80 + (a.seed % 20);
+      $("farmWho").innerHTML = `<div class="hd"><img src="${ART(K.icon)}" alt="" width="72" height="72"><div><span class="k">${K.name}${a.stage ? " &middot; " + a.stage : ""}</span><b class="nm">${esc(a.name || (BREEDS[sp] ? BREEDS[sp].names[a.seed % 14] : K.name))}</b><span class="muted">${a.id} &middot; ${a.sex === "m" ? "male" : "female"} &middot; ${esc(P)}</span></div></div>
+        ${a.role === "fox" ? `<span>Wild, and only visiting: a wild animal is derived from the world's seed and the clock, and never saved. It cannot be tamed (a predator).</span>` : `<div style="display:flex;gap:6px;align-items:center">${NEED_ICONS.map(n => `<img src="${ART(n)}" width="16" height="16" alt="${n.slice(5)}" title="${n.slice(5)}: met">`).join("")}<span class="small">all met</span><img src="${ART("need_mood")}" width="16" height="16" alt="mood" title="mood"><span class="small">${mood}</span><img src="${ART("need_health")}" width="16" height="16" alt="health" title="health"><span class="small">${hl}</span></div>
+        ${genomeHTML(a.gen, sp || "woolback")}
+        <span class="line">rec animal:${a.id} {sp:home/${20 + Object.keys(KINDS).indexOf(a.kind)} sex:${a.sex} pen:${a.pen || "-"} owner:p0 state:alive} @p</span>`}`;
+    }
+  };
+  // controls
+  $("farmTime").addEventListener("input", e => V.setTime(+e.target.value));
+  document.querySelectorAll("[data-ft]").forEach(b => b.addEventListener("click", () => V.setTime(+b.dataset.ft)));
+  for (const id of ["farmClock", "coopShut", "houndOn"]) $(id).addEventListener("click", () => { const el = $(id); el.setAttribute("aria-pressed", el.getAttribute("aria-pressed") !== "true"); });
+  V.setTime(10);
+  // let the scene settle so animals stand in their places on the first frame
+  for (let i = 0; i < 20; i++) stepView(V, 0.05);
+  return V;
+};
+</script>
+
+<script>
+"use strict";
+// =====================================================================================================
+// Taming: a wild herd at the edge of the fields, a player with its favourite food, and a pen with a lit gate.
+// =====================================================================================================
+const TAMES = {
+  plodder:    { kind: "plodder", n: 3, food: "m8/produce_turnip", foodName: "turnip", gain: 20, way: "Feed", fear: 9, run: 3 },
+  woolback:   { kind: "woolback", n: 4, food: "feed_grain", foodName: "grain", gain: 25, way: "Feed", fear: 9, run: 3.5 },
+  ridge_goat: { kind: "ridge_goat", n: 3, food: "m8/produce_frost_kale", foodName: "frost kale", gain: 15, way: "Feed", fear: 9, run: 4.5 },
+  hen:        { kind: "hen", n: 4, food: "feed_grain", foodName: "grain", gain: 34, way: "Feed", fear: 6, run: 3 },
+  fellrunner: { kind: "fellrunner", n: 3, food: "feed_grain", foodName: "grain", gain: 12, way: "Feed, then break in", fear: 12, run: 6, breakIn: 1 },
+  red_fox:    { kind: "red_fox", n: 1, food: "m7/drop_meat", foodName: "meat", gain: 0, way: "Wild only: a predator", fear: 6, run: 6, wild: 1 },
+};
+MAKERS.tame = function(){
+  const V = newView("tame", { yaw: 0.12, pitch: 0.58, dist: 25, target: new THREE.Vector3(-2.2, 0, 0.8) });
+  const S = V.scene;
+  const cells = new Map();
+  for (let q = -6; q <= 6; q++) for (let r = -6; r <= 6; r++){ if (Math.abs(q + r) > 6) continue; cells.set(key(q, r), { q, r, h: hdist([q, r], [0, 0]) === 6 && (q + r * 2) % 3 === 0 ? 1 : 0 }); }
+  ground(V, cells);
+  const PEN = [[-4, 2], [-5, 3], [-4, 3], [-5, 2]];
+  const g = pen(V, PEN, [[-4, 2, 0]])[0];
+  lanternPost(V, g.x + g.nx * 0.55 + g.nz * 0.9, 0, g.z + g.nz * 0.55 - g.nx * 0.9, -Math.atan2(g.nz, g.nx));
+  { const [x, z] = hexXZ(-5, 3); trough(V, x + 0.2, 0, z + 0.3, 0.4, true); }
+  for (const [q, r, s] of [[-1, -5, 1], [5, -5, 0.9], [-6, 0, 1], [6, -1, 1.1], [-2, -3, 0.9]]){ const [x, z] = hexXZ(q, r); tree(V, x, cells.get(key(q, r)).h, z, s); }
+  const gateIn = [g.x - g.nx * 1.6, g.z - g.nz * 1.6], gateOut = [g.x + g.nx * 1.2, g.z + g.nz * 1.2];
+  const P = person(V);
+  const st = { sp: "plodder", herd: [], trust: 0, mode: "idle", food: 8, tgt: null, wait: 0, home: hexXZ(3, -2) };
+  V.st = st;
+  function build(){
+    st.herd.forEach(a => S.remove(a.g)); st.herd = [];
+    const T = TAMES[st.sp], rnd = mulberry32(hashStr(st.sp));
+    for (let i = 0; i < T.n; i++){
+      const a = buildAnimal(V, T.kind, 0.95 + rnd() * 0.1);
+      a.seed = hashStr(st.sp + i); a.gen = rollGenome(a.seed, "woolback"); a.t = rnd() * 5;
+      const p = pointIn([[3, -2], [4, -2], [3, -1], [2, -1]], rnd, 0.6); a.g.position.set(p[0], 0, p[1]); a.g.rotation.y = rnd() * 6;
+      st.herd.push(a);
+    }
+    st.target = st.herd[0]; st.trust = 0; st.mode = "idle"; st.food = 8; st.flee = 0;
+    P.g.position.set(gateOut[0] + 1.5, 0, gateOut[1] - 0.5); P.g.rotation.y = 0; P.crouch = 0;
+    panel(); buttons();
+  }
+  const factor = () => 1.3 - 0.7 * expQ(st.target.gen, "temper");
+  function panel(){
+    const T = TAMES[st.sp], K = KINDS[T.kind], f = factor();
+    $("tameHow").innerHTML = T.wild ? `<span class="warn">${T.way}.</span> Nothing tames it; offering food is refused and nothing is written.` : `<b>${T.way}.</b> Favourite food: ${T.foodName}. Gain ${T.gain} a feed &times; temper ${f.toFixed(2)} = <b>${Math.round(T.gain * f)}</b>.`;
+    $("tameTrust").style.width = st.trust + "%"; $("tameTrustOut").textContent = Math.round(st.trust) + " / 100";
+    const state = { idle: "Grazing, unaware of you.", approach: st.crouch ? "You creep up, crouched, food in hand." : "You walk up standing.", reach: "At arm's reach. It sniffs the food.", eat: "Eating from your hand.", spooked: "Spooked: it bolted from you.", follow: "Trusts you: it follows.", lead: "Following you to the pen.", done: "In the pen. Yours, and saved." }[st.mode];
+    $("tameWho").innerHTML = `<div class="hd"><img src="${ART(K.icon)}" alt="" width="72" height="72"><div><span class="k">${st.mode === "done" ? "Tamed" : "Wild"} ${K.name.toLowerCase()} &middot; seed ${(st.target.seed % 65536).toString(16)}</span><b class="nm">${K.name}</b><span class="muted">${state}</span></div></div>
+      ${genomeHTML(st.target.gen, null)}
+      ${st.mode === "done" ? `<span>The record is written through the journal at once, acknowledged when the store commits:</span><span class="line">rec animal:a1043 {v:1 sp:home/${st.sp === "hen" ? 26 : 24} sex:${st.target.seed & 1 ? "m" : "f"} born:${(1834 - 40 - st.target.seed % 30).toFixed(2)} gen:[from its wild seed] sire:- dam:- pen:p${hashStr("pen") % 99999} owner:p0 state:alive via:feed} @p</span>${TAMES[st.sp].breakIn ? `<span class="small">A fellrunner then needs three gentling sessions on a lead (20 s each, walked in a pen) before it takes a saddle.</span>` : ""}` : `<span class="small muted">Fear radius ${T.fear} m standing, ${T.fear / 2} m crouched; with ${T.foodName} in hand, crouched, it lets you to 1.5 m.</span>`}`;
+    hotbar($("tameHot"), [{ i: T.food, t: T.foodName, n: st.food, sel: true, big: false }, { i: "tool_lead", t: "Lead" }, { i: "tool_brush", t: "Brush" }, { i: "feed_grain", t: "Grain", n: 12 }]);
+  }
+  function buttons(){
+    const m = st.mode, T = TAMES[st.sp];
+    $("tCrouch").disabled = !(m === "idle" || m === "spooked"); $("tStand").disabled = !(m === "idle" || m === "spooked");
+    $("tFeed").disabled = !(m === "reach") || st.food <= 0; $("tLead").disabled = m !== "follow";
+    $("tFeed").textContent = "Offer " + T.foodName;
+  }
+  V.feed = () => {
+    const T = TAMES[st.sp];
+    if (T.wild){ toast($("tameToast"), "<b>Refused</b>Wild only: a predator. The fox takes nothing from your hand, and nothing is written.", 3000); st.mode = "spooked"; st.flee = 2.5; panel(); buttons(); return; }
+    st.food--; st.mode = "eat"; st.wait = 1.4; const add = T.gain * factor(); st.trust = Math.min(100, st.trust + add);
+    toast($("tameToast"), `<b>+${Math.round(add)} trust</b>${Math.round(st.trust)} of 100`, 1200); panel(); buttons();
+  };
+  V.approach = crouch => { st.crouch = crouch; st.mode = "approach"; P.crouch = crouch ? 1 : 0; panel(); buttons(); };
+  V.lead = () => { st.mode = "lead"; st.leg = 0; panel(); buttons(); };
+  V.update = dt => {
+    let pspd = 0; const T = TAMES[st.sp], tp = st.target.g.position, pp = P.g.position;
+    const crouchT = (st.mode === "approach" && st.crouch) || st.mode === "reach" || st.mode === "eat" ? 1 : 0;
+    P.crouch = lerp(P.crouch, crouchT, Math.min(1, dt * 5));
+    if (st.mode === "approach"){
+      const d = Math.hypot(tp.x - pp.x, tp.z - pp.z), spd = st.crouch ? 0.9 : 1.6;
+      const fearNow = T.wild ? T.fear : st.crouch ? 0 : T.fear;
+      if (d < fearNow){ st.mode = "spooked"; st.flee = 2.5; st.trust = Math.max(0, st.trust - 10); toast($("tameToast"), T.wild ? "<b>Refused: wild only</b>A predator. It keeps its distance, takes nothing from your hand, and nothing is written." : "<b>Spooked</b>You stood up inside its fear radius: it bolts, and loses 10 trust.", 2600); panel(); buttons(); }
+      else if (d > 1.5){ const s = Math.min(d - 1.5, spd * dt); pp.x += (tp.x - pp.x) / d * s; pp.z += (tp.z - pp.z) / d * s; P.g.rotation.y = Math.atan2(-(tp.z - pp.z), tp.x - pp.x); pspd = spd; }
+      else { st.mode = "reach"; panel(); buttons(); }
+    } else if (st.mode === "lead"){
+      const wp = st.leg === 0 ? gateOut : st.leg === 1 ? gateIn : hexXZ(-5, 3);
+      const dx = wp[0] - pp.x, dz = wp[1] - pp.z, d = Math.hypot(dx, dz);
+      if (d > 0.1){ const s = Math.min(d, 1.4 * dt); pp.x += dx / d * s; pp.z += dz / d * s; P.g.rotation.y = Math.atan2(-dz, dx); pspd = 1.4; }
+      else if (st.leg < 2) st.leg++;
+      else { st.mode = "done"; toast($("tameToast"), "<b>Tamed</b>Through the gate: it is livestock, and its record is written.", 3000); panel(); buttons(); }
+    } else if (st.mode === "eat"){ st.wait -= dt; if (st.wait < 0){ st.mode = st.trust >= 100 ? "follow" : "reach"; if (st.mode === "follow") toast($("tameToast"), "<b>Full trust</b>It follows you for a minute, or while it wears a lead.", 2600); panel(); buttons(); } }
+    posePerson(P, dt, pspd);
+    // the herd
+    for (const a of st.herd){
+      const K = KINDS[a.kind]; let spd = 0; a.t -= dt;
+      const isT = a === st.target;
+      if (st.mode === "spooked" && st.flee > 0){
+        const dx = a.g.position.x - pp.x, dz = a.g.position.z - pp.z, d = Math.hypot(dx, dz) || 1;
+        steer(a, a.g.position.x + dx / d * 3, a.g.position.z + dz / d * 3, T.run, dt); spd = T.run; a.headT = 0;
+      } else if (isT && (st.mode === "follow" || st.mode === "lead" || st.mode === "done")){
+        const back = st.mode === "done" ? 0.6 : 1.6, yaw = P.g.rotation.y, tx = pp.x - Math.cos(yaw) * back * (st.mode === "done" ? -1 : 1), tz = pp.z + Math.sin(yaw) * back * (st.mode === "done" ? -1 : 1);
+        const d = Math.hypot(tx - a.g.position.x, tz - a.g.position.z);
+        if (d > 0.25 && st.mode !== "done"){ steer(a, tx, tz, Math.min(2.2, K.walk + d * 0.6), dt); spd = K.walk; a.headT = 0; } else { a.headT = st.mode === "done" ? 1 : 0; turn(a, Math.atan2(-(pp.z - a.g.position.z), pp.x - a.g.position.x), dt); }
+      } else if (isT && (st.mode === "reach" || st.mode === "eat")){
+        turn(a, Math.atan2(-(pp.z - a.g.position.z), pp.x - a.g.position.x), dt); a.headT = st.mode === "eat" ? 0.7 : 0.15;
+      } else {
+        if (!a.tgt || a.t < 0){ a.tgt = pointIn([[3, -2], [4, -2], [3, -1], [2, -1], [4, -3]], Math.random, 0.6); a.t = 5 + Math.random() * 6; a.walking = true; }
+        if (a.walking){ const d = steer(a, a.tgt[0], a.tgt[1], K.walk * 0.8, dt); spd = K.walk * 0.8; a.headT = 0; if (d < 0.1) a.walking = false; }
+        else a.headT = a.plan === "bird" ? (Math.sin(a.t * 9) > 0.3 ? 1 : 0.2) : 1;
+      }
+      pose(a, dt, spd);
+    }
+    if (st.mode === "spooked"){ st.flee -= dt; }
+  };
+  V.setTime = h => { light(V, h); $("tameDbg").textContent = `taming | fields L0, column | ${fmtT(h)} | ${KINDS[TAMES[st.sp].kind].name.toLowerCase()} herd, wild (derived, not saved)`; document.querySelectorAll("[data-tt]").forEach(b => b.setAttribute("aria-pressed", Math.abs(+b.dataset.tt - h) < 0.01)); };
+  V.click = e => { const hit = V.ray(e, st.herd.map(a => a.g))[0]; if (!hit) return; const a = hit.object.userData.animal; if (a && st.mode === "idle"){ st.target = a; panel(); } };
+  $("tameSp").innerHTML = Object.entries(TAMES).map(([k, t]) => `<option value="${k}">${KINDS[t.kind].name}${t.wild ? " (wild only)" : ""}</option>`).join("");
+  $("tameSp").addEventListener("change", () => { st.sp = $("tameSp").value; build(); V.setTime(V.hour); });
+  $("tCrouch").addEventListener("click", () => V.approach(true)); $("tStand").addEventListener("click", () => V.approach(false));
+  $("tFeed").addEventListener("click", V.feed); $("tLead").addEventListener("click", V.lead);
+  $("tReset").addEventListener("click", () => { build(); });
+  document.querySelectorAll("[data-tt]").forEach(b => b.addEventListener("click", () => V.setTime(+b.dataset.tt)));
+  build(); V.setTime(10);
+  return V;
+};
+</script>
+
+<script>
+"use strict";
+// =====================================================================================================
+// The hatchery: inside a coop (walls cut away), a broody hen on her clutch, an incubator, and each animal's life stages.
+// =====================================================================================================
+// A low-poly egg: stacked six-sided prisms, the way the game builds round things.
+const EGGG = (() => { const g = new THREE.CylinderGeometry(1, 1, 1, 6, 1); return g; })();
+function egg(V, x, y, z, s, col){
+  const g = new THREE.Group(); g.position.set(x, y, z); V.scene.add(g); const m = flatMat(V, col);
+  for (const [r, h, yy] of [[0.55, 0.25, 0.12], [0.75, 0.35, 0.42], [0.62, 0.3, 0.75], [0.35, 0.18, 0.98]]){ const p = new THREE.Mesh(EGGG, m); p.scale.set(r * s * 0.5, h * s, r * s * 0.5); p.position.y = yy * s; g.add(p); }
+  return g;
+}
+MAKERS.hatch = function(){
+  const V = newView("hatch", { yaw: 0.3, pitch: 0.55, dist: 11.5, target: new THREE.Vector3(-0.2, 0.3, 0.6), min: 3, max: 30 });
+  const S = V.scene;
+  const cells = new Map(); for (let q = -2; q <= 2; q++) for (let r = -2; r <= 2; r++){ if (Math.abs(q + r) > 2) continue; cells.set(key(q, r), { q, r, h: 0, top: gameMat(V, "plank") }); }
+  ground(V, cells);
+  const wm = gameMat(V, "whitewash"), bm = gameMat(V, "boards"), straw = floorMat(V, "tex_straw", 1);
+  bx(S, wm, 11, 2.6, 0.2, 0, 1.3, -4.3); bx(S, wm, 0.2, 2.6, 8.6, -5.6, 1.3, 0);
+  bx(S, gameMat(V, "timber"), 11, 0.2, 0.2, 0, 2.6, -4.2);
+  // a hanging lantern for the night
+  const lh = bx(S, new THREE.MeshBasicMaterial({ color: 0xffc070 }), 0.22, 0.3, 0.22, -1.5, 2.2, -3.6); lamp(V, -1.5, 2.1, -3.4, 0xffc070, 1.6, 6, lh);
+  lanternPost(V, 2.2, 0, 3.6, Math.PI);   // a post lantern over the front rows
+  // nest boxes on the back wall, with today's eggs
+  for (let i = 0; i < 3; i++){ const x = 1.2 + i * 0.85; bx(S, bm, 0.7, 0.06, 0.55, x, 0.55, -3.9); bx(S, bm, 0.06, 0.45, 0.55, x - 0.35, 0.78, -3.9); bx(S, bm, 0.7, 0.06, 0.55, x, 1.0, -3.9); bx(S, straw, 0.62, 0.06, 0.5, x, 0.6, -3.9); egg(V, x - 0.1, 0.62, -3.85, 0.06, 0xeab798); if (i !== 1) egg(V, x + 0.1, 0.62, -3.95, 0.06, 0xcfaa81); }
+  bx(S, bm, 0.06, 0.45, 0.55, 1.2 + 2 * 0.85 + 0.35, 0.78, -3.9);
+  // the broody hen's floor nest
+  const nest = [-3.2, -2.4];
+  { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, 0.14, 6), straw); m.position.set(nest[0], 0.07, nest[1]); S.add(m); }
+  const clutch = []; for (let i = 0; i < 6; i++){ const a = i / 6 * 6.283; clutch.push(egg(V, nest[0] + Math.cos(a) * 0.32, 0.12, nest[1] + Math.sin(a) * 0.32, 0.06, 0xcfaa81)); }
+  const broody = buildAnimal(V, "yard_hen", 1.05); broody.g.position.set(nest[0], 0.08, nest[1]); broody.g.rotation.y = -0.5; broody.lieT = 1; broody.lie = 1;
+  const bchicks = clutch.map((e, i) => { const c = buildAnimal(V, "chick", 0.29); c.g.position.copy(e.position); c.g.visible = false; c.i = i; return c; });
+  // the incubator: a boards box, a glass lid, a lamp
+  const inc = [2.4, -1.6];
+  { bx(S, bm, 1.5, 0.5, 0.9, inc[0], 0.25, inc[1]); bx(S, straw, 1.36, 0.04, 0.78, inc[0], 0.5, inc[1]); const gl = bx(S, flatMat(V, 0x84e3b5, { opacity: 0.25 }), 1.5, 0.04, 0.9, inc[0], 0.92, inc[1]);
+    for (const [dx, dz] of [[-0.72, -0.42], [0.72, -0.42], [-0.72, 0.42], [0.72, 0.42]]) bx(S, gameMat(V, "timber"), 0.06, 0.42, 0.06, inc[0] + dx, 0.71, inc[1] + dz);
+    bx(S, gameMat(V, "iron"), 0.3, 0.18, 0.3, inc[0], 1.05, inc[1]); }
+  const incBulb = bx(S, new THREE.MeshBasicMaterial({ color: 0xffd080 }), 0.16, 0.1, 0.16, inc[0], 0.94, inc[1]);
+  const incLamp = lamp(V, inc[0], 0.85, inc[1], 0xffb050, 1.4, 2.8, incBulb, { always: true });
+  const ieggs = [], ichicks = [];
+  for (let i = 0; i < 6; i++){ const duck = i >= 4, x = inc[0] - 0.5 + (i % 3) * 0.5, z = inc[1] - 0.2 + Math.floor(i / 3) * 0.4;
+    ieggs.push(Object.assign(egg(V, x, 0.52, z, duck ? 0.075 : 0.065, duck ? 0x84e3b5 : 0xeab798), { duck, hatch: duck ? 4 : 3 }));
+    const yk = duck ? "yard_dabbler" : "chick", c = buildAnimal(V, yk, duck ? 0.3 : 0.29, duck ? 0xfff0a0 : 0xffffff); c.g.visible = false; c.duck = duck; ichicks.push(c);
+    const grown = buildAnimal(V, duck ? "yard_dabbler" : "yard_hen", 1); grown.g.visible = false; c.grown = grown; c.home = [0.8 + (i % 3) * 0.7, 0.6 + Math.floor(i / 3) * 0.8]; }
+  // feeder and water
+  trough(V, 0.8, 0, -0.6, 0, false); trough(V, -1.2, 0, -1.5, 0.6, true);
+  // life-stage rows at the front, at true size
+  const ROWS = [
+    { z: 0.9, dx: 1.5, items: [["egg", 0.065, 0xeab798, "hen's egg 3 d"], ["chick", 0.29, 0, "chick"], ["yard_hen", 0.71, 0, "pullet 5 d"], ["yard_hen", 1, 0, "hen 10 d"]] },
+    { z: 2.0, dx: 1.5, items: [["egg", 0.075, 0x84e3b5, "duck egg 4 d"], ["yard_dabbler", 0.33, 0xfff0a0, "duckling"], ["yard_dabbler", 0.66, 0, "6 d"], ["yard_dabbler", 1, 0, "12 d"]] },
+    { z: 3.3, dx: 2.4, items: [["woolback", 0.45, 0, "lamb 45%"], ["woolback", 0.75, 0, "hogg 75%"], ["woolback", 1, 0, "ewe"]] },
+    { z: 4.7, dx: 2.4, items: [["rootling", 0.3, 0, "piglet 30%"], ["rootling", 0.6, 0, "weaner 60%"], ["rootling", 1, 0, "sow"]] },
+  ];
+  const tags = [];
+  for (const row of ROWS) row.items.forEach(([kind, k, col, label], i) => {
+    const x = -3.6 + i * row.dx;
+    if (kind === "egg") egg(V, x, 0, row.z, k, col); else { const a = buildAnimal(V, kind, k, col || 0xffffff); a.g.position.set(x, 0, row.z); a.g.rotation.y = -0.35; pose(a, 0, 0); }
+    const el = document.createElement("div"); el.className = "tag3d"; el.textContent = label; V.stage.appendChild(el); tags.push({ el, p: new THREE.Vector3(x, (KINDS[kind] ? (KINDS[kind].plan === "bird" ? 0.75 : 1.3) * k : 0.25) + 0.25, row.z) });
+  });
+  V.after = () => { const w = V.stage.clientWidth, h = V.stage.clientHeight; for (const t of tags){ const v = t.p.clone().project(V.camera); const vis = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05; t.el.style.display = vis ? "block" : "none"; t.el.style.left = ((v.x + 1) / 2 * w) + "px"; t.el.style.top = ((1 - v.y) / 2 * h) + "px"; } };
+  // ---- the day slider drives everything; nothing here moves the camera
+  V.day = 0;
+  const incOn = () => $("incOn").getAttribute("aria-pressed") === "true";
+  V.update = dt => {
+    const d = V.day;
+    // the broody clutch: 3 days; the chicks follow her once they are out
+    clutch.forEach((e, i) => { const crack = d > 2.6 && d < 3; e.visible = d < 3; e.rotation.z = crack ? Math.sin(V.time * 18 + i) * 0.25 : 0; });
+    broody.lieT = d < 3 ? 1 : 0;
+    if (d >= 3){
+      const ang = V.time * 0.25, bx2 = nest[0] + 0.6 + Math.cos(ang) * 0.9, bz = nest[1] + 0.9 + Math.sin(ang) * 0.6;
+      const dd = steer(broody, bx2, bz, 0.35, dt); broody.headT = Math.sin(V.time * 3) > 0.6 ? 1 : 0; pose(broody, dt, dd > 0.05 ? 0.35 : 0);
+      let lead = broody;
+      bchicks.forEach(c => { c.g.visible = true; const s = 0.29 + 0.42 * clamp((d - 3) / 5, 0, 1); c.g.scale.setScalar(s / 0.29); const L = lead.g.position, yaw = lead.g.rotation.y, gap = lead === broody ? 0.45 : 0.22; steer(c, L.x - Math.cos(yaw) * gap, L.z + Math.sin(yaw) * gap, 0.6, dt); pose(c, dt, 0.4); lead = c; });
+    } else { bchicks.forEach(c => c.g.visible = false); pose(broody, dt, 0); }
+    // the incubator: only while its lamp is lit
+    ieggs.forEach((e, i) => {
+      const c = ichicks[i], out = incOn() && d >= e.hatch;
+      e.visible = !out; e.rotation.z = incOn() && d > e.hatch - 0.4 && d < e.hatch ? Math.sin(V.time * 16 + i) * 0.25 : 0;
+      if (!out){ c.g.visible = false; c.grown.g.visible = false; return; }
+      const age = d - e.hatch, adult = c.duck ? 12 : 10, young = c.duck ? 6 : 5;
+      const show = age < young ? c : c.grown;
+      (show === c ? c.grown : c).g.visible = false; show.g.visible = true;
+      const kScale = age < young ? 1 + 1.4 * age / young : lerp(0.66, 1, clamp((age - young) / (adult - young), 0, 1)) / 1;
+      show.g.scale.setScalar(kScale);
+      if (!show.placed){ show.g.position.set(c.home[0], 0, c.home[1]); show.placed = 1; }
+      show.t = (show.t || 0) - dt; if (!show.tgt || show.t < 0){ show.tgt = [c.home[0] + (Math.random() - 0.5) * 1.6, c.home[1] + (Math.random() - 0.5) * 1.2]; show.t = 2 + Math.random() * 3; }
+      const dd = steer(show, show.tgt[0], show.tgt[1], 0.3, dt); show.headT = dd < 0.05 && Math.sin(V.time * 8 + i) > 0.3 ? 1 : 0; pose(show, dt, dd > 0.05 ? 0.3 : 0);
+    });
+    incBulb.material.color.set(incOn() ? 0xffd080 : 0x3a3020); incLamp.always = incOn(); incLamp.on = incOn();
+  };
+  V.setDay = d => {
+    V.day = d; $("hatchDay").value = d; $("hatchDayOut").textContent = "day " + d.toFixed(1);
+    const hatched = d >= 3 ? 6 : 0, ih = incOn() ? (d >= 3 ? 4 : 0) + (d >= 4 ? 2 : 0) : 0;
+    const stage = d < 2.6 ? "warm eggs; a broody hen turns hers" : d < 3 ? "pipping: the eggs rock and crack" : d < 8 ? "chicks, following" : d < 13 ? "pullets" : "laying hens";
+    $("hatchDbg").textContent = `coop interior | day ${d.toFixed(1)} since set | ${stage} | incubator ${incOn() ? "lit" : "cold"}`;
+    $("hatchWho").innerHTML = `<div class="hd"><img src="${ART(d < 3 ? "fertile_egg" : d < 8 ? "chick" : "yard_hen")}" alt="" width="72" height="72"><div><span class="k">Today</span><b class="nm">${stage[0].toUpperCase() + stage.slice(1)}</b></div></div>
+      <span>Broody hen: ${hatched ? `6 chicks out (day 3), ${d >= 8 ? "pullets now" : "following her"}` : "sitting on 6 fertile eggs, off lay"}.</span>
+      <span>Incubator: ${incOn() ? `${ih} of 6 out (hen's eggs day 3, duck eggs day 4)` : `<span class="warn">lamp out: the eggs are cooling; a day cold and they will not hatch</span>`}.</span>
+      <span class="small muted">Each chick is a record from the hour it hatches: <code>rec animal:a12xx {via:hatched sire:a0950 dam:a1011 born:${(1834 + 3).toFixed(2)}} @whusbandry</code>. Its stage and size are derived from its birth day, never stored.</span>`;
+    hotbar($("hatchHot"), [{ i: "fertile_egg", t: "Fertile eggs", n: 3 }, { i: "duck_egg", t: "Duck eggs", n: 2 }, { i: "tool_nest", t: "Nest box" }, { i: "tool_incubator", t: "Incubator", sel: true }, { i: "tallow", t: "Tallow (lamp fuel)", n: 4 }]);
+  };
+  V.setTime = h => { light(V, h); V.scene.background = new THREE.Color(h > 6 && h < 19 ? 0x2a2418 : 0x07080a); document.querySelectorAll("[data-ht]").forEach(b => b.setAttribute("aria-pressed", Math.abs(+b.dataset.ht - h) < 0.01)); };
+  $("hatchDay").addEventListener("input", e => V.setDay(+e.target.value));
+  document.querySelectorAll("[data-hd]").forEach(b => b.addEventListener("click", () => V.setDay(+b.dataset.hd)));
+  document.querySelectorAll("[data-ht]").forEach(b => b.addEventListener("click", () => V.setTime(+b.dataset.ht)));
+  $("incOn").addEventListener("click", () => { const el = $("incOn"); el.setAttribute("aria-pressed", el.getAttribute("aria-pressed") !== "true"); V.setDay(V.day); light(V, V.hour); });
+  V.setTime(11); V.setDay(0);
+  return V;
+};
+</script>
+
+<script>
+"use strict";
+// =====================================================================================================
+// The Kingdom: every species on every world. [id, name, world, biomes, class, size m, diet, temperament, status, gives, icon, source, note]
+// Worlds: T Tenebris, S Sequoia, W Wick, F Fallow, I an ice moon (M9). Status: dom, tame, wild, prot.
+// =====================================================================================================
+const WORLDS = { T: "Tenebris", S: "Sequoia", W: "Wick", F: "Fallow (Gemel)", I: "an ice moon (M9)" };
+const CLASSES = {
+  mammal: ["Mammals", "fur, milk"], bird: ["Birds", "feathers, eggs"], reptile: ["Reptiles and amphibians", "scales or bare skin, eggs"], fish: ["Fish", "gills, fins"],
+  arthropod: ["Arthropods", "jointed legs: insects, crabs, krill"], soft: ["Molluscs and soft-bodied", "shells, tentacles, spines, worms"],
+  twostrider: ["Twostriders", "Sequoia: two-legged, tailed walkers (Fallow's burrowkit evolved the same form apart)"], sporekin: ["Sporekin", "Sequoia: fungal animals of the Sporewood"], ringling: ["Ringlings", "Wick: black-skinned life of the twilight ring, that never sees a sunrise"],
+};
+const BRANCHES = [["Backboned", ["mammal", "bird", "reptile", "fish"]], ["Jointed and soft", ["arthropod", "soft"]], ["Alien branches", ["twostrider", "sporekin", "ringling"]]];
+const STATUS = { dom: ["domestic", "dom"], tame: ["tameable", "tame"], wild: ["wild only", "wild"], prot: ["protected", "prot"] };
+const GIVE = { wool: "m7/drop_wool", meat: "m7/drop_meat", hide: "m7/drop_hide", horn: "m7/drop_horn", milk: "m7/drop_milk", egg: "m7/drop_egg", feather: "m7/drop_feather", glow: "m7/drop_glow", shell: "m7/drop_shell",
+  honey: "honey", wax: "wax", duck_egg: "duck_egg", manure: "manure", tallow: "tallow", fleece: "m1/res_fleece", steak: "cut_steak", chop: "cut_chop", ham: "cut_ham", drumstick: "cut_drumstick" };
+const SPECIES = [
+  // the game's own (assets/config/fauna.ron, home)
+  ["minnow", "Minnow", "T", "river pond marsh sea", "fish", 0.08, "forager", "skittish", "wild", "meat", "game/fish-minnow", "game"],
+  ["silverfin", "Silverfin", "T", "sea polar", "fish", 0.3, "forager", "skittish", "wild", "meat", "game/fish-silverfin", "game"],
+  ["perch", "Banded perch", "T", "river", "fish", 0.3, "predator", "docile", "wild", "meat", "game/fish-perch", "game"],
+  ["ray", "Ray", "T", "sea reef", "fish", 1.2, "forager", "docile", "wild", "meat", "game/fish-ray", "game"],
+  ["eel", "Eel", "T", "river marsh sea", "fish", 0.9, "predator", "territorial", "wild", "meat", "game/fish-eel", "game"],
+  ["reef", "Reef fish", "T", "reef", "fish", 0.2, "grazer", "skittish", "wild", "meat", "game/fish-reef", "game"],
+  ["deepback", "Deepback", "T", "sea deep", "fish", 0.9, "forager", "docile", "wild", "meat", "game/fish-deepback", "game"],
+  ["serpent", "Sea serpent", "T", "sea deep", "fish", 6, "predator", "predator", "wild", "meat hide", "game/fish-serpent", "game"],
+  // M7, the land
+  ["woolback", "Woolback", "T", "fields", "mammal", 1.15, "grazer", "docile", "dom", "wool chop hide manure", "m7/woolback", "M7", "Tamed by grain. A fleece every 4 days."],
+  ["plodder", "Plodder", "T", "fields", "mammal", 2.0, "grazer", "docile", "dom", "milk steak hide horn manure", "m7/plodder", "M7", "Tamed by turnips. Milk; ploughs and pulls a cart."],
+  ["hen", "Meadow hen", "T", "fields", "bird", 0.42, "forager", "skittish", "tame", "egg feather", "m7/hen", "M7", "The wild bird of the yard hen. Tamed by grain."],
+  ["meadow_hare", "Meadow hare", "T", "fields mountains", "mammal", 0.55, "grazer", "skittish", "wild", "hide meat", "m7/meadow_hare", "M7", "Too skittish to keep."],
+  ["red_fox", "Red fox", "T", "fields", "mammal", 0.9, "predator", "predator", "wild", "hide", "m7/red_fox", "M7", "Comes for the coop after dark."],
+  ["lark", "Lark", "T", "fields", "bird", 0.22, "forager", "skittish", "wild", "feather", "m7/lark", "M7", "Migrates: gone in winter."],
+  ["firefly", "Firefly", "T", "fields swamp", "arthropod", 0.02, "forager", "docile", "wild", "glow", "m7/firefly", "M7", "Netted for a glow jar, not kept."],
+  ["sand_strider", "Sand strider", "T", "desert", "mammal", 1.9, "browser", "docile", "dom", "milk hide", "m7/sand_strider", "M7", "Tamed by dates. Pack (8 slots) and mount."],
+  ["dust_hound", "Dust hound", "T", "desert", "mammal", 1.0, "predator", "predator", "wild", "hide", "m7/dust_hound", "M7"],
+  ["scarab", "Scarab", "T", "desert", "arthropod", 0.3, "forager", "docile", "wild", "shell", "m7/scarab", "M7"],
+  ["stripe_cat", "Stripe cat", "T", "jungle", "mammal", 1.7, "predator", "predator", "wild", "hide", "m7/stripe_cat", "M7"],
+  ["tusk_boar", "Tusk boar", "T", "jungle", "mammal", 1.3, "omnivore", "territorial", "tame", "meat hide horn", "m7/tusk_boar", "M7", "Adults stay wild; boarlets raised by hand become rootlings."],
+  ["parrot", "Parrot", "T", "jungle", "bird", 0.32, "forager", "skittish", "wild", "feather", "m7/parrot", "M7"],
+  ["glowmoth", "Glowmoth", "T", "jungle", "arthropod", 0.05, "forager", "docile", "wild", "glow", "m7/glowmoth", "M7"],
+  ["bog_toad", "Bog toad", "T", "swamp", "reptile", 0.32, "forager", "docile", "wild", "glow", "m7/bog_toad", "M7"],
+  ["heron", "Heron", "T", "swamp river", "bird", 0.6, "predator", "skittish", "wild", "feather", "m7/heron", "M7"],
+  ["mire_lurker", "Mire lurker", "T", "swamp marsh", "reptile", 2.8, "predator", "predator", "wild", "hide meat", "m7/mire_lurker", "M7"],
+  ["ridge_goat", "Ridge goat", "T", "mountains", "mammal", 1.1, "browser", "skittish", "dom", "milk chop horn hide manure", "m7/ridge_goat", "M7", "Tamed by frost kale. Milk; clears scrub."],
+  ["crag_eagle", "Crag eagle", "T", "mountains", "bird", 0.8, "predator", "predator", "wild", "feather", "m7/crag_eagle", "M7"],
+  ["shagback", "Shagback", "T", "tundra", "mammal", 2.1, "grazer", "territorial", "wild", "wool meat hide horn", "m7/shagback", "M7", "Migrates south in winter: wild only."],
+  ["pale_wolf", "Pale wolf", "T", "tundra", "mammal", 1.4, "predator", "predator", "tame", "hide", "m7/pale_wolf", "M7", "Adults wild; pups from a den become herd hounds."],
+  ["snow_hare", "Snow hare", "T", "tundra", "mammal", 0.6, "grazer", "skittish", "wild", "hide meat", "m7/snow_hare", "M7"],
+  ["shore_crab", "Shore crab", "T", "beach", "arthropod", 0.4, "forager", "docile", "wild", "shell meat", "m7/shore_crab", "M7"],
+  ["gull", "Gull", "T", "beach", "bird", 0.45, "forager", "skittish", "wild", "feather egg", "m7/gull", "M7"],
+  // new here (Tenebris)
+  ["fellrunner", "Fellrunner", "T", "fields mountains", "mammal", 1.9, "grazer", "skittish", "tame", "manure", "fellrunner", "new", "Wild herds on the fields and mountain meadows. Fed, then broken in: ridden at 9 m/s, ploughs, pulls a cart."],
+  ["clover_bee", "Clover bee", "T", "fields", "arthropod", 0.015, "forager", "territorial", "tame", "honey wax", "clover_bee", "new", "Swarms in hollow oaks; a swarm moved into a hive at dusk. Crops near a hive yield one more."],
+  ["hedge_cat", "Hedge cat", "T", "fields", "mammal", 0.55, "predator", "skittish", "tame", "", "hedge_cat", "new", "Moves into a barn with mice and a dish of milk. Never penned."],
+  ["field_mouse", "Field mouse", "T", "fields", "mammal", 0.08, "forager", "skittish", "wild", "", "field_mouse", "new", "A pest of stored feed: 10% a day without a cat."],
+  // the domestic breeds: the same species as their wild kin
+  ["yard_hen", "Yard hen", "T", "farm", "bird", 0.42, "forager", "docile", "dom", "egg feather drumstick manure", "yard_hen", "new", "The meadow hen's breed. An egg a day; fertile with a cockerel in the coop.", "hen"],
+  ["rootling", "Rootling", "T", "farm", "mammal", 1.25, "omnivore", "docile", "dom", "ham hide manure", "rootling", "new", "The tusk boar's breed. Litters of 4 to 8; roots a pen cell to tilled soil.", "tusk_boar"],
+  ["yard_dabbler", "Yard dabbler", "T", "farm pond", "bird", 0.48, "forager", "docile", "dom", "duck_egg feather", "yard_dabbler", "new", "Hatched from wild reed dabbler eggs. Never butchered.", "dabbler"],
+  ["herd_hound", "Herd hound", "T", "farm", "mammal", 0.95, "omnivore", "docile", "dom", "", "herd_hound", "new", "Raised from pale wolf pups. Herds a flock through a gate; guards pens at night.", "pale_wolf"],
+  // M25, water life
+  ["glider", "Glider", "T", "sea", "fish", 0.3, "forager", "skittish", "wild", "meat", "m25/glider", "M25"],
+  ["jelly", "Lantern jelly", "T", "sea deep", "soft", 0.4, "filter", "docile", "wild", "glow", "m25/jelly", "M25"],
+  ["sparkle", "Sea sparkle", "T", "sea", "soft", 0.001, "filter", "docile", "wild", "", "m25/sparkle", "M25", "Plankton that lights the night surf."],
+  ["hermit", "Hermit crab", "T", "beach reef", "arthropod", 0.08, "forager", "skittish", "wild", "shell", "m25/hermit", "M25"],
+  ["starfish", "Sea star", "T", "beach reef kelp", "soft", 0.25, "predator", "docile", "wild", "shell", "m25/starfish", "M25"],
+  ["urchin", "Sea urchin", "T", "reef kelp", "soft", 0.1, "grazer", "docile", "wild", "meat", "m25/urchin", "M25"],
+  ["anemone", "Anemone", "T", "reef beach", "soft", 0.15, "filter", "docile", "wild", "", "m25/card-anemone", "M25"],
+  ["shrimp", "Cleaner shrimp", "T", "reef", "arthropod", 0.05, "forager", "docile", "wild", "meat", "m25/shrimp", "M25"],
+  ["darter", "Anemone darter", "T", "reef", "fish", 0.08, "forager", "skittish", "wild", "", "m25/darter", "M25"],
+  ["beakfish", "Beakfish", "T", "reef", "fish", 0.5, "grazer", "docile", "wild", "meat", "m25/beakfish", "M25"],
+  ["turtle", "Reef turtle", "T", "reef beach", "reptile", 1.0, "grazer", "docile", "prot", "", "m25/turtle", "M25"],
+  ["clam", "Pearl clam", "T", "reef", "soft", 0.8, "filter", "docile", "wild", "meat shell", "m25/clam", "M25"],
+  ["octopus", "Den octopus", "T", "reef", "soft", 1.2, "predator", "skittish", "wild", "meat", "m25/octopus", "M25"],
+  ["cucumber", "Sea cucumber", "T", "reef deep", "soft", 0.3, "filter", "docile", "wild", "meat", "m25/cucumber", "M25"],
+  ["flounder", "Sand flounder", "T", "reef beach", "fish", 0.4, "forager", "docile", "wild", "meat", "m25/flounder", "M25"],
+  ["lobster", "Rock lobster", "T", "reef kelp", "arthropod", 0.5, "forager", "territorial", "wild", "meat shell", "m25/lobster", "M25"],
+  ["otter", "Sea otter", "T", "kelp", "mammal", 1.3, "predator", "docile", "prot", "", "m25/otter", "M25"],
+  ["kelpfin", "Kelpfin", "T", "kelp", "fish", 0.3, "forager", "territorial", "wild", "meat", "m25/kelpfin", "M25"],
+  ["abalone", "Kelp abalone", "T", "kelp", "soft", 0.2, "grazer", "docile", "wild", "meat shell", "m25/abalone", "M25"],
+  ["crab", "Stone crab", "T", "kelp reef", "arthropod", 0.3, "forager", "territorial", "wild", "meat shell", "m25/crab", "M25"],
+  ["seal", "Ice seal", "T", "polar kelp", "mammal", 1.8, "predator", "skittish", "prot", "", "m25/seal", "M25"],
+  ["krill", "Krill", "T", "polar", "arthropod", 0.05, "filter", "docile", "wild", "meat", "m25/krill", "M25"],
+  ["squid", "Glow squid", "T", "deep", "soft", 0.6, "predator", "skittish", "wild", "meat glow", "m25/squid", "M25"],
+  ["tubeworm", "Plume worm", "T", "deep", "soft", 2.0, "filter", "docile", "wild", "", "m25/tubeworm", "M25"],
+  ["ventcrab", "Vent crab", "T", "deep", "arthropod", 0.15, "forager", "docile", "wild", "meat shell", "m25/ventcrab", "M25"],
+  ["ventshrimp", "Vent shrimp", "T", "deep", "arthropod", 0.05, "forager", "docile", "wild", "glow", "m25/ventshrimp", "M25"],
+  ["ventmussel", "Vent mussel", "T", "deep", "soft", 0.15, "filter", "docile", "wild", "meat shell", "m25/ventmussel", "M25"],
+  ["redrun", "Redrun", "T", "river sea", "fish", 0.8, "predator", "skittish", "wild", "meat", "m25/redrun", "M25"],
+  ["trout", "Leaping trout", "T", "river", "fish", 0.4, "predator", "skittish", "wild", "meat", "m25/trout", "M25"],
+  ["crayfish", "Crayfish", "T", "river", "arthropod", 0.12, "forager", "territorial", "wild", "meat shell", "m25/crayfish", "M25"],
+  ["rivermussel", "River mussel", "T", "river", "soft", 0.1, "filter", "docile", "wild", "shell", "m25/rivermussel", "M25"],
+  ["riverotter", "River otter", "T", "river marsh", "mammal", 1.0, "predator", "skittish", "prot", "", "m25/riverotter", "M25"],
+  ["kingfisher", "Kingfisher", "T", "river", "bird", 0.17, "predator", "skittish", "wild", "feather", "m25/kingfisher", "M25"],
+  ["dragonfly", "Dragonfly", "T", "river pond marsh", "arthropod", 0.08, "predator", "skittish", "wild", "", "m25/dragonfly", "M25"],
+  ["beaver", "Beaver", "T", "river pond", "mammal", 1.1, "browser", "territorial", "wild", "", "m25/beaver", "M25", "Its colony is a world author: dams are journal entries (M25)."],
+  ["dabbler", "Reed dabbler", "T", "pond marsh", "bird", 0.55, "forager", "skittish", "prot", "egg feather", "m25/dabbler_drake", "M25", "Catching one is refused (M25); a wild nest's egg can be taken and hatched."],
+  ["diver", "Pond diver", "T", "pond river marsh", "bird", 0.45, "forager", "skittish", "wild", "feather", "m25/diver", "M25"],
+  ["frog", "Reed frog", "T", "pond marsh", "reptile", 0.08, "forager", "skittish", "wild", "meat", "m25/frog", "M25"],
+  ["fiddler", "Fiddler crab", "T", "marsh", "arthropod", 0.05, "forager", "territorial", "wild", "shell", "m25/fiddler", "M25"],
+  // M9, the fish lab
+  ["bloatfin", "Bloatfin", "T", "reef", "fish", 0.3, "forager", "docile", "wild", "meat", "m9/bloatfin", "M9"],
+  ["lanternjaw", "Lanternjaw", "T", "deep", "fish", 0.4, "predator", "predator", "wild", "meat glow", "m9/lanternjaw", "M9"],
+  ["emberback", "Emberback", "T", "deep", "fish", 0.7, "predator", "predator", "wild", "meat", "m9/emberback", "M9"],
+  ["sunplate", "Sunplate", "T", "pond", "fish", 0.2, "forager", "docile", "wild", "meat", "m9/sunplate", "M9"],
+  ["glassback", "Glassback", "I", "under ice", "fish", 0.25, "forager", "docile", "wild", "meat", "m9/glassback", "M9", "M9's fish of an ice moon; sits against 'frozen worlds are lifeless', flagged for M9."],
+  // M1, the other living worlds
+  ["sparkit", "Sparkit", "S", "redwood", "twostrider", 0.7, "omnivore", "docile", "tame", "", "m1/sparkit", "M1", "Built in Tenebris. Tamed by feeding: a companion that walks at your side."],
+  ["shellkin", "Shellkin", "S", "river redwood", "twostrider", 0.9, "grazer", "docile", "tame", "", "m1/shellkin", "M1", "Built in Tenebris. Tamed by feeding: a pack animal, 6 slots."],
+  ["barkstrider", "Barkstrider", "S", "redwood", "twostrider", 1.6, "browser", "territorial", "wild", "", "m1/barkstrider", "M1", "Planned in Tenebris."],
+  ["gloomhopper", "Gloomhopper", "S", "sporewood", "sporekin", 0.9, "forager", "skittish", "wild", "", "m1/gloomhopper", "M1", "Planned in Tenebris."],
+  ["sporeling", "Sporeling", "S", "sporewood", "sporekin", 0.6, "forager", "docile", "wild", "", "m1/sporeling", "M1", "Planned in Tenebris."],
+  ["crane", "Crane", "S", "river", "bird", 1.4, "predator", "skittish", "wild", "feather", "m1/crane", "M1", "Bird-form; no kin to Tenebris's birds."],
+  ["raptor", "Raptor", "S", "mountains", "bird", 0.9, "predator", "predator", "wild", "feather", "m1/raptor", "M1", "Bird-form, of the high ground."],
+  ["sserpent", "Sea serpent (Sequoia)", "S", "sea", "reptile", 6, "predator", "predator", "wild", "", "m1/serpent", "M1", "In Sequoia's green water only. Shares a name with Tenebris's fish."],
+  ["mossback", "Mossback", "S", "river redwood", "reptile", 2.4, "grazer", "docile", "wild", "", "m1/mossback", "M1", "Planned in Tenebris. Moss on its shell."],
+  ["tallowback", "Tallowback", "W", "ring", "ringling", 1.8, "grazer", "docile", "tame", "tallow milk", "m1/tallowback", "M1", "Tamed by feeding blackleaf. Tallow every 4 days: candles and lamp fuel for the ring."],
+  ["dimwing", "Dimwing", "W", "ring", "ringling", 0.9, "forager", "skittish", "wild", "", "m1/dimwing", "M1", "Rides the wind that never stops."],
+  ["drover", "Drover", "F", "steppe", "mammal", 1.5, "grazer", "docile", "tame", "fleece milk", "m1/drover", "M1", "Mammal-form. Ranched for drover fleece, Fallow's export (M1)."],
+  ["scythewing", "Scythewing", "F", "steppe", "bird", 0.9, "predator", "predator", "wild", "feather", "m1/scythewing", "M1"],
+  ["burrowkit", "Burrowkit", "F", "steppe", "twostrider", 0.6, "forager", "skittish", "tame", "", "m1/burrowkit", "M1", "Kits raised by hand dig: loosen a cell, turn up what is buried."],
+].map(r => ({ id: r[0], name: r[1], world: r[2], biomes: r[3].split(" "), cls: r[4], size: r[5], diet: r[6], temp: r[7], status: r[8], gives: r[9] ? r[9].split(" ") : [], icon: r[10], src: r[11], note: r[12] || "", breedOf: r[13] || null }));
+const KF = { cls: null, world: "", biome: "", role: "", temp: "", text: "" };
+function iconImg(path, size = 64){
+  const s = /^game\/fish|^m9\//.test(path) ? 16 : /^m25\/card-/.test(path) ? 32 : /^(m25|m8)\//.test(path) || /^cut_|^duck_|^honey|^wax|^manure|^tallow/.test(path) ? 24 : /^m1\//.test(path) ? 32 : 36;
+  const k = Math.max(1, Math.floor(size / s));
+  return `<img src="${ART(path)}" width="${s * k}" height="${s * k}" alt="">`;
+}
+function kTree(){
+  const pressed = c => KF.cls === c ? "true" : "false";
+  let h = `<ul><li><button data-c="" aria-pressed="${!KF.cls}">Animal kingdom</button> <span class="ct">${SPECIES.length} on 4 worlds and a moon</span><ul>`;
+  for (const [bn, cls] of BRANCHES){
+    const n = SPECIES.filter(s => cls.includes(s.cls)).length;
+    h += `<li class="${bn.startsWith("Alien") ? "alien" : ""}"><span class="ct" style="font-family:var(--display);font-size:13px;letter-spacing:.08em;text-transform:uppercase">${bn}</span> <span class="ct">${n}</span><ul>`;
+    for (const c of cls){ const L = SPECIES.filter(s => s.cls === c); h += `<li class="${bn.startsWith("Alien") ? "alien" : ""}"><button data-c="${c}" aria-pressed="${pressed(c)}" title="${esc(CLASSES[c][1])}">${CLASSES[c][0]}</button> <span class="ct">${L.length}</span><div class="strip">${L.slice(0, 8).map(s => iconImg(s.icon, 24)).join("")}</div></li>`; }
+    h += `</ul></li>`;
+  }
+  $("ktree").innerHTML = h + `</ul></li></ul><p class="small muted" style="margin:8px 0 0 6px">Grouped by body form. Not drawn yet, so not listed: Sequoia's fernwhistle, canopyclaw, mirefoot, duskstalker, silthog and slatehorn (planned in Tenebris, no design). Airless bodies: none.</p>`;
+  $("ktree").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { KF.cls = b.dataset.c || null; $("fClass").value = KF.cls || ""; kDraw(); }));
+}
+function kDraw(){
+  kTree();
+  const L = SPECIES.filter(s => (!KF.cls || s.cls === KF.cls) && (!KF.world || s.world === KF.world) && (!KF.biome || s.biomes.includes(KF.biome)) && (!KF.role || s.status === KF.role) && (!KF.temp || s.temp === KF.temp) && (!KF.text || s.name.toLowerCase().includes(KF.text)));
+  $("kCount").textContent = `${L.length} of ${SPECIES.length} species` + (KF.role === "dom" ? ". The domestic roster: Tenebris's farm animals and the sand strider; on other worlds, see Tameable." : "");
+  $("kcards").innerHTML = L.map(s => `<div class="card"><div class="ic">${iconImg(s.icon, 64)}</div><div><h4>${esc(s.name)}</h4><div class="meta">${WORLDS[s.world]} &middot; ${s.biomes.join(", ")}</div></div>
+    <div class="tags"><span class="tag ${STATUS[s.status][1]}">${STATUS[s.status][0]}</span><span class="tag ${s.temp === "predator" ? "pred" : ""}">${s.temp}</span><span class="tag">${CLASSES[s.cls][0].replace(" and amphibians", "/amph.").replace("Molluscs and soft-bodied", "soft-bodied")}</span><span class="tag src">${s.src === "new" ? "new here" : s.src}</span></div>
+    <div class="gives"><span>${s.size < 0.1 ? Math.round(s.size * 1000) + " mm" : s.size + " m"} &middot; ${s.diet}${s.gives.length ? " &middot; gives" : ""}</span>${s.gives.map(g => `<img src="${ART(GIVE[g])}" alt="${g}" title="${g}">`).join("")}</div>
+    ${s.note ? `<p class="txt">${esc(s.note)}</p>` : ""}</div>`).join("");
+}
+let kingBuilt = false;
+TAB_HOOKS.kingdom = { show(){
+  if (!kingBuilt){
+    kingBuilt = true;
+    const opt = (el, list) => { el.innerHTML = list.map(([v, t]) => `<option value="${v}">${t}</option>`).join(""); };
+    opt($("fWorld"), [["", "All worlds"], ...Object.entries(WORLDS)]);
+    const biomes = [...new Set(SPECIES.flatMap(s => s.biomes))].sort();
+    opt($("fBiome"), [["", "All biomes"], ...biomes.map(b => [b, b])]);
+    opt($("fClass"), [["", "All classes"], ...Object.entries(CLASSES).map(([k, v]) => [k, v[0]])]);
+    opt($("fRole"), [["", "Any status"], ["dom", "Domestic"], ["tame", "Tameable"], ["wild", "Wild only"], ["prot", "Protected"]]);
+    opt($("fTemp"), [["", "Any temperament"], ["docile", "docile"], ["skittish", "skittish"], ["territorial", "territorial"], ["predator", "predator"]]);
+    $("fWorld").onchange = e => { KF.world = e.target.value; kDraw(); }; $("fBiome").onchange = e => { KF.biome = e.target.value; kDraw(); };
+    $("fClass").onchange = e => { KF.cls = e.target.value || null; kDraw(); }; $("fRole").onchange = e => { KF.role = e.target.value; kDraw(); };
+    $("fTemp").onchange = e => { KF.temp = e.target.value; kDraw(); }; $("fText").oninput = e => { KF.text = e.target.value.trim().toLowerCase(); kDraw(); };
+  }
+  kDraw();
+} };
+
+// =====================================================================================================
+// The economy: per animal per world day, by season. Units: grain, hay, turnips, kale, scraps (items); buckets of water.
+// =====================================================================================================
+const ECON = [
+  // id, name, icon, start count, needs {summer}, winterNeeds, gives per day, labour min, grass cells
+  { id: "yard_hen", name: "Yard hen", icon: "yard_hen", n: 6, eat: { grain: 0.1 }, give: { egg: 1, feather: 0.1, manure: 0.1 }, winterGive: { egg: 0.5 }, labour: 0.3 },
+  { id: "cockerel", name: "Cockerel", icon: "cockerel", n: 1, eat: { grain: 0.1 }, give: { manure: 0.1 }, labour: 0.1 },
+  { id: "woolback", name: "Woolback", icon: "m7/woolback", n: 6, graze: 1, hay: 1, give: { wool: 0.75, manure: 1 }, labour: 0.6 },
+  { id: "plodder", name: "Plodder (in milk)", icon: "m7/plodder", n: 2, graze: 2, hay: 2, eat: { turnip: 0.2 }, give: { milk: 1, manure: 2 }, labour: 2 },
+  { id: "ridge_goat", name: "Ridge goat (in milk)", icon: "m7/ridge_goat", n: 2, graze: 1, hay: 1, eat: { kale: 0.2 }, give: { milk: 1, manure: 1 }, labour: 1.5 },
+  { id: "rootling", name: "Rootling", icon: "rootling", n: 1, eat: { turnip: 0.5 }, give: { manure: 2 }, labour: 0.3 },
+  { id: "fellrunner", name: "Fellrunner", icon: "fellrunner", n: 2, graze: 2, hay: 2, eat: { grain: 0.3 }, give: { manure: 2 }, labour: 0.5 },
+  { id: "yard_dabbler", name: "Yard dabbler", icon: "yard_dabbler", n: 5, eat: { grain: 0.1 }, give: { duck_egg: 0.5, feather: 0.125, manure: 0.1 }, winterGive: { duck_egg: 0.25 }, labour: 0.2, pond: 1 },
+  { id: "hive", name: "Clover bee hive", icon: "clover_bee", n: 3, give: { honey: 0.33, wax: 0.17 }, winterGive: { honey: 0, wax: 0 }, labour: 0.4, noWater: 1 },
+  { id: "herd_hound", name: "Herd hound", icon: "herd_hound", n: 1, eat: { scraps: 0.3 }, give: {}, labour: 0.1 },
+  { id: "hedge_cat", name: "Hedge cat", icon: "hedge_cat", n: 1, eat: { milk: 0.2 }, give: {}, labour: 0 },
+];
+const UNITS = { grain: ["grain", "feed_grain"], hay: ["hay", "feed_hay"], turnip: ["turnips", "m8/produce_turnip"], kale: ["frost kale", "m8/produce_frost_kale"], scraps: ["scraps", "m7/drop_meat"], milk: ["milk (pails)", "m7/drop_milk"], water: ["water (buckets)", "need_water"], grass: ["grazing (grass cells)", "need_space"],
+  egg: ["eggs", "m7/drop_egg"], duck_egg: ["duck eggs", "duck_egg"], wool: ["wool", "m7/drop_wool"], feather: ["feathers and down", "m7/drop_feather"], honey: ["honey", "honey"], wax: ["wax", "wax"], manure: ["manure", "manure"], compost: ["compost (from manure)", "m8/tool_fert"] };
+function econDraw(){
+  const season = +$("eSeason").value, winter = season === 2;
+  const IN = {}, OUT = {}; let labour = 0;
+  const add = (o, k, v) => o[k] = (o[k] || 0) + v;
+  for (const e of ECON){
+    const n = e.n; if (!n) continue;
+    for (const [k, v] of Object.entries(e.eat || {})) add(IN, k, v * n);
+    if (e.graze){ if (winter) add(IN, "hay", e.hay * n); else add(IN, "grass", e.graze * n); }
+    if (!e.noWater) add(IN, "water", 0.25 * n);
+    const give = Object.assign({}, e.give, winter ? e.winterGive || {} : {});
+    for (const [k, v] of Object.entries(give)) if (v) add(OUT, k, v * n);
+    labour += e.labour * n;
+  }
+  // the cat drinks milk the herd gives
+  if (OUT.manure) OUT.compost = OUT.manure / 4;
+  const bars = (el, obj, col) => {
+    const ents = Object.entries(obj).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    const max = Math.max(1, ...ents.map(e => e[1]));
+    el.innerHTML = ents.map(([k, v]) => `<div class="erow" title="${UNITS[k][0]}: ${v.toFixed(2)} a day"><span><img src="${ART(UNITS[k][1])}" alt="">${UNITS[k][0]}</span><div class="b" style="width:${Math.max(2, v / max * 100)}%;background:${col}"></div><span class="v">${v.toFixed(v < 10 ? 2 : 1)}</span></div>`).join("") || `<span class="muted small">nothing</span>`;
+  };
+  bars($("eIn"), IN, "var(--amber)"); bars($("eOut"), OUT, "var(--moss)");
+  const cellsFor = (k, perCellDay) => IN[k] ? Math.ceil(IN[k] / perCellDay) : 0;
+  const wheat = cellsFor("grain", 0.5), turn = cellsFor("turnip", 0.5), kale = cellsFor("kale", 0.4), hay = winter ? Math.ceil((IN.hay || 0) * 50 / 4 / 1) : 0;
+  $("eLand").innerHTML = `<p><b>What it takes to feed, from M8's yields</b> (wheat 3 a cell in 6 days, turnips 2 in 4, frost kale 2 in 5): <b>${wheat}</b> wheat cells, <b>${turn}</b> turnip cells, <b>${kale}</b> kale cells` +
+    (winter ? `, and the winter's hay: <b>${Math.ceil((IN.hay || 0) * 25)}</b> hay for its 25 days, mown in summer from ${Math.ceil((IN.hay || 0) * 25 / 6)} grass cells (1 hay a cell, regrown every 4 days through a 25-day season, about 6 cuts).` : `; <b>${Math.ceil(IN.grass || 0)}</b> grass cells of pasture, regrowing every 4 days.`) +
+    ` <b>${(OUT.compost || 0).toFixed(1)}</b> compost a day goes back to fertilise that many crop cells for their next harvest. Chores: about <b>${Math.round(labour)}</b> minutes of play a day (collecting, milking, shearing every 4th day, feeding).</p>` +
+    `<p class="small muted">Meat is not a daily product: a butchered animal gives its cuts once (a plodder: 4 steak, 2 hide, 2 horn; a woolback or goat: 3 chop, 1 hide; a rootling: 4 ham, 1 hide; a hen: 2 drumstick). Every dish is in the cooking mockup.</p>`;
+  $("eTable").innerHTML = `<tr><th>Animal</th><th>Eats a day</th><th>Drinks</th><th>Space</th><th>Gives a day</th><th>Once, at the block</th><th>Work</th></tr>` + [
+    ["yard_hen", "Yard hen", "0.1 grain; scratches pests in crop cells", "1/4 bucket", "5 to a cell, coop", "1 egg (0.5 in winter); a feather a moult", "2 drumstick", ""],
+    ["m7/plodder", "Plodder", "2 grass cells or 2 hay; 0.2 turnip", "1/4 bucket", "2 cells, barn", "1 pail of milk for 40 days after a calf; 2 manure", "4 steak, 2 hide, 2 horn", "plough, cart"],
+    ["m7/woolback", "Woolback", "1 grass cell or 1 hay", "1/4 bucket", "1 cell", "3 wool every 4 days; 1 manure", "3 chop, 1 hide", ""],
+    ["m7/ridge_goat", "Ridge goat", "1 grass cell or 1 hay; 0.2 kale", "1/4 bucket", "1 cell", "1 jug of milk for 30 days after a kid; 1 manure", "3 chop, 1 hide, 1 horn", "clears scrub"],
+    ["rootling", "Rootling", "0.5 turnip or scraps", "1/4 bucket", "1 cell, sty with mud", "2 manure; a litter of 4 to 8", "4 ham, 1 hide", "roots a cell to tilled"],
+    ["fellrunner", "Fellrunner", "2 grass cells or 2 hay; 0.3 grain worked", "1/4 bucket", "2 cells, stable", "2 manure", "(not butchered)", "ridden 9 m/s, plough, cart"],
+    ["yard_dabbler", "Yard dabbler", "0.1 grain; slugs in crop cells", "the pond", "4 to a pond cell", "1 duck egg every 2 days; down every 8", "(never butchered)", ""],
+    ["clover_bee", "Clover bee (a hive)", "flowers within 3 cells", "", "a hive on an edge", "1 honey every 3 days, 1 wax every 6 (spring, summer)", "", "pollinates: +1 yield within 3 cells"],
+    ["herd_hound", "Herd hound", "0.3 scraps or meat", "1/4 bucket", "kennel", "", "", "herds; guards at night"],
+    ["hedge_cat", "Hedge cat", "a dish of milk (0.2)", "", "roams", "", "", "mice: feed loss 10% to 0"],
+    ["m1/tallowback", "Tallowback (Wick)", "1 grass cell of blackleaf browse", "1/4 bucket", "1 cell", "tallow every 4 days; milk", "", ""],
+    ["m1/drover", "Drover (Fallow)", "1 grass cell or 1 hay", "1/4 bucket", "1 cell", "drover fleece every 5 days; milk", "", ""],
+    ["m1/shellkin", "Shellkin (Sequoia)", "spore caps", "1/4 bucket", "1 cell", "", "", "pack, 6 slots"],
+  ].map(r => `<tr><td>${iconImg(r[0], 36)} ${r[1]}</td>${r.slice(2).map(c => `<td>${c}</td>`).join("")}</tr>`).join("");
+}
+let econBuilt = false;
+TAB_HOOKS.economy = { show(){
+  if (!econBuilt){
+    econBuilt = true;
+    $("eHerd").innerHTML = ECON.map((e, i) => `<label><img src="${ART(e.icon)}" alt="">${e.name}<input type="number" min="0" max="99" value="${e.n}" data-i="${i}" aria-label="${e.name} count"></label>`).join("");
+    $("eHerd").querySelectorAll("input").forEach(inp => inp.addEventListener("input", () => { ECON[+inp.dataset.i].n = clamp(+inp.value || 0, 0, 99); econDraw(); }));
+    $("eSeason").addEventListener("change", econDraw);
+  }
+  econDraw();
+} };
+
+// ------------------------------------------------------------------ start, and a hook for the page's own tests
+window.__husbandry = {
+  canvases: () => document.querySelectorAll("canvas").length,
+  hasRenderer: () => !!renderer, tab: () => TAB, view: n => VIEWS[n],
+  camera: () => current ? current.camera.position.toArray().map(v => +v.toFixed(4)) : null,
+  rafRunning: () => !!raf,
+  step: (n, s) => { const V = VIEWS[n]; for (let t = 0; t < s; t += 0.05) stepView(V, 0.05); },
+};
+setTab(tabOf(location.hash) || "farm", false);
+</script>
+</body>
+</html>

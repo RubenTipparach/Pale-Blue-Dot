@@ -90,6 +90,21 @@ Things that move because the world moves them keep moving: a station ring
 spinning for gravity, a wind turbine in the wind, a craft being flown, a ship
 under sail, workers at work.
 
+## Descriptive text goes in modals (owner, 2026-11-14)
+
+**Standing instruction from the user:** "Too much text on screen. Descriptive
+Text on all mockups belong in modals". A mockup's screen shows the thing
+itself: the scene, the UI, the controls and their short labels. Everything
+that explains it goes in a modal opened from a small info button:
+- the intro and "which art is whose" notes, captions, design notes, decision
+  rows, odds and maths tables, "in the engine" sections and long how-to text;
+- the modal closes with its ✕, Esc or a tap outside, and is readable on a
+  phone;
+- a short title per tab and one-line labels on controls may stay on screen;
+- the tracker link stays visible near the top.
+New mockups are built this way; an older mockup moves its text into modals
+the next time it is republished.
+
 ## One 3D view at a time, in tabs (owner, 2026-11-13)
 
 **Standing instruction from the user:** "make sure to apply the "tabs"
@@ -142,7 +157,7 @@ answer, and answers are folded back into the OpenSpec changes they shape.
 **The survey is an HTML page (owner, 2026-11-12):** "can you create a mockup
 tracking dock, and a survey html tracker? both of these skills are found in
 fleet command repo". Questions go into
-https://claude.ai/artifact/3ViY6udhFkkx5Wzx4jn3w5 (`docs/design/survey.html`),
+https://claude.ai/artifact/S3hRQL12WLctoD21jar1yT (`docs/design/survey.html`),
 whose database holds the answers; the `html-survey` skill
 (`.claude/skills/html-survey`) says how to ask, read the answers back with
 `ArtifactData`, and move them to "Already decided". Keep republishing that
@@ -373,16 +388,16 @@ The `lighting-model` cost on the desktop (RTX 3070; main before the merge,
 the new model and `PBD_LIGHTING=today`, then by part and at night;
 `docs/benchmarks/2026-11-12-lighting-model-clean/`, a quiet machine; the
 2026-11-11 sitting it replaces was contaminated; plan in `lighting-perf`)
-is https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9.
+is https://claude.ai/artifact/EqzrbQjpB7HxEQ3QDogBAv.
 The `lighting-perf` close (main's lighting, `f15a647`, against the branch
 after 2.8's half-size reflections: every scenario inside 16.7 ms at p99;
 `docs/benchmarks/2026-11-12-worst-case-60/`) is
-https://claude.ai/artifact/DiyFFNobHpBLsuCpvB5ssk.
+https://claude.ai/artifact/DahhhtX5wbwTxPUAnkppZA.
 The `lighting-perf` checkpoint (the desktop, main's `f15a647` against the
 branch before it and the branch with frame latency 2 and the L8 fixes, every
 scenario, at night, with vsync, and the slow frames classified;
 `docs/benchmarks/2026-11-12-lighting-perf/`) is
-https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH.
+https://claude.ai/artifact/1LQaNTQW3d2sdngM2Uj8oc.
 The one-part-off breakdown (where the frame goes, the same Mac) is
 https://claude.ai/artifact/3hvQJvSQJJhAQX7hUjHzQn.
 

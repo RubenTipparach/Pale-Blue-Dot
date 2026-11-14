@@ -436,6 +436,78 @@ Recommendations taken (ask only with screenshots):
 - **When sails furl.** They stay set while anyone is aboard, and furl only
   when no one is.
 
+### 9. Sails, oars and the deck, rebuilt on the owner's report (M23, 2026-11-13)
+
+The owner, on the Sail it view (verbatim): "sailing mockup is broken, I cant
+actually walk around on the ship, sail ships sails dont have affect, and I
+can move it normally, thats mad, sail ships should depend on size of sail
+splayed out + the angle of the sail with the dir of wind, show wind arrows
+too to indicate where the wind is blowing. is this crows feet thing supposed
+to be the direction of travel? you better fix that thing i have in the
+screenshot". Then: "also rowing should actually row", and "why do these
+ships have so many planks? whats that all about? also planks should have a
+toggle to extend or not".
+
+What was wrong, and what the mockup does now (supersedes the "Sail limit",
+"Telegraph and sheet", "Walking" and "When sails furl" notes of sections 7
+and 8):
+- **The crow's feet were an artefact.** The sea is a polar mesh whose
+  vertices spread out with distance; the shortest waves aliased on it and the
+  crest foam, interpolated per vertex across long thin triangles and dithered
+  with holes, drew dark radial streaks fanning from the point under the
+  camera. Each wave now fades out of the geometry between 3 and 6 wavelengths
+  from the eye, and crest foam and normals are worked out per pixel; lamps
+  light foam as they light water.
+- **The cyan bars were the GPS route**, a ribbon as wide as 0.8 % of the
+  camera distance laid flat at 0.12 m, which the swell cut into bars, plus a
+  16 m chevron. The water now carries three lines that ride the same waves:
+  a white dashed course from the bow (where she is in a minute), the GPS
+  route as a thin cyan dotted line with a post at each tack, and a pale wake
+  astern along the water she crossed. A legend in the view names them.
+- **Sails drive her, and only sails.** Drive is the sail as a foil in the
+  apparent wind: 0.5 rho A^2 times the canvas set (furl 0 to 1, up and down
+  arrows) times the sail cells' area, at the angle of attack between the
+  apparent wind and the sheet (left arrow hauls in, right eases), resolved
+  into drive and a push to leeward. The keel resists the push as a foil
+  (leeway), the hull's drag grows with speed squared. Inside about 33 degrees
+  of apparent wind (about 40 true) the luff cannot fill: in irons, and she
+  drifts astern. Fastest on a beam reach (the sloop 3.9 m/s in 8 m/s of
+  wind, 3.1 close-hauled at 45, 2.8 broad at 150); furled, she drifts to a
+  stop. She starts furled; taking the helm no longer sets sail by itself.
+  The rudder turns her only with way on. An engine's thrust adds to any sail.
+- **Wind is shown**: pale arrows drifting with the wind over the water across
+  the view, a pennant at the masthead in the apparent wind, and a wind
+  instrument (heading up, true and apparent wind, the no-go zone, trim, canvas
+  set, speed in knots and m/s, and DRAWING, LUFFING, STALLED or IN IRONS).
+  The true wind shifts slowly, about 20 degrees and 15 % over minutes. The
+  compass bar shades the no-go zone; the GPS advice names the key to press.
+- **Rowing rows.** A bench station (the Q cells at one place along her
+  length) rows one oar a side, two rowers to a sweep; W and S step the stroke
+  (back water, shipped, slow 16, cruise 24, ramming 34 a minute). Thrust
+  comes only in each stroke's drive, from the benches' power and the crew's
+  stamina; the oars sweep through catch, drive, release and a feathered
+  recovery. With the helm over, the rowers pull on the outside and back water
+  on the inside, so she turns from rest. Shipped, she coasts to a stop.
+- **Oars and gangway.** The old launch drew two 4.2 m oars a bench cell,
+  fixed and run out (twelve "planks"), and a gangway cell ran a plank out of
+  every open edge (three). Oars now lie shipped along the rail unless she is
+  rowing, with looms and blades in a pale wood; a gangway is one plank,
+  stood up against the rail unless run out: G at the helm or beside it, or a
+  button, only when she is stopped, and it comes in by itself under way. The
+  dock has its own toggle; the plank comes in when she warps out.
+- **Walking.** The walker moved all or nothing on a nearest-cell test, so any
+  blocked step (a mast cell, a hatch, a rail post, a step of more than one
+  layer) froze the move, and at a low frame rate one long jump was refused
+  whole. Now the move is sub-stepped and slides along what is in the way;
+  a mast is walked round; she steps up a layer or drops up to three off an
+  edge (from a poop to the waist), never down a hatch, where Space takes the
+  ladder; she goes over the side only by walking off an edge with no rail.
+
+Recommendations taken (ask only with screenshots): the no-go angle (about
+40 degrees true), the stroke rates, and starting furled. Screenshots:
+`docs/screenshots/mockup-drydock/sail-fix-*.png` (software rendering in a
+cloud container; the look, not the frame rate).
+
 ## Risks
 
 - **Controls on the keyboard.** Four craft kinds now share W, A, S and D

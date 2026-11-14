@@ -8,7 +8,7 @@ const URL = process.env.HANGAR_URL || 'http://localhost:8763/hangar.html?test&st
 const fail = [];
 const check = (ok, what) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${what}`); if (!ok) fail.push(what); };
 (async () => {
-  const browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']});
+  const browser = await chromium.launch({args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--js-flags=--expose-gc', '--enable-precise-memory-info']});
   const page = await browser.newPage({viewport: {width: 1000, height: 700}});
   const errs = [];
   page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
@@ -83,6 +83,44 @@ const check = (ok, what) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${what}`); i
   const pw = await page.evaluate(() => document.getElementById('flyHud').innerText.match(/Throttle\s+(\d+)%/));
   console.log(`\n-- keyboard: Shift held 1.5 s in real time -> ${pw && pw[0]}`);
   check(pw && +pw[1] > 70, 'the keys reach the flight model');
+
+  // 8. the flight effects (owner, 2026-11-13): airflow lines and wingtip trails read the flight and never write it.
+  //    Above a speed they appear, a hard pull thickens the trails, parked there are none; a rotor in the hover
+  //    blows dust; an airship has none; the Effects button turns them off; a frame of them makes no garbage.
+  console.log('\n-- effects: airflow lines, wingtip trails, prop swirl, rotor dust --');
+  for (const id of ['sharky', 'gull', 'dart']) {
+    const e = await page.evaluate(id => {
+      const H = window.__hangar, o = {};
+      H.fly(id); o.parked = (H.run(1.5, [[0, 1.5, ['ControlLeft']]]), H.fx());
+      H.put([300, 90, -160], 0.3, 13); o.slow = (H.run(0.3, []), H.fx());
+      H.put([300, 90, -160], 0.3, 40); o.cruise = (H.run(3, [[0, 3, ['ShiftLeft']]]), H.fx());
+      H.run(0.45, [[0, 0.45, ['KeyA']]]); o.turn = (H.run(1.2, [[0, 1.2, ['KeyS', 'ShiftLeft']]]), H.fx());
+      return o;
+    }, id);
+    console.log(`${id.padEnd(7)} parked: ${e.parked.streaks} lines, trail ${e.parked.trail} | 13 m/s: ${e.slow.streaks} lines | cruise: ${e.cruise.streaks} lines, trail ${e.cruise.trail} x ${e.cruise.width} m, ${e.cruise.g} g | hard turn: trail ${e.turn.trail} x ${e.turn.width} m, ${e.turn.g} g, ${e.turn.aoa} deg | ${e.cruise.tips} tips, ${e.cruise.props} prop${e.cruise.props === 1 ? '' : 's'}`);
+    check(e.parked.streaks === 0 && e.parked.trail === 0, `${id}: nothing on the ground at a standstill`);
+    check(e.slow.streaks === 0, `${id}: no airflow lines below the speed they start at`);
+    check(e.cruise.streaks >= 8 && e.cruise.trail > 0 && e.cruise.tips >= 2, `${id}: lines and faint trails in cruise (${e.cruise.streaks} lines, trail ${e.cruise.trail})`);
+    check(e.turn.trail > e.cruise.trail * 2 && e.turn.width > e.cruise.width * 1.5, `${id}: the trails grow in a hard pull (${e.cruise.trail} -> ${e.turn.trail})`);
+  }
+  const hv = await page.evaluate(() => { const H = window.__hangar, o = {}; H.fly('bumble'); o.bumble = (H.run(2.5, [[0, 2.5, ['ShiftLeft']]]), H.fx()); H.fly('puffin'); o.puffin = (H.run(2.5, [[0, 2.5, ['ShiftLeft']]]), H.fx()); H.fly('puff'); o.puff = (H.run(3, [[0, 3, ['KeyW']]]), H.fx()); return o; });
+  console.log(`bumble hover: ${hv.bumble.dust} dust motes, ${hv.bumble.streaks} lines | puffin hover: ${hv.puffin.dust} dust | Puff (airship): ${hv.puff.streaks} lines, ${hv.puff.dust} dust, trail ${hv.puff.trail}`);
+  check(hv.bumble.dust > 10 && hv.bumble.streaks === 0 && hv.puffin.dust > 10, 'a rotor in a low hover blows dust, and makes no airflow lines');
+  check(!hv.puff.ready && hv.puff.streaks === 0 && hv.puff.dust === 0, 'an airship has no effects');
+  const bd = await page.evaluate(() => { grid = PRESETS.gull.rows.map(r => r.split('')); YARD.flyDesign(); return window.__hangar.fx(); });
+  check(bd.ready && bd.tips === 4 && bd.props === 1, `a design flown from the builder finds its own wingtips, tailplane tips and prop (${bd.tips} tips, ${bd.props} prop)`);
+  const tg = await page.evaluate(() => { const H = window.__hangar, b = document.getElementById('fxBtn'); b.click(); const off = {on: H.fx().on, pressed: b.getAttribute('aria-pressed'), box: document.getElementById('fxChk').checked}; b.click(); return {off, on: H.fx().on}; });
+  check(!tg.off.on && tg.off.pressed === 'false' && !tg.off.box && tg.on, 'the Effects button (and the box in Controls) turns them off and on');
+  const al = await page.evaluate(() => {
+    const H = window.__hangar; H.fly('sharky'); H.put([300, 90, -160], 0.3, 40); H.run(2, [[0, 2, ['ShiftLeft']]]);
+    H.fxBench(3000);   // warmed up: the first frames run before the engine has compiled the code, and box their numbers
+    let grew = 1e12, ms = 0;
+    for (let k = 0; k < 3; k++) { gc(); const m0 = performance.memory.usedJSHeapSize; ms = H.fxBench(3000); grew = Math.min(grew, performance.memory.usedJSHeapSize - m0); }
+    gc(); const e0 = performance.memory.usedJSHeapSize; for (let i = 0; i < 3000; i++) performance.now(); const empty = performance.memory.usedJSHeapSize - e0;
+    return {grew, empty, us: Math.round(ms / 3000 * 1000)};
+  });
+  console.log(`3000 effect frames (a step and a layout each), warmed up: heap grew ${al.grew} bytes (an empty loop of 3000: ${al.empty}), ${al.us} us a frame (software rendering; not the game's speed)`);
+  check(al.grew < 200 * 1024, `an effects frame allocates nothing to speak of (${al.grew} bytes over 3000 frames, ${Math.round(al.grew / 3000)} a frame)`);
 
   check(errs.length === 0, `no console errors${errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''}`);
   console.log(`\n${fail.length ? `${fail.length} FAILED` : 'ALL PASSED'}`);

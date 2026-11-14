@@ -271,7 +271,7 @@ p50 spread between the two repeats: 0.02-0.18 ms (stroll, storm).
 ## The checkpoint (task 3.1, measured 2026-11-12)
 
 `docs/benchmarks/2026-11-12-lighting-perf/`
-(https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH): `f15a647`, the branch
+(https://claude.ai/artifact/1LQaNTQW3d2sdngM2Uj8oc): `f15a647`, the branch
 before this change (`86361b1`) and the branch at `cdf0317` (latency 2, 2.1,
 2.2, 2.4, 2.5, 2.10, the loading screen), every scenario, 2 repeats. p50 /
 p95 / p99 ms, `f15a647` then now:
@@ -514,7 +514,7 @@ against 0.5, 2 repeats interleaved, latency 2. p50 / p95 / p99 ms:
 ### Worst case 60, met (measured 2026-11-12)
 
 `docs/benchmarks/2026-11-12-worst-case-60/`
-(https://claude.ai/artifact/DiyFFNobHpBLsuCpvB5ssk): `f15a647` (main, its
+(https://claude.ai/artifact/DahhhtX5wbwTxPUAnkppZA): `f15a647` (main, its
 own latency 1) against the branch at `c05ae5f`, every scenario, 2 repeats.
 p50 / p95 / p99 ms, main then the branch:
 

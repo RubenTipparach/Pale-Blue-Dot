@@ -36,8 +36,8 @@ pub fn setup(mut commands: Commands) {
             position_type: PositionType::Absolute,
             left: percent(50),
             top: percent(50),
-            width: px(3),
-            height: px(3),
+            width: px(2),
+            height: px(2),
             ..default()
         },
         BackgroundColor(Color::srgba(0.88, 0.94, 0.91, 0.75)),
@@ -45,15 +45,17 @@ pub fn setup(mut commands: Commands) {
     commands.spawn((
         Text::new(NearField::default().line()),
         TextFont {
-            font_size: 11.0,
+            font_size: 9.0,
             ..default()
         },
         TextColor(Color::srgb(0.92, 0.97, 0.95)),
-        TextShadow::default(),
+        pbd_app::ui_kit::text_shadow(),
         Node {
             position_type: PositionType::Absolute,
-            left: px(8),
-            top: px(6),
+            left: px(4),
+            // Under the compass strip and its town line, so the two never
+            // overlap at any window width.
+            top: px(36),
             ..default()
         },
         NearFieldText,

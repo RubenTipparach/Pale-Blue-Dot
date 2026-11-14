@@ -4,7 +4,7 @@
 //! row sets `OverlayMode` as the map's "Show on globe" does: one mode, two
 //! hands on it. M opens the map (`world-map` task 5.2) rather than cycling.
 
-use super::menu::{EDGE, INK, MINT, MenuAction, PANEL_FILL, small};
+use super::menu::{MenuAction, small};
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
@@ -12,6 +12,7 @@ use bevy::{
 };
 use pbd_app::overlay::{OverlayMode, ramp_colour};
 use pbd_app::sky::Sun;
+use pbd_app::ui_kit::{self, KitPiece, KitText, Set, UiKit};
 use pbd_core::overlay::Overlay;
 
 /// The legend panel; shown only while an overlay is.
@@ -34,8 +35,8 @@ pub struct LegendBar(Handle<Image>);
 /// Texels along the colour bar.
 const BAR_TEXELS: u32 = 256;
 /// The bar's size on screen, px.
-const BAR_WIDTH: f32 = 220.0;
-const BAR_HEIGHT: f32 = 10.0;
+const BAR_WIDTH: f32 = 120.0;
+const BAR_HEIGHT: f32 = 6.0;
 
 /// The colour bar of an overlay: its ramp, low end on the left, as sRGB bytes.
 pub fn bar_texels(overlay: Overlay) -> Vec<u8> {
@@ -60,7 +61,7 @@ fn text(parent: &mut ChildSpawnerCommands, which: LegendText, size: f32, colour:
     ));
 }
 
-pub fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+pub fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>, kit: Res<UiKit>) {
     let bar = images.add(Image::new(
         Extent3d {
             width: BAR_TEXELS,
@@ -76,22 +77,22 @@ pub fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands
         .spawn((
             Legend,
+            // The dressed-stone moulding of an in-play sub-panel.
+            kit.nine(Set::Stone, "frame"),
+            KitPiece("frame".into()),
             Node {
                 position_type: PositionType::Absolute,
-                top: px(12),
-                right: px(12),
+                top: px(6),
+                right: px(6),
                 flex_direction: FlexDirection::Column,
-                row_gap: px(4),
-                padding: UiRect::all(px(10)),
-                border: UiRect::all(px(1)),
+                row_gap: px(2),
+                padding: UiRect::all(px(14)),
                 display: Display::None,
                 ..default()
             },
-            BorderColor::all(EDGE),
-            BackgroundColor(PANEL_FILL),
         ))
         .with_children(|panel| {
-            text(panel, LegendText::Title, 13.0, MINT);
+            text(panel, LegendText::Title, 11.0, ui_kit::TITLE);
             panel.spawn((
                 ImageNode::new(bar),
                 Node {
@@ -107,18 +108,11 @@ pub fn spawn(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                     ..default()
                 })
                 .with_children(|ends| {
-                    text(ends, LegendText::Low, 11.0, INK);
-                    text(ends, LegendText::High, 11.0, INK);
+                    text(ends, LegendText::Low, 9.0, ui_kit::TEXT);
+                    text(ends, LegendText::High, 9.0, ui_kit::TEXT);
                 });
-            text(panel, LegendText::Date, 11.0, INK);
-            panel.spawn((
-                Text::new("[M] THE MAP CHOOSES IT"),
-                TextFont {
-                    font_size: 10.0,
-                    ..default()
-                },
-                TextColor(MINT),
-            ));
+            text(panel, LegendText::Date, 9.0, ui_kit::TEXT);
+            panel.spawn(KitText::new("M: THE MAP CHOOSES IT", ui_kit::TEXT_DIM));
         });
 }
 
@@ -182,33 +176,24 @@ pub fn show(
 }
 
 /// The pause panel's overlay row: off, then one button per overlay.
-pub fn spawn_row(panel: &mut ChildSpawnerCommands) {
-    panel.spawn((
-        Text::new("GLOBE OVERLAY"),
-        TextFont {
-            font_size: 11.0,
-            ..default()
-        },
-        TextColor(MINT),
-    ));
+pub fn spawn_row(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
+    panel.spawn(KitText::new("GLOBE OVERLAY", ui_kit::TITLE).shadow(ui_kit::INK));
     panel
         .spawn(Node {
             flex_wrap: FlexWrap::Wrap,
-            column_gap: px(4),
-            row_gap: px(4),
-            margin: UiRect::bottom(px(6)),
-            max_width: px(BAR_WIDTH + 20.0),
+            column_gap: px(2),
+            row_gap: px(2),
+            margin: UiRect::bottom(px(3)),
             ..default()
         })
         .with_children(|row| {
-            small(row, "OFF", MenuAction::Overlay(0));
+            small(row, kit, "OFF", MenuAction::Overlay(0));
             for (i, overlay) in Overlay::ALL.iter().enumerate() {
-                small(row, overlay.name(), MenuAction::Overlay(i as u8 + 1));
+                small(row, kit, overlay.name(), MenuAction::Overlay(i as u8 + 1));
             }
         });
 }
 
-/// The mode a row's number stands for: 0 is off, then `Overlay::ALL` in order.
 pub fn mode_for(row: u8) -> Option<Overlay> {
     row.checked_sub(1)
         .and_then(|i| Overlay::ALL.get(i as usize).copied())

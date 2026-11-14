@@ -10,6 +10,8 @@ Mockups first; game code waits for the owner's approval and a request.
 - [x] 1.2a M24: airships (decision 3b), an Airship tab with 2 m cells, two presets, a shed and a mast, and Fly it for them. Verify: screenshots of a moored airship at night and one flying.
 - [x] 1.4 M20 Pits, Plants and Power: oil fields, pumpjack, refinery and oil plant on the power ladder, lit at night. Verify: screenshots in `docs/screenshots/mockup-industry/`.
 - [x] 1.5 Republish the four, update the tracker and `docs/mockups/mockup-work.md`.
+- [x] 1.6 M23 Sail it, rebuilt on the owner's report of 2026-11-13 (design section 9): sails drive only by canvas set and trim in the apparent wind, with a no-go zone; oars row in strokes; wind arrows, a pennant and a wind instrument; the crow's-feet sea artefact and the cyan route bars replaced by a course line, a dotted route and a wake; walking the deck fixed; oars shipped and a gangway toggle. Verify: 29 Playwright checks pass in headless Chromium (furled she does not move; trimmed on a beam reach she accelerates; head to wind she stalls; best trim beats worst; walk helm to bow and back under way; oars sweep, thrust pulses, more benches more speed, shipped she coasts to a stop; the gangway); screenshots `sail-fix-*.png` in `docs/screenshots/mockup-drydock/`.
+- [ ] 1.7 Republish M23 and note the rebuild on the tracker (the parent session).
 
 ## 2. The owner's review
 

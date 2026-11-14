@@ -128,11 +128,11 @@ pub fn is_big(site: &Site) -> bool {
 
 /// The marker's half-width, pixels.
 fn half(site: &Site) -> f32 {
-    if is_big(site) { 5.0 } else { 3.5 }
+    if is_big(site) { 3.0 } else { 2.0 }
 }
 
 fn font_px(site: &Site) -> f32 {
-    if is_big(site) { 14.0 } else { 12.0 }
+    if is_big(site) { 9.0 } else { 8.0 }
 }
 
 /// How far a town's lamps light the ground round it, metres.
@@ -187,7 +187,7 @@ fn spawn_parts(commands: &mut Commands, parent: Entity, sites: &[Site]) {
                         .spawn((
                             tag,
                             Node {
-                                border: UiRect::all(px(1.2)),
+                                border: UiRect::all(px(1.0)),
                                 border_radius: BorderRadius::MAX,
                                 ..absolute()
                             },
@@ -200,7 +200,7 @@ fn spawn_parts(commands: &mut Commands, parent: Entity, sites: &[Site]) {
                             Node {
                                 width: px(2.0 * half(site)),
                                 height: px(2.0 * half(site)),
-                                border: UiRect::all(px(1.5)),
+                                border: UiRect::all(px(1.0)),
                                 border_radius: if is_big(site) {
                                     BorderRadius::ZERO
                                 } else {
@@ -216,9 +216,9 @@ fn spawn_parts(commands: &mut Commands, parent: Entity, sites: &[Site]) {
                         .spawn((
                             tag,
                             Node {
-                                width: px(2.0 * (half(site) + 2.5)),
-                                height: px(2.0 * (half(site) + 2.5)),
-                                border: UiRect::all(px(2.0)),
+                                width: px(2.0 * (half(site) + 1.5)),
+                                height: px(2.0 * (half(site) + 1.5)),
+                                border: UiRect::all(px(1.0)),
                                 border_radius: if is_big(site) {
                                     BorderRadius::all(px(2.0))
                                 } else {
@@ -233,9 +233,9 @@ fn spawn_parts(commands: &mut Commands, parent: Entity, sites: &[Site]) {
                         .spawn((
                             tag,
                             Node {
-                                width: px(2.0 * (half(site) + 4.0)),
-                                height: px(2.0 * (half(site) + 4.0)),
-                                border: UiRect::all(px(1.5)),
+                                width: px(2.0 * (half(site) + 2.0)),
+                                height: px(2.0 * (half(site) + 2.0)),
+                                border: UiRect::all(px(1.0)),
                                 border_radius: BorderRadius::MAX,
                                 ..absolute()
                             },
@@ -297,10 +297,14 @@ pub fn draw_sites(
     layer: Query<(Entity, Option<&Children>), With<SiteLayer>>,
     mut parts: PartQuery,
     mut notes: Query<&mut Text, With<SitesNote>>,
+    ui_scale: Option<Res<UiScale>>,
 ) {
     if *screen != Screen::Map {
         return;
     }
+    // The map is laid out in window pixels and a node is in native UI
+    // pixels, `s` of them to one (`ui_kit`).
+    let s = ui_scale.map_or(1.0, |u| u.0.max(1e-3));
     let sites = world_sites.as_ref().and_then(|w| w.ready());
     let towns = towns.as_deref();
     for mut text in &mut notes {
@@ -351,29 +355,32 @@ pub fn draw_sites(
         let lat = site.direction.normalize().y.clamp(-1.0, 1.0).asin();
         let stretch = 1.0 / lat.cos().max(0.05);
         // The part's half-extent, pixels, and whether it is drawn at all.
+        // Glow and footprint are measured on the ground, so their sizes are
+        // in window pixels and divided by `s`; the markers are native.
         let (half_w, half_h, show) = match tag.part {
             Part::Glow => {
                 let r = (reach_m(site) * px_per_m).max(10.0);
-                (r, r, night > 0.02)
+                (r / s, r / s, night > 0.02)
             }
             Part::Footprint => {
                 let footprint = rules.as_ref().map_or(0.0, |r| r.0.rule(site.kind).radius_m);
                 let ry = footprint * px_per_m;
-                (ry * stretch, ry, ry > FOOTPRINT_MIN_PX)
+                (ry * stretch / s, ry / s, ry > FOOTPRINT_MIN_PX)
             }
             Part::Built => (
-                half(site) + 2.5,
-                half(site) + 2.5,
+                half(site) + 1.5,
+                half(site) + 1.5,
                 stands == Some(Standing::Built),
             ),
             Part::Icon => (half(site), half(site), true),
-            Part::Crown => (half(site) + 4.0, half(site) + 4.0, true),
+            Part::Crown => (half(site) + 2.0, half(site) + 2.0, true),
             Part::Label => (0.0, 0.0, labels || site.capital || site.home),
         };
-        let on_screen = centre.x + half_w > -80.0
-            && centre.x - half_w < size.x + 80.0
-            && centre.y + half_h > -40.0
-            && centre.y - half_h < size.y + 40.0;
+        let on_screen = centre.x + half_w * s > -80.0
+            && centre.x - half_w * s < size.x + 80.0
+            && centre.y + half_h * s > -40.0
+            && centre.y - half_h * s < size.y + 40.0;
+        let centre = centre / s;
         if !(show && on_screen) {
             node.display = Display::None;
             continue;
