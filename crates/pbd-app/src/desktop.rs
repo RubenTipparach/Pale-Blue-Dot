@@ -1109,6 +1109,8 @@ pub fn run(args: &[String]) {
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
     .init_resource::<menu::SettingsTab>()
+    .init_resource::<menu::InputTab>()
+    .init_resource::<menu::Rebinding>()
     .add_systems(Startup, menu::spawn)
     .add_systems(
         PostStartup,
@@ -1131,6 +1133,7 @@ pub fn run(args: &[String]) {
     .add_systems(
         PreUpdate,
         (
+            menu::capture_rebind,
             menu::name_input,
             menu::toggle,
             guide::open,
@@ -1138,14 +1141,20 @@ pub fn run(args: &[String]) {
             map_screen::open,
         )
             .chain()
-            .after(bevy::input::InputSystems),
+            .after(bevy::input::InputSystems)
+            .after(pbd_app::controls::remap_keys),
     )
     .add_systems(
         Update,
         (
             menu::press_graphics,
             menu::label_graphics,
+            menu::drag_settings,
+            menu::show_settings,
             menu::settings_tabs,
+            menu::input_tabs,
+            menu::press_bindings,
+            menu::rebuild_input,
             menu::wheel_scroll,
         )
             .chain(),

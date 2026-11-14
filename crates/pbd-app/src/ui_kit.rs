@@ -1113,6 +1113,18 @@ mod tests {
         for c in ('A'..='Z').chain('0'..='9') {
             assert!(have.contains(&c), "{c}");
         }
+        // Every key cap the Input page can print, a rebind's and a fixed
+        // one's, and its waiting cap.
+        let caps = crate::controls::ASSIGNABLE
+            .iter()
+            .map(|(_, label)| *label)
+            .chain(["ESC", "LEFT CLICK", "RIGHT CLICK", "WHEEL", "PRESS A KEY"])
+            .chain(crate::controls::Tab::ALL.map(|t| t.label()));
+        for label in caps {
+            for c in label.chars().filter(|c| *c != ' ') {
+                assert!(have.contains(&c), "{c} in {label}");
+            }
+        }
         assert_eq!(layout.len(), order.len());
     }
 

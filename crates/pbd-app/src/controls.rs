@@ -277,6 +277,7 @@ impl Key {
 }
 
 /// One control and what it does.
+#[derive(Debug)]
 pub struct Binding {
     /// The keys, in the order they are printed. Several means either: `W A S D`
     /// is four keys for one action, and `SPACE / CTRL` is a pair.
@@ -366,6 +367,7 @@ impl When {
 }
 
 /// A heading and the controls under it.
+#[derive(Debug)]
 pub struct Group {
     pub heading: &'static str,
     /// The Input sub-tab it is listed on.
@@ -846,9 +848,9 @@ pub fn remapped(
 /// last frame, which it hands back to the physical keyboard.
 #[allow(clippy::too_many_arguments)]
 pub fn remap_keys(
-    mut keys: ResMut<ButtonInput<KeyCode>>,
-    mut typed: MessageReader<bevy::input::keyboard::KeyboardInput>,
-    mut lost: MessageReader<bevy::input::keyboard::KeyboardFocusLost>,
+    keys: Option<ResMut<ButtonInput<KeyCode>>>,
+    typed: Option<MessageReader<bevy::input::keyboard::KeyboardInput>>,
+    lost: Option<MessageReader<bevy::input::keyboard::KeyboardFocusLost>>,
     binds: Option<Res<KeyBinds>>,
     menu: Option<Res<MenuOpen>>,
     walking: Option<Res<crate::walking::WalkingReadout>>,
@@ -856,6 +858,11 @@ pub fn remap_keys(
     vehicles: Query<&crate::vehicles::Vehicle>,
     mut state: Local<RemapState>,
 ) {
+    // A world with no keyboard (a test's, a headless tool's) has nothing to
+    // remap.
+    let (Some(mut keys), Some(mut typed), Some(mut lost)) = (keys, typed, lost) else {
+        return;
+    };
     // The physical keyboard, kept as Bevy keeps its own.
     state.physical.clear();
     for event in typed.read() {
