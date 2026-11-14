@@ -60,21 +60,21 @@
 - [ ] Publish the page, add it to the mockup tracker, put Q1 ("which rock") in
       the survey with `q1-which-rock-hud.jpg` and `q1-which-rock-pack.jpg`, and
       move Q2 to "Already decided".
-- [ ] The owner answers Q1 and approves the mockup for build.
+- [x] The owner answers Q1 and approves the mockup for build (2026-11-14: "Smooth is the best. Write it down as the decision and start working the current UI as the wood + rendered smooth rock").
 
-## 1. The kit in the game (waits for the owner's go-ahead)
+## 1. The kit in the game (go-ahead given 2026-11-14: smooth rock in play, smooth oak out of play)
 - [ ] Confirm the Bevy 0.18.1 names (`ImageNode`, `NodeImageMode::Sliced`,
       `TextureSlicer`, `SliceScaleMode`, `UiScale`) against the crate.
 - [ ] `assets/ui/` (the kit's PNGs and `slices.json`, copied from
       `docs/mockups/ui/`), `assets/fonts/`
       (Pixelify Sans, VT323, their OFL texts).
-- [ ] `desktop/ui_kit.rs`: `UiKit` (handles, nearest sampler, margins read
+- [ ] `desktop/ui_kit.rs`: `UiKit` (handles, a linear sampler for the kit's smooth textures and nearest for icons and the font, margins read
       from `slices.json`), the tokens, `nine(piece)`.
 - [ ] Integer `UiScale` from the window height; native-pixel constants.
 - [ ] The kit font as a Bevy bitmap font (atlas from `kit-font.png`, metrics
       from `kit-font.json`), VT323 for body text.
-- [ ] Rock panels baked at their sizes (or a long baked edge, only cropped),
-      once Q1 is answered; the timber set for the menus out of play.
+- [ ] Rock panels baked at their sizes (or a long baked edge, only cropped) from
+      the smooth renders (Q1 answered: Smooth); the smooth oak set for the menus out of play.
 - [ ] Test: no two opposite margins in `slices.json` add up to more than the piece; every PNG
       is on the palette with alpha 0 or 255 (the art file itself, not a copy).
 - [ ] Capture: a frame at scale 2 draws its corners 28 px, pixel exact.

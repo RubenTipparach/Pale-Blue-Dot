@@ -514,3 +514,20 @@ The owner: "We don't need an x button in the actual game this is for just mobile
 will do just fine." The game's panels shut with Esc (and E for a machine, I for the pack, M for the
 map); none gets a close X. The X in `docs/mockups/ui.html` is the mockup page's own, shown only on a
 touch screen so the page can be used from a phone, and is not part of the design.
+
+## Decided: smooth rock, rendered smooth timber (owner, 2026-11-14)
+
+The owner, after the three looks side by side (`docs/screenshots/mockup-ui/compare/`): "Smooth is
+the best. Write it down as the decision and start working the current UI as the wood + rendered
+smooth rock". Q1 is answered: the game's UI uses the **Smooth** look, the Blender renders sampled
+linear, not reduced to pixels:
+- in play, the approved base rock (`docs/mockups/ui/rendered/hires/rock/`, baked per panel size)
+  and the smooth stone pieces (`rendered/hires/`);
+- out of play (main menu, pause, settings, saves), the carved oak in the same smooth render
+  (`rendered/hires/oak/`).
+This is the owner's own exception to nearest sampling, for the UI only: the UI's kit textures are
+sampled linear. Terrain, blocks, items and every world texture stay nearest (CLAUDE.md, "Terrain
+textures use nearest point sampling"). Item icons inside slots stay pixel art, nearest. The kit font
+stays the pixel bitmap font, nearest, at whole-number scale. The drawn and pixelated looks stay in
+the mockup as the record, not in the game. The owner's words also count as the go-ahead to start
+section 1 of `tasks.md` (the kit in the game).

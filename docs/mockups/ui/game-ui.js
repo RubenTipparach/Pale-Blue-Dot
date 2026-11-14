@@ -28,7 +28,7 @@
       OAK.map((n) => `  --o-${n}: url(${L.oak}${n}.png);`).join('\n') + '\n}\n';
   }
   document.getElementById('lookvars').textContent = css;
-  let LOOK = 'drawn';
+  let LOOK = 'smooth'; // the owner's decision, 2026-11-14: "Smooth is the best"
   try { const v = localStorage.getItem('pbd-ui-look'); if (LOOKS[v]) LOOK = v; } catch (e) { /* storage blocked: default look */ }
   function setLook(l, remember) {
     if (!LOOKS[l]) return;
