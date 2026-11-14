@@ -51,6 +51,7 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 | M19 | Kestrel, Tern and Loon | `vehicles.html` | vehicles, vehicle-models | Approved for game, recorded: approved, and the Rust port built (vehicles design) | https://claude.ai/artifact/UJebv7EdJUg1NLpvfVHi3D |
 | M20 | Pits, Plants and Power | `industry.html` | none yet | Drafted (2026-11-12; version 2, GPU screenshot gate not run) | https://claude.ai/artifact/JBcP2Js3bdQ2uApN3xUnHV |
 | M21 | Rockets to Starships | `ship-tiers.html` | ship-tiers | Drafted (2026-11-12; GPU screenshot gate not run: mockup work moved off the desktop during perf tuning) | https://claude.ai/artifact/2Sb7mNRv4wauJh8WFoR9eD |
+| M25 | Pale Blue Dot Sounds | `sounds.html` | audio-and-ambience | Drafted (2026-11-14; the owner listens and keeps or sends back each take) | https://claude.ai/artifact/AmHnQnrzU4bJhFtDDrSjnc |
 
 The thirteen of 2026-11-12 were published as one batch. Their commit (`d468860`) says "Fourteen",
 but it names thirteen subjects, and thirteen pages were published.

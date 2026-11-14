@@ -45,8 +45,9 @@
   (2026-11-14, written by `gen_sfx_page.py`, 191 files grouped by where they
   are heard, each with what it is and its source, light and dark, phone
   width), its MP3s are in `docs/mockups/sounds/` and its `files` map is
-  `docs/mockups/sounds.files.json`; publishing, the tracker row and the
-  owner's listen are still to come.
+  `docs/mockups/sounds.files.json`; published 2026-11-14 at
+  https://claude.ai/artifact/AmHnQnrzU4bJhFtDDrSjnc and on the tracker as M25;
+  the owner's listen is still to come.
 
 ## 3. The rules (`pbd_core::audio`)
 
