@@ -37,3 +37,13 @@ drawer is always open.
 first open frame without warming, so every capture logs late pipelines, before
 as after. The kit adds one, `ui_texture_slice_pipeline`. See the real-time run
 below for a launch that warms.
+
+**The real-time run.** `realtime-pause-after.jpg` is the same pause shot with
+`--real-time --frames 60`: the launch warms behind the loading screen as a
+player's does, then the shot is taken. Its log has `READY playable 112.80 s
+... (warm 90.23 s, 78 pipelines)` and one `LATE_PIPELINE` after it,
+`screenshot-to-screen`, the capture's own instrument. No UI pipeline compiles
+late: the kit's `ui_texture_slice_pipeline` is compiled during the warm by the
+loading slab's sliced bar, on the game's camera. On lavapipe the warm ran
+into its 90 s cap rather than going quiet, so this is a check, not a proof;
+the owner's desktop run is the proof.
