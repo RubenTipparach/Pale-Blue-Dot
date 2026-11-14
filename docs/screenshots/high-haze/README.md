@@ -70,3 +70,11 @@ readable).
 m (outside) above the ground with the follow-up. Inside the shell the far sea
 at the limb is dark slate under the ground's own haze; it is not this
 change's and is noted in the design.
+
+## The blue tint back, over 200 m (owner, 2026-11-14)
+
+`handover-200m.jpg`: the same view from 875 m (inside the shell) through 895,
+935, 985, 1035 and 1100 m above the ground (11 to 216 m past the shell's top,
+which is 884 m above the ground here), then 1800 m before `high-haze` and now:
+the column fades in over 200 m past the shell to the original blue tint, and
+from there on matches the look before this change.

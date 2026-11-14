@@ -6,4 +6,5 @@
 - [x] 4. The before and after ladder at the owner's spot (600-2000 m, 3000 m, 9000 m), its contact sheet and the ground patch's numbers in `docs/screenshots/high-haze/`
 - [x] 5. `cargo fmt --all -- --check`, `openspec validate high-haze`
 - [x] 7. The limb follow-up: the hand-over lifted toward the limb, shots in `docs/screenshots/high-haze/limb-*`
+- [x] 8. The owner's 200 m hand-over to the original blue tint, `handover-200m.jpg`
 - [ ] 6. The step's video (held for the batch, `CLAUDE.md`)

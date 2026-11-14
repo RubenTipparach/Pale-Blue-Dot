@@ -86,3 +86,16 @@ limb's haze, where the ground's own haze is already thickest. Verified by
 the ladder through the crossing (shots below the shell, at it and past it)
 and the limb at 1200, 1800 and 3000 m. Recommendation taken (ask only with
 screenshots).
+
+## The owner's call: the blue tint back, over 200 m (2026-11-14)
+
+The owner: "I noticed you removed the blue tint form 900m mark I think It
+should be there but transition to it over 200 m transition". So the look
+past the shell is the original one, the dome's whole column with its
+un-normalised Rayleigh phase, the blue tint, and only the switch is gone:
+from the shell's top the column fades in over the next 200 m
+(`GROUND_HANDOVER_M`), a smoothstep, and the ground's sky-coloured haze
+(`GROUND_RAYLEIGH_GAIN`) mixes back to the full gain along the same ramp.
+This replaces decisions 1 and 2's exponential hand-over and normalised
+phase, and the limb follow-up above with them (at full hand-over the limb has
+its whole column again).

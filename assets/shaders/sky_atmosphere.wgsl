@@ -43,11 +43,12 @@ const SUN_COS_INNER: f32 = 0.999975;
 const SUN_COLOUR: vec3<f32> = vec3<f32>(1.0,0.93,0.80);
 
 // Over the ground from above the shell (`high-haze`): the Rayleigh phase's
-// 1 / (4 pi), the opacity from which the gain rises back to the sky's own, and
-// the ground haze's scale height (`air` in `finish`, `distance_fog`).
+// 1 / (4 pi), the opacity from which the gain rises back to the sky's own,
+// and the climb past the shell's top over which the column fades in (the
+// owner: "transition to it over 200 m").
 const GROUND_RAYLEIGH_GAIN: f32 = 0.0795775;
 const GROUND_GAIN_FROM: f32 = 0.3;
-const GROUND_HAZE_HEIGHT_M: f32 = 1050.0;
+const GROUND_HANDOVER_M: f32 = 200.0;
 fn sun_visibility(p: vec3<f32>, sun: vec3<f32>) -> f32 {
     let along_sun = dot(p,sun);
     if (along_sun >= 0.0) { return 1.0; }
@@ -122,8 +123,12 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     // to the sky's colour instead, its normalised phase, and meets the sky's
     // own light toward the limb, where the path is long and the opacity nears
     // its cap.
+    // The hand-over: from the shell's top the column fades in over
+    // GROUND_HANDOVER_M, and with it the haze's colour goes from the sky's to
+    // the dome's own blue tint, the look the owner kept.
+    let handover = smoothstep(0.0,GROUND_HANDOVER_M,max(altitude-shell,0.0));
     let rayleigh_gain = select(1.0,
-        mix(GROUND_RAYLEIGH_GAIN,1.0,smoothstep(GROUND_GAIN_FROM,0.94,column_opacity)),
+        mix(mix(GROUND_RAYLEIGH_GAIN,1.0,smoothstep(GROUND_GAIN_FROM,0.94,column_opacity)),1.0,handover),
         over_ground);
     var scattered = integrated*(beta_r*rayleigh_phase*rayleigh_gain+vec3<f32>(beta_m*mie_phase))*sky.sun.w;
 
@@ -167,19 +172,12 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     let sun_light = SUN_COLOUR*sky.sun.w*(disc*limb+glow)*shadowed;
     scattered += sun_light;
     opacity = max(opacity,disc*shadowed);
-    // The hand-over (`high-haze`): the ground's haze thins as
-    // exp(-h / GROUND_HAZE_HEIGHT_M) of the eye's height, and over the ground
-    // the column takes up what it gives away past the shell, from nothing at
-    // the shell's top to all of it from orbit. Nothing switches on in a frame.
-    // Toward the limb the column is the sky's own light at every height: it
-    // was never the veil, and without it the far sea showed its own grazing
-    // colour as an olive rim.
+    // Over the ground the column comes in with the hand-over, from nothing
+    // at the shell's top to the whole of it 200 m on: nothing switches on in
+    // a frame.
     if (over_ground) {
-        let past = max(altitude-shell,0.0);
-        let take = mix(1.0-exp(-past/GROUND_HAZE_HEIGHT_M),1.0,
-            smoothstep(GROUND_GAIN_FROM,0.94,column_opacity));
-        scattered *= take;
-        opacity *= take;
+        scattered *= handover;
+        opacity *= handover;
     }
     return vec4<f32>(max(scattered,vec3<f32>(0.0)),opacity);
 }
