@@ -595,11 +595,15 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
     sc.addEventListener('keyup', (e) => { S.keys[e.code] = false; });
     sc.addEventListener('blur', () => { S.keys = {}; });
     // mouse: pointer lock on click; drag to look where the lock is refused
+    // The game UI's layer lies over the whole canvas, so presses are taken on the scene and left to
+    // the UI only where they land on one of its controls (a slot, a button, a panel).
     let drag = null;
-    canvas.addEventListener('mousedown', (e) => {
+    const onControl = (t) => t !== canvas && t !== ui && !!(t.closest && t.closest('.slots, button, input, .nine, [data-act], .playstart, .hint'));
+    sc.addEventListener('mousedown', (e) => {
       sc.focus({ preventScroll: true });
       if (S.touch) return; // touch plays with the on-screen controls
       if (S.ui.menuOpen) return;
+      if (!S.locked && onControl(e.target)) return;
       if (S.locked) { if (e.button === 0) dig(); if (e.button === 2) place(); return; }
       drag = { x: e.clientX, y: e.clientY, moved: 0, b: e.button };
     });
@@ -616,7 +620,7 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
         if (d.b === 0) dig(); if (d.b === 2) place();
       }
     });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    sc.addEventListener('contextmenu', (e) => { if (!S.ui.menuOpen) e.preventDefault(); });
     document.addEventListener('pointerlockchange', () => {
       const was = S.locked; S.locked = document.pointerLockElement === canvas;
       if (was && !S.locked && !S.menuRelease && !S.ui.menuOpen) S.ui.go('pause'); // Esc while walking: the browser takes it to free the mouse
