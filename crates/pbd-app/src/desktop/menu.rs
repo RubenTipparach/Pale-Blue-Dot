@@ -732,7 +732,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                                         .with_children(
                                             |caps| {
                                                 for key in binding.keys {
-                                                    key_cap(caps, kit, &key.label());
+                                                    key_cap(caps, kit, key.label());
                                                 }
                                             },
                                         );

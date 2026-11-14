@@ -324,7 +324,7 @@ pub fn paint_icon(
 
 /// Repaint the row from the store. Everything a slot shows is derived here, so
 /// the store stays the one place that knows what is carried.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn update(
     slots: Res<Hotbar>,
     icons: Option<Res<ItemIcons>>,

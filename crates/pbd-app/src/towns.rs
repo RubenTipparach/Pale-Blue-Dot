@@ -1600,7 +1600,8 @@ pub fn casting(laid: &Laid, dressing_cascades: usize) -> TownCasting {
     }
     // By chunk: its cascades, then the cell its centroid is in. A BTreeMap,
     // so the order is the same on every run.
-    let mut by_chunk: BTreeMap<(u8, [i32; 3]), Vec<[[f32; 3]; 3]>> = BTreeMap::new();
+    type Triangle = [[f32; 3]; 3];
+    let mut by_chunk: BTreeMap<(u8, [i32; 3]), Vec<Triangle>> = BTreeMap::new();
     for (t, cascades) in triangles {
         let centre = (Vec3::from(t[0]) + Vec3::from(t[1]) + Vec3::from(t[2])) / 3.0;
         let cell = (centre / CASTER_CHUNK_M).floor().as_ivec3().to_array();
