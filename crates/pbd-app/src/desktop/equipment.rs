@@ -227,7 +227,9 @@ pub struct ToolSlotCell;
 
 /// What the tool slot's tooltip says: the tool in hand and what it is for.
 pub fn hand_tip(held: Option<Tool>) -> String {
-    let (name, purpose) = held.map_or(("Bare hands", "breaks nothing"), |t| (t.name(), t.purpose()));
+    let (name, purpose) = held.map_or(("Bare hands", "breaks nothing"), |t| {
+        (t.name(), t.purpose())
+    });
     format!("{name}: {purpose}")
 }
 

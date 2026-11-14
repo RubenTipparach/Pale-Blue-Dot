@@ -13,13 +13,13 @@
 //! node is still laid out and still PICKED, so an invisible panel goes on
 //! swallowing clicks over the middle of the screen for as long as it is shut.
 
+use bevy::ui::RelativeCursorPosition;
 use bevy::{
     app::AppExit,
     ecs::system::SystemParam,
     input::keyboard::{Key, KeyboardInput},
     prelude::*,
 };
-use bevy::ui::RelativeCursorPosition;
 use pbd_app::controls::{self, BINDINGS, KeyBinds, MenuOpen, Tab};
 use pbd_app::saves::{self, Slot, WorldSave};
 use pbd_app::settings::{PlayerSettings, SettingsFile};
@@ -1917,10 +1917,22 @@ mod tests {
         assert_eq!(nearest_step(0.49, 5), 2);
         let off = with_step(MenuAction::FrameLimit, player, 0);
         assert_eq!(off.frame_limit, FrameLimit::Off);
-        assert_eq!(with_step(MenuAction::FrameLimit, player, 2).frame_limit, FrameLimit::Fps120);
-        assert_eq!(with_step(MenuAction::RenderScale, player, 0).render_scale, 50);
-        assert_eq!(with_step(MenuAction::RenderScale, player, 4).render_scale, 100);
-        assert_eq!(settings_value(MenuAction::FrameLimit, &off).as_deref(), Some("OFF"));
+        assert_eq!(
+            with_step(MenuAction::FrameLimit, player, 2).frame_limit,
+            FrameLimit::Fps120
+        );
+        assert_eq!(
+            with_step(MenuAction::RenderScale, player, 0).render_scale,
+            50
+        );
+        assert_eq!(
+            with_step(MenuAction::RenderScale, player, 4).render_scale,
+            100
+        );
+        assert_eq!(
+            settings_value(MenuAction::FrameLimit, &off).as_deref(),
+            Some("OFF")
+        );
         // Every offered value is a step, and every step an offered value.
         for scale in pbd_app::settings::SCALES {
             assert!(scale_steps().contains(&scale));
@@ -1953,13 +1965,19 @@ mod tests {
             app.update();
         };
         press(&mut app, KeyCode::Lang1);
-        assert!(app.world().resource::<Rebinding>().0.is_some(), "still waiting");
+        assert!(
+            app.world().resource::<Rebinding>().0.is_some(),
+            "still waiting"
+        );
         press(&mut app, KeyCode::KeyE);
         assert_eq!(app.world().resource::<Rebinding>().0, None);
         let sprint = controls::slots()
             .find(|s| s.name() == "on_foot:ShiftLeft")
             .unwrap();
-        assert_eq!(app.world().resource::<KeyBinds>().key(&sprint), KeyCode::KeyE);
+        assert_eq!(
+            app.world().resource::<KeyBinds>().key(&sprint),
+            KeyCode::KeyE
+        );
         assert!(
             !app.world()
                 .resource::<ButtonInput<KeyCode>>()
@@ -1976,7 +1994,9 @@ mod tests {
                 .just_pressed(KeyCode::Escape),
             "and is consumed, so the page does not step back"
         );
-        let door = controls::slots().find(|s| s.name() == "hands:KeyE").unwrap();
+        let door = controls::slots()
+            .find(|s| s.name() == "hands:KeyE")
+            .unwrap();
         assert_eq!(app.world().resource::<KeyBinds>().key(&door), KeyCode::KeyE);
 
         // Leaving the settings stops a wait.
@@ -2021,7 +2041,10 @@ mod tests {
         app.update();
         let world = app.world_mut();
         let flagged = also(world);
-        assert!(flagged.contains(&"also: open or shut a door".to_string()), "{flagged:?}");
+        assert!(
+            flagged.contains(&"also: open or shut a door".to_string()),
+            "{flagged:?}"
+        );
         assert!(flagged.contains(&"also: sprint".to_string()), "{flagged:?}");
         // The rebound cap reads its new key.
         let labels: Vec<String> = world

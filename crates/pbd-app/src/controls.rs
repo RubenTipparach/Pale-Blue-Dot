@@ -303,7 +303,13 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub const ALL: [Tab; 5] = [Tab::OnFoot, Tab::Hands, Tab::Flying, Tab::Vehicles, Tab::Menus];
+    pub const ALL: [Tab; 5] = [
+        Tab::OnFoot,
+        Tab::Hands,
+        Tab::Flying,
+        Tab::Vehicles,
+        Tab::Menus,
+    ];
 
     /// The sub-tab's label, in the kit's font.
     pub fn label(self) -> &'static str {
@@ -362,7 +368,9 @@ impl When {
 
     /// Whether two groups' keys can be read at the same moment.
     pub fn together(self, other: When) -> bool {
-        Live::ALL.iter().any(|&now| self.live(now) && other.live(now))
+        Live::ALL
+            .iter()
+            .any(|&now| self.live(now) && other.live(now))
     }
 }
 
@@ -430,7 +438,6 @@ const HANDS: [Binding; 6] = [
         "hold for the tools; the wheel picks one",
     ),
 ];
-
 
 const FLYING: [Binding; 6] = [
     row(&WASD, " ", "move"),
@@ -676,10 +683,7 @@ impl KeyBinds {
         let mut binds = Self::default();
         let mut skipped = Vec::new();
         for (slot, key) in names {
-            match (
-                known.iter().find(|s| s.name() == *slot),
-                key_named(key),
-            ) {
+            match (known.iter().find(|s| s.name() == *slot), key_named(key)) {
                 (Some(slot), Some(key)) => binds.set(slot, key),
                 _ => skipped.push(format!("{slot} = {key}")),
             }
@@ -829,7 +833,10 @@ pub fn remapped(
     owned
         .iter()
         .map(|&key| {
-            let mut stands_for = pairs.iter().filter(|(default, _)| *default == key).peekable();
+            let mut stands_for = pairs
+                .iter()
+                .filter(|(default, _)| *default == key)
+                .peekable();
             let down = if stands_for.peek().is_some() {
                 stands_for.any(|(_, by)| physical.pressed(*by))
             } else {
@@ -1107,7 +1114,11 @@ mod tests {
         assert!(names.contains(&"flying:KeyQ".to_string()));
         assert!(names.contains(&"on_foot:ShiftLeft".to_string()));
         // Not slots: the mouse, the wheel, the number row's range and Esc.
-        assert!(!names.iter().any(|n| n.contains("Digit") || n.contains("Escape")));
+        assert!(
+            !names
+                .iter()
+                .any(|n| n.contains("Digit") || n.contains("Escape"))
+        );
         // Every default a slot names is a key a cap can print and the file
         // can write back.
         for slot in slots() {
@@ -1179,7 +1190,10 @@ mod tests {
         let roll = slots().find(|s| s.name() == "flying:KeyQ").unwrap();
         binds.set(&roll, KeyCode::ArrowLeft);
         let names = binds.to_names();
-        assert_eq!(names.get("flying:KeyQ").map(String::as_str), Some("ArrowLeft"));
+        assert_eq!(
+            names.get("flying:KeyQ").map(String::as_str),
+            Some("ArrowLeft")
+        );
         let (back, skipped) = KeyBinds::from_names(&names);
         assert_eq!(back, binds);
         assert!(skipped.is_empty());
@@ -1189,7 +1203,10 @@ mod tests {
         let (read, skipped) = KeyBinds::from_names(&later);
         assert_eq!(read, binds);
         assert_eq!(skipped.len(), 2);
-        assert_eq!(line("FLYING", &binds).split("   ").nth(2), Some("← / E roll"));
+        assert_eq!(
+            line("FLYING", &binds).split("   ").nth(2),
+            Some("← / E roll")
+        );
     }
 
     /// The remap: a moved slot's default key is down while its new key is,
@@ -1198,7 +1215,7 @@ mod tests {
     /// touched at all.
     #[test]
     fn a_rebound_key_presses_the_default_its_readers_read() {
-        use bevy::input::{ButtonState, keyboard::KeyboardInput, keyboard::Key as Logical};
+        use bevy::input::{ButtonState, keyboard::Key as Logical, keyboard::KeyboardInput};
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, bevy::input::InputPlugin))
             .insert_resource(MenuOpen(false))
@@ -1207,10 +1224,7 @@ mod tests {
                 ..default()
             })
             .init_resource::<KeyBinds>()
-            .add_systems(
-                PreUpdate,
-                remap_keys.after(bevy::input::InputSystems),
-            );
+            .add_systems(PreUpdate, remap_keys.after(bevy::input::InputSystems));
         let send = |app: &mut App, key: KeyCode, down: bool| {
             app.world_mut().write_message(KeyboardInput {
                 key_code: key,
@@ -1233,7 +1247,10 @@ mod tests {
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(KeyCode::KeyW);
         app.update();
-        assert!(keys(&app).pressed(KeyCode::KeyW), "untouched with no rebinds");
+        assert!(
+            keys(&app).pressed(KeyCode::KeyW),
+            "untouched with no rebinds"
+        );
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .release(KeyCode::KeyW);
@@ -1253,7 +1270,10 @@ mod tests {
         assert!(keys(&app).just_released(KeyCode::KeyE) && !keys(&app).pressed(KeyCode::KeyE));
         send(&mut app, KeyCode::KeyE, true);
         app.update();
-        assert!(!keys(&app).pressed(KeyCode::KeyE), "E no longer opens it on foot");
+        assert!(
+            !keys(&app).pressed(KeyCode::KeyE),
+            "E no longer opens it on foot"
+        );
         assert!(!keys(&app).just_pressed(KeyCode::KeyE));
 
         // Flying, E is the roll's own again, held as it is.
@@ -1273,6 +1293,9 @@ mod tests {
         send(&mut app, KeyCode::KeyK, true);
         app.update();
         assert!(keys(&app).just_pressed(KeyCode::KeyK));
-        assert!(!keys(&app).pressed(KeyCode::KeyE), "the menu reads the real keys");
+        assert!(
+            !keys(&app).pressed(KeyCode::KeyE),
+            "the menu reads the real keys"
+        );
     }
 }

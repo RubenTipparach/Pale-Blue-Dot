@@ -559,12 +559,18 @@ mod tests {
             item: Item::Tool(Tool::Rod),
             count: 1,
         };
-        assert_eq!(stack_tip(Some(rod), &items), "Fishing rod: cast, hook, reel");
+        assert_eq!(
+            stack_tip(Some(rod), &items),
+            "Fishing rod: cast, hook, reel"
+        );
         let char_ = Stack {
             item: Item::Fish(1),
             count: 3,
         };
         assert_eq!(stack_tip(Some(char_), &items), "Char x 3");
-        assert_eq!(super::super::equipment::hand_tip(None), "Bare hands: breaks nothing");
+        assert_eq!(
+            super::super::equipment::hand_tip(None),
+            "Bare hands: breaks nothing"
+        );
     }
 }

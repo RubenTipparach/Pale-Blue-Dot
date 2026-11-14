@@ -11,6 +11,7 @@
 //! ([`Overrides`]), so a picture or a perf number is a function of its command
 //! line, whatever the player last chose.
 
+use crate::controls::KeyBinds;
 use bevy::{
     camera::{ImageRenderTarget, RenderTarget},
     core_pipeline::tonemapping::{DebandDither, Tonemapping},
@@ -20,7 +21,6 @@ use bevy::{
     ui::IsDefaultUiCamera,
     window::{PrimaryWindow, WindowRef},
 };
-use crate::controls::KeyBinds;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

@@ -1032,7 +1032,11 @@ pub fn tooltip_at(cursor: Vec2, window: f32, scale: f32) -> (Option<f32>, Option
     let scale = scale.max(1e-3);
     let top = cursor.y / scale + TOOLTIP_OFFSET;
     if cursor.x > window * 0.75 {
-        (None, Some((window - cursor.x) / scale + TOOLTIP_OFFSET), top)
+        (
+            None,
+            Some((window - cursor.x) / scale + TOOLTIP_OFFSET),
+            top,
+        )
     } else {
         (Some(cursor.x / scale + TOOLTIP_OFFSET), None, top)
     }
@@ -1296,8 +1300,14 @@ mod tests {
     /// the pointer.
     #[test]
     fn a_tooltip_shows_by_the_pointer_only_while_a_menu_holds_it() {
-        assert_eq!(tooltip_at(Vec2::new(100.0, 60.0), 1440.0, 2.0), (Some(58.0), None, 38.0));
-        assert_eq!(tooltip_at(Vec2::new(1400.0, 60.0), 1440.0, 2.0), (None, Some(28.0), 38.0));
+        assert_eq!(
+            tooltip_at(Vec2::new(100.0, 60.0), 1440.0, 2.0),
+            (Some(58.0), None, 38.0)
+        );
+        assert_eq!(
+            tooltip_at(Vec2::new(1400.0, 60.0), 1440.0, 2.0),
+            (None, Some(28.0), 38.0)
+        );
 
         let mut app = App::new();
         install_bare(&mut app);
@@ -1333,11 +1343,18 @@ mod tests {
                 .clone();
             (node.display, node.left, words)
         };
-        assert_eq!(shown(&mut app), (Display::Flex, px(58.0), "Stone x 12".to_string()));
-        app.world_mut().resource_mut::<crate::controls::MenuOpen>().0 = false;
+        assert_eq!(
+            shown(&mut app),
+            (Display::Flex, px(58.0), "Stone x 12".to_string())
+        );
+        app.world_mut()
+            .resource_mut::<crate::controls::MenuOpen>()
+            .0 = false;
         app.update();
         assert_eq!(shown(&mut app).0, Display::None, "no tooltip in play");
-        app.world_mut().resource_mut::<crate::controls::MenuOpen>().0 = true;
+        app.world_mut()
+            .resource_mut::<crate::controls::MenuOpen>()
+            .0 = true;
         *app.world_mut().get_mut::<Interaction>(slot).unwrap() = Interaction::None;
         app.update();
         assert_eq!(shown(&mut app).0, Display::None, "nothing hovered");

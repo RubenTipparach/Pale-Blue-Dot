@@ -1294,7 +1294,10 @@ pub fn run(args: &[String]) {
         let mut names = keys.to_names();
         names.extend(launch.rebinds.iter().cloned());
         let (laid, skipped) = pbd_app::controls::KeyBinds::from_names(&names);
-        assert!(skipped.is_empty(), "--rebind names no slot or key: {skipped:?}");
+        assert!(
+            skipped.is_empty(),
+            "--rebind names no slot or key: {skipped:?}"
+        );
         keys = laid;
     }
     if !keys.is_empty() {
