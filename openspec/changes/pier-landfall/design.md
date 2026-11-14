@@ -112,6 +112,9 @@ What it costs:
   harbours, and the open question this change leaves (the bank shot):
   planks on the sand bar as now, a gap in the planks where the bank is, or
   a short stair. Recommendation: leave it until the owner has seen the shot.
+  **Answered (W20), by the owner's rule of 2026-11-14:** "where theres a
+  step on a path there should be staris". A stair up and one down, built in
+  `path-stairs`.
 
 The cut is one function, `harbour::stretches`, used both to cut the pier and
 by the dressing's stand query (`dressing::stand`, through `harbour::top_at`),
