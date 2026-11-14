@@ -143,6 +143,7 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   <details open><summary>Layers</summary><div class="body" id="layers"></div></details>
   <details open><summary>Trees and plants</summary><div class="body">
     <div class="field"><label for="treeStyle">Tree geometry</label><select id="treeStyle"><option value="detail">Detailed: parametric trunk, branches, leaf cards (proposal)</option><option value="hex">Tenebris hex prisms, game textures (what the game draws)</option></select></div>
+    <div class="field"><label for="grassStyle">Grass</label><select id="grassStyle"><option value="blades">Blades cut from the ground tile (proposal)</option><option value="tufts">Pixel tufts, from the Stone and Timber Play demo</option></select></div>
     <div class="field"><label for="treeScale">Tree scale</label><output id="treeScaleOut"></output><input type="range" id="treeScale" min="0.5" max="1.6" step="0.01" value="1"></div>
     <div class="field"><label for="plantScale">Plant and clutter scale</label><output id="plantScaleOut"></output><input type="range" id="plantScale" min="0.5" max="2" step="0.01" value="1"></div>
     <div class="field"><label for="colVar">Colour variation</label><output id="colVarOut"></output><input type="range" id="colVar" min="0" max="1" step="0.01" value="0.35"></div>
@@ -196,6 +197,7 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   <p><b>The game's own, wherever it has one</b> (byte-identical copies in <code>docs/mockups/foliage/game/</code>, sources named in its README):</p>
   <ul>
     <li><b>Terrain:</b> <code>assets/tilesets/atlas.png</code>, sampled as <code>planet_surface.wgsl</code>'s <code>pixel_tile</code> does (32 texels a tile, nearest). Each biome draws its game sheet: the top is tile (0,0); a wall is the sod-into-earth side (1,0) for its first metre, the earth (2,0) down to 4 m, then the stone (3,0); sand biomes show their own sand to 4 m; snow is the tundra sheet's (2,2). Top UVs are the game's: the cell's local position over 1.5 tile widths.</li>
+    <li><b>Grass: pixel tufts</b> (owner, 2026-11-14: "this grass is actually better than what we have in the game ... add it to the foliage pack, add a toggle for me to try this alternate grass in the different biomes"). The Grass switch swaps the blades cut from the ground tile for the Play demo's tufts (Stone and Timber, <code>ui/play.js</code>): nine one-pixel blades on a 16 px card, dark root to light tip, on two crossed cards 0.8 m across and 0.6 m tall, sampled nearest. Each biome has its own three-tone ramp, the temperate one being the demo's greens; they still sway in the wind and turn to straw under snow. Nothing here is in the game.</li>
     <li><b>The game's trees</b> (Tree geometry: Tenebris hex prisms): wood is the biome sheet's tile (2,1) and leaves its (0,2), as material codes 8 and 9 are. The detailed trees use the same bark and leaf tiles, plus <code>needles</code>, <code>leaves</code> and <code>sage</code> from <code>assets/textures/settlement/</code>.</li>
     <li><b>Grass blades</b> crop a vertical strip 0.18 wide of their ground tile, as the clutter pass does. Rocks and pebbles are the sheet's stone, logs its bark, reeds and litter the settlement <code>reed</code> and <code>litter</code>, the lanterns <code>timber</code> and <code>iron</code>. The fungal forest is the game's sporewood sheet (stalk, cap skin, spore clusters), the crystals the frozen wastes sheet's ice and frost crystals, the kelp the ocean sheet's kelp mat.</li>
   </ul>
@@ -338,7 +340,7 @@ const LAYER_DEFS = [
   ["fireflies", "Fireflies and spores", "moving lights"],
 ];
 const DEFAULTS = {
-  biome: "temperate", season: "summer", time: 16.5, treeStyle: "detail", treeScale: 1, plantScale: 1, colVar: 0.35,
+  biome: "temperate", season: "summer", time: 16.5, treeStyle: "detail", grassStyle: "blades", treeScale: 1, plantScale: 1, colVar: 0.35,
   wind: 0.35, gust: 0.5, windDir: 60, lodMode: "timed", near: 22, mid: 45, draw: 80, fadeW: 0.3, lodVis: false, maskVis: false, atlasVis: false, patch: 26,
   layers: Object.fromEntries(LAYER_DEFS.map(([k]) => [k, { on: true, dens: 1 }])),
 };
@@ -920,6 +922,31 @@ function grassTuft(rnd, n = 9) {
   }
   return g;
 }
+// The Play demo's grass (docs/mockups/ui/play.js, tuftTex): a 16 px tuft of nine one-pixel blades,
+// dark at the root and light at the tip, cut out with alpha, on two crossed cards. Owner, 2026-11-14:
+// "this grass is actually better than what we have in the game ... add a toggle for me to try this
+// alternate grass in the different biomes". Each biome gets its own three-tone ramp; temperate is
+// the demo's own.
+const TUFT_RAMP = {
+  temperate: ["#05582d", "#559642", "#9bb675"], jungle: ["#0a4a24", "#2f7d32", "#6fb043"],
+  savanna: ["#6b5a1e", "#a8913a", "#d8c070"], taiga: ["#1d3f2c", "#3d6a48", "#7c9a6a"],
+  desert: ["#5c5a2a", "#8a8448", "#b9b07a"], swamp: ["#2f3d16", "#5a6a26", "#8c9446"],
+  fungal: ["#2a1a4a", "#6a3a9a", "#c08ae0"], crystal: ["#2a4a6a", "#5a8ab8", "#a8d0f0"],
+  kelp: ["#0e4a3e", "#2a7a64", "#6ab8a0"],
+};
+const tuftHash = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
+function tuftTex(biome, v) {
+  const key = "tuft:" + biome + ":" + v;
+  if (TEX[key]) return key;
+  const ramp = TUFT_RAMP[biome] || TUFT_RAMP.temperate;
+  const cv = document.createElement("canvas"); cv.width = cv.height = 16; const g = cv.getContext("2d");
+  for (let i = 0; i < 9; i++) {
+    const x = 1 + Math.floor(tuftHash(i, 2 + v * 7) * 14), hgt = 5 + Math.floor(tuftHash(i, 5 + v * 3) * 9);
+    for (let y = 0; y < hgt; y++) { g.fillStyle = ramp[Math.min(2, Math.floor(y / 4))]; g.fillRect(x + (y > 6 && i % 2 ? 1 : 0), 15 - y, 1, 1); }
+  }
+  const t = new THREE.CanvasTexture(cv); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  TEX[key] = t; return key;
+}
 function crossedCards(w, h, n = 2, yOff = 0) {
   const g = new GB();
   for (let i = 0; i < n; i++) { const a = i / n * Math.PI, dx = Math.cos(a) * w / 2, dz = Math.sin(a) * w / 2, nm = [0, 1, 0];
@@ -1278,7 +1305,12 @@ function buildLayers(B) {
   if (ON("grass")) {
     const L = makeLayer("grass", () => [S.near * 0.8, S.mid * 0.65]);
     const vars = [];
-    for (let v = 0; v < 3; v++) vars.push([
+    if (S.grassStyle === "tufts") for (let v = 0; v < 3; v++) {
+      // the demo's tuft: 0.8 m across, 0.6 m tall, near and mid alike (it is already a card)
+      const o = { tex: tuftTex(S.biome, v), alpha: true, card: true, grass: true, keep: G.uKeepGrass, windAmp: 0.15, windH: 0.6, upN: 1, snowable: B.snow };
+      vars.push([nb(crossedCards(0.8, 0.6, 2), mat("tuft:" + S.biome + ":" + v, o), 0), nb(crossedCards(0.8, 0.6, 2), mat("tuft:" + S.biome + ":" + v, Object.assign({ level: 1 }, o)), 1)]);
+    }
+    else for (let v = 0; v < 3; v++) vars.push([
       nb(grassTuft(rngOf(700 + v), 9), mat("blade:" + B.sheet + ":" + ground, { at: [B.sheet, ground], card: true, grass: true, keep: G.uKeepGrass, windAmp: 0.18, windH: 0.6, upN: 1, snowable: B.snow }), 0),
       nb(crossedCards(0.9, 0.55, 2), mat("gcard:" + B.sheet + ":" + ground, { at: [B.sheet, ground], card: true, grass: true, keep: G.uKeepGrass, mask: 3, windAmp: 0.15, windH: 0.6, upN: 1, snowable: B.snow, level: 1 }), 1)]);
     for (const c of CELLS) {
@@ -1749,7 +1781,7 @@ function applyLive() {
 function syncUI() {
   for (const [k, fmt] of LIVE) { $(k).value = S[k]; $(k + "Out").textContent = fmt(+S[k]); }
   $("time").value = S.time; $("timeOut").textContent = fmtTime(S.time);
-  $("treeStyle").value = S.treeStyle; $("lodMode").value = S.lodMode; $("lodVis").checked = S.lodVis; $("maskVis").checked = S.maskVis; $("atlasVis").checked = !!S.atlasVis; $("patch").value = String(S.patch);
+  $("treeStyle").value = S.treeStyle; $("grassStyle").value = S.grassStyle || "blades"; $("lodMode").value = S.lodMode; $("lodVis").checked = S.lodVis; $("maskVis").checked = S.maskVis; $("atlasVis").checked = !!S.atlasVis; $("patch").value = String(S.patch);
   for (const b of $("season").children) b.setAttribute("aria-pressed", b.dataset.v === S.season);
   for (const b of $("biomes").children) b.setAttribute("aria-pressed", b.dataset.v === S.biome);
   const B = BIOMES[S.biome];
@@ -1767,6 +1799,7 @@ function fmtTime(h) { const H = Math.floor(h) % 24, M = Math.round((h - Math.flo
 for (const [k, fmt] of LIVE) $(k).addEventListener("input", e => { S[k] = +e.target.value; $(k + "Out").textContent = fmt(S[k]); if (k === "near" && S.mid < S.near) S.mid = S.near; if (k === "mid" && S.draw < S.mid) S.draw = S.mid; applyLive(); });
 $("time").addEventListener("input", e => { S.time = +e.target.value; $("timeOut").textContent = fmtTime(S.time); setWhere(); applyLive(); });
 $("treeStyle").onchange = e => { S.treeStyle = e.target.value; syncUI(); rebuild(); };
+$("grassStyle").onchange = e => { S.grassStyle = e.target.value; syncUI(); rebuild(); };
 $("lodMode").onchange = e => { S.lodMode = e.target.value; applyLive(); };
 $("lodVis").onchange = e => { S.lodVis = e.target.checked; applyLive(); };
 $("maskVis").onchange = e => { S.maskVis = e.target.checked; applyLive(); };
@@ -1780,12 +1813,12 @@ function setCamMode(m) {
   if (m === "walk") { CAM.wx = camera.position.x * 0.3; CAM.wz = camera.position.z * 0.3; CAM.wyaw = CAM.yaw + Math.PI; CAM.wpitch = -0.05; }
 }
 for (const b of document.querySelectorAll("[data-preset]")) b.onclick = () => {
-  const p = PRESETS[b.dataset.preset]; const keep = { biome: S.biome, season: S.season, time: S.time, treeStyle: S.treeStyle, patch: S.patch };
+  const p = PRESETS[b.dataset.preset]; const keep = { biome: S.biome, season: S.season, time: S.time, treeStyle: S.treeStyle, grassStyle: S.grassStyle, patch: S.patch };
   Object.assign(S, JSON.parse(JSON.stringify(DEFAULTS)), keep, JSON.parse(JSON.stringify(p)));
   S.layers = Object.assign(JSON.parse(JSON.stringify(DEFAULTS.layers)), p.layers ? JSON.parse(JSON.stringify(p.layers)) : {});
   syncUI(); rebuild(); toast("Preset: " + b.textContent);
 };
-function shareObj() { return { biome: S.biome, season: S.season, time: +S.time.toFixed(2), treeStyle: S.treeStyle, treeScale: S.treeScale, plantScale: S.plantScale, colVar: S.colVar, wind: S.wind, gust: S.gust, windDir: S.windDir, lodMode: S.lodMode, near: S.near, mid: S.mid, draw: S.draw, fadeW: S.fadeW, patch: S.patch, layers: S.layers }; }
+function shareObj() { return { biome: S.biome, season: S.season, time: +S.time.toFixed(2), treeStyle: S.treeStyle, grassStyle: S.grassStyle, treeScale: S.treeScale, plantScale: S.plantScale, colVar: S.colVar, wind: S.wind, gust: S.gust, windDir: S.windDir, lodMode: S.lodMode, near: S.near, mid: S.mid, draw: S.draw, fadeW: S.fadeW, patch: S.patch, layers: S.layers }; }
 let shareEdited = false;
 function updateShare() { if (!shareEdited) $("share").value = JSON.stringify(shareObj(), null, 1); }
 $("share").addEventListener("input", () => { shareEdited = true; });
