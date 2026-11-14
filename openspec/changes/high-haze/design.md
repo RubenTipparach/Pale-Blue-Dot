@@ -99,3 +99,16 @@ from the shell's top the column fades in over the next 200 m
 This replaces decisions 1 and 2's exponential hand-over and normalised
 phase, and the limb follow-up above with them (at full hand-over the limb has
 its whole column again).
+
+## The owner's call: thinner from far away (2026-11-14)
+
+The owner, from orbit with the whole planet in view, beside photographs of
+the Earth from space: "blue titnt is too strong from far away, hard to read
+land from out here. it should read more as blueish green still from a
+distance". The full tint kept past the 200 m hand-over is right just above
+the shell and too strong from afar: from orbit every column over the ground
+is the dome's whole un-normalised in-scatter. So the gain over the ground
+thins again with height past the hand-over, from the full tint toward
+`ORBIT_GROUND_GAIN` between `FAR_FROM_M` and `FAR_TO_M` past the shell (values
+chosen by captures beside the owner's references), while the limb keeps the
+sky's own light (the bright rim the photographs have).

@@ -78,3 +78,11 @@ change's and is noted in the design.
 which is 884 m above the ground here), then 1800 m before `high-haze` and now:
 the column fades in over 200 m past the shell to the original blue tint, and
 from there on matches the look before this change.
+
+## Thinner from far away (owner, 2026-11-14)
+
+`far-thinned.jpg`: the owner's spot at 1100, 3000, 9000 and 20000 m above the
+ground (`--pitch -34, -50, -70, -80`), left the full tint kept past the 200 m
+hand-over, right the tint thinned from 1 km past the shell to a quarter by
+6 km past it. Just above the shell they match; from orbit the land reads
+green and brown with the limb's blue rim kept.

@@ -7,4 +7,5 @@
 - [x] 5. `cargo fmt --all -- --check`, `openspec validate high-haze`
 - [x] 7. The limb follow-up: the hand-over lifted toward the limb, shots in `docs/screenshots/high-haze/limb-*`
 - [x] 8. The owner's 200 m hand-over to the original blue tint, `handover-200m.jpg`
+- [x] 9. Thinner from far away, `far-thinned.jpg`
 - [ ] 6. The step's video (held for the batch, `CLAUDE.md`)
