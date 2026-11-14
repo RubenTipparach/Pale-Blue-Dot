@@ -604,3 +604,144 @@ What differs from section 8's plan, and why:
   clock and the globe overlay on a new World tab. Nothing scrolls off screen.
 - Body text's shadow is one native pixel in ink (`ui_kit::text_shadow`):
   Bevy's default of 4 px read, at scale 2, as a second copy of the line.
+
+## Section 2: Input in sub-tabs with rebinding, sliders, tooltips (written 2026-11-14, before the code)
+
+Written up first, as CLAUDE.md asks; the code follows it. Decision 6 is the
+owner's ("organize the input menu better with tabs or something instead of
+big uber list"); everything in this section beyond the owner's words is a
+recommendation taken (ask only with screenshots).
+
+### The sub-tabs
+
+The Input page gets one row of oak sub-tabs, the settings tabs' own piece:
+**ON FOOT, HANDS, FLYING, VEHICLES, MENUS** (decision 6). Each holds the
+groups of `controls::BINDINGS` that belong to it, a heading per group and one
+row per action, scrolled by the wheel when it is longer than the page:
+
+| Sub-tab | Groups (headings) | Rows |
+| --- | --- | --- |
+| ON FOOT | ON FOOT | move, jump / rise in water, sprint |
+| HANDS | HANDS | open or shut a door, the tool in hand, place, select a slot, step the slots, the tools (G) |
+| FLYING | FLYING, KESTREL | free flight; the Kestrel's pitch, roll, yaw, power, nacelles, assist, wheel brake |
+| VEHICLES | VEHICLES, TERN, LOON, ROWBOAT, COG | board, view, anchor; each boat's own |
+| MENUS | WORLD, SCREEN | map, walk or fly, spawn, weather, noon or midnight; menu, screenshot, frame graph, the guide, the pack |
+
+`BINDINGS` stays the one table: the old ON FOOT group is split in two (ON
+FOOT and HANDS) and the field guide and the pack move to SCREEN, which is a
+regrouping of the same rows and keys; `--help` prints the new headings. The
+two proposed rows of decision 6 (crouch / sink, drop stack) are not added:
+the game has no such actions, and a row for one would be a key that does
+nothing (`controls::tests::a_named_key_is_a_key_something_reads`).
+
+### Rebinding: what can be changed
+
+A **slot** is one keyboard key in one row: `W A S D` is four slots, `SPACE /
+CTRL` two. A slot is named by its group and its default key
+(`"flying:KeyQ"`): within a group no key appears twice (a test), and the
+default key is what the game's readers press, so the name says exactly what
+a rebind replaces. Mouse buttons, the wheel, the number row's `1 - 0` range
+and `ESC` are shown in their caps but are not slots: the mouse is not a key,
+the range is ten readers' keys at once, and Esc is the key that cancels a
+rebind and always opens the menu.
+
+The flow, as the owner put it (no close X; Esc closes):
+- **Click a key cap.** The cap reads `PRESS A KEY`; any other cap or sub-tab
+  or leaving the page cancels it.
+- **Press a key.** The slot takes it. A key with no label in the kit's font
+  (outside `controls::ASSIGNABLE`: letters, digits, F1-F12, the arrows,
+  space, tab, enter, backspace, shift, ctrl, alt, the punctuation the font
+  has, the numpad digits, home, end, insert, delete, page up and down) is not
+  taken and the cap goes on waiting.
+- **Esc cancels**, and is consumed, so it does not also step the screen back.
+- A slot set back to its default key is removed from the file, so a player
+  who never rebinds has an empty list and a file like today's.
+- **A clash is flagged on the row**: when a slot's key is a key another slot
+  reads in a context that is live at the same time, the row says `also:`
+  and the other action. The defaults share keys between contexts on purpose
+  (W is move on foot, pitch in the Kestrel and a sheet in the Tern); those
+  are never live together, so they are not flagged.
+- **RESET TAB** puts the open sub-tab's slots back to their defaults.
+
+### Rebinding: how the game obeys it (one remap, not a rewrite of every reader)
+
+The game reads keys in a dozen systems by their `KeyCode` (`walking.rs`,
+`flight_view/input.rs`, `vehicles.rs`, `weather.rs`, `desktop/*.rs`), and a
+key means different things in different contexts. Rewriting every reader to
+ask an action table would touch every system and its tests. Instead, one
+system, `controls::remap_keys`, runs in `PreUpdate` right after Bevy's input
+systems and before the menu's, and rewrites `ButtonInput<KeyCode>` for the
+keys a rebind touches, so every reader goes on reading its default key:
+
+1. It keeps its own copy of the **physical** keyboard from the
+   `KeyboardInput` messages (and lets every key go on `KeyboardFocusLost`),
+   exactly as Bevy's `keyboard_input_system` does.
+2. It works out the **live context**: aboard a craft of kind K (`Aboard`),
+   else on foot (`WalkingReadout::active`), else flying. Each group says
+   when it is live (`controls::When`): ON FOOT and HANDS on foot; FLYING in
+   free flight; VEHICLES on foot (F boards) and aboard; KESTREL, TERN, LOON,
+   ROWBOAT and COG aboard that kind; WORLD and SCREEN always.
+3. For every default key `c` of a live slot that has been moved, or whose
+   key some live slot now uses, it sets `c`'s pressed, just-pressed and
+   just-released state from the physical keys of the live slots whose
+   default is `c` (an unmoved slot is its own key). A key that is no live
+   slot's default keeps its physical state.
+4. **While a menu is open the remap is off** (every key its physical
+   self), so the menus, the name field and the rebind capture read the real
+   keyboard; and keys it touched last frame but not this one are put back
+   to their physical state.
+
+With no rebinds it touches nothing at all, so a player who never rebinds,
+every `--capture` and every benchmark (which read no settings file) run
+exactly the game of today; the readers' own tests still press the default
+keys directly. What the remap cannot do, on purpose: give one key two
+meanings in the same context except by the clash the row already flags, or
+rebind the mouse.
+
+### Rebinding: the file (old files still load)
+
+`PlayerSettings` stays a small `Copy` value. The rebinds are their own
+resource, `controls::KeyBinds` (slot name to key, a `BTreeMap` so the file
+is written in one order), kept in the same `settings.ron` through the
+existing path (`SettingsFile::keep`, the temporary file and the rename).
+The file goes to **version 3**, which adds `keys: { "flying:KeyQ": "KeyZ" }`
+with a default of none:
+- a file of version 0 to 2 has no `keys` and reads as no rebinds, every
+  other field as before (a test reads a version-2 file);
+- a slot or a key this build does not know (a later build's) is skipped with
+  a warning, not an error, and the rest of the file still loads;
+- a version-3 file read by an older build: serde ignores the unknown `keys`,
+  and `Loaded::writable` already refuses to write a newer file back, so the
+  rebinds survive;
+- a capture or a benchmark (`settings::for_launch` isolated) reads no file
+  and has no rebinds.
+
+### Sliders for the frame limit and the render scale
+
+The two value plaques become the stone groove with the oak grip
+(`menu::slider`, the time and weather bars' own), with the value beside it in
+the kit's font. The values and steps are the plaques' exactly: the frame
+limit OFF, 60, 120 (`FrameLimit`) and the render scale 50, 67, 75, 85, 100
+(`settings::SCALES`, shown low to high). A press or a drag sets the step
+nearest the cursor, and the grip and the lit part of the groove sit at that
+step; the choice is kept through `SettingsFile::keep` as before.
+
+### Tooltips (in the kit)
+
+`ui_kit::Tooltip(String)` on any node with an `Interaction` is the text the
+kit shows while the pointer is over it, in one stone `tooltip` piece that
+follows the cursor (VT323 body text, the 6 px margin), above every panel. It
+shows only while a menu holds the pointer, since in play there is no cursor.
+The slots keep their own tooltips from the store: an empty slot has none, a
+stack its name and count (`Stone x 12`), a tool its name and purpose; the
+pack's thirty, the hotbar row (in the pack and on the HUD, which gets an
+`Interaction` for it) and the tool slot, which says what is in hand.
+
+### The map's drawer stays open (recommendation)
+
+The map's legend drawer stays open by default, as it is. The mockup's
+drawer is shut by default and opened by a plaque; shutting the game's by
+default would change what a player sees on opening the map, so it is a
+**recommendation, not done**: shut by default, opened by a DRAWER plaque on
+the frame and by a key, with the choice remembered for the run. Recorded in
+`tasks.md` section 2 so the owner can take it or leave it.
