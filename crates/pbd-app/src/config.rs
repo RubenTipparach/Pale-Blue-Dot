@@ -670,7 +670,7 @@ impl Default for WeatherSettings {
             cloud_shadow: 0.8,
             cloud_extinction: 0.0115,
             cloud_storm_extinction: 0.03,
-            cloud_night_floor: 0.045,
+            cloud_night_floor: 0.008,
             cloud_sun: 0.55,
             cloud_ambient_sky: 0.9,
             cloud_ambient_ground: 0.35,

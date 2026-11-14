@@ -205,6 +205,60 @@ pub fn sh_irradiance(c: &[[f32; 3]; 9], n: [f32; 3]) -> [f32; 3] {
     [0, 1, 2].map(|i| (0..9).map(|k| c[k][i] * y[k]).sum::<f32>())
 }
 
+/// The sky's mean light from the upper hemisphere, clear and overcast, at
+/// night, with the sun on the horizon and at the zenith: what a cloud is lit
+/// by from the sky (`dusk-clouds` design 1). Rows: night, horizon, zenith.
+pub const CLOUD_SKY_CLEAR: [[f32; 3]; 3] = [
+    [0.0092, 0.0128, 0.0235],
+    [0.0563, 0.0979, 0.1404],
+    [0.0833, 0.1619, 0.2694],
+];
+pub const CLOUD_SKY_OVERCAST: [[f32; 3]; 3] = [
+    [0.0335, 0.0365, 0.0457],
+    [0.0970, 0.1019, 0.1071],
+    [0.1674, 0.1764, 0.1878],
+];
+/// The sun elevations (sines) over which the sky's light comes up from its
+/// night, and over which it goes from the horizon's to the zenith's.
+pub const CLOUD_SKY_TWILIGHT: [f32; 2] = [-0.16, 0.02];
+pub const CLOUD_SKY_RISE: [f32; 2] = [0.0, 0.5];
+
+/// The sky's light on a cloud with the sun at elevation sine `e` and `cover`
+/// clouded: a closed form of the cosine-weighted mean of `sky_radiance` over
+/// the upper hemisphere, cheap enough for a shader to read per fragment
+/// (`clouds.wgsl`'s `cloud_sky` is the same, number for number).
+pub fn cloud_sky(e: f32, cover: f32) -> [f32; 3] {
+    let w = smooth(CLOUD_SKY_TWILIGHT[0], CLOUD_SKY_TWILIGHT[1], e);
+    let r = smooth(CLOUD_SKY_RISE[0], CLOUD_SKY_RISE[1], e);
+    let one = |t: &[[f32; 3]; 3]| {
+        [0, 1, 2].map(|i| {
+            let day = t[1][i] + (t[2][i] - t[1][i]) * r;
+            t[0][i] + (day - t[0][i]) * w
+        })
+    };
+    let (a, b) = (one(&CLOUD_SKY_CLEAR), one(&CLOUD_SKY_OVERCAST));
+    let c = cover.clamp(0.0, 1.0);
+    [0, 1, 2].map(|i| a[i] + (b[i] - a[i]) * c)
+}
+
+/// How far the sun is raised for a cloud at the top of the dome's air, and
+/// that top above the sea, metres (`dusk-clouds` design 2): `sun_high`'s
+/// lift, in proportion to the height in the dome's shell.
+pub const CLOUD_SUN_LIFT: f32 = 0.22;
+pub const CLOUD_SUN_TOP_M: f32 = 960.0;
+
+/// The sun on a cloud `height_m` above the sea with the sun at elevation
+/// sine `e` there, against the noon sun (`SUN_NOW`, so white at 60 degrees):
+/// the sun after the air seen from a little higher the higher the cloud, and
+/// gone with the dome's twilight. `clouds.wgsl`'s `cloud_sun` is the same.
+pub fn cloud_sun(e: f32, height_m: f32) -> [f32; 3] {
+    let lift = CLOUD_SUN_LIFT * (height_m / CLOUD_SUN_TOP_M).clamp(0.0, 1.0);
+    let up = e + lift;
+    let k = smooth(-0.12, 0.0, e) / smooth(-0.02, 0.01, up).max(1e-3);
+    let s = sun_air(up);
+    [0, 1, 2].map(|i| s[i] / SUN_NOW[i] * k)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,6 +329,56 @@ mod tests {
         // even: a wall gets most of what a cap does under the deck
         let wall = sh_irradiance(&deck, [1.0, 0.0, 0.0]);
         assert!(luma(wall) > 0.5 * luma(o), "{wall:?} {o:?}");
+    }
+
+    /// The cosine-weighted mean of the sky's light over the upper hemisphere.
+    fn hemisphere_mean(e: f32, cover: f32) -> [f32; 3] {
+        let e = e.clamp(-1.0, 1.0);
+        let s = [(1.0 - e * e).max(0.0).sqrt(), e, 0.0];
+        let (mut acc, mut w) = ([0.0f32; 3], 0.0);
+        for d in sphere(4096).filter(|d| d[1] > 0.0) {
+            let l = sky_radiance(d, s, cover);
+            for i in 0..3 {
+                acc[i] += l[i] * d[1];
+            }
+            w += d[1];
+        }
+        acc.map(|v| v / w)
+    }
+
+    /// `dusk-clouds`: the cloud's sky light is the sky's own, within a
+    /// quarter, at every elevation and both covers.
+    #[test]
+    fn the_cloud_sky_follows_the_sky() {
+        for k in -10..=45 {
+            let e = (2.0 * k as f32).to_radians().sin();
+            for cover in [0.0, 1.0] {
+                let want = hemisphere_mean(e, cover);
+                let got = cloud_sky(e, cover);
+                for i in 0..3 {
+                    let off = (got[i] - want[i]).abs() / want[i];
+                    assert!(
+                        off < 0.25,
+                        "{} deg cover {cover}: {got:?} against {want:?}",
+                        2 * k
+                    );
+                }
+            }
+        }
+    }
+
+    /// `dusk-clouds`: a top keeps the sun after its base, none of a cloud is
+    /// sunlit past seven degrees under, and at noon it is white.
+    #[test]
+    fn the_cloud_sun_is_the_domes_twilight() {
+        let deg = |d: f32| d.to_radians().sin();
+        let noon = cloud_sun(deg(60.0), 300.0);
+        assert!(noon.iter().all(|&v| (v - 1.0).abs() < 0.1), "{noon:?}");
+        let (base, top) = (cloud_sun(deg(-2.0), 300.0), cloud_sun(deg(-2.0), 750.0));
+        assert!(luma(top) > 3.0 * luma(base), "{base:?} {top:?}");
+        assert!(top[0] > top[2] * 2.0, "the last light is warm: {top:?}");
+        assert_eq!(cloud_sun(deg(-7.0), 960.0), [0.0; 3]);
+        assert_eq!(cloud_sun(deg(-30.0), 960.0), [0.0; 3]);
     }
 }
 

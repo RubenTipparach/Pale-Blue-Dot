@@ -587,3 +587,84 @@ fn the_rain_volume_is_not_drawn_under_the_sea() {
         "the rain passes run under the sea"
     );
 }
+
+/// `dusk-clouds` design 1-2: the shaders light a cloud by the core's sun and
+/// sky, number for number, the puffs and the march alike.
+#[test]
+fn clouds_are_lit_by_the_cores_sun_and_sky() {
+    let clouds = include_str!("../../../assets/shaders/clouds.wgsl").replace("\r\n", "\n");
+    // Named apart from the terrain's, which share a module with them in
+    // the planet surface's test build.
+    sun_constants_match(
+        &clouds
+            .replace("CLOUD_TAU_M", "SKY_TAU_M")
+            .replace("CLOUD_TAU", "SKY_TAU")
+            .replace("CLOUD_SUN_NOW", "SUN_NOW")
+            .replace("CLOUD_SUN_NORM", "SUN_NORM"),
+    );
+    use pbd_core::sky_light as core;
+    let vec_of = |name: &str| -> Vec<f32> {
+        let at = clouds
+            .find(&format!("const {name} = vec"))
+            .unwrap_or_else(|| panic!("{name} is gone from clouds.wgsl"));
+        let rest = &clouds[at..];
+        let open = rest.find('(').unwrap() + 1;
+        let close = rest.find(')').unwrap();
+        rest[open..close]
+            .split(',')
+            .map(|x| x.trim().parse().unwrap())
+            .collect()
+    };
+    for (name, rows) in [
+        ("CLEAR", core::CLOUD_SKY_CLEAR),
+        ("OVERCAST", core::CLOUD_SKY_OVERCAST),
+    ] {
+        for (row, part) in ["NIGHT", "HORIZON", "ZENITH"].iter().enumerate() {
+            assert_eq!(
+                vec_of(&format!("CLOUD_SKY_{name}_{part}")),
+                rows[row].to_vec(),
+                "{name} {part}"
+            );
+        }
+    }
+    assert_eq!(
+        vec_of("CLOUD_SKY_TWILIGHT"),
+        core::CLOUD_SKY_TWILIGHT.to_vec()
+    );
+    assert_eq!(vec_of("CLOUD_SKY_RISE"), core::CLOUD_SKY_RISE.to_vec());
+    assert!(clouds.contains(&format!("const CLOUD_SUN_LIFT = {};", core::CLOUD_SUN_LIFT)));
+    assert!(clouds.contains(&format!(
+        "const CLOUD_SUN_TOP_M = {:.1};",
+        core::CLOUD_SUN_TOP_M
+    )));
+    let light = wgsl_fn_body(&clouds, "cloud_light");
+    assert!(
+        light.contains("let sun_colour = cloud_sunlight(elevation, length(p) - layer.cells.w);")
+    );
+    assert!(light.contains("let sky = cloud_sky_light(elevation, local.x);"));
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let puff = wgsl_fn_body(&water, "cloud_puff_fragment");
+    assert!(puff.contains("let sun_colour = cloud_sunlight(elevation, r - view.planet_center.w);"));
+    assert!(puff.contains("let sky = cloud_sky_light(elevation, puff.layer.z);"));
+}
+
+/// `dusk-clouds` design 3: under the puffs, with the sky behind, the scene
+/// is hidden by the puffs' own coverage and the air adds the sky's light
+/// without its stars.
+#[test]
+fn cloud_hides_the_stars() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let composite = wgsl_fn_body(&src, "clouds");
+    for line in [
+        "let upsampled = cloud_upsampled(uv, far, &at, &own);",
+        "if (view.cloud_puff_fade.w > 0.5 && far >= CLOUD_FAR_CAP_M*0.999 && own > cloud.w) {",
+        "let air_light = sky_without_stars(uv, scene);",
+        "behind = scene*(1.0-own) + cloud.rgb + air_light*(own - cloud.w);",
+    ] {
+        assert!(composite.contains(line), "missing `{line}`");
+    }
+    let sky = wgsl_fn_body(&src, "sky_without_stars");
+    assert!(sky.contains("let px = 3.0/vec2<f32>(textureDimensions(scene_color));"));
+    assert!(sky.contains("if (load_depth(at) > 1e-7) { continue; }"));
+    assert!(sky.contains("if (l < best_l) { best = c; best_l = l; }"));
+}

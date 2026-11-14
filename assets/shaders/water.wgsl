@@ -6,7 +6,7 @@
 // Reverse-Z depth (near=1, sky=0), linear scene colour, the resolved
 // single-sample scene textures. Positions are body-local; `planet_center` is
 // where that frame sits in the render frame (zero today).
-#import pbd::clouds::{CloudLayer, CloudSample, cloud_span, cloud_march, cloud_sphere_hit, cloud_flash_at, cloud_map_smooth, cloud_hash, cloud_near_m, cloud_near_fog, cloud_density, cloud_lookup, cloud_local, cloud_wind, cloud_noise}
+#import pbd::clouds::{CloudLayer, CloudSample, cloud_span, cloud_march, cloud_sphere_hit, cloud_flash_at, cloud_map_smooth, cloud_hash, cloud_near_m, cloud_near_fog, cloud_density, cloud_lookup, cloud_local, cloud_wind, cloud_noise, cloud_sunlight, cloud_sky_light, cloud_day_share}
 #import pbd::sea::{SeaView, sea_surface}
 #import pbd::sun_shadow::SunCascades
 struct Cell {
@@ -1314,7 +1314,9 @@ const CLOUD_FAR_CAP_M: f32 = 60000.0;
 // `distance` receives where the kept texels' cloud is along the ray,
 // weighted by the cloud each holds: what the haze is measured to
 // (`cloud-close-up`).
-fn cloud_upsampled(uv: vec2<f32>, far: f32, distance: ptr<function, f32>) -> vec4<f32> {
+// `own` takes the puffs' own coverage, unhazed (the history's alpha), beside
+// the hazed coverage in the result's w (`dusk-clouds`).
+fn cloud_upsampled(uv: vec2<f32>, far: f32, distance: ptr<function, f32>, own: ptr<function, f32>) -> vec4<f32> {
     let size = vec2<i32>(textureDimensions(cloud_history));
     let at = uv*vec2<f32>(size) - 0.5;
     let base = vec2<i32>(floor(at));
@@ -1323,6 +1325,7 @@ fn cloud_upsampled(uv: vec2<f32>, far: f32, distance: ptr<function, f32>) -> vec
     var weight = 0.0;
     var at_sum = 0.0;
     var at_weight = 0.0;
+    var own_sum = 0.0;
     for (var k = 0u; k < 4u; k++) {
         let o = vec2<i32>(i32(k & 1u), i32((k >> 1u) & 1u));
         let texel = clamp(base + o, vec2<i32>(0), size - 1);
@@ -1330,6 +1333,7 @@ fn cloud_upsampled(uv: vec2<f32>, far: f32, distance: ptr<function, f32>) -> vec
         let depth = textureLoad(cloud_depth, texel, 0).rg;
         let kept = select(0.0, 1.0, cloud_texel_sees(depth, far));
         var cloud = textureLoad(cloud_history, texel, 0);
+        own_sum += cloud.w*w*kept;
         // Under the puffs, the coverage the air leaves is kept apart from the
         // light (`puff-haze`).
         if (view.cloud_puff_fade.w > 0.5) { cloud.w = textureLoad(cloud_puff_cover, texel, 0).r; }
@@ -1344,8 +1348,28 @@ fn cloud_upsampled(uv: vec2<f32>, far: f32, distance: ptr<function, f32>) -> vec
     // Every texel round the pixel looked somewhere else: there is no cloud
     // this pixel can take. Dividing their near-nothing weights back up drew a
     // whole cloud from texels that had been rejected (`cloud-close-up`).
-    if (weight < 1e-3) { return vec4<f32>(0.0); }
+    if (weight < 1e-3) { *own = 0.0; return vec4<f32>(0.0); }
+    *own = own_sum/weight;
     return sum/weight;
+}
+
+// The sky behind a cloud without its stars (`dusk-clouds`): the dimmest of
+// the pixel and four neighbours three pixels off whose depth says sky. A
+// star is a point a few pixels across (`steady-stars`); the sky's glow is
+// smooth over six.
+fn sky_without_stars(uv: vec2<f32>, scene: vec3<f32>) -> vec3<f32> {
+    let px = 3.0/vec2<f32>(textureDimensions(scene_color));
+    var best = scene;
+    var best_l = dot(scene, vec3<f32>(0.2126, 0.7152, 0.0722));
+    let offsets = array<vec2<f32>, 4>(vec2<f32>(1.0, 0.0), vec2<f32>(-1.0, 0.0), vec2<f32>(0.0, 1.0), vec2<f32>(0.0, -1.0));
+    for (var k = 0u; k < 4u; k++) {
+        let at = clamp(uv + offsets[k]*px, vec2<f32>(0.0), vec2<f32>(1.0));
+        if (load_depth(at) > 1e-7) { continue; }
+        let c = textureSampleLevel(scene_color, scene_sampler, at, 0.0).rgb;
+        let l = dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
+        if (l < best_l) { best = c; best_l = l; }
+    }
+    return best;
 }
 
 // How much of a cloud at `d` metres along the ray the air in front of it
@@ -1394,13 +1418,21 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // (`puff-haze`); with the puffs configured the history holds nothing
     // else, so the air here is the march's alone.
     var at = 0.0;
-    let upsampled = cloud_upsampled(uv, far, &at);
+    var own = 0.0;
+    let upsampled = cloud_upsampled(uv, far, &at, &own);
     var air = 1.0;
     if (view.cloud_puff_fade.w < 0.5) {
         air = cloud_air(eye, ray.direction, min(select(span.x, at, at > 0.0), far));
     }
     let cloud = upsampled*air;
-    let behind = scene*(1.0-cloud.w)+cloud.rgb;
+    var behind = scene*(1.0-cloud.w)+cloud.rgb;
+    // Under the puffs, with the sky behind: the cloud hides the scene by its
+    // own coverage, and the air in front of it adds the sky's light, never
+    // the stars' (`dusk-clouds`). With no star there this is the line above.
+    if (view.cloud_puff_fade.w > 0.5 && far >= CLOUD_FAR_CAP_M*0.999 && own > cloud.w) {
+        let air_light = sky_without_stars(uv, scene);
+        behind = scene*(1.0-own) + cloud.rgb + air_light*(own - cloud.w);
+    }
     // The first metres from the eye, to this pixel's own stop, are the
     // cloud's fog seen in front of everything else: it thickens as the eye
     // enters a cloud and thins as it leaves, with nothing to flicker
@@ -1424,7 +1456,7 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 struct PuffInstance {
     centre_seed: vec4<f32>, // xyz centre, body-local m; w noise seed
     shape: vec4<f32>,       // x radius across, y radius up, z darkness, w opacity
-    layer: vec4<f32>,       // x the column's base radius, y its top radius
+    layer: vec4<f32>,       // x the column's base radius, y its top radius, z the cover over it
 }
 @group(3) @binding(10) var<storage, read> cloud_puffs: array<PuffInstance>;
 
@@ -1579,13 +1611,16 @@ fn cloud_puff_fragment(in: PuffVaryings) -> PuffOut {
     // The march's light (`cloud_light`): the sun's colour by its height, the
     // sky, the ground's bounce, the night floor and a lightning flash.
     let elevation = dot(radial, sun);
-    let day = smoothstep(-0.10, 0.15, elevation);
-    let sun_colour = mix(vec3<f32>(1.0, 0.62, 0.36), vec3<f32>(1.0, 0.97, 0.92), smoothstep(0.0, 0.35, elevation));
-    let sky = mix(vec3<f32>(0.03, 0.04, 0.07), vec3<f32>(0.55, 0.68, 0.92), day);
-    let ground = vec3<f32>(0.30, 0.32, 0.28)*day*(1.0 - h);
+    // The dome's sun and the sky's own light (`dusk-clouds`): the sun
+    // lifted for this point's height and gone with the dome's twilight, the
+    // sky at this puff's sun and cover, the day's blue only while the sun is up.
     let layer = cloud_layer();
+    let day = cloud_day_share(elevation);
+    let sun_colour = cloud_sunlight(elevation, r - view.planet_center.w);
+    let sky = cloud_sky_light(elevation, puff.layer.z);
+    let ground = vec3<f32>(0.30, 0.32, 0.28)*day*(1.0 - h);
     let albedo = mix(1.0, 0.55, dark);
-    let lit = sun_colour*layer.light.x*day*1.6*(diffuse*body + silver + 0.25*body)*albedo
+    let lit = sun_colour*layer.light.x*1.6*(diffuse*body + silver + 0.25*body)*albedo
         + sky*layer.clouds.y*mix(0.45, 1.0, h)*mix(0.5, 1.0, shadow)*albedo
         + ground*layer.slab.y*(1.0 - under*0.5)
         + vec3<f32>(layer.clouds.w)

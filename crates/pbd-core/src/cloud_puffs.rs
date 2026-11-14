@@ -71,6 +71,8 @@ pub struct Puff {
     pub top_radius_m: f32,
     /// Its site's noise number.
     pub seed: f32,
+    /// The cover over its site, 0..1: the sky's light on it (`dusk-clouds`).
+    pub cover: f32,
 }
 
 /// Half the band of cover over which a puff fades in: a puff appears over a
@@ -297,6 +299,7 @@ pub fn puffs_at(site: &Site, look: Look, layer: &Layer, out: &mut Vec<Puff>) {
             base_radius_m: base,
             top_radius_m: base + height,
             seed: site.seed + 17.0 * k as f32,
+            cover,
         });
     }
 }

@@ -22,7 +22,8 @@ pub(super) struct PuffInstance {
     pub centre_seed: [f32; 4],
     /// x radius across, y radius up, z darkness, w opacity.
     pub shape: [f32; 4],
-    /// x the column's base radius, y its top radius; zw spare.
+    /// x the column's base radius, y its top radius, z the cover over it;
+    /// w spare.
     pub layer: [f32; 4],
 }
 
@@ -31,7 +32,7 @@ impl From<&Puff> for PuffInstance {
         Self {
             centre_seed: [p.centre.x, p.centre.y, p.centre.z, p.seed],
             shape: [p.radius_across_m, p.radius_up_m, p.dark, p.opacity],
-            layer: [p.base_radius_m, p.top_radius_m, 0.0, 0.0],
+            layer: [p.base_radius_m, p.top_radius_m, p.cover, 0.0],
         }
     }
 }

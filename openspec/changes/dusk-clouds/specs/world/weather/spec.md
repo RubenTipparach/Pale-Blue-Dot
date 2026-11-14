@@ -20,7 +20,7 @@ be the ground's.
 
 #### Scenario: Puffs and the march light alike
 - **WHEN** the shipped shaders are read
-- **THEN** the puffs and `cloud_light` both light a cloud by `cloud_sun` and `cloud_sky`, whose constants are the core's
+- **THEN** the puffs and `cloud_light` both light a cloud by `cloud_sunlight` and `cloud_sky_light` (the core's `cloud_sun` and `cloud_sky`), whose constants are the core's
   (`shader_tests::clouds_are_lit_by_the_cores_sun_and_sky`)
 
 ### Requirement: Cloud hides the stars

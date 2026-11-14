@@ -190,7 +190,9 @@ impl CloudNow {
                 settings.cloud_cells,
                 settings.cloud_step_m,
                 settings.cloud_max_steps as f32,
-                0.0,
+                // The sea's radius, which a cloud's sun is lifted from
+                // (`dusk-clouds`).
+                PLANET_RADIUS,
             ),
         }
     }

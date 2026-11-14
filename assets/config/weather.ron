@@ -127,7 +127,7 @@
     // metre for the view and the light, fair and at full cover.
     cloud_extinction: 0.0115,
     cloud_storm_extinction: 0.03,
-    cloud_night_floor: 0.045,
+    cloud_night_floor: 0.008,
     // The sun's strength on a cloud, sky light from above and ground bounce
     // from below; the cloud over a sample dims the sky light, which is what
     // darkens a thick base.
