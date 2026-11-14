@@ -10,6 +10,12 @@ Re-copy from the source when it changes; never edit these copies.
 None of these was a Git LFS stub: every file is a real PNG, so the page draws
 no stand-ins for Tenebris art. (The clone has no `.gitattributes`.)
 
+Later the same day the owner said the home world *is* Tenebris ("pale blue = tenebris, so call it
+that, sequoia is the sister planet"). The separate Tenebris vignette (a homestead in these
+textures) was removed with the Nocturne system: the home world keeps the game's own atlas. Rows
+below that say "Tenebris's ..." (crowns, earth, beach, snow line, trunks) now describe textures
+copied and shown in the texture row only; they are kept, byte-identical, as the source set.
+
 | File | Source (in `tenebris-rs/`) | Bytes | Tenebris uses it for | The mockup uses it for |
 | --- | --- | ---: | --- | --- |
 | `planet_seq_grass.png` | `assets/textures/planet_seq/planet_seq_grass.png` | 475 | SEQ_GRASS top (Sequoia's tan sod; "Sequoia doesnt have green grass") | Sequoia's redwood-grove tops |
@@ -27,12 +33,12 @@ no stand-ins for Tenebris art. (The clone has no `.gitattributes`.)
 | `dirt_grass.png` | `assets/textures/dirt_grass.png` | 489 | DIRT_GRASS | (copied) |
 | `dirt.png` | `assets/textures/dirt.png` | 563 | DIRT | Tenebris's earth |
 | `sand.png` | `assets/textures/sand.png` | 461 | SAND | Tenebris's beach and desert |
-| `rocks.png` | `assets/textures/rocks.png` | 464 | STONE; ASTEROID_ROCK tinted (0.70, 0.68, 0.65) | Stone under every column; the belt |
+| `rocks.png` | `assets/textures/rocks.png` | 464 | STONE; ASTEROID_ROCK tinted (0.70, 0.68, 0.65) | Stone under every column |
 | `snow.png` | `assets/textures/snow.png` | 459 | SNOW | Tenebris's snow line; Frostbite's crust |
 | `dirt_snow.png` | `assets/textures/dirt_snow.png` | 489 | DIRT_SNOW | Snow-capped walls |
 | `wood.png` | `assets/textures/wood.png` | 443 | WOOD (mushroom stems are Wood) | Tenebris trunks; pale-tinted mushroom stems |
-| `ice.png` | `assets/textures/ice.png` | 447 | FROST_ICE tinted (0.55, 0.80, 1.25) | Frostbite's and Rime's glacier |
-| `moon.png` | `assets/textures/moon.png` | 222 | MOON; CRAG_ROCK tinted (1.30, 0.55, 0.35) | Crag, Luna, Selene, Verdant, Sprout, Quartz |
+| `ice.png` | `assets/textures/ice.png` | 447 | FROST_ICE tinted (0.55, 0.80, 1.25) | Frostbite's and Hoar's glacier (Hoar is Tenebris's Rime, renamed) |
+| `moon.png` | `assets/textures/moon.png` | 222 | MOON; CRAG_ROCK tinted (1.30, 0.55, 0.35) | Crag, Selene, Sprout, Quartz |
 | `water.png` | `assets/textures/water.png` | 431 | WATER | (copied; the vignettes tint water flat) |
 | `jungle_grass.png`, `jungle_dirt_grass.png` | `assets/textures/` | 193, 290 | JUNGLE_GRASS top and side | (copied) |
 | `dry_grass.png`, `dry_dirt_grass.png` | `assets/textures/` | 198, 293 | DRY_GRASS, Tenebris's yellow-green pasture | Tenebris's fields |

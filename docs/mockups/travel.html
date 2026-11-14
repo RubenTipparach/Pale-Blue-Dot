@@ -123,8 +123,8 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
 </header>
 
 <div class="scene" id="scene">
-  <canvas id="sceneCanvas" tabindex="0" aria-label="A three-dimensional transfer from Pale Blue's night side to the skimmer platform at Amber's cloud tops. Drag to turn the camera."></canvas>
-  <div class="tag">Pale Blue to Amber<small>A town on the night side to the skimmer platform, 900 km. Not to scale: the bodies are enlarged and pulled together. The numbers in the strip below are the real ones.</small></div>
+  <canvas id="sceneCanvas" tabindex="0" aria-label="A three-dimensional transfer from Tenebris's night side to the skimmer platform at Amber's cloud tops. Drag to turn the camera."></canvas>
+  <div class="tag">Tenebris to Amber<small>A town on the night side to the skimmer platform, 900 km. Not to scale: the bodies are enlarged and pulled together. The numbers in the strip below are the real ones.</small></div>
   <div class="ghud" aria-hidden="true"><div class="gdbg" id="gDbg"></div><div class="gbar" id="gBar"></div></div>
   <div class="cams"><button class="btn" id="camChase" aria-pressed="true">Chase</button><button class="btn" id="camWide">Whole route</button></div>
 </div>
@@ -140,7 +140,7 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
     <div class="ro">
       <div><span class="k">Speed</span><span class="v" id="roSpeed">0 m/s</span></div>
       <div><span class="k">Local gravity</span><span class="v" id="roG">25.0 m/s&sup2;</span></div>
-      <div><span class="k">Frame</span><span class="v" id="roFrame">Pale Blue</span></div>
+      <div><span class="k">Frame</span><span class="v" id="roFrame">Tenebris</span></div>
       <div><span class="k">Drive</span><span class="v" id="roDrive">lift</span></div>
       <div><span class="k">Dampeners</span><span class="v" id="roDamp">on</span></div>
       <div><span class="k">Transit fuel</span><span class="v" id="roFuel">30.0 km/s</span></div>
@@ -183,7 +183,7 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
       <text x="870" y="125" text-anchor="middle" class="m" font-size="12">poses in the star's frame</text>
       <text x="870" y="145" text-anchor="middle" class="m" font-size="12">keep 60 km from Aubade</text>
       <g class="num m" font-size="12"><text x="130" y="224" text-anchor="middle">R</text><text x="300" y="224" text-anchor="middle">air top</text><text x="425" y="224" text-anchor="middle">1.4 R</text><text x="550" y="224" text-anchor="middle">1.8 R</text><text x="760" y="224" text-anchor="middle">frame sphere</text></g>
-      <g class="num" font-size="12"><text x="20" y="262">Pale Blue:</text><text x="130" y="262" text-anchor="middle">4,800 m</text><text x="300" y="262" text-anchor="middle">+0.96 km</text><text x="425" y="262" text-anchor="middle">+1.92 km</text><text x="550" y="262" text-anchor="middle">+3.84 km</text><text x="760" y="262" text-anchor="middle">60 km</text></g>
+      <g class="num" font-size="12"><text x="20" y="262">Tenebris:</text><text x="130" y="262" text-anchor="middle">4,800 m</text><text x="300" y="262" text-anchor="middle">+0.96 km</text><text x="425" y="262" text-anchor="middle">+1.92 km</text><text x="550" y="262" text-anchor="middle">+3.84 km</text><text x="760" y="262" text-anchor="middle">60 km</text></g>
       <g class="num m" font-size="12"><text x="20" y="284">Amber:</text><text x="130" y="284" text-anchor="middle">19,200 m</text><text x="300" y="284" text-anchor="middle">(no floor)</text><text x="425" y="284" text-anchor="middle">+7.68 km</text><text x="550" y="284" text-anchor="middle">+15.4 km</text><text x="760" y="284" text-anchor="middle">200 km</text></g>
     </svg></div>
   </div>
@@ -203,10 +203,10 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
     <p class="sub">Every body is on rails, so the map is exact for any day. A trip is the climb out, the transit (accelerate at 60 m/s&sup2; to 4 km/s, coast, flip, brake) and the descent. The route is a straight line, bent round the star when it would pass within 60 km. Drag the day: times change with where the worlds are, not with a window you have to wait for.</p>
     <div class="daybar"><label for="mapDay" class="eyebrow">Day</label><input type="range" id="mapDay" min="0" max="1232" value="40"><span class="mono" id="mapDayOut">40</span><button class="btn" id="mapPlay" aria-pressed="false">Run</button></div>
     <div class="two">
-      <div class="fig"><svg id="sysmap" viewBox="0 0 640 640" role="img" aria-label="Top-down map of the system with routes from Pale Blue to every other world" style="min-width:320px"></svg></div>
+      <div class="fig"><svg id="sysmap" viewBox="0 0 640 640" role="img" aria-label="Top-down map of the system with routes from Tenebris to every other world" style="min-width:320px"></svg></div>
       <div style="display:grid;gap:10px;align-content:start;min-width:0">
         <div class="tablewrap"><table class="grid" id="timeTable" style="min-width:420px"></table></div>
-        <p class="note">Distance is centre to centre. Times are minutes:seconds of play, door to door, with no lanes. <b>&Delta;v</b> is the transit drive's use one way; the runabout's tank holds 30 km/s. Moons from their planet: Lantern is 26 km from Pale Blue, about 1:40 door to door.</p>
+        <p class="note">Distance is centre to centre. Times are minutes:seconds of play, door to door, with no lanes. <b>&Delta;v</b> is the transit drive's use one way; the runabout's tank holds 30 km/s. Moons from their planet: Lantern is 26 km from Tenebris, about 1:40 door to door.</p>
       </div>
     </div>
   </div>
@@ -268,10 +268,10 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
     <div class="tablewrap"><table class="grid">
       <thead><tr><th>Station</th><th>Where</th><th>On rails as</th><th>What it is for</th></tr></thead>
       <tbody>
-        <tr><td>Highport</td><td>Over Pale Blue, 12 km up, above the first town</td><td>Fixed in Pale Blue's turning frame, so it hangs over one place</td><td>The first dock; ship sales, repairs, hydrogen</td></tr>
-        <tr><td>Skimmer platform</td><td>Amber's cloud tops (and one at Glaucus)</td><td>A point on the turning giant, held up by hover compensation in 1.6 g</td><td>Fuel from the scoop; the transfer above ends here</td></tr>
+        <tr><td>Highport</td><td>Over Tenebris, 12 km up, above the first town</td><td>Fixed in Tenebris's turning frame, so it hangs over one place</td><td>The first dock; ship sales, repairs, hydrogen</td></tr>
+        <tr><td>Skimmer platform</td><td>Floating in Amber's airship band, just under the cloud tops (and one at Glaucus). Nothing lands on a giant (the owner, 2026-11-14): the platform and the airships are as deep as anything goes, far above the limit where every craft is destroyed</td><td>A point on the turning giant, held up by its hot-hydrogen envelope in 1.6 g</td><td>Fuel from the scoop; the transfer above ends here</td></tr>
         <tr><td>Rime depot</td><td>On Rime's ice, by the drill</td><td>A surface base: it turns with the moon</td><td>Water ice made into hydrogen; the cheapest fuel in the system</td></tr>
-        <tr><td>Lane gates</td><td>Near Pale Blue, Amber and Glaucus (if built)</td><td>Each in its body's frame, 40 km out</td><td>Long hops in a minute (see Lanes)</td></tr>
+        <tr><td>Lane gates</td><td>Near Tenebris, Amber and Glaucus (if built)</td><td>Each in its body's frame, 40 km out</td><td>Long hops in a minute (see Lanes)</td></tr>
       </tbody>
     </table></div>
   </div>
@@ -299,11 +299,11 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
     <div class="two">
       <div style="display:grid;gap:10px;align-content:start">
         <div class="eyebrow">Lanes and gates</div><h2>A shortcut to the giants, built late</h2>
-        <p class="note">A pair of gates makes a lane: fly through one aligned and slow, and the ship is carried at 25 km/s to the other, which rides its own body's rails, so the lane's length changes through the year. Nothing is simulated in between. Pale Blue to Glaucus drops from eight to ten minutes to about two and a half. <b>Recommended for later</b>: the system works without them, and building the first pair is a goal worth having.</p>
+        <p class="note">A pair of gates makes a lane: fly through one aligned and slow, and the ship is carried at 25 km/s to the other, which rides its own body's rails, so the lane's length changes through the year. Nothing is simulated in between. Tenebris to Glaucus drops from eight to ten minutes to about two and a half. <b>Recommended for later</b>: the system works without them, and building the first pair is a goal worth having.</p>
         <div class="icons"><figure><img src="travel/icon_gate.png?v=3" alt="">Lane gate</figure><figure><img src="travel/icon_station.png?v=3" alt="">Station</figure><figure><img src="travel/icon_ship.png?v=3" alt="">The runabout</figure><figure><img src="travel/icon_dampener.png?v=3" alt="">Dampeners</figure></div>
       </div>
-      <div class="fig"><svg viewBox="0 0 600 260" role="img" aria-label="Two lane gates, one by Pale Blue and one by Glaucus, joined by a lane" style="min-width:420px">
-        <circle cx="80" cy="150" r="34" fill="#2a6ab0"/><text x="80" y="208" text-anchor="middle" font-size="13">Pale Blue</text>
+      <div class="fig"><svg viewBox="0 0 600 260" role="img" aria-label="Two lane gates, one by Tenebris and one by Glaucus, joined by a lane" style="min-width:420px">
+        <circle cx="80" cy="150" r="34" fill="#2a6ab0"/><text x="80" y="208" text-anchor="middle" font-size="13">Tenebris</text>
         <circle cx="530" cy="120" r="44" fill="#78c0d8"/><text x="530" y="188" text-anchor="middle" font-size="13">Glaucus</text>
         <ellipse cx="160" cy="138" rx="9" ry="22" fill="none" stroke="#5ad2f0" stroke-width="5"/>
         <ellipse cx="445" cy="124" rx="9" ry="22" fill="none" stroke="#5ad2f0" stroke-width="5"/>
@@ -322,12 +322,11 @@ footer{padding-block:30px 40px;color:var(--muted);font-size:13px}
     <div class="two">
       <div style="display:grid;gap:10px;align-content:start">
         <div class="eyebrow">Beyond Aubade &middot; proposed 2026-11-14</div><h2>Star lanes to the neighbours</h2>
-        <p class="note">Three stars lie within nine light years (the star map is on the planets page: <a href="planets.html#starmap">planets.html#starmap</a>). No ship crosses that by flying: there is no warp drive, and the transit drive above stays the only engine. A <b>star lane</b> is a pair of the lane gates above, one 1,800 km from each star (past Glaucus at Aubade). The passage carries the ship gate to gate with nothing simulated in between, <b>30 s of play per light year</b>, and it comes out in the far star's frame at the speed it went in. The first passage to a star is an uncrewed seed run that carries the far gate's kit, so nobody is stranded. A late goal: the gates take the antimatter collider's power and platinum.</p>
+        <p class="note">Two stars lie within nine light years (the star map is on the planets page: <a href="planets.html#starmap">planets.html#starmap</a>). No ship crosses that by flying: there is no warp drive, and the transit drive above stays the only engine. A <b>star lane</b> is a pair of the lane gates above, one 1,800 km from each star (past Glaucus at Aubade). The passage carries the ship gate to gate with nothing simulated in between, <b>30 s of play per light year</b>, and it comes out in the far star's frame at the speed it went in. The first passage to a star is an uncrewed seed run that carries the far gate's kit, so nobody is stranded. A late goal: the gates take the antimatter collider's power and platinum.</p>
       </div>
       <div class="tablewrap"><table class="grid" style="min-width:420px">
         <thead><tr><th>Destination</th><th style="text-align:right">Light years</th><th style="text-align:right">Passage</th><th>Why go</th></tr></thead>
         <tbody>
-          <tr><td>Nocturne</td><td class="n">4.6</td><td class="n">2:18</td><td>Tenebris's worlds, ported: Sequoia's giant redwoods, Tenebris itself, Crag, Frostbite</td></tr>
           <tr><td>Tallow</td><td class="n">6.3</td><td class="n">3:08</td><td>Wick's twilight ring of black-leaved life; emberglass on Sconce</td></tr>
           <tr><td>Gemel</td><td class="n">8.1</td><td class="n">4:03</td><td>Fallow, open steppe to settle under two suns; platinum on Lode</td></tr>
         </tbody>
@@ -379,12 +378,15 @@ const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a
 
 // The bodies, as on the planets page (same ids, so the same phases).
 const BODIES = [
+  { id: "crag", name: "Crag", a: 120, R: 2400, g: 0.60, col: "#c0583a" },
   { id: "ochre", name: "Ochre", a: 180, R: 1200, g: 0.70, col: "#d2784a" },
-  { id: "home", name: "Pale Blue", a: 300, R: 4800, g: 1.00, col: "#3c84d0" },
+  { id: "home", name: "Tenebris", a: 300, R: 4800, g: 1.00, col: "#3c84d0" },
+  { id: "sequoia", name: "Sequoia", a: 380, R: 4800, g: 1.10, col: "#b8865a" },
   { id: "verdance", name: "Verdance", a: 450, R: 2400, g: 0.90, col: "#3aa070" },
   { id: "pebble", name: "Pebble (belt)", a: 650, R: 300, g: 0.15, col: "#8a7a6a" },
   { id: "amber", name: "Amber", a: 1000, R: 19200, g: 1.60, col: "#e0a868", giant: true },
   { id: "glaucus", name: "Glaucus", a: 1600, R: 9600, g: 1.20, col: "#8ad0e4", giant: true },
+  { id: "frostbite", name: "Frostbite", a: 2400, R: 2400, g: 0.80, col: "#74c0e8" },
 ];
 for (const b of BODIES) { b.T = 100 * Math.pow(b.a / 300, 1.5); b.phase = ((b.id.charCodeAt(0) * 37 + b.id.length * 101) % 360) * Math.PI / 180; }
 const posOf = (b, day) => { const t = b.phase + 2 * Math.PI * day / b.T; return [Math.cos(t) * b.a, -Math.sin(t) * b.a]; };
@@ -411,10 +413,10 @@ function trip(from, to, day) {
 // =====================================================================
 const D_KM = 900;
 const PH = [
-  { key: "pad", name: "Lift off", t: 10, v0: 0, v1: 60, drive: "lift", damp: "on", note: "<b>Hover compensation cancels Pale Blue's 25 m/s&sup2;</b>, so the 20 m/s&sup2; of thrust is all climb. The town's lamps are lit below; it is just past dusk." },
+  { key: "pad", name: "Lift off", t: 10, v0: 0, v1: 60, drive: "lift", damp: "on", note: "<b>Hover compensation cancels Tenebris's 25 m/s&sup2;</b>, so the 20 m/s&sup2; of thrust is all climb. The town's lamps are lit below; it is just past dusk." },
   { key: "air", name: "Climb through the air", t: 16, v0: 60, v1: 600, drive: "lift (cruise)", damp: "on", note: "Up through the weather at the air's cap: 600 m/s in cruise. The lift drive burns nothing." },
   { key: "band", name: "Leave the band", t: 6, v0: 600, v1: 600, drive: "lift (cruise)", damp: "on", note: "Full pull to 1.92 km up, then a linear taper to <b>zero at 3.84 km</b> (1.8 R). Past it the field is zero: you are in space, and the transit drive can light." },
-  { key: "burn", name: "Transit burn", t: 3400 / A_T, v0: 600, v1: 4000, drive: "transit 60 m/s²", damp: "off", note: "Accelerate at 60 m/s&sup2; to 4 km/s. Halfway through, 60 km out, the ship <b>leaves Pale Blue's frame</b>: pose, velocity and history are rebased to the star's frame at one tick (the planet moves at 6.5 m/s, so nothing jumps)." },
+  { key: "burn", name: "Transit burn", t: 3400 / A_T, v0: 600, v1: 4000, drive: "transit 60 m/s²", damp: "off", note: "Accelerate at 60 m/s&sup2; to 4 km/s. Halfway through, 60 km out, the ship <b>leaves Tenebris's frame</b>: pose, velocity and history are rebased to the star's frame at one tick (the planet moves at 6.5 m/s, so nothing jumps)." },
   { key: "coast", name: "Coast", t: 0, v0: 4000, v1: 4000, drive: "off", damp: "off", note: "Dampeners off, drive off: the ship carries on. Nothing to do but look; the coast is about two and a half minutes on this route." },
   { key: "brake", name: "Flip and brake", t: 3400 / A_T, v0: 4000, v1: 600, drive: "transit 60 m/s²", damp: "off", note: "Turn round and burn the other way. 200 km out the ship <b>enters Amber's frame</b>, rebased the same way (Amber moves at 3.6 m/s)." },
   { key: "desc", name: "Into Amber's band", t: 30, v0: 600, v1: 50, drive: "lift", damp: "on", note: "Into the band at 15.4 km: the pull rises to <b>40 m/s&sup2;</b> (1.6 g) by 7.7 km and hover compensation takes all of it. The platform's rail lamps show through the cloud tops." },
@@ -499,7 +501,7 @@ shell(HOME, HOME_R * 1.4, 0xf0b43c, 0.35); shell(HOME, HOME_R * 1.8, 0xf0b43c, 0
 shell(AMB, AMB_R * 1.4, 0xf0b43c, 0.3); shell(AMB, AMB_R * 1.8, 0xf0b43c, 0.45); shell(AMB, 95, 0xb98cff, 0.3);
 // the route's control points: one per phase boundary
 const d0 = new THREE.Vector3(0.42, 0.5, 0.76).normalize();          // just past the terminator: dusk at the town
-const dA = new THREE.Vector3(-0.66, 0.42, 0.62).normalize();        // the platform faces back toward Pale Blue
+const dA = new THREE.Vector3(-0.66, 0.42, 0.62).normalize();        // the platform faces back toward Tenebris
 const T0 = d0.clone().multiplyScalar(HOME_R * 1.8), T1 = AMB.clone().add(dA.clone().multiplyScalar(AMB_R * 1.8));
 const PTS = [
   d0.clone().multiplyScalar(HOME_R + 0.02), d0.clone().multiplyScalar(HOME_R + 0.35), d0.clone().multiplyScalar(HOME_R * 1.25),
@@ -623,7 +625,7 @@ function state(t) {
 }
 function readouts(st) {
   const { p, tau, v, d } = st;
-  let g = 0, frame = "Pale Blue", fuel = TANK;
+  let g = 0, frame = "Tenebris", fuel = TANK;
   if (p.key === "pad" || p.key === "air") g = 25;
   if (p.key === "band") { const alt = 0.96 + tau * (3.84 - 0.96); g = alt < 1.92 ? 25 : 25 * (1 - (alt - 1.92) / 1.92); }
   if (p.key === "desc") { const alt = 15.36 - tau * 15.36; g = alt > 7.68 ? 40 * (1 - (alt - 7.68) / 7.68) : 40; }
@@ -743,7 +745,7 @@ const el = (tag, attrs, parent, text) => { const e = document.createElementNS(NS
   el("text", { x: 18, y: (y0 + y1) / 2, "text-anchor": "middle", class: "m", "font-size": 13, transform: `rotate(-90 18 ${(y0 + y1) / 2})` }, svg, "pull, m/s²");
   const curves = [
     { name: "Lantern 0.35 g", R: 1.2, g: 0.35, col: "#b8b8c4" }, { name: "Ochre 0.70 g", R: 1.2, g: 0.70, col: "#e08a5a" },
-    { name: "Verdance 0.90 g", R: 2.4, g: 0.90, col: "#5ac08a" }, { name: "Pale Blue 1.00 g", R: 4.8, g: 1.0, col: "#5aa2ec" },
+    { name: "Verdance 0.90 g", R: 2.4, g: 0.90, col: "#5ac08a" }, { name: "Tenebris 1.00 g", R: 4.8, g: 1.0, col: "#5aa2ec" },
     { name: "Amber 1.60 g", R: 19.2, g: 1.6, col: "#f0b43c" },
   ];
   for (const c of curves) {
@@ -756,11 +758,11 @@ const el = (tag, attrs, parent, text) => { const e = document.createElementNS(NS
     el("text", { x: x + 30, y, "font-size": 13 }, svg, `${c.name} · band to ${fmt(0.8 * c.R, 2)} km`);
   });
   el("line", { x1: X(3.84), x2: X(3.84), y1: y0, y2: Y(32), stroke: "#5aa2ec", "stroke-dasharray": "4 4" }, svg);
-  el("text", { x: X(3.84) + 6, y: Y(31), class: "m", "font-size": 12 }, svg, "Pale Blue's band edge: in space past here");
+  el("text", { x: X(3.84) + 6, y: Y(31), class: "m", "font-size": 12 }, svg, "Tenebris's band edge: in space past here");
 }
 // system map and times
 const mapSvg = document.getElementById("sysmap"), dayIn = document.getElementById("mapDay"), dayOut = document.getElementById("mapDayOut");
-const MR = a => 14 + 7.0 * Math.sqrt(a);    // radius on the map: square-root scaled so the inner worlds show
+const MR = a => 12 + 5.8 * Math.sqrt(a);    // radius on the map: square-root scaled so the inner worlds show (Frostbite, 2,400 km, at the rim)
 function drawMap(day) {
   mapSvg.innerHTML = "";
   const c = 320;
@@ -768,7 +770,7 @@ function drawMap(day) {
   el("circle", { cx: c, cy: c, r: MR(60) - 4, fill: "#ff7a5c", "fill-opacity": 0.08, stroke: "#ff7a5c", "stroke-opacity": 0.4, "stroke-dasharray": "3 4" }, mapSvg);
   el("circle", { cx: c, cy: c, r: 9, fill: "#ffd27a" }, mapSvg);
   el("circle", { cx: c, cy: c, r: MR(650), fill: "none", stroke: "#8a7a6a", "stroke-width": 9, "stroke-opacity": 0.22 }, mapSvg);
-  const home = BODIES[1], hp = posOf(home, day);
+  const home = BODIES.find(b => b.id === "home"), hp = posOf(home, day);
   const P = b => { const [x, y] = posOf(b, day), r = Math.hypot(x, y), k = MR(r) / r; return [c + x * k, c + y * k]; };
   for (const b of BODIES) el("circle", { cx: c, cy: c, r: MR(b.a), fill: "none", stroke: "#56627e", "stroke-opacity": 0.6 }, mapSvg);
   const [hx, hy] = P(home);
@@ -785,7 +787,8 @@ function drawMap(day) {
   for (const b of BODIES) {
     const [x, y] = P(b);
     el("circle", { cx: x, cy: y, r: b.giant ? 11 : b === home ? 8 : 6, fill: b.col, stroke: b === home ? "#f0b43c" : "none", "stroke-width": 2 }, mapSvg);
-    el("text", { x: x + 12, y: y - 10, class: "d", "font-size": 14 }, mapSvg, b.name);
+    const right = x > c + 180;   // keep a label at the rim inside the map
+    el("text", { x: right ? x - 12 : x + 12, y: y - 10, class: "d", "font-size": 14, "text-anchor": right ? "end" : "start" }, mapSvg, b.name);
   }
   // the table
   const rows = BODIES.filter(b => b !== home).map(b => {
@@ -794,7 +797,7 @@ function drawMap(day) {
     const tr = trip(home, b, day);
     return `<tr><td><span style="color:${b.col}">&#9679;</span> ${b.name}</td><td class="n">${fmt(tr.km)} km</td><td class="n"><b>${mmss(tr.t)}</b></td><td class="n">${mmss(mn)} &ndash; ${mmss(mx)}</td><td class="n">${fmt(tr.dv, 1)} km/s</td></tr>`;
   });
-  document.getElementById("timeTable").innerHTML = `<thead><tr><th>From Pale Blue to</th><th class="n">Now</th><th class="n">Time now</th><th class="n">Over the year</th><th class="n">&Delta;v</th></tr></thead><tbody>${rows.join("")}</tbody>`;
+  document.getElementById("timeTable").innerHTML = `<thead><tr><th>From Tenebris to</th><th class="n">Now</th><th class="n">Time now</th><th class="n">Over the year</th><th class="n">&Delta;v</th></tr></thead><tbody>${rows.join("")}</tbody>`;
   dayOut.textContent = fmt(day);
 }
 dayIn.addEventListener("input", () => drawMap(+dayIn.value));
@@ -804,13 +807,13 @@ function tick() { if (!mapRun) return; dayIn.value = (+dayIn.value + 1) % 1232; 
 drawMap(+dayIn.value);
 // takeoff table
 {
-  const list = [["Pebble", 300, 0.15], ["Lantern", 1200, 0.35], ["Ochre", 1200, 0.70], ["Verdance", 2400, 0.90], ["Pale Blue", 4800, 1.0], ["Glaucus (platform)", 9600, 1.2], ["Amber (platform)", 19200, 1.6]];
+  const list = [["Pebble", 300, 0.15], ["Lantern", 1200, 0.35], ["Ochre", 1200, 0.70], ["Verdance", 2400, 0.90], ["Tenebris", 4800, 1.0], ["Glaucus (platform)", 9600, 1.2], ["Amber (platform)", 19200, 1.6]];
   document.getElementById("liftTable").innerHTML = `<thead><tr><th>Body</th><th class="n">Pull</th><th class="n">Hover cancels</th><th class="n">Band edge</th><th class="n">Time to space</th></tr></thead><tbody>` +
     list.map(([n, R, g]) => `<tr><td>${n}</td><td class="n">${fmt(g, 2)} g</td><td class="n">${fmt(g * G1, 1)} m/s&sup2;</td><td class="n">${fmt(0.8 * R / 1000, 2)} km up</td><td class="n">${mmss(22 + 0.8 * R / 400)}</td></tr>`).join("") + `</tbody>`;
 }
 // fuel bars, one-way trips at their longest, against the 30 km/s tank
 {
-  const box = document.getElementById("fuelBars"), home = BODIES[1];
+  const box = document.getElementById("fuelBars"), home = BODIES.find(b => b.id === "home");
   const rows = [["Lantern (26 km)", 2 * Math.sqrt(A_T * 26000) / 1000]].concat(BODIES.filter(b => b !== home).map(b => { let mx = 0; for (let k = 0; k < 200; k++) mx = Math.max(mx, trip(home, b, k * 6.16).dv); return [b.name, mx]; }));
   box.innerHTML = rows.map(([n, dv]) => `<div class="bar"><span>${n}</span><span class="track"><span class="fill" style="width:${dv / TANK * 100}%"></span></span><span class="v">${fmt(dv, 1)} / 30</span></div>`).join("") +
     `<p class="note">&Delta;v for one way at the longest, in km/s, against a full 30 km/s tank. A round trip to either giant, there and back, uses 16 of it.</p>`;

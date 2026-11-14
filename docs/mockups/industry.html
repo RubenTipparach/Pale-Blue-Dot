@@ -889,7 +889,7 @@ function buildSwarm() {
   const star = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 16), starMat); S.group.add(star);
   const gc = document.createElement("canvas"); gc.width = gc.height = 128; const g2 = gc.getContext("2d"), gr = g2.createRadialGradient(64, 64, 8, 64, 64, 64); gr.addColorStop(0, "rgba(255,240,200,1)"); gr.addColorStop(1, "rgba(255,200,80,0)"); g2.fillStyle = gr; g2.fillRect(0, 0, 128, 128);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(gc), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); glow.scale.set(46, 46, 1); S.group.add(glow);
-  // Pale Blue, wearing its map from the planets mockup
+  // Tenebris (the home world), wearing its map from the planets mockup
   const home = new THREE.Mesh(new THREE.SphereGeometry(4, 32, 16), new THREE.MeshLambertMaterial({ map: prep(loader.load("planets/map_home.png?v=2")) })); home.position.set(58, 0, 14); S.group.add(home);
   // the swarm: rings of drones at many tilts, each ring an instanced mesh of pixel-textured collectors
   const RINGS = 8, PER = 450, dg = new THREE.BoxGeometry(0.9, 0.06, 0.5), dm = new THREE.MeshBasicMaterial({ map: texOf("m:tex_panel") }), M = new THREE.Matrix4(), qq = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), pos = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
@@ -923,7 +923,7 @@ function buildSwarm() {
       if (on) segs.push(g.position.x * 0.32, g.position.y * 0.32, g.position.z * 0.32, g.position.x, g.position.y, g.position.z); });
     inLines.geometry.setAttribute("position", new THREE.Float32BufferAttribute(segs, 3));
   });
-  tag(S, "Aubade", 0, 9, 0); tag(S, "Pale Blue: the ground receiver", 58, 5.5, 14); tag(S, "Relay stations", 58, 12, 14, "warm"); tag(S, "END GAME &middot; Collector drones", 0, 21, 0, "late");
+  tag(S, "Aubade", 0, 9, 0); tag(S, "Tenebris: the ground receiver", 58, 5.5, 14); tag(S, "Relay stations", 58, 12, 14, "warm"); tag(S, "END GAME &middot; Collector drones", 0, 21, 0, "late");
   S.cam = { tx: 26, ty: 0, tz: 6, dist: 80, yaw: 0.25, pitch: 0.42 };
   S.status = () => `space view | swarm ${Math.round(ST.swarm)}% = ${Math.round(ST.swarm * 1000).toLocaleString("en")} drones | ${GENS.dyson.out().toLocaleString("en")} kW at the receiver`;
   powerHot(S, "dyson");

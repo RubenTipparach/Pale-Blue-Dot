@@ -9,10 +9,12 @@ It extends tools/art/planets_art.py (imported, its helpers reused: the map Grid,
 the portrait, the night-light towns) and writes only NEW files, so the twelve Aubade bodies'
 art is never redrawn:
 
-- `map_<body>.png` (128 x 64) and `portrait_<body>.png` (48 x 48) for the ported Tenebris worlds
-  (Nocturne system) and the bodies of Tallow and Gemel; `lights_<body>.png` where a world has
-  night lights (Tenebris's homesteads, Sequoia's glowing mycelium, Wick's lanternbloom ring,
-  Fallow's camps).
+- `map_<body>.png` (128 x 64) and `portrait_<body>.png` (48 x 48) for Tenebris's own bodies, now
+  in the home system Aubade (Sequoia, Crag, Frostbite, Selene, Sprout, Quartz and Hoar; the home
+  world is Tenebris and keeps planets_art.py's map_home), and the bodies of Tallow and Gemel;
+  `lights_<body>.png` where a world has night lights (Sequoia's glowing mycelium, Wick's
+  lanternbloom ring, Fallow's camps). 2026-11-14: the duplicate Tenebris, Luna, Verdant, the
+  separate belt and the star Nocturne were dropped with the Nocturne system.
 - `species/<id>.png` (32 x 32): an icon per species on the ported and new worlds.
 - `res_<resource>.png` (32 x 32): the new resources (redwood, spores, blackwood, emberglass,
   platinum, fleece).
@@ -43,30 +45,7 @@ WHITE = "#fffefe"
 Grid, hexc = PA.Grid, PA.hexc
 
 
-# ---------- maps: the ported Tenebris worlds (Nocturne) -----------------------------------------
-
-def map_tenebris():
-    """Tenebris: blue seas, the yellow-green pasture of its Fields, deserts with red crag rock,
-    jungle, mountains and tundra caps (planet_gen.rs biomes)."""
-    g = Grid()
-    e = g.noise(2101, 1.8, 5)
-    m = g.noise(2102, 2.6, 3)
-    sea = e < 0.50
-    g.ramp(np.clip((e - 0.30) / 0.22, 0, 1), ["#15578a", "#15578a", "#1096c3"], sea, spread=1.2)
-    land = ~sea
-    g.put(land, "#9bb675")                                  # DryGrass pasture
-    g.put(land & (m > 0.56), "#559642")
-    g.put(land & (m > 0.64), "#297537")                     # jungle
-    des = land & (m < 0.36) & (np.abs(g.lat) < 0.8)
-    g.put(des, "#cfaa81")
-    g.put(des & (g.noise(2103, 9, 2) > 0.66), "#a8633e")    # crag rock outcrops in the desert
-    g.put(land & (e > 0.68), "#a09f91")
-    g.put(land & (e > 0.73), WHITE)
-    PA.caps(g, 22, 24, 2104)
-    lights = PA.towns(g, land & (np.abs(g.lat) < 1.0), 40, 2105, big=0.08)
-    PA.clouds(g, 2106, 0.68, freq=2.4)
-    return g, lights
-
+# ---------- maps: Tenebris's own bodies, in Aubade -----------------------------------------
 
 def map_sequoia():
     """Sequoia: an archipelago in dark green water (~55% sea), tan sod (it has no green grass),
@@ -118,16 +97,8 @@ def _barren(seed, ramp, n_craters, crater_cols, tint_spots=None):
     return g
 
 
-def map_luna():
-    return _barren(2301, ["#434137", "#a09f91", "#a09f91", "#bfcad7"], 28, ("#a09f91", "#2c2c25", "#bfcad7")), None
-
-
 def map_selene():
     return _barren(2311, ["#2c2c25", "#434137", "#434137", "#a09f91"], 22, ("#434137", "#161612", "#a09f91")), None
-
-
-def map_verdant():
-    return _barren(2321, ["#2c2c25", "#434137", "#a09f91", "#9bb675"], 18, ("#434137", "#161612", "#a09f91")), None
 
 
 def map_sprout():
@@ -165,16 +136,13 @@ def map_frostbite():
     return g, None
 
 
-def map_tenrime():
+def map_hoar():
+    """Hoar: Frostbite's small ice moon (Tenebris's Rime, renamed: Amber's moon is Rime)."""
     g = _ice(2511, ["#92a3b2", "#bfcad7", "#d2f8ff", "#d2f8ff", WHITE], 1)
     rnd = np.random.default_rng(2512)
     for _ in range(8):
         g.crater(rnd.uniform(0, 128), rnd.uniform(8, 56), float(rnd.choice([1.5, 2, 3])), "#bfcad7", "#5d778d", WHITE)
     return g, None
-
-
-def map_nbelt():
-    return _barren(2601, ["#2c2c25", "#434137", "#434137", "#a09f91"], 36, ("#434137", "#161612", "#a09f91"), ("#bfcad7", 10)), None
 
 
 # ---------- maps: Tallow (a red dwarf) ----------------------------------------------------------
@@ -278,9 +246,9 @@ def map_lode():
 
 
 MAPS = {
-    "tenebris": map_tenebris, "sequoia": map_sequoia, "luna": map_luna, "selene": map_selene,
-    "verdant": map_verdant, "sprout": map_sprout, "crag": map_crag, "quartz": map_quartz,
-    "frostbite": map_frostbite, "tenrime": map_tenrime, "nbelt": map_nbelt,
+    "sequoia": map_sequoia, "selene": map_selene,
+    "sprout": map_sprout, "crag": map_crag, "quartz": map_quartz,
+    "frostbite": map_frostbite, "hoar": map_hoar,
     "sconce": map_sconce, "wick": map_wick, "censer": map_censer, "snuff": map_snuff,
     "fallow": map_fallow, "shale": map_shale, "lode": map_lode,
 }
@@ -324,23 +292,18 @@ def censer_portrait():
 
 
 PORTRAITS = {
-    "nocturne": star_portrait(RAMPS["flame"], ["#841c1d", "#c56d25", "#fb902f", "#faaf5c", WHITE], spots=[(18, 26), (28, 30)]),
     "tallow": star_portrait(["#4a051e", "#a61e1f", "#d4462b", "#fe6420"], ["#4a051e", "#841c1d", "#d4462b", "#fe6420", "#fb902f"],
                             r_out=22, r_in=17, r_disc=17, spots=[(16, 24), (27, 31), (30, 20)]),
     "gemel": star_portrait(["#8d4526", "#c56d25", "#fb902f", "#faaf5c"], ["#8d4526", "#c56d25", "#fb902f", "#faaf5c", WHITE],
                            r_out=19, r_in=13, r_disc=13, companion=(40, 9)),
     "gemelb": star_portrait(["#15578a", "#1096c3", "#74effe", "#d2f8ff"], ["#74effe", "#d2f8ff", WHITE], r_out=14, r_in=6, r_disc=6),
-    "tenebris": lambda: PA.portrait("tenebris", air="#74effe", lon0=0.8),
     "sequoia": lambda: PA.portrait("sequoia", r=22, air="#e69d69", lon0=1.6),
-    "luna": lambda: PA.portrait("luna", r=16),
     "selene": lambda: PA.portrait("selene", r=12),
-    "verdant": lambda: PA.portrait("verdant", r=12),
     "sprout": lambda: PA.portrait("sprout", r=12, lumpy=lumpy(1.0)),
     "crag": lambda: PA.portrait("crag", r=19, lon0=0.4),
     "quartz": lambda: PA.portrait("quartz", r=12),
     "frostbite": lambda: PA.portrait("frostbite", r=19, tilt=0.2),
-    "tenrime": lambda: PA.portrait("tenrime", r=12),
-    "nbelt": lambda: PA.portrait("nbelt", r=17, lumpy=lumpy(2.0), tilt=0.2),
+    "hoar": lambda: PA.portrait("hoar", r=12),
     "sconce": lambda: PA.portrait("sconce", r=18, lon0=0.2),
     "wick": lambda: PA.portrait("wick", r=20, air="#e69d69", lon0=-0.9, tilt=0.1),
     "censer": censer_portrait,
