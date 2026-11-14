@@ -729,8 +729,13 @@ step; the choice is kept through `SettingsFile::keep` as before.
 ### Tooltips (in the kit)
 
 `ui_kit::Tooltip(String)` on any node with an `Interaction` is the text the
-kit shows while the pointer is over it, in one stone `tooltip` piece that
-follows the cursor (VT323 body text, the 6 px margin), above every panel. It
+kit shows while the pointer is over it, in one stone `tooltip` piece
+(VT323 body text, the 6 px margin) drawn over every panel. It stands above
+the hovered node, centred on it, 3 px clear, so it never covers that slot's
+count or its neighbours' (the coordinator's review of the first capture,
+where it hung below the pointer over the counts and off the window's
+bottom by the tool slot); below the node only when there is no room above,
+and clamped 3 px inside the window on every side. It
 shows only while a menu holds the pointer, since in play there is no cursor.
 The slots keep their own tooltips from the store: an empty slot has none, a
 stack its name and count (`Stone x 12`), a tool its name and purpose; the

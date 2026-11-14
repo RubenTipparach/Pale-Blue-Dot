@@ -992,8 +992,9 @@ pub struct TooltipBox;
 #[derive(Component)]
 pub struct TooltipWords;
 
-/// How far the tooltip sits from the pointer, native px.
-const TOOLTIP_OFFSET: f32 = 8.0;
+/// The gap between a tooltip and its node, and its least distance from the
+/// window's edge, native px.
+const TOOLTIP_GAP: f32 = 3.0;
 
 /// Spawn the tooltip, hidden.
 pub fn spawn_tooltip(mut commands: Commands, kit: Res<UiKit>) {
@@ -1024,60 +1025,64 @@ pub fn spawn_tooltip(mut commands: Commands, kit: Res<UiKit>) {
         });
 }
 
-/// Where the tooltip goes for a pointer at `cursor` (logical px) in a
-/// window of `window` (logical px), at UI scale `scale`: below and right of
-/// the pointer; left of it in the window's right quarter and above it in the
-/// bottom fifth (the hotbar), so it stays on screen. Native px, as
-/// `[left, right, top, bottom]`, each set or `None`.
-pub fn tooltip_at(cursor: Vec2, window: Vec2, scale: f32) -> [Option<f32>; 4] {
-    let scale = scale.max(1e-3);
-    let (left, right) = if cursor.x > window.x * 0.75 {
-        (None, Some((window.x - cursor.x) / scale + TOOLTIP_OFFSET))
+/// Where a tooltip `tip` (its size) goes for the hovered node `over`, in a
+/// window `window`, all native px: above the node and centred on it, so it
+/// never covers the node or the counts below and beside it, and below the
+/// node only when there is no room above; clamped inside the window on every
+/// side. Its top-left corner.
+pub fn tooltip_at(over: Rect, tip: Vec2, window: Vec2) -> Vec2 {
+    let edge = TOOLTIP_GAP;
+    let left = (over.center().x - tip.x / 2.0).clamp(edge, (window.x - tip.x - edge).max(edge));
+    let above = over.min.y - TOOLTIP_GAP - tip.y;
+    let top = if above >= edge {
+        above
     } else {
-        (Some(cursor.x / scale + TOOLTIP_OFFSET), None)
+        over.max.y + TOOLTIP_GAP
     };
-    let (top, bottom) = if cursor.y > window.y * 0.8 {
-        (None, Some((window.y - cursor.y) / scale + TOOLTIP_OFFSET))
-    } else {
-        (Some(cursor.y / scale + TOOLTIP_OFFSET), None)
-    };
-    [left, right, top, bottom]
+    Vec2::new(left, top.clamp(edge, (window.y - tip.y - edge).max(edge)))
 }
 
-/// Show the hovered node's tooltip by the pointer, or none.
+/// Show the hovered node's tooltip over it, or none.
 #[allow(clippy::type_complexity)]
 pub fn show_tooltip(
     menu: Option<Res<crate::controls::MenuOpen>>,
-    hovered: Query<(&Interaction, &Tooltip, &InheritedVisibility)>,
+    hovered: Query<(
+        &Interaction,
+        &Tooltip,
+        &InheritedVisibility,
+        &ComputedNode,
+        &UiGlobalTransform,
+    )>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    scale: Option<Res<UiScale>>,
-    mut boxes: Query<&mut Node, With<TooltipBox>>,
+    mut boxes: Query<(&mut Node, &ComputedNode), (With<TooltipBox>, Without<Tooltip>)>,
     mut words: Query<&mut Text, With<TooltipWords>>,
 ) {
     let free = menu.is_some_and(|m| m.0);
     let over = hovered
         .iter()
-        .find(|(i, tip, shown)| **i != Interaction::None && !tip.0.is_empty() && shown.get())
-        .map(|(_, tip, _)| tip.0.clone());
-    let cursor = windows
-        .single()
-        .ok()
-        .and_then(|w| w.cursor_position().map(|c| (c, w.size())));
-    let (Some(text), Some((cursor, width)), true) = (over, cursor, free) else {
-        for mut node in &mut boxes {
+        .find(|(i, tip, shown, ..)| **i != Interaction::None && !tip.0.is_empty() && shown.get())
+        .map(|(_, tip, _, node, at)| {
+            // Physical px to native px: the node's own inverse scale holds
+            // the window's factor and the UI scale both.
+            let k = node.inverse_scale_factor();
+            let centre = at.translation * k;
+            let half = node.size() * k / 2.0;
+            (tip.0.clone(), Rect::from_center_half_size(centre, half), k)
+        });
+    let window = windows.single().ok().map(|w| w.physical_size().as_vec2());
+    let (Some((text, rect, k)), Some(window), true) = (over, window, free) else {
+        for (mut node, _) in &mut boxes {
             if node.display != Display::None {
                 node.display = Display::None;
             }
         }
         return;
     };
-    let [left, right, top, bottom] = tooltip_at(cursor, width, scale.map_or(1.0, |s| s.0));
-    for mut node in &mut boxes {
+    for (mut node, computed) in &mut boxes {
+        let at = tooltip_at(rect, computed.size() * k, window * k);
         node.display = Display::Flex;
-        node.left = left.map_or(Val::Auto, px);
-        node.right = right.map_or(Val::Auto, px);
-        node.top = top.map_or(Val::Auto, px);
-        node.bottom = bottom.map_or(Val::Auto, px);
+        node.left = px(at.x);
+        node.top = px(at.y);
     }
     for mut words in &mut words {
         if words.0 != text {
@@ -1298,25 +1303,26 @@ mod tests {
         }
     }
 
-    /// The tooltip sits by the pointer, left of it near the right edge, in
-    /// native px; it shows only over a node with words while a menu holds
-    /// the pointer.
+    /// The tooltip stands above its slot, clear of the slot's and its
+    /// neighbours' counts, below it only with no room above, and inside the
+    /// window; it shows only over a node with words while a menu holds the
+    /// pointer.
     #[test]
-    fn a_tooltip_shows_by_the_pointer_only_while_a_menu_holds_it() {
-        let window = Vec2::new(1440.0, 900.0);
-        assert_eq!(
-            tooltip_at(Vec2::new(100.0, 60.0), window, 2.0),
-            [Some(58.0), None, Some(38.0), None]
-        );
-        assert_eq!(
-            tooltip_at(Vec2::new(1400.0, 60.0), window, 2.0),
-            [None, Some(28.0), Some(38.0), None]
-        );
-        // Over the hotbar it stands above the pointer.
-        assert_eq!(
-            tooltip_at(Vec2::new(448.0, 860.0), window, 2.0),
-            [Some(232.0), None, None, Some(28.0)]
-        );
+    fn a_tooltip_stands_over_its_slot_only_while_a_menu_holds_the_pointer() {
+        let window = Vec2::new(720.0, 450.0);
+        let tip = Vec2::new(60.0, 14.0);
+        // Above a slot in the middle, centred on it.
+        let slot = Rect::new(100.0, 200.0, 124.0, 224.0);
+        assert_eq!(tooltip_at(slot, tip, window), Vec2::new(82.0, 183.0));
+        // The hotbar at the bottom: above it still, never off the bottom.
+        let hotbar = Rect::new(220.0, 416.0, 244.0, 440.0);
+        assert_eq!(tooltip_at(hotbar, tip, window).y, 399.0);
+        // At the left edge it is held inside the window; at the top, with no
+        // room above, it goes below.
+        let corner = Rect::new(0.0, 0.0, 24.0, 24.0);
+        assert_eq!(tooltip_at(corner, tip, window), Vec2::new(3.0, 27.0));
+        let right = Rect::new(700.0, 200.0, 720.0, 224.0);
+        assert_eq!(tooltip_at(right, tip, window).x, 657.0);
 
         let mut app = App::new();
         install_bare(&mut app);
@@ -1324,9 +1330,7 @@ mod tests {
             .insert_resource(UiScale(2.0))
             .add_systems(Startup, spawn_tooltip)
             .add_systems(Update, show_tooltip);
-        let mut window = Window::default();
-        window.set_cursor_position(Some(Vec2::new(100.0, 60.0)));
-        app.world_mut().spawn((window, PrimaryWindow));
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
         let slot = app
             .world_mut()
             .spawn((
@@ -1334,6 +1338,12 @@ mod tests {
                 Interaction::Hovered,
                 Tooltip("Stone x 12".into()),
                 InheritedVisibility::VISIBLE,
+                ComputedNode {
+                    size: Vec2::splat(48.0),
+                    inverse_scale_factor: 0.5,
+                    ..default()
+                },
+                UiGlobalTransform::from_xy(224.0, 424.0),
             ))
             .id();
         app.update();
@@ -1352,9 +1362,11 @@ mod tests {
                 .clone();
             (node.display, node.left, words)
         };
+        // Over the slot (native 100..124 across), centred: the box has no
+        // size before its first layout.
         assert_eq!(
             shown(&mut app),
-            (Display::Flex, px(58.0), "Stone x 12".to_string())
+            (Display::Flex, px(112.0), "Stone x 12".to_string())
         );
         app.world_mut()
             .resource_mut::<crate::controls::MenuOpen>()
