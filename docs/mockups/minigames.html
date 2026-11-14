@@ -142,6 +142,8 @@ img{image-rendering:pixelated}
 .msg{font-size:14px !important}
 
 .table{background:var(--panel) !important;border:1px solid var(--line) !important}
+/* a table's controls stay on screen while any of the table is: they pin to the bottom edge (the felt can be taller than the window) */
+.table > .ctrl{position:sticky;bottom:0;z-index:6;background:var(--panel);padding-block:8px;padding-bottom:max(8px, env(safe-area-inset-bottom, 0px));border-top:1px solid var(--line)}
 .reel{background:var(--slot-fill) !important;border:1px solid var(--slot-edge) !important}
 .reel.win{border-color:#fad973 !important;box-shadow:none !important}
 canvas.game{background:#050f14 !important;image-rendering:pixelated}
