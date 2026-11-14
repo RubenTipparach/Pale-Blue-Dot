@@ -36,6 +36,9 @@ header.top h1 { font: 600 28px/1.1 var(--display); color: var(--title); margin: 
 header.top p { margin: 4px 0 0; color: var(--page-dim); max-width: 1000px; }
 .pbd-tracker { font: 500 14px/1.4 var(--body); }
 .lookbar { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 8px; }
+.lookprev { line-height: 0; }
+.looktoast { font: 600 13px/1 VT323, monospace; color: #84e3b5; opacity: 0; transition: opacity .25s; }
+.looktoast.on { opacity: 1; }
 .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
 .seg button { font: 16px var(--body); background: var(--page-2); color: var(--page-text); border: 1px solid var(--page-line); padding: 6px 12px; min-height: 36px; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--page-line); color: var(--rune); border-color: var(--rune-dim); }
@@ -231,6 +234,8 @@ dialog.infomodal .mbody .ask, dialog.infomodal .mbody p { max-width: none; }
   <p class="info">The owner, 2026-11-14: <em>"show me the game with that 3d rendered look"</em>, <em>"yea the 3d rendered look as a whole kit, also make the menus interactive please"</em>, <em>"make a 3js demo"</em>, <em>"do all three"</em>, <em>"main menu I think should use the timber stuff, but the game I like the rock stuff, just need to determine which rock thing to use"</em>, <em>"pause menu = timber too"</em>. So: <b>carved oak for the menus out of play</b> (title screen, pause, settings), <b>rock and slate-blue stone for everything in play</b> (HUD, pack, map, machines, talk and trade). Every piece exists three ways; the switch below swaps the whole page, the demo included. Design: <code>openspec/changes/stone-and-wood-ui</code>. Desktop only.</p>
   <div class="lookbar"><span>Look:</span><div class="seg" id="lookSeg" role="group" aria-label="Look of the kit">
     <button data-look="drawn" aria-pressed="true">Drawn</button><button data-look="rendered" aria-pressed="false">Rendered (pixelated)</button><button data-look="smooth" aria-pressed="false">Smooth (Cycles)</button></div>
+    <div class="lookprev" aria-hidden="true" title="What the look changes: the rock panels, slots and plaques"><div class="nine p-rock face" data-rock="kit-128" style="--s:1;width:128px;height:64px;display:flex;align-items:center;justify-content:center;gap:6px"><span style="--s:1;width:24px;height:24px;display:inline-block;background:var(--i-slot-selected) 0 0/100% 100%;image-rendering:var(--ir)"></span><span style="--s:1;width:24px;height:24px;display:inline-block;background:var(--i-slot-idle) 0 0/100% 100%;image-rendering:var(--ir)"></span></div></div>
+    <span class="looktoast" id="lookToast" role="status" aria-live="polite"></span>
     <span class="info">Drawn: pixel by pixel (<code>ui_art.py</code>). Rendered: modelled in Blender, Cycles on the CPU (no GPU here), reduced to the same pixels and palette. Smooth: the 8x render itself, sampled linear (breaks the nearest-sampling rule: a question, not a decision).</span></div>
 </header>
 <nav class="tabs" role="tablist" aria-label="Screens">

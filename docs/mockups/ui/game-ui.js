@@ -20,6 +20,7 @@
     rendered: { dir: 'ui/rendered/', oak: 'ui/rendered/oak/', m: 1, ir: 'pixelated' },
     smooth: { dir: 'ui/rendered/hires/', oak: 'ui/rendered/hires/oak/', m: 8, ir: 'auto' },
   };
+  let ROCKS = {}; // panel name -> [w, h] native px of its baked rock frame (rendered/slices.json)
   let css = '';
   for (const [k, L] of Object.entries(LOOKS)) {
     const sel = k === 'drawn' ? ':root, [data-look="drawn"]' : `:root.look-${k}, [data-look="${k}"]`;
@@ -38,6 +39,10 @@
     if (remember) { try { localStorage.setItem('pbd-ui-look', l); } catch (e) { /* not remembered */ } }
     rockify(document);
     document.dispatchEvent(new CustomEvent('pbd-look', { detail: l }));
+    if (remember) {
+      const t = document.getElementById('lookToast');
+      if (t) { t.textContent = 'Look: ' + { drawn: 'Drawn', rendered: 'Rendered', smooth: 'Smooth' }[l]; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1600); }
+    }
   }
   setLook(LOOK, false);
   document.getElementById('lookSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setLook(b.dataset.look, true); });
@@ -99,7 +104,7 @@
   // The rough-rock frame of an in-play panel. In the rendered and smooth looks it is the approved
   // base rock rendered at exactly this panel's native size (rendered/slices.json "rock_panels"), so
   // nothing in its rim or lip shadow tiles; in the drawn look it is the drawn slab as a 9-slice.
-  let ROCKS = {};
+  // (ROCKS is declared at the top: setLook rockifies the page before this point)
   function rockPanel(name, attrs, ...kids) {
     const [w, hh] = ROCKS[name] || [200, 120];
     const a = Object.assign({}, attrs, { class: 'nine p-rock face', 'data-rock': name });
@@ -332,7 +337,8 @@
         // "There's no button to close or exit use modal"): an X in the panel's own top-right corner,
         // unless the panel already carries one. It does what Esc does.
         const has = el.querySelector('[aria-label^="close"], [aria-label^="Close"]');
-        if (!['title', 'loading'].includes(sc) && !has) {
+        // (touch screens only: on a desktop Esc shuts it, and the game itself has no X; owner, 2026-11-14)
+        if (COARSE && !['title', 'loading'].includes(sc) && !has) {
           if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
           el.append(h('button', { type: 'button', class: 'ui-x', 'aria-label': 'Close', title: 'Close (Esc)',
             style: 'position:absolute;top:calc(-6px*var(--s));right:calc(-6px*var(--s));z-index:40;width:calc(20px*var(--s));height:calc(20px*var(--s));min-width:36px;min-height:36px;padding:0;border:2px solid #92a3b2;border-radius:6px;background:#011c34;color:#eab798;font:700 calc(14px*var(--s))/1 VT323,monospace;box-shadow:0 2px 6px #000a;cursor:pointer;touch-action:manipulation',
@@ -875,6 +881,7 @@
     if (l !== 'drawn') for (const [w, hh] of Object.values(ROCKS)) src.push(`ui/rendered/${l === 'smooth' ? 'hires/' : ''}rock/rock-${w}x${hh}.png`);
     for (const u of src) { const i = new Image(); i.decoding = 'async'; i.src = u; KEEP.push(i); }
   }
+  rockify(document);
   preload(LOOK);
   document.addEventListener('pbd-look', (e) => preload(e.detail));
   setTimeout(() => Object.keys(LOOKS).filter((l) => l !== LOOK).forEach(preload), 1500);
