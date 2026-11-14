@@ -64,3 +64,25 @@ their air (`cloud_air`); the day veil and the stars.
 - `PBD_NO_SKY` at 1000 m as the reference for the ground's own colour.
 - The shader validated by the build (Bevy compiles the material at load; the
   capture logs no shader error).
+
+## Follow-up: an olive rim on the far sea (owner, 2026-11-14)
+
+The owner, on a shot from a few kilometres up: "Why ocean in the distance have
+this yellow rim lighting". Measured at the owner's spot at 1200 and 1800 m
+above the ground, before and after this change: before, the far sea at the
+limb is blue; after, a dull olive band lies along it. The hand-over weight
+`take` is applied to the whole column, so just past the shell (316 m past it
+at 1200 m, `take` 0.26) the limb, where the air path is longest, lost three
+quarters of its haze, and what showed was the sea's own colour at a grazing
+angle: its reflection of the sky's coefficients near the horizon, a dull
+olive. The near ground was the veil; the limb never was.
+
+Decision: the hand-over is lifted toward the limb by the same weight that
+gives the limb the sky's own light, `smoothstep(GROUND_GAIN_FROM, 0.94,
+column_opacity)`: `take' = mix(take, 1, that)`. The ground under the eye
+still takes the haze up from nothing at the shell; the limb keeps the dome's
+column at every height. What crosses the shell in a frame is then only the
+limb's haze, where the ground's own haze is already thickest. Verified by
+the ladder through the crossing (shots below the shell, at it and past it)
+and the limb at 1200, 1800 and 3000 m. Recommendation taken (ask only with
+screenshots).

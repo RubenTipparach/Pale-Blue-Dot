@@ -171,9 +171,13 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     // exp(-h / GROUND_HAZE_HEIGHT_M) of the eye's height, and over the ground
     // the column takes up what it gives away past the shell, from nothing at
     // the shell's top to all of it from orbit. Nothing switches on in a frame.
+    // Toward the limb the column is the sky's own light at every height: it
+    // was never the veil, and without it the far sea showed its own grazing
+    // colour as an olive rim.
     if (over_ground) {
         let past = max(altitude-shell,0.0);
-        let take = 1.0-exp(-past/GROUND_HAZE_HEIGHT_M);
+        let take = mix(1.0-exp(-past/GROUND_HAZE_HEIGHT_M),1.0,
+            smoothstep(GROUND_GAIN_FROM,0.94,column_opacity));
         scattered *= take;
         opacity *= take;
     }

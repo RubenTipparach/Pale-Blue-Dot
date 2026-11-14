@@ -55,3 +55,18 @@ more sea, so its blue rises with the view, not the haze.
   but it was not captured).
 - Real-time smoothness: a fixed-step capture shows the look, not the frame
   time. The frame cost was not measured (no perf runs on this Mac today).
+
+## The limb follow-up (2026-11-14)
+
+`limb-1200-1800.jpg`: the owner's spot from 1200 m (top) and 1800 m above the
+ground (bottom), looking at the limb over the sea to the west, `--view column
+--at 16.86 57.63 --height <h> --pitch -37|-43 --yaw -60 --time 11 --rain 0
+--weather-at 3600`, a new world per shot. Left, before `high-haze`; middle,
+`high-haze` as first merged (the far sea at the limb an olive band); right,
+with the hand-over lifted toward the limb (blue at the limb, the land still
+readable).
+
+`limb-crossing.jpg`: the same view at 850, 875 (inside the shell), 895 and 950
+m (outside) above the ground with the follow-up. Inside the shell the far sea
+at the limb is dark slate under the ground's own haze; it is not this
+change's and is noted in the design.
