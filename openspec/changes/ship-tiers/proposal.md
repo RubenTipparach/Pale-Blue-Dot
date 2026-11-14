@@ -35,7 +35,7 @@ The owner, 2026-11-14: "update the rocket sim to have a larger ground area,
 and maybe a small planet to test orbit transitions around, and a solar system
 with navigation nodes to plot flight paths and rocket burns". The mockup gets a
 launch field 2.4 km across (the game's cells near the pad, a cheap far ring),
-Wick, a 600 m test moon 14 km out, and a planner tab: the whole system, a
+Taper, a 600 m test moon 14 km out, and a planner tab: the whole system, a
 predicted line integrated forward, and maneuver nodes. Nodes contradict the
 flight invariant; they are in the mockup only, and the invariant is asked
 about (survey G4a, design 11.4).
@@ -103,7 +103,7 @@ commit that builds it, with its test.
   save path.
 
 - **The planner (mockup, 2026-11-14):** maneuver nodes with prograde, normal
-  and radial handles on the integrated line, chained, flown by hand; Wick to
+  and radial handles on the integrated line, chained, flown by hand; Taper to
   practise launch, orbit, transfer, capture, landing and return; the Aubade
   system to scale. Provisional on G4a; not in the spec deltas.
 

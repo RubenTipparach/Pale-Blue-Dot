@@ -178,7 +178,7 @@ form.addroute select{font:inherit;font-size:13.5px;background:var(--panel-2);col
   <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
   <p>Three tiers of ship, each unlocked by the next rung of the power ladder. <b>Chemical and nuclear rockets</b> are stacked from hex cells in the assembly building and fly to orbit on thrust-to-weight and delta-v. <b>Fusion</b> ships stay in space, fly courses their nav computer plots, run freight on their own, and meet landers in low orbit. <b>Antimatter</b> makes the lander the ship: it flies from one world's surface to another's with no orbit stop, anywhere in the system. There is no warp: <q>Let's not do warp</q> (the owner, 2026-11-12).</p>
   <p>The assembly building's grid reaches <b>four rings</b> out from the core, a stack up to nine cells (25.5 m) across, so a big rocket has decks to walk: crew decks, cabins, ladders, hatches and airlocks are cells like the tanks, checked so the pod can be walked to from the hatch. <q>Make me some more rocket building presets. Allow larger rockets with more leg room to walk around in. (3-4 radius? Blocks)</q> (the owner, 2026-11-12). Pick <b>Colony lander</b>, set it to night and go <b>Inside</b>.</p>
-  <p><b>New, 2026-11-14:</b> <q>update the rocket sim to have a larger ground area, and maybe a small planet to test orbit transitions around, and a solar system with navigation nodes to plot flight paths and rocket burns</q> (the owner). The launch field now runs 2.4 km out (the game's cells for 200 m round the pad, a cheap far ring beyond), with <b>Pad B</b> 190 m out to hop to and a <b>Walk the field</b> view. The new <b>Planner</b> tab has <b>Wick</b>, a 600 m test moon 16 km from home, the whole <b>Aubade</b> system to scale, and <b>maneuver nodes</b> on a predicted line that is the flight itself run forward: launch, orbit, transfer, capture, land on Wick, come home.</p>
+  <p><b>New, 2026-11-14:</b> <q>update the rocket sim to have a larger ground area, and maybe a small planet to test orbit transitions around, and a solar system with navigation nodes to plot flight paths and rocket burns</q> (the owner). The launch field now runs 2.4 km out (the game's cells for 200 m round the pad, a cheap far ring beyond), with <b>Pad B</b> 190 m out to hop to and a <b>Walk the field</b> view. The new <b>Planner</b> tab has <b>Taper</b>, a 600 m test moon 16 km from home, the whole <b>Aubade</b> system to scale, and <b>maneuver nodes</b> on a predicted line that is the flight itself run forward: launch, orbit, transfer, capture, land on Taper, come home.</p>
   <p class="honest"><b>Maneuver nodes go against CLAUDE.md as written</b> ("Do not restore rocket patched conics, maneuver nodes, transfer-window requirements, or n-body ship simulation"). You asked for them, so they are in this mockup only; the rule changes only on your word. It is the survey's question G4a, with the planner's screenshots.</p>
   <p class="honest"><b>One thing here needs your call, and it is the reason for the screenshots in the survey.</b> CLAUDE.md says ships fly Newtonian with local gravity falloff and that patched conics, maneuver nodes and transfer windows stay out. The chemical tier's "orbital stuff" pulls against that. Tab 2 flies the same rocket both ways: <b>today's bounded field</b> and <b>the inverse-square field Tenebris flies its rockets in</b>. The recommendation is at the bottom of the page.</p>
 </header>
@@ -190,7 +190,7 @@ form.addroute select{font:inherit;font-size:13.5px;background:var(--panel-2);col
     <button class="tab" role="tab" data-tab="orbit" aria-selected="false"><img src="ship-tiers/engine-chem.png?v=1" alt=""><b>Chemical: orbit</b><span>tier 1 &middot; fission</span></button>
     <button class="tab" role="tab" data-tab="fusion" aria-selected="false"><img src="ship-tiers/fusion.png?v=1" alt=""><b>Fusion</b><span>tier 2 &middot; fusion power</span></button>
     <button class="tab" role="tab" data-tab="antimatter" aria-selected="false"><img src="ship-tiers/antimatter.png?v=1" alt=""><b>Antimatter</b><span>tier 3 &middot; the collider</span></button>
-    <button class="tab" role="tab" data-tab="plan" aria-selected="false"><img src="ship-tiers/navcomp.png?v=1" alt=""><b>Planner</b><span>nodes &middot; Wick &middot; Aubade</span></button>
+    <button class="tab" role="tab" data-tab="plan" aria-selected="false"><img src="ship-tiers/navcomp.png?v=1" alt=""><b>Planner</b><span>nodes &middot; Taper &middot; Aubade</span></button>
   </div>
   <div class="stage" id="stage">
     <canvas id="view" aria-label="The current tier's 3D view"></canvas>
@@ -1729,9 +1729,9 @@ const PSYS = [
   {id: "ochre", name: "Ochre", parent: "aubade", a: 180e3, ph: 2.3, R: 1200, g: 0.70, air: 0xffc496, biome: "ochre", level: 4, layer: 0.004, color: 0xffc496},
   {id: "pale", name: "Pale Blue", parent: "aubade", a: 300e3, ph: 0, R: 4800, g: 1.0, air: 0x5aa8ff, biome: "home", level: 5, layer: 0.01, lights: true, color: 0x8fc3d8},
   {id: "lantern", name: "Lantern", parent: "pale", a: 26e3, ph: 2.4, R: 1200, g: 0.35, biome: "lantern", level: 4, layer: 0.004, color: 0xb3b8d9, lo: 300},
-  {id: "wick", name: "Wick", parent: "pale", a: 16e3, ph: 0.9, R: 600, g: 0.40, biome: "wick", level: 4, layer: 0.002, color: 0xd8c8a0, lo: 150},
+  {id: "taper", name: "Taper", parent: "pale", a: 16e3, ph: 0.9, R: 600, g: 0.40, biome: "taper", level: 4, layer: 0.002, color: 0xd8c8a0, lo: 150},
   {id: "verdance", name: "Verdance", parent: "aubade", a: 450e3, ph: 0.36, R: 2400, g: 0.90, air: 0x9cf0d0, biome: "verdance", level: 4, layer: 0.006, ocean: 0x1b5a5a, color: 0x9cf0d0, lo: 500},
-  {id: "pebble", name: "Pebble", parent: "aubade", a: 650e3, ph: 1.3, R: 300, g: 0.15, biome: "wick", level: 3, layer: 0.002, color: 0xa09080, lo: 150},
+  {id: "pebble", name: "Pebble", parent: "aubade", a: 650e3, ph: 1.3, R: 300, g: 0.15, biome: "taper", level: 3, layer: 0.002, color: 0xa09080, lo: 150},
   {id: "amber", name: "Amber", parent: "aubade", a: 1000e3, ph: 3.5, R: 19200, g: 1.6, gas: true, air: 0xffd8a0, color: 0xffd8a0},
   {id: "cinder", name: "Cinder", parent: "amber", a: 60e3, ph: 1.0, R: 1200, g: 0.45, biome: "cinder", level: 4, layer: 0.004, color: 0xe8b040, lo: 300},
   {id: "rime", name: "Rime", parent: "amber", a: 95e3, ph: 4.1, R: 1200, g: 0.40, biome: "rime", level: 4, layer: 0.004, color: 0xcfe6f0, lo: 300},
@@ -1743,7 +1743,7 @@ PSYS.forEach(b => {
   if (b.pi >= 0) { const P = PSYS[b.pi]; b.w = Math.sqrt(P.mu / (b.a ** 3)); b.moon = !!P.parent; b.hill = b.a * Math.cbrt(b.mu / (3 * P.mu)); }
   b.Rc = b.R + (b.layer ? 2 : 0);       // the ground a ship touches: the cell tops, about 2 m over the radius
 });
-BIOMES.wick = p => ({sheet: SHEET.asteroid, h: 1 + Math.floor(fbm(p, 61, 2.6) * 3)});
+BIOMES.taper = p => ({sheet: SHEET.asteroid, h: 1 + Math.floor(fbm(p, 61, 2.6) * 3)});
 BIOMES.ochre = p => { const e = fbm(p, 31, 2); return {sheet: e > 0.6 ? SHEET.mountains : SHEET.desert, h: 1 + Math.floor(e * 6)}; };
 BIOMES.rime = p => ({sheet: SHEET.frozen, h: 1 + Math.floor(fbm(p, 71, 2.2) * 4)});
 // every body's position (or velocity) at time t, parents first, into out[3i..3i+2]
@@ -1774,8 +1774,8 @@ function domOf(p, P) {
   return best;
 }
 // the field a ship feels. The bodies ride rails that know only their parents, so a ship that felt every
-// body's full pull would be dragged off a moon by Amber's 0.03 m/s^2 at Pale Blue, which Wick's rail never
-// feels (measured: an orbit round Wick hits the ground inside two turns). So the ship is integrated in the
+// body's full pull would be dragged off a moon by Amber's 0.03 m/s^2 at Pale Blue, which Taper's rail never
+// feels (measured: an orbit round Taper hits the ground inside two turns). So the ship is integrated in the
 // frame of the body it is round (domOf), which rides that body's rail: that body's own pull, plus every
 // other body's tide (its pull on the ship less its pull on the frame body), plus the rail's own
 // acceleration. Far from every planet the frame is the star's and the pulls are summed as they are.
@@ -2029,7 +2029,7 @@ function readoutAfter(pr, seg) {
 }
 
 const PLAN = {scope: "home", focus: "pale", warp: 1, sas: "node", nodes: [], horizon: 900, S: null, trail: [], pred: null, ro: null, dirty: true, lastPred: 0, burning: false, msg: "", sel: 0};
-const FOCI = {home: [["pale", "Pale Blue"], ["wick", "Wick"], ["lantern", "Lantern"], ["ship", "Ship"]], system: [["aubade", "Aubade"], ["pale", "Pale Blue"], ["verdance", "Verdance"], ["ochre", "Ochre"], ["amber", "Amber"], ["ship", "Ship"]]};
+const FOCI = {home: [["pale", "Pale Blue"], ["taper", "Taper"], ["lantern", "Lantern"], ["ship", "Ship"]], system: [["aubade", "Aubade"], ["pale", "Pale Blue"], ["verdance", "Verdance"], ["ochre", "Ochre"], ["amber", "Amber"], ["ship", "Ship"]]};
 const WARPS = [1, 4, 16, 64, 256, 1000];
 const fmtT = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}` : `${m}:${String(ss).padStart(2, "0")}`; };
 const fmtD = m => Math.abs(m) >= 100000 ? Math.round(m / 1000).toLocaleString() + " km" : Math.abs(m) >= 10000 ? (m / 1000).toFixed(1) + " km" : Math.round(m).toLocaleString() + " m";
@@ -2063,7 +2063,7 @@ function buildPlanner() {
   W.dots.geometry.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(3 * NBOD), 3));
   W.dots.geometry.setAttribute("color", new THREE.Float32BufferAttribute(PSYS.flatMap(b => new THREE.Color(b.color).toArray()), 3)); W.dots.frustumCulled = false; W.scene.add(W.dots);
   const ex = new THREE.Vector3(1, 0, 0), ez = new THREE.Vector3(0, 0, -1);
-  W.rails = PSYS.map(b => { if (b.pi < 0) return null; const l = ring(b.a / 1000, b.moon ? 0xb3b8d9 : 0x7390bf, b.id === "wick" ? 0.5 : 0.3, ex, ez, 256); W.scene.add(l); return l; });
+  W.rails = PSYS.map(b => { if (b.pi < 0) return null; const l = ring(b.a / 1000, b.moon ? 0xb3b8d9 : 0x7390bf, b.id === "taper" ? 0.5 : 0.3, ex, ez, 256); W.scene.add(l); return l; });
   // the line ahead (vertex colours: cyan bound, orange escape or impact, purple after a node) and the flown trail
   const NP = 30002;
   W.path = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({vertexColors: true}));
@@ -2090,7 +2090,7 @@ function buildPlanner() {
   });
   W.cam = {target: new THREE.Vector3(), yaw: 0.5, pitch: 0.75, dist: 34, min: 0.02, max: 6000};
   if (PLAN.scope === "system") Object.assign(W.cam, {dist: 1900, pitch: 1.0});
-  if (PLAN.focus !== "pale" && PLAN.focus !== "aubade") { const b = PSYS[BI[PLAN.focus]]; W.cam.dist = PLAN.focus === "ship" ? 1.5 : Math.max(4, b.R / 1000 * (b.id === "wick" ? 5 : 7)); }
+  if (PLAN.focus !== "pale" && PLAN.focus !== "aubade") { const b = PSYS[BI[PLAN.focus]]; W.cam.dist = PLAN.focus === "ship" ? 1.5 : Math.max(4, b.R / 1000 * (b.id === "taper" ? 5 : 7)); }
   W.fov = 50;
   W.reset = (how) => {
     PLAN.trail = []; PLAN.nodes = []; PLAN.msg = ""; PLAN.warp = 1;
@@ -2293,7 +2293,7 @@ function renderPlanWork() {
       <div class="eyebrow">Flight plan</div>
       <div class="seg"><button class="pbtn" id="pReset">Reset: in low orbit</button><button class="pbtn" id="pPad">Reset: on the pad</button><button class="pbtn" id="pClear">Clear nodes</button></div>
       <div class="eyebrow">The nav computer's suggestion (a tier-2 part; its nodes are ordinary nodes)</div>
-      <div class="seg"><button class="pbtn" id="navWick">Transfer to Wick</button><button class="pbtn" id="navHome">Return to Pale Blue</button><button class="pbtn" id="navLantern">Transfer to Lantern</button><button class="pbtn" id="navVerd">Out to Verdance</button></div>
+      <div class="seg"><button class="pbtn" id="navTaper">Transfer to Taper</button><button class="pbtn" id="navHome">Return to Pale Blue</button><button class="pbtn" id="navLantern">Transfer to Lantern</button><button class="pbtn" id="navVerd">Out to Verdance</button></div>
       <p class="muted" style="font-size:13px">Click the line in the view to put a node there; drag its handles (yellow prograde and retrograde, purple normal, cyan radial) and the line moves as you drag, or nudge it here. Hold <b>B</b> (or the on-screen Burn) when a node comes up: the ship points along it and burns until it is done. SAS holds point it prograde, retrograde, radial out or normal for burns by hand: a landing is a retrograde burn held to the ground, a lift-off is radial out.</p>
       <div class="bars"><div class="bar"><span>Delta-v: need ${Math.round(need)} of ${Math.round(have)} m/s</span><span class="t"><i class="${need > have ? "short" : ""}" style="width:${Math.min(100, have ? need / have * 100 : 0)}%"></i></span><span class="v">${Math.round(have - need)} left</span></div></div>
       ${nodeRows || `<p class="muted" style="font-size:13.5px">No nodes yet.</p>`}
@@ -2304,7 +2304,7 @@ function renderPlanWork() {
       <div class="eyebrow">The bodies near home</div>
       <div class="tablebox"><table><thead><tr><th></th><th>Radius</th><th>Gravity</th><th>From Pale Blue</th><th>Low orbit</th></tr></thead><tbody>
         <tr><td>Pale Blue</td><td class="n">4,800 m</td><td class="n">1.00 g</td><td class="n">-</td><td class="n">960 m, 316 m/s, 1:54</td></tr>
-        <tr><td><b>Wick</b> (test moon)</td><td class="n">600 m (L8)</td><td class="n">0.40 g</td><td class="n">16 km, rail 8:50</td><td class="n">150 m, 69 m/s, 1:08</td></tr>
+        <tr><td><b>Taper</b> (test moon)</td><td class="n">600 m (L8)</td><td class="n">0.40 g</td><td class="n">16 km, rail 8:50</td><td class="n">150 m, 69 m/s, 1:08</td></tr>
         <tr><td>Lantern</td><td class="n">1,200 m (L9)</td><td class="n">0.35 g</td><td class="n">26 km, rail 18:18</td><td class="n">300 m, 92 m/s</td></tr></tbody></table></div>
       <div class="eyebrow">Measured on this page's integrator</div>
       <div class="tablebox"><table><tbody id="planMeasured">${PLAN_MEASURED}</tbody></table></div>
@@ -2315,7 +2315,7 @@ function renderPlanWork() {
   $("pPad").onclick = () => { PLAN.endShown = false; PLAN.launch = false; W.reset("pad"); };
   $("pClear").onclick = () => { PLAN.nodes = []; PLAN.dirty = true; replan(); };
   const nav = (tgt, o) => { flashInfo("The nav computer is searching node times and burns..."); setTimeout(() => { const r = planNav(tgt, o); flashInfo(r); }, 30); };
-  $("navWick").onclick = () => nav("wick");
+  $("navTaper").onclick = () => nav("taper");
   $("navHome").onclick = () => nav("pale");
   $("navLantern").onclick = () => nav("lantern");
   $("navVerd").onclick = () => nav("verdance");
@@ -2329,10 +2329,10 @@ let PLAN_MEASURED = [
   ["Pad to low orbit (First orbit, gravity turn)", "23 s, 548 m/s; Ap 989 m, Pe 884 m, T 1:54"],
   ["A coasting ship against its line, 60 s on", "0 m apart (the line is the flight)"],
   ["A 25 m/s prograde node", "moves the line 10.1 km two minutes on; Ap 3,135 m"],
-  ["Low orbit to Wick (the nav computer's nodes, flown)", "72 + 38 + 2 m/s = 113 m/s; orbit Ap 211 m, Pe 131 m, T 1:12"],
-  ["That orbit, left alone", "still round Wick 2 h 40 min later (Ap 261 m, Pe 153 m)"],
-  ["Down onto Wick (a scripted retrograde burn)", "206 m/s, landed under 6 m/s"],
-  ["Wick orbit to home", "29 m/s; into Pale Blue's air 2:11 later at 412 m/s"],
+  ["Low orbit to Taper (the nav computer's nodes, flown)", "72 + 38 + 2 m/s = 113 m/s; orbit Ap 211 m, Pe 131 m, T 1:12"],
+  ["That orbit, left alone", "still round Taper 2 h 40 min later (Ap 261 m, Pe 153 m)"],
+  ["Down onto Taper (a scripted retrograde burn)", "206 m/s, landed under 6 m/s"],
+  ["Taper orbit to home", "29 m/s; into Pale Blue's air 2:11 later at 412 m/s"],
   ["One prediction (this container's CPU)", "6 to 10 ms for 15 min near home; 75 to 110 ms for 4 h across the system"],
 ].map(([a, b]) => `<tr><td>${a}</td><td class="n" style="white-space:normal">${b}</td></tr>`).join("");
 // plan with the nav computer from the ship's state now
@@ -2431,7 +2431,7 @@ function renderCtl() {
       + seg("speedSel", [["1", "x1"], ["4", "x4"], ["16", "x16"]], String(ORB.speed), "Time speed");
   } else if (TAB === "plan") {
     const S = PLAN.S;
-    h = seg("pscope", [["home", "Pale Blue and Wick"], ["system", "Aubade system"]], PLAN.scope, "Scope")
+    h = seg("pscope", [["home", "Pale Blue and Taper"], ["system", "Aubade system"]], PLAN.scope, "Scope")
       + seg("pfocus", FOCI[PLAN.scope], PLAN.focus, "Focus")
       + seg("pwarp", WARPS.map(w => [String(w), "x" + w]), String(PLAN.warp), "Time warp")
       + seg("psas", [["node", "Node"], ["pro", "Prograde"], ["retro", "Retrograde"], ["rad", "Radial out"], ["nor", "Normal"]], PLAN.sas, "SAS hold")
@@ -2460,7 +2460,7 @@ function renderCtl() {
   if ($("pro")) $("pro").onclick = () => WORLDS.orbit.burn(20);
   if ($("retro")) $("retro").onclick = () => WORLDS.orbit.burn(-20);
   bindSeg("pscope", v => { PLAN.scope = v; PLAN.focus = v === "system" ? "aubade" : "pale"; Object.assign(WORLDS.plan.cam, v === "system" ? {dist: 1900, pitch: 1.0} : {dist: 34, pitch: 0.75}); PLAN.dirty = true; renderCtl(); });
-  bindSeg("pfocus", v => { PLAN.focus = v; const b = PSYS[BI[v]]; WORLDS.plan.cam.dist = v === "ship" ? 1.5 : v === "aubade" ? 1900 : Math.max(4, b.R / 1000 * (b.id === "wick" ? 5 : 7)); renderCtl(); });
+  bindSeg("pfocus", v => { PLAN.focus = v; const b = PSYS[BI[v]]; WORLDS.plan.cam.dist = v === "ship" ? 1.5 : v === "aubade" ? 1900 : Math.max(4, b.R / 1000 * (b.id === "taper" ? 5 : 7)); renderCtl(); });
   bindSeg("pwarp", v => { PLAN.warp = +v; renderCtl(); });
   bindSeg("psas", v => { PLAN.sas = v; renderCtl(); });
   if ($("pLaunch")) $("pLaunch").onclick = () => { PLAN.launch = true; renderCtl(); };
@@ -2477,7 +2477,7 @@ function renderInfo() {
     vab: VAB.view === "inside" ? "<b>Aboard, on the pad.</b> You stand on a deck the walk check reached, in the rocket's frame: launch the preview and you ride it up. Drag to look; nothing moves until you do." : "<b>Edit a layer</b> in the editor under the stage, or click a ghost cell here to place the selected part on the layer being edited; right-click or the eraser takes one off. Drag to look round, scroll to zoom. Cut-away hides the walls on your side so the decks show. Press Launch and fly it: W and S pitch, A and D yaw, Q and E roll, Shift and Ctrl throttle; the nozzles swivel in their gimbals.",
     orbit: "<b>To scale</b>: Pale Blue is 4.8 km across the middle, low orbit 960 m up. The cyan line is the path the ship will fly, integrated forward through the same field it flies in; orange means it escapes or comes down.",
     fusion: FUS.view === "freight" ? "<b>Freighters</b> fly the nav computer's courses between stops, with no pilot. Add a route in the panel below." : FUS.view === "lander" ? "<b>Landers</b> lift off to low orbit to meet the fusion ship, which never lands. Set it to night: the pad lamps and the exhaust light the ground." : "<b>The nav computer</b> plots a near-straight course: burn, flip at the midpoint, brake. The dashed line is what a chemical rocket flies instead.",
-    plan: "<b>The planner.</b> Every body on its rails, the ship in their pull (in the frame of the body it is round, so the rails and the field agree), the line ahead that same integration run forward. Drag to turn, scroll to zoom from metres to the whole system. Click the line to place a node; drag its handles. Focus Wick to see an orbit round it close.",
+    plan: "<b>The planner.</b> Every body on its rails, the ship in their pull (in the frame of the body it is round, so the rails and the field agree), the line ahead that same integration run forward. Drag to turn, scroll to zoom from metres to the whole system. Click the line to place a node; drag its handles. Focus Taper to see an orbit round it close.",
     antimatter: AM.view === "course" ? "<b>The nav computer</b> plots a lander's course from one surface to another: lift off, burn, flip, brake, set down. The dashed line is the fusion tier's way: lander up, ship across, lander down." : "<b>The antimatter lander</b> from the assembly building's examples, on Cinder after flying from Pale Blue's surface with no orbit stop. Its deck, cabins and airlock are cells like any other.",
   };
   INFO.innerHTML = T[TAB];
@@ -2850,8 +2850,8 @@ $("opts").innerHTML = [
   + `<p class="muted" style="grid-column:1/-1;font-size:14px">B changes the invariant in one place: "ships use local gravity falloff" becomes "assisted ships use the bounded anchor field; rockets use the orbital field". Patched conics, maneuver nodes, transfer-window requirements and ship-to-ship gravity stay out. This is the survey's question G4, with tab 2's screenshots in both fields and tab 3's course beside it.</p>`;
 const DEC = [
   ["G4a. Maneuver nodes on the integrated line? (asked, with the planner's screenshots)", "You asked for navigation nodes to plot paths and burns (2026-11-14). CLAUDE.md keeps maneuver nodes out, and G4's recommended B had none. The planner has them, in the mockup only.", "Allow them: nodes are finite burns planned on the line the integrator draws and flown by hand; patched conics, sphere-of-influence solvers, transfer-window requirements and ship-to-ship gravity stay out. The rule's wording changes only on your answer, in the commit that builds it."],
-  ["The ship's frame (2026-11-14)", "The bodies ride rails that know only their parents. A ship feeling every body's full pull is dragged off a moon orbit by Amber's 0.03 m/s&sup2; at Pale Blue, which Wick's rail never feels: measured, an orbit round Wick hit the ground inside two turns.", "Recommendation taken (ask only with screenshots): the ship is integrated in the frame of the body it is round, riding that body's rail: that body's pull plus every other body's tide. One integrator, no conics; the frame only changes which rail is the reference."],
-  ["Wick, the test moon (2026-11-14)", "A small body close to home to practise orbit transitions.", "Recommendation taken (ask only with screenshots): 600 m (Goldberg level 8, on the ladder), 0.4 g, 16 km from Pale Blue on a rail that agrees with the field, airless and lifeless. Mockup data: whether the game gets a Wick is the planets change's call."],
+  ["The ship's frame (2026-11-14)", "The bodies ride rails that know only their parents. A ship feeling every body's full pull is dragged off a moon orbit by Amber's 0.03 m/s&sup2; at Pale Blue, which Taper's rail never feels: measured, an orbit round Taper hit the ground inside two turns.", "Recommendation taken (ask only with screenshots): the ship is integrated in the frame of the body it is round, riding that body's rail: that body's pull plus every other body's tide. One integrator, no conics; the frame only changes which rail is the reference."],
+  ["Taper, the test moon (2026-11-14)", "A small body close to home to practise orbit transitions.", "Recommendation taken (ask only with screenshots): 600 m (Goldberg level 8, on the ladder), 0.4 g, 16 km from Pale Blue on a rail that agrees with the field, airless and lifeless. Mockup data: whether the game gets a Taper is the planets change's call."],
   ["The launch field (2026-11-14)", "A larger ground area round the pad, kept cheap.", "Recommendation taken (ask only with screenshots): 80 rings of the game's cells (about 200 m), a far ring of cells twelve times wider to 2.4 km as scenery, Pad B 190 m out, walking on the near ring."],
   ["G4. How do chemical rockets meet orbits? (asked, with screenshots)", "A keep the invariant, B Tenebris's orbital field without nodes, C all of Tenebris.", "B. It is the orbital play Tenebris has, with the part that made the invariant necessary (a second, analytic model of motion) left out. Until you answer, the plan is written for B and marked provisional."],
   ["One build grid", "The VAB builds hex stacks; the shipyard mockup builds on 2 m squares.", "Recommendation taken (ask only with screenshots): both on the 2.833 m hex cell with 1 m layers, so a part is a unit of the world like a block."],
