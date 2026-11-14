@@ -11,10 +11,10 @@
 /* Tokens. The UI's colours are the kit's (tools/art/ui_art.py, every one Sweaft-64); the game UI
    has one look by day and by night, so light and dark page schemes share them. */
 :root {
-  --ink: #010000; --seam: #170916; --face: #2c2c25; --well: #161612;
+  --ink: #010000; --seam: #170916; --face: #1f3b52; --well: #011c34;
   --text: #eab798; --text-dim: #cfaa81; --title: #faaf5c; --label: #010000;
   --oak-0: #2f1525; --oak-1: #41322c; --oak-2: #725244; --oak-3: #ab8465; --oak-4: #cfaa81;
-  --stone-1: #2c2c25; --stone-2: #434137; --stone-3: #a09f91;
+  --stone-1: #1f3b52; --stone-2: #3e586e; --stone-3: #92a3b2;
   --rock-1: #2b1f35; --rock-2: #3e3551; --rock-3: #69608b;
   --rune: #84e3b5; --rune-dim: #53998b;
   --page: #010e1a; --page-2: #011c34; --page-line: #1f3b52; --page-text: #bfcad7; --page-dim: #92a3b2;
@@ -181,7 +181,7 @@ table.t td, table.t th { border-bottom: 1px solid var(--page-line); padding: 3px
   <h2>Type</h2>
   <p class="note">Display: <b>Pixelify Sans</b> (carved titles and plaque labels, upper case). Body: <b>VT323</b> (counts, lines of talk, settings). Both on Google Fonts under the OFL; the game would ship the two TTFs in <code>assets/fonts/</code>. Sizes are whole multiples of the UI scale.</p>
   <div class="row big2">
-    <div class="nine p-frame face" style="width:420px"><div class="carved" style="font-size:calc(12px*var(--s))">Pale Blue Dot</div><div class="carved">Settings &middot; Input &middot; Pack</div><p style="margin:8px 0 0">Ore for the gate hinges. Bring six iron and I will see the gate hung by nightfall.</p><p style="margin:4px 0 0;color:var(--text-dim)">Secondary text, and counts: 64 16 3</p></div>
+    <div class="nine p-rock face" style="width:420px"><div class="carved" style="font-size:calc(12px*var(--s))">Pale Blue Dot</div><div class="carved">Settings &middot; Input &middot; Pack</div><p style="margin:8px 0 0">Ore for the gate hinges. Bring six iron and I will see the gate hung by nightfall.</p><p style="margin:4px 0 0;color:var(--text-dim)">Secondary text, and counts: 64 16 3</p></div>
   </div>
 
   <h2>Panels at three sizes (9-slice)</h2>
@@ -221,7 +221,7 @@ table.t td, table.t th { border-bottom: 1px solid var(--page-line); padding: 3px
 
   <h2>Tabs, scrollbar, slider, checkboxes, tooltip</h2>
   <div class="row big2">
-    <div class="nine p-frame face" style="width:420px">
+    <div class="nine p-rock face" style="width:420px">
       <div style="display:flex;gap:2px;margin:-4px 0 6px" id="kitTabs"></div>
       <div style="display:flex;gap:8px">
         <div class="scroller" id="kitList" style="height:112px;flex:1"></div>
@@ -449,7 +449,7 @@ function packPanel(cols) {
     s.onclick = (ev) => { ev.stopPropagation(); clickSlot(i); };
     (i < 30 ? grid : hot).append(s);
   });
-  const p = h('div', { class: 'nine p-frame face', style: 'display:inline-block' },
+  const p = h('div', { class: 'nine p-rock face', style: 'display:inline-block' },
     h('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:calc(4px*var(--s))' },
       h('div', { class: 'carved' }, 'Pack'), h('img', { src: 'ui/icon-close.png', class: 'px', alt: 'close', style: 'width:calc(11px*var(--s));height:calc(11px*var(--s));background:var(--oak-3)' })),
     grid, h('div', { class: 'carved', style: 'margin-top:calc(5px*var(--s));color:var(--text-dim);font-size:calc(7px*var(--s))' }, 'Hotbar'), hot);
@@ -490,7 +490,7 @@ function renderPack() {
 // ---------------------------------------------------------------- pause and settings
 const BINDS = [['W A S D', 'move'], ['Space', 'jump, rise in water'], ['Shift', 'sprint'], ['Left click', 'dig'], ['Right click', 'place'], ['1 - 0', 'select a slot'], ['Wheel', 'step through slots'], ['F', 'walk or fly'], ['I', 'pack'], ['M', 'map'], ['J', 'guide'], ['Esc', 'menu'], ['F12', 'screenshot']];
 function pausePanel() {
-  return h('div', { class: 'nine p-frame face', style: 'width:calc(96px*var(--s))' },
+  return h('div', { class: 'nine p-rock face', style: 'width:calc(96px*var(--s))' },
     h('div', { class: 'carved', style: 'text-align:center;margin-bottom:calc(6px*var(--s))' }, 'Paused'),
     h('div', { style: 'display:grid;gap:calc(3px*var(--s))' }, btn('Resume', 'is-focus'), btn('Settings'), btn('Quit')));
 }
@@ -502,7 +502,7 @@ function settingsPanel() {
     h('div', { style: `position:absolute;left:0;top:0;height:calc(2px*var(--s));width:${pct}%;background:var(--rune-dim)` }),
     h('img', { src: 'ui/slider-knob.png', class: 'px', alt: '', style: `position:absolute;left:calc(${pct}% - 4.5px*var(--s));top:calc(-5px*var(--s));width:calc(9px*var(--s));height:calc(13px*var(--s))` }));
   const check = (on) => h('img', { src: `ui/check-${on ? 'on' : 'off'}.png`, class: 'px', alt: on ? 'on' : 'off', style: 'width:calc(12px*var(--s));height:calc(12px*var(--s))' });
-  return h('div', { class: 'nine p-frame face', style: 'width:calc(200px*var(--s))' },
+  return h('div', { class: 'nine p-rock face', style: 'width:calc(200px*var(--s))' },
     h('div', { class: 'carved', style: 'margin-bottom:calc(6px*var(--s))' }, 'Settings'), tabs,
     h('div', { style: 'display:grid;gap:calc(3px*var(--s))' },
       row('Render scale', slider(100)), row('Frame limit', slider(60)), row('Step up blocks', check(true)), row('Rain shadow', check(false))),
@@ -532,7 +532,7 @@ function renderMap() {
     // The frame sits at the window's edge, its centre left open (no fill) so the map shows through.
     sc.ui.append(h('div', { class: 'nine', style: 'position:absolute;inset:0;border-width:calc(22px*var(--s));border-image:url(ui/map-frame.png) 22 stretch;pointer-events:none' }));
     const toggles = ['The planet', 'Biomes', 'Wind', 'Jet', 'Currents', 'Cloud', 'Rain', 'Humidity', 'Sunlight', 'Heat', 'Night side', 'Clouds'];
-    const drawer = h('div', { class: 'nine p-frame face', style: 'position:absolute;left:calc(22px*var(--s));top:calc(22px*var(--s));width:calc(144px*var(--s))' },
+    const drawer = h('div', { class: 'nine p-rock face', style: 'position:absolute;left:calc(22px*var(--s));top:calc(22px*var(--s));width:calc(144px*var(--s))' },
       h('div', { style: 'display:flex;justify-content:space-between;align-items:center' }, h('div', { class: 'carved' }, 'Overlays'),
         h('img', { src: 'ui/icon-close.png', class: 'px', alt: 'close', style: 'width:calc(11px*var(--s));height:calc(11px*var(--s));background:var(--oak-3)' })),
       h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:calc(2px*var(--s));margin-top:calc(4px*var(--s))' },
@@ -560,7 +560,7 @@ function stationPanel(kind) {
     bar(forge ? 60 : 35),
     slotEl(out[0], out[1], 'r-uncommon'),
     btn(forge ? 'Craft' : 'Cook'));
-  return h('div', { class: 'nine p-frame face', style: 'width:calc(220px*var(--s))' },
+  return h('div', { class: 'nine p-rock face', style: 'width:calc(220px*var(--s))' },
     h('div', { class: 'carved', style: 'margin-bottom:calc(6px*var(--s))' }, forge ? 'Forge' : 'Hearth and pot'),
     h('div', { style: 'display:flex;gap:calc(6px*var(--s))' }, list,
       h('div', { class: 'nine p-track-v', style: 'width:calc(8px*var(--s));height:calc(104px*var(--s));position:relative;flex:none' }, h('div', { class: 'nine p-thumb', style: 'position:absolute;left:calc(-4px*var(--s));top:calc(16px*var(--s));width:calc(8px*var(--s));height:calc(28px*var(--s))' })),
@@ -578,7 +578,7 @@ function renderStation() {
 function talkPanel() {
   return h('div', { style: 'position:absolute;left:50%;transform:translateX(-50%);bottom:calc(76px*var(--k) + 30px*var(--s));display:flex;gap:calc(4px*var(--s));align-items:flex-end' },
     h('div', { class: 'nine p-portrait', style: 'width:calc(64px*var(--s));height:calc(64px*var(--s));overflow:hidden;flex:none' }, h('img', { src: 'npcs/smith.png', class: 'px', alt: 'Hale, the smith', style: 'width:calc(48px*var(--s));height:calc(48px*var(--s))' })),
-    h('div', { class: 'nine p-frame face', style: 'width:calc(260px*var(--s))' },
+    h('div', { class: 'nine p-rock face', style: 'width:calc(260px*var(--s))' },
       h('div', { class: 'carved', style: 'margin-bottom:calc(3px*var(--s))' }, 'Hale, the smith'),
       h('div', {}, 'Ore for the gate hinges. Bring six iron and the gate is hung by nightfall.'),
       h('div', { style: 'display:flex;gap:calc(3px*var(--s));margin-top:calc(5px*var(--s));flex-wrap:wrap' }, btn('I will', 'is-focus'), btn('Trade'), btn('Later'))));
@@ -587,7 +587,7 @@ function tradePanel() {
   const mine = [['cobble', 48], ['perch', 3], ['planks', 40], ['candle', 6], [null, 0], [null, 0], [null, 0], [null, 0]];
   const theirs = [['pickaxe', 1], ['axe', 1], ['lantern', 2], ['brazier', 1], ['torch', 16], [null, 0], [null, 0], [null, 0]];
   const g = (arr) => h('div', { style: 'display:grid;grid-template-columns:repeat(4,calc(24px*var(--s)))' }, ...arr.map(([i, n]) => slotEl(i, n)));
-  return h('div', { class: 'centre' }, h('div', { class: 'nine p-frame face' },
+  return h('div', { class: 'centre' }, h('div', { class: 'nine p-rock face' },
     h('div', { style: 'display:flex;align-items:center;gap:calc(4px*var(--s));margin-bottom:calc(4px*var(--s))' }, h('img', { src: 'npcs/trader.png', class: 'px', alt: 'the trader', style: 'width:calc(24px*var(--s));height:calc(24px*var(--s))' }), h('div', { class: 'carved' }, 'Barter with Ysolde')),
     h('div', { style: 'display:flex;gap:calc(8px*var(--s));align-items:flex-start' },
       h('div', {}, h('div', { style: 'color:var(--text-dim)' }, 'Yours'), g(mine)),
@@ -635,8 +635,8 @@ function renderPhone() {
 // ---------------------------------------------------------------- kit extras
 function kitExtras() {
   const tok = document.getElementById('tokens');
-  const T = [['INK', '#010000'], ['SEAM', '#170916'], ['FACE', '#2c2c25'], ['WELL', '#161612'], ['TEXT', '#eab798'], ['TEXT_DIM', '#cfaa81'], ['TITLE', '#faaf5c'], ['LABEL', '#010000'], ['RUNE', '#84e3b5'],
-    ['OAK 0..4', '#2f1525 #41322c #725244 #ab8465 #cfaa81'], ['STONE 0..4', '#161612 #2c2c25 #434137 #a09f91 #bfcad7'], ['ROCK 0..4', '#161612 #2b1f35 #3e3551 #69608b #92a3b2'], ['IRON', '#010000 #161612 #2c2c25 #434137 #a09f91'], ['BRASS', '#733126 #c56d25 #fb902f #faaf5c'],
+  const T = [['INK', '#010000'], ['SEAM', '#170916'], ['FACE', '#1f3b52'], ['WELL', '#011c34'], ['TEXT', '#eab798'], ['TEXT_DIM', '#cfaa81'], ['TITLE', '#faaf5c'], ['LABEL', '#010000'], ['RUNE', '#84e3b5'],
+    ['OAK 0..4', '#2f1525 #41322c #725244 #ab8465 #cfaa81'], ['STONE 0..4', '#011c34 #1f3b52 #3e586e #92a3b2 #bfcad7'], ['ROCK 0..4', '#010e1a #1f3b52 #3e586e #5d778d #92a3b2'], ['IRON', '#010000 #161612 #2c2c25 #434137 #a09f91'], ['BRASS', '#733126 #c56d25 #fb902f #faaf5c'],
     ['HEALTH', '#4a051e #a61e1f #d12d41 #fa3a64'], ['STAMINA', '#733126 #c56d25 #fb902f #faaf5c'], ['BREATH', '#0c2f44 #15578a #1096c3 #74effe']];
   for (const [n, cs] of T) tok.append(h('span', { class: 'tok' }, ...cs.split(' ').map((c) => h('i', { style: `background:${c}`, title: c })), n));
   const ct = document.getElementById('contrast');

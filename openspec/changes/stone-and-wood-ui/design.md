@@ -248,3 +248,13 @@ skill) beside those screenshots when the page is published.
   are shown at half size with the UI at 1x, the game's proportion at a 1440 x
   900 window; under 720 px the scene is a quarter and the UI is not to scale
   (the page says so).
+
+## The owner's answer: stone, and bluer (2026-11-14)
+
+The owner: "I like the stone kit more, can you make the stone more blue?". Taken as the answer to
+Q2: menus are framed in the rough-rock slab, not the carved-oak moulding. Oak stays for the
+button plaques, tabs and the compass strip, and the oak frame stays in the kit for comparison.
+The stone moves from warm grey to Sweaft-64's slate blues: dressed stone `#011c34 #1f3b52
+#3e586e #92a3b2 #bfcad7` (FACE `#1f3b52`, WELL `#011c34`), rough rock `#010e1a #1f3b52 #3e586e
+#5d778d #92a3b2`. Text on the new face measures TEXT 6.49:1, TEXT_DIM 5.38:1, TITLE 6.29:1, the
+rune 7.55:1, all above 4.5:1.

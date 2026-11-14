@@ -239,8 +239,8 @@
  "tokens": {
   "INK": "#010000",
   "SEAM": "#170916",
-  "FACE": "#2c2c25",
-  "WELL": "#161612",
+  "FACE": "#1f3b52",
+  "WELL": "#011c34",
   "TEXT": "#eab798",
   "TEXT_DIM": "#cfaa81",
   "TITLE": "#faaf5c",
@@ -248,17 +248,17 @@
  },
  "ramps": {
   "STONE": [
-   "#161612",
-   "#2c2c25",
-   "#434137",
-   "#a09f91",
+   "#011c34",
+   "#1f3b52",
+   "#3e586e",
+   "#92a3b2",
    "#bfcad7"
   ],
   "ROCK": [
-   "#161612",
-   "#2b1f35",
-   "#3e3551",
-   "#69608b",
+   "#010e1a",
+   "#1f3b52",
+   "#3e586e",
+   "#5d778d",
    "#92a3b2"
   ],
   "WOOD": [
@@ -307,14 +307,14 @@
   ]
  },
  "contrast": {
-  "TEXT on FACE": 7.85,
-  "TEXT_DIM on FACE": 6.51,
-  "TITLE on FACE": 7.6,
-  "TEXT on WELL": 10.13,
+  "TEXT on FACE": 6.49,
+  "TEXT_DIM on FACE": 5.38,
+  "TITLE on FACE": 6.29,
+  "TEXT on WELL": 9.63,
   "SEAM on WOOD[3] (compass letters)": 5.72,
   "LABEL on WOOD[3] (button label)": 6.21,
   "LABEL on WOOD[4] (hovered button label)": 9.71,
   "TEXT_DIM on WOOD_DIM[2] (disabled label)": 5.66,
-  "RUNE[2] on WELL (focus ring)": 11.78
+  "RUNE[2] on WELL (focus ring)": 11.2
  }
 }
