@@ -1,1 +1,1272 @@
-{}
+{
+ "kenney/impact-sounds": {
+  "pack": "impact-sounds",
+  "url": "https://kenney.nl/assets/impact-sounds",
+  "licences": [
+   "CC0"
+  ],
+  "author": "Kenney",
+  "title": "Impact Sounds \u00b7 Kenney",
+  "files": [
+   "impact-sounds.zip"
+  ]
+ },
+ "kenney/rpg-audio": {
+  "pack": "rpg-audio",
+  "url": "https://kenney.nl/assets/rpg-audio",
+  "licences": [
+   "CC0"
+  ],
+  "author": "Kenney",
+  "title": "RPG Audio \u00b7 Kenney",
+  "files": [
+   "rpg-audio.zip"
+  ]
+ },
+ "freesound/434359": {
+  "pack": "434359",
+  "url": "https://freesound.org/people/csengeri/sounds/434359/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Close lightning strike 2018 07 07",
+  "author": "csengeri",
+  "files": [
+   "434359.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/840628": {
+  "pack": "840628",
+  "url": "https://freesound.org/people/loganzsound/sounds/840628/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Closeup Thunder Strike 01",
+  "author": "loganzsound",
+  "files": [
+   "840628.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/264826": {
+  "pack": "264826",
+  "url": "https://freesound.org/people/Martineerok/sounds/264826/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Thunder (close up)",
+  "author": "Martineerok",
+  "files": [
+   "264826.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/534023": {
+  "pack": "534023",
+  "url": "https://freesound.org/people/Fission9/sounds/534023/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Thunderclap",
+  "author": "Fission9",
+  "files": [
+   "534023.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/581125": {
+  "pack": "581125",
+  "url": "https://freesound.org/people/Fission9/sounds/581125/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Distant Thunder 4",
+  "author": "Fission9",
+  "files": [
+   "581125.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/128497": {
+  "pack": "128497",
+  "url": "https://freesound.org/people/ecfike/sounds/128497/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Distant Thunder.wav",
+  "author": "ecfike",
+  "files": [
+   "128497.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/486557": {
+  "pack": "486557",
+  "url": "https://freesound.org/people/xUMR/sounds/486557/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "thunder.rumble.ogg",
+  "author": "xUMR",
+  "files": [
+   "486557.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/200273": {
+  "pack": "200273",
+  "url": "https://freesound.org/people/jmbphilmes/sounds/200273/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Rain light 2 (rural)",
+  "author": "jmbphilmes",
+  "files": [
+   "200273.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/607070": {
+  "pack": "607070",
+  "url": "https://freesound.org/people/morsine/sounds/607070/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Light rain",
+  "author": "morsine",
+  "files": [
+   "607070.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/200272": {
+  "pack": "200272",
+  "url": "https://freesound.org/people/jmbphilmes/sounds/200272/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Rain heavy 2 (rural)",
+  "author": "jmbphilmes",
+  "files": [
+   "200272.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/161705": {
+  "pack": "161705",
+  "url": "https://freesound.org/people/allrealsound/sounds/161705/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Rain from inside.wav",
+  "author": "allrealsound",
+  "files": [
+   "161705.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/117136": {
+  "pack": "117136",
+  "url": "https://freesound.org/people/cobratronik/sounds/117136/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Wind__Artic__Cold.wav",
+  "author": "cobratronik",
+  "files": [
+   "117136.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/697217": {
+  "pack": "697217",
+  "url": "https://freesound.org/people/dhallcomposer/sounds/697217/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Looping Gentle Wind Ambience on an Open Desert Plain.wav",
+  "author": "dhallcomposer",
+  "files": [
+   "697217.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/457318": {
+  "pack": "457318",
+  "url": "https://freesound.org/people/Stek59/sounds/457318/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Autumn wind and dry leaves.wav",
+  "author": "Stek59",
+  "files": [
+   "457318.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/531015": {
+  "pack": "531015",
+  "url": "https://freesound.org/people/Noted451/sounds/531015/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Ocean Waves.wav",
+  "author": "Noted451",
+  "files": [
+   "531015.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/376805": {
+  "pack": "376805",
+  "url": "https://freesound.org/people/amholma/sounds/376805/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Waves Up Close 3",
+  "author": "amholma",
+  "files": [
+   "376805.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/260263": {
+  "pack": "260263",
+  "url": "https://freesound.org/people/richardemoore/sounds/260263/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "WavesOnTheShore.wav",
+  "author": "richardemoore",
+  "files": [
+   "260263.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/637945": {
+  "pack": "637945",
+  "url": "https://freesound.org/people/kyles/sounds/637945/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "water lake waves light gentle lap at boats on beach.flac",
+  "author": "kyles",
+  "files": [
+   "637945.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/480838": {
+  "pack": "480838",
+  "url": "https://freesound.org/people/craigsmith/sounds/480838/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "R23-36-Water Against Wooden Boat.wav",
+  "author": "craigsmith",
+  "files": [
+   "480838.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/482848": {
+  "pack": "482848",
+  "url": "https://freesound.org/people/craigsmith/sounds/482848/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "R23-11-Water Lapping Against Speed Boat.wav",
+  "author": "craigsmith",
+  "files": [
+   "482848.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/274175": {
+  "pack": "274175",
+  "url": "https://freesound.org/people/Mafon2/sounds/274175/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Park ambience - mostly birds",
+  "author": "Mafon2",
+  "files": [
+   "274175.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/160893": {
+  "pack": "160893",
+  "url": "https://freesound.org/people/ecfike/sounds/160893/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Quiet Spring Woodland Ambience.wav",
+  "author": "ecfike",
+  "files": [
+   "160893.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/619264": {
+  "pack": "619264",
+  "url": "https://freesound.org/people/paulprit/sounds/619264/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Day Time Sounds in Malaysian Jungle.wav",
+  "author": "paulprit",
+  "files": [
+   "619264.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/548629": {
+  "pack": "548629",
+  "url": "https://freesound.org/people/Kostrava/sounds/548629/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "forest swamp",
+  "author": "Kostrava",
+  "files": [
+   "548629.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/537854": {
+  "pack": "537854",
+  "url": "https://freesound.org/people/Ambientsoundapp/sounds/537854/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Seagulls distant.wav",
+  "author": "Ambientsoundapp",
+  "files": [
+   "537854.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/353416": {
+  "pack": "353416",
+  "url": "https://freesound.org/people/squashy555/sounds/353416/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Seagull on beach",
+  "author": "squashy555",
+  "files": [
+   "353416.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/263786": {
+  "pack": "263786",
+  "url": "https://freesound.org/people/steaq/sounds/263786/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Seagull single call",
+  "author": "steaq",
+  "files": [
+   "263786.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/574397": {
+  "pack": "574397",
+  "url": "https://freesound.org/people/TRP/sounds/574397/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Semi desert insects ravens birds quiet with bad mic noise BADLANDS AB 190818.flac",
+  "author": "TRP",
+  "files": [
+   "574397.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/175020": {
+  "pack": "175020",
+  "url": "https://freesound.org/people/sengjinn/sounds/175020/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "AMBIENCE NIGHT FIELD CRICKET 01.wav",
+  "author": "sengjinn",
+  "files": [
+   "175020.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/32655": {
+  "pack": "32655",
+  "url": "https://freesound.org/people/greysound/sounds/32655/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "FrogsAndCrickets_ExcerptB_JMA_24Bit_48k.wav",
+  "author": "greysound",
+  "files": [
+   "32655.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/135561": {
+  "pack": "135561",
+  "url": "https://freesound.org/people/felix.blume/sounds/135561/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Toads and frogs are singing at night in the pond, in the center of the small village of Diafarabe, on the Niger river. (Africa, Mali)",
+  "author": "felix.blume",
+  "files": [
+   "135561.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/465697": {
+  "pack": "465697",
+  "url": "https://freesound.org/people/Breviceps/sounds/465697/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Owl Hoot",
+  "author": "Breviceps",
+  "files": [
+   "465697.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/398734": {
+  "pack": "398734",
+  "url": "https://freesound.org/people/Anthousai/sounds/398734/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "owl.wav",
+  "author": "Anthousai",
+  "files": [
+   "398734.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/578072": {
+  "pack": "578072",
+  "url": "https://freesound.org/people/ramonmineiro/sounds/578072/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "medieval_village_atmosphere.wav",
+  "author": "ramonmineiro",
+  "files": [
+   "578072.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/331442": {
+  "pack": "331442",
+  "url": "https://freesound.org/people/The_Sound_Side/sounds/331442/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Village ambience rooster and light birds with wind .wav",
+  "author": "The_Sound_Side",
+  "files": [
+   "331442.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/400353": {
+  "pack": "400353",
+  "url": "https://freesound.org/people/savvah/sounds/400353/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Village Night Crickets",
+  "author": "savvah",
+  "files": [
+   "400353.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/54545": {
+  "pack": "54545",
+  "url": "https://freesound.org/people/Heigh-hoo/sounds/54545/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "distant_dog.wav",
+  "author": "Heigh-hoo",
+  "files": [
+   "54545.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/573146": {
+  "pack": "573146",
+  "url": "https://freesound.org/people/fleurescence/sounds/573146/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "dog barking in the distance",
+  "author": "fleurescence",
+  "files": [
+   "573146.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/177958": {
+  "pack": "177958",
+  "url": "https://freesound.org/people/Sclolex/sounds/177958/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Water Dripping in Cave.wav",
+  "author": "Sclolex",
+  "files": [
+   "177958.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/177031": {
+  "pack": "177031",
+  "url": "https://freesound.org/people/iampagan/sounds/177031/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Droplets in a cave",
+  "author": "iampagan",
+  "files": [
+   "177031.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/504641": {
+  "pack": "504641",
+  "url": "https://freesound.org/people/Fission9/sounds/504641/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Underwater Ambience",
+  "author": "Fission9",
+  "files": [
+   "504641.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/181563": {
+  "pack": "181563",
+  "url": "https://freesound.org/people/kingsrow/sounds/181563/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Fire Crackling 01.wav",
+  "author": "kingsrow",
+  "files": [
+   "181563.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/386385": {
+  "pack": "386385",
+  "url": "https://freesound.org/people/ldezem/sounds/386385/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Torch - Ignite flame on soft",
+  "author": "ldezem",
+  "files": [
+   "386385.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/872960": {
+  "pack": "872960",
+  "url": "https://freesound.org/people/loganzsound/sounds/872960/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Tumbleweed Firestarter Torch Ignite Denoised 02",
+  "author": "loganzsound",
+  "files": [
+   "872960.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/365071": {
+  "pack": "365071",
+  "url": "https://freesound.org/people/sniperous/sounds/365071/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Steam.wav",
+  "author": "sniperous",
+  "files": [
+   "365071.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/234782": {
+  "pack": "234782",
+  "url": "https://freesound.org/people/wubitog/sounds/234782/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Steam/hiss",
+  "author": "wubitog",
+  "files": [
+   "234782.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/442773": {
+  "pack": "442773",
+  "url": "https://freesound.org/people/qubodup/sounds/442773/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Big Water Splash",
+  "author": "qubodup",
+  "files": [
+   "442773.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/9508": {
+  "pack": "9508",
+  "url": "https://freesound.org/people/petenice/sounds/9508/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "SPLASH.wav",
+  "author": "petenice",
+  "files": [
+   "9508.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/398032": {
+  "pack": "398032",
+  "url": "https://freesound.org/people/swordofkings128/sounds/398032/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Splash",
+  "author": "swordofkings128",
+  "files": [
+   "398032.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/50623": {
+  "pack": "50623",
+  "url": "https://freesound.org/people/vibe_crc/sounds/50623/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "water_splash_10shots.wav",
+  "author": "vibe_crc",
+  "files": [
+   "50623.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/585744": {
+  "pack": "585744",
+  "url": "https://freesound.org/people/Nox_Sound/sounds/585744/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Foley_Natural_Water_Jump_Mono.wav",
+  "author": "Nox_Sound",
+  "files": [
+   "585744.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/379334": {
+  "pack": "379334",
+  "url": "https://freesound.org/people/13FPanska_Marval_Lukas/sounds/379334/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Swimming.wav",
+  "author": "13FPanska_Marval_Lukas",
+  "files": [
+   "379334.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/539823": {
+  "pack": "539823",
+  "url": "https://freesound.org/people/ristooooo1/sounds/539823/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Bubbles 001.wav",
+  "author": "ristooooo1",
+  "files": [
+   "539823.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/51745": {
+  "pack": "51745",
+  "url": "https://freesound.org/people/erkanozan/sounds/51745/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Bubbles.wav",
+  "author": "erkanozan",
+  "files": [
+   "51745.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/65620": {
+  "pack": "65620",
+  "url": "https://freesound.org/people/otherthings/sounds/65620/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Inhale_10115a.wav",
+  "author": "otherthings",
+  "files": [
+   "65620.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/725426": {
+  "pack": "725426",
+  "url": "https://freesound.org/people/mwchristian95/sounds/725426/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Fishing Rod Cast - Swoosh",
+  "author": "mwchristian95",
+  "files": [
+   "725426.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/507078": {
+  "pack": "507078",
+  "url": "https://freesound.org/people/paulprit/sounds/507078/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Angel Fly Fish Reel Slow Wind_1.wav",
+  "author": "paulprit",
+  "files": [
+   "507078.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/537084": {
+  "pack": "537084",
+  "url": "https://freesound.org/people/khenshom/sounds/537084/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Guitar string snap or breaks - various sounds",
+  "author": "khenshom",
+  "files": [
+   "537084.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/348991": {
+  "pack": "348991",
+  "url": "https://freesound.org/people/bzamecnik/sounds/348991/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Powerful helicopter sound Bell 407 OK-ALB",
+  "author": "bzamecnik",
+  "files": [
+   "348991.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/322021": {
+  "pack": "322021",
+  "url": "https://freesound.org/people/Burningmonkey/sounds/322021/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Servo motor",
+  "author": "Burningmonkey",
+  "files": [
+   "322021.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/57280": {
+  "pack": "57280",
+  "url": "https://freesound.org/people/_earthbound_/sounds/57280/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "RAH_Flapping_Fabric_3.flac",
+  "author": "_earthbound_",
+  "files": [
+   "57280.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/448975": {
+  "pack": "448975",
+  "url": "https://freesound.org/people/GeorgeHopkins/sounds/448975/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "flag.wav",
+  "author": "GeorgeHopkins",
+  "files": [
+   "448975.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/500143": {
+  "pack": "500143",
+  "url": "https://freesound.org/people/phonoflora/sounds/500143/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "liner mooring hawsers creak, gangplank groans.WAV",
+  "author": "phonoflora",
+  "files": [
+   "500143.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/438846": {
+  "pack": "438846",
+  "url": "https://freesound.org/people/craigsmith/sounds/438846/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "G54-27-Oars Rowing.wav",
+  "author": "craigsmith",
+  "files": [
+   "438846.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/702386": {
+  "pack": "702386",
+  "url": "https://freesound.org/people/egeexyz/sounds/702386/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Water Paddle Splashing rowing in a canoe",
+  "author": "egeexyz",
+  "files": [
+   "702386.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/588308": {
+  "pack": "588308",
+  "url": "https://freesound.org/people/Fenodyrie/sounds/588308/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "rowing boat rear wave.wav",
+  "author": "Fenodyrie",
+  "files": [
+   "588308.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/394222": {
+  "pack": "394222",
+  "url": "https://freesound.org/people/mikewest/sounds/394222/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Large rope pulley operated.wav",
+  "author": "mikewest",
+  "files": [
+   "394222.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/146770": {
+  "pack": "146770",
+  "url": "https://freesound.org/people/qubodup/sounds/146770/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Rocket Boost Engine Loop.wav",
+  "author": "qubodup",
+  "files": [
+   "146770.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/584181": {
+  "pack": "584181",
+  "url": "https://freesound.org/people/unfa/sounds/584181/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Thrust Loop",
+  "author": "unfa",
+  "files": [
+   "584181.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/235625": {
+  "pack": "235625",
+  "url": "https://freesound.org/people/vmgraw/sounds/235625/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Water Sloshing",
+  "author": "vmgraw",
+  "files": [
+   "235625.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/384082": {
+  "pack": "384082",
+  "url": "https://freesound.org/people/savataivanov/sounds/384082/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Foot_Step_grit_Sand.wav",
+  "author": "savataivanov",
+  "files": [
+   "384082.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/543385": {
+  "pack": "543385",
+  "url": "https://freesound.org/people/alexo400/sounds/543385/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "FOOT_STEPS_SNOW_HEAVY.wav",
+  "author": "alexo400",
+  "files": [
+   "543385.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/530589": {
+  "pack": "530589",
+  "url": "https://freesound.org/people/Nox_Sound/sounds/530589/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Footsteps_Boots_Gritty_Ground_(Gravel).wav",
+  "author": "Nox_Sound",
+  "files": [
+   "530589.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/459970": {
+  "pack": "459970",
+  "url": "https://freesound.org/people/florianreichelt/sounds/459970/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Footsteps on hollow wood",
+  "author": "florianreichelt",
+  "files": [
+   "459970.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/861369": {
+  "pack": "861369",
+  "url": "https://freesound.org/people/ChristopherJngs/sounds/861369/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Splashing Footsteps Shallow Water",
+  "author": "ChristopherJngs",
+  "files": [
+   "861369.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/376809": {
+  "pack": "376809",
+  "url": "https://freesound.org/people/Alex_hears_things/sounds/376809/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "MUDDY AND WET FOOTSTEPS.wav",
+  "author": "Alex_hears_things",
+  "files": [
+   "376809.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/218305": {
+  "pack": "218305",
+  "url": "https://freesound.org/people/SpliceSound/sounds/218305/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "01-20 Footsteps, sneakers on dry leaves.wav",
+  "author": "SpliceSound",
+  "files": [
+   "218305.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/384362": {
+  "pack": "384362",
+  "url": "https://freesound.org/people/Ali_6868/sounds/384362/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Digging a Hole and Shovelling Soil/Dirt 2",
+  "author": "Ali_6868",
+  "files": [
+   "384362.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/353907": {
+  "pack": "353907",
+  "url": "https://freesound.org/people/dr19/sounds/353907/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Shovel_dirt.wav",
+  "author": "dr19",
+  "files": [
+   "353907.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/268056": {
+  "pack": "268056",
+  "url": "https://freesound.org/people/jobel0092/sounds/268056/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "metal shovel into icy snow",
+  "author": "jobel0092",
+  "files": [
+   "268056.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/651292": {
+  "pack": "651292",
+  "url": "https://freesound.org/people/f3bbbo/sounds/651292/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Digging in wet course sand (1)",
+  "author": "f3bbbo",
+  "files": [
+   "651292.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/651293": {
+  "pack": "651293",
+  "url": "https://freesound.org/people/f3bbbo/sounds/651293/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Digging in wet course sand (2)",
+  "author": "f3bbbo",
+  "files": [
+   "651293.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/662864": {
+  "pack": "662864",
+  "url": "https://freesound.org/people/schneidi67/sounds/662864/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "digging sand with hands.WAV",
+  "author": "schneidi67",
+  "files": [
+   "662864.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/431019": {
+  "pack": "431019",
+  "url": "https://freesound.org/people/CamoMano/sounds/431019/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Stone hit",
+  "author": "CamoMano",
+  "files": [
+   "431019.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/512243": {
+  "pack": "512243",
+  "url": "https://freesound.org/people/NeoSpica/sounds/512243/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Rock Smash",
+  "author": "NeoSpica",
+  "files": [
+   "512243.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/262118": {
+  "pack": "262118",
+  "url": "https://freesound.org/people/rokenjocu/sounds/262118/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Kirkstall Rock Crumble .wav",
+  "author": "rokenjocu",
+  "files": [
+   "262118.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/177045": {
+  "pack": "177045",
+  "url": "https://freesound.org/people/Veridiansunrise/sounds/177045/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Log Split",
+  "author": "Veridiansunrise",
+  "files": [
+   "177045.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/753925": {
+  "pack": "753925",
+  "url": "https://freesound.org/people/xkeril/sounds/753925/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Axe chopping wood",
+  "author": "xkeril",
+  "files": [
+   "753925.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/421929": {
+  "pack": "421929",
+  "url": "https://freesound.org/people/micahlg/sounds/421929/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Chopping wood 02",
+  "author": "micahlg",
+  "files": [
+   "421929.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ }
+}

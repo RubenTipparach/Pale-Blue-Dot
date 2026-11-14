@@ -218,31 +218,39 @@ def ring(freqs, decays_s, n: int, amps=None) -> np.ndarray:
     return out
 
 
+def _comb(x: np.ndarray, d: int, g: float) -> np.ndarray:
+    """y[i] = x[i] + g * y[i - d], a block of d samples at a time: each block needs only the one
+    before it, so this is the per-sample loop's result in len(x) / d numpy steps."""
+    y = x.copy()
+    for k in range(d, len(x), d):
+        e = min(len(x), k + d)
+        y[k:e] += g * y[k - d:e - d]
+    return y
+
+
+def _allpass(x: np.ndarray, d: int, g: float) -> np.ndarray:
+    """y[i] = -g x[i] + x[i - d] + g y[i - d], block by block as _comb."""
+    y = -g * x
+    y[d:] += x[:-d]
+    for k in range(d, len(x), d):
+        e = min(len(x), k + d)
+        y[k:e] += g * y[k - d:e - d]
+    return y
+
+
 def reverb(x: np.ndarray, room: float = 0.5, wet: float = 0.3, tail_s: float = 1.5) -> np.ndarray:
-    """A small Schroeder reverb (four combs, two allpasses), with a tail appended."""
+    """A small Schroeder reverb (four combs, two allpasses), with a tail appended. The combs and
+    allpasses run a block of their delay at a time (_comb, _allpass): the same output as the
+    per-sample loops Fleet Command and Crab Breeze run, in a fraction of the time."""
     x = np.concatenate([x, np.zeros(int(tail_s * SR))])
     out = np.zeros_like(x)
     for delay_ms, g in ((29.7, 0.805), (37.1, 0.827), (41.1, 0.783), (43.7, 0.764)):
         d = int(delay_ms * SR / 1000 * (0.6 + room))
         gg = g * (0.75 + 0.25 * room)
-        if lfilter is not None:
-            out += lfilter([1.0], np.r_[1.0, np.zeros(d - 1), -gg], x)
-            continue
-        buf = np.zeros_like(x)
-        for i in range(len(x)):
-            buf[i] = x[i] + (gg * buf[i - d] if i >= d else 0.0)
-        out += buf
+        out += _comb(x, d, gg)
     for delay_ms, g in ((5.0, 0.7), (1.7, 0.7)):
         d = int(delay_ms * SR / 1000)
-        if lfilter is not None:
-            out = lfilter(np.r_[-g, np.zeros(d - 1), 1.0], np.r_[1.0, np.zeros(d - 1), -g], out)
-            continue
-        y = np.zeros_like(out)
-        for i in range(len(out)):
-            xd = out[i - d] if i >= d else 0.0
-            yd = y[i - d] if i >= d else 0.0
-            y[i] = -g * out[i] + xd + g * yd
-        out = y
+        out = _allpass(out, d, g)
     return x * (1 - wet) + out * wet * 0.25
 
 
@@ -309,7 +317,104 @@ def tone(freq_hz: float, seconds: float, a=0.004, d=0.03, s=0.6, r=0.05, fn=None
 
 
 # ---------------------------------------------------------------- the sounds
-# None yet: audio-and-ambience task 2.2 adds them.
+# Only what the design says to synthesise (openspec/changes/audio-and-ambience, design section 7):
+# the menu tones, the stall warning, and layers a recording lacks. Everything else is recorded
+# (tools/audio/cc0_cues.json).
+
+def mallet(freq_hz: float, seconds: float, bright: float = 0.25, decay_s: float = 0.25) -> np.ndarray:
+    """A soft wooden mallet note: a sine with a quieter octave and twelfth that die faster, a 2 ms
+    attack and an exponential fall, so a menu tone sounds struck and warm rather than electronic."""
+    n = int(seconds * SR)
+    f = np.full(n, float(freq_hz))
+    body = sine(f) + bright * sine(f * 2.0) * exp_decay(n, decay_s * 0.5) + 0.4 * bright * sine(f * 3.0) * exp_decay(n, decay_s * 0.3)
+    env = exp_decay(n, decay_s) * np.minimum(1.0, np.arange(n) / (0.002 * SR))
+    tail = np.linspace(1, 0, min(n, int(0.01 * SR)))
+    env[-len(tail):] *= tail
+    return body * env
+
+
+# --- layers (mixed into recorded cues, never written alone)
+
+@sound("sub_boom", "_layer", "The weight under a close thunder crack: a sine falling from 70 to 28 Hz over two seconds, as a recording made on a field microphone loses it.")
+def sub_boom(r):
+    n = int(2.6 * SR)
+    body = sine(sweep(70, 28, n, 0.6)) * exp_decay(n, 2.2) * np.minimum(1.0, np.arange(n) / (0.01 * SR))
+    return hp(body, 22.0, order=2)
+
+
+@sound("sub_roll", "_layer", "A long low swell under a far roll of thunder: brown noise kept under 120 Hz, rising and falling over four seconds.")
+def sub_roll(r):
+    n = int(5.0 * SR)
+    body = hp(lp(brown(r, n), 120.0, order=4), 25.0, order=2)
+    env = np.sin(np.pi * np.linspace(0, 1, n)) ** 1.5
+    return body / (np.max(np.abs(body)) or 1.0) * env
+
+
+@sound("room_tone", "_layer", "A cave's still air under its drips: brown noise between 40 and 220 Hz, swelling a decibel either way over the loop. The drip recordings have none of it.")
+def room_tone(r):
+    n = int(40.0 * SR)
+    body = hp(lp(brown(r, n), 220.0, order=4), 40.0, order=4)
+    drift = 1.0 + 0.1 * np.interp(np.arange(n), np.linspace(0, n, 7), r.uniform(-1, 1, 7))
+    return body / (np.max(np.abs(body)) or 1.0) * drift
+
+
+# --- menus and HUD (not placed; the menus bus)
+
+@sound("ui_hover", "Menu", "The pointer over a button: one soft, short mallet tick, high and quiet.", peak_db=-14.0)
+def ui_hover(r):
+    return mallet(1568.0, 0.09, bright=0.1, decay_s=0.05)
+
+
+@sound("ui_click", "Menu", "A button pressed: a soft wooden mallet note with a quick upper grace note.", peak_db=-9.0)
+def ui_click(r):
+    n = int(0.22 * SR)
+    return mix(at(mallet(784.0, 0.2, decay_s=0.12), 0.0, n), 0.5 * at(mallet(1175.0, 0.16, decay_s=0.08), 0.025, n))
+
+
+@sound("ui_back", "Menu", "Back or close: the click's two notes falling, a fourth down.", peak_db=-9.0)
+def ui_back(r):
+    n = int(0.26 * SR)
+    return mix(0.6 * at(mallet(880.0, 0.16, decay_s=0.08), 0.0, n), at(mallet(659.0, 0.22, decay_s=0.12), 0.04, n))
+
+
+@sound("ui_toggle", "Menu", "A setting switched: two quick knocks, the second higher.", peak_db=-9.0)
+def ui_toggle(r):
+    n = int(0.2 * SR)
+    return mix(at(mallet(523.0, 0.1, decay_s=0.05), 0.0, n), at(mallet(784.0, 0.12, decay_s=0.06), 0.06, n))
+
+
+@sound("ui_slot", "Menu", "The hotbar moved one slot: a dry, very short wooden tick.", peak_db=-12.0)
+def ui_slot(r):
+    n = int(0.07 * SR)
+    knock = mallet(1046.0, 0.07, bright=0.4, decay_s=0.03)
+    click = onepole_hp(noise(r, n), 2500.0) * exp_decay(n, 0.006)
+    return mix(knock, 0.3 * click)
+
+
+@sound("pickup", "Menu", "A drop picked up: a soft rising pair of mallet notes, small and quick.", peak_db=-10.0)
+def pickup(r):
+    n = int(0.25 * SR)
+    return mix(at(mallet(659.0, 0.14, decay_s=0.07), 0.0, n), at(mallet(988.0, 0.2, decay_s=0.12), 0.05, n))
+
+
+@sound("catch_chime", "Menu", "A fish landed: three rising mallet notes with a little ring, a small reward.", peak_db=-8.0)
+def catch_chime(r):
+    n = int(0.9 * SR)
+    notes = [(523.0, 0.0), (659.0, 0.09), (784.0, 0.18), (1046.0, 0.27)]
+    return mix(*[at(mallet(f, 0.6, bright=0.3, decay_s=0.45), t, n) * (0.8 if i < 3 else 1.0) for i, (f, t) in enumerate(notes)])
+
+
+# --- craft
+
+@sound("stall_warn", "Craft", "The Kestrel's stall warning in the cockpit: a soft two-tone chime pulsing about three times a second (loops).", peak_db=-10.0)
+def stall_warn(r):
+    period = 0.32
+    n = int(period * 4 * SR)
+    beep = lambda f: tone(f, 0.13, a=0.006, d=0.02, s=0.7, r=0.05, fn=lambda ff: sine(ff) + 0.12 * sine(ff * 2))
+    parts = [at(beep(880.0 if k % 2 == 0 else 740.0), k * period, n) for k in range(4)]
+    return mix(*parts)
+
+
 
 
 # ---------------------------------------------------------------- output
@@ -338,6 +443,12 @@ def main() -> int:
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     manifest = []
+    path = os.path.join(args.out, "sfx.json")
+    if args.only and os.path.exists(path):
+        # a partial rebuild keeps every other cue's entry, or the Sounds page would list only the rebuilt ones
+        # (changed here, 2026-11-14: Fleet Command's wrote the partial list over the whole one)
+        manifest = [m for m in json.load(open(path)) if m["name"] not in args.only
+                    and m.get("cue", m["name"]) not in args.only]
     for name, (group, what, fn, peak_db) in SOUNDS.items():
         if is_layer(name) or (args.only and name not in args.only):
             continue

@@ -25,6 +25,13 @@ differ, this note wins.
   `cc0_packs.json` and `freesound/<id>:<id>.mp3` in a layer; the fetcher refuses it unless its page links CC0.
   A cue with `takes` writes `<cue>_1 .. _N`. The Sounds page's MP3s are in `docs/mockups/sounds/`, and
   `docs/mockups/sounds.files.json` is the publish's `files` map.
+- **Where the first set came from** (2026-11-14, on the Mac): Kenney's packs (fetched through Kenney's
+  download-link endpoint) and Freesound sounds whose pages say Creative Commons 0. OpenGameArt answered 403 to
+  the fetcher that day, so none of its packs were used; it was not worked around. Sonniss GDC bundles are not
+  CC0 and were not considered.
+- **Beds with birds or insects** keep their low pass at 8 kHz, not 3.5: birdsong lives at 2 to 6 kHz and
+  cricket song near 4.5 kHz, and a 3.5 kHz low pass took them out. Wind, rain, surf and the town keep the
+  3.5 kHz treatment (rain at 6 kHz, under water at 1.5).
 - **The engine is kira, not Godot's and not rodio.** The game plays sounds through kira (design section 1),
   which filters live: a muffled copy for caves, under water or a closed cabin is a low pass on a bus, not a
   second file. Crab Breeze's `muffled/` and `far/` copies (rodio had no filter) are not made here; Fleet

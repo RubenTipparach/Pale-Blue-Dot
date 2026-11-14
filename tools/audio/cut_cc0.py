@@ -127,7 +127,15 @@ def layer(spec: dict, src_root: str, channels: int) -> np.ndarray:
 
 
 def smooth(x: np.ndarray, seconds: float) -> np.ndarray:
+    """A moving average over `seconds`, centred as np.convolve's "same" is. Through an FFT where scipy
+    is there (changed here: a direct 0.3 s window over a 40 s bed took a minute a bed)."""
     w = max(1, int(seconds * SR))
+    if len(x) >= w:
+        try:
+            from scipy.signal import fftconvolve
+            return fftconvolve(x, np.ones(w) / w, "same")
+        except ImportError:  # pragma: no cover
+            pass
     return np.convolve(x, np.ones(w) / w, "same")
 
 

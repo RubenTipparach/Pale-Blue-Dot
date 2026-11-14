@@ -1,3 +1,3449 @@
 {
- "_about": "Recorded cues for tools/audio/cut_cc0.py (format from Crab Breeze, unchanged). A layer is {src: 'pack:file'} or {synth: '<gen_sfx layer or cue>'}, with optional shot (n-th shot of a multi-shot take), start, dur (s), pitch (tape-speed ratio), gain (dB after the layer is peak-normalised), lp, hp (Hz, steep), fadein, fadeout, delay (s), repeat. A cue may set len, drive (tanh), hp, lp (gentle, 12 dB/octave), distance (compressor, lowpass and reverb that push a bed into the background), loop, stereo, group, peak_db, what and edits. A cue whose what ends in (loops) loops in the game. A cue may also set scatter: a list of groups, each placing count short sounds picked from pick (layer specs) at seeded times inside within seconds (from 0, no closer than min_gap), with gain, pitch ranges and a pan width; scattered sounds are mixed after the distance treatment (this repository, 2026-11-06). A cue's lp_order (default 2, 12 dB/octave) makes its lp steeper: 4 is Crab Breeze's sealed-cockpit filter (two 2-pole passes at 4 kHz), used here for every weapon heard from the bridge through the hull, written 6 dB down (peak_db -7) (2026-11-07). A cue's hp_order (default 2) makes its hp steeper, as lp_order does its lp. Added in Pale Blue Dot (2026-11-14): takes, a list of objects, each merged over the cue's first layer (or over the cue when it has its own layers), writing <name>_1, <name>_2, ... (a footstep or a dig has several takes and the game picks one); group is this game's (Steps, Ground, Water, Weather, Craft, Fishing, Fauna, Menu, Ambience); every source is CC0 or public domain by its own page (a Freesound sound is freesound/<id>:<id>.mp3)."
+ "_about": "Recorded cues for tools/audio/cut_cc0.py (format from Crab Breeze, unchanged). A layer is {src: 'pack:file'} or {synth: '<gen_sfx layer or cue>'}, with optional shot (n-th shot of a multi-shot take), start, dur (s), pitch (tape-speed ratio), gain (dB after the layer is peak-normalised), lp, hp (Hz, steep), fadein, fadeout, delay (s), repeat. A cue may set len, drive (tanh), hp, lp (gentle, 12 dB/octave), distance (compressor, lowpass and reverb that push a bed into the background), loop, stereo, group, peak_db, what and edits. A cue whose what ends in (loops) loops in the game. A cue may also set scatter: a list of groups, each placing count short sounds picked from pick (layer specs) at seeded times inside within seconds (from 0, no closer than min_gap), with gain, pitch ranges and a pan width; scattered sounds are mixed after the distance treatment (this repository, 2026-11-06). A cue's lp_order (default 2, 12 dB/octave) makes its lp steeper: 4 is Crab Breeze's sealed-cockpit filter (two 2-pole passes at 4 kHz), used here for every weapon heard from the bridge through the hull, written 6 dB down (peak_db -7) (2026-11-07). A cue's hp_order (default 2) makes its hp steeper, as lp_order does its lp. Added in Pale Blue Dot (2026-11-14): takes, a list of objects, each merged over the cue's first layer (or over the cue when it has its own layers), writing <name>_1, <name>_2, ... (a footstep or a dig has several takes and the game picks one); group is this game's (Steps, Ground, Water, Weather, Craft, Fishing, Fauna, Menu, Ambience); every source is CC0 or public domain by its own page (a Freesound sound is freesound/<id>:<id>.mp3).",
+ "step_stone": {
+  "group": "Steps",
+  "what": "A boot on stone, rock or ore: hard and short, with a little grit under the sole.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_concrete_000.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/530589:530589.mp3",
+      "shot": 1,
+      "dur": 0.3,
+      "gain": -12,
+      "hp": 1500,
+      "fadeout": 0.12
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_concrete_001.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/530589:530589.mp3",
+      "shot": 2,
+      "dur": 0.3,
+      "gain": -12,
+      "hp": 1500,
+      "fadeout": 0.12
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_concrete_002.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/530589:530589.mp3",
+      "shot": 3,
+      "dur": 0.3,
+      "gain": -12,
+      "hp": 1500,
+      "fadeout": 0.12
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_concrete_003.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/530589:530589.mp3",
+      "shot": 4,
+      "dur": 0.3,
+      "gain": -12,
+      "hp": 1500,
+      "fadeout": 0.12
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_concrete_004.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/530589:530589.mp3",
+      "shot": 5,
+      "dur": 0.3,
+      "gain": -12,
+      "hp": 1500,
+      "fadeout": 0.12
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_concrete_001.ogg",
+      "dur": 0.35,
+      "pitch": 0.9,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/530589:530589.mp3",
+      "shot": 6,
+      "dur": 0.3,
+      "gain": -12,
+      "hp": 1500,
+      "fadeout": 0.12
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_concrete_000.ogg",
+    "dur": 0.35,
+    "fadeout": 0.08
+   },
+   {
+    "src": "freesound/530589:530589.mp3",
+    "shot": 1,
+    "dur": 0.3,
+    "gain": -12,
+    "hp": 1500,
+    "fadeout": 0.12
+   }
+  ],
+  "len": 0.45,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "Kenney's concrete steps, take 6 is take 2 a tone lower; a shot of boots on gravel under each, high passed at 1.5 kHz, 12 dB down"
+ },
+ "step_dirt": {
+  "group": "Steps",
+  "what": "A boot on soil or dirt: a soft, dull thud.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "kenney/rpg-audio:footstep00.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/rpg-audio:footstep01.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/rpg-audio:footstep02.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/rpg-audio:footstep03.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/rpg-audio:footstep04.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/rpg-audio:footstep05.ogg",
+      "dur": 0.35,
+      "fadeout": 0.08
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "kenney/rpg-audio:footstep00.ogg",
+    "dur": 0.35,
+    "fadeout": 0.08
+   }
+  ],
+  "len": 0.45,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "Kenney's RPG footsteps 0 to 5, trimmed"
+ },
+ "step_grass": {
+  "group": "Steps",
+  "what": "A boot in grass: a soft thud and a brush of blades.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_grass_000.ogg",
+      "dur": 0.34,
+      "fadeout": 0.12
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_grass_001.ogg",
+      "dur": 0.34,
+      "fadeout": 0.12
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_grass_002.ogg",
+      "dur": 0.34,
+      "fadeout": 0.12
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_grass_003.ogg",
+      "dur": 0.34,
+      "fadeout": 0.12
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_grass_004.ogg",
+      "dur": 0.34,
+      "fadeout": 0.12
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_grass_003.ogg",
+      "dur": 0.34,
+      "pitch": 1.08,
+      "fadeout": 0.12
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_grass_000.ogg",
+    "dur": 0.34,
+    "fadeout": 0.12
+   }
+  ],
+  "len": 0.45,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "Kenney's grass steps; take 6 is take 4 a little higher; trimmed to the step and its brush"
+ },
+ "step_dry": {
+  "group": "Steps",
+  "what": "A boot on dry grass and leaves: crisp and crackling.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/218305:218305.mp3",
+      "start": 4.14,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/218305:218305.mp3",
+      "start": 6.3,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/218305:218305.mp3",
+      "start": 7.56,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/218305:218305.mp3",
+      "start": 15.98,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/218305:218305.mp3",
+      "start": 19.47,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/218305:218305.mp3",
+      "start": 21.28,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/218305:218305.mp3",
+    "start": 4.14,
+    "dur": 0.42,
+    "fadeout": 0.15
+   }
+  ],
+  "len": 0.45,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "Six steps from a walk in sneakers on dry leaves, each from its onset"
+ },
+ "step_sand": {
+  "group": "Steps",
+  "what": "A boot in sand: a soft crunch and a hiss of grains.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/384082:384082.mp3",
+      "shot": 1,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384082:384082.mp3",
+      "shot": 2,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384082:384082.mp3",
+      "shot": 3,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384082:384082.mp3",
+      "shot": 4,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384082:384082.mp3",
+      "shot": 5,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384082:384082.mp3",
+      "shot": 6,
+      "dur": 0.42,
+      "fadeout": 0.15
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/384082:384082.mp3",
+    "shot": 1,
+    "dur": 0.42,
+    "fadeout": 0.15
+   }
+  ],
+  "len": 0.45,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "Six steps from a recording of gritty sand steps, each from its onset"
+ },
+ "step_snow": {
+  "group": "Steps",
+  "what": "A boot in snow: a packed squeak and crunch.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_snow_000.ogg",
+      "dur": 0.32,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_snow_001.ogg",
+      "dur": 0.32,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_snow_002.ogg",
+      "dur": 0.32,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_snow_003.ogg",
+      "dur": 0.32,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_snow_004.ogg",
+      "dur": 0.32,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/543385:543385.mp3",
+      "shot": 1,
+      "dur": 0.42,
+      "fadeout": 0.12
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_snow_000.ogg",
+    "dur": 0.32,
+    "fadeout": 0.1
+   }
+  ],
+  "len": 0.45,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "Kenney's snow steps and one heavy snow step from Freesound"
+ },
+ "step_wood": {
+  "group": "Steps",
+  "what": "A boot on a town's floor, stair or deck: a hollow knock.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_wood_000.ogg",
+      "dur": 0.3,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/459970:459970.mp3",
+      "shot": 1,
+      "dur": 0.3,
+      "gain": -9,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_wood_001.ogg",
+      "dur": 0.3,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/459970:459970.mp3",
+      "shot": 2,
+      "dur": 0.3,
+      "gain": -9,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_wood_002.ogg",
+      "dur": 0.3,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/459970:459970.mp3",
+      "shot": 3,
+      "dur": 0.3,
+      "gain": -9,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_wood_003.ogg",
+      "dur": 0.3,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/459970:459970.mp3",
+      "shot": 4,
+      "dur": 0.3,
+      "gain": -9,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:footstep_wood_004.ogg",
+      "dur": 0.3,
+      "fadeout": 0.08
+     },
+     {
+      "src": "freesound/459970:459970.mp3",
+      "shot": 5,
+      "dur": 0.3,
+      "gain": -9,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/459970:459970.mp3",
+      "shot": 6,
+      "dur": 0.3,
+      "fadeout": 0.1
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_wood_000.ogg",
+    "dur": 0.3,
+    "fadeout": 0.08
+   },
+   {
+    "src": "freesound/459970:459970.mp3",
+    "shot": 1,
+    "dur": 0.3,
+    "gain": -9,
+    "fadeout": 0.1
+   }
+  ],
+  "len": 0.45,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "Kenney's wood steps with a step on hollow wood under each, 9 dB down; take 6 the hollow wood alone"
+ },
+ "step_shallow": {
+  "group": "Steps",
+  "what": "Wading under the knees: a splash with each step.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/861369:861369.mp3",
+      "shot": 1,
+      "dur": 0.6,
+      "fadeout": 0.25
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/861369:861369.mp3",
+      "shot": 2,
+      "dur": 0.6,
+      "fadeout": 0.25
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/861369:861369.mp3",
+      "shot": 3,
+      "dur": 0.6,
+      "fadeout": 0.25
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/861369:861369.mp3",
+      "shot": 4,
+      "dur": 0.6,
+      "fadeout": 0.25
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/861369:861369.mp3",
+      "shot": 5,
+      "dur": 0.6,
+      "fadeout": 0.25
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/861369:861369.mp3",
+      "shot": 6,
+      "dur": 0.6,
+      "fadeout": 0.25
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/861369:861369.mp3",
+    "shot": 1,
+    "dur": 0.6,
+    "fadeout": 0.25
+   }
+  ],
+  "len": 0.6,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "Six steps from a walk through shallow water, each from its onset"
+ },
+ "step_wet": {
+  "group": "Steps",
+  "what": "The wet layer under a step on wet dirt, grass or stone: a squelch.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/376809:376809.mp3",
+      "shot": 1,
+      "dur": 0.4,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/376809:376809.mp3",
+      "shot": 2,
+      "dur": 0.4,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/376809:376809.mp3",
+      "shot": 3,
+      "dur": 0.4,
+      "fadeout": 0.15
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/376809:376809.mp3",
+    "shot": 1,
+    "dur": 0.4,
+    "fadeout": 0.15
+   }
+  ],
+  "len": 0.45,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "Three steps from a walk on muddy, wet ground"
+ },
+ "jump_stone": {
+  "group": "Steps",
+  "what": "Pushing off stone into a jump: a scuff and a rustle of clothes.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_concrete_002.ogg",
+    "dur": 0.4,
+    "fadeout": 0.15,
+    "pitch": 1.05
+   },
+   {
+    "src": "kenney/rpg-audio:cloth2.ogg",
+    "gain": -8,
+    "delay": 0.03
+   }
+  ],
+  "len": 0.55,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
+ },
+ "land_stone": {
+  "group": "Steps",
+  "what": "Landing on stone: both feet at once, heavier than a step.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_concrete_002.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.85
+   },
+   {
+    "src": "kenney/impact-sounds:footstep_concrete_002.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.92,
+    "delay": 0.025,
+    "gain": -3
+   },
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
+    "gain": -6
+   }
+  ],
+  "len": 0.6,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
+ },
+ "jump_dirt": {
+  "group": "Steps",
+  "what": "Pushing off dirt into a jump: a scuff and a rustle of clothes.",
+  "layers": [
+   {
+    "src": "kenney/rpg-audio:footstep04.ogg",
+    "dur": 0.4,
+    "fadeout": 0.15,
+    "pitch": 1.05
+   },
+   {
+    "src": "kenney/rpg-audio:cloth2.ogg",
+    "gain": -8,
+    "delay": 0.03
+   }
+  ],
+  "len": 0.55,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
+ },
+ "land_dirt": {
+  "group": "Steps",
+  "what": "Landing on dirt: both feet at once, heavier than a step.",
+  "layers": [
+   {
+    "src": "kenney/rpg-audio:footstep04.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.85
+   },
+   {
+    "src": "kenney/rpg-audio:footstep04.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.92,
+    "delay": 0.025,
+    "gain": -3
+   },
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
+    "gain": -6
+   }
+  ],
+  "len": 0.6,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
+ },
+ "jump_grass": {
+  "group": "Steps",
+  "what": "Pushing off grass into a jump: a scuff and a rustle of clothes.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_grass_001.ogg",
+    "dur": 0.4,
+    "fadeout": 0.15,
+    "pitch": 1.05
+   },
+   {
+    "src": "kenney/rpg-audio:cloth2.ogg",
+    "gain": -8,
+    "delay": 0.03
+   }
+  ],
+  "len": 0.55,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
+ },
+ "land_grass": {
+  "group": "Steps",
+  "what": "Landing on grass: both feet at once, heavier than a step.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_grass_001.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.85
+   },
+   {
+    "src": "kenney/impact-sounds:footstep_grass_001.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.92,
+    "delay": 0.025,
+    "gain": -3
+   },
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
+    "gain": -6
+   }
+  ],
+  "len": 0.6,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
+ },
+ "jump_dry": {
+  "group": "Steps",
+  "what": "Pushing off dry into a jump: a scuff and a rustle of clothes.",
+  "layers": [
+   {
+    "src": "freesound/218305:218305.mp3",
+    "start": 20.02,
+    "dur": 0.4,
+    "fadeout": 0.15,
+    "pitch": 1.05
+   },
+   {
+    "src": "kenney/rpg-audio:cloth2.ogg",
+    "gain": -8,
+    "delay": 0.03
+   }
+  ],
+  "len": 0.55,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
+ },
+ "land_dry": {
+  "group": "Steps",
+  "what": "Landing on dry: both feet at once, heavier than a step.",
+  "layers": [
+   {
+    "src": "freesound/218305:218305.mp3",
+    "start": 20.02,
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.85
+   },
+   {
+    "src": "freesound/218305:218305.mp3",
+    "start": 20.02,
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.92,
+    "delay": 0.025,
+    "gain": -3
+   },
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
+    "gain": -6
+   }
+  ],
+  "len": 0.6,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
+ },
+ "jump_sand": {
+  "group": "Steps",
+  "what": "Pushing off sand into a jump: a scuff and a rustle of clothes.",
+  "layers": [
+   {
+    "src": "freesound/384082:384082.mp3",
+    "shot": 2,
+    "dur": 0.4,
+    "fadeout": 0.15,
+    "pitch": 1.05
+   },
+   {
+    "src": "kenney/rpg-audio:cloth2.ogg",
+    "gain": -8,
+    "delay": 0.03
+   }
+  ],
+  "len": 0.55,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
+ },
+ "land_sand": {
+  "group": "Steps",
+  "what": "Landing on sand: both feet at once, heavier than a step.",
+  "layers": [
+   {
+    "src": "freesound/384082:384082.mp3",
+    "shot": 2,
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.85
+   },
+   {
+    "src": "freesound/384082:384082.mp3",
+    "shot": 2,
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.92,
+    "delay": 0.025,
+    "gain": -3
+   },
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
+    "gain": -6
+   }
+  ],
+  "len": 0.6,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
+ },
+ "jump_snow": {
+  "group": "Steps",
+  "what": "Pushing off snow into a jump: a scuff and a rustle of clothes.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_snow_002.ogg",
+    "dur": 0.4,
+    "fadeout": 0.15,
+    "pitch": 1.05
+   },
+   {
+    "src": "kenney/rpg-audio:cloth2.ogg",
+    "gain": -8,
+    "delay": 0.03
+   }
+  ],
+  "len": 0.55,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
+ },
+ "land_snow": {
+  "group": "Steps",
+  "what": "Landing on snow: both feet at once, heavier than a step.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_snow_002.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.85
+   },
+   {
+    "src": "kenney/impact-sounds:footstep_snow_002.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.92,
+    "delay": 0.025,
+    "gain": -3
+   },
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
+    "gain": -6
+   }
+  ],
+  "len": 0.6,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
+ },
+ "jump_wood": {
+  "group": "Steps",
+  "what": "Pushing off wood into a jump: a scuff and a rustle of clothes.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_wood_002.ogg",
+    "dur": 0.4,
+    "fadeout": 0.15,
+    "pitch": 1.05
+   },
+   {
+    "src": "kenney/rpg-audio:cloth2.ogg",
+    "gain": -8,
+    "delay": 0.03
+   }
+  ],
+  "len": 0.55,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
+ },
+ "land_wood": {
+  "group": "Steps",
+  "what": "Landing on wood: both feet at once, heavier than a step.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:footstep_wood_002.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.85
+   },
+   {
+    "src": "kenney/impact-sounds:footstep_wood_002.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.92,
+    "delay": 0.025,
+    "gain": -3
+   },
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
+    "gain": -6
+   }
+  ],
+  "len": 0.6,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
+ },
+ "jump_shallow": {
+  "group": "Steps",
+  "what": "Pushing off the shallows into a jump: a scuff and a rustle of clothes.",
+  "layers": [
+   {
+    "src": "freesound/861369:861369.mp3",
+    "shot": 2,
+    "dur": 0.4,
+    "fadeout": 0.15,
+    "pitch": 1.05
+   },
+   {
+    "src": "kenney/rpg-audio:cloth2.ogg",
+    "gain": -8,
+    "delay": 0.03
+   }
+  ],
+  "len": 0.55,
+  "hp": 70,
+  "peak_db": -1.0,
+  "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
+ },
+ "land_shallow": {
+  "group": "Steps",
+  "what": "Landing on the shallows: both feet at once, heavier than a step.",
+  "layers": [
+   {
+    "src": "freesound/861369:861369.mp3",
+    "shot": 2,
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.85
+   },
+   {
+    "src": "freesound/861369:861369.mp3",
+    "shot": 2,
+    "dur": 0.45,
+    "fadeout": 0.15,
+    "pitch": 0.92,
+    "delay": 0.025,
+    "gain": -3
+   },
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
+    "gain": -6
+   }
+  ],
+  "len": 0.6,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
+ },
+ "land_hard": {
+  "group": "Steps",
+  "what": "A fall over 9 m/s: a heavy body thud added under the landing.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_003.ogg",
+    "pitch": 0.8
+   },
+   {
+    "src": "kenney/impact-sounds:impactPunch_heavy_000.ogg",
+    "gain": -6,
+    "pitch": 0.8
+   },
+   {
+    "synth": "sub_boom",
+    "dur": 0.4,
+    "gain": -10,
+    "fadeout": 0.2
+   }
+  ],
+  "len": 0.7,
+  "hp": 30,
+  "peak_db": -1.0,
+  "edits": "Kenney's soft and punch heavy impacts, slowed to 0.8, and our sub boom's first 0.4 s, 10 dB down"
+ },
+ "dig_stone": {
+  "group": "Ground",
+  "what": "A pick into stone, rock or ore, three times a block: a hard metal clink and chips.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:impactMining_000.ogg",
+      "dur": 0.6,
+      "fadeout": 0.2
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:impactMining_001.ogg",
+      "dur": 0.6,
+      "fadeout": 0.2
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/impact-sounds:impactMining_002.ogg",
+      "dur": 0.6,
+      "fadeout": 0.2
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactMining_000.ogg",
+    "dur": 0.6,
+    "fadeout": 0.2
+   }
+  ],
+  "len": 0.6,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "Kenney's mining impacts, trimmed"
+ },
+ "dig_dirt": {
+  "group": "Ground",
+  "what": "A spade into soil or dirt: a gritty scrape and thud.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/384362:384362.mp3",
+      "shot": 1,
+      "dur": 0.6,
+      "fadeout": 0.2
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384362:384362.mp3",
+      "shot": 3,
+      "dur": 0.6,
+      "fadeout": 0.2
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384362:384362.mp3",
+      "shot": 5,
+      "dur": 0.6,
+      "fadeout": 0.2
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/384362:384362.mp3",
+    "shot": 1,
+    "dur": 0.6,
+    "fadeout": 0.2
+   }
+  ],
+  "len": 0.6,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "three spade strokes from a recording of digging a hole"
+ },
+ "dig_grass": {
+  "group": "Ground",
+  "what": "A spade through turf: the dirt stroke and a rip of roots and grass.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/384362:384362.mp3",
+      "shot": 2,
+      "dur": 0.6,
+      "fadeout": 0.2
+     },
+     {
+      "src": "kenney/impact-sounds:footstep_grass_000.ogg",
+      "gain": -6,
+      "dur": 0.5
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384362:384362.mp3",
+      "shot": 4,
+      "dur": 0.6,
+      "fadeout": 0.2
+     },
+     {
+      "src": "kenney/impact-sounds:footstep_grass_002.ogg",
+      "gain": -6,
+      "dur": 0.5
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384362:384362.mp3",
+      "shot": 6,
+      "dur": 0.6,
+      "fadeout": 0.2
+     },
+     {
+      "src": "kenney/impact-sounds:footstep_grass_004.ogg",
+      "gain": -6,
+      "dur": 0.5
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/384362:384362.mp3",
+    "shot": 2,
+    "dur": 0.6,
+    "fadeout": 0.2
+   },
+   {
+    "src": "kenney/impact-sounds:footstep_grass_000.ogg",
+    "gain": -6,
+    "dur": 0.5
+   }
+  ],
+  "len": 0.6,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "spade strokes with Kenney's grass steps 6 dB under for the rip"
+ },
+ "dig_dry": {
+  "group": "Ground",
+  "what": "A spade into dry grass: the stroke and a crackle of dry stems.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/384362:384362.mp3",
+      "shot": 1,
+      "dur": 0.6,
+      "fadeout": 0.2,
+      "gain": -3
+     },
+     {
+      "src": "freesound/218305:218305.mp3",
+      "start": 13.89,
+      "dur": 0.45,
+      "fadeout": 0.2
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384362:384362.mp3",
+      "shot": 3,
+      "dur": 0.6,
+      "fadeout": 0.2,
+      "gain": -3
+     },
+     {
+      "src": "freesound/218305:218305.mp3",
+      "start": 18.65,
+      "dur": 0.45,
+      "fadeout": 0.2
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/384362:384362.mp3",
+      "shot": 5,
+      "dur": 0.6,
+      "fadeout": 0.2,
+      "gain": -3
+     },
+     {
+      "src": "freesound/218305:218305.mp3",
+      "start": 28.0,
+      "dur": 0.45,
+      "fadeout": 0.2
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/384362:384362.mp3",
+    "shot": 1,
+    "dur": 0.6,
+    "fadeout": 0.2,
+    "gain": -3
+   },
+   {
+    "src": "freesound/218305:218305.mp3",
+    "start": 13.89,
+    "dur": 0.45,
+    "fadeout": 0.2
+   }
+  ],
+  "len": 0.6,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "spade strokes 3 dB down under steps in dry leaves"
+ },
+ "dig_sand": {
+  "group": "Ground",
+  "what": "A spade into sand: a soft, hissing scoop.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/651292:651292.mp3",
+      "dur": 0.45,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/651293:651293.mp3",
+      "dur": 0.7,
+      "fadeout": 0.2
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/662864:662864.mp3",
+      "shot": 2,
+      "dur": 0.6,
+      "fadeout": 0.2
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/651292:651292.mp3",
+    "dur": 0.45,
+    "fadeout": 0.15
+   }
+  ],
+  "len": 0.6,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "two spade strokes in wet coarse sand and one scoop of sand by hand"
+ },
+ "dig_snow": {
+  "group": "Ground",
+  "what": "A spade into packed snow: a crunching bite.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/268056:268056.mp3",
+      "shot": 1,
+      "dur": 0.6,
+      "fadeout": 0.2
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/268056:268056.mp3",
+      "shot": 2,
+      "dur": 0.6,
+      "fadeout": 0.2
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/268056:268056.mp3",
+      "shot": 3,
+      "dur": 0.6,
+      "fadeout": 0.2
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/268056:268056.mp3",
+    "shot": 1,
+    "dur": 0.6,
+    "fadeout": 0.2
+   }
+  ],
+  "len": 0.6,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "three strokes of a metal shovel into icy snow"
+ },
+ "dig_wood": {
+  "group": "Ground",
+  "what": "An axe into a wooden block: a dry chop.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/421929:421929.mp3",
+      "dur": 0.4,
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/753925:753925.mp3",
+      "shot": 1,
+      "dur": 0.5,
+      "fadeout": 0.15
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/753925:753925.mp3",
+      "shot": 2,
+      "dur": 0.5,
+      "fadeout": 0.15
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/421929:421929.mp3",
+    "dur": 0.4,
+    "fadeout": 0.1
+   }
+  ],
+  "len": 0.6,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "a single chop and two from an axe chopping wood"
+ },
+ "break_stone": {
+  "group": "Ground",
+  "what": "A block of stone coming out: a crack and rubble falling.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactMining_003.ogg",
+    "dur": 0.5,
+    "fadeout": 0.2
+   },
+   {
+    "src": "freesound/262118:262118.mp3",
+    "gain": -2,
+    "delay": 0.05,
+    "fadeout": 0.3
+   }
+  ],
+  "len": 1.0,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "a pick strike and a rock crumble 50 ms after it"
+ },
+ "break_dirt": {
+  "group": "Ground",
+  "what": "A block of soil coming out: a heavy, crumbling thud.",
+  "layers": [
+   {
+    "src": "freesound/353907:353907.mp3",
+    "shot": 1,
+    "dur": 0.9,
+    "fadeout": 0.3
+   },
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_000.ogg",
+    "gain": -6,
+    "pitch": 0.85
+   }
+  ],
+  "len": 1.0,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "a shovel of dirt over Kenney's soft heavy impact, slowed"
+ },
+ "break_grass": {
+  "group": "Ground",
+  "what": "A turf block coming out: dirt crumbling and grass tearing.",
+  "layers": [
+   {
+    "src": "freesound/353907:353907.mp3",
+    "shot": 2,
+    "dur": 0.9,
+    "fadeout": 0.3
+   },
+   {
+    "src": "kenney/impact-sounds:footstep_grass_004.ogg",
+    "gain": -4
+   }
+  ],
+  "len": 1.0,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "a shovel of dirt with Kenney's grass step for the tear"
+ },
+ "break_dry": {
+  "group": "Ground",
+  "what": "A dry grass block coming out: a crumble and a crackle.",
+  "layers": [
+   {
+    "src": "freesound/353907:353907.mp3",
+    "shot": 3,
+    "dur": 0.9,
+    "fadeout": 0.3,
+    "gain": -3
+   },
+   {
+    "src": "freesound/218305:218305.mp3",
+    "start": 6.3,
+    "dur": 0.5,
+    "fadeout": 0.2
+   }
+  ],
+  "len": 1.0,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "a shovel of dirt under dry leaves crunching"
+ },
+ "break_sand": {
+  "group": "Ground",
+  "what": "A sand block coming out: a pour of grains.",
+  "layers": [
+   {
+    "src": "freesound/662864:662864.mp3",
+    "shot": 4,
+    "dur": 1.0,
+    "fadeout": 0.4
+   }
+  ],
+  "len": 1.0,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "sand dug and poured by hand"
+ },
+ "break_snow": {
+  "group": "Ground",
+  "what": "A snow block coming out: a soft collapse.",
+  "layers": [
+   {
+    "src": "freesound/268056:268056.mp3",
+    "shot": 4,
+    "dur": 0.9,
+    "fadeout": 0.3
+   },
+   {
+    "src": "kenney/impact-sounds:footstep_snow_004.ogg",
+    "gain": -4,
+    "pitch": 0.85
+   }
+  ],
+  "len": 1.0,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "a shovel into icy snow over a snow step, slowed"
+ },
+ "break_wood": {
+  "group": "Ground",
+  "what": "A wooden block coming out: a split and a creak.",
+  "layers": [
+   {
+    "src": "freesound/177045:177045.mp3",
+    "fadeout": 0.3
+   },
+   {
+    "src": "kenney/rpg-audio:creak3.ogg",
+    "gain": -8,
+    "delay": 0.1
+   }
+  ],
+  "len": 1.0,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "a log split and Kenney's creak 8 dB down"
+ },
+ "place_stone": {
+  "group": "Ground",
+  "what": "Setting a stone block: a solid knock.",
+  "layers": [
+   {
+    "src": "freesound/431019:431019.mp3",
+    "pitch": 0.8,
+    "fadeout": 0.15
+   },
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_002.ogg",
+    "gain": -4
+   }
+  ],
+  "len": 0.5,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "a stone hit, slowed to 0.8, over Kenney's soft heavy impact"
+ },
+ "place_dirt": {
+  "group": "Ground",
+  "what": "Setting a block of soil: a soft, packed thud.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_004.ogg"
+   },
+   {
+    "src": "kenney/rpg-audio:footstep05.ogg",
+    "gain": -6
+   }
+  ],
+  "len": 0.5,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "Kenney's soft heavy impact and a dirt step"
+ },
+ "place_grass": {
+  "group": "Ground",
+  "what": "Setting turf: a thud and a brush of grass.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_004.ogg",
+    "gain": -2
+   },
+   {
+    "src": "kenney/impact-sounds:footstep_grass_002.ogg",
+    "gain": -4,
+    "dur": 0.4
+   }
+  ],
+  "len": 0.5,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "Kenney's soft heavy impact and grass step"
+ },
+ "place_dry": {
+  "group": "Ground",
+  "what": "Setting dry grass: a thud and a crackle.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactSoft_heavy_000.ogg",
+    "gain": -2
+   },
+   {
+    "src": "freesound/218305:218305.mp3",
+    "start": 7.56,
+    "dur": 0.4,
+    "gain": -5,
+    "fadeout": 0.15
+   }
+  ],
+  "len": 0.5,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "Kenney's soft heavy impact and a step in dry leaves"
+ },
+ "place_sand": {
+  "group": "Ground",
+  "what": "Setting sand: a soft, shifting pat.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactSoft_medium_001.ogg",
+    "gain": -3
+   },
+   {
+    "src": "freesound/384082:384082.mp3",
+    "shot": 4,
+    "dur": 0.4,
+    "fadeout": 0.15
+   }
+  ],
+  "len": 0.5,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "Kenney's soft impact and a sand step"
+ },
+ "place_snow": {
+  "group": "Ground",
+  "what": "Setting snow: a packed pat.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactSoft_medium_003.ogg",
+    "gain": -3
+   },
+   {
+    "src": "kenney/impact-sounds:footstep_snow_001.ogg",
+    "dur": 0.3,
+    "fadeout": 0.1
+   }
+  ],
+  "len": 0.5,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "Kenney's soft impact and a snow step"
+ },
+ "place_wood": {
+  "group": "Ground",
+  "what": "Setting a plank or a wooden block: a hollow knock.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactPlank_medium_001.ogg",
+    "dur": 0.45,
+    "fadeout": 0.15
+   },
+   {
+    "src": "kenney/impact-sounds:impactWood_heavy_001.ogg",
+    "gain": -4
+   }
+  ],
+  "len": 0.5,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "Kenney's plank and heavy wood impacts"
+ },
+ "place_lamp": {
+  "group": "Ground",
+  "what": "Setting a lamp: a light clink of metal and glass.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactMetal_light_001.ogg",
+    "fadeout": 0.15
+   },
+   {
+    "src": "kenney/impact-sounds:impactGlass_light_002.ogg",
+    "gain": -8,
+    "delay": 0.02
+   }
+  ],
+  "len": 0.5,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "Kenney's light metal impact and a light glass one 8 dB down"
+ },
+ "fire_ignite_small": {
+  "group": "Weather",
+  "what": "A brazier lighting: a soft whoosh as the flame takes.",
+  "layers": [
+   {
+    "src": "freesound/386385:386385.mp3",
+    "fadeout": 0.2
+   }
+  ],
+  "len": 1.0,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "a torch igniting on a soft flame"
+ },
+ "water_enter_small": {
+  "group": "Water",
+  "what": "Slipping into water at a walk: a light splash.",
+  "layers": [
+   {
+    "src": "freesound/398032:398032.mp3",
+    "fadeout": 0.3
+   }
+  ],
+  "len": 1.3,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "a splash, as recorded"
+ },
+ "water_enter_big": {
+  "group": "Water",
+  "what": "Falling or diving into water: a big plunge.",
+  "layers": [
+   {
+    "src": "freesound/442773:442773.mp3",
+    "fadeout": 0.4
+   },
+   {
+    "synth": "sub_boom",
+    "dur": 0.5,
+    "gain": -12,
+    "fadeout": 0.3
+   }
+  ],
+  "len": 2.2,
+  "hp": 40,
+  "peak_db": -1.0,
+  "edits": "a big water splash with our sub boom's first half second 12 dB under"
+ },
+ "water_exit": {
+  "group": "Water",
+  "what": "Climbing out of the water: a lift and water running off.",
+  "layers": [
+   {
+    "src": "freesound/585744:585744.mp3",
+    "shot": 2,
+    "dur": 1.2,
+    "fadeout": 0.5,
+    "pitch": 1.1,
+    "gain": -3
+   },
+   {
+    "src": "freesound/50623:50623.mp3",
+    "shot": 3,
+    "dur": 0.8,
+    "gain": -8,
+    "delay": 0.2,
+    "fadeout": 0.4
+   }
+  ],
+  "len": 1.4,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "the tail of a jump into water, a little faster, and a small splash 8 dB down"
+ },
+ "swim_stroke": {
+  "group": "Water",
+  "what": "An arm stroke at the surface: a scoop and a wash.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/379334:379334.mp3",
+      "start": 0.05,
+      "dur": 0.8,
+      "fadeout": 0.3
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/379334:379334.mp3",
+      "start": 6.52,
+      "dur": 0.8,
+      "fadeout": 0.3
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/379334:379334.mp3",
+      "start": 7.73,
+      "dur": 0.8,
+      "fadeout": 0.3
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/379334:379334.mp3",
+    "start": 0.05,
+    "dur": 0.8,
+    "fadeout": 0.3
+   }
+  ],
+  "len": 0.8,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "three strokes from a recording of swimming"
+ },
+ "swim_stroke_under": {
+  "group": "Water",
+  "what": "A stroke under water: the same scoop, dull and close.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/379334:379334.mp3",
+      "start": 1.54,
+      "dur": 0.9,
+      "fadeout": 0.3,
+      "lp": 700,
+      "lp_order": 4
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/379334:379334.mp3",
+      "start": 5.65,
+      "dur": 0.9,
+      "fadeout": 0.3,
+      "lp": 700,
+      "lp_order": 4
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/379334:379334.mp3",
+    "start": 1.54,
+    "dur": 0.9,
+    "fadeout": 0.3,
+    "lp": 700,
+    "lp_order": 4
+   }
+  ],
+  "len": 0.9,
+  "hp": 40,
+  "peak_db": -1.0,
+  "edits": "swimming strokes low passed at 700 Hz, 24 dB/octave"
+ },
+ "bubbles": {
+  "group": "Water",
+  "what": "Breath escaping under water: a burble of bubbles.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/539823:539823.mp3",
+      "dur": 1.5,
+      "fadeout": 0.4
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/51745:51745.mp3",
+      "fadeout": 0.4
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/539823:539823.mp3",
+    "dur": 1.5,
+    "fadeout": 0.4
+   }
+  ],
+  "len": 1.5,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "two bubble recordings"
+ },
+ "breath": {
+  "group": "Water",
+  "what": "Surfacing after a long time under: a sharp breath in.",
+  "layers": [
+   {
+    "src": "freesound/65620:65620.mp3",
+    "fadeout": 0.3
+   }
+  ],
+  "len": 1.6,
+  "hp": 80,
+  "peak_db": -3.0,
+  "edits": "an inhale, as recorded"
+ },
+ "cast_whoosh": {
+  "group": "Fishing",
+  "what": "Casting: the rod's whoosh and the line running out.",
+  "layers": [
+   {
+    "src": "freesound/725426:725426.mp3",
+    "fadeout": 0.3
+   }
+  ],
+  "len": 1.5,
+  "hp": 80,
+  "peak_db": -1.0,
+  "edits": "a fishing rod cast, as recorded"
+ },
+ "float_plop": {
+  "group": "Fishing",
+  "what": "The float landing on water: a small plop.",
+  "layers": [
+   {
+    "src": "freesound/50623:50623.mp3",
+    "shot": 1,
+    "dur": 0.5,
+    "pitch": 1.4,
+    "fadeout": 0.25
+   }
+  ],
+  "len": 0.5,
+  "hp": 120,
+  "peak_db": -1.0,
+  "edits": "a water splash sped up 1.4 times and cut short"
+ },
+ "float_dry": {
+  "group": "Fishing",
+  "what": "The float landing on dry ground: a light tap.",
+  "layers": [
+   {
+    "src": "kenney/impact-sounds:impactGeneric_light_002.ogg",
+    "fadeout": 0.1
+   }
+  ],
+  "len": 0.3,
+  "hp": 100,
+  "peak_db": -1.0,
+  "edits": "Kenney's light impact"
+ },
+ "nibble_tick": {
+  "group": "Fishing",
+  "what": "A fish nibbling: the float ticks on the surface.",
+  "layers": [
+   {
+    "src": "freesound/50623:50623.mp3",
+    "shot": 5,
+    "dur": 0.18,
+    "pitch": 1.8,
+    "fadeout": 0.1
+   }
+  ],
+  "len": 0.2,
+  "hp": 200,
+  "peak_db": -1.0,
+  "edits": "the first 0.18 s of a splash, sped up 1.8 times"
+ },
+ "bite_splash": {
+  "group": "Fishing",
+  "what": "A bite: the float pulled under with a splash.",
+  "layers": [
+   {
+    "src": "freesound/50623:50623.mp3",
+    "shot": 2,
+    "dur": 0.9,
+    "fadeout": 0.4
+   }
+  ],
+  "len": 0.9,
+  "hp": 80,
+  "peak_db": -1.0,
+  "edits": "a water splash"
+ },
+ "reel_loop": {
+  "group": "Fishing",
+  "what": "Reeling in: the reel's clicking whirr (loops).",
+  "layers": [
+   {
+    "src": "freesound/507078:507078.mp3",
+    "start": 1.0,
+    "dur": 4.0
+   }
+  ],
+  "len": 4.0,
+  "hp": 100,
+  "loop": true,
+  "loop_fade": 0.3,
+  "peak_db": -1.0,
+  "edits": "four seconds from the middle of a fly reel winding slowly, looped"
+ },
+ "line_snap": {
+  "group": "Fishing",
+  "what": "The line breaking: a sharp twang.",
+  "layers": [
+   {
+    "src": "freesound/537084:537084.mp3",
+    "shot": 1,
+    "dur": 0.6,
+    "fadeout": 0.3
+   }
+  ],
+  "len": 0.6,
+  "hp": 150,
+  "peak_db": -1.0,
+  "edits": "a guitar string snapping"
+ },
+ "catch_splash": {
+  "group": "Fishing",
+  "what": "The fish pulled out of the water: a thrashing splash.",
+  "layers": [
+   {
+    "src": "freesound/9508:9508.mp3",
+    "fadeout": 0.4
+   }
+  ],
+  "len": 2.0,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "a splash, as recorded"
+ },
+ "rotor_loop": {
+  "group": "Craft",
+  "what": "A Kestrel rotor turning: a steady chop (loops; pitch follows rotor speed).",
+  "layers": [
+   {
+    "src": "freesound/348991:348991.mp3",
+    "start": 21.0,
+    "dur": 6.0
+   }
+  ],
+  "len": 6.0,
+  "hp": 40,
+  "loop": true,
+  "loop_fade": 0.5,
+  "peak_db": -1.0,
+  "edits": "six seconds of a Bell 407 helicopter in steady flight, looped"
+ },
+ "nacelle_motor": {
+  "group": "Craft",
+  "what": "The Kestrel's nacelles tilting: a geared electric whine (loops).",
+  "layers": [
+   {
+    "src": "freesound/322021:322021.mp3",
+    "start": 3.3,
+    "dur": 0.7
+   }
+  ],
+  "len": 0.7,
+  "hp": 100,
+  "loop": true,
+  "loop_fade": 0.15,
+  "peak_db": -1.0,
+  "edits": "the steady middle of one servo motor run, looped"
+ },
+ "airframe_wind": {
+  "group": "Craft",
+  "what": "Air rushing over the airframe, louder with airspeed (loops).",
+  "layers": [
+   {
+    "src": "freesound/117136:117136.mp3",
+    "start": 10.0,
+    "dur": 8.0,
+    "hp": 200
+   }
+  ],
+  "len": 8.0,
+  "hp": 60,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "eight seconds of cold arctic wind, high passed at 200 Hz, looped"
+ },
+ "hull_water": {
+  "group": "Craft",
+  "what": "Water rushing past a hull under way, louder with speed (loops).",
+  "layers": [
+   {
+    "src": "freesound/588308:588308.mp3",
+    "start": 5.0,
+    "dur": 8.0
+   }
+  ],
+  "len": 8.0,
+  "hp": 60,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "eight seconds of a rowing boat's wake, looped"
+ },
+ "bow_splash": {
+  "group": "Craft",
+  "what": "The bow meeting a wave: a slap and spray.",
+  "layers": [
+   {
+    "src": "freesound/480838:480838.mp3",
+    "shot": 1,
+    "dur": 1.2,
+    "fadeout": 0.5
+   }
+  ],
+  "len": 1.2,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "water slapping a wooden boat"
+ },
+ "sail_luff": {
+  "group": "Craft",
+  "what": "A sail luffing: canvas flapping in the wind (loops).",
+  "layers": [
+   {
+    "src": "freesound/57280:57280.mp3",
+    "start": 4.0,
+    "dur": 5.0
+   }
+  ],
+  "len": 5.0,
+  "hp": 80,
+  "loop": true,
+  "loop_fade": 0.4,
+  "peak_db": -1.0,
+  "edits": "five seconds of flapping fabric, looped"
+ },
+ "sail_fill": {
+  "group": "Craft",
+  "what": "A sail filling: one deep whump of canvas.",
+  "layers": [
+   {
+    "src": "freesound/448975:448975.mp3",
+    "shot": 1,
+    "dur": 1.0,
+    "pitch": 0.8,
+    "fadeout": 0.4
+   }
+  ],
+  "len": 1.2,
+  "hp": 50,
+  "peak_db": -1.0,
+  "edits": "one flap of a flag, slowed to 0.8"
+ },
+ "rigging_creak": {
+  "group": "Craft",
+  "what": "Rigging and timbers creaking as the boat heels.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/500143:500143.mp3",
+      "shot": 1,
+      "dur": 1.5,
+      "fadeout": 0.5
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/rpg-audio:creak1.ogg",
+      "pitch": 0.8
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "kenney/rpg-audio:creak2.ogg",
+      "pitch": 0.75
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/500143:500143.mp3",
+    "shot": 1,
+    "dur": 1.5,
+    "fadeout": 0.5
+   }
+  ],
+  "len": 1.5,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "a liner's mooring hawsers creaking and two of Kenney's creaks, slowed"
+ },
+ "sheet_run": {
+  "group": "Craft",
+  "what": "The sheet running out through a block: a rope's rattle.",
+  "layers": [
+   {
+    "src": "freesound/394222:394222.mp3",
+    "start": 1.0,
+    "dur": 1.5,
+    "fadeout": 0.4
+   }
+  ],
+  "len": 1.5,
+  "hp": 80,
+  "peak_db": -1.0,
+  "edits": "a large rope pulley worked"
+ },
+ "paddle_stroke": {
+  "group": "Craft",
+  "what": "A canoe paddle stroke: a dip and a swirl.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/702386:702386.mp3",
+      "start": 1.5,
+      "dur": 1.0,
+      "fadeout": 0.4
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/702386:702386.mp3",
+      "start": 3.6,
+      "dur": 1.0,
+      "fadeout": 0.4
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/702386:702386.mp3",
+      "start": 4.8,
+      "dur": 1.0,
+      "fadeout": 0.4
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/702386:702386.mp3",
+    "start": 1.5,
+    "dur": 1.0,
+    "fadeout": 0.4
+   }
+  ],
+  "len": 1.0,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "three strokes of a canoe paddle"
+ },
+ "oar_stroke": {
+  "group": "Craft",
+  "what": "An oar stroke: a creak of the rowlock and a pull through the water.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/438846:438846.mp3",
+      "start": 0.08,
+      "dur": 1.4,
+      "fadeout": 0.5
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/438846:438846.mp3",
+      "start": 5.0,
+      "dur": 1.4,
+      "fadeout": 0.5
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/438846:438846.mp3",
+      "start": 8.0,
+      "dur": 1.4,
+      "fadeout": 0.5
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/438846:438846.mp3",
+    "start": 0.08,
+    "dur": 1.4,
+    "fadeout": 0.5
+   }
+  ],
+  "len": 1.4,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "three strokes from a recording of oars rowing"
+ },
+ "hull_lap": {
+  "group": "Craft",
+  "what": "Water lapping against a hull at rest (loops).",
+  "layers": [
+   {
+    "src": "freesound/482848:482848.mp3",
+    "start": 6.0,
+    "dur": 10.0
+   }
+  ],
+  "len": 10.0,
+  "hp": 60,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "ten seconds of water lapping against a boat, looped"
+ },
+ "water_slosh": {
+  "group": "Craft",
+  "what": "Water sloshing in the bottom of the hull.",
+  "layers": [
+   {
+    "src": "freesound/235625:235625.mp3",
+    "start": 0.5,
+    "dur": 2.0,
+    "fadeout": 0.6
+   }
+  ],
+  "len": 2.0,
+  "hp": 60,
+  "peak_db": -1.0,
+  "edits": "two seconds of water sloshing"
+ },
+ "thruster_loop": {
+  "group": "Craft",
+  "what": "Free flight's thruster: a steady jet roar, louder with thrust (loops).",
+  "layers": [
+   {
+    "src": "freesound/146770:146770.mp3",
+    "dur": 4.0
+   },
+   {
+    "src": "freesound/584181:584181.mp3",
+    "gain": -6,
+    "repeat": 3,
+    "dur": 4.0
+   }
+  ],
+  "len": 4.0,
+  "hp": 40,
+  "lp": 9000,
+  "loop": true,
+  "loop_fade": 0.4,
+  "peak_db": -1.0,
+  "edits": "a rocket boost loop with a thrust loop 6 dB under"
+ },
+ "rain_hit_water": {
+  "group": "Weather",
+  "what": "Rain falling on the sea near the listener: a fine patter on water (loops).",
+  "layers": [
+   {
+    "src": "freesound/607070:607070.mp3",
+    "start": 50.0,
+    "dur": 8.0,
+    "hp": 600
+   }
+  ],
+  "len": 8.0,
+  "hp": 60,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "eight seconds of light rain, high passed at 600 Hz, looped"
+ },
+ "thunder_crack": {
+  "group": "Weather",
+  "what": "A strike under 400 m: a tearing crack and the boom on top of it.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/840628:840628.mp3",
+      "start": 0.5,
+      "dur": 9.0,
+      "fadeout": 3.0
+     },
+     {
+      "synth": "sub_boom",
+      "gain": -6,
+      "delay": 0.08
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/434359:434359.mp3",
+      "start": 1.5,
+      "dur": 11.0,
+      "fadeout": 4.0
+     },
+     {
+      "synth": "sub_boom",
+      "gain": -6,
+      "delay": 0.1
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/840628:840628.mp3",
+    "start": 0.5,
+    "dur": 9.0,
+    "fadeout": 3.0
+   },
+   {
+    "synth": "sub_boom",
+    "gain": -6,
+    "delay": 0.08
+   }
+  ],
+  "len": 11.0,
+  "hp": 25,
+  "peak_db": -1.0,
+  "edits": "two close strikes, each with our sub boom 6 dB under it"
+ },
+ "thunder_close": {
+  "group": "Weather",
+  "what": "A strike 400 m to 1.5 km off: a sharp clap and a roll.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/264826:264826.mp3",
+      "start": 6.0,
+      "dur": 10.0,
+      "fadeout": 4.0
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/534023:534023.mp3",
+      "start": 0.7,
+      "dur": 10.0,
+      "fadeout": 4.0
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/264826:264826.mp3",
+    "start": 6.0,
+    "dur": 10.0,
+    "fadeout": 4.0
+   }
+  ],
+  "len": 10.0,
+  "hp": 25,
+  "peak_db": -1.0,
+  "edits": "a close-up thunder clap and a thunderclap, each cut to its clap and roll"
+ },
+ "thunder_roll": {
+  "group": "Weather",
+  "what": "A strike past 1.5 km: a long, low roll.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/581125:581125.mp3",
+      "start": 2.0,
+      "dur": 12.0,
+      "fadeout": 5.0
+     },
+     {
+      "synth": "sub_roll",
+      "gain": -8,
+      "delay": 1.0
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/128497:128497.mp3",
+      "start": 10.0,
+      "dur": 12.0,
+      "fadeout": 5.0
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/486557:486557.mp3",
+      "start": 8.0,
+      "dur": 12.0,
+      "fadeout": 4.0
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/581125:581125.mp3",
+    "start": 2.0,
+    "dur": 12.0,
+    "fadeout": 5.0
+   },
+   {
+    "synth": "sub_roll",
+    "gain": -8,
+    "delay": 1.0
+   }
+  ],
+  "len": 12.0,
+  "lp": 2500,
+  "lp_order": 4,
+  "hp": 25,
+  "peak_db": -1.0,
+  "edits": "three distant thunders, low passed at 2.5 kHz; the first with our sub roll 8 dB under"
+ },
+ "strike_hit_tree": {
+  "group": "Weather",
+  "what": "Lightning hitting a tree within 400 m: a crack, wood splitting, a sizzle.",
+  "layers": [
+   {
+    "src": "freesound/840628:840628.mp3",
+    "start": 0.5,
+    "dur": 2.5,
+    "fadeout": 1.2,
+    "gain": -2
+   },
+   {
+    "src": "freesound/177045:177045.mp3",
+    "gain": -3,
+    "delay": 0.05
+   },
+   {
+    "src": "freesound/234782:234782.mp3",
+    "gain": -10,
+    "delay": 0.3,
+    "fadeout": 0.6
+   }
+  ],
+  "len": 3.0,
+  "hp": 30,
+  "peak_db": -1.0,
+  "edits": "the first 2.5 s of a close strike, a log split and a steam hiss under it"
+ },
+ "strike_hit_ground": {
+  "group": "Weather",
+  "what": "Lightning hitting the ground within 400 m: a crack and a thud of earth.",
+  "layers": [
+   {
+    "src": "freesound/840628:840628.mp3",
+    "start": 0.5,
+    "dur": 2.5,
+    "fadeout": 1.2,
+    "gain": -2
+   },
+   {
+    "src": "freesound/512243:512243.mp3",
+    "shot": 1,
+    "dur": 1.5,
+    "gain": -4,
+    "delay": 0.05,
+    "fadeout": 0.6
+   },
+   {
+    "synth": "sub_boom",
+    "dur": 1.5,
+    "gain": -8,
+    "fadeout": 0.8
+   }
+  ],
+  "len": 3.0,
+  "hp": 25,
+  "peak_db": -1.0,
+  "edits": "the first 2.5 s of a close strike, a rock smash, and our sub boom"
+ },
+ "fire_ignite": {
+  "group": "Weather",
+  "what": "A fire catching: a whoomph as it takes hold.",
+  "layers": [
+   {
+    "src": "freesound/872960:872960.mp3",
+    "start": 6.2,
+    "dur": 2.0,
+    "fadeout": 0.8
+   },
+   {
+    "synth": "sub_boom",
+    "dur": 0.6,
+    "gain": -12,
+    "fadeout": 0.4
+   }
+  ],
+  "len": 2.0,
+  "hp": 40,
+  "peak_db": -1.0,
+  "edits": "a torch lighting a fire starter, with our sub boom 12 dB under"
+ },
+ "fire_crackle": {
+  "group": "Weather",
+  "what": "A fire burning: crackles and the flame's roar, level by its size (loops).",
+  "layers": [
+   {
+    "src": "freesound/181563:181563.mp3",
+    "start": 4.0,
+    "dur": 12.0
+   }
+  ],
+  "len": 12.0,
+  "hp": 50,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "twelve seconds of a crackling fire, looped"
+ },
+ "fire_hiss": {
+  "group": "Weather",
+  "what": "Rain on a fire: steam hissing, louder as the rain hits harder (loops).",
+  "layers": [
+   {
+    "src": "freesound/365071:365071.mp3",
+    "start": 0.55,
+    "dur": 2.4
+   }
+  ],
+  "len": 2.4,
+  "hp": 200,
+  "loop": true,
+  "loop_fade": 0.5,
+  "peak_db": -1.0,
+  "edits": "two seconds of steam at its fullest, looped"
+ },
+ "fire_out": {
+  "group": "Weather",
+  "what": "A fire going out: a last puff of steam and a pop.",
+  "layers": [
+   {
+    "src": "freesound/234782:234782.mp3",
+    "fadeout": 0.6
+   },
+   {
+    "src": "freesound/181563:181563.mp3",
+    "start": 7.3,
+    "dur": 0.25,
+    "gain": -4,
+    "delay": 0.5,
+    "fadeout": 0.1
+   }
+  ],
+  "len": 1.5,
+  "hp": 80,
+  "peak_db": -1.0,
+  "edits": "a short steam hiss and one crackle from the fire recording"
+ },
+ "owl": {
+  "group": "Fauna",
+  "what": "An owl at night, placed 30 to 200 m off at random: a soft hoot.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/465697:465697.mp3",
+      "dur": 2.0,
+      "fadeout": 0.4
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/398734:398734.mp3",
+      "start": 1.2,
+      "dur": 2.5,
+      "fadeout": 0.5
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/465697:465697.mp3",
+    "dur": 2.0,
+    "fadeout": 0.4
+   }
+  ],
+  "len": 2.5,
+  "hp": 150,
+  "peak_db": -1.0,
+  "edits": "two owl hoots"
+ },
+ "gull": {
+  "group": "Fauna",
+  "what": "A gull over a beach or the sea, placed 30 to 200 m off: one cry.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/263786:263786.mp3",
+      "fadeout": 0.1
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/353416:353416.mp3",
+      "shot": 1,
+      "dur": 1.5,
+      "fadeout": 0.4
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/353416:353416.mp3",
+      "shot": 2,
+      "dur": 1.5,
+      "fadeout": 0.4
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/263786:263786.mp3",
+    "fadeout": 0.1
+   }
+  ],
+  "len": 1.5,
+  "hp": 200,
+  "peak_db": -1.0,
+  "edits": "a single gull call and two from a gull on a beach"
+ },
+ "dog_far": {
+  "group": "Fauna",
+  "what": "A dog barking somewhere in a town, placed 30 to 200 m off.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/54545:54545.mp3",
+      "shot": 1,
+      "dur": 2.0,
+      "fadeout": 0.5
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/573146:573146.mp3",
+      "shot": 1,
+      "dur": 2.5,
+      "fadeout": 0.5
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/54545:54545.mp3",
+    "shot": 1,
+    "dur": 2.0,
+    "fadeout": 0.5
+   }
+  ],
+  "len": 2.5,
+  "hp": 150,
+  "lp": 5000,
+  "peak_db": -1.0,
+  "edits": "two distant dog barks"
+ },
+ "amb_wind_low": {
+  "group": "Ambience",
+  "what": "A soft breeze near the ground, a rustle of leaves in it (loops)",
+  "layers": [
+   {
+    "src": "freesound/697217:697217.mp3",
+    "dur": 40.0
+   },
+   {
+    "src": "freesound/457318:457318.mp3",
+    "start": 8.0,
+    "dur": 34.0,
+    "gain": -8,
+    "fadein": 2.0,
+    "fadeout": 4.0
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 3500,
+   "wet": 0.35,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of gentle wind on an open plain, with dry leaves in an autumn wind 8 dB under; the bed treatment (compressed, low passed at 3.5 kHz, reverb)"
+ },
+ "amb_wind_high": {
+  "group": "Ambience",
+  "what": "Open, hollow wind high above the ground (loops)",
+  "layers": [
+   {
+    "src": "freesound/117136:117136.mp3",
+    "start": 5.0,
+    "dur": 40.0
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 3500,
+   "wet": 0.35,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of cold arctic wind; the bed treatment"
+ },
+ "amb_rain_light": {
+  "group": "Ambience",
+  "what": "Light rain all around (loops)",
+  "layers": [
+   {
+    "src": "freesound/200273:200273.mp3",
+    "dur": 40.0
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 6000,
+   "wet": 0.3,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of light rural rain; the bed treatment with its low pass at 6 kHz so the drops stay crisp"
+ },
+ "amb_rain_heavy": {
+  "group": "Ambience",
+  "what": "Heavy rain all around (loops)",
+  "layers": [
+   {
+    "src": "freesound/200272:200272.mp3",
+    "dur": 40.0
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 6000,
+   "wet": 0.3,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of heavy rural rain; the bed treatment, low pass at 6 kHz"
+ },
+ "amb_rain_roof": {
+  "group": "Ambience",
+  "what": "Rain on the roof, heard from inside (loops)",
+  "layers": [
+   {
+    "src": "freesound/161705:161705.mp3",
+    "dur": 32.0
+   }
+  ],
+  "len": 32.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 3500,
+   "wet": 0.35,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "32 s of rain heard from inside; the bed treatment"
+ },
+ "amb_surf": {
+  "group": "Ambience",
+  "what": "Surf breaking on the shore (loops)",
+  "layers": [
+   {
+    "src": "freesound/260263:260263.mp3",
+    "dur": 40.0
+   },
+   {
+    "src": "freesound/376805:376805.mp3",
+    "start": 12.0,
+    "dur": 40.0,
+    "gain": -6
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 3500,
+   "wet": 0.35,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of waves on a shore with waves up close 6 dB under; the bed treatment"
+ },
+ "amb_open_water": {
+  "group": "Ambience",
+  "what": "Open water from a boat: gentle lapping, no shore (loops)",
+  "layers": [
+   {
+    "src": "freesound/637945:637945.mp3",
+    "dur": 40.0
+   },
+   {
+    "src": "freesound/482848:482848.mp3",
+    "dur": 20.0,
+    "gain": -9,
+    "repeat": 2,
+    "fadein": 1.0,
+    "fadeout": 1.0
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 3500,
+   "wet": 0.35,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of gentle lake waves lapping at boats, with water lapping a hull 9 dB under; the bed treatment"
+ },
+ "amb_meadow_day": {
+  "group": "Ambience",
+  "what": "A meadow by day: birdsong near and far (loops)",
+  "layers": [
+   {
+    "src": "freesound/274175:274175.mp3",
+    "dur": 40.0
+   },
+   {
+    "src": "freesound/160893:160893.mp3",
+    "start": 12.0,
+    "dur": 40.0,
+    "gain": -6
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 8000,
+   "wet": 0.3,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of a park, mostly birds, with a quiet spring woodland 6 dB under; the bed treatment with its low pass at 8 kHz, because birdsong lives at 2 to 6 kHz"
+ },
+ "amb_jungle_day": {
+  "group": "Ambience",
+  "what": "A jungle by day: dense insects, birds and calls (loops)",
+  "layers": [
+   {
+    "src": "freesound/619264:619264.mp3",
+    "start": 60.0,
+    "dur": 40.0
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 8000,
+   "wet": 0.3,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of daytime in a Malaysian jungle, from a minute in; the bed treatment at 8 kHz"
+ },
+ "amb_swamp_day": {
+  "group": "Ambience",
+  "what": "A swamp by day: frogs, insects and still water (loops)",
+  "layers": [
+   {
+    "src": "freesound/548629:548629.mp3",
+    "dur": 40.0
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 8000,
+   "wet": 0.3,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of a forest swamp; the bed treatment at 8 kHz"
+ },
+ "amb_gulls": {
+  "group": "Ambience",
+  "what": "A beach or the sea by day: gulls calling over distant surf (loops)",
+  "layers": [
+   {
+    "src": "freesound/537854:537854.mp3",
+    "dur": 29.0
+   },
+   {
+    "src": "freesound/531015:531015.mp3",
+    "start": 30.0,
+    "dur": 29.0,
+    "gain": -10
+   }
+  ],
+  "len": 29.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 8000,
+   "wet": 0.3,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "29 s of distant seagulls over ocean waves 10 dB under; the bed treatment at 8 kHz"
+ },
+ "amb_desert_day": {
+  "group": "Ambience",
+  "what": "A desert by day: sparse insects in a dry wind (loops)",
+  "layers": [
+   {
+    "src": "freesound/574397:574397.mp3",
+    "dur": 40.0,
+    "hp": 150
+   },
+   {
+    "src": "freesound/697217:697217.mp3",
+    "dur": 40.0,
+    "gain": -8
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 8000,
+   "wet": 0.3,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of a semi-desert with insects and ravens (high passed at 150 Hz against its microphone rumble), with open-plain wind 8 dB under; the bed treatment at 8 kHz"
+ },
+ "amb_night_crickets": {
+  "group": "Ambience",
+  "what": "A field or jungle at night: crickets (loops)",
+  "layers": [
+   {
+    "src": "freesound/175020:175020.mp3",
+    "dur": 40.0
+   },
+   {
+    "src": "freesound/697217:697217.mp3",
+    "dur": 40.0,
+    "gain": -14
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 8000,
+   "wet": 0.3,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of a night field of crickets, with a breath of wind 14 dB under; the bed treatment at 8 kHz, because cricket song is near 4.5 kHz"
+ },
+ "amb_night_frogs": {
+  "group": "Ambience",
+  "what": "A swamp or fresh water at night: frogs and toads (loops)",
+  "layers": [
+   {
+    "src": "freesound/135561:135561.mp3",
+    "start": 5.0,
+    "dur": 40.0
+   },
+   {
+    "src": "freesound/32655:32655.mp3",
+    "start": 10.0,
+    "dur": 40.0,
+    "gain": -6
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 8000,
+   "wet": 0.3,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of toads and frogs singing in a pond at night, with frogs and crickets 6 dB under; the bed treatment at 8 kHz"
+ },
+ "amb_town_day": {
+  "group": "Ambience",
+  "what": "A town by day: distant work, voices, a cart (loops)",
+  "layers": [
+   {
+    "src": "freesound/578072:578072.mp3",
+    "dur": 40.0
+   },
+   {
+    "src": "freesound/331442:331442.mp3",
+    "start": 20.0,
+    "dur": 40.0,
+    "gain": -6
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 3500,
+   "wet": 0.35,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of a medieval village atmosphere with a village's rooster, birds and wind 6 dB under; the bed treatment"
+ },
+ "amb_town_night": {
+  "group": "Ambience",
+  "what": "A town at night: quiet, crickets, now and then a dog or a door (loops)",
+  "layers": [
+   {
+    "src": "freesound/400353:400353.mp3",
+    "dur": 40.0
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 8000,
+   "wet": 0.3,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "scatter": [
+   {
+    "count": 3,
+    "within": 36.0,
+    "from": 2.0,
+    "min_gap": 8.0,
+    "gain": [
+     -16.0,
+     -10.0
+    ],
+    "pan": 0.8,
+    "pick": [
+     {
+      "src": "freesound/54545:54545.mp3",
+      "shot": 1,
+      "dur": 2.0,
+      "lp": 3000,
+      "fadeout": 0.5
+     },
+     {
+      "src": "freesound/573146:573146.mp3",
+      "shot": 1,
+      "dur": 2.5,
+      "lp": 3000,
+      "fadeout": 0.5
+     },
+     {
+      "src": "kenney/rpg-audio:doorClose_2.ogg",
+      "lp": 2500,
+      "pitch": 0.9
+     }
+    ]
+   }
+  ],
+  "edits": "40 s of a village at night with crickets, and a few distant dogs and a door scattered over it; the bed treatment at 8 kHz"
+ },
+ "amb_cave": {
+  "group": "Ambience",
+  "what": "A cave: water dripping in a still, low room (loops)",
+  "layers": [
+   {
+    "src": "freesound/177958:177958.mp3",
+    "dur": 40.0
+   },
+   {
+    "src": "freesound/177031:177031.mp3",
+    "dur": 40.0,
+    "gain": -6
+   },
+   {
+    "synth": "room_tone",
+    "gain": -12
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 5000,
+   "wet": 0.5,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of water dripping in a cave and droplets in a cave 6 dB under, over our room tone 12 dB down; the bed treatment with more reverb"
+ },
+ "amb_underwater": {
+  "group": "Ambience",
+  "what": "Under water: a dull, pressing hum and the odd bubble (loops)",
+  "layers": [
+   {
+    "src": "freesound/504641:504641.mp3",
+    "dur": 40.0
+   }
+  ],
+  "len": 40.0,
+  "stereo": true,
+  "loop": true,
+  "loop_fade": 2.0,
+  "distance": {
+   "lp": 1500,
+   "wet": 0.4,
+   "threshold_db": -18,
+   "ratio": 3
+  },
+  "hp": 40,
+  "peak_db": -14.0,
+  "edits": "40 s of an underwater ambience; the bed treatment with its low pass at 1.5 kHz"
+ }
 }

@@ -82,17 +82,36 @@ def oga(slug: str, dest: str) -> dict:
 
 
 def kenney(slug: str, dest: str) -> dict:
-    page = get(f"https://kenney.nl/assets/{slug}")
-    zips = re.findall(r"https://kenney.nl/media/pages/assets/[^\"']+\.zip", page)
-    if not zips:
-        return {"pack": slug, "refused": "no download link found"}
+    """A Kenney pack. Refused unless its page's licence row links CC0. Kenney's site (2026-11) no longer
+    puts the zip in the page: it asks https://kenney.nl/download-link/<id> for a signed link, with the
+    page's session cookie and the page as referer, which is what this does (changed here)."""
     d = os.path.join(dest, "kenney")
     os.makedirs(d, exist_ok=True)
+    jar = os.path.join(d, f".{slug}.cookies")
+    page_url = f"https://kenney.nl/assets/{slug}"
+    page = subprocess.run(["curl", "-sL", "-m", "60", "-A", UA, "-c", jar, "-b", jar, page_url],
+                          capture_output=True, text=True, errors="replace", check=True).stdout
+    if "creativecommons.org/publicdomain/zero/" not in page:
+        return {"pack": slug, "licences": [], "refused": "page does not link CC0"}
     p = os.path.join(d, f"{slug}.zip")
-    download(zips[0], p)
+    if not (os.path.exists(p) and os.path.getsize(p) > 0):
+        ident = re.search(r"data-download-id='([0-9a-f]+)'", page)
+        zips = re.findall(r"https://kenney.nl/media/pages/assets/[^\"']+\.zip", page)
+        if ident:
+            link = subprocess.run(["curl", "-sL", "-m", "60", "-A", UA, "-c", jar, "-b", jar, "-H",
+                                   f"Referer: {page_url}", f"https://kenney.nl/download-link/{ident.group(1)}"],
+                                  capture_output=True, text=True, check=True).stdout
+            url = json.loads(link).get("url")
+        else:
+            url = zips[0] if zips else None
+        if not url:
+            return {"pack": slug, "licences": ["CC0"], "refused": "no download link found"}
+        subprocess.run(["curl", "-sL", "-m", "1200", "-A", UA, "-c", jar, "-b", jar, "-H", f"Referer: {page_url}",
+                        "-o", p, url], check=True)
     unpack(p)
-    return {"pack": slug, "url": f"https://kenney.nl/assets/{slug}", "licences": ["CC0"], "author": "Kenney",
-            "files": [os.path.basename(zips[0])]}
+    title = re.search(r"<meta property='og:title'\s+content='([^']+)'", page)
+    return {"pack": slug, "url": page_url, "licences": ["CC0"], "author": "Kenney",
+            "title": html.unescape(title.group(1)) if title else None, "files": [f"{slug}.zip"]}
 
 
 def freesound(sound_id: str, dest: str) -> dict:

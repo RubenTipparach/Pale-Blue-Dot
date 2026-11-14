@@ -125,7 +125,12 @@ def check(out: str) -> int:
             problems.append(f"{clipped} clipped samples")
         if manifest.get(name, {}).get("loop"):
             seam = np.abs(x[0] - x[-1]).max()
-            step = np.median(np.abs(np.diff(x, axis=0))) or 1.0
+            # an ordinary step is the file's median, or the median right at the seam where the loop is louder
+            # than its average (a frog chorus at the join: changed here, 2026-11-14, after a continuous join
+            # read as a seam against the whole bed's quieter median)
+            edge = int(0.02 * rate)
+            near = np.abs(np.diff(np.concatenate([x[-edge:], x[:edge]]), axis=0))
+            step = max(np.median(np.abs(np.diff(x, axis=0))), np.median(near)) or 1.0
             if seam > 6 * step:
                 problems.append(f"loop seam {seam:.0f} against a typical step of {step:.0f}")
         ring = ringing(x.mean(axis=1) / 32768.0, rate)
@@ -135,16 +140,31 @@ def check(out: str) -> int:
         status |= bool(problems)
     cells = os.path.join(out, "sheet")
     os.makedirs(cells, exist_ok=True)
+    for old in glob.glob(os.path.join(cells, "*.png")):
+        os.remove(old)
+    # ffmpeg's drawtext needs freetype, which the Mac's Homebrew ffmpeg lacks: the spectrograms are drawn bare
+    # and labelled and tiled with Pillow where it is there (changed here), else tiled unlabelled by ffmpeg
+    names = []
     for path in sorted(glob.glob(os.path.join(out, "*.wav"))):
         name = os.path.basename(path)[:-4]
+        names.append(name)
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", path, "-lavfi",
-                        "showspectrumpic=s=400x160:legend=0:scale=log:fscale=log:color=intensity,"
-                        f"drawtext=text='{name}':x=4:y=4:fontcolor=white:fontsize=16",
+                        "showspectrumpic=s=400x160:legend=0:scale=log:fscale=log:color=intensity",
                         os.path.join(cells, name + ".png")], check=True)
-    n = len(glob.glob(os.path.join(cells, "*.png")))
+    n = len(names)
     rows = -(-n // 5)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-pattern_type", "glob", "-i", os.path.join(cells, "*.png"),
-                    "-vf", f"scale=400:200,tile=5x{rows}", "-frames:v", "1", os.path.join(out, "sheet.png")], check=True)
+    try:
+        from PIL import Image, ImageDraw
+        sheet = Image.new("RGB", (5 * 400, rows * 200), "black")
+        for k, name in enumerate(names):
+            cell = Image.open(os.path.join(cells, name + ".png")).convert("RGB").resize((400, 200))
+            ImageDraw.Draw(cell).text((6, 4), name, fill="white")
+            sheet.paste(cell, ((k % 5) * 400, (k // 5) * 200))
+        sheet.save(os.path.join(out, "sheet.png"))
+    except ImportError:
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-pattern_type", "glob", "-i", os.path.join(cells, "*.png"),
+                        "-vf", f"scale=400:200,tile=5x{rows}", "-frames:v", "1", os.path.join(out, "sheet.png")],
+                       check=True)
     print(f"contact sheet: {os.path.relpath(os.path.join(out, 'sheet.png'), REPO)} ({n} cues); look at it")
     return status
 

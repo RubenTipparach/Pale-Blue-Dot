@@ -18,16 +18,35 @@
   nothing written" and left the tree clean. Added on the way (PROVENANCE.md
   says why): `encode_ogg.py` (the Mac's ffmpeg has no libvorbis), Freesound
   CC0 in the fetcher, `takes` in the cutter, 48 kHz.
-- [ ] 2.2 Find and cut the first set (design section 4 and 5): every step and
+- [x] 2.2 Find and cut the first set (design section 4 and 5): every step and
   dig family, water, the craft loops, fishing, menus, thunder, fire, and the
   beds. CC0 only. Verify:
   - `inspect_sfx.py check` passes (no clipping, no loop seam);
   - the contact sheet is in `docs/screenshots/audio/`;
   - `AUDIO_SOURCES.md` and both `SOURCES.md` are written by the tools.
+  Done 2026-11-14: 117 cues and beds in 191 files (173 placed or menu cues in
+  `assets/audio/sfx`, 18 stereo beds in `assets/audio/ambience`, 48 kHz OGG),
+  183 cut from 91 CC0 sources (Kenney's impact and RPG packs, 89 Freesound
+  sounds, each page read for Creative Commons 0 by `fetch_cc0.py`), 8
+  synthesised (the menu tones, `catch_chime`, `stall_warn`) plus three layers
+  (`sub_boom`, `sub_roll` under thunder, `room_tone` under the cave). Steps
+  have six takes a family, digs three. The check passes for every file; the
+  sheet is `docs/screenshots/audio/sfx-sheet.jpg`. Departures, each a
+  recommendation taken (ask only with screenshots): beds with birds or
+  insects are low passed at 8 kHz, not 3.5 (their calls live at 2 to 6 kHz);
+  beds are 30 to 38 s loops; Freesound sounds are its HQ preview MP3s (band
+  limited near 16 kHz); OpenGameArt answered 403 to the fetcher and was not
+  used. Also made: `gull`, `owl` and `dog_far` scatters (Fauna) for the beds'
+  scatters in design section 5.
 - [ ] 2.3 The Sounds page (`docs/mockups/sounds.html`): every cue and bed with
   a play button, published with its MP3s as a `files` map, on the mockup
   tracker in the same step, with the tracker link near its top. Owner gate:
-  the owner listens and keeps or sends back each take.
+  the owner listens and keeps or sends back each take. The page exists
+  (2026-11-14, written by `gen_sfx_page.py`, 191 files grouped by where they
+  are heard, each with what it is and its source, light and dark, phone
+  width), its MP3s are in `docs/mockups/sounds/` and its `files` map is
+  `docs/mockups/sounds.files.json`; publishing, the tracker row and the
+  owner's listen are still to come.
 
 ## 3. The rules (`pbd_core::audio`)
 
