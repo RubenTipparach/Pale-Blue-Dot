@@ -693,7 +693,7 @@ const GENS = {
   wind: { name: "Wind turbines", icon: "wind", tier: "Mid", out: () => 3 * windKW(ST.wind), fuel: "None. Output with the wind: cut in 3 m/s, rated 12 m/s, cut out 25 m/s", foot: "1 cell each, 14 m tall; 3 cells apart", rule: "On a rise: the cell must stand 2 layers above every cell within 3. Rotor clear of trees.", note: "Three turbines on a hill. The slider is the wind; weather sets it in the game." },
   geo: { name: "Geothermal", icon: "geothermal", tier: "Mid-late", out: () => 400, fuel: "None. Steady day and night", foot: "4 cells over a vent", rule: "Only over a hot vent: basalt wastes or a volcanic world's sulfur cells, found by their steam.", note: "Wells over the vents, steam piped to a turbine house." },
   hydro: { name: "Hydropower", icon: "hydro", tier: "Mid", out: () => Math.round(5 * ST.flow), fuel: "None. Output with the river's flow", foot: "A dam across the river: 5 cells, 4 layers", rule: "Across a river where it drops 3 layers or more within 2 cells.", note: "A concrete dam on a river step, penstocks to a turbine at its foot. The slider is the flow; rain raises it." },
-  nuclear: { name: "Fission", icon: "nuclear", tier: "Late", out: () => 4000, fuel: "Fuel rods: 1 per 10 game days, from refined uranium", foot: "19 cells; cooling tower 16 m", rule: "Needs water within 4 cells and a cleared 2-cell margin.", note: "A block-built containment dome, a turbine hall and a cooling tower." },
+  nuclear: { name: "Fission", icon: "nuclear", tier: "Late", out: () => 4000, fuel: "Fuel rods: 1 per 10 game days, from refined uranium", foot: "Dome 19 hex cells, 8 layers; cooling tower a hex shell 7 cells across, 16 layers", rule: "Needs water within 4 cells and a cleared 2-cell margin.", note: "A block-built containment dome, a turbine hall and a cooling tower." },
   fusion: { name: "Fusion", icon: "fusion", tier: "Late", out: () => 25000, fuel: "Deuterium from clean water (section 3) and helium-3 skimmed from the gas giant Amber: 1 canister of each per game day", foot: "37 cells, hall 9 m; the torus 12 m across", rule: "On bedrock (no ore or cave within 3 layers), clean water piped in. Needs a fission plant running to start it.", note: "A tokamak in its hall, shown cut away: a ring of block segments and field coils round a plasma that lights the hall at night." },
   collider: { name: "Collider", icon: "collider", tier: "Late", consumer: true, out: () => 0, draw: 20000, fuel: "Draws 20,000 kW. Makes 1 antimatter cell a game hour", foot: "A ring 48 m across, 1 layer: about 60 cells, plus a 2-cell detector hall", rule: "A closed ring of segments on level ground; nothing built on its cells. One detector hall on the ring.", note: "Not a generator: it spends power to make antimatter. The cells are the most compact fuel in the game: a ship or a far outpost runs on them." },
   antimatter: { name: "Antimatter plant", icon: "antimatter", tier: "Late", out: () => (GRID.cons.collider ? 16000 : 0), fuel: "Antimatter cells from the collider: 1 a game hour at full output", foot: "19 cells inside a 2-cell berm of basalt", rule: "Shielding berm all round, 3 layers high; no building within 4 cells.", note: "Containment vessels behind heavy shielding. A battery, not a source: 20,000 kW at the collider makes a cell that gives back 16,000 kW for an hour, anywhere you carry it." },
@@ -859,18 +859,24 @@ function buildPower(id) {
     const H = (q, r) => lakeC(q, r) ? -1 : pad(q, r) ? 0.2 : 0;
     genGround(S, { H, top: (q, r, h) => lakeC(q, r) ? "a:" + SHEET.beach + ":2" : pad(q, r) ? "m:tex_concrete" : grassTop(), side: (q, r, y, h) => pad(q, r) ? "m:tex_concrete" : grassSide(q, r, y, h) }); trees(H, (q, r) => !pad(q, r) && !lakeC(q, r) && hexDist(q, r) > 8);
     const lw = new THREE.Mesh(new THREE.CircleGeometry(7.4, 6), WATER); lw.rotation.x = -Math.PI / 2; lw.rotation.z = Math.PI / 6; lw.position.set(hx(9, -2), -0.3, hz(9, -2)); S.group.add(lw);
-    // a block dome: stacked hex prisms narrowing
-    const dx = -3.5, dz = 1.5; const rings = []; for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI / 2, a2 = (i + 1) / 9 * Math.PI / 2; rings.push([4.4 * Math.cos(a2) + 0.3, 3.4 + 4.4 * Math.sin(a), 3.4 + 4.4 * Math.sin(a2), 12]); }
-    stackPrism(GS, "m:tex_white", "m:tex_white", dx, dz, [[4.6, 0.2, 3.4, 12], ...rings]);
-    GS.box("b:tex_metal", dx + 4.6, 0.2, dz, 0.4, 2.4, 1.6); GS.box("m:tex_hazard", dx + 4.82, 2.6, dz, 0.04, 0.3, 1.6);
+    // the containment dome of whole hex cells: a stepped dome, each column one cell, its height by its ring
+    const DC = [-3, 1], dx = hx(...DC), dz = hz(...DC), DOME_H = [8, 7, 5];   // centre, first ring, second ring, in 1 m layers
+    for (let q = -2; q <= 2; q++) for (let r = -2; r <= 2; r++) { const d = hexDist(q, r); if (d > 2) continue; GS.prism("m:tex_white", "m:tex_white", hexPts(DC[0] + q, DC[1] + r), 0.2, 0.2 + DOME_H[d], { bottom: "m:tex_white" }); }
+    GS.box("b:tex_metal", dx + 2 * W + R + 0.2, 0.2, dz, 0.4, 2.4, 1.6); GS.box("m:tex_hazard", dx + 2 * W + R + 0.42, 2.6, dz, 0.04, 0.3, 1.6);
     GS.box("m:tex_concrete", 4.5, 0.2, 3.5, 6, 4, 3.2); GS.box("iron", 4.5, 4.2, 3.5, 6.2, 0.2, 3.4); GS.box("glow:m:tex_ether#74effe", 4.5, 1.8, 5.11, 3.6, 0.6, 0.04);
-    const tr = []; for (let i = 0; i < 12; i++) { const y0 = 0.2 + i * 1.4, f = i / 11, r = 3.6 - 2.0 * Math.sin(f * Math.PI * 0.85) + f * 0.6; tr.push([r, y0, y0 + 1.4, 12]); }
-    stackPrism(GS, null, "m:tex_concrete", 5.5, -5, tr);
-    puffs(S, 5.5, 17.2, -5, PUFF.steam, { n: 16, life: 6, rise: 9, size: 2.0, drift: [0.8, 0.4] });
-    for (const [x, z] of [[-9, -5], [-9, 6], [9, 7.5], [-1, -8]]) lampPost(S, GS, x, 0.2, z);
+    // the cooling tower of whole hex cells: a shell of columns on the second ring, a skirt and a lip on the third,
+    // hollow inside, so it reads as a stepped hyperboloid, not a lathe
+    const TC = [5, -4], tx0 = hx(...TC), tz0 = hz(...TC), TOP = 16;
+    for (let q = -3; q <= 3; q++) for (let r = -3; r <= 3; r++) { const d = hexDist(q, r), P = hexPts(TC[0] + q, TC[1] + r);
+      if (d === 2) GS.prism("m:tex_concrete", "m:tex_concrete", P, 0, TOP, { bottom: "m:tex_concrete" });
+      if (d === 3) { GS.prism("m:tex_concrete", "m:tex_concrete", P, 0, 4, { bottom: "m:tex_concrete" }); GS.prism("m:tex_concrete", "m:tex_concrete", P, TOP - 1, TOP, { bottom: "m:tex_concrete" }); } }
+    for (const [q, r] of [[1, -2], [9, -6]]) lampPost(S, GS, hx(q, r), 0, hz(q, r));   // lamps at its foot
+    { const ax = hx(TC[0] - 3, TC[1] + 1), az = hz(TC[0] - 3, TC[1] + 1); S.lights.push({ x: ax, y: TOP + 0.6, z: az, c: lin(0xff3020), p: 1.0, R: 4 }); const bc = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshBasicMaterial({ color: 0xff3a30 })); bc.position.set(ax, TOP + 0.2, az); S.group.add(bc); }
+    puffs(S, tx0, TOP + 0.4, tz0, PUFF.steam, { n: 16, life: 6, rise: 9, size: 2.4, drift: [0.8, 0.4] });
+    for (const [x, z] of [[-14, -5], [-14, 9], [9, 7.5], [-4, -10]]) lampPost(S, GS, x, 0.2, z);
     S.lights.push({ x: 4.5, y: 2.1, z: 5.7, c: lin(0x74effe), p: 0.9, R: 4.5 });
-    tag(S, "LATE GAME &middot; Containment dome", dx, 9.4, dz, "late"); tag(S, "Cooling tower", 5.5, 18.5, -5); tag(S, "Turbine hall", 4.5, 5.0, 3.5); tag(S, "Cooling water", hx(9, -2), 1.0, hz(9, -2));
-    S.cam = { tx: 0, ty: 4, tz: 0, dist: 44, yaw: 0.6, pitch: 0.4 };
+    tag(S, "LATE GAME &middot; Containment dome, 19 hex cells", dx, 9.6, dz, "late"); tag(S, "Cooling tower, hex cells, 16 layers", tx0, TOP + 2, tz0); tag(S, "Turbine hall", 4.5, 5.0, 3.5); tag(S, "Cooling water", hx(9, -2), 1.0, hz(9, -2));
+    S.cam = { tx: 1, ty: 6, tz: -2, dist: 56, yaw: 0.6, pitch: 0.42 };
   }
   addMeshes(GS, S.group); finish(S);
   S.status = () => `${GENS[id].name.toLowerCase()} | ${GENS[id].consumer ? "draws " + GENS[id].draw : GENS[id].out()} kW | ${id === "wind" ? "wind " + ST.wind + " m/s" : id === "hydro" ? "flow " + ST.flow + "%" : id === "dyson" ? "swarm " + Math.round(ST.swarm) + "%" : "steady"}`;

@@ -62,3 +62,12 @@ Chromium on SwiftShader (no GPU), 1280 × 800 at 2x.
 | `pods-freighter-hex-night.png` | The same automated at 22:00: the bridge windows, the radio mast and the quay crane's floodlight. |
 | `pods-tanker-hex.png` | The tanker at the offshore platform: the same hex hull, carrying 16 tank pods (160 t), the hose from the leg tanks. |
 | `pods-icons.png` | The redrawn freighter and tanker icons and the new pod icon, 8x nearest (`tools/art/industry_art.py`). |
+
+## Fission in hex blocks (2026-11-14)
+
+The owner: "cooling tower should be made of hexagon blocks". Headless Chromium on SwiftShader (no GPU), 2x.
+
+| Shot | Shows |
+| --- | --- |
+| `hex-cooling-tower.png` | The fission plant by day: the cooling tower as a hollow shell of whole hex columns (second ring, 16 layers) with a skirt and a lip on the third ring, and the containment dome as 19 hex columns stepped 8, 7 and 5 layers, where both were lathed 12-sided rings before. |
+| `hex-cooling-tower-night.png` | The same at 22:00, lit by its lamps and the turbine hall's light. |
