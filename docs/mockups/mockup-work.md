@@ -76,6 +76,7 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 | M23 | Drydock and Hex Ship Builder | `drydock.html` | vehicle-yards | Drafted (2026-11-12) | https://claude.ai/artifact/KeUTrW429tn9Vuo9dZy9Bb |
 | M24 | Hangar and Chibi Aircraft | `hangar.html` | vehicle-yards | Drafted (2026-11-12); the owner on the flight, 2026-11-13: "it feels pretty good so far", "I like it" (a note, not an approval) | https://claude.ai/artifact/EvFLtkABNcoz9SeAqZduZK |
 | M25 | Seas, Rivers and Marshes | `ocean.html` | ocean-environments | Drafted (2026-11-14); three owner questions with screenshots on the page (tides, creatures as pixel cards, deep zones) | https://claude.ai/artifact/JsniCJdwG8b7faX1LRXULR |
+| M26 | Pens, Nests and Pedigrees | `husbandry.html` | animal-husbandry | Drafted (2026-11-14); three owner questions with screenshots on the page (Kingdom by form or by world, can a fox take a hen, breeding ticks or arrows) | https://claude.ai/artifact/KQV8S91JncntnsZ1sQZCYE |
 
 The thirteen of 2026-11-12 were published as one batch. Their commit (`d468860`) says "Fourteen",
 but it names thirteen subjects, and thirteen pages were published.
