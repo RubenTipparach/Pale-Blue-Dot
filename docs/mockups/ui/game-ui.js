@@ -778,14 +778,15 @@
     for (const n of STONE) { const [w, hh] = dims(n); pc.append(h('div', { class: 'card', style: 'text-align:center' }, ki('i-' + n, n.startsWith('fill') ? 8 : w, n.startsWith('fill') ? 8 : hh), h('div', { class: 'cap' }, n))); }
     for (const n of OAK) { const [w, hh] = dims(n); pc.append(h('div', { class: 'card', style: 'text-align:center' }, ki('o-' + n, w, hh), h('div', { class: 'cap' }, 'oak/' + n))); }
     // contrast, three looks
-    const ct = document.getElementById('contrast');
+    const byId = (id) => document.getElementById(id) || Object.values(INFO).map((i) => i.box.querySelector('#' + id)).find(Boolean); // the tables live in the Kit's info modal
+    const ct = byId('contrast');
     Promise.all([fetch('ui/slices.json').then((r) => r.json()), fetch('ui/rendered/slices.json').then((r) => r.json())]).then(([d, r]) => {
       ct.append(h('tr', {}, h('th', {}, 'Drawn pair (tokens)'), h('th', {}, 'Ratio')));
       for (const [k, v] of Object.entries(d.contrast)) ct.append(h('tr', {}, h('td', {}, k), h('td', {}, v + ':1')));
       ct.append(h('tr', {}, h('th', {}, 'Rendered and smooth piece: token'), h('th', {}, 'Rendered / smooth')));
       for (const [k, v] of Object.entries(r.contrast)) for (const [t, x] of Object.entries(v)) ct.append(h('tr', {}, h('td', {}, `${k}: ${t}`), h('td', {}, `${x}:1 / ${r.contrast_smooth[k][t]}:1`)));
     }).catch(() => ct.append(h('tr', {}, h('td', {}, 'contrast tables load from ui/slices.json and ui/rendered/slices.json'))));
-    const tok = document.getElementById('tokens');
+    const tok = byId('tokens');
     for (const [n, cs] of [['STONE 0..4 (+ STONE_MID)', '#011c34 #1f3b52 #3e586e #5d778d #92a3b2 #bfcad7'], ['ROCK 0..4', '#010e1a #1f3b52 #3e586e #5d778d #92a3b2'], ['OAK 0..4 (timber menus, accents)', '#2f1525 #41322c #725244 #ab8465 #cfaa81'],
       ['IRON', '#010000 #161612 #2c2c25 #434137 #a09f91'], ['BRASS', '#733126 #c56d25 #fb902f #faaf5c'], ['RUNE (focus, selection)', '#204f63 #53998b #84e3b5 #c1f1d8'], ['TEXT, TEXT_DIM, TITLE, LABEL, LABEL_DIM, TAB_DIM', '#eab798 #cfaa81 #faaf5c #fffefe #92a3b2 #bfcad7']])
       tok.append(h('span', { class: 'tok' }, ...cs.split(' ').map((c) => h('i', { style: `background:${c}`, title: c })), n));
@@ -813,7 +814,39 @@
   let lastW = 0;
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { const k = sceneScale(), w = mainWidth(); if (k !== lastK || (w !== lastW && w < 1440)) { lastK = k; lastW = w; const id = (location.hash || '#play').slice(1); if (id !== 'play' && id !== 'kit' && R[id]) R[id](); } }, 150); });
 
-  window.PBDUI = { COARSE, mainWidth, GameUI, P, h, btn, slotEl, ITEMS, BLOCKS, newInv, STATIONS, scene, compass, setLook, get look() { return LOOK; }, UIS };
+  // ------------------------------------------------------------------ descriptive text in modals
+  // CLAUDE.md, "Descriptive text goes in modals" (owner, 2026-11-14: "Too much text on screen.
+  // Descriptive Text on all mockups belong in modals"). The screen keeps the scenes, the controls, a
+  // short title per tab and the tracker link; every note, decision, caption and table moves into the
+  // tab's info modal, opened from the small i button by the title.
+  const dlg = h('dialog', { class: 'infomodal', 'aria-label': 'About this' });
+  const dTitle = h('b', {}), dBody = h('div', { class: 'mbody' });
+  dlg.append(h('div', { class: 'mhead' }, dTitle, h('button', { type: 'button', 'aria-label': 'Close', onclick: () => dlg.close() }, '\u2715')), dBody);
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+  document.body.append(dlg);
+  const INFO = {};
+  function infoButton(key, title, nodes) {
+    const box = h('div', {}); nodes.forEach((n) => box.append(n));
+    INFO[key] = { title, box };
+    return h('button', { class: 'infobtn', type: 'button', 'aria-label': 'About: ' + title, title: 'About this', 'data-info': key, onclick: () => openInfo(key) }, 'i');
+  }
+  function openInfo(key) {
+    const it = INFO[key]; dTitle.textContent = it.title; dBody.innerHTML = ''; dBody.append(it.box);
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  }
+  (function moveText() {
+    const head = document.querySelector('header.top'), h1 = head.querySelector('h1');
+    const hn = [...head.querySelectorAll('.info')];
+    const row = h('div', { class: 'titlerow' }); h1.replaceWith(row); row.append(h1, infoButton('page', 'Stone and Timber', hn));
+    for (const sec of document.querySelectorAll('section.tab')) {
+      const h2 = sec.querySelector('h2'); if (!h2) continue;
+      const nodes = [...sec.querySelectorAll('p.note, .ask, .info, .scrollx, .tok')].filter((n) => !n.parentElement.closest('p.note, .ask, .info, .scrollx'));
+      // a kit subsection title whose only content moved goes with it
+      const tr = h('div', { class: 'titlerow' }); h2.replaceWith(tr); tr.append(h2, infoButton(sec.id, h2.textContent, nodes));
+    }
+  })();
+
+  window.PBDUI = { openInfo, COARSE, mainWidth, GameUI, P, h, btn, slotEl, ITEMS, BLOCKS, newInv, STATIONS, scene, compass, setLook, get look() { return LOOK; }, UIS };
   Promise.all([
     fetch('ui/font/kit-font.json').then((r) => r.json()).then((f) => { FONT = f; }).catch(() => { /* fallback text */ }),
     fetch('ui/rendered/slices.json').then((r) => r.json()).then((j) => { ROCKS = j.rock_panels || {}; }).catch(() => { /* drawn rock only */ }),

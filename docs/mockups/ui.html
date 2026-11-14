@@ -200,8 +200,26 @@ table.t td, table.t th { border-bottom: 1px solid var(--page-line); padding: 3px
 .touchpad .tbtns { position: absolute; right: 10px; bottom: 60px; display: grid; grid-template-columns: repeat(2, 64px); gap: 6px; pointer-events: auto; }
 .touchpad .tbtns button { font: 15px var(--body); min-height: 44px; background: rgba(1,14,26,.7); color: var(--page-text); border: 1px solid rgba(146,163,178,.7); border-radius: 6px; touch-action: manipulation; }
 .touchpad.menu .look, .touchpad.menu .stick { display: none; }
+.playwrap .stage:not(.full) .touchpad { display: none; } /* the touch controls are for fullscreen; in the page the view is too small to steer */
 .playwrap.fs .hint, .playwrap:fullscreen .hint { display: none; }
-.rotate-hint { font: 15px var(--body); color: var(--page-dim); margin: 4px 0; }
+.infobtn { font: 600 15px/1 var(--body); width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--rune-dim); background: var(--page-2); color: var(--rune); cursor: pointer; vertical-align: middle; margin-left: 8px; }
+.titlerow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.titlerow h1, .titlerow h2 { margin-right: 4px; }
+dialog.infomodal { max-width: min(760px, 94vw); max-height: 86vh; max-height: 86dvh; padding: 0; border: 4px solid var(--stone-2); outline: 2px solid var(--ink); background: var(--page-2); color: var(--page-text); }
+dialog.infomodal::backdrop { background: rgba(1, 14, 26, .72); }
+dialog.infomodal .mhead { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; background: var(--face); border-bottom: 2px solid var(--stone-0); }
+dialog.infomodal .mhead b { font: 600 18px/1.2 var(--display); color: var(--title); }
+dialog.infomodal .mhead button { font: 18px var(--body); min-width: 40px; min-height: 40px; background: var(--page-2); color: var(--page-text); border: 1px solid var(--page-line); cursor: pointer; }
+dialog.infomodal .mbody { padding: 10px 16px 16px; overflow: auto; }
+dialog.infomodal .mbody .ask, dialog.infomodal .mbody p { max-width: none; }
+.playstart { position: absolute; inset: 0; z-index: 25; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(1, 14, 26, .35); cursor: pointer; }
+.playstart button { font: 600 22px/1 var(--display); padding: 16px 26px; min-height: 56px; background: var(--face); color: var(--title); border: 3px solid var(--stone-3); outline: 2px solid var(--ink); cursor: pointer; }
+.playstart span { font: 15px var(--body); color: var(--page-text); background: rgba(1, 14, 26, .7); padding: 2px 8px; }
+.fsbtn.icon { font: 20px/1 var(--body); padding: 6px 10px; }
+.playwrap .stage { position: relative; width: 100%; height: 100%; }
+.playwrap .stage.full { position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; height: 100dvh; }
+.playwrap .stage.full.rot { width: 100vh; width: 100dvh; height: 100vw; height: 100dvw; transform: rotate(90deg) translateY(-100%); transform-origin: top left; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 @media (max-width: 480px) { header.top h1 { font-size: 24px; } header.top p { font-size: 15px; } p.note { font-size: 15px; } nav.tabs a { font-size: 14px; padding: 10px 6px 8px; } }
 </style>
@@ -210,10 +228,10 @@ table.t td, table.t th { border-bottom: 1px solid var(--page-line); padding: 3px
 <header class="top">
   <h1>Stone and Timber</h1>
   <p class="pbd-tracker"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
-  <p>The owner, 2026-11-14: <em>"show me the game with that 3d rendered look"</em>, <em>"yea the 3d rendered look as a whole kit, also make the menus interactive please"</em>, <em>"make a 3js demo"</em>, <em>"do all three"</em>, <em>"main menu I think should use the timber stuff, but the game I like the rock stuff, just need to determine which rock thing to use"</em>, <em>"pause menu = timber too"</em>. So: <b>carved oak for the menus out of play</b> (title screen, pause, settings), <b>rock and slate-blue stone for everything in play</b> (HUD, pack, map, machines, talk and trade). Every piece exists three ways; the switch below swaps the whole page, the demo included. Design: <code>openspec/changes/stone-and-wood-ui</code>. Desktop only.</p>
+  <p class="info">The owner, 2026-11-14: <em>"show me the game with that 3d rendered look"</em>, <em>"yea the 3d rendered look as a whole kit, also make the menus interactive please"</em>, <em>"make a 3js demo"</em>, <em>"do all three"</em>, <em>"main menu I think should use the timber stuff, but the game I like the rock stuff, just need to determine which rock thing to use"</em>, <em>"pause menu = timber too"</em>. So: <b>carved oak for the menus out of play</b> (title screen, pause, settings), <b>rock and slate-blue stone for everything in play</b> (HUD, pack, map, machines, talk and trade). Every piece exists three ways; the switch below swaps the whole page, the demo included. Design: <code>openspec/changes/stone-and-wood-ui</code>. Desktop only.</p>
   <div class="lookbar"><span>Look:</span><div class="seg" id="lookSeg" role="group" aria-label="Look of the kit">
     <button data-look="drawn" aria-pressed="true">Drawn</button><button data-look="rendered" aria-pressed="false">Rendered (pixelated)</button><button data-look="smooth" aria-pressed="false">Smooth (Cycles)</button></div>
-    <span class="note" style="color:var(--page-dim)">Drawn: pixel by pixel (<code>ui_art.py</code>). Rendered: modelled in Blender, Cycles on the CPU (no GPU here), reduced to the same pixels and palette. Smooth: the 8x render itself, sampled linear (breaks the nearest-sampling rule: a question, not a decision).</span></div>
+    <span class="info">Drawn: pixel by pixel (<code>ui_art.py</code>). Rendered: modelled in Blender, Cycles on the CPU (no GPU here), reduced to the same pixels and palette. Smooth: the 8x render itself, sampled linear (breaks the nearest-sampling rule: a question, not a decision).</span></div>
 </header>
 <nav class="tabs" role="tablist" aria-label="Screens">
   <a href="#play" role="tab"><span>Play</span></a>
@@ -231,11 +249,11 @@ table.t td, table.t th { border-bottom: 1px solid var(--page-line); padding: 3px
 
 <!-- ================================ PLAY ================================ -->
 <section class="tab" id="play" role="tabpanel">
-  <h2>Play: a hillside to walk around</h2>
+  <h2>Play</h2>
   <p class="note">A small patch of Tenebris in three.js r128: hex columns 2.833 m across and 1 m high, the game's atlas tiles sampled nearest, a stream with a water wheel, a stone workshop, machines. <b>Click the view</b> to walk (pointer lock; drag to look if the lock is refused). WASD, Space to jump, mouse to look. Left click digs the block you look at into the pack, right click places the selected block. <b>E</b> uses what you face: the bench, the forge and bellows, the hearth, the mill, the press, the chest, or Wren the smith. <b>Esc</b> pauses (timber), <b>I</b> or <b>Tab</b> the pack, <b>M</b> the map, 1-0 and the wheel pick a slot. Keys act only while the view has focus. The frame rate was not measured here (no GPU; SwiftShader).</p>
+  <div class="row" id="playScenes"></div>
   <div class="playctl"><div class="seg" id="todSeg"><button data-t="17.6" aria-pressed="true">Golden hour</button><button data-t="12" aria-pressed="false">Day</button><button data-t="19.2" aria-pressed="false">Dusk</button><button data-t="23" aria-pressed="false">Night</button></div>
     <label>Time <input type="range" id="todRange" min="0" max="24" step="0.1" value="17.6"> <span id="todVal">17:36</span></label></div>
-  <div class="row" id="playScenes"></div>
 </section>
 
 <!-- ================================ TITLE ================================ -->
@@ -259,7 +277,7 @@ table.t td, table.t th { border-bottom: 1px solid var(--page-line); padding: 3px
   <p class="note">The owner, of a <em>PACK</em> lintel that read as PAOK in Pixelify Sans: <em>"the c there is kinda weird, which you'd fix it"</em>. Every title, plaque and tab label, section label, compass letter and key cap is now drawn in the kit's own 5 x 7 pixel font (<code>ui/font/kit-font.png</code> and <code>.json</code>, by <code>ui_art.py</code>): C and G open, E flat-backed, 0 slashed against O, 1 flagged against I. Body text stays VT323.</p>
   <div class="row big2" id="fontRow"></div>
 
-  <h2>The rock had lines</h2>
+  <h2 class="info">The rock had lines</h2>
   <p class="note">The owner: <em>"how come the rock one has lines in it?"</em>, then <em>"the 3d rendered one"</em>. The old render's rim had strata made as rings of equal distance from the edge (<code>sin(d * 3.1) &gt; 0.92</code>), which read as straight stitched lines; the drawn rock had evenly spaced dashes on rows 5 and 42. Both are now isotropic rock: Voronoi chips and pits, short cracks of varied length and angle, speckle, periodic in the 20 px tile. Before and after: <code>docs/screenshots/mockup-ui/rock-lines-before-after.png</code>.</p>
 
   <h2>The base rock (approved)</h2>
@@ -273,12 +291,12 @@ table.t td, table.t th { border-bottom: 1px solid var(--page-line); padding: 3px
   <h2>Every piece</h2>
   <div class="row big2" id="pieces"></div>
 
-  <h2>Contrast, measured</h2>
+  <h2 class="info">Contrast, measured</h2>
   <p class="note">Every text pair a player reads is at least 4.5:1 in every look. Drawn: measured on the tokens by <code>ui_art.py</code>. Rendered: on the commonest colour of each text area, and on any colour that covers a tenth of it. Smooth: on the 10th, 50th and 90th luminance percentile of the area. The oak disabled plaque was darkened a step (WOOD[0]) after the smooth render measured 4.4:1.</p>
   <div class="scrollx"><table class="t" id="contrast"></table></div>
 
-  <h2>Materials and tokens</h2>
-  <div id="tokens"></div>
+  <h2 class="info">Materials and tokens</h2>
+  <div id="tokens" class="info"></div>
 </section>
 
 <!-- ================================ HUD ================================ -->

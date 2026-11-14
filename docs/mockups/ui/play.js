@@ -531,36 +531,45 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
     sc.append(canvas, ui, h('div', { class: 'hint', id: 'playHint' }, touch ? 'left: walk; drag right: look; buttons: jump, use, dig, place' : 'click to walk: WASD, Space, mouse; E use, Esc pause, I pack, M map'));
     // The view scales as one picture to fit the page, or the whole screen in fullscreen.
     const inner = h('div', { class: 'scenebox', style: `width:${1440 * k}px;max-width:none;overflow:hidden;transform-origin:0 0` }, sc);
-    const wrap = h('div', { class: 'playwrap' }, inner);
-    const fsBtn = h('button', { class: 'fsbtn', type: 'button', 'aria-label': 'Fullscreen' }, 'Fullscreen');
-    wrap.append(fsBtn);
-    if (touch) box.append(h('div', { class: 'rotate-hint' }, 'Turn the phone sideways and tap Fullscreen to play.'));
+    // wrap is what goes fullscreen; stage holds the view and its controls, and turns sideways when a
+    // portrait phone cannot be locked to landscape (the browser's own fullscreen styles forbid
+    // transforming the fullscreen element itself)
+    const stage = h('div', { class: 'stage' }, inner);
+    const wrap = h('div', { class: 'playwrap' }, stage);
+    const fsBtn = h('button', { class: 'fsbtn icon', type: 'button', 'aria-label': 'Fullscreen', title: 'Fullscreen', 'data-act': 'fs' }, '⤢');
+    const start = h('div', { class: 'playstart' }, h('button', { type: 'button', 'data-act': 'play-fs' }, '▶ Play fullscreen'), h('span', {}, touch ? 'or tap to watch here' : 'or click to play here'));
+    stage.append(fsBtn, start);
     box.append(wrap);
+    const isFull = () => wrap.classList.contains('fs') || document.fullscreenElement === wrap;
     const fit = () => {
-      const full = wrap.classList.contains('fs') || document.fullscreenElement === wrap;
-      const aw = full ? window.innerWidth : Math.min(window.PBDUI.mainWidth(), box.clientWidth || 1e9), ah = full ? window.innerHeight : Infinity;
+      const full = isFull(), rot = full && window.innerHeight > window.innerWidth;
+      stage.classList.toggle('rot', rot); S && (S.rot = rot);
+      const vw = rot ? window.innerHeight : window.innerWidth, vh = rot ? window.innerWidth : window.innerHeight;
+      const aw = full ? vw : Math.min(window.PBDUI.mainWidth(), box.clientWidth || 1e9), ah = full ? vh : Infinity;
       const f = full ? Math.min(aw / (1440 * k), ah / (900 * k)) : Math.min(1, aw / (1440 * k));
       inner.style.transform = f === 1 ? '' : `scale(${f})`;
-      if (!full) { wrap.style.width = Math.floor(1440 * k * f) + 'px'; wrap.style.height = Math.ceil(900 * k * f) + 'px'; inner.style.position = ''; }
-      else { wrap.style.width = ''; wrap.style.height = ''; inner.style.position = 'absolute'; inner.style.left = Math.round((aw - 1440 * k * f) / 2) + 'px'; inner.style.top = Math.round((ah - 900 * k * f) / 2) + 'px'; }
-      fsBtn.textContent = full ? '\u2715 Exit' : 'Fullscreen';
+      if (!full) { wrap.style.width = Math.floor(1440 * k * f) + 'px'; wrap.style.height = Math.ceil(900 * k * f) + 'px'; inner.style.position = ''; stage.classList.remove('full'); }
+      else { wrap.style.width = ''; wrap.style.height = ''; stage.classList.add('full'); inner.style.position = 'absolute'; inner.style.left = Math.round((aw - 1440 * k * f) / 2) + 'px'; inner.style.top = Math.round((ah - 900 * k * f) / 2) + 'px'; }
+      fsBtn.textContent = full ? '✕' : '⤢'; fsBtn.setAttribute('aria-label', full ? 'Exit fullscreen' : 'Fullscreen');
     };
-    fsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const full = wrap.classList.contains('fs') || document.fullscreenElement === wrap;
-      if (full) { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); wrap.classList.remove('fs'); fit(); return; }
-      const fallback = () => { wrap.classList.add('fs'); fit(); };
-      if (wrap.requestFullscreen) wrap.requestFullscreen().then(fit).catch(fallback); else fallback();
-    });
+    const goFull = () => {
+      const after = () => { const o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => {}).finally(fit); fit(); };
+      const fallback = () => { wrap.classList.add('fs'); after(); };
+      if (wrap.requestFullscreen) wrap.requestFullscreen().then(after).catch(fallback); else fallback();
+    };
+    const leaveFull = () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); wrap.classList.remove('fs'); fit(); };
+    fsBtn.addEventListener('click', (e) => { e.stopPropagation(); start.remove(); if (isFull()) leaveFull(); else goFull(); });
+    start.addEventListener('click', (e) => { e.stopPropagation(); start.remove(); if (e.target.closest('button')) goFull(); sc.focus({ preventScroll: true }); });
     document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) wrap.classList.remove('fs'); fit(); });
     window.addEventListener('resize', () => fit());
+    window.addEventListener('orientationchange', () => setTimeout(fit, 200));
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     renderer.setPixelRatio(1); renderer.setSize(1440 * k, 900 * k, false); // pixel ratio 1 everywhere, so a phone's GPU draws 720 x 450
     renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0xb8d4ec, 55, 210);
     const camera = new THREE.PerspectiveCamera(70, 1440 / 900, 0.1, 900);
-    S = { touch, wrap, fit, renderer, scene, camera, sc, canvas, keys: {}, joy: { x: 0, y: 0 }, t: 0, frames: 0, running: {}, stats: { digs: 0, used: [] }, focus: new THREE.Vector3(48, 3, 44), town: [380, -920] };
+    S = { touch, wrap, stage, fit, goFull, renderer, scene, camera, sc, canvas, keys: {}, joy: { x: 0, y: 0 }, t: 0, frames: 0, running: {}, stats: { digs: 0, used: [] }, focus: new THREE.Vector3(48, 3, 44), town: [380, -920] };
     S.land = makeLand();
     S.sunL = new THREE.DirectionalLight(0xffffff, 2.5); S.sunL.castShadow = true; S.sunL.shadow.mapSize.set(touch ? 1024 : 2048, touch ? 1024 : 2048);
     Object.assign(S.sunL.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, near: 1, far: 220 }); S.sunL.shadow.bias = -0.0006; S.sunL.shadow.normalBias = 0.03;
@@ -618,7 +627,7 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
     seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; rng.value = b.dataset.t; setTime(+b.dataset.t); seg.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); });
     rng.addEventListener('input', () => { setTime(+rng.value); seg.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', 'false')); });
     setTime(+rng.value);
-    if (touch) touchControls(wrap);
+    if (touch) touchControls(stage);
     fit();
     step(0);
   }
@@ -633,13 +642,13 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
     wrap.append(pad); S.pad = pad;
     let sid = null, c0 = null;
     stick.addEventListener('pointerdown', (e) => { sid = e.pointerId; stick.setPointerCapture(e.pointerId); const r = stick.getBoundingClientRect(); c0 = [r.left + r.width / 2, r.top + r.height / 2]; move(e); });
-    const move = (e) => { if (e.pointerId !== sid) return; const dx = (e.clientX - c0[0]) / 50, dy = (e.clientY - c0[1]) / 50, l = Math.max(1, Math.hypot(dx, dy)); S.joy.x = dx / l; S.joy.y = dy / l; stick.firstChild.style.transform = `translate(${S.joy.x * 40}px, ${S.joy.y * 40}px)`; };
+    const move = (e) => { if (e.pointerId !== sid) return; let dx = (e.clientX - c0[0]) / 50, dy = (e.clientY - c0[1]) / 50; if (S.rot) [dx, dy] = [dy, -dx]; const l = Math.max(1, Math.hypot(dx, dy)); S.joy.x = dx / l; S.joy.y = dy / l; stick.firstChild.style.transform = `translate(${S.joy.x * 40}px, ${S.joy.y * 40}px)`; };
     stick.addEventListener('pointermove', move);
     const end = (e) => { if (e.pointerId !== sid) return; sid = null; S.joy.x = S.joy.y = 0; stick.firstChild.style.transform = ''; };
     stick.addEventListener('pointerup', end); stick.addEventListener('pointercancel', end);
     let lid = null, lp = null;
     look.addEventListener('pointerdown', (e) => { lid = e.pointerId; look.setPointerCapture(e.pointerId); lp = [e.clientX, e.clientY]; });
-    look.addEventListener('pointermove', (e) => { if (e.pointerId !== lid) return; S.player.yaw -= (e.clientX - lp[0]) * 0.006; S.player.pitch = Math.max(-1.45, Math.min(1.45, S.player.pitch - (e.clientY - lp[1]) * 0.006)); lp = [e.clientX, e.clientY]; });
+    look.addEventListener('pointermove', (e) => { if (e.pointerId !== lid) return; let dx = e.clientX - lp[0], dy = e.clientY - lp[1]; if (S.rot) [dx, dy] = [dy, -dx]; S.player.yaw -= dx * 0.006; S.player.pitch = Math.max(-1.45, Math.min(1.45, S.player.pitch - dy * 0.006)); lp = [e.clientX, e.clientY]; });
     look.addEventListener('pointerup', () => { lid = null; }); look.addEventListener('pointercancel', () => { lid = null; });
   }
   window.PBDPlay = {
