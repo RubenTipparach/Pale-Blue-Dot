@@ -1,0 +1,320 @@
+{
+ "source": "tools/art/ui_art.py",
+ "palette": "Sweaft-64",
+ "pieces": {
+  "frame": {
+   "w": 48,
+   "h": 48,
+   "slice": 14,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "menu panel: oak moulding round a dressed-stone face"
+  },
+  "rock": {
+   "w": 48,
+   "h": 48,
+   "slice": 14,
+   "sides": "tile",
+   "centre": "stretch",
+   "note": "rough-rock slab; sides tile (period 20 px)"
+  },
+  "slot-idle": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-hover": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-selected": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-disabled": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-uncommon": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, uncommon"
+  },
+  "slot-rare": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, rare"
+  },
+  "slot-epic": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, epic"
+  },
+  "slot-legendary": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, legendary"
+  },
+  "button-idle": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "carved oak plaque"
+  },
+  "button-hover": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "carved oak plaque"
+  },
+  "button-pressed": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "carved oak plaque"
+  },
+  "button-disabled": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "carved oak plaque"
+  },
+  "button-focus": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "carved oak plaque"
+  },
+  "tab-open": {
+   "w": 40,
+   "h": 18,
+   "slice": 7,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "tab-shut": {
+   "w": 40,
+   "h": 18,
+   "slice": 7,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "scroll-track": {
+   "w": 8,
+   "h": 24,
+   "slice": 4,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "scroll-thumb": {
+   "w": 8,
+   "h": 16,
+   "slice": 4,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "slider-track": {
+   "w": 32,
+   "h": 8,
+   "slice": 3,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "slider-knob": {
+   "w": 9,
+   "h": 13
+  },
+  "check-off": {
+   "w": 12,
+   "h": 12
+  },
+  "check-on": {
+   "w": 12,
+   "h": 12
+  },
+  "tooltip": {
+   "w": 24,
+   "h": 18,
+   "slice": 6,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "bar": {
+   "w": 40,
+   "h": 10,
+   "slice": 4,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "channel x 4..35, y 2..7; fill drawn in x 5..34, y 3..6"
+  },
+  "fill-health": {
+   "w": 2,
+   "h": 4
+  },
+  "fill-stamina": {
+   "w": 2,
+   "h": 4
+  },
+  "fill-breath": {
+   "w": 2,
+   "h": 4
+  },
+  "fill-progress": {
+   "w": 2,
+   "h": 4
+  },
+  "compass": {
+   "w": 80,
+   "h": 18,
+   "slice": [
+    9,
+    10,
+    9,
+    10
+   ],
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "slices top, right, bottom, left: it stretches along x only"
+  },
+  "compass-pointer": {
+   "w": 7,
+   "h": 5
+  },
+  "compass-town": {
+   "w": 5,
+   "h": 5
+  },
+  "map-frame": {
+   "w": 64,
+   "h": 64,
+   "slice": 22,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "portrait": {
+   "w": 32,
+   "h": 32,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "emblem": {
+   "w": 48,
+   "h": 48
+  },
+  "icon-close": {
+   "w": 11,
+   "h": 11
+  },
+  "icon-back": {
+   "w": 11,
+   "h": 11
+  },
+  "icon-gear": {
+   "w": 11,
+   "h": 11
+  },
+  "icon-map": {
+   "w": 11,
+   "h": 11
+  },
+  "icon-pack": {
+   "w": 11,
+   "h": 11
+  }
+ },
+ "tokens": {
+  "INK": "#010000",
+  "SEAM": "#170916",
+  "FACE": "#2c2c25",
+  "WELL": "#161612",
+  "TEXT": "#eab798",
+  "TEXT_DIM": "#cfaa81",
+  "TITLE": "#faaf5c",
+  "LABEL": "#010000"
+ },
+ "ramps": {
+  "STONE": [
+   "#161612",
+   "#2c2c25",
+   "#434137",
+   "#a09f91",
+   "#bfcad7"
+  ],
+  "ROCK": [
+   "#161612",
+   "#2b1f35",
+   "#3e3551",
+   "#69608b",
+   "#92a3b2"
+  ],
+  "WOOD": [
+   "#2f1525",
+   "#41322c",
+   "#725244",
+   "#ab8465",
+   "#cfaa81"
+  ],
+  "IRON": [
+   "#010000",
+   "#161612",
+   "#2c2c25",
+   "#434137",
+   "#a09f91"
+  ],
+  "BRASS": [
+   "#733126",
+   "#c56d25",
+   "#fb902f",
+   "#faaf5c"
+  ],
+  "RUNE": [
+   "#204f63",
+   "#53998b",
+   "#84e3b5",
+   "#c1f1d8"
+  ],
+  "HEALTH": [
+   "#4a051e",
+   "#a61e1f",
+   "#d12d41",
+   "#fa3a64"
+  ],
+  "STAMINA": [
+   "#733126",
+   "#c56d25",
+   "#fb902f",
+   "#faaf5c"
+  ],
+  "BREATH": [
+   "#0c2f44",
+   "#15578a",
+   "#1096c3",
+   "#74effe"
+  ]
+ },
+ "contrast": {
+  "TEXT on FACE": 7.85,
+  "TEXT_DIM on FACE": 6.51,
+  "TITLE on FACE": 7.6,
+  "TEXT on WELL": 10.13,
+  "SEAM on WOOD[3] (compass letters)": 5.72,
+  "LABEL on WOOD[3] (button label)": 6.21,
+  "LABEL on WOOD[4] (hovered button label)": 9.71,
+  "TEXT_DIM on WOOD_DIM[2] (disabled label)": 5.66,
+  "RUNE[2] on WELL (focus ring)": 11.78
+ }
+}
