@@ -41,3 +41,33 @@ the night, so one take shows the low sun, the dusk sky, the stars and the
 water at each.
 
 `pbd-app --world <new> --walk --at 30 177.5 --time 8 --clock-runs --coast-walk 2000 --no-vsync --frame-log <csv> --frame-graph`
+
+## COAST_TURN's latitude and the compass test (found 2026-11-14, not changed)
+
+`desktop::tests::the_screen_reads_the_compass_not_the_frame` fails on main:
+`COAST_TURN` (1.2, `f07556d`) logs where a stall happened with
+`pbd_core::geo::lat_lon(up)`, the FRAME's latitude, and the test refuses the
+frame's functions anywhere in `desktop.rs` (`compass-bar` decision 2: the
+frame's north is the compass's south, so a readout in it mirrors the planet).
+
+The line is not on the screen. It is a log line for whoever reruns the walk,
+and it is in the frame on purpose, whether or not that was meant: `--at`
+takes the frame's latitude (`spawn_direction` passes it straight to
+`geo::direction`), and the take is launched `--at 30 177.5`. A stall logged
+at frame latitude 30.0123 is reproduced by `--at 30.0123 ...`. Routing it
+through `geo::compass_lat_lon` would print -30.0123, and a rerun pasted from
+the log would start on the mirror of the spot. That is a behaviour change to
+the instrument, so it was written up here instead of made
+(`stone-and-wood-ui`'s close, which met it).
+
+Ways out, for the owner or the next coast-walk step:
+1. **Recommended:** print the spot as the flag that reproduces it, through
+   one helper beside `spawn_direction` (the inverse of `--at`, named for
+   it), and let the test allow that helper by name: the frame is `--at`'s
+   contract, and the screen still never reads it.
+2. Print the compass latitude and make `--at` take the compass's, so the log,
+   the map's readout and the flag agree. That moves every `--at` written
+   down so far (this file's take, the town captures in `cities-in-the-world`)
+   to its mirror unless each is negated in the same commit.
+3. Move the coast walk's script out of `desktop.rs` into `coast_walk.rs`,
+   which the test does not read. It passes the test without answering it.
