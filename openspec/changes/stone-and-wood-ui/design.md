@@ -507,3 +507,10 @@ The owner's words, in order, all 2026-11-14:
 10. **"Ok good continue with the mockups"**: the base rock approved, from the
     parent session's sample (`base-rock-approved.png`); the kit carried its
     material after that, and not before.
+
+## No close X in the game (owner, 2026-11-14)
+
+The owner: "We don't need an x button in the actual game this is for just mobile. In desktop esc
+will do just fine." The game's panels shut with Esc (and E for a machine, I for the pack, M for the
+map); none gets a close X. The X in `docs/mockups/ui.html` is the mockup page's own, shown only on a
+touch screen so the page can be used from a phone, and is not part of the design.
