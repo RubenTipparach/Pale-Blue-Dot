@@ -279,7 +279,10 @@
       if ((k === 'KeyI' || k === 'Tab') && ['hud', 'pack'].includes(st.screen)) { e.preventDefault(); this.go(st.screen === 'pack' ? 'hud' : 'pack'); return true; }
       if (k === 'KeyM' && ['hud', 'map'].includes(st.screen)) { e.preventDefault(); this.go(st.screen === 'map' ? 'hud' : 'map'); return true; }
       if (k.startsWith('Digit') && ['hud', 'pack'].includes(st.screen)) { this.inv.sel = (parseInt(k.slice(5), 10) + 9) % 10; this.render(); return true; }
-      if (k === 'KeyE' && ['station', 'talk', 'trade', 'chest'].includes(st.screen)) { e.preventDefault(); this.go('hud'); return true; }
+      // E closes whatever is open, a step back as Esc does: in fullscreen the browser takes Esc to leave
+      // fullscreen (owner, 2026-11-14: "esc also closes out of big screen ... add e as exit instead").
+      // On the HUD E is still "use".
+      if (k === 'KeyE' && !['hud', 'title', 'loading'].includes(st.screen) && !(e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName))) { e.preventDefault(); this.back(); return true; }
       return false;
     }
     wheel(e) {
