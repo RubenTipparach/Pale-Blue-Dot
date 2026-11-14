@@ -2978,10 +2978,11 @@ fn coast_script(
             walk.trapped += 1;
             walk.trap_at.get_or_insert(here);
             walk.anchor = Some((here, now));
-            let (lat, lon) = pbd_core::geo::lat_lon(up).degrees();
             info!(
-                "COAST_TURN stalled 1.5 s at {:.0} m walked, at {lat:.4} {lon:.4}, {} in this spot",
-                walk.walked_m, walk.trapped
+                "COAST_TURN stalled 1.5 s at {:.0} m walked, {}, {} in this spot",
+                walk.walked_m,
+                pbd_app::place::Place::of(here).line(),
+                walk.trapped
             );
         }
     }
