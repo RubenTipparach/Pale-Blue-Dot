@@ -1,22 +1,41 @@
 {
  "source": "tools/art/ui_art.py",
  "palette": "Sweaft-64",
+ "material": "stone first",
+ "timber_accents": [
+  "lintel",
+  "tab-open (cap)",
+  "compass-pointer"
+ ],
  "pieces": {
-  "frame": {
-   "w": 48,
-   "h": 48,
-   "slice": 14,
-   "sides": "stretch",
-   "centre": "stretch",
-   "note": "menu panel: oak moulding round a dressed-stone face"
-  },
   "rock": {
    "w": 48,
    "h": 48,
    "slice": 14,
    "sides": "tile",
    "centre": "stretch",
-   "note": "rough-rock slab; sides tile (period 20 px)"
+   "note": "rough-rock slab, the menu frame; sides tile (period 20 px)"
+  },
+  "frame": {
+   "w": 48,
+   "h": 48,
+   "slice": 14,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "dressed-stone moulding round the face: drawers and sub-panels"
+  },
+  "lintel": {
+   "w": 40,
+   "h": 16,
+   "slice": [
+    5,
+    9,
+    5,
+    9
+   ],
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "timber accent: the carved oak title board over a menu"
   },
   "slot-idle": {
    "w": 24,
@@ -64,7 +83,7 @@
    "slice": 8,
    "sides": "stretch",
    "centre": "stretch",
-   "note": "carved oak plaque"
+   "note": "raised stone plaque"
   },
   "button-hover": {
    "w": 48,
@@ -72,7 +91,7 @@
    "slice": 8,
    "sides": "stretch",
    "centre": "stretch",
-   "note": "carved oak plaque"
+   "note": "raised stone plaque"
   },
   "button-pressed": {
    "w": 48,
@@ -80,7 +99,7 @@
    "slice": 8,
    "sides": "stretch",
    "centre": "stretch",
-   "note": "carved oak plaque"
+   "note": "raised stone plaque"
   },
   "button-disabled": {
    "w": 48,
@@ -88,7 +107,7 @@
    "slice": 8,
    "sides": "stretch",
    "centre": "stretch",
-   "note": "carved oak plaque"
+   "note": "raised stone plaque"
   },
   "button-focus": {
    "w": 48,
@@ -96,14 +115,15 @@
    "slice": 8,
    "sides": "stretch",
    "centre": "stretch",
-   "note": "carved oak plaque"
+   "note": "raised stone plaque"
   },
   "tab-open": {
    "w": 40,
    "h": 18,
    "slice": 7,
    "sides": "stretch",
-   "centre": "stretch"
+   "centre": "stretch",
+   "note": "stone; timber accent: the oak cap"
   },
   "tab-shut": {
    "w": 40,
@@ -191,7 +211,8 @@
   },
   "compass-pointer": {
    "w": 7,
-   "h": 5
+   "h": 6,
+   "note": "timber accent: oak wedge, iron tip"
   },
   "compass-town": {
    "w": 5,
@@ -217,23 +238,28 @@
   },
   "icon-close": {
    "w": 11,
-   "h": 11
+   "h": 11,
+   "note": "inlaid light, for a stone face"
   },
   "icon-back": {
    "w": 11,
-   "h": 11
+   "h": 11,
+   "note": "inlaid light, for a stone face"
   },
   "icon-gear": {
    "w": 11,
-   "h": 11
+   "h": 11,
+   "note": "inlaid light, for a stone face"
   },
   "icon-map": {
    "w": 11,
-   "h": 11
+   "h": 11,
+   "note": "inlaid light, for a stone face"
   },
   "icon-pack": {
    "w": 11,
-   "h": 11
+   "h": 11,
+   "note": "inlaid light, for a stone face"
   }
  },
  "tokens": {
@@ -244,7 +270,13 @@
   "TEXT": "#eab798",
   "TEXT_DIM": "#cfaa81",
   "TITLE": "#faaf5c",
-  "LABEL": "#010000"
+  "LABEL": "#fffefe",
+  "LABEL_DIM": "#92a3b2",
+  "TAB_DIM": "#bfcad7",
+  "CUT": "#011c34",
+  "NORTH": "#4a051e",
+  "OAK_LABEL": "#010000",
+  "STONE_MID": "#5d778d"
  },
  "ramps": {
   "STONE": [
@@ -307,14 +339,20 @@
   ]
  },
  "contrast": {
-  "TEXT on FACE": 6.49,
-  "TEXT_DIM on FACE": 5.38,
-  "TITLE on FACE": 6.29,
-  "TEXT on WELL": 9.63,
-  "SEAM on WOOD[3] (compass letters)": 5.72,
-  "LABEL on WOOD[3] (button label)": 6.21,
-  "LABEL on WOOD[4] (hovered button label)": 9.71,
-  "TEXT_DIM on WOOD_DIM[2] (disabled label)": 5.66,
-  "RUNE[2] on WELL (focus ring)": 11.2
+  "TEXT on FACE (body text on a panel)": 6.49,
+  "TEXT_DIM on FACE (secondary text)": 5.38,
+  "TITLE on FACE (carved titles, key names)": 6.29,
+  "TEXT on WELL (slot counts, the map's tooltip)": 9.63,
+  "LABEL on button-idle / focus (STONE[2])": 7.38,
+  "LABEL on button-hover (STONE_MID)": 4.65,
+  "LABEL on button-pressed (STONE[1])": 11.55,
+  "LABEL_DIM on button-disabled (STONE[0])": 6.66,
+  "LABEL on tab-open (STONE[2])": 7.38,
+  "TAB_DIM on tab-shut (STONE[1])": 7.0,
+  "CUT on the compass strip (STONE[3]): letters, ticks": 6.66,
+  "NORTH on the compass strip (STONE[3]): the N": 6.09,
+  "OAK_LABEL on the lintel (WOOD[3]): menu titles": 6.21,
+  "icon inlay STONE[4] on FACE": 7.0,
+  "RUNE[2] on WELL (focus ring, selection)": 11.2
  }
 }

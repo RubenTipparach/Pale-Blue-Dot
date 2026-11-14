@@ -11,19 +11,35 @@
 - [x] Study the UI as it is (`desktop/*.rs`, `loading.rs`, the screenshots) and
       the mockups' panels that will become screens.
 - [x] Draw the kit: `tools/art/ui_art.py` into `docs/mockups/ui/` with
-      `slices.json` (40 pieces, every colour Sweaft-64, contrast measured).
+      `slices.json` (every colour Sweaft-64, contrast measured).
 - [x] Render the frame and the rock slab in Blender and pixelate them:
       `tools/art/ui_panels_blend.py`.
 - [x] The mockup `docs/mockups/ui.html` ("Stone and Timber"): kit, HUD by day
       and night before and after, pack, pause and settings, map, station,
-      talk and trade, loading, phone width.
+      talk and trade, loading.
 - [x] Verify it in headless Chromium (SwiftShader, no GPU): no console errors,
       every tab draws, no WebGL context, no horizontal scroll at 390 px, every
       9-slice and pixel image at a whole-number scale and pixelated. Shots in
       `docs/screenshots/mockup-ui/`.
-- [ ] Publish the page, add it to the mockup tracker, put Q1 and Q2 in the
-      survey with their screenshots.
-- [ ] The owner answers Q1 and Q2 and approves the mockup for build.
+- [x] Fold in the owner's Q2 answer (2026-11-14, "I like the stone kit more,
+      can you make the stone more blue?"): menus in rough rock, slate-blue
+      stone and rock ramps.
+- [x] Fold in "phones cant run this lol, mostly stone with some occasion
+      timber for accent" (2026-11-14): remove the Phone tab, the phone-width
+      layouts and the phone requirement (the game is desktop only; integer UI
+      scale from the window height); redraw every piece stone-first with
+      three oak accents (lintel, open tab's cap, compass pointer), the oak
+      draft kept behind `ui_art.py --oak`; re-measure every text pair (all
+      4.5:1 or more, the run fails otherwise); re-render the Q1 rock in the
+      blue ramp.
+- [x] Verify again in headless Chromium (SwiftShader, no GPU): no console
+      errors, every tab draws, no horizontal page scroll at 390 px (scenes
+      scroll in their own box), every pixel image and 9-slice border at a
+      whole-number scale and pixelated. Shots replaced in
+      `docs/screenshots/mockup-ui/` (phone and blue-step shots removed).
+- [ ] Publish the page, add it to the mockup tracker, put Q1 in the survey
+      with its screenshot and move Q2 to "Already decided".
+- [ ] The owner answers Q1 and approves the mockup for build.
 
 ## 1. The kit in the game (waits for the owner's go-ahead)
 - [ ] Confirm the Bevy 0.18.1 names (`ImageNode`, `NodeImageMode::Sliced`,

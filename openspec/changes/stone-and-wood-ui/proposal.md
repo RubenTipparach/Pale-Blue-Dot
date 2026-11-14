@@ -1,4 +1,4 @@
-# Proposal: the UI in rock, dressed stone and carved oak
+# Proposal: the UI in stone and rough rock, carved oak as accent
 
 ## Why
 
@@ -26,19 +26,20 @@ The world is pixel art sampled nearest at whole texels; its UI should be too.
 
 ## What changes
 
-A UI kit in three materials and one accent, drawn as pixel art in the game's
-style and used by every screen:
+A UI kit in stone with a few carved-wood accents, drawn as pixel art in the
+game's style and used by every screen. The owner chose stone (2026-11-14, "I
+like the stone kit more, can you make the stone more blue?") and then set the
+balance: **"mostly stone with some occasion timber for accent"**.
 
-- **Carved oak** for what the hand touches: menu frames (a moulding with
-  mitred corners and iron brackets), button plaques, tabs, the compass strip,
-  the map's frame, tooltips.
-- **Dressed stone** for what holds things: the face every menu's text sits on,
-  slots as stone blocks with a well cut in them, grooves for scrollbars and
-  sliders, checkboxes.
-- **Rough rock** for what stands in the world: the loading screen's slab, the
-  map frame's corner blocks.
-- **Iron and brass** fittings in corners only; **one rune glow** (the mint the
-  game already uses) for focus and selection.
+- **Rough rock**, slate blue, frames every menu (pause, settings, the pack, a
+  station, talk and trade), the loading slab and the map frame's corners.
+- **Dressed stone**, slate blue, is everything inside: the faces text sits on,
+  button plaques in every state, tabs, the compass strip, slots, scrollbars,
+  sliders, checkboxes, tooltips, bars, the map's moulding, the portrait frame.
+- **Carved oak** only as three small accents: the title lintel over a menu,
+  the open tab's cap and the compass pointer.
+- **Iron and brass** as small fittings; **one rune glow** (the mint the game
+  already uses) for focus and selection.
 
 Every piece is drawn at native size by `tools/art/ui_art.py` with the
 `balatro-pixel-art` kit (every colour Sweaft-64), shown at a whole-number UI
@@ -63,6 +64,9 @@ Also in this change, done: five UI skills ported from Fleet Command into
   (CLAUDE.md, "Write it up before touching code").
 - Layout and behaviour of every screen: the same controls, the same keys,
   `MenuOpen` and `Display::None` as they are.
+- No phone layout. The owner, 2026-11-14: "phones cant run this lol". The
+  game is desktop only; the UI scale is a whole number from the window
+  height.
 - Saves: the UI holds no saved state.
 
 ## Impact

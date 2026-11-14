@@ -17,7 +17,7 @@ Grain and strata run ALONG each edge (they vary only across it), so a stretched 
 
 Needs the bpy module (Blender 4.5 as a Python wheel, Python 3.11) with numpy and Pillow:
     python3.11 -m venv /tmp/bpy && /tmp/bpy/bin/pip install "bpy==4.5.*" pillow numpy
-    /tmp/bpy/bin/python tools/art/ui_panels_blend.py [--samples 24] [--px 10]
+    /tmp/bpy/bin/python tools/art/ui_panels_blend.py [--samples 24] [--px 10] [--only rock]
 Writes docs/mockups/ui/blender-<name>.png (native, pixelated) and
 docs/mockups/ui/blender-<name>-render.png (the smooth render, reference only).
 In a cloud container this runs on the CPU (no GPU there); on the owner's desktop use the GPU.
@@ -147,7 +147,8 @@ def rock_field():
     d = np.minimum.reduce([x, y, N - x, N - y])
     rough = fbm(x, y, 7, 5, 0.12)
     rough2 = fbm(x, y, 11, 3, 0.5)
-    rock = [hexlin(c) for c in ("#2b1f35", "#3e3551", "#69608b", "#92a3b2")]
+    # The kit's own rock ramp, slate blue since the owner's "make the stone more blue" (2026-11-14).
+    rock = [hexlin(c) for c in ui_art.ROCK[1:]]
     # Chipped silhouette: stronger chips toward the corners.
     corner = np.minimum(np.minimum(x, N - x), np.minimum(y, N - y))
     near_corner = np.clip(1 - np.maximum(np.minimum(x, N - x), np.minimum(y, N - y)) / 14.0, 0, 1)
@@ -164,7 +165,7 @@ def rock_field():
     col[lip] = rock[1]
     face = d >= 12.0
     h = np.where(face, 0.0, h)
-    col[face] = hexlin("#2c2c25")
+    col[face] = hexlin(ui_art.FACE)
     del corner
     return h, col, alpha
 
@@ -274,7 +275,10 @@ def pixelate(path_render, path_out):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
+    only = arg("--only", "")
     for name, field in (("frame", frame_field), ("rock", rock_field)):
+        if only and name != only:
+            continue
         sc = scene()
         build_mesh(name, *field())
         render = os.path.join(OUT, f"blender-{name}-render.png")
