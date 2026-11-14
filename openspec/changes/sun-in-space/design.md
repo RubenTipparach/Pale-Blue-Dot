@@ -89,3 +89,12 @@ the sun, the weather or the planet's centre.
   (`NoFrustumCulling`), so its pipeline is built on the first frames behind
   the loading screen, like the dome's. A capture's log is checked for a
   `LATE_PIPELINE` naming it.
+
+## 5. As built
+
+As designed, first trial kept (`docs/screenshots/sun-in-space/`). One visible
+difference beyond the fix: with the sun half behind the limb, the dome used to
+add the sun's glow over the planet's face in front of it (its front faces lie
+over the ground), a bright patch on the sea and land at the limb. The quad
+discards rays that meet the sea sphere, so the glow now stops at the limb, as a
+sun behind the planet should. A normal launch logs no `LATE_PIPELINE`.

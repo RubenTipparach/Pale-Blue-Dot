@@ -106,6 +106,7 @@ pub struct SkyPlugin;
 impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<SkyMaterial>::default())
+            .add_plugins(MaterialPlugin::<SunDiscMaterial>::default())
             .init_resource::<Sun>()
             .init_resource::<CloudNow>()
             .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
@@ -115,7 +116,8 @@ impl Plugin for SkyPlugin {
             .add_systems(Update, (run_clock, follow_weather))
             .add_systems(
                 PostUpdate,
-                position_atmosphere
+                (position_atmosphere, follow_dome)
+                    .chain()
                     .after(update_planet_frame)
                     .before(TransformSystems::Propagate)
                     .run_if(crate::world_open),
@@ -123,7 +125,7 @@ impl Plugin for SkyPlugin {
     }
 }
 
-#[derive(Clone, Copy, ShaderType, Debug)]
+#[derive(Clone, Copy, ShaderType, Debug, PartialEq)]
 pub struct SkyParameters {
     /// Planet center xyz, solid sea-level radius w, all in local world metres.
     pub center_radius: Vec4,
@@ -293,6 +295,121 @@ impl Material for SkyMaterial {
     }
 }
 
+/// The sun seen from outside the atmosphere shell (`sun-in-space`).
+///
+/// The dome draws the sun as a term of its own shader, which from outside the
+/// shell has fragments only where a ray meets the shell: a sun above the
+/// shell's rim had no pixel, and one across it was cut flat along it. This is
+/// `sky_atmosphere.wgsl` again, with `SUN_DISC` defined: a quad across the
+/// sun's direction at 150 km, the same disc and glow, dimmed and reddened by
+/// the air on its ray. From inside the shell it collapses to nothing and the
+/// dome draws the sun as before. Its parameters are the dome's, copied each
+/// frame by [`follow_dome`], so the two cannot disagree about the sun.
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+pub struct SunDiscMaterial {
+    #[uniform(0)]
+    pub parameters: SkyParameters,
+}
+
+/// The `SUN_DISC` quad's four corners, as two triangles.
+const SUN_DISC_CORNERS: [[f32; 3]; 6] = [
+    [-1.0, -1.0, 0.0],
+    [1.0, -1.0, 0.0],
+    [1.0, 1.0, 0.0],
+    [-1.0, -1.0, 0.0],
+    [1.0, 1.0, 0.0],
+    [-1.0, 1.0, 0.0],
+];
+
+#[derive(Component)]
+struct SunDisc;
+
+impl Material for SunDiscMaterial {
+    fn vertex_shader() -> ShaderRef {
+        "shaders/sky_atmosphere.wgsl".into()
+    }
+
+    fn fragment_shader() -> ShaderRef {
+        "shaders/sky_atmosphere.wgsl".into()
+    }
+
+    /// Light added over what the dome left: the shader writes alpha 0.
+    fn alpha_mode(&self) -> AlphaMode {
+        AlphaMode::Add
+    }
+
+    /// The quad's entity stands at the planet's centre with the dome; one
+    /// metre further in the back-to-front sort draws it just after the dome,
+    /// so the dome's column is not laid over it a second time.
+    fn depth_bias(&self) -> f32 {
+        1.0
+    }
+
+    fn enable_prepass() -> bool {
+        false
+    }
+
+    fn enable_shadows() -> bool {
+        false
+    }
+
+    fn specialize(
+        _pipeline: &MaterialPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        layout: &MeshVertexBufferLayoutRef,
+        _key: MaterialPipelineKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        descriptor.vertex.buffers = vec![
+            layout
+                .0
+                .get_layout(&[Mesh::ATTRIBUTE_POSITION.at_shader_location(0)])?,
+        ];
+        descriptor.vertex.shader_defs.push("SUN_DISC".into());
+        if let Some(fragment) = descriptor.fragment.as_mut() {
+            fragment.shader_defs.push("SUN_DISC".into());
+        }
+        descriptor.primitive.cull_mode = None;
+        if let Some(depth) = descriptor.depth_stencil.as_mut() {
+            depth.depth_write_enabled = false;
+            depth.depth_compare = CompareFunction::GreaterEqual;
+        }
+        Ok(())
+    }
+}
+
+/// The sun quad follows the dome: the same parameters (the sun, the weather,
+/// the planet's centre) and the same place in the sort. Written only when
+/// they differ, so an unchanged frame uploads nothing.
+#[allow(clippy::type_complexity)]
+fn follow_dome(
+    domes: Query<(&Transform, &MeshMaterial3d<SkyMaterial>), With<PlanetAtmosphere>>,
+    mut discs: Query<
+        (&mut Transform, &MeshMaterial3d<SunDiscMaterial>),
+        (With<SunDisc>, Without<PlanetAtmosphere>),
+    >,
+    skies: Res<Assets<SkyMaterial>>,
+    mut suns: ResMut<Assets<SunDiscMaterial>>,
+) {
+    let Some((dome_at, dome)) = domes.iter().next() else {
+        return;
+    };
+    let Some(sky) = skies.get(&dome.0) else {
+        return;
+    };
+    for (mut at, disc) in &mut discs {
+        if at.translation != dome_at.translation {
+            at.translation = dome_at.translation;
+        }
+        if suns
+            .get(&disc.0)
+            .is_some_and(|sun| sun.parameters != sky.parameters)
+            && let Some(sun) = suns.get_mut(&disc.0)
+        {
+            sun.parameters = sky.parameters;
+        }
+    }
+}
+
 /// Hand the dome the cover overhead, and the clouds pass its lanes.
 ///
 /// The dome's overcast greying reads the cover over the player, the same
@@ -337,10 +454,12 @@ fn apply_weather(
     sky.sun.w = radiance;
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_atmosphere(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<SkyMaterial>>,
+    mut sun_discs: ResMut<Assets<SunDiscMaterial>>,
     water: Res<WaterSettings>,
     weather_settings: Res<WeatherSettings>,
     weather: Res<crate::weather::Weather>,
@@ -369,6 +488,24 @@ fn spawn_atmosphere(
         Mesh3d(meshes.add(Sphere::new(ATMOSPHERE_RADIUS).mesh().uv(96, 64))),
         MeshMaterial3d(material),
         Transform::IDENTITY,
+        NotShadowCaster,
+        NotShadowReceiver,
+    ));
+    // The sun from outside the shell. Never culled and always visible, so
+    // its pipeline is built while the loading screen is up, like the dome's;
+    // from inside the shell its vertex shader collapses it.
+    let quad = Mesh::new(
+        bevy::mesh::PrimitiveTopology::TriangleList,
+        bevy::asset::RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, SUN_DISC_CORNERS.to_vec());
+    commands.spawn((
+        Name::new("Sun disc seen from outside the shell"),
+        SunDisc,
+        Mesh3d(meshes.add(quad)),
+        MeshMaterial3d(sun_discs.add(SunDiscMaterial { parameters })),
+        Transform::IDENTITY,
+        bevy::camera::visibility::NoFrustumCulling,
         NotShadowCaster,
         NotShadowReceiver,
     ));

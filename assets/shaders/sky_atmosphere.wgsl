@@ -3,9 +3,17 @@
 // The integrated material uses 16 view steps and a soft planetary penumbra
 // to remove visible shadow bands found in the native orbital captures.
 // Unlike the standalone asset, this consumes Bevy view/mesh bindings.
-#import bevy_pbr::forward_io::VertexOutput
+//
+// Two draws use this file (`sun-in-space`): the dome (`SkyMaterial`), and,
+// with `SUN_DISC` defined, the sun seen from outside the shell
+// (`SunDiscMaterial`), a quad of its own because from outside the dome has
+// fragments only where its shell is. One file, so the air, its extinction and
+// the sun's disc are written once.
 #import bevy_pbr::mesh_view_bindings::view
 #import pbd::clouds::cloud_sphere_hit
+#ifndef SUN_DISC
+#import bevy_pbr::forward_io::VertexOutput
+#endif
 
 struct SkyParameters {
     center_radius: vec4<f32>,
@@ -67,6 +75,101 @@ fn sun_visibility(p: vec3<f32>, sun: vec3<f32>) -> f32 {
     return smoothstep(-penumbra,penumbra,closest_radius-sky.center_radius.w);
 }
 
+// The sun's own light along a view direction at `cosine` from it: a disc
+// with a darkened limb and a glow that reaches a few radii, hidden by the
+// planet's shadow over the eye at `camera`. There was a sunset here once and
+// no sun; the scattering brightened toward a direction nothing was drawn
+// along. Tenebris draws its disc as an angular-size-correct billboard inside
+// the far plane. The radius is a few times the real sun's 0.27 degrees, for
+// legibility. The light, and in `a` the disc's cover (how much of what is
+// behind it the disc replaces).
+fn sun_disc_light(cosine: f32, camera: vec3<f32>, sun: vec3<f32>) -> vec4<f32> {
+    let disc = smoothstep(SUN_COS_OUTER,SUN_COS_INNER,cosine);
+    let limb = mix(0.62,1.0,smoothstep(SUN_COS_OUTER,1.0,cosine));
+    let glow = pow(max(cosine,0.0),1800.0)*0.55;
+    let shadowed = sun_visibility(camera,sun);
+    return vec4<f32>(SUN_COLOUR*sky.sun.w*(disc*limb+glow)*shadowed,disc*shadowed);
+}
+
+#ifdef SUN_DISC
+// The sun from outside the shell (`sun-in-space`). From inside, the dome's
+// back faces surround the eye and it draws the sun; from outside, the dome
+// has a fragment only where a ray meets the shell, and a sun above the
+// shell's rim had none: it was cut flat along the rim, or gone.
+//
+// A quad across the sun's direction, SUN_REACH_TAN each way (6.9 degrees:
+// the glow is 2e-6 of the sun there), SUN_DISTANCE_M out: in front of the
+// stars (180 km), behind the moon and the planet, which the depth test hides
+// it behind. Built here from the mesh's four corners; its transform is not
+// read (the entity stands at the planet's centre with the dome only so that
+// the transparent sort draws it just after the dome).
+const SUN_REACH_TAN: f32 = 0.1206;
+const SUN_DISTANCE_M: f32 = 150000.0;
+
+struct SunVertex {
+    @location(0) position: vec3<f32>,
+}
+
+struct SunVaryings {
+    @builtin(position) clip_position: vec4<f32>,
+    // The ray toward this corner in the world's axes, unnormalised and kept
+    // relative to the eye, so f32 keeps the disc's edge.
+    @location(0) ray: vec3<f32>,
+}
+
+@vertex
+fn vertex(v: SunVertex) -> SunVaryings {
+    let sun = normalize(sky.sun.xyz);
+    let helper = select(vec3<f32>(0.0,1.0,0.0),vec3<f32>(1.0,0.0,0.0),abs(sun.y) > 0.9);
+    let right = normalize(cross(sun,helper));
+    let up = cross(right,sun);
+    let ray = sun+(right*v.position.x+up*v.position.y)*SUN_REACH_TAN;
+    var out: SunVaryings;
+    out.ray = ray;
+    let in_view = (view.view_from_world*vec4<f32>(ray*SUN_DISTANCE_M,0.0)).xyz;
+    out.clip_position = view.clip_from_view*vec4<f32>(in_view,1.0);
+    // From inside the shell the dome draws the sun: every corner at one
+    // point, no area, no fragments.
+    let camera = view.world_position - sky.center_radius.xyz;
+    if (length(camera) < sky.atmosphere.x) {
+        out.clip_position = vec4<f32>(0.0,0.0,0.0,1.0);
+    }
+    return out;
+}
+
+// The sun's light added over what the dome left (`AlphaMode::Add`), through
+// the air on its ray: the dome's own extinction, per channel, so a sun seen
+// through the limb's air is dimmer and redder. It comes in over the
+// hand-over past the shell's top, so leaving the shell changes nothing in a
+// frame (the dome's sun, inside, is not attenuated).
+@fragment
+fn fragment(in: SunVaryings) -> @location(0) vec4<f32> {
+    let camera = view.world_position - sky.center_radius.xyz;
+    let direction = normalize(in.ray);
+    let sun = normalize(sky.sun.xyz);
+    // Behind the planet the terrain's depth hides it; the sea sphere makes
+    // sure.
+    let ground = cloud_sphere_hit(camera,direction,sky.center_radius.w);
+    if (ground.x > 0.0) { discard; }
+    let light = sun_disc_light(clamp(dot(direction,sun),-1.0,1.0),camera,sun);
+    let shell = max(sky.atmosphere.x-sky.center_radius.w, 1.0);
+    let air_hit = cloud_sphere_hit(camera,direction,sky.atmosphere.x);
+    let start = max(air_hit.x,0.0);
+    let end = air_hit.y;
+    var depth = 0.0;
+    if (end > start) {
+        let step_size = (end-start)/16.0;
+        for (var i=0u; i<16u; i++) {
+            depth += air_density(camera+direction*(start+step_size*(f32(i)+0.5)))*step_size/shell;
+        }
+    }
+    let beta = sky.scatter.xyz*sky.atmosphere.z+vec3<f32>(sky.atmosphere.w);
+    let altitude = max(length(camera)-sky.center_radius.w,0.0);
+    let handover = smoothstep(0.0,GROUND_HANDOVER_M,max(altitude-shell,0.0));
+    let through = mix(vec3<f32>(1.0),exp(-beta*depth),handover);
+    return vec4<f32>(light.rgb*through,0.0);
+}
+#else
 @fragment
 fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
     let camera = view.world_position - sky.center_radius.xyz;
@@ -167,21 +270,17 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     // (`water.wgsl`, `pbd::clouds`) draws them over everything against the
     // scene's depth, so a cloud in front of a hill is in front of it and the
     // sun disc below is covered wherever a cloud crosses it.
-    // The sun itself: a disc along the sun direction with a darkened limb and
-    // a glow that reaches a few radii, hidden by the planet's own shadow and
-    // by the cloud this ray crossed. There was a sunset here and no sun; the
-    // scattering brightened toward a direction nothing was drawn along.
-    // Tenebris draws its disc as an angular-size-correct billboard inside the
-    // far plane; the shell is that surface here. The radius is a few times
-    // the real sun's 0.27 degrees, for legibility at the shell's resolution.
-    // The clouds pass draws over it, so a cloud hides it.
-    let disc = smoothstep(SUN_COS_OUTER,SUN_COS_INNER,cosine);
-    let limb = mix(0.62,1.0,smoothstep(SUN_COS_OUTER,1.0,cosine));
-    let glow = pow(max(cosine,0.0),1800.0)*0.55;
-    let shadowed = sun_visibility(camera,sun);
-    let sun_light = SUN_COLOUR*sky.sun.w*(disc*limb+glow)*shadowed;
-    scattered += sun_light;
-    opacity = max(opacity,disc*shadowed);
+    // The sun itself (`sun_disc_light`), from inside the shell, where the
+    // dome surrounds the eye and is the far surface every direction meets.
+    // From outside, the dome covers only the shell's disc, and the sun is the
+    // `SUN_DISC` quad instead (`sun-in-space`); adding it here too would count
+    // the glow twice along the rim. The clouds pass draws over both, so a
+    // cloud hides it.
+    if (inside) {
+        let sun_light = sun_disc_light(cosine,camera,sun);
+        scattered += sun_light.rgb;
+        opacity = max(opacity,sun_light.a);
+    }
     // Over the ground the column comes in with the hand-over, from nothing
     // at the shell's top to the whole of it 200 m on: nothing switches on in
     // a frame.
@@ -191,3 +290,4 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     }
     return vec4<f32>(max(scattered,vec3<f32>(0.0)),opacity);
 }
+#endif

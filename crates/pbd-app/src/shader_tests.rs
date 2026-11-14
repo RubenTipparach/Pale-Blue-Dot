@@ -309,6 +309,48 @@ fn rain_detail_is_gated_near_the_eye_in_the_new_model_only() {
     }
 }
 
+/// `sun-in-space`: the sun is one function, `sun_disc_light`, which the dome
+/// adds only from inside the shell (from outside it has fragments only where
+/// its shell is, and the sun above the rim had none) and the `SUN_DISC` quad
+/// adds from outside, through the air's extinction faded in over the
+/// `high-haze` hand-over. Its quad reaches past where the glow is visible.
+#[test]
+fn the_sun_is_drawn_from_outside_the_shell_by_its_own_quad() {
+    let src = include_str!("../../../assets/shaders/sky_atmosphere.wgsl").replace("\r\n", "\n");
+    let light = wgsl_fn_body(&src, "sun_disc_light");
+    assert!(light.contains("let glow = pow(max(cosine,0.0),1800.0)*0.55;"));
+    let quad = src.find("#ifdef SUN_DISC").expect("the SUN_DISC variant");
+    let dome = src.find("#else\n@fragment").expect("the dome's variant");
+    assert!(quad < dome && src.trim_end().ends_with("#endif"));
+    let (quad_src, dome_src) = (&src[quad..dome], &src[dome..]);
+    assert!(quad_src.contains("fn vertex(") && quad_src.contains("fn fragment("));
+    assert!(
+        dome_src.contains(
+            "    if (inside) {\n        let sun_light = sun_disc_light(cosine,camera,sun);"
+        ),
+        "the dome draws the sun from inside the shell only"
+    );
+    assert_eq!(dome_src.matches("sun_disc_light(").count(), 1);
+    for line in [
+        "if (length(camera) < sky.atmosphere.x) {",
+        "let light = sun_disc_light(clamp(dot(direction,sun),-1.0,1.0),camera,sun);",
+        "let handover = smoothstep(0.0,GROUND_HANDOVER_M,max(altitude-shell,0.0));",
+        "let through = mix(vec3<f32>(1.0),exp(-beta*depth),handover);",
+        "return vec4<f32>(light.rgb*through,0.0);",
+    ] {
+        assert!(quad_src.contains(line), "missing `{line}`");
+    }
+    // The quad's edge is where the glow has faded to nothing.
+    let reach: f32 = src
+        .split("const SUN_REACH_TAN: f32 = ")
+        .nth(1)
+        .and_then(|rest| rest.split(';').next())
+        .and_then(|v| v.parse().ok())
+        .expect("SUN_REACH_TAN");
+    let edge = 0.55 * (1.0 / (1.0 + reach * reach).sqrt()).powf(1800.0);
+    assert!(edge < 1e-5, "the glow at the quad's edge is {edge}");
+}
+
 /// `dusk-sky`: seen from the ground the dome is lit on the ground's twilight,
 /// not through the small planet's shadow, which kept high air lit to 34
 /// degrees under and drew its edge across the sky.
