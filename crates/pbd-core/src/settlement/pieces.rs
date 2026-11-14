@@ -19,6 +19,7 @@ pub mod desert;
 pub mod dressing;
 pub mod harbour;
 pub mod jungle;
+pub mod steps;
 pub mod tundra;
 
 /// Floor boards and joists, metres.
@@ -156,6 +157,18 @@ pub enum Surface {
         to: f32,
         depth: f32,
     },
+    /// Street steps across a cell (`path-stairs`, the mockup's
+    /// `streetSteps`): over a convex `outline`, the top from `base` at
+    /// `foot` rising along `dir` to `base + rise` at `full` metres along it,
+    /// level past that.
+    Steps {
+        outline: Vec<Vec2>,
+        foot: Vec2,
+        dir: Vec2,
+        full: f32,
+        base: f32,
+        rise: f32,
+    },
     /// A newel stair in one cell: `start` the angle it climbs from, turning
     /// `sense` (+1 or -1), a turn every `turn_m` from `base` to `top`, with
     /// `landing` radians of floor past the top and `margin` before the
@@ -227,6 +240,22 @@ impl Surface {
                 }
                 let top = from + (to - from) * u / len;
                 out.push((top - depth, top));
+            }
+            Surface::Steps {
+                outline,
+                foot,
+                dir,
+                full,
+                base,
+                rise,
+            } => {
+                if !inside(outline, p) {
+                    return;
+                }
+                let u = (p - *foot).dot(*dir);
+                let top = base + (u / full.max(1e-3)).clamp(0.0, 1.0) * rise;
+                // Solid down to the cell's ground, as the mockup's are.
+                out.push((base - 0.01, top));
             }
             Surface::Newel {
                 centre,

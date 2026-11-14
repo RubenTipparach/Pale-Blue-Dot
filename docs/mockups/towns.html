@@ -2442,6 +2442,7 @@ function makeCoast() {
     const low = TOP[idx(c, r)] - 1; TOP[idx(c, r)] = low; STEPCELL.add(idx(c, r));
     let up = 1; for (const d of [1, 2]) { const [c2, r2] = nb(c, r, d); if (TOPMAT[idx(c2, r2)] === "cobble" && TOP[idx(c2, r2)] === low + 1) { up = d; break; } }
     streetSteps(c, r, up, low);
+    AREA[idx(c, r)] = AREA[idx(c, r)] + ", steps";
   }
   // houses on the three terraces, whitewash and driftwood among the others
   const homes = [

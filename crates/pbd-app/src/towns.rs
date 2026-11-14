@@ -246,8 +246,34 @@ pub fn build(
     config: &TerrainConfig,
     sheet_m: f32,
 ) -> Result<Laid, String> {
+    build_yielding(
+        site,
+        town,
+        template,
+        kits,
+        repeat_m,
+        config,
+        sheet_m,
+        &BTreeSet::new(),
+    )
+}
+
+/// [`build`], its path stairs (`path-stairs`) yielding to the cells in
+/// `yielded`, by exact key: the town's cells that hold a player's edit
+/// ([`edited_cells`]).
+#[allow(clippy::too_many_arguments)]
+pub fn build_yielding(
+    site: &Site,
+    town: &Town,
+    template: Option<&Template>,
+    kits: &Kits,
+    repeat_m: &dyn Fn(&str) -> f32,
+    config: &TerrainConfig,
+    sheet_m: f32,
+    yielded: &BTreeSet<u32>,
+) -> Result<Laid, String> {
     let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
-    let built = record::build_town(
+    let built = record::build_town_yielding(
         town,
         template,
         &patch,
@@ -256,6 +282,7 @@ pub fn build(
         config.radius_m,
         sheet_m,
         natural(config),
+        &|k| yielded.contains(&k),
     )?;
     Ok(Laid {
         site: site.id,
@@ -273,6 +300,20 @@ pub fn build(
         props: built.props,
         casting: None,
     })
+}
+
+/// The exact keys of a town's cells, laid or over the sea, that hold a
+/// player's edit in `save`: what its path stairs yield to (`path-stairs`).
+pub fn edited_cells(save: Option<&WorldSave>, town: &Town) -> BTreeSet<u32> {
+    let Some(save) = save.filter(|s| !s.edits.is_empty()) else {
+        return BTreeSet::new();
+    };
+    town.cells
+        .iter()
+        .chain(&town.over_sea)
+        .map(|c| c.2)
+        .filter(|&k| !save.edits.for_cell(k).is_empty())
+        .collect()
 }
 
 /// A site's town as the world's save holds it.
@@ -855,7 +896,8 @@ fn settle(world: &mut World) {
             .resource::<TownAssets>()
             .template_named(&h.town.template)
             .cloned();
-        match build(
+        let yielded = edited_cells(world.get_resource::<WorldSave>(), &h.town);
+        match build_yielding(
             &h.site,
             &h.town,
             template.as_ref(),
@@ -863,6 +905,7 @@ fn settle(world: &mut World) {
             &repeat,
             &config,
             sheet,
+            &yielded,
         ) {
             Ok(laid) => stand(world, &h, laid, 1.0),
             Err(why) => warn!("{} could not be built: {why}", h.site.name),
@@ -961,13 +1004,20 @@ pub fn stand_in_range(world: &mut World) {
         }
     }
     if !wanted_now.is_empty() {
+        // The cells of each that hold a player's edit, which its path
+        // stairs yield to (`path-stairs`).
+        let yielded: Vec<BTreeSet<u32>> = wanted_now
+            .iter()
+            .map(|h| edited_cells(world.get_resource::<WorldSave>(), &h.town))
+            .collect();
         let assets = world.resource::<TownAssets>();
         let (kits, repeat) = (assets.kits.clone(), assets.repeat());
         // Every template a town can be laid from: the harbour's too, or a
         // harbour coming into range is cut with none of its sea's pieces.
         let cuts: Vec<_> = wanted_now
             .into_iter()
-            .map(|h| {
+            .zip(yielded)
+            .map(|(h, yielded)| {
                 let template = [
                     &assets.village,
                     &assets.walled,
@@ -983,7 +1033,7 @@ pub fn stand_in_range(world: &mut World) {
                 let (kits, repeat) = (kits.clone(), repeat.clone());
                 let cascades = assets.draw.dressing_cascades;
                 let task = AsyncComputeTaskPool::get().spawn(async move {
-                    build(
+                    build_yielding(
                         &h.site,
                         &h.town,
                         template.as_ref(),
@@ -991,6 +1041,7 @@ pub fn stand_in_range(world: &mut World) {
                         &repeat,
                         &config,
                         sheet,
+                        &yielded,
                     )
                     .map(|mut laid| {
                         laid.casting = Some(Arc::new(casting(&laid, cascades)));

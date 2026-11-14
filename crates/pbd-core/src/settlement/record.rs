@@ -19,7 +19,7 @@ use super::chart::{Chart, Charted, Patch, chart};
 use super::ground::{Lamp, TownGround};
 use super::pieces::{
     BuildingSolids, Meshes, RoomLight, cog, cut_building, cut_masonry, desert, dressing, harbour,
-    jungle, tundra,
+    jungle, steps, tundra,
 };
 use super::{BuildingDef, Kits, Template, neighbour};
 use crate::records::{Record, Records};
@@ -551,6 +551,11 @@ pub struct Built {
     /// rank 5): for each texture, the run of vertices its dressing things
     /// added. They are small, and cast only into the finer cascades.
     pub props: BTreeMap<String, (usize, usize)>,
+    /// Its path stairs (`path-stairs`): each one's place among its solids
+    /// and what it climbs. A pier's stairs are among the pier's pieces.
+    pub stairs: Vec<(usize, steps::Cut)>,
+    /// The risers left bare because a player's edit is in their cells.
+    pub stairs_yielded: usize,
 }
 
 /// The run of vertices each texture gained between two counts of `meshes`.
@@ -742,6 +747,8 @@ pub fn build(
         cog_meshes: Meshes::new(),
         cog_bow: Vec3::ZERO,
         props: BTreeMap::new(),
+        stairs: Vec::new(),
+        stairs_yielded: 0,
     })
 }
 
@@ -767,7 +774,56 @@ pub fn build_town(
     sheet_m: f32,
     natural: impl Fn(Vec3) -> f32,
 ) -> Result<Built, String> {
+    build_town_yielding(
+        town,
+        template,
+        patch,
+        kits,
+        repeat_m,
+        radius_m,
+        sheet_m,
+        natural,
+        &|_| false,
+    )
+}
+
+/// [`build_town`], its path stairs (`path-stairs`) yielding to the cells
+/// `yielded` holds, by exact key: a cell with a player's edit in it. The
+/// stairs come after the buildings, before every other piece: they are the
+/// template's, cut from the town's stored chart and levels, and never
+/// saved. Everything yielded is the town as it was cut before stairs.
+#[allow(clippy::too_many_arguments)]
+pub fn build_town_yielding(
+    town: &Town,
+    template: Option<&Template>,
+    patch: &Patch,
+    kits: &Kits,
+    repeat_m: &dyn Fn(&str) -> f32,
+    radius_m: f32,
+    sheet_m: f32,
+    natural: impl Fn(Vec3) -> f32,
+    yielded: &dyn Fn(u32) -> bool,
+) -> Result<Built, String> {
     let mut built = build(town, patch, kits, repeat_m, radius_m, &natural)?;
+    if let Some(template) = template {
+        let (pieces, cuts, skipped) = steps::path_stairs(
+            &mut built.meshes,
+            repeat_m,
+            patch,
+            &built.chart,
+            town,
+            template,
+            radius_m,
+            yielded,
+        );
+        built.stairs_yielded = skipped;
+        for (piece, cut) in pieces.into_iter().zip(cuts) {
+            built.stairs.push((built.solids.len(), cut));
+            built.rooms.push(Meshes::new());
+            built.lights.push(Vec::new());
+            built.solids.push(piece);
+        }
+    }
     // The harbour's piers and light (slice 4d), the template's as its
     // masonry is, each with no rooms and no lights.
     if let Some(template) = template.filter(|t| t.sea) {
@@ -786,6 +842,7 @@ pub fn build_town(
                 radius_m,
                 terrace,
                 &under,
+                yielded,
             )?);
         }
         if let Some(light) = &template.light {

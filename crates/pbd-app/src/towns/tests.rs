@@ -1025,8 +1025,8 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
         );
         assert_eq!(
             laid.solids.len(),
-            template.buildings.len() + template.masonry.len(),
-            "{}: every building and every cell of the wall",
+            template.buildings.len() + 12 + template.masonry.len(),
+            "{}: every building, its 12 path stairs and every cell of the wall",
             site.name
         );
         assert!(levels.len() >= 3, "{}: levels {levels:?}", site.name);
@@ -2635,5 +2635,93 @@ fn print_the_harbours_up_street_spots() {
             at(side),
             yaw(side, steps),
         );
+    }
+}
+
+/// `path-stairs`: every town of the shipped seed, of every kind, as a
+/// world lays it and cuts it: each riser between two of its path cells has
+/// a stair and none is left bare (no edits), and the harbours' piers stand
+/// a stair at each end of a raised stretch: two at Marenstrand's bank, and
+/// none on any other pier.
+#[test]
+fn every_towns_path_risers_have_their_stairs() {
+    use pbd_core::settlement::pieces::{harbour, steps};
+    let config = *crate::planet::terrain_config();
+    let kits = load_kits();
+    for (kind, name) in [
+        (SiteKind::Village, "village"),
+        (SiteKind::Walled, "town"),
+        (SiteKind::Harbour, "coast"),
+        (SiteKind::Desert, "desert"),
+        (SiteKind::Tundra, "tundra"),
+        (SiteKind::Jungle, "jungle"),
+    ] {
+        let template = load_template(name);
+        let cell_m = template.grid.cell_m;
+        let (mut towns, mut edges, mut stairs) = (0, 0, 0);
+        for site in sites_of(kind) {
+            let town =
+                lay_out(&site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+            let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+            let built = record::build_town(
+                &town,
+                Some(&template),
+                &patch,
+                &kits,
+                &|_: &str| 2.0,
+                config.radius_m,
+                sheet(&config),
+                natural(&config),
+            )
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+            assert_eq!(built.stairs_yielded, 0, "{}", site.name);
+            for r in steps::risers(&town, &template) {
+                for &(d, _) in &r.ups {
+                    assert!(
+                        built
+                            .stairs
+                            .iter()
+                            .any(|(_, c)| c.cell == r.cell && c.edges.contains(&d)),
+                        "{} {:?} edge {d}: no stair",
+                        site.name,
+                        r.cell
+                    );
+                    edges += 1;
+                }
+            }
+            stairs += built.stairs.len();
+            towns += 1;
+            if template.sea {
+                let nat = natural(&config);
+                let under = |d: Vec3| {
+                    let n = nat(d);
+                    built.ground.at(d).map_or(n, |g| g.height(n))
+                };
+                for (i, p) in template.piers.iter().enumerate() {
+                    let cut = harbour::stretches(
+                        &patch,
+                        &built.chart,
+                        p,
+                        cell_m,
+                        town.terrace as f32,
+                        &under,
+                    );
+                    let n = harbour::stairs(&cut).len();
+                    let want = if site.name == "Marenstrand" && i == 0 {
+                        2
+                    } else {
+                        0
+                    };
+                    assert_eq!(n, want, "{} pier {i}: its stairs", site.name);
+                }
+            }
+        }
+        println!("{name}: {towns} towns, {edges} risers, {stairs} path stairs");
+        let (e, s) = match name {
+            "town" => (18, 12),
+            "coast" => (12, 6),
+            _ => (0, 0),
+        };
+        assert_eq!((edges, stairs), (e * towns, s * towns), "{name}");
     }
 }

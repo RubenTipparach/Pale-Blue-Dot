@@ -10697,14 +10697,14 @@
    "r": 21,
    "h": 1,
    "top": "cobble",
-   "area": "Up street"
+   "area": "Up street, steps"
   },
   {
    "c": 23,
    "r": 21,
    "h": 1,
    "top": "cobble",
-   "area": "Up street"
+   "area": "Up street, steps"
   },
   {
    "c": 24,
@@ -12797,14 +12797,14 @@
    "r": 27,
    "h": 2,
    "top": "cobble",
-   "area": "Up street"
+   "area": "Up street, steps"
   },
   {
    "c": 23,
    "r": 27,
    "h": 2,
    "top": "cobble",
-   "area": "Up street"
+   "area": "Up street, steps"
   },
   {
    "c": 24,
