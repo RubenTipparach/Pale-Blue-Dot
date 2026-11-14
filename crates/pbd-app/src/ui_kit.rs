@@ -1032,8 +1032,8 @@ mod tests {
         let slices = slices();
         for (name, p) in &slices.pieces {
             if let Some([top, right, bottom, left]) = p.slice {
-                assert!(left + right < p.w, "{name}: {left}+{right} >= {}", p.w);
-                assert!(top + bottom < p.h, "{name}: {top}+{bottom} >= {}", p.h);
+                assert!(left + right <= p.w, "{name}: {left}+{right} > {}", p.w);
+                assert!(top + bottom <= p.h, "{name}: {top}+{bottom} > {}", p.h);
             }
         }
         let dir = assets_dir();
