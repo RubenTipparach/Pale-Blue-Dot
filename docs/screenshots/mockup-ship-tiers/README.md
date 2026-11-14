@@ -44,3 +44,27 @@ hatch, airlock, hull wall; a fusion ship sprite replacing the starship) are draw
 by `tools/art/ship_tiers_art.py` with the balatro-pixel-art kit;
 `python tools/art/ship_tiers_art.py --sheet OUT.png` sheets them beside the kit's
 references.
+
+## 2026-11-14: the launch field, Taper and the planner
+
+The owner, 2026-11-14: "update the rocket sim to have a larger ground area, and
+maybe a small planet to test orbit transitions around, and a solar system with
+navigation nodes to plot flight paths and rocket burns" (design section 11).
+Taken the same way, **without a GPU** (Playwright's Chromium on SwiftShader,
+1280 x 800 CSS pixels at device scale 2, saved as JPEG), by
+`shots.js`-style scripts that load the page and, for the planner, drive its own
+flight code (`planNav`, holding B through each node) before the shot. They show
+what the page looks like, never how smoothly it runs.
+
+| Shot | What it shows | Page URL flags, then what the script did |
+| --- | --- | --- |
+| `7-field-aerial-day.jpg` | The launch field from 150 m up: the pad and hall in the middle, the near ring of the game's 2.833 m cells rolling a few layers from 60 m out, the far ring of wider cells beyond, the hills that ring the field. | `?shot=1&preset=orbit&cyaw=2.2&cpitch=0.5&cdist=12` |
+| `7-field-aerial-night.jpg` | The same at night: the pad's rim lamps and masts throw the only pools; the field is near-black. | `...&time=night` |
+| `7-field-walk-padB-night.jpg` | Walking the field at night, 23 m from Pad B: its rim lamps, the red beacon on its mast, the ground dark between the pools. | `?shot=1&preset=orbit&view=walk&time=night`, then *To Pad B* |
+| `7-field-walk-edge-day.jpg` | At the edge of the walkable near ring, 186 m out, looking away from the pad: the game's cells underfoot, the far ring's wider cells as scenery. | `?shot=1&preset=orbit&view=walk`, then *To the edge* |
+| `8-planner-transfer-nodes.jpg` | Low orbit round Pale Blue with the nav computer's three nodes to Taper: the line purple after the first node, each node's six handles, Taper's ghost where it will be at the encounter. | `?shot=1&tab=plan`, then *Transfer to Taper* |
+| `8-planner-node-handles.jpg` | A node close up (focus on the ship): prograde and retrograde yellow, normal purple, radial cyan; the line bends after it. | `?shot=1&tab=plan&focus=ship`, a node of 30 m/s prograde and 8 m/s radial |
+| `8-planner-taper-orbit.jpg` | After flying those nodes: in orbit round Taper, drawn in Taper's frame (focus Taper), Ap and Pe marked, the HUD's `orbit [Taper]`. | `?shot=1&tab=plan`, the transfer flown, focus Taper |
+| `8-planner-taper-from-home.jpg` | The same orbit drawn in Pale Blue's frame: a curl along Taper's rail. | as above, focus Pale Blue |
+| `8-planner-return-home.jpg` | From Taper orbit, the nav computer's return: one node, the line falling into Pale Blue's air. | as above, then *Return to Pale Blue* |
+| `8-planner-system.jpg` | The Aubade system to scale, the nav computer's departure to Verdance and its capture node; the bodies marked by dots and names. | `?shot=1&tab=plan&scope=system`, then *Out to Verdance* |

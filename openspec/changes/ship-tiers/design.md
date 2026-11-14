@@ -247,3 +247,233 @@ steps), flown with each example stack:
 
 This is a mockup's integrator, not the game's; the game's own numbers are a
 task.
+
+## 11. 2026-11-14: a bigger launch field, a test moon, and a node planner
+
+The owner, 2026-11-14, verbatim:
+
+> update the rocket sim to have a larger ground area, and maybe a small planet
+> to test orbit transitions around, and a solar system with navigation nodes to
+> plot flight paths and rocket burns
+
+The same day the home star was renamed from Halcyon to **Aubade** across the
+mockups; this page follows (the other planet names stay).
+
+Three additions to the mockup, all mockup-only. No game code changes with them
+(CLAUDE.md, "Write it up before touching code").
+
+### 11.1 The launch field
+
+Today the assembly building's pad sits on 44 rings of hex columns (about
+125 m out) and the rest is fog. A hop has nowhere to go, and a landing off the
+pad lands on nothing in particular.
+
+- **Near ground, the game's cells:** 80 rings of 2.833 m columns with 1 m
+  layers round the pad (about 227 m out, 19,441 cells), the terrain atlas's
+  fields sheet, rolling a few layers from 60 m out, the mountains sheet where
+  a column stands 12 layers or more.
+- **Far ground, a cheap LOD ring:** the same height function sampled on hex
+  cells twelve times wider (34 m), from 200 m out to 2.4 km, in 1 m layers,
+  drawn as one mesh with the same atlas tiles and sunk 1.3 m where it
+  overlaps the near ring so the near cells always win. This is what the game
+  would do with a far-terrain tier; the near ring is the real thing.
+- **Somewhere to go:** a second pad, **Pad B**, a stone disc 190 m from the
+  launch pad with its own rim lamps and a beacon, for a hop and a landing on
+  the gimballed launch preview. The flight preview now lands on the ground
+  under it (the column it comes down on), not on a flat plane at the pad's
+  height, and calls it landed under 8 m/s, as before.
+- **Walk the field:** a fourth view, *Walk*, puts a walker on the ground by
+  the gantry: WASD (or the on-screen keys) at 4.5 m/s, Shift to run at 9,
+  stepping up one 1 m layer and down any, mouse look from the raw drag. A
+  *Go to Pad B* button moves the walker there. Driving is not drawn: there is
+  no ground vehicle in this mockup yet, and the Kestrel stays parked.
+- Night is lit as before: the pads' rim lamps, the masts, the hall door, the
+  gantry, Pad B's ring and beacon; the moon dim. Fog is pushed out to 2.2 km by
+  day so the far ring reads; at night the dark does the hiding.
+
+Recommendations taken (ask only with screenshots): the near ring's size, the
+far ring's 12x cell, Pad B's distance.
+
+### 11.2 Taper, a test moon
+
+Named Taper, a thin candle, beside Lantern. It was first drafted as Wick; the
+star-systems change gave that name to a Tallow-system world the same day, so
+this moon took another (recommendation taken, ask only with screenshots).
+
+A small body close to home, to practise every orbit transition in one sitting:
+launch, low orbit, transfer, capture, land, lift off, return.
+
+| | Taper |
+| --- | --- |
+| Radius | **600 m**, Goldberg level 8 (on the ladder: 300 m x 2^(8-7); tile 1.2087 x 600 / 256 = 2.833 m) |
+| Surface gravity | 0.4 g = 10 m/s^2 (mu = 10 x 600^2 = 3.6e6 m^3/s^2) |
+| Orbit | circular, 16 km from Pale Blue's centre, in Lantern's plane; rail speed = circular speed in Pale Blue's field, 189.7 m/s, period 8 min 50 s |
+| Hill sphere | 16 km x (3.6e6 / (3 x 5.76e8))^(1/3) = 2.04 km |
+| Low orbit | 150 m up (r 750 m, 0.37 of the Hill radius), 69 m/s, period 68 s |
+| Air, life | none: airless, no sky, weather or clouds, lifeless (CLAUDE.md), the asteroid rubble sheet |
+
+First drawn at 14 km and 0.3 g with a 240 m low orbit; measured, every orbit
+there was pumped into the ground by Pale Blue's tide within a few turns (it
+sat at half Taper's Hill radius), so Taper moved out to 16 km and up to 0.4 g,
+and its low orbit down to 150 m, where a round orbit lasts. Hohmann by hand,
+low orbit (5,760 m) to 16 km: +66 m/s out, then about 40 m/s to capture. The
+flown numbers are in 11.5. Taper is mockup data, not a body in the planets mockup:
+whether the game gets a Taper is the planets change's to decide
+(recommendation taken: shown here as a practice moon; ask only with
+screenshots).
+
+### 11.3 The planner: a solar system with navigation nodes
+
+A fifth tab, **Planner**, one 3D view (CLAUDE.md, "One 3D view at a time").
+
+- **One field, every body.** The ship is integrated in the inverse-square
+  pull of every body on its rails: Aubade, Ochre, Pale Blue
+  (with Lantern and Taper), Verdance, Pebble, Amber (with Cinder and Rime),
+  from the planets mockup's distances and surface gravities (`planets.html`).
+  Rails are circular and agree with the field: each body's angular speed is
+  circular speed round its parent, so a ship parked in a moon's orbit stays
+  in it (design 2). Aubade's mu is the one that gives Pale Blue's 100-day
+  year at 300 km: 1.28e7 m^3/s^2.
+- **The ship's frame (found while building, recommendation taken).** The
+  rails know only their parents: Taper's rail follows Pale Blue, never Amber.
+  A ship that felt every body's full pull in a fixed frame was dragged off a
+  Taper orbit by Amber's 0.03 m/s^2 at Pale Blue (measured: a circular orbit
+  round Taper hit the ground inside two turns, prograde or retrograde). So the
+  ship is integrated in the frame of the body it is round (the planet that
+  pulls hardest, or one of its moons whose Hill sphere it is in), and that
+  frame rides the body's rail: the body's own pull, plus every other body's
+  tide (its pull on the ship less its pull on the frame body), plus the
+  rail's acceleration. This is the bounded local frame CLAUDE.md already asks
+  for, applied to gravity. It is still one integrator and one summed field;
+  no conic is solved and no trajectory is patched; at the edge between frames
+  the force changes by the difference in tides (a few hundredths of a
+  m/s^2), the path does not jump. Under B the game's orbital field has the
+  same problem and wants the same answer (task 3.1).
+- **Two scopes, one simulation.** *Pale Blue and Taper* frames home, its
+  moons and the ship at 1 km a unit; *Aubade system* frames the whole system
+  to scale, the bodies marked with dots and names. Both are the same world
+  and the same integration; the scope only moves the camera. The scene is
+  rebased on the focused body every frame (f64 positions in the page, the
+  origin subtracted before they go to the GPU).
+- **The predicted line is the flight run forward.** The same semi-implicit
+  Euler step the ship flies, with the same step rule (a fiftieth of the local
+  orbital timescale, sqrt(r^3/mu), of the nearest body, 0.05 to 30 s), so
+  a coasting ship flies exactly along its line. No conic solver and no
+  spheres of influence. The line is drawn in the frame of the focused body:
+  each point minus where that body is at that point's time. Focus Taper and an
+  orbit round Taper draws as a closed loop; focus Pale Blue and the same orbit
+  is a curl along Taper's rail. Cyan bound, orange escape or impact, purple
+  after a node (Tenebris's colours). Ap, Pe and T in the HUD are read off the
+  line, round whichever body's Hill sphere the ship is in.
+- **Encounters.** For each body the line passes within three Hill radii of,
+  the closest point is marked on the line and the body's ghost is drawn where
+  it will be then, with the closest distance and the time to it.
+- **Maneuver nodes.** Click the line to place a node at that point. Its gizmo
+  has six handles: prograde and retrograde (yellow), normal and anti-normal
+  (purple), radial out and in (cyan), in the frame of the body the ship is
+  round at the node. Drag a handle to add delta-v along it; the line updates
+  as you drag. The panel under the view lists each node: its time, its three
+  components with nudge buttons, its total, its burn time from the ship's
+  thrust and mass, and the delta-v the ship has left after all of them (need
+  and have, from the rocket equation, as in Tenebris). Several nodes chain:
+  each is planned on the line the one before it leaves.
+- **A node is a finite burn,** centred on its time, along a direction fixed
+  at the burn's start, with mass falling as it burns: the prediction flies it
+  with the same step, so the line after a node is what that burn does, not an
+  impulse.
+- **Flying the burns.** Warp (x1 to x1000) drops to x1 ten seconds before a
+  node. Hold **B** (or the on-screen Burn) and the ship points along the
+  node and burns; the node's remaining delta-v counts down and the node is
+  done when it reaches zero. Held early, B waits for the burn's start, so the
+  flight burns on the same steps the line did. SAS holds also point the ship prograde,
+  retrograde, radial out or normal for burns flown by hand (a landing is a
+  retrograde burn held to the ground; a lift-off is radial out). Nothing
+  flies a burn for you.
+- **The ship** is the *First orbit* stack from the assembly building, flown
+  from Pale Blue's pad by tab 2's gravity turn (Launch), or put straight into
+  the orbit that flight reaches (Reset in orbit). After the climb it is the
+  nuclear thermal upper stage: 13.1 t, 220 kN, 1,500 m/s exhaust, TWR 2.2 on
+  Taper.
+- **The nav computer's suggestion** (labelled as the tier-2 part it is): a
+  *Plan transfer* button searches node times over one orbit and prograde
+  delta-v for the line that passes the target at its low-orbit height, and
+  adds the capture node at the closest point and a small round-off burn at the
+  next periapsis (a round orbit is the one the planet's tide leaves alone); *Plan return* does the same for
+  Pale Blue with a periapsis in the air. The nodes it places are ordinary
+  nodes, edited and flown the same way.
+- **Landing and home.** Touching a body under 6 m/s is landed (the ship rides
+  the body's rail until it lifts off), faster is a crash. Pale Blue has air
+  and the planner has no air model, so a line that comes down into Pale
+  Blue's air is the pod's heat shield and chutes: home. Said on the page.
+
+What the system scope shows, honestly: at this scale the star is light.
+Aubade's pull at Pale Blue is 1.4e-4 m/s^2 and Pale Blue's own pull 150 km out
+is 0.026 m/s^2, so between planets a chemical path is shaped by the planets'
+wells, not the star: a climb out on a curl, a nearly straight coast, a fall
+into the next well. (Section 2 gave the star's pull as 3e-5 m/s^2; with the
+100-day year it is 1.4e-4. Either way it is small.)
+
+### 11.4 The conflict with CLAUDE.md, said plainly
+
+CLAUDE.md, "Non-negotiable world and flight invariants": "Do not restore rocket
+patched conics, **maneuver nodes**, transfer-window requirements, or n-body ship
+simulation." The planner has maneuver nodes, because the owner asked for
+navigation nodes to plot flight paths and burns. That contradicts the
+invariant, and it also goes past G4's recommendation B ("no maneuver nodes").
+
+- It is built in the mockup only. CLAUDE.md, the flight spec and this
+  change's spec deltas are not edited: the invariant changes only on the
+  owner's word, in the commit that builds what it allows, with its test.
+- The planner keeps the rest of the invariant's ship model: Newtonian motion
+  integrated in a gravity field, the prediction that same integration run
+  forward. It adds no patched conics, no Kepler solver and no spheres of
+  influence: a node is a burn the integrator flies, not an edit to a conic.
+  It has no transfer-window requirement: a window is where the line meets the
+  target, not a gate. The ship's field is n-body in the sense Tenebris's is
+  (every body pulls the ship; bodies stay on rails; ships never pull on
+  anything), which is what B already proposes.
+- **Why integrate rather than solve conics:** the line cannot disagree with
+  the flight, since it is the flight; the moons' pull and every body at once
+  come free; and the cost is small (measured in 11.5). A conic solver would be
+  a second model of motion, the thing the invariant was written against.
+- The question goes to the survey as **G4a**, with screenshots of the planner
+  beside it: change the invariant to allow maneuver nodes on the integrated
+  line (the wording below), keep nodes out (the planner's nodes go, the line
+  and SAS stay: G4's B), or take all of Tenebris (G4's C).
+
+Proposed wording if the owner allows nodes (applied only on their word):
+
+> Assisted ships, hover and walkers use the bounded anchor field. Rockets use
+> the orbital field: inverse-square pull from every on-rails body and the star,
+> integrated Newtonian. A rocket's predicted path is that same integration run
+> forward, and maneuver nodes are finite burns planned on that path and flown
+> by the player. Do not restore patched conics, sphere-of-influence solvers,
+> transfer-window requirements, or ship-to-ship gravity.
+
+Until G4a is answered the spec deltas stay as written for B (no nodes), marked
+provisional, and this section is the record that the mockup goes further.
+
+### 11.5 Measured on the mockup
+
+By a script driving the page's own flight code (the same `planUpdate` the
+page runs each frame, faster than real time) in headless Chromium on this
+container's CPU, SwiftShader for the pictures (no GPU). The game's numbers are
+a task (3.3).
+
+| What | Result |
+| --- | --- |
+| Pad to low orbit (First orbit, tab 2's gravity turn, circularised on the velocity still to gain) | 23 s, 548 m/s; Ap 989 m, Pe 884 m, T 1:54 |
+| A coasting ship against its predicted line, 60 s on | 0 m apart: the flight takes the line's own steps |
+| A 25 m/s prograde node | moves the line 10.1 km two minutes on; Ap 3,135 m |
+| Low orbit to Taper (the nav computer's three nodes, flown by holding B) | 72.1 + 38.2 + 2.3 = 113 m/s; orbit round Taper Ap 211 m, Pe 131 m, T 1:12 |
+| That orbit, left alone at warp | still round Taper 2 h 40 min later (Ap 261 m, Pe 153 m) |
+| Down onto Taper (a scripted retrograde burn held to the ground) | 206 m/s, touched under 6 m/s (a crude script, not a good landing) |
+| Taper orbit to home (the nav computer's node) | 28.6 m/s; into Pale Blue's air 2 min 11 s later at 412 m/s |
+| One prediction | 6 to 10 ms for a 15-minute line near home (about 2,500 steps); 75 to 110 ms for a 4-hour line across the system |
+| WebGL contexts with every tab opened in turn | 1 |
+| Console errors | none |
+
+The prediction cost is JavaScript on a shared cloud CPU while it also renders
+on SwiftShader; it says the integration is cheap enough to redraw while a
+handle is dragged, nothing about the game's frame time (CLAUDE.md, "Render on
+the GPU").
