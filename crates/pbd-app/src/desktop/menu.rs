@@ -1900,4 +1900,135 @@ mod tests {
             assert_eq!(screen != Screen::Playing, held, "{screen:?}");
         }
     }
+
+    /// The frame limit and render scale sliders keep the plaques' values and
+    /// steps: off, 60, 120; 50, 67, 75, 85, 100; a press lands on the step
+    /// nearest the cursor.
+    #[test]
+    fn the_sliders_keep_the_plaques_values_and_steps() {
+        use pbd_app::settings::FrameLimit;
+        let player = PlayerSettings::default();
+        assert_eq!(scale_steps(), vec![50, 67, 75, 85, 100]);
+        assert_eq!(slider_step(MenuAction::FrameLimit, &player), Some((3, 1)));
+        assert_eq!(slider_step(MenuAction::RenderScale, &player), Some((5, 3)));
+        assert_eq!(nearest_step(0.0, 3), 0);
+        assert_eq!(nearest_step(0.74, 3), 1);
+        assert_eq!(nearest_step(1.2, 3), 2);
+        assert_eq!(nearest_step(0.49, 5), 2);
+        let off = with_step(MenuAction::FrameLimit, player, 0);
+        assert_eq!(off.frame_limit, FrameLimit::Off);
+        assert_eq!(with_step(MenuAction::FrameLimit, player, 2).frame_limit, FrameLimit::Fps120);
+        assert_eq!(with_step(MenuAction::RenderScale, player, 0).render_scale, 50);
+        assert_eq!(with_step(MenuAction::RenderScale, player, 4).render_scale, 100);
+        assert_eq!(settings_value(MenuAction::FrameLimit, &off).as_deref(), Some("OFF"));
+        // Every offered value is a step, and every step an offered value.
+        for scale in pbd_app::settings::SCALES {
+            assert!(scale_steps().contains(&scale));
+        }
+    }
+
+    fn rebind_app(waiting: Option<&str>) -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<ButtonInput<KeyCode>>()
+            .insert_resource(Screen::Settings)
+            .insert_resource(Rebinding(waiting.map(String::from)))
+            .init_resource::<KeyBinds>()
+            .init_resource::<PlayerSettings>()
+            .init_resource::<SettingsFile>()
+            .add_systems(Update, capture_rebind);
+        app
+    }
+
+    /// Click a binding, press a key: the slot takes it and the key is
+    /// consumed. Esc cancels and is consumed, so the page stays open. A key
+    /// no slot can take is waited through.
+    #[test]
+    fn a_cap_takes_the_next_key_and_esc_cancels() {
+        let mut app = rebind_app(Some("on_foot:ShiftLeft"));
+        let press = |app: &mut App, key: KeyCode| {
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.clear();
+            keys.press(key);
+            app.update();
+        };
+        press(&mut app, KeyCode::Lang1);
+        assert!(app.world().resource::<Rebinding>().0.is_some(), "still waiting");
+        press(&mut app, KeyCode::KeyE);
+        assert_eq!(app.world().resource::<Rebinding>().0, None);
+        let sprint = controls::slots()
+            .find(|s| s.name() == "on_foot:ShiftLeft")
+            .unwrap();
+        assert_eq!(app.world().resource::<KeyBinds>().key(&sprint), KeyCode::KeyE);
+        assert!(
+            !app.world()
+                .resource::<ButtonInput<KeyCode>>()
+                .just_pressed(KeyCode::KeyE),
+            "the key is the cap's, not the world's"
+        );
+
+        app.world_mut().resource_mut::<Rebinding>().0 = Some("hands:KeyE".into());
+        press(&mut app, KeyCode::Escape);
+        assert_eq!(app.world().resource::<Rebinding>().0, None, "Esc cancels");
+        assert!(
+            !app.world()
+                .resource::<ButtonInput<KeyCode>>()
+                .just_pressed(KeyCode::Escape),
+            "and is consumed, so the page does not step back"
+        );
+        let door = controls::slots().find(|s| s.name() == "hands:KeyE").unwrap();
+        assert_eq!(app.world().resource::<KeyBinds>().key(&door), KeyCode::KeyE);
+
+        // Leaving the settings stops a wait.
+        app.world_mut().resource_mut::<Rebinding>().0 = Some("hands:KeyE".into());
+        *app.world_mut().resource_mut::<Screen>() = Screen::Pause;
+        press(&mut app, KeyCode::KeyK);
+        assert_eq!(app.world().resource::<Rebinding>().0, None);
+        assert_eq!(app.world().resource::<KeyBinds>().key(&door), KeyCode::KeyE);
+    }
+
+    /// The Input page: five oak sub-tabs, one list each, a changeable cap
+    /// for every slot, and a clash flagged on its row (the change's
+    /// "Rebinding a key" scenario, with the game's own rows).
+    #[test]
+    fn the_input_page_lists_every_slot_and_flags_a_clash() {
+        let mut app = App::new();
+        pbd_app::ui_kit::install_bare(&mut app);
+        app.init_resource::<KeyBinds>()
+            .init_resource::<Rebinding>()
+            .add_systems(Startup, spawn)
+            .add_systems(Update, rebuild_input);
+        app.update();
+        app.update();
+        let world = app.world_mut();
+        assert_eq!(world.query::<&InputTabButton>().iter(world).count(), 5);
+        assert_eq!(world.query::<&InputList>().iter(world).count(), 5);
+        let caps = world.query::<&RebindCap>().iter(world).count();
+        assert_eq!(caps, controls::slots().count());
+        let also = |world: &mut World| {
+            world
+                .query::<&Text>()
+                .iter(world)
+                .filter(|t| t.0.starts_with("also:"))
+                .map(|t| t.0.clone())
+                .collect::<Vec<_>>()
+        };
+        assert!(also(world).is_empty(), "the defaults never clash");
+        let sprint = controls::slots()
+            .find(|s| s.name() == "on_foot:ShiftLeft")
+            .unwrap();
+        world.resource_mut::<KeyBinds>().set(&sprint, KeyCode::KeyE);
+        app.update();
+        let world = app.world_mut();
+        let flagged = also(world);
+        assert!(flagged.contains(&"also: open or shut a door".to_string()), "{flagged:?}");
+        assert!(flagged.contains(&"also: sprint".to_string()), "{flagged:?}");
+        // The rebound cap reads its new key.
+        let labels: Vec<String> = world
+            .query::<&KitText>()
+            .iter(world)
+            .map(|t| t.text.clone())
+            .collect();
+        assert!(labels.contains(&"E".to_string()));
+    }
 }

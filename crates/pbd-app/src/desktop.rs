@@ -263,6 +263,15 @@ pub struct Launch {
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
     pub menu: Option<String>,
+    /// `--settings-tab picture|weather|world|movement|input` and
+    /// `--input-tab on-foot|hands|flying|vehicles|menus`: the tab and the
+    /// Input sub-tab the settings open on, for a capture of each.
+    pub settings_tab: u8,
+    pub input_tab: u8,
+    /// `--rebind SLOT=KEY` (repeatable, e.g. `on_foot:ShiftLeft=KeyE`): a
+    /// rebind for this run only, so a capture, which reads no settings file,
+    /// can show one and its clash. An instrument; nothing is kept.
+    pub rebinds: Vec<(String, String)>,
     /// How the map opens, for its captures: `--map-mpp <metres>` is its zoom
     /// as metres a screen pixel at the centre, `--map-overlay <name>` a
     /// weather overlay, `--map-layer <name>` a raster layer such as
@@ -335,6 +344,9 @@ impl Launch {
             yaw: None,
             turn: 0.0,
             menu: None,
+            settings_tab: 0,
+            input_tab: 0,
+            rebinds: Vec::new(),
         };
         let mut i = 0;
         while i < args.len() {
@@ -467,6 +479,30 @@ impl Launch {
                         "--menu takes pause, settings, saves, pack or map"
                     );
                     result.menu = Some(screen.clone());
+                }
+                "--settings-tab" => {
+                    i += 1;
+                    let name = args.get(i).expect("--settings-tab requires a tab");
+                    result.settings_tab = menu::SETTINGS_TABS
+                        .iter()
+                        .position(|t| t.eq_ignore_ascii_case(name))
+                        .expect("--settings-tab takes picture, weather, world, movement or input")
+                        as u8;
+                }
+                "--input-tab" => {
+                    i += 1;
+                    let name = args.get(i).expect("--input-tab requires a sub-tab");
+                    result.input_tab = pbd_app::controls::Tab::ALL
+                        .iter()
+                        .position(|t| t.label().eq_ignore_ascii_case(&name.replace('-', " ")))
+                        .expect("--input-tab takes on-foot, hands, flying, vehicles or menus")
+                        as u8;
+                }
+                "--rebind" => {
+                    i += 1;
+                    let pair = args.get(i).expect("--rebind requires SLOT=KEY");
+                    let (slot, key) = pair.split_once('=').expect("--rebind takes SLOT=KEY");
+                    result.rebinds.push((slot.into(), key.into()));
                 }
                 "--map-mpp" => {
                     i += 1;
@@ -1108,8 +1144,8 @@ pub fn run(args: &[String]) {
     .insert_resource(opening)
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
-    .init_resource::<menu::SettingsTab>()
-    .init_resource::<menu::InputTab>()
+    .insert_resource(menu::SettingsTab(launch.settings_tab))
+    .insert_resource(menu::InputTab(launch.input_tab))
     .init_resource::<menu::Rebinding>()
     .add_systems(Startup, menu::spawn)
     .add_systems(
@@ -1240,7 +1276,7 @@ pub fn run(args: &[String]) {
     // The player's settings (`player-settings`): the file in a plain run;
     // in a capture or a benchmark the defaults, so its picture or its numbers
     // are its flags' alone. Read here, once the logger is up.
-    let (player, keys, kept) = pbd_app::settings::for_launch(
+    let (player, mut keys, kept) = pbd_app::settings::for_launch(
         launch.capture.is_some() || launch.frame_log.is_some(),
         &launch.settings,
     );
@@ -1254,6 +1290,13 @@ pub fn run(args: &[String]) {
             .as_ref()
             .map_or("none".into(), |p| p.display().to_string()),
     );
+    if !launch.rebinds.is_empty() {
+        let mut names = keys.to_names();
+        names.extend(launch.rebinds.iter().cloned());
+        let (laid, skipped) = pbd_app::controls::KeyBinds::from_names(&names);
+        assert!(skipped.is_empty(), "--rebind names no slot or key: {skipped:?}");
+        keys = laid;
+    }
     if !keys.is_empty() {
         info!("PLAYER_KEYS {:?}", keys.to_names());
     }
