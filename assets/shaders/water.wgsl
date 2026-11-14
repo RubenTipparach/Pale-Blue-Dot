@@ -1850,11 +1850,18 @@ fn rain_gather(eye: vec3<f32>, direction: vec3<f32>, far: f32, range: f32,
 // of the rain takes none of the rain gathered past it.
 @group(3) @binding(15) var rain_half_tex: texture_2d<f32>;
 
+// The rain is in the air (`rain-under-water`). From a camera under the sea
+// every ray starts in the water, and what it sees of the air beyond the
+// surface - Snell's window, the murk over it - is the sheet's, drawn before
+// this pass. The volume marched from the eye through the water as if it
+// were air and laid its fog over the murk, the sheet and the seabed alike.
+fn rain_under_water() -> bool { return view.fx.y > 0.75; }
+
 // Where the ray through `uv` stops for the rain: the ground, the sea, the
 // cloud base or the range; zero where no rain is drawn.
 fn rain_far(uv: vec2<f32>) -> f32 {
     let range = view.rain_look.w;
-    if (range <= 0.0) { return 0.0; }
+    if (range <= 0.0 || rain_under_water()) { return 0.0; }
     let ray = view_ray(uv);
     let eye = ray.origin-view.planet_center.xyz;
     let base = view.cloud_clouds.x;
@@ -1924,7 +1931,7 @@ fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let uv = in.uv;
     let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
     let range = view.rain_look.w;
-    if (range <= 0.0) { return vec4<f32>(scene,1.0); }
+    if (range <= 0.0 || rain_under_water()) { return vec4<f32>(scene,1.0); }
     let ray = view_ray(uv);
     let center = view.planet_center.xyz;
     let eye = ray.origin-center;

@@ -1543,9 +1543,12 @@ fn prepare_water_views(
             !map.values.is_empty() && map.values.iter().any(|value| value.abs() > 1e-3)
         });
         // RAIN SHADOW off (the player's setting): no rain volume at all;
-        // the near shower, the wet ground and the lens stay.
+        // the near shower, the wet ground and the lens stay. Nor under the
+        // sea (`rain-under-water`): the rain is in the air, and what the eye
+        // sees of the air from under the surface is the sheet's.
         let rain_needed = map.is_some()
             && rain_shadows
+            && state <= 0.75
             && camera.length() < clouds.clouds.x
             && weather_settings.rain_volume_range_m > 0.0;
         let size = UVec2::new(view.viewport.z.max(1), view.viewport.w.max(1));

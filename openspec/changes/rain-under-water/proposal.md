@@ -33,17 +33,13 @@ does not.
 
 ## What changes
 
-- From under the sea, a ray's rain starts where the ray leaves the water: at
-  its exit through the sea sphere, on the refracted direction, and only
-  inside Snell's window. A ray past the critical angle (total internal
-  reflection), a ray that never rises, or a ray that meets something in the
-  water first gathers no rain.
-- What it gathers is laid over the frame weighed by what reaches the eye
-  through the surface: the Fresnel transmission at the exit times the water's
-  absorption over the path from the eye to the surface. The rain seen through
-  the window is faint and blue-shifted, never a fog over the water.
+- Under the sea (the camera's state is "under") the rain volume draws
+  nothing, and the CPU does not run its passes. What the eye sees of the air
+  through the surface is the sheet's Snell's window, as with the volume off.
 - Above the sea nothing changes: the rain already stops at the sea sphere and
   at the scene's depth.
+- A test validates the whole of `water.wgsl` with naga, its imports spliced
+  (`water-lit` 3.4: a helper was once deleted with the tests passing).
 
 ## Not in this change
 
@@ -53,6 +49,7 @@ does not.
   dark lines over what is seen through the surface (a hull above it in the
   shots); that is the sheet's own term, there with the volume off, and is
   reported, not fixed here.
+- The rain seen through Snell's window (tried; design 3).
 - The straddling state (the eye within 0.8 m of the surface) keeps today's
   rain.
 - A launch with `--rain 1` by day panics (`min > max, or either was NaN` in

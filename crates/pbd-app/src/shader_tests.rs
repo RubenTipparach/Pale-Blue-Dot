@@ -474,3 +474,92 @@ fn the_puff_blend_is_the_air_over_each_puff_with_no_step() {
         last = next;
     }
 }
+
+/// `water.wgsl` as Bevy's composer hands it to naga, single-sampled: its
+/// three imports replaced by those modules' items and the `MULTISAMPLED`
+/// branches taken as off. `water-lit` 3.4: the pieces tested on their own
+/// passed with a helper the module calls deleted from it; this is the whole
+/// file, with every entry point its pipelines name.
+pub(crate) fn water_source() -> String {
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let clouds: String = include_str!("../../../assets/shaders/clouds.wgsl")
+        .lines()
+        .filter(|line| !line.starts_with("#define_import_path"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut out = String::new();
+    // Inside `#ifdef MULTISAMPLED` (skipped) or its `#else` (kept).
+    let mut skipping = false;
+    for line in water.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("#import pbd::clouds::") {
+            out.push_str(&clouds);
+        } else if trimmed.starts_with("#import pbd::sea::") {
+            out.push_str(&sea_source());
+        } else if trimmed.starts_with("#import pbd::sun_shadow::") {
+            out.push_str(&sun_shadow_source());
+        } else if trimmed == "#ifdef MULTISAMPLED" {
+            skipping = true;
+        } else if trimmed == "#else" || trimmed == "#endif" {
+            skipping = false;
+        } else if trimmed.starts_with('#') {
+            panic!("water.wgsl has a directive this splice does not know: {trimmed}");
+        } else if !skipping {
+            out.push_str(line);
+        }
+        out.push('\n');
+    }
+    out
+}
+
+#[test]
+fn the_water_shader_compiles_with_the_entry_points_its_pipelines_name() {
+    let entries = validated_entry_points("water.wgsl", &water_source());
+    for entry in [
+        "vertex",
+        "fragment",
+        "compose",
+        "lens",
+        "lens_mist_pass",
+        "cloud_march_pass",
+        "cloud_resolve",
+        "clouds",
+        "cloud_puff_vertex",
+        "cloud_puff_fragment",
+        "rain",
+        "rain_half",
+        "rain_compose",
+        "overlay",
+    ] {
+        assert!(
+            entries.iter().any(|name| name == entry),
+            "water.wgsl declares {entries:?}, and a water pipeline asks for `{entry}`"
+        );
+    }
+}
+
+/// `rain-under-water`: the rain is in the air. From a camera under the sea
+/// both rain renderers draw nothing (what the eye sees of the air through the
+/// surface is the sheet's), and the CPU does not run the rain passes there.
+#[test]
+fn the_rain_volume_is_not_drawn_under_the_sea() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    assert!(src.contains("fn rain_under_water() -> bool { return view.fx.y > 0.75; }"));
+    assert!(
+        wgsl_fn_body(&src, "rain_far")
+            .contains("if (range <= 0.0 || rain_under_water()) { return 0.0; }"),
+        "the small rain gathers under the sea"
+    );
+    assert!(
+        wgsl_fn_body(&src, "rain")
+            .contains("if (range <= 0.0 || rain_under_water()) { return vec4<f32>(scene,1.0); }"),
+        "the full-size rain draws under the sea"
+    );
+    let cpu = include_str!("planet_water.rs");
+    let start = cpu.find("let rain_needed = map.is_some()").unwrap();
+    let gate = &cpu[start..start + cpu[start..].find(';').unwrap()];
+    assert!(
+        gate.contains("&& state <= 0.75"),
+        "the rain passes run under the sea"
+    );
+}
