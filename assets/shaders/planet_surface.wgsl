@@ -1887,12 +1887,24 @@ fn column_pair(q: vec3<f32>, slot: u32) -> vec3<f32> {
     let w = 0.5*(1.0 - smoothstep(0.0, 0.8, first_score - second_score));
     return vec3(f32(first), f32(second), w);
 }
+// A sample's altitude in layers, snapped to the whole layer when it lies
+// within `LAYER_SNAP_M` of one (`wall-foot-speckle`). A floor's sample half a
+// metre up sits exactly on a whole layer, and at 4,800 m `length` steps every
+// 0.49 mm, so `floor` flipped from pixel to pixel between the layer under the
+// floor and the one over it. Where `column_pair` blends in a wall's column the
+// two differ (the wall's rock is empty in the bake), and the flip drew dark
+// speckle along every wall's foot.
+const LAYER_SNAP_M: f32 = 0.01;
+fn sample_layer(alt: f32) -> f32 {
+    let whole = round(alt);
+    return select(alt, whole, abs(alt - whole) < LAYER_SNAP_M);
+}
 // The bounce half a metre off a face, between the two layers it falls
 // between; a layer that is rock (none) gives way to the other.
 fn bounce_near(position: vec3<f32>, n: vec3<f32>, slot: u32) -> vec3<f32> {
     let q = position + n*0.5;
     let pair = column_pair(q, slot);
-    let alt = length(q) - params.settings.x - COLUMN_BASE_M - 0.5;
+    let alt = sample_layer(length(q) - params.settings.x - COLUMN_BASE_M - 0.5);
     if alt < 0.0 { return vec3(0.0); }
     let l0 = u32(floor(alt));
     let f = fract(alt);
@@ -1944,7 +1956,7 @@ fn lamp_cell(half: u32, slot: u32, layer: u32, p: vec3<f32>, n: vec3<f32>) -> ve
 fn lamp_near(half: u32, position: vec3<f32>, n: vec3<f32>, slot: u32) -> vec4<f32> {
     let q = position + n*0.5;
     let pair = column_pair(q, slot);
-    let alt = length(q) - params.settings.x - COLUMN_BASE_M - 0.5;
+    let alt = sample_layer(length(q) - params.settings.x - COLUMN_BASE_M - 0.5);
     if alt < 0.0 { return vec4(0.0, 0.0, 0.0, -1.0); }
     let l0 = u32(floor(alt));
     let here = lamp_column(half, u32(pair.x), l0, fract(alt), position, n);

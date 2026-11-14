@@ -668,3 +668,60 @@ fn cloud_hides_the_stars() {
     assert!(sky.contains("if (load_depth(at) > 1e-7) { continue; }"));
     assert!(sky.contains("if (l < best_l) { best = c; best_l = l; }"));
 }
+
+/// `wall-foot-speckle`: the lamp bake and the sun bounce are sampled half a
+/// metre off a face, and a floor's sample sits exactly on a whole layer. In
+/// f32 at the game's radius it lands either side of that layer from point to
+/// point, which flipped `floor` between the layer under the floor and the one
+/// over it and drew dark speckle along every wall's foot. Both samplers take
+/// the altitude through `sample_layer`, and every floor sample lies within its
+/// snap.
+#[test]
+fn a_floor_reads_one_layer_of_baked_light() {
+    let src = include_str!("../../../assets/shaders/planet_surface.wgsl").replace("\r\n", "\n");
+    assert!(src.contains("const LAYER_SNAP_M: f32 = 0.01;"));
+    let snap = 0.01_f32;
+    let helper = wgsl_fn_body(&src, "sample_layer");
+    assert!(helper.contains("select(alt, whole, abs(alt - whole) < LAYER_SNAP_M)"));
+    for name in ["lamp_near", "bounce_near"] {
+        let body = wgsl_fn_body(&src, name);
+        assert!(
+            body.contains(
+                "let alt = sample_layer(length(q) - params.settings.x - COLUMN_BASE_M - 0.5);"
+            ),
+            "`{name}` samples its layer without the snap"
+        );
+    }
+    // Floor points on a patch round a direction, at whole altitudes, built in
+    // f64 and cast as an interpolated vertex position is, then measured in
+    // f32 as the shader measures them.
+    let radius = 4_800.0_f32;
+    let base = pbd_core::column::BASE_M as f32;
+    let (mut below, mut above, mut worst) = (0usize, 0usize, 0.0_f32);
+    for h in [0.0_f64, 1.0, 2.0, 7.0, 31.0] {
+        for i in 0..400 {
+            let a = 0.4 + i as f64 * 1.3e-5;
+            let b = -0.9 + (i * 7 % 400) as f64 * 1.1e-5;
+            let dir = bevy::math::DVec3::new(a.cos() * b.cos(), a.sin() * b.cos(), b.sin());
+            let p = (dir * (radius as f64 + h)).as_vec3();
+            let up = p.normalize();
+            let q = p + up * 0.5;
+            let alt = q.length() - radius - base - 0.5;
+            let whole = (h as f32) - base;
+            if alt < whole {
+                below += 1;
+            } else {
+                above += 1;
+            }
+            worst = worst.max((alt - whole).abs());
+        }
+    }
+    assert!(
+        below > 0 && above > 0,
+        "the floor's sample did not straddle its layer ({below} below, {above} above)"
+    );
+    assert!(
+        worst < snap * 0.25,
+        "a floor's sample lies {worst} m off its layer"
+    );
+}
