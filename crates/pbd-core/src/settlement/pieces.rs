@@ -26,6 +26,11 @@ pub const SLAB_M: f32 = 0.2;
 /// A floor is drawn this far over where it stands, so a wall top in its
 /// plane never fights it (the mockup's ZLIFT).
 pub const LIFT_M: f32 = 0.01;
+/// How far past both edges of its band of height a room light still lights,
+/// metres (`roof-speckle`): a face built on an edge, as a newel sconce's band
+/// ends on a whole storey, is then wholly inside it rather than in and out
+/// pixel by pixel. `field_lit.wgsl`'s `BAND_SLACK`.
+pub const BAND_SLACK_M: f32 = 0.05;
 /// A window, wide by high, on a one-metre sill, where the kit does not say.
 pub const WINDOW_M: (f32, f32) = (0.8, 1.0);
 

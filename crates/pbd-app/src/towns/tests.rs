@@ -1,6 +1,62 @@
 use super::*;
 use crate::sites::{list_spawn, load_rules};
 
+/// `roof-speckle`: at the game's radius, no level room face in a light's
+/// reach lies within a centimetre of its band's edges as `field_lit.wgsl`'s
+/// `room_lights` measures them, in f32 and widened by the slack. With no
+/// slack the Fieldstone house's newel sconces end their bands exactly on its
+/// top ceiling and on its stair, and the faces flipped in and out of the
+/// light pixel by pixel.
+#[test]
+fn no_room_face_lies_on_a_lights_band_edge() {
+    use pbd_core::settlement::pieces::BAND_SLACK_M;
+    let site = holbrook();
+    let config = *crate::planet::terrain_config();
+    let town = lay_out(&site, &load_template("village"), &config).unwrap();
+    let laid = build(
+        &site,
+        &town,
+        None,
+        &load_kits(),
+        &|_: &str| 2.0,
+        &config,
+        sheet(&config),
+    )
+    .unwrap();
+    let on_edge = |slack: f32| {
+        let mut found = Vec::new();
+        for (lights, rooms) in laid.lights.iter().zip(&laid.rooms) {
+            for l in lights {
+                let up = l.at.normalize();
+                let edges = [-l.below_m - slack, l.above_m + slack];
+                for (name, m) in rooms {
+                    for t in m.positions.chunks(3) {
+                        let v: Vec<Vec3> = t.iter().map(|p| Vec3::from_array(*p)).collect();
+                        let n = (v[1] - v[0]).cross(v[2] - v[0]).normalize_or_zero();
+                        if n.dot(up).abs() < 0.9 {
+                            continue;
+                        }
+                        let centre = (v[0] + v[1] + v[2]) / 3.0;
+                        if (centre - l.at).length() >= l.kind.reach_m() {
+                            continue;
+                        }
+                        for p in &v {
+                            let rise = (*p - l.at).dot(up);
+                            if edges.iter().any(|e| (rise - e).abs() < 0.01) {
+                                found.push(format!("{:?} {name} rise {rise:.4}", l.kind));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        found
+    };
+    println!("faces on an edge with no slack: {}", on_edge(0.0).len());
+    let found = on_edge(BAND_SLACK_M);
+    assert!(found.is_empty(), "faces on a band's edge: {found:?}");
+}
+
 /// Holbrook, as a new world's list places it.
 fn holbrook() -> Site {
     let list = pbd_core::sites::generate(

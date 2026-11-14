@@ -1570,6 +1570,19 @@ mod tests {
         assert!(town.contains("if bayer4(in.position.xy) < field.fade.x {"));
     }
 
+    /// `roof-speckle`: a room light's band is widened on both edges by the
+    /// core's slack, so a face built on an edge is lit whole.
+    #[test]
+    fn the_band_slack_is_the_cores() {
+        let town = include_str!("../../../assets/shaders/field_lit.wgsl").replace("\r\n", "\n");
+        let line = format!(
+            "const BAND_SLACK: f32 = {:?};",
+            pbd_core::settlement::pieces::BAND_SLACK_M
+        );
+        assert!(town.contains(&line), "field_lit.wgsl should carry `{line}`");
+        assert!(town.contains("if rise < span.x - BAND_SLACK || rise > span.y + BAND_SLACK {"));
+    }
+
     /// `field_lit.wgsl` carries the terrain's light constants, and they are
     /// the core's: a ship and the ground it stands on are lit by one set of
     /// numbers.
