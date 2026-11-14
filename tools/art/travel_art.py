@@ -1,16 +1,24 @@
-"""Draw the icons for docs/mockups/travel.html as pixel art (balatro-pixel-art kit).
+"""Draw the icons for docs/mockups/travel.html as pixel art (balatro-pixel-art kit), and copy the
+art it borrows into docs/mockups/travel/ byte-identical.
 
-    python tools/art/travel_art.py            # 32 x 32 PNGs into docs/mockups/travel/
+    python tools/art/travel_art.py            # 32 x 32 PNGs into docs/mockups/travel/, plus the copies
     python tools/art/travel_art.py --sheet    # also a contact sheet beside six of the
                                               # solitaire collection's sprites, in
                                               # $ART_SHEET_DIR (default target/art-sheets)
 
 Same kit and rules as tools/art/planets_art.py: a tiny native canvas, short ramps lit
 from the top left, a 1 px outline, light drawn after the outline, Sweaft-64 only.
+
+2026-11-14 (the owner: "Aubade Transit - you just lifted off with a vtol to another planet that
+makes no fucking sense lol"): the page now travels on M21's rockets, so the runabout and dampener
+icons (the free lift drive's ship) are gone, an aerostat icon is new, and the rocket part textures
+and icons are copied from M21 (docs/mockups/ship-tiers/, drawn by tools/art/ship_tiers_art.py)
+into travel/rocket/, the settlement textures the launch field needs into travel/game/.
 """
 
 import math
 import os
+import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -20,21 +28,6 @@ from planets_art import RAMPS, ROOT, SCRATCH, Sprite, refs, save, sheet  # noqa:
 OUT = os.path.join(ROOT, "docs", "mockups", "travel")
 HULL = ["#3e586e", "#92a3b2", "#bfcad7", "#fffefe"]
 PLUME = ["#15578a", "#1096c3", "#74effe", "#d2f8ff", "#fffefe"]
-
-
-def ship():
-    """The runabout: a wedge hull, an amber stripe, a canopy, two engine pods, blue plumes."""
-    sp = Sprite(32, 32)
-    for y in (4, 24):
-        sp.part(sp.rect(8, y, 17, y + 4), RAMPS["metal"], "cyl_h")
-    sp.part(sp.poly([(7, 7), (20, 5), (31, 15), (31, 17), (20, 27), (7, 25), (5, 16)]), HULL, "cyl_h")
-    sp.part(sp.poly([(11, 12), (21, 11), (27, 16), (21, 21), (11, 20)]), RAMPS["brass"], "flat", base=2)
-    sp.part(sp.ellipse(19, 13, 27, 19), RAMPS["cyan"], "sphere")
-    sp.plot(21, 14, "#fffefe")
-    sp.outline()
-    for y in (4, 24):
-        sp.part(sp.taper(7, y + 2, 0, y + 2, 5, 1), PLUME, "inset", glow=True)
-    return sp
 
 
 def gate():
@@ -86,18 +79,21 @@ def fuel():
     return sp
 
 
-def dampener():
-    """Dampeners: a ship-shaped dot held still by four arrows pressing in."""
+def aerostat():
+    """An aerostat for a giant's airship band: a fat hot-hydrogen envelope with seams, a gondola
+    slung under it with two lit windows, and a scoop line hanging below."""
     sp = Sprite(32, 32)
-    sp.part(sp.circle(16, 16, 7), RAMPS["green"], "sphere")
-    for k in range(4):
-        a = k * math.pi / 2
-        c, s = math.cos(a), math.sin(a)
-        pts = [(-15, -2), (-12, -2), (-12, -5), (-8, 0), (-12, 5), (-12, 2), (-15, 2)]
-        sp.part(sp.poly([(16 + x * c - y * s, 16 + x * s + y * c) for x, y in pts]), RAMPS["gold"][:4], "rim")
-    sp.part(sp.circle(16, 16, 2), RAMPS["paper"], "flat")
-    sp.plot(13, 12, "#fffefe")
+    env = sp.ellipse(3, 3, 28, 19)
+    sp.part(env, RAMPS["brass"], "sphere")
+    for x in (10, 16, 22):
+        sp.fill(sp.line([(x, 4), (x, 18)], 1) & env, "#733126")
+    for x0, x1 in ((11, 13), (19, 21)):
+        sp.part(sp.line([(x0, 18), (x1 + 1, 22)], 1), RAMPS["metal"], "flat", base=2)
+    sp.part(sp.rect(10, 22, 22, 26), RAMPS["metal"], "cyl_h")
+    sp.part(sp.rect(15, 27, 16, 30), RAMPS["steel"], "flat", base=2)
+    sp.plot(9, 7, "#fffefe")
     sp.outline()
+    sp.plots([(13, 24), (19, 24)], "#faaf5c", glow=True)
     return sp
 
 
@@ -138,11 +134,29 @@ def cloud_amber():
     return Image.fromarray(img, "RGB").convert("RGBA")
 
 
-ICONS = {"ship": ship, "gate": gate, "station": station, "fuel": fuel, "dampener": dampener, "skimmer": skimmer}
+ICONS = {"gate": gate, "station": station, "fuel": fuel, "skimmer": skimmer, "aerostat": aerostat}
+
+# Copied byte-identical, never edited: M21's rocket art (its own pixel art, ship_tiers_art.py) and the
+# game's settlement textures for the launch field. Only served image types (no .glb).
+ST = os.path.join(ROOT, "docs", "mockups", "ship-tiers")
+ROCKET = {n + ".png": os.path.join(ST, n + ".png") for n in (
+    "tex-pod", "tex-tank", "tex-engine", "tex-ntr", "tex-booster", "tex-fin", "tex-hazard",
+    "pod", "tank", "engine-chem", "engine-ntr", "booster", "legs", "fusion", "antimatter",
+    "lander", "fusionship", "navcomp")}
+GAME = {n + ".png": os.path.join(ROOT, "assets", "textures", "settlement", n + ".png") for n in ("granite", "stone", "slate")}
+
+
+def copy_borrowed():
+    for folder, files in ((os.path.join(OUT, "rocket"), ROCKET), (os.path.join(OUT, "game"), GAME)):
+        os.makedirs(folder, exist_ok=True)
+        for name, src in files.items():
+            shutil.copyfile(src, os.path.join(folder, name))
+        print("copied", len(files), "files to", folder)
 
 
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
+    copy_borrowed()
     items = []
     for name, fn in ICONS.items():
         im = fn().image()
