@@ -47,3 +47,56 @@ late: the kit's `ui_texture_slice_pipeline` is compiled during the warm by the
 loading slab's sliced bar, on the game's camera. On lavapipe the warm ran
 into its 90 s cap rather than going quiet, so this is a check, not a proof;
 the owner's desktop run is the proof.
+
+## Section 2: every screen by day and by night (2026-11-14)
+
+The branch after section 2 (Input in sub-tabs with rebinding, the stone
+sliders, the kit's tooltips), made the same way: a Claude Code cloud
+container with **no GPU**, Mesa's lavapipe under `xvfb-run` at 1440 x 900
+(UI scale 2), the **`--profile fast`** build, headless `--capture`, a new
+memory-only world, walking, facing compass north, clear weather. A cloud
+capture is a fixed-step render: it shows what the screens look like, never
+how fast they run. **The frame cost was not measured** (`perf_suite.py` is
+for the owner's desktop). Day is `--time 12`, night `--time 0`:
+
+    xvfb-run -a -s "-screen 0 1440x900x24" target/fast/pbd-app --capture <shot>.png \
+      --walk --yaw 90 --pitch 4 --rain 0 --weather-at 7200 --frames 90 --time 12|0 <flags>
+
+The instruments these shots needed (none changes play): `--menu guide`;
+`--settings-tab TAB` and `--input-tab SUB` (the tab the settings open on);
+`--rebind SLOT=KEY` (a rebind for this run only: a capture reads no settings
+file); `--cursor X Y` (the pointer held there, so a headless run can hover a
+slot for its tooltip).
+
+| Shots | Flags | What it shows |
+| --- | --- | --- |
+| `s2-pause-{day,night}.jpg` | `--menu pause` | Pause in the carved oak, Resume with the rune focus |
+| `s2-saves-{day,night}.jpg` | `--menu saves` | The worlds page in oak: the name field, New world, Back |
+| `s2-settings-picture-{day,night}.jpg` | `--menu settings --settings-tab picture` | Bloom's checkbox; the frame limit and render scale as stone sliders with oak grips and their values beside them (the value 4 px clear of the grip at the top step) |
+| `s2-settings-weather-{day,night}.jpg` | `--settings-tab weather` | The rain shadow (off by default) and the storm bar |
+| `s2-settings-world-{day,night}.jpg` | `--settings-tab world` | The clock's bar with Day and Night, the globe overlay |
+| `s2-settings-movement-{day,night}.jpg` | `--settings-tab movement` | Auto step |
+| `s2-settings-input-{day,night}.jpg` | `--settings-tab input --input-tab on-foot` | Input's five oak sub-tabs, On foot open; each changeable key an oak plaque, Reset tab |
+| `s2-input-{hands,flying,vehicles,menus}-day.jpg` | `--input-tab hands` etc. | The other sub-tabs: the mouse, wheel and number row in flat caps (not changeable); Flying holds the Kestrel's group, Vehicles each boat's, Menus the world and screen keys with Esc fixed |
+| `s2-input-rebound-day.jpg` | `--input-tab on-foot --rebind on_foot:ShiftLeft=KeyE --rebind on_foot:KeyW=ArrowUp` | A rebind: move reads ↑ A S D, sprint reads E and says "also: open or shut a door" |
+| `s2-pack-{day,night}.jpg` | `--menu pack --cursor 600 537` | The pack, the pointer on the hotbar's stone: the tooltip "Stone x 48" stands above the slot, clear of the counts |
+| `s2-tool-tip-day.jpg` | `--menu pack --cursor 448 857` | The tool slot's tooltip, "Bare hands: breaks nothing", above the HUD's tool slot |
+| `s2-hud-{day,night}.jpg` | (none) | The quiet screen: compass, hotbar, tool slot; no tooltip in play |
+| `s2-map-{day,night}.jpg` | `--menu map --map-mpp 12` | The map frame and its drawer, open by default as before (shutting it by default is a recommendation, not done) |
+| `s2-guide-{day,night}.jpg` | `--menu guide` | The field guide on its stone |
+| `s2-loading-{day,night}.jpg` | `--capture-loading` (and `--time`) | The loading slab while the planet builds |
+
+### Corners: 28 px, pixel exact at scale 2
+
+Measured off the PNG of `s2-settings-input-day` (the oak frame, 324 native
+px wide) against the frame as the game bakes it at scale 2 (`cargo test
+--profile fast -p pbd-app --lib -- --ignored dump_the_frames_baked_at_scale_two`
+writes it to `target/kit-dump/`):
+
+    python3 tools/art/measure_corners.py <capture.png> target/kit-dump/oak-frame@2.png --tolerance 0
+
+CORNERS_RESULT
+
+### LATE_PIPELINE
+
+LATE_RESULT
