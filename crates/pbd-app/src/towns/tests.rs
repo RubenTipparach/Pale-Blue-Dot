@@ -2406,3 +2406,60 @@ fn print_the_lamps_in_their_columns() {
     });
     println!("{stood} lamps stand in their columns, {missing} do not");
 }
+
+/// `pier-landfall`: an instrument. For each harbour of the shipped seed and
+/// each of its piers, the highest ground under each of its stretches (as
+/// `harbour::pier` cuts them), across the deck's width, as the column has
+/// it (the town's where laid or eased, the planet's elsewhere, on its
+/// layer), against the deck's top. A stretch whose ground reaches the deck
+/// has its planks inside the ground.
+#[test]
+#[ignore = "instrument: the ground under each harbour pier's stretches"]
+fn print_the_ground_under_the_harbour_piers() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let cell_m = template.grid.cell_m;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, ground) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let nat = natural(&config);
+        for (i, p) in template.piers.iter().enumerate() {
+            let deck = town.terrace as f32 + p.from[1];
+            let (dx, dz) = (p.to[0] - p.from[0], p.to[2] - p.from[2]);
+            let len = (dx * dx + dz * dz).sqrt();
+            let (ux, uz) = (dx / len, dz / len);
+            let stretches = ((len / 2.2).round() as usize).max(1);
+            let mut tops = Vec::new();
+            for k in 0..stretches {
+                let (s0, s1) = (
+                    len * k as f32 / stretches as f32,
+                    len * (k + 1) as f32 / stretches as f32,
+                );
+                let mut top = f32::MIN;
+                let mut s = s0;
+                while s <= s1 + 1e-3 {
+                    for w in [-0.5f32, 0.0, 0.5] {
+                        let w = w * p.width_m;
+                        let (x, z) = (p.from[0] + ux * s - uz * w, p.from[2] + uz * s + ux * w);
+                        if let Some(d) = sea::point(&chart, &patch, x, z, cell_m) {
+                            let n = nat(d);
+                            top = top.max(ground.at(d).map_or(n, |g| g.height(n)).floor());
+                        }
+                    }
+                    s += 0.25;
+                }
+                tops.push(top - deck);
+            }
+            if tops.iter().any(|&t| t >= 0.0) {
+                let text: Vec<String> = tops.iter().map(|t| format!("{t:+.0}")).collect();
+                println!(
+                    "{} pier {i} ({len:.1} m): ground under each stretch against the deck at {deck}: {}",
+                    site.name,
+                    text.join(" ")
+                );
+            }
+        }
+    }
+}
