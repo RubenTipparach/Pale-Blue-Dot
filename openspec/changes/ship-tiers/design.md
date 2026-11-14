@@ -3,7 +3,7 @@
 Everything here is proposed. Numbers are the mockup's and are recommendations
 to tune, not measurements of the game, except where a line says it was
 measured (the ascent figures were measured by flying the mockup's integrator,
-which uses the game's 25 m/s^2, Pale Blue's 4,800 m radius and a semi-implicit
+which uses the game's 25 m/s^2, Tenebris's 4,800 m radius and a semi-implicit
 Euler step like the game's).
 
 ## 1. What Tenebris does
@@ -57,7 +57,7 @@ Consequences of B that are part of the plan:
 
 - **Rails must agree with the field.** A moon's rail speed must equal circular
   speed in its parent's inverse-square field, or a ship parked in the moon's
-  orbit drifts off it. Lantern at 26 km round Pale Blue (mu = 25 x 4800^2 =
+  orbit drifts off it. Lantern at 26 km round Tenebris (mu = 25 x 4800^2 =
   5.76e8 m^3/s^2) circles in 18.2 minutes at 149 m/s. The planets mockup's
   Lantern period has to follow, as a new generator-independent body version
   (bodies' rails are not terrain, but a save names its system's layout, so the
@@ -107,7 +107,7 @@ delta; picking C adds a conic solver and nodes and removes most of the clause.
   hop, First orbit, Too heavy, Lantern lander, Crew rocket (ring 2, two
   decks), Heavy lifter (ring 3, cargo deck, airlock), Colony lander (ring 4,
   752 cells, three decks, fifteen cabins; its upper stage lands on a light
-  world like Lantern, not Pale Blue) and Antimatter lander.
+  world like Lantern, not Tenebris) and Antimatter lander.
 - **Parts, one cell each** (mockup numbers; tonnes, kN, m/s):
 
   | Part | Where | Mass | Propellant | Thrust | Exhaust |
@@ -148,7 +148,7 @@ delta; picking C adds a conic solver and nodes and removes most of the clause.
 
 A launched stack is a rocket: thrust along its nose, no dampeners (it has no
 RCS authority to null drift at orbital speed), attitude hold with Tenebris's
-SAS modes, and the HUD line `orbit [Pale Blue]  Ap  Pe  T`. Burns are flown
+SAS modes, and the HUD line `orbit [Tenebris]  Ap  Pe  T`. Burns are flown
 by hand against the predicted line (cyan bound, orange escape or impact).
 Re-entry is the pod's heat shield; spent stages break up and are not saved
 (recommendation taken).
@@ -187,7 +187,7 @@ Tier 1 reaches: low orbit (535 m/s), Lantern's orbit on a Hohmann arc
 - **Landers anywhere.** An antimatter core (1,000 kN, 60 km/s exhaust, 1.0 t;
   the mockup's four-core lander makes 55 km/s at a TWR of 3.3) gives about
   60 km/s of delta-v at a TWR of
-  3 at 1 g: a lander flies surface to surface (Pale Blue to Cinder, 5 min 10 s,
+  3 at 1 g: a lander flies surface to surface (Tenebris to Cinder, 5 min 10 s,
   9.8 km/s) with no orbit stop.
 - **No warp.** The owner, 2026-11-12: "Let's not do warp." There are no
   starships, no warp ring and no other star systems; antimatter is the top
@@ -307,13 +307,13 @@ launch, low orbit, transfer, capture, land, lift off, return.
 | --- | --- |
 | Radius | **600 m**, Goldberg level 8 (on the ladder: 300 m x 2^(8-7); tile 1.2087 x 600 / 256 = 2.833 m) |
 | Surface gravity | 0.4 g = 10 m/s^2 (mu = 10 x 600^2 = 3.6e6 m^3/s^2) |
-| Orbit | circular, 16 km from Pale Blue's centre, in Lantern's plane; rail speed = circular speed in Pale Blue's field, 189.7 m/s, period 8 min 50 s |
+| Orbit | circular, 16 km from Tenebris's centre, in Lantern's plane; rail speed = circular speed in Tenebris's field, 189.7 m/s, period 8 min 50 s |
 | Hill sphere | 16 km x (3.6e6 / (3 x 5.76e8))^(1/3) = 2.04 km |
 | Low orbit | 150 m up (r 750 m, 0.37 of the Hill radius), 69 m/s, period 68 s |
 | Air, life | none: airless, no sky, weather or clouds, lifeless (CLAUDE.md), the asteroid rubble sheet |
 
 First drawn at 14 km and 0.3 g with a 240 m low orbit; measured, every orbit
-there was pumped into the ground by Pale Blue's tide within a few turns (it
+there was pumped into the ground by Tenebris's tide within a few turns (it
 sat at half Taper's Hill radius), so Taper moved out to 16 km and up to 0.4 g,
 and its low orbit down to 150 m, where a round orbit lasts. Hohmann by hand,
 low orbit (5,760 m) to 16 km: +66 m/s out, then about 40 m/s to capture. The
@@ -327,17 +327,17 @@ screenshots).
 A fifth tab, **Planner**, one 3D view (CLAUDE.md, "One 3D view at a time").
 
 - **One field, every body.** The ship is integrated in the inverse-square
-  pull of every body on its rails: Aubade, Ochre, Pale Blue
+  pull of every body on its rails: Aubade, Ochre, Tenebris
   (with Lantern and Taper), Verdance, Pebble, Amber (with Cinder and Rime),
   from the planets mockup's distances and surface gravities (`planets.html`).
   Rails are circular and agree with the field: each body's angular speed is
   circular speed round its parent, so a ship parked in a moon's orbit stays
-  in it (design 2). Aubade's mu is the one that gives Pale Blue's 100-day
+  in it (design 2). Aubade's mu is the one that gives Tenebris's 100-day
   year at 300 km: 1.28e7 m^3/s^2.
 - **The ship's frame (found while building, recommendation taken).** The
-  rails know only their parents: Taper's rail follows Pale Blue, never Amber.
+  rails know only their parents: Taper's rail follows Tenebris, never Amber.
   A ship that felt every body's full pull in a fixed frame was dragged off a
-  Taper orbit by Amber's 0.03 m/s^2 at Pale Blue (measured: a circular orbit
+  Taper orbit by Amber's 0.03 m/s^2 at Tenebris (measured: a circular orbit
   round Taper hit the ground inside two turns, prograde or retrograde). So the
   ship is integrated in the frame of the body it is round (the planet that
   pulls hardest, or one of its moons whose Hill sphere it is in), and that
@@ -349,7 +349,7 @@ A fifth tab, **Planner**, one 3D view (CLAUDE.md, "One 3D view at a time").
   the force changes by the difference in tides (a few hundredths of a
   m/s^2), the path does not jump. Under B the game's orbital field has the
   same problem and wants the same answer (task 3.1).
-- **Two scopes, one simulation.** *Pale Blue and Taper* frames home, its
+- **Two scopes, one simulation.** *Tenebris and Taper* frames home, its
   moons and the ship at 1 km a unit; *Aubade system* frames the whole system
   to scale, the bodies marked with dots and names. Both are the same world
   and the same integration; the scope only moves the camera. The scene is
@@ -361,7 +361,7 @@ A fifth tab, **Planner**, one 3D view (CLAUDE.md, "One 3D view at a time").
   a coasting ship flies exactly along its line. No conic solver and no
   spheres of influence. The line is drawn in the frame of the focused body:
   each point minus where that body is at that point's time. Focus Taper and an
-  orbit round Taper draws as a closed loop; focus Pale Blue and the same orbit
+  orbit round Taper draws as a closed loop; focus Tenebris and the same orbit
   is a curl along Taper's rail. Cyan bound, orange escape or impact, purple
   after a node (Tenebris's colours). Ap, Pe and T in the HUD are read off the
   line, round whichever body's Hill sphere the ship is in.
@@ -390,7 +390,7 @@ A fifth tab, **Planner**, one 3D view (CLAUDE.md, "One 3D view at a time").
   retrograde burn held to the ground; a lift-off is radial out). Nothing
   flies a burn for you.
 - **The ship** is the *First orbit* stack from the assembly building, flown
-  from Pale Blue's pad by tab 2's gravity turn (Launch), or put straight into
+  from Tenebris's pad by tab 2's gravity turn (Launch), or put straight into
   the orbit that flight reaches (Reset in orbit). After the climb it is the
   nuclear thermal upper stage: 13.1 t, 220 kN, 1,500 m/s exhaust, TWR 2.2 on
   Taper.
@@ -399,19 +399,39 @@ A fifth tab, **Planner**, one 3D view (CLAUDE.md, "One 3D view at a time").
   delta-v for the line that passes the target at its low-orbit height, and
   adds the capture node at the closest point and a small round-off burn at the
   next periapsis (a round orbit is the one the planet's tide leaves alone); *Plan return* does the same for
-  Pale Blue with a periapsis in the air. The nodes it places are ordinary
+  Tenebris with a periapsis in the air. The nodes it places are ordinary
   nodes, edited and flown the same way.
 - **Landing and home.** Touching a body under 6 m/s is landed (the ship rides
-  the body's rail until it lifts off), faster is a crash. Pale Blue has air
+  the body's rail until it lifts off), faster is a crash. Tenebris has air
   and the planner has no air model, so a line that comes down into Pale
   Blue's air is the pod's heat shield and chutes: home. Said on the page.
 
 What the system scope shows, honestly: at this scale the star is light.
-Aubade's pull at Pale Blue is 1.4e-4 m/s^2 and Pale Blue's own pull 150 km out
+Aubade's pull at Tenebris is 1.4e-4 m/s^2 and Tenebris's own pull 150 km out
 is 0.026 m/s^2, so between planets a chemical path is shaped by the planets'
 wells, not the star: a climb out on a curl, a nearly straight coast, a fall
 into the next well. (Section 2 gave the star's pull as 3e-5 m/s^2; with the
 100-day year it is 1.4e-4. Either way it is small.)
+
+### 11.3a The owner's two rules of 2026-11-14, later the same day
+
+Relayed from the owner's thread, verbatim: "pale blue = tenebris, so call it
+that, sequoia is the sister planet", and "also there is no landing on gas
+giants, some kind of air ship could deploy in the atmosphere though, but at a
+certain point in the atmosphere should just be an ocean of hydrogen".
+
+- The home world is **Tenebris** throughout this change and the mockup (the
+  game keeps its name, Pale Blue Dot). Where this change says "Tenebris" about
+  the owner's earlier game (`tenebris-rs`, its orbital field, its nodes), it
+  means that game, as before.
+- **Sequoia**, Tenebris's wooded sister (4,800 m, level 11, 1.1 g, thick
+  dusty air, as the planets mockup draws it), rides the next orbit out at
+  380 km and is a planner destination ("Out to Sequoia"). The orbit is this
+  mockup's until the planets mockup settles it.
+- **No landing on a gas giant.** Amber can be targeted, captured round and
+  orbited, and its moons landed on; a line into Amber ends in its hydrogen
+  ocean, reported as such, never as a landing. An airship deployed from
+  orbit is the planets mockup's giant descent, not drawn here.
 
 ### 11.4 The conflict with CLAUDE.md, said plainly
 
@@ -458,18 +478,19 @@ provisional, and this section is the record that the mockup goes further.
 By a script driving the page's own flight code (the same `planUpdate` the
 page runs each frame, faster than real time) in headless Chromium on this
 container's CPU, SwiftShader for the pictures (no GPU). The game's numbers are
-a task (3.3).
+a task (3.3). Retaken after Sequoia joined the field (11.3a); a
+Verdance run from low orbit: 128 + 83 + 13 m/s into orbit round it.
 
 | What | Result |
 | --- | --- |
-| Pad to low orbit (First orbit, tab 2's gravity turn, circularised on the velocity still to gain) | 23 s, 548 m/s; Ap 989 m, Pe 884 m, T 1:54 |
+| Pad to low orbit (First orbit, tab 2's gravity turn, circularised on the velocity still to gain) | 23 s, 548 m/s; Ap 989 m, Pe 886 m, T 1:54 |
 | A coasting ship against its predicted line, 60 s on | 0 m apart: the flight takes the line's own steps |
-| A 25 m/s prograde node | moves the line 10.1 km two minutes on; Ap 3,135 m |
-| Low orbit to Taper (the nav computer's three nodes, flown by holding B) | 72.1 + 38.2 + 2.3 = 113 m/s; orbit round Taper Ap 211 m, Pe 131 m, T 1:12 |
-| That orbit, left alone at warp | still round Taper 2 h 40 min later (Ap 261 m, Pe 153 m) |
-| Down onto Taper (a scripted retrograde burn held to the ground) | 206 m/s, touched under 6 m/s (a crude script, not a good landing) |
-| Taper orbit to home (the nav computer's node) | 28.6 m/s; into Pale Blue's air 2 min 11 s later at 412 m/s |
-| One prediction | 6 to 10 ms for a 15-minute line near home (about 2,500 steps); 75 to 110 ms for a 4-hour line across the system |
+| A 25 m/s prograde node | moves the line 10.1 km two minutes on; Ap 3,138 m |
+| Low orbit to Taper (the nav computer's three nodes, flown by holding B) | 60.8 + 14.8 + 0.7 = 76 m/s; orbit round Taper Ap 111 m, Pe 72 m, T 1:01 |
+| That orbit, left alone at warp | still round Taper 2 h 40 min later (Ap 121 m, Pe 82 m) |
+| Down onto Taper (a scripted retrograde burn held to the ground) | 151 m/s, touched under 6 m/s (a crude script, not a good landing) |
+| Taper orbit to home (the nav computer's node) | 43.3 m/s; into Tenebris's air 2 min 3 s later at 413 m/s |
+| One prediction | 6 to 12 ms for a 15-minute line near home (about 2,500 steps); 75 to 110 ms for a 4-hour line across the system |
 | WebGL contexts with every tab opened in turn | 1 |
 | Console errors | none |
 
