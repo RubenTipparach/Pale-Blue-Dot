@@ -41,6 +41,13 @@ fn sun_depth(p: vec3<f32>, direction: vec3<f32>) -> f32 {
 const SUN_COS_OUTER: f32 = 0.999945;
 const SUN_COS_INNER: f32 = 0.999975;
 const SUN_COLOUR: vec3<f32> = vec3<f32>(1.0,0.93,0.80);
+
+// Over the ground from above the shell (`high-haze`): the Rayleigh phase's
+// 1 / (4 pi), the opacity from which the gain rises back to the sky's own, and
+// the ground haze's scale height (`air` in `finish`, `distance_fog`).
+const GROUND_RAYLEIGH_GAIN: f32 = 0.0795775;
+const GROUND_GAIN_FROM: f32 = 0.3;
+const GROUND_HAZE_HEIGHT_M: f32 = 1050.0;
 fn sun_visibility(p: vec3<f32>, sun: vec3<f32>) -> f32 {
     let along_sun = dot(p,sun);
     if (along_sun >= 0.0) { return 1.0; }
@@ -101,7 +108,24 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     let rayleigh_phase = 0.75*(1.0+cosine*cosine);
     let g = clamp(sky.scatter.w,-0.95,0.95);
     let mie_phase = (1.0-g*g)/(12.5663706*pow(max(1.0+g*g-2.0*g*cosine,0.001),1.5));
-    var scattered = integrated*(beta_r*rayleigh_phase+vec3<f32>(beta_m*mie_phase))*sky.sun.w;
+    // The column over the ground, seen from above the shell (`high-haze`).
+    // From inside, the back face over the ground lies beyond it and fails the
+    // depth test, so the ground's own haze (`finish`) is all the air there;
+    // from outside, the front face lays this column over everything. Laid on
+    // whole, it switched on in the one frame the eye crossed the shell (960 m
+    // up) as a blue-white veil.
+    let over_ground = !inside && ground.x > 0.0;
+    let average_beta = dot(beta_r,vec3<f32>(1.0/3.0))+beta_m;
+    let column_opacity = clamp(1.0-exp(-view_depth*average_beta),0.0,0.94);
+    // The Rayleigh phase here is not normalised by 4 pi (the Mie one is): the
+    // sky's brightness was tuned with it so. Over the ground the haze tends
+    // to the sky's colour instead, its normalised phase, and meets the sky's
+    // own light toward the limb, where the path is long and the opacity nears
+    // its cap.
+    let rayleigh_gain = select(1.0,
+        mix(GROUND_RAYLEIGH_GAIN,1.0,smoothstep(GROUND_GAIN_FROM,0.94,column_opacity)),
+        over_ground);
+    var scattered = integrated*(beta_r*rayleigh_phase*rayleigh_gain+vec3<f32>(beta_m*mie_phase))*sky.sun.w;
 
     // The dusk tint, and near the ground over the ground's twilight band
     // (sine 0 to -0.2, to 11.5 degrees under) rather than to 16, where the
@@ -116,8 +140,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     let sun_side = smoothstep(-0.3,1.0,dot(across,toward)*inverseSqrt(max(dot(across,across)*dot(toward,toward),1e-8)));
     scattered = mix(scattered,scattered*vec3<f32>(2.1,0.65,0.24),dusk*0.65);
     scattered += vec3<f32>(0.8,0.24,0.055)*dusk*horizon*low_camera*0.18*mix(1.0,sun_side,near_ground);
-    let average_beta = dot(beta_r,vec3<f32>(1.0/3.0))+beta_m;
-    var opacity = clamp(1.0-exp(-view_depth*average_beta),0.0,0.94);
+    var opacity = column_opacity;
     // Art-directed daylight veil keeps bright stars out of the surface sky.
     // It fades out with altitude, revealing the star field continuously.
     let veil_altitude = max(length(camera)-sky.center_radius.w,0.0);
@@ -144,5 +167,15 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     let sun_light = SUN_COLOUR*sky.sun.w*(disc*limb+glow)*shadowed;
     scattered += sun_light;
     opacity = max(opacity,disc*shadowed);
+    // The hand-over (`high-haze`): the ground's haze thins as
+    // exp(-h / GROUND_HAZE_HEIGHT_M) of the eye's height, and over the ground
+    // the column takes up what it gives away past the shell, from nothing at
+    // the shell's top to all of it from orbit. Nothing switches on in a frame.
+    if (over_ground) {
+        let past = max(altitude-shell,0.0);
+        let take = 1.0-exp(-past/GROUND_HAZE_HEIGHT_M);
+        scattered *= take;
+        opacity *= take;
+    }
     return vec4<f32>(max(scattered,vec3<f32>(0.0)),opacity);
 }
