@@ -7,9 +7,10 @@
 //! clock's own turning does (`switch_dusk_lamps`); there is no second way to
 //! make it night.
 
-use super::menu::{EDGE, MINT, MenuAction, NameField, small};
+use super::menu::{MenuAction, NameField, small};
 use bevy::{prelude::*, ui::RelativeCursorPosition};
 use pbd_app::sky::Sun;
+use pbd_app::ui_kit::{self, KitText, UiKit};
 use pbd_core::daylight::Clock;
 
 /// The bar a press or a drag sets the hour from.
@@ -24,8 +25,12 @@ pub struct TimeFill;
 #[derive(Component)]
 pub struct TimeLabel;
 
+/// The oak grip on the groove.
+#[derive(Component)]
+pub struct TimeKnob;
+
 /// The bar's width, px: the weather bar's, so the two read as a pair.
-const BAR_WIDTH: f32 = 220.0;
+const BAR_WIDTH: f32 = 172.0;
 
 /// Noon and midnight, the presets and the two ends of L.
 pub const NOON: f32 = 12.0;
@@ -51,50 +56,28 @@ pub fn flipped(clock: Clock) -> Clock {
 }
 
 /// The control, laid into the pause panel above its buttons.
-pub fn spawn(panel: &mut ChildSpawnerCommands) {
+pub fn spawn(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
     panel.spawn((
         TimeLabel,
-        Text::new("TIME"),
-        TextFont {
-            font_size: 11.0,
-            ..default()
-        },
-        TextColor(MINT),
+        KitText::new("TIME", ui_kit::TITLE).shadow(ui_kit::INK),
     ));
-    panel
-        .spawn((
-            TimeSlider,
-            Button,
-            RelativeCursorPosition::default(),
-            Node {
-                width: px(BAR_WIDTH),
-                height: px(14),
-                border: UiRect::all(px(1)),
-                ..default()
-            },
-            BorderColor::all(EDGE),
-            BackgroundColor(Color::srgba(0.04, 0.10, 0.12, 0.9)),
-        ))
-        .with_children(|bar| {
-            bar.spawn((
-                TimeFill,
-                Node {
-                    width: percent(0),
-                    height: percent(100),
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.95, 0.78, 0.40, 0.75)),
-            ));
-        });
+    super::menu::slider(
+        panel,
+        kit,
+        BAR_WIDTH,
+        (TimeSlider, Button, RelativeCursorPosition::default()),
+        TimeFill,
+        TimeKnob,
+    );
     panel
         .spawn(Node {
-            column_gap: px(6),
-            margin: UiRect::bottom(px(6)),
+            column_gap: px(2),
+            margin: UiRect::bottom(px(3)),
             ..default()
         })
         .with_children(|row| {
-            small(row, "DAY", MenuAction::Time(NOON as u8));
-            small(row, "NIGHT", MenuAction::Time(MIDNIGHT as u8));
+            small(row, kit, "DAY", MenuAction::Time(NOON as u8));
+            small(row, kit, "NIGHT", MenuAction::Time(MIDNIGHT as u8));
         });
 }
 
@@ -136,18 +119,27 @@ pub fn toggle(keys: Res<ButtonInput<KeyCode>>, name: Res<NameField>, mut sun: Re
 /// The bar and the label follow the clock, however it was set.
 pub fn show(
     sun: Res<Sun>,
-    mut fills: Query<&mut Node, With<TimeFill>>,
-    mut labels: Query<&mut Text, With<TimeLabel>>,
+    mut fills: Query<&mut Node, (With<TimeFill>, Without<TimeKnob>)>,
+    mut knobs: Query<&mut Node, (With<TimeKnob>, Without<TimeFill>)>,
+    mut labels: Query<&mut KitText, With<TimeLabel>>,
 ) {
     let hour = sun.clock.hour();
+    let at = percent(hour / 24.0 * 100.0);
     for mut node in &mut fills {
-        node.width = percent(hour / 24.0 * 100.0);
+        if node.width != at {
+            node.width = at;
+        }
+    }
+    for mut node in &mut knobs {
+        if node.left != at {
+            node.left = at;
+        }
     }
     for mut text in &mut labels {
         let minutes = (hour * 60.0).round() as u32 % (24 * 60);
         let shown = format!("TIME  {:02}:{:02}", minutes / 60, minutes % 60);
-        if text.0 != shown {
-            text.0 = shown;
+        if text.text != shown {
+            text.text = shown;
         }
     }
 }

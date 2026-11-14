@@ -48,6 +48,8 @@ pub mod tone;
 #[cfg(feature = "desktop")]
 pub mod towns;
 #[cfg(feature = "desktop")]
+pub mod ui_kit;
+#[cfg(feature = "desktop")]
 pub mod vehicles;
 #[cfg(feature = "desktop")]
 pub mod walking;

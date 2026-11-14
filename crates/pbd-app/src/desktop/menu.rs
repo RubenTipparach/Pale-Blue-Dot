@@ -22,6 +22,7 @@ use bevy::{
 use pbd_app::controls::{BINDINGS, MenuOpen};
 use pbd_app::saves::{self, Slot, WorldSave};
 use pbd_app::settings::{PlayerSettings, SettingsFile};
+use pbd_app::ui_kit::{self, KitPiece, KitText, Plaque, Set, UiKit, plaque, plaque_label};
 
 /// Which screen is open. One enum and not two flags, because two flags is how
 /// a settings page ends up open over a closed pause menu.
@@ -131,48 +132,28 @@ pub fn wheel_scroll(
     }
 }
 
-/// What the bloom row says.
-fn bloom_label(on: bool) -> String {
-    format!(
-        "BLOOM: {}",
-        if on {
-            "ON"
-        } else {
-            "OFF  (costs ~2.4 ms on a Mac)"
-        }
-    )
+/// What a value plaque on the settings page says (`player-settings`): the
+/// frame limit and the render scale, which a press steps through.
+fn settings_value(action: MenuAction, player: &PlayerSettings) -> Option<String> {
+    Some(match action {
+        MenuAction::FrameLimit => player.frame_limit.label().to_uppercase(),
+        MenuAction::RenderScale => format!("{}%", player.render_scale),
+        _ => return None,
+    })
 }
 
-/// What a player-settings row says (`player-settings`): the value, and what
-/// it means where that is not plain from the value.
-fn settings_label(action: MenuAction, player: &PlayerSettings) -> Option<String> {
+/// Whether a checkbox on the settings page is ticked: bloom, the rain
+/// shadow (off by default, CLAUDE.md "What the owner means by rain shadow")
+/// and auto step.
+fn settings_checked(
+    action: MenuAction,
+    graphics: &pbd_app::tone::Graphics,
+    player: &PlayerSettings,
+) -> Option<bool> {
     Some(match action {
-        MenuAction::FrameLimit => format!("FRAME LIMIT: {}", player.frame_limit.label()),
-        MenuAction::RenderScale => format!(
-            "RENDER SCALE: {}%{}",
-            player.render_scale,
-            if player.render_scale == 100 {
-                ""
-            } else {
-                "  (HUD stays sharp)"
-            }
-        ),
-        MenuAction::AutoStep => format!(
-            "AUTO STEP: {}",
-            if player.auto_step {
-                "ON  (walk up a layer)"
-            } else {
-                "OFF  (jump to climb a layer)"
-            }
-        ),
-        MenuAction::RainShadows => format!(
-            "RAIN SHADOW: {}",
-            if player.rain_shadows {
-                "ON  (rain fog and streaks)"
-            } else {
-                "OFF  (no rain fog)"
-            }
-        ),
+        MenuAction::Bloom => graphics.bloom,
+        MenuAction::RainShadows => player.rain_shadows,
+        MenuAction::AutoStep => player.auto_step,
         _ => return None,
     })
 }
@@ -210,28 +191,101 @@ pub fn press_graphics(
     }
 }
 
-/// The GRAPHICS and MOVEMENT rows say what is chosen.
+/// The settings controls say what is chosen: a checkbox shows its tick, a
+/// value plaque its value.
 pub fn label_graphics(
+    kit: Res<UiKit>,
     graphics: Res<pbd_app::tone::Graphics>,
     player: Res<PlayerSettings>,
-    rows: Query<(&MenuAction, &Children)>,
-    mut texts: Query<&mut Text>,
+    mut checks: Query<(&MenuAction, &mut ImageNode), With<Check>>,
+    rows: Query<(&MenuAction, &Children), With<Plaque>>,
+    mut texts: Query<&mut KitText>,
 ) {
+    for (action, mut image) in &mut checks {
+        if let Some(on) = settings_checked(*action, &graphics, &player) {
+            let want = kit.image(if on { "check-on" } else { "check-off" });
+            if image.image != want {
+                image.image = want;
+            }
+        }
+    }
     for (action, children) in &rows {
-        let label = if *action == MenuAction::Bloom {
-            bloom_label(graphics.bloom)
-        } else if let Some(label) = settings_label(*action, &player) {
-            label
-        } else {
+        let Some(label) = settings_value(*action, &player) else {
             continue;
         };
         for child in children.iter() {
             if let Ok(mut text) = texts.get_mut(child)
-                && text.0 != label
+                && text.text != label
             {
-                text.0 = label.clone();
+                text.text = label.clone();
             }
         }
+    }
+}
+
+/// A checkbox on the settings page.
+#[derive(Component)]
+pub struct Check;
+
+/// The settings page's tabs: Picture, Weather (the rain shadow and the
+/// storm forcing), World (the clock and the globe overlay), Movement, Input.
+pub const SETTINGS_TABS: [&str; 5] = ["PICTURE", "WEATHER", "WORLD", "MOVEMENT", "INPUT"];
+
+/// Which settings tab is open.
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct SettingsTab(pub u8);
+
+/// A settings tab's own oak tab, by index.
+#[derive(Component)]
+pub struct SettingsTabButton(pub u8);
+
+/// The body of a settings tab, by index.
+#[derive(Component)]
+pub struct SettingsPage(pub u8);
+
+/// A press on a tab opens its page; the open tab wears the oak cap, the shut
+/// ones the plain stone (design 3, accent 2), and only the open page is laid
+/// out.
+#[allow(clippy::type_complexity)]
+pub fn settings_tabs(
+    kit: Res<UiKit>,
+    mut tab: ResMut<SettingsTab>,
+    pressed: Query<(&Interaction, &SettingsTabButton), Changed<Interaction>>,
+    mut tabs: Query<(&SettingsTabButton, &mut ImageNode, &mut KitPiece, &Children)>,
+    mut labels: Query<&mut KitText>,
+    mut pages: Query<(&SettingsPage, &mut Node)>,
+) {
+    for (interaction, button) in &pressed {
+        if *interaction == Interaction::Pressed && tab.0 != button.0 {
+            tab.0 = button.0;
+        }
+    }
+    if !tab.is_changed() {
+        return;
+    }
+    for (button, mut image, mut piece, children) in &mut tabs {
+        let open = button.0 == tab.0;
+        let key = Set::Oak.key(if open { "tab-open" } else { "tab-shut" });
+        if piece.0 != key {
+            image.image = kit.image(&key);
+            piece.0 = key;
+        }
+        for child in children.iter() {
+            if let Ok(mut text) = labels.get_mut(child) {
+                text.colour = if open {
+                    ui_kit::OAK_LABEL
+                } else {
+                    ui_kit::LABEL
+                };
+            }
+        }
+    }
+    for (page, mut node) in &mut pages {
+        node.display = if page.0 == tab.0 {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
 }
 
@@ -367,34 +421,9 @@ pub struct SavesPage<'w> {
 #[derive(Component)]
 pub struct SaveList;
 
-/// The rows whose hover or press state changed this frame: exactly the two
-/// things a repaint reads, which is this project's rule that a query names
-/// what it touches and nothing else.
-type TouchedRows<'w, 's> = Query<
-    'w,
-    's,
-    (&'static Interaction, &'static mut BackgroundColor),
-    (Changed<Interaction>, With<MenuAction>),
->;
-
 /// Marks a panel with the screen it belongs to.
 #[derive(Component)]
 pub struct Panel(pub(super) Screen);
-
-pub(super) const INK: Color = Color::srgb(0.88, 0.94, 0.91);
-pub(super) const MINT: Color = Color::srgb(0.48, 0.8, 0.77);
-pub(super) const PANEL_FILL: Color = Color::srgba(0.02, 0.06, 0.08, 0.94);
-pub(super) const EDGE: Color = Color::srgba(0.55, 0.75, 0.74, 0.6);
-
-fn idle() -> Color {
-    Color::srgba(0.06, 0.13, 0.15, 0.9)
-}
-fn hovered() -> Color {
-    Color::srgba(0.11, 0.22, 0.24, 0.95)
-}
-fn pressed() -> Color {
-    Color::srgba(0.18, 0.34, 0.35, 1.0)
-}
 
 /// The full-screen layer a panel is centred in.
 ///
@@ -417,223 +446,482 @@ pub(super) fn layer() -> Node {
     }
 }
 
-pub(super) fn panel_node(width: f32) -> Node {
-    Node {
-        width: px(width),
-        padding: UiRect::all(px(22)),
-        border: UiRect::all(px(1)),
-        flex_direction: FlexDirection::Column,
-        row_gap: px(10),
-        ..default()
-    }
+/// An out-of-play menu's layer: the world dimmed behind the timber.
+fn timber_layer(screen: Screen) -> impl Bundle {
+    (
+        layer(),
+        BackgroundColor(ui_kit::DIMMER),
+        GlobalZIndex(10),
+        Panel(screen),
+    )
 }
 
-pub(super) fn title(text: &str) -> impl Bundle {
+/// A panel's frame and layout: `width` native pixels, the frame's 14 px
+/// margin as its padding, children in a column. Oak out of play, the stone
+/// moulding (`frame`) for an in-play panel with no baked rock of its size.
+pub(super) fn framed(kit: &UiKit, set: Set, width: f32) -> impl Bundle {
     (
-        Text::new(text.to_string()),
-        TextFont {
-            font_size: 15.0,
-            ..default()
-        },
-        TextColor(MINT),
+        kit.nine(set, "frame"),
+        KitPiece(set.key("frame")),
         Node {
-            margin: UiRect::bottom(px(6)),
+            width: px(width),
+            padding: UiRect::all(px(14)),
+            flex_direction: FlexDirection::Column,
+            row_gap: px(3),
             ..default()
         },
     )
 }
 
-/// A row that can be clicked. Every one is a real `Button` with a hit box and
-/// hover and press states: a control that only responds to a key is a control
-/// nobody can find, which is why the bindings were on screen in the first
-/// place.
-pub(super) fn button(parent: &mut ChildSpawnerCommands, label: &str, action: MenuAction) {
+/// The carved oak lintel over a panel, its title cut into it (design 3,
+/// accent 1): pegged on the frame's top edge.
+pub(super) fn lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: &str) {
     parent
-        .spawn((
-            Button,
-            Node {
-                width: percent(100.0),
-                padding: UiRect::axes(px(14), px(9)),
-                border: UiRect::all(px(1)),
-                ..default()
-            },
-            BorderColor::all(EDGE),
-            BackgroundColor(idle()),
-            action,
-        ))
+        .spawn(Node {
+            justify_content: JustifyContent::Center,
+            margin: UiRect::new(px(0), px(0), px(-15), px(4)),
+            flex_shrink: 0.0,
+            ..default()
+        })
         .with_children(|row| {
             row.spawn((
-                Text::new(label.to_string()),
-                TextFont {
-                    font_size: 14.0,
+                kit.nine(Set::Stone, "lintel"),
+                KitPiece("lintel".into()),
+                Node {
+                    min_height: px(16),
+                    min_width: px(40),
+                    padding: UiRect::new(px(11), px(11), px(5), px(4)),
+                    justify_content: JustifyContent::Center,
                     ..default()
                 },
-                TextColor(INK),
+            ))
+            .with_children(|board| {
+                board.spawn(KitText::new(text, ui_kit::OAK_LABEL));
+            });
+        });
+}
+
+/// A section label inside a panel, carved in the kit's font.
+pub(super) fn section(parent: &mut ChildSpawnerCommands, text: &str) {
+    parent.spawn((
+        KitText::new(text, ui_kit::TITLE).shadow(ui_kit::INK),
+        Node {
+            margin: UiRect::top(px(3)),
+            ..default()
+        },
+    ));
+}
+
+/// A line of the body face (VT323) on a stone face.
+pub(super) fn body(text: impl Into<String>, size: f32, colour: Color) -> impl Bundle {
+    (
+        Text::new(text.into()),
+        TextFont {
+            font_size: size,
+            ..default()
+        },
+        TextColor(colour),
+    )
+}
+
+/// A row that can be clicked: an oak plaque the panel's width. Every one is a
+/// real `Button` with a hit box and hover and press states: a control that
+/// only responds to a key is a control nobody can find, which is why the
+/// bindings were on screen in the first place.
+pub(super) fn button(
+    parent: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    label: &str,
+    action: MenuAction,
+) -> Entity {
+    parent
+        .spawn((plaque(kit, Set::Oak, 48.0), action))
+        .insert(Node {
+            width: percent(100.0),
+            ..plaque_node()
+        })
+        .with_children(|row| {
+            row.spawn(plaque_label(Set::Oak, label));
+        })
+        .id()
+}
+
+/// A plaque's own node, as `ui_kit::plaque` lays it out.
+fn plaque_node() -> Node {
+    Node {
+        min_width: px(30),
+        height: px(22),
+        padding: UiRect::new(px(10), px(10), px(8), px(0)),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::FlexStart,
+        flex_shrink: 0.0,
+        ..default()
+    }
+}
+
+pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
+    let kit = &*kit;
+    spawn_saves(&mut commands, kit);
+    commands
+        // Above the slot row, which is spawned a schedule later and would
+        // otherwise draw over the panel: within a UI, later is on top.
+        .spawn(timber_layer(Screen::Pause))
+        .with_children(|layer| {
+            layer
+                // The owner's menu and nothing else (`menus-and-a-quiet-screen`:
+                // "Pause menu should have resume, settings, and quit", and the
+                // saves): the weather, the clock and the globe overlay moved to
+                // their own tabs in Settings, so the panel fits every window.
+                .spawn(framed(kit, Set::Oak, 120.0))
+                .with_children(|panel| {
+                    lintel(panel, kit, "PAUSED");
+                    let resume = button(panel, kit, "RESUME", MenuAction::Resume);
+                    panel.commands().entity(resume).insert(Plaque {
+                        focus: true,
+                        ..Plaque::new(Set::Oak)
+                    });
+                    button(panel, kit, "SAVES", MenuAction::Saves);
+                    button(panel, kit, "SETTINGS", MenuAction::Settings);
+                    button(panel, kit, "QUIT", MenuAction::Quit);
+                });
+        });
+
+    commands
+        .spawn(timber_layer(Screen::Settings))
+        .with_children(|layer| {
+            layer
+                .spawn(framed(kit, Set::Oak, 324.0))
+                .with_children(|panel| {
+                    lintel(panel, kit, "SETTINGS");
+                    // The tabs, oak, the open one capped (design 8).
+                    panel
+                        .spawn(Node {
+                            column_gap: px(1),
+                            margin: UiRect::bottom(px(3)),
+                            ..default()
+                        })
+                        .with_children(|tabs| {
+                            for (i, name) in SETTINGS_TABS.iter().enumerate() {
+                                let open = i == 0;
+                                let piece = if open { "tab-open" } else { "tab-shut" };
+                                tabs.spawn((
+                                    Button,
+                                    kit.nine(Set::Oak, piece),
+                                    KitPiece(Set::Oak.key(piece)),
+                                    SettingsTabButton(i as u8),
+                                    Node {
+                                        height: px(18),
+                                        padding: UiRect::new(px(10), px(10), px(7), px(0)),
+                                        flex_shrink: 0.0,
+                                        ..default()
+                                    },
+                                ))
+                                .with_children(|tab| {
+                                    tab.spawn(KitText::new(
+                                        *name,
+                                        if open {
+                                            ui_kit::OAK_LABEL
+                                        } else {
+                                            ui_kit::LABEL
+                                        },
+                                    ));
+                                });
+                            }
+                        });
+                    let page = |panel: &mut ChildSpawnerCommands, i: u8| {
+                        panel
+                            .spawn((
+                                Node {
+                                    flex_direction: FlexDirection::Column,
+                                    row_gap: px(2),
+                                    min_height: px(176),
+                                    display: if i == 0 { Display::Flex } else { Display::None },
+                                    ..default()
+                                },
+                                SettingsPage(i),
+                            ))
+                            .id()
+                    };
+                    let picture = page(panel, 0);
+                    panel.commands().entity(picture).with_children(|rows| {
+                        // `player-settings`: each control shows what is chosen,
+                        // kept up by `label_graphics`.
+                        check_row(
+                            rows,
+                            kit,
+                            "Bloom",
+                            "costs ~2.4 ms on a Mac",
+                            MenuAction::Bloom,
+                        );
+                        value_row(rows, kit, "Frame limit", "", MenuAction::FrameLimit);
+                        value_row(
+                            rows,
+                            kit,
+                            "Render scale",
+                            "the HUD stays sharp",
+                            MenuAction::RenderScale,
+                        );
+                    });
+                    let weather = page(panel, 1);
+                    panel.commands().entity(weather).with_children(|rows| {
+                        check_row(
+                            rows,
+                            kit,
+                            "Rain shadow",
+                            "the rain fog and streaks; off by default",
+                            MenuAction::RainShadows,
+                        );
+                        rows.spawn(body(
+                            "The near shower, the wet ground and the drops on the lens still draw.",
+                            10.0,
+                            ui_kit::TEXT_DIM,
+                        ));
+                        super::weather_ui::spawn(rows, kit);
+                    });
+                    let world = page(panel, 2);
+                    panel.commands().entity(world).with_children(|rows| {
+                        super::time_ui::spawn(rows, kit);
+                        super::overlay_ui::spawn_row(rows, kit);
+                    });
+                    let movement = page(panel, 3);
+                    panel.commands().entity(movement).with_children(|rows| {
+                        check_row(
+                            rows,
+                            kit,
+                            "Auto step",
+                            "walk up one layer without a key",
+                            MenuAction::AutoStep,
+                        );
+                    });
+                    let input = page(panel, 4);
+                    panel.commands().entity(input).with_children(|page| {
+                        // Taller than the page (every binding is listed), so it is
+                        // held inside it and scrolls with the wheel.
+                        page.spawn((
+                            Node {
+                                height: px(176),
+                                flex_direction: FlexDirection::Column,
+                                overflow: Overflow::scroll_y(),
+                                row_gap: px(1),
+                                ..default()
+                            },
+                            ScrollPosition::default(),
+                            WheelScrolls,
+                        ))
+                        .with_children(|list| {
+                            // Off the one binding table, a heading per context and
+                            // a row per action with its keys in caps.
+                            for group in &BINDINGS {
+                                section(list, group.heading);
+                                for binding in group.rows {
+                                    list.spawn(Node {
+                                        justify_content: JustifyContent::SpaceBetween,
+                                        align_items: AlignItems::Center,
+                                        min_height: px(18),
+                                        column_gap: px(4),
+                                        flex_shrink: 0.0,
+                                        ..default()
+                                    })
+                                    .with_children(|line| {
+                                        line.spawn(body(binding.does, 10.0, ui_kit::TEXT));
+                                        line.spawn(Node {
+                                            column_gap: px(1),
+                                            flex_shrink: 0.0,
+                                            ..default()
+                                        })
+                                        .with_children(
+                                            |caps| {
+                                                for key in binding.keys {
+                                                    key_cap(caps, kit, &key.label());
+                                                }
+                                            },
+                                        );
+                                    });
+                                }
+                            }
+                        });
+                    });
+                    panel
+                        .spawn(Node {
+                            justify_content: JustifyContent::FlexEnd,
+                            margin: UiRect::top(px(4)),
+                            ..default()
+                        })
+                        .with_children(|foot| {
+                            small(foot, kit, "BACK", MenuAction::Back);
+                        });
+                });
+        });
+}
+
+/// A slider in the timber menus: the stone groove, the rune in it as far as
+/// the value, and the oak grip (design 8). `track` is the clickable groove
+/// (it carries `RelativeCursorPosition`), `fill` and `knob` are moved by the
+/// caller's `show`.
+pub(super) fn slider(
+    parent: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    width: f32,
+    track: impl Bundle,
+    fill: impl Bundle,
+    knob: impl Bundle,
+) {
+    parent
+        .spawn((
+            kit.nine(Set::Stone, "slider-track"),
+            KitPiece("slider-track".into()),
+            Node {
+                width: px(width),
+                height: px(8),
+                padding: UiRect::all(px(3)),
+                margin: UiRect::vertical(px(3)),
+                flex_shrink: 0.0,
+                ..default()
+            },
+            track,
+        ))
+        .with_children(|bar| {
+            bar.spawn((
+                Node {
+                    width: percent(0),
+                    height: percent(100),
+                    ..default()
+                },
+                BackgroundColor(ui_kit::RUNE_DIM),
+                fill,
+            ));
+            bar.spawn((
+                kit.whole(Set::Oak, "slider-knob"),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: percent(0),
+                    top: px(-2),
+                    width: px(9),
+                    height: px(13),
+                    margin: UiRect::left(px(-4)),
+                    ..default()
+                },
+                knob,
             ));
         });
 }
 
-pub fn spawn(mut commands: Commands) {
-    spawn_saves(&mut commands);
-    commands
-        // Above the slot row, which is spawned a schedule later and would
-        // otherwise draw over the panel: within a UI, later is on top.
-        .spawn((layer(), GlobalZIndex(10), Panel(Screen::Pause)))
-        .with_children(|layer| {
-            layer
-                .spawn((
-                    panel_node(260.0),
-                    BorderColor::all(EDGE),
-                    BackgroundColor(PANEL_FILL),
-                ))
-                .with_children(|panel| {
-                    panel.spawn(title("PAUSED"));
-                    super::weather_ui::spawn(panel);
-                    super::time_ui::spawn(panel);
-                    super::overlay_ui::spawn_row(panel);
-                    button(panel, "RESUME", MenuAction::Resume);
-                    button(panel, "SAVES", MenuAction::Saves);
-                    button(panel, "SETTINGS", MenuAction::Settings);
-                    button(panel, "QUIT", MenuAction::Quit);
-                });
+/// A settings row: what it is, a dim note, and its control on the right.
+fn setting_row(
+    rows: &mut ChildSpawnerCommands,
+    label: &str,
+    note: &str,
+    control: impl FnOnce(&mut ChildSpawnerCommands),
+) {
+    rows.spawn(Node {
+        justify_content: JustifyContent::SpaceBetween,
+        align_items: AlignItems::Center,
+        min_height: px(22),
+        column_gap: px(4),
+        ..default()
+    })
+    .with_children(|row| {
+        row.spawn(Node {
+            column_gap: px(4),
+            align_items: AlignItems::Center,
+            ..default()
+        })
+        .with_children(|words| {
+            words.spawn(body(label, 10.0, ui_kit::TEXT));
+            if !note.is_empty() {
+                words.spawn(body(format!("({note})"), 8.0, ui_kit::TEXT_DIM));
+            }
         });
+        control(row);
+    });
+}
 
-    commands
-        .spawn((layer(), GlobalZIndex(10), Panel(Screen::Settings)))
-        .with_children(|layer| {
-            layer
-                .spawn((
-                    // Taller than a screen (every binding is listed), so it is
-                    // held inside one and scrolls with the wheel.
-                    Node {
-                        max_height: percent(92.0),
-                        overflow: Overflow::scroll_y(),
-                        ..panel_node(520.0)
-                    },
-                    ScrollPosition::default(),
-                    WheelScrolls,
-                    BorderColor::all(EDGE),
-                    BackgroundColor(PANEL_FILL),
-                ))
-                .with_children(|panel| {
-                    panel.spawn(title("SETTINGS"));
-                    panel.spawn((
-                        Text::new("GRAPHICS"),
-                        TextFont {
-                            font_size: 12.0,
-                            ..default()
-                        },
-                        TextColor(MINT),
-                        Node {
-                            margin: UiRect::top(px(2)),
-                            ..default()
-                        },
-                    ));
-                    // First, above the long INPUT list, so it is always on screen. Its words are `bloom_label`'s, kept up by `label_graphics`.
-                    button(panel, "BLOOM", MenuAction::Bloom);
-                    // `player-settings`: each row's words are
-                    // `settings_label`'s, kept up by `label_graphics`.
-                    button(panel, "FRAME LIMIT", MenuAction::FrameLimit);
-                    button(panel, "RENDER SCALE", MenuAction::RenderScale);
-                    button(panel, "RAIN SHADOW", MenuAction::RainShadows);
-                    panel.spawn((
-                        Text::new("MOVEMENT"),
-                        TextFont {
-                            font_size: 12.0,
-                            ..default()
-                        },
-                        TextColor(MINT),
-                    ));
-                    button(panel, "AUTO STEP", MenuAction::AutoStep);
-                    panel.spawn((
-                        Text::new("INPUT"),
-                        TextFont {
-                            font_size: 12.0,
-                            ..default()
-                        },
-                        TextColor(MINT),
-                    ));
-                    // Two columns, off the one binding table. A key on the left and
-                    // what it does on the right is the shape a player can scan; the
-                    // run-on line it replaces was readable only by whoever wrote it.
-                    for group in &BINDINGS {
-                        panel.spawn((
-                            Text::new(group.heading.to_string()),
-                            TextFont {
-                                font_size: 11.0,
-                                ..default()
-                            },
-                            TextColor(Color::srgba(0.55, 0.75, 0.74, 0.85)),
-                            Node {
-                                margin: UiRect::top(px(8)),
-                                ..default()
-                            },
-                        ));
-                        for binding in group.rows {
-                            panel
-                                .spawn(Node {
-                                    column_gap: px(12),
-                                    ..default()
-                                })
-                                .with_children(|line| {
-                                    line.spawn((
-                                        Text::new(binding.keys_label()),
-                                        TextFont {
-                                            font_size: 12.0,
-                                            ..default()
-                                        },
-                                        TextColor(INK),
-                                        Node {
-                                            width: px(150),
-                                            ..default()
-                                        },
-                                    ));
-                                    line.spawn((
-                                        Text::new(binding.does.to_string()),
-                                        TextFont {
-                                            font_size: 12.0,
-                                            ..default()
-                                        },
-                                        TextColor(Color::srgba(0.88, 0.94, 0.91, 0.72)),
-                                    ));
-                                });
-                        }
-                    }
-                    panel.spawn(Node {
-                        height: px(10),
-                        ..default()
-                    });
-                    button(panel, "BACK", MenuAction::Back);
-                });
+/// A row with a checkbox: the stone well, the tick a glowing rune.
+fn check_row(
+    rows: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    label: &str,
+    note: &str,
+    action: MenuAction,
+) {
+    setting_row(rows, label, note, |row| {
+        row.spawn((
+            Button,
+            kit.whole(Set::Stone, "check-off"),
+            Node {
+                width: px(12),
+                height: px(12),
+                flex_shrink: 0.0,
+                ..default()
+            },
+            Check,
+            action,
+        ));
+    });
+}
+
+/// A row whose plaque steps through values.
+fn value_row(
+    rows: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    label: &str,
+    note: &str,
+    action: MenuAction,
+) {
+    setting_row(rows, label, note, |row| {
+        row.spawn((plaque(kit, Set::Oak, 64.0), action))
+            .with_children(|p| {
+                p.spawn(plaque_label(Set::Oak, ""));
+            });
+    });
+}
+
+/// A key in a cap: the oak-rimmed tooltip with the key cut in the kit's font.
+fn key_cap(parent: &mut ChildSpawnerCommands, kit: &UiKit, key: &str) {
+    parent
+        .spawn((
+            kit.nine(Set::Oak, "tooltip"),
+            KitPiece(Set::Oak.key("tooltip")),
+            Node {
+                min_width: px(18),
+                height: px(18),
+                padding: UiRect::new(px(6), px(6), px(5), px(0)),
+                justify_content: JustifyContent::Center,
+                flex_shrink: 0.0,
+                ..default()
+            },
+        ))
+        .with_children(|cap| {
+            cap.spawn(KitText::new(key, ui_kit::TEXT));
         });
 }
 
 /// The saves panel: a title, the list (rebuilt when it changes), and BACK.
-fn spawn_saves(commands: &mut Commands) {
+fn spawn_saves(commands: &mut Commands, kit: &UiKit) {
     commands
-        .spawn((layer(), GlobalZIndex(10), Panel(Screen::Saves)))
+        .spawn(timber_layer(Screen::Saves))
         .with_children(|layer| {
             layer
-                .spawn((
-                    panel_node(520.0),
-                    BorderColor::all(EDGE),
-                    BackgroundColor(PANEL_FILL),
-                ))
+                .spawn(framed(kit, Set::Oak, 280.0))
                 .with_children(|panel| {
-                    panel.spawn(title("WORLDS"));
+                    lintel(panel, kit, "WORLDS");
                     panel.spawn((
                         Node {
                             flex_direction: FlexDirection::Column,
-                            row_gap: px(6),
+                            row_gap: px(3),
                             ..default()
                         },
                         SaveList,
                     ));
-                    panel.spawn(Node {
-                        height: px(10),
-                        ..default()
-                    });
-                    button(panel, "BACK", MenuAction::Back);
+                    panel
+                        .spawn(Node {
+                            justify_content: JustifyContent::FlexEnd,
+                            margin: UiRect::top(px(4)),
+                            ..default()
+                        })
+                        .with_children(|foot| {
+                            small(foot, kit, "BACK", MenuAction::Back);
+                        });
                 });
         });
 }
@@ -641,14 +929,7 @@ fn spawn_saves(commands: &mut Commands) {
 /// A line of small text, for a slot's date or a reason something did not
 /// happen.
 fn note(text: String, colour: Color) -> impl Bundle {
-    (
-        Text::new(text),
-        TextFont {
-            font_size: 11.0,
-            ..default()
-        },
-        TextColor(colour),
-    )
+    body(text, 9.0, colour)
 }
 
 /// How long ago, in words a player reads rather than a timestamp.
@@ -667,6 +948,7 @@ fn since(then: u64) -> String {
 /// when a world is made or deleted and a row's button carries its index.
 pub fn rebuild_saves(
     mut commands: Commands,
+    kit: Res<UiKit>,
     index: Res<SaveIndex>,
     name: Res<NameField>,
     open: Option<Res<WorldSave>>,
@@ -675,6 +957,7 @@ pub fn rebuild_saves(
     if !index.is_changed() {
         return;
     }
+    let kit = &*kit;
     let playing = open
         .as_ref()
         .and_then(|save| save.slot().map(|slot| slot.id.clone()));
@@ -682,7 +965,7 @@ pub fn rebuild_saves(
         commands.entity(list).despawn_related::<Children>();
         commands.entity(list).with_children(|rows| {
             if let Some(trouble) = index.trouble.as_ref() {
-                rows.spawn(note(trouble.clone(), Color::srgb(0.95, 0.66, 0.45)));
+                rows.spawn(note(trouble.clone(), ui_kit::TITLE));
             }
             // A delete REPLACES the list while it is pending, and says what
             // is lost rather than only asking. Tenebris's own dialog, ported
@@ -691,82 +974,70 @@ pub fn rebuild_saves(
             if let Some(row) = index.asking
                 && let Some(slot) = index.slots.get(row)
             {
-                rows.spawn((
-                    Text::new(format!("Delete '{}'?", slot.file.name)),
-                    TextFont {
-                        font_size: 14.0,
-                        ..default()
-                    },
-                    TextColor(Color::srgb(0.95, 0.66, 0.45)),
+                rows.spawn(body(
+                    format!("Delete '{}'?", slot.file.name),
+                    11.0,
+                    ui_kit::TITLE,
                 ));
                 rows.spawn(note(
                     "Everything dug, built and carried in it is gone for good.".into(),
-                    Color::srgba(0.88, 0.94, 0.91, 0.7),
+                    ui_kit::TEXT,
                 ));
                 rows.spawn(Node {
-                    height: px(8),
+                    height: px(4),
                     ..default()
                 });
                 rows.spawn(Node {
-                    column_gap: px(10),
+                    column_gap: px(3),
                     ..default()
                 })
                 .with_children(|line| {
-                    small(line, "DELETE FOREVER", MenuAction::Delete(row));
-                    small(line, "CANCEL", MenuAction::Keep);
+                    small(line, kit, "DELETE FOREVER", MenuAction::Delete(row));
+                    let keep = small(line, kit, "CANCEL", MenuAction::Keep);
+                    line.commands().entity(keep).insert(Plaque {
+                        focus: true,
+                        ..Plaque::new(Set::Oak)
+                    });
                 });
                 return;
             }
             if index.slots.is_empty() {
-                rows.spawn(note(
-                    "no worlds yet".into(),
-                    Color::srgba(0.88, 0.94, 0.91, 0.6),
-                ));
+                rows.spawn(note("no worlds yet".into(), ui_kit::TEXT_DIM));
             }
             for (row, slot) in index.slots.iter().enumerate() {
                 let here = Some(&slot.id) == playing.as_ref();
                 rows.spawn(Node {
-                    column_gap: px(10),
+                    column_gap: px(3),
                     align_items: AlignItems::Center,
+                    min_height: px(24),
                     ..default()
                 })
                 .with_children(|line| {
-                    line.spawn((
-                        Text::new(if here {
-                            format!("{}  (open)", slot.file.name)
+                    line.spawn(Node {
+                        flex_direction: FlexDirection::Column,
+                        flex_grow: 1.0,
+                        row_gap: px(1),
+                        ..default()
+                    })
+                    .with_children(|words| {
+                        let shown = if here {
+                            format!("{} (open)", slot.file.name)
                         } else {
                             slot.file.name.clone()
-                        }),
-                        TextFont {
-                            font_size: 13.0,
-                            ..default()
-                        },
-                        TextColor(INK),
-                        Node {
-                            width: px(220),
-                            ..default()
-                        },
-                    ));
-                    line.spawn((
-                        note(
-                            since(slot.file.played_unix_s),
-                            Color::srgba(0.88, 0.94, 0.91, 0.6),
-                        ),
-                        Node {
-                            width: px(110),
-                            ..default()
-                        },
-                    ));
+                        };
+                        words.spawn(KitText::new(shown, ui_kit::TITLE).shadow(ui_kit::INK));
+                        words.spawn(note(since(slot.file.played_unix_s), ui_kit::TEXT_DIM));
+                    });
                     if here {
-                        small(line, "CONTINUE", MenuAction::Resume);
+                        small(line, kit, "CONTINUE", MenuAction::Resume);
                     } else {
-                        small(line, "LOAD", MenuAction::Load(row));
+                        small(line, kit, "LOAD", MenuAction::Load(row));
                     }
-                    small(line, "DELETE", MenuAction::Ask(row));
+                    small(line, kit, "DELETE", MenuAction::Ask(row));
                 });
             }
             rows.spawn(Node {
-                height: px(6),
+                height: px(3),
                 ..default()
             });
             // The name for a new world, typed in the game's own box: a
@@ -774,77 +1045,52 @@ pub fn rebuild_saves(
             // rule forbids. Prefilled with the number the page would have
             // chosen, so Enter alone still makes one.
             rows.spawn(Node {
-                column_gap: px(10),
+                column_gap: px(4),
                 align_items: AlignItems::Center,
                 ..default()
             })
             .with_children(|line| {
-                line.spawn((
-                    note("NAME".into(), Color::srgba(0.55, 0.75, 0.74, 0.85)),
-                    Node {
-                        width: px(50),
-                        ..default()
-                    },
-                ));
+                line.spawn(KitText::new("NAME", ui_kit::TITLE).shadow(ui_kit::INK));
                 line.spawn((
                     Button,
+                    kit.nine(Set::Oak, "tooltip"),
+                    KitPiece(Set::Oak.key("tooltip")),
                     Node {
-                        width: px(280),
-                        padding: UiRect::axes(px(9), px(4)),
-                        border: UiRect::all(px(1)),
+                        flex_grow: 1.0,
+                        height: px(18),
+                        padding: UiRect::new(px(6), px(6), px(3), px(0)),
                         ..default()
                     },
-                    BorderColor::all(EDGE),
-                    BackgroundColor(idle()),
                     MenuAction::EditName,
                 ))
                 .with_children(|field| {
-                    field.spawn((
-                        Text::new(name.shown()),
-                        TextFont {
-                            font_size: 13.0,
-                            ..default()
-                        },
-                        TextColor(INK),
-                        NameText,
-                    ));
+                    field.spawn((body(name.shown(), 10.0, ui_kit::TEXT), NameText));
                 });
             });
-            small_wide(rows, "NEW WORLD", MenuAction::New);
+            rows.spawn(Node {
+                justify_content: JustifyContent::FlexStart,
+                ..default()
+            })
+            .with_children(|line| {
+                small(line, kit, "NEW WORLD", MenuAction::New);
+            });
         });
     }
 }
 
-/// A button that sits in a row rather than filling the panel.
-pub(super) fn small(parent: &mut ChildSpawnerCommands, label: &str, action: MenuAction) {
+/// An oak plaque that sits in a row rather than filling the panel.
+pub(super) fn small(
+    parent: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    label: &str,
+    action: MenuAction,
+) -> Entity {
     parent
-        .spawn((
-            Button,
-            Node {
-                padding: UiRect::axes(px(9), px(4)),
-                border: UiRect::all(px(1)),
-                ..default()
-            },
-            BorderColor::all(EDGE),
-            BackgroundColor(idle()),
-            action,
-        ))
+        .spawn((plaque(kit, Set::Oak, 30.0), action))
         .with_children(|row| {
-            row.spawn((
-                Text::new(label.to_string()),
-                TextFont {
-                    font_size: 11.0,
-                    ..default()
-                },
-                TextColor(INK),
-            ));
-        });
-}
-
-fn small_wide(parent: &mut ChildSpawnerCommands, label: &str, action: MenuAction) {
-    parent
-        .spawn(Node { ..default() })
-        .with_children(|line| small(line, label, action));
+            row.spawn(plaque_label(Set::Oak, label));
+        })
+        .id()
 }
 
 /// `Escape` steps back one screen, and is CONSUMED.
@@ -1065,7 +1311,6 @@ pub fn paint(
     mut name: ResMut<NameField>,
     save: Option<Res<WorldSave>>,
     mut panels: Query<(&Panel, &mut Node)>,
-    mut rows: TouchedRows,
 ) {
     if screen.is_changed() {
         menu.0 = *screen != Screen::Playing;
@@ -1091,18 +1336,42 @@ pub fn paint(
             };
         }
     }
-    for (interaction, mut fill) in &mut rows {
-        fill.0 = match interaction {
-            Interaction::Pressed => pressed(),
-            Interaction::Hovered => hovered(),
-            Interaction::None => idle(),
-        };
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Out of play is timber (owner, 2026-11-14: "pause menu = timber too"):
+    /// the pause, settings and saves panels are framed in the carved oak, and
+    /// every plaque on them is oak.
+    #[test]
+    fn the_timber_menus_are_oak() {
+        let mut app = App::new();
+        pbd_app::ui_kit::install_bare(&mut app);
+        app.add_systems(Update, spawn);
+        app.update();
+        let world = app.world_mut();
+        let oak = world.resource::<UiKit>().image("oak/frame");
+        let mut panels = world.query::<(&Panel, &Children)>();
+        let found: Vec<(Screen, Entity)> = panels
+            .iter(world)
+            .map(|(panel, children)| (panel.0, children[0]))
+            .collect();
+        let screens: Vec<Screen> = found.iter().map(|f| f.0).collect();
+        for screen in [Screen::Pause, Screen::Settings, Screen::Saves] {
+            assert!(screens.contains(&screen), "{screen:?} has a panel");
+        }
+        for (screen, frame) in found {
+            let image = world.get::<ImageNode>(frame).expect("a framed panel");
+            assert_eq!(image.image, oak, "{screen:?} is framed in oak");
+        }
+        let mut plaques = world.query::<&Plaque>();
+        assert!(plaques.iter(world).count() >= 5);
+        for plaque in plaques.iter(world) {
+            assert_eq!(plaque.set, Set::Oak, "a timber menu's plaque is oak");
+        }
+    }
 
     /// Escape steps out one screen at a time, and from the world it steps IN.
     /// A settings page that resumed the game on its way past the pause menu is

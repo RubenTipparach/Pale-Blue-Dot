@@ -18,6 +18,7 @@ use super::slots::{self, Hotbar, ItemIcons, SlotCell};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::{self, KitText, UiKit};
 use pbd_app::walking::WalkingReadout;
 use pbd_core::inventory::{PACK, SLOTS, Slots, Stack};
 
@@ -109,69 +110,57 @@ pub fn open(
     }
 }
 
-const EDGE: Color = Color::srgba(0.55, 0.75, 0.74, 0.6);
-const PANEL_FILL: Color = Color::srgba(0.02, 0.06, 0.08, 0.94);
-const DIM: Color = Color::srgb(0.6, 0.72, 0.72);
-const GAP: f32 = 4.0;
-
-/// Build the pack's screen, hidden. `PostStartup`, after the icons.
-pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>) {
+/// The pack's panel: the approved base rock baked at the pack's own size
+/// (`rock_panels.pack`, 268 x 152 native px), the oak lintel carrying its
+/// title, the thirty slots and the hotbar's ten under them. Nothing else on
+/// it: no close button (owner, 2026-11-14: "In desktop esc will do just
+/// fine"; I shuts it too) and no line of instructions.
+pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, kit: Res<UiKit>) {
     let atlas = icons.atlas.clone();
+    let kit = &*kit;
+    let (rock, (w, h)) = kit.rock("pack");
     commands
         .spawn((menu::layer(), GlobalZIndex(10), Panel(Screen::Pack)))
         .with_children(|layer| {
             layer
                 .spawn((
-                    menu::panel_node(520.0),
-                    BorderColor::all(EDGE),
-                    BackgroundColor(PANEL_FILL),
+                    rock,
+                    Node {
+                        width: px(w),
+                        height: px(h),
+                        padding: UiRect::all(px(14)),
+                        flex_direction: FlexDirection::Column,
+                        ..default()
+                    },
                 ))
                 .with_children(|panel| {
-                    panel.spawn(menu::title("PACK"));
+                    menu::lintel(panel, kit, "PACK");
                     let rows = PACK / SLOTS;
                     for row in 0..=rows {
                         let first = if row < rows { SLOTS + row * SLOTS } else { 0 };
                         if row == rows {
                             panel.spawn((
-                                Text::new("HOTBAR"),
-                                TextFont {
-                                    font_size: 11.0,
+                                KitText::new("HOTBAR", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                                Node {
+                                    margin: UiRect::new(px(0), px(0), px(5), px(3)),
                                     ..default()
                                 },
-                                TextColor(DIM),
                             ));
                         }
-                        panel
-                            .spawn(Node {
-                                column_gap: px(GAP),
-                                ..default()
-                            })
-                            .with_children(|line| {
-                                for index in first..first + SLOTS {
-                                    slots::cell(line, index, &atlas, (Button, PackCell(index)));
-                                }
-                            });
+                        panel.spawn(Node::default()).with_children(|line| {
+                            for index in first..first + SLOTS {
+                                slots::cell(line, kit, index, &atlas, (Button, PackCell(index)));
+                            }
+                        });
                     }
-                    panel.spawn((
-                        Text::new(
-                            "CLICK picks up and puts down   RIGHT-CLICK takes half   \
-                             SHIFT-CLICK sends across",
-                        ),
-                        TextFont {
-                            font_size: 11.0,
-                            ..default()
-                        },
-                        TextColor(DIM),
-                    ));
-                    menu::button(panel, "CLOSE  (I)", menu::MenuAction::Back);
                 });
         });
     commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                width: px(36),
-                height: px(36),
+                width: px(16),
+                height: px(16),
                 display: Display::None,
                 ..default()
             },
@@ -185,17 +174,11 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>) {
         ))
         .with_children(|icon| {
             icon.spawn((
-                Text::new(""),
-                TextFont {
-                    font_size: 10.0,
-                    ..default()
-                },
-                TextColor(Color::srgb(0.92, 0.97, 0.95)),
-                TextShadow::default(),
+                KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
                     position_type: PositionType::Absolute,
-                    bottom: px(-2),
-                    right: px(0),
+                    bottom: px(-3),
+                    right: px(-2),
                     ..default()
                 },
                 HeldCount,
@@ -203,8 +186,6 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>) {
         });
 }
 
-/// A click on a square: pick up, put down or send, through the save's
-/// durable path. A move the save refuses does not happen.
 #[allow(clippy::too_many_arguments)]
 pub fn press(
     mouse: Res<ButtonInput<MouseButton>>,
@@ -259,9 +240,14 @@ pub fn paint(
     icons: Option<Res<ItemIcons>>,
     images: Res<Assets<Image>>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    mut held: Query<(&mut Node, &mut ImageNode), With<HeldIcon>>,
-    mut count: Query<&mut Text, With<HeldCount>>,
-    mut cells: Query<(&SlotCell, &mut BorderColor), With<PackCell>>,
+    ui_scale: Res<UiScale>,
+    kit: Res<UiKit>,
+    mut held: Query<(&mut Node, &mut ImageNode), (With<HeldIcon>, Without<PackCell>)>,
+    mut count: Query<&mut KitText, With<HeldCount>>,
+    mut cells: Query<
+        (&SlotCell, &Interaction, &mut ImageNode),
+        (With<PackCell>, Without<HeldIcon>),
+    >,
 ) {
     let Some(icons) = icons else {
         return;
@@ -277,8 +263,10 @@ pub fn paint(
         match (stack, cursor) {
             (Some(stack), Some(at)) => {
                 node.display = Display::Flex;
-                node.left = px(at.x - 18.0);
-                node.top = px(at.y - 18.0);
+                // The cursor is in window pixels, a node in native ones.
+                let at = at / ui_scale.0.max(1e-3);
+                node.left = px(at.x - 8.0);
+                node.top = px(at.y - 8.0);
                 slots::paint_icon(&mut image, Some(stack), &icons, &images);
             }
             _ => node.display = Display::None,
@@ -289,15 +277,25 @@ pub fn paint(
             Some(stack) if stack.count > 1 => stack.count.to_string(),
             _ => String::new(),
         };
-        if text.0 != label {
-            text.0 = label;
+        if text.text != label {
+            text.text = label;
         }
     }
-    for (cell, mut border) in &mut cells {
-        if in_hand.is_some_and(|h| h.from == cell.0) {
-            *border = BorderColor::all(Color::srgb(0.98, 0.85, 0.45));
-        } else if hand.is_changed() {
-            *border = BorderColor::all(slots::border_of(cell.0 == hotbar.selected()));
+    if *screen != Screen::Pack {
+        return;
+    }
+    // The slot a stack is lifted from, and the one under the pointer, are lit;
+    // the selected slot wears the rune.
+    for (cell, interaction, mut image) in &mut cells {
+        let lit = in_hand.is_some_and(|h| h.from == cell.0) || *interaction != Interaction::None;
+        let key = if lit {
+            "slot-hover"
+        } else {
+            slots::slot_piece(cell.0 == hotbar.selected())
+        };
+        let want = kit.image(key);
+        if image.image != want {
+            image.image = want;
         }
     }
 }
@@ -307,6 +305,57 @@ mod tests {
     use super::*;
     use pbd_core::inventory::Item;
     use pbd_core::terrain::Material;
+
+    /// In play is rock: the pack is framed in the base rock baked at the
+    /// pack's own size, drawn whole (never tiled), its slots are dressed
+    /// stone, and its title is on the oak lintel.
+    #[test]
+    fn the_pack_is_framed_in_its_own_rock() {
+        let mut app = App::new();
+        pbd_app::ui_kit::install_bare(&mut app);
+        app.insert_resource(ItemIcons {
+            atlas: Handle::default(),
+            fish: Vec::new(),
+            tools: Vec::new(),
+            hand: Handle::default(),
+            lights: Vec::new(),
+        });
+        app.add_systems(Update, spawn);
+        app.update();
+        let world = app.world_mut();
+        let (rock, lintel, slots) = {
+            let kit = world.resource::<UiKit>();
+            (
+                kit.image("rock/pack"),
+                kit.image("lintel"),
+                [kit.image("slot-idle"), kit.image("slot-selected")],
+            )
+        };
+        let mut panels = world.query::<(&Panel, &Children)>();
+        let (_, children) = panels
+            .iter(world)
+            .find(|(p, _)| p.0 == Screen::Pack)
+            .expect("the pack's panel");
+        let frame = children[0];
+        let image = world.get::<ImageNode>(frame).unwrap();
+        assert_eq!(image.image, rock);
+        assert!(
+            matches!(image.image_mode, NodeImageMode::Stretch),
+            "drawn whole"
+        );
+        let node = world.get::<Node>(frame).unwrap();
+        assert_eq!((node.width, node.height), (px(268), px(152)));
+        let mut images = world.query::<&ImageNode>();
+        assert_eq!(
+            images.iter(world).filter(|i| i.image == lintel).count(),
+            1,
+            "one oak lintel"
+        );
+        let mut cells = world.query_filtered::<&ImageNode, With<PackCell>>();
+        let n = cells.iter(world).count();
+        assert_eq!(n, PACK + SLOTS);
+        assert!(cells.iter(world).all(|i| slots.contains(&i.image)));
+    }
 
     fn kit() -> Slots {
         let mut slots = Slots::new();

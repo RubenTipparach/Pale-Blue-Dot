@@ -3,8 +3,9 @@
 //! key and `--rain` do (`StormForcing`), so there is one path to the weather
 //! and the menu is only another hand on it.
 
-use super::menu::{EDGE, MINT, MenuAction, small};
+use super::menu::{MenuAction, small};
 use bevy::{prelude::*, ui::RelativeCursorPosition};
+use pbd_app::ui_kit::{self, KitText, UiKit};
 use pbd_app::weather::StormForcing;
 
 /// The bar a press or a drag sets the forcing from.
@@ -19,8 +20,12 @@ pub struct WeatherFill;
 #[derive(Component)]
 pub struct WeatherLabel;
 
+/// The oak grip on the groove.
+#[derive(Component)]
+pub struct WeatherKnob;
+
 /// The bar's width, px.
-const BAR_WIDTH: f32 = 220.0;
+const BAR_WIDTH: f32 = 172.0;
 
 /// What a forcing reads as, in words a player would use.
 pub fn describe(forcing: f32) -> &'static str {
@@ -33,51 +38,29 @@ pub fn describe(forcing: f32) -> &'static str {
 }
 
 /// The control, laid into the pause panel above its buttons.
-pub fn spawn(panel: &mut ChildSpawnerCommands) {
+pub fn spawn(panel: &mut ChildSpawnerCommands, kit: &UiKit) {
     panel.spawn((
         WeatherLabel,
-        Text::new("WEATHER"),
-        TextFont {
-            font_size: 11.0,
-            ..default()
-        },
-        TextColor(MINT),
+        KitText::new("WEATHER", ui_kit::TITLE).shadow(ui_kit::INK),
     ));
-    panel
-        .spawn((
-            WeatherSlider,
-            Button,
-            RelativeCursorPosition::default(),
-            Node {
-                width: px(BAR_WIDTH),
-                height: px(14),
-                border: UiRect::all(px(1)),
-                ..default()
-            },
-            BorderColor::all(EDGE),
-            BackgroundColor(Color::srgba(0.04, 0.10, 0.12, 0.9)),
-        ))
-        .with_children(|bar| {
-            bar.spawn((
-                WeatherFill,
-                Node {
-                    width: percent(0),
-                    height: percent(100),
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.48, 0.8, 0.77, 0.75)),
-            ));
-        });
+    super::menu::slider(
+        panel,
+        kit,
+        BAR_WIDTH,
+        (WeatherSlider, Button, RelativeCursorPosition::default()),
+        WeatherFill,
+        WeatherKnob,
+    );
     panel
         .spawn(Node {
-            column_gap: px(6),
-            margin: UiRect::bottom(px(6)),
+            column_gap: px(2),
+            margin: UiRect::bottom(px(3)),
             ..default()
         })
         .with_children(|row| {
-            small(row, "NATURAL", MenuAction::Weather(0));
-            small(row, "RAIN", MenuAction::Weather(60));
-            small(row, "STORM", MenuAction::Weather(100));
+            small(row, kit, "NATURAL", MenuAction::Weather(0));
+            small(row, kit, "RAIN", MenuAction::Weather(60));
+            small(row, kit, "STORM", MenuAction::Weather(100));
         });
 }
 
@@ -104,17 +87,22 @@ pub fn drag(
 /// The bar and the label follow the forcing, however it was set.
 pub fn show(
     forcing: Res<StormForcing>,
-    mut fills: Query<&mut Node, With<WeatherFill>>,
-    mut labels: Query<&mut Text, With<WeatherLabel>>,
+    mut fills: Query<&mut Node, (With<WeatherFill>, Without<WeatherKnob>)>,
+    mut knobs: Query<&mut Node, (With<WeatherKnob>, Without<WeatherFill>)>,
+    mut labels: Query<&mut KitText, With<WeatherLabel>>,
 ) {
     if !forcing.is_changed() {
         return;
     }
+    let at = percent(forcing.0.clamp(0.0, 1.0) * 100.0);
     for mut node in &mut fills {
-        node.width = percent(forcing.0.clamp(0.0, 1.0) * 100.0);
+        node.width = at;
+    }
+    for mut node in &mut knobs {
+        node.left = at;
     }
     for mut text in &mut labels {
-        text.0 = format!(
+        text.text = format!(
             "WEATHER  {}  {:.0}%",
             describe(forcing.0),
             forcing.0.clamp(0.0, 1.0) * 100.0

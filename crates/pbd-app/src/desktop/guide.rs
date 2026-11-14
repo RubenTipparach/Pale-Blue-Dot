@@ -11,13 +11,14 @@
 //! guide, the numbers are `fish::guide_facts` off the same record the schools
 //! and the hook read, and the catches are the save's.
 
-use super::menu::{self, EDGE, INK, MINT, MenuAction, PANEL_FILL, Panel, Screen};
+use super::menu::{self, MenuAction, Panel, Screen};
 use super::slots::ItemIcons;
 use bevy::prelude::*;
 use pbd_app::config::FaunaConfig;
 use pbd_app::fish::{Body, guide_facts};
 use pbd_app::hotbar::Hotbar;
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::{self, KitText, Set, UiKit, plaque};
 use pbd_core::fauna::Origin;
 use pbd_core::inventory::Item;
 
@@ -35,8 +36,9 @@ pub struct GuideEntry;
 #[derive(Component)]
 pub struct GuideCount(pub u16);
 
-const DIM: Color = Color::srgb(0.60, 0.70, 0.70);
-const AMBER: Color = Color::srgb(0.96, 0.72, 0.30);
+const DIM: Color = ui_kit::TEXT_DIM;
+const AMBER: Color = ui_kit::TITLE;
+const INK: Color = ui_kit::TEXT;
 
 fn text(value: impl Into<String>, size: f32, colour: Color) -> impl Bundle {
     (
@@ -52,6 +54,7 @@ fn text(value: impl Into<String>, size: f32, colour: Color) -> impl Bundle {
 /// Build the guide's panel, hidden. `PostStartup`, after the icons.
 pub fn spawn(
     mut commands: Commands,
+    kit: Res<UiKit>,
     icons: Res<ItemIcons>,
     fauna: Res<FaunaConfig>,
     body: Res<Body>,
@@ -61,24 +64,23 @@ pub fn spawn(
         .spawn((menu::layer(), GlobalZIndex(10), Panel(Screen::Guide)))
         .with_children(|layer| {
             layer
-                .spawn((
-                    menu::panel_node(820.0),
-                    BorderColor::all(EDGE),
-                    BackgroundColor(PANEL_FILL),
-                ))
+                // In play, so stone: the dressed-stone moulding, which
+                // stretches with nothing to repeat (no rock is baked at the
+                // guide's size).
+                .spawn(menu::framed(&kit, Set::Stone, 420.0))
                 .with_children(|panel| {
-                    panel.spawn(menu::title("FIELD GUIDE"));
+                    menu::lintel(panel, &kit, "FIELD GUIDE");
                     panel
                         .spawn(Node {
-                            column_gap: px(18),
+                            column_gap: px(9),
                             ..default()
                         })
                         .with_children(|columns| {
                             columns
                                 .spawn(Node {
                                     flex_direction: FlexDirection::Column,
-                                    row_gap: px(4),
-                                    width: px(230),
+                                    row_gap: px(1),
+                                    width: px(120),
                                     flex_shrink: 0.0,
                                     ..default()
                                 })
@@ -86,64 +88,59 @@ pub fn spawn(
                                     if roster.is_empty() {
                                         list.spawn(text(
                                             "Nothing lives in the water here.",
-                                            12.0,
+                                            10.0,
                                             DIM,
                                         ));
                                     }
                                     for (index, species) in roster.iter().enumerate() {
-                                        row(list, index as u16, &species.name, &icons);
+                                        row(list, &kit, index as u16, &species.name, &icons);
                                     }
                                 });
                             columns.spawn((
                                 Node {
                                     flex_direction: FlexDirection::Column,
-                                    row_gap: px(8),
+                                    row_gap: px(4),
                                     flex_grow: 1.0,
                                     ..default()
                                 },
                                 GuideEntry,
                             ));
                         });
-                    menu::button(panel, "CLOSE  (J)", MenuAction::Back);
                 });
         });
 }
 
 /// One row of the species list: a pressable thumbnail, name and count.
-fn row(list: &mut ChildSpawnerCommands, index: u16, name: &str, icons: &ItemIcons) {
-    list.spawn((
-        Button,
-        Node {
+fn row(list: &mut ChildSpawnerCommands, kit: &UiKit, index: u16, name: &str, icons: &ItemIcons) {
+    list.spawn((plaque(kit, Set::Stone, 48.0), MenuAction::Species(index)))
+        .insert(Node {
             align_items: AlignItems::Center,
-            column_gap: px(8),
-            padding: UiRect::axes(px(8), px(4)),
-            border: UiRect::all(px(1)),
+            column_gap: px(4),
+            height: px(22),
+            padding: UiRect::axes(px(6), px(3)),
+            flex_shrink: 0.0,
             ..default()
-        },
-        BorderColor::all(EDGE),
-        BackgroundColor(Color::srgba(0.06, 0.13, 0.15, 0.9)),
-        MenuAction::Species(index),
-    ))
-    .with_children(|row| {
-        if let Some(icon) = icons.fish.get(index as usize) {
+        })
+        .with_children(|row| {
+            if let Some(icon) = icons.fish.get(index as usize) {
+                row.spawn((
+                    ImageNode::new(icon.clone()),
+                    Node {
+                        width: px(16),
+                        height: px(16),
+                        ..default()
+                    },
+                ));
+            }
             row.spawn((
-                ImageNode::new(icon.clone()),
+                text(name, 10.0, ui_kit::LABEL),
                 Node {
-                    width: px(28),
-                    height: px(28),
+                    flex_grow: 1.0,
                     ..default()
                 },
             ));
-        }
-        row.spawn((
-            text(name, 13.0, INK),
-            Node {
-                flex_grow: 1.0,
-                ..default()
-            },
-        ));
-        row.spawn((text("", 11.0, DIM), GuideCount(index)));
-    });
+            row.spawn((text("", 9.0, ui_kit::TAB_DIM), GuideCount(index)));
+        });
 }
 
 /// J opens the guide from the world and closes it again. `PreUpdate` after
@@ -223,7 +220,7 @@ pub fn paint(
     commands.entity(entry).with_children(|entry| {
         entry
             .spawn(Node {
-                column_gap: px(14),
+                column_gap: px(7),
                 align_items: AlignItems::Center,
                 ..default()
             })
@@ -232,8 +229,8 @@ pub fn paint(
                     head.spawn((
                         ImageNode::new(icon.clone()),
                         Node {
-                            width: px(96),
-                            height: px(96),
+                            width: px(48),
+                            height: px(48),
                             flex_shrink: 0.0,
                             ..default()
                         },
@@ -241,50 +238,54 @@ pub fn paint(
                 }
                 head.spawn(Node {
                     flex_direction: FlexDirection::Column,
-                    row_gap: px(4),
+                    row_gap: px(2),
                     ..default()
                 })
                 .with_children(|words| {
-                    words.spawn(text(species.name.to_uppercase(), 18.0, MINT));
+                    words.spawn(
+                        KitText::new(species.name.to_uppercase(), ui_kit::TITLE)
+                            .shadow(ui_kit::INK)
+                            .size(2),
+                    );
                     let from = match &species.from {
                         Origin::Tenebris(kind) => format!("from Tenebris ({kind})"),
                         Origin::New => "new to Pale Blue Dot".into(),
                     };
-                    words.spawn(text(from, 11.0, AMBER));
+                    words.spawn(text(from, 9.0, AMBER));
                     let caught = match record {
                         Some(r) if r.count > 0 => {
                             format!("caught {}, best {} cm", r.count, r.best_cm)
                         }
                         _ => "not caught in this world yet".into(),
                     };
-                    words.spawn(text(caught, 12.0, INK));
+                    words.spawn(text(caught, 10.0, INK));
                 });
             });
         entry.spawn((
-            text(species.guide.entry.clone(), 13.0, INK),
+            text(species.guide.entry.clone(), 10.0, INK),
             Node {
-                max_width: px(520),
+                max_width: px(260),
                 ..default()
             },
         ));
         entry
             .spawn(Node {
                 display: Display::Grid,
-                grid_template_columns: vec![GridTrack::px(120.0), GridTrack::flex(1.0)],
-                row_gap: px(3),
-                column_gap: px(10),
+                grid_template_columns: vec![GridTrack::px(60.0), GridTrack::flex(1.0)],
+                row_gap: px(1),
+                column_gap: px(5),
                 ..default()
             })
             .with_children(|grid| {
                 for (key, value) in facts {
-                    grid.spawn(text(key, 10.0, DIM));
-                    grid.spawn(text(value, 12.0, INK));
+                    grid.spawn(text(key, 9.0, DIM));
+                    grid.spawn(text(value, 10.0, INK));
                 }
             });
         entry.spawn((
-            text(format!("TIP  {}", species.guide.tip), 12.0, AMBER),
+            text(format!("TIP  {}", species.guide.tip), 10.0, AMBER),
             Node {
-                max_width: px(520),
+                max_width: px(260),
                 ..default()
             },
         ));

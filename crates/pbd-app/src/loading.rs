@@ -53,11 +53,8 @@ const PLANET_GUESS_S: f32 = 5.5;
 /// Blocks in the bar.
 const BLOCKS: usize = 32;
 
-const INK: Color = Color::srgb(0.88, 0.94, 0.91);
-const MINT: Color = Color::srgb(0.48, 0.8, 0.77);
-const DIM: Color = Color::srgba(0.55, 0.75, 0.74, 0.18);
-const EDGE: Color = Color::srgba(0.55, 0.75, 0.74, 0.6);
-const NIGHT: Color = Color::srgb(0.002, 0.004, 0.012);
+// The screen's colours are the kit's tokens (`ui_kit`); it keeps no copy.
+use crate::ui_kit::{self, KitText, NIGHT, Set, TEXT_DIM, TITLE, UiKit};
 
 /// The schedule a loading frame runs between `First` and `PostUpdate`.
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
@@ -337,7 +334,7 @@ struct StepText;
 #[derive(Component)]
 struct DetailText;
 #[derive(Component)]
-struct Block(usize);
+struct Block;
 
 /// The loading screen.
 pub struct LoadingPlugin {
@@ -453,7 +450,13 @@ fn run_main_gated(world: &mut World, mut started: Local<bool>) {
     });
 }
 
+/// The loading slab (`stone-and-wood-ui`, the Loading tab): the approved
+/// base rock baked at the slab's own size, the emblem, the name carved in
+/// the kit's font, the step in the body face and the bar as the stone band
+/// with its progress fill. The kit is decoded before the first frame
+/// (`ui_kit::install`), so the first frame the window shows is this one.
 fn spawn_screen(world: &mut World) {
+    ui_kit::install(world);
     let camera = world
         .spawn((
             Camera2d,
@@ -465,10 +468,11 @@ fn spawn_screen(world: &mut World) {
             LoadingCamera,
         ))
         .id();
-    let text = |size: f32| TextFont {
-        font_size: size,
-        ..default()
-    };
+    let kit = world.resource::<UiKit>();
+    let (slab, (w, h)) = kit.rock("loading");
+    let emblem = kit.whole(Set::Stone, "emblem");
+    let bar = kit.nine(Set::Stone, "bar");
+    let fill = kit.whole(Set::Stone, "fill-progress");
     world
         .spawn((
             Node {
@@ -487,47 +491,77 @@ fn spawn_screen(world: &mut World) {
         ))
         .with_children(|root| {
             root.spawn((
+                slab,
                 Node {
+                    width: px(w),
+                    height: px(h),
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Center,
-                    row_gap: px(14),
-                    padding: UiRect::axes(px(36), px(28)),
-                    border: UiRect::all(px(1)),
+                    padding: UiRect::all(px(14)),
                     ..default()
                 },
-                BorderColor::all(EDGE),
             ))
             .with_children(|panel| {
-                panel.spawn((Text::new("PALE BLUE DOT"), text(26.0), TextColor(INK)));
+                panel.spawn((
+                    emblem,
+                    Node {
+                        width: px(48),
+                        height: px(48),
+                        flex_shrink: 0.0,
+                        ..default()
+                    },
+                ));
+                panel.spawn((
+                    KitText::new("PALE BLUE DOT", TITLE).shadow(ui_kit::INK),
+                    Node {
+                        margin: UiRect::vertical(px(3)),
+                        ..default()
+                    },
+                ));
                 panel.spawn((
                     Text::new(Step::Reading.label()),
-                    text(14.0),
-                    TextColor(MINT),
+                    TextFont {
+                        font_size: 10.0,
+                        ..default()
+                    },
+                    TextColor(TEXT_DIM),
+                    Node {
+                        margin: UiRect::bottom(px(4)),
+                        ..default()
+                    },
                     StepText,
                 ));
                 panel
-                    .spawn(Node {
-                        flex_direction: FlexDirection::Row,
-                        column_gap: px(2),
-                        ..default()
-                    })
+                    .spawn((
+                        bar,
+                        Node {
+                            width: percent(100),
+                            height: px(10),
+                            flex_shrink: 0.0,
+                            // The fill sits in the band's channel (x 5..34,
+                            // y 3..6 of the 40 x 10 piece).
+                            padding: UiRect::new(px(5), px(5), px(3), px(4)),
+                            ..default()
+                        },
+                    ))
                     .with_children(|bar| {
-                        for i in 0..BLOCKS {
-                            bar.spawn((
-                                Node {
-                                    width: px(10),
-                                    height: px(14),
-                                    ..default()
-                                },
-                                BackgroundColor(DIM),
-                                Block(i),
-                            ));
-                        }
+                        bar.spawn((
+                            fill,
+                            Node {
+                                width: percent(0),
+                                height: percent(100),
+                                ..default()
+                            },
+                            Block,
+                        ));
                     });
                 panel.spawn((
                     Text::new(""),
-                    text(11.0),
-                    TextColor(INK.with_alpha(0.6)),
+                    TextFont {
+                        font_size: 8.0,
+                        ..default()
+                    },
+                    TextColor(TEXT_DIM),
                     DetailText,
                 ));
             });
@@ -555,11 +589,13 @@ fn paint(world: &mut World, step: Step, fraction: f32, detail: String) {
             text.0.clone_from(&detail);
         }
     }
-    let mut blocks = world.query::<(&Block, &mut BackgroundColor)>();
-    for (block, mut colour) in blocks.iter_mut(world) {
-        let want = if block.0 < filled { MINT } else { DIM };
-        if colour.0 != want {
-            colour.0 = want;
+    // The fill is the bar's blocks as a share: the same steps, drawn as one
+    // run of the progress fill along the band's channel.
+    let want = percent(filled as f32 / BLOCKS as f32 * 100.0);
+    let mut blocks = world.query_filtered::<&mut Node, With<Block>>();
+    for mut node in blocks.iter_mut(world) {
+        if node.width != want {
+            node.width = want;
         }
     }
 }

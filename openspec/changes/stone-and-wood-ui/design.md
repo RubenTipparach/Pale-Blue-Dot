@@ -531,3 +531,76 @@ textures use nearest point sampling"). Item icons inside slots stay pixel art, n
 stays the pixel bitmap font, nearest, at whole-number scale. The drawn and pixelated looks stay in
 the mockup as the record, not in the game. The owner's words also count as the go-ahead to start
 section 1 of `tasks.md` (the kit in the game).
+
+## Section 1 as built: the Bevy 0.18.1 names, and what differs from section 8 (2026-11-14)
+
+Read off the crate sources (`bevy_ui` 0.18.1 `widget/image.rs` and `lib.rs`,
+`bevy_sprite` 0.18.1 `texture_slice/`, `bevy_ui_render` 0.18.1
+`ui_texture_slice_pipeline.rs`, `bevy_image` 0.18.1, `bevy_text` 0.18.1):
+
+| Name | As it is in 0.18.1 |
+| --- | --- |
+| `ImageNode` | `bevy::ui::widget::ImageNode { color, image, texture_atlas: Option<TextureAtlas>, flip_x, flip_y, rect, image_mode }`; builders `new`, `from_atlas_image`, `with_color`, `with_mode` |
+| `NodeImageMode` | `Auto`, `Stretch`, `Sliced(TextureSlicer)`, `Tiled { tile_x, tile_y, stretch_value }` |
+| `TextureSlicer` | `bevy::sprite::TextureSlicer { border: BorderRect, center_scale_mode, sides_scale_mode, max_corner_scale }` |
+| `BorderRect` | **differs from older Bevy**: `{ min_inset: Vec2, max_inset: Vec2 }` (min is left and top, max right and bottom), with `all` and `axes`; there are no `left/right/top/bottom` fields |
+| `SliceScaleMode` | `Stretch`, `Tile { stretch_value }` |
+| `UiScale` | `bevy::ui::UiScale(pub f32)`; it scales `Val::Px` and text, and the slicer's target size is taken after it |
+| `ImageSampler` | `bevy::image::ImageSampler::{linear(), nearest()}`, per image (`Image::sampler`) |
+| Atlas | `TextureAtlasLayout::new_empty(UVec2)` + `add_texture(URect)`, `TextureAtlas { layout, index }` |
+| Default font | `TextPlugin` inserts Fira Mono at `AssetId::<Font>::default()`; inserting another `Font` there replaces the face of every `Text` |
+
+**How a slice corner scales (the risk in section 12, measured in the source).**
+`compute_texture_slices` draws a corner at `border * min(target / image,
+max_corner_scale)` UI units, `target` being the node's size in UI units. So a
+corner GROWS with the node until the texture's own size unless
+`max_corner_scale` caps it. The game bakes each piece at the screen's pixels a
+native pixel (`s`), gives the slicer the margins times `s`, and sets
+`max_corner_scale = 1/s`: a corner is then its native size in UI units, and
+`margin * UiScale` screen pixels, at every node size
+(`ui_kit::slicer_at`, test `the_kit_bakes_linear_and_the_font_nearest`).
+
+What differs from section 8's plan, and why:
+
+- **The kit is `crates/pbd-app/src/ui_kit.rs`, in the library, not
+  `desktop/ui_kit.rs`.** The loading screen (`loading.rs`) is in the library
+  and draws the kit's slab; the binary's `desktop/` cannot be reached from
+  there.
+- **Smooth, linear, resampled per scale.** Section 8 was written for the pixel
+  looks (nearest). The owner chose Smooth, so the kit's pieces are sampled
+  linear; drawn straight from the 8x renders they would be minified four to one
+  with no mip chain. Each piece is resampled once on the CPU (premultiplied,
+  Catmull-Rom) to exactly `s` texels a native pixel when the kit is installed
+  and again when the window crosses a step of the scale, into the same handles.
+  Item icons and the pixel font stay nearest.
+- **Decoded before the first frame, not through the asset server**, in the
+  plugin's `finish`, so the loading slab is on the first frame the window shows
+  (CLAUDE.md, "A loading screen on boot").
+- **The map frame is hollow**: a Bevy slicer always fills the centre, so the
+  bake clears the face inside the map frame's 22 px margins.
+- **The kit font is drawn as glyph image nodes** (`KitText`): one atlas
+  image node per glyph, nearest, whole native pixels, a one-pixel shadow node
+  under it where carved. Bevy's `Text` takes only outline fonts.
+- **VT323 is installed as the default face** rather than named in each
+  `TextFont`, so every line of body text reads in it.
+- **`UiScale` is `s / window scale factor`**, so the screen pixels a native
+  pixel is the whole number `s` on a high-DPI display as well.
+- Settings got its tabs (Picture, Weather, Movement, Input); Input is the
+  binding table under a heading per context with each key in a cap, scrolled
+  by the wheel. The sub-tabs and rebinding (decision 6) are new behaviour and
+  stay in this change for a later step. Frame limit and render scale are oak
+  plaques that step through their values, as the rows did; bloom, rain shadow
+  (still off by default) and auto step are checkboxes.
+- The pack carries only its slots under the PACK lintel: the old CLOSE (I)
+  button and the line of mouse instructions are gone (no close button in the
+  game; "All text is excess on the UI"). I and Esc shut it as before.
+- The map keeps its legend as a drawer that is always open (the mockup's
+  shut-by-default drawer would be a behaviour change).
+- **The pause panel is the owner's menu only** (Resume, Saves, Settings,
+  Quit; `menus-and-a-quiet-screen`). The weather, the clock and the globe
+  overlay that sat on it made it taller than a 900 px window at scale 2 (the
+  first capture had its lintel off the top of the screen). They moved to
+  Settings: the storm forcing beside the rain shadow on the Weather tab, the
+  clock and the globe overlay on a new World tab. Nothing scrolls off screen.
+- Body text's shadow is one native pixel in ink (`ui_kit::text_shadow`):
+  Bevy's default of 4 px read, at scale 2, as a second copy of the line.

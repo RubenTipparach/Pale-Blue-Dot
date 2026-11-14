@@ -63,21 +63,45 @@
 - [x] The owner answers Q1 and approves the mockup for build (2026-11-14: "Smooth is the best. Write it down as the decision and start working the current UI as the wood + rendered smooth rock").
 
 ## 1. The kit in the game (go-ahead given 2026-11-14: smooth rock in play, smooth oak out of play)
-- [ ] Confirm the Bevy 0.18.1 names (`ImageNode`, `NodeImageMode::Sliced`,
-      `TextureSlicer`, `SliceScaleMode`, `UiScale`) against the crate.
-- [ ] `assets/ui/` (the kit's PNGs and `slices.json`, copied from
-      `docs/mockups/ui/`), `assets/fonts/`
-      (Pixelify Sans, VT323, their OFL texts).
-- [ ] `desktop/ui_kit.rs`: `UiKit` (handles, a linear sampler for the kit's smooth textures and nearest for icons and the font, margins read
-      from `slices.json`), the tokens, `nine(piece)`.
-- [ ] Integer `UiScale` from the window height; native-pixel constants.
-- [ ] The kit font as a Bevy bitmap font (atlas from `kit-font.png`, metrics
-      from `kit-font.json`), VT323 for body text.
-- [ ] Rock panels baked at their sizes (or a long baked edge, only cropped) from
-      the smooth renders (Q1 answered: Smooth); the smooth oak set for the menus out of play.
-- [ ] Test: no two opposite margins in `slices.json` add up to more than the piece; every PNG
-      is on the palette with alpha 0 or 255 (the art file itself, not a copy).
-- [ ] Capture: a frame at scale 2 draws its corners 28 px, pixel exact.
+- [x] Confirm the Bevy 0.18.1 names (`ImageNode`, `NodeImageMode::Sliced`,
+      `TextureSlicer`, `SliceScaleMode`, `UiScale`) against the crate: design,
+      "Section 1 as built" (`BorderRect` is `min_inset`/`max_inset` now; a
+      slice corner grows with its node unless `max_corner_scale` caps it).
+- [x] `assets/ui/` (the smooth stone, oak and per-panel rock renders the game
+      draws, and `slices.json`, copied from `docs/mockups/ui/rendered/` at
+      `d69ee33`), `assets/fonts/` (the kit font, VT323 and its OFL text);
+      provenance in each folder's README. Pixelify Sans is not used: the kit's
+      own font replaced it for every label.
+- [x] `ui_kit.rs` (in the library, `crates/pbd-app/src/ui_kit.rs`, since the
+      loading screen is there): `UiKit` (handles; LINEAR for the kit's smooth
+      pieces, the owner's UI exception; NEAREST for the font; margins from
+      `slices.json`), the tokens, `nine`, `whole`, `rock`, plaques in five
+      states driven by `Interaction`, the lintel, oak tabs.
+- [x] Integer `UiScale` from the window height (`ui_scale_for`), set so the
+      window's scale factor times it is the whole number; the pieces baked
+      again into the same handles when it moves a step; every `px()` in the
+      interface in native pixels.
+- [x] The kit font as glyph image nodes (`KitText`: an atlas from
+      `kit-font.png`, metrics from `kit-font.json`, nearest, whole native
+      pixels, a carved shadow); VT323 installed as the default face for body
+      text.
+- [x] Rock panels baked at their sizes (the pack, the loading slab), drawn
+      whole; the smooth oak set for the menus out of play.
+- [x] Tests: no two opposite margins in `slices.json` add up to more than the
+      piece, and every copied render is its piece's size times its texels;
+      the kit bakes linear at 1 to 4 and the font is nearest; the map frame is
+      hollow; the scale for a set of heights; the font has every label glyph;
+      the tokens clear 4.5:1; no UI file keeps a colour of its own; the timber
+      menus are oak; the pack is framed in its own rock.
+- [x] The existing screens restyled (the rest of section 2 is folded in here,
+      at the owner's go-ahead): pause, settings (tabs Picture, Weather, World,
+      Movement, Input; checkboxes, value plaques, sliders), saves; hotbar, tool
+      slot and picker; the pack; the compass; the map frame, drawer and
+      readout; the overlay legend; the field guide; the loading slab. Captures
+      in `docs/screenshots/stone-and-wood-ui/` (lavapipe, no GPU).
+- [ ] Capture: a frame at scale 2 draws its corners 28 px, pixel exact (the
+      slicer arithmetic is pinned by a test; a pixel-measured capture is not
+      taken yet).
 
 ## 2. Screens, one at a time, each with day and night captures
 - [ ] Pause, settings, saves (`menu.rs`) in the timber set, plaques in every
