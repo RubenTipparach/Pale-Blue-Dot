@@ -1344,7 +1344,7 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
         } else {
             // Grazing, head down while it stands; up to walk or look about.
             let grazing = standing && b.glance_s > 0.6 && b.mode != Mode::Follow;
-            b.head_goal = if grazing { 1.45 } else { 0.0 };
+            b.head_goal = if grazing { 1.85 } else { 0.0 };
             let chew = if grazing {
                 (b.clock_s * 5.0).sin() * 0.05
             } else {
@@ -1817,7 +1817,7 @@ fn script(
             }
         }
         "tame" => {
-            let k = wild(&mut yard, index("woolback"), 1, feet + ahead * 2.0);
+            let k = wild(&mut yard, index("woolback"), 1, feet + ahead * 3.2);
             select_food(hotbar, &roster[index("woolback") as usize]);
             for _ in 0..12 {
                 if matches!(yard.beasts[k].who, Who::Kept { .. }) {

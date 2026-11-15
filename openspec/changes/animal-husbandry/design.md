@@ -358,11 +358,12 @@ decisions 1 to 11 because something they lean on is not in the game yet:
   A record names its species as `sp: <land index>` on its body (`body` field).
   Every fish gains `class: Fish` and `status: WildOnly` (decision 2: fish are
   kept in tanks, not pens). Only `home` has life; no other body is in the game.
-- **S3. Feed until farming lands is turf.** The favourite food of all three
-  is a grass block (`Item::Block(Grass)`, which every world's kit holds and a
-  shovel gives back), marked as a placeholder in `husbandry.ron`. When the
-  branches merge, grain, turnips and kale from farming replace it per species
-  (decision 3's table), one line each in `husbandry.ron`.
+- **S3. Feed is farming's crops, and turf for the grazers.** After
+  `farming-and-smelting` landed (merged from `claude/phase-1`), a species eats
+  a list of foods, its favourite first: the yard hen wheat seed or wheat, the
+  woolback wheat or turf, the plodder turnip or turf (decision 3's grain and
+  turnips; turf is a grass block, which a grazer eats in its pen anyway). Frost
+  kale waits for the ridge goat.
 - **S4. No crouch exists; standing still is the crouch.** The fear radius is
   9 m while the player moves and 4.5 m while they stand still (decision 3's
   numbers). Recommendation taken (ask only with screenshots).
@@ -375,12 +376,16 @@ decisions 1 to 11 because something they lean on is not in the game yet:
   player stands in, crossing only edges with no piece, of at most 64 cells; it
   is a pen if it never escapes and its border holds a gate. Its id is its
   lowest cell key.
-- **S6. Fences, gates and products are items.** `Item::Husbandry(Good)`, one
-  variant, saved as `h<code>`: fence 0, gate 1, egg 2, wool 3, milk 4. All in
-  one marked block of `inventory.rs` so the farming branch's items merge
-  beside it. A kit grant (version 3) deals 24 fences and 2 gates to every
-  world once, as the lights were dealt (an old world gains these and nothing
-  else: no animals).
+- **S6. Fences, gates and products are goods.** Rows of the one goods
+  table (`pbd_core::goods`, `farming-and-smelting` decision 1) under an
+  `animal-husbandry` comment, saved by code: `fence`, `gate`, `egg`, `wool`,
+  `milk` (`gfence,3` in a slot field). A fence is NOT a block: it stands on a
+  hex edge as a `fence` record, so it takes no material code. Every action
+  that changes a record and the hands together is one `with ... rec @p` line
+  (`store_with_hands`): taming (the last feed and the new animal), a hand
+  feed, a collection, a piece set or taken up. Kit grant version 4 deals 24
+  fences and 2 gates to every world once (version 3 is the forge's); an old
+  world gains these and nothing else: no animals.
 - **S7. The farm is derived, not stepped: no world process yet.** The steward
   (`world-persistence` group 4) is not built. Everything the farm does on its
   own in this slice is a closed form of world time from the record's last
@@ -426,9 +431,15 @@ decisions 1 to 11 because something they lean on is not in the game yet:
   hand, feed it (a wild one gains trust; a tame one is fed); on a tame one
   with something waiting, collect it; otherwise lead it or let it stay.
   Fences and gates are placed with right click like a block, on the edge of
-  the aimed cell nearest the aim, and taken back with left click while one is
-  held. A tamed animal follows for 60 s or until let go; let go inside a pen,
+  the aimed cell nearest the aim, and taken back with `E`. The animals' `E`
+  runs before farming's and consumes a press it used, so one press never also
+  harvests the crop behind an animal. A tamed animal follows for 60 s or until let go; let go inside a pen,
   that pen becomes its home (`@p`).
+
+- **S13. Messages for the starter missions.** `pbd_app::husbandry::Deed`:
+  `Tamed { species }`, `Penned { species }` and `PenBuilt { pen, cells }`, and
+  every collection a `hotbar::Gained { how: Collected }`, each on the frame
+  its durable write was accepted.
 
 Recommendations taken (ask only with screenshots) for M26's questions, as no
 survey answer exists for them: **Q1** the Kingdom by body form, world as a
