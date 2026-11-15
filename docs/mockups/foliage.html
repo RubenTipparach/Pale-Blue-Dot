@@ -158,9 +158,9 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   </div></details>
   <details open><summary>LOD and distance</summary><div class="body">
     <div class="field"><label for="lodMode">Switching</label><select id="lodMode"><option value="timed">Timed dithered cross-fade (no pop, no standing dither)</option><option value="fade">Distance cross-fade band (distance-lod-fade)</option><option value="cut">Hard cut (what popping looks like)</option></select></div>
-    <div class="field"><label for="near">Near ring: full geometry, to</label><output id="nearOut"></output><input type="range" id="near" min="5" max="80" step="1" value="22"></div>
-    <div class="field"><label for="mid">Mid ring: cards, to</label><output id="midOut"></output><input type="range" id="mid" min="10" max="150" step="1" value="45"></div>
-    <div class="field"><label for="draw">Draw distance: far impostors, to</label><output id="drawOut"></output><input type="range" id="draw" min="20" max="250" step="1" value="80"></div>
+    <div class="field"><label for="near">Near ring: full geometry, to</label><output id="nearOut"></output><input type="range" id="near" min="5" max="160" step="1" value="44"></div>
+    <div class="field"><label for="mid">Mid ring: cards, to</label><output id="midOut"></output><input type="range" id="mid" min="10" max="300" step="1" value="90"></div>
+    <div class="field"><label for="draw">Draw distance: far impostors, to</label><output id="drawOut"></output><input type="range" id="draw" min="20" max="500" step="1" value="160"></div>
     <div class="field"><label for="fadeW" id="fadeWLabel">Fade time</label><output id="fadeWOut"></output><input type="range" id="fadeW" min="0.02" max="0.6" step="0.01" value="0.3"></div>
     <label class="check"><input type="checkbox" id="lodVis"> Colour by LOD level</label>
     <label class="check"><input type="checkbox" id="maskVis"> Show wind mask on cards (black root, white tip)</label>
@@ -379,14 +379,14 @@ const LAYER_DEFS = [
 ];
 const DEFAULTS = {
   biome: "temperate", season: "summer", time: 16.5, treeStyle: "detail", grassStyle: "tufts", leafFall: 0.45, leafUnder: 0.7, leafSize: 1, treeScale: 1, plantScale: 1, colVar: 0.35,
-  wind: 0.35, gust: 0.5, windDir: 60, lodMode: "timed", near: 22, mid: 45, draw: 80, fadeW: 0.3, lodVis: false, maskVis: false, atlasVis: false, patch: 26,
+  wind: 0.35, gust: 0.5, windDir: 60, lodMode: "timed", near: 44, mid: 90, draw: 160,   /* doubled (owner, 2026-11-15: "2x each LOD level distance") */ fadeW: 0.3, lodVis: false, maskVis: false, atlasVis: false, patch: 26,
   layers: Object.fromEntries(LAYER_DEFS.map(([k]) => [k, { on: true, dens: 1 }])),
 };
 const PRESETS = {
   default: {},
-  lush: { near: 30, mid: 70, draw: 140, wind: 0.45, layers: { trees: { on: true, dens: 1.4 }, bushes: { on: true, dens: 1.6 }, grass: { on: true, dens: 1.8 }, flowers: { on: true, dens: 1.6 }, ferns: { on: true, dens: 1.6 }, mush: { on: true, dens: 1.4 }, rocks: { on: true, dens: 1 }, logs: { on: true, dens: 1.5 }, vines: { on: true, dens: 1.5 }, litter: { on: true, dens: 1.5 } } },
+  lush: { near: 60, mid: 140, draw: 280, wind: 0.45, layers: { trees: { on: true, dens: 1.4 }, bushes: { on: true, dens: 1.6 }, grass: { on: true, dens: 1.8 }, flowers: { on: true, dens: 1.6 }, ferns: { on: true, dens: 1.6 }, mush: { on: true, dens: 1.4 }, rocks: { on: true, dens: 1 }, logs: { on: true, dens: 1.5 }, vines: { on: true, dens: 1.5 }, litter: { on: true, dens: 1.5 } } },
   sparse: { layers: { trees: { on: true, dens: 0.35 }, bushes: { on: true, dens: 0.4 }, grass: { on: true, dens: 0.35 }, flowers: { on: true, dens: 0.4 }, ferns: { on: true, dens: 0.3 }, mush: { on: true, dens: 0.3 }, rocks: { on: true, dens: 1.2 }, logs: { on: true, dens: 0.5 }, vines: { on: true, dens: 0.3 }, litter: { on: true, dens: 0.4 } } },
-  perf: { near: 14, mid: 32, draw: 60, fadeW: 0.25, layers: { trees: { on: true, dens: 0.8 }, bushes: { on: true, dens: 0.6 }, grass: { on: true, dens: 0.5 }, flowers: { on: true, dens: 0.5 }, ferns: { on: true, dens: 0.5 }, mush: { on: true, dens: 0.4 }, rocks: { on: true, dens: 0.6 }, logs: { on: true, dens: 0.5 }, vines: { on: false, dens: 0.5 }, litter: { on: false, dens: 0.5 } } },
+  perf: { near: 28, mid: 64, draw: 120, fadeW: 0.25, layers: { trees: { on: true, dens: 0.8 }, bushes: { on: true, dens: 0.6 }, grass: { on: true, dens: 0.5 }, flowers: { on: true, dens: 0.5 }, ferns: { on: true, dens: 0.5 }, mush: { on: true, dens: 0.4 }, rocks: { on: true, dens: 0.6 }, logs: { on: true, dens: 0.5 }, vines: { on: false, dens: 0.5 }, litter: { on: false, dens: 0.5 } } },
 };
 const S = JSON.parse(JSON.stringify(DEFAULTS));
 
