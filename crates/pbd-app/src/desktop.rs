@@ -146,6 +146,9 @@ pub struct Launch {
     /// animals can be photographed (`animal-husbandry` S12). A capture
     /// instrument, like `--fish`.
     pub husbandry: Option<String>,
+    /// `--life ID`: a capture instrument that puts a group of that water
+    /// species a few metres in front of the eye (`ocean-environments` 7.1).
+    pub life: Option<String>,
     /// `--aboard KIND` boards a craft of that kind once the fleet is in (a
     /// cog or a rowboat once a harbour has made one), and `--seat` takes the
     /// seat rather than the chase view: a headless run has nobody to walk up
@@ -366,6 +369,7 @@ impl Launch {
             swim: false,
             fish: false,
             husbandry: None,
+            life: None,
             aboard: None,
             seat: false,
             sail: None,
@@ -878,6 +882,15 @@ impl Launch {
                 "--fish" => {
                     result.walk = true;
                     result.fish = true;
+                }
+                "--life" => {
+                    i += 1;
+                    result.walk = true;
+                    result.life = Some(
+                        args.get(i)
+                            .expect("--life requires a species id from fauna.ron")
+                            .clone(),
+                    );
                 }
                 "--husbandry" => {
                     i += 1;
@@ -1616,6 +1629,9 @@ pub fn run(args: &[String]) {
         }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
+        }
+        if let Some(id) = launch.life.clone() {
+            app.insert_resource(pbd_app::fish::LifeScript { id, placed: false });
         }
         if let Some(scene) = launch.husbandry.clone() {
             app.insert_resource(pbd_app::husbandry::HusbandryScript { scene });

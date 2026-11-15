@@ -33,6 +33,7 @@ pub mod light;
 pub mod map;
 pub mod missions;
 pub mod night_lights;
+pub mod ocean;
 pub mod orbit;
 pub mod overlay;
 pub mod planet_gen;

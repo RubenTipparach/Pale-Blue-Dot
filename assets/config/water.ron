@@ -30,6 +30,33 @@
     // colours, teal shallows easing to it over 14 m of water, and clear
     // water (Pope and Fry, blue-green halved after Lee 2015).
     absorption_per_m: (0.32, 0.035, 0.012),
+    // Light under water (`ocean-environments` design B2-B5). Absorption is
+    // the view's path; downwelling is the daylight arriving at a depth, so
+    // blue keeps 15% at 40 m (sunlit above) and 1.7% at 90 m (midnight
+    // below), and the deep goes dark inside the column.
+    downwell_per_m: (0.40, 0.065, 0.046),
+    // Per metre toward the water's own colour; coast, ocean and river are
+    // read today, the rest wait for the environment function (6.1).
+    turbidity: (
+        ocean: 0.022,
+        coast: 0.07,
+        river: 0.12,
+        reef: 0.016,
+        kelp: 0.05,
+        polar: 0.03,
+        marsh: 0.35,
+        ease_s: 2.0,
+    ),
+    caustics: 3.0,
+    caustic_cell_m: 4.0,
+    caustic_fade_m: 30.0,
+    shafts: 0.6,
+    shaft_reach_m: 40.0,
+    snow: 1.0,
+    snow_from_m: 15.0,
+    snow_glow: 0.006,
+    spray_from_mps: 17.0,
+    spray: 0.6,
     deep_color: (0.004, 0.018, 0.040),
     shallow_color: (0.020, 0.090, 0.075),
     shallow_depth_m: 14.0,

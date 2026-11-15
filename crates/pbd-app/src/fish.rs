@@ -65,6 +65,8 @@ pub struct Fishery {
     /// ground rule runs the terrain's noise, several microseconds a call, and
     /// a school asks it for every fish every step.
     beds: Mutex<HashMap<(i32, i32, i32), f32>>,
+    /// The cast a refusal was last said for, so it is said once a cast.
+    told_refusal: bool,
 }
 
 impl Default for Fishery {
@@ -77,6 +79,7 @@ impl Default for Fishery {
             spawned: 0,
             rng: fauna::Rng::new(0x5c4001),
             beds: Mutex::new(HashMap::new()),
+            told_refusal: false,
         }
     }
 }
@@ -125,7 +128,14 @@ impl Plugin for FishPlugin {
             .add_systems(Startup, draw::spawn)
             .add_systems(
                 Update,
-                (fish, draw::schools, draw::tackle).chain().in_set(FishSet),
+                (
+                    life_script.run_if(resource_exists::<LifeScript>),
+                    fish,
+                    draw::schools,
+                    draw::tackle,
+                )
+                    .chain()
+                    .in_set(FishSet),
             );
     }
 }
@@ -344,7 +354,30 @@ fn fish(
         _ => None,
     };
 
-    // The schools, on their own clock.
+    // A float cast over a protected creature: the catch is refused, with the
+    // reason, once a cast (`ocean-environments` 7.3).
+    if fishery.line.is_out() {
+        let float = fishery.line.float;
+        let refused = fishery.schools.iter().find_map(|school| {
+            let species = roster.get(school.species as usize)?;
+            let reason = species.catch_refusal()?;
+            (species.status == fauna::Status::Protected
+                && school.centre().distance(float) <= species.sense_m.max(3.0))
+            .then(|| format!("{}: {reason}", species.name))
+        });
+        if let Some(text) = refused
+            && !fishery.told_refusal
+        {
+            status.say(text, 3.0);
+            fishery.told_refusal = true;
+        }
+    } else {
+        fishery.told_refusal = false;
+    }
+
+    // The schools, on their own clock. A shy creature near the eye is
+    // startled first: a clam shuts, a duck paddles off (7.2).
+    let eye = camera.map_or(feet + up * 1.6, |c| c.0);
     let step = 1.0 / settings.spawn.step_hz;
     fishery.step_s = (fishery.step_s + dt).min(4.0 * step);
     while fishery.step_s >= step {
@@ -356,6 +389,7 @@ fn fish(
                 continue;
             };
             let water = PlanetWater::at(sea, air, contact, beds, school.anchor, seconds);
+            school.notice(eye, species, SHY_HOLD_S);
             school.step(step, species, &settings.flock, &water, splash);
         }
     }
@@ -371,6 +405,76 @@ fn fish(
         }
     }
 }
+
+/// `--life ID`, a capture instrument (`ocean-environments` 7.1): once the
+/// walker is up, one group of that species is put in the water a few metres
+/// ahead of the eye, where the spawner's ring (20 to 60 m out) never puts
+/// one, so a capture can show it close. It changes nothing a player meets.
+#[derive(Resource, Clone, Debug)]
+pub struct LifeScript {
+    pub id: String,
+    pub placed: bool,
+}
+
+fn life_script(
+    mut script: ResMut<LifeScript>,
+    mut fishery: ResMut<Fishery>,
+    world: Surroundings,
+    mut waited: Local<u32>,
+) {
+    if script.placed || !world.walking.as_ref().is_some_and(|w| w.active) {
+        return;
+    }
+    // Five seconds on foot first, so a walker over water has sunk to the bed
+    // and the group is put where the eye then is.
+    *waited += 1;
+    if *waited < 300 {
+        return;
+    }
+    let (Some(sea), Some(camera)) = (world.sea.as_deref(), world.cameras.iter().next()) else {
+        return;
+    };
+    let roster = world.fauna.0.roster(&world.body.0);
+    let Some(index) = roster.iter().position(|sp| sp.id == script.id) else {
+        warn!("--life {}: no such species", script.id);
+        script.placed = true;
+        return;
+    };
+    let eye = (camera.translation().as_dvec3() - world.frame.center).as_vec3();
+    let up = eye.normalize_or(Vec3::Y);
+    let look = camera.forward().as_vec3();
+    let ahead = (look - up * look.dot(up)).normalize_or(up.any_orthonormal_vector());
+    // The first point ahead deep enough for it, 3 to 14 m out.
+    let species = &roster[index];
+    let seconds = world.sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
+    for metres in 3..=14 {
+        let direction = (eye + ahead * metres as f32).normalize_or(up);
+        if !species.fits(sea.depth_at(direction)) {
+            continue;
+        }
+        let anchor = direction * sea.radius;
+        let water = PlanetWater::at(
+            sea,
+            world.air.as_deref(),
+            world.contact.as_deref(),
+            &fishery.beds,
+            anchor,
+            seconds,
+        );
+        let school = School::spawn(index as u16, species, anchor, 0x11fe, &water);
+        info!(
+            "life script: {} x{} put {metres} m ahead",
+            species.id,
+            school.len()
+        );
+        fishery.schools.push(school);
+        script.placed = true;
+        return;
+    }
+}
+
+/// How long a startled shy creature stays so after the eye has gone, s.
+const SHY_HOLD_S: f32 = 6.0;
 
 /// Drop the schools that have gone too far or been fished out, keeping the
 /// line's target pointing at the same school.
@@ -408,7 +512,18 @@ fn try_spawn(
     settings: &fauna::FaunaSettings,
     seconds: f64,
 ) {
-    if roster.is_empty() || fishery.schools.len() >= settings.spawn.max_schools as usize {
+    // Fish and the rest of the water life have their own caps, so the life
+    // never crowds out what a line is cast for (`ocean-environments` 7.1).
+    let biting = |school: &School| {
+        roster
+            .get(school.species as usize)
+            .is_some_and(Species::can_bite)
+    };
+    let fish_now = fishery.schools.iter().filter(|s| biting(s)).count();
+    let life_now = fishery.schools.len() - fish_now;
+    let fish_room = fish_now < settings.spawn.max_schools as usize;
+    let life_room = life_now < settings.spawn.max_life as usize;
+    if roster.is_empty() || (!fish_room && !life_room) {
         return;
     }
     let up = feet.normalize_or(Vec3::Y);
@@ -436,6 +551,8 @@ fn try_spawn(
         .filter(|(i, sp)| {
             sp.lives_in(class, temperature, &settings.water)
                 && sp.fits(depth)
+                && sp.env_allows(None)
+                && if sp.can_bite() { fish_room } else { life_room }
                 && fishery
                     .schools
                     .iter()
@@ -789,8 +906,13 @@ mod draw {
         mut materials: ResMut<Assets<StandardMaterial>>,
         mut drawn: Query<(Entity, &SchoolMesh, &Mesh3d, &mut Transform)>,
         mut palette: Local<HashMap<u16, Handle<StandardMaterial>>>,
+        sun: Option<Res<crate::sky::Sun>>,
     ) {
         let roster = fauna.0.roster(&body.0);
+        // The clock and the sun the creatures' poses read (7.2).
+        let now = sun
+            .as_deref()
+            .map(|sun| (sun.clock.seconds, sun.direction()));
         let mut seen = vec![false; fishery.schools.len()];
         for (entity, school_mesh, mesh, mut transform) in &mut drawn {
             let Some(school) = fishery.schools.get(school_mesh.0) else {
@@ -803,7 +925,7 @@ mod draw {
             seen[school_mesh.0] = true;
             transform.translation = (frame.center + school.anchor.as_dvec3()).as_vec3();
             if let Some(mesh) = meshes.get_mut(&mesh.0) {
-                build(mesh, school, species);
+                build(mesh, school, species, now);
             }
         }
         for (index, school) in fishery.schools.iter().enumerate() {
@@ -830,7 +952,7 @@ mod draw {
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::default(),
             );
-            build(&mut mesh, school, species);
+            build(&mut mesh, school, species, now);
             commands.spawn((
                 Name::new(format!("{} school", species.name)),
                 SchoolMesh(index),
@@ -845,15 +967,31 @@ mod draw {
 
     /// A school's fish as one triangle list: each a five-sided cone nosed
     /// along its own velocity with a tail fin, scaled by the species' shape.
-    fn build(mesh: &mut Mesh, school: &School, species: &Species) {
+    ///
+    /// A creature's pose shapes it (`ocean-environments` 7.2): a shut clam is
+    /// flat, an upended dabbler points its nose down, a sleeping duck lies
+    /// low, and a diver under the water is not drawn.
+    fn build(mesh: &mut Mesh, school: &School, species: &Species, now: Option<(f64, Vec3)>) {
         const SIDES: usize = 5;
         let mut positions = Vec::with_capacity(school.len() * SIDES * 9);
-        let [sx, sy, sz] = species.shape;
+        let [sx, sy0, sz] = species.shape;
         let length = species.length_m;
         for (i, p) in school.positions.iter().enumerate() {
             let up = p.normalize_or(Vec3::Y);
+            let pose = now.map_or(fauna::Pose::Moving, |(seconds, sun)| {
+                fauna::pose(species, school, i, seconds, sun.dot(up) < -0.05)
+            });
+            let sy = match pose {
+                fauna::Pose::Under => continue,
+                fauna::Pose::Shut => sy0 * 0.35,
+                fauna::Pose::Asleep => sy0 * 0.7,
+                _ => sy0,
+            };
             let v = school.velocities[i];
-            let forward = (v - up * v.dot(up) * 0.5).normalize_or(up.any_orthonormal_vector());
+            let mut forward = (v - up * v.dot(up) * 0.5).normalize_or(up.any_orthonormal_vector());
+            if pose == fauna::Pose::TippedUp {
+                forward = (forward - up * 1.4).normalize_or(-up);
+            }
             let side = forward.cross(up).normalize_or(up.any_orthonormal_vector());
             let top = side.cross(forward);
             let at = *p - school.anchor;

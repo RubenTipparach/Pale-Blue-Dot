@@ -31,7 +31,7 @@ fn index_of(id: &str) -> usize {
 }
 
 #[test]
-fn the_defaults_validate_and_carry_eight_species_on_the_home_body() {
+fn the_defaults_validate_and_carry_the_eight_fish_then_the_water_life() {
     let fauna = FaunaSettings::default();
     fauna.validate().unwrap();
     let ids: Vec<&str> = fauna
@@ -49,7 +49,15 @@ fn the_defaults_validate_and_carry_eight_species_on_the_home_body() {
             "eel",
             "reef",
             "deepback",
-            "serpent"
+            "serpent",
+            // The water life (`ocean-environments` 7.1), appended.
+            "shore_crab",
+            "lobster",
+            "giant_clam",
+            "reef_turtle",
+            "sea_otter",
+            "reed_dabbler",
+            "pond_diver"
         ],
         "the roster is append-only: a saved fish is its index"
     );
@@ -444,5 +452,160 @@ fn a_fish_measures_the_same_whoever_is_caught_first() {
     assert!(
         (lo.floor() as u32..=hi.ceil() as u32).contains(&before),
         "{before} cm"
+    );
+}
+
+/// Only the eight fish take a lure; every protected creature refuses a catch
+/// with the reason, and so does anything else that is not a fish
+/// (`ocean-environments` 7.3).
+#[test]
+fn only_fish_bite_and_protected_creatures_refuse_the_catch() {
+    let roster = roster();
+    let biters: Vec<&str> = roster
+        .iter()
+        .filter(|s| s.can_bite())
+        .map(|s| s.id.as_str())
+        .collect();
+    assert_eq!(
+        biters,
+        [
+            "minnow",
+            "silverfin",
+            "perch",
+            "ray",
+            "eel",
+            "reef",
+            "deepback",
+            "serpent"
+        ]
+    );
+    for id in ["reef_turtle", "sea_otter", "reed_dabbler", "pond_diver"] {
+        let sp = &roster[index_of(id)];
+        assert_eq!(sp.status, Status::Protected, "{id}");
+        assert_eq!(
+            sp.catch_refusal(),
+            Some("protected: it may not be caught"),
+            "{id}"
+        );
+        assert!(!sp.can_bite(), "{id}");
+    }
+    for id in ["shore_crab", "lobster", "giant_clam"] {
+        assert_eq!(
+            roster[index_of(id)].catch_refusal(),
+            Some("it is not taken on a line"),
+            "{id}"
+        );
+    }
+    assert_eq!(roster[index_of("minnow")].catch_refusal(), None);
+}
+
+/// A sea with a wave on it, for the floaters.
+struct Swell;
+
+impl Water for Swell {
+    fn surface(&self, point: Vec3) -> f32 {
+        let p = point.normalize_or(Vec3::Y) * R;
+        R + 0.4 * (p.x * 0.3).sin() + 0.2 * (p.z * 0.5).cos()
+    }
+    fn bed(&self, point: Vec3) -> f32 {
+        Shore { max_depth: 6.0 }.bed(point)
+    }
+}
+
+/// A crawler stands on the bed and a floater rides the drawn sea, wherever
+/// either goes, for two minutes (`ocean-environments` 7.1).
+#[test]
+fn a_crawler_walks_the_bed_and_a_floater_rides_the_sea() {
+    let flock = FlockSettings::default();
+    let r = roster();
+    for (id, seed) in [("shore_crab", 11), ("lobster", 12), ("giant_clam", 13)] {
+        let i = index_of(id);
+        let water = Shore { max_depth: 6.0 };
+        let mut school = School::spawn(i as u16, &r[i], at(0.0, 1.0, 12.0), seed, &water);
+        assert!(!school.is_empty());
+        for tick in 0..3600 {
+            school.step(1.0 / 30.0, &r[i], &flock, &water, None);
+            for p in &school.positions {
+                let off = p.length() - water.bed(*p);
+                assert!(
+                    p.is_finite() && off > 0.0 && off < 0.4,
+                    "{id} {off} m off the bed at tick {tick}"
+                );
+            }
+        }
+    }
+    for (id, seed) in [("sea_otter", 21), ("reed_dabbler", 22), ("pond_diver", 23)] {
+        let i = index_of(id);
+        let mut school = School::spawn(i as u16, &r[i], at(0.0, 1.0, 12.0), seed, &Swell);
+        for tick in 0..3600 {
+            school.step(1.0 / 30.0, &r[i], &flock, &Swell, None);
+            for p in &school.positions {
+                let off = p.length() - Swell.surface(*p);
+                assert!(
+                    p.is_finite() && off.abs() < 1e-3,
+                    "{id} {off} m off the sea at tick {tick}"
+                );
+            }
+        }
+    }
+}
+
+/// A clam shuts when the eye comes within its 4 m and opens again once the
+/// eye has gone and the hold has run out (`ocean-environments` 7.2).
+#[test]
+fn a_clam_shuts_when_the_eye_comes_close_and_opens_after() {
+    let water = Shore { max_depth: 6.0 };
+    let flock = FlockSettings::default();
+    let r = roster();
+    let i = index_of("giant_clam");
+    let mut school = School::spawn(i as u16, &r[i], at(0.0, 1.0, 12.0), 5, &water);
+    let clam = school.positions[0];
+    let up = clam.normalize();
+    let pose_now = |s: &School| pose(&r[i], s, 0, 100.0, false);
+    assert_eq!(pose_now(&school), Pose::Moving, "open to begin with");
+    school.notice(clam + up * 5.0, &r[i], 6.0);
+    assert_eq!(pose_now(&school), Pose::Moving, "5 m off: still open");
+    school.notice(clam + up * 3.5, &r[i], 6.0);
+    assert_eq!(pose_now(&school), Pose::Shut, "3.5 m off: shut");
+    for _ in 0..(5 * 30) {
+        school.step(1.0 / 30.0, &r[i], &flock, &water, None);
+    }
+    assert_eq!(pose_now(&school), Pose::Shut, "still shut 5 s on");
+    for _ in 0..(2 * 30) {
+        school.step(1.0 / 30.0, &r[i], &flock, &water, None);
+    }
+    assert_eq!(pose_now(&school), Pose::Moving, "open again after the hold");
+}
+
+/// A dabbler tips up some of the time by day, never while startled, and
+/// sleeps at night; the same clock gives the same pose (7.2).
+#[test]
+fn a_dabbler_tips_up_by_day_paddles_off_when_startled_and_sleeps_at_night() {
+    let r = roster();
+    let i = index_of("reed_dabbler");
+    let mut school = School::spawn(i as u16, &r[i], at(0.0, 1.0, 12.0), 9, &Swell);
+    let n = school.len();
+    let mut tipped = 0;
+    let mut samples = 0;
+    for step in 0..600 {
+        let t = 1000.0 + step as f64 * 0.5;
+        for fish in 0..n {
+            let p = pose(&r[i], &school, fish, t, false);
+            assert_eq!(p, pose(&r[i], &school, fish, t, false));
+            assert!(matches!(p, Pose::Moving | Pose::TippedUp));
+            tipped += usize::from(p == Pose::TippedUp);
+            samples += 1;
+            assert_eq!(pose(&r[i], &school, fish, t, true), Pose::Asleep);
+        }
+    }
+    let share = tipped as f32 / samples as f32;
+    assert!((0.2..0.4).contains(&share), "tipped up {share} of the time");
+    let eye = school.positions[0];
+    school.notice(eye, &r[i], 3.0);
+    assert_eq!(pose(&r[i], &school, 0, 1000.0, false), Pose::Moving);
+    assert_eq!(
+        pose(&r[i], &school, 0, 1000.0, true),
+        Pose::Moving,
+        "awake once startled"
     );
 }

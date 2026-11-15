@@ -16,6 +16,8 @@ struct Cell {
 }
 struct Params {
     clip_from_body: mat4x4<f32>, camera: vec4<f32>, sun: vec4<f32>, settings: vec4<f32>,
+    // `water_absorption` rgb is the DOWNWELLING per metre (`ocean-environments`
+    // B2), the daylight arriving at a depth; w the sheet's radius.
     water_absorption: vec4<f32>, water_deep: vec4<f32>, weather: vec4<f32>,
     rain: array<vec4<f32>,6>, // wet knobs; overcast sun, fill, fog per cover, fog in rain; sky blue cut, sky dim
     lod_offsets: vec4<u32>, // x base count, y fine-region capacity, z the current set's half (`two-set-dissolve`)
@@ -33,7 +35,7 @@ struct Params {
     lod_prev: vec4<f32>,       // the partition the cross-fade leaves: xyz its anchor
     bands_prev: vec4<f32>,     // and its band cosines
     lod_counts_prev: vec4<u32>, // the dissolve's old set's counts (`two-set-dissolve`);
-    lod_spare: vec4<f32>,       // read by the visibility pass, laid out here to match
+    lod_spare: vec4<f32>,       // caustics (`ocean-environments` B5): strength, the web's cell m, gone by m; the visibility pass reads none of it
     anchor: vec4<f32>,         // `distance-lod-fade`: the fine set's anchor (`lod` is the fade centre),
     bands_in: vec4<f32>,       // the bands' cross-fade rings' inner edges, cosines,
     bands_prev_in: vec4<f32>,  // and those of the partition a landing dissolves from
@@ -2625,6 +2627,33 @@ fn oct_decode(e: vec2<u32>) -> vec3<f32> {
 }
 const REQUEST_FLAG: u32 = 0x8000u;
 
+// Caustics on the seabed (`ocean-environments` B5): the bright web the waves
+// focus the sun into. The point is traced up along the sun to the surface, so
+// the web leans with the sun as the light does, and snapped to 0.25 m to
+// match the nearest-sampled textures. Two warped three-wave sums, each bright
+// where it crosses zero, give a web that drifts and never tiles; `cell` is
+// its spacing, m. Returns 0..about 1.
+fn caustic_web(position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>, depth: f32, t: f32, cell: f32) -> f32 {
+    let sun_up = max(dot(sun, radial), 0.2);
+    let surface = position + (sun - radial*dot(sun, radial))*(depth/sun_up)*0.75;
+    // Body-fixed coordinates, the two axes across the radial's main one (a
+    // cube face), so the web stays put as the eye moves.
+    let a = abs(radial);
+    var flat = surface.xz;
+    if a.x >= a.y && a.x >= a.z { flat = surface.yz; } else if a.z >= a.y { flat = surface.xy; }
+    var p = floor(flat*4.0)*0.25/max(cell, 0.05)*6.2832;
+    var web = 0.0;
+    for (var layer = 0; layer < 2; layer++) {
+        let s = 1.0 + f32(layer)*0.63;
+        let q = p*s + vec2(sin(p.y*0.37*s + t*0.31), cos(p.x*0.41*s - t*0.27))*1.7;
+        let wave = sin(q.x + t*0.9) + sin(dot(q, vec2(-0.5, 0.866)) - t*0.7)
+            + sin(dot(q, vec2(-0.5, -0.866)) + t*0.8);
+        web += pow(clamp(1.0 - abs(wave)*0.5, 0.0, 1.0), 4.0);
+        p = vec2(p.x*0.8 - p.y*0.6, p.x*0.6 + p.y*0.8);
+    }
+    return web*0.6;
+}
+
 fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // A pixel's footprint on the ground, metres: taken before anything can
     // branch, since a derivative needs every pixel of its quad. The new wet
@@ -2911,7 +2940,20 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     }
     let water_depth = max(water_surface - length(input.position), 0.);
     if water_depth > 0. {
+        // The daylight left at this depth (downwelling): the deep goes dark
+        // inside the column (`ocean-environments` B2).
         let attenuation = exp(-params.water_absorption.rgb*water_depth);
+        // Caustics: the sun focused by the waves, a moving web on what the
+        // sun reaches, as strong as the light left here and gone by
+        // `lod_spare.z` (B5). On `direct`, so cloud, shade and night take it.
+        if params.lod_spare.x > 0. && params.light.x > 0.5 && direct > 0. {
+            let fade = 1. - smoothstep(0., max(params.lod_spare.z, 1e-3), water_depth);
+            if fade > 0. {
+                let web = caustic_web(input.position, radial, sun, water_depth, params.settings.z, params.lod_spare.y);
+                color += albedo*sun_air(sun_elevation)*direct*skylight*attenuation
+                    *(web*params.lod_spare.x*fade);
+            }
+        }
         // The water's deep albedo lit as this face is (`water-lit`): the deep
         // colour is an albedo now, and bare it would be a near-black seabed
         // under the new model, as unlit it glowed under the old one.
