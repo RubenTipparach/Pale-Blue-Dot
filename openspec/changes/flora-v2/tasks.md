@@ -40,14 +40,16 @@ Ordered by value. Captures go in
 
 ## 6. The approved mockup into the engine (M13 approved 2026-11-15; design 9)
 
-On `claude/env-flora`. Captures in `docs/screenshots/flora-v2/` (the
-`m13-*` set). Frame cost not measured.
+Built on `claude/env-flora` (2026-11-15). Captures and an honest read of each
+in `docs/screenshots/flora-v2/README.md` (the `m13-*` set). Frame cost not
+measured. The dry olive beach crowns (6.3) are built but were not caught in a
+capture: no beach tree was in view.
 
-- [ ] 6.1 Painted flowers off the ground tiles: `no_flowers.py`'s rules as a step of `tools/build_tileset_atlas.py`; atlas rebuilt. Verify: `--check` passes; the atlas equals the mockup's copy.
-- [ ] 6.2 Tuft ramps from each biome's ground tile, and the plants' tile means, in `pbd_core::flora`. Verify: a test recomputes both off `atlas.png`.
-- [ ] 6.3 Plant contrast pulled to the tile's mean (crowns and bushes 0.45; trunks, twigs, pebbles 0.7); beach crowns and bushes in the dry olive gradient map. Verify: shader compiles; captures.
-- [ ] 6.4 Clutter reach doubled (120 m, fade 30 m). Verify: config validation; captures.
-- [ ] 6.5 Fallen leaves in the cap fragment: `Season::litter`, thicker under a tree, browned in winter, deciduous biomes only; `leaf_fall`, `leaf_under`, `leaf_size`. Verify: core tests on `litter`; the season constants test; captures at `--day` in autumn, winter and summer.
-- [ ] 6.6 Fruit and pine cones on the trees, and fallen fruit: foliage draw 258 vertices, offsets moved in both shaders; kinds per biome; season keep. Verify: the vertex-arithmetic tests; captures close on fruit trees.
-- [ ] 6.7 Checks: fmt, clippy, pbd-core and pbd-app tests, `openspec validate --all`; a normal launch to READY with no ERROR and no `LATE_PIPELINE`.
+- [x] 6.1 Painted flowers off the ground tiles: `no_flowers.py`'s rules as a step of `tools/build_tileset_atlas.py`; atlas rebuilt. Verify: `--check` passes; the atlas equals the mockup's copy.
+- [x] 6.2 Tuft ramps from each biome's ground tile, and the plants' tile means, in `pbd_core::flora`. Verify: a test recomputes both off `atlas.png`.
+- [x] 6.3 Plant contrast pulled to the tile's mean (crowns and bushes 0.45; trunks, twigs, pebbles 0.7); beach crowns and bushes in the dry olive gradient map. Verify: shader compiles; captures.
+- [x] 6.4 Clutter reach doubled (120 m, fade 30 m). Verify: config validation; captures.
+- [x] 6.5 Fallen leaves in the cap fragment: `Season::litter`, thicker under a tree, browned in winter, deciduous biomes only; `leaf_fall`, `leaf_under`, `leaf_size`. Verify: core tests on `litter`; the season constants test; captures at `--day` in autumn, winter and summer.
+- [x] 6.6 Fruit and pine cones on the trees, and fallen fruit: foliage draw 258 vertices, offsets moved in both shaders; kinds per biome; season keep. Verify: the vertex-arithmetic tests; captures close on fruit trees.
+- [x] 6.7 Checks: fmt, clippy, pbd-core and pbd-app tests, `openspec validate --all`; a normal launch to READY with no ERROR and no `LATE_PIPELINE`. Failing before this group and untouched by it: `planet_gen` version 4 and 5 digests, `husbandry` (shore crab class), and two `settings` file-version tests (they expect version 5; the file is 6 since the env-v2 merge).
 - [ ] 6.8 Not built (design 9.9): the winter sod lip (no seasonal snow in the game), unbaked far trees (no impostors), the fungal forest (a new generator version), crops and forage plants (phase 1's are reused), picking fruit.

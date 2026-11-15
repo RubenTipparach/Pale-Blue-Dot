@@ -796,6 +796,20 @@ fn the_plants_season_is_the_cores() {
             .collect();
         assert_eq!(v, pair.to_vec(), "{name}");
     }
+    // The fallen leaves' four edges and their midwinter share (design 9.4).
+    let at = src
+        .find("const SEASON_LITTER = vec4<f32>(")
+        .expect("SEASON_LITTER is gone from planet_surface.wgsl");
+    let rest = &src[at..];
+    let litter: Vec<f32> = rest[rest.find('(').unwrap() + 1..rest.find(')').unwrap()]
+        .split(',')
+        .map(|x| x.trim().parse().unwrap())
+        .collect();
+    assert_eq!(litter, pbd_core::flora::SEASON_LITTER.to_vec());
+    assert!(src.contains(&format!(
+        "const LITTER_WINTER: f32 = {:?};",
+        pbd_core::flora::LITTER_WINTER
+    )));
     // The hemisphere flip and the tropics' fade are the core's too.
     let body = wgsl_fn_body(src, "season_at");
     assert!(body.contains("select(0.0, 0.5, radial.y < 0.0)"));
@@ -816,4 +830,35 @@ fn the_plants_dither_out_and_cut_out_in_dropped() {
         assert!(body.contains(line), "dropped no longer says `{line}`");
     }
     assert!(wgsl_fn_body(src, "shadow_fragment").contains("dropped(input)"));
+}
+
+/// `flora-v2` design 9.2 and 9.6: the shader's plant detail and fruit
+/// palette are `pbd_core::flora`'s, and the cap under a tree is found by the
+/// visibility pass's own tree rule, line for line.
+#[test]
+fn the_mockups_plants_are_the_cores() {
+    use pbd_core::flora::{FRUIT_RAMPS, LEAF_DETAIL, SOLID_DETAIL};
+    let src = include_str!("../../../assets/shaders/planet_surface.wgsl");
+    assert!(src.contains(&format!("const LEAF_DETAIL: f32 = {LEAF_DETAIL:?};")));
+    assert!(src.contains(&format!("const SOLID_DETAIL: f32 = {SOLID_DETAIL:?};")));
+    let body = wgsl_fn_body(src, "fruit_ramp");
+    for (k, ramp) in FRUIT_RAMPS.iter().enumerate() {
+        let line = format!(
+            "return vec3(0x{:06x}u, 0x{:06x}u, 0x{:06x}u);",
+            ramp[0], ramp[1], ramp[2]
+        );
+        assert!(body.contains(&line), "fruit {k}: `{line}`");
+    }
+    let visibility = include_str!("../../../assets/shaders/planet_visibility.wgsl");
+    let rule = wgsl_fn_body(src, "stands_tree");
+    for line in rule
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("let ") || l.starts_with("if "))
+    {
+        assert!(
+            visibility.contains(line),
+            "the visibility pass's tree rule has no `{line}`"
+        );
+    }
 }

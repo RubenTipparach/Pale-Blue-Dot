@@ -367,6 +367,8 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         flora_more: Vec4::ZERO,
         flora_biome: [Vec4::ZERO; 8],
         tuft_ramps: [UVec4::ZERO; 8],
+        plant_means: [UVec4::ZERO; 8],
+        flora_fall: Vec4::ZERO,
         night: Vec4::ZERO,
         night_lights: [Vec4::ZERO; 2 * crate::night_lights::MAX_FAR_LIGHTS],
     }
