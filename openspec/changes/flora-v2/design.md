@@ -30,8 +30,8 @@ the variant in its integer part and the card position in its fraction, and the
 fragment asks "is pixel (x, y) of variant v a blade?" by walking the nine
 blades - nine integer hashes, cheaper than the texture fetch it replaces. The
 same test is the cut-out, so it lives in `dropped`, which the sun's cascades
-also call (a tuft would cast a solid card's shadow otherwise; clutter does not
-cast today, but leaf cards below do, and they share the function).
+also call (clutter does not cast today, but a cut-out there is right if it
+ever does).
 
 **Per-biome ramps** are data in `pbd_core::flora::TUFT_RAMPS`, one three-tone
 ramp per `Biome`, packed into the uniform as `0xRRGGBB` words. The mockup's
@@ -108,39 +108,23 @@ The visibility pass lists a cell for them on the same rolls and the same
 weights (both read them from the uniform), so a listed cell always grows what
 it was listed for.
 
-## 4. Leaf cards on the hex-prism trees (Q1 C)
+## 4. ~~Leaf cards on the hex-prism trees~~ (dropped; Q1 A, the owner's)
 
-The tree stays Tenebris's prisms: the trunk and the two leaf layers (or the
-pine's two tapering segments) are unchanged, and so is everything that
-chopping, collision and saves know about a tree (nothing - it is derived).
-The foliage draw grows from 198 to 306 vertices: **eighteen cards**, six
-vertices each.
+The owner, 2026-11-15, on the leaf cards as first built: *"Hmm trees have
+weird leave structures on them I don't really like"*.
 
-- Cards 0-11 hang from the top rim of each leaf layer's six sides: the root
-  edge is the rim edge, 85% of its length, pushed 5 cm out; the tip is 0.45 m
-  further out and 0.85 m down, so a crown's edge is a fringe of leaves over its
-  side rather than a hexagon's straight line.
-- Cards 12-17 stand on the top layer's rim, leaning up and out, so the crown's
-  top is ragged too.
-- On a pentagon cell the sixth card of each ring collapses, as the sixth side
-  does.
-
-The card's pixels are the biome's own leaf tile (`(0,2)`, material 9's), cut by
-a mask that keeps fewer pixels toward the tip and the edges - a leaf cluster,
-not a rectangle. The cut is in `dropped`, so the shadow a card casts is the
-shape it shows. Cards sway like tufts, at their tips.
-
-**Reach.** Cards are near detail: drawn to `leaf_card_reach_m` (90 m) and
-dithered out over the last `leaf_card_fade_m` (25 m) through the tree's own
-mask; past that a vertex collapses and the prism is the tree, as today. A card
-is part of the tree's instance, so the landing dissolve and the bands'
-cross-fade (`distance-lod-fade`) apply to it exactly as to the prism.
+Eighteen cut-out leaf cards per tree were built round the crown (hanging from
+each layer's rim and standing on the top, foliage draw 198 -> 306 vertices)
+and are taken off again in the same change. **Q1 is A: trees stay the
+Tenebris hex prisms as today** - the owner's own decision, not a
+recommendation taken. The foliage draw is back to 198 vertices and the trees
+cast and dither exactly as before this change.
 
 **Not built: the baked mid and far tree** (Q2). Recommendation taken (crossed
 cards mid, billboard far, baked from the near tree); its build is a
-render-to-texture bake and an atlas, deferred to its own task. The game's
-mid and far tree is the prism crown it already draws, the shape a card-less
-bake of the same tree would give.
+render-to-texture bake and an atlas, deferred to its own task; with the
+cards gone the question is open again. The game's mid and far tree is the
+prism crown it already draws.
 
 ## 5. Seasons on plants (Q5 A)
 
@@ -157,9 +141,9 @@ bare, straw }`, each 0..1, from the one calendar the clock already keeps
   the tropics, full ones from about 27 degrees.
 
 In the shader, deciduous biomes (`BiomeFlora::deciduous`: fields, swamp,
-beach) tint material 9 and the leaf cards toward a hashed gold, orange or red
-by `turn`, and by `bare` thin the cards (a card pixel is kept above a hashed
-threshold) and fade the prism's leaves toward bare twig grey-brown. Grass
+beach) tint the prism's leaves (material 9) a texel at a time toward a hashed
+gold, orange or red by `turn`, and by `bare` fade them toward bare twig
+grey-brown (the prism stays: it is the shape you chop). Grass
 blades and tufts mix toward straw by `straw`. The rule runs per vertex in WGSL
 with the same constants as `pbd_core`, and a test holds the two to one set of
 numbers.
@@ -174,7 +158,7 @@ pass's prefix still ends where it did):
 
 ```
 flora: vec4       x tufts per cell (0: blades), y tuft width m, z tuft height m, w year 0..1
-flora_more: vec4  x mushroom chance, y fern chance, z leaf card reach m (0: off), w its fade m
+flora_more: vec4  x mushroom chance, y fern chance, zw spare
 flora_biome: array<vec4,8>  per Biome: fern weight, mushroom weight, flower colours (bits), deciduous
 tuft_ramps: array<uvec4,8>  per Biome: dark, mid, light as 0xRRGGBB, w red caps
 ```
@@ -182,9 +166,8 @@ tuft_ramps: array<uvec4,8>  per Biome: dark, mid, light as 0xRRGGBB, w red caps
 The visibility shader's copy of the struct gains the same lanes; the existing
 struct-size test catches a mismatch. The knobs live in `scatter.ron`
 (`tuft_count`, `tuft_width_m`, `tuft_height_m`, `mushroom_chance`,
-`fern_chance`, `leaf_card_reach_m`, `leaf_card_fade_m`), validated:
-`tuft_count` within the eighteen-slot budget, chances in 0..1, the card fade
-within its reach.
+`fern_chance`), validated: `tuft_count` within the eighteen-slot budget,
+chances in 0..1.
 
 ## 7. Saved games
 
@@ -196,12 +179,13 @@ settings file migrates forward (version 5, the new field defaulted).
 
 ## 8. Decisions taken (ask only with screenshots)
 
-From the mockup's notes, all recommendations taken (recommendation taken, ask
-only with screenshots), with what this change does with each:
+From the mockup's notes, the recommendations taken (recommendation taken, ask
+only with screenshots) - except Q1, which is the owner's own answer - with
+what this change does with each:
 
 | # | question | taken | here |
 | --- | --- | --- | --- |
-| 1 | near tree | C, prisms wrapped in leaf cards | built (4) |
+| 1 | near tree | **A, hex prisms as today - the owner's own decision** (2026-11-15, after seeing C) | cards built, then removed (4) |
 | 2 | mid ring for trees | A mid, B far, baked | deferred (4) |
 | 3 | fade width | 0.3 | kept (2) |
 | 4 | grass past its rings | A, the ground tile carries it | kept: no far grass level |

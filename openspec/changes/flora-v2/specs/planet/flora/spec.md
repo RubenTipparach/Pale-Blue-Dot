@@ -4,7 +4,7 @@
 
 ### Requirement: Plant decoration is derived and never stored
 
-Tuft grass, flowers, mushrooms, ferns, leaf cards and their seasonal colour
+Tuft grass, flowers, mushrooms, ferns and the plants' seasonal colour
 SHALL be drawn from the cell record and the clock alone, by the planet's
 existing indirect draws. They SHALL NOT change any cell's material, collide,
 enter a save, or need a new generator version, so an existing world opens with
@@ -39,9 +39,8 @@ drawn as before.
 ### Requirement: Clutter thins out rather than popping
 
 Every clutter piece SHALL dither out through the screen-door mask over the
-last `clutter_fade_m` of the clutter reach, and leaf cards over the last
-`leaf_card_fade_m` of theirs, so no piece appears or vanishes in one frame at
-the edge of its reach.
+last `clutter_fade_m` of the clutter reach, so no piece appears or vanishes
+in one frame at the edge of its reach.
 
 #### Scenario: Walking toward a meadow
 
@@ -61,22 +60,10 @@ them on the same rolls and weights the vertex path draws them with.
 - **THEN** ferns are common there
 - **AND** a desert grows no ferns or mushrooms
 
-### Requirement: Trees wear leaf cards near the player
-
-A tree within `leaf_card_reach_m` SHALL draw cut-out leaf cards hanging from
-and standing on its crown's rim, in the biome's leaf tile, over the unchanged
-hex-prism trunk and crown, and they SHALL cast sun shadows in the shape they
-show. Beyond the reach the tree SHALL be the prism alone.
-
-#### Scenario: A tree up close
-
-- **WHEN** the player stands beside a tree
-- **THEN** its crown's edges are ragged leaves, not a straight hexagon
-- **AND** chopping it removes the same cells as before
-
 ### Requirement: Plants follow the planet's one calendar
 
-Deciduous leaves SHALL turn in autumn and thin to bare in winter, and grass
+The prism trees' deciduous leaves SHALL turn in autumn and dull toward bare
+twigs in winter, and grass
 SHALL dry toward straw in winter, by `pbd_core::flora::season_at`, a function
 of the clock's year and the place's latitude: opposite in the two hemispheres
 and absent near the equator.

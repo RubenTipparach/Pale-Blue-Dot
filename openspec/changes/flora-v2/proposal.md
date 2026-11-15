@@ -33,16 +33,14 @@ Ordered by value, each a slice that stands on its own:
    the jungle sheet's fern tile by a pixel mask), at per-biome weights as the
    mockup's biome table has them. They dither in and out at the edge of the
    clutter reach.
-3. **Leaf cards on the hex-prism trees** (mockup Q1 C). The prism stays the
-   shape you chop - every cell, material and save is untouched - and each crown
-   layer is wrapped in leaf cards hanging from its rim, cut from the biome's own
-   leaf tile by a pixel mask, so the silhouette is ragged leaves rather than a
-   hexagon. They are drawn out to a reach of their own and dither out before
-   it; past it the prism alone is the far tree, as it is today. They cast sun
-   shadows through the same cut-out.
+3. ~~Leaf cards on the hex-prism trees~~ - **dropped by the owner.** They were
+   built and then taken off. The owner, 2026-11-15, on the leaf cards as first built: *"Hmm trees have
+   weird leave structures on them I don't really like"*.
+   Trees stay the hex prisms they are today (mockup Q1 A, the owner's own
+   decision).
 4. **Seasons on plants** (mockup Q5 A, one calendar per planet). The clock's
-   year (`orbit-and-seasons`, already built) turns deciduous leaves gold and
-   red in autumn and bare in winter, and dries the grass to straw, flipped by
+   year (`orbit-and-seasons`, already built) turns the prism trees' deciduous
+   leaves gold and red in autumn and dull toward bare twigs in winter, and dries the grass to straw, flipped by
    hemisphere and fading out toward the equator. A tint and a thinning of
    derived decoration: no cell changes.
 
@@ -51,9 +49,8 @@ Not in this change, and why:
 - **Baked mid and far tree impostors** (mockup Q2). The recommendation (crossed
   cards mid, billboard far, baked from the near tree) is taken, but its build
   is a render-to-texture bake, an atlas binding and a new LOD switch, and a day
-  is better spent getting the near cards right first. Past the card reach the
-  game draws the prism crown it draws today, which is what a card-less bake of
-  the same tree would show. Left as an open task.
+  is better spent elsewhere. The game draws the prism crown at every
+  distance, as today. Left as an open task.
 - **Fungal forest** (mockup Q7). It is a new biome, so a new generator version
   for new worlds (CLAUDE.md "Saved games survive every change"); it waits for
   its own change.
@@ -74,7 +71,7 @@ Not in this change, and why:
 ## Impact
 
 - `assets/shaders/planet_surface.wgsl`: the grass slots, two new clutter
-  pieces, leaf cards in the foliage branch, cut-outs in `dropped`, the flora
+  pieces, cut-outs in `dropped`, the flora
   colours and the season tint in `shade_terrain`.
 - `assets/shaders/planet_visibility.wgsl`: the new vertex budgets, and the
   clutter eligibility knows mushrooms and ferns.
@@ -90,6 +87,6 @@ Not in this change, and why:
   derived decoration, a pure function of the cell and the clock, never saved,
   never collided with. The settings file moves to version 5; an older file
   reads Pixel grass off and keeps the rest.
-- **Frame cost:** more vertices per tree (18 cards) and per clutter cell (a
+- **Frame cost:** more vertices per clutter cell (a
   mushroom and four fronds). Not measured in this change (the perf suite is
   the owner's on the desktop); said so in the report.

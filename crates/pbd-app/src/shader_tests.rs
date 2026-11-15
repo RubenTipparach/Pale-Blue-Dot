@@ -799,8 +799,7 @@ fn the_plants_season_is_the_cores() {
 }
 
 /// `flora-v2` design 2: every clutter piece dithers out at the edge of the
-/// clutter reach, and a leaf card at the edge of its own, in `dropped`,
-/// which the sun's cascades also call; the plants' cut-outs are there too.
+/// clutter reach, in `dropped`; the plants' cut-outs are there too.
 #[test]
 fn the_plants_dither_out_and_cut_out_in_dropped() {
     let src = include_str!("../../../assets/shaders/planet_surface.wgsl");
@@ -808,9 +807,7 @@ fn the_plants_dither_out_and_cut_out_in_dropped() {
     for line in [
         "if code == TUFT_CODE && !tuft_on(input.uv) { return true; }",
         "if code == FERN_CODE && fern_cut(input.uv) { return true; }",
-        "if leaf_cut(input) { return true; }",
         "let left = params.clutter.x - 2.0 - distance(input.position, params.camera.xyz);",
-        "let left = params.flora_more.z - 4.0 - distance(input.position, params.camera.xyz);",
     ] {
         assert!(body.contains(line), "dropped no longer says `{line}`");
     }

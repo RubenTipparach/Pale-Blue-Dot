@@ -107,11 +107,10 @@ pub(crate) fn clutter_vertices() -> u32 {
     // fronds).
     GRASS_BLADE_BUDGET * 2 * 6 + 18 + 54 + 108 + 36 + 2 * 54 + 4 * 6
 }
-/// Vertices per tree: the trunk's 54, two leaf layers of 72, and
-/// `flora-v2`'s eighteen leaf cards.
+/// Vertices per tree: the trunk's 54 and two leaf layers of 72.
 #[cfg(test)]
 pub(crate) fn foliage_vertices() -> u32 {
-    54 + 2 * 72 + 18 * 6
+    54 + 2 * 72
 }
 /// Where the clutter branch starts in the shared vertex shader: after the
 /// terrain's 60 and the foliage.
@@ -775,8 +774,7 @@ struct PlanetParams {
     // `flora-v2` design 6: x tufts per cell (zero: the blades), y and z the
     // tuft's width and height, m; w how far round the year, 0..1.
     flora: Vec4,
-    // x mushroom chance, y fern chance, z leaf card reach m (zero: none), w
-    // the stretch the cards dither out over, m.
+    // x mushroom chance, y fern chance, zw spare.
     flora_more: Vec4,
     // Per biome, `Biome` order: fern weight, mushroom weight, flower colour
     // bits, one where deciduous (`pbd_core::flora::BIOME_FLORA`).
@@ -1867,12 +1865,7 @@ fn prepare_views(
                 scatter.tuft_height_m,
                 sun.clock.year_fraction() as f32,
             ),
-            flora_more: Vec4::new(
-                scatter.mushroom_chance,
-                scatter.fern_chance,
-                scatter.leaf_card_reach_m,
-                scatter.leaf_card_fade_m,
-            ),
+            flora_more: Vec4::new(scatter.mushroom_chance, scatter.fern_chance, 0.0, 0.0),
             flora_biome,
             tuft_ramps,
             night,

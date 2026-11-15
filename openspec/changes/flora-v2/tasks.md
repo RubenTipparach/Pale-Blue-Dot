@@ -1,7 +1,8 @@
 # Tasks
 
-Built on `claude/flora-v2` (2026-11-15): all of 1-4 except the baked
-impostors (3.2); captures and their notes in
+Built on `claude/flora-v2` (2026-11-15): 1, 2 and 4; the leaf cards (3.1)
+were built and removed at the owner's word, and the baked impostors (3.2)
+are not built; captures and their notes in
 `docs/screenshots/flora-v2/README.md`. Frame cost not measured (the owner's
 perf sitting); the owner's video waits for the batch.
 
@@ -20,9 +21,9 @@ Ordered by value. Captures go in
 - [x] 2.1 Every clutter piece dithers out over `clutter_fade_m`. Verify: shader test that `dropped` gates kind 3 by the clutter reach.
 - [x] 2.2 Flower colours from the biome palette; mushrooms and ferns, with the visibility pass listing them on the same rolls; vertex budget 564. Verify: the visibility GPU test's draw arguments; captures.
 
-## 3. Leaf cards
+## 3. ~~Leaf cards~~ (dropped by the owner, 2026-11-15)
 
-- [x] 3.1 Eighteen cards per tree in the foliage draw (306 vertices), the leaf mask, the reach dither, shadows through the cut-out. Verify: the draw-argument test; captures of a tree near and at the reach.
+- [x] ~~3.1 Eighteen cards per tree in the foliage draw (306 vertices), the leaf mask, the reach dither, shadows through the cut-out.~~ Built, then removed: the owner, "Hmm trees have weird leave structures on them I don't really like". Q1 is A, trees as today (the owner's own decision); the foliage draw is back to 198 vertices.
 - [ ] 3.2 Baked mid and far impostors (design 4, Q2). Deferred: not in this change.
 
 ## 4. Seasons

@@ -998,11 +998,6 @@ pub struct ScatterSettings {
     pub mushroom_chance: f32,
     /// Probability a grassy cell grows a fern, before its biome's weight.
     pub fern_chance: f32,
-    /// How far from the camera a tree wears its leaf cards, metres
-    /// (`flora-v2` design 4). 0 draws none.
-    pub leaf_card_reach_m: f32,
-    /// The last stretch of that reach over which the cards dither out.
-    pub leaf_card_fade_m: f32,
 }
 
 impl Default for ScatterSettings {
@@ -1031,8 +1026,6 @@ impl Default for ScatterSettings {
             tuft_height_m: 0.6,
             mushroom_chance: 0.05,
             fern_chance: 0.08,
-            leaf_card_reach_m: 90.,
-            leaf_card_fade_m: 25.,
         }
     }
 }
@@ -1069,18 +1062,7 @@ impl Validated for ScatterSettings {
         unit("grass_base_shade", self.grass_base_shade)?;
         unit("mushroom_chance", self.mushroom_chance)?;
         unit("fern_chance", self.fern_chance)?;
-        non_negative(
-            "flora sizes",
-            &[
-                self.tuft_width_m,
-                self.tuft_height_m,
-                self.leaf_card_reach_m,
-                self.leaf_card_fade_m,
-            ],
-        )?;
-        (self.leaf_card_reach_m == 0. || self.leaf_card_fade_m <= self.leaf_card_reach_m)
-            .then_some(())
-            .ok_or("leaf_card_fade_m cannot exceed leaf_card_reach_m")?;
+        non_negative("flora sizes", &[self.tuft_width_m, self.tuft_height_m])?;
         // Each tuft takes a grass slot, so the slots are its budget too.
         (self.tuft_count >= 0. && self.tuft_count <= crate::planet::GRASS_BLADE_BUDGET as f32)
             .then_some(())

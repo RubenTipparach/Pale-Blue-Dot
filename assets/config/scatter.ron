@@ -56,8 +56,4 @@
     // (pbd_core::flora::BIOME_FLORA).
     mushroom_chance: 0.05,
     fern_chance: 0.08,
-    // Trees wear leaf cards within this reach, metres, dithering out over the
-    // last stretch; past it the prism crown alone. 0 draws none.
-    leaf_card_reach_m: 90.0,
-    leaf_card_fade_m: 25.0,
 )
