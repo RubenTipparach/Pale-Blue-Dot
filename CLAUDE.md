@@ -313,6 +313,12 @@ game is built toward first. The parts and where each stands:
 4. **Herding**: being built (`animal-husbandry`, branch
    `claude/animal-husbandry`).
 5. **Cooking**: written up (`cooking`), built after farming lands.
+6. **Starter missions**: written up (`starter-missions`), built last: a
+   chain that walks a new player through the loop ("start a fcrafting
+   table", make mining tools, make fishing rood, make axe, make fire... etc";
+   "go fishing, catch x fish, cook x fish"; "farm x plants").
+
+The owner, 2026-11-14: "try to do all of step 1 over the next 24 hours".
 
 Each part feeds the next: crafted tools dig, fish and till; crops feed the
 herd and the pot; the herd's eggs, milk and meat go in the pot too. Work on
