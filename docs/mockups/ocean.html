@@ -126,6 +126,21 @@ tr:last-child td{border-bottom:0}
 #lightChart{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:4px;background:#0b1217}
 .journal{font:12px/1.45 var(--mono);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:6px 8px;max-height:190px;overflow:auto;white-space:pre-wrap;color:var(--muted)}
 .journal b{color:var(--amber);font-weight:600}.journal i{color:var(--warn);font-style:normal}.journal u{color:var(--ok);text-decoration:none}
+/* descriptive text lives in modals (CLAUDE.md, "Descriptive text goes in modals"): a small info button opens one */
+.info{all:unset;cursor:pointer;display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 7px;border:1px solid var(--line-2);border-radius:12px;font:600 13px var(--display);letter-spacing:.06em;color:var(--sky);background:var(--panel);vertical-align:middle}
+.info:hover{border-color:var(--amber);color:var(--amber)} .info:focus-visible{outline:2px solid var(--amber)}
+.modal{position:fixed;inset:0;z-index:100;background:rgba(3,6,9,.72);display:grid;place-items:center;padding:12px}
+.modal .mbox{background:var(--panel);border:1px solid var(--line-2);border-radius:8px;width:min(760px,100%);max-height:min(86vh,900px);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+.modal .mhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.modal .mclose{all:unset;cursor:pointer;font-size:18px;line-height:1;padding:4px 8px;border-radius:4px;color:var(--ink)} .modal .mclose:hover{color:var(--amber)} .modal .mclose:focus-visible{outline:2px solid var(--amber)}
+.modal .mbody{overflow:auto;padding:12px;display:grid;gap:10px;font-size:15px;min-width:0}
+.modal .mbody dl{display:grid;gap:6px;margin:0} .modal .mbody dt{font:600 11.5px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)} .modal .mbody dd{margin:0}
+.modal .mbody .life{display:flex;flex-wrap:wrap;gap:4px} .modal .mbody .life span{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:3px;padding:1px 6px 1px 2px;font-size:12.5px;background:var(--panel-2)} .modal .mbody .life img{width:24px;height:24px}
+.lifecard{all:unset;cursor:pointer;display:flex;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+.lifecard:hover{border-color:var(--amber)} .lifecard:focus-visible{outline:2px solid var(--amber)} .lifecard img{width:48px;height:48px;flex:none} .lifecard b{font-family:var(--display);font-size:16px;font-weight:600}
+.cards.small{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px}
+.btnrow .pbtn{padding:8px 12px}
 </style>
 
 <div class="wrap">
@@ -134,25 +149,31 @@ tr:last-child td{border-bottom:0}
   <span class="tag">Proposal, not built</span><span class="tag plain">Mockup, 2026-11-14</span>
   <h1>Seas, Rivers and Marshes</h1>
   <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace;flex-basis:100%"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
-  <details class="about"><summary>About this mockup: the owner's words, the idea, and which art is the game's</summary>
+  <button class="info" data-modal="aboutTpl" data-title="About this mockup" aria-label="About this mockup: the owner's words, the idea, and which art is the game's">About</button>
+  <template id="aboutTpl">
   <blockquote>"Draft up mockups for advanced ocean environments" ... "Coral reefs, clams, lobsters, crabs, bottom feeders. More marine life. Octopus, squid, tube worm thingies on vents" ... "Oh yea, rivers are important too, like beavers and dams, kelp forests, marshes" ... "And ducks" <span class="muted">(the owner, 2026-11-14)</span></blockquote>
   <p>Every water place Tenebris makes (the home planet, in the Aubade system), as the game would have it: what makes each one distinct to look at, swim and sail through, what lives there and moves, what the player does there, and what in the planet's data decides where it is. Ten places, each a 3D scene on the world's own cell (2.833 m across, 1 m layers: seabeds terrace, reefs, ice, dams and lodges are cells), by day and at night, lit at night only by their own lights: bioluminescence, vent glow, a diver's lamp, lanterns, a lighthouse, fireflies; the moon stays dim. Then how light behaves under water, a bestiary of the water life, a chart of where each place occurs on a sample planet, and how it maps onto the engine. Drag to look, scroll to zoom, <kbd>W A S D</kbd> to swim the view and <kbd>R</kbd>/<kbd>F</kbd> to rise and sink. Creatures move because they are alive; nothing else in a view moves on its own.</p>
-  <p class="honest"><b>About the art.</b> <b>The game's own</b> (byte-identical copies in <code>ocean/game/</code>, see its README): every ground, seabed, ice and mud cell is a tile of the terrain atlas (<code>assets/tilesets/atlas.png</code>: the ocean, beach, frozen, swamp, basalt, fields and mountains sheets), drawn as <code>planet_surface.wgsl</code> picks a column's top, side, earth and stone; the lighthouse, boat, wreck, hut, chimneys and ice blocks wear the settlement textures (stone, timber, plank, iron, driftwood, linen, slate, basalt, ice, snow, peat, leaves, bark) at their <code>repeat_m</code>; the eight fish that swim in the game today use their own item icons (<code>assets/items/fish</code>). <b>From other mockups:</b> the heron, gull, shore crab, bog toad, mire lurker, firefly and glowmoth portraits and the feather, egg, shell, meat, glow and hide drop icons are M7's (<code>animals/</code>); bloatfin, lanternjaw, glassback, emberback and sunplate are M9's (<code>fish/</code>). <b>Mockup-only:</b> every other creature, the coral, kelp, reed, lily, fan and mangrove cards and ten textures (brain and table coral, sponge, bacterial mat, mussel bed, tube worm tube and plume, beaver sticks, wake) are pixel art drawn in code with the balatro-pixel-art kit (<code>tools/art/ocean_art.py</code>, Sweaft-64), sampled nearest with no mipmaps. Creatures are pixel cards (side views turned along their heading, crawlers laid flat), the cheap way the game would draw hundreds of them. The water, light, caustics, god rays and marine snow are shaders written for this page; the "in the engine" tab says which of them the game has today.</p>
+  <p class="honest"><b>About the art.</b> <b>The game's own</b> (byte-identical copies in <code>ocean/game/</code>, see its README): every ground, seabed, ice and mud cell is a tile of the terrain atlas (<code>assets/tilesets/atlas.png</code>: the ocean, beach, frozen, swamp, basalt, fields and mountains sheets), drawn as <code>planet_surface.wgsl</code> picks a column's top, side, earth and stone; the lighthouse, boat, wreck, hut, chimneys and ice blocks wear the settlement textures (stone, timber, plank, iron, driftwood, linen, slate, basalt, ice, snow, peat, leaves, bark) at their <code>repeat_m</code>; the eight fish that swim in the game today use their own item icons (<code>assets/items/fish</code>). <b>From other mockups:</b> the heron, gull, shore crab, bog toad, mire lurker, firefly and glowmoth portraits and the feather, egg, shell, meat, glow and hide drop icons are M7's (<code>animals/</code>); bloatfin, lanternjaw, glassback, emberback and sunplate are M9's (<code>fish/</code>). <b>Mockup-only:</b> every other creature, the coral, kelp, reed, lily, fan and mangrove cards and ten textures (brain and table coral, sponge, bacterial mat, mussel bed, tube worm tube and plume, beaver sticks, wake) are pixel art drawn in code with the balatro-pixel-art kit (<code>tools/art/ocean_art.py</code>, Sweaft-64), sampled nearest with no mipmaps. Every animal alive in a scene is a low-poly 3D model (<code>ocean/creatures3d.js</code>): flat shaded, its colours taken from its sprite, a fish swaying from its tail, a duck paddling, tipping up and flying. The owner, 2026-11-15: "ducks should be 3d, birds in general are 3d" and "all fish should also be 3d, unless they are caught, and a player drops them as 2d sprites". Schools and the reef are instanced (one draw per kind). The sprites stay as the bestiary's portraits and as a caught fish dropped on the ground (the river's "Drop a catch"). The water, light, caustics, god rays and marine snow are shaders written for this page; the "in the engine" tab says which of them the game has today.</p>
   <p class="honest"><b>How it was checked.</b> The screenshots in <code>docs/screenshots/mockup-ocean/</code> were rendered in a cloud container with no GPU (Chromium on SwiftShader), so they show the look, never how smoothly it runs.</p>
-  </details>
+  </template>
 </header>
 
 <nav class="tabs" role="tablist" aria-label="Parts of the mockup">
   <div class="trow sea"><span class="lab">Sea</span><button role="tab" data-tab="sea">Open sea</button><button role="tab" data-tab="coast">Coast and tide</button><button role="tab" data-tab="reef">Coral reef</button><button role="tab" data-tab="kelp">Kelp forest</button><button role="tab" data-tab="polar">Polar sea</button><button role="tab" data-tab="deep">The deep and vents</button><button role="tab" data-tab="wrecks">Trench, caves, wrecks</button></div>
-  <div class="trow fresh"><span class="lab">Fresh</span><button role="tab" data-tab="river">River, source to mouth</button><button role="tab" data-tab="dam">Beavers and dams</button><button role="tab" data-tab="marsh">Marsh and estuary</button></div>
+  <div class="trow fresh"><span class="lab">Fresh</span><button role="tab" data-tab="river">River, source to mouth</button><button role="tab" data-tab="dam">Beavers and dams</button><button role="tab" data-tab="marsh">Marsh and estuary</button><button role="tab" data-tab="sim">Water sim</button></div>
   <div class="trow"><span class="lab">Guide</span><button role="tab" data-tab="light">How underwater looks</button><button role="tab" data-tab="life">Water life</button><button role="tab" data-tab="chart">Where they occur</button><button role="tab" data-tab="engine">In the engine</button></div>
 </nav>
 
 <div id="envPanels"></div>
 
+<div class="tabpanel" id="tab-sim" role="tabpanel" hidden>
+  <h2>Water sim <button class="info" data-help="sim" aria-label="How the water sim works">i</button></h2>
+  <div class="stage" data-scene="sim"></div>
+</div>
+
 <div class="tabpanel" id="tab-light" role="tabpanel" hidden>
-  <h2>How underwater looks</h2>
-  <details class="sdesc"><summary>What this shows, and how to use it</summary><p>A diver goes down a reef wall that drops from the surface to the floor of the world's column, 145 m down (<code>column::BASE_M</code>, which never moves). A colour board hangs two metres in front of the lens: red, orange, yellow, green, cyan, blue. Drag the depth: red goes first (it is gone by ten metres), then orange and yellow, and by the twilight zone only blue is left. Switch between <b>today's game</b> (the sea's one absorption, <code>absorption_per_m</code> 0.32 / 0.035 / 0.012, and a murk lit by the open sea's light whatever the depth) and <b>proposed</b> (light that fades with depth, caustics on the bed, god rays near the surface, marine snow, and a turbidity per place). The chart beside it is the light left at each depth.</p></details>
+  <h2>How underwater looks <button class="info" data-modal="lightTpl" data-title="How underwater looks" aria-label="What this shows">i</button></h2>
+  <template id="lightTpl"><p>A diver goes down a reef wall that drops from the surface to the floor of the world's column, 145 m down (<code>column::BASE_M</code>, which never moves). A colour board hangs two metres in front of the lens: red, orange, yellow, green, cyan, blue. Drag the depth: red goes first (it is gone by ten metres), then orange and yellow, and by the twilight zone only blue is left. Switch between <b>today's game</b> (the sea's one absorption, <code>absorption_per_m</code> 0.32 / 0.035 / 0.012, and a murk lit by the open sea's light whatever the depth) and <b>proposed</b> (light that fades with depth, caustics on the bed, god rays near the surface, marine snow, and a turbidity per place). The chart beside it is the light left at each depth.</p></template>
   <div class="envgrid">
     <div class="stage" data-scene="light"></div>
     <div class="side">
@@ -165,40 +186,46 @@ tr:last-child td{border-bottom:0}
 </div>
 
 <div class="tabpanel" id="tab-life" role="tabpanel" hidden>
-  <h2>Water life</h2>
-  <p class="muted">Every creature the ten places show, with where it lives, how it behaves, what the player gets from it and how. <span class="st today">game</span> swims in the game today (<code>assets/config/fauna.ron</code>); <span class="st m">M7</span> and <span class="st m">M9</span> are the animals and fish-lab mockups' species, extended here, not redrawn; <span class="st prop">new</span> is proposed by this page. A new species is appended to its body's roster (the roster is append-only: a caught fish is saved as its index).</p>
+  <h2>Water life <button class="info" data-modal="lifeTpl" data-title="Water life" aria-label="About the bestiary">i</button></h2>
+  <template id="lifeTpl">  <p>Every creature the ten places show, with where it lives, how it behaves, what the player gets from it and how. <span class="st today">game</span> swims in the game today (<code>assets/config/fauna.ron</code>); <span class="st m">M7</span> and <span class="st m">M9</span> are the animals and fish-lab mockups' species, extended here, not redrawn; <span class="st prop">new</span> is proposed by this page. A new species is appended to its body's roster (the roster is append-only: a caught fish is saved as its index).</p> Pick a creature for its card.</p></template>
   <div class="seg" id="lifeFilter" role="group" aria-label="Water"><button data-f="all" aria-pressed="true">All</button><button data-f="marine" aria-pressed="false">Marine</button><button data-f="brackish" aria-pressed="false">Brackish</button><button data-f="fresh" aria-pressed="false">Fresh</button></div>
   <div class="seg" id="lifeEnv" role="group" aria-label="Place"></div>
-  <div class="cards" id="lifeCards"></div>
+  <div class="cards small" id="lifeCards"></div>
 </div>
 
 <div class="tabpanel" id="tab-chart" role="tabpanel" hidden>
-  <h2>Where each place occurs</h2>
-  <p class="muted">A sample Tenebris-like planet drawn in this page with the rules below, from the data the game already has or would derive: height (shelf and abyss), latitude and sea temperature (the atmosphere's sea cells carry their heat and currents), sea ice from the climate normals (<code>climate-and-fish-maps</code>), drainage for rivers, and flat wet lowland for marshes. It is a picture of the rules, not of Tenebris's shipped seed: the real chart would be a layer of the in-game map, computed by the same function the spawner and the generator use, so the three can never disagree. Click a place in the legend to show only it; hover the map to read a point.</p>
+  <h2>Where each place occurs <button class="info" data-modal="chartTpl" data-title="Where each place occurs" aria-label="About the chart and its rules">i</button></h2>
+
   <div class="chartwrap">
     <canvas id="chart" width="720" height="360" aria-label="A world map coloured by water environment"></canvas>
-    <div class="side"><div class="legend" id="legend"></div><div class="mono muted" id="chartRead" style="font-size:12px;min-height:3em">Hover the map.</div><p class="muted" style="font-size:13px">The same function runs on every body with water, on its own data and roster. Sequoia, Tenebris's sister planet, has green seas under a brown sky: its reefs, kelp and marshes would come from the same rules and look nothing like these. Airless bodies have none.</p></div>
+    <div class="side"><div class="legend" id="legend"></div><div class="mono muted" id="chartRead" style="font-size:12px;min-height:3em">Hover the map.</div></div>
   </div>
-  <div class="tablebox"><table><thead><tr><th>Place</th><th>Where the planet puts it</th><th>Read from</th></tr></thead><tbody id="ruleRows"></tbody></table></div>
+  <template id="chartTpl">  <p>A sample Tenebris-like planet drawn in this page with the rules below, from the data the game already has or would derive: height (shelf and abyss), latitude and sea temperature (the atmosphere's sea cells carry their heat and currents), sea ice from the climate normals (<code>climate-and-fish-maps</code>), drainage for rivers, and flat wet lowland for marshes. It is a picture of the rules, not of Tenebris's shipped seed: the real chart would be a layer of the in-game map, computed by the same function the spawner and the generator use, so the three can never disagree. Click a place in the legend to show only it; hover the map to read a point.</p><p>The same function runs on every body with water, on its own data and roster. Sequoia, Tenebris's sister planet, has green seas under a brown sky: its reefs, kelp and marshes would come from the same rules and look nothing like these. Airless bodies have none.</p><h3>The rules</h3><div class="tablebox"><table><thead><tr><th>Place</th><th>Where the planet puts it</th><th>Read from</th></tr></thead><tbody id="ruleRows"></tbody></table></div></template>
 </div>
 
 <div class="tabpanel" id="tab-engine" role="tabpanel" hidden>
   <h2>In the engine</h2>
-  <p class="muted">What each part of the mockup is in the game today, and what would be new. Nothing here is built by this change; it is a write-up (<code>openspec/changes/ocean-environments</code>). The game is a heightfield of hex columns from 145 m below the datum; the sea is one sheet at sea level, drawn from both sides by <code>water.wgsl</code> and floated on by <code>pbd_core::sea</code>.</p>
+  <div class="btnrow"><button class="pbtn" data-modal="engFeatTpl" data-title="In the engine, feature by feature">Feature by feature</button><button class="pbtn" data-modal="engSavesTpl" data-title="Saves, and what stays true">Saves, and what stays true</button><button class="pbtn" data-modal="engDecTpl" data-title="Decisions and questions for the owner">Decisions and questions</button></div>
+  <template id="engFeatTpl">  <p>What each part of the mockup is in the game today, and what would be new. Nothing here is built by this change; it is a write-up (<code>openspec/changes/ocean-environments</code>). The game is a heightfield of hex columns from 145 m below the datum; the sea is one sheet at sea level, drawn from both sides by <code>water.wgsl</code> and floated on by <code>pbd_core::sea</code>.</p>
   <div class="tablebox"><table><thead><tr><th>Feature</th><th>Today</th><th>Would be new</th><th>Data and config</th></tr></thead><tbody id="engineRows"></tbody></table></div>
-  <h2>Saves, and what stays true</h2>
+</template>
+  <template id="engSavesTpl">  
   <div class="cards">
     <div class="card"><h3>New places are a new generator version</h3><p>Reefs, kelp beds, vents, deeper trenches, stepped rivers, marsh pools and sea ice cells change what a world is made of, so they ship as a new terrain generator version, for new worlds. A world keeps the version it names, cell for cell; the old version is carried forever with its digest test (<code>openspec/specs/planet/terrain</code>, "The generator is versioned"). Opening an old world never rebuilds it onto the new seabed.</p></div>
     <div class="card"><h3>Habitat is derived, a fished-down stock is a record</h3><p>Where a reef or a kelp bed is, and which species can spawn there now, is derived from the seed, the generator version and the live climate, and never saved (<code>world-persistence</code> decision 1). A named fishing ground, a pearl bed someone has worked, or a stock that can be fished down is a stored record, and changes through the journal.</p></div>
     <div class="card"><h3>A beaver dam is an authored world change</h3><p>A colony's dam, lodge and felled trees are journal entries authored <code>@wbeaver:&lt;colony&gt;</code>, written through the durable path like the player's digging, and checked first against every cell the player has touched: the world never overwrites the player. Break a dam and the pond drains; the colony does not rebuild on the cells you broke, it moves its dam to the next site.</p></div>
     <div class="card"><h3>Every depth fits the column</h3><p>A saved edit is indexed from <code>column::BASE_M</code> (&minus;145 m), which does not move. So the deep is fitted to the column: sunlit to 40 m, twilight to 90 m, midnight to the floor, set by how fast light fades with depth, not by real-ocean metres. No old save gains a layer it cannot index.</p></div>
   </div>
-  <h2>Decisions and questions for the owner</h2>
-  <p class="muted">Recommendations are mine, not the owner's words. Three questions come with screenshots to look at (marked); everything else is "recommendation taken (ask only with screenshots)".</p>
+</template>
+  <template id="engDecTpl">  
+  <p>Recommendations are mine, not the owner's words. Two questions come with screenshots to look at (marked); Q2 (creatures as cards) the owner answered on 2026-11-15; everything else is "recommendation taken (ask only with screenshots)".</p>
   <div class="dec" id="decisions"></div>
+</template>
 </div>
 
 </div>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="mbox"><div class="mhead"><h2 id="modalTitle"></h2><button class="mclose" id="modalClose" aria-label="Close">&#x2715;</button></div><div class="mbody" id="modalBody"></div></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="ocean/creatures3d.js?v=1"></script>
@@ -280,7 +307,7 @@ const ENV = [
     where: "The swamp biome (flat land within a few metres of the sea that the rain keeps wet, 1% of land today), widened to every flat wet lowland. Estuaries where a river meets the sea; mangroves where that sea is above 20 C.",
     today: "The swamp biome, its herons, bog toads, mire lurkers and fireflies (M7's design) exist or are drawn; the pools above sea level, peat cells, mangroves and estuary are new."},
 ];
-const SCENE_IDS = ENV.map(e => e.id).concat(["light"]);
+const SCENE_IDS = ENV.map(e => e.id).concat(["sim", "light"]);
 const TABS = SCENE_IDS.concat(["life", "chart", "engine"]);
 
 // ======================= shared: params, tabs =======================
@@ -305,24 +332,41 @@ function lifeChip(id) { const s = SPECIES_BY[id]; if (!s) return ""; return `<sp
 function buildPanels() {
   document.getElementById("envPanels").innerHTML = ENV.map(e => `
 <div class="tabpanel" id="tab-${e.id}" role="tabpanel" hidden>
-  <h2>${e.name} <span class="wtag ${e.water}" style="vertical-align:middle">${e.water}</span></h2>
-  <p>${e.lede}</p>
-  <div class="envgrid">
+  <h2>${e.name} <span class="wtag ${e.water}" style="vertical-align:middle">${e.water}</span> <button class="info" data-modal="about-${e.id}" data-title="${e.name}" aria-label="About ${e.name}: what it shows, what lives there, where the planet puts it">i</button></h2>
+  <div class="${e.id === "dam" ? "envgrid" : ""}">
     <div class="stage" data-scene="${e.id}"></div>
-    <div class="side">
-      <details class="sdesc" open><summary>What this shows, and how to use it</summary><p>${e.sdesc}</p></details>
-      <dl>
-        <dt>What makes it distinct</dt><dd>${e.look}</dd>
-        <dt>What lives here (all of it moves)</dt><dd class="life">${e.life.map(lifeChip).join("")}</dd>
-        <dt>What the player does</dt><dd>${e.does}</dd>
-        <dt>Where the planet puts it</dt><dd>${e.where}</dd>
-        <dt>Today and proposed</dt><dd>${e.today}</dd>
-      </dl>
-      ${e.id === "dam" ? `<div class="journal" id="journal" aria-label="The world's journal for this valley"></div>` : ""}
-    </div>
+    ${e.id === "dam" ? `<div class="side"><div class="journal" id="journal" aria-label="The world's journal for this valley"></div></div>` : ""}
   </div>
+  <template id="about-${e.id}">
+    <p>${e.lede}</p>
+    <p>${e.sdesc}</p>
+    <dl>
+      <dt>What makes it distinct</dt><dd>${e.look}</dd>
+      <dt>What lives here (all of it moves)</dt><dd class="life">${e.life.map(lifeChip).join("")}</dd>
+      <dt>What the player does</dt><dd>${e.does}</dd>
+      <dt>Where the planet puts it</dt><dd>${e.where}</dd>
+      <dt>Today and proposed</dt><dd>${e.today}</dd>
+    </dl>
+  </template>
 </div>`).join("");
 }
+// ---- the modal: one for the page, filled from a template or a string; closes with its X, Esc or a tap outside
+const tplEl = id => { for (const t of document.querySelectorAll("template")) { const e = t.content.querySelector("#" + id); if (e) return e; } return document.getElementById(id); };
+let MODAL_BACK = null;
+function openModal(title, content) {
+  const m = document.getElementById("modal"), body = document.getElementById("modalBody");
+  document.getElementById("modalTitle").textContent = title; body.innerHTML = "";
+  if (typeof content === "string") body.innerHTML = content; else body.appendChild(content);
+  MODAL_BACK = document.activeElement; m.hidden = false; body.scrollTop = 0; document.getElementById("modalClose").focus();
+}
+function closeModal() { const m = document.getElementById("modal"); if (m.hidden) return; m.hidden = true; if (MODAL_BACK && MODAL_BACK.focus) MODAL_BACK.focus(); }
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-modal]"); if (b) { const t = document.getElementById(b.dataset.modal); if (t) openModal(b.dataset.title || "", t.content.cloneNode(true)); return; }
+  const h = e.target.closest("[data-help]"); if (h && h.dataset.help === "sim") openModal("How the water sim works", SIM_HELP);
+});
+document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
+document.getElementById("modalClose").addEventListener("click", closeModal);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 
 let TAB = null;
 function setTab(t, push = true) {
@@ -408,7 +452,10 @@ function loop(now) {
 const KEYS = new Set();
 function bindControls(cv) {
   let drag = null; const pts = new Map();
-  cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = {x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey}; cv.focus({preventScroll: true}); });
+  let press = null;
+  cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = {x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey}; press = {x: e.clientX, y: e.clientY, b: e.button, moved: 0}; cv.focus({preventScroll: true}); });
+  cv.addEventListener("pointermove", e => { if (press) press.moved = Math.max(press.moved, Math.hypot(e.clientX - press.x, e.clientY - press.y)); });
+  cv.addEventListener("pointerup", e => { if (press && press.moved < 6 && press.b === 0 && ACTIVE && ACTIVE.onClick && !e.shiftKey) ACTIVE.onClick(e); press = null; });
   cv.addEventListener("pointermove", e => {
     if (!drag || !ACTIVE) return; const c = ACTIVE.cam;
     if (pts.size === 2) { const prev = [...pts.values()]; pts.set(e.pointerId, [e.clientX, e.clientY]); const now = [...pts.values()]; const d0 = Math.hypot(prev[0][0] - prev[1][0], prev[0][1] - prev[1][1]), d1 = Math.hypot(now[0][0] - now[1][0], now[0][1] - now[1][1]); if (d0 > 0) c.dist = clamp(c.dist * d0 / d1, c.minD, c.maxD); return; }
@@ -792,6 +839,7 @@ function waterCtl(W, mat, mesh, o) {
   W.seas.push(S); return S;
 }
 // fresh water: a hex cap at each water cell's level, and a falling face down every step to a lower cell
+const FALL_OFF = 0.08;   // metres a falling sheet stands off the cliff it falls down
 function makeCaps(W, cells, o = {}) {
   const pos = [], flow = [], fall = [], push = (p, f, fa) => { pos.push(...p); flow.push(...f); fall.push(fa); };
   for (const [key, c] of cells) {
@@ -799,9 +847,16 @@ function makeCaps(W, cells, o = {}) {
     for (let i = 0; i < 6; i++) { const [ax, az] = CORNER[i], [bx, bz] = CORNER[(i + 1) % 6]; push([X, c.wl, Z], f, 0); push([X + bx, c.wl, Z + bz], f, 0); push([X + ax, c.wl, Z + az], f, 0); }
     for (let i = 0; i < 6; i++) {
       const nb = cells.get((q + DIRS[i][0]) + "," + (r + DIRS[i][1])); if (o.noFalls || !nb || nb.wl >= c.wl - 0.05) continue;
-      const [ax, az] = CORNER[i], [bx, bz] = CORNER[(i + 1) % 6], a = Math.PI / 3 * i, fd = [Math.cos(a), Math.sin(a)];
-      const P = [[X + ax, c.wl, Z + az], [X + bx, c.wl, Z + bz], [X + bx, nb.wl, Z + bz], [X + ax, nb.wl, Z + az]];
+      // The falling sheet stands FALL_OFF in front of the cell's edge, toward the lower cell: the cliff face (the column's
+      // side) is on the edge itself, and a sheet on the same plane z-fights with it. The sheet runs from the lip of the
+      // upper cap down a hair into the pool below, so no seam opens at either end.
+      const [ax, az] = CORNER[i], [bx, bz] = CORNER[(i + 1) % 6], a = Math.PI / 3 * i, fd = [Math.cos(a), Math.sin(a)], ox = fd[0] * FALL_OFF, oz = fd[1] * FALL_OFF;
+      const el = Math.hypot(bx - ax, bz - az), ex = (bx - ax) / el * FALL_OFF * 0.6, ez = (bz - az) / el * FALL_OFF * 0.6;   // reach past each corner, to meet the next sheet round a bend
+      const P = [[X + ax + ox - ex, c.wl, Z + az + oz - ez], [X + bx + ox + ex, c.wl, Z + bz + oz + ez], [X + bx + ox + ex, nb.wl - 0.04, Z + bz + oz + ez], [X + ax + ox - ex, nb.wl - 0.04, Z + az + oz - ez]];
       for (const k of [0, 1, 2, 0, 2, 3]) push(P[k], fd, 1);
+      // and a lip: the strip of cap between the edge and the sheet, so the water runs over the edge onto the sheet
+      const L = [[X + ax, c.wl, Z + az], [X + bx, c.wl, Z + bz], [X + bx + ox, c.wl, Z + bz + oz], [X + ax + ox, c.wl, Z + az + oz]];
+      for (const k of [0, 1, 2, 0, 2, 3]) push(L[k], f, 0);
     }
   }
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("aFlow", new THREE.Float32BufferAttribute(flow, 2)); g.setAttribute("aFall", new THREE.Float32BufferAttribute(fall, 1));
@@ -1120,7 +1175,7 @@ function reefGeos() {
   const anem = (n, R, L) => { const k = K(); k.add(C3.cyl(R, R * 1.15, R * 0.5, 8), 0x9e3ba2, {p: [0, R * 0.25, 0]}); k.add(new THREE.CircleGeometry(R * 0.5, 8).rotateX(-Math.PI / 2), 0x7d2dbd, {p: [0, R * 0.5 + 0.004, 0]});   // an anemone: a purple foot, waving tentacles
     for (let i = 0; i < n; i++) { const a = i * 2.39996, rr = R * Math.sqrt((i + 0.5) / n) * 0.95, h = L * (0.7 + 0.5 * hh(i, 14)), t = 0.3 + rr / R * 0.9; k.add(C3.cyl(0.006 * L / 0.25, 0.016 * L / 0.25, h, 4).translate(0, h / 2, 0), (x, y) => y > R * 0.5 + h * 0.75 ? 0xc1f1d8 : 0x9bb675, {p: [Math.cos(a) * rr, R * 0.45, Math.sin(a) * rr], r: [Math.sin(a) * t, 0, -Math.cos(a) * t]}); }
     return k.build(); };
-  G.anem = anem(28, 0.13, 0.22); G.hero = anem(150, 0.5, 0.55);
+  G.anem = anem(28, 0.13, 0.22); G.hero = anem(220, 0.55, 0.5);
   { const k = K(); for (let i = 0; i < 8; i++) { const a = i * 2.3, h = 0.1 + 0.16 * hh(i, 15), x = Math.cos(a) * 0.08, z = Math.sin(a) * 0.08; k.add(C3.shape([[-0.02, 0], [0.02, 0], [0, h]]), (xx, y) => y > h * 0.5 ? 0xffffff : 0xd0d0d0, {p: [x, 0, z], r: [0, a, 0]}); } G.turf = k.build(); }   // algae turf
   { const k = K(); for (let i = 0; i < 7; i++) { const a = i * 2.1, h = 0.3 + 0.3 * hh(i, 16); k.add(C3.shape([[-0.025, 0], [0.025, 0], [0.012, h * 0.7], [0, h]]), 0xffffff, {p: [Math.cos(a) * 0.06, 0, Math.sin(a) * 0.06], r: [0.1 * Math.sin(a), a, 0.1 * Math.cos(a)]}); } G.grass = k.build(); }   // sea grass
   { const k = K(); for (let j = 0; j < 3; j++) { const a = j * 2.1, H = 1.6 + j * 0.5; for (let i = 0; i < 8; i++) { const y0 = i * H / 8, y1 = (i + 1) * H / 8, w = 0.08 + 0.04 * Math.sin(i); k.add(C3.shape([[-w, y0], [w, y0], [w * 0.9, y1], [-w * 0.9, y1]]), i % 2 ? 0xffffff : 0xe0e0e0, {p: [Math.cos(a) * 0.1, 0, Math.sin(a) * 0.1], r: [0, a + i * 0.25, 0]}); } } G.kelp = k.build(); }   // seaweed
@@ -1175,7 +1230,7 @@ function sceneReef(stage) {
     k++; const x = gx + (hsh(k, 1) - 0.5) * 0.5, z = gz + (hsh(k, 2) - 0.5) * 0.5, d = Math.hypot(x, z), dv = Math.hypot(x - VT.x, z - VT.z);
     const dens = d < 24 || dv < 14 ? 1 : d < 46 ? 0.28 : 0; if (hsh(k, 3) > dens) continue;
     if (Math.hypot(x - den.x, z - den.z) < 1.4) continue;
-    if (Math.hypot(x - EYE.x, z - EYE.z) < 2.2) continue;
+    if (Math.hypot(x - EYE.x, z - EYE.z) < 1.0) continue;
     const low = segDist(x, z) < 1.1 || Math.hypot(x - EYE.x, z - EYE.z) < 3.4;   // the eye's line to the anemone: only low growth
     const y = bed(x, z), rock = y > -5.5, zone = vn(x / 3.1 + 11, z / 3.1 - 4), r = hsh(k, 4), s = 0.7 + 0.6 * hsh(k, 5), yaw = hsh(k, 6) * 6.28;
     if (!rock) {   // the sand: sea grass, rubble and shells, a few corals, a stand of seaweed
@@ -1184,17 +1239,17 @@ function sceneReef(stage) {
       continue;
     }
     if (low) { if (r < 0.5) RP.add("turf", x, y, z, s, yaw); else if (r < 0.7) RP.add("rubble", x, y, z, s, yaw); else if (r < 0.8) RP.add("finger", x, y, z, s * 0.6, yaw); else RP.add("shell", x, y, z, s, yaw); continue; }
-    if (r < 0.03 && y <= -3.5 && dv > 4) { RP.add("table", x, y, z, 1.1 + 1.1 * hsh(k, 7), yaw, null, 0.8 + 1.2 * hsh(k, 8)); continue; }
+    if (r < 0.03 && y <= -3.5 && dv > 4) { RP.add("table", x, y, z, 0.9 + 0.8 * hsh(k, 7), yaw, null, 0.6 + 0.6 * hsh(k, 8)); continue; }
     if (r < 0.04 && clams.length < 10 && y < -3) { clams.push(makeClam(W, M, x - 0.5, y, z - 0.3)); continue; }
     const kind = zone < 0.27 ? "branch" : zone < 0.4 ? "finger" : zone < 0.5 ? "boulder" : zone < 0.57 ? "soft" : zone < 0.63 ? (r < 0.5 ? "tube" : "barrel") : zone < 0.69 ? "fan" : zone < 0.73 ? "anem" : zone < 0.84 ? "branch" : "turf";
     const sy = kind === "boulder" ? 0.7 + 0.8 * hsh(k, 9) : 1;
-    RP.add(kind, x, y, z, kind === "boulder" ? s * 1.2 : s, yaw, null, sy);
+    RP.add(kind, x, y, z, kind === "boulder" ? s * 0.85 : s, yaw, null, sy);
     if (kind === "anem" && anems.length < 8) anems.push(new THREE.Vector3(x, y + 0.25 * s, z));
-    if (kind === "boulder" && hsh(k, 10) < 0.35) RP.add(hsh(k, 11) < 0.6 ? "branch" : "finger", x, y + 0.42 * s * 1.2 * sy, z, s * 0.6, yaw);   // corals grow on corals
+    if (kind === "boulder" && hsh(k, 10) < 0.35) RP.add(hsh(k, 11) < 0.6 ? "branch" : "finger", x, y + 0.42 * s * 0.85 * sy, z, s * 0.6, yaw);   // corals grow on corals
     if (hsh(k, 12) < 0.55) RP.add(hsh(k, 13) < 0.6 ? "turf" : "rubble", x + 0.3, y, z - 0.2, 0.6 + 0.6 * hsh(k, 14), yaw);   // the gaps filled
   }
   // the skyline: big table corals layered at different heights across the middle distance of the default view
-  for (let i = 0; i < 16; i++) { const along = 6 + 13 * hsh(i, 21), side = (hsh(i, 22) - 0.5) * 22, x = VT.x + VD.x * along + VD.z * side, z = VT.z + VD.z * along - VD.x * side, y = bed(x, z); if (y < -5.5) continue; RP.add("table", x, y, z, 1.8 + 1.4 * hsh(i, 23), hsh(i, 24) * 6, null, 1.3 + 1.6 * hsh(i, 25)); }
+  for (let i = 0; i < 16; i++) { const along = 6 + 13 * hsh(i, 21), side = (hsh(i, 22) - 0.5) * 22, x = VT.x + VD.x * along + VD.z * side, z = VT.z + VD.z * along - VD.x * side, y = bed(x, z); if (y < -5.5) continue; RP.add("table", x, y, z, 1.5 + 1.1 * hsh(i, 23), hsh(i, 24) * 6, null, 0.9 + 0.9 * hsh(i, 25)); }
   // the big anemone close to the eye, with its clownfish (darters)
   const heroP = HERO.clone(); heroP.y = bed(heroP.x, heroP.z); RP.add("hero", heroP.x, heroP.y, heroP.z, 1, 0.3, 0xfffefe);
   const pieces = RP.build();
@@ -1203,7 +1258,7 @@ function sceneReef(stage) {
   for (const a of anems.slice(0, 6)) life.push(school(W, "darter", 2, 0.22, () => a, [0.5, 0.3, 0.5]));
   // fish everywhere: a cloud of small orange anthias over the reef, dark damsels higher, the game's reef fish
   const cloud = VT.clone().addScaledVector(VD, 5);
-  life.push(school(W, "anthias", 340, 0.2, orbitPath(cloud.x, -2.6, cloud.z, 2.5, 1.8, 0.05, 0.3), [20, 3.2, 15]));
+  life.push(school(W, "anthias", 380, 0.2, orbitPath(cloud.x, -2.7, cloud.z, 2, 1.5, 0.05, 0.3), [14, 2.6, 10]));
   life.push(school(W, "anthias", 160, 0.2, orbitPath(-10, -3.2, -8, 4, 3, -0.06, 0.4, 1), [14, 2.5, 12]));
   life.push(school(W, "damsel", 40, 0.32, orbitPath(cloud.x - 2, -1.2, cloud.z - 2, 3, 2, 0.04, 0.3, 2), [18, 1.4, 14]));
   life.push(school(W, "game/fish-reef", 26, 0.3, orbitPath(-4, -3, 6, 12, 8, 0.1), [5, 1.5, 4]));
@@ -1517,7 +1572,7 @@ function fireflies(W, n, c, s, color, lamps = 3) { const f = motes(W, n, color, 
 
 // ======================= 8. the river, source to mouth =======================
 function sceneRiver(stage) {
-  const W = setupStage("river", stage, {marine: true, water: "river", far: 800});
+  const W = setupStage("river", stage, {marine: true, water: "river", far: 800, extraTop: `<div class="seg"><button id="dropCatch">Drop a catch</button></div>`});
   W.water = WATERS.river; W.U.uWLdef.value = -1000;
   const M = commonMats(W), B = SHEET;
   const STEPS = [[-999, 15], [-74, 14], [-66, 13], [-58, 12], [-48, 11], [-40, 10], [-31.5, 6], [-14, 5], [-6, 4], [-4, 3.0], [24, 2], [46, 1], [70, 0]];
@@ -1562,8 +1617,19 @@ function sceneRiver(stage) {
   const ff = fireflies(W, 120, new THREE.Vector3(18, 4, zc(18) + 5), [20, 2, 8], 0xc8ff5a), gm = fireflies(W, 40, new THREE.Vector3(mx + 3, mb + 2.6, mz - 1), [3, 1.5, 3], 0x78dcff, 1);
   const lamp = diverLamp(W);
   W.hudExtra = () => { const x = W.cam.target.x; const w = wlx(x); return `river here: water at layer ${w}, ${x < -40 ? "riffles" : x < -31 ? "the fall's lip" : x < -22 ? "plunge pool" : x < 0 ? "rapid" : x < 70 ? "meanders" : "the mouth"}`; };
-  W.update = (t, dt) => { const cp = W.camera.position, cwl = W.waterAt(cp.x, cp.z), under = cp.y < cwl; for (const l of life) l.update(t, cp, dt); ff.update(t); gm.update(t); lamp.update(under, cwl - cp.y); };
-  W.setViews({"Waterfall": [[-31, 7, zc(-31)], 1.62, 0.2, 21], "Source": [[-80, 16, zc(-80)], 0.8, 0.45, 40], "Meanders": [[30, 2, 4], 0.4, 0.75, 70], "Mouth": [[80, 0, 4], 1.6, 0.3, 40], "Plunge pool": [[-26, 4.2, zc(-26)], 1.5, 0.08, 6]});
+  // A caught fish the player drops on the bank is an item: its 2D item icon (the game's own, assets/items/fish), standing
+  // on the ground and turned to the eye, as the game draws a dropped item. It is the one animal left as a sprite (the
+  // owner, 2026-11-15: "all fish should also be 3d, unless they are caught, and a player drops them as 2d sprites"):
+  // the live trout and perch swimming beside it in the pool are 3D.
+  const DROPS = [], DROP_AT = [[-21.5, 4.6], [-22.6, 5.4], [-20.6, 5.9], [-23.4, 4.5], [-21.8, 6.6], [-20.2, 4.8]];
+  const ICONS = ["game/fish-perch", "game/fish-minnow", "game/fish-perch", "game/fish-eel", "game/fish-minnow", "game/fish-perch"];
+  W.dropCatch = () => { const i = DROPS.length % DROP_AT.length, [x, dz] = DROP_AT[i], z = zc(x) + dz, g = bed(x, z);
+    const m = card(W, spriteTex(ICONS[i]), 0.55, 0.55, {anchorBottom: true}); m.position.set(x, g + 1.4, z); DROPS.push({m, g, vy: 0}); if (DROPS.length > DROP_AT.length) { const o = DROPS.shift(); W.scene.remove(o.m); } return DROPS.length; };
+  stage.querySelector("#dropCatch").addEventListener("click", () => W.dropCatch());
+  if (Q.has("drop")) for (let i = 0; i < 3; i++) W.dropCatch();
+  W.update = (t, dt) => { const cp = W.camera.position, cwl = W.waterAt(cp.x, cp.z), under = cp.y < cwl; for (const l of life) l.update(t, cp, dt); ff.update(t); gm.update(t); lamp.update(under, cwl - cp.y);
+    for (const d of DROPS) { if (d.m.position.y > d.g + 0.02) { d.vy -= 9.8 * dt; d.m.position.y = Math.max(d.g + 0.02, d.m.position.y + d.vy * dt); } d.m.rotation.set(0, Math.atan2(cp.x - d.m.position.x, cp.z - d.m.position.z), 0); } };
+  W.setViews({"Bank": [[-22, bed(-22, zc(-22) + 5.2) + 0.3, zc(-22) + 4.2], 1.1, 0.35, 5.5], "Waterfall": [[-31, 7, zc(-31)], 1.62, 0.2, 21], "Source": [[-80, 16, zc(-80)], 0.8, 0.45, 40], "Meanders": [[30, 2, 4], 0.4, 0.75, 70], "Mouth": [[80, 0, 4], 1.6, 0.3, 40], "Plunge pool": [[-26, 4.2, zc(-26)], 1.5, 0.08, 6]});
   W.lampBtn(); finish(W, "Waterfall"); return W;
 }
 
@@ -1733,6 +1799,117 @@ function sceneMarsh(stage) {
   W.lampBtn(); finish(W, "Pools"); return W;
 }
 
+// ======================= the water sim =======================
+// The owner, 2026-11-15: "there should be a sim where I can place water blocks and see how their physics plays out,
+// I had asked to look at minetest source code for water implementation". A hex patch of columns where a click pours
+// a water source, digs a cell or places a block, and the water moves by Luanti's (Minetest's) own liquid rule:
+// water-flow/liquid.js, the port of ServerMap::transformLiquidsLocal and get_max_liquid_level M28 made (LGPL-2.1-or-
+// later, its licence published beside it as water-flow/COPYING.LESSER). One copy of the rule serves both pages.
+const SIM_PRESETS = {
+  pond: {name: "Pond", ground: (q, r) => hexDistA(q, r) <= 3 ? 1 : 3, run: S => { for (const k of [0, 2, 4]) S.pour(DIRS[k][0], DIRS[k][1], 1); }, view: "Patch"},
+  fall: {name: "Waterfall", ground: (q, r) => { const x = hx(q, r); return x < -14 ? 11 : x < -8 ? 9 : x < -3 ? 7 : x < 3 ? 5 : x < 9 ? 3 : 1; }, run: S => S.pour(-7, 0, 11), view: "Patch"},
+  dam: {name: "Dam", ground: (q, r) => Math.abs(r) <= 1 && q - 0 > -12 ? 1 : 4, run: S => S.dam(), view: "Patch"},
+  flat: {name: "Flat", ground: () => 2, run: () => {}, view: "Patch"},
+};
+const hexDistA = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+function sceneSim(stage) {
+  const W = setupStage("sim", stage, {marine: false, water: "river", far: 500,
+    extraTop: `<div class="seg" role="group" aria-label="Tool" id="simTool"><button data-k="pour" aria-pressed="true">Pour water</button><button data-k="dig" aria-pressed="false">Dig</button><button data-k="block" aria-pressed="false">Place block</button></div>`,
+    extra: `<div class="seg"><button id="simRun" aria-pressed="true">Pause</button><button id="simStep">Step</button><button id="simReset">Reset</button><button id="simBreach" hidden>Breach the dam</button><button class="info" id="simInfo" aria-label="How the water sim works">i</button></div>
+      <div class="lab2"><span>Tick speed</span><b id="simRateV">4 ticks/s</b></div><input type="range" id="simRate" min="1" max="20" value="4" aria-label="Ticks a second">
+      <div class="seg" role="group" aria-label="Preset" id="simPreset">${Object.entries(SIM_PRESETS).map(([k, p]) => `<button data-p="${k}" aria-pressed="false">${p.name}</button>`).join("")}</div>
+      <div class="seg" role="group" aria-label="Renewal" id="simRenew"><button data-r="3" aria-pressed="true">Renew at 3 (hex)</button><button data-r="2" aria-pressed="false">2 (Luanti)</button><button data-r="99" aria-pressed="false">Off</button></div>`});
+  W.U.uWLdef.value = -1000; bakeWater(W, () => -1000, -60, -60, 60, 60, 8, () => -50); W.caust = 0;
+  const L = PBDLiquid, {AIR, SOLID, FLOW, SRC} = L, N = 9, Y0 = 0, Y1 = 15;
+  const LQ = L.create({N, Y0, Y1, range: 8, renew: 3}), {kind, lvl, down, idx, inside, unidx, SIM} = LQ;
+  const cmat = new Uint8Array(LQ.NCELL);   // 1 grass top, 2 dirt, 3 stone, 4 placed granite
+  const atlas = atlasMat(W), granite = W.std({map: tex("game/granite", 2)});
+  const wMat = W.std({vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false, roughness: 0.3});
+  const S = {preset: "fall", tool: "pour", run: true, rate: 4, acc: 0, ground: null, water: null};
+  const setCell = (q, r, y, k, m = 0) => { if (!inside(q, r, y)) return false; const i = idx(q, r, y); kind[i] = k; lvl[i] = 0; down[i] = 0; cmat[i] = m; LQ.touch(q, r, y); return true; };
+  S.pour = (q, r, y) => inside(q, r, y) && kind[idx(q, r, y)] !== SOLID && setCell(q, r, y, SRC);
+  S.dig = (q, r, y) => inside(q, r, y) && kind[idx(q, r, y)] !== AIR && y > Y0 && setCell(q, r, y, AIR);
+  S.place = (q, r, y) => inside(q, r, y) && kind[idx(q, r, y)] !== SOLID && setCell(q, r, y, SOLID, 4);
+  const topOf = (q, r) => { let y = Y1; while (y > Y0 && kind[idx(q, r, y)] !== SOLID) y--; return y + 1; };
+  // the dam: a wall of placed blocks across the channel at q = 0, the reservoir behind it full of sources (settled,
+  // as generated water is: nothing queued until someone edits)
+  S.dam = () => { for (let r = -2; r <= 2; r++) for (let y = 1; y < 5; y++) if (kind[idx(0, r, y)] !== SOLID) { kind[idx(0, r, y)] = SOLID; cmat[idx(0, r, y)] = 4; }
+    for (let q = -N; q < 0; q++) for (let r = -1; r <= 1; r++) if (inside(q, r, 1)) for (let y = 1; y < 4; y++) if (kind[idx(q, r, y)] === AIR) kind[idx(q, r, y)] = SRC; };
+  S.breach = () => { for (let y = 1; y < 5; y++) S.dig(0, 0, y); for (let y = 1; y < 5; y++) S.dig(0, 1, y); rebuildGround(); rebuildWater(); };
+  function reset(k) {
+    S.preset = k || S.preset; const P = SIM_PRESETS[S.preset]; LQ.clear(); cmat.fill(0);
+    for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) { if (hexDistA(q, r) > N) continue; const h = P.ground(q, r); for (let y = Y0; y < h; y++) { const i = idx(q, r, y); kind[i] = SOLID; cmat[i] = y === h - 1 ? 1 : y >= h - 3 ? 2 : 3; } }
+    P.run(S); SIM.renew = +(stage.querySelector("#simRenew [aria-pressed=true]") || {dataset: {r: 3}}).dataset.r;
+    stage.querySelectorAll("#simPreset button").forEach(b => b.setAttribute("aria-pressed", b.dataset.p === S.preset));
+    stage.querySelector("#simBreach").hidden = S.preset !== "dam";
+    rebuildGround(); rebuildWater();
+  }
+  const TOPS = {1: [4, 0, 0], 2: [4, 2, 0], 3: [8, 3, 0]}, SIDES = {1: [4, 1, 0], 2: [4, 2, 0], 3: [8, 3, 0]};
+  function rebuildGround() {
+    if (S.ground) S.ground.forEach(m => { W.scene.remove(m); m.geometry.dispose(); });
+    const GA = Geo(), GG = Geo();
+    for (let i = 0; i < LQ.NCELL; i++) { if (kind[i] !== SOLID) continue; const [q, r, y] = unidx(i), X = hx(q, r), Z = hz(r), m = cmat[i];
+      const open = !inside(q, r, y + 1) || kind[idx(q, r, y + 1)] !== SOLID;
+      if (open) { if (m === 4) hexTop(GG, X, y + 1, Z, (px, pz) => [px / 2, -pz / 2]); else { const t = TOPS[m]; hexTop(GA, X, y + 1, Z, (px, pz) => auv(t[0], t[1], t[2], (px - X) / (2 * HR) + 0.5, (pz - Z) / (2 * HR) + 0.5)); } }
+      for (let k = 0; k < 6; k++) { const nq = q + DIRS[k][0], nr = r + DIRS[k][1]; if (inside(nq, nr, y) && kind[idx(nq, nr, y)] === SOLID) continue; if (!inside(nq, nr, y) && y < Y0 + 1) continue;
+        if (m === 4) hexSide(GG, X, Z, k, y, y + 1, () => [[0, 0.5], [0.7, 0.5], [0.7, 0], [0, 0]]);
+        else { const t = open && m === 1 ? SIDES[1] : SIDES[m === 1 ? 2 : m]; hexSide(GA, X, Z, k, y, y + 1, () => [auv(t[0], t[1], t[2], 0, 0), auv(t[0], t[1], t[2], 1, 0), auv(t[0], t[1], t[2], 1, 1), auv(t[0], t[1], t[2], 0, 1)]); } } }
+    S.ground = [meshOf(GA, atlas), meshOf(GG, granite)]; S.ground.forEach(m => W.scene.add(m));
+  }
+  // water: tinted by its level, as M28 and the game tint water: sources deep blue, flowing lighter as its level falls,
+  // falling water palest. A cap where nothing wet is above; a side wherever the neighbour is not solid and lower.
+  const C_SRC = new THREE.Color(0x2a6a92).convertSRGBToLinear(), C_FLOW = new THREE.Color(0x4a9cbc).convertSRGBToLinear(), C_FALL = new THREE.Color(0x9fd2e4).convertSRGBToLinear(), cc = new THREE.Color();
+  const surf = i => { const [q, r, y] = unidx(i), up = inside(q, r, y + 1) ? kind[idx(q, r, y + 1)] : AIR; if (up === SRC || up === FLOW) return y + 1; return kind[i] === SRC || down[i] ? y + 0.94 : y + (lvl[i] + 1) / 8; };
+  function rebuildWater() {
+    const P = [], Cl = [], tri = (a, b, c) => { P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) Cl.push(cc.r, cc.g, cc.b); };
+    for (let i = 0; i < LQ.NCELL; i++) { const k = kind[i]; if (k !== SRC && k !== FLOW) continue; const [q, r, y] = unidx(i), h = surf(i), X = hx(q, r), Z = hz(r);
+      if (k === SRC) cc.copy(C_SRC); else if (down[i]) cc.copy(C_FALL); else cc.copy(C_SRC).lerp(C_FLOW, 1 - lvl[i] / 7);
+      const up = inside(q, r, y + 1) ? kind[idx(q, r, y + 1)] : AIR;
+      if (up !== SRC && up !== FLOW) for (let k2 = 0; k2 < 6; k2++) { const [ax, az] = CORNER[k2], [bx, bz] = CORNER[(k2 + 1) % 6]; tri([X, h, Z], [X + bx, h, Z + bz], [X + ax, h, Z + az]); }
+      for (let sd = 0; sd < 6; sd++) { const nq = q + DIRS[sd][0], nr = r + DIRS[sd][1]; let lo = y;
+        if (inside(nq, nr, y)) { const n = idx(nq, nr, y), kn = kind[n]; if (kn === SOLID) continue; if (kn === SRC || kn === FLOW) { lo = Math.max(y, surf(n)); if (lo >= h - 0.01) continue; } } else continue;
+        const [ax, az] = CORNER[sd], [bx, bz] = CORNER[(sd + 1) % 6]; tri([X + ax, lo, Z + az], [X + bx, lo, Z + bz], [X + bx, h, Z + bz]); tri([X + ax, lo, Z + az], [X + bx, h, Z + bz], [X + ax, h, Z + az]); } }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(Cl, 3)); g.computeVertexNormals();
+    if (S.water) { S.water.geometry.dispose(); S.water.geometry = g; } else { S.water = new THREE.Mesh(g, wMat); S.water.renderOrder = 3; W.scene.add(S.water); }
+  }
+  const count = () => { let s = 0, f = 0, d = 0; for (let i = 0; i < LQ.NCELL; i++) { if (kind[i] === SRC) s++; else if (kind[i] === FLOW) { f++; if (down[i]) d++; } } return {s, f, d}; };
+  // lamp posts at the patch's edge: at night the water is lit by them
+  for (const [q, r] of [[8, -4], [-8, 4], [3, 5], [-4, -5], [6, 2], [-2, 8]]) { const X = hx(q, r), Z = hz(r), y = SIM_PRESETS.fall.ground(q, r); W.lampPosts = W.lampPosts || []; const post = box(W, W.std({map: tex("game/iron", 1)}), 0.14, 3, 0.14, X, 0, Z); W.lampPosts.push({post, q, r}); W.lamp(X, 3.2, Z, 0xffc070, 2.4, 12, {size: 0.3}); }
+  const placePosts = () => { for (const P of W.lampPosts) { const y = topOf(P.q, P.r); P.post.position.y = y + 1.5; const L = W.LAMPS.find(l => Math.abs(l.p.x - P.post.position.x) < 0.01 && Math.abs(l.p.z - P.post.position.z) < 0.01); if (L) { L.p.y = y + 3.15; L.bulb.position.y = y + 3.15; } } };
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  W.onClick = e => {
+    const b = CANVAS.getBoundingClientRect(); ndc.set((e.clientX - b.left) / b.width * 2 - 1, -(e.clientY - b.top) / b.height * 2 + 1); ray.setFromCamera(ndc, W.camera);
+    const hit = ray.intersectObjects([...S.ground, S.water], false)[0]; if (!hit) return;
+    const into = S.tool === "dig", n = hit.face.normal, p = hit.point.clone().addScaledVector(n, into ? -0.05 : 0.05), [q, r] = cellOf(p.x, p.z), y = Math.floor(p.y);
+    const ok = S.tool === "pour" ? S.pour(q, r, y) : S.tool === "dig" ? S.dig(q, r, y) : S.place(q, r, y);
+    if (ok) { if (S.tool !== "pour") { rebuildGround(); placePosts(); } rebuildWater(); }
+  };
+  const runBtn = stage.querySelector("#simRun"), rateEl = stage.querySelector("#simRate");
+  const setRun = v => { S.run = v; runBtn.setAttribute("aria-pressed", v); runBtn.textContent = v ? "Pause" : "Play"; };
+  runBtn.addEventListener("click", () => setRun(!S.run));
+  stage.querySelector("#simStep").addEventListener("click", () => { setRun(false); LQ.tick(); rebuildWater(); });
+  stage.querySelector("#simReset").addEventListener("click", () => { reset(); placePosts(); });
+  stage.querySelector("#simBreach").addEventListener("click", () => S.breach());
+  rateEl.addEventListener("input", () => { S.rate = +rateEl.value; stage.querySelector("#simRateV").textContent = S.rate + " ticks/s"; });
+  stage.querySelectorAll("#simPreset button").forEach(b => b.addEventListener("click", () => { reset(b.dataset.p); placePosts(); W.view(SIM_PRESETS[b.dataset.p].view); }));
+  stage.querySelectorAll("#simTool button").forEach(b => b.addEventListener("click", () => { S.tool = b.dataset.k; stage.querySelectorAll("#simTool button").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
+  stage.querySelectorAll("#simRenew button").forEach(b => b.addEventListener("click", () => { SIM.renew = +b.dataset.r; stage.querySelectorAll("#simRenew button").forEach(x => x.setAttribute("aria-pressed", x === b)); for (let i = 0; i < LQ.NCELL; i++) if (kind[i] === FLOW || kind[i] === SRC) LQ.qpush(i); }));
+  stage.querySelector("#simInfo").addEventListener("click", () => openModal("How the water sim works", SIM_HELP));
+  W.hudExtra = () => { const c = count(); return `tick ${SIM.tick}, ${SIM.queue.length ? SIM.queue.length + " cells queued" : "settled"}, ${SIM.lastChanged} changed last tick\n${c.s} sources, ${c.f} flowing (${c.d} falling); renew ${SIM.renew > 8 ? "off" : "at " + SIM.renew}, range ${SIM.range}`; };
+  W.update = (t, dt) => {
+    if (S.run && SIM.queue.length) { S.acc += dt * S.rate; let n = 0; while (S.acc >= 1 && n < 20) { S.acc -= 1; LQ.tick(); n++; } if (n) rebuildWater(); } else S.acc = 0;
+  };
+  window.__sim = {LQ, S, count, reset: k => { reset(k); placePosts(); }, step: () => { LQ.tick(); rebuildWater(); }, pour: (q, r, y) => { const ok = S.pour(q, r, y); rebuildWater(); return ok; }, topOf, setRun, state: () => ({tick: SIM.tick, queue: SIM.queue.length, renew: SIM.renew, ...count()})};
+  const pq = Q.get("sim"); reset(pq && SIM_PRESETS[pq] ? pq : "fall"); placePosts(); setRun(!Q.has("paused"));
+  W.setViews({"Patch": [[0, 4, 0], 0.7, 0.62, 52], "Close": [[-3, 6, 0], 1.2, 0.45, 24], "From above": [[0, 2, 0], 0.01, 1.4, 60]});
+  finish(W, "Patch"); return W;
+}
+const SIM_HELP = `<p>A hex patch nine cells across from its middle, each cell 2.833 m flat to flat and 1 m a layer, as the game's. Click to <b>pour</b> a water source into a cell, <b>dig</b> one out (water or ground), or <b>place</b> a granite block. Drag to look, wheel to zoom.</p>
+<p>The water moves by <b>Luanti's (Minetest's) liquid rule</b>: <code>ServerMap::transformLiquidsLocal</code> and <code>get_max_liquid_level</code> in Luanti's <code>src/servermap.cpp</code> (commit <code>a10dc8d</code>, 2026-11-09), ported to the hex grid in <code>water-flow/liquid.js</code>, the same file the Hex Water Flow mockup (M28) runs. A <b>source</b> is full water that never drains. Next to it, <b>flowing</b> water takes level 7, and each cell further out one less, so water reaches <b>8 cells</b> (the range) and stops. Water with air under it <b>falls</b>: a cell above water flows down before it spreads (Luanti's drop boost), which is how it comes off a ledge and spreads again below. A cell touched by enough sources becomes a source itself: the <b>renewal</b> rule. On hex, two touching cells share two neighbours, so Luanti's threshold of 2 floods a plain; the threshold here is <b>3</b>, and the toggle shows Luanti's 2 and no renewal at all.</p>
+<p>A <b>tick</b> handles every cell queued, once, as Luanti does; an edit queues the cell and its eight neighbours (up, six sides, down). <b>Step</b> runs one tick; the slider sets ticks a second.</p>
+<p><b>Presets:</b> <i>Pond</i>, three sources round a basin's middle: the middle and then the cells between renew, so a pool of sources forms. <i>Waterfall</i>, a spring on the top of cell steps: it spreads, falls each step and spreads again. <i>Dam</i>, a reservoir of sources behind a wall of blocks: <b>Breach the dam</b> digs a gap and the reservoir pours through; the sources stay, so the flow keeps running.</p>
+<p class="muted">Licence: Luanti is Copyright (C) 2010-2024 celeron55, Perttu Ahola and contributors, under the GNU Lesser General Public License 2.1 or later; the port is offered under the same licence, published beside it as <a href="water-flow/COPYING.LESSER">water-flow/COPYING.LESSER</a>. Proposal only: the game has no flowing water today (<code>openspec/changes/water-flow</code>).</p>`;
+
 // ======================= how underwater looks =======================
 const LIGHT = {mode: Q.get("mode") === "today" ? "today" : "prop", w: Q.get("w") || "ocean"};
 function sceneLight(stage) {
@@ -1865,10 +2042,12 @@ function buildLife() {
   let F = "all", E = "all";
   const draw = () => {
     const list = SPECIES.filter(s => (F === "all" || s.water.includes(F)) && (E === "all" || s.env.includes(E)));
-    box.innerHTML = list.map(s => `<div class="card"><div class="head"><img src="${s.img}" alt="" width="72" height="72"><div class="nm"><h3>${s.name}</h3><div>${s.st === "game" ? `<span class="st today">game</span>` : s.st === "new" ? `<span class="st prop">new</span>` : `<span class="st m">${s.st}</span>`} ${s.water.map(w => `<span class="wtag ${w}">${w}</span>`).join(" ")}</div></div></div>
+    const cardOf = s => `<div class="card"><div class="head"><img src="${s.img}" alt="" width="72" height="72"><div class="nm"><h3>${s.name}</h3><div>${s.st === "game" ? `<span class="st today">game</span>` : s.st === "new" ? `<span class="st prop">new</span>` : `<span class="st m">${s.st}</span>`} ${s.water.map(w => `<span class="wtag ${w}">${w}</span>`).join(" ")}</div></div></div>
       <dl><dt>Lives</dt><dd>${s.env.map(e => ENV_NAME[e]).join(", ")}</dd><dt>Depth</dt><dd>${s.depth}</dd><dt>Water</dt><dd>${s.temp}</dd></dl>
       <p>${s.beh}</p>
-      <dl><dt>Gives</dt><dd><span class="drops">${s.drops.map(d => `<img src="${D7(d)}" alt="${d}" title="${d}">`).join("")} ${s.gets}</span></dd><dt>How</dt><dd>${s.how}</dd></dl></div>`).join("") || `<p class="muted">Nothing lives there in that water.</p>`;
+      <dl><dt>Gives</dt><dd><span class="drops">${s.drops.map(d => `<img src="${D7(d)}" alt="${d}" title="${d}">`;
+    box.innerHTML = list.map(s => `<button class="lifecard" data-id="${s.id}"><img src="${s.img}" alt="" width="48" height="48"><span><b>${s.name}</b><br>${s.st === "game" ? `<span class="st today">game</span>` : s.st === "new" ? `<span class="st prop">new</span>` : `<span class="st m">${s.st}</span>`}</span></button>`).join("") || `<p class="muted">Nothing lives there in that water.</p>`;
+    box.querySelectorAll(".lifecard").forEach(b => b.addEventListener("click", () => { const sp = SPECIES_BY[b.dataset.id]; openModal(sp.name, cardOf(sp)); }));
   };
   fsel.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { F = b.dataset.f; fsel.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); draw(); }));
   esel.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { E = b.dataset.e; esel.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); draw(); }));
@@ -1939,7 +2118,7 @@ function buildChartUI() {
   const lg = document.getElementById("legend");
   lg.innerHTML = `<button data-p="all" aria-pressed="true"><i style="background:linear-gradient(90deg,#1f4f8a,#ff7f6e,#6fd2ff)"></i>All places</button>` + PLACES.map(p => `<button data-p="${p[0]}" aria-pressed="false"><i style="background:${p[2]}"></i>${p[1]}</button>`).join("");
   lg.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { CHART_ON = b.dataset.p === "all" ? new Set(PLACES.map(p => p[0])) : new Set([b.dataset.p]); lg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); drawChart(); }));
-  document.getElementById("ruleRows").innerHTML = PLACES.map(p => `<tr><td><i style="display:inline-block;width:10px;height:10px;background:${p[2]};margin-right:6px"></i>${p[1]}</td><td>${p[3]}</td><td>${p[4]}</td></tr>`).join("");
+  tplEl("ruleRows").innerHTML = PLACES.map(p => `<tr><td><i style="display:inline-block;width:10px;height:10px;background:${p[2]};margin-right:6px"></i>${p[1]}</td><td>${p[3]}</td><td>${p[4]}</td></tr>`).join("");
   const cv = document.getElementById("chart");
   cv.addEventListener("pointermove", e => { if (!CHART) return; const r = cv.getBoundingClientRect(), i = Math.floor((e.clientX - r.left) / r.width * CHART.Wm), j = Math.floor((e.clientY - r.top) / r.height * CHART.Hm), k = j * CHART.Wm + i; if (k < 0 || k >= CHART.env.length) return;
     const e0 = CHART.el[k], p = CHART.env[k] ? PLACES[CHART.env[k] - 1][1] : (e0 < 0 ? "sea" : "dry land"); document.getElementById("chartRead").textContent = `lat ${(90 - (j + 0.5)).toFixed(0)}, lon ${(i - 180)}\n${e0 < 0 ? `depth ${Math.round(-e0 * 160)} m, sea ${CHART.sst[k].toFixed(0)} C` : `height ${Math.round(e0 * 160)} m`}\n${p}`; });
@@ -1955,7 +2134,7 @@ const ENGINE = [
   ["Tides", "Not built: the sea level is fixed", "A tide as an offset of the one sea function, from the body's moon, 3 m on Tenebris; derived from the clock, never saved", "<code>ocean.ron</code> <code>tide_range_m</code> per body"],
   ["Depth zones", "The column is 145 m deep below the datum (<code>column::BASE_M</code>, never moves); the ocean floor is 60 to 145 m", "Sunlit to 40 m, twilight to 90, midnight to the floor, by the light left; a deeper basin and trench in a new generator version, still inside the column", "<code>ocean.ron</code> <code>zones_m</code>"],
   ["Reef, kelp, vents, trenches, sea ice", "Not built", "Environment classes from the generator and the climate normals; reef and ice as cells of new materials, coral and kelp as pieces on cells (derived, like trees); a new generator version for new worlds", "<code>ocean.ron</code> rules (reef_min_c 23, kelp 5 to 20 C, vent ridge threshold, ice from the normals)"],
-  ["Water life", "Built: eight species in schools, spawned by water class and temperature (<code>fauna.ron</code>, <code>openspec/specs/world/fauna</code>)", "The new species appended to the roster (append-only), environment tags beside the water classes, a bed crawler and a surface floater beside the school, pixel cards", "<code>fauna.ron</code> <code>env:</code> per species"],
+  ["Water life", "Built: eight species in schools, spawned by water class and temperature (<code>fauna.ron</code>, <code>openspec/specs/world/fauna</code>)", "The new species appended to the roster (append-only), environment tags beside the water classes, a bed crawler and a surface floater beside the school; every live animal a low-poly 3D body, schools instanced, and a caught fish dropped on the ground a 2D item sprite", "<code>fauna.ron</code> <code>env:</code> per species"],
   ["Rivers that step down, waterfalls, flow", "Channels carved to sea level below 40 m altitude; the flow hook is ported and zero (<code>water-flow</code>)", "Volumetric water (<code>volumetric-water</code> phases 2 and 3) and a drainage river pass in a new generator version; the flow field then fills", "<code>column.ron</code> river pass"],
   ["Ponds, marsh pools above the sea", "Not possible: water exists only below sea level", "Water cells at any height, settled by the volumetric water rule", "volumetric water"],
   ["Beaver dams", "Not built; the authored journal is designed (<code>world-persistence</code>)", "A colony record and a world process <code>beaver</code> that proposes fell, dam and lodge edits, refused on any cell the player touched", "<code>fauna.ron</code> colony rules"],
@@ -1964,7 +2143,7 @@ const ENGINE = [
 ];
 const DEC = [
   ["Q1. Tides: should the sea rise and fall?", true, "A 3 m tide twice a day moves every coastline: beaches bare and cover, rock pools appear, a sea cave is cut off at high water, and a boat left on the beach floats or strands. See the coast tab's tide slider and <code>coast-low-tide-day.jpg</code> beside <code>coast-high-tide-day.jpg</code>.", "Yes, at 3 m on Tenebris, from its moon; derived from the clock, so saves are untouched. Smaller on a moonless body."],
-  ["Q2. Creatures as pixel cards", true, "Every creature is a pixel card: a side view turned along its heading, a crawler laid flat. It is how hundreds can swim at once cheaply, and it matches the game's item icons. Box-built 3D bodies (M7's animals) look solid from every side but cost more. See <code>reef-life-day.jpg</code>, <code>marsh-ducks-day.jpg</code>.", "Cards for anything smaller than a walker; box-built only for the big ones (turtle, seal, serpent) in a later pass."],
+  ["Q2. Creatures as pixel cards", false, "The draft drew every creature as a pixel card. The owner answered on 2026-11-15, looking at the river's waterfall: \"ducks should be 3d, birds in general are 3d\" and \"all fish should also be 3d, unless they are caught, and a player drops them as 2d sprites\".", "Answered by the owner: every animal alive in the world is a low-poly 3D body (birds, fish, crawlers, mammals), its colours from its sprite; a school is one instanced draw. A caught fish the player drops is a 2D item sprite (the river tab's \"Drop a catch\" shows the two side by side).", "Answered"],
   ["Q3. The deep fitted to the column", true, "The column ends 145 m down and cannot grow downward without breaking saved edits. So the zones are fitted to it: sunlit to 40 m, twilight to 90, midnight below. See the light tab at 40, 90 and 140 m (<code>light-40m.jpg</code>, <code>light-90m.jpg</code>, <code>light-140m.jpg</code>) and <code>deep-vents-day.jpg</code>.", "Fit the zones to the column; it keeps every save valid, and the dark comes from the light model, not the metres."],
   ["D4. New places are a new generator version", false, "Reefs, kelp beds, vents, deeper basins, stepped rivers and marsh pools change what the ground is.", "Recommendation taken (ask only with screenshots): a new terrain generator version for new worlds; every old world keeps its own, cell for cell."],
   ["D5. Coral and kelp are pieces; reef rock and ice are cells", false, "A coral is alive and small; a reef is the rock it builds.", "Recommendation taken (ask only with screenshots): reef rock, brain coral blocks, ice and dam sticks are cells you can dig; living coral, kelp, reeds and lilies are pieces on cells, derived like trees."],
@@ -1976,12 +2155,12 @@ const DEC = [
   ["D11. Underwater turbidity per place", false, "A marsh pool is not a reef.", "Recommendation taken (ask only with screenshots): clear ocean and reef 100 m and more of sight, kelp 60, coast 30, river 15, marsh 5."],
 ];
 function buildEngine() {
-  document.getElementById("engineRows").innerHTML = ENGINE.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join("");
-  document.getElementById("decisions").innerHTML = DEC.map(([q, pic, ctx, rec]) => `<div class="q${pic ? " ask" : ""}"><h3>${q}${pic ? ` <span class="tag" style="vertical-align:middle;margin-left:6px">question, with screenshots</span>` : ""}</h3><p>${ctx}</p><p class="rec"><b>${pic ? "Recommend" : "Taken"}</b>${rec}</p></div>`).join("");
+  tplEl("engineRows").innerHTML = ENGINE.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join("");
+  tplEl("decisions").innerHTML = DEC.map(([q, pic, ctx, rec, lab]) => `<div class="q${pic ? " ask" : ""}"><h3>${q}${pic ? ` <span class="tag" style="vertical-align:middle;margin-left:6px">question, with screenshots</span>` : ""}</h3><p>${ctx}</p><p class="rec"><b>${lab || (pic ? "Recommend" : "Taken")}</b>${rec}</p></div>`).join("");
 }
 
 // ======================= start =======================
-const SCENES = {sea: sceneSea, coast: sceneCoast, reef: sceneReef, kelp: sceneKelp, polar: scenePolar, deep: sceneDeep, wrecks: sceneWrecks, river: sceneRiver, dam: sceneDam, marsh: sceneMarsh, light: sceneLight};
+const SCENES = {sim: sceneSim, sea: sceneSea, coast: sceneCoast, reef: sceneReef, kelp: sceneKelp, polar: scenePolar, deep: sceneDeep, wrecks: sceneWrecks, river: sceneRiver, dam: sceneDam, marsh: sceneMarsh, light: sceneLight};
 function makeScene(id, stage) { const W = SCENES[id](stage); return W; }
 buildPanels(); buildLife(); buildChartUI(); buildEngine();
 document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
