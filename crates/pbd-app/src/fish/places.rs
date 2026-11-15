@@ -954,6 +954,11 @@ struct Sway {
 struct Built {
     positions: Vec<[f32; 3]>,
     colours: Vec<[f32; 4]>,
+    /// The floes, in a mesh of their own: they float, so they ride the tide
+    /// (a floe built at the mean sea was drowned by the flood and the water
+    /// sheet cut across its top in streaks; owner, 2026-11-15).
+    floe_positions: Vec<[f32; 3]>,
+    floe_colours: Vec<[f32; 4]>,
     glow_positions: Vec<[f32; 3]>,
     glow_colours: Vec<[f32; 4]>,
     sway: Sway,
@@ -1010,8 +1015,8 @@ fn build_tile(
                 axes,
                 p.reach,
                 p.tall,
-                &mut out.positions,
-                &mut out.colours,
+                &mut out.floe_positions,
+                &mut out.floe_colours,
             );
             // A seal hauled out on one floe in nine.
             if hh(i as i64, seed as i64) < 0.11 {
@@ -1134,6 +1139,7 @@ fn build_tile(
 fn ambient(
     list: &[Ambient],
     t: f32,
+    tide: f32,
     eye: Vec3,
     lit: (&mut Vec<[f32; 3]>, &mut Vec<[f32; 4]>),
     smoke: (&mut Vec<[f32; 3]>, &mut Vec<[f32; 4]>),
@@ -1208,6 +1214,8 @@ fn ambient(
                 }
             }
             Ambient::Seal { at, up, yaw } => {
+                // On its floe, which rides the tide.
+                let at = at + up * tide;
                 // Slid in once the eye is within its nine metres.
                 if at.distance(eye) < 9.0 {
                     continue;
@@ -1298,6 +1306,8 @@ struct Drawn {
     sway: Option<(Entity, Handle<Mesh>)>,
     life: (Entity, Handle<Mesh>),
     smoke: Option<(Entity, Handle<Mesh>)>,
+    /// The floes' mesh, lifted by the tide at the tile each frame.
+    floes: Option<Entity>,
     anchor: Vec3,
     landed_s: f32,
     still: Sway,
@@ -1392,6 +1402,7 @@ fn tiles(
     sun: Option<Res<crate::sky::Sun>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut roots: Query<(&mut Transform, &mut crate::field_light::Faded)>,
+    mut parts: Query<&mut Transform, Without<crate::field_light::Faded>>,
     mut shown: Query<&mut Visibility>,
 ) {
     let cfg = *crate::planet::terrain_config();
@@ -1457,6 +1468,17 @@ fn tiles(
                 faded.0 = fade;
             }
         }
+        // The floes float: they rise and fall with the tide over the tile.
+        let tile_up = drawn.anchor.normalize_or(Vec3::Y);
+        let tide = sea.tide_at(tile_up);
+        if let Some(floes) = drawn.floes
+            && let Ok(mut transform) = parts.get_mut(floes)
+        {
+            let lift = tile_up * tide;
+            if transform.translation != lift {
+                transform.translation = lift;
+            }
+        }
         // The unlit glow and smoke cannot take the mask: they go at half.
         for entity in [drawn.glow, drawn.smoke.as_ref().map(|s| s.0)]
             .into_iter()
@@ -1500,6 +1522,7 @@ fn tiles(
                 ambient(
                     &drawn.ambient,
                     seconds,
+                    tide,
                     local_eye,
                     (&mut lp, &mut lc),
                     (&mut sp, &mut sc),
@@ -1621,6 +1644,14 @@ fn tiles(
             "Sea pieces",
         );
     }
+    let floes = (!built.floe_positions.is_empty()).then(|| {
+        child(
+            &mut commands,
+            meshes.add(mesh_of(built.floe_positions, built.floe_colours)),
+            life.0.clone(),
+            "Ice floes",
+        )
+    });
     let glow_id = (!built.glow_positions.is_empty()).then(|| {
         child(
             &mut commands,
@@ -1678,6 +1709,7 @@ fn tiles(
             sway,
             life: (life_id, life_handle),
             smoke,
+            floes,
             anchor,
             landed_s: now,
             still: built.sway,

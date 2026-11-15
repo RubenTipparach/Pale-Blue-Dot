@@ -20,7 +20,6 @@ use pbd_core::terrain::Material;
 /// test can hold them to `cues.ron`. The family-made names are listed by
 /// [`family_cues`].
 pub const NAMED: &[&str] = &[
-    "land_hard",
     "step_wet",
     "water_enter_small",
     "water_enter_big",
@@ -63,7 +62,7 @@ pub const NAMED: &[&str] = &[
 pub fn family_cues() -> Vec<String> {
     let mut out = Vec::new();
     for family in Family::ALL {
-        for verb in ["step", "jump", "land"] {
+        for verb in ["step", "jump"] {
             out.push(format!("{verb}_{}", family.name()));
         }
         if family.diggable() {
@@ -392,11 +391,12 @@ fn walker_sounds(
         if fall > mix.land_from_m_s
             && let Some(family) = family
         {
-            let level = (20.0 * (fall / mix.land_hard_m_s).log10()).clamp(-10.0, 3.0);
-            sfx.play_with(named("land", family), at, level, 1.0);
-            if fall > mix.land_hard_m_s {
-                sfx.play("land_hard", at);
-            }
+            // A landing is heard as an ordinary step, at a step's level,
+            // however far the fall (owner, 2026-11-15: "I dont like the fall
+            // thump, please get rid of that, regular step when falling and
+            // hitting ground is fine"). The `land_*` and `land_hard` takes
+            // stay in the book, unplayed.
+            sfx.play(named("step", family), at);
         }
         body.stride.reset();
     }
