@@ -1549,7 +1549,9 @@ pub fn run(args: &[String]) {
         (
             // Picking fruit from a tree (`flora-v2` 12.5), ahead of the
             // farm's E, after the husbandry hands'.
-            fruit::scripted.after(digging::scripted_dig),
+            fruit::scripted
+                .after(digging::scripted_dig)
+                .run_if(pbd_app::loading::ready),
             fruit::pick
                 .before(farm::use_key)
                 .after(digging::dig_and_place)

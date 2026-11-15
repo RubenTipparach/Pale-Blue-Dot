@@ -116,6 +116,11 @@ pub(crate) fn refresh(
         picked: pick.into_iter().take(PICKED).map(|(_, id)| id).collect(),
     };
     if *taken != next {
+        info!(
+            "TREES_TAKEN {} felled and {} picked near the camera",
+            next.felled.len(),
+            next.picked.len()
+        );
         *taken = next;
     }
 }
