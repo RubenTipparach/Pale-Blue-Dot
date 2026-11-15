@@ -46,4 +46,14 @@
 
     shrub_chance: 0.14,
     shrub_size_m: 0.38,
+
+    // flora-v2. The pixel tufts that take the grass slots when the player's
+    // Pixel grass is on (at most 18, the slots), and their card in metres.
+    tuft_count: 6.0,
+    tuft_width_m: 0.8,
+    tuft_height_m: 0.6,
+    // Mushrooms and ferns on grassy cells, before each biome's weight
+    // (pbd_core::flora::BIOME_FLORA).
+    mushroom_chance: 0.05,
+    fern_chance: 0.08,
 )

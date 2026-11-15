@@ -767,6 +767,15 @@ impl Launch {
                         _ => panic!("--rain-shadows takes on or off"),
                     });
                 }
+                "--grass" => {
+                    i += 1;
+                    let look = args.get(i).expect("--grass requires tufts or blades");
+                    result.settings.pixel_grass = Some(match look.as_str() {
+                        "tufts" => true,
+                        "blades" => false,
+                        _ => panic!("--grass takes tufts or blades"),
+                    });
+                }
                 "--upscale" => {
                     i += 1;
                     let filter = args.get(i).expect("--upscale requires bilinear or nearest");
@@ -1515,11 +1524,12 @@ pub fn run(args: &[String]) {
         &launch.settings,
     );
     info!(
-        "PLAYER_SETTINGS frame_limit={} render_scale={}% auto_step={} rain_shadows={} file={}",
+        "PLAYER_SETTINGS frame_limit={} render_scale={}% auto_step={} rain_shadows={} pixel_grass={} file={}",
         player.frame_limit.label(),
         player.render_scale,
         player.auto_step,
         player.rain_shadows,
+        player.pixel_grass,
         kept.path
             .as_ref()
             .map_or("none".into(), |p| p.display().to_string()),

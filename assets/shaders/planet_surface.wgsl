@@ -47,6 +47,10 @@ struct Params {
     ssr_eye: vec4<f32>,        // and its eye; w one once there is a history
     rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m
     light_ease: vec4<f32>,     // `baked-light-ease` 7.3: x the light field's newest half blended in 0..1, y that half, z one while the other is blended from
+    flora: vec4<f32>,          // `flora-v2`: x tufts per cell (zero: blades), y tuft width m, z tuft height m, w the year 0..1
+    flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
+    flora_biome: array<vec4<f32>,8>, // per biome: fern weight, mushroom weight, flower bits, deciduous
+    tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
     night: vec4<f32>,          // `night-lights-from-space`: x how many far lights `night_lights` holds
     night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
 }
@@ -218,8 +222,9 @@ const COLUMN_RUNS: u32 = 4u;
 // under the lowest, between each pair, and over the highest.
 const COLUMN_GAPS: u32 = COLUMN_RUNS + 1u;
 // Where the column branch starts in the shared vertex shader, after the
-// terrain's 60, the foliage's 198 and the clutter's 432.
-const COLUMN_FIRST_VERTEX: u32 = 690u;
+// terrain's 60, the foliage's 198 and the clutter's 564 (432, then
+// `flora-v2`'s mushroom and fern).
+const COLUMN_FIRST_VERTEX: u32 = 822u;
 // Per run, a cave ceiling fan and a cave floor fan.
 const COLUMN_CAP_VERTICES: u32 = COLUMN_RUNS * 36u;
 // Per side, per run, per neighbouring air gap, one quad.
@@ -714,7 +719,18 @@ const SALT_FLOWER: u32 = 0x52u;
 const SALT_BUSH: u32 = 0x53u;
 const SALT_ROCK: u32 = 0x54u;
 const SALT_SHRUB: u32 = 0x55u;
+const SALT_MUSH: u32 = 0x56u;
+const SALT_FERN: u32 = 0x57u;
 const TAU: f32 = 6.28318530718;
+
+// `flora-v2`: the plants' own material codes, past the ground's (0-15) and
+// before the lamps' (240-): faces nothing in a column is ever made of.
+const TUFT_CODE: u32 = 16u;
+const FERN_CODE: u32 = 18u;
+const MUSH_STEM_CODE: u32 = 19u;
+const CAP_RED_CODE: u32 = 20u;
+const CAP_BROWN_CODE: u32 = 21u;
+const FLOWER_CODE: u32 = 22u;
 
 struct Piece { position: vec3<f32>, normal: vec3<f32>, uv: vec2<f32> }
 
@@ -1280,6 +1296,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // already handled.
         let v = vertex-258u;
         let id = cell.metadata.w;
+        let biome = min((cell.metadata.y >> 8u) & 0xffu, 7u);
         let green = grassy(material);
         let dry = bare(material);
         // Everything shrinks into the ground over the last stretch of the
@@ -1310,7 +1327,35 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             let j = v/12u;
             let i = v%12u;
             let blades = u32((0.6+0.4*roll(id,SALT_GRASS+1u))*params.clutter.z);
-            if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < blades {
+            // `flora-v2` design 1: with the player's Pixel grass on, a slot
+            // is a tuft - two crossed cards, the same twelve vertices - on
+            // its own count, at the seat and facing the blade would take.
+            let tufts = u32(round((0.6+0.4*roll(id,SALT_GRASS+1u))*params.flora.x));
+            if params.flora.x > 0. {
+                if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < tufts {
+                    let sj = SALT_GRASS+16u+j*8u;
+                    let k = u32(roll(id,sj)*f32(degree));
+                    let f0 = 0.15+0.60*roll(id,sj+1u);
+                    let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                    let size = 0.8+0.5*roll(id,sj+3u);
+                    let half_w = params.flora.y*size*0.5;
+                    let h = params.flora.z*size;
+                    let a = roll(id,sj+2u)*TAU+f32(i/6u)*TAU*0.25;
+                    let dir = tangent*cos(a)+bitangent*sin(a);
+                    // The tip row sways along the card; the root stays put.
+                    let sway = sin(1.7*params.settings.z+roll(id,sj+6u)*TAU)*0.06*h;
+                    let top = bottom+axis*h+dir*sway;
+                    quad = array<vec3<f32>,4>(bottom-dir*half_w,bottom+dir*half_w,
+                        top+dir*half_w,top-dir*half_w);
+                    // The variant in the integer part, the card in the fraction.
+                    let variant = f32(u32(roll(id,sj+5u)*3.));
+                    quad_uv = array<vec2<f32>,4>(vec2(variant,0.),vec2(variant+0.999,0.),
+                        vec2(variant+0.999,1.),vec2(variant,1.));
+                    material = TUFT_CODE;
+                    is_quad = true;
+                    grown = h > 0.0001;
+                }
+            } else if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < blades {
                 let sj = SALT_GRASS+16u+j*8u;
                 let k = u32(roll(id,sj)*f32(degree));
                 let f0 = 0.15+0.60*roll(id,sj+1u);
@@ -1366,9 +1411,18 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     shade_lo = base_shade;
                     is_quad = true;
                 } else {
-                    // The head takes its own colour: a white bloom or a warm
-                    // one, which is the reference's snow/crag pair.
-                    material = select(4u,6u,roll(id,SALT_FLOWER+4u) < 0.5);
+                    // The head takes one of its biome's flower colours
+                    // (`flora-v2` design 3), carried in the uv's integer part.
+                    material = FLOWER_CODE;
+                    let bits = u32(params.flora_biome[biome].z) & 15u;
+                    var pick = u32(roll(id,SALT_FLOWER+4u)*f32(max(countOneBits(bits),1u)));
+                    var colour = 0u;
+                    for (var q = 0u; q < 4u; q++) {
+                        if ((bits >> q) & 1u) == 1u {
+                            if pick == 0u { colour = q; break; }
+                            pick -= 1u;
+                        }
+                    }
                     if glowing {
                         material = BLOOM_CODE;
                         bloom = lit_slot != 0u
@@ -1384,6 +1438,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     let top = tip+axis*0.03;
                     position = select(select(top,p1,c==1u),p0,c==0u);
                     uv = select(select(vec2(0.5,0.5),vec2(0.9,0.9),c==1u),vec2(0.1,0.9),c==0u);
+                    if !glowing { uv.x += f32(colour); }
                 }
                 grown = h > 0.0001;
             }
@@ -1427,7 +1482,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 uv = piece.uv;
                 grown = h > 0.0001;
             }
-        } else {
+        } else if v < 432u {
             // ---- dead shrub: a splay of dry twigs, which on desert sand and
             // tundra snow is the only ground cover there is.
             let i = v-396u;
@@ -1448,6 +1503,56 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 quad_uv = array<vec2<f32>,4>(vec2(0.1,1.),vec2(0.3,1.),vec2(0.3,0.),vec2(0.1,0.));
                 is_quad = true;
                 grown = h > 0.0001;
+            }
+        } else if v < 540u {
+            // ---- mushroom (`flora-v2` design 3): a pale stem prism and a
+            // squat cap prism wider than it, at the biome's weight.
+            let chance = min(params.flora_more.x*params.flora_biome[biome].y, 1.);
+            if green && roll(id,SALT_MUSH) < chance {
+                let k = u32(roll(id,SALT_MUSH+1u)*f32(degree));
+                let f0 = 0.15+0.60*roll(id,SALT_MUSH+2u);
+                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let stem_h = (0.12+0.08*roll(id,SALT_MUSH+3u))*fade;
+                let cap_r = 0.09+0.05*roll(id,SALT_MUSH+4u);
+                let phase = roll(id,SALT_MUSH+5u)*TAU;
+                var piece: Piece;
+                if v < 486u {
+                    piece = prism_vertex(v-432u,bottom,axis,tangent,bitangent,0.03,stem_h,phase);
+                    material = MUSH_STEM_CODE;
+                } else {
+                    piece = prism_vertex(v-486u,bottom+axis*(stem_h*0.85),axis,tangent,bitangent,
+                        cap_r,cap_r*0.45*fade,phase+0.5);
+                    material = select(CAP_BROWN_CODE,CAP_RED_CODE,params.tuft_ramps[biome].w == 1u);
+                }
+                position = piece.position;
+                normal = piece.normal;
+                uv = piece.uv;
+                grown = stem_h > 0.0001;
+            }
+        } else {
+            // ---- fern (`flora-v2` design 3): four fronds arching out of a
+            // hashed seat, each cut to its shape by a pixel mask.
+            let chance = min(params.flora_more.y*params.flora_biome[biome].x, 1.);
+            if green && roll(id,SALT_FERN) < chance {
+                let frond = (v-540u)/6u;
+                let k = u32(roll(id,SALT_FERN+1u)*f32(degree));
+                let f0 = 0.15+0.60*roll(id,SALT_FERN+2u);
+                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let size = 0.8+0.4*roll(id,SALT_FERN+3u);
+                let ang = roll(id,SALT_FERN+4u)*TAU+f32(frond)*TAU*0.25
+                    +(roll(id,SALT_FERN+8u+frond)-0.5)*0.6;
+                let out_dir = tangent*cos(ang)+bitangent*sin(ang);
+                let side = tangent*cos(ang+1.5708)+bitangent*sin(ang+1.5708);
+                let len = 0.6*size*fade;
+                let sway = sin(1.5*params.settings.z+f32(frond)*2.1+roll(id,SALT_FERN+5u)*TAU)*0.04*len;
+                let tip = bottom+out_dir*(len*0.8)+axis*(len*0.55)+side*sway;
+                let hw = 0.12*size;
+                quad = array<vec3<f32>,4>(bottom-side*hw,bottom+side*hw,tip+side*hw,tip-side*hw);
+                quad_uv = array<vec2<f32>,4>(vec2(f32(frond),0.),vec2(f32(frond)+0.999,0.),
+                    vec2(f32(frond)+0.999,1.),vec2(f32(frond),1.));
+                material = FERN_CODE;
+                is_quad = true;
+                grown = len > 0.0001;
             }
         }
 
@@ -1740,6 +1845,127 @@ fn tree_shown(radial: vec3<f32>, position: vec3<f32>, part: Partition) -> f32 {
     return clamp(left/params.fade.x, 0.0, 1.0);
 }
 
+// ---- `flora-v2`: the plants' pixel shapes and their season. ----
+
+// The plants' season at a place (design 5): `pbd_core::flora::season_at`,
+// whose constants a test holds these to. One calendar, half a year on across
+// the equator, none in the tropics. x autumn colour, y bare, z straw.
+const SEASON_TROPIC = vec2<f32>(0.12, 0.45);
+const SEASON_TURN = vec2<f32>(0.27, 0.15);
+const SEASON_BARE = vec2<f32>(0.5, 0.13);
+const SEASON_STRAW = vec2<f32>(0.47, 0.22);
+fn season_bump(x: f32, at: vec2<f32>) -> f32 {
+    let d = abs(x - at.x);
+    return 1.0 - smoothstep(0.0, at.y, min(d, 1.0 - d));
+}
+fn season_at(radial: vec3<f32>) -> vec3<f32> {
+    let own = fract(params.flora.w + select(0.0, 0.5, radial.y < 0.0));
+    let strength = smoothstep(SEASON_TROPIC.x, SEASON_TROPIC.y, abs(radial.y));
+    return strength*vec3(season_bump(own, SEASON_TURN), season_bump(own, SEASON_BARE),
+        season_bump(own, SEASON_STRAW));
+}
+
+// One texel of a plant card, as a number 0..1: the card (the uv's integer
+// part), the texel on its 16 px grid, the cell and a salt.
+fn card_texel(uv: vec2<f32>, seed: u32, salt: u32) -> f32 {
+    let card = u32(max(floor(uv.x), 0.0));
+    let tx = u32(floor(fract(uv.x)*16.0));
+    let ty = u32(floor(clamp(uv.y, 0.0, 0.999)*16.0));
+    return random(seed*131u + card*977u + tx*17u + ty*257u + salt*7919u);
+}
+
+// Whether a pixel of the pixel tuft is a blade (design 1): the Play demo's
+// nine one-pixel blades on a 16 px card, at hashed columns 1..14 and heights
+// 5..13, the odd ones stepping a pixel over above row 6. The variant is the
+// uv's integer part; y counts up from the root.
+fn tuft_on(uv: vec2<f32>) -> bool {
+    let variant = u32(max(floor(uv.x), 0.0));
+    let px = i32(floor(fract(uv.x)*16.0));
+    let py = i32(floor(clamp(uv.y, 0.0, 0.999)*16.0));
+    for (var b = 0u; b < 9u; b++) {
+        let h = hash(variant*97u + b*13u + 0x7f4au);
+        let x = 1 + i32(h % 14u);
+        let tall = 5 + i32((h >> 8u) % 9u);
+        let step_over = select(0, 1, py > 6 && (b & 1u) == 1u);
+        if py < tall && px == x + step_over { return true; }
+    }
+    return false;
+}
+
+// Whether a pixel of a fern frond is cut away (design 3): a stem up the
+// middle and leaflets either side in alternate rows, inside a frond's taper.
+fn fern_cut(uv: vec2<f32>) -> bool {
+    let u = fract(uv.x);
+    let v = clamp(uv.y, 0.0, 1.0);
+    let tx = floor(u*16.0);
+    let ty = floor(v*16.0);
+    let off = abs(tx - 7.5);
+    if off < 1.0 { return false; }
+    let width = 7.5*sin(3.14159*min(v*1.05, 1.0))*(1.0 - 0.3*v);
+    if off > width { return true; }
+    return (u32(ty + floor(off*0.5)) % 2u) == 1u;
+}
+
+// A `0xRRGGBB` sRGB colour as the linear albedo the atlas's texels are.
+fn rgb8(c: u32) -> vec3<f32> {
+    let srgb = vec3(f32((c >> 16u) & 0xffu), f32((c >> 8u) & 0xffu), f32(c & 0xffu))/255.0;
+    return pow(srgb, vec3(2.2));
+}
+// The four flower colours, in `pbd_core::flora`'s bit order: red, yellow,
+// white, blue.
+fn flower_colour(i: u32) -> vec3<f32> {
+    if i == 0u { return vec3(0.62, 0.06, 0.05); }
+    if i == 1u { return vec3(0.85, 0.62, 0.06); }
+    if i == 2u { return vec3(0.82, 0.82, 0.74); }
+    return vec3(0.12, 0.22, 0.75);
+}
+const STRAW = vec3<f32>(0.50, 0.38, 0.15);
+const TWIG = vec3<f32>(0.16, 0.12, 0.09);
+
+// The plants' own colours and their season (design 1, 3, 5), over the
+// albedo the tile gave: a tuft's ramp, a flower's colour, a mushroom's, the
+// autumn and the bare winter of deciduous leaves, and straw in the grass.
+fn flora_albedo(input: VertexOut, albedo_in: vec3<f32>, grain: f32, variation: f32) -> vec3<f32> {
+    let cap = input.material & 0xffu;
+    let biome = min((input.material >> 8u) & 0xffu, 7u);
+    let leafy = cap == 9u;
+    let grass = cap == TUFT_CODE || (input.kind == 3u && (cap == 2u || cap == 3u || cap == 7u));
+    var albedo = albedo_in;
+    if cap == TUFT_CODE {
+        let ramp = params.tuft_ramps[biome];
+        let py = u32(floor(clamp(input.uv.y, 0.0, 0.999)*16.0));
+        albedo = rgb8(select(select(ramp.z, ramp.y, py < 8u), ramp.x, py < 4u))*variation;
+    }
+    if cap == FLOWER_CODE {
+        albedo = flower_colour(min(u32(max(floor(input.uv.x), 0.0)), 3u))*(0.75 + 0.5*grain);
+    }
+    if cap == MUSH_STEM_CODE { albedo = vec3(0.72, 0.66, 0.52)*(0.8 + 0.4*grain); }
+    if cap == CAP_BROWN_CODE { albedo = vec3(0.30, 0.16, 0.07)*(0.7 + 0.6*grain); }
+    if cap == CAP_RED_CODE {
+        // White flecks on the red: a few texels of the cap's own grid.
+        let fleck = random(input.seed*7u + u32(floor(input.uv.x*6.0)) + u32(floor(input.uv.y*6.0))*13u) < 0.2;
+        albedo = select(vec3(0.58, 0.05, 0.03), vec3(0.85, 0.82, 0.74), fleck)*(0.85 + 0.3*grain);
+    }
+    if !(leafy || grass) { return albedo; }
+    let season = season_at(normalized(input.position));
+    if grass { albedo = mix(albedo, STRAW*(0.7 + 0.6*grain)*variation, season.z*0.65); }
+    if leafy && params.flora_biome[biome].w > 0.5 {
+        // Autumn: a texel at a time turns gold, orange or red, more of them
+        // as the season deepens; winter fades the prism's leaves toward
+        // bare twigs.
+        let texel = floor(fract(input.uv)*32.0);
+        let h = random(input.seed*31u + u32(texel.x) + u32(texel.y)*37u);
+        if h < season.x*1.1 {
+            var turned = vec3(0.70, 0.40, 0.04);
+            if h < season.x*0.7 { turned = vec3(0.68, 0.18, 0.03); }
+            if h < season.x*0.3 { turned = vec3(0.45, 0.06, 0.03); }
+            albedo = turned*(0.7 + 0.6*grain);
+        }
+        albedo = mix(albedo, TWIG*(0.7 + 0.6*grain), season.y*0.85);
+    }
+    return albedo;
+}
+
 // Whether a pixel of this piece is left out: a landing's dissolve, a band's
 // cross-fade, a split midpoint cell's far half, a tree thinning at the edge of
 // its range (`detail-fade`, `distance-lod-fade`). The main pass and the sun's
@@ -1747,6 +1973,17 @@ fn tree_shown(radial: vec3<f32>, position: vec3<f32>, part: Partition) -> f32 {
 fn dropped(input: VertexOut) -> bool {
     let radial = normalized(input.position);
     let mask = bayer4(input.clip.xy);
+    // `flora-v2`: the plants' cut-outs, and the clutter's dither at the
+    // edge of its reach. The
+    // reach is shortened by the most a piece stands from its cell's centre,
+    // so a cell is wholly faded before the pass stops listing it.
+    let code = input.material & 0xffu;
+    if code == TUFT_CODE && !tuft_on(input.uv) { return true; }
+    if code == FERN_CODE && fern_cut(input.uv) { return true; }
+    if input.kind == 3u {
+        let left = params.clutter.x - 2.0 - distance(input.position, params.camera.xyz);
+        if mask >= clamp(left/max(params.clutter.y, 0.001), 0.0, 1.0) { return true; }
+    }
     // A landing's dissolve (`detail-fade`): each pixel shows the new
     // partition where its mask is under the dissolve's progress and the old
     // one elsewhere. Its own mask, interleaved gradient noise, so it does not
@@ -2507,6 +2744,12 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     if code==9u { base=vec3(0.085,0.24,0.060); tile=vec2(0.,2.); }
     if code==14u { base=vec3(0.36,0.25,0.16); tile=vec2(2.,3.); }
     if code==15u { base=vec3(0.30,0.31,0.33); tile=vec2(1.,3.); }
+    // `flora-v2`: a fern frond wears its biome's leaves (the jungle sheet's
+    // fern ground is fronds on bare soil, which a cut frond shows as brown);
+    // a mushroom and a flower head the stone tile's grain under their own
+    // colour.
+    if code==FERN_CODE { base=vec3(0.085,0.24,0.060); tile=vec2(0.,2.); }
+    if code>=MUSH_STEM_CODE && code<=FLOWER_CODE { tile=vec2(3.,0.); }
     if code==TILLED_CODE { slot = tileset_slot(FIELDS_BIOME); }
     if code==FORGE_CODE { slot = tileset_slot(MOUNTAINS_BIOME); }
     if code==6u || code==SNOW_SIDE_CODE { slot = u32(params.ground.z); }
@@ -2536,6 +2779,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let grain = dot(art, vec3(0.299, 0.587, 0.114));
     let up = dot(n, radial);
     if cap == BLOOM_CODE { albedo = vec3(0.55, 0.90, 0.82)*(0.75 + 0.5*grain); }
+    albedo = flora_albedo(input, albedo, grain, cell_variation);
     if input.kind == KIND_LAMP {
         var part = vec3(0.16, 0.15, 0.14);
         if cap == LAMP_WAX_CODE { part = vec3(0.86, 0.80, 0.66); }

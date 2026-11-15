@@ -103,13 +103,20 @@ pub const GRASS_BLADE_BUDGET: u32 = 18;
 /// nobody would be exactly the drift they are meant to catch.
 #[cfg(test)]
 pub(crate) fn clutter_vertices() -> u32 {
-    GRASS_BLADE_BUDGET * 2 * 6 + 18 + 54 + 108 + 36
+    // ...and `flora-v2`'s mushroom (a stem and a cap prism) and fern (four
+    // fronds).
+    GRASS_BLADE_BUDGET * 2 * 6 + 18 + 54 + 108 + 36 + 2 * 54 + 4 * 6
+}
+/// Vertices per tree: the trunk's 54 and two leaf layers of 72.
+#[cfg(test)]
+pub(crate) fn foliage_vertices() -> u32 {
+    54 + 2 * 72
 }
 /// Where the clutter branch starts in the shared vertex shader: after the
-/// terrain's 60 and the foliage's 198.
+/// terrain's 60 and the foliage.
 #[cfg(test)]
 pub(crate) fn clutter_first_vertex() -> u32 {
-    60 + 198
+    60 + foliage_vertices()
 }
 /// Bytes of indirect draw arguments the compute pass publishes: five draws of
 /// four words each - terrain, foliage, water, clutter, the column tier. The
@@ -239,6 +246,33 @@ struct PlanetBase {
 #[derive(Resource, Clone, Default, ExtractResource)]
 pub(crate) struct PlanetClock(f32);
 
+/// How the plant decoration is drawn, from the player's settings
+/// (`flora-v2` design 1): the pixel tufts in the grass slots, or the blades.
+#[derive(Resource, Clone, Copy, Default, ExtractResource)]
+pub struct FloraLook {
+    pub tufts: bool,
+}
+
+/// The per-biome flora tables as the shaders read them (`flora-v2` design
+/// 6): fern weight, mushroom weight, flower colour bits and deciduous per
+/// biome; then the tuft ramps as `0xRRGGBB`, w one for red caps.
+fn flora_tables() -> ([Vec4; 8], [UVec4; 8]) {
+    use pbd_core::flora::{BIOME_FLORA, TUFT_RAMPS};
+    let biome = BIOME_FLORA.map(|b| {
+        Vec4::new(
+            b.fern,
+            b.mushroom,
+            b.flowers as f32,
+            if b.deciduous { 1.0 } else { 0.0 },
+        )
+    });
+    let mut ramps = [UVec4::ZERO; 8];
+    for (i, ramp) in TUFT_RAMPS.iter().enumerate() {
+        ramps[i] = UVec4::new(ramp[0], ramp[1], ramp[2], BIOME_FLORA[i].red_caps as u32);
+    }
+    (biome, ramps)
+}
+
 #[derive(Resource, Clone, ExtractResource)]
 pub struct PlanetArt(pub Handle<Image>);
 
@@ -262,6 +296,7 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<PlanetArt>::default(),
             ExtractResourcePlugin::<water::EyeWaterState>::default(),
             ExtractResourcePlugin::<water::RainShadows>::default(),
+            ExtractResourcePlugin::<FloraLook>::default(),
             ExtractResourcePlugin::<PlanetRenderFrame>::default(),
             ExtractComponentPlugin::<PlanetSurface>::default(),
             ExtractResourcePlugin::<bounce::BounceField>::default(),
@@ -281,6 +316,7 @@ impl Plugin for PlanetPlugin {
         )
         .init_resource::<PlanetClock>()
         .init_resource::<water::RainShadows>()
+        .init_resource::<FloraLook>()
         .init_resource::<PlanetRenderFrame>()
         .init_resource::<lod::LodRefresh>()
         .init_resource::<lod::NearField>()
@@ -735,6 +771,16 @@ struct PlanetParams {
     // newest; z one while the other half holds the field it blends from; w
     // spare.
     light_ease: Vec4,
+    // `flora-v2` design 6: x tufts per cell (zero: the blades), y and z the
+    // tuft's width and height, m; w how far round the year, 0..1.
+    flora: Vec4,
+    // x mushroom chance, y fern chance, zw spare.
+    flora_more: Vec4,
+    // Per biome, `Biome` order: fern weight, mushroom weight, flower colour
+    // bits, one where deciduous (`pbd_core::flora::BIOME_FLORA`).
+    flora_biome: [Vec4; 8],
+    // Per biome: the tuft's three tones, `0xRRGGBB`, w one for red caps.
+    tuft_ramps: [UVec4; 8],
     // `night-lights-from-space`: x how many far lights `night_lights` holds,
     // yzw spare; then two vec4 a light (`night_lights::FarLights::pack`).
     // Last, so the visibility pass, which reads a prefix of this uniform,
@@ -1548,6 +1594,8 @@ pub(crate) struct Tunables<'w> {
     maps: Res<'w, weather_maps::WeatherMapsNow>,
     /// The night side's far lights (`night-lights-from-space`).
     far: Option<Res<'w, crate::night_lights::FarLights>>,
+    /// The player's grass (`flora-v2`).
+    flora: Option<Res<'w, FloraLook>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1591,6 +1639,7 @@ fn prepare_views(
                 FOLIAGE_DRAW_DISTANCE
             };
         let w = &weather_settings;
+        let (flora_biome, tuft_ramps) = flora_tables();
         let lod = &planet.lod;
         let landing = planet.lod_prev.map(|(_, landed)| landed);
         // The fade centre (`distance-lod-fade`): the ground under the camera,
@@ -1806,6 +1855,19 @@ fn prepare_views(
                 planet.light_from_s,
                 clock.0,
             ),
+            flora: Vec4::new(
+                if tunables.flora.as_ref().is_some_and(|f| f.tufts) {
+                    scatter.tuft_count
+                } else {
+                    0.0
+                },
+                scatter.tuft_width_m,
+                scatter.tuft_height_m,
+                sun.clock.year_fraction() as f32,
+            ),
+            flora_more: Vec4::new(scatter.mushroom_chance, scatter.fern_chance, 0.0, 0.0),
+            flora_biome,
+            tuft_ramps,
             night,
             night_lights,
             // w: there is a history to read, so not while the capture is off.

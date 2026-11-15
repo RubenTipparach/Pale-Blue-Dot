@@ -986,6 +986,18 @@ pub struct ScatterSettings {
     /// levels cross-fade with distance through complementary dither masks
     /// (`distance-lod-fade`, Unity's LOD cross-fade width). 0 draws hard edges.
     pub lod_fade_width: f32,
+    /// Pixel tufts per covered grass cell, upper bound, when the player's
+    /// Pixel grass is on (`flora-v2` design 1); a hash picks 60%..100% of it.
+    /// Each takes one of the grass slots, so it shares their budget.
+    pub tuft_count: f32,
+    /// A tuft's card width and height, metres: the mockup's 0.8 x 0.6.
+    pub tuft_width_m: f32,
+    pub tuft_height_m: f32,
+    /// Probability a grassy cell grows a mushroom, before its biome's weight
+    /// (`pbd_core::flora::BIOME_FLORA`).
+    pub mushroom_chance: f32,
+    /// Probability a grassy cell grows a fern, before its biome's weight.
+    pub fern_chance: f32,
 }
 
 impl Default for ScatterSettings {
@@ -1009,6 +1021,11 @@ impl Default for ScatterSettings {
             tree_fade_m: 150.,
             lod_fade_s: 1.0,
             lod_fade_width: 0.3,
+            tuft_count: 6.,
+            tuft_width_m: 0.8,
+            tuft_height_m: 0.6,
+            mushroom_chance: 0.05,
+            fern_chance: 0.08,
         }
     }
 }
@@ -1043,6 +1060,13 @@ impl Validated for ScatterSettings {
         unit("bush_chance", self.bush_chance)?;
         unit("shrub_chance", self.shrub_chance)?;
         unit("grass_base_shade", self.grass_base_shade)?;
+        unit("mushroom_chance", self.mushroom_chance)?;
+        unit("fern_chance", self.fern_chance)?;
+        non_negative("flora sizes", &[self.tuft_width_m, self.tuft_height_m])?;
+        // Each tuft takes a grass slot, so the slots are its budget too.
+        (self.tuft_count >= 0. && self.tuft_count <= crate::planet::GRASS_BLADE_BUDGET as f32)
+            .then_some(())
+            .ok_or("tuft_count must be within 0..=18, the grass slots")?;
         non_negative(
             "clutter sizes",
             &[
