@@ -219,3 +219,77 @@ alone.
 them, and opens with the Homestead chain locked behind its starter chain as
 usual.
 
+## Missions are a tree that unlocks the tech (owner, 2026-11-15)
+
+The owner: *"I expect the bot to play through missions. The point of the
+missions is to get the player to play through the content and unlock new
+tech. So an example of missions could be craft an axe, gather 10 wood, make
+some planks, build a craft bench then make a fishing rod, go fishing. Another
+branch would be farming, and other branch could be herding and another branch
+could be mining and smelting, and later on down the line cooking"*.
+
+This replaces the single line of nineteen and the Homestead chain above. The
+same verbs and many of the same ids are rearranged into a tree, and finishing
+a mission **unlocks** the recipes and stations of the next ones.
+
+**The trunk: tools and fishing.** Each mission unlocks what the next needs.
+
+| id | mission | unlocks |
+| --- | --- | --- |
+| `axe` | Craft an axe (by hand: stone, fibre, a stick) | felling trees |
+| `wood` | Gather 10 wood (fell trees with the axe) | planks |
+| `planks-rope` | Make planks and rope | the crafting bench |
+| `crafting-table` | Build a crafting bench | the bench's recipes: the rod, stone tools |
+| `rod` | Make a fishing rod | casting |
+| `go-fishing` | Go fishing: catch 3 fish | **the branches open** |
+
+**Four branches** open off the trunk. They can be played in any order, and
+each ends in a payoff that unlocks the next tier:
+
+- **Farming:** `find-seeds` (dig grass, pick wild plants), then `till` (a
+  hoe or shovel, unlocked here), then `plant` 4, then `harvest` 4, which
+  unlocks the next crops' seeds and the compost.
+- **Herding:** `fence` (unlocks fences and gates), then `tame` an animal by
+  feeding, then `pen` (a pen with a gate), then `collect` eggs, milk or wool,
+  which unlocks the coop and the second species.
+- **Mining and smelting:** `mining-tools` (a stone pick), then `ore` (dig
+  copper and tin), then `forge` (unlocks the forge), then `smelt` (bronze),
+  then `metal-tool`, which unlocks bronze tools, then iron.
+- **Cooking, later down the line:** it opens when fishing and one of farming
+  or herding are done. `fire` (the campfire, unlocked here), then
+  `cook-fish`, then `farm-meal` (a dish from a crop or an egg), then
+  **eat**, which unlocks the kitchen stations when `cooking` builds them.
+
+**Unlocking.**
+- A recipe or station is **locked** until its mission is done.
+- In the recipe list it shows as a dim silhouette, with the name of the
+  mission that opens it. The game says where to go next and shows no other
+  explanation (CLAUDE.md, "Notes stay out of the game").
+- The unlock list is data on each mission (`unlocks: [recipe codes]`) in
+  `missions.ron`, so tech and missions are tuned in one file.
+- A recipe no mission names is unlocked from the start.
+
+**Saves.**
+- An unlock is derived from the world's `missions` record and never stored
+  on its own.
+- A world from before the tree opens with every mission it already
+  finished done.
+- Any recipe it has already crafted, and anything the player carries or
+  placed, counts as unlocked too, so no old world loses a tool it could
+  make. A test pins this.
+- Mission ids stay append-only. The old line's ids map onto the tree's,
+  and new ids are added for the new steps (`wood`, `fence`, `ore`, `forge`,
+  `eat`).
+
+**The bot plays the tree** (CLAUDE.md, "Demos: tech montages and a bot
+playing to a goal"). Its goals:
+1. "Finish the trunk": axe to fishing.
+2. Each branch as its own goal and video section: farming, herding, mining
+   and smelting.
+3. Cooking last.
+
+It plays each mission through the player's inputs. The proof is the
+mission's own completion line and the unlock appearing in the recipe list.
+The Homestead missions above are kept only as later goals for a branch's
+payoff, not as a second chain.
+
