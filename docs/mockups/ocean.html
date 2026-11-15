@@ -1757,7 +1757,7 @@ function sceneSim(stage) {
   W.update = (t, dt) => {
     if (S.run && SIM.queue.length) { S.acc += dt * S.rate; let n = 0; while (S.acc >= 1 && n < 20) { S.acc -= 1; LQ.tick(); n++; } if (n) rebuildWater(); } else S.acc = 0;
   };
-  window.__sim = {LQ, S, count, reset: k => { reset(k); placePosts(); }, step: () => { LQ.tick(); rebuildWater(); }, pour: (q, r, y) => { const ok = S.pour(q, r, y); rebuildWater(); return ok; }, topOf, setRun, state: () => ({tick: SIM.tick, queue: SIM.queue.length, renew: SIM.renew, ...count()})};
+  window.__sim = {LQ, S, SW, count, reset: k => { reset(k); placePosts(); }, step: () => { LQ.tick(); rebuildWater(); }, pour: (q, r, y) => { const ok = S.pour(q, r, y); rebuildWater(); return ok; }, topOf, setRun, state: () => ({tick: SIM.tick, queue: SIM.queue.length, renew: SIM.renew, ...count()})};
   const pq = Q.get("sim"); reset(pq && SIM_PRESETS[pq] ? pq : "fall"); placePosts(); setRun(!Q.has("paused"));
   W.setViews({"Patch": [[0, 4, 0], 0.7, 0.62, 52], "Close": [[-3, 6, 0], 1.2, 0.45, 24], "From above": [[0, 2, 0], 0.01, 1.4, 60]});
   finish(W, "Patch"); return W;

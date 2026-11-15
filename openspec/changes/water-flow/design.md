@@ -99,6 +99,21 @@
 - Cost: the queue is bounded per tick like Luanti's. It is measured on real
   hardware before it ships (perf rule).
 
+**7a. The mockup draws water as M25's water sim does (owner, 2026-11-15).**
+"sync m28 with these changes", after the owner asked of M25's Water sim
+tab for "the frothy walls and edges like the river demo you had and show
+flow direction" and found it "missing the wall/waterfalls part". The look
+is shared, as the rule is: `docs/mockups/water-flow/water-look.js` holds
+M25's water material (waves, foam, lamps, haze), its hex caps with a
+foaming fall sheet and lip on every step down, and the sim's water builder
+(each column's top water surface, a flow vector towards the neighbours
+whose water stands lower, by how much lower, and a chevron on each flowing
+cap behind a Flow arrows toggle). Both pages load it, as both load
+`water-flow/liquid.js`. M28 feeds it its own lamps, a depth map baked from
+the patch, and its fog. The rule is untouched: every preset settles in the
+same ticks to the same cell counts as before. This is the mockup's look,
+not a decision about the game's water renderer, which stays decision 7.
+
 **8. The game's code is written from the rule, not translated.** The mockup
 is a line-by-line port of LGPL-2.1-or-later code and says so. The Rust
 version is written from decisions 1 to 6 and Luanti's rule as described in

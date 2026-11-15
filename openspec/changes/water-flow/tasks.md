@@ -6,6 +6,7 @@
 - [x] 1.2 `docs/mockups/water-flow.html`: Luanti's `transformLiquidsLocal` ported to the hex grid (design 1 to 4), with the LGPL notice. A hex patch with a hill, a ledge, a basin and the sea. Pour, dig and place tools, presets, and Run off by default. Lit at night. Verify: headless screenshots of each preset settled, by day and at night, in `docs/screenshots/mockup-water-flow/`; no page errors.
 - [x] 1.3 Settling is a function of sources and solids (design 6). Verify: in the page, "Settle from scratch" matches the incremental state cell for cell after each preset.
 - [x] 1.4 On the tracker as M28, and in `docs/mockups/mockup-work.md`. Verify: the tracker entry in the repo.
+- [x] 1.6 Sync the water's look with M25's Water sim (design 7a): frothy fall walls and lips on every step down, flow streaks along each cap, Flow arrows on by default, in `water-flow/water-look.js` shared by both pages; M28's descriptive text moved into a modal. Verify: every preset settles in the same ticks to the same counts as before; both pages open with no errors and one WebGL context; before and after screenshots (`sync-*.png`) in `docs/screenshots/mockup-water-flow/`.
 - [ ] 1.5 The owner approves the mockup on the tracker. Verify: the approval is read back and recorded.
 
 ## 2. The rule in `pbd-core` (after approval and a request)
