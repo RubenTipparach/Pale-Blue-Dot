@@ -562,7 +562,38 @@ near tree it hangs on. The landing dissolve and the band cross-fade of
   roll per pixel. Pines, palms, kapok, acacia and cacti keep theirs.
 - Snow on branches is not added: snow is the generator's material (5).
 
-### 10.7 Not built
+### 10.7 As built, and where it departs from the mockup
+
+Built on `claude/env-trees` (2026-11-15); captures and an honest read in
+`docs/screenshots/flora-v2/README.md` (the `trees-*` set).
+
+- **The kit**: 32 models, 6,042 KiB, built in about 370 ms on the M4 Max in
+  the fast build, on its own thread behind the loading screen. Near vertices
+  per tree (largest variant, plus the 60 for fruit): oak 2,904, birch 1,584,
+  kapok 588, palm 492, acacia 696, pine 6,126, willow 1,296, cactus 588.
+- **The bake's palette** takes the crown's own three tones (the leaf tile as
+  the bake shades it, cut in thirds by luminance) beside Sweaft-64, as the
+  mockup takes its acacia's olive: Sweaft has no olive leaf green either, and
+  a fields crown snapped to it alone came out a darker, cooler green than the
+  near crown beside it (`trees-rings.jpg` shows the four levels side by side).
+  The mockup's fixed pull of a baked crown toward the near one (`* (0.92,
+  0.95, 0.72)`) is replaced by a measured one: the bake records its crown's
+  mean, and the shader meets its brightness to the near leaves' mean under
+  their root-to-tip shade.
+- **Crown and bark pixels are told apart** by the bake (alpha 255 and 254),
+  so the season and that match touch the leaves alone; the mockup guessed
+  leaves by a green test, which an olive or autumn crown fails.
+- **A mid card seen from behind** shows the view baked from that side; the
+  mockup shows its front view mirrored.
+- **Winter** thins a deciduous crown card by card as `bare` rises, the last
+  ones in their autumn colour, where the mockup drops them all at once; its
+  impostors cross from the leafy bake to the bare one a texel at a time.
+- **Not seen in the game, though built**: the acacia. Every beach cell is sand
+  (`planet_gen::top_material`) and a tree needs grass (`grows_tree`), so no
+  beach tree has ever stood, prism or detailed. Placing one would change
+  where trees stand, which saves forbid; it waits for the owner.
+
+### 10.8 Not built
 
 - The mockup's vines on jungle and swamp trees (a layer of its own), the
   glowing fungal and crystal and kelp species (no such biome, Q7), the

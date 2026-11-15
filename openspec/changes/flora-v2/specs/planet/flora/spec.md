@@ -62,8 +62,7 @@ them on the same rolls and weights the vertex path draws them with.
 
 ### Requirement: Plants follow the planet's one calendar
 
-The prism trees' deciduous leaves SHALL turn in autumn and dull toward bare
-twigs in winter, and grass
+Deciduous trees' leaves SHALL turn in autumn and fall in winter, and grass
 SHALL dry toward straw in winter, by `pbd_core::flora::season_at`, a function
 of the clock's year and the place's latitude: opposite in the two hemispheres
 and absent near the equator.
@@ -115,9 +114,9 @@ before spring, thicker in a cell that stands a tree, with none in the tropics.
 
 ### Requirement: Trees bear fruit by biome
 
-About half the trees of a fruiting biome SHALL hang fruit from the underside
-of their lower leaf layer, and drop a few under them, within the clutter's
-reach: fields apple, pear, plum and cherry; jungle mango and papaya; beach
+About half the trees of a fruiting biome SHALL hang fruit from their own
+branches (the near model's anchors), and drop a few under them, within the
+near trees' ring: fields apple, pear, plum and cherry; jungle mango and papaya; beach
 marula and baobab; tundra pines their cones. Fruit SHALL be heaviest in
 autumn and nearly gone in winter; cones SHALL stay all year. Fruit is
 decoration and SHALL NOT enter a save.
@@ -126,3 +125,25 @@ decoration and SHALL NOT enter a save.
 
 - **WHEN** the player stands among fields trees in autumn
 - **THEN** some trees hang fruit under their crowns, the same trees on every visit
+
+### Requirement: Trees are the approved detailed models
+
+Trees SHALL be drawn as the approved M13 mockup's detailed trees (a
+parametric trunk, branches and leaf cards per species, four seeded variants a
+species), with mid and far trees baked from the near model, and SHALL
+cross-fade between near, mid and far through complementary dither masks, so
+a tree never appears, vanishes or changes in one frame. Where a tree stands
+and whether a cell can be chopped SHALL stay `pbd_core::flora::grows_tree`'s;
+a tree's species, variant, turn and size SHALL be decoration derived from its
+id at draw time and SHALL NOT enter a save.
+
+#### Scenario: The same tree at every distance
+
+- **WHEN** the player walks away from a tree past the near and the mid rings
+- **THEN** it cross-fades from its model to its crossed cards to its billboard
+- **AND** every level shows the same tree, baked from the model
+
+#### Scenario: An old world's trees
+
+- **WHEN** a world saved before the detailed trees is opened
+- **THEN** a tree stands on exactly the cells it did, and the same cells can be chopped

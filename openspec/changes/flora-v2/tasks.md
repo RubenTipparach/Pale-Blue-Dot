@@ -56,12 +56,13 @@ capture: no beach tree was in view.
 
 ## 7. The detailed trees (M13's default; design 10)
 
-The owner, 2026-11-15: "why didnt you implement new trees for env 2". Built on `claude/env-trees`.
+The owner, 2026-11-15: "why didnt you implement new trees for env 2". Built on `claude/env-trees` (2026-11-15); captures and their read in `docs/screenshots/flora-v2/README.md` (`trees-*`). Frame cost not measured (the owner's perf sitting); the owner's video waits for the batch. Failing before this group and untouched by it: the `planet_gen` version 4 and 5 digests.
 
-- [ ] 7.1 Correct the record: design 4, the Q1 row and the proposal say the owner disliked cards on prisms and approved M13's detailed trees.
-- [ ] 7.2 `pbd_core::tree_kit`: the mockup's builders per species, four seeded variants, the anchors, the biome species mix and the draw-time pick. Verify: core tests (determinism, every variant inside its bounds, every leaf card rooted on a branch, the mix sums to one, vertex counts reported).
-- [ ] 7.3 The CPU impostor bake: 8 views of 48 x 72, Sweaft-64 in OKLab, block fold, leafy and bare. Verify: core tests (alpha 0 or 255 only, every pixel a palette colour, a view is not empty, deterministic).
-- [ ] 7.4 The kit buffer (draw binding 11), the near list (cull binding 8), the eight near draws, the impostor draw at 30 vertices, offsets moved in both shaders and the test arithmetic; the main pass and the sun cascades. Verify: shader compiles; the vertex-arithmetic tests; a launch to READY with no ERROR and no `LATE_PIPELINE`.
-- [ ] 7.5 The near tree in the shader: bark and leaf textures, masks, the mean pull, wind, fruit on anchors, autumn and winter; the mid cards and far billboard; the dithered cross-fade. Verify: captures of every species, autumn and winter, and a walk-away sequence beside the mockup's.
-- [ ] 7.6 Cacti as desert scenery (not choppable). Verify: `grows_tree` unchanged (its test); capture.
-- [ ] 7.7 Checks: fmt, clippy, pbd-core and pbd-app tests, `openspec validate --all`.
+- [x] 7.1 Correct the record: design 4, the Q1 row and the proposal say the owner disliked cards on prisms and approved M13's detailed trees.
+- [x] 7.2 `pbd_core::tree_kit`: the mockup's builders per species, four seeded variants, the anchors, the biome species mix and the draw-time pick. Verify: core tests (determinism, every variant inside its bounds, every leaf card rooted on a branch, the mix sums to one, vertex counts reported).
+- [x] 7.3 The CPU impostor bake: 8 views of 48 x 72, Sweaft-64 in OKLab, block fold, leafy and bare. Verify: core tests (alpha 0 or 255 only, every pixel a palette colour, a view is not empty, deterministic).
+- [x] 7.4 The kit buffer (draw binding 11), the near list (cull binding 8), the eight near draws, the impostor draw at 30 vertices, offsets moved in both shaders and the test arithmetic; the main pass and the sun cascades. Verify: shader compiles; the vertex-arithmetic tests; a launch to READY with no ERROR and no `LATE_PIPELINE`.
+- [x] 7.5 The near tree in the shader: bark and leaf textures, masks, the mean pull, wind, fruit on anchors, autumn and winter; the mid cards and far billboard; the dithered cross-fade. Verify: captures of every species, autumn and winter, and a walk-away sequence beside the mockup's.
+- [x] 7.6 Cacti as desert scenery (not choppable). Verify: `grows_tree` unchanged (its test); capture.
+- [x] 7.7 Checks: fmt, clippy, pbd-core and pbd-app tests, `openspec validate --all`.
+- [ ] 7.8 Not built (design 10.8): vines, the alien species, the desert palm, snow on branches. Not seen: the acacia (no beach cell grows a tree) and the swamp's willows (not caught in a capture).
