@@ -810,7 +810,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                             rows,
                             kit,
                             "Pixel grass",
-                            "pixel tufts in place of the blades",
+                            "",
                             MenuAction::PixelGrass,
                         );
                     });
