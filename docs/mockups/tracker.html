@@ -455,7 +455,7 @@ function linkCard(a) {
     el('div', { class: 'row' }, el('a', { class: 'open', href: a.url, target: '_blank', rel: 'noopener' }, 'Open')));
 }
 
-// The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, then space exploration and colonization. `refs` are mockup ids;
+// The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, space exploration and colonization, then exo-industry and advanced propulsion. `refs` are mockup ids;
 // `change` is the OpenSpec change. Status: built, building, planned (written up), later (not started).
 const ROADMAP = [
   { title: 'The first game loop', when: 'now', note: 'Crafting tools, fishing, farming, herding, cooking: each feeds the next.', steps: [
@@ -499,6 +499,11 @@ const ROADMAP = [
   { title: 'Space exploration and colonization', when: 'later', note: 'After rocketry. Not started.', steps: [
     { title: 'Space exploration', status: 'later', change: 'interplanetary-travel', refs: ['M1', 'M2'], text: 'The other worlds and moons of the system, reached by rocket.' },
     { title: 'Colonization', status: 'later', change: '', refs: ['M10'], text: 'Settling other worlds: outposts, stations and bases off the home planet.' },
+  ] },
+  { title: 'Exo-industry and advanced propulsion', when: 'later', note: 'After colonization. Not started.', steps: [
+    { title: 'Exo-industrialization', status: 'later', change: 'industry-tiers', refs: ['M20', 'M10'], text: 'Industry off the home planet: mining and plants on moons, asteroids and stations.' },
+    { title: 'Advanced rocket engines', status: 'later', change: 'ship-tiers', refs: ['M21'], text: 'Past chemical rockets: fusion courses and antimatter landers.' },
+    { title: 'Particle colliders', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'A collider behind a basalt berm, making the antimatter cells that late engines and power run on.' },
   ] },
 ];
 const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started' };

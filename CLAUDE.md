@@ -343,6 +343,11 @@ which wait for a request.
 - **Then space exploration and colonization** ("after rocketry, we'll get
   into space exploration and colonization"): the system's other worlds (M1,
   M2, `interplanetary-travel`) and settling them (M10 stations and outposts).
+- **Then exo-industry and advanced propulsion** ("after colonization, we'll
+  do exo-industrialiozation + advanced rocket engines + particle colliders"):
+  industry off the home planet (M20, M10), engines past chemical rockets
+  (M21's fusion and antimatter), and particle colliders (M20's collider, the
+  antimatter source).
 
 None of these starts until the owner asks. The tracker's Roadmap section
 lists every phase with its mockups; keep it in step with this list

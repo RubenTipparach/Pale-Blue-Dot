@@ -33,6 +33,7 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 21 | 2026-11-14 | Nuclear and rocketry added after the age of flight and industry; advanced power now stops at coal and oil. |
 | 22 | 2026-11-14 | The townsfolk moved to right after environment v2 ("townsfolk comes after env v2"). |
 | 23 | 2026-11-14 | Space exploration and colonization added after rocketry. |
+| 24 | 2026-11-14 | Exo-industry and advanced propulsion added after colonization: exo-industrialization, advanced rocket engines, particle colliders. |
 
 **Back on one account (2026-11-14).** On 2026-11-13 a cloud session republished this week's pages
 on a second claude.ai account and moved every link here to it; later sessions added M25 to M29
