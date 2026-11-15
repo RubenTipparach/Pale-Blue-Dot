@@ -411,7 +411,11 @@ const ON_FOOT: [Binding; 3] = [
 ];
 
 const HANDS: [Binding; 6] = [
-    row(&[Key::Board(KeyCode::KeyE)], " ", "open or shut a door"),
+    row(
+        &[Key::Board(KeyCode::KeyE)],
+        " ",
+        "open or shut a door; feed, lead or collect from an animal; take up a fence",
+    ),
     row(
         &[Key::Mouse(MouseButton::Left)],
         " ",

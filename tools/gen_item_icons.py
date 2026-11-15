@@ -110,6 +110,50 @@ ICONS["tools/hand"] = ([
 ], {"k": "#5a3a24", "s": "#e3b089", "S": "#c39776"})
 
 
+# The husbandry items (`animal-husbandry` design 12, S6): the pen pieces in
+# the fence's own wood (the game draws posts and rails in these two browns),
+# and what kept animals give. One palette serves all five.
+FARM = {
+    "k": "#3a2614", "w": "#7a5230", "W": "#a8743f",
+    "e": "#f2e6cc", "E": "#d9c7a0",
+    "m": "#ffffff", "M": "#dfe6ea",
+    "i": "#3c3c44", "I": "#8a8a96",
+}
+
+ICONS.update({
+    "husbandry/fence": ([
+        "................", "................", "..kk.......kk...", ".kWWk.....kWWk..",
+        ".kWwkkkkkkkWwk..", ".kWwWWWWWWWWwk..", ".kWwwwwwwwwwwk..", ".kWwkkkkkkkWwk..",
+        ".kWwk.....kWwk..", ".kWwkkkkkkkWwk..", ".kWwWWWWWWWWwk..", ".kWwwwwwwwwwwk..",
+        ".kWwkkkkkkkWwk..", ".kWwk.....kWwk..", ".kkkk.....kkkk..", "................",
+    ], FARM),
+    "husbandry/gate": ([
+        "................", "................", ".kk..........kk.", "kWWk........kWWk",
+        "kWwkkkkkkkkkkWwk", "kWwWWWWWWWWWWWwk", "kWwkkkkkkkkWWkwk", "kWwk.....kWWkkwk",
+        "kWwk...kWWk..Wwk", "kWwkkkWWkkkkkWwk", "kWwWWWWWWWWWWWwk", "kWwkkkkkkkkkkWwk",
+        "kWwk........kWwk", "kWwk........kWwk", "kkkk........kkkk", "................",
+    ], FARM),
+    "husbandry/egg": ([
+        "................", "................", "................", "......kkkk......",
+        ".....keeeek.....", "....keeeeeek....", "....keemeeek....", "...keemeeeeek...",
+        "...keeeeeeeek...", "...keeeeeeeek...", "...keeeeeeEEk...", "....keeeeEEk....",
+        "....kEeeEEEk....", ".....kEEEEk.....", "......kkkk......", "................",
+    ], FARM),
+    "husbandry/wool": ([
+        "................", "................", "................", "......kk.kk.....",
+        "....kkmmkmmkk...", "...kmmmmmmmmmk..", "..kmmMmmmmMmmmk.", "..kmmmmmMmmmmmk.",
+        ".kmmMmmmmmmmMmk.", ".kmmmmmMmmmmmmk.", "..kmmmmmmmMmmk..", "..kMmmMmmmmmMk..",
+        "...kkMMkkMMkkk..", ".....kk..kk.....", "................", "................",
+    ], FARM),
+    "husbandry/milk": ([
+        "................", "................", "....kkkkkkkk....", "...k........k...",
+        "..k..........k..", ".kiiiiiiiiiiiik.", ".kImmmmmmmmmmIk.", ".kIMmmmmmmmmMIk.",
+        "..kIiiiiiiiiIk..", "..kIiIIIIIIiIk..", "..kIiiiiiiiiIk..", "..kIiIIIIIIiIk..",
+        "...kIiiiiiiIk...", "...kIIIIIIIIk...", "....kkkkkkkk....", "................",
+    ], FARM),
+})
+
+
 def rgba(hex_colour):
     h = hex_colour.lstrip("#")
     return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"

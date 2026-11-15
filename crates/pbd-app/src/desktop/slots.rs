@@ -108,6 +108,8 @@ pub struct ItemIcons {
     pub lights: Vec<Handle<Image>>,
     /// The roster's names, by roster index, for a fish's tooltip.
     pub fish_names: Vec<String>,
+    /// The husbandry items, in `Good::ALL` order (`animal-husbandry` S6).
+    pub goods: Vec<Handle<Image>>,
 }
 
 impl ItemIcons {
@@ -151,6 +153,10 @@ pub fn load_icons(
         hand: assets.load(pbd_app::fish::HAND_ICON),
         lights,
         fish_names,
+        goods: pbd_core::inventory::Good::ALL
+            .iter()
+            .map(|good| assets.load(pbd_app::husbandry::good_icon(*good)))
+            .collect(),
     });
 }
 
@@ -289,6 +295,7 @@ pub fn paint_icon(
             .iter()
             .position(|&light| light == material)
             .and_then(|index| items.lights.get(index).cloned()),
+        Item::Husbandry(good) => items.goods.get(good.code() as usize).cloned(),
     });
     if let Some(image) = own {
         node.image = image;
@@ -299,7 +306,7 @@ pub fn paint_icon(
     node.image = items.atlas.clone();
     let art = stack.and_then(|stack| match stack.item {
         Item::Block(material) => thumbnail(material),
-        Item::Tool(_) | Item::Fish(_) => None,
+        Item::Tool(_) | Item::Fish(_) | Item::Husbandry(_) => None,
     });
     let Some((slot, tile, tint)) = art else {
         node.color = Color::NONE;
@@ -340,7 +347,7 @@ pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -
             .get(species as usize)
             .cloned()
             .unwrap_or_else(|| stack.item.name().into()),
-        Item::Block(_) => stack.item.name().into(),
+        Item::Block(_) | Item::Husbandry(_) => stack.item.name().into(),
     };
     let mut letters = name.chars();
     let name = letters
@@ -546,6 +553,7 @@ mod tests {
             hand: Handle::default(),
             lights: Vec::new(),
             fish_names: vec!["Perch".into(), "Char".into()],
+            goods: Vec::new(),
         };
         assert_eq!(stack_tip(None, &items), "");
         let stone = Stack {

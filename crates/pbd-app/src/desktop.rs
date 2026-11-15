@@ -132,6 +132,11 @@ pub struct Launch {
     /// photographed and the fishery's numbers logged. A capture instrument,
     /// like `--swim`: a headless run has no hand on the mouse.
     pub fish: bool,
+    /// `--husbandry SCENE`: set a farm scene in front of the walker through
+    /// the player's own paths (`wild`, `tame`, `pen` or `collect`), so the
+    /// animals can be photographed (`animal-husbandry` S12). A capture
+    /// instrument, like `--fish`.
+    pub husbandry: Option<String>,
     /// `--aboard KIND` boards a craft of that kind once the fleet is in (a
     /// cog or a rowboat once a harbour has made one), and `--seat` takes the
     /// seat rather than the chase view: a headless run has nobody to walk up
@@ -317,6 +322,7 @@ impl Launch {
             walk: false,
             swim: false,
             fish: false,
+            husbandry: None,
             aboard: None,
             seat: false,
             sail: None,
@@ -731,6 +737,15 @@ impl Launch {
                 "--fish" => {
                     result.walk = true;
                     result.fish = true;
+                }
+                "--husbandry" => {
+                    i += 1;
+                    result.walk = true;
+                    result.husbandry = Some(
+                        args.get(i)
+                            .expect("--husbandry requires a scene: wild, tame, pen or collect")
+                            .clone(),
+                    );
                 }
                 "--aboard" => {
                     i += 1;
@@ -1384,6 +1399,7 @@ pub fn run(args: &[String]) {
             pbd_app::vehicles::VehiclePlugin,
             pbd_app::fish::FishPlugin,
             pbd_app::held::HeldPlugin,
+            pbd_app::husbandry::HusbandryPlugin,
         ))
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
@@ -1404,6 +1420,9 @@ pub fn run(args: &[String]) {
         }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
+        }
+        if let Some(scene) = launch.husbandry.clone() {
+            app.insert_resource(pbd_app::husbandry::HusbandryScript { scene });
         }
         if launch.fish {
             app.add_systems(
