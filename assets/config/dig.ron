@@ -5,7 +5,12 @@
 // A test holds the shipped rows to that. The rod breaks nothing. With the
 // button held, the next block starts between_s after the last one broke.
 //
-// The wood row waits on trees: no material is wood until they can be felled.
+// The wood row is the workbench and a tree worked for logs (tool-crafting).
+//
+// The matrix is the STONE tier. A tool of a higher tier divides its time by
+// that tier's speed (tier_speeds, stone, bronze, iron, steel: M3 section 7).
+// Bare hands take soft ground (the dirt row) and placed lights at the stone
+// shovel's time over hand_speed, and nothing else (tool-crafting decision 1).
 //
 // The code defaults written out; a test holds the two together. Why these
 // numbers, cell by cell: openspec/changes/fishing-and-equipment/design.md
@@ -19,4 +24,6 @@
     wood:   (shovel: 2.5, pickaxe: 2.0, axe: 0.6),
     placed: (shovel: 0.1, pickaxe: 0.1, axe: 0.1),
     between_s: 0.15,
+    hand_speed: 0.25,
+    tier_speeds: (1.0, 1.6, 2.4, 3.6),
 )

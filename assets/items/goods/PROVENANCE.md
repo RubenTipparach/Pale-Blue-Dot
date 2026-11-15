@@ -22,3 +22,15 @@ A reduction is an area average cut at half alpha, each pixel snapped to a
 colour of its own source, so no colour enters that the source lacks. Every
 picture is drawn nearest-sampled. Each good's row in `pbd_core::goods` names
 its file, and `farm::tests::every_good_has_its_icon` holds them together.
+
+## tool-crafting
+
+Made by `tools/art/crafting_icons.py` (`tool-crafting` task 2.1), by the same
+reduction:
+
+| Where | What | How |
+| --- | --- | --- |
+| `assets/items/goods/{fibre,stone,log,planks,rope}.png` | tier 0 and the hands work | M3 icons, reduced to 16 px |
+| `assets/items/stations/workbench.png` | the workbench block slot icon | M3 `workbench.png`, reduced to 16 px |
+| `assets/items/tools/{stone,bronze,iron}-pickaxe.png` | a pick of each tier | M3 `pick-<tier>.png`, reduced to 16 px |
+| `assets/items/tools/{stone,bronze,iron}-{shovel,axe}.png` | a shovel and an axe of each tier | the game own `shovel.png` and `axe.png` with the head three greys swapped for the tier three (iron is the picture as drawn) |

@@ -72,8 +72,39 @@ pub const GOODS: &[GoodRow] = &[
         99,
         "items/goods/bronze-ingot.png",
     ),
+    // ---- tool-crafting: tier 0 by hand (M3 section 2) and what the hands
+    // work it into. Named by code, never by index (`Good::FIBRE` and the
+    // rest are found by code at compile time), so other branches' rows can
+    // land above or below these in either order.
+    row("fibre", "plant fibre", 99, "items/goods/fibre.png"),
+    row("stone", "loose stone", 99, "items/goods/stone.png"),
+    row("log", "log", 99, "items/goods/log.png"),
+    row("planks", "planks", 99, "items/goods/planks.png"),
+    row("rope", "rope", 99, "items/goods/rope.png"),
     // ---- Append new goods here (animal products, food, feed ...).
 ];
+
+/// The row a code names, at compile time: a constant that cannot point at the
+/// wrong row whatever was appended before it. Fails the build for a code the
+/// table lacks.
+const fn by_code_const(code: &str) -> Good {
+    let mut index = 0;
+    while index < GOODS.len() {
+        let row = GOODS[index].code.as_bytes();
+        let want = code.as_bytes();
+        if row.len() == want.len() {
+            let mut k = 0;
+            while k < row.len() && row[k] == want[k] {
+                k += 1;
+            }
+            if k == row.len() {
+                return Good(index as u16);
+            }
+        }
+        index += 1;
+    }
+    panic!("no such good")
+}
 
 /// A row of [`GOODS`], by index. In memory only: see the module docs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -93,6 +124,12 @@ impl Good {
     pub const COPPER_INGOT: Good = Good(10);
     pub const IRON_INGOT: Good = Good(11);
     pub const BRONZE_INGOT: Good = Good(12);
+    // tool-crafting, by code (see `by_code_const`).
+    pub const FIBRE: Good = by_code_const("fibre");
+    pub const LOOSE_STONE: Good = by_code_const("stone");
+    pub const LOG: Good = by_code_const("log");
+    pub const PLANKS: Good = by_code_const("planks");
+    pub const ROPE: Good = by_code_const("rope");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
@@ -167,6 +204,11 @@ mod tests {
             (Good::COPPER_INGOT, "copper-ingot"),
             (Good::IRON_INGOT, "iron-ingot"),
             (Good::BRONZE_INGOT, "bronze-ingot"),
+            (Good::FIBRE, "fibre"),
+            (Good::LOOSE_STONE, "stone"),
+            (Good::LOG, "log"),
+            (Good::PLANKS, "planks"),
+            (Good::ROPE, "rope"),
         ] {
             assert_eq!(good.code(), code);
             assert_eq!(Good::by_code(code), Some(good));

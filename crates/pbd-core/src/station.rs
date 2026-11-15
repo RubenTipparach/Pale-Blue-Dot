@@ -12,7 +12,7 @@
 //! the job is queued.
 
 use crate::goods::Good;
-use crate::inventory::{Item, Slots, material_name};
+use crate::inventory::{Equipment, Item, NotBetter, Slots, Tier, Tool, material_name};
 use crate::terrain::Material;
 use serde::{Deserialize, Serialize};
 
@@ -49,7 +49,24 @@ pub const STATIONS: &[StationRow] = &[
         material: None,
         max_jobs: 1,
     },
+    // tool-crafting: tools, the rod and a forge (decision 5).
+    StationRow {
+        code: "workbench",
+        name: "workbench",
+        material: Some(Material::Workbench),
+        max_jobs: 4,
+    },
 ];
+
+/// The record id of the hands' queue (`tool-crafting` decision 4): kept like
+/// a station's, under an id no cell's [`record_id`] reaches (those stop at
+/// 48 bits).
+pub const HAND_RECORD_ID: u64 = u64::MAX;
+
+/// The hands' station row.
+pub fn hand() -> &'static StationRow {
+    station_by_code("hand").expect("the hand row")
+}
 
 /// The station a block is, if it is one.
 pub fn station_of(material: Material) -> Option<&'static StationRow> {
@@ -69,17 +86,27 @@ pub fn record_id(cell: u32, layer: u16) -> u64 {
     (u64::from(cell) << 16) | u64::from(layer)
 }
 
+/// A tool as `recipes.ron` names it: `tool:<tier>-<tool>`
+/// (`tool:iron-pickaxe`), or `tool:<tool>` for the stone tier
+/// (`tool:pickaxe`, `tool:rod`). A tool goes to the tool slot, not a stack
+/// (`tool-crafting` decision 6).
+pub fn tool_named(name: &str) -> Option<(Tool, Tier)> {
+    let rest = name.strip_prefix("tool:")?;
+    let (tier, tool) = match rest.split_once('-') {
+        Some((tier, tool)) => (Tier::ALL.into_iter().find(|t| t.code() == tier)?, tool),
+        None => (Tier::Stone, rest),
+    };
+    let tool = Tool::ALL.into_iter().find(|t| t.code() == tool)?;
+    Some((tool, tier))
+}
+
 /// An item as `recipes.ron` names it: a good by its code (`coal`), a block
 /// as `block:<name>` (`block:ore`), the name the inventory gives it, or a
-/// tool as `tool:<name>` (`tool:pickaxe`). A tool output is the hook for
-/// `tool-crafting`: a tool is a single thing (stack 1) that the app hands to
-/// the tool slot rather than a stack; its tier is that change's to add.
+/// tool as `tool:<name>` ([`tool_named`]), which as an item is the tool
+/// without its tier.
 pub fn item_named(name: &str) -> Option<Item> {
-    if let Some(tool) = name.strip_prefix("tool:") {
-        return crate::inventory::Tool::ALL
-            .into_iter()
-            .find(|t| t.name().eq_ignore_ascii_case(tool))
-            .map(Item::Tool);
+    if name.starts_with("tool:") {
+        return tool_named(name).map(|(tool, _)| Item::Tool(tool));
     }
     if let Some(block) = name.strip_prefix("block:") {
         return Material::ALL
@@ -116,10 +143,44 @@ pub struct RecipeFile {
 }
 
 impl Default for RecipeFile {
-    /// M3's forge: mixed ore at its fixed split, and bronze.
+    /// M3's forge: mixed ore at its fixed split, and bronze; then the hands'
+    /// and the workbench's (`tool-crafting` decisions 4 and 5).
     fn default() -> Self {
         let pair = |name: &str, n| (name.to_string(), n);
-        Self {
+        let recipe = |code: &str,
+                      name: &str,
+                      station: &str,
+                      secs: f32,
+                      inputs: &[(&str, u16)],
+                      outputs: &[(&str, u16)]| RecipeEntry {
+            code: code.into(),
+            name: name.into(),
+            station: station.into(),
+            secs,
+            inputs: inputs.iter().map(|&(n, k)| pair(n, k)).collect(),
+            outputs: outputs.iter().map(|&(n, k)| pair(n, k)).collect(),
+        };
+        let stone_tool = |tool: &str, name: &str| {
+            recipe(
+                &format!("stone-{tool}"),
+                name,
+                "workbench",
+                3.0,
+                &[("stone", 3), ("planks", 2), ("rope", 1)],
+                &[(&format!("tool:stone-{tool}"), 1)],
+            )
+        };
+        let metal_tool = |tier: &str, tool: &str, name: &str| {
+            recipe(
+                &format!("{tier}-{tool}"),
+                name,
+                "workbench",
+                4.0,
+                &[(&format!("{tier}-ingot"), 3), ("planks", 2)],
+                &[(&format!("tool:{tier}-{tool}"), 1)],
+            )
+        };
+        let mut file = Self {
             recipes: vec![
                 RecipeEntry {
                     code: "mixed-ore".into(),
@@ -142,7 +203,53 @@ impl Default for RecipeFile {
                     outputs: vec![pair("bronze-ingot", 2)],
                 },
             ],
-        }
+        };
+        // ---- tool-crafting: by hand, then at the workbench (M3 section 4).
+        file.recipes.extend([
+            recipe(
+                "planks",
+                "PLANKS",
+                "hand",
+                1.0,
+                &[("log", 1)],
+                &[("planks", 4)],
+            ),
+            recipe("rope", "ROPE", "hand", 2.0, &[("fibre", 3)], &[("rope", 1)]),
+            recipe(
+                "workbench",
+                "WORKBENCH",
+                "hand",
+                4.0,
+                &[("planks", 6)],
+                &[("block:workbench", 1)],
+            ),
+            stone_tool("pickaxe", "STONE PICK"),
+            stone_tool("shovel", "STONE SHOVEL"),
+            stone_tool("axe", "STONE AXE"),
+            recipe(
+                "rod",
+                "ROD",
+                "workbench",
+                3.0,
+                &[("planks", 2), ("rope", 2), ("fibre", 2)],
+                &[("tool:rod", 1)],
+            ),
+            recipe(
+                "forge",
+                "FORGE",
+                "workbench",
+                6.0,
+                &[("stone", 8), ("block:stone", 4)],
+                &[("block:forge", 1)],
+            ),
+            metal_tool("bronze", "pickaxe", "BRONZE PICK"),
+            metal_tool("bronze", "shovel", "BRONZE SHOVEL"),
+            metal_tool("bronze", "axe", "BRONZE AXE"),
+            metal_tool("iron", "pickaxe", "IRON PICK"),
+            metal_tool("iron", "shovel", "IRON SHOVEL"),
+            metal_tool("iron", "axe", "IRON AXE"),
+        ]);
+        file
     }
 }
 
@@ -154,7 +261,20 @@ pub struct Recipe {
     pub station: &'static StationRow,
     pub secs: f32,
     pub inputs: Vec<(Item, u16)>,
+    /// What it gives into the slots.
     pub outputs: Vec<(Item, u16)>,
+    /// The tools it gives to the tool slot, with their tiers
+    /// (`tool-crafting`): a `tool:` output, not in `outputs`.
+    pub tools: Vec<(Tool, Tier)>,
+}
+
+impl Recipe {
+    /// Everything it gives, tools as items, for a panel to draw.
+    pub fn shown_outputs(&self) -> Vec<(Item, u16)> {
+        let mut all = self.outputs.clone();
+        all.extend(self.tools.iter().map(|&(tool, _)| (Item::Tool(tool), 1)));
+        all
+    }
 }
 
 /// Every recipe, resolved and checked.
@@ -195,13 +315,32 @@ impl RecipeFile {
                     })
                     .collect()
             };
+            let mut tools = Vec::new();
+            let mut outputs = Vec::new();
+            for (name, n) in &entry.outputs {
+                if name.starts_with("tool:") {
+                    let tool = tool_named(name).ok_or_else(|| format!("{at}: no tool {name:?}"))?;
+                    if *n != 1 {
+                        return Err(format!("{at}: a tool is made one at a time"));
+                    }
+                    tools.push(tool);
+                } else {
+                    outputs.push((name.clone(), *n));
+                }
+            }
+            let outputs = if outputs.is_empty() && !tools.is_empty() {
+                Vec::new()
+            } else {
+                items(&outputs)?
+            };
             recipes.push(Recipe {
                 code: entry.code.clone(),
                 name: entry.name.clone(),
                 station,
                 secs: entry.secs,
                 inputs: items(&entry.inputs)?,
-                outputs: items(&entry.outputs)?,
+                outputs,
+                tools,
             });
         }
         Ok(RecipeBook { recipes })
@@ -248,6 +387,9 @@ pub enum Refused {
     Full,
     /// Not this station's recipe.
     Elsewhere,
+    /// It makes a tool the player already has at that tier or better, or
+    /// one already in this queue (`tool-crafting` decision 6).
+    NotBetter,
 }
 
 impl StationState {
@@ -301,6 +443,39 @@ impl StationState {
     /// nothing: refused, with the slots untouched, when they lack an input
     /// or the queue is full.
     pub fn queue(&mut self, slots: &mut Slots, recipe: &Recipe, now_s: f64) -> Result<(), Refused> {
+        self.queue_for(slots, None, None, recipe, now_s)
+    }
+
+    /// Queue as [`StationState::queue`], and refuse a tool that would not be
+    /// an upgrade on `equipment` or on a tool this queue already makes
+    /// (`book` names the queued jobs' recipes), before anything is taken.
+    pub fn queue_for(
+        &mut self,
+        slots: &mut Slots,
+        equipment: Option<&Equipment>,
+        book: Option<&RecipeBook>,
+        recipe: &Recipe,
+        now_s: f64,
+    ) -> Result<(), Refused> {
+        if let Some(equipment) = equipment {
+            for &(tool, tier) in &recipe.tools {
+                if equipment.would_take(tool, tier).is_err() {
+                    return Err(Refused::NotBetter);
+                }
+            }
+        }
+        if let Some(book) = book {
+            let queued = self
+                .jobs
+                .iter()
+                .filter_map(|job| book.get(&job.recipe))
+                .flat_map(|r| r.tools.iter().copied());
+            for (tool, tier) in queued {
+                if recipe.tools.iter().any(|&(t, k)| t == tool && k <= tier) {
+                    return Err(Refused::NotBetter);
+                }
+            }
+        }
         let row = station_by_code(&self.station).ok_or(Refused::Elsewhere)?;
         if recipe.station.code != row.code {
             return Err(Refused::Elsewhere);
@@ -326,7 +501,21 @@ impl StationState {
     /// `slots` and take it off, stopping at the first that is not finished
     /// or whose outputs do not all fit. Returns how many were collected.
     pub fn collect(&mut self, slots: &mut Slots, book: &RecipeBook, now_s: f64) -> usize {
-        let mut done = 0;
+        self.collect_into(slots, None, book, now_s).len()
+    }
+
+    /// Collect as [`StationState::collect`], giving a recipe's tools to
+    /// `equipment` (`tool-crafting` decision 6). A tool that is no longer an
+    /// upgrade is given nothing and the job still comes off: a finished job
+    /// is never stuck. Returns the jobs collected, oldest first.
+    pub fn collect_into(
+        &mut self,
+        slots: &mut Slots,
+        mut equipment: Option<&mut Equipment>,
+        book: &RecipeBook,
+        now_s: f64,
+    ) -> Vec<Job> {
+        let mut done = Vec::new();
         while let Some(&(_, end)) = self.schedule(book).first() {
             if end > now_s {
                 break;
@@ -344,13 +533,20 @@ impl StationState {
                 break;
             }
             *slots = after;
-            self.jobs.remove(0);
+            if let (Some(equipment), Some(recipe)) =
+                (equipment.as_deref_mut(), book.get(&self.jobs[0].recipe))
+            {
+                for &(tool, tier) in &recipe.tools {
+                    // Made twice over: the better one stands.
+                    let _: Result<(), NotBetter> = equipment.grant(tool, tier);
+                }
+            }
+            done.push(self.jobs.remove(0));
             // The next job started when this one finished, not when it was
             // queued: carried on it, so taking the head off does not move it.
             if let Some(next) = self.jobs.first_mut() {
                 next.queued_s = next.queued_s.max(end);
             }
-            done += 1;
         }
         done
     }
@@ -402,6 +598,8 @@ mod tests {
         assert_eq!(file, RecipeFile::default());
         let book = file.resolve().unwrap();
         assert_eq!(book.at("forge").count(), 2);
+        assert_eq!(book.at("hand").count(), 3);
+        assert_eq!(book.at("workbench").count(), 11);
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));
         assert_eq!(item_named("coal"), Some(Item::Good(Good::COAL)));
         assert_eq!(item_named("unobtainium"), None);
@@ -510,5 +708,88 @@ mod tests {
             assert_eq!(ore_yield(c, 3, false), ore_yield(c, 3, false));
             assert_eq!(ore_yield(c, 3, true), Item::Block(Material::Ore));
         }
+    }
+
+    /// Every input and output of every recipe is a known item, and every
+    /// tool names a tool and a tier (`tool-crafting` task 2.1).
+    #[test]
+    fn every_tool_crafting_recipe_resolves_to_known_things() {
+        let book = book();
+        for recipe in &book.recipes {
+            assert!(
+                !recipe.outputs.is_empty() || !recipe.tools.is_empty(),
+                "{}",
+                recipe.code
+            );
+        }
+        let made = |code: &str| book.get(code).unwrap();
+        assert_eq!(made("planks").outputs, vec![(Item::Good(Good::PLANKS), 4)]);
+        assert_eq!(
+            made("workbench").outputs,
+            vec![(Item::Block(Material::Workbench), 1)]
+        );
+        assert_eq!(
+            made("stone-pickaxe").tools,
+            vec![(Tool::Pickaxe, Tier::Stone)]
+        );
+        assert_eq!(made("iron-axe").tools, vec![(Tool::Axe, Tier::Iron)]);
+        assert_eq!(made("rod").tools, vec![(Tool::Rod, Tier::Stone)]);
+        assert_eq!(
+            made("forge").outputs,
+            vec![(Item::Block(Material::Forge), 1)]
+        );
+        assert_eq!(
+            tool_named("tool:bronze-shovel"),
+            Some((Tool::Shovel, Tier::Bronze))
+        );
+        assert_eq!(
+            tool_named("tool:pickaxe"),
+            Some((Tool::Pickaxe, Tier::Stone))
+        );
+        assert_eq!(tool_named("tool:gold-pickaxe"), None);
+        assert_eq!(
+            station_of(Material::Workbench).map(|s| s.code),
+            Some("workbench")
+        );
+        assert!(HAND_RECORD_ID > record_id(u32::MAX, u16::MAX));
+    }
+
+    /// A tool is refused before anything is taken when it is not an upgrade
+    /// or the queue already makes it; a collected one goes to the tool slot.
+    #[test]
+    fn a_tool_is_made_once_and_lands_in_the_tool_slot() {
+        let book = book();
+        let pick = book.get("stone-pickaxe").unwrap();
+        let mut bench = StationState::new(station_by_code("workbench").unwrap());
+        let mut slots = Slots::new();
+        slots.give(Item::Good(Good::LOOSE_STONE), 9);
+        slots.give(Item::Good(Good::PLANKS), 6);
+        slots.give(Item::Good(Good::ROPE), 3);
+        let mut kit = Equipment::new_world();
+        bench
+            .queue_for(&mut slots, Some(&kit), Some(&book), pick, 0.0)
+            .unwrap();
+        let before = slots.clone();
+        assert_eq!(
+            bench.queue_for(&mut slots, Some(&kit), Some(&book), pick, 0.0),
+            Err(Refused::NotBetter),
+            "already in the queue"
+        );
+        assert_eq!(slots, before, "and nothing taken");
+        let jobs = bench.collect_into(&mut slots, Some(&mut kit), &book, 10.0);
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(kit.tier(Tool::Pickaxe), Some(Tier::Stone));
+        assert_eq!(slots.count(Item::Tool(Tool::Pickaxe)), 0, "not a stack");
+        assert_eq!(
+            bench.queue_for(&mut slots, Some(&kit), Some(&book), pick, 20.0),
+            Err(Refused::NotBetter),
+            "owned at that tier"
+        );
+        // Made twice across two stations: the second is collected for nothing.
+        let mut other = StationState::new(station_by_code("workbench").unwrap());
+        other.queue(&mut slots, pick, 30.0).unwrap();
+        let jobs = other.collect_into(&mut slots, Some(&mut kit), &book, 40.0);
+        assert_eq!(jobs.len(), 1, "never stuck");
+        assert!(!other.busy());
     }
 }

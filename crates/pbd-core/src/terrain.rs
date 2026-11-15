@@ -78,6 +78,9 @@ pub enum Material {
     /// The forge (`farming-and-smelting` decision 8): the first station
     /// block. Solid, drawn in slate bricks, with a chimney stood on it.
     Forge = 19,
+    /// The workbench (`tool-crafting` decision 5): the station tools are made
+    /// at. Solid, drawn in the local trees' wood with a plank top stood on it.
+    Workbench = 20,
 }
 
 impl Material {
@@ -119,7 +122,7 @@ impl Material {
     }
 
     /// Every material, in code order.
-    pub const ALL: [Material; 20] = [
+    pub const ALL: [Material; 21] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -140,6 +143,7 @@ impl Material {
         Material::Candle,
         Material::Tilled,
         Material::Forge,
+        Material::Workbench,
     ];
 
     /// Every light, in material order.
