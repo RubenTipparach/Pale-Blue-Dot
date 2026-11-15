@@ -9,7 +9,7 @@ Built last in phase 1, once tool crafting, farming, herding and cooking are in.
 
 ## 2. The chain
 
-- [ ] 2.1 `assets/config/missions.ron` with the eighteen missions above, the counts tuned to 1-3 minutes each. Verify: a data test that every `what` names a known good, recipe, block or species.
+- [ ] 2.1 `assets/config/missions.ron` with the nineteen missions above, the counts tuned to 1-3 minutes each. Verify: a data test that every `what` names a known good, recipe, block or species.
 
 ## 3. In the game
 

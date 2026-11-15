@@ -6,7 +6,8 @@ The owner, 2026-11-14: "yup, try to do all of step 1 over the next 24 hours,
 when you think you are in a good spot, start scripting a sereis of missions
 to accomplish like "start a fcrafting table", make mining tools, make fishing
 rood, make axe, make fire... etc". They added, the same day: "go fishing,
-catch x fish, cook x fish" and "farm x plants".
+catch x fish, cook x fish", "farm x plants" and "finsd x seeds (seeds drop
+from hitting grass or finding plants int he wild)".
 
 The first game loop is crafting tools, fishing, farming, herding and cooking
 (CLAUDE.md, "The first game loop"). A new player is not told any of it. A
@@ -31,14 +32,17 @@ part unlocks the next.
   8. Go fishing: cast at water.
   9. Catch fish ×3.
   10. Cook fish ×3 at the campfire.
-  11. Till farmland, and plant seeds ×4.
-  12. Farm plants: harvest crops ×4.
-  13. Tame an animal.
-  14. Build a pen and keep an animal in it.
-  15. Collect a product (an egg, milk or wool).
-  16. Build a furnace and smelt ore into ingots ×3.
-  17. Make a bronze or iron tool.
-  18. Cook a meal from the farm and the herd.
+  11. Find seeds ×4: from hitting grass, or by picking wild plants
+      ("finsd x seeds (seeds drop from hitting grass or finding plants int he
+      wild)").
+  12. Till farmland, and plant seeds ×4.
+  13. Farm plants: harvest crops ×4.
+  14. Tame an animal.
+  15. Build a pen and keep an animal in it.
+  16. Collect a product (an egg, milk or wool).
+  17. Build a furnace and smelt ore into ingots ×3.
+  18. Make a bronze or iron tool.
+  19. Cook a meal from the farm and the herd.
 
   The counts (the owner's "x") are data, and are picked so that each mission
   takes one to three minutes.

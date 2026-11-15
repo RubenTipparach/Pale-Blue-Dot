@@ -310,6 +310,10 @@ game is built toward first. The parts and where each stands:
    `basic-smelting` builds.
 2. **Fishing**: built (`fishing-and-equipment`).
 3. **Farming**: being built (`farming`, branch `claude/farming-smelting`).
+   Seeds drop from grass and from wild plants ("we might need to combine env
+   v2 in this first step"): the wild plants farming needs are pulled forward
+   from environment v2's flora; the rest of environment v2 stays after the
+   loop (recommendation taken, ask only with screenshots).
 4. **Herding**: being built (`animal-husbandry`, branch
    `claude/animal-husbandry`).
 5. **Cooking**: written up (`cooking`), built after farming lands.

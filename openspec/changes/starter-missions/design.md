@@ -6,7 +6,7 @@ Recommendations taken (ask only with screenshots) unless quoted.
 
 1. **Data, not code.** Each mission is
    `{ id, title, help, needs: [ids], objectives: [{ kind, what, count }] }`.
-   - Kinds: `craft`, `place`, `gather`, `catch`, `cook`, `plant`,
+   - Kinds: `craft`, `place`, `gather`, `catch`, `cook`, `find`, `plant`,
      `harvest`, `tame`, `pen`, `collect`, `smelt`, `fell`, `cast`.
    - Ids are append-only short codes, so a saved record keeps its meaning.
 2. **Counted from events the game already raises.** The systems that do the
