@@ -72,6 +72,35 @@ pub fn light_icon(material: Material) -> Option<&'static str> {
     })
 }
 
+/// Something came into the player's hands, for whatever counts it (the
+/// `starter-missions` chain: "find seeds", "harvest"). Raised on the frame
+/// the durable write was accepted, never before.
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Gained {
+    pub item: Item,
+    pub count: u16,
+    pub how: How,
+}
+
+/// How a [`Gained`] came about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum How {
+    /// Turned up by digging or tilling grass.
+    Found,
+    /// Picked from a wild plant.
+    Picked,
+    /// Harvested from a crop.
+    Harvested,
+    /// Made at a station.
+    Made,
+}
+
+/// A seed was planted (`starter-missions`: "plant").
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Planted {
+    pub crop: pbd_core::farming::Crop,
+}
+
 /// The player's slots as a Bevy resource.
 ///
 /// A newtype rather than a `Resource` derive on the core type: the core owns

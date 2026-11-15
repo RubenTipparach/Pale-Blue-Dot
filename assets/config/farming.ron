@@ -9,4 +9,10 @@
     turnip:     (days: 4.0, produce: 2, seeds: 2),
     frost_kale: (days: 5.0, produce: 2, seeds: 2),
     chili:      (days: 5.0, produce: 4, seeds: 2),
+    // Wild plants: one grassy cell in `wild_one_in` grows one, which gives
+    // `wild_seeds` seeds and one produce when picked. Digging a grassy cell
+    // turns up a seed in one cell in `grass_seed_one_in`. Cells.
+    wild_one_in: 40,
+    wild_seeds: 2,
+    grass_seed_one_in: 4,
 )

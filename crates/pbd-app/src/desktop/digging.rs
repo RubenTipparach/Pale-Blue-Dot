@@ -75,7 +75,11 @@ impl Mining {
 
 /// What a block is made of: its column's answer, or the column the edit path
 /// would adopt for it off the tier's edge.
-fn material_of(fine: &PlanetFine, save: &WorldSave, (cell, layer): Block) -> Option<Material> {
+pub(super) fn material_of(
+    fine: &PlanetFine,
+    save: &WorldSave,
+    (cell, layer): Block,
+) -> Option<Material> {
     let record = record_of(fine, cell)?;
     match fine.set.columns.column(record) {
         Some(column) => Some(column.material(layer)),
@@ -148,7 +152,7 @@ fn why_unsampled(contact: &PlanetContact, point: Vec3) -> Option<Unsampled> {
 
 /// The record index of a cell by its key. The march answers in keys because
 /// that is what an edit is saved by; applying one needs the slot.
-fn record_of(fine: &PlanetFine, cell: u32) -> Option<usize> {
+pub(super) fn record_of(fine: &PlanetFine, cell: u32) -> Option<usize> {
     fine.set
         .finest_records()
         .iter()
@@ -170,6 +174,31 @@ pub enum Hands {
     Spend,
     /// A scripted edit, which has no player and no hands.
     Empty,
+    /// A till (`farming-and-smelting` decision 2): the hands take nothing,
+    /// but the soil may turn up a seed, which floats out as a dig's block
+    /// does, on the edit's own line.
+    Till(Option<Item>),
+    /// A dig that also turns up something into the hands: a seed out of dug
+    /// grass (`farming-and-smelting` decision 14), on the same line.
+    TakeWith(Item),
+}
+
+/// What a dug block yields (`farming-and-smelting` decisions 2 and 10):
+/// tilled soil gives dirt; a generated ore cell gives mixed ore or, in a coal
+/// seam, coal; a placed one gives ore; everything else gives itself.
+pub(super) fn yield_of(save: &WorldSave, was: Material, cell: u32, layer: usize) -> Item {
+    match was {
+        Material::Tilled => Item::Block(Material::Dirt),
+        Material::Ore => {
+            let placed = save
+                .edits
+                .for_cell(cell)
+                .iter()
+                .any(|&(l, m)| usize::from(l) == layer && m == Material::Ore);
+            pbd_core::station::ore_yield(cell, layer as u16, placed)
+        }
+        other => Item::Block(other),
+    }
 }
 
 /// Everything one edit touches, which is what says these travel together: the
@@ -278,7 +307,16 @@ pub fn apply_edit(
         // The dug block floats where it was cut, at the cell's centre, and
         // the magnet brings it in (`inventory-grid` decision 4). The hands do
         // not change here; the pickup is its own line.
-        Hands::Take => {
+        Hands::Take | Hands::TakeWith(_) | Hands::Till(Some(_)) => {
+            if let Hands::TakeWith(bonus) = hands {
+                // What does not fit is not given: the seed is a find, not a
+                // block the player is owed.
+                moved.give(bonus, 1);
+            }
+            let item = match hands {
+                Hands::Till(Some(item)) => item,
+                _ => yield_of(save, was, cell, layer),
+            };
             let direction = fine
                 .set
                 .finest_records()
@@ -286,8 +324,14 @@ pub fn apply_edit(
                 .map(|cell| Vec3::from_slice(&cell.direction_height[..3]))
                 .and_then(Vec3::try_normalize);
             if let Some(direction) = direction {
-                let centre = direction * (PLANET_RADIUS + column::layer_altitude(layer) + 0.5);
-                dropped = Some(Drops::make(save, Item::Block(was), centre, *now_s));
+                // A till's seed comes up out of the soil, over the cell.
+                let lift = if matches!(hands, Hands::Till(_)) {
+                    1.3
+                } else {
+                    0.5
+                };
+                let centre = direction * (PLANET_RADIUS + column::layer_altitude(layer) + lift);
+                dropped = Some(Drops::make(save, item, centre, *now_s));
             }
         }
         Hands::Spend => {
@@ -297,7 +341,7 @@ pub fn apply_edit(
                 return None;
             }
         }
-        Hands::Empty => {}
+        Hands::Empty | Hands::Till(None) => {}
     }
     if !save.accept(
         Edit {
@@ -389,6 +433,12 @@ pub fn dig_and_place(
         ResMut<Drops>,
         Res<pbd_app::sky::Sun>,
     ),
+    (mut note, farm, mut gained, mut planted): (
+        ResMut<super::farm::FarmNote>,
+        Res<pbd_app::config::FarmConfig>,
+        MessageWriter<pbd_app::hotbar::Gained>,
+        MessageWriter<pbd_app::hotbar::Planted>,
+    ),
 ) {
     // The tool in hand chops while a block is being broken: last frame's
     // answer, a frame behind, which nobody can see.
@@ -458,6 +508,24 @@ pub fn dig_and_place(
         .breaking
         .step(dt, held, secs.map(|secs| (block, secs)), between);
     if let Step::Broken((cell, layer)) = step {
+        let wall_s = time.elapsed_secs();
+        let was = material_of(&fine, &edits, (cell, layer));
+        // A station with work in it is not broken (decision 7): nothing in a
+        // queue is lost to a pick.
+        if let Some(row) = was.and_then(pbd_core::station::station_of)
+            && super::farm::station_state(&edits, cell, layer as u16, row).busy()
+        {
+            note.say(wall_s, format!("Empty the {} first", row.name));
+            return;
+        }
+        // Dug grass turns up a seed, one cell in a few (decision 14).
+        let seed = was
+            .filter(|m| pbd_core::farming::sprouts_seed(*m))
+            .and_then(|_| {
+                farm.0
+                    .grass_seed(cell, super::farm::climate_at(&fine, cell, layer))
+            });
+        let hands = seed.map_or(Hands::Take, |s| Hands::TakeWith(Item::Good(s)));
         if let Some(taken) = apply_edit(
             &mut Edited {
                 fine: &mut fine,
@@ -467,11 +535,22 @@ pub fn dig_and_place(
                 drops: &mut drops,
                 now_s: sun.clock.seconds,
             },
-            Hands::Take,
+            hands,
             cell,
             layer,
             Material::Air,
         ) {
+            if let Some(seed) = seed {
+                gained.write(pbd_app::hotbar::Gained {
+                    item: Item::Good(seed),
+                    count: 1,
+                    how: pbd_app::hotbar::How::Found,
+                });
+                note.say(wall_s, format!("Found a {}", seed.name()));
+            }
+            if taken == Material::Tilled {
+                super::farm::uproot(&mut edits, &slots.0, cell);
+            }
             info!(
                 "dug {taken:?} from cell {cell} layer {layer} with the {} in {:.2} s, \
                  fine set version {}",
@@ -495,10 +574,38 @@ pub fn dig_and_place(
             info!("edit refused: no air along the ray to place into");
             return;
         };
+        let wall_s = time.elapsed_secs();
+        // A seed is planted on the tilled soil the ray meets
+        // (`farming-and-smelting` decision 3).
+        if let Some(Item::Good(seed)) = slots.held().map(|stack| stack.item)
+            && pbd_core::farming::Crop::of_seed(seed).is_some()
+        {
+            super::farm::plant(
+                &mut Edited {
+                    fine: &mut fine,
+                    contact: &mut contact,
+                    save: &mut edits,
+                    slots: &mut slots,
+                    drops: &mut drops,
+                    now_s: sun.clock.seconds,
+                },
+                target.dig.cell,
+                target.dig.layer,
+                seed,
+                &mut note,
+                wall_s,
+                &mut planted,
+            );
+            return;
+        }
         let Some(Item::Block(material)) = slots.held().map(|stack| stack.item) else {
             info!("edit refused: the selected slot holds no block");
             return;
         };
+        if super::farm::crop_in_the_way(&fine, &edits, place.cell, place.layer) {
+            note.say(wall_s, "A crop grows there");
+            return;
+        }
         // A block may not be placed into the player. Sealing yourself into
         // rock is a world you cannot move in, and the walker's own feet and
         // eye are what say where you are.

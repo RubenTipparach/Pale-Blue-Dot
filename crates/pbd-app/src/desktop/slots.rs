@@ -120,6 +120,8 @@ pub struct ItemIcons {
     pub fish_names: Vec<String>,
     /// Every good's icon, in goods-table order (`pbd_core::goods`).
     pub goods: Vec<Handle<Image>>,
+    /// The forge's own picture, M3's, for its block in a slot.
+    pub forge: Handle<Image>,
 }
 
 impl ItemIcons {
@@ -166,6 +168,7 @@ pub fn load_icons(
         goods: pbd_core::goods::Good::all()
             .map(|good| assets.load(good.icon()))
             .collect(),
+        forge: assets.load("items/stations/forge.png"),
     });
 }
 
@@ -300,6 +303,7 @@ pub fn paint_icon(
     let own = stack.and_then(|stack| match stack.item {
         Item::Fish(species) => items.fish.get(species as usize).cloned(),
         Item::Tool(tool) => Some(items.tool(tool)),
+        Item::Block(Material::Forge) => Some(items.forge.clone()),
         Item::Block(material) => Material::LAMPS
             .iter()
             .position(|&light| light == material)
@@ -562,6 +566,8 @@ mod tests {
             hand: Handle::default(),
             lights: Vec::new(),
             fish_names: vec!["Perch".into(), "Char".into()],
+            goods: Vec::new(),
+            forge: Handle::default(),
         };
         assert_eq!(stack_tip(None, &items), "");
         let stone = Stack {

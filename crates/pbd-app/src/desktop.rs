@@ -4,6 +4,8 @@ mod cracks;
 mod digging;
 mod drops_view;
 mod equipment;
+mod farm;
+mod forge;
 mod frame_graph;
 mod guide;
 mod hud;
@@ -1115,6 +1117,11 @@ pub fn run(args: &[String]) {
     .init_resource::<pbd_app::fish::Body>()
     .init_resource::<guide::GuidePage>()
     .init_resource::<pack::PackHand>()
+    // Farming and the forge (`farming-and-smelting`).
+    .init_resource::<farm::FarmNote>()
+    .init_resource::<farm::StationAt>()
+    .add_message::<pbd_app::hotbar::Gained>()
+    .add_message::<pbd_app::hotbar::Planted>()
     // The world, loaded before the planet is built: `create_planet` reads its
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
@@ -1164,6 +1171,8 @@ pub fn run(args: &[String]) {
             photo_camera,
             overlay_ui::spawn,
             cracks::spawn,
+            farm::make_looks,
+            farm::spawn_note,
         ),
     )
     // The column tier is built by a startup system and its records land when
@@ -1188,6 +1197,7 @@ pub fn run(args: &[String]) {
                     guide::spawn,
                     drops_view::dress,
                     pack::spawn,
+                    forge::spawn,
                 ),
             )
                 .chain(),
@@ -1254,6 +1264,15 @@ pub fn run(args: &[String]) {
             capture
                 .run_if(pbd_app::loading::ready)
                 .after(pbd_app::loading::warm),
+        ),
+    )
+    .add_systems(
+        Update,
+        (
+            (farm::use_key, forge::work, forge::grey, forge::paint)
+                .chain()
+                .after(digging::dig_and_place),
+            (farm::show, farm::show_note),
         ),
     )
     .add_systems(

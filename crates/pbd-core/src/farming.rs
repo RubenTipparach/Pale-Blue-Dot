@@ -140,6 +140,14 @@ pub struct FarmSettings {
     pub turnip: CropTuning,
     pub frost_kale: CropTuning,
     pub chili: CropTuning,
+    /// One grassy cell in this many grows a wild plant of a crop that suits
+    /// its climate (decision 14), cells.
+    pub wild_one_in: u32,
+    /// Seeds a wild plant gives when picked, items (and one of its produce).
+    pub wild_seeds: u16,
+    /// One grassy cell in this many turns up a seed when it is dug
+    /// (decision 14), cells.
+    pub grass_seed_one_in: u32,
 }
 
 impl Default for FarmSettings {
@@ -155,6 +163,9 @@ impl Default for FarmSettings {
             turnip: tuning(4.0, 2),
             frost_kale: tuning(5.0, 2),
             chili: tuning(5.0, 4),
+            wild_one_in: 40,
+            wild_seeds: 2,
+            grass_seed_one_in: 4,
         }
     }
 }
@@ -179,7 +190,36 @@ impl FarmSettings {
                 return Err(format!("{}: a ripe crop gives something", crop.row().code));
             }
         }
+        if self.wild_one_in == 0 || self.grass_seed_one_in == 0 {
+            return Err("wild_one_in and grass_seed_one_in are one in N, N above zero".into());
+        }
+        if self.wild_seeds == 0 {
+            return Err("a wild plant gives at least one seed".into());
+        }
         Ok(())
+    }
+
+    /// The wild crop growing on a grassy cell of a world with seed
+    /// `world_seed`, if one does (decision 14): one cell in `wild_one_in`, a
+    /// crop that suits the climate. DERIVED, like the meadow's flowers, so
+    /// it is never saved; picking it is (a `wild` record).
+    pub fn wild_crop(&self, world_seed: u64, cell: u32, climate: Option<Climate>) -> Option<Crop> {
+        let h = mix(world_seed ^ (u64::from(cell) << 1) ^ 0x0a11_d5ee_d000);
+        if h % u64::from(self.wild_one_in) != 0 {
+            return None;
+        }
+        let suits: Vec<Crop> = Crop::all().filter(|c| c.grows_in(climate)).collect();
+        (!suits.is_empty()).then(|| suits[((h >> 32) % suits.len() as u64) as usize])
+    }
+
+    /// The seed a grassy cell turns up when it is dug (decision 14): one
+    /// cell in `grass_seed_one_in`, the cell's own seed. The same cell always
+    /// answers the same.
+    pub fn grass_seed(&self, cell: u32, climate: Option<Climate>) -> Option<Good> {
+        let h = mix(u64::from(cell) ^ 0x6a55_5eed);
+        (h % u64::from(self.grass_seed_one_in) == 0)
+            .then(|| seed_turned_up(cell, climate))
+            .flatten()
     }
 
     /// How far along a crop is, 0 sown to 1 ripe (and beyond, clamped).
@@ -269,6 +309,17 @@ pub fn seed_turned_up(cell: u32, climate: Option<Climate>) -> Option<Good> {
     }
     let pick = mix(u64::from(cell) ^ 0x5eed_f1e1d) % suits.len() as u64;
     Some(suits[pick as usize].row().seed)
+}
+
+/// The record kind a picked wild plant is stored as (decision 14): its id
+/// is the cell's key, and its body says when.
+pub const WILD_KIND: &str = "wild";
+pub const WILD_SCHEMA: u32 = 1;
+
+/// A picked wild plant's record body.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Picked {
+    pub picked_s: f64,
 }
 
 /// The record kind a planted cell is stored as.
@@ -394,6 +445,33 @@ mod tests {
         }
         assert_eq!(Crop::of_seed(Good::COAL), None);
         FarmSettings::default().validate().unwrap();
+    }
+
+    /// Wild plants: about one grassy cell in forty, always the same cells
+    /// for a seed, each a crop that suits; other seeds put them elsewhere.
+    /// Grass seeds: about one cell in four.
+    #[test]
+    fn wild_plants_and_grass_seeds_are_derived_and_rare() {
+        let s = FarmSettings::default();
+        let fields = Climate::of(Biome::Fields);
+        let wild: Vec<u32> = (0..40_000)
+            .filter(|&c| s.wild_crop(7, c, fields).is_some())
+            .collect();
+        assert!((800..1200).contains(&wild.len()), "{}", wild.len());
+        for &c in &wild[..20] {
+            assert!(s.wild_crop(7, c, fields).unwrap().grows_in(fields));
+        }
+        let other = (0..40_000).filter(|&c| s.wild_crop(8, c, fields).is_some());
+        assert_ne!(other.take(20).collect::<Vec<_>>(), wild[..20].to_vec());
+        assert_eq!(
+            s.wild_crop(7, wild[0], None),
+            None,
+            "nothing on the sea floor"
+        );
+        let seeds = (0..4000)
+            .filter(|&c| s.grass_seed(c, fields).is_some())
+            .count();
+        assert!((800..1200).contains(&seeds), "{seeds}");
     }
 
     /// A plot body round-trips through RON, and a crop this build lacks
