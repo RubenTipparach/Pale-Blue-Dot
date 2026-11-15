@@ -698,6 +698,9 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
             // rule, at full strength each.
             g = rain_rings(uv,time,view.fx.z)*view.ripple.w;
         }
+        // Only on water that faces up (owner, 2026-11-15: "when raining - no
+        // droplets on vertical water"): a fall's or a wall's face takes none.
+        g *= smoothstep(0.7, 0.95, horizontal);
         gradient += tangent_u*g.x + tangent_v*g.y;
     }
     // Slope cap BEFORE the gradient bends the normal: the rain kernel spikes it
@@ -796,8 +799,18 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     var foam = clamp(max(crest,slope)*view.foam_color.w,0.,1.);
     // A falling face of the game's water is white water: froth streaming down
     // its own advected waves (`water-flow` 7a, the mockups' fall froth).
+    // White water on a fall (owner, 2026-11-15: "vertical water should have
+    // a bit froth to it"): streaks of froth stretched down the face and
+    // scrolled down it with the fall's own advection, denser at a fall's lip
+    // and foot (the mesher's froth weight, `flow_uv.x` on a falling face).
     if (in.kind == 2u && horizontal < 0.5) {
-        foam = max(foam, 0.08 + 0.3*smoothstep(0.0, 0.5, height));
+        let down_p = advected*vec3<f32>(1.0, 1.0, 1.0);
+        let along = vec3<f32>(dot(down_p, tangent_u), dot(down_p, radial), dot(down_p, tangent_v));
+        let streak_p = vec3<f32>(along.x*5.0, along.y*0.35, along.z*5.0) + vec3<f32>(0.0, time*0.6, 0.0);
+        let n = gnoise3(streak_p)*0.5 + gnoise3(streak_p*2.3)*0.3 + 0.5;
+        let weight = clamp(in.flow_uv.x, 0.35, 1.0);
+        let froth = smoothstep(0.42, 0.7, n)*0.75 + 0.15;
+        foam = max(foam, clamp(froth*weight + 0.12, 0.0, 0.92));
     }
     // A gale and up (`ocean-environments` 4.3): foam torn into streaks along
     // the wind and spray off the crests, growing from `spray_from_mps` to

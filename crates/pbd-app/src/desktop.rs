@@ -1142,8 +1142,9 @@ impl Launch {
                     "column"
                 ]
                 .contains(&result.view.as_str())
-                    && result.capture.is_some()),
-            "--height requires --view shore or dive with a static --capture"
+                    && result.capture.is_some())
+                || result.fly,
+            "--height requires --fly, or --view shore or dive with a static --capture"
         );
         assert!(
             result.render_offset == Vec3::ZERO
@@ -1301,7 +1302,13 @@ pub fn run(args: &[String]) {
                 .map(|pose| pose.position.normalize_or(Vec3::Y))
                 .unwrap_or_else(|| spawn_direction(&launch))
         },
-        spawn_altitude: 240.0,
+        // `--fly --height M` starts that far over the ground (a capture's
+        // view from the air: `water-flow`'s rivers); 240 m otherwise.
+        spawn_altitude: if launch.fly {
+            launch.height.unwrap_or(240.0)
+        } else {
+            240.0
+        },
         // The tour keeps 45 m above the ground; the route lands, so it keeps
         // only the walker's eye height.
         minimum_clearance: if launch.route {

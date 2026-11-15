@@ -21,6 +21,8 @@
 
 - [x] 3.8 One water (E9): the game's water drawn by the sea's fragment. Verify: day and night captures beside the tile cut (`look-before-after-sheet.jpg`); a launch reaches READY with no LATE_PIPELINE.
 - [x] 3.9 The walker swims in the column's water and the tided sea (E10). Verify: `the_walker_swims_in_a_pool_a_flowing_cell_and_a_high_tide` (which found and fixed a pool above sea level being swum to the sea's sheet).
+- [x] 3.11 The owner's fall notes (E12 to E14): no rain rings on vertical water, froth on falls, a splash at every fall's foot by its height. Verify: `owner-fall-froth-rain-before-after.jpg`; a launch reaches READY with no LATE_PIPELINE.
+- [x] 3.12 Rivers settled by the rule at the build (E15). Verify: `a_freshly_built_tier_s_rivers_are_what_the_rule_keeps`.
 - [x] 3.10 The wooden bucket (E11): recipe, icons, take and pour. Verify: `a_bucket_takes_a_source_and_pours_into_air`; the recipe test counts it.
 
 - [x] 3.7 Pouring (E5): the place path places a held water block as a source; F6 pours one where the place ray lands; a dig or a block placed beside water queues the flow. Verify: the tier tests; the captures pour through the same edit path.

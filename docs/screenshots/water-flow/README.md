@@ -79,20 +79,38 @@ inlets.
 | `river-valley-day.jpg` | `--walk --at -34.6830 101.4869 --yaw 14 --pitch -6 --time 5` | A river coming down a terraced valley: a short fall of white water into a still reach, the reach running on toward the sea (lower left). |
 | `river-valley-night.jpg` | the same, `--time 17` | The same at night. |
 | `river-valley-arrows.jpg` | the same, `--arrows` | The arrows: down the fall's faces and along the sheet below it. |
-| `river-waterfall-day.jpg` | `--walk --at -41.1424 -122.3150 --yaw 143 --pitch 5 --time 21` | The tallest fall found (21 falling blocks) in a stone gorge. |
 | `marsh-pool-day.jpg` | `--walk --at 57.0007 -89.9243 --yaw 0 --pitch -25 --time 17` | A marsh pool held by its rim, under the trees. |
 
 Honest notes:
 
 - No frame shows a river from its spring to its mouth: each picture shows a
   stretch. The spring is a river's lattice head in the hills (design 13).
-- `river-waterfall-day.jpg` looks wrong in part: the fall stands as a free
-  column beside the gorge's wall, and half-way up a step of the river's
-  water stands as a ledge in the air. The fall is placed in the cell in
-  front of the step, which here is open far below.
 - Most of a river's steps are one or two layers: the ground is gentle at a
   cell's scale. M25's plunge pools are not generated.
 - Beyond the column tier (about 90 m) a river's water is not drawn; its
   valley shows.
 - The marsh frame is dark under the trees; the pool reads, the rim is the
   bank beside it.
+
+## Fourth pass (2026-11-15): the owner's fall notes, rivers settled by the rule
+
+| File | What it shows |
+| --- | --- |
+| `owner-fall-froth-rain-before-after.jpg` | A 9-layer fall into a pit (`--pour 1 --pour-ahead 12 --pit 9`): top row clear weather before and after, bottom row `--rain 1` before and after. After: white froth streaking down the faces; no rain rings on the vertical faces (before shows them). The light blue at the fall's foot is the splash. |
+| `fall-splash-2-and-12-layers-day-night.jpg` | A 2-layer step and a 12-layer fall, by day (top) and at 22:00 (bottom). |
+| `river-valley-from-60m.jpg` | `--fly --at -34.6830 101.4869 --height 60`: the valley from the air. |
+
+Honest notes:
+
+- The splash is hard to see in these frames: the 12-layer fall's foot is at
+  the bottom of a pit, hidden by its near wall, and the 2-layer step's
+  splash is a few small drops. No frame shows a tall fall's mist plume.
+- The froth reads as blotches more than streaks close up.
+- The lead's captures for rivers were not achieved: no frame from the air
+  shows a river from high ground to the sea (from 60 m over the valley the
+  river is down in its cut and not in view), no gorge fall (the terrain
+  moved with the wider valleys and the fall found before is gone), no wide
+  lower reach. The far rivers' sheet is built and tested only by the build,
+  not seen in a picture.
+- `river-valley-*` and `marsh-pool-day.jpg` above were taken before this
+  pass's valley changes.

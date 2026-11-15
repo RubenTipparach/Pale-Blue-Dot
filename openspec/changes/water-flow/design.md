@@ -467,6 +467,40 @@ Both are one edit and one hands change on one line, the place path's own
 transaction (`Hands::Swap`), so the source taken and the bucket filled reach
 the disk together. The rule is `pbd_core::liquid::bucket`, tested.
 
+## The owner's notes on falls (2026-11-15)
+
+**E12. No rain on vertical water.** The owner: "when raining - no droplets
+on vertical water." The rain's rings are scaled by how much a face looks up
+(`smoothstep(0.7, 0.95, horizontal)` in `water.wgsl`), so a fall's or a
+wall's face takes none and a top takes them all.
+
+**E13. Froth on falls.** The owner: "vertical water should have a bit froth
+to it, probably something easy to do via shaders." A falling face carries
+white streaks of froth, noise stretched down the face and scrolled down it
+with the fall, denser at a fall's lip and foot (the mesher's froth weight,
+`flow_uv.x` on a falling face); a still wall keeps none.
+
+**E14. Splash at a fall's foot.** The owner: "can you also add some particle
+fx to bottom of the waterfall? more fx based on distance it fell". The mesher
+records every fall's foot (water not falling with falling water on it) and
+how many layers fell onto it; each frame, spray drops are thrown up and out
+and fall back, and a low white mist puffs, both more, higher and wider for a
+taller fall (3 + 6 per layer drops up to 160, a puff per two-thirds of a
+layer up to 24), at most 4,000 quads, out to 70 m and faded over the last
+15 m, lit by the sky's share and the hour. A pure function of time: nothing
+is stored. One unlit alpha-blended mesh, born at startup, so the loading
+screen builds its pipeline.
+
+**E15. The rivers' water is the rule's.** The generator seeds only sources,
+on their own bed and never over open air; a version 8 tier's build runs the
+rule over them until nothing is queued and a sweep of every water cell
+changes nothing (`ColumnTier::settle_rivers`), so falls, sheets and riffles
+are exactly what the rule keeps (`a_freshly_built_tier_s_rivers_are_what_the_rule_keeps`).
+Derived, never saved; older worlds are not settled. The banks are held on
+every side (the water's top is a metre under the lowest ground round the
+valley's rim), yet a fall's foot can still spread its eight cells past a
+river's valley.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With

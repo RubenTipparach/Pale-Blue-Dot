@@ -505,8 +505,19 @@ versions 4 to 7 keep their digests, and version 8's is pinned beside them.
   fish's river class (a version 8 river is a river at any height), the coast
   walk and the capture's locator.
 - **The climate** for version 8 is version 7's settled state (as 7's is
-  6's): the climate's cells are far coarser than a river, and the biomes are
-  version 7's. Recommendation taken (ask only with screenshots).
+  6's): the climate's cells are far coarser than a river. Recommendation
+  taken (ask only with screenshots), kept on the lead's fourth pass. The
+  valleys change a few biome cells the weather reads, which moved the
+  default start's cover from 0.69 to 0.67 (no rain).
+- **Fourth pass.** A river is a stream at its spring and widens 1.5 m each
+  time its catchment doubles, to 18 m across; under a fall of three layers
+  or more the bed is two layers deeper for two cells (a plunge pool); its
+  last reach is at the sea's level and runs into it. Only sources are
+  generated; the tier's build settles them by the rule (`water-flow` E15).
+  Beyond the tier the river is drawn on far cells as the sea is, a still
+  sheet at its surface over every cell whose centre is within half its width
+  of the line (`spare.w`), dithered against the tier's own water across the
+  tier's last 25 m.
 - **Version 7's noise channels stay** as the sea's inlets, so off the new
   rivers' valleys a version 8 world is version 7's ground: the city survey
   reads version 7's ground (`TerrainConfig::site_ground`), so the list the
