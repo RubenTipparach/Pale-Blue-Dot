@@ -1646,6 +1646,14 @@ fn station(
             // A station up a wall too high to step (the bot is in a hole
             // beside it): build up to it.
             let rise = (at - s.feet).dot(s.up);
+            if (bot.phase_s % 5.0) < s.dt {
+                info!(
+                    "showcase: walking to the {}: {:.1} m off, {:.1} m up",
+                    row.name,
+                    tangent(at - s.feet, s.up).length(),
+                    rise
+                );
+            }
             if rise > 0.9 && tangent(at - s.feet, s.up).length() < 3.5 {
                 bot.climb(s, out);
             } else if bot.walk_to(s, out, at, 2.0) == Walked::There {
