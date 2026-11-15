@@ -17,7 +17,7 @@ use pbd_app::config::HusbandryConfig;
 use pbd_app::fish::Body;
 use pbd_app::husbandry::BreedingPick;
 use pbd_app::saves::WorldSave;
-use pbd_app::ui_kit::{self, KitText, Set, UiKit, plaque, plaque_label};
+use pbd_app::ui_kit::{self, Set, UiKit, plaque};
 use pbd_app::walking::WalkingReadout;
 use pbd_core::husbandry::breeding::{self, Pedigree};
 use pbd_core::husbandry::record::{self, AnimalBody, Life};
@@ -255,7 +255,7 @@ pub fn paint(
                 tabs.spawn((plaque(&kit, Set::Stone, 60.0), MenuAction::BreedSpecies(*i)))
                     .with_children(|p| {
                         let name = s.name.to_uppercase();
-                        p.spawn(plaque_label(Set::Stone, &name));
+                        p.spawn(text(name, 10.0, ui_kit::LABEL));
                     });
             }
         });
@@ -274,7 +274,7 @@ pub fn paint(
                     ..default()
                 })
                 .with_children(|list| {
-                    list.spawn(KitText::new("THE HERD", ui_kit::TITLE).shadow(ui_kit::INK));
+                    list.spawn(text("THE HERD", 11.0, AMBER));
                     if herd.is_empty() {
                         list.spawn(text("No kept animals", 10.0, DIM));
                     }
@@ -446,7 +446,7 @@ fn pair_panel(
         .with_children(|row| {
             row.spawn((plaque(kit, Set::Stone, 60.0), MenuAction::BreedPair))
                 .with_children(|p| {
-                    p.spawn(plaque_label(Set::Stone, "PAIR"));
+                    p.spawn(text("PAIR", 10.0, ui_kit::LABEL));
                 });
             let paired = dam.mate.is_some() && dam.mate == pick.sire;
             let said = if pick.said.is_empty() && paired {
