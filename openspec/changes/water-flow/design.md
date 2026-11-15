@@ -547,6 +547,51 @@ counted.
 degrees, 0 north, 90 east) and `--pitch` (degrees, negative down) beside
 `--at` and `--height`, so a capture can look down on a river from the air.
 
+## The fall look, in a mockup first (owner, 2026-11-15)
+
+Two in-game fall looks were rejected (pass 5, `c620183`: "all the afters are
+bad"; the bowed strands, `b9c81ec`: "too smeared, theres also a geometric gap
+at the edge"). From here a fall's look is approved in a mockup before the game
+changes (CLAUDE.md, "Waterfalls are designed in a mockup first"). The mockup is
+`docs/mockups/waterfall.html` (`waterfall/waterfall.js`). It shows the game's
+test case (`--pour 1 --pour-ahead 12 --pit 9`: a source beside a 9-deep pit of
+seven cells) and a 2-layer step, on 2.833 m cells with 1 m layers. It shows them
+by day and at night under three lamps, with toggles for rain and splash. Its
+screenshots are in `docs/screenshots/mockup-waterfall/`. Not built in the game.
+
+The froth is a GLSL port of `water.wgsl` at `dc0c5cb`, the falling-face branch
+(`in.kind == 2u && horizontal < 0.5`). It keeps the same `gnoise3` (integer
+lattice hash), the same `fbm3`, the same tangent frame (body X projected off the
+face) and the same constants. Variant A is that port unchanged.
+
+One finding from the port: the froth's `along.y*0.35` was meant to stretch
+it down the fall, but it never could. On a vertical face the radial lies in
+the face's own plane, so it is already read at 5x through `tangent_u` and
+`tangent_v`. The 0.35 term adds about 0.1% to the noise's rate down the face.
+The approved blotches are round for that reason. B stretches that real look.
+
+| Variant | What it is | Game change to port it |
+| --- | --- | --- |
+| A Today | dc0c5cb as it is | none |
+| B Stretched | the same pattern, its height below the lip divided by `stretch` (default 2.0, range 1-4); a speed multiplier on the froth's time terms (default 1.0) | in the froth branch, read the noise at `p' = advected - radial*(h*(1 - 1/FALL_STRETCH))`, where `h` is the height above the lip's top (the mesher puts the lip height, or the metres under the lip it already writes in `flow_uv.z`, on each vertex). Multiply `time` by `FALL_FROTH_SPEED` in `advected`'s radial term and in the `+ time*0.6` term for the froth only |
+| C Leaning | B on a sheet that leans out along the flow: offset `lean * profile(depth/drop)` with `profile(u) = (sqrt(u+0.05) - sqrt(0.05)) / (sqrt(1.05) - sqrt(0.05))`, default lean 0.8 m; nothing above the lip's ground moves, so the top and the sheet share their rim vertices (no gap) | `water_flow.rs`: move each falling face's vertex out along the fall's flow direction by that offset, the same for every face at one depth (the column's corners stay joined). Carry the unmoved position as one more vertex attribute and read the froth there, so the pattern is B's, bent |
+| D Lip + speed-up | C, plus one amount (default 0.5): (1) the froth is read on one frame per fall (the face toward the flow) at the point where the flow leaves the falling cell, so the top and the face are one pattern across the edge; (2) the top whitens over its last 1.5 m (`smoothstep(-1.5, 0, s)*amount`); (3) the path below the lip is warped to time of flight, `c(s) = mix(s, (sqrt(1 + 2*3*s) - 1)/3, amount)` (1 m/s at the lip, 3 m/s^2), so the blotches lengthen as the water speeds up; on the top, `c = s - 0.6*amount*s^2` | mesher: per top vertex, the ray from the source cell's centre to where it leaves the falling cell (exit point and signed distance `s`), and per face vertex `s` = metres under the lip; shader: the froth's noise point `(exit.x, lip - c(s)/stretch, exit.z)` in body space, the ramp on tops |
+
+Splash and mist (every variant, toggle): drops and a mist sized by the fall's
+height H. There are about 26H drops and 7H mist puffs, thrown at
+`sqrt(H)`-scaled speeds. They start on the open side of the column, past the
+hex's corner radius from the leaned foot. They are never drawn below the
+pool's surface + 5 cm ("only outside"). Rain rings are multiplied by
+`smoothstep(0.7, 0.95, horizontal)` on the face's own normal, as in the game,
+so no falling face takes any.
+
+What the mockup does not port: the game's light and tone mapping (the
+sand, sky light and white are matched to the screenshot by eye), the
+screen-space reflection, the refraction offset, the distance fog and the
+game's sky light per vertex (a depth ramp stands in). The noise is read at
+a stand-in body position (a 2400 m planet at the capture's 24.1 N), so A
+draws the game's kind of blotches, not the same ones in the same places.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With
