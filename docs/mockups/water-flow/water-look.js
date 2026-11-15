@@ -210,7 +210,7 @@ function simWater(W, LQ, o = {}) {
       if (!t.fall) for (const [dq, dr] of DIRS) { const n = tops.get((t.q + dq) + "," + (t.r + dr)); if (!n || n.head >= t.head - 0.02) continue;
         const dx = hx(t.q + dq, t.r + dr) - X, dz = hz(t.r + dr) - Z, l = Math.hypot(dx, dz) || 1, w = Math.min(1, t.head - n.head); fx += dx / l * w; fz += dz / l * w; }
       const m = Math.hypot(fx, fz), sp = Math.min(0.9, m * 0.9);
-      cells.set(key, {wl: t.wl, y: t.y, flow: m > 1e-4 ? [fx / m * sp, fz / m * sp] : [0, 0]});
+      cells.set(key, {wl: t.wl, y: t.y, head: t.head, flow: m > 1e-4 ? [fx / m * sp, fz / m * sp] : [0, 0]});
     }
     if (SW.mesh) { W.scene.remove(SW.mesh); SW.mesh.geometry.dispose(); }
     SW.mesh = makeCaps(W, cells, Object.assign(SW.mat ? {mat: SW.mat} : Object.assign({amp: 0.01, mud: 0, minA: 0.78}, o.caps), {lower: o.lower, minStep: 0.07}));
