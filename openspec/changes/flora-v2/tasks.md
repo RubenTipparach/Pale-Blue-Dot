@@ -83,3 +83,4 @@ The owner, 2026-11-15: "finish up fishing wiki, herding, and flora". Cloud sessi
 - [ ] 9.4 Snow on the branches (12.3). Verify: `winter_cover` core test and its WGSL twin; a winter capture of a tundra pine and a fields oak beside summer.
 - [ ] 9.5 Vines (12.4). Verify: core tests (a vine hangs from an anchor, no longer than the trunk); a jungle capture.
 - [ ] 9.6 Fruit to pick (12.5): goods and icons, `flora::fruit_of`, E on a tree, the `fruit` record, the picked and felled bits. Verify: a test that a picked tree gives nothing until it regrows and that the record survives a reload; captures of a tree before and after picking, and a felled tree gone.
+- [ ] 9.7 The ground follows the seasons (12.6): `ground_season` in the core, the grass top, the sod lip and the tufts tinted dry and frosted by it in the surface shader. Verify: a test holding the WGSL constants to the core's; captures at one fields spot and forest edge at `--day 2`, `27` and `52`, side by side.

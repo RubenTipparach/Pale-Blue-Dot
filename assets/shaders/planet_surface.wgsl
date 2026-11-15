@@ -2261,7 +2261,8 @@ fn flora_albedo(input: VertexOut, albedo_in: vec3<f32>, grain: f32, variation: f
     }
     if !(leafy || grass) { return albedo; }
     let season = season_at(normalized(input.position));
-    if grass { albedo = mix(albedo, STRAW*(0.7 + 0.6*grain)*variation, season.z*0.65); }
+    // The tufts and blades dry with the ground under them (design 12.6).
+    if grass { albedo = mix(albedo, STRAW*(0.7 + 0.6*grain)*variation, ground_season(normalized(input.position)).x*0.65); }
     if leafy && params.flora_biome[biome].w > 0.5 {
         // Autumn: a texel at a time turns gold, orange or red, more of them
         // as the season deepens; winter fades the prism's leaves toward
@@ -2541,6 +2542,26 @@ fn tree_autumn(albedo: vec3<f32>, tree: f32, card: f32, turn: f32) -> vec3<f32> 
     let k = h12(vec2(floor(tree*97.0), floor(card*61.0)));
     let aut = mix(vec3(0.46, 0.10, 0.025), vec3(0.66, 0.34, 0.04), k)*(0.55 + lum*2.6);
     return mix(albedo, aut, turn*smoothstep(0.1, 0.6, k + 0.35));
+}
+
+// The ground follows the seasons (design 12.6): `pbd_core::flora::
+// ground_season`, the trees' calendar. A grass texel keeps its own light and
+// dark; dry multiplies its luminance into the dried-grass ochre, frost lifts
+// it toward a pale rime. x dry, y frost.
+const GROUND_DRY = vec3<f32>(1.25, 1.0, 0.45);
+const GROUND_FROST = vec3<f32>(0.8, 0.84, 0.9);
+const GROUND_DRY_MIX: f32 = 0.6;
+const GROUND_FROST_MIX: f32 = 0.45;
+fn ground_season(radial: vec3<f32>) -> vec2<f32> {
+    let s = season_at(radial);
+    return vec2(max(s.z, s.y), s.y*smoothstep(SNOW_COLD.x, SNOW_COLD.y, abs(radial.y)));
+}
+fn ground_tint(albedo: vec3<f32>, radial: vec3<f32>) -> vec3<f32> {
+    let g = ground_season(radial);
+    if g.x <= 0.0 && g.y <= 0.0 { return albedo; }
+    let lum = dot(albedo, vec3(0.299, 0.587, 0.114));
+    let dried = mix(albedo, lum*GROUND_DRY, g.x*GROUND_DRY_MIX);
+    return mix(dried, GROUND_FROST*(0.6 + 0.8*lum), g.y*GROUND_FROST_MIX);
 }
 
 // Snow on the branches (design 12.3): `pbd_core::flora::winter_cover`, the
@@ -3500,6 +3521,12 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let up = dot(n, radial);
     if cap == BLOOM_CODE { albedo = vec3(0.55, 0.90, 0.82)*(0.75 + 0.5*grain); }
     albedo = flora_albedo(input, albedo, grain, cell_variation);
+    // Design 12.6: the ground's grass (a top, the sod lip down a column's
+    // side, a terrace) dries and frosts with the season.
+    if (input.kind == 0u || input.kind == 1u || input.kind == 4u)
+        && (code == 2u || code == 3u || code == 7u || code == GRASS_SIDE_CODE) {
+        albedo = ground_tint(albedo, normalized(input.position));
+    }
     // Design 9.4: the year's fallen leaves, in the cap's own texels.
     if input.kind == 0u && cap != 0u {
         albedo = fallen_leaves(input, albedo);

@@ -483,6 +483,36 @@ pub fn winter_cover(year_fraction: f64, latitude_sin: f32) -> f32 {
         * smooth(SNOW_COLD[0], SNOW_COLD[1], latitude_sin.abs())
 }
 
+/// The ground's season (`flora-v2` design 12.6): the dried-grass ochre a
+/// grass texel's luminance is multiplied into, the frost it lifts toward, and
+/// how far each is mixed in. `planet_surface.wgsl`'s `GROUND_*` constants are
+/// the same numbers, which a test holds.
+pub const GROUND_DRY: [f32; 3] = [1.25, 1.0, 0.45];
+pub const GROUND_FROST: [f32; 3] = [0.80, 0.84, 0.90];
+pub const GROUND_DRY_MIX: f32 = 0.6;
+pub const GROUND_FROST_MIX: f32 = 0.45;
+
+/// How the ground's grass stands at a place (design 12.6), each 0..1.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GroundSeason {
+    /// Dried toward straw: through autumn and winter, gone by spring.
+    pub dry: f32,
+    /// A light rime: midwinter where it is cold.
+    pub frost: f32,
+}
+
+/// The ground's season from the trees' calendar ([`season_at`]): `dry` the
+/// larger of the straw and the bare months, `frost` the bare months times the
+/// cold of the latitude ([`SNOW_COLD`]). None in the tropics. Draw-time only:
+/// no cell changes.
+pub fn ground_season(year_fraction: f64, latitude_sin: f32) -> GroundSeason {
+    let s = season_at(year_fraction, latitude_sin);
+    GroundSeason {
+        dry: s.straw.max(s.bare),
+        frost: s.bare * smooth(SNOW_COLD[0], SNOW_COLD[1], latitude_sin.abs()),
+    }
+}
+
 /// How much of the year's fall lies on the ground at `local` (0 a place's
 /// midsummer), 0..1: landing through autumn, thinned to [`LITTER_WINTER`] by
 /// midwinter, gone before spring.
@@ -786,6 +816,47 @@ mod tests {
         );
         let picked = FruitPicked { day: 10.0, took: 3 };
         assert!(picked.bare_at(17.9) && !picked.bare_at(18.0));
+    }
+
+    /// The ground follows the trees' calendar (design 12.6): green in
+    /// summer and spring, dry through autumn and winter, frosted only in a
+    /// cold winter, never in the tropics; and the WGSL is the same numbers.
+    #[test]
+    fn the_ground_follows_the_seasons() {
+        let north_40 = 0.643;
+        let summer = ground_season(0.0, north_40);
+        assert!(summer.dry < 0.05 && summer.frost == 0.0, "{summer:?}");
+        let autumn = ground_season(0.35, north_40);
+        assert!(autumn.dry > 0.3 && autumn.frost == 0.0, "{autumn:?}");
+        let winter = ground_season(0.5, north_40);
+        assert!(winter.dry > 0.9, "{winter:?}");
+        assert!(
+            winter.frost > 0.1 && winter.frost < 0.6,
+            "a light frost at 40: {winter:?}"
+        );
+        assert!(ground_season(0.5, 0.8).frost > 0.9, "full rime at 53");
+        assert!(
+            ground_season(0.75, north_40).dry < 0.05,
+            "green again by spring"
+        );
+        let tropic = ground_season(0.5, 0.05);
+        assert_eq!(
+            (tropic.dry, tropic.frost),
+            (0.0, 0.0),
+            "no seasons on the equator"
+        );
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        let v3 = |c: [f32; 3]| format!("vec3<f32>({:?}, {:?}, {:?})", c[0], c[1], c[2]);
+        for line in [
+            format!("const GROUND_DRY = {};", v3(GROUND_DRY)),
+            format!("const GROUND_FROST = {};", v3(GROUND_FROST)),
+            format!("const GROUND_DRY_MIX: f32 = {:?};", GROUND_DRY_MIX),
+            format!("const GROUND_FROST_MIX: f32 = {:?};", GROUND_FROST_MIX),
+            "return vec2(max(s.z, s.y), s.y*smoothstep(SNOW_COLD.x, SNOW_COLD.y, abs(radial.y)));"
+                .to_string(),
+        ] {
+            assert!(shader.contains(&line), "the shader no longer says `{line}`");
+        }
     }
 
     /// Snow lies on the branches only in a cold winter: none in summer, none

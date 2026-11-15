@@ -785,7 +785,55 @@ vine hangs from an anchor and that no vine is longer than the trunk is tall.
   changes. Fruit decided by the generator's table is derived and never saved;
   only what a player took is.
 
-### 12.6 What this pass leaves
+### 12.6 The ground follows the seasons
+
+The owner, 2026-11-15: "winter isn't changing terrain texture". A winter
+capture of the fields (`--day 52`) shows the deciduous trees bare, a few
+yellow leaves left, over ground still summer green: grass tops, tufts and
+terraces as in July.
+
+**Finding.** Section 5 put the season on the plants only: the tufts and
+blades mix toward straw by `straw`, the leaves turn and fall. The ground's
+own faces (the grass top tile, the green sod lip down a column's side, the
+terrace steps) are drawn from the atlas with no season at all, and at
+midwinter `straw` (a bump at 0.47 of the year, 0.22 wide) is already
+falling, so even the tufts are greener than the trees above them.
+
+**Change** (draw-time only: derived, never saved, no generator version, no
+save change):
+
+- **One calendar.** `pbd_core::flora::ground_season(year_fraction,
+  latitude_sin) -> GroundSeason { dry, frost }` reads `season_at`, the trees'
+  calendar. `dry` rises through autumn and holds through winter (the larger
+  of `straw` and `bare`), and is gone by spring. `frost` is `bare` times the
+  cold of the latitude, the snow-on-branches ramp (`SNOW_COLD`, 35 to 50
+  degrees). Both scale by the tropic strength, so the equator and the
+  tropics never change. The desert, beach sand, rock and snow tops are not
+  grass and are never tinted.
+- **The tint keeps the tile's palette.** A grass face's texel keeps its own
+  light and dark: the season moves its hue, not its pattern. Dry
+  multiplies the texel's luminance into the dried-grass ochre
+  (`GROUND_DRY`), mixed in by `dry × 0.6`. Frost lifts it toward a pale
+  blue-grey (`GROUND_FROST`) by `frost × 0.45`, a light rime and never a
+  white sheet. No outline; the tufts' straw follows the same `dry`, so
+  ground and tufts move together.
+- **Where.** The grass top faces (codes 2, 3, 7, the swamp's 7 included),
+  the grass sod lip on a column's side (`GRASS_SIDE`), and the tufts and
+  blades (their straw now follows `dry` instead of the narrower `straw`).
+- **The winter sod lip** (9.9) follows: the green lip on a column side
+  takes the same dry and frost as the top above it, so a cold winter's
+  terrace is dull and frosted, not a green band.
+- **No seasonal snow cover.** The game's climate lays no snow on the
+  ground by season (snow is the generator's material), so none is invented
+  here; frost is the most a cold winter shows.
+- **Held together.** The WGSL `ground_season` mirrors the core's numbers;
+  a test reads the shader's constant lines against `GROUND_DRY`,
+  `GROUND_FROST` and the mixes, as the season test does.
+- **Verified** with captures at the same fields spot and forest edge at
+  `--day 2` (summer), `--day 27` (autumn) and `--day 52` (winter), side by
+  side.
+
+### 12.7 What this pass leaves
 
 - The forest-and-clearing noise (12.2), alien species, the desert palm, the
   fungal forest.
