@@ -709,6 +709,9 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         path_length = min(path_length,max(length(background-view.camera_time.xyz)-camera_distance,0.0));
         depth_under = max(length(in.body_position)-length(background-view.planet_center.xyz),0.0);
     }
+    // A wall of the game's water is a cell or two thick, however far the
+    // ground behind it is: the light crosses that much water, not the view.
+    if (in.kind >= 2u) { path_length = min(path_length, 2.0); depth_under = min(depth_under, 1.0); }
     let absorption = max(view.absorption.rgb,vec3<f32>(0.));
     // Seen from below: decided by where the camera is, not by the polygon's
     // winding. The swell tilts a 2.8 m cap by several degrees, more than the
@@ -725,7 +728,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         below = dot(view.camera_time.xyz - in.local_position, face) < 0.0;
         // Its back seen from dry air is the inside of a block of water the
         // eye is not in: the face toward the eye draws it, this one does not.
-        if (below && view.fx.y < 0.25) { discard; }
+        if (below && view.fx.y < 0.75) { discard; }
     }
     if (below) {
         // Seen from below: the murk by camera distance, and Snell's window.

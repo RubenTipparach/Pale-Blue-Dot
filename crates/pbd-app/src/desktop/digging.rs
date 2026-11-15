@@ -469,7 +469,8 @@ pub fn dig_and_place(
         Option<ResMut<pbd_app::held::Swinging>>,
         ResMut<Drops>,
         Res<pbd_app::sky::Sun>,
-        ResMut<pbd_app::husbandry::AimedGround>,
+        // Absent in a still capture, which has no husbandry.
+        Option<ResMut<pbd_app::husbandry::AimedGround>>,
     ),
     (mut note, farm, mut gained, mut planted, gather, effects, mut did): (
         ResMut<super::farm::FarmNote>,
@@ -481,7 +482,9 @@ pub fn dig_and_place(
         MessageWriter<pbd_app::missions::Did>,
     ),
 ) {
-    ground.0 = None;
+    if let Some(ground) = ground.as_mut() {
+        ground.0 = None;
+    }
     // The tool in hand chops while a block is being broken: last frame's
     // answer, a frame behind, which nobody can see.
     let breaking = mining.progress().is_some();
@@ -563,7 +566,9 @@ pub fn dig_and_place(
     }
     // Where the ray met the ground, for a fence piece's edge
     // (`animal-husbandry` S12).
-    ground.0 = target.map(|t| eye + look * t.distance);
+    if let Some(ground) = ground.as_mut() {
+        ground.0 = target.map(|t| eye + look * t.distance);
+    }
     let clicked =
         buttons.just_pressed(MouseButton::Left) || buttons.just_pressed(MouseButton::Right);
     let Some(target) = target else {
@@ -776,7 +781,11 @@ pub fn dig_and_place(
             {
                 info!(
                     "{} cell {cell} layer {layer} with the bucket",
-                    if full { "poured into" } else { "took water from" }
+                    if full {
+                        "poured into"
+                    } else {
+                        "took water from"
+                    }
                 );
             }
             return;

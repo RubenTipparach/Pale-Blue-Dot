@@ -614,7 +614,11 @@ mod tests {
         let book = file.resolve().unwrap();
         assert_eq!(book.at("forge").count(), 2);
         assert_eq!(book.at("hand").count(), 3);
-        assert_eq!(book.at("workbench").count(), 12, "with the bucket (water-flow E11)");
+        assert_eq!(
+            book.at("workbench").count(),
+            12,
+            "with the bucket (water-flow E11)"
+        );
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));
         assert_eq!(item_named("coal"), Some(Item::Good(Good::COAL)));
         assert_eq!(item_named("unobtainium"), None);

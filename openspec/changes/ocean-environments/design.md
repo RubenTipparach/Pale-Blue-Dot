@@ -463,6 +463,36 @@ the spill) and breaches (0 sticks, 8 cells of water, settled in 26 ticks);
 `-before` is M28's own page, its `-after` this tab; `merged-into-m25.jpg` in
 `docs/screenshots/mockup-water-flow/` is the page M28 now is.
 
+### 13. Rivers and marsh pools in the game: generator version 8 (proposed, 2026-11-15)
+
+Written for the lead's second pass on `claude/env-water`; not built there
+(see B8). Version 8 is version 7 (the sea's places) with fresh water on
+cells, for new worlds only; versions 4 to 7 keep their digests.
+
+- **What a column can know.** A column is a pure function of its
+  direction, so a river's level cannot come from a drainage walk at build:
+  two tiers would disagree at their seam. The level must be a field: the
+  river channel's own carve (`river_channel`, version 6) gives where a
+  river is; version 8 adds its *stage*, the altitude of its water, as a
+  function of the channel's distance to the sea along the river field's
+  gradient, quantised so a reach is level and steps one layer at most four
+  cells apart (design 12, "what the rule asks of a river").
+- **What is generated.** In a channel cell above sea level, the bed is
+  carved to the stage less two, the layer under the stage is sources (still
+  water, as design 12 has it), and a reach's lip one layer deep. Springs are
+  the channel's upper ends. Marsh pools are sources in basins whose rim
+  stands a layer over them (`Marsh` biome cells whose low-pass height is a
+  local minimum).
+- **What flows.** Only edits start water moving (`water-flow` decision 5),
+  so a generated river is still sources at each reach until a player digs
+  beside it; the flowing layer between reaches that M25 shows is the rule
+  settled from those sources, which the game would run, bounded and not
+  saved, at build over channel cells only. Whether that settle is worth a
+  rebuild's milliseconds is the measurement that comes first.
+- **Tests.** Version 7's digest unchanged; a version 8 digest; every river
+  cell's stage never rises toward the sea; an old save opens on its own
+  version.
+
 ## In the engine, part by part
 
 | Part | Today | New | Config |
@@ -847,6 +877,12 @@ sheet, or a world whose weather has run into a real storm; not done.
   first tick (under 1 m over the 125 m open floor, as before). Not found
   yet; the test is held on the deepest open sea (126 m and less) with a
   note, and the trench case is open.
+
+### B8. The second pass on `claude/env-water` (2026-11-15)
+
+Tides are built (5.1). Rivers and marsh pools (8.1, 8.3) are written up as
+decision 13 and not built: the stage field is the design work they need,
+and it was not done in the time. The beaver colony (8.2) waits for them.
 
 ## Recommendations taken (ask only with screenshots)
 

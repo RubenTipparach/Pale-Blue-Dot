@@ -13,3 +13,16 @@ its own, so it stays here.
 - **WHEN** a walker stands in a flowing cell
 - **THEN** the walker's water depth is the flowing cell's surface over its
   floor
+
+### Requirement: A wooden bucket takes and pours a source
+
+An empty bucket SHALL take a water source and only a source; a full bucket
+SHALL pour a source into air and nowhere else, each as one edit with the
+bucket's change on the same line. The rule is proven by
+`a_bucket_takes_a_source_and_pours_into_air`; the place path is not yet.
+
+#### Scenario: Carrying water up a hill
+
+- **WHEN** a player fills a bucket at a pool and pours it on a hillside
+- **THEN** the pool's cell is air, the hillside cell is a source, and the
+  water runs from it by the rule

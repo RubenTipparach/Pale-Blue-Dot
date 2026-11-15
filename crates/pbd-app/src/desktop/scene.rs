@@ -163,6 +163,7 @@ pub fn setup(
 
 /// The moon on its orbit, in the system frame, carried into the planet's by
 /// the spin: it crosses the sky as the planet turns under it, as the sun does.
+#[allow(clippy::too_many_arguments)]
 pub fn move_moon(
     time: Res<pbd_app::SimulationClock>,
     frame: Res<pbd_app::PhysicsFrame>,

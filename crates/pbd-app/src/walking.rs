@@ -1100,7 +1100,10 @@ impl Sea<'_> {
     /// The sheet the water pass draws over a direction: the mean sea, less
     /// the sheet's offset, plus the tide there.
     fn sheet_radius(&self, direction: Vec3) -> f32 {
-        let tide = self.sea.as_deref().map_or(0.0, |sea| sea.tide_at(direction));
+        let tide = self
+            .sea
+            .as_deref()
+            .map_or(0.0, |sea| sea.tide_at(direction));
         PLANET_RADIUS - self.settings.depth_offset_m + tide
     }
 
@@ -1124,7 +1127,13 @@ impl Sea<'_> {
             .map(probe)
             .collect::<Vec<_>>();
         let surface = if in_column.iter().all(Option::is_some) {
-            match in_column.iter().flatten().flatten().copied().reduce(f32::max) {
+            match in_column
+                .iter()
+                .flatten()
+                .flatten()
+                .copied()
+                .reduce(f32::max)
+            {
                 // The sea's water reaches sea level: its surface is the sheet.
                 Some(top) if top >= sea_level - 0.01 => Some(sheet),
                 Some(top) => Some(top),

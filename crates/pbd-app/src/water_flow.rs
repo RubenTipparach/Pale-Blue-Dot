@@ -400,7 +400,10 @@ pub fn liquid_mesh(
                 // Each triangle lit by its own slope, so a top running down to
                 // a sheet's edge reads as water tilted, not a mirror on edge.
                 for i in 0..degree {
-                    let (p, q) = (at(corners[i], levels[i]), at(corners[(i + 1) % degree], levels[(i + 1) % degree]));
+                    let (p, q) = (
+                        at(corners[i], levels[i]),
+                        at(corners[(i + 1) % degree], levels[(i + 1) % degree]),
+                    );
                     let mut n = (p - middle).cross(q - middle).normalize_or(centre);
                     if n.dot(centre) < 0.0 {
                         n = -n;
@@ -632,5 +635,4 @@ mod tests {
             0.5
         );
     }
-
 }
