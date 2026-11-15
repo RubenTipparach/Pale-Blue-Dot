@@ -601,3 +601,38 @@ Built on `claude/env-trees` (2026-11-15); captures and an honest read in
 - The mockup's per-plant colour variation and baked canopy occlusion: the
   game lights the trees with its own sun, sky, shadow cascades and voxel
   field instead.
+
+## 11. The crops and wild plants in the world's style
+
+The owner, 2026-11-15: *"I see some plants are still using the old sprites, so
+please get new sprites that have a more unified art style"*.
+
+**Finding.** Every other plant in the world is drawn by the shaders: tufts,
+flowers, ferns, mushrooms, fallen leaves and the detailed trees. The only plant
+sprites left are the farm's: the four stages of each crop
+(`assets/items/crops/<crop>_<stage>.png`), which also draw the wild plants (a
+wild plant is its crop's ripe stage on the wild clump mesh). These are still
+M8's outlined stages: a 1 px ink ring, dark seams between parts and near-black
+shadow tones. That is the look the "No outlines in the world; one art style"
+rule (CLAUDE.md, owner 2026-11-15) keeps to UI icons.
+
+**The art already exists and is approved.** `docs/mockups/farming/world_art.py`
+draws each stage again from M8's own drawing functions, for the world:
+- no outline ring and no seams;
+- each near-black ramp tone lifted one step.
+
+It writes the stages to `docs/mockups/farming/world/` and to M13's
+`foliage/crops/`. M8's plot and M13's "Crops and gardens" layer both draw
+them, and the owner approved M13. They are 32 px, like the game's.
+
+**Change.**
+- **Art:** copy the 16 stages (wheat, turnip, chili, frost kale) byte for byte
+  over the game's.
+- **Same in the game:** the meshes, sizes, alpha cut-out, the wild plant's
+  ripe stage, and every saved plot and picked record.
+- **Icons:** the goods and seed icons stay outlined, because they are UI.
+- **The forge's flame:** `flame.png` is fire, not a plant, and stays.
+
+**Not plants, still outlined.** The light sprites in `assets/items/lights`
+(campfire, torch, brazier) are outside this request. They are listed here
+for a later pass.

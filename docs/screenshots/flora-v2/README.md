@@ -114,3 +114,20 @@ birch 1584, kapok 588, palm 492, acacia 696, pine 6126, willow 1296, cactus
 holds about 390); every tree past them is 30 vertices (mid cards and
 billboard), down from the prisms' 258; the sun cascades draw the near trees
 as well.
+
+## The crops and wild plants in the world's style (task 8.1, 2026-11-15)
+
+The M4 Max Mac, the fast build. Each shot is a `--capture` run on a new world:
+`--walk --spawn fields --weather-at 1800 --time 10 --grass tufts`. The tufts
+are what players see, while captures default to the blades.
+
+| file | flags | what it shows |
+| --- | --- | --- |
+| `crops-before-field.jpg`, `crops-after-field.jpg` | `--yaw 270 --pitch -24 --farm 6` | Wheat and turnip at all four stages, and a wild wheat and chili at the right. Before: M8's outlined stages, with ink rings, dark seams and near-black shadows. After: the outline-free world stages that M8 and M13 draw. |
+| `crops-field-crop.jpg` | | The same rows enlarged, before above and after below. |
+| `crops-before-wild.jpg`, `crops-after-wild.jpg` | `--yaw 110 --pitch -12` | A wild frost kale on the terrace and a wild chili above it. They are small at this distance. |
+
+Read: the crops no longer sit on top of the ground as outlined stickers. They
+share the tufts' and the trees' soft edges. The goods and seed icons in the
+hotbar and pack keep their outline, because they are UI. The floating seed
+sack is a dropped item, and a dropped item is an icon.

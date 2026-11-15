@@ -66,3 +66,9 @@ The owner, 2026-11-15: "why didnt you implement new trees for env 2". Built on `
 - [x] 7.6 Cacti as desert scenery (not choppable). Verify: `grows_tree` unchanged (its test); capture.
 - [x] 7.7 Checks: fmt, clippy, pbd-core and pbd-app tests, `openspec validate --all`.
 - [ ] 7.8 Not built (design 10.8): vines, the alien species, the desert palm, snow on branches. Not seen: the acacia (no beach cell grows a tree) and the swamp's willows (not caught in a capture).
+
+## 8. The crops and wild plants in the world's style (design 11)
+
+The owner, 2026-11-15: "I see some plants are still using the old sprites, so please get new sprites that have a more unified art style".
+
+- [x] 8.1 Copy `docs/mockups/farming/world/<crop>_<s>.png` (M8's outline-free world stages, the same bytes as M13's `foliage/crops/`) over `assets/items/crops/`; PROVENANCE says so. Verify: `farm::tests::every_stage_has_its_sprite`; a byte comparison with the mockup's copies; `--farm` captures before and after, the field and a wild plant.
