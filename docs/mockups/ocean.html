@@ -201,6 +201,8 @@ tr:last-child td{border-bottom:0}
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="ocean/creatures3d.js?v=1"></script>
+<script src="water-flow/liquid.js?v=1"></script>
 <script>
 "use strict";
 // ======================= the places =======================
@@ -337,6 +339,7 @@ function setTab(t, push = true) {
 // built the first time its tab opens. Only the open tab draws; on a 2D tab the loop stops.
 let RENDERER = null, CANVAS = null, ACTIVE = null, RAF = 0, LAST = 0, CLOCK0 = performance.now();
 const BUILT = {};
+const ANIM = {t: 0, dt: 0.016};   // the open scene's clock, for the creatures' own motion
 const TEXC = {};
 const MAXL = 40;
 function tex(path, rep = 1) {   // nearest, no mipmaps; world-metre UVs, rep the metres one repeat covers
@@ -394,7 +397,7 @@ function loop(now) {
   RAF = requestAnimationFrame(loop);
   if (!ACTIVE) return;
   const dt = Math.min(0.06, (now - LAST) / 1000); LAST = now;
-  const S = ACTIVE; S.t += dt;
+  const S = ACTIVE; S.t += dt; ANIM.t = S.t; ANIM.dt = dt;
   S.cam.step(dt);
   S.update(S.t, dt);
   S.render();
@@ -443,6 +446,23 @@ function Cam(camera) {
 // water the light from above fades with depth (per colour, red first), the bed carries caustics, and the view is
 // absorbed and scattered along the part of its path that runs through water. The water level comes from a baked map,
 // so a river's steps and a rock pool above the sea are water at their own height.
+// How a body sways, in its own model space, in the vertex shader: a swimmer from the tail (head +x, one unit long),
+// an eel along its length, a stalk or a tentacle from its foot (+y). The phase comes from where the body is, so a
+// school of instances never moves in step.
+const SWAY_HEAD = `
+#ifdef USE_INSTANCING
+  vec3 swP = (modelMatrix * instanceMatrix[3]).xyz;
+#else
+  vec3 swP = modelMatrix[3].xyz;
+#endif
+  float swPh = swP.x * 1.7 + swP.z * 1.3 + swP.y * 0.7;
+`;
+const SWAY = {
+  fish: `{ float w = clamp((0.3 - transformed.x) / 0.8, 0.0, 1.0); transformed.z += sin(uTime * 7.0 + swPh - transformed.x * 6.0) * 0.075 * w * w; }`,
+  eel: `{ float w = clamp((0.55 - transformed.x) / 1.0, 0.15, 1.0); transformed.z += sin(uTime * 3.5 + swPh - transformed.x * 13.0) * 0.06 * w; }`,
+  stalk: `{ float w = max(transformed.y, 0.0); w *= w; transformed.x += sin(uTime * 1.3 + swPh + transformed.z * 3.0) * 0.07 * w; transformed.z += cos(uTime * 1.1 + swPh * 1.3 + transformed.x * 3.0) * 0.05 * w; }`,
+  tent: `{ float w = max(transformed.y, 0.0); w *= w; transformed.x += sin(uTime * 1.6 + swPh + transformed.z * 9.0 + transformed.y * 4.0) * 0.55 * w; transformed.z += cos(uTime * 1.3 + swPh + transformed.x * 9.0 + transformed.y * 3.0) * 0.45 * w; }`,
+};
 function World(stage, opts) {
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(opts.fov || 55, 1, 0.1, opts.far || 1500);
   const U = {uLampPos: {value: Array.from({length: MAXL}, () => new THREE.Vector3())}, uLampCol: {value: Array.from({length: MAXL}, () => new THREE.Vector4())}, uLampCount: {value: 0},
@@ -450,11 +470,12 @@ function World(stage, opts) {
     uK: {value: new THREE.Vector3()}, uKd: {value: new THREE.Vector3()}, uKs: {value: 0.03}, uWCol: {value: new THREE.Color()}, uCaust: {value: 1}, uTime: {value: 0},
     uHaze: {value: new THREE.Color()}, uFogR: {value: new THREE.Vector2(150, 900)}, uDay: {value: 1}, uCamWL: {value: -1000}, uUnder: {value: 0}};
   const W = {scene, camera, U, LAMPS: [], t: 0, stage, opts, cam: Cam(camera), seas: [], glow: [], timeHooks: [], water: WATERS[opts.water || "ocean"]};
-  W.lit = (mat, basic) => {
+  W.lit = (mat, basic, lo = {}) => {
     mat.fog = false;
+    const sway = lo.sway && SWAY[lo.sway] ? lo.sway : "";
     mat.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, U);
-      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vWP;").replace("#include <project_vertex>", `#include <project_vertex>
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vWP;\nuniform float uTime;").replace("#include <begin_vertex>", "#include <begin_vertex>\n" + (sway ? SWAY_HEAD + SWAY[sway] : "")).replace("#include <project_vertex>", `#include <project_vertex>
   #ifdef USE_INSTANCING
     vWP = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
   #else
@@ -514,7 +535,7 @@ float wlAt(vec2 p) {
   }
   #include <tonemapping_fragment>`);
     };
-    mat.customProgramCacheKey = () => basic ? "pbdb" : "pbd";
+    mat.customProgramCacheKey = () => (basic ? "pbdb" : "pbd") + sway;
     return mat;
   };
   W.std = o => W.lit(new THREE.MeshStandardMaterial(Object.assign({roughness: 0.95, metalness: 0}, o)));
@@ -633,13 +654,14 @@ function card(W, map, w, h, o = {}) {
 // a side card turned about its heading so it faces the eye, dorsal up; a crawler laid flat and turned to its heading
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _m4 = new THREE.Matrix4();
 function faceAlong(m, pos, head, cam) {
+  if (m.userData.c3) { C3.orient(m, pos, head, ANIM.t, ANIM.dt); return; }   // a 3D creature: upright along its heading
   m.position.copy(pos);
   const x = _v1.copy(head).normalize(), toC = _v2.copy(cam).sub(pos);
   let z = toC.sub(_v3.copy(x).multiplyScalar(x.dot(toC))); if (z.lengthSq() < 1e-6) z.set(0, 0, 1); z.normalize();
   let y = new THREE.Vector3().crossVectors(z, x); if (y.y < 0) { z.negate(); y.negate(); }
   _m4.makeBasis(x, y, z); m.quaternion.setFromRotationMatrix(_m4);
 }
-function flatAlong(m, pos, yawRad) { m.position.copy(pos); m.rotation.set(0, yawRad, 0); }
+function flatAlong(m, pos, yawRad) { m.position.copy(pos); m.rotation.set(0, yawRad, 0); if (m.userData.c3) C3.animate(m, ANIM.t); }
 // glowing things: brighter at night
 function glowHook(W) { W.cards = W.cards || []; W.timeHooks.push((n, T) => { W.glow.forEach(m => m.emissiveIntensity = T.day > 0.6 ? 0.3 : 1.4 - T.day); W.cards.forEach(m => m.emissiveIntensity = 0.3 * T.day); }); }
 </script>
@@ -790,41 +812,50 @@ function makeCaps(W, cells, o = {}) {
 }
 
 // ======================= living things =======================
-// Schools swim round a moving centre; crawlers walk the bed between waypoints; each is a pixel card.
+// Every animal alive in a scene is a low-poly 3D model (ocean/creatures3d.js), never a card: the owner, 2026-11-15,
+// "ducks should be 3d, birds in general are 3d" and "all fish should also be 3d, unless they are caught". A school is
+// one InstancedMesh (one draw for the lot) whose bodies sway from the tail in the vertex shader; a swimmer is one
+// model turned along its path; a crawler walks the bed between waypoints. The one animal left as a 2D sprite is a
+// caught fish the player drops on the ground (dropCatch, below).
+const _sq = new THREE.Quaternion(), _sx = new THREE.Vector3(), _sy = new THREE.Vector3(), _sz = new THREE.Vector3(), _sm = new THREE.Matrix4(), _ss = new THREE.Vector3(), _UP = new THREE.Vector3(0, 1, 0);
+function headQuat(h, out) { _sx.copy(h); if (_sx.lengthSq() < 1e-10) _sx.set(1, 0, 0); _sx.normalize(); _sy.copy(_UP).addScaledVector(_sx, -_sx.y); if (_sy.lengthSq() < 1e-6) _sy.set(-_sx.y, _sx.x, 0); _sy.normalize(); _sz.crossVectors(_sx, _sy); _sm.makeBasis(_sx, _sy, _sz); return out.setFromRotationMatrix(_sm); }
 function school(W, sprite, n, size, centreFn, spread, o = {}) {
-  const map = spriteTex(sprite), list = [];
-  const mat = W.std({map, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1, emissive: o.glow ? new THREE.Color(o.glow) : 0x000000, emissiveMap: o.glow ? map : null, emissiveIntensity: 0});
-  if (o.glow) W.glow.push(mat); else { mat.emissive = new THREE.Color(0xffffff); mat.emissiveMap = map; mat.emissiveIntensity = 0.3; (W.cards || (W.cards = [])).push(mat); }
-  const geo = new THREE.PlaneGeometry(size, size);
-  for (let i = 0; i < n; i++) { const m = new THREE.Mesh(geo, mat); W.scene.add(m); list.push({m, off: new THREE.Vector3((rnd() - 0.5) * spread[0], (rnd() - 0.5) * spread[1], (rnd() - 0.5) * spread[2]), ph: rnd() * 6.28, sp: 0.8 + rnd() * 0.4, prev: new THREE.Vector3()}); }
-  const S = {list, mat, update(t, cam) {
+  const list = [], mesh = new THREE.InstancedMesh(C3.geo(sprite), C3.mat(W, sprite, {glow: o.glow}), n);
+  mesh.frustumCulled = false; W.scene.add(mesh); (W.instances || (W.instances = [])).push(mesh);
+  const sc = size * ((C3.SPEC[sprite] || {}).scale || 0.85) * (o.scale || 1);
+  for (let i = 0; i < n; i++) list.push({off: new THREE.Vector3((rnd() - 0.5) * spread[0], (rnd() - 0.5) * spread[1], (rnd() - 0.5) * spread[2]), ph: rnd() * 6.28, sp: 0.8 + rnd() * 0.4, k: 0.85 + rnd() * 0.3});
+  const p = new THREE.Vector3(), h = new THREE.Vector3(), wob = new THREE.Vector3();
+  const S = {list, mesh, update(t) {
     const c0 = centreFn(t), c1 = centreFn(t + 0.25), head = c1.clone().sub(c0);
-    for (const f of list) {
-      const wob = new THREE.Vector3(Math.sin(t * 1.3 * f.sp + f.ph) * 0.6, Math.sin(t * 0.9 + f.ph * 2) * 0.25, Math.cos(t * 1.1 * f.sp + f.ph) * 0.6);
-      const p = c0.clone().add(f.off).add(wob);
+    list.forEach((f, i) => {
+      wob.set(Math.sin(t * 1.3 * f.sp + f.ph) * 0.6, Math.sin(t * 0.9 + f.ph * 2) * 0.25, Math.cos(t * 1.1 * f.sp + f.ph) * 0.6);
+      p.copy(c0).add(f.off).add(wob);
       if (o.clampY) p.y = Math.min(p.y, o.clampY(p.x, p.z));
-      const h = head.clone().add(new THREE.Vector3(Math.cos(t * 1.3 * f.sp + f.ph) * 0.1, 0, -Math.sin(t * 1.1 * f.sp + f.ph) * 0.1));
-      if (h.lengthSq() < 1e-6) h.set(1, 0, 0);
-      faceAlong(f.m, p, h, cam);
-    }
+      h.copy(head).add(wob.set(Math.cos(t * 1.3 * f.sp + f.ph) * 0.1, 0, -Math.sin(t * 1.1 * f.sp + f.ph) * 0.1));
+      _ss.setScalar(sc * f.k); _sm.compose(p, headQuat(h, _sq), _ss); mesh.setMatrixAt(i, _sm);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
   }};
   return S;
 }
 function orbitPath(cx, cy, cz, rx, rz, w, dy = 0, ph = 0) { return t => new THREE.Vector3(cx + rx * Math.cos(t * w + ph), cy + dy * Math.sin(t * w * 2.3 + ph), cz + rz * Math.sin(t * w + ph)); }
+// a 3D creature in place of a card (the sprite name picks the model; size is the old card's)
+function creature(W, sprite, size, o = {}) { return C3.make(W, sprite, size, o); }
 // one swimmer on a path, turned along it
 function swimmer(W, sprite, size, pathFn, o = {}) {
-  const m = card(W, spriteTex(sprite), size, size * (o.aspect || 1), {glow: o.glow});
-  return {m, update(t, cam) { const p = pathFn(t), q = pathFn(t + 0.2); const h = o.upright ? new THREE.Vector3(cam.z - p.z, 0, p.x - cam.x) : q.clone().sub(p); if (h.lengthSq() < 1e-8) h.set(1, 0, 0); faceAlong(m, p, h, cam); if (o.after) o.after(m, t, p); }};
+  const m = creature(W, sprite, size, {glow: o.glow, pose: o.pose || "auto"});
+  return {m, update(t, cam) { const p = pathFn(t), q = pathFn(t + 0.2); const h = o.upright ? new THREE.Vector3(1, 0, 0) : q.clone().sub(p); if (h.lengthSq() < 1e-8) h.set(1, 0, 0); faceAlong(m, p, h, cam); if (o.after) o.after(m, t, p); }};
 }
 // a crawler on the bed: walks between random waypoints within a radius, pausing; crabs walk sideways
 function crawler(W, sprite, size, home, R, bedFn, o = {}) {
-  const m = card(W, spriteTex(sprite), size, size, {flat: true, glow: o.glow});
+  const m = creature(W, sprite, size, {glow: o.glow});
   const st = {p: home.clone(), goal: home.clone(), wait: rnd() * 3, yaw: rnd() * 6.28, sp: o.speed || 0.3};
   return {m, st, update(t, cam, dt) {
     if (o.hide && o.hide(st, cam, dt)) return;
+    let moving = false;
     if (st.wait > 0) st.wait -= dt;
-    else { const d = st.goal.clone().sub(st.p); d.y = 0; const L = d.length(); if (L < 0.1) { st.goal.set(home.x + (rnd() - 0.5) * 2 * R, 0, home.z + (rnd() - 0.5) * 2 * R); st.wait = 1 + rnd() * 3; } else { d.multiplyScalar(Math.min(L, st.sp * dt) / L); st.p.add(d); const move = Math.atan2(-d.z, d.x); st.yaw = o.sideways ? move + Math.PI / 2 : move; } }
-    st.p.y = bedFn(st.p.x, st.p.z) + 0.03;
+    else { const d = st.goal.clone().sub(st.p); d.y = 0; const L = d.length(); if (L < 0.1) { st.goal.set(home.x + (rnd() - 0.5) * 2 * R, 0, home.z + (rnd() - 0.5) * 2 * R); st.wait = 1 + rnd() * 3; } else { d.multiplyScalar(Math.min(L, st.sp * dt) / L); st.p.add(d); moving = true; const move = Math.atan2(-d.z, d.x); st.yaw = o.sideways ? move + Math.PI / 2 : move; } }
+    st.p.y = bedFn(st.p.x, st.p.z) + 0.02 + (moving && o.sideways ? Math.abs(Math.sin(t * 14)) * 0.012 : 0);
     flatAlong(m, st.p, st.yaw);
   }};
 }
@@ -1080,7 +1111,7 @@ function sceneReef(stage) {
     life.push(swimmer(W, "beakfish", 0.6, t => new THREE.Vector3(x + Math.sin(t * 0.3 + i) * 2, Math.max(y, -5) + 0.5 + Math.abs(Math.sin(t * 2 + i)) * 0.25, z + Math.cos(t * 0.3 + i) * 2))); }
   life.push(swimmer(W, "m9/bloatfin", 0.4, orbitPath(-8, -3.2, -6, 3, 2, 0.1)));
   life.push(swimmer(W, "turtle", 1.3, orbitPath(0, -2.4, 0, 22, 16, 0.045, 0.6)));
-  life.push({m: null, update: (() => { const m = card(W, spriteTex("game/fish-ray"), 1.4, 1.4, {flat: true}); return (t) => { const p = new THREE.Vector3(Math.cos(t * 0.07) * 26, -5.3 + Math.sin(t * 0.5) * 0.15, Math.sin(t * 0.07) * 20); flatAlong(m, p, -t * 0.07 - Math.PI / 2); }; })()});
+  life.push({m: null, update: (() => { const m = creature(W, "game/fish-ray", 1.4); return (t) => { const p = new THREE.Vector3(Math.cos(t * 0.07) * 26, -5.3 + Math.sin(t * 0.5) * 0.15, Math.sin(t * 0.07) * 20); flatAlong(m, p, -t * 0.07 - Math.PI / 2); }; })()});
   for (let i = 0; i < 8; i++) { const h = new THREE.Vector3((rnd() - 0.5) * 40, 0, (rnd() - 0.5) * 40); const kind = ["urchin", "starfish", "cucumber", "starfish"][i % 4]; life.push(crawler(W, kind, kind === "cucumber" ? 0.7 : 0.45, h, 1.5, bed, {speed: 0.02})); }
   life.push(crawler(W, "lobster", 0.6, new THREE.Vector3(4.5, 0, -6.3), 0.8, bed, {speed: 0.1}));
   for (let i = 0; i < 2; i++) life.push(crawler(W, "flounder", 0.8, new THREE.Vector3(-18 + i * 30, 0, 22 - i * 40), 4, bed, {speed: 0.12}));
@@ -1112,8 +1143,7 @@ function makeClam(W, M, x, y, z) {
 // an octopus: crawls from its den over the reef, takes the rock's colour when still and flushes red when it moves;
 // come within 6 m and it inks and jets back into the den, and stays hidden a while
 function makeOctopus(W, den, bed) {
-  const map = spriteTex("octopus"), mat = W.std({map, alphaTest: 0.5, side: THREE.DoubleSide, color: 0xffffff});
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1).rotateX(-Math.PI / 2), mat); W.scene.add(m);
+  const m = creature(W, "octopus", 1.1, {own: true}), mat = m.userData.c3.mat;   // its own material: it changes colour
   const ink = motes(W, 140, 0x010103, 1.1, {c: den, s: [1.5, 1.5, 1.5]}, {opacity: 0, swirl: 1.2});
   const st = {state: "out", p: den.clone(), goal: den.clone().add(new THREE.Vector3(3, 0, 2)), timer: 0, yaw: 0, inkT: 99, hue: 0};
   return {m, st, update(t, cam, dt) {
@@ -1129,8 +1159,8 @@ function makeOctopus(W, den, bed) {
     st.hue += ((moving ? 1 : 0) - st.hue) * Math.min(1, dt * 1.5);
     mat.color.setRGB(lerp(0.55, 1.0, st.hue), lerp(0.55, 0.8, st.hue), lerp(0.5, 0.75, st.hue));   // camouflage grey-brown to flushed
     st.p.y = st.state === "hiding" ? den.y - 0.6 : Math.max(bed(st.p.x, st.p.z), -10) + 0.05;
-    m.scale.setScalar(st.state === "hiding" ? 0.5 : 1);
-    flatAlong(m, st.p, st.yaw + Math.sin(t * 3) * 0.08);
+    m.scale.setScalar((st.state === "hiding" ? 0.5 : 1) * 1.1 * 0.85);
+    m.userData.c3.pose = st.state === "inking" ? "jet" : "crawl"; flatAlong(m, st.p, st.yaw + Math.sin(t * 3) * 0.08);
   }};
 }
 
@@ -1160,14 +1190,14 @@ function sceneKelp(stage) {
   life.push(school(W, "game/fish-silverfin", 24, 0.4, orbitPath(6, -3, -2, 14, 12, -0.11), [5, 2, 5]));
   life.push(swimmer(W, "seal", 1.6, orbitPath(0, -5, 0, 20, 14, 0.12, 2.5)));
   // otters rafting on their backs in the canopy, bobbing on the sea
-  const otters = []; for (let i = 0; i < 4; i++) otters.push({m: card(W, spriteTex("otter"), 1.3, 1.3), x: -6 + i * 3.2, z: 6 + (i % 2) * 2, ph: i});
+  const otters = []; for (let i = 0; i < 4; i++) otters.push({m: creature(W, "otter", 1.3, {pose: "raft"}), x: -6 + i * 3.2, z: 6 + (i % 2) * 2, ph: i});
   const rs = rays(W, 0, 0, 28, 30, 0, 16);
   const lamp = diverLamp(W);
   W.hudExtra = () => "water: kelp shelf, 12 C; the bare patch is an urchin barren";
   W.update = (t, dt) => {
     const cp = W.camera.position, cwl = 0, under = cp.y < cwl;
     for (const f of fronds) { f.g.rotation.z = Math.sin(t * 0.55 + f.ph) * 0.06; f.g.rotation.x = Math.cos(t * 0.45 + f.ph) * 0.05; }
-    for (const o of otters) { const x = o.x + Math.sin(t * 0.05 + o.ph) * 1.5, z = o.z + Math.cos(t * 0.04 + o.ph) * 1.5; faceAlong(o.m, new THREE.Vector3(x, sea.h(x, z, t, cp) + 0.12, z), new THREE.Vector3(1, 0, 0.3 * o.ph), cp); }
+    for (const o of otters) { const x = o.x + Math.sin(t * 0.05 + o.ph) * 1.5, z = o.z + Math.cos(t * 0.04 + o.ph) * 1.5; faceAlong(o.m, new THREE.Vector3(x, sea.h(x, z, t, cp) - 0.02, z), new THREE.Vector3(1, 0, 0.3 * o.ph), cp); }
     for (const l of life) l.update(t, cp, dt);
     rs.update(t, under, cwl - cp.y); lamp.update(under, cwl - cp.y);
   };
@@ -1201,7 +1231,7 @@ function scenePolar(stage) {
   const ship = new THREE.Group(); W.scene.add(ship); ship.position.set(24, 0, -14);
   box(W, M.plank, 9, 1.6, 3, 0, 0.2, 0, ship); box(W, M.timber, 0.3, 8, 0.3, 0, 4.5, 0, ship); W.lamp(4.3, 1.6, 0, 0xffb35a, 2.2, 14, {parent: ship}); W.lamp(-4.3, 1.6, 0, 0xffb35a, 2.2, 14, {parent: ship});
   // seals on the floes that slide in when you come close, krill under the ice, silverfin and deepback below
-  const seals = floes.slice(0, 6).map((f, i) => ({f, m: card(W, spriteTex("seal"), 1.7, 1.7), state: "out", t: 0, ph: i}));
+  const seals = floes.slice(0, 6).map((f, i) => ({f, m: creature(W, "seal", 1.7), state: "out", t: 0, ph: i}));
   const krill = motes(W, 900, 0xfb902f, 0.12, {c: new THREE.Vector3(6, -4, 4), s: [26, 5, 20]}, {swirl: 0.5, opacity: 0.95});
   const life = [school(W, "game/fish-silverfin", 26, 0.4, orbitPath(4, -6, 4, 14, 9, 0.1), [6, 2, 6]), school(W, "game/fish-deepback", 8, 0.8, orbitPath(-6, -22, -4, 16, 12, -0.06), [5, 3, 5]), school(W, "krill", 30, 0.18, orbitPath(10, -3, 0, 6, 4, 0.2), [4, 1.5, 4])];
   const rs = rays(W, 10, 0, 30, 20, 0, 18);
@@ -1215,7 +1245,7 @@ function scenePolar(stage) {
     for (const s of seals) { const f = s.f, d = cp.distanceTo(f.g.position);
       if (s.state === "out" && d < 9) { s.state = "in"; s.t = 0; }
       if (s.state === "in") { s.t += dt; if (s.t > 14 && d > 12) s.state = "out"; }
-      if (s.state === "out") faceAlong(s.m, new THREE.Vector3(f.x, f.g.position.y + 1.05, f.z), new THREE.Vector3(Math.cos(s.ph), 0, Math.sin(s.ph)), cp);
+      if (s.state === "out") faceAlong(s.m, new THREE.Vector3(f.x, f.g.position.y + 0.5, f.z), new THREE.Vector3(Math.cos(s.ph), 0, Math.sin(s.ph)), cp);
       else { const a = s.t * 0.5 + s.ph, p = new THREE.Vector3(f.x + Math.cos(a) * 6, -2.5 - Math.min(s.t, 2), f.z + Math.sin(a) * 6), h = new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)); faceAlong(s.m, p, h, cp); } }
     krill.update(t); for (const l of life) l.update(t, cp, dt);
     rs.update(t, under, -cp.y); lamp.update(under, -cp.y);
@@ -1299,7 +1329,7 @@ function sceneWrecks(stage) {
   for (let i = 0; i < 3; i++) { const x0 = -3.2 + i * 1.6, z0 = 9.2 + i * 0.5; life.push(swimmer(W, "game/fish-eel", 0.9, t => new THREE.Vector3(x0 + Math.max(0, Math.sin(t * 0.4 + i * 2)) * 1.2, -24.9 + i * 0.2, z0))); }
   life.push(makeOctopus(W, new THREE.Vector3(-4.5, -27, 9.2), bed));
   for (let i = 0; i < 3; i++) life.push(crawler(W, "lobster", 0.6, new THREE.Vector3(-3 + i * 2, 0, 12 - i), 1.2, bed, {speed: 0.1}));
-  life.push({update: (() => { const m = card(W, spriteTex("game/fish-ray"), 1.4, 1.4, {flat: true}); return t => flatAlong(m, new THREE.Vector3(-14 + Math.cos(t * 0.08) * 12, -27.2, 8 + Math.sin(t * 0.08) * 8), -t * 0.08 - 1.57); })()});
+  life.push({update: (() => { const m = creature(W, "game/fish-ray", 1.4); return t => flatAlong(m, new THREE.Vector3(-14 + Math.cos(t * 0.08) * 12, -27.2, 8 + Math.sin(t * 0.08) * 8), -t * 0.08 - 1.57); })()});
   life.push(school(W, "game/fish-deepback", 12, 0.8, orbitPath(18, -40, 0, 10, 16, 0.07), [5, 4, 5]));
   life.push(swimmer(W, "game/fish-serpent", 7, t => new THREE.Vector3(40 + Math.sin(t * 0.05) * 6, -95 + Math.sin(t * 0.1) * 10, -60 + ((t * 2.5) % 120))));
   for (let i = 0; i < 5; i++) { const x = 10 + rnd() * 30, z = (rnd() - 0.5) * 40, y = -35 - rnd() * 30, ph = rnd() * 6; life.push(swimmer(W, "jelly", 1.0, t => new THREE.Vector3(x, y + Math.sin(t * 0.5 + ph) * 0.6, z), {glow: 0x9ff4ff, upright: true})); }
@@ -1323,27 +1353,27 @@ function rectRegion(x0, x1, z0, z1, fn) { const cells = new Map(); const r0 = Ma
 // ducks on a pond: a mother leads her ducklings in a line, the drake nearby; each tips up to feed now and then; wakes
 // trail behind them; at night they sleep on the water, heads tucked
 function duckFamily(W, centre, R, levelFn, o = {}) {
-  const mk = (s, size) => card(W, spriteTex(s), size, size);
+  const mk = (s, size) => creature(W, s, size);
   const hen = {m: mk("dabbler_hen", 0.75), sprite: "dabbler_hen"}, drake = {m: mk("dabbler_drake", 0.8), sprite: "dabbler_drake"};
   const kids = Array.from({length: o.kids ?? 5}, () => ({m: mk("duckling", 0.38), sprite: "duckling"}));
-  const sleepT = spriteTex("dabbler_sleep");
   const wakeMat = new THREE.MeshBasicMaterial({color: 0xdfeef2, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide});
-  const wakeGeo = new THREE.BufferGeometry(); wakeGeo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, -1, 0, 0.35, -1, 0, 0.45, 0, 0, 0, -1, 0, -0.35, -1, 0, -0.45, 0, 0, 0.04, -1, 0, 0.45, 0, 0, -0.04, -1, 0, -0.45, -1, 0, -0.35, 0, 0, 0.0].slice(0, 18), 3));
-  const all = [hen, drake, ...kids]; all.forEach(d => { d.wake = new THREE.Mesh(wakeGeo, wakeMat); d.wake.renderOrder = 6; W.scene.add(d.wake); d.day = d.m.material.map; });
-  const hist = []; let up = 0;
+  const wakeGeo = new THREE.BufferGeometry(); wakeGeo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, -1, 0, 0.35, -1, 0, 0.45, 0, 0, 0, -1, 0, -0.35, -1, 0, -0.45], 3));
+  const all = [hen, drake, ...kids]; all.forEach(d => { d.wake = new THREE.Mesh(wakeGeo, wakeMat); d.wake.renderOrder = 6; W.scene.add(d.wake); });
+  const hist = [];
   return {all, update(t, cam, dt) {
     const night = W.T.day < 0.3;
     const a = t * (o.speed ?? 0.06), lead = new THREE.Vector3(centre.x + Math.cos(a) * R, 0, centre.z + Math.sin(a) * R * 0.7);
     hist.unshift(lead.clone()); if (hist.length > 400) hist.pop();
     const place = (d, p, prev, i) => {
-      const lvl = levelFn(p.x, p.z); p.y = lvl + d.m.geometry.parameters.height * 0.32;
-      if (night) { d.m.material.map = d.sprite === "duckling" ? d.day : sleepT; faceAlong(d.m, p.clone().setY(lvl + 0.18), new THREE.Vector3(1, 0, 0.3 * i), cam); d.wake.visible = false; return; }
-      d.m.material.map = d.day;
+      const lvl = levelFn(p.x, p.z), c = d.m.userData.c3; p.y = lvl - 0.02;
+      // at night: asleep on the water, head turned back onto the back, no paddling, no wake
+      if (night) { c.pose = d.sprite === "duckling" ? "swim" : "sleep"; faceAlong(d.m, p, new THREE.Vector3(1, 0, 0.3 * i), cam); d.wake.visible = false; return; }
       const h = p.clone().sub(prev); h.y = 0; if (h.lengthSq() < 1e-6) h.set(1, 0, 0);
-      faceAlong(d.m, p, h, cam);
-      // tipping up to feed: the card turns about its own across axis, head down, tail up
+      // tipping up to feed: the body pitches about its own across axis, head under, tail and feet up
       const tip = d.sprite !== "duckling" ? Math.max(0, Math.sin(t * 0.7 + i * 2.1) - 0.75) * 4 : 0;
-      if (tip > 0) { d.m.rotateZ(-Math.min(1, tip) * 1.7); d.m.position.y = lvl + 0.15; }
+      c.pose = tip > 0 ? "upend" : "swim";
+      faceAlong(d.m, p, h, cam);
+      if (tip > 0) { d.m.rotateZ(-Math.min(1, tip) * 1.7); d.m.position.y = lvl + 0.02; }
       d.wake.visible = true; d.wake.position.set(p.x, lvl + 0.03, p.z); d.wake.rotation.set(0, Math.atan2(-h.z, h.x), 0); const sc = d.sprite === "duckling" ? 0.6 : 1.3; d.wake.scale.set(sc * 1.8, 1, sc);
     };
     const step = 12; place(hen, hist[0], hist[Math.min(hist.length - 1, 3)], 0);
@@ -1354,31 +1384,32 @@ function duckFamily(W, centre, R, levelFn, o = {}) {
 }
 // a flock of dabblers on the water that lifts when startled, circles in a loose V and comes back down
 function duckFlock(W, spots, levelFn) {
-  const fly = spriteTex("dabbler_fly"), sleepT = spriteTex("dabbler_sleep");
-  const ducks = spots.map((p, i) => { const s = i % 3 ? "dabbler_drake" : "dabbler_hen"; const m = card(W, spriteTex(s), 0.75, 0.75); return {m, home: p.clone(), day: m.material.map, i}; });
+  const ducks = spots.map((p, i) => { const s = i % 3 ? "dabbler_drake" : "dabbler_hen"; const m = creature(W, s, 0.75); return {m, home: p.clone(), i}; });
   const F = {t0: -99, ducks, startle() { F.t0 = W.t; }, update(t, cam) {
     const T = t - F.t0, night = W.T.day < 0.3, airborne = T >= 0 && T < 16;
     const c = ducks.reduce((s, d) => s.add(d.home), new THREE.Vector3()).multiplyScalar(1 / ducks.length);
     for (const d of ducks) {
-      const lvl = levelFn(d.home.x, d.home.z);
+      const lvl = levelFn(d.home.x, d.home.z), cc = d.m.userData.c3;
       if (airborne) {
         const k = Math.min(1, T / 2.5) * Math.min(1, (16 - T) / 2.5), a = (T - 2) * 0.35, rank = d.i, side = rank % 2 ? 1 : -1, back = Math.ceil(rank / 2);
         const lead = new THREE.Vector3(c.x + Math.cos(a) * 26, lvl + 12, c.z + Math.sin(a) * 18), dir = new THREE.Vector3(-Math.sin(a), 0, Math.cos(a));
         const vpos = lead.clone().addScaledVector(dir, -back * 1.5).add(new THREE.Vector3(dir.z, 0, -dir.x).multiplyScalar(side * back * 1.3));
-        const p = d.home.clone().setY(lvl + 0.25).lerp(vpos, k); d.m.material.map = fly; faceAlong(d.m, p, k < 0.3 ? new THREE.Vector3(1, 0.6, 0) : dir, cam);
+        const p = d.home.clone().setY(lvl - 0.02).lerp(vpos, k); cc.pose = "fly"; faceAlong(d.m, p, k < 0.3 ? new THREE.Vector3(1, 0.6, 0) : dir, cam);
       } else {
-        d.m.material.map = night ? sleepT : d.day;
-        const p = d.home.clone().add(new THREE.Vector3(Math.sin(t * 0.13 + d.i) * 1.2, 0, Math.cos(t * 0.11 + d.i * 2) * 1.2)); p.y = lvl + 0.24;
+        const p = d.home.clone().add(new THREE.Vector3(Math.sin(t * 0.13 + d.i) * 1.2, 0, Math.cos(t * 0.11 + d.i * 2) * 1.2)); p.y = lvl - 0.02;
+        const tip = !night ? Math.max(0, Math.sin(t * 0.6 + d.i * 1.7) - 0.8) * 5 : 0;
+        cc.pose = night ? "sleep" : tip > 0 ? "upend" : "swim";
         faceAlong(d.m, p, new THREE.Vector3(Math.cos(t * 0.13 + d.i), 0, -Math.sin(t * 0.11 + d.i * 2)), cam);
-        const tip = !night ? Math.max(0, Math.sin(t * 0.6 + d.i * 1.7) - 0.8) * 5 : 0; if (tip > 0) { d.m.rotateZ(-Math.min(1, tip) * 1.7); d.m.position.y = lvl + 0.12; }
+        if (tip > 0) { d.m.rotateZ(-Math.min(1, tip) * 1.7); d.m.position.y = lvl + 0.02; }
       }
     }
   }};
   return F;
 }
+// a diving duck: rides the water, then dives and swims under for a few seconds
 function diverDuck(W, centre, R, levelFn, ph = 0) {
-  const m = card(W, spriteTex("diver"), 0.7, 0.7);
-  return {update(t, cam) { const a = t * 0.05 + ph, p = new THREE.Vector3(centre.x + Math.cos(a) * R, 0, centre.z + Math.sin(a) * R * 0.6), lvl = levelFn(p.x, p.z); const cyc = (t + ph * 5) % 11, under = cyc > 7 && cyc < 10; p.y = under ? lvl - 1.2 : lvl + 0.22; faceAlong(m, p, new THREE.Vector3(-Math.sin(a), under ? -0.2 : 0, Math.cos(a)), cam); }};
+  const m = creature(W, "diver", 0.7);
+  return {update(t, cam) { const a = t * 0.05 + ph, p = new THREE.Vector3(centre.x + Math.cos(a) * R, 0, centre.z + Math.sin(a) * R * 0.6), lvl = levelFn(p.x, p.z); const cyc = (t + ph * 5) % 11, under = cyc > 7 && cyc < 10; p.y = under ? lvl - 1.2 : lvl - 0.02; m.userData.c3.pose = W.T.day < 0.3 ? "sleep" : "swim"; faceAlong(m, p, new THREE.Vector3(-Math.sin(a), under ? -0.2 : 0, Math.cos(a)), cam); }};
 }
 function dragonflies(W, n, cx, cy, cz, R) { const L = []; for (let i = 0; i < n; i++) { const ph = rnd() * 6; L.push(swimmer(W, "dragonfly", 0.35, t => new THREE.Vector3(cx + Math.sin(t * 0.9 + ph) * R + Math.sin(t * 4.1 + ph) * 0.4, cy + Math.sin(t * 2.3 + ph) * 0.3, cz + Math.cos(t * 0.7 + ph * 2) * R))); } return L; }
 function fireflies(W, n, c, s, color, lamps = 3) { const f = motes(W, n, color, 0.18, {c, s}, {add: true, swirl: 0.4, opacity: 0}); for (let i = 0; i < lamps; i++) W.lamp(c.x + (hsh(i, 5) - 0.5) * s[0], c.y + 0.5, c.z + (hsh(i, 6) - 0.5) * s[2], color, 0.5, 4, {size: 0.08}); W.timeHooks.push((nm, T) => f.mat.opacity = T.day < 0.6 ? 0.95 : 0); return f; }
@@ -1424,7 +1455,7 @@ function sceneRiver(stage) {
   for (let i = 0; i < 6; i++) { const x = 8 + i * 6; life.push(crawler(W, "rivermussel", 0.35, new THREE.Vector3(x, 0, zc(x) + 1), 0.05, bed, {speed: 0.001})); }
   life.push(swimmer(W, "riverotter", 0.9, t => { const a = t * 0.3; const x = -26 + Math.cos(a) * 3.5, z = zc(-26) + Math.sin(a) * 1.8; return new THREE.Vector3(x, 5.85 - Math.max(0, Math.sin(t * 0.5)) * 1.8, z); }));
   { const perch = new THREE.Vector3(-22, 9.2, zc(-22) + 5.5); life.push(swimmer(W, "kingfisher", 0.45, t => { const c = t % 9; if (c < 6) return perch.clone().add(new THREE.Vector3(c * 0.0001, 0, 0)); const k = (c - 6) / 3, tgt = new THREE.Vector3(-25, 5.6, zc(-25)); const p = perch.clone().lerp(tgt, Math.sin(Math.PI * k)); return p; })); }
-  { const hm = card(W, spriteTex("m7/heron"), 1.8, 1.8); const hp = new THREE.Vector3(36, 0, zc(36) - 4.6); life.push({update: (t, cam) => { const lv = levelAt(hp.x, hp.z); faceAlong(hm, hp.clone().setY(lv + 0.85), new THREE.Vector3(0.3, Math.max(0, Math.sin(t * 0.4) - 0.9) * -6, 1), cam); }}); }
+  { const hm = creature(W, "m7/heron", 1.8, {pose: "stand"}); const hp = new THREE.Vector3(36, 0, zc(36) - 4.6); life.push({update: (t, cam) => { const lv = levelAt(hp.x, hp.z); hm.userData.c3.strike = Math.min(1, Math.max(0, Math.sin(t * 0.4) - 0.9) * 12); faceAlong(hm, hp.clone().setY(lv - 0.1), new THREE.Vector3(0.3, 0, 1), cam); }}); }
   life.push(diverDuck(W, new THREE.Vector3(-26, 0, zc(-26)), 2.6, levelAt, 1), diverDuck(W, new THREE.Vector3(44, 0, zc(44)), 3, levelAt, 3));
   life.push(...dragonflies(W, 5, 20, 3.5, zc(20) + 4, 6));
   const ff = fireflies(W, 120, new THREE.Vector3(18, 4, zc(18) + 5), [20, 2, 8], 0xc8ff5a), gm = fireflies(W, 40, new THREE.Vector3(mx + 3, mb + 2.6, mz - 1), [3, 1.5, 3], 0x78dcff, 1);
@@ -1517,12 +1548,12 @@ function sceneDam(stage) {
   { const px = -17, pz = 6.5, pb = bed(px, pz); box(W, M.iron, 0.12, 2.2, 0.12, px, pb + 1.1, pz); W.lamp(px, pb + 2.3, pz, 0xffb35a, 2.4, 14, {size: 0.3}); }   // a lantern post on the pond's edge
   // life: beavers hauling branches to the dam and round the lodge; a duck family on the pond; a diving duck; trout, frogs, a heron
   const level = (x, z) => { const v = W.waterAt(x, z); return v > -999 ? v : bed(x, z); };
-  const beavers = [0, 1, 2].map(i => ({m: card(W, spriteTex("beaver_branch"), 1.0, 1.0), m2: card(W, spriteTex("beaver"), 1.0, 1.0), i}));
-  const gnaw = card(W, spriteTex("beaver"), 0.95, 0.95);
+  const beavers = [0, 1, 2].map(i => ({m: creature(W, "beaver_branch", 1.0), m2: creature(W, "beaver", 1.0), i}));
+  const gnaw = creature(W, "beaver", 0.95);
   const fam = duckFamily(W, new THREE.Vector3(-22, 0, 0), 5, level, {kids: 5});
   const life = [fam, diverDuck(W, new THREE.Vector3(-34, 0, 2), 3, level, 2), school(W, "trout", 7, 0.5, orbitPath(-18, 0.3, 1, 5, 2, 0.06), [3, 0.5, 2]), ...dragonflies(W, 4, -12, 2.6, 6, 6)];
-  const frogs = [0, 1, 2].map(i => card(W, spriteTex("frog"), 0.4, 0.4, {flat: true}));
-  { const hm = card(W, spriteTex("m7/heron"), 1.8, 1.8); life.push({update: (t, cam) => { const p = new THREE.Vector3(-8, 0, -7); faceAlong(hm, p.setY(level(p.x, p.z) + 0.9), new THREE.Vector3(0.4, Math.max(0, Math.sin(t * 0.37) - 0.9) * -6, 1), cam); }}); }
+  const frogs = [0, 1, 2].map(i => creature(W, "frog", 0.4));
+  { const hm = creature(W, "m7/heron", 1.8, {pose: "stand"}); life.push({update: (t, cam) => { const p = new THREE.Vector3(-8, 0, -7); hm.userData.c3.strike = Math.min(1, Math.max(0, Math.sin(t * 0.37) - 0.9) * 12); faceAlong(hm, p.setY(level(p.x, p.z) - 0.1), new THREE.Vector3(0.4, 0, 1), cam); }}); }
   W.hudExtra = () => state ? `pond at ${Math.max(...state.levels).toFixed(1)} m, ${state.placed.size} dam cells, ${state.lodge.length} lodge cells; ${state.J.length} journal entries` : "";
   W.update = (t, dt) => {
     const cp = W.camera.position;
@@ -1531,9 +1562,9 @@ function sceneDam(stage) {
     beavers.forEach(b => { const a = t * 0.12 + b.i * 2.1; let p, carrying;
       if (!lodgeOn && D >= 1) { const k = (Math.sin(a) + 1) / 2, from = new THREE.Vector3(s.x - 18, 0, zc(s.x - 18) + (b.i - 1) * 1.5), to = new THREE.Vector3(s.x - 1.6, 0, zc(s.x) + (b.i - 1) * 1.2); p = from.clone().lerp(to, k); carrying = Math.cos(a) > 0; }
       else { const lx = s.x - 13; p = new THREE.Vector3(lx + Math.cos(a) * 4.5, 0, zc(lx) + Math.sin(a) * 3.2); carrying = b.i === 0; }
-      const lv = level(p.x, p.z); p.y = lv + 0.12; const h = new THREE.Vector3(Math.cos(a) * (carrying ? 1 : -1), 0, Math.sin(a) * 0.3 + 0.01);
+      const lv = level(p.x, p.z); p.y = lv - 0.1; const h = new THREE.Vector3(Math.cos(a) * (carrying ? 1 : -1), 0, Math.sin(a) * 0.3 + 0.01);
       b.m.visible = carrying; b.m2.visible = !carrying; faceAlong(carrying ? b.m : b.m2, p, h, cp); });
-    const ft = s.fell.find(tr => !state.felled.has(tr)); gnaw.visible = !!ft && D < 30; if (ft) faceAlong(gnaw, new THREE.Vector3(ft.x + 0.8, ft.h + 0.45 + Math.abs(Math.sin(t * 6)) * 0.06, ft.z), new THREE.Vector3(-1, 0, 0), cp);
+    const ft = s.fell.find(tr => !state.felled.has(tr)); gnaw.visible = !!ft && D < 30; if (ft) faceAlong(gnaw, new THREE.Vector3(ft.x + 0.8, ft.h + Math.abs(Math.sin(t * 6)) * 0.03, ft.z), new THREE.Vector3(-1, 0, 0), cp);
     for (const l of life) l.update(t, cp, dt);
     lilies.slice(0, 3).forEach((l, i) => { const f = frogs[i]; f.visible = true; const hop = Math.max(0, Math.sin(t * 0.8 + i * 2) - 0.92) * 12; flatAlong(f, l.position.clone().add(new THREE.Vector3(0, 0.05 + hop * 0.3, 0)), i); });
     for (let i = lilies.length; i < 3; i++) frogs[i].visible = false;
@@ -1583,13 +1614,13 @@ function sceneMarsh(stage) {
   stage.querySelector("#startle").addEventListener("click", () => flock.startle());
   if (Q.has("startle")) setTimeout(() => flock.startle(), 50);
   const life = [flock, duckFamily(W, new THREE.Vector3(-30, 0, 8), 4, () => 0.6, {kids: 4, speed: 0.05}), diverDuck(W, new THREE.Vector3(10, 0, zc(10)), 4, level, 0.5)];
-  { const hm = card(W, spriteTex("m7/heron"), 1.8, 1.8); life.push({update: (t, cam) => { const p = new THREE.Vector3(-6, 0, 6); faceAlong(hm, p.setY(0.6 + 0.85), new THREE.Vector3(0.6, Math.max(0, Math.sin(t * 0.33) - 0.9) * -6, 1), cam); }}); }
-  for (let i = 0; i < 4; i++) { const p = spot(i + 10); const m = card(W, spriteTex("m7/bog_toad"), 0.7, 0.7, {glow: 0x96ffd2}); const home = p.clone().add(new THREE.Vector3(1.6, 0, 0)); life.push({update: (t, cam) => { const hop = Math.max(0, Math.sin(t * 0.5 + i * 2) - 0.9) * 10; faceAlong(m, home.clone().setY(level(home.x, home.z) + 0.3 + hop * 0.08), new THREE.Vector3(Math.cos(i), 0, Math.sin(i)), cam); }}); }
+  { const hm = creature(W, "m7/heron", 1.8, {pose: "stand"}); life.push({update: (t, cam) => { const p = new THREE.Vector3(-6, 0, 6); hm.userData.c3.strike = Math.min(1, Math.max(0, Math.sin(t * 0.33) - 0.9) * 12); faceAlong(hm, p.setY(0.5), new THREE.Vector3(0.6, 0, 1), cam); }}); }
+  for (let i = 0; i < 4; i++) { const p = spot(i + 10); const m = creature(W, "m7/bog_toad", 0.7); const home = p.clone().add(new THREE.Vector3(1.6, 0, 0)); life.push({update: (t, cam) => { const hop = Math.max(0, Math.sin(t * 0.5 + i * 2) - 0.9) * 10; faceAlong(m, home.clone().setY(level(home.x, home.z) + hop * 0.08), new THREE.Vector3(Math.cos(i), 0, Math.sin(i)), cam); }}); }
   for (let i = 0; i < 4; i++) { const p = spot(i + 30); life.push(crawler(W, "frog", 0.38, p.clone(), 1.2, () => 0.62, {speed: 0.25})); }
-  { const m = card(W, spriteTex("m7/mire_lurker"), 2.6, 2.6); life.push({update: (t, cam) => { const a = t * 0.03, p = new THREE.Vector3(-26 + Math.cos(a) * 6, 0.25, -18 + Math.sin(a) * 4); faceAlong(m, p, new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)), cam); }}); }
+  { const m = creature(W, "m7/mire_lurker", 2.6); life.push({update: (t, cam) => { const a = t * 0.03, p = new THREE.Vector3(-26 + Math.cos(a) * 6, 0.42, -18 + Math.sin(a) * 4); faceAlong(m, p, new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)), cam); }}); }
   for (let i = 0; i < 3; i++) life.push(swimmer(W, "game/fish-eel", 0.9, orbitPath(18 + i * 8, -1.2, zc(18 + i * 8), 3, 1.4, 0.15 + i * 0.03, 0.2, i)));
   life.push(school(W, "game/fish-minnow", 22, 0.22, orbitPath(44, -0.8, zc(44), 4, 2, 0.12), [3, 0.4, 2]));
-  for (let i = 0; i < 9; i++) { const h = new THREE.Vector3(38 + rnd() * 14, 0, -20 + rnd() * 40); const m0 = crawler(W, "fiddler", 0.4, h, 1.5, bed, {speed: 0.35, sideways: true}); const u0 = m0.update; m0.update = (t, cam, dt) => { u0(t, cam, dt); m0.m.scale.set(1, 1, 1 + Math.max(0, Math.sin(t * 3 + i)) * 0.25); }; life.push(m0); }
+  for (let i = 0; i < 9; i++) { const h = new THREE.Vector3(38 + rnd() * 14, 0, -20 + rnd() * 40); life.push(crawler(W, "fiddler", 0.4, h, 1.5, bed, {speed: 0.35, sideways: true})); }   // the big claw waves (creatures3d's own motion)
   life.push(...dragonflies(W, 6, -10, 2.4, 4, 9));
   const ff = fireflies(W, 160, new THREE.Vector3(-14, 2, 0), [40, 2.5, 30], 0xc8ff5a, 4), gm = fireflies(W, 40, new THREE.Vector3(hx0 + 2, 3.6, hz0), [3, 1.6, 3], 0x78dcff, 1);
   const gas = motes(W, 60, 0x9bffb0, 0.28, {c: new THREE.Vector3(-24, 0.9, -12), s: [24, 0.8, 18]}, {add: true, swirl: 0.15, opacity: 0});
