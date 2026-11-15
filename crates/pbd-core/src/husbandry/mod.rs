@@ -149,6 +149,8 @@ pub struct Keeping {
     pub adult_days: f32,
     /// One in this many of a herd is male.
     pub male_one_in: u32,
+    /// Its life stages and how it is born (design 13, E1).
+    pub young: Young,
 }
 
 /// One land species (decision 1): what the field guide, the herds, the rig

@@ -77,9 +77,12 @@ impl BroodBody {
     /// The day it hatches or is born, or `None` while carried.
     pub fn due(&self, young: &Young) -> Option<f64> {
         match (self.place, young.birth) {
-            (Place::Hen(_) | Place::Incubator(_), super::Birth::Eggs { incubation_days, .. }) => {
-                self.set.map(|s| s + f64::from(incubation_days))
-            }
+            (
+                Place::Hen(_) | Place::Incubator(_),
+                super::Birth::Eggs {
+                    incubation_days, ..
+                },
+            ) => self.set.map(|s| s + f64::from(incubation_days)),
             (Place::Womb, super::Birth::Live { gestation_days, .. }) => {
                 Some(self.laid + f64::from(gestation_days))
             }
@@ -150,7 +153,7 @@ pub fn inherit(
             let h = hash2(hash2(pair, u64::from(n)), (gene * 2 + side) as u64 + 0x1e6e);
             let (a, b) = parent.alleles(gene);
             let mut allele = if h & 1 == 0 { a } else { b };
-            if (h >> 8) % u64::from(s.mutate_one_in.max(1)) == 0 {
+            if (h >> 8).is_multiple_of(u64::from(s.mutate_one_in.max(1))) {
                 mutated.push(gene);
                 let r = ((h >> 24) & 0xffff) as f32 / 65535.0;
                 allele = match gene {
@@ -323,7 +326,8 @@ pub fn farm_events(
     fit: &dyn Fn(&AnimalBody) -> Fitness,
     lamp_lit: &dyn Fn(u32) -> bool,
 ) -> Vec<FarmEvent> {
-    let mut animals: BTreeMap<u64, AnimalBody> = super::record::animals(records).into_iter().collect();
+    let mut animals: BTreeMap<u64, AnimalBody> =
+        super::record::animals(records).into_iter().collect();
     let mut all_broods = broods(records);
     let mut next_animal = super::record::next_animal_id(records);
     let mut next_brood = next_brood_id(records);
@@ -341,7 +345,9 @@ pub fn farm_events(
                 continue;
             }
             let Some(keep) = keep_of(b.sp) else { continue };
-            let Some(due) = b.due(&keep.young) else { continue };
+            let Some(due) = b.due(&keep.young) else {
+                continue;
+            };
             let ready = match b.place {
                 Place::Hen(hen) => animals.get(&hen).is_some_and(|h| h.state == Life::Alive),
                 Place::Incubator(cell) => lamp_lit(cell),
@@ -356,16 +362,18 @@ pub fn farm_events(
         let pedigree = Pedigree::from_animals(&animals);
         let mut conceive: Option<(f64, u64, u64)> = None;
         for (dam_id, dam) in &animals {
-            let Some(keep) = keep_of(dam.sp) else { continue };
+            let Some(keep) = keep_of(dam.sp) else {
+                continue;
+            };
             let super::Birth::Live { gestation_days, .. } = keep.young.birth else {
                 continue;
             };
             if dam.sex != Sex::F || dam.state != Life::Alive || dam.pen.is_none() {
                 continue;
             }
-            let carrying = all_broods.iter().any(|(id, b)| {
-                b.place == Place::Womb && b.dam == *dam_id && !done.contains(id)
-            });
+            let carrying = all_broods
+                .iter()
+                .any(|(id, b)| b.place == Place::Womb && b.dam == *dam_id && !done.contains(id));
             if carrying {
                 continue;
             }
@@ -397,7 +405,9 @@ pub fn farm_events(
                 .mate
                 .and_then(|want| mates.iter().find(|(id, _)| **id == want))
                 .or_else(|| mates.first());
-            let Some((sire_id, sire)) = chosen else { continue };
+            let Some((sire_id, sire)) = chosen else {
+                continue;
+            };
             let from = [
                 dam.as_of,
                 sire.as_of,
@@ -424,7 +434,10 @@ pub fn farm_events(
             let (due, _, brood_id) = best.expect("a birth");
             let brood = all_broods[&brood_id].clone();
             let keep = keep_of(brood.sp).expect("a kept species");
-            let (Some(sire), Some(dam)) = (animals.get(&brood.sire), animals.get(&brood.dam)) else {
+            let (Some(sire), Some(dam)) = (
+                animals.get(&brood.sire).cloned(),
+                animals.get(&brood.dam).cloned(),
+            ) else {
                 // A parent this build cannot read: the brood waits.
                 all_broods.remove(&brood_id);
                 continue;
@@ -444,13 +457,21 @@ pub fn farm_events(
                 .count() as u32;
             let (home, pen) = match brood.place {
                 Place::Incubator(cell) => (cell, None),
-                Place::Hen(hen) => animals.get(&hen).map_or((dam.home, dam.pen), |h| (h.home, h.pen)),
+                Place::Hen(hen) => animals
+                    .get(&hen)
+                    .map_or((dam.home, dam.pen), |h| (h.home, h.pen)),
                 _ => (dam.home, dam.pen),
             };
             let mut records = Vec::new();
             for k in 0..count {
                 let n = before + k;
-                let (genes, _) = inherit((brood.sire, &sire.genome()), (brood.dam, &dam.genome()), n, keep, s);
+                let (genes, _) = inherit(
+                    (brood.sire, &sire.genome()),
+                    (brood.dam, &dam.genome()),
+                    n,
+                    keep,
+                    s,
+                );
                 let young = AnimalBody {
                     body: brood.body.clone(),
                     sp: brood.sp,

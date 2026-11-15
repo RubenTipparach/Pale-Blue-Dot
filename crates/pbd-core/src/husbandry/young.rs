@@ -73,7 +73,11 @@ impl Young {
     pub fn validate(&self, at: &str, adult_days: f32) -> Result<(), String> {
         let mut last = 0.0;
         for s in &self.stages {
-            if s.name.is_empty() || !(s.until_days > last) || !(s.size > 0.0 && s.size < 1.0) {
+            if s.name.is_empty()
+                || s.until_days.partial_cmp(&last) != Some(std::cmp::Ordering::Greater)
+                || !(0.0..1.0).contains(&s.size)
+                || s.size == 0.0
+            {
                 return Err(format!(
                     "{at}: stages are named, in order, and smaller than the adult"
                 ));

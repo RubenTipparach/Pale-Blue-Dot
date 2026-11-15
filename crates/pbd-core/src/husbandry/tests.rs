@@ -513,7 +513,9 @@ mod breeding_tests {
             sp: index(sp),
             sex,
             born,
-            genes: Genome::roll(seed, k.coats.len(), k.patterns.len()).0.to_vec(),
+            genes: Genome::roll(seed, k.coats.len(), k.patterns.len())
+                .0
+                .to_vec(),
             pen: Some(pen),
             home: pen,
             as_of: born + f64::from(k.adult_days),
@@ -601,7 +603,10 @@ mod breeding_tests {
         assert_eq!(at_15.waiting("egg"), 2, "two days of a hen's laying");
         // Hatched once: the brood is done.
         apply(&mut records, &events);
-        assert!(breeding::farm_events(&records, roster, &s.breeding, d + 30.0, &content, &lit).is_empty());
+        assert!(
+            breeding::farm_events(&records, roster, &s.breeding, d + 30.0, &content, &lit)
+                .is_empty()
+        );
     }
 
     /// 7.1: an incubator without a lamp beside it holds its eggs; carried
@@ -627,7 +632,10 @@ mod breeding_tests {
         let dark = breeding::farm_events(&records, roster, &s.breeding, 30.0, &content, &|_| false);
         assert!(dark.is_empty(), "no lamp, no hatch");
         let lit_now = breeding::farm_events(&records, roster, &s.breeding, 30.0, &content, &lit);
-        assert_eq!(lit_now[0].day, 23.2, "born on its due day, however late it is seen");
+        assert_eq!(
+            lit_now[0].day, 23.2,
+            "born on its due day, however late it is seen"
+        );
         let carried = BroodBody {
             sp: index("meadow-hen"),
             dam: 1,
@@ -669,7 +677,11 @@ mod breeding_tests {
             t += 0.5;
         }
         assert_eq!(once, steps);
-        assert!(once.len() > 6, "several conceptions and births: {}", once.len());
+        assert!(
+            once.len() > 6,
+            "several conceptions and births: {}",
+            once.len()
+        );
         // The first conception is the first morning after the pair is adult
         // and penned (as_of 12 for the first ewe and the ram).
         assert_eq!(once[0].day, 12.25);
@@ -698,14 +710,19 @@ mod breeding_tests {
         let mut loose = adult("woolback", Sex::M, 0.0, 5, 3);
         loose.pen = None;
         records.put(loose.record(3));
-        assert!(breeding::farm_events(&records, roster, &s.breeding, 500.0, &content, &lit).is_empty());
+        assert!(
+            breeding::farm_events(&records, roster, &s.breeding, 500.0, &content, &lit).is_empty()
+        );
         records.put(adult("woolback", Sex::M, 0.0, 5, 4).record(4));
         let sad = |_: &AnimalBody| Fitness {
             mood: 50.0,
             health: 100.0,
         };
         assert!(breeding::farm_events(&records, roster, &s.breeding, 500.0, &sad, &lit).is_empty());
-        assert!(breeding::farm_events(&Records::new(), roster, &s.breeding, 500.0, &content, &lit).is_empty());
+        assert!(
+            breeding::farm_events(&Records::new(), roster, &s.breeding, 500.0, &content, &lit)
+                .is_empty()
+        );
     }
 
     /// 8.1: the four predicted values of a quantitative gene are exactly the
@@ -716,7 +733,12 @@ mod breeding_tests {
         let keep = species("woolback").keep.unwrap();
         let sire = Genome::roll(91, 3, 2);
         let dam = Genome::roll(92, 3, 2);
-        for gene in [genome::SIZE, genome::YIELD, genome::TEMPERAMENT, genome::HARDINESS] {
+        for gene in [
+            genome::SIZE,
+            genome::YIELD,
+            genome::TEMPERAMENT,
+            genome::HARDINESS,
+        ] {
             let predicted = breeding::offspring_values(&sire, &dam, gene);
             let mut seen = std::collections::BTreeSet::new();
             let mut mutated = 0;
@@ -735,7 +757,10 @@ mod breeding_tests {
             }
             assert_eq!(seen.len(), 4, "gene {gene}: all four turn up");
             // Mutation one allele in 32: about 1 young in 16 for a gene.
-            assert!((150..400).contains(&mutated), "gene {gene}: {mutated} mutated");
+            assert!(
+                (150..400).contains(&mutated),
+                "gene {gene}: {mutated} mutated"
+            );
         }
         // The morph: two carriers give it one young in four.
         let mut a = Genome::default();
