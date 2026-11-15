@@ -207,7 +207,12 @@ but you should really consolidate things: tech demos show technical things,
 in montages, gameplay should be a bot playing the game and showing the
 interactions, have goal and bot should be accomplishing a goal" (after "demos
 for gameplay needs to be incontext of gameplay, not just stills of UI").
-A pile of short clips, one per feature, is not a demo:
+A pile of short clips, one per feature, is not a demo. And a posed scene
+filmed with a slow pan is a screenshot, not a video (owner: "the scripted
+demos ... are too artificial, a screenshot for these wouldve suffice, the
+point of a demo is to showcase gameplay, and how the player would see
+something"). If nothing is being played, take a still. A video is for play,
+seen the way the player sees it:
 
 - **Technical demos are montages.** Rendering, water, weather, flora by
   biome and season, sea life: shot after shot cut into one video per phase
