@@ -20,7 +20,7 @@ How they were taken, 2026-11-15:
 | `loon-before.jpg` / `loon-after.jpg` | `--aboard loon`, a new memory-only world | The boats are where they were. Both logs read `Tern placed at 1362.7 m` and `Loon placed at 883.2 m`. Before, the log also reads `Kestrel placed at 16.2 m`; after, nothing is placed for it. |
 | `old-save-before.jpg` / `old-save-after.jpg` | `--walk --world <a copy of the old world>` | A world made by the old build, its walker turned to face the Kestrel (only the saved heading and pitch were changed in that copy's `world.ron`; its vehicle file is the old build's). Before, the Kestrel is there. After, it is not drawn, and the log reads `craft 1 is a retired kestrel: kept in the save, not in the world` (requirement "A retired craft in a save is kept and not flown"). |
 | `old-save-boats-after.jpg` | `--aboard loon --world "Kestrel era"` | The old world's boats under the new build: its Loon, boarded, where the old build left it. |
-| `realtime-after.jpg` | `--aboard loon --real-time --frames 60` | The LATE_PIPELINE check below. |
+| `realtime-before.jpg` / `realtime-after.jpg` | `--aboard loon --real-time --frames 60` | The LATE_PIPELINE check below. In both builds the Loon lies swamped against the rock (heel +60 deg, 700 kg of water aboard) after the long real-time warm on lavapipe. The two shots are the same, so this is not from this change; it is noted here and not looked into. |
 
 ## The old world's vehicle file
 
@@ -46,4 +46,4 @@ screen as a player's does. Its log:
 - no `LATE_PIPELINE` before READY;
 - one after it, `screenshot-to-screen`, the capture's own instrument.
 
-On lavapipe the warm runs into its 90 s cap, so this is a check, not a proof.
+The build before logs the same: `READY playable 111.78 s ... (warm 90.35 s, 78 pipelines)` and only `screenshot-to-screen` after it. On lavapipe the warm runs into its 90 s cap, so this is a check, not a proof.
