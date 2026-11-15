@@ -252,7 +252,7 @@ pub fn use_key(
     mut station_at: ResMut<StationAt>,
     mut note: ResMut<FarmNote>,
     time: Res<Time>,
-    mut gained: MessageWriter<Gained>,
+    (mut gained, mut did): (MessageWriter<Gained>, MessageWriter<pbd_app::missions::Did>),
     (mut fine, mut contact, mut save, mut slots, mut drops, sun): (
         ResMut<PlanetFine>,
         ResMut<PlanetContact>,
@@ -348,6 +348,11 @@ pub fn use_key(
         Material::Tilled,
     );
     if tilled.is_some() {
+        // What the starter missions count: a cell tilled.
+        did.write(pbd_app::missions::Did::block(
+            pbd_core::missions::Kind::Till,
+            material,
+        ));
         if let Some(seed) = seed {
             gained.write(Gained {
                 item: Item::Good(seed),

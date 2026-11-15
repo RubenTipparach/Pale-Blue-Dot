@@ -434,12 +434,13 @@ pub fn dig_and_place(
         Res<pbd_app::sky::Sun>,
         ResMut<pbd_app::husbandry::AimedGround>,
     ),
-    (mut note, farm, mut gained, mut planted, effects): (
+    (mut note, farm, mut gained, mut planted, effects, mut did): (
         ResMut<super::farm::FarmNote>,
         Res<pbd_app::config::FarmConfig>,
         MessageWriter<pbd_app::hotbar::Gained>,
         MessageWriter<pbd_app::hotbar::Planted>,
         Option<Res<pbd_app::kitchen::MealEffects>>,
+        MessageWriter<pbd_app::missions::Did>,
     ),
 ) {
     ground.0 = None;
@@ -561,6 +562,11 @@ pub fn dig_and_place(
             if taken == Material::Tilled {
                 super::farm::uproot(&mut edits, &slots.0, cell);
             }
+            // What the starter missions count: a block dug (`gather`).
+            did.write(pbd_app::missions::Did::block(
+                pbd_core::missions::Kind::Gather,
+                taken,
+            ));
             info!(
                 "dug {taken:?} from cell {cell} layer {layer} with the {} in {:.2} s, \
                  fine set version {}",
@@ -643,6 +649,10 @@ pub fn dig_and_place(
                 "placed {material:?} in cell {} layer {}, fine set version {}",
                 place.cell, place.layer, fine.version
             );
+            did.write(pbd_app::missions::Did::block(
+                pbd_core::missions::Kind::Place,
+                material,
+            ));
         }
     }
 }

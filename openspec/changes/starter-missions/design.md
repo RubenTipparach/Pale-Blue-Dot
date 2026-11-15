@@ -64,18 +64,20 @@ written, so its codes are the ones its design names.
      fish landed), `cook` (a dish collected, by recipe code), `find` (a good
      found in grass or picked from a wild plant), `till` (a cell tilled),
      `plant` (a seed planted, by seed code), `harvest` (produce harvested),
-     `tame`, `pen` (a kept animal let go in a pen), `build-pen` (a pen closed
+     `tame`, `pen` (a kept animal let go in a pen), `build_pen` (a pen closed
      with a gate), `collect` (an egg, wool or milk), `smelt` (an ingot made),
      `fell` (a tree felled).
 8. **Pending rows.** An objective whose `what` this build cannot resolve is
    pending when every unknown name is listed in the file's `awaited` (the
    tool-crafting codes); any other unknown name is an error at load, as in
-   `cooking.ron`. A `craft` of an item no recipe makes (`tool:pickaxe`,
-   `block:campfire` today) is pending too, and `fell` is pending while the
-   game has no felling. A mission with a pending objective is **skipped**:
+   `cooking.ron`. A `craft` of an item no recipe makes (`tool:pickaxe`
+   today) is pending too, and `fell` is pending while the game has no
+   felling. "Make a fire" plays: `cooking.ron` already has the campfire's
+   hand recipe, and a new world is dealt a campfire (kit version 6), so its
+   craft is met by carrying one and it is done when placed. A mission with a pending objective is **skipped**:
    logged at load (`mission <id> is pending: ...`), listed in the tab as
    "not in this build yet", and treated as met by the missions that need
-   it. So on this branch the chain plays from "Go fishing", and the missions
+   it. So on this branch the chain plays from "Make a fire", and the missions
    before it light up after the tool-crafting merge, with the state-met rule
    (decision 4) closing any the world already holds.
 9. **Current missions.** A mission is open when every mission it needs is
@@ -83,7 +85,8 @@ written, so its codes are the ones its design names.
    *the* current mission, shown on the HUD. Every open mission counts.
 10. **State-met objectives** are checked when a mission opens and when a
     world opens: `craft` of a tool the world owns or an item the slots hold
-    `count` of, and `place` of a block the world's edits hold `count` of
+    `count` of (for a block, carried and placed together), and `place` of a
+    block the world's edits hold `count` of
     (the save's edits, so a forge dealt in the kit counts only once placed).
     Nothing else is state-met: a fish caught before the mission opened is not
     counted.

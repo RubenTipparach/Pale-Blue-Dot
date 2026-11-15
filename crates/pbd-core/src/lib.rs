@@ -29,6 +29,7 @@ pub mod inventory;
 pub mod lamp_bake;
 pub mod light;
 pub mod map;
+pub mod missions;
 pub mod night_lights;
 pub mod orbit;
 pub mod overlay;

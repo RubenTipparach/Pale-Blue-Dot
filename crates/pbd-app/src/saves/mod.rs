@@ -287,6 +287,16 @@ pub struct WorldSave {
     slot: Option<Slot>,
     root: PathBuf,
     writer: SaveWriter,
+    /// Which opening of a world this is, unique for the run: what a system
+    /// that keeps state per world (`missions`) compares to see that a load
+    /// replaced the save.
+    serial: u64,
+}
+
+/// The next [`WorldSave::serial`].
+fn next_serial() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl Default for WorldSave {
@@ -312,6 +322,7 @@ impl Default for WorldSave {
             slot: None,
             root: PathBuf::from(ROOT),
             writer: SaveWriter::none(),
+            serial: next_serial(),
         }
     }
 }
@@ -385,6 +396,7 @@ impl WorldSave {
             slot: Some(slot),
             writer,
             root,
+            serial: next_serial(),
         }
     }
 
@@ -393,6 +405,11 @@ impl WorldSave {
     /// need no branch.
     pub fn memory_only() -> Self {
         Self::default()
+    }
+
+    /// Which opening of a world this is: unique for the run.
+    pub fn serial(&self) -> u64 {
+        self.serial
     }
 
     pub fn slot(&self) -> Option<&Slot> {

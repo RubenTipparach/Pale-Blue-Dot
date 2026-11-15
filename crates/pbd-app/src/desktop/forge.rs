@@ -233,7 +233,7 @@ pub fn work(
     mut save: ResMut<WorldSave>,
     mut hotbar: ResMut<slots::Hotbar>,
     mut note: ResMut<FarmNote>,
-    mut gained: MessageWriter<Gained>,
+    (mut gained, mut did): (MessageWriter<Gained>, MessageWriter<pbd_app::missions::Did>),
     mut plaques: Query<(&Interaction, &RecipePlaque, &mut Plaque), Changed<Interaction>>,
     mut line: Query<&mut KitText, With<QueueText>>,
     mut fill: Query<&mut Node, With<QueueFill>>,
@@ -270,6 +270,12 @@ pub fn work(
         if store(&mut save, cell, layer, &state, &moved) {
             hotbar.0 = moved;
             for job in done {
+                // What the starter missions count: this recipe made.
+                did.write(pbd_app::missions::Did::new(
+                    pbd_core::missions::Kind::Craft,
+                    format!("recipe:{}", job.recipe),
+                    1,
+                ));
                 if let Some(recipe) = recipes.0.get(&job.recipe) {
                     for &(item, count) in &recipe.outputs {
                         gained.write(Gained {

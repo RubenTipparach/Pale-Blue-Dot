@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 /// The shipped `assets/config` directory, resolved the same way the desktop
 /// app resolves its asset root.
-fn config_dir() -> PathBuf {
+pub fn config_dir() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/config"))
 }
 
@@ -1267,7 +1267,7 @@ impl Validated for pbd_core::cooking::CookingFile {
 pub struct KitchenConfig(pub pbd_core::cooking::Kitchen);
 
 /// The station recipes and the kitchen's in one book, and the kitchen.
-fn recipe_book() -> (Recipes, KitchenConfig) {
+pub fn recipe_book() -> (Recipes, KitchenConfig) {
     let mut book = load::<pbd_core::station::RecipeFile>("recipes")
         .resolve()
         .expect("validated on load");
