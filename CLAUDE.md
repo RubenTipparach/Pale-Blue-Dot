@@ -146,6 +146,19 @@ no bracketed explanations, design notes, costs measured on one machine or
 "off by default" remarks. Those go in the OpenSpec change, the mockup's info
 modal and the reply.
 
+## Waterfalls are designed in a mockup first (owner, 2026-11-15)
+
+**Standing instruction from the user:** "make mockups from now on for how
+we're gonna do the waterfall part so you dont mess it up in game, we've done
+this twice now", and "lets make sure third time is the right one" (after two
+in-game fall looks were rejected: "all the afters are bad", "too smeared").
+Any change to how falling water looks (its froth, its shape at the lip, its
+foot, its splash and mist) is built and shown in a mockup first, running
+the game's own shader terms, beside the game's current look. The game's
+code changes only after the owner approves the mockup. Until then the game
+keeps the fall look the owner pointed to on 2026-11-15 ("go back to these
+shaders"): the blotched froth of `water.wgsl` at `dc0c5cb`.
+
 ## One 3D view at a time, in tabs (owner, 2026-11-13)
 
 **Standing instruction from the user:** "make sure to apply the "tabs"
