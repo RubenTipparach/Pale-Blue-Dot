@@ -455,7 +455,7 @@ function linkCard(a) {
     el('div', { class: 'row' }, el('a', { class: 'open', href: a.url, target: '_blank', rel: 'noopener' }, 'Open')));
 }
 
-// The roadmap (owner, 2026-11-14): the first game loop, environment v2, town building and civil engineering, mass transportation, the age of flight and industry, then the townsfolk. `refs` are mockup ids;
+// The roadmap (owner, 2026-11-14): the first game loop, environment v2, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, then the townsfolk. `refs` are mockup ids;
 // `change` is the OpenSpec change. Status: built, building, planned (written up), later (not started).
 const ROADMAP = [
   { title: 'The first game loop', when: 'now', note: 'Crafting tools, fishing, farming, herding, cooking: each feeds the next.', steps: [
@@ -484,7 +484,11 @@ const ROADMAP = [
     { title: 'Mass mining', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'Strip mines cut in hex layers, crews, quarry frames and excavators.' },
     { title: 'Oil', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'From field and offshore platform to the refinery, by tanker.' },
     { title: 'Industrialization', status: 'later', change: 'industry-tiers', refs: ['M20', 'M3'], text: 'Ore to plate in plants and fabricators, past the forge.' },
-    { title: 'Advanced power generation', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'Up the power ladder past water and wind: coal, oil, fission and beyond.' },
+    { title: 'Advanced power generation', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'Up the power ladder past water and wind: coal and oil.' },
+  ] },
+  { title: 'Nuclear and rocketry', when: 'later', note: 'After the age of flight and industry. Not started.', steps: [
+    { title: 'Nuclear', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'The fission plant, its cooling tower and containment dome built of hex cells.' },
+    { title: 'Rocketry', status: 'later', change: 'ship-tiers', refs: ['M21', 'M1', 'M2'], text: 'Hex-cell rockets with decks you walk, flown to orbit and on to the other worlds.' },
   ] },
   { title: 'Townsfolk', when: 'later', note: 'Not started. Its place in the order is open: hired haulers need townsfolk to hire.', steps: [
     { title: 'NPCs', status: 'later', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, talk and trade.' },

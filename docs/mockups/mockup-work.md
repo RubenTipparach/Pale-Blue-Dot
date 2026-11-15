@@ -30,6 +30,7 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 18 | 2026-11-14 | Town building and civil engineering added after environment v2. |
 | 19 | 2026-11-14 | Mass transportation added after civil engineering: airships, sea ships and navigation, hired haulers, conveyors, aqueducts and minecart track. |
 | 20 | 2026-11-14 | The age of flight and industry added after mass transportation: aircraft, mass mining, oil, industrialization, advanced power. |
+| 21 | 2026-11-14 | Nuclear and rocketry added after the age of flight and industry; advanced power now stops at coal and oil. |
 
 **Back on one account (2026-11-14).** On 2026-11-13 a cloud session republished this week's pages
 on a second claude.ai account and moved every link here to it; later sessions added M25 to M29

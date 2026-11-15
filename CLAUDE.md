@@ -333,7 +333,10 @@ which wait for a request.
 - **Then the age of flight and industry** ("after mass transit we'll get
   into age of flight and mass mining, oil, industrialization, advanced power
   generation"): aircraft (M24), mass mining, oil, industry and the power
-  ladder past water and wind (M20, `industry-tiers`).
+  ladder past water and wind to coal and oil (M20, `industry-tiers`).
+- **Then nuclear and rocketry** ("then after that we'll get into nuclear,
+  and rocketry"): the fission plant (M20) and rockets to orbit and the other
+  worlds (M21, `ship-tiers`; M1, M2).
 - **The townsfolk**, its place in the order not yet set (hired haulers need
   people to hire): NPCs (M5, `townsfolk`), missions, carpentry and
   house building (M6, M22, `player-building`), and power generation, its
