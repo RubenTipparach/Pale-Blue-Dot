@@ -1,4 +1,5 @@
 mod arrival;
+mod breeding;
 mod compass_bar;
 mod cracks;
 mod craft;
@@ -1456,6 +1457,7 @@ pub fn run(args: &[String]) {
                     kitchen::spawn,
                     kitchen::spawn_effects,
                     missions::spawn,
+                    breeding::spawn,
                 ),
             )
                 .chain(),
@@ -1470,6 +1472,7 @@ pub fn run(args: &[String]) {
             menu::name_input,
             menu::toggle,
             guide::open,
+            breeding::open,
             pack::open,
             map_screen::open,
         )
@@ -1477,6 +1480,7 @@ pub fn run(args: &[String]) {
             .after(bevy::input::InputSystems)
             .after(pbd_app::controls::remap_keys),
     )
+    .add_systems(Update, (breeding::press, breeding::paint).chain())
     .add_systems(
         Update,
         (

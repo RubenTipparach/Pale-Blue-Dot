@@ -51,3 +51,7 @@ reduction:
 | `assets/items/stations/workbench.png` | the workbench block slot icon | M3 `workbench.png`, reduced to 16 px |
 | `assets/items/tools/{stone,bronze,iron}-pickaxe.png` | a pick of each tier | M3 `pick-<tier>.png`, reduced to 16 px |
 | `assets/items/tools/{stone,bronze,iron}-{shovel,axe}.png` | a shovel and an axe of each tier | the game own `shovel.png` and `axe.png` with the head three greys swapped for the tier three (iron is the picture as drawn) |
+
+`fertile-egg` and `incubator` (`animal-husbandry` design 13, E3 and E4) are
+drawn the same way by `tools/gen_item_icons.py`, in the same palette with a
+speckle brown and two glass blues (`HATCH`).

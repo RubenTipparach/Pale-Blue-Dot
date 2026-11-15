@@ -313,7 +313,8 @@ pub struct Fitness {
 }
 
 /// Everything the farm does on its own up to `now` (E5, E6), in day order,
-/// given the records as they stand. `fit` answers how an animal fares now;
+/// given the records as they stand. `fit` answers how an animal (by id)
+/// fares now;
 /// `lamp_lit` whether an incubator's cell has a lamp beside it. Running it to
 /// `now` once gives the same events as running it to every moment before
 /// `now` and storing each answer between: every event's day is decided by
@@ -323,7 +324,7 @@ pub fn farm_events(
     roster: &[LandSpecies],
     s: &BreedingSettings,
     now: f64,
-    fit: &dyn Fn(&AnimalBody) -> Fitness,
+    fit: &dyn Fn(u64, &AnimalBody) -> Fitness,
     lamp_lit: &dyn Fn(u32) -> bool,
 ) -> Vec<FarmEvent> {
     let mut animals: BTreeMap<u64, AnimalBody> =
@@ -382,23 +383,20 @@ pub fn farm_events(
                 .filter(|b| b.place == Place::Womb && b.dam == *dam_id)
                 .filter_map(|b| b.due(&keep.young))
                 .fold(f64::NEG_INFINITY, f64::max);
-            let f_ok = |a: &AnimalBody| {
-                let f = fit(a);
-                f.health >= s.health_min
-            };
-            if fit(dam).mood < s.mood_min || !f_ok(dam) {
+            let f_ok = |id: u64, a: &AnimalBody| fit(id, a).health >= s.health_min;
+            if fit(*dam_id, dam).mood < s.mood_min || !f_ok(*dam_id, dam) {
                 continue;
             }
             let adult = |a: &AnimalBody| a.born + f64::from(keep.adult_days);
             let mates: Vec<(&u64, &AnimalBody)> = animals
                 .iter()
-                .filter(|(_, m)| {
+                .filter(|(id, m)| {
                     m.sex == Sex::M
                         && m.state == Life::Alive
                         && m.sp == dam.sp
                         && m.body == dam.body
                         && m.pen == dam.pen
-                        && f_ok(m)
+                        && f_ok(**id, m)
                 })
                 .collect();
             let chosen = dam

@@ -108,6 +108,15 @@
             inputs: [("planks", 3), ("rope", 1)],
             outputs: [("bucket", 1)],
         ),
+        // ---- animal-husbandry design 13 (E4): the incubator, set by a lamp.
+        (
+            code: "incubator",
+            name: "INCUBATOR",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("planks", 4), ("rope", 2)],
+            outputs: [("incubator", 1)],
+        ),
         (
             code: "bronze-pickaxe",
             name: "BRONZE PICK",

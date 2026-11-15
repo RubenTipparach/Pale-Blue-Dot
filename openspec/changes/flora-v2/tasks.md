@@ -72,3 +72,14 @@ The owner, 2026-11-15: "why didnt you implement new trees for env 2". Built on `
 The owner, 2026-11-15: "I see some plants are still using the old sprites, so please get new sprites that have a more unified art style".
 
 - [x] 8.1 Copy `docs/mockups/farming/world/<crop>_<s>.png` (M8's outline-free world stages, the same bytes as M13's `foliage/crops/`) over `assets/items/crops/`; PROVENANCE says so. Verify: `farm::tests::every_stage_has_its_sprite`; a byte comparison with the mockup's copies; `--farm` captures before and after, the field and a wild plant.
+
+## 9. Generator version 10, snow on the branches, vines, fruit to pick (design 12)
+
+The owner, 2026-11-15: "finish up fishing wiki, herding, and flora". Cloud session: lavapipe captures, frame cost not measured.
+
+- [ ] 9.1 Pin where version 9's trees stand (a tree digest over 10,000 sample cells) and record the x86_64 ground digests of versions 6 to 9 beside the aarch64 ones. Verify: the digest tests pass on this machine before the table moves.
+- [ ] 9.2 `TreeTable` in `TerrainConfig`: versions 4 to 9 carry today's table, version 10 M13's (design 12.2) with the beach's sand eligible; `grows_tree` takes the world's table at every caller. Verify: version 10's ground digest equals version 9's; version 9's tree digest is unchanged; version 10's tree counts per biome match 12.2 within sampling.
+- [ ] 9.3 The foliage pass reads the table from `PlanetParams`; its literals go. Verify: a test that the uniform carries the open world's table, and that no density literal is left in the WGSL; shader validation; a launch to READY with no `LATE_PIPELINE`.
+- [ ] 9.4 Snow on the branches (12.3). Verify: `winter_cover` core test and its WGSL twin; a winter capture of a tundra pine and a fields oak beside summer.
+- [ ] 9.5 Vines (12.4). Verify: core tests (a vine hangs from an anchor, no longer than the trunk); a jungle capture.
+- [ ] 9.6 Fruit to pick (12.5): goods and icons, `flora::fruit_of`, E on a tree, the `fruit` record, the picked and felled bits. Verify: a test that a picked tree gives nothing until it regrows and that the record survives a reload; captures of a tree before and after picking, and a felled tree gone.

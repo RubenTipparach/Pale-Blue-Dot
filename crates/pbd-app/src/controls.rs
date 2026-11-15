@@ -508,9 +508,10 @@ const WORLD: [Binding; 5] = [
     row(&[Key::Board(KeyCode::KeyL)], " ", "noon or midnight"),
 ];
 
-const SCREEN: [Binding; 8] = [
+const SCREEN: [Binding; 9] = [
     row(&[Key::Board(KeyCode::Escape)], " ", "menu"),
     row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
+    row(&[Key::Board(KeyCode::KeyB)], " ", "breeding (on foot)"),
     row(
         &[Key::Board(KeyCode::KeyI), Key::Board(KeyCode::Tab)],
         " / ",

@@ -180,3 +180,104 @@ fn a_rig_builds_boxes_and_its_legs_follow_the_phase() {
         assert_ne!(a.positions, b.positions, "{}: the legs move", sp.id);
     }
 }
+
+/// Design 13, E10: a world saved before breeding (an animal record with no
+/// `brood` or `mate`) opens with that animal as it was; the farm's own
+/// events write nothing for it however long it is left; and the identity
+/// gains no breeding kind until one is stored.
+#[test]
+fn a_world_saved_before_breeding_opens_unchanged_and_writes_nothing() {
+    use pbd_core::husbandry::breeding::{self, Fitness};
+    use pbd_core::records::Record;
+    let root = temporary("before-breeding");
+    let slot = create(&root, "Old farm", 5).unwrap();
+    // The line the build before design 13 wrote for a tamed ewe.
+    let old = "(body:\"home\",sp:1,sex:F,born:3.0,gen:[1,2,3,4,5,6,7,8,9,10,11,12,13,14],pen:Some(5),home:5,owner:0,state:Alive,via:Fed,wild:77,as_of:4.0,health:100.0,hungry:0.0,fed_until:6.0,made:{})";
+    {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        note_kinds(&mut save);
+        let line = Record {
+            kind: record::ANIMAL.into(),
+            id: 1,
+            schema: 1,
+            body: old.into(),
+        };
+        assert!(save.store(&Author::Player(0), vec![line]).is_some());
+        save.drain();
+    }
+    let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+    let kept = record::animals(&reopened.records);
+    assert_eq!(kept.len(), 1);
+    let body = &kept[0].1;
+    assert_eq!((body.brood, body.mate), (None, None));
+    assert_eq!(
+        (body.sp, body.home, body.pen, body.wild),
+        (1, 5, Some(5), 77)
+    );
+    assert_eq!(
+        reopened
+            .records
+            .get(record::ANIMAL, 1)
+            .map(|r| r.body.as_str()),
+        Some(old),
+        "the stored line itself is untouched"
+    );
+    let settings = HusbandrySettings::default();
+    let roster = settings.roster(pbd_core::fauna::HOME_BODY);
+    let content = |_: u64, _: &AnimalBody| Fitness {
+        mood: 100.0,
+        health: 100.0,
+    };
+    let events = breeding::farm_events(
+        &reopened.records,
+        roster,
+        &settings.breeding,
+        400.0,
+        &content,
+        &|_| true,
+    );
+    assert!(
+        events.is_empty(),
+        "a lone ewe and no broods: nothing to write"
+    );
+    assert!(
+        breeding::KINDS
+            .iter()
+            .all(|(kind, _)| !reopened.identity.records.contains_key(*kind)),
+        "no breeding kind is noted before one is stored"
+    );
+}
+
+/// Design 13, E3 and E10: fertile eggs in the pack and the carried clutch
+/// that holds their parentage survive a quit and a reload, and the kinds are
+/// noted.
+#[test]
+fn fertile_eggs_and_their_parentage_survive_a_reload() {
+    use pbd_core::husbandry::breeding::{self, BroodBody, Place};
+    let root = temporary("fertile");
+    let slot = create(&root, "Hatchery", 5).unwrap();
+    let brood = BroodBody {
+        sp: 0,
+        dam: 2,
+        sire: 1,
+        eggs: 3,
+        laid: 12.5,
+        ..BroodBody::default()
+    };
+    let mut carried = Slots::new();
+    carried.give(Item::Good(Good::FERTILE_EGG), 3);
+    {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        assert!(save.store_with_hands(brood.record(1), breeding::BROOD_SCHEMA, &carried));
+        save.drain();
+    }
+    let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+    let broods = breeding::broods(&reopened.records);
+    assert_eq!(broods.get(&1), Some(&brood));
+    assert_eq!(broods[&1].place, Place::Carried);
+    assert_eq!(reopened.carried.as_ref(), Some(&carried));
+    assert_eq!(
+        reopened.identity.records.get(breeding::BROOD),
+        Some(&breeding::BROOD_SCHEMA)
+    );
+}

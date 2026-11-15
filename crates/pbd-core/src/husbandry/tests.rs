@@ -525,7 +525,7 @@ mod breeding_tests {
         }
     }
 
-    fn content(_: &AnimalBody) -> Fitness {
+    fn content(_: u64, _: &AnimalBody) -> Fitness {
         Fitness {
             mood: 75.0,
             health: 100.0,
@@ -714,7 +714,7 @@ mod breeding_tests {
             breeding::farm_events(&records, roster, &s.breeding, 500.0, &content, &lit).is_empty()
         );
         records.put(adult("woolback", Sex::M, 0.0, 5, 4).record(4));
-        let sad = |_: &AnimalBody| Fitness {
+        let sad = |_: u64, _: &AnimalBody| Fitness {
             mood: 50.0,
             health: 100.0,
         };

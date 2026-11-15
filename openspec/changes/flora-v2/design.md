@@ -636,3 +636,158 @@ them, and the owner approved M13. They are 32 px, like the game's.
 **Not plants, still outlined.** The light sprites in `assets/items/lights`
 (campfire, torch, brazier) are outside this request. They are listed here
 for a later pass.
+
+## 12. Generator version 10, snow on the branches, vines, and fruit to pick (planned 2026-11-15)
+
+The owner, 2026-11-15: "finish up fishing wiki, herding, and flora". This is
+the plan for what 9.9 and 10.8 left, written before its code: forests as
+dense as M13, acacias that stand, snow on the branches in winter, jungle and
+swamp vines, and fruit a player can pick. Not in this pass: the alien species
+(no such biome), the desert palm (no oasis) and the fungal forest (Q7, a
+biome of its own).
+
+### 12.1 Where a tree stands is the generator's, so it gets a version
+
+`pbd_core::flora::grows_tree` decides which cells stand a tree from the
+cell's tree id and its material word, through one table, `TREE_DENSITY`
+(trees per 256 cells by biome). The foliage pass keeps the same table as
+literals (`planet_visibility.wgsl`, `has_nearby_foliage`). A tree is a thing
+a player works: chopping one writes a `tree` record keyed by the cell
+(`tool-crafting`). So moving a tree moves what a save's records point at,
+and changing the table for an existing world is the bug CLAUDE.md's "Saved
+games survive every change" exists to prevent.
+
+So the table becomes part of the generator:
+
+- **`TerrainConfig` gains `trees: TreeTable`**: trees per 256 cells for each
+  of the eight biomes, and the material codes a tree may stand on in each.
+  Versions 4 to 9 carry today's table (`TreeTable::V4`), byte for byte.
+  **Version 10** is version 9 with M13's table (12.2), and it is the version a
+  new world is made on.
+- **`grows_tree` takes the world's table.** It is called with the open
+  world's `terrain_config().trees` (the aim, the gathering, the spawn's
+  tool-crafting ground), so an old world's trees are the ones it had.
+- **The shader reads the table from the uniform** (`PlanetParams` gains
+  `tree_density: array<vec4<u32>, 2>`, the eight biomes, and
+  `tree_ground: vec4<u32>`, the per-biome eligibility as bits). Its
+  literals go. This closes `fishing-and-equipment` task 4's open half: a test
+  runs the WGSL rule (through naga's validator for the layout, and the rule
+  transcribed by a Rust mirror that reads the shader's text) against
+  `grows_tree` over 10,000 cell ids and every biome and material, for
+  version 9's table and version 10's.
+- **Digests first.** Version 9's ground digest is pinned before version 10
+  lands (it is: `version_9_makes_the_ground_its_worlds_are_made_on`), and a
+  new **tree digest** pins where version 9's trees stand on 10,000 sample
+  cells, taken before the table moves. Version 10 gets the same pair. Its
+  ground (heights, biomes, top blocks) is version 9's, digest for digest:
+  only the trees move.
+
+**A finding that comes with this, measured in this session**: the ground
+digests are not the same on every machine. Versions 6 to 9 were pinned on the
+M4 Max Mac (aarch64) and fail on x86_64 Linux (this container); versions 4
+and 5 were pinned on x86_64 and the Mac session reports them failing there.
+The generator's `f32` arithmetic (`sin`, `cos`, `powf`, fused multiply-adds)
+differs between the two targets in the last bits, and a threshold somewhere
+lands on the other side. A world made on the Mac and opened on the desktop
+(RTX 3070, x86_64) can therefore differ in the odd cell. This pass does not
+fix that (it is a determinism change to every version, and needs its own
+write-up); it pins version 10's digests per target
+(`cfg(target_arch)`), records the x86_64 values of 6 to 9 beside the
+aarch64 ones so both machines' test runs mean something, and lists the
+cross-machine drift as an open question for the owner.
+
+### 12.2 M13's densities
+
+M13 rolls a tree on a cell with probability `treeP × (0.25 + 1.5 × forest)`,
+`forest` a slow noise. Its mean over a biome is about `treeP`. Version 10
+takes the means, in trees per 256 cells (recommendation taken, ask only with
+screenshots: the forest-and-clearing noise is not ported, because the shader
+and the CPU would each have to compute it and agree at every threshold):
+
+| Biome | M13 biome, `treeP` | Version 9 | Version 10 |
+| --- | --- | ---: | ---: |
+| Fields | temperate forest, 0.32 | 13 | 82 |
+| Jungle | jungle, 0.55 | 115 | 141 |
+| Swamp | swamp, 0.26 | 34 | 67 |
+| Tundra | taiga, 0.30 | 2 | 77 |
+| Beach | savanna, 0.06 | 13 (on grass, which a beach never has) | 15, on sand |
+| Desert, mountains, ocean | | 0 | 0 |
+
+The tundra's pines stand on snow as today, and now on its grass too.
+
+**Acacias stand** (10.7's finding): a beach is sand, and only grass grew a
+tree, so the acacia was built and never seen. Version 10 lets the beach's
+sand (material code 1) stand a tree at 15 in 256, which the kit draws as
+the beach's species, the acacia. The cactus rule is untouched (desert only).
+
+**Frame cost** rises with the tree count (fields about six times as many
+trees). Not measured here (no GPU); the owner's perf sitting judges it, and
+the LOD distances are the lever if it is too much.
+
+### 12.3 Snow on the branches
+
+Section 5 left snow alone because the generator's snow is a material and a
+seasonal one would move cells. Snow on a tree's branches moves nothing: it is
+decoration on a drawn model. The near tree's fragment whitens the up-facing
+side of a bark or leaf card by a **winter cover**:
+`cover = bare(season) × cold`, where `cold` is 1 on a tundra or mountain
+cell and on any cell above 50° latitude, and falls to 0 by 35°. Pines, which
+keep their needles, carry the most; a deciduous tree's bare twigs a thin
+line. The impostors take the same cover on their up-facing pixels (the
+bake's normal is not kept, so the top third of the crown's pixels). A test
+holds the Rust `winter_cover` and the WGSL to one set of numbers, as 5 does
+for the season.
+
+**The winter sod lip** stays not built (9.9): the season model lays no snow
+on the ground, so there is no green lip under snow to fix.
+
+### 12.4 Vines
+
+M13 hangs vines from the jungle's and the swamp's trees (`vines: 0.7` and
+`0.5`). They join the near model in `tree_kit::build`: on the kapok, the
+palm and the willow, a strand of leaf cards hangs from some of the model's
+anchors (a vine's chance by species, seeded like the rest of the model), each
+a chain of 3 to 6 narrow cards falling straight down with a little sway,
+on the leaf tile in the crown's colours. They are part of the model, so they
+are baked into its impostors and fade with it, and the near draw's vertex
+count is the model's (`near_vertices` reads the kit). A core test pins that a
+vine hangs from an anchor and that no vine is longer than the trunk is tall.
+
+### 12.5 Fruit to pick
+
+9.6 drew the fruit and left it "not gatherable yet". Now:
+
+- **Goods**: one good per fruit kind (`apple`, `pear`, `plum`, `cherry`,
+  `mango`, `papaya`, `marula`, `baobab`, `pine-cone`), appended to the goods
+  table with 16 px icons reduced from M13's own fruit sprites
+  (`docs/mockups/foliage/fruit_art.py`'s ramps), outlined as UI icons are.
+- **Which tree bears what** is the drawing's rule, moved to the core so the
+  CPU and the shader read one answer: `flora::fruit_of(tree_id, biome,
+  direction)` gives the kind (the patch hash on the tree's direction) and
+  whether this tree fruits at all (`fruit_chance`). How many hang today is
+  the season's keep (summer 0.85, autumn all, winter 0.08), so a tree in
+  winter mostly has none to give.
+- **Picking**: E on a fruiting tree (the aim's `tree_on_ray`) gives its
+  hanging fruit, up to four. What was picked is a **stored record**,
+  `fruit` by the cell's key (schema 1, the picked day and how many), written
+  with the hands in one line, like the `tree` record. A tree's fruit grows
+  back after `regrow_days` (8 world days): a picked record older than that
+  reads as a full tree again.
+- **Seeing it go**: a picked tree's hanging fruit must not still hang. The
+  tier's record build sets a **picked bit** (bit 25 of the material word,
+  beside the town's cleared bit) on a cell whose `fruit` record is younger
+  than `regrow_days`, and the fruit vertices of that tree are skipped. The
+  same path sets a **felled bit** (bit 26) on a cell whose `tree` record says
+  it was felled, which is `fishing-and-equipment` task 4's other open half: a
+  felled tree stops being drawn, after a tier rebuild too.
+- **Saves**: `fruit` is a new record kind at schema 1, noted in
+  `identity.ron` the first time one is stored; nothing else in a save
+  changes. Fruit decided by the generator's table is derived and never saved;
+  only what a player took is.
+
+### 12.6 What this pass leaves
+
+- The forest-and-clearing noise (12.2), alien species, the desert palm, the
+  fungal forest.
+- The cross-machine digest drift (12.1), written up, not fixed.
+- Frame cost, not measured (no GPU in the cloud session).
