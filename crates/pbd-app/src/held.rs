@@ -18,7 +18,7 @@ use bevy::light::NotShadowCaster;
 use bevy::mesh::PrimitiveTopology;
 use bevy::prelude::*;
 use pbd_core::hexel::{self, Hex, HexelMesh, Prism};
-use pbd_core::inventory::Tool;
+use pbd_core::inventory::{Tier, Tool};
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
@@ -217,7 +217,68 @@ pub struct HeldPlugin;
 impl Plugin for HeldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Swinging>()
-            .add_systems(Update, (spawn, hold, light_held).chain());
+            .add_systems(Update, (spawn, hold, light_held, tint_held).chain());
+    }
+}
+
+/// A held tool's mesh and its colours as drawn, so its head can be recoloured
+/// for its tier (`tool-crafting` decision 9).
+#[derive(Component)]
+struct ToolColours {
+    tool: Tool,
+    drawn: Vec<[f32; 4]>,
+    tier: Option<Tier>,
+}
+
+/// What a tier does to a head's grey: the tools were drawn as iron.
+pub fn tier_tint(tier: Tier) -> [f32; 3] {
+    match tier {
+        Tier::Stone => [0.80, 0.74, 0.66],
+        Tier::Bronze => [1.15, 0.74, 0.40],
+        Tier::Iron => [1.0, 1.0, 1.0],
+        Tier::Steel => [0.88, 0.97, 1.12],
+    }
+}
+
+/// Whether a drawn colour is a head's metal: a grey, not the wood.
+fn metal(c: [f32; 4]) -> bool {
+    let (lo, hi) = (c[0].min(c[1]).min(c[2]), c[0].max(c[1]).max(c[2]));
+    hi > 0.15 && hi - lo < 0.12 * hi.max(0.2)
+}
+
+/// Recolour a held tool's head when its tier changes.
+fn tint_held(
+    tools: Res<ToolSlot>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut held: Query<(&mut ToolColours, &Mesh3d)>,
+) {
+    for (mut colours, mesh) in &mut held {
+        let tier = tools.tier(colours.tool);
+        if colours.tier == tier {
+            continue;
+        }
+        let Some(mesh) = meshes.get_mut(&mesh.0) else {
+            continue;
+        };
+        let tint = tier_tint(tier.unwrap_or(Tier::Iron));
+        let tinted: Vec<[f32; 4]> = colours
+            .drawn
+            .iter()
+            .map(|&c| {
+                if metal(c) {
+                    [
+                        (c[0] * tint[0]).min(1.0),
+                        (c[1] * tint[1]).min(1.0),
+                        (c[2] * tint[2]).min(1.0),
+                        c[3],
+                    ]
+                } else {
+                    c
+                }
+            })
+            .collect();
+        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, tinted);
+        colours.tier = tier;
     }
 }
 
@@ -322,7 +383,8 @@ fn spawn(
             ))
             .with_children(|parent| {
                 for (part, built) in [("tool", tool_mesh), ("hand", hand_mesh)] {
-                    parent.spawn((
+                    let drawn = built.colours.clone();
+                    let mut child = parent.spawn((
                         Name::new(part),
                         Mesh3d(meshes.add(bevy_mesh(built))),
                         MeshMaterial3d(material.clone()),
@@ -330,6 +392,13 @@ fn spawn(
                         Visibility::Inherited,
                         NotShadowCaster,
                     ));
+                    if part == "tool" {
+                        child.insert(ToolColours {
+                            tool,
+                            drawn,
+                            tier: Some(Tier::Iron),
+                        });
+                    }
                 }
             })
             .id();

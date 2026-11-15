@@ -18,7 +18,7 @@ use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
 use pbd_core::aim::{self, Sample};
 use pbd_core::column::{self, LAYERS};
-use pbd_core::dig::Step;
+use pbd_core::dig::{Digger, Refusal, Step};
 use pbd_core::edits::Edit;
 use pbd_core::inventory::{Item, Tool};
 use pbd_core::terrain::Material;
@@ -33,6 +33,10 @@ pub struct Aim {
 /// A block, as the digging rule names it: its cell's stable ID and its layer.
 pub type Block = (u32, usize);
 
+/// The layer a tree being worked is named by in a [`Block`]: no layer, so
+/// the cracks leave it alone (`tool-crafting` decision 3).
+pub const TREE_LAYER: usize = usize::MAX;
+
 /// The block being broken and how far along it is (`pbd_core::dig`), kept
 /// between frames because breaking is a hold. The crack overlay reads
 /// `progress`.
@@ -42,7 +46,7 @@ pub struct Mining {
     /// The last break time looked up: for which block, tool and fine set
     /// version. A lookup finds the record and may build its column, so it is
     /// done once per target rather than every frame of a hold.
-    lookup: Option<(Block, Tool, u64, Option<f32>)>,
+    lookup: Option<(Block, Digger, u64, Result<f32, Refusal>)>,
 }
 
 impl Mining {
@@ -51,24 +55,27 @@ impl Mining {
         self.breaking.progress()
     }
 
-    /// How long `block` takes with `tool`, remembered until either changes.
+    /// How long `block` takes for `digger`, or why it does not break,
+    /// remembered until either changes.
     fn secs(
         &mut self,
         block: Block,
-        tool: Tool,
+        digger: Digger,
         fine: &PlanetFine,
         save: &WorldSave,
         dig: &pbd_core::dig::DigSettings,
-    ) -> Option<f32> {
-        if let Some((b, t, v, secs)) = self.lookup
+    ) -> Result<f32, Refusal> {
+        if let Some((b, d, v, secs)) = self.lookup
             && b == block
-            && t == tool
+            && d == digger
             && v == fine.version
         {
             return secs;
         }
-        let secs = material_of(fine, save, block).and_then(|material| dig.secs(material, tool));
-        self.lookup = Some((block, tool, fine.version, secs));
+        let secs = material_of(fine, save, block)
+            .ok_or(Refusal::NotABlock)
+            .and_then(|material| dig.secs_by(material, digger));
+        self.lookup = Some((block, digger, fine.version, secs));
         secs
     }
 }
@@ -178,9 +185,10 @@ pub enum Hands {
     /// but the soil may turn up a seed, which floats out as a dig's block
     /// does, on the edit's own line.
     Till(Option<Item>),
-    /// A dig that also turns up something into the hands: a seed out of dug
-    /// grass (`farming-and-smelting` decision 14), on the same line.
-    TakeWith(Item),
+    /// A dig that also turns up finds into the hands, on the same line: a
+    /// seed out of dug grass (`farming-and-smelting` decision 14), fibre out
+    /// of grass and loose stone out of earth (`tool-crafting` decision 2).
+    TakeFinds([Option<Item>; 2]),
 }
 
 /// What a dug block yields (`farming-and-smelting` decisions 2 and 10):
@@ -307,11 +315,13 @@ pub fn apply_edit(
         // The dug block floats where it was cut, at the cell's centre, and
         // the magnet brings it in (`inventory-grid` decision 4). The hands do
         // not change here; the pickup is its own line.
-        Hands::Take | Hands::TakeWith(_) | Hands::Till(Some(_)) => {
-            if let Hands::TakeWith(bonus) = hands {
-                // What does not fit is not given: the seed is a find, not a
-                // block the player is owed.
-                moved.give(bonus, 1);
+        Hands::Take | Hands::TakeFinds(_) | Hands::Till(Some(_)) => {
+            // What does not fit is not given: a find is not a block the
+            // player is owed.
+            if let Hands::TakeFinds(finds) = hands {
+                for find in finds.into_iter().flatten() {
+                    moved.give(find, 1);
+                }
             }
             let item = match hands {
                 Hands::Till(Some(item)) => item,
@@ -434,11 +444,12 @@ pub fn dig_and_place(
         Res<pbd_app::sky::Sun>,
         ResMut<pbd_app::husbandry::AimedGround>,
     ),
-    (mut note, farm, mut gained, mut planted): (
+    (mut note, farm, mut gained, mut planted, gather): (
         ResMut<super::farm::FarmNote>,
         Res<pbd_app::config::FarmConfig>,
         MessageWriter<pbd_app::hotbar::Gained>,
         MessageWriter<pbd_app::hotbar::Planted>,
+        Res<pbd_app::config::GatherConfig>,
     ),
 ) {
     ground.0 = None;
@@ -472,14 +483,55 @@ pub fn dig_and_place(
     // way INSIDE the ground, because a click that lands there is a click the
     // world should have answered.
     let mut unsampled = None;
+    let mut solid_m: Option<f32> = None;
     let target = aim::march(eye, look, |point| {
         let sample = sample_at(&fine, &contact, point);
         if sample.is_none() && unsampled.is_none() {
             unsampled = why_unsampled(&contact, point);
         }
+        if solid_m.is_none() && sample.is_some_and(|s| s.solid) {
+            solid_m = Some(point.distance(eye));
+        }
         sample
     });
     aimed.target = target;
+    // What breaks: bare hands dig soft ground (`tool-crafting` decision 1),
+    // a tool at its tier; the rod nothing.
+    let digger = if tools.bare_handed() {
+        Some(Digger::Hands)
+    } else {
+        tools.digging().map(|(tool, tier)| Digger::Tool(tool, tier))
+    };
+    // A tree's trunk nearer than the ground is worked for a log (decision 3).
+    if buttons.pressed(MouseButton::Left)
+        && digger.is_some()
+        && let Some(tree) = tree_on_ray(&fine, eye, look, solid_m.unwrap_or(aim::REACH_M))
+    {
+        let by_axe = matches!(digger, Some(Digger::Tool(Tool::Axe, _)));
+        let wood = dig.0.wood.axe;
+        let secs = match digger {
+            Some(Digger::Tool(Tool::Axe, tier)) => {
+                wood / dig.0.tier_speeds[usize::from(tier.digit())]
+            }
+            _ => wood / dig.0.hand_speed,
+        };
+        let step = mining
+            .breaking
+            .step(dt, true, Some(((tree, TREE_LAYER), secs)), between);
+        if let Step::Broken(_) = step {
+            take_log(
+                &mut edits,
+                &mut slots,
+                &gather,
+                tree,
+                by_axe,
+                &mut note,
+                time.elapsed_secs(),
+                &mut gained,
+            );
+        }
+        return;
+    }
     // Where the ray met the ground, for a fence piece's edge
     // (`animal-husbandry` S12).
     ground.0 = target.map(|t| eye + look * t.distance);
@@ -502,13 +554,26 @@ pub fn dig_and_place(
     // (`pbd_core::dig`). A rod casts rather than digs, and the fishing system
     // has that button; bare hands break nothing (`inventory-grid` decision
     // 8); every other tool digs, the right one fastest.
-    let tool = tools.digging_tool();
     let block = (target.dig.cell, target.dig.layer);
-    let held = buttons.pressed(MouseButton::Left) && tool.is_some();
-    let secs = match tool {
-        Some(tool) if held => mining.secs(block, tool, &fine, &edits, &dig.0),
-        _ => None,
+    let held = buttons.pressed(MouseButton::Left) && digger.is_some();
+    let secs = match digger {
+        Some(digger) if held => mining.secs(block, digger, &fine, &edits, &dig.0),
+        _ => Err(Refusal::NotABlock),
     };
+    // Say once, on the press, why a block will not break.
+    if buttons.just_pressed(MouseButton::Left)
+        && let Err(why) = secs
+    {
+        let wall_s = time.elapsed_secs();
+        match why {
+            Refusal::NotByHand => note.say(wall_s, "Hands take soft ground: make a tool"),
+            Refusal::TierTooLow(tier) => {
+                note.say(wall_s, format!("That wants a {} pick", tier.name()))
+            }
+            Refusal::NotADiggingTool | Refusal::NotABlock => {}
+        }
+    }
+    let secs = secs.ok();
     let step = mining
         .breaking
         .step(dt, held, secs.map(|secs| (block, secs)), between);
@@ -530,7 +595,21 @@ pub fn dig_and_place(
                 farm.0
                     .grass_seed(cell, super::farm::climate_at(&fine, cell, layer))
             });
-        let hands = seed.map_or(Hands::Take, |s| Hands::TakeWith(Item::Good(s)));
+        // And tier 0 (`tool-crafting` decision 2): fibre from grass, loose
+        // stone from earth, never from a block a player placed.
+        let placed = was.is_some_and(|m| {
+            edits
+                .edits
+                .for_cell(cell)
+                .iter()
+                .any(|&(l, e)| usize::from(l) == layer && e == m)
+        });
+        let find = was.and_then(|m| gather.0.find(m, cell, layer as u16, placed));
+        let hands = if seed.is_none() && find.is_none() {
+            Hands::Take
+        } else {
+            Hands::TakeFinds([seed.map(Item::Good), find.map(Item::Good)])
+        };
         if let Some(taken) = apply_edit(
             &mut Edited {
                 fine: &mut fine,
@@ -545,13 +624,13 @@ pub fn dig_and_place(
             layer,
             Material::Air,
         ) {
-            if let Some(seed) = seed {
+            for good in [seed, find].into_iter().flatten() {
                 gained.write(pbd_app::hotbar::Gained {
-                    item: Item::Good(seed),
+                    item: Item::Good(good),
                     count: 1,
                     how: pbd_app::hotbar::How::Found,
                 });
-                note.say(wall_s, format!("Found a {}", seed.name()));
+                note.say(wall_s, format!("Found {}", good.name()));
             }
             if taken == Material::Tilled {
                 super::farm::uproot(&mut edits, &slots.0, cell);
@@ -559,7 +638,10 @@ pub fn dig_and_place(
             info!(
                 "dug {taken:?} from cell {cell} layer {layer} with the {} in {:.2} s, \
                  fine set version {}",
-                tool.map_or("bare hands", |t| t.name()),
+                match digger {
+                    Some(Digger::Tool(tool, tier)) => pbd_core::inventory::tool_title(tool, tier),
+                    _ => "bare hands".to_string(),
+                },
                 secs.unwrap_or(0.0),
                 fine.version
             );
@@ -640,6 +722,124 @@ pub fn dig_and_place(
             );
         }
     }
+}
+
+/// The tree whose trunk the eye ray meets nearer than `before_m` and within
+/// reach, by its cell's key: a vertical column at the centre of a cell that
+/// grows a tree (`pbd_core::flora::grows_tree`, the foliage pass's own rule),
+/// the trunk's width low down and the canopy's higher up.
+pub fn tree_on_ray(fine: &PlanetFine, eye: Vec3, look: Vec3, before_m: f32) -> Option<u32> {
+    let reach = before_m.min(aim::REACH_M);
+    let toward = eye.normalize_or(Vec3::Y);
+    let near = ((aim::REACH_M + 3.0) / PLANET_RADIUS).cos();
+    let mut best: Option<(f32, u32)> = None;
+    for record in fine.set.finest_records() {
+        let up = Vec3::from_slice(&record.direction_height[..3]);
+        let Some(up) = up.try_normalize() else {
+            continue;
+        };
+        if up.dot(toward) < near
+            || !pbd_core::flora::grows_tree(record.spare[0], record.metadata[1])
+        {
+            continue;
+        }
+        let base = up * (PLANET_RADIUS + record.direction_height[3]);
+        // The ray in the trunk's frame: across (perpendicular to up) and up.
+        let rel = eye - base;
+        let d_across = look - up * look.dot(up);
+        let p_across = rel - up * rel.dot(up);
+        let a = d_across.length_squared();
+        if a < 1e-6 {
+            continue;
+        }
+        for (radius, low, high) in [(0.45_f32, 0.0_f32, 3.0_f32), (1.0, 3.0, 6.5)] {
+            let b = 2.0 * p_across.dot(d_across);
+            let c = p_across.length_squared() - radius * radius;
+            let disc = b * b - 4.0 * a * c;
+            if disc < 0.0 {
+                continue;
+            }
+            let t = (-b - disc.sqrt()) / (2.0 * a);
+            let t = if t < 0.0 {
+                (-b + disc.sqrt()) / (2.0 * a)
+            } else {
+                t
+            };
+            if !(0.0..=reach).contains(&t) {
+                continue;
+            }
+            let height = (rel + look * t).dot(up);
+            if (low..=high).contains(&height) && best.is_none_or(|(bt, _)| t < bt) {
+                best = Some((t, record.key()));
+            }
+        }
+    }
+    best.map(|(_, key)| key)
+}
+
+/// A log from a worked tree into the slots, and what the tree has given, in
+/// one saved line (`tool-crafting` decision 3).
+#[allow(clippy::too_many_arguments)]
+fn take_log(
+    save: &mut WorldSave,
+    slots: &mut super::slots::Hotbar,
+    gather: &pbd_app::config::GatherConfig,
+    tree: u32,
+    by_axe: bool,
+    note: &mut super::farm::FarmNote,
+    wall_s: f32,
+    gained: &mut MessageWriter<pbd_app::hotbar::Gained>,
+) {
+    use pbd_core::gather::{TREE_KIND, TREE_SCHEMA, TreeSpent, TreeTaken};
+    let taken: TreeTaken = save
+        .records
+        .get(TREE_KIND, u64::from(tree))
+        .and_then(|r| r.read())
+        .unwrap_or_default();
+    match gather.0.tree_gives(taken.logs, by_axe) {
+        Err(TreeSpent::BranchTaken) => {
+            note.say(wall_s, "Its branch is taken: an axe takes more");
+            return;
+        }
+        Err(TreeSpent::Felled) => {
+            note.say(wall_s, "This tree has given all its wood");
+            return;
+        }
+        Ok(()) => {}
+    }
+    let log = Item::Good(pbd_core::goods::Good::LOG);
+    let mut moved = slots.0.clone();
+    if moved.give(log, 1) > 0 {
+        note.say(wall_s, "No room in the pack");
+        return;
+    }
+    let record = pbd_core::records::Record::of(
+        TREE_KIND,
+        u64::from(tree),
+        TREE_SCHEMA,
+        &TreeTaken {
+            logs: taken.logs + 1,
+        },
+    );
+    if !save.store_with_hands(record, TREE_SCHEMA, &moved) {
+        error!("log BLOCKED: the save did not accept it");
+        return;
+    }
+    slots.0 = moved;
+    gained.write(pbd_app::hotbar::Gained {
+        item: log,
+        count: 1,
+        how: pbd_app::hotbar::How::Found,
+    });
+    note.say(
+        wall_s,
+        if by_axe {
+            "+1 log"
+        } else {
+            "+1 log: a branch pulled down"
+        },
+    );
+    info!("took log {} from the tree at cell {tree}", taken.logs + 1);
 }
 
 /// Whether the player's own body stands in this cell and layer.

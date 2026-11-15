@@ -115,10 +115,16 @@ pub fn open(
 /// title, the thirty slots and the hotbar's ten under them. Nothing else on
 /// it: no close button (owner, 2026-11-14: "In desktop esc will do just
 /// fine"; I shuts it too) and no line of instructions.
-pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, kit: Res<UiKit>) {
+pub fn spawn(
+    mut commands: Commands,
+    icons: Res<ItemIcons>,
+    kit: Res<UiKit>,
+    recipes: Res<pbd_app::config::Recipes>,
+) {
     let atlas = icons.atlas.clone();
     let kit = &*kit;
-    let (rock, (w, h)) = kit.rock("pack");
+    // M29's rock, grown for the Craft row (`tool-crafting` decision 9).
+    let (rock, (w, h)) = kit.rock("pack-craft");
     commands
         .spawn((menu::layer(), GlobalZIndex(10), Panel(Screen::Pack)))
         .with_children(|layer| {
@@ -153,6 +159,7 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, kit: Res<UiKit>) {
                             }
                         });
                     }
+                    super::craft::spawn_pack_row(panel, kit, &atlas, &recipes);
                 });
         });
     commands
@@ -322,6 +329,8 @@ mod tests {
             fish_names: Vec::new(),
             goods: Vec::new(),
             forge: Handle::default(),
+            workbench: Handle::default(),
+            tiered: Vec::new(),
         });
         app.add_systems(Update, spawn);
         app.update();

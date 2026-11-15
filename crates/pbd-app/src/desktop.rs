@@ -1,6 +1,7 @@
 mod arrival;
 mod compass_bar;
 mod cracks;
+mod craft;
 mod digging;
 mod drops_view;
 mod equipment;
@@ -162,9 +163,19 @@ pub struct Launch {
     /// for that long, with `--tool` in hand (the shovel if none), so a capture
     /// can photograph the cracks at a chosen stage. Implies `--walk`.
     pub break_s: Option<f32>,
-    /// `--tool rod|shovel|pickaxe|axe`: the tool in hand for a capture, with
-    /// or without `--break`. Implies nothing else.
+    /// `--tool rod|shovel|pickaxe|axe|hand`: the tool in hand for a capture,
+    /// with or without `--break`; `hand` is bare hands. A new world owns no
+    /// tool, so the rig gives it the tool first, at `--tier` (stone when
+    /// none follows). Implies nothing else.
     pub tool: Option<pbd_core::inventory::Tool>,
+    /// `--tool hand`: bare hands.
+    pub bare: bool,
+    /// `--tier stone|bronze|iron|steel`, for `--tool`.
+    pub tier: pbd_core::inventory::Tier,
+    /// `--craft pack|bench [metres]` (`tool-crafting` task 4.2, a capture
+    /// instrument): the pack's Craft row mid-craft, or a workbench that far
+    /// ahead with its panel open mid-craft.
+    pub craft: Option<(String, f32)>,
     /// `--place N` stacks N stones on the last hole, so a tower somebody built
     /// can be photographed wearing the stone it is made of.
     pub place: u32,
@@ -368,6 +379,9 @@ impl Launch {
             farm_harvest: false,
             forge: None,
             forge_panel: false,
+            bare: false,
+            tier: pbd_core::inventory::Tier::Stone,
+            craft: None,
             dig_ahead: false,
             pitch: None,
             yaw: None,
@@ -408,8 +422,34 @@ impl Launch {
                         "shovel" => Tool::Shovel,
                         "pickaxe" => Tool::Pickaxe,
                         "axe" => Tool::Axe,
-                        _ => panic!("--tool {name}: rod, shovel, pickaxe or axe"),
+                        "hand" => {
+                            result.bare = true;
+                            Tool::Shovel
+                        }
+                        _ => panic!("--tool {name}: rod, shovel, pickaxe, axe or hand"),
                     });
+                }
+                "--tier" => {
+                    i += 1;
+                    let name = args.get(i).expect("--tier requires a tier").to_lowercase();
+                    result.tier = pbd_core::inventory::Tier::ALL
+                        .into_iter()
+                        .find(|t| t.code() == name)
+                        .expect("--tier takes stone, bronze, iron or steel");
+                }
+                "--craft" => {
+                    i += 1;
+                    let scene = args.get(i).expect("--craft requires pack or bench").clone();
+                    assert!(
+                        matches!(scene.as_str(), "pack" | "bench" | "bench-view"),
+                        "--craft takes pack, bench or bench-view"
+                    );
+                    let mut metres = 4.0;
+                    if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
+                        metres = m;
+                        i += 1;
+                    }
+                    result.craft = Some((scene, metres));
                 }
                 "--dig" => {
                     i += 1;
@@ -1171,6 +1211,7 @@ pub fn run(args: &[String]) {
     // Farming and the forge (`farming-and-smelting`).
     .init_resource::<farm::FarmNote>()
     .init_resource::<farm::StationAt>()
+    .init_resource::<craft::CraftPick>()
     .add_message::<pbd_app::hotbar::Gained>()
     .add_message::<pbd_app::hotbar::Planted>()
     // The world, loaded before the planet is built: `create_planet` reads its
@@ -1320,12 +1361,21 @@ pub fn run(args: &[String]) {
     .add_systems(
         Update,
         (
-            (farm::use_key, forge::work, forge::grey, forge::paint)
+            (
+                farm::use_key,
+                forge::work,
+                forge::grey,
+                forge::paint,
+                craft::press,
+                craft::collect_hands,
+                craft::paint,
+            )
                 .chain()
                 .after(digging::dig_and_place)
                 .after(pbd_app::husbandry::HusbandryHands),
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
+            craft::scripted.after(digging::scripted_dig),
         ),
     )
     .add_systems(
@@ -3258,7 +3308,15 @@ fn break_script(
     if *frame < 90 || !state.active {
         return;
     }
-    tools.hold(launch.tool.unwrap_or(pbd_core::inventory::Tool::Shovel));
+    if launch.bare {
+        tools.hold(None);
+    } else {
+        let tool = launch.tool.unwrap_or(pbd_core::inventory::Tool::Shovel);
+        // A capture's world is new and owns nothing: the rig gives it the
+        // tool asked for (its save is memory-only).
+        let _ = tools.0.grant(tool, launch.tier);
+        tools.hold(tool);
+    }
     let Some(hold) = launch.break_s else {
         return;
     };

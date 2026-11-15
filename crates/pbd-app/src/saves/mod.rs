@@ -979,6 +979,60 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// `tool-crafting` task 3.1: a world made by this build owns no tools,
+    /// and still owns none after it has been played and reopened; a tool it
+    /// makes comes back with its tier; a world from before (no `tools` in its
+    /// identity, no `hand` line) opens with all four at the stone tier.
+    #[test]
+    fn a_new_world_owns_no_tools_and_an_old_one_keeps_four() {
+        use crate::fish::ToolSlot;
+        use pbd_core::inventory::{Equipment, Tier, Tool};
+        let root = temporary("tools");
+        let slot = create(&root, "Tools", 5).unwrap();
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            assert!(save.identity.crafts_its_tools());
+            assert!(ToolSlot::restore(&save).tools().is_empty());
+            assert!(save.accept(
+                Edit {
+                    cell: 77,
+                    layer: 200,
+                    material: Material::Air,
+                },
+                None,
+                &Slots::new()
+            ));
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        assert!(
+            ToolSlot::restore(&reopened).tools().is_empty(),
+            "played and reopened, still nothing owned"
+        );
+        {
+            let mut save = reopened;
+            let mut kit = Equipment::new_world();
+            kit.grant(Tool::Pickaxe, Tier::Iron).unwrap();
+            kit.hold(Tool::Pickaxe);
+            assert!(save.record_hand(&kit));
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        let tools = ToolSlot::restore(&reopened);
+        assert_eq!(tools.tier(Tool::Pickaxe), Some(Tier::Iron));
+        assert_eq!(tools.held(), Some(Tool::Pickaxe));
+        assert_eq!(tools.tools(), vec![Tool::Pickaxe]);
+        // An old world: its identity written before `tools` existed.
+        let old = root.join(&list(&root)[0].id).join(IDENTITY);
+        std::fs::write(&old, "(seed: 5, generator: 4, topology: 1, keys: 1)").unwrap();
+        std::fs::remove_file(root.join(&list(&root)[0].id).join(LOG)).unwrap();
+        let old_world = WorldSave::open(root.clone(), list(&root)[0].clone());
+        assert!(!old_world.identity.crafts_its_tools());
+        let tools = ToolSlot::restore(&old_world);
+        assert_eq!(tools.tiers(), [Some(Tier::Stone); 4], "all four, stone");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// A catch and a change of tool come back from the disk: the fish in the
     /// hotbar, the field guide's count and best, and the tool in hand.
     #[test]
