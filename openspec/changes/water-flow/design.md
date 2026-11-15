@@ -217,6 +217,108 @@ by speed, a falling face panned down, still water still, and a flow-arrow
 overlay to check it (tasks 3.4, 3.5). Proposed only; no game code until the
 owner approves the mockup and asks.
 
+**7e. Water is meshed per cell, as Luanti's liquid mesher does (owner,
+2026-11-15).** "Same issues as before for the leading edge, also theres no
+flow maps on the edge as well and no walls, note that you missed a critical
+part of the luanti/minetest water implementation that shows the water
+falling", and "water should generate blocks vertically as it falls too".
+The flat caps of 7a to 7c drew one cap per *column*, at its top water, with a
+sheet from that cap down to the next column's top: every cell under the top
+of a column was never drawn, so a falling column showed as one flat cap
+hanging at the ledge's height a cell out from the cliff, and the front of a
+sheet ended in a flat, wall-less edge.
+
+*The rule was not the problem.* Measured on M28's spring (a Node run of
+`water-flow/liquid.js` with the page's ground, no page code): the first
+falling cell over the cliff appears at tick 4 (`(3, -1)` at layer 6, level
+4, `down` set); by tick 6 the same column holds falling cells at layers 6, 5
+and 4, by tick 8 at 6 to 2, by tick 10 at 6 to 0, the column growing one
+layer a tick, every cell below the top at level 7 (its upper neighbour's
+level plus `WATER_DROP_BOOST`, capped) with `down` set, standing on the
+plain's own sheet. Settled (tick 40), twelve columns fall the six layers
+from the ledge to the plain. Luanti's rule already makes real falling cells,
+block by block; they were simply not drawn. The rule is unchanged, and every
+preset settles in the same ticks to the same counts.
+
+*Luanti's mesher*, read at `a10dc8dbff3b0af8295ae55df44f65b1d9ee92c7`,
+`src/client/content_mapblock.cpp` (LGPL-2.1-or-later):
+- `drawLiquidNode` draws one *flowing* node (`NDT_FLOWINGLIQUID`):
+  `prepareLiquidNodeDrawing`, `getLiquidNeighborhood`,
+  `calculateCornerLevels`, `drawLiquidSides`, then `drawLiquidTop` unless the
+  node above is the same liquid, and `drawLiquidBottom` if the node below is
+  neither the same liquid nor solid. A *source* (`NDT_LIQUID`) is drawn by
+  `drawSolidNode<true>` as a full cube, a face wherever the neighbour is not
+  the same liquid, not solid and not `CONTENT_IGNORE`.
+- `prepareLiquidNodeDrawing`: `top_is_same_liquid` (the node above is the
+  source or flowing form) and `draw_bottom`.
+- `getLiquidNeighborhood`: the 3 x 3 nodes round it on its own layer, each
+  with a `level` in node units (-0.5 the floor, +0.5 the top): a source
+  +0.5, a flowing node `-0.5 + (level + 0.5) / range` (range 8, so level 7
+  stands at 15/16 of the node), anything else -0.5; and whether the node
+  above that neighbour is liquid. `CONTENT_IGNORE` is left out.
+- `getCornerLevel`, for each corner over the 2 x 2 nodes sharing it: if any
+  of them has liquid above it, or is a source, the corner is full (+0.5).
+  Else the flowing nodes' levels are averaged, and air is counted; two or
+  more air of the four pull the corner to the floor (`-0.5 + 0.2 / BS`, 2 cm
+  up). No flowing node and fewer than two air: the middle (0).
+- `drawLiquidSides`, for each side: no face against the same liquid, unless
+  this node has liquid above and that neighbour does not; no face against a
+  solid. The face runs from this node's two corner heights (or the top, if
+  liquid is above) down to the floor, or, against the same liquid, down to
+  the corner heights. These are the walls at the front of a sheet and the
+  sides of every falling node.
+- `drawLiquidTop`: a quad through the four corner heights. Its flowing
+  texture is turned to the flow: `dz` is the corners on -Z less those on +Z,
+  `dx` those on -X less those on +X, so the direction is down the corner
+  gradient; a symmetric top gets (1, 0). Without reflections the normal is
+  `(dx, 1, dz)` normalised. The sides carry the flowing texture, which runs
+  down.
+- `drawLiquidBottom`: a flat face at the floor.
+
+A falling node therefore has liquid above it, so all its corners are full,
+it draws no top, and its sides stand the whole node down to its floor: a
+falling column is a stack of whole blocks, each drawn with its own sides,
+and the node at the top of the fall, with nothing above it, slopes from the
+lip down to its own level.
+
+*On the hex grid* (`PBDWater.liquidMesh` in `water-flow/water-look.js`, which
+`simWater` now calls, so M25's Water sim and M28 both take it):
+- A cell has six corners, each shared by three cells: the cell and its two
+  side neighbours on either side of that corner (corner *i* lies between
+  sides *i - 1* and *i*). `getCornerLevel` runs over those three: full if any
+  has liquid above or is a source; else the mean of the flowing levels; air
+  pulls the corner to the floor at two or more of the three (Luanti's "half
+  or more" of the cells round a corner); a cell outside the patch is left
+  out, as `CONTENT_IGNORE` is.
+- Heights are Luanti's: level *L* stands at `(L + 0.5) / 8` of its layer, a
+  source and any cell with liquid above it at the full layer. (Decision 4's
+  `(level + 1) / 8` and 7a's 0.94 for a source are retired with the caps.)
+- The top is six triangles from the corners to a centre at their mean, drawn
+  unless the cell has liquid above. Its normal follows the slope.
+- A side is drawn per Luanti's `drawLiquidSides` across each of the six
+  edges: against air down to the cell's floor; against the same liquid only
+  where Luanti draws it. The patch's own boundary is the one change: Luanti
+  draws no source face against `CONTENT_IGNORE`, but the mockups cut the
+  patch like a cake (7b), so every water cell at the boundary draws its side
+  there, down to its floor, for sources and flowing cells alike.
+- The bottom is drawn where the cell below is air (Luanti's `draw_bottom`).
+- The flow vector is Luanti's: down the corner gradient. On hex it is the
+  least-squares slope of the six corners, `-sum(h_i c_i) / (3 R^2)` with
+  `c_i` the corner offsets; a symmetric top has none (a pool stands still,
+  where Luanti turns it to +X). It drives Tenebris's tile and the arrows: the
+  tile pans along it, faster on steeper water; the arrow lies on the slope.
+- Walls: a flowing cell's sides run Luanti's flowing texture downward, the
+  Tenebris tile panning down with froth, and every falling cell is a whole
+  block of it; a source's sides stand still. A falling cell's open sides
+  also carry a down-pointing arrow, so a fall shows its flow with the
+  arrows on.
+- The depth pre-pass, the night lamps and the arrows' toggle are unchanged;
+  the column-top record (`SW.cells`) is kept for M28's depth map.
+
+The game's water mesher should do the same (requirement "Flowing water is
+meshed per cell from its corner levels", task 3.6). Proposed only; no game
+code until the owner approves the mockup and asks.
+
 **8. The game's code is written from the rule, not translated.** The mockup
 is a line-by-line port of LGPL-2.1-or-later code and says so. The Rust
 version is written from decisions 1 to 6 and Luanti's rule as described in

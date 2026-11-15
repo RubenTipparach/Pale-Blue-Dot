@@ -45,3 +45,27 @@ on / off" toggle shows it.
 - **THEN** every flowing top shows an arrow downstream, the pool's still
   water shows none, and turning it off removes every arrow
 
+### Requirement: Flowing water is meshed per cell from its corner levels
+The water mesher SHALL draw every water cell, not one surface per column, as
+Luanti's liquid mesher does (`content_mapblock.cpp`, `drawLiquidNode`), on
+the hex grid: each of a cell's six corner heights SHALL come from the three
+cells sharing it (full where any has liquid above or is a source, else the
+mean of the flowing levels, and at the floor where two of the three are
+air); the top SHALL run through those corners and SHALL be left out where
+liquid stands above; a side SHALL be drawn wherever the neighbour is neither
+solid nor the same liquid, from the corner heights down to the cell's floor;
+a bottom SHALL be drawn over air. A falling cell SHALL be a whole block with
+its own sides, so a column falling over a cliff stacks block by block. The
+flow vector SHALL be the corner slope's downhill direction, and the surface
+pattern and the flow arrows SHALL read it. The owner, 2026-11-15: "you
+missed a critical part of the luanti/minetest water implementation that
+shows the water falling" and "water should generate blocks vertically as it
+falls too". Proposed; the mockups (M25, M28) show it.
+
+#### Scenario: A spring runs over a cliff
+- **WHEN** a spring's water reaches the edge of a ledge six layers above a
+  plain
+- **THEN** its surface slopes down to the edge, a wall stands at every edge
+  that faces air, and each falling cell under the lip is drawn as its own
+  full block with sides, the column growing a block a tick to the plain
+
