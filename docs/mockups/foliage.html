@@ -401,7 +401,7 @@ const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 1200);
 camera.rotation.order = "YXZ";
 
 const TEXDIR = "foliage/";
-const ART_V = 11;   // cache-bust: bump whenever any PNG changes, so no browser shows stale art
+const ART_V = 12;   // cache-bust: bump whenever any PNG changes, so no browser shows stale art
 const TEX = {};
 const loader = new THREE.TextureLoader();
 let pending = 0, loadedOnce = false;
@@ -1396,7 +1396,7 @@ function buildTerrain(B) {
     g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2)); g.setAttribute("lampV", new THREE.Float32BufferAttribute(b.lamp, 3));
     g.setAttribute("glowV", new THREE.Float32BufferAttribute(b.glow, 3)); g.setAttribute("occV", new THREE.Float32BufferAttribute(b.occ, 1));
     g.setAttribute("card", new THREE.Float32BufferAttribute(new Float32Array(nv), 1)); g.setAttribute("ao", new THREE.Float32BufferAttribute(new Float32Array(nv).fill(1), 1));
-    const m = new THREE.Mesh(g, mat("terrain:" + b.kind + ":" + b.slot + ":" + b.idx, { at: [b.slot, b.idx], ...rp("terrain:" + b.slot + ":" + b.idx, B), terrain: true, snowable: B.snow && b.kind === "top" && b.slot !== SNOW[0], single: true }));
+    const m = new THREE.Mesh(g, mat("terrain:" + b.kind + ":" + b.slot + ":" + b.idx, { at: [b.slot, b.idx], ...rp("terrain:" + b.slot + ":" + b.idx, B), terrain: true, snowable: B.snow && b.slot !== SNOW[0], single: true   /* sides too: their grass lip whitens (the shader snows only green texels on a side) */ }));
     m.matrixAutoUpdate = false; ROOT.add(m); TERRAIN.push(m);
   }
   // far ground past the patch, so the land does not end in a cliff over nothing
