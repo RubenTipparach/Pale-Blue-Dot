@@ -341,7 +341,6 @@ def painted_tile(chart, obj, u_axis, v_axis, lo, plane):
     material={'white':'white-panels','coral':'coral-trim','navy':'rotor','ink':'rotor',
               'metal':'gear-metal','pale':'white-panels','amber':'coral-trim','teal':'teal-hull'}[tag]
     if wood: material='varnished-wood'
-    if name=='canopy': material='canopy'
     if KIND=='tern':
         if name=='hull': material='white-topsides'
         if name=='deck' or name.startswith('cockpit_'): material='coral-deck'

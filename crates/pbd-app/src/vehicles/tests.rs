@@ -1211,22 +1211,33 @@ fn a_world_saved_with_a_kestrel_opens_with_its_boats_and_keeps_the_record() {
         .map(|r| r.id)
         .collect();
     assert_eq!(ids, boats, "the world opens with two craft, the Tern and the Loon");
-    let tern_at = pbd_core::DVec3::from(
-        old.vehicles.iter().find(|r| r.kind == "tern").unwrap().position,
-    );
+    // This test's planet starts its walker elsewhere than the world the file
+    // came from, so the boats are stowed. Bring the Tern's record near the
+    // walker, as coming near it does, and it is in the world.
+    let tern_id = old.vehicles.iter().find(|r| r.kind == "tern").unwrap().id;
+    let near = {
+        let w = walker(&mut app).as_dvec3();
+        let up = w.normalize();
+        let angle = 60.0 / w.length();
+        (up * angle.cos() + up.any_orthonormal_vector() * angle.sin()) * w.length()
+    };
+    {
+        let mut fleet = app.world_mut().resource_mut::<Fleet>();
+        if let Some(r) = fleet.stowed.iter_mut().find(|r| r.id == tern_id) {
+            r.position = near.to_array();
+        }
+    }
     let mut all = Vec::new();
-    for _ in 0..240 {
-        stand_at(&mut app, (tern_at + tern_at.normalize() * 2.0).as_vec3());
+    for _ in 0..120 {
         app.update();
         all = crafts(&mut app);
-        eprintln!("DBG walker {:?} tern_at {:?} stowed {:?} in {:?}", walker(&mut app), tern_at, app.world().resource::<Fleet>().stowed.iter().map(|r| r.id).collect::<Vec<_>>(), all.iter().map(|(_, c)| c.id).collect::<Vec<_>>());
-        if all.iter().any(|(_, c)| c.kind == Kind::Tern) {
+        if all.iter().any(|(_, c)| c.id == tern_id) {
             break;
         }
     }
     assert!(
-        all.iter().any(|(_, c)| c.kind == Kind::Tern),
-        "the Tern is in the world beside its walker"
+        all.iter().any(|(_, c)| c.id == tern_id),
+        "the Tern is in the world near the walker"
     );
     let mut names = app.world_mut().query::<&Name>();
     assert!(

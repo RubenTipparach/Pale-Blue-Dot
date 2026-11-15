@@ -20,7 +20,7 @@ from pathlib import Path
 p = Path(r'C:\Users\santi\repos\pbd-codex-vehicles\assets\models\vehicles\author.py')
 ns = {'__file__': str(p), '__name__': 'pbd_vehicle_author'}
 exec(compile(p.read_text(), str(p), 'exec'), ns)
-ns['build']('kestrel')
+ns['build']('tern')
 ```
 
 The script owns only the `PBD_AUTHOR` scene. It creates modeled meshes and UVs
@@ -101,9 +101,12 @@ frame-rate improvement is claimed. CPU parsing/decode happens once per craft.
 
 ## Models currently registered
 
-| Craft | Source/export | Appearance |
-| --- | --- | --- |
-| Kestrel | `kestrel/kestrel.blend`, `kestrel/kestrel.glb` | White/coral tapered tiltrotor, opaque navy canopy, separate controls/nacelles/rotors |
+None. The Kestrel tiltrotor was the only craft drawn from its authored model
+(`pbd-app::vehicles::model::AUTHORED`); it was retired on 2026-11-14
+(`openspec/changes/retire-kestrel`), and its source, export, atlas and its
+own swatches (`canopy`, `intake-grille`) were removed with it. The Tern and
+Loon sources and exports here are authored but not registered: the game
+builds those two from their numbers (`vehicles::draw`).
 
 Game screenshots and in-game appearance review are assigned to Claude. Blender
 viewport review and artifact tests do not establish in-game lighting, seat-view
