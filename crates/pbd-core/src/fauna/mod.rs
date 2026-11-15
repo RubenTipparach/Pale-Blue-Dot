@@ -23,7 +23,7 @@ use glam::Vec3;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub use school::{School, Water, pose};
+pub use school::{School, Water, crawl_lift, pose};
 
 /// The home planet's key in the roster. The world has one body with water
 /// today; a second gets its own key and its own species.
@@ -180,8 +180,8 @@ pub enum Mover {
 }
 
 /// The water places a species lives in (`ocean-environments` design 4 and 7).
-/// Read once the environment function exists (6.1); until then every place
-/// is allowed and the water class and temperature decide.
+/// Answered by `ocean::places::environment` (6.1); `None` (not known) allows
+/// every place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Environment {
     Open,
@@ -195,6 +195,33 @@ pub enum Environment {
     Marsh,
     Estuary,
     Mudflat,
+    /// Where plates close under the sea, the floor carved toward the column's
+    /// (B10).
+    Trench,
+}
+
+impl Environment {
+    /// Whether `ocean::places::environment` answers it today: the sea's
+    /// places. The fresh-water ones (pools, riffles, marsh, estuary,
+    /// mudflat) wait for volumetric water (`ocean-environments` group 8).
+    pub fn is_placed(self) -> bool {
+        matches!(
+            self,
+            Environment::Open
+                | Environment::Coast
+                | Environment::Reef
+                | Environment::Kelp
+                | Environment::Vent
+                | Environment::UnderIce
+                | Environment::Trench
+        )
+    }
+
+    /// Whether it exists only where the generator puts it: nowhere on a
+    /// world made before the sea's places.
+    pub fn needs_generator(self) -> bool {
+        matches!(self, Environment::Vent | Environment::Trench)
+    }
 }
 
 /// What a creature does when the player comes close, or by the clock
@@ -211,6 +238,35 @@ pub enum Behaviour {
     Dabbles,
     /// Dives now and then and comes up elsewhere: diving ducks.
     Dives,
+    /// Crawls near its den; within `shy_m` of the eye it inks and jets home,
+    /// and hides there for [`HIDE_S`] and until the eye is [`HIDE_UNTIL`]
+    /// times `shy_m` off: the octopus (`ocean-environments` B9).
+    Hides,
+    /// Lies out on the water (a floe, once there is sea ice) when calm;
+    /// within `shy_m` slides in and swims under for [`UNDER_S`]: seals.
+    HaulsOut,
+}
+
+/// How long a startled octopus stays hidden in its den, s.
+pub const HIDE_S: f32 = 12.0;
+/// How far off, as a multiple of its `shy_m`, the eye must be before a hidden
+/// octopus comes out (6 m shy, 8 m to come out).
+pub const HIDE_UNTIL: f32 = 4.0 / 3.0;
+/// How long a startled seal stays under before it hauls out again, s.
+pub const UNDER_S: f32 = 20.0;
+/// How much faster than its fastest cruise a startled octopus jets home.
+pub const JET: f32 = 4.0;
+
+impl Behaviour {
+    /// How long a startle lasts after the eye has gone, s: the caller's
+    /// default, or the behaviour's own where it has one.
+    pub fn hold_s(self, default_s: f32) -> f32 {
+        match self {
+            Behaviour::Hides => default_s.max(HIDE_S),
+            Behaviour::HaulsOut => default_s.max(UNDER_S),
+            _ => default_s,
+        }
+    }
 }
 
 /// How a creature is posed now, for the drawing.
@@ -226,6 +282,12 @@ pub enum Pose {
     Under,
     /// A duck asleep on the water, head tucked.
     Asleep,
+    /// An octopus jetting home in a cloud of ink.
+    Inking,
+    /// An octopus hidden in its den: drawn small and flat.
+    Hidden,
+    /// A seal lying out, still.
+    HauledOut,
 }
 
 /// A species' field-guide entry: the text the guide shows beside the numbers
@@ -320,12 +382,24 @@ impl Species {
         }
     }
 
-    /// Whether it may live in this environment; `None` (not yet known, until
-    /// the environment function lands) allows every place.
+    /// Whether it may live in this environment (`ocean-environments` 6.1).
+    ///
+    /// - A place the generator makes (`Some`): a species with no tags, or
+    ///   one tagged with that place, or one whose tags are all places the
+    ///   generator does not make yet (the fresh-water places wait for
+    ///   volumetric water, group 8: ducks keep to their water classes until
+    ///   then).
+    /// - Unknown (`None`, a world made before the sea's places): anything
+    ///   but a species that lives only where the generator puts it (a vent,
+    ///   a trench), so the old worlds' life is as it was.
     pub fn env_allows(&self, here: Option<Environment>) -> bool {
         match here {
-            Some(env) => self.env.is_empty() || self.env.contains(&env),
-            None => true,
+            Some(env) => {
+                self.env.is_empty()
+                    || self.env.contains(&env)
+                    || !self.env.iter().any(|e| e.is_placed())
+            }
+            None => self.env.is_empty() || !self.env.iter().all(|e| e.needs_generator()),
         }
     }
 
@@ -1152,6 +1226,97 @@ fn water_life() -> Vec<Species> {
             mover: Mover::Floater,
             env: vec![Marsh, Pool],
             behaviour: Behaviour::Dives,
+            shy_m: 9.0,
+        },
+        // The octopus, the plume worm and the seal (B9), appended.
+        Species {
+            id: "octopus".into(),
+            name: "Den octopus".into(),
+            from: Origin::New,
+            class: Class::MolluscSoft,
+            status: Status::WildOnly,
+            water: vec![Shallows, Shelf],
+            temp_c: (6.0, 32.0),
+            length_m: 0.5,
+            speed_mps: (0.05, 0.3),
+            depth_m: (1.0, 40.0),
+            bed: true,
+            school: (1, 1),
+            max_schools: 1,
+            sense_m: 6.0,
+            bite: 0.0,
+            pull: 0.6,
+            strength: 2,
+            colour: [0.83, 0.27, 0.17],
+            shape: [0.8, 0.4, 1.0],
+            icon: "water_life/octopus".into(),
+            guide: Guide {
+                entry: "A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the colour of the rock when still and flushes red when it moves. Come within six metres and it inks and jets home, and stays hidden until you have gone.".into(),
+                tip: "Look for the shells at its door, then keep back and wait.".into(),
+            },
+            mover: Mover::Crawler,
+            env: vec![Reef],
+            behaviour: Behaviour::Hides,
+            shy_m: 6.0,
+        },
+        Species {
+            id: "tube_worm".into(),
+            name: "Plume worm".into(),
+            from: Origin::New,
+            class: Class::MolluscSoft,
+            status: Status::WildOnly,
+            water: vec![Deep],
+            temp_c: (-1.8, 32.0),
+            length_m: 1.4,
+            speed_mps: (0.0005, 0.001),
+            depth_m: (90.0, 145.0),
+            bed: true,
+            school: (10, 16),
+            max_schools: 1,
+            sense_m: 5.0,
+            bite: 0.0,
+            pull: 0.1,
+            strength: 1,
+            colour: [0.82, 0.18, 0.25],
+            shape: [0.15, 0.05, 0.15],
+            icon: "water_life/tube_worm".into(),
+            guide: Guide {
+                entry: "White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five metres. They live on the vent, not on the light.".into(),
+                tip: "Only at the vents on the deepest floor. Nothing worth taking; the vent is the prize.".into(),
+            },
+            mover: Mover::Crawler,
+            env: vec![Vent],
+            behaviour: Behaviour::Shuts,
+            shy_m: 5.0,
+        },
+        Species {
+            id: "seal".into(),
+            name: "Ice seal".into(),
+            from: Origin::New,
+            class: Class::Mammal,
+            status: Status::Protected,
+            water: vec![Shallows, Shelf],
+            temp_c: (-1.8, 14.0),
+            length_m: 1.6,
+            speed_mps: (0.3, 1.5),
+            depth_m: (1.0, 40.0),
+            bed: false,
+            school: (1, 3),
+            max_schools: 1,
+            sense_m: 9.0,
+            bite: 0.0,
+            pull: 1.0,
+            strength: 3,
+            colour: [0.36, 0.47, 0.55],
+            shape: [0.4, 0.35, 1.0],
+            icon: "water_life/seal".into(),
+            guide: Guide {
+                entry: "Grey seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine metres, then surface somewhere else a while later. Seals are protected: none may be caught.".into(),
+                tip: "Cold water, near the ice or the kelp. Where seals are, the fish are.".into(),
+            },
+            mover: Mover::Floater,
+            env: vec![UnderIce, Kelp],
+            behaviour: Behaviour::HaulsOut,
             shy_m: 9.0,
         },
     ]

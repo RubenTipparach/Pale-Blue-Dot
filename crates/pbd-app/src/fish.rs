@@ -120,7 +120,8 @@ pub struct FishPlugin;
 
 impl Plugin for FishPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Fishery>()
+        app.add_plugins(places::SeaPlacesPlugin)
+            .init_resource::<Fishery>()
             .add_message::<crate::missions::Did>()
             .init_resource::<FishingStatus>()
             .init_resource::<ToolSlot>()
@@ -414,14 +415,20 @@ fn fish(
 #[derive(Resource, Clone, Debug)]
 pub struct LifeScript {
     pub id: String,
+    /// How far ahead to put it, m; 3 to 14 m when `None`.
+    pub metres: Option<f32>,
     pub placed: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn life_script(
     mut script: ResMut<LifeScript>,
     mut fishery: ResMut<Fishery>,
     world: Surroundings,
     mut waited: Local<u32>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    life: Option<Res<draw::LifeMaterial>>,
 ) {
     if script.placed || !world.walking.as_ref().is_some_and(|w| w.active) {
         return;
@@ -436,6 +443,34 @@ fn life_script(
         return;
     };
     let roster = world.fauna.0.roster(&world.body.0);
+    if script.id == "lineup" {
+        let eye = (camera.translation().as_dvec3() - world.frame.center).as_vec3();
+        let look = camera.forward().as_vec3();
+        let water = PlanetWater::at(
+            sea,
+            world.air.as_deref(),
+            world.contact.as_deref(),
+            &fishery.beds,
+            eye,
+            0.0,
+        );
+        let seconds = world.sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
+        let above = eye.length() > water.surface(eye);
+        let mesh = lineup(eye, look, &water, seconds, above);
+        if let Some(life) = life {
+            commands.spawn((
+                Name::new("Water life lineup"),
+                crate::field_light::LitByField,
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(life.0.clone()),
+                Transform::from_translation(world.frame.center.as_vec3()),
+                Visibility::default(),
+            ));
+            info!("life script: the lineup of every body put ahead");
+        }
+        script.placed = true;
+        return;
+    }
     let Some(index) = roster.iter().position(|sp| sp.id == script.id) else {
         warn!("--life {}: no such species", script.id);
         script.placed = true;
@@ -448,8 +483,10 @@ fn life_script(
     // The first point ahead deep enough for it, 3 to 14 m out.
     let species = &roster[index];
     let seconds = world.sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
-    for metres in 3..=14 {
-        let direction = (eye + ahead * metres as f32).normalize_or(up);
+    let first = script.metres.unwrap_or(3.0);
+    for step in 0..=22 {
+        let metres = first + step as f32 * 0.5;
+        let direction = (eye + ahead * metres).normalize_or(up);
         if !species.fits(sea.depth_at(direction)) {
             continue;
         }
@@ -472,6 +509,87 @@ fn life_script(
         script.placed = true;
         return;
     }
+}
+
+/// `--life lineup`, a capture instrument (`ocean-environments` B8): every
+/// body side by side on the bed ahead of the eye, each 0.5 m long (a worm
+/// 0.8 m tall) whatever its species' size, in rows of five: first as each
+/// swims, then the poses (a clam shut, a dabbler upended and asleep, a worm
+/// drawn in, an octopus inking, a seal hauled out), so the bodies can be
+/// judged beside the mockup's. Static: posed at the clock it was put at.
+fn lineup(
+    eye: Vec3,
+    look: Vec3,
+    water: &impl fauna::Water,
+    seconds: f64,
+    floaters_up: bool,
+) -> Mesh {
+    use bodies::{Look, Place, emit, model_for};
+    use fauna::Pose;
+    let up = eye.normalize_or(Vec3::Y);
+    let ahead = (look - up * look.dot(up)).normalize_or(up.any_orthonormal_vector());
+    let right = ahead.cross(up);
+    let mut entries: Vec<(&str, u32, Pose)> = bodies::MODELS
+        .iter()
+        .filter(|m| !m.starts_with("dabbler"))
+        .map(|m| (*m, 0, Pose::Moving))
+        .collect();
+    entries.insert(13, ("reed_dabbler", 0, Pose::Moving));
+    entries.insert(14, ("reed_dabbler", 1, Pose::Moving));
+    entries.extend([
+        ("giant_clam", 0, Pose::Shut),
+        ("reed_dabbler", 0, Pose::TippedUp),
+        ("reed_dabbler", 1, Pose::Asleep),
+        ("tube_worm", 0, Pose::Shut),
+        ("octopus", 0, Pose::Inking),
+        ("seal", 0, Pose::HauledOut),
+    ]);
+    let t = seconds.rem_euclid(3600.0) as f32;
+    let (mut positions, mut colours) = (Vec::new(), Vec::new());
+    for (k, (model, id, pose)) in entries.into_iter().enumerate() {
+        let (row, col) = ((k / 5) as f32, (k % 5) as f32);
+        let at = eye + ahead * (2.2 + row * 0.9) + right * ((col - 2.0) * 0.75);
+        let dir = at.normalize_or(up);
+        let bed = water.bed(dir * water.surface(at));
+        let body = model_for(model, id);
+        let size = if body.kind == bodies::Kind::TubeWorm {
+            0.8
+        } else {
+            0.5
+        };
+        // From above the water the floaters ride the surface.
+        let floats = matches!(
+            body.kind,
+            bodies::Kind::Bird | bodies::Kind::Otter | bodies::Kind::Seal
+        );
+        let radius = if floaters_up && floats {
+            water.surface(at) - 0.03
+        } else {
+            bed + 0.02
+        };
+        let place = Place {
+            origin: dir * radius,
+            // Each turned three-quarters to the eye, so its side and its
+            // face both show.
+            forward: (-right * 0.8 - ahead * 0.6).normalize(),
+            up: dir,
+            scale: size / body.length,
+        };
+        let look = Look {
+            t,
+            phase: k as f32,
+            pose,
+        };
+        emit(body, &look, &place, [1.0; 3], &mut positions, &mut colours);
+    }
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
+    mesh.compute_flat_normals();
+    mesh
 }
 
 /// How long a startled shy creature stays so after the eye has gone, s.
@@ -546,13 +664,22 @@ fn try_spawn(
         return;
     };
     let temperature = air.now.sample(direction).temperature;
+    // The place, from the one environment function the generator and the
+    // map read (`ocean-environments` 6.1); unknown on a world made before
+    // the sea's places, whose life spawns as it always did.
+    let terrain = crate::planet::terrain_config();
+    let here = terrain
+        .ocean
+        .is_some()
+        .then(|| pbd_core::ocean::places::environment(terrain, direction))
+        .flatten();
     let candidates: Vec<usize> = roster
         .iter()
         .enumerate()
         .filter(|(i, sp)| {
             sp.lives_in(class, temperature, &settings.water)
                 && sp.fits(depth)
-                && sp.env_allows(None)
+                && sp.env_allows(here)
                 && if sp.can_bite() { fish_room } else { life_room }
                 && fishery
                     .schools
@@ -770,7 +897,10 @@ pub fn water_here(
     )
 }
 
-mod draw {
+pub mod bodies;
+pub mod places;
+
+pub(crate) mod draw {
     //! The fish, the rod, the float and the line, drawn.
     use super::*;
 
@@ -799,6 +929,29 @@ mod draw {
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<StandardMaterial>>,
     ) {
+        // The creatures' material, with one tiny creature-shaped mesh held
+        // hidden from the start so the loading screen warms its pipeline
+        // before play (no schools exist until the walker is in the water).
+        let life = materials.add(life_material_desc());
+        let mut warm = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        warm.insert_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            vec![[0.0, 0.0, 0.0], [0.01, 0.0, 0.0], [0.0, 0.01, 0.0]],
+        );
+        warm.insert_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32; 4]; 3]);
+        warm.compute_flat_normals();
+        commands.spawn((
+            Name::new("Water life (warm)"),
+            crate::field_light::LitByField,
+            Mesh3d(meshes.add(warm)),
+            MeshMaterial3d(life.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+        ));
+        commands.insert_resource(LifeMaterial(life));
         let red = materials.add(StandardMaterial {
             base_color: Color::srgb(0.85, 0.2, 0.15),
             perceptual_roughness: 0.5,
@@ -894,6 +1047,22 @@ mod draw {
 
     const LINE_POINTS: usize = 24;
 
+    /// The one material every creature is drawn with: white, its colours in
+    /// the vertices, both sides lit (a fin is one face).
+    #[derive(Resource)]
+    pub struct LifeMaterial(pub Handle<StandardMaterial>);
+
+    pub fn life_material_desc() -> StandardMaterial {
+        StandardMaterial {
+            base_color: Color::WHITE,
+            perceptual_roughness: 0.85,
+            reflectance: 0.3,
+            cull_mode: None,
+            double_sided: true,
+            ..default()
+        }
+    }
+
     /// One mesh per school, rebuilt from its fish each frame; entities made
     /// and dropped as schools come and go.
     #[allow(clippy::too_many_arguments)]
@@ -904,9 +1073,10 @@ mod draw {
         body: Res<Body>,
         frame: Res<crate::planet::PlanetRenderFrame>,
         mut meshes: ResMut<Assets<Mesh>>,
-        mut materials: ResMut<Assets<StandardMaterial>>,
         mut drawn: Query<(Entity, &SchoolMesh, &Mesh3d, &mut Transform)>,
-        mut palette: Local<HashMap<u16, Handle<StandardMaterial>>>,
+        life: Res<LifeMaterial>,
+        water: Option<Res<crate::config::WaterSettings>>,
+        sea: Option<Res<Sea>>,
         sun: Option<Res<crate::sky::Sun>>,
     ) {
         let roster = fauna.0.roster(&body.0);
@@ -914,6 +1084,12 @@ mod draw {
         let now = sun
             .as_deref()
             .map(|sun| (sun.clock.seconds, sun.direction()));
+        // The daylight left at a creature's depth (`ocean-environments` B6's
+        // known limit, closed in B12).
+        let dim = sea
+            .as_deref()
+            .zip(water.as_deref())
+            .map(|(sea, water)| (sea.radius, water.downwell_per_m));
         let mut seen = vec![false; fishery.schools.len()];
         for (entity, school_mesh, mesh, mut transform) in &mut drawn {
             let Some(school) = fishery.schools.get(school_mesh.0) else {
@@ -926,7 +1102,7 @@ mod draw {
             seen[school_mesh.0] = true;
             transform.translation = (frame.center + school.anchor.as_dvec3()).as_vec3();
             if let Some(mesh) = meshes.get_mut(&mesh.0) {
-                build(mesh, school, species, now);
+                build(mesh, school, species, now, dim);
             }
         }
         for (index, school) in fishery.schools.iter().enumerate() {
@@ -936,24 +1112,12 @@ mod draw {
             let Some(species) = roster.get(school.species as usize) else {
                 continue;
             };
-            let material = palette
-                .entry(school.species)
-                .or_insert_with(|| {
-                    let [r, g, b] = species.colour;
-                    materials.add(StandardMaterial {
-                        base_color: Color::srgb(r, g, b),
-                        perceptual_roughness: 0.45,
-                        reflectance: 0.6,
-                        cull_mode: None,
-                        ..default()
-                    })
-                })
-                .clone();
+            let material = life.0.clone();
             let mut mesh = Mesh::new(
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::default(),
             );
-            build(&mut mesh, school, species, now);
+            build(&mut mesh, school, species, now, dim);
             commands.spawn((
                 Name::new(format!("{} school", species.name)),
                 SchoolMesh(index),
@@ -966,60 +1130,93 @@ mod draw {
         }
     }
 
-    /// A school's fish as one triangle list: each a five-sided cone nosed
-    /// along its own velocity with a tail fin, scaled by the species' shape.
+    /// A school's creatures as one triangle list: each its own low-poly body
+    /// (`bodies`, `ocean-environments` design B8), posed for what it is doing
+    /// (7.2), swayed, scaled to its length and turned along its heading.
     ///
-    /// A creature's pose shapes it (`ocean-environments` 7.2): a shut clam is
-    /// flat, an upended dabbler points its nose down, a sleeping duck lies
-    /// low, and a diver under the water is not drawn.
-    fn build(mesh: &mut Mesh, school: &School, species: &Species, now: Option<(f64, Vec3)>) {
-        const SIDES: usize = 5;
-        let mut positions = Vec::with_capacity(school.len() * SIDES * 9);
-        let [sx, sy0, sz] = species.shape;
-        let length = species.length_m;
+    /// A crawler stands on the bed and walks it (a crab sideways); a floater
+    /// rides the sea (a seal lies out, and swims under when startled); a
+    /// swimmer pitches with its heading. A shut clam's lid is down, an
+    /// upended dabbler points its nose down, a sleeping duck tucks its head,
+    /// a diver under the water is not drawn and a hidden octopus is small in
+    /// its den.
+    fn build(
+        mesh: &mut Mesh,
+        school: &School,
+        species: &Species,
+        now: Option<(f64, Vec3)>,
+        dim: Option<(f32, [f32; 3])>,
+    ) {
+        let mut positions: Vec<[f32; 3]> = Vec::new();
+        let mut colours: Vec<[f32; 4]> = Vec::new();
+        let t = now.map_or(0.0, |(seconds, _)| seconds.rem_euclid(3600.0) as f32);
         for (i, p) in school.positions.iter().enumerate() {
             let up = p.normalize_or(Vec3::Y);
             let pose = now.map_or(fauna::Pose::Moving, |(seconds, sun)| {
                 fauna::pose(species, school, i, seconds, sun.dot(up) < -0.05)
             });
-            let sy = match pose {
-                fauna::Pose::Under => continue,
-                fauna::Pose::Shut => sy0 * 0.35,
-                fauna::Pose::Asleep => sy0 * 0.7,
-                _ => sy0,
-            };
+            if pose == fauna::Pose::Under && species.id != "seal" {
+                continue;
+            }
+            let id = school.ids.get(i).copied().unwrap_or(0);
+            let body = bodies::model_for(&species.id, id);
+            let phase = (fauna::hash2(school.seed, u64::from(id)) >> 40) as f32
+                / (1u64 << 24) as f32
+                * std::f32::consts::TAU;
             let v = school.velocities[i];
-            let mut forward = (v - up * v.dot(up) * 0.5).normalize_or(up.any_orthonormal_vector());
-            if pose == fauna::Pose::TippedUp {
-                forward = (forward - up * 1.4).normalize_or(-up);
+            let along = v - up * v.dot(up);
+            let flat = along.normalize_or(up.any_orthonormal_vector());
+            let mut forward = match species.mover {
+                fauna::Mover::School => {
+                    (v - up * v.dot(up) * 0.5).normalize_or(up.any_orthonormal_vector())
+                }
+                _ => flat,
+            };
+            // A crab walks sideways.
+            if body.kind == bodies::Kind::Crab {
+                forward = up.cross(flat).normalize_or(flat);
             }
             let side = forward.cross(up).normalize_or(up.any_orthonormal_vector());
             let top = side.cross(forward);
+            let length = school.length_cm(i, species) as f32 / 100.0;
+            let mut scale = length / body.length;
             let at = *p - school.anchor;
-            let nose = at + forward * length * sz * 0.5;
-            let tail = at - forward * length * sz * 0.5;
-            let ring: Vec<Vec3> = (0..SIDES)
-                .map(|k| {
-                    let a = k as f32 / SIDES as f32 * std::f32::consts::TAU;
-                    at - forward * length * sz * 0.1
-                        + side * a.cos() * length * sx * 0.25
-                        + top * a.sin() * length * sy * 0.25
-                })
-                .collect();
-            for k in 0..SIDES {
-                let (a, b) = (ring[k], ring[(k + 1) % SIDES]);
-                positions.extend_from_slice(&[nose, a, b, tail, b, a]);
+            let mut origin = match species.mover {
+                fauna::Mover::Crawler => at - up * fauna::crawl_lift(species),
+                _ => at,
+            };
+            match (body.kind, pose) {
+                (bodies::Kind::Seal, fauna::Pose::Under) => origin -= up * (1.2 + 0.13 * scale),
+                (bodies::Kind::Seal, _) => origin -= up * 0.1 * scale,
+                (bodies::Kind::Otter, _) => origin -= up * 0.03 * scale,
+                (bodies::Kind::Bird, _) => origin -= up * 0.02,
+                (bodies::Kind::Octopus, fauna::Pose::Hidden) => scale *= 0.5,
+                _ => {}
             }
-            // The tail fin, a flat triangle across the body.
-            let fin = tail - forward * length * sz * 0.2;
-            positions.extend_from_slice(&[
-                tail,
-                fin + top * length * sy * 0.3,
-                fin - top * length * sy * 0.3,
-            ]);
+            // An octopus takes the rock's colour when still and flushes when
+            // it moves (decision 6).
+            let mut tint = if body.kind == bodies::Kind::Octopus {
+                let h = (along.length() / species.speed_mps.1.max(1e-3)).clamp(0.0, 1.0);
+                [0.55 + 0.45 * h, 0.55 + 0.25 * h, 0.5 + 0.25 * h]
+            } else {
+                [1.0; 3]
+            };
+            if let Some((surface, downwell)) = dim {
+                let light = super::places::dimmed(downwell, surface - p.length());
+                tint = [tint[0] * light[0], tint[1] * light[1], tint[2] * light[2]];
+            }
+            let look = bodies::Look { t, phase, pose };
+            let place = bodies::Place {
+                origin,
+                forward,
+                up: top,
+                scale,
+            };
+            bodies::emit(body, &look, &place, tint, &mut positions, &mut colours);
         }
         let count = positions.len();
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
         mesh.remove_indices();
         mesh.compute_flat_normals();
         if count == 0 {

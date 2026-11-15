@@ -107,6 +107,11 @@ pub struct TerrainConfig {
     /// Mountain ranges in regions of their own (`taller-mountains` decision
     /// 1). `None` has none (versions 4 and 5).
     pub ranges: Option<Ranges>,
+    /// The sea's places (`ocean-environments` design B10): reefs, kelp,
+    /// polar sea, vents and trenches, by `ocean::places::environment`, and
+    /// the trench's carve. `None` has only the coast and the open sea
+    /// (versions 4 to 6).
+    pub ocean: Option<crate::ocean::places::OceanPlaces>,
 }
 
 /// A second ridge field, wider than the mountain field and standing only in
@@ -129,7 +134,18 @@ pub struct Ranges {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V6;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V7;
+
+    /// Generator version 7 (`ocean-environments` design B10): version 6
+    /// with the sea's places. The land, the biomes and the sea's mask are
+    /// version 6's; the floor along a trench line is carved toward 140 m,
+    /// and reefs, kelp, vents and polar sea are placed by
+    /// `ocean::places::environment`, which the pieces, the spawner and the map
+    /// read.
+    pub const TENEBRIS_V7: Self = Self {
+        ocean: Some(crate::ocean::places::OceanPlaces::V7),
+        ..Self::TENEBRIS_V6
+    };
 
     /// Generator version 6 (`taller-mountains`, survey H1 to H3, "Accept
     /// everything as recommended"): version 5 with mountain ranges three
@@ -219,6 +235,7 @@ impl TerrainConfig {
         desert_rock_frac: 0.14,
         strata_m: None,
         ranges: None,
+        ocean: None,
     };
 }
 
@@ -231,6 +248,7 @@ impl TerrainConfig {
             4 => Some(Self::TENEBRIS_V4),
             5 => Some(Self::TENEBRIS_V5),
             6 => Some(Self::TENEBRIS_V6),
+            7 => Some(Self::TENEBRIS_V7),
             _ => None,
         }
     }
@@ -484,6 +502,11 @@ pub fn surface_altitude(cfg: &TerrainConfig, direction: Vec3) -> f32 {
             let t = smooth(((r - cfg.rocky_above) / (1.0 - cfg.rocky_above)).clamp(0.0, 1.0));
             return base + t * cfg.rocky_uplift_m;
         }
+    }
+    // The trench (version 7): the deep floor carved toward the column's
+    // floor along the line where two plates close.
+    if let Some(places) = cfg.ocean.as_ref() {
+        return crate::ocean::places::carve_trench(cfg, places, d, base);
     }
     base
 }
@@ -766,6 +789,44 @@ mod tests {
     /// The digests of version 5's ground and top blocks on 10,000 directions.
     const VERSION_5_DIGEST: u64 = 17_903_191_863_826_077_473;
     const VERSION_5_TOP_DIGEST: u64 = 13_661_571_992_430_582_298;
+
+    /// Version 6's ground, biomes and top blocks, as every world made on it
+    /// was: taken before version 7 landed (`ocean-environments` B10), and
+    /// this fails if anything moves them.
+    #[test]
+    fn version_6_makes_the_ground_its_worlds_were_made_on() {
+        let v6 = TerrainConfig::for_version(6).expect("version 6 is carried");
+        assert_eq!(v6, TerrainConfig::TENEBRIS_V6);
+        assert_eq!(v6.ocean, None);
+        assert_eq!(digest(&v6, 10_000), VERSION_6_DIGEST);
+        assert_eq!(top_digest(&v6, 10_000), VERSION_6_TOP_DIGEST);
+    }
+
+    /// The digests of version 6's ground and top blocks on 10,000 directions,
+    /// taken on the M4 Max Mac (2026-11-15).
+    const VERSION_6_DIGEST: u64 = 1_195_572_018_390_891_724;
+    const VERSION_6_TOP_DIGEST: u64 = 2_881_052_872_441_172_356;
+
+    /// Version 7's ground (the trench carved) and top blocks, pinned as it
+    /// lands so its worlds keep it.
+    #[test]
+    fn version_7_makes_the_ground_its_worlds_are_made_on() {
+        let v7 = TerrainConfig::for_version(7).expect("version 7 is carried");
+        assert_eq!(v7, TerrainConfig::TENEBRIS_V7);
+        assert_eq!(digest(&v7, 10_000), VERSION_7_DIGEST);
+        assert_eq!(top_digest(&v7, 10_000), VERSION_7_TOP_DIGEST);
+        // Version 7 moves nothing above the sea: its land is version 6's.
+        let v6 = TerrainConfig::TENEBRIS_V6;
+        for d in sphere(10_000) {
+            let h6 = surface_altitude(&v6, d);
+            if h6 >= v6.sea_level_m - 60.0 {
+                assert_eq!(surface_altitude(&v7, d).to_bits(), h6.to_bits(), "{d}");
+            }
+        }
+    }
+
+    const VERSION_7_DIGEST: u64 = 9_167_527_543_725_899_224;
+    const VERSION_7_TOP_DIGEST: u64 = 10_634_382_923_396_087_003;
 
     /// A desert's rock follows the contours (survey G1): every desert cell at
     /// one height has the same top block, where the latitude bands gave one

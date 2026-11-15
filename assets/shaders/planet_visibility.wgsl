@@ -45,6 +45,8 @@ struct Params {
     flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
     flora_biome: array<vec4<f32>,8>, // per biome: fern weight, mushroom weight, flower bits, deciduous
     tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
+    plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits
+    flora_fall: vec4<f32>,     // 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w fruit chance
     night: vec4<f32>,                   // `night-lights-from-space`, unread here
     night_lights: array<vec4<f32>,128>,
 }
@@ -133,7 +135,8 @@ fn clear_indirect() {
     atomicStore(&args[0].instance_count, 0u);
     args[0].first_vertex = 0u;
     args[0].first_instance = 0u;
-    args[1].vertex_count = 198u;
+    // The trunk and two leaf layers, then `flora-v2`'s fruit (design 9.6).
+    args[1].vertex_count = 258u;
     atomicStore(&args[1].instance_count, 0u);
     args[1].first_vertex = 60u;
     args[1].first_instance = 0u;
@@ -148,7 +151,7 @@ fn clear_indirect() {
     // the two together.
     args[3].vertex_count = 564u;
     atomicStore(&args[3].instance_count, 0u);
-    args[3].first_vertex = 258u;
+    args[3].first_vertex = 318u;
     args[3].first_instance = 0u;
     // The inside of the world: a ceiling and a floor per run, then a flank per
     // side per run per stretch of the neighbour's air, then a lamp.
@@ -156,7 +159,7 @@ fn clear_indirect() {
     // arithmetic and a test holds them together.
     args[4].vertex_count = 936u;
     atomicStore(&args[4].instance_count, 0u);
-    args[4].first_vertex = 822u;
+    args[4].first_vertex = 882u;
     args[4].first_instance = 0u;
 }
 

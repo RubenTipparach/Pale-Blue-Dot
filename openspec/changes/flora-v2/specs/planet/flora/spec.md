@@ -73,3 +73,56 @@ and absent near the equator.
 - **WHEN** it is a quarter-year after the +Y hemisphere's midsummer
 - **THEN** deciduous trees there are in autumn colour
 - **AND** at the same latitude across the equator they are not
+
+### Requirement: Tufts and plants wear the ground's palette
+
+A pixel tuft's three tones SHALL be read off the ground tile its biome draws
+on grassy cells, by the approved mockup's rule (the tile's texels sorted by
+luminance, cut in thirds, each third's commonest colour), and a test SHALL
+hold the shipped table to the committed atlas. Tree crowns and bushes SHALL
+be drawn at 0.45 of their tile's contrast about its mean colour, and trunks,
+twigs and pebbles at 0.7; a beach crown or bush SHALL wear the fields' leaves
+through the dry olive gradient map.
+
+#### Scenario: A repainted ground tile
+
+- **WHEN** a biome's ground tile is repainted and the atlas rebuilt
+- **THEN** the atlas test fails until the tuft table is the new tile's colours
+
+### Requirement: No painted flowers on the ground tiles
+
+The atlas build SHALL take the painted flowers off the fields grass top and
+sod lip, the swamp moss top and the tundra top, so the only flowers on the
+ground are the clutter's own; the source sheets SHALL stay as generated and
+the build's check SHALL hold the atlas to them.
+
+#### Scenario: A meadow up close
+
+- **WHEN** the player looks at fields grass and the side of a dug step
+- **THEN** no daisy is painted in the grass texels or the sod lip
+
+### Requirement: Fallen leaves follow the calendar
+
+In a deciduous biome, up-facing ground SHALL show fallen leaves in its own
+texels, landing through autumn, thinned and browned by midwinter, and gone
+before spring, thicker in a cell that stands a tree, with none in the tropics.
+
+#### Scenario: Autumn and summer
+
+- **WHEN** a fields meadow is seen at the height of autumn and again in summer
+- **THEN** its ground carries scattered fallen leaves, thickest under trees, in autumn
+- **AND** none in summer
+
+### Requirement: Trees bear fruit by biome
+
+About half the trees of a fruiting biome SHALL hang fruit from the underside
+of their lower leaf layer, and drop a few under them, within the clutter's
+reach: fields apple, pear, plum and cherry; jungle mango and papaya; beach
+marula and baobab; tundra pines their cones. Fruit SHALL be heaviest in
+autumn and nearly gone in winter; cones SHALL stay all year. Fruit is
+decoration and SHALL NOT enter a save.
+
+#### Scenario: A fields orchard in autumn
+
+- **WHEN** the player stands among fields trees in autumn
+- **THEN** some trees hang fruit under their crowns, the same trees on every visit

@@ -107,10 +107,12 @@ pub(crate) fn clutter_vertices() -> u32 {
     // fronds).
     GRASS_BLADE_BUDGET * 2 * 6 + 18 + 54 + 108 + 36 + 2 * 54 + 4 * 6
 }
-/// Vertices per tree: the trunk's 54 and two leaf layers of 72.
+/// Vertices per tree: the trunk's 54, two leaf layers of 72, and
+/// `flora-v2`'s fruit (design 9.6): four hanging, each two crossed cards,
+/// and two fallen, a flat card each.
 #[cfg(test)]
 pub(crate) fn foliage_vertices() -> u32 {
-    54 + 2 * 72
+    54 + 2 * 72 + 4 * 12 + 2 * 6
 }
 /// Where the clutter branch starts in the shared vertex shader: after the
 /// terrain's 60 and the foliage.
@@ -255,9 +257,10 @@ pub struct FloraLook {
 
 /// The per-biome flora tables as the shaders read them (`flora-v2` design
 /// 6): fern weight, mushroom weight, flower colour bits and deciduous per
-/// biome; then the tuft ramps as `0xRRGGBB`, w one for red caps.
-fn flora_tables() -> ([Vec4; 8], [UVec4; 8]) {
-    use pbd_core::flora::{BIOME_FLORA, TUFT_RAMPS};
+/// biome; then the tuft ramps as `0xRRGGBB`, w one for red caps; then the
+/// plants' tile means and, in w, the fruit the trees bear (design 9).
+fn flora_tables() -> ([Vec4; 8], [UVec4; 8], [UVec4; 8]) {
+    use pbd_core::flora::{BIOME_FLORA, BIOME_FRUIT, PLANT_MEANS, TUFT_RAMPS};
     let biome = BIOME_FLORA.map(|b| {
         Vec4::new(
             b.fern,
@@ -270,7 +273,11 @@ fn flora_tables() -> ([Vec4; 8], [UVec4; 8]) {
     for (i, ramp) in TUFT_RAMPS.iter().enumerate() {
         ramps[i] = UVec4::new(ramp[0], ramp[1], ramp[2], BIOME_FLORA[i].red_caps as u32);
     }
-    (biome, ramps)
+    let mut means = [UVec4::ZERO; 8];
+    for (i, m) in PLANT_MEANS.iter().enumerate() {
+        means[i] = UVec4::new(m[0], m[1], m[2], BIOME_FRUIT[i]);
+    }
+    (biome, ramps, means)
 }
 
 #[derive(Resource, Clone, ExtractResource)]
@@ -781,6 +788,12 @@ struct PlanetParams {
     flora_biome: [Vec4; 8],
     // Per biome: the tuft's three tones, `0xRRGGBB`, w one for red caps.
     tuft_ramps: [UVec4; 8],
+    // `flora-v2` design 9.2, 9.6: per biome the mean of the leaves, bark and
+    // stone tiles, `0xRRGGBB`; w the fruit its trees bear, as bits.
+    plant_means: [UVec4; 8],
+    // Design 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w
+    // fruit chance.
+    flora_fall: Vec4,
     // `night-lights-from-space`: x how many far lights `night_lights` holds,
     // yzw spare; then two vec4 a light (`night_lights::FarLights::pack`).
     // Last, so the visibility pass, which reads a prefix of this uniform,
@@ -1650,7 +1663,7 @@ fn prepare_views(
                 FOLIAGE_DRAW_DISTANCE
             };
         let w = &weather_settings;
-        let (flora_biome, tuft_ramps) = flora_tables();
+        let (flora_biome, tuft_ramps, plant_means) = flora_tables();
         let lod = &planet.lod;
         let landing = planet.lod_prev.map(|(_, landed)| landed);
         // The fade centre (`distance-lod-fade`): the ground under the camera,
@@ -1897,6 +1910,13 @@ fn prepare_views(
             flora_more: Vec4::new(scatter.mushroom_chance, scatter.fern_chance, 0.0, 0.0),
             flora_biome,
             tuft_ramps,
+            plant_means,
+            flora_fall: Vec4::new(
+                scatter.leaf_fall,
+                scatter.leaf_under,
+                scatter.leaf_size,
+                scatter.fruit_chance,
+            ),
             night,
             night_lights,
             // w: there is a history to read, so not while the capture is off.
