@@ -26,6 +26,8 @@ pub mod held;
 #[cfg(feature = "desktop")]
 pub mod hotbar;
 #[cfg(feature = "desktop")]
+pub mod kitchen;
+#[cfg(feature = "desktop")]
 pub mod loading;
 #[cfg(feature = "desktop")]
 pub mod night_lights;

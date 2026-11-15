@@ -34,7 +34,7 @@ const KIT_BASE: [(Material, u16); 4] = [
 /// world is dealt the base and all of these; a saved world is dealt the ones
 /// past the version its log records. Append, never reorder: a saved version
 /// names a prefix of this table.
-const KIT_GRANTS: [&[(Item, u16)]; 3] = [
+const KIT_GRANTS: [&[(Item, u16)]; 4] = [
     // Something to see with. A kit that could dig into the dark and not light
     // it was a kit that could only dig in daylight.
     &[(Item::Block(Material::Torch), 16)],
@@ -54,6 +54,9 @@ const KIT_GRANTS: [&[(Item, u16)]; 3] = [
         (Item::Good(Good::WHEAT_SEED), 4),
         (Item::Good(Good::TURNIP_SEED), 4),
     ],
+    // A campfire (`cooking` design S3), so cooking plays before
+    // `tool-crafting`'s hand panel can make one.
+    &[(Item::Block(Material::Campfire), 1)],
 ];
 
 /// A light's own icon, as an asset path, or `None` for a block that is not
@@ -68,6 +71,7 @@ pub fn light_icon(material: Material) -> Option<&'static str> {
         Material::LanternHanging => "items/lights/lantern_hanging.png",
         Material::Brazier => "items/lights/brazier.png",
         Material::Candle => "items/lights/candle.png",
+        Material::Campfire => "items/lights/campfire.png",
         _ => return None,
     })
 }
@@ -199,7 +203,7 @@ mod kit_tests {
         for (item, expected) in KIT_GRANTS.iter().copied().flatten() {
             assert_eq!(kit.count(*item), u32::from(*expected), "{item:?}");
         }
-        assert_eq!(KIT_VERSION, 3);
+        assert_eq!(KIT_VERSION, 4);
         assert!(
             kit.hotbar().all(|slot| slot.is_some()),
             "ten slots, all full"
@@ -240,7 +244,11 @@ mod kit_tests {
         save.kit = 1;
         let mut slots = the_old_kit();
         let grant = grant_since(&mut slots, 1);
-        assert_eq!(grant.given.len(), 9, "every light, then the forge's grant");
+        assert_eq!(
+            grant.given.len(),
+            10,
+            "every light, then the forge's grant, then the campfire"
+        );
         assert!(grant.no_room.is_empty());
         assert_eq!(
             slots.get(8).map(|s| s.item),
@@ -278,8 +286,8 @@ mod kit_tests {
         assert!(grant.given.is_empty());
         assert_eq!(
             grant.no_room.len(),
-            9,
-            "every light and the forge's grant are named"
+            10,
+            "every light, the forge's grant and the campfire are named"
         );
         let restored = Hotbar::restore(&mut save);
         assert_eq!(restored.0, full, "nothing moved");
@@ -307,6 +315,23 @@ mod kit_tests {
         );
         let again = Hotbar::restore(&mut save);
         assert_eq!(again.count(Item::Block(Material::Forge)), 1, "not twice");
+    }
+
+    /// A world dealt kit 3 (every save before `cooking`) is dealt one
+    /// campfire, once, and keeps all it had (`cooking` design S3).
+    #[test]
+    fn a_save_from_before_cooking_is_dealt_a_campfire_once() {
+        let mut save = WorldSave::memory_only();
+        let mut old = Slots::new();
+        old.give(Item::Block(Material::Forge), 1);
+        save.carried = Some(old);
+        save.kit = 3;
+        let restored = Hotbar::restore(&mut save);
+        assert_eq!(restored.count(Item::Block(Material::Campfire)), 1);
+        assert_eq!(restored.count(Item::Block(Material::Forge)), 1);
+        assert_eq!(restored.count(Item::Good(Good::COAL)), 0, "v3 not again");
+        let again = Hotbar::restore(&mut save);
+        assert_eq!(again.count(Item::Block(Material::Campfire)), 1, "not twice");
     }
 
     /// The owner's report: a world saved before torches joined the kit had

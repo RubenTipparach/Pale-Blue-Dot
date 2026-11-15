@@ -222,6 +222,7 @@ pub fn material_name(material: Material) -> &'static str {
         Material::Candle => "candle",
         Material::Tilled => "tilled soil",
         Material::Forge => "forge",
+        Material::Campfire => "campfire",
     }
 }
 

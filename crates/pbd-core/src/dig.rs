@@ -66,7 +66,8 @@ impl Class {
             | Material::LanternWall
             | Material::LanternHanging
             | Material::Brazier
-            | Material::Candle => Class::Placed,
+            | Material::Candle
+            | Material::Campfire => Class::Placed,
             Material::Air | Material::Water => return None,
         })
     }

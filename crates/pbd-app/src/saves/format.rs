@@ -155,6 +155,7 @@ pub fn material_code(material: Material) -> u8 {
         Material::Candle => 17,
         Material::Tilled => 18,
         Material::Forge => 19,
+        Material::Campfire => 21,
     }
 }
 
@@ -180,6 +181,7 @@ pub fn material_of(code: u8) -> Option<Material> {
         17 => Material::Candle,
         18 => Material::Tilled,
         19 => Material::Forge,
+        21 => Material::Campfire,
         _ => return None,
     })
 }
@@ -885,6 +887,26 @@ mod tests {
         let codes: std::collections::BTreeSet<u8> =
             Material::ALL.iter().map(|m| material_code(*m)).collect();
         assert_eq!(codes.len(), Material::ALL.len());
+    }
+
+    /// The campfire saves as code 21 and a dish by its code (`cooking`
+    /// design S7); a fish stays a fish.
+    #[test]
+    fn a_campfire_and_a_dish_survive_the_round_trip() {
+        let mut slots = kit();
+        slots.give(Item::Block(Material::Campfire), 1);
+        slots.give(Item::Good(Good::by_code("grilled-fish").unwrap()), 2);
+        slots.give(Item::Fish(4), 3);
+        let line = pack_line_of(&slots);
+        assert!(line.contains(" b21,1"), "{line}");
+        assert!(line.contains(" ggrilled-fish,2"), "{line}");
+        let Some(Record::Pack { slots: back }) = parse_line(line.trim_end()) else {
+            panic!("{line}");
+        };
+        assert_eq!(back, slots);
+        assert_eq!(material_of(21), Some(Material::Campfire));
+        // 20 is another branch's (`tool-crafting`); this build does not know it.
+        assert_eq!(material_of(20), None);
     }
 
     /// A good this build does not have costs its own line and no other.

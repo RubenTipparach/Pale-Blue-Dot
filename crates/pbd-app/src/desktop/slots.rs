@@ -87,7 +87,8 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         | Material::LanternWall
         | Material::LanternHanging
         | Material::Brazier
-        | Material::Candle => return None,
+        | Material::Candle
+        | Material::Campfire => return None,
     })
 }
 

@@ -200,6 +200,8 @@ struct Surroundings<'w, 's> {
     time: Res<'w, Time>,
     walkers: Query<'w, 's, &'static Position, With<Walker>>,
     cameras: Query<'w, 's, &'static GlobalTransform, With<WalkingCamera>>,
+    /// Steady hands (`cooking` design S5).
+    meals: Option<Res<'w, crate::kitchen::MealEffects>>,
 }
 
 /// One frame of fishing: the line, the schools, and spawning round the
@@ -286,13 +288,18 @@ fn fish(
                 .fishing
                 .bite_factor(sample.cover, sample.rain_rate * 3600.0)
         });
+        // Steady hands: the line's rules eased while the effect runs.
+        let fishing = pbd_core::cooking::steadied(
+            &settings.fishing,
+            world.meals.as_deref().map_or(1.0, |m| m.steady),
+        );
         let events = fishery.line.step(
             dt,
             controls,
             &angler,
             &mut fishery.schools,
             roster,
-            &settings.fishing,
+            &fishing,
             &settings.flock,
             &water,
             crate::sea::surface_gravity(),

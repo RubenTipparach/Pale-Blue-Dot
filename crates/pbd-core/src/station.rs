@@ -49,6 +49,13 @@ pub const STATIONS: &[StationRow] = &[
         material: None,
         max_jobs: 1,
     },
+    // `cooking` design S2: the kitchen's first station, also a light.
+    StationRow {
+        code: "campfire",
+        name: "campfire",
+        material: Some(Material::Campfire),
+        max_jobs: 4,
+    },
 ];
 
 /// The station a block is, if it is one.

@@ -433,11 +433,12 @@ pub fn dig_and_place(
         ResMut<Drops>,
         Res<pbd_app::sky::Sun>,
     ),
-    (mut note, farm, mut gained, mut planted): (
+    (mut note, farm, mut gained, mut planted, effects): (
         ResMut<super::farm::FarmNote>,
         Res<pbd_app::config::FarmConfig>,
         MessageWriter<pbd_app::hotbar::Gained>,
         MessageWriter<pbd_app::hotbar::Planted>,
+        Option<Res<pbd_app::kitchen::MealEffects>>,
     ),
 ) {
     // The tool in hand chops while a block is being broken: last frame's
@@ -501,7 +502,11 @@ pub fn dig_and_place(
     let block = (target.dig.cell, target.dig.layer);
     let held = buttons.pressed(MouseButton::Left) && tool.is_some();
     let secs = match tool {
-        Some(tool) if held => mining.secs(block, tool, &fine, &edits, &dig.0),
+        // Keen (`cooking` design S5): a break takes its time over the
+        // effect's strength while it runs.
+        Some(tool) if held => mining
+            .secs(block, tool, &fine, &edits, &dig.0)
+            .map(|secs| secs / effects.as_deref().map_or(1.0, |e| e.keen)),
         _ => None,
     };
     let step = mining

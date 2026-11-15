@@ -985,6 +985,7 @@ mod tests {
             (Material::LanternHanging, 12),
             (Material::Brazier, 15),
             (Material::Candle, 8),
+            (Material::Campfire, 13),
         ];
         assert_eq!(levels.len(), Material::LAMPS.len());
         for (material, level) in levels {
@@ -1001,6 +1002,7 @@ mod tests {
             Material::LanternHanging,
             Material::Brazier,
             Material::Candle,
+            Material::Campfire,
         ] {
             assert!(!always.dusk_lit(), "{always:?} burns all day");
         }

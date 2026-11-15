@@ -1,0 +1,110 @@
+// The kitchen (pbd_core::cooking, `cooking` design S4 and S5).
+//
+// `recipes` are station recipes exactly as in recipes.ron, appended to the
+// same book at load: made at one station, taking `secs` of WORLD time (time
+// passes only while the world is played), their inputs taken when queued.
+// Items are a good's code, `block:<name>`, or `fish` for one caught fish of
+// any species (an input only). A recipe's `code` is saved in a station's
+// queue: never rename one that has shipped. The campfire burns what it was
+// built with, so its recipes name no fuel (design S3).
+//
+// A recipe naming a good in `awaited` that this build lacks (the husbandry
+// branch's eggs, milk and meat) is pending: logged at load and left out
+// until the good exists. Any other unknown name is an error.
+//
+// `dishes` are the goods that are eaten: the effect each gives and for how
+// many minutes of play. `strengths` are each effect's multiplier (1 is none):
+// stride on sprint and swim speed, steady on the line's tension (divided)
+// and the fish's tiring (times), keen on break speed. At most `max_effects`
+// run at once.
+//
+// The code defaults written out; a test holds the two together.
+(
+    strengths: (
+        stride: 1.15,
+        steady: 1.2,
+        keen: 1.15,
+    ),
+    max_effects: 3,
+    dishes: [
+        (good: "grilled-fish", effect: Steady, minutes: 6.0),
+        (good: "chili-fish", effect: Steady, minutes: 10.0),
+        (good: "flatbread", effect: Stride, minutes: 5.0),
+        (good: "roast-turnip", effect: Keen, minutes: 4.0),
+        (good: "kale-skewer", effect: Keen, minutes: 6.0),
+        (good: "fried-egg", effect: Keen, minutes: 5.0),
+        (good: "roast-meat", effect: Stride, minutes: 8.0),
+    ],
+    awaited: ["egg", "milk", "raw-meat"],
+    recipes: [
+        (
+            code: "grilled-fish",
+            name: "GRILL FISH",
+            station: "campfire",
+            secs: 20.0,
+            inputs: [("fish", 1)],
+            outputs: [("grilled-fish", 1)],
+        ),
+        (
+            code: "chili-fish",
+            name: "CHILI FISH",
+            station: "campfire",
+            secs: 25.0,
+            inputs: [("fish", 1), ("chili", 1)],
+            outputs: [("chili-fish", 1)],
+        ),
+        (
+            code: "flatbread",
+            name: "FLATBREAD",
+            station: "campfire",
+            secs: 30.0,
+            inputs: [("wheat", 3)],
+            outputs: [("flatbread", 2)],
+        ),
+        (
+            code: "roast-turnip",
+            name: "ROAST TURNIP",
+            station: "campfire",
+            secs: 20.0,
+            inputs: [("turnip", 2)],
+            outputs: [("roast-turnip", 2)],
+        ),
+        (
+            code: "kale-skewer",
+            name: "KALE SKEWER",
+            station: "campfire",
+            secs: 25.0,
+            inputs: [("frost-kale", 2), ("turnip", 1)],
+            outputs: [("kale-skewer", 1)],
+        ),
+        // Pending until `animal-husbandry` adds the egg.
+        (
+            code: "fried-egg",
+            name: "FRIED EGG",
+            station: "campfire",
+            secs: 15.0,
+            inputs: [("egg", 1)],
+            outputs: [("fried-egg", 1)],
+        ),
+        // Pending until `animal-husbandry` adds raw meat.
+        (
+            code: "roast-meat",
+            name: "ROAST MEAT",
+            station: "campfire",
+            secs: 30.0,
+            inputs: [("raw-meat", 1)],
+            outputs: [("roast-meat", 1)],
+        ),
+        // Making fire (design S3): by hand, from the pack, once
+        // `tool-crafting`'s hand panel is in. Stone and coal until there are
+        // logs.
+        (
+            code: "campfire",
+            name: "CAMPFIRE",
+            station: "hand",
+            secs: 3.0,
+            inputs: [("block:stone", 5), ("coal", 2)],
+            outputs: [("block:campfire", 1)],
+        ),
+    ],
+)

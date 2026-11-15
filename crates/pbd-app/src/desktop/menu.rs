@@ -42,6 +42,8 @@ pub enum Screen {
     Map,
     /// A station's panel, opened with E on it (`farming-and-smelting`).
     Forge,
+    /// A kitchen station's panel, opened with E on a campfire (`cooking`).
+    Kitchen,
 }
 
 impl Screen {
@@ -62,9 +64,12 @@ impl Screen {
         }
         match self {
             Screen::Playing => Screen::Pause,
-            Screen::Pause | Screen::Guide | Screen::Pack | Screen::Map | Screen::Forge => {
-                Screen::Playing
-            }
+            Screen::Pause
+            | Screen::Guide
+            | Screen::Pack
+            | Screen::Map
+            | Screen::Forge
+            | Screen::Kitchen => Screen::Playing,
             Screen::Settings | Screen::Saves => Screen::Pause,
         }
     }

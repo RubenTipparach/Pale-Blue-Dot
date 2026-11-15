@@ -44,7 +44,7 @@ pub fn dress(
         perceptual_roughness: 0.95,
         ..default()
     });
-    for material in (0..=u8::MAX).map_while(material_of) {
+    for material in (0..=u8::MAX).filter_map(material_of) {
         let item = Item::Block(material);
         if let Some(index) = Material::LAMPS.iter().position(|&m| m == material) {
             let Some(icon) = icons.lights.get(index) else {

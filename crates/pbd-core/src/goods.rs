@@ -73,6 +73,29 @@ pub const GOODS: &[GoodRow] = &[
         "items/goods/bronze-ingot.png",
     ),
     // ---- Append new goods here (animal products, food, feed ...).
+    // cooking (`cooking` design S1): the campfire's dishes. Saved by code.
+    row(
+        "grilled-fish",
+        "grilled fish",
+        16,
+        "items/goods/grilled-fish.png",
+    ),
+    row("chili-fish", "chili fish", 16, "items/goods/chili-fish.png"),
+    row("flatbread", "flatbread", 32, "items/goods/flatbread.png"),
+    row(
+        "roast-turnip",
+        "roast turnip",
+        32,
+        "items/goods/roast-turnip.png",
+    ),
+    row(
+        "kale-skewer",
+        "kale skewer",
+        16,
+        "items/goods/kale-skewer.png",
+    ),
+    row("fried-egg", "fried egg", 16, "items/goods/fried-egg.png"),
+    row("roast-meat", "roast meat", 16, "items/goods/roast-meat.png"),
 ];
 
 /// A row of [`GOODS`], by index. In memory only: see the module docs.
