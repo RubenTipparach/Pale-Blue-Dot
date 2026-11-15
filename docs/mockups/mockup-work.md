@@ -26,6 +26,21 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 12 | 2026-11-13 | One 3D view at a time, in tabs: M24 v7, M1 v6, M5 v7, M9 v4, M17 v11. |
 | 13 to 15 | 2026-11-13 to 14 | Published from other branches (the last, from claude/perf-tuning, added the Sounds page as M25). |
 | 16 | 2026-11-14 | Every page back on this account: main's lists with this account's links, M25 to M29 added, the Sounds page as M30. |
+| 17 | 2026-11-14 | A Roadmap section above the mockups (the owner: "I'm just building a road map for the mockup tracker doc"): the first game loop, environment v2, town building and civil engineering, then the townsfolk. |
+| 18 | 2026-11-14 | Town building and civil engineering added after environment v2. |
+| 19 | 2026-11-14 | Mass transportation added after civil engineering: airships, sea ships and navigation, hired haulers, conveyors, aqueducts and minecart track. |
+| 20 | 2026-11-14 | The age of flight and industry added after mass transportation: aircraft, mass mining, oil, industrialization, advanced power. |
+| 21 | 2026-11-14 | Nuclear and rocketry added after the age of flight and industry; advanced power now stops at coal and oil. |
+| 22 | 2026-11-14 | The townsfolk moved to right after environment v2 ("townsfolk comes after env v2"). |
+| 23 | 2026-11-14 | Space exploration and colonization added after rocketry. |
+| 24 | 2026-11-14 | Exo-industry and advanced propulsion added after colonization: exo-industrialization, advanced rocket engines, particle colliders. |
+| 25 | 2026-11-14 | Antimatter and interstellar travel added after exo-industry; advanced engines now stop at fusion. |
+| 26 | 2026-11-14 | Space freighters added to phase 9 ("9 should also include space freighers"). |
+| 27 | 2026-11-14 | Finance and space stations added after rocketry (phase 8): stock market, space trading posts, space casinos. |
+| 28 | 2026-11-14 | Space tourism added to phase 9, space exploration and colonization. |
+| 29 | 2026-11-14 | Starter missions added to phase 1. |
+| 30 | 2026-11-14 | Farming gains seeds from grass and wild plants; those wild plants pulled forward from environment v2. |
+| 31 | 2026-11-14 | Phase 1 statuses: farming, herding and cooking built on `claude/phase-1`; tool crafting and starter missions building. |
 
 **Back on one account (2026-11-14).** On 2026-11-13 a cloud session republished this week's pages
 on a second claude.ai account and moved every link here to it; later sessions added M25 to M29

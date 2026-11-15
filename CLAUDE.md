@@ -299,6 +299,79 @@ the owner calls the rain drops.
 The player's RAIN SHADOW setting (`player-settings` 8) turns all of it off,
 and is off by default.
 
+## The first game loop (owner, 2026-11-14)
+
+**Standing direction from the user:** "so initial game loop will be:
+crafting tools, fishing, farming, herding, cooking". That loop is what the
+game is built toward first. The parts and where each stands:
+
+1. **Crafting tools**: `tool-crafting` (written up, not built). The tools are
+   made, not handed out; it rests on the station and recipe mechanism that
+   `basic-smelting` builds.
+2. **Fishing**: built (`fishing-and-equipment`).
+3. **Farming**: being built (`farming`, branch `claude/farming-smelting`).
+   Seeds drop from grass and from wild plants ("we might need to combine env
+   v2 in this first step"): the wild plants farming needs are pulled forward
+   from environment v2's flora; the rest of environment v2 stays after the
+   loop (recommendation taken, ask only with screenshots).
+4. **Herding**: being built (`animal-husbandry`, branch
+   `claude/animal-husbandry`).
+5. **Cooking**: written up (`cooking`), built after farming lands.
+6. **Starter missions**: written up (`starter-missions`), built last: a
+   chain that walks a new player through the loop ("start a fcrafting
+   table", make mining tools, make fishing rood, make axe, make fire... etc";
+   "go fishing, catch x fish, cook x fish"; "farm x plants").
+
+The owner, 2026-11-14: "try to do all of step 1 over the next 24 hours".
+
+Each part feeds the next: crafted tools dig, fish and till; crops feed the
+herd and the pot; the herd's eggs, milk and meat go in the pot too. Work on
+the loop comes before the other drafted mockups (ships, stations, markets),
+which wait for a request.
+
+**After the loop (owner, 2026-11-14; "dont start this stuff yet"):**
+- **Environment v2, an environmental overhaul**: advanced foliage and flora (M13), and an
+  underwater overhaul (M25, `ocean-environments`).
+- **Then the townsfolk** ("townsfolk comes after env v2"): NPCs (M5, `townsfolk`), missions, carpentry and
+  house building (M6, M22, `player-building`), and power generation, its
+  first rungs only: water and wind (M20).
+- **Then town building and civil engineering** ("the after env v2, we'll
+  down town building, civil engineerring"): towns built and grown on the grid (M15,
+  M22), and the works between buildings (roads, bridges); no mockup yet for
+  the second.
+- **Then mass transportation** ("then after civil engineering, we'll get
+  into mass transportation"): airships (M24), sea ships, sailing and
+  navigation (M23, `steer-and-sail`), hiring workers to transport goods, and
+  basic conveyors, aqueducts and minecart track (M20, M28).
+- **Then the age of flight and industry** ("after mass transit we'll get
+  into age of flight and mass mining, oil, industrialization, advanced power
+  generation"): aircraft (M24), mass mining, oil, industry and the power
+  ladder past water and wind to coal and oil (M20, `industry-tiers`).
+- **Then nuclear and rocketry** ("then after that we'll get into nuclear,
+  and rocketry"): the fission plant (M20) and rockets to orbit (M21,
+  `ship-tiers`).
+- **Then finance and space stations** ("after 7 lets also add in finance and
+  space stations exploration: stock market, space trading posts, and space
+  casinos"): the stock market and trading posts (M12, M10) and the casinos
+  (M11).
+- **Then space exploration and colonization** ("after rocketry, we'll get
+  into space exploration and colonization"): the system's other worlds (M1,
+  M2, `interplanetary-travel`), space tourism ("in 9 , add in \"space
+  tourism\""), and settling them (M10 stations and outposts).
+- **Then exo-industry and advanced propulsion** ("after colonization, we'll
+  do exo-industrialiozation + advanced rocket engines + particle colliders"):
+  industry off the home planet (M20, M10), engines past chemical rockets
+  (M21's fusion drives), space freighters ("9 should also include space
+  freighers": M21's freighters, M12's markets), and particle colliders
+  (M20's collider, the antimatter source).
+- **Then antimatter and interstellar travel** ("then we'll do antimatterm
+  interstellar travel"): antimatter as power and fuel (M20, M21's landers)
+  and travel to other stars (M1, M2, `star-systems`).
+
+None of these starts until the owner asks. The tracker's Roadmap section
+lists every phase with its mockups; keep it in step with this list
+("I'm just building a road map for the mockup tracker doc").
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything

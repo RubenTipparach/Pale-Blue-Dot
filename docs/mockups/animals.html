@@ -709,16 +709,24 @@ function buildBird(sp, k, rnd, c) {
   const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
   const M = hideMats(c, rnd), L = p.L * k;
   const legH = L * (p.legs || 0.6);
-  for (const s of [-1, 1]) { bx(body, M[1], L * 0.07, legH, L * 0.07, 0, legH / 2, s * L * 0.1); bx(body, M[1], L * 0.22, L * 0.04, L * 0.12, L * 0.06, L * 0.02, s * L * 0.1); }
+  // legs on hip pivots, so they swing; the foot rides the leg
+  c.legs = [];
+  for (const s of [-1, 1]) { const hip = new THREE.Group(); hip.position.set(0, legH, s * L * 0.1); body.add(hip); bx(hip, M[1], L * 0.07, legH, L * 0.07, 0, -legH / 2, 0); bx(hip, M[1], L * 0.22, L * 0.04, L * 0.12, L * 0.06, -legH + L * 0.02, 0); c.legs.push(hip); }
   bx(body, M[0], L, L * 0.56, L * 0.52, 0, legH + L * 0.25, 0);
   bx(body, M[7], L * 0.6, L * 0.2, L * 0.46, L * 0.1, legH + L * 0.06, 0);
-  bx(body, M[2], L * 0.38, L * 0.36, L * 0.34, L * 0.5, legH + L * 0.6, 0);
+  // the head on a neck pivot, so it pecks, bobs and looks about; beak, comb and eyes ride it
+  const neck = new THREE.Group(); neck.position.set(L * 0.38, legH + L * 0.42, 0); body.add(neck);
+  const hx = L * 0.12, hy = -L * 0.42;
+  bx(neck, M[2], L * 0.38, L * 0.36, L * 0.34, hx, hy + L * 0.6, 0);
   const bl = L * 0.24 * (p.legs > 1 ? 2.2 : 1);
-  bx(body, M[6], bl, L * 0.1, L * 0.1, L * 0.69 + bl / 2, legH + L * 0.56, 0);
-  if (p.crest) bx(body, M[3], L * 0.2, L * 0.14, L * 0.06, L * 0.5, legH + L * 0.84, 0);
-  const tl = bx(body, M[4], L * 0.5, L * 0.08, L * 0.3, -L * 0.62, legH + L * 0.36, 0); tl.rotation.z = 0.3;
+  bx(neck, M[6], bl, L * 0.1, L * 0.1, hx + L * 0.19 + bl / 2, hy + L * 0.56, 0);
+  if (p.crest) bx(neck, M[3], L * 0.2, L * 0.14, L * 0.06, hx, hy + L * 0.84, 0);
   const eM = eyeMat(sp);
-  for (const s of [-1, 1]) bx(body, eM, L * 0.07, L * 0.07, L * 0.02, L * 0.6, legH + L * 0.66, s * L * 0.17);
+  for (const s of [-1, 1]) bx(neck, eM, L * 0.07, L * 0.07, L * 0.02, hx + L * 0.1, hy + L * 0.66, s * L * 0.17);
+  c.head = neck;
+  const tail = new THREE.Group(); tail.position.set(-L * 0.4, legH + L * 0.4, 0); body.add(tail);
+  bx(tail, M[4], L * 0.5, L * 0.08, L * 0.3, -L * 0.22, -L * 0.04, 0); tail.rotation.z = 0.3; c.tail = tail;
+  c.peck = { t: 0.5 + rnd() * 2, dip: 0, look: 0, lookT: 0, flick: 0, scratch: 0 };
   c.wings = [];
   for (const s of [-1, 1]) {
     const piv = new THREE.Group(); piv.position.set(0, legH + L * 0.4, s * L * 0.26); body.add(piv);
@@ -727,6 +735,25 @@ function buildBird(sp, k, rnd, c) {
   }
   c.body = body; c.legLen = legH; c.radius = L;
   return g;
+}
+// A bird's small motions: the head bobs with each step, dips to peck when it stands, glances about,
+// the tail flicks and the wings shuffle now and then; asleep, the head is tucked down.
+function birdIdle(c, dt, time, sp2, active, asleep) {
+  const pk = c.peck, L = c.radius;
+  pk.flap = Math.max(0, (pk.flap || 0) - dt * 3);
+  let pitch = 0, bobX = 0;
+  if (asleep) pitch = -0.5;
+  else if (sp2 > 0.08) { bobX = Math.sin(c.phase * 2) * L * 0.08; pitch = -0.12 + 0.12 * Math.sin(c.phase * 2); pk.t = Math.min(pk.t, 0.6); }
+  else if (active) {
+    pk.t -= dt;
+    if (pk.t <= 0) { const r = Math.random(); if (r < 0.62) pk.dip = 1; else if (r < 0.85) pk.lookT = (Math.random() - 0.5) * 1.6; else if (r < 0.93) pk.flick = 1; else pk.flap = 1; pk.t = 0.35 + Math.random() * 1.6; }
+    if (pk.dip > 0) { pk.dip = Math.max(0, pk.dip - dt * 3.2); pitch = -1.15 * Math.sin(pk.dip * Math.PI); }
+  }
+  pk.look += (pk.lookT - pk.look) * Math.min(1, dt * 8);
+  if (sp2 > 0.08 || asleep) pk.lookT = 0;
+  c.head.rotation.z = pitch; c.head.rotation.y = pk.look; c.head.position.x = L * 0.38 + bobX;
+  pk.flick = Math.max(0, pk.flick - dt * 4);
+  if (c.tail) c.tail.rotation.z = 0.3 + 0.45 * Math.sin(pk.flick * Math.PI) + (asleep ? -0.15 : 0);
 }
 function buildCrab(sp, k, rnd, c) {
   const p = sp.p, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
@@ -859,6 +886,13 @@ function step(dt, time, sunEl) {
       const d = tmp.length();
       if (d > 2.5 + (c.seed % 5) * 0.5) { want.copy(tmp.normalize()); speed = sp.walk; if (c.state === "grazing") c.state = sp.role === "hunt" ? "prowling" : "walking with the herd"; }
     }
+    // a ground bird potters: a few quick steps to a spot close by, then pecks there
+    if (c.peck && active && speed === 0 && !threat) {
+      const pk = c.peck;
+      if (!pk.goal || pk.wait <= 0) { pk.wait = 2 + Math.random() * 4; const a = Math.random() * 6.28, r = 0.4 + Math.random() * 1.2; pk.goal = new THREE.Vector3(g.position.x + Math.cos(a) * r, 0, g.position.z + Math.sin(a) * r); pk.walk = Math.random() < 0.55; }
+      pk.wait -= dt;
+      if (pk.walk) { tmp.subVectors(pk.goal, g.position).setY(0); if (tmp.length() > 0.12) { want.copy(tmp.normalize()); speed = sp.walk * 1.4; c.state = "pottering about, pecking"; } else pk.walk = false; }
+    }
     // separation, and stay on the patch and out of deep water
     for (const o of CREATURES) if (o !== c && !o.fly) { const d = g.position.distanceTo(o.g.position), m = c.radius + o.radius; if (d < m && d > 1e-3) want.add(tmp.subVectors(g.position, o.g.position).setY(0).multiplyScalar((m - d) / d * 2)); }
     if (Math.hypot(g.position.x, g.position.z) > PATCH_R) want.add(tmp.set(-g.position.x, 0, -g.position.z).normalize().multiplyScalar(2));
@@ -878,7 +912,8 @@ function step(dt, time, sunEl) {
     if (c.legs) c.legs.forEach((l, i) => { l.rotation.z = asleep && sp.plan === "quad" ? (i < 2 ? -1.3 : 1.3) : Math.sin(c.phase + (i % 3 === 0 ? 0 : Math.PI)) * Math.min(0.7, sp2 * 0.35); });
     if (c.head) c.head.rotation.z += (((c.state === "grazing" && sp2 < 0.1) ? -0.75 : asleep ? -0.35 : 0) - c.head.rotation.z) * Math.min(1, dt * 3);
     if (sp.plan === "toad") { const hop = (c.t % 3) < 0.4 && active ? Math.sin((c.t % 3) / 0.4 * Math.PI) * 0.25 : 0; c.body.position.y = hop; if (hop) { g.position.x += Math.cos(c.seed) * dt * 0.8; g.position.z += Math.sin(c.seed) * dt * 0.8; } c.glowMat.uniforms.uEmissive.value.copy(new THREE.Color(sp.glow)).multiplyScalar(night ? 0.06 * (0.6 + 0.4 * Math.sin(time * 2 + c.seed)) : 0.0); c.state = active ? "calling by the water, spots pulsing" : "buried in the mud"; }
-    if (c.wings) for (const [w, s] of c.wings) w.rotation.x = -s * (c.vel.length() > 2 ? 0.7 * Math.sin(time * 14) : 0.05);
+    if (c.peck) birdIdle(c, dt, time, sp2, active, asleep);
+    if (c.wings) for (const [w, s] of c.wings) w.rotation.x = -s * (c.vel.length() > 2 ? 0.7 * Math.sin(time * 14) : 0.05 + (c.peck ? c.peck.flap : 0));
   }
   // swarms: drift about home, or gather at the nearest lamp; each lights what is near it
   for (const sw of SWARMS) {
