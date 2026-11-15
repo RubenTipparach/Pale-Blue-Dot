@@ -285,7 +285,9 @@ function waterMesh(W, g, o = {}) {
 // a cake, design 7b), sources too, where Luanti draws no face against CONTENT_IGNORE.
 const FLOOR_EPS = 0.02;                  // Luanti's -0.5 + 0.2 / BS: a corner pulled to the floor stands 2 cm up
 const FLOW_K = 5, FLOW_MIN = 0.3;        // a top's flow vector: FLOW_MIN + FLOW_K times its slope, at most 0.9
-function liquidMesh(LQ) {
+// o.skip(q, r, y, kind): a cell another mesh draws (M25's river leaves its sea's sources to the wave surface); it is left
+// out of the mesh and of the columns, but still shapes its neighbours' corners and walls as the water it is
+function liquidMesh(LQ, o = {}) {
   const {AIR, SOLID, FLOW, SRC, LIQUID_LEVEL_MAX} = root.PBDLiquid, {kind, lvl, down, idx, inside, unidx, SIM} = LQ;
   const IGN = -1, range = Math.max(1, Math.min(8, SIM.range)), cut0 = LIQUID_LEVEL_MAX + 1 - range;
   const isLiq = k => k === FLOW || k === SRC;
@@ -317,7 +319,8 @@ function liquidMesh(LQ) {
   const cols = new Map(), tops = [], falls = [], Z2 = [0, 0];
   for (let i = 0; i < LQ.NCELL; i++) {
     const k0 = kind[i]; if (!isLiq(k0)) continue;
-    const [q, r, y] = unidx(i), X = hx(q, r), Z = hz(r), self = nbOf(q, r, y), nb = DIRS.map(([dq, dr]) => nbOf(q + dq, r + dr, y));
+    const [q, r, y] = unidx(i); if (o.skip && o.skip(q, r, y, k0)) continue;
+    const X = hx(q, r), Z = hz(r), self = nbOf(q, r, y), nb = DIRS.map(([dq, dr]) => nbOf(q + dq, r + dr, y));
     // calculateCornerLevels: heights in metres
     const h = CORNER.map((_, c) => y + 0.5 + cornerLevel([self, nb[(c + 5) % 6], nb[c]]));
     // the flow: Luanti turns the flowing texture down the corner gradient; on hex the least-squares slope of the six
@@ -358,7 +361,7 @@ function simWater(W, LQ, o = {}) {
   const SW = {mesh: null, mat: null, arrows: null, cells: null, showArrows: o.arrows !== false};
   const M4 = new THREE.Matrix4(), V = new THREE.Vector3(), N3 = new THREE.Vector3(), X3 = new THREE.Vector3(), Z3 = new THREE.Vector3(), SC = new THREE.Vector3();
   SW.rebuild = () => {
-    const LM = liquidMesh(LQ);
+    const LM = liquidMesh(LQ, {skip: o.skip});
     if (SW.mesh) { W.scene.remove(SW.mesh); SW.mesh.geometry.dispose(); }
     SW.mesh = waterMesh(W, LM.geo, SW.mat ? {mat: SW.mat} : Object.assign({amp: 0.01, mud: 0, minA: 0.78}, o.caps));
     if (!SW.mat) SW.mat = SW.mesh.material;
