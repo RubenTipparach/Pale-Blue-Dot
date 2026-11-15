@@ -1,142 +1,97 @@
-// Phase 1's gameplay showcase (`step-videos` 5.2, `starter-missions`
-// "Missions that show off the game"): a bot in a new world plays the
-// starter missions through the player's own inputs, each shot one mission
-// or a step toward it. The HUD's mission line ticks as it goes; each shot
-// ends when its missions are done, or the run fails as stalled.
+// Phase 1's gameplay showcase (`step-videos` 5.2, `starter-missions` T.5):
+// a bot in a new world plays the mission tree through the player's own
+// inputs - the trunk from bare hands to stone tools, then fishing, farming
+// and herding, each a section with its own goal, and cooking last. The HUD's
+// mission line ticks as it goes, each recipe opens as its mission is done,
+// and each shot ends when its missions are done or the run fails as stalled.
 //
-// The goal stops at "Build a pen": "Smelt ore" needs ore, and no ground
-// this build generates holds any (written up in `step-videos` tasks 5.2),
-// so the chain cannot go past it in a new world yet. The last shots play
-// the rest of the loop the chain asks for later: the field harvested after
-// six days on a sped-up clock, bread at the campfire, a meal eaten.
+// Not played yet: mining and smelting stops at `ore` (no ground this build
+// generates holds ore), and light and building, getting about and the
+// later cooking dishes are for a follow-up.
+//
+// The start is a level pasture with the sea within thirty metres, found by
+// `showcase::tests::find_a_coastal_field` (a measurement, run by hand).
 (
-    goal: "Goal: the starter missions, from Gather by hand to Build a pen",
+    goal: "Goal: the mission tree's trunk, then fishing, farming, herding and cooking",
     at: Some((11.5085, -25.0992)),
     hour: 8.5,
     shots: [
+        // ---- The trunk.
         (
-            caption: "Gather by hand: a branch from a tree, soil and fibre from the ground",
+            caption: "The trunk. Gather by hand: fibre and loose stone turn up in the ground",
             until: ["gather"],
-            max_s: 150.0,
-            acts: [Chop(Have("log", 1)), Still, Dig(Mission("gather"), 2)],
+            max_s: 240.0,
+            acts: [Dig(Mission("gather"), 2), Still],
         ),
         (
-            caption: "Make planks and rope in the pack",
+            caption: "Craft an axe: a branch pulled from a tree, then the pack's Craft row",
+            until: ["axe"],
+            max_s: 90.0,
+            acts: [Chop(Have("log", 1)), Craft("stone-axe", 1)],
+        ),
+        (
+            caption: "Gather wood: fell trees with the axe",
+            until: ["wood"],
+            max_s: 240.0,
+            acts: [Hand("axe"), Chop(Mission("wood")), Still],
+        ),
+        (
+            caption: "Make planks and rope",
             until: ["planks-rope"],
-            max_s: 40.0,
-            acts: [Craft("planks", 1), Craft("rope", 1)],
+            max_s: 240.0,
+            acts: [Craft("planks", 2), Hand("hand"), Dig(Have("fibre", 6), 1), Craft("rope", 2)],
         ),
         (
-            caption: "Make a crafting table, and set it down",
+            caption: "Build a crafting bench",
             until: ["crafting-table"],
             max_s: 90.0,
-            acts: [
-                Chop(Have("log", 1)),
-                Craft("planks", 1),
-                Craft("workbench", 1),
-                Place("block:workbench"),
-                Look(-150.0, -10.0, 1.2),
-                Still,
-            ],
+            acts: [Craft("workbench", 1), Place("block:workbench"), Look(-150.0, -10.0, 1.2)],
         ),
         (
-            caption: "Loose stone and fibre turn up in the ground",
+            caption: "Stone tools at the bench",
+            until: ["stone-tools"],
             max_s: 300.0,
             acts: [
-                Chop(Have("log", 1)),
-                Dig(Have("stone", 6), 3),
-                Dig(Have("fibre", 6), 1),
-            ],
-        ),
-        (
-            caption: "Make mining tools at the workbench",
-            until: ["mining-tools"],
-            max_s: 90.0,
-            acts: [
                 Craft("planks", 1),
-                Craft("rope", 2),
+                Dig(Have("stone", 6), 2),
                 Bench("stone-shovel", 1),
-                Still,
                 Bench("stone-pickaxe", 1),
-            ],
-        ),
-        (
-            caption: "With the shovel the ground comes up faster",
-            max_s: 420.0,
-            acts: [
-                Hand("shovel"),
-                Dig(Have("stone", 8), 3),
-                Dig(Have("fibre", 8), 1),
-                Chop(Have("log", 1)),
-            ],
-        ),
-        (
-            caption: "Make an axe, and cut logs with it",
-            until: ["axe"],
-            max_s: 120.0,
-            acts: [
-                Bench("stone-axe", 1),
-                Hand("axe"),
-                Chop(Mission("axe")),
                 Still,
             ],
         ),
+        // ---- Fishing.
         (
-            caption: "Make a fishing rod",
+            caption: "Fishing. Make a rod",
             until: ["rod"],
-            max_s: 90.0,
-            acts: [Craft("planks", 1), Craft("rope", 2), Bench("rod", 1)],
-        ),
-        (
-            caption: "Make a campfire, and set it down near the water",
-            until: ["fire"],
-            max_s: 180.0,
-            acts: [
-                Chop(Have("log", 2)),
-                Hand("shovel"),
-                Dig(Have("stone", 5), 3),
-                Craft("campfire", 1),
-                Shore,
-                Place("block:campfire"),
-                Still,
-            ],
+            max_s: 300.0,
+            acts: [Hand("shovel"), Dig(Have("fibre", 8), 1), Craft("rope", 2), Bench("rod", 1)],
         ),
         (
             caption: "Go fishing: cast, wait for the bite, reel",
-            until: ["go-fishing", "catch-fish"],
-            max_s: 240.0,
-            acts: [Hand("rod"), Fish(Mission("catch-fish")), Still],
+            until: ["go-fishing"],
+            max_s: 300.0,
+            acts: [Hand("rod"), Fish(Mission("go-fishing")), Still],
         ),
+        // ---- Farming.
         (
-            caption: "Grill the catch on the campfire",
-            until: ["cook-fish"],
-            max_s: 150.0,
-            acts: [Cook("grilled-fish", 3), Still],
-        ),
-        (
-            caption: "Find seeds: wild plants give them when picked",
+            caption: "Farming. Find seeds: wild plants give them when picked",
             until: ["find-seeds"],
             repeat: true,
             max_s: 150.0,
             acts: [Hand("hand"), Pick(1)],
         ),
         (
-            caption: "Till a field with the shovel, and sow it",
-            until: ["plant"],
-            max_s: 120.0,
-            acts: [Hand("shovel"), Till(4), Plant(4), Look(0.0, -35.0, 1.0), Still],
-        ),
-        (
-            caption: "Tame an animal: stand still with its food, and feed it",
-            until: ["tame"],
-            max_s: 200.0,
-            acts: [Hand("hand"), Tame("any"), Still],
-        ),
-        (
-            caption: "Build a pen, and lead the animal in",
-            until: ["pen"],
-            max_s: 200.0,
-            acts: [Walk(2.0), Pen, Select("fence"), Lead("any"), Still],
+            caption: "Break ground with the shovel, and sow wheat",
+            until: ["till", "plant"],
+            max_s: 300.0,
+            acts: [
+                Hand("shovel"),
+                Dig(Have("wheat-seed", 4), 1),
+                Till(4),
+                Plant(4),
+                Look(0.0, -35.0, 1.0),
+                Still,
+            ],
         ),
         (
             caption: "Six days later: the wheat is ripe",
@@ -145,19 +100,86 @@
             acts: [Wait(43.2)],
         ),
         (
-            caption: "Harvest the wheat, bake flatbread, and eat",
-            max_s: 150.0,
+            caption: "Harvest the wheat",
+            until: ["harvest"],
+            max_s: 120.0,
+            acts: [Hand("hand"), Harvest(4), Still],
+        ),
+        // ---- Herding.
+        (
+            caption: "Herding. Make fences and a gate at the bench",
+            until: ["fence"],
+            max_s: 300.0,
             acts: [
-                Hand("hand"),
-                Harvest(4),
-                Still,
-                Cook("flatbread", 1),
-                Eat("flatbread"),
-                Still,
+                Hand("axe"),
+                Chop(Have("log", 2)),
+                Craft("planks", 2),
+                Hand("shovel"),
+                Dig(Have("fibre", 3), 1),
+                Craft("rope", 1),
+                Bench("fence", 6),
+                Bench("gate", 1),
             ],
         ),
         (
-            caption: "Goal met: fourteen starter missions done",
+            caption: "Tame a hen: stand still with seed in hand, and feed her",
+            until: ["tame"],
+            max_s: 200.0,
+            acts: [Hand("hand"), Tame("meadow-hen"), Still],
+        ),
+        (
+            caption: "Build a pen, and lead her in",
+            until: ["pen"],
+            max_s: 200.0,
+            acts: [Walk(2.0), Pen, Select("fence"), Lead("meadow-hen"), Still],
+        ),
+        (
+            caption: "Two days later: eggs to collect",
+            rate: Some(300.0),
+            max_s: 30.0,
+            acts: [Wait(20.0)],
+        ),
+        (
+            caption: "Collect the eggs",
+            until: ["collect"],
+            max_s: 90.0,
+            acts: [Collect("meadow-hen"), Still],
+        ),
+        // ---- Cooking.
+        (
+            caption: "Cooking. Make a fire by the water",
+            until: ["fire"],
+            max_s: 300.0,
+            acts: [
+                Hand("axe"),
+                Chop(Have("log", 2)),
+                Hand("shovel"),
+                Dig(Have("stone", 5), 2),
+                Craft("campfire", 1),
+                Shore,
+                Place("block:campfire"),
+            ],
+        ),
+        (
+            caption: "Grill the catch",
+            until: ["cook-fish"],
+            max_s: 150.0,
+            acts: [Cook("grilled-fish", 2), Still],
+        ),
+        (
+            caption: "Bake bread from the wheat",
+            until: ["bread"],
+            max_s: 150.0,
+            acts: [Cook("flatbread", 2)],
+        ),
+        (
+            caption: "Eat well",
+            until: ["eat"],
+            max_s: 30.0,
+            acts: [Eat("flatbread"), Still],
+        ),
+        (
+            caption: "Goal met: the trunk, fishing, farming, herding and cooking",
             max_s: 30.0,
             acts: [Missions(6.0)],
         ),

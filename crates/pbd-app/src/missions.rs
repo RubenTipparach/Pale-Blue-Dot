@@ -259,6 +259,76 @@ pub fn count(mut c: Counting) {
     }
 }
 
+/// The recipes the mission tree still holds shut (`starter-missions` T.1),
+/// by code, with the title of the mission that opens each: derived each
+/// frame from the chain, the world's progress and what the world holds,
+/// never stored.
+#[derive(Resource, Clone, Debug, Default, PartialEq, Eq)]
+pub struct RecipeLocks(pub std::collections::BTreeMap<String, String>);
+
+impl RecipeLocks {
+    /// The title of the mission that opens `code`, while it is locked.
+    pub fn locked(&self, code: &str) -> Option<&str> {
+        self.0.get(code).map(String::as_str)
+    }
+}
+
+/// Recompute the locks: one rule, `Chain::recipe_open`, for every station.
+/// A recipe whose output the world already holds (a tool owned at its tier
+/// or better, an item carried, a block placed) stays open, so a world from
+/// before the tree loses nothing (T.3).
+pub fn refresh_locks(
+    chain: Res<MissionChain>,
+    missions: Res<Missions>,
+    recipes: Res<Recipes>,
+    save: Option<Res<WorldSave>>,
+    hotbar: Option<Res<Hotbar>>,
+    tools: Option<Res<crate::fish::ToolSlot>>,
+    mut locks: ResMut<RecipeLocks>,
+) {
+    let chain = &chain.0;
+    if chain.missions.iter().all(|m| m.unlocks.is_empty()) {
+        if !locks.0.is_empty() {
+            locks.0.clear();
+        }
+        return;
+    }
+    let placed: Vec<Material> = save
+        .as_deref()
+        .map(|s| s.edits.all().into_iter().map(|e| e.material).collect())
+        .unwrap_or_default();
+    let holds = |recipe: &pbd_core::station::Recipe| {
+        let tool_held = recipe.tools.iter().any(|&(tool, tier)| {
+            tools
+                .as_deref()
+                .and_then(|t| t.0.tier(tool))
+                .is_some_and(|have| have >= tier)
+        });
+        let item_held = recipe.outputs.iter().any(|&(item, _)| {
+            hotbar.as_deref().is_some_and(|h| h.0.count(item) > 0)
+                || matches!(item, Item::Block(m) if placed.contains(&m))
+        });
+        tool_held || item_held
+    };
+    let mut now = std::collections::BTreeMap::new();
+    for recipe in &recipes.0.recipes {
+        let makes: Vec<String> = recipe
+            .outputs
+            .iter()
+            .map(|(item, _)| item_code(*item))
+            .chain(recipe.tools.iter().map(|(t, _)| item_code(Item::Tool(*t))))
+            .collect();
+        if !chain.recipe_open(&missions.progress, &recipe.code, &makes, holds(recipe))
+            && let Some(m) = chain.unlocked_by(&recipe.code)
+        {
+            now.insert(recipe.code.clone(), m.title.clone());
+        }
+    }
+    if locks.0 != now {
+        locks.0 = now;
+    }
+}
+
 /// Load the chain, unless one is already given (a test's).
 fn start(
     mut commands: Commands,
@@ -287,10 +357,14 @@ impl Plugin for MissionsPlugin {
             .add_message::<Deed>()
             .add_message::<Cooked>()
             .init_resource::<Missions>()
+            .init_resource::<RecipeLocks>()
             .add_systems(PreStartup, start)
             .add_systems(
                 PostUpdate,
-                count.in_set(MissionsSet).run_if(crate::world_open),
+                (count, refresh_locks)
+                    .chain()
+                    .in_set(MissionsSet)
+                    .run_if(crate::world_open),
             );
     }
 }

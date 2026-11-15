@@ -74,13 +74,41 @@
             inputs: [("stone", 3), ("planks", 2), ("rope", 1)],
             outputs: [("tool:stone-shovel", 1)],
         ),
+        // The first tool, by hand (`starter-missions` T.2, the tree's trunk):
+        // loose stone, fibre and a branch.
         (
             code: "stone-axe",
             name: "STONE AXE",
+            station: "hand",
+            secs: 3.0,
+            inputs: [("stone", 3), ("fibre", 2), ("log", 1)],
+            outputs: [("tool:stone-axe", 1)],
+        ),
+        // A pen's pieces and a torch (T.2): made, where the kit used to deal
+        // them.
+        (
+            code: "fence",
+            name: "FENCE X2",
+            station: "workbench",
+            secs: 2.0,
+            inputs: [("planks", 1)],
+            outputs: [("fence", 2)],
+        ),
+        (
+            code: "gate",
+            name: "GATE",
             station: "workbench",
             secs: 3.0,
-            inputs: [("stone", 3), ("planks", 2), ("rope", 1)],
-            outputs: [("tool:stone-axe", 1)],
+            inputs: [("planks", 2), ("rope", 1)],
+            outputs: [("gate", 1)],
+        ),
+        (
+            code: "torch",
+            name: "TORCH X2",
+            station: "hand",
+            secs: 1.0,
+            inputs: [("planks", 1), ("fibre", 1)],
+            outputs: [("block:torch", 2)],
         ),
         (
             code: "rod",

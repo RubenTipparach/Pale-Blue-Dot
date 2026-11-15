@@ -603,6 +603,7 @@ pub fn press(
     options: Query<(&Interaction, &DropOption), (Changed<Interaction>, With<Button>)>,
     wells: Query<(&Interaction, &Well), Changed<Interaction>>,
     buttons: Query<(&Interaction, &CraftButton, &Plaque), Changed<Interaction>>,
+    locks: Res<pbd_app::missions::RecipeLocks>,
 ) {
     if *screen != Screen::Pack && *screen != Screen::Forge {
         if pick.list_open {
@@ -639,6 +640,12 @@ pub fn press(
         let Some(code) = picked(&recipes, &pick, station).map(|r| r.code.clone()) else {
             continue;
         };
+        // Locked by the mission tree (`starter-missions` T.1): it says
+        // which mission opens it.
+        if let Some(opens) = locks.locked(&code) {
+            note.say(time.elapsed_secs(), format!("Opens with: {opens}"));
+            continue;
+        }
         queue(
             &mut save,
             &mut hotbar,

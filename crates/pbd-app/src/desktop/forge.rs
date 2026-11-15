@@ -246,6 +246,7 @@ pub fn work(
     mut fill: Query<&mut Node, (With<QueueFill>, Without<StationPanel>)>,
     mut tools: ResMut<pbd_app::fish::ToolSlot>,
     mut panels: Query<(&StationPanel, &mut Node), Without<QueueFill>>,
+    locks: Res<pbd_app::missions::RecipeLocks>,
 ) {
     if *screen != Screen::Forge {
         return;
@@ -286,6 +287,10 @@ pub fn work(
     }
     for (interaction, plaque, _) in &mut plaques {
         if *interaction == Interaction::Pressed {
+            if let Some(opens) = locks.locked(&plaque.0) {
+                note.say(wall_s, format!("Opens with: {opens}"));
+                continue;
+            }
             queue(
                 &mut save,
                 &mut hotbar,

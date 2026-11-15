@@ -232,7 +232,42 @@ impl Default for RecipeFile {
             ),
             stone_tool("pickaxe", "STONE PICK"),
             stone_tool("shovel", "STONE SHOVEL"),
-            stone_tool("axe", "STONE AXE"),
+            // The first tool, by hand (`starter-missions` T.2, the tree's
+            // trunk): loose stone, fibre and a branch.
+            recipe(
+                "stone-axe",
+                "STONE AXE",
+                "hand",
+                3.0,
+                &[("stone", 3), ("fibre", 2), ("log", 1)],
+                &[("tool:stone-axe", 1)],
+            ),
+            // A pen's pieces and a torch (T.2): made, where the kit used to
+            // deal them.
+            recipe(
+                "fence",
+                "FENCE X2",
+                "workbench",
+                2.0,
+                &[("planks", 1)],
+                &[("fence", 2)],
+            ),
+            recipe(
+                "gate",
+                "GATE",
+                "workbench",
+                3.0,
+                &[("planks", 2), ("rope", 1)],
+                &[("gate", 1)],
+            ),
+            recipe(
+                "torch",
+                "TORCH X2",
+                "hand",
+                1.0,
+                &[("planks", 1), ("fibre", 1)],
+                &[("block:torch", 2)],
+            ),
             recipe(
                 "rod",
                 "ROD",
@@ -613,10 +648,12 @@ mod tests {
         assert_eq!(file, RecipeFile::default());
         let book = file.resolve().unwrap();
         assert_eq!(book.at("forge").count(), 2);
-        assert_eq!(book.at("hand").count(), 3);
+        // Planks, rope, the workbench, the stone axe and torches by hand
+        // (`starter-missions` T.2); at the bench the rest, fences and gates.
+        assert_eq!(book.at("hand").count(), 5);
         assert_eq!(
             book.at("workbench").count(),
-            12,
+            13,
             "with the bucket (water-flow E11)"
         );
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));

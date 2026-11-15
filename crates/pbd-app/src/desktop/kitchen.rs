@@ -303,6 +303,7 @@ pub fn work(
     plaques: Query<(&Interaction, &CookPlaque), Changed<Interaction>>,
     mut line: Query<&mut KitText, With<CookLine>>,
     mut fill: Query<&mut Node, With<CookFill>>,
+    locks: Res<pbd_app::missions::RecipeLocks>,
 ) {
     if *screen != Screen::Kitchen {
         return;
@@ -312,6 +313,10 @@ pub fn work(
     let wall_s = time.elapsed_secs();
     for (interaction, plaque) in &plaques {
         if *interaction == Interaction::Pressed {
+            if let Some(opens) = locks.locked(&plaque.0) {
+                note.say(wall_s, format!("Opens with: {opens}"));
+                continue;
+            }
             queue(
                 &mut save,
                 &mut hotbar,

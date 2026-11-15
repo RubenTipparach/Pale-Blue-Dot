@@ -1,155 +1,186 @@
-// The starter missions (pbd_core::missions, `starter-missions` design 7-17).
+// The starter missions (pbd_core::missions, `starter-missions` design 7-17
+// and "Missions are a tree that unlocks the tech"): a trunk from bare hands
+// to stone tools, then branches - fishing, farming, herding, mining and
+// smelting, light and building - and cooking once there is food.
 //
 // A mission opens when every mission in `needs` is done (or pending), and is
 // done when every objective's count is reached. Counts start when a mission
 // opens; `craft` of a tool owned or an item carried, and `place` of a block
 // the world's edits hold, are met by what the world already has.
 //
+// `unlocks` lists the recipe codes a mission's completion opens. A recipe a
+// mission names is locked until then (the pack, the bench, the forge and the
+// campfire all ask `Chain::recipe_open`); a recipe no mission names is open
+// from the start; a recipe whose output the world already holds stays open,
+// so a world from before the tree keeps every tool it could make.
+//
 // `what` is a name, names joined by `|` (any counts), `any`, or a group:
 // `seed`, `crop` (produce), `ingot`, `fish`. Names are the recipe table's:
 // a good's code, `block:<name>`, `tool:<name>`, `recipe:<code>`; animals
-// and fish by their roster name in lower case.
+// and fish by their roster name in lower case. `fell` counts the axe's
+// last log from a tree, `eat` a dish eaten, `night` the clock passing 20:00
+// near a light in the world.
+//
+// A craft of `recipe:<code>` counts the makes at a station, one a job, and
+// is never met by what the world carries (the starting kit deals fences,
+// gates and torches to every world today).
 //
 // `awaited` names what another branch will bring: a mission naming only
 // these where it names anything unknown is PENDING - logged at load, shown
-// as not in this build, and met for the missions that need it. A `craft` of
-// an item no recipe makes is pending too. `fell` counts the axe's last log
-// from a tree, `eat` a dish eaten, `night` the clock passing 20:00 near a
-// light the player placed. Any other unknown name is an error.
+// as not in this build, and met for the missions that need it. Any other
+// unknown name is an error.
 //
 // A mission's `id` is saved in the world's `missions` record: append-only,
-// never renamed. Counts are picked so each mission is one to three minutes
-// of play, except where the world clock sets the pace: an egg comes once a
-// world day (48 minutes) and a crop ripens in four to six (see
-// farming.ron), so `collect` and `harvest` come late in the chain, after
-// the planting and taming they wait on.
+// never renamed. The old line's ids keep their place in the tree; an id the
+// tree dropped (`metal-tool`) stays in an old world's record, unread.
+//
+// Still to come (T.2, a follow-up): fishing's `bait`, `three-kinds` and
+// `sea-fishing`, farming's `water-field` and `three-crops`, herding's
+// `flock`, and getting about (`map`, `swim`, `reef`, `town`, `boat`), which
+// need the `pour`, `reach`, `swim` and `board` kinds.
 (
-    // Nothing awaited: tool crafting is in (its goods `fibre`, `stone`,
-    // `log`, `planks`, `rope`, the workbench and its recipes).
     awaited: [],
     missions: [
+        // ---- 0. The trunk: hands to tools.
         (
             id: "gather",
             title: "Gather by hand",
-            help: "Dig soft ground with bare hands (fibre turns up in grass), and hit a tree by hand to pull down a branch.",
+            help: "Dig soft ground with bare hands: fibre turns up in grass, loose stone in the soil under it.",
             objectives: [
+                (kind: gather, what: "fibre", count: 4, label: "fibre"),
+                (kind: gather, what: "stone", count: 4, label: "stone"),
                 (kind: gather, what: "block:dirt|block:grass|block:soil|block:sand", count: 4, label: "soil"),
-                (kind: gather, what: "fibre", count: 3, label: "fibre"),
-                (kind: gather, what: "log", count: 1, label: "branch"),
             ],
+            unlocks: ["stone-axe"],
+        ),
+        (
+            id: "axe",
+            title: "Craft an axe",
+            help: "Pull a branch from a tree by hand, then make a stone axe in the pack's Craft row (I).",
+            needs: ["gather"],
+            objectives: [
+                (kind: craft, what: "tool:axe|recipe:stone-axe", count: 1, label: "axe"),
+            ],
+        ),
+        (
+            id: "wood",
+            title: "Gather wood",
+            help: "With the axe in hand (G), work trees for logs until they fall.",
+            needs: ["axe"],
+            objectives: [
+                (kind: fell, what: "tree", count: 2, label: "trees"),
+                (kind: gather, what: "log", count: 10, label: "logs"),
+            ],
+            unlocks: ["planks", "rope"],
         ),
         (
             id: "planks-rope",
             title: "Make planks and rope",
             help: "In the pack (I), the Craft row makes planks from a log and rope from three fibre.",
-            needs: ["gather"],
+            needs: ["wood"],
             objectives: [
-                (kind: craft, what: "planks", count: 4, label: "planks"),
-                (kind: craft, what: "rope", count: 1, label: "rope"),
+                (kind: craft, what: "planks", count: 8, label: "planks"),
+                (kind: craft, what: "rope", count: 2, label: "rope"),
             ],
+            unlocks: ["workbench"],
         ),
         (
             id: "crafting-table",
-            title: "Make a crafting table",
+            title: "Build a crafting bench",
             help: "Make a workbench from six planks in the Craft row, then place it on the ground.",
             needs: ["planks-rope"],
             objectives: [
                 (kind: craft, what: "block:workbench", count: 1, label: "make"),
                 (kind: place, what: "block:workbench", count: 1, label: "place"),
             ],
+            unlocks: ["stone-pickaxe", "stone-shovel", "rod"],
         ),
         (
-            id: "mining-tools",
-            title: "Make mining tools",
-            help: "Loose stone comes off rock outcrops by hand. At the workbench (E), make a stone pickaxe and a stone shovel.",
+            id: "stone-tools",
+            title: "Stone tools",
+            help: "At the workbench (E), make a stone pickaxe and a stone shovel.",
             needs: ["crafting-table"],
             objectives: [
                 (kind: craft, what: "tool:pickaxe|recipe:stone-pickaxe", count: 1, label: "pickaxe"),
                 (kind: craft, what: "tool:shovel|recipe:stone-shovel", count: 1, label: "shovel"),
             ],
         ),
-        (
-            id: "axe",
-            title: "Make an axe",
-            help: "Make a stone axe at the workbench, and cut logs from a tree with it.",
-            needs: ["mining-tools"],
-            objectives: [
-                (kind: craft, what: "tool:axe|recipe:stone-axe", count: 1, label: "axe"),
-                (kind: gather, what: "log", count: 3, label: "logs"),
-            ],
-        ),
+        // ---- 1. Fishing.
         (
             id: "rod",
             title: "Make a fishing rod",
             help: "Make a rod at the workbench from planks, rope and fibre.",
-            needs: ["axe"],
+            needs: ["stone-tools"],
             objectives: [
                 (kind: craft, what: "tool:rod|recipe:rod", count: 1, label: "rod"),
             ],
         ),
         (
-            id: "fire",
-            title: "Make a fire",
-            help: "Make a campfire in the Craft row from five loose stone and two logs, and set it down near water.",
-            needs: ["rod"],
-            objectives: [
-                (kind: craft, what: "block:campfire|recipe:campfire", count: 1, label: "make"),
-                (kind: place, what: "block:campfire", count: 1, label: "place"),
-            ],
-        ),
-        (
             id: "go-fishing",
             title: "Go fishing",
-            help: "Hold the rod (G), hold the left button and let go to cast the float onto water.",
-            needs: ["fire"],
+            help: "Hold the rod (G), cast onto water, wait for the float to go under, click, and reel.",
+            needs: ["rod"],
             objectives: [
                 (kind: cast, what: "water", count: 1, label: "cast"),
-            ],
-        ),
-        (
-            id: "catch-fish",
-            title: "Catch fish",
-            help: "Wait for the float to go under, click, and reel - ease off when the fish runs.",
-            needs: ["go-fishing"],
-            objectives: [
                 (kind: catch, what: "fish", count: 3, label: "fish"),
             ],
+            unlocks: ["bucket"],
         ),
-        (
-            id: "cook-fish",
-            title: "Cook fish",
-            help: "Set a campfire down, open it with E, and grill the fish you caught.",
-            needs: ["catch-fish"],
-            objectives: [
-                (kind: cook, what: "grilled-fish|chili-fish", count: 3, label: "fish"),
-            ],
-        ),
+        // ---- 2. Farming.
         (
             id: "find-seeds",
             title: "Find seeds",
             help: "Seeds turn up when you dig grass, and wild plants give them when picked (E).",
-            needs: ["cook-fish"],
+            needs: ["stone-tools"],
             objectives: [
-                (kind: find, what: "seed", count: 4, label: "seeds"),
+                (kind: find, what: "seed", count: 2, label: "seeds"),
+            ],
+        ),
+        (
+            id: "till",
+            title: "Break ground",
+            help: "With the shovel in hand, E tills soil.",
+            needs: ["find-seeds"],
+            objectives: [
+                (kind: till, what: "any", count: 4, label: "till"),
             ],
         ),
         (
             id: "plant",
             title: "Plant a field",
-            help: "With the shovel in hand, E tills soil; plant a seed on it with the right button.",
-            needs: ["find-seeds"],
+            help: "Hold wheat seed and plant it on the tilled soil with the right button.",
+            needs: ["till"],
             objectives: [
-                (kind: till, what: "any", count: 4, label: "till"),
-                (kind: plant, what: "seed", count: 4, label: "plant"),
+                (kind: plant, what: "wheat-seed", count: 4, label: "plant"),
+            ],
+        ),
+        (
+            id: "harvest",
+            title: "Harvest",
+            help: "Wheat is ripe after six days: E on it harvests grain and seed.",
+            needs: ["plant"],
+            objectives: [
+                (kind: harvest, what: "wheat", count: 4, label: "wheat"),
+            ],
+        ),
+        // ---- 3. Herding.
+        (
+            id: "fence",
+            title: "Make fences",
+            help: "At the workbench, make fences and a gate from planks and rope.",
+            needs: ["stone-tools"],
+            objectives: [
+                (kind: craft, what: "recipe:fence", count: 6, label: "fences"),
+                (kind: craft, what: "recipe:gate", count: 1, label: "gate"),
             ],
         ),
         (
             id: "tame",
             title: "Tame an animal",
-            help: "Stand still with its food in hand and let a wild animal come to you, then feed it.",
-            needs: ["plant"],
+            help: "Stand still with seed in hand and let a yard hen come to you, then feed it (E).",
+            needs: ["fence"],
             objectives: [
-                (kind: tame, what: "any", count: 1, label: "tame"),
+                (kind: tame, what: "yard hen", count: 1, label: "tame"),
             ],
         ),
         (
@@ -163,121 +194,166 @@
             ],
         ),
         (
-            id: "smelt",
-            title: "Smelt ore",
-            help: "Make a forge at the workbench and place it, dig ore with the pickaxe, and smelt it with coal (E on the forge).",
-            needs: ["pen"],
-            objectives: [
-                (kind: place, what: "block:forge", count: 1, label: "place a forge"),
-                (kind: smelt, what: "ingot", count: 3, label: "ingots"),
-            ],
-        ),
-        (
-            id: "metal-tool",
-            title: "Make a metal tool",
-            help: "At the workbench, make a bronze or an iron tool from ingots.",
-            needs: ["smelt"],
-            objectives: [
-                (kind: craft, what: "recipe:bronze-pickaxe|recipe:bronze-shovel|recipe:bronze-axe|recipe:iron-pickaxe|recipe:iron-shovel|recipe:iron-axe", count: 1, label: "tool"),
-            ],
-        ),
-        (
             id: "collect",
             title: "Collect from the herd",
-            help: "A kept animal in a pen gives an egg, wool or milk once a day: E on it collects.",
-            needs: ["metal-tool"],
+            help: "A kept hen in a pen lays an egg a day: E on her collects it.",
+            needs: ["pen"],
             objectives: [
-                (kind: collect, what: "egg|wool|milk", count: 1, label: "product"),
+                (kind: collect, what: "egg", count: 2, label: "eggs"),
+            ],
+        ),
+        // ---- 4. Mining and smelting.
+        (
+            id: "dig-deep",
+            title: "Dig into the hill",
+            help: "With the stone pickaxe, dig down through the soil to the stone under it.",
+            needs: ["stone-tools"],
+            objectives: [
+                (kind: gather, what: "block:stone", count: 10, label: "stone"),
+            ],
+            unlocks: ["forge"],
+        ),
+        (
+            id: "ore",
+            title: "Find ore",
+            help: "Ore lies in the stone: dig it with the pickaxe, and coal with it.",
+            needs: ["dig-deep"],
+            objectives: [
+                (kind: gather, what: "block:ore", count: 4, label: "ore"),
+                (kind: gather, what: "coal", count: 2, label: "coal"),
             ],
         ),
         (
-            id: "harvest",
-            title: "Farm plants",
-            help: "A crop is ripe when it is full grown: E on it harvests produce and seed.",
-            needs: ["collect"],
+            id: "forge",
+            title: "Build a forge",
+            help: "Make a forge at the workbench and place it.",
+            needs: ["ore"],
             objectives: [
-                (kind: harvest, what: "crop", count: 4, label: "produce"),
+                (kind: craft, what: "block:forge", count: 1, label: "make"),
+                (kind: place, what: "block:forge", count: 1, label: "place"),
             ],
+            unlocks: ["mixed-ore", "bronze"],
         ),
         (
-            id: "farm-meal",
-            title: "Cook a farm meal",
-            help: "At the campfire, cook a dish from your field and one from your herd.",
-            needs: ["harvest"],
+            id: "smelt",
+            title: "Smelt bronze",
+            help: "At the forge (E), smelt the ore, then alloy copper and tin into bronze.",
+            needs: ["forge"],
             objectives: [
-                (kind: cook, what: "flatbread|roast-turnip|kale-skewer", count: 1, label: "from the field"),
-                (kind: cook, what: "fried-egg", count: 1, label: "from the herd"),
+                (kind: smelt, what: "bronze-ingot", count: 2, label: "bronze"),
             ],
+            unlocks: ["bronze-pickaxe", "bronze-shovel", "bronze-axe"],
         ),
-        // ---- Homestead (`starter-missions` "Missions that show off the
-        // game", H.2): opened when the starter chain is done, each a small
-        // story with its payoff on screen. The bronze age stands off the
-        // line (it waits on ore), so the rest of the homestead does not.
         (
-            id: "shore-lunch",
-            title: "Shore lunch",
-            help: "Catch two fish, grill them at the campfire, and eat one (right button with it in hand).",
-            needs: ["farm-meal"],
+            id: "bronze-tool",
+            title: "Bronze tools",
+            help: "At the workbench, make a bronze pickaxe, and dig stone with it.",
+            needs: ["smelt"],
             objectives: [
-                (kind: catch, what: "fish", count: 2, label: "catch"),
-                (kind: cook, what: "grilled-fish", count: 2, label: "grill"),
-                (kind: eat, what: "grilled-fish", count: 1, label: "eat"),
+                (kind: craft, what: "recipe:bronze-pickaxe", count: 1, label: "pickaxe"),
+                (kind: gather, what: "block:stone", count: 5, label: "stone"),
+            ],
+            unlocks: ["iron-pickaxe"],
+        ),
+        (
+            id: "iron",
+            title: "The iron age",
+            help: "Smelt iron at the forge and make an iron pickaxe.",
+            needs: ["bronze-tool"],
+            objectives: [
+                (kind: smelt, what: "iron-ingot", count: 1, label: "iron"),
+                (kind: craft, what: "recipe:iron-pickaxe", count: 1, label: "pickaxe"),
+            ],
+            unlocks: ["iron-axe", "iron-shovel"],
+        ),
+        // ---- 5. Cooking: once there is fish and a crop.
+        (
+            id: "fire",
+            title: "Make a fire",
+            help: "Make a campfire in the Craft row from loose stone and logs, and set it down near water.",
+            needs: ["go-fishing", "harvest"],
+            objectives: [
+                (kind: craft, what: "block:campfire|recipe:campfire", count: 1, label: "make"),
+                (kind: place, what: "block:campfire", count: 1, label: "place"),
+            ],
+            unlocks: ["grilled-fish", "chili-fish", "flatbread", "roast-turnip", "kale-skewer", "fried-egg"],
+        ),
+        (
+            id: "cook-fish",
+            title: "Cook fish",
+            help: "Open the campfire with E, and grill the fish you caught.",
+            needs: ["fire"],
+            objectives: [
+                (kind: cook, what: "grilled-fish|chili-fish", count: 2, label: "fish"),
             ],
         ),
         (
             id: "bread",
-            title: "Bread from your field",
-            help: "Till four cells, sow wheat, harvest it when ripe, and bake flatbread at the campfire.",
-            needs: ["shore-lunch"],
+            title: "Bake bread",
+            help: "At the campfire, bake flatbread from your wheat.",
+            needs: ["cook-fish"],
             objectives: [
-                (kind: till, what: "any", count: 4, label: "till"),
-                (kind: plant, what: "wheat-seed", count: 4, label: "sow wheat"),
-                (kind: harvest, what: "wheat", count: 4, label: "harvest"),
-                (kind: cook, what: "flatbread", count: 2, label: "bake"),
+                (kind: cook, what: "flatbread", count: 2, label: "flatbread"),
             ],
         ),
         (
-            id: "flock",
-            title: "Start a flock",
-            help: "Tame two yard hens with seed, pen them with a gate, collect their eggs and fry one.",
+            id: "eat",
+            title: "Eat well",
+            help: "Hold a dish and eat it with the right button: its effect shows by the hotbar.",
             needs: ["bread"],
             objectives: [
-                (kind: tame, what: "yard hen", count: 2, label: "tame hens"),
-                (kind: build_pen, what: "any", count: 1, label: "pen"),
-                (kind: collect, what: "egg", count: 2, label: "eggs"),
-                (kind: cook, what: "fried-egg", count: 1, label: "fry"),
+                (kind: eat, what: "grilled-fish|chili-fish|flatbread|roast-turnip|kale-skewer|fried-egg|roast-meat", count: 1, label: "eat"),
             ],
         ),
         (
-            id: "bronze",
-            title: "The bronze age",
-            help: "Smelt bronze at the forge, make a bronze pickaxe at the workbench, and dig stone with it.",
-            needs: ["flock"],
+            id: "farm-meal",
+            title: "A farm meal",
+            help: "At the campfire, cook a dish from your field.",
+            needs: ["eat"],
             objectives: [
-                (kind: smelt, what: "bronze-ingot", count: 2, label: "bronze"),
-                (kind: craft, what: "recipe:bronze-pickaxe", count: 1, label: "pickaxe"),
-                (kind: gather, what: "block:stone", count: 3, label: "stone"),
+                (kind: cook, what: "roast-turnip|kale-skewer|chili-fish", count: 1, label: "dish"),
             ],
         ),
         (
-            id: "lamplight",
-            title: "Light the farm",
-            help: "Set four lights by the pen and the field, and be there when night falls.",
-            needs: ["flock"],
+            id: "fried-egg",
+            title: "Breakfast",
+            help: "Fry an egg from your hen at the campfire.",
+            needs: ["eat", "collect"],
             objectives: [
-                (kind: place, what: "block:torch|block:street lantern|block:wall lantern|block:hanging lantern|block:brazier|block:candle", count: 4, label: "lights"),
-                (kind: night, what: "light", count: 1, label: "nightfall"),
+                (kind: cook, what: "fried-egg", count: 1, label: "egg"),
             ],
         ),
         (
             id: "feast",
-            title: "A farm feast",
+            title: "A feast",
             help: "Eat three dishes: one from the sea, one from the field and one from the coop.",
-            needs: ["lamplight"],
+            needs: ["farm-meal", "fried-egg"],
             objectives: [
                 (kind: eat, what: "grilled-fish|chili-fish", count: 1, label: "from the sea"),
                 (kind: eat, what: "flatbread|roast-turnip|kale-skewer", count: 1, label: "from the field"),
                 (kind: eat, what: "fried-egg", count: 1, label: "from the coop"),
+            ],
+        ),
+        // ---- 6. Light and building.
+        (
+            id: "build",
+            title: "Build a shelter",
+            help: "Place twenty blocks: planks, stone or soil.",
+            needs: ["stone-tools"],
+            objectives: [
+                (kind: place, what: "any", count: 20, label: "blocks"),
+            ],
+            unlocks: ["torch"],
+        ),
+        (
+            id: "torch",
+            title: "Light the night",
+            help: "Make torches in the Craft row, set four down, and be beside them when night falls.",
+            needs: ["build"],
+            objectives: [
+                (kind: craft, what: "recipe:torch", count: 2, label: "make"),
+                (kind: place, what: "block:torch", count: 4, label: "place"),
+                (kind: night, what: "light", count: 1, label: "nightfall"),
             ],
         ),
     ],

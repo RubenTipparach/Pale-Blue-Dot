@@ -140,6 +140,11 @@ pub struct MissionEntry {
     #[serde(default)]
     pub needs: Vec<String>,
     pub objectives: Vec<ObjectiveEntry>,
+    /// The recipe codes this mission's completion opens (design "Missions
+    /// are a tree that unlocks the tech"). A recipe no mission names is open
+    /// from the start.
+    #[serde(default)]
+    pub unlocks: Vec<String>,
 }
 
 /// `assets/config/missions.ron`.
@@ -226,6 +231,8 @@ pub struct Mission {
     pub objectives: Vec<Objective>,
     /// Why it waits, when it does: the names this build lacks.
     pub pending: Option<Vec<String>>,
+    /// The recipe codes its completion opens.
+    pub unlocks: Vec<String>,
 }
 
 /// What the build knows, for resolving names: built by the app from its
@@ -395,6 +402,11 @@ impl MissionFile {
                     label: objective.label.clone(),
                 });
             }
+            for code in &entry.unlocks {
+                if !catalog.recipes.contains(code) {
+                    return Err(format!("{at}: unlocks {code:?}, which is no recipe"));
+                }
+            }
             missions.push(Mission {
                 id: at.clone(),
                 title: entry.title.clone(),
@@ -402,6 +414,7 @@ impl MissionFile {
                 needs: entry.needs.clone(),
                 objectives,
                 pending: (!missing.is_empty()).then_some(missing),
+                unlocks: entry.unlocks.clone(),
             });
         }
         Ok(Chain { missions })
@@ -411,6 +424,51 @@ impl MissionFile {
 impl Chain {
     pub fn get(&self, id: &str) -> Option<&Mission> {
         self.missions.iter().find(|m| m.id == id)
+    }
+
+    /// The mission whose completion opens `recipe`, if one names it: the
+    /// first in the chain's order.
+    pub fn unlocked_by(&self, recipe: &str) -> Option<&Mission> {
+        self.missions
+            .iter()
+            .find(|m| m.unlocks.iter().any(|u| u == recipe))
+    }
+
+    /// Whether `recipe` may be crafted (the one lock rule, used by every
+    /// station). Open when no mission names it, or when a mission that
+    /// names it is done or pending (a pending mission is met for those after
+    /// it). And, so no world from before the tree loses a tool it could make
+    /// (T.3): open when the world already `holds` what it makes - a tool
+    /// owned, an item carried, a block placed - or when a done mission
+    /// crafted it (`makes` are its outputs' canonical names).
+    pub fn recipe_open(
+        &self,
+        progress: &Progress,
+        recipe: &str,
+        makes: &[String],
+        holds: bool,
+    ) -> bool {
+        let mut naming = self
+            .missions
+            .iter()
+            .filter(|m| m.unlocks.iter().any(|u| u == recipe))
+            .peekable();
+        if naming.peek().is_none() || holds {
+            return true;
+        }
+        if naming.any(|m| progress.is_done(&m.id) || m.pending.is_some()) {
+            return true;
+        }
+        let code = format!("recipe:{recipe}");
+        self.missions
+            .iter()
+            .filter(|m| progress.is_done(&m.id))
+            .flat_map(|m| &m.objectives)
+            .filter(|o| o.kind == Kind::Craft)
+            .any(|o| {
+                o.want.matches(Kind::Craft, &code)
+                    || makes.iter().any(|w| o.want.matches(Kind::Craft, w))
+            })
     }
 
     /// The missions skipped in this build, with what each waits for.

@@ -1,6 +1,5 @@
 use super::*;
 use crate::config::{FaunaConfig, HusbandryConfig};
-use pbd_core::edits::Edit;
 use pbd_core::farming::Crop;
 use pbd_core::goods::Good;
 use pbd_core::missions::{MissionEntry, ObjectiveEntry};
@@ -77,6 +76,7 @@ fn every_kind_counts_from_its_message() {
                 help: String::new(),
                 needs: vec![],
                 objectives: vec![o.clone()],
+                unlocks: vec![],
             })
             .collect(),
     };
@@ -121,7 +121,7 @@ fn every_kind_counts_from_its_message() {
     assert!(save.records.get(MISSIONS_KIND, MISSIONS_ID).is_some());
 }
 
-/// The shipped chain on a new world (which owns no tools since
+/// The shipped tree on a new world (which owns no tools since
 /// `tool-crafting`) opens on "Gather by hand", and the HUD's line follows
 /// the digging; three fish are counted one at a time once fishing opens.
 #[test]
@@ -138,45 +138,43 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
         let chain = &app.world().resource::<MissionChain>().0;
         app.world().resource::<Missions>().progress.line(chain)
     };
+    assert_eq!(line(&app).as_deref(), Some("Gather by hand: fibre 0/4"));
+    let world = app.world_mut();
+    for good in ["fibre", "stone"] {
+        world.write_message(Gained {
+            item: Item::Good(Good::by_code(good).unwrap()),
+            count: 4,
+            how: How::Found,
+        });
+    }
+    app.update();
     assert_eq!(line(&app).as_deref(), Some("Gather by hand: soil 0/4"));
     for _ in 0..4 {
         app.world_mut()
             .write_message(Did::block(Kind::Gather, Material::Dirt));
     }
     app.update();
-    assert_eq!(line(&app).as_deref(), Some("Gather by hand: fibre 0/3"));
-    let world = app.world_mut();
-    world.write_message(Gained {
-        item: Item::Good(Good::FIBRE),
-        count: 3,
-        how: How::Found,
-    });
-    world.write_message(Gained {
-        item: Item::Good(Good::by_code("log").unwrap()),
-        count: 1,
-        how: How::Found,
-    });
-    app.update();
     assert!(done(&app, "gather"));
-    assert_eq!(
-        line(&app).as_deref(),
-        Some("Make planks and rope: planks 0/4")
-    );
+    assert_eq!(line(&app).as_deref(), Some("Craft an axe 0/1"));
     let missions = app.world().resource::<Missions>();
     assert_eq!(
         missions.notice.as_ref().map(|(t, _)| t.as_str()),
         Some("Gather by hand")
     );
-    // Skip ahead to fishing: the record says the rest is done.
+    // The axe was locked until the gathering was done.
+    let locks = app.world().resource::<RecipeLocks>();
+    assert_eq!(locks.locked("stone-axe"), None);
+    assert_eq!(locks.locked("planks"), Some("Gather wood"));
+    // Skip ahead to fishing: the record says the trunk is done.
     {
         let mut missions = app.world_mut().resource_mut::<Missions>();
         for id in [
+            "axe",
+            "wood",
             "planks-rope",
             "crafting-table",
-            "mining-tools",
-            "axe",
+            "stone-tools",
             "rod",
-            "fire",
         ] {
             missions.progress.done.insert(id.into());
         }
@@ -189,29 +187,38 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
             .write_message(Did::new(Kind::Catch, "minnow", 1));
         app.update();
         if n < 3 {
-            assert_eq!(line(&app), Some(format!("Catch fish {n}/3")));
+            assert_eq!(line(&app), Some(format!("Go fishing: fish {n}/3")));
         }
     }
-    assert_eq!(line(&app).as_deref(), Some("Cook fish 0/3"));
+    assert!(done(&app, "go-fishing"));
+    assert_eq!(line(&app).as_deref(), Some("Find seeds 0/2"));
 }
 
 /// An old world, saved before missions and before tool crafting, opens with
-/// the chain started and what it already holds done: its four tools (owned
-/// at the stone tier, `Equipment::default`) and a campfire it placed close
-/// everything up to "Make a fire". A world with a record reads it back.
+/// the tree started and what it already holds done: its four tools (owned
+/// at the stone tier, `Equipment::default`) close the trunk and the rod,
+/// and nothing it could make is locked (T.3). A world with a record reads
+/// it back.
 #[test]
 fn an_old_world_joins_with_what_it_holds_and_a_record_reads_back() {
     let mut app = app(None);
     app.insert_resource(crate::fish::ToolSlot::default());
-    let mut old = WorldSave::memory_only();
-    old.edits.set(Edit {
-        cell: 1234,
-        layer: 30,
-        material: Material::Campfire,
-    });
-    app.insert_resource(old);
+    app.insert_resource(WorldSave::memory_only());
     app.update();
-    assert!(done(&app, "fire"), "a campfire placed in the world counts");
+    for id in [
+        "gather",
+        "axe",
+        "wood",
+        "crafting-table",
+        "stone-tools",
+        "rod",
+    ] {
+        assert!(done(&app, id), "{id}: the tools it owns close the trunk");
+    }
+    let locks = app.world().resource::<RecipeLocks>();
+    for code in ["stone-axe", "planks", "rope", "workbench", "rod"] {
+        assert_eq!(locks.locked(code), None, "{code}");
+    }
     assert!(!done(&app, "go-fishing"));
 
     // Count a cast, then reopen the world from its records.
@@ -223,5 +230,14 @@ fn an_old_world_joins_with_what_it_holds_and_a_record_reads_back() {
     reopened.records = records;
     app.insert_resource(reopened);
     app.update();
-    assert!(done(&app, "fire") && done(&app, "go-fishing"));
+    assert!(done(&app, "rod"));
+    let chain = &app.world().resource::<MissionChain>().0;
+    assert_eq!(
+        app.world()
+            .resource::<Missions>()
+            .progress
+            .line(chain)
+            .as_deref(),
+        Some("Go fishing: fish 0/3")
+    );
 }

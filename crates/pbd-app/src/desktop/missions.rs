@@ -342,51 +342,68 @@ fn script() -> Vec<Scripted> {
     use pbd_core::missions::Kind;
     use pbd_core::terrain::Material;
     let good = |code| Item::Good(Good::by_code(code).expect("a shipped good"));
+    let n = |k: usize, step: Scripted| std::iter::repeat_n(step, k);
+    // The tree (`starter-missions` T.2) in the order the bot plays it.
     let mut steps = vec![
-        S::Did(Kind::Gather, "block:dirt"),
-        S::Did(Kind::Gather, "block:dirt"),
-        S::Did(Kind::Gather, "block:grass"),
-        S::Did(Kind::Gather, "block:dirt"),
-        S::Gained(good("fibre"), 2, Found),
-        S::Gained(good("fibre"), 1, Found),
-        S::Gained(good("log"), 1, Found),
-        S::Gained(good("planks"), 4, Made),
-        S::Gained(good("rope"), 1, Made),
+        S::Gained(good("fibre"), 4, Found),
+        S::Gained(good("stone"), 4, Found),
+    ];
+    steps.extend(n(4, S::Did(Kind::Gather, "block:dirt")));
+    steps.push(S::Did(Kind::Craft, "recipe:stone-axe"));
+    steps.extend(n(2, S::Did(Kind::Fell, "tree")));
+    steps.extend([
+        S::Gained(good("log"), 10, Found),
+        S::Gained(good("planks"), 8, Made),
+        S::Gained(good("rope"), 2, Made),
         S::Gained(Item::Block(Material::Workbench), 1, Made),
         S::Did(Kind::Place, "block:workbench"),
         S::Gained(Item::Tool(Tool::Pickaxe), 1, Made),
         S::Gained(Item::Tool(Tool::Shovel), 1, Made),
-        S::Gained(Item::Tool(Tool::Axe), 1, Made),
-    ];
-    steps.extend((0..3).map(|_| S::Gained(good("log"), 1, Found)));
+    ]);
+    steps.extend(n(20, S::Did(Kind::Place, "block:dirt")));
+    steps.extend(n(2, S::Did(Kind::Craft, "recipe:torch")));
+    steps.extend(n(4, S::Did(Kind::Place, "block:torch")));
     steps.extend([
+        S::Did(Kind::Night, "light"),
         S::Gained(Item::Tool(Tool::Rod), 1, Made),
-        S::Gained(Item::Block(Material::Campfire), 1, Made),
-        S::Did(Kind::Place, "block:campfire"),
         S::Did(Kind::Cast, "water"),
     ]);
-    steps.extend((0..3).map(|_| S::Did(Kind::Catch, "minnow")));
-    steps.extend((0..3).map(|_| S::Cooked("grilled-fish", 1)));
+    steps.extend(n(3, S::Did(Kind::Catch, "minnow")));
+    steps.push(S::Gained(good("wheat-seed"), 2, Found));
+    steps.extend(n(4, S::Did(Kind::Till, "block:grass")));
+    steps.extend(n(4, S::Planted("wheat")));
+    steps.push(S::Gained(good("wheat"), 4, Harvested));
+    steps.extend(n(6, S::Did(Kind::Craft, "recipe:fence")));
     steps.extend([
-        S::Gained(good("wheat-seed"), 1, Found),
-        S::Gained(good("turnip-seed"), 2, Picked),
-        S::Gained(good("wheat-seed"), 1, Found),
-    ]);
-    steps.extend((0..4).map(|_| S::Did(Kind::Till, "block:grass")));
-    steps.extend((0..4).map(|_| S::Planted("turnip")));
-    steps.extend([
+        S::Did(Kind::Craft, "recipe:gate"),
         S::Deed(Deed::Tamed { species: 0 }),
         S::Deed(Deed::PenBuilt { pen: 1, cells: 7 }),
         S::Deed(Deed::Penned { species: 0 }),
+        S::Gained(good("egg"), 2, Collected),
+    ]);
+    steps.extend(n(10, S::Did(Kind::Gather, "block:stone")));
+    steps.extend(n(4, S::Did(Kind::Gather, "block:ore")));
+    steps.extend([
+        S::Gained(good("coal"), 2, Found),
+        S::Gained(Item::Block(Material::Forge), 1, Made),
         S::Did(Kind::Place, "block:forge"),
-        S::Gained(good("copper-ingot"), 2, Made),
+        S::Gained(good("bronze-ingot"), 2, Made),
+        S::Did(Kind::Craft, "recipe:bronze-pickaxe"),
+    ]);
+    steps.extend(n(5, S::Did(Kind::Gather, "block:stone")));
+    steps.extend([
         S::Gained(good("iron-ingot"), 1, Made),
-        S::Did(Kind::Craft, "recipe:bronze-axe"),
-        S::Gained(good("egg"), 1, Collected),
-        S::Gained(good("turnip"), 2, Harvested),
-        S::Gained(good("turnip"), 2, Harvested),
-        S::Cooked("roast-turnip", 2),
+        S::Did(Kind::Craft, "recipe:iron-pickaxe"),
+        S::Gained(Item::Block(Material::Campfire), 1, Made),
+        S::Did(Kind::Place, "block:campfire"),
+        S::Cooked("grilled-fish", 2),
+        S::Cooked("flatbread", 2),
+        S::Did(Kind::Eat, "flatbread"),
+        S::Cooked("roast-turnip", 1),
         S::Cooked("fried-egg", 1),
+        S::Did(Kind::Eat, "grilled-fish"),
+        S::Did(Kind::Eat, "flatbread"),
+        S::Did(Kind::Eat, "fried-egg"),
     ]);
     steps
 }

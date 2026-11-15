@@ -631,7 +631,7 @@ impl Bot {
                 .map(|(_, _, at)| at)
                 .or(self.home);
             let pick = self
-                .fresh_cells(s, 5.0, 16.0)
+                .fresh_cells(s, 5.0, 30.0)
                 .into_iter()
                 .filter(|(_, top, _)| clear(*top))
                 // Near home as well as near the feet, so the bot digs round
@@ -2151,10 +2151,14 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
                     (0..CARRIED).any(|i| s.slots.get(i).is_some_and(|st| k.eats(st.item)))
                 })
         })
+        // A female first, for the eggs, milk or wool the herding asks
+        // for later; the nearest of those.
         .min_by(|a, b| {
-            a.0.pos
-                .distance(s.feet)
-                .total_cmp(&b.0.pos.distance(s.feet))
+            (!a.0.female as u8).cmp(&(!b.0.female as u8)).then(
+                a.0.pos
+                    .distance(s.feet)
+                    .total_cmp(&b.0.pos.distance(s.feet)),
+            )
         });
     let Some((animal, sp)) = target else {
         // None in sight: look further.
@@ -2639,6 +2643,7 @@ mod tests {
             .init_resource::<super::super::farm::FarmNote>()
             .init_resource::<super::super::farm::StationAt>()
             .init_resource::<super::super::craft::CraftPick>()
+            .init_resource::<pbd_app::missions::RecipeLocks>()
             .add_message::<MouseWheel>()
             .add_message::<pbd_app::missions::Did>()
             .add_message::<pbd_app::hotbar::Gained>()
