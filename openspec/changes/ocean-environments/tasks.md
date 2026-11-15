@@ -65,5 +65,5 @@ against what it would cost.
 
 ## 11. Kelp that reads as kelp (design B16; owner, 2026-11-15: "kelp needs fixing")
 
-- [ ] 11.1 The kelp stand redrawn after M25's frond: slender crossed stipes, narrow spiralling blades with gas floats, a surface canopy, one colour a part in the frond's palette; the rocks at its foot in the rock's palette. Placement unchanged. Verify: a test of the stand's widths and colours; captures at `--walk --at 71.308 -8.196 --time 12` before and after.
+- [x] 11.1 (Built 2026-11-15, cloud session, lavapipe: `a_kelp_stand_is_slender_and_in_the_frond_s_colours`; `docs/screenshots/ocean-environments/kelp-before-after.jpg` at the owner's spot, with `kelp-after-first.jpg` the take before the green was deepened. The rocks read pale cyan: grey rock under the water's tint. Frame cost not measured.) The kelp stand redrawn after M25's frond: slender crossed stipes, narrow spiralling blades with gas floats, a surface canopy, one colour a part in the frond's palette; the rocks at its foot in the rock's palette. Placement unchanged. Verify: a test of the stand's widths and colours; captures at `--walk --at 71.308 -8.196 --time 12` before and after.
 
