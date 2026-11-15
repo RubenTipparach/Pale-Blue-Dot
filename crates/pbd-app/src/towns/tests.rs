@@ -233,7 +233,10 @@ fn a_damaged_settlement_is_neither_built_nor_written_over() {
 #[test]
 fn holbrooks_ground_is_pinned() {
     let site = holbrook();
-    let config = *crate::planet::terrain_config();
+    // On the ground its pins were taken on: version 7's. A version 8 world's
+    // Holbrook eases its margin to a river's valley where one runs by
+    // (`ocean-environments` design 13); a made town keeps its world's ground.
+    let config = pbd_core::planet_gen::TerrainConfig::TENEBRIS_V7;
     let town = lay_out(&site, &load_template("village"), &config).unwrap();
     assert_eq!(town.layout, record::LAYOUT_VERSION);
     let mut stored = town.clone();

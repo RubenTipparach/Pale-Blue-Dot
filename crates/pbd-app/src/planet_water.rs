@@ -188,6 +188,9 @@ pub(super) struct WaterView {
     /// The snow's own glow, linear; the wind at the sea, m/s; the spray's
     /// start, m/s, and its strength.
     under_more: Vec4,
+    /// The column tier: xyz its anchor, w its reach, m (zero: none). The far
+    /// river's sheet and the tier's water dither across its edge (design 13).
+    column: Vec4,
 }
 
 /// The light on open water and the sky's coefficients, both by the cover:
@@ -1181,6 +1184,8 @@ pub(super) struct WaterSky<'w> {
     rain_shadows: Option<Res<'w, RainShadows>>,
     /// The game's own water the sheet does not draw (`water-flow` E6).
     flowing: Option<Res<'w, crate::water_flow::FlowingWater>>,
+    /// The column tier's reach, for the far rivers' fade (design 13).
+    columns: Option<Res<'w, crate::config::ColumnSettings>>,
 }
 
 /// The sky's mean radiance for a sun at elevation sine `e` under `cover`:
@@ -1232,6 +1237,7 @@ fn prepare_water_views(
         fine,
         rain_shadows,
         flowing,
+        columns,
     } = sky;
     let lit_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
     let rain_shadows = rain_shadows.is_none_or(|r| r.0);
@@ -1513,6 +1519,14 @@ fn prepare_water_views(
             sky_sh,
             under: Vec4::new(s.shafts, s.shaft_reach_m, s.snow, s.snow_from_m),
             under_more: Vec4::new(s.snow_glow, sea_now.wind_mps, s.spray_from_mps, s.spray),
+            column: fine
+                .as_deref()
+                .filter(|f| !f.set.columns.columns.is_empty())
+                .map_or(Vec4::ZERO, |f| {
+                    f.set
+                        .anchor
+                        .extend(columns.as_deref().map_or(0.0, |c| c.reach_m))
+                }),
             ssr_eye: if lighting
                 .as_ref()
                 .is_some_and(|l| l.reflect_sea_on() && l.reflect_capture_on())
@@ -2509,7 +2523,7 @@ mod tests {
         // And the sky's nine coefficients (`water-lit`).
         let sh = block.matches("array<vec4<f32>, 9>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * lamps + 8 * sh;
-        assert_eq!((mat4, vec4, lamps, sh), (4, 76, 1, 1));
+        assert_eq!((mat4, vec4, lamps, sh), (4, 77, 1, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");

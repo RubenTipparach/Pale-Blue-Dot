@@ -71,7 +71,10 @@ fn a_new_world_starts_where_it_did_before_its_towns_stood() {
     );
     let cell = pbd_core::weather::cloud_cell(air.shown.to(), after);
     assert!(
-        (cell.cover - 0.69).abs() < 0.015 && cell.rain == 0.0,
+        // Within 0.03: version 8's river valleys change a few of the biome
+        // cells the weather reads (its settled climate is version 7's, design
+        // 13), which moved the start's cover from 0.69 to 0.67; no rain.
+        (cell.cover - 0.69).abs() < 0.03 && cell.rain == 0.0,
         "the start's weather at 10:00: cover {:.3}, rain {:.3}",
         cell.cover,
         cell.rain

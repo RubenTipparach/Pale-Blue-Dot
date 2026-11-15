@@ -133,6 +133,10 @@ struct WaterView {
     // m/s and its strength.
     under: vec4<f32>,
     under_more: vec4<f32>,
+    // The column tier (`water-flow` E6, design 13): xyz its anchor, w its
+    // reach, m. A far river's sheet and the tier's own water are dithered
+    // across its last 25 m, so neither pops in.
+    column: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -331,14 +335,27 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     if (triangle < degree && corner != 0u) {
         ray = cell.corners[(triangle+corner-1u)%degree].xyz;
     }
-    let p = ray*sea;
+    // A far river (`spare.w`, design 13): a still sheet at its own surface,
+    // a hair over the cell's ground where the cell is wider than the river.
+    let river = cell.spare.w != 0u;
+    var radius = sea;
+    if river {
+        let surface_m = bitcast<f32>(cell.spare.w);
+        radius = view.planet_center.w + view.sea_frame.x
+            + max(surface_m, cell.direction_height.w + 0.05);
+    }
+    let p = ray*radius;
     // The sea the hulls float on (`pbd::sea`), in body-local metres so a
     // floating-origin shift cannot shift the phase. The cell's height is its
     // seabed; the filter drops any wave its own corners are too far apart to
     // draw.
     let depth = -cell.direction_height.w - view.sea_frame.x;
     let spacing = length(cell.corners[0].xyz - axis)*sea;
-    let surface = sea_surface(view.sea, p, ray, depth, spacing);
+    var surface = sea_surface(view.sea, p, ray, depth, spacing);
+    if river {
+        surface.height = 0.0;
+        surface.gradient = vec3<f32>(0.0);
+    }
     let displaced = p + ray*surface.height;
     var out: VertexOut;
     out.sea_slope = surface.gradient;
@@ -350,7 +367,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // baked occlusion is the seabed's and would tile the sea by column.
     out.sky_light = 1.0;
     out.flow_uv = vec2<f32>(0.0);
-    out.kind = 0u;
+    out.kind = select(0u, 4u, river);
     out.level = level;
     out.owner_a = cell.owner_a.xyz;
     out.owner_b = cell.owner_b.xyz;
@@ -630,6 +647,15 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     }
     let m = water_bayer4(in.clip.xy);
     if (in.fade_t.z > m) { discard; }
+    // The tier's water and the far river's sheet share its last 25 m by the
+    // same dither, so the one gives way to the other with no seam (design 13).
+    if (in.kind != 0u && view.column.w > 0.0) {
+        let from_anchor = acos(clamp(dot(radial, safe_normal(view.column.xyz)), -1.0, 1.0))
+            * length(in.body_position);
+        let far = smoothstep(view.column.w - 25.0, view.column.w - 5.0, from_anchor);
+        if (in.kind == 4u && far <= m) { discard; }
+        if (in.kind != 4u && far > m) { discard; }
+    }
     if (in.level > u32(view.lod.w)) {
         let owner_t = select(in.fade_t.y, in.fade_t.x, dot(radial, in.owner_a) >= dot(radial, in.owner_b));
         if (owner_t <= m) { discard; }

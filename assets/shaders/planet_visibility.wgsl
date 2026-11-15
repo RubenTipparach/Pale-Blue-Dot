@@ -511,8 +511,9 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // Under the tide's high water too (`lod_spare.w`, nought with no tide),
     // so the sheet runs on over a beach the tide covers (`ocean-environments`
     // B7); where the ground stands over the sheet, the ground hides it.
-    if !cascade && cell.direction_height.w < max(params.lod_spare.w, 0.0)
-        && (cell.spare.z & 2u) == 0u {
+    // Or a river's water over a far cell (`spare.w`, design 13).
+    if !cascade && (cell.direction_height.w < max(params.lod_spare.w, 0.0)
+        && (cell.spare.z & 2u) == 0u || cell.spare.w != 0u) {
         let sea = params.water_absorption.w;
         let sheet = cell.direction_height.xyz*sea;
         var reach = 0.0;

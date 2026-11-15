@@ -60,7 +60,7 @@ impl RiverSettings {
         max_spring_m: 90.0,
         half_width_m: 2.2,
         max_half_width_m: 9.0,
-        bank_m: 5.0,
+        bank_m: 7.0,
         meander_m: 7.0,
         rim_m: 2.9,
     };
@@ -250,6 +250,18 @@ impl RiverMap {
 
     /// The river at a direction, if `d` is within its banks' reach.
     pub fn at(&self, cfg: &TerrainConfig, settings: &RiverSettings, d: Vec3) -> Option<RiverHere> {
+        self.at_widened(cfg, settings, d, 0.0)
+    }
+
+    /// [`Self::at`] with the banks' reach widened by `extra` metres: what a
+    /// far cell, wider than the river, asks.
+    pub fn at_widened(
+        &self,
+        cfg: &TerrainConfig,
+        settings: &RiverSettings,
+        d: Vec3,
+        extra: f32,
+    ) -> Option<RiverHere> {
         let d = d.normalize_or(Vec3::Y);
         let radius = cfg.radius_m;
         let (ci, cj) = self.cell_of(d);
@@ -295,7 +307,7 @@ impl RiverMap {
                         * 2.0
                         * settings.meander_m;
                 let q = (-closest - side * wander).length();
-                let reach = node.half_width + settings.bank_m;
+                let reach = node.half_width + settings.bank_m + extra;
                 if q < reach && q - node.half_width < best_q {
                     best_q = q - node.half_width;
                     best = Some(RiverHere {
@@ -502,6 +514,22 @@ fn top_at(cfg: &TerrainConfig, settings: &RiverSettings, map: &RiverMap, d: Vec3
     }
     let level = top_here(cfg, settings, &here, d, base);
     (level > 0).then_some(level)
+}
+
+/// The river's water surface over a far cell, metres over the sea, for the
+/// far tiers that have no columns (design 13: the far river is drawn as the
+/// sea is, a sheet over the cell): a river within half the cell's width of
+/// its centre, `None` otherwise or at the sea.
+pub fn far_surface(cfg: &TerrainConfig, d: Vec3, cell_m: f32) -> Option<f32> {
+    let settings = cfg.rivers.as_ref()?;
+    let map = map(cfg, settings);
+    let here = map.at_widened(cfg, settings, d, (cell_m * 0.5 - settings.bank_m).max(0.0))?;
+    if here.level <= 0 || here.across_m > (cell_m * 0.5).max(here.half_width_m) {
+        return None;
+    }
+    let base = planet_gen::surface_altitude_unrivered(cfg, d);
+    let top = top_here(cfg, settings, &here, d, base);
+    (top > 0).then_some(cfg.sea_level_m + top as f32)
 }
 
 /// Whether a marsh pool may stand at `d` (version 8): the ground round it,
