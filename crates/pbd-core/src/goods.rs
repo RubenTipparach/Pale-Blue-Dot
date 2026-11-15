@@ -89,6 +89,29 @@ pub const GOODS: &[GoodRow] = &[
     row("planks", "planks", 99, "items/goods/planks.png"),
     row("rope", "rope", 99, "items/goods/rope.png"),
     // ---- Append new goods here (food, feed ...).
+    // cooking (`cooking` design S1): the campfire's dishes. Saved by code.
+    row(
+        "grilled-fish",
+        "grilled fish",
+        16,
+        "items/goods/grilled-fish.png",
+    ),
+    row("chili-fish", "chili fish", 16, "items/goods/chili-fish.png"),
+    row("flatbread", "flatbread", 32, "items/goods/flatbread.png"),
+    row(
+        "roast-turnip",
+        "roast turnip",
+        32,
+        "items/goods/roast-turnip.png",
+    ),
+    row(
+        "kale-skewer",
+        "kale skewer",
+        16,
+        "items/goods/kale-skewer.png",
+    ),
+    row("fried-egg", "fried egg", 16, "items/goods/fried-egg.png"),
+    row("roast-meat", "roast meat", 16, "items/goods/roast-meat.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the

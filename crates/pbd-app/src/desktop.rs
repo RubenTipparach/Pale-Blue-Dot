@@ -10,6 +10,7 @@ mod forge;
 mod frame_graph;
 mod guide;
 mod hud;
+mod kitchen;
 mod map_screen;
 mod map_sites;
 mod menu;
@@ -265,6 +266,13 @@ pub struct Launch {
     /// the first part done; with `--forge-panel`, its panel open.
     pub forge: Option<f32>,
     pub forge_panel: bool,
+    /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
+    /// campfire that far ahead, stocked, flatbread done on it and a fish
+    /// grilling; with `--campfire-panel`, its panel open.
+    pub campfire: Option<f32>,
+    pub campfire_panel: bool,
+    /// `--eat <dish,dish>`: each dish given and eaten, for the effects row.
+    pub eat: Vec<String>,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -382,6 +390,9 @@ impl Launch {
             bare: false,
             tier: pbd_core::inventory::Tier::Stone,
             craft: None,
+            campfire: None,
+            campfire_panel: false,
+            eat: Vec::new(),
             dig_ahead: false,
             pitch: None,
             yaw: None,
@@ -504,6 +515,23 @@ impl Launch {
                 }
                 "--farm-harvest" => result.farm_harvest = true,
                 "--forge-panel" => result.forge_panel = true,
+                "--campfire" => {
+                    let mut metres = 4.0;
+                    if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
+                        assert!(m.is_finite() && m > 0.0, "--campfire takes metres ahead");
+                        metres = m;
+                        i += 1;
+                    }
+                    result.campfire = Some(metres);
+                }
+                "--campfire-panel" => result.campfire_panel = true,
+                "--eat" => {
+                    i += 1;
+                    let dishes = args
+                        .get(i)
+                        .expect("--eat takes dish codes, comma separated");
+                    result.eat = dishes.split(',').map(str::to_string).collect();
+                }
                 "--dig-ahead" => result.dig_ahead = true,
                 "--pitch" => {
                     i += 1;
@@ -1214,6 +1242,10 @@ pub fn run(args: &[String]) {
     .init_resource::<craft::CraftPick>()
     .add_message::<pbd_app::hotbar::Gained>()
     .add_message::<pbd_app::hotbar::Planted>()
+    // Cooking (`cooking` design S5, S6).
+    .init_resource::<pbd_app::kitchen::MealEffects>()
+    .add_message::<pbd_app::kitchen::Cooked>()
+    .add_message::<pbd_app::kitchen::Ate>()
     // The world, loaded before the planet is built: `create_planet` reads its
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
@@ -1290,6 +1322,8 @@ pub fn run(args: &[String]) {
                     drops_view::dress,
                     pack::spawn,
                     forge::spawn,
+                    kitchen::spawn,
+                    kitchen::spawn_effects,
                 ),
             )
                 .chain(),
@@ -1373,6 +1407,14 @@ pub fn run(args: &[String]) {
                 .chain()
                 .after(digging::dig_and_place)
                 .after(pbd_app::husbandry::HusbandryHands),
+            // The campfire's panel opens from `farm::use_key` (after the
+            // husbandry hands, which clear an E they used).
+            (kitchen::work, kitchen::grey, kitchen::paint, kitchen::eat)
+                .chain()
+                .after(farm::use_key)
+                .after(pbd_app::husbandry::HusbandryHands),
+            (pbd_app::kitchen::refresh_effects, kitchen::show_effects),
+            kitchen::scripted.after(farm::scripted),
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
             craft::scripted.after(digging::scripted_dig),

@@ -444,12 +444,13 @@ pub fn dig_and_place(
         Res<pbd_app::sky::Sun>,
         ResMut<pbd_app::husbandry::AimedGround>,
     ),
-    (mut note, farm, mut gained, mut planted, gather): (
+    (mut note, farm, mut gained, mut planted, gather, effects): (
         ResMut<super::farm::FarmNote>,
         Res<pbd_app::config::FarmConfig>,
         MessageWriter<pbd_app::hotbar::Gained>,
         MessageWriter<pbd_app::hotbar::Planted>,
         Res<pbd_app::config::GatherConfig>,
+        Option<Res<pbd_app::kitchen::MealEffects>>,
     ),
 ) {
     ground.0 = None;
@@ -557,7 +558,11 @@ pub fn dig_and_place(
     let block = (target.dig.cell, target.dig.layer);
     let held = buttons.pressed(MouseButton::Left) && digger.is_some();
     let secs = match digger {
-        Some(digger) if held => mining.secs(block, digger, &fine, &edits, &dig.0),
+        // Keen (`cooking` design S5): a break takes its time over the
+        // effect's strength while it runs.
+        Some(digger) if held => mining
+            .secs(block, digger, &fine, &edits, &dig.0)
+            .map(|secs| secs / effects.as_deref().map_or(1.0, |e| e.keen)),
         _ => Err(Refusal::NotABlock),
     };
     // Say once, on the press, why a block will not break.

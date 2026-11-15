@@ -246,6 +246,7 @@ const LAMP_WALL: u32 = 2u;
 const LAMP_HANGING: u32 = 3u;
 const LAMP_BRAZIER: u32 = 4u;
 const LAMP_CANDLE: u32 = 5u;
+const LAMP_CAMPFIRE: u32 = 6u;
 // The column pass's lamps are their own draw kind, so the fragment colours
 // them from the part (iron, wax, glass, flame) rather than from the layer's
 // material, which for a lamp's cell is nothing that looks like a lamp.
@@ -254,6 +255,8 @@ const KIND_LAMP: u32 = 5u;
 const LAMP_IRON_CODE: u32 = 240u;
 const LAMP_WAX_CODE: u32 = 241u;
 const LAMP_WOOD_CODE: u32 = 243u;
+// A campfire's ring of stones (`cooking` design S2).
+const LAMP_STONE_CODE: u32 = 245u;
 // A lantern's glass while it is out: dark panes in the iron frame.
 const LAMP_GLASS_CODE: u32 = 242u;
 // What a lit part carries in the block channel instead of a level, so the
@@ -1072,7 +1075,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     var half = vec3(0.);
                     // A brazier's and a candle's light is a bare flame; the
                     // three lanterns' is lit glass in an iron frame.
-                    let flame = which == LAMP_BRAZIER || which == LAMP_CANDLE;
+                    let flame = which == LAMP_BRAZIER || which == LAMP_CANDLE || which == LAMP_CAMPFIRE;
                     var code = LAMP_IRON_CODE;
                     if box == 1u && !flame { code = LAMP_GLASS_CODE; }
                     let glow = box == 1u && lamp_lit(rec);
@@ -1089,6 +1092,11 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                         // An iron basket on its stand, and the fire in it.
                         if box == 0u { centre = axis*(foot+0.3); half = vec3(0.26,0.26,0.3); }
                         else { centre = axis*(foot+0.82); half = vec3(0.17,0.17,0.22); }
+                    } else if which == LAMP_CAMPFIRE {
+                        // A low ring of stones, wide on the ground, and the
+                        // fire on it (`cooking` design S2).
+                        if box == 0u { centre = axis*(foot+0.09); half = vec3(0.40,0.40,0.09); code = LAMP_STONE_CODE; }
+                        else { centre = axis*(foot+0.42); half = vec3(0.19,0.19,0.24); }
                     } else {
                         if box == 0u { centre = axis*(foot+0.12); half = vec3(0.045,0.045,0.12); code = LAMP_WAX_CODE; }
                         else { centre = axis*(foot+0.29); half = vec3(0.022,0.022,0.05); }
@@ -2532,6 +2540,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         var part = vec3(0.16, 0.15, 0.14);
         if cap == LAMP_WAX_CODE { part = vec3(0.86, 0.80, 0.66); }
         if cap == LAMP_WOOD_CODE { part = vec3(0.36, 0.22, 0.12); }
+        if cap == LAMP_STONE_CODE { part = vec3(0.44, 0.42, 0.39); }
         if cap == LAMP_GLASS_CODE && !lantern_frame(input.uv, up) { part = vec3(0.20, 0.25, 0.27); }
         albedo = part*(0.75 + 0.5*grain);
     }

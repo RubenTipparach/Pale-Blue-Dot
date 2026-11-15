@@ -964,7 +964,7 @@ fn ride_decks(
     }
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn drive_walker(
     mut state: ResMut<WalkingState>,
     config: Res<WalkingConfig>,
@@ -984,7 +984,11 @@ fn drive_walker(
         >,
         Query<Forces, With<Walker>>,
     )>,
+    meals: Option<Res<crate::kitchen::MealEffects>>,
 ) {
+    // Stride (`cooking` design S5): sprinting and swimming are faster while
+    // it runs; walking is not.
+    let stride = meals.as_deref().map_or(1.0, |m| m.stride);
     if !state.active {
         return;
     }
@@ -1006,12 +1010,15 @@ fn drive_walker(
             ground.grounded = false;
         }
         let mut speed = if state.sprinting {
-            config.sprint_speed
+            config.sprint_speed * stride
         } else {
             config.walk_speed
         };
         if wet.body {
             speed *= config.water_movement_mult;
+            if !state.sprinting {
+                speed *= stride;
+            }
         }
         // A deck's way, kept off it (`sail-the-cog` design 6), until the
         // feet are down; water takes it off as it takes a fall.

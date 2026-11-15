@@ -7,6 +7,7 @@ pub mod bounce;
 pub mod cell_key;
 pub mod cloud_puffs;
 pub mod column;
+pub mod cooking;
 pub mod daylight;
 pub mod dig;
 pub mod drops;

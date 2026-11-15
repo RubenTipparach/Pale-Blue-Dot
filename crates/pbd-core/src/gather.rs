@@ -239,6 +239,6 @@ mod tests {
         );
         // A few minutes of digging, not an hour.
         assert!(seconds < 240.0, "{seconds} s of digging by hand");
-        assert_eq!(STATIONS.len(), 3);
+        assert!(STATIONS.iter().any(|s| s.code == "workbench"));
     }
 }

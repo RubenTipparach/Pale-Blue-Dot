@@ -151,11 +151,26 @@ with a capture once it is built.
    - **Notes under the crosshair** say why nothing happens: "Hands cannot
      break rock: make a pickaxe", "This tree has given its branch: an axe
      takes more".
-10. **The forge after this change.** The forge is made at the workbench
-    (decision 5). Kit v3 stays as it is for every world: old worlds were
-    dealt it already and keep it (nothing is taken away), and a new world is
-    still dealt the forge, coal and seeds that farming's start depends on. A
-    second forge is made, not dealt.
+10. **No free stations; the kit after this change.** The phase-1
+    coordinator's decision (2026-11-14), because `starter-missions` needs
+    earned steps ("make fire", "find seeds"): a new world is dealt no
+    station and no seeds.
+    - **Kit v3** (farming's forge, 8 coal, 4 wheat and 4 turnip seeds) is
+      emptied: the forge is made at the workbench (decision 5), seeds are
+      found in dug grass and wild plants (`farming-and-smelting` decision 14).
+      Coal goes with the forge it fed. Recommendation taken: the seeds go too
+      (the mission is "find seeds x4", and grass turns one up in four cells).
+    - **Kit v5** was held for this change and stays empty: tools are made.
+    - **Kit v6** (cooking's free campfire) is emptied: the hands make one
+      from loose stone x5 and logs x2 (`cooking.ron`'s `campfire` recipe,
+      which was stone blocks and coal until there were logs).
+    - **Saves:** the versions stay, in order, so the kit path deals nothing
+      twice and skips nothing. No save outside the phase-1 branches was ever
+      dealt v3 or v6 (none of it reached main), and a save that was keeps
+      what it holds: nothing is taken away. A main-branch save (dealt v2)
+      opening this build is dealt the pen's pieces (v4) and no station.
+    - The pen's fences and gate (v4, `animal-husbandry`) are not a station
+      and stay.
 11. **Events.** Every collected craft raises `Gained { item, count, how: Made }`
     for each output, a tool as `Item::Tool`; fibre, loose stone and logs raise
     `Gained { how: Found }`. `starter-missions` counts them.

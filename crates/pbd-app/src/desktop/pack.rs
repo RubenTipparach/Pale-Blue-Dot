@@ -332,13 +332,16 @@ mod tests {
             workbench: Handle::default(),
             tiered: Vec::new(),
         });
+        app.insert_resource(pbd_app::config::Recipes(
+            pbd_core::station::RecipeFile::default().resolve().unwrap(),
+        ));
         app.add_systems(Update, spawn);
         app.update();
         let world = app.world_mut();
         let (rock, lintel, slots) = {
             let kit = world.resource::<UiKit>();
             (
-                kit.image("rock/pack"),
+                kit.image("rock/pack-craft"),
                 kit.image("lintel"),
                 [kit.image("slot-idle"), kit.image("slot-selected")],
             )
@@ -356,7 +359,10 @@ mod tests {
             "drawn whole"
         );
         let node = world.get::<Node>(frame).unwrap();
-        assert_eq!((node.width, node.height), (px(268), px(152)));
+        // M29's rock, grown for the Craft row (`tool-crafting` decision 9).
+        assert_eq!((node.width, node.height), (px(268), px(204)));
+        let mut wells = world.query::<&super::super::craft::Well>();
+        assert_eq!(wells.iter(world).count(), 4, "three needs and the result");
         let mut images = world.query::<&ImageNode>();
         assert_eq!(
             images.iter(world).filter(|i| i.image == lintel).count(),

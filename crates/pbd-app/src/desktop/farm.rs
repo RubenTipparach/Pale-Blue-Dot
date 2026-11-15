@@ -266,7 +266,7 @@ pub fn use_key(
         return;
     }
     // E shuts a station's panel as it opened it.
-    if *screen == Screen::Forge {
+    if matches!(*screen, Screen::Forge | Screen::Kitchen) {
         *screen = Screen::Playing;
         return;
     }
@@ -287,7 +287,8 @@ pub fn use_key(
     };
     if let Some(row) = station::station_of(material) {
         station_at.0 = Some((cell, layer as u16));
-        *screen = Screen::Forge;
+        // The kitchen's stations have their own panel (`cooking` design S4).
+        *screen = super::kitchen::screen_for(row);
         info!("opened the {} at cell {cell} layer {layer}", row.name);
         return;
     }
@@ -823,10 +824,11 @@ pub fn show(
                 MeshMaterial3d(looks.stages[crop.index()][stage.index()].clone()),
             ));
     }
-    // The forges: every station block an edit placed, near the eye.
+    // The forges and workbenches: every such block an edit placed, near the
+    // eye. A campfire is a light, drawn by the column pass (`cooking` S2).
     let mut wanted: HashMap<(u32, u16), (usize, bool, Material)> = HashMap::new();
     for edit in save.edits.all() {
-        if station::station_of(edit.material).is_none() {
+        if !matches!(edit.material, Material::Forge | Material::Workbench) {
             continue;
         }
         let Some(&index) = keys.map.get(&edit.cell) else {

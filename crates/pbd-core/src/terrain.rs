@@ -81,6 +81,11 @@ pub enum Material {
     /// The workbench (`tool-crafting` decision 5): the station tools are made
     /// at. Solid, drawn in the local trees' wood with a plank top stood on it.
     Workbench = 20,
+    // 20 is `tool-crafting`'s; 22 and 23 are held for the kitchen.
+    /// A campfire (`cooking` design S2): a ring of stones round a fire, the
+    /// kitchen's first station and a light. Like every light it is neither
+    /// solid nor opaque, and the column pass draws it as a lamp.
+    Campfire = 21,
 }
 
 impl Material {
@@ -104,6 +109,8 @@ impl Material {
             Material::LanternHanging => 12,
             Material::Brazier => 15,
             Material::Candle => 8,
+            // A cook fire: a street lantern's reach, below the brazier.
+            Material::Campfire => 13,
             _ => 0,
         }
     }
@@ -121,8 +128,10 @@ impl Material {
         matches!(self, Material::LanternPost | Material::LanternWall)
     }
 
-    /// Every material, in code order.
-    pub const ALL: [Material; 21] = [
+    /// Every material, in code order. Codes need not be contiguous: two
+    /// branches each take their own numbers, and a gap is a code another
+    /// build holds.
+    pub const ALL: [Material; 22] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -144,16 +153,19 @@ impl Material {
         Material::Tilled,
         Material::Forge,
         Material::Workbench,
+        Material::Campfire,
     ];
 
-    /// Every light, in material order.
-    pub const LAMPS: [Material; 6] = [
+    /// Every light, in material order. The column pass's lamp kind is the
+    /// index here, in three bits: one more fits.
+    pub const LAMPS: [Material; 7] = [
         Material::Torch,
         Material::LanternPost,
         Material::LanternWall,
         Material::LanternHanging,
         Material::Brazier,
         Material::Candle,
+        Material::Campfire,
     ];
 }
 
@@ -256,11 +268,15 @@ mod tests {
 
     const PLANAR_DIGEST: u64 = 17_835_469_625_199_367_657;
 
-    /// `ALL` is every material once, in its discriminant's order.
+    /// `ALL` is every material once, in its discriminant's order: the
+    /// first twenty with no gap, and after them only rising codes.
     #[test]
     fn all_lists_every_material_in_order() {
-        for (index, material) in Material::ALL.iter().enumerate() {
+        for (index, material) in Material::ALL.iter().enumerate().take(20) {
             assert_eq!(*material as usize, index);
+        }
+        for pair in Material::ALL.windows(2) {
+            assert!((pair[0] as u16) < (pair[1] as u16), "{pair:?}");
         }
     }
 

@@ -250,7 +250,7 @@ pub fn hand_tip(equipment: &Equipment) -> String {
 pub struct PickerName(pub Option<Tool>);
 
 /// Paint the tool slot and the picker from the resources.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn paint(
     key: Res<PickerKey>,
     tools: Res<ToolSlot>,

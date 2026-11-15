@@ -1259,9 +1259,44 @@ impl Validated for pbd_core::gather::GatherSettings {
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
 pub struct GatherConfig(pub pbd_core::gather::GatherSettings);
 
-/// Every station's recipes (`recipes.ron`), resolved once.
+/// Every station's recipes (`recipes.ron`, then the kitchen's from
+/// `cooking.ron`), resolved once: one book, so every station follows one
+/// set of rules (`cooking` design S4).
 #[derive(Resource, Clone, Debug, PartialEq, Default)]
 pub struct Recipes(pub pbd_core::station::RecipeBook);
+
+impl Validated for pbd_core::cooking::CookingFile {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::cooking::CookingFile::validate(self)
+    }
+}
+
+/// The kitchen (`cooking.ron`), resolved once: dishes, effects, and the
+/// recipes waiting on another branch's goods.
+#[derive(Resource, Clone, Debug, PartialEq, Default)]
+pub struct KitchenConfig(pub pbd_core::cooking::Kitchen);
+
+/// The station recipes and the kitchen's in one book, and the kitchen.
+fn recipe_book() -> (Recipes, KitchenConfig) {
+    let mut book = load::<pbd_core::station::RecipeFile>("recipes")
+        .resolve()
+        .expect("validated on load");
+    let kitchen = load::<pbd_core::cooking::CookingFile>("cooking")
+        .resolve()
+        .expect("validated on load");
+    for (code, missing) in &kitchen.pending {
+        info!("recipe {code} is pending: no {missing:?} in this build");
+    }
+    for recipe in &kitchen.recipes {
+        assert!(
+            book.get(&recipe.code).is_none(),
+            "recipe {} is in recipes.ron and cooking.ron",
+            recipe.code
+        );
+    }
+    book.recipes.extend(kitchen.recipes.iter().cloned());
+    (Recipes(book), KitchenConfig(kitchen))
+}
 
 /// Where the tool in hand sits and how it moves (`held.rs`).
 #[cfg(feature = "desktop")]
@@ -1595,6 +1630,7 @@ pub struct ConfigPlugin;
 
 impl Plugin for ConfigPlugin {
     fn build(&self, app: &mut App) {
+        let (recipes, kitchen) = recipe_book();
         app.insert_resource(load::<WaterSettings>("water"))
             .insert_resource(load::<WeatherSettings>("weather"))
             .insert_resource(load::<ScatterSettings>("scatter"))
@@ -1607,11 +1643,8 @@ impl Plugin for ConfigPlugin {
             .insert_resource(DigConfig(load("dig")))
             .insert_resource(FarmConfig(load("farming")))
             .insert_resource(GatherConfig(load("gather")))
-            .insert_resource(Recipes(
-                load::<pbd_core::station::RecipeFile>("recipes")
-                    .resolve()
-                    .expect("validated on load"),
-            ));
+            .insert_resource(recipes)
+            .insert_resource(kitchen);
         #[cfg(feature = "desktop")]
         app.insert_resource(HeldConfig(load("held")));
         app.add_plugins((

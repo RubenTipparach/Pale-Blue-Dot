@@ -42,6 +42,8 @@ pub enum Screen {
     Map,
     /// A station's panel, opened with E on it (`farming-and-smelting`).
     Forge,
+    /// A kitchen station's panel, opened with E on a campfire (`cooking`).
+    Kitchen,
 }
 
 impl Screen {
@@ -62,9 +64,12 @@ impl Screen {
         }
         match self {
             Screen::Playing => Screen::Pause,
-            Screen::Pause | Screen::Guide | Screen::Pack | Screen::Map | Screen::Forge => {
-                Screen::Playing
-            }
+            Screen::Pause
+            | Screen::Guide
+            | Screen::Pack
+            | Screen::Map
+            | Screen::Forge
+            | Screen::Kitchen => Screen::Playing,
             Screen::Settings | Screen::Saves => Screen::Pause,
         }
     }
@@ -2056,7 +2061,7 @@ mod tests {
         let flagged = also(world);
         assert!(
             flagged.contains(
-                &"also: use: a door, a forge, a ripe crop; with the shovel, till".to_string()
+                &"also: use: a door, a forge, a campfire, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till".to_string()
             ),
             "{flagged:?}"
         );

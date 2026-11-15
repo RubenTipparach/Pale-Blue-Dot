@@ -462,6 +462,7 @@ mod tests {
             ("LAMP_HANGING", Material::LanternHanging),
             ("LAMP_BRAZIER", Material::Brazier),
             ("LAMP_CANDLE", Material::Candle),
+            ("LAMP_CAMPFIRE", Material::Campfire),
         ] {
             let index = Material::LAMPS.iter().position(|&m| m == lamp).unwrap();
             let line = format!("const {name}: u32 = {index}u;");
