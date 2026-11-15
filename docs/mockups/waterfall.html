@@ -1,0 +1,226 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Waterfall Look</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap">
+<style>
+/* The waterfall look, in a mockup first (CLAUDE.md, owner 2026-11-15). Dark, as M25 (ocean.html) is. */
+:root{
+  color-scheme: dark;
+  --ground:#0a1014; --panel:#111a20; --panel-2:#16222a; --line:rgba(130,175,180,.24); --line-2:rgba(130,175,180,.4);
+  --ink:#e4ecee; --muted:#94a8ad; --amber:#e8b040; --sky:#8fc3d8;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{background:var(--ground);overflow-x:hidden}
+body{margin:0;color:var(--ink);font:15px/1.5 var(--body);padding:12px max(16px,env(safe-area-inset-right,0px)) 28px max(16px,env(safe-area-inset-left,0px))}
+main{max-width:1180px;margin:0 auto;display:grid;gap:10px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+h1{font:700 clamp(24px,5vw,34px)/1.05 var(--display);letter-spacing:.02em;margin:0}
+.tracker{flex-basis:100%;margin:0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.tracker a{color:inherit}
+button{font:inherit;color:inherit}
+.info{all:unset;cursor:pointer;display:inline-grid;place-items:center;min-width:30px;height:30px;padding:0 10px;border:1px solid var(--line-2);border-radius:15px;font:600 14px var(--display);letter-spacing:.06em;color:var(--sky)}
+.info:hover,.info:focus-visible{border-color:var(--amber);color:var(--amber);outline:none}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:7px 11px;font:600 15px var(--display);letter-spacing:.04em;color:var(--muted);background:var(--panel)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:rgba(232,176,64,.16);color:var(--amber)}
+.seg button:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.lbl{font:600 12px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.stage{position:relative;width:100%;aspect-ratio:16/10;max-height:72vh;min-height:300px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#000}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.vtitle{position:absolute;left:10px;top:8px;font:700 18px var(--display);letter-spacing:.03em;text-shadow:0 1px 3px #000;pointer-events:none}
+.ref{position:absolute;right:8px;top:8px;width:min(42%,360px);border:1px solid var(--line-2);border-radius:4px;box-shadow:0 2px 10px #000}
+.ref img{display:block;width:100%}
+.ref span{position:absolute;left:4px;bottom:3px;font:600 12px var(--display);letter-spacing:.06em;text-shadow:0 1px 2px #000}
+.sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 16px;min-height:0}
+.sl{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+.sl label{font:600 14px var(--display);letter-spacing:.04em}
+.sl output{font:500 13px ui-monospace,Menlo,monospace;color:var(--amber);min-width:44px;text-align:right}
+.sl input{width:100%;min-width:0;accent-color:var(--amber)}
+.chk{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel);font:600 15px var(--display);letter-spacing:.04em;cursor:pointer}
+.chk input{accent-color:var(--amber);margin:0}
+.modal{position:fixed;inset:0;z-index:100;background:rgba(3,6,9,.72);display:grid;place-items:center;padding:12px}
+.modal[hidden]{display:none}
+.modal .mbox{background:var(--panel);border:1px solid var(--line-2);border-radius:8px;width:min(780px,100%);max-height:min(88vh,920px);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+.modal .mhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.modal .mhead h2{margin:0;font:700 20px var(--display);letter-spacing:.03em}
+.modal .mclose{all:unset;cursor:pointer;font-size:18px;line-height:1;padding:4px 8px;border-radius:4px}
+.modal .mclose:hover{color:var(--amber)} .modal .mclose:focus-visible{outline:2px solid var(--amber)}
+.modal .mbody{overflow:auto;padding:12px 14px;display:grid;gap:10px;min-width:0}
+.mbody h3{margin:6px 0 0;font:700 17px var(--display);letter-spacing:.03em;color:var(--sky)}
+.mbody p,.mbody ul{margin:0} .mbody ul{padding-left:20px}
+.mbody q{color:var(--amber);quotes:"\201C" "\201D"}
+.mbody img{max-width:100%;border-radius:4px;border:1px solid var(--line)}
+.mbody code{font:13px ui-monospace,Menlo,monospace;color:#cfe3e6;overflow-wrap:anywhere}
+.mbody table{border-collapse:collapse;width:100%;font-size:13.5px}
+.mbody td,.mbody th{border-top:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
+.mbody th{font:600 12px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tw{overflow-x:auto}
+</style>
+<main>
+  <header>
+    <p class="tracker"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+    <h1>Waterfall Look</h1>
+    <button class="info" data-modal="aboutTpl" data-title="About this mockup" aria-label="About this mockup: the owner's words, what each variant is">About</button>
+    <button class="info" data-modal="checkTpl" data-title="Variant A against the game" aria-label="How close variant A is to the game's screenshot">Check A</button>
+    <button class="info" data-modal="portTpl" data-title="Porting the approved one" aria-label="Which game constants each variant maps to">Porting</button>
+  </header>
+  <div class="bar" role="group" aria-label="Variant">
+    <span class="lbl">Variant</span>
+    <span class="seg" id="variants">
+      <button data-v="A" aria-pressed="true">A Today</button><button data-v="B" aria-pressed="false">B Stretched</button><button data-v="C" aria-pressed="false">C Leaning</button><button data-v="D" aria-pressed="false">D Lip + speed-up</button>
+    </span>
+    <button class="info" id="varInfo" aria-label="What this variant is">i</button>
+  </div>
+  <div class="stage">
+    <canvas id="view" aria-label="The waterfall scene: drag to turn, wheel or pinch to come closer"></canvas>
+    <div class="vtitle" id="vtitle">A: today (the approved baseline)</div>
+    <div class="ref" id="ref" hidden><img src="waterfall/game-fall-froth.jpg" alt="The game today: the pit's fall, by day, after the froth (the approved look)"><span>The game, dc0c5cb</span></div>
+  </div>
+  <div class="bar">
+    <span class="lbl">View</span>
+    <span class="seg" id="views"><button data-view="game" aria-pressed="true">Game view</button><button data-view="side" aria-pressed="false">Side</button><button data-view="step" aria-pressed="false">2-layer step</button><button data-view="wide" aria-pressed="false">Wide</button></span>
+    <span class="seg" id="tod"><button data-tod="day" aria-pressed="true">Day</button><button data-tod="night" aria-pressed="false">Night</button></span>
+    <label class="chk"><input type="checkbox" id="rain"> Rain</label>
+    <label class="chk"><input type="checkbox" id="splash" checked> Splash</label>
+    <label class="chk"><input type="checkbox" id="showRef"> Game shot</label>
+    <label class="chk"><input type="checkbox" id="pause"> Pause</label>
+  </div>
+  <div class="sliders" id="sliders"></div>
+</main>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="mbox"><div class="mhead"><h2 id="modalTitle"></h2><button class="mclose" id="modalClose" aria-label="Close">&#x2715;</button></div><div class="mbody" id="modalBody"></div></div></div>
+
+<template id="aboutTpl">
+  <p>The third try at how a waterfall looks, in a mockup before any game code (owner, 2026-11-15: <q>make mockups from now on for how we're gonna do the waterfall part so you dont mess it up in game, we've done this twice now</q>, <q>lets make sure third time is the right one</q>).</p>
+  <h3>The scene</h3>
+  <p>The game's test case: a source poured beside a pit dug 9 layers deep (the cell and the six round it), its water falling into the pit, and a 2-layer step on the terrace beside it. Cells are the game's: 2.833 m across, 1 m layers. Drag to turn, wheel or pinch to come closer. The water moves; nothing else does.</p>
+  <h3>What was tried and rejected</h3>
+  <ul>
+    <li>Pass 5: thin speeding ribbons and a whitened faceted lip: <q>all the afters are bad</q>, <q>dont do that</q>.</li>
+    <li>A bowed sheet of long continuous strands: <q>too smeared, theres also a geometric gap at the edge</q>.</li>
+  </ul>
+  <h3>What was asked</h3>
+  <ul>
+    <li><q>go back to these shaders</q>: the blotched froth of dc0c5cb (variant A).</li>
+    <li><q>I said stretched out, like maybe 2x of the original</q> (variant B).</li>
+    <li><q>the wall should be skewed</q>: the sheet leans out from the lip (variant C), with no gap where the top meets it.</li>
+    <li><q>can we have the edge transition into froth? and somehow show that it is speeding up in velocity/flow in to the wall</q>, gently (variant D).</li>
+    <li>No rain rings on vertical water (the Rain toggle), and a splash at the foot sized by the fall's height, never inside the water (the Splash toggle).</li>
+  </ul>
+  <h3>The variants</h3>
+  <ul>
+    <li><b>A Today</b>: the game's shader, ported line for line. No controls.</li>
+    <li><b>B Stretched</b>: the same froth pattern stretched down the fall by the Stretch slider (2x by default), and its scroll speed.</li>
+    <li><b>C Leaning</b>: B on a sheet that leans out from the lip (the Lean slider, 0 is today's straight drop). The top and the sheet share their edge's vertices, so there is no gap.</li>
+    <li><b>D Lip + speed-up</b>: C, plus froth that starts on the top over its last 1.5 m and runs over the edge as one pattern, and froth that speeds up (and so lengthens) as it falls. One slider sets how much.</li>
+  </ul>
+  <h3>What is the game's here</h3>
+  <p>The froth noise, its coordinates and constants, the water's colour terms and the face kinds are the game's (<code>assets/shaders/water.wgsl</code> at <code>dc0c5cb</code>). The ground, the sky, the lamps and the splash are the page's own stand-ins. The night scene is lit by three lamps; each lights the ground, the water and the spray near it.</p>
+</template>
+
+<template id="checkTpl">
+  <p>The game's screenshot (left, the approved look, <code>docs/screenshots/water-flow/owner-fall-froth-rain-before-after.jpg</code>, top right) beside variant A from about the same place (right).</p>
+  <img src="waterfall/check-a-vs-game.jpg" alt="Left: the game's fall. Right: the mockup's variant A from about the same view.">
+  <h3>How close it is</h3>
+  <ul>
+    <li><b>The froth</b> is the game's pattern by construction: the same <code>gnoise3</code> (Tenebris's lattice hash, bit for bit in integer maths), the same body-frame tangents, the same <code>5 / 0.35 / 5</code> scales, <code>0.6</code> s<sup>-1</sup> drift, threshold <code>0.42 to 0.7</code>, weights <code>0.75, 0.15, 0.12</code>, cap <code>0.92</code> and the mesher's froth weight (1 on the lip and foot layers, 0.55 between). The blotches read at the same size and coverage as the game's: grey-white, roughly round, a few tenths of a metre, streaming down.</li>
+    <li><b>Not the same blotches in the same places.</b> The noise is read at the body position, and the page's planet is a 2400 m stand-in at the capture's latitude, so the pattern is the game's kind of pattern, not the same instance.</li>
+    <li><b>Why the game's froth was never stretched.</b> On a vertical face the "down" direction lies in the face's own plane, so the face's two tangents already read it at the 5x scale. The <code>0.35</code> term meant to stretch it adds about 0.1%. The streaks the shader meant to draw come out as round blotches, and that is the look that was approved. B stretches that real look.</li>
+    <li><b>Size.</b> By the maths, the blotches are the same number per metre as the game's. Side by side, the game's look about a third larger on its face. I could not account for that from the shader. It may be the camera or the way the screenshot was scaled down.</li>
+    <li><b>Colour.</b> The game's light and tone mapping are not ported: the sand, the sky light and the white are matched by eye to the screenshot. The water's own colour terms (absorption, shallow colour, Fresnel, the sky it mirrors, the foam colour) are the game's.</li>
+    <li><b>Not drawn</b>: the screen-space reflections, refraction offset, the distance fog, the terrain's shadows and the game's own splash. The ground's sand is a stand-in texture.</li>
+  </ul>
+</template>
+
+<template id="portTpl">
+  <p>Each variant changes one or two lines of the fall's froth in <code>water.wgsl</code> (the <code>in.kind == 2u &amp;&amp; horizontal &lt; 0.5</code> branch) or the mesher in <code>water_flow.rs</code>. The full table is in <code>openspec/changes/water-flow/design.md</code>, "The fall look, in a mockup first".</p>
+  <div class="tw"><table>
+    <tr><th>Variant</th><th>Game change</th></tr>
+    <tr><td>A</td><td>None: dc0c5cb as it is.</td></tr>
+    <tr><td>B</td><td>Before the froth's <code>along</code>: <code>down_p = advected - radial*(dot(advected - lip, radial))*(1 - 1/FALL_STRETCH)</code>, the height below the lip divided by <code>FALL_STRETCH</code> (2.0). Scroll speed multiplies <code>time</code> in the froth's two time terms (1.0 is today's).</td></tr>
+    <tr><td>C</td><td>B, plus the mesher moves each falling face's vertex out along the flow by <code>lean * profile(depth / drop)</code> (profile <code>(sqrt(u + 0.05) - sqrt(0.05)) / (sqrt(1.05) - sqrt(0.05))</code>), every face's row at one depth moved alike, and nothing above the lip's ground moved. The froth is read at the unmoved position (one more vertex attribute), so the pattern is B's, bent.</td></tr>
+    <tr><td>D</td><td>C, plus: the froth is read on one frame per fall (the face toward the flow), at the point where the flow leaves the falling cell; the top's last 1.5 m gets the same froth ramped in; and the path below the lip is warped to time of flight from 1 m/s under 3 m/s<sup>2</sup>, mixed by the slider.</td></tr>
+  </table></div>
+</template>
+
+<template id="vA"><p><b>A: today, the approved baseline.</b> The game's fall froth at <code>dc0c5cb</code>, ported line for line: blotches of white water streaming down each falling face, denser on the lip's and the foot's layers. Nothing to set.</p></template>
+<template id="vB"><p><b>B: the original froth, stretched down the fall.</b> <q>I said stretched out, like maybe 2x of the original</q>. The same pattern as A, read with the height below the lip divided by <b>Stretch</b> (2.0 by default, 1 is A). <b>Speed</b> scales how fast it streams down (1.0 is the game's; stretched, it covers twice the ground in the same time, as a stretched film would).</p></template>
+<template id="vC"><p><b>C: B, leaning out from the lip.</b> <q>the wall should be skewed</q>. The sheet is pushed out along the flow by <b>Lean</b> metres at its foot, steepest just under the lip, as water thrown off an edge falls. 0 is today's straight drop. The top and the sheet share the lip's vertices, so no gap opens there; the sheet's sides pull away from the pit wall as a real curtain does. The froth is B's pattern, bent with the sheet.</p></template>
+<template id="vD"><p><b>D: C, with froth into the edge and a gentle speed-up.</b> <q>can we have the edge transition into froth? and somehow show that it is speeding up in velocity/flow in to the wall</q>. <b>Lip + speed-up</b> sets both: the top whitens over its last 1.5 m before the edge, with the same froth that then goes over and down as one pattern, and the froth speeds up as it falls, so its blotches lengthen lower down. At 0 this is C (on one frame per fall).</p></template>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="waterfall/waterfall.js?v=1"></script>
+<script>
+"use strict";
+// ---- the modal: one for the page, filled from a template; closes with its X, Esc or a tap outside
+let MODAL_BACK = null;
+function openModal(title, node) {
+  const m = document.getElementById("modal"), body = document.getElementById("modalBody");
+  document.getElementById("modalTitle").textContent = title; body.innerHTML = ""; body.appendChild(node);
+  MODAL_BACK = document.activeElement; m.hidden = false; body.scrollTop = 0; document.getElementById("modalClose").focus();
+}
+function closeModal() { const m = document.getElementById("modal"); if (m.hidden) return; m.hidden = true; if (MODAL_BACK && MODAL_BACK.focus) MODAL_BACK.focus(); }
+document.addEventListener("click", e => { const b = e.target.closest("[data-modal]"); if (b) { const t = document.getElementById(b.dataset.modal); if (t) openModal(b.dataset.title || "", t.content.cloneNode(true)); } });
+document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
+document.getElementById("modalClose").addEventListener("click", closeModal);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+// ---- the variants: each with only the controls it needs, off (or at the game's value) unless the variant is them
+const VARS = {
+  A: {title: "A: today (the approved baseline)", set: {stretch: 1, speed: 1, lean: 0, accel: 0, lip: 0, fallFrame: 0}, sliders: []},
+  B: {title: "B: the original froth, stretched down the fall", set: {stretch: 2, speed: 1, lean: 0, accel: 0, lip: 0, fallFrame: 0}, sliders: ["stretch", "speed"]},
+  C: {title: "C: B on a sheet leaning out from the lip", set: {stretch: 2, speed: 1, lean: 0.8, accel: 0, lip: 0, fallFrame: 0}, sliders: ["stretch", "speed", "lean"]},
+  D: {title: "D: C with froth into the edge and a speed-up", set: {stretch: 2, speed: 1, lean: 0.8, accel: 0.5, lip: 0.5, fallFrame: 1}, sliders: ["stretch", "speed", "lean", "amount"]},
+};
+const SLIDERS = {
+  stretch: {label: "Stretch", min: 1, max: 4, step: 0.05, fmt: v => v.toFixed(2) + "x", get: S => S.stretch, put: (S, v) => { S.stretch = v; }},
+  speed: {label: "Speed", min: 0.25, max: 3, step: 0.05, fmt: v => v.toFixed(2) + "x", get: S => S.speed, put: (S, v) => { S.speed = v; }},
+  lean: {label: "Lean", min: 0, max: 2, step: 0.05, fmt: v => v.toFixed(2) + " m", get: S => S.lean, put: (S, v) => { S.lean = v; }},
+  amount: {label: "Lip + speed-up", min: 0, max: 1, step: 0.05, fmt: v => v.toFixed(2), get: S => S.accel, put: (S, v) => { S.accel = v; S.lip = v; }},
+};
+const KEPT = {};   // each variant keeps what the viewer set on it
+let F = null, CUR = "A";
+function pick(v) {
+  if (!VARS[v]) v = "A";
+  if (F && CUR) KEPT[CUR] = Object.assign({}, {stretch: F.S.stretch, speed: F.S.speed, lean: F.S.lean, accel: F.S.accel, lip: F.S.lip, fallFrame: F.S.fallFrame});
+  CUR = v;
+  Object.assign(F.S, VARS[v].set, KEPT[v] || {});
+  F.apply();
+  for (const b of document.querySelectorAll("#variants button")) b.setAttribute("aria-pressed", String(b.dataset.v === v));
+  document.getElementById("vtitle").textContent = VARS[v].title;
+  const box = document.getElementById("sliders"); box.innerHTML = "";
+  for (const k of VARS[v].sliders) {
+    const d = SLIDERS[k], row = document.createElement("div"); row.className = "sl";
+    const id = "sl-" + k;
+    row.innerHTML = `<label for="${id}">${d.label}</label><input id="${id}" type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${d.get(F.S)}"><output>${d.fmt(d.get(F.S))}</output>`;
+    const inp = row.querySelector("input"), out = row.querySelector("output");
+    inp.addEventListener("input", () => { d.put(F.S, +inp.value); out.textContent = d.fmt(+inp.value); F.apply(); });
+    box.appendChild(row);
+  }
+  if (location.hash.slice(1) !== v) history.replaceState(null, "", "#" + v);
+}
+F = PBDFalls(document.getElementById("view"));
+document.getElementById("variants").addEventListener("click", e => { const b = e.target.closest("button[data-v]"); if (b) pick(b.dataset.v); });
+document.getElementById("varInfo").addEventListener("click", () => openModal("Variant " + CUR, document.getElementById("v" + CUR).content.cloneNode(true)));
+document.getElementById("views").addEventListener("click", e => {
+  const b = e.target.closest("button[data-view]"); if (!b) return; F.views[b.dataset.view]();
+  for (const x of document.querySelectorAll("#views button")) x.setAttribute("aria-pressed", String(x === b));
+});
+document.getElementById("tod").addEventListener("click", e => {
+  const b = e.target.closest("button[data-tod]"); if (!b) return; F.S.night = b.dataset.tod === "night"; F.apply();
+  for (const x of document.querySelectorAll("#tod button")) x.setAttribute("aria-pressed", String(x === b));
+});
+document.getElementById("rain").addEventListener("change", e => { F.S.rain = e.target.checked; F.apply(); });
+document.getElementById("splash").addEventListener("change", e => { F.S.splash = e.target.checked; F.apply(); });
+document.getElementById("showRef").addEventListener("change", e => { document.getElementById("ref").hidden = !e.target.checked; });
+document.getElementById("pause").addEventListener("change", e => { F.S.running = !e.target.checked; });
+window.addEventListener("hashchange", () => pick(location.hash.slice(1)));
+pick(location.hash.slice(1) || "A");
+F.start();
+</script>
