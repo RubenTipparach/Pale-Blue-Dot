@@ -173,7 +173,7 @@ tr:last-child td{border-bottom:0}
 
 <div class="tabpanel" id="tab-sim" role="tabpanel" hidden>
   <h2>Water sim <button class="info" data-help="sim" aria-label="How the water sim works">i</button></h2>
-  <div class="stage" data-scene="sim"></div>
+  <div class="envgrid"><div class="stage" data-scene="sim"></div><div class="side" id="simSide" aria-label="Presets and settings"></div></div>
 </div>
 
 <div class="tabpanel" id="tab-light" role="tabpanel" hidden>
@@ -235,7 +235,7 @@ tr:last-child td{border-bottom:0}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="ocean/creatures3d.js?v=1"></script>
 <script src="water-flow/liquid.js?v=1"></script>
-<script src="water-flow/water-look.js?v=3"></script>
+<script src="water-flow/water-look.js?v=4"></script>
 <script>
 "use strict";
 // ======================= the places =======================
@@ -1442,53 +1442,116 @@ function diverDuck(W, centre, R, levelFn, ph = 0) {
 function dragonflies(W, n, cx, cy, cz, R) { const L = []; for (let i = 0; i < n; i++) { const ph = rnd() * 6; L.push(swimmer(W, "dragonfly", 0.35, t => new THREE.Vector3(cx + Math.sin(t * 0.9 + ph) * R + Math.sin(t * 4.1 + ph) * 0.4, cy + Math.sin(t * 2.3 + ph) * 0.3, cz + Math.cos(t * 0.7 + ph * 2) * R))); } return L; }
 function fireflies(W, n, c, s, color, lamps = 3) { const f = motes(W, n, color, 0.18, {c, s}, {add: true, swirl: 0.4, opacity: 0}); for (let i = 0; i < lamps; i++) W.lamp(c.x + (hsh(i, 5) - 0.5) * s[0], c.y + 0.5, c.z + (hsh(i, 6) - 0.5) * s[2], color, 0.5, 4, {size: 0.08}); W.timeHooks.push((nm, T) => f.mat.opacity = T.day < 0.6 ? 0.95 : 0); return f; }
 
+// ======================= fresh water on cells: the rule and its mesher, on every tab =======================
+// The owner, 2026-11-15: "water that flows - make sure the rivers use that too, so merge these artifacts together so we
+// get it more consistent". Every tab's fresh water that stands or flows on cells (the river, the dam's stream and pond,
+// the marsh pools and the Water sim) is moved by Luanti's liquid rule (water-flow/liquid.js) and drawn by its liquid
+// mesher (PBDWater.simWater in water-flow/water-look.js): one rule and one look everywhere (ocean-environments design 12).
+// Still water is sources, as the world's generated water is; everything else follows from the sources and the cells by
+// the rule, settled before the first frame, so a tab opens on running water. The sea stays the wave surface (makeSea):
+// it is not cells.
+function cellWater(W, o) {
+  const L = PBDLiquid, {AIR, SOLID, FLOW, SRC} = L;
+  const LQ = L.create({N: o.N, Y0: o.Y0, Y1: o.Y1, range: 8, renew: o.renew ?? 3}), {kind, lvl, down, idx, inside, SIM} = LQ;
+  const SW = PBDWater.simWater(W, LQ, {caps: Object.assign({amp: 0.01, mud: 0, minA: 0.78}, o.caps), skip: o.skip, arrows: o.arrows});
+  const CW = {LQ, SW, rate: o.rate ?? 4, acc: 0};
+  // the cells: each column of `ground` (key "q,r" -> {h}) solid below its top; the patch outside it solid to the top
+  CW.fill = ground => {
+    LQ.clear();
+    for (let q = -o.N; q <= o.N; q++) for (let r = -o.N; r <= o.N; r++) {
+      if (L.hexDist(q, r) > o.N) continue; const c = ground.get(q + "," + r), top = Math.min(c ? Math.ceil(c.h) : o.Y1 + 1, o.Y1 + 1);
+      for (let y = o.Y0; y < top; y++) kind[idx(q, r, y)] = SOLID;
+    }
+  };
+  CW.set = (q, r, y, k) => { if (!inside(q, r, y)) return; const i = idx(q, r, y); kind[i] = k; lvl[i] = 0; down[i] = 0; };
+  CW.at = (q, r, y) => inside(q, r, y) ? kind[idx(q, r, y)] : SOLID;
+  // settle from scratch: every source queued, as M28's "settle from scratch" does, and ticks until nothing is queued
+  CW.settle = (max = 4000) => {
+    SIM.queue.length = 0; SIM.inQ.fill(0);
+    for (let i = 0; i < LQ.NCELL; i++) if (kind[i] === SRC) { const [q, r, y] = LQ.unidx(i); LQ.touch(q, r, y); }
+    let n = 0; while (SIM.queue.length && n < max) { LQ.tick(); n++; } return n;
+  };
+  // the water level and its bed under each point, for the lit materials under it and the creatures on it
+  CW.levelAt = (x, z) => { if (o.levelOver) { const v = o.levelOver(x, z); if (v != null) return v; } const [q, r] = cellOf(x, z), c = SW.cells && SW.cells.get(q + "," + r); return c ? c.wl : -1000; };
+  CW.bedAt = (x, z) => { const [q, r] = cellOf(x, z), c = SW.cells && SW.cells.get(q + "," + r); let y = c ? c.y : o.Y1; while (y > o.Y0 && CW.at(q, r, y) !== SOLID) y--; return y + 1; };
+  CW.draw = () => { SW.rebuild(); if (o.bake) bakeWater(W, CW.levelAt, ...o.bake, CW.bedAt); };
+  // live ticks after an edit (a breach): the rule at CW.rate ticks a second, redrawn when a tick ran
+  CW.step = dt => { if (!SIM.queue.length) { CW.acc = 0; return false; } CW.acc += dt * CW.rate; let n = 0; while (CW.acc >= 1 && n < 20) { CW.acc -= 1; LQ.tick(); n++; } if (n) CW.draw(); return n > 0; };
+  CW.count = () => { let s = 0, f = 0, d = 0; for (let i = 0; i < LQ.NCELL; i++) { if (kind[i] === SRC) s++; else if (kind[i] === FLOW) { f++; if (down[i]) d++; } } return {s, f, d}; };
+  // the flow arrows are an overlay: dimmer at night, so the lamps read
+  W.timeHooks.push((nm, T) => { if (SW.arrows) SW.arrows.material.opacity = T.day < 0.5 ? 0.4 : 0.85; });
+  // the "Arrows: on / off" toggle: pressed and lit when they show, its label saying which
+  CW.arrowsButton = btn => { const show = () => { btn.setAttribute("aria-pressed", String(SW.showArrows)); btn.textContent = "Arrows: " + (SW.showArrows ? "on" : "off"); };
+    btn.addEventListener("click", () => { SW.setArrows(!SW.showArrows); show(); }); show(); };
+  return CW;
+}
+
 // ======================= 8. the river, source to mouth =======================
+// The river's water is the rule's (design 12). Under Luanti's rule a reach of flowing water runs eight cells from where
+// it is fed and no further, and a step down feeds the reach below anew (a one-layer step at the lip's level plus three,
+// a step of two or more to the full seven). So a river on cells comes down in riffles at most four cells apart: the
+// meanders step a layer every 10 m, and the whole river stands four layers higher than its hand-placed caps did.
+// Sources at the spring, a plunge pool and the bed of each deep reach (still water under the flowing layer), the sea
+// at the mouth; everything else flows by the rule, settled before the first frame.
 function sceneRiver(stage) {
-  const W = setupStage("river", stage, {marine: true, water: "river", far: 800, extraTop: `<div class="seg"><button id="dropCatch">Drop a catch</button></div>`});
+  const W = setupStage("river", stage, {marine: true, water: "river", far: 800, extraTop: `<div class="seg"><button id="dropCatch">Drop a catch</button><button id="riverArrows" class="tog" aria-pressed="true" title="Arrows on the water: which way each cell flows. Press to hide or show them.">Arrows: on</button></div>`});
   W.water = WATERS.river; W.U.uWLdef.value = -1000;
-  const M = commonMats(W), B = SHEET;
-  const STEPS = [[-999, 15], [-74, 14], [-66, 13], [-58, 12], [-48, 11], [-40, 10], [-31.5, 6], [-14, 5], [-6, 4], [-4, 3.0], [24, 2], [46, 1], [70, 0]];
-  const wlx = x => { let v = 15; for (const [s, l] of STEPS) if (x >= s) v = l; return v; };
+  const M = commonMats(W), B = SHEET, {SRC} = PBDLiquid;
+  // T: the top of each reach's water layer (its flowing water stands in layer T - 1), from x on
+  const STEPS = [[-999, 19], [-74, 18], [-66, 17], [-58, 16], [-48, 15], [-40, 14], [-31.5, 10], [-20, 9], [-10, 8], [0, 7], [10, 6], [20, 5], [30, 4], [40, 3], [50, 2], [61, 1]];
+  const SPRING_X = -84;
+  const wlx = x => { let v = STEPS[0][1]; for (const [s, l] of STEPS) if (x >= s) v = l; return v; };
   const zc = x => x > -4 ? 9 * Math.sin((x + 4) / 13) : 2 * Math.sin(x / 20);
   const hw = x => x < -40 ? 2.4 : x < 0 ? 3.0 : 4.2;
   const cells = rectRegion(-98, 98, -34, 34, (q, r, x, z) => {
-    const d = Math.abs(z - zc(x)), w = hw(x), wl = wlx(x);
-    if (x > 72) { const h = Math.round(1 - (x - 72) * 0.32 - Math.max(0, 6 - Math.abs(z)) * 0.1); return {h: Math.max(h, -5), s: h >= 1 ? B.beach : B.ocean, top: [0, 0], river: d < w && h < 1 ? {wl: 0} : null}; }
-    if (d < w) { const plunge = x > -31.5 && x < -22, bedH = Math.floor(wl) - (plunge ? 3 : x < -40 ? 1 : 2); return {h: bedH, s: x < 0 ? B.beach : B.swamp, top: x < 0 ? [0, 3] : [1, 1], river: {wl: wl - 0.15}}; }
+    const d = Math.abs(z - zc(x)), w = hw(x), T = wlx(x);
+    if (x > 72) { const h = Math.max(-5, Math.round(1 - (x - 72) * 0.32 - Math.max(0, 6 - Math.abs(z)) * 0.1)); return {h, s: h >= 1 ? B.beach : B.ocean, top: [0, 0], sea: h < 1}; }
+    if (d < w) return {h: T - 2, s: x < 0 ? B.beach : B.swamp, top: x < 0 ? [0, 3] : [1, 1], river: {T, spring: x < SPRING_X, plunge: x > -31.5 && x < -22}};
     const bar = x > 0 && x < 70 && d < w + 2.9 && Math.sin((x + 4) / 13) * (z - zc(x)) < 0;
-    if (bar) return {h: Math.floor(wl), s: B.beach, top: [0, 3]};
+    if (bar) return {h: T, s: B.beach, top: [0, 3]};
     const hill = Math.max(0, (-x - 30) * 0.12), rise = Math.floor((d - w) * (x < -30 ? 0.55 : 0.32) + hill + fbm(x / 10, z / 10) * 1.5);
-    const h = Math.floor(wl) + 1 + rise; const high = x < -40;
-    return {h, s: high ? B.mountains : x > 60 ? B.beach : B.fields, top: high && h > 18 ? [0, 0] : [0, 0]};
+    const h = T + 1 + rise; const high = x < -40;
+    return {h, s: high ? B.mountains : x > 60 ? B.beach : B.fields, top: [0, 0]};
   });
+  // the beds: a lip (a cell beside a lower reach or the sea) is one layer deep, so the still water under a reach never
+  // touches the reach below; the plunge pool is three deep; every other reach two, a source under its flowing layer
+  for (const [k, c] of cells) { if (!c.river) continue; const [q, r] = k.split(",").map(Number);
+    c.lip = DIRS.some(([dq, dr]) => { const n = cells.get((q + dq) + "," + (r + dr)); return n && (n.sea || (n.river && n.river.T < c.river.T)); });
+    c.h = c.river.spring ? c.river.T - 2 : c.river.plunge ? c.river.T - 3 : c.lip ? c.river.T - 1 : c.river.T - 2; }
   buildColumns(W, cells, M); const bed = bedSampler(cells);
-  // the river's caps: each water cell at its level, flowing downstream along the channel, falling down every step
-  const rc = new Map(); for (const [k, c] of cells) if (c.river) { const [q, r] = k.split(",").map(Number), x = hx(q, r); const dz = (zc(x + 1) - zc(x - 1)) / 2, L = Math.hypot(1, dz), fast = (x > -76 && x < -40) || (x > -16 && x < 0) ? 0.9 : x > 70 ? 0 : 0.35; rc.set(k, {wl: c.river.wl, flow: [fast / L, fast * dz / L]}); }
-  makeCaps(W, new Map([...rc].filter(([k, c]) => c.wl > 0.1)), {amp: 0.015, mud: 0.4, lower: rc});
+  const seaCol = new Set([...cells].filter(([k, c]) => c.sea).map(([k]) => k));
+  const CW = cellWater(W, {N: 42, Y0: -6, Y1: 19, caps: {amp: 0.015, mud: 0.4, minA: 0.74}, bake: [-100, -40, 100, 40, 256],
+    skip: (q, r, y, k) => k === SRC && seaCol.has(q + "," + r),   // the sea's own cells: the wave surface draws them
+    levelOver: (x, z) => { if (x <= 72) return null; const k = cellOf(x, z), g = cells.get(k[0] + "," + k[1]); return !g || g.h < 0.1 ? 0 : null; }});
+  CW.fill(cells);
+  for (const [k, c] of cells) { const [q, r] = k.split(",").map(Number);
+    if (c.sea) for (let y = c.h; y < 0; y++) CW.set(q, r, y, SRC);                          // the sea: sources to sea level
+    else if (c.river) { const top = c.river.spring ? c.river.T : c.lip ? c.h : c.river.T - 1; for (let y = c.h; y < top; y++) CW.set(q, r, y, SRC); } }
+  CW.ticks = CW.settle(); CW.draw();
+  CW.arrowsButton(stage.querySelector("#riverArrows"));
   const sea = makeSea(W, {amp: 0.25, seaOnly: true});
-  const wl = (x, z) => { const k = cellOf(x, z), key = k[0] + "," + k[1], c = rc.get(key); if (c) return c.wl; if (x > 72) { const g = cells.get(key); if (!g || g.h < 0.1) return 0; } return -1000; };
-  bakeWater(W, wl, -100, -40, 100, 40, 256, bed);
   // banks: willows low, firs high, reeds along the lower river; a mill cottage by the fall with its lantern
   for (const [k, c] of cells) { if (c.river) continue; const [q, r] = k.split(",").map(Number), x = hx(q, r), z = hz(r), d = Math.abs(z - zc(x)), p = hsh(q * 5, r * 3);
     if (d > hw(x) + 3 && d < hw(x) + 12 && p < 0.12) tree(W, M, x, c.h, z, x < -40 ? 0.9 : 1, {willow: x > -20});
     else if (x > -20 && x < 72 && d < hw(x) + 4 && p > 0.6) crossed(W, "card-reed", 2.2, 2.0, x, c.h, z, {n: 2, rot: p * 5}); }
   const mx = -36, mz = zc(-36) + 9, mb = bed(mx, mz); box(W, M.stone, 5, 3, 4, mx, mb + 1.5, mz); box(W, M.slate, 5.6, 0.5, 4.6, mx, mb + 3.2, mz); W.lamp(mx + 2.7, mb + 2, mz - 1, 0xffb35a, 2.2, 13);
-  // life
+  // life: heights from the reach they are in (the plunge pool's water stands at 10, the fall's lip at 14)
   const life = [], levelAt = (x, z) => { const v = W.waterAt(x, z); return v > -999 ? v : bed(x, z); };
-  for (let i = 0; i < 6; i++) { const ph = i / 6; life.push(swimmer(W, "redrun", 0.75, t => { const u = ((t * 0.018 + ph) % 1), x = lerp(60, -62, u); let y = wlx(x) - 0.6; if (x < -29 && x > -34.5) { const k = (-29 - x) / 5.5; y = lerp(5.4, 9.4, k) + Math.sin(Math.PI * k) * 2.6; } return new THREE.Vector3(x, y, zc(x) + Math.sin(i * 2 + t * 0.4) * 0.8); })); }
-  for (let i = 0; i < 4; i++) { const p = new THREE.Vector3(-27 + i * 1.3, 4.4, zc(-27) - 1 + i * 0.7); life.push(swimmer(W, "trout", 0.55, t => p.clone().add(new THREE.Vector3(Math.sin(t * 0.8 + i) * 0.3, Math.sin(t + i) * 0.1, 0)).add(new THREE.Vector3(-0.001, 0, 0)), {after: (m, t, p) => {}})); life[life.length - 1].update = ((sw, p, i) => (t, cam) => faceAlong(sw.m, p.clone().add(new THREE.Vector3(Math.sin(t * 0.8 + i) * 0.3, 0, 0)), new THREE.Vector3(-1, 0, Math.sin(t * 1.3 + i) * 0.15), cam))(life[life.length - 1], p, i); }
-  life.push(school(W, "game/fish-perch", 10, 0.45, orbitPath(30, 0.6, zc(30), 4, 2, 0.08), [3, 0.5, 2]));
+  const PL = wlx(-26), LIP = wlx(-34);
+  for (let i = 0; i < 6; i++) { const ph = i / 6; life.push(swimmer(W, "redrun", 0.75, t => { const u = ((t * 0.018 + ph) % 1), x = lerp(60, -62, u), z = zc(x) + Math.sin(i * 2 + t * 0.4) * 0.8; let y = Math.max(bed(x, z) + 0.3, wlx(x) - 1.3); if (x < -29 && x > -34.5) { const k = (-29 - x) / 5.5; y = lerp(PL - 0.6, LIP - 0.6, k) + Math.sin(Math.PI * k) * 2.6; } return new THREE.Vector3(x, y, z); })); }
+  for (let i = 0; i < 4; i++) { const p = new THREE.Vector3(-27 + i * 1.3, PL - 1.6, zc(-27) - 1 + i * 0.7); const sw = swimmer(W, "trout", 0.55, () => p); sw.update = (t, cam) => faceAlong(sw.m, p.clone().add(new THREE.Vector3(Math.sin(t * 0.8 + i) * 0.3, 0, 0)), new THREE.Vector3(-1, 0, Math.sin(t * 1.3 + i) * 0.15), cam); life.push(sw); }
+  life.push(school(W, "game/fish-perch", 10, 0.45, orbitPath(30, wlx(30) - 1.4, zc(30), 4, 2, 0.08), [3, 0.5, 2]));
   life.push(school(W, "game/fish-minnow", 20, 0.22, orbitPath(76, -0.5, zc(76), 5, 3, 0.12), [3, 0.3, 3]));
   for (let i = 0; i < 4; i++) life.push(crawler(W, "crayfish", 0.45, new THREE.Vector3(-26 + i * 9, 0, zc(-26 + i * 9)), 1.5, bed, {speed: 0.12}));
   for (let i = 0; i < 6; i++) { const x = 8 + i * 6; life.push(crawler(W, "rivermussel", 0.35, new THREE.Vector3(x, 0, zc(x) + 1), 0.05, bed, {speed: 0.001})); }
-  life.push(swimmer(W, "riverotter", 0.9, t => { const a = t * 0.3; const x = -26 + Math.cos(a) * 3.5, z = zc(-26) + Math.sin(a) * 1.8; return new THREE.Vector3(x, 5.85 - Math.max(0, Math.sin(t * 0.5)) * 1.8, z); }));
-  { const perch = new THREE.Vector3(-22, 9.2, zc(-22) + 5.5); life.push(swimmer(W, "kingfisher", 0.45, t => { const c = t % 9; if (c < 6) return perch.clone().add(new THREE.Vector3(c * 0.0001, 0, 0)); const k = (c - 6) / 3, tgt = new THREE.Vector3(-25, 5.6, zc(-25)); const p = perch.clone().lerp(tgt, Math.sin(Math.PI * k)); return p; })); }
+  life.push(swimmer(W, "riverotter", 0.9, t => { const a = t * 0.3; const x = -26 + Math.cos(a) * 3.5, z = zc(-26) + Math.sin(a) * 1.8; return new THREE.Vector3(x, PL - 0.15 - Math.max(0, Math.sin(t * 0.5)) * 1.8, z); }));
+  { const perch = new THREE.Vector3(-22, PL + 3.2, zc(-22) + 5.5); life.push(swimmer(W, "kingfisher", 0.45, t => { const c = t % 9; if (c < 6) return perch.clone().add(new THREE.Vector3(c * 0.0001, 0, 0)); const k = (c - 6) / 3, tgt = new THREE.Vector3(-25, PL - 0.4, zc(-25)); const p = perch.clone().lerp(tgt, Math.sin(Math.PI * k)); return p; })); }
   { const hm = creature(W, "m7/heron", 1.8, {pose: "stand"}); const hp = new THREE.Vector3(36, 0, zc(36) - 4.6); life.push({update: (t, cam) => { const lv = levelAt(hp.x, hp.z); hm.userData.c3.strike = Math.min(1, Math.max(0, Math.sin(t * 0.4) - 0.9) * 12); faceAlong(hm, hp.clone().setY(lv - 0.1), new THREE.Vector3(0.3, 0, 1), cam); }}); }
   life.push(diverDuck(W, new THREE.Vector3(-26, 0, zc(-26)), 2.6, levelAt, 1), diverDuck(W, new THREE.Vector3(44, 0, zc(44)), 3, levelAt, 3));
-  life.push(...dragonflies(W, 5, 20, 3.5, zc(20) + 4, 6));
-  const ff = fireflies(W, 120, new THREE.Vector3(18, 4, zc(18) + 5), [20, 2, 8], 0xc8ff5a), gm = fireflies(W, 40, new THREE.Vector3(mx + 3, mb + 2.6, mz - 1), [3, 1.5, 3], 0x78dcff, 1);
+  life.push(...dragonflies(W, 5, 20, wlx(20) + 1.5, zc(20) + 4, 6));
+  const ff = fireflies(W, 120, new THREE.Vector3(18, wlx(18) + 2, zc(18) + 5), [20, 2, 8], 0xc8ff5a), gm = fireflies(W, 40, new THREE.Vector3(mx + 3, mb + 2.6, mz - 1), [3, 1.5, 3], 0x78dcff, 1);
   const lamp = diverLamp(W);
-  W.hudExtra = () => { const x = W.cam.target.x; const w = wlx(x); return `river here: water at layer ${w}, ${x < -40 ? "riffles" : x < -31 ? "the fall's lip" : x < -22 ? "plunge pool" : x < 0 ? "rapid" : x < 70 ? "meanders" : "the mouth"}`; };
+  W.hudExtra = () => { const x = W.cam.target.x; const w = wlx(x); return `river here: water to layer ${w}, ${x < -40 ? "riffles" : x < -31 ? "the fall's lip" : x < -22 ? "plunge pool" : x < 0 ? "rapid" : x < 70 ? "meanders" : "the mouth"}`; };
   // A caught fish the player drops on the bank is an item: its 2D item icon (the game's own, assets/items/fish), standing
   // on the ground and turned to the eye, as the game draws a dropped item. It is the one animal left as a sprite (the
   // owner, 2026-11-15: "all fish should also be 3d, unless they are caught, and a player drops them as 2d sprites"):
@@ -1499,104 +1562,155 @@ function sceneRiver(stage) {
     const m = card(W, spriteTex(ICONS[i]), 0.55, 0.55, {anchorBottom: true}); m.position.set(x, g + 1.4, z); DROPS.push({m, g, vy: 0}); if (DROPS.length > DROP_AT.length) { const o = DROPS.shift(); W.scene.remove(o.m); } return DROPS.length; };
   stage.querySelector("#dropCatch").addEventListener("click", () => W.dropCatch());
   if (Q.has("drop")) for (let i = 0; i < 3; i++) W.dropCatch();
-  W.update = (t, dt) => { const cp = W.camera.position, cwl = W.waterAt(cp.x, cp.z), under = cp.y < cwl; for (const l of life) l.update(t, cp, dt); ff.update(t); gm.update(t); lamp.update(under, cwl - cp.y);
+  W.update = (t, dt) => { const cp = W.camera.position, cwl = W.waterAt(cp.x, cp.z), under = cp.y < cwl; CW.step(dt); for (const l of life) l.update(t, cp, dt); ff.update(t); gm.update(t); lamp.update(under, cwl - cp.y);
     for (const d of DROPS) { if (d.m.position.y > d.g + 0.02) { d.vy -= 9.8 * dt; d.m.position.y = Math.max(d.g + 0.02, d.m.position.y + d.vy * dt); } d.m.rotation.set(0, Math.atan2(cp.x - d.m.position.x, cp.z - d.m.position.z), 0); } };
-  W.setViews({"Bank": [[-22, bed(-22, zc(-22) + 5.2) + 0.3, zc(-22) + 4.2], 1.1, 0.35, 5.5], "Waterfall": [[-31, 7, zc(-31)], 1.62, 0.2, 21], "Source": [[-80, 16, zc(-80)], 0.8, 0.45, 40], "Meanders": [[30, 2, 4], 0.4, 0.75, 70], "Mouth": [[80, 0, 4], 1.6, 0.3, 40], "Plunge pool": [[-26, 4.2, zc(-26)], 1.5, 0.08, 6]});
+  window.__river = {CW, cells, wlx, zc};
+  W.setViews({"Bank": [[-22, bed(-22, zc(-22) + 5.2) + 0.3, zc(-22) + 4.2], 1.1, 0.35, 5.5], "Waterfall": [[-31, PL + 1, zc(-31)], 1.62, 0.2, 21], "Source": [[-80, wlx(-80) + 1, zc(-80)], 0.8, 0.45, 40], "Meanders": [[30, wlx(30) + 1, 4], 0.4, 0.75, 70], "Mouth": [[80, 0, 4], 1.6, 0.3, 40], "Plunge pool": [[-26, PL - 1.8, zc(-26)], 1.5, 0.08, 6]});
   W.lampBtn(); finish(W, "Waterfall"); return W;
 }
 
 // ======================= 9. beavers and dams =======================
+// The stream and the pond are the rule's (design 12). The stream comes down its valley a layer every 10 m from a spring
+// of sources at its head, so it runs by the rule all the way; a dam is solid cells of sticks, and its pond is sources
+// standing up to one layer over the dam's lowest cell (the spillway the colony leaves one layer short), so a full pond
+// spills over it and the stream below the dam runs on by the rule. "Breach the dam" digs the dam's middle out and the
+// pond pours through, live.
 function sceneDam(stage) {
   const W = setupStage("dam", stage, {marine: false, water: "river", far: 600,
-    extra: `<div class="lab2"><span>Days since the colony came</span><b id="dayName">day 40</b></div><input type="range" id="day" min="0" max="40" step="0.25" value="${Q.get("day") ?? 40}" aria-label="Days since the beavers came"><div class="seg"><button id="dayPlay" aria-pressed="false">Play the days</button><button id="jetty" aria-pressed="${Q.has("jetty")}">Player's jetty on day 2</button><button id="breakDam" aria-pressed="${Q.has("break")}">Player breaks the dam on day 30</button></div>`});
+    extra: `<div class="lab2"><span>Days since the colony came</span><b id="dayName">day 40</b></div><input type="range" id="day" min="0" max="40" step="0.25" value="${Q.get("day") ?? 40}" aria-label="Days since the beavers came"><div class="seg"><button id="dayPlay" aria-pressed="false">Play the days</button><button id="jetty" aria-pressed="${Q.has("jetty")}">Player's jetty on day 2</button><button id="breakDam" aria-pressed="${Q.has("break")}">Player breaks the dam on day 30</button><button id="damBreach" aria-pressed="false">Breach the dam</button><button id="damArrows" class="tog" aria-pressed="true" title="Arrows on the water: which way each cell flows. Press to hide or show them.">Arrows: on</button></div>`});
   W.water = WATERS.river; W.U.uWLdef.value = -1000;
-  const M = commonMats(W), B = SHEET;
+  const M = commonMats(W), B = SHEET, {AIR, SOLID, SRC} = PBDLiquid;
   const zc = x => 2 * Math.sin(x / 18);
-  const ground = new Map(), cellsG = rectRegion(-70, 40, -30, 30, (q, r, x, z) => { const d = Math.abs(z - zc(x)); if (d < 2.3) return {h: 0, s: B.swamp, top: [0, 3], stream: true}; const h = 1 + Math.floor((d - 2.3) * 0.36 + fbm(x / 12, z / 12) * 1.2) + (x > 10 ? 0 : 0); return {h, s: B.fields, top: [0, 0]}; });
+  // T: the top of the stream's water layer, a layer down every 10 m from the spring (x < -62) to the valley's foot
+  const STEPS = [[-999, 12], [-62, 11], [-52, 10], [-42, 9], [-32, 8], [-22, 7], [-12, 6], [-2, 5], [8, 4], [18, 3], [28, 2]];
+  const SPRING_X = -62;
+  const wlx = x => { let v = STEPS[0][1]; for (const [s, l] of STEPS) if (x >= s) v = l; return v; };
+  const ground = new Map(), cellsG = rectRegion(-70, 40, -30, 30, (q, r, x, z) => { const d = Math.abs(z - zc(x)), T = wlx(x); if (d < 2.3) return {h: T - 1, s: B.swamp, top: [0, 3], stream: true}; const h = T + Math.floor((d - 2.3) * 0.36 + fbm(x / 12, z / 12) * 1.2); return {h, s: B.fields, top: [0, 0]}; });
   for (const [k, c] of cellsG) ground.set(k, c);
   buildColumns(W, cellsG, M); const bed = bedSampler(cellsG);
+  // a dam: every cell of its line lower than four layers over the stream's bed there, built a layer at a time from the
+  // bed up, the middle first; the stream's middle cell is left one layer short, the spillway
   const SITES = [{x: 0, start: 5}, {x: -28, start: 5}];
-  const unitsOf = s => { const out = []; for (const [k, c] of cellsG) { const [q, r] = k.split(",").map(Number), x = hx(q, r); if (Math.abs(x - s.x) > HW * 0.55 || c.h >= 4) continue; for (let L = c.h + 1; L <= 4; L++) out.push({k, L, d: Math.abs(hz(r) - zc(x))}); } out.sort((a, b) => a.L - b.L || a.d - b.d); return out; };
+  const unitsOf = s => {
+    s.bed = wlx(s.x) - 1; const crest = s.bed + 4, out = [], mids = [];
+    for (const [k, c] of cellsG) { const [q, r] = k.split(",").map(Number), x = hx(q, r); if (Math.abs(x - s.x) > HW * 0.55 || c.h >= crest) continue; const d = Math.abs(hz(r) - zc(x)); if (c.stream) mids.push({k, d}); for (let y = c.h; y < crest; y++) out.push({k, y, d}); }
+    mids.sort((a, b) => a.d - b.d); s.spill = mids[0].k; s.mid2 = mids[1] && mids[1].k; s.line = [...new Set(out.map(u => u.k))];
+    return out.filter(u => !(u.k === s.spill && u.y === crest - 1)).sort((a, b) => a.y - b.y || a.d - b.d);
+  };
   SITES.forEach(s => s.units = unitsOf(s));
   const trees = []; for (const [k, c] of cellsG) { const [q, r] = k.split(",").map(Number), x = hx(q, r), z = hz(r), d = Math.abs(z - zc(x)); if (d > 3.5 && d < 16 && hsh(q * 3, r * 7) < 0.16) trees.push({k, x, z, h: c.h, g: tree(W, M, x, c.h, z, 0.9), stump: (() => { const s = prism(W, M.bark, 0.28 * 0.9, 0.45, x, c.h, z); s.visible = false; return s; })()}); }
   // which trees the colony fells: the nearest to each site, a few a day
   for (const s of SITES) s.fell = trees.filter(t => t.x < s.x + 6 && t.x > s.x - 26 && Math.abs(t.z) < 12).sort((a, b) => Math.hypot(a.x - s.x, a.z) - Math.hypot(b.x - s.x, b.z)).slice(0, 9);
-  const jettyBtn = stage.querySelector("#jetty"), breakBtn = stage.querySelector("#breakDam"), daySl = stage.querySelector("#day"), dayName = stage.querySelector("#dayName"), playBtn = stage.querySelector("#dayPlay");
-  let damMeshes = [], capMesh = null, lilies = [], jetty = null, state = null;
-  // the valley's history at day D: which entries the colony and the player made, and the water that results
+  const jettyBtn = stage.querySelector("#jetty"), breakBtn = stage.querySelector("#breakDam"), daySl = stage.querySelector("#day"), dayName = stage.querySelector("#dayName"), playBtn = stage.querySelector("#dayPlay"), breachBtn = stage.querySelector("#damBreach");
+  let damMeshes = [], lilies = [], state = null, dc = null, ponds = [];
+  // the valley's history at day D: which entries the colony and the player made, and the ponds that result
   function history(D) {
     const J = [], jet = jettyBtn.getAttribute("aria-pressed") === "true", brk = breakBtn.getAttribute("aria-pressed") === "true";
     const touched = new Set(), placed = new Map(), felled = new Set();
     J.push([0, "@c", "world made, generator v-next: the stream and its woods are derived, never saved"]);
     J.push([0, "@wbeaver:colony-17", "rec colony-17 colony {members: 4, site: none}"]);
-    if (jet) { const s = SITES[0]; for (const u of s.units) if (u.L === 1) touched.add(u.k); if (D >= 2) J.push([2, "@p", `place plank x${[...touched].length} across the stream: the player's jetty`]); }
+    if (jet) { const s = SITES[0]; for (const u of s.units) if (u.y === s.bed) touched.add(u.k); if (D >= 2) J.push([2, "@p", `place plank x${[...touched].length} across the stream: the player's jetty`]); }
     let site = SITES[0];
     if (jet && D >= 5) { J.push([5, "@wbeaver:colony-17", "<i>propose dam at site 1: refused, a cell the player touched</i>"]); J.push([5, "@wbeaver:colony-17", "rec colony-17 colony {site: 2}: moves upstream"]); site = SITES[1]; }
-    const active = [site]; let brokeAt = null;
+    const active = [site];
     // fell, then build, then the lodge; a break moves the colony on
     const run = (s, from) => {
       s.fell.forEach((t, i) => { const d = from - 4 + i * 0.6; if (D >= d) { felled.add(t); } });
       if (D >= from - 4) J.push([from - 4, "@wbeaver:colony-17", `fell ${s.fell.filter((t, i) => D >= from - 4 + i * 0.6).length} trees by the bank`]);
       const rate = 15 / s.units.length; let n = 0;
-      s.units.forEach((u, i) => { const d = from + i * rate, key = u.k + ":" + u.L; if (D < d) return; if (touched.has(u.k)) return; if (brokeAt != null && d > brokeAt && (u.k === s.breakK || u.k === s.breakK2)) return; placed.set(key, {u, s}); n++; });
-      if (n) J.push([Math.min(D, from + n * rate), "@wbeaver:colony-17", `place sticks x${n} at site ${SITES.indexOf(s) + 1}, layers 1 to ${Math.max(...[...placed.values()].filter(p => p.s === s).map(p => p.u.L))}`]);
+      s.units.forEach((u, i) => { const d = from + i * rate; if (D < d) return; if (touched.has(u.k)) return; placed.set(u.k + ":" + u.y, {u, s}); n++; });
+      if (n) J.push([Math.min(D, from + n * rate), "@wbeaver:colony-17", `place sticks x${n} at site ${SITES.indexOf(s) + 1}, layers 1 to ${Math.max(...[...placed.values()].filter(p => p.s === s).map(p => p.u.y - s.bed + 1))}`]);
     };
     run(site, site.start);
     if (brk && site === SITES[0] && D >= 30) {
-      const s = SITES[0], mid = s.units.filter(u => u.L === 1).sort((a, b) => a.d - b.d); s.breakK = mid[0].k; s.breakK2 = mid[1] && mid[1].k;
-      for (const key of [...placed.keys()]) { const p = placed.get(key); if (p.u.k === s.breakK || p.u.k === s.breakK2) { placed.delete(key); touched.add(p.u.k); } }
-      J.push([30, "@p", `dig sticks x${[s.breakK, s.breakK2].filter(Boolean).length * 4}: the player breaks the dam`]);
+      const s = SITES[0], gone = [s.spill, s.mid2].filter(Boolean);
+      for (const key of [...placed.keys()]) { const p = placed.get(key); if (gone.includes(p.u.k)) { placed.delete(key); touched.add(p.u.k); } }
+      J.push([30, "@p", `dig sticks x${gone.length * 4}: the player breaks the dam`]);
       if (D >= 31) J.push([31, "@wbeaver:colony-17", "<i>propose repair: refused, cells the player touched</i>"]);
       if (D >= 31) { J.push([31, "@wbeaver:colony-17", "rec colony-17 colony {site: 2}: moves upstream"]); run(SITES[1], 32); active.push(SITES[1]); }
     }
     const last = active[active.length - 1];
+    // the pond: sources one layer over the dam's lowest cell (so a full pond spills over it), rising a little a day
+    // and draining fast when the dam is broken; held as whole layers of sources over the site's bed
+    const levels = SITES.map(s => {
+      let crest = 99; for (const k of s.line) { let top = ground.get(k).h; while (placed.has(k + ":" + top)) top++; crest = Math.min(crest, top); }
+      const rel = crest === 99 ? 0 : crest - s.bed, want = rel >= 1 ? rel + 1 : 0; let lvl = 0;
+      for (let d = 0; d <= D; d += 0.25) lvl = want > lvl ? Math.min(want, lvl + 0.05) : Math.max(want, lvl - 0.6);
+      return Math.floor(lvl + 1e-6);
+    });
     // the lodge in the pond behind the newest dam
     const lodgeStart = (last === SITES[0] ? last.start : (jet ? last.start : 32)) + 16, lodge = [];
     if (D >= lodgeStart) { const lx = last.x - 13, ring = [[0, 0, 3]].concat(DIRS.map(d => [d[0], d[1], 2])); const [q0, r0] = cellOf(lx, zc(lx)); const n = Math.min(ring.length, Math.floor((D - lodgeStart) / 1.2) + 1); for (let i = 0; i < n; i++) lodge.push([q0 + ring[i][0], r0 + ring[i][1], ring[i][2]]); J.push([lodgeStart, "@wbeaver:colony-17", `place lodge x${n} in the pond`]); }
-    // the pond: water stands behind each dam up to just under its lowest cell across the stream, rising a little a day
-    const levels = SITES.map(s => { let lvl = 0.55; for (let d = 0; d <= D; d += 0.25) { let crest = 99; for (const u of s.units) { if (u.L !== 1) continue; let top = ground.get(u.k).h; for (let L = 1; L <= 4; L++) if (placed.has(u.k + ":" + L)) top = ground.get(u.k).h + L; else break; crest = Math.min(crest, top); } if (crest === 99) crest = 0.55; const want = Math.max(0.55, crest - 0.25); lvl = want > lvl ? Math.min(want, lvl + 0.05) : Math.max(want, lvl - 0.6); } return lvl; });
     J.sort((a, b) => a[0] - b[0]);
     return {J, placed, felled, lodge, levels, active, last, touched, jet};
   }
-  function wlAt(x, z, st) { const k = cellOf(x, z), key = k[0] + "," + k[1], g = ground.get(key); if (!g) return -1000; let best = g.stream ? 0.55 : -1000; SITES.forEach((s, i) => { if (x < s.x - HW * 0.5 && g.h < st.levels[i]) best = Math.max(best, st.levels[i]); }); return best; }
+  // the water: the rule's, on a patch over the valley
+  const CW = cellWater(W, {N: 33, Y0: -1, Y1: 17, caps: {amp: 0.01, mud: 0.3, minA: 0.74}, bake: [-75, -35, 45, 35, 160]});
+  CW.arrowsButton(stage.querySelector("#damArrows"));
+  // a pond: every open cell reached from just behind the dam at or under its top layer P, on the pond's side of the line
+  function pondFill(s, P) {
+    const seen = new Set(), st = [], tops = new Set();
+    for (const [k, c] of ground) { if (!c.stream) continue; const [q, r] = k.split(",").map(Number), x = hx(q, r); if (x < s.x - HW * 0.5 && x > s.x - HW * 2.5) for (let y = s.bed; y <= P; y++) st.push([q, r, y]); }
+    while (st.length) {
+      const [q, r, y] = st.pop(), id = q + "," + r + "," + y; if (seen.has(id)) continue; seen.add(id);
+      if (y > P || hx(q, r) >= s.x - HW * 0.5 || CW.at(q, r, y) !== AIR) continue;
+      CW.set(q, r, y, SRC); if (y === P) tops.add(q + "," + r);
+      for (const [dq, dr] of DIRS) st.push([q + dq, r + dr, y]); st.push([q, r, y - 1]);
+    }
+    return {s, P, tops};
+  }
+  function buildDam() {
+    damMeshes.forEach(m => W.scene.remove(m)); damMeshes = buildColumns(W, dc, M);
+    if (state.jet) { const jc = new Map(); for (const k of state.touched) { const g = ground.get(k); if (g && g.stream) jc.set(k, {h: g.h + 1.2, under: g.h + 1, m: "plank"}); } damMeshes.push(...buildColumns(W, jc, M)); }
+  }
   function rebuild() {
     const D = +daySl.value; dayName.textContent = `day ${D.toFixed(D % 1 ? 2 : 0)}`;
-    state = history(D);
-    damMeshes.forEach(m => W.scene.remove(m)); damMeshes = [];
-    const dc = new Map(); for (const {u} of state.placed.values()) { const g = ground.get(u.k), cur = dc.get(u.k); const top = g.h + u.L; if (!cur || cur.h < top) dc.set(u.k, {h: top, m: "sticks", floor: g.h}); }
-    for (const [q, r, h] of state.lodge) { const k = q + "," + r, g = ground.get(k); if (g) dc.set(k, {h: Math.max(g.h, Math.round(state.levels[SITES.indexOf(state.last)])) + h - 1, m: "sticks", floor: g.h}); }
-    damMeshes = buildColumns(W, dc, M);
-    if (state.jet) { const jc = new Map(); for (const k of state.touched) if (ground.get(k) && ground.get(k).stream) jc.set(k, {h: 1, under: 0.8, m: "plank"}); if (state.jet) damMeshes.push(...buildColumns(W, jc, M)); }
+    state = history(D); breachBtn.setAttribute("aria-pressed", "false");
+    // the dam's and the lodge's cells
+    dc = new Map(); for (const {u} of state.placed.values()) { const g = ground.get(u.k), cur = dc.get(u.k), top = u.y + 1; if (!cur || cur.h < top) dc.set(u.k, {h: top, m: "sticks", floor: g.h}); }
+    const li = SITES.indexOf(state.last), surf = state.last.bed + state.levels[li];
+    for (const [q, r, h] of state.lodge) { const k = q + "," + r, g = ground.get(k); if (g) dc.set(k, {h: Math.max(g.h, surf) + h - 1, m: "sticks", floor: g.h}); }
+    buildDam();
     for (const t of trees) { const f = state.felled.has(t); t.g.visible = !f; t.stump.visible = f; }
-    // water: stream and ponds as caps at their level
-    if (capMesh) { W.scene.remove(capMesh); W.seas = W.seas.filter(s => s.mesh !== capMesh); }
-    const caps = new Map(); for (const [k, g] of ground) { const [q, r] = k.split(",").map(Number), x = hx(q, r), z = hz(r); const v = wlAt(x, z, state); if (v > g.h + 0.05 && !dc.has(k)) caps.set(k, {wl: v, flow: v < 0.6 ? [0.5, 0] : [0, 0]}); }
-    capMesh = makeCaps(W, caps, {amp: 0.01, mud: 0.3}); W.setTime(TIME);
-    bakeWater(W, (x, z) => wlAt(x, z, state), -75, -35, 45, 35, 160, bed);
+    // the water from scratch: the ground, the dam and the lodge solid, the spring and the ponds sources, then settled
+    CW.fill(ground);
+    for (const [k, c] of dc) { const [q, r] = k.split(",").map(Number); for (let y = c.floor; y < c.h; y++) CW.set(q, r, y, SOLID); }
+    for (const [k, c] of ground) if (c.stream && hx(...k.split(",").map(Number)) < SPRING_X) { const [q, r] = k.split(",").map(Number); CW.set(q, r, c.h, SRC); }
+    ponds = SITES.map((s, i) => state.levels[i] > 0 ? pondFill(s, s.bed + state.levels[i] - 1) : null).filter(Boolean);
+    CW.ticks = CW.settle(); CW.draw(); W.setTime(TIME);
     lilies.forEach(l => W.scene.remove(l)); lilies = [];
-    const lilyStart = state.lodge.length ? 0 : 99; let n = 0;
-    for (const [k, c] of caps) { if (c.wl < 1.2 || hsh(k.length, n) > 2 || lilyStart > 0) continue; const [q, r] = k.split(",").map(Number); if (hsh(q * 9, r * 4) < 0.18) { const m = card(W, spriteTex("card-lily"), 1.5, 1.5, {flat: true}); m.position.set(hx(q, r) + 0.4, c.wl + 0.03, hz(r) - 0.3); m.rotation.y = hsh(q, r) * 6; lilies.push(m); } n++; }
+    if (state.lodge.length) for (const p of ponds) for (const k of p.tops) { const [q, r] = k.split(",").map(Number); if (p.P - ground.get(k).h < 1 || hsh(q * 9, r * 4) >= 0.18) continue; const m = card(W, spriteTex("card-lily"), 1.5, 1.5, {flat: true}); m.position.set(hx(q, r) + 0.4, p.P + 1.03, hz(r) - 0.3); m.rotation.y = hsh(q, r) * 6; lilies.push(m); }
     const jEl = document.getElementById("journal"); if (jEl) jEl.innerHTML = `<b>The journal, as the valley's changes are written</b>\n` + state.J.slice(-13).map(([d, a, s]) => `day ${String(d.toFixed(1)).padStart(4)}  ${a === "@p" ? "<u>@p</u>" : a}  ${s}`).join("\n") + `\n<span class="muted">The pond is not saved: it is what the water does behind saved cells.</span>`;
   }
+  // a breach, live: the newest dam's spillway and the cell beside it dug out to the bed, and the rule runs on from there
+  W.breach = () => {
+    const s = state.last; if (!state.placed.size || breachBtn.getAttribute("aria-pressed") === "true") return false;
+    for (const k of [s.spill, s.mid2].filter(Boolean)) { const [q, r] = k.split(",").map(Number), g = ground.get(k); for (let y = g.h; y < s.bed + 4; y++) if (CW.at(q, r, y) === SOLID) { CW.set(q, r, y, AIR); CW.LQ.touch(q, r, y); } dc.delete(k); }
+    buildDam(); CW.draw(); breachBtn.setAttribute("aria-pressed", "true"); return true;
+  };
+  breachBtn.addEventListener("click", () => W.breach());
   [jettyBtn, breakBtn].forEach(b => b.addEventListener("click", () => { b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); rebuild(); }));
   daySl.addEventListener("input", rebuild);
   let playing = false; playBtn.addEventListener("click", () => { playing = !playing; playBtn.setAttribute("aria-pressed", playing); if (playing && +daySl.value >= 40) daySl.value = 0; });
   // the cabin on the bank, fireflies at night
   const cx = 14, cz = 10, cb = bed(cx, cz); box(W, M.timber, 4, 2.6, 3.4, cx, cb + 1.3, cz); box(W, M.slate, 4.6, 0.4, 4, cx, cb + 2.8, cz); W.lamp(cx - 2.2, cb + 1.8, cz, 0xffb35a, 2.2, 13);
-  const ff = fireflies(W, 140, new THREE.Vector3(-14, 2.4, 0), [30, 2, 16], 0xc8ff5a);
+  const POND = SITES[0].bed + 4;   // the full pond's surface behind the first dam
+  const ff = fireflies(W, 140, new THREE.Vector3(-14, POND + 1.4, 0), [30, 2, 16], 0xc8ff5a);
   { const px = -17, pz = 6.5, pb = bed(px, pz); box(W, M.iron, 0.12, 2.2, 0.12, px, pb + 1.1, pz); W.lamp(px, pb + 2.3, pz, 0xffb35a, 2.4, 14, {size: 0.3}); }   // a lantern post on the pond's edge
   // life: beavers hauling branches to the dam and round the lodge; a duck family on the pond; a diving duck; trout, frogs, a heron
   const level = (x, z) => { const v = W.waterAt(x, z); return v > -999 ? v : bed(x, z); };
   const beavers = [0, 1, 2].map(i => ({m: creature(W, "beaver_branch", 1.0), m2: creature(W, "beaver", 1.0), i}));
   const gnaw = creature(W, "beaver", 0.95);
   const fam = duckFamily(W, new THREE.Vector3(-22, 0, 0), 5, level, {kids: 5});
-  const life = [fam, diverDuck(W, new THREE.Vector3(-34, 0, 2), 3, level, 2), school(W, "trout", 7, 0.5, orbitPath(-18, 0.3, 1, 5, 2, 0.06), [3, 0.5, 2]), ...dragonflies(W, 4, -12, 2.6, 6, 6)];
+  const life = [fam, diverDuck(W, new THREE.Vector3(-34, 0, 2), 3, level, 2), school(W, "trout", 7, 0.5, orbitPath(-18, wlx(-18) - 0.4, 1, 5, 2, 0.06), [3, 0.5, 2]), ...dragonflies(W, 4, -12, POND + 1.6, 6, 6)];
   const frogs = [0, 1, 2].map(i => creature(W, "frog", 0.4));
   { const hm = creature(W, "m7/heron", 1.8, {pose: "stand"}); life.push({update: (t, cam) => { const p = new THREE.Vector3(-8, 0, -7); hm.userData.c3.strike = Math.min(1, Math.max(0, Math.sin(t * 0.37) - 0.9) * 12); faceAlong(hm, p.setY(level(p.x, p.z) - 0.1), new THREE.Vector3(0.4, 0, 1), cam); }}); }
-  W.hudExtra = () => state ? `pond at ${Math.max(...state.levels).toFixed(1)} m, ${state.placed.size} dam cells, ${state.lodge.length} lodge cells; ${state.J.length} journal entries` : "";
+  W.hudExtra = () => { if (!state) return ""; const c = CW.count(); return `pond ${state.levels.some(n => n) ? state.levels.map((n, i) => n ? `${n} layers over site ${i + 1}'s bed` : "").filter(Boolean).join(", ") : "none"}, ${state.placed.size} dam cells, ${state.lodge.length} lodge cells; ${state.J.length} journal entries\nwater: ${c.s} sources, ${c.f} flowing (${c.d} falling)${CW.LQ.SIM.queue.length ? ", " + CW.LQ.SIM.queue.length + " queued" : ""}`; };
+  let lastQ = -1;
   W.update = (t, dt) => {
     const cp = W.camera.position;
-    if (playing) { const v = Math.min(40, +daySl.value + dt * 1.2); daySl.value = v; rebuild(); if (v >= 40) { playing = false; playBtn.setAttribute("aria-pressed", "false"); } }
+    if (playing) { const v = Math.min(40, +daySl.value + dt * 1.2); daySl.value = v; const qd = Math.floor(v * 4); if (qd !== lastQ) { lastQ = qd; rebuild(); } if (v >= 40) { playing = false; playBtn.setAttribute("aria-pressed", "false"); } }
+    CW.step(dt);
     const s = state.last, lodgeOn = state.lodge.length > 0, D = +daySl.value;
     beavers.forEach(b => { const a = t * 0.12 + b.i * 2.1; let p, carrying;
       if (!lodgeOn && D >= 1) { const k = (Math.sin(a) + 1) / 2, from = new THREE.Vector3(s.x - 18, 0, zc(s.x - 18) + (b.i - 1) * 1.5), to = new THREE.Vector3(s.x - 1.6, 0, zc(s.x) + (b.i - 1) * 1.2); p = from.clone().lerp(to, k); carrying = Math.cos(a) > 0; }
@@ -1609,116 +1723,176 @@ function sceneDam(stage) {
     for (let i = lilies.length; i < 3; i++) frogs[i].visible = false;
     ff.update(t);
   };
-  W.setViews({"The dam": [[-6, 2, 0], 1.75, 0.42, 28], "Pond and lodge": [[-22, 4, 0], 0.6, 0.4, 24], "Ducks": [[-22, 4.4, 0], 1.3, 0.3, 10], "Valley": [[-14, 1, 0], 0.9, 0.7, 70]});
+  window.__dam = {CW, SITES, ground, rebuild, state: () => state, breach: () => W.breach(), wlx};
+  W.setViews({"The dam": [[-6, POND - 2, 0], 1.75, 0.42, 28], "Pond and lodge": [[-22, POND + 1, 0], 0.6, 0.4, 24], "Ducks": [[-22, POND + 0.6, 0], 1.3, 0.3, 10], "Valley": [[-14, POND - 2, 0], 0.9, 0.7, 70]});
   rebuild(); finish(W, "The dam"); return W;
 }
 
 // ======================= 10. marsh and estuary =======================
+// The marsh pools are the rule's (design 12): still water on cells, so sources, standing in basins rimmed by hummocks
+// and drawn by the same mesher as the river. A source's top is its layer's full height, so the pools stand at 1 m over
+// their beds and the hummocks and peat a layer higher than before, at 2. The brackish channel, the mudflats and the
+// sea are the sea's wave surface, as before.
 function sceneMarsh(stage) {
   const W = setupStage("marsh", stage, {marine: true, water: "marsh", far: 600, dawn: true,
     extraTop: `<div class="seg"><button id="startle">Startle the flock</button></div>`});
   W.water = WATERS.marsh;
-  const M = commonMats(W), B = SHEET;
+  const M = commonMats(W), B = SHEET, {SRC} = PBDLiquid;
   const zc = x => 10 * Math.sin(x / 16);
   const cells = rectRegion(-58, 72, -38, 38, (q, r, x, z) => {
     const chan = x > -24 && Math.abs(z - zc(x)) < 3.2;
     if (x > 54) return {h: Math.max(-4, Math.round(-1 - (x - 54) * 0.25)), s: B.ocean, top: [0, 0]};
-    if (x > 34) { if (chan) return {h: -2, s: B.swamp, top: [1, 1], chan: true}; return {h: hsh(q, r) > 0.7 ? 0 : -0, s: B.swamp, top: [1, 1], flat: true, mud: true}; }
+    if (x > 34) { if (chan) return {h: -2, s: B.swamp, top: [1, 1], chan: true}; return {h: 0, s: B.swamp, top: [1, 1], flat: true, mud: true}; }
     if (chan) return {h: -2, s: B.swamp, top: [1, 1], chan: true};
     const n = fbm(x / 7, z / 7); if (n < 0.47) return {h: 0, s: B.swamp, top: [2, 0], pool: true};
-    const peat = n > 0.72 && hsh(q, r) > 0.5; return peat ? {h: 1, m: "peat"} : {h: 1, s: B.swamp, top: [0, 0], hum: true};
+    const peat = n > 0.72 && hsh(q, r) > 0.5; return peat ? {h: 2, m: "peat"} : {h: 2, s: B.swamp, top: [0, 0], hum: true};
   });
+  // a pool beside the channel, the mudflats or the patch's edge is a hummock, so every pool is a basin that holds
+  for (const [k, c] of cells) { if (!c.pool) continue; const [q, r] = k.split(",").map(Number);
+    if (DIRS.some(([dq, dr]) => { const n = cells.get((q + dq) + "," + (r + dr)); return !n || !(n.pool || n.hum || n.m === "peat"); })) Object.assign(c, {pool: false, hum: true, h: 2, top: [0, 0]}); }
   buildColumns(W, cells, M); const bed = bedSampler(cells);
-  const pools = new Map(); for (const [k, c] of cells) if (c.pool) pools.set(k, {wl: 0.6});
-  makeCaps(W, pools, {amp: 0.008, mud: 0.7});
+  const CW = cellWater(W, {N: 34, Y0: -1, Y1: 2, caps: {amp: 0.008, mud: 0.7, minA: 0.74}, bake: [-62, -42, 76, 42, 256],
+    levelOver: (x, z) => { const k = cellOf(x, z), c = cells.get(k[0] + "," + k[1]); if (!c) return 0; if (c.pool) return null; if (c.chan || x > 54 || c.mud) return c.mud ? 0.1 : 0; return -1000; }});
+  CW.fill(cells);
+  for (const [k, c] of cells) if (c.pool) { const [q, r] = k.split(",").map(Number); CW.set(q, r, 0, SRC); }
+  CW.ticks = CW.settle(); CW.draw();
+  const POOL = 1;   // the pools' surface: a source's top
   const sea = makeSea(W, {amp: 0.12, seaOnly: true, mud: 0.4, foam: 0});
-  const wl = (x, z) => { const k = cellOf(x, z), key = k[0] + "," + k[1], c = cells.get(key); if (!c) return 0; if (c.pool) return 0.6; if (c.chan || x > 54 || c.mud) return c.mud ? 0.1 : 0; return -1000; };
-  bakeWater(W, wl, -62, -42, 76, 42, 256, bed);
   W.U.uWLdef.value = 0;
   // reed beds and cattails on the hummocks, lilies on the pools, mangroves on the mudflats, a stilt hut
   for (const [k, c] of cells) { const [q, r] = k.split(",").map(Number), x = hx(q, r), z = hz(r), p = hsh(q * 3, r * 11);
     if (c.hum && p < 0.4) crossed(W, "card-reed", 2.4, 2.4, x, c.h, z, {n: 3, rot: p * 7});
-    else if (c.pool && p < 0.16) { const m = card(W, spriteTex("card-lily"), 1.3, 1.3, {flat: true}); m.position.set(x + 0.3, 0.63, z); m.rotation.y = p * 40; }
+    else if (c.pool && p < 0.16) { const m = card(W, spriteTex("card-lily"), 1.3, 1.3, {flat: true}); m.position.set(x + 0.3, POOL + 0.03, z); m.rotation.y = p * 40; }
     else if (c.mud && p < 0.3) { crossed(W, "card-mangrove", 2.2, 2.4, x, c.h, z, {n: 2, rot: p * 9}); prism(W, M.leaves, 1.5, 1.4, x, c.h + 2.2, z); prism(W, M.leaves, 1.0, 1.0, x, c.h + 3.4, z); } }
-  const hx0 = 6, hz0 = -14; for (const [dx, dz] of [[-1.4, -1.2], [1.4, -1.2], [-1.4, 1.2], [1.4, 1.2]]) box(W, M.timber, 0.2, 2.2, 0.2, hx0 + dx, 1.1, hz0 + dz); box(W, M.plank, 3.6, 0.2, 3.2, hx0, 2.2, hz0); box(W, M.timber, 3.4, 2.2, 3, hx0, 3.4, hz0); box(W, M.slate, 4, 0.3, 3.6, hx0, 4.6, hz0); W.lamp(hx0 + 1.9, 3.4, hz0, 0xffb35a, 2.2, 13);
+  const hx0 = 6, hz0 = -14, hb = bed(hx0, hz0); for (const [dx, dz] of [[-1.4, -1.2], [1.4, -1.2], [-1.4, 1.2], [1.4, 1.2]]) box(W, M.timber, 0.2, 3.2 - hb, 0.2, hx0 + dx, (3.2 + hb) / 2, hz0 + dz); box(W, M.plank, 3.6, 0.2, 3.2, hx0, 3.2, hz0); box(W, M.timber, 3.4, 2.2, 3, hx0, 4.4, hz0); box(W, M.slate, 4, 0.3, 3.6, hx0, 5.6, hz0); W.lamp(hx0 + 1.9, 4.4, hz0, 0xffb35a, 2.2, 13);
   // dawn mist: low sheets over the water
   const mistMat = new THREE.MeshBasicMaterial({map: (() => { const t = tex("tex-wake", 4); return t; })(), color: 0xc8d0cc, transparent: true, opacity: 0, depthWrite: false});
-  const mists = [0.9, 1.5, 2.2].map((y, i) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(130, 80).rotateX(-Math.PI / 2), mistMat); m.position.set(0, y, 0); m.renderOrder = 7; W.scene.add(m); return m; });
+  const mists = [1.2, 2.3, 3.0].map((y, i) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(130, 80).rotateX(-Math.PI / 2), mistMat); m.position.set(0, y, 0); m.renderOrder = 7; W.scene.add(m); return m; });
   W.timeHooks.push((n, T) => { mistMat.opacity = n === "dawn" ? 0.2 : n === "night" ? 0.05 : 0; });
   // life
   const level = (x, z) => { const v = W.waterAt(x, z); return v > -999 ? v : bed(x, z); };
-  const poolKeys = [...pools.keys()]; const spot = i => { const k = poolKeys[Math.floor(hsh(i, 77) * poolKeys.length)]; const [q, r] = k.split(",").map(Number); return new THREE.Vector3(hx(q, r), 0, hz(r)); };
+  const poolKeys = [...cells].filter(([k, c]) => c.pool).map(([k]) => k); const spot = i => { const k = poolKeys[Math.floor(hsh(i, 77) * poolKeys.length)]; const [q, r] = k.split(",").map(Number); return new THREE.Vector3(hx(q, r), 0, hz(r)); };
   const flockSpots = []; for (let i = 0; i < 12; i++) flockSpots.push(new THREE.Vector3(-14 + (i % 4) * 2.4 + hsh(i, 1), 0, -2 + Math.floor(i / 4) * 2.2));
-  const flock = duckFlock(W, flockSpots, () => 0.6);
+  const flock = duckFlock(W, flockSpots, level);
   stage.querySelector("#startle").addEventListener("click", () => flock.startle());
   if (Q.has("startle")) setTimeout(() => flock.startle(), 50);
-  const life = [flock, duckFamily(W, new THREE.Vector3(-30, 0, 8), 4, () => 0.6, {kids: 4, speed: 0.05}), diverDuck(W, new THREE.Vector3(10, 0, zc(10)), 4, level, 0.5)];
-  { const hm = creature(W, "m7/heron", 1.8, {pose: "stand"}); life.push({update: (t, cam) => { const p = new THREE.Vector3(-6, 0, 6); hm.userData.c3.strike = Math.min(1, Math.max(0, Math.sin(t * 0.33) - 0.9) * 12); faceAlong(hm, p.setY(0.5), new THREE.Vector3(0.6, 0, 1), cam); }}); }
+  const life = [flock, duckFamily(W, new THREE.Vector3(-30, 0, 8), 4, level, {kids: 4, speed: 0.05}), diverDuck(W, new THREE.Vector3(10, 0, zc(10)), 4, level, 0.5)];
+  { const hm = creature(W, "m7/heron", 1.8, {pose: "stand"}); life.push({update: (t, cam) => { const p = new THREE.Vector3(-6, 0, 6); hm.userData.c3.strike = Math.min(1, Math.max(0, Math.sin(t * 0.33) - 0.9) * 12); faceAlong(hm, p.setY(Math.max(bed(p.x, p.z), level(p.x, p.z) - 0.45)), new THREE.Vector3(0.6, 0, 1), cam); }}); }
   for (let i = 0; i < 4; i++) { const p = spot(i + 10); const m = creature(W, "m7/bog_toad", 0.7); const home = p.clone().add(new THREE.Vector3(1.6, 0, 0)); life.push({update: (t, cam) => { const hop = Math.max(0, Math.sin(t * 0.5 + i * 2) - 0.9) * 10; faceAlong(m, home.clone().setY(level(home.x, home.z) + hop * 0.08), new THREE.Vector3(Math.cos(i), 0, Math.sin(i)), cam); }}); }
-  for (let i = 0; i < 4; i++) { const p = spot(i + 30); life.push(crawler(W, "frog", 0.38, p.clone(), 1.2, () => 0.62, {speed: 0.25})); }
-  { const m = creature(W, "m7/mire_lurker", 2.6); life.push({update: (t, cam) => { const a = t * 0.03, p = new THREE.Vector3(-26 + Math.cos(a) * 6, 0.42, -18 + Math.sin(a) * 4); faceAlong(m, p, new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)), cam); }}); }
+  for (let i = 0; i < 4; i++) { const p = spot(i + 30); life.push(crawler(W, "frog", 0.38, p.clone(), 1.2, () => POOL + 0.02, {speed: 0.25})); }
+  { const m = creature(W, "m7/mire_lurker", 2.6); life.push({update: (t, cam) => { const a = t * 0.03, p = new THREE.Vector3(-26 + Math.cos(a) * 6, POOL - 0.18, -18 + Math.sin(a) * 4); faceAlong(m, p, new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)), cam); }}); }
   for (let i = 0; i < 3; i++) life.push(swimmer(W, "game/fish-eel", 0.9, orbitPath(18 + i * 8, -1.2, zc(18 + i * 8), 3, 1.4, 0.15 + i * 0.03, 0.2, i)));
   life.push(school(W, "game/fish-minnow", 22, 0.22, orbitPath(44, -0.8, zc(44), 4, 2, 0.12), [3, 0.4, 2]));
   for (let i = 0; i < 9; i++) { const h = new THREE.Vector3(38 + rnd() * 14, 0, -20 + rnd() * 40); life.push(crawler(W, "fiddler", 0.4, h, 1.5, bed, {speed: 0.35, sideways: true})); }   // the big claw waves (creatures3d's own motion)
-  life.push(...dragonflies(W, 6, -10, 2.4, 4, 9));
-  const ff = fireflies(W, 160, new THREE.Vector3(-14, 2, 0), [40, 2.5, 30], 0xc8ff5a, 4), gm = fireflies(W, 40, new THREE.Vector3(hx0 + 2, 3.6, hz0), [3, 1.6, 3], 0x78dcff, 1);
-  const gas = motes(W, 60, 0x9bffb0, 0.28, {c: new THREE.Vector3(-24, 0.9, -12), s: [24, 0.8, 18]}, {add: true, swirl: 0.15, opacity: 0});
+  life.push(...dragonflies(W, 6, -10, 3.4, 4, 9));
+  const ff = fireflies(W, 160, new THREE.Vector3(-14, 3, 0), [40, 2.5, 30], 0xc8ff5a, 4), gm = fireflies(W, 40, new THREE.Vector3(hx0 + 2, 4.6, hz0), [3, 1.6, 3], 0x78dcff, 1);
+  const gas = motes(W, 60, 0x9bffb0, 0.28, {c: new THREE.Vector3(-24, 1.6, -12), s: [24, 0.8, 18]}, {add: true, swirl: 0.15, opacity: 0});
   W.timeHooks.push((n, T) => gas.mat.opacity = T.day < 0.3 ? 0.45 : 0);
   const lamp = diverLamp(W);
-  W.hudExtra = () => "pools 0.6 m above the sea (fresh); the channel and mudflats brackish";
+  W.hudExtra = () => { const c = CW.count(); return `pools 1 m above the sea (fresh): ${c.s} source cells, standing; the channel and mudflats brackish`; };
   W.update = (t, dt) => { const cp = W.camera.position, cwl = W.waterAt(cp.x, cp.z), under = cp.y < cwl; for (const l of life) l.update(t, cp, dt); ff.update(t); gm.update(t); gas.update(t); lamp.update(under, cwl - cp.y); };
-  W.setViews({"Pools": [[-12, 1.5, 0], 1.0, 0.3, 22], "Ducks": [[-12, 0.8, 0], 1.2, 0.18, 9], "Mangroves": [[44, 1, 0], 1.7, 0.3, 26], "Above": [[4, 0, 0], 0.9, 0.85, 90]});
+  window.__marsh = {CW, cells};
+  W.setViews({"Pools": [[-12, 2.5, 0], 1.0, 0.3, 22], "Ducks": [[-12, 1.8, 0], 1.2, 0.18, 9], "Mangroves": [[44, 1, 0], 1.7, 0.3, 26], "Above": [[4, 0, 0], 0.9, 0.85, 90]});
   W.lampBtn(); finish(W, "Pools"); return W;
 }
 
 // ======================= the water sim =======================
 // The owner, 2026-11-15: "there should be a sim where I can place water blocks and see how their physics plays out,
-// I had asked to look at minetest source code for water implementation". A hex patch of columns where a click pours
-// a water source, digs a cell or places a block, and the water moves by Luanti's (Minetest's) own liquid rule:
-// water-flow/liquid.js, the port of ServerMap::transformLiquidsLocal and get_max_liquid_level M28 made (LGPL-2.1-or-
-// later, its licence published beside it as water-flow/COPYING.LESSER). One copy of the rule serves both pages.
-const SIM_PRESETS = {
-  pond: {name: "Pond", ground: (q, r) => hexDistA(q, r) <= 3 ? 1 : 3, run: S => { for (const k of [0, 2, 4]) S.pour(DIRS[k][0], DIRS[k][1], 1); }, view: "Patch"},
-  fall: {name: "Waterfall", ground: (q, r) => { const x = hx(q, r); return x < -14 ? 11 : x < -8 ? 9 : x < -3 ? 7 : x < 3 ? 5 : x < 9 ? 3 : 1; }, run: S => S.pour(-7, 0, 11), view: "Patch"},
-  dam: {name: "Dam", ground: (q, r) => Math.abs(r) <= 1 && q - 0 > -12 ? 1 : 4, run: S => S.dam(), view: "Patch"},
-  flat: {name: "Flat", ground: () => 2, run: () => {}, view: "Patch"},
+// I had asked to look at minetest source code for water implementation", and later the same day: "water that flows -
+// make sure the rivers use that too, so merge these artifacts together so we get it more consistent". The one place for
+// the playable sim: M28 (Water That Flows) is folded in here, with its coast patch, its presets, its renew toggle, range
+// slider and speeds. A click pours a water source, digs a cell or places a block, and the water moves by Luanti's
+// (Minetest's) own liquid rule: water-flow/liquid.js, the port of ServerMap::transformLiquidsLocal and
+// get_max_liquid_level (LGPL-2.1-or-later, its licence published beside it as water-flow/COPYING.LESSER).
+// Two patches: M28's, the sea to the west, a beach, a plain with a dry basin, a ledge and a plateau (12 cells from its
+// middle, layers -6 to 13); and this tab's own small one (9 cells, layers 0 to 15). Each preset names its patch.
+const SIM_PATCH = {
+  m28: {N: 12, Y0: -6, Y1: 13, lamps: [[6, 0], [3, 3], [-1, 4], [-5, 2], [9, -5], [-2, -4], [1, -6]], patchView: [[2, 0, 0], 0.55, 0.66, 66]},
+  m25: {N: 9, Y0: 0, Y1: 15, lamps: [[8, -4], [-8, 4], [3, 5], [-4, -5], [6, 2], [-2, 8]], patchView: [[0, 4, 0], 0.7, 0.62, 52]},
 };
 const hexDistA = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+// M28's ground: the sea's bed to the west, the beach rising to the plain, the basin, the ledge and the plateau
+const m28Ground = (q, r) => { const x = hx(q, r), z = hz(r); if (x < -17) return -5; if (x < -9) return Math.min(0, Math.round(-5 + (x + 17) / 8 * 5.6)); if (hexDistA(q - 1, r - 1) <= 2) return -2; if (x > 17 && z > -6) return 9; if (x > 9) return 6; return 0; };
+const SIM_PRESETS = {
+  spring: {name: "Spring on the ledge", patch: "m28", cam: [[14, 3, -6], -1.15, 0.42, 44], note: "One source poured on the ledge's edge. It falls first, spreads seven cells, pours off the cliff and spreads again on the plain.", run: S => S.pour(7, -2, S.topOf(7, -2))},
+  channel: {name: "Channel from the sea", patch: "m28", cam: [[-4, -1, 3], 0.35, 0.75, 34], note: "Dig a channel one layer deep from the beach to the dry basin. The sea runs in and the basin fills, every cell one level lower than the last.", run: S => { for (let q = -9; q <= 0; q++) S.dig(q, 1, -1); }},
+  basin: {name: "Three sources make a pool", patch: "m28", cam: [[3, -1, 3], 0.5, 0.8, 26], note: "Three sources poured round the basin's middle cell, every other side. The middle touches three, so it renews; then each cell between two of the three touches three and renews too: a pool of seven sources that holds. The basin's outer ring stays flowing, one level below. A triangle of three, or a row, would not grow.", run: S => { for (const k of [0, 2, 4]) S.pour(1 + DIRS[k][0], 1 + DIRS[k][1], -2); }},
+  pair: {name: "Two sources stay a pair", patch: "m28", renew: 3, cam: [[-3, 0, -10], 0.4, 0.7, 46], note: "Two sources side by side on the plain, with the hex threshold of three. The sheet spreads to its range and stops: no new source forms.", run: S => { S.pour(-2, -5, 0); S.pour(-1, -5, 0); }},
+  runaway: {name: "Luanti's threshold on hex", patch: "m28", renew: 2, cam: [[-3, 0, -6], 0.4, 0.75, 60], note: "The same two sources with Luanti's own threshold of two. On hex, two touching cells share two neighbours, so each shared cell becomes a source, which makes new pairs: the plain floods to its edge.", run: S => { S.pour(-2, -5, 0); S.pour(-1, -5, 0); }},
+  recede: {name: "Take the spring away", patch: "m28", cam: [[14, 3, -6], -1.15, 0.42, 44], note: "The ledge's spring, settled, then its source dug out. The flow recedes level by level, from the top down, as Luanti's does.", run: S => { const y = S.topOf(7, -2); S.pour(7, -2, y); S.settle(400); S.dig(7, -2, y); }},
+  pond: {name: "Pond", patch: "m25", ground: (q, r) => hexDistA(q, r) <= 3 ? 1 : 3, note: "Three sources round a basin's middle: the middle and then the cells between renew, so a pool of sources forms.", run: S => { for (const k of [0, 2, 4]) S.pour(DIRS[k][0], DIRS[k][1], 1); }},
+  fall: {name: "Waterfall", patch: "m25", ground: (q, r) => { const x = hx(q, r); return x < -14 ? 11 : x < -8 ? 9 : x < -3 ? 7 : x < 3 ? 5 : x < 9 ? 3 : 1; }, note: "A spring on the top of cell steps: it spreads, falls each step and spreads again.", run: S => S.pour(-7, 0, 11)},
+  dam: {name: "Dam", patch: "m25", ground: (q, r) => Math.abs(r) <= 1 && q - 0 > -12 ? 1 : 4, note: "A reservoir of sources behind a wall of blocks: Breach the dam digs a gap and the reservoir pours through; the sources stay, so the flow keeps running.", run: S => S.dam()},
+  flat: {name: "Flat", patch: "m25", ground: () => 2, note: "An empty plain to pour on.", run: () => {}},
+};
 function sceneSim(stage) {
   const W = setupStage("sim", stage, {marine: false, water: "river", far: 500,
     extraTop: `<div class="seg" role="group" aria-label="Tool" id="simTool"><button data-k="pour" aria-pressed="true">Pour water</button><button data-k="dig" aria-pressed="false">Dig</button><button data-k="block" aria-pressed="false">Place block</button></div>`,
-    extra: `<div class="seg"><button id="simRun" aria-pressed="true">Pause</button><button id="simStep">Step</button><button id="simReset">Reset</button><button id="simBreach" hidden>Breach the dam</button><button id="simArrows" class="tog" aria-pressed="true" title="Arrows on the water: which way each cell flows. Press to hide or show them.">Arrows: on</button><button class="info" id="simInfo" aria-label="How the water sim works">i</button></div>
-      <div class="lab2"><span>Tick speed</span><b id="simRateV">4 ticks/s</b></div><input type="range" id="simRate" min="1" max="20" value="4" aria-label="Ticks a second">
-      <div class="seg" role="group" aria-label="Preset" id="simPreset">${Object.entries(SIM_PRESETS).map(([k, p]) => `<button data-p="${k}" aria-pressed="false">${p.name}</button>`).join("")}</div>
-      <div class="seg" role="group" aria-label="Renewal" id="simRenew"><button data-r="3" aria-pressed="true">Renew at 3 (hex)</button><button data-r="2" aria-pressed="false">2 (Luanti)</button><button data-r="99" aria-pressed="false">Off</button></div>`});
-  W.U.uWLdef.value = -1000; bakeWater(W, () => -1000, -60, -60, 60, 60, 8, () => -50); W.caust = 0;
-  const L = PBDLiquid, {AIR, SOLID, FLOW, SRC} = L, N = 9, Y0 = 0, Y1 = 15;
-  const LQ = L.create({N, Y0, Y1, range: 8, renew: 3}), {kind, lvl, down, idx, inside, unidx, SIM} = LQ;
-  const cmat = new Uint8Array(LQ.NCELL);   // 1 grass top, 2 dirt, 3 stone, 4 placed granite
-  const atlas = atlasMat(W), granite = W.std({map: tex("game/granite", 2)});
-  const S = {preset: "fall", tool: "pour", run: true, rate: 4, acc: 0, ground: null, water: null};
+    extra: `<div class="seg"><button id="simRun" aria-pressed="true">Pause</button><button id="simStep">Step</button><button id="simReset">Reset</button><button id="simBreach" hidden>Breach the dam</button><button id="simArrows" class="tog" aria-pressed="true" title="Arrows on the water: which way each cell flows. Press to hide or show them.">Arrows: on</button><button class="info" id="simInfo" aria-label="How the water sim works">i</button></div>`});
+  const side = document.getElementById("simSide");
+  side.innerHTML = `<div class="lab2"><span>Presets: each resets the patch</span></div>
+    <div class="seg" role="group" aria-label="Presets on the coast patch" id="simPresetA">${Object.entries(SIM_PRESETS).filter(([k, p]) => p.patch === "m28").map(([k, p]) => `<button data-p="${k}" aria-pressed="false">${p.name}</button>`).join("")}</div>
+    <div class="seg" role="group" aria-label="Presets on the small patch" id="simPresetB">${Object.entries(SIM_PRESETS).filter(([k, p]) => p.patch === "m25").map(([k, p]) => `<button data-p="${k}" aria-pressed="false">${p.name}</button>`).join("")}</div>
+    <div class="lab2"><span>Speed</span><b id="simRateV">4 ticks/s</b></div>
+    <div class="seg" role="group" aria-label="Ticks a second" id="simRate">${[1, 4, 16].map(v => `<button data-r="${v}" aria-pressed="${v === 4}">${v} tick${v > 1 ? "s" : ""}/s</button>`).join("")}</div>
+    <div class="lab2"><span>Renew a source at</span></div>
+    <div class="seg" role="group" aria-label="Renewal" id="simRenew"><button data-r="3" aria-pressed="true">3 (hex)</button><button data-r="2" aria-pressed="false">2 (Luanti)</button><button data-r="99" aria-pressed="false">Off</button></div>
+    <div class="lab2"><span>Range</span><b id="simRangeV">8 levels</b></div><input type="range" id="simRange" min="1" max="8" value="8" aria-label="Range in levels" style="width:100%;accent-color:var(--amber)">
+    <div class="seg"><button id="simCmp">Settle from scratch and compare</button></div><div class="lab2" id="simCmpO" style="text-transform:none"></div>`;
+  const L = PBDLiquid, {AIR, SOLID, FLOW, SRC} = L;
+  const atlas = atlasMat(W), granite = W.std({map: tex("game/granite", 2)}), iron = W.std({map: tex("game/iron", 1)});
+  const S = {preset: "fall", tool: "pour", run: true, rate: 4, acc: 0, ground: null, water: null, patch: null};
+  // one rule state and one water mesh a patch, made when a preset first needs it
+  const PATCHES = {};
+  function patch(name) {
+    if (PATCHES[name]) return PATCHES[name];
+    const o = SIM_PATCH[name], LQ = L.create({N: o.N, Y0: o.Y0, Y1: o.Y1, range: 8, renew: 3});
+    const SW = PBDWater.simWater(W, LQ, {caps: {amp: 0.01, mud: 0, minA: 0.78}});
+    // lamp posts at the patch's edge: at night the water is lit by them
+    const posts = o.lamps.map(([q, r]) => { const X = hx(q, r) + (name === "m28" ? 0.6 : 0), Z = hz(r), post = box(W, iron, 0.14, 3, 0.14, X, 0, Z), lamp = W.lamp(X, 3.2, Z, 0xffc070, 2.4, 12, {size: 0.3}); return {q, r, post, lamp}; });
+    W.LAMPS = W.LAMPS.filter(l => !posts.some(p => p.lamp === l));   // lit only while their patch is the one shown
+    return (PATCHES[name] = {name, o, LQ, SW, posts, cmat: new Uint8Array(LQ.NCELL)});
+  }
+  let P = null, LQ = null, SIM = null, kind = null, lvl = null, down = null, idx = null, inside = null, unidx = null, cmat = null, SW = null;
+  function usePatch(name) {
+    if (P && P.name === name) return;
+    for (const Q2 of Object.values(PATCHES)) { if (Q2.SW.mesh) Q2.SW.mesh.visible = false; if (Q2.SW.arrows) Q2.SW.arrows.visible = false; for (const p of Q2.posts) { p.post.visible = false; if (p.lamp.bulb) p.lamp.bulb.visible = false; W.LAMPS = W.LAMPS.filter(l => l !== p.lamp); } }
+    P = patch(name); ({LQ, SW, cmat} = P); ({SIM, kind, lvl, down, idx, inside, unidx} = LQ);
+    for (const p of P.posts) { p.post.visible = true; W.LAMPS.push(p.lamp); }
+    SW.setArrows(arrowsBtn.getAttribute("aria-pressed") === "true");
+    W.setViews({"Patch": P.o.patchView, "Close": name === "m28" ? [[6, 2, -4], 1.2, 0.45, 24] : [[-3, 6, 0], 1.2, 0.45, 24], "From above": [[0, 2, 0], 0.01, 1.4, name === "m28" ? 80 : 60]});
+  }
   const setCell = (q, r, y, k, m = 0) => { if (!inside(q, r, y)) return false; const i = idx(q, r, y); kind[i] = k; lvl[i] = 0; down[i] = 0; cmat[i] = m; LQ.touch(q, r, y); return true; };
   S.pour = (q, r, y) => inside(q, r, y) && kind[idx(q, r, y)] !== SOLID && setCell(q, r, y, SRC);
-  S.dig = (q, r, y) => inside(q, r, y) && kind[idx(q, r, y)] !== AIR && y > Y0 && setCell(q, r, y, AIR);
+  S.dig = (q, r, y) => inside(q, r, y) && kind[idx(q, r, y)] !== AIR && y > LQ.Y0 && setCell(q, r, y, AIR);
   S.place = (q, r, y) => inside(q, r, y) && kind[idx(q, r, y)] !== SOLID && setCell(q, r, y, SOLID, 4);
-  const topOf = (q, r) => { let y = Y1; while (y > Y0 && kind[idx(q, r, y)] !== SOLID) y--; return y + 1; };
+  S.topOf = (q, r) => { let y = LQ.Y1; while (y > LQ.Y0 && kind[idx(q, r, y)] !== SOLID) y--; return y + 1; };
+  S.settle = (max = 2000) => { let n = 0; while (SIM.queue.length && n < max) { LQ.tick(); n++; } return n; };
   // the dam: a wall of placed blocks across the channel at q = 0, the reservoir behind it full of sources (settled,
   // as generated water is: nothing queued until someone edits)
   S.dam = () => { for (let r = -2; r <= 2; r++) for (let y = 1; y < 5; y++) if (kind[idx(0, r, y)] !== SOLID) { kind[idx(0, r, y)] = SOLID; cmat[idx(0, r, y)] = 4; }
-    for (let q = -N; q < 0; q++) for (let r = -1; r <= 1; r++) if (inside(q, r, 1)) for (let y = 1; y < 4; y++) if (kind[idx(q, r, y)] === AIR) kind[idx(q, r, y)] = SRC; };
+    for (let q = -P.o.N; q < 0; q++) for (let r = -1; r <= 1; r++) if (inside(q, r, 1)) for (let y = 1; y < 4; y++) if (kind[idx(q, r, y)] === AIR) kind[idx(q, r, y)] = SRC; };
   S.breach = () => { for (let y = 1; y < 5; y++) S.dig(0, 0, y); for (let y = 1; y < 5; y++) S.dig(0, 1, y); rebuildGround(); rebuildWater(); };
-  function reset(k) {
-    S.preset = k || S.preset; const P = SIM_PRESETS[S.preset]; LQ.clear(); cmat.fill(0);
-    for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) { if (hexDistA(q, r) > N) continue; const h = P.ground(q, r); for (let y = Y0; y < h; y++) { const i = idx(q, r, y); kind[i] = SOLID; cmat[i] = y === h - 1 ? 1 : y >= h - 3 ? 2 : 3; } }
-    P.run(S); SIM.renew = +(stage.querySelector("#simRenew [aria-pressed=true]") || {dataset: {r: 3}}).dataset.r;
-    stage.querySelectorAll("#simPreset button").forEach(b => b.setAttribute("aria-pressed", b.dataset.p === S.preset));
-    stage.querySelector("#simBreach").hidden = S.preset !== "dam";
-    rebuildGround(); rebuildWater();
+  // materials: 1 grass top, 2 dirt, 3 stone, 4 placed granite, 5 sand
+  function lay(ground, beach) {
+    const N = P.o.N; LQ.clear(); cmat.fill(0);
+    for (let q = -N; q <= N; q++) for (let r = -N; r <= N; r++) { if (hexDistA(q, r) > N) continue; const h = ground(q, r), sand = beach && beach(q, r);
+      for (let y = LQ.Y0; y < h; y++) { const i = idx(q, r, y); kind[i] = SOLID; cmat[i] = y === h - 1 ? (sand ? 5 : 1) : y >= h - 3 ? (sand ? 5 : 2) : 3; }
+      if (sand) for (let y = h; y < 0; y++) kind[idx(q, r, y)] = SRC; }   // M28's sea: sources, never queued; the basin inland starts dry
   }
-  const TOPS = {1: [4, 0, 0], 2: [4, 2, 0], 3: [8, 3, 0]}, SIDES = {1: [4, 1, 0], 2: [4, 2, 0], 3: [8, 3, 0]};
+  function reset(k) {
+    S.preset = k || S.preset; const Pr = SIM_PRESETS[S.preset]; usePatch(Pr.patch);
+    if (Pr.patch === "m28") lay(m28Ground, (q, r) => hx(q, r) < -6); else lay(Pr.ground);
+    SIM.renew = Pr.renew ?? 3; SIM.range = +rangeEl.value;
+    Pr.run(S);
+    showRenew(); side.querySelectorAll("[data-p]").forEach(b => b.setAttribute("aria-pressed", b.dataset.p === S.preset));
+    stage.querySelector("#simBreach").hidden = S.preset !== "dam"; cmpO.textContent = "";
+    rebuildGround(); rebuildWater(); placePosts();
+  }
+  const TOPS = {1: [4, 0, 0], 2: [4, 2, 0], 3: [8, 3, 0], 5: [2, 0, 0]}, SIDES = {1: [4, 1, 0], 2: [4, 2, 0], 3: [8, 3, 0], 5: [2, 1, 0]};
   function rebuildGround() {
     if (S.ground) S.ground.forEach(m => { W.scene.remove(m); m.geometry.dispose(); });
-    const GA = Geo(), GG = Geo();
+    const GA = Geo(), GG = Geo(), Y0 = LQ.Y0;
     for (let i = 0; i < LQ.NCELL; i++) { if (kind[i] !== SOLID) continue; const [q, r, y] = unidx(i), X = hx(q, r), Z = hz(r), m = cmat[i];
       const open = !inside(q, r, y + 1) || kind[idx(q, r, y + 1)] !== SOLID;
       if (open) { if (m === 4) hexTop(GG, X, y + 1, Z, (px, pz) => [px / 2, -pz / 2]); else { const t = TOPS[m]; hexTop(GA, X, y + 1, Z, (px, pz) => auv(t[0], t[1], t[2], (px - X) / (2 * HR) + 0.5, (pz - Z) / (2 * HR) + 0.5)); } }
@@ -1731,15 +1905,25 @@ function sceneSim(stage) {
         else { const t = open && m === 1 ? SIDES[1] : SIDES[m === 1 ? 2 : m]; hexSide(GA, X, Z, k, y, y + 1, () => [auv(t[0], t[1], t[2], 0, 0), auv(t[0], t[1], t[2], 1, 0), auv(t[0], t[1], t[2], 1, 1), auv(t[0], t[1], t[2], 0, 1)]); } } }
     S.ground = [meshOf(GA, atlas), meshOf(GG, granite)]; S.ground.forEach(m => W.scene.add(m));
   }
-  // The sim's water: PBDWater.simWater (water-flow/water-look.js, which M28 runs too) meshes every water cell as
-  // Luanti's liquid mesher does (water-flow design 7e): sloped tops from shared corner heights, walls where water meets
-  // air, each falling cell a whole foaming block, the flow down the slope for the texture and the chevrons.
-  const SW = PBDWater.simWater(W, LQ, {caps: {amp: 0.01, mud: 0, minA: 0.78}});
-  function rebuildWater() { S.water = SW.rebuild(); S.arrows = SW.arrows; }
+  // The sim's water: PBDWater.simWater (water-flow/water-look.js, the river, the dam and the marsh draw with it too)
+  // meshes every water cell as Luanti's liquid mesher does (water-flow design 7e): sloped tops from shared corner
+  // heights, walls where water meets air, each falling cell a whole foaming block, the flow down the slope for the
+  // texture and the chevrons. The depth under it is baked, so deeper water reads darker, as on the other tabs.
+  const levelAt = (x, z) => { const [q, r] = cellOf(x, z), c = SW.cells && SW.cells.get(q + "," + r); return c ? c.wl : -1000; };
+  const bedAt = (x, z) => { const [q, r] = cellOf(x, z), c = SW.cells && SW.cells.get(q + "," + r); let y = c ? c.y : LQ.Y1; while (y > LQ.Y0 && (!inside(q, r, y) || kind[idx(q, r, y)] !== SOLID)) y--; return y + 1; };
+  function rebuildWater() { S.water = SW.rebuild(); S.arrows = SW.arrows; if (S.arrows) S.arrows.material.opacity = W.T && W.T.day < 0.5 ? 0.4 : 0.85; bakeWater(W, levelAt, -44, -40, 44, 40, 128, bedAt); }
+  W.timeHooks.push((nm, T) => { if (SW && SW.arrows) SW.arrows.material.opacity = T.day < 0.5 ? 0.4 : 0.85; });
   const count = () => { let s = 0, f = 0, d = 0; for (let i = 0; i < LQ.NCELL; i++) { if (kind[i] === SRC) s++; else if (kind[i] === FLOW) { f++; if (down[i]) d++; } } return {s, f, d}; };
-  // lamp posts at the patch's edge: at night the water is lit by them
-  for (const [q, r] of [[8, -4], [-8, 4], [3, 5], [-4, -5], [6, 2], [-2, 8]]) { const X = hx(q, r), Z = hz(r), y = SIM_PRESETS.fall.ground(q, r); W.lampPosts = W.lampPosts || []; const post = box(W, W.std({map: tex("game/iron", 1)}), 0.14, 3, 0.14, X, 0, Z); W.lampPosts.push({post, q, r}); W.lamp(X, 3.2, Z, 0xffc070, 2.4, 12, {size: 0.3}); }
-  const placePosts = () => { for (const P of W.lampPosts) { const y = topOf(P.q, P.r); P.post.position.y = y + 1.5; const L = W.LAMPS.find(l => Math.abs(l.p.x - P.post.position.x) < 0.01 && Math.abs(l.p.z - P.post.position.z) < 0.01); if (L) { L.p.y = y + 3.15; L.bulb.position.y = y + 3.15; } } };
+  const placePosts = () => { for (const p of P.posts) { const y = S.topOf(p.q, p.r); p.post.position.y = y + 1.5; p.lamp.p.y = y + 3.15; if (p.lamp.bulb) p.lamp.bulb.position.y = y + 3.15; } };
+  // design 6: settling is a function of the sources and the solids. Re-run every source from scratch and compare.
+  function compareScratch() {
+    const K = kind.slice(), Lv = lvl.slice(), Dn = down.slice();
+    for (let i = 0; i < LQ.NCELL; i++) if (kind[i] === FLOW) { kind[i] = AIR; lvl[i] = 0; down[i] = 0; }
+    SIM.queue.length = 0; SIM.inQ.fill(0); for (let i = 0; i < LQ.NCELL; i++) if (kind[i] === SRC) { const [q, r, y] = unidx(i); LQ.touch(q, r, y); }
+    const ticks = S.settle(5000); let diff = 0; for (let i = 0; i < LQ.NCELL; i++) if (kind[i] !== K[i] || lvl[i] !== Lv[i] || down[i] !== Dn[i]) diff++;
+    kind.set(K); lvl.set(Lv); down.set(Dn); SIM.queue.length = 0; SIM.inQ.fill(0);
+    return {diff, ticks};
+  }
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   W.onClick = e => {
     const b = CANVAS.getBoundingClientRect(); ndc.set((e.clientX - b.left) / b.width * 2 - 1, -(e.clientY - b.top) / b.height * 2 + 1); ray.setFromCamera(ndc, W.camera);
@@ -1751,31 +1935,44 @@ function sceneSim(stage) {
   const arrowsBtn = stage.querySelector("#simArrows");
   // the arrows' toggle: pressed and lit when they show, its label saying which (owner, 2026-11-15: "Add button to toggle arrows on off")
   arrowsBtn.addEventListener("click", () => { SW.setArrows(!SW.showArrows); arrowsBtn.setAttribute("aria-pressed", String(SW.showArrows)); arrowsBtn.textContent = "Arrows: " + (SW.showArrows ? "on" : "off"); });
-  const runBtn = stage.querySelector("#simRun"), rateEl = stage.querySelector("#simRate");
+  const runBtn = stage.querySelector("#simRun"), rangeEl = side.querySelector("#simRange"), cmpO = side.querySelector("#simCmpO");
   const setRun = v => { S.run = v; runBtn.setAttribute("aria-pressed", v); runBtn.textContent = v ? "Pause" : "Play"; };
+  const showRenew = () => side.querySelectorAll("#simRenew button").forEach(x => x.setAttribute("aria-pressed", +x.dataset.r === SIM.renew));
   runBtn.addEventListener("click", () => setRun(!S.run));
   stage.querySelector("#simStep").addEventListener("click", () => { setRun(false); LQ.tick(); rebuildWater(); });
-  stage.querySelector("#simReset").addEventListener("click", () => { reset(); placePosts(); });
+  stage.querySelector("#simReset").addEventListener("click", () => reset());
   stage.querySelector("#simBreach").addEventListener("click", () => S.breach());
-  rateEl.addEventListener("input", () => { S.rate = +rateEl.value; stage.querySelector("#simRateV").textContent = S.rate + " ticks/s"; });
-  stage.querySelectorAll("#simPreset button").forEach(b => b.addEventListener("click", () => { reset(b.dataset.p); placePosts(); W.view(SIM_PRESETS[b.dataset.p].view); }));
+  side.querySelectorAll("#simRate button").forEach(b => b.addEventListener("click", () => { S.rate = +b.dataset.r; side.querySelectorAll("#simRate button").forEach(x => x.setAttribute("aria-pressed", x === b)); side.querySelector("#simRateV").textContent = S.rate + " ticks/s"; }));
+  side.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", () => { const Pr = SIM_PRESETS[b.dataset.p]; reset(b.dataset.p); if (Pr.cam) W.cam.set(...Pr.cam); else W.view("Patch"); setRun(true); }));
   stage.querySelectorAll("#simTool button").forEach(b => b.addEventListener("click", () => { S.tool = b.dataset.k; stage.querySelectorAll("#simTool button").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
-  stage.querySelectorAll("#simRenew button").forEach(b => b.addEventListener("click", () => { SIM.renew = +b.dataset.r; stage.querySelectorAll("#simRenew button").forEach(x => x.setAttribute("aria-pressed", x === b)); for (let i = 0; i < LQ.NCELL; i++) if (kind[i] === FLOW || kind[i] === SRC) LQ.qpush(i); }));
+  side.querySelectorAll("#simRenew button").forEach(b => b.addEventListener("click", () => { SIM.renew = +b.dataset.r; showRenew(); for (let i = 0; i < LQ.NCELL; i++) if (kind[i] === FLOW || kind[i] === SRC) LQ.qpush(i); }));
+  rangeEl.addEventListener("input", () => { SIM.range = +rangeEl.value; side.querySelector("#simRangeV").textContent = SIM.range + " level" + (SIM.range > 1 ? "s" : ""); for (let i = 0; i < LQ.NCELL; i++) if (kind[i] === FLOW || kind[i] === SRC) LQ.qpush(i); });
+  side.querySelector("#simCmp").addEventListener("click", () => { const was = S.run; setRun(false); const pend = S.settle(5000); const {diff, ticks} = compareScratch(); cmpO.innerHTML = `${pend ? `Settled first (${pend} ticks). ` : ""}From scratch: ${ticks} ticks, <b style="color:${diff ? "var(--warn)" : "var(--ok)"}">${diff} cells differ</b>`; rebuildWater(); setRun(was); });
   stage.querySelector("#simInfo").addEventListener("click", () => openModal("How the water sim works", SIM_HELP));
   W.hudExtra = () => { const c = count(); return `tick ${SIM.tick}, ${SIM.queue.length ? SIM.queue.length + " cells queued" : "settled"}, ${SIM.lastChanged} changed last tick\n${c.s} sources, ${c.f} flowing (${c.d} falling); renew ${SIM.renew > 8 ? "off" : "at " + SIM.renew}, range ${SIM.range}`; };
   W.update = (t, dt) => {
     if (S.run && SIM.queue.length) { S.acc += dt * S.rate; let n = 0; while (S.acc >= 1 && n < 20) { S.acc -= 1; LQ.tick(); n++; } if (n) rebuildWater(); } else S.acc = 0;
   };
-  window.__sim = {LQ, S, SW, count, reset: k => { reset(k); placePosts(); }, step: () => { LQ.tick(); rebuildWater(); }, pour: (q, r, y) => { const ok = S.pour(q, r, y); rebuildWater(); return ok; }, topOf, setRun, state: () => ({tick: SIM.tick, queue: SIM.queue.length, renew: SIM.renew, ...count()})};
-  const pq = Q.get("sim"); reset(pq && SIM_PRESETS[pq] ? pq : "fall"); placePosts(); setRun(!Q.has("paused"));
-  W.setViews({"Patch": [[0, 4, 0], 0.7, 0.62, 52], "Close": [[-3, 6, 0], 1.2, 0.45, 24], "From above": [[0, 2, 0], 0.01, 1.4, 60]});
-  finish(W, "Patch"); return W;
+  window.__sim = {get LQ() { return LQ; }, S, get SW() { return SW; }, count, compareScratch, reset: k => reset(k), step: () => { LQ.tick(); rebuildWater(); }, pour: (q, r, y) => { const ok = S.pour(q, r, y); rebuildWater(); return ok; }, topOf: (q, r) => S.topOf(q, r), setRun, settle: n => S.settle(n), rebuildWater, PRESETS: SIM_PRESETS, state: () => ({tick: SIM.tick, queue: SIM.queue.length, renew: SIM.renew, range: SIM.range, ...count()})};
+  const pq = Q.get("sim"); reset(pq && SIM_PRESETS[pq] ? pq : "fall"); setRun(!Q.has("paused"));
+  const Pr0 = SIM_PRESETS[S.preset];
+  if (Pr0.cam && !Q.get("view")) { W.view("Patch"); finish(W, "Patch"); W.cam.set(...Pr0.cam); } else finish(W, "Patch");
+  return W;
 }
-const SIM_HELP = `<p>A hex patch nine cells across from its middle, each cell 2.833 m flat to flat and 1 m a layer, as the game's. Click to <b>pour</b> a water source into a cell, <b>dig</b> one out (water or ground), or <b>place</b> a granite block. Drag to look, wheel to zoom.</p>
-<p>The water moves by <b>Luanti's (Minetest's) liquid rule</b>: <code>ServerMap::transformLiquidsLocal</code> and <code>get_max_liquid_level</code> in Luanti's <code>src/servermap.cpp</code> (commit <code>a10dc8d</code>, 2026-11-09), ported to the hex grid in <code>water-flow/liquid.js</code>, the same file the Hex Water Flow mockup (M28) runs. A <b>source</b> is full water that never drains. Next to it, <b>flowing</b> water takes level 7, and each cell further out one less, so water reaches <b>8 cells</b> (the range) and stops. Water with air under it <b>falls</b>: a cell above water flows down before it spreads (Luanti's drop boost), which is how it comes off a ledge and spreads again below. A cell touched by enough sources becomes a source itself: the <b>renewal</b> rule. On hex, two touching cells share two neighbours, so Luanti's threshold of 2 floods a plain; the threshold here is <b>3</b>, and the toggle shows Luanti's 2 and no renewal at all.</p>
-<p>The water is <b>drawn cell by cell as Luanti draws it</b> (its liquid mesher, <code>drawLiquidNode</code> in <code>src/client/content_mapblock.cpp</code>, ported to hex in <code>water-flow/water-look.js</code>): each corner's height comes from the three cells sharing it, so a sheet slopes down to its edge with a wall where it meets air, and water falling off a step is a column of whole cells, one more each tick, each its own foaming block. The texture and the arrows run down the slope and down each fall.</p>
-<p>A <b>tick</b> handles every cell queued, once, as Luanti does; an edit queues the cell and its eight neighbours (up, six sides, down). <b>Step</b> runs one tick; the slider sets ticks a second.</p>
-<p><b>Presets:</b> <i>Pond</i>, three sources round a basin's middle: the middle and then the cells between renew, so a pool of sources forms. <i>Waterfall</i>, a spring on the top of cell steps: it spreads, falls each step and spreads again. <i>Dam</i>, a reservoir of sources behind a wall of blocks: <b>Breach the dam</b> digs a gap and the reservoir pours through; the sources stay, so the flow keeps running.</p>
+const SIM_HELP = `<p>The one place for the playable water sim: <b>Water That Flows</b> (M28) is part of this tab now, with its coast patch and its presets. Click to <b>pour</b> a water source into a cell, <b>dig</b> one out (water or ground), or <b>place</b> a granite block. Drag to look, wheel to zoom. Every cell is 2.833 m flat to flat and 1 m a layer, as the game's.</p>
+<p>The water moves by <b>Luanti's (Minetest's) liquid rule</b>: <code>ServerMap::transformLiquidsLocal</code> and <code>get_max_liquid_level</code> in Luanti's <code>src/servermap.cpp</code> (commit <code>a10dc8d</code>, 2026-11-09), ported to the hex grid in <code>water-flow/liquid.js</code>. The river, the dam's stream and pond and the marsh pools on the other tabs run on the same file. A <b>source</b> is full water that never drains. Next to it, <b>flowing</b> water takes level 7, and each cell further out one less, so water reaches <b>8 cells</b> (the range; the slider shortens it) and stops. Water with air under it <b>falls</b>: a cell above water flows down before it spreads (Luanti's drop boost of four), which is how it comes off a ledge and spreads again below. A cell touched by enough sources becomes a source itself: the <b>renewal</b> rule. On hex, two touching cells share two neighbours, so Luanti's threshold of 2 floods a plain; the threshold here is <b>3</b>, and the toggle shows Luanti's 2 and no renewal at all.</p>
+<p>The water is <b>drawn cell by cell as Luanti draws it</b> (its liquid mesher, <code>drawLiquidNode</code> in <code>src/client/content_mapblock.cpp</code>, ported to hex in <code>water-flow/water-look.js</code>): each corner's height comes from the three cells sharing it, so a sheet slopes down to its edge with a wall where it meets air, and water falling off a step is a column of whole cells, one more each tick, each its own foaming block. The texture (Tenebris's water tile) and the arrows run down the slope and down each fall.</p>
+<p>A <b>tick</b> handles every cell queued, once, as Luanti does; an edit queues the cell and its eight neighbours (up, six sides, down). <b>Step</b> runs one tick; the speed buttons set ticks a second. <b>Settle from scratch</b> re-runs every source with the flowing water cleared and counts the cells that differ from the water you see: settled water follows from the sources and the cells alone, so it should be none.</p>
+<h3>The rule</h3><div class="tablebox"><table><thead><tr><th>A queued cell with</th><th>Becomes</th><th>Luanti's code</th></tr></thead><tbody>
+<tr><td>3 sources beside or above it (2 in Luanti)</td><td>a source: the pool renews</td><td><code>num_sources &gt;= 2</code></td></tr>
+<tr><td>1 source beside or above it</td><td>flowing, level 7</td><td><code>LIQUID_LEVEL_MAX</code></td></tr>
+<tr><td>flowing water above it</td><td>its level + 4, at most 7</td><td><code>WATER_DROP_BOOST</code></td></tr>
+<tr><td>flowing water beside it, not falling</td><td>the highest neighbour's level &minus; 1</td><td><code>get_max_liquid_level</code></td></tr>
+<tr><td>air or flowing water under it</td><td>falling: it offers nothing sideways, so water drops before it spreads</td><td><code>LIQUID_FLOW_DOWN_MASK</code></td></tr>
+<tr><td>no level within the range</td><td>air again: the water recedes</td><td><code>liquid_range</code> 8</td></tr>
+</tbody></table></div>
+<p><b>On hex</b>: eight neighbours (up, six sides, down) for Luanti's six, in Luanti's order; a pentagon cell has five sides and the same rule. Seven cells is 20 m, where Luanti's water spreads 7 m. Generated water is all source and never queued, so opening a world never moves its water; sources are saved as edits, and settled flowing water follows from the sources and the ground.</p>
+<h3>Presets</h3><dl>${Object.values(SIM_PRESETS).map(p => `<dt>${p.name}</dt><dd>${p.note}</dd>`).join("")}</dl>
 <p class="muted">Licence: Luanti is Copyright (C) 2010-2024 celeron55, Perttu Ahola and contributors, under the GNU Lesser General Public License 2.1 or later; the port is offered under the same licence, published beside it as <a href="water-flow/COPYING.LESSER">water-flow/COPYING.LESSER</a>. Proposal only: the game has no flowing water today (<code>openspec/changes/water-flow</code>).</p>`;
 
 // ======================= how underwater looks =======================
