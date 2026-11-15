@@ -254,8 +254,8 @@ function makeCaps(W, cells, o = {}) {
 // The liquid rule's water drawn as the river's is (owner, 2026-11-15: "can we have the frothy walls and edges like the
 // river demo you had and show flow direction?"): one cap per column at its top water surface, through makeCaps, so
 // every step down to a lower column gets the river's foaming fall sheet and lip, and each cap carries a flow vector the
-// streaks advect along: towards the neighbours whose water stands lower, by how much lower (Luanti's levels falling
-// outward). A column falling straight down carries none. A flat chevron on each flowing cap points downstream, longer
+// streaks and the texture advect along: down the head, from higher water to lower and on into dry cells it spreads or
+// falls into (Luanti's levels falling outward; see rebuild). A column falling straight down carries none. A flat chevron on each flowing cap points downstream, longer
 // the faster it runs (the Flow arrows toggle).
 // The water's top in a cell: a source or a falling cell stands nearly full, a flowing one at (level + 1) / 8 of its
 // layer, and a cell with water above it is full to its top. So a source (0.94) is drawn 6 cm below the level-7 water
@@ -268,18 +268,28 @@ function surfOf(LQ) {
 }
 const ARROW_MAX = 2400;
 function simWater(W, LQ, o = {}) {
-  const {SRC, FLOW, SOLID} = root.PBDLiquid, {kind, down, unidx, idx} = LQ, surf = surfOf(LQ);
+  const {SRC, FLOW, SOLID} = root.PBDLiquid, {kind, lvl, down, unidx, idx} = LQ, surf = surfOf(LQ);
   const SW = {mesh: null, mat: null, arrows: null, cells: null, showArrows: o.arrows !== false, surf};
   const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), SC = new THREE.Vector3(), UPA = new THREE.Vector3(0, 1, 0);
   SW.rebuild = () => {
     const tops = new Map();
     for (let i = 0; i < LQ.NCELL; i++) { const k = kind[i]; if (k !== SRC && k !== FLOW) continue; const [q, r, y] = unidx(i), key = q + "," + r, h = surf(i);
-      const t = tops.get(key); if (!t || h > t.wl) tops.set(key, {q, r, y, wl: h, head: k === SRC && h < y + 1 ? y + 9 / 8 : h, fall: k === FLOW && !!down[i]}); }
+      const t = tops.get(key); if (!t || h > t.wl) tops.set(key, {q, r, y, i, wl: h, src: k === SRC, head: k === SRC && h < y + 1 ? y + 9 / 8 : h, fall: k === FLOW && !!down[i]}); }
     const cells = new Map();
     for (const [key, t] of tops) {
       const X = hx(t.q, t.r), Z = hz(t.r); let fx = 0, fz = 0;
-      if (!t.fall) for (const [dq, dr] of DIRS) { const n = tops.get((t.q + dq) + "," + (t.r + dr)); if (!n || n.head >= t.head - 0.02) continue;
-        const dx = hx(t.q + dq, t.r + dr) - X, dz = hz(t.r + dr) - Z, l = Math.hypot(dx, dz) || 1, w = Math.min(1, t.head - n.head); fx += dx / l * w; fz += dz / l * w; }
+      // The way the water is going (owner, 2026-11-15: "the edges also dont have flow ... we can see 1 arrow in a cell
+      // with 4 pads"): down the head, from higher water to lower, weighted by the drop (capped at a layer).
+      //  - toward a neighbour whose water stands lower: it runs there;
+      //  - away from a neighbour whose water stands higher and reaches this layer (its column is open at this cell's
+      //    layer): it runs in from there, so a cap at the spreading front, or against a wall, still points onward;
+      //  - toward a dry neighbour the water can spread into (open air at this layer, and this cell has a level to give,
+      //    Luanti's level above 0) or fall into (open air at this layer and the one below): the front of a spreading sheet;
+      //  - a source only where water leaves it, never "away from" its fellows; a still pool (every head equal) has none.
+      if (!t.fall) for (const [dq, dr] of DIRS) { const nq = t.q + dq, nr = t.r + dr, n = tops.get(nq + "," + nr); let w = 0;
+        if (n) { const d = t.head - n.head; if (d > 0.02) w = Math.min(1, d); else if (d < -0.02 && !t.src && LQ.inside(nq, nr, t.y) && kind[idx(nq, nr, t.y)] !== SOLID) w = Math.max(-1, d); }
+        else if (LQ.inside(nq, nr, t.y) && kind[idx(nq, nr, t.y)] !== SOLID) { const drop = LQ.inside(nq, nr, t.y - 1) && kind[idx(nq, nr, t.y - 1)] !== SOLID; if (drop) w = 1; else if (t.src || lvl[t.i] > 0) w = 0.5; }
+        if (!w) continue; const dx = hx(nq, nr) - X, dz = hz(nr) - Z, l = Math.hypot(dx, dz) || 1; fx += dx / l * w; fz += dz / l * w; }
       const m = Math.hypot(fx, fz), sp = Math.min(0.9, m * 0.9);
       // where the patch ends beside this water, its side stands down to the bed (the first solid cell under it)
       let cuts = null;
