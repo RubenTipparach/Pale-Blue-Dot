@@ -141,7 +141,7 @@ pub fn pick(
 
 /// `--take-trees`: a capture's instrument (`flora-v2` 12.5). Once the fine set
 /// stands round the camera, the three nearest fruiting trees in front of it
-/// are marked picked today and the next three trees felled, as `fruit` and
+/// are marked picked today and the next twelve trees felled, as `fruit` and
 /// `tree` records stored as the player's (the records a player's hands
 /// write; the instrument's liberty is not walking to each). The draw then
 /// leaves their fruit and the felled trees out.
@@ -203,12 +203,17 @@ pub fn scripted(
         .collect();
     trees.sort_by(|a, b| a.0.total_cmp(&b.0));
     let picked: Vec<u32> = trees.iter().filter(|t| t.2).take(3).map(|t| t.1).collect();
-    let felled: Vec<u32> = trees
+    let felled_at: Vec<(f32, u32)> = trees
         .iter()
         .filter(|t| !picked.contains(&t.1))
-        .take(3)
-        .map(|t| t.1)
+        .take(12)
+        .map(|t| (t.0, t.1))
         .collect();
+    let felled: Vec<u32> = felled_at.iter().map(|t| t.1).collect();
+    info!(
+        "TAKE_TREES felled at {:?} m",
+        felled_at.iter().map(|t| t.0.round()).collect::<Vec<_>>()
+    );
     let mut records = Vec::new();
     for cell in &picked {
         let body = FruitPicked { day, took: 4 };
