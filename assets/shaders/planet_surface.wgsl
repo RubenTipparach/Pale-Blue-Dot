@@ -1533,6 +1533,14 @@ fn tileset_slot(biome: u32) -> u32 {
 const DIRT_CODE = 10u;
 const GRASS_SIDE_CODE = 11u;
 const SNOW_SIDE_CODE = 12u;
+// `farming-and-smelting`: tilled soil and a station block are materials of
+// their own, drawn from one sheet wherever they lie: the fields sheet's
+// tilled soil, the mountains sheet's slate bricks. `planet_terrain.rs`'s
+// TILLED and FORGE, and the biomes' order in `Biome`; a test holds them.
+const TILLED_CODE = 14u;
+const FORGE_CODE = 15u;
+const FIELDS_BIOME = 2u;
+const MOUNTAINS_BIOME = 6u;
 // What the side tile averages to. A face seen from far enough away fades to
 // it, exactly as a cap fades to its flat base, because a point-sampled tile
 // at range is shimmer rather than detail. The earth is two thirds of the tile
@@ -1545,6 +1553,8 @@ const GROUND_MEAN = vec3(0.466,0.342,0.255);
 // themselves, and `params.ground` carries its two depths, so the rule is
 // written twice and its numbers have one source.
 fn face_code(cap: u32, depth: f32) -> u32 {
+    // A furrow's side is the earth it was turned from.
+    if cap == TILLED_CODE { return DIRT_CODE; }
     if depth <= params.ground.x {
         // Sward, jungle and marsh all fade into earth; snow fades into it too,
         // which is Tenebris's `dirt_snow`. Sand, stone and earth show their own
@@ -2461,6 +2471,9 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         if abs(facing) < 0.5 {
             if grassy(own) { code = GRASS_SIDE_CODE; }
             if own == 6u { code = SNOW_SIDE_CODE; }
+            if own == TILLED_CODE { code = DIRT_CODE; }
+        } else if facing < -0.5 && own == TILLED_CODE {
+            code = DIRT_CODE;
         } else if facing < -0.5 && grassy(own) {
             code = DIRT_CODE;
         }
@@ -2484,6 +2497,10 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     if code==7u { base=vec3(0.32,0.36,0.22); }
     if code==8u { base=vec3(0.16,0.105,0.055); tile=vec2(2.,1.); }
     if code==9u { base=vec3(0.085,0.24,0.060); tile=vec2(0.,2.); }
+    if code==14u { base=vec3(0.36,0.25,0.16); tile=vec2(2.,3.); }
+    if code==15u { base=vec3(0.30,0.31,0.33); tile=vec2(1.,3.); }
+    if code==TILLED_CODE { slot = tileset_slot(FIELDS_BIOME); }
+    if code==FORGE_CODE { slot = tileset_slot(MOUNTAINS_BIOME); }
     if code==6u || code==SNOW_SIDE_CODE { slot = u32(params.ground.z); }
     // A face is drawn in its tile's COLOURS - the grass top is the grass art,
     // a wall's first metre is the sod-into-earth transition - and fades at
@@ -2495,7 +2512,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // underneath: three pictures, none of them a tint.
     var far = base;
     if code>=LAMP_IRON_CODE { tile = vec2(3.,0.); }
-    if code>=DIRT_CODE && code<LAMP_IRON_CODE {
+    if code>=DIRT_CODE && code<=SNOW_SIDE_CODE {
         tile = vec2(2.,0.);
         if code>=GRASS_SIDE_CODE { tile = vec2(1.,0.); }
         far = GROUND_MEAN;

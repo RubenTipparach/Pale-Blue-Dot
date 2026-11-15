@@ -320,6 +320,7 @@ mod tests {
             hand: Handle::default(),
             lights: Vec::new(),
             fish_names: Vec::new(),
+            goods: Vec::new(),
         });
         app.add_systems(Update, spawn);
         app.update();

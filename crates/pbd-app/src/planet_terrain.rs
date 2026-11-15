@@ -146,6 +146,9 @@ pub fn render_code(material: Material) -> u32 {
         // through one both came out green; and the material actually named
         // dirt shared the SAND code, so a mud flat was drawn as beach.
         Material::Soil | Material::Dirt => DIRT,
+        // `farming-and-smelting`: the last two codes of the four bits.
+        Material::Tilled => TILLED,
+        Material::Forge => FORGE,
         // Grass and dry grass: the shader's own default green.
         _ => 2,
     }
@@ -245,6 +248,13 @@ pub const GRASS_SIDE: u32 = 11;
 /// authored tile exists at (1,0) of `tundra.png` and `frozen_wastes.png` and
 /// is out of reach until a body can bind its own tileset.
 pub const SNOW_SIDE: u32 = 12;
+/// Tilled soil (`farming-and-smelting` decision 2): the fields sheet's own
+/// tilled-soil tile on top, earth on its sides, in whatever biome it lies.
+pub const TILLED: u32 = 14;
+/// A station block, the forge first (decision 8): the mountains sheet's slate
+/// bricks. The LAST code the four-bit material word has: a later station
+/// shares it or the word widens.
+pub const FORGE: u32 = 15;
 
 fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
     // A town's lanes and floors are its own top (`cities-in-the-world`).
@@ -528,6 +538,8 @@ mod tests {
             (0, "ocean", "sand"),
             (1, "beach", "sand"),
             (4, "desert", "sand"),
+            (TILLED, "fields", "tilled"),
+            (FORGE, "mountains", "bricks"),
         ] {
             let names = sheet_tile_names(sheet);
             let name = &names[index(tile_of(code))];
@@ -554,6 +566,20 @@ mod tests {
         assert_eq!(index(tile_of(2)), 0, "grass is the sheet's ground");
         assert_eq!(&sheet_tile_names("fields")[3], "limestone");
         assert_eq!(&sheet_tile_names("fields")[0], "pasture grass");
+        // Tilled soil and the forge are drawn from one sheet each, named
+        // by the biome's place in `Biome`, wherever they lie.
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        use pbd_core::planet_gen::Biome;
+        for line in [
+            format!("const TILLED_CODE = {TILLED}u;"),
+            format!("const FORGE_CODE = {FORGE}u;"),
+            format!("const FIELDS_BIOME = {}u;", Biome::Fields as u32),
+            format!("const MOUNTAINS_BIOME = {}u;", Biome::Mountains as u32),
+        ] {
+            assert!(shader.contains(&line), "the shader should declare `{line}`");
+        }
+        assert_eq!(render_code(Material::Tilled), TILLED);
+        assert_eq!(render_code(Material::Forge), FORGE);
     }
 
     /// The atlas is baked by `tools/build_tileset_atlas.py`, which derives its

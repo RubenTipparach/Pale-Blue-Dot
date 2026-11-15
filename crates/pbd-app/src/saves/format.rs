@@ -28,6 +28,7 @@
 use bevy::math::Vec3;
 use pbd_core::drops::ItemDrop;
 use pbd_core::edits::Edit;
+use pbd_core::goods::Good;
 use pbd_core::inventory::{CARRIED, Equipment, Item, SLOTS, Slots, Stack, Tool};
 use pbd_core::planet_gen::TerrainConfig;
 use pbd_core::records::{Author, Record as StoredRecord, split_author};
@@ -74,6 +75,10 @@ pub enum Record {
     /// site, and later a settlement or a landmark. Held as text, so a kind
     /// this build does not know is kept as it came.
     Stored(StoredRecord),
+    /// A record's new value and the slots after it, in ONE line
+    /// (`farming-and-smelting` decision 4): a crop planted or harvested, a
+    /// station's job queued or collected. Both reach the disk or neither.
+    Handed { record: StoredRecord, slots: Slots },
 }
 
 /// The kit line's leading token, which no cell number can be.
@@ -86,6 +91,21 @@ const HAND: &str = "hand";
 const PACK: &str = "pack";
 /// A pickup's.
 const PICK: &str = "pick";
+/// A record with the hands': `with s0 .. s39 rec @p kind id schema body`.
+const WITH: &str = "with";
+
+/// `with s0 .. s39 <record line>`, one line: the slots after the change,
+/// then the record as a `rec` line of the player's.
+pub fn with_line_of(record: &StoredRecord, slots: &Slots) -> String {
+    let mut line = WITH.to_string();
+    for index in 0..CARRIED {
+        line.push(' ');
+        line.push_str(&stack_text(slots.get(index)));
+    }
+    line.push(' ');
+    line.push_str(&record.line(&Author::Player(0)));
+    line
+}
 
 /// A tool's saved code. `t0` was the pick placeholder, which nothing ever
 /// constructed, so the pickaxe keeps it.
@@ -133,6 +153,8 @@ pub fn material_code(material: Material) -> u8 {
         Material::LanternHanging => 15,
         Material::Brazier => 16,
         Material::Candle => 17,
+        Material::Tilled => 18,
+        Material::Forge => 19,
     }
 }
 
@@ -156,6 +178,8 @@ pub fn material_of(code: u8) -> Option<Material> {
         15 => Material::LanternHanging,
         16 => Material::Brazier,
         17 => Material::Candle,
+        18 => Material::Tilled,
+        19 => Material::Forge,
         _ => return None,
     })
 }
@@ -175,6 +199,12 @@ fn stack_text(stack: Option<Stack>) -> String {
             item: Item::Fish(species),
             count,
         }) => format!("f{species},{count}"),
+        // A good by its CODE, never its index (`farming-and-smelting`
+        // decision 1): `gwheat,3`.
+        Some(Stack {
+            item: Item::Good(good),
+            count,
+        }) => format!("g{},{count}", good.code()),
     }
 }
 
@@ -189,6 +219,7 @@ fn stack_of(text: &str) -> Option<Option<Stack>> {
         "b" => Item::Block(material_of(code.parse().ok()?)?),
         "t" => Item::Tool(tool_of(code.parse().ok()?)?),
         "f" => Item::Fish(code.parse().ok()?),
+        "g" => Item::Good(Good::by_code(code)?),
         _ => return None,
     };
     Some(Some(Stack::new(item, count)))
@@ -363,6 +394,26 @@ pub fn parse_line(line: &str) -> Option<Record> {
         return Some(Record::Catch {
             species,
             length_cm,
+            slots: slots_of(&carried)?,
+        });
+    }
+    if head == WITH {
+        // Forty slot fields, then a whole record line, whose body may hold
+        // spaces: split the slots off by count, and parse the rest as a line.
+        let rest = line.trim_start().strip_prefix(WITH)?;
+        let mut rest = rest.trim_start();
+        let mut carried = Vec::with_capacity(CARRIED);
+        for _ in 0..CARRIED {
+            let (field, after) = rest.split_once(' ')?;
+            carried.push(field);
+            rest = after.trim_start();
+        }
+        let (author, record) = StoredRecord::parse_line(rest)?;
+        if !author.is_player() {
+            return None;
+        }
+        return Some(Record::Handed {
+            record,
             slots: slots_of(&carried)?,
         });
     }
@@ -809,6 +860,70 @@ mod tests {
 
     /// A damaged line is skipped rather than guessed at, and the damage does
     /// not spread: a torn last line costs that line and no other.
+    /// Goods save by their code (`farming-and-smelting` decision 1), and
+    /// the two new blocks by codes of their own.
+    #[test]
+    fn goods_and_the_new_blocks_survive_the_round_trip() {
+        let mut slots = kit();
+        slots.give(Item::Good(Good::WHEAT), 3);
+        slots.give(Item::Good(Good::COAL), 8);
+        slots.give(Item::Block(Material::Forge), 1);
+        let line = pack_line_of(&slots);
+        assert!(
+            line.contains(" gwheat,3") && line.contains(" gcoal,8"),
+            "{line}"
+        );
+        assert!(line.contains(" b19,1"), "{line}");
+        let Some(Record::Pack { slots: back }) = parse_line(line.trim_end()) else {
+            panic!("{line}");
+        };
+        assert_eq!(back, slots);
+        for material in [Material::Tilled, Material::Forge] {
+            assert_eq!(material_of(material_code(material)), Some(material));
+        }
+        // Every material has its own code.
+        let codes: std::collections::BTreeSet<u8> =
+            Material::ALL.iter().map(|m| material_code(*m)).collect();
+        assert_eq!(codes.len(), Material::ALL.len());
+    }
+
+    /// A good this build does not have costs its own line and no other.
+    #[test]
+    fn an_unknown_good_costs_only_its_line() {
+        let mut line = pack_line_of(&Slots::new());
+        line = line.replacen(" -", " gdragon-egg,1", 1);
+        assert!(parse_line(line.trim_end()).is_none());
+    }
+
+    /// The hands-and-record line: a plot planted, with the slots after it,
+    /// reads back whole; torn, it reads as nothing at all.
+    #[test]
+    fn a_record_with_the_hands_survives_the_round_trip() {
+        let mut slots = kit();
+        slots.give(Item::Good(Good::WHEAT_SEED), 3);
+        let record = StoredRecord::of(
+            pbd_core::farming::PLOT_KIND,
+            4242,
+            pbd_core::farming::PLOT_SCHEMA,
+            &pbd_core::farming::Plot::sown(61, pbd_core::farming::Crop::WHEAT, 99.5),
+        );
+        let line = with_line_of(&record, &slots);
+        assert!(line.starts_with("with ") && line.ends_with('\n'));
+        let (author, parsed) = parse_entry(&line).expect("reads");
+        assert_eq!(author, Author::Player(0));
+        assert_eq!(
+            parsed,
+            Record::Handed {
+                record: record.clone(),
+                slots: slots.clone()
+            }
+        );
+        let torn = &line[..line.len() - 6];
+        assert!(parse_entry(torn).is_none(), "a torn body is damaged");
+        let short = line.replacen("with b3,64 ", "with ", 1);
+        assert!(parse_entry(&short).is_none(), "a slot short is damaged");
+    }
+
     #[test]
     fn a_damaged_line_costs_that_line_and_no_other() {
         for bad in [
