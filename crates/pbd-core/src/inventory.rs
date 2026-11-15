@@ -6,6 +6,7 @@
 //! they depend on nothing but the material enum beside them. Drawing a slot is
 //! the app's business; deciding what is in it is not.
 
+use crate::goods::Good;
 use crate::terrain::Material;
 
 /// How many hotbar slots the player carries. Ten, selected with the number
@@ -33,6 +34,10 @@ pub enum Item {
     /// (`fauna::Roster`). An index rather than a name because a slot is `Copy`
     /// and saved as a short code; the roster is append-only for that reason.
     Fish(u16),
+    /// A good: a row of the one goods table (`crate::goods`), saved by its
+    /// short code. Seeds, produce, coal, ore, ingots; food and animal
+    /// products to come, as rows.
+    Good(Good),
 }
 
 /// The four tools, in the order the picker lists them.
@@ -176,6 +181,7 @@ impl Item {
             Item::Tool(_) => 1,
             // A creel's worth: a fish is a thing you carry a few of.
             Item::Fish(_) => 16,
+            Item::Good(good) => good.stack_limit(),
         }
     }
 
@@ -189,11 +195,12 @@ impl Item {
             // The species' own name is the roster's; the item alone only
             // knows it is a fish.
             Item::Fish(_) => "fish",
+            Item::Good(good) => good.name(),
         }
     }
 }
 
-fn material_name(material: Material) -> &'static str {
+pub fn material_name(material: Material) -> &'static str {
     match material {
         Material::Air => "air",
         Material::Stone => "stone",
@@ -213,6 +220,8 @@ fn material_name(material: Material) -> &'static str {
         Material::LanternHanging => "hanging lantern",
         Material::Brazier => "brazier",
         Material::Candle => "candle",
+        Material::Tilled => "tilled soil",
+        Material::Forge => "forge",
     }
 }
 
@@ -454,6 +463,35 @@ impl Slots {
                 }
             }
         }
+    }
+
+    /// How many of `item` the slots hold, hotbar and pack together.
+    pub fn count(&self, item: Item) -> u32 {
+        self.slots
+            .iter()
+            .flatten()
+            .filter(|stack| stack.item == item)
+            .map(|stack| u32::from(stack.count))
+            .sum()
+    }
+
+    /// Take `count` of `item`, from the hotbar's slots first and then the
+    /// pack's, in index order. All or nothing: `false`, and nothing taken,
+    /// when the slots hold fewer.
+    pub fn take_item(&mut self, item: Item, count: u16) -> bool {
+        if self.count(item) < u32::from(count) {
+            return false;
+        }
+        let mut left = count;
+        for index in 0..CARRIED {
+            if left == 0 {
+                break;
+            }
+            if self.get(index).is_some_and(|s| s.item == item) {
+                left -= self.take(index, left);
+            }
+        }
+        true
     }
 
     /// Take one from the selected slot: what placing a block will ask for.

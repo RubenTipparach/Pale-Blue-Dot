@@ -71,6 +71,13 @@ pub enum Material {
     Brazier = 16,
     /// A candle: enough to light a room, and no more. Always lit.
     Candle = 17,
+    /// Tilled soil (`farming-and-smelting` decision 2): a grass, dirt, soil or
+    /// sand top the shovel has turned, which a seed is planted on. Solid,
+    /// drawn with the fields sheet's own tilled-soil tile.
+    Tilled = 18,
+    /// The forge (`farming-and-smelting` decision 8): the first station
+    /// block. Solid, drawn in slate bricks, with a chimney stood on it.
+    Forge = 19,
 }
 
 impl Material {
@@ -110,6 +117,30 @@ impl Material {
     pub fn dusk_lit(self) -> bool {
         matches!(self, Material::LanternPost | Material::LanternWall)
     }
+
+    /// Every material, in code order.
+    pub const ALL: [Material; 20] = [
+        Material::Air,
+        Material::Stone,
+        Material::Soil,
+        Material::Grass,
+        Material::Water,
+        Material::Ore,
+        Material::Sand,
+        Material::DryGrass,
+        Material::JungleGrass,
+        Material::Snow,
+        Material::Rock,
+        Material::Dirt,
+        Material::Torch,
+        Material::LanternPost,
+        Material::LanternWall,
+        Material::LanternHanging,
+        Material::Brazier,
+        Material::Candle,
+        Material::Tilled,
+        Material::Forge,
+    ];
 
     /// Every light, in material order.
     pub const LAMPS: [Material; 6] = [
@@ -220,6 +251,14 @@ mod tests {
     }
 
     const PLANAR_DIGEST: u64 = 17_835_469_625_199_367_657;
+
+    /// `ALL` is every material once, in its discriminant's order.
+    #[test]
+    fn all_lists_every_material_in_order() {
+        for (index, material) in Material::ALL.iter().enumerate() {
+            assert_eq!(*material as usize, index);
+        }
+    }
 
     #[test]
     fn terrain_is_independent_of_visit_order_and_changes_with_seed() {

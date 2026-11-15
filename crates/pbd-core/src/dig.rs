@@ -56,8 +56,9 @@ impl Class {
             | Material::Soil
             | Material::Dirt
             | Material::Sand
-            | Material::Snow => Class::Dirt,
-            Material::Stone => Class::Stone,
+            | Material::Snow
+            | Material::Tilled => Class::Dirt,
+            Material::Stone | Material::Forge => Class::Stone,
             Material::Rock => Class::Rock,
             Material::Ore => Class::Ore,
             Material::Torch

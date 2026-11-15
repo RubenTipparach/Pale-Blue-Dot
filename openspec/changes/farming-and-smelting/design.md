@@ -151,6 +151,15 @@ ore), validated against the goods table and the materials at load.
 - A cooking pot, an oven or a campfire is a new row and new recipes; a
   station whose block is not a block of bricks (a campfire) is the cooking
   change's to draw (decision 8).
+- **Two hooks for `tool-crafting`** (the owner, 2026-11-14: "initial game
+  loop will be: crafting tools, fishing, farming, herding, cooking"):
+  - *Recipes by hand.* `STATIONS` has a `hand` row with no block: a recipe
+    whose station is `hand` is made from the pack. It is queued and
+    collected by the same rules, its queue kept on the player instead of a
+    cell. Nothing is made by hand in this change.
+  - *Tools as outputs.* A recipe item may be `tool:<name>`; a tool is a
+    single item (stack 1) that the app hands to the tool slot. Tiers are
+    `tool-crafting`'s to add.
 
 ### 7. A station's queue is a stored record; queuing and collecting carry the hands
 
