@@ -230,13 +230,15 @@ struct ToolColours {
     tier: Option<Tier>,
 }
 
-/// What a tier does to a head's grey: the tools were drawn as iron.
+/// What a tier does to a head's grey, in linear light (the held material
+/// is lit brighter than one at noon, so a mild tint would clip back to
+/// white): the tools were drawn as iron.
 pub fn tier_tint(tier: Tier) -> [f32; 3] {
     match tier {
-        Tier::Stone => [0.80, 0.74, 0.66],
-        Tier::Bronze => [1.15, 0.74, 0.40],
+        Tier::Stone => [0.36, 0.33, 0.29],
+        Tier::Bronze => [0.95, 0.50, 0.20],
         Tier::Iron => [1.0, 1.0, 1.0],
-        Tier::Steel => [0.88, 0.97, 1.12],
+        Tier::Steel => [0.70, 0.80, 0.95],
     }
 }
 

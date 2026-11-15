@@ -143,7 +143,15 @@ impl Hotbar {
     /// path on the frame it is dealt, so it is dealt exactly once.
     pub fn restore(save: &mut WorldSave) -> Self {
         let Some(mut slots) = save.carried.clone() else {
-            return Self::starting_kit();
+            // A new world's kit is recorded as dealt, at this version, the
+            // moment it is dealt. Before `tool-crafting` it was not, so the
+            // first line that carried the slots left the log at kit 0 and
+            // the next open dealt every grant again on top of them.
+            let kit = Self::starting_kit();
+            if !save.deal_kit(KIT_VERSION, &kit.0) {
+                warn!("starting kit: the save did not take the deal");
+            }
+            return kit;
         };
         let dealt = save.kit;
         if dealt < KIT_VERSION {
@@ -420,6 +428,17 @@ mod kit_tests {
         ] {
             assert!(light_icon(block).is_none(), "{block:?} is not a light");
         }
+    }
+
+    /// A new world's kit is recorded as dealt, so a world played and opened
+    /// again is not dealt it a second time (`tool-crafting`).
+    #[test]
+    fn a_new_world_is_dealt_its_kit_once() {
+        let mut save = WorldSave::memory_only();
+        let first = Hotbar::restore(&mut save);
+        assert_eq!(save.kit, KIT_VERSION, "the deal is recorded");
+        let again = Hotbar::restore(&mut save);
+        assert_eq!(again.0, first.0, "and not dealt twice");
     }
 
     /// A save that spent its torches is not refilled: the deal is by version,

@@ -318,13 +318,14 @@ fn well(parent: &mut ChildSpawnerCommands, kit: &UiKit, atlas: &Handle<Image>, w
         });
 }
 
-/// The row both widgets share: up to three needs, an arrow, the result, and
+/// The row both widgets share: `needs` wells, an arrow, the result, and
 /// CRAFT, after whatever `lead` puts first.
 fn craft_row(
     parent: &mut ChildSpawnerCommands,
     kit: &UiKit,
     atlas: &Handle<Image>,
     station: &'static str,
+    needs: usize,
     lead: impl FnOnce(&mut ChildSpawnerCommands),
 ) {
     parent
@@ -337,7 +338,7 @@ fn craft_row(
         })
         .with_children(|row| {
             lead(row);
-            for k in 0..3 {
+            for k in 0..needs {
                 well(
                     row,
                     kit,
@@ -387,12 +388,15 @@ pub fn spawn_pack_row(
         },
     ));
     let hand: Vec<&Recipe> = recipes.0.at("hand").collect();
-    craft_row(panel, kit, atlas, "hand", |row| {
+    // The hands' recipes take at most two things, which leaves the row room
+    // for the drop-down inside the pack's 240 px.
+    let needs = hand.iter().map(|r| r.inputs.len()).max().unwrap_or(1);
+    craft_row(panel, kit, atlas, "hand", needs, |row| {
         row.spawn((
             kit.nine(Set::Stone, "button-idle"),
             Button,
             Node {
-                width: px(96),
+                width: px(82),
                 height: px(24),
                 align_items: AlignItems::Center,
                 column_gap: px(3),
@@ -530,7 +534,7 @@ pub fn spawn_bench(
                         );
                     }
                 });
-            craft_row(panel, kit, atlas, "workbench", |_| {});
+            craft_row(panel, kit, atlas, "workbench", 3, |_| {});
             panel.spawn((
                 KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
@@ -784,9 +788,9 @@ pub fn paint(
                             "slot-disabled"
                         },
                     ),
-                    None => (None, "slot-disabled"),
+                    None => (None, "slot-idle"),
                 },
-                None => (None, "slot-disabled"),
+                None => (None, "slot-idle"),
             },
             Role::Result => match of(well.station) {
                 Some((recipe, _, blocked)) => (
