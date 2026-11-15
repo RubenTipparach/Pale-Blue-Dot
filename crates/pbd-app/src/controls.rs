@@ -512,8 +512,8 @@ const SCREEN: [Binding; 6] = [
     row(&[Key::Board(KeyCode::Escape)], " ", "menu"),
     row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
     row(
-        &[Key::Board(KeyCode::KeyI)],
-        " ",
+        &[Key::Board(KeyCode::KeyI), Key::Board(KeyCode::Tab)],
+        " / ",
         "the pack: thirty more slots",
     ),
     row(&[Key::Board(KeyCode::KeyO)], " ", "the starter missions"),

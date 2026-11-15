@@ -30,8 +30,58 @@ use std::time::{Duration, Instant};
 /// same fields as 1; version 2 added `rain_shadows`, which an older file
 /// reads as its default; version 3 added `keys`, the player's rebinds
 /// (`stone-and-wood-ui`), which an older file reads as none; version 4 added
-/// `mission_line` (`starter-missions`), which an older file reads as on.
-pub const VERSION: u32 = 4;
+/// `mission_line` (`starter-missions`), which an older file reads as on;
+/// version 5 added `volumes` (`audio-and-ambience`), which an older file
+/// reads as their defaults.
+pub const VERSION: u32 = 5;
+
+/// The five sound volumes (`audio-and-ambience` design section 2), each a
+/// whole percent 0..=100 in steps of 10. 0 is silent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Volumes {
+    pub master: u32,
+    pub effects: u32,
+    pub ambience: u32,
+    pub music: u32,
+    pub menus: u32,
+}
+
+impl Default for Volumes {
+    fn default() -> Self {
+        Self {
+            master: 80,
+            effects: 100,
+            ambience: 80,
+            music: 60,
+            menus: 70,
+        }
+    }
+}
+
+impl Volumes {
+    /// Every volume snapped to its step of 10 and held to 0..=100.
+    pub fn snapped(self) -> Self {
+        let snap = |v: u32| (v.min(100) + 5) / 10 * 10;
+        Self {
+            master: snap(self.master),
+            effects: snap(self.effects),
+            ambience: snap(self.ambience),
+            music: snap(self.music),
+            menus: snap(self.menus),
+        }
+    }
+
+    /// The next value a press on a volume row gives: up by 10, and from
+    /// 100 round to 0.
+    pub fn step(percent: u32) -> u32 {
+        if percent >= 100 {
+            0
+        } else {
+            (percent / 10 + 1) * 10
+        }
+    }
+}
 
 /// The render scales offered, in percent, in the order a press cycles them.
 pub const SCALES: [u32; 5] = [100, 85, 75, 67, 50];
@@ -119,6 +169,8 @@ pub struct PlayerSettings {
     /// The current starter mission's line on the HUD (`starter-missions`
     /// design 14). Off hides it; the chain still counts.
     pub mission_line: bool,
+    /// The five sound volumes (`audio-and-ambience`).
+    pub volumes: Volumes,
 }
 
 /// A new player's settings, the owner's choice (2026-11-13, "default to
@@ -132,6 +184,7 @@ impl Default for PlayerSettings {
             auto_step: false,
             rain_shadows: false,
             mission_line: true,
+            volumes: Volumes::default(),
         }
     }
 }
@@ -147,6 +200,13 @@ impl PlayerSettings {
         auto_step: true,
         rain_shadows: true,
         mission_line: true,
+        volumes: Volumes {
+            master: 80,
+            effects: 100,
+            ambience: 80,
+            music: 60,
+            menus: 70,
+        },
     };
 }
 
@@ -162,6 +222,7 @@ struct File {
     auto_step: bool,
     rain_shadows: bool,
     mission_line: bool,
+    volumes: Volumes,
     /// Slot name to key name (`controls::KeyBinds::to_names`).
     keys: BTreeMap<String, String>,
 }
@@ -176,6 +237,7 @@ impl Default for File {
             auto_step: base.auto_step,
             rain_shadows: base.rain_shadows,
             mission_line: base.mission_line,
+            volumes: base.volumes,
             keys: BTreeMap::new(),
         }
     }
@@ -215,6 +277,7 @@ impl PlayerSettings {
             auto_step: file.auto_step,
             rain_shadows: file.rain_shadows,
             mission_line: file.mission_line,
+            volumes: file.volumes.snapped(),
         };
         let (keys, skipped) = KeyBinds::from_names(&file.keys);
         for rebind in skipped {
@@ -233,6 +296,7 @@ impl PlayerSettings {
                 auto_step: self.auto_step,
                 rain_shadows: self.rain_shadows,
                 mission_line: self.mission_line,
+                volumes: self.volumes,
                 keys: keys.to_names(),
             },
             ron::ser::PrettyConfig::default(),
@@ -275,6 +339,7 @@ impl PlayerSettings {
             auto_step: overrides.auto_step.unwrap_or(self.auto_step),
             rain_shadows: overrides.rain_shadows.unwrap_or(self.rain_shadows),
             mission_line: self.mission_line,
+            volumes: self.volumes,
         }
     }
 }
@@ -690,6 +755,8 @@ mod tests {
                 rain_shadows: false,
                 // Version 4's field: an older file reads it as on.
                 mission_line: true,
+                // Version 5's: an older file reads the defaults.
+                volumes: Volumes::default(),
             }
         );
         assert!(
@@ -707,6 +774,10 @@ mod tests {
             auto_step: false,
             rain_shadows: true,
             mission_line: false,
+            volumes: Volumes {
+                ambience: 40,
+                ..Volumes::default()
+            },
         };
         let mut keys = KeyBinds::default();
         let roll = crate::controls::slots()
@@ -802,7 +873,7 @@ mod tests {
         // Written back, a file with no rebinds says so, and an older build
         // ignores the field.
         let text = PlayerSettings::default().to_text(&KeyBinds::default());
-        assert!(text.contains("version: 4"), "{text}");
+        assert!(text.contains("version: 5"), "{text}");
         let (_, none, _) = PlayerSettings::parse(&text).unwrap();
         assert!(none.is_empty());
     }
@@ -867,6 +938,35 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    /// `audio-and-ambience` 7.1: a version 4 file (the last before volumes)
+    /// reads every field it has and the default volumes, and is written back
+    /// at version 5 with them; a volume off its step snaps to it.
+    #[test]
+    fn a_file_from_before_volumes_reads_the_defaults_and_keeps_the_rest() {
+        let old = "(version: 4, frame_limit: Fps120, render_scale: 67, auto_step: true, rain_shadows: true, mission_line: false)";
+        let (read, _, version) = PlayerSettings::parse(old).unwrap();
+        assert_eq!(version, 4);
+        assert_eq!(read.render_scale, 67);
+        assert!(read.rain_shadows && read.auto_step && !read.mission_line);
+        assert_eq!(read.volumes, Volumes::default());
+        assert!(Loaded::Read(4).writable());
+        let text = read.to_text(&KeyBinds::default());
+        assert!(text.contains("version: 5"), "{text}");
+        let (again, _, _) = PlayerSettings::parse(&text).unwrap();
+        assert_eq!(again, read);
+        let odd = "(version: 5, volumes: (master: 43, effects: 250, menus: 0))";
+        let (snapped, _, _) = PlayerSettings::parse(odd).unwrap();
+        assert_eq!(snapped.volumes.master, 40);
+        assert_eq!(snapped.volumes.effects, 100);
+        assert_eq!(snapped.volumes.menus, 0);
+        assert_eq!(snapped.volumes.ambience, Volumes::default().ambience);
+        assert_eq!(Volumes::step(90), 100);
+        assert_eq!(Volumes::step(100), 0);
+        assert_eq!(Volumes::step(0), 10);
+        // Captures and takes hear the defaults.
+        assert_eq!(PlayerSettings::ISOLATED.volumes, Volumes::default());
+    }
+
     #[test]
     fn a_scale_off_the_list_snaps_to_it() {
         assert_eq!(snap_scale(66), 67);
@@ -890,6 +990,7 @@ mod tests {
             auto_step: false,
             rain_shadows: false,
             mission_line: true,
+            volumes: Volumes::default(),
         };
         let flags = Overrides {
             render_scale: Some(100),

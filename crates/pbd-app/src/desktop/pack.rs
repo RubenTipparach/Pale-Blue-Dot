@@ -1,5 +1,5 @@
-//! The pack: thirty slots behind the hotbar, opened with I (`inventory-grid`
-//! tasks 4.1 and 4.2).
+//! The pack: thirty slots behind the hotbar, opened with I or Tab
+//! (`inventory-grid` tasks 4.1 and 4.2, decision 9).
 //!
 //! It is a menu screen of its own, as the field guide is, so it holds the
 //! pointer and closes on Escape with no code of its own for either. Its grid
@@ -90,7 +90,7 @@ pub fn click(
     }
 }
 
-/// I opens the pack from the world on foot and closes it again. `PreUpdate`
+/// I or Tab opens the pack from the world on foot and closes it again. `PreUpdate`
 /// after `menu::toggle`, before the world's readers, like the guide's J. The
 /// pack does not open in a ship's seat, where the hotbar is not drawn either.
 pub fn open(
@@ -101,7 +101,7 @@ pub fn open(
     // I is the pack and O the starter missions (`starter-missions` design
     // 13): each opens its own screen from the world, shuts it again, and
     // switches to it from the other.
-    let to = if keys.just_pressed(KeyCode::KeyI) {
+    let to = if keys.any_just_pressed([KeyCode::KeyI, KeyCode::Tab]) {
         Screen::Pack
     } else if keys.just_pressed(KeyCode::KeyO) {
         Screen::Missions
@@ -474,5 +474,26 @@ mod tests {
             Screen::Playing,
             "not in a seat"
         );
+    }
+
+    /// Tab opens and shuts the pack as I does (decision 9).
+    #[test]
+    fn tab_opens_and_closes_the_pack() {
+        let mut app = App::new();
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .insert_resource(Screen::Playing)
+            .insert_resource(WalkingReadout {
+                active: true,
+                ..default()
+            })
+            .add_systems(Update, open);
+        for want in [Screen::Pack, Screen::Playing] {
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.release(KeyCode::Tab);
+            keys.clear();
+            keys.press(KeyCode::Tab);
+            app.update();
+            assert_eq!(*app.world().resource::<Screen>(), want);
+        }
     }
 }

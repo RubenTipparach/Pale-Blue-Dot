@@ -529,15 +529,19 @@ pub fn open(
         return;
     }
     match *screen {
-        Screen::Playing => {
-            if let Some(at) = player.get() {
-                view.centre = geo::project(at);
-            }
-            *screen = Screen::Map;
-        }
+        Screen::Playing => show(&mut screen, &mut view, &player),
         Screen::Map => *screen = Screen::Playing,
         _ => {}
     }
+}
+
+/// Put the map up centred on the player: M from the world, and the pack's
+/// MAP link (`inventory-grid` decision 9).
+pub fn show(screen: &mut Screen, view: &mut MapView, player: &PlayerPlace) {
+    if let Some(at) = player.get() {
+        view.centre = geo::project(at);
+    }
+    *screen = Screen::Map;
 }
 
 /// Build the map's screen, hidden, and its live material. `Startup`.

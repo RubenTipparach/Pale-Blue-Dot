@@ -41,6 +41,18 @@ pub struct TabStrip;
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 pub struct TabTo(pub Screen);
 
+/// The strip over the pack and the missions, left to right: their own two
+/// tabs, then links to the map, the guide and the pause menu
+/// (`inventory-grid` decision 9; owner, 2026-11-15: "pack should buttons to
+/// other menus like the pause menu or the map").
+pub const TABS: [(&str, Screen); 5] = [
+    ("PACK  I", Screen::Pack),
+    ("MISSIONS  O", Screen::Missions),
+    ("MAP  M", Screen::Map),
+    ("GUIDE  J", Screen::Guide),
+    ("MENU  ESC", Screen::Pause),
+];
+
 /// The tab's width, native pixels.
 const WIDTH: f32 = 300.0;
 
@@ -75,7 +87,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, chain: Res<MissionChain>) 
             TabStrip,
         ))
         .with_children(|strip| {
-            for (label, to) in [("PACK  I", Screen::Pack), ("MISSIONS  O", Screen::Missions)] {
+            for (label, to) in TABS {
                 strip
                     .spawn((ui_kit::plaque(kit, Set::Oak, 70.0), TabTo(to)))
                     .with_children(|p| {
@@ -291,10 +303,17 @@ pub fn paint(
 pub fn press_tabs(
     tabs: Query<(&Interaction, &TabTo), Changed<Interaction>>,
     mut screen: ResMut<Screen>,
+    mut view: ResMut<super::map_screen::MapView>,
+    player: super::map_screen::PlayerPlace,
 ) {
     for (interaction, to) in &tabs {
-        if *interaction == Interaction::Pressed && *screen != to.0 {
-            *screen = to.0;
+        if *interaction != Interaction::Pressed || *screen == to.0 {
+            continue;
+        }
+        // The map opens centred on the player, as M does.
+        match to.0 {
+            Screen::Map => super::map_screen::show(&mut screen, &mut view, &player),
+            other => *screen = other,
         }
     }
 }
@@ -456,5 +475,21 @@ mod tests {
         let missions = app.world().resource::<Missions>();
         assert_eq!(missions.progress.current(chain).map(|m| &m.id), None);
         assert_eq!(missions.progress.done.len(), chain.missions.len());
+    }
+
+    /// Each plaque in the strip puts its own screen up from the pack
+    /// (`inventory-grid` decision 9).
+    #[test]
+    fn each_strip_tab_opens_its_screen() {
+        for (label, to) in TABS {
+            let mut app = App::new();
+            app.insert_resource(Screen::Pack)
+                .init_resource::<super::super::map_screen::MapView>()
+                .add_systems(Update, press_tabs);
+            app.world_mut()
+                .spawn((Button, Interaction::Pressed, TabTo(to)));
+            app.update();
+            assert_eq!(*app.world().resource::<Screen>(), to, "{label}");
+        }
     }
 }

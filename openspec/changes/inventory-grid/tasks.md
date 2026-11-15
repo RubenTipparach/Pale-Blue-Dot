@@ -33,6 +33,10 @@ the block into the world as a floating block.
 
 - [ ] 4.5 `Equipment` holds a tool or nothing; a new world's kit holds nothing; the roll-out starts with "Bare hands"; bare hands dig nothing and draw nothing in hand; the `hand` line writes `-` for them. Verify: the tests and the capture decision 8 names.
 
+## 4d. Tab and the links (decision 9)
+
+- [ ] 4.6 Tab opens and shuts the pack beside I; the tab strip over the pack links to the map, the guide and the pause menu. Verify: the tests and the capture decision 9 names.
+
 ## 5. The owner's check
 
 - [ ] 5.1 The gate video (`step-videos`, in the owner's batch): the pack opened, stacks moved, a dig pulled into the pack, and a dig with everything full left floating.
