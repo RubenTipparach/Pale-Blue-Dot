@@ -20,3 +20,10 @@ Done on `claude/starter-missions` (2026-11-14): tests in `pbd_core::missions` an
 - [x] 3.1 The events fed from crafting, dig and place, fishing, farming, husbandry, cooking and smelting. Verify: an app test per kind.
 - [x] 3.2 The Missions tab and the HUD line, stone-and-wood kit, with a chime on completion. Verify: captures of the tab and the HUD.
 - [x] 3.3 A scripted run (a capture instrument, `--missions`) through the whole chain on a fresh world, from the first dig to the farm meal (tool crafting merged, design 18). Verify: the log shows each completion; screenshots in `docs/screenshots/starter-missions/`.
+
+## Homestead missions and the bot (design "Missions that show off the game")
+
+- [ ] H.1 The `eat`, `fell` and `night` objective kinds in `pbd_core::missions`, raised where eating, felling and the clock already act. Verify: core tests that each counts once per deed and that an old world's missions record reads unchanged.
+- [ ] H.2 The Homestead chain in `missions.ron`, opened by the starter chain. Verify: the load test names no unknown item; the chain is reachable (every `what` has a recipe or a source).
+- [ ] H.3 The bot's goals in `assets/showcase/phase-1-loop.ron`: the starter chain, then Homestead, played through the player's inputs (`step-videos` 5.1, 5.2). Verify: a run ends with every mission of both chains done in the save, and `SHOWCASE_END`.
+

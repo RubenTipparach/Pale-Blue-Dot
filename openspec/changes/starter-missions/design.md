@@ -165,3 +165,57 @@ in. Recommendations taken (ask only with screenshots):
     once a day; planting and taming come early so that the waiting happens
     while the player smelts. Those two are the missions that cannot be one
     to three minutes; every other count is.
+
+## Missions that show off the game, and a bot that plays them (owner, 2026-11-15)
+
+The owner: *"think about the missions systems, design missions that show off
+gameplay and make sure the bot completes it"*. This came after the demo rule
+in CLAUDE.md ("Demos: tech montages and a bot playing to a goal").
+
+**Two goals for the bot.** The phase-1 showcase (`step-videos` 5.2) is a bot
+whose stated goal is a mission chain. It plays the chain through the
+player's inputs, and the missions' own completion lines prove it. The goals
+are:
+1. **"Finish the starter missions"**: the nineteen that exist, unchanged. They
+   teach each verb once.
+2. **"Homestead"**: a second chain, opened when the starter chain is done. It
+   is built to show the verbs working together, each mission a small story
+   with a payoff on screen.
+
+**The Homestead chain** (new ids, append-only; counts kept small so the bot's
+run stays watchable):
+
+| id | title | objectives | what it shows |
+| --- | --- | --- | --- |
+| `shore-lunch` | Shore lunch | catch 2 fish of 2 species; cook 2 `grilled-fish`; **eat** 1 | the rod's bite and reel, species, the campfire, eating with its effect icon |
+| `bread` | Bread from your field | till 4; plant 4 `wheat-seed`; harvest 4 `wheat`; cook 2 `flatbread` | a field from bare grass to bread, on a sped-up clock |
+| `flock` | Start a flock | tame 2 `yard hen`; build a pen with a gate; collect 2 `egg`; cook 1 `fried-egg` | taming by feeding, fences on hex edges, the coop's eggs into the pan |
+| `bronze` | The bronze age | smelt 2 `bronze-ingot`; craft `tool:pickaxe` at bronze; dig 3 stone with it | the forge's alloy and a faster pick, the dig time shown |
+| `lamplight` | Light the farm | place 4 lights at the pen and field; be there at night | the lit-at-night look on the player's own farm |
+| `feast` | A farm feast | **eat** 3 different dishes | every effect icon at once: the payoff of the whole loop |
+
+**Two objective kinds are added.**
+- **`eat`**: a dish eaten from the hotbar. Eating exists (`cooking`), and
+  the event is already raised where the effect starts.
+- **`fell`**: a tree felled with the axe, now that felling is built
+  (`tool-crafting`). `fell` stops being "pending".
+
+`lamplight`'s "be there at night" is `place` of lights plus a new **`night`**
+objective: the clock passes 20:00 with the player within 30 m of a light
+they placed. If a new kind is not wanted, `night` falls back to `place`
+alone.
+
+**What the bot does and does not do.**
+- It plays every objective through the player's inputs (`step-videos` 5.1).
+- It may speed the clock while it waits on a crop, an egg or the night, and
+  a caption says so.
+- It never sets a mission's count or an item directly. A mission the bot
+  cannot finish fails the run: `SHOWCASE_END` is not printed and the log
+  says which objective stalled.
+- The test of the showcase is that both chains are done in the save at the
+  end.
+
+**Saves.** New mission ids only, appended. A world from before has none of
+them, and opens with the Homestead chain locked behind its starter chain as
+usual.
+
