@@ -120,7 +120,9 @@ from this plan; recorded here so the two changes agree.
       takes each species' icon and entry from the run, and is regenerated
       from the built roster (`docs/wiki/fish-ranges/`, day one and 200 days
       of the shipped settings).
-      The atlas itself is not yet regenerated with the full roster.
+      Regenerated 2026-11-15 with the full roster (1 and 200 days of the
+      shipped settings; the sea now holds near 17 C and nothing freezes all
+      year, so the old 'sea that freezes' series is gone).
 - [x] Bottom dwellers: the goal off the bed and the vertical hold.
 - [x] App: spawn ring, caps, despawn, a fixed 30 Hz step. Drawn as one mesh
       per school rebuilt from its arrays rather than an instanced draw per
@@ -173,9 +175,11 @@ from this plan; recorded here so the two changes agree.
 - [x] Capture: `--fish` stands on a warm shore and scripts one cast, logging
       the schools (`docs/screenshots/fishing-cast.png`).
 - [ ] Captures: the picker open, the field guide open, a felled tree.
-      (2026-11-15: the field guide can be captured with `--menu guide`, not
-      yet taken; the picker has no capture flag yet; a felled tree does not
-      vanish, section 4.)
+      (2026-11-15, cloud session: the field guide taken with `--menu guide`,
+      `docs/screenshots/fishing-and-equipment/field-guide.jpg`, all 18
+      species of the water roster in the list; a felled tree's capture is
+      `flora-v2`'s `--take-trees` shot. Still open: the picker has no
+      capture flag.)
 - [x] `openspec validate --all`, fmt, clippy and tests.
 - [x] Moved into `openspec/specs`: `world/fauna`, `player/fishing`, the tool
       slot, picker and saved tool change of `player/equipment`, and the tap
