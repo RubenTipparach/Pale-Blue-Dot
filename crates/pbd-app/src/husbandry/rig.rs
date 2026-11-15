@@ -23,9 +23,13 @@ pub struct Builder {
 
 impl Builder {
     /// A box: its centre and three half-axes (each a direction times a half
-    /// extent), in the mesh's space.
+    /// extent), in the mesh's space. The colour is sRGB, as the data and a
+    /// `Color::srgb` are; a vertex colour is linear, so it is converted.
     pub fn cuboid(&mut self, centre: Vec3, axes: [Vec3; 3], colour: [f32; 3]) {
-        let c = [colour[0], colour[1], colour[2], 1.0];
+        let [r, g, b, _] = Color::srgb(colour[0], colour[1], colour[2])
+            .to_linear()
+            .to_f32_array();
+        let c = [r, g, b, 1.0];
         for k in 0..3 {
             let (a, b, d) = (axes[k], axes[(k + 1) % 3], axes[(k + 2) % 3]);
             for sign in [1.0f32, -1.0] {

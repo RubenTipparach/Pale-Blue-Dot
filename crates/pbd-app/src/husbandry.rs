@@ -811,7 +811,13 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
                     *t -= took as f32;
                 }
                 if took > 0 {
-                    got.push(format!("{took} {}", p.good));
+                    got.push(match (p.good.as_str(), took) {
+                        ("egg", 1) => "an egg".to_string(),
+                        ("egg", n) => format!("{n} eggs"),
+                        ("milk", 1) => "a pail of milk".to_string(),
+                        ("milk", n) => format!("{n} pails of milk"),
+                        (good, n) => format!("{n} {good}"),
+                    });
                 }
             }
             if !got.is_empty() {
@@ -942,6 +948,21 @@ fn settle(world: &World, yard: &mut Farmyard, save: &mut WorldSave, k: usize) {
     body.home = cell;
     body.pen = pen.as_ref().map(|p| p.id);
     save.store(&Author::Player(0), vec![body.record(id)]);
+    let herd: Vec<(u16, Sex)> = match &pen {
+        Some(p) => record::animals(&save.records)
+            .into_iter()
+            .filter(|(_, b)| b.pen.is_some() && p.cells.contains(&b.home))
+            .map(|(_, b)| (b.sp, b.sex))
+            .collect(),
+        None => vec![(body.sp, body.sex)],
+    };
+    let c = conditions(world, pen.as_ref(), &herd);
+    info!(
+        "husbandry: {name} {id} home {cell} pen {:?} ({} cells, herd {}): {c:?}",
+        body.pen,
+        pen.as_ref().map_or(0, |p| p.cells.len()),
+        herd.len()
+    );
     let b = &mut yard.beasts[k];
     b.mode = Mode::Idle;
     b.goal = None;
@@ -972,7 +993,7 @@ fn edge_at(world: &World, point: Vec3) -> Option<(Edge, Vec3, Vec3)> {
         .filter_map(|&n| {
             let other = set.finest_records().get(n as usize)?;
             let mid = (here + Vec3::from_slice(&other.direction_height[..3])).normalize();
-            Some((n as usize, mid.angle_between(d)))
+            Some((n as usize, mid.distance_squared(d)))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))?;
     let other = set.finest_records().get(n)?;
@@ -990,7 +1011,7 @@ fn edge_corners(a: &crate::planet::GpuCell, b: &crate::planet::GpuCell) -> Optio
         .iter()
         .map(|c| Vec3::new(c[0], c[1], c[2]).normalize_or(ca))
         .collect();
-    corners.sort_by(|x, y| x.angle_between(mid).total_cmp(&y.angle_between(mid)));
+    corners.sort_by(|x, y| x.distance_squared(mid).total_cmp(&y.distance_squared(mid)));
     Some((*corners.first()?, *corners.get(1)?))
 }
 
@@ -1451,7 +1472,7 @@ fn draw_fences(
     let mut origin = None;
     let mut builder = rig::Builder::default();
     let wood = [0.42, 0.28, 0.16];
-    let light = [0.62, 0.44, 0.26];
+    let light = [0.80, 0.70, 0.52];
     let mut drawn = 0;
     for (edge, &gate) in &pieces {
         let (a, b) = edge.cells();
@@ -1468,6 +1489,7 @@ fn draw_fences(
             &mut builder,
             pa - o,
             pb - o,
+            (ca + cb).normalize_or(Vec3::Y),
             gate,
             if gate { light } else { wood },
         );
@@ -1505,8 +1527,7 @@ fn draw_fences(
 
 /// A piece between two corners on the ground: two posts and two rails; a
 /// gate adds a brace.
-fn fence_piece(out: &mut rig::Builder, a: Vec3, b: Vec3, gate: bool, colour: [f32; 3]) {
-    let up = ((a + b) * 0.5).normalize_or(Vec3::Y);
+fn fence_piece(out: &mut rig::Builder, a: Vec3, b: Vec3, up: Vec3, gate: bool, colour: [f32; 3]) {
     let along = b - a;
     let side = along.cross(up).normalize_or(Vec3::Z);
     let post = |out: &mut rig::Builder, at: Vec3| {
@@ -1678,6 +1699,17 @@ fn script(
         return;
     }
     let spot = feet + ahead * 7.0;
+    // The hands the scene needs, where a capture's `--lamps` took the kit
+    // (a capture's save is memory-only, so nothing is kept).
+    for (item, count) in [
+        (Item::Block(Material::Grass), 64),
+        (Item::Husbandry(Good::Fence), 24),
+        (Item::Husbandry(Good::Gate), 2),
+    ] {
+        if !hotbar.iter().flatten().any(|s| s.item == item) {
+            hotbar.give(item, count);
+        }
+    }
     match script.scene.as_str() {
         "wild" => {
             for n in 0..5 {
@@ -1832,8 +1864,8 @@ fn build_ring(
     let gate = edges
         .iter()
         .min_by(|a, b| {
-            a.1.angle_between(toward)
-                .total_cmp(&b.1.angle_between(toward))
+            a.1.distance_squared(toward.normalize())
+                .total_cmp(&b.1.distance_squared(toward.normalize()))
         })
         .map(|e| e.0);
     for (edge, mid) in edges {
