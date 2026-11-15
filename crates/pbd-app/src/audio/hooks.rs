@@ -335,7 +335,7 @@ fn walker_sounds(
     let flat = (v - up * up_speed).length();
     // The water at the walker's column: the surface over the floor.
     let stand = contact.stand(feet);
-    let surface = (stand.water_depth > 0.0).then(|| stand.floor_radius + stand.water_depth);
+    let surface = (stand.water_depth > 0.0).then_some(stand.floor_radius + stand.water_depth);
     let feet_wet = surface.is_some_and(|s| feet.length() < s);
     let in_water = surface.is_some_and(|s| position.length() < s);
     let eyes_under = env.underwater;
@@ -548,9 +548,13 @@ fn fishing(
     }
 }
 
+/// A button whose state changed this frame.
+type ChangedButtons<'w, 's> =
+    Query<'w, 's, (Entity, &'static Interaction), (Changed<Interaction>, With<Button>)>;
+
 /// Every UI button: a hover and a press (design section 4, Menus).
 fn menus(
-    buttons: Query<(Entity, &Interaction), (Changed<Interaction>, With<Button>)>,
+    buttons: ChangedButtons,
     mut was: Local<std::collections::HashMap<Entity, Interaction>>,
     mut sfx: ResMut<Sfx>,
 ) {
@@ -569,13 +573,17 @@ fn menus(
     }
 }
 
+/// The fires the tier holds, by its fine version and light version: each
+/// one's point and whether it is a campfire.
+type FireCache = (u64, u64, Vec<(Vec3, bool)>);
+
 /// The campfires and braziers near the ears crackle (build decision 7).
 fn fires(
     fine: Option<Res<PlanetFine>>,
     listener: Res<Listener>,
     data: Res<AudioData>,
     mut sfx: ResMut<Sfx>,
-    mut cache: Local<(u64, u64, Vec<(Vec3, bool)>)>,
+    mut cache: Local<FireCache>,
 ) {
     let Some(fine) = fine else {
         return;
@@ -625,52 +633,66 @@ fn thunder_from_strikes(
     sun: Option<Res<crate::sky::Sun>>,
     listener: Res<Listener>,
     data: Res<AudioData>,
+    time: Res<Time>,
     mut sfx: ResMut<Sfx>,
-    mut heard: Local<Option<u64>>,
+    mut heard: Local<(Option<u64>, f32)>,
 ) {
     let (Some(air), Some(sun)) = (air, sun) else {
         return;
     };
+    let (seen, quiet_s) = &mut *heard;
+    *quiet_s += time.delta_secs();
     let newest = air.now.strikes.iter().map(|s| s.step).max();
-    let Some(last) = *heard else {
+    let Some(last) = *seen else {
         // Strikes already in the state at the start were before the player
         // arrived.
-        *heard = Some(newest.unwrap_or(air.now.step));
+        *seen = Some(newest.unwrap_or(air.now.step));
         return;
     };
     if !listener.valid || newest.is_none_or(|n| n <= last) {
         return;
     }
+    *seen = newest;
+    let mix = &data.mix;
     let dt = air.now.settings.dt_s;
     let since_state = (sun.clock.seconds - air.at_seconds).max(0.0) as f32;
-    let mut count = 0;
-    for strike in air.now.strikes.iter().filter(|s| s.step > last) {
-        let Some(heard) = thunder(
-            &data.mix,
-            listener.eye,
-            strike.direction,
-            PLANET_RADIUS,
-            crate::sky::CLOUD_RADIUS,
-            strike.strength,
-        ) else {
-            continue;
-        };
-        if count >= 3 {
-            break;
-        }
-        count += 1;
-        let age = air.now.step.saturating_sub(strike.step) as f32 * dt + since_state;
-        // Placed at the bolt's nearest point, along the line to it.
-        let toward = strike.direction * PLANET_RADIUS - listener.eye;
-        let point = listener.eye + toward.normalize_or_zero() * heard.near_m;
-        sfx.play_since(
-            heard.take.cue(),
-            Where::At(point),
-            6.0 * strike.strength.clamp(0.0, 1.0),
-            age,
-        );
+    // The nearest new strike speaks for its step (build decision 11); a far
+    // one waits out `thunder_gap_s` after the last thunder, a near one
+    // never does.
+    let Some((strike, heard)) = air
+        .now
+        .strikes
+        .iter()
+        .filter(|s| s.step > last)
+        .filter_map(|strike| {
+            thunder(
+                mix,
+                listener.eye,
+                strike.direction,
+                PLANET_RADIUS,
+                crate::sky::CLOUD_RADIUS,
+                strike.strength,
+            )
+            .map(|heard| (strike, heard))
+        })
+        .min_by(|a, b| a.1.near_m.total_cmp(&b.1.near_m))
+    else {
+        return;
+    };
+    if heard.take == pbd_core::audio::ThunderTake::Roll && *quiet_s < mix.thunder_gap_s {
+        return;
     }
-    *heard = newest;
+    *quiet_s = 0.0;
+    let age = air.now.step.saturating_sub(strike.step) as f32 * dt + since_state;
+    // Placed at the bolt's nearest point, along the line to it.
+    let toward = strike.direction * PLANET_RADIUS - listener.eye;
+    let point = listener.eye + toward.normalize_or_zero() * heard.near_m;
+    sfx.play_since(
+        heard.take.cue(),
+        Where::At(point),
+        6.0 * strike.strength.clamp(0.0, 1.0),
+        age,
+    );
 }
 
 /// A short call placed around the listener now and then, so a bed is not one

@@ -559,6 +559,12 @@ shown in a screenshot, so the owner turns any of them by ear.
     and 2.8 sprinting (`step_rate_walk_hz`, `step_rate_run_hz`), the stride
     being speed over rate and never under 0.8 m (`stride_walk_m`), so a slow
     walk still steps every 0.8 m.
+11. **One thunder a step, and the far ones spaced.** A five-minute walk under
+    the spawn's storm heard 232 strikes within 6 km, a roll every 1.3 s. Of
+    each atmosphere step's new strikes only the nearest is heard, and a
+    far roll (past 1.5 km) waits `thunder_gap_s` (4 s) after the last
+    thunder; a crack or a clap never waits. Every near strike is still
+    heard, at its own delay.
 
 ## Decisions
 

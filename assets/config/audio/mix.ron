@@ -23,6 +23,7 @@
     loop_fade_s: 0.15,
     thunder_reach_m: 6000.0,
     thunder_full_within_m: 150.0,
+    thunder_gap_s: 4.0,
     wet_step_from: 0.4,
     stride_walk_m: 0.8,
     step_rate_walk_hz: 2.2,

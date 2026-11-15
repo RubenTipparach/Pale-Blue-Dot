@@ -178,6 +178,9 @@ pub struct MixConfig {
     pub loop_fade_s: f32,
     pub thunder_reach_m: f32,
     pub thunder_full_within_m: f32,
+    /// A far strike's roll waits this long after the last thunder; the
+    /// nearest new strike of a step speaks for it (build decision 11).
+    pub thunder_gap_s: f32,
     /// Wetness over which the wet layer goes under a step.
     pub wet_step_from: f32,
     /// The shortest stride: a slow walk steps every this many metres.
@@ -223,6 +226,7 @@ impl Default for MixConfig {
             loop_fade_s: 0.15,
             thunder_reach_m: 6000.0,
             thunder_full_within_m: 150.0,
+            thunder_gap_s: 4.0,
             wet_step_from: 0.4,
             stride_walk_m: 0.8,
             step_rate_walk_hz: 2.2,
@@ -472,7 +476,7 @@ impl Stride {
     /// The first step comes half a stride in, so a walker who sets off is
     /// heard at once.
     pub fn advance(&mut self, moved_m: f32, stride_m: f32) -> u32 {
-        if !(moved_m > 0.0) || !(stride_m > 0.0) {
+        if moved_m.is_nan() || stride_m.is_nan() || moved_m <= 0.0 || stride_m <= 0.0 {
             return 0;
         }
         let before = self.walked_m;

@@ -194,6 +194,8 @@ pub enum Backend {
     Mock { frames_per_step: usize },
 }
 
+// One manager for the whole run; its size does not matter.
+#[allow(clippy::large_enum_variant)]
 enum Manager {
     Device(AudioManager<CpalBackend>),
     Mock(AudioManager<MockBackend>),

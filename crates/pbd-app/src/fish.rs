@@ -216,6 +216,7 @@ struct Surroundings<'w, 's> {
 
 /// One frame of fishing: the line, the schools, and spawning round the
 /// player.
+#[allow(clippy::too_many_arguments)]
 fn fish(
     world: Surroundings,
     tools: Res<ToolSlot>,
