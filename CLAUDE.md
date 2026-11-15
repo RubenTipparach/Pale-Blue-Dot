@@ -322,6 +322,9 @@ which wait for a request.
 **After the loop (owner, 2026-11-14; "dont start this stuff yet"):**
 - **Environment v2, an environmental overhaul**: advanced foliage and flora (M13), and an
   underwater overhaul (M25, `ocean-environments`).
+- **Then the townsfolk** ("townsfolk comes after env v2"): NPCs (M5, `townsfolk`), missions, carpentry and
+  house building (M6, M22, `player-building`), and power generation, its
+  first rungs only: water and wind (M20).
 - **Then town building and civil engineering** ("the after env v2, we'll
   down town building, civil engineerring"): towns built and grown on the grid (M15,
   M22), and the works between buildings (roads, bridges); no mockup yet for
@@ -335,12 +338,11 @@ which wait for a request.
   generation"): aircraft (M24), mass mining, oil, industry and the power
   ladder past water and wind to coal and oil (M20, `industry-tiers`).
 - **Then nuclear and rocketry** ("then after that we'll get into nuclear,
-  and rocketry"): the fission plant (M20) and rockets to orbit and the other
-  worlds (M21, `ship-tiers`; M1, M2).
-- **The townsfolk**, its place in the order not yet set (hired haulers need
-  people to hire): NPCs (M5, `townsfolk`), missions, carpentry and
-  house building (M6, M22, `player-building`), and power generation, its
-  first rungs only: water and wind (M20).
+  and rocketry"): the fission plant (M20) and rockets to orbit (M21,
+  `ship-tiers`).
+- **Then space exploration and colonization** ("after rocketry, we'll get
+  into space exploration and colonization"): the system's other worlds (M1,
+  M2, `interplanetary-travel`) and settling them (M10 stations and outposts).
 
 None of these starts until the owner asks. The tracker's Roadmap section
 lists every phase with its mockups; keep it in step with this list

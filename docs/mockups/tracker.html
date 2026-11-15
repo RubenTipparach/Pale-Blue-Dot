@@ -455,7 +455,7 @@ function linkCard(a) {
     el('div', { class: 'row' }, el('a', { class: 'open', href: a.url, target: '_blank', rel: 'noopener' }, 'Open')));
 }
 
-// The roadmap (owner, 2026-11-14): the first game loop, environment v2, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, then the townsfolk. `refs` are mockup ids;
+// The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, then space exploration and colonization. `refs` are mockup ids;
 // `change` is the OpenSpec change. Status: built, building, planned (written up), later (not started).
 const ROADMAP = [
   { title: 'The first game loop', when: 'now', note: 'Crafting tools, fishing, farming, herding, cooking: each feeds the next.', steps: [
@@ -469,7 +469,13 @@ const ROADMAP = [
     { title: 'Advanced foliage and flora', status: 'later', change: '', refs: ['M13'], text: 'Richer ground cover and plants, biome by biome, by day and night.' },
     { title: 'Underwater overhaul', status: 'later', change: 'ocean-environments', refs: ['M25'], text: 'Seas, rivers and marshes: what lives under the water and how it looks.' },
   ] },
-  { title: 'Town building and civil engineering', when: 'later', note: 'After environment v2. Not started.', steps: [
+  { title: 'Townsfolk', when: 'later', note: 'After environment v2. Not started.', steps: [
+    { title: 'NPCs', status: 'later', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, talk and trade.' },
+    { title: 'Missions', status: 'later', change: '', refs: ['M11'], text: 'Jobs and contracts from the townsfolk.' },
+    { title: 'Carpentry and house building', status: 'later', change: 'player-building', refs: ['M6', 'M22'], text: 'Walls, floors and storeys on the hex grid; cranes and scaffold.' },
+    { title: 'Power generation', status: 'later', change: '', refs: ['M20'], text: 'The first rungs: water wheels and windmills.' },
+  ] },
+  { title: 'Town building and civil engineering', when: 'later', note: 'After the townsfolk. Not started.', steps: [
     { title: 'Town building', status: 'later', change: 'tenebris-towns', refs: ['M15', 'M22'], text: 'Building and growing towns on the hex grid, from the reference town.' },
     { title: 'Civil engineering', status: 'later', change: '', refs: [], text: 'The works between buildings: roads, bridges and the like. No mockup yet.' },
   ] },
@@ -488,13 +494,11 @@ const ROADMAP = [
   ] },
   { title: 'Nuclear and rocketry', when: 'later', note: 'After the age of flight and industry. Not started.', steps: [
     { title: 'Nuclear', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'The fission plant, its cooling tower and containment dome built of hex cells.' },
-    { title: 'Rocketry', status: 'later', change: 'ship-tiers', refs: ['M21', 'M1', 'M2'], text: 'Hex-cell rockets with decks you walk, flown to orbit and on to the other worlds.' },
+    { title: 'Rocketry', status: 'later', change: 'ship-tiers', refs: ['M21'], text: 'Hex-cell rockets with decks you walk, flown to orbit and back.' },
   ] },
-  { title: 'Townsfolk', when: 'later', note: 'Not started. Its place in the order is open: hired haulers need townsfolk to hire.', steps: [
-    { title: 'NPCs', status: 'later', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, talk and trade.' },
-    { title: 'Missions', status: 'later', change: '', refs: ['M11'], text: 'Jobs and contracts from the townsfolk.' },
-    { title: 'Carpentry and house building', status: 'later', change: 'player-building', refs: ['M6', 'M22'], text: 'Walls, floors and storeys on the hex grid; cranes and scaffold.' },
-    { title: 'Power generation', status: 'later', change: '', refs: ['M20'], text: 'The first rungs: water wheels and windmills.' },
+  { title: 'Space exploration and colonization', when: 'later', note: 'After rocketry. Not started.', steps: [
+    { title: 'Space exploration', status: 'later', change: 'interplanetary-travel', refs: ['M1', 'M2'], text: 'The other worlds and moons of the system, reached by rocket.' },
+    { title: 'Colonization', status: 'later', change: '', refs: ['M10'], text: 'Settling other worlds: outposts, stations and bases off the home planet.' },
   ] },
 ];
 const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started' };
