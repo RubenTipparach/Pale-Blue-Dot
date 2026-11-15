@@ -29,7 +29,7 @@ use bevy::math::Vec3;
 use pbd_core::drops::ItemDrop;
 use pbd_core::edits::Edit;
 use pbd_core::goods::Good;
-use pbd_core::inventory::{CARRIED, Equipment, Item, SLOTS, Slots, Stack, Tool};
+use pbd_core::inventory::{CARRIED, Equipment, Item, SLOTS, Slots, Stack, Tier, Tool};
 use pbd_core::planet_gen::TerrainConfig;
 use pbd_core::records::{Author, Record as StoredRecord, split_author};
 use pbd_core::terrain::{GENERATOR_VERSION, Material, TOPOLOGY_VERSION};
@@ -155,6 +155,7 @@ pub fn material_code(material: Material) -> u8 {
         Material::Candle => 17,
         Material::Tilled => 18,
         Material::Forge => 19,
+        Material::Workbench => 20,
     }
 }
 
@@ -180,6 +181,7 @@ pub fn material_of(code: u8) -> Option<Material> {
         17 => Material::Candle,
         18 => Material::Tilled,
         19 => Material::Forge,
+        20 => Material::Workbench,
         _ => return None,
     })
 }
@@ -317,19 +319,48 @@ pub fn catch_line_of(species: u16, length_cm: u32, slots: &Slots) -> String {
     line
 }
 
-/// `hand tool owned`, one line: the tool's code, or `-` for bare hands
-/// (`inventory-grid` decision 8), and one bit per tool owned, in
-/// `Tool::ALL` order.
+/// `hand tool tiers`, one line: the tool's code, or `-` for bare hands
+/// (`inventory-grid` decision 8), and one character per tool in `Tool::ALL`
+/// order, its tier's digit or `-` for not owned (`tool-crafting` decision
+/// 8): `hand - 0-2-`. The field before tiers was a bit mask of one or two
+/// digits, which [`parse_line`] still reads, as the stone tier.
 pub fn hand_line_of(equipment: &Equipment) -> String {
-    let owned = equipment
-        .owned()
+    let tiers: String = equipment
+        .tiers()
         .iter()
-        .enumerate()
-        .fold(0u8, |bits, (i, owns)| bits | (u8::from(*owns) << i));
+        .map(|tier| tier.map_or('-', |t| char::from(b'0' + t.digit())))
+        .collect();
     let held = equipment
         .held()
         .map_or_else(|| BARE.to_string(), |t| tool_code(t).to_string());
-    format!("{HAND} {held} {owned}\n")
+    format!("{HAND} {held} {tiers}\n")
+}
+
+/// The owned field of a `hand` line: four tier characters, or the old bit
+/// mask read as the stone tier.
+fn tiers_of(field: &str) -> Option<[Option<Tier>; 4]> {
+    if field.len() == Tool::ALL.len() && field.chars().all(|c| c == '-' || c.is_ascii_digit()) {
+        let mut tiers = [None; 4];
+        for (slot, c) in tiers.iter_mut().zip(field.bytes()) {
+            *slot = match c {
+                b'-' => None,
+                digit => Some(Tier::of_digit(digit - b'0')?),
+            };
+        }
+        return Some(tiers);
+    }
+    if field.len() > 2 {
+        return None;
+    }
+    let bits: u8 = field.parse().ok()?;
+    if bits >= 1 << Tool::ALL.len() {
+        return None;
+    }
+    let mut tiers = [None; 4];
+    for (i, tier) in tiers.iter_mut().enumerate() {
+        *tier = (bits & (1 << i) != 0).then_some(Tier::Stone);
+    }
+    Some(tiers)
 }
 
 /// The `hand` line's tool for bare hands. An older build reads it as a
@@ -422,16 +453,12 @@ pub fn parse_line(line: &str) -> Option<Record> {
             BARE => None,
             code => Some(tool_of(code.parse().ok()?)?),
         };
-        let bits: u8 = parts.next()?.parse().ok()?;
-        if parts.next().is_some() || bits >= 1 << Tool::ALL.len() {
+        let tiers = tiers_of(parts.next()?)?;
+        if parts.next().is_some() {
             return None;
         }
-        let mut owned = [false; 4];
-        for (i, owns) in owned.iter_mut().enumerate() {
-            *owns = bits & (1 << i) != 0;
-        }
         return Some(Record::Hand {
-            equipment: Equipment::from_parts(owned, held),
+            equipment: Equipment::from_tiers(tiers, held),
         });
     }
     if head == PACK {
@@ -520,7 +547,15 @@ pub struct Identity {
     /// `city-sites` adds the first.
     #[serde(default)]
     pub records: BTreeMap<String, u32>,
+    /// How the world's tools began (`tool-crafting` decision 8): 0, absent
+    /// in every world made before, is the old kit of all four tools; 1 is a
+    /// world made with tool crafting, which starts owning none.
+    #[serde(default)]
+    pub tools: u32,
 }
+
+/// The `tools` a world this build makes is marked with.
+pub const TOOLS_VERSION: u32 = 1;
 
 impl Identity {
     /// A world this build makes.
@@ -531,7 +566,13 @@ impl Identity {
             topology: TOPOLOGY_VERSION,
             keys: KEY_VERSION,
             records: BTreeMap::new(),
+            tools: TOOLS_VERSION,
         }
+    }
+
+    /// Whether the world began with tool crafting, owning no tools.
+    pub fn crafts_its_tools(&self) -> bool {
+        self.tools >= TOOLS_VERSION
     }
 
     /// A world made before identities were written: generator 4 and topology
@@ -544,6 +585,7 @@ impl Identity {
             topology: 1,
             keys,
             records: BTreeMap::new(),
+            tools: 0,
         }
     }
 
@@ -680,13 +722,36 @@ mod tests {
             parse_line(&hand_line_of(&partial)),
             Some(Record::Hand { equipment: partial })
         );
-        // Bare hands write `-`, and read back bare; a tool line reads as it
-        // always did (`inventory-grid` decision 8).
+        // Bare hands write `-`, and read back bare; a line from before tiers
+        // reads as it always did, at the stone tier (`inventory-grid`
+        // decision 8, `tool-crafting` decision 8).
         let bare = Equipment::default();
-        assert_eq!(hand_line_of(&bare), "hand - 15\n");
+        assert_eq!(hand_line_of(&bare), "hand - 0000\n");
         assert_eq!(
             parse_line("hand - 15"),
             Some(Record::Hand { equipment: bare })
+        );
+        assert_eq!(
+            parse_line("hand - 5"),
+            Some(Record::Hand {
+                equipment: Equipment::from_parts([true, false, true, false], None)
+            })
+        );
+        // Tiers: a new world's nothing, and an iron pickaxe in hand.
+        let none = Equipment::new_world();
+        assert_eq!(hand_line_of(&none), "hand - ----\n");
+        assert_eq!(
+            parse_line("hand - ----"),
+            Some(Record::Hand { equipment: none })
+        );
+        let mut iron = Equipment::new_world();
+        iron.grant(Tool::Pickaxe, Tier::Iron).unwrap();
+        iron.grant(Tool::Rod, Tier::Stone).unwrap();
+        iron.hold(Tool::Pickaxe);
+        assert_eq!(hand_line_of(&iron), "hand 0 0-2-\n");
+        assert_eq!(
+            parse_line(&hand_line_of(&iron)),
+            Some(Record::Hand { equipment: iron })
         );
         assert_eq!(
             parse_line("hand 3 15"),
@@ -704,6 +769,10 @@ mod tests {
             "hand 3 15 x",
             "hand -- 15",
             "hand - 16",
+            "hand - 0-4-",
+            "hand - 0-2",
+            "hand - 0-2-0",
+            "hand - 015",
         ] {
             assert!(parse_line(bad).is_none(), "{bad:?} parsed");
         }
@@ -1048,6 +1117,11 @@ mod tests {
             "no records field reads as no record kinds"
         );
         assert_eq!(made.refusal(), None);
+        assert!(made.crafts_its_tools(), "a new world crafts its tools");
+        assert!(
+            !Identity::from_ron(bare).unwrap().crafts_its_tools(),
+            "a world from before keeps the old kit"
+        );
         assert_eq!(
             Identity::legacy(7, 0).refusal(),
             None,

@@ -137,15 +137,26 @@ fn the_guide_reads_its_numbers_off_the_species() {
     }
 }
 
-/// A world with no tool record is dealt the four tools with nothing in hand
-/// (`inventory-grid` decision 8), and one that recorded a change comes back
-/// with it.
+/// A world from before tool crafting with no tool record is dealt the four
+/// tools with nothing in hand (`inventory-grid` decision 8); a world made
+/// since owns none (`tool-crafting` decision 8); and one that recorded a
+/// change comes back with it.
 #[test]
 fn the_tool_slot_opens_bare_handed_or_on_what_the_save_says() {
     let mut save = WorldSave::memory_only();
+    let fresh = ToolSlot::restore(&save);
+    assert_eq!(fresh.held(), None);
+    assert!(fresh.tools().is_empty(), "a new world owns no tool");
+    save.identity.tools = 0;
     let slot = ToolSlot::restore(&save);
     assert_eq!(slot.held(), None);
     assert!(Tool::ALL.iter().all(|t| slot.owns(*t)));
+    assert!(
+        Tool::ALL
+            .iter()
+            .all(|t| slot.tier(*t) == Some(pbd_core::inventory::Tier::Stone)),
+        "at the stone tier"
+    );
     let mut changed = slot;
     assert!(changed.hold(Tool::Axe));
     save.equipment = Some(changed.0);

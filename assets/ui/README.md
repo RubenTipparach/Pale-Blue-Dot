@@ -12,7 +12,7 @@ loads them.
 | --- | --- | --- |
 | `stone/<piece>.png` | `docs/mockups/ui/rendered/hires/<piece>.png` | `tools/art/ui_panels_blend.py` (Blender Cycles, 8 texels a native pixel) |
 | `oak/<piece>.png` | `docs/mockups/ui/rendered/hires/oak/<piece>.png` | the same, the carved-oak set |
-| `rock/rock-268x152.png` (the pack), `rock/rock-150x148.png` (the loading slab) | `docs/mockups/ui/rendered/hires/rock/` | the same, the approved base rock rendered at each panel's size (4 texels a native pixel) |
+| `rock/rock-268x152.png` (the pack), `rock/rock-150x148.png` (the loading slab), `rock/rock-268x204.png` (the pack with its Craft row, M29, commit `32c0edc`), `rock/rock-372x168.png` (the chest rock, the workbench panel's) | `docs/mockups/ui/rendered/hires/rock/` | the same, the approved base rock rendered at each panel's size (4 texels a native pixel) |
 | `slices.json` | `docs/mockups/ui/rendered/slices.json` | the same script: each piece's native size and 9-slice margins, the rock panels' sizes, the tokens and the contrast measured |
 
 Stone pieces copied: `frame`, `lintel`, `slot-idle`, `slot-hover`,
