@@ -159,7 +159,7 @@ function makeCaps(W, cells, o = {}) {
     const [q, r] = key.split(",").map(Number), X = hx(q, r), Z = hz(r), f = c.flow || [0, 0];
     for (let i = 0; i < 6; i++) { const [ax, az] = CORNER[i], [bx, bz] = CORNER[(i + 1) % 6]; push([X, c.wl, Z], f, 0); push([X + bx, c.wl, Z + bz], f, 0); push([X + ax, c.wl, Z + az], f, 0); }
     for (let i = 0; i < 6; i++) {
-      const nk = (q + DIRS[i][0]) + "," + (r + DIRS[i][1]), nb = cells.get(nk) || (o.lower && o.lower.get(nk)); if (o.noFalls || !nb || nb.wl >= c.wl - 0.05) continue;   // o.lower: water drawn by another mesh (the sea), so the last step still falls into it (owner, 2026-11-15: "last part of this water fall is missing")
+      const nk = (q + DIRS[i][0]) + "," + (r + DIRS[i][1]), nb = cells.get(nk) || (o.lower && o.lower.get(nk)); if (o.noFalls || !nb || nb.wl >= c.wl - (o.minStep ?? 0.05)) continue;   // o.lower: water drawn by another mesh (the sea), so the last step still falls into it (owner, 2026-11-15: "last part of this water fall is missing")
       // The falling sheet stands FALL_OFF in front of the cell's edge, toward the lower cell: the cliff face (the column's
       // side) is on the edge itself, and a sheet on the same plane z-fights with it. The sheet runs from the lip of the
       // upper cap down a hair into the pool below, so no seam opens at either end.
@@ -187,7 +187,10 @@ function makeCaps(W, cells, o = {}) {
 // outward). A column falling straight down carries none. A flat chevron on each flowing cap points downstream, longer
 // the faster it runs (the Flow arrows toggle).
 // The water's top in a cell: a source or a falling cell stands nearly full, a flowing one at (level + 1) / 8 of its
-// layer, and a cell with water above it is full to its top.
+// layer, and a cell with water above it is full to its top. So a source (0.94) is drawn 6 cm below the level-7 water
+// beside it (1.0), though the water runs out of the source: the flow is worked out on the head, where a source stands
+// an eighth above level 7, and no fall is drawn for a step under an eighth (minStep), so a pool of sources neither
+// grows a 6 cm froth ring nor shows arrows running into it.
 function surfOf(LQ) {
   const {AIR, SRC, FLOW} = root.PBDLiquid, {kind, lvl, down, idx, inside, unidx} = LQ;
   return i => { const [q, r, y] = unidx(i), up = inside(q, r, y + 1) ? kind[idx(q, r, y + 1)] : AIR; if (up === SRC || up === FLOW) return y + 1; return kind[i] === SRC || down[i] ? y + 0.94 : y + (lvl[i] + 1) / 8; };
@@ -200,17 +203,17 @@ function simWater(W, LQ, o = {}) {
   SW.rebuild = () => {
     const tops = new Map();
     for (let i = 0; i < LQ.NCELL; i++) { const k = kind[i]; if (k !== SRC && k !== FLOW) continue; const [q, r, y] = unidx(i), key = q + "," + r, h = surf(i);
-      const t = tops.get(key); if (!t || h > t.wl) tops.set(key, {q, r, y, wl: h, fall: k === FLOW && !!down[i]}); }
+      const t = tops.get(key); if (!t || h > t.wl) tops.set(key, {q, r, y, wl: h, head: k === SRC && h < y + 1 ? y + 9 / 8 : h, fall: k === FLOW && !!down[i]}); }
     const cells = new Map();
     for (const [key, t] of tops) {
       const X = hx(t.q, t.r), Z = hz(t.r); let fx = 0, fz = 0;
-      if (!t.fall) for (const [dq, dr] of DIRS) { const n = tops.get((t.q + dq) + "," + (t.r + dr)); if (!n || n.wl >= t.wl - 0.02) continue;
-        const dx = hx(t.q + dq, t.r + dr) - X, dz = hz(t.r + dr) - Z, l = Math.hypot(dx, dz) || 1, w = Math.min(1, t.wl - n.wl); fx += dx / l * w; fz += dz / l * w; }
+      if (!t.fall) for (const [dq, dr] of DIRS) { const n = tops.get((t.q + dq) + "," + (t.r + dr)); if (!n || n.head >= t.head - 0.02) continue;
+        const dx = hx(t.q + dq, t.r + dr) - X, dz = hz(t.r + dr) - Z, l = Math.hypot(dx, dz) || 1, w = Math.min(1, t.head - n.head); fx += dx / l * w; fz += dz / l * w; }
       const m = Math.hypot(fx, fz), sp = Math.min(0.9, m * 0.9);
       cells.set(key, {wl: t.wl, y: t.y, flow: m > 1e-4 ? [fx / m * sp, fz / m * sp] : [0, 0]});
     }
     if (SW.mesh) { W.scene.remove(SW.mesh); SW.mesh.geometry.dispose(); }
-    SW.mesh = makeCaps(W, cells, SW.mat ? {mat: SW.mat, lower: o.lower} : Object.assign({amp: 0.01, mud: 0, minA: 0.78, lower: o.lower}, o.caps));
+    SW.mesh = makeCaps(W, cells, Object.assign(SW.mat ? {mat: SW.mat} : Object.assign({amp: 0.01, mud: 0, minA: 0.78}, o.caps), {lower: o.lower, minStep: 0.07}));
     if (!SW.mat) SW.mat = SW.mesh.material;
     if (!SW.arrows) {
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute([0.55, 0, 0, -0.35, 0, 0.42, -0.12, 0, 0, 0.55, 0, 0, -0.12, 0, 0, -0.35, 0, -0.42], 3));
