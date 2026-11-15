@@ -235,7 +235,7 @@ tr:last-child td{border-bottom:0}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="ocean/creatures3d.js?v=1"></script>
 <script src="water-flow/liquid.js?v=1"></script>
-<script src="water-flow/water-look.js?v=1"></script>
+<script src="water-flow/water-look.js?v=2"></script>
 <script>
 "use strict";
 // ======================= the places =======================
@@ -1731,10 +1731,9 @@ function sceneSim(stage) {
         else { const t = open && m === 1 ? SIDES[1] : SIDES[m === 1 ? 2 : m]; hexSide(GA, X, Z, k, y, y + 1, () => [auv(t[0], t[1], t[2], 0, 0), auv(t[0], t[1], t[2], 1, 0), auv(t[0], t[1], t[2], 1, 1), auv(t[0], t[1], t[2], 0, 1)]); } } }
     S.ground = [meshOf(GA, atlas), meshOf(GG, granite)]; S.ground.forEach(m => W.scene.add(m));
   }
-  // The sim's water is drawn as the river's is (owner, 2026-11-15: "can we have the frothy walls and edges like the
-  // river demo you had and show flow direction?"): PBDWater.simWater (water-flow/water-look.js, which M28 runs too) takes
-  // the top water surface per column, gives each a flow vector towards its lower neighbours, and draws them through
-  // makeCaps, with the foaming fall sheet and lip on every step down and a chevron on each flowing cap.
+  // The sim's water: PBDWater.simWater (water-flow/water-look.js, which M28 runs too) meshes every water cell as
+  // Luanti's liquid mesher does (water-flow design 7e): sloped tops from shared corner heights, walls where water meets
+  // air, each falling cell a whole foaming block, the flow down the slope for the texture and the chevrons.
   const SW = PBDWater.simWater(W, LQ, {caps: {amp: 0.01, mud: 0, minA: 0.78}});
   function rebuildWater() { S.water = SW.rebuild(); S.arrows = SW.arrows; }
   const count = () => { let s = 0, f = 0, d = 0; for (let i = 0; i < LQ.NCELL; i++) { if (kind[i] === SRC) s++; else if (kind[i] === FLOW) { f++; if (down[i]) d++; } } return {s, f, d}; };
@@ -1774,6 +1773,7 @@ function sceneSim(stage) {
 }
 const SIM_HELP = `<p>A hex patch nine cells across from its middle, each cell 2.833 m flat to flat and 1 m a layer, as the game's. Click to <b>pour</b> a water source into a cell, <b>dig</b> one out (water or ground), or <b>place</b> a granite block. Drag to look, wheel to zoom.</p>
 <p>The water moves by <b>Luanti's (Minetest's) liquid rule</b>: <code>ServerMap::transformLiquidsLocal</code> and <code>get_max_liquid_level</code> in Luanti's <code>src/servermap.cpp</code> (commit <code>a10dc8d</code>, 2026-11-09), ported to the hex grid in <code>water-flow/liquid.js</code>, the same file the Hex Water Flow mockup (M28) runs. A <b>source</b> is full water that never drains. Next to it, <b>flowing</b> water takes level 7, and each cell further out one less, so water reaches <b>8 cells</b> (the range) and stops. Water with air under it <b>falls</b>: a cell above water flows down before it spreads (Luanti's drop boost), which is how it comes off a ledge and spreads again below. A cell touched by enough sources becomes a source itself: the <b>renewal</b> rule. On hex, two touching cells share two neighbours, so Luanti's threshold of 2 floods a plain; the threshold here is <b>3</b>, and the toggle shows Luanti's 2 and no renewal at all.</p>
+<p>The water is <b>drawn cell by cell as Luanti draws it</b> (its liquid mesher, <code>drawLiquidNode</code> in <code>src/client/content_mapblock.cpp</code>, ported to hex in <code>water-flow/water-look.js</code>): each corner's height comes from the three cells sharing it, so a sheet slopes down to its edge with a wall where it meets air, and water falling off a step is a column of whole cells, one more each tick, each its own foaming block. The texture and the arrows run down the slope and down each fall.</p>
 <p>A <b>tick</b> handles every cell queued, once, as Luanti does; an edit queues the cell and its eight neighbours (up, six sides, down). <b>Step</b> runs one tick; the slider sets ticks a second.</p>
 <p><b>Presets:</b> <i>Pond</i>, three sources round a basin's middle: the middle and then the cells between renew, so a pool of sources forms. <i>Waterfall</i>, a spring on the top of cell steps: it spreads, falls each step and spreads again. <i>Dam</i>, a reservoir of sources behind a wall of blocks: <b>Breach the dam</b> digs a gap and the reservoir pours through; the sources stay, so the flow keeps running.</p>
 <p class="muted">Licence: Luanti is Copyright (C) 2010-2024 celeron55, Perttu Ahola and contributors, under the GNU Lesser General Public License 2.1 or later; the port is offered under the same licence, published beside it as <a href="water-flow/COPYING.LESSER">water-flow/COPYING.LESSER</a>. Proposal only: the game has no flowing water today (<code>openspec/changes/water-flow</code>).</p>`;

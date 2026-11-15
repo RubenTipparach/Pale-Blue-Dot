@@ -67,3 +67,30 @@ pages. Flow on caps (settled): spring 230 flowing caps, 229 with an arrow and th
 12 of 12, plus 6 of its 7 sources (water leaves them); channel 20 of 20; pair 190 of 190. The arrows and the texture read
 the same flow vector. Nothing moves on its own: camera and every object's rotation unchanged over 2 s idle. The liquid
 rule is untouched.
+
+## Luanti's liquid mesher (owner, 2026-11-15): sloped edges, walls, and falls block by block
+
+openspec/changes/water-flow design 7e. The owner, on M28's ledge: "same issues as before for the leading edge, also
+theres no flow maps on the edge as well and no walls, note that you missed a critical part of the luanti/minetest water
+implementation that shows the water falling", then "water should generate blocks vertically as it falls too".
+Headless Chromium on SwiftShader (no GPU in the cloud session): the look, never the frame rate. Before is the branch
+before the mesher (`438d4f2`'s `water-look.js`), after is the mesher; same camera, same preset, same tick. `phone` is
+390 × 844 (2x), `desk` 1400 × 900 (the stage only).
+
+| Before | After | Shows |
+| --- | --- | --- |
+| `mesher-ledge-default-{phone,desk}-before.png` | `-after` | M28's spring settled, its own view (the owner's): before, each falling column is a flat cap at the lip a cell out from the cliff with one sheet to the plain; after, the sheet slopes to the edge and every falling cell is drawn, a wall of blocks down the cliff. |
+| `mesher-ledge-edge-{phone,desk}-before.png` | `-after` | The ledge edge close, from the plain: the falls stack block by block (a thin band at each layer), foaming, the tile running down them, a chevron down each falling block and down each sloping top. |
+| `mesher-ledge-edge-night-{phone,desk}-before.png` | `-after` | The same at 22:00: the lamps light the water and the foam near them. |
+| `mesher-grow-t{0,2,4,6,8,10}-{phone,desk}-before.png` | `-after` | The spring tick by tick: t2 the sheet's front slopes to a wall; t4 the first falling cell over the cliff; t6, t8, t10 the column one layer longer each tick, block by block, until it reaches the plain. Before, the same ticks show a cap hanging at the lip. |
+| `mesher-m25-sim-fall-{phone,desk}-before.png`, `-close-`, `-close-night-` | `-after` | M25's Water sim, Waterfall settled: every step falls as whole cells with sloped tops above them; Close; Close at night. |
+| `mesher-m25-sim-fall-t2-…`, `mesher-m25-sim-fall-t6-…` | `-after` | M25's Waterfall 2 and 6 ticks in: the first falls growing a cell a tick. |
+
+The rule (`water-flow/liquid.js`) is unchanged. It already made the falling cells: on the spring, the first falling
+cell over the cliff is at tick 4, and the column grows a layer a tick to the plain by tick 10 (design 7e). Checks
+(Playwright): every preset of both pages settles in the same ticks to the same counts as before (M28 spring 22 ticks,
+580 sources, 380 flowing, 126 falling; channel 7, 580, 22, 1; basin 4, 586, 12, 0; pair 13, 581, 208, 12; runaway
+19, 896, 38, 19; recede 53, 579, 0, 0; M25 pond 5, 7, 30, 0; waterfall 27, 1, 452, 182; dam 0, 78, 0, 0; flat 0);
+M28 at 390 × 844 and 1400 × 900 and M25 #sim: no page errors (the only console line is the fonts request the harness
+blocks), one WebGL context, no horizontal scroll; nothing moves in 2 s idle. On the settled spring, 253 of 254
+flowing tops carry a flow vector and an arrow; the one without is the basin's still middle.

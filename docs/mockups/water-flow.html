@@ -207,8 +207,8 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
 <div id="err" hidden></div>
 <template id="aboutT">
     <p>Today the game's water is one still material, filled up to sea level when the world is made, and nothing ever moves it. This page runs Luanti's liquid rule, ported to our hex cells, on a patch with a sea, a beach, a plain with a dry basin, a ledge and a plateau. Pour a source, dig a channel, drop a block in the stream. Water falls first, then spreads seven cells, a level lower each cell, and recedes when its source goes. It moves one tick a second, as Luanti's does, and only after <b>Run water</b> or a preset.</p>
-<p>Water is drawn as M25's water sim draws it (<span class="src">water-flow/water-look.js</span>, which both pages load): one cap per column at its top water surface, a foaming fall sheet and lip on every step down to a lower column, flow streaks on each cap running towards the neighbours whose water stands lower, and a chevron on each flowing cap (<b>Arrows: on / off</b> hides or shows them). At night every lamp lights the water and the foam near it.</p>
-<p><b>The water's texture shows the flow</b>, as Tenebris's water does: Tenebris's own 16-pixel water tile, drawn nearest in three tones of the water it is on, pans along each cap's flow vector, faster where the cap runs faster, and stands still on still water; on a falling sheet it pans straight down. Each cap pans by its own constant vector, as Tenebris C's water shader does, so the pattern never stretches.</p>
+<p><b>Water is drawn cell by cell, as Luanti draws it</b> (its liquid mesher, <span class="src">drawLiquidNode</span> in <span class="src">src/client/content_mapblock.cpp</span>, ported to hex in <span class="src">water-flow/water-look.js</span>, which both pages load). Each of a cell's six corners takes its height from the three cells that share it: full beside a source or under falling water, the mean of the flowing levels otherwise, and down to the floor where two of the three are air. So a sheet slopes down to its edge, and a wall stands wherever water meets air. Water falling over a cliff is a column of whole cells, one more each tick, each drawn as its own block with its sides, foaming, the texture running down it. <b>Arrows: on / off</b> shows a chevron down each sloping top and down each falling block. At night every lamp lights the water and the foam near it.</p>
+<p><b>The water's texture shows the flow</b>, as Tenebris's water does: Tenebris's own 16-pixel water tile, drawn nearest in three tones of the water it is on, pans down each top's slope (Luanti's flow direction, from the corner heights), faster where it is steeper, and stands still on still water; on a flowing cell's sides it pans straight down.</p>
 <p><b>The patch is cut at its edge</b>: every column's side shows down to the base, and where water meets the edge it stands as a still wall down to the ground. Water behind nearer water is hidden, so falls and caps read in the right order from any side.</p>
 <h3>Presets</h3><dl id="presetNotes"></dl>
   <div style="display:grid;gap:12px">
@@ -237,7 +237,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="building/scene-kit.js?v=1"></script>
 <script src="water-flow/liquid.js?v=1"></script>
-<script src="water-flow/water-look.js?v=1"></script>
+<script src="water-flow/water-look.js?v=2"></script>
 <script>
 "use strict";
 window.addEventListener("error", e => { const el = document.getElementById("err"); el.hidden = false; el.textContent += (e.message || e) + " @" + (e.lineno || "") + "\n"; });
@@ -394,11 +394,10 @@ function buildGround() {
   for (const [q, r] of TREES) { let top = Y0; while (top <= Y1 && kind[idx(q, r, top)] === SOLID) top++; if (top === groundH(q, r)) treeAt(GS, q, r, top); }
   addMeshes(GS, GROUND); scene.add(GROUND); PICK[0] = GROUND;
 }
-// The water, drawn as M25's water sim draws it (owner, 2026-11-15: "sync m28 with these changes", after "can we have
-// the frothy walls and edges like the river demo you had and show flow direction?" and "water sim is missing the
-// wall/waterfalls part"). PBDWater (water-flow/water-look.js, the one copy both pages load) takes the top water surface
-// of each column, gives it a flow vector towards the neighbours whose water stands lower, and draws one cap per column
-// with a foaming fall sheet and lip on every step down, flow streaks along each cap, and a chevron on each flowing cap.
+// The water, drawn as M25's water sim draws it (owner, 2026-11-15: "sync m28 with these changes"). PBDWater.simWater
+// (water-flow/water-look.js, the one copy both pages load) meshes every water cell as Luanti's liquid mesher does
+// (design 7e): corner heights from the cells sharing each corner, sloped tops, walls where water meets air, every
+// falling cell a whole block, the flow down the corner slope for the texture and the chevrons.
 // WW is what the water material reads from a scene: its lamps, the depth map, the haze; applyTime and the loop feed it.
 const WW = { scene, U: PBDWater.uniforms(16), opts: {}, seas: [] };
 const SW = PBDWater.simWater(WW, LQ, { caps: { amp: 0.01, mud: 0, minA: 0.78 } });
