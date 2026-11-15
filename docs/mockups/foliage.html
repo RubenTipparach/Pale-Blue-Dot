@@ -471,8 +471,8 @@ void main(){
 
 const FRAG = `
 uniform sampler2D map;
-uniform vec3 uSunDir, uSunCol, uSkyAmb, uGndAmb, uFogCol, uLodCol, uEmitCol, uAt;
-uniform float uBake, uFogNear, uFogFar, uLodVis, uMaskVis, uColVar, uAutumn, uSpring, uWinter, uSnow, uSnowable, uLeafy, uDecid, uEmit, uCardLit, uAlphaTest, uKeep, uExposure, uTime, uNight, uFlicker, uUseAt, uMask, uSwayMask, uRep, uImp, uGrass, uViews;
+uniform vec3 uSunDir, uSunCol, uSkyAmb, uGndAmb, uFogCol, uLodCol, uEmitCol, uAt, uMean;
+uniform float uBake, uFogNear, uFogFar, uLodVis, uMaskVis, uColVar, uAutumn, uSpring, uWinter, uSnow, uSnowable, uLeafy, uDecid, uEmit, uCardLit, uAlphaTest, uKeep, uExposure, uTime, uNight, uFlicker, uUseAt, uMask, uSwayMask, uRep, uImp, uGrass, uViews, uDetail;
 varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vTint; varying vec3 vBlock; varying float vFade; varying vec2 vSeed; varying float vAo; varying float vCard; varying float vSway;
 float bayer2(vec2 a){ a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
 float bayer4(vec2 a){ return bayer2(0.5 * a) * 0.25 + bayer2(a); }
@@ -545,6 +545,10 @@ void main(){
   if (tx.a < uAlphaTest) discard;
   float grain = dot(tx.rgb, vec3(0.299, 0.587, 0.114));
   vec3 alb = pow(tx.rgb, vec3(2.2));
+  // one art style (owner, 2026-11-15): a plant or prop keeps its texture's palette but not its
+  // full contrast, pulled toward the texture's own mean colour, so it reads as a soft mass lit
+  // like the ground rather than salt-and-pepper speckle. The ground itself keeps uDetail = 1.
+  alb = mix(uMean, alb, uDetail);
   // the palette's greens are more saturated than the near tree's game texture: measured on the
   // near/far side-by-side, pull the baked crown back to the near crown's mean colour
   if (uImp > 0.5 && uViews > 0.5) { float l = dot(alb, vec3(0.2126, 0.7152, 0.0722)); alb = mix(vec3(l), alb, 0.5) * vec3(0.92, 0.95, 0.72); }
@@ -590,11 +594,10 @@ void main(){
     // a fixed neutral daylight; a card's back face is as bright as its front, so a needle seen
     // from behind does not go dark and snap to grey-brown
     float key = uCardLit > 0.5 ? 1.15 : 0.85 + 0.3 * max(dot(N, normalize(vec3(-0.5, 0.8, 0.4))), 0.0);
-    // cards: dark where they root on the branch, bright at their tips, so each whorl reads as a layer
     // cards: horizontal bands, light on top and dark underneath, one band per half metre (the whorl
     // spacing); a band, not a per-card shade, so no dark pixel stands alone as speckle
     float bandY = fract(vW.y / 0.5);
-    float layer = uCardLit > 0.5 ? (bandY < 0.3 ? 0.55 : bandY > 0.65 ? 1.25 : 1.0) : 1.0;
+    float layer = uCardLit > 0.5 ? (bandY < 0.3 ? 0.85 : bandY > 0.65 ? 1.08 : 1.0) : 1.0;   // gentle: no dark band reads as speckle
     gl_FragColor = vec4(pow(clamp(alb * key * layer, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
     return;
   }
@@ -607,6 +610,34 @@ void main(){
 }`;
 
 const MATS = {};
+// The mean linear colour of a texture, or of one atlas tile, read off the loaded image.
+const MEANS = {}, MEAN_Q = [];
+function imagePixels(img, x0, y0, w, h) {
+  const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const g = cv.getContext("2d");
+  g.drawImage(img, x0, y0, w, h, 0, 0, w, h); return g.getImageData(0, 0, w, h).data;
+}
+// an atlas tile's pixel rectangle, as atlasTile samples it: sheet by slot in a 4 x 4 grid of
+// 128 px sheets, tile (column, row) in the sheet, 32 px a tile
+function tileRect(img, slot, idx) { const k = img.width / 512; return [((slot % 4) * 128 + (idx % 4) * 32) * k, (Math.floor(slot / 4) * 128 + Math.floor(idx / 4) * 32) * k, 32 * k, 32 * k]; }
+function meanOf(img, rect) {
+  const key = img.src + "|" + rect.join(",");
+  if (MEANS[key]) return MEANS[key];
+  const d = imagePixels(img, ...rect); let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i + 3] >= 128) { r += (d[i] / 255) ** 2.2; g += (d[i + 1] / 255) ** 2.2; b += (d[i + 2] / 255) ** 2.2; n++; }
+  return (MEANS[key] = n ? [r / n, g / n, b / n] : null);
+}
+function resolveMeans() {
+  for (let i = MEAN_Q.length - 1; i >= 0; i--) {
+    const q = MEAN_Q[i], img = TEX[q.tex] && TEX[q.tex].image;
+    if (!img || !img.complete || !img.naturalWidth) continue;
+    MEAN_Q.splice(i, 1);
+    try {
+      const mn = meanOf(img, q.at ? tileRect(img, q.at.x, q.at.y + q.at.z * 4) : [0, 0, img.naturalWidth, img.naturalHeight]);
+      if (mn) { q.m.uniforms.uMean.value.set(mn[0], mn[1], mn[2]); q.m.uniforms.uDetail.value = q.detail; }
+    } catch (e) { /* an unreadable image keeps its full detail */ }
+  }
+  for (let i = TUFT_Q.length - 1; i >= 0; i--) if (TUFT_Q[i]()) TUFT_Q.splice(i, 1);
+}
 const LODCOL = [new THREE.Color(0x7be08a), new THREE.Color(0xf2d24a), new THREE.Color(0xe46ad8)];
 // o: at [slot, tile index] or tex, plus card, mask, sway, wind, seasons, glow
 function mat(key, o) {
@@ -621,10 +652,15 @@ function mat(key, o) {
     uEmit: { value: o.emit ?? 0 }, uCardLit: { value: o.card ? 1 : 0 }, uAlphaTest: { value: o.alpha ? 0.5 : -1 },
     uLeafy: { value: o.leafy ? 1 : 0 }, uDecid: { value: o.decid ? 1 : 0 },
     uSnowable: { value: o.snowable ? 1 : 0 }, uKeep: o.keep || { value: 2 }, uFlicker: { value: o.flicker ? 1 : 0 }, uImp: { value: o.imp ? 1 : 0 }, uGrass: { value: o.grass ? 1 : 0 },
+    uMean: { value: new THREE.Vector3() }, uDetail: { value: 1 },
   });
   const defines = {}; if (o.terrain) defines.TERRAIN = ""; if (o.billboard) defines.BILLBOARD = "";
   // cutouts are alpha-TESTED, never blended: opaque, depth written, no sorting
   const m = new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, defines, side: o.single ? THREE.FrontSide : THREE.DoubleSide, transparent: false, depthWrite: true });
+  // how much of its texture's contrast an in-world thing keeps (1 = all, the ground's own tiles,
+  // the baked impostors, flowers and tufts); set once the texture's mean is known (resolveMeans)
+  const detail = o.detail ?? (o.terrain || o.imp || o.alpha || o.grass ? 1 : (o.leafy || o.mask) ? 0.45 : 0.7);
+  if (detail < 1) MEAN_Q.push({ m, detail, at: o.at ? at.clone().setX(o.at[0]) : null, tex: o.at ? "game/atlas" : o.tex });
   if (o.decal) { m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -4; }
   MATS[k] = m; return m;
 }
@@ -1860,6 +1896,7 @@ function frame() {
   G.uTime.value = now / 1000;
   updateCamera(dt);
   moveFireflies(now / 1000);
+  resolveMeans();
   bakeImpostors();
   updateLOD(now / 1000);
   sky.position.copy(camera.position);

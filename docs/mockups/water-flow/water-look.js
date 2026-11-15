@@ -162,9 +162,9 @@ void main() {
                     : vec2(dot(vW.xz, fd) - spd * ${PAN_K.toFixed(2)} * uT, dot(vW.xz, vec2(-fd.y, fd.x)));
     float ti = texture2D(uFlowTex, tuv / ${TEX_M.toFixed(2)}).r * 2.0;
     float rip = step(0.5, ti), glint = step(1.5, ti);
-    float tk = uTexK * (1.0 - smoothstep(60.0, 140.0, dist));   // a 12 cm pixel would shimmer far off
+    float tk = uTexK * (1.0 - smoothstep(45.0, 120.0, dist));   // a 12 cm pixel would shimmer far off
     foam += step(0.82 - 0.22 * clamp(spd, 0.0, 1.5), nse) * clamp(spd, 0.0, 1.0) * (0.55 - 0.3 * uTexK);
-    if (vFall > 0.5) { vec2 fp = floor(vec2(vW.x + vW.z, vW.y * 3.0 + uT * 6.0) * 2.0); foam = mix(0.35 + 0.55 * step(0.45, hash(fp)), 0.32 + 0.3 * rip + 0.3 * glint, uTexK); }
+    if (vFall > 0.5) { vec2 fp = floor(vec2(vW.x + vW.z, vW.y * 3.0 + uT * 6.0) * 2.0); foam = mix(0.35 + 0.55 * step(0.45, hash(fp)), 0.5 + 0.22 * rip + 0.28 * glint, uTexK); }
     if (cut) foam = 0.0;
     foam = clamp(foam * (0.75 + 0.25 * nse), 0.0, 0.9);
     vec3 lit = vec3(uAmb + 0.7 * uSunI + 0.08 * uMoonI);
@@ -172,7 +172,7 @@ void main() {
     // the tile's three tones on this water: the body as it is, a ripple lifted toward the sky it mirrors, a glint as foam
     vec3 ripC = mix(col, mix(uHor, uSky, 0.5) * lit + lampSum * 0.5, 0.35) * 1.25;
     col = mix(col, ripC, rip * tk * (1.0 - glint));
-    col = mix(col, foamC, glint * tk * 0.7);
+    col = mix(col, foamC, glint * tk * 0.55);
     col = mix(col, foamC, foam);
     alpha = mix(uMinA, 0.97, smoothstep(1.0, 18.0, depth / max(v.y, 0.25)));
     alpha = max(alpha, max(foam, fres));
