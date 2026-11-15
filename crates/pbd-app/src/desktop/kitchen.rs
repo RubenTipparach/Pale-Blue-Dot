@@ -48,7 +48,7 @@ pub struct CookLine;
 #[derive(Component)]
 pub struct CookFill;
 
-/// The panel: the stone-and-wood kit's rock, the lintel, the campfire's
+/// The panel: the stone-and-wood kit's stone frame, the lintel, the campfire's
 /// recipes in two columns, the job being worked and its bar, and a line
 /// saying how a dish is eaten.
 pub fn spawn(
@@ -58,24 +58,15 @@ pub fn spawn(
     recipes: Res<Recipes>,
 ) {
     let kit = &*kit;
-    let (rock, (w, h)) = kit.rock("chest");
     let atlas = icons.atlas.clone();
     let bar = kit.nine(Set::Stone, "bar");
     let fill = kit.whole(Set::Stone, "fill-progress");
     commands
         .spawn((menu::layer(), GlobalZIndex(10), Panel(Screen::Kitchen)))
         .with_children(|layer| {
+            // The stone moulding: no baked rock is this panel's size.
             layer
-                .spawn((
-                    rock,
-                    Node {
-                        width: px(w),
-                        height: px(h),
-                        padding: UiRect::all(px(14)),
-                        flex_direction: FlexDirection::Column,
-                        ..default()
-                    },
-                ))
+                .spawn(menu::framed(kit, Set::Stone, 372.0))
                 .with_children(|panel| {
                     menu::lintel(panel, kit, "CAMPFIRE");
                     panel
@@ -653,7 +644,8 @@ pub fn show_effects(
 /// campfire that far ahead through the same durable paths a player takes,
 /// the slots stocked with fish, wheat and chili; flatbread put on the fire
 /// long enough ago to be done and a fish three-quarters grilled behind it.
-/// With `--campfire-panel` the panel opens, which collects the flatbread.
+/// With `--campfire-panel` the panel opens, which collects the flatbread;
+/// without it the flatbread is collected at once.
 /// `--eat <dish,dish>` gives each dish and eats it, so the effects row
 /// shows. The capture's save is memory-only, so nothing is kept.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -678,6 +670,7 @@ pub fn scripted(
         Res<Time>,
         MessageWriter<Ate>,
     ),
+    (mut cooked, mut gained): (MessageWriter<Cooked>, MessageWriter<Gained>),
     mut done: Local<bool>,
 ) {
     if *done
@@ -754,6 +747,20 @@ pub fn scripted(
         if launch.campfire_panel {
             station_at.0 = Some(at);
             *screen = Screen::Kitchen;
+        } else {
+            // Without the panel, the cook takes what is done, so the pack
+            // (`--menu pack`) shows the flatbread.
+            collect(
+                &mut save,
+                &mut hotbar,
+                &recipes,
+                at,
+                now_s,
+                &mut note,
+                wall_s,
+                &mut cooked,
+                &mut gained,
+            );
         }
         info!("scripted campfire at cell {cell} layer {layer}");
     }

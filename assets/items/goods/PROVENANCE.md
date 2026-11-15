@@ -30,3 +30,12 @@ its file, and `farm::tests::every_good_has_its_icon` holds them together.
 grids and one palette (`FARM`); `python3 tools/gen_item_icons.py --check`
 fails if a PNG differs from what it draws: two posts and two rails; a gate
 with its brace; a cream egg; a shorn fleece; an iron pail of milk.
+
+## Cooking (`cooking` design S1)
+
+The dishes (`grilled-fish`, `chili-fish`, `flatbread`, `roast-turnip`,
+`kale-skewer`, `fried-egg`, `roast-meat`) are made by
+`tools/art/cooking_icons.py` from the M27 mockup's own pixel art
+(`docs/mockups/cooking/`, `tools/art/cooking_art.py`, balatro-pixel-art kit,
+Sweaft-64), reduced from 24 px to 16 px the same way as above. The script
+names which mockup picture each dish takes.

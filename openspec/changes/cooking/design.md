@@ -275,7 +275,7 @@ and quality wait for it (S11).
   touched and needs no widening for it. The lamp kind's three bits held six
   lights; they now hold seven, and one is left.
 - **A station**: `E` on it opens the campfire's panel (S4).
-- **Broken** with bare hands or any tool, like the other lights, and gives
+- **Broken** with any tool, like the other lights, and gives
   itself back; refused while it has jobs, as the forge is.
 
 Codes 22 and 23 are held for the next two kitchen stations (oven, pot).
@@ -286,7 +286,7 @@ The campfire is a **hand recipe** (`campfire`: 5 stone, 2 coal; a ring of
 stones round a fire of coal), made from the pack once `tool-crafting`'s hand
 panel lands. M27 builds it of stone and logs; there are no logs in the game
 until `tool-crafting` adds them, so coal stands in (recommendation taken).
-So that cooking plays before that merge, **kit version 4 deals one
+So that cooking plays before that merge, **kit version 6 deals one
 campfire** to every world, old or new, through the existing kit path.
 
 The campfire burns what it was built with: **no fuel per cook** in this
@@ -307,7 +307,7 @@ the farming change's own rules; nothing about stations is duplicated.
   first fish stack in slot order holding enough is the one taken. Outputs
   never depend on the species.
 - **Pending rows.** A recipe naming a good this build does not have (the
-  husbandry branch's eggs, milk and meat) is held as pending: logged at
+  husbandry branch's meat, which it has not built) is held as pending: logged at
   load and left out of the book, never an error. It goes live in the build
   where the good exists. A test holds that only the goods listed as awaited
   can make a recipe pending.
@@ -323,7 +323,7 @@ The dishes:
 | `flatbread` | campfire | 3 wheat | 2 flatbread | 30 | stride | 5 |
 | `roast-turnip` | campfire | 2 turnip | 2 roast turnip | 20 | keen | 4 |
 | `kale-skewer` | campfire | 2 frost kale, 1 turnip | 1 kale skewer | 25 | keen | 6 |
-| `fried-egg` (pending) | campfire | 1 `egg` | 1 fried egg | 15 | keen | 5 |
+| `fried-egg` | campfire | 1 `egg` | 1 fried egg | 15 | keen | 5 |
 | `roast-meat` (pending) | campfire | 1 `raw-meat` | 1 roast meat | 30 | stride | 8 |
 | `campfire` | hand | 5 stone, 2 coal | 1 campfire | 3 | | |
 
@@ -366,6 +366,20 @@ dish is collected (`fish` is how many caught fish went into it), and
 the frame the durable write was accepted. Collecting also raises the
 farming change's `Gained { how: Made }`, as the forge does. Nothing here
 reads them; `starter-missions` counts them.
+
+### S6b. Merged with animal husbandry (2026-11-14)
+
+`claude/phase-1` gained `animal-husbandry` while this was built, and it is
+merged in: its goods (fence, gate, egg, wool, milk) come first in the table
+and the dishes after them (saves name goods by code, so the order is only
+memory). Eggs exist, so **fried egg is live**; raw meat is not built, so
+roast meat stays pending. The kit's versions are phase 1's agreed order:
+v4 the pen (husbandry), **v5 held empty for `tool-crafting`**, v6 the
+campfire. No build with the empty v5 reaches a player before
+`tool-crafting` fills it at the phase-1 merge. The kitchen's systems run
+after `HusbandryHands`, which clears an `E` it used, as `farm::use_key` does.
+The panel is drawn in the stone moulding frame (`menu::framed`), since no
+baked rock is its size.
 
 ### S7. Saves
 
