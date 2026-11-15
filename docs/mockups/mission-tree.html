@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mission Tree</title>
+<meta name="description" content="Pale Blue Dot's Missions screen redrawn as the tree that unlocks the tech: the trunk and seven branches, every mission, objective and unlock from starter-missions, with a bot run that plays it in order.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=VT323&display=swap">
+<style>
+/* Tokens: the stone-and-carved-wood kit's colours (tools/art/ui_art.py, Sweaft-64), as ui.html.
+   The game UI has one look by day and by night, so both schemes share them. */
+:root {
+  --ink: #010000; --face: #1f3b52; --well: #011c34;
+  --text: #eab798; --text-dim: #cfaa81; --title: #faaf5c; --label: #fffefe; --label-dim: #92a3b2;
+  --oak-label: #010000; --stone-0: #011c34; --stone-1: #1f3b52; --stone-2: #3e586e; --stone-3: #92a3b2; --stone-4: #bfcad7;
+  --rune: #84e3b5; --rune-dim: #53998b; --new: #ff8a3d;
+  --page: #010e1a; --page-2: #011c34; --page-line: #1f3b52; --page-text: #bfcad7; --page-dim: #92a3b2;
+  --canvas: #06121d; --grid: rgba(62, 88, 110, .22);
+  --display: "Pixelify Sans", "VT323", ui-monospace, monospace;
+  --body: "VT323", ui-monospace, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #010e1a; } }
+:root[data-theme="dark"] { --page: #010e1a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--page); color: var(--page-text); font: 18px/1.3 var(--body); overflow: hidden; display: flex; flex-direction: column; }
+a { color: var(--rune); }
+img { image-rendering: pixelated; }
+
+/* ---- header ---- */
+header.top { padding: 8px 16px 6px; border-bottom: 1px solid var(--page-line); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 0; letter-spacing: 1px; text-shadow: 0 2px 0 var(--ink); }
+.pbd-tracker { margin: 0; font: 16px/1.2 var(--body); }
+.infobtn { font: 600 18px/1 var(--body); width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--rune-dim); background: var(--page-2); color: var(--rune); cursor: pointer; }
+.infobtn:focus-visible { outline: 2px solid var(--rune); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-left: auto; font-size: 16px; color: var(--page-dim); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 14px; height: 14px; display: inline-block; border: 2px solid var(--stone-2); background: var(--face); }
+.legend .l-done i { border-color: var(--rune-dim); background: #10352e; }
+.legend .l-now i { border-color: var(--title); background: #5a3a1c; }
+.legend .l-locked i { opacity: .45; }
+
+/* ---- controls: plaques from the kit ---- */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 16px; border-bottom: 4px solid var(--stone-2); background: var(--page-2); }
+.bar .grp { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bar .lab { font: 600 15px/1 var(--display); color: var(--text-dim); letter-spacing: 1px; }
+.btn { border-style: solid; border-width: 10px; border-image: url(mission-tree/ui/stone-button-idle.png) 64 fill stretch; image-rendering: pixelated;
+  background: none; color: var(--label); cursor: pointer; height: 38px; min-width: 52px; padding: 0 4px; font: 20px/1 var(--body);
+  text-shadow: 0 2px 0 var(--stone-0); display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.btn:hover { border-image-source: url(mission-tree/ui/stone-button-hover.png); }
+.btn:active, .btn[aria-pressed="true"] { border-image-source: url(mission-tree/ui/stone-button-pressed.png); }
+.btn:focus-visible { outline: none; border-image-source: url(mission-tree/ui/stone-button-focus.png); }
+.btn:disabled { border-image-source: url(mission-tree/ui/stone-button-disabled.png); color: var(--label-dim); cursor: default; }
+.btn.oak { border-image-source: url(mission-tree/ui/oak-button-idle.png); color: var(--oak-label); text-shadow: none; }
+.btn.oak:hover { border-image-source: url(mission-tree/ui/oak-button-hover.png); }
+.btn.oak:active, .btn.oak[aria-pressed="true"] { border-image-source: url(mission-tree/ui/oak-button-pressed.png); }
+.speed { font: 19px var(--body); height: 34px; background: var(--well); color: var(--label); border: 2px solid var(--stone-2); padding: 0 6px; }
+.stepno { font: 18px/1 var(--body); color: var(--page-dim); min-width: 86px; }
+
+/* ---- the canvas: pans and zooms, nothing moves on its own ---- */
+.stage { position: relative; flex: 1; min-height: 300px; overflow: hidden; }
+#view { position: absolute; inset: 0; overflow: hidden; background: var(--canvas);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 40px 40px; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+#view.drag { cursor: grabbing; }
+#world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+#edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+#edges path { fill: none; stroke-width: 4; stroke: var(--stone-1); }
+#edges path.e-open { stroke: var(--stone-3); }
+#edges path.e-done { stroke: var(--rune-dim); }
+#edges path.e-or { stroke-dasharray: 10 7; }
+#edges path.e-uses { stroke-dasharray: 3 7; stroke-width: 3; stroke-linecap: round; }
+#edges path.e-hl { stroke: var(--title); stroke-width: 6; }
+
+.lane { position: absolute; border-style: solid; border-width: 8px 14px; border-image: url(mission-tree/ui/stone-lintel.png) 40 72 fill stretch;
+  image-rendering: pixelated; color: var(--oak-label); font: 600 17px/1 var(--display); letter-spacing: 1px; padding: 0 4px; white-space: nowrap; height: 32px; display: flex; align-items: center; }
+
+/* a mission card: the kit's stone tooltip; the current goal in carved oak */
+.card { position: absolute; width: 236px; height: 188px; border-style: solid; border-width: 12px; border-image: url(mission-tree/ui/stone-tooltip.png) 48 fill stretch;
+  image-rendering: pixelated; color: var(--text); padding: 2px 4px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+.card.sel { outline: 3px solid var(--rune); outline-offset: 4px; }
+.card .hd { display: flex; gap: 8px; align-items: center; min-height: 44px; }
+.slot { position: relative; width: 44px; height: 44px; flex: none; background: url(mission-tree/ui/stone-slot-idle.png) 0 0 / 100% 100%; image-rendering: pixelated; display: grid; place-items: center; }
+.slot img { width: 32px; height: 32px; }
+.slot.sm { width: 32px; height: 32px; }
+.slot.sm img { width: 22px; height: 22px; }
+.slot.off { background-image: url(mission-tree/ui/stone-slot-disabled.png); }
+.slot.on { background-image: url(mission-tree/ui/stone-slot-selected.png); }
+.sil { filter: brightness(0) invert(1) brightness(.34); }
+.card .tt { min-width: 0; flex: 1; }
+.card .tt b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font: 600 17px/1.05 var(--display); color: var(--title); text-shadow: 0 2px 0 var(--ink); overflow: hidden; padding-right: 2px; }
+.card .tt small { display: block; font: 16px/1.1 var(--body); color: var(--label-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badge { position: absolute; right: 6px; top: -20px; font: 15px/1 var(--body); padding: 2px 5px 1px; border: 1px solid currentColor; color: var(--label-dim); background: var(--well); white-space: nowrap; }
+.card .ck.big { position: absolute; right: -4px; top: -6px; }
+.ck { width: 18px; height: 18px; flex: none; }
+.card .ck.big { width: 26px; height: 26px; }
+.obj { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; flex: 1; }
+.obj li { display: flex; align-items: center; gap: 5px; font: 17px/1 var(--body); color: var(--text); min-width: 0; }
+.obj li > span:not(.nw) { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.obj li em { font-style: normal; color: var(--rune); white-space: nowrap; }
+.obj li.full span { color: var(--text-dim); }
+.nw { color: var(--new); font: 14px/1 var(--body); border: 1px solid var(--new); padding: 1px 3px 0; margin-left: 3px; vertical-align: 1px; }
+.un { display: flex; align-items: center; gap: 4px; min-height: 32px; border-top: 1px solid rgba(146,163,178,.25); padding-top: 3px; }
+.un .lbl { font: 14px/1 var(--body); color: var(--label-dim); letter-spacing: 1px; margin-right: 2px; }
+.un .chip { font: 15px/1 var(--body); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.un .none { color: var(--label-dim); }
+
+.card.st-done .badge { color: var(--rune); }
+.card.st-now { border-image-source: url(mission-tree/ui/oak-tooltip.png); box-shadow: 0 0 0 3px var(--title), 0 0 26px 6px rgba(250, 175, 92, .45); }
+.card.st-now .badge { color: var(--ink); background: var(--title); border-color: var(--title); }
+.card.st-open .badge { color: var(--stone-4); }
+.card.st-locked { opacity: .55; }
+.card.st-locked .tt b { color: var(--label-dim); }
+.card.st-locked .obj li, .card.st-locked .obj li em { color: var(--label-dim); }
+.card.st-locked .hd .slot img { filter: brightness(0) invert(1) brightness(.34); }
+.card .lit { animation: lit 1.4s ease-out 1; }
+.card.fresh { animation: fresh 1.4s ease-out 1; }
+@keyframes lit { 0% { filter: drop-shadow(0 0 8px var(--title)) brightness(1.8); } 100% { filter: none; } }
+@keyframes fresh { 0% { box-shadow: 0 0 0 4px var(--rune), 0 0 30px 8px rgba(132,227,181,.5); } 100% { box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .card .lit, .card.fresh { animation: none; } }
+
+/* far away, a card is its icon and title */
+#world.far .card .obj, #world.far .card .un, #world.far .card .tt small, #world.far .card .badge { display: none; }
+#world.far .card .hd { flex-direction: column; justify-content: center; flex: 1; gap: 6px; }
+#world.far .card .hd .slot { width: 60px; height: 60px; }
+#world.far .card .hd .slot img { width: 46px; height: 46px; }
+#world.far .card .tt { flex: none; width: 100%; }
+#world.far .card .tt b { font-size: 33px; -webkit-line-clamp: 3; text-align: center; line-height: .95; }
+#world.far .card .ck.big { position: absolute; right: 2px; top: 2px; width: 44px; height: 44px; }
+#world.far .lane { transform: scale(2); transform-origin: 0 100%; }
+
+/* the HUD line and the log, in the game's face */
+.hud:empty { display: none; }
+.hud { position: absolute; right: 12px; top: 10px; background: rgba(1, 14, 26, .78); padding: 4px 8px 2px; border: 1px solid var(--stone-1); font: 22px/1 var(--body); color: var(--text); text-shadow: 0 2px 0 var(--ink), 0 0 4px var(--ink); pointer-events: none; text-transform: uppercase; text-align: right; }
+.hud.done { color: var(--rune); }
+.log { position: absolute; left: 10px; bottom: 10px; width: min(560px, calc(100% - 20px)); border-style: solid; border-width: 12px; border-image: url(mission-tree/ui/stone-tooltip.png) 48 fill stretch;
+  image-rendering: pixelated; font: 17px/1.15 var(--body); color: var(--text-dim); pointer-events: none; padding: 0 4px; }
+.log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+.log div:last-child { color: var(--text); }
+.log .d { color: var(--rune); }
+.log:empty { display: none; }
+
+/* ---- the side panel: the stone moulding, a lintel, two oak tabs ---- */
+.panel { position: absolute; right: 0; top: 0; bottom: 0; width: min(400px, 100%); border-style: solid; border-width: 24px; border-image: url(mission-tree/ui/stone-frame.png) 112 fill stretch;
+  image-rendering: pixelated; color: var(--text); display: none; flex-direction: column; z-index: 5; padding: 0 2px; }
+.panel.open { display: flex; }
+.panel .phead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ptabs { display: flex; gap: 2px; }
+.ptab { border-style: solid; border-width: 12px 12px 0; border-image: url(mission-tree/ui/oak-tab-shut.png) 56 56 0 fill stretch; image-rendering: pixelated; cursor: pointer; background: none;
+  color: var(--label); font: 19px/1 var(--body); padding: 0 4px 6px; }
+.ptab[aria-selected="true"] { border-image-source: url(mission-tree/ui/oak-tab-open.png); color: var(--oak-label); }
+.ptab:focus-visible { outline: 2px solid var(--rune); }
+.xbtn { min-width: 40px; }
+.pbody { overflow: auto; flex: 1; padding-right: 4px; scrollbar-width: thin; }
+.pbody h2 { font: 600 22px/1.1 var(--display); color: var(--title); margin: 0; text-shadow: 0 2px 0 var(--ink); }
+.pbody h3 { font: 600 15px/1 var(--display); color: var(--label-dim); letter-spacing: 1px; margin: 12px 0 4px; }
+.pbody .who { display: flex; gap: 10px; align-items: center; }
+.pbody .who .slot { width: 56px; height: 56px; }
+.pbody .who .slot img { width: 40px; height: 40px; }
+.pbody .sub { color: var(--label-dim); font-size: 17px; }
+.pobj { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.pobj li { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 6px; align-items: center; font-size: 18px; }
+.pobj li .pb { grid-column: 2 / 4; height: 14px; border-style: solid; border-width: 4px; border-image: url(mission-tree/ui/stone-bar.png) 32 fill stretch; image-rendering: pixelated; position: relative; }
+.pobj li .pb i { position: absolute; left: 0; top: 0; bottom: 0; background: url(mission-tree/ui/stone-fill-progress.png) 0 0 / 4px 100% repeat-x; image-rendering: pixelated; }
+.pobj li em { font-style: normal; color: var(--rune); }
+.help { color: var(--text-dim); font-size: 18px; margin: 0; }
+.ulist { display: grid; gap: 4px; }
+.ulist div { display: flex; gap: 8px; align-items: center; font-size: 18px; }
+.ulist small { display: block; color: var(--label-dim); font-size: 16px; }
+.mlinks { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.mlinks button { all: unset; cursor: pointer; color: var(--rune); font: 18px var(--body); text-decoration: underline; }
+.mlinks button:focus-visible { outline: 2px solid var(--rune); }
+.rgroup { font: 600 14px/1 var(--display); color: var(--label-dim); letter-spacing: 1px; margin: 10px 0 4px; }
+.rrow { all: unset; display: flex; gap: 8px; align-items: center; width: 100%; cursor: pointer; padding: 2px 0; font: 18px/1.1 var(--body); color: var(--text); }
+.rrow small { display: block; color: var(--label-dim); font-size: 16px; }
+.rrow.locked > span:last-child { color: var(--label-dim); }
+.rrow:focus-visible { outline: 2px solid var(--rune); }
+
+/* ---- the info modal ---- */
+dialog.infomodal { max-width: min(760px, 94vw); max-height: 86vh; max-height: 86dvh; padding: 0; border: 4px solid var(--stone-2); outline: 2px solid var(--ink); background: var(--page-2); color: var(--page-text); }
+dialog.infomodal::backdrop { background: rgba(1, 14, 26, .72); }
+dialog.infomodal .mhead { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; background: var(--face); border-bottom: 2px solid var(--stone-0); }
+dialog.infomodal .mhead b { font: 600 18px/1.2 var(--display); color: var(--title); }
+dialog.infomodal .mhead button { font: 18px var(--body); min-width: 40px; min-height: 40px; background: var(--page-2); color: var(--page-text); border: 1px solid var(--page-line); cursor: pointer; }
+dialog.infomodal .mbody { padding: 6px 16px 16px; overflow: auto; font-size: 18px; }
+dialog.infomodal h3 { font: 600 17px/1.2 var(--display); color: var(--text-dim); margin: 14px 0 4px; }
+dialog.infomodal p, dialog.infomodal li { margin: 4px 0; }
+dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
+
+@media (max-width: 640px) {
+  header.top h1 { font-size: 20px; }
+  .legend { margin-left: 0; font-size: 15px; }
+  .bar { padding: 6px 10px; gap: 4px 6px; }
+  .bar .btn { height: 34px; min-width: 40px; font-size: 18px; border-width: 8px; }
+  .speed { height: 32px; font-size: 17px; }
+  .stepno { min-width: 0; }
+  .panel { top: auto; height: 62%; width: 100%; }
+  .log { font-size: 15px; }
+  .hud { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>MISSION TREE</h1>
+  <button class="infobtn" id="infoBtn" aria-label="About this page" title="About this page">i</button>
+  <p class="pbd-tracker"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+  <div class="legend" aria-label="Legend">
+    <span class="l-done"><i></i>Done</span><span class="l-now"><i></i>Now</span><span class="l-open"><i></i>Open</span><span class="l-locked"><i></i>Locked</span>
+  </div>
+</header>
+<div class="bar">
+  <div class="grp"><button class="btn" id="fitBtn">Fit</button><button class="btn" id="zoomOut" aria-label="Zoom out">−</button><button class="btn" id="zoomIn" aria-label="Zoom in">+</button></div>
+  <div class="grp"><span class="lab">BOT RUN</span>
+    <button class="btn oak" id="resetBtn" title="Back to a new world">Reset</button>
+    <button class="btn oak" id="stepBtn">Step</button>
+    <button class="btn oak" id="playBtn" aria-pressed="false">Play</button>
+    <select class="speed" id="speed" aria-label="Bot speed">
+      <option value="0" selected>Speed: off</option><option value="900">Slow</option><option value="420">Normal</option><option value="140">Fast</option>
+    </select>
+    <span class="stepno" id="stepNo"></span>
+  </div>
+  <div class="grp"><button class="btn" id="recipesBtn">Recipes</button></div>
+</div>
+<div class="stage">
+  <div id="view"><div id="world"><svg id="edges"></svg></div></div>
+  <div class="hud" id="hud"></div>
+  <div class="log" id="log" aria-live="polite"></div>
+  <aside class="panel" id="panel" aria-label="Mission">
+    <div class="phead">
+      <div class="ptabs" role="tablist">
+        <button class="ptab" role="tab" id="tabM" aria-selected="true">MISSION</button>
+        <button class="ptab" role="tab" id="tabR" aria-selected="false">RECIPES</button>
+      </div>
+      <button class="btn xbtn" id="closePanel" aria-label="Close">✕</button>
+    </div>
+    <div class="pbody" id="pbody"></div>
+  </aside>
+</div>
+
+<dialog class="infomodal" id="info">
+  <div class="mhead"><b>The mission tree</b><button id="infoClose" aria-label="Close">✕</button></div>
+  <div class="mbody">
+    <p>The game's Missions screen (the pack's MISSIONS tab, opened with O), redrawn as the tree that <code>starter-missions</code> designs ("Missions are a tree that unlocks the tech" and "The full tree"). Every mission, objective and unlock on this page comes from there.</p>
+    <h3>What the tree is for</h3>
+    <p>The owner, 2026-11-15: <em>"The point of the missions is to get the player to play through the content and unlock new tech"</em>, and <em>"a comprehensive mission tree that would encourage the bot to try all these game play mechanics"</em>. Every mechanic the game has today has a mission that needs it: hands, tools at three tiers, building, light, water, fishing, farming, herding, mining and smelting, cooking and eating, and getting about.</p>
+    <ul>
+      <li><b>The trunk</b>, hands to tools, runs left to right and opens everything else.</li>
+      <li><b>Fishing, farming, herding, mining and smelting, light and building</b> open when the trunk is done, and can be played in any order.</li>
+      <li><b>Getting about</b> opens after "Go fishing".</li>
+      <li><b>Cooking</b> opens after fishing's "Three kinds of fish" and one of farming ("Harvest") or herding ("Collect from the herd"): the dashed lines. The dotted lines mark where a cooking mission uses a crop or an egg from another branch; they do not lock it.</li>
+    </ul>
+    <h3>How unlocks work</h3>
+    <ul>
+      <li>A recipe or station is locked until the mission that names it is done. In the recipe list (the Recipes button here) it shows as a dim silhouette with the name of that mission, and the game says nothing else.</li>
+      <li>The unlock list is data on each mission (<code>unlocks: [recipe codes]</code>) in <code>missions.ron</code>, so tech and missions are tuned in one file. A recipe no mission names is unlocked from the start.</li>
+      <li>On a card, an unlock is a silhouette until its mission is done, then it lights.</li>
+    </ul>
+    <h3>Old saves keep everything</h3>
+    <ul>
+      <li>An unlock is derived from the world's <code>missions</code> record and never stored on its own.</li>
+      <li>A world from before the tree opens with every mission it already finished done.</li>
+      <li>Any recipe it has already crafted, and anything the player carries or placed, counts as unlocked too, so no old world loses a tool it could make. A test pins this.</li>
+      <li>Mission ids stay append-only; the old line's ids map onto the tree's.</li>
+    </ul>
+    <h3>New in the tree <span class="nw">NEW</span></h3>
+    <ul>
+      <li><b>Objective kinds:</b> <code>fell</code>, <code>eat</code>, <code>pour</code>, <code>night</code>, <code>reach</code>, <code>swim</code>, <code>board</code>. Each is raised where the game already acts: felling, eating, the bucket, the clock, the walker's position against a site or the sea places map, the swimmer, and boarding.</li>
+      <li><b>Recipes:</b> <code>fence</code>, <code>gate</code>, <code>campfire</code> and <code>torch</code>. Today they come in the starting kit, which keeps them for a world from before the tree.</li>
+      <li>Both are marked NEW on the cards and in the side panel.</li>
+    </ul>
+    <h3>The bot plays it as the gameplay demo</h3>
+    <p>The phase-1 showcase is a bot whose goal is this tree. It plays the trunk, then each branch in order: fishing, farming, herding, mining and smelting, cooking, light and building, getting about. Each branch is a goal and a section of the video. It plays every objective through the player's inputs and never sets a count or an item; waits on a crop, an egg or the night are sped up and captioned. A branch it cannot finish fails the run and the log names the stalled objective: that is the test that every mechanic is reachable by play.</p>
+    <p>The Bot run controls walk that order here. Reset is a new world; Step takes one step (a mission becomes Now, an objective fills, the mission is Done and its unlocks light); Play runs the steps at the chosen speed. The page opens on a world partway through, the bot in the middle of "Go fishing". Nothing moves until Step or Play is pressed.</p>
+    <h3>Reading the page</h3>
+    <p>Drag to pan, wheel or pinch to zoom, Fit to see the whole tree. Click a mission for its full objectives, help line and unlocks. Far out, a card shows only its icon and title.</p>
+    <h3>Art</h3>
+    <p>Panels, plaques, slots, checks and bars are the game's own stone-and-carved-wood kit (<code>assets/ui/stone</code>, <code>assets/ui/oak</code>); item icons are the game's (<code>assets/items</code>), kept with their 1 px UI outline. The yard hen is the husbandry mockup's sprite and the map glyph the UI mockup's, since the game has no item icon for either. Where a mission has no icon of its own (a rowboat, a town), it borrows the nearest good. Help lines for missions that exist today are the game's (<code>missions.ron</code>); the others are drafted for this mockup.</p>
+  </div>
+</dialog>
+
+<script src="mission-tree/tree.js"></script>
+</body>
+</html>
