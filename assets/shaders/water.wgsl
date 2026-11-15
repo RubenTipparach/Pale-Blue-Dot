@@ -803,61 +803,14 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // a bit froth to it"): streaks of froth stretched down the face and
     // scrolled down it with the fall's own advection, denser at a fall's lip
     // and foot (the mesher's froth weight, `flow_uv.x` on a falling face).
-    // The noise's coordinates are kept small: its hash is lost at
-    // planet-sized coordinates.
-    let wrapped_time = time - 512.0*floor(time/512.0);
     if (in.kind == 2u && horizontal < 0.5) {
-        // Ribbons that fall (owner, 2026-11-15: "show that it is speeding up
-        // in velocity"): the water leaves the lip at 1 m/s and falls freely,
-        // so a mark on it is at depth d after (sqrt(v0^2 + 2 g d) - v0)/g.
-        // Reading the noise at the time it left the lip makes every streak
-        // accelerate down the face and stretch with the speed, sqrt(2 g d),
-        // with no shear building up over time. Clear water at the lip,
-        // white ribbons lower down, the churn of the foot at the bottom.
-        let across_m = dot(in.body_position, safe_normal(cross(face, radial)));
-        let across = across_m - 128.0*floor(across_m/128.0);
-        let d = max(in.flow_uv.z, 0.0);
-        let v0 = 1.0;
-        let left = (sqrt(v0*v0 + 19.62*d) - v0)/9.81;
-        let along = (wrapped_time - left)*1.6;
-        let q = vec3<f32>(across*1.8, along, 0.0);
-        let n1 = gnoise3(q)*2.2 + 0.5;
-        let n2 = gnoise3(q*vec3<f32>(2.1, 1.4, 1.0) + vec3<f32>(7.3, 0.0, 3.1))*2.2 + 0.5;
-        let ribbons = min(smoothstep(0.62, 0.8, n1) + 0.6*smoothstep(0.68, 0.85, n2), 1.0);
-        let grow = smoothstep(0.0, 2.5, d);
-        // The lip's veil, where the top's whitening meets the face.
-        let veil = 1.0 - smoothstep(0.0, 0.6, d);
-        // The churn of the foot: the mesher's froth weight is one at a
-        // fall's two ends, and the foot is the end under the lip.
-        let end = smoothstep(0.85, 1.0, in.flow_uv.x)*smoothstep(0.8, 1.6, d);
-        let churn = clamp(gnoise3(vec3<f32>(across*1.7, along*2.0, wrapped_time*1.5))*2.2 + 0.5, 0.0, 1.0);
-        let froth = 0.04 + 0.25*veil + ribbons*(0.2 + 0.55*grow) + end*(0.1 + 0.3*churn);
-        foam = max(foam, clamp(froth, 0.0, 0.95));
-    }
-    if (in.kind == 1u && in.flow_uv.z > 0.0) {
-        // A top running to a fall's lip (owner, 2026-11-15: "can we have the
-        // edge transition into froth?"): across its last metre or so it
-        // whitens into streaks drawn along its flow, which run faster toward
-        // the lip. Two phases of the flow, half a cycle apart and blended,
-        // so the faster scroll never shears the pattern over time.
-        let lip = clamp(in.flow_uv.z, 0.0, 1.0);
-        let pan = in.flow_uv.xy;
-        var dir = tangent_u;
-        if (dot(pan, pan) > 1e-6) { dir = safe_normal(tangent_u*pan.x + tangent_v*pan.y); }
-        let side = cross(face, dir);
-        let along_m = dot(in.body_position, dir);
-        let across_m = dot(in.body_position, side);
-        let along0 = along_m - 128.0*floor(along_m/128.0);
-        let across0 = across_m - 128.0*floor(across_m/128.0);
-        let speed = 0.6 + 3.4*lip*lip;
-        let phase0 = fract(wrapped_time*0.5);
-        let phase1 = fract(wrapped_time*0.5 + 0.5);
-        let blend = abs(1.0 - 2.0*phase0);
-        let s0 = gnoise3(vec3<f32>(across0*2.0, (along0 - phase0*2.0*speed)*0.6, 0.0))*2.2 + 0.5;
-        let s1 = gnoise3(vec3<f32>(across0*2.0, (along0 - phase1*2.0*speed)*0.6, 5.7))*2.2 + 0.5;
-        let streaks = mix(smoothstep(0.55, 0.8, s1), smoothstep(0.55, 0.8, s0), blend);
-        let edge = smoothstep(0.2, 1.0, lip);
-        foam = max(foam, clamp(edge*(0.2 + 0.55*streaks), 0.0, 0.9));
+        let down_p = advected*vec3<f32>(1.0, 1.0, 1.0);
+        let along = vec3<f32>(dot(down_p, tangent_u), dot(down_p, radial), dot(down_p, tangent_v));
+        let streak_p = vec3<f32>(along.x*5.0, along.y*0.35, along.z*5.0) + vec3<f32>(0.0, time*0.6, 0.0);
+        let n = gnoise3(streak_p)*0.5 + gnoise3(streak_p*2.3)*0.3 + 0.5;
+        let weight = clamp(in.flow_uv.x, 0.35, 1.0);
+        let froth = smoothstep(0.42, 0.7, n)*0.75 + 0.15;
+        foam = max(foam, clamp(froth*weight + 0.12, 0.0, 0.92));
     }
     // A gale and up (`ocean-environments` 4.3): foam torn into streaks along
     // the wind and spray off the crests, growing from `spray_from_mps` to
