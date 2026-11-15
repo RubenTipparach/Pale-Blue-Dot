@@ -114,3 +114,39 @@ Honest notes:
   not seen in a picture.
 - `river-valley-*` and `marsh-pool-day.jpg` above were taken before this
   pass's valley changes.
+
+## Fifth pass (2026-11-15): falling froth, the lip, a river held, the aerial rig
+
+| File | What it shows |
+| --- | --- |
+| `froth-lip-before-after.jpg` | The fourth pass's fall (`--walk --pitch -40 --yaw 90 --pour 1 --pour-ahead 12 --pit 9 --water-ticks 10 --time 11`), top row; the same pour at `--pitch -15`, bottom row. Before (left) is the committed shader and mesher on today's ground; after (right) this pass. After: thin vertical ribbons that leave the lip clear and grow longer and denser lower down; the top's last metre before the lip whitens. The white at the foot is the splash's mist. |
+| `river-from-air-200m.jpg` | `--fly --at 24.0797 1.7719 --yaw 160 --pitch -35 --height 200 --time 12`: a river running down from a lake. |
+| `river-reach-from-air-150m.jpg` | `--fly --at 24.2400 3.8543 --yaw 149 --pitch -35 --height 150 --time 12`: a lower reach, its valley and banks. |
+| `far-rivers-from-250m.jpg` | `--yaw -20 --pitch -30 --height 250`: rivers far past the column tier (3,100 columns round the camera) drawn as the far sheet. |
+| `river-from-air-night.jpg` | The 200 m view at 22:00. |
+
+Honest notes:
+
+- The spill the lead saw was underground. On four tiers over falls, the
+  flowing water "outside the banks" was in caves the worms open under and
+  beside a river, tens of metres down. Rock under a river and 15 m past its
+  banks now keeps no cave above four metres under the sea's level, and a 3 m
+  levee, falling away at one in one, stands a layer over the reach's water.
+  `a_freshly_built_tier_s_rivers_are_what_the_rule_keeps` asserts no flowing
+  water over the sea's layer outside a river's banks on all four. Water at
+  the sea's layer in a sea cave is the sea's and is not counted. A plunge
+  pool's edge now slopes up the bank rather than stepping two metres. The
+  version 8 digests are re-pinned; the seam report holds at none of 4,000.
+- The acceleration is in the shader: a fall's ribbons are read at the time
+  the water left the lip, free fall from 1 m/s, so they speed up and stretch
+  with sqrt(2 g d). A still frame shows the stretch, not the motion; the
+  motion is for the recording.
+- The top's whitening is drawn per triangle (corners at a lip are one, the
+  middle nought), so up close it reads in facets.
+- No frame shows a river's mouth at the sea or a tall river fall with its
+  plume from the air: the tall fall here is the poured pit's nine layers.
+- The start's cloud cover stays inside `new_world_start`'s 0.03 of 0.69
+  (an earlier try at this pass, a deeper water clamp, moved it to 0.66 and
+  was dropped).
+- Captures in the `--capture` fixed-step mode on the Mac (M4 Max); frame
+  cost not measured.

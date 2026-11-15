@@ -23,6 +23,9 @@
 - [x] 3.9 The walker swims in the column's water and the tided sea (E10). Verify: `the_walker_swims_in_a_pool_a_flowing_cell_and_a_high_tide` (which found and fixed a pool above sea level being swum to the sea's sheet).
 - [x] 3.11 The owner's fall notes (E12 to E14): no rain rings on vertical water, froth on falls, a splash at every fall's foot by its height. Verify: `owner-fall-froth-rain-before-after.jpg`; a launch reaches READY with no LATE_PIPELINE.
 - [x] 3.12 Rivers settled by the rule at the build (E15). Verify: `a_freshly_built_tier_s_rivers_are_what_the_rule_keeps`.
+- [x] 3.13 Froth as falling ribbons, the lip whitening and speeding up (E13, fifth pass, the owner's note). Verify: `froth-lip-before-after.jpg`, the same views before and after.
+- [x] 3.14 A river is held by its valley: a levee and sealed rock (E16). Verify: `a_freshly_built_tier_s_rivers_are_what_the_rule_keeps` asserts no flowing cell outside a river's banks, on four tiers over falls.
+- [x] 3.15 The capture rig's `--fly --yaw --pitch` (E17). Verify: the aerial captures of the fifth pass.
 - [x] 3.10 The wooden bucket (E11): recipe, icons, take and pour. Verify: `a_bucket_takes_a_source_and_pours_into_air`; the recipe test counts it.
 
 - [x] 3.7 Pouring (E5): the place path places a held water block as a source; F6 pours one where the place ray lands; a dig or a block placed beside water queues the flow. Verify: the tier tests; the captures pour through the same edit path.

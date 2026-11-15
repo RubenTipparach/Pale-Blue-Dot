@@ -527,6 +527,12 @@ versions 4 to 7 keep their digests, and version 8's is pinned beside them.
 - **The valley.** The bed is flat for 1.5 m either side of the line and
   rises evenly to the ground 8.2 m out, so a channel is never a slot a far
   tier's walls cannot close (the seam report holds at none of 4,000 edges).
+- **Held in its valley** (`water-flow` E16, fifth pass): a 3 m levee round
+  the valley stands a layer over the reach's water and its fall, and the
+  ground under a river, its banks and 15 m past them opens no cave above four
+  metres under the sea's level, so no river water drains into a cave and
+  runs on underground. Tested: no flowing water outside a river's banks on
+  four tiers over falls.
 - **Measured.** 8,200 of the lattice's 259,200 cells are river; 2.7 % of
   land samples are within reach of one. World preparation went from 3.4 to
   3.8 s.

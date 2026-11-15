@@ -69,6 +69,12 @@ impl RiverSettings {
 /// The spacing a sheet's levels fall by, metres: one cell.
 const CELL_M: f32 = 2.833;
 const MEANDER_SALT: u64 = 0x3EA_DE55;
+/// How wide the levee round a river's valley is, metres.
+const LEVEE_M: f32 = 3.0;
+/// How far the levee's outer slope runs down to the ground, at most, metres.
+const LEVEE_FOOT_M: f32 = 12.0;
+/// How far past a river's banks its ground is sealed from caves, metres.
+const SEAL_M: f32 = LEVEE_M + LEVEE_FOOT_M;
 const NONE: u32 = u32::MAX;
 
 /// One lattice cell of the drainage map.
@@ -359,6 +365,11 @@ impl RiverMap {
         (self.centre(k), n.level, n.drop, n.down == NONE)
     }
 
+    /// Half a river cell's width, metres.
+    pub fn half_width(&self, k: usize) -> f32 {
+        self.nodes[k].half_width
+    }
+
     /// The cell a river cell drains into.
     pub fn down(&self, k: usize) -> Option<usize> {
         let d = self.nodes[k].down;
@@ -405,6 +416,18 @@ pub fn at(cfg: &TerrainConfig, d: Vec3) -> Option<RiverHere> {
     map(cfg, settings).at(cfg, settings, d)
 }
 
+/// Where a river's valley and a margin past its banks are sealed from
+/// caves (`water-flow` E16): the altitude, metres over the radius, above
+/// which no cave opens in a column here. Four metres under the sea's level,
+/// under every reach's bed and plunge pool: a reach's own level is not
+/// enough, because at a fall the reach below runs through the same ground
+/// and a cave under its bed would drain it.
+pub fn sealed_from(cfg: &TerrainConfig, d: Vec3) -> Option<f32> {
+    let settings = cfg.rivers.as_ref()?;
+    map(cfg, settings).at_widened(cfg, settings, d, SEAL_M)?;
+    Some(cfg.sea_level_m - 4.0)
+}
+
 /// The water's top at a point of a river, whole metres over sea level: the
 /// reach's level, or a metre under the ground the river cuts through where
 /// that is lower, so a river never stands over its banks (no levee is ever
@@ -430,6 +453,8 @@ fn top_here(
             planet_gen::surface_altitude_unrivered(cfg, n)
         })
         .fold(base, f32::min);
+    // A layer under the lowest of it; the levee round the valley
+    // (`water-flow` E16) holds what runs out over a low rim.
     here.level
         .min((low - cfg.sea_level_m).floor() as i32 - 1)
         .max(0)
@@ -444,14 +469,24 @@ pub fn carve(cfg: &TerrainConfig, d: Vec3, base: f32) -> f32 {
     if base < cfg.sea_level_m - 1.0 {
         return base;
     }
-    let Some(here) = map(cfg, settings).at(cfg, settings, d) else {
+    let Some(here) = map(cfg, settings).at_widened(cfg, settings, d, LEVEE_M + LEVEE_FOOT_M) else {
         return base;
     };
+    if here.across_m >= here.half_width_m + settings.bank_m {
+        // A levee round the valley, as high as any water in the valley near
+        // it (its reach's level, and the reach above where it falls in),
+        // and a layer over: a river that runs along a slope cannot spill out
+        // over its low side.
+        // Flat for its width, then down at one in one to the ground: never
+        // a wall a coarse tier's seam cannot close.
+        let past = here.across_m - here.half_width_m - settings.bank_m - LEVEE_M;
+        return base.max(levee_m(cfg, &here) - past.max(0.0));
+    }
     let top = top_here(cfg, settings, &here, d, base);
     let water = cfg.sea_level_m + top as f32;
     // Under a fall of three layers or more, a plunge pool: two layers deeper
     // for two cells downstream of the step (M25's river tab).
-    let plunge = if here.across_m < here.half_width_m && top > 0 {
+    let plunge = if top > 0 {
         let map = map(cfg, settings);
         (1..=2).any(|n| {
             let at = (d.normalize_or(Vec3::Y) + here.upstream * (n as f32 * CELL_M / cfg.radius_m))
@@ -461,16 +496,27 @@ pub fn carve(cfg: &TerrainConfig, d: Vec3, base: f32) -> f32 {
     } else {
         false
     };
-    let bed = (water - if plunge { 4.0 } else { 2.0 } + 0.01).min(base);
-    // A valley, not a slot: the bed is flat for a metre and a half either
-    // side of the line, then rises evenly to the ground at the banks' outer
-    // edge, so no step across the river is taller than the ground a coarse
-    // tier's walls can reach (the seam report's slits).
     let core: f32 = 1.5;
     let core = core.max(here.half_width_m - 1.5);
     let outer = here.half_width_m + settings.bank_m;
     let t = ((here.across_m - core) / (outer - core)).clamp(0.0, 1.0);
-    (bed + (base - bed) * t).min(base)
+    // The pool's extra depth eases out up the bank, so its edge is a slope
+    // and not a two-metre step.
+    let bed = (water - if plunge { 4.0 - 2.0 * t } else { 2.0 } + 0.01).min(base);
+    // A valley, not a slot: the bed is flat for a metre and a half either
+    // side of the line, then rises evenly to the ground at the banks' outer
+    // edge, so no step across the river is taller than the ground a coarse
+    // tier's walls can reach (the seam report's slits).
+    // The banks rise to the levee where it stands over the ground, so the
+    // valley meets it without a step.
+    let rim = base.max(levee_m(cfg, &here));
+    (bed + (rim - bed) * t).min(rim)
+}
+
+/// The levee's top round a reach, metres over the radius: a layer over its
+/// water and the fall into it.
+fn levee_m(cfg: &TerrainConfig, here: &RiverHere) -> f32 {
+    cfg.sea_level_m + (here.level + here.drop + 1) as f32 + 0.01
 }
 
 /// The water a river puts in a column over its bed: `(altitude of the

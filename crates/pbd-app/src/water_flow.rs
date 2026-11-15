@@ -196,7 +196,9 @@ pub struct LiquidMesh {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     /// The flow in the face's tangent frame as the sea's fragment reads it.
-    pub flow: Vec<[f32; 2]>,
+    /// The flow lane: a top's pan (xy) and how near a fall's lip it is (z);
+    /// a face's froth weight (x) and how far under its fall's lip it is (z).
+    pub flow: Vec<[f32; 3]>,
     /// The face's kind, and the sky's share at it, 0..1.
     pub kind: Vec<f32>,
     pub sky: Vec<f32>,
@@ -222,6 +224,10 @@ fn shader_frame(face: Vec3) -> (Vec3, Vec3) {
 
 impl LiquidMesh {
     fn vertex(&mut self, p: Vec3, n: Vec3, flow: Vec2, kind: f32, sky: f32) -> u32 {
+        self.vertex_with(p, n, flow.extend(0.0), kind, sky)
+    }
+
+    fn vertex_with(&mut self, p: Vec3, n: Vec3, flow: Vec3, kind: f32, sky: f32) -> u32 {
         self.positions.push(p.to_array());
         self.normals.push(n.to_array());
         self.flow.push(flow.to_array());
@@ -237,10 +243,10 @@ impl LiquidMesh {
             let i = i as usize;
             let [x, y, z] = self.positions[i];
             let [nx, ny, nz] = self.normals[i];
-            let [fx, fy] = self.flow[i];
+            let [fx, fy, fz] = self.flow[i];
             out.push([x, y, z, self.sky[i]]);
             out.push([nx, ny, nz, self.kind[i]]);
-            out.push([fx, fy, 0.0, 0.0]);
+            out.push([fx, fy, fz, 0.0]);
         }
         out
     }
@@ -409,6 +415,29 @@ pub fn liquid_mesh(
                 } else {
                     Vec2::ZERO
                 };
+                // How near each corner is to a fall's lip (owner, 2026-11-15:
+                // "can we have the edge transition into froth?"): one at a
+                // corner on a side whose water goes over an edge, so the top
+                // whitens and speeds up toward the fall across its last metre
+                // or so. An edge goes over where the side's water falls, or
+                // falls from under it, or this cell's own water falls below.
+                let over = |s: usize| -> bool {
+                    sides[s].is_some_and(|n| {
+                        is_falling(material(n, layer))
+                            || (!tier.columns[n].solid(layer) && is_falling(material(n, layer - 1)))
+                    })
+                };
+                let own_lip = is_falling(column.material(layer - 1));
+                let lips: Vec<f32> = (0..degree)
+                    .map(|i| {
+                        if own_lip || over((i + degree - 1) % degree) || over(i) {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    })
+                    .collect();
+                let middle_lip = if own_lip { 0.6 } else { 0.0 };
                 // Each triangle lit by its own slope, so a top running down to
                 // a sheet's edge reads as water tilted, not a mirror on edge.
                 for i in 0..degree {
@@ -420,8 +449,9 @@ pub fn liquid_mesh(
                     if n.dot(centre) < 0.0 {
                         n = -n;
                     }
-                    for v in [middle, p, q] {
-                        let id = out.vertex(v, n, pan, KIND_TOP, lit);
+                    let j = (i + 1) % degree;
+                    for (v, lip) in [(middle, middle_lip), (p, lips[i]), (q, lips[j])] {
+                        let id = out.vertex_with(v, n, pan.extend(lip), KIND_TOP, lit);
                         out.indices.push(id);
                     }
                 }
@@ -482,6 +512,16 @@ pub fn liquid_mesh(
                 } else {
                     KIND_STILL
                 };
+                // How far under its fall's lip each corner is, metres: the
+                // falling run over this layer, and the fraction into it.
+                let run = if falling {
+                    (layer + 1..LAYERS)
+                        .take_while(|&l| is_falling(column.material(l)))
+                        .count() as f32
+                } else {
+                    0.0
+                };
+                let under = |fraction: f32| if falling { run + 1.0 - fraction } else { 0.0 };
                 let pts = [
                     (at(a, bottom_a), floor + bottom_a),
                     (at(z, bottom_z), floor + bottom_z),
@@ -490,7 +530,16 @@ pub fn liquid_mesh(
                 ];
                 let ids: Vec<u32> = pts
                     .iter()
-                    .map(|&(p, _)| out.vertex(p, normal, Vec2::new(froth, 0.0), kind, lit))
+                    .zip([bottom_a, bottom_z, top_z, top_a])
+                    .map(|(&(p, _), fraction)| {
+                        out.vertex_with(
+                            p,
+                            normal,
+                            Vec3::new(froth, 0.0, under(fraction)),
+                            kind,
+                            lit,
+                        )
+                    })
                     .collect();
                 out.indices
                     .extend([ids[0], ids[1], ids[2], ids[0], ids[2], ids[3]]);

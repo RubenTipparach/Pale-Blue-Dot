@@ -41,6 +41,9 @@ pub struct FlightViewConfig {
     pub minimum_clearance: f32,
     /// Camera/ship pitch below the local tangent at spawn, in radians.
     pub view_pitch_down: f32,
+    /// The heading the flight starts looking along, degrees right of compass
+    /// west as the walker's `--yaw` is (90 north); `None` looks east.
+    pub view_yaw_deg: Option<f32>,
     pub startup_camera: bool,
     // ---- The far-side route (`route.rs`, `far-side-flight`).
     /// Cruise height above the ground, metres: above the atmosphere (960 m
@@ -93,6 +96,7 @@ impl Default for FlightViewConfig {
             acceleration: 80.0,
             minimum_clearance: 45.0,
             view_pitch_down: 0.31,
+            view_yaw_deg: None,
             startup_camera: true,
             route_cruise_height_m: 3_000.0,
             route_climb_angle_deg: 60.0,
@@ -311,7 +315,15 @@ fn spawn_pose(config: FlightViewConfig) -> (Vec3, Quat, Vec3) {
         planet::terrain_radius(up) + config.spawn_altitude.max(config.minimum_clearance)
     };
     let position = up * radius;
-    let view_direction = east * config.view_pitch_down.cos() - up * config.view_pitch_down.sin();
+    let ahead = match config.view_yaw_deg {
+        Some(yaw) => {
+            let (north, east) = pbd_core::geo::compass_north_east(up);
+            let yaw = yaw.to_radians();
+            (-east * yaw.cos() + north * yaw.sin()).normalize_or(east)
+        }
+        None => east,
+    };
+    let view_direction = ahead * config.view_pitch_down.cos() - up * config.view_pitch_down.sin();
     let orientation = Transform::from_translation(position)
         .looking_to(view_direction, up)
         .rotation;

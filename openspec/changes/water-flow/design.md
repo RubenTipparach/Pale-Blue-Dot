@@ -499,7 +499,53 @@ are exactly what the rule keeps (`a_freshly_built_tier_s_rivers_are_what_the_rul
 Derived, never saved; older worlds are not settled. The banks are held on
 every side (the water's top is a metre under the lowest ground round the
 valley's rim), yet a fall's foot can still spread its eight cells past a
-river's valley.
+river's valley (fixed in the fifth pass, E16).
+
+## Fifth pass (lead's request, 2026-11-15)
+
+**E13, again: froth as streaks.** The fourth pass's froth read as camo
+blotches. It is now thin bright vertical ribbons: two octaves of gradient
+noise stretched about seven times along the fall, scrolled down at 4 m/s,
+thresholded to narrow bands, over a soft white veil, with a churned band at
+the lip and the foot (the mesher's froth weight). The noise's coordinates
+are taken modulo 128 m first: at planet-sized coordinates the noise's hash
+loses its precision and the streaks went flat.
+
+**E13, a third time: the lip and the speed.** The owner, on the after shot:
+"can we have the edge transition into froth? and somehow show that it is
+speeding up in velocity/flow in to the wall". The mesher gives each top
+corner a lip weight (one where a side's water falls, falls from under it,
+or this cell's own water falls below) and each falling face's corners how
+far under their fall's lip they are, in the flow lane's third component.
+On a top, the last metre or so before a lip whitens into streaks along the
+flow that run faster toward it (two phases of the flow half a cycle apart,
+blended, so the speed never shears the pattern). On a fall, the ribbons are
+read at the time the water left the lip, free fall from 1 m/s,
+`(sqrt(v0^2 + 2 g d) - v0) / g`, so they accelerate down the face and
+stretch with sqrt(2 g d): clear just over the lip, white ribbons lower down,
+the churn at the foot (`froth-lip-before-after.jpg`).
+
+**E16. A river is held: levee and sealed rock.** Measured on four tiers
+over falls (`a_freshly_built_tier_s_rivers_are_what_the_rule_keeps`), the
+water that spread past a river's banks was not on the surface: it ran down
+through caves the worms open under and beside a river's bed, and spread in
+them, tens of metres from the river and tens of metres under the ground. Two
+changes to version 8 (not yet in any played save): every column within a
+river's banks plus 15 m keeps its rock, cave-free, from four metres under
+the sea's level up (`rivers::sealed_from`, applied after the worms in
+`column::generate_edited`); and a 3 m levee round a valley stands a layer
+over the reach's water and its fall, its banks rising to it and its outside
+falling away at one in one (`rivers::carve`). With the levee, the water's
+top goes back to a layer under the lowest of six points round the rim. A
+plunge pool's extra depth eases out up the bank, so the seam report holds
+at none of 4,000 edges. The test now
+asserts no flowing water over the sea's layer outside a river's banks, on
+four tiers. Water at the sea's layer in a sea cave is the sea's and is not
+counted.
+
+**E17. The capture rig flies anywhere.** `--fly` takes `--yaw` (compass
+degrees, 0 north, 90 east) and `--pitch` (degrees, negative down) beside
+`--at` and `--height`, so a capture can look down on a river from the air.
 
 ## Risks / Trade-offs
 

@@ -1304,6 +1304,13 @@ pub fn run(args: &[String]) {
         },
         // `--fly --height M` starts that far over the ground (a capture's
         // view from the air: `water-flow`'s rivers); 240 m otherwise.
+        // `--fly --yaw/--pitch` aims a flight's first view, so a capture can
+        // look down at a place from the air.
+        view_pitch_down: match (launch.fly, launch.pitch) {
+            (true, Some(pitch)) => -pitch.to_radians(),
+            _ => FlightViewConfig::default().view_pitch_down,
+        },
+        view_yaw_deg: if launch.fly { launch.yaw } else { None },
         spawn_altitude: if launch.fly {
             launch.height.unwrap_or(240.0)
         } else {

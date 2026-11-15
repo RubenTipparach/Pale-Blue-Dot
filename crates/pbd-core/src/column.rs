@@ -337,7 +337,19 @@ pub fn generate_edited(
 ) -> Column {
     let mut column = generate_solid(terrain, direction);
     let crust = crate::settlement::ground::crust(terrain, direction);
+    // A river's valley and its levee are sealed rock down to well under its
+    // water (`water-flow` E16): a cave opening under a river would drain it
+    // into the cave, and its water would run on underground forever.
+    let sealed =
+        crate::rivers::sealed_from(terrain, direction).map(|floor| (floor, column.clone()));
     carve_worms(&mut column, worms, field, terrain, direction, crust);
+    if let Some((floor, solid)) = sealed {
+        for (index, layer) in column.layers.iter_mut().enumerate() {
+            if layer_altitude(index) >= floor {
+                *layer = solid.layers[index];
+            }
+        }
+    }
     for &(layer, material) in edits {
         if let Some(slot) = column.layers.get_mut(layer as usize) {
             *slot = material;

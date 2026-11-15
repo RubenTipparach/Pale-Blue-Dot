@@ -2991,15 +2991,20 @@ mod river_tier_tests {
 
     /// A river with a fall of three layers or more, as the drainage map has
     /// it, for an anchor.
-    fn a_fall() -> Vec3 {
+    fn falls() -> Vec<Vec3> {
         let cfg = terrain_config();
         let settings = cfg.rivers.expect("the default generator has rivers");
         let map = pbd_core::rivers::map(cfg, &settings);
-        map.rivers()
+        let falls: Vec<Vec3> = map
+            .rivers()
             .map(|k| map.describe(k))
-            .find(|&(c, level, drop, _)| drop >= 3 && level >= 3 && c.y.abs() < 0.7)
+            .filter(|&(c, level, drop, _)| drop >= 3 && level >= 3 && c.y.abs() < 0.7)
             .map(|(c, ..)| c)
-            .expect("a river with a fall")
+            .step_by(97)
+            .take(4)
+            .collect();
+        assert!(!falls.is_empty(), "a river with a fall");
+        falls
     }
 
     /// A freshly built tier over a river: its water does not move when the
@@ -3007,7 +3012,12 @@ mod river_tier_tests {
     /// some of it flows (the river is not still pools).
     #[test]
     fn a_freshly_built_tier_s_rivers_are_what_the_rule_keeps() {
-        let anchor = a_fall();
+        for anchor in falls() {
+            a_tier_s_rivers_are_what_the_rule_keeps(anchor);
+        }
+    }
+
+    fn a_tier_s_rivers_are_what_the_rule_keeps(anchor: Vec3) {
         let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
         let mut tier = set.columns.clone();
         let sea = sea_layer();
@@ -3034,21 +3044,25 @@ mod river_tier_tests {
             }
         }
         eprintln!("river tier: {sources} sources, {flowing} flowing over the sea's level");
-        if std::env::var("RIVER_DIAG").is_ok() {
-            let cfg = terrain_config();
-            let (mut inside, mut outside, mut levels) = (0, 0, [0usize; 16]);
-            for slot in 0..tier.columns.len() {
-                for layer in sea..LAYERS - 1 {
-                    let m = tier.columns[slot].material(layer);
-                    if let Some((l, f)) = m.flow() {
-                        levels[l as usize + if f { 8 } else { 0 }] += 1;
-                        let near = pbd_core::rivers::at(cfg, tier.centres[slot]).is_some();
-                        if near { inside += 1 } else { outside += 1 }
-                    }
-                }
-            }
-            eprintln!("flowing near a river {inside}, away {outside}; by level {levels:?}");
-        }
+        // No flowing water outside a river's banks (pass 5): the valley,
+        // its levee and the sealed rock under both hold the river, at a
+        // fall's foot as anywhere. Over the sea's layer: the sea's own
+        // water spreading into a sea cave is the sea's, not a river's.
+        let cfg = terrain_config();
+        let outside: Vec<_> = (0..tier.columns.len())
+            .filter(|&slot| !tier.rim(slot))
+            .flat_map(|slot| (sea + 1..LAYERS - 1).map(move |layer| (slot, layer)))
+            .filter(|&(slot, layer)| {
+                tier.columns[slot].material(layer).flow().is_some()
+                    && pbd_core::rivers::at(cfg, tier.centres[slot]).is_none()
+            })
+            .collect();
+        assert!(
+            outside.is_empty(),
+            "{} flowing cells outside a river's banks, first {:?}",
+            outside.len(),
+            &outside[..outside.len().min(6)]
+        );
         assert!(sources > 50, "a river in the tier: {sources}");
         assert!(flowing > 0, "the river flows somewhere: {flowing}");
         assert!(

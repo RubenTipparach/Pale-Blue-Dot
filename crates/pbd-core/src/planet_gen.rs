@@ -891,7 +891,8 @@ mod tests {
             if h7 < v7.sea_level_m - 1.0 {
                 continue;
             }
-            let near_river = crate::rivers::at(&v8, d).is_some();
+            // A river, its banks and its levee (`water-flow` E16).
+            let near_river = crate::rivers::sealed_from(&v8, d).is_some();
             let channel = river_channel(&v7, d) > v7.river_threshold;
             rivered += usize::from(near_river);
             if !near_river && !channel {
@@ -906,8 +907,8 @@ mod tests {
         );
     }
 
-    const VERSION_8_DIGEST: u64 = 10_398_422_663_871_040_125;
-    const VERSION_8_TOP_DIGEST: u64 = 2_532_115_838_391_165_757;
+    const VERSION_8_DIGEST: u64 = 15_558_980_979_595_432_169;
+    const VERSION_8_TOP_DIGEST: u64 = 13_002_675_292_541_232_770;
 
     const VERSION_7_DIGEST: u64 = 9_167_527_543_725_899_224;
     const VERSION_7_TOP_DIGEST: u64 = 10_634_382_923_396_087_003;
