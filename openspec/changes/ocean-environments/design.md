@@ -1071,6 +1071,44 @@ the ribbons), pinned under 500 by a test. Schools are rebuilt on the CPU
 each frame as before, now also writing a UV per vertex. The frame cost is
 not measured on this branch.
 
+### B15. Generator version 9: the reefs back; the other creatures modelled (2026-11-15, `claude/env-reef`)
+
+**Why version 8 lost the reef.** A reef is kept clear of rivers
+(`reef_clear_m`, 60 m). Version 7 asked for a noise channel's *mouth*: the
+channel above its threshold where the ground would be land without the
+carve. Version 8 swapped that for `planet_gen::in_river`, which is true at
+*any* point of a noise channel, and the channels run through the open sea as
+well as into the land, so nearly every shallow warm sea was "near a river":
+on a one-degree globe scan version 7 has 55 reef samples and version 8 has 3.
+
+**Version 9** is version 8 with `OceanPlaces::V9`: version 7's numbers and
+`reef_mouths_only`, which clears a reef only near a channel's mouth (version
+7's test, the channel read on the ground without version 8's rivers) or a
+version 8 river's own reach. Version 8 is not edited; a world that names it
+keeps its 3 reefs. The reef is pieces, not ground, so version 9's altitudes,
+biomes and top blocks are version 8's digest for digest (both pinned);
+`GENERATOR_VERSION` is 9, and the settled climate g9 is g8's, as g8 was g7's.
+Tested: version 9's reef share on the scan is 55, version 7's exactly
+(`version_9_has_version_7s_reefs_again`). `reef-v9.jpg` is the old
+`reef.jpg` view, reef and all, on a new world.
+
+**The other creatures.** The owner: proper models "instead of placeholders".
+The crab, lobster, clam, turtle, otter, seal, the two ducks and the diver,
+the octopus and the plume worm are modelled again in M9's manner
+(`fish/bodies/creatures.rs`): skinned tubes and tapered limbs instead of
+boxes, each wearing a 64 x 32 skin drawn by M9's own `paintSkin` on the
+creature's colours and a pattern (`tools/water_life_atlas.py`,
+`CREATURE_SKINS`: 19 skins, the crab spotted, its legs barred, the
+lobster mottled with a barred tail, the clam's fluted shell and spotted
+blue mantle, the turtle's mottled shell and spotted skin, the drake's
+vermiculated grey and green head, the hen mottled, the diver spotted, the
+octopus mottled, the worm's ringed tube and banded plume). Every part and
+pivot keeps its posing name, so the ducks' heads, wings and feet, the
+turtle's flippers, the octopus's arms, the clam's lid and the worm's plume
+move as before. In the fish's budget: 150 (worm) to 470 (lobster)
+triangles, pinned under 500 with every UV in a tile by a test. M9's "Reef &
+sea floor" tab draws the same meshes.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

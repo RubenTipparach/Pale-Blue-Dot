@@ -12,10 +12,12 @@ use crate::hex::{Hex, Voxel};
 /// is and nothing about its shape; version 6 (`taller-mountains`) raises
 /// mountain ranges to about 290 m in regions of their own and caps them with
 /// snow above 200 m; version 7 (`ocean-environments` B10) adds the sea's
-/// places and carves its trenches. A new world is made with this version;
+/// places and carves its trenches; version 8 (design 13) runs rivers to
+/// the sea; version 9 (design B15) puts back the reefs version 8 lost. A new
+/// world is made with this version;
 /// a saved one keeps the version it was made with
 /// ([`crate::planet_gen::TerrainConfig::for_version`]).
-pub const GENERATOR_VERSION: u32 = 8;
+pub const GENERATOR_VERSION: u32 = 9;
 
 /// The topology a world's cells are cut from: the Goldberg levels and the
 /// finest cell keys (`pbd_core::cell_key`). A save records it beside the

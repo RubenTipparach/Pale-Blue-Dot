@@ -1876,10 +1876,37 @@ mod tests {
                 }
             }
         }
-        // The creatures M9's fish do not cover keep their bodies, on the
-        // white texel.
-        let crab = model_for("shore_crab", 0);
-        assert!(crab.base.uvs.iter().all(|uv| *uv == white_uv()));
+        // The other creatures are modelled in M9's manner (B15): skinned,
+        // in the fish's budget, every UV in a tile of the atlas.
+        let tiles: Vec<[f32; 4]> = atlas().tiles.values().map(|r| rect_uv(*r)).collect();
+        for (id, n) in [
+            ("shore_crab", 0),
+            ("lobster", 0),
+            ("giant_clam", 0),
+            ("reef_turtle", 0),
+            ("sea_otter", 0),
+            ("seal", 0),
+            ("reed_dabbler", 0),
+            ("reed_dabbler", 1),
+            ("pond_diver", 0),
+            ("octopus", 0),
+            ("tube_worm", 0),
+        ] {
+            let body = model_for(id, n);
+            let faces = body.triangles();
+            eprintln!("{id} {n}: {faces} triangles");
+            assert!(faces > 100 && faces < 500, "{id}: {faces} faces");
+            let all = std::iter::once(&body.base).chain(body.parts.iter().map(|p| &p.shape));
+            let mut skinned = 0;
+            for shape in all {
+                assert_eq!(shape.uvs.len(), shape.positions.len(), "{id}");
+                for uv in &shape.uvs {
+                    assert!(tiles.iter().any(|r| inside(*uv, *r)), "{id}: {uv:?}");
+                    skinned += usize::from(*uv != white_uv());
+                }
+            }
+            assert!(skinned * 2 > body.triangles() * 3, "{id} wears a skin");
+        }
     }
 
     /// Writes the game's sea pieces and every water creature's body, at rest,

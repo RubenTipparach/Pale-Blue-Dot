@@ -50,6 +50,12 @@ pub struct OceanPlaces {
     pub boundary_rate: f32,
     /// The coast: within this many cells of the shore.
     pub coast_cells: f32,
+    /// What keeps a reef clear on a world with version 8's rivers: `false`
+    /// (version 8) any point of a noise channel, which runs through the open
+    /// sea as well as into the land and so cleared almost every reef;
+    /// `true` (version 9) only a channel's mouth (where it cuts land, as
+    /// version 7 asks) or a version 8 river's own reach.
+    pub reef_mouths_only: bool,
 }
 
 impl OceanPlaces {
@@ -74,6 +80,15 @@ impl OceanPlaces {
         trench_floor_m: -140.0,
         boundary_rate: 0.2,
         coast_cells: 2.0,
+        reef_mouths_only: false,
+    };
+
+    /// Version 9's rules (`ocean-environments` B15): version 7's, with a
+    /// reef kept clear only of a river's mouth on a world with version 8's
+    /// rivers, so the reefs version 8 lost stand again.
+    pub const V9: Self = Self {
+        reef_mouths_only: true,
+        ..Self::V7
     };
 }
 
@@ -197,11 +212,14 @@ fn land_within(cfg: &TerrainConfig, d: Vec3, metres: f32) -> bool {
 
 /// Whether a river runs into the sea within `metres` of a direction: a
 /// point the channel carves under the sea that would be land without it.
-fn river_within(cfg: &TerrainConfig, d: Vec3, metres: f32) -> bool {
+fn river_within(cfg: &TerrainConfig, places: &OceanPlaces, d: Vec3, metres: f32) -> bool {
     let mut uncarved = *cfg;
     // The channel field never exceeds one, so no carve fires.
     uncarved.river_threshold = 2.0;
     uncarved.ocean = None;
+    if places.reef_mouths_only {
+        uncarved.rivers = None;
+    }
     let east = Vec3::Y.cross(d).normalize_or(Vec3::X);
     let north = d.cross(east);
     let arc = metres / cfg.radius_m;
@@ -211,12 +229,23 @@ fn river_within(cfg: &TerrainConfig, d: Vec3, metres: f32) -> bool {
             (d + (east * a.cos() + north * a.sin()) * arc).normalize_or(d)
         }))
         .any(|at| {
-            if cfg.rivers.is_some() {
-                // Version 8: a river's own reach at its mouth.
-                planet_gen::in_river(cfg, at)
-            } else {
+            let mouth = || {
                 planet_gen::river_channel(cfg, at) > cfg.river_threshold
                     && planet_gen::surface_altitude(&uncarved, at) >= cfg.sea_level_m
+            };
+            if places.reef_mouths_only {
+                // Version 9: a channel's mouth, or a version 8 river's reach.
+                mouth()
+                    || cfg.rivers.as_ref().is_some_and(|settings| {
+                        crate::rivers::at(cfg, at)
+                            .is_some_and(|here| here.across_m < settings.half_width_m)
+                    })
+            } else if cfg.rivers.is_some() {
+                // Version 8 as it shipped: any point of a channel, the open
+                // sea's included (design B15).
+                planet_gen::in_river(cfg, at)
+            } else {
+                mouth()
             }
         })
 }
@@ -278,7 +307,7 @@ fn place_at(cfg: &TerrainConfig, d: Vec3, altitude: f32, with_coast: bool) -> Op
     }
     if depth <= places.reef_depth_m
         && coldest >= places.reef_coldest_c
-        && !river_within(cfg, d, places.reef_clear_m)
+        && !river_within(cfg, places, d, places.reef_clear_m)
     {
         return Some(Environment::Reef);
     }
@@ -300,6 +329,38 @@ fn place_at(cfg: &TerrainConfig, d: Vec3, altitude: f32, with_coast: bool) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Version 9 puts back the reefs version 8 lost (design B15): on a
+    /// one-degree scan of the globe its reef is within a tenth of version
+    /// 7's, where version 8's is a few samples; and version 8 still places
+    /// what it placed, since a world may name it.
+    #[test]
+    fn version_9_has_version_7s_reefs_again() {
+        use crate::geo::{LatLon, direction};
+        let count = |cfg: &TerrainConfig| {
+            let mut n = 0usize;
+            for lat in -89..=89 {
+                for lon in -180..180 {
+                    let d = direction(LatLon {
+                        lat: (lat as f32).to_radians(),
+                        lon: (lon as f32).to_radians(),
+                    });
+                    n += usize::from(environment(cfg, d) == Some(Environment::Reef));
+                }
+            }
+            n
+        };
+        let v7 = count(&TerrainConfig::TENEBRIS_V7);
+        let v8 = count(&TerrainConfig::TENEBRIS_V8);
+        let v9 = count(&TerrainConfig::TENEBRIS_V9);
+        eprintln!("reef samples: version 7 {v7}, 8 {v8}, 9 {v9}");
+        assert!(v7 > 20, "{v7}");
+        assert!(
+            (v9 as f32 - v7 as f32).abs() <= v7 as f32 * 0.1,
+            "version 9 {v9} against version 7 {v7}"
+        );
+        assert!(v8 * 4 < v7, "version 8 is left as it shipped: {v8}");
+    }
 
     fn sphere(n: usize) -> impl Iterator<Item = Vec3> {
         let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());

@@ -86,6 +86,40 @@ SPECIES = [
          cols=dict(back="#dd576d", belly="#faaf5c", acc="#fb902f", fin="#dd576d"), hueVar=10),
 ]
 
+# The other water creatures' skins (design B15): M9's paintSkin on each
+# creature's colours and a pattern, so a crab or a duck wears the fish's
+# pixel style. Name, (back, belly, accent), pattern, extra.
+CREATURE_SKINS = [
+    ("crab", ("#a61e1f", "#fe6420", "#4a051e"), "spots", dict(den=0.8, con=0.8)),
+    ("crab_leg", ("#d4462b", "#fb902f", "#841c1d"), "bars", dict(bars=[6, 0.04, 1.0])),
+    ("lobster", ("#733126", "#e69d69", "#2e0d06"), "mottled", dict(den=1.1)),
+    ("lobster_tail", ("#a8633e", "#e69d69", "#733126"), "bars", dict(bars=[6, 0.05, 0.7])),
+    ("clam_shell", ("#a09f91", "#eab798", "#cfaa81"), "bars", dict(bars=[9, 0.03, 1.0], con=0.7)),
+    ("clam_mantle", ("#15578a", "#1096c3", "#74effe"), "spots", dict(den=1.5)),
+    ("turtle_shell", ("#522b2f", "#ab8465", "#cfaa81"), "mottled", dict(den=1.2)),
+    ("turtle_skin", ("#297537", "#9bb675", "#05582d"), "spots", dict(den=1.4)),
+    ("otter", ("#522b2f", "#cfaa81", "#2e0d06"), "gradient", dict()),
+    ("seal", ("#3e586e", "#bfcad7", "#1f3b52"), "spots", dict(den=1.2)),
+    ("drake", ("#434137", "#bfcad7", "#2c2c25"), "stripes", dict(wavy=True, den=1.4, con=0.6)),
+    ("drake_head", ("#05582d", "#297537", "#1096c3"), "gradient", dict()),
+    ("hen", ("#725244", "#cfaa81", "#41322c"), "mottled", dict(den=1.6)),
+    ("hen_head", ("#725244", "#ab8465", "#2e0d06"), "stripes", dict()),
+    ("diver", ("#2c2c25", "#fffefe", "#bfcad7"), "spots", dict(den=1.0)),
+    ("diver_head", ("#161612", "#434137", "#a61e1f"), "gradient", dict()),
+    ("octopus", ("#d4462b", "#e69d69", "#841c1d"), "mottled", dict(den=1.3)),
+    ("worm_tube", ("#bfcad7", "#fffefe", "#92a3b2"), "bars", dict(bars=[10, 0.03, 1.0])),
+    ("worm_plume", ("#a61e1f", "#fa3a64", "#fffefe"), "bars", dict(bars=[8, 0.04, 1.0])),
+]
+
+
+def creature_genome(name, cols, pat, extra):
+    sp = dict(id=name, prof="fusiform", pat=pat, den=extra.get("den", 1.0), con=extra.get("con", 0.9),
+              cols=dict(back=cols[0], belly=cols[1], acc=cols[2], fin=cols[0]), hueVar=0,
+              bars=extra.get("bars"), wavy=extra.get("wavy", False))
+    return dict(sp=sp, seed=0, prof="fusiform", pat=pat, den=sp["den"], con=sp["con"], hue=0, light=0,
+                patSeed=hash_str(name) % 1000000000)
+
+
 # ---------------------------------------------------------------- JS arithmetic
 M32 = 0xFFFFFFFF
 
@@ -596,7 +630,13 @@ def build():
                 "anal": [[a[0], a[1], a[2]] for a in sp["anal"]],
                 "pec": sp["pec"], "eye": sp["eye"], "crest": sp.get("crest", False),
             })
-    assert fin_y0 + math.ceil(n / fins_per_row) * 36 <= SIZE
+    crit_y0 = fin_y0 + math.ceil(n / fins_per_row) * 36
+    for i, (name, cols, pat, extra) in enumerate(CREATURE_SKINS):
+        skin, _ = paint_skin(creature_genome(name, cols, pat, extra))
+        x, y = 2 + (i % skins_per_row) * 68, crit_y0 + (i // skins_per_row) * 36
+        place(atlas, skin, x, y)
+        manifest["tiles"][name] = [x, y, 64, 32]
+    assert crit_y0 + math.ceil(len(CREATURE_SKINS) / skins_per_row) * 36 <= SIZE
     return atlas, manifest
 
 

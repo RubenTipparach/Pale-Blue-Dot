@@ -158,3 +158,25 @@ Honest read, judged against the terrain beside them:
   colour is all in the skin now.
 - The other creatures (crab, lobster, clam, turtle, otter, seal, ducks,
   octopus, plume worm) are unchanged.
+
+## Version 9 and the other creatures (B15, 2026-11-15)
+
+Same Mac, same method, generator version 9 (the new default).
+
+- `reef-v9.jpg`: the old `reef.jpg` view, (13.096, 94.896), 11:00, pitch
+  -12, 240 frames: version 9 has the reef back where version 8 lost it, the
+  same pieces as `reef.jpg` with B14's textures.
+- `creatures-before-after.jpg`: the lineup's creatures cropped, before (top,
+  the B8 bodies, taken earlier the same day) and after (bottom).
+- `lineup-creatures-modelled.jpg`: the whole lineup after.
+
+Honest read: the crab is a crab now (an oval spotted carapace, jointed
+barred legs, claws with fingers, eyes on stalks) where it was boxes; the
+lobster has a ridged barred tail, a fan, big claws and long feelers but is
+small at 0.5 m; the turtle's dome and flippers read, its mottled shell
+reads darker and more camouflage than a real turtle's; the ducks keep their
+shapes with feathered skins and a proper bill; the plume worm has its
+ringed tube and a crown of radioles; the octopus is a mottled mantle and
+tapered arms, its mantle blobby; the clam's fluted shells are fair but its
+open lid looks heavy; the otter and seal are smooth furred bodies. Under
+water they all take the cyan cast.

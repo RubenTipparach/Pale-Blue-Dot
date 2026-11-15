@@ -402,11 +402,6 @@ pub(crate) fn lathe(prof: &[[f32; 4]], nv: usize, rot: f32) -> Vec<Vec3> {
     out
 }
 
-pub(crate) fn lathe6(prof: &[[f32; 3]]) -> Vec<Vec3> {
-    let p: Vec<[f32; 4]> = prof.iter().map(|r| [r[0], r[1], r[2], 0.0]).collect();
-    lathe(&p, 6, PI / 6.0)
-}
-
 pub(crate) fn rotate_z(tris: Vec<Vec3>, a: f32) -> Vec<Vec3> {
     let q = Quat::from_rotation_z(a);
     tris.into_iter().map(|p| q * p).collect()
@@ -415,8 +410,6 @@ pub(crate) fn rotate_z(tris: Vec<Vec3>, a: f32) -> Vec<Vec3> {
 pub(crate) fn translate(tris: Vec<Vec3>, by: [f32; 3]) -> Vec<Vec3> {
     tris.into_iter().map(|p| p + Vec3::from(by)).collect()
 }
-
-pub(crate) const EYE: u32 = 0x161612;
 
 // ---- the water life's atlas (`ocean-environments` B14) ----------------------
 
@@ -905,550 +898,7 @@ fn m9_body(p: &FishPlan) -> Body {
     body
 }
 
-// ---- crawlers --------------------------------------------------------------
-
-struct CrabP {
-    top: u32,
-    under: u32,
-    leg: u32,
-    claw: u32,
-}
-
-fn crab_geo(p: &CrabP) -> Shape {
-    let mut k = Kit::default();
-    let (top, under) = (p.top, p.under);
-    k.add_with(ell(0.28, 0.12, 0.36, 8, 4), at([0.0, 0.16, 0.0]), |c, _| {
-        if c.y > 0.05 { top } else { under }
-    });
-    for s in [1.0f32, -1.0] {
-        for i in 0..4 {
-            let x = 0.12 - i as f32 * 0.1;
-            k.add(
-                bx(0.04, 0.04, 0.3),
-                atr(
-                    [x, 0.12, s * 0.42],
-                    [s * 0.55, (i as f32 - 1.5) * 0.25 * s, 0.0],
-                ),
-                p.leg,
-            );
-            k.add(
-                bx(0.035, 0.18, 0.035),
-                at([x - 0.01, 0.06, s * 0.56]),
-                p.leg,
-            );
-        }
-    }
-    for s in [1.0f32, -1.0] {
-        k.add(
-            bx(0.2, 0.08, 0.08),
-            atr([0.32, 0.17, s * 0.22], [0.0, s * 0.5, 0.0]),
-            p.claw,
-        );
-        k.add(bx(0.06, 0.06, 0.06), at([0.22, 0.17, s * 0.22]), p.claw);
-    }
-    for s in [1.0f32, -1.0] {
-        k.add(cyl(0.012, 0.012, 0.12, 4), at([0.24, 0.29, s * 0.07]), EYE);
-        k.add(bx(0.04, 0.04, 0.04), at([0.24, 0.36, s * 0.07]), EYE);
-    }
-    k.build()
-}
-
-fn lobster_geo() -> Shape {
-    let (top, under, band, claw, ant) = (0xa8633e, 0xe69d69, 0x733126, 0x733126, 0x2e0d06);
-    let mut k = Kit::default();
-    k.add_with(
-        lathe6(&[
-            [0.42, 0.0, 0.0],
-            [0.36, 0.06, 0.07],
-            [0.2, 0.09, 0.09],
-            [0.05, 0.09, 0.085],
-            [-0.02, 0.07, 0.07],
-        ]),
-        at([0.0, 0.1, 0.0]),
-        |c, _| if c.y > 0.12 { top } else { under },
-    );
-    for i in 0..5 {
-        let (x, r) = (-0.04 - i as f32 * 0.075, 0.065 - i as f32 * 0.007);
-        k.add(
-            lathe6(&[[x + 0.035, r, r * 1.1], [x - 0.035, r * 0.95, r * 1.05]]),
-            at([0.0, 0.1, 0.0]),
-            if i % 2 == 1 { top } else { band },
-        );
-    }
-    k.add(
-        shape(&[[0.0, 0.0], [-0.12, 0.09], [-0.15, 0.0], [-0.12, -0.09]]),
-        atr([-0.41, 0.09, 0.0], [FRAC_PI_2, 0.0, 0.0]),
-        top,
-    );
-    for s in [1.0f32, -1.0] {
-        k.add(
-            bx(0.18, 0.03, 0.03),
-            atr([0.42, 0.11, s * 0.1], [0.0, s * 0.5, 0.0]),
-            top,
-        );
-        k.add(
-            ell(0.13, 0.05, 0.065, 6, 3),
-            atr([0.6, 0.11, s * 0.2], [0.0, s * 0.3, 0.0]),
-            claw,
-        );
-        k.add(
-            bx(0.7, 0.012, 0.012),
-            atr([0.75, 0.16, s * 0.18], [0.0, s * 0.35, 0.12]),
-            ant,
-        );
-        for i in 0..4 {
-            k.add(
-                bx(0.025, 0.12, 0.025),
-                atr([0.25 - i as f32 * 0.07, 0.05, s * 0.1], [s * 0.6, 0.0, 0.0]),
-                under,
-            );
-        }
-    }
-    for s in [1.0f32, -1.0] {
-        k.add(bx(0.03, 0.03, 0.03), at([0.4, 0.16, s * 0.04]), EYE);
-    }
-    k.build()
-}
-
-/// A giant clam: the lower shell and the mantle, its upper shell a part on
-/// the hinge (the mockup's `makeClam`, its colours read off `clam.png`).
-fn clam_geo() -> (Shape, Shape) {
-    let (shell, ridge, lip, mantle, spot) = (0xa09f91, 0xcfaa81, 0xeab798, 0x1096c3, 0x74effe);
-    let mut k = Kit::default();
-    k.add_with(ell(0.5, 0.16, 0.36, 8, 4), at([0.0, 0.12, 0.0]), |c, n| {
-        if c.y > 0.2 {
-            lip
-        } else if n % 3 == 0 {
-            ridge
-        } else {
-            shell
-        }
-    });
-    k.add_with(bx(0.85, 0.06, 0.5), at([0.0, 0.25, 0.0]), |_, n| {
-        if hh(n as i64, 5) < 0.3 { spot } else { mantle }
-    });
-    let lower = k.build();
-    let mut k = Kit::default();
-    k.add_with(ell(0.5, 0.14, 0.36, 8, 4), at([0.0, 0.0, -0.36]), |c, n| {
-        if c.y < -0.06 {
-            lip
-        } else if n % 3 == 0 {
-            ridge
-        } else {
-            shell
-        }
-    });
-    (lower, k.build())
-}
-
-fn turtle_geo() -> (Shape, Vec<Part>) {
-    let (shell, scute, under, skin) = (0x725244, 0xab8465, 0xcfaa81, 0x297537);
-    let mut k = Kit::default();
-    k.add_with(ell(0.36, 0.13, 0.3, 8, 4), at([0.0, 0.02, 0.0]), |c, n| {
-        if c.y < 0.02 {
-            under
-        } else if n % 5 == 0 {
-            scute
-        } else {
-            shell
-        }
-    });
-    k.add(ell(0.36, 0.03, 0.3, 8, 2), at([0.0, -0.01, 0.0]), under);
-    k.add(ell(0.1, 0.07, 0.07, 6, 4), at([0.42, 0.02, 0.0]), skin);
-    for s in [1.0f32, -1.0] {
-        k.add(bx(0.03, 0.03, 0.02), at([0.46, 0.05, s * 0.055]), EYE);
-    }
-    k.add(
-        rotate_z(cyl(0.0, 0.04, 0.12, 4), FRAC_PI_2),
-        at([-0.38, 0.0, 0.0]),
-        skin,
-    );
-    let flipper = |front: bool, s: f32| {
-        let mut k = Kit::default();
-        let (w, d) = if front { (0.14, 0.36) } else { (0.1, 0.16) };
-        let g = translate(bx(w, 0.02, d), [0.0, 0.0, d / 2.0])
-            .into_iter()
-            .map(|p| p * Vec3::new(1.0, 1.0, s))
-            .collect();
-        k.add(g, Mat4::IDENTITY, skin);
-        k.build()
-    };
-    let parts = vec![
-        Part {
-            name: "fr",
-            at: Vec3::new(0.18, 0.0, 0.22),
-            yaw: 0.0,
-            shape: flipper(true, 1.0),
-        },
-        Part {
-            name: "fl",
-            at: Vec3::new(0.18, 0.0, -0.22),
-            yaw: 0.0,
-            shape: flipper(true, -1.0),
-        },
-        Part {
-            name: "br",
-            at: Vec3::new(-0.22, 0.0, 0.22),
-            yaw: 0.0,
-            shape: flipper(false, 1.0),
-        },
-        Part {
-            name: "bl",
-            at: Vec3::new(-0.22, 0.0, -0.22),
-            yaw: 0.0,
-            shape: flipper(false, -1.0),
-        },
-    ];
-    (k.build(), parts)
-}
-
-fn octopus_geo() -> (Shape, Vec<Part>) {
-    let (body, spot, eye, sucker) = (0xd4462b, 0x841c1d, 0xeab798, 0xe69d69);
-    let mut k = Kit::default();
-    k.add_with(
-        ell(0.22, 0.2, 0.2, 7, 5),
-        atr([-0.12, 0.26, 0.0], [0.0, 0.0, 0.4]),
-        |_, n| if hh(n as i64, 6) < 0.25 { spot } else { body },
-    );
-    k.add(ell(0.13, 0.11, 0.15, 7, 4), at([0.06, 0.12, 0.0]), body);
-    for s in [1.0f32, -1.0] {
-        k.add(bx(0.06, 0.05, 0.05), at([0.12, 0.19, s * 0.1]), eye);
-        k.add(bx(0.07, 0.015, 0.015), at([0.13, 0.19, s * 0.125]), EYE);
-    }
-    let arm = || {
-        let mut k = Kit::default();
-        k.add_with(
-            translate(
-                rotate_z(cyl(0.012, 0.045, 0.5, 4), -FRAC_PI_2),
-                [0.25, 0.0, 0.0],
-            ),
-            Mat4::IDENTITY,
-            |c, _| if c.y < 0.0 { sucker } else { body },
-        );
-        k.build()
-    };
-    let parts = (0..8)
-        .map(|i| Part {
-            name: "arm",
-            at: Vec3::new(0.05, 0.08, 0.0),
-            yaw: i as f32 * PI / 4.0 + PI / 8.0,
-            shape: arm(),
-        })
-        .collect();
-    (k.build(), parts)
-}
-
-fn seal_geo() -> Shape {
-    let (back, side, belly, spot) = (0x3e586e, 0x5d778d, 0x92a3b2, 0x1f3b52);
-    let mut k = Kit::default();
-    k.add_with(
-        lathe6(&[
-            [0.5, 0.0, 0.0],
-            [0.44, 0.08, 0.08],
-            [0.36, 0.1, 0.1],
-            [0.3, 0.09, 0.09],
-            [0.15, 0.13, 0.14],
-            [-0.05, 0.14, 0.15],
-            [-0.25, 0.1, 0.11],
-            [-0.38, 0.05, 0.05],
-            [-0.42, 0.0, 0.0],
-        ]),
-        at([0.0, 0.13, 0.0]),
-        |c, n| {
-            let y = c.y - 0.13;
-            if y > 0.06 {
-                if hh(n as i64, 4) < 0.2 { spot } else { back }
-            } else if y < -0.05 {
-                belly
-            } else {
-                side
-            }
-        },
-    );
-    for s in [1.0f32, -1.0] {
-        k.add(bx(0.035, 0.035, 0.03), at([0.43, 0.2, s * 0.06]), EYE);
-        k.add(
-            bx(0.18, 0.025, 0.08),
-            atr([0.15, 0.04, s * 0.14], [0.0, s * 0.6, 0.0]),
-            back,
-        );
-        k.add(
-            shape(&[[0.0, 0.0], [-0.16, 0.0], [-0.18, s * 0.12]]),
-            atr([-0.38, 0.13, 0.0], [FRAC_PI_2, 0.0, 0.0]),
-            back,
-        );
-    }
-    k.add(bx(0.03, 0.02, 0.03), at([0.5, 0.15, 0.0]), EYE);
-    k.build()
-}
-
-/// A sea otter rafting on its back, paws on its chest round an urchin.
-fn otter_geo() -> Shape {
-    let (back, belly) = (0x522b2f, 0xcfaa81);
-    let mut k = Kit::default();
-    k.add_with(
-        lathe6(&[
-            [0.5, 0.0, 0.0],
-            [0.45, 0.06, 0.06],
-            [0.36, 0.075, 0.075],
-            [0.3, 0.065, 0.065],
-            [0.12, 0.1, 0.11],
-            [-0.12, 0.1, 0.1],
-            [-0.26, 0.07, 0.07],
-            [-0.3, 0.0, 0.0],
-        ]),
-        at([0.0, 0.03, 0.0]),
-        |c, _| if c.y < 0.05 { back } else { belly },
-    );
-    k.add(
-        rotate_z(cyl(0.01, 0.045, 0.3, 5), FRAC_PI_2),
-        at([-0.42, 0.03, 0.0]),
-        back,
-    );
-    for s in [1.0f32, -1.0] {
-        k.add(bx(0.03, 0.03, 0.03), at([0.42, 0.075, s * 0.04]), EYE);
-        k.add(bx(0.06, 0.03, 0.04), at([0.36, 0.0, s * 0.06]), back);
-    }
-    k.add(bx(0.03, 0.03, 0.04), at([0.5, 0.05, 0.0]), EYE);
-    for s in [1.0f32, -1.0] {
-        k.add(
-            bx(0.12, 0.03, 0.03),
-            atr([0.2, 0.13, s * 0.05], [0.0, s * 0.3, 0.3]),
-            back,
-        );
-    }
-    k.add(icosahedron(0.05), at([0.24, 0.16, 0.0]), 0x7d2dbd);
-    for s in [1.0f32, -1.0] {
-        k.add(
-            bx(0.12, 0.03, 0.04),
-            atr([-0.24, 0.08, s * 0.06], [0.0, 0.0, -0.4]),
-            back,
-        );
-    }
-    k.build()
-}
-
-/// A plume worm: a white tube standing up (+Y, one unit tall) and its red
-/// plume, a part that draws in.
-fn worm_geo() -> (Shape, Vec<Part>) {
-    let (tube, tube2, rim) = (0xbfcad7, 0x92a3b2, 0xfffefe);
-    let (plume, plume2, plume3) = (0xd12d41, 0xfa3a64, 0xa61e1f);
-    let mut k = Kit::default();
-    k.add_with(cyl(0.05, 0.065, 1.0, 6), at([0.0, 0.5, 0.0]), |c, n| {
-        if c.y > 0.95 {
-            rim
-        } else if n % 4 == 0 {
-            tube2
-        } else {
-            tube
-        }
-    });
-    let mut p = Kit::default();
-    p.add_with(cyl(0.13, 0.05, 0.22, 6), at([0.0, 0.11, 0.0]), |c, n| {
-        if c.y > 0.2 {
-            plume2
-        } else if n % 3 == 0 {
-            plume3
-        } else {
-            plume
-        }
-    });
-    let parts = vec![Part {
-        name: "plume",
-        at: Vec3::new(0.0, 0.98, 0.0),
-        yaw: 0.0,
-        shape: p.build(),
-    }];
-    (k.build(), parts)
-}
-
-// ---- birds -------------------------------------------------------------------
-
-#[derive(Clone, Default)]
-struct BirdP {
-    back: u32,
-    side: u32,
-    belly: u32,
-    breast: Option<u32>,
-    flank: Option<u32>,
-    tail_c: u32,
-    curl: Option<u32>,
-    head_c: u32,
-    ring: Option<u32>,
-    neck_c: u32,
-    bill_c: u32,
-    wing_c: u32,
-    spec: Option<u32>,
-    leg_c: u32,
-    crest: Option<u32>,
-    cheek: Option<u32>,
-}
-
-fn bird_geo(p: &BirdP) -> (Shape, Vec<Part>) {
-    let by = 0.12;
-    let mut k = Kit::default();
-    let prof = [
-        [0.36, 0.0, 0.0],
-        [0.32, 0.1, 0.1],
-        [0.2, 0.15, 0.15],
-        [0.0, 0.15, 0.16],
-        [-0.2, 0.12, 0.12],
-        [-0.34, 0.07, 0.06],
-        [-0.4, 0.0, 0.0],
-    ];
-    let pr: Vec<[f32; 4]> = prof.iter().map(|r| [r[0], r[1], r[2], 0.0]).collect();
-    k.add_with(lathe(&pr, 7, PI / 6.0), at([0.0, by, 0.0]), |c, _| {
-        let (x, y, z) = (c.x, c.y - by, c.z);
-        if let Some(b) = p.breast
-            && x > 0.12
-            && y > -0.08
-        {
-            return b;
-        }
-        if let Some(f) = p.flank
-            && z.abs() > 0.09
-            && y < 0.07
-            && y > -0.08
-            && x < 0.15
-        {
-            return f;
-        }
-        if y > 0.06 {
-            p.back
-        } else if y < -0.06 {
-            p.belly
-        } else {
-            p.side
-        }
-    });
-    k.add(
-        shape(&[[0.0, 0.03], [-0.16, 0.08], [-0.16, -0.05], [0.0, -0.03]]),
-        atr([-0.38, by + 0.03, 0.0], [FRAC_PI_2, 0.0, 0.25]),
-        p.tail_c,
-    );
-    if let Some(curl) = p.curl {
-        k.add(bx(0.04, 0.06, 0.02), at([-0.42, by + 0.12, 0.0]), curl);
-    }
-    // The head and neck, pivoted at the neck's base.
-    let (nl, hr, lean) = (0.14f32, 0.1f32, -0.25f32);
-    let mut h = Kit::default();
-    h.add(
-        cyl(0.05, 0.065, nl, 6),
-        atr([0.0, nl / 2.0, 0.0], [0.0, 0.0, lean]),
-        p.neck_c,
-    );
-    let (hx, hy) = ((-lean).sin() * nl, lean.cos() * nl);
-    h.add(
-        ell(hr * 1.1, hr * 0.9, hr * 0.85, 7, 4),
-        at([hx + 0.02, hy + 0.02, 0.0]),
-        p.head_c,
-    );
-    if let Some(ring) = p.ring {
-        h.add(
-            cyl(0.068, 0.068, 0.025, 6),
-            at([hx * 0.2, nl * 0.2, 0.0]),
-            ring,
-        );
-    }
-    let bl = 0.12;
-    h.add(
-        bx(bl, 0.03, 0.06),
-        atr(
-            [hx + 0.02 + hr + bl / 2.0 - 0.02, hy, 0.0],
-            [0.0, 0.0, -0.1],
-        ),
-        p.bill_c,
-    );
-    for s in [1.0f32, -1.0] {
-        h.add(
-            bx(0.025, 0.025, 0.02),
-            at([hx + 0.02 + hr * 0.45, hy + 0.04, s * hr * 0.8]),
-            EYE,
-        );
-    }
-    if let Some(crest) = p.crest {
-        h.add(
-            bx(0.18, 0.015, 0.015),
-            atr([hx - 0.1, hy + 0.05, 0.0], [0.0, 0.0, 0.2]),
-            crest,
-        );
-    }
-    if let Some(cheek) = p.cheek {
-        for s in [1.0f32, -1.0] {
-            h.add(
-                bx(0.05, 0.04, 0.01),
-                at([hx + 0.03, hy - 0.01, s * hr * 0.85]),
-                cheek,
-            );
-        }
-    }
-    let wing = |s: f32| {
-        let (sp, ch) = (0.34f32, 0.2f32);
-        let mut w = Kit::default();
-        w.add_with(
-            shape(&[
-                [0.04, 0.0],
-                [-ch, 0.0],
-                [-ch * 1.1, sp * 0.6],
-                [-ch * 0.7, sp],
-                [0.0, sp * 0.55],
-            ]),
-            atr([0.0; 3], [s * FRAC_PI_2, 0.0, 0.0]),
-            |c, _| match p.spec {
-                Some(spec) if c.x < -ch * 0.55 && c.z.abs() < sp * 0.5 => spec,
-                _ => p.wing_c,
-            },
-        );
-        w.build()
-    };
-    let foot = || {
-        let mut f = Kit::default();
-        f.add(
-            translate(bx(0.02, 0.08, 0.02), [0.0, -0.04, 0.0]),
-            Mat4::IDENTITY,
-            p.leg_c,
-        );
-        f.add(
-            translate(bx(0.08, 0.012, 0.06), [0.02, -0.08, 0.0]),
-            Mat4::IDENTITY,
-            p.leg_c,
-        );
-        f.build()
-    };
-    let parts = vec![
-        Part {
-            name: "head",
-            at: Vec3::new(0.28, by + 0.06, 0.0),
-            yaw: 0.0,
-            shape: h.build(),
-        },
-        Part {
-            name: "wingR",
-            at: Vec3::new(0.12, by + 0.1, 0.12),
-            yaw: 0.0,
-            shape: wing(1.0),
-        },
-        Part {
-            name: "wingL",
-            at: Vec3::new(0.12, by + 0.1, -0.12),
-            yaw: 0.0,
-            shape: wing(-1.0),
-        },
-        Part {
-            name: "footR",
-            at: Vec3::new(-0.04, by - 0.05, 0.06),
-            yaw: 0.0,
-            shape: foot(),
-        },
-        Part {
-            name: "footL",
-            at: Vec3::new(-0.04, by - 0.05, -0.06),
-            yaw: 0.0,
-            shape: foot(),
-        },
-    ];
-    (k.build(), parts)
-}
+mod creatures;
 
 // ---- the species ------------------------------------------------------------
 
@@ -1482,20 +932,10 @@ impl Body {
 /// atlas's plans, [`model_for`]).
 fn build(model: &str) -> Body {
     match model {
-        "shore_crab" => Body::new(
-            Kind::Crab,
-            Sway::None,
-            crab_geo(&CrabP {
-                top: 0xa61e1f,
-                under: 0xd4462b,
-                leg: 0xfe6420,
-                claw: 0x4a051e,
-            }),
-            Vec::new(),
-        ),
-        "lobster" => Body::new(Kind::Lobster, Sway::None, lobster_geo(), Vec::new()),
+        "shore_crab" => Body::new(Kind::Crab, Sway::None, creatures::crab(), Vec::new()),
+        "lobster" => Body::new(Kind::Lobster, Sway::None, creatures::lobster(), Vec::new()),
         "giant_clam" => {
-            let (lower, upper) = clam_geo();
+            let (lower, upper) = creatures::clam();
             let lid = Part {
                 name: "lid",
                 at: Vec3::new(0.0, 0.2, 0.36),
@@ -1505,71 +945,55 @@ fn build(model: &str) -> Body {
             Body::new(Kind::Clam, Sway::None, lower, vec![lid])
         }
         "reef_turtle" => {
-            let (base, parts) = turtle_geo();
+            let (base, parts) = creatures::turtle();
             Body::new(Kind::Turtle, Sway::None, base, parts)
         }
-        "sea_otter" => Body::new(Kind::Otter, Sway::None, otter_geo(), Vec::new()),
-        "seal" => Body::new(Kind::Seal, Sway::Fish, seal_geo(), Vec::new()),
+        "sea_otter" => Body::new(Kind::Otter, Sway::None, creatures::otter(), Vec::new()),
+        "seal" => Body::new(Kind::Seal, Sway::Fish, creatures::seal(), Vec::new()),
         "octopus" => {
-            let (base, parts) = octopus_geo();
+            let (base, parts) = creatures::octopus();
             Body::new(Kind::Octopus, Sway::None, base, parts)
         }
         "tube_worm" => {
-            let (base, parts) = worm_geo();
+            let (base, parts) = creatures::tube_worm();
             Body::new(Kind::TubeWorm, Sway::None, base, parts)
         }
-        "dabbler_drake" => bird(BirdP {
-            back: 0x434137,
-            side: 0xbfcad7,
-            belly: 0xa09f91,
-            breast: Some(0xab8465),
-            flank: Some(0xbfcad7),
-            tail_c: 0x2c2c25,
-            curl: Some(0x2c2c25),
-            head_c: 0x297537,
+        "dabbler_drake" => bird(&creatures::Duck {
+            body: "drake",
+            head: "drake_head",
+            bill: 0xfaaf5c,
+            leg: 0xfb902f,
             ring: Some(0xfffefe),
-            neck_c: 0x297537,
-            bill_c: 0xfaaf5c,
-            wing_c: 0x434137,
             spec: Some(0x1096c3),
-            leg_c: 0xfb902f,
-            ..default()
+            crest: None,
+            tail: 0x2c2c25,
         }),
-        "dabbler_hen" => bird(BirdP {
-            back: 0x725244,
-            side: 0xab8465,
-            belly: 0xcfaa81,
-            tail_c: 0x725244,
-            head_c: 0xab8465,
-            neck_c: 0xab8465,
-            cheek: Some(0x2e0d06),
-            bill_c: 0xfb902f,
-            wing_c: 0x725244,
+        "dabbler_hen" => bird(&creatures::Duck {
+            body: "hen",
+            head: "hen_head",
+            bill: 0xfb902f,
+            leg: 0xfb902f,
+            ring: None,
             spec: Some(0x1096c3),
-            leg_c: 0xfb902f,
-            ..default()
+            crest: None,
+            tail: 0x725244,
         }),
-        "pond_diver" => bird(BirdP {
-            back: 0x2c2c25,
-            side: 0xbfcad7,
-            belly: 0xfffefe,
-            flank: Some(0xfffefe),
-            tail_c: 0x161612,
-            head_c: 0x434137,
-            neck_c: 0x2c2c25,
-            bill_c: 0x92a3b2,
-            wing_c: 0x2c2c25,
+        "pond_diver" => bird(&creatures::Duck {
+            body: "diver",
+            head: "diver_head",
+            bill: 0x92a3b2,
+            leg: 0x92a3b2,
+            ring: None,
             spec: Some(0xfffefe),
-            leg_c: 0x92a3b2,
             crest: Some(0x161612),
-            ..default()
+            tail: 0x161612,
         }),
         other => panic!("no body for {other}"),
     }
 }
 
-fn bird(p: BirdP) -> Body {
-    let (base, parts) = bird_geo(&p);
+fn bird(p: &creatures::Duck) -> Body {
+    let (base, parts) = creatures::duck(p);
     Body::new(Kind::Bird, Sway::None, base, parts)
 }
 
