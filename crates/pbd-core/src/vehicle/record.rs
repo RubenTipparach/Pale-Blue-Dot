@@ -35,7 +35,9 @@ pub struct VehicleRecord {
     pub mooring: Option<([f64; 3], f64, bool)>,
     /// Who it belongs to; nobody yet, in a world with one player.
     pub owner: Option<String>,
-    /// The Kestrel's nacelles and brake; the Tern's sheet.
+    /// The Kestrel's nacelles and brake, kept in layout 1 for the retired
+    /// records that carry them (`retire-kestrel` decision 2); the Tern's
+    /// sheet.
     pub nacelle: Option<f64>,
     pub brake: Option<bool>,
     pub sheet: Option<f64>,
@@ -65,7 +67,6 @@ impl Craft {
     /// load puts them, and the craft is unattended until they board again.
     pub fn record(&self) -> VehicleRecord {
         let (nacelle, brake, sheet) = match &self.state {
-            CraftState::Kestrel(s) => (Some(s.nacelle), Some(s.brake), None),
             CraftState::Tern(s) => (None, None, Some(s.sheet)),
             CraftState::Loon(_) | CraftState::Cog(_) => (None, None, None),
         };
@@ -148,14 +149,6 @@ impl Craft {
             anchored,
         });
         match &mut craft.state {
-            CraftState::Kestrel(s) => {
-                if let Some(n) = record.nacelle.filter(|n| n.is_finite()) {
-                    s.nacelle = n.clamp(0.0, std::f64::consts::FRAC_PI_2);
-                }
-                if let Some(b) = record.brake {
-                    s.brake = b;
-                }
-            }
             CraftState::Tern(s) => {
                 if let Some(sheet) = record.sheet.filter(|s| s.is_finite()) {
                     s.sheet = sheet.clamp(0.0, 1.0);

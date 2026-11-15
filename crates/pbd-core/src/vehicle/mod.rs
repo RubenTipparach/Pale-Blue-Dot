@@ -1,6 +1,7 @@
-//! Vehicles: a VTOL tiltrotor (Kestrel), a sailing keelboat (Tern), a paddle
-//! canoe (Loon) and the harbour's cog (`sail-the-cog`), stepped here and drawn
-//! by the app (`vehicles` change).
+//! Vehicles: a sailing keelboat (Tern), a paddle canoe (Loon), the harbour's
+//! rowboat and cog (`sail-the-cog`), stepped here and drawn by the app
+//! (`vehicles` change). The VTOL tiltrotor (Kestrel) is retired
+//! (`retire-kestrel`): a save's record of one is held aside, never flown.
 //!
 //! A craft steps itself at the substep rate against its `Surroundings`: the sea
 //! function, the wind at a point, gravity and the ground. Nothing here knows
@@ -12,7 +13,6 @@ pub mod body;
 pub mod cog;
 pub mod foil;
 pub mod hull;
-mod kestrel;
 mod loon;
 pub mod record;
 pub mod spec;
@@ -21,7 +21,6 @@ mod tern;
 mod tests;
 
 pub use cog::{CogState, CogTelemetry};
-pub use kestrel::{KestrelState, KestrelTelemetry};
 pub use loon::{LoonState, LoonTelemetry, Stroke};
 pub use tern::{SailState, TernState, TernTelemetry};
 
@@ -45,7 +44,6 @@ pub const UP: DVec3 = DVec3::Y;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Kind {
-    Kestrel,
     Tern,
     Loon,
     Cog,
@@ -55,17 +53,10 @@ pub enum Kind {
 }
 
 impl Kind {
-    pub const ALL: [Kind; 5] = [
-        Kind::Kestrel,
-        Kind::Tern,
-        Kind::Loon,
-        Kind::Cog,
-        Kind::Rowboat,
-    ];
+    pub const ALL: [Kind; 4] = [Kind::Tern, Kind::Loon, Kind::Cog, Kind::Rowboat];
 
     pub fn name(self) -> &'static str {
         match self {
-            Kind::Kestrel => "Kestrel",
             Kind::Tern => "Tern",
             Kind::Loon => "Loon",
             Kind::Rowboat => "Rowboat",
@@ -76,7 +67,6 @@ impl Kind {
     /// The saved name.
     pub fn key(self) -> &'static str {
         match self {
-            Kind::Kestrel => "kestrel",
             Kind::Tern => "tern",
             Kind::Loon => "loon",
             Kind::Rowboat => "rowboat",
@@ -141,13 +131,6 @@ pub struct Surroundings<'a> {
 /// What a pilot asks for. Each craft reads its own fields, all -1..1.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Input {
-    /// Kestrel: nose up (+), roll right (+), nose right (+), climb (+), and
-    /// the nacelles up (+) or forward (-).
-    pub pitch: f32,
-    pub roll: f32,
-    pub yaw: f32,
-    pub collective: f32,
-    pub tilt: f32,
     /// Tern: turn left (+). Loon: turn left (+), by paddling on the right.
     pub steer: f32,
     /// Tern: sheet in (+) or ease (-). Cog: brace the yard round, its
@@ -176,7 +159,6 @@ pub struct Mooring {
 /// Each craft's own controls and what they are doing.
 #[derive(Clone, Debug, PartialEq)]
 pub enum CraftState {
-    Kestrel(KestrelState),
     Tern(TernState),
     Loon(LoonState),
     Cog(CogState),
@@ -187,7 +169,6 @@ pub enum CraftState {
 pub enum Telemetry {
     #[default]
     None,
-    Kestrel(KestrelTelemetry),
     Tern(TernTelemetry),
     Loon(LoonTelemetry),
     Cog(CogTelemetry),
@@ -416,7 +397,6 @@ impl Craft {
         orientation: DQuat,
     ) -> Self {
         let state = match kind {
-            Kind::Kestrel => CraftState::Kestrel(KestrelState::default()),
             Kind::Tern => CraftState::Tern(TernState::default()),
             Kind::Loon | Kind::Rowboat => CraftState::Loon(LoonState::default()),
             Kind::Cog => CraftState::Cog(CogState::default()),
@@ -475,7 +455,6 @@ impl Craft {
 
     pub fn hull(&self) -> Option<&Arc<Hull>> {
         match self.kind {
-            Kind::Kestrel => None,
             Kind::Tern => Some(&self.hulls.tern),
             Kind::Loon => Some(&self.hulls.loon),
             Kind::Rowboat => Some(&self.hulls.rowboat),
@@ -504,11 +483,6 @@ impl Craft {
         let specs = self.specs.clone();
         let bilge = self.bilge_kg as f32;
         let (mass, com, inertia) = match self.kind {
-            Kind::Kestrel => (
-                specs.kestrel.mass_kg as f64,
-                DVec3::ZERO,
-                v3(specs.kestrel.inertia),
-            ),
             Kind::Tern => {
                 let s = &specs.tern;
                 let mut parts = s.parts.to_vec();
@@ -573,7 +547,6 @@ impl Craft {
     pub fn leave(&mut self) {
         self.occupied = false;
         match &mut self.state {
-            CraftState::Kestrel(s) => s.assist = true,
             CraftState::Tern(s) => {
                 s.sheet = 1.0;
                 s.crew = 0.0;
@@ -586,7 +559,6 @@ impl Craft {
     /// The seat's eye, planet frame.
     pub fn eye(&self) -> DVec3 {
         let seat = match self.kind {
-            Kind::Kestrel => self.specs.kestrel.seat,
             Kind::Tern => self.specs.tern.seat,
             Kind::Loon | Kind::Rowboat => self.loon_spec().seat,
             Kind::Cog => self.specs.cog.seat,
@@ -606,7 +578,6 @@ impl Craft {
 
     pub fn seat(&self) -> spec::SeatSpec {
         match self.kind {
-            Kind::Kestrel => self.specs.kestrel.seat,
             Kind::Tern => self.specs.tern.seat,
             Kind::Loon | Kind::Rowboat => self.loon_spec().seat,
             Kind::Cog => self.specs.cog.seat,
@@ -616,7 +587,6 @@ impl Craft {
     /// Where a mooring line is made fast on board, planet frame.
     pub fn bow(&self) -> DVec3 {
         match self.kind {
-            Kind::Kestrel => self.body.position,
             Kind::Tern => self.reference_point(self.specs.tern.bow),
             Kind::Loon | Kind::Rowboat => self.reference_point(self.loon_spec().bow),
             Kind::Cog => self.reference_point(self.specs.cog.bow),
@@ -648,7 +618,6 @@ impl Craft {
             };
             self.body.push_centre(env.gravity * self.body.mass);
             match self.kind {
-                Kind::Kestrel => kestrel::forces(self, &input, &cx),
                 Kind::Tern => tern::forces(self, &input, &cx),
                 Kind::Loon | Kind::Rowboat => loon::forces(self, &input, &cx),
                 Kind::Cog => cog::forces(self, &input, &cx),
