@@ -2248,9 +2248,9 @@
   "layers": [
    {
     "src": "freesound/480838:480838.mp3",
-    "shot": 1,
     "dur": 1.2,
-    "fadeout": 0.5
+    "fadeout": 0.5,
+    "start": 4.4
    }
   ],
   "len": 1.2,
@@ -2408,7 +2408,7 @@
     "layers": [
      {
       "src": "freesound/438846:438846.mp3",
-      "start": 0.08,
+      "start": 10.0,
       "dur": 1.4,
       "fadeout": 0.5
      }
@@ -2438,7 +2438,7 @@
   "layers": [
    {
     "src": "freesound/438846:438846.mp3",
-    "start": 0.08,
+    "start": 10.0,
     "dur": 1.4,
     "fadeout": 0.5
    }
@@ -2446,7 +2446,7 @@
   "len": 1.4,
   "hp": 60,
   "peak_db": -1.0,
-  "edits": "three strokes from a recording of oars rowing"
+  "edits": "three strokes from a recording of oars rowing, after the recordist's spoken slate (0.25-1.25 s)"
  },
  "hull_lap": {
   "group": "Craft",
@@ -2520,7 +2520,8 @@
   "loop": true,
   "loop_fade": 1.0,
   "peak_db": -1.0,
-  "edits": "eight seconds of light rain, high passed at 600 Hz, looped"
+  "edits": "eight seconds of light rain, high passed at 600 Hz and low passed at 3.5 kHz (owner, 2026-11-14: \"needs a low pass\"), looped",
+  "lp": 3500
  },
  "thunder_crack": {
   "group": "Weather",
@@ -2537,7 +2538,7 @@
      {
       "synth": "sub_boom",
       "gain": -6,
-      "delay": 0.08
+      "delay": 0.15
      }
     ]
    },
@@ -2552,7 +2553,7 @@
      {
       "synth": "sub_boom",
       "gain": -6,
-      "delay": 0.1
+      "delay": 1.6
      }
     ]
    }
@@ -2567,13 +2568,13 @@
    {
     "synth": "sub_boom",
     "gain": -6,
-    "delay": 0.08
+    "delay": 0.15
    }
   ],
   "len": 11.0,
   "hp": 25,
   "peak_db": -1.0,
-  "edits": "two close strikes, each with our sub boom 6 dB under it"
+  "edits": "two close strikes, each with our sub boom 6 dB under it, timed to land on the recording's crack (0.15 s and 1.6 s in), never ahead of it"
  },
  "thunder_close": {
   "group": "Weather",
@@ -2724,7 +2725,8 @@
     "synth": "sub_boom",
     "dur": 1.5,
     "gain": -8,
-    "fadeout": 0.8
+    "fadeout": 0.8,
+    "delay": 0.15
    }
   ],
   "len": 3.0,
@@ -3092,11 +3094,12 @@
    },
    {
     "src": "freesound/482848:482848.mp3",
-    "dur": 20.0,
+    "dur": 19.0,
     "gain": -9,
     "repeat": 2,
     "fadein": 1.0,
-    "fadeout": 1.0
+    "fadeout": 1.0,
+    "start": 2.0
    }
   ],
   "len": 40.0,
