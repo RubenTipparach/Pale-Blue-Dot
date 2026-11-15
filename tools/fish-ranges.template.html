@@ -201,7 +201,7 @@ const META = {
   eel:{from:"Tenebris", bed:true}, reef:{from:"Tenebris"}, deepback:{from:"new"}, serpent:{from:"Tenebris"},
 };
 const MAP_CAPTIONS = {
-  richness:"<b>Species count.</b> How many of the roster's species could spawn at each point in the period, from pale (one) to dark (four, the most anywhere). The richest water is warm-temperate shallows at river mouths, where river, shallows and shelf species overlap. On day one no open water has none.",
+  richness:"<b>Species count.</b> How many of the roster's species could spawn at each point in the period, from pale (one) to dark (eight or more). The richest water is warm-temperate shallows at river mouths, where river, shallows and shelf species overlap. On day one no open water has none.",
   temperature:"<b>Water temperature</b>, the year's mean of the daily means, from −20 °C (blue) through 5 °C (white) to 30 °C (red). Hatched water is frozen all year.",
   classes:"<b>Water classes.</b> Darker grey is shallower: shallows (6 m or less, reachable with a cast from the shore), then shelf (6 to 40 m), then deep (over 40 m, lightest). Rivers are dark lines: channels the terrain cuts below the sea across lowland.",
 };
@@ -265,7 +265,7 @@ function render(){
   document.getElementById("how").innerHTML = [
     `Terrain: the world's own generator (<code>planet_gen::surface_altitude</code>) sampled at 1440 × 720 points. Water is <b>${pct(c.river)}</b> rivers, <b>${pct(c.shallows)}</b> shallows, <b>${pct(c.shelf)}</b> shelf and <b>${pct(c.deep)}</b> deep. A river is water that is there only because of the river cut: the same generator run with the cut switched off calls it land.`,
     `Temperature: the world's atmosphere and ocean (<code>pbd_core::atmosphere</code>, 10,242 cells, 1 s steps) run forward from a new world. The water temperature of every cell is averaged over each day (8 samples), and each year's coldest, warmest and mean daily values are kept.`,
-    `Instrument: <code>cargo run --release -p pbd-core --example fish_ranges</code>, then <code>python3 tools/fish_ranges.py</code>, which applies the rules and draws these maps.`,
+    `Instrument: <code>cargo run --profile fast -p pbd-core --example fish_ranges</code>, then <code>python3 tools/fish_ranges.py</code>, which applies the rules and draws these maps.`,
   ].map(t => `<li>${t}</li>`).join("");
   document.getElementById("care").innerHTML = [
     `"Part of the year" is thin because the ocean is a slow flywheel. Its heat capacity is 3.0e6 J/m²K against a 100-day year, and the median gap between a point's coldest and warmest day here is ${s.swing_c[1].toFixed(2)} °C. Real migrations would need a shallower mixed layer, which is a decision about the atmosphere, not about fish.`,

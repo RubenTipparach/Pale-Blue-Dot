@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Range maps for the fish of Pale Blue Dot, drawn off the measured world.
 
-Reads the fields `cargo run --release -p pbd-core --example fish_ranges`
+Reads the fields `cargo run --profile fast -p pbd-core --example fish_ranges`
 writes (depth, rivers, and the water temperature over a simulated year) and
 applies the habitat rules of `assets/config/fauna.ron`
 (`openspec/changes/fishing-and-equipment/design.md` section 7) to draw one
