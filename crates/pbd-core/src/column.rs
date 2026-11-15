@@ -63,7 +63,7 @@ impl Column {
     /// and a torch or any other light is walked through.
     pub fn solid(&self, index: usize) -> bool {
         let material = self.material(index);
-        !(matches!(material, Material::Air | Material::Water) || material.is_lamp())
+        !(material == Material::Air || material.is_water() || material.is_lamp())
     }
 
     /// The topmost solid layer, which is the surface the heightfield tiers draw.
@@ -130,14 +130,14 @@ impl Column {
     /// because the day flooding lands is the day a pool exists.
     pub fn water_surface(&self, altitude: f32) -> Option<f32> {
         let layer = layer_at(altitude)?;
-        if self.material(layer) != Material::Water {
+        if !self.material(layer).is_water() {
             return None;
         }
         let top = (layer..LAYERS)
-            .take_while(|index| self.material(*index) == Material::Water)
+            .take_while(|index| self.material(*index).is_water())
             .last()
             .unwrap_or(layer);
-        Some(layer_altitude(top) + 1.0)
+        Some(layer_altitude(top) + crate::liquid::top_fraction(self.material(top)))
     }
 
     /// Whether rain reaches `altitude`: nothing solid stands above it in this

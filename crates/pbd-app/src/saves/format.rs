@@ -157,6 +157,9 @@ pub fn material_code(material: Material) -> u8 {
         Material::Forge => 19,
         Material::Workbench => 20,
         Material::Campfire => 21,
+        // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
+        // the material's own code, far from the blocks' run.
+        flowing @ pbd_core::flowing_water!() => flowing as u16 as u8,
     }
 }
 
@@ -184,6 +187,7 @@ pub fn material_of(code: u8) -> Option<Material> {
         19 => Material::Forge,
         20 => Material::Workbench,
         21 => Material::Campfire,
+        64..=79 => Material::flowing((code - 64) % 8, code >= 72),
         _ => return None,
     })
 }

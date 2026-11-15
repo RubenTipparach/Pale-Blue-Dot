@@ -108,7 +108,7 @@ pub(super) fn material_of(
 /// would generate for it as rim, so the ray stops on the cap the player sees
 /// and the edit adopts the column (`apply_edit`) instead of the click passing
 /// into the hill as if it were sky.
-fn sample_at(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<Sample> {
+pub(super) fn sample_at(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<Sample> {
     let direction = point.try_normalize()?;
     // Only while the contact and `PlanetFine` hold the same set: for the frame
     // between a set landing in one and the other, the index is the wrong set's.
@@ -384,6 +384,13 @@ pub fn apply_edit(
         if neighbor != u32::MAX {
             set.columns.repack(neighbor as usize);
         }
+    }
+    // The water (`water-flow` decision 5, `volumetric-water` phase 2): the
+    // sea floods what this opened onto it, and the cell and its neighbours
+    // are queued for the rule, so a dig beside water or a poured source
+    // starts it moving.
+    for slot in set.columns.water_after_edit(record, layer, &save.edits) {
+        set.columns.repack_slot(slot);
     }
     // And the SURFACE, which is a second representation of where the ground
     // is: the terrain pass draws its cap from the cell record and every

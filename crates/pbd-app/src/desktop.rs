@@ -21,6 +21,7 @@ mod scene;
 mod slots;
 mod sounds;
 mod time_ui;
+mod water;
 mod weather_ui;
 
 use avian3d::prelude::*;
@@ -248,6 +249,18 @@ pub struct Launch {
     /// `--turn DEG_PER_S`: the walker's view turns right at this rate, a
     /// measurement instrument for the clouds' history (`cloud-ghosting`).
     pub turn: f32,
+    /// `--pour N` pours N water sources where the capture camera looks, a
+    /// cell apart across the view (`water-flow` E5).
+    pub pour: u32,
+    /// `--water-ticks N` runs N ticks of the water's rule at once after the
+    /// pour, so a capture shows water that has had N seconds to move.
+    pub water_ticks: u32,
+    /// `--pour-ahead M`: pour straight down M metres ahead of the eye.
+    pub pour_ahead: f32,
+    /// `--pit DEPTH`: dig a pit that deep two cells past the pour.
+    pub pit: u32,
+    /// `--arrows` turns the flow-arrow overlay on (`water-flow` 3.4).
+    pub arrows: bool,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -393,6 +406,11 @@ impl Launch {
             overlay: None,
             map: map_screen::MapLaunch::default(),
             torch: false,
+            pour: 0,
+            water_ticks: 0,
+            pour_ahead: 0.0,
+            pit: 0,
+            arrows: false,
             lamps: false,
             lamps_at: 5.0,
             lamps_across: 0.0,
@@ -491,6 +509,35 @@ impl Launch {
                         .expect("--place requires a count");
                 }
                 "--torch" => result.torch = true,
+                "--pour" => {
+                    i += 1;
+                    result.pour = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--pour requires a count");
+                }
+                "--water-ticks" => {
+                    i += 1;
+                    result.water_ticks = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--water-ticks requires a count");
+                }
+                "--arrows" => result.arrows = true,
+                "--pit" => {
+                    i += 1;
+                    result.pit = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--pit requires a depth");
+                }
+                "--pour-ahead" => {
+                    i += 1;
+                    result.pour_ahead = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--pour-ahead requires metres");
+                }
                 "--lamps" => {
                     result.lamps = true;
                     if let Some(metres) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
@@ -1342,6 +1389,8 @@ pub fn run(args: &[String]) {
     .insert_resource(launch.clone())
     .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
     .add_plugins(pbd_app::place::PlacePlugin)
+    // Water that flows (`water-flow`): the rule's tick, the mesher, the arrows.
+    .add_plugins(pbd_app::water_flow::WaterFlowPlugin)
     .add_plugins(MaterialPlugin::<scene::StarMaterial>::default())
     .add_systems(
         Startup,
@@ -1477,6 +1526,9 @@ pub fn run(args: &[String]) {
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
             craft::scripted.after(digging::scripted_dig),
+            // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
+            water::scripted.after(digging::scripted_dig),
+            water::keys.after(digging::dig_and_place),
         ),
     )
     .add_systems(

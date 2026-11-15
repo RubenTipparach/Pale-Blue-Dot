@@ -69,7 +69,7 @@ impl Class {
             | Material::Brazier
             | Material::Candle
             | Material::Campfire => Class::Placed,
-            Material::Air | Material::Water => return None,
+            Material::Air | Material::Water | crate::flowing_water!() => return None,
         })
     }
 

@@ -86,7 +86,73 @@ pub enum Material {
     /// kitchen's first station and a light. Like every light it is neither
     /// solid nor opaque, and the column pass draws it as a lamp.
     Campfire = 21,
+    /// Flowing water (`water-flow`): Luanti's flowing liquid on the hex grid,
+    /// at a level from 7 (beside its source) down to 0, a thin film. A
+    /// `Fall` is the same with Luanti's "flowing down" set: the cell below is
+    /// air or flowing, so it offers nothing sideways. `Water` is the source.
+    /// Neither solid nor opaque, swum like the source. Codes 64 to 79, far
+    /// from the blocks' run, so a branch adding blocks never meets them.
+    Flow0 = 64,
+    Flow1 = 65,
+    Flow2 = 66,
+    Flow3 = 67,
+    Flow4 = 68,
+    Flow5 = 69,
+    Flow6 = 70,
+    Flow7 = 71,
+    Fall0 = 72,
+    Fall1 = 73,
+    Fall2 = 74,
+    Fall3 = 75,
+    Fall4 = 76,
+    Fall5 = 77,
+    Fall6 = 78,
+    Fall7 = 79,
 }
+
+/// Every flowing material as one pattern, for an exhaustive match.
+#[macro_export]
+macro_rules! flowing_water {
+    () => {
+        $crate::terrain::Material::Flow0
+            | $crate::terrain::Material::Flow1
+            | $crate::terrain::Material::Flow2
+            | $crate::terrain::Material::Flow3
+            | $crate::terrain::Material::Flow4
+            | $crate::terrain::Material::Flow5
+            | $crate::terrain::Material::Flow6
+            | $crate::terrain::Material::Flow7
+            | $crate::terrain::Material::Fall0
+            | $crate::terrain::Material::Fall1
+            | $crate::terrain::Material::Fall2
+            | $crate::terrain::Material::Fall3
+            | $crate::terrain::Material::Fall4
+            | $crate::terrain::Material::Fall5
+            | $crate::terrain::Material::Fall6
+            | $crate::terrain::Material::Fall7
+    };
+}
+
+/// The flowing materials by level, still then falling: `FLOWING[level]` and
+/// `FLOWING[8 + level]`.
+pub const FLOWING: [Material; 16] = [
+    Material::Flow0,
+    Material::Flow1,
+    Material::Flow2,
+    Material::Flow3,
+    Material::Flow4,
+    Material::Flow5,
+    Material::Flow6,
+    Material::Flow7,
+    Material::Fall0,
+    Material::Fall1,
+    Material::Fall2,
+    Material::Fall3,
+    Material::Fall4,
+    Material::Fall5,
+    Material::Fall6,
+    Material::Fall7,
+];
 
 impl Material {
     /// How much light this gives out, 0 for most things.
@@ -119,6 +185,26 @@ impl Material {
     /// through rather than stood on.
     pub fn is_lamp(self) -> bool {
         self.emission() > 0
+    }
+
+    /// Flowing water at `level` (0 to 7), falling or not.
+    pub fn flowing(level: u8, falling: bool) -> Material {
+        FLOWING[usize::from(level.min(7)) + if falling { 8 } else { 0 }]
+    }
+
+    /// A flowing cell's level and whether it is falling, or `None` for
+    /// anything else, the source included.
+    pub fn flow(self) -> Option<(u8, bool)> {
+        let code = self as u16;
+        (64..80)
+            .contains(&code)
+            .then(|| ((code - 64) as u8 % 8, code >= 72))
+    }
+
+    /// Whether this is water, a source or flowing: what is swum, what the
+    /// renderer's water code means and what a cell under it is wet in.
+    pub fn is_water(self) -> bool {
+        self == Material::Water || self.flow().is_some()
     }
 
     /// Whether this light burns only from dusk to dawn. A property of the

@@ -347,6 +347,76 @@ Context, and the mockup is the reference for behaviour. Recommendation taken
 (ask only with screenshots). The owner can choose to take the LGPL code into
 the game instead, and that is the owner's call.
 
+## In the engine (owner, 2026-11-15: "commence implementation of all env changes")
+
+M25 and M28 are approved, and the request to build came with them. How the
+rule goes into the game, in the order it is built (branch `claude/env-water`):
+
+**E1. A flowing cell is a material.** `Material::Flow0` to `Flow7` and
+`Fall0` to `Fall7` (codes 64 to 79, far from the blocks' run) are flowing
+water at a level, still and falling; `Water` stays the source. The column
+keeps two bytes a layer, so the tier costs nothing more to hold or clone.
+`Material::is_water` is what every reader asks (the walker swims in both,
+decision 7; the renderer's water code is both). A flowing top's surface is
+Luanti's `(level + 0.5) / 8` of its layer (`liquid::top_fraction`).
+
+**E2. The rule is `pbd_core::liquid`**, written from decisions 1 to 6
+(decision 8): `transform` is a pure function of a cell and its eight
+neighbours (`None` for a pentagon's missing side or off the region), and
+returns the new state and which neighbours to queue, in Luanti's order;
+`Queue` is the unique queue and the tick, at most the queue's length and
+`LOOP_MAX` a tick. Held to the mockup by a fixture the mockup's own
+`liquid.js` writes (`tools/water_flow_fixture.mjs`): all eight presets
+settle in the same ticks to the same field, cell for cell. Water enters
+only air: a block, a lamp or anything else is neutral, so the rule never
+removes a thing a player made.
+
+**E3. It runs over the column tier**, once a second (Luanti's
+`liquid_update`): the tier is the `Grid`, a cell is a slot and a layer, the
+rim and every cell off the tier are neutral. Each tick's changes go in as
+an edit does (the changed records and their neighbours repacked, the
+contact and the fine set's version moved), without the relight: water does
+not stop light in the field.
+
+**E4. Saves (this replaces decision 6's "derived").** Every change the rule
+makes is an edit authored by the water (`@wwater:flow/0`), with no slots:
+a source as `Water`, a flowing cell as its `Flow`/`Fall` code, so its level
+is saved. Derived was the plan, but the tier is regenerated from the edits
+each time it moves, and a derived field would re-run on every rebuild. The
+water's edits do not pass the world's yield set: water filling a hole the
+player dug is what water does, and it only ever fills air. Opening a world
+queues every cell of the tier that holds a water edit, and its neighbours,
+so water still moving at the close picks up and a settled field changes
+nothing. A save from before has no water edits, so nothing is queued and
+every cell is where it was (decision 5; tested).
+
+**E5. Pouring.** There is no bucket, and nothing yields a water block,
+though the place path places any held block and water has its thumbnail.
+Recommendation taken (ask only with screenshots): the place path is the
+pour (a held water block places a source, which queues the flow), and a
+debug key, F6, pours one source where the place ray lands, through the same
+edit path. A dig or a placed block next to water queues the flow the same
+way. Captures pour with `--pour`.
+
+**E6. The water mesher** (task 3.6) is a CPU mesh of the tier's water,
+rebuilt when the fine set's version moves: Luanti's `drawLiquidNode` on hex
+as design 7e has it (corner levels from the three cells round a corner,
+tops through them, sides where water meets air, falling cells whole blocks,
+bottoms over air, the flow down the corner slope). It leaves out what the
+sea sheet already draws: the top of a column's water at sea level where the
+cell's record is under the sea. One mesh, Tenebris's water tile
+nearest-sampled and alpha-blended, unlit with the tier's light field in its
+vertex colour (sky by the daylight, the block light warm), so it is dark at
+night and lit by lamps. The mesh exists from the first frame (an empty
+placeholder), so the loading screen builds its pipeline.
+
+**E7. The flow is shown as design 7c says** (task 3.5): each frame the
+tops' texture coordinates move along the cell's flow vector, faster on a
+steeper slope, and a falling face's move down; a still cell and a source
+the water does not leave stand still. The flow-arrow overlay (task 3.4) is
+a second mesh of arrows over every flowing top and down every fall, hidden
+unless F5 or the player setting "Flow arrows" (off by default) turns it on.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With

@@ -63,6 +63,7 @@ pub mod ui_kit;
 pub mod vehicles;
 #[cfg(feature = "desktop")]
 pub mod walking;
+pub mod water_flow;
 #[cfg(feature = "desktop")]
 pub mod weather;
 pub mod world_map;
