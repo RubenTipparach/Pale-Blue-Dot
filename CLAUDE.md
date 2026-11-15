@@ -330,6 +330,10 @@ which wait for a request.
   into mass transportation"): airships (M24), sea ships, sailing and
   navigation (M23, `steer-and-sail`), hiring workers to transport goods, and
   basic conveyors, aqueducts and minecart track (M20, M28).
+- **Then the age of flight and industry** ("after mass transit we'll get
+  into age of flight and mass mining, oil, industrialization, advanced power
+  generation"): aircraft (M24), mass mining, oil, industry and the power
+  ladder past water and wind (M20, `industry-tiers`).
 - **The townsfolk**, its place in the order not yet set (hired haulers need
   people to hire): NPCs (M5, `townsfolk`), missions, carpentry and
   house building (M6, M22, `player-building`), and power generation, its
