@@ -143,6 +143,10 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   <details open><summary>Trees and plants</summary><div class="body">
     <div class="field"><label for="treeStyle">Tree geometry</label><select id="treeStyle"><option value="detail">Detailed: parametric trunk, branches, leaf cards (proposal)</option><option value="hex">Tenebris hex prisms, game textures (what the game draws)</option></select></div>
     <div class="field"><label for="grassStyle">Grass</label><select id="grassStyle"><option value="tufts">Pixel tufts, coloured from the ground</option><option value="blades">Blades cut from the ground tile</option></select></div>
+    <div class="field"><label for="leafFall">Fallen leaves <output id="leafFallOut"></output></label><input id="leafFall" type="range" min="0" max="1" step="0.01"></div>
+    <div class="field"><label for="leafUnder">Gather under trees <output id="leafUnderOut"></output></label><input id="leafUnder" type="range" min="0" max="1" step="0.01"></div>
+    <div class="field"><label for="leafSize">Leaf size <output id="leafSizeOut"></output></label><input id="leafSize" type="range" min="0.5" max="2" step="0.05"></div>
+    <div class="row3"><button class="btn" id="leafPlay" aria-pressed="false" title="Leaves keep falling until the ground is covered">&#9654; Let them fall</button></div>
     <div class="field"><label for="treeScale">Tree scale</label><output id="treeScaleOut"></output><input type="range" id="treeScale" min="0.5" max="1.6" step="0.01" value="1"></div>
     <div class="field"><label for="plantScale">Plant and clutter scale</label><output id="plantScaleOut"></output><input type="range" id="plantScale" min="0.5" max="2" step="0.01" value="1"></div>
     <div class="field"><label for="colVar">Colour variation</label><output id="colVarOut"></output><input type="range" id="colVar" min="0" max="1" step="0.01" value="0.35"></div>
@@ -346,7 +350,7 @@ const LAYER_DEFS = [
   ["fireflies", "Fireflies and spores", "moving lights"],
 ];
 const DEFAULTS = {
-  biome: "temperate", season: "summer", time: 16.5, treeStyle: "detail", grassStyle: "tufts", treeScale: 1, plantScale: 1, colVar: 0.35,
+  biome: "temperate", season: "summer", time: 16.5, treeStyle: "detail", grassStyle: "tufts", leafFall: 0.45, leafUnder: 0.7, leafSize: 1, treeScale: 1, plantScale: 1, colVar: 0.35,
   wind: 0.35, gust: 0.5, windDir: 60, lodMode: "timed", near: 22, mid: 45, draw: 80, fadeW: 0.3, lodVis: false, maskVis: false, atlasVis: false, patch: 26,
   layers: Object.fromEntries(LAYER_DEFS.map(([k]) => [k, { on: true, dens: 1 }])),
 };
@@ -405,7 +409,7 @@ const G = { // shared uniforms
   uAutumn: { value: 0 }, uSpring: { value: 0 }, uWinter: { value: 0 }, uSnow: { value: 0 },
   uFF: { value: Array.from({ length: 16 }, () => new THREE.Vector3(0, -999, 0)) }, uFFCol: { value: new THREE.Color(0.9, 1.0, 0.4) }, uFFOn: { value: 0 },
   uLodVis: { value: 0 }, uMaskVis: { value: 0 }, uColVar: { value: 0.35 }, uTreeScale: { value: 1 }, uPlantScale: { value: 1 }, uExposure: { value: 0.8 },
-  uKeepFlower: { value: 1 }, uKeepGrass: { value: 2 }, uKeepLitter: { value: 1 }, uKeepMush: { value: 1 }, uKeepFruit: { value: 1 }, uLowG: { value: 0 }, uNight: { value: 0 }, uBake: { value: 0 },
+  uKeepFlower: { value: 1 }, uKeepGrass: { value: 2 }, uKeepLitter: { value: 1 }, uKeepMush: { value: 1 }, uKeepFruit: { value: 1 }, uLeafFall: { value: 0 }, uLeafUnder: { value: 0.7 }, uLeafSize: { value: 1 }, uLowG: { value: 0 }, uNight: { value: 0 }, uBake: { value: 0 },
 };
 
 const VERT = `
@@ -478,6 +482,7 @@ void main(){
 const FRAG = `
 uniform sampler2D map;
 uniform vec3 uSunDir, uSunCol, uSkyAmb, uGndAmb, uFogCol, uLodCol, uEmitCol, uAt, uMean;
+uniform float uLeafFall, uLeafUnder, uLeafSize;
 uniform float uBake, uFogNear, uFogFar, uLodVis, uMaskVis, uColVar, uAutumn, uSpring, uWinter, uSnow, uSnowable, uLeafy, uDecid, uEmit, uCardLit, uAlphaTest, uKeep, uExposure, uTime, uNight, uFlicker, uUseAt, uMask, uSwayMask, uRep, uImp, uGrass, uViews, uDetail;
 varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vTint; varying vec3 vBlock; varying float vFade; varying vec2 vSeed; varying float vAo; varying float vCard; varying float vSway;
 float bayer2(vec2 a){ a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
@@ -573,6 +578,25 @@ void main(){
     alb = mix(alb, aut, uAutumn * uDecid * leafPix * smoothstep(0.1, 0.6, k + 0.35));
     alb = mix(alb, alb * vec3(1.05, 1.2, 0.8) + vec3(0.01, 0.02, 0.0), uSpring * leafPix);
   }
+#ifdef TERRAIN
+  // Fallen leaves (owner, 2026-11-15: "autumn ground should have some leaf coverage, maybe use shader for this so we can
+  // kind of customize it", "and show gradually more leaves"). On what faces up, in leaf-sized pixel blobs on a world
+  // grid (so they never swim), thicker under the canopy (the terrain's own canopy shade, vSeed.y). uLeafFall is how far
+  // the fall has gone, 0 to 1: a blob lies down once the fall passes its own random moment, so leaves come one by one.
+  if (uLeafFall > 0.0 && normalize(vN).y > 0.55) {
+    vec2 lp = floor(vW.xz * 6.0 / uLeafSize);
+    float when = h12(lp + 31.7), sub = h12(floor(vW.xz * 12.0 / uLeafSize) + 7.3);
+    float under = clamp(vSeed.y * 2.2, 0.0, 1.0);
+    float reach = uLeafFall * mix(1.0 - uLeafUnder * 0.85, 1.0, under) * (0.75 + 0.5 * under);
+    if (when < reach && sub > 0.25) {
+      float hue = h12(lp + 3.1);
+      vec3 leaf = hue < 0.3 ? vec3(0.42, 0.10, 0.03) : hue < 0.6 ? vec3(0.62, 0.30, 0.04) : hue < 0.85 ? vec3(0.70, 0.52, 0.08) : vec3(0.30, 0.18, 0.08);
+      float old = smoothstep(0.0, 0.7, reach - when);          // the first to fall have browned by the end
+      leaf = mix(leaf, vec3(0.26, 0.15, 0.07), old * 0.5);
+      alb = leaf * (0.85 + 0.3 * h12(lp + 9.9));
+    }
+  }
+#endif
   // under snow, grass is dead straw, not summer green
   if (uGrass > 0.5 && uSnow > 0.0) alb = mix(alb, vec3(0.20, 0.14, 0.06) * (0.55 + grain), 0.9);
   vec3 N = normalize(vN);
@@ -1963,6 +1987,12 @@ function applyLive() {
   const B = BIOMES[S.biome], se = S.season;
   G.uAutumn.value = se === "autumn" ? 1 : 0; G.uSpring.value = se === "spring" ? 1 : 0; G.uWinter.value = se === "winter" ? 1 : 0;
   G.uSnow.value = se === "winter" && B.snow ? 1 : 0;
+  // fallen leaves: only where trees drop them (the biome's broadleaf share), in autumn, and browned under winter's snow
+  const tw = B.trees || {}, tot = Object.values(tw).reduce((a, b) => a + b, 0) || 1, decid = Object.entries(tw).reduce((a, [k, w]) => a + (SPECIES[k] && SPECIES[k].decid ? w : 0), 0) / tot;
+  G.uLeafFall.value = B.alien ? 0 : (se === "autumn" ? S.leafFall : se === "winter" ? 0.6 * S.leafFall : 0) * Math.min(1, decid * 1.25);
+  G.uLeafUnder.value = S.leafUnder; G.uLeafSize.value = S.leafSize;
+  for (const [id, v] of [["leafFall", S.leafFall], ["leafUnder", S.leafUnder], ["leafSize", S.leafSize]]) { const el = $(id); if (el && +el.value !== v) el.value = v; }
+  if ($("leafFallOut")) { $("leafFallOut").textContent = Math.round(S.leafFall * 100) + "%"; $("leafUnderOut").textContent = Math.round(S.leafUnder * 100) + "%"; $("leafSizeOut").textContent = "x" + S.leafSize.toFixed(2); }
   G.uKeepFlower.value = { spring: 1.01, summer: 0.75, autumn: 0.3, winter: 0 }[se];
   G.uKeepLitter.value = { spring: 0.35, summer: 0.5, autumn: 1.01, winter: 0.6 }[se];
   G.uKeepMush.value = { spring: 0.4, summer: 0.6, autumn: 1.01, winter: 0.1 }[se];
@@ -1998,6 +2028,10 @@ for (const [k, fmt] of LIVE) $(k).addEventListener("input", e => { S[k] = +e.tar
 $("time").addEventListener("input", e => { S.time = +e.target.value; $("timeOut").textContent = fmtTime(S.time); setWhere(); applyLive(); });
 $("treeStyle").onchange = e => { S.treeStyle = e.target.value; syncUI(); rebuild(); };
 $("grassStyle").onchange = e => { S.grassStyle = e.target.value; syncUI(); rebuild(); };
+for (const id of ["leafFall", "leafUnder", "leafSize"]) $(id).oninput = e => { S[id] = +e.target.value; applyLive(); };
+// "Let them fall": the fall goes on from wherever the slider is, slowly, to a covered ground, then stops. Off by default.
+let leafRun = false;
+$("leafPlay").onclick = () => { leafRun = !leafRun; if (leafRun && S.leafFall >= 0.999) S.leafFall = 0; if (leafRun && S.season !== "autumn") { S.season = "autumn"; syncUI(); rebuild(); } $("leafPlay").setAttribute("aria-pressed", String(leafRun)); applyLive(); };
 $("lodMode").onchange = e => { S.lodMode = e.target.value; applyLive(); };
 $("lodVis").onchange = e => { S.lodVis = e.target.checked; applyLive(); };
 $("maskVis").onchange = e => { S.maskVis = e.target.checked; applyLive(); };
@@ -2058,6 +2092,7 @@ function frame() {
   const now = performance.now();   // one clock for animation and fades (a rAF timestamp can lag it)
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   G.uTime.value = now / 1000;
+  if (leafRun) { S.leafFall = Math.min(1, S.leafFall + dt / 40); applyLive(); if (S.leafFall >= 1) { leafRun = false; $("leafPlay").setAttribute("aria-pressed", "false"); } }
   updateCamera(dt);
   moveFireflies(now / 1000);
   resolveMeans();
