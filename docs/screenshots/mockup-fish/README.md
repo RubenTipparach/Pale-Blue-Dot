@@ -22,3 +22,6 @@ turn with no console errors, failed requests or page errors.
   thumbnails baked by the page's own renderer into `fish/sheet/`.
 - `modal-roster.jpg`: a tab's notes in its info modal (owner, 2026-11-14:
   descriptive text in modals).
+- `sea-creatures.jpg` (B15): the crab, lobster, clam, turtle, octopus,
+  drake, otter and plume worm in the "Reef & sea floor" tab, each the game's
+  own new mesh and skin.

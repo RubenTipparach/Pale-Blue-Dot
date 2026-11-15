@@ -138,7 +138,18 @@ pub struct Ranges {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V8;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V9;
+
+    /// Generator version 9 (`ocean-environments` design B15): version 8 with
+    /// its reefs back. Version 8 kept a reef clear of every point of a noise
+    /// channel, which runs through the open sea too, and so lost almost every
+    /// reef version 7 had; version 9 clears a reef only near a channel's
+    /// mouth or a river's reach. The ground is version 8's: only where the
+    /// sea's pieces stand changes.
+    pub const TENEBRIS_V9: Self = Self {
+        ocean: Some(crate::ocean::places::OceanPlaces::V9),
+        ..Self::TENEBRIS_V8
+    };
 
     /// Generator version 8 (`ocean-environments` design 13): version 7 with
     /// rivers that run down to the sea reach by reach, from one drainage map
@@ -265,6 +276,7 @@ impl TerrainConfig {
             6 => Some(Self::TENEBRIS_V6),
             7 => Some(Self::TENEBRIS_V7),
             8 => Some(Self::TENEBRIS_V8),
+            9 => Some(Self::TENEBRIS_V9),
             _ => None,
         }
     }
@@ -906,6 +918,24 @@ mod tests {
             "version 8 against 7 on land: {same} the same, {moved} by a river ({rivered} by version 8's)"
         );
     }
+
+    /// Version 9 (`ocean-environments` B15) is version 8 with the sea's reef
+    /// rule mended, and the reef is pieces, not ground: its altitudes,
+    /// biomes and top blocks are version 8's, digest for digest, pinned on
+    /// its own constants so a later change to either version shows.
+    #[test]
+    fn version_9_makes_the_ground_its_worlds_are_made_on() {
+        let v9 = TerrainConfig::for_version(9).expect("version 9 is carried");
+        assert_eq!(v9, TerrainConfig::TENEBRIS_V9);
+        assert_eq!(TerrainConfig::TENEBRIS, v9, "a new world is made on 9");
+        assert_eq!(digest(&v9, 10_000), VERSION_9_DIGEST);
+        assert_eq!(top_digest(&v9, 10_000), VERSION_9_TOP_DIGEST);
+        assert_eq!(VERSION_9_DIGEST, VERSION_8_DIGEST);
+        assert_eq!(VERSION_9_TOP_DIGEST, VERSION_8_TOP_DIGEST);
+    }
+
+    const VERSION_9_DIGEST: u64 = 15_558_980_979_595_432_169;
+    const VERSION_9_TOP_DIGEST: u64 = 13_002_675_292_541_232_770;
 
     const VERSION_8_DIGEST: u64 = 15_558_980_979_595_432_169;
     const VERSION_8_TOP_DIGEST: u64 = 13_002_675_292_541_232_770;

@@ -1263,15 +1263,19 @@ pub(crate) mod draw {
                 &mut uvs,
             );
         }
-        let count = positions.len();
+        // A school with nobody drawn (all under, all gone) keeps one hidden
+        // triangle, so its mesh keeps the layout the loading screen warmed
+        // and never asks for a pipeline of its own.
+        if positions.is_empty() {
+            positions = vec![[0.0; 3]; 3];
+            colours = vec![[0.0; 4]; 3];
+            uvs = vec![bodies::white_uv(); 3];
+        }
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         mesh.remove_indices();
         mesh.compute_flat_normals();
-        if count == 0 {
-            mesh.remove_attribute(Mesh::ATTRIBUTE_NORMAL);
-        }
     }
 
     /// The rod in hand, the float on the water, the line between them, and the
