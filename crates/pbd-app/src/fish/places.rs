@@ -32,8 +32,6 @@ use std::sync::OnceLock;
 /// A tile's side, m (on the cube projection, so up to about 1.7 times this
 /// near a cube corner).
 const TILE_M: f32 = 12.0;
-/// Tiles whose middle is within this of the eye are drawn, m.
-const RADIUS_M: f32 = 46.0;
 /// The reef's lattice, m (the mockup's 0.62, opened a little for the cost).
 const REEF_STEP_M: f32 = 0.7;
 
@@ -49,6 +47,8 @@ enum Kind {
     Barrel,
     Fan,
     Anemone,
+    /// The big anemone with its clownfish (design 11).
+    Hero,
     Turf,
     Grass,
     Weed,
@@ -163,7 +163,7 @@ fn palette(kind: Kind) -> &'static [u32] {
         Kind::Tube => &[0x7d2dbd, 0xc56d25, 0xfb902f, 0x9e3ba2, 0xd12d41],
         Kind::Barrel => &[0xa8633e, 0x733126, 0x725244, 0xc56d25],
         Kind::Fan => &[0xd12d41, 0xfaaf5c, 0x9e3ba2, 0xfb902f, 0xdd576d],
-        Kind::Anemone => &[0xfffefe, 0xfaaf5c, 0xc1f1d8, 0xdd576d],
+        Kind::Anemone | Kind::Hero => &[0xfffefe, 0xfaaf5c, 0xc1f1d8, 0xdd576d],
         Kind::Turf => &[0x559642, 0x9bb675, 0x297537, 0x84e3b5, 0x05582d, 0xc56d25],
         Kind::Grass => &[0x559642, 0x297537, 0x9bb675],
         Kind::Weed => &[0x8d4526, 0x559642, 0x297537, 0xc56d25],
@@ -382,6 +382,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Fan, k.build());
         // An anemone: a purple foot, waving tentacles.
         g.insert(Kind::Anemone, anemone(20, 0.13, 0.22));
+        g.insert(Kind::Hero, anemone(220, 0.55, 0.5));
         // Algae turf.
         let mut k = Kit::default();
         for i in 0..8 {
@@ -594,7 +595,7 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
                 let yaw = hash_unit(seed ^ 6, k) * TAU;
                 let zone = zone_noise(seed, d, radius, 3.1);
                 // Table corals on the deeper rock only, as the mockup's.
-                if r < 0.015 && deep(d) {
+                if r < 0.03 && deep(d) {
                     out.push(piece(
                         d,
                         Kind::Table,
@@ -660,8 +661,8 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
                 }
             }
         }
-        // The skyline: now and then a big table coral.
-        for t in 0..1u64 {
+        // The skyline: big table corals layered at their heights.
+        for t in 0..3u64 {
             let k = tile_k ^ (0x7ab1e << 8) ^ t;
             let (fu, fv) = (hash_unit(seed ^ 21, k), hash_unit(seed ^ 22, k));
             let d = from_face(key.0, u0 + fu * unit, v0 + fv * unit);
@@ -679,6 +680,27 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
                 hash_unit(seed ^ 24, k) * TAU,
                 k,
             ));
+        }
+    }
+    // The big anemone, one reef tile in three, with its clownfish (drawn
+    // by `ambient`).
+    if any(Environment::Reef) && hash_unit(seed ^ 60, tile_k) < 0.35 {
+        let (fu, fv) = (
+            0.2 + 0.6 * hash_unit(seed ^ 61, tile_k),
+            0.2 + 0.6 * hash_unit(seed ^ 62, tile_k),
+        );
+        if env_at(fu, fv) == Some(Environment::Reef) {
+            let d = from_face(key.0, u0 + fu * unit, v0 + fv * unit);
+            let mut p = piece(
+                d,
+                Kind::Hero,
+                1.0,
+                1.0,
+                hash_unit(seed ^ 63, tile_k) * TAU,
+                tile_k,
+            );
+            p.colour = [1.0; 3];
+            out.push(p);
         }
     }
     // Kelp: stands every 2 m, to the surface, on the kelp's rock.
@@ -797,14 +819,6 @@ pub fn dimmed(downwell_per_m: [f32; 3], depth_m: f32) -> [f32; 3] {
 
 // ---- the tile's mesh (main thread) -------------------------------------------
 
-#[derive(Default)]
-struct Built {
-    positions: Vec<[f32; 3]>,
-    colours: Vec<[f32; 4]>,
-    glow_positions: Vec<[f32; 3]>,
-    glow_colours: Vec<[f32; 4]>,
-}
-
 fn frame_at(dir: Vec3, yaw: f32) -> (Vec3, Vec3, Vec3) {
     let up = dir;
     let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
@@ -913,15 +927,80 @@ fn floe(
     lay(&s, origin, axes, Vec3::ONE, [1.0; 3], positions, colours);
 }
 
+/// A part of a tile drawn afresh each frame near the eye: a cloud of reef
+/// fish, the clownfish over the big anemone, a smoker's plume, a seal
+/// hauled out on a floe. Positions are the tile's (its anchor taken off).
+#[derive(Clone, Copy, Debug)]
+enum Ambient {
+    Anthias { at: Vec3, up: Vec3, seed: u32 },
+    Clowns { at: Vec3, up: Vec3, seed: u32 },
+    Smoke { at: Vec3, up: Vec3, seed: u32 },
+    Seal { at: Vec3, up: Vec3, yaw: f32 },
+}
+
+/// The swaying pieces of a tile, kept at rest so each frame can bend them:
+/// a vertex's height over its piece's foot (what it sways by), the piece's
+/// across axis and phase.
+#[derive(Default)]
+struct Sway {
+    rest: Vec<Vec3>,
+    colours: Vec<[f32; 4]>,
+    height: Vec<f32>,
+    axis: Vec<Vec3>,
+    phase: Vec<f32>,
+}
+
+#[derive(Default)]
+struct Built {
+    positions: Vec<[f32; 3]>,
+    colours: Vec<[f32; 4]>,
+    glow_positions: Vec<[f32; 3]>,
+    glow_colours: Vec<[f32; 4]>,
+    sway: Sway,
+    ambient: Vec<Ambient>,
+}
+
+/// Whether a kind bends in the surge.
+fn sways(kind: Kind) -> bool {
+    matches!(
+        kind,
+        Kind::Soft | Kind::Anemone | Kind::Hero | Kind::Turf | Kind::Grass | Kind::Weed
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lay_swaying(
+    shape: &Shape,
+    origin: Vec3,
+    axes: (Vec3, Vec3, Vec3),
+    scale: Vec3,
+    tint: [f32; 3],
+    phase: f32,
+    sway: &mut Sway,
+) {
+    for (p, c) in shape.positions.iter().zip(&shape.colours) {
+        let m = *p * scale;
+        sway.rest
+            .push(origin + axes.0 * m.x + axes.1 * m.y + axes.2 * m.z);
+        sway.colours
+            .push([c[0] * tint[0], c[1] * tint[1], c[2] * tint[2], 1.0]);
+        sway.height.push(m.y.max(0.0));
+        sway.axis.push(axes.0);
+        sway.phase.push(phase);
+    }
+}
+
 fn build_tile(
     pieces: &[Piece],
     anchor: Vec3,
     bed: impl Fn(Vec3) -> f32,
     sea_radius: f32,
     downwell: [f32; 3],
+    seed: u32,
 ) -> Built {
     let lib = library();
     let mut out = Built::default();
+    let mut reef = Vec::new();
     for (i, p) in pieces.iter().enumerate() {
         let axes = frame_at(p.dir, p.yaw);
         if p.floe {
@@ -934,28 +1013,41 @@ fn build_tile(
                 &mut out.positions,
                 &mut out.colours,
             );
+            // A seal hauled out on one floe in nine.
+            if hh(i as i64, seed as i64) < 0.11 {
+                out.ambient.push(Ambient::Seal {
+                    at: origin + p.dir * p.tall,
+                    up: p.dir,
+                    yaw: p.yaw,
+                });
+            }
             continue;
         }
         let ground = bed(p.dir);
         let origin = p.dir * (ground + p.over) - anchor;
         match p.kind {
             None => {
-                // Kelp, to the surface.
+                // Kelp, to the surface, swaying.
                 let height = (sea_radius - ground - 0.3).max(1.0);
-                let from = out.colours.len();
+                let (mut positions, mut colours) = (Vec::new(), Vec::new());
                 kelp_stand(
                     origin,
                     axes,
                     height,
                     i as f32 * 0.37,
-                    &mut out.positions,
-                    &mut out.colours,
+                    &mut positions,
+                    &mut colours,
                 );
                 let light = dimmed(downwell, height * 0.5);
-                for c in &mut out.colours[from..] {
-                    for (k, l) in light.iter().enumerate() {
-                        c[k] *= l;
-                    }
+                for (q, c) in positions.into_iter().zip(colours) {
+                    let q = Vec3::from_array(q);
+                    out.sway.rest.push(q);
+                    out.sway
+                        .colours
+                        .push([c[0] * light[0], c[1] * light[1], c[2] * light[2], 1.0]);
+                    out.sway.height.push((q - origin).dot(p.dir).max(0.0));
+                    out.sway.axis.push(axes.0);
+                    out.sway.phase.push(i as f32 * 0.37);
                 }
             }
             Some(kind) => {
@@ -969,17 +1061,39 @@ fn build_tile(
                     p.colour[1] * light[1],
                     p.colour[2] * light[2],
                 ];
-                lay(
-                    shape,
-                    origin,
-                    axes,
-                    scale,
-                    tint,
-                    &mut out.positions,
-                    &mut out.colours,
-                );
+                if sways(kind) {
+                    lay_swaying(
+                        shape,
+                        origin,
+                        axes,
+                        scale,
+                        tint,
+                        i as f32 * 0.61,
+                        &mut out.sway,
+                    );
+                } else {
+                    lay(
+                        shape,
+                        origin,
+                        axes,
+                        scale,
+                        tint,
+                        &mut out.positions,
+                        &mut out.colours,
+                    );
+                }
+                if kind == Kind::Hero {
+                    out.ambient.push(Ambient::Clowns {
+                        at: origin + p.dir * 0.8,
+                        up: p.dir,
+                        seed: seed ^ i as u32,
+                    });
+                }
+                if !matches!(kind, Kind::Chimney | Kind::Mat | Kind::Mussels) {
+                    reef.push((origin, p.dir));
+                }
                 if kind == Kind::Chimney {
-                    // The mouth's glow, drawn unlit.
+                    // The mouth's glow, drawn unlit, and its plume.
                     let top = 6.5 * p.tall;
                     let mut k = Kit::default();
                     k.add(bx(0.6, 0.25, 0.6), at([0.0, top + 0.12, 0.0]), 0xff7a2a);
@@ -994,22 +1108,210 @@ fn build_tile(
                         &mut out.glow_positions,
                         &mut out.glow_colours,
                     );
+                    out.ambient.push(Ambient::Smoke {
+                        at: origin + p.dir * (top + 0.25),
+                        up: p.dir,
+                        seed: seed ^ i as u32,
+                    });
                 }
             }
         }
     }
+    // A cloud of anthias over one packed reef tile in two.
+    if reef.len() > 80 && hh(seed as i64, 71) < 0.5 {
+        let (at, up) = reef[reef.len() / 2];
+        out.ambient.push(Ambient::Anthias {
+            at: at + up * 1.6,
+            up,
+            seed,
+        });
+    }
     out
+}
+
+/// A tile's ambient life and plumes at a moment, round the eye (`eye` in
+/// the tile's frame): lit fish and seals, and the unlit smoke.
+fn ambient(
+    list: &[Ambient],
+    t: f32,
+    eye: Vec3,
+    lit: (&mut Vec<[f32; 3]>, &mut Vec<[f32; 4]>),
+    smoke: (&mut Vec<[f32; 3]>, &mut Vec<[f32; 4]>),
+) {
+    use super::bodies::{Look, Place, emit, model_for};
+    use pbd_core::fauna::Pose;
+    let (lp, lc) = lit;
+    let (sp, sc) = smoke;
+    let fish = |model: &str,
+                at: Vec3,
+                along: Vec3,
+                up: Vec3,
+                len: f32,
+                phase: f32,
+                lp: &mut Vec<[f32; 3]>,
+                lc: &mut Vec<[f32; 4]>| {
+        let body = model_for(model, 0);
+        let forward = (along - up * along.dot(up)).normalize_or(up.any_orthonormal_vector());
+        let side = forward.cross(up);
+        let place = Place {
+            origin: at,
+            forward,
+            up: side.cross(forward),
+            scale: len / body.length,
+        };
+        emit(
+            body,
+            &Look {
+                t,
+                phase,
+                pose: Pose::Moving,
+            },
+            &place,
+            [1.0; 3],
+            lp,
+            lc,
+        );
+    };
+    for a in list {
+        match *a {
+            Ambient::Anthias { at, up, seed } => {
+                let (e, n) = frame_tangents(up);
+                for k in 0..40u32 {
+                    let r = |s: i64| hh(i64::from(k), i64::from(seed) ^ s);
+                    let radius = 1.5 + 3.5 * r(1);
+                    let speed = (0.25 + 0.2 * r(2)) * if r(3) < 0.5 { 1.0 } else { -1.0 };
+                    let a0 = r(4) * TAU + t * speed;
+                    let h = (r(5) - 0.3) * 2.0 + 0.3 * (t * 0.7 + r(6) * 6.0).sin();
+                    let pos = at + (e * a0.cos() * radius + n * a0.sin() * radius * 0.7) + up * h;
+                    let along = (-e * a0.sin() + n * a0.cos() * 0.7) * speed.signum();
+                    fish(
+                        "anthias",
+                        pos,
+                        along,
+                        up,
+                        0.11 + 0.04 * r(7),
+                        r(8) * TAU,
+                        lp,
+                        lc,
+                    );
+                }
+            }
+            Ambient::Clowns { at, up, seed } => {
+                let (e, n) = frame_tangents(up);
+                for k in 0..2u32 {
+                    let a0 = t * 0.3 + k as f32 * PI + hh(i64::from(seed), 3) * TAU;
+                    let pos = at
+                        + (e * a0.cos() + n * a0.sin()) * 0.45
+                        + up * (0.06 * (t * 1.3 + k as f32).sin());
+                    let along = -e * a0.sin() + n * a0.cos();
+                    fish("darter", pos, along, up, 0.13, k as f32 * 2.0, lp, lc);
+                }
+            }
+            Ambient::Seal { at, up, yaw } => {
+                // Slid in once the eye is within its nine metres.
+                if at.distance(eye) < 9.0 {
+                    continue;
+                }
+                let (e, n) = frame_tangents(up);
+                let forward = e * yaw.cos() + n * yaw.sin();
+                let body = model_for("seal", 0);
+                let place = Place {
+                    origin: at,
+                    forward,
+                    up,
+                    scale: 1.6 / body.length,
+                };
+                emit(
+                    body,
+                    &Look {
+                        t,
+                        phase: yaw,
+                        pose: Pose::HauledOut,
+                    },
+                    &place,
+                    [1.0; 3],
+                    lp,
+                    lc,
+                );
+            }
+            Ambient::Smoke { at, up, seed } => {
+                // A shimmering plume: puffs rising, widening and swirling,
+                // hot orange at the mouth and smoke-black above.
+                let (e, n) = frame_tangents(up);
+                let puff = icosahedron(1.0);
+                for k in 0..36u32 {
+                    let r = |s: i64| hh(i64::from(k), i64::from(seed) ^ s);
+                    let life = ((t * 0.12 + r(1)) % 1.0 + 1.0) % 1.0;
+                    let rise = life * 11.0;
+                    let swirl = t * (0.8 + r(2)) + r(3) * TAU;
+                    let spread = 0.15 + life * 1.1;
+                    let pos = at
+                        + up * rise
+                        + (e * swirl.cos() + n * swirl.sin()) * spread * (0.4 + 0.6 * r(4));
+                    let size = 0.2 + life * 0.7;
+                    let heat = (1.0 - life * 5.0).max(0.0);
+                    let c = [
+                        0.05 + 0.6 * heat,
+                        0.045 + 0.22 * heat,
+                        0.04 + 0.05 * heat,
+                        1.0,
+                    ];
+                    for q in &puff {
+                        sp.push((pos + *q * size * Vec3::new(1.0, 0.8, 1.0)).to_array());
+                        sc.push(c);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn frame_tangents(up: Vec3) -> (Vec3, Vec3) {
+    let e = Vec3::Y.cross(up).normalize_or(Vec3::X);
+    (e, up.cross(e))
 }
 
 // ---- the plugin --------------------------------------------------------------
 
+/// The tile's fade (`detail-fade`'s screen-door mask, through the field's
+/// `Faded`): out from `FADE_FROM_M` to `FADE_TO_M` of its middle from the eye,
+/// and in over `LAND_S` when it lands. A tile is dropped only once it is
+/// wholly faded, so nothing appears or vanishes in one frame.
+const FADE_FROM_M: f32 = 34.0;
+const FADE_TO_M: f32 = 46.0;
+const WANT_M: f32 = 52.0;
+const LAND_S: f32 = 0.8;
+/// Within this of the eye a tile sways and draws its ambient life, m.
+const NEAR_M: f32 = 30.0;
+
+/// How far a tile has faded out, 0 whole to 1 gone: `metres` its middle from
+/// the eye, `since_s` since it landed.
+fn tile_fade(metres: f32, since_s: f32) -> f32 {
+    let by_distance = ((metres - FADE_FROM_M) / (FADE_TO_M - FADE_FROM_M)).clamp(0.0, 1.0);
+    let by_landing = 1.0 - (since_s / LAND_S).clamp(0.0, 1.0);
+    by_distance.max(by_landing)
+}
+
+struct Drawn {
+    root: Entity,
+    glow: Option<Entity>,
+    sway: Option<(Entity, Handle<Mesh>)>,
+    life: (Entity, Handle<Mesh>),
+    smoke: Option<(Entity, Handle<Mesh>)>,
+    anchor: Vec3,
+    landed_s: f32,
+    still: Sway,
+    ambient: Vec<Ambient>,
+    swayed: bool,
+}
+
 #[derive(Resource, Default)]
 struct Tiles {
-    drawn: HashMap<Key, (Entity, Option<Entity>, Vec3)>,
+    drawn: HashMap<Key, Drawn>,
     planning: HashMap<Key, Task<Vec<Piece>>>,
     ready: Vec<(Key, Vec<Piece>)>,
-    /// The terrain epoch the tiles were made for: a world switching its
-    /// generator drops them.
+    /// Whether the world has sea places: a world switching its generator
+    /// drops the tiles.
     version: Option<bool>,
 }
 
@@ -1086,17 +1388,17 @@ fn tiles(
     life: Option<Res<super::draw::LifeMaterial>>,
     glow: Option<Res<GlowMaterial>>,
     water: Option<Res<crate::config::WaterSettings>>,
+    time: Res<Time>,
+    sun: Option<Res<crate::sky::Sun>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut placed: Query<&mut Transform>,
+    mut roots: Query<(&mut Transform, &mut crate::field_light::Faded)>,
+    mut shown: Query<&mut Visibility>,
 ) {
     let cfg = *crate::planet::terrain_config();
     let has_places = cfg.ocean.is_some();
     if state.version != Some(has_places) {
-        for (_, (body, light, _)) in state.drawn.drain() {
-            commands.entity(body).despawn();
-            if let Some(light) = light {
-                commands.entity(light).despawn();
-            }
+        for (_, drawn) in state.drawn.drain() {
+            commands.entity(drawn.root).despawn();
         }
         state.planning.clear();
         state.ready.clear();
@@ -1110,52 +1412,124 @@ fn tiles(
     if !has_places {
         return;
     }
+    let now = time.elapsed_secs();
     let radius = cfg.radius_m;
     let eye = (camera.translation().as_dvec3() - frame.center).as_vec3();
     let eye_dir = eye.normalize_or(Vec3::Y);
+    let metres = |key: Key| tile_centre(key, radius).distance(eye_dir) * radius;
     // The tiles wanted: every tile a ring of points round the eye falls in,
     // so a cube face's edge is crossed as any other.
     let mut wanted = HashSet::new();
     let east = Vec3::Y.cross(eye_dir).normalize_or(Vec3::X);
     let north = eye_dir.cross(east);
     let step = TILE_M * 0.5;
-    let reach = (RADIUS_M / step).ceil() as i32;
+    let reach = (WANT_M / step).ceil() as i32;
     for a in -reach..=reach {
         for b in -reach..=reach {
             let off = Vec2::new(a as f32, b as f32) * step;
-            if off.length() > RADIUS_M + TILE_M {
+            if off.length() > WANT_M + TILE_M {
                 continue;
             }
             let d = (eye_dir + (east * off.x + north * off.y) / radius).normalize();
             let key = key_of(d, radius);
-            if tile_centre(key, radius).distance(eye_dir) * radius <= RADIUS_M + TILE_M * 0.75 {
+            if metres(key) <= WANT_M {
                 wanted.insert(key);
             }
         }
     }
-    // Drop what has gone out of reach.
-    let gone: Vec<Key> = state
-        .drawn
-        .keys()
-        .filter(|k| !wanted.contains(k))
-        .copied()
-        .collect();
-    for key in gone {
-        if let Some((body, light, _)) = state.drawn.remove(&key) {
-            commands.entity(body).despawn();
-            if let Some(light) = light {
-                commands.entity(light).despawn();
+    // Fade every tile by its distance and its landing; drop one once it is
+    // out of reach and wholly faded.
+    let seconds = sun
+        .as_deref()
+        .map_or(now as f64, |s| s.clock.seconds)
+        .rem_euclid(3600.0) as f32;
+    let mut gone = Vec::new();
+    for (key, drawn) in state.drawn.iter_mut() {
+        let m = metres(*key);
+        let fade = tile_fade(m, now - drawn.landed_s);
+        if !wanted.contains(key) && fade >= 1.0 {
+            gone.push(*key);
+            continue;
+        }
+        if let Ok((mut transform, mut faded)) = roots.get_mut(drawn.root) {
+            transform.translation = (frame.center + drawn.anchor.as_dvec3()).as_vec3();
+            if faded.0 != fade {
+                faded.0 = fade;
             }
+        }
+        // The unlit glow and smoke cannot take the mask: they go at half.
+        for entity in [drawn.glow, drawn.smoke.as_ref().map(|s| s.0)]
+            .into_iter()
+            .flatten()
+        {
+            if let Ok(mut v) = shown.get_mut(entity) {
+                let want = if fade < 0.5 {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                };
+                if *v != want {
+                    *v = want;
+                }
+            }
+        }
+        let near = m <= NEAR_M;
+        let local_eye = eye - drawn.anchor;
+        // The surge: soft corals, anemones, grass and kelp bend, near the eye.
+        if let Some((_, handle)) = &drawn.sway
+            && (near || !drawn.swayed)
+            && let Some(mesh) = meshes.get_mut(handle)
+        {
+            let s = &drawn.still;
+            let bend = if near { 1.0 } else { 0.0 };
+            let positions: Vec<[f32; 3]> = (0..s.rest.len())
+                .map(|i| {
+                    let h = s.height[i];
+                    let wave = (seconds * 1.1 + s.phase[i] + h * 0.6).sin();
+                    let reach = (0.07 * h).min(0.7) * bend;
+                    (s.rest[i] + s.axis[i] * wave * reach).to_array()
+                })
+                .collect();
+            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+            drawn.swayed = near;
+        }
+        // The ambient life and the plumes, near the eye; none further off.
+        if !drawn.ambient.is_empty() {
+            let (mut lp, mut lc, mut sp, mut sc) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+            if near {
+                ambient(
+                    &drawn.ambient,
+                    seconds,
+                    local_eye,
+                    (&mut lp, &mut lc),
+                    (&mut sp, &mut sc),
+                );
+            }
+            for (positions, colours, handle) in [
+                (lp, lc, Some(&drawn.life.1)),
+                (sp, sc, drawn.smoke.as_ref().map(|s| &s.1)),
+            ] {
+                if let Some(handle) = handle
+                    && let Some(mesh) = meshes.get_mut(handle)
+                {
+                    write_mesh(mesh, positions, colours);
+                }
+            }
+        }
+    }
+    for key in gone {
+        if let Some(drawn) = state.drawn.remove(&key) {
+            commands.entity(drawn.root).despawn();
         }
     }
     state.planning.retain(|k, _| wanted.contains(k));
     // Plan what is new, off the main thread.
     let pool = AsyncComputeTaskPool::get();
     for key in &wanted {
-        if state.drawn.contains_key(key) || state.planning.contains_key(key) {
-            continue;
-        }
-        if state.ready.iter().any(|(k, _)| k == key) {
+        if state.drawn.contains_key(key)
+            || state.planning.contains_key(key)
+            || state.ready.iter().any(|(k, _)| k == key)
+        {
             continue;
         }
         let key = *key;
@@ -1163,87 +1537,166 @@ fn tiles(
             .planning
             .insert(key, pool.spawn(async move { plan(&cfg, key) }));
     }
-    let finished: Vec<(Key, Vec<Piece>)> = {
-        let mut out = Vec::new();
-        let keys: Vec<Key> = state.planning.keys().copied().collect();
-        for key in keys {
-            if let Some(task) = state.planning.get_mut(&key)
-                && let Some(pieces) = block_on(future::poll_once(task))
-            {
-                out.push((key, pieces));
-            }
+    let mut finished = Vec::new();
+    let keys: Vec<Key> = state.planning.keys().copied().collect();
+    for key in keys {
+        if let Some(task) = state.planning.get_mut(&key)
+            && let Some(pieces) = block_on(future::poll_once(task))
+        {
+            finished.push((key, pieces));
         }
-        out
-    };
+    }
     for (key, pieces) in finished {
         state.planning.remove(&key);
         state.ready.push((key, pieces));
     }
     // Build one tile a frame, the nearest first.
-    state.ready.sort_by(|a, b| {
-        let da = tile_centre(a.0, radius).distance(eye_dir);
-        let db = tile_centre(b.0, radius).distance(eye_dir);
-        db.total_cmp(&da)
+    state
+        .ready
+        .sort_by(|a, b| metres(b.0).total_cmp(&metres(a.0)));
+    let Some((key, pieces)) = state.ready.pop() else {
+        return;
+    };
+    if !wanted.contains(&key) {
+        return;
+    }
+    let anchor = tile_centre(key, radius) * sea.radius;
+    let contact = contact.as_deref();
+    let bed = |d: Vec3| crate::vehicles::ground_under(contact, (d * sea.radius).as_dvec3()) as f32;
+    let downwell = water
+        .as_deref()
+        .map_or(pbd_core::ocean::OCEAN_DOWNWELL_PER_M, |w| w.downwell_per_m);
+    let seed = (key.1 as u32).wrapping_mul(73_856_093)
+        ^ (key.2 as u32).wrapping_mul(19_349_663)
+        ^ u32::from(key.0);
+    let built = build_tile(&pieces, anchor, bed, sea.radius, downwell, seed);
+    for a in &built.ambient {
+        let (Ambient::Anthias { at, .. }
+        | Ambient::Clowns { at, .. }
+        | Ambient::Smoke { at, .. }
+        | Ambient::Seal { at, .. }) = a;
+        let (lat, lon) = pbd_core::geo::lat_lon(*at + anchor).degrees();
+        debug!(
+            "sea ambient {} at --at {lat:.4} {lon:.4}",
+            match a {
+                Ambient::Anthias { .. } => "anthias",
+                Ambient::Clowns { .. } => "clownfish",
+                Ambient::Smoke { .. } => "smoke",
+                Ambient::Seal { .. } => "seal",
+            }
+        );
+    }
+    let at = (frame.center + anchor.as_dvec3()).as_vec3();
+    let root = commands
+        .spawn((
+            Name::new("Sea places tile"),
+            crate::field_light::LitByField,
+            crate::field_light::Faded(1.0),
+            Transform::from_translation(at),
+            Visibility::default(),
+        ))
+        .id();
+    let child = |commands: &mut Commands,
+                 mesh: Handle<Mesh>,
+                 material: Handle<StandardMaterial>,
+                 name: &'static str| {
+        let id = commands
+            .spawn((
+                Name::new(name),
+                Mesh3d(mesh),
+                MeshMaterial3d(material),
+                Transform::default(),
+                Visibility::default(),
+                bevy::camera::visibility::NoFrustumCulling,
+            ))
+            .id();
+        commands.entity(root).add_child(id);
+        id
+    };
+    if !built.positions.is_empty() {
+        child(
+            &mut commands,
+            meshes.add(mesh_of(built.positions, built.colours)),
+            life.0.clone(),
+            "Sea pieces",
+        );
+    }
+    let glow_id = (!built.glow_positions.is_empty()).then(|| {
+        child(
+            &mut commands,
+            meshes.add(mesh_of(built.glow_positions, built.glow_colours)),
+            glow.0.clone(),
+            "Vent glow",
+        )
     });
-    if let Some((key, pieces)) = state.ready.pop()
-        && wanted.contains(&key)
-    {
-        {
-            let anchor = tile_centre(key, radius) * sea.radius;
-            let contact = contact.as_deref();
-            let bed = |d: Vec3| {
-                crate::vehicles::ground_under(contact, (d * sea.radius).as_dvec3()) as f32
-            };
-            let downwell = water
-                .as_deref()
-                .map_or(pbd_core::ocean::OCEAN_DOWNWELL_PER_M, |w| w.downwell_per_m);
-            let built = build_tile(&pieces, anchor, bed, sea.radius, downwell);
-            let at = (frame.center + anchor.as_dvec3()).as_vec3();
-            let body = (!built.positions.is_empty()).then(|| {
-                commands
-                    .spawn((
-                        Name::new("Sea places tile"),
-                        crate::field_light::LitByField,
-                        Mesh3d(meshes.add(mesh_of(built.positions, built.colours))),
-                        MeshMaterial3d(life.0.clone()),
-                        Transform::from_translation(at),
-                        Visibility::default(),
-                    ))
-                    .id()
-            });
-            let light = (!built.glow_positions.is_empty()).then(|| {
-                commands
-                    .spawn((
-                        Name::new("Vent glow"),
-                        Mesh3d(meshes.add(mesh_of(built.glow_positions, built.glow_colours))),
-                        MeshMaterial3d(glow.0.clone()),
-                        Transform::from_translation(at),
-                        Visibility::default(),
-                    ))
-                    .id()
-            });
-            match body {
-                Some(body) => {
-                    state.drawn.insert(key, (body, light, anchor));
-                }
-                None => {
-                    // An empty tile: remembered by a bare entity, so it is
-                    // not planned again while it stays in reach.
-                    let empty = commands.spawn(Name::new("Sea places tile (empty)")).id();
-                    state.drawn.insert(key, (empty, light, anchor));
-                }
-            }
-        }
-    }
-    // Keep the tiles where they are as the render frame's centre moves.
-    for (body, light, anchor) in state.drawn.values() {
-        let at = (frame.center + anchor.as_dvec3()).as_vec3();
-        for entity in [Some(*body), *light].into_iter().flatten() {
-            if let Ok(mut transform) = placed.get_mut(entity) {
-                transform.translation = at;
-            }
-        }
-    }
+    let sway = (!built.sway.rest.is_empty()).then(|| {
+        let positions: Vec<[f32; 3]> = built.sway.rest.iter().map(|p| p.to_array()).collect();
+        let handle = meshes.add(mesh_of(positions, built.sway.colours.clone()));
+        (
+            child(
+                &mut commands,
+                handle.clone(),
+                life.0.clone(),
+                "Sea pieces (swaying)",
+            ),
+            handle,
+        )
+    });
+    // The ambient meshes start with one hidden triangle, so the field gives
+    // them their material at once and they never need it again.
+    let blank = || {
+        let mut m = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        write_mesh(&mut m, vec![[0.0; 3]; 3], vec![[0.0; 4]; 3]);
+        m
+    };
+    let life_handle = meshes.add(blank());
+    let life_id = child(
+        &mut commands,
+        life_handle.clone(),
+        life.0.clone(),
+        "Sea life (ambient)",
+    );
+    let smoke = built
+        .ambient
+        .iter()
+        .any(|a| matches!(a, Ambient::Smoke { .. }))
+        .then(|| {
+            let handle = meshes.add(blank());
+            (
+                child(&mut commands, handle.clone(), glow.0.clone(), "Vent smoke"),
+                handle,
+            )
+        });
+    state.drawn.insert(
+        key,
+        Drawn {
+            root,
+            glow: glow_id,
+            sway,
+            life: (life_id, life_handle),
+            smoke,
+            anchor,
+            landed_s: now,
+            still: built.sway,
+            ambient: built.ambient,
+            swayed: false,
+        },
+    );
+}
+
+fn write_mesh(mesh: &mut Mesh, positions: Vec<[f32; 3]>, colours: Vec<[f32; 4]>) {
+    let (positions, colours) = if positions.is_empty() {
+        (vec![[0.0; 3]; 3], vec![[0.0; 4]; 3])
+    } else {
+        (positions, colours)
+    };
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
+    mesh.remove_indices();
+    mesh.compute_flat_normals();
 }
 
 #[cfg(test)]
@@ -1284,6 +1737,38 @@ mod tests {
             Kind::Mussels,
         ] {
             assert!(!library()[&kind].positions.is_empty(), "{kind:?}");
+        }
+    }
+
+    /// A tile never appears or vanishes in one frame (CLAUDE.md, "No
+    /// pop-in"): it lands wholly faded and comes in over `LAND_S`; it fades
+    /// out with distance before it is out of reach, and is dropped only once
+    /// wholly faded (`tiles`); and the frame-to-frame change is small.
+    #[test]
+    fn a_tile_fades_in_when_it_lands_and_out_before_it_is_dropped() {
+        assert_eq!(tile_fade(10.0, 0.0), 1.0, "lands faded");
+        assert_eq!(tile_fade(10.0, LAND_S), 0.0, "whole once landed");
+        assert_eq!(
+            tile_fade(WANT_M, 100.0),
+            1.0,
+            "gone before it is out of reach"
+        );
+        const { assert!(FADE_TO_M < WANT_M) };
+        let mut last = tile_fade(10.0, 0.0);
+        for frame in 1..=120 {
+            let f = tile_fade(10.0, frame as f32 / 60.0);
+            assert!(
+                (f - last).abs() <= 1.0 / (LAND_S * 60.0) + 1e-5,
+                "a step of {}",
+                f - last
+            );
+            last = f;
+        }
+        let mut last = tile_fade(0.0, 10.0);
+        for cm in 0..=(WANT_M as i32 * 100) {
+            let f = tile_fade(cm as f32 / 100.0, 10.0);
+            assert!(f >= last && f - last < 0.01);
+            last = f;
         }
     }
 

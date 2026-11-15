@@ -401,6 +401,7 @@ enum Tail {
     Deep,
     Lunate,
     Trunc,
+    Round,
 }
 
 #[derive(Clone)]
@@ -544,6 +545,13 @@ fn fish_geo(p: &FishP) -> Shape {
                 [xt - tl, hp + tl * 0.55],
                 [xt - tl * 1.04, 0.0],
                 [xt - tl, -hp - tl * 0.55],
+                [xt + 0.02, -hp],
+            ],
+            Tail::Round => vec![
+                [xt + 0.02, hp],
+                [xt - tl * 0.6, hp + tl * 0.45],
+                [xt - tl, 0.0],
+                [xt - tl * 0.6, -hp - tl * 0.45],
                 [xt + 0.02, -hp],
             ],
         };
@@ -1237,6 +1245,22 @@ impl Body {
 fn build(model: &str) -> Body {
     use Tail::*;
     match model {
+        // The reef's ambient fish (`places`): not species, never caught.
+        "darter" => fish_body(FishP {
+            tail_c: Some(0x8d4526),
+            bands: vec![
+                (0.13, 0.19, 0xfffefe),
+                (0.42, 0.5, 0xfffefe),
+                (0.74, 0.8, 0xfffefe),
+            ],
+            dorsal: Some(vec![[0.22, 0.7, 0.12]]),
+            ..FishP::new(0xc56d25, 0xfb902f, 0xfaaf5c, 0xfb902f, 0.36, 0.14, Round)
+        }),
+        "anthias" => fish_body(FishP {
+            tail_c: Some(0xdd576d),
+            lateral: Some(0xfaaf5c),
+            ..FishP::new(0xdd576d, 0xfb902f, 0xfaaf5c, 0xfb902f, 0.3, 0.1, Lunate)
+        }),
         "minnow" => fish_body(FishP {
             lateral: Some(0x3c4c5c),
             ..FishP::new(0x54697e, 0x7896b4, 0xbcd0e4, 0x7896b4, 0.2, 0.1, Fork)
@@ -1389,6 +1413,8 @@ pub const MODELS: &[&str] = &[
     "octopus",
     "tube_worm",
     "seal",
+    "darter",
+    "anthias",
 ];
 
 /// The model a species' creature `id` wears: its own, the hen for every

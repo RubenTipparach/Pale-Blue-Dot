@@ -844,6 +844,35 @@ sheet, or a world whose weather has run into a real storm; not done.
   yet; the test is held on the deepest open sea (126 m and less) with a
   note, and the trench case is open.
 
+### B13. Second pass (2026-11-15): no pop-in, the reef's life, smoke, seals, the chart
+
+- **No pop-in** (CLAUDE.md priority 1). A tile is a root carrying the
+  field's `Faded` (`cities-in-the-world` 4a), so its meshes go through the
+  terrain's screen-door mask (`detail-fade`): wholly masked when it lands
+  and in over 0.8 s, out as its middle goes from 34 to 46 m off, and
+  dropped only once wholly masked at 52 m. The unlit glow and smoke cannot
+  take the mask; they show while the tile is under half faded.
+- **The reef's life** (decision 11): the big anemone (220 tentacles) on one
+  reef tile in three with two clownfish circling it; a cloud of forty
+  anthias over one packed reef tile in two; up to three skyline table corals
+  a tile and twice the scattered ones. The fish are ambient, drawn afresh
+  each frame within 30 m (not species, never caught).
+- **Sway**: soft corals, anemones, grass, turf and kelp are their own mesh,
+  bent each frame within 30 m by a wave up their height (7% of it, at most
+  0.7 m), on the CPU as the bodies are.
+- **Smoke**: each smoker's plume, 36 puffs rising 11 m, widening and
+  swirling, hot at the mouth, unlit.
+- **Seals on floes**: one floe in nine carries a seal lying out; within 9 m
+  of the eye it is gone (slid in). They are decoration of the floe, not the
+  `seal` species, whose floaters still lie on the water.
+- **The chart**: `pbd_core::map::Texel` carries the place (`chart_at`, the
+  environment without the coast), the map's cache is renamed (`-p1`) so an
+  older one is rebuilt, and the map's registry gains a "Sea places" layer.
+- **The trench handoff (B12)**: looked into, not found. The ship stands
+  still when parked over the trench (its velocity is 1e-8 m/s), so the
+  1.7 m comes from the walker's own first step there, not from the ship.
+  The test stays on open sea.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

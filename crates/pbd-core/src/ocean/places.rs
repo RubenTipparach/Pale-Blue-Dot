@@ -228,6 +228,19 @@ pub fn environment(cfg: &TerrainConfig, direction: Vec3) -> Option<Environment> 
 
 /// [`environment`] with the altitude already in hand.
 pub fn environment_at(cfg: &TerrainConfig, d: Vec3, altitude: f32) -> Option<Environment> {
+    place_at(cfg, d, altitude, true)
+}
+
+/// The places as the map's chart shows them: [`environment_at`] without the
+/// coast, which is two cells wide and finer than any map pixel (the chart
+/// shows open sea there), and without its six extra looks at the ground.
+/// `None` on land and on a world made before the sea's places.
+pub fn chart_at(cfg: &TerrainConfig, d: Vec3, altitude: f32) -> Option<Environment> {
+    cfg.ocean.as_ref()?;
+    place_at(cfg, d, altitude, false)
+}
+
+fn place_at(cfg: &TerrainConfig, d: Vec3, altitude: f32, with_coast: bool) -> Option<Environment> {
     let sea = cfg.sea_level_m;
     if altitude >= sea {
         return None;
@@ -235,7 +248,7 @@ pub fn environment_at(cfg: &TerrainConfig, d: Vec3, altitude: f32) -> Option<Env
     let depth = sea - altitude;
     let coast = |places: Option<&OceanPlaces>| {
         let cells = places.map_or(2.0, |p| p.coast_cells);
-        land_within(cfg, d, cells * CELL_M)
+        with_coast && land_within(cfg, d, cells * CELL_M)
     };
     let Some(places) = cfg.ocean.as_ref() else {
         return Some(if coast(None) {
@@ -345,6 +358,26 @@ mod tests {
                 assert!(n < sea / 4, "{place} is {n} of {sea}");
             }
         }
+    }
+
+    /// The chart agrees with the environment everywhere but the coast, which
+    /// it shows as open sea.
+    #[test]
+    fn the_chart_is_the_environment_but_the_coast() {
+        let v7 = TerrainConfig::for_version(7).unwrap();
+        for d in sphere(20_000) {
+            let h = planet_gen::surface_altitude(&v7, d);
+            let env = environment_at(&v7, d, h);
+            let chart = chart_at(&v7, d, h);
+            let expect = if env == Some(Environment::Coast) {
+                Some(Environment::Open)
+            } else {
+                env
+            };
+            assert_eq!(chart, expect, "{d}");
+        }
+        let v6 = TerrainConfig::for_version(6).unwrap();
+        assert_eq!(chart_at(&v6, Vec3::X, -50.0), None);
     }
 
     /// The trench is carved inside the column, and only on sea floor.

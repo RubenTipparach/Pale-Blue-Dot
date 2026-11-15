@@ -30,7 +30,7 @@ fn main() {
     let band = |env: Environment| match env {
         Environment::Reef => (2.0, 4.5),
         Environment::Kelp => (8.0, 16.0),
-        Environment::UnderIce => (4.0, 20.0),
+        Environment::UnderIce => (0.3, 1.5),
         Environment::Coast => (0.5, 1.2),
         Environment::Vent => (90.0, 125.0),
         Environment::Trench => (100.0, 145.0),
