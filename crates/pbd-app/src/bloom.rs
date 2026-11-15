@@ -200,6 +200,12 @@ impl LiteBloomTexture {
     }
 }
 
+/// Whether a first level this size has room for every mip of the chain: each
+/// level halves both sides, and the last must still be a texel.
+fn holds_the_chain(size: UVec2) -> bool {
+    size.min_element() >> (LEVELS - 1) >= 1
+}
+
 fn prepare_textures(
     mut commands: Commands,
     mut cache: ResMut<TextureCache>,
@@ -211,6 +217,13 @@ fn prepare_textures(
             continue;
         };
         let size = (viewport / 4).max(UVec2::ONE);
+        // A window shrunk to a few pixels (minimised, mid-resize) cannot hold
+        // the chain's mips; that frame goes out without bloom rather than
+        // failing wgpu's validation (lighting-model L6, 2026-11-15).
+        if !holds_the_chain(size) {
+            commands.entity(entity).remove::<LiteBloomTexture>();
+            continue;
+        }
         let texture = cache.get(
             &device,
             TextureDescriptor {
@@ -360,5 +373,20 @@ impl ViewNode for LiteBloomNode {
         }
         span.end(encoder);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A minimised window's viewport makes no chain; a normal one does
+    /// (the owner's crash, 2026-11-15: "mip level count 5 is invalid").
+    #[test]
+    fn a_window_too_small_for_the_chain_skips_it() {
+        assert!(!holds_the_chain(UVec2::ONE));
+        assert!(!holds_the_chain(UVec2::new(400, 15)));
+        assert!(holds_the_chain(UVec2::new(16, 16)));
+        assert!(holds_the_chain(UVec2::new(480, 270)));
     }
 }

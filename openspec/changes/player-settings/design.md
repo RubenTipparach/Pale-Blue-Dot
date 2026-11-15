@@ -316,3 +316,14 @@ corrected it the same day.)
 - The render world reads it as `RainShadows`; off, `rain_needed` is false and
   no rain volume pass runs. The near shower (the CPU streak mesh), the wet
   ground and the drops on the lens still draw.
+
+## 9. No notes on the rows (owner, 2026-11-15)
+
+The Bloom row carried a hint, "costs ~2.4 ms on a Mac". The owner, 2026-11-15:
+"remove that 2ms for mac thing, thats not gonna be useful for a ton of
+people", then "notes belong in mockups and chats, not the real game". A
+settings row in the game shows its name and its control, nothing more: the
+bracketed notes on Bloom, Render scale, Rain shadow, Mission line and Auto
+step are gone, and so is the line under Rain shadow ("The near shower, the
+wet ground and the drops on the lens still draw."). What a setting does and costs is explained in this design, in
+mockups and in the reply, never on the game's screen.

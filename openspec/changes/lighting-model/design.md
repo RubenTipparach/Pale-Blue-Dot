@@ -340,6 +340,16 @@ are the `.ron` field names to be.
     stay under the curve's shoulder and keep their orange.
 - Cost: auto-exposure and bloom together are about 0.3–0.5 ms.
 
+**A window too small for the chain (2026-11-15).** The bloom's levels are
+one texture a quarter of the viewport with five mips, and a texture can only
+hold as many mips as its larger side has halvings. The owner's desktop
+crashed with `Texture descriptor mip level count 5 is invalid, maximum
+allowed is 1` ("crash detected") when the window shrank to a few pixels
+(minimised, or mid-resize). Under 64 px on the smaller side (so the last
+level is still a texel each way, and a legal texture by a wide margin), the
+chain is skipped for that frame: no texture is made and the bloom node finds nothing
+to run on, so the frame goes out without bloom instead of failing.
+
 ### As built in the game (2026-10-29)
 Every part is in the game behind `lighting.ron` (and an environment switch
 for A/B runs). Where the game differs from the mockup:

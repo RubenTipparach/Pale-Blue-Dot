@@ -105,6 +105,16 @@ that explains it goes in a modal opened from a small info button:
 New mockups are built this way; an older mockup moves its text into modals
 the next time it is republished.
 
+## No notes in the game (owner, 2026-11-15)
+
+**Standing instruction from the user:** "notes belong in mockups and chats,
+not the real game" (after "remove that 2ms for mac thing, thats not gonna be
+useful for a ton of people", on the settings page's "costs ~2.4 ms on a
+Mac"). The game's screens show names, controls and the player's own state:
+no bracketed explanations, design notes, costs measured on one machine or
+"off by default" remarks. Those go in the OpenSpec change, the mockup's info
+modal and the reply.
+
 ## One 3D view at a time, in tabs (owner, 2026-11-13)
 
 **Standing instruction from the user:** "make sure to apply the "tabs"

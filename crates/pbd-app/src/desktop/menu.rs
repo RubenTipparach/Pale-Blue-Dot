@@ -787,59 +787,24 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                     panel.commands().entity(picture).with_children(|rows| {
                         // `player-settings`: each control shows what is chosen,
                         // kept up by `label_graphics`.
-                        check_row(
-                            rows,
-                            kit,
-                            "Bloom",
-                            "costs ~2.4 ms on a Mac",
-                            MenuAction::Bloom,
-                        );
+                        check_row(rows, kit, "Bloom", "", MenuAction::Bloom);
                         slider_row(rows, kit, "Frame limit", "", MenuAction::FrameLimit);
-                        slider_row(
-                            rows,
-                            kit,
-                            "Render scale",
-                            "the HUD stays sharp",
-                            MenuAction::RenderScale,
-                        );
+                        slider_row(rows, kit, "Render scale", "", MenuAction::RenderScale);
                     });
                     let weather = page(panel, 1);
                     panel.commands().entity(weather).with_children(|rows| {
-                        check_row(
-                            rows,
-                            kit,
-                            "Rain shadow",
-                            "the rain fog and streaks; off by default",
-                            MenuAction::RainShadows,
-                        );
-                        rows.spawn(body(
-                            "The near shower, the wet ground and the drops on the lens still draw.",
-                            10.0,
-                            ui_kit::TEXT_DIM,
-                        ));
+                        check_row(rows, kit, "Rain shadow", "", MenuAction::RainShadows);
                         super::weather_ui::spawn(rows, kit);
                     });
                     let world = page(panel, 2);
                     panel.commands().entity(world).with_children(|rows| {
                         super::time_ui::spawn(rows, kit);
                         super::overlay_ui::spawn_row(rows, kit);
-                        check_row(
-                            rows,
-                            kit,
-                            "Mission line",
-                            "the current mission on the HUD",
-                            MenuAction::MissionLine,
-                        );
+                        check_row(rows, kit, "Mission line", "", MenuAction::MissionLine);
                     });
                     let movement = page(panel, 3);
                     panel.commands().entity(movement).with_children(|rows| {
-                        check_row(
-                            rows,
-                            kit,
-                            "Auto step",
-                            "walk up one layer without a key",
-                            MenuAction::AutoStep,
-                        );
+                        check_row(rows, kit, "Auto step", "", MenuAction::AutoStep);
                     });
                     let input = page(panel, 4);
                     panel.commands().entity(input).with_children(|page| {
