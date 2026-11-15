@@ -2666,3 +2666,194 @@ mod tests {
         assert_eq!(tier.light_at(0, 41).block(), 0);
     }
 }
+
+/// The tier's water (`volumetric-water` phase 2, `water-flow` E3 and E4) on a
+/// line of columns: the sea at one end, land at the other, the ends rim.
+#[cfg(test)]
+mod water_tier_tests {
+    use super::*;
+    use pbd_core::edits::Edit;
+
+    const N: usize = 12;
+    /// The top of the seabed and of the land, layers.
+    const BED: usize = 130;
+    const LAND: usize = 150;
+
+    /// Columns 1 to 4 the sea (water from the bed to sea level), 5 to 10
+    /// land, 0 and 11 the rim. Slot `i` is finest record `i`, key `100 + i`.
+    fn line() -> ColumnTier {
+        let sea = sea_layer();
+        let columns: Vec<Column> = (0..N)
+            .map(|i| {
+                let mut column = Column::bedrock();
+                let top = if (1..=4).contains(&i) { BED } else { LAND };
+                for layer in 1..=top {
+                    column.set(layer, Material::Stone);
+                }
+                if (1..=4).contains(&i) {
+                    for layer in BED + 1..sea {
+                        column.set(layer, Material::Water);
+                    }
+                }
+                column
+            })
+            .collect();
+        let records = (0..N)
+            .map(|i| GpuColumn {
+                runs: columns[i].packed_runs(render_code),
+                neighbors: [
+                    if i + 1 < N { i as u32 + 1 } else { NO_NEIGHBOR },
+                    if i > 0 { i as u32 - 1 } else { NO_NEIGHBOR },
+                    NO_NEIGHBOR,
+                    NO_NEIGHBOR,
+                ],
+                more: [
+                    NO_NEIGHBOR,
+                    NO_NEIGHBOR,
+                    6,
+                    u32::from(i == 0 || i == N - 1) | state_word(&columns[i], false, false),
+                ],
+            })
+            .collect();
+        let mut tier = ColumnTier {
+            columns,
+            slots: (0..N).collect(),
+            records,
+            light: Vec::new(),
+            dusk: false,
+            glow: vec![false; N],
+            centres: vec![Vec3::Y; N],
+            sides: Vec::new(),
+            relit: 0,
+            lamps: Vec::new(),
+            water: TierWater {
+                queue: liquid::Queue::new(),
+                keys: (0..N as u32).map(|i| 100 + i).collect(),
+                records: (0..N).collect(),
+            },
+        };
+        tier.sides = tier.neighbor_slots();
+        tier
+    }
+
+    fn carve(tier: &mut ColumnTier, slots: std::ops::RangeInclusive<usize>, layers: std::ops::RangeInclusive<usize>) {
+        for slot in slots {
+            for layer in layers.clone() {
+                tier.columns[slot].set(layer, Material::Air);
+            }
+        }
+    }
+
+    /// Build's flood: a tunnel from the sea floods to sea level, never above
+    /// it, and a sealed pocket beside it stays dry.
+    #[test]
+    fn a_tunnel_into_the_sea_floods_and_a_sealed_pocket_stays_dry() {
+        let sea = sea_layer();
+        let mut tier = line();
+        // A tunnel under the land from the sea (column 4), three layers
+        // high, with a shaft rising out of it in column 7 to two layers over
+        // sea level; and a pocket two columns on, sealed by column 8's rock.
+        carve(&mut tier, 5..=7, BED + 5..=BED + 7);
+        carve(&mut tier, 7..=7, BED + 8..=sea + 1);
+        carve(&mut tier, 9..=10, BED + 5..=BED + 7);
+        let seeds = tier.sea_seeds(&Edits::new());
+        assert!(!seeds.is_empty(), "the sea touches the tunnel");
+        let flooded = tier.flood_from(seeds);
+        assert_eq!(flooded, vec![5, 6, 7], "the tunnel's columns");
+        for slot in 5..=7 {
+            for layer in BED + 5..=BED + 7 {
+                assert_eq!(tier.columns[slot].material(layer), Material::Water);
+            }
+        }
+        // The shaft rising out of the tunnel stays dry: the flood never
+        // climbs (design, phase 2), so it fills down and across from the sea,
+        // and never over sea level.
+        for layer in BED + 8..=sea + 1 {
+            assert_eq!(tier.columns[7].material(layer), Material::Air, "{layer}");
+        }
+        for slot in 9..=10 {
+            assert_eq!(tier.columns[slot].material(BED + 6), Material::Air, "sealed");
+        }
+        assert_eq!(
+            tier.columns[11].material(BED + 6),
+            Material::Stone,
+            "the rim is solid"
+        );
+    }
+
+    /// An edit's flood: digging the rock between the flooded tunnel and the
+    /// pocket lets the sea in, at once.
+    #[test]
+    fn digging_through_to_the_sea_floods_on_the_edit() {
+        let mut tier = line();
+        carve(&mut tier, 5..=7, BED + 5..=BED + 7);
+        carve(&mut tier, 9..=10, BED + 5..=BED + 7);
+        let seeds = tier.sea_seeds(&Edits::new());
+        tier.flood_from(seeds);
+        let mut edits = Edits::new();
+        edits.set(Edit {
+            cell: 108,
+            layer: (BED + 6) as u16,
+            material: Material::Air,
+        });
+        tier.columns[8].set(BED + 6, Material::Air);
+        let flooded = tier.water_after_edit(8, BED + 6, &edits);
+        assert_eq!(flooded, vec![8, 9, 10]);
+        assert_eq!(tier.columns[10].material(BED + 5), Material::Water);
+        assert_eq!(
+            tier.columns[10].material(BED + 7),
+            Material::Air,
+            "the flood does not climb past the hole it came through"
+        );
+        assert!(!tier.water.queue.is_empty(), "and the edit is queued");
+    }
+
+    /// A poured source on land runs by the rule over the tier, a level less
+    /// a cell, and stops at the rim; a world whose edits hold no water queues
+    /// nothing, so it does not move (`water-flow` decision 5, E4).
+    #[test]
+    fn a_poured_source_runs_by_the_rule_and_an_old_world_queues_nothing() {
+        let mut old = line();
+        let mut edits = Edits::new();
+        edits.set(Edit {
+            cell: 106,
+            layer: (LAND - 3) as u16,
+            material: Material::Air,
+        });
+        old.queue_edited_water(&edits);
+        assert!(old.water.queue.is_empty(), "no water in the edits: nothing queued");
+        assert!(old.tick_water(liquid::LOOP_MAX).is_empty());
+
+        let mut tier = line();
+        let at = LAND + 1;
+        tier.columns[7].set(at, Material::Water);
+        edits.set(Edit {
+            cell: 107,
+            layer: at as u16,
+            material: Material::Water,
+        });
+        tier.queue_edited_water(&edits);
+        let mut ticks = 0;
+        while !tier.water.queue.is_empty() && ticks < 50 {
+            tier.tick_water(liquid::LOOP_MAX);
+            ticks += 1;
+        }
+        let m = |slot: usize| tier.columns[slot].material(at);
+        assert_eq!(m(6), Material::Flow7);
+        assert_eq!(m(8), Material::Flow7);
+        assert_eq!(m(5), Material::Flow6);
+        assert_eq!(m(9), Material::Flow6);
+        assert_eq!(m(10), Material::Flow5);
+        assert_eq!(m(11), Material::Air, "the rim is neutral");
+        // Column 4 is the sea, far below: the sheet spreads into the air
+        // over it on its own layer, and falls from there.
+        assert!(m(4).flow().is_some());
+        assert!(
+            tier.columns[4].material(at - 1).flow().is_some_and(|(_, falling)| falling)
+                || tier.columns[4].material(at - 1).is_water(),
+            "and falls toward the sea"
+        );
+        // The record carries the new water top.
+        assert_eq!(water_top_layer(&tier.columns[10]), Some(at));
+    }
+}
