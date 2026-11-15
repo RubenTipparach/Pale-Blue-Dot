@@ -435,6 +435,28 @@ the zone it puts the point in: sunlit while blue keeps over 15%, twilight to
   downwelling at its depth; the crawlers live in the sunlit zone (to 40 m),
   where that shows least.
 
+### B7. What was left, and why (2026-11-15)
+
+- **Tides (group 5) are not built.** The condition was the shader-against-
+  core sea test within 1 mm and hulls still floating; both would hold, since
+  a tide is one offset in `LocalSea` and `sea.wgsl` alike. What does not
+  hold is the shore: the sheet is drawn only over water cells
+  (`water.wgsl`'s cap comes from each water cell's record), so at a 1.5 m
+  high tide the last water cell's cap would stand as a lip of water above
+  the beach beside it, and at low tide the seabed's tint
+  (`planet_surface.wgsl`, from the mean sheet radius) would stay on sand the
+  sea had left. A tide needs the sheet to follow the shoreline cells, which
+  is volumetric water's job (decision 9). Written up here rather than
+  shipped with a lip at every coast.
+- **Places in the generator (group 6) are not built.** The rules in
+  decision 4 read the sea's yearly temperature normals and the plate field,
+  which the game does not have yet (`climate-and-fish-maps`); a reef placed
+  by latitude instead would be a second rule that the environment function
+  then has to disagree with. Group 6 starts with 6.1 once the normals exist.
+- **Fresh water (group 8)** waits for volumetric water, as planned.
+- **The 4.3 storm capture** is owed: no gale was found to film on the seed
+  in the time, so only a test capture with the threshold lowered exists.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

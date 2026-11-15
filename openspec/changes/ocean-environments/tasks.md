@@ -29,11 +29,11 @@ against what it would cost.
 
 ## 5. Tides (requested 2026-11-15, after group 7, on the 1 mm condition)
 
-- [ ] 5.1 The tide as an offset of the sea function, from the body's moon. Verify: the shader-against-core test still agrees within 1 mm with the tide on; a core test of the range and period.
+- [ ] 5.1 (Not built 2026-11-15: the sheet is drawn only over water cells, so a tide leaves a lip at every shore; design B7.) The tide as an offset of the sea function, from the body's moon. Verify: the shader-against-core test still agrees within 1 mm with the tide on; a core test of the range and period.
 
 ## 6. Places in the generator (requested 2026-11-15, if time remains)
 
-- [ ] 6.1 `ocean::environment` in `pbd-core`, read by the generator, the spawner and the map. Verify: a test that the three agree on a sample of directions; the map's chart layer.
+- [ ] 6.1 (Not started 2026-11-15: needs the sea-temperature normals and plate field; design B7.) `ocean::environment` in `pbd-core`, read by the generator, the spawner and the map. Verify: a test that the three agree on a sample of directions; the map's chart layer.
 - [ ] 6.2 Reef, kelp, vent, trench and sea-ice cells and pieces in a new generator version. Verify: the old version's digest test unchanged; a new digest test for the new version; an old save opens on its own version.
 
 ## 7. Water life (requested 2026-11-15)
