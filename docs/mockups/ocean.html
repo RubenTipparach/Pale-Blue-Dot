@@ -2045,7 +2045,7 @@ function buildLife() {
     const cardOf = s => `<div class="card"><div class="head"><img src="${s.img}" alt="" width="72" height="72"><div class="nm"><h3>${s.name}</h3><div>${s.st === "game" ? `<span class="st today">game</span>` : s.st === "new" ? `<span class="st prop">new</span>` : `<span class="st m">${s.st}</span>`} ${s.water.map(w => `<span class="wtag ${w}">${w}</span>`).join(" ")}</div></div></div>
       <dl><dt>Lives</dt><dd>${s.env.map(e => ENV_NAME[e]).join(", ")}</dd><dt>Depth</dt><dd>${s.depth}</dd><dt>Water</dt><dd>${s.temp}</dd></dl>
       <p>${s.beh}</p>
-      <dl><dt>Gives</dt><dd><span class="drops">${s.drops.map(d => `<img src="${D7(d)}" alt="${d}" title="${d}">`;
+      <dl><dt>Gives</dt><dd><span class="drops">${s.drops.map(d => `<img src="${D7(d)}" alt="${d}" title="${d}">`).join("")} ${s.gets}</span></dd><dt>How</dt><dd>${s.how}</dd></dl></div>`;
     box.innerHTML = list.map(s => `<button class="lifecard" data-id="${s.id}"><img src="${s.img}" alt="" width="48" height="48"><span><b>${s.name}</b><br>${s.st === "game" ? `<span class="st today">game</span>` : s.st === "new" ? `<span class="st prop">new</span>` : `<span class="st m">${s.st}</span>`}</span></button>`).join("") || `<p class="muted">Nothing lives there in that water.</p>`;
     box.querySelectorAll(".lifecard").forEach(b => b.addEventListener("click", () => { const sp = SPECIES_BY[b.dataset.id]; openModal(sp.name, cardOf(sp)); }));
   };
