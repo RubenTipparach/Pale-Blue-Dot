@@ -36,6 +36,7 @@ against what it would cost.
 
 ## 6. Places in the generator (requested 2026-11-15, if time remains)
 
+- [ ] 6.0 (design B10) The sea's yearly normals (`examples/sea_normals.rs`, `assets/climate/sea-normals-g7.bin`) and the plate field (`pbd_core::ocean::plates`). Verify: core tests that the normals load and are finite and that both kinds of plate boundary lie under the sea.
 - [ ] 6.1 (Not started 2026-11-15: needs the sea-temperature normals and plate field; design B7.) `ocean::environment` in `pbd-core`, read by the generator, the spawner and the map. Verify: a test that the three agree on a sample of directions; the map's chart layer.
 - [ ] 6.2 Reef, kelp, vent, trench and sea-ice cells and pieces in a new generator version. Verify: the old version's digest test unchanged; a new digest test for the new version; an old save opens on its own version.
 
@@ -43,6 +44,8 @@ against what it would cost.
 
 - [ ] 7.1 (First cut built 2026-11-15: seven appended, `shore_crab`, `lobster`, `giant_clam`, `reef_turtle`, `sea_otter`, `reed_dabbler`, `pond_diver`, with `env` tags, the crawler and the floater, their own spawn cap `max_life`; the append-only and mover tests pass. Open: the other 31 species, and spawning by environment, which needs 6.1.) The new species appended to `fauna.ron` with `env:` tags; the bed crawler and the surface floater. Verify: the append-only test; spawn tests per environment.
 - [ ] 7.2 (Clams and ducks built 2026-11-15, `pose` and `School::notice`, with core tests; the octopus, tube worms and seals wait for their species.) Behaviours: clams, the octopus, tube worms, seals, ducks. Verify: core tests of each state machine against the eye's distance.
+- [ ] 7.4 (design B8) The mockup's 3D bodies for every water creature, fish included, posed and animated on the CPU as the herd is; a caught fish stays its item sprite. Verify: a `--life <id>` capture of each in `docs/screenshots/ocean-life/`, judged beside the mockup's; an app test that every species in the roster has a body with faces; READY with no `LATE_PIPELINE`.
+- [ ] 7.5 (design B9) The octopus, tube worms and seals appended, with `Hides` and `HaulsOut`. Verify: the append-only test; a core test of each state machine against the eye's distance.
 - [x] 7.3 Protected species refuse capture. Verify: a test per species. (Built 2026-11-15: `catch_refusal`, `can_bite`; a float over one says why, once a cast.)
 
 ## 8. Fresh water (after volumetric water phases 2 and 3)

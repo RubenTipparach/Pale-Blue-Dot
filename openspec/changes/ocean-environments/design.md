@@ -650,6 +650,155 @@ the zone it puts the point in: sunlit while blue keeps over 15%, twilight to
 - **The 4.3 storm capture** is owed: no gale was found to film on the seed
   in the time, so only a test capture with the threshold lowered exists.
 
+### B8. Bodies: the mockup's 3D creatures in the game (2026-11-15)
+
+The owner approved M25 and asked to "commence implementation of all env
+changes". The first cut drew every creature as a five-sided cone with a
+fin, one colour a species (`docs/screenshots/underwater-v2/life-zoomed.jpg`).
+Decision 11 says what they are: low-poly bodies, flat shaded, one colour a
+face, read off each creature's sprite. How they go in:
+- **One kit, ported.** `crates/pbd-app/src/fish/bodies.rs` is
+  `ocean/creatures3d.js` in Rust: the face-coloured kit (rings along the
+  body, boxes, prisms, ellipsoids, flat polygons, an icosahedron, three.js's
+  own vertex orders so a face's hashed colour lands where the mockup's
+  does), and the species table (`SPEC`) with the mockup's colours, sRGB
+  hex read as linear for the vertex colour. A model is one unit long, head
+  along +X, back along +Y, as in the mockup.
+- **The house approach.** The herd's animals (`husbandry/rig.rs`) are a
+  rig of parts on pivots, posed and built into one vertex-coloured mesh on
+  the CPU each frame. The water life does the same: each species' body is
+  built once and cached; each frame a school's mesh is every creature's body
+  posed (parts turned on their pivots), swayed, scaled to the species'
+  `length_m` and turned along its heading, as today's cones were. A school is
+  still one entity and one mesh (the fish rule: what there are many of is
+  not an entity). No new shader: the sway the mockup does in its vertex
+  shader is done on the CPU here, so the material is a plain
+  `StandardMaterial` with vertex colours, double sided, warmed behind the
+  loading screen like every other.
+- **The animation is the mockup's**: a fish sways from the tail (an eel
+  along its length), a ray and a turtle flap, a duck paddles its feet, tips
+  up (body nose-down and head down) and tucks its head to sleep, an octopus's
+  arms wave, a clam's upper shell opens on its hinge and shuts, a tube worm's
+  plume stands out of its tube and snaps in, a crab walks sideways. Each is a
+  function of the world clock and the creature's own phase (hashed from its
+  id), so nothing is stored.
+- **Which body.** The table maps each species id to its model:
+  the eight fish to the mockup's `game/fish-*` (from fish.html's
+  `buildFish`), the crab to M7's shore crab, the reed dabbler to the drake
+  and, for every second bird of a flock, the hen. A species with no model
+  falls back to the minnow's body in its own colour.
+- **A caught fish stays a 2D item sprite**: the hotbar, the pack and a fish
+  dropped on the ground are its item icon, as now (decision 11). Nothing
+  in the drop path changes.
+
+### B9. The octopus, tube worms and seals (7.2)
+
+Three species appended after the pond diver (append only; the index is the
+save), each with its behaviour as a pure rule in `pbd_core::fauna` beside the
+clam's and the ducks':
+- **Den octopus** (`octopus`), a crawler of the reef and the shelf's rock,
+  1 to 40 m, above 6 C, wild only and not taken on a line (a knife, later).
+  `Behaviour::Hides`: out, it crawls the bed near its den (the place it
+  spawned); when the eye comes within 6 m it inks and jets home at four
+  times its pace; home, it hides (drawn half size, flat in the den) for 12 s
+  and until the eye is 8 m off, then comes out. Its colour runs from the
+  rock's grey-brown when still to flushed red when it moves (decision 6's
+  reef row).
+- **Plume worm** (`tube_worm`), a cluster round a vent on the deep floor,
+  8 to 30 C at the vent, never moves (a crawler at no pace). `Shuts`, as the
+  clam: within 5 m the red plume snaps into its white tube, and comes out
+  6 s after the eye leaves. Left alone; it gives nothing.
+- **Ice seal** (`seal`), a protected floater of polar and kelp water,
+  -2 to 14 C. `Behaviour::HaulsOut`: calm, it lies out on the water still
+  (on a floe once sea ice exists, B10); within 9 m it slides in, swims off
+  under the water and comes back up 20 s later.
+Each has a core test of its state machine against the eye's distance. Until
+the environment function lands (B10), the octopus and tube worm would spawn
+anywhere their class fits; so the spawner reads the environment from the
+same step, and a species tagged `Vent` never spawns outside a vent.
+
+### B10. Places: what the game has, and the minimum to build them
+
+Measured on `claude/env-v2` (2026-11-15) for B7's two inputs:
+- **Sea temperature normals: missing, but the pieces are there.** No yearly
+  normals are shipped (`climate-and-fish-maps` 3.1 and 3.2 are not built).
+  What is shipped is `assets/climate/settled-g6-l5.bin`, a settled level-5
+  atmosphere at the start of a year, and `examples/fish_ranges.rs` already
+  runs a year and keeps each cell's coldest and warmest daily-mean sea
+  temperature (`ground_k`). The minimum is that, written down once.
+- **The plate field: missing entirely.** Nothing in the game has plates,
+  ridges or trenches.
+
+So the minimum, per `climate-and-fish-maps` design 3 but narrower:
+- **`examples/sea_normals.rs`** (a measurement instrument) restores
+  `settled-g6-l5`, runs one year of 100 days at the shipped settings, and
+  writes per atmosphere cell the coldest and warmest daily-mean sea
+  temperature and the share of days frozen (at or below -1.8 C):
+  `assets/climate/sea-normals-g7.bin` (magic, level, cell count, three f32
+  planes). It is a generator INPUT, so unlike the climate layer's asset it
+  is never re-baked: it is version 7's, frozen, pinned by the version 7
+  digest test, and `include_bytes!`'d by `pbd-core` so the generator, the
+  spawner and the map read the same bytes with no file system. A retuned
+  atmosphere later makes a new generator version's file, never this one.
+  The climate layer's full normals (`climate-and-fish-maps` 3) stay that
+  change's; this is the sea's three planes only.
+- **`pbd_core::ocean::plates`**: fourteen plates seeded on the sphere
+  (jittered Fibonacci points), each turning about its own pole; a direction
+  belongs to the nearest seed after a low-frequency warp, so boundaries
+  wander. At a boundary the two plates' motions along its normal say what
+  it is: parting is a ridge, closing is a trench. A pure function of the
+  seed, cheap, tested for coverage (every plate holds ground, both kinds of
+  boundary exist under the sea).
+- **`pbd_core::ocean::environment(cfg, direction)`**, decision 4's rules on
+  this planet's scale (the body is 4.8 km in radius, so decision 4's
+  kilometres are cut to metres, recommendation taken):
+  - Reef: under 6 m, coldest sea above 23 C, no river channel within 60 m;
+  - Kelp: 6 to 40 m on rocky ground (`rockiness` above its median),
+    warmest sea 5 to 20 C (upwelling from the live current is left out:
+    the generator reads no live weather);
+  - Polar: the sea frozen on at least a quarter of the year's days;
+  - Vent: deeper than 90 m within 120 m of a ridge;
+  - Trench: deeper than 60 m within 150 m of a trench line;
+  - Coast: within two cells of the shore; Open: the rest.
+  Read by the generator (pieces and the trench), the spawner (the species'
+  `env` tags) and the map.
+- **Generator version 7** (`TENEBRIS_V7`, a new world's): version 6 with
+  `ocean: Some(OceanPlaces)`. Version 6 is pinned by digest before it lands
+  and never edited. What 7 changes:
+  - **the trench**: the floor deepened toward the column's floor along a
+    trench line (to 140 m, inside `column::BASE_M`);
+  - **the pieces**, derived like trees and drawn only on a version-7 world:
+    the reef packed per decision 11 (table corals on stalks, branching and
+    finger clumps, boulder and brain corals, soft tufts, sponges, fans,
+    anemones, turf, sea grass, rubble), kelp stacked to the surface with a
+    canopy, black smokers with a glow at the mouth, and floes on polar
+    water. They are drawn in tiles round the eye, one vertex-coloured mesh a
+    tile, from the same kit as the bodies;
+  - **the life**: species with `env` tags spawn only where the environment
+    function says (the octopus on the reef, the tube worms at a vent, the
+    seal on polar water). On a version 4 to 6 world the function answers
+    `None` for every place but Coast and Open, so their water life is as
+    today.
+  - The land, the biomes and the sea mask are version 6's, so the settled
+    climate a version-7 world starts from is version 6's state, shipped as
+    `settled-g7-*` (the climate reads the sea mask and the land's height,
+    neither of which moves).
+- **What is not built, and why: reef, ice, basalt and mussel-bed CELLS.**
+  Decision 5 makes reef rock, brain coral, sea ice, vent basalt and mussel
+  beds cells. The column renderer's material word is four bits and full
+  (`planet_terrain.rs`: "`FORGE`, the LAST code the four-bit material word
+  has"), so a new cell material needs that word widened in the column pass
+  and its shaders, which is the water agents' ground this week. Version 7's
+  reef bed is sand and its vent floor stone, which the column already draws,
+  and the coral, the chimneys and the floes are pieces. Widening the word is
+  written up here as the next step and not taken.
+
+### B11. The gale spray capture (4.3)
+
+Still owed: a storm on the seed to film the spray at `spray_from_mps`
+(17 m/s). Tried with the capture harness's forced weather (B12 records
+what was found).
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with
