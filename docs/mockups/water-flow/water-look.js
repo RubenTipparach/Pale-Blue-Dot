@@ -78,20 +78,20 @@ function waterMat(W, o = {}) {
     uFlowTex: {value: flowTexture()}, uTexK: {value: o.tex ?? 0}});
   const mat = new THREE.ShaderMaterial({uniforms: U, transparent: true, depthWrite: false, side: THREE.DoubleSide,
     vertexShader: `uniform float uT; uniform float uAmp; uniform vec2 uCenter; uniform float uLevel; uniform float uFollow;
-attribute vec2 aFlow; attribute float aFall; attribute float aTop;
-varying vec3 vW; varying vec2 vFlow; varying float vFall; varying float vTop;
+attribute vec2 aFlow; attribute float aFall; attribute float aTop; attribute vec2 aGrad; attribute float aFroth;
+varying vec3 vW; varying vec2 vFlow; varying float vFall; varying float vTop; varying vec2 vGrad; varying float vFroth;
 ${WAVE_GLSL}
 void main() {
   vec3 p = position; if (uFollow > 0.5) { p.xz += uCenter; p.y = uLevel; }
   float eta = (1.0 - step(0.5, abs(aFall))) * etaAt(p.xz, uT, uAmp);   // only a cap rides the waves; a fall or a cut stands
-  vW = vec3(p.x, p.y + eta, p.z); vFlow = aFlow; vFall = aFall; vTop = aTop;
+  vW = vec3(p.x, p.y + eta, p.z); vFlow = aFlow; vFall = aFall; vTop = aTop; vGrad = aGrad; vFroth = aFroth;
   gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.0);
 }`,
     fragmentShader: `uniform vec3 uSky; uniform vec3 uHor; uniform vec3 uSun; uniform float uSunI; uniform float uMoonI; uniform float uAmb; uniform float uT; uniform float uAmp; uniform float uFoamK; uniform float uMud; uniform float uSeaOnly; uniform float uMinA;
 uniform vec3 uLampPos[${MAXL}]; uniform vec4 uLampCol[${MAXL}]; uniform int uLampCount;
 uniform sampler2D uWL; uniform vec4 uWLR; uniform vec3 uK; uniform float uKs; uniform vec3 uWCol; uniform vec3 uHaze; uniform vec2 uFogR; uniform float uCamWL;
 uniform sampler2D uFlowTex; uniform float uTexK;
-varying vec3 vW; varying vec2 vFlow; varying float vFall; varying float vTop;
+varying vec3 vW; varying vec2 vFlow; varying float vFall; varying float vTop; varying vec2 vGrad; varying float vFroth;
 float hash(vec2 q) { return fract(sin(dot(q, vec2(127.1, 311.7))) * 43758.5453); }
 ${WAVE_GLSL}
 void main() {
@@ -103,10 +103,12 @@ void main() {
     if (uSeaOnly > 0.5 && (t.b < 0.5 || abs(lvl - vW.y) > 0.35 + uAmp)) discard;
     depth = t.a * 255.0 / 4.0;
   }
-  // vFall: 0 a cap, 1 a falling sheet, -1 a cut (the side of the water where the patch ends: still, standing on its bed)
+  // vFall: 0 a cap (or a bottom), 1 a falling face (a fall sheet, or a flowing cell's side: Luanti's flowing texture runs
+  // down it), -1 a still wall (a source's side, a cut where the patch ends); vFroth how much a falling face foams (1 a fall)
+  // vGrad: the cap's own slope (dh/dx, dh/dz), from the liquid mesher's corner heights; 0 on a flat cap
   bool cut = vFall < -0.5, side = abs(vFall) > 0.5;
   if (cut) depth = max(0.4, vTop - vW.y + 1.0);
-  vec2 gr = side ? vec2(0.0) : gradAt(vW.xz, uT, uAmp);
+  vec2 gr = side ? vec2(0.0) : gradAt(vW.xz, uT, uAmp) + vGrad;
   vec3 n = normalize(vec3(-gr.x, 1.0, -gr.y)); if (vFall > 0.5) n = normalize(vec3(vFlow.x, 0.2, vFlow.y)); if (cut) n = vec3(vFlow.x, 0.0, vFlow.y);
   vec3 C = cameraPosition, v = normalize(C - vW); float dist = length(C - vW);
   vec3 col; float alpha;
@@ -164,7 +166,9 @@ void main() {
     float rip = step(0.5, ti), glint = step(1.5, ti);
     float tk = uTexK * (1.0 - smoothstep(45.0, 120.0, dist));   // a 12 cm pixel would shimmer far off
     foam += step(0.82 - 0.22 * clamp(spd, 0.0, 1.5), nse) * clamp(spd, 0.0, 1.0) * (0.55 - 0.3 * uTexK);
-    if (vFall > 0.5) { vec2 fp = floor(vec2(vW.x + vW.z, vW.y * 3.0 + uT * 6.0) * 2.0); foam = mix(0.35 + 0.55 * step(0.45, hash(fp)), 0.5 + 0.22 * rip + 0.28 * glint, uTexK); }
+    if (vFall > 0.5) { vec2 fp = floor(vec2(vW.x + vW.z, vW.y * 3.0 + uT * 6.0) * 2.0); foam = mix(0.08 + 0.3 * glint, mix(0.35 + 0.55 * step(0.45, hash(fp)), 0.5 + 0.22 * rip + 0.28 * glint, uTexK), vFroth);
+      // a fall is a stack of whole cells (design 7e): a thin band at each layer's top reads each block, a 1 m layer apart
+      float fy = fract(vW.y + 0.001); foam *= 1.0 - 0.45 * vFroth * (1.0 - step(0.06, fy)); }
     if (cut) foam = 0.0;
     foam = clamp(foam * (0.75 + 0.25 * nse), 0.0, 0.9);
     vec3 lit = vec3(uAmb + 0.7 * uSunI + 0.08 * uMoonI);
@@ -176,7 +180,7 @@ void main() {
     col = mix(col, foamC, foam);
     alpha = mix(uMinA, 0.97, smoothstep(1.0, 18.0, depth / max(v.y, 0.25)));
     alpha = max(alpha, max(foam, fres));
-    if (vFall > 0.5) alpha = 0.92;
+    if (vFall > 0.5) alpha = mix(0.84, 0.92, vFroth);
     if (cut) alpha = 0.86;
     if (C.y < uCamWL) { float path = dist; col = col * exp(-uK * path) + uWCol * (1.0 - exp(-uKs * path)); }
     else col = mix(col, uHaze, smoothstep(uFogR.x, uFogR.y, dist));
@@ -236,7 +240,17 @@ function makeCaps(W, cells, o = {}) {
       for (const k of [0, 1, 2, 0, 2, 3]) push(P[k], fd, -1, c.wl);
     }
   }
-  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("aFlow", new THREE.Float32BufferAttribute(flow, 2)); g.setAttribute("aFall", new THREE.Float32BufferAttribute(fall, 1)); g.setAttribute("aTop", new THREE.Float32BufferAttribute(top, 1));
+  return waterMesh(W, waterGeometry(pos, flow, fall, top), o);
+}
+// the attributes every water face carries; grad (the cap's slope) and froth default to 0 and 1, the flat caps' values
+function waterGeometry(pos, flow, fall, top, grad, froth) {
+  const g = new THREE.BufferGeometry(), n = pos.length / 3;
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("aFlow", new THREE.Float32BufferAttribute(flow, 2)); g.setAttribute("aFall", new THREE.Float32BufferAttribute(fall, 1)); g.setAttribute("aTop", new THREE.Float32BufferAttribute(top, 1));
+  g.setAttribute("aGrad", new THREE.Float32BufferAttribute(grad || new Float32Array(2 * n), 2)); g.setAttribute("aFroth", new THREE.Float32BufferAttribute(froth || new Float32Array(n).fill(1), 1));
+  return g;
+}
+// one water mesh, its material (o.mat, or a new one) and its depth-only twin
+function waterMesh(W, g, o = {}) {
   const mat = o.mat || waterMat(W, {amp: o.amp ?? 0.02, foam: 0.2, mud: o.mud, minA: o.minA ?? 0.74, tex: o.tex ?? 1});
   const mesh = new THREE.Mesh(g, mat); mesh.renderOrder = 4; W.scene.add(mesh);
   // Sorting (owner, 2026-11-15: "some zdepth issues with the waterfall/transparency sorting"): caps, lips, falls and cuts
@@ -250,71 +264,121 @@ function makeCaps(W, cells, o = {}) {
   return mesh;
 }
 
-// ======================= the sim's water: top surfaces, flow vectors, caps and arrows =======================
-// The liquid rule's water drawn as the river's is (owner, 2026-11-15: "can we have the frothy walls and edges like the
-// river demo you had and show flow direction?"): one cap per column at its top water surface, through makeCaps, so
-// every step down to a lower column gets the river's foaming fall sheet and lip, and each cap carries a flow vector the
-// streaks and the texture advect along: down the head, from higher water to lower and on into dry cells it spreads or
-// falls into (Luanti's levels falling outward; see rebuild). A column falling straight down carries none. A flat chevron on each flowing cap points downstream, longer
-// the faster it runs (the Flow arrows toggle).
-// The water's top in a cell: a source or a falling cell stands nearly full, a flowing one at (level + 1) / 8 of its
-// layer, and a cell with water above it is full to its top. So a source (0.94) is drawn 6 cm below the level-7 water
-// beside it (1.0), though the water runs out of the source: the flow is worked out on the head, where a source stands
-// an eighth above level 7, and no fall is drawn for a step under an eighth (minStep), so a pool of sources neither
-// grows a 6 cm froth ring nor shows arrows running into it.
-function surfOf(LQ) {
-  const {AIR, SRC, FLOW} = root.PBDLiquid, {kind, lvl, down, idx, inside, unidx} = LQ;
-  return i => { const [q, r, y] = unidx(i), up = inside(q, r, y + 1) ? kind[idx(q, r, y + 1)] : AIR; if (up === SRC || up === FLOW) return y + 1; return kind[i] === SRC || down[i] ? y + 0.94 : y + (lvl[i] + 1) / 8; };
+// ======================= the sim's water: Luanti's liquid mesher on the hex grid =======================
+// The owner, 2026-11-15, on M28's ledge: "same issues as before for the leading edge, also theres no flow maps on the
+// edge as well and no walls, note that you missed a critical part of the luanti/minetest water implementation that
+// shows the water falling", and "water should generate blocks vertically as it falls too". The caps before drew one
+// cap per column at its top water, so every falling cell under a lip was never drawn. This draws every water cell,
+// as Luanti's client meshes a liquid node: MapblockMeshGenerator::drawLiquidNode and its helpers
+// (prepareLiquidNodeDrawing, getLiquidNeighborhood, calculateCornerLevels, getCornerLevel, drawLiquidSides,
+// drawLiquidTop, drawLiquidBottom) in src/client/content_mapblock.cpp at a10dc8dbff3b0af8295ae55df44f65b1d9ee92c7,
+// ported to the hex grid (openspec/changes/water-flow design 7e).
+//   Luanti: Copyright (C) 2010-2024 celeron55, Perttu Ahola <celeron55@gmail.com> and contributors.
+//   SPDX-License-Identifier: LGPL-2.1-or-later. This port is offered under the same licence;
+//   the licence text is published beside this file as water-flow/COPYING.LESSER.
+// What changed for hex: six sides; a corner is shared by three cells (the cell and the side neighbours either side of
+// it), so air pulls a corner to the floor at two of the three, Luanti's "half or more"; the top is a fan of six
+// triangles to the corners' mean; the flow is the corners' least-squares slope. Cells outside the patch are left out
+// of the corners as CONTENT_IGNORE is, but every water cell draws its side where the patch ends (the patch is cut like
+// a cake, design 7b), sources too, where Luanti draws no face against CONTENT_IGNORE.
+const FLOOR_EPS = 0.02;                  // Luanti's -0.5 + 0.2 / BS: a corner pulled to the floor stands 2 cm up
+const FLOW_K = 5, FLOW_MIN = 0.3;        // a top's flow vector: FLOW_MIN + FLOW_K times its slope, at most 0.9
+function liquidMesh(LQ) {
+  const {AIR, SOLID, FLOW, SRC, LIQUID_LEVEL_MAX} = root.PBDLiquid, {kind, lvl, down, idx, inside, unidx, SIM} = LQ;
+  const IGN = -1, range = Math.max(1, Math.min(8, SIM.range)), cut0 = LIQUID_LEVEL_MAX + 1 - range;
+  const isLiq = k => k === FLOW || k === SRC;
+  // getLiquidNeighborhood: a cell's content, its level in node units (-0.5 its floor, +0.5 its top), and whether the
+  // cell above it is liquid; outside the patch is CONTENT_IGNORE
+  const nbOf = (q, r, y) => {
+    if (!inside(q, r, y)) return {k: IGN, level: -0.5, top: false};
+    const i = idx(q, r, y), k = kind[i]; let level = -0.5;
+    if (k === SRC) level = 0.5;
+    else if (k === FLOW) { let l = lvl[i]; l = l <= cut0 ? 0 : l - cut0; level = -0.5 + (l + 0.5) / range; }
+    return {k, level, top: inside(q, r, y + 1) && isLiq(kind[idx(q, r, y + 1)]), i};
+  };
+  // getCornerLevel over the three cells round corner c (between sides c - 1 and c)
+  const cornerLevel = (cells) => {
+    let sum = 0, count = 0, air = 0;
+    for (const n of cells) {
+      if (n.k === IGN) continue;
+      if (n.top) return 0.5;                           // liquid above: drawn from the top of the node
+      if (n.k === SRC) return 0.5;                     // a source always has the full height
+      if (n.k === FLOW) { sum += n.level; count++; } else if (n.k === AIR) air++;
+    }
+    if (air >= 2) return -0.5 + FLOOR_EPS;
+    if (count > 0) return sum / count;
+    return 0;
+  };
+  const pos = [], flow = [], fall = [], top = [], grad = [], froth = [];
+  const put = (p, f, fa, tp, g, fr) => { pos.push(p[0], p[1], p[2]); flow.push(f[0], f[1]); fall.push(fa); top.push(tp); grad.push(g[0], g[1]); froth.push(fr); };
+  const quad = (P, f, fa, tp, fr) => { for (const k of [0, 1, 2, 0, 2, 3]) put(P[k], f, fa, tp, [0, 0], fr); };
+  const cols = new Map(), tops = [], falls = [], Z2 = [0, 0];
+  for (let i = 0; i < LQ.NCELL; i++) {
+    const k0 = kind[i]; if (!isLiq(k0)) continue;
+    const [q, r, y] = unidx(i), X = hx(q, r), Z = hz(r), self = nbOf(q, r, y), nb = DIRS.map(([dq, dr]) => nbOf(q + dq, r + dr, y));
+    // calculateCornerLevels: heights in metres
+    const h = CORNER.map((_, c) => y + 0.5 + cornerLevel([self, nb[(c + 5) % 6], nb[c]]));
+    // the flow: Luanti turns the flowing texture down the corner gradient; on hex the least-squares slope of the six
+    // corners, grad = sum(h_c * corner_c) / (3 R^2), the water running down it
+    let gx = 0, gz = 0; for (let c = 0; c < 6; c++) { gx += h[c] * CORNER[c][0]; gz += h[c] * CORNER[c][1]; } gx /= 3 * HR * HR; gz /= 3 * HR * HR;
+    const gl = Math.hypot(gx, gz), sp = gl < 0.004 ? 0 : Math.min(0.9, FLOW_MIN + FLOW_K * gl), f = sp ? [-gx / gl * sp, -gz / gl * sp] : Z2;
+    // drawLiquidTop, unless the cell above is the same liquid
+    if (!self.top) {
+      const hc = h.reduce((a, b) => a + b, 0) / 6, g = [gx, gz];
+      for (let c = 0; c < 6; c++) { const [ax, az] = CORNER[c], [bx, bz] = CORNER[(c + 1) % 6];
+        put([X, hc, Z], f, 0, hc, g, 0); put([X + bx, h[(c + 1) % 6], Z + bz], f, 0, hc, g, 0); put([X + ax, h[c], Z + az], f, 0, hc, g, 0); }
+      tops.push({q, r, y, X, Z, hc, f, sp, gx, gz});
+      const key = q + "," + r, t = cols.get(key); if (!t || y > t.y) cols.set(key, {q, r, y, wl: hc, flow: f});
+    }
+    // drawLiquidSides
+    for (let s = 0; s < 6; s++) {
+      const n = nb[s];
+      if (isLiq(n.k)) { if (!self.top || n.top) continue; }   // no face inside the same liquid, unless it joins a top
+      else if (n.k === SOLID) continue;                          // a solid hides it; air and the patch's cut (IGN) get a wall
+      const ca = s, cb = (s + 1) % 6, [ax, az] = CORNER[ca], [bx, bz] = CORNER[cb];
+      const ta = self.top ? y + 1 : h[ca], tb = self.top ? y + 1 : h[cb];
+      const ba = isLiq(n.k) ? h[ca] : y, bb = isLiq(n.k) ? h[cb] : y;
+      if (ta - ba < 1e-3 && tb - bb < 1e-3) continue;
+      const a = Math.PI / 3 * s, o = [Math.cos(a), Math.sin(a)];
+      // a flowing cell's side runs Luanti's flowing texture down it, foaming where it faces open air; a source's stands
+      const fa = k0 === FLOW ? 1 : -1, fr = n.k === AIR ? 1 : 0.35;
+      quad([[X + ax, ta, Z + az], [X + bx, tb, Z + bz], [X + bx, bb, Z + bz], [X + ax, ba, Z + az]], o, fa, Math.max(ta, tb), fr);
+      if (k0 === FLOW && down[i] && n.k === AIR) falls.push({X: X + (ax + bx) / 2, Z: Z + (az + bz) / 2, y: (ta + tb + ba + bb) / 4, o, ht: Math.min(ta - ba, tb - bb)});
+    }
+    // drawLiquidBottom, over air
+    if (inside(q, r, y - 1) && kind[idx(q, r, y - 1)] === AIR)
+      for (let c = 0; c < 6; c++) { const [ax, az] = CORNER[c], [bx, bz] = CORNER[(c + 1) % 6]; put([X, y, Z], Z2, 0, y, Z2, 0); put([X + ax, y, Z + az], Z2, 0, y, Z2, 0); put([X + bx, y, Z + bz], Z2, 0, y, Z2, 0); }
+  }
+  return {geo: waterGeometry(pos, flow, fall, top, grad, froth), cols, tops, falls};
 }
 const ARROW_MAX = 2400;
 function simWater(W, LQ, o = {}) {
-  const {SRC, FLOW, SOLID} = root.PBDLiquid, {kind, lvl, down, unidx, idx} = LQ, surf = surfOf(LQ);
-  const SW = {mesh: null, mat: null, arrows: null, cells: null, showArrows: o.arrows !== false, surf};
-  const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), SC = new THREE.Vector3(), UPA = new THREE.Vector3(0, 1, 0);
+  const SW = {mesh: null, mat: null, arrows: null, cells: null, showArrows: o.arrows !== false};
+  const M4 = new THREE.Matrix4(), V = new THREE.Vector3(), N3 = new THREE.Vector3(), X3 = new THREE.Vector3(), Z3 = new THREE.Vector3(), SC = new THREE.Vector3();
   SW.rebuild = () => {
-    const tops = new Map();
-    for (let i = 0; i < LQ.NCELL; i++) { const k = kind[i]; if (k !== SRC && k !== FLOW) continue; const [q, r, y] = unidx(i), key = q + "," + r, h = surf(i);
-      const t = tops.get(key); if (!t || h > t.wl) tops.set(key, {q, r, y, i, wl: h, src: k === SRC, head: k === SRC && h < y + 1 ? y + 9 / 8 : h, fall: k === FLOW && !!down[i]}); }
-    const cells = new Map();
-    for (const [key, t] of tops) {
-      const X = hx(t.q, t.r), Z = hz(t.r); let fx = 0, fz = 0;
-      // The way the water is going (owner, 2026-11-15: "the edges also dont have flow ... we can see 1 arrow in a cell
-      // with 4 pads"): down the head, from higher water to lower, weighted by the drop (capped at a layer).
-      //  - toward a neighbour whose water stands lower: it runs there;
-      //  - away from a neighbour whose water stands higher and reaches this layer (its column is open at this cell's
-      //    layer): it runs in from there, so a cap at the spreading front, or against a wall, still points onward;
-      //  - toward a dry neighbour the water can spread into (open air at this layer, and this cell has a level to give,
-      //    Luanti's level above 0) or fall into (open air at this layer and the one below): the front of a spreading sheet;
-      //  - a source only where water leaves it, never "away from" its fellows; a still pool (every head equal) has none.
-      if (!t.fall) for (const [dq, dr] of DIRS) { const nq = t.q + dq, nr = t.r + dr, n = tops.get(nq + "," + nr); let w = 0;
-        if (n) { const d = t.head - n.head; if (d > 0.02) w = Math.min(1, d); else if (d < -0.02 && !t.src && LQ.inside(nq, nr, t.y) && kind[idx(nq, nr, t.y)] !== SOLID) w = Math.max(-1, d); }
-        else if (LQ.inside(nq, nr, t.y) && kind[idx(nq, nr, t.y)] !== SOLID) { const drop = LQ.inside(nq, nr, t.y - 1) && kind[idx(nq, nr, t.y - 1)] !== SOLID; if (drop) w = 1; else if (t.src || lvl[t.i] > 0) w = 0.5; }
-        if (!w) continue; const dx = hx(nq, nr) - X, dz = hz(nr) - Z, l = Math.hypot(dx, dz) || 1; fx += dx / l * w; fz += dz / l * w; }
-      const m = Math.hypot(fx, fz), sp = Math.min(0.9, m * 0.9);
-      // where the patch ends beside this water, its side stands down to the bed (the first solid cell under it)
-      let cuts = null;
-      for (let i = 0; i < 6; i++) { if (LQ.inside(t.q + DIRS[i][0], t.r + DIRS[i][1], t.y)) continue;
-        let y = t.y; while (y > LQ.Y0 && kind[idx(t.q, t.r, y - 1)] !== SOLID) y--; (cuts = cuts || []).push([i, y]); }
-      cells.set(key, {wl: t.wl, y: t.y, head: t.head, flow: m > 1e-4 ? [fx / m * sp, fz / m * sp] : [0, 0], cuts});
-    }
+    const LM = liquidMesh(LQ);
     if (SW.mesh) { W.scene.remove(SW.mesh); SW.mesh.geometry.dispose(); }
-    SW.mesh = makeCaps(W, cells, Object.assign(SW.mat ? {mat: SW.mat} : Object.assign({amp: 0.01, mud: 0, minA: 0.78}, o.caps), {lower: o.lower, minStep: 0.07}));
+    SW.mesh = waterMesh(W, LM.geo, SW.mat ? {mat: SW.mat} : Object.assign({amp: 0.01, mud: 0, minA: 0.78}, o.caps));
     if (!SW.mat) SW.mat = SW.mesh.material;
     if (!SW.arrows) {
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute([0.55, 0, 0, -0.35, 0, 0.42, -0.12, 0, 0, 0.55, 0, 0, -0.12, 0, 0, -0.35, 0, -0.42], 3));
       SW.arrows = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({color: 0xf4fbff, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide}), ARROW_MAX);
       SW.arrows.renderOrder = 6; SW.arrows.frustumCulled = false; W.scene.add(SW.arrows);
     }
+    // a chevron on every top with a flow, lying on its slope and pointing down it, longer the faster it runs; and one
+    // pointing down each open side of a falling cell, so a fall shows its flow block by block
     let na = 0;
-    for (const [key, c] of cells) { const sp = Math.hypot(c.flow[0], c.flow[1]); if (sp < 0.05 || na >= ARROW_MAX) continue; const [q, r] = key.split(",").map(Number);
-      Q.setFromAxisAngle(UPA, -Math.atan2(c.flow[1], c.flow[0])); V.set(hx(q, r), c.wl + 0.04, hz(r)); const k = 0.9 + 0.9 * sp; SC.set(k, 1, 1.2);
-      M4.compose(V, Q, SC); SW.arrows.setMatrixAt(na++, M4); }
+    const place = (x, y, z, xa, ya, len, wid = 1.2) => { if (na >= ARROW_MAX) return; Z3.crossVectors(xa, ya); M4.makeBasis(xa, ya, Z3); SC.set(len, 1, wid); M4.scale(SC); M4.setPosition(V.set(x, y, z)); SW.arrows.setMatrixAt(na++, M4); };
+    for (const t of LM.tops) { if (t.sp < 0.05) continue;
+      N3.set(-t.gx, 1, -t.gz).normalize(); X3.set(t.f[0], 0, t.f[1]); X3.addScaledVector(N3, -X3.dot(N3)).normalize();
+      place(t.X, t.hc + 0.06, t.Z, X3, N3, 0.9 + 0.9 * t.sp); }
+    for (const fl of LM.falls) { if (fl.ht < 0.4) continue; X3.set(0, -1, 0); N3.set(fl.o[0], 0, fl.o[1]); place(fl.X + fl.o[0] * 0.05, fl.y, fl.Z + fl.o[1] * 0.05, X3, N3, 0.75 * Math.min(1, fl.ht), 0.7); }
     SW.arrows.count = na; SW.arrows.instanceMatrix.needsUpdate = true; SW.arrows.visible = SW.showArrows;
-    SW.cells = cells; return SW.mesh;
+    SW.cells = LM.cols; SW.tops = LM.tops; SW.falls = LM.falls; return SW.mesh;
   };
   SW.setArrows = v => { SW.showArrows = !!v; if (SW.arrows) SW.arrows.visible = SW.showArrows; };
   return SW;
 }
 
-root.PBDWater = {WAVES, seaH, WAVE_GLSL, waterMat, waterCtl, makeCaps, FALL_OFF, uniforms, surfOf, simWater, hx, hz, CORNER, DIRS};
+root.PBDWater = {WAVES, seaH, WAVE_GLSL, waterMat, waterCtl, makeCaps, waterGeometry, waterMesh, FALL_OFF, uniforms, liquidMesh, simWater, hx, hz, CORNER, DIRS};
 })(typeof window !== "undefined" ? window : globalThis);
