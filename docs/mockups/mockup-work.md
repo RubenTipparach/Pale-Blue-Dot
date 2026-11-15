@@ -41,6 +41,7 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 29 | 2026-11-14 | Starter missions added to phase 1. |
 | 30 | 2026-11-14 | Farming gains seeds from grass and wild plants; those wild plants pulled forward from environment v2. |
 | 31 | 2026-11-14 | Phase 1 statuses: farming, herding and cooking built on `claude/phase-1`; tool crafting and starter missions building. |
+| 32 | 2026-11-15 | Phase 1 built: crafting tools and starter missions done on `claude/phase-1`. |
 
 **Back on one account (2026-11-14).** On 2026-11-13 a cloud session republished this week's pages
 on a second claude.ai account and moved every link here to it; later sessions added M25 to M29

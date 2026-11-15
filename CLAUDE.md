@@ -305,24 +305,24 @@ and is off by default.
 crafting tools, fishing, farming, herding, cooking". That loop is what the
 game is built toward first. The parts and where each stands:
 
-1. **Crafting tools**: `tool-crafting` (written up, not built). The tools are
-   made, not handed out; it rests on the station and recipe mechanism that
-   `basic-smelting` builds.
+1. **Crafting tools**: built (`tool-crafting`). The tools are made, not
+   handed out, on the station and recipe mechanism of `farming-and-smelting`.
 2. **Fishing**: built (`fishing-and-equipment`).
-3. **Farming**: being built (`farming`, branch `claude/farming-smelting`).
+3. **Farming**: built (`farming-and-smelting`, with basic smelting).
    Seeds drop from grass and from wild plants ("we might need to combine env
    v2 in this first step"): the wild plants farming needs are pulled forward
    from environment v2's flora; the rest of environment v2 stays after the
    loop (recommendation taken, ask only with screenshots).
-4. **Herding**: being built (`animal-husbandry`, branch
-   `claude/animal-husbandry`).
-5. **Cooking**: written up (`cooking`), built after farming lands.
-6. **Starter missions**: written up (`starter-missions`), built last: a
+4. **Herding**: built (`animal-husbandry`).
+5. **Cooking**: built (`cooking`): the campfire and its dishes.
+6. **Starter missions**: built (`starter-missions`): a
    chain that walks a new player through the loop ("start a fcrafting
    table", make mining tools, make fishing rood, make axe, make fire... etc";
    "go fishing, catch x fish, cook x fish"; "farm x plants").
 
 The owner, 2026-11-14: "try to do all of step 1 over the next 24 hours".
+All of it is on `claude/phase-1` (2026-11-15), waiting to merge; none of
+the phase-1 changes is archived until the owner has played it.
 
 Each part feeds the next: crafted tools dig, fish and till; crops feed the
 herd and the pot; the herd's eggs, milk and meat go in the pot too. Work on
