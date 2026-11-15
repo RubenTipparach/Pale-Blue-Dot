@@ -1092,24 +1092,62 @@ pub(crate) struct WaterState {
 pub(crate) struct Sea<'w> {
     terrain: Res<'w, PlanetContact>,
     settings: Res<'w, crate::config::WaterSettings>,
+    /// The tide (`ocean-environments` 5.1), where the sea is set up.
+    sea: Option<Res<'w, crate::sea::Sea>>,
 }
 
 impl Sea<'_> {
-    fn sheet_radius(&self) -> f32 {
-        PLANET_RADIUS - self.settings.depth_offset_m
+    /// The sheet the water pass draws over a direction: the mean sea, less
+    /// the sheet's offset, plus the tide there.
+    fn sheet_radius(&self, direction: Vec3) -> f32 {
+        let tide = self.sea.as_deref().map_or(0.0, |sea| sea.tide_at(direction));
+        PLANET_RADIUS - self.settings.depth_offset_m + tide
     }
 
     fn state(&self, config: &WalkingConfig, position: Vec3) -> WaterState {
         let direction = position.normalize_or(Vec3::Y);
-        // Over land there is no sheet at any height, however low the ground is.
-        if self.terrain.sample(direction).water_depth <= 0.0 {
-            return WaterState::default();
-        }
         let feet = position.length() - HALF_HEIGHT;
-        let sheet = self.sheet_radius();
+        let sheet = self.sheet_radius(direction);
+        let sea_level = PLANET_RADIUS + crate::planet::terrain_config().sea_level_m;
+        // The column first (`water-flow` E1, task 2 of the second pass): the
+        // water the body is in, a pool or a flowing cell at its own level,
+        // and the sea's own water at the drawn, tided sheet. Probed from the
+        // feet up to the eye, so a swimmer whose feet are over the bed still
+        // finds the water they are in.
+        let probe = |height: f32| {
+            self.terrain
+                .column_water(direction * (feet + height))
+                .map(|top| top.map(|top| PLANET_RADIUS + top))
+        };
+        let in_column = [0.1, config.water_body_check_height, EYE_HEIGHT]
+            .into_iter()
+            .map(probe)
+            .collect::<Vec<_>>();
+        let surface = if in_column.iter().all(Option::is_some) {
+            match in_column.iter().flatten().flatten().copied().reduce(f32::max) {
+                // The sea's water reaches sea level: its surface is the sheet.
+                Some(top) if top >= sea_level - 0.01 => Some(sheet),
+                Some(top) => Some(top),
+                // Dry in the column, but the tide may stand over a beach
+                // that the column's sea does not reach: the height field.
+                None => (self.terrain.sample(direction).floor_radius < sheet
+                    && self.terrain.sample(direction).water_depth >= 0.0
+                    && crate::planet::surface_height(direction) < sheet - PLANET_RADIUS
+                    && self.terrain.open_to_sky(direction * (feet + 0.1)))
+                .then_some(sheet),
+            }
+        } else if crate::planet::surface_height(direction) < sheet - PLANET_RADIUS {
+            // Off the tier: the height field's sea, to the tided sheet.
+            Some(sheet)
+        } else {
+            None
+        };
+        let Some(surface) = surface else {
+            return WaterState::default();
+        };
         WaterState {
-            body: feet + config.water_body_check_height < sheet,
-            eyes: feet + EYE_HEIGHT < sheet,
+            body: feet + config.water_body_check_height < surface,
+            eyes: feet + EYE_HEIGHT < surface,
         }
     }
 }

@@ -99,6 +99,17 @@ pub fn top_fraction(material: Material) -> f32 {
     }
 }
 
+/// A wooden bucket used on a cell (`water-flow` E11): what the cell holds
+/// after, or `None` where nothing happens. An empty bucket takes a source,
+/// never flowing water (Luanti's); a full one pours a source into air.
+pub fn bucket(full: bool, at: Material) -> Option<Material> {
+    match (full, at) {
+        (false, Material::Water) => Some(Material::Air),
+        (true, Material::Air) => Some(Material::Water),
+        _ => None,
+    }
+}
+
 /// The rule's two settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Rules {
@@ -388,6 +399,19 @@ mod tests {
             cells[place] = Some(cell);
         }
         cells
+    }
+
+    /// E11: an empty bucket takes a source and only a source; a full one
+    /// pours into air and nothing else.
+    #[test]
+    fn a_bucket_takes_a_source_and_pours_into_air() {
+        assert_eq!(bucket(false, Material::Water), Some(Material::Air));
+        assert_eq!(bucket(false, Material::flowing(7, false)), None);
+        assert_eq!(bucket(false, Material::Air), None);
+        assert_eq!(bucket(true, Material::Air), Some(Material::Water));
+        assert_eq!(bucket(true, Material::Water), None);
+        assert_eq!(bucket(true, Material::Stone), None);
+        assert_eq!(bucket(true, Material::flowing(3, true)), None);
     }
 
     #[test]

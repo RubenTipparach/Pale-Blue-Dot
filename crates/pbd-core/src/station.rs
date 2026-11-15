@@ -249,6 +249,14 @@ impl Default for RecipeFile {
                 &[("stone", 8), ("block:stone", 4)],
                 &[("block:forge", 1)],
             ),
+            recipe(
+                "bucket",
+                "BUCKET",
+                "workbench",
+                3.0,
+                &[("planks", 3), ("rope", 1)],
+                &[("bucket", 1)],
+            ),
             metal_tool("bronze", "pickaxe", "BRONZE PICK"),
             metal_tool("bronze", "shovel", "BRONZE SHOVEL"),
             metal_tool("bronze", "axe", "BRONZE AXE"),
@@ -606,7 +614,7 @@ mod tests {
         let book = file.resolve().unwrap();
         assert_eq!(book.at("forge").count(), 2);
         assert_eq!(book.at("hand").count(), 3);
-        assert_eq!(book.at("workbench").count(), 11);
+        assert_eq!(book.at("workbench").count(), 12, "with the bucket (water-flow E11)");
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));
         assert_eq!(item_named("coal"), Some(Item::Good(Good::COAL)));
         assert_eq!(item_named("unobtainium"), None);

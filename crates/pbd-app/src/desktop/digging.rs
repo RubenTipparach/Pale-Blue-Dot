@@ -20,6 +20,7 @@ use pbd_core::aim::{self, Sample};
 use pbd_core::column::{self, LAYERS};
 use pbd_core::dig::{Digger, Refusal, Step};
 use pbd_core::edits::Edit;
+use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Tool};
 use pbd_core::terrain::Material;
 use std::sync::Arc;
@@ -185,6 +186,9 @@ pub enum Hands {
     /// but the soil may turn up a seed, which floats out as a dig's block
     /// does, on the edit's own line.
     Till(Option<Item>),
+    /// Trade one of the selected stack for this item, on the same line: a
+    /// bucket filled or emptied (`water-flow` E11).
+    Swap(Item),
     /// A dig that also turns up finds into the hands, on the same line: a
     /// seed out of dug grass (`farming-and-smelting` decision 14), fibre out
     /// of grass and loose stone out of earth (`tool-crafting` decision 2).
@@ -350,6 +354,14 @@ pub fn apply_edit(
                 info!("edit refused: nothing in the selected slot to place");
                 return None;
             }
+        }
+        Hands::Swap(item) => {
+            let index = moved.selected();
+            if moved.take(index, 1) != 1 {
+                info!("edit refused: nothing in the selected slot to use");
+                return None;
+            }
+            moved.give(item, 1);
         }
         Hands::Empty | Hands::Till(None) => {}
     }
@@ -709,6 +721,64 @@ pub fn dig_and_place(
                 wall_s,
                 &mut planted,
             );
+            return;
+        }
+        // The wooden bucket (`water-flow` E11): an empty one takes the
+        // source the eye meets, a full one pours where a block would go.
+        if let Some(Item::Good(good)) = slots.held().map(|stack| stack.item)
+            && (good == Good::BUCKET || good == Good::WATER_BUCKET)
+        {
+            let full = good == Good::WATER_BUCKET;
+            let at = if full {
+                Some((place.cell, place.layer))
+            } else {
+                // The ray stops at water for a bucket, as it does not for a
+                // hand: the first source along it.
+                aim::march(eye, look, |point| {
+                    sample_at(&fine, &contact, point).map(|mut s| {
+                        if material_of(&fine, &edits, (s.cell, s.layer)) == Some(Material::Water) {
+                            s.solid = true;
+                        }
+                        s
+                    })
+                })
+                .map(|t| (t.dig.cell, t.dig.layer))
+            };
+            let Some((cell, layer)) = at else {
+                return;
+            };
+            let Some(now) = material_of(&fine, &edits, (cell, layer))
+                .and_then(|was| pbd_core::liquid::bucket(full, was))
+            else {
+                info!("edit refused: the bucket has nothing to take or nowhere to pour");
+                return;
+            };
+            let swapped = if full {
+                Good::BUCKET
+            } else {
+                Good::WATER_BUCKET
+            };
+            if apply_edit(
+                &mut Edited {
+                    fine: &mut fine,
+                    contact: &mut contact,
+                    save: &mut edits,
+                    slots: &mut slots,
+                    drops: &mut drops,
+                    now_s: sun.clock.seconds,
+                },
+                Hands::Swap(Item::Good(swapped)),
+                cell,
+                layer,
+                now,
+            )
+            .is_some()
+            {
+                info!(
+                    "{} cell {cell} layer {layer} with the bucket",
+                    if full { "poured into" } else { "took water from" }
+                );
+            }
             return;
         }
         let Some(Item::Block(material)) = slots.held().map(|stack| stack.item) else {

@@ -427,6 +427,46 @@ as sources to sea level (`volumetric-water` phase 2) rather than as M28's
 "Channel from the sea" flowing sheet: in the game the sea is the sea's
 table. Recommendation taken (ask only with screenshots).
 
+## Second pass (lead's request, 2026-11-15)
+
+**E9. One water: the game's water is drawn by the sea's own fragment.** The
+first cut drew poured water with an unlit tile mesh, and it read as dark
+confetti beside the sea. Now the mesher's triangles go to the water pass as
+a storage buffer (three lanes a vertex: position and the sky's share; the
+face's normal and kind; the flow in the face's tangent frame) and are drawn
+by a second vertex entry, `vertex_flowing`, into the cap's own fragment, in
+the cap's render pass and depth. So a pool and the sea are one water: the
+sea's colour by depth, its light by the hour and the cover, its sky
+reflection, fog and glint, and no seam where they meet. The flow streams the
+sea's waves along a top (Tenebris C's desktop way, 7c, the cap's flow hook)
+and down a falling face, which carries white water; a still face neither.
+A face seen from behind from dry air is discarded (its front draws the
+block); from inside the water it is the murk, as under the sheet. The tile
+is gone from the game; it stays the mockups' look. Recommendation taken
+(ask only with screenshots).
+
+**E10. The walker swims in what is drawn.** The walker's water was the
+height field's sea against the untided sheet. It now asks the column first:
+the water the body is in, a pool or a flowing cell at its own level, and the
+sea's water at the drawn sheet with the tide on it; a dry column under open
+sky still swims where the tide stands over its ground (a beach at high
+water); off the tier, the height field's sea to the tided sheet.
+
+**E11. The wooden bucket.** The way a player uses water, after E5's debug
+key: two goods appended to the goods table, `bucket` (a wooden bucket, 4 to
+a slot) and `water-bucket` (a bucket of water, 1 to a slot), with 16 px
+icons from `tools/gen_item_icons.py` in the fence's wood. Made at the
+workbench from 3 planks and 1 rope (`recipes.ron`, `bucket`). Held, the
+right button:
+- with an empty bucket, aimed at a source (the ray stops at water for it,
+  as it does not for a block), takes the source and the bucket is full;
+  flowing water cannot be taken, as in Luanti;
+- with a full bucket, pours a source where a block would be placed, and the
+  bucket is empty.
+Both are one edit and one hands change on one line, the place path's own
+transaction (`Hands::Swap`), so the source taken and the bucket filled reach
+the disk together. The rule is `pbd_core::liquid::bucket`, tested.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With

@@ -311,6 +311,18 @@ impl PlanetContact {
         self.fine.as_ref()?.locate(direction)
     }
 
+    /// The water at a body-local point by the column there: `None` off the
+    /// tier (the height field answers), `Some(None)` where the column holds
+    /// no water at that height, `Some(Some(top))` the altitude of the top of
+    /// the water the point is in (`water-flow` E1: a flowing cell's own level).
+    pub fn column_water(&self, point: Vec3) -> Option<Option<f32>> {
+        let direction = point.try_normalize()?;
+        let fine = self.fine.as_ref()?;
+        let id = fine.locate(direction)?;
+        let column = fine.set.columns.column(id)?;
+        Some(column.water_surface(point.length() - PLANET_RADIUS))
+    }
+
     pub fn stand(&self, feet: Vec3) -> Stand {
         let direction = feet.try_normalize().unwrap_or(Vec3::Y);
         let surface = self.sample(direction);
