@@ -1150,8 +1150,10 @@ version):
   0.08 m) sits at each blade's base. Near the surface, four longer blades
   (1.3 m) lie out flat as the canopy.
 - **The colours**: one per part, not cycled per triangle. Stipe `#725244`;
-  blades `#ab8465`, with one in three `#559642`; floats `#c56d25` (M25's
-  frond). The kelp's `veins` tile still gives the blades their grain.
+  blades `#ab8465`, with one in three `#05582d`; floats `#c56d25` (M25's
+  frond; the green is the deep step of its `kelpg` ramp: the first after
+  shot, `kelp-after-first.jpg`, had the brighter `#559642`, which still
+  stood out lime in the water). The kelp's `veins` tile still gives the blades their grain.
   Depth dimming and the field light are unchanged.
 - **The rocks at its foot** keep their place and shape, but take the
   rock's palette (`#434137`, `#725244`, `#a09f91`), not the coral's.

@@ -883,7 +883,7 @@ struct Verts {
 /// The kelp frond's colours (design B16): M25's `kelp_card`, one a part.
 const KELP_STIPE: u32 = 0x725244;
 const KELP_BLADE: u32 = 0xab8465;
-const KELP_BLADE_GREEN: u32 = 0x559642;
+const KELP_BLADE_GREEN: u32 = 0x05582d;
 const KELP_FLOAT: u32 = 0xc56d25;
 /// The rocks a kelp bed stands on: the rock's palette, not the coral's.
 const KELP_ROCK: [u32; 3] = [0x434137, 0x725244, 0xa09f91];
