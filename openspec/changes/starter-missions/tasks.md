@@ -30,3 +30,11 @@ Done on `claude/starter-missions` (2026-11-14): tests in `pbd_core::missions` an
 - [ ] H.3 The bot's goals in `assets/showcase/phase-1-loop.ron`: the starter chain, then Homestead, played through the player's inputs (`step-videos` 5.1, 5.2). Verify: a run ends with every mission of both chains done in the save, and `SHOWCASE_END`.
   - **Blocked: no ore in the world.** `smelt` ("dig ore with the pickaxe") cannot be done in a new world: the generator never writes `Material::Ore` (`column::material_at_depth` gives sod, soil, then stone; only the test terrain in `terrain.rs` has ore), so nothing a player can dig yields ore or coal. `smelt`, and with it `metal-tool`, `collect`, `harvest` and `farm-meal`, and so the whole Homestead, are out of reach until ore is in the ground, which is a generation change (a new generator version, written up first). The bot's goal stops at `pen`, the fourteenth starter mission; its last shot says so. The bot plays the rest of the loop the brief asks for (harvest, egg, flatbread, eating) only where a later mission would count it.
 
+## T. The mission tree and unlocks (design "Missions are a tree that unlocks the tech")
+
+- [ ] T.1 `unlocks` on missions and a recipe lock in `pbd_core` (one rule, used by the pack, the bench, the forge and the campfire). Verify: core tests that a locked recipe cannot be crafted, a mission's completion unlocks its list, and a recipe no mission names is open.
+- [ ] T.2 The full tree in `missions.ron` (design "The full tree": trunk, fishing, farming, herding, mining and smelting, cooking, light and building, getting about), with the new kinds `fell`, `eat`, `pour`, `night`, `reach`, `swim`, `board` and the new recipes `fence`, `gate`, `campfire`, `torch`. Verify: the load test; every branch is reachable from the trunk; every `unlocks` names a real recipe.
+- [ ] T.3 Old worlds keep everything: finished missions done, and anything crafted, carried or placed counts as unlocked. Verify: a test opens a save from before the tree and crafts every tool it could before.
+- [ ] T.4 The locked silhouette and its mission name in the recipe lists. Verify: captures of the bench and the pack with locked and open recipes.
+- [ ] T.5 The bot plays the tree: trunk, branches, cooking, each a goal (`step-videos` 5.x). Verify: a run ends with the tree done in the save and every unlock seen.
+

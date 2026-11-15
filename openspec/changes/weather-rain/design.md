@@ -51,3 +51,160 @@ there is no cloud field.
 The kernels (Zavie's rings, the rivulets, Heartfelt's drops) keep their inner
 constants inline, as Tenebris does: those numbers are the effect's identity.
 Everything a designer would turn is in `weather.ron`.
+
+## Splashes where rain lands (owner, 2026-11-15)
+
+The owner: "quick note on rain, one of the things were missing are puddle
+splashes on the ground, can you mock thatn up for me". Then, on how: "particle
+splashing for rain, the more gpu native rain we can have the better".
+
+Proposed, not built. The mockup is `docs/mockups/rain-splashes.html` (M32);
+nothing below enters the game until the owner approves it, and then only with
+the perf A/B in tasks group 6.
+
+### What is missing today
+
+Rain in the game today is four things, all of them flat on a surface or a
+line in the air:
+
+- the ground darkens and saturates by `wetness * skylight` (the wetness block
+  above);
+- puddles stand on flat floor-like faces under the puddle mask
+  (`rain_puddle_scale_m` 0.4, `rain_puddle_share` 0.35), with the impact ring
+  kernel in them, at half strength on grass (`rain_grass_rings` 0.5), only
+  within `rain_detail_reach_m` 20 m (`wet-near-detail`);
+- the near shower: up to 1,700 CPU streaks on an 18 m disk
+  (`weather.rs`, `near_shower`), rebuilt into a mesh every frame;
+- drops on the lens.
+
+Nothing leaves the ground. A drop that lands draws a ring and nothing else, so
+a storm on a puddle reads as a pattern on a texture rather than water being
+hit. Real rain throws a small crown of droplets up from standing water and a
+fainter spray off grass and wet soil, for a third of a second, everywhere at
+once around the viewer. That is the missing piece.
+
+### The proposed look
+
+- **On a puddle, a crown.** Six droplets thrown up and out in a ring
+  (0.55-0.9 m/s out, 1.3-1.8 m/s up, so 9-16 cm high), and a late central jet
+  (one droplet, about 0.07 s after the impact, straight up). Gone in about
+  0.35 s. The ring kernel already in the puddle reads as the crown's footprint.
+- **On grass, a softer spray.** Three or four smaller, fainter droplets, low
+  (3-5 cm) and short. Grass takes about half the splashes a puddle does, as it
+  takes half the rings.
+- **On wet bare ground** (dirt, path, boards, outside the puddle mask),
+  between the two: five droplets, a little lower than a crown.
+- **Small and pixel-like.** A droplet is a square of a few pixels at arm's
+  length and one pixel at the reach, never an outlined sprite or a soft blob
+  (CLAUDE.md, "No outlines in the world; one art style"). It is coloured and
+  lit as the water it came from: the wet ground's own colour mixed toward the
+  sky it mirrors, lit by the same sun, sky and lamps as the ground.
+- **Lit by the lamps at night.** A droplet near a lamp catches it, as the
+  puddle's own lamp highlight does; away from the lamps, under a dim moon, the
+  splashes all but vanish, as they do in the real dark.
+- **More with more rain.** The splash rate follows `rain` (light, heavy,
+  storm); the crown's size follows how much water stands there (`wetness` and
+  the puddle mask).
+
+### The design principle: rain belongs on the GPU
+
+The owner's direction, 2026-11-15: "particle splashing for rain, the more gpu
+native rain we can have the better". The splashes are GPU particles:
+spawned, moved and aged on the GPU, from a hashed seed and the time, with no
+per-particle work on the CPU and no per-frame upload. Nothing about a splash
+is stored; every droplet's whole life is a pure function of its lane index and
+`time`, as the ring kernel's drops already are.
+
+### How the game draws it
+
+One instanced draw, after the opaque terrain, alpha blended, depth-tested
+against the scene and not writing depth.
+
+- **Lanes on the columns, not on a world grid.** The near list is the hex
+  columns within the reach (22 m: the detail reach plus its fade): their
+  centre in the render frame, the height of their topmost up-face, its
+  material class (grass, floor-like, other) and its sky light. About 220
+  columns at 2.833 m cells; 16 bytes each, about 3.5 KB. It is rebuilt and
+  uploaded only when the camera crosses a cell or a column within reach is
+  edited, never per frame. It is read from the data the near shower already
+  samples (`PlanetContact`), so the splash lands where the streak does.
+- **Slots and cycles.** Each column has S = 48 slots. A slot's cycle is
+  `phase = time / period + hash(slot)`; each cycle it either fires (a hash of
+  `(slot, floor(phase))` below `keep`) or stays dark, and when it fires its
+  impact point is hashed anew inside the hex top. `keep` follows `rain` and
+  the material (puddle 1, bare wet ground 0.8, grass 0.5). A splash is alive
+  for about the first 0.3 s of a 0.5 s cycle.
+- **Droplets in the vertex shader.** An instance is one droplet (K = 8 per
+  slot), drawn as a camera-facing quad of 4 vertices. The vertex shader takes
+  the instance index, finds its column, slot and droplet, evaluates the
+  ballistic arc `p = impact + v*t - g*t^2/2` for the droplet's hashed launch,
+  and sizes the quad to whole pixels. A dead droplet, a droplet past the
+  reach, or a droplet that has fallen back below its impact height is
+  collapsed to a degenerate quad. No compute pass is needed: there is no
+  state to carry from one frame to the next.
+- **Which kind of splash** is decided per impact point in the vertex shader:
+  the puddle mask (`puddle_noise`, the same two octaves and the same quantile
+  edge the terrain uses) at the impact point picks a crown, the column's
+  class picks grass spray or wet ground. The crown lands exactly in the
+  puddles the ground draws.
+- **Lit like the ground.** The vertex shader lights the droplet with the
+  ground's own terms (sky, sun, the lamp list), from the column's ground
+  colour mean (`plant_means`/the tile means the terrain already carries), so
+  it sits in the scene rather than on it.
+
+### Gates
+
+- **Rain and wetness.** No draw at all when `rain` is zero (the draw is
+  skipped on the CPU from one number, not culled per vertex). The rate follows
+  `rain`; the crown's share follows the puddle mask at the current `wetness`,
+  so the first minute of a shower throws only spray, and the crowns come as
+  the puddles form.
+- **None under cover.** A column whose top face has no sky light gets no
+  slots: the same baked sky light (`cell.metadata.z`) that keeps the ground
+  dry under a roof keeps it splash-free. The ground under a roof shows neither
+  wet nor splash; the roof's own top takes the splashes.
+- **None on vertical faces.** Impacts are only ever placed on the top face of
+  a column; walls, terrace sides and trunks take the rivulets they already
+  have, and no splash.
+- **None under water, none above the altitude gate**, exactly where the near
+  shower is suppressed (`rain_drawn_at`, under water, under ground).
+- **Near only.** Past `rain_detail_reach_m` (20 m) a droplet is one pixel or
+  less; droplets fade over the last 4 m (the same band as the rings) and are
+  not drawn past it.
+
+### Cost estimate (an estimate, not a measurement)
+
+| Quantity | Value |
+| --- | ---: |
+| Columns within 22 m | about 220 |
+| Slots (S = 48, K = 8 droplets) | 10,560 slots, 84,480 droplets |
+| Vertices per frame | 337,920 (4 per droplet), all run, most degenerate |
+| Droplets alive in a storm | about 28,000 (4,700 splashes: keep 0.5-1 by class, 0.3 s of a 0.5 s cycle, 4-8 droplets each) |
+| Pixels drawn | about 2-30 px per live droplet near, 1 px at the reach: about 0.2-0.3 M |
+| Upload | 3.5 KB on a cell crossing or an edit; nothing per frame |
+| CPU | one draw call; no per-particle work |
+
+On the desktop RTX 3070, 340 k short vertex invocations (two hashes, the
+puddle mask, four lamps) and 0.3 M blended pixels are expected to cost about
+0.1 ms; the M4 Max laptop similar. S = 48 is what the mockup needed for heavy
+rain to read as heavy (24 looked sparse); it is the first knob to turn down.
+
+**Budget:** at most **0.25 ms of GPU time at p50 in the `storm` and
+`rain-stroll` scenarios** on the desktop and on the Mac, measured old build
+against new, interleaved, in one sitting (`tools/perf_suite.py`, perf-measure
+rule 2). If the A/B shows more, S and K come down before anything else does.
+The instance count is fixed, so the cost has a hard ceiling whatever the
+weather.
+
+### Possible follow-on, not part of this change: the shower on the GPU
+
+The near shower is the same shape of problem: every streak is already a pure
+function of its index and the time (`streak_seed`, `column_fade`), yet the
+CPU rebuilds 1,700 quads into a new mesh and uploads it every frame (about
+190 KB a frame at full rain). It can move to the GPU the same way: one
+instanced draw whose vertex shader evaluates `streak_seed` and the fall, with
+the landing height read from the same near column list. That would remove the
+per-frame mesh rebuild and upload. It is recorded here as a candidate in the
+spirit of the owner's "the more gpu native rain we can have the better", and
+is a separate change with its own A/B; the mockup draws its streaks that way
+already, which is a demonstration, not a plan of record.
