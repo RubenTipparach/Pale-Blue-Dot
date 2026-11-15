@@ -744,14 +744,19 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
                 p.reach = -1.0; // to the surface, set when the bed is known
                 out.push(p);
                 if hash_unit(seed ^ 34, k) < 0.5 {
-                    out.push(piece(
+                    let mut rock = piece(
                         d,
                         Kind::Boulder,
                         0.6 + 0.5 * hash_unit(seed ^ 35, k),
                         0.8,
                         0.0,
                         k ^ 3,
-                    ));
+                    );
+                    // A kelp bed's rocks are rock, not brain coral (B16).
+                    let pick = (hash_unit(seed ^ 36, k) * KELP_ROCK.len() as f32) as usize;
+                    let l = lin(KELP_ROCK[pick.min(KELP_ROCK.len() - 1)]);
+                    rock.colour = [l[0], l[1], l[2]];
+                    out.push(rock);
                 }
             }
         }
@@ -875,55 +880,111 @@ struct Verts {
     uvs: Vec<[f32; 2]>,
 }
 
+/// The kelp frond's colours (design B16): M25's `kelp_card`, one a part.
+const KELP_STIPE: u32 = 0x725244;
+const KELP_BLADE: u32 = 0xab8465;
+const KELP_BLADE_GREEN: u32 = 0x559642;
+const KELP_FLOAT: u32 = 0xc56d25;
+/// The rocks a kelp bed stands on: the rock's palette, not the coral's.
+const KELP_ROCK: [u32; 3] = [0x434137, 0x725244, 0xa09f91];
+
+/// One kelp stand from the bed to the surface (design B16), after M25's
+/// frond: two or three slender stipes, each two crossed strips; narrow
+/// tapered blades spiralling up them, each with a gas float at its base;
+/// a canopy of longer blades lying out at the surface. One colour a part.
 fn kelp_stand(origin: Vec3, axes: (Vec3, Vec3, Vec3), height: f32, k: f32, out: &mut Verts) {
-    let cols = [0x8d4526, 0xc56d25, 0x559642, 0x297537].map(lin);
     let mut kit = Kit::default();
     kit.tile("veins");
-    for stipe in 0..3 {
+    // A part laid along `dir` (its length) with its width along `side`,
+    // rooted at `at`.
+    let along = |at: Vec3, dir: Vec3, side: Vec3| {
+        let dir = dir.normalize_or(Vec3::Y);
+        let side = side.normalize_or(Vec3::X);
+        Mat4::from_cols(
+            dir.extend(0.0),
+            side.extend(0.0),
+            dir.cross(side).normalize_or(Vec3::Z).extend(0.0),
+            at.extend(1.0),
+        )
+    };
+    let blade = |len: f32, half: f32| {
+        shape(&[
+            [0.0, -half * 0.4],
+            [len * 0.35, -half],
+            [len * 0.85, -half * 0.55],
+            [len, 0.0],
+            [len * 0.85, half * 0.55],
+            [len * 0.35, half],
+            [0.0, half * 0.4],
+        ])
+    };
+    let stipes = 2 + ((k * 7.3).sin().abs() * 1.99) as usize;
+    for stipe in 0..stipes {
         let a = stipe as f32 * 2.1 + k;
-        let top = height * (0.85 + 0.15 * (stipe as f32 * 1.7 + k).sin().abs());
-        let segs = (top / 0.7).ceil().max(2.0) as usize;
+        let foot = Vec3::new(a.cos() * 0.12, 0.0, a.sin() * 0.12);
+        let top = height * (0.88 + 0.12 * (stipe as f32 * 1.7 + k).sin().abs());
+        // The stipe: two crossed strips, a metre a segment.
+        let segs = top.ceil().max(1.0) as usize;
         for i in 0..segs {
             let (y0, y1) = (
                 i as f32 * top / segs as f32,
                 (i + 1) as f32 * top / segs as f32,
             );
-            let w = 0.12 + 0.05 * (i as f32 * 0.9).sin();
-            kit.add(
-                shape(&[[-w, y0], [w, y0], [w * 0.8, y1], [-w * 0.8, y1]]),
-                atr(
-                    [a.cos() * 0.12, 0.0, a.sin() * 0.12],
-                    [0.0, a + i as f32 * 0.6, 0.0],
-                ),
-                if i % 2 == 1 { 0xffffff } else { 0xe0e0e0 },
-            );
+            let w = 0.035;
+            for turn in [a, a + FRAC_PI_2] {
+                kit.add(
+                    shape(&[[-w, y0], [w, y0], [w, y1], [-w, y1]]),
+                    atr(foot.to_array(), [0.0, turn, 0.0]),
+                    KELP_STIPE,
+                );
+            }
         }
-        // The canopy: blades lying out at the top.
-        for b in 0..4 {
-            let t = b as f32 * 1.57 + a;
+        // The blades, spiralling up, each with its float.
+        let n = ((top - 1.2) / 0.6).floor().max(0.0) as usize;
+        for b in 0..n {
+            let y = 0.8 + b as f32 * 0.6;
+            let yaw = a + b as f32 * 2.4;
+            let out_dir = Vec3::new(yaw.cos(), 0.0, yaw.sin());
+            let side = Vec3::new(-yaw.sin(), 0.0, yaw.cos());
+            let lift: f32 = 0.7;
+            let dir = out_dir * lift.cos() + Vec3::Y * lift.sin();
+            let root = foot + Vec3::Y * y + out_dir * 0.03;
+            let colour = if (b + stipe) % 3 == 2 {
+                KELP_BLADE_GREEN
+            } else {
+                KELP_BLADE
+            };
+            kit.add(blade(0.85, 0.06), along(root, dir, side), colour);
+            for turn in [0.0, FRAC_PI_2] {
+                kit.add(
+                    shape(&[[0.0, -0.04], [0.04, 0.0], [0.0, 0.04], [-0.04, 0.0]]),
+                    atr(root.to_array(), [0.0, yaw + turn, 0.0]),
+                    KELP_FLOAT,
+                );
+            }
+        }
+        // The canopy: longer blades lying out at the surface.
+        for c in 0..4 {
+            let yaw = a + c as f32 * FRAC_PI_2 + 0.4;
+            let out_dir = Vec3::new(yaw.cos(), 0.0, yaw.sin());
+            let side = Vec3::new(-yaw.sin(), 0.0, yaw.cos());
+            let dir = out_dir + Vec3::Y * 0.08;
             kit.add(
-                shape(&[
-                    [0.0, -0.08],
-                    [1.4, -0.05],
-                    [1.6, 0.0],
-                    [1.4, 0.05],
-                    [0.0, 0.08],
-                ]),
-                atr(
-                    [a.cos() * 0.12, top - 0.1, a.sin() * 0.12],
-                    [FRAC_PI_2, t, 0.0],
-                ),
-                0xf0f0f0,
+                blade(1.3, 0.07),
+                along(foot + Vec3::Y * (top - 0.1), dir, side),
+                if c % 3 == 2 {
+                    KELP_BLADE_GREEN
+                } else {
+                    KELP_BLADE
+                },
             );
         }
     }
     let shape = kit.build();
-    for (n, (p, c)) in shape.positions.iter().zip(&shape.colours).enumerate() {
+    for (p, c) in shape.positions.iter().zip(&shape.colours) {
         out.positions
             .push((origin + axes.0 * p.x + axes.1 * p.y + axes.2 * p.z).to_array());
-        let tint = cols[(n / 3 / 6) % cols.len()];
-        out.colours
-            .push([c[0] * tint[0], c[1] * tint[1], c[2] * tint[2], 1.0]);
+        out.colours.push([c[0], c[1], c[2], 1.0]);
     }
     out.uvs.extend_from_slice(&shape.uvs);
 }
@@ -1726,6 +1787,44 @@ fn write_mesh(mesh: &mut Mesh, verts: Verts, textured: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Design B16: a kelp stand is slender (every triangle a sliver no
+    /// thicker than 0.15 m: stipes, blades, floats and canopy), rises to the
+    /// surface, and wears only the frond's four colours, one a part.
+    #[test]
+    fn a_kelp_stand_is_slender_and_in_the_frond_s_colours() {
+        let axes = (Vec3::X, Vec3::Y, Vec3::Z);
+        let mut kelp = Verts::default();
+        kelp_stand(Vec3::ZERO, axes, 18.0, 0.7, &mut kelp);
+        assert_eq!(kelp.positions.len() % 3, 0);
+        for tri in kelp.positions.chunks(3) {
+            let [a, b, c] = [0, 1, 2].map(|i| Vec3::from_array(tri[i]));
+            let area2 = (b - a).cross(c - a).length();
+            let longest = (b - a).length().max((c - b).length()).max((a - c).length());
+            let thinnest = area2 / longest.max(1e-6);
+            assert!(thinnest <= 0.15, "a part {thinnest} m across");
+        }
+        let top = kelp.positions.iter().map(|p| p[1]).fold(0.0f32, f32::max);
+        assert!(top > 15.0 && top <= 18.5, "to the surface: {top}");
+        let frond: Vec<[f32; 4]> = [KELP_STIPE, KELP_BLADE, KELP_BLADE_GREEN, KELP_FLOAT]
+            .into_iter()
+            .map(lin)
+            .collect();
+        for c in &kelp.colours {
+            assert!(
+                frond
+                    .iter()
+                    .any(|f| (0..3).all(|i| (f[i] - c[i]).abs() < 1e-4)),
+                "{c:?} is not the frond's"
+            );
+        }
+        let blades = kelp
+            .colours
+            .iter()
+            .filter(|c| (0..3).all(|i| (c[i] - lin(KELP_BLADE)[i]).abs() < 1e-4))
+            .count();
+        assert!(blades > 100, "fronds all the way up: {blades}");
+    }
 
     /// A tile is the same tile whoever comes near it, and its plan is a
     /// function of the seed and the tile: the same pieces each time.
