@@ -2055,7 +2055,9 @@ mod tests {
         let world = app.world_mut();
         let flagged = also(world);
         assert!(
-            flagged.contains(&"also: open or shut a door".to_string()),
+            flagged.contains(
+                &"also: use: a door, a forge, a ripe crop; with the shovel, till".to_string()
+            ),
             "{flagged:?}"
         );
         assert!(flagged.contains(&"also: sprint".to_string()), "{flagged:?}");

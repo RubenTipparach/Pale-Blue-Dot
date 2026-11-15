@@ -58,3 +58,26 @@ vanish in one frame.
 - **WHEN** a field stands beside a lit lantern at midnight
 - **THEN** the crops near the lantern are lit by it and those far from it are
   dark
+
+### Requirement: Seeds are found in the wild
+Digging a grassy block SHALL, in a fixed share of cells chosen by the cell's
+key, also put a seed of a crop that suits the climate into the slots, on the
+dig's own saved line. A fixed share of grassy cells, chosen from the world's
+seed and the cell's key, SHALL grow a wild plant of a crop that suits the
+climate; the use key on one SHALL give its seeds and one of its produce and
+keep it picked, in one saved line. Wild plants SHALL change no generated
+terrain.
+
+#### Scenario: Picking a wild plant
+- **WHEN** the player uses a wild frost kale
+- **THEN** two frost kale seed and a frost kale are in the slots, and the
+  plant is gone for good
+
+### Requirement: Finds, plantings and harvests are reported
+Each find, pick, planting, harvest and station output SHALL raise a game
+message naming the item and count (or the crop planted) once its write is
+accepted, for another system to count.
+
+#### Scenario: Harvesting raises the event
+- **WHEN** a ripe wheat crop is harvested
+- **THEN** messages for three wheat and two wheat seed, harvested, are raised

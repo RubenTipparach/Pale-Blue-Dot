@@ -327,10 +327,7 @@ impl StationState {
     /// or whose outputs do not all fit. Returns how many were collected.
     pub fn collect(&mut self, slots: &mut Slots, book: &RecipeBook, now_s: f64) -> usize {
         let mut done = 0;
-        loop {
-            let Some(&(_, end)) = self.schedule(book).first() else {
-                break;
-            };
+        while let Some(&(_, end)) = self.schedule(book).first() {
             if end > now_s {
                 break;
             }

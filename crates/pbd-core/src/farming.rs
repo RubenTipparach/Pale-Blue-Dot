@@ -205,7 +205,7 @@ impl FarmSettings {
     /// it is never saved; picking it is (a `wild` record).
     pub fn wild_crop(&self, world_seed: u64, cell: u32, climate: Option<Climate>) -> Option<Crop> {
         let h = mix(world_seed ^ (u64::from(cell) << 1) ^ 0x0a11_d5ee_d000);
-        if h % u64::from(self.wild_one_in) != 0 {
+        if !h.is_multiple_of(u64::from(self.wild_one_in)) {
             return None;
         }
         let suits: Vec<Crop> = Crop::all().filter(|c| c.grows_in(climate)).collect();
@@ -217,7 +217,7 @@ impl FarmSettings {
     /// answers the same.
     pub fn grass_seed(&self, cell: u32, climate: Option<Climate>) -> Option<Good> {
         let h = mix(u64::from(cell) ^ 0x6a55_5eed);
-        (h % u64::from(self.grass_seed_one_in) == 0)
+        h.is_multiple_of(u64::from(self.grass_seed_one_in))
             .then(|| seed_turned_up(cell, climate))
             .flatten()
     }

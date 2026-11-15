@@ -241,7 +241,7 @@ pub fn station_state(
 }
 
 /// The use key.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn use_key(
     keys: Res<ButtonInput<KeyCode>>,
     mut screen: ResMut<Screen>,
@@ -893,6 +893,261 @@ pub fn show(
                     Flame,
                 ));
             });
+    }
+}
+
+// ---------------------------------------------------------------- capture rig
+
+/// `--farm` and `--forge` (`farming-and-smelting` task 5.1): a measurement
+/// instrument for the headless captures. A capture has no hands, so this
+/// does through the same durable paths what a player would: till, sow at
+/// staggered world times (so the rows show every stage), turn up a seed,
+/// stand a lantern by the field; place a forge and queue two jobs, the first
+/// part done. The capture's save is memory-only, so nothing is kept.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+pub fn scripted(
+    launch: Res<super::Launch>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    refresh: Res<pbd_app::planet::LodRefresh>,
+    (mut fine, mut contact, mut save, mut slots, mut drops, sun): (
+        ResMut<PlanetFine>,
+        ResMut<PlanetContact>,
+        ResMut<WorldSave>,
+        ResMut<super::slots::Hotbar>,
+        ResMut<Drops>,
+        Res<pbd_app::sky::Sun>,
+    ),
+    (farm, recipes, mut station_at, mut screen, mut note, time, mut gained): (
+        Res<FarmConfig>,
+        Res<Recipes>,
+        ResMut<StationAt>,
+        ResMut<Screen>,
+        ResMut<FarmNote>,
+        Res<Time>,
+        MessageWriter<Gained>,
+    ),
+    mut done: Local<bool>,
+) {
+    if *done || launch.capture.is_none() || (launch.farm.is_none() && launch.forge.is_none()) {
+        return;
+    }
+    if refresh.in_flight_s().is_some() {
+        return;
+    }
+    let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
+        return;
+    };
+    let eye = transform.translation();
+    let up = eye.normalize_or(Vec3::Y);
+    let forward = transform.forward().as_vec3();
+    let ahead = (forward - up * forward.dot(up)).normalize_or(Vec3::X);
+    let right = ahead.cross(up).normalize_or(Vec3::Z);
+    // The cell `metres` ahead and `across` to the right: its key and the
+    // top solid layer.
+    let spot = |fine: &PlanetFine,
+                contact: &PlanetContact,
+                metres: f32,
+                across: f32|
+     -> Option<(u32, usize)> {
+        let offset = ahead * metres + right * across;
+        let angle = offset.length() / PLANET_RADIUS;
+        let direction = (up * angle.cos() + offset.normalize_or(ahead) * angle.sin()).normalize();
+        let record = contact.finest_cell(direction)?;
+        let key = fine.set.finest_records().get(record)?.key();
+        let top = fine.set.columns.column(record)?.surface()?;
+        Some((key, top))
+    };
+    let first = launch.farm.or(launch.forge).unwrap_or(6.0);
+    if spot(&fine, &contact, first, 0.0).is_none() {
+        return;
+    }
+    *done = true;
+    let now_s = sun.clock.seconds;
+    let wall_s = time.elapsed_secs();
+    let day = f64::from(pbd_core::daylight::DAY_S);
+    macro_rules! world {
+        () => {
+            &mut Edited {
+                fine: &mut fine,
+                contact: &mut contact,
+                save: &mut save,
+                slots: &mut slots,
+                drops: &mut drops,
+                now_s,
+            }
+        };
+    }
+    if let Some(metres) = launch.farm {
+        const STEP: f32 = 2.9;
+        let mut used = Vec::new();
+        let mut ripe = Vec::new();
+        for (row, crop) in [Crop::WHEAT, Crop::TURNIP].into_iter().enumerate() {
+            for (col, share) in [0.1, 0.4, 0.8, 1.2].into_iter().enumerate() {
+                let mut across = (col as f32 - 1.5) * STEP;
+                let mut found = None;
+                for _ in 0..12 {
+                    match spot(&fine, &contact, metres + row as f32 * STEP, across) {
+                        Some((cell, top)) if !used.contains(&cell) => {
+                            found = Some((cell, top));
+                            break;
+                        }
+                        _ => across += 0.5,
+                    }
+                }
+                let Some((cell, top)) = found else { continue };
+                used.push(cell);
+                let material = digging::material_of(&fine, &save, (cell, top));
+                if material.is_some_and(farming::tillable) {
+                    apply_edit(world!(), Hands::Till(None), cell, top, Material::Tilled);
+                }
+                if digging::material_of(&fine, &save, (cell, top)) != Some(Material::Tilled) {
+                    warn!("scripted farm: cell {cell} would not till ({material:?})");
+                    continue;
+                }
+                let planted = now_s - share * f64::from(farm.0.of(crop).days) * day;
+                let plot = Plot::sown(top as u16, crop, planted);
+                save.store_with_hands(plot_record(cell, &plot), PLOT_SCHEMA, &slots.0);
+                if share >= 1.0 {
+                    ripe.push((cell, plot, crop));
+                }
+                info!(
+                    "scripted farm: {} at cell {cell}, {:.0}% grown",
+                    crop.row().name,
+                    share * 100.0
+                );
+            }
+        }
+        // A grassy cell tilled before the field, so its seed floats up.
+        for across in [0.0, 1.0, -1.0, 2.0] {
+            if let Some((cell, top)) = spot(&fine, &contact, metres - 2.4, across)
+                && !used.contains(&cell)
+                && digging::material_of(&fine, &save, (cell, top))
+                    .is_some_and(farming::sprouts_seed)
+            {
+                let seed = farming::seed_turned_up(cell, climate_at(&fine, cell, top))
+                    .unwrap_or(pbd_core::goods::Good::WHEAT_SEED);
+                apply_edit(
+                    world!(),
+                    Hands::Till(Some(Item::Good(seed))),
+                    cell,
+                    top,
+                    Material::Tilled,
+                );
+                info!(
+                    "scripted farm: tilled grass at cell {cell}, turned up a {}",
+                    seed.name()
+                );
+                break;
+            }
+        }
+        // Where the wild plants round the camera are, so a shot can be
+        // turned onto one (`--yaw` is the bearing plus the camera's own).
+        for (index, record) in fine.set.finest_records().iter().enumerate() {
+            let Some(dir) = direction_of(&fine, index) else {
+                continue;
+            };
+            let off = dir * PLANET_RADIUS - up * PLANET_RADIUS;
+            let (fwd, side) = (off.dot(ahead), off.dot(right));
+            let d = fwd.hypot(side);
+            if d > 25.0 {
+                continue;
+            }
+            let Some(top) = fine.set.columns.column(index).and_then(|c| c.surface()) else {
+                continue;
+            };
+            if let Some(crop) = wild_at(&fine, &save, &farm, record.key(), top) {
+                info!(
+                    "scripted farm: a wild {} {d:.1} m away, {:.0} degrees right of the view",
+                    crop.row().name,
+                    side.atan2(fwd).to_degrees()
+                );
+            }
+        }
+        // A street lantern at the field's end, for the night shot.
+        if let Some((cell, top)) = spot(&fine, &contact, metres + 0.5 * STEP, 2.0 * STEP) {
+            apply_edit(world!(), Hands::Empty, cell, top + 1, Material::LanternPost);
+        }
+        if launch.farm_harvest {
+            for (cell, plot, crop) in ripe {
+                harvest(
+                    &mut save,
+                    &mut slots,
+                    &farm,
+                    cell,
+                    plot,
+                    crop,
+                    now_s,
+                    &mut note,
+                    wall_s,
+                    &mut gained,
+                );
+            }
+            // And the nearest wild plant within a short walk.
+            let mut nearest: Option<(f32, u32, Crop)> = None;
+            for (index, record) in fine.set.finest_records().iter().enumerate() {
+                let Some(dir) = direction_of(&fine, index) else {
+                    continue;
+                };
+                let d = dir.angle_between(up) * PLANET_RADIUS;
+                if d > 30.0 || nearest.is_some_and(|n| n.0 <= d) {
+                    continue;
+                }
+                let Some(top) = fine.set.columns.column(index).and_then(|c| c.surface()) else {
+                    continue;
+                };
+                if let Some(crop) = wild_at(&fine, &save, &farm, record.key(), top) {
+                    nearest = Some((d, record.key(), crop));
+                }
+            }
+            match nearest {
+                Some((d, cell, crop)) => {
+                    info!(
+                        "scripted farm: picking the wild {} {d:.1} m away",
+                        crop.row().name
+                    );
+                    pick(
+                        &mut save,
+                        &mut slots,
+                        &farm,
+                        cell,
+                        crop,
+                        now_s,
+                        &mut note,
+                        wall_s,
+                        &mut gained,
+                    );
+                }
+                None => warn!("scripted farm: no wild plant within 30 m"),
+            }
+        }
+    }
+    if let Some(metres) = launch.forge {
+        let Some((cell, top)) = spot(&fine, &contact, metres, 0.0) else {
+            return;
+        };
+        let layer = top + 1;
+        apply_edit(world!(), Hands::Empty, cell, layer, Material::Forge);
+        slots.give(Item::Block(Material::Ore), 12);
+        slots.give(Item::Good(pbd_core::goods::Good::COAL), 8);
+        let at = (cell, layer as u16);
+        // The first job three seconds in, the second waiting behind it.
+        for at_s in [now_s - 3.0, now_s] {
+            super::forge::queue(
+                &mut save,
+                &mut slots,
+                &recipes,
+                at,
+                "mixed-ore",
+                at_s,
+                &mut note,
+                wall_s,
+            );
+        }
+        if launch.forge_panel {
+            station_at.0 = Some(at);
+            *screen = Screen::Forge;
+        }
+        info!("scripted forge at cell {cell} layer {layer}");
     }
 }
 

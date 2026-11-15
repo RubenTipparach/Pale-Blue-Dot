@@ -236,6 +236,19 @@ pub struct Launch {
     pub lamps: bool,
     pub lamps_at: f32,
     pub lamps_across: f32,
+    /// `--farm [metres]` (`farming-and-smelting` task 5.1, a capture
+    /// instrument): tills two rows of four cells that far ahead, sows wheat
+    /// and turnip in them at staggered world times so the rows show all four
+    /// stages, tills one grassy cell so its seed floats, and stands a street
+    /// lantern by the field for a night shot.
+    pub farm: Option<f32>,
+    /// `--farm-harvest`: with `--farm`, harvests the ripe cells and picks the
+    /// nearest wild plant, so the hotbar shows what came of it.
+    pub farm_harvest: bool,
+    /// `--forge [metres]`: a forge that far ahead, stocked and given two jobs,
+    /// the first part done; with `--forge-panel`, its panel open.
+    pub forge: Option<f32>,
+    pub forge_panel: bool,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -345,6 +358,10 @@ impl Launch {
             lamps: false,
             lamps_at: 5.0,
             lamps_across: 0.0,
+            farm: None,
+            farm_harvest: false,
+            forge: None,
+            forge_panel: false,
             dig_ahead: false,
             pitch: None,
             yaw: None,
@@ -422,6 +439,25 @@ impl Launch {
                         }
                     }
                 }
+                "--farm" | "--forge" => {
+                    let farm = args[i] == "--farm";
+                    let mut metres = 6.0;
+                    if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
+                        assert!(
+                            m.is_finite() && m > 0.0,
+                            "--farm and --forge take metres ahead"
+                        );
+                        metres = m;
+                        i += 1;
+                    }
+                    if farm {
+                        result.farm = Some(metres);
+                    } else {
+                        result.forge = Some(metres);
+                    }
+                }
+                "--farm-harvest" => result.farm_harvest = true,
+                "--forge-panel" => result.forge_panel = true,
                 "--dig-ahead" => result.dig_ahead = true,
                 "--pitch" => {
                     i += 1;
@@ -1273,6 +1309,7 @@ pub fn run(args: &[String]) {
                 .chain()
                 .after(digging::dig_and_place),
             (farm::show, farm::show_note),
+            farm::scripted.after(digging::scripted_dig),
         ),
     )
     .add_systems(

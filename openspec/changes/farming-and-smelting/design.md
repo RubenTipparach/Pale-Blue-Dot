@@ -168,6 +168,9 @@ body `(station: "forge", jobs: [(recipe: "mixed-ore", queued_s: S), ..])`.
 
 - **Queuing** takes the recipe's inputs from the slots (hotbar first, then
   the pack) and appends the job: one `with` line.
+- When a finished job is collected, the job after it takes the finished
+  one's end as its own start (written into the record), so taking the head
+  off the queue never moves the next job's clock.
 - **Collecting** happens while the panel is open: each finished job at the
   head of the queue whose outputs fit in the slots is removed and its outputs
   given by the give order: one `with` line. A job whose outputs do not fit
@@ -242,6 +245,42 @@ whose queue is full, is drawn disabled. The hotbar stays drawn under it.
 - The identity file notes the two record kinds at schema 1 the first time
   each is stored (`note_record_kinds`).
 
+### 14. Seeds in the wild: dug grass and wild plants
+
+The owner, 2026-11-14: "seeds drop from hitting grass or finding plants in
+the wild ... we might need to combine env v2 in this first step". Two finds,
+both kept to what farming needs:
+
+- **Dug grass turns up a seed**: digging a grassy block gives its block as
+  before and, in one cell in `grass_seed_one_in` (4), a seed of a crop that
+  suits the climate, the same for the same cell every time. The seed goes
+  straight into the slots on the dig's own line (the line already carries
+  the slots), so the hole, the block and the seed are durable together.
+- **Wild plants**: one grassy cell in `wild_one_in` (40) grows a wild plant
+  of a crop that suits its climate, drawn as one bush of its ripe sprite.
+  `E` on it picks it: `wild_seeds` (2) seeds and one of its produce, and a
+  `wild` record (id the cell's key, body the world time) in one `with` line,
+  so a picked plant stays picked. A plant on a cell that is dug, tilled or
+  built over is simply not there.
+- **Recommendation taken (ask only with screenshots): wild plants are a
+  derived decoration layer, not generation.** They are a function of the
+  world's seed and a cell's key, read off the ground the column tier already
+  holds, the way the meadow's flowers are drawn; no terrain, biome, top block
+  or tree changes, no generator version moves, and every digest test is
+  untouched. They appear in old worlds too, which changes how an old meadow
+  looks and nothing it holds: nothing a player made is moved or removed, and
+  picking is the player's own durable edit. Gating them behind a generator
+  version would have kept every existing world seedless except by digging.
+  Wild plants do not regrow in this slice.
+
+### 15. Game events for what counts them
+
+Picking, finding, planting, harvesting and making raise Bevy messages
+(`pbd_app::hotbar::Gained { item, count, how }`, `how` one of found, picked,
+harvested, made, and `Planted { crop }`), written on the frame the durable
+write was accepted. The coming `starter-missions` chain ("find seeds",
+"plant", "harvest") counts them; nothing in this change reads them.
+
 ### 13. What is derived and what is stored
 
 | Thing | Stored | Derived |
@@ -251,6 +290,8 @@ whose queue is full, is drawn disabled. The hotbar stays drawn under it.
 | A seed turned up by tilling | the drop on the till's line | which crop, from the cell's key and climate |
 | A station | its block (edit) and its queue record | each job's progress and whether it is done |
 | Coal from ore | the drop on the dig's line | coal or ore, from the cell's key |
+| A seed from dug grass | the slots on the dig's line | whether and which, from the cell's key |
+| A wild plant | that it was picked (`wild` record) | where they grow, from the world seed and the cell's key |
 
 ## Non-goals (deferred, and why)
 
