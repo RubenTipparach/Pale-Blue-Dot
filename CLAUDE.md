@@ -319,6 +319,21 @@ herd and the pot; the herd's eggs, milk and meat go in the pot too. Work on
 the loop comes before the other drafted mockups (ships, stations, markets),
 which wait for a request.
 
+**After the loop (owner, 2026-11-14; "dont start this stuff yet"):**
+- **Environment v2, an environmental overhaul**: advanced foliage and flora (M13), and an
+  underwater overhaul (M25, `ocean-environments`).
+- **Then town building and civil engineering** ("the after env v2, we'll
+  down town building, civil engineerring"): towns built and grown on the grid (M15,
+  M22), and the works between buildings (roads, bridges); no mockup yet for
+  the second.
+- **Then the townsfolk**: NPCs (M5, `townsfolk`), missions, carpentry and
+  house building (M6, M22, `player-building`), and power generation, its
+  first rungs only: water and wind (M20).
+
+None of these starts until the owner asks. The tracker's Roadmap section
+lists every phase with its mockups; keep it in step with this list
+("I'm just building a road map for the mockup tracker doc").
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything

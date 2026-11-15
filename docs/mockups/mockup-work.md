@@ -26,6 +26,8 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 12 | 2026-11-13 | One 3D view at a time, in tabs: M24 v7, M1 v6, M5 v7, M9 v4, M17 v11. |
 | 13 to 15 | 2026-11-13 to 14 | Published from other branches (the last, from claude/perf-tuning, added the Sounds page as M25). |
 | 16 | 2026-11-14 | Every page back on this account: main's lists with this account's links, M25 to M29 added, the Sounds page as M30. |
+| 17 | 2026-11-14 | A Roadmap section above the mockups (the owner: "I'm just building a road map for the mockup tracker doc"): the first game loop, environment v2, town building and civil engineering, then the townsfolk. |
+| 18 | 2026-11-14 | Town building and civil engineering added after environment v2. |
 
 **Back on one account (2026-11-14).** On 2026-11-13 a cloud session republished this week's pages
 on a second claude.ai account and moved every link here to it; later sessions added M25 to M29
