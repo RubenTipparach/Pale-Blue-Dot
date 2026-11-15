@@ -89,19 +89,42 @@ impl FarmState {
         yield_factor: f32,
         n: &NeedSettings,
     ) -> FarmState {
+        self.advance_from(to, c, keep, sex, yield_factor, n, f64::NEG_INFINITY)
+    }
+
+    /// [`Self::advance`], giving products only from `productive_from`: a
+    /// young animal from the day it is adult, a hen that sat on a clutch
+    /// from the day it hatched (`animal-husbandry` design 13, E1, E4). The
+    /// day is the second boundary the span is split at.
+    #[allow(clippy::too_many_arguments)]
+    pub fn advance_from(
+        &self,
+        to: f64,
+        c: Conditions,
+        keep: &Keeping,
+        sex: Sex,
+        yield_factor: f32,
+        n: &NeedSettings,
+        productive_from: f64,
+    ) -> FarmState {
         let mut s = self.clone();
         if to.partial_cmp(&s.as_of) != Some(std::cmp::Ordering::Greater) {
             return s;
         }
-        // A hand feed running out is the one boundary inside the span.
-        if s.fed_until > s.as_of && s.fed_until < to {
-            let split = s.fed_until;
-            s = s.segment(split, c, keep, sex, yield_factor, n);
+        let mut cuts = [s.fed_until, productive_from];
+        cuts.sort_by(f64::total_cmp);
+        for split in cuts {
+            if split > s.as_of && split < to {
+                let gives = s.as_of >= productive_from;
+                s = s.segment(split, c, keep, sex, yield_factor, n, gives);
+            }
         }
-        s.segment(to, c, keep, sex, yield_factor, n)
+        let gives = s.as_of >= productive_from;
+        s.segment(to, c, keep, sex, yield_factor, n, gives)
     }
 
     /// One span over which the needs met do not change.
+    #[allow(clippy::too_many_arguments)]
     fn segment(
         mut self,
         to: f64,
@@ -110,6 +133,7 @@ impl FarmState {
         sex: Sex,
         yield_factor: f32,
         n: &NeedSettings,
+        gives: bool,
     ) -> FarmState {
         let dt = (to - self.as_of) as f32;
         let met = self.met(c, self.as_of);
@@ -133,7 +157,7 @@ impl FarmState {
         } else {
             0.0
         };
-        if productive > 0.0 {
+        if productive > 0.0 && gives {
             for p in keep.products.iter().filter(|p| p.gives(sex)) {
                 let per_day = p.amount * yield_factor / p.period_days;
                 let cap = per_day * n.cap_days.max(p.period_days);

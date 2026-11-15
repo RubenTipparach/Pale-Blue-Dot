@@ -34,6 +34,25 @@
         near_m: 150.0,
         fade_s: 1.0,
     ),
+    // Eggs, pairing and inheritance (design 13): mood and health out of
+    // 100, the morning check as a fraction of the world day, a mutation one
+    // allele in 32 by up to 0.15, hardiness lowered 0.5 x F, F read back
+    // four generations and warned above first cousins (1/16). A carried
+    // fertile egg goes cold after a day; an incubator holds 6 and wants a
+    // lamp within 3 m.
+    breeding: (
+        mood_min: 60.0,
+        health_min: 50.0,
+        morning: 0.25,
+        mutate_one_in: 32,
+        mutate_step: 0.15,
+        hardiness_per_f: 0.5,
+        generations: 4,
+        warn_f: 0.0625,
+        cold_after_days: 1.0,
+        incubator_eggs: 6,
+        lamp_m: 3.0,
+    ),
     land: {
         "home": [
             (
@@ -63,6 +82,16 @@
                     morph: "golden",
                     adult_days: 10.0,
                     male_one_in: 6,
+                    // Decision 8: a chick 0-5 days at 0.12 m of 0.42, a pullet
+                    // 5-10 at 0.3 m; eggs hatch in 3 days, 8 under a broody hen.
+                    young: (
+                        stages: [
+                            (name: "chick", until_days: 5.0, size: 0.29),
+                            (name: "pullet", until_days: 10.0, size: 0.71),
+                        ],
+                        adult: ("hen", "cockerel"),
+                        birth: Eggs(incubation_days: 3.0, clutch_max: 8),
+                    ),
                 )),
                 guide: (
                     entry: "A meadow hen scratches for seed in the long grass and runs from anything taller than a fence post. Kept in a yard she lays an egg a day.",
@@ -96,6 +125,15 @@
                     morph: "melanic",
                     adult_days: 12.0,
                     male_one_in: 5,
+                    // Decision 8: gestation 5, 1-2 lambs; lamb 0-6 at 45%, hogg 6-12 at 75%.
+                    young: (
+                        stages: [
+                            (name: "lamb", until_days: 6.0, size: 0.45),
+                            (name: "hogg", until_days: 12.0, size: 0.75),
+                        ],
+                        adult: ("ewe", "ram"),
+                        birth: Live(gestation_days: 5.0, litter: (1, 2)),
+                    ),
                 )),
                 guide: (
                     entry: "Woolbacks graze the open fields in loose flocks, heads down, and lift them all at once at a sound. A kept one grows a fleece worth shearing every four days.",
@@ -129,6 +167,15 @@
                     morph: "albino",
                     adult_days: 16.0,
                     male_one_in: 4,
+                    // Decision 8: gestation 8, one calf; calf 0-8 at 40%, young 8-16 at 75%.
+                    young: (
+                        stages: [
+                            (name: "calf", until_days: 8.0, size: 0.40),
+                            (name: "young", until_days: 16.0, size: 0.75),
+                        ],
+                        adult: ("cow", "bull"),
+                        birth: Live(gestation_days: 8.0, litter: (1, 1)),
+                    ),
                 )),
                 guide: (
                     entry: "The plodder is the great slow beast of the fields: two metres of patience that grazes from dawn to dusk. A kept cow gives a pail of milk a day.",
