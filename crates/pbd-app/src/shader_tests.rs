@@ -378,16 +378,20 @@ fn the_sky_near_the_ground_keeps_the_grounds_twilight() {
 fn the_water_is_lit_not_luminous() {
     let src = include_str!("../../../assets/shaders/water.wgsl");
     for line in [
-        "return view.deep_color.rgb*view.water_light.rgb*exp(-absorption*max(eye_depth,0.0));",
-        "let transmitted = mix(albedo*water_lit,scene,exp(-absorption*path_length));",
+        "return view.deep_color.rgb*view.water_light.rgb*light_left(eye_depth);",
+        "let transmitted = mix(albedo*water_lit,scene,exp(-view_extinction()*path_length));",
         "var reflected = water_sky_radiance(water_sky_frame(reflected_ray,radial,sun_direction));",
     ] {
         assert!(src.contains(line), "missing `{line}`");
     }
-    assert!(
-        !src.contains("view.absorption.w"),
-        "the night floor is gone"
+    // The absorption lane's w was a night floor; it is the turbidity now
+    // (`ocean-environments` B3), read only as a per-metre extinction.
+    assert_eq!(
+        src.matches("view.absorption.w").count(),
+        1,
+        "the night floor is gone; w is read once, as the turbidity"
     );
+    assert!(src.contains("vec3<f32>(max(view.absorption.w,0.0))"));
 }
 
 /// One function's body in a WGSL source, from `fn name(` to its closing brace

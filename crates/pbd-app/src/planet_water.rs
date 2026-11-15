@@ -65,7 +65,8 @@ pub(super) struct WaterView {
     waves: Vec4,
     ripple: Vec4,
     refraction: Vec4,
-    /// rgb absorption per metre; w spare.
+    /// rgb absorption per metre (the view's path); w the turbidity at the
+    /// eye, per metre (`ocean-environments` B3).
     absorption: Vec4,
     /// rgb the deep water's albedo; w the falling-water flow speed.
     deep_color: Vec4,
@@ -181,6 +182,12 @@ pub(super) struct WaterView {
     /// (`sky_sh_pair`): the sky the sheet mirrors where the screen trace
     /// finds nothing nearer (`sh_radiance`).
     sky_sh: [Vec4; 9],
+    /// Under the water (`ocean-environments` B5): the shafts' strength and
+    /// reach, m; the snow's strength and the depth it shows from, m.
+    under: Vec4,
+    /// The snow's own glow, linear; the wind at the sea, m/s; the spray's
+    /// start, m/s, and its strength.
+    under_more: Vec4,
 }
 
 /// The light on open water and the sky's coefficients, both by the cover:
@@ -1328,7 +1335,8 @@ fn prepare_water_views(
             camera_time: camera.extend(clock.0 * s.time_scale),
             planet_center: Vec3::ZERO.extend(sea_radius),
             sun: sun.direction().extend(s.specular_intensity * sun_dim),
-            waves: Vec4::new(0.0, 0.0, 0.0, s.wave_steepness),
+            // xyz the downwelling (`ocean-environments` B2).
+            waves: v3(s.downwell_per_m).extend(s.wave_steepness),
             ripple: Vec4::new(
                 s.ripple_scale,
                 s.ripple_speed,
@@ -1341,7 +1349,8 @@ fn prepare_water_views(
                 s.slope_max,
                 s.max_path_m,
             ),
-            absorption: v3(s.absorption_per_m).extend(0.0),
+            // w the turbidity at the eye, eased (B3).
+            absorption: v3(s.absorption_per_m).extend(sea_now.turbidity.max(0.0)),
             deep_color: v3(s.deep_color).extend(s.flow_uv_speed_falling),
             shallow: v3(s.shallow_color).extend(s.sky_horizon_strength),
             water_light: open_water_light.extend(s.shallow_depth_m),
@@ -1480,6 +1489,8 @@ fn prepare_water_views(
             ssr_clip: planet_view.ssr_clip,
             haze_weather: Vec4::new(weather.cover, weather.rain, 0.0, 0.0),
             sky_sh,
+            under: Vec4::new(s.shafts, s.shaft_reach_m, s.snow, s.snow_from_m),
+            under_more: Vec4::new(s.snow_glow, sea_now.wind_mps, s.spray_from_mps, s.spray),
             ssr_eye: if lighting
                 .as_ref()
                 .is_some_and(|l| l.reflect_sea_on() && l.reflect_capture_on())
@@ -2429,7 +2440,7 @@ mod tests {
         // And the sky's nine coefficients (`water-lit`).
         let sh = block.matches("array<vec4<f32>, 9>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * lamps + 8 * sh;
-        assert_eq!((mat4, vec4, lamps, sh), (4, 74, 1, 1));
+        assert_eq!((mat4, vec4, lamps, sh), (4, 76, 1, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");

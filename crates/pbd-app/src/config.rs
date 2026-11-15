@@ -107,8 +107,33 @@ pub struct WaterSettings {
     /// Longest optical path through water, metres, used where scene depth is
     /// sky.
     pub max_path_m: f32,
-    /// RGB absorption per metre.
+    /// RGB absorption per metre: the VIEW's path through water.
     pub absorption_per_m: [f32; 3],
+    /// RGB downwelling per metre: daylight ARRIVING at a depth, which lights
+    /// the seabed and the water round the eye and sets the depth zones
+    /// (`pbd_core::ocean`, `ocean-environments` design B2).
+    pub downwell_per_m: [f32; 3],
+    /// Turbidity per metre toward the water's own colour, by environment
+    /// (`ocean-environments` design B3).
+    pub turbidity: pbd_core::ocean::Turbidity,
+    /// Caustics on sunlit seabed: strength (zero: none), the web's cell, m,
+    /// and the depth they are gone by, m.
+    pub caustics: f32,
+    pub caustic_cell_m: f32,
+    pub caustic_fade_m: f32,
+    /// Light shafts seen from under the water by day: strength (zero: none)
+    /// and how far along the view they are gathered, m.
+    pub shafts: f32,
+    pub shaft_reach_m: f32,
+    /// Marine snow round the eye: strength (zero: none), the depth it starts
+    /// showing from, m, and its own faint glow, linear.
+    pub snow: f32,
+    pub snow_from_m: f32,
+    pub snow_glow: f32,
+    /// Spray and streaked foam from this wind at the sea up, m/s (a gale),
+    /// and how strong they are at twice it (zero: none).
+    pub spray_from_mps: f32,
+    pub spray: f32,
     /// The deep water's albedo, linear RGB: what it gives back of the light
     /// that reaches it (`water-lit`). Real deep sea returns a few percent of
     /// the blue; from above its colour is mostly the sky it mirrors.
@@ -173,6 +198,18 @@ impl Default for WaterSettings {
             refract_max_uv: 0.03,
             max_path_m: 200.0,
             absorption_per_m: [0.32, 0.035, 0.012],
+            downwell_per_m: pbd_core::ocean::OCEAN_DOWNWELL_PER_M,
+            turbidity: pbd_core::ocean::Turbidity::default(),
+            caustics: 3.0,
+            caustic_cell_m: 4.0,
+            caustic_fade_m: 30.0,
+            shafts: 0.6,
+            shaft_reach_m: 40.0,
+            snow: 1.0,
+            snow_from_m: 15.0,
+            snow_glow: 0.006,
+            spray_from_mps: 17.0,
+            spray: 0.6,
             deep_color: [0.004, 0.018, 0.040],
             shallow_color: [0.020, 0.090, 0.075],
             shallow_depth_m: 14.0,
@@ -233,6 +270,25 @@ impl Validated for WaterSettings {
         )?;
         s.sea.validate()?;
         non_negative("absorption_per_m", &s.absorption_per_m)?;
+        non_negative("downwell_per_m", &s.downwell_per_m)?;
+        s.turbidity.validate()?;
+        non_negative(
+            "under water",
+            &[
+                s.caustics,
+                s.caustic_fade_m,
+                s.shafts,
+                s.shaft_reach_m,
+                s.snow,
+                s.snow_from_m,
+                s.snow_glow,
+                s.spray_from_mps,
+                s.spray,
+            ],
+        )?;
+        (s.caustic_cell_m.is_finite() && s.caustic_cell_m > 0.0)
+            .then_some(())
+            .ok_or("caustic_cell_m must be a positive size")?;
         non_negative("deep_color", &s.deep_color)?;
         non_negative("shallow_color", &s.shallow_color)?;
         (s.shallow_depth_m.is_finite() && s.shallow_depth_m > 0.0)

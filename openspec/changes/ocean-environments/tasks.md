@@ -23,9 +23,9 @@ against what it would cost.
 
 ## 4. Light under water (requested 2026-11-15; branch `claude/underwater-v2`)
 
-- [ ] 4.1 `downwell_per_m` split from `absorption_per_m`, and `turbidity` per environment. Verify: a capture at 10, 40, 90 and 123 m (the seed's deepest floor is 125 m, design B1) beside the mockup's light tab; a core test that the zones fall at 40 and 90 m for ocean water.
-- [ ] 4.2 Caustics, shafts and marine snow. Verify: captures; `tools/perf_suite.py` before and after on the owner's hardware.
-- [ ] 4.3 Spray and streaked foam from a gale up. Verify: a storm capture beside `sea-storm-day.jpg`.
+- [x] 4.1 (built 2026-11-15; the owner judges `docs/screenshots/underwater-v2/compare-sheet.jpg`) `downwell_per_m` split from `absorption_per_m`, and `turbidity` per environment. Verify: a capture at 10, 40, 90 and 123 m (the seed's deepest floor is 125 m, design B1) beside the mockup's light tab; a core test that the zones fall at 40 and 90 m for ocean water.
+- [ ] 4.2 Caustics, shafts and marine snow. Verify: captures; `tools/perf_suite.py` before and after on the owner's hardware. (Built 2026-11-15 and captured, `after-*-sun.jpg`; frame cost NOT measured, the perf suite waits for the owner's hardware, so this stays open.)
+- [ ] 4.3 Spray and streaked foam from a gale up. Verify: a storm capture beside `sea-storm-day.jpg`. (Built 2026-11-15; no gale was found to film, so only a test capture with the threshold lowered exists, `spray-test-from-1mps.jpg`; the storm capture is still owed.)
 
 ## 5. Tides (requested 2026-11-15, after group 7, on the 1 mm condition)
 

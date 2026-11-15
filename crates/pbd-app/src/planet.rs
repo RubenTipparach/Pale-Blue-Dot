@@ -1643,7 +1643,10 @@ fn prepare_views(
             camera: camera_position.extend(1.),
             sun: sun.direction().extend(1.),
             settings: Vec4::new(PLANET_RADIUS, planet.slots as f32, clock.0, foliage_range),
-            water_absorption: Vec3::from_array(water_settings.absorption_per_m)
+            // The DOWNWELLING (`ocean-environments` B2): the seabed's light is
+            // the daylight arriving at its depth. The lane keeps its name; its
+            // only reader is that light, and the sea radius in w.
+            water_absorption: Vec3::from_array(water_settings.downwell_per_m)
                 .extend(PLANET_RADIUS - water_settings.depth_offset_m),
             water_deep: Vec3::from_array(water_settings.deep_color).extend(0.),
             weather: Vec4::new(
@@ -1757,7 +1760,15 @@ fn prepare_views(
             lod_prev: prev_centre.extend(0.0),
             bands_prev: prev.bands,
             lod_counts_prev: UVec4::from_array(counts_prev),
-            lod_spare: Vec4::ZERO,
+            // Caustics on the seabed (`ocean-environments` B5): strength,
+            // the web's cell m, the depth they are gone by m. The lane is the
+            // visibility pass's spare; it reads none of it.
+            lod_spare: Vec4::new(
+                water_settings.caustics,
+                water_settings.caustic_cell_m,
+                water_settings.caustic_fade_m,
+                0.0,
+            ),
             anchor: anchor.extend(0.0),
             bands_in: lod.bands_in,
             bands_prev_in: prev.bands_in,
