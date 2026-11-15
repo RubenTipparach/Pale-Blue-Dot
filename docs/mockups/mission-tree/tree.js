@@ -150,23 +150,23 @@
       help: "Iron ore smelts hotter: feed the forge more coal." },
 
     // 5. Cooking
-    { id: "fire", b: "cooking", col: 11, row: 3, icon: "campfire", title: "Make a fire", needs: [["three-kinds"], ["harvest", "collect"]],
+    { id: "fire", b: "cooking", col: 13, row: 3, icon: "campfire", title: "Make a fire", needs: [["three-kinds"], ["harvest", "collect"]],
       obj: [o("craft a campfire", 1, "craft a campfire (new recipe)", true), o("place it", 1, "place the campfire")], unl: ["campfire-dishes"],
       help: "Make a campfire in the Craft row from five loose stone and two logs, and set it down near water." },
-    { id: "cook-fish", b: "cooking", col: 12, row: 3, icon: "grilled-fish", title: "Cook fish", needs: [["fire"]],
+    { id: "cook-fish", b: "cooking", col: 14, row: 3, icon: "grilled-fish", title: "Cook fish", needs: [["fire"]],
       obj: [o("cook grilled fish", 2, "cook 2 grilled-fish")], unl: [], help: "Open the campfire with E and grill the fish you caught." },
-    { id: "bread", b: "cooking", col: 13, row: 3, icon: "flatbread", title: "Bake bread", needs: [["cook-fish"]], uses: ["harvest"],
+    { id: "bread", b: "cooking", col: 15, row: 3, icon: "flatbread", title: "Bake bread", needs: [["cook-fish"]], uses: ["harvest"],
       obj: [o("cook flatbread", 2, "cook 2 flatbread from your wheat")], unl: [], help: "At the campfire, bake flatbread from wheat you grew." },
-    { id: "eat", b: "cooking", col: 14, row: 3, icon: "kale-skewer", title: "Eat well", needs: [["bread"]],
+    { id: "eat", b: "cooking", col: 16, row: 3, icon: "kale-skewer", title: "Eat well", needs: [["bread"]],
       obj: [o("eat a dish", 1, "eat 1 dish; its effect shows", true)], unl: [],
       help: "Put a dish on the hotbar and use it; its effect shows beside the health bar." },
-    { id: "farm-meal", b: "cooking", col: 15, row: 3, icon: "roast-turnip", title: "A farm meal", needs: [["eat"]], uses: ["three-crops"],
+    { id: "farm-meal", b: "cooking", col: 17, row: 3, icon: "roast-turnip", title: "A farm meal", needs: [["eat"]], uses: ["three-crops"],
       obj: [o("cook a farm dish", 1, "cook roast-turnip, kale-skewer or chili-fish")], unl: [],
       help: "At the campfire, cook a dish from your field." },
-    { id: "fried-egg", b: "cooking", col: 16, row: 3, icon: "fried-egg", title: "Breakfast", needs: [["farm-meal"]], uses: ["collect"],
+    { id: "fried-egg", b: "cooking", col: 18, row: 3, icon: "fried-egg", title: "Breakfast", needs: [["farm-meal"]], uses: ["collect"],
       obj: [o("cook a fried egg", 1, "cook a fried-egg from your hen's egg")], unl: [],
       help: "At the campfire, fry an egg from your own hens." },
-    { id: "feast", b: "cooking", col: 17, row: 3, icon: "chili-fish", title: "A feast", needs: [["fried-egg"]],
+    { id: "feast", b: "cooking", col: 19, row: 3, icon: "chili-fish", title: "A feast", needs: [["fried-egg"]],
       obj: [o("eat different dishes", 3, "eat 3 different dishes", true)], unl: ["kitchen"],
       help: "Eat three different dishes; every effect shows at once." },
 
@@ -287,27 +287,36 @@
     m.needs.forEach((g) => g.forEach((from) => edges.push({ from, to: m.id, kind: g.length > 1 ? "or" : "need" })));
     (m.uses || []).forEach((from) => edges.push({ from, to: m.id, kind: "uses" }));
   });
+  // Every link runs in the gaps: out of the source's side into the column gap
+  // beside it, along the row gap next to the target's row, down the column
+  // gap before the target, into its side. Cards sit only in the cells, so no
+  // link crosses one. Links sharing a gap are offset a few pixels apart.
+  const gapX = (c) => px(c) - GX / 2;            // the column gap left of column c
+  const gapY = (r) => py(r) - GY / 2;            // the row gap above row r
+  const lane = {};
+  const slot = (key) => { lane[key] = (lane[key] || 0) + 1; return (lane[key] - 1) * 6 - 6; };
   edges.forEach((e) => {
     const a = byId[e.from], b = byId[e.to];
-    let x1 = px(a.col) + CW, y1 = py(a.row) + CH / 2, x2 = px(b.col), y2 = py(b.row) + CH / 2;
+    const y1 = py(a.row) + CH / 2, y2 = py(b.row) + CH / 2;
+    const x1 = px(a.col) + CW, x2 = px(b.col);
     let d;
-    if (e.kind === "uses") {
-      // from the top or bottom of the source into the target's side
-      const up = b.row < a.row;
-      x1 = px(a.col) + CW / 2 + 40;
-      y1 = up ? py(a.row) : py(a.row) + CH;
-      x2 = px(b.col) + CW / 2 - 40;
-      y2 = up ? py(b.row) + CH : py(b.row);
-      const my = (y1 + y2) / 2;
-      d = `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`;
-    } else if (a.row === b.row) {
+    if (a.row === b.row && b.col === a.col + 1) {
       d = `M${x1},${y1} L${x2},${y2}`;
     } else {
-      const mx = x1 + Math.max(30, (x2 - x1) / 2);
-      d = `M${x1},${y1} C${mx},${y1} ${x2 - 30},${y2} ${x2},${y2}`;
+      const xs = gapX(a.col + 1) + slot("c" + (a.col + 1));
+      const xt = gapX(b.col) + slot("c" + b.col + "t");
+      if (b.col === a.col + 1) {
+        d = `M${x1},${y1} L${xs},${y1} L${xs},${y2} L${x2},${y2}`;
+      } else {
+        // the row gap on the target's side: above it when coming down, below it when going up
+        const ry = b.row > a.row ? gapY(b.row) : b.row < a.row ? gapY(b.row + 1) : gapY(b.row + 1);
+        const yr = ry + slot("r" + ry);
+        d = `M${x1},${y1} L${xs},${y1} L${xs},${yr} L${xt},${yr} L${xt},${y2} L${x2},${y2}`;
+      }
     }
     const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
     p.setAttribute("d", d);
+    p.setAttribute("fill", "none");
     e.el = p;
     svg.appendChild(p);
   });
