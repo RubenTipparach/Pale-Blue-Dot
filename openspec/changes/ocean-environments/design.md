@@ -453,8 +453,15 @@ the LGPL notice; `water-flow/liquid.js`, `water-look.js` and
 Checked headless (Chromium on SwiftShader, no GPU, so the look only, never
 the frame cost): every tab opens with no console errors and one WebGL
 context, nothing moves when idle, night is lit, no horizontal scroll at
-390 px. Screenshots `river-sim-*`, `dam-sim-*`, `marsh-sim-*` and
-`sim-presets-*` in `docs/screenshots/mockup-ocean/`.
+390 px; the river has no dry cell (154 river cells), the fall is three
+columns of falling cells at layers 10 to 13, and all 159 arrows on flowing
+tops point downstream; the dam holds (its gap columns 7 cells of sticks and
+the spill) and breaches (0 sticks, 8 cells of water, settled in 26 ticks);
+"Drop a catch" still drops. Screenshots `river-sim-*`, `dam-sim-*` (with
+`dam-sim-holds-after` and `dam-sim-breach-after`), `marsh-sim-*` and
+`sim-presets-*` in `docs/screenshots/mockup-ocean/`: each M28 preset's
+`-before` is M28's own page, its `-after` this tab; `merged-into-m25.jpg` in
+`docs/screenshots/mockup-water-flow/` is the page M28 now is.
 
 ## In the engine, part by part
 
