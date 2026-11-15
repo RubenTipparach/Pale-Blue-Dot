@@ -1810,7 +1810,7 @@ pub fn run(args: &[String]) {
             }
             app.insert_resource(
                 showcase::Player::new(name, file, launch.showcase_stills.clone())
-                    .from_shot(launch.showcase_from),
+                    .starting_at(launch.showcase_from),
             )
             .init_resource::<showcase::Tally>()
             .init_resource::<showcase::PendingClick>()

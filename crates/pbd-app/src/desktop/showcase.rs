@@ -65,7 +65,7 @@ impl Player {
     }
 
     /// Start at shot `n`, counted from 1.
-    pub fn from_shot(mut self, n: usize) -> Self {
+    pub fn starting_at(mut self, n: usize) -> Self {
         self.bot.shot = n.saturating_sub(1);
         self
     }
@@ -160,6 +160,12 @@ struct Bot {
     walk_anchor: Option<(Vec3, f32)>,
     detour_s: f32,
     roam_to: Option<Vec3>,
+    climb_s: f32,
+    /// Where the bot started: what it roams round before it has a bench.
+    home: Option<Vec3>,
+    roam_s: f32,
+    /// The tops of the cells the bot dug holes in, to walk round.
+    holes: Vec<Vec3>,
     look_goal: Option<(Vec3, f32, f32)>,
     index: Option<(u64, HashMap<u32, usize>)>,
     released: Vec<KeyCode>,
@@ -169,6 +175,10 @@ struct Bot {
     still: u32,
     line_was_out: bool,
     bite_s: f32,
+    /// An act's moment worth a still, taken after its frame.
+    want_still: bool,
+    /// The acts that have asked for a still this run, by kind.
+    stilled: HashSet<&'static str>,
 }
 
 /// Everything the bot looks at, borrowed for a frame.
@@ -312,6 +322,30 @@ impl Bot {
             self.steer(s, out, s.heading + right * 0.02, -0.1);
             return Walked::Going;
         }
+        // Round the nearest hole the bot dug that lies on the way.
+        let dir = to / dist;
+        let blocking = self
+            .holes
+            .iter()
+            .filter_map(|h| {
+                let rel = tangent(*h - s.feet, s.up);
+                let along = rel.dot(dir);
+                let lateral = rel - dir * along;
+                (along > 0.3 && along < dist && lateral.length() < 1.9)
+                    .then_some((along, *h, lateral))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0));
+        let to = match blocking {
+            Some((_, hole, lateral)) => {
+                let side = if lateral.length() > 0.05 {
+                    -lateral.normalize()
+                } else {
+                    dir.cross(s.up)
+                };
+                tangent(hole + side * 2.8 - s.feet, s.up)
+            }
+            None => to,
+        };
         let facing = self.steer(s, out, to, -0.12);
         let yaw = signed_angle(s.heading, to.normalize_or(s.heading), s.up);
         let _ = facing;
@@ -321,8 +355,16 @@ impl Bot {
                 out.held.insert(KeyCode::ShiftLeft);
             }
         }
+        // In a hole of its own digging: up out of it, as a player does,
+        // a block set under the feet at the top of each jump.
+        if self.in_pit(s) {
+            self.climb(s, out);
+            return Walked::Going;
+        }
+        self.climb_s = 0.0;
         let (anchor, since) = *self.walk_anchor.get_or_insert((s.feet, s.now));
-        if s.feet.distance(anchor) > 0.8 {
+        // Ground covered, not a jump up and down.
+        if tangent(s.feet - anchor, s.up).length() > 0.8 {
             self.walk_anchor = Some((s.feet, s.now));
         } else {
             let stalled = s.now - since;
@@ -337,6 +379,58 @@ impl Bot {
             }
         }
         Walked::Going
+    }
+
+    /// Whether the ground all round stands well over the feet: a pit.
+    fn in_pit(&self, s: &Sight) -> bool {
+        let ground = s.eye.length() - PLANET_RADIUS - pbd_app::walking::EYE_HEIGHT;
+        let east = Vec3::Y.cross(s.up).normalize_or(Vec3::X);
+        let north = s.up.cross(east);
+        let records = s.fine.set.finest_records();
+        (0..6)
+            .filter(|k| {
+                let a = *k as f32 / 6.0 * std::f32::consts::TAU;
+                let d = (s.feet + (east * a.cos() + north * a.sin()) * 2.6).normalize();
+                s.contact
+                    .finest_cell(d)
+                    .and_then(|i| records.get(i))
+                    .is_some_and(|r| r.direction_height[3] - ground > 1.3)
+            })
+            .count()
+            >= 5
+    }
+
+    /// One step of climbing out of a pit: dirt in hand, look down, jump,
+    /// and set the block under the feet at the jump's top.
+    fn climb(&mut self, s: &Sight, out: &mut Intent) {
+        if self.climb_s == 0.0 {
+            info!("showcase: climbing out of a pit");
+        }
+        self.climb_s += s.dt;
+        let dirt = (0..SLOTS).find(|&k| {
+            s.slots.get(k).is_some_and(|st| {
+                matches!(
+                    st.item,
+                    Item::Block(Material::Dirt | Material::Grass | Material::Soil)
+                )
+            })
+        });
+        if let Some(k) = dirt
+            && s.slots.selected() != k
+        {
+            out.taps.push(DIGITS[k]);
+            return;
+        }
+        self.steer(s, out, s.heading, -1.45);
+        let looking = s.pitch < -1.2;
+        let t = self.climb_s % 1.0;
+        if looking && t < s.dt * 1.5 {
+            out.taps.push(KeyCode::Space);
+        } else if looking && (0.22..0.6).contains(&t) && !self.rmb_down {
+            // Through the jump's top: whichever frame the feet clear the
+            // layer, the block goes under them.
+            out.rmb_tap = true;
+        }
     }
 
     /// Put an item in the selected slot: its number key, or the pack first
@@ -421,6 +515,20 @@ impl Bot {
         let toward = s.feet.normalize_or(Vec3::Y);
         let cos = (far / PLANET_RADIUS).cos();
         let mut out = Vec::new();
+        // Not beside a station: a hole there is a hole the bot must stand
+        // in to use it.
+        let stations: Vec<u32> = s
+            .save
+            .edits
+            .all()
+            .into_iter()
+            .filter(|e| pbd_core::station::station_of(e.material).is_some())
+            .map(|e| e.cell)
+            .collect();
+        let stations: Vec<Vec3> = stations
+            .into_iter()
+            .filter_map(|k| self.top_of(s, k))
+            .collect();
         for r in s.fine.set.finest_records() {
             let d = Vec3::from_slice(&r.direction_height[..3]);
             let Some(d) = d.try_normalize() else { continue };
@@ -440,7 +548,20 @@ impl Bot {
             let top = d * (PLANET_RADIUS + r.direction_height[3]);
             let dist = tangent(top - s.feet, s.up).length();
             let rise = (top - s.feet).dot(s.up);
-            if dist < near || dist > far || rise.abs() > 1.6 {
+            if dist < near
+                || dist > far
+                || rise.abs() > 1.6
+                || stations.iter().any(|st| st.distance(top) < 4.5)
+            {
+                continue;
+            }
+            // Not at the water's edge, where a roam ends in the sea.
+            let east = Vec3::Y.cross(d).normalize_or(Vec3::X);
+            let north = d.cross(east);
+            let wet = [east, -east, north, -north]
+                .iter()
+                .any(|o| surface_height((top + *o * 3.5).normalize()) < 0.3);
+            if wet {
                 continue;
             }
             out.push((key, top, dist));
@@ -505,20 +626,40 @@ impl Bot {
                     (rel - dir * along).length() > 2.0
                 })
             };
+            let home = self
+                .stations(s, Material::Workbench)
+                .map(|(_, _, at)| at)
+                .or(self.home);
             let pick = self
                 .fresh_cells(s, 5.0, 16.0)
                 .into_iter()
                 .filter(|(_, top, _)| clear(*top))
-                .min_by(|a, b| a.2.total_cmp(&b.2))
+                // Near home as well as near the feet, so the bot digs round
+                // its workbench rather than wandering off across the map.
+                .min_by(|a, b| {
+                    let cost = |c: &(u32, Vec3, f32)| c.2 + home.map_or(0.0, |h| h.distance(c.1));
+                    cost(a).total_cmp(&cost(b))
+                })
                 .map(|c| c.1);
+            info!(
+                "showcase: roaming to fresh ground ({})",
+                if pick.is_some() {
+                    "a clear cell"
+                } else {
+                    "anywhere"
+                }
+            );
             self.roam_to = Some(pick.unwrap_or_else(|| {
                 let away = Quat::from_axis_angle(s.up, 1.7) * s.heading;
                 s.feet + away * 8.0
             }));
         }
         let to = self.roam_to.expect("set above");
-        if self.walk_to(s, out, to, 1.2) != Walked::Going {
+        self.roam_s += s.dt;
+        // Somewhere it cannot get to in time: somewhere else.
+        if self.walk_to(s, out, to, 1.2) != Walked::Going || self.roam_s > 12.0 {
             self.roam_to = None;
+            self.roam_s = 0.0;
         }
     }
 
@@ -672,6 +813,11 @@ pub fn drive(
     if let Some(state) = w.state.as_mut() {
         state.scripted = *w.screen == Screen::Playing;
     }
+    if bot.home.is_none()
+        && let Ok(p) = w.walkers.single()
+    {
+        bot.home = Some(p.0);
+    }
     let started = *bot.started.get_or_insert_with(|| {
         info!("SHOWCASE_START {}", player.name);
         info!("SHOWCASE_GOAL {}", player.file.goal);
@@ -740,6 +886,21 @@ pub fn drive(
         }
         bot.mark = sight.tally;
     }
+    // Where the bot is in its acts, every ten seconds, so a stall can be
+    // read off the log.
+    if (bot.shot_s / 10.0).floor() != ((bot.shot_s + dt) / 10.0).floor() {
+        info!(
+            "SHOWCASE_STATUS shot {} act {} phase {} ({:.1} s) goal {:?} screen {:?} aim {:?} in hand {:?}",
+            bot.shot + 1,
+            bot.act + 1,
+            bot.phase,
+            bot.phase_s,
+            bot.goal,
+            sight.screen,
+            sight.aim.map(|t| (t.dig.cell, t.dig.layer)),
+            sight.tools.held(),
+        );
+    }
     bot.shot_s += dt;
     bot.act_s += dt;
     bot.phase_s += dt;
@@ -778,6 +939,11 @@ pub fn drive(
             }
         }
     };
+    // A still an act asked for in the middle of its work (a panel in
+    // use, a fish on the line).
+    if bot.want_still {
+        still(bot, &mut commands, player.stills.as_ref());
+    }
     let status = if bot.shot_s > shot.max_s {
         Status::Fail(format!("over its {} s", shot.max_s))
     } else {
@@ -967,9 +1133,8 @@ fn run(
             let target = s.heading.slerp(heading, k.min(1.0));
             let p = from_pitch + (pitch.to_radians() - from_pitch) * k;
             bot.steer(s, out, target, p);
-            if k >= 1.0 && bot.steer(s, out, heading, pitch.to_radians()) {
-                Status::Done
-            } else if bot.act_s > secs + 2.0 {
+            let there = k >= 1.0 && bot.steer(s, out, heading, pitch.to_radians());
+            if there || bot.act_s > secs + 2.0 {
                 Status::Done
             } else {
                 Status::Running
@@ -1008,7 +1173,7 @@ fn run(
                     bot.next_phase();
                     Status::Running
                 }
-                None => Status::Fail("no sea within 160 m".into()),
+                None => Status::Fail("no sea within 900 m".into()),
             },
             1 => {
                 let Some(Goal::Point(_, stand)) = bot.goal else {
@@ -1049,6 +1214,10 @@ fn run(
                 bot.next_phase();
                 Status::Running
             }
+            1 if bot.phase_s > 2.0 && bot.stilled.insert("missions") => {
+                bot.want_still = true;
+                Status::Running
+            }
             1 if bot.phase_s > *secs => {
                 if s.screen == Screen::Missions {
                     out.taps.push(KeyCode::KeyO);
@@ -1060,16 +1229,22 @@ fn run(
             _ => Status::Running,
         },
         Act::Still => {
-            if let Some(dir) = stills {
-                bot.still += 1;
-                let path = dir.join(format!("{:02}-shot{:02}.png", bot.still, bot.shot + 1));
-                info!("SHOWCASE_STILL {}", path.display());
-                commands
-                    .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
-                    .observe(bevy::render::view::screenshot::save_to_disk(path));
-            }
+            still(bot, commands, stills);
             Status::Done
         }
+    }
+}
+
+/// A still into `--showcase-stills`' directory, if it names one.
+fn still(bot: &mut Bot, commands: &mut Commands, stills: Option<&PathBuf>) {
+    bot.want_still = false;
+    if let Some(dir) = stills {
+        bot.still += 1;
+        let path = dir.join(format!("{:02}-shot{:02}.png", bot.still, bot.shot + 1));
+        info!("SHOWCASE_STILL {}", path.display());
+        commands
+            .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
+            .observe(bevy::render::view::screenshot::save_to_disk(path));
     }
 }
 
@@ -1227,6 +1402,12 @@ fn dig(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) ->
         bot.count = dug;
         bot.tries += 1;
         bot.phase_s = 0.0;
+        if let Some(Goal::Cell(key)) = bot.goal
+            && let Some(top) = bot.top_of(s, key)
+            && !bot.holes.iter().any(|h| h.distance(top) < 1.0)
+        {
+            bot.holes.push(top);
+        }
         if bot.tries >= depth {
             if let Some(Goal::Cell(key)) = bot.goal {
                 bot.used.insert(key);
@@ -1285,6 +1466,11 @@ fn dig(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) ->
     } else if bot.lmb_down && on {
         out.lmb = true;
     }
+    // Aimed and something else in the way (a nearer rise): another cell.
+    if aimed && !on && !bot.lmb_down && bot.phase_s > 1.5 {
+        bot.used.insert(key);
+        bot.goal = None;
+    }
     if bot.phase_s > 8.0 {
         bot.used.insert(key);
         bot.goal = None;
@@ -1327,6 +1513,9 @@ fn craft(bot: &mut Bot, code: &str, times: u32, s: &Sight, out: &mut Intent) -> 
             } else if !busy {
                 out.click = Some(Click::CraftHand);
                 bot.count += 1;
+                if bot.stilled.insert("pack") {
+                    bot.want_still = true;
+                }
                 bot.next_phase();
             }
         }
@@ -1454,14 +1643,33 @@ fn station(
     };
     match bot.phase {
         0 => {
-            if bot.walk_to(s, out, at, 2.0) == Walked::There {
+            // A station up a wall too high to step (the bot is in a hole
+            // beside it): build up to it.
+            let rise = (at - s.feet).dot(s.up);
+            if rise > 0.9 && tangent(at - s.feet, s.up).length() < 3.5 {
+                bot.climb(s, out);
+            } else if bot.walk_to(s, out, at, 2.0) == Walked::There {
+                info!(
+                    "showcase: at the {} in cell {cell} layer {layer}, {:.1} m from the eye, {:.1} m over the feet",
+                    row.name,
+                    at.distance(s.eye),
+                    (at - s.feet).dot(s.up)
+                );
                 bot.next_phase();
             }
         }
         1 => {
-            let aimed = bot.aim_at(s, out, at);
-            let on = bot.aimed_cell(s) == Some((cell, layer));
-            if aimed && on && bot.phase_s > 0.3 {
+            // Its top half: from below, the middle sits on the block under it.
+            // A campfire is a light the eye ray passes: E goes on the
+            // ground it stands on.
+            let (point, want) = if material.is_lamp() {
+                (at - s.up * 0.6, (cell, layer - 1))
+            } else {
+                (at + s.up * 0.3, (cell, layer))
+            };
+            bot.aim_at(s, out, point);
+            let on = bot.aimed_cell(s) == Some(want);
+            if on && bot.phase_s > 0.3 {
                 out.taps.push(KeyCode::KeyE);
                 bot.next_phase();
             } else if bot.phase_s > 3.0 {
@@ -1497,6 +1705,13 @@ fn station(
             if material != Material::Campfire {
                 out.click = Some(Click::CraftBench);
             }
+            if bot.stilled.insert(if material == Material::Campfire {
+                "cook"
+            } else {
+                "bench"
+            }) {
+                bot.want_still = true;
+            }
             bot.count += 1;
             bot.phase = 3;
             bot.phase_s = 0.0;
@@ -1527,7 +1742,7 @@ fn shore(s: &Sight) -> Option<(Vec3, Vec3)> {
     let up = s.up;
     let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
     let north = up.cross(east);
-    for r in (4..160).step_by(2) {
+    for r in (4..900).step_by(3) {
         let r = r as f32;
         let mut best: Option<(Vec3, f32)> = None;
         for a in 0..48 {
@@ -1554,6 +1769,7 @@ fn shore(s: &Sight) -> Option<(Vec3, Vec3)> {
             let water = (up * PLANET_RADIUS + along * (r + 4.0)).normalize() * PLANET_RADIUS;
             let ground = (up * PLANET_RADIUS + along * stand.max(0.0)).normalize();
             let ground = ground * (PLANET_RADIUS + surface_height(ground).max(0.0));
+            info!("showcase: the sea is {r:.0} m off");
             return Some((water, ground));
         }
     }
@@ -1578,7 +1794,7 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
     match bot.phase {
         0 => {
             let Some((water, stand)) = shore(s) else {
-                return Status::Fail("no sea within 160 m".into());
+                return Status::Fail("no sea within 900 m".into());
             };
             bot.goal = Some(Goal::Point(water, stand));
             bot.next_phase();
@@ -1628,6 +1844,9 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
                 }
                 Phase::Hooked => {
                     bot.bite_s = 0.0;
+                    if bot.stilled.insert("hooked") {
+                        bot.want_still = true;
+                    }
                     // Reel while the line takes it; ease off when it runs.
                     let hold = if bot.lmb_down {
                         line.tension < 0.8
@@ -1699,7 +1918,7 @@ fn till(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
                 bot.phase_s = 0.0;
             }
             None => {
-                out.held.insert(KeyCode::KeyS);
+                bot.roam(s, out);
             }
         }
         return Status::Running;
@@ -1730,7 +1949,13 @@ fn till(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
 /// Sow the field's tilled cells with the seed in hand.
 fn plant(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     if bot.phase == 0 {
-        match bot.select(s, out, &|item| wanted("seed", item)) {
+        // Wheat when there is any: the field's bread comes from it.
+        let seed = if carried(s.slots, "wheat-seed") >= n {
+            "wheat-seed"
+        } else {
+            "seed"
+        };
+        match bot.select(s, out, &|item| wanted(seed, item)) {
             Status::Done => bot.next_phase(),
             Status::Fail(why) => return Status::Fail(format!("seed: {why}")),
             Status::Running => {}
@@ -1860,16 +2085,26 @@ fn harvest(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
         bot.tries += 2;
         return Status::Running;
     };
-    if top.distance(s.eye) > 4.5 {
-        bot.walk_to(s, out, top, 2.0);
+    if tangent(top - s.feet, s.up).length() > 2.6 {
+        if bot.walk_to(s, out, top, 2.2) == Walked::Stuck {
+            bot.tries += 2;
+        }
+        bot.phase_s = 0.0;
         return Status::Running;
     }
-    let aimed = bot.aim_at(s, out, top - s.up * 0.2);
+    bot.aim_at(s, out, top - s.up * 0.2);
     let on = bot.aimed_cell(s).is_some_and(|(c, _)| c == key);
-    if aimed && on && bot.phase_s > 0.5 {
+    if on && bot.phase_s > 0.6 {
         out.taps.push(KeyCode::KeyE);
         bot.tries += 1;
         bot.phase_s = 0.0;
+    } else if bot.phase_s > 4.0 {
+        // Out of sight from here: the next cell.
+        bot.tries += 2;
+        bot.phase_s = 0.0;
+    }
+    if bot.act_s > 90.0 {
+        return Status::Fail(format!("harvested {} of {n}", bot.count));
     }
     Status::Running
 }
@@ -1983,7 +2218,9 @@ fn pen(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
                 }
                 let cn = Vec3::from_slice(&records[n as usize].direction_height[..3]).normalize();
                 let mid = (ci + cn).normalize();
-                let aim = (mid * 0.94 + ci * 0.06).normalize();
+                // Well inside the inner cell, so the ray's hit is on its
+                // ground and this edge is the nearest of its edges.
+                let aim = (mid * 0.8 + ci * 0.2).normalize();
                 let aim = aim * (PLANET_RADIUS + records[i].direction_height[3]);
                 let stand = ci * (PLANET_RADIUS + records[i].direction_height[3]);
                 let rel = tangent(mid - centre, centre);
@@ -2005,6 +2242,7 @@ fn pen(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
     if pieces > bot.pieces {
         bot.pieces = pieces;
         bot.count += 1;
+        bot.tries = 0;
         bot.phase = 1;
         bot.phase_s = 0.0;
         bot.sel = (0, 0.0);
@@ -2030,11 +2268,13 @@ fn pen(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
         }
         _ => {
             let aimed = bot.aim_at(s, out, aim);
-            if aimed && bot.phase_s > 0.3 {
+            if aimed && bot.phase_s > 0.3 && bot.tries < 3 {
                 out.rmb_tap = true;
                 bot.phase_s = -0.6;
+                bot.tries += 1;
             }
-            if bot.phase_s > 3.0 {
+            if bot.phase_s > 3.0 || (bot.tries >= 3 && bot.phase_s > 0.5) {
+                bot.tries = 0;
                 warn!("showcase: no piece on pen edge {}", bot.count);
                 bot.count += 1;
                 bot.phase = 1;
@@ -2280,6 +2520,53 @@ mod tests {
             .min_by(|a, b| a.3.total_cmp(&b.3))
             .map(|(k, base, stand, _)| (k, base, stand))
             .expect("a tree near the spawn")
+    }
+
+    /// MEASUREMENT (`step-videos` 5.2, run by hand with `--ignored`): the
+    /// nearest pasture to the fields spawn with the sea within thirty
+    /// metres, as `--at` degrees, for the phase-1 showcase's start: a field
+    /// the bot can fish from without a long walk.
+    #[test]
+    #[ignore]
+    fn find_a_coastal_field() {
+        let spawn = fields();
+        let east = Vec3::Y.cross(spawn).normalize();
+        let north = spawn.cross(east);
+        let at = |d: Vec3, e: f32, n: f32| (d * PLANET_RADIUS + east * e + north * n).normalize();
+        let mut found = Vec::new();
+        for i in -300..=300 {
+            for j in -300..=300 {
+                let d = at(spawn, i as f32 * 10.0, j as f32 * 10.0);
+                let h = surface_height(d);
+                if !(1.0..8.0).contains(&h) || pbd_app::planet::surface_code(d, h) & 0xff != 2 {
+                    continue;
+                }
+                let sea = (0..12).any(|k| {
+                    let a = k as f32 / 12.0 * std::f32::consts::TAU;
+                    [15.0, 30.0]
+                        .iter()
+                        .any(|r| surface_height(at(d, a.cos() * r, a.sin() * r)) < -0.6)
+                });
+                // Level ground behind the shore: nothing over two metres up
+                // or down within twenty-five metres inland.
+                let level = (0..8).all(|k| {
+                    let a = k as f32 / 8.0 * std::f32::consts::TAU;
+                    [10.0, 25.0].iter().all(|r| {
+                        let hh = surface_height(at(d, a.cos() * r, a.sin() * r));
+                        hh < 0.0 || (hh - h).abs() < 2.0
+                    })
+                });
+                if sea && level {
+                    found.push((d.distance(spawn) * PLANET_RADIUS, d));
+                }
+            }
+        }
+        found.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for (m, d) in found.iter().take(8) {
+            let (lat, lon) = pbd_core::geo::lat_lon(*d).degrees();
+            println!("COASTAL_FIELD {m:.0} m from the fields spawn: --at {lat:.4} {lon:.4}");
+        }
+        assert!(!found.is_empty());
     }
 
     /// `step-videos` 5.1's verify: a short showcase's chop and craft go

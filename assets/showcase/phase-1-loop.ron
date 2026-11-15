@@ -7,11 +7,11 @@
 // The goal stops at "Build a pen": "Smelt ore" needs ore, and no ground
 // this build generates holds any (written up in `step-videos` tasks 5.2),
 // so the chain cannot go past it in a new world yet. The last shots play
-// the rest of the loop the chain asks for later: a field harvested on a
-// sped-up clock, bread at the campfire, a meal eaten.
+// the rest of the loop the chain asks for later: the field harvested after
+// six days on a sped-up clock, bread at the campfire, a meal eaten.
 (
     goal: "Goal: the starter missions, from Gather by hand to Build a pen",
-    spawn: Some("fields"),
+    at: Some((11.5085, -25.0992)),
     hour: 8.5,
     shots: [
         (
@@ -44,7 +44,7 @@
             max_s: 300.0,
             acts: [
                 Chop(Have("log", 1)),
-                Dig(Have("stone", 6), 2),
+                Dig(Have("stone", 6), 3),
                 Dig(Have("fibre", 6), 1),
             ],
         ),
@@ -65,7 +65,7 @@
             max_s: 420.0,
             acts: [
                 Hand("shovel"),
-                Dig(Have("stone", 8), 2),
+                Dig(Have("stone", 8), 3),
                 Dig(Have("fibre", 8), 1),
                 Chop(Have("log", 1)),
             ],
@@ -94,7 +94,7 @@
             acts: [
                 Chop(Have("log", 2)),
                 Hand("shovel"),
-                Dig(Have("stone", 5), 2),
+                Dig(Have("stone", 5), 3),
                 Craft("campfire", 1),
                 Shore,
                 Place("block:campfire"),
@@ -137,6 +137,24 @@
             until: ["pen"],
             max_s: 200.0,
             acts: [Walk(2.0), Pen, Select("fence"), Lead("any"), Still],
+        ),
+        (
+            caption: "Six days later: the wheat is ripe",
+            rate: Some(400.0),
+            max_s: 60.0,
+            acts: [Wait(43.2)],
+        ),
+        (
+            caption: "Harvest the wheat, bake flatbread, and eat",
+            max_s: 150.0,
+            acts: [
+                Hand("hand"),
+                Harvest(4),
+                Still,
+                Cook("flatbread", 1),
+                Eat("flatbread"),
+                Still,
+            ],
         ),
         (
             caption: "Goal met: fourteen starter missions done",
