@@ -70,3 +70,35 @@ Judged beside the mockup's screenshots:
   cells).
 - **Pop-in**: tiles appear whole as they come within 46 m, with no dither
   fade.
+
+## Second pass (B13): fades, the reef's life, smoke, seals, the chart
+
+- `fade-distance.jpg`: the same reef seen from (13.30, 94.896), (13.40), (13.50)
+  and (13.60) facing north (`--yaw 90 --pitch -3`), about 17, 25, 34 and 42 m
+  off: the pieces go through the terrain's screen-door mask as they pass
+  34 to 46 m, so the far reef thins to a dither and is gone before its tile
+  is dropped. The landing fade (0.8 s from wholly masked) is not caught in a
+  capture: the fixed-step harness has every tile landed before frame 60; it
+  is pinned by `a_tile_fades_in_when_it_lands_and_out_before_it_is_dropped`.
+- `reef-skyline.jpg`: (13.096, 94.896) facing north: the table-coral skyline,
+  now three a tile on the deeper rock.
+- `reef-anemone.jpg`, `anemone-sway.jpg`: the big anemone at (12.845,
+  94.9168), and its tentacles 30 frames apart, bent differently (the sway).
+  Its two clownfish circle above it at 0.8 m but are hard to make out among
+  the tentacles at this size.
+- `reef-anthias.jpg`: a cloud of anthias over the reef at (13.04, 94.9297).
+- `kelp-sway.jpg`: the kelp at (71.308, -8.196), 60 frames apart; 5% of the
+  pixels changed by more than 20 of 255 between them.
+- `vent-smoke.jpg`: the black smokers' plumes rising from their mouths at 90 m.
+- `seals-on-floes.jpg`, `seals-on-floes-close.jpg`: seals hauled out on the
+  floes from a 0.8 m polar shore at (86.965, -17.827). The floes nearest the
+  eye stand tall: they are hex slabs of 0.25 to 0.6 m freeboard.
+- `map-sea-places.jpg`: the map's "Sea places" layer (`--walk --menu map
+  --map-layer "sea places" --map-mpp 40`), with each place's share in the key.
+
+Honest read: the far reef dithers out rather than popping; the reef now has
+its skyline, a big anemone and its fish clouds; the smoke reads as rising
+puffs but is blocky, and blue-green rather than black, from the water between;
+the seals on floes are small at 10 m and pale; the chart's polar sea fills
+the map's bottom rows (the projection stretches the pole). The unlit vent
+glow and smoke cannot take the mask, so they appear and go at half fade.
