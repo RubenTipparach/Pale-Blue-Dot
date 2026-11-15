@@ -340,6 +340,10 @@ which wait for a request.
 - **Then nuclear and rocketry** ("then after that we'll get into nuclear,
   and rocketry"): the fission plant (M20) and rockets to orbit (M21,
   `ship-tiers`).
+- **Then finance and space stations** ("after 7 lets also add in finance and
+  space stations exploration: stock market, space trading posts, and space
+  casinos"): the stock market and trading posts (M12, M10) and the casinos
+  (M11).
 - **Then space exploration and colonization** ("after rocketry, we'll get
   into space exploration and colonization"): the system's other worlds (M1,
   M2, `interplanetary-travel`) and settling them (M10 stations and outposts).

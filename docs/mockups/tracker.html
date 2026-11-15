@@ -455,7 +455,7 @@ function linkCard(a) {
     el('div', { class: 'row' }, el('a', { class: 'open', href: a.url, target: '_blank', rel: 'noopener' }, 'Open')));
 }
 
-// The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, space exploration and colonization, exo-industry and advanced propulsion, then antimatter and interstellar travel. `refs` are mockup ids;
+// The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, finance and space stations, space exploration and colonization, exo-industry and advanced propulsion, then antimatter and interstellar travel. `refs` are mockup ids;
 // `change` is the OpenSpec change. Status: built, building, planned (written up), later (not started).
 const ROADMAP = [
   { title: 'The first game loop', when: 'now', note: 'Crafting tools, fishing, farming, herding, cooking: each feeds the next.', steps: [
@@ -496,7 +496,12 @@ const ROADMAP = [
     { title: 'Nuclear', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'The fission plant, its cooling tower and containment dome built of hex cells.' },
     { title: 'Rocketry', status: 'later', change: 'ship-tiers', refs: ['M21'], text: 'Hex-cell rockets with decks you walk, flown to orbit and back.' },
   ] },
-  { title: 'Space exploration and colonization', when: 'later', note: 'After rocketry. Not started.', steps: [
+  { title: 'Finance and space stations', when: 'later', note: 'After rocketry. Not started.', steps: [
+    { title: 'Stock market', status: 'later', change: '', refs: ['M12'], text: 'Companies whose shares trade on the exchange, priced by what they make and sell.' },
+    { title: 'Space trading posts', status: 'later', change: '', refs: ['M10', 'M12'], text: 'Stations in orbit that buy and sell, each with its own stock and prices.' },
+    { title: 'Space casinos', status: 'later', change: '', refs: ['M11'], text: 'The station bar and casino: games that show their odds, and jobs.' },
+  ] },
+  { title: 'Space exploration and colonization', when: 'later', note: 'After finance and space stations. Not started.', steps: [
     { title: 'Space exploration', status: 'later', change: 'interplanetary-travel', refs: ['M1', 'M2'], text: 'The other worlds and moons of the system, reached by rocket.' },
     { title: 'Colonization', status: 'later', change: '', refs: ['M10'], text: 'Settling other worlds: outposts, stations and bases off the home planet.' },
   ] },
