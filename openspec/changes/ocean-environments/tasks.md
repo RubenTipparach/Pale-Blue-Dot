@@ -50,6 +50,6 @@ against what it would cost.
 
 ## 8. Fresh water (after volumetric water phases 2 and 3)
 
-- [ ] 8.1 (Written up 2026-11-15 as design 13, generator version 8 on 7; not built.) A drainage river pass that steps down from springs, in a new generator version. Verify: a test that every river cell drains to the sea; captures beside the river tab.
+- [x] 8.1 (Built 2026-11-15, generator version 8 on 7, design 13: `every_river_cell_drains_to_the_sea`, `a_rivers_water_sits_on_its_own_bed`, version 8's digest pinned and 7's unchanged; `docs/screenshots/water-flow/river-*.jpg`.) A drainage river pass that steps down from springs, in a new generator version. Verify: a test that every river cell drains to the sea; captures beside the river tab.
 - [ ] 8.2 The beaver colony record and the `beaver` world process through the journal. Verify: a catch-up test to day 40; a test that a broken dam is not rebuilt on the player's cells and the colony moves on.
-- [ ] 8.3 Marsh pools and the estuary. Verify: captures beside the marsh tab.
+- [x] 8.3 (Marsh pools built 2026-11-15 in version 8: version 5's swamp water only where a rim holds it; `marsh-pools-day.jpg`. The estuary is the river's mouth into the sea; no estuary of its own.) Marsh pools and the estuary. Verify: captures beside the marsh tab.

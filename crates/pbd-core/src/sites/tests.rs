@@ -79,7 +79,9 @@ fn fewer_towns_keeps_the_same_sites() {
 #[test]
 fn every_site_stands_where_its_settlement_can_be_built() {
     let cfg = shipped();
-    let terrain = TerrainConfig::TENEBRIS;
+    // The ground the survey chose on (version 8's rivers are not on it: a
+    // town's own ground replaces a river in its footprint).
+    let terrain = TerrainConfig::TENEBRIS.site_ground();
     let sea = terrain.sea_level_m;
     let shallows = crate::fauna::WaterLimits::default().shallows_max_m;
     for site in &planet().sites {

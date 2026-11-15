@@ -176,10 +176,9 @@ fn the_water_class_comes_from_the_terrain() {
         match water_class(&terrain, d, depth, &limits) {
             Some(WaterClass::River) => {
                 rivers += 1;
-                assert!(
-                    depth > 0.0 && depth < 4.0,
-                    "a river channel is shallow: {depth}"
-                );
+                // Version 8's rivers run above the sea too (design 13): a
+                // river stands at most a few metres under it, at its mouth.
+                assert!(depth < 4.0, "a river channel is shallow: {depth}");
             }
             Some(WaterClass::Shallows) => {
                 seas += 1;

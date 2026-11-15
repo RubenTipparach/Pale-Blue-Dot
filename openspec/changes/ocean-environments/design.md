@@ -463,35 +463,66 @@ the spill) and breaches (0 sticks, 8 cells of water, settled in 26 ticks);
 `-before` is M28's own page, its `-after` this tab; `merged-into-m25.jpg` in
 `docs/screenshots/mockup-water-flow/` is the page M28 now is.
 
-### 13. Rivers and marsh pools in the game: generator version 8 (proposed, 2026-11-15)
+### 13. Rivers and marsh pools in the game: generator version 8 (built, 2026-11-15)
 
-Written for the lead's second pass on `claude/env-water`; not built there
-(see B8). Version 8 is version 7 (the sea's places) with fresh water on
-cells, for new worlds only; versions 4 to 7 keep their digests.
+Version 8 is version 7 (the sea's places) with rivers that run down to the
+sea reach by reach and marsh pools held by rims, for new worlds only;
+versions 4 to 7 keep their digests, and version 8's is pinned beside them.
+`pbd_core::rivers`.
 
-- **What a column can know.** A column is a pure function of its
-  direction, so a river's level cannot come from a drainage walk at build:
-  two tiers would disagree at their seam. The level must be a field: the
-  river channel's own carve (`river_channel`, version 6) gives where a
-  river is; version 8 adds its *stage*, the altitude of its water, as a
-  function of the channel's distance to the sea along the river field's
-  gradient, quantised so a reach is level and steps one layer at most four
-  cells apart (design 12, "what the rule asks of a river").
-- **What is generated.** In a channel cell above sea level, the bed is
-  carved to the stage less two, the layer under the stage is sources (still
-  water, as design 12 has it), and a reach's lip one layer deep. Springs are
-  the channel's upper ends. Marsh pools are sources in basins whose rim
-  stands a layer over them (`Marsh` biome cells whose low-pass height is a
-  local minimum).
-- **What flows.** Only edits start water moving (`water-flow` decision 5),
-  so a generated river is still sources at each reach until a player digs
-  beside it; the flowing layer between reaches that M25 shows is the rule
-  settled from those sources, which the game would run, bounded and not
-  saved, at build over channel cells only. Whether that settle is worth a
-  rebuild's milliseconds is the measurement that comes first.
-- **Tests.** Version 7's digest unchanged; a version 8 digest; every river
-  cell's stage never rises toward the sea; an old save opens on its own
-  version.
+- **The stage is a field, from one drainage map.** A column is a pure
+  function of its direction, so a river's level cannot come from a walk done
+  when a tier is built. It comes from one map of the whole body, built once
+  per world (0.1 s) from version 7's ground with no channels in it, read by
+  every tier and thread alike: a latitude-longitude lattice of 0.5 degrees
+  (42 m at the equator) drained by the priority flood. From every sea cell
+  outward, in rising order of the level water would spill at, each land cell
+  drains into the neighbour it was reached from. So every land cell drains
+  to the sea by construction, down a path whose spill never rises, a hollow
+  crossed at its spill. A cell is river where 40 cells or more drain through
+  it, below 90 m of spill (springs are the river's heads in the hills).
+- **Reaches and the water's top.** A reach runs from a lattice cell to the
+  next downstream, wandering up to 7 m either side along a smooth field; its
+  water is 6.4 m wide where the valley's floor is under it. Its water's top is the cell's spill less a metre; at any point it
+  is that, or a metre under the ground the river cuts there where that is
+  lower, so a river never stands over its banks and no levee is raised: down
+  a slope the river steps with the ground. The bed is two layers under the
+  water (two layers of sources, design 12's deep reach), in the valley
+  described below.
+- **Flowing water, settled.** The column reads the river's own top one cell,
+  two cells, up to eight cells up the river: below a step of one layer it
+  carries a flowing sheet one layer over the sources at seven less a level a
+  cell; at a step of two or more, a column of falling blocks in front of the
+  step, its foot flowing over the pool. That is what `water-flow`'s rule
+  settles to from the sources, written as a pure function so every tier
+  makes the same, and nothing is queued (decision 5): it moves when a
+  player edits beside it.
+- **Marsh pools** are version 5's swamp water in its lowest layer, now only
+  where the ground 2.9 m round it in six directions stands as high (the
+  rim), so every pool is held.
+- **Everything that asked for a river asks one test** (`planet_gen::in_river`):
+  the city sites' river villages, the sea's places at a river mouth, the
+  fish's river class (a version 8 river is a river at any height), the coast
+  walk and the capture's locator.
+- **The climate** for version 8 is version 7's settled state (as 7's is
+  6's): the climate's cells are far coarser than a river, and the biomes are
+  version 7's. Recommendation taken (ask only with screenshots).
+- **Version 7's noise channels stay** as the sea's inlets, so off the new
+  rivers' valleys a version 8 world is version 7's ground: the city survey
+  reads version 7's ground (`TerrainConfig::site_ground`), so the list the
+  owner approved for a new world is unchanged and Holbrook is where it was,
+  and a new world starts where it always did (the start's search reads the
+  same ground). A town's ground stands in for a river in its footprint.
+- **The valley.** The bed is flat for 1.5 m either side of the line and
+  rises evenly to the ground 8.2 m out, so a channel is never a slot a far
+  tier's walls cannot close (the seam report holds at none of 4,000 edges).
+- **Measured.** 8,200 of the lattice's 259,200 cells are river; 2.7 % of
+  land samples are within reach of one. World preparation went from 3.4 to
+  3.8 s.
+- **What it is not.** The river's water is drawn only in the column tier (as
+  every pool is); beyond it the carved channel shows its bed. Most steps are
+  one or two layers, since the ground is gentle at a cell's scale: tall
+  waterfalls are rare. M25's plunge pools are not generated.
 
 ## In the engine, part by part
 
@@ -880,9 +911,9 @@ sheet, or a world whose weather has run into a real storm; not done.
 
 ### B8. The second pass on `claude/env-water` (2026-11-15)
 
-Tides are built (5.1). Rivers and marsh pools (8.1, 8.3) are written up as
-decision 13 and not built: the stage field is the design work they need,
-and it was not done in the time. The beaver colony (8.2) waits for them.
+Tides are built (5.1). Rivers and marsh pools (8.1, 8.3) are built in the
+third pass as generator version 8 (decision 13). The beaver colony (8.2) is
+not.
 
 ### B13. Second pass (2026-11-15): no pop-in, the reef's life, smoke, seals, the chart
 

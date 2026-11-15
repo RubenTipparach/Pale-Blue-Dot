@@ -458,6 +458,22 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
         }
         *layer = material_at_depth(top, surface_m - altitude);
     }
+    // A river's water over its bed (generator version 8, `ocean-environments`
+    // design 13): sources to its reach's level, and below a riffle or a fall
+    // the flowing sheet and the falling blocks `water-flow`'s rule keeps.
+    // Not in a town's footprint: its ground stands in for the river there.
+    let rivers = if crate::settlement::ground::top(terrain, direction).is_some() {
+        Vec::new()
+    } else {
+        crate::rivers::water(terrain, direction)
+    };
+    for (top, material) in rivers {
+        if let Some(i) = layer_at(top as f32 - 0.5)
+            && layers[i] == Material::Air
+        {
+            layers[i] = material;
+        }
+    }
     // A town's street lamp or lantern (`cities-in-the-world` task 5.2), in
     // the air over its cell. A lamp is walked through, so it blocks no lane.
     if let Some(lamp) = crate::settlement::ground::lamp(terrain, direction)

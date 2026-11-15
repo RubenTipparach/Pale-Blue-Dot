@@ -211,8 +211,13 @@ fn river_within(cfg: &TerrainConfig, d: Vec3, metres: f32) -> bool {
             (d + (east * a.cos() + north * a.sin()) * arc).normalize_or(d)
         }))
         .any(|at| {
-            planet_gen::river_channel(cfg, at) > cfg.river_threshold
-                && planet_gen::surface_altitude(&uncarved, at) >= cfg.sea_level_m
+            if cfg.rivers.is_some() {
+                // Version 8: a river's own reach at its mouth.
+                planet_gen::in_river(cfg, at)
+            } else {
+                planet_gen::river_channel(cfg, at) > cfg.river_threshold
+                    && planet_gen::surface_altitude(&uncarved, at) >= cfg.sea_level_m
+            }
         })
 }
 

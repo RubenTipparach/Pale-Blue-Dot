@@ -34,7 +34,7 @@
 
 use crate::fauna::WaterClass;
 use crate::geo::{self, LatLon};
-use crate::planet_gen::{Biome, TerrainConfig, biome_at, river_channel, surface_altitude};
+use crate::planet_gen::{Biome, TerrainConfig, biome_at, surface_altitude};
 use crate::records::{Record, Records};
 use crate::topology;
 use glam::Vec3;
@@ -646,7 +646,7 @@ fn river_near(terrain: &TerrainConfig, d: Vec3, reach_m: f32) -> bool {
             reach_m * bearing.cos(),
             terrain.radius_m,
         );
-        river_channel(terrain, p) > terrain.river_threshold
+        crate::planet_gen::in_river(terrain, p)
     })
 }
 
@@ -1167,6 +1167,7 @@ pub fn generate(
     spawn: Vec3,
     threads: usize,
 ) -> SiteList {
+    let terrain = &terrain.site_ground();
     let cells = Cells::new(sites.level);
     let found = candidates(sites, terrain, &cells, threads);
     select(sites, terrain, &cells, &found, spawn)

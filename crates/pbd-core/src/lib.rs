@@ -39,6 +39,7 @@ pub mod orbit;
 pub mod overlay;
 pub mod planet_gen;
 pub mod records;
+pub mod rivers;
 pub mod sea;
 pub mod settlement;
 pub mod shadow;

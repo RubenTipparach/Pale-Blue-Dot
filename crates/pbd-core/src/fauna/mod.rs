@@ -66,6 +66,11 @@ pub fn water_class(
     depth_m: f32,
     limits: &WaterLimits,
 ) -> Option<WaterClass> {
+    // Version 8's rivers stand above the sea, so their water is not the
+    // sea's depth: a river is a river at any height.
+    if terrain.rivers.is_some() && is_river(terrain, direction) && depth_m.is_finite() {
+        return Some(WaterClass::River);
+    }
     if depth_m.is_nan() || depth_m <= 0.0 {
         return None;
     }
@@ -84,7 +89,15 @@ pub fn water_class(
 /// Whether the ground at a direction is below the sea only because the river
 /// carve put it there.
 pub fn is_river(terrain: &TerrainConfig, direction: Vec3) -> bool {
+    // Version 8: the river's own water, fresh, above the sea or at it.
+    if let Some(settings) = terrain.rivers.as_ref()
+        && crate::rivers::at(terrain, direction)
+            .is_some_and(|here| here.across_m < settings.half_width_m)
+    {
+        return true;
+    }
     let mut uncut = *terrain;
+    uncut.rivers = None;
     // The channel field never exceeds one, so no carve fires.
     uncut.river_threshold = 2.0;
     surface_altitude(terrain, direction) < terrain.sea_level_m

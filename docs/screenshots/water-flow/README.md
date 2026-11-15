@@ -67,3 +67,32 @@ Honest notes:
   seam in colour is possible, but it is not shown.
 - The bucket is not shown in use: there is no capture rig for the right
   button; its rule is tested (`a_bucket_takes_a_source_and_pours_into_air`).
+
+## Third pass (2026-11-15): rivers and marsh pools, generator version 8
+
+New worlds only (old saves keep their generator). Version 8 is version 7
+plus rivers and rimmed marsh pools; version 7's noise channels stay as sea
+inlets.
+
+| File | Flags | What it shows |
+| --- | --- | --- |
+| `river-valley-day.jpg` | `--walk --at -34.6830 101.4869 --yaw 14 --pitch -6 --time 5` | A river coming down a terraced valley: a short fall of white water into a still reach, the reach running on toward the sea (lower left). |
+| `river-valley-night.jpg` | the same, `--time 17` | The same at night. |
+| `river-valley-arrows.jpg` | the same, `--arrows` | The arrows: down the fall's faces and along the sheet below it. |
+| `river-waterfall-day.jpg` | `--walk --at -41.1424 -122.3150 --yaw 143 --pitch 5 --time 21` | The tallest fall found (21 falling blocks) in a stone gorge. |
+| `marsh-pool-day.jpg` | `--walk --at 57.0007 -89.9243 --yaw 0 --pitch -25 --time 17` | A marsh pool held by its rim, under the trees. |
+
+Honest notes:
+
+- No frame shows a river from its spring to its mouth: each picture shows a
+  stretch. The spring is a river's lattice head in the hills (design 13).
+- `river-waterfall-day.jpg` looks wrong in part: the fall stands as a free
+  column beside the gorge's wall, and half-way up a step of the river's
+  water stands as a ledge in the air. The fall is placed in the cell in
+  front of the step, which here is open far below.
+- Most of a river's steps are one or two layers: the ground is gentle at a
+  cell's scale. M25's plunge pools are not generated.
+- Beyond the column tier (about 90 m) a river's water is not drawn; its
+  valley shows.
+- The marsh frame is dark under the trees; the pool reads, the rim is the
+  bank beside it.

@@ -43,8 +43,8 @@ use pbd_app::{
     config::ConfigPlugin,
     flight_view::{FlightViewConfig, FlightViewPlugin, FlyMode, TourProgress},
     planet::{
-        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, river_channel, surface_code, surface_height,
-        terrain_config, terrain_radius, tile_width_m,
+        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, surface_code, surface_height, terrain_config,
+        terrain_radius, tile_width_m,
     },
     saves::{self, Pose, WorldSave},
     sky::SkyPlugin,
@@ -2717,7 +2717,7 @@ fn photo_camera(
             if toward < 0.85 || !(-4.0..0.0).contains(&depth) {
                 continue;
             }
-            if river_channel(terrain_config(), here) <= terrain_config().river_threshold {
+            if !pbd_core::planet_gen::in_river(terrain_config(), here) {
                 continue;
             }
             let (a, b) = here.any_orthonormal_pair();
