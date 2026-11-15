@@ -120,7 +120,8 @@ pub struct FishPlugin;
 
 impl Plugin for FishPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Fishery>()
+        app.add_plugins(places::SeaPlacesPlugin)
+            .init_resource::<Fishery>()
             .add_message::<crate::missions::Did>()
             .init_resource::<FishingStatus>()
             .init_resource::<ToolSlot>()
@@ -896,8 +897,9 @@ pub fn water_here(
 }
 
 pub mod bodies;
+pub mod places;
 
-mod draw {
+pub(crate) mod draw {
     //! The fish, the rod, the float and the line, drawn.
     use super::*;
 
@@ -1072,6 +1074,8 @@ mod draw {
         mut meshes: ResMut<Assets<Mesh>>,
         mut drawn: Query<(Entity, &SchoolMesh, &Mesh3d, &mut Transform)>,
         life: Res<LifeMaterial>,
+        water: Option<Res<crate::config::WaterSettings>>,
+        sea: Option<Res<Sea>>,
         sun: Option<Res<crate::sky::Sun>>,
     ) {
         let roster = fauna.0.roster(&body.0);
@@ -1079,6 +1083,12 @@ mod draw {
         let now = sun
             .as_deref()
             .map(|sun| (sun.clock.seconds, sun.direction()));
+        // The daylight left at a creature's depth (`ocean-environments` B6's
+        // known limit, closed in B12).
+        let dim = sea
+            .as_deref()
+            .zip(water.as_deref())
+            .map(|(sea, water)| (sea.radius, water.downwell_per_m));
         let mut seen = vec![false; fishery.schools.len()];
         for (entity, school_mesh, mesh, mut transform) in &mut drawn {
             let Some(school) = fishery.schools.get(school_mesh.0) else {
@@ -1091,7 +1101,7 @@ mod draw {
             seen[school_mesh.0] = true;
             transform.translation = (frame.center + school.anchor.as_dvec3()).as_vec3();
             if let Some(mesh) = meshes.get_mut(&mesh.0) {
-                build(mesh, school, species, now);
+                build(mesh, school, species, now, dim);
             }
         }
         for (index, school) in fishery.schools.iter().enumerate() {
@@ -1106,7 +1116,7 @@ mod draw {
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::default(),
             );
-            build(&mut mesh, school, species, now);
+            build(&mut mesh, school, species, now, dim);
             commands.spawn((
                 Name::new(format!("{} school", species.name)),
                 SchoolMesh(index),
@@ -1129,7 +1139,13 @@ mod draw {
     /// upended dabbler points its nose down, a sleeping duck tucks its head,
     /// a diver under the water is not drawn and a hidden octopus is small in
     /// its den.
-    fn build(mesh: &mut Mesh, school: &School, species: &Species, now: Option<(f64, Vec3)>) {
+    fn build(
+        mesh: &mut Mesh,
+        school: &School,
+        species: &Species,
+        now: Option<(f64, Vec3)>,
+        dim: Option<(f32, [f32; 3])>,
+    ) {
         let mut positions: Vec<[f32; 3]> = Vec::new();
         let mut colours: Vec<[f32; 4]> = Vec::new();
         let t = now.map_or(0.0, |(seconds, _)| seconds.rem_euclid(3600.0) as f32);
@@ -1178,12 +1194,16 @@ mod draw {
             }
             // An octopus takes the rock's colour when still and flushes when
             // it moves (decision 6).
-            let tint = if body.kind == bodies::Kind::Octopus {
+            let mut tint = if body.kind == bodies::Kind::Octopus {
                 let h = (along.length() / species.speed_mps.1.max(1e-3)).clamp(0.0, 1.0);
                 [0.55 + 0.45 * h, 0.55 + 0.25 * h, 0.5 + 0.25 * h]
             } else {
                 [1.0; 3]
             };
+            if let Some((surface, downwell)) = dim {
+                let light = super::places::dimmed(downwell, surface - p.length());
+                tint = [tint[0] * light[0], tint[1] * light[1], tint[2] * light[2]];
+            }
             let look = bodies::Look { t, phase, pose };
             let place = bodies::Place {
                 origin,

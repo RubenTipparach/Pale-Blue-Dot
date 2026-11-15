@@ -85,7 +85,7 @@ impl Body {
 // ---- the kit ---------------------------------------------------------------
 
 /// sRGB hex to a linear vertex colour.
-fn lin(hex: u32) -> [f32; 4] {
+pub(crate) fn lin(hex: u32) -> [f32; 4] {
     let c = Color::srgb_u8((hex >> 16) as u8, (hex >> 8) as u8, hex as u8).to_linear();
     [c.red, c.green, c.blue, 1.0]
 }
@@ -100,7 +100,7 @@ pub fn hh(a: i64, b: i64) -> f32 {
 }
 
 /// A transform as the mockup writes one: position, Euler XYZ, scale.
-fn tf(p: [f32; 3], r: [f32; 3], s: [f32; 3]) -> Mat4 {
+pub(crate) fn tf(p: [f32; 3], r: [f32; 3], s: [f32; 3]) -> Mat4 {
     Mat4::from_scale_rotation_translation(
         Vec3::from(s),
         Quat::from_euler(EulerRot::XYZ, r[0], r[1], r[2]),
@@ -108,20 +108,25 @@ fn tf(p: [f32; 3], r: [f32; 3], s: [f32; 3]) -> Mat4 {
     )
 }
 
-fn at(p: [f32; 3]) -> Mat4 {
+pub(crate) fn at(p: [f32; 3]) -> Mat4 {
     Mat4::from_translation(Vec3::from(p))
 }
 
-fn atr(p: [f32; 3], r: [f32; 3]) -> Mat4 {
+pub(crate) fn atr(p: [f32; 3], r: [f32; 3]) -> Mat4 {
     tf(p, r, [1.0; 3])
 }
 
 #[derive(Default)]
-struct Kit(Shape);
+pub(crate) struct Kit(pub(crate) Shape);
 
 impl Kit {
     /// Add a triangle list, coloured per face by `colour(centre, face)`.
-    fn add_with(&mut self, tris: Vec<Vec3>, m: Mat4, colour: impl Fn(Vec3, usize) -> u32) {
+    pub(crate) fn add_with(
+        &mut self,
+        tris: Vec<Vec3>,
+        m: Mat4,
+        colour: impl Fn(Vec3, usize) -> u32,
+    ) {
         for (n, tri) in tris.chunks_exact(3).enumerate() {
             let t = [
                 m.transform_point3(tri[0]),
@@ -136,25 +141,25 @@ impl Kit {
         }
     }
 
-    fn add(&mut self, tris: Vec<Vec3>, m: Mat4, hex: u32) {
+    pub(crate) fn add(&mut self, tris: Vec<Vec3>, m: Mat4, hex: u32) {
         self.add_with(tris, m, |_, _| hex);
     }
 
-    fn build(self) -> Shape {
+    pub(crate) fn build(self) -> Shape {
         self.0
     }
 }
 
 /// three.js's `SphereGeometry(1, ws, hs)` scaled to an ellipsoid, in its own
 /// face order. `theta_len` below pi is a cap (a jelly's bell).
-fn ell(rx: f32, ry: f32, rz: f32, ws: usize, hs: usize) -> Vec<Vec3> {
+pub(crate) fn ell(rx: f32, ry: f32, rz: f32, ws: usize, hs: usize) -> Vec<Vec3> {
     sphere(ws, hs, PI)
         .into_iter()
         .map(|p| p * Vec3::new(rx, ry, rz))
         .collect()
 }
 
-fn sphere(ws: usize, hs: usize, theta_len: f32) -> Vec<Vec3> {
+pub(crate) fn sphere(ws: usize, hs: usize, theta_len: f32) -> Vec<Vec3> {
     let mut grid = Vec::new();
     for iy in 0..=hs {
         let v = iy as f32 / hs as f32;
@@ -191,7 +196,7 @@ fn sphere(ws: usize, hs: usize, theta_len: f32) -> Vec<Vec3> {
 }
 
 /// A box centred on the origin.
-fn bx(w: f32, h: f32, d: f32) -> Vec<Vec3> {
+pub(crate) fn bx(w: f32, h: f32, d: f32) -> Vec<Vec3> {
     let (x, y, z) = (w / 2.0, h / 2.0, d / 2.0);
     let v = |sx: f32, sy: f32, sz: f32| Vec3::new(sx * x, sy * y, sz * z);
     let quad = |a: Vec3, b: Vec3, c: Vec3, d: Vec3| [a, b, d, b, c, d];
@@ -237,7 +242,7 @@ fn bx(w: f32, h: f32, d: f32) -> Vec<Vec3> {
 }
 
 /// three.js's `CylinderGeometry(rt, rb, h, n, 1)`: the side, then the caps.
-fn cyl(rt: f32, rb: f32, h: f32, n: usize) -> Vec<Vec3> {
+pub(crate) fn cyl(rt: f32, rb: f32, h: f32, n: usize) -> Vec<Vec3> {
     let ring = |r: f32, y: f32| -> Vec<Vec3> {
         (0..=n)
             .map(|x| {
@@ -273,7 +278,7 @@ fn cyl(rt: f32, rb: f32, h: f32, n: usize) -> Vec<Vec3> {
 }
 
 /// A flat polygon in the XY plane, ear-clipped (three.js's `ShapeGeometry`).
-fn shape(points: &[[f32; 2]]) -> Vec<Vec3> {
+pub(crate) fn shape(points: &[[f32; 2]]) -> Vec<Vec3> {
     let pts: Vec<Vec2> = points.iter().map(|p| Vec2::new(p[0], p[1])).collect();
     let area: f32 = (0..pts.len())
         .map(|i| {
@@ -323,7 +328,7 @@ fn shape(points: &[[f32; 2]]) -> Vec<Vec3> {
     out
 }
 
-fn icosahedron(r: f32) -> Vec<Vec3> {
+pub(crate) fn icosahedron(r: f32) -> Vec<Vec3> {
     let t = (1.0 + 5f32.sqrt()) / 2.0;
     let v = [
         [-1., t, 0.],
@@ -349,7 +354,7 @@ fn icosahedron(r: f32) -> Vec<Vec3> {
 }
 
 /// A body of rings along X: `[x, half height, half width, y offset]`.
-fn lathe(prof: &[[f32; 4]], nv: usize, rot: f32) -> Vec<Vec3> {
+pub(crate) fn lathe(prof: &[[f32; 4]], nv: usize, rot: f32) -> Vec<Vec3> {
     let rings: Vec<Vec<Vec3>> = prof
         .iter()
         .map(|r| {
@@ -372,21 +377,21 @@ fn lathe(prof: &[[f32; 4]], nv: usize, rot: f32) -> Vec<Vec3> {
     out
 }
 
-fn lathe6(prof: &[[f32; 3]]) -> Vec<Vec3> {
+pub(crate) fn lathe6(prof: &[[f32; 3]]) -> Vec<Vec3> {
     let p: Vec<[f32; 4]> = prof.iter().map(|r| [r[0], r[1], r[2], 0.0]).collect();
     lathe(&p, 6, PI / 6.0)
 }
 
-fn rotate_z(tris: Vec<Vec3>, a: f32) -> Vec<Vec3> {
+pub(crate) fn rotate_z(tris: Vec<Vec3>, a: f32) -> Vec<Vec3> {
     let q = Quat::from_rotation_z(a);
     tris.into_iter().map(|p| q * p).collect()
 }
 
-fn translate(tris: Vec<Vec3>, by: [f32; 3]) -> Vec<Vec3> {
+pub(crate) fn translate(tris: Vec<Vec3>, by: [f32; 3]) -> Vec<Vec3> {
     tris.into_iter().map(|p| p + Vec3::from(by)).collect()
 }
 
-const EYE: u32 = 0x161612;
+pub(crate) const EYE: u32 = 0x161612;
 
 // ---- fish (after fish.html's buildFish) ------------------------------------
 

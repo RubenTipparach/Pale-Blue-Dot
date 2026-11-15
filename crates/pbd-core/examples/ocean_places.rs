@@ -17,6 +17,14 @@ fn main() {
         .nth(1)
         .and_then(|a| a.parse().ok())
         .unwrap_or(400_000);
+    if std::env::args().nth(2).is_some() {
+        let a: Vec<f32> = std::env::args()
+            .skip(2)
+            .map(|s| s.parse().unwrap())
+            .collect();
+        check(a[0], a[1]);
+        return;
+    }
     let cfg = TerrainConfig::for_version(7).expect("version 7");
     // The depth band a capture wants for each place.
     let band = |env: Environment| match env {
@@ -65,4 +73,18 @@ fn main() {
             println!("           --at {lat:.3} {lon:.3}   depth {depth:.1} m");
         }
     }
+}
+
+#[allow(dead_code)]
+fn check(lat: f32, lon: f32) {
+    let cfg = TerrainConfig::for_version(7).unwrap();
+    let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+        lat: lat.to_radians(),
+        lon: lon.to_radians(),
+    });
+    let h = surface_altitude(&cfg, d);
+    println!(
+        "{lat} {lon}: altitude {h:.1}, {:?}",
+        environment_at(&cfg, d, h)
+    );
 }

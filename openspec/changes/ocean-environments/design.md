@@ -776,9 +776,12 @@ So the minimum, per `climate-and-fish-maps` design 3 but narrower:
     tile, from the same kit as the bodies;
   - **the life**: species with `env` tags spawn only where the environment
     function says (the octopus on the reef, the tube worms at a vent, the
-    seal on polar water). On a version 4 to 6 world the function answers
-    `None` for every place but Coast and Open, so their water life is as
-    today.
+    seal on polar water). A species whose tags are all fresh-water places
+    (the ducks: marsh, pool, riffle, estuary) keeps to its water classes
+    until volumetric water makes those places. On a version 4 to 6 world the
+    spawner does not ask the place at all, so its water life is as it was,
+    but for the plume worm, which lives only at vents and so never appears
+    there.
   - The land, the biomes and the sea mask are version 6's, so the settled
     climate a version-7 world starts from is version 6's state, shipped as
     `settled-g7-*` (the climate reads the sea mask and the land's height,
@@ -795,9 +798,45 @@ So the minimum, per `climate-and-fish-maps` design 3 but narrower:
 
 ### B11. The gale spray capture (4.3)
 
-Still owed: a storm on the seed to film the spray at `spray_from_mps`
-(17 m/s). Tried with the capture harness's forced weather (B12 records
-what was found).
+Still owed. `examples/gale_probe.rs` (an instrument) runs the settled
+climate a new world opens on through its first day and finds the strongest
+wind over the sea each hour: gusts of 19.8 m/s at (-27.30, 33.36) at 11:00
+and 21.9 m/s at (55.80, -10.92) at 23:00, each one cell for about an hour,
+so the sea (which follows the wind with a lag) is never seen at a gale. The
+capture harness also cannot hold the eye on the surface over deep water:
+`--walk`, `--swim` and `--fly --height` all put the walker on the seabed
+there. Filming it needs a harness option that holds the eye above the
+sheet, or a world whose weather has run into a real storm; not done.
+
+### B12. What was built and measured (2026-11-15, `claude/env-life`)
+
+- **Bodies (B8)**: every species has its mockup body; `--life lineup` lays
+  them side by side. A capture is a fixed step on the M4 Max Mac with
+  `--profile fast`: looks, not frame cost, which was NOT measured.
+- **The places (B10)**, measured on 400,000 directions of version 7
+  (`examples/ocean_places.rs`): of the sea, open 83.1%, kelp 10.9%, coast
+  3.6%, polar 1.2%, trench 0.75%, vent 0.31%, reef 0.23%. The deepest floor
+  is 140.0 m (version 6's: 125 m), inside the column.
+- **The reef's temperature**: decision 4's 23 C gives no reef at all on this
+  planet; its warmest coldest-day sea is 21.9 C (`sea_normals`). 20 C is
+  taken (recommendation taken, ask only with screenshots); real reefs reach
+  down to about 18 C.
+- **Pieces**: drawn in 12 m tiles out to 46 m round the eye, planned off the
+  main thread and built one tile a frame. Known limits, each written here
+  rather than hidden: a tile appears whole when it comes in reach (no dither
+  fade yet, against CLAUDE.md's "no pop-in", so the reef's far edge pops,
+  softened by the murk); kelp and soft corals stand still (the mockup sways
+  them in a vertex shader); pieces sit on the cell under their own middle,
+  so one straddling a cell's edge overhangs the step; the big anemone with
+  its clownfish and the reef's anthias and damsels are not built (they
+  would be species); the vents' smoke and their light on what is near them
+  are not built (the glow is an unlit mesh, no lamp).
+- **Generator version 7** is a new world's. The digests of versions 6 and 7
+  were taken on the Mac; versions 4 and 5's ground digests already fail on
+  the Mac (they were taken on the desktop), so version 6 and 7's ground
+  digests may fail on the desktop the same way, while the top-block digests
+  hold on both (version 4's does). Another agent adding a generator version
+  this week would collide on the number 7; whoever merges second renumbers.
 
 ## Recommendations taken (ask only with screenshots)
 
