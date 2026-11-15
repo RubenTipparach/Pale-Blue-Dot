@@ -346,8 +346,12 @@ which wait for a request.
 - **Then exo-industry and advanced propulsion** ("after colonization, we'll
   do exo-industrialiozation + advanced rocket engines + particle colliders"):
   industry off the home planet (M20, M10), engines past chemical rockets
-  (M21's fusion and antimatter), and particle colliders (M20's collider, the
-  antimatter source).
+  (M21's fusion drives), space freighters ("9 should also include space
+  freighers": M21's freighters, M12's markets), and particle colliders
+  (M20's collider, the antimatter source).
+- **Then antimatter and interstellar travel** ("then we'll do antimatterm
+  interstellar travel"): antimatter as power and fuel (M20, M21's landers)
+  and travel to other stars (M1, M2, `star-systems`).
 
 None of these starts until the owner asks. The tracker's Roadmap section
 lists every phase with its mockups; keep it in step with this list

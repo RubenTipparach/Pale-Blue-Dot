@@ -455,7 +455,7 @@ function linkCard(a) {
     el('div', { class: 'row' }, el('a', { class: 'open', href: a.url, target: '_blank', rel: 'noopener' }, 'Open')));
 }
 
-// The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, space exploration and colonization, then exo-industry and advanced propulsion. `refs` are mockup ids;
+// The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, space exploration and colonization, exo-industry and advanced propulsion, then antimatter and interstellar travel. `refs` are mockup ids;
 // `change` is the OpenSpec change. Status: built, building, planned (written up), later (not started).
 const ROADMAP = [
   { title: 'The first game loop', when: 'now', note: 'Crafting tools, fishing, farming, herding, cooking: each feeds the next.', steps: [
@@ -502,8 +502,13 @@ const ROADMAP = [
   ] },
   { title: 'Exo-industry and advanced propulsion', when: 'later', note: 'After colonization. Not started.', steps: [
     { title: 'Exo-industrialization', status: 'later', change: 'industry-tiers', refs: ['M20', 'M10'], text: 'Industry off the home planet: mining and plants on moons, asteroids and stations.' },
-    { title: 'Advanced rocket engines', status: 'later', change: 'ship-tiers', refs: ['M21'], text: 'Past chemical rockets: fusion courses and antimatter landers.' },
+    { title: 'Advanced rocket engines', status: 'later', change: 'ship-tiers', refs: ['M21'], text: 'Past chemical rockets: fusion drives.' },
+    { title: 'Space freighters', status: 'later', change: 'ship-tiers', refs: ['M21', 'M12'], text: 'Freighters hauling goods between worlds and stations, for the markets.' },
     { title: 'Particle colliders', status: 'later', change: 'industry-tiers', refs: ['M20'], text: 'A collider behind a basalt berm, making the antimatter cells that late engines and power run on.' },
+  ] },
+  { title: 'Antimatter and interstellar travel', when: 'later', note: 'After exo-industry. Not started.', steps: [
+    { title: 'Antimatter', status: 'later', change: 'industry-tiers', refs: ['M20', 'M21'], text: 'Antimatter cells as power and as fuel: the antimatter plant and antimatter landers.' },
+    { title: 'Interstellar travel', status: 'later', change: 'star-systems', refs: ['M1', 'M2'], text: 'Leaving the home system for other stars, by star lanes rather than a warp drive.' },
   ] },
 ];
 const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started' };

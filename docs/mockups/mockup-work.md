@@ -34,6 +34,8 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 22 | 2026-11-14 | The townsfolk moved to right after environment v2 ("townsfolk comes after env v2"). |
 | 23 | 2026-11-14 | Space exploration and colonization added after rocketry. |
 | 24 | 2026-11-14 | Exo-industry and advanced propulsion added after colonization: exo-industrialization, advanced rocket engines, particle colliders. |
+| 25 | 2026-11-14 | Antimatter and interstellar travel added after exo-industry; advanced engines now stop at fusion. |
+| 26 | 2026-11-14 | Space freighters added to phase 9 ("9 should also include space freighers"). |
 
 **Back on one account (2026-11-14).** On 2026-11-13 a cloud session republished this week's pages
 on a second claude.ai account and moved every link here to it; later sessions added M25 to M29
