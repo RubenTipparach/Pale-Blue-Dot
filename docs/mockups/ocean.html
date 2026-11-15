@@ -359,7 +359,7 @@ const TIMES = {
 // how much it scatters (turbidity), and its colour lit by the open water's light
 const WATERS = {
   ocean: {K: [0.25, 0.035, 0.012], Kd: [0.40, 0.065, 0.046], Ks: 0.022, col: [0.03, 0.16, 0.30]},
-  reef:  {K: [0.20, 0.03, 0.012], Kd: [0.22, 0.05, 0.035], Ks: 0.016, col: [0.05, 0.30, 0.40]},
+  reef:  {K: [0.12, 0.028, 0.012], Kd: [0.11, 0.04, 0.03], Ks: 0.014, col: [0.06, 0.34, 0.46]},
   coast: {K: [0.36, 0.06, 0.05], Kd: [0.45, 0.10, 0.09], Ks: 0.07, col: [0.07, 0.24, 0.26]},
   kelp:  {K: [0.34, 0.05, 0.04], Kd: [0.42, 0.08, 0.07], Ks: 0.05, col: [0.07, 0.22, 0.20]},
   polar: {K: [0.33, 0.04, 0.02], Kd: [0.42, 0.07, 0.05], Ks: 0.03, col: [0.06, 0.20, 0.32]},
@@ -1073,13 +1073,88 @@ function sceneCoast(stage) {
 }
 
 // ======================= 3. the coral reef =======================
+// The owner, 2026-11-15: "coral reefs need to be denser, with vegetation and stuff", and a reference photo: big
+// teal table corals as the skyline, cream, lilac, pink and tan branching and finger corals crowded edge to edge,
+// a big anemone with a clownfish, boulder and brain corals, sponges, rubble and yellow tufts in every gap, hundreds
+// of small orange fish over it and dark damsels higher up. Every coral, plant, stone and shell here is a low-poly
+// 3D piece drawn as instances: one InstancedMesh per kind, coloured per instance from the kind's palette (the
+// Sweaft-64 tones of the page's sprites), so the reef is a few draws however many pieces it has.
+const REEF_KINDS = {
+  branch: {cols: [0xeab798, 0xcfaa81, 0xab8465, 0xbfcad7, 0xdd576d, 0xc34988, 0x9e3ba2, 0x84e3b5, 0xfffefe]},
+  finger: {cols: [0xdd576d, 0xeab798, 0xc34988, 0xcfaa81, 0x9bb675, 0xe69d69]},
+  boulder: {cols: [0x9bb675, 0x92a3b2, 0x559642, 0xa09f91, 0xeab798, 0x5d778d, 0x53998b, 0xc34988]},
+  table: {cols: [0x53998b, 0x204f63, 0x297537, 0x3e586e, 0x53998b]},
+  soft: {cols: [0xfaaf5c, 0xfb902f, 0xfaaf5c, 0xdd576d, 0xc1f1d8], sway: "stalk"},
+  tube: {cols: [0x7d2dbd, 0xc56d25, 0xfb902f, 0x9e3ba2, 0xd12d41]},
+  barrel: {cols: [0xa8633e, 0x733126, 0x725244, 0xc56d25]},
+  fan: {cols: [0xd12d41, 0xfaaf5c, 0x9e3ba2, 0xfb902f, 0xdd576d]},
+  anem: {cols: [0xfffefe, 0xfaaf5c, 0xc1f1d8, 0xdd576d], sway: "tent"},
+  turf: {cols: [0x559642, 0x9bb675, 0x297537, 0x84e3b5, 0x05582d, 0xc56d25], sway: "stalk"},
+  grass: {cols: [0x559642, 0x297537, 0x9bb675], sway: "stalk"},
+  kelp: {cols: [0x8d4526, 0x559642, 0x297537, 0xc56d25], sway: "stalk"},
+  rubble: {cols: [0xa09f91, 0xcfaa81, 0xeab798, 0x92a3b2, 0xdd576d, 0x5d778d, 0xfffefe]},
+  shell: {cols: [0xfffefe, 0xeab798, 0xdd576d, 0xfaaf5c, 0xcfaa81]},
+};
+let REEF_GEO = null;
+function reefGeos() {
+  if (REEF_GEO) return REEF_GEO;
+  const K = C3.Kit, hh = C3.hh, G = {}, up = (k, n) => (x, y) => y > k ? 0xffffff : n;
+  { const k = K(); k.add(C3.ell(0.3, 0.14, 0.3, 7, 3), 0xc8c8c8, {p: [0, 0.04, 0]});   // branching: a clump of fingers on a low dome
+    for (let i = 0; i < 26; i++) { const a = i * 2.4, rr = 0.04 + 0.27 * Math.sqrt((i + 0.5) / 26), x = Math.cos(a) * rr, z = Math.sin(a) * rr, h = 0.2 + 0.22 * hh(i, 1), t = 1.5;
+      k.add(C3.cyl(0.02, 0.034, h, 4).translate(0, h / 2, 0), up(0.1 + h * 0.75, 0xe4e4e4), {p: [x, 0.08, z], r: [z * t, 0, -x * t]});
+      if (i % 3 === 0) k.add(C3.cyl(0.016, 0.024, h * 0.6, 4).translate(0, h * 0.3, 0), 0xe8e8e8, {p: [x * 1.1, 0.08 + h * 0.5, z * 1.1], r: [z * 3 + 0.4, 0, -x * 3]}); }
+    G.branch = k.build(); }
+  { const k = K(); for (let i = 0; i < 12; i++) { const a = i * 2.2, rr = i ? 0.1 + 0.14 * hh(i, 3) : 0, y = 0.12 + (1 - rr / 0.25) * 0.12; k.add(new THREE.IcosahedronGeometry(0.08 + 0.04 * hh(i, 4), 0), (x, yy, z, n) => n % 3 ? 0xffffff : 0xd8d8d8, {p: [Math.cos(a) * rr, y, Math.sin(a) * rr]}); }   // finger, knobbly like a cauliflower
+    k.add(C3.ell(0.24, 0.12, 0.24, 6, 3), 0xc8c8c8, {p: [0, 0.06, 0]}); G.finger = k.build(); }
+  { const k = K(); k.add(new THREE.IcosahedronGeometry(0.5, 1).scale(1, 0.58, 1), (x, y, z, n) => hh(n, 11) < 0.45 ? 0xd0d0d0 : 0xffffff, {p: [0, 0.16, 0]}); G.boulder = k.build(); }   // boulder and brain: faces in two tones, the grooves
+  { const k = K(); k.add(C3.cyl(0.07, 0.11, 0.48, 5), 0xb4b4b4, {p: [0, 0.24, 0]});   // table: a plate with a hard rim on a short stalk
+    k.add(C3.cyl(1, 0.9, 0.08, 10), (x, y) => y > 0.5 ? 0xffffff : 0xa8a8a8, {p: [0, 0.5, 0]});
+    k.add(new THREE.CylinderGeometry(1.03, 1.0, 0.07, 10, 1, true), 0xdcdcdc, {p: [0, 0.535, 0]});
+    k.add(new THREE.RingGeometry(0.86, 1.03, 10, 1).rotateX(-Math.PI / 2), 0xdedede, {p: [0, 0.57, 0]});
+    G.table = k.build(); }
+  { const k = K(); for (let i = 0; i < 16; i++) { const a = i * 2.4, t = 0.25 + 0.6 * hh(i, 5), h = 0.2 + 0.25 * hh(i, 6); k.add(C3.cyl(0.0, 0.03, h, 4).translate(0, h / 2, 0), up(h * 0.6, 0xd0d0d0), {p: [0, 0, 0], r: [Math.sin(a) * t, 0, -Math.cos(a) * t]}); } G.soft = k.build(); }   // soft coral tufts
+  { const k = K(); for (let i = 0; i < 5; i++) { const a = i * 1.9, rr = i ? 0.12 : 0, r = 0.06 + 0.04 * hh(i, 7), h = 0.3 + 0.4 * hh(i, 8); k.add(C3.cyl(r, r * 0.85, h, 6), 0xffffff, {p: [Math.cos(a) * rr, h / 2, Math.sin(a) * rr]}); k.add(new THREE.CircleGeometry(r * 0.75, 6).rotateX(-Math.PI / 2), 0x202020, {p: [Math.cos(a) * rr, h + 0.012, Math.sin(a) * rr]}); } G.tube = k.build(); }   // tube sponges, dark mouths
+  { const k = K(); k.add(C3.cyl(0.32, 0.22, 0.5, 8), (x, y, z, n) => n % 2 ? 0xffffff : 0xdcdcdc, {p: [0, 0.25, 0]}); k.add(new THREE.CircleGeometry(0.24, 8).rotateX(-Math.PI / 2), 0x1c1c1c, {p: [0, 0.512, 0]}); G.barrel = k.build(); }   // a barrel sponge
+  { const k = K(), pts = [[0, 0]]; for (let i = 0; i <= 8; i++) { const a = 0.35 + i * (Math.PI - 0.7) / 8, rr = 0.5 + 0.08 * hh(i, 9); pts.push([Math.cos(a) * rr, Math.sin(a) * rr]); }   // a sea fan: a lattice fan on a stem
+    k.add(C3.shape(pts), (x, y, z, n) => hh(n, 13) < 0.35 ? 0x8c8c8c : 0xffffff, {p: [0, 0.12, 0]}); k.add(C3.cyl(0.02, 0.03, 0.14, 4), 0xaaaaaa, {p: [0, 0.07, 0]}); G.fan = k.build(); }
+  const anem = (n, R, L) => { const k = K(); k.add(C3.cyl(R, R * 1.15, R * 0.5, 8), 0x9e3ba2, {p: [0, R * 0.25, 0]}); k.add(new THREE.CircleGeometry(R * 0.5, 8).rotateX(-Math.PI / 2), 0x7d2dbd, {p: [0, R * 0.5 + 0.004, 0]});   // an anemone: a purple foot, waving tentacles
+    for (let i = 0; i < n; i++) { const a = i * 2.39996, rr = R * Math.sqrt((i + 0.5) / n) * 0.95, h = L * (0.7 + 0.5 * hh(i, 14)), t = 0.3 + rr / R * 0.9; k.add(C3.cyl(0.006 * L / 0.25, 0.016 * L / 0.25, h, 4).translate(0, h / 2, 0), (x, y) => y > R * 0.5 + h * 0.75 ? 0xc1f1d8 : 0x9bb675, {p: [Math.cos(a) * rr, R * 0.45, Math.sin(a) * rr], r: [Math.sin(a) * t, 0, -Math.cos(a) * t]}); }
+    return k.build(); };
+  G.anem = anem(28, 0.13, 0.22); G.hero = anem(150, 0.5, 0.55);
+  { const k = K(); for (let i = 0; i < 8; i++) { const a = i * 2.3, h = 0.1 + 0.16 * hh(i, 15), x = Math.cos(a) * 0.08, z = Math.sin(a) * 0.08; k.add(C3.shape([[-0.02, 0], [0.02, 0], [0, h]]), (xx, y) => y > h * 0.5 ? 0xffffff : 0xd0d0d0, {p: [x, 0, z], r: [0, a, 0]}); } G.turf = k.build(); }   // algae turf
+  { const k = K(); for (let i = 0; i < 7; i++) { const a = i * 2.1, h = 0.3 + 0.3 * hh(i, 16); k.add(C3.shape([[-0.025, 0], [0.025, 0], [0.012, h * 0.7], [0, h]]), 0xffffff, {p: [Math.cos(a) * 0.06, 0, Math.sin(a) * 0.06], r: [0.1 * Math.sin(a), a, 0.1 * Math.cos(a)]}); } G.grass = k.build(); }   // sea grass
+  { const k = K(); for (let j = 0; j < 3; j++) { const a = j * 2.1, H = 1.6 + j * 0.5; for (let i = 0; i < 8; i++) { const y0 = i * H / 8, y1 = (i + 1) * H / 8, w = 0.08 + 0.04 * Math.sin(i); k.add(C3.shape([[-w, y0], [w, y0], [w * 0.9, y1], [-w * 0.9, y1]]), i % 2 ? 0xffffff : 0xe0e0e0, {p: [Math.cos(a) * 0.1, 0, Math.sin(a) * 0.1], r: [0, a + i * 0.25, 0]}); } } G.kelp = k.build(); }   // seaweed
+  { const k = K(); k.add(new THREE.IcosahedronGeometry(0.15, 0).scale(1, 0.5, 1), (x, y, z, n) => n % 2 ? 0xffffff : 0xd4d4d4, {p: [0, 0.04, 0]}); k.add(new THREE.IcosahedronGeometry(0.09, 0).scale(1, 0.6, 1.3), 0xd8d8d8, {p: [0.17, 0.03, 0.05]}); G.rubble = k.build(); }   // rubble
+  { const k = K(); k.add(C3.cyl(0.0, 0.05, 0.11, 5).rotateZ(Math.PI / 2), (x, y, z, n) => n % 2 ? 0xffffff : 0xc8c8c8, {p: [0, 0.035, 0]}); k.add(C3.ell(0.06, 0.025, 0.05, 6, 2), 0xe8e8e8, {p: [0.13, 0.015, 0.06]}); G.shell = k.build(); }   // shells
+  return (REEF_GEO = G);
+}
+function reefPieces(W) {
+  const L = {}, G = reefGeos();
+  const add = (kind, x, y, z, s, yaw = 0, col = null, sy = 1) => { (L[kind] || (L[kind] = [])).push([x, y, z, s, yaw, col, sy]); };
+  const build = () => {
+    const out = {meshes: [], counts: {}, total: 0}, m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), c = new THREE.Color();
+    for (const [kind, list] of Object.entries(L)) {
+      const def = REEF_KINDS[kind] || REEF_KINDS.anem, geo = kind === "hero" ? G.hero : G[kind];
+      const mat = W.lit(new THREE.MeshStandardMaterial({vertexColors: true, flatShading: true, side: THREE.DoubleSide, roughness: 0.9}), false, {sway: def.sway});
+      const im = new THREE.InstancedMesh(geo, mat, list.length); im.frustumCulled = false;
+      list.forEach(([x, y, z, s, yaw, col, sy], i) => { e.set(0, yaw, 0); q.setFromEuler(e); sc.set(s, s * sy, s); m4.compose(v.set(x, y, z), q, sc); im.setMatrixAt(i, m4);
+        c.copy(C3.lin(col != null ? col : def.cols[Math.floor(C3.hh(i, kind.length * 7) * def.cols.length)])).multiplyScalar(0.85 + 0.3 * C3.hh(i, 3)); im.setColorAt(i, c); });
+      W.scene.add(im); out.meshes.push(im); out.counts[kind] = list.length; out.total += list.length;
+    }
+    return out;
+  };
+  return {add, build};
+}
 function sceneReef(stage) {
   const W = setupStage("reef", stage, {marine: true, water: "reef", far: 700});
   W.water = WATERS.reef;
   const M = commonMats(W), B = SHEET;
+  // the reef flat: coral rock cells two to five layers down, sand lanes between; dense round the default view
+  const VT = new THREE.Vector3(2, -4.2, 3), VD = new THREE.Vector3(-Math.sin(0.9), 0, -Math.cos(0.9));
   const cells = hexRegion(24, (q, r, x, z) => {
-    const n = fbm(x / 11 + 3, z / 11 - 2), d = Math.hypot(x, z);
-    if (n > 0.56 && d < 60) { const h = Math.round(-5 + (n - 0.56) * 22); const brain = hsh(q, r) > 0.8; return {h: Math.min(h, -1), s: B.ocean, top: brain ? null : (hsh(r, q) > 0.5 ? [1, 2] : [0, 1]), m: brain ? "brain" : null}; }
+    let n = fbm(x / 11 + 3, z / 11 - 2); const d = Math.hypot(x, z), dv = Math.hypot(x - VT.x, z - VT.z), lane = Math.abs(Math.sin(x / 9 + z / 23)) < 0.1 && d > 12 && dv > 14;
+    if (dv < 13) n = Math.max(n, 0.48);
+    if (d < 48 && n > 0.4 && !lane) { let h = Math.round(-5.5 + (n - 0.4) * 14); h = Math.min(h, -2); if (dv < 6) h = Math.min(h, -5); else if (dv < 13) h = Math.min(h, -4); const brain = hsh(q, r) > 0.82; return {h, s: B.ocean, top: brain ? null : (hsh(r, q) > 0.5 ? [1, 2] : [0, 1]), m: brain ? "brain" : null}; }
     const h = d > 52 ? -9 : -6; return {h, s: B.ocean, top: hsh(q, r) > 0.85 ? [0, 2] : [3, 2]};
   });
   for (const c of cells.values()) if (!c.m) delete c.m;
@@ -1089,46 +1164,72 @@ function sceneReef(stage) {
   const bed = bedSampler(cells);
   const sea = makeSea(W, {amp: 0.25});
   bakeWater(W, () => 0, -80, -80, 80, 80, 192, bed);
-  // living coral on the reef cells, as pieces: staghorn, table, fans, soft coral, anemones, sponges, clams
-  const life = [], clams = [], anems = [];
-  for (const [k, c] of cells) {
-    const [q, r] = k.split(",").map(Number), x = hx(q, r), z = hz(r), p = hsh(q * 7 + 1, r * 5 + 3);
-    if (c.h > -5.5 && c.h < -0.5) {
-      if (p < 0.18) crossed(W, "card-staghorn", 1.6, 1.6, x, c.h, z, {n: 3, rot: p * 9});
-      else if (p < 0.27) { prism(W, M.branch, 0.12, 0.7, x, c.h, z); prism(W, M.table, 1.25, 0.14, x, c.h + 0.7, z); }
-      else if (p < 0.36) crossed(W, "card-fan", 1.5, 1.5, x, c.h, z, {n: 1, rot: 0.4});
-      else if (p < 0.47) crossed(W, "card-soft", 1.1, 1.1, x, c.h, z, {n: 2});
-      else if (p < 0.55) { crossed(W, "card-anemone", 1.0, 0.9, x, c.h, z, {n: 3}); anems.push(new THREE.Vector3(x, c.h + 0.7, z)); }
-      else if (p < 0.62) box(W, M.sponge, 0.7, 0.9 + p, 0.7, x + 0.4, c.h + 0.5, z - 0.3);
-      else if (p < 0.66) clams.push(makeClam(W, M, x, c.h, z));
-    } else if (c.h <= -6 && p < 0.05) crossed(W, "card-seagrass", 1.6, 0.8, x, c.h, z, {n: 3});
+  // the living reef, packed: a jittered grid, every point something, clustered by kind; dense inside 24 m, thinner to 46
+  const RP = reefPieces(W), life = [], clams = [], anems = [];
+  const den = new THREE.Vector3(hx(4, -4), -3.9, hz(-4) + 0.4);
+  const VIEW = [0.9, 0.2, 6], EYE = new THREE.Vector3(VT.x + VIEW[2] * Math.cos(VIEW[1]) * Math.sin(VIEW[0]), 0, VT.z + VIEW[2] * Math.cos(VIEW[1]) * Math.cos(VIEW[0]));
+  const HERO = new THREE.Vector3(VT.x + 0.4, 0, VT.z + 1.2);
+  const segDist = (x, z) => { const ax = HERO.x - EYE.x, az = HERO.z - EYE.z, t = clamp(((x - EYE.x) * ax + (z - EYE.z) * az) / (ax * ax + az * az), 0, 1); return Math.hypot(x - EYE.x - ax * t, z - EYE.z - az * t); };
+  let k = 0;
+  for (let gx = -46; gx <= 46; gx += 0.62) for (let gz = -46; gz <= 46; gz += 0.62) {
+    k++; const x = gx + (hsh(k, 1) - 0.5) * 0.5, z = gz + (hsh(k, 2) - 0.5) * 0.5, d = Math.hypot(x, z), dv = Math.hypot(x - VT.x, z - VT.z);
+    const dens = d < 24 || dv < 14 ? 1 : d < 46 ? 0.28 : 0; if (hsh(k, 3) > dens) continue;
+    if (Math.hypot(x - den.x, z - den.z) < 1.4) continue;
+    if (Math.hypot(x - EYE.x, z - EYE.z) < 2.2) continue;
+    const low = segDist(x, z) < 1.1 || Math.hypot(x - EYE.x, z - EYE.z) < 3.4;   // the eye's line to the anemone: only low growth
+    const y = bed(x, z), rock = y > -5.5, zone = vn(x / 3.1 + 11, z / 3.1 - 4), r = hsh(k, 4), s = 0.7 + 0.6 * hsh(k, 5), yaw = hsh(k, 6) * 6.28;
+    if (!rock) {   // the sand: sea grass, rubble and shells, a few corals, a stand of seaweed
+      if (r < 0.42) RP.add("grass", x, y, z, s, yaw); else if (r < 0.6) RP.add("rubble", x, y, z, s, yaw); else if (r < 0.68) RP.add("shell", x, y, z, s, yaw);
+      else if (r < 0.74) RP.add(zone < 0.5 ? "finger" : "boulder", x, y, z, s * 0.6, yaw); else if (r < 0.77 && vn(x / 9, z / 9) > 0.55) RP.add("kelp", x, y, z, s, yaw);
+      continue;
+    }
+    if (low) { if (r < 0.5) RP.add("turf", x, y, z, s, yaw); else if (r < 0.7) RP.add("rubble", x, y, z, s, yaw); else if (r < 0.8) RP.add("finger", x, y, z, s * 0.6, yaw); else RP.add("shell", x, y, z, s, yaw); continue; }
+    if (r < 0.03 && y <= -3.5 && dv > 4) { RP.add("table", x, y, z, 1.1 + 1.1 * hsh(k, 7), yaw, null, 0.8 + 1.2 * hsh(k, 8)); continue; }
+    if (r < 0.04 && clams.length < 10 && y < -3) { clams.push(makeClam(W, M, x - 0.5, y, z - 0.3)); continue; }
+    const kind = zone < 0.27 ? "branch" : zone < 0.4 ? "finger" : zone < 0.5 ? "boulder" : zone < 0.57 ? "soft" : zone < 0.63 ? (r < 0.5 ? "tube" : "barrel") : zone < 0.69 ? "fan" : zone < 0.73 ? "anem" : zone < 0.84 ? "branch" : "turf";
+    const sy = kind === "boulder" ? 0.7 + 0.8 * hsh(k, 9) : 1;
+    RP.add(kind, x, y, z, kind === "boulder" ? s * 1.2 : s, yaw, null, sy);
+    if (kind === "anem" && anems.length < 8) anems.push(new THREE.Vector3(x, y + 0.25 * s, z));
+    if (kind === "boulder" && hsh(k, 10) < 0.35) RP.add(hsh(k, 11) < 0.6 ? "branch" : "finger", x, y + 0.42 * s * 1.2 * sy, z, s * 0.6, yaw);   // corals grow on corals
+    if (hsh(k, 12) < 0.55) RP.add(hsh(k, 13) < 0.6 ? "turf" : "rubble", x + 0.3, y, z - 0.2, 0.6 + 0.6 * hsh(k, 14), yaw);   // the gaps filled
   }
+  // the skyline: big table corals layered at different heights across the middle distance of the default view
+  for (let i = 0; i < 16; i++) { const along = 6 + 13 * hsh(i, 21), side = (hsh(i, 22) - 0.5) * 22, x = VT.x + VD.x * along + VD.z * side, z = VT.z + VD.z * along - VD.x * side, y = bed(x, z); if (y < -5.5) continue; RP.add("table", x, y, z, 1.8 + 1.4 * hsh(i, 23), hsh(i, 24) * 6, null, 1.3 + 1.6 * hsh(i, 25)); }
+  // the big anemone close to the eye, with its clownfish (darters)
+  const heroP = HERO.clone(); heroP.y = bed(heroP.x, heroP.z); RP.add("hero", heroP.x, heroP.y, heroP.z, 1, 0.3, 0xfffefe);
+  const pieces = RP.build();
+  W.reefCount = pieces;
+  life.push(school(W, "darter", 2, 0.26, t => heroP.clone().add(new THREE.Vector3(Math.cos(t * 0.3) * 0.25, 0.55, Math.sin(t * 0.3) * 0.25)), [0.5, 0.2, 0.5]));
   for (const a of anems.slice(0, 6)) life.push(school(W, "darter", 2, 0.22, () => a, [0.5, 0.3, 0.5]));
+  // fish everywhere: a cloud of small orange anthias over the reef, dark damsels higher, the game's reef fish
+  const cloud = VT.clone().addScaledVector(VD, 5);
+  life.push(school(W, "anthias", 340, 0.2, orbitPath(cloud.x, -2.6, cloud.z, 2.5, 1.8, 0.05, 0.3), [20, 3.2, 15]));
+  life.push(school(W, "anthias", 160, 0.2, orbitPath(-10, -3.2, -8, 4, 3, -0.06, 0.4, 1), [14, 2.5, 12]));
+  life.push(school(W, "damsel", 40, 0.32, orbitPath(cloud.x - 2, -1.2, cloud.z - 2, 3, 2, 0.04, 0.3, 2), [18, 1.4, 14]));
   life.push(school(W, "game/fish-reef", 26, 0.3, orbitPath(-4, -3, 6, 12, 8, 0.1), [5, 1.5, 4]));
   life.push(school(W, "game/fish-reef", 18, 0.3, orbitPath(12, -2.5, -10, 7, 10, -0.13, 0.5, 2), [4, 1.2, 4]));
-  life.push(school(W, "game/fish-reef", 14, 0.3, orbitPath(3, -0.9, -3, 2.2, 1.8, 0.16), [1.8, 0.3, 1.8]));
-  for (let i = 0; i < 4; i++) { const a = [...cells.values()][Math.floor(rnd() * cells.size)]; const k = [...cells.keys()][Math.floor(hsh(i, 9) * cells.size)]; const [q, r] = k.split(",").map(Number); const x = hx(q, r), z = hz(r), y = cells.get(k).h;
-    life.push(swimmer(W, "beakfish", 0.6, t => new THREE.Vector3(x + Math.sin(t * 0.3 + i) * 2, Math.max(y, -5) + 0.5 + Math.abs(Math.sin(t * 2 + i)) * 0.25, z + Math.cos(t * 0.3 + i) * 2))); }
+  for (let i = 0; i < 4; i++) { const k2 = [...cells.keys()][Math.floor(hsh(i, 9) * cells.size)]; const [q, r] = k2.split(",").map(Number); const x = hx(q, r), z = hz(r), y = cells.get(k2).h;
+    life.push(swimmer(W, "beakfish", 0.6, t => new THREE.Vector3(x + Math.sin(t * 0.3 + i) * 2, Math.max(y, -5) + 0.9 + Math.abs(Math.sin(t * 2 + i)) * 0.25, z + Math.cos(t * 0.3 + i) * 2))); }
   life.push(swimmer(W, "m9/bloatfin", 0.4, orbitPath(-8, -3.2, -6, 3, 2, 0.1)));
-  life.push(swimmer(W, "turtle", 1.3, orbitPath(0, -2.4, 0, 22, 16, 0.045, 0.6)));
+  life.push(swimmer(W, "turtle", 1.3, orbitPath(0, -2.0, 0, 22, 16, 0.045, 0.6)));
   life.push({m: null, update: (() => { const m = creature(W, "game/fish-ray", 1.4); return (t) => { const p = new THREE.Vector3(Math.cos(t * 0.07) * 26, -5.3 + Math.sin(t * 0.5) * 0.15, Math.sin(t * 0.07) * 20); flatAlong(m, p, -t * 0.07 - Math.PI / 2); }; })()});
   for (let i = 0; i < 8; i++) { const h = new THREE.Vector3((rnd() - 0.5) * 40, 0, (rnd() - 0.5) * 40); const kind = ["urchin", "starfish", "cucumber", "starfish"][i % 4]; life.push(crawler(W, kind, kind === "cucumber" ? 0.7 : 0.45, h, 1.5, bed, {speed: 0.02})); }
   life.push(crawler(W, "lobster", 0.6, new THREE.Vector3(4.5, 0, -6.3), 0.8, bed, {speed: 0.1}));
   for (let i = 0; i < 2; i++) life.push(crawler(W, "flounder", 0.8, new THREE.Vector3(-18 + i * 30, 0, 22 - i * 40), 4, bed, {speed: 0.12}));
   life.push(swimmer(W, "shrimp", 0.3, orbitPath(-5, -4.6, 3, 0.4, 0.3, 0.6, 0.1)));
-  const octo = makeOctopus(W, new THREE.Vector3(hx(4, -4), -3.9, hz(-4) + 0.4), bed); life.push(octo);
+  const octo = makeOctopus(W, den, bed); life.push(octo);
   life.push(...clams);
   const rs = rays(W, 0, 0, 30, 26, 0, 14);
   const sparkle = motes(W, 300, 0x5ff0ff, 0.12, {c: new THREE.Vector3(0, -3, 0), s: [50, 5, 50]}, {add: true, opacity: 0, swirl: 0.3});
   const lamp = diverLamp(W);
-  W.hudExtra = () => "water: reef (the clearest), 27 C" + (octo.st.state !== "out" ? `, octopus ${octo.st.state}` : "");
+  W.hudExtra = () => `water: reef (the clearest), 27 C; ${pieces.total} reef pieces in ${pieces.meshes.length} instanced draws` + (octo.st.state !== "out" ? `, octopus ${octo.st.state}` : "");
   W.update = (t, dt) => {
     const cp = W.camera.position, cwl = W.waterAt(cp.x, cp.z), under = cp.y < cwl;
     for (const l of life) l.update(t, cp, dt);
     rs.update(t, under, cwl - cp.y); sparkle.mat.opacity = W.T.day < 0.3 ? 0.7 : 0; sparkle.update(t); lamp.update(under, cwl - cp.y);
   };
-  W.setViews({"Reef flat": [[0, -3, 0], 0.9, 0.12, 18], "Life": [[3, -1.4, -3], 0.4, 0.12, 6], "Clams and den": [[5.6, -3.6, -9.0], 2.6, 0.35, 4], "From the boat": [[0, -2, 0], 0.7, 0.95, 26]});
-  W.lampBtn(); finish(W, "Reef flat"); return W;
+  W.setViews({"Reef": [VT.toArray(), ...VIEW], "Reef flat": [[0, -3, 0], 0.9, 0.12, 18], "Life": [[3, -1.4, -3], 0.4, 0.12, 6], "Clams and den": [[5.6, -3.6, -9.0], 2.6, 0.35, 4], "From the boat": [[0, -2, 0], 0.7, 0.95, 26]});
+  W.lampBtn(); finish(W, "Reef"); return W;
 }
 // a giant clam: two shell halves on a hinge that open and close, and shut when the eye comes within 4 m
 function makeClam(W, M, x, y, z) {
