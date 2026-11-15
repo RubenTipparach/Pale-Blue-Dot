@@ -925,7 +925,7 @@ mod tests {
         // Written back, a file with no rebinds says so, and an older build
         // ignores the field.
         let text = PlayerSettings::default().to_text(&KeyBinds::default());
-        assert!(text.contains("version: 5"), "{text}");
+        assert!(text.contains("version: 6"), "{text}");
         let (_, none, _) = PlayerSettings::parse(&text).unwrap();
         assert!(none.is_empty());
     }
@@ -1003,7 +1003,7 @@ mod tests {
         assert_eq!(read.volumes, Volumes::default());
         assert!(Loaded::Read(4).writable());
         let text = read.to_text(&KeyBinds::default());
-        assert!(text.contains("version: 5"), "{text}");
+        assert!(text.contains("version: 6"), "{text}");
         let (again, _, _) = PlayerSettings::parse(&text).unwrap();
         assert_eq!(again, read);
         let odd = "(version: 5, volumes: (master: 43, effects: 250, menus: 0))";
