@@ -117,6 +117,106 @@ under 7 cm; arrows no longer run into a pool of sources. The rule is untouched: 
 same ticks to the same cell counts as before. This is the mockup's look,
 not a decision about the game's water renderer, which stays decision 7.
 
+**7b. The mockups' water reads right from any side (owner, 2026-11-15).**
+Looking at M28 on a phone at its default view, the owner wrote four notes.
+They are the mockup's look, and the rule is untouched (every preset settles
+in the same ticks to the same counts):
+
+- *"The very front part of the cell doesn't have any geometry. Front lines
+  of generation?"* M28 drew every column's side down to the patch's base,
+  but a sea sheet ran on past the patch to the horizon at sea level and,
+  near-opaque at a glance, covered those walls from 0 down to -6, so the
+  near edge read as a grass lid on nothing. M25's sim skipped the bottom
+  layer's outer sides outright, so its 1-layer front had no wall at all.
+  Now the patch is cut like a cake: every side down to a stone base, a stone
+  floor under it, the outer sea sheet gone (M28's sea is its own sea cells),
+  and where water meets the patch's edge it stands as a still wall down to
+  its bed (`simWater`'s cuts, drawn by `makeCaps` as a third kind of face).
+- *"some zdepth issues with the waterfall/transparency sorting"*. The caps,
+  lips and falls were one transparent mesh with no depth written, so its
+  triangles blended in build order and a fall behind a cap could paint over
+  it. `makeCaps` now draws a depth-only twin of the mesh first (the same
+  shaders, so the same waves; render order 3.5, after every opaque thing),
+  and the colour pass keeps only the nearest water at each pixel. Water
+  behind water is hidden, as the game's single water layer is; the arrows
+  test against that depth, so a fall in front hides the arrow behind it.
+- *"Add button to toggle arrows on off, the game should have this too."*
+  The toggle reads "Arrows: on" / "Arrows: off" with a lit dot when pressed,
+  in both pages. The game's overlay is requirement "A flow-arrow overlay" in
+  `specs/planet/water` (task 3.4).
+- *"the edges also dont have flow ... we can see 1 arrow in a cell with 4
+  pads."* A cap pointed only toward lower water, so the spreading front
+  (dry beyond) and a ring at rest against a wall came out with no vector.
+  The vector is now the way the water is going, down the head: toward lower
+  water; away from higher water that reaches this layer; toward a dry cell
+  it can spread into (open at this layer, and a level above 0 to give) or
+  fall into (open at this layer and the one below). A source points only
+  where water leaves it, and a still pool (every head equal) has none.
+  Basin: 18 caps with arrows where there were 6; spring: 230 where there
+  were 186, with every flowing cap that has somewhere to go carrying one.
+
+**7c. Flow is shown by panning a water texture, Tenebris C's way (owner,
+2026-11-15).** "Add UV scrolling and water texture or shaders to show the
+flow map. This is how tenebris c does it." Read at `RubenTipparach/tenebris`
+commit `ef9865166349c7a3c4ae09acdd20640daf85b4fd` (2026-08-15, "Merge pull
+request #89"), cloned read-only:
+
+- `tenebris-c/src/client/hex_mesher.c`, `bake_water_flow_uv`: at mesh time
+  each water cell's top-cap vertices get the cell's flow direction, from
+  `world_water_flow_direction` (`src/core/world_water.c`: the cell's centre
+  minus the mean position of the source cells it descends from, normalised),
+  projected onto the tile's tangent plane and written into the vertex's UV
+  channel. Side walls, bottom caps and cells with no origin (generated sea,
+  sources) get (0, 0): "spawn blocks stay static, flow blocks pan".
+- `tenebris-c/src/shaders/water.glsl`, `water_fs` (the desktop path): no
+  texture. The surface is a three-octave gradient-noise fBm (`gnoise3`,
+  `fbm3`) whose finite-difference gradient bends the normal. Flow moves the
+  noise's sample point: on a cap, `flow_pan = -flow_world * u_time * 0.35`
+  (weighted by how horizontal the face is); on a vertical face, a shift along
+  the radial by `u_time * u_flow_speed_falling` (`flow_uv_speed_falling`,
+  1.0 in `assets/config/water.yaml`), so the pattern streams down a fall.
+  One phase, no reset: the vector is constant over a cell, so the pan never
+  stretches the pattern and no two-phase blend is needed.
+- `tenebris-c/src/shaders/water_mobile.glsl`, `water_mobile_fs` (the phone
+  path): the same idea with a texture, `assets/textures/water_normal.png`
+  (128 px, made by `tools/gen-water-normal.py`), sampled triplanar in two
+  layers at two scales and drift speeds, the fall shift added to the sample
+  point on vertical faces (no cap pan on mobile).
+- `tenebris-c/water.md` section 8 plans the rest: the cap's UV scrolled along
+  the net flow at `flow_uv_speed_per_level` per level of drop (0.25; parsed
+  in `config.c`, not yet used by the shader), a falling side scrolled from
+  V 1 to 0, still and flowing atlas slots.
+- `tenebris-c/src/client/renderer.c`, `renderer_draw_water_flow_debug` and
+  `flow_arrow_visit`, toggled by F5 in `src/client/main_web.c`: a debug
+  overlay of a red line arrow on every water cell with a flow direction, a
+  hair above the cap, depth-tested and not written.
+
+The mockups do it the same way with a pixel texture. `waterMat` samples
+Tenebris's own water tile (`tenebris-rs/assets/textures/water.png`, 16 x 16,
+three colours; byte-identical in `docs/mockups/planets/tenebris/water.png`),
+embedded in `water-look.js` as its 256 colour indices so no file travels with
+it, nearest-sampled, 2 m a tile. The three indices are drawn as three tones
+of the water they are on (its own colour, a ripple lifted toward the sky, a
+glint lit as the foam), so the pattern is palette-true and lit by the lamps
+at night. Each cap pans the tile along its own flow vector at 1.6 m/s per
+unit of flow, the tile's streaks laid along the flow; a falling sheet pans
+it down at 2.4 m/s, streaks standing; a still cap and a cut stand still. As
+in Tenebris, the vector is constant per cell, so one phase serves. The fall
+froth now comes from the tile (its old hash streaks are kept only where a
+page asks for no texture), the cap streak foam is lighter, and the pattern
+fades out between 45 and 120 m, where a 12 cm pixel would shimmer. The sea
+(`tex` 0) is unchanged. Measured in M28 (SwiftShader, two frames a second
+apart): a flowing cap changes 10.8 % of its pixels by more than 24 levels,
+still sea 0.4 %.
+
+**7d. The game's flowing water (proposed, not built).** The game's cap
+already has a flow hook (requirement "The water surface streams along a
+per-cell flow"). When flowing water lands, its look is Tenebris's: the
+flow vector baked per cell at mesh time, the top's pattern panned along it
+by speed, a falling face panned down, still water still, and a flow-arrow
+overlay to check it (tasks 3.4, 3.5). Proposed only; no game code until the
+owner approves the mockup and asks.
+
 **8. The game's code is written from the rule, not translated.** The mockup
 is a line-by-line port of LGPL-2.1-or-later code and says so. The Rust
 version is written from decisions 1 to 6 and Luanti's rule as described in
