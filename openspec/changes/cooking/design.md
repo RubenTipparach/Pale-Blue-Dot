@@ -232,6 +232,159 @@ flickers and smoke rises because the world moves them; the camera stays where
 the viewer left it and nothing turns on its own. The galley keeps a ship's
 day: white cabin strips by day, dim red by night.
 
+## The first playable slice (built 2026-11-14)
+
+The owner, 2026-11-14: "start building the farming systems ... oh and cooking
+and domestication of animals too", for roadmap phase 1 ("the first game
+loop": crafting tools, fishing, farming, herding, cooking, then starter
+missions). This slice builds on `farming-and-smelting`'s goods table and
+station table and is the part of decisions 1 to 13 the starter missions
+need ("make fire", "catch x fish, cook x fish"). Where it departs from the
+decisions above, it says so; the rest of them stand for later slices.
+
+**Q1 to Q3 have no answer in the survey** (read 2026-11-14: only G1 is
+answered). Each is taken at its recommendation, recorded as
+"recommendation taken (ask only with screenshots)": Q1 buffs and no hunger
+bar; Q2 separate stations, the campfire first; Q3 heat as the cook's choice,
+which waits with stars (S11) because a heat that is worth a star needs stars.
+
+### S1. Food is goods, not `Item::Food` (supersedes decision 6)
+
+The goods table (`farming-and-smelting` decision 1) was built after this
+design, and it is exactly "a thing that stacks and has an icon", saved by
+code. A dish is a row in `pbd_core::goods::GOODS` under `// cooking`, saved
+as `g<code>,<n>`. No new item kind, no new slot prefix. Fish stay
+`Item::Fish` and are an ingredient as they are.
+
+A stack carries no made-at time and no stars in this slice: both need state
+on a stack, which is a new slot field kind (goods decision 1), and freshness
+and quality wait for it (S11).
+
+### S2. The campfire is a light and a station (material code 21)
+
+`Material::Campfire`, save code **21**, is the second row of
+`pbd_core::station::STATIONS` and the seventh light in `Material::LAMPS`:
+- **A light**, always lit, emission 13 (a street lantern's reach; the
+  brazier is 15), so a camp at night is lit by its fire in the field like
+  every other lamp, and neither solid nor opaque: walked through, as the
+  brazier is (`lamps-and-lanterns`). One light to a column, as every lamp.
+- **Drawn by the column pass's lamp draw**, as kind `LAMP_CAMPFIRE` (6): a
+  ring of stones, two crossed logs and the flame, from the lamp parts the
+  other lights use (iron, wood, flame). A light is not drawn from the runs,
+  so the four-bit render code (`farming-and-smelting` decision 8) is not
+  touched and needs no widening for it. The lamp kind's three bits held six
+  lights; they now hold seven, and one is left.
+- **A station**: `E` on it opens the campfire's panel (S4).
+- **Broken** with bare hands or any tool, like the other lights, and gives
+  itself back; refused while it has jobs, as the forge is.
+
+Codes 22 and 23 are held for the next two kitchen stations (oven, pot).
+
+### S3. Making fire
+
+The campfire is a **hand recipe** (`campfire`: 5 stone, 2 coal; a ring of
+stones round a fire of coal), made from the pack once `tool-crafting`'s hand
+panel lands. M27 builds it of stone and logs; there are no logs in the game
+until `tool-crafting` adds them, so coal stands in (recommendation taken).
+So that cooking plays before that merge, **kit version 4 deals one
+campfire** to every world, old or new, through the existing kit path.
+
+The campfire burns what it was built with: **no fuel per cook** in this
+slice (recommendation taken). Decision 2's "burns log" comes with logs and
+the stations that burn them.
+
+### S4. Recipes in `cooking.ron`, one recipe book
+
+The kitchen's recipes live in `assets/config/cooking.ron`, beside the
+forge's `recipes.ron` rather than inside it (supersedes decision 7's file),
+with the food data (effect and minutes per dish) and the effects' strengths.
+At load the kitchen's recipes are appended to the same `RecipeBook` the
+forge uses, so the queue, the collect, the station record and the panel are
+the farming change's own rules; nothing about stations is duplicated.
+
+- **Any fish.** A recipe input written `fish` takes one caught fish of any
+  species (a starter mission counts fish, not perch). At queue time the
+  first fish stack in slot order holding enough is the one taken. Outputs
+  never depend on the species.
+- **Pending rows.** A recipe naming a good this build does not have (the
+  husbandry branch's eggs, milk and meat) is held as pending: logged at
+  load and left out of the book, never an error. It goes live in the build
+  where the good exists. A test holds that only the goods listed as awaited
+  can make a recipe pending.
+- Item names are the station file's (`block:stone`, a good's code), plus
+  `fish`.
+
+The dishes:
+
+| Recipe | At | Takes | Gives | Time (world s) | Effect | Minutes |
+| --- | --- | --- | --- | ---: | --- | ---: |
+| `grilled-fish` | campfire | 1 fish | 1 grilled fish | 20 | steady hands | 6 |
+| `chili-fish` | campfire | 1 fish, 1 chili | 1 chili fish | 25 | steady hands | 10 |
+| `flatbread` | campfire | 3 wheat | 2 flatbread | 30 | stride | 5 |
+| `roast-turnip` | campfire | 2 turnip | 2 roast turnip | 20 | keen | 4 |
+| `kale-skewer` | campfire | 2 frost kale, 1 turnip | 1 kale skewer | 25 | keen | 6 |
+| `fried-egg` (pending) | campfire | 1 `egg` | 1 fried egg | 15 | keen | 5 |
+| `roast-meat` (pending) | campfire | 1 `raw-meat` | 1 roast meat | 30 | stride | 8 |
+| `campfire` | hand | 5 stone, 2 coal | 1 campfire | 3 | | |
+
+**Bread from wheat is the campfire's flatbread**, baked on the hearth
+stones (M27 lists flatbread at the campfire). Flour, the quern and the oven's
+loaf come with those stations.
+
+### S5. Eating
+
+**The right mouse button with a dish in the selected hotbar slot eats one**,
+as it plants a seed (`farming-and-smelting` decision 3). A good that is not
+a dish (wheat, a raw turnip, coal) is not eaten.
+
+The effects (Q1's table, the three that touch built systems):
+
+| Effect | Does | Strength (`cooking.ron`) |
+| --- | --- | ---: |
+| stride | sprinting and swimming are faster | x 1.15 |
+| steady hands | the line's tension rises slower while reeling, the fish tires faster | x 1.2 |
+| keen | blocks break faster | x 1.15 |
+
+Glow waits for a light that follows the player; warmth waits for cold.
+
+- Up to **three** effects at once. Eating an effect already running sets
+  its time to the longer of the two (never stacks). A fourth effect replaces
+  the one with least time left.
+- Times are **world seconds**, so a closed game runs nothing down and a
+  minute of play is a minute.
+- **Eating is durable**: the slots after it and a record of kind `meal`
+  (id 0, schema 1, body the running effects and the world time each ends)
+  go to the disk in one `with` line. A world reopened mid-buff has the buff.
+- The HUD shows each running effect over the hotbar: the dish's icon and its
+  minutes left.
+
+### S6. Events for the starter missions
+
+`pbd_app::kitchen::Cooked { recipe, dish, count, fish }` when a finished
+dish is collected (`fish` is how many caught fish went into it), and
+`pbd_app::kitchen::Ate { dish, effect }` when one is eaten, each written on
+the frame the durable write was accepted. Collecting also raises the
+farming change's `Gained { how: Made }`, as the forge does. Nothing here
+reads them; `starter-missions` counts them.
+
+### S7. Saves
+
+Nothing an old save holds changes meaning, and nothing migrates. Additions:
+material code 21, the dishes' goods codes, a `station` record whose station
+is `campfire`, and the record kind `meal` (noted in the identity file the
+first time it is stored). An older build opening a newer save loses what it
+cannot read and nothing else, exactly as `farming-and-smelting` decision 12
+says: a line with material 21 or an unknown good is skipped as damaged; a
+`meal` record is held as text and written back.
+
+### S8. What waits (the rest of decisions 2 to 13)
+
+Freshness and spoiling; stars, practice and heat (Q3); every other kitchen
+station (the oven, the pot, the quern and flour); recipe learning; selling;
+the twelve new crops; glow and warmth; eating from the pack (it eats from the
+hotbar); kitchens in towns. Each needs either per-stack state, a new
+station's art, or a system that is not built.
+
 ## Risks / Trade-offs
 
 - **Fifteen stations is a lot to build.** Each is small (a model, a panel
