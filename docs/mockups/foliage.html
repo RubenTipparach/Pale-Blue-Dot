@@ -554,7 +554,8 @@ void main(){
   // one art style (owner, 2026-11-15): a plant or prop keeps its texture's palette but not its
   // full contrast, pulled toward the texture's own mean colour, so it reads as a soft mass lit
   // like the ground rather than salt-and-pepper speckle. The ground itself keeps uDetail = 1.
-  alb = mix(uMean, alb, uDetail);
+  // a baked crown is seen at 48 px: there its leaf tile's speckle would be salt-and-pepper, so it keeps less
+  alb = mix(uMean, alb, uBake > 0.5 && uLeafy > 0.5 && uDetail < 1.0 ? 0.2 : uDetail);
   // the palette's greens are more saturated than the near tree's game texture: measured on the
   // near/far side-by-side, pull the baked crown back to the near crown's mean colour
   if (uImp > 0.5 && uViews > 0.5) { float l = dot(alb, vec3(0.2126, 0.7152, 0.0722)); alb = mix(vec3(l), alb, 0.5) * vec3(0.92, 0.95, 0.72); }

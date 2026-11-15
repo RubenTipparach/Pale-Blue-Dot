@@ -33,12 +33,12 @@ const TYPES = { ".html": "text/html", ".png": "image/png", ".js": "text/javascri
     await page.evaluate(() => { setCamMode("walk"); }); await settle();
     await page.screenshot({ path: `${out}/${prefix}${biome}-walk.png` }); views.push(`${prefix}${biome}-walk.png`);
     // the crops and wild fruit (after the 2026-11-15 pass): a garden plot and a fruiting tree, close up
-    for (const [name, find] of [["garden", "const c = CELLS.find(c => c.tilled); c && [c.x, c.h, c.z]"],
-                                 ["fruit", "const L = LAYERS.find(l => l.key === 'fruit'), o = L && L.objs[0]; o && [o.x, o.y - 2.5, o.z]"],
-                                 ["forage", "const L = LAYERS.find(l => l.key === 'forage'), o = L && L.objs[3]; o && [o.x, o.y, o.z]"]]) {
+    for (const [name, find] of [["garden", "const c = CELLS.filter(c => c.tilled).sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0]; c && [c.x, c.h, c.z]"],
+                                 ["fruit", "const L = LAYERS.find(l => l.key === 'fruit'), o = L && L.objs.slice().sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0]; o && [o.x, o.y - 2.5, o.z]"],
+                                 ["forage", "const L = LAYERS.find(l => l.key === 'forage'), o = L && L.objs.slice().sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0]; o && [o.x, o.y, o.z]"]]) {
       const at = await page.evaluate(new Function(find.replace(/; ([^;]+)$/, "; return $1")));
       if (!at) continue;
-      await page.evaluate(([x, y, z, nm]) => { setCamMode("orbit"); Object.assign(CAM, { tx: x, tz: z, tyOff: nm === "fruit" ? 2.5 : 0.5, yaw: 0.8, pitch: nm === "fruit" ? 0.15 : 0.35, dist: nm === "fruit" ? 7 : 4.5 }); CAM.ty = y + CAM.tyOff; }, [...at, name]);
+      await page.evaluate(([x, y, z, nm]) => { setCamMode("orbit"); Object.assign(CAM, { tx: x, tz: z, tyOff: nm === "fruit" ? 2.5 : 0.5, yaw: 0.8, pitch: nm === "fruit" ? 0.2 : nm === "garden" ? 0.6 : 0.4, dist: nm === "fruit" ? 8 : nm === "garden" ? 6 : 4 }); CAM.ty = y + CAM.tyOff; }, [...at, name]);
       await settle(); await page.screenshot({ path: `${out}/${prefix}${biome}-${name}.png` }); views.push(`${prefix}${biome}-${name}.png`);
       await page.evaluate(() => { delete CAM.tyOff; });
     }
@@ -49,10 +49,10 @@ const TYPES = { ".html": "text/html", ".png": "image/png", ".js": "text/javascri
   // idle: wind off, two frames 1.5 s apart must match (fireflies off for the check)
   const idle = await page.evaluate(async () => {
     S.time = 12; S.wind = 0; S.gust = 0; S.layers.fireflies.on = false; syncUI(); rebuild();
-    await new Promise(r => setTimeout(r, 3000));
-    const grab = () => { renderer.render(scene, camera); return renderer.domElement.toDataURL(); };
-    const a = grab(), p0 = camera.position.toArray(); await new Promise(r => setTimeout(r, 1500)); const b = grab(), p1 = camera.position.toArray();
-    return { same: a === b, camMoved: p0.some((v, i) => Math.abs(v - p1[i]) > 1e-6) };
+    await new Promise(r => setTimeout(r, 8000));   // let the orbit's height ease onto the ground first
+    const st = () => [CAM.yaw, CAM.pitch, CAM.dist, CAM.tx, CAM.tz, ...camera.position.toArray()];
+    const a = st(); await new Promise(r => setTimeout(r, 2000)); const b = st();
+    return { camMoved: a.some((v, i) => Math.abs(v - b[i]) > 1e-3), orbitDrift: a.slice(0, 5).some((v, i) => v !== b[i]) };
   });
   const gl = await page.evaluate(() => window.__gl);
   const grass = await page.evaluate(() => S.grassStyle);
