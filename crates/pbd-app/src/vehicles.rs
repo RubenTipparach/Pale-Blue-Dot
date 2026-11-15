@@ -1,4 +1,4 @@
-//! Vehicles in the app: the Kestrel, the Tern and the Loon as entities, the
+//! Vehicles in the app: the Tern, the Loon and the harbours' boats as entities, the
 //! world sampled round each one every tick and handed to `pbd_core::vehicle`,
 //! boarding and leaving, and the durable record of every craft.
 //!
@@ -28,7 +28,7 @@ use bevy::prelude::*;
 use pbd_core::DVec3;
 use pbd_core::vehicle::record::{RECORD_VERSION, VehicleFile};
 use pbd_core::vehicle::spec::VehicleSpecs;
-use pbd_core::vehicle::{Craft, CraftState, Hulls, Input, Kind, Mooring, Surroundings};
+use pbd_core::vehicle::{Craft, Hulls, Input, Kind, Mooring, Surroundings};
 use pbd_core::wind::AirHere;
 use std::sync::Arc;
 
@@ -141,12 +141,6 @@ impl Vehicle {
     }
 }
 
-/// A pose the Kestrel is held at, for a capture that needs it somewhere it
-/// cannot be flown and landed by a script: in a cave (`lamps-and-lanterns`
-/// task 3.3). Held after every step, at rest, body-local.
-#[derive(Resource, Default, Clone, Copy, Debug)]
-pub struct CraftHold(pub Option<(DVec3, pbd_core::DQuat)>);
-
 /// The craft the player is aboard, if any.
 #[derive(Resource, Default, Debug)]
 pub struct Aboard(pub Option<Entity>);
@@ -169,7 +163,6 @@ impl Plugin for VehiclePlugin {
             .init_resource::<Aboard>()
             .init_resource::<VehicleControls>()
             .init_resource::<VehicleClock>()
-            .init_resource::<CraftHold>()
             .init_resource::<view::VehicleView>()
             .add_systems(Startup, (view::spawn_camera, hud::spawn))
             .add_systems(
@@ -190,7 +183,7 @@ impl Plugin for VehiclePlugin {
             )
             .add_systems(
                 FixedUpdate,
-                (step_vehicles, hold_craft, harbour::swing_moored_cogs).chain(),
+                (step_vehicles, harbour::swing_moored_cogs).chain(),
             )
             .add_systems(
                 PostUpdate,
@@ -201,23 +194,6 @@ impl Plugin for VehiclePlugin {
                     .run_if(crate::world_open),
             )
             .add_systems(Update, (hud::show, save_vehicles, view::look));
-    }
-}
-
-/// Hold the Kestrel where a capture put it.
-fn hold_craft(hold: Res<CraftHold>, mut vehicles: Query<&mut Vehicle>) {
-    let Some((at, facing)) = hold.0 else {
-        return;
-    };
-    if let Some(mut vehicle) = vehicles
-        .iter_mut()
-        .find(|v| v.craft.kind == pbd_core::vehicle::Kind::Kestrel)
-    {
-        let body = &mut vehicle.craft.body;
-        body.position = at;
-        body.orientation = facing;
-        body.velocity = DVec3::ZERO;
-        body.angular_velocity = DVec3::ZERO;
     }
 }
 
@@ -427,14 +403,6 @@ fn read_controls(
         ..default()
     };
     match vehicle.craft.kind {
-        Kind::Kestrel => {
-            input.pitch = axis(KeyCode::KeyS, KeyCode::KeyW);
-            input.roll = axis(KeyCode::KeyD, KeyCode::KeyA);
-            input.yaw = axis(KeyCode::KeyE, KeyCode::KeyQ);
-            input.collective = axis(KeyCode::Space, KeyCode::ControlLeft);
-            input.tilt = axis(KeyCode::KeyC, KeyCode::KeyZ);
-            input.bail = false;
-        }
         Kind::Tern => {
             input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
             input.sheet = axis(KeyCode::KeyW, KeyCode::KeyS);
@@ -454,8 +422,8 @@ fn read_controls(
 }
 
 /// F boards the craft in reach and leaves the one you are in; T makes a boat
-/// fast or casts it off; the Kestrel's X and B are its assist and its brake;
-/// V swaps the vehicle camera between the seat and the chase view.
+/// fast or casts it off; V swaps the vehicle camera between the seat and the
+/// chase view.
 fn board_or_leave(world: &mut World) {
     if world
         .get_resource::<crate::controls::MenuOpen>()
@@ -469,14 +437,12 @@ fn board_or_leave(world: &mut World) {
     let pressed = |k| keys.just_pressed(k);
     // F is the interaction key: E is a craft's own control (yaw, hiking, the
     // blade as a rudder), and G is the tool picker.
-    let (g, t, x, b, v) = (
+    let (g, t, v) = (
         pressed(KeyCode::KeyF),
         pressed(KeyCode::KeyT),
-        pressed(KeyCode::KeyX),
-        pressed(KeyCode::KeyB),
         pressed(KeyCode::KeyV),
     );
-    if !(g || t || x || b || v) {
+    if !(g || t || v) {
         return;
     }
     let aboard = world.resource::<Aboard>().0;
@@ -494,18 +460,6 @@ fn board_or_leave(world: &mut World) {
             }
             if t {
                 make_fast_or_cast_off(world, entity);
-            }
-            let Some(mut vehicle) = world.get_mut::<Vehicle>(entity) else {
-                return;
-            };
-            if let CraftState::Kestrel(state) = &mut vehicle.craft.state {
-                if x {
-                    state.assist = !state.assist;
-                    info!("Kestrel assist {}", if state.assist { "on" } else { "off" });
-                }
-                if b {
-                    state.brake = !state.brake;
-                }
             }
         }
     }
@@ -667,9 +621,6 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
     let Some(vehicle) = world.get::<Vehicle>(entity) else {
         return;
     };
-    if vehicle.craft.kind == Kind::Kestrel {
-        return;
-    }
     if vehicle.craft.mooring.is_some() {
         world
             .get_mut::<Vehicle>(entity)

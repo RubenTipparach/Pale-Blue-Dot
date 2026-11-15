@@ -13,7 +13,10 @@ use bevy::{
 use pbd_core::vehicle::{Craft, Kind};
 use std::path::PathBuf;
 
-pub(super) const AUTHORED: &[Kind] = &[Kind::Kestrel];
+/// The craft drawn from an authored model rather than built from their
+/// numbers. None since the Kestrel was retired (`retire-kestrel`); the loader
+/// and its tests stay for the next one.
+pub(super) const AUTHORED: &[Kind] = &[];
 pub(super) type Result<T> = std::result::Result<T, String>;
 
 pub(super) fn folder(kind: Kind) -> PathBuf {
@@ -296,7 +299,7 @@ fn instantiate(
         ))
         .id();
     world.entity_mut(parent).add_child(entity);
-    if let Some(part) = super::draw::Part::named(owner, kind, &node.name) {
+    if let Some(part) = super::draw::Part::named(owner, &node.name) {
         world.entity_mut(entity).insert(part);
     }
     for (primitive, mesh) in node.primitives.iter().zip(&model.meshes[index]) {

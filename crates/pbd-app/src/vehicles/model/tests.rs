@@ -3,85 +3,6 @@ use pbd_core::vehicle::{Hulls, spec::VehicleSpecs};
 use std::{collections::BTreeSet, sync::Arc};
 
 #[test]
-fn loaded_kestrel_parts_follow_physics_without_reshaping() {
-    use bevy::ecs::system::RunSystemOnce;
-    use pbd_core::vehicle::{CraftState, KestrelTelemetry, Telemetry};
-    let mut world = World::new();
-    world.init_resource::<Assets<Mesh>>();
-    world.init_resource::<Assets<Image>>();
-    world.init_resource::<Assets<StandardMaterial>>();
-    world.init_resource::<Time>();
-    world
-        .resource_mut::<Time>()
-        .advance_by(std::time::Duration::from_secs_f32(0.1));
-    world.init_resource::<crate::planet::PlanetRenderFrame>();
-    world.init_resource::<super::super::view::VehicleView>();
-    world.init_resource::<super::super::Aboard>();
-    let specs = Arc::new(VehicleSpecs::default());
-    let mut craft = Craft::new(
-        Kind::Kestrel,
-        1,
-        specs.clone(),
-        Hulls::new(&specs),
-        pbd_core::DVec3::Y * 4800.0,
-        pbd_core::DQuat::IDENTITY,
-    );
-    craft.occupied = true;
-    let CraftState::Kestrel(state) = &mut craft.state else {
-        unreachable!()
-    };
-    state.nacelle = 0.0;
-    state.throttle = 0.6;
-    let angles = [0.1, -0.2, 0.15, -0.12];
-    craft.telemetry = Telemetry::Kestrel(KestrelTelemetry {
-        surface_deflections: angles,
-        ..default()
-    });
-    let original = craft.record();
-    let owner = world
-        .spawn((
-            super::super::Vehicle::new(craft.clone()),
-            Transform::IDENTITY,
-            Visibility::Inherited,
-        ))
-        .id();
-    build(&mut world, owner, &craft).unwrap();
-    let count = world.resource::<Assets<Mesh>>().len();
-    world.run_system_once(super::super::draw::place).unwrap();
-    let mut query = world.query::<(&Name, &Transform)>();
-    for (name, axis, angle) in [
-        ("nacelle_left", Vec3::X, -std::f32::consts::FRAC_PI_2),
-        ("rotor_right", Vec3::Y, 1.08),
-        ("flaperon_left", Vec3::X, angles[0] as f32),
-        ("flaperon_right", Vec3::X, angles[1] as f32),
-        ("elevator", Vec3::X, angles[2] as f32),
-        ("rudder", Vec3::X, angles[3] as f32),
-    ] {
-        let transform = query
-            .iter(&world)
-            .find(|(n, _)| n.as_str() == name)
-            .unwrap()
-            .1;
-        assert!(
-            transform
-                .rotation
-                .abs_diff_eq(Quat::from_axis_angle(axis, angle), 1e-6),
-            "{name}"
-        );
-        assert_eq!(transform.scale, Vec3::ONE);
-    }
-    assert_eq!(
-        world
-            .get::<super::super::Vehicle>(owner)
-            .unwrap()
-            .craft
-            .record(),
-        original
-    );
-    assert_eq!(world.resource::<Assets<Mesh>>().len(), count);
-}
-
-#[test]
 fn exported_models_match_configured_parts_pivots_axes_and_dimensions() {
     let specs: VehicleSpecs =
         ron::from_str(include_str!("../../../../../assets/config/vehicles.ron")).unwrap();
@@ -90,27 +11,6 @@ fn exported_models_match_configured_parts_pivots_axes_and_dimensions() {
             .unwrap()
             .validate_config(*kind, &specs)
             .unwrap();
-    }
-}
-
-#[test]
-fn changed_geometry_requires_blender_regeneration() {
-    let model = Model::read(Kind::Kestrel).unwrap();
-    for change in 0..7 {
-        let mut specs = VehicleSpecs::default();
-        match change {
-            0 => specs.kestrel.wing.panel_area_m2 += 0.5,
-            1 => specs.kestrel.wing.dihedral_deg += 1.0,
-            2 => specs.kestrel.rotor.radius_m += 0.1,
-            3 => specs.kestrel.rotor.at[0] += 0.1,
-            4 => specs.kestrel.seat.eye[1] += 0.1,
-            5 => specs.kestrel.tail.aspect += 0.2,
-            _ => specs.kestrel.gear[0].at[2] += 0.1,
-        }
-        assert!(
-            model.validate_config(Kind::Kestrel, &specs).is_err(),
-            "change {change} accepted stale art"
-        );
     }
 }
 
@@ -157,7 +57,7 @@ struct Swatch {
 
 #[test]
 fn generated_source_swatches_have_provenance_exact_palette_scale_and_wrap_edges() {
-    let root = folder(Kind::Kestrel).parent().unwrap().join("swatches");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/models/vehicles/swatches");
     let manifest: SwatchManifest =
         serde_json::from_slice(&std::fs::read(root.join("manifest.json")).unwrap()).unwrap();
     assert_eq!(manifest.pixels_per_metre, 16);

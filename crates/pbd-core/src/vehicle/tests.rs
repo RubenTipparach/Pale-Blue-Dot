@@ -13,36 +13,6 @@ const RADIUS: f64 = 4799.5;
 const G: f64 = 25.0;
 const TICK: f64 = 1.0 / 60.0;
 
-#[test]
-fn kestrel_reports_the_deflections_used_by_its_foils() {
-    let mut craft = at_pole(Kind::Kestrel, 100.0, 0.0);
-    craft.occupied = true;
-    let CraftState::Kestrel(state) = &mut craft.state else {
-        unreachable!()
-    };
-    state.assist = false;
-    let input = Input {
-        roll: 0.5,
-        pitch: -0.25,
-        yaw: 0.75,
-        ..Default::default()
-    };
-    World::new(RADIUS - 100.0).run(&mut craft, TICK, |_| input);
-    let Telemetry::Kestrel(t) = &craft.telemetry else {
-        unreachable!()
-    };
-    let s = &craft.specs().kestrel;
-    let expected = [
-        s.wing.flap_rad as f64 + 0.5 * s.wing.aileron_rad as f64,
-        s.wing.flap_rad as f64 - 0.5 * s.wing.aileron_rad as f64,
-        0.25 * s.elevator_rad as f64,
-        -0.75 * s.rudder_rad as f64,
-    ];
-    for (actual, expected) in t.surface_deflections.into_iter().zip(expected) {
-        assert!((actual - expected).abs() < 1e-10);
-    }
-}
-
 struct World {
     sea: SeaTable,
     gusts: GustSettings,
@@ -136,57 +106,6 @@ fn tern_telemetry(craft: &Craft) -> TernTelemetry {
 }
 
 #[test]
-fn kestrel_assist_stays_finite_as_gravity_fades_to_zero() {
-    for gravity in [0.0, 1e-12, 1e-5] {
-        let mut world = World::new(RADIUS - 40.0);
-        world.gravity = gravity;
-        let mut craft = at_pole(Kind::Kestrel, 100.0, 0.0);
-        craft.board();
-        world.run(&mut craft, 1.0, |_| Input::default());
-        let CraftState::Kestrel(state) = &craft.state else {
-            unreachable!()
-        };
-        assert!(state.throttle.is_finite() && state.lever.is_finite());
-    }
-}
-
-#[test]
-fn kestrel_rotor_controls_need_power_and_preserve_their_signs() {
-    for power in [0.0, 0.5] {
-        let mut world = World::new(RADIUS - 40.0);
-        world.gravity = 0.0;
-        let mut craft = at_pole(Kind::Kestrel, 100.0, 0.0);
-        craft.board();
-        if let CraftState::Kestrel(state) = &mut craft.state {
-            state.assist = false;
-            state.throttle = power;
-            state.lever = power;
-        }
-        world.run(&mut craft, TICK, |_| Input {
-            pitch: 1.0,
-            roll: 1.0,
-            yaw: 1.0,
-            ..Default::default()
-        });
-        if power == 0.0 {
-            assert!(
-                craft.body.angular_velocity.length() < 1e-12,
-                "unpowered rotation {:?}",
-                craft.body.angular_velocity
-            );
-            assert!(craft.body.velocity.length() < 1e-12, "unpowered thrust");
-        } else {
-            let spin = craft.body.local(craft.body.angular_velocity);
-            assert!(
-                spin.x > 0.0 && spin.y < 0.0 && spin.z < 0.0,
-                "powered signs {spin:?}"
-            );
-            assert!(craft.body.velocity.y > 0.0);
-        }
-    }
-}
-
-#[test]
 fn tern_leeway_does_not_confuse_a_cross_current_with_sliding_through_water() {
     let mut world = World::new(RADIUS - 40.0);
     world.sea = SeaTable::new(
@@ -233,45 +152,6 @@ fn loon_instruments_separate_water_motion_from_ground_motion() {
     };
     assert!((t.speed - 1.0).abs() < 0.005 && (t.drift - 2.0).abs() < 0.005);
     assert!(t.water_speed.abs() < 0.005 && t.water_drift.abs() < 0.005);
-}
-
-#[test]
-fn kestrel_can_convert_to_wing_support_with_pilot_control_of_the_nacelles() {
-    let mut world = World::new(RADIUS - 40.0);
-    let mut craft = at_pole(Kind::Kestrel, 100.0, 0.0);
-    craft.board();
-    world.run(&mut craft, 5.0, |_| Input::default());
-    let Telemetry::Kestrel(hover) = &craft.telemetry else {
-        unreachable!()
-    };
-    assert!(hover.climb_hold);
-    let mut lowest = 100.0_f64;
-    let mut pitch = 0.0_f64;
-    world.run(&mut craft, 6.1, |c| {
-        lowest = lowest.min(c.body.position.length() - RADIUS);
-        pitch = pitch.max(
-            c.body
-                .axis(FORWARD)
-                .dot(c.body.position.normalize())
-                .asin()
-                .abs(),
-        );
-        Input {
-            tilt: -1.0,
-            ..Default::default()
-        }
-    });
-    let Telemetry::Kestrel(t) = &craft.telemetry else {
-        unreachable!()
-    };
-    assert!(t.airspeed > 60.0 && t.wing_share > 0.8, "conversion {t:?}");
-    assert!(!t.climb_hold && t.nacelle < 0.01);
-    assert!(lowest > 80.0, "lost too much height: {lowest}");
-    assert!(
-        pitch < 12.0_f64.to_radians(),
-        "pitched {} degrees",
-        pitch.to_degrees()
-    );
 }
 
 #[test]
@@ -552,77 +432,6 @@ fn a_hull_rides_a_long_wave() {
         hi - lo,
         world.sea.state(12.0, Vec3::X).significant_height()
     );
-}
-
-#[test]
-fn the_kestrel_climbs_on_the_collective_and_holds_its_attitude() {
-    let mut world = World::new(RADIUS + 5.0);
-    let mut craft = at_pole(Kind::Kestrel, 5.0 + 1.2, 0.0);
-    craft.board();
-    world.run(&mut craft, 2.0, |_| Input::default());
-    world.run(&mut craft, 3.0, |_| Input {
-        collective: 1.0,
-        ..Default::default()
-    });
-    let Telemetry::Kestrel(t) = craft.telemetry.clone() else {
-        panic!()
-    };
-    assert!(
-        (t.vertical_speed - 7.0).abs() < 1.0,
-        "climbing at {}",
-        t.vertical_speed
-    );
-    let up = craft.body.position.normalize();
-    let tilt = craft.body.axis(UP).angle_between(up).to_degrees();
-    assert!(tilt < 3.0, "tilted {tilt} deg");
-}
-
-#[test]
-fn an_empty_kestrel_holds_its_ground_in_a_crosswind_and_sets_down() {
-    let mut world = World::new(RADIUS + 5.0);
-    world.wind = Vec3::X * 10.0;
-    let mut craft = at_pole(Kind::Kestrel, 40.0, 0.0);
-    craft.body.velocity = DVec3::ZERO;
-    // Left in the hover at 35 m over the ground, in a 10 m/s wind.
-    world.run(&mut craft, 8.0, |_| Input::default());
-    let up = craft.body.position.normalize();
-    let drift = craft.body.velocity - up * craft.body.velocity.dot(up);
-    assert!(drift.length() < 2.0, "drifting at {} m/s", drift.length());
-    world.run(&mut craft, 30.0, |_| Input::default());
-    let Telemetry::Kestrel(t) = craft.telemetry.clone() else {
-        panic!()
-    };
-    assert!(t.touching >= 2, "not down: {} m up", t.height);
-    assert!(craft.body.velocity.length() < 0.5);
-}
-
-#[test]
-fn converting_below_the_stall_speed_sinks_it() {
-    // Nacelles fully forward at 25 m/s, little power, and a pilot holding the
-    // nose up to stop the sink: the wing cannot carry her, and stalls.
-    let mut world = World::new(RADIUS - 200.0);
-    let mut craft = at_pole(Kind::Kestrel, 150.0, 0.0);
-    craft.board();
-    if let CraftState::Kestrel(s) = &mut craft.state {
-        s.nacelle = 0.0;
-        s.lever = 0.1;
-        s.throttle = 0.1;
-    }
-    craft.body.velocity = craft.body.axis(FORWARD) * 25.0;
-    let mut stalled: f64 = 0.0;
-    let mut sink: f64 = 0.0;
-    world.run(&mut craft, 2.0, |c| {
-        if let Telemetry::Kestrel(t) = &c.telemetry {
-            stalled = stalled.max(t.stall);
-            sink = sink.min(t.vertical_speed);
-        }
-        Input {
-            pitch: 1.0,
-            ..Default::default()
-        }
-    });
-    assert!(sink < -5.0, "sank at most {sink} m/s");
-    assert!(stalled > 0.5, "the wing never showed the stall");
 }
 
 /// Hold a heading off the true wind with the tiller, as a helmsman does.

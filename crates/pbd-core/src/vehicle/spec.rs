@@ -104,14 +104,6 @@ fn positive(name: &str, values: &[f32]) -> Result<(), String> {
         .ok_or_else(|| format!("{name} must be positive"))
 }
 
-fn non_negative(name: &str, values: &[f32]) -> Result<(), String> {
-    values
-        .iter()
-        .all(|v| v.is_finite() && *v >= 0.0)
-        .then_some(())
-        .ok_or_else(|| format!("{name} must not be negative"))
-}
-
 // ---- Tern ---------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]

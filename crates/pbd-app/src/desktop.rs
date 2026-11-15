@@ -220,12 +220,6 @@ pub struct Launch {
     /// `--turn DEG_PER_S`: the walker's view turns right at this rate, a
     /// measurement instrument for the clouds' history (`cloud-ghosting`).
     pub turn: f32,
-    /// `--walk --ship-in-cave` starts the walker in a cave chamber (the one
-    /// `--view cave` photographs), looking down the tunnel, and parks the
-    /// Kestrel nine metres ahead, nose away: the moving things' light in a
-    /// cave (`lamps-and-lanterns` task 3.3). Vehicles and the light field are
-    /// the walker's, so the rig is too.
-    pub ship_in_cave: bool,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -339,7 +333,6 @@ impl Launch {
             overlay: None,
             map: map_screen::MapLaunch::default(),
             torch: false,
-            ship_in_cave: false,
             lamps: false,
             lamps_at: 5.0,
             lamps_across: 0.0,
@@ -401,7 +394,6 @@ impl Launch {
                         .expect("--place requires a count");
                 }
                 "--torch" => result.torch = true,
-                "--ship-in-cave" => result.ship_in_cave = true,
                 "--lamps" => {
                     result.lamps = true;
                     if let Some(metres) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
@@ -733,7 +725,7 @@ impl Launch {
                     let key = args.get(i).expect("--aboard requires a craft");
                     result.aboard = Some(
                         pbd_core::vehicle::Kind::from_key(key)
-                            .expect("--aboard knows kestrel, tern, loon, cog and rowboat"),
+                            .expect("--aboard knows tern, loon, cog and rowboat"),
                     );
                     result.walk = true;
                 }
@@ -1151,10 +1143,6 @@ pub fn run(args: &[String]) {
     // that schedule's commands apply, so a camera that wants to stand inside a
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
-    .add_systems(
-        PostStartup,
-        park_in_cave.before(pbd_app::walking::WalkingSetup),
-    )
     .insert_resource(opening)
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
@@ -2081,47 +2069,6 @@ fn cave_chamber(
         }
     }
     best
-}
-
-/// `--walk --ship-in-cave`: the walker starts in the capture cave's chamber
-/// looking down its tunnel, and the Kestrel is held nine metres ahead,
-/// halfway up the chamber, nose down the tunnel.
-fn park_in_cave(
-    mut commands: Commands,
-    launch: Res<Launch>,
-    fine: Res<pbd_app::planet::PlanetFine>,
-    config: Option<ResMut<WalkingConfig>>,
-) {
-    if !launch.ship_in_cave || !launch.walk {
-        return;
-    }
-    let Some(mut config) = config else {
-        return;
-    };
-    let Some((_, here, floor, roof, along)) = cave_chamber(&fine, false) else {
-        panic!("no chamber in the column tier to park the Kestrel in")
-    };
-    let gap = roof - floor;
-    config.restored = Some(RestoredPose {
-        position: here * (PLANET_RADIUS + floor + 1.0),
-        heading: along,
-        pitch: 0.0,
-    });
-    // Nose down the tunnel, seen from behind as the chase view sees it: side
-    // on, its length would run into both walls of a tunnel four metres wide.
-    let at_dir = (here + along * (9.0 / PLANET_RADIUS)).normalize();
-    let at = at_dir * (PLANET_RADIUS + floor + gap * 0.5);
-    let facing = Transform::from_translation(at)
-        .looking_to(along, at_dir)
-        .rotation;
-    info!(
-        "the walker starts in a {gap:.0} m cave chamber and the Kestrel is parked 9 m down it, {:.1} m above the floor",
-        gap * 0.5
-    );
-    commands.insert_resource(pbd_app::vehicles::CraftHold(Some((
-        at.as_dvec3(),
-        facing.as_dquat(),
-    ))));
 }
 
 fn cave_camera(

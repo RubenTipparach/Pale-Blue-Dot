@@ -333,10 +333,9 @@ pub enum Live {
 
 impl Live {
     /// Every context, for asking whether two groups can be live together.
-    pub const ALL: [Live; 7] = [
+    pub const ALL: [Live; 6] = [
         Live::OnFoot,
         Live::Flying,
-        Live::Aboard(Kind::Kestrel),
         Live::Aboard(Kind::Tern),
         Live::Aboard(Kind::Loon),
         Live::Aboard(Kind::Rowboat),
@@ -470,24 +469,6 @@ const VEHICLES: [Binding; 3] = [
     ),
 ];
 
-const KESTREL: [Binding; 7] = [
-    row(&W_S, "/", "pitch"),
-    row(&A_D, "/", "roll"),
-    row(&Q_E, "/", "yaw"),
-    row(
-        &[Key::Board(KeyCode::Space), Key::Board(KeyCode::ControlLeft)],
-        "/",
-        "power",
-    ),
-    row(
-        &[Key::Board(KeyCode::KeyZ), Key::Board(KeyCode::KeyC)],
-        "/",
-        "nacelles ahead or up",
-    ),
-    row(&[Key::Board(KeyCode::KeyX)], " ", "assist"),
-    row(&[Key::Board(KeyCode::KeyB)], " ", "wheel brake"),
-];
-
 const TERN: [Binding; 4] = [
     row(&A_D, "/", "tiller"),
     row(&W_S, "/", "sheet in or ease"),
@@ -544,17 +525,13 @@ const fn group(heading: &'static str, tab: Tab, when: When, rows: &'static [Bind
     }
 }
 
-/// Every control in the game, once.
-pub static BINDINGS: [Group; 11] = [
+/// Every control in the game, once. (The Kestrel's group, KESTREL on the
+/// Flying sub-tab, went with it in `retire-kestrel`; a saved rebind of one of
+/// its slots is kept in the file and read by nothing.)
+pub static BINDINGS: [Group; 10] = [
     group("ON FOOT", Tab::OnFoot, When::OnFoot, &ON_FOOT),
     group("HANDS", Tab::Hands, When::OnFoot, &HANDS),
     group("FLYING", Tab::Flying, When::Flying, &FLYING),
-    group(
-        "KESTREL",
-        Tab::Flying,
-        When::Aboard(Kind::Kestrel),
-        &KESTREL,
-    ),
     group("VEHICLES", Tab::Vehicles, When::OnFootOrAboard, &VEHICLES),
     group("TERN", Tab::Vehicles, When::Aboard(Kind::Tern), &TERN),
     group("LOON", Tab::Vehicles, When::Aboard(Kind::Loon), &LOON),
@@ -637,6 +614,11 @@ pub fn slot_at(group: &'static Group, row: &'static Binding, index: usize) -> Op
 #[derive(Resource, Clone, Debug, Default, PartialEq, Eq)]
 pub struct KeyBinds {
     moved: BTreeMap<String, KeyCode>,
+    /// The file's rebinds this build does not know (a removed slot's, such
+    /// as the retired Kestrel's, or a later build's): read by nothing, and
+    /// written back as they were read, so the file is never rewritten
+    /// without them (`retire-kestrel` decision 3).
+    kept: BTreeMap<String, String>,
 }
 
 impl KeyBinds {
@@ -650,6 +632,7 @@ impl KeyBinds {
 
     /// Give a slot a key; its own default takes it off the list.
     pub fn set(&mut self, slot: &Slot, key: KeyCode) {
+        self.kept.remove(&slot.name());
         if key == slot.default {
             self.moved.remove(&slot.name());
         } else {
@@ -661,23 +644,32 @@ impl KeyBinds {
     pub fn reset(&mut self, tab: Tab) {
         for slot in slots().filter(|s| s.group.tab == tab) {
             self.moved.remove(&slot.name());
+            self.kept.remove(&slot.name());
         }
     }
 
+    /// No rebind is read: a kept one this build does not know moves no key.
     pub fn is_empty(&self) -> bool {
         self.moved.is_empty()
     }
 
-    /// The file's `keys`: slot name to key name, in one order.
+    /// The file's `keys`: slot name to key name, in one order, the ones this
+    /// build does not know among them as they were read.
     pub fn to_names(&self) -> BTreeMap<String, String> {
-        self.moved
+        self.kept
             .iter()
-            .map(|(slot, key)| (slot.clone(), key_name(*key)))
+            .map(|(slot, key)| (slot.clone(), key.clone()))
+            .chain(
+                self.moved
+                    .iter()
+                    .map(|(slot, key)| (slot.clone(), key_name(*key))),
+            )
             .collect()
     }
 
     /// From the file's `keys`. A slot or a key this build does not know (a
-    /// later build's) is skipped and named in the second list; the rest load.
+    /// removed slot's, or a later build's) is skipped, named in the second
+    /// list, and kept to be written back; the rest load.
     pub fn from_names(names: &BTreeMap<String, String>) -> (Self, Vec<String>) {
         let known: Vec<Slot> = slots().collect();
         let mut binds = Self::default();
@@ -685,7 +677,10 @@ impl KeyBinds {
         for (slot, key) in names {
             match (known.iter().find(|s| s.name() == *slot), key_named(key)) {
                 (Some(slot), Some(key)) => binds.set(slot, key),
-                _ => skipped.push(format!("{slot} = {key}")),
+                _ => {
+                    skipped.push(format!("{slot} = {key}"));
+                    binds.kept.insert(slot.clone(), key.clone());
+                }
             }
         }
         (binds, skipped)
@@ -693,7 +688,7 @@ impl KeyBinds {
 
     /// The other actions that read `slot`'s key while it is read: a clash to
     /// flag on its row. The defaults share keys only between contexts that
-    /// are never live together (W is move on foot and pitch in the Kestrel),
+    /// are never live together (W is move on foot and sheet in in the Tern),
     /// so with no rebinds nothing is flagged.
     pub fn clashes(&self, slot: &Slot) -> Vec<&'static str> {
         let key = self.key(slot);
@@ -1140,7 +1135,7 @@ mod tests {
         let on = |heading: &str| BINDINGS.iter().find(|g| g.heading == heading).unwrap().tab;
         assert_eq!(on("ON FOOT"), Tab::OnFoot);
         assert_eq!(on("HANDS"), Tab::Hands);
-        assert_eq!(on("KESTREL"), Tab::Flying);
+        assert_eq!(on("FLYING"), Tab::Flying);
         assert_eq!(on("COG"), Tab::Vehicles);
         assert_eq!(on("SCREEN"), Tab::Menus);
     }
@@ -1163,8 +1158,8 @@ mod tests {
         let mut binds = KeyBinds::default();
         binds.set(&sprint, KeyCode::KeyE);
         assert_eq!(binds.clashes(&sprint), vec!["open or shut a door"]);
-        // E is the Kestrel's yaw too, but never on foot.
-        assert!(!binds.clashes(&sprint).contains(&"yaw"));
+        // E is the Tern's hiking too, but never on foot.
+        assert!(!binds.clashes(&sprint).contains(&"hike to port or starboard"));
         // A digit is the number row's, which reads every digit.
         binds.set(&sprint, KeyCode::Digit5);
         assert_eq!(binds.clashes(&sprint), vec!["select a slot"]);
@@ -1183,7 +1178,7 @@ mod tests {
     }
 
     /// The file's names round trip, and a slot or key this build does not
-    /// know is skipped, not fatal.
+    /// know is skipped, not fatal, and kept to be written back.
     #[test]
     fn rebinds_round_trip_through_their_names() {
         let mut binds = KeyBinds::default();
@@ -1201,8 +1196,9 @@ mod tests {
         later.insert("jetpack:KeyJ".into(), "KeyU".into());
         later.insert("on_foot:KeyW".into(), "Hyper".into());
         let (read, skipped) = KeyBinds::from_names(&later);
-        assert_eq!(read, binds);
+        assert_eq!(read.moved, binds.moved, "only the known one is read");
         assert_eq!(skipped.len(), 2);
+        assert_eq!(read.to_names(), later, "and the rest are written back");
         assert_eq!(
             line("FLYING", &binds).split("   ").nth(2),
             Some("← / E roll")

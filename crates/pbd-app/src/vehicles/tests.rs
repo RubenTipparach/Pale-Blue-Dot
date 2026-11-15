@@ -385,7 +385,6 @@ fn each_craft_maps_its_controls_and_menus_suppress_keys_and_look() {
         app.update();
         let input = app.world().resource::<VehicleControls>().0;
         match craft.kind {
-            Kind::Kestrel => unreachable!("retired: never placed"),
             Kind::Tern => assert_eq!(
                 (input.steer, input.sheet, input.crew, input.bail),
                 (1.0, 1.0, -1.0, true)

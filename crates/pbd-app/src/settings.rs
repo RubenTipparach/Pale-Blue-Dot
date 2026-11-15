@@ -774,10 +774,16 @@ mod tests {
         let now = r#"(version: 3, render_scale: 75, keys: {"flying:KeyQ": "KeyZ", "jetpack:KeyJ": "KeyU"})"#;
         let (read, keys, _) = PlayerSettings::parse(now).unwrap();
         assert_eq!(read.render_scale, 75);
-        assert_eq!(keys.to_names().len(), 1);
         assert_eq!(
             keys.to_names().get("flying:KeyQ").map(String::as_str),
             Some("KeyZ")
+        );
+        // The unknown one moves no key, and is kept to be written back
+        // (`retire-kestrel` decision 3).
+        assert!(!keys.is_empty());
+        assert_eq!(
+            keys.to_names().get("jetpack:KeyJ").map(String::as_str),
+            Some("KeyU")
         );
         // Written back, a file with no rebinds says so, and an older build
         // ignores the field.
@@ -785,6 +791,53 @@ mod tests {
         assert!(text.contains("version: 3"), "{text}");
         let (_, none, _) = PlayerSettings::parse(&text).unwrap();
         assert!(none.is_empty());
+    }
+
+    /// `retire-kestrel` decision 3: a rebind of a key the retired Kestrel
+    /// read (its group went with it) is ignored on load, moves no key, and
+    /// is still in the file after the next change is written.
+    #[test]
+    fn a_rebind_of_a_retired_slot_is_ignored_and_kept() {
+        let path = scratch("retired-slot");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            r#"(version: 3, render_scale: 75, keys: {"kestrel:KeyW": "KeyI", "on_foot:ShiftLeft": "KeyK"})"#,
+        )
+        .unwrap();
+        let (read, keys, loaded) = PlayerSettings::load_from(&path);
+        assert_eq!(loaded, Loaded::Read(3));
+        assert!(
+            crate::controls::slots().all(|s| s.name() != "kestrel:KeyW"),
+            "no slot reads it"
+        );
+        let pairs = crate::controls::live_pairs(
+            &keys,
+            crate::controls::Live::Aboard(pbd_core::vehicle::Kind::Tern),
+            false,
+        );
+        assert!(
+            pairs.iter().all(|(_, by)| *by != KeyCode::KeyI),
+            "I stands for nothing aboard"
+        );
+        let changed = PlayerSettings {
+            render_scale: 50,
+            ..read
+        };
+        changed.keep_to(&keys, &path).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let (again, keys_again, _) = PlayerSettings::parse(&text).unwrap();
+        assert_eq!(again.render_scale, 50, "the change is written");
+        assert_eq!(
+            keys_again.to_names().get("kestrel:KeyW").map(String::as_str),
+            Some("KeyI"),
+            "and the retired rebind is still in the file: {text}"
+        );
+        assert_eq!(
+            keys_again.to_names().get("on_foot:ShiftLeft").map(String::as_str),
+            Some("KeyK")
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

@@ -96,34 +96,6 @@ fn panel(vehicle: &Vehicle, seat: bool, binds: &crate::controls::KeyBinds) -> St
     };
     let _ = writeln!(s, "{}{moored}", craft.kind.name().to_uppercase());
     match (&craft.telemetry, &craft.state) {
-        (Telemetry::Kestrel(t), CraftState::Kestrel(st)) => {
-            let _ = writeln!(
-                s,
-                "air {:>5.1} m/s  ground {:>5.1} m/s  climb {:>+5.1} m/s  height {:>6.1} m",
-                t.airspeed, t.ground_speed, t.vertical_speed, t.height
-            );
-            let _ = writeln!(
-                s,
-                "nacelles {:>3.0} deg  power {:>3.0}%  wing {:>3.0}%  aoa {:>+5.1} deg{}{}",
-                t.nacelle.to_degrees(),
-                t.throttle * 100.0,
-                t.wing_share * 100.0,
-                t.alpha.to_degrees(),
-                if t.stall > 0.3 { "  WING STALL" } else { "" },
-                if t.wet_loss > 0.02 { "  WET WING" } else { "" },
-            );
-            let _ = writeln!(
-                s,
-                "assist {}  brake {}  collective: {}",
-                on(st.assist),
-                on(st.brake),
-                if t.climb_hold {
-                    "CLIMB RATE"
-                } else {
-                    "POWER LEVER"
-                }
-            );
-        }
         (Telemetry::Tern(t), CraftState::Tern(_)) => {
             let sail = match t.sail_state {
                 SailState::Luffing => "luffing",
@@ -267,10 +239,6 @@ fn panel(vehicle: &Vehicle, seat: bool, binds: &crate::controls::KeyBinds) -> St
     s
 }
 
-fn on(flag: bool) -> &'static str {
-    if flag { "on" } else { "off" }
-}
-
 fn side(angle: f64) -> &'static str {
     if angle.abs() < 0.5_f64.to_radians() {
         "AHEAD"
@@ -285,7 +253,7 @@ fn side(angle: f64) -> &'static str {
 mod tests {
     use super::*;
     use pbd_core::vehicle::{
-        Craft, Hulls, KestrelTelemetry, Kind, LoonTelemetry, Mooring, TernTelemetry,
+        Craft, Hulls, Kind, LoonTelemetry, Mooring, TernTelemetry,
         spec::VehicleSpecs,
     };
     use pbd_core::{DQuat, DVec3};
@@ -343,15 +311,7 @@ mod tests {
     }
 
     #[test]
-    fn flight_and_paddle_panels_explain_the_active_control_state() {
-        let mut v = vehicle(Kind::Kestrel);
-        for (hold, label) in [(true, "CLIMB RATE"), (false, "POWER LEVER")] {
-            v.craft.telemetry = Telemetry::Kestrel(KestrelTelemetry {
-                climb_hold: hold,
-                ..default()
-            });
-            assert!(panel(&v, false, &Default::default()).contains(label));
-        }
+    fn the_paddle_panel_explains_the_active_control_state() {
         let mut v = vehicle(Kind::Loon);
         v.craft.telemetry = Telemetry::Loon(LoonTelemetry {
             rudder_at: Some(DVec3::ZERO),
