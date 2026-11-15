@@ -1368,6 +1368,9 @@ pub fn run(args: &[String]) {
     // themselves come with the walker.
     .init_resource::<pbd_app::fish::Body>()
     .init_resource::<guide::GuidePage>()
+    // The breeding screen's choices, in every mode: a still capture has no
+    // husbandry plugin, and the screen's systems still run.
+    .init_resource::<pbd_app::husbandry::BreedingPick>()
     .init_resource::<pack::PackHand>()
     // Farming and the forge (`farming-and-smelting`).
     .init_resource::<farm::FarmNote>()

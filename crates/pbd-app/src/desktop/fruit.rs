@@ -31,16 +31,22 @@ pub fn pick(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     fine: Option<Res<PlanetFine>>,
     sun: Option<Res<pbd_app::sky::Sun>>,
-    scatter: Res<pbd_app::config::ScatterSettings>,
-    gather: Res<pbd_app::config::GatherConfig>,
+    scatter: Option<Res<pbd_app::config::ScatterSettings>>,
+    gather: Option<Res<pbd_app::config::GatherConfig>>,
     time: Res<Time>,
-    (mut save, mut slots, mut note, mut gained): (
+    (mut save, slots, note, mut gained): (
         Option<ResMut<WorldSave>>,
-        ResMut<super::slots::Hotbar>,
-        ResMut<FarmNote>,
+        Option<ResMut<super::slots::Hotbar>>,
+        Option<ResMut<FarmNote>>,
         MessageWriter<Gained>,
     ),
 ) {
+    // A still capture has no walker, hands or gathering: nothing to pick.
+    let (Some(scatter), Some(gather), Some(mut slots), Some(mut note)) =
+        (scatter, gather, slots, note)
+    else {
+        return;
+    };
     if !keys.just_pressed(KeyCode::KeyE) || *screen != Screen::Playing {
         return;
     }
@@ -146,13 +152,16 @@ pub fn scripted(
     fine: Option<Res<PlanetFine>>,
     mut save: Option<ResMut<WorldSave>>,
     sun: Option<Res<pbd_app::sky::Sun>>,
-    scatter: Res<pbd_app::config::ScatterSettings>,
-    gather: Res<pbd_app::config::GatherConfig>,
+    scatter: Option<Res<pbd_app::config::ScatterSettings>>,
+    gather: Option<Res<pbd_app::config::GatherConfig>>,
     mut done: Local<u32>,
 ) {
     if !launch.take_trees || *done > 30 {
         return;
     }
+    let (Some(scatter), Some(gather)) = (scatter, gather) else {
+        return;
+    };
     *done += 1;
     if *done < 30 {
         // A few frames for the fine set to land round the camera.
