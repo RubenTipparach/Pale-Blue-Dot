@@ -152,6 +152,21 @@ section{display:grid;gap:14px;min-width:0}
 .q p{font-size:14px;color:var(--muted)}
 .rec b{color:var(--ok)}
 footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px}
+.info{cursor:pointer;background:transparent;border:1px solid var(--line);border-radius:50%;width:30px;height:30px;padding:0;font:600 15px var(--mono);color:var(--sky);vertical-align:middle}
+.info:hover{border-color:var(--amber);color:var(--amber)}
+.info:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.modal{position:fixed;inset:0;z-index:100;background:rgba(3,6,9,.72);display:grid;place-items:center;padding:12px}
+.modal[hidden]{display:none}
+.modal .mbox{background:var(--panel-solid);border:1px solid var(--line);border-radius:8px;width:min(820px,100%);max-height:min(88vh,920px);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+.modal .mhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.modal .mclose{all:unset;cursor:pointer;font-size:18px;line-height:1;padding:4px 8px;border-radius:4px;color:var(--ink)}
+.modal .mclose:hover{color:var(--amber)}
+.modal .mclose:focus-visible{outline:2px solid var(--amber)}
+.modal .mbody{overflow:auto;padding:12px;display:grid;gap:12px;font-size:14.5px;min-width:0}
+.modal .mbody h3{margin-top:4px}
+.modal .mbody dl{display:grid;gap:6px;margin:0}
+.modal .mbody dt{font:600 12px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+.modal .mbody dd{margin:0 0 4px;color:var(--muted)}
 #err{position:fixed;left:8px;bottom:8px;max-width:60ch;background:#400;color:#fff;font:12px var(--mono);padding:6px;white-space:pre-wrap;z-index:9}
 @media (prefers-reduced-motion:reduce){#grid .wire.on{animation:none}}
 </style>
@@ -159,14 +174,14 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
 <div class="wrap">
   <header class="top">
     <div class="eyebrow">Pale Blue Dot &middot; design mockup M28 &middot; <span class="badge">Proposal, not built</span></div>
-    <h1>Water that flows</h1>
+    <h1>Water that flows <button class="info" id="infoBtn" aria-label="About this mockup: the rule, the presets and the licence" title="About this mockup">i</button></h1>
     <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
-    <p class="lede">Today the game's water is one still material, filled up to sea level when the world is made, and nothing ever moves it. This page runs Luanti's liquid rule, ported to our hex cells, on a patch with a sea, a beach, a plain with a dry basin, a ledge and a plateau. Pour a source, dig a channel, drop a block in the stream. Water falls first, then spreads seven cells, a level lower each cell, and recedes when its source goes. It moves one tick a second, as Luanti's does, and only after <b>Run water</b> or a preset.</p>
   </header>
 
   <div class="tabs" role="toolbar" aria-label="Water and time">
     <span class="sp"></span>
     <button class="btn" id="tRun" aria-pressed="false" title="Water stands still until this is pressed">Run water</button>
+    <button class="btn" id="tArrows" aria-pressed="true" title="Arrows on the water: which way each cell flows">Flow arrows</button>
     <button class="btn" id="tDay" aria-pressed="true">Day 14:00</button><button class="btn" id="tNight" aria-pressed="false">Night 22:00</button>
   </div>
 
@@ -182,7 +197,14 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
     <aside class="side" id="side" aria-label="Presets and settings"></aside>
   </div>
 
-  <section>
+  <footer>Liquid rule ported from Luanti, LGPL-2.1-or-later (<a href="water-flow/COPYING.LESSER" style="color:var(--sky)">licence</a>); the rest in <b>i</b> beside the title.</footer>
+</div>
+<div id="err" hidden></div>
+<template id="aboutT">
+    <p>Today the game's water is one still material, filled up to sea level when the world is made, and nothing ever moves it. This page runs Luanti's liquid rule, ported to our hex cells, on a patch with a sea, a beach, a plain with a dry basin, a ledge and a plateau. Pour a source, dig a channel, drop a block in the stream. Water falls first, then spreads seven cells, a level lower each cell, and recedes when its source goes. It moves one tick a second, as Luanti's does, and only after <b>Run water</b> or a preset.</p>
+<p>Water is drawn as M25's water sim draws it (<span class="src">water-flow/water-look.js</span>, which both pages load): one cap per column at its top water surface, a foaming fall sheet and lip on every step down to a lower column, flow streaks on each cap running towards the neighbours whose water stands lower, and a chevron on each flowing cap (<b>Flow arrows</b>). At night every lamp lights the water and the foam near it.</p>
+<h3>Presets</h3><dl id="presetNotes"></dl>
+  <div style="display:grid;gap:12px">
     <div class="sec-head"><div class="eyebrow">The rule</div><h2>Luanti's liquid transform, on eight neighbours</h2>
       <p class="lede">Each cell of water is a <b>source</b> or a <b>flowing</b> cell with a level from 7 (beside a source) to 0 (the thinnest film), and a flag for falling. Only queued cells are looked at. An edit queues a cell and its neighbours, and a cell that changes queues the neighbours it can reach. A tick takes the queue once.</p></div>
     <div class="tbl"><table><thead><tr><th>A queued cell with</th><th>Becomes</th><th>Luanti's code</th></tr></thead><tbody>
@@ -199,15 +221,16 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
       <div class="card"><div class="head"><div><div class="eyebrow">Hex</div><h3>Seven cells is 20 m</h3></div></div><p>A cell is 2.833 m across, so a sheet spreads 20 m from its source where Luanti's spreads 7 m. The range slider shortens it. Each flowing cell's top stands at (level + 1) / 8 of its 1 m layer, a flat hexagon, so a sheet steps down by eighths.</p></div>
       <div class="card"><div class="head"><div><div class="eyebrow">Saves</div><h3>Only edits start water</h3></div></div><p>Generated water is all source and never queued, so opening a world never moves its water. Sources are saved as edits; settled flowing water follows from the sources and the ground, which "Settle from scratch" checks.</p></div>
     </div>
-  </section>
-
-  <footer>Mockup for the owner, 2026-11-14 (<span class="src">openspec/changes/water-flow</span>), made to <span class="src">docs/mockups/ART-DIRECTION.md</span>. Proposal only: the game has no flowing water today. <b>Licence:</b> the flow rule in this page is a port of Luanti's <span class="src">ServerMap::transformLiquidsLocal</span> and <span class="src">get_max_liquid_level</span> (<span class="src">src/servermap.cpp</span>, commit a10dc8d, 2026-11-09), Copyright (C) 2010-2024 celeron55, Perttu Ahola and contributors, under the GNU Lesser General Public License 2.1 or later; the port is offered under the same licence, whose text is <a href="water-flow/COPYING.LESSER" style="color:var(--sky)">published beside this page</a>. Art: the ground is the terrain atlas's fields, beach and mountains tiles on 2.833 m hex columns with 1 m layers; trees and lamp posts are built as the game builds them; the pickaxe and hand are the game's item icons; water is a flat tint, lighter as its level falls, as the game tints its water.</footer>
-</div>
-<div id="err" hidden></div>
+  </div>
+<h3>Settle from scratch</h3><p>Re-runs every source with the flowing water cleared, and counts the cells that differ from the water you see. Design 6 needs nought.</p>
+<p class="note">Mockup for the owner, 2026-11-14 (<span class="src">openspec/changes/water-flow</span>), made to <span class="src">docs/mockups/ART-DIRECTION.md</span>. Proposal only: the game has no flowing water today. <b>Licence:</b> the flow rule in this page is a port of Luanti's <span class="src">ServerMap::transformLiquidsLocal</span> and <span class="src">get_max_liquid_level</span> (<span class="src">src/servermap.cpp</span>, commit a10dc8d, 2026-11-09), Copyright (C) 2010-2024 celeron55, Perttu Ahola and contributors, under the GNU Lesser General Public License 2.1 or later; the port is offered under the same licence, whose text is <a href="water-flow/COPYING.LESSER" style="color:var(--sky)">published beside this page</a>. Art: the ground is the terrain atlas's fields, beach and mountains tiles on 2.833 m hex columns with 1 m layers; trees and lamp posts are built as the game builds them; the pickaxe and hand are the game's item icons; water is a flat tint, lighter as its level falls, as the game tints its water.</p>
+</template>
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="mbox"><div class="mhead"><h2 id="modalTitle">Water that flows</h2><button class="mclose" id="modalClose" aria-label="Close">&#x2715;</button></div><div class="mbody" id="modalBody"></div></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="building/scene-kit.js?v=1"></script>
 <script src="water-flow/liquid.js?v=1"></script>
+<script src="water-flow/water-look.js?v=1"></script>
 <script>
 "use strict";
 window.addEventListener("error", e => { const el = document.getElementById("err"); el.hidden = false; el.textContent += (e.message || e) + " @" + (e.lineno || "") + "\n"; });
