@@ -32,6 +32,16 @@ const TYPES = { ".html": "text/html", ".png": "image/png", ".js": "text/javascri
     await settle(); await page.screenshot({ path: `${out}/${prefix}${biome}-orbit.png` }); views.push(`${prefix}${biome}-orbit.png`);
     await page.evaluate(() => { setCamMode("walk"); }); await settle();
     await page.screenshot({ path: `${out}/${prefix}${biome}-walk.png` }); views.push(`${prefix}${biome}-walk.png`);
+    // the crops and wild fruit (after the 2026-11-15 pass): a garden plot and a fruiting tree, close up
+    for (const [name, find] of [["garden", "const c = CELLS.find(c => c.tilled); c && [c.x, c.h, c.z]"],
+                                 ["fruit", "const L = LAYERS.find(l => l.key === 'fruit'), o = L && L.objs[0]; o && [o.x, o.y - 2.5, o.z]"],
+                                 ["forage", "const L = LAYERS.find(l => l.key === 'forage'), o = L && L.objs[3]; o && [o.x, o.y, o.z]"]]) {
+      const at = await page.evaluate(new Function(find.replace(/; ([^;]+)$/, "; return $1")));
+      if (!at) continue;
+      await page.evaluate(([x, y, z, nm]) => { setCamMode("orbit"); Object.assign(CAM, { tx: x, tz: z, tyOff: nm === "fruit" ? 2.5 : 0.5, yaw: 0.8, pitch: nm === "fruit" ? 0.15 : 0.35, dist: nm === "fruit" ? 7 : 4.5 }); CAM.ty = y + CAM.tyOff; }, [...at, name]);
+      await settle(); await page.screenshot({ path: `${out}/${prefix}${biome}-${name}.png` }); views.push(`${prefix}${biome}-${name}.png`);
+      await page.evaluate(() => { delete CAM.tyOff; });
+    }
   }
   // night: temperate at 22:00, default orbit
   await page.evaluate(() => { setCamMode("orbit"); Object.assign(CAM, { tx: 0, tz: 0, yaw: 0.8, pitch: 0.42, dist: 32 }); S.biome = "temperate"; S.time = 22; syncUI(); rebuild(); });
