@@ -30,6 +30,9 @@ pub struct Texel {
     pub top: Material,
     /// Under water: the surface is below the sea level, as a column floods.
     pub sea: bool,
+    /// The sea's place here (`ocean-environments` 6.1), as the chart shows
+    /// it: `None` on land and on a world made before the sea's places.
+    pub place: Option<crate::fauna::Environment>,
 }
 
 /// What the map shows at `direction`, a direction from the planet's centre.
@@ -42,6 +45,7 @@ pub fn base_texel(cfg: &TerrainConfig, direction: Vec3) -> Texel {
         biome: biome_at(cfg, d, altitude_m),
         top: top_material(cfg, d, altitude_m),
         sea: altitude_m < cfg.sea_level_m,
+        place: crate::ocean::places::chart_at(cfg, d, altitude_m),
     }
 }
 

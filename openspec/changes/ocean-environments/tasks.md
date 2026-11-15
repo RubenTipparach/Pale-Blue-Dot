@@ -37,7 +37,7 @@ against what it would cost.
 ## 6. Places in the generator (requested 2026-11-15, if time remains)
 
 - [x] 6.0 (built 2026-11-15, `claude/env-life`; design B10, B12) The sea's yearly normals (`examples/sea_normals.rs`, `assets/climate/sea-normals-g7.bin`) and the plate field (`pbd_core::ocean::plates`). Verify: core tests that the normals load and are finite and that both kinds of plate boundary lie under the sea.
-- [ ] 6.1 (Built 2026-11-15 on `claude/env-life`: the function, read by the generator (the trench, the pieces) and the spawner, with core tests of its places. Open: the map's chart layer, not built.) `ocean::environment` in `pbd-core`, read by the generator, the spawner and the map. Verify: a test that the three agree on a sample of directions; the map's chart layer.
+- [x] 6.1 (Built 2026-11-15 on `claude/env-life`: the function, read by the generator (the trench, the pieces), the spawner and the map's "Sea places" layer, B13.) `ocean::environment` in `pbd-core`, read by the generator, the spawner and the map. Verify: a test that the three agree on a sample of directions; the map's chart layer.
 - [ ] 6.2 (Built 2026-11-15 as generator version 7: the trench carved, reef, kelp, vents and floes as PIECES; versions 6 and 7 pinned by digest (taken on the Mac). Open: reef, ice, basalt and mussel-bed CELLS wait for the column's material word to widen (B10); the pieces have no dither fade yet (B12).) Reef, kelp, vent, trench and sea-ice cells and pieces in a new generator version. Verify: the old version's digest test unchanged; a new digest test for the new version; an old save opens on its own version.
 
 ## 7. Water life (requested 2026-11-15)

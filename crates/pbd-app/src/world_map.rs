@@ -20,6 +20,7 @@
 
 use crate::planet::{PLANET_RADIUS, terrain_config};
 use crate::saves::format::{material_code, material_of};
+use pbd_core::fauna::Environment;
 use pbd_core::geo;
 use pbd_core::map::{Texel, base_texel};
 use pbd_core::planet_gen::{Biome, TerrainConfig};
@@ -263,30 +264,57 @@ pub fn colour_block(
 /// they were terraced over.
 pub fn cache_name(seed: u64, generator: u32) -> String {
     match pbd_core::settlement::ground::installed() {
+        // `p1`: the texel carries the sea's place (`ocean-environments` 6.1),
+        // so a cache from before it is not read.
         Some(ground) => format!(
-            "map-base-g{generator}-{seed:016x}-t{:016x}.png",
+            "map-base-g{generator}-p1-{seed:016x}-t{:016x}.png",
             ground.digest()
         ),
-        None => format!("map-base-g{generator}-{seed:016x}.png"),
+        None => format!("map-base-g{generator}-p1-{seed:016x}.png"),
     }
 }
 
 /// Pack a texel for the cache: its altitude in 16 bits (floored metres, the
 /// layer the column is floored to, offset by 32,768), its top block's saved
-/// code and its biome.
+/// code, and its biome in the low four bits of the last byte with the sea's
+/// place ([`PLACES`], one more than its row, nought for none) in the high.
 fn pack(t: &Texel) -> [u8; 4] {
     let altitude = (t.altitude_m.floor() + 32768.0).clamp(0.0, 65535.0) as u16;
     let [high, low] = altitude.to_be_bytes();
-    [high, low, material_code(t.top), t.biome as u8]
+    let place = t
+        .place
+        .and_then(|p| PLACES.iter().position(|q| *q == p))
+        .map_or(0, |i| i as u8 + 1);
+    [
+        high,
+        low,
+        material_code(t.top),
+        (t.biome as u8 & 15) | (place << 4),
+    ]
 }
+
+/// The sea's places a texel can carry, in the cache's order.
+pub const PLACES: [Environment; 7] = [
+    Environment::Open,
+    Environment::Coast,
+    Environment::Reef,
+    Environment::Kelp,
+    Environment::UnderIce,
+    Environment::Vent,
+    Environment::Trench,
+];
 
 fn unpack(p: [u8; 4], cfg: &TerrainConfig) -> Option<Texel> {
     let altitude_m = f32::from(u16::from_be_bytes([p[0], p[1]])) - 32768.0;
     Some(Texel {
         altitude_m,
-        biome: *BIOMES.get(usize::from(p[3]))?,
+        biome: *BIOMES.get(usize::from(p[3] & 15))?,
         top: material_of(p[2])?,
         sea: altitude_m < cfg.sea_level_m,
+        place: match p[3] >> 4 {
+            0 => None,
+            i => Some(*PLACES.get(usize::from(i) - 1)?),
+        },
     })
 }
 
@@ -425,6 +453,39 @@ pub fn biome_colour(texel: &Texel) -> [u8; 4] {
     match biome_class(texel) {
         Some(class) => {
             let [r, g, b] = BIOME_KEY[class].1;
+            [r, g, b, BIOME_ALPHA]
+        }
+        None => [0; 4],
+    }
+}
+
+/// The sea's places as the chart draws them (`ocean-environments` 6.1):
+/// the places themselves coloured, the open sea left clear.
+pub const PLACE_KEY: &[(&str, [u8; 3])] = &[
+    ("coral reef", [235, 110, 120]),
+    ("kelp forest", [150, 140, 50]),
+    ("polar sea", [225, 240, 255]),
+    ("vents", [250, 120, 40]),
+    ("trench", [70, 40, 120]),
+];
+
+/// A texel's row in [`PLACE_KEY`].
+pub fn place_class(texel: &Texel) -> Option<usize> {
+    match texel.place? {
+        Environment::Reef => Some(0),
+        Environment::Kelp => Some(1),
+        Environment::UnderIce => Some(2),
+        Environment::Vent => Some(3),
+        Environment::Trench => Some(4),
+        _ => None,
+    }
+}
+
+/// The places layer's colours.
+pub fn place_colour(texel: &Texel) -> [u8; 4] {
+    match place_class(texel) {
+        Some(class) => {
+            let [r, g, b] = PLACE_KEY[class].1;
             [r, g, b, BIOME_ALPHA]
         }
         None => [0; 4],
@@ -724,6 +785,7 @@ mod tests {
             biome: Biome::Fields,
             top: Material::Grass,
             sea: false,
+            place: None,
         };
         let [r, g, b] = palette.ground_colour(&meadow);
         assert!(g > r && g > b, "meadow is green: {r} {g} {b}");
