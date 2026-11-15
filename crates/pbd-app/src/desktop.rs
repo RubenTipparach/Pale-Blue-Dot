@@ -19,7 +19,9 @@ mod overlay_ui;
 mod pack;
 mod scene;
 mod slots;
+mod sounds;
 mod time_ui;
+mod water;
 mod weather_ui;
 
 use avian3d::prelude::*;
@@ -41,8 +43,8 @@ use pbd_app::{
     config::ConfigPlugin,
     flight_view::{FlightViewConfig, FlightViewPlugin, FlyMode, TourProgress},
     planet::{
-        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, river_channel, surface_code, surface_height,
-        terrain_config, terrain_radius, tile_width_m,
+        FINEST_LEVEL, PLANET_RADIUS, PlanetPlugin, surface_code, surface_height, terrain_config,
+        terrain_radius, tile_width_m,
     },
     saves::{self, Pose, WorldSave},
     sky::SkyPlugin,
@@ -57,6 +59,9 @@ use std::{
 #[derive(Resource, Clone)]
 pub struct Launch {
     pub capture: Option<PathBuf>,
+    /// Sound (`audio-and-ambience`): `--no-audio`, `--audio-log` and
+    /// `--audio-wav PATH`.
+    pub audio: pbd_app::audio::AudioLaunch,
     /// `--frame-log PATH`: a measurement instrument. Every frame's wall time,
     /// written as CSV with the fine set's state on the same clock, so a hitch
     /// can be attributed rather than guessed at (`far-side-flight`).
@@ -142,6 +147,9 @@ pub struct Launch {
     /// animals can be photographed (`animal-husbandry` S12). A capture
     /// instrument, like `--fish`.
     pub husbandry: Option<String>,
+    /// `--life ID`: a capture instrument that puts a group of that water
+    /// species a few metres in front of the eye (`ocean-environments` 7.1).
+    pub life: Option<String>,
     /// `--aboard KIND` boards a craft of that kind once the fleet is in (a
     /// cog or a rowboat once a harbour has made one), and `--seat` takes the
     /// seat rather than the chase view: a headless run has nobody to walk up
@@ -241,6 +249,21 @@ pub struct Launch {
     /// `--turn DEG_PER_S`: the walker's view turns right at this rate, a
     /// measurement instrument for the clouds' history (`cloud-ghosting`).
     pub turn: f32,
+    /// `--pour N` pours N water sources where the capture camera looks, a
+    /// cell apart across the view (`water-flow` E5).
+    pub pour: u32,
+    /// `--water-ticks N` runs N ticks of the water's rule at once after the
+    /// pour, so a capture shows water that has had N seconds to move.
+    pub water_ticks: u32,
+    /// `--pour-ahead M`: pour straight down M metres ahead of the eye.
+    pub pour_ahead: f32,
+    /// `--pit DEPTH`: dig a pit that deep two cells short of the pour.
+    pub pit: u32,
+    /// `--tide high|low`: the tide's moon over the camera or a quarter turn
+    /// round (`ocean-environments` 5.1), for the tide's captures.
+    pub tide: Option<String>,
+    /// `--arrows` turns the flow-arrow overlay on (`water-flow` 3.4).
+    pub arrows: bool,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -331,6 +354,7 @@ impl Launch {
     fn parse(args: &[String]) -> Self {
         let mut result = Self {
             capture: None,
+            audio: pbd_app::audio::AudioLaunch::default(),
             frame_log: None,
             walk_distance: None,
             stroll: None,
@@ -361,6 +385,7 @@ impl Launch {
             swim: false,
             fish: false,
             husbandry: None,
+            life: None,
             aboard: None,
             seat: false,
             sail: None,
@@ -384,6 +409,12 @@ impl Launch {
             overlay: None,
             map: map_screen::MapLaunch::default(),
             torch: false,
+            pour: 0,
+            water_ticks: 0,
+            pour_ahead: 0.0,
+            pit: 0,
+            tide: None,
+            arrows: false,
             lamps: false,
             lamps_at: 5.0,
             lamps_across: 0.0,
@@ -482,6 +513,41 @@ impl Launch {
                         .expect("--place requires a count");
                 }
                 "--torch" => result.torch = true,
+                "--pour" => {
+                    i += 1;
+                    result.pour = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--pour requires a count");
+                }
+                "--water-ticks" => {
+                    i += 1;
+                    result.water_ticks = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--water-ticks requires a count");
+                }
+                "--arrows" => result.arrows = true,
+                "--tide" => {
+                    i += 1;
+                    let which = args.get(i).expect("--tide requires high or low").clone();
+                    assert!(matches!(which.as_str(), "high" | "low"), "--tide high|low");
+                    result.tide = Some(which);
+                }
+                "--pit" => {
+                    i += 1;
+                    result.pit = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--pit requires a depth");
+                }
+                "--pour-ahead" => {
+                    i += 1;
+                    result.pour_ahead = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--pour-ahead requires metres");
+                }
                 "--lamps" => {
                     result.lamps = true;
                     if let Some(metres) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
@@ -620,7 +686,7 @@ impl Launch {
                     result.settings_tab = menu::SETTINGS_TABS
                         .iter()
                         .position(|t| t.eq_ignore_ascii_case(name))
-                        .expect("--settings-tab takes picture, weather, world, movement or input")
+                        .expect("--settings-tab takes picture, weather, world, movement, input or sound")
                         as u8;
                 }
                 "--input-tab" => {
@@ -762,6 +828,15 @@ impl Launch {
                         _ => panic!("--rain-shadows takes on or off"),
                     });
                 }
+                "--grass" => {
+                    i += 1;
+                    let look = args.get(i).expect("--grass requires tufts or blades");
+                    result.settings.pixel_grass = Some(match look.as_str() {
+                        "tufts" => true,
+                        "blades" => false,
+                        _ => panic!("--grass takes tufts or blades"),
+                    });
+                }
                 "--upscale" => {
                     i += 1;
                     let filter = args.get(i).expect("--upscale requires bilinear or nearest");
@@ -824,6 +899,14 @@ impl Launch {
                     );
                     result.stroll_leg = Some(seconds);
                 }
+                "--no-audio" => result.audio.off = true,
+                "--audio-log" => result.audio.log = true,
+                "--audio-wav" => {
+                    i += 1;
+                    result.audio.wav = Some(PathBuf::from(
+                        args.get(i).expect("--audio-wav requires a path"),
+                    ));
+                }
                 "--frame-log" => {
                     i += 1;
                     result.frame_log = Some(PathBuf::from(
@@ -856,6 +939,15 @@ impl Launch {
                 "--fish" => {
                     result.walk = true;
                     result.fish = true;
+                }
+                "--life" => {
+                    i += 1;
+                    result.walk = true;
+                    result.life = Some(
+                        args.get(i)
+                            .expect("--life requires a species id from fauna.ron")
+                            .clone(),
+                    );
                 }
                 "--husbandry" => {
                     i += 1;
@@ -1050,8 +1142,9 @@ impl Launch {
                     "column"
                 ]
                 .contains(&result.view.as_str())
-                    && result.capture.is_some()),
-            "--height requires --view shore or dive with a static --capture"
+                    && result.capture.is_some())
+                || result.fly,
+            "--height requires --fly, or --view shore or dive with a static --capture"
         );
         assert!(
             result.render_offset == Vec3::ZERO
@@ -1209,7 +1302,20 @@ pub fn run(args: &[String]) {
                 .map(|pose| pose.position.normalize_or(Vec3::Y))
                 .unwrap_or_else(|| spawn_direction(&launch))
         },
-        spawn_altitude: 240.0,
+        // `--fly --height M` starts that far over the ground (a capture's
+        // view from the air: `water-flow`'s rivers); 240 m otherwise.
+        // `--fly --yaw/--pitch` aims a flight's first view, so a capture can
+        // look down at a place from the air.
+        view_pitch_down: match (launch.fly, launch.pitch) {
+            (true, Some(pitch)) => -pitch.to_radians(),
+            _ => FlightViewConfig::default().view_pitch_down,
+        },
+        view_yaw_deg: if launch.fly { launch.yaw } else { None },
+        spawn_altitude: if launch.fly {
+            launch.height.unwrap_or(240.0)
+        } else {
+            240.0
+        },
         // The tour keeps 45 m above the ground; the route lands, so it keeps
         // only the walker's eye height.
         minimum_clearance: if launch.route {
@@ -1307,6 +1413,8 @@ pub fn run(args: &[String]) {
     .insert_resource(launch.clone())
     .insert_resource(pbd_app::overlay::OverlayMode(launch.overlay))
     .add_plugins(pbd_app::place::PlacePlugin)
+    // Water that flows (`water-flow`): the rule's tick, the mesher, the arrows.
+    .add_plugins(pbd_app::water_flow::WaterFlowPlugin)
     .add_plugins(MaterialPlugin::<scene::StarMaterial>::default())
     .add_systems(
         Startup,
@@ -1442,6 +1550,17 @@ pub fn run(args: &[String]) {
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
             craft::scripted.after(digging::scripted_dig),
+            // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
+            water::scripted
+                .after(digging::scripted_dig)
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
+                .run_if(resource_exists::<pbd_app::drops::Drops>),
+            water::keys
+                .after(digging::dig_and_place)
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
+                .run_if(resource_exists::<pbd_app::drops::Drops>),
         ),
     )
     .add_systems(
@@ -1502,11 +1621,12 @@ pub fn run(args: &[String]) {
         &launch.settings,
     );
     info!(
-        "PLAYER_SETTINGS frame_limit={} render_scale={}% auto_step={} rain_shadows={} file={}",
+        "PLAYER_SETTINGS frame_limit={} render_scale={}% auto_step={} rain_shadows={} pixel_grass={} file={}",
         player.frame_limit.label(),
         player.render_scale,
         player.auto_step,
         player.rain_shadows,
+        player.pixel_grass,
         kept.path
             .as_ref()
             .map_or("none".into(), |p| p.display().to_string()),
@@ -1594,6 +1714,19 @@ pub fn run(args: &[String]) {
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
         }
+        if let Some(id) = launch.life.clone() {
+            // `--life ID:METRES` puts the group that far ahead, for a close
+            // look at something small.
+            let (id, metres) = match id.split_once(':') {
+                Some((id, m)) => (id.to_string(), m.parse().ok()),
+                None => (id, None),
+            };
+            app.insert_resource(pbd_app::fish::LifeScript {
+                id,
+                metres,
+                placed: false,
+            });
+        }
         if let Some(scene) = launch.husbandry.clone() {
             app.insert_resource(pbd_app::husbandry::HusbandryScript { scene });
         }
@@ -1653,6 +1786,18 @@ pub fn run(args: &[String]) {
                 }
             },
         );
+    }
+    // Sound (`audio-and-ambience`): the device, or the mock backend stepped
+    // with a fixed-step capture; default volumes in a capture, a benchmark
+    // or a take (`PBD_TAKE_SOUND=1`).
+    {
+        let mut audio = launch.audio.clone();
+        audio.capture = launch.capture.is_some() && !launch.real_time;
+        audio.default_volumes = launch.capture.is_some()
+            || launch.frame_log.is_some()
+            || std::env::var_os("PBD_TAKE_SOUND").is_some_and(|v| v == "1");
+        app.add_plugins(pbd_app::audio::AudioPlugin(audio));
+        sounds::register(&mut app);
     }
     // The UI kit (`stone-and-wood-ui`): its pieces, fonts and scale are in
     // place in `finish`, before the loading screen's first frame.
@@ -2586,7 +2731,7 @@ fn photo_camera(
             if toward < 0.85 || !(-4.0..0.0).contains(&depth) {
                 continue;
             }
-            if river_channel(terrain_config(), here) <= terrain_config().river_threshold {
+            if !pbd_core::planet_gen::in_river(terrain_config(), here) {
                 continue;
             }
             let (a, b) = here.any_orthonormal_pair();

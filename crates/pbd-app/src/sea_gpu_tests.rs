@@ -11,7 +11,8 @@ const RADIUS: f32 = 4799.5;
 
 fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::VULKAN,
+        // Metal too, so the Mac runs it rather than skipping.
+        backends: wgpu::Backends::VULKAN | wgpu::Backends::METAL,
         ..Default::default()
     });
     let adapter = bevy::tasks::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -53,7 +54,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         .iter()
         .chain(&sea.bands)
         .chain(&sea.phase)
-        .chain([&sea.heading, &sea.limits]);
+        .chain([&sea.heading, &sea.limits, &sea.tide]);
     for lane in lanes {
         uniform.extend_from_slice(&lane.to_array());
     }
@@ -140,7 +141,13 @@ fn the_shipped_wgsl_computes_the_sea_the_hulls_float_on() {
     let seconds = 7_654.321;
     let mut failures = Vec::new();
     let mut compared = 0;
-    for (wind, heading) in [(11.0, Vec3::X), (3.0, Vec3::Z), (18.0, Vec3::ZERO)] {
+    // The tide (`ocean-environments` 5.1): off, then on from two moons.
+    let moon = |v: Vec3, range: f32| v.normalize().extend(range);
+    for (wind, heading, tide) in [
+        (11.0, Vec3::X, moon(Vec3::X, 0.0)),
+        (3.0, Vec3::Z, moon(Vec3::new(0.4, 0.7, -0.3), 3.0)),
+        (18.0, Vec3::ZERO, moon(Vec3::new(-0.9, 0.1, 0.2), 3.0)),
+    ] {
         let state = table.state(wind, heading);
         // Directions all over the sphere, each at a few points and depths.
         let mut probes = Vec::new();
@@ -156,13 +163,14 @@ fn the_shipped_wgsl_computes_the_sea_the_hulls_float_on() {
         }
         // The state's heading is tangent at the place in the engine; here a
         // fixed vector stands in, projected by the code under test itself.
-        let gpu = table.gpu(&state, seconds);
+        let mut gpu = table.gpu(&state, seconds);
+        gpu.tide = tide;
         let Some(heights) = run(&gpu, &probes) else {
             eprintln!("SKIPPED: no Vulkan adapter, the sea's WGSL was not run");
             return;
         };
         for ((p, n, depth), gpu_height) in probes.iter().zip(heights) {
-            let local = table.local(&state, *n, *depth, seconds);
+            let local = table.local(&state, *n, *depth, seconds).with_tide(tide);
             let cpu = local.height(*p, RADIUS);
             compared += 1;
             if (cpu - gpu_height).abs() > 1e-3 {

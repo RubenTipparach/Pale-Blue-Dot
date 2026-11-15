@@ -107,6 +107,15 @@ pub struct TerrainConfig {
     /// Mountain ranges in regions of their own (`taller-mountains` decision
     /// 1). `None` has none (versions 4 and 5).
     pub ranges: Option<Ranges>,
+    /// The sea's places (`ocean-environments` design B10): reefs, kelp,
+    /// polar sea, vents and trenches, by `ocean::places::environment`, and
+    /// the trench's carve. `None` has only the coast and the open sea
+    /// (versions 4 to 6).
+    pub ocean: Option<crate::ocean::places::OceanPlaces>,
+    /// Rivers that step down to the sea from springs, and marsh pools held
+    /// in rimmed basins (`ocean-environments` design 13). `None` has the
+    /// noise channels only (versions 4 to 7).
+    pub rivers: Option<crate::rivers::RiverSettings>,
 }
 
 /// A second ridge field, wider than the mountain field and standing only in
@@ -129,7 +138,28 @@ pub struct Ranges {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V6;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V8;
+
+    /// Generator version 8 (`ocean-environments` design 13): version 7 with
+    /// rivers that run down to the sea reach by reach, from one drainage map
+    /// of the body (`crate::rivers`), and its marsh pools only where a rim
+    /// holds them. Version 7's noise channels stay, as the sea's inlets. Off
+    /// the rivers' valleys and the marsh it is version 7.
+    pub const TENEBRIS_V8: Self = Self {
+        rivers: Some(crate::rivers::RiverSettings::V8),
+        ..Self::TENEBRIS_V7
+    };
+
+    /// Generator version 7 (`ocean-environments` design B10): version 6
+    /// with the sea's places. The land, the biomes and the sea's mask are
+    /// version 6's; the floor along a trench line is carved toward 140 m,
+    /// and reefs, kelp, vents and polar sea are placed by
+    /// `ocean::places::environment`, which the pieces, the spawner and the map
+    /// read.
+    pub const TENEBRIS_V7: Self = Self {
+        ocean: Some(crate::ocean::places::OceanPlaces::V7),
+        ..Self::TENEBRIS_V6
+    };
 
     /// Generator version 6 (`taller-mountains`, survey H1 to H3, "Accept
     /// everything as recommended"): version 5 with mountain ranges three
@@ -219,6 +249,8 @@ impl TerrainConfig {
         desert_rock_frac: 0.14,
         strata_m: None,
         ranges: None,
+        ocean: None,
+        rivers: None,
     };
 }
 
@@ -231,7 +263,22 @@ impl TerrainConfig {
             4 => Some(Self::TENEBRIS_V4),
             5 => Some(Self::TENEBRIS_V5),
             6 => Some(Self::TENEBRIS_V6),
+            7 => Some(Self::TENEBRIS_V7),
+            8 => Some(Self::TENEBRIS_V8),
             _ => None,
+        }
+    }
+}
+
+impl TerrainConfig {
+    /// The ground the city survey reads (`crate::sites::generate`): version
+    /// 8's sites are version 7's, the list the owner approved for a new
+    /// world, so a version with rivers surveys the ground without them
+    /// (`ocean-environments` design 13).
+    pub fn site_ground(&self) -> Self {
+        Self {
+            rivers: None,
+            ..*self
         }
     }
 }
@@ -391,6 +438,15 @@ fn smooth(t: f32) -> f32 {
 /// Surface altitude in metres above the base radius at a unit direction,
 /// unquantised. Negative is sea floor.
 pub fn surface_altitude(cfg: &TerrainConfig, direction: Vec3) -> f32 {
+    let base = surface_altitude_unrivered(cfg, direction);
+    if cfg.rivers.is_none() {
+        return base;
+    }
+    crate::rivers::carve(cfg, direction, base)
+}
+
+/// [`surface_altitude`] before version 8's rivers.
+pub fn surface_altitude_unrivered(cfg: &TerrainConfig, direction: Vec3) -> f32 {
     let d = direction.normalize_or(Vec3::Y);
     let seed = cfg.seed;
 
@@ -485,6 +541,11 @@ pub fn surface_altitude(cfg: &TerrainConfig, direction: Vec3) -> f32 {
             return base + t * cfg.rocky_uplift_m;
         }
     }
+    // The trench (version 7): the deep floor carved toward the column's
+    // floor along the line where two plates close.
+    if let Some(places) = cfg.ocean.as_ref() {
+        return crate::ocean::places::carve_trench(cfg, places, d, base);
+    }
     base
 }
 
@@ -501,6 +562,17 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
         4,
     );
     1.0 - (2.0 * n - 1.0).abs()
+}
+
+/// Whether a direction is in a river: the noise channel's carve (versions 4
+/// on; version 8 keeps it as the sea's inlets) or a version 8 river. One test for every reader (sites,
+/// the sea's places, the fish, the coast walk), so they agree on a river.
+pub fn in_river(cfg: &TerrainConfig, direction: Vec3) -> bool {
+    let channel = river_channel(cfg, direction) > cfg.river_threshold;
+    channel
+        || cfg.rivers.as_ref().is_some_and(|_| {
+            crate::rivers::at(cfg, direction).is_some_and(|here| here.across_m < here.half_width_m)
+        })
 }
 
 /// The region field that drives the rocky uplift and the Mountains biome, in [0, 1].
@@ -633,7 +705,8 @@ pub fn top_material(cfg: &TerrainConfig, direction: Vec3, surface_m: f32) -> Mat
         // Standing water in a swamp's lowest layer, mud one above.
         (Biome::Swamp, Some(_)) => {
             let above_beach = surface_m - (sea + cfg.beach_band_m);
-            if above_beach < 1.0 {
+            // Version 8: a pool only where a rim holds it (design 13).
+            if above_beach < 1.0 && crate::rivers::rimmed(cfg, direction, surface_m) {
                 Material::Water
             } else if above_beach < 2.0 {
                 Material::Dirt
@@ -766,6 +839,79 @@ mod tests {
     /// The digests of version 5's ground and top blocks on 10,000 directions.
     const VERSION_5_DIGEST: u64 = 17_903_191_863_826_077_473;
     const VERSION_5_TOP_DIGEST: u64 = 13_661_571_992_430_582_298;
+
+    /// Version 6's ground, biomes and top blocks, as every world made on it
+    /// was: taken before version 7 landed (`ocean-environments` B10), and
+    /// this fails if anything moves them.
+    #[test]
+    fn version_6_makes_the_ground_its_worlds_were_made_on() {
+        let v6 = TerrainConfig::for_version(6).expect("version 6 is carried");
+        assert_eq!(v6, TerrainConfig::TENEBRIS_V6);
+        assert_eq!(v6.ocean, None);
+        assert_eq!(digest(&v6, 10_000), VERSION_6_DIGEST);
+        assert_eq!(top_digest(&v6, 10_000), VERSION_6_TOP_DIGEST);
+    }
+
+    /// The digests of version 6's ground and top blocks on 10,000 directions,
+    /// taken on the M4 Max Mac (2026-11-15).
+    const VERSION_6_DIGEST: u64 = 1_195_572_018_390_891_724;
+    const VERSION_6_TOP_DIGEST: u64 = 2_881_052_872_441_172_356;
+
+    /// Version 7's ground (the trench carved) and top blocks, pinned as it
+    /// lands so its worlds keep it.
+    #[test]
+    fn version_7_makes_the_ground_its_worlds_are_made_on() {
+        let v7 = TerrainConfig::for_version(7).expect("version 7 is carried");
+        assert_eq!(v7, TerrainConfig::TENEBRIS_V7);
+        assert_eq!(digest(&v7, 10_000), VERSION_7_DIGEST);
+        assert_eq!(top_digest(&v7, 10_000), VERSION_7_TOP_DIGEST);
+        // Version 7 moves nothing above the sea: its land is version 6's.
+        let v6 = TerrainConfig::TENEBRIS_V6;
+        for d in sphere(10_000) {
+            let h6 = surface_altitude(&v6, d);
+            if h6 >= v6.sea_level_m - 60.0 {
+                assert_eq!(surface_altitude(&v7, d).to_bits(), h6.to_bits(), "{d}");
+            }
+        }
+    }
+
+    /// Version 8's ground (the rivers carved, the marsh's pools rimmed) and
+    /// top blocks, pinned as it lands; above the rivers' banks and off the
+    /// marsh it is version 7's.
+    #[test]
+    fn version_8_makes_the_ground_its_worlds_are_made_on() {
+        let v8 = TerrainConfig::for_version(8).expect("version 8 is carried");
+        assert_eq!(v8, TerrainConfig::TENEBRIS_V8);
+        assert_eq!(digest(&v8, 10_000), VERSION_8_DIGEST);
+        assert_eq!(top_digest(&v8, 10_000), VERSION_8_TOP_DIGEST);
+        let v7 = TerrainConfig::TENEBRIS_V7;
+        let (mut same, mut moved, mut rivered) = (0, 0, 0);
+        for d in sphere(10_000) {
+            let h7 = surface_altitude(&v7, d);
+            if h7 < v7.sea_level_m - 1.0 {
+                continue;
+            }
+            // A river, its banks and its levee (`water-flow` E16).
+            let near_river = crate::rivers::sealed_from(&v8, d).is_some();
+            let channel = river_channel(&v7, d) > v7.river_threshold;
+            rivered += usize::from(near_river);
+            if !near_river && !channel {
+                assert_eq!(surface_altitude(&v8, d).to_bits(), h7.to_bits(), "{d}");
+                same += 1;
+            } else {
+                moved += 1;
+            }
+        }
+        eprintln!(
+            "version 8 against 7 on land: {same} the same, {moved} by a river ({rivered} by version 8's)"
+        );
+    }
+
+    const VERSION_8_DIGEST: u64 = 15_558_980_979_595_432_169;
+    const VERSION_8_TOP_DIGEST: u64 = 13_002_675_292_541_232_770;
+
+    const VERSION_7_DIGEST: u64 = 9_167_527_543_725_899_224;
+    const VERSION_7_TOP_DIGEST: u64 = 10_634_382_923_396_087_003;
 
     /// A desert's rock follows the contours (survey G1): every desert cell at
     /// one height has the same top block, where the latitude bands gave one
@@ -1122,7 +1268,9 @@ mod tests {
     /// or below the sea, within a bounded number of steps.
     #[test]
     fn rivers_reach_the_sea() {
-        let cfg = TerrainConfig::default();
+        // The noise channels, versions 4 to 7; version 8's rivers have their
+        // own test (`rivers::tests::every_river_cell_drains_to_the_sea`).
+        let cfg = TerrainConfig::TENEBRIS_V7;
         let step = 2.833 / 4_800.0;
         let mut channels = 0;
         for d in sphere(40_000) {

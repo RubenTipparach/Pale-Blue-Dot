@@ -119,6 +119,13 @@ pub enum MenuAction {
     RainShadows,
     /// The starter mission's HUD line, on or off.
     MissionLine,
+    /// A sound volume (`audio-and-ambience` 7.2): 0 master, 1 effects,
+    /// 2 ambience, 3 music, 4 menus, each 0..=100 % in steps of 10.
+    Volume(u8),
+    /// The pixel tuft grass, on or off (`flora-v2`).
+    PixelGrass,
+    /// Arrows on the flowing water, on or off (`water-flow` 3.4).
+    FlowArrows,
     /// Put the open Input sub-tab's keys back to their defaults.
     ResetTab,
 }
@@ -164,9 +171,24 @@ fn scale_steps() -> Vec<u32> {
     steps
 }
 
+/// The volume a `Volume` slider sets.
+fn volume_of(volumes: &mut pbd_app::settings::Volumes, which: u8) -> &mut u32 {
+    match which {
+        0 => &mut volumes.master,
+        1 => &mut volumes.effects,
+        2 => &mut volumes.ambience,
+        3 => &mut volumes.music,
+        _ => &mut volumes.menus,
+    }
+}
+
 /// How many steps a settings slider has, and which one the player is on.
 fn slider_step(action: MenuAction, player: &PlayerSettings) -> Option<(usize, usize)> {
     Some(match action {
+        MenuAction::Volume(which) => {
+            let mut volumes = player.volumes;
+            (11, (*volume_of(&mut volumes, which) / 10).min(10) as usize)
+        }
         MenuAction::FrameLimit => (
             FRAME_STEPS.len(),
             FRAME_STEPS
@@ -199,6 +221,9 @@ fn with_step(action: MenuAction, player: PlayerSettings, step: usize) -> PlayerS
             let steps = scale_steps();
             changed.render_scale = steps[step.min(steps.len() - 1)];
         }
+        MenuAction::Volume(which) => {
+            *volume_of(&mut changed.volumes, which) = step.min(10) as u32 * 10;
+        }
         _ => {}
     }
     changed
@@ -209,6 +234,10 @@ fn settings_value(action: MenuAction, player: &PlayerSettings) -> Option<String>
     Some(match action {
         MenuAction::FrameLimit => player.frame_limit.label().to_uppercase(),
         MenuAction::RenderScale => format!("{}%", player.render_scale),
+        MenuAction::Volume(which) => {
+            let mut volumes = player.volumes;
+            format!("{}%", volume_of(&mut volumes, which))
+        }
         _ => return None,
     })
 }
@@ -309,6 +338,8 @@ fn settings_checked(
         MenuAction::Bloom => graphics.bloom,
         MenuAction::RainShadows => player.rain_shadows,
         MenuAction::MissionLine => player.mission_line,
+        MenuAction::PixelGrass => player.pixel_grass,
+        MenuAction::FlowArrows => player.flow_arrows,
         MenuAction::AutoStep => player.auto_step,
         _ => return None,
     })
@@ -336,6 +367,8 @@ pub fn press_graphics(
             MenuAction::AutoStep => changed.auto_step = !changed.auto_step,
             MenuAction::RainShadows => changed.rain_shadows = !changed.rain_shadows,
             MenuAction::MissionLine => changed.mission_line = !changed.mission_line,
+            MenuAction::PixelGrass => changed.pixel_grass = !changed.pixel_grass,
+            MenuAction::FlowArrows => changed.flow_arrows = !changed.flow_arrows,
             _ => {}
         }
         if changed != *player {
@@ -368,7 +401,7 @@ pub struct Check;
 
 /// The settings page's tabs: Picture, Weather (the rain shadow and the
 /// storm forcing), World (the clock and the globe overlay), Movement, Input.
-pub const SETTINGS_TABS: [&str; 5] = ["PICTURE", "WEATHER", "WORLD", "MOVEMENT", "INPUT"];
+pub const SETTINGS_TABS: [&str; 6] = ["PICTURE", "WEATHER", "WORLD", "MOVEMENT", "INPUT", "SOUND"];
 
 /// Which settings tab is open.
 #[derive(Resource, Default, Clone, Copy, PartialEq, Eq, Debug)]
@@ -752,7 +785,9 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                                     SettingsTabButton(i as u8),
                                     Node {
                                         height: px(18),
-                                        padding: UiRect::new(px(10), px(10), px(7), px(0)),
+                                        // Six tabs fit the panel at 5 px a side (the SOUND tab,
+                                        // `audio-and-ambience` 7.2).
+                                        padding: UiRect::new(px(5), px(5), px(7), px(0)),
                                         flex_shrink: 0.0,
                                         ..default()
                                     },
@@ -787,15 +822,11 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                     panel.commands().entity(picture).with_children(|rows| {
                         // `player-settings`: each control shows what is chosen,
                         // kept up by `label_graphics`.
-                        check_row(
-                            rows,
-                            kit,
-                            "Bloom",
-                            "costs ~2.4 ms on a Mac",
-                            MenuAction::Bloom,
-                        );
+                        check_row(rows, kit, "Bloom", "", MenuAction::Bloom);
                         slider_row(rows, kit, "Frame limit", "", MenuAction::FrameLimit);
                         slider_row(rows, kit, "Render scale", "", MenuAction::RenderScale);
+                        check_row(rows, kit, "Pixel grass", "", MenuAction::PixelGrass);
+                        check_row(rows, kit, "Flow arrows", "", MenuAction::FlowArrows);
                     });
                     let weather = page(panel, 1);
                     panel.commands().entity(weather).with_children(|rows| {
@@ -806,13 +837,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                     panel.commands().entity(world).with_children(|rows| {
                         super::time_ui::spawn(rows, kit);
                         super::overlay_ui::spawn_row(rows, kit);
-                        check_row(
-                            rows,
-                            kit,
-                            "Mission line",
-                            "the current mission on the HUD",
-                            MenuAction::MissionLine,
-                        );
+                        check_row(rows, kit, "Mission line", "", MenuAction::MissionLine);
                     });
                     let movement = page(panel, 3);
                     panel.commands().entity(movement).with_children(|rows| {
@@ -821,6 +846,17 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                     let input = page(panel, 4);
                     panel.commands().entity(input).with_children(|page| {
                         spawn_input_page(page, kit);
+                    });
+                    // `audio-and-ambience` 7.2: the five volumes, heard at
+                    // once and kept as every setting is.
+                    let sound = page(panel, 5);
+                    panel.commands().entity(sound).with_children(|rows| {
+                        for (which, label) in ["Master", "Effects", "Ambience", "Music", "Menus"]
+                            .iter()
+                            .enumerate()
+                        {
+                            slider_row(rows, kit, label, "", MenuAction::Volume(which as u8));
+                        }
                     });
                     panel
                         .spawn(Node {
@@ -1729,6 +1765,9 @@ pub fn press(
             | MenuAction::AutoStep
             | MenuAction::RainShadows
             | MenuAction::MissionLine
+            | MenuAction::Volume(_)
+            | MenuAction::PixelGrass
+            | MenuAction::FlowArrows
             | MenuAction::ResetTab => {}
             MenuAction::Load(row) => {
                 let Some(slot) = index.slots.get(row).cloned() else {

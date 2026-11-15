@@ -4,13 +4,13 @@
 The player's settings SHALL hold five volumes, master, effects, ambience,
 music and menus, each a whole percent from 0 to 100 set in steps of 10 on the
 settings screen, with defaults of 80, 100, 80, 60 and 70. They SHALL be kept
-in the player's settings file at version 3. A file of version 2 or older
+in the player's settings file at version 5. A file of version 4 or older
 SHALL read with the default volumes and keep every other setting it has. A
 run with `--capture` or `--frame-log`, or with `PBD_TAKE_SOUND=1`, SHALL use
 the default volumes whatever the file says.
 
 #### Scenario: An older file
-- **WHEN** the game reads a version 2 settings file with a 67 % render scale
+- **WHEN** the game reads a version 4 settings file with a 67 % render scale
 - **THEN** the render scale stays 67 % and the volumes take their defaults
 
 #### Scenario: Round trip

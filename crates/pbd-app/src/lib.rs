@@ -4,6 +4,8 @@
 #[cfg(feature = "desktop")]
 pub mod atmosphere;
 #[cfg(feature = "desktop")]
+pub mod audio;
+#[cfg(feature = "desktop")]
 pub mod bloom;
 #[cfg(feature = "desktop")]
 pub mod coast_walk;
@@ -61,6 +63,7 @@ pub mod ui_kit;
 pub mod vehicles;
 #[cfg(feature = "desktop")]
 pub mod walking;
+pub mod water_flow;
 #[cfg(feature = "desktop")]
 pub mod weather;
 pub mod world_map;

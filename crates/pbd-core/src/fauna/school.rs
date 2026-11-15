@@ -11,7 +11,7 @@
 //! steered to a lure or held at it by the line; that is how the fish that
 //! bites is a fish that was swimming there.
 
-use super::{FlockSettings, Rng, Species, hash2};
+use super::{Behaviour, FlockSettings, Mover, Pose, Rng, Species, hash2};
 use glam::Vec3;
 
 /// The water a school swims in: the sea surface and the ground under a
@@ -44,6 +44,8 @@ pub struct School {
     /// A stable number per fish, which is what its length is hashed from, so
     /// a fish measures the same whichever of its schoolmates are caught first.
     pub ids: Vec<u32>,
+    /// Where each creature was put: an octopus's den (`Behaviour::Hides`).
+    pub homes: Vec<Vec3>,
     pub goal: Vec3,
     goal_t: f32,
     /// The school has scented a lure and is swimming for it.
@@ -82,6 +84,7 @@ impl School {
             velocities: Vec::with_capacity(count as usize),
             spook: vec![0.0; count as usize],
             ids: (0..count as u32).collect(),
+            homes: Vec::with_capacity(count as usize),
             goal: anchor,
             goal_t: 0.0,
             lured: false,
@@ -97,6 +100,7 @@ impl School {
             let point = at * water.surface(at * anchor.length());
             let radius = school.depth_for(species, point, water);
             school.positions.push(at * radius);
+            school.homes.push(at * radius);
             let heading = east * school.rng.range(-1.0, 1.0) + north * school.rng.range(-1.0, 1.0);
             school
                 .velocities
@@ -133,6 +137,38 @@ impl School {
             })
     }
 
+    /// The player's eye at `eye`: every creature of a shy species within its
+    /// `shy_m` is startled for `hold_s` (a clam shuts, a duck paddles off, a
+    /// crab scuttles), and stays so while the eye stays near
+    /// (`ocean-environments` 7.2).
+    ///
+    /// A hidden octopus stays hidden while the eye is within `HIDE_UNTIL`
+    /// times its `shy_m`, and its hold and a seal's are their own
+    /// ([`Behaviour::hold_s`]).
+    pub fn notice(&mut self, eye: Vec3, species: &Species, hold_s: f32) {
+        if species.shy_m <= 0.0 || !eye.is_finite() {
+            return;
+        }
+        let hold_s = species.behaviour.hold_s(hold_s);
+        for i in 0..self.len() {
+            let d = self.positions[i].distance(eye);
+            let keeps = species.behaviour == Behaviour::Hides
+                && self.spook[i] > 0.0
+                && d <= species.shy_m * super::HIDE_UNTIL;
+            if d <= species.shy_m || keeps {
+                self.frighten(i, hold_s);
+            }
+        }
+    }
+
+    /// Whether this creature is at its home, within a few centimetres.
+    pub fn at_home(&self, fish: usize) -> bool {
+        match (self.positions.get(fish), self.homes.get(fish)) {
+            (Some(p), Some(h)) => p.distance(*h) < 0.3,
+            _ => false,
+        }
+    }
+
     /// Frighten one fish.
     pub fn frighten(&mut self, fish: usize, seconds: f32) {
         if let Some(s) = self.spook.get_mut(fish) {
@@ -149,6 +185,9 @@ impl School {
         self.velocities.swap_remove(fish);
         self.spook.swap_remove(fish);
         self.ids.swap_remove(fish);
+        if fish < self.homes.len() {
+            self.homes.swap_remove(fish);
+        }
         self.lure = None;
         self.held = None;
     }
@@ -206,6 +245,28 @@ impl School {
                 self.spook[i] = self.spook[i].max(1.0);
             }
             self.spook[i] = (self.spook[i] - dt).max(0.0);
+            // A startled octopus jets home and stays there.
+            if species.behaviour == Behaviour::Hides
+                && self.spook[i] > 0.0
+                && let Some(home) = self.homes.get(i).copied()
+            {
+                let to = home - self.positions[i];
+                let reach = species.speed_mps.1 * super::JET * dt;
+                let (p, v) = if to.length() <= reach {
+                    (home, Vec3::ZERO)
+                } else {
+                    let v = to.normalize_or_zero() * species.speed_mps.1 * super::JET;
+                    (self.positions[i] + v * dt, v)
+                };
+                self.positions[i] = p;
+                self.velocities[i] = if v == Vec3::ZERO {
+                    // Keep a heading to draw it along.
+                    self.velocities[i].normalize_or_zero() * 1e-3
+                } else {
+                    v
+                };
+                continue;
+            }
             let mut v = self.velocities[i] + acceleration * dt;
             let fright = if self.spook[i] > 0.0 { 2.0 } else { 1.0 };
             let (slow, fast) = (species.speed_mps.0 * 0.5, species.speed_mps.1 * fright);
@@ -230,6 +291,20 @@ impl School {
             };
             if r > 0.0 && clamped.is_finite() {
                 p *= clamped / r;
+            }
+            // A crawler stands on the bed and a floater rides the surface
+            // (`ocean-environments` 7.1): along it, never off it.
+            let ride = match species.mover {
+                Mover::School => None,
+                Mover::Crawler => Some(water.bed(p) + crawl_lift(species)),
+                Mover::Floater => Some(water.surface(p)),
+            };
+            if let Some(radius) = ride
+                && radius.is_finite()
+            {
+                let up = p.normalize_or(Vec3::Y);
+                p = up * radius;
+                v -= up * v.dot(up);
             }
             if p.is_finite() {
                 self.positions[i] = p;
@@ -312,6 +387,11 @@ impl School {
     /// under the surface, or just off the bed for a bed dweller.
     fn depth_for(&mut self, species: &Species, point: Vec3, water: &impl Water) -> f32 {
         let (surface, bed) = (water.surface(point), water.bed(point));
+        match species.mover {
+            Mover::Crawler => return bed + crawl_lift(species),
+            Mover::Floater => return surface,
+            Mover::School => {}
+        }
         if species.bed {
             return bed + SKIN_M + 0.1;
         }
@@ -339,6 +419,64 @@ impl School {
             self.anchor
         } else {
             self.goal
+        }
+    }
+}
+
+/// How far a crawler's middle stands off the bed, m: half its height.
+pub fn crawl_lift(species: &Species) -> f32 {
+    0.02 + 0.5 * species.length_m * species.shape[1]
+}
+
+/// How a creature is posed now (`ocean-environments` 7.2), from its species'
+/// behaviour, whether it is startled, the world clock and whether it is
+/// night. Deterministic: the same school, fish and time give the same pose.
+pub fn pose(species: &Species, school: &School, fish: usize, seconds: f64, night: bool) -> Pose {
+    let startled = school.spook.get(fish).is_some_and(|s| *s > 0.0);
+    let id = school.ids.get(fish).copied().unwrap_or(0);
+    // Each creature's own phase in a cycle of `period` seconds, 0..1.
+    let phase = |period: f64| {
+        let offset = (hash2(school.seed, u64::from(id)) >> 40) as f64 / (1u64 << 24) as f64;
+        (seconds / period + offset).rem_euclid(1.0)
+    };
+    match species.behaviour {
+        Behaviour::None => Pose::Moving,
+        Behaviour::Shuts => {
+            if startled {
+                Pose::Shut
+            } else {
+                Pose::Moving
+            }
+        }
+        Behaviour::Dabbles => {
+            if startled {
+                Pose::Moving
+            } else if night {
+                Pose::Asleep
+            } else if phase(9.0) < 0.3 {
+                Pose::TippedUp
+            } else {
+                Pose::Moving
+            }
+        }
+        Behaviour::Dives => {
+            if !startled && !night && phase(14.0) < 0.35 {
+                Pose::Under
+            } else {
+                Pose::Moving
+            }
+        }
+        Behaviour::Hides => match (startled, school.at_home(fish)) {
+            (false, _) => Pose::Moving,
+            (true, false) => Pose::Inking,
+            (true, true) => Pose::Hidden,
+        },
+        Behaviour::HaulsOut => {
+            if startled {
+                Pose::Under
+            } else {
+                Pose::HauledOut
+            }
         }
     }
 }

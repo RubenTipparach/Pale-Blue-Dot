@@ -59,6 +59,15 @@ pub const NAME_MAX: usize = 31;
 /// is exactly why it is the only part on a timer.
 pub const AUTOSAVE_S: f32 = 5.0;
 
+/// Who the water's edits are journaled as: `@wwater:flow/0`.
+pub fn water_author() -> Author {
+    Author::World {
+        process: "water".into(),
+        kind: "flow".into(),
+        id: 0,
+    }
+}
+
 pub fn now_unix_s() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -617,6 +626,25 @@ impl WorldSave {
         self.carried = Some(carried.clone());
         self.writer.append(format::with_line_of(&record, carried));
         self.note_record_kinds(&[(kind.as_str(), schema_of_kind)]);
+        true
+    }
+
+    /// The water's own changes (`water-flow` E4): each cell the rule wrote,
+    /// a source or a flowing cell at its level, journaled under the water's
+    /// author with no slots. They do not pass the yield set: the rule only
+    /// ever fills air or drains its own water, so water running into a hole
+    /// the player dug is what water does, not the world undoing the player.
+    /// `false`, writing nothing, once the writer has failed.
+    pub fn accept_water(&mut self, edits: &[Edit]) -> bool {
+        if self.writer.failure().is_some() {
+            return false;
+        }
+        let author = water_author();
+        for &edit in edits {
+            self.edits.set(edit);
+            self.writer
+                .append(format::authored(&author, format::world_edit_line(edit)));
+        }
         true
     }
 

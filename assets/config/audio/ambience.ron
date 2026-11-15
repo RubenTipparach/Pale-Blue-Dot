@@ -1,0 +1,24 @@
+// Each ambience bed's own level in dB (`audio-and-ambience` design section 5);
+// `pbd_core::audio::bed_weights` decides how much of each plays where.
+(
+    beds: {
+        "amb_cave": (volume_db: -4.0),
+        "amb_desert_day": (volume_db: -6.0),
+        "amb_gulls": (volume_db: -6.0),
+        "amb_jungle_day": (volume_db: -6.0),
+        "amb_meadow_day": (volume_db: -6.0),
+        "amb_night_crickets": (volume_db: -4.0),
+        "amb_night_frogs": (volume_db: -4.0),
+        "amb_open_water": (volume_db: -6.0),
+        "amb_rain_heavy": (volume_db: -3.0),
+        "amb_rain_light": (volume_db: -5.0),
+        "amb_rain_roof": (volume_db: -5.0),
+        "amb_surf": (volume_db: -4.0),
+        "amb_swamp_day": (volume_db: -6.0),
+        "amb_town_day": (volume_db: -6.0),
+        "amb_town_night": (volume_db: -6.0),
+        "amb_underwater": (volume_db: -2.0),
+        "amb_wind_high": (volume_db: -4.0),
+        "amb_wind_low": (volume_db: -6.0),
+    },
+)

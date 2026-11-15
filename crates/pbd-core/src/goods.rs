@@ -112,6 +112,14 @@ pub const GOODS: &[GoodRow] = &[
     ),
     row("fried-egg", "fried egg", 16, "items/goods/fried-egg.png"),
     row("roast-meat", "roast meat", 16, "items/goods/roast-meat.png"),
+    // ---- water-flow E11: the wooden bucket, empty and full.
+    row("bucket", "wooden bucket", 4, "items/goods/bucket.png"),
+    row(
+        "water-bucket",
+        "bucket of water",
+        1,
+        "items/goods/water-bucket.png",
+    ),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -166,6 +174,8 @@ impl Good {
     pub const LOG: Good = by_code_const("log");
     pub const PLANKS: Good = by_code_const("planks");
     pub const ROPE: Good = by_code_const("rope");
+    pub const BUCKET: Good = by_code_const("bucket");
+    pub const WATER_BUCKET: Good = by_code_const("water-bucket");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {

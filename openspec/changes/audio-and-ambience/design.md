@@ -501,6 +501,71 @@ cost.
   already keeps what it knows and ignores what it does not (the existing
   rule).
 
+## Build decisions (2026-11-15)
+
+Decided while building sections 3 to 7, before the code that carries them.
+Each is a recommendation taken (ask only with screenshots): sound cannot be
+shown in a screenshot, so the owner turns any of them by ear.
+
+1. **The settings file goes to version 5, not 3.** Phase 1 took versions 3
+   (`keys`) and 4 (`mission_line`) while this change waited. `volumes` is
+   version 5; a version 4 file (or older) reads with the default volumes and
+   keeps everything else.
+2. **Panning is ours, not kira's listener.** Each voice is a plain sub-track
+   of `effects` with its own low-pass filter, and the sound on it is panned
+   with kira's equal-power `Panning` from `pbd_core::audio::pan`, which takes
+   the emitter in the camera's own axes (`emitter - eye` turned by the
+   camera's inverse rotation). In stereo this is what a spatial sub-track
+   does, and it keeps the rule in the tested crate. No kira listener is made.
+   An origin rebase cannot move a sound because only `emitter - eye` reaches
+   the engine.
+3. **Sounds decode on their own thread from the first frame**, every cue
+   whole (`StaticSoundData`), thunder included (its takes are 3 to 9 s, about
+   10 MB decoded, under the 64 MB budget with the rest). Beds open as streams
+   when first wanted, which reads only the file's header. The loading screen
+   shows "TUNING THE AIR" and `READY` waits until the bank is decoded. A cue
+   asked for after `READY` and not decoded is `LATE_SOUND <cue>`.
+4. **`cues.ron` names each cue's takes by count** (`takes: 6` is
+   `step_grass_1.ogg` .. `step_grass_6.ogg`; one take is `step_grass.ogg`).
+5. **The hooks read what the game already says, and add little.** Steps,
+   jumps, landings and water crossings are read by the audio system from the
+   walker (its position, `GroundState`, the water under the eye); `walking.rs`
+   is not changed. Digging is read from the dig progress at the aimed block
+   (a small system beside `digging.rs`); breaks, places, tilling, planting,
+   crafting, cooking and the animals from the messages Phase 1 raises
+   (`missions::Did`, `hotbar::Gained`, `Planted`, `husbandry::Deed`,
+   `kitchen::Cooked`/`Ate`). Fishing raises one new message,
+   `fish::Heard { event, at }`, beside the events it already handles. Menus
+   are every UI button's `Interaction` (hover, press), with no change to the
+   menus.
+6. **Phase 1's actions and their cues** (no new files): a crafted or smelted
+   item `pickup`; a dish cooked `pickup`, a dish eaten `breath`; a seed
+   planted `place_dirt`; a cell tilled `dig_dirt`; a pen built `place_wood`;
+   an animal tamed or penned `ui_toggle`; a station placed is a place by its
+   material (the workbench `place_wood`, the forge `place_stone`, the campfire
+   `fire_ignite_small`).
+7. **The campfire and the brazier crackle.** Every `Campfire` and `Brazier`
+   cell among the column tier's lamps within 30 m is a `fire_crackle` loop at
+   the lamp (the four nearest), quieter for the brazier. `lightning-fire`'s
+   fires join the same loop when that change lands.
+8. **Shelter filters the beds only** (a filter on `ambience`); under water and
+   underground filter `world`, effects and beds together, as section 3 says.
+9. **Craft loops come after the owner's first listen** (task 5.4 stays open):
+   the first build sounds the player's own body, the ground, the water, the
+   rod, the weather, the fire and the menus.
+10. **Steps keep a cadence, not a fixed stride.** The walker walks at 8 m/s
+    and sprints at 14 (`WalkingConfig`); a 0.8 m stride there is ten steps a
+    second, a drum roll. A step comes 2.2 times a second at walking speed
+    and 2.8 sprinting (`step_rate_walk_hz`, `step_rate_run_hz`), the stride
+    being speed over rate and never under 0.8 m (`stride_walk_m`), so a slow
+    walk still steps every 0.8 m.
+11. **One thunder a step, and the far ones spaced.** A five-minute walk under
+    the spawn's storm heard 232 strikes within 6 km, a roll every 1.3 s. Of
+    each atmosphere step's new strikes only the nearest is heard, and a
+    far roll (past 1.5 km) waits `thunder_gap_s` (4 s) after the last
+    thunder; a crack or a clap never waits. Every near strike is still
+    heard, at its own delay.
+
 ## Decisions
 
 Every decision here is a recommendation taken (ask only with screenshots):

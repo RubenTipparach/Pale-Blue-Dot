@@ -197,8 +197,10 @@ cell by a crack channel in its hex shader).
   every crack pixel an order. Stage `k` draws the first `(k+1)/10` of them,
   so each stage contains the one before it and the block reads as one block
   cracking, never as ten different pictures. Crack pixels are near black at
-  0.85 alpha with a lighter pixel beside some of them, which is what gives
-  Minecraft's cracks their chipped edge. It writes
+  0.85 alpha, and nothing else. (They first carried a lighter "chipped edge"
+  pixel beside some of them, as Minecraft's do; the overlay is unlit, so at
+  night those pixels glowed white over a dark block. The owner, 2026-11-15,
+  on a night dig: "why does digging glow white". The chips were dropped.) It writes
   `assets/textures/break/stage_0.png` to `stage_9.png`.
 - **Its own mesh, not a terrain shader term.** The overlay is a small prism
   built on the CPU from the targeted cell's record (its degree, its six or

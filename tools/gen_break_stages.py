@@ -7,9 +7,10 @@ of the square, branching as it goes, and every crack pixel is given the time
 the crack reached it. Stage k draws the first (k+1)/10 of those pixels in time
 order, so each stage contains every crack pixel of the stage before it and
 the block reads as one block cracking apart, not ten different pictures. A
-crack pixel is near black; some carry a lighter pixel below and to the right,
-the chipped edge that makes Minecraft's cracks read as cut into the surface
-rather than drawn on it. Tenebris's generator (tools/gen-break-stages.py in
+crack pixel is near black, and that is all there is: the overlay is drawn
+unlit, so a lighter "chipped edge" pixel beside a crack showed as a glowing
+white speck at night (owner, 2026-11-15: "why does digging glow white"). A
+shadow reads the same in any light; a highlight does not. Tenebris's generator (tools/gen-break-stages.py in
 tenebris-rs) is the same idea over six stages; the drawing here is new.
 
 32 px because a terrain atlas tile is 32 px: the overlay uses the terrain's
@@ -32,7 +33,6 @@ S = 32        # pixels a side, the atlas tile size
 STAGES = 10   # Minecraft's count
 
 CRACK = (18, 14, 11, 225)     # near black, a little warm
-CHIP = (255, 250, 240, 70)    # the lit edge beside a crack
 
 _seed = [0x5EED_B10C]
 
@@ -99,19 +99,10 @@ def fractures():
 def stages():
     times = fractures()
     order = sorted(times, key=lambda p: (times[p], p[1], p[0]))
-    # Which crack pixels carry a chipped edge: decided once, so a stage adds
-    # chips and never moves one.
-    chipped = {p for p in order if rnd() < 0.35}
     grids = []
     for k in range(STAGES):
         shown = order[: max(1, round(len(order) * (k + 1) / STAGES))]
         grid = [[(0, 0, 0, 0)] * S for _ in range(S)]
-        cracks = set(shown)
-        for (x, y) in shown:
-            if (x, y) in chipped:
-                cx, cy = x + 1, y + 1
-                if cx < S and cy < S and (cx, cy) not in cracks:
-                    grid[cy][cx] = CHIP
         for (x, y) in shown:
             grid[y][x] = CRACK
         grids.append(grid)

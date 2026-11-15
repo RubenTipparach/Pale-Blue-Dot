@@ -36,9 +36,12 @@
       the sea did not move.
 
 ## 3. Flooding by connectivity
-- [ ] The bounded flood at `column::build` and on an edit; tests for a
-      tunnel into the sea (floods) and a sealed pocket (dry).
+- [x] The bounded flood at `column::build` and on an edit; tests for a
+      tunnel into the sea (floods) and a sealed pocket (dry). (2026-11-15,
+      design "Phase 2 in the engine"; `water_tier_tests`; no sea sheet over
+      a pit the sea has not reached, `DRY_SHEET_BIT`.)
 
 ## 4. Flow
-- [ ] Held for the fluid state: levels, spread, sources, the sheet at a
-      cell's level.
+- [x] Held for the fluid state: levels, spread, sources, the sheet at a
+      cell's level. (Built as `water-flow`'s rule, 2026-11-15: Luanti's on
+      hex rather than Minecraft's, as that change decided.)

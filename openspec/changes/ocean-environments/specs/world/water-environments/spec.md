@@ -40,24 +40,14 @@ rebuild it with the new places.
   build that carries the new one
 - **THEN** its ground digest matches the previous version's pinned digest
 
-### Requirement: Daylight under water fades with depth
+### Requirement: Turbidity per environment
+Once the environment function exists, the turbidity SHALL be the
+environment's (reef, kelp, polar, marsh and the rest), replacing the reading
+off the water class that `world/water-environments` makes today.
 
-The light reaching a point under water SHALL fall with its depth below the
-water's surface by a downwelling coefficient per colour, separate from the
-view's absorption per metre of path. The view SHALL also scatter toward the
-water's own colour by a turbidity per environment.
-
-#### Scenario: The zones fall inside the column
-
-- **WHEN** the blue light left in ocean water is evaluated at 40 m and at
-  90 m
-- **THEN** it is 15% or more at 40 m (sunlit above) and 1.7% or less at
-  90 m (midnight below), so every zone lies above `column::BASE_M`
-
-#### Scenario: Red goes first
-
-- **WHEN** the light left at 10 m is evaluated
-- **THEN** red is under 2% while green and blue are above 50%
+#### Scenario: A marsh is murky
+- **WHEN** the eye is in water the environment function calls marsh
+- **THEN** the turbidity is the marsh's, 0.35 per metre
 
 ### Requirement: The tide is an offset of the one sea function
 

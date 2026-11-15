@@ -1,0 +1,94 @@
+# audio-and-ambience task 8.3: a storm walk with --audio-log (2026-11-15, the Mac, fast build)
+# ./target/fast/pbd-app --world AudioTest --walk-distance 2000 --audio-log, 150 s, a fresh world under the spawn's storm.
+# A thunder's delay is its distance / 343 m/s less the time since its strike's step (strikes are dated to the 1 s atmosphere step).
+# No LATE_SOUND, LATE_PIPELINE or ERROR in the run.
+2026-11-15T09:25:38.336467Z  INFO pbd_app::audio: AUDIO on: the sound device
+2026-11-15T09:25:38.446120Z  INFO pbd_app::audio: AUDIO bank 160 files decoded in 0.03 s, 50.3 MB static
+2026-11-15T09:25:39.466240Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -100/-100, effects -100/-100, ambience -100/-100, music -100/-100, menus -100/-100 | voices 0 started 0 dropped 0 | beds 
+2026-11-15T09:25:40.333844Z  INFO pbd_app::audio: AUDIO bed start amb_wind_low at 6.5 s
+2026-11-15T09:25:40.334396Z  INFO pbd_app::audio: AUDIO bed start amb_meadow_day at 12.0 s
+2026-11-15T09:25:40.334961Z  INFO pbd_app::audio: AUDIO bed start amb_desert_day at 18.9 s
+2026-11-15T09:25:40.775272Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -58/-72, effects -100/-100, ambience -54/-68, music -100/-100, menus -100/-100 | voices 0 started 0 dropped 0 | beds wind_low=-27 meadow_day=-29 desert_day=-25
+2026-11-15T09:25:41.209793Z  INFO pbd_app::loading: READY playable 3.78 s after launch at frame 116 (world 1.30 s, warm 1.47 s, 97 pipelines)
+2026-11-15T09:25:41.790352Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -38/-47, effects -100/-100, ambience -34/-44, music -100/-100, menus -100/-100 | voices 0 started 0 dropped 0 | beds wind_low=-18 meadow_day=-20 desert_day=-16
+2026-11-15T09:25:42.408330Z  INFO pbd_app::audio: AUDIO bed start amb_rain_light at 13.6 s
+2026-11-15T09:25:42.675368Z  INFO pbd_app::audio: AUDIO bed start amb_rain_heavy at 32.4 s
+2026-11-15T09:25:42.792096Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -33/-47, effects -100/-100, ambience -29/-43, music -100/-100, menus -100/-100 | voices 0 started 0 dropped 0 | beds wind_low=-15 rain_light=-26 rain_heavy=-40 meadow_day=-17 desert_day=-13
+2026-11-15T09:25:43.259443Z  INFO pbd_app::audio: AUDIO start thunder_close take 1 at 755.3 m gain -12.0 dB cutoff 5.0 kHz pan -0.78 delay 1149 ms
+2026-11-15T09:25:43.809380Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -32/-48, effects -100/-100, ambience -28/-44, music -100/-100, menus -100/-100 | voices 1 started 1 dropped 0 | beds wind_low=-13 rain_light=-24 rain_heavy=-14 meadow_day=-19 desert_day=-14
+2026-11-15T09:25:44.246249Z  INFO pbd_app::audio: AUDIO start thunder_close take 2 at 975.4 m gain -14.3 dB cutoff 4.1 kHz pan -0.42 delay 1808 ms
+2026-11-15T09:25:44.801047Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -31/-47, effects -51/-69, ambience -27/-43, music -100/-100, menus -100/-100 | voices 2 started 2 dropped 0 | beds wind_low=-12 rain_light=-27 rain_heavy=-9 meadow_day=-22 desert_day=-17
+2026-11-15T09:25:45.270718Z  INFO pbd_app::audio: AUDIO start thunder_crack take 1 at 179.3 m gain +0.5 dB cutoff 11.6 kHz pan -0.75 delay 0 ms
+2026-11-15T09:25:45.803215Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world 2/-15, effects 2/-15, ambience -27/-37, music -100/-100, menus -100/-100 | voices 3 started 3 dropped 0 | beds wind_low=-11 rain_light=-30 rain_heavy=-7 meadow_day=-24 desert_day=-20
+2026-11-15T09:25:46.272999Z  INFO pbd_app::audio: AUDIO start thunder_close take 1 at 1054.9 m gain -14.9 dB cutoff 2.9 kHz pan -0.70 delay 2016 ms
+2026-11-15T09:25:46.833923Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -3/-24, effects -3/-25, ambience -24/-39, music -100/-100, menus -100/-100 | voices 4 started 4 dropped 0 | beds wind_low=-11 rain_light=-33 rain_heavy=-6 meadow_day=-27 desert_day=-23
+2026-11-15T09:25:47.856778Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -12/-31, effects -12/-31, ambience -25/-38, music -100/-100, menus -100/-100 | voices 4 started 4 dropped 0 | beds wind_low=-10 rain_light=-36 rain_heavy=-5 meadow_day=-30 desert_day=-26
+2026-11-15T09:25:48.879656Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -19/-31, effects -19/-31, ambience -19/-42, music -100/-100, menus -100/-100 | voices 4 started 4 dropped 0 | beds wind_low=-10 rain_light=-38 rain_heavy=-4 meadow_day=-33 desert_day=-29
+2026-11-15T09:25:49.429793Z  INFO pbd_app::audio: AUDIO bed stop amb_rain_light
+2026-11-15T09:25:49.888684Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -19/-38, effects -20/-37, ambience -30/-46, music -100/-100, menus -100/-100 | voices 4 started 4 dropped 0 | beds wind_low=-10 rain_heavy=-4 meadow_day=-36 desert_day=-31
+2026-11-15T09:25:50.289244Z  INFO pbd_app::audio: AUDIO start thunder_roll take 2 at 2787.1 m gain -24.4 dB cutoff 1.6 kHz pan +0.88 delay 7044 ms
+2026-11-15T09:25:50.895371Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -16/-34, effects -16/-33, ambience -28/-40, music -100/-100, menus -100/-100 | voices 5 started 5 dropped 0 | beds wind_low=-10 rain_heavy=-4 meadow_day=-39 desert_day=-34
+2026-11-15T09:25:51.185252Z  INFO pbd_app::audio: AUDIO bed stop amb_meadow_day
+2026-11-15T09:25:51.901585Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -14/-40, effects -14/-49, ambience -28/-38, music -100/-100, menus -100/-100 | voices 5 started 5 dropped 0 | beds wind_low=-10 rain_heavy=-3 desert_day=-37
+2026-11-15T09:25:52.852788Z  INFO pbd_app::audio: AUDIO bed stop amb_desert_day
+2026-11-15T09:25:52.910343Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -20/-40, effects -21/-41, ambience -27/-44, music -100/-100, menus -100/-100 | voices 5 started 5 dropped 0 | beds wind_low=-10 rain_heavy=-3
+2026-11-15T09:25:53.931269Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -21/-42, effects -21/-51, ambience -29/-39, music -100/-100, menus -100/-100 | voices 5 started 5 dropped 1 | beds wind_low=-10 rain_heavy=-3
+2026-11-15T09:25:54.120476Z  INFO pbd_app::audio: AUDIO start step_sand take 5 at 1.6 m gain -9.0 dB cutoff 19.9 kHz pan -0.00 delay 0 ms
+2026-11-15T09:25:54.489077Z  INFO pbd_app::audio: AUDIO start step_sand take 6 at 1.6 m gain -9.0 dB cutoff 19.9 kHz pan +0.00 delay 0 ms
+2026-11-15T09:25:54.939363Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -10/-37, effects -10/-39, ambience -28/-39, music -100/-100, menus -100/-100 | voices 5 started 7 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:25:55.135472Z  INFO pbd_app::audio: AUDIO start jump_sand take 1 at 1.4 m gain -9.0 dB cutoff 19.8 kHz pan +0.11 delay 0 ms
+2026-11-15T09:25:55.938963Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -13/-42, effects -13/-69, ambience -27/-38, music -100/-100, menus -100/-100 | voices 4 started 8 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:25:56.068625Z  INFO pbd_app::audio: AUDIO start step_stone take 4 at 1.6 m gain -9.0 dB cutoff 19.9 kHz pan -0.00 delay 0 ms
+2026-11-15T09:25:56.068667Z  INFO pbd_app::audio: AUDIO start step_wet take 3 at 1.6 m gain -15.0 dB cutoff 19.9 kHz pan -0.00 delay 0 ms
+2026-11-15T09:25:56.233634Z  INFO pbd_app::audio: AUDIO start step_stone take 1 at 1.7 m gain -9.0 dB cutoff 19.9 kHz pan -0.55 delay 0 ms
+2026-11-15T09:25:56.233678Z  INFO pbd_app::audio: AUDIO start step_wet take 2 at 1.7 m gain -15.0 dB cutoff 19.9 kHz pan -0.55 delay 0 ms
+2026-11-15T09:25:56.562021Z  INFO pbd_app::audio: AUDIO start thunder_close take 2 at 436.7 m gain -7.3 dB cutoff 4.7 kHz pan +0.39 delay 0 ms
+2026-11-15T09:25:56.941795Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -7/-38, effects -8/-41, ambience -25/-41, music -100/-100, menus -100/-100 | voices 3 started 13 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:25:57.941154Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -11/-45, effects -11/-51, ambience -28/-42, music -100/-100, menus -100/-100 | voices 3 started 13 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:25:58.938000Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -7/-41, effects -8/-44, ambience -28/-40, music -100/-100, menus -100/-100 | voices 2 started 13 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:25:59.936798Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -18/-38, effects -18/-42, ambience -28/-38, music -100/-100, menus -100/-100 | voices 2 started 13 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:00.298244Z  INFO pbd_app::audio: AUDIO start thunder_close take 1 at 1457.8 m gain -17.8 dB cutoff 2.5 kHz pan +0.84 delay 3163 ms
+2026-11-15T09:26:00.956162Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -20/-40, effects -21/-39, ambience -26/-40, music -100/-100, menus -100/-100 | voices 3 started 14 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:01.287423Z  INFO pbd_app::audio: AUDIO start thunder_close take 2 at 1080.6 m gain -15.2 dB cutoff 2.3 kHz pan -0.19 delay 2073 ms
+2026-11-15T09:26:01.970490Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -22/-38, effects -23/-41, ambience -29/-41, music -100/-100, menus -100/-100 | voices 4 started 15 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:02.270231Z  INFO pbd_app::audio: AUDIO start thunder_close take 1 at 571.9 m gain -9.6 dB cutoff 3.7 kHz pan +0.13 delay 609 ms
+2026-11-15T09:26:02.986614Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -20/-44, effects -21/-45, ambience -28/-42, music -100/-100, menus -100/-100 | voices 4 started 16 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:03.467978Z  INFO pbd_app::audio: AUDIO start step_stone take 2 at 1.7 m gain -9.0 dB cutoff 19.9 kHz pan +0.00 delay 0 ms
+2026-11-15T09:26:03.468024Z  INFO pbd_app::audio: AUDIO start step_wet take 3 at 1.7 m gain -15.0 dB cutoff 19.9 kHz pan +0.00 delay 0 ms
+2026-11-15T09:26:03.919727Z  INFO pbd_app::audio: AUDIO start land_sand take 1 at 1.8 m gain -7.6 dB cutoff 19.9 kHz pan -0.00 delay 0 ms
+2026-11-15T09:26:04.008977Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -9/-29, effects -9/-29, ambience -27/-45, music -100/-100, menus -100/-100 | voices 5 started 19 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:04.099185Z  INFO pbd_app::audio: AUDIO start step_sand take 1 at 1.7 m gain -9.0 dB cutoff 19.9 kHz pan -0.00 delay 0 ms
+2026-11-15T09:26:04.463315Z  INFO pbd_app::audio: AUDIO start step_sand take 3 at 1.7 m gain -9.0 dB cutoff 19.9 kHz pan -0.00 delay 0 ms
+2026-11-15T09:26:05.021371Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -8/-30, effects -8/-31, ambience -28/-40, music -100/-100, menus -100/-100 | voices 4 started 21 dropped 2 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:06.032614Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -9/-31, effects -9/-31, ambience -26/-43, music -100/-100, menus -100/-100 | voices 4 started 21 dropped 3 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:06.284105Z  INFO pbd_app::audio: AUDIO start thunder_crack take 2 at 369.6 m gain -5.8 dB cutoff 8.1 kHz pan -0.89 delay 5 ms
+2026-11-15T09:26:07.049364Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -13/-29, effects -13/-29, ambience -25/-41, music -100/-100, menus -100/-100 | voices 4 started 22 dropped 3 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:08.063143Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -4/-20, effects -4/-20, ambience -25/-42, music -100/-100, menus -100/-100 | voices 4 started 22 dropped 3 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:08.261888Z  INFO pbd_app::audio: AUDIO start thunder_close take 2 at 1186.4 m gain -16.0 dB cutoff 3.5 kHz pan +0.10 delay 2411 ms
+2026-11-15T09:26:09.085282Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -5/-23, effects -5/-23, ambience -28/-40, music -100/-100, menus -100/-100 | voices 5 started 23 dropped 3 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:09.263732Z  INFO pbd_app::audio: AUDIO start thunder_close take 1 at 1073.5 m gain -15.1 dB cutoff 2.7 kHz pan -0.64 delay 2063 ms
+2026-11-15T09:26:10.093264Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -8/-21, effects -8/-22, ambience -30/-42, music -100/-100, menus -100/-100 | voices 4 started 24 dropped 3 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:11.100445Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -9/-38, effects -9/-37, ambience -31/-40, music -100/-100, menus -100/-100 | voices 4 started 24 dropped 4 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:12.101095Z  INFO pbd_app::audio: AUDIO start jump_sand take 1 at 1.4 m gain -9.0 dB cutoff 19.9 kHz pan -0.00 delay 0 ms
+2026-11-15T09:26:12.117152Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -10/-25, effects -11/-25, ambience -27/-41, music -100/-100, menus -100/-100 | voices 5 started 25 dropped 4 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:12.268446Z  INFO pbd_app::audio: AUDIO start thunder_crack take 1 at 246.7 m gain -5.3 dB cutoff 10.1 kHz pan -0.84 delay 0 ms
+2026-11-15T09:26:13.119715Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -4/-28, effects -4/-28, ambience -27/-41, music -100/-100, menus -100/-100 | voices 4 started 26 dropped 4 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:13.233419Z  INFO pbd_app::audio: AUDIO start step_sand take 6 at 1.6 m gain -9.0 dB cutoff 19.9 kHz pan +0.00 delay 0 ms
+2026-11-15T09:26:14.133164Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -9/-36, effects -9/-39, ambience -28/-40, music -100/-100, menus -100/-100 | voices 3 started 27 dropped 4 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:14.269029Z  INFO pbd_app::audio: AUDIO start thunder_close take 2 at 649.8 m gain -11.2 dB cutoff 5.6 kHz pan +0.65 delay 834 ms
+2026-11-15T09:26:15.150123Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -13/-42, effects -13/-42, ambience -27/-100, music -100/-100, menus -100/-100 | voices 4 started 28 dropped 4 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:15.266912Z  INFO pbd_app::audio: AUDIO start thunder_close take 1 at 1201.8 m gain -16.1 dB cutoff 2.1 kHz pan +0.18 delay 2442 ms
+2026-11-15T09:26:16.153054Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -14/-42, effects -14/-42, ambience -100/-100, music -100/-100, menus -100/-100 | voices 5 started 29 dropped 4 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:17.149590Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -11/-47, effects -11/-47, ambience -100/-100, music -100/-100, menus -100/-100 | voices 5 started 29 dropped 4 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:17.269364Z  INFO pbd_app::audio: AUDIO start thunder_close take 2 at 470.1 m gain -8.8 dB cutoff 6.9 kHz pan +0.56 delay 312 ms
+2026-11-15T09:26:18.151700Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -14/-40, effects -14/-40, ambience -100/-100, music -100/-100, menus -100/-100 | voices 4 started 30 dropped 4 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:19.149428Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -8/-33, effects -8/-33, ambience -100/-100, music -100/-100, menus -100/-100 | voices 4 started 30 dropped 5 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:20.161522Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -17/-46, effects -17/-46, ambience -100/-100, music -100/-100, menus -100/-100 | voices 4 started 30 dropped 5 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:20.995850Z  INFO pbd_app::audio: AUDIO start jump_sand take 1 at 1.4 m gain -9.0 dB cutoff 19.9 kHz pan +0.00 delay 0 ms
+2026-11-15T09:26:21.179664Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -13/-39, effects -13/-39, ambience -100/-100, music -100/-100, menus -100/-100 | voices 5 started 31 dropped 5 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:21.248340Z  INFO pbd_app::audio: AUDIO start thunder_close take 1 at 983.8 m gain -14.3 dB cutoff 4.1 kHz pan +0.80 delay 1832 ms
+2026-11-15T09:26:22.194021Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -24/-45, effects -24/-45, ambience -100/-100, music -100/-100, menus -100/-100 | voices 4 started 32 dropped 5 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:22.667036Z  INFO pbd_app::audio: AUDIO start thunder_close take 2 at 850.8 m gain -13.1 dB cutoff 2.9 kHz pan -0.41 delay 1006 ms
+2026-11-15T09:26:23.196915Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -23/-36, effects -23/-36, ambience -100/-100, music -100/-100, menus -100/-100 | voices 4 started 33 dropped 5 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:24.216624Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -20/-37, effects -20/-37, ambience -100/-100, music -100/-100, menus -100/-100 | voices 3 started 33 dropped 5 | beds wind_low=-9 rain_heavy=-3
+2026-11-15T09:26:25.213373Z  INFO pbd_app::audio: AUDIO buses peak/rms dB: main -100/-100, world -14/-44, effects -14/-44, ambience -100/-100, music -100/-100, menus -100/-100 | voices 2 started 33 dropped 5 | beds wind_low=-9 rain_heavy=-3

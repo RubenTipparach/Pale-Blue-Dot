@@ -20,6 +20,7 @@ use pbd_core::aim::{self, Sample};
 use pbd_core::column::{self, LAYERS};
 use pbd_core::dig::{Digger, Refusal, Step};
 use pbd_core::edits::Edit;
+use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Tool};
 use pbd_core::terrain::Material;
 use std::sync::Arc;
@@ -108,7 +109,7 @@ pub(super) fn material_of(
 /// would generate for it as rim, so the ray stops on the cap the player sees
 /// and the edit adopts the column (`apply_edit`) instead of the click passing
 /// into the hill as if it were sky.
-fn sample_at(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<Sample> {
+pub(super) fn sample_at(fine: &PlanetFine, contact: &PlanetContact, point: Vec3) -> Option<Sample> {
     let direction = point.try_normalize()?;
     // Only while the contact and `PlanetFine` hold the same set: for the frame
     // between a set landing in one and the other, the index is the wrong set's.
@@ -185,6 +186,9 @@ pub enum Hands {
     /// but the soil may turn up a seed, which floats out as a dig's block
     /// does, on the edit's own line.
     Till(Option<Item>),
+    /// Trade one of the selected stack for this item, on the same line: a
+    /// bucket filled or emptied (`water-flow` E11).
+    Swap(Item),
     /// A dig that also turns up finds into the hands, on the same line: a
     /// seed out of dug grass (`farming-and-smelting` decision 14), fibre out
     /// of grass and loose stone out of earth (`tool-crafting` decision 2).
@@ -351,6 +355,14 @@ pub fn apply_edit(
                 return None;
             }
         }
+        Hands::Swap(item) => {
+            let index = moved.selected();
+            if moved.take(index, 1) != 1 {
+                info!("edit refused: nothing in the selected slot to use");
+                return None;
+            }
+            moved.give(item, 1);
+        }
         Hands::Empty | Hands::Till(None) => {}
     }
     if !save.accept(
@@ -385,6 +397,14 @@ pub fn apply_edit(
             set.columns.repack(neighbor as usize);
         }
     }
+    // The water (`water-flow` decision 5, `volumetric-water` phase 2): the
+    // sea floods what this opened onto it, and the cell and its neighbours
+    // are queued for the rule, so a dig beside water or a poured source
+    // starts it moving.
+    let flooded = set.columns.water_after_edit(record, layer, &save.edits);
+    for &slot in &flooded {
+        set.columns.repack_slot(slot);
+    }
     // And the SURFACE, which is a second representation of where the ground
     // is: the terrain pass draws its cap from the cell record and every
     // neighbour draws its wall down to it. Repacking the runs and leaving that
@@ -392,6 +412,13 @@ pub fn apply_edit(
     // build pass says what it looks like in as many words, "a meadow over the
     // hole and a wall across it", and that pass ran only at build.
     set.reconcile(record);
+    // Whether the sea sheet lies over the edited cell and what the flood
+    // reached: a pit dug below sea level is dry until the sea comes in.
+    let flooded: Vec<usize> = flooded
+        .iter()
+        .filter_map(|&slot| set.columns.water.records.get(slot).copied())
+        .collect();
+    set.mark_sheets(std::iter::once(record).chain(flooded));
     // The whole tier, at the measured six milliseconds. A block changes what
     // light reaches every cell it can be seen from, which is not a region this
     // code can name: a dug shaft lets daylight forty metres down, and a torch
@@ -442,7 +469,8 @@ pub fn dig_and_place(
         Option<ResMut<pbd_app::held::Swinging>>,
         ResMut<Drops>,
         Res<pbd_app::sky::Sun>,
-        ResMut<pbd_app::husbandry::AimedGround>,
+        // Absent in a still capture, which has no husbandry.
+        Option<ResMut<pbd_app::husbandry::AimedGround>>,
     ),
     (mut note, farm, mut gained, mut planted, gather, effects, mut did): (
         ResMut<super::farm::FarmNote>,
@@ -454,7 +482,9 @@ pub fn dig_and_place(
         MessageWriter<pbd_app::missions::Did>,
     ),
 ) {
-    ground.0 = None;
+    if let Some(ground) = ground.as_mut() {
+        ground.0 = None;
+    }
     // The tool in hand chops while a block is being broken: last frame's
     // answer, a frame behind, which nobody can see.
     let breaking = mining.progress().is_some();
@@ -536,7 +566,9 @@ pub fn dig_and_place(
     }
     // Where the ray met the ground, for a fence piece's edge
     // (`animal-husbandry` S12).
-    ground.0 = target.map(|t| eye + look * t.distance);
+    if let Some(ground) = ground.as_mut() {
+        ground.0 = target.map(|t| eye + look * t.distance);
+    }
     let clicked =
         buttons.just_pressed(MouseButton::Left) || buttons.just_pressed(MouseButton::Right);
     let Some(target) = target else {
@@ -694,6 +726,68 @@ pub fn dig_and_place(
                 wall_s,
                 &mut planted,
             );
+            return;
+        }
+        // The wooden bucket (`water-flow` E11): an empty one takes the
+        // source the eye meets, a full one pours where a block would go.
+        if let Some(Item::Good(good)) = slots.held().map(|stack| stack.item)
+            && (good == Good::BUCKET || good == Good::WATER_BUCKET)
+        {
+            let full = good == Good::WATER_BUCKET;
+            let at = if full {
+                Some((place.cell, place.layer))
+            } else {
+                // The ray stops at water for a bucket, as it does not for a
+                // hand: the first source along it.
+                aim::march(eye, look, |point| {
+                    sample_at(&fine, &contact, point).map(|mut s| {
+                        if material_of(&fine, &edits, (s.cell, s.layer)) == Some(Material::Water) {
+                            s.solid = true;
+                        }
+                        s
+                    })
+                })
+                .map(|t| (t.dig.cell, t.dig.layer))
+            };
+            let Some((cell, layer)) = at else {
+                return;
+            };
+            let Some(now) = material_of(&fine, &edits, (cell, layer))
+                .and_then(|was| pbd_core::liquid::bucket(full, was))
+            else {
+                info!("edit refused: the bucket has nothing to take or nowhere to pour");
+                return;
+            };
+            let swapped = if full {
+                Good::BUCKET
+            } else {
+                Good::WATER_BUCKET
+            };
+            if apply_edit(
+                &mut Edited {
+                    fine: &mut fine,
+                    contact: &mut contact,
+                    save: &mut edits,
+                    slots: &mut slots,
+                    drops: &mut drops,
+                    now_s: sun.clock.seconds,
+                },
+                Hands::Swap(Item::Good(swapped)),
+                cell,
+                layer,
+                now,
+            )
+            .is_some()
+            {
+                info!(
+                    "{} cell {cell} layer {layer} with the bucket",
+                    if full {
+                        "poured into"
+                    } else {
+                        "took water from"
+                    }
+                );
+            }
             return;
         }
         let Some(Item::Block(material)) = slots.held().map(|stack| stack.item) else {

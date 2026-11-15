@@ -490,6 +490,19 @@ pub fn biomes_layer() -> RasterLayer {
     }
 }
 
+/// The sea's places (`ocean-environments` 6.1): reef, kelp, polar sea,
+/// vents and trenches, from the one function the generator and the spawner
+/// read.
+pub fn places_layer() -> RasterLayer {
+    RasterLayer {
+        name: "Sea places",
+        note: "Reefs, kelp forests, polar sea, vents and trenches.",
+        paint: raster::place_colour,
+        key: raster::PLACE_KEY,
+        class: raster::place_class,
+    }
+}
+
 /// Where the player is: the walker when on foot, else the ship they fly,
 /// body-local and planet-centred, as the readouts read them.
 #[derive(bevy::ecs::system::SystemParam)]
@@ -529,15 +542,19 @@ pub fn open(
         return;
     }
     match *screen {
-        Screen::Playing => {
-            if let Some(at) = player.get() {
-                view.centre = geo::project(at);
-            }
-            *screen = Screen::Map;
-        }
+        Screen::Playing => show(&mut screen, &mut view, &player),
         Screen::Map => *screen = Screen::Playing,
         _ => {}
     }
+}
+
+/// Put the map up centred on the player: M from the world, and the pack's
+/// MAP link (`inventory-grid` decision 9).
+pub fn show(screen: &mut Screen, view: &mut MapView, player: &PlayerPlace) {
+    if let Some(at) = player.get() {
+        view.centre = geo::project(at);
+    }
+    *screen = Screen::Map;
 }
 
 /// Build the map's screen, hidden, and its live material. `Startup`.
@@ -1708,6 +1725,7 @@ impl Plugin for MapScreenPlugin {
             .init_resource::<super::map_sites::DrawnSites>()
             .add_systems(PreStartup, |mut layers: ResMut<MapLayers>| {
                 layers.add(biomes_layer());
+                layers.add(places_layer());
             })
             .add_systems(Startup, spawn)
             .add_systems(

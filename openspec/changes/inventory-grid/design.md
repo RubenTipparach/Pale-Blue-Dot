@@ -169,6 +169,25 @@ anything, the equip thingy (rollout) should have a bare hands option", and
     and the rod (there is no dig-system harness to drive in an app test);
   - a capture: the walker's view with nothing in hand.
 
+### 9. Tab opens the pack too, and the pack links to the other screens (owner, 2026-11-15)
+
+The owner, 2026-11-15: "also tab should open pack" and "and pack should
+buttons to other menus like the pause menu or the map".
+
+- **Tab beside I.** The pack's row in the bindings (`controls::SCREEN`) holds
+  two keys, I and Tab, each its own rebindable slot. Neither moves for a
+  player who never rebinds, and a settings file that rebound I keeps that
+  rebind, because the I slot's name (`screen:KeyI`) does not change. Tab is
+  bound to nothing else in the game.
+- **Links in the tab strip.** The oak strip over the pack and the missions
+  (`starter-missions`: PACK and MISSIONS) gains three more plaques: MAP M,
+  GUIDE J and MENU ESC (the pause menu). A press switches straight to that
+  screen, as its key does from the world; the map opens centred on the
+  player, as M does. Escape still closes the pack, and the owner's "no close
+  button" still holds: these lead somewhere else.
+- Verify: an app test that Tab opens and shuts the pack; an app test that
+  each strip link's press puts its screen up; a capture of the open pack.
+
 ## Risks / Trade-offs
 
 - [A 40-field log line is longer to write on every dig] → A dig writes about

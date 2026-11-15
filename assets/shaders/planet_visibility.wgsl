@@ -41,6 +41,12 @@ struct Params {
     ssr_eye: vec4<f32>,
     rain_near: vec4<f32>,
     light_ease: vec4<f32>,
+    flora: vec4<f32>,          // `flora-v2`: x tufts per cell (zero: blades), y tuft width m, z tuft height m, w the year 0..1
+    flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
+    flora_biome: array<vec4<f32>,8>, // per biome: fern weight, mushroom weight, flower bits, deciduous
+    tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
+    plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits
+    flora_fall: vec4<f32>,     // 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w fruit chance
     night: vec4<f32>,                   // `night-lights-from-space`, unread here
     night_lights: array<vec4<f32>,128>,
 }
@@ -129,7 +135,8 @@ fn clear_indirect() {
     atomicStore(&args[0].instance_count, 0u);
     args[0].first_vertex = 0u;
     args[0].first_instance = 0u;
-    args[1].vertex_count = 198u;
+    // The trunk and two leaf layers, then `flora-v2`'s fruit (design 9.6).
+    args[1].vertex_count = 258u;
     atomicStore(&args[1].instance_count, 0u);
     args[1].first_vertex = 60u;
     args[1].first_instance = 0u;
@@ -139,11 +146,12 @@ fn clear_indirect() {
     args[2].first_vertex = 0u;
     args[2].first_instance = 0u;
     // Ground clutter: eighteen blades of two segments, then a flower, a
-    // pebble, a bush and a dead shrub. CLUTTER_VERTICES in planet.rs is the
-    // same arithmetic and a test holds the two together.
-    args[3].vertex_count = 432u;
+    // pebble, a bush, a dead shrub, a mushroom and a fern (`flora-v2`).
+    // CLUTTER_VERTICES in planet.rs is the same arithmetic and a test holds
+    // the two together.
+    args[3].vertex_count = 564u;
     atomicStore(&args[3].instance_count, 0u);
-    args[3].first_vertex = 258u;
+    args[3].first_vertex = 318u;
     args[3].first_instance = 0u;
     // The inside of the world: a ceiling and a floor per run, then a flank per
     // side per run per stretch of the neighbour's air, then a lamp.
@@ -151,7 +159,7 @@ fn clear_indirect() {
     // arithmetic and a test holds them together.
     args[4].vertex_count = 936u;
     atomicStore(&args[4].instance_count, 0u);
-    args[4].first_vertex = 690u;
+    args[4].first_vertex = 882u;
     args[4].first_instance = 0u;
 }
 
@@ -180,6 +188,8 @@ const SALT_FLOWER: u32 = 0x52u;
 const SALT_BUSH: u32 = 0x53u;
 const SALT_ROCK: u32 = 0x54u;
 const SALT_SHRUB: u32 = 0x55u;
+const SALT_MUSH: u32 = 0x56u;
+const SALT_FERN: u32 = 0x57u;
 
 fn grassy(material: u32) -> bool { return material==2u || material==3u || material==7u; }
 // Dirt and beach sand share index 1, so "bare" is every dry top a pebble can
@@ -215,7 +225,12 @@ fn has_clutter(cell: Cell, center: vec3<f32>) -> bool {
     let rock = (green||dry) && roll(id,SALT_ROCK) < rock_chance;
     // Dead twigs are the desert's and the tundra's only ground cover.
     let shrub = (material==4u||material==6u) && roll(id,SALT_SHRUB) < params.clutter_more.y;
-    return grass || flower || bush || rock || shrub;
+    // Mushrooms and ferns at their biome's weight (`flora-v2` design 3), on
+    // the rolls the surface pass draws them with.
+    let biome = min((cell.metadata.y >> 8u) & 0xffu, 7u);
+    let mush = green && roll(id,SALT_MUSH) < min(params.flora_more.x*params.flora_biome[biome].y, 1.);
+    let fern = green && roll(id,SALT_FERN) < min(params.flora_more.y*params.flora_biome[biome].x, 1.);
+    return grass || flower || bush || rock || shrub || mush || fern;
 }
 
 // This is the sole foliage eligibility decision. The foliage indirect draw
@@ -490,7 +505,15 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // at a landing it dissolves with the seabed under it rather than taking
     // the new partition's coastline at once (`two-set-dissolve`). The clutter
     // and the columns are drawn for the current partition only.
-    if !cascade && cell.direction_height.w < 0.0 {
+    // Not over a pit dug below sea level that the sea has not reached: its
+    // column says dry (`volumetric-water` phase 2, the record's
+    // `DRY_SHEET_BIT` in `spare.z`).
+    // Under the tide's high water too (`lod_spare.w`, nought with no tide),
+    // so the sheet runs on over a beach the tide covers (`ocean-environments`
+    // B7); where the ground stands over the sheet, the ground hides it.
+    // Or a river's water over a far cell (`spare.w`, design 13).
+    if !cascade && (cell.direction_height.w < max(params.lod_spare.w, 0.0)
+        && (cell.spare.z & 2u) == 0u || cell.spare.w != 0u) {
         let sea = params.water_absorption.w;
         let sheet = cell.direction_height.xyz*sea;
         var reach = 0.0;

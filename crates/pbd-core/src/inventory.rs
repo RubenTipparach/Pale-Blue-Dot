@@ -357,6 +357,7 @@ pub fn material_name(material: Material) -> &'static str {
         Material::Forge => "forge",
         Material::Workbench => "workbench",
         Material::Campfire => "campfire",
+        crate::flowing_water!() => "water",
     }
 }
 

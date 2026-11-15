@@ -157,6 +157,9 @@ pub fn material_code(material: Material) -> u8 {
         Material::Forge => 19,
         Material::Workbench => 20,
         Material::Campfire => 21,
+        // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
+        // the material's own code, far from the blocks' run.
+        flowing @ pbd_core::flowing_water!() => flowing as u16 as u8,
     }
 }
 
@@ -184,6 +187,7 @@ pub fn material_of(code: u8) -> Option<Material> {
         19 => Material::Forge,
         20 => Material::Workbench,
         21 => Material::Campfire,
+        64..=79 => Material::flowing((code - 64) % 8, code >= 72),
         _ => return None,
     })
 }
@@ -956,6 +960,52 @@ mod tests {
         let codes: std::collections::BTreeSet<u8> =
             Material::ALL.iter().map(|m| material_code(*m)).collect();
         assert_eq!(codes.len(), Material::ALL.len());
+    }
+
+    /// Flowing water saves its level (`water-flow` E4): codes 64 to 79,
+    /// each one material, none taken by a block; the water's own lines are
+    /// authored and carry no slots; a line from before is read as it was.
+    #[test]
+    fn flowing_water_saves_its_level_and_an_old_line_reads_as_before() {
+        let mut codes = std::collections::BTreeSet::new();
+        for level in 0..=7 {
+            for falling in [false, true] {
+                let m = Material::flowing(level, falling);
+                let code = material_code(m);
+                assert!((64..80).contains(&code), "{m:?} {code}");
+                assert_eq!(material_of(code), Some(m));
+                codes.insert(code);
+            }
+        }
+        assert_eq!(codes.len(), 16);
+        for block in Material::ALL {
+            assert!(material_code(block) < 64, "{block:?}");
+        }
+        let author = crate::saves::water_author();
+        let edit = Edit {
+            cell: 77,
+            layer: 210,
+            material: Material::flowing(5, true),
+        };
+        let line = authored(&author, world_edit_line(edit));
+        assert_eq!(line, "@wwater:flow/0 77 210 77\n");
+        let (by, record) = parse_entry(line.trim_end()).expect("the water's line parses");
+        assert_eq!(by, author);
+        assert_eq!(
+            record,
+            Record::Edit {
+                edit,
+                drop: None,
+                slots: None
+            }
+        );
+        // A player's line from before flowing water: a source is code 4.
+        let (by, record) = parse_entry("12 140 4").expect("an old line");
+        assert!(by.is_player());
+        let Record::Edit { edit, .. } = record else {
+            panic!("an edit");
+        };
+        assert_eq!(edit.material, Material::Water);
     }
 
     /// The campfire saves as code 21 and a dish by its code (`cooking`

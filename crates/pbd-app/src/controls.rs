@@ -508,17 +508,19 @@ const WORLD: [Binding; 5] = [
     row(&[Key::Board(KeyCode::KeyL)], " ", "noon or midnight"),
 ];
 
-const SCREEN: [Binding; 6] = [
+const SCREEN: [Binding; 8] = [
     row(&[Key::Board(KeyCode::Escape)], " ", "menu"),
     row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
     row(
-        &[Key::Board(KeyCode::KeyI)],
-        " ",
+        &[Key::Board(KeyCode::KeyI), Key::Board(KeyCode::Tab)],
+        " / ",
         "the pack: thirty more slots",
     ),
     row(&[Key::Board(KeyCode::KeyO)], " ", "the starter missions"),
     row(&[Key::Board(KeyCode::F12)], " ", "screenshot"),
     row(&[Key::Board(KeyCode::F3)], " ", "frame graph"),
+    row(&[Key::Board(KeyCode::F5)], " ", "flow arrows"),
+    row(&[Key::Board(KeyCode::F6)], " ", "pour water"),
 ];
 
 const fn group(heading: &'static str, tab: Tab, when: When, rows: &'static [Binding]) -> Group {

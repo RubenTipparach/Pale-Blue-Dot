@@ -246,8 +246,25 @@ fn record(source: CellSource, heights: &mut Heights, rule: FloorRule) -> GpuCell
         owner_a: [a.x, a.y, a.z, floors[0]],
         owner_b: [b.x, b.y, b.z, floors[1]],
         floors: [floors[2], floors[3], floors[4], floors[5]],
-        spare: [source.tree, source.key, 0, 0],
+        spare: [
+            source.tree,
+            source.key,
+            0,
+            river_word(source.direction, source.level),
+        ],
     }
+}
+
+/// A far cell's river (`ocean-environments` design 13): its water surface,
+/// metres, as `f32` bits in `spare[3]`, nought where no river runs. The water
+/// pass draws it as it draws the sea, as a sheet over the cell, and fades it
+/// against the near tier's own water.
+pub const RIVER_WORD_NONE: u32 = 0;
+
+fn river_word(direction: Vec3, level: u8) -> u32 {
+    let cell_m = 2.833 * (1u32 << (super::FINEST_LEVEL.saturating_sub(level) as u32)) as f32;
+    pbd_core::rivers::far_surface(super::terrain::terrain_config(), direction, cell_m)
+        .map_or(RIVER_WORD_NONE, |m| m.max(0.001).to_bits())
 }
 
 /// The base level's records from the whole-sphere dual. Owners are the cell
@@ -432,6 +449,22 @@ impl FineSet {
             return;
         };
         column::reconcile_surface(&mut self.levels[3], &self.finest_neighbors, record, &column);
+    }
+
+    /// Whether the sea sheet is drawn over a record and the slots' records,
+    /// from their columns (`planet::column::mark_sheet`).
+    pub fn mark_sheets(&mut self, records: impl IntoIterator<Item = usize>) {
+        for record in records {
+            let Some(&slot) = self.columns.slots.get(record) else {
+                continue;
+            };
+            if let (Some(column), Some(cell)) = (
+                self.columns.columns.get(slot),
+                self.levels[3].get_mut(record),
+            ) {
+                column::mark_sheet(cell, column);
+            }
+        }
     }
 
     /// The column a finest record would have if the tier adopted it now:
