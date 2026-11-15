@@ -195,7 +195,7 @@ struct VertexOut {
     @location(1) normal: vec3<f32>,
     @location(2) sky_light: f32,
     @location(3) body_position: vec3<f32>,
-    @location(4) flow_uv: vec4<f32>,
+    @location(4) flow_uv: vec3<f32>,
     @location(5) @interpolate(flat) level: u32,
     @location(6) @interpolate(flat) owner_a: vec3<f32>,
     @location(7) @interpolate(flat) owner_b: vec3<f32>,
@@ -366,7 +366,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // The sheet is open sky by construction in a heightfield; the cell's
     // baked occlusion is the seabed's and would tile the sea by column.
     out.sky_light = 1.0;
-    out.flow_uv = vec4<f32>(0.0);
+    out.flow_uv = vec3<f32>(0.0);
     out.kind = select(0u, 4u, river);
     out.level = level;
     out.owner_a = cell.owner_a.xyz;
@@ -397,7 +397,7 @@ fn vertex_flowing(@builtin(vertex_index) vertex: u32) -> VertexOut {
     out.clip = view.clip_from_local*vec4<f32>(out.local_position, 1.0);
     out.normal = b.xyz;
     out.sky_light = a.w;
-    out.flow_uv = c;
+    out.flow_uv = c.xyz;
     out.level = 0u;
     out.owner_a = safe_normal(a.xyz);
     out.owner_b = out.owner_a;
@@ -706,9 +706,6 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // Slope cap BEFORE the gradient bends the normal: the rain kernel spikes it
     // to ~8x the waves and, uncapped, flipped the sheet into a flat mirror.
     // Foam still reads the raw gradient so storm foam keeps its bite.
-    // A fall's sheet is smooth water: its round waves would read as blobs
-    // on it (owner, 2026-11-15: "its definitely not discrete noise").
-    if (in.kind == 2u) { gradient = vec3<f32>(0.0); }
     let raw_slope = length(gradient);
     var capped = gradient*min(1.0,max(view.refraction.z,0.0)/max(raw_slope,1e-6));
     let normal = safe_normal(radial - in.sea_slope - capped*view.waves.w);
@@ -806,47 +803,14 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // a bit froth to it"): streaks of froth stretched down the face and
     // scrolled down it with the fall's own advection, denser at a fall's lip
     // and foot (the mesher's froth weight, `flow_uv.x` on a falling face).
-    // Kept small: the noise's hash is lost at planet-sized coordinates.
-    let wrapped_time = time - 512.0*floor(time/512.0);
-    if (in.kind == 2u && in.flow_uv.w > 0.0) {
-        // A fall's sheet (owner, 2026-11-15: "look at waterfall images",
-        // "its definitely not discrete noise"): fine white strands, each
-        // continuous from the lip to the foot, dark water between them. The
-        // noise varies across the face and barely at all down it; down the
-        // face it is read at the time the water left the lip, so each
-        // strand's slow change in brightness runs down it faster and
-        // stretches as the water falls (free fall from the lip).
-        // Where across the face, metres, from the mesher (small numbers: off
-        // body-frame positions the centimetres a strand is are lost).
-        let across = in.flow_uv.y;
-        let d = max(in.flow_uv.z, 0.0);
-        let fall_height = in.flow_uv.w;
-        let v0 = 0.9;
-        let left = (sqrt(v0*v0 + 19.62*d) - v0)/9.81;
-        let u = (wrapped_time - left)*0.15;
-        let s1 = gnoise3(vec3<f32>(across*2.5, u, 0.0));
-        let s2 = gnoise3(vec3<f32>(across*9.0 + 3.1, u*1.3, 1.7));
-        let s3 = gnoise3(vec3<f32>(across*23.0 + 7.9, u*1.7, 4.2));
-        let s4 = gnoise3(vec3<f32>(across*51.0 + 2.3, u*2.1, 6.1));
-        let strand = (s1*0.4 + s2*0.3 + s3*0.2 + s4*0.15)*1.8 + 0.5;
-        let strands = smoothstep(0.3, 0.8, strand);
-        // Glassy over the lip, strands opening out under it.
-        let grow = smoothstep(0.25, 2.0, d);
-        var sheet = strands*(0.03 + 0.77*grow) + 0.12*grow;
-        // The churn where it lands: the last metre and a half.
-        let foot = smoothstep(fall_height - 1.6, fall_height - 0.2, d)*smoothstep(1.5, 3.0, fall_height);
-        let churn = clamp(gnoise3(vec3<f32>(across*4.0, d*2.5 - wrapped_time*3.0, wrapped_time*0.7))*0.9 + 0.6, 0.0, 1.0);
-        sheet = max(sheet, foot*(0.55 + 0.4*churn));
-        foam = clamp(sheet, 0.0, 0.95);
-    }
-    if (in.kind == 1u && in.flow_uv.z > 0.0) {
-        // The foam a fall churns up, spreading out over its pool and
-        // fading into the water round it.
-        let near = smoothstep(0.0, 1.0, in.flow_uv.z);
-        // Churned by the water's own waves, which are drawn at a scale the
-        // body frame keeps.
-        let churn = smoothstep(-0.25, 0.35, height);
-        foam = max(foam, clamp(near*(0.35 + 0.6*churn), 0.0, 0.92));
+    if (in.kind == 2u && horizontal < 0.5) {
+        let down_p = advected*vec3<f32>(1.0, 1.0, 1.0);
+        let along = vec3<f32>(dot(down_p, tangent_u), dot(down_p, radial), dot(down_p, tangent_v));
+        let streak_p = vec3<f32>(along.x*5.0, along.y*0.35, along.z*5.0) + vec3<f32>(0.0, time*0.6, 0.0);
+        let n = gnoise3(streak_p)*0.5 + gnoise3(streak_p*2.3)*0.3 + 0.5;
+        let weight = clamp(in.flow_uv.x, 0.35, 1.0);
+        let froth = smoothstep(0.42, 0.7, n)*0.75 + 0.15;
+        foam = max(foam, clamp(froth*weight + 0.12, 0.0, 0.92));
     }
     // A gale and up (`ocean-environments` 4.3): foam torn into streaks along
     // the wind and spray off the crests, growing from `spray_from_mps` to
@@ -865,10 +829,6 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // Foam is lit as the water is; the glint is the sun as it reaches the
     // water, after the air and the cloud (`rain_sun`), gone at night.
     var color = mix(mix(transmitted,reflected,fresnel),view.foam_color.rgb*water_lit,foam);
-    // A fall's lip is glassy and a little darker as the water bends over it.
-    if (in.kind == 2u && in.flow_uv.w > 0.0) {
-        color *= mix(0.82, 1.0, smoothstep(0.0, 0.8, in.flow_uv.z));
-    }
     let half_vector = safe_normal(look+sun_direction);
     color += view.sun_tint.rgb
         *pow(max(dot(normal,half_vector),0.),max(view.sun_tint.w,1.))

@@ -196,10 +196,9 @@ pub struct LiquidMesh {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     /// The flow in the face's tangent frame as the sea's fragment reads it.
-    /// The flow lane: a top's pan (xy) and how near a fall's foot it is
-    /// (z); a face's froth weight (x), how far under its fall's lip it is
-    /// (z) and how tall the whole fall is (w), metres.
-    pub flow: Vec<[f32; 4]>,
+    /// The flow lane: a top's pan (xy) and how near a fall's lip it is (z);
+    /// a face's froth weight (x) and how far under its fall's lip it is (z).
+    pub flow: Vec<[f32; 3]>,
     /// The face's kind, and the sky's share at it, 0..1.
     pub kind: Vec<f32>,
     pub sky: Vec<f32>,
@@ -225,10 +224,10 @@ fn shader_frame(face: Vec3) -> (Vec3, Vec3) {
 
 impl LiquidMesh {
     fn vertex(&mut self, p: Vec3, n: Vec3, flow: Vec2, kind: f32, sky: f32) -> u32 {
-        self.vertex_with(p, n, flow.extend(0.0).extend(0.0), kind, sky)
+        self.vertex_with(p, n, flow.extend(0.0), kind, sky)
     }
 
-    fn vertex_with(&mut self, p: Vec3, n: Vec3, flow: Vec4, kind: f32, sky: f32) -> u32 {
+    fn vertex_with(&mut self, p: Vec3, n: Vec3, flow: Vec3, kind: f32, sky: f32) -> u32 {
         self.positions.push(p.to_array());
         self.normals.push(n.to_array());
         self.flow.push(flow.to_array());
@@ -244,10 +243,10 @@ impl LiquidMesh {
             let i = i as usize;
             let [x, y, z] = self.positions[i];
             let [nx, ny, nz] = self.normals[i];
-            let [fx, fy, fz, fw] = self.flow[i];
+            let [fx, fy, fz] = self.flow[i];
             out.push([x, y, z, self.sky[i]]);
             out.push([nx, ny, nz, self.kind[i]]);
-            out.push([fx, fy, fz, fw]);
+            out.push([fx, fy, fz, 0.0]);
         }
         out
     }
@@ -308,36 +307,6 @@ fn corner_level(cells: &[Option<Side>; 3]) -> f32 {
     } else {
         0.5
     }
-}
-
-/// How fast water leaves a fall's lip, outward, m/s, and how far out its
-/// sheet bows at most, metres.
-const FALL_LEAVE_MPS: f32 = 0.9;
-const FALL_BOW_MAX_M: f32 = 0.6;
-
-/// How far out a fall's sheet is at `d` metres under its lip, of a fall
-/// `height` metres tall, and how fast that grows with depth (dx/dd): the
-/// path of water leaving the lip at [`FALL_LEAVE_MPS`] under gravity, held
-/// to [`FALL_BOW_MAX_M`] and brought back in over the last metre and a half
-/// so the sheet meets its pool.
-fn bow(d: f32, height: f32) -> (f32, f32) {
-    let d = d.max(0.0);
-    let free = FALL_LEAVE_MPS * (2.0 * d / 9.81).sqrt();
-    let free_slope = FALL_LEAVE_MPS / (2.0 * 9.81 * d.max(1e-3)).sqrt();
-    let (x, slope) = if free < FALL_BOW_MAX_M {
-        (free, free_slope.min(4.0))
-    } else {
-        (FALL_BOW_MAX_M, 0.0)
-    };
-    let left = ((height - d) / 1.5).clamp(0.0, 1.0);
-    let ease = left * left * (3.0 - 2.0 * left);
-    let ease_slope = if left > 0.0 && left < 1.0 {
-        6.0 * left * (1.0 - left) / 1.5
-    } else {
-        0.0
-    };
-    // d(x * ease)/dd: the ease falls as d grows.
-    (x * ease, slope * ease - x * ease_slope)
 }
 
 /// Mesh every water cell of the tier the sea sheet does not draw.
@@ -446,29 +415,29 @@ pub fn liquid_mesh(
                 } else {
                     Vec2::ZERO
                 };
-                // How near each corner is to a fall's foot: one at a corner
-                // beside the cell a fall lands in, so the foam the fall
-                // churns up spreads out over the pool round it.
-                let foot_of = |s: usize| -> bool {
+                // How near each corner is to a fall's lip (owner, 2026-11-15:
+                // "can we have the edge transition into froth?"): one at a
+                // corner on a side whose water goes over an edge, so the top
+                // whitens and speeds up toward the fall across its last metre
+                // or so. An edge goes over where the side's water falls, or
+                // falls from under it, or this cell's own water falls below.
+                let over = |s: usize| -> bool {
                     sides[s].is_some_and(|n| {
-                        let m = material(n, layer);
-                        m.is_water() && !is_falling(m) && is_falling(material(n, layer + 1))
+                        is_falling(material(n, layer))
+                            || (!tier.columns[n].solid(layer) && is_falling(material(n, layer - 1)))
                     })
                 };
-                let feet: Vec<f32> = (0..degree)
+                let own_lip = is_falling(column.material(layer - 1));
+                let lips: Vec<f32> = (0..degree)
                     .map(|i| {
-                        if foot_of((i + degree - 1) % degree) || foot_of(i) {
+                        if own_lip || over((i + degree - 1) % degree) || over(i) {
                             1.0
                         } else {
                             0.0
                         }
                     })
                     .collect();
-                let middle_foot = if feet.iter().any(|&f| f > 0.0) {
-                    0.45
-                } else {
-                    0.0
-                };
+                let middle_lip = if own_lip { 0.6 } else { 0.0 };
                 // Each triangle lit by its own slope, so a top running down to
                 // a sheet's edge reads as water tilted, not a mirror on edge.
                 for i in 0..degree {
@@ -481,8 +450,8 @@ pub fn liquid_mesh(
                         n = -n;
                     }
                     let j = (i + 1) % degree;
-                    for (v, foot) in [(middle, middle_foot), (p, feet[i]), (q, feet[j])] {
-                        let id = out.vertex_with(v, n, pan.extend(foot).extend(0.0), KIND_TOP, lit);
+                    for (v, lip) in [(middle, middle_lip), (p, lips[i]), (q, lips[j])] {
+                        let id = out.vertex_with(v, n, pan.extend(lip), KIND_TOP, lit);
                         out.indices.push(id);
                     }
                 }
@@ -543,9 +512,8 @@ pub fn liquid_mesh(
                 } else {
                     KIND_STILL
                 };
-                // How far under its fall's lip each corner is, metres (the
-                // falling run over this layer, and the fraction into it),
-                // and how tall the whole fall is.
+                // How far under its fall's lip each corner is, metres: the
+                // falling run over this layer, and the fraction into it.
                 let run = if falling {
                     (layer + 1..LAYERS)
                         .take_while(|&l| is_falling(column.material(l)))
@@ -553,105 +521,28 @@ pub fn liquid_mesh(
                 } else {
                     0.0
                 };
-                let below = if falling {
-                    (1..layer)
-                        .take_while(|&k| is_falling(column.material(layer - k)))
-                        .count() as f32
-                } else {
-                    0.0
-                };
-                let fall_height = run + 1.0 + below;
-                // The sheet bows out (owner, 2026-11-15: "the wall should be
-                // skewed"): water leaves the lip moving out, so a falling face
-                // is the path it takes, out by `bow` at each depth, the top
-                // bending over from the cap. Each corner moves the same way
-                // for every fall cell round it, so neighbouring columns' faces
-                // still meet.
-                let bow_dir = |i: usize| -> Vec3 {
-                    let corner = corners[i % degree];
-                    let mut sum = Vec3::ZERO;
-                    for cell in [
-                        Some(slot),
-                        sides[(i + degree - 1) % degree],
-                        sides[i % degree],
-                    ]
-                    .into_iter()
-                    .flatten()
-                    {
-                        let m = material(cell, layer);
-                        if is_falling(m) {
-                            let c = tier.centre(cell).normalize_or(centre);
-                            sum += corner - c;
-                        } else if m.is_water() {
-                            // Beside water that is not falling the corner
-                            // stays put, so the sheet meets that water's face.
-                            return Vec3::ZERO;
-                        }
-                    }
-                    let flat = sum - corner * sum.dot(corner);
-                    flat.normalize_or(Vec3::ZERO)
-                };
-                let (dir_a, dir_z) = (bow_dir(s), bow_dir(s + 1));
-                let rows = if !falling {
-                    1
-                } else if run == 0.0 {
-                    6
-                } else {
-                    2
-                };
-                let point = |dir: Vec3, k: Vec3, fraction: f32| -> (Vec3, Vec3, f32) {
-                    let base = at(k, fraction);
-                    if !falling {
-                        return (base, normal, 0.0);
-                    }
-                    let d = run + 1.0 - fraction;
-                    let (x, slope) = bow(d, fall_height);
-                    // The face's normal tips up where the sheet leans out:
-                    // out + up * dx/dd is square to the path's tangent.
-                    let n = (normal + k * slope).normalize_or(normal);
-                    (base + dir * x, n, d)
-                };
-                // Where along the face's edge each side is, metres, for the
-                // strands: kept small (modulo 64 m, in f64), because the
-                // fragment cannot take it off body-frame positions hundreds of
-                // kilometres long without losing the centimetres a strand is.
-                let edge64 = edge.as_dvec3();
-                let base = (at(a, 0.0).as_dvec3().dot(edge64)).rem_euclid(64.0);
-                let along_edge = (at(z, 0.0) - at(a, 0.0)).as_dvec3().dot(edge64);
-                let (across_a, across_z) = (base as f32, (base + along_edge) as f32);
-                let mut row_ids: Vec<(u32, u32)> = Vec::with_capacity(rows + 1);
-                for r in 0..=rows {
-                    let f = r as f32 / rows as f32;
-                    let fa = bottom_a + (top_a - bottom_a) * f;
-                    let fz = bottom_z + (top_z - bottom_z) * f;
-                    let (pa, na, da) = point(dir_a, a, fa);
-                    let (pz, nz, dz) = point(dir_z, z, fz);
-                    let ia = out.vertex_with(
-                        pa,
-                        na,
-                        Vec4::new(froth, across_a, da, fall_height),
-                        kind,
-                        lit,
-                    );
-                    let iz = out.vertex_with(
-                        pz,
-                        nz,
-                        Vec4::new(froth, across_z, dz, fall_height),
-                        kind,
-                        lit,
-                    );
-                    row_ids.push((ia, iz));
-                }
-                for r in 0..rows {
-                    let ((b0, b1), (t0, t1)) = (row_ids[r], row_ids[r + 1]);
-                    out.indices.extend([b0, b1, t1, b0, t1, t0]);
-                }
+                let under = |fraction: f32| if falling { run + 1.0 - fraction } else { 0.0 };
                 let pts = [
                     (at(a, bottom_a), floor + bottom_a),
                     (at(z, bottom_z), floor + bottom_z),
                     (at(z, top_z), floor + top_z),
                     (at(a, top_a), floor + top_a),
                 ];
+                let ids: Vec<u32> = pts
+                    .iter()
+                    .zip([bottom_a, bottom_z, top_z, top_a])
+                    .map(|(&(p, _), fraction)| {
+                        out.vertex_with(
+                            p,
+                            normal,
+                            Vec3::new(froth, 0.0, under(fraction)),
+                            kind,
+                            lit,
+                        )
+                    })
+                    .collect();
+                out.indices
+                    .extend([ids[0], ids[1], ids[2], ids[0], ids[2], ids[3]]);
                 if falling && !there.is_water() {
                     let mid = (pts[0].0 + pts[1].0 + pts[2].0 + pts[3].0) * 0.25;
                     out.arrow(mid + normal * ARROW_LIFT, -centre, edge, 0.7);
@@ -1010,24 +901,20 @@ fn animate_splash(
                 &mut positions,
             );
         }
-        // Mist: soft white puffs that rise and spread out over the pool,
-        // far bigger and higher from a tall fall (the owner's photos: a
-        // cloud at a tall fall's foot rising up the cliff). Each fades in
-        // and out, so none pops.
-        let puffs = ((h - 1.0) * 2.5).clamp(1.0, 40.0) as u32;
+        // Mist: a low white puff, bigger and denser from a taller fall.
+        let puffs = ((h - 1.0) * 1.5).clamp(1.0, 24.0) as u32;
         for i in 0..puffs {
             let r = |k: u32| hash01(seed ^ 0xA5A5, i * 8 + k);
-            let period = 3.0 + 2.5 * r(0);
+            let period = 2.0 + 1.5 * r(0);
             let phase = (t / period + r(1)).fract();
             let s = phase * period;
             let a = r(2) * std::f32::consts::TAU;
             let dir = east * a.cos() + north * a.sin();
-            let spread = (0.8 + 0.3 * h).min(9.0);
-            let rise = (0.3 + 0.12 * h).min(2.5);
-            let p = *foot + up * (rise * s + 0.3) + dir * spread * (0.2 + 0.8 * phase) * r(3);
-            let size = (0.8 + 0.3 * h).min(5.5) * (0.5 + 0.9 * phase);
-            let alpha =
-                (0.04 + 0.08 * (h / 8.0).min(1.0)) * (std::f32::consts::PI * phase).sin() * fade;
+            let spread = (0.5 + 0.12 * h).min(5.0);
+            let p =
+                *foot + up * ((0.25 + 0.04 * h) * s + 0.2) + dir * spread * (0.3 + phase) * r(3);
+            let size = (0.5 + 0.18 * h).min(5.0) * (0.6 + 0.8 * phase);
+            let alpha = (0.12 + 0.33 * (h / 8.0).min(1.0)) * (1.0 - phase) * fade;
             quad(p, size, [light, light, light, alpha], &mut positions);
         }
     }

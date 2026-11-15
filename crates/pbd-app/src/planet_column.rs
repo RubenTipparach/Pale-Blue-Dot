@@ -217,11 +217,6 @@ impl ColumnTier {
     }
 
     /// A slot's neighbours across its sides, `None` off the tier.
-    /// A column's centre, a unit direction.
-    pub fn centre(&self, slot: usize) -> Vec3 {
-        self.centres.get(slot).copied().unwrap_or(Vec3::Y)
-    }
-
     pub fn sides_of(&self, slot: usize) -> [Option<usize>; 6] {
         let mut out = [None; 6];
         let (Some(record), Some(sides)) = (self.records.get(slot), self.sides.get(slot)) else {
