@@ -778,7 +778,7 @@ and a button to look at crafting trees/recipes". The M29 mockup now shows it
 The owner: "notes belong in mockups and chats, not the real game" (CLAUDE.md,
 "Notes stay out of the game"). The settings pages carried developer notes as
 hints beside their labels. These are removed, and the rows keep their labels
-and controls. (Bloom's "costs ~2.4 ms on a Mac" the owner is removing it:
+and controls. (Bloom's "costs ~2.4 ms on a Mac" is the owner's to remove:
 "dont worry about the mac note ... I'm removing it".)
 - Render scale: "the HUD stays sharp".
 - Rain shadow: "the rain fog and streaks; off by default".
