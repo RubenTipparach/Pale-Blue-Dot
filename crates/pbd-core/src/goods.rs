@@ -129,6 +129,17 @@ pub const GOODS: &[GoodRow] = &[
         "items/goods/fertile-egg.png",
     ),
     row("incubator", "incubator", 8, "items/goods/incubator.png"),
+    // ---- flora-v2 design 12.5: the trees' fruit, picked by hand, in
+    // `pbd_core::flora::FRUIT_KINDS` order.
+    row("apple", "apple", 32, "items/goods/apple.png"),
+    row("pear", "pear", 32, "items/goods/pear.png"),
+    row("plum", "plum", 32, "items/goods/plum.png"),
+    row("cherry", "cherry", 32, "items/goods/cherry.png"),
+    row("mango", "mango", 32, "items/goods/mango.png"),
+    row("papaya", "papaya", 32, "items/goods/papaya.png"),
+    row("marula", "marula", 32, "items/goods/marula.png"),
+    row("baobab", "baobab fruit", 32, "items/goods/baobab.png"),
+    row("pine-cone", "pine cone", 32, "items/goods/pine-cone.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the

@@ -848,7 +848,11 @@ pub fn tree_on_ray(fine: &PlanetFine, eye: Vec3, look: Vec3, before_m: f32) -> O
             continue;
         };
         if up.dot(toward) < near
-            || !pbd_core::flora::grows_tree(record.spare[0], record.metadata[1])
+            || !pbd_core::flora::grows_tree(
+                &pbd_app::planet::terrain_config().trees,
+                record.spare[0],
+                record.metadata[1],
+            )
         {
             continue;
         }

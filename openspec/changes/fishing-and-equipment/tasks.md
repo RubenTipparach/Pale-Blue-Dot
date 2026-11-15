@@ -79,10 +79,15 @@ from this plan; recorded here so the two changes agree.
       `shader_hash` and `TREE_DENSITY`, the foliage pass's rule on the CPU
       (`crates/pbd-core/src/flora.rs`); `planet_lod.rs`
       `tool_crafting_ground` counts trees by it round the spawn.
-- [ ] Still open from this plan: the WGSL reads its density table from a
-      uniform, and a compute-shader test that shader and core agree over
-      10,000 cell IDs. Today the WGSL keeps its literals and the core's
-      comment points at them.
+- [x] The WGSL reads its density table from the uniform (`flora-v2` design
+      12.1, built 2026-11-15 with generator version 10): the table is the
+      world's (`TerrainConfig::trees`), packed into `plant_means[b].w`, and
+      the literals are gone. Agreement is held by
+      `flora::tests::the_tree_rule_is_the_foliage_pass_s`: the shader's rule
+      lines must stand word for word in both passes, and a Rust mirror of
+      those lines agrees with `grows_tree` over 10,000 cell IDs, every biome
+      and material, both tables. Not a compute-shader run: the cloud session
+      has no GPU to run one on; the launch to READY compiles the pipelines.
 - [x] Aim tests the trunk and canopy: `desktop/digging.rs` `tree_on_ray`
       (a trunk column 0.45 m to 3 m, a canopy 1 m to 6.5 m). Wood is a good,
       `Good::LOG`, not a placeable `Material::Wood` (the planks of
@@ -91,9 +96,14 @@ from this plan; recorded here so the two changes agree.
       (`gather::TREE_KIND`, `TreeTaken`), written with the slots in one
       `store_with_hands` line; hands take one branch, an axe up to
       `gather.axe_logs` (4). It survives a reload as every record does.
-- [ ] Still open: a spent tree still stands. Nothing uploads the record to
-      the visibility pass, so a felled tree does not vanish, and there is no
-      test of it after a tier rebuild.
+- [x] A spent tree no longer stands (`flora-v2` design 12.5, 2026-11-15):
+      `trees_taken` lists the 64 felled trees nearest the camera (a `tree`
+      record at `axe_logs`) by tree id in the uniform, and both passes leave
+      them out; the list is rebuilt from the records twice a second, so it
+      holds after a tier rebuild. Test
+      `trees_taken::tests::the_lists_pack_nearest_first_and_a_spent_tree_is_felled`;
+      capture with `--take-trees` (`docs/screenshots/flora-v2/`). Limit: a
+      felled tree beyond the 64 nearest is drawn again.
 
 ## 5. Fauna
 - [x] `pbd_core::fauna::School`: packed arrays, the boid terms of design

@@ -45,10 +45,12 @@ struct Params {
     flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
     flora_biome: array<vec4<f32>,8>, // per biome: fern weight, mushroom weight, flower bits, deciduous
     tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
-    plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits
+    plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits (low 16), tree table (high 16)
     flora_fall: vec4<f32>,     // 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w fruit chance
     night: vec4<f32>,                   // `night-lights-from-space`, unread here
     night_lights: array<vec4<f32>,128>,
+    felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty
+    picked: array<vec4<u32>,8>,   // and the trees picked bare
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }
@@ -173,6 +175,23 @@ fn clear_indirect() {
     }
 }
 
+// `flora-v2` design 12.5: whether a tree a player felled, or picked bare, is
+// in the uniform's short lists (`trees_taken::TreesTaken`, nearest first).
+fn tree_felled(id: u32) -> bool {
+    if id == 0u { return false; }
+    for (var i = 0u; i < 16u; i++) {
+        if any(params.felled[i] == vec4<u32>(id)) { return true; }
+    }
+    return false;
+}
+fn tree_picked(id: u32) -> bool {
+    if id == 0u { return false; }
+    for (var i = 0u; i < 8u; i++) {
+        if any(params.picked[i] == vec4<u32>(id)) { return true; }
+    }
+    return false;
+}
+
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
     h = ((h >> ((h >> 28u)+4u))^h)*277803737u;
@@ -271,20 +290,23 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
     let roll = hash(cell.spare.x) & 0xffu;
     let material = cell.metadata.y & 0xffu;
     let biome = (cell.metadata.y >> 8u) & 0xffu;
+    // `flora-v2` design 12.1: the world's tree table, from the uniform: the
+    // high half of `plant_means[biome].w` (`pbd_core::flora::TreeTable::packed`),
+    // so an old world keeps its trees and version 10 grows M13's forests.
+    let entry = params.plant_means[min(biome, 7u)].w;
+    let density = (entry >> 16u) & 0xffu;
     let grass = material==2u || material==3u || material==7u;
-    let pine = biome==7u && material==6u;
-    var density = 0u;
-    if biome==4u { density = 115u; }
-    if biome==5u { density = 34u; }
-    if biome==2u || biome==1u { density = 13u; }
-    if biome==7u { density = 2u; }
-    let tree = (grass||pine) && roll < density;
+    let sand = ((entry >> 24u) & 1u) == 1u && material==1u;
+    let pine = ((entry >> 25u) & 1u) == 1u && material==6u;
+    let tree = (grass||sand||pine) && roll < density;
+    // A tree felled for its wood is gone (design 12.5).
+    let standing = tree && !tree_felled(cell.spare.x);
     // `flora-v2` design 10.1: a desert cactus, scenery the tree draw draws
     // but not a tree (`pbd_core::tree_kit::grows_cactus`): it cannot be
     // chopped, so it is no part of the rule above.
     let cactus = biome==3u && (material==1u || material==4u)
         && (hash(cell.spare.x ^ SALT_CACTUS) & 0xffu) < CACTUS_DENSITY;
-    return (tree || cactus) && distance(params.camera.xyz,center)<params.settings.w;
+    return (standing || cactus) && distance(params.camera.xyz,center)<params.settings.w;
 }
 
 // `flora-v2` design 10.1: which species a tree is, by its biome's mix

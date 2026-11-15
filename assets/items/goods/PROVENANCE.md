@@ -55,3 +55,13 @@ reduction:
 `fertile-egg` and `incubator` (`animal-husbandry` design 13, E3 and E4) are
 drawn the same way by `tools/gen_item_icons.py`, in the same palette with a
 speckle brown and two glass blues (`HATCH`).
+
+## flora-v2 design 12.5: the trees' fruit
+
+`apple`, `pear`, `plum`, `cherry`, `mango`, `papaya`, `marula`, `baobab` and
+`pine-cone` are M13's own hanging-fruit sprites
+(`docs/mockups/foliage/fruit/hang_<kind>.png`, 16 px, drawn by
+`docs/mockups/foliage/fruit_art.py` in the Sweaft-64 palette), given the 1 px
+outline of an inventory icon (the sprite's darkest tone at 45%) by
+`tools/gen_fruit_icons.py`; `--check` holds them.
+

@@ -2010,23 +2010,13 @@ fn script(
                     .collect();
                 if let [first, second, ..] = hens[..] {
                     use_on(&world, &mut yard, hotbar, save, first);
-                    if let Some(k) = (0..pbd_core::inventory::SLOTS).find(|&k| {
-                        hotbar
-                            .get(k)
-                            .is_some_and(|s| s.item == Item::Good(Good::FERTILE_EGG))
-                    }) {
-                        hotbar.select(k);
+                    if select_item(hotbar, Item::Good(Good::FERTILE_EGG)) {
                         use_on(&world, &mut yard, hotbar, save, second);
                     }
                 }
                 breed::rebase(save, 5.0);
                 hotbar.give(Item::Good(Good::INCUBATOR), 1);
-                if let Some(k) = (0..pbd_core::inventory::SLOTS).find(|&k| {
-                    hotbar
-                        .get(k)
-                        .is_some_and(|s| s.item == Item::Good(Good::INCUBATOR))
-                }) {
-                    hotbar.select(k);
+                if select_item(hotbar, Item::Good(Good::INCUBATOR)) {
                     let at = feet + ahead * 2.5 - right * 1.5;
                     breed::place_incubator(&world, &mut yard, hotbar, save, at);
                 }
@@ -2059,10 +2049,21 @@ fn select_food(hotbar: &mut Slots, species: &LandSpecies) {
     let Some(keep) = species.keep.as_ref() else {
         return;
     };
-    let Some(k) = (0..pbd_core::inventory::CARRIED)
-        .find(|&k| hotbar.get(k).is_some_and(|s| keep.eats(s.item)))
+    select_where(hotbar, |item| keep.eats(item));
+}
+
+/// Put an item in hand, from the pack if need be. Whether there was one.
+fn select_item(hotbar: &mut Slots, item: Item) -> bool {
+    select_where(hotbar, |i| i == item)
+}
+
+/// Put the first carried stack that `want`s in hand, swapping it from the
+/// pack into the last hotbar slot if need be. Whether there was one.
+fn select_where(hotbar: &mut Slots, want: impl Fn(Item) -> bool) -> bool {
+    let Some(k) =
+        (0..pbd_core::inventory::CARRIED).find(|&k| hotbar.get(k).is_some_and(|s| want(s.item)))
     else {
-        return;
+        return false;
     };
     // From the pack, swapped with the last hotbar slot.
     let k = if k >= pbd_core::inventory::SLOTS {
@@ -2075,6 +2076,7 @@ fn select_food(hotbar: &mut Slots, species: &LandSpecies) {
         k
     };
     hotbar.select(k);
+    true
 }
 
 /// A ring of fence round a cell and its neighbours, the gate on the side

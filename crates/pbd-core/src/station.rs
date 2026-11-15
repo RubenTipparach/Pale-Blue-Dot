@@ -624,8 +624,8 @@ mod tests {
         assert_eq!(book.at("hand").count(), 3);
         assert_eq!(
             book.at("workbench").count(),
-            12,
-            "with the bucket (water-flow E11)"
+            13,
+            "with the bucket (water-flow E11) and the incubator (animal-husbandry E4)"
         );
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));
         assert_eq!(item_named("coal"), Some(Item::Good(Good::COAL)));

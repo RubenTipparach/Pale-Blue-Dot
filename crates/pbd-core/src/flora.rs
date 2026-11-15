@@ -42,31 +42,103 @@ pub fn shader_hash(x: u32) -> u32 {
 }
 
 /// Trees per 256 cells in each biome, by the biome's index
-/// (`planet_gen::Biome`): the foliage pass's `density`.
+/// (`planet_gen::Biome`): the foliage pass's `density` up to generator
+/// version 9 ([`TreeTable::V4`]).
 pub const TREE_DENSITY: [(u32, u32); 5] = [(4, 115), (5, 34), (2, 13), (1, 13), (7, 2)];
 
-/// Whether a finest cell stands a tree (`tool-crafting` decision 3): the
-/// foliage pass's rule (`planet_visibility.wgsl`, `has_nearby_foliage`)
-/// on the CPU, so a tree the player sees is a tree the player can work.
+/// Where a world's trees stand (`flora-v2` design 12.1): trees per 256 cells
+/// in each biome, and which material codes of the record's word a tree may
+/// stand on there, as bits. Part of the generator (`TerrainConfig::trees`):
+/// a tree is a thing a player works and a `tree` record names its cell, so a
+/// world keeps the table it was made with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TreeTable {
+    /// Per biome, `planet_gen::Biome` order: trees per 256 cells, 0..=255.
+    pub density: [u32; 8],
+    /// Per biome: bit `m` set where a tree stands on material code `m`.
+    pub ground: [u32; 8],
+}
+
+/// The material codes a tree stands on in every biome: the three grasses.
+const GRASS_CODES: u32 = 1 << 2 | 1 << 3 | 1 << 7;
+/// The tundra's pine on its snow (code 6).
+const SNOW_CODE: u32 = 1 << 6;
+/// A beach's dry sand (code 1).
+const SAND_CODE: u32 = 1 << 1;
+
+impl TreeTable {
+    /// Versions 4 to 9: the Tenebris scatter rule at its own rates
+    /// ([`TREE_DENSITY`]): a grass of any kind, or the tundra pine on snow.
+    pub const V4: Self = Self {
+        density: [0, 13, 13, 0, 115, 34, 0, 2],
+        ground: [
+            GRASS_CODES,
+            GRASS_CODES,
+            GRASS_CODES,
+            GRASS_CODES,
+            GRASS_CODES,
+            GRASS_CODES,
+            GRASS_CODES,
+            GRASS_CODES | SNOW_CODE,
+        ],
+    };
+
+    /// Version 10 (design 12.2): M13's mean densities (its `treeP` times
+    /// 256), and the beach's sand stands the acacia.
+    pub const V10: Self = Self {
+        density: [0, 15, 82, 0, 141, 67, 0, 77],
+        ground: [
+            GRASS_CODES,
+            GRASS_CODES | SAND_CODE,
+            GRASS_CODES,
+            GRASS_CODES,
+            GRASS_CODES,
+            GRASS_CODES,
+            GRASS_CODES,
+            GRASS_CODES | SNOW_CODE,
+        ],
+    };
+
+    /// Whether a finest cell stands a tree under this table: the foliage
+    /// pass's rule, which reads the same numbers from the uniform
+    /// ([`Self::packed`]).
+    pub fn grows(&self, tree_id: u32, word: u32) -> bool {
+        if (word >> 24) & 1 == 1 {
+            return false;
+        }
+        let material = word & 0xff;
+        let biome = ((word >> 8) & 0xff) as usize;
+        let (Some(&density), Some(&ground)) = (self.density.get(biome), self.ground.get(biome))
+        else {
+            return false;
+        };
+        material < 32 && (ground >> material) & 1 == 1 && shader_hash(tree_id) & 0xff < density
+    }
+
+    /// One biome's entry as the shader reads it, in the top half of the
+    /// uniform's `plant_means[biome].w` (the low half is the fruit bits):
+    /// bits 16..24 the density, bit 24 the sand, bit 25 the snow. Only the
+    /// codes these tables use are packed: grass in every biome, so it is not.
+    pub fn packed(&self, biome: usize) -> u32 {
+        let density = self.density.get(biome).copied().unwrap_or(0).min(255);
+        let ground = self.ground.get(biome).copied().unwrap_or(0);
+        density << 16
+            | u32::from(ground & SAND_CODE != 0) << 24
+            | u32::from(ground & SNOW_CODE != 0) << 25
+    }
+}
+
+/// Whether a finest cell stands a tree (`tool-crafting` decision 3) under
+/// the world's table: the foliage pass's rule (`planet_visibility.wgsl`,
+/// `has_nearby_foliage`) on the CPU, so a tree the player sees is a tree the
+/// player can work.
 ///
 /// `tree_id` is the cell record's tree lane (`spare.x`); `word` its material
 /// word (`metadata.y`): the material index in the low byte, the biome in the
 /// next, and bit 24 set in a town's cleared footprint. The distance and
 /// partition tests the shader adds decide only what is drawn this frame.
-pub fn grows_tree(tree_id: u32, word: u32) -> bool {
-    if (word >> 24) & 1 == 1 {
-        return false;
-    }
-    let roll = shader_hash(tree_id) & 0xff;
-    let material = word & 0xff;
-    let biome = (word >> 8) & 0xff;
-    let grass = matches!(material, 2 | 3 | 7);
-    let pine = biome == 7 && material == 6;
-    let density = TREE_DENSITY
-        .iter()
-        .find(|(b, _)| *b == biome)
-        .map_or(0, |(_, d)| *d);
-    (grass || pine) && roll < density
+pub fn grows_tree(table: &TreeTable, tree_id: u32, word: u32) -> bool {
+    table.grows(tree_id, word)
 }
 
 // ---- Flora v2 (`flora-v2`): the per-biome looks and the plants' calendar ----
@@ -306,6 +378,111 @@ pub fn season_at(year_fraction: f64, latitude_sin: f32) -> Season {
     }
 }
 
+/// The fruit's salt in the tree draw (`planet_surface.wgsl`, `SALT_FRUIT`).
+pub const SALT_FRUIT: u32 = 0x58;
+
+/// Each fruit kind's good, by [`FRUIT_KINDS`] index (`flora-v2` design 12.5).
+pub const FRUIT_GOODS: [&str; 9] = [
+    "apple",
+    "pear",
+    "plum",
+    "cherry",
+    "mango",
+    "papaya",
+    "marula",
+    "baobab",
+    "pine-cone",
+];
+
+/// A `fruit` record (design 12.5): what a player took from a tree, by the
+/// tree's cell key. Its fruit grows back [`FRUIT_REGROW_DAYS`] after.
+pub const FRUIT_RECORD: &str = "fruit";
+pub const FRUIT_SCHEMA: u32 = 1;
+pub const FRUIT_REGROW_DAYS: f64 = 8.0;
+
+/// A `fruit` record's body.
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
+pub struct FruitPicked {
+    /// The world day it was last picked.
+    pub day: f64,
+    /// How many it gave.
+    pub took: u16,
+}
+
+impl FruitPicked {
+    /// Whether the tree's fruit is still gone at `day`.
+    pub fn bare_at(&self, day: f64) -> bool {
+        day - self.day < FRUIT_REGROW_DAYS
+    }
+}
+
+/// What a tree has hanging now (design 12.5): its fruit kind (a
+/// [`FRUIT_KINDS`] index) and how many of its four hanging fruit the season
+/// keeps, or `None` for a tree that bears none. The tree draw's rule
+/// (`planet_surface.wgsl`, the fruit part of the near tree) on the CPU, so
+/// what a player picks is what hung there.
+///
+/// `axis` is the tree's unit direction, `radius` the body's (the draw's
+/// `params.settings.x`), `fruit_chance` the scatter's.
+pub fn hanging_fruit(
+    tree_id: u32,
+    biome: u32,
+    axis: [f32; 3],
+    radius: f32,
+    year_fraction: f64,
+    fruit_chance: f32,
+) -> Option<(usize, u32)> {
+    use crate::tree_kit::roll;
+    let bits = BIOME_FRUIT.get(biome.min(7) as usize).copied().unwrap_or(0) & 0xffff;
+    if bits == 0 || roll(tree_id, SALT_FRUIT) >= fruit_chance {
+        return None;
+    }
+    // A patch is a forty-metre stretch of the body: neighbours bear alike.
+    let grove = axis.map(|a| (a * radius / 40.0).floor() as i32 as u32);
+    let p = shader_hash(
+        grove[0].wrapping_mul(73_856_093)
+            ^ grove[1].wrapping_mul(19_349_663)
+            ^ grove[2].wrapping_mul(83_492_791),
+    );
+    let count = bits.count_ones();
+    let mut pick = (p.wrapping_add(u32::from(roll(tree_id, SALT_FRUIT + 1) < 0.25))) % count;
+    let mut which = 0;
+    for q in 0..9 {
+        if (bits >> q) & 1 == 1 {
+            if pick == 0 {
+                which = q;
+                break;
+            }
+            pick -= 1;
+        }
+    }
+    let cone = which == 8;
+    let season = season_at(year_fraction, axis[1]);
+    let keep = if cone {
+        1.0
+    } else {
+        (0.85 + (1.01 - 0.85) * season.turn) * (1.0 - 0.92 * season.bare)
+    };
+    let hanging = (0..4u32)
+        .filter(|item| roll(tree_id, SALT_FRUIT + 2 + item) < keep)
+        .count() as u32;
+    Some((which as usize, hanging))
+}
+
+/// Where snow lies on the trees' branches in winter (`flora-v2` design
+/// 12.3): from no cover at 35 degrees of latitude (its sine) to full at 50.
+pub const SNOW_COLD: [f32; 2] = [0.574, 0.766];
+
+/// How much snow lies on a tree's branches at a place, 0..1: the season's
+/// `bare` (midwinter) times the cold of the latitude. Decoration on a drawn
+/// model, never a cell: the ground's snow stays the generator's. The tree
+/// draw's `winter_cover` is the same lines.
+pub fn winter_cover(year_fraction: f64, latitude_sin: f32) -> f32 {
+    season_at(year_fraction, latitude_sin).bare
+        * smooth(SNOW_COLD[0], SNOW_COLD[1], latitude_sin.abs())
+}
+
 /// How much of the year's fall lies on the ground at `local` (0 a place's
 /// midsummer), 0..1: landing through autumn, thinned to [`LITTER_WINTER`] by
 /// midwinter, gone before spring.
@@ -367,35 +544,276 @@ mod tests {
     /// off the shipped file (`tool-crafting` decision 3).
     #[test]
     fn the_tree_rule_is_the_foliage_pass_s() {
-        let shader = include_str!("../../../assets/shaders/planet_visibility.wgsl");
+        // The shader's lines, transcribed below as `shader_rule`: each must
+        // still be in both passes word for word, so the mirror is the
+        // shader's own rule (`fishing-and-equipment` task 4, `flora-v2` 12.1).
+        let lines = [
+            "let roll = hash(cell.spare.x) & 0xffu;",
+            "let material = cell.metadata.y & 0xffu;",
+            "let biome = (cell.metadata.y >> 8u) & 0xffu;",
+            "let entry = params.plant_means[min(biome, 7u)].w;",
+            "let density = (entry >> 16u) & 0xffu;",
+            "let grass = material==2u || material==3u || material==7u;",
+            "let sand = ((entry >> 24u) & 1u) == 1u && material==1u;",
+            "let pine = ((entry >> 25u) & 1u) == 1u && material==6u;",
+            "let tree = (grass||sand||pine) && roll < density;",
+            "if ((cell.metadata.y >> 24u) & 1u) == 1u { return false; }",
+        ];
+        for (name, shader) in [
+            (
+                "planet_visibility",
+                include_str!("../../../assets/shaders/planet_visibility.wgsl"),
+            ),
+            (
+                "planet_surface",
+                include_str!("../../../assets/shaders/planet_surface.wgsl"),
+            ),
+        ] {
+            for line in lines {
+                assert!(shader.contains(line), "{name} no longer says `{line}`");
+            }
+            for literal in ["density = 115u", "density = 34u", "density = 13u"] {
+                assert!(!shader.contains(literal), "{name} keeps `{literal}`");
+            }
+        }
+        let visibility = include_str!("../../../assets/shaders/planet_visibility.wgsl");
         for line in [
             "var h = x*747796405u+2891336453u;",
             "h = ((h >> ((h >> 28u)+4u))^h)*277803737u;",
             "return (h>>22u)^h;",
-            "let roll = hash(cell.spare.x) & 0xffu;",
-            "let grass = material==2u || material==3u || material==7u;",
-            "let pine = biome==7u && material==6u;",
-            "if biome==4u { density = 115u; }",
-            "if biome==5u { density = 34u; }",
-            "if biome==2u || biome==1u { density = 13u; }",
-            "if biome==7u { density = 2u; }",
-            "let tree = (grass||pine) && roll < density;",
-            "if ((cell.metadata.y >> 24u) & 1u) == 1u { return false; }",
+        ] {
+            assert!(
+                visibility.contains(line),
+                "the hash no longer says `{line}`"
+            );
+        }
+        // The mirror, line for line.
+        fn shader_rule(means_w: &[u32; 8], id: u32, word: u32) -> bool {
+            if (word >> 24) & 1 == 1 {
+                return false;
+            }
+            let roll = shader_hash(id) & 0xff;
+            let material = word & 0xff;
+            let biome = (word >> 8) & 0xff;
+            let entry = means_w[biome.min(7) as usize];
+            let density = (entry >> 16) & 0xff;
+            let grass = material == 2 || material == 3 || material == 7;
+            let sand = (entry >> 24) & 1 == 1 && material == 1;
+            let pine = (entry >> 25) & 1 == 1 && material == 6;
+            (grass || sand || pine) && roll < density
+        }
+        // The uniform's lanes as the app packs them (the fruit in the low
+        // half), against the CPU rule, for every biome and material code and
+        // 10,000 cell ids, on both tables.
+        for table in [TreeTable::V4, TreeTable::V10] {
+            let w: [u32; 8] = std::array::from_fn(|b| BIOME_FRUIT[b] | table.packed(b));
+            for biome in 0..8u32 {
+                for material in 0..16u32 {
+                    for cleared in [0, 1 << 24] {
+                        let word = material | biome << 8 | cleared;
+                        for id in 0..10_000u32 {
+                            assert_eq!(
+                                shader_rule(&w, id, word),
+                                grows_tree(&table, id, word),
+                                "{table:?} id {id} word {word:#x}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        // Version 9's rule is today's: about 5% of a field's grass stands a
+        // tree, none of its sand, and a town's footprint none.
+        let field = |material: u32| material | 2 << 8;
+        let v4 = TreeTable::V4;
+        let trees = (0..100_000u32)
+            .filter(|&id| grows_tree(&v4, id, field(2)))
+            .count();
+        assert!((4_500..5_700).contains(&trees), "{trees}");
+        assert!(!(0..10_000u32).any(|id| grows_tree(&v4, id, field(1))));
+        assert!(!(0..10_000u32).any(|id| grows_tree(&v4, id, field(2) | 1 << 24)));
+    }
+
+    /// Where trees stand under a table, folded: every biome, material code
+    /// and cleared bit over 10,000 cell ids. A cell's id and word are pinned
+    /// by the ground digests and the cell keys, so this pins where a world's
+    /// trees stand.
+    fn tree_digest(table: &TreeTable) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for biome in 0..8u32 {
+            for material in 0..16u32 {
+                for cleared in [0, 1 << 24] {
+                    let word = material | biome << 8 | cleared;
+                    for id in 0..10_000u32 {
+                        let grows = u64::from(grows_tree(table, id, word));
+                        hash = (hash ^ grows).wrapping_mul(0x0000_0100_0000_01b3);
+                    }
+                }
+            }
+        }
+        hash
+    }
+
+    /// Versions 4 to 9 stand their trees where they always stood (taken
+    /// before version 10 landed, `flora-v2` 12.1), and version 10's are
+    /// pinned as it lands. Integer arithmetic only: the same on every target.
+    #[test]
+    fn every_version_keeps_where_its_trees_stand() {
+        assert_eq!(tree_digest(&TreeTable::V4), V4_TREE_DIGEST);
+        assert_eq!(tree_digest(&TreeTable::V10), V10_TREE_DIGEST);
+        // The same rule as the table this build shipped before, for versions
+        // 4 to 9, read off `TREE_DENSITY`.
+        for (biome, density) in TREE_DENSITY {
+            assert_eq!(TreeTable::V4.density[biome as usize], density);
+        }
+        // And cell for cell the rule as this build had it before the table,
+        // transcribed: the grasses, or the tundra pine on snow.
+        let before = |id: u32, word: u32| {
+            if (word >> 24) & 1 == 1 {
+                return false;
+            }
+            let roll = shader_hash(id) & 0xff;
+            let material = word & 0xff;
+            let biome = (word >> 8) & 0xff;
+            let grass = matches!(material, 2 | 3 | 7);
+            let pine = biome == 7 && material == 6;
+            let density = TREE_DENSITY
+                .iter()
+                .find(|(b, _)| *b == biome)
+                .map_or(0, |(_, d)| *d);
+            (grass || pine) && roll < density
+        };
+        for word in (0..8u32).flat_map(|b| (0..16u32).map(move |m| m | b << 8)) {
+            for id in 0..10_000u32 {
+                assert_eq!(grows_tree(&TreeTable::V4, id, word), before(id, word));
+            }
+        }
+    }
+
+    const V4_TREE_DIGEST: u64 = 16_944_701_438_888_284_610;
+    const V10_TREE_DIGEST: u64 = 10_242_190_396_241_142_731;
+
+    /// Version 10's forests are M13's: per 256 cells of grass, about its
+    /// `treeP` times 256 by biome; the beach's dry sand stands acacias.
+    #[test]
+    fn version_10_grows_m13_s_forests() {
+        let v10 = TreeTable::V10;
+        let share = |biome: u32, material: u32| {
+            (0..100_000u32)
+                .filter(|&id| grows_tree(&v10, id, material | biome << 8))
+                .count() as f32
+                / 100_000.0
+                * 256.0
+        };
+        for (biome, material, want) in [
+            (2, 2, 82.0),
+            (4, 3, 141.0),
+            (5, 7, 67.0),
+            (7, 2, 77.0),
+            (7, 6, 77.0),
+            (1, 1, 15.0),
+        ] {
+            let got = share(biome, material);
+            assert!(
+                (got - want).abs() < 2.0,
+                "biome {biome} material {material}: {got} of 256"
+            );
+        }
+        assert_eq!(
+            share(3, 1),
+            0.0,
+            "a desert's sand stands cacti, never trees"
+        );
+        assert_eq!(share(2, 1), 0.0, "only the beach's sand stands a tree");
+    }
+
+    /// The fruit a player picks is the fruit the tree draw hangs: the lines
+    /// `hanging_fruit` mirrors are the shader's, a fields tree bears one of
+    /// its four kinds, neighbours mostly alike, and winter thins the crop.
+    #[test]
+    fn the_fruit_to_pick_is_the_fruit_the_draw_hangs() {
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        for line in [
+            "const SALT_FRUIT: u32 = 0x58u;",
+            "let bits = params.plant_means[b].w & 0xffffu;",
+            "if bits != 0u && anchors > 0u && roll(id,SALT_FRUIT) < params.flora_fall.w {",
+            "let grove = vec3<i32>(floor(axis*params.settings.x/40.0));",
+            "let p = hash(u32(grove.x)*73856093u ^ u32(grove.y)*19349663u ^ u32(grove.z)*83492791u);",
+            "var pick = (p + select(0u, 1u, roll(id,SALT_FRUIT+1u) < 0.25)) % count;",
+            "let keep = select(mix(0.85, 1.01, season.x)*(1.0-0.92*season.y), 1.0, cone);",
+            "if roll(id,SALT_FRUIT+2u+item) < keep && !(f < 48u && tree_picked(id)) {",
         ] {
             assert!(
                 shader.contains(line),
-                "the foliage pass no longer says `{line}`"
+                "the tree draw no longer says `{line}`"
             );
         }
-        // About 5% of a field's grass stands a tree, none of its sand, and a
-        // town's footprint none.
-        let field = |material: u32| material | 2 << 8;
-        let trees = (0..100_000u32)
-            .filter(|&id| grows_tree(id, field(2)))
-            .count();
-        assert!((4_500..5_700).contains(&trees), "{trees}");
-        assert!(!(0..10_000u32).any(|id| grows_tree(id, field(1))));
-        assert!(!(0..10_000u32).any(|id| grows_tree(id, field(2) | 1 << 24)));
+        let axis = {
+            let v = [0.6f32, 0.6, 0.53];
+            let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            v.map(|x| x / l)
+        };
+        let (mut bearing, mut kinds) = (0, std::collections::BTreeSet::new());
+        for id in 0..2_000u32 {
+            if let Some((kind, n)) = hanging_fruit(id, 2, axis, 4_800.0, 0.27, 0.5) {
+                bearing += 1;
+                assert!(kind < 4, "a fields tree bears apple, pear, plum or cherry");
+                assert!(n <= 4);
+                kinds.insert(kind);
+            }
+        }
+        assert!(
+            (800..1_200).contains(&bearing),
+            "about half bear: {bearing}"
+        );
+        assert!(kinds.len() <= 2, "one patch, one kind or two: {kinds:?}");
+        assert_eq!(
+            hanging_fruit(7, 5, axis, 4_800.0, 0.27, 1.0),
+            None,
+            "the swamp bears none"
+        );
+        let summer: u32 = (0..2_000u32)
+            .filter_map(|id| hanging_fruit(id, 2, axis, 4_800.0, 0.0, 1.0))
+            .map(|(_, n)| n)
+            .sum();
+        let winter: u32 = (0..2_000u32)
+            .filter_map(|id| hanging_fruit(id, 2, axis, 4_800.0, 0.5, 1.0))
+            .map(|(_, n)| n)
+            .sum();
+        assert!(
+            winter * 4 < summer,
+            "winter {winter} against summer {summer}"
+        );
+        let picked = FruitPicked { day: 10.0, took: 3 };
+        assert!(picked.bare_at(17.9) && !picked.bare_at(18.0));
+    }
+
+    /// Snow lies on the branches only in a cold winter: none in summer, none
+    /// at 30 degrees, full at midwinter past 50; and the tree draw's
+    /// `winter_cover` reads the same numbers (design 12.3).
+    #[test]
+    fn snow_lies_on_branches_only_in_a_cold_winter() {
+        let north_50 = 0.80;
+        let midwinter = 0.5;
+        assert!(winter_cover(midwinter, north_50) > 0.9);
+        assert!(winter_cover(0.0, north_50) < 0.01, "midsummer");
+        assert_eq!(
+            winter_cover(midwinter, 0.5),
+            0.0,
+            "30 degrees is never snowy"
+        );
+        assert!(
+            winter_cover(0.0, -north_50) > 0.9,
+            "the south's winter is the north's summer"
+        );
+        let shader = include_str!("../../../assets/shaders/planet_surface.wgsl");
+        assert!(shader.contains(&format!(
+            "const SNOW_COLD = vec2<f32>({:?}, {:?});",
+            SNOW_COLD[0], SNOW_COLD[1]
+        )));
+        assert!(shader.contains(
+            "return season_at(radial).y*smoothstep(SNOW_COLD.x, SNOW_COLD.y, abs(radial.y));"
+        ));
     }
 
     /// Every biome has a tuft ramp that runs dark at the root to light at

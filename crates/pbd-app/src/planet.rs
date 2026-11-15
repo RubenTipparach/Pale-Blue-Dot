@@ -279,7 +279,8 @@ pub struct FloraLook {
 /// The per-biome flora tables as the shaders read them (`flora-v2` design
 /// 6): fern weight, mushroom weight, flower colour bits and deciduous per
 /// biome; then the tuft ramps as `0xRRGGBB`, w one for red caps; then the
-/// plants' tile means and, in w, the fruit the trees bear (design 9).
+/// plants' tile means and, in w, the fruit the trees bear (design 9) in the
+/// low half and the open world's tree table in the high half (design 12.1).
 fn flora_tables() -> ([Vec4; 8], [UVec4; 8], [UVec4; 8]) {
     use pbd_core::flora::{BIOME_FLORA, BIOME_FRUIT, PLANT_MEANS, TUFT_RAMPS};
     let biome = BIOME_FLORA.map(|b| {
@@ -296,7 +297,8 @@ fn flora_tables() -> ([Vec4; 8], [UVec4; 8], [UVec4; 8]) {
     }
     let mut means = [UVec4::ZERO; 8];
     for (i, m) in PLANT_MEANS.iter().enumerate() {
-        means[i] = UVec4::new(m[0], m[1], m[2], BIOME_FRUIT[i]);
+        let trees = terrain_config().trees.packed(i);
+        means[i] = UVec4::new(m[0], m[1], m[2], BIOME_FRUIT[i] | trees);
     }
     (biome, ramps, means)
 }
@@ -335,6 +337,11 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<lod::DuskRelight>::default(),
         ))
         .add_plugins(crate::night_lights::NightLightsPlugin)
+        // What players took from the trees near the camera (`flora-v2`
+        // design 12.5): felled trees and picked fruit the draw leaves out.
+        .add_plugins(ExtractResourcePlugin::<crate::trees_taken::TreesTaken>::default())
+        .init_resource::<crate::trees_taken::TreesTaken>()
+        .add_systems(Update, crate::trees_taken::refresh)
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
         .init_resource::<lod::DuskRelight>()
@@ -824,6 +831,11 @@ struct PlanetParams {
     // never sees them.
     night: Vec4,
     night_lights: [Vec4; 2 * crate::night_lights::MAX_FAR_LIGHTS],
+    // `flora-v2` design 12.5: the ids of the felled trees and of the trees
+    // picked bare near the camera, four a lane, zero empty
+    // (`trees_taken::TreesTaken`).
+    felled: [UVec4; crate::trees_taken::FELLED / 4],
+    picked: [UVec4; crate::trees_taken::PICKED / 4],
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1649,6 +1661,8 @@ pub(crate) struct Tunables<'w> {
     flora: Option<Res<'w, FloraLook>>,
     /// The sea now, for the tide (`ocean-environments` 5.1).
     sea_now: Option<Res<'w, crate::sea::SeaNow>>,
+    /// The trees felled and picked near the camera (`flora-v2` 12.5).
+    taken: Option<Res<'w, crate::trees_taken::TreesTaken>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1702,6 +1716,11 @@ fn prepare_views(
             };
         let w = &weather_settings;
         let (flora_biome, tuft_ramps, plant_means) = flora_tables();
+        let (felled, picked) = tunables
+            .taken
+            .as_deref()
+            .map(crate::trees_taken::TreesTaken::packed)
+            .unwrap_or_default();
         let lod = &planet.lod;
         let landing = planet.lod_prev.map(|(_, landed)| landed);
         // The fade centre (`distance-lod-fade`): the ground under the camera,
@@ -1962,6 +1981,8 @@ fn prepare_views(
             ),
             night,
             night_lights,
+            felled,
+            picked,
             // w: there is a history to read, so not while the capture is off.
             ssr_eye: existing.as_ref().map_or(Vec4::ZERO, |gpu| {
                 gpu.last_camera.extend(if lighting.reflect_capture_on() {

@@ -9,6 +9,7 @@ mod equipment;
 mod farm;
 mod forge;
 mod frame_graph;
+mod fruit;
 mod guide;
 mod hud;
 mod kitchen;
@@ -235,6 +236,9 @@ pub struct Launch {
     /// the wall, so every capture of a hole is a screen of dirt. Digging ahead
     /// leaves them standing on the rim looking at what they made.
     pub dig_ahead: bool,
+    /// `--take-trees`: a capture's instrument that marks the nearest trees
+    /// picked bare and the next felled (`flora-v2` 12.5).
+    pub take_trees: bool,
     /// `--pitch <degrees>` starts the walker looking that far below (negative)
     /// or above the horizon. A capture that digs along the look needs to look
     /// DOWN to dig a pit the way a player does - a slanted run of cells, each
@@ -431,6 +435,7 @@ impl Launch {
             eat: Vec::new(),
             missions: None,
             dig_ahead: false,
+            take_trees: false,
             pitch: None,
             yaw: None,
             turn: 0.0,
@@ -613,6 +618,7 @@ impl Launch {
                     );
                 }
                 "--dig-ahead" => result.dig_ahead = true,
+                "--take-trees" => result.take_trees = true,
                 "--pitch" => {
                     i += 1;
                     let degrees: f32 = args
@@ -670,14 +676,21 @@ impl Launch {
                 "--menu" => {
                     i += 1;
                     let screen = args.get(i).expect(
-                        "--menu requires pause, settings, saves, pack, map, guide or missions",
+                        "--menu requires pause, settings, saves, pack, map, guide, missions or breeding",
                     );
                     assert!(
                         matches!(
                             screen.as_str(),
-                            "pause" | "settings" | "saves" | "pack" | "map" | "guide" | "missions"
+                            "pause"
+                                | "settings"
+                                | "saves"
+                                | "pack"
+                                | "map"
+                                | "guide"
+                                | "missions"
+                                | "breeding"
                         ),
-                        "--menu takes pause, settings, saves, pack, map, guide or missions"
+                        "--menu takes pause, settings, saves, pack, map, guide, missions or breeding"
                     );
                     result.menu = Some(screen.clone());
                 }
@@ -1531,6 +1544,13 @@ pub fn run(args: &[String]) {
     .add_systems(
         Update,
         (
+            // Picking fruit from a tree (`flora-v2` 12.5), ahead of the
+            // farm's E, after the husbandry hands'.
+            fruit::scripted.after(digging::scripted_dig),
+            fruit::pick
+                .before(farm::use_key)
+                .after(digging::dig_and_place)
+                .after(pbd_app::husbandry::HusbandryHands),
             (
                 farm::use_key,
                 forge::work,
