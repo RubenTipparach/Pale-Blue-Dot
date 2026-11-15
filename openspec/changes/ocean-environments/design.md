@@ -837,6 +837,12 @@ sheet, or a world whose weather has run into a real storm; not done.
   digests may fail on the desktop the same way, while the top-block digests
   hold on both (version 4's does). Another agent adding a generator version
   this week would collide on the number 7; whoever merges second renumbers.
+- **A walking test found a trench's edge case**: `walking::tests::toggling_to_walk_over_the_sea_lands_in_the_water_not_on_a_shore`
+  stands over the planet's deepest water, which on version 7 is a 140 m
+  trench; there, leaving flight moves the walker 1.7 m sideways in the
+  first tick (under 1 m over the 125 m open floor, as before). Not found
+  yet; the test is held on the deepest open sea (126 m and less) with a
+  note, and the trench case is open.
 
 ## Recommendations taken (ask only with screenshots)
 

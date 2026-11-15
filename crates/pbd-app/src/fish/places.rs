@@ -1185,8 +1185,10 @@ fn tiles(
         let db = tile_centre(b.0, radius).distance(eye_dir);
         db.total_cmp(&da)
     });
-    if let Some((key, pieces)) = state.ready.pop() {
-        if wanted.contains(&key) {
+    if let Some((key, pieces)) = state.ready.pop()
+        && wanted.contains(&key)
+    {
+        {
             let anchor = tile_centre(key, radius) * sea.radius;
             let contact = contact.as_deref();
             let bed = |d: Vec3| {
