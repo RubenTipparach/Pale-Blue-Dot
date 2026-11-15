@@ -247,9 +247,9 @@ fn set_eggs(
     if set == 0 {
         return Err("these eggs have gone cold");
     }
-    let mut next = breeding::next_brood_id(&save.records);
+    let first = breeding::next_brood_id(&save.records);
     let mut records = Vec::new();
-    for (id, carried, give) in parts {
+    for (next, (id, carried, give)) in (first..).zip(parts) {
         let mut rest = carried.clone();
         rest.eggs -= give;
         records.push(rest.record(id));
@@ -260,7 +260,6 @@ fn set_eggs(
             ..carried
         };
         records.push(brood.record(next));
-        next += 1;
     }
     let at = hotbar.selected();
     hotbar.take(at, set as u16);
