@@ -955,6 +955,116 @@ not.
   1.7 m comes from the walker's own first step there, not from the ship.
   The test stays on open sea.
 
+### B14. Textures on the reef, and M9's fish in the water (2026-11-15, `claude/env-reef`)
+
+The owner, looking at the reef in the game: "reef needs some textures". Then,
+of the fish: "also please use proper fish models", refined to "use the fish
+species mockup to create proper fish": M9, *Fish Lab and Aquariums*
+(`docs/mockups/fish.html`, https://claude.ai/artifact/VbVmuUHVTUczkiMYGHEZSn),
+whose rule is that every fish is drawn from a species and a seed.
+
+**Finding.** The reef's pieces (B10, B13) and the creatures (B8) are flat,
+vertex-coloured faces with no texture at all: beside the terrain's 32 px
+pixel-art tiles they read as smooth plastic (`reef.jpg`, `kelp.jpg`,
+`vent.jpg`). The fish are the ocean mockup's six-sided darts, not M9's
+fish: no gill line, no scales, no pattern but a few coloured faces, and a
+species' shape only by its height and tail.
+
+**What is built** (the plan; the result is recorded under it once built):
+
+1. **One atlas for the water life**, `assets/textures/water_life/atlas.png`
+   (512 x 512, sRGB, nearest-point sampled, no mipmaps, as M9's own skins
+   are), drawn by a committed generator, `tools/water_life_atlas.py`
+   (PIL and numpy; Sweaft-64 palette, Bayer-4 dither, no outlines in the
+   world), with a manifest `atlas.ron` beside it naming every rect and
+   every fish variant's genome, and `PROVENANCE.md`.
+2. **The reef's tiles**, 32 x 32 each, greyscale near white so the pieces'
+   palettes stay (the texture multiplies the vertex colour, which keeps
+   the kind's palette, the per-face shades and the depth dimming): polyps
+   (branching and finger corals), brain grooves (boulders), plate rings
+   (table corals), pores (sponges), lattice (fans), tentacle stripes
+   (anemones, soft corals), blade veins (grass, turf, weed, kelp), grit
+   (rubble, shells, mussels, mats), basalt with sulfide crust (chimneys)
+   and ice. The world's art rule holds: no outline, the contrast kept near
+   each tile's mean (mean luminance about 0.85, darkest marks about 0.6),
+   so a tile reads as surface, not as a sticker.
+3. **UVs on the pieces**: each part a piece is built from (one `Kit::add`)
+   is box-projected by its face's normal into its kind's tile, at one
+   scale for the part (its longest side across the tile), so a triangle
+   never crosses a tile edge and nothing needs a repeat. The texture rides
+   on the one `LifeMaterial` the pieces already share; there is no new
+   material and no new draw call. Every mesh drawn with it carries `UV_0`
+   (pieces, swaying pieces, ambient life, schools, the loading screen's
+   warm mesh), so there is still one pipeline and the prewarm still covers
+   it. Sway moves positions only; the screen-door fade is the field's,
+   untouched.
+4. **M9's fish**, ported from `fish.html`'s `genome`, `paintSkin` and
+   `buildFish` rather than invented again:
+   - the body: M9's profile (`PROFILES`: fusiform, compressed, disc, eel,
+     flat) with its `profH` and the ray's diamond `rayW`, twelve rings of
+     six sides (twenty-two for an eel), a slightly flatter belly, the skin's
+     UV the length and the angle round the body as M9's;
+   - the tail fin by M9's tails (forked, deep fork, lunate, square,
+     rounded), the dorsal fins soft, spiny or tall, the anal fin, an eel's
+     ribbon fins, the serpent's crest, the pectoral fins and the ray's whip
+     tail, all thin double-sided surfaces with M9's fin-ray tile;
+   - M9's block eye (a pale block and its pupil);
+   - the skin: M9's `paintSkin` in Python, 64 x 32 (countershading in four
+     dithered Sweaft tones, then the species' stripes, bars, spots or
+     mottling and the dashed lateral line), and its 8 x 8 fin tile;
+   - the seed: each species has four variants in the atlas, each from M9's
+     `genome(species, seed)` with seeds 1 to 4 (its length factor, depth,
+     width, fin size, pattern density, hue and lightness, pattern seed), and
+     a creature wears variant `id % 4`. M9's rare morphs (golden, pale,
+     dark, one in 64) are not baked.
+   The game's own animation is kept: the tail sway and the eel's wave of
+   B8, and a new flap for the ray, whose wings are M9's one flat body
+   bent up and down by the distance from its spine (M9's `swim` for the
+   flat plan).
+
+**M9 to the game's ids.** The eight fish the game has are M9's first eight
+under the same ids: `minnow`, `silverfin`, `perch`, `ray`, `eel`, `reef`,
+`deepback`, `serpent`, each with M9's numbers (profile, tail, fins, eye,
+pattern, colours, variation). M9's five new species (`bloatfin`,
+`sunplate`, `lanternjaw`, `glassback`, `emberback`) are not in the game's
+roster and are not built. The reef's two ambient fish, which are not
+species, are given M9 definitions in the same form: `darter` (compressed,
+rounded tail, white bars on orange, the clownfish over the big anemone)
+and `anthias` (compressed, lunate, orange-pink with a gold lateral). The
+2D item sprite a caught fish becomes is unchanged; it is the species'
+icon, which M9 already draws beside its fish.
+
+**The other creatures** (crabs, lobsters, clams, turtles, otters, seals,
+ducks, the octopus, plume worms) keep their B8 bodies, flat-coloured, with
+their UVs on a white texel of the atlas; they are not rebuilt in this pass.
+
+**M9 is the library (owner, 2026-11-15).** "add more fish from the reef if
+needed, just keep that mockup updated since that represents our "Fish"
+library", "and coral and all underwater objects to the fish and aquariums doc
+too", "fish and aquariums doc should have at least 1 of everything". So M9
+gains the darter and the anthias as species entries (roster, sheet, lab,
+tank), icons in its manner (`tools/art/fish_art.py`), and a "Reef & sea
+floor" tab that draws one of everything the game's sea has (every reef
+piece, kelp, the smoker, mat, mussel bed, the floe, and every water
+creature's body) from the game's own meshes, written out by the app test
+`export_water_life_models` into `fish/water_life_models.js`, in the game's
+own atlas. The page's descriptive text moves into info modals as it is
+republished (owner, 2026-11-14).
+
+**Found while capturing: version 8 lost the reef.** On a 1-degree global
+scan of `ocean::places::environment`, version 7 has 55 reef samples and
+version 8 has 3; none is left within 10 degrees of (13.096, 94.896), where
+`reef.jpg` was taken, though kelp, vents and polar sea are unchanged. This
+is upstream of this branch (generator version 8, design 13) and is not fixed
+here; it wants its own look, since a saved version-8 world keeps what it
+has.
+
+**Cost.** A fish body is 221 to 288 triangles (a 12 x 6 body, its fins and
+the block eyes; the ray 288), an eel 416 and the serpent 452 (22 rings and
+the ribbons), pinned under 500 by a test. Schools are rebuilt on the CPU
+each frame as before, now also writing a UV per vertex. The frame cost is
+not measured on this branch.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

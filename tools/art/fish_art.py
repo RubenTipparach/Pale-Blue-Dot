@@ -147,8 +147,32 @@ def icon_emberback():
     return s
 
 
+def icon_darter():
+    """The reef's darter (the clownfish over the giant anemone): orange, three white bars."""
+    s = Sprite(16, 16)
+    body16(s, s.poly([(4, 7), (1, 5), (1, 10), (4, 8)]), "#8d4526", "#c56d25")
+    body = s.ellipse(3, 4, 14, 11)
+    body16(s, body, "#c56d25", "#fb902f", s.rect(6, 10, 10, 10), "#faaf5c")
+    for x in (5, 8, 12):
+        s.fill(s.rect(x, 5, x, 10) & erode(body), "#fffefe")
+    s.plot(12, 6, DARK_EYE)
+    return s
+
+
+def icon_anthias():
+    """The reef's anthias: pink-orange, a gold line along it, a lunate tail."""
+    s = Sprite(16, 16)
+    body16(s, s.poly([(4, 7), (0, 3), (2, 7), (0, 12), (4, 8)]), "#c34988", "#dd576d")
+    body = s.ellipse(3, 5, 14, 11)
+    body16(s, body, "#c34988", "#dd576d", s.rect(6, 10, 10, 10), "#faaf5c")
+    s.fill(s.rect(5, 8, 12, 8) & erode(body), "#fb902f")
+    s.plot(12, 7, DARK_EYE)
+    return s
+
+
 SPECIES_ICONS = {"bloatfin": icon_bloatfin, "sunplate": icon_sunplate, "lanternjaw": icon_lanternjaw,
-                 "glassback": icon_glassback, "emberback": icon_emberback}
+                 "glassback": icon_glassback, "emberback": icon_emberback,
+                 "darter": icon_darter, "anthias": icon_anthias}
 GAME_FISH = ("minnow", "silverfin", "perch", "ray", "eel", "reef", "deepback", "serpent")
 
 

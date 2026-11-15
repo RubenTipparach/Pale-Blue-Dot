@@ -1,0 +1,1882 @@
+{
+ "size": [
+  512,
+  512
+ ],
+ "tiles": {
+  "white": [
+   2,
+   2,
+   32,
+   32
+  ],
+  "polyps": [
+   38,
+   2,
+   32,
+   32
+  ],
+  "knobs": [
+   74,
+   2,
+   32,
+   32
+  ],
+  "brain": [
+   110,
+   2,
+   32,
+   32
+  ],
+  "plate": [
+   146,
+   2,
+   32,
+   32
+  ],
+  "pores": [
+   182,
+   2,
+   32,
+   32
+  ],
+  "lattice": [
+   218,
+   2,
+   32,
+   32
+  ],
+  "stripes": [
+   254,
+   2,
+   32,
+   32
+  ],
+  "veins": [
+   290,
+   2,
+   32,
+   32
+  ],
+  "grit": [
+   326,
+   2,
+   32,
+   32
+  ],
+  "ridges": [
+   362,
+   2,
+   32,
+   32
+  ],
+  "basalt": [
+   398,
+   2,
+   32,
+   32
+  ],
+  "ice": [
+   434,
+   2,
+   32,
+   32
+  ],
+  "mat": [
+   470,
+   2,
+   32,
+   32
+  ]
+ },
+ "fish": [
+  {
+   "id": "minnow",
+   "variant": 0,
+   "seed": 1,
+   "skin": [
+    2,
+    40,
+    64,
+    32
+   ],
+   "fin_tile": [
+    2,
+    256,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "forked",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 0.93458,
+   "width": 1.04456,
+   "fin": 1.02721,
+   "length_k": 0.99881,
+   "dorsal": [
+    [
+     0.38,
+     0.55,
+     0.1,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.74,
+     0.06
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.03,
+   "crest": false
+  },
+  {
+   "id": "minnow",
+   "variant": 1,
+   "seed": 2,
+   "skin": [
+    70,
+    40,
+    64,
+    32
+   ],
+   "fin_tile": [
+    38,
+    256,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "forked",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 1.00823,
+   "width": 0.98493,
+   "fin": 1.11865,
+   "length_k": 1.15141,
+   "dorsal": [
+    [
+     0.38,
+     0.55,
+     0.1,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.74,
+     0.06
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.03,
+   "crest": false
+  },
+  {
+   "id": "minnow",
+   "variant": 2,
+   "seed": 3,
+   "skin": [
+    138,
+    40,
+    64,
+    32
+   ],
+   "fin_tile": [
+    74,
+    256,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "forked",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 1.06185,
+   "width": 0.97549,
+   "fin": 1.09559,
+   "length_k": 1.19193,
+   "dorsal": [
+    [
+     0.38,
+     0.55,
+     0.1,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.74,
+     0.06
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.03,
+   "crest": false
+  },
+  {
+   "id": "minnow",
+   "variant": 3,
+   "seed": 4,
+   "skin": [
+    206,
+    40,
+    64,
+    32
+   ],
+   "fin_tile": [
+    110,
+    256,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "forked",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 1.0402,
+   "width": 0.96931,
+   "fin": 1.04547,
+   "length_k": 0.95443,
+   "dorsal": [
+    [
+     0.38,
+     0.55,
+     0.1,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.74,
+     0.06
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.03,
+   "crest": false
+  },
+  {
+   "id": "silverfin",
+   "variant": 0,
+   "seed": 1,
+   "skin": [
+    274,
+    40,
+    64,
+    32
+   ],
+   "fin_tile": [
+    146,
+    256,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "deepfork",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 0.90249,
+   "width": 0.91706,
+   "fin": 0.95253,
+   "length_k": 0.91927,
+   "dorsal": [
+    [
+     0.36,
+     0.5,
+     0.12,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.6,
+     0.72,
+     0.07
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.032,
+   "crest": false
+  },
+  {
+   "id": "silverfin",
+   "variant": 1,
+   "seed": 2,
+   "skin": [
+    342,
+    40,
+    64,
+    32
+   ],
+   "fin_tile": [
+    182,
+    256,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "deepfork",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 0.87858,
+   "width": 1.01385,
+   "fin": 0.89731,
+   "length_k": 0.91512,
+   "dorsal": [
+    [
+     0.36,
+     0.5,
+     0.12,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.6,
+     0.72,
+     0.07
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.032,
+   "crest": false
+  },
+  {
+   "id": "silverfin",
+   "variant": 2,
+   "seed": 3,
+   "skin": [
+    410,
+    40,
+    64,
+    32
+   ],
+   "fin_tile": [
+    218,
+    256,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "deepfork",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 0.9264,
+   "width": 0.96853,
+   "fin": 1.08132,
+   "length_k": 1.16979,
+   "dorsal": [
+    [
+     0.36,
+     0.5,
+     0.12,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.6,
+     0.72,
+     0.07
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.032,
+   "crest": false
+  },
+  {
+   "id": "silverfin",
+   "variant": 3,
+   "seed": 4,
+   "skin": [
+    2,
+    76,
+    64,
+    32
+   ],
+   "fin_tile": [
+    254,
+    256,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "deepfork",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 0.94529,
+   "width": 0.9518,
+   "fin": 0.97105,
+   "length_k": 1.10285,
+   "dorsal": [
+    [
+     0.36,
+     0.5,
+     0.12,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.6,
+     0.72,
+     0.07
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.032,
+   "crest": false
+  },
+  {
+   "id": "perch",
+   "variant": 0,
+   "seed": 1,
+   "skin": [
+    70,
+    76,
+    64,
+    32
+   ],
+   "fin_tile": [
+    290,
+    256,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "truncate",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.87648,
+   "width": 0.98963,
+   "fin": 1.01184,
+   "length_k": 0.93436,
+   "dorsal": [
+    [
+     0.22,
+     0.48,
+     0.14,
+     "spiny"
+    ],
+    [
+     0.5,
+     0.68,
+     0.11,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.74,
+     0.08
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.034,
+   "crest": false
+  },
+  {
+   "id": "perch",
+   "variant": 1,
+   "seed": 2,
+   "skin": [
+    138,
+    76,
+    64,
+    32
+   ],
+   "fin_tile": [
+    326,
+    256,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "truncate",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.92767,
+   "width": 0.95663,
+   "fin": 1.10442,
+   "length_k": 1.04397,
+   "dorsal": [
+    [
+     0.22,
+     0.48,
+     0.14,
+     "spiny"
+    ],
+    [
+     0.5,
+     0.68,
+     0.11,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.74,
+     0.08
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.034,
+   "crest": false
+  },
+  {
+   "id": "perch",
+   "variant": 2,
+   "seed": 3,
+   "skin": [
+    206,
+    76,
+    64,
+    32
+   ],
+   "fin_tile": [
+    362,
+    256,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "truncate",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.90307,
+   "width": 0.93189,
+   "fin": 0.92741,
+   "length_k": 0.86992,
+   "dorsal": [
+    [
+     0.22,
+     0.48,
+     0.14,
+     "spiny"
+    ],
+    [
+     0.5,
+     0.68,
+     0.11,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.74,
+     0.08
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.034,
+   "crest": false
+  },
+  {
+   "id": "perch",
+   "variant": 3,
+   "seed": 4,
+   "skin": [
+    274,
+    76,
+    64,
+    32
+   ],
+   "fin_tile": [
+    398,
+    256,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "truncate",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.91611,
+   "width": 0.99243,
+   "fin": 1.04756,
+   "length_k": 1.07351,
+   "dorsal": [
+    [
+     0.22,
+     0.48,
+     0.14,
+     "spiny"
+    ],
+    [
+     0.5,
+     0.68,
+     0.11,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.74,
+     0.08
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.034,
+   "crest": false
+  },
+  {
+   "id": "ray",
+   "variant": 0,
+   "seed": 1,
+   "skin": [
+    342,
+    76,
+    64,
+    32
+   ],
+   "fin_tile": [
+    434,
+    256,
+    32,
+    32
+   ],
+   "profile": "flat",
+   "tail": "whip",
+   "d": 0.05,
+   "w": 0.44,
+   "u_max": 0.4,
+   "ped": 0.1,
+   "body": 1.0,
+   "eel": false,
+   "flat": true,
+   "depth": 0.9959,
+   "width": 1.04098,
+   "fin": 1.03065,
+   "length_k": 0.95387,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0,
+   "eye": 0.026,
+   "crest": false
+  },
+  {
+   "id": "ray",
+   "variant": 1,
+   "seed": 2,
+   "skin": [
+    410,
+    76,
+    64,
+    32
+   ],
+   "fin_tile": [
+    470,
+    256,
+    32,
+    32
+   ],
+   "profile": "flat",
+   "tail": "whip",
+   "d": 0.05,
+   "w": 0.44,
+   "u_max": 0.4,
+   "ped": 0.1,
+   "body": 1.0,
+   "eel": false,
+   "flat": true,
+   "depth": 0.93879,
+   "width": 0.91094,
+   "fin": 1.07275,
+   "length_k": 0.8594,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0,
+   "eye": 0.026,
+   "crest": false
+  },
+  {
+   "id": "ray",
+   "variant": 2,
+   "seed": 3,
+   "skin": [
+    2,
+    112,
+    64,
+    32
+   ],
+   "fin_tile": [
+    2,
+    292,
+    32,
+    32
+   ],
+   "profile": "flat",
+   "tail": "whip",
+   "d": 0.05,
+   "w": 0.44,
+   "u_max": 0.4,
+   "ped": 0.1,
+   "body": 1.0,
+   "eel": false,
+   "flat": true,
+   "depth": 1.01275,
+   "width": 0.96973,
+   "fin": 1.0576,
+   "length_k": 1.06191,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0,
+   "eye": 0.026,
+   "crest": false
+  },
+  {
+   "id": "ray",
+   "variant": 3,
+   "seed": 4,
+   "skin": [
+    70,
+    112,
+    64,
+    32
+   ],
+   "fin_tile": [
+    38,
+    292,
+    32,
+    32
+   ],
+   "profile": "flat",
+   "tail": "whip",
+   "d": 0.05,
+   "w": 0.44,
+   "u_max": 0.4,
+   "ped": 0.1,
+   "body": 1.0,
+   "eel": false,
+   "flat": true,
+   "depth": 0.99033,
+   "width": 0.95936,
+   "fin": 0.90447,
+   "length_k": 1.02211,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0,
+   "eye": 0.026,
+   "crest": false
+  },
+  {
+   "id": "eel",
+   "variant": 0,
+   "seed": 1,
+   "skin": [
+    138,
+    112,
+    64,
+    32
+   ],
+   "fin_tile": [
+    74,
+    292,
+    32,
+    32
+   ],
+   "profile": "eel",
+   "tail": "eel",
+   "d": 0.042,
+   "w": 0.036,
+   "u_max": 0.1,
+   "ped": 0.55,
+   "body": 1.0,
+   "eel": true,
+   "flat": false,
+   "depth": 0.98843,
+   "width": 0.96228,
+   "fin": 1.02011,
+   "length_k": 0.96264,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0.035,
+   "eye": 0.022,
+   "crest": false
+  },
+  {
+   "id": "eel",
+   "variant": 1,
+   "seed": 2,
+   "skin": [
+    206,
+    112,
+    64,
+    32
+   ],
+   "fin_tile": [
+    110,
+    292,
+    32,
+    32
+   ],
+   "profile": "eel",
+   "tail": "eel",
+   "d": 0.042,
+   "w": 0.036,
+   "u_max": 0.1,
+   "ped": 0.55,
+   "body": 1.0,
+   "eel": true,
+   "flat": false,
+   "depth": 1.0365,
+   "width": 1.03267,
+   "fin": 0.98922,
+   "length_k": 1.22711,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0.035,
+   "eye": 0.022,
+   "crest": false
+  },
+  {
+   "id": "eel",
+   "variant": 2,
+   "seed": 3,
+   "skin": [
+    274,
+    112,
+    64,
+    32
+   ],
+   "fin_tile": [
+    146,
+    292,
+    32,
+    32
+   ],
+   "profile": "eel",
+   "tail": "eel",
+   "d": 0.042,
+   "w": 0.036,
+   "u_max": 0.1,
+   "ped": 0.55,
+   "body": 1.0,
+   "eel": true,
+   "flat": false,
+   "depth": 1.01376,
+   "width": 1.02354,
+   "fin": 1.07199,
+   "length_k": 0.94154,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0.035,
+   "eye": 0.022,
+   "crest": false
+  },
+  {
+   "id": "eel",
+   "variant": 3,
+   "seed": 4,
+   "skin": [
+    342,
+    112,
+    64,
+    32
+   ],
+   "fin_tile": [
+    182,
+    292,
+    32,
+    32
+   ],
+   "profile": "eel",
+   "tail": "eel",
+   "d": 0.042,
+   "w": 0.036,
+   "u_max": 0.1,
+   "ped": 0.55,
+   "body": 1.0,
+   "eel": true,
+   "flat": false,
+   "depth": 0.892,
+   "width": 0.95049,
+   "fin": 1.09063,
+   "length_k": 0.90868,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0.035,
+   "eye": 0.022,
+   "crest": false
+  },
+  {
+   "id": "reef",
+   "variant": 0,
+   "seed": 1,
+   "skin": [
+    410,
+    112,
+    64,
+    32
+   ],
+   "fin_tile": [
+    218,
+    292,
+    32,
+    32
+   ],
+   "profile": "disc",
+   "tail": "lunate",
+   "d": 0.29,
+   "w": 0.055,
+   "u_max": 0.44,
+   "ped": 0.14,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 1.05357,
+   "width": 1.01853,
+   "fin": 1.04239,
+   "length_k": 1.23735,
+   "dorsal": [
+    [
+     0.18,
+     0.66,
+     0.2,
+     "tall"
+    ]
+   ],
+   "anal": [
+    [
+     0.5,
+     0.74,
+     0.16
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.034,
+   "crest": false
+  },
+  {
+   "id": "reef",
+   "variant": 1,
+   "seed": 2,
+   "skin": [
+    2,
+    148,
+    64,
+    32
+   ],
+   "fin_tile": [
+    254,
+    292,
+    32,
+    32
+   ],
+   "profile": "disc",
+   "tail": "lunate",
+   "d": 0.29,
+   "w": 0.055,
+   "u_max": 0.44,
+   "ped": 0.14,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.93537,
+   "width": 1.00764,
+   "fin": 0.91348,
+   "length_k": 1.18109,
+   "dorsal": [
+    [
+     0.18,
+     0.66,
+     0.2,
+     "tall"
+    ]
+   ],
+   "anal": [
+    [
+     0.5,
+     0.74,
+     0.16
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.034,
+   "crest": false
+  },
+  {
+   "id": "reef",
+   "variant": 2,
+   "seed": 3,
+   "skin": [
+    70,
+    148,
+    64,
+    32
+   ],
+   "fin_tile": [
+    290,
+    292,
+    32,
+    32
+   ],
+   "profile": "disc",
+   "tail": "lunate",
+   "d": 0.29,
+   "w": 0.055,
+   "u_max": 0.44,
+   "ped": 0.14,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 1.02446,
+   "width": 0.98821,
+   "fin": 1.09712,
+   "length_k": 1.15632,
+   "dorsal": [
+    [
+     0.18,
+     0.66,
+     0.2,
+     "tall"
+    ]
+   ],
+   "anal": [
+    [
+     0.5,
+     0.74,
+     0.16
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.034,
+   "crest": false
+  },
+  {
+   "id": "reef",
+   "variant": 3,
+   "seed": 4,
+   "skin": [
+    138,
+    148,
+    64,
+    32
+   ],
+   "fin_tile": [
+    326,
+    292,
+    32,
+    32
+   ],
+   "profile": "disc",
+   "tail": "lunate",
+   "d": 0.29,
+   "w": 0.055,
+   "u_max": 0.44,
+   "ped": 0.14,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.94616,
+   "width": 1.01073,
+   "fin": 0.94174,
+   "length_k": 1.02971,
+   "dorsal": [
+    [
+     0.18,
+     0.66,
+     0.2,
+     "tall"
+    ]
+   ],
+   "anal": [
+    [
+     0.5,
+     0.74,
+     0.16
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.034,
+   "crest": false
+  },
+  {
+   "id": "deepback",
+   "variant": 0,
+   "seed": 1,
+   "skin": [
+    206,
+    148,
+    64,
+    32
+   ],
+   "fin_tile": [
+    362,
+    292,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "lunate",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 1.24426,
+   "width": 1.02857,
+   "fin": 0.9792,
+   "length_k": 1.00537,
+   "dorsal": [
+    [
+     0.34,
+     0.48,
+     0.12,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.72,
+     0.07
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.036,
+   "crest": false
+  },
+  {
+   "id": "deepback",
+   "variant": 1,
+   "seed": 2,
+   "skin": [
+    274,
+    148,
+    64,
+    32
+   ],
+   "fin_tile": [
+    398,
+    292,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "lunate",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 1.25189,
+   "width": 1.02812,
+   "fin": 1.0353,
+   "length_k": 1.18965,
+   "dorsal": [
+    [
+     0.34,
+     0.48,
+     0.12,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.72,
+     0.07
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.036,
+   "crest": false
+  },
+  {
+   "id": "deepback",
+   "variant": 2,
+   "seed": 3,
+   "skin": [
+    342,
+    148,
+    64,
+    32
+   ],
+   "fin_tile": [
+    434,
+    292,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "lunate",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 1.19734,
+   "width": 0.98167,
+   "fin": 0.94409,
+   "length_k": 1.22263,
+   "dorsal": [
+    [
+     0.34,
+     0.48,
+     0.12,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.72,
+     0.07
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.036,
+   "crest": false
+  },
+  {
+   "id": "deepback",
+   "variant": 3,
+   "seed": 4,
+   "skin": [
+    410,
+    148,
+    64,
+    32
+   ],
+   "fin_tile": [
+    470,
+    292,
+    32,
+    32
+   ],
+   "profile": "fusiform",
+   "tail": "lunate",
+   "d": 0.12,
+   "w": 0.075,
+   "u_max": 0.33,
+   "ped": 0.2,
+   "body": 0.8,
+   "eel": false,
+   "flat": false,
+   "depth": 1.19725,
+   "width": 0.94472,
+   "fin": 1.08604,
+   "length_k": 1.0348,
+   "dorsal": [
+    [
+     0.34,
+     0.48,
+     0.12,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.62,
+     0.72,
+     0.07
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.036,
+   "crest": false
+  },
+  {
+   "id": "serpent",
+   "variant": 0,
+   "seed": 1,
+   "skin": [
+    2,
+    184,
+    64,
+    32
+   ],
+   "fin_tile": [
+    2,
+    328,
+    32,
+    32
+   ],
+   "profile": "eel",
+   "tail": "eel",
+   "d": 0.042,
+   "w": 0.036,
+   "u_max": 0.1,
+   "ped": 0.55,
+   "body": 1.0,
+   "eel": true,
+   "flat": false,
+   "depth": 1.43184,
+   "width": 0.98702,
+   "fin": 0.93509,
+   "length_k": 1.08012,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0.04,
+   "eye": 0.026,
+   "crest": true
+  },
+  {
+   "id": "serpent",
+   "variant": 1,
+   "seed": 2,
+   "skin": [
+    70,
+    184,
+    64,
+    32
+   ],
+   "fin_tile": [
+    38,
+    328,
+    32,
+    32
+   ],
+   "profile": "eel",
+   "tail": "eel",
+   "d": 0.042,
+   "w": 0.036,
+   "u_max": 0.1,
+   "ped": 0.55,
+   "body": 1.0,
+   "eel": true,
+   "flat": false,
+   "depth": 1.4757,
+   "width": 1.07011,
+   "fin": 1.09814,
+   "length_k": 1.14689,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0.04,
+   "eye": 0.026,
+   "crest": true
+  },
+  {
+   "id": "serpent",
+   "variant": 2,
+   "seed": 3,
+   "skin": [
+    138,
+    184,
+    64,
+    32
+   ],
+   "fin_tile": [
+    74,
+    328,
+    32,
+    32
+   ],
+   "profile": "eel",
+   "tail": "eel",
+   "d": 0.042,
+   "w": 0.036,
+   "u_max": 0.1,
+   "ped": 0.55,
+   "body": 1.0,
+   "eel": true,
+   "flat": false,
+   "depth": 1.57399,
+   "width": 1.00808,
+   "fin": 0.88741,
+   "length_k": 1.1612,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0.04,
+   "eye": 0.026,
+   "crest": true
+  },
+  {
+   "id": "serpent",
+   "variant": 3,
+   "seed": 4,
+   "skin": [
+    206,
+    184,
+    64,
+    32
+   ],
+   "fin_tile": [
+    110,
+    328,
+    32,
+    32
+   ],
+   "profile": "eel",
+   "tail": "eel",
+   "d": 0.042,
+   "w": 0.036,
+   "u_max": 0.1,
+   "ped": 0.55,
+   "body": 1.0,
+   "eel": true,
+   "flat": false,
+   "depth": 1.46681,
+   "width": 0.98577,
+   "fin": 0.93365,
+   "length_k": 0.99755,
+   "dorsal": [],
+   "anal": [],
+   "pec": 0.04,
+   "eye": 0.026,
+   "crest": true
+  },
+  {
+   "id": "darter",
+   "variant": 0,
+   "seed": 1,
+   "skin": [
+    274,
+    184,
+    64,
+    32
+   ],
+   "fin_tile": [
+    146,
+    328,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "rounded",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 1.05513,
+   "width": 0.99628,
+   "fin": 1.09047,
+   "length_k": 0.85226,
+   "dorsal": [
+    [
+     0.22,
+     0.68,
+     0.12,
+     "spiny"
+    ]
+   ],
+   "anal": [
+    [
+     0.58,
+     0.74,
+     0.09
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.04,
+   "crest": false
+  },
+  {
+   "id": "darter",
+   "variant": 1,
+   "seed": 2,
+   "skin": [
+    342,
+    184,
+    64,
+    32
+   ],
+   "fin_tile": [
+    182,
+    328,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "rounded",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 1.00777,
+   "width": 0.95963,
+   "fin": 0.89533,
+   "length_k": 0.97353,
+   "dorsal": [
+    [
+     0.22,
+     0.68,
+     0.12,
+     "spiny"
+    ]
+   ],
+   "anal": [
+    [
+     0.58,
+     0.74,
+     0.09
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.04,
+   "crest": false
+  },
+  {
+   "id": "darter",
+   "variant": 2,
+   "seed": 3,
+   "skin": [
+    410,
+    184,
+    64,
+    32
+   ],
+   "fin_tile": [
+    218,
+    328,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "rounded",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.9868,
+   "width": 0.99629,
+   "fin": 1.06006,
+   "length_k": 0.86087,
+   "dorsal": [
+    [
+     0.22,
+     0.68,
+     0.12,
+     "spiny"
+    ]
+   ],
+   "anal": [
+    [
+     0.58,
+     0.74,
+     0.09
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.04,
+   "crest": false
+  },
+  {
+   "id": "darter",
+   "variant": 3,
+   "seed": 4,
+   "skin": [
+    2,
+    220,
+    64,
+    32
+   ],
+   "fin_tile": [
+    254,
+    328,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "rounded",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 1.11346,
+   "width": 1.10119,
+   "fin": 0.94402,
+   "length_k": 1.23408,
+   "dorsal": [
+    [
+     0.22,
+     0.68,
+     0.12,
+     "spiny"
+    ]
+   ],
+   "anal": [
+    [
+     0.58,
+     0.74,
+     0.09
+    ]
+   ],
+   "pec": 0.08,
+   "eye": 0.04,
+   "crest": false
+  },
+  {
+   "id": "anthias",
+   "variant": 0,
+   "seed": 1,
+   "skin": [
+    70,
+    220,
+    64,
+    32
+   ],
+   "fin_tile": [
+    290,
+    328,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "lunate",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.79095,
+   "width": 0.93418,
+   "fin": 0.90669,
+   "length_k": 1.01462,
+   "dorsal": [
+    [
+     0.24,
+     0.66,
+     0.1,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.58,
+     0.74,
+     0.08
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.036,
+   "crest": false
+  },
+  {
+   "id": "anthias",
+   "variant": 1,
+   "seed": 2,
+   "skin": [
+    138,
+    220,
+    64,
+    32
+   ],
+   "fin_tile": [
+    326,
+    328,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "lunate",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.77115,
+   "width": 0.9583,
+   "fin": 0.88371,
+   "length_k": 0.86317,
+   "dorsal": [
+    [
+     0.24,
+     0.66,
+     0.1,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.58,
+     0.74,
+     0.08
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.036,
+   "crest": false
+  },
+  {
+   "id": "anthias",
+   "variant": 2,
+   "seed": 3,
+   "skin": [
+    206,
+    220,
+    64,
+    32
+   ],
+   "fin_tile": [
+    362,
+    328,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "lunate",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.82333,
+   "width": 1.01179,
+   "fin": 0.91853,
+   "length_k": 0.96871,
+   "dorsal": [
+    [
+     0.24,
+     0.66,
+     0.1,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.58,
+     0.74,
+     0.08
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.036,
+   "crest": false
+  },
+  {
+   "id": "anthias",
+   "variant": 3,
+   "seed": 4,
+   "skin": [
+    274,
+    220,
+    64,
+    32
+   ],
+   "fin_tile": [
+    398,
+    328,
+    32,
+    32
+   ],
+   "profile": "compressed",
+   "tail": "lunate",
+   "d": 0.19,
+   "w": 0.06,
+   "u_max": 0.38,
+   "ped": 0.18,
+   "body": 0.82,
+   "eel": false,
+   "flat": false,
+   "depth": 0.84148,
+   "width": 0.94031,
+   "fin": 1.00234,
+   "length_k": 0.98796,
+   "dorsal": [
+    [
+     0.24,
+     0.66,
+     0.1,
+     "soft"
+    ]
+   ],
+   "anal": [
+    [
+     0.58,
+     0.74,
+     0.08
+    ]
+   ],
+   "pec": 0.07,
+   "eye": 0.036,
+   "crest": false
+  }
+ ]
+}

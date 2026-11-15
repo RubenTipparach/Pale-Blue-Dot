@@ -48,6 +48,13 @@ against what it would cost.
 - [x] 7.5 (built 2026-11-15; design B9) The octopus, tube worms and seals appended, with `Hides` and `HaulsOut`. Verify: the append-only test; a core test of each state machine against the eye's distance.
 - [x] 7.3 Protected species refuse capture. Verify: a test per species. (Built 2026-11-15: `catch_refusal`, `can_bite`; a float over one says why, once a cast.)
 
+## 9. Textures and M9's fish (requested 2026-11-15: "reef needs some textures", "use the fish species mockup to create proper fish"; design B14)
+
+- [x] 9.1 (Built 2026-11-15 on `claude/env-reef`; the skins checked pixel for pixel against M9's JavaScript.) The water-life atlas: reef tiles and M9's skins and fin tiles, drawn by `tools/water_life_atlas.py` with a manifest and provenance. Verify: the generator's `--check` holds the committed atlas to its source.
+- [x] 9.2 (Built 2026-11-15: `every_piece_is_laid_into_a_reef_tile`; `docs/screenshots/ocean-life/*-textured.jpg` beside `*-untextured.jpg`, at a version-8 reef since version 8 lost the old one, B14.) UVs on the reef's pieces into their kinds' tiles, the texture on `LifeMaterial`, nearest. Verify: a test that every piece vertex has a UV inside its tile; READY with no `LATE_PIPELINE`; `*-textured.jpg` captures beside the untextured ones.
+- [x] 9.3 (Built 2026-11-15: `every_fish_variant_wears_its_own_skin`; `lineup-seabed-textured.jpg`, `fish-close-textured.jpg`. M9 gains the darter and anthias and a "Reef & sea floor" tab of the game's own models, `docs/screenshots/mockup-fish/`.) The fish from M9: profile, tail, fins, eye, skin and seed variants; the ray's flap. Verify: a test that every fish model and variant builds with faces and UVs in its skin; the lineup and three close shots beside M9's sheet.
+- [ ] 9.4 Video (batch).
+
 ## 8. Fresh water (after volumetric water phases 2 and 3)
 
 - [x] 8.1 (Built 2026-11-15, generator version 8 on 7, design 13: `every_river_cell_drains_to_the_sea`, `a_rivers_water_sits_on_its_own_bed`, version 8's digest pinned and 7's unchanged; `docs/screenshots/water-flow/river-*.jpg`.) A drainage river pass that steps down from springs, in a new generator version. Verify: a test that every river cell drains to the sea; captures beside the river tab.
