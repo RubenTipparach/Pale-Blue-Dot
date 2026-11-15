@@ -400,8 +400,9 @@ const WASD: [Key; 4] = [
     Key::Board(KeyCode::KeyD),
 ];
 
-const ON_FOOT: [Binding; 3] = [
+const ON_FOOT: [Binding; 4] = [
     row(&WASD, " ", "move"),
+    row(&[Key::Board(KeyCode::KeyB)], " ", "breeding"),
     row(
         &[Key::Board(KeyCode::Space)],
         " ",
@@ -508,10 +509,9 @@ const WORLD: [Binding; 5] = [
     row(&[Key::Board(KeyCode::KeyL)], " ", "noon or midnight"),
 ];
 
-const SCREEN: [Binding; 9] = [
+const SCREEN: [Binding; 8] = [
     row(&[Key::Board(KeyCode::Escape)], " ", "menu"),
     row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
-    row(&[Key::Board(KeyCode::KeyB)], " ", "breeding (on foot)"),
     row(
         &[Key::Board(KeyCode::KeyI), Key::Board(KeyCode::Tab)],
         " / ",
