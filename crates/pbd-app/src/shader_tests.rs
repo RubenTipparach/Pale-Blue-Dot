@@ -767,3 +767,52 @@ fn a_floor_reads_one_layer_of_baked_light() {
         "a floor's sample lies {worst} m off its layer"
     );
 }
+
+/// `flora-v2` design 5: the shader's plant season is `pbd_core::flora`'s,
+/// read off the shipped file: the same four pairs of numbers.
+#[test]
+fn the_plants_season_is_the_cores() {
+    let src = include_str!("../../../assets/shaders/planet_surface.wgsl");
+    use pbd_core::flora::{SEASON_BARE, SEASON_STRAW, SEASON_TROPIC, SEASON_TURN};
+    for (name, pair) in [
+        ("SEASON_TROPIC", SEASON_TROPIC),
+        ("SEASON_TURN", SEASON_TURN),
+        ("SEASON_BARE", SEASON_BARE),
+        ("SEASON_STRAW", SEASON_STRAW),
+    ] {
+        let at = src
+            .find(&format!("const {name} = vec2<f32>("))
+            .unwrap_or_else(|| panic!("{name} is gone from planet_surface.wgsl"));
+        let rest = &src[at..];
+        let open = rest.find('(').unwrap() + 1;
+        let close = rest.find(')').unwrap();
+        let v: Vec<f32> = rest[open..close]
+            .split(',')
+            .map(|x| x.trim().parse().unwrap())
+            .collect();
+        assert_eq!(v, pair.to_vec(), "{name}");
+    }
+    // The hemisphere flip and the tropics' fade are the core's too.
+    let body = wgsl_fn_body(src, "season_at");
+    assert!(body.contains("select(0.0, 0.5, radial.y < 0.0)"));
+    assert!(body.contains("smoothstep(SEASON_TROPIC.x, SEASON_TROPIC.y, abs(radial.y))"));
+}
+
+/// `flora-v2` design 2: every clutter piece dithers out at the edge of the
+/// clutter reach, and a leaf card at the edge of its own, in `dropped`,
+/// which the sun's cascades also call; the plants' cut-outs are there too.
+#[test]
+fn the_plants_dither_out_and_cut_out_in_dropped() {
+    let src = include_str!("../../../assets/shaders/planet_surface.wgsl");
+    let body = wgsl_fn_body(src, "dropped");
+    for line in [
+        "if code == TUFT_CODE && !tuft_on(input.uv) { return true; }",
+        "if code == FERN_CODE && fern_cut(input.uv) { return true; }",
+        "if leaf_cut(input) { return true; }",
+        "let left = params.clutter.x - 2.0 - distance(input.position, params.camera.xyz);",
+        "let left = params.flora_more.z - 4.0 - distance(input.position, params.camera.xyz);",
+    ] {
+        assert!(body.contains(line), "dropped no longer says `{line}`");
+    }
+    assert!(wgsl_fn_body(src, "shadow_fragment").contains("dropped(input)"));
+}

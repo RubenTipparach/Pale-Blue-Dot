@@ -41,6 +41,10 @@ struct Params {
     ssr_eye: vec4<f32>,
     rain_near: vec4<f32>,
     light_ease: vec4<f32>,
+    flora: vec4<f32>,          // `flora-v2`: x tufts per cell (zero: blades), y tuft width m, z tuft height m, w the year 0..1
+    flora_more: vec4<f32>,     // x mushroom chance, y fern chance, z leaf card reach m, w its fade m
+    flora_biome: array<vec4<f32>,8>, // per biome: fern weight, mushroom weight, flower bits, deciduous
+    tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
     night: vec4<f32>,                   // `night-lights-from-space`, unread here
     night_lights: array<vec4<f32>,128>,
 }
@@ -129,7 +133,8 @@ fn clear_indirect() {
     atomicStore(&args[0].instance_count, 0u);
     args[0].first_vertex = 0u;
     args[0].first_instance = 0u;
-    args[1].vertex_count = 198u;
+    // The trunk and two leaf layers, then eighteen leaf cards (`flora-v2`).
+    args[1].vertex_count = 306u;
     atomicStore(&args[1].instance_count, 0u);
     args[1].first_vertex = 60u;
     args[1].first_instance = 0u;
@@ -139,11 +144,12 @@ fn clear_indirect() {
     args[2].first_vertex = 0u;
     args[2].first_instance = 0u;
     // Ground clutter: eighteen blades of two segments, then a flower, a
-    // pebble, a bush and a dead shrub. CLUTTER_VERTICES in planet.rs is the
-    // same arithmetic and a test holds the two together.
-    args[3].vertex_count = 432u;
+    // pebble, a bush, a dead shrub, a mushroom and a fern (`flora-v2`).
+    // CLUTTER_VERTICES in planet.rs is the same arithmetic and a test holds
+    // the two together.
+    args[3].vertex_count = 564u;
     atomicStore(&args[3].instance_count, 0u);
-    args[3].first_vertex = 258u;
+    args[3].first_vertex = 366u;
     args[3].first_instance = 0u;
     // The inside of the world: a ceiling and a floor per run, then a flank per
     // side per run per stretch of the neighbour's air, then a lamp.
@@ -151,7 +157,7 @@ fn clear_indirect() {
     // arithmetic and a test holds them together.
     args[4].vertex_count = 936u;
     atomicStore(&args[4].instance_count, 0u);
-    args[4].first_vertex = 690u;
+    args[4].first_vertex = 930u;
     args[4].first_instance = 0u;
 }
 
@@ -180,6 +186,8 @@ const SALT_FLOWER: u32 = 0x52u;
 const SALT_BUSH: u32 = 0x53u;
 const SALT_ROCK: u32 = 0x54u;
 const SALT_SHRUB: u32 = 0x55u;
+const SALT_MUSH: u32 = 0x56u;
+const SALT_FERN: u32 = 0x57u;
 
 fn grassy(material: u32) -> bool { return material==2u || material==3u || material==7u; }
 // Dirt and beach sand share index 1, so "bare" is every dry top a pebble can
@@ -215,7 +223,12 @@ fn has_clutter(cell: Cell, center: vec3<f32>) -> bool {
     let rock = (green||dry) && roll(id,SALT_ROCK) < rock_chance;
     // Dead twigs are the desert's and the tundra's only ground cover.
     let shrub = (material==4u||material==6u) && roll(id,SALT_SHRUB) < params.clutter_more.y;
-    return grass || flower || bush || rock || shrub;
+    // Mushrooms and ferns at their biome's weight (`flora-v2` design 3), on
+    // the rolls the surface pass draws them with.
+    let biome = min((cell.metadata.y >> 8u) & 0xffu, 7u);
+    let mush = green && roll(id,SALT_MUSH) < min(params.flora_more.x*params.flora_biome[biome].y, 1.);
+    let fern = green && roll(id,SALT_FERN) < min(params.flora_more.y*params.flora_biome[biome].x, 1.);
+    return grass || flower || bush || rock || shrub || mush || fern;
 }
 
 // This is the sole foliage eligibility decision. The foliage indirect draw

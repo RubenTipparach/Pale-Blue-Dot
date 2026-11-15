@@ -205,7 +205,10 @@ impl VisibilityGpu {
         // first vertices are arithmetic written out in two places, so this is
         // where the shader and `planet.rs` are held together.
         assert_eq!([words[0], words[2], words[3]], [60, 0, 0]);
-        assert_eq!([words[4], words[6], words[7]], [198, 60, 0]);
+        assert_eq!(
+            [words[4], words[6], words[7]],
+            [crate::planet::foliage_vertices(), 60, 0]
+        );
         assert_eq!([words[8], words[10], words[11]], [18, 0, 0]);
         assert_eq!(
             [words[12], words[14], words[15]],
@@ -358,6 +361,12 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         ssr_eye: Vec4::ZERO,
         rain_near: Vec4::ZERO,
         light_ease: Vec4::new(1.0, 0.0, 0.0, 0.0),
+        // `flora-v2`: no mushrooms or ferns, so the clutter fixture's cells
+        // are the ones its older pieces roll.
+        flora: Vec4::ZERO,
+        flora_more: Vec4::ZERO,
+        flora_biome: [Vec4::ZERO; 8],
+        tuft_ramps: [UVec4::ZERO; 8],
         night: Vec4::ZERO,
         night_lights: [Vec4::ZERO; 2 * crate::night_lights::MAX_FAR_LIGHTS],
     }

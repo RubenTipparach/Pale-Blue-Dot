@@ -30,8 +30,10 @@ use std::time::{Duration, Instant};
 /// same fields as 1; version 2 added `rain_shadows`, which an older file
 /// reads as its default; version 3 added `keys`, the player's rebinds
 /// (`stone-and-wood-ui`), which an older file reads as none; version 4 added
-/// `mission_line` (`starter-missions`), which an older file reads as on.
-pub const VERSION: u32 = 4;
+/// `mission_line` (`starter-missions`), which an older file reads as on;
+/// version 5 added `pixel_grass` (`flora-v2`), which an older file reads as
+/// off.
+pub const VERSION: u32 = 5;
 
 /// The render scales offered, in percent, in the order a press cycles them.
 pub const SCALES: [u32; 5] = [100, 85, 75, 67, 50];
@@ -119,6 +121,9 @@ pub struct PlayerSettings {
     /// The current starter mission's line on the HUD (`starter-missions`
     /// design 14). Off hides it; the chain still counts.
     pub mission_line: bool,
+    /// The pixel tuft grass in place of the blades cut from the ground tile
+    /// (`flora-v2` design 1): the owner's toggle to try it, off by default.
+    pub pixel_grass: bool,
 }
 
 /// A new player's settings, the owner's choice (2026-11-13, "default to
@@ -132,6 +137,7 @@ impl Default for PlayerSettings {
             auto_step: false,
             rain_shadows: false,
             mission_line: true,
+            pixel_grass: false,
         }
     }
 }
@@ -147,6 +153,7 @@ impl PlayerSettings {
         auto_step: true,
         rain_shadows: true,
         mission_line: true,
+        pixel_grass: false,
     };
 }
 
@@ -162,6 +169,7 @@ struct File {
     auto_step: bool,
     rain_shadows: bool,
     mission_line: bool,
+    pixel_grass: bool,
     /// Slot name to key name (`controls::KeyBinds::to_names`).
     keys: BTreeMap<String, String>,
 }
@@ -176,6 +184,7 @@ impl Default for File {
             auto_step: base.auto_step,
             rain_shadows: base.rain_shadows,
             mission_line: base.mission_line,
+            pixel_grass: base.pixel_grass,
             keys: BTreeMap::new(),
         }
     }
@@ -215,6 +224,7 @@ impl PlayerSettings {
             auto_step: file.auto_step,
             rain_shadows: file.rain_shadows,
             mission_line: file.mission_line,
+            pixel_grass: file.pixel_grass,
         };
         let (keys, skipped) = KeyBinds::from_names(&file.keys);
         for rebind in skipped {
@@ -233,6 +243,7 @@ impl PlayerSettings {
                 auto_step: self.auto_step,
                 rain_shadows: self.rain_shadows,
                 mission_line: self.mission_line,
+                pixel_grass: self.pixel_grass,
                 keys: keys.to_names(),
             },
             ron::ser::PrettyConfig::default(),
@@ -275,18 +286,20 @@ impl PlayerSettings {
             auto_step: overrides.auto_step.unwrap_or(self.auto_step),
             rain_shadows: overrides.rain_shadows.unwrap_or(self.rain_shadows),
             mission_line: self.mission_line,
+            pixel_grass: overrides.pixel_grass.unwrap_or(self.pixel_grass),
         }
     }
 }
 
 /// A launch's flags: `--frame-limit`, `--render-scale`, `--no-auto-step`,
-/// `--rain-shadows on|off`.
+/// `--rain-shadows on|off`, `--grass tufts|blades`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Overrides {
     pub frame_limit: Option<FrameLimit>,
     pub render_scale: Option<u32>,
     pub auto_step: Option<bool>,
     pub rain_shadows: Option<bool>,
+    pub pixel_grass: Option<bool>,
 }
 
 /// Where the file lives: `PBD_SETTINGS` if set, else the user's config
@@ -614,6 +627,17 @@ pub fn follow_rain_shadows(
     }
 }
 
+/// The grass's look follows the setting, for the render world
+/// (`planet::FloraLook`, `flora-v2` design 1).
+pub fn follow_pixel_grass(
+    settings: Res<PlayerSettings>,
+    mut look: ResMut<crate::planet::FloraLook>,
+) {
+    if look.tufts != settings.pixel_grass {
+        look.tufts = settings.pixel_grass;
+    }
+}
+
 /// The settings' systems: the render scale, auto step and the rain's
 /// shadows each frame, the pacer last. `capture` stands the pacer down.
 pub struct PlayerSettingsPlugin {
@@ -635,6 +659,7 @@ impl Plugin for PlayerSettingsPlugin {
                     apply_render_scale.before(bevy::camera::CameraUpdateSystems),
                     follow_auto_step,
                     follow_rain_shadows,
+                    follow_pixel_grass,
                 ),
             );
         if !self.capture {
@@ -690,6 +715,8 @@ mod tests {
                 rain_shadows: false,
                 // Version 4's field: an older file reads it as on.
                 mission_line: true,
+                // Version 5's: off.
+                pixel_grass: false,
             }
         );
         assert!(
@@ -707,6 +734,7 @@ mod tests {
             auto_step: false,
             rain_shadows: true,
             mission_line: false,
+            pixel_grass: true,
         };
         let mut keys = KeyBinds::default();
         let roll = crate::controls::slots()
@@ -763,6 +791,29 @@ mod tests {
         assert_eq!(empty, PlayerSettings::default());
     }
 
+    /// `flora-v2`: a version-4 file (the last before Pixel grass) reads it
+    /// off and keeps the rest; a capture's `--grass` flag lays over the file.
+    #[test]
+    fn a_file_from_before_pixel_grass_reads_it_off() {
+        let text = "(version: 4, frame_limit: Fps120, render_scale: 75, auto_step: true, \
+                    rain_shadows: true, mission_line: false)";
+        let (read, _, version) = PlayerSettings::parse(text).unwrap();
+        assert_eq!(version, 4);
+        assert!(!read.pixel_grass);
+        assert!(read.rain_shadows && !read.mission_line && read.render_scale == 75);
+        assert!(!PlayerSettings::default().pixel_grass);
+        let isolated = PlayerSettings::ISOLATED;
+        assert!(!isolated.pixel_grass, "captures keep the blades");
+        let flags = Overrides {
+            pixel_grass: Some(true),
+            ..default()
+        };
+        assert!(read.with(&flags).pixel_grass);
+        let (back, _, _) =
+            PlayerSettings::parse(&read.with(&flags).to_text(&KeyBinds::default())).unwrap();
+        assert!(back.pixel_grass);
+    }
+
     #[test]
     fn a_newer_file_is_read_and_never_written_back() {
         let text = "(version: 7, frame_limit: Fps60, brightness: 3)";
@@ -802,7 +853,7 @@ mod tests {
         // Written back, a file with no rebinds says so, and an older build
         // ignores the field.
         let text = PlayerSettings::default().to_text(&KeyBinds::default());
-        assert!(text.contains("version: 4"), "{text}");
+        assert!(text.contains("version: 5"), "{text}");
         let (_, none, _) = PlayerSettings::parse(&text).unwrap();
         assert!(none.is_empty());
     }
@@ -883,6 +934,7 @@ mod tests {
             auto_step: false,
             rain_shadows: false,
             mission_line: true,
+            pixel_grass: true,
         };
         let flags = Overrides {
             render_scale: Some(100),

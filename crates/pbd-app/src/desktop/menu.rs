@@ -119,6 +119,8 @@ pub enum MenuAction {
     RainShadows,
     /// The starter mission's HUD line, on or off.
     MissionLine,
+    /// The pixel tuft grass, on or off (`flora-v2`).
+    PixelGrass,
     /// Put the open Input sub-tab's keys back to their defaults.
     ResetTab,
 }
@@ -309,6 +311,7 @@ fn settings_checked(
         MenuAction::Bloom => graphics.bloom,
         MenuAction::RainShadows => player.rain_shadows,
         MenuAction::MissionLine => player.mission_line,
+        MenuAction::PixelGrass => player.pixel_grass,
         MenuAction::AutoStep => player.auto_step,
         _ => return None,
     })
@@ -336,6 +339,7 @@ pub fn press_graphics(
             MenuAction::AutoStep => changed.auto_step = !changed.auto_step,
             MenuAction::RainShadows => changed.rain_shadows = !changed.rain_shadows,
             MenuAction::MissionLine => changed.mission_line = !changed.mission_line,
+            MenuAction::PixelGrass => changed.pixel_grass = !changed.pixel_grass,
             _ => {}
         }
         if changed != *player {
@@ -801,6 +805,13 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                             "Render scale",
                             "the HUD stays sharp",
                             MenuAction::RenderScale,
+                        );
+                        check_row(
+                            rows,
+                            kit,
+                            "Pixel grass",
+                            "pixel tufts in place of the blades",
+                            MenuAction::PixelGrass,
                         );
                     });
                     let weather = page(panel, 1);
@@ -1752,6 +1763,7 @@ pub fn press(
             | MenuAction::AutoStep
             | MenuAction::RainShadows
             | MenuAction::MissionLine
+            | MenuAction::PixelGrass
             | MenuAction::ResetTab => {}
             MenuAction::Load(row) => {
                 let Some(slot) = index.slots.get(row).cloned() else {
