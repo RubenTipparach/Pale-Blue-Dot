@@ -9,7 +9,7 @@ default = ["desktop"]
 desktop = [
     "bevy/default_app", "bevy/3d_bevy_render", "bevy/ui_bevy_render",
     "bevy/default_font", "bevy/bevy_winit", "bevy/x11", "bevy/keyboard",
-    "bevy/mouse", "dep:bytemuck", "dep:gltf", "dep:serde_json",
+    "bevy/mouse", "dep:bytemuck", "dep:gltf", "dep:serde_json", "dep:kira",
 ]
 # MEASUREMENT (`town-frame-time`): a span per system and render stage, written
 # to a Chrome trace file. Ranks where a frame's time goes; never for numbers.
@@ -32,6 +32,10 @@ serde_json = { version = "1", optional = true }
 # supports (`planet_cloud_timer.rs`), and needs wgpu's query set, which Bevy
 # does not re-export. The same wgpu Bevy already carries.
 wgpu = { version = "27", default-features = false }
+# Sound (`audio-and-ambience` design section 1): kira directly, not through a
+# Bevy plugin, so live filters and buses are ours and no Bevy version is in the
+# audio path. Bevy's own `bevy_audio` stays off.
+kira = { version = "=0.12.6", default-features = false, features = ["cpal", "ogg", "vorbis"], optional = true }
 
 [dev-dependencies]
 # The shipped WGSL is parsed and validated on the CPU in tests, so a shader

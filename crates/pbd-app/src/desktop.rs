@@ -19,6 +19,7 @@ mod overlay_ui;
 mod pack;
 mod scene;
 mod slots;
+mod sounds;
 mod time_ui;
 mod weather_ui;
 
@@ -57,6 +58,9 @@ use std::{
 #[derive(Resource, Clone)]
 pub struct Launch {
     pub capture: Option<PathBuf>,
+    /// Sound (`audio-and-ambience`): `--no-audio`, `--audio-log` and
+    /// `--audio-wav PATH`.
+    pub audio: pbd_app::audio::AudioLaunch,
     /// `--frame-log PATH`: a measurement instrument. Every frame's wall time,
     /// written as CSV with the fine set's state on the same clock, so a hitch
     /// can be attributed rather than guessed at (`far-side-flight`).
@@ -331,6 +335,7 @@ impl Launch {
     fn parse(args: &[String]) -> Self {
         let mut result = Self {
             capture: None,
+            audio: pbd_app::audio::AudioLaunch::default(),
             frame_log: None,
             walk_distance: None,
             stroll: None,
@@ -823,6 +828,14 @@ impl Launch {
                         "--stroll-leg takes seconds"
                     );
                     result.stroll_leg = Some(seconds);
+                }
+                "--no-audio" => result.audio.off = true,
+                "--audio-log" => result.audio.log = true,
+                "--audio-wav" => {
+                    i += 1;
+                    result.audio.wav = Some(PathBuf::from(
+                        args.get(i).expect("--audio-wav requires a path"),
+                    ));
                 }
                 "--frame-log" => {
                     i += 1;
@@ -1653,6 +1666,18 @@ pub fn run(args: &[String]) {
                 }
             },
         );
+    }
+    // Sound (`audio-and-ambience`): the device, or the mock backend stepped
+    // with a fixed-step capture; default volumes in a capture, a benchmark
+    // or a take (`PBD_TAKE_SOUND=1`).
+    {
+        let mut audio = launch.audio.clone();
+        audio.capture = launch.capture.is_some() && !launch.real_time;
+        audio.default_volumes = launch.capture.is_some()
+            || launch.frame_log.is_some()
+            || std::env::var_os("PBD_TAKE_SOUND").is_some_and(|v| v == "1");
+        app.add_plugins(pbd_app::audio::AudioPlugin(audio));
+        sounds::register(&mut app);
     }
     // The UI kit (`stone-and-wood-ui`): its pieces, fonts and scale are in
     // place in `finish`, before the loading screen's first frame.

@@ -224,6 +224,7 @@ fn fish(
     mut hotbar: Option<ResMut<Hotbar>>,
     mut save: Option<ResMut<WorldSave>>,
     mut did: MessageWriter<crate::missions::Did>,
+    mut heard: MessageWriter<crate::audio::hooks::FishHeard>,
 ) {
     let Some(sea) = world.sea.as_deref() else {
         return;
@@ -317,6 +318,11 @@ fn fish(
             factor,
         );
         for event in events {
+            // The rod's sounds (`audio-and-ambience` build decision 5).
+            heard.write(crate::audio::hooks::FishHeard {
+                event,
+                at: fishery.line.float,
+            });
             if let Some(happened) = report(
                 &mut status,
                 event,
