@@ -115,6 +115,12 @@ ol.q{display:grid;gap:12px;padding-left:22px;margin:0}
 ol.q li{max-width:80ch}
 ol.q b{font-family:var(--display);font-size:17px;letter-spacing:.02em}
 .rec{color:var(--sprout)}
+/* descriptive text lives in a modal (owner, 2026-11-14): it closes with its X, Esc or a tap outside */
+.modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.62);overflow:auto;padding:16px;display:grid;justify-items:center;align-items:start}
+.modal[hidden]{display:none}
+.modal .sheet{position:relative;width:100%;max-width:960px;min-width:0;box-sizing:border-box;background:var(--panel-solid);border:1px solid var(--line);border-radius:6px;padding:18px 16px;display:grid;gap:26px}
+.modal .x{position:absolute;right:10px;top:10px}
+.info{font-size:13px}
 @media (prefers-reduced-motion: reduce){.toast{transition:none}}
 </style>
 
@@ -123,8 +129,8 @@ ol.q b{font-family:var(--display);font-size:17px;letter-spacing:.02em}
   <div class="row"><span class="pill">Proposal, not built</span><span class="eyebrow">Design mockup &middot; 2026-11-11 &middot; growing food on a hex world</span></div>
   <h1>Furrows and Greenhouses</h1>
   <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
-  <p class="lede">Farming on hex cells: till a cell, plant a crop that suits the climate, keep it watered, wait out the days and harvest. Seasons decide what grows outdoors; a greenhouse lets anything grow anywhere, including on an airless moon. Pens hold the animals you tame. None of it is in the game yet.</p>
-</header>
+  <div class="row"><button class="btn info" id="openNotes" aria-haspopup="dialog">i&nbsp; About this mockup</button></div>
+/header>
 
 <div class="farm">
   <div class="stage" id="stage">
@@ -157,6 +163,14 @@ ol.q b{font-family:var(--display);font-size:17px;letter-spacing:.02em}
     <div class="row"><button class="btn" id="nextDay">Next day (Space)</button><button class="btn" id="next5">+5 days</button><span class="sep"></span><div class="inv" id="inv" aria-label="Harvest"></div></div>
   </div>
 </div>
+
+</div>
+
+<div class="modal" id="notes" hidden role="dialog" aria-modal="true" aria-labelledby="notesTitle">
+<div class="sheet">
+<button class="btn x" id="closeNotes" aria-label="Close">&#x2715;</button>
+<h2 id="notesTitle">Furrows and Greenhouses</h2>
+  <p class="lede">Farming on hex cells: till a cell, plant a crop that suits the climate, keep it watered, wait out the days and harvest. Seasons decide what grows outdoors; a greenhouse lets anything grow anywhere, including on an airless moon. Pens hold the animals you tame. None of it is in the game yet.</p>
 
 <section>
   <h2>Crops by climate</h2>
@@ -226,6 +240,7 @@ ol.q b{font-family:var(--display);font-size:17px;letter-spacing:.02em}
   <h2>About the art</h2>
   <p><b>The game's own textures:</b> every hex top and side is the shipped terrain atlas (<code>assets/tilesets/atlas.png</code>), read the way the terrain shader reads it: each biome's sheet, its ground on top, the ground-into-earth tile on the first metre of a side, earth below. Tilled soil is the fields sheet's own <i>tilled soil</i> tile. Posts, fences, the trough, the farmhouse (plaster walls, a pitched thatch roof, boards) and the greenhouse frame (iron, fieldstone) are the settlement textures at their <code>repeat_m</code>. The penned woolbacks and hens are boxes in the animals mockup's pixel hides (<code>animals/hide_*.png</code>). The HUD is the game's: the monospace debug line and hotbar slots. All are byte-identical copies in <code>docs/mockups/farming/game/</code>, nearest-sampled.</p>
   <p class="muted"><b>Mockup-only:</b> crop stages, produce, seed, tool and harvest icons are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/farming_art.py</code>): crop stages on a 32 px canvas, produce and tools on 24 px, Sweaft-64 colours only, alpha 0 or 255; the game has none of these yet. Watered and composted soil are the game's tilled tile with a tint, since the game has no wet or composted tile. The tilled tile exists only on the fields sheet, so the desert, jungle and tundra plots borrow it; each sheet would want its own. Glass and water are flat colour, as the game draws them. In the plot each crop is a pair of crossed sprites, the way the game's ground clutter is drawn: nearest-sampled without mipmaps and cut out by an alpha test, never blended.</p>
+  <p class="muted"><b>One art style, no outlines in the world</b> (owner, 2026-11-15: "outlines are for sprites in the ui inventory system, there is no need for that in the world"). The plot draws each stage's world version (<code>farming/world/</code>, made by <code>farming/world_art.py</code> from the same drawing functions): no outline ring, no dark seams between parts, and each near-black ramp tone lifted one step, so a crop is lit and coloured like the soil it stands in. The icons in the table, the cell panel, the seed belt and the harvest slots keep their 1 px outline. The foliage playground (M13) draws the same world stages in its Crops and gardens layer.</p>
 </section>
 
 <section>
@@ -239,6 +254,7 @@ ol.q b{font-family:var(--display);font-size:17px;letter-spacing:.02em}
     <li><b>Crops per planet?</b> <span class="rec">Recommendation: like animals, an explicit roster per body;</span> a crop from one world grows elsewhere only as seed you carried, and only in a greenhouse.</li>
   </ol>
 </section>
+</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -393,7 +409,9 @@ const TILLED = [SLOT.fields, 2, 3];   // the fields sheet's "tilled soil" (tile 
 const tileMat = (tile, tint = 0xffffff) => { const k = tile.join() + "/" + tint; return MATS[k] || (MATS[k] = litMat({ map: ATLAS, mode: 3, tile, color: tint })); };
 const SETTLE = { timber: 1, plank: 2, plaster: 2, thatch: 2, iron: 1, boards: 2, fieldstone: 2 };   // repeat_m, manifest.ron
 const gameMat = (name, tint = 0xffffff) => { const k = "s:" + name + "/" + tint; return MATS[k] || (MATS[k] = litMat({ map: gameTex(name), mode: 2, rep: SETTLE[name], color: tint })); };
-const cropMat = name => MATS[name] || (MATS[name] = litMat({ map: tex(name), side: THREE.DoubleSide, up: 1 }));
+// The plot draws each stage's outline-free world version (farming/world/, docs/mockups/farming/world_art.py):
+// outlines belong to inventory and UI icons only (owner, 2026-11-15). The table, cell panel and seed belt keep the icons.
+const cropMat = name => MATS["w:" + name] || (MATS["w:" + name] = litMat({ map: tex("world/" + name), side: THREE.DoubleSide, up: 1 }));
 
 // =====================================================================
 // Renderer and a small orbit control
@@ -775,7 +793,12 @@ $("nextDay").addEventListener("click", nextDay);
 $("next5").addEventListener("click", () => { for (let i = 0; i < 5; i++) nextDay(); });
 $("reset").addEventListener("click", () => { DAY = 0; RAIN = false; for (const k in INV) delete INV[k]; drawInv(); build(); refreshAll(); });
 $("site").addEventListener("change", e => { SITE = e.target.value; RAIN = false; build(); refreshAll(); if (SEED_CROP !== "glowcap" && SITE === "moon") document.querySelector('[data-seed="glowcap"]').click(); });
+$("openNotes").addEventListener("click", () => { $("notes").hidden = false; $("closeNotes").focus(); });
+$("closeNotes").addEventListener("click", () => { $("notes").hidden = true; $("openNotes").focus(); });
+$("notes").addEventListener("click", e => { if (e.target === $("notes")) $("notes").hidden = true; });
 window.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !$("notes").hidden) { $("notes").hidden = true; return; }
+  if (!$("notes").hidden) return;
   if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
   const t = TOOLS.find(t => t.key === e.key); if (t) setTool(t.id);
   if (e.key === "n" || e.key === "N") $("night").click();

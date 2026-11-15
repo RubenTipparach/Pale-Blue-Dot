@@ -76,6 +76,37 @@ that the lamps read. `docs/mockups/towns.html` does this (the `tenebris-towns`
 design, section 7). `fishing.html` and `vehicles.html` predate this rule and
 have a fixed daylight.
 
+## No outlines in the world; one art style (owner, 2026-11-15)
+
+**Standing instruction from the user:** "we need unified art style. outlines
+are for sprites in the ui inventory system, there is no need for that in the
+world, this game looks much better without harsh outlines". In the 3D world,
+in the game and in every mockup:
+- no black or dark outline round plants, crops, creatures or props, and no
+  harsh contrasting detail on them;
+- they are lit and coloured like the ground they stand on, in its palette,
+  so they sit in the scene rather than on top of it;
+- ground cover defaults to the pixel tufts (M13), coloured from the biome's
+  own ground.
+
+The 1 px outline belongs to inventory and UI icons only: a pack slot, the
+hotbar, a recipe tree. A dropped item lying in the world is an icon, and keeps
+its own.
+
+## Notes stay out of the game (owner, 2026-11-15)
+
+**Standing instruction from the user:** "notes belong in mockups and chats,
+not the real game". The game's own screens carry labels and controls, never
+design or developer notes:
+- no frame costs ("costs ~2.4 ms on a Mac");
+- no explanations of what a setting leaves alone;
+- no "off by default";
+- no owner quotes, change names or other reasoning.
+
+That text belongs in a mockup's modal, an OpenSpec change, a doc or the reply
+in chat. A one-line instruction for using a control may stay, such as how to
+rebind a key. A debug overlay is a developer tool and stays behind its key.
+
 ## Nothing in a mockup spins on its own (owner, 2026-11-12)
 
 **Standing instruction from the user:** "dont auto spin anything lol". A
