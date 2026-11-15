@@ -143,7 +143,7 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   <details open><summary>Layers</summary><div class="body" id="layers"></div></details>
   <details open><summary>Trees and plants</summary><div class="body">
     <div class="field"><label for="treeStyle">Tree geometry</label><select id="treeStyle"><option value="detail">Detailed: parametric trunk, branches, leaf cards (proposal)</option><option value="hex">Tenebris hex prisms, game textures (what the game draws)</option></select></div>
-    <div class="field"><label for="grassStyle">Grass</label><select id="grassStyle"><option value="blades">Blades cut from the ground tile (proposal)</option><option value="tufts">Pixel tufts, from the Stone and Timber Play demo</option></select></div>
+    <div class="field"><label for="grassStyle">Grass</label><select id="grassStyle"><option value="tufts">Pixel tufts, coloured from the ground</option><option value="blades">Blades cut from the ground tile</option></select></div>
     <div class="field"><label for="treeScale">Tree scale</label><output id="treeScaleOut"></output><input type="range" id="treeScale" min="0.5" max="1.6" step="0.01" value="1"></div>
     <div class="field"><label for="plantScale">Plant and clutter scale</label><output id="plantScaleOut"></output><input type="range" id="plantScale" min="0.5" max="2" step="0.01" value="1"></div>
     <div class="field"><label for="colVar">Colour variation</label><output id="colVarOut"></output><input type="range" id="colVar" min="0" max="1" step="0.01" value="0.35"></div>
@@ -299,7 +299,7 @@ const BIOMES = {
     ferns: { kind: "reed", n: 1.1 }, mush: { tex: "P:cap_brown", n: 0.25 }, rocks: 0.15, logs: 0.06, vines: 0.5, litter: 0.3, snow: true, fireflies: true },
   fungal: { name: "Glowing fungal forest", icon: "glowcap", alien: true, amp: 3, sheet: SHEET.sporewood, sky: [0x5a5490, 0xb8a0c8], fog: 0x8a7ea8,
     trees: { glowcap: 1 }, treeP: 0.2, extra: 0, grass: 3, bush: { tex: "S:10", n: 0.15, glow: true }, flowers: { tex: ["flower_glow"], n: 0.25, glow: true },
-    ferns: { kind: "twig", n: 0.0 }, mush: { tex: "S:9", n: 0.7, glow: true }, rocks: 0.3, logs: 0.0, vines: 0.2, litter: 0.0, snow: false, fireflies: true, spores: true },
+    ferns: { kind: "twig", n: 0.0 }, mush: { tex: "S:9", n: 0.7, glow: true }, rocks: 0.3, logs: 0.0, vines: 0.2, vine: "S:14", litter: 0.0, snow: false, fireflies: true, spores: true },
   crystal: { name: "Crystal flora", icon: "crystal", alien: true, amp: 5, sheet: SHEET.frozen_wastes, sky: [0x8ab0d8, 0xe6d8f0], fog: 0xc8c0dc,
     trees: { crystal: 1 }, treeP: 0.14, extra: 0, grass: 1.2, bush: null, flowers: { tex: ["flower_blue", "flower_white"], n: 0.08 },
     ferns: { kind: "shard", n: 0.35 }, mush: null, rocks: 1.2, logs: 0, vines: 0, litter: 0, snow: false, fireflies: false },
@@ -328,7 +328,7 @@ const SPECIES = {
 const LAYER_DEFS = [
   ["trees", "Trees", "one per cell, by biome rate"],
   ["bushes", "Bushes", ""],
-  ["grass", "Grass", "blades near, cards mid"],
+  ["grass", "Grass", ""],
   ["flowers", "Flowers", ""],
   ["ferns", "Ferns, reeds, undergrowth", ""],
   ["mush", "Mushrooms", ""],
@@ -340,7 +340,7 @@ const LAYER_DEFS = [
   ["fireflies", "Fireflies and spores", "moving lights"],
 ];
 const DEFAULTS = {
-  biome: "temperate", season: "summer", time: 16.5, treeStyle: "detail", grassStyle: "blades", treeScale: 1, plantScale: 1, colVar: 0.35,
+  biome: "temperate", season: "summer", time: 16.5, treeStyle: "detail", grassStyle: "tufts", treeScale: 1, plantScale: 1, colVar: 0.35,
   wind: 0.35, gust: 0.5, windDir: 60, lodMode: "timed", near: 22, mid: 45, draw: 80, fadeW: 0.3, lodVis: false, maskVis: false, atlasVis: false, patch: 26,
   layers: Object.fromEntries(LAYER_DEFS.map(([k]) => [k, { on: true, dens: 1 }])),
 };
@@ -363,7 +363,7 @@ const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 1200);
 camera.rotation.order = "YXZ";
 
 const TEXDIR = "foliage/";
-const ART_V = 8;   // cache-bust: bump whenever any PNG changes, so no browser shows stale art
+const ART_V = 9;   // cache-bust: bump whenever any PNG changes, so no browser shows stale art
 const TEX = {};
 const loader = new THREE.TextureLoader();
 let pending = 0, loadedOnce = false;
@@ -961,8 +961,10 @@ function grassTuft(rnd, n = 9) {
 // The Play demo's grass (docs/mockups/ui/play.js, tuftTex): a 16 px tuft of nine one-pixel blades,
 // dark at the root and light at the tip, cut out with alpha, on two crossed cards. Owner, 2026-11-14:
 // "this grass is actually better than what we have in the game ... add a toggle for me to try this
-// alternate grass in the different biomes". Each biome gets its own three-tone ramp; temperate is
-// the demo's own.
+// alternate grass in the different biomes"; 2026-11-15: "first default to pixel tufts, make sure
+// its color matches the ground though". So the tufts are the default, and each biome's three-tone
+// ramp is read off its own ground tile (groundRamp), never a fixed green.
+// TUFT_RAMP is only the fallback for a browser that cannot read the atlas's pixels.
 const TUFT_RAMP = {
   temperate: ["#05582d", "#559642", "#9bb675"], jungle: ["#0a4a24", "#2f7d32", "#6fb043"],
   savanna: ["#6b5a1e", "#a8913a", "#d8c070"], taiga: ["#1d3f2c", "#3d6a48", "#7c9a6a"],
@@ -970,17 +972,48 @@ const TUFT_RAMP = {
   fungal: ["#2a1a4a", "#6a3a9a", "#c08ae0"], crystal: ["#2a4a6a", "#5a8ab8", "#a8d0f0"],
   kelp: ["#0e4a3e", "#2a7a64", "#6ab8a0"],
 };
+// The tile a biome's grass grows from: its terrain top (0,0), or topIdx where the biome sets one,
+// and the kelp drift's kelp mat (grassIdx), the same tile the blades crop.
+const groundIdx = B => B.grassIdx !== undefined ? B.grassIdx : (B.topIdx || 0);
+// A ground tile's dark, mid and light colours: its 1,024 texels sorted by luminance and split in
+// thirds, each third giving its commonest colour. They are the tile's own palette colours, so a
+// tuft sits in the ground's palette (and is lit by the same light) rather than on top of it.
+const RAMPS_OF = {};
+function groundRamp(img, slot, idx) {
+  const key = slot + ":" + idx;
+  if (RAMPS_OF[key]) return RAMPS_OF[key];
+  const d = imagePixels(img, ...tileRect(img, slot, idx)), px = [];
+  for (let i = 0; i < d.length; i += 4) px.push([d[i], d[i + 1], d[i + 2], 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]]);
+  px.sort((a, b) => a[3] - b[3]);
+  const ramp = [0, 1, 2].map(t => {
+    const part = px.slice(Math.floor(px.length * t / 3), Math.floor(px.length * (t + 1) / 3)), count = new Map();
+    let best = part[0], bn = 0;
+    for (const p of part) { const k = (p[0] << 16) | (p[1] << 8) | p[2], n = (count.get(k) || 0) + 1; count.set(k, n); if (n > bn) { bn = n; best = p; } }
+    return "rgb(" + best[0] + "," + best[1] + "," + best[2] + ")";
+  });
+  return (RAMPS_OF[key] = ramp);
+}
+const TUFT_Q = [];   // tufts waiting for the atlas to load; drawn by resolveMeans
 const tuftHash = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
 function tuftTex(biome, v) {
   const key = "tuft:" + biome + ":" + v;
   if (TEX[key]) return key;
-  const ramp = TUFT_RAMP[biome] || TUFT_RAMP.temperate;
+  const B = BIOMES[biome], atlas = tex("game/atlas");
   const cv = document.createElement("canvas"); cv.width = cv.height = 16; const g = cv.getContext("2d");
-  for (let i = 0; i < 9; i++) {
-    const x = 1 + Math.floor(tuftHash(i, 2 + v * 7) * 14), hgt = 5 + Math.floor(tuftHash(i, 5 + v * 3) * 9);
-    for (let y = 0; y < hgt; y++) { g.fillStyle = ramp[Math.min(2, Math.floor(y / 4))]; g.fillRect(x + (y > 6 && i % 2 ? 1 : 0), 15 - y, 1, 1); }
-  }
   const t = new THREE.CanvasTexture(cv); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  const draw = () => {
+    const img = atlas.image;
+    if (!img || !img.complete || !img.naturalWidth) return false;
+    let ramp;
+    try { ramp = groundRamp(img, B.sheet, groundIdx(B)); } catch (e) { ramp = TUFT_RAMP[biome] || TUFT_RAMP.temperate; }
+    g.clearRect(0, 0, 16, 16);
+    for (let i = 0; i < 9; i++) {
+      const x = 1 + Math.floor(tuftHash(i, 2 + v * 7) * 14), hgt = 5 + Math.floor(tuftHash(i, 5 + v * 3) * 9);
+      for (let y = 0; y < hgt; y++) { g.fillStyle = ramp[Math.min(2, Math.floor(y / 4))]; g.fillRect(x + (y > 6 && i % 2 ? 1 : 0), 15 - y, 1, 1); }
+    }
+    t.needsUpdate = true; dirty = true; return true;
+  };
+  if (!draw()) TUFT_Q.push(draw);
   TEX[key] = t; return key;
 }
 function crossedCards(w, h, n = 2, yOff = 0) {
@@ -1227,7 +1260,7 @@ function buildLayers(B) {
   const ON = k => S.layers[k].on, D = k => S.layers[k].dens;
   const usable = c => !c.wet && !c.path && !c.clear;
   const ends3 = () => [S.near, S.mid, S.draw];
-  const ground = B.grassIdx !== undefined ? B.grassIdx : (B.topIdx || 0);   // the tile the blades crop
+  const ground = groundIdx(B);   // the tile the blades (and the tufts' colours) come from
 
   // ---- lanterns and the campfire (lit first, so everything else can bake them)
   if (ON("lights")) {
@@ -1435,7 +1468,7 @@ function buildLayers(B) {
   // ---- vines, hung by their root from the crowns of the trees placed above
   if (ON("vines") && B.vines && treeObjs.length && S.treeStyle !== "hex") {
     const L = makeLayer("vines", () => [S.near * 1.1]);
-    const vars = [0, 1, 2].map(v => nb(vineStrand(rngOf(900 + v)), mat("vine", { tex: "game/leaves", card: true, mask: 4, sway: true, leafy: true, windAmp: 0.0, windH: 3, upN: 0.3, flutter: 0.08 }), 0));
+    const vars = [0, 1, 2].map(v => nb(vineStrand(rngOf(900 + v)), mat("vine:" + (B.vine || "T:game/leaves") + ":" + B.sheet, { ...spec(B.vine || "T:game/leaves", B), card: true, mask: 4, sway: true, leafy: true, windAmp: 0.0, windH: 3, upN: 0.3, flutter: 0.08 }), 0));
     for (const t of treeObjs) { const seed = t.seed * 1e6 | 0; if (hash(seed, 1, 901) > B.vines * D("vines")) continue;
       const n = 3 + ((hash(seed, 2, 901) * 4) | 0);
       for (let k = 0; k < n; k++) { const a = hash(seed, k, 902) * 6.28, r = t.cr * (0.4 + hash(seed, k, 903) * 0.5), x = t.x + Math.cos(a) * r, z = t.z + Math.sin(a) * r, y = t.y + t.H * (0.6 + hash(seed, k, 904) * 0.25);
@@ -1817,7 +1850,7 @@ function applyLive() {
 function syncUI() {
   for (const [k, fmt] of LIVE) { $(k).value = S[k]; $(k + "Out").textContent = fmt(+S[k]); }
   $("time").value = S.time; $("timeOut").textContent = fmtTime(S.time);
-  $("treeStyle").value = S.treeStyle; $("grassStyle").value = S.grassStyle || "blades"; $("lodMode").value = S.lodMode; $("lodVis").checked = S.lodVis; $("maskVis").checked = S.maskVis; $("atlasVis").checked = !!S.atlasVis; $("patch").value = String(S.patch);
+  $("treeStyle").value = S.treeStyle; $("grassStyle").value = S.grassStyle || "tufts"; $("lodMode").value = S.lodMode; $("lodVis").checked = S.lodVis; $("maskVis").checked = S.maskVis; $("atlasVis").checked = !!S.atlasVis; $("patch").value = String(S.patch);
   for (const b of $("season").children) b.setAttribute("aria-pressed", b.dataset.v === S.season);
   for (const b of $("biomes").children) b.setAttribute("aria-pressed", b.dataset.v === S.biome);
   const B = BIOMES[S.biome];
