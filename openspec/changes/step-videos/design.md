@@ -123,6 +123,41 @@ post the prototype too so I can compare/contrast stuff".
   the gate also asks the owner to run `obs-record` on the same showcase. The
   gate is not passed on the cloud video alone.
 
+**7. Gameplay demos are played, and technical demos are one video (owner, 2026-11-15).**
+The owner, on the first batch of phase 1 and 2 clips, which were scripted
+scene setups filmed with a slow pan: *"demos for gameplay needs to be
+incontext of gameplay, not just stills of UI"*, and *"demos of technical
+stuff, should be consoliotdated"*.
+
+- **A gameplay showcase plays the game.** The walker moves, looks and acts
+  through the player's own input path: the same key and button handling,
+  the aim ray, the hotbar, the panels opened by their keys, and the clicks on
+  a panel's recipe. Every step of the loop is something done, not a state
+  set:
+  - walking up to a tree and chopping it;
+  - gathering, crafting at the bench, placing the bench;
+  - casting, waiting for the bite, reeling and landing;
+  - tilling, sowing, waiting for the crop on a sped-up clock, harvesting;
+  - feeding to tame, building a pen, collecting;
+  - lighting the campfire, cooking and eating;
+  - the mission line ticking off as it goes.
+
+  A panel shows only while the player uses it. No panel is opened onto a
+  posed scene, and nothing is placed by a capture instrument. Clock speed-ups
+  are allowed and captioned ("3 days later").
+- **Phase 1 is one continuous run:** a new world, through the loop, in
+  sections with captions. Its sections can also be cut as clips.
+- **Technical features go in one consolidated video per phase,** shot after
+  shot with a caption each, for example "Water flows by Luanti's rule;
+  sources renew", "High and low tide on one beach" or "Trees by biome",
+  instead of one file per feature.
+- **Water waits.** The owner: *"I'd hold off on the water stuff until the
+  lerp work is done"*. The water shots (flow, falls, river, flooding, tides)
+  are filmed after `water-flow` design "Smooth water between ticks" is in the
+  game.
+- **Recording.** The capture rig's debug readout is off in a showcase. Audio
+  is recorded where the platform allows, and a silent video says so.
+
 ## Risks / Trade-offs
 
 - [lavapipe is slow enough that a three-minute recording takes hours] →
