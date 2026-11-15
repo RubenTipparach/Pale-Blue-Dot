@@ -18,7 +18,7 @@ use pbd_app::controls::PickerKey;
 use pbd_app::fish::ToolSlot;
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitPiece, KitText, Set, Tooltip, UiKit};
-use pbd_core::inventory::Tool;
+use pbd_core::inventory::{Equipment, Tool, tool_title};
 
 /// The picker's highlight while G is held: a tool, or `None` for bare hands.
 /// Separate from the tool in hand, so wheeling past a tool does not put it in
@@ -99,7 +99,7 @@ pub fn spawn(
             kit.whole(Set::Stone, "slot-idle"),
             // Hovered while the pack has the pointer: what is in hand.
             Interaction::default(),
-            Tooltip(hand_tip(None)),
+            Tooltip(hand_tip(&Equipment::new_world())),
             ToolSlotCell,
         ))
         .with_children(|cell| {
@@ -137,9 +137,8 @@ pub fn spawn(
         .with_children(|column| {
             let entries = std::iter::once(None).chain(Tool::ALL.into_iter().map(Some));
             for tool in entries {
-                let (name, purpose) = tool.map_or(("Bare hands", "breaks nothing"), |t| {
-                    (t.name(), t.purpose())
-                });
+                let (name, purpose) =
+                    tool.map_or((BARE, BARE_PURPOSE), |t| (t.name(), t.purpose()));
                 column
                     .spawn((
                         Node {
@@ -162,6 +161,7 @@ pub fn spawn(
                                 ..default()
                             },
                             PickerIcon,
+                            PickerRow(tool),
                         ));
                         row.spawn(Node {
                             flex_direction: FlexDirection::Column,
@@ -169,10 +169,11 @@ pub fn spawn(
                             ..default()
                         })
                         .with_children(|words| {
-                            words.spawn(
+                            words.spawn((
                                 KitText::new(name.to_uppercase(), ui_kit::TITLE)
                                     .shadow(ui_kit::INK),
-                            );
+                                PickerName(tool),
+                            ));
                             words.spawn((
                                 Text::new(purpose),
                                 TextFont {
@@ -214,10 +215,7 @@ pub fn pick(
         if let Some(save) = save.as_deref_mut() {
             save.record_hand(&tools);
         }
-        info!(
-            "in hand: {}",
-            tools.held().map_or("bare hands", |t| t.name())
-        );
+        info!("in hand: {}", hand_tip(&tools));
     }
 }
 
@@ -225,16 +223,34 @@ pub fn pick(
 #[derive(Component)]
 pub struct ToolSlotCell;
 
-/// What the tool slot's tooltip says: the tool in hand and what it is for.
-pub fn hand_tip(held: Option<Tool>) -> String {
-    let (name, purpose) = held.map_or(("Bare hands", "breaks nothing"), |t| {
-        (t.name(), t.purpose())
-    });
-    format!("{name}: {purpose}")
+/// Bare hands, in the picker and the tool slot's tooltip.
+const BARE: &str = "Bare hands";
+/// What they do (`tool-crafting` decision 1).
+const BARE_PURPOSE: &str = "digs soft ground";
+
+/// A tool's name as the picker shows it: with its tier ("Iron pickaxe").
+pub fn tool_name(equipment: &Equipment, tool: Option<Tool>) -> String {
+    match tool {
+        None => BARE.to_string(),
+        Some(tool) => equipment
+            .tier(tool)
+            .map_or_else(|| tool.name().to_string(), |tier| tool_title(tool, tier)),
+    }
 }
 
+/// What the tool slot's tooltip says: the tool in hand, with its tier, and
+/// what it is for.
+pub fn hand_tip(equipment: &Equipment) -> String {
+    let purpose = equipment.held().map_or(BARE_PURPOSE, Tool::purpose);
+    format!("{}: {purpose}", tool_name(equipment, equipment.held()))
+}
+
+/// The name line of a picker row, renamed when its tool's tier changes.
+#[derive(Component)]
+pub struct PickerName(pub Option<Tool>);
+
 /// Paint the tool slot and the picker from the resources.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn paint(
     key: Res<PickerKey>,
     tools: Res<ToolSlot>,
@@ -242,19 +258,43 @@ pub fn paint(
     icons: Res<ItemIcons>,
     mut slot: Query<&mut ImageNode, (With<ToolIcon>, Without<PickerIcon>)>,
     mut column: Query<&mut Node, With<PickerColumn>>,
-    mut rows: Query<(&PickerRow, &mut Node, &mut BackgroundColor), Without<PickerColumn>>,
+    mut rows: Query<
+        (&PickerRow, &mut Node, &mut BackgroundColor),
+        (Without<PickerColumn>, Without<PickerIcon>),
+    >,
     mut tips: Query<&mut Tooltip, With<ToolSlotCell>>,
+    mut names: Query<(&PickerName, &mut KitText)>,
+    mut picker_icons: Query<(&PickerRow, &mut ImageNode), (With<PickerIcon>, Without<ToolIcon>)>,
 ) {
     for mut tip in &mut tips {
-        let want = hand_tip(tools.held());
+        let want = hand_tip(&tools);
         if tip.0 != want {
             tip.0 = want;
         }
     }
     for mut image in &mut slot {
-        let want = icons.in_hand(tools.held());
+        let want = icons.in_hand_at(&tools);
         if image.image != want {
             image.image = want;
+        }
+    }
+    if tools.is_changed() {
+        for (name, mut text) in &mut names {
+            let want = tool_name(&tools, name.0).to_uppercase();
+            if text.text != want {
+                text.text = want;
+            }
+        }
+        for (row, mut image) in &mut picker_icons {
+            let want = match row.0 {
+                Some(tool) => tools
+                    .tier(tool)
+                    .map_or_else(|| icons.tool(tool), |tier| icons.tool_at(tool, tier)),
+                None => icons.hand.clone(),
+            };
+            if image.image != want {
+                image.image = want;
+            }
         }
     }
     let open = key.holding;

@@ -10,12 +10,12 @@
 // a good's code, `block:<name>`, `tool:<name>`, `recipe:<code>`; animals
 // and fish by their roster name in lower case.
 //
-// `awaited` are tool-crafting's names (its design, decisions 2-6), not in
-// this build yet: a mission naming only these where it names anything
-// unknown is PENDING - logged at load, shown as not in this build, and met
-// for the missions that need it. A `craft` of an item no recipe makes is
-// pending too, and so is `fell` while nothing fells a tree. Any other
-// unknown name is an error.
+// `awaited` names what another branch will bring: a mission naming only
+// these where it names anything unknown is PENDING - logged at load, shown
+// as not in this build, and met for the missions that need it. A `craft` of
+// an item no recipe makes is pending too, and so is `fell` while nothing
+// fells a tree (trees give logs, they are not felled). Any other unknown
+// name is an error.
 //
 // A mission's `id` is saved in the world's `missions` record: append-only,
 // never renamed. Counts are picked so each mission is one to three minutes
@@ -24,39 +24,34 @@
 // farming.ron), so `collect` and `harvest` come late in the chain, after
 // the planting and taming they wait on.
 (
-    awaited: [
-        "fibre", "fiber", "log", "branch-log", "planks", "plank", "rope",
-        "block:workbench", "tree",
-        "recipe:stone-pickaxe", "recipe:stone-shovel", "recipe:stone-axe", "recipe:rod",
-        "recipe:campfire",
-        "recipe:bronze-pickaxe", "recipe:bronze-shovel", "recipe:bronze-axe",
-        "recipe:iron-pickaxe", "recipe:iron-shovel", "recipe:iron-axe",
-    ],
+    // Nothing awaited: tool crafting is in (its goods `fibre`, `stone`,
+    // `log`, `planks`, `rope`, the workbench and its recipes).
+    awaited: [],
     missions: [
         (
             id: "gather",
             title: "Gather by hand",
-            help: "Dig soft ground with bare hands, pull fibre from grass, and find a branch under a tree.",
+            help: "Dig soft ground with bare hands (fibre turns up in grass), and hit a tree by hand to pull down a branch.",
             objectives: [
                 (kind: gather, what: "block:dirt|block:grass|block:soil|block:sand", count: 4, label: "soil"),
-                (kind: gather, what: "fibre|fiber", count: 3, label: "fibre"),
-                (kind: gather, what: "log|branch-log", count: 1, label: "branch"),
+                (kind: gather, what: "fibre", count: 3, label: "fibre"),
+                (kind: gather, what: "log", count: 1, label: "branch"),
             ],
         ),
         (
             id: "planks-rope",
             title: "Make planks and rope",
-            help: "Open the pack (I) and make planks from the branch and rope from fibre.",
+            help: "In the pack (I), the Craft row makes planks from a log and rope from three fibre.",
             needs: ["gather"],
             objectives: [
-                (kind: craft, what: "planks|plank", count: 4, label: "planks"),
+                (kind: craft, what: "planks", count: 4, label: "planks"),
                 (kind: craft, what: "rope", count: 1, label: "rope"),
             ],
         ),
         (
             id: "crafting-table",
             title: "Make a crafting table",
-            help: "Make a workbench from planks, then place it on the ground.",
+            help: "Make a workbench from six planks in the Craft row, then place it on the ground.",
             needs: ["planks-rope"],
             objectives: [
                 (kind: craft, what: "block:workbench", count: 1, label: "make"),
@@ -66,7 +61,7 @@
         (
             id: "mining-tools",
             title: "Make mining tools",
-            help: "At the workbench (E), make a stone pickaxe and a stone shovel.",
+            help: "Loose stone comes off rock outcrops by hand. At the workbench (E), make a stone pickaxe and a stone shovel.",
             needs: ["crafting-table"],
             objectives: [
                 (kind: craft, what: "tool:pickaxe|recipe:stone-pickaxe", count: 1, label: "pickaxe"),
@@ -76,11 +71,11 @@
         (
             id: "axe",
             title: "Make an axe",
-            help: "Make a stone axe at the workbench, and fell a tree with it.",
+            help: "Make a stone axe at the workbench, and cut logs from a tree with it.",
             needs: ["mining-tools"],
             objectives: [
                 (kind: craft, what: "tool:axe|recipe:stone-axe", count: 1, label: "axe"),
-                (kind: fell, what: "tree", count: 1, label: "fell a tree"),
+                (kind: gather, what: "log", count: 3, label: "logs"),
             ],
         ),
         (
@@ -89,13 +84,13 @@
             help: "Make a rod at the workbench from planks, rope and fibre.",
             needs: ["axe"],
             objectives: [
-                (kind: craft, what: "tool:fishing rod|recipe:rod", count: 1, label: "rod"),
+                (kind: craft, what: "tool:rod|recipe:rod", count: 1, label: "rod"),
             ],
         ),
         (
             id: "fire",
             title: "Make a fire",
-            help: "Make a campfire from the pack, and set it down near water.",
+            help: "Make a campfire in the Craft row from five loose stone and two logs, and set it down near water.",
             needs: ["rod"],
             objectives: [
                 (kind: craft, what: "block:campfire|recipe:campfire", count: 1, label: "make"),
@@ -170,7 +165,7 @@
         (
             id: "smelt",
             title: "Smelt ore",
-            help: "Place a forge, dig ore with the pickaxe, and smelt it with coal (E on the forge).",
+            help: "Make a forge at the workbench and place it, dig ore with the pickaxe, and smelt it with coal (E on the forge).",
             needs: ["pen"],
             objectives: [
                 (kind: place, what: "block:forge", count: 1, label: "place a forge"),

@@ -39,3 +39,15 @@ The dishes (`grilled-fish`, `chili-fish`, `flatbread`, `roast-turnip`,
 (`docs/mockups/cooking/`, `tools/art/cooking_art.py`, balatro-pixel-art kit,
 Sweaft-64), reduced from 24 px to 16 px the same way as above. The script
 names which mockup picture each dish takes.
+
+## tool-crafting
+
+Made by `tools/art/crafting_icons.py` (`tool-crafting` task 2.1), by the same
+reduction:
+
+| Where | What | How |
+| --- | --- | --- |
+| `assets/items/goods/{fibre,stone,log,planks,rope}.png` | tier 0 and the hands work | M3 icons, reduced to 16 px |
+| `assets/items/stations/workbench.png` | the workbench block slot icon | M3 `workbench.png`, reduced to 16 px |
+| `assets/items/tools/{stone,bronze,iron}-pickaxe.png` | a pick of each tier | M3 `pick-<tier>.png`, reduced to 16 px |
+| `assets/items/tools/{stone,bronze,iron}-{shovel,axe}.png` | a shovel and an axe of each tier | the game own `shovel.png` and `axe.png` with the head three greys swapped for the tier three (iron is the picture as drawn) |

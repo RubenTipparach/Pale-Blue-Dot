@@ -1249,6 +1249,16 @@ impl Validated for pbd_core::station::RecipeFile {
     }
 }
 
+impl Validated for pbd_core::gather::GatherSettings {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::gather::GatherSettings::validate(self)
+    }
+}
+
+/// Tier 0 off the ground (`gather.ron`, `tool-crafting`), loaded once.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
+pub struct GatherConfig(pub pbd_core::gather::GatherSettings);
+
 /// Every station's recipes (`recipes.ron`, then the kitchen's from
 /// `cooking.ron`), resolved once: one book, so every station follows one
 /// set of rules (`cooking` design S4).
@@ -1632,6 +1642,7 @@ impl Plugin for ConfigPlugin {
             .insert_resource(HusbandryConfig(load("husbandry")))
             .insert_resource(DigConfig(load("dig")))
             .insert_resource(FarmConfig(load("farming")))
+            .insert_resource(GatherConfig(load("gather")))
             .insert_resource(recipes)
             .insert_resource(kitchen);
         #[cfg(feature = "desktop")]
@@ -1707,6 +1718,10 @@ mod tests {
             ron::from_str(include_str!("../../../assets/config/farming.ron")).unwrap();
         Validated::validate(&farm).unwrap();
         assert_eq!(farm, Default::default());
+        let gather: pbd_core::gather::GatherSettings =
+            ron::from_str(include_str!("../../../assets/config/gather.ron")).unwrap();
+        Validated::validate(&gather).unwrap();
+        assert_eq!(gather, Default::default());
         #[cfg(feature = "desktop")]
         {
             let held: crate::held::HeldSettings = ron::from_str(HELD_RON).unwrap();

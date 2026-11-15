@@ -95,15 +95,14 @@
             inputs: [("raw-meat", 1)],
             outputs: [("roast-meat", 1)],
         ),
-        // Making fire (design S3): by hand, from the pack, once
-        // `tool-crafting`'s hand panel is in. Stone and coal until there are
-        // logs.
+        // Making fire (design S3): by hand, from the pack's Craft row, from
+        // loose stone and logs (`tool-crafting` decision 10).
         (
             code: "campfire",
             name: "CAMPFIRE",
             station: "hand",
             secs: 3.0,
-            inputs: [("block:stone", 5), ("coal", 2)],
+            inputs: [("stone", 5), ("log", 2)],
             outputs: [("block:campfire", 1)],
         ),
     ],

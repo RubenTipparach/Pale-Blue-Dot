@@ -99,12 +99,7 @@ pub fn held(
     placed: &[Material],
 ) -> u32 {
     let want = |item: Item| objective.want.matches(objective.kind, &item_code(item));
-    let placed_count = || {
-        placed
-            .iter()
-            .filter(|m| want(Item::Block(**m)))
-            .count() as u32
-    };
+    let placed_count = || placed.iter().filter(|m| want(Item::Block(**m))).count() as u32;
     match objective.kind {
         Kind::Craft => {
             if matches!(objective.want, Want::Any) {

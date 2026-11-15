@@ -221,7 +221,7 @@ pub fn queue(
             note.say(wall_s, "The fire is full");
             return false;
         }
-        Err(station::Refused::Elsewhere) => return false,
+        Err(station::Refused::Elsewhere | station::Refused::NotBetter) => return false,
     }
     if !store(save, cell, layer, &state, &moved) {
         error!("cook BLOCKED: the save did not accept it");

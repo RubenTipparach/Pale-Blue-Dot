@@ -90,7 +90,11 @@ pub fn show(
     let Ok((mut cracks, mut visibility, mesh, mut material)) = overlay.single_mut() else {
         return;
     };
-    let Some((block, progress)) = mining.progress() else {
+    // A tree being worked has no block to crack (`tool-crafting` decision 3).
+    let Some((block, progress)) = mining
+        .progress()
+        .filter(|(block, _)| block.1 != super::digging::TREE_LAYER)
+    else {
         if *visibility != Visibility::Hidden {
             *visibility = Visibility::Hidden;
             cracks.block = None;

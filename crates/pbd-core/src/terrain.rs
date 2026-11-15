@@ -78,6 +78,9 @@ pub enum Material {
     /// The forge (`farming-and-smelting` decision 8): the first station
     /// block. Solid, drawn in slate bricks, with a chimney stood on it.
     Forge = 19,
+    /// The workbench (`tool-crafting` decision 5): the station tools are made
+    /// at. Solid, drawn in the local trees' wood with a plank top stood on it.
+    Workbench = 20,
     // 20 is `tool-crafting`'s; 22 and 23 are held for the kitchen.
     /// A campfire (`cooking` design S2): a ring of stones round a fire, the
     /// kitchen's first station and a light. Like every light it is neither
@@ -128,7 +131,7 @@ impl Material {
     /// Every material, in code order. Codes need not be contiguous: two
     /// branches each take their own numbers, and a gap is a code another
     /// build holds.
-    pub const ALL: [Material; 21] = [
+    pub const ALL: [Material; 22] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -149,6 +152,7 @@ impl Material {
         Material::Candle,
         Material::Tilled,
         Material::Forge,
+        Material::Workbench,
         Material::Campfire,
     ];
 

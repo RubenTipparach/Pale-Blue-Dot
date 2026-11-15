@@ -18,9 +18,8 @@ fn objective(kind: Kind, what: &str, count: u32) -> ObjectiveEntry {
 /// memory-only world, with `chain` (or the shipped one).
 fn app(chain: Option<MissionFile>) -> App {
     let (recipes, _) = crate::config::recipe_book();
-    let fauna = FaunaConfig(
-        ron::from_str(include_str!("../../../../assets/config/fauna.ron")).unwrap(),
-    );
+    let fauna =
+        FaunaConfig(ron::from_str(include_str!("../../../../assets/config/fauna.ron")).unwrap());
     let land = HusbandryConfig(Default::default());
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
@@ -50,7 +49,10 @@ fn done(app: &App, id: &str) -> bool {
 fn every_kind_counts_from_its_message() {
     let rows = [
         ("find", objective(Kind::Find, "seed", 3)),
-        ("gather", objective(Kind::Gather, "wheat-seed|block:dirt", 2)),
+        (
+            "gather",
+            objective(Kind::Gather, "wheat-seed|block:dirt", 2),
+        ),
         ("harvest", objective(Kind::Harvest, "crop", 2)),
         ("collect", objective(Kind::Collect, "egg", 1)),
         ("craft", objective(Kind::Craft, "recipe:mixed-ore", 1)),
@@ -91,7 +93,9 @@ fn every_kind_counts_from_its_message() {
     world.write_message(gained(Item::Good(Good::COPPER_INGOT), 2, How::Made));
     world.write_message(gained(Item::Good(Good::IRON_INGOT), 1, How::Made));
     world.write_message(gained(Item::Block(Material::Dirt), 1, How::Found));
-    world.write_message(Planted { crop: Crop::all().nth(1).unwrap() });
+    world.write_message(Planted {
+        crop: Crop::all().nth(1).unwrap(),
+    });
     world.write_message(Deed::Tamed { species: 0 });
     world.write_message(Deed::Penned { species: 0 });
     world.write_message(Deed::PenBuilt { pen: 1, cells: 7 });
@@ -117,12 +121,15 @@ fn every_kind_counts_from_its_message() {
     assert!(save.records.get(MISSIONS_KIND, MISSIONS_ID).is_some());
 }
 
-/// The shipped chain on a new world opens on "Make a fire", whose craft is
-/// met by the kit's campfire; placing it closes the mission and opens "Go
-/// fishing", and the HUD's line follows.
+/// The shipped chain on a new world (which owns no tools since
+/// `tool-crafting`) opens on "Gather by hand", and the HUD's line follows
+/// the digging; three fish are counted one at a time once fishing opens.
 #[test]
-fn a_new_world_starts_at_the_fire_and_placing_it_moves_on() {
+fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
     let mut app = app(None);
+    app.insert_resource(crate::fish::ToolSlot(
+        pbd_core::inventory::Equipment::new_world(),
+    ));
     app.insert_resource(Hotbar::starting_kit());
     // A world just opened joins with what it holds.
     app.insert_resource(WorldSave::memory_only());
@@ -131,19 +138,51 @@ fn a_new_world_starts_at_the_fire_and_placing_it_moves_on() {
         let chain = &app.world().resource::<MissionChain>().0;
         app.world().resource::<Missions>().progress.line(chain)
     };
-    assert_eq!(line(&app).as_deref(), Some("Make a fire: place 0/1"));
-    app.world_mut()
-        .write_message(Did::block(Kind::Place, Material::Campfire));
+    assert_eq!(line(&app).as_deref(), Some("Gather by hand: soil 0/4"));
+    for _ in 0..4 {
+        app.world_mut()
+            .write_message(Did::block(Kind::Gather, Material::Dirt));
+    }
     app.update();
-    assert!(done(&app, "fire"));
-    assert_eq!(line(&app).as_deref(), Some("Go fishing 0/1"));
+    assert_eq!(line(&app).as_deref(), Some("Gather by hand: fibre 0/3"));
+    let world = app.world_mut();
+    world.write_message(Gained {
+        item: Item::Good(Good::FIBRE),
+        count: 3,
+        how: How::Found,
+    });
+    world.write_message(Gained {
+        item: Item::Good(Good::by_code("log").unwrap()),
+        count: 1,
+        how: How::Found,
+    });
+    app.update();
+    assert!(done(&app, "gather"));
+    assert_eq!(
+        line(&app).as_deref(),
+        Some("Make planks and rope: planks 0/4")
+    );
     let missions = app.world().resource::<Missions>();
     assert_eq!(
         missions.notice.as_ref().map(|(t, _)| t.as_str()),
-        Some("Make a fire")
+        Some("Gather by hand")
     );
-    // Three fish, one at a time.
-    app.world_mut().write_message(Did::new(Kind::Cast, "water", 1));
+    // Skip ahead to fishing: the record says the rest is done.
+    {
+        let mut missions = app.world_mut().resource_mut::<Missions>();
+        for id in [
+            "planks-rope",
+            "crafting-table",
+            "mining-tools",
+            "axe",
+            "rod",
+            "fire",
+        ] {
+            missions.progress.done.insert(id.into());
+        }
+    }
+    app.world_mut()
+        .write_message(Did::new(Kind::Cast, "water", 1));
     app.update();
     for n in 1..=3 {
         app.world_mut()
@@ -156,12 +195,14 @@ fn a_new_world_starts_at_the_fire_and_placing_it_moves_on() {
     assert_eq!(line(&app).as_deref(), Some("Cook fish 0/3"));
 }
 
-/// An old world, saved before missions, opens with the chain started and
-/// what it already holds done: a campfire it placed closes "Make a fire".
-/// A world with a record reads it back on open.
+/// An old world, saved before missions and before tool crafting, opens with
+/// the chain started and what it already holds done: its four tools (owned
+/// at the stone tier, `Equipment::default`) and a campfire it placed close
+/// everything up to "Make a fire". A world with a record reads it back.
 #[test]
 fn an_old_world_joins_with_what_it_holds_and_a_record_reads_back() {
     let mut app = app(None);
+    app.insert_resource(crate::fish::ToolSlot::default());
     let mut old = WorldSave::memory_only();
     old.edits.set(Edit {
         cell: 1234,
@@ -174,7 +215,8 @@ fn an_old_world_joins_with_what_it_holds_and_a_record_reads_back() {
     assert!(!done(&app, "go-fishing"));
 
     // Count a cast, then reopen the world from its records.
-    app.world_mut().write_message(Did::new(Kind::Cast, "water", 1));
+    app.world_mut()
+        .write_message(Did::new(Kind::Cast, "water", 1));
     app.update();
     let records = app.world().resource::<WorldSave>().records.clone();
     let mut reopened = WorldSave::memory_only();

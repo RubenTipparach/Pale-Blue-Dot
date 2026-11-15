@@ -36,6 +36,11 @@ pub struct QueueFill;
 
 use pbd_app::hotbar::Gained;
 
+/// A station's own panel inside the station layer, by station code: the one
+/// whose station is open is shown (`tool-crafting` decision 9).
+#[derive(Component)]
+pub struct StationPanel(pub &'static str);
+
 /// The panel. Built for the forge's recipes; another station's panel is the
 /// same with its own rows.
 pub fn spawn(
@@ -62,6 +67,7 @@ pub fn spawn(
                         flex_direction: FlexDirection::Column,
                         ..default()
                     },
+                    StationPanel("forge"),
                 ))
                 .with_children(|panel| {
                     menu::lintel(panel, kit, "FORGE");
@@ -159,6 +165,7 @@ pub fn spawn(
                             ));
                         });
                 });
+            super::craft::spawn_bench(layer, kit, &atlas, &recipes);
         });
 }
 
@@ -207,7 +214,7 @@ pub fn queue(
             note.say(wall_s, "The forge's queue is full");
             return false;
         }
-        Err(station::Refused::Elsewhere) => return false,
+        Err(station::Refused::Elsewhere | station::Refused::NotBetter) => return false,
     }
     if !store(save, cell, layer, &state, &moved) {
         error!("queue BLOCKED: the save did not accept it");
@@ -236,7 +243,9 @@ pub fn work(
     (mut gained, mut did): (MessageWriter<Gained>, MessageWriter<pbd_app::missions::Did>),
     mut plaques: Query<(&Interaction, &RecipePlaque, &mut Plaque), Changed<Interaction>>,
     mut line: Query<&mut KitText, With<QueueText>>,
-    mut fill: Query<&mut Node, With<QueueFill>>,
+    mut fill: Query<&mut Node, (With<QueueFill>, Without<StationPanel>)>,
+    mut tools: ResMut<pbd_app::fish::ToolSlot>,
+    mut panels: Query<(&StationPanel, &mut Node), Without<QueueFill>>,
 ) {
     if *screen != Screen::Forge {
         return;
@@ -244,6 +253,37 @@ pub fn work(
     let Some((cell, layer)) = at.0 else { return };
     let now_s = sun.clock.seconds;
     let wall_s = time.elapsed_secs();
+    // The open station's panel, and its queue collected while it is open,
+    // tools to the tool slot (`tool-crafting`).
+    let Some(row) = super::craft::station_row_at(&save, cell, layer) else {
+        return;
+    };
+    for (panel, mut node) in &mut panels {
+        let want = if panel.0 == row.code {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != want {
+            node.display = want;
+        }
+    }
+    super::craft::collect(
+        &mut save,
+        &mut hotbar,
+        &mut tools,
+        &recipes,
+        station::record_id(cell, layer),
+        row,
+        now_s,
+        &mut note,
+        wall_s,
+        &mut gained,
+        &mut did,
+    );
+    if row.code != "forge" {
+        return;
+    }
     for (interaction, plaque, _) in &mut plaques {
         if *interaction == Interaction::Pressed {
             queue(
@@ -258,39 +298,7 @@ pub fn work(
             );
         }
     }
-    let Some(row) = station::STATIONS.iter().find(|s| s.code == "forge") else {
-        return;
-    };
-    let mut state = station_state(&save, cell, layer, row);
-    // Collect what is done.
-    let before = state.jobs.clone();
-    let mut moved = hotbar.0.clone();
-    if state.collect(&mut moved, &recipes.0, now_s) > 0 {
-        let done: Vec<_> = before[..before.len() - state.jobs.len()].to_vec();
-        if store(&mut save, cell, layer, &state, &moved) {
-            hotbar.0 = moved;
-            for job in done {
-                // What the starter missions count: this recipe made.
-                did.write(pbd_app::missions::Did::new(
-                    pbd_core::missions::Kind::Craft,
-                    format!("recipe:{}", job.recipe),
-                    1,
-                ));
-                if let Some(recipe) = recipes.0.get(&job.recipe) {
-                    for &(item, count) in &recipe.outputs {
-                        gained.write(Gained {
-                            item,
-                            count,
-                            how: pbd_app::hotbar::How::Made,
-                        });
-                    }
-                    note.say(wall_s, format!("{} done", recipe.name));
-                }
-            }
-        } else {
-            error!("collect BLOCKED: the save did not accept it");
-        }
-    }
+    let state = station_state(&save, cell, layer, row);
     let progress = state.head_progress(&recipes.0, now_s);
     let text = match state.jobs.first().and_then(|j| recipes.0.get(&j.recipe)) {
         Some(recipe) => {

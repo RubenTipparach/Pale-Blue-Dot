@@ -5,9 +5,15 @@
 // block (`block:ore` is mixed ore). A recipe's `code` is saved in a station's
 // queue: never rename one that has shipped.
 //
+// A tool is `tool:<tier>-<tool>` (`tool:iron-pickaxe`), or `tool:<tool>` at
+// the stone tier; it goes to the tool slot, one at a time (`tool-crafting`).
+// The station `hand` is the pack's Craft row: no block.
+//
 // The code defaults written out; a test holds the two together. Numbers are
 // M3's (docs/mockups/crafting.html): mixed ore at its fixed split, 2 copper :
-// 1 iron : 1 tin per 4, and bronze.
+// 1 iron : 1 tin per 4, and bronze; planks, rope and the workbench by hand;
+// the tools at the workbench. The forge is M3's "stone x12, clay x4" without
+// the clay the ground does not have.
 (
     recipes: [
         (
@@ -25,6 +31,120 @@
             secs: 5.0,
             inputs: [("copper-ingot", 1), ("tin-ore", 1), ("coal", 1)],
             outputs: [("bronze-ingot", 2)],
+        ),
+        // ---- tool-crafting: by hand.
+        (
+            code: "planks",
+            name: "PLANKS",
+            station: "hand",
+            secs: 1.0,
+            inputs: [("log", 1)],
+            outputs: [("planks", 4)],
+        ),
+        (
+            code: "rope",
+            name: "ROPE",
+            station: "hand",
+            secs: 2.0,
+            inputs: [("fibre", 3)],
+            outputs: [("rope", 1)],
+        ),
+        (
+            code: "workbench",
+            name: "WORKBENCH",
+            station: "hand",
+            secs: 4.0,
+            inputs: [("planks", 6)],
+            outputs: [("block:workbench", 1)],
+        ),
+        // ---- tool-crafting: at the workbench.
+        (
+            code: "stone-pickaxe",
+            name: "STONE PICK",
+            station: "workbench",
+            secs: 3.0,
+            inputs: [("stone", 3), ("planks", 2), ("rope", 1)],
+            outputs: [("tool:stone-pickaxe", 1)],
+        ),
+        (
+            code: "stone-shovel",
+            name: "STONE SHOVEL",
+            station: "workbench",
+            secs: 3.0,
+            inputs: [("stone", 3), ("planks", 2), ("rope", 1)],
+            outputs: [("tool:stone-shovel", 1)],
+        ),
+        (
+            code: "stone-axe",
+            name: "STONE AXE",
+            station: "workbench",
+            secs: 3.0,
+            inputs: [("stone", 3), ("planks", 2), ("rope", 1)],
+            outputs: [("tool:stone-axe", 1)],
+        ),
+        (
+            code: "rod",
+            name: "ROD",
+            station: "workbench",
+            secs: 3.0,
+            inputs: [("planks", 2), ("rope", 2), ("fibre", 2)],
+            outputs: [("tool:rod", 1)],
+        ),
+        (
+            code: "forge",
+            name: "FORGE",
+            station: "workbench",
+            secs: 6.0,
+            inputs: [("stone", 8), ("block:stone", 4)],
+            outputs: [("block:forge", 1)],
+        ),
+        (
+            code: "bronze-pickaxe",
+            name: "BRONZE PICK",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("bronze-ingot", 3), ("planks", 2)],
+            outputs: [("tool:bronze-pickaxe", 1)],
+        ),
+        (
+            code: "bronze-shovel",
+            name: "BRONZE SHOVEL",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("bronze-ingot", 3), ("planks", 2)],
+            outputs: [("tool:bronze-shovel", 1)],
+        ),
+        (
+            code: "bronze-axe",
+            name: "BRONZE AXE",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("bronze-ingot", 3), ("planks", 2)],
+            outputs: [("tool:bronze-axe", 1)],
+        ),
+        (
+            code: "iron-pickaxe",
+            name: "IRON PICK",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("iron-ingot", 3), ("planks", 2)],
+            outputs: [("tool:iron-pickaxe", 1)],
+        ),
+        (
+            code: "iron-shovel",
+            name: "IRON SHOVEL",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("iron-ingot", 3), ("planks", 2)],
+            outputs: [("tool:iron-shovel", 1)],
+        ),
+        (
+            code: "iron-axe",
+            name: "IRON AXE",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("iron-ingot", 3), ("planks", 2)],
+            outputs: [("tool:iron-axe", 1)],
         ),
     ],
 )

@@ -149,6 +149,9 @@ pub fn render_code(material: Material) -> u32 {
         // `farming-and-smelting`: the last two codes of the four bits.
         Material::Tilled => TILLED,
         Material::Forge => FORGE,
+        // `tool-crafting` decision 5: the local trees' wood, the code a
+        // trunk is drawn in, so the full four-bit word need not widen.
+        Material::Workbench => WOOD,
         // Grass and dry grass: the shader's own default green.
         _ => 2,
     }
@@ -255,6 +258,9 @@ pub const TILLED: u32 = 14;
 /// bricks. The LAST code the four-bit material word has: a later station
 /// shares it or the word widens.
 pub const FORGE: u32 = 15;
+/// Tree wood: the trunk's code in the surface pass (the sheet's (2,1),
+/// "oak bark" on the fields sheet), which the workbench block shares.
+pub const WOOD: u32 = 8;
 
 fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
     // A town's lanes and floors are its own top (`cities-in-the-world`).
@@ -581,6 +587,9 @@ mod tests {
         }
         assert_eq!(render_code(Material::Tilled), TILLED);
         assert_eq!(render_code(Material::Forge), FORGE);
+        assert_eq!(render_code(Material::Workbench), WOOD);
+        assert_eq!(index(tile_of(WOOD)), 6, "the workbench is the trunk's wood");
+        assert!(sheet_tile_names("fields")[6].contains("bark"));
     }
 
     /// The atlas is baked by `tools/build_tileset_atlas.py`, which derives its

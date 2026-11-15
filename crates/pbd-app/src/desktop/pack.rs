@@ -115,10 +115,16 @@ pub fn open(
 /// title, the thirty slots and the hotbar's ten under them. Nothing else on
 /// it: no close button (owner, 2026-11-14: "In desktop esc will do just
 /// fine"; I shuts it too) and no line of instructions.
-pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, kit: Res<UiKit>) {
+pub fn spawn(
+    mut commands: Commands,
+    icons: Res<ItemIcons>,
+    kit: Res<UiKit>,
+    recipes: Res<pbd_app::config::Recipes>,
+) {
     let atlas = icons.atlas.clone();
     let kit = &*kit;
-    let (rock, (w, h)) = kit.rock("pack");
+    // M29's rock, grown for the Craft row (`tool-crafting` decision 9).
+    let (rock, (w, h)) = kit.rock("pack-craft");
     commands
         .spawn((menu::layer(), GlobalZIndex(10), Panel(Screen::Pack)))
         .with_children(|layer| {
@@ -153,6 +159,7 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, kit: Res<UiKit>) {
                             }
                         });
                     }
+                    super::craft::spawn_pack_row(panel, kit, &atlas, &recipes);
                 });
         });
     commands
@@ -322,14 +329,19 @@ mod tests {
             fish_names: Vec::new(),
             goods: Vec::new(),
             forge: Handle::default(),
+            workbench: Handle::default(),
+            tiered: Vec::new(),
         });
+        app.insert_resource(pbd_app::config::Recipes(
+            pbd_core::station::RecipeFile::default().resolve().unwrap(),
+        ));
         app.add_systems(Update, spawn);
         app.update();
         let world = app.world_mut();
         let (rock, lintel, slots) = {
             let kit = world.resource::<UiKit>();
             (
-                kit.image("rock/pack"),
+                kit.image("rock/pack-craft"),
                 kit.image("lintel"),
                 [kit.image("slot-idle"), kit.image("slot-selected")],
             )
@@ -347,7 +359,10 @@ mod tests {
             "drawn whole"
         );
         let node = world.get::<Node>(frame).unwrap();
-        assert_eq!((node.width, node.height), (px(268), px(152)));
+        // M29's rock, grown for the Craft row (`tool-crafting` decision 9).
+        assert_eq!((node.width, node.height), (px(268), px(204)));
+        let mut wells = world.query::<&super::super::craft::Well>();
+        assert!(wells.iter(world).count() >= 2, "the needs and the result");
         let mut images = world.query::<&ImageNode>();
         assert_eq!(
             images.iter(world).filter(|i| i.image == lintel).count(),

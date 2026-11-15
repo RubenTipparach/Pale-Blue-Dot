@@ -245,7 +245,7 @@ impl Default for CookingFile {
                     "CAMPFIRE",
                     "hand",
                     3.0,
-                    vec![pair("block:stone", 5), pair("coal", 2)],
+                    vec![pair("stone", 5), pair("log", 2)],
                     vec![pair("block:campfire", 1)],
                 ),
             ],
@@ -336,6 +336,7 @@ impl CookingFile {
                 secs: entry.secs,
                 inputs,
                 outputs,
+                tools: Vec::new(),
             });
         }
         Ok(Kitchen {

@@ -255,6 +255,11 @@ impl Catalog {
             for (item, _) in &recipe.outputs {
                 catalog.made.insert(item_code(*item));
             }
+            for (tool, _) in &recipe.tools {
+                catalog
+                    .made
+                    .insert(item_code(crate::inventory::Item::Tool(*tool)));
+            }
         }
         catalog
     }
@@ -300,7 +305,7 @@ pub fn item_code(item: crate::inventory::Item) -> String {
     match item {
         Item::Good(good) => good.code().to_string(),
         Item::Block(material) => format!("block:{}", material_name(material)),
-        Item::Tool(tool) => format!("tool:{}", tool.name().to_lowercase()),
+        Item::Tool(tool) => format!("tool:{}", tool.code()),
         Item::Fish(_) => "fish".into(),
     }
 }
@@ -438,9 +443,11 @@ impl Progress {
             Standing::Done
         } else if mission.pending.is_some() {
             Standing::Pending
-        } else if mission.needs.iter().all(|need| {
-            self.is_done(need) || chain.get(need).is_none_or(|m| m.pending.is_some())
-        }) {
+        } else if mission
+            .needs
+            .iter()
+            .all(|need| self.is_done(need) || chain.get(need).is_none_or(|m| m.pending.is_some()))
+        {
             Standing::Open
         } else {
             Standing::Locked
@@ -533,12 +540,43 @@ impl Progress {
                     self.counts.insert(mission.id.clone(), counts);
                 }
             }
+            // A locked mission the world already holds whole closes too: a
+            // world that owns its tools is not told to make them, whatever
+            // came before them in the chain.
+            if closed.is_none() {
+                closed = chain
+                    .missions
+                    .iter()
+                    .filter(|m| self.standing(chain, m) == Standing::Locked)
+                    .find(|m| m.objectives.iter().all(|o| state(o) >= o.count))
+                    .map(|m| m.id.clone());
+            }
             let Some(id) = closed else {
                 break;
             };
-            self.counts.remove(&id);
-            self.done.insert(id.clone());
-            step.done.push(id);
+            // A mission done means the ones it needs were passed: they are
+            // done with it, in the chain's order.
+            let mut close = vec![id];
+            let mut at = 0;
+            while at < close.len() {
+                if let Some(m) = chain.get(&close[at]) {
+                    for need in &m.needs {
+                        if !self.is_done(need)
+                            && !close.contains(need)
+                            && chain.get(need).is_some_and(|n| n.pending.is_none())
+                        {
+                            close.push(need.clone());
+                        }
+                    }
+                }
+                at += 1;
+            }
+            close.sort_by_key(|id| chain.missions.iter().position(|m| &m.id == id));
+            for id in close {
+                self.counts.remove(&id);
+                self.done.insert(id.clone());
+                step.done.push(id);
+            }
             step.changed = true;
         }
         // Counts kept only for open missions: a count of nought is no record.

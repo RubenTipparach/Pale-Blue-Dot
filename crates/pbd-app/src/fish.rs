@@ -36,9 +36,18 @@ use std::sync::Mutex;
 pub struct ToolSlot(pub Equipment);
 
 impl ToolSlot {
-    /// The tool slot a world opens with: the save's, or the new world's kit.
+    /// The tool slot a world opens with: the save's; or, in a world that
+    /// never recorded one, nothing for a world made with tool crafting and
+    /// all four at the stone tier for one made before (`tool-crafting`
+    /// decision 8).
     pub fn restore(save: &WorldSave) -> Self {
-        Self(save.equipment.unwrap_or_default())
+        Self(save.equipment.unwrap_or_else(|| {
+            if save.identity.crafts_its_tools() {
+                Equipment::new_world()
+            } else {
+                Equipment::default()
+            }
+        }))
     }
 }
 

@@ -30,9 +30,9 @@ pub mod husbandry;
 #[cfg(feature = "desktop")]
 pub mod kitchen;
 #[cfg(feature = "desktop")]
-pub mod missions;
-#[cfg(feature = "desktop")]
 pub mod loading;
+#[cfg(feature = "desktop")]
+pub mod missions;
 #[cfg(feature = "desktop")]
 pub mod night_lights;
 #[cfg(feature = "desktop")]

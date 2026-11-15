@@ -474,6 +474,11 @@ pub struct FarmLooks {
     iron: Handle<StandardMaterial>,
     flame: Handle<Mesh>,
     fire: Handle<StandardMaterial>,
+    /// The workbench's plank top and its vise (`tool-crafting` decision 5):
+    /// plain boxes in the forge's chimney's pipeline.
+    board: Handle<Mesh>,
+    vise: Handle<Mesh>,
+    oak: Handle<StandardMaterial>,
 }
 
 /// The path of a crop's stage sprite (decision 5).
@@ -561,6 +566,13 @@ pub fn make_looks(
             ..default()
         }),
         flame: meshes.add(clumps_mesh(0.45, 0.0)),
+        board: meshes.add(Cuboid::new(1.5, 0.08, 0.32)),
+        vise: meshes.add(Cuboid::new(0.22, 0.22, 0.3)),
+        oak: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.55, 0.38, 0.21),
+            perceptual_roughness: 0.9,
+            ..default()
+        }),
         // The flame draws its own light, unlit, as a lamp's flame does.
         fire: materials.add(StandardMaterial {
             base_color_texture: Some(assets.load("items/crops/flame.png")),
@@ -817,11 +829,11 @@ pub fn show(
                 MeshMaterial3d(looks.stages[crop.index()][stage.index()].clone()),
             ));
     }
-    // The forges: every forge block an edit placed, near the eye. A campfire
-    // is a light, drawn by the column pass (`cooking` design S2).
-    let mut wanted: HashMap<(u32, u16), (usize, bool)> = HashMap::new();
+    // The forges and workbenches: every such block an edit placed, near the
+    // eye. A campfire is a light, drawn by the column pass (`cooking` S2).
+    let mut wanted: HashMap<(u32, u16), (usize, bool, Material)> = HashMap::new();
     for edit in save.edits.all() {
-        if edit.material != Material::Forge {
+        if !matches!(edit.material, Material::Forge | Material::Workbench) {
             continue;
         }
         let Some(&index) = keys.map.get(&edit.cell) else {
@@ -836,14 +848,14 @@ pub fn show(
         }
         let row = station::station_of(edit.material).expect("checked");
         let working = station_state(&save, edit.cell, edit.layer, row).working(&recipes.0, now_s);
-        wanted.insert((edit.cell, edit.layer), (index, working));
+        wanted.insert((edit.cell, edit.layer), (index, working, edit.material));
     }
     for (_, mut view, _, children) in &mut forges {
         if view.leaving {
             continue;
         }
         match wanted.remove(&(view.cell, view.layer)) {
-            Some((_, working)) => {
+            Some((_, working, _)) => {
                 view.working = working;
                 for child in children.iter() {
                     if let Ok(mut shown) = flames.get_mut(child) {
@@ -861,10 +873,43 @@ pub fn show(
             None => view.leaving = true,
         }
     }
-    for ((cell, layer), (index, working)) in wanted {
+    for ((cell, layer), (index, working, material)) in wanted {
         let Some(transform) = standing(&fine, index, usize::from(layer), 0.0) else {
             continue;
         };
+        if material == Material::Workbench {
+            // Two planks laid across the top and an iron vise at one end,
+            // after M3's workbench icon.
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|bench| {
+                    for z in [-0.18, 0.18] {
+                        bench.spawn((
+                            Mesh3d(looks.board.clone()),
+                            MeshMaterial3d(looks.oak.clone()),
+                            Transform::from_xyz(0.0, 0.04, z),
+                        ));
+                    }
+                    bench.spawn((
+                        Mesh3d(looks.vise.clone()),
+                        MeshMaterial3d(looks.iron.clone()),
+                        Transform::from_xyz(0.6, 0.19, 0.0),
+                    ));
+                });
+            continue;
+        }
         // The chimney stands off the centre, toward one corner, as M3's
         // forge icon has it; the flame in its mouth while a job runs.
         let off = Vec3::new(0.55, 0.45, 0.25);

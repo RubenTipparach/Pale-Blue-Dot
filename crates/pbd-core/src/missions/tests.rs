@@ -85,7 +85,10 @@ fn a_chain_is_walked_by_its_events() {
     };
     let chain = file.resolve(&shipped_catalog(&book)).unwrap();
     let mut progress = Progress::default();
-    assert_eq!(progress.current(&chain).map(|m| m.id.as_str()), Some("cast"));
+    assert_eq!(
+        progress.current(&chain).map(|m| m.id.as_str()),
+        Some("cast")
+    );
     assert_eq!(progress.line(&chain).as_deref(), Some("cast 0/1"));
 
     // A fish before its mission opened is not counted.
@@ -112,7 +115,10 @@ fn a_chain_is_walked_by_its_events() {
     assert_eq!(step.done, ["cook"]);
     assert_eq!(progress.current(&chain), None);
     assert_eq!(progress.line(&chain), None);
-    assert!(progress.counts.is_empty(), "no counts kept for closed missions");
+    assert!(
+        progress.counts.is_empty(),
+        "no counts kept for closed missions"
+    );
     assert_eq!(progress.done.len(), 3);
 }
 
@@ -121,23 +127,8 @@ fn a_chain_is_walked_by_its_events() {
 /// the mission after opens at once.
 #[test]
 fn a_state_met_mission_completes_on_open() {
-    let mut book = shipped_book();
-    // A recipe making the stone tools, as `tool-crafting` will add one.
-    book.recipes.extend(
-        RecipeFile {
-            recipes: vec![crate::station::RecipeEntry {
-                code: "stone-pickaxe".into(),
-                name: "STONE PICKAXE".into(),
-                station: "hand".into(),
-                secs: 1.0,
-                inputs: vec![("coal".into(), 1)],
-                outputs: vec![("tool:pickaxe".into(), 1), ("tool:shovel".into(), 1)],
-            }],
-        }
-        .resolve()
-        .unwrap()
-        .recipes,
-    );
+    // The workbench's stone tools (`tool-crafting`) are in the shipped book.
+    let book = shipped_book();
     let file = MissionFile {
         awaited: vec![],
         missions: vec![
@@ -170,7 +161,10 @@ fn a_state_met_mission_completes_on_open() {
     let step = progress.settle(&chain, &owned);
     assert_eq!(step.done, ["mining-tools"]);
     assert!(step.changed);
-    assert_eq!(progress.current(&chain).map(|m| m.id.as_str()), Some("cast"));
+    assert_eq!(
+        progress.current(&chain).map(|m| m.id.as_str()),
+        Some("cast")
+    );
     // Settling again changes nothing.
     assert_eq!(progress.settle(&chain, &owned), Step::default());
 
@@ -182,6 +176,37 @@ fn a_state_met_mission_completes_on_open() {
         progress.line(&chain).as_deref(),
         Some("mining-tools: tool:shovel 0/1")
     );
+
+    // The shipped chain and an old world (before tool crafting) that owns
+    // all four tools at the stone tier and has a campfire placed: the
+    // missions it holds close, and those before them with them (the axe's
+    // logs too, since the rod after it is held), so it is told to go
+    // fishing, not to gather by hand.
+    let chain = shipped_file().resolve(&shipped_catalog(&book)).unwrap();
+    let tools = ["tool:rod", "tool:shovel", "tool:pickaxe", "tool:axe"];
+    let held = |o: &Objective| match o.kind {
+        Kind::Craft => tools
+            .iter()
+            .chain(["block:campfire"].iter())
+            .filter(|t| o.want.matches(Kind::Craft, t))
+            .count() as u32,
+        Kind::Place => u32::from(o.want.matches(Kind::Place, "block:campfire")),
+        _ => 0,
+    };
+    let mut progress = Progress::default();
+    let step = progress.settle(&chain, &held);
+    for id in [
+        "gather",
+        "planks-rope",
+        "crafting-table",
+        "mining-tools",
+        "axe",
+        "rod",
+        "fire",
+    ] {
+        assert!(progress.is_done(id), "{id} in {:?}", step.done);
+    }
+    assert_eq!(progress.line(&chain).as_deref(), Some("Go fishing 0/1"));
 }
 
 /// A name the build lacks that the file awaits makes its mission pending,
@@ -191,14 +216,14 @@ fn an_awaited_name_makes_a_mission_pending() {
     let book = shipped_book();
     let catalog = shipped_catalog(&book);
     let file = MissionFile {
-        awaited: vec!["planks".into()],
+        awaited: vec!["oak-planks".into()],
         missions: vec![
-            mission("planks", &[], vec![objective(Kind::Craft, "planks", 4)]),
+            mission("planks", &[], vec![objective(Kind::Craft, "oak-planks", 4)]),
             // Known, but no recipe makes it: pending without being awaited.
             mission(
                 "pick",
                 &["planks"],
-                vec![objective(Kind::Craft, "tool:pickaxe", 1)],
+                vec![objective(Kind::Craft, "block:torch", 1)],
             ),
             mission("fell", &["pick"], vec![objective(Kind::Fell, "tree", 1)]),
             mission("cast", &["fell"], vec![objective(Kind::Cast, "water", 1)]),
@@ -208,23 +233,26 @@ fn an_awaited_name_makes_a_mission_pending() {
     let pending: Vec<&str> = chain.pending().map(|(id, _)| id).collect();
     assert_eq!(pending, ["planks", "pick", "fell"]);
     let progress = Progress::default();
-    assert_eq!(progress.current(&chain).map(|m| m.id.as_str()), Some("cast"));
+    assert_eq!(
+        progress.current(&chain).map(|m| m.id.as_str()),
+        Some("cast")
+    );
     assert_eq!(
         progress.standing(&chain, chain.get("planks").unwrap()),
         Standing::Pending
     );
     // A pending mission counts nothing.
     let mut progress = Progress::default();
-    let step = progress.record(&chain, &Happened::new(Kind::Craft, "planks", 4), &none);
+    let step = progress.record(&chain, &Happened::new(Kind::Craft, "oak-planks", 4), &none);
     assert!(!step.changed);
 
     // One alternative known is enough for a mission to play.
     let file = MissionFile {
-        awaited: vec!["fibre".into()],
+        awaited: vec!["bark".into()],
         missions: vec![mission(
             "gather",
             &[],
-            vec![objective(Kind::Gather, "fibre|block:dirt", 2)],
+            vec![objective(Kind::Gather, "bark|block:dirt", 2)],
         )],
     };
     assert!(file.resolve(&catalog).unwrap().pending().next().is_none());
@@ -249,12 +277,21 @@ fn an_awaited_name_makes_a_mission_pending() {
 #[test]
 fn the_record_round_trips_and_keeps_what_it_does_not_know() {
     let mut progress = Progress::default();
-    progress.done.insert("fire".into());
+    for id in [
+        "gather",
+        "planks-rope",
+        "crafting-table",
+        "mining-tools",
+        "axe",
+        "rod",
+        "fire",
+    ] {
+        progress.done.insert(id.into());
+    }
     progress.done.insert("go-fishing".into());
     progress.done.insert("a-later-mission".into());
     progress.counts.insert("catch-fish".into(), vec![2]);
-    let record =
-        crate::records::Record::of(MISSIONS_KIND, MISSIONS_ID, MISSIONS_SCHEMA, &progress);
+    let record = crate::records::Record::of(MISSIONS_KIND, MISSIONS_ID, MISSIONS_SCHEMA, &progress);
     assert_eq!(record.read::<Progress>(), Some(progress.clone()));
 
     let chain = shipped_file()
@@ -268,29 +305,24 @@ fn the_record_round_trips_and_keeps_what_it_does_not_know() {
 
 /// The shipped chain: every `what` names a known good, recipe, block,
 /// species or action, pending rows excepted, and on this build (before
-/// `tool-crafting`) it plays from "Make a fire" to the end.
+/// `tool-crafting`) it plays from the first mission to the last.
 #[test]
 fn the_shipped_chain_names_only_what_the_build_knows() {
     let book = shipped_book();
     let chain = shipped_file().resolve(&shipped_catalog(&book)).unwrap();
     assert_eq!(chain.missions.len(), 19);
-    let pending: Vec<&str> = chain.pending().map(|(id, _)| id).collect();
-    assert_eq!(
-        pending,
-        [
-            "gather",
-            "planks-rope",
-            "crafting-table",
-            "mining-tools",
-            "axe",
-            "rod",
-            "metal-tool"
-        ]
+    // Nothing is pending since `tool-crafting` merged: a new world starts
+    // at the first mission.
+    assert!(
+        chain.pending().next().is_none(),
+        "{:?}",
+        chain.pending().collect::<Vec<_>>()
     );
-    // "Make a fire" plays: the campfire's hand recipe is in `cooking.ron`,
-    // and a new world is dealt one (kit version 6) to place.
     let progress = Progress::default();
-    assert_eq!(progress.current(&chain).map(|m| m.id.as_str()), Some("fire"));
+    assert_eq!(
+        progress.current(&chain).map(|m| m.id.as_str()),
+        Some("gather")
+    );
     // Every live objective resolved to something it can count.
     for mission in chain.missions.iter().filter(|m| m.pending.is_none()) {
         for objective in &mission.objectives {
@@ -305,6 +337,18 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
     // Walk it from "Go fishing" to the end with the events the game raises.
     let mut progress = Progress::default();
     let events = [
+        Happened::new(Kind::Gather, "block:dirt", 4),
+        Happened::new(Kind::Gather, "fibre", 3),
+        Happened::new(Kind::Gather, "log", 1),
+        Happened::new(Kind::Craft, "planks", 4),
+        Happened::new(Kind::Craft, "rope", 1),
+        Happened::new(Kind::Craft, "block:workbench", 1),
+        Happened::new(Kind::Place, "block:workbench", 1),
+        Happened::new(Kind::Craft, "tool:pickaxe", 1),
+        Happened::new(Kind::Craft, "tool:shovel", 1),
+        Happened::new(Kind::Craft, "recipe:stone-axe", 1),
+        Happened::new(Kind::Gather, "log", 3),
+        Happened::new(Kind::Craft, "tool:rod", 1),
         Happened::new(Kind::Craft, "block:campfire", 1),
         Happened::new(Kind::Place, "block:campfire", 1),
         Happened::new(Kind::Cast, "water", 1),
@@ -320,6 +364,7 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
         Happened::new(Kind::Place, "block:forge", 1),
         Happened::new(Kind::Smelt, "copper-ingot", 2),
         Happened::new(Kind::Smelt, "iron-ingot", 1),
+        Happened::new(Kind::Craft, "recipe:bronze-axe", 1),
         Happened::new(Kind::Collect, "egg", 1),
         Happened::new(Kind::Harvest, "wheat", 4),
         Happened::new(Kind::Cook, "flatbread", 1),
@@ -332,6 +377,12 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
     assert_eq!(
         done,
         [
+            "gather",
+            "planks-rope",
+            "crafting-table",
+            "mining-tools",
+            "axe",
+            "rod",
             "fire",
             "go-fishing",
             "catch-fish",
@@ -341,6 +392,7 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
             "tame",
             "pen",
             "smelt",
+            "metal-tool",
             "collect",
             "harvest",
             "farm-meal"
