@@ -475,6 +475,7 @@ pub fn eat(
     mut hotbar: ResMut<slots::Hotbar>,
     mut note: ResMut<FarmNote>,
     mut ate: MessageWriter<Ate>,
+    mut did: MessageWriter<pbd_app::missions::Did>,
 ) {
     if !buttons.just_pressed(MouseButton::Right) || *screen != Screen::Playing {
         return;
@@ -490,6 +491,12 @@ pub fn eat(
             dish: dish.good,
             effect: dish.effect,
         });
+        // What the missions count: a dish eaten (`starter-missions` H.1).
+        did.write(pbd_app::missions::Did::new(
+            pbd_core::missions::Kind::Eat,
+            dish.good.code(),
+            1,
+        ));
         note.say(
             time.elapsed_secs(),
             format!(

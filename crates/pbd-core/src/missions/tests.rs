@@ -225,13 +225,12 @@ fn an_awaited_name_makes_a_mission_pending() {
                 &["planks"],
                 vec![objective(Kind::Craft, "block:torch", 1)],
             ),
-            mission("fell", &["pick"], vec![objective(Kind::Fell, "tree", 1)]),
-            mission("cast", &["fell"], vec![objective(Kind::Cast, "water", 1)]),
+            mission("cast", &["pick"], vec![objective(Kind::Cast, "water", 1)]),
         ],
     };
     let chain = file.resolve(&catalog).unwrap();
     let pending: Vec<&str> = chain.pending().map(|(id, _)| id).collect();
-    assert_eq!(pending, ["planks", "pick", "fell"]);
+    assert_eq!(pending, ["planks", "pick"]);
     let progress = Progress::default();
     assert_eq!(
         progress.current(&chain).map(|m| m.id.as_str()),
@@ -310,7 +309,21 @@ fn the_record_round_trips_and_keeps_what_it_does_not_know() {
 fn the_shipped_chain_names_only_what_the_build_knows() {
     let book = shipped_book();
     let chain = shipped_file().resolve(&shipped_catalog(&book)).unwrap();
-    assert_eq!(chain.missions.len(), 19);
+    // The nineteen starter missions, then the six of the Homestead
+    // (H.2), which opens when the starter chain is done.
+    assert_eq!(chain.missions.len(), 25);
+    for id in [
+        "shore-lunch",
+        "bread",
+        "flock",
+        "bronze",
+        "lamplight",
+        "feast",
+    ] {
+        let m = chain.get(id).unwrap_or_else(|| panic!("no {id}"));
+        assert!(m.pending.is_none(), "{id} pending: {:?}", m.pending);
+    }
+    assert_eq!(chain.get("shore-lunch").unwrap().needs, ["farm-meal"]);
     // Nothing is pending since `tool-crafting` merged: a new world starts
     // at the first mission.
     assert!(
@@ -398,5 +411,71 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
             "farm-meal"
         ]
     );
-    assert_eq!(progress.current(&chain), None);
+    // The starter chain done, the Homestead opens.
+    assert_eq!(
+        progress.current(&chain).map(|m| m.id.as_str()),
+        Some("shore-lunch")
+    );
+}
+
+/// The Homestead's kinds (`starter-missions` H.1): a felling, a dish eaten
+/// and a night by the lights each count once per deed, and only what they
+/// name.
+#[test]
+fn eat_fell_and_night_count_once_per_deed() {
+    let book = shipped_book();
+    let catalog = shipped_catalog(&book);
+    let file = MissionFile {
+        awaited: vec![],
+        missions: vec![
+            mission("fell", &[], vec![objective(Kind::Fell, "tree", 2)]),
+            mission(
+                "eat",
+                &["fell"],
+                vec![
+                    objective(Kind::Eat, "grilled-fish", 1),
+                    objective(Kind::Eat, "flatbread", 1),
+                ],
+            ),
+            mission("night", &["eat"], vec![objective(Kind::Night, "light", 1)]),
+        ],
+    };
+    let chain = file.resolve(&catalog).unwrap();
+    assert!(chain.pending().next().is_none(), "every kind is live");
+    let mut progress = Progress::default();
+    progress.record(&chain, &Happened::new(Kind::Fell, "tree", 1), &none);
+    assert_eq!(progress.line(&chain).as_deref(), Some("fell 1/2"));
+    progress.record(&chain, &Happened::new(Kind::Fell, "tree", 1), &none);
+    assert!(progress.is_done("fell"));
+    // The same dish twice is one objective, not two.
+    progress.record(&chain, &Happened::new(Kind::Eat, "grilled-fish", 1), &none);
+    progress.record(&chain, &Happened::new(Kind::Eat, "grilled-fish", 1), &none);
+    assert!(!progress.is_done("eat"));
+    progress.record(&chain, &Happened::new(Kind::Eat, "flatbread", 1), &none);
+    assert!(progress.is_done("eat"));
+    progress.record(&chain, &Happened::new(Kind::Night, "light", 1), &none);
+    assert!(progress.is_done("night"));
+    // A name the kind does not know is refused.
+    let bad = MissionFile {
+        awaited: vec![],
+        missions: vec![mission("x", &[], vec![objective(Kind::Night, "moon", 1)])],
+    };
+    assert!(bad.resolve(&catalog).is_err());
+}
+
+/// An old world's missions record reads unchanged with the new kinds in
+/// the build: the record names ids and counts, never kinds.
+#[test]
+fn an_old_missions_record_reads_unchanged() {
+    let old = r#"(done: ["gather", "planks-rope"], counts: {"crafting-table": [1, 0]})"#;
+    let progress: Progress = ron::from_str(old).unwrap();
+    assert!(progress.is_done("gather"));
+    assert_eq!(progress.counts.get("crafting-table"), Some(&vec![1, 0]));
+    let chain = shipped_file()
+        .resolve(&shipped_catalog(&shipped_book()))
+        .unwrap();
+    assert_eq!(
+        progress.current(&chain).map(|m| m.id.as_str()),
+        Some("crafting-table")
+    );
 }

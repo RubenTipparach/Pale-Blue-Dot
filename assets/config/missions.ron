@@ -13,9 +13,9 @@
 // `awaited` names what another branch will bring: a mission naming only
 // these where it names anything unknown is PENDING - logged at load, shown
 // as not in this build, and met for the missions that need it. A `craft` of
-// an item no recipe makes is pending too, and so is `fell` while nothing
-// fells a tree (trees give logs, they are not felled). Any other unknown
-// name is an error.
+// an item no recipe makes is pending too. `fell` counts the axe's last log
+// from a tree, `eat` a dish eaten, `night` the clock passing 20:00 near a
+// light the player placed. Any other unknown name is an error.
 //
 // A mission's `id` is saved in the world's `missions` record: append-only,
 // never renamed. Counts are picked so each mission is one to three minutes
@@ -207,6 +207,77 @@
             objectives: [
                 (kind: cook, what: "flatbread|roast-turnip|kale-skewer", count: 1, label: "from the field"),
                 (kind: cook, what: "fried-egg", count: 1, label: "from the herd"),
+            ],
+        ),
+        // ---- Homestead (`starter-missions` "Missions that show off the
+        // game", H.2): opened when the starter chain is done, each a small
+        // story with its payoff on screen. The bronze age stands off the
+        // line (it waits on ore), so the rest of the homestead does not.
+        (
+            id: "shore-lunch",
+            title: "Shore lunch",
+            help: "Catch two fish, grill them at the campfire, and eat one (right button with it in hand).",
+            needs: ["farm-meal"],
+            objectives: [
+                (kind: catch, what: "fish", count: 2, label: "catch"),
+                (kind: cook, what: "grilled-fish", count: 2, label: "grill"),
+                (kind: eat, what: "grilled-fish", count: 1, label: "eat"),
+            ],
+        ),
+        (
+            id: "bread",
+            title: "Bread from your field",
+            help: "Till four cells, sow wheat, harvest it when ripe, and bake flatbread at the campfire.",
+            needs: ["shore-lunch"],
+            objectives: [
+                (kind: till, what: "any", count: 4, label: "till"),
+                (kind: plant, what: "wheat-seed", count: 4, label: "sow wheat"),
+                (kind: harvest, what: "wheat", count: 4, label: "harvest"),
+                (kind: cook, what: "flatbread", count: 2, label: "bake"),
+            ],
+        ),
+        (
+            id: "flock",
+            title: "Start a flock",
+            help: "Tame two yard hens with seed, pen them with a gate, collect their eggs and fry one.",
+            needs: ["bread"],
+            objectives: [
+                (kind: tame, what: "yard hen", count: 2, label: "tame hens"),
+                (kind: build_pen, what: "any", count: 1, label: "pen"),
+                (kind: collect, what: "egg", count: 2, label: "eggs"),
+                (kind: cook, what: "fried-egg", count: 1, label: "fry"),
+            ],
+        ),
+        (
+            id: "bronze",
+            title: "The bronze age",
+            help: "Smelt bronze at the forge, make a bronze pickaxe at the workbench, and dig stone with it.",
+            needs: ["flock"],
+            objectives: [
+                (kind: smelt, what: "bronze-ingot", count: 2, label: "bronze"),
+                (kind: craft, what: "recipe:bronze-pickaxe", count: 1, label: "pickaxe"),
+                (kind: gather, what: "block:stone", count: 3, label: "stone"),
+            ],
+        ),
+        (
+            id: "lamplight",
+            title: "Light the farm",
+            help: "Set four lights by the pen and the field, and be there when night falls.",
+            needs: ["flock"],
+            objectives: [
+                (kind: place, what: "block:torch|block:street lantern|block:wall lantern|block:hanging lantern|block:brazier|block:candle", count: 4, label: "lights"),
+                (kind: night, what: "light", count: 1, label: "nightfall"),
+            ],
+        ),
+        (
+            id: "feast",
+            title: "A farm feast",
+            help: "Eat three dishes: one from the sea, one from the field and one from the coop.",
+            needs: ["lamplight"],
+            objectives: [
+                (kind: eat, what: "grilled-fish|chili-fish", count: 1, label: "from the sea"),
+                (kind: eat, what: "flatbread|roast-turnip|kale-skewer", count: 1, label: "from the field"),
+                (kind: eat, what: "fried-egg", count: 1, label: "from the coop"),
             ],
         ),
     ],

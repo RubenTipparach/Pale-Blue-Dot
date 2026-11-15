@@ -75,12 +75,25 @@ impl Sun {
 
 /// Advance the clock. One writer, so the hour cannot differ between systems
 /// inside a frame.
-pub fn run_clock(time: Res<Time>, mut sun: ResMut<Sun>, mut rate: Local<Option<f32>>) {
+pub fn run_clock(
+    time: Res<Time>,
+    mut sun: ResMut<Sun>,
+    sped: Option<Res<ClockRate>>,
+    mut rate: Local<Option<f32>>,
+) {
     if sun.running {
-        let rate = *rate.get_or_insert_with(|| clock_runs().unwrap_or(1.0));
+        let own = *rate.get_or_insert_with(|| clock_runs().unwrap_or(1.0));
+        let rate = sped.map_or(own, |s| s.0);
         sun.clock.advance(time.delta_secs() * rate);
     }
 }
+
+/// How many times its own pace the clock runs, where something asks it to
+/// run faster for a while: a showcase waiting on a crop or an egg, with a
+/// caption saying so (`step-videos` design 7). Absent, the clock keeps its
+/// own pace.
+#[derive(Resource, Clone, Copy, Debug, PartialEq)]
+pub struct ClockRate(pub f32);
 
 /// MEASUREMENT (`baked-light-ease`): `PBD_CLOCK_RUNS=<rate>` keeps the clock
 /// running in a capture or a run with `--time`, at `rate` times its own pace,

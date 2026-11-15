@@ -216,7 +216,35 @@ impl Default for Farmyard {
     }
 }
 
+/// One animal as the player sees it: where it stands, what it is, and
+/// whether it is wild, kept or following. Read by the showcase's bot, which
+/// looks for an animal the way a player does (`step-videos` 5.1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Seen {
+    /// Feet, body-local.
+    pub pos: Vec3,
+    /// Roster index on this body.
+    pub species: u16,
+    pub wild: bool,
+    pub following: bool,
+    pub female: bool,
+}
+
 impl Farmyard {
+    /// The animals in view: drawn, and not leaving.
+    pub fn seen(&self) -> impl Iterator<Item = Seen> + '_ {
+        self.beasts
+            .iter()
+            .filter(|b| !b.leaving && b.shown > 0.5)
+            .map(|b| Seen {
+                pos: b.pos,
+                species: b.species,
+                wild: matches!(b.who, Who::Wild { .. }),
+                following: b.mode == Mode::Follow,
+                female: b.sex == Sex::F,
+            })
+    }
+
     fn say(&mut self, text: impl Into<String>, hold_s: f32) {
         self.status = text.into();
         self.hold_s = hold_s;

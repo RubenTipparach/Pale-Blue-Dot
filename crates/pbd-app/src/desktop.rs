@@ -18,6 +18,7 @@ mod missions;
 mod overlay_ui;
 mod pack;
 mod scene;
+mod showcase;
 mod slots;
 mod sounds;
 mod time_ui;
@@ -348,6 +349,15 @@ pub struct Launch {
     /// `biomes`, `--map-night` and `--map-clouds` those live layers, and
     /// `--map-at <lat> <lon>` the centre in degrees (the player otherwise).
     pub map: map_screen::MapLaunch,
+    /// `--showcase <name>` (`step-videos` 2.1, 5.1): a bot plays
+    /// `assets/showcase/<name>.ron` toward its goal through the player's
+    /// own inputs, in real time, in a new world, and quits.
+    pub showcase: Option<(String, showcase::file::Showcase)>,
+    /// `--showcase-stills <dir>`: a showcase's `Still` acts save a PNG there.
+    pub showcase_stills: Option<PathBuf>,
+    /// `--showcase-from N`: start at shot N, a development aid with a
+    /// `--world` that already holds the shots before it.
+    pub showcase_from: usize,
 }
 
 impl Launch {
@@ -408,6 +418,9 @@ impl Launch {
             day: None,
             overlay: None,
             map: map_screen::MapLaunch::default(),
+            showcase: None,
+            showcase_stills: None,
+            showcase_from: 1,
             torch: false,
             pour: 0,
             water_ticks: 0,
@@ -786,6 +799,35 @@ impl Launch {
                     result.spawn = Some(spawn);
                 }
                 "--frame-graph" => result.frame_graph = true,
+                "--showcase" => {
+                    i += 1;
+                    let name = args.get(i).expect("--showcase requires a name").clone();
+                    let file = showcase::file::load(&name).unwrap_or_else(|e| panic!("{e}"));
+                    // A new world, on foot, where and when the shot list
+                    // says, with the clock running from its hour.
+                    result.walk = true;
+                    result.spawn = file.spawn.clone().or(result.spawn.take());
+                    result.at = file.at.or(result.at);
+                    result.yaw = file.yaw.or(result.yaw);
+                    result.time = Some(file.hour);
+                    result.day = file.day.or(result.day);
+                    result.clock_runs = true;
+                    result.showcase = Some((name, file));
+                }
+                "--showcase-from" => {
+                    i += 1;
+                    result.showcase_from = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .filter(|n| *n >= 1)
+                        .expect("--showcase-from takes a shot number from 1");
+                }
+                "--showcase-stills" => {
+                    i += 1;
+                    result.showcase_stills = Some(PathBuf::from(
+                        args.get(i).expect("--showcase-stills requires a directory"),
+                    ));
+                }
                 "--no-vsync" => result.no_vsync = true,
                 "--frame-latency" => {
                     i += 1;
@@ -1212,7 +1254,7 @@ pub fn run(args: &[String]) {
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
         launch.menu.as_deref(),
-        launch.world.is_some(),
+        launch.world.is_some() || launch.showcase.is_some(),
         launch.capture.is_some(),
     );
     let restored = world.pose;
@@ -1373,6 +1415,7 @@ pub fn run(args: &[String]) {
         (
             (missions::press_tabs, missions::paint, missions::show_line).chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
+            missions::night_watch.run_if(pbd_app::loading::ready),
         ),
     )
     // The world, loaded before the planet is built: `create_planet` reads its
@@ -1617,7 +1660,7 @@ pub fn run(args: &[String]) {
     // in a capture or a benchmark the defaults, so its picture or its numbers
     // are its flags' alone. Read here, once the logger is up.
     let (player, mut keys, kept) = pbd_app::settings::for_launch(
-        launch.capture.is_some() || launch.frame_log.is_some(),
+        launch.capture.is_some() || launch.frame_log.is_some() || launch.showcase.is_some(),
         &launch.settings,
     );
     info!(
@@ -1761,6 +1804,33 @@ pub fn run(args: &[String]) {
                     .run_if(pbd_app::loading::ready),
             );
         }
+        if let Some((name, file)) = launch.showcase.clone() {
+            if let Some(dir) = &launch.showcase_stills {
+                std::fs::create_dir_all(dir).expect("stills directory");
+            }
+            app.insert_resource(
+                showcase::Player::new(name, file, launch.showcase_stills.clone())
+                    .from_shot(launch.showcase_from),
+            )
+            .init_resource::<showcase::Tally>()
+            .init_resource::<showcase::PendingClick>()
+            .add_systems(Startup, showcase::spawn_caption)
+            .add_systems(Update, (showcase::hide_readout, showcase::warm_stills))
+            .add_systems(
+                PreUpdate,
+                (showcase::tally, showcase::drive)
+                    .chain()
+                    .after(bevy::input::InputSystems)
+                    .before(pbd_app::controls::remap_keys)
+                    .run_if(pbd_app::loading::ready),
+            )
+            .add_systems(
+                PreUpdate,
+                showcase::press_controls
+                    .after(bevy::ui::UiSystems::Focus)
+                    .after(showcase::drive),
+            );
+        }
         if launch.swim {
             // The scripted keys have to be written where the real ones are:
             // after the input clear and before the walking input reads them,
@@ -1845,7 +1915,9 @@ fn open_world(launch: &Launch) -> WorldSave {
     // world that chooses it is open.
     let seed = pbd_core::planet_gen::TerrainConfig::TENEBRIS.seed;
     let asked = launch.world.clone();
-    if asked.is_none() && launch.capture.is_some() {
+    // A showcase plays a new world, kept in memory unless `--world` names
+    // one: the owner's saves are not its to fill.
+    if asked.is_none() && (launch.capture.is_some() || launch.showcase.is_some()) {
         return WorldSave::memory_only();
     }
     let listed = saves::list(&root);

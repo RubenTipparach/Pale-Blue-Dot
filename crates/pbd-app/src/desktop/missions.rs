@@ -444,6 +444,58 @@ pub fn scripted(world: &mut World, mut at: Local<(usize, u32)>) {
     raise(step, world);
 }
 
+/// The hour a night by the lights is counted from.
+pub const NIGHT_HOUR: f32 = 20.0;
+/// How near a light the player placed they have to be, metres.
+pub const NIGHT_NEAR_M: f32 = 30.0;
+
+/// `night` (`starter-missions` H.1): the clock passes 20:00 with the
+/// player within 30 m of a light they placed. Raised once each evening.
+pub fn night_watch(
+    sun: Res<pbd_app::sky::Sun>,
+    save: Res<pbd_app::saves::WorldSave>,
+    fine: Option<Res<pbd_app::planet::PlanetFine>>,
+    walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    mut did: MessageWriter<pbd_app::missions::Did>,
+    mut was: Local<Option<f32>>,
+) {
+    let hour = sun.clock.hour();
+    let crossed = was.is_some_and(|h| h < NIGHT_HOUR && hour >= NIGHT_HOUR);
+    *was = Some(hour);
+    if !crossed {
+        return;
+    }
+    let (Some(fine), Ok(feet)) = (fine, walkers.single()) else {
+        return;
+    };
+    let lights: Vec<_> = save
+        .edits
+        .all()
+        .into_iter()
+        .filter(|e| pbd_app::hotbar::light_icon(e.material).is_some())
+        .collect();
+    if lights.is_empty() {
+        return;
+    }
+    let toward = feet.0.normalize_or(Vec3::Y);
+    let near = fine.set.finest_records().iter().any(|r| {
+        lights.iter().any(|e| e.cell == r.key())
+            && Vec3::from_slice(&r.direction_height[..3])
+                .normalize_or(Vec3::Y)
+                .distance(toward)
+                * pbd_app::planet::PLANET_RADIUS
+                < NIGHT_NEAR_M
+    });
+    if near {
+        info!("night by the lights at {hour:.2}");
+        did.write(pbd_app::missions::Did::new(
+            pbd_core::missions::Kind::Night,
+            "light",
+            1,
+        ));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

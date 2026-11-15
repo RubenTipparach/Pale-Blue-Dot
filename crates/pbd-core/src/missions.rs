@@ -61,14 +61,19 @@ pub enum Kind {
     Collect,
     /// An ingot made.
     Smelt,
-    /// A tree felled.
+    /// A tree felled: the axe's last log from it.
     Fell,
+    /// A dish eaten from the hand, by its code.
+    Eat,
+    /// The clock passed 20:00 with the player near a light they placed.
+    Night,
 }
 
 impl Kind {
-    /// The kinds a chain may name whatever the build: every kind but those
-    /// the game raises no event for yet. Felling is `tool-crafting`'s.
-    pub const LIVE: [Kind; 15] = [
+    /// The kinds a chain may name whatever the build: every kind the game
+    /// raises an event for (all of them, since felling, eating and the
+    /// night came in with the Homestead chain).
+    pub const LIVE: [Kind; 18] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -84,6 +89,9 @@ impl Kind {
         Kind::BuildPen,
         Kind::Collect,
         Kind::Smelt,
+        Kind::Fell,
+        Kind::Eat,
+        Kind::Night,
     ];
 }
 
@@ -285,6 +293,8 @@ impl Catalog {
             Kind::Tame | Kind::Pen => self.animals.contains(name),
             Kind::Cast => name == "water",
             Kind::Fell => name == "tree",
+            Kind::Night => name == "light",
+            Kind::Eat => item(),
             Kind::Place => name.starts_with("block:") && item(),
             Kind::Till | Kind::BuildPen => false,
             Kind::Gather
