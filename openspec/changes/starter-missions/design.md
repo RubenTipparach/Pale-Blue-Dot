@@ -293,3 +293,111 @@ mission's own completion line and the unlock appearing in the recipe list.
 The Homestead missions above are kept only as later goals for a branch's
 payoff, not as a second chain.
 
+### The full tree (owner, 2026-11-15: "make a comprehensive mission tree that would encourage the bot to try all these game play mechanics")
+
+Every mechanic the game has today has a mission that needs it: hands, tools
+at three tiers, building, light, water, fishing, farming, herding, mining
+and smelting, cooking and eating, and getting about. Names are the real
+recipe, good and species codes (`recipes.ron`, `pbd_core::goods`,
+`husbandry.ron`, `fauna.ron`, `farming.ron`). **New** marks an objective
+kind or a recipe the game does not have yet. Every mission's `unlocks`
+lists what it opens.
+
+**0. Trunk: hands to tools** (in order; it opens everything else)
+
+| id | mission | objectives | unlocks |
+| --- | --- | --- | --- |
+| `gather` | Gather by hand | gather 4 fibre, 4 stone, 4 soil by hand | `stone-axe` |
+| `axe` | Craft an axe | craft `stone-axe` (in the pack) | felling |
+| `wood` | Gather wood | **fell** 2 trees; gather 10 `log` | `planks`, `rope` |
+| `planks-rope` | Planks and rope | craft 8 `planks`, 2 `rope` | `workbench` |
+| `crafting-table` | Build a crafting bench | craft and **place** `workbench` | `stone-pickaxe`, `stone-shovel`, `rod` |
+| `stone-tools` | Stone tools | craft `stone-pickaxe`, `stone-shovel` | the four branches |
+
+**1. Fishing** (opens after the trunk)
+
+| id | mission | objectives | unlocks |
+| --- | --- | --- | --- |
+| `rod` | Make a fishing rod | craft `rod` | casting |
+| `go-fishing` | Go fishing | cast onto water; catch 3 fish | `bucket` |
+| `bait` | Dig for bait | dig bait from wet ground; catch 1 fish with bait | — |
+| `three-kinds` | Three kinds of fish | catch 3 different species (the field guide, J, fills in) | the cooking branch, with farming or herding |
+| `sea-fishing` | Off the shore | catch 1 fish from the sea and 1 from a river or lake | — |
+
+**2. Farming**
+
+| id | mission | objectives | unlocks |
+| --- | --- | --- | --- |
+| `find-seeds` | Find seeds | dig grass for a seed; pick 1 wild plant | tilling with the shovel |
+| `till` | Break ground | till 4 cells | — |
+| `plant` | Plant a field | plant 4 `wheat-seed` | — |
+| `water-field` | Water the field | **pour** a `water-bucket` beside the field (**new** kind `pour`) | — |
+| `harvest` | Harvest | harvest 4 `wheat` | `turnip-seed`, `chili-seed` |
+| `three-crops` | A mixed field | harvest `turnip`, `chili` and `frost-kale` (kale where it is cold) | the cooking branch's farm dishes |
+
+**3. Herding**
+
+| id | mission | objectives | unlocks |
+| --- | --- | --- | --- |
+| `fence` | Make fences | craft 12 `fence`, 1 `gate` (**new** recipes, from planks and rope) | — |
+| `tame` | Tame an animal | tame a `Yard hen` by feeding | — |
+| `pen` | Build a pen | build a pen with a gate round tamed animals | — |
+| `collect` | Collect from the herd | collect 2 `egg` | — |
+| `flock` | A mixed herd | tame a `Woolback` or a `Plodder`; collect `wool` or `milk` | the egg dishes |
+
+**4. Mining and smelting**
+
+| id | mission | objectives | unlocks |
+| --- | --- | --- | --- |
+| `dig-deep` | Dig into the hill | dig 10 stone with the stone pickaxe | `forge` |
+| `ore` | Find ore | dig `mixed-ore` (copper and tin) and `coal` | — |
+| `forge` | Build a forge | craft and place `forge` | `bronze` |
+| `smelt` | Smelt bronze | smelt 2 `bronze-ingot` | `bronze-axe`, `bronze-pickaxe`, `bronze-shovel` |
+| `bronze-tool` | Bronze tools | craft `bronze-pickaxe`; dig 5 stone with it | iron smelting |
+| `iron` | The iron age | smelt `iron-ingot`; craft `iron-pickaxe` | `iron-axe`, `iron-shovel` |
+
+**5. Cooking** (opens after fishing's `three-kinds` and one of farming or herding)
+
+| id | mission | objectives | unlocks |
+| --- | --- | --- | --- |
+| `fire` | Make a fire | craft and place a campfire (**new** recipe) | the campfire's dishes |
+| `cook-fish` | Cook fish | cook 2 `grilled-fish` | — |
+| `bread` | Bake bread | cook 2 `flatbread` from your wheat | — |
+| `eat` | Eat well | **eat** 1 dish (**new** kind `eat`); its effect shows | — |
+| `farm-meal` | A farm meal | cook `roast-turnip`, `kale-skewer` or `chili-fish` | — |
+| `fried-egg` | Breakfast | cook a `fried-egg` from your hen's egg | — |
+| `feast` | A feast | **eat** 3 different dishes | the kitchen stations, when `cooking` builds them |
+
+**6. Light and building** (opens after the trunk)
+
+| id | mission | objectives | unlocks |
+| --- | --- | --- | --- |
+| `build` | Build a shelter | **place** 20 blocks (planks, stone or soil) | torches |
+| `torch` | Light the night | craft and **place** 4 torches (**new** recipe); be beside them after 20:00 (**new** kind `night`) | lanterns, when they get a recipe |
+
+**7. Getting about** (opens after fishing; each goal is something to see)
+
+| id | mission | objectives | unlocks |
+| --- | --- | --- | --- |
+| `map` | Read the map | open the map (M) and **reach** a marked place 200 m away (**new** kind `reach`) | — |
+| `swim` | Into the water | **swim** 20 m (**new** kind `swim`) | — |
+| `reef` | See a reef | **reach** a reef or kelp forest under water | — |
+| `town` | Find a town | **reach** a town | — |
+| `boat` | Take a boat | **board** a rowboat or a cog and travel 100 m (**new** kind `board`) | — |
+
+**New kinds:** `fell`, `eat`, `pour`, `night`, `reach`, `swim`, `board`.
+Each is raised where the game already acts: felling, eating, the bucket,
+the clock, the walker's position against a site or the sea places map, the
+swimmer, and boarding.
+
+**New recipes:** `fence`, `gate`, `campfire` and `torch`. Today they come
+in the starting kit. The kit keeps them for a world from before the tree
+(T.3).
+
+**The bot.** It plays the trunk, then each branch in order: fishing,
+farming, herding, mining and smelting, cooking, light and building, getting
+about. Each branch is a goal and a section of the video. Waits are sped up
+and captioned. A branch the bot cannot finish fails the run and the log
+names the stalled objective. That is the test that every mechanic is
+reachable by play.
+

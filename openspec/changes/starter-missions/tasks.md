@@ -30,7 +30,7 @@ Done on `claude/starter-missions` (2026-11-14): tests in `pbd_core::missions` an
 ## T. The mission tree and unlocks (design "Missions are a tree that unlocks the tech")
 
 - [ ] T.1 `unlocks` on missions and a recipe lock in `pbd_core` (one rule, used by the pack, the bench, the forge and the campfire). Verify: core tests that a locked recipe cannot be crafted, a mission's completion unlocks its list, and a recipe no mission names is open.
-- [ ] T.2 The tree in `missions.ron`: the trunk, then farming, herding, mining and smelting, then cooking; new ids `wood`, `fence`, `ore`, `forge`, `eat`. Verify: the load test; every branch is reachable from the trunk; every `unlocks` names a real recipe.
+- [ ] T.2 The full tree in `missions.ron` (design "The full tree": trunk, fishing, farming, herding, mining and smelting, cooking, light and building, getting about), with the new kinds `fell`, `eat`, `pour`, `night`, `reach`, `swim`, `board` and the new recipes `fence`, `gate`, `campfire`, `torch`. Verify: the load test; every branch is reachable from the trunk; every `unlocks` names a real recipe.
 - [ ] T.3 Old worlds keep everything: finished missions done, and anything crafted, carried or placed counts as unlocked. Verify: a test opens a save from before the tree and crafts every tool it could before.
 - [ ] T.4 The locked silhouette and its mission name in the recipe lists. Verify: captures of the bench and the pack with locked and open recipes.
 - [ ] T.5 The bot plays the tree: trunk, branches, cooking, each a goal (`step-videos` 5.x). Verify: a run ends with the tree done in the save and every unlock seen.
