@@ -281,3 +281,43 @@ fn fertile_eggs_and_their_parentage_survive_a_reload() {
         Some(&breeding::BROOD_SCHEMA)
     );
 }
+
+/// Design 14: a pen piece wears its texture at the manifest's scale. A
+/// 2.8 m rail of `poles` (2 m a repeat) spans 1.4 repeats along its length;
+/// an animal's flat box writes no UVs, so its mesh keeps its layout.
+#[test]
+fn a_textured_box_lays_its_texture_at_the_repeat() {
+    let mut rail = rig::Builder::default();
+    rail.textured_cuboid(
+        Vec3::ZERO,
+        [Vec3::X * 1.4, Vec3::Y * 0.05, Vec3::Z * 0.03],
+        2.0,
+    );
+    assert!(rail.textured);
+    assert_eq!(rail.uvs.len(), rail.positions.len());
+    let widest = rail
+        .uvs
+        .iter()
+        .map(|uv| uv[0].max(uv[1]))
+        .fold(0.0f32, f32::max);
+    assert!((widest - 1.4).abs() < 1e-5, "{widest}");
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    rail.write(&mut mesh);
+    assert!(mesh.attribute(Mesh::ATTRIBUTE_UV_0).is_some());
+    let mut animal = rig::Builder::default();
+    animal.cuboid(Vec3::ZERO, [Vec3::X, Vec3::Y, Vec3::Z], [0.5, 0.4, 0.3]);
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    animal.write(&mut mesh);
+    assert!(mesh.attribute(Mesh::ATTRIBUTE_UV_0).is_none());
+    // The pen's textures are the settlement manifest's own.
+    let repeats = crate::towns::load_repeats();
+    for name in PEN_TEXTURES {
+        assert!(repeats.contains_key(name), "{name} is a settlement texture");
+    }
+}

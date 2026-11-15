@@ -1516,7 +1516,7 @@ pub fn swing_doors(
 }
 
 /// A texture of the town's, sampled nearest and repeated.
-fn texture(assets: &AssetServer, name: &str) -> Handle<Image> {
+pub(crate) fn texture(assets: &AssetServer, name: &str) -> Handle<Image> {
     assets.load_with_settings(
         format!("textures/settlement/{name}.png"),
         |s: &mut ImageLoaderSettings| {

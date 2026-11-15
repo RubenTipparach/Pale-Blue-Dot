@@ -564,6 +564,42 @@ birth makes an animal that must outlive every rule change.
   only while the player is within 150 m or opens the world, which E5 makes
   invisible: a birth's day is its due day whenever it is written.
 
+## 14. The pen in the game's own wood (owner, 2026-11-15)
+
+The owner, on the eggs capture: "some of the fence shot is missing
+textures".
+
+**Finding.** Every pen piece the game draws is a box of flat vertex colour
+on a plain white material: `husbandry::rig::Builder` writes positions,
+normals and one colour per box, and no UVs. The posts only seem to have a
+grain because the ground's light field and the shadow cascades fall across
+them; a rail, and above all the gate's pale boards, show the flat fill
+plainly. The approved mockup (M26, `docs/mockups/husbandry.html`, `pen()`)
+dresses the pen in the game's settlement textures: posts in `timber`, rails
+in `poles`, the gate in `boards`, a trough in `plank`. The first playable
+slice (S11, decision 12) drew them flat, and this pass's incubator followed
+it. The animals are the same: flat boxes, where M26 gives each box a tile of
+its hide.
+
+**Change** (drawing only; no record, rule or save changes):
+
+- `rig::Builder` gains UVs: a textured box lays its texture along each face
+  at the texture's `repeat_m` from `textures/settlement/manifest.ron` (the
+  towns' own scale), so a 2.8 m rail shows its grain at the same size a
+  town's beam does.
+- The fences are drawn as three meshes, one per texture: posts `timber`,
+  rails `poles`, gates `boards`, each on a `StandardMaterial` with that
+  texture sampled nearest and repeated (the towns' `texture()` settings),
+  lit by the field as the boxes were. The incubator's body is `plank`, its
+  legs `timber`, and its glass lid stays a flat pale blue (M26: "water,
+  glass and the sky are flat colour").
+- The textured fence pipeline is built behind the loading screen: a hidden
+  textured piece joins the yard's prewarm template.
+- **Not in this fix**: the animals' hides. Each species' hide strip has to
+  be drawn first (M26's `tools/art/husbandry_art.py` holds them, outlined;
+  the world's copy loses the outline, CLAUDE.md "No outlines in the world"),
+  and that is its own step, listed as task 9.2.
+
 ## Risks / Trade-offs
 
 - **Scope.** This is a large system. The tasks put it in slices: records and

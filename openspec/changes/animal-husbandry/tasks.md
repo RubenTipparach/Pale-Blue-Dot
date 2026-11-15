@@ -45,3 +45,10 @@ judged against what it would cost.
 
 - [x] 8.1 Pairing, gestation, cooldown; inheritance with mutation; Wright's F from the pedigree (design 13, E6-E8). Verify: a test that catching up in one evaluation writes the same births as evaluating every half day; a test that a world with no broods opens unchanged and writes nothing; a test that the four predicted values for a gene are exactly the ones births produce over many seeds; siblings give F = 0.25. (Built 2026-11-15: `catching_up_in_one_evaluation_writes_what_half_days_write`, `a_world_with_no_broods_writes_nothing`, `the_four_predicted_values_are_the_ones_births_produce`, `siblings_give_f_a_quarter`, all passing. In play, conception reads each animal's mood and health from its pen now (S7); `--husbandry breed` runs forty days of a pen of one ram and three ewes and logs 19 born.)
 - [x] 8.2 The breeding screen and the pedigree (design 13, E9). Verify: a capture beside the mockup's Breeding tab. (Built 2026-11-15: `desktop/breeding.rs`, B on foot or `--menu breeding`; species tabs, the herd, the pair with F and its warning, each gene's four young as ticks with the band and the parents' marks, coat, pattern and morph odds, PAIR writing `mate` on the dam as the player's, and a three-generation pedigree. Tests `b_opens_the_breeding_screen_on_foot_only`, `generations_count_from_the_founders`. Capture `docs/screenshots/animal-husbandry/breeding-screen.png` beside `docs/screenshots/mockup-husbandry/breeding.jpg`.)
+
+
+## 9. The pen in the game's own wood (design 14; owner, 2026-11-15: "some of the fence shot is missing textures")
+
+- [ ] 9.1 Fences, gates and the incubator in the settlement textures (posts `timber`, rails `poles`, gates `boards`, incubator `plank`) at their `repeat_m`, UVs from the builder; the textured pipeline prewarmed. Verify: a builder test that a textured box's UVs span its faces at `repeat_m`; the eggs capture again beside the first take.
+- [ ] 9.2 The animals in their hides (M26's hide strips, outline-free for the world). Not started: the strips are drawn first.
+

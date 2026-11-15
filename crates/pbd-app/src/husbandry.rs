@@ -204,6 +204,9 @@ pub struct Farmyard {
     hold_s: f32,
     fences_drawn: Option<(BTreeMap<Edge, bool>, Vec<u32>, usize)>,
     material: Option<Handle<StandardMaterial>>,
+    /// The pen's textured materials in [`PEN_TEXTURES`] order, and each
+    /// texture's repeat in metres (design 14).
+    pen_materials: Option<([Handle<StandardMaterial>; 4], [f32; 4])>,
     /// What the player did this frame, announced as messages.
     deeds: Vec<Deed>,
     gained: Vec<(Item, u16)>,
@@ -219,6 +222,7 @@ impl Default for Farmyard {
             hold_s: 0.0,
             fences_drawn: None,
             material: None,
+            pen_materials: None,
             deeds: Vec::new(),
             gained: Vec::new(),
         }
@@ -353,7 +357,48 @@ fn spawn(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     config: Res<HusbandryConfig>,
+    assets: Option<Res<AssetServer>>,
 ) {
+    // The pen's own wood (design 14): the towns' textures, sampled nearest
+    // and repeated at the manifest's scale.
+    if let Some(assets) = assets.as_deref() {
+        let repeats = crate::towns::load_repeats();
+        let repeat = PEN_TEXTURES.map(|n| repeats.get(n).copied().unwrap_or(1.0).max(0.25));
+        let pen = PEN_TEXTURES.map(|n| {
+            materials.add(StandardMaterial {
+                base_color_texture: Some(crate::towns::texture(assets, n)),
+                perceptual_roughness: 0.93,
+                reflectance: 0.2,
+                ..default()
+            })
+        });
+        // Its pipeline built behind the loading screen: one hidden post.
+        let mut post = rig::Builder::default();
+        post.textured_cuboid(
+            Vec3::ZERO,
+            [Vec3::X * 0.07, Vec3::Y * 0.6, Vec3::Z * 0.07],
+            1.0,
+        );
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        post.write(&mut mesh);
+        commands
+            .spawn((
+                Name::new("Pen prewarm template"),
+                LitByField,
+                Faded(1.0),
+                Transform::from_xyz(0.0, -1.0e5, 0.0),
+                Visibility::Hidden,
+            ))
+            .with_child((
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(pen[0].clone()),
+                Transform::default(),
+            ));
+        yard.pen_materials = Some((pen, repeat));
+    }
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 0.9,
@@ -1622,9 +1667,13 @@ fn draw_fences(
             .collect()
     };
     let mut origin = None;
-    let mut builder = rig::Builder::default();
-    let wood = [0.42, 0.28, 0.16];
-    let light = [0.80, 0.70, 0.52];
+    let Some((materials, repeat)) = yard.pen_materials.clone() else {
+        return;
+    };
+    let mut pen = PenMeshes {
+        repeat,
+        ..PenMeshes::default()
+    };
     let mut drawn = 0;
     for (edge, &gate) in &pieces {
         let (a, b) = edge.cells();
@@ -1638,16 +1687,15 @@ fn draw_fences(
         let pb = cb * world.ground(cb);
         let o = *origin.get_or_insert(pa);
         fence_piece(
-            &mut builder,
+            &mut pen,
             pa - o,
             pb - o,
             (ca + cb).normalize_or(Vec3::Y),
             gate,
-            if gate { light } else { wood },
         );
         drawn += 1;
     }
-    drawn += breed::draw_incubators(&world, &save, &mut builder, &mut origin);
+    drawn += breed::draw_incubators(&world, &save, &mut pen, &mut origin);
     yard.fences_drawn = Some((pieces, incubators, version));
     if let Some(children) = children {
         for c in children.iter() {
@@ -1657,63 +1705,94 @@ fn draw_fences(
     let Some(o) = origin else {
         return;
     };
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-    builder.write(&mut mesh);
-    let Some(material) = yard.material.clone() else {
+    let Some(flat) = yard.material.clone() else {
         return;
     };
-    commands
-        .entity(root)
-        .insert(Transform::from_translation(
-            (world.frame.center + o.as_dvec3()).as_vec3(),
-        ))
-        .with_child((
+    commands.entity(root).insert(Transform::from_translation(
+        (world.frame.center + o.as_dvec3()).as_vec3(),
+    ));
+    let parts = [
+        (pen.timber, materials[0].clone()),
+        (pen.poles, materials[1].clone()),
+        (pen.boards, materials[2].clone()),
+        (pen.plank, materials[3].clone()),
+        (pen.glass, flat),
+    ];
+    for (builder, material) in parts {
+        if builder.positions.is_empty() {
+            continue;
+        }
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        builder.write(&mut mesh);
+        commands.entity(root).with_child((
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(material),
             Transform::default(),
         ));
+    }
     debug!("husbandry: {drawn} fence pieces drawn");
 }
 
 /// A piece between two corners on the ground: two posts and two rails; a
 /// gate adds a brace.
-fn fence_piece(out: &mut rig::Builder, a: Vec3, b: Vec3, up: Vec3, gate: bool, colour: [f32; 3]) {
+fn fence_piece(pen: &mut PenMeshes, a: Vec3, b: Vec3, up: Vec3, gate: bool) {
     let along = b - a;
     let side = along.cross(up).normalize_or(Vec3::Z);
-    let post = |out: &mut rig::Builder, at: Vec3| {
-        let fwd = along.normalize_or(Vec3::X);
-        out.cuboid(
+    let fwd = along.normalize_or(Vec3::X);
+    // The posts stand on the corners in timber, the rails run between them
+    // in poles; a gate is boards (M26's `pen()`).
+    for at in [a, b] {
+        pen.timber.textured_cuboid(
             at + up * 0.6,
             [fwd * 0.07, up * 0.65, side * 0.07],
-            [0.33, 0.22, 0.12],
+            pen.repeat[0],
         );
+    }
+    let (rails, repeat) = if gate {
+        (&mut pen.boards, pen.repeat[2])
+    } else {
+        (&mut pen.poles, pen.repeat[1])
     };
-    post(out, a);
-    post(out, b);
-    // The posts stand on the corners, the rails run between them.
-    let rail = |out: &mut rig::Builder, h: f32| {
+    let mut rail = |h: f32| {
         let mid = (a + b) * 0.5 + up * h;
-        out.cuboid(mid, [along * 0.5, up * 0.05, side * 0.03], colour);
+        rails.textured_cuboid(mid, [along * 0.5, up * 0.05, side * 0.03], repeat);
     };
-    rail(out, 0.35);
-    rail(out, 0.85);
+    rail(0.35);
+    rail(0.85);
     if gate {
+        rail(0.6);
         // A brace from bottom corner to top corner.
         let from = a + up * 0.35;
         let to = b + up * 0.85;
         let brace = to - from;
         let bup = brace.cross(side).normalize_or(up);
-        out.cuboid(
+        pen.boards.textured_cuboid(
             (from + to) * 0.5,
             [brace * 0.5, bup * 0.045, side * 0.035],
-            colour,
+            repeat,
         );
-        rail(out, 0.6);
     }
 }
+
+/// The pen's meshes, one per texture (`animal-husbandry` design 14): posts
+/// and legs in timber, rails in poles, gates in boards, an incubator's body
+/// in plank, and its glass flat. `repeat` is each texture's metres, in that
+/// order.
+#[derive(Default)]
+pub(crate) struct PenMeshes {
+    pub(crate) timber: rig::Builder,
+    pub(crate) poles: rig::Builder,
+    pub(crate) boards: rig::Builder,
+    pub(crate) plank: rig::Builder,
+    pub(crate) glass: rig::Builder,
+    pub(crate) repeat: [f32; 4],
+}
+
+/// The pen's textures by name, in [`PenMeshes`] order.
+const PEN_TEXTURES: [&str; 4] = ["timber", "poles", "boards", "plank"];
 
 /// The HUD line: a one-off message, or what the aimed animal is.
 fn hud(

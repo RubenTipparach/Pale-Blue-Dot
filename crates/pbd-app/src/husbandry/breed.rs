@@ -467,11 +467,12 @@ pub(super) fn describe_incubator(world: &World, save: &WorldSave, point: Vec3) -
     })
 }
 
-/// The incubators, drawn as small crates with a glass lid into a builder.
+/// The incubators, drawn as small crates of plank on timber legs with a
+/// flat glass lid (design 14), into the pen's meshes.
 pub(super) fn draw_incubators(
     world: &World,
     save: &WorldSave,
-    builder: &mut rig::Builder,
+    pen: &mut PenMeshes,
     origin: &mut Option<Vec3>,
 ) -> usize {
     let mut n = 0;
@@ -485,21 +486,21 @@ pub(super) fn draw_incubators(
         let side = Vec3::Y.cross(up).normalize_or(Vec3::X);
         let fwd = up.cross(side);
         let base = at - o;
-        builder.cuboid(
+        pen.plank.textured_cuboid(
             base + up * 0.18,
             [side * 0.30, up * 0.18, fwd * 0.22],
-            [0.42, 0.28, 0.16],
+            pen.repeat[3],
         );
-        builder.cuboid(
+        pen.glass.cuboid(
             base + up * 0.39,
             [side * 0.28, up * 0.03, fwd * 0.20],
             [0.66, 0.85, 0.91],
         );
         for (x, z) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
-            builder.cuboid(
+            pen.timber.textured_cuboid(
                 base + up * 0.2 + side * (0.29 * x) + fwd * (0.21 * z),
                 [side * 0.025, up * 0.2, fwd * 0.025],
-                [0.33, 0.22, 0.12],
+                pen.repeat[0],
             );
         }
         n += 1;
