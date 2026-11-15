@@ -28,6 +28,13 @@ Today the game has fish and nothing else that lives:
 There is no one list of what lives where, no rule for what can be tamed and
 what stays wild, no eggs that hatch, no young that grow, and no inheritance.
 
+## Go-ahead
+
+The owner, 2026-11-14: **"start building the farming systems into the game,
+as well as the basic smelting stuff"**, then **"oh and cooking and
+domestication of animals too"**. That is the request for the build (tasks 4
+to 6, the first playable slice); design decision 12 says what it builds.
+
 ## What Changes
 
 One mockup, `docs/mockups/husbandry.html`, "Pens, Nests and Pedigrees", and

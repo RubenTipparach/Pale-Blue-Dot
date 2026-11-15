@@ -338,6 +338,105 @@ A day is 48 minutes of play (M8), so a chick is a laying hen in eight hours.
   them, until the owner picks the art route (M7's question).
 - Multiplayer: the same core rules for every peer; the record names its owner.
 
+## 12. The first playable slice (built 2026-11-14)
+
+The owner, 2026-11-14: "start building the farming systems into the game, as
+well as the basic smelting stuff", then "oh and cooking and domestication of
+animals too". That is the request for tasks 4 to 6 (proposal, "Go-ahead").
+Farming and smelting are built beside this on `claude/farming-smelting`; this
+slice is `claude/animal-husbandry`. What it builds, and where it departs from
+decisions 1 to 11 because something they lean on is not in the game yet:
+
+- **S1. Three animals first: yard hen, woolback, plodder** (decision 4's
+  Tenebris roster, M26's farmstead). Each is tamed by feeding (decision 3).
+  The others in decision 4 wait for their ways (hatching, raising young,
+  swarms) and for the buildings they need.
+- **S2. Land species are their own roster beside the fish.** A caught fish is
+  saved as `Item::Fish(index)` into `fauna.ron`'s roster, and every fish rule
+  reads that list, so land species go in `assets/config/husbandry.ron` under
+  `land: { "home": [...] }`, append-only, with ids unique across both lists.
+  A record names its species as `sp: <land index>` on its body (`body` field).
+  Every fish gains `class: Fish` and `status: WildOnly` (decision 2: fish are
+  kept in tanks, not pens). Only `home` has life; no other body is in the game.
+- **S3. Feed until farming lands is turf.** The favourite food of all three
+  is a grass block (`Item::Block(Grass)`, which every world's kit holds and a
+  shovel gives back), marked as a placeholder in `husbandry.ron`. When the
+  branches merge, grain, turnips and kale from farming replace it per species
+  (decision 3's table), one line each in `husbandry.ron`.
+- **S4. No crouch exists; standing still is the crouch.** The fear radius is
+  9 m while the player moves and 4.5 m while they stand still (decision 3's
+  numbers). Recommendation taken (ask only with screenshots).
+- **S5. Fences are edge pieces stored as records.** `player-building` is not
+  built, so a fence or a gate is a `fence` record whose id is its edge (the
+  two cells' keys, low key in the high word), authored `@p`, with a `gate`
+  flag and a `state` (`placed`, `removed`: records are never deleted). They are
+  drawn as posts and rails by the app; they do not block the walker yet. A pen
+  is derived from them (decision 5): a flood over the cells from the one the
+  player stands in, crossing only edges with no piece, of at most 64 cells; it
+  is a pen if it never escapes and its border holds a gate. Its id is its
+  lowest cell key.
+- **S6. Fences, gates and products are items.** `Item::Husbandry(Good)`, one
+  variant, saved as `h<code>`: fence 0, gate 1, egg 2, wool 3, milk 4. All in
+  one marked block of `inventory.rs` so the farming branch's items merge
+  beside it. A kit grant (version 3) deals 24 fences and 2 gates to every
+  world once, as the lights were dealt (an old world gains these and nothing
+  else: no animals).
+- **S7. The farm is derived, not stepped: no world process yet.** The steward
+  (`world-persistence` group 4) is not built. Everything the farm does on its
+  own in this slice is a closed form of world time from the record's last
+  player-written state (`as_of`, `health`, `hungry_s`, `made`), evaluated
+  when the player looks: health, mood, straying and what is waiting. Nothing
+  is written until the player acts (feeds, leads, collects), and each such
+  write re-bases the record at that moment. So no record is written by the
+  world, the yield set is never in question, and a farm costs nothing while
+  the player is elsewhere. Eggs are products like milk and wool here (decision
+  7's exception, an egg laid into a nest as a journal entry, comes with
+  fertile eggs in task 7, which needs the steward).
+- **S8. Needs in this slice.** Food: the pen's grass cells graze one woolback
+  each (a plodder two cells, a hen a fifth), or a hand feed of turf, which
+  lasts two world days. Water: a pen cell next to water. Shelter: never met
+  (there are no buildings yet), so a content animal is food plus space (50),
+  with water 75. Space: the pen's cells against the herd's space. A loose
+  animal has space and no grazing. Mood, health, sickness and straying as
+  decision 6; neglect never kills.
+- **S9. Products accrue continuously.** Each content, healthy day adds
+  `amount x (0.6 + 0.8 x yield) / period` to the product's tally; whole units
+  are waiting, at most three periods' worth. Collecting takes the whole units
+  and keeps the fraction. Milk is a plodder cow's, daily, without a calf in
+  this slice (calves are task 8).
+- **S10. Wild herds are derived from the world seed.** The surface is cut
+  into 160 m squares by latitude and longitude; a square holds a herd if its
+  hash says so and its centre is dry grass-topped land. The herd's species,
+  size and each member's seed come from the same hash. A tamed animal's record
+  keeps the wild seed it came from, and the herd leaves that member out from
+  then on, so it is never in two places.
+- **S11. Animals move like animals** (the owner on M7, 2026-11-14: "sad,
+  these chickens arent animated at all"). Each animal is one mesh rebuilt per
+  frame from boxes posed by a small rig: legs swing on a phase advanced by
+  ground distance over stride, so feet never slide; a walking bird bobs its
+  head with its steps; a standing bird pecks (quick dips at random 0.4 to
+  2 s), glances about and flicks its tail; it potters a short way every few
+  seconds; a quadruped grazes head down and shifts its weight; all lie or
+  roost at night (sun below the horizon). Drawn lit by the field, and faded in
+  and out through the terrain's screen-door mask (`Faded`) over 1 s, never
+  popped (priority 1).
+- **S12. Controls.** `E` (the door key, now "use") on an animal: with turf in
+  hand, feed it (a wild one gains trust; a tame one is fed); on a tame one
+  with something waiting, collect it; otherwise lead it or let it stay.
+  Fences and gates are placed with right click like a block, on the edge of
+  the aimed cell nearest the aim, and taken back with left click while one is
+  held. A tamed animal follows for 60 s or until let go; let go inside a pen,
+  that pen becomes its home (`@p`).
+
+Recommendations taken (ask only with screenshots) for M26's questions, as no
+survey answer exists for them: **Q1** the Kingdom by body form, world as a
+filter (S2 keeps `class` on every species); **Q2** a fox may take a hen from
+an open unlit run, never from a shut coop or past a hound (no fox in this
+slice); **Q3** the breeding screen draws every possible offspring as ticks
+with a better/same/worse arrow beside each (breeding is task 8).
+
+Frame cost: not measured. `perf_suite` waits for the owner's hardware.
+
 ## Risks / Trade-offs
 
 - **Scope.** This is a large system. The tasks put it in slices: records and
