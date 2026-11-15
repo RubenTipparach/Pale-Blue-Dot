@@ -145,6 +145,12 @@ stuff, should be consoliotdated"*.
   A panel shows only while the player uses it. No panel is opened onto a
   posed scene, and nothing is placed by a capture instrument. Clock speed-ups
   are allowed and captioned ("3 days later").
+- **The bot plays toward a goal** (owner: "gameplay should be a bot playing
+  the game and showing the interactions, have goal and bot should be
+  accomplishing a goal"). A gameplay showcase opens by stating its goal,
+  such as "finish the starter missions", and ends when the goal is met, with
+  the missions' own completion lines as the proof. The technical video is a
+  montage (owner: "tech demos show technical things, in montages").
 - **Phase 1 is one continuous run:** a new world, through the loop, in
   sections with captions. Its sections can also be cut as clips.
 - **Technical features go in one consolidated video per phase,** shot after

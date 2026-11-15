@@ -200,6 +200,36 @@ owner says otherwise:
 
 `exact-cell-keys` is the one step whose video was already made.
 
+## Demos: tech montages and a bot playing to a goal (owner, 2026-11-15)
+
+**Standing instruction from the user:** "these few seconds demos are cool,
+but you should really consolidate things: tech demos show technical things,
+in montages, gameplay should be a bot playing the game and showing the
+interactions, have goal and bot should be accomplishing a goal" (after "demos
+for gameplay needs to be incontext of gameplay, not just stills of UI").
+A pile of short clips, one per feature, is not a demo:
+
+- **Technical demos are montages.** Rendering, water, weather, flora by
+  biome and season, sea life: shot after shot cut into one video per phase
+  or topic, each shot captioned with what it shows.
+- **Gameplay demos are a bot playing the game toward a goal.**
+  - The bot has a goal it states at the start and accomplishes on screen,
+    for example "finish the starter missions" or "cook a meal from a crop
+    you grew".
+  - It reaches the goal through the player's own inputs: walking, looking,
+    chopping, crafting, casting and reeling, tilling, taming, cooking. It
+    plays each interaction out.
+  - A panel is on screen only while the bot uses it. No scene is posed by a
+    capture instrument, and no state is set behind the player's back.
+  - Waiting (crops, animals) may be sped up, with a caption saying so.
+- **Built with the showcases** of `openspec/changes/step-videos` (design 7):
+  - no debug readout;
+  - captions in the frame;
+  - recorded with `obs-record`, one OBS only.
+- **Water demos wait** until the water's smoothing between ticks is in the
+  game (owner: "I'd hold off on the water stuff until the lerp work is
+  done").
+
 ## Ask the owner with a survey (owner, 2026-09-27)
 
 **Standing instruction from the user:** "you need some sort of survey form
