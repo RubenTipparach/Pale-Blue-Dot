@@ -112,8 +112,9 @@ pub fn scripted(
     (mut drops, sun, mut arrows): (ResMut<Drops>, Res<pbd_app::sky::Sun>, ResMut<FlowArrows>),
     refresh: Res<pbd_app::planet::LodRefresh>,
     mut done: Local<bool>,
+    mut sources: ResMut<PourSources>,
 ) {
-    if *done || launch.capture.is_none() {
+    if *done || (launch.capture.is_none() && launch.pour_for.is_none()) {
         return;
     }
     if launch.arrows {
@@ -176,7 +177,7 @@ pub fn scripted(
         // One source on the look, more spread across it a cell apart.
         let aside = (i as f32 - (launch.pour as f32 - 1.0) * 0.5) * 2.9;
         let from = eye + ahead + right * aside;
-        if pour(
+        if let Some(at) = pour(
             &mut Edited {
                 fine: &mut fine,
                 contact: &mut contact,
@@ -187,10 +188,9 @@ pub fn scripted(
             },
             from,
             look,
-        )
-        .is_some()
-        {
+        ) {
             poured += 1;
+            sources.0.push(at);
         }
     }
     if launch.pour > 0 && poured == 0 {
@@ -251,4 +251,86 @@ fn dig_pit(world: &mut Edited, from: Vec3, depth: u32) -> usize {
         dug += 1;
     }
     dug
+}
+
+/// The sources `--pour` poured, as (cell, layer): what `--pour-for` stops
+/// and starts again.
+#[derive(Resource, Default)]
+pub struct PourSources(pub Vec<(u32, usize)>);
+
+/// Seconds after the pour before `POUR_START`: the first flow settles in.
+const POUR_SETTLE_S: f32 = 5.0;
+/// Seconds each half of the `--pour-for` cycle runs: the sources on, then
+/// off, so the water spreads, falls, then drains and dries, over and over.
+const POUR_CYCLE_S: f32 = 12.0;
+
+/// `--pour-for SECONDS` (`water-flow` 5.3, `perf_suite.py`'s `pour`): a
+/// measurement instrument. From the scripted pour, wait `POUR_SETTLE_S`, log
+/// `POUR_START`, then stop the poured sources and start them again every
+/// `POUR_CYCLE_S`, so water is always flowing, falling or drying near the
+/// eye; after SECONDS log `POUR_DONE` and quit. The edits take the ordinary
+/// edit path, as a player's would.
+#[allow(clippy::too_many_arguments)]
+pub fn pour_cycle(
+    launch: Res<super::Launch>,
+    mut fine: ResMut<PlanetFine>,
+    mut contact: ResMut<PlanetContact>,
+    mut save: ResMut<WorldSave>,
+    mut slots: ResMut<super::slots::Hotbar>,
+    (mut drops, sun): (ResMut<Drops>, Res<pbd_app::sky::Sun>),
+    sources: Res<PourSources>,
+    mut exit: MessageWriter<AppExit>,
+    mut clock: Local<Option<(std::time::Instant, Option<std::time::Instant>, u32)>>,
+) {
+    let Some(seconds) = launch.pour_for else {
+        return;
+    };
+    if sources.0.is_empty() {
+        return;
+    }
+    let now = std::time::Instant::now();
+    let (poured, started, flips) = clock.get_or_insert((now, None, 0));
+    let Some(started) = *started else {
+        if now.duration_since(*poured).as_secs_f32() >= POUR_SETTLE_S {
+            info!(
+                "POUR_START {seconds:.0} s, {} sources, {} cells queued",
+                sources.0.len(),
+                fine.set.columns.water.queue.len()
+            );
+            clock.as_mut().unwrap().1 = Some(now);
+        }
+        return;
+    };
+    let run = now.duration_since(started).as_secs_f32();
+    if run >= seconds {
+        info!("POUR_DONE {run:.1} s, {flips} flips");
+        exit.write(AppExit::Success);
+        return;
+    }
+    let due = (run / POUR_CYCLE_S) as u32;
+    if due <= *flips {
+        return;
+    }
+    *flips = due;
+    // Odd flips stop the sources, even ones pour them again.
+    let material = if due % 2 == 1 {
+        Material::Air
+    } else {
+        Material::Water
+    };
+    let mut world = Edited {
+        fine: &mut fine,
+        contact: &mut contact,
+        save: &mut save,
+        slots: &mut slots,
+        drops: &mut drops,
+        now_s: sun.clock.seconds,
+    };
+    let mut changed = 0;
+    for &(cell, layer) in &sources.0 {
+        if apply_edit(&mut world, Hands::Empty, cell, layer, material).is_some() {
+            changed += 1;
+        }
+    }
+    info!("POUR_FLIP {due} {material:?}: {changed} sources");
 }

@@ -259,6 +259,12 @@ pub struct Launch {
     pub pour_ahead: f32,
     /// `--pit DEPTH`: dig a pit that deep two cells short of the pour.
     pub pit: u32,
+    /// `--pour-for SECONDS`: a measurement instrument (`water-flow` 5.3,
+    /// `perf_suite.py`'s `pour`). The `--pour`/`--pit` script runs in real
+    /// time without a capture, then the poured sources are stopped and
+    /// started again in turn so water flows, falls and dries the whole
+    /// while; logs `POUR_START` and `POUR_DONE` and quits after that long.
+    pub pour_for: Option<f32>,
     /// `--tide high|low`: the tide's moon over the camera or a quarter turn
     /// round (`ocean-environments` 5.1), for the tide's captures.
     pub tide: Option<String>,
@@ -413,6 +419,7 @@ impl Launch {
             water_ticks: 0,
             pour_ahead: 0.0,
             pit: 0,
+            pour_for: None,
             tide: None,
             arrows: false,
             lamps: false,
@@ -540,6 +547,18 @@ impl Launch {
                         .get(i)
                         .and_then(|n| n.parse().ok())
                         .expect("--pit requires a depth");
+                }
+                "--pour-for" => {
+                    i += 1;
+                    let seconds: f32 = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--pour-for requires seconds");
+                    assert!(
+                        seconds.is_finite() && seconds > 0.0,
+                        "--pour-for takes seconds"
+                    );
+                    result.pour_for = Some(seconds);
                 }
                 "--pour-ahead" => {
                     i += 1;
@@ -1357,6 +1376,7 @@ pub fn run(args: &[String]) {
     .init_resource::<pack::PackHand>()
     // Farming and the forge (`farming-and-smelting`).
     .init_resource::<farm::FarmNote>()
+    .init_resource::<water::PourSources>()
     .init_resource::<farm::StationAt>()
     .init_resource::<craft::CraftPick>()
     .add_message::<pbd_app::hotbar::Gained>()
@@ -1553,6 +1573,12 @@ pub fn run(args: &[String]) {
             // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
             water::scripted
                 .after(digging::scripted_dig)
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
+                .run_if(resource_exists::<pbd_app::drops::Drops>),
+            water::pour_cycle
+                .after(water::scripted)
+                .run_if(|launch: Res<Launch>| launch.pour_for.is_some())
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
                 .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
                 .run_if(resource_exists::<pbd_app::drops::Drops>),
