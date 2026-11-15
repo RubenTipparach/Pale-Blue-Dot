@@ -362,6 +362,82 @@ impl ColumnTier {
         self.water.queue = queue;
     }
 
+    /// Settle a version 8 world's generated fresh water by the rule (design
+    /// 13, `water-flow`): every generated source above the sea with air
+    /// beside or under it is queued, and the rule runs until nothing is (at
+    /// most `RIVER_SETTLE_TICKS`), so what flows between a river's reaches,
+    /// down its falls and over its riffles is exactly what the rule keeps.
+    /// Derived, like the sea's flood: never saved, and the same tier settles
+    /// the same way. A world of an older version is left as it was made.
+    /// Returns how many cells the rule changed.
+    pub fn settle_rivers(&mut self, edits: &Edits) -> usize {
+        if terrain_config().rivers.is_none() {
+            return 0;
+        }
+        let sea = sea_layer();
+        let mut queue = liquid::Queue::new();
+        for slot in 0..self.columns.len() {
+            if self.rim(slot) {
+                continue;
+            }
+            let key = self.water.keys.get(slot).copied().unwrap_or(u32::MAX);
+            for layer in sea.max(1)..LAYERS - 1 {
+                if self.columns[slot].material(layer) != Material::Water
+                    || edited_water(edits, key, layer)
+                {
+                    continue;
+                }
+                let id = water_id(slot, layer);
+                let around = self.water_around(id);
+                let open = around[liquid::SIDE..]
+                    .iter()
+                    .flatten()
+                    .any(|&n| self.water_at(n) == LiquidCell::Air);
+                if open {
+                    queue.push(id);
+                }
+            }
+        }
+        let mut changed = Vec::new();
+        let mut ticks = 0;
+        // Settled, then swept: every water cell over the sea looked at again,
+        // because the rule does not requeue the cell above one that changes
+        // (Luanti's, kept), and a sweep that changes nothing is the field the
+        // rule keeps. Two or three sweeps at most in practice.
+        for sweep in 0..6 {
+            let before = changed.len();
+            while !queue.is_empty() && ticks < RIVER_SETTLE_TICKS {
+                queue.tick(
+                    &mut TierGrid(self),
+                    liquid::Rules::default(),
+                    liquid::LOOP_MAX,
+                    &mut changed,
+                );
+                ticks += 1;
+            }
+            if sweep > 0 && changed.len() == before {
+                break;
+            }
+            for slot in 0..self.columns.len() {
+                if self.rim(slot) {
+                    continue;
+                }
+                for layer in sea.max(1)..LAYERS - 1 {
+                    if self.columns[slot].material(layer).is_water() {
+                        queue.push(water_id(slot, layer));
+                    }
+                }
+            }
+        }
+        let mut slots: Vec<usize> = changed.iter().map(|&(id, _)| water_cell(id).0).collect();
+        slots.sort_unstable();
+        slots.dedup();
+        for slot in slots {
+            self.repack_slot(slot);
+        }
+        changed.len()
+    }
+
     /// One tick of the rule over the tier: every cell that changed, by slot,
     /// layer and the material it holds now, in the order they changed. The
     /// changed slots' records are repacked.
@@ -391,6 +467,10 @@ impl ColumnTier {
         out
     }
 }
+
+/// The most ticks a tier's rivers are settled for at its build: longer than
+/// any reach's sheet and any fall in it takes to settle.
+pub const RIVER_SETTLE_TICKS: usize = 2048;
 
 /// The most cells one flood fills: a sea cave the size of the tier is about
 /// a hundred thousand; this bounds a flood whatever the world.
@@ -1240,6 +1320,11 @@ pub fn build(
     let flooded = tier.flood_from(seeds);
     for slot in flooded {
         tier.repack_slot(slot);
+    }
+    // A version 8 world's rivers, settled by the rule (design 13).
+    let settled = tier.settle_rivers(edits);
+    if settled > 0 {
+        bevy::log::debug!("rivers settled at build: {settled} cells");
     }
     // Water the edits hold picks up where it was (`water-flow` E4).
     tier.queue_edited_water(edits);
@@ -2894,5 +2979,103 @@ mod water_tier_tests {
         );
         // The record carries the new water top.
         assert_eq!(water_top_layer(&tier.columns[10]), Some(at));
+    }
+}
+
+/// Version 8's rivers in a real tier (design 13, `water-flow`): what the
+/// build leaves is what the rule keeps.
+#[cfg(test)]
+mod river_tier_tests {
+    use super::*;
+    use crate::planet::lod;
+
+    /// A river with a fall of three layers or more, as the drainage map has
+    /// it, for an anchor.
+    fn a_fall() -> Vec3 {
+        let cfg = terrain_config();
+        let settings = cfg.rivers.expect("the default generator has rivers");
+        let map = pbd_core::rivers::map(cfg, &settings);
+        map.rivers()
+            .map(|k| map.describe(k))
+            .find(|&(c, level, drop, _)| drop >= 3 && level >= 3 && c.y.abs() < 0.7)
+            .map(|(c, ..)| c)
+            .expect("a river with a fall")
+    }
+
+    /// A freshly built tier over a river: its water does not move when the
+    /// rule runs over all of it again, no water stands over open air, and
+    /// some of it flows (the river is not still pools).
+    #[test]
+    fn a_freshly_built_tier_s_rivers_are_what_the_rule_keeps() {
+        let anchor = a_fall();
+        let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let mut tier = set.columns.clone();
+        let sea = sea_layer();
+        let (mut sources, mut flowing, mut over_air) = (0, 0, Vec::new());
+        let mut queue = liquid::Queue::new();
+        for slot in 0..tier.columns.len() {
+            if tier.rim(slot) {
+                continue;
+            }
+            for layer in sea..LAYERS - 1 {
+                let m = tier.columns[slot].material(layer);
+                if !m.is_water() {
+                    continue;
+                }
+                if m == Material::Water {
+                    sources += 1;
+                } else {
+                    flowing += 1;
+                }
+                if tier.columns[slot].material(layer - 1) == Material::Air {
+                    over_air.push((slot, layer, m));
+                }
+                queue.push(water_id(slot, layer));
+            }
+        }
+        eprintln!("river tier: {sources} sources, {flowing} flowing over the sea's level");
+        if std::env::var("RIVER_DIAG").is_ok() {
+            let cfg = terrain_config();
+            let (mut inside, mut outside, mut levels) = (0, 0, [0usize; 16]);
+            for slot in 0..tier.columns.len() {
+                for layer in sea..LAYERS - 1 {
+                    let m = tier.columns[slot].material(layer);
+                    if let Some((l, f)) = m.flow() {
+                        levels[l as usize + if f { 8 } else { 0 }] += 1;
+                        let near = pbd_core::rivers::at(cfg, tier.centres[slot]).is_some();
+                        if near { inside += 1 } else { outside += 1 }
+                    }
+                }
+            }
+            eprintln!("flowing near a river {inside}, away {outside}; by level {levels:?}");
+        }
+        assert!(sources > 50, "a river in the tier: {sources}");
+        assert!(flowing > 0, "the river flows somewhere: {flowing}");
+        assert!(
+            over_air.is_empty(),
+            "water over open air: {:?}",
+            &over_air[..over_air.len().min(8)]
+        );
+        let mut changed = Vec::new();
+        let mut ticks = 0;
+        while !queue.is_empty() && ticks < 64 {
+            queue.tick(
+                &mut TierGrid(&mut tier),
+                liquid::Rules::default(),
+                liquid::LOOP_MAX,
+                &mut changed,
+            );
+            ticks += 1;
+        }
+        assert!(
+            changed.is_empty(),
+            "the rule changed {} cells of a fresh tier, first {:?}",
+            changed.len(),
+            changed
+                .iter()
+                .take(6)
+                .map(|&(id, c)| (water_cell(id), c))
+                .collect::<Vec<_>>()
+        );
     }
 }

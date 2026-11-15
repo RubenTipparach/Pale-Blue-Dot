@@ -39,8 +39,11 @@ pub struct RiverSettings {
     /// Rivers rise no higher than this, metres over the sea: springs are in
     /// the hills, not on the peaks.
     pub max_spring_m: f32,
-    /// Half the river's width, metres; and the banks beside it.
+    /// Half the river's width at its smallest, a stream at its spring,
+    /// metres; it widens with its catchment up to `max_half_width_m`. And
+    /// the banks beside it.
     pub half_width_m: f32,
+    pub max_half_width_m: f32,
     pub bank_m: f32,
     /// How far the river wanders either side of the lattice's straight line,
     /// metres, along a smooth field.
@@ -55,15 +58,14 @@ impl RiverSettings {
         cell_deg: 0.5,
         min_catchment: 40,
         max_spring_m: 90.0,
-        half_width_m: 3.2,
+        half_width_m: 2.2,
+        max_half_width_m: 9.0,
         bank_m: 5.0,
         meander_m: 7.0,
         rim_m: 2.9,
     };
 }
 
-/// The edge of a flowing sheet below a riffle or a fall: Luanti's range.
-const SHEET_CELLS: i32 = 8;
 /// The spacing a sheet's levels fall by, metres: one cell.
 const CELL_M: f32 = 2.833;
 const MEANDER_SALT: u64 = 0x3EA_DE55;
@@ -80,6 +82,8 @@ struct Node {
     level: i32,
     /// The most any river reach feeding it stands above it, metres.
     drop: i32,
+    /// Half its width, metres: wider the more drains through it.
+    half_width: f32,
 }
 
 /// The body's drainage, built once per world.
@@ -104,6 +108,8 @@ pub struct RiverHere {
     pub drop: i32,
     /// Up the river from here: a unit tangent at the point.
     pub upstream: Vec3,
+    /// Half the river's width here, metres.
+    pub half_width_m: f32,
 }
 
 impl RiverMap {
@@ -145,6 +151,7 @@ impl RiverMap {
                     river: false,
                     level: 0,
                     drop: 0,
+                    half_width: 0.0,
                 };
                 width * height
             ],
@@ -220,6 +227,12 @@ impl RiverMap {
             node.river = alt[k] >= sea
                 && catchment[k] >= settings.min_catchment
                 && spill[k] < sea + settings.max_spring_m;
+            // A stream at its spring, a metre and a half wider each time
+            // its catchment doubles.
+            let grown = (catchment[k] as f32 / settings.min_catchment as f32)
+                .max(1.0)
+                .log2();
+            node.half_width = (settings.half_width_m + 1.5 * grown).min(settings.max_half_width_m);
         }
         // The sea cell a river runs into is part of its mouth.
         for k in 0..width * height {
@@ -240,7 +253,6 @@ impl RiverMap {
         let d = d.normalize_or(Vec3::Y);
         let radius = cfg.radius_m;
         let (ci, cj) = self.cell_of(d);
-        let reach = settings.half_width_m + settings.bank_m;
         let mut best: Option<RiverHere> = None;
         let mut best_q = f32::INFINITY;
         for dj in -2..=2 {
@@ -283,9 +295,11 @@ impl RiverMap {
                         * 2.0
                         * settings.meander_m;
                 let q = (-closest - side * wander).length();
-                if q < reach && q < best_q {
-                    best_q = q;
+                let reach = node.half_width + settings.bank_m;
+                if q < reach && q - node.half_width < best_q {
+                    best_q = q - node.half_width;
                     best = Some(RiverHere {
+                        half_width_m: node.half_width,
                         across_m: q,
                         along_m: t * len2.sqrt(),
                         level: node.level,
@@ -383,9 +397,29 @@ pub fn at(cfg: &TerrainConfig, d: Vec3) -> Option<RiverHere> {
 /// reach's level, or a metre under the ground the river cuts through where
 /// that is lower, so a river never stands over its banks (no levee is ever
 /// raised; a dip in the ground holds the river lower there).
-fn top_here(cfg: &TerrainConfig, here: &RiverHere, base: f32) -> i32 {
+fn top_here(
+    cfg: &TerrainConfig,
+    settings: &RiverSettings,
+    here: &RiverHere,
+    d: Vec3,
+    base: f32,
+) -> i32 {
+    // The ground round the valley's rim as well as under the line, so the
+    // water is held by its banks on every side and never spills onto the
+    // land beside a river that runs a little high.
+    let d = d.normalize_or(Vec3::Y);
+    let east = Vec3::Y.cross(d).normalize_or(Vec3::X);
+    let north = d.cross(east);
+    let rim = (here.half_width_m + settings.bank_m) / cfg.radius_m;
+    let low = (0..6)
+        .map(|k| {
+            let a = k as f32 * std::f32::consts::TAU / 6.0;
+            let n = (d + (east * a.cos() + north * a.sin()) * rim).normalize();
+            planet_gen::surface_altitude_unrivered(cfg, n)
+        })
+        .fold(base, f32::min);
     here.level
-        .min((base - cfg.sea_level_m).floor() as i32 - 1)
+        .min((low - cfg.sea_level_m).floor() as i32 - 1)
         .max(0)
 }
 
@@ -401,23 +435,34 @@ pub fn carve(cfg: &TerrainConfig, d: Vec3, base: f32) -> f32 {
     let Some(here) = map(cfg, settings).at(cfg, settings, d) else {
         return base;
     };
-    let water = cfg.sea_level_m + top_here(cfg, &here, base) as f32;
-    let bed = (water - 2.0 + 0.01).min(base);
+    let top = top_here(cfg, settings, &here, d, base);
+    let water = cfg.sea_level_m + top as f32;
+    // Under a fall of three layers or more, a plunge pool: two layers deeper
+    // for two cells downstream of the step (M25's river tab).
+    let plunge = if here.across_m < here.half_width_m && top > 0 {
+        let map = map(cfg, settings);
+        (1..=2).any(|n| {
+            let at = (d.normalize_or(Vec3::Y) + here.upstream * (n as f32 * CELL_M / cfg.radius_m))
+                .normalize();
+            top_at(cfg, settings, map, at).is_some_and(|up| up >= top + 3)
+        })
+    } else {
+        false
+    };
+    let bed = (water - if plunge { 4.0 } else { 2.0 } + 0.01).min(base);
     // A valley, not a slot: the bed is flat for a metre and a half either
     // side of the line, then rises evenly to the ground at the banks' outer
     // edge, so no step across the river is taller than the ground a coarse
     // tier's walls can reach (the seam report's slits).
-    let core = 1.5;
-    let outer = settings.half_width_m + settings.bank_m;
+    let core: f32 = 1.5;
+    let core = core.max(here.half_width_m - 1.5);
+    let outer = here.half_width_m + settings.bank_m;
     let t = ((here.across_m - core) / (outer - core)).clamp(0.0, 1.0);
     (bed + (base - bed) * t).min(base)
 }
 
-/// The water a river puts in a column over its bed (`water-flow`'s rule
-/// settled from its sources): `(altitude of the layer's top, material)`,
-/// bottom up. Sources to the reach's level; below a riffle or a fall, a
-/// flowing sheet one layer over them, seven down to nought a cell; at a fall,
-/// a column of falling blocks.
+/// The water a river puts in a column over its bed: `(altitude of the
+/// layer's top, material)`, bottom up, sources to the water's top here.
 pub fn water(cfg: &TerrainConfig, d: Vec3) -> Vec<(i32, Material)> {
     let Some(settings) = cfg.rivers.as_ref() else {
         return Vec::new();
@@ -427,43 +472,19 @@ pub fn water(cfg: &TerrainConfig, d: Vec3) -> Vec<(i32, Material)> {
     let Some(top) = top_at(cfg, settings, map, d) else {
         return Vec::new();
     };
-    let Some(here) = map.at(cfg, settings, d) else {
-        return Vec::new();
-    };
     let sea = cfg.sea_level_m.round() as i32;
-    // Sources from the ground the valley leaves here up to the reach's top.
+    // Sources from the ground the valley leaves here up to the reach's top:
+    // still water on its own bed, never over open air. What flows between
+    // reaches is the rule's, settled when a tier is built
+    // (`planet::column::ColumnTier::settle_rivers`), so it is exactly what
+    // the rule keeps.
     let floor = planet_gen::surface_altitude(cfg, d).floor() as i32 - sea;
     if floor >= top {
         return Vec::new();
     }
-    let mut out: Vec<(i32, Material)> = (floor + 1..=top)
+    let out: Vec<(i32, Material)> = (floor + 1..=top)
         .map(|t| (sea + t, Material::Water))
         .collect();
-    // The first step up the river within a sheet's reach: the rule's flowing
-    // water below it, settled (`water-flow` design 1 to 4; a pure function of
-    // the river, so every tier makes the same).
-    for n in 0..SHEET_CELLS {
-        let at = (d + here.upstream * ((n + 1) as f32 * CELL_M / cfg.radius_m)).normalize();
-        let Some(up) = top_at(cfg, settings, map, at) else {
-            break;
-        };
-        if up <= top {
-            continue;
-        }
-        let drop = up - top;
-        if n == 0 && drop >= 2 {
-            // A fall: a column of falling blocks in front of the step, its foot
-            // flowing over the pool.
-            out.push((sea + top + 1, Material::flowing(7, false)));
-            for k in 2..=drop {
-                out.push((sea + top + k, Material::flowing(7, true)));
-            }
-        } else {
-            // A riffle, or a fall's foot spreading: one level less a cell.
-            out.push((sea + top + 1, Material::flowing((7 - n) as u8, false)));
-        }
-        break;
-    }
     out
 }
 
@@ -479,7 +500,7 @@ fn top_at(cfg: &TerrainConfig, settings: &RiverSettings, map: &RiverMap, d: Vec3
     if base < cfg.sea_level_m - 1.0 {
         return None;
     }
-    let level = top_here(cfg, &here, base);
+    let level = top_here(cfg, settings, &here, d, base);
     (level > 0).then_some(level)
 }
 
@@ -548,7 +569,7 @@ mod tests {
             for step in 0..=20 {
                 let p = a.lerp(b, step as f32 / 20.0).normalize();
                 if let Some(here) = map.at(&cfg, &settings, p)
-                    && here.across_m < settings.half_width_m
+                    && here.across_m < here.half_width_m
                     && here.level > 0
                 {
                     let bed = planet_gen::surface_altitude(&cfg, p).floor() as i32;

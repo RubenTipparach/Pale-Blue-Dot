@@ -570,9 +570,8 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
 pub fn in_river(cfg: &TerrainConfig, direction: Vec3) -> bool {
     let channel = river_channel(cfg, direction) > cfg.river_threshold;
     channel
-        || cfg.rivers.as_ref().is_some_and(|settings| {
-            crate::rivers::at(cfg, direction)
-                .is_some_and(|here| here.across_m < settings.half_width_m)
+        || cfg.rivers.as_ref().is_some_and(|_| {
+            crate::rivers::at(cfg, direction).is_some_and(|here| here.across_m < here.half_width_m)
         })
 }
 
@@ -907,8 +906,8 @@ mod tests {
         );
     }
 
-    const VERSION_8_DIGEST: u64 = 16_629_724_068_223_953_125;
-    const VERSION_8_TOP_DIGEST: u64 = 17_920_052_144_062_209_285;
+    const VERSION_8_DIGEST: u64 = 9_353_728_972_634_789_829;
+    const VERSION_8_TOP_DIGEST: u64 = 506_789_715_127_037_221;
 
     const VERSION_7_DIGEST: u64 = 9_167_527_543_725_899_224;
     const VERSION_7_TOP_DIGEST: u64 = 10_634_382_923_396_087_003;

@@ -90,9 +90,9 @@ pub fn water_class(
 /// carve put it there.
 pub fn is_river(terrain: &TerrainConfig, direction: Vec3) -> bool {
     // Version 8: the river's own water, fresh, above the sea or at it.
-    if let Some(settings) = terrain.rivers.as_ref()
+    if terrain.rivers.is_some()
         && crate::rivers::at(terrain, direction)
-            .is_some_and(|here| here.across_m < settings.half_width_m)
+            .is_some_and(|here| here.across_m < here.half_width_m)
     {
         return true;
     }
