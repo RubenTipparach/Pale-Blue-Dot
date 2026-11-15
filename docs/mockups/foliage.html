@@ -401,7 +401,7 @@ const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 1200);
 camera.rotation.order = "YXZ";
 
 const TEXDIR = "foliage/";
-const ART_V = 10;   // cache-bust: bump whenever any PNG changes, so no browser shows stale art
+const ART_V = 12;   // cache-bust: bump whenever any PNG changes, so no browser shows stale art
 const TEX = {};
 const loader = new THREE.TextureLoader();
 let pending = 0, loadedOnce = false;
@@ -668,6 +668,12 @@ void main(){
     // snow lies crisply on what faces up (trunks, branches, rocks, the ground);
     // a card is frosted evenly, never speckled
     float s = uCardLit > 0.5 ? 0.05 * uSnow : step(0.55, N.y) * uSnow;
+#ifdef TERRAIN
+    // the sod lip on a column's side is grass too: under snow it whitens with the top (owner, 2026-11-15: "some green
+    // grass during winter"). Only the green texels go, so the dirt and stone below keep their own colours.
+    float green = step(tx.r * 1.04, tx.g) * step(tx.b * 1.1, tx.g);
+    if (N.y < 0.55) s = max(s, green * uSnow);
+#endif
     alb = mix(alb, sn, s);
     if (leafHit > 0.5) alb = mix(leafAlb, sn, 0.06);   // winter: the browned leaves lie on the snow, lightly frosted
   }
@@ -1390,7 +1396,7 @@ function buildTerrain(B) {
     g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2)); g.setAttribute("lampV", new THREE.Float32BufferAttribute(b.lamp, 3));
     g.setAttribute("glowV", new THREE.Float32BufferAttribute(b.glow, 3)); g.setAttribute("occV", new THREE.Float32BufferAttribute(b.occ, 1));
     g.setAttribute("card", new THREE.Float32BufferAttribute(new Float32Array(nv), 1)); g.setAttribute("ao", new THREE.Float32BufferAttribute(new Float32Array(nv).fill(1), 1));
-    const m = new THREE.Mesh(g, mat("terrain:" + b.kind + ":" + b.slot + ":" + b.idx, { at: [b.slot, b.idx], ...rp("terrain:" + b.slot + ":" + b.idx, B), terrain: true, snowable: B.snow && b.kind === "top" && b.slot !== SNOW[0], single: true }));
+    const m = new THREE.Mesh(g, mat("terrain:" + b.kind + ":" + b.slot + ":" + b.idx, { at: [b.slot, b.idx], ...rp("terrain:" + b.slot + ":" + b.idx, B), terrain: true, snowable: B.snow && b.slot !== SNOW[0], single: true   /* sides too: their grass lip whitens (the shader snows only green texels on a side) */ }));
     m.matrixAutoUpdate = false; ROOT.add(m); TERRAIN.push(m);
   }
   // far ground past the patch, so the land does not end in a cliff over nothing
