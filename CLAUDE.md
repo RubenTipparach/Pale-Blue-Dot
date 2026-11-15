@@ -93,6 +93,20 @@ The 1 px outline belongs to inventory and UI icons only: a pack slot, the
 hotbar, a recipe tree. A dropped item lying in the world is an icon, and keeps
 its own.
 
+## Notes stay out of the game (owner, 2026-11-15)
+
+**Standing instruction from the user:** "notes belong in mockups and chats,
+not the real game". The game's own screens carry labels and controls, never
+design or developer notes:
+- no frame costs ("costs ~2.4 ms on a Mac");
+- no explanations of what a setting leaves alone;
+- no "off by default";
+- no owner quotes, change names or other reasoning.
+
+That text belongs in a mockup's modal, an OpenSpec change, a doc or the reply
+in chat. A one-line instruction for using a control may stay, such as how to
+rebind a key. A debug overlay is a developer tool and stays behind its key.
+
 ## Nothing in a mockup spins on its own (owner, 2026-11-12)
 
 **Standing instruction from the user:** "dont auto spin anything lol". A

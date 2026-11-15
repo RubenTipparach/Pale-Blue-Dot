@@ -778,28 +778,11 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                             MenuAction::Bloom,
                         );
                         slider_row(rows, kit, "Frame limit", "", MenuAction::FrameLimit);
-                        slider_row(
-                            rows,
-                            kit,
-                            "Render scale",
-                            "the HUD stays sharp",
-                            MenuAction::RenderScale,
-                        );
+                        slider_row(rows, kit, "Render scale", "", MenuAction::RenderScale);
                     });
                     let weather = page(panel, 1);
                     panel.commands().entity(weather).with_children(|rows| {
-                        check_row(
-                            rows,
-                            kit,
-                            "Rain shadow",
-                            "the rain fog and streaks; off by default",
-                            MenuAction::RainShadows,
-                        );
-                        rows.spawn(body(
-                            "The near shower, the wet ground and the drops on the lens still draw.",
-                            10.0,
-                            ui_kit::TEXT_DIM,
-                        ));
+                        check_row(rows, kit, "Rain shadow", "", MenuAction::RainShadows);
                         super::weather_ui::spawn(rows, kit);
                     });
                     let world = page(panel, 2);
@@ -809,13 +792,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                     });
                     let movement = page(panel, 3);
                     panel.commands().entity(movement).with_children(|rows| {
-                        check_row(
-                            rows,
-                            kit,
-                            "Auto step",
-                            "walk up one layer without a key",
-                            MenuAction::AutoStep,
-                        );
+                        check_row(rows, kit, "Auto step", "", MenuAction::AutoStep);
                     });
                     let input = page(panel, 4);
                     panel.commands().entity(input).with_children(|page| {
