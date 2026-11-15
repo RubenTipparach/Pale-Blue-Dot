@@ -167,12 +167,14 @@ void main() {
     float tk = uTexK * (1.0 - smoothstep(45.0, 120.0, dist));   // a 12 cm pixel would shimmer far off
     foam += step(0.82 - 0.22 * clamp(spd, 0.0, 1.5), nse) * clamp(spd, 0.0, 1.0) * (0.55 - 0.3 * uTexK);
     if (vFall > 0.5) { vec2 fp = floor(vec2(vW.x + vW.z, vW.y * 3.0 + uT * 6.0) * 2.0); foam = mix(0.08 + 0.3 * glint, mix(0.35 + 0.55 * step(0.45, hash(fp)), 0.5 + 0.22 * rip + 0.28 * glint, uTexK), vFroth);
-      // a fall is a stack of whole cells (design 7e): a thin band at each layer's top reads each block, a 1 m layer apart
-      float fy = fract(vW.y + 0.001); foam *= 1.0 - 0.45 * vFroth * (1.0 - step(0.06, fy)); }
+      // no band at each layer's top (owner, 2026-11-15: "remove stripes on water walls"); a little less froth, so the
+      // wall's water colour shows through
+      foam *= 0.8; }
     if (cut) foam = 0.0;
     foam = clamp(foam * (0.75 + 0.25 * nse), 0.0, 0.9);
     vec3 lit = vec3(uAmb + 0.7 * uSunI + 0.08 * uMoonI);
-    vec3 foamC = vec3(0.86, 0.92, 0.94) * lit + lampSum * 0.9;
+    // falls and walls froth a water blue, not grey-white (owner, 2026-11-15: "make the walls a bit more blue tinted")
+    vec3 foamC = (vFall > 0.5 ? vec3(0.58, 0.78, 0.93) : vec3(0.86, 0.92, 0.94)) * lit + lampSum * 0.9;
     // the tile's three tones on this water: the body as it is, a ripple lifted toward the sky it mirrors, a glint as foam
     vec3 ripC = mix(col, mix(uHor, uSky, 0.5) * lit + lampSum * 0.5, 0.35) * 1.25;
     col = mix(col, ripC, rip * tk * (1.0 - glint));
