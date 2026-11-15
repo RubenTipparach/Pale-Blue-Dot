@@ -46,6 +46,11 @@ button{font:inherit;color:inherit}
 .btn{cursor:pointer;background:transparent;border:1px solid var(--line);border-radius:4px;padding:5px 9px;font-family:var(--display);font-size:14px;letter-spacing:.05em;color:var(--ink)}
 .btn:hover{border-color:rgba(240,180,60,.55)}
 .btn[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.12)}
+/* an on/off toggle: a lamp dot that is lit when on, so the state reads at a glance on a phone */
+.btn.tog{display:inline-flex;align-items:center;gap:6px;min-height:36px}
+.btn.tog::before{content:"";width:9px;height:9px;border-radius:50%;border:1px solid currentColor;box-sizing:border-box}
+.btn.tog[aria-pressed="true"]::before{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.btn.tog[aria-pressed="false"]{color:var(--muted)}
 .btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .tabs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tabs .tab{display:inline-flex;gap:6px;align-items:center;font-size:16px;padding:4px 12px 4px 4px}
@@ -181,7 +186,7 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
   <div class="tabs" role="toolbar" aria-label="Water and time">
     <span class="sp"></span>
     <button class="btn" id="tRun" aria-pressed="false" title="Water stands still until this is pressed">Run water</button>
-    <button class="btn" id="tArrows" aria-pressed="true" title="Arrows on the water: which way each cell flows">Flow arrows</button>
+    <button class="btn tog" id="tArrows" aria-pressed="true" title="Arrows on the water: which way each cell flows. Press to hide or show them.">Arrows: on</button>
     <button class="btn" id="tDay" aria-pressed="true">Day 14:00</button><button class="btn" id="tNight" aria-pressed="false">Night 22:00</button>
   </div>
 
@@ -202,7 +207,9 @@ footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padd
 <div id="err" hidden></div>
 <template id="aboutT">
     <p>Today the game's water is one still material, filled up to sea level when the world is made, and nothing ever moves it. This page runs Luanti's liquid rule, ported to our hex cells, on a patch with a sea, a beach, a plain with a dry basin, a ledge and a plateau. Pour a source, dig a channel, drop a block in the stream. Water falls first, then spreads seven cells, a level lower each cell, and recedes when its source goes. It moves one tick a second, as Luanti's does, and only after <b>Run water</b> or a preset.</p>
-<p>Water is drawn as M25's water sim draws it (<span class="src">water-flow/water-look.js</span>, which both pages load): one cap per column at its top water surface, a foaming fall sheet and lip on every step down to a lower column, flow streaks on each cap running towards the neighbours whose water stands lower, and a chevron on each flowing cap (<b>Flow arrows</b>). At night every lamp lights the water and the foam near it.</p>
+<p>Water is drawn as M25's water sim draws it (<span class="src">water-flow/water-look.js</span>, which both pages load): one cap per column at its top water surface, a foaming fall sheet and lip on every step down to a lower column, flow streaks on each cap running towards the neighbours whose water stands lower, and a chevron on each flowing cap (<b>Arrows: on / off</b> hides or shows them). At night every lamp lights the water and the foam near it.</p>
+<p><b>The water's texture shows the flow</b>, as Tenebris's water does: Tenebris's own 16-pixel water tile, drawn nearest in three tones of the water it is on, pans along each cap's flow vector, faster where the cap runs faster, and stands still on still water; on a falling sheet it pans straight down. Each cap pans by its own constant vector, as Tenebris C's water shader does, so the pattern never stretches.</p>
+<p><b>The patch is cut at its edge</b>: every column's side shows down to the base, and where water meets the edge it stands as a still wall down to the ground. Water behind nearer water is hidden, so falls and caps read in the right order from any side.</p>
 <h3>Presets</h3><dl id="presetNotes"></dl>
   <div style="display:grid;gap:12px">
     <div class="sec-head"><div class="eyebrow">The rule</div><h2>Luanti's liquid transform, on eight neighbours</h2>
@@ -380,6 +387,7 @@ function buildGround() {
   for (let i = 0; i < NCELL; i++) { if (kind[i] !== SOLID) continue; const [q, r, y] = unidx(i); if (hexDist(q, r) > N) continue;
     const x = hx(q, r), z = hz(q, r), topOpen = !inside(q, r, y + 1) || kind[idx(q, r, y + 1)] !== SOLID, T = TILE[cmat[i]];
     if (topOpen) GS.g(T[0]).face(hexPts(q, r).map(p => [p[0], y + 1, p[1]]), [0, 1, 0], PBD.cellUV(x, z));
+    if (y === Y0) GS.g(TILE[M.stone][0]).face(hexPts(q, r).map(p => [p[0], Y0, p[1]]), [0, -1, 0], PBD.cellUV(x, z));   // the patch's base
     for (let k = 0; k < 6; k++) { const nq = q + DIRS[k][0], nr = r + DIRS[k][1]; if (inside(nq, nr, y) && kind[idx(nq, nr, y)] === SOLID) continue;
       const A = corner(q, r, k), B = corner(q, r, k + 1), a = k * Math.PI / 3;
       GS.g(topOpen && cmat[i] === M.grass ? T[1] : cmat[i] === M.grass ? "a:4:2" : T[1]).face([[A[0], y, A[1]], [B[0], y, B[1]], [B[0], y + 1, B[1]], [A[0], y + 1, A[1]]], [Math.cos(a), 0, Math.sin(a)], PBD.sideUV(A, B, y + 1)); } }
@@ -397,32 +405,23 @@ const SW = PBDWater.simWater(WW, LQ, { caps: { amp: 0.01, mud: 0, minA: 0.78 } }
 // the depth under each column's water, baked as M25 bakes its water-level map: deeper water reads darker
 const DEPTH_N = 128, DEPTH_R = 64, DEPTH = new Uint8Array(DEPTH_N * DEPTH_N * 4);
 { const t = new THREE.DataTexture(DEPTH, DEPTH_N, DEPTH_N, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; WW.U.uWL.value = t; WW.U.uWLR.value.set(-DEPTH_R, -DEPTH_R, DEPTH_R, DEPTH_R); }
-const SEA_SHEET = SEA_TOP - 0.12, SEA_BED = -5;
 function bakeDepth(cells) {
   DEPTH.fill(0); const bedOf = new Map();
   for (let j = 0; j < DEPTH_N; j++) for (let i = 0; i < DEPTH_N; i++) {
     const x = -DEPTH_R + (i + 0.5) / DEPTH_N * 2 * DEPTH_R, z = -DEPTH_R + (j + 0.5) / DEPTH_N * 2 * DEPTH_R, [q, r] = cellAt(x, z), o = (j * DEPTH_N + i) * 4;
     let wl = null, bed = 0;
-    if (hexDist(q, r) > N) { wl = SEA_SHEET; bed = SEA_BED; }                       // the sea beyond the patch
-    else { const k = key(q, r), c = cells.get(k); if (c) { wl = c.wl; if (!bedOf.has(k)) { let y = c.y; while (y > Y0 && kind[idx(q, r, y)] !== SOLID) y--; bedOf.set(k, kind[idx(q, r, y)] === SOLID ? y + 1 : Y0); } bed = bedOf.get(k); } }
+    { const k = key(q, r), c = cells.get(k); if (c) { wl = c.wl; if (!bedOf.has(k)) { let y = c.y; while (y > Y0 && kind[idx(q, r, y)] !== SOLID) y--; bedOf.set(k, kind[idx(q, r, y)] === SOLID ? y + 1 : Y0); } bed = bedOf.get(k); } }
     if (wl == null) continue; const v = Math.round((wl + 200) * 100);
     DEPTH[o] = v >> 8; DEPTH[o + 1] = v & 255; DEPTH[o + 2] = 255; DEPTH[o + 3] = clamp(Math.round((wl - bed) * 4), 0, 255);
   }
   WW.U.uWL.value.needsUpdate = true;
 }
-let SEA = null;
-function buildWater() {
-  SW.rebuild(); SW.mesh.renderOrder = 2; PICK[1] = SW.mesh; bakeDepth(SW.cells);
-  if (!SEA) {
-    // the sea beyond the patch, at the sea's surface in the same material (a sheet with the patch cut out of it, so it
-    // never shows inside the patch's dry ground). The material places vertices in world space, so the sheet is baked flat.
-    const sh = new THREE.Shape([[-300, -300], [300, -300], [300, 300], [-300, 300]].map(([a, b]) => new THREE.Vector2(a, b)));
-    sh.holes.push(new THREE.Path([[-N, 0], [-N, N], [0, N], [N, 0], [N, -N], [0, -N]].map(([q, r]) => new THREE.Vector2(hx(q, r), -hz(q, r)))));
-    const g = new THREE.ShapeGeometry(sh); g.rotateX(-Math.PI / 2); g.translate(0, SEA_SHEET, 0); const nv = g.attributes.position.count;
-    g.setAttribute("aFlow", new THREE.Float32BufferAttribute(new Float32Array(nv * 2), 2)); g.setAttribute("aFall", new THREE.Float32BufferAttribute(new Float32Array(nv), 1));
-    SEA = new THREE.Mesh(g, SW.mat); SEA.renderOrder = 1; SEA.frustumCulled = false; scene.add(SEA);
-  }
-}
+// The patch stands on its own, its edge cut like a cake's (owner, 2026-11-15: "The very front part of the cell doesn't
+// have any geometry. Front lines of generation?"): every column's side shows down to the base at Y0, and where water
+// meets the edge its side stands as a still wall down to the ground (simWater's cuts). The sea sheet that ran on past
+// the patch to the horizon covered those walls below sea level, so the patch's near edge read as a grass lid on
+// nothing; it is gone, and the sea is the patch's own sea cells, cut at the edge like everything else.
+function buildWater() { SW.rebuild(); PICK[1] = SW.mesh; bakeDepth(SW.cells); }
 const PICK = [null, null];
 // lamps: the ledge's spring, the fall's foot, the basin, the beach; each lights the water near it at night
 const LIGHTS = [], FLAMES = [];
@@ -542,7 +541,9 @@ function click(e) {
 function resize() { const b = canvas.parentElement.getBoundingClientRect(); renderer.setSize(b.width, b.height, false); camera.aspect = b.width / Math.max(1, b.height); camera.updateProjectionMatrix(); }
 new ResizeObserver(resize).observe(canvas.parentElement);
 $("tRun").addEventListener("click", () => setRun(!ST.run));
-$("tArrows").addEventListener("click", () => { SW.setArrows(!SW.showArrows); $("tArrows").setAttribute("aria-pressed", String(SW.showArrows)); });
+// the arrows' toggle: pressed and lit when they show, its label saying which (owner, 2026-11-15: "Add button to toggle arrows on off")
+function setArrows(v) { SW.setArrows(v); const b = $("tArrows"); b.setAttribute("aria-pressed", String(SW.showArrows)); b.textContent = "Arrows: " + (SW.showArrows ? "on" : "off"); }
+$("tArrows").addEventListener("click", () => setArrows(!SW.showArrows));
 // descriptive text lives in the modal: the intro, the presets' notes, the rule and the licence
 let MODAL_BACK = null;
 function openAbout() {

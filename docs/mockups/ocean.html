@@ -69,6 +69,11 @@ img{image-rendering:pixelated}
 .seg button[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:rgba(240,180,60,.14)}
 .seg button:hover,.pbtn:hover{border-color:rgba(240,180,60,.55)}
 .seg button:focus-visible,.pbtn:focus-visible{outline:2px solid var(--amber)}
+/* an on/off toggle: a lamp dot lit when on, so the state reads at a glance on a phone */
+.seg button.tog{display:inline-flex;align-items:center;gap:6px}
+.seg button.tog::before{content:"";width:9px;height:9px;border-radius:50%;border:1px solid currentColor;box-sizing:border-box}
+.seg button.tog[aria-pressed="true"]::before{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.seg button.tog[aria-pressed="false"]{color:var(--muted)}
 .hudline{position:absolute;right:8px;top:8px;font:600 11.5px var(--mono);color:#fff;text-shadow:0 1px 0 #000,1px 0 0 #000;pointer-events:none;text-align:right;white-space:pre;z-index:1}
 .hint{position:absolute;right:8px;bottom:8px;font:500 11px var(--mono);color:rgba(255,255,255,.7);text-shadow:0 1px 0 #000;pointer-events:none;z-index:1}
 .stage .loading{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--display);letter-spacing:.1em;color:var(--muted)}
@@ -1682,7 +1687,7 @@ const hexDistA = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
 function sceneSim(stage) {
   const W = setupStage("sim", stage, {marine: false, water: "river", far: 500,
     extraTop: `<div class="seg" role="group" aria-label="Tool" id="simTool"><button data-k="pour" aria-pressed="true">Pour water</button><button data-k="dig" aria-pressed="false">Dig</button><button data-k="block" aria-pressed="false">Place block</button></div>`,
-    extra: `<div class="seg"><button id="simRun" aria-pressed="true">Pause</button><button id="simStep">Step</button><button id="simReset">Reset</button><button id="simBreach" hidden>Breach the dam</button><button id="simArrows" aria-pressed="true" title="Arrows on the water: which way each cell flows">Flow arrows</button><button class="info" id="simInfo" aria-label="How the water sim works">i</button></div>
+    extra: `<div class="seg"><button id="simRun" aria-pressed="true">Pause</button><button id="simStep">Step</button><button id="simReset">Reset</button><button id="simBreach" hidden>Breach the dam</button><button id="simArrows" class="tog" aria-pressed="true" title="Arrows on the water: which way each cell flows. Press to hide or show them.">Arrows: on</button><button class="info" id="simInfo" aria-label="How the water sim works">i</button></div>
       <div class="lab2"><span>Tick speed</span><b id="simRateV">4 ticks/s</b></div><input type="range" id="simRate" min="1" max="20" value="4" aria-label="Ticks a second">
       <div class="seg" role="group" aria-label="Preset" id="simPreset">${Object.entries(SIM_PRESETS).map(([k, p]) => `<button data-p="${k}" aria-pressed="false">${p.name}</button>`).join("")}</div>
       <div class="seg" role="group" aria-label="Renewal" id="simRenew"><button data-r="3" aria-pressed="true">Renew at 3 (hex)</button><button data-r="2" aria-pressed="false">2 (Luanti)</button><button data-r="99" aria-pressed="false">Off</button></div>`});
@@ -1717,7 +1722,11 @@ function sceneSim(stage) {
     for (let i = 0; i < LQ.NCELL; i++) { if (kind[i] !== SOLID) continue; const [q, r, y] = unidx(i), X = hx(q, r), Z = hz(r), m = cmat[i];
       const open = !inside(q, r, y + 1) || kind[idx(q, r, y + 1)] !== SOLID;
       if (open) { if (m === 4) hexTop(GG, X, y + 1, Z, (px, pz) => [px / 2, -pz / 2]); else { const t = TOPS[m]; hexTop(GA, X, y + 1, Z, (px, pz) => auv(t[0], t[1], t[2], (px - X) / (2 * HR) + 0.5, (pz - Z) / (2 * HR) + 0.5)); } }
-      for (let k = 0; k < 6; k++) { const nq = q + DIRS[k][0], nr = r + DIRS[k][1]; if (inside(nq, nr, y) && kind[idx(nq, nr, y)] === SOLID) continue; if (!inside(nq, nr, y) && y < Y0 + 1) continue;
+      // the patch's base: a stone floor under the bottom layer, and every side to it, the edge's included (owner,
+      // 2026-11-15: "The very front part of the cell doesn't have any geometry"; the bottom layer's outer sides were skipped)
+      if (y === Y0) for (let j = 0; j < 6; j++) { const [ax, az] = CORNER[j], [bx, bz] = CORNER[(j + 1) % 6], t = TOPS[3];
+        for (const [px, pz] of [[X, Z], [X + ax, Z + az], [X + bx, Z + bz]]) { GA.p.push(px, Y0, pz); GA.n.push(0, -1, 0); GA.u.push(...auv(t[0], t[1], t[2], (px - X) / (2 * HR) + 0.5, (pz - Z) / (2 * HR) + 0.5)); } }
+      for (let k = 0; k < 6; k++) { const nq = q + DIRS[k][0], nr = r + DIRS[k][1]; if (inside(nq, nr, y) && kind[idx(nq, nr, y)] === SOLID) continue;
         if (m === 4) hexSide(GG, X, Z, k, y, y + 1, () => [[0, 0.5], [0.7, 0.5], [0.7, 0], [0, 0]]);
         else { const t = open && m === 1 ? SIDES[1] : SIDES[m === 1 ? 2 : m]; hexSide(GA, X, Z, k, y, y + 1, () => [auv(t[0], t[1], t[2], 0, 0), auv(t[0], t[1], t[2], 1, 0), auv(t[0], t[1], t[2], 1, 1), auv(t[0], t[1], t[2], 0, 1)]); } } }
     S.ground = [meshOf(GA, atlas), meshOf(GG, granite)]; S.ground.forEach(m => W.scene.add(m));
@@ -1741,7 +1750,8 @@ function sceneSim(stage) {
     if (ok) { if (S.tool !== "pour") { rebuildGround(); placePosts(); } rebuildWater(); }
   };
   const arrowsBtn = stage.querySelector("#simArrows");
-  arrowsBtn.addEventListener("click", () => { SW.setArrows(!SW.showArrows); arrowsBtn.setAttribute("aria-pressed", String(SW.showArrows)); });
+  // the arrows' toggle: pressed and lit when they show, its label saying which (owner, 2026-11-15: "Add button to toggle arrows on off")
+  arrowsBtn.addEventListener("click", () => { SW.setArrows(!SW.showArrows); arrowsBtn.setAttribute("aria-pressed", String(SW.showArrows)); arrowsBtn.textContent = "Arrows: " + (SW.showArrows ? "on" : "off"); });
   const runBtn = stage.querySelector("#simRun"), rateEl = stage.querySelector("#simRate");
   const setRun = v => { S.run = v; runBtn.setAttribute("aria-pressed", v); runBtn.textContent = v ? "Pause" : "Play"; };
   runBtn.addEventListener("click", () => setRun(!S.run));
