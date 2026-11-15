@@ -82,9 +82,10 @@ before the mesher (`438d4f2`'s `water-look.js`), after is the mesher; same camer
 | `mesher-ledge-default-{phone,desk}-before.png` | `-after` | M28's spring settled, its own view (the owner's): before, each falling column is a flat cap at the lip a cell out from the cliff with one sheet to the plain; after, the sheet slopes to the edge and every falling cell is drawn, a wall of blocks down the cliff. |
 | `mesher-ledge-edge-{phone,desk}-before.png` | `-after` | The ledge edge close, from the plain: the falls stack block by block (a thin band at each layer), foaming, the tile running down them, a chevron down each falling block and down each sloping top. |
 | `mesher-ledge-edge-night-{phone,desk}-before.png` | `-after` | The same at 22:00: the lamps light the water and the foam near them. |
-| `mesher-grow-t{0,2,4,6,8,10}-{phone,desk}-before.png` | `-after` | The spring tick by tick: t2 the sheet's front slopes to a wall; t4 the first falling cell over the cliff; t6, t8, t10 the column one layer longer each tick, block by block, until it reaches the plain. Before, the same ticks show a cap hanging at the lip. |
-| `mesher-m25-sim-fall-{phone,desk}-before.png`, `-close-`, `-close-night-` | `-after` | M25's Water sim, Waterfall settled: every step falls as whole cells with sloped tops above them; Close; Close at night. |
-| `mesher-m25-sim-fall-t2-…`, `mesher-m25-sim-fall-t6-…` | `-after` | M25's Waterfall 2 and 6 ticks in: the first falls growing a cell a tick. |
+| `mesher-grow-t{0,2,4,6,8,10}-desk-before.png` | `-after` | The spring tick by tick from the ledge edge: t0 the source, a full block; t2 the sheet's front slopes down to a wall; t4 the first falling cell over the cliff; t6, t8, t10 the column a layer longer each tick, block by block, until it reaches the plain. Before, the same ticks show a cap hanging at the lip. |
+| `mesher-page-default-{phone,desk}-before.png` | `-after` | M28 as it opens (the sea, no preset): the sea's cut sides stand still at the patch's edge. |
+| `mesher-m25-sim-fall-desk-before.png`, `mesher-m25-sim-fall-close-desk-before.png`, `mesher-m25-sim-fall-close-night-desk-before.png` | `-after` | M25's Water sim, Waterfall settled, its Patch and Close views and Close at night: every step falls as whole cells, with sloped tops above them. |
+| `mesher-m25-sim-fall-close-t{2,4,6}-desk-before.png` | `-after` | M25's Waterfall 2, 4 and 6 ticks in: the first falls growing a cell a tick. |
 
 The rule (`water-flow/liquid.js`) is unchanged. It already made the falling cells: on the spring, the first falling
 cell over the cliff is at tick 4, and the column grows a layer a tick to the plain by tick 10 (design 7e). Checks
