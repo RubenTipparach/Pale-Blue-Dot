@@ -447,7 +447,7 @@ attribute vec3 lampV; attribute vec3 glowV; attribute float occV;
 #else
 attribute float aFade; attribute vec3 aTint; attribute vec3 aLamp; attribute vec3 aGlow; attribute vec2 aSeed;
 #endif
-uniform float uTime, uWind, uGust, uScale, uWindAmp, uWindH, uFlutter, uUpN, uLampOn, uFFOn, uLowG, uSwayMask, uViews;
+uniform float uTime, uWind, uGust, uScale, uWindAmp, uWindH, uFlutter, uUpN, uLampOn, uFFOn, uLowG, uSwayMask, uViews, uNight;
 uniform vec2 uWindDir; uniform vec3 uFF[16]; uniform vec3 uFFCol;
 varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vTint; varying vec3 vBlock; varying float vFade; varying vec2 vSeed; varying float vAo; varying float vCard; varying float vSway;
 void main(){
@@ -458,7 +458,7 @@ void main(){
 #ifdef TERRAIN
   vec3 w = (modelMatrix * vec4(position,1.0)).xyz;
   vN = normal; vTint = vec3(1.0); vFade = 1.0; vSeed = vec2(0.0, occV);
-  vBlock = lampV * uLampOn + glowV;
+  vBlock = lampV * uLampOn + glowV * mix(0.35, 1.0, uNight);   // always-on glows: a third as strong by day
 #else
   vec3 org = instanceMatrix[3].xyz;
   float sc = length(instanceMatrix[0].xyz) * uScale;
@@ -497,7 +497,7 @@ void main(){
   w += vec3(sin(uTime*7.0*speed + card*40.0 + ph), cos(uTime*6.0*speed + card*31.0), sin(uTime*5.0*speed + card*23.0)) * uFlutter * (uWind + gust * 0.5) * step(0.001, card) * sw;
   vN = normalize(mix(vN, vec3(0.0,1.0,0.0), uUpN));
   vTint = aTint; vFade = aFade; vSeed = aSeed;
-  vBlock = aLamp * uLampOn + aGlow;
+  vBlock = aLamp * uLampOn + aGlow * mix(0.35, 1.0, uNight);
 #endif
   // the fireflies: all sixteen light everything near them, wherever the camera is
   vec3 ff = vec3(0.0);
@@ -600,7 +600,8 @@ void main(){
   alb = mix(mean, alb, uBake > 0.5 && uLeafy > 0.5 && uDetail < 1.0 ? 0.2 : uDetail);
   // the palette's greens are more saturated than the near tree's game texture: measured on the
   // near/far side-by-side, pull the baked crown back to the near crown's mean colour
-  if (uImp > 0.5 && uViews > 0.5) { float l = dot(alb, vec3(0.2126, 0.7152, 0.0722)); alb = mix(vec3(l), alb, 0.5) * vec3(0.92, 0.95, 0.72); }
+  // (green crown pixels only: a violet cap or an olive acacia was never too saturated, and greyed it read as frost)
+  if (uImp > 0.5 && uViews > 0.5 && tx.g > max(tx.r, tx.b) * 1.05) { float l = dot(alb, vec3(0.2126, 0.7152, 0.0722)); alb = mix(vec3(l), alb, 0.5) * vec3(0.92, 0.95, 0.72); }
   alb *= max(vec3(0.0), vec3(1.0) + vTint * uColVar);   // per-plant colour variation
   if (uLeafy > 0.5) {                                    // seasons, on leaves
     // on a far impostor only the crown's green pixels are leaves; the trunk is left alone
@@ -773,6 +774,7 @@ function mat(key, o) {
   // the baked impostors, flowers and tufts); set once the texture's mean is known (resolveMeans)
   const detail = o.detail ?? (o.terrain || o.imp || o.alpha || o.grass ? 1 : (o.leafy || o.mask) ? 0.45 : 0.7);
   if (detail < 1) MEAN_Q.push({ m, detail, at: o.at ? at.clone().setX(o.at[0]) : null, tex: o.at ? "game/atlas" : o.tex });
+  if (o.ramp) m.userData.ramp = o.ramp;
   if (o.decal) { m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -4; }
   MATS[k] = m; return m;
 }
@@ -1748,7 +1750,7 @@ function buildLayers(B) {
   const tl = [0, 0, 0], tg = [0, 0, 0];
   for (const L of LAYERS) for (const o of L.objs) {
     lightAt(o.x, o.y + Math.max(0.1, o.ly), o.z, null, tl, tg); o.lamp = tl.slice(); o.glow = tg.slice();
-    o.occ = L.key === "trees" ? occAt(o.x, o.z) * 0.25 : occAt(o.x, o.z) * (o.ly < 0 ? 0.3 : 1);
+    o.occ = L.key === "trees" ? occAt(o.x, o.z) * 0.25 : occAt(o.x, o.z) * (L.key === "fruit" ? 0.9 : o.ly < 0 ? 0.3 : 1);   // fruit hangs inside the crown, in its shade
   }
   for (const b of BATCHES) realise(b);
 }
@@ -1827,14 +1829,19 @@ function bakeImpostors() {
       snap[i] = -1;
       if (buf[i * 4 + 3] < 128) continue;
       const q = oklab(buf[i * 4], buf[i * 4 + 1], buf[i * 4 + 2]); let best = 0, bd = 1e9;
-      for (let c = 0; c < SWEAFT_LAB.length; c++) { const p = SWEAFT_LAB[c], d = (p[0] - q[0]) ** 2 + 8 * ((p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2); if (d < bd) { bd = d; best = c; } }
+      for (let c = 0; c < PAL_LAB.length; c++) { const p = PAL_LAB[c], d = (p[0] - q[0]) ** 2 + 8 * ((p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2); if (d < bd) { bd = d; best = c; } }
       snap[i] = best;
     }
     return snap;
   };
   const blockOf = (snap, x, y) => { const ids = []; for (let j = 0; j < S3; j++) for (let i = 0; i < S3; i++) { const c = snap[(S3 * y + j) * W3 + S3 * x + i]; if (c >= 0) ids.push(c); } return ids; };
-  const mode = ids => { let best = ids[0], bn = 0; for (const c of ids) { let n = 0; for (const d of ids) if (d === c) n++; if (n > bn || (n === bn && SWEAFT_LAB[c][1] < SWEAFT_LAB[best][1])) { bn = n; best = c; } } return best; };
+  const mode = ids => { let best = ids[0], bn = 0; for (const c of ids) { let n = 0; for (const d of ids) if (d === c) n++; if (n > bn || (n === bn && PAL_LAB[c][1] < PAL_LAB[best][1])) { bn = n; best = c; } } return best; };
+  // the snap palette is Sweaft-64 plus the place's own colours where a tree wears a palette (RAMPS): Sweaft has no
+  // dry olive, so an acacia crown snapped to it alone came out tan and brown
+  let PAL = SWEAFT, PAL_LAB = SWEAFT_LAB;
   for (const job of BAKES) {
+    const extra = [...new Set(job.parts.flatMap(([, m]) => m.userData.ramp ? m.userData.ramp.c : []))].map(h => [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)));
+    PAL = SWEAFT.concat(extra); PAL_LAB = PAL.map(c => oklab(c[0], c[1], c[2]));
     const cam = new THREE.OrthographicCamera(-job.Wd / 2, job.Wd / 2, job.hi, job.lo, 0.1, 400);
     const split = job.parts.length > 1;   // a tree with leaves: bark is its first part
     const crown = snapOf((split ? job.parts.slice(1) : job.parts).map(([geo, m]) => bakeMesh(geo, m)), cam);
@@ -1845,7 +1852,7 @@ function bakeImpostors() {
       if (ids.length >= 6) best = mode(ids);   // clear if 4 of 9 are: the sky gaps at the whorl tips survive
       if (bark) { const b = blockOf(bark, x, y); if (b.length >= 6 || (best < 0 && b.length >= 5)) best = mode(b); }
       if (best < 0) continue;
-      const o = (y * W + x) * 4; out[o] = SWEAFT[best][0]; out[o + 1] = SWEAFT[best][1]; out[o + 2] = SWEAFT[best][2]; out[o + 3] = 255;
+      const o = (y * W + x) * 4; out[o] = PAL[best][0]; out[o + 1] = PAL[best][1]; out[o + 2] = PAL[best][2]; out[o + 3] = 255;
     }
     const t = new THREE.DataTexture(out, W, H, THREE.RGBAFormat);
     t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.needsUpdate = true;
