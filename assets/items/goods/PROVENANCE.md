@@ -23,6 +23,14 @@ colour of its own source, so no colour enters that the source lacks. Every
 picture is drawn nearest-sampled. Each good's row in `pbd_core::goods` names
 its file, and `farm::tests::every_good_has_its_icon` holds them together.
 
+## animal-husbandry
+
+`fence`, `gate`, `egg`, `wool` and `milk` are new to Pale Blue Dot and drawn by
+`tools/gen_item_icons.py` (`animal-husbandry` design 12, S6) from its pixel
+grids and one palette (`FARM`); `python3 tools/gen_item_icons.py --check`
+fails if a PNG differs from what it draws: two posts and two rails; a gate
+with its brace; a cream egg; a shorn fleece; an iron pail of milk.
+
 ## tool-crafting
 
 Made by `tools/art/crafting_icons.py` (`tool-crafting` task 2.1), by the same

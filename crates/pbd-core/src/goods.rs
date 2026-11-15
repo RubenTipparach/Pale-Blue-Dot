@@ -72,6 +72,13 @@ pub const GOODS: &[GoodRow] = &[
         99,
         "items/goods/bronze-ingot.png",
     ),
+    // ---- animal-husbandry: a pen's pieces (fences and gates stand on hex
+    // edges as `fence` records, not as blocks) and what kept animals give.
+    row("fence", "fence", 64, "items/goods/fence.png"),
+    row("gate", "gate", 64, "items/goods/gate.png"),
+    row("egg", "egg", 32, "items/goods/egg.png"),
+    row("wool", "wool", 32, "items/goods/wool.png"),
+    row("milk", "pail of milk", 16, "items/goods/milk.png"),
     // ---- tool-crafting: tier 0 by hand (M3 section 2) and what the hands
     // work it into. Named by code, never by index (`Good::FIBRE` and the
     // rest are found by code at compile time), so other branches' rows can
@@ -81,7 +88,7 @@ pub const GOODS: &[GoodRow] = &[
     row("log", "log", 99, "items/goods/log.png"),
     row("planks", "planks", 99, "items/goods/planks.png"),
     row("rope", "rope", 99, "items/goods/rope.png"),
-    // ---- Append new goods here (animal products, food, feed ...).
+    // ---- Append new goods here (food, feed ...).
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -124,6 +131,12 @@ impl Good {
     pub const COPPER_INGOT: Good = Good(10);
     pub const IRON_INGOT: Good = Good(11);
     pub const BRONZE_INGOT: Good = Good(12);
+    // animal-husbandry
+    pub const FENCE: Good = Good(13);
+    pub const GATE: Good = Good(14);
+    pub const EGG: Good = Good(15);
+    pub const WOOL: Good = Good(16);
+    pub const MILK: Good = Good(17);
     // tool-crafting, by code (see `by_code_const`).
     pub const FIBRE: Good = by_code_const("fibre");
     pub const LOOSE_STONE: Good = by_code_const("stone");
@@ -204,6 +217,11 @@ mod tests {
             (Good::COPPER_INGOT, "copper-ingot"),
             (Good::IRON_INGOT, "iron-ingot"),
             (Good::BRONZE_INGOT, "bronze-ingot"),
+            (Good::FENCE, "fence"),
+            (Good::GATE, "gate"),
+            (Good::EGG, "egg"),
+            (Good::WOOL, "wool"),
+            (Good::MILK, "milk"),
             (Good::FIBRE, "fibre"),
             (Good::LOOSE_STONE, "stone"),
             (Good::LOG, "log"),

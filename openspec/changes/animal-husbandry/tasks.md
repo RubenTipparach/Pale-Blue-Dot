@@ -22,20 +22,20 @@ judged against what it would cost.
 
 ## 4. The kingdom in data (on request, after approval)
 
-- [ ] 4.1 `class` and `status` on every species in `fauna.ron`; the land species appended to `home`, Sequoia's, Wick's and Fallow's rosters. Verify: the append-only test still passes; a test that every species has a class, a status and a field-guide entry, and that an airless body's roster is empty.
+- [x] 4.1 (Built 2026-11-14, slice: `class` and `status` on every fish; the land species are their own append-only roster in `assets/config/husbandry.ron`, design 12 S2; only `home` has life in the game. `husbandry::tests::every_species_has_a_class_a_status_and_a_guide_entry_and_airless_bodies_have_none`, `the_land_roster_keeps_its_order`.) `class` and `status` on every species in `fauna.ron`; the land species appended to `home`, Sequoia's, Wick's and Fallow's rosters. Verify: the append-only test still passes; a test that every species has a class, a status and a field-guide entry, and that an airless body's roster is empty.
 
 ## 5. Taming and the animal record (on request, after approval)
 
-- [ ] 5.1 `pbd_core::husbandry` genome (seven genes, two alleles) rolled from a wild animal's seed. Verify: a core test that the same seed gives the same genome, and the morph shows in 1 of 64 over 64,000 rolls within 10%.
-- [ ] 5.2 Taming by feeding: trust, fear radius, decay; the `animal` record written through the journal `@p` on taming. Verify: a test that a tamed animal survives quit and reload with its genome; a test that a wild-only or protected species refuses with its reason.
-- [ ] 5.3 The record's schema version in `identity.ron`. Verify: a world saved before it opens and gains no animals; a v1 record opens under a v2 build with the new gene at its default.
+- [x] 5.1 (Built: `husbandry::genome`. `the_same_seed_gives_the_same_genome_and_the_morph_shows_one_in_64`.) `pbd_core::husbandry` genome (seven genes, two alleles) rolled from a wild animal's seed. Verify: a core test that the same seed gives the same genome, and the morph shows in 1 of 64 over 64,000 rolls within 10%.
+- [x] 5.2 (Built: `husbandry::taming`, `pbd_app::husbandry` E key; the record is a `with ... rec @p animal` line. `a_plodder_takes_five_feeds_and_a_spook_costs_ten`, `a_wild_only_or_protected_species_refuses_with_its_reason`, app `a_tamed_animal_survives_quit_and_reload_with_its_genome`.) Taming by feeding: trust, fear radius, decay; the `animal` record written through the journal `@p` on taming. Verify: a test that a tamed animal survives quit and reload with its genome; a test that a wild-only or protected species refuses with its reason.
+- [x] 5.3 (Built: `animal` and `fence` at schema 1 in `identity.ron`. `an_older_record_opens_with_the_missing_gene_and_fields_at_their_defaults`, app `a_world_saved_before_opens_and_gains_no_animals`.) The record's schema version in `identity.ron`. Verify: a world saved before it opens and gains no animals; a v1 record opens under a v2 build with the new gene at its default.
 
 ## 6. Pens, needs and products (on request, after approval)
 
-- [ ] 6.1 Pens derived from fence and gate pieces. Verify: a core test that a closed loop with a gate is a pen and a broken loop is not.
-- [ ] 6.2 Needs, mood, health and straying; the `husbandry` world process run by the steward. Verify: the catch-up test (a closed form for N hours equals N stepwise hours); a test that a process proposal changing a player-written field is refused.
-- [ ] 6.3 Products by schedule and yield; compost from manure; the butcher's block. Verify: a test of a day's output for a known herd against the Economy tab's numbers.
-- [ ] 6.4 Animals near the player as entities, far pens as numbers. Verify: captures by day and night beside the mockup's; `tools/perf_suite.py` before and after on the owner's hardware.
+- [x] 6.1 (Built: `husbandry::pen`, pieces as `fence` records on hex edges, S5. `a_closed_loop_with_a_gate_is_a_pen_and_a_broken_loop_is_not`.) Pens derived from fence and gate pieces. Verify: a core test that a closed loop with a gate is a pen and a broken loop is not.
+- [x] 6.2 (Built as far as the slice needs, S7/S8: a closed form from the record's last player-written state, no steward and no world writes. `the_closed_form_for_n_hours_equals_n_stepwise_hours`, `neglect_never_kills_and_an_unfed_animal_strays_after_five_days`, `a_process_proposal_changing_a_player_written_field_is_refused`. The steward-run process waits for `world-persistence` group 4.) Needs, mood, health and straying; the `husbandry` world process run by the steward. Verify: the catch-up test (a closed form for N hours equals N stepwise hours); a test that a process proposal changing a player-written field is refused.
+- [x] 6.3 (Built for eggs, wool and milk, S9. `a_known_herds_output_matches_the_economy_tab`. Compost and the butcher's block deferred.) Products by schedule and yield; compost from manure; the butcher's block. Verify: a test of a day's output for a known herd against the Economy tab's numbers.
+- [x] 6.4 (Built: animals within 150 m as entities, rigged and animated, S11; far pens are not drawn. Captures in `docs/screenshots/animal-husbandry/`. `perf_suite` not run: frame cost not measured.) Animals near the player as entities, far pens as numbers. Verify: captures by day and night beside the mockup's; `tools/perf_suite.py` before and after on the owner's hardware.
 
 ## 7. Eggs and young (on request, after approval)
 
