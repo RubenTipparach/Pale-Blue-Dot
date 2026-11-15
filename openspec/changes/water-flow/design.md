@@ -347,6 +347,206 @@ Context, and the mockup is the reference for behaviour. Recommendation taken
 (ask only with screenshots). The owner can choose to take the LGPL code into
 the game instead, and that is the owner's call.
 
+## In the engine (owner, 2026-11-15: "commence implementation of all env changes")
+
+M25 and M28 are approved, and the request to build came with them. How the
+rule goes into the game, in the order it is built (branch `claude/env-water`):
+
+**E1. A flowing cell is a material.** `Material::Flow0` to `Flow7` and
+`Fall0` to `Fall7` (codes 64 to 79, far from the blocks' run) are flowing
+water at a level, still and falling; `Water` stays the source. The column
+keeps two bytes a layer, so the tier costs nothing more to hold or clone.
+`Material::is_water` is what every reader asks (the walker swims in both,
+decision 7; the renderer's water code is both). A flowing top's surface is
+Luanti's `(level + 0.5) / 8` of its layer (`liquid::top_fraction`).
+
+**E2. The rule is `pbd_core::liquid`**, written from decisions 1 to 6
+(decision 8): `transform` is a pure function of a cell and its eight
+neighbours (`None` for a pentagon's missing side or off the region), and
+returns the new state and which neighbours to queue, in Luanti's order;
+`Queue` is the unique queue and the tick, at most the queue's length and
+`LOOP_MAX` a tick. Held to the mockup by a fixture the mockup's own
+`liquid.js` writes (`tools/water_flow_fixture.mjs`): all eight presets
+settle in the same ticks to the same field, cell for cell. Water enters
+only air: a block, a lamp or anything else is neutral, so the rule never
+removes a thing a player made.
+
+**E3. It runs over the column tier**, once a second (Luanti's
+`liquid_update`): the tier is the `Grid`, a cell is a slot and a layer, the
+rim and every cell off the tier are neutral. Each tick's changes go in as
+an edit does (the changed records and their neighbours repacked, the
+contact and the fine set's version moved), without the relight: water does
+not stop light in the field.
+
+**E4. Saves (this replaces decision 6's "derived").** Every change the rule
+makes is an edit authored by the water (`@wwater:flow/0`), with no slots:
+a source as `Water`, a flowing cell as its `Flow`/`Fall` code, so its level
+is saved. Derived was the plan, but the tier is regenerated from the edits
+each time it moves, and a derived field would re-run on every rebuild. The
+water's edits do not pass the world's yield set: water filling a hole the
+player dug is what water does, and it only ever fills air. Opening a world
+queues every cell of the tier that holds a water edit, and its neighbours,
+so water still moving at the close picks up and a settled field changes
+nothing. A save from before has no water edits, so nothing is queued and
+every cell is where it was (decision 5; tested).
+
+**E5. Pouring.** There is no bucket, and nothing yields a water block,
+though the place path places any held block and water has its thumbnail.
+Recommendation taken (ask only with screenshots): the place path is the
+pour (a held water block places a source, which queues the flow), and a
+debug key, F6, pours one source where the place ray lands, through the same
+edit path. A dig or a placed block next to water queues the flow the same
+way. Captures pour with `--pour`.
+
+**E6. The water mesher** (task 3.6) is a CPU mesh of the tier's water,
+rebuilt when the fine set's version moves: Luanti's `drawLiquidNode` on hex
+as design 7e has it (corner levels from the three cells round a corner,
+tops through them, sides where water meets air, falling cells whole blocks,
+bottoms over air, the flow down the corner slope). It leaves out what the
+sea sheet already draws: the top of a column's water at sea level where the
+cell's record is under the sea. One mesh, Tenebris's water tile
+nearest-sampled and alpha-blended, unlit with the tier's light field in its
+vertex colour (sky by the daylight, the block light warm), so it is dark at
+night and lit by lamps. The mesh exists from the first frame (an empty
+placeholder), so the loading screen builds its pipeline.
+
+**E7. The flow is shown as design 7c says** (task 3.5): each frame the
+tops' texture coordinates move along the cell's flow vector, faster on a
+steeper slope, and a falling face's move down; a still cell and a source
+the water does not leave stand still. The flow-arrow overlay (task 3.4) is
+a second mesh of arrows over every flowing top and down every fall, hidden
+unless F5 or the player setting "Flow arrows" (off by default) turns it on.
+
+**E8. What was built, and what was not (2026-11-15).** All of E1 to E7 is
+built and tested in `pbd-core` and the tier (see tasks). Not measured: the
+frame cost (3.3). Not checked: the pan's "two frames a second apart" (3.5).
+A set built while water is ticking would land without the ticks in flight,
+so the tick waits while a set is in flight; the existing "undone when it
+lands" behaviour of edits is unchanged. The sea floods a channel dug from it
+as sources to sea level (`volumetric-water` phase 2) rather than as M28's
+"Channel from the sea" flowing sheet: in the game the sea is the sea's
+table. Recommendation taken (ask only with screenshots).
+
+## Second pass (lead's request, 2026-11-15)
+
+**E9. One water: the game's water is drawn by the sea's own fragment.** The
+first cut drew poured water with an unlit tile mesh, and it read as dark
+confetti beside the sea. Now the mesher's triangles go to the water pass as
+a storage buffer (three lanes a vertex: position and the sky's share; the
+face's normal and kind; the flow in the face's tangent frame) and are drawn
+by a second vertex entry, `vertex_flowing`, into the cap's own fragment, in
+the cap's render pass and depth. So a pool and the sea are one water: the
+sea's colour by depth, its light by the hour and the cover, its sky
+reflection, fog and glint, and no seam where they meet. The flow streams the
+sea's waves along a top (Tenebris C's desktop way, 7c, the cap's flow hook)
+and down a falling face, which carries white water; a still face neither.
+A face seen from behind from dry air is discarded (its front draws the
+block); from inside the water it is the murk, as under the sheet. The tile
+is gone from the game; it stays the mockups' look. Recommendation taken
+(ask only with screenshots).
+
+**E10. The walker swims in what is drawn.** The walker's water was the
+height field's sea against the untided sheet. It now asks the column first:
+the water the body is in, a pool or a flowing cell at its own level, and the
+sea's water at the drawn sheet with the tide on it; a dry column under open
+sky still swims where the tide stands over its ground (a beach at high
+water); off the tier, the height field's sea to the tided sheet.
+
+**E11. The wooden bucket.** The way a player uses water, after E5's debug
+key: two goods appended to the goods table, `bucket` (a wooden bucket, 4 to
+a slot) and `water-bucket` (a bucket of water, 1 to a slot), with 16 px
+icons from `tools/gen_item_icons.py` in the fence's wood. Made at the
+workbench from 3 planks and 1 rope (`recipes.ron`, `bucket`). Held, the
+right button:
+- with an empty bucket, aimed at a source (the ray stops at water for it,
+  as it does not for a block), takes the source and the bucket is full;
+  flowing water cannot be taken, as in Luanti;
+- with a full bucket, pours a source where a block would be placed, and the
+  bucket is empty.
+Both are one edit and one hands change on one line, the place path's own
+transaction (`Hands::Swap`), so the source taken and the bucket filled reach
+the disk together. The rule is `pbd_core::liquid::bucket`, tested.
+
+## The owner's notes on falls (2026-11-15)
+
+**E12. No rain on vertical water.** The owner: "when raining - no droplets
+on vertical water." The rain's rings are scaled by how much a face looks up
+(`smoothstep(0.7, 0.95, horizontal)` in `water.wgsl`), so a fall's or a
+wall's face takes none and a top takes them all.
+
+**E13. Froth on falls.** The owner: "vertical water should have a bit froth
+to it, probably something easy to do via shaders." A falling face carries
+white streaks of froth, noise stretched down the face and scrolled down it
+with the fall, denser at a fall's lip and foot (the mesher's froth weight,
+`flow_uv.x` on a falling face); a still wall keeps none.
+
+**E14. Splash at a fall's foot.** The owner: "can you also add some particle
+fx to bottom of the waterfall? more fx based on distance it fell". The mesher
+records every fall's foot (water not falling with falling water on it) and
+how many layers fell onto it; each frame, spray drops are thrown up and out
+and fall back, and a low white mist puffs, both more, higher and wider for a
+taller fall (3 + 6 per layer drops up to 160, a puff per two-thirds of a
+layer up to 24), at most 4,000 quads, out to 70 m and faded over the last
+15 m, lit by the sky's share and the hour. A pure function of time: nothing
+is stored. One unlit alpha-blended mesh, born at startup, so the loading
+screen builds its pipeline.
+
+**E15. The rivers' water is the rule's.** The generator seeds only sources,
+on their own bed and never over open air; a version 8 tier's build runs the
+rule over them until nothing is queued and a sweep of every water cell
+changes nothing (`ColumnTier::settle_rivers`), so falls, sheets and riffles
+are exactly what the rule keeps (`a_freshly_built_tier_s_rivers_are_what_the_rule_keeps`).
+Derived, never saved; older worlds are not settled. The banks are held on
+every side (the water's top is a metre under the lowest ground round the
+valley's rim), yet a fall's foot can still spread its eight cells past a
+river's valley (fixed in the fifth pass, E16).
+
+## Fifth pass (lead's request, 2026-11-15)
+
+**E13, again: froth as streaks.** The fourth pass's froth read as camo
+blotches. It is now thin bright vertical ribbons: two octaves of gradient
+noise stretched about seven times along the fall, scrolled down at 4 m/s,
+thresholded to narrow bands, over a soft white veil, with a churned band at
+the lip and the foot (the mesher's froth weight). The noise's coordinates
+are taken modulo 128 m first: at planet-sized coordinates the noise's hash
+loses its precision and the streaks went flat.
+
+**E13, a third time: the lip and the speed.** The owner, on the after shot:
+"can we have the edge transition into froth? and somehow show that it is
+speeding up in velocity/flow in to the wall". The mesher gives each top
+corner a lip weight (one where a side's water falls, falls from under it,
+or this cell's own water falls below) and each falling face's corners how
+far under their fall's lip they are, in the flow lane's third component.
+On a top, the last metre or so before a lip whitens into streaks along the
+flow that run faster toward it (two phases of the flow half a cycle apart,
+blended, so the speed never shears the pattern). On a fall, the ribbons are
+read at the time the water left the lip, free fall from 1 m/s,
+`(sqrt(v0^2 + 2 g d) - v0) / g`, so they accelerate down the face and
+stretch with sqrt(2 g d): clear just over the lip, white ribbons lower down,
+the churn at the foot (`froth-lip-before-after.jpg`).
+
+**E16. A river is held: levee and sealed rock.** Measured on four tiers
+over falls (`a_freshly_built_tier_s_rivers_are_what_the_rule_keeps`), the
+water that spread past a river's banks was not on the surface: it ran down
+through caves the worms open under and beside a river's bed, and spread in
+them, tens of metres from the river and tens of metres under the ground. Two
+changes to version 8 (not yet in any played save): every column within a
+river's banks plus 15 m keeps its rock, cave-free, from four metres under
+the sea's level up (`rivers::sealed_from`, applied after the worms in
+`column::generate_edited`); and a 3 m levee round a valley stands a layer
+over the reach's water and its fall, its banks rising to it and its outside
+falling away at one in one (`rivers::carve`). With the levee, the water's
+top goes back to a layer under the lowest of six points round the rim. A
+plunge pool's extra depth eases out up the bank, so the seam report holds
+at none of 4,000 edges. The test now
+asserts no flowing water over the sea's layer outside a river's banks, on
+four tiers. Water at the sea's layer in a sea cave is the sea's and is not
+counted.
+
+**E17. The capture rig flies anywhere.** `--fly` takes `--yaw` (compass
+degrees, 0 north, 90 east) and `--pitch` (degrees, negative down) beside
+`--at` and `--height`, so a capture can look down on a river from the air.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With

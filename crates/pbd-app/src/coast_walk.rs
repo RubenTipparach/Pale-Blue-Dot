@@ -7,7 +7,7 @@
 
 use bevy::math::{Quat, Vec3};
 
-use crate::planet::{PLANET_RADIUS, river_channel, surface_height, terrain_config};
+use crate::planet::{PLANET_RADIUS, surface_height, terrain_config};
 
 /// How far along each heading the ground is read, m.
 const AHEAD_M: [f32; 4] = [4.0, 8.0, 14.0, 22.0];
@@ -44,7 +44,7 @@ pub fn along(here: Vec3, heading: Vec3, metres: f32) -> Vec3 {
 /// test, which tells a watercourse from a shallow bay as no height can.
 pub fn in_river(direction: Vec3) -> bool {
     let cfg = terrain_config();
-    river_channel(cfg, direction) > cfg.river_threshold
+    pbd_core::planet_gen::in_river(cfg, direction)
 }
 
 /// What a walker stands on at a direction: the ground, or the water over it.

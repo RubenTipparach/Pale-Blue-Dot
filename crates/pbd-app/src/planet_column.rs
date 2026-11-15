@@ -27,6 +27,7 @@ use pbd_core::column::{self, Column, LAYERS, MAX_RUNS};
 use pbd_core::edits::Edits;
 use pbd_core::flora;
 use pbd_core::light;
+use pbd_core::liquid::{self, Cell as LiquidCell, Grid};
 use pbd_core::terrain::Material;
 use pbd_core::worms;
 
@@ -156,6 +157,338 @@ pub struct ColumnTier {
     /// lighting model's highlights, reflections and rain glow read
     /// (`lighting-model`), so they find the same lamps the field does.
     lamps: Vec<LampSpot>,
+    /// The water's queue and what it needs to name a slot's cell
+    /// (`water-flow` E3).
+    pub water: TierWater,
+}
+
+/// The tier's water (`water-flow` E3, `volumetric-water` phase 2): the
+/// rule's queue, and each slot's cell key and finest record, which a change
+/// the rule makes is saved and drawn by.
+#[derive(Clone, Default)]
+pub struct TierWater {
+    pub queue: liquid::Queue,
+    /// Each slot's exact cell key.
+    pub keys: Vec<u32>,
+    /// Each slot's finest record.
+    pub records: Vec<usize>,
+}
+
+/// Layers a slot's water ids are spaced by: a cell is `slot * 512 + layer`.
+pub const WATER_ID_LAYERS: u32 = 512;
+const _: () = assert!(LAYERS < WATER_ID_LAYERS as usize);
+
+/// The id `pbd_core::liquid` names a slot's layer by.
+pub fn water_id(slot: usize, layer: usize) -> u32 {
+    slot as u32 * WATER_ID_LAYERS + layer as u32
+}
+
+/// The slot and layer of a water id.
+pub fn water_cell(id: u32) -> (usize, usize) {
+    (
+        (id / WATER_ID_LAYERS) as usize,
+        (id % WATER_ID_LAYERS) as usize,
+    )
+}
+
+/// The first layer at or above sea level: the flood fills only below it.
+pub fn sea_layer() -> usize {
+    column::layer_at(terrain_config().sea_level_m).unwrap_or(0)
+}
+
+/// Whether the edits put water in this cell's layer: a source a player
+/// poured, or water the rule wrote. Neither seeds the sea's flood.
+fn edited_water(edits: &Edits, key: u32, layer: usize) -> bool {
+    edits
+        .for_cell(key)
+        .iter()
+        .any(|&(l, m)| usize::from(l) == layer && m.is_water())
+}
+
+/// The tier as the water rule's grid: a slot's layer, the rim and every cell
+/// off the tier neutral.
+pub struct TierGrid<'a>(pub &'a mut ColumnTier);
+
+impl ColumnTier {
+    fn rim(&self, slot: usize) -> bool {
+        self.records
+            .get(slot)
+            .is_none_or(|record| record.more[3] & RIM_BIT != 0)
+    }
+
+    /// A slot's neighbours across its sides, `None` off the tier.
+    pub fn sides_of(&self, slot: usize) -> [Option<usize>; 6] {
+        let mut out = [None; 6];
+        let (Some(record), Some(sides)) = (self.records.get(slot), self.sides.get(slot)) else {
+            return out;
+        };
+        let degree = ((record.more[2] & DEGREE_MASK) as usize).min(6);
+        for (o, &s) in out.iter_mut().zip(sides).take(degree) {
+            if s != NO_NEIGHBOR && (s as usize) < self.columns.len() {
+                *o = Some(s as usize);
+            }
+        }
+        out
+    }
+
+    fn water_at(&self, id: u32) -> LiquidCell {
+        let (slot, layer) = water_cell(id);
+        if layer == 0 || layer >= LAYERS || self.rim(slot) {
+            return LiquidCell::Neutral;
+        }
+        self.columns
+            .get(slot)
+            .map_or(LiquidCell::Neutral, |c| LiquidCell::of(c.material(layer)))
+    }
+
+    fn water_around(&self, id: u32) -> [Option<u32>; 8] {
+        let (slot, layer) = water_cell(id);
+        let mut out = [None; 8];
+        if layer + 1 < LAYERS {
+            out[liquid::UP] = Some(water_id(slot, layer + 1));
+        }
+        for (k, side) in self.sides_of(slot).into_iter().enumerate() {
+            out[liquid::SIDE + k] = side.map(|s| water_id(s, layer));
+        }
+        if layer > 0 {
+            out[liquid::DOWN] = Some(water_id(slot, layer - 1));
+        }
+        out
+    }
+
+    /// Repack one slot's record from its column.
+    pub fn repack_slot(&mut self, slot: usize) {
+        if let Some(&record) = self.water.records.get(slot) {
+            self.repack(record);
+        }
+    }
+
+    /// The sea's flood (`volumetric-water` phase 2) from `seeds`: every air
+    /// cell below sea level that is joined to them across the sides or
+    /// downward, inside the rim, filled as a source. Returns the slots it
+    /// changed, each once.
+    fn flood_from(&mut self, seeds: Vec<u32>) -> Vec<usize> {
+        let sea = sea_layer();
+        let rim: Vec<bool> = (0..self.columns.len()).map(|s| self.rim(s)).collect();
+        let filled = liquid::flood(
+            &mut TierGrid(self),
+            seeds,
+            |id| {
+                let (slot, layer) = water_cell(id);
+                layer < sea && !rim.get(slot).copied().unwrap_or(true)
+            },
+            FLOOD_LIMIT,
+        );
+        let mut slots: Vec<usize> = filled.into_iter().map(|id| water_cell(id).0).collect();
+        slots.sort_unstable();
+        slots.dedup();
+        slots
+    }
+
+    /// Every generated water cell below sea level beside air the flood may
+    /// fill: where a build's flood starts.
+    fn sea_seeds(&self, edits: &Edits) -> Vec<u32> {
+        let sea = sea_layer();
+        let mut seeds = Vec::new();
+        for slot in 0..self.columns.len() {
+            if self.rim(slot) {
+                continue;
+            }
+            let key = self.water.keys.get(slot).copied().unwrap_or(u32::MAX);
+            let sides = self.sides_of(slot);
+            for layer in 1..sea.min(LAYERS) {
+                if self.columns[slot].material(layer) != Material::Water
+                    || edited_water(edits, key, layer)
+                {
+                    continue;
+                }
+                let open = |s: usize, l: usize| {
+                    !self.rim(s) && self.columns[s].material(l) == Material::Air
+                };
+                if open(slot, layer - 1) || sides.iter().flatten().any(|&s| open(s, layer)) {
+                    seeds.push(water_id(slot, layer));
+                }
+            }
+        }
+        seeds
+    }
+
+    /// An edit at a finest record's layer, for the water: the sea floods in if
+    /// the edit opened a cell to it, and the cell and its neighbours are
+    /// queued for the rule (`water-flow` decision 5). Returns the slots the
+    /// flood changed, which the caller repacks.
+    pub fn water_after_edit(&mut self, record: usize, layer: usize, edits: &Edits) -> Vec<usize> {
+        let Some(&slot) = self.slots.get(record) else {
+            return Vec::new();
+        };
+        if slot == usize::MAX || slot >= self.columns.len() {
+            return Vec::new();
+        }
+        let at = water_id(slot, layer);
+        let mut seeds = Vec::new();
+        for id in std::iter::once(at).chain(self.water_around(at).into_iter().flatten()) {
+            let (s, l) = water_cell(id);
+            let key = self.water.keys.get(s).copied().unwrap_or(u32::MAX);
+            if self.columns.get(s).map(|c| c.material(l)) == Some(Material::Water)
+                && !edited_water(edits, key, l)
+            {
+                seeds.push(id);
+            }
+        }
+        let flooded = if seeds.is_empty() {
+            Vec::new()
+        } else {
+            self.flood_from(seeds)
+        };
+        let mut queue = std::mem::take(&mut self.water.queue);
+        queue.touch(&TierGrid(self), at);
+        self.water.queue = queue;
+        flooded
+    }
+
+    /// Queue every cell of the tier that holds water the edits put there, and
+    /// its neighbours: water still moving when the world was closed or the
+    /// tier moved picks up, and a settled field changes nothing.
+    pub fn queue_edited_water(&mut self, edits: &Edits) {
+        let mut queue = std::mem::take(&mut self.water.queue);
+        for slot in 0..self.columns.len() {
+            let key = self.water.keys.get(slot).copied().unwrap_or(u32::MAX);
+            for &(layer, material) in edits.for_cell(key) {
+                if material.is_water() {
+                    queue.touch(&TierGrid(self), water_id(slot, usize::from(layer)));
+                }
+            }
+        }
+        self.water.queue = queue;
+    }
+
+    /// Settle a version 8 world's generated fresh water by the rule (design
+    /// 13, `water-flow`): every generated source above the sea with air
+    /// beside or under it is queued, and the rule runs until nothing is (at
+    /// most `RIVER_SETTLE_TICKS`), so what flows between a river's reaches,
+    /// down its falls and over its riffles is exactly what the rule keeps.
+    /// Derived, like the sea's flood: never saved, and the same tier settles
+    /// the same way. A world of an older version is left as it was made.
+    /// Returns how many cells the rule changed.
+    pub fn settle_rivers(&mut self, edits: &Edits) -> usize {
+        if terrain_config().rivers.is_none() {
+            return 0;
+        }
+        let sea = sea_layer();
+        let mut queue = liquid::Queue::new();
+        for slot in 0..self.columns.len() {
+            if self.rim(slot) {
+                continue;
+            }
+            let key = self.water.keys.get(slot).copied().unwrap_or(u32::MAX);
+            for layer in sea.max(1)..LAYERS - 1 {
+                if self.columns[slot].material(layer) != Material::Water
+                    || edited_water(edits, key, layer)
+                {
+                    continue;
+                }
+                let id = water_id(slot, layer);
+                let around = self.water_around(id);
+                let open = around[liquid::SIDE..]
+                    .iter()
+                    .flatten()
+                    .any(|&n| self.water_at(n) == LiquidCell::Air);
+                if open {
+                    queue.push(id);
+                }
+            }
+        }
+        let mut changed = Vec::new();
+        let mut ticks = 0;
+        // Settled, then swept: every water cell over the sea looked at again,
+        // because the rule does not requeue the cell above one that changes
+        // (Luanti's, kept), and a sweep that changes nothing is the field the
+        // rule keeps. Two or three sweeps at most in practice.
+        for sweep in 0..6 {
+            let before = changed.len();
+            while !queue.is_empty() && ticks < RIVER_SETTLE_TICKS {
+                queue.tick(
+                    &mut TierGrid(self),
+                    liquid::Rules::default(),
+                    liquid::LOOP_MAX,
+                    &mut changed,
+                );
+                ticks += 1;
+            }
+            if sweep > 0 && changed.len() == before {
+                break;
+            }
+            for slot in 0..self.columns.len() {
+                if self.rim(slot) {
+                    continue;
+                }
+                for layer in sea.max(1)..LAYERS - 1 {
+                    if self.columns[slot].material(layer).is_water() {
+                        queue.push(water_id(slot, layer));
+                    }
+                }
+            }
+        }
+        let mut slots: Vec<usize> = changed.iter().map(|&(id, _)| water_cell(id).0).collect();
+        slots.sort_unstable();
+        slots.dedup();
+        for slot in slots {
+            self.repack_slot(slot);
+        }
+        changed.len()
+    }
+
+    /// One tick of the rule over the tier: every cell that changed, by slot,
+    /// layer and the material it holds now, in the order they changed. The
+    /// changed slots' records are repacked.
+    pub fn tick_water(&mut self, max: usize) -> Vec<(usize, usize, Material)> {
+        let mut queue = std::mem::take(&mut self.water.queue);
+        let mut changed = Vec::new();
+        queue.tick(
+            &mut TierGrid(self),
+            liquid::Rules::default(),
+            max,
+            &mut changed,
+        );
+        self.water.queue = queue;
+        let out: Vec<(usize, usize, Material)> = changed
+            .into_iter()
+            .filter_map(|(id, cell)| {
+                let (slot, layer) = water_cell(id);
+                Some((slot, layer, cell.material()?))
+            })
+            .collect();
+        let mut slots: Vec<usize> = out.iter().map(|c| c.0).collect();
+        slots.sort_unstable();
+        slots.dedup();
+        for slot in slots {
+            self.repack_slot(slot);
+        }
+        out
+    }
+}
+
+/// The most ticks a tier's rivers are settled for at its build: longer than
+/// any reach's sheet and any fall in it takes to settle.
+pub const RIVER_SETTLE_TICKS: usize = 2048;
+
+/// The most cells one flood fills: a sea cave the size of the tier is about
+/// a hundred thousand; this bounds a flood whatever the world.
+pub const FLOOD_LIMIT: usize = 400_000;
+
+impl Grid for TierGrid<'_> {
+    fn cell(&self, at: u32) -> LiquidCell {
+        self.0.water_at(at)
+    }
+    fn set(&mut self, at: u32, cell: LiquidCell) {
+        let (slot, layer) = water_cell(at);
+        if let (Some(material), Some(column)) = (cell.material(), self.0.columns.get_mut(slot)) {
+            column.set(layer, material);
+        }
+    }
+    fn around(&self, at: u32) -> [Option<u32>; 8] {
+        self.0.water_around(at)
+    }
 }
 
 /// One emitting cell: its column's unit direction, the middle of its layer
@@ -182,6 +515,7 @@ impl ColumnTier {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            water: TierWater::default(),
         }
     }
 
@@ -340,6 +674,8 @@ impl ColumnTier {
             .push(Vec3::from_slice(&finest[index].direction_height[..3]).normalize_or(Vec3::Y));
         self.columns.push(column);
         self.light.push([light::Light::DARK; LAYERS]);
+        self.water.keys.push(finest[index].key());
+        self.water.records.push(index);
         true
     }
 
@@ -755,7 +1091,7 @@ pub(crate) fn reach_rings(records: &[GpuColumn], centres: &[Vec3], reach_m: f32)
 /// surface, which is what decides whether a face under sea level is wet.
 fn water_word(column: &Column) -> u32 {
     for layer in (1..LAYERS).rev() {
-        if column.material(layer) == Material::Water {
+        if column.material(layer).is_water() {
             return (layer as u32 + 1) << WATER_SHIFT;
         }
     }
@@ -785,6 +1121,22 @@ const _: () = assert!(GLOW_LIT_BIT > LAMP_LIT_BIT);
 /// Set in a finest record's `spare[2]` where its cell grows a glowing flower,
 /// chosen once from the cell's exact key (`pbd_core::flora::glows`).
 pub const GLOW_FLOWER_BIT: u32 = 1;
+
+/// Set in a finest record's `spare[2]` where its cell's ground is under sea
+/// level and yet its column holds no water at the sheet's layer: a pit dug
+/// below sea level that nothing has flooded. The visibility pass lists no sea
+/// sheet over it (`volumetric-water` phase 2), so a sealed pocket is dry on
+/// screen as it is in the column.
+pub const DRY_SHEET_BIT: u32 = 2;
+
+/// Mark or clear a record's [`DRY_SHEET_BIT`] from its column.
+pub fn mark_sheet(cell: &mut GpuCell, column: &Column) {
+    let sea = sea_layer();
+    let dry = sea > 0
+        && cell.direction_height[3] < terrain_config().sea_level_m
+        && !column.material(sea - 1).is_water();
+    cell.spare[2] = (cell.spare[2] & !DRY_SHEET_BIT) | if dry { DRY_SHEET_BIT } else { 0 };
+}
 
 /// Whether a record's cell grows a glowing flower.
 fn glows(cell: &GpuCell) -> bool {
@@ -954,7 +1306,32 @@ pub fn build(
         sides: Vec::new(),
         relit: 0,
         lamps: Vec::new(),
+        water: TierWater {
+            queue: liquid::Queue::new(),
+            keys: members.iter().map(|&i| finest[i].key()).collect(),
+            records: members.clone(),
+        },
     };
+    // The sea floods what a carve or an edit opened onto it (`volumetric-water`
+    // phase 2): derived from the columns and the edits, so the same tier
+    // floods the same way however often it is built, and never saved.
+    tier.sides = tier.neighbor_slots();
+    let seeds = tier.sea_seeds(edits);
+    let flooded = tier.flood_from(seeds);
+    for slot in flooded {
+        tier.repack_slot(slot);
+    }
+    // A version 8 world's rivers, settled by the rule (design 13).
+    let settled = tier.settle_rivers(edits);
+    if settled > 0 {
+        bevy::log::debug!("rivers settled at build: {settled} cells");
+    }
+    // Water the edits hold picks up where it was (`water-flow` E4).
+    tier.queue_edited_water(edits);
+    // And no sea sheet over a pit the sea has not reached.
+    for (slot, &index) in members.iter().enumerate() {
+        mark_sheet(&mut finest[index], &tier.columns[slot]);
+    }
     // The light comes last, because it is a function of the finished columns:
     // the rim's solid ring and every edit are already in them, and lighting
     // before either would light a world that is not the one being drawn.
@@ -2130,6 +2507,7 @@ mod tests {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            water: TierWater::default(),
         };
         tier.relight();
         assert_eq!(tier.light_at(0, 41).block(), 0, "the lantern is out by day");
@@ -2358,6 +2736,7 @@ mod tests {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            water: TierWater::default(),
         };
         tier.relight();
         let emits = |tier: &ColumnTier, slot: u32| {
@@ -2395,5 +2774,322 @@ mod tests {
         assert!(!emits(&tier, 0), "dug up with its sod");
         assert_eq!(tier.records[0].more[3] & GLOW_LIT_BIT, 0);
         assert_eq!(tier.light_at(0, 41).block(), 0);
+    }
+}
+
+/// The tier's water (`volumetric-water` phase 2, `water-flow` E3 and E4) on a
+/// line of columns: the sea at one end, land at the other, the ends rim.
+#[cfg(test)]
+mod water_tier_tests {
+    use super::*;
+    use pbd_core::edits::Edit;
+
+    const N: usize = 12;
+    /// The top of the seabed and of the land, layers.
+    const BED: usize = 130;
+    const LAND: usize = 150;
+
+    /// Columns 1 to 4 the sea (water from the bed to sea level), 5 to 10
+    /// land, 0 and 11 the rim. Slot `i` is finest record `i`, key `100 + i`.
+    fn line() -> ColumnTier {
+        let sea = sea_layer();
+        let columns: Vec<Column> = (0..N)
+            .map(|i| {
+                let mut column = Column::bedrock();
+                let top = if (1..=4).contains(&i) { BED } else { LAND };
+                for layer in 1..=top {
+                    column.set(layer, Material::Stone);
+                }
+                if (1..=4).contains(&i) {
+                    for layer in BED + 1..sea {
+                        column.set(layer, Material::Water);
+                    }
+                }
+                column
+            })
+            .collect();
+        let records = (0..N)
+            .map(|i| GpuColumn {
+                runs: columns[i].packed_runs(render_code),
+                neighbors: [
+                    if i + 1 < N { i as u32 + 1 } else { NO_NEIGHBOR },
+                    if i > 0 { i as u32 - 1 } else { NO_NEIGHBOR },
+                    NO_NEIGHBOR,
+                    NO_NEIGHBOR,
+                ],
+                more: [
+                    NO_NEIGHBOR,
+                    NO_NEIGHBOR,
+                    6,
+                    u32::from(i == 0 || i == N - 1) | state_word(&columns[i], false, false),
+                ],
+            })
+            .collect();
+        let mut tier = ColumnTier {
+            columns,
+            slots: (0..N).collect(),
+            records,
+            light: Vec::new(),
+            dusk: false,
+            glow: vec![false; N],
+            centres: vec![Vec3::Y; N],
+            sides: Vec::new(),
+            relit: 0,
+            lamps: Vec::new(),
+            water: TierWater {
+                queue: liquid::Queue::new(),
+                keys: (0..N as u32).map(|i| 100 + i).collect(),
+                records: (0..N).collect(),
+            },
+        };
+        tier.sides = tier.neighbor_slots();
+        tier
+    }
+
+    fn carve(
+        tier: &mut ColumnTier,
+        slots: std::ops::RangeInclusive<usize>,
+        layers: std::ops::RangeInclusive<usize>,
+    ) {
+        for slot in slots {
+            for layer in layers.clone() {
+                tier.columns[slot].set(layer, Material::Air);
+            }
+        }
+    }
+
+    /// Build's flood: a tunnel from the sea floods to sea level, never above
+    /// it, and a sealed pocket beside it stays dry.
+    #[test]
+    fn a_tunnel_into_the_sea_floods_and_a_sealed_pocket_stays_dry() {
+        let sea = sea_layer();
+        let mut tier = line();
+        // A tunnel under the land from the sea (column 4), three layers
+        // high, with a shaft rising out of it in column 7 to two layers over
+        // sea level; and a pocket two columns on, sealed by column 8's rock.
+        carve(&mut tier, 5..=7, BED + 5..=BED + 7);
+        carve(&mut tier, 7..=7, BED + 8..=sea + 1);
+        carve(&mut tier, 9..=10, BED + 5..=BED + 7);
+        let seeds = tier.sea_seeds(&Edits::new());
+        assert!(!seeds.is_empty(), "the sea touches the tunnel");
+        let flooded = tier.flood_from(seeds);
+        assert_eq!(flooded, vec![5, 6, 7], "the tunnel's columns");
+        for slot in 5..=7 {
+            for layer in BED + 5..=BED + 7 {
+                assert_eq!(tier.columns[slot].material(layer), Material::Water);
+            }
+        }
+        // The shaft rising out of the tunnel stays dry: the flood never
+        // climbs (design, phase 2), so it fills down and across from the sea,
+        // and never over sea level.
+        for layer in BED + 8..=sea + 1 {
+            assert_eq!(tier.columns[7].material(layer), Material::Air, "{layer}");
+        }
+        for slot in 9..=10 {
+            assert_eq!(
+                tier.columns[slot].material(BED + 6),
+                Material::Air,
+                "sealed"
+            );
+        }
+        assert_eq!(
+            tier.columns[11].material(BED + 6),
+            Material::Stone,
+            "the rim is solid"
+        );
+    }
+
+    /// An edit's flood: digging the rock between the flooded tunnel and the
+    /// pocket lets the sea in, at once.
+    #[test]
+    fn digging_through_to_the_sea_floods_on_the_edit() {
+        let mut tier = line();
+        carve(&mut tier, 5..=7, BED + 5..=BED + 7);
+        carve(&mut tier, 9..=10, BED + 5..=BED + 7);
+        let seeds = tier.sea_seeds(&Edits::new());
+        tier.flood_from(seeds);
+        let mut edits = Edits::new();
+        edits.set(Edit {
+            cell: 108,
+            layer: (BED + 6) as u16,
+            material: Material::Air,
+        });
+        tier.columns[8].set(BED + 6, Material::Air);
+        let flooded = tier.water_after_edit(8, BED + 6, &edits);
+        assert_eq!(flooded, vec![8, 9, 10]);
+        assert_eq!(tier.columns[10].material(BED + 5), Material::Water);
+        assert_eq!(
+            tier.columns[10].material(BED + 7),
+            Material::Air,
+            "the flood does not climb past the hole it came through"
+        );
+        assert!(!tier.water.queue.is_empty(), "and the edit is queued");
+    }
+
+    /// A poured source on land runs by the rule over the tier, a level less
+    /// a cell, and stops at the rim; a world whose edits hold no water queues
+    /// nothing, so it does not move (`water-flow` decision 5, E4).
+    #[test]
+    fn a_poured_source_runs_by_the_rule_and_an_old_world_queues_nothing() {
+        let mut old = line();
+        let mut edits = Edits::new();
+        edits.set(Edit {
+            cell: 106,
+            layer: (LAND - 3) as u16,
+            material: Material::Air,
+        });
+        old.queue_edited_water(&edits);
+        assert!(
+            old.water.queue.is_empty(),
+            "no water in the edits: nothing queued"
+        );
+        assert!(old.tick_water(liquid::LOOP_MAX).is_empty());
+
+        let mut tier = line();
+        let at = LAND + 1;
+        tier.columns[7].set(at, Material::Water);
+        edits.set(Edit {
+            cell: 107,
+            layer: at as u16,
+            material: Material::Water,
+        });
+        tier.queue_edited_water(&edits);
+        let mut ticks = 0;
+        while !tier.water.queue.is_empty() && ticks < 50 {
+            tier.tick_water(liquid::LOOP_MAX);
+            ticks += 1;
+        }
+        let m = |slot: usize| tier.columns[slot].material(at);
+        assert_eq!(m(6), Material::Flow7);
+        assert_eq!(m(8), Material::Flow7);
+        assert_eq!(m(5), Material::Flow6);
+        assert_eq!(m(9), Material::Flow6);
+        assert_eq!(m(10), Material::Flow5);
+        assert_eq!(m(11), Material::Air, "the rim is neutral");
+        // Column 4 is the sea, far below: the sheet spreads into the air
+        // over it on its own layer, and falls from there.
+        assert!(m(4).flow().is_some());
+        assert!(
+            tier.columns[4]
+                .material(at - 1)
+                .flow()
+                .is_some_and(|(_, falling)| falling)
+                || tier.columns[4].material(at - 1).is_water(),
+            "and falls toward the sea"
+        );
+        // The record carries the new water top.
+        assert_eq!(water_top_layer(&tier.columns[10]), Some(at));
+    }
+}
+
+/// Version 8's rivers in a real tier (design 13, `water-flow`): what the
+/// build leaves is what the rule keeps.
+#[cfg(test)]
+mod river_tier_tests {
+    use super::*;
+    use crate::planet::lod;
+
+    /// A river with a fall of three layers or more, as the drainage map has
+    /// it, for an anchor.
+    fn falls() -> Vec<Vec3> {
+        let cfg = terrain_config();
+        let settings = cfg.rivers.expect("the default generator has rivers");
+        let map = pbd_core::rivers::map(cfg, &settings);
+        let falls: Vec<Vec3> = map
+            .rivers()
+            .map(|k| map.describe(k))
+            .filter(|&(c, level, drop, _)| drop >= 3 && level >= 3 && c.y.abs() < 0.7)
+            .map(|(c, ..)| c)
+            .step_by(97)
+            .take(4)
+            .collect();
+        assert!(!falls.is_empty(), "a river with a fall");
+        falls
+    }
+
+    /// A freshly built tier over a river: its water does not move when the
+    /// rule runs over all of it again, no water stands over open air, and
+    /// some of it flows (the river is not still pools).
+    #[test]
+    fn a_freshly_built_tier_s_rivers_are_what_the_rule_keeps() {
+        for anchor in falls() {
+            a_tier_s_rivers_are_what_the_rule_keeps(anchor);
+        }
+    }
+
+    fn a_tier_s_rivers_are_what_the_rule_keeps(anchor: Vec3) {
+        let set = lod::generate_fine(anchor, &ColumnSettings::default(), &Edits::new());
+        let mut tier = set.columns.clone();
+        let sea = sea_layer();
+        let (mut sources, mut flowing, mut over_air) = (0, 0, Vec::new());
+        let mut queue = liquid::Queue::new();
+        for slot in 0..tier.columns.len() {
+            if tier.rim(slot) {
+                continue;
+            }
+            for layer in sea..LAYERS - 1 {
+                let m = tier.columns[slot].material(layer);
+                if !m.is_water() {
+                    continue;
+                }
+                if m == Material::Water {
+                    sources += 1;
+                } else {
+                    flowing += 1;
+                }
+                if tier.columns[slot].material(layer - 1) == Material::Air {
+                    over_air.push((slot, layer, m));
+                }
+                queue.push(water_id(slot, layer));
+            }
+        }
+        eprintln!("river tier: {sources} sources, {flowing} flowing over the sea's level");
+        // No flowing water outside a river's banks (pass 5): the valley,
+        // its levee and the sealed rock under both hold the river, at a
+        // fall's foot as anywhere. Over the sea's layer: the sea's own
+        // water spreading into a sea cave is the sea's, not a river's.
+        let cfg = terrain_config();
+        let outside: Vec<_> = (0..tier.columns.len())
+            .filter(|&slot| !tier.rim(slot))
+            .flat_map(|slot| (sea + 1..LAYERS - 1).map(move |layer| (slot, layer)))
+            .filter(|&(slot, layer)| {
+                tier.columns[slot].material(layer).flow().is_some()
+                    && pbd_core::rivers::at(cfg, tier.centres[slot]).is_none()
+            })
+            .collect();
+        assert!(
+            outside.is_empty(),
+            "{} flowing cells outside a river's banks, first {:?}",
+            outside.len(),
+            &outside[..outside.len().min(6)]
+        );
+        assert!(sources > 50, "a river in the tier: {sources}");
+        assert!(flowing > 0, "the river flows somewhere: {flowing}");
+        assert!(
+            over_air.is_empty(),
+            "water over open air: {:?}",
+            &over_air[..over_air.len().min(8)]
+        );
+        let mut changed = Vec::new();
+        let mut ticks = 0;
+        while !queue.is_empty() && ticks < 64 {
+            queue.tick(
+                &mut TierGrid(&mut tier),
+                liquid::Rules::default(),
+                liquid::LOOP_MAX,
+                &mut changed,
+            );
+            ticks += 1;
+        }
+        assert!(
+            changed.is_empty(),
+            "the rule changed {} cells of a fresh tier, first {:?}",
+            changed.len(),
+            changed
+                .iter()
+                .take(6)
+                .map(|&(id, c)| (water_cell(id), c))
+                .collect::<Vec<_>>()
+        );
     }
 }

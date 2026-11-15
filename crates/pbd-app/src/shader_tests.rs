@@ -378,16 +378,20 @@ fn the_sky_near_the_ground_keeps_the_grounds_twilight() {
 fn the_water_is_lit_not_luminous() {
     let src = include_str!("../../../assets/shaders/water.wgsl");
     for line in [
-        "return view.deep_color.rgb*view.water_light.rgb*exp(-absorption*max(eye_depth,0.0));",
-        "let transmitted = mix(albedo*water_lit,scene,exp(-absorption*path_length));",
+        "return view.deep_color.rgb*view.water_light.rgb*light_left(eye_depth);",
+        "let transmitted = mix(albedo*water_lit,scene,exp(-view_extinction()*path_length));",
         "var reflected = water_sky_radiance(water_sky_frame(reflected_ray,radial,sun_direction));",
     ] {
         assert!(src.contains(line), "missing `{line}`");
     }
-    assert!(
-        !src.contains("view.absorption.w"),
-        "the night floor is gone"
+    // The absorption lane's w was a night floor; it is the turbidity now
+    // (`ocean-environments` B3), read only as a per-metre extinction.
+    assert_eq!(
+        src.matches("view.absorption.w").count(),
+        1,
+        "the night floor is gone; w is read once, as the turbidity"
     );
+    assert!(src.contains("vec3<f32>(max(view.absorption.w,0.0))"));
 }
 
 /// One function's body in a WGSL source, from `fn name(` to its closing brace
@@ -766,4 +770,95 @@ fn a_floor_reads_one_layer_of_baked_light() {
         worst < snap * 0.25,
         "a floor's sample lies {worst} m off its layer"
     );
+}
+
+/// `flora-v2` design 5: the shader's plant season is `pbd_core::flora`'s,
+/// read off the shipped file: the same four pairs of numbers.
+#[test]
+fn the_plants_season_is_the_cores() {
+    let src = include_str!("../../../assets/shaders/planet_surface.wgsl");
+    use pbd_core::flora::{SEASON_BARE, SEASON_STRAW, SEASON_TROPIC, SEASON_TURN};
+    for (name, pair) in [
+        ("SEASON_TROPIC", SEASON_TROPIC),
+        ("SEASON_TURN", SEASON_TURN),
+        ("SEASON_BARE", SEASON_BARE),
+        ("SEASON_STRAW", SEASON_STRAW),
+    ] {
+        let at = src
+            .find(&format!("const {name} = vec2<f32>("))
+            .unwrap_or_else(|| panic!("{name} is gone from planet_surface.wgsl"));
+        let rest = &src[at..];
+        let open = rest.find('(').unwrap() + 1;
+        let close = rest.find(')').unwrap();
+        let v: Vec<f32> = rest[open..close]
+            .split(',')
+            .map(|x| x.trim().parse().unwrap())
+            .collect();
+        assert_eq!(v, pair.to_vec(), "{name}");
+    }
+    // The fallen leaves' four edges and their midwinter share (design 9.4).
+    let at = src
+        .find("const SEASON_LITTER = vec4<f32>(")
+        .expect("SEASON_LITTER is gone from planet_surface.wgsl");
+    let rest = &src[at..];
+    let litter: Vec<f32> = rest[rest.find('(').unwrap() + 1..rest.find(')').unwrap()]
+        .split(',')
+        .map(|x| x.trim().parse().unwrap())
+        .collect();
+    assert_eq!(litter, pbd_core::flora::SEASON_LITTER.to_vec());
+    assert!(src.contains(&format!(
+        "const LITTER_WINTER: f32 = {:?};",
+        pbd_core::flora::LITTER_WINTER
+    )));
+    // The hemisphere flip and the tropics' fade are the core's too.
+    let body = wgsl_fn_body(src, "season_at");
+    assert!(body.contains("select(0.0, 0.5, radial.y < 0.0)"));
+    assert!(body.contains("smoothstep(SEASON_TROPIC.x, SEASON_TROPIC.y, abs(radial.y))"));
+}
+
+/// `flora-v2` design 2: every clutter piece dithers out at the edge of the
+/// clutter reach, in `dropped`; the plants' cut-outs are there too.
+#[test]
+fn the_plants_dither_out_and_cut_out_in_dropped() {
+    let src = include_str!("../../../assets/shaders/planet_surface.wgsl");
+    let body = wgsl_fn_body(src, "dropped");
+    for line in [
+        "if code == TUFT_CODE && !tuft_on(input.uv) { return true; }",
+        "if code == FERN_CODE && fern_cut(input.uv) { return true; }",
+        "let left = params.clutter.x - 2.0 - distance(input.position, params.camera.xyz);",
+    ] {
+        assert!(body.contains(line), "dropped no longer says `{line}`");
+    }
+    assert!(wgsl_fn_body(src, "shadow_fragment").contains("dropped(input)"));
+}
+
+/// `flora-v2` design 9.2 and 9.6: the shader's plant detail and fruit
+/// palette are `pbd_core::flora`'s, and the cap under a tree is found by the
+/// visibility pass's own tree rule, line for line.
+#[test]
+fn the_mockups_plants_are_the_cores() {
+    use pbd_core::flora::{FRUIT_RAMPS, LEAF_DETAIL, SOLID_DETAIL};
+    let src = include_str!("../../../assets/shaders/planet_surface.wgsl");
+    assert!(src.contains(&format!("const LEAF_DETAIL: f32 = {LEAF_DETAIL:?};")));
+    assert!(src.contains(&format!("const SOLID_DETAIL: f32 = {SOLID_DETAIL:?};")));
+    let body = wgsl_fn_body(src, "fruit_ramp");
+    for (k, ramp) in FRUIT_RAMPS.iter().enumerate() {
+        let line = format!(
+            "return vec3(0x{:06x}u, 0x{:06x}u, 0x{:06x}u);",
+            ramp[0], ramp[1], ramp[2]
+        );
+        assert!(body.contains(&line), "fruit {k}: `{line}`");
+    }
+    let visibility = include_str!("../../../assets/shaders/planet_visibility.wgsl");
+    let rule = wgsl_fn_body(src, "stands_tree");
+    for line in rule
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("let ") || l.starts_with("if "))
+    {
+        assert!(
+            visibility.contains(line),
+            "the visibility pass's tree rule has no `{line}`"
+        );
+    }
 }

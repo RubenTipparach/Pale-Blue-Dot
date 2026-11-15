@@ -26,6 +26,12 @@ pub struct Sea {
     /// The radius of the mean sea surface, m.
     pub radius: f32,
     pub depth_offset_m: f32,
+    /// The tide now (`pbd_core::sea::tide_m`): the moon's direction in the
+    /// planet's frame and the range, m; zero until a moon is placed. The
+    /// shader, every hull, the line and the walker read this one value.
+    pub tide: Vec4,
+    /// The tide's range from the settings, m.
+    pub tide_range_m: f32,
 }
 
 impl Sea {
@@ -34,7 +40,19 @@ impl Sea {
             table: Arc::new(SeaTable::new(water.sea, surface_gravity())),
             radius: PLANET_RADIUS - water.depth_offset_m,
             depth_offset_m: water.depth_offset_m,
+            tide: Vec4::ZERO,
+            tide_range_m: water.tide_range_m,
         }
+    }
+
+    /// Set the tide from the moon's direction in the planet's frame.
+    pub fn set_moon(&mut self, moon: Vec3) {
+        self.tide = moon.normalize_or(Vec3::X).extend(self.tide_range_m);
+    }
+
+    /// The tide's offset of the surface over a direction, m.
+    pub fn tide_at(&self, direction: Vec3) -> f32 {
+        pbd_core::sea::tide_m(direction, self.tide)
     }
 
     /// The sea state over a body-local direction: the wind the waves have
@@ -59,11 +77,31 @@ impl Sea {
 
 /// What the water pass reads this frame: the table at the camera's sea state,
 /// and how high the surface stands under the camera.
-#[derive(Resource, Clone, Default, ExtractResource)]
+#[derive(Resource, Clone, ExtractResource)]
 pub struct SeaNow {
     pub gpu: SeaGpu,
     /// The surface's height over the sea radius directly under the camera, m.
     pub camera_height: f32,
+    /// The wind the sea has caught up with at the camera, m/s: what the
+    /// spray and streaked foam start from (`ocean-environments` 4.3).
+    pub wind_mps: f32,
+    /// The turbidity of the water at the camera, per metre, eased
+    /// (`pbd_core::ocean::Turbidity`; design B3). Negative until set.
+    pub turbidity: f32,
+    /// The tide under the camera, m (`ocean-environments` 5.1).
+    pub tide_here: f32,
+}
+
+impl Default for SeaNow {
+    fn default() -> Self {
+        Self {
+            gpu: SeaGpu::default(),
+            camera_height: 0.0,
+            wind_mps: 0.0,
+            turbidity: -1.0,
+            tide_here: 0.0,
+        }
+    }
 }
 
 pub struct SeaPlugin;
@@ -99,12 +137,16 @@ fn init_sea(mut commands: Commands, water: Res<WaterSettings>) {
 }
 
 /// The sea state at the active camera, as the shader's table.
+#[allow(clippy::too_many_arguments)]
 fn publish_sea(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     frame: Res<crate::planet::PlanetRenderFrame>,
     air: Option<Res<Air>>,
     sun: Res<crate::sky::Sun>,
     sea: Option<Res<Sea>>,
+    water: Res<WaterSettings>,
+    fauna: Option<Res<crate::config::FaunaConfig>>,
+    time: Res<Time>,
     mut now: ResMut<SeaNow>,
 ) {
     let Some(sea) = sea else {
@@ -120,7 +162,36 @@ fn publish_sea(
     let state = sea.state_at(air.as_deref(), direction);
     let local = sea
         .table
-        .local(&state, direction, sea.depth_at(direction), seconds);
+        .local(&state, direction, sea.depth_at(direction), seconds)
+        .with_tide(sea.tide);
     now.gpu = sea.table.gpu(&state, seconds);
+    now.gpu.tide = sea.tide;
+    now.tide_here = sea.tide_at(direction);
     now.camera_height = local.height(camera, sea.radius);
+    // The wind the sea has caught up with; from the shore, where the sea's
+    // lane is zero, the surface wind blowing over it.
+    now.wind_mps = air.as_deref().map_or(0.0, |air| {
+        let here = air.now.sample(direction);
+        if here.sea > 0.0 {
+            here.sea
+        } else {
+            here.wind.length()
+        }
+    });
+    // The water's turbidity under the eye, by its class and depth, eased so
+    // a swim out or into a river mouth never steps.
+    let limits = fauna.map_or_else(pbd_core::fauna::WaterLimits::default, |f| f.0.water);
+    let depth = sea.depth_at(direction);
+    let class =
+        pbd_core::fauna::water_class(crate::planet::terrain_config(), direction, depth, &limits);
+    let target = water
+        .turbidity
+        .at(class, depth, (limits.shallows_max_m, limits.shelf_max_m));
+    now.turbidity = if now.turbidity < 0.0 {
+        target
+    } else {
+        water
+            .turbidity
+            .ease(now.turbidity, target, time.delta_secs())
+    };
 }

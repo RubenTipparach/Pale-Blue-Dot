@@ -98,6 +98,16 @@
             inputs: [("stone", 8), ("block:stone", 4)],
             outputs: [("block:forge", 1)],
         ),
+        // ---- water-flow E11: the wooden bucket, which takes and pours a
+        // water source.
+        (
+            code: "bucket",
+            name: "BUCKET",
+            station: "workbench",
+            secs: 3.0,
+            inputs: [("planks", 3), ("rope", 1)],
+            outputs: [("bucket", 1)],
+        ),
         (
             code: "bronze-pickaxe",
             name: "BRONZE PICK",

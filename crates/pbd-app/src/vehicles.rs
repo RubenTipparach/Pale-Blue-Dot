@@ -244,6 +244,7 @@ fn step_vehicles(
         let env = Surroundings {
             sea: &sea.table,
             sea_state: sea.state_at(world.air.as_deref(), direction),
+            tide: sea.tide,
             sea_radius: sea.radius as f64,
             depth: sea.depth_at(direction),
             air: AirHere {

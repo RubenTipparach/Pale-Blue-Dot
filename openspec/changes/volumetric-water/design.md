@@ -143,6 +143,24 @@ What this is not: aquifers. Minecraft fills some sealed caves at generated
 levels; ours are dry until the generator gains a rule for it, and that is a
 decision for the terrain generator's write-up rather than this one.
 
+### Phase 2 in the engine (2026-11-15)
+
+- **What floods.** The sea's table: air below sea level that is connected,
+  across the sides and downward, to water the generator made (not a source
+  a player poured, which flows by `water-flow`'s rule instead). Every
+  generated water layer is at the sea's table, an inland basin under sea
+  level included, so "fills to the water's level" is "fills to sea level".
+- **When.** At `column::build`, after the carve and the edits, from every
+  generated water cell beside such air; and on an edit, from the edited
+  cell if a generated water cell is beside or above it. `pbd_core::liquid::flood`
+  does both, bounded to the tier's inner cells (the rim is solid) and to a
+  cell count.
+- **Never saved.** What the flood fills is a function of the columns and the
+  edits, so the same tier floods the same way every time it is built.
+- **And flow.** The flood's water is sources. `water-flow`'s rule then runs
+  from an edit as everywhere else; the sea's sources spread nothing new,
+  since every air cell they could reach on their level is already flooded.
+
 ## Phase 3: flow, in Minecraft's terms
 
 Recorded so phase 1's data shape does not fight it. A water layer carries a

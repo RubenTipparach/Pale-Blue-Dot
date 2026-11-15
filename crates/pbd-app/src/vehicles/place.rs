@@ -349,11 +349,14 @@ pub(crate) fn floor(direction: Vec3) -> f32 {
 }
 
 /// The generator's own ground under a direction, m from the centre: [`floor`]
-/// with no town's ground (`column::natural_surface_m`).
+/// with no town's ground (`column::natural_surface_m`), and with no version 8
+/// river (`TerrainConfig::site_ground`), so a new world starts where the same
+/// seed always started and the rivers are not a reason to move it
+/// (`ocean-environments` design 13).
 pub(crate) fn natural_floor(direction: Vec3) -> f32 {
     PLANET_RADIUS
         + pbd_core::column::natural_surface_m(
-            crate::planet::terrain_config(),
+            &crate::planet::terrain_config().site_ground(),
             direction.normalize_or(Vec3::Y),
         )
 }

@@ -51,6 +51,7 @@ impl World {
             let env = Surroundings {
                 sea: &self.sea,
                 sea_state: self.sea.state(self.sea_wind, self.wind),
+                tide: glam::Vec4::ZERO,
                 sea_radius: RADIUS,
                 depth: (RADIUS - self.ground).max(0.0) as f32,
                 air: AirHere {
@@ -199,6 +200,7 @@ fn loon_skeg_immersion_is_independent_of_the_lateral_plane() {
         let env = Surroundings {
             sea: &world.sea,
             sea_state: world.sea.state(0.0, Vec3::ZERO),
+            tide: glam::Vec4::ZERO,
             sea_radius: RADIUS,
             depth: 40.0,
             air: AirHere {
@@ -250,6 +252,7 @@ fn loon_reports_a_working_rudder_at_rest_and_during_recovery() {
     let env = Surroundings {
         sea: &world.sea,
         sea_state: world.sea.state(0.0, Vec3::ZERO),
+        tide: glam::Vec4::ZERO,
         sea_radius: RADIUS,
         depth: 40.0,
         air: AirHere {
@@ -330,6 +333,7 @@ fn a_wet_foil_uses_orbital_velocity_and_current_at_its_own_depth() {
     let env = Surroundings {
         sea: &world.sea,
         sea_state: world.sea.state(12.0, Vec3::X * 12.0),
+        tide: glam::Vec4::ZERO,
         sea_radius: RADIUS,
         depth: 40.0,
         air: AirHere {

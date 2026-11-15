@@ -71,7 +71,7 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         Material::Rock => one(home(Biome::Mountains), 3., 0.),
         Material::Snow => one(snow_slot(), 0., 0.),
         Material::Ore => one(home(Biome::Fields), 0., 1.),
-        Material::Water => one(home(Biome::Ocean), 2., 2.),
+        Material::Water | pbd_core::flowing_water!() => one(home(Biome::Ocean), 2., 2.),
         // The fields sheet's own tilled soil over its earth, as the ground
         // draws it (`farming-and-smelting` decision 2).
         Material::Tilled => BlockArt {

@@ -154,6 +154,26 @@ ICONS.update({
 })
 
 
+# The wooden bucket (`water-flow` E11): staves in the fence's two browns,
+# two iron hoops and a rope handle; full, the sea's own blues at its brim.
+BUCKET = dict(FARM, **{"r": "#c9a46a", "b": "#1c5ea0", "B": "#5a8ac0", "d": "#1d2b53"})
+
+ICONS.update({
+    "goods/bucket": ([
+        "................", ".....krrrrk.....", "....r......r....", "...r........r...",
+        "..kkkkkkkkkkkk..", "..kddddddddddk..", "..kIiiiiiiiiIk..", "...kWwWwWwWwk...",
+        "...kWwWwWwWwk...", "...kIiiiiiiIk...", "...kWwWwWwWwk...", "....kWwWwWwk....",
+        "....kIiiiiIk....", "....kWwWwWwk....", ".....kkkkkk.....", "................",
+    ], BUCKET),
+    "goods/water-bucket": ([
+        "................", ".....krrrrk.....", "....r......r....", "...r........r...",
+        "..kkkkkkkkkkkk..", "..kbBbbBbbbBbk..", "..kIiiiiiiiiIk..", "...kWwWwWwWwk...",
+        "...kWwWwWwWwk...", "...kIiiiiiiIk...", "...kWwWwWwWwk...", "....kWwWwWwk....",
+        "....kIiiiiIk....", "....kWwWwWwk....", ".....kkkkkk.....", "................",
+    ], BUCKET),
+})
+
+
 def rgba(hex_colour):
     h = hex_colour.lstrip("#")
     return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"

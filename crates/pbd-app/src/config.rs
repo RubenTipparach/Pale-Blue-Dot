@@ -107,8 +107,33 @@ pub struct WaterSettings {
     /// Longest optical path through water, metres, used where scene depth is
     /// sky.
     pub max_path_m: f32,
-    /// RGB absorption per metre.
+    /// RGB absorption per metre: the VIEW's path through water.
     pub absorption_per_m: [f32; 3],
+    /// RGB downwelling per metre: daylight ARRIVING at a depth, which lights
+    /// the seabed and the water round the eye and sets the depth zones
+    /// (`pbd_core::ocean`, `ocean-environments` design B2).
+    pub downwell_per_m: [f32; 3],
+    /// Turbidity per metre toward the water's own colour, by environment
+    /// (`ocean-environments` design B3).
+    pub turbidity: pbd_core::ocean::Turbidity,
+    /// Caustics on sunlit seabed: strength (zero: none), the web's cell, m,
+    /// and the depth they are gone by, m.
+    pub caustics: f32,
+    pub caustic_cell_m: f32,
+    pub caustic_fade_m: f32,
+    /// Light shafts seen from under the water by day: strength (zero: none)
+    /// and how far along the view they are gathered, m.
+    pub shafts: f32,
+    pub shaft_reach_m: f32,
+    /// Marine snow round the eye: strength (zero: none), the depth it starts
+    /// showing from, m, and its own faint glow, linear.
+    pub snow: f32,
+    pub snow_from_m: f32,
+    pub snow_glow: f32,
+    /// Spray and streaked foam from this wind at the sea up, m/s (a gale),
+    /// and how strong they are at twice it (zero: none).
+    pub spray_from_mps: f32,
+    pub spray: f32,
     /// The deep water's albedo, linear RGB: what it gives back of the light
     /// that reaches it (`water-lit`). Real deep sea returns a few percent of
     /// the blue; from above its colour is mostly the sky it mirrors.
@@ -152,6 +177,10 @@ pub struct WaterSettings {
     pub emerge_dry_s: f32,
     /// Radial scroll speed of the wave field on vertical water faces.
     pub flow_uv_speed_falling: f32,
+    /// How far the tide rises and falls at one place over a day, m, from the
+    /// body's moon (`ocean-environments` design 10): 3 on Tenebris, nought
+    /// for no tide.
+    pub tide_range_m: f32,
     /// How fast the wave normal and crest foam fade as the fbm's features fall
     /// under a pixel: the gradient is scaled by `1 / (1 + footprint * fade)`
     /// where footprint is the per-pixel change of the noise coordinate. Zero
@@ -173,6 +202,18 @@ impl Default for WaterSettings {
             refract_max_uv: 0.03,
             max_path_m: 200.0,
             absorption_per_m: [0.32, 0.035, 0.012],
+            downwell_per_m: pbd_core::ocean::OCEAN_DOWNWELL_PER_M,
+            turbidity: pbd_core::ocean::Turbidity::default(),
+            caustics: 3.0,
+            caustic_cell_m: 4.0,
+            caustic_fade_m: 30.0,
+            shafts: 0.6,
+            shaft_reach_m: 40.0,
+            snow: 1.0,
+            snow_from_m: 15.0,
+            snow_glow: 0.006,
+            spray_from_mps: 17.0,
+            spray: 0.6,
             deep_color: [0.004, 0.018, 0.040],
             shallow_color: [0.020, 0.090, 0.075],
             shallow_depth_m: 14.0,
@@ -196,6 +237,7 @@ impl Default for WaterSettings {
             partial_band_m: 0.8,
             emerge_dry_s: 2.6,
             flow_uv_speed_falling: 1.0,
+            tide_range_m: 3.0,
             detail_fade: 4.0,
         }
     }
@@ -228,11 +270,31 @@ impl Validated for WaterSettings {
                 s.partial_band_m,
                 s.emerge_dry_s,
                 s.flow_uv_speed_falling,
+                s.tide_range_m,
                 s.detail_fade,
             ],
         )?;
         s.sea.validate()?;
         non_negative("absorption_per_m", &s.absorption_per_m)?;
+        non_negative("downwell_per_m", &s.downwell_per_m)?;
+        s.turbidity.validate()?;
+        non_negative(
+            "under water",
+            &[
+                s.caustics,
+                s.caustic_fade_m,
+                s.shafts,
+                s.shaft_reach_m,
+                s.snow,
+                s.snow_from_m,
+                s.snow_glow,
+                s.spray_from_mps,
+                s.spray,
+            ],
+        )?;
+        (s.caustic_cell_m.is_finite() && s.caustic_cell_m > 0.0)
+            .then_some(())
+            .ok_or("caustic_cell_m must be a positive size")?;
         non_negative("deep_color", &s.deep_color)?;
         non_negative("shallow_color", &s.shallow_color)?;
         (s.shallow_depth_m.is_finite() && s.shallow_depth_m > 0.0)
@@ -942,7 +1004,9 @@ impl Validated for WeatherSettings {
 #[serde(default, deny_unknown_fields)]
 pub struct ScatterSettings {
     /// How far from the camera clutter is drawn at all, metres. Beyond about
-    /// 60 m a blade is under two pixels wide and costs a vertex to shimmer.
+    /// 60 m a blade is under two pixels wide and costs a vertex to shimmer;
+    /// the approved M13 mockup doubles each plant ring as the default
+    /// (`flora-v2` design 9.3), so it is 120 m.
     pub clutter_radius_m: f32,
     /// The last stretch of that reach, metres, over which a piece shrinks into
     /// the ground rather than popping out of existence.
@@ -986,13 +1050,34 @@ pub struct ScatterSettings {
     /// levels cross-fade with distance through complementary dither masks
     /// (`distance-lod-fade`, Unity's LOD cross-fade width). 0 draws hard edges.
     pub lod_fade_width: f32,
+    /// Pixel tufts per covered grass cell, upper bound, when the player's
+    /// Pixel grass is on (`flora-v2` design 1); a hash picks 60%..100% of it.
+    /// Each takes one of the grass slots, so it shares their budget.
+    pub tuft_count: f32,
+    /// A tuft's card width and height, metres: the mockup's 0.8 x 0.6.
+    pub tuft_width_m: f32,
+    pub tuft_height_m: f32,
+    /// Probability a grassy cell grows a mushroom, before its biome's weight
+    /// (`pbd_core::flora::BIOME_FLORA`).
+    pub mushroom_chance: f32,
+    /// Probability a grassy cell grows a fern, before its biome's weight.
+    pub fern_chance: f32,
+    /// Fallen leaves at the height of autumn, 0..1 (`flora-v2` design 9.4):
+    /// the share of the ground's leaf slots that have a leaf down.
+    pub leaf_fall: f32,
+    /// How much thicker the fall lies under a tree than in the open, 0..1.
+    pub leaf_under: f32,
+    /// A fallen leaf's size against the mockup's two-texel slot, 0.5..2.
+    pub leaf_size: f32,
+    /// Probability a fruiting biome's tree bears fruit (`flora-v2` design 9.6).
+    pub fruit_chance: f32,
 }
 
 impl Default for ScatterSettings {
     fn default() -> Self {
         Self {
-            clutter_radius_m: 60.,
-            clutter_fade_m: 15.,
+            clutter_radius_m: 120.,
+            clutter_fade_m: 30.,
             grass_chance: 0.8,
             grass_blades: 18.,
             grass_height_m: 0.55,
@@ -1009,6 +1094,15 @@ impl Default for ScatterSettings {
             tree_fade_m: 150.,
             lod_fade_s: 1.0,
             lod_fade_width: 0.3,
+            tuft_count: 6.,
+            tuft_width_m: 0.8,
+            tuft_height_m: 0.6,
+            mushroom_chance: 0.05,
+            fern_chance: 0.08,
+            leaf_fall: 0.45,
+            leaf_under: 0.7,
+            leaf_size: 1.0,
+            fruit_chance: 0.5,
         }
     }
 }
@@ -1043,6 +1137,19 @@ impl Validated for ScatterSettings {
         unit("bush_chance", self.bush_chance)?;
         unit("shrub_chance", self.shrub_chance)?;
         unit("grass_base_shade", self.grass_base_shade)?;
+        unit("mushroom_chance", self.mushroom_chance)?;
+        unit("fern_chance", self.fern_chance)?;
+        unit("leaf_fall", self.leaf_fall)?;
+        unit("leaf_under", self.leaf_under)?;
+        unit("fruit_chance", self.fruit_chance)?;
+        (self.leaf_size.is_finite() && (0.5..=2.0).contains(&self.leaf_size))
+            .then_some(())
+            .ok_or("leaf_size must lie within 0.5 and 2")?;
+        non_negative("flora sizes", &[self.tuft_width_m, self.tuft_height_m])?;
+        // Each tuft takes a grass slot, so the slots are its budget too.
+        (self.tuft_count >= 0. && self.tuft_count <= crate::planet::GRASS_BLADE_BUDGET as f32)
+            .then_some(())
+            .ok_or("tuft_count must be within 0..=18, the grass slots")?;
         non_negative(
             "clutter sizes",
             &[

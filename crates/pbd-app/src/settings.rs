@@ -32,8 +32,11 @@ use std::time::{Duration, Instant};
 /// (`stone-and-wood-ui`), which an older file reads as none; version 4 added
 /// `mission_line` (`starter-missions`), which an older file reads as on;
 /// version 5 added `volumes` (`audio-and-ambience`), which an older file
-/// reads as their defaults.
-pub const VERSION: u32 = 5;
+/// reads as their defaults; version 6 added `pixel_grass` (`flora-v2`),
+/// which an older file reads as on (owner, 2026-11-15: "first default to
+/// pixel tufts"); version 7 added `flow_arrows` (`water-flow` task 3.4),
+/// which an older file reads as off.
+pub const VERSION: u32 = 7;
 
 /// The five sound volumes (`audio-and-ambience` design section 2), each a
 /// whole percent 0..=100 in steps of 10. 0 is silent.
@@ -171,6 +174,12 @@ pub struct PlayerSettings {
     pub mission_line: bool,
     /// The five sound volumes (`audio-and-ambience`).
     pub volumes: Volumes,
+    /// The pixel tuft grass in place of the blades cut from the ground tile
+    /// (`flora-v2` design 1): the owner's toggle to try it, off by default.
+    pub pixel_grass: bool,
+    /// Arrows on the flowing water, the way each cell flows (`water-flow`
+    /// task 3.4): off by default.
+    pub flow_arrows: bool,
 }
 
 /// A new player's settings, the owner's choice (2026-11-13, "default to
@@ -185,6 +194,8 @@ impl Default for PlayerSettings {
             rain_shadows: false,
             mission_line: true,
             volumes: Volumes::default(),
+            pixel_grass: true,
+            flow_arrows: false,
         }
     }
 }
@@ -207,6 +218,8 @@ impl PlayerSettings {
             music: 60,
             menus: 70,
         },
+        pixel_grass: false,
+        flow_arrows: false,
     };
 }
 
@@ -223,6 +236,8 @@ struct File {
     rain_shadows: bool,
     mission_line: bool,
     volumes: Volumes,
+    pixel_grass: bool,
+    flow_arrows: bool,
     /// Slot name to key name (`controls::KeyBinds::to_names`).
     keys: BTreeMap<String, String>,
 }
@@ -238,6 +253,8 @@ impl Default for File {
             rain_shadows: base.rain_shadows,
             mission_line: base.mission_line,
             volumes: base.volumes,
+            pixel_grass: base.pixel_grass,
+            flow_arrows: base.flow_arrows,
             keys: BTreeMap::new(),
         }
     }
@@ -278,6 +295,8 @@ impl PlayerSettings {
             rain_shadows: file.rain_shadows,
             mission_line: file.mission_line,
             volumes: file.volumes.snapped(),
+            pixel_grass: file.pixel_grass,
+            flow_arrows: file.flow_arrows,
         };
         let (keys, skipped) = KeyBinds::from_names(&file.keys);
         for rebind in skipped {
@@ -297,6 +316,8 @@ impl PlayerSettings {
                 rain_shadows: self.rain_shadows,
                 mission_line: self.mission_line,
                 volumes: self.volumes,
+                pixel_grass: self.pixel_grass,
+                flow_arrows: self.flow_arrows,
                 keys: keys.to_names(),
             },
             ron::ser::PrettyConfig::default(),
@@ -340,18 +361,21 @@ impl PlayerSettings {
             rain_shadows: overrides.rain_shadows.unwrap_or(self.rain_shadows),
             mission_line: self.mission_line,
             volumes: self.volumes,
+            pixel_grass: overrides.pixel_grass.unwrap_or(self.pixel_grass),
+            flow_arrows: self.flow_arrows,
         }
     }
 }
 
 /// A launch's flags: `--frame-limit`, `--render-scale`, `--no-auto-step`,
-/// `--rain-shadows on|off`.
+/// `--rain-shadows on|off`, `--grass tufts|blades`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Overrides {
     pub frame_limit: Option<FrameLimit>,
     pub render_scale: Option<u32>,
     pub auto_step: Option<bool>,
     pub rain_shadows: Option<bool>,
+    pub pixel_grass: Option<bool>,
 }
 
 /// Where the file lives: `PBD_SETTINGS` if set, else the user's config
@@ -679,6 +703,30 @@ pub fn follow_rain_shadows(
     }
 }
 
+/// The flow arrows follow the setting (`water-flow` task 3.4); F5 lays its
+/// own switch over it for the session.
+pub fn follow_flow_arrows(
+    settings: Res<PlayerSettings>,
+    arrows: Option<ResMut<crate::water_flow::FlowArrows>>,
+) {
+    if let Some(mut arrows) = arrows
+        && arrows.setting != settings.flow_arrows
+    {
+        arrows.setting = settings.flow_arrows;
+    }
+}
+
+/// The grass's look follows the setting, for the render world
+/// (`planet::FloraLook`, `flora-v2` design 1).
+pub fn follow_pixel_grass(
+    settings: Res<PlayerSettings>,
+    mut look: ResMut<crate::planet::FloraLook>,
+) {
+    if look.tufts != settings.pixel_grass {
+        look.tufts = settings.pixel_grass;
+    }
+}
+
 /// The settings' systems: the render scale, auto step and the rain's
 /// shadows each frame, the pacer last. `capture` stands the pacer down.
 pub struct PlayerSettingsPlugin {
@@ -700,6 +748,8 @@ impl Plugin for PlayerSettingsPlugin {
                     apply_render_scale.before(bevy::camera::CameraUpdateSystems),
                     follow_auto_step,
                     follow_rain_shadows,
+                    follow_pixel_grass,
+                    follow_flow_arrows,
                 ),
             );
         if !self.capture {
@@ -757,6 +807,10 @@ mod tests {
                 mission_line: true,
                 // Version 5's: an older file reads the defaults.
                 volumes: Volumes::default(),
+                // Version 6's: on, the default.
+                pixel_grass: true,
+                // Version 7's: off, the default.
+                flow_arrows: false,
             }
         );
         assert!(
@@ -778,6 +832,8 @@ mod tests {
                 ambience: 40,
                 ..Volumes::default()
             },
+            pixel_grass: true,
+            flow_arrows: true,
         };
         let mut keys = KeyBinds::default();
         let roll = crate::controls::slots()
@@ -834,13 +890,37 @@ mod tests {
         assert_eq!(empty, PlayerSettings::default());
     }
 
+    /// `flora-v2`: a version-4 file (before Pixel grass) reads it on, the
+    /// default since the owner's "first default to pixel tufts", and keeps
+    /// the rest; a capture's `--grass` flag lays over the file.
+    #[test]
+    fn a_file_from_before_pixel_grass_reads_it_on() {
+        let text = "(version: 4, frame_limit: Fps120, render_scale: 75, auto_step: true, \
+                    rain_shadows: true, mission_line: false)";
+        let (read, _, version) = PlayerSettings::parse(text).unwrap();
+        assert_eq!(version, 4);
+        assert!(read.pixel_grass);
+        assert!(read.rain_shadows && !read.mission_line && read.render_scale == 75);
+        assert!(PlayerSettings::default().pixel_grass);
+        let isolated = PlayerSettings::ISOLATED;
+        assert!(!isolated.pixel_grass, "captures keep the blades");
+        let flags = Overrides {
+            pixel_grass: Some(false),
+            ..default()
+        };
+        assert!(!read.with(&flags).pixel_grass);
+        let (back, _, _) =
+            PlayerSettings::parse(&read.with(&flags).to_text(&KeyBinds::default())).unwrap();
+        assert!(!back.pixel_grass);
+    }
+
     #[test]
     fn a_newer_file_is_read_and_never_written_back() {
-        let text = "(version: 7, frame_limit: Fps60, brightness: 3)";
+        let text = "(version: 99, frame_limit: Fps60, brightness: 3)";
         let (read, _, version) = PlayerSettings::parse(text).unwrap();
         assert_eq!(read.frame_limit, FrameLimit::Fps60);
-        assert_eq!(version, 7);
-        assert!(!Loaded::Read(7).writable());
+        assert_eq!(version, 99);
+        assert!(!Loaded::Read(VERSION + 1).writable());
         assert!(Loaded::Read(VERSION).writable());
     }
 
@@ -873,7 +953,7 @@ mod tests {
         // Written back, a file with no rebinds says so, and an older build
         // ignores the field.
         let text = PlayerSettings::default().to_text(&KeyBinds::default());
-        assert!(text.contains("version: 5"), "{text}");
+        assert!(text.contains(&format!("version: {VERSION}")), "{text}");
         let (_, none, _) = PlayerSettings::parse(&text).unwrap();
         assert!(none.is_empty());
     }
@@ -951,7 +1031,7 @@ mod tests {
         assert_eq!(read.volumes, Volumes::default());
         assert!(Loaded::Read(4).writable());
         let text = read.to_text(&KeyBinds::default());
-        assert!(text.contains("version: 5"), "{text}");
+        assert!(text.contains(&format!("version: {VERSION}")), "{text}");
         let (again, _, _) = PlayerSettings::parse(&text).unwrap();
         assert_eq!(again, read);
         let odd = "(version: 5, volumes: (master: 43, effects: 250, menus: 0))";
@@ -991,6 +1071,8 @@ mod tests {
             rain_shadows: false,
             mission_line: true,
             volumes: Volumes::default(),
+            pixel_grass: true,
+            flow_arrows: false,
         };
         let flags = Overrides {
             render_scale: Some(100),

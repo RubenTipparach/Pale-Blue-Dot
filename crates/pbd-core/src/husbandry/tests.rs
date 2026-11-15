@@ -50,8 +50,17 @@ fn every_species_has_a_class_a_status_and_a_guide_entry_and_airless_bodies_have_
     let mut ids = std::collections::BTreeSet::new();
     for (body, list) in &fauna.bodies {
         for sp in list {
-            assert_eq!(sp.class, crate::fauna::Class::Fish, "{body}/{}", sp.id);
-            assert_eq!(sp.status, crate::fauna::Status::WildOnly);
+            // Water life is not only fish since `ocean-environments` 7.1
+            // (crabs, clams, turtles, otters, ducks), and none is tamed:
+            // each is wild, or protected from the catch (design D9).
+            assert!(
+                matches!(
+                    sp.status,
+                    crate::fauna::Status::WildOnly | crate::fauna::Status::Protected
+                ),
+                "{body}/{}",
+                sp.id
+            );
             assert!(!sp.guide.entry.is_empty());
             assert!(ids.insert(sp.id.clone()));
         }

@@ -63,7 +63,7 @@ impl Column {
     /// and a torch or any other light is walked through.
     pub fn solid(&self, index: usize) -> bool {
         let material = self.material(index);
-        !(matches!(material, Material::Air | Material::Water) || material.is_lamp())
+        !(material == Material::Air || material.is_water() || material.is_lamp())
     }
 
     /// The topmost solid layer, which is the surface the heightfield tiers draw.
@@ -130,14 +130,14 @@ impl Column {
     /// because the day flooding lands is the day a pool exists.
     pub fn water_surface(&self, altitude: f32) -> Option<f32> {
         let layer = layer_at(altitude)?;
-        if self.material(layer) != Material::Water {
+        if !self.material(layer).is_water() {
             return None;
         }
         let top = (layer..LAYERS)
-            .take_while(|index| self.material(*index) == Material::Water)
+            .take_while(|index| self.material(*index).is_water())
             .last()
             .unwrap_or(layer);
-        Some(layer_altitude(top) + 1.0)
+        Some(layer_altitude(top) + crate::liquid::top_fraction(self.material(top)))
     }
 
     /// Whether rain reaches `altitude`: nothing solid stands above it in this
@@ -337,7 +337,19 @@ pub fn generate_edited(
 ) -> Column {
     let mut column = generate_solid(terrain, direction);
     let crust = crate::settlement::ground::crust(terrain, direction);
+    // A river's valley and its levee are sealed rock down to well under its
+    // water (`water-flow` E16): a cave opening under a river would drain it
+    // into the cave, and its water would run on underground forever.
+    let sealed =
+        crate::rivers::sealed_from(terrain, direction).map(|floor| (floor, column.clone()));
     carve_worms(&mut column, worms, field, terrain, direction, crust);
+    if let Some((floor, solid)) = sealed {
+        for (index, layer) in column.layers.iter_mut().enumerate() {
+            if layer_altitude(index) >= floor {
+                *layer = solid.layers[index];
+            }
+        }
+    }
     for &(layer, material) in edits {
         if let Some(slot) = column.layers.get_mut(layer as usize) {
             *slot = material;
@@ -457,6 +469,22 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
             continue;
         }
         *layer = material_at_depth(top, surface_m - altitude);
+    }
+    // A river's water over its bed (generator version 8, `ocean-environments`
+    // design 13): sources to its reach's level, and below a riffle or a fall
+    // the flowing sheet and the falling blocks `water-flow`'s rule keeps.
+    // Not in a town's footprint: its ground stands in for the river there.
+    let rivers = if crate::settlement::ground::top(terrain, direction).is_some() {
+        Vec::new()
+    } else {
+        crate::rivers::water(terrain, direction)
+    };
+    for (top, material) in rivers {
+        if let Some(i) = layer_at(top as f32 - 0.5)
+            && layers[i] == Material::Air
+        {
+            layers[i] = material;
+        }
     }
     // A town's street lamp or lantern (`cities-in-the-world` task 5.2), in
     // the air over its cell. A lamp is walked through, so it blocks no lane.

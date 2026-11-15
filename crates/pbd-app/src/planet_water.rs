@@ -65,7 +65,8 @@ pub(super) struct WaterView {
     waves: Vec4,
     ripple: Vec4,
     refraction: Vec4,
-    /// rgb absorption per metre; w spare.
+    /// rgb absorption per metre (the view's path); w the turbidity at the
+    /// eye, per metre (`ocean-environments` B3).
     absorption: Vec4,
     /// rgb the deep water's albedo; w the falling-water flow speed.
     deep_color: Vec4,
@@ -181,6 +182,15 @@ pub(super) struct WaterView {
     /// (`sky_sh_pair`): the sky the sheet mirrors where the screen trace
     /// finds nothing nearer (`sh_radiance`).
     sky_sh: [Vec4; 9],
+    /// Under the water (`ocean-environments` B5): the shafts' strength and
+    /// reach, m; the snow's strength and the depth it shows from, m.
+    under: Vec4,
+    /// The snow's own glow, linear; the wind at the sea, m/s; the spray's
+    /// start, m/s, and its strength.
+    under_more: Vec4,
+    /// The column tier: xyz its anchor, w its reach, m (zero: none). The far
+    /// river's sheet and the tier's water dither across its edge (design 13).
+    column: Vec4,
 }
 
 /// The light on open water and the sky's coefficients, both by the cover:
@@ -225,6 +235,8 @@ pub(crate) struct SeaView {
     phase: [Vec4; pbd_core::sea::COMPONENTS / 4],
     heading: Vec4,
     limits: Vec4,
+    /// The tide: the moon's direction and the range (`pbd_core::sea::tide_m`).
+    tide: Vec4,
 }
 
 impl From<&pbd_core::sea::SeaGpu> for SeaView {
@@ -235,6 +247,7 @@ impl From<&pbd_core::sea::SeaGpu> for SeaView {
             phase: sea.phase,
             heading: sea.heading,
             limits: sea.limits,
+            tide: sea.tide,
         }
     }
 }
@@ -647,7 +660,7 @@ fn data_layout() -> BindGroupLayoutDescriptor {
                 uniform_buffer::<WaterView>(false),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(size_of::<GpuCell>() as u64)),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
-                storage_buffer_read_only_sized(false, NonZeroU64::new(8)),
+                storage_buffer_read_only_sized(false, NonZeroU64::new(16)),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
             ),
         ),
@@ -719,6 +732,8 @@ fn initialize_pipelines(
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Pass {
     Cap,
+    /// The game's own water, by the cap's fragment (`water-flow` E6).
+    Flowing,
     Compose,
     CloudMarch,
     CloudResolve,
@@ -779,6 +794,16 @@ impl SpecializedRenderPipeline for WaterPipelines {
                     shader: self.shader.clone(),
                     shader_defs: defs.clone(),
                     entry_point: Some(Cow::Borrowed("vertex")),
+                    ..default()
+                },
+                "fragment",
+            ),
+            Pass::Flowing => (
+                "Flowing water by the sea's own fragment",
+                VertexState {
+                    shader: self.shader.clone(),
+                    shader_defs: defs.clone(),
+                    entry_point: Some(Cow::Borrowed("vertex_flowing")),
                     ..default()
                 },
                 "fragment",
@@ -863,8 +888,8 @@ impl SpecializedRenderPipeline for WaterPipelines {
             | Pass::Overlay => None,
             pass => Some(DepthStencilState {
                 format: WATER_DEPTH_FORMAT,
-                depth_write_enabled: pass == Pass::Cap,
-                depth_compare: if pass == Pass::Cap {
+                depth_write_enabled: matches!(pass, Pass::Cap | Pass::Flowing),
+                depth_compare: if matches!(pass, Pass::Cap | Pass::Flowing) {
                     CompareFunction::GreaterEqual
                 } else {
                     CompareFunction::Always
@@ -890,7 +915,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
                         _ => self.composite_layout.clone(),
                     },
                 ]
-            } else if matches!(key.pass, Pass::Cap | Pass::Compose) {
+            } else if matches!(key.pass, Pass::Cap | Pass::Flowing | Pass::Compose) {
                 vec![
                     self.data_layout.clone(),
                     scene,
@@ -1029,10 +1054,14 @@ impl SpecializedRenderPipeline for WaterPipelines {
 #[derive(Component)]
 pub(super) struct WaterViewGpu {
     uniform: UniformBuffer<WaterView>,
-    // Held by the bind group; kept so its lifetime is explicit.
-    _flow: Buffer,
+    /// The game's own water, three lanes a vertex (`water-flow` E6): the
+    /// buffer the data bind group holds, its version and how many vertices.
+    flowing: Buffer,
+    flowing_version: u64,
+    flowing_count: u32,
     data_bind_group: BindGroup,
     cap: CachedRenderPipelineId,
+    flowing_pipe: CachedRenderPipelineId,
     compose: CachedRenderPipelineId,
     cloud_march: CachedRenderPipelineId,
     cloud_resolve: CachedRenderPipelineId,
@@ -1153,6 +1182,10 @@ pub(super) struct WaterSky<'w> {
     lighting: Option<Res<'w, crate::config::LightingSettings>>,
     fine: Option<Res<'w, super::lod::PlanetFine>>,
     rain_shadows: Option<Res<'w, RainShadows>>,
+    /// The game's own water the sheet does not draw (`water-flow` E6).
+    flowing: Option<Res<'w, crate::water_flow::FlowingWater>>,
+    /// The column tier's reach, for the far rivers' fade (design 13).
+    columns: Option<Res<'w, crate::config::ColumnSettings>>,
 }
 
 /// The sky's mean radiance for a sun at elevation sine `e` under `cover`:
@@ -1203,6 +1236,8 @@ fn prepare_water_views(
         lighting,
         fine,
         rain_shadows,
+        flowing,
+        columns,
     } = sky;
     let lit_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
     let rain_shadows = rain_shadows.is_none_or(|r| r.0);
@@ -1328,7 +1363,8 @@ fn prepare_water_views(
             camera_time: camera.extend(clock.0 * s.time_scale),
             planet_center: Vec3::ZERO.extend(sea_radius),
             sun: sun.direction().extend(s.specular_intensity * sun_dim),
-            waves: Vec4::new(0.0, 0.0, 0.0, s.wave_steepness),
+            // xyz the downwelling (`ocean-environments` B2).
+            waves: v3(s.downwell_per_m).extend(s.wave_steepness),
             ripple: Vec4::new(
                 s.ripple_scale,
                 s.ripple_speed,
@@ -1341,7 +1377,8 @@ fn prepare_water_views(
                 s.slope_max,
                 s.max_path_m,
             ),
-            absorption: v3(s.absorption_per_m).extend(0.0),
+            // w the turbidity at the eye, eased (B3).
+            absorption: v3(s.absorption_per_m).extend(sea_now.turbidity.max(0.0)),
             deep_color: v3(s.deep_color).extend(s.flow_uv_speed_falling),
             shallow: v3(s.shallow_color).extend(s.sky_horizon_strength),
             water_light: open_water_light.extend(s.shallow_depth_m),
@@ -1480,6 +1517,16 @@ fn prepare_water_views(
             ssr_clip: planet_view.ssr_clip,
             haze_weather: Vec4::new(weather.cover, weather.rain, 0.0, 0.0),
             sky_sh,
+            under: Vec4::new(s.shafts, s.shaft_reach_m, s.snow, s.snow_from_m),
+            under_more: Vec4::new(s.snow_glow, sea_now.wind_mps, s.spray_from_mps, s.spray),
+            column: fine
+                .as_deref()
+                .filter(|f| !f.set.columns.columns.is_empty())
+                .map_or(Vec4::ZERO, |f| {
+                    f.set
+                        .anchor
+                        .extend(columns.as_deref().map_or(0.0, |c| c.reach_m))
+                }),
             ssr_eye: if lighting
                 .as_ref()
                 .is_some_and(|l| l.reflect_sea_on() && l.reflect_capture_on())
@@ -1562,6 +1609,31 @@ fn prepare_water_views(
             .max(UVec2::ONE);
         let rain_half_on = weather_settings.rain_render_scale < 1.0;
         if let Some(mut gpu) = existing {
+            // The game's own water, when the mesher has made it again.
+            if let Some(flowing) = flowing.as_deref()
+                && flowing.version != gpu.flowing_version
+            {
+                let bytes: &[u8] = bytemuck::cast_slice(flowing.lanes.as_slice());
+                if gpu.flowing.size() < bytes.len() as u64 {
+                    gpu.flowing = flowing_buffer(&device, flowing.lanes.len());
+                    gpu.data_bind_group = device.create_bind_group(
+                        Some("water data"),
+                        &cache.get_bind_group_layout(&pipelines.data_layout),
+                        &BindGroupEntries::sequential((
+                            &gpu.uniform,
+                            planet.cells.as_entire_binding(),
+                            planet_view.water.as_entire_binding(),
+                            gpu.flowing.as_entire_binding(),
+                            gpu.rain_buffer.as_entire_binding(),
+                        )),
+                    );
+                }
+                if !bytes.is_empty() {
+                    queue.write_buffer(&gpu.flowing, 0, bytes);
+                }
+                gpu.flowing_count = (flowing.lanes.len() / 3) as u32;
+                gpu.flowing_version = flowing.version;
+            }
             let resized = gpu.history_size != history_size;
             if resized {
                 gpu.history = cloud_history(&device, history_size);
@@ -1634,14 +1706,15 @@ fn prepare_water_views(
             queue.write_buffer(&puff_buffer, 0, bytemuck::cast_slice(instances.as_slice()));
         }
         let puffs_on = puffs_drawn;
-        // The flow field: zero for every cell, because the world has no rivers
-        // and no water voxels yet. See openspec/changes/water-flow.
-        let flow = device.create_buffer(&BufferDescriptor {
-            label: Some("GPU water flow vectors (zero until a fluid state exists)"),
-            size: (planet.slots as u64 * 8).max(8),
-            usage: BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        });
+        // The game's own water (`water-flow` E6), as the mesher last made it.
+        let (lanes, flowing_version) = flowing
+            .as_deref()
+            .map_or((Vec::new(), 0), |f| ((*f.lanes).clone(), f.version));
+        let flow = flowing_buffer(&device, lanes.len());
+        if !lanes.is_empty() {
+            queue.write_buffer(&flow, 0, bytemuck::cast_slice(lanes.as_slice()));
+        }
+        let flowing_count = (lanes.len() / 3) as u32;
         let rain_buffer = device.create_buffer(&BufferDescriptor {
             label: Some("precipitation map"),
             size: RAIN_MAP_MAX * RAIN_MAP_MAX * 4,
@@ -1681,6 +1754,10 @@ fn prepare_water_views(
         };
         commands.entity(entity).insert(WaterViewGpu {
             cap: pipeline(Pass::Cap),
+            flowing_pipe: pipeline(Pass::Flowing),
+            flowing: flow,
+            flowing_version,
+            flowing_count,
             compose: pipeline(Pass::Compose),
             cloud_march: pipeline(Pass::CloudMarch),
             cloud_resolve: pipeline(Pass::CloudResolve),
@@ -1701,7 +1778,6 @@ fn prepare_water_views(
             depth: water_depth(&device, size),
             depth_size: size,
             uniform,
-            _flow: flow,
             data_bind_group,
             multisampled,
             lens_needed,
@@ -1730,6 +1806,16 @@ fn prepare_water_views(
             rain_fallen,
         });
     }
+}
+
+/// The game's own water's buffer, room for `lanes` vec4s (one at least).
+fn flowing_buffer(device: &RenderDevice, lanes: usize) -> Buffer {
+    device.create_buffer(&BufferDescriptor {
+        label: Some("flowing water vertices"),
+        size: (lanes.max(3) as u64 * 16).next_power_of_two(),
+        usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
 }
 
 /// Where the march stops for a ray that meets nothing, metres:
@@ -1959,6 +2045,14 @@ impl ViewNode for WaterCompositeNode {
             pass.draw(0..3, 0..1);
             pass.set_render_pipeline(cap);
             pass.draw_indirect(&planet_view.indirect, 32);
+            // The game's own water, in the same pass and depth, so the sheet
+            // and a poured pool sort as one water.
+            if water.flowing_count > 0
+                && let Some(flowing) = cache.get_render_pipeline(water.flowing_pipe)
+            {
+                pass.set_render_pipeline(flowing);
+                pass.draw(0..water.flowing_count, 0..1);
+            }
             span.end(&mut pass);
         }
         // The march reads last frame's history and writes this frame's, and
@@ -2429,7 +2523,7 @@ mod tests {
         // And the sky's nine coefficients (`water-lit`).
         let sh = block.matches("array<vec4<f32>, 9>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * lamps + 8 * sh;
-        assert_eq!((mat4, vec4, lamps, sh), (4, 74, 1, 1));
+        assert_eq!((mat4, vec4, lamps, sh), (4, 77, 1, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");

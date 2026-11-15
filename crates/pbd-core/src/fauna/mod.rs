@@ -23,7 +23,7 @@ use glam::Vec3;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub use school::{School, Water};
+pub use school::{School, Water, crawl_lift, pose};
 
 /// The home planet's key in the roster. The world has one body with water
 /// today; a second gets its own key and its own species.
@@ -66,6 +66,11 @@ pub fn water_class(
     depth_m: f32,
     limits: &WaterLimits,
 ) -> Option<WaterClass> {
+    // Version 8's rivers stand above the sea, so their water is not the
+    // sea's depth: a river is a river at any height.
+    if terrain.rivers.is_some() && is_river(terrain, direction) && depth_m.is_finite() {
+        return Some(WaterClass::River);
+    }
     if depth_m.is_nan() || depth_m <= 0.0 {
         return None;
     }
@@ -84,7 +89,15 @@ pub fn water_class(
 /// Whether the ground at a direction is below the sea only because the river
 /// carve put it there.
 pub fn is_river(terrain: &TerrainConfig, direction: Vec3) -> bool {
+    // Version 8: the river's own water, fresh, above the sea or at it.
+    if terrain.rivers.is_some()
+        && crate::rivers::at(terrain, direction)
+            .is_some_and(|here| here.across_m < here.half_width_m)
+    {
+        return true;
+    }
     let mut uncut = *terrain;
+    uncut.rivers = None;
     // The channel field never exceeds one, so no carve fires.
     uncut.river_threshold = 2.0;
     surface_altitude(terrain, direction) < terrain.sea_level_m
@@ -167,6 +180,129 @@ impl Status {
     }
 }
 
+/// How a creature moves (`ocean-environments` design 7): in a school of
+/// boids (every fish today), walking the bed, or riding the sea's surface.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub enum Mover {
+    #[default]
+    School,
+    /// Walks the tops of the cells: crabs, lobsters, clams (which barely do).
+    Crawler,
+    /// Rides the one sea function: ducks, otters.
+    Floater,
+}
+
+/// The water places a species lives in (`ocean-environments` design 4 and 7).
+/// Answered by `ocean::places::environment` (6.1); `None` (not known) allows
+/// every place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum Environment {
+    Open,
+    Coast,
+    Reef,
+    Kelp,
+    Vent,
+    UnderIce,
+    Pool,
+    Riffle,
+    Marsh,
+    Estuary,
+    Mudflat,
+    /// Where plates close under the sea, the floor carved toward the column's
+    /// (B10).
+    Trench,
+}
+
+impl Environment {
+    /// Whether `ocean::places::environment` answers it today: the sea's
+    /// places. The fresh-water ones (pools, riffles, marsh, estuary,
+    /// mudflat) wait for volumetric water (`ocean-environments` group 8).
+    pub fn is_placed(self) -> bool {
+        matches!(
+            self,
+            Environment::Open
+                | Environment::Coast
+                | Environment::Reef
+                | Environment::Kelp
+                | Environment::Vent
+                | Environment::UnderIce
+                | Environment::Trench
+        )
+    }
+
+    /// Whether it exists only where the generator puts it: nowhere on a
+    /// world made before the sea's places.
+    pub fn needs_generator(self) -> bool {
+        matches!(self, Environment::Vent | Environment::Trench)
+    }
+}
+
+/// What a creature does when the player comes close, or by the clock
+/// (`ocean-environments` 7.2). Each is a small rule on the CPU, deterministic
+/// like the schools.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub enum Behaviour {
+    #[default]
+    None,
+    /// Shuts within `shy_m` of the eye and opens again after a while: clams.
+    Shuts,
+    /// Tips up to feed now and then, paddles off within `shy_m` of the eye,
+    /// sleeps on the water at night: dabbling ducks.
+    Dabbles,
+    /// Dives now and then and comes up elsewhere: diving ducks.
+    Dives,
+    /// Crawls near its den; within `shy_m` of the eye it inks and jets home,
+    /// and hides there for [`HIDE_S`] and until the eye is [`HIDE_UNTIL`]
+    /// times `shy_m` off: the octopus (`ocean-environments` B9).
+    Hides,
+    /// Lies out on the water (a floe, once there is sea ice) when calm;
+    /// within `shy_m` slides in and swims under for [`UNDER_S`]: seals.
+    HaulsOut,
+}
+
+/// How long a startled octopus stays hidden in its den, s.
+pub const HIDE_S: f32 = 12.0;
+/// How far off, as a multiple of its `shy_m`, the eye must be before a hidden
+/// octopus comes out (6 m shy, 8 m to come out).
+pub const HIDE_UNTIL: f32 = 4.0 / 3.0;
+/// How long a startled seal stays under before it hauls out again, s.
+pub const UNDER_S: f32 = 20.0;
+/// How much faster than its fastest cruise a startled octopus jets home.
+pub const JET: f32 = 4.0;
+
+impl Behaviour {
+    /// How long a startle lasts after the eye has gone, s: the caller's
+    /// default, or the behaviour's own where it has one.
+    pub fn hold_s(self, default_s: f32) -> f32 {
+        match self {
+            Behaviour::Hides => default_s.max(HIDE_S),
+            Behaviour::HaulsOut => default_s.max(UNDER_S),
+            _ => default_s,
+        }
+    }
+}
+
+/// How a creature is posed now, for the drawing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pose {
+    /// Swimming, walking or floating as it does.
+    Moving,
+    /// A clam shut.
+    Shut,
+    /// A dabbler upended, feeding.
+    TippedUp,
+    /// Under, for a diver; the drawing hides it.
+    Under,
+    /// A duck asleep on the water, head tucked.
+    Asleep,
+    /// An octopus jetting home in a cloud of ink.
+    Inking,
+    /// An octopus hidden in its den: drawn small and flat.
+    Hidden,
+    /// A seal lying out, still.
+    HauledOut,
+}
+
 /// A species' field-guide entry: the text the guide shows beside the numbers
 /// it reads off the record itself.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -223,9 +359,63 @@ pub struct Species {
     /// Its icon, relative to `assets/items/`, without the extension.
     pub icon: String,
     pub guide: Guide,
+    /// How it moves; every fish is `School` (`ocean-environments` 7.1).
+    #[serde(default)]
+    pub mover: Mover,
+    /// The water places it lives in; empty is anywhere its classes fit.
+    #[serde(default)]
+    pub env: Vec<Environment>,
+    /// What it does when the player comes close (7.2), and how close, m.
+    #[serde(default)]
+    pub behaviour: Behaviour,
+    #[serde(default)]
+    pub shy_m: f32,
 }
 
 impl Species {
+    /// Whether it takes a lure: a fish that is not protected and swims in a
+    /// school. Crawlers, floaters and protected creatures never bite.
+    pub fn can_bite(&self) -> bool {
+        self.class == Class::Fish
+            && self.status != Status::Protected
+            && self.mover == Mover::School
+            && self.bite > 0.0
+    }
+
+    /// Why catching it is refused, or `None` where it may be caught
+    /// (`ocean-environments` 7.3): a protected creature never is, whatever
+    /// takes it; anything else that is not a fish is not taken on a line.
+    pub fn catch_refusal(&self) -> Option<&'static str> {
+        if self.status == Status::Protected {
+            Some("protected: it may not be caught")
+        } else if !self.can_bite() {
+            Some("it is not taken on a line")
+        } else {
+            None
+        }
+    }
+
+    /// Whether it may live in this environment (`ocean-environments` 6.1).
+    ///
+    /// - A place the generator makes (`Some`): a species with no tags, or
+    ///   one tagged with that place, or one whose tags are all places the
+    ///   generator does not make yet (the fresh-water places wait for
+    ///   volumetric water, group 8: ducks keep to their water classes until
+    ///   then).
+    /// - Unknown (`None`, a world made before the sea's places): anything
+    ///   but a species that lives only where the generator puts it (a vent,
+    ///   a trench), so the old worlds' life is as it was.
+    pub fn env_allows(&self, here: Option<Environment>) -> bool {
+        match here {
+            Some(env) => {
+                self.env.is_empty()
+                    || self.env.contains(&env)
+                    || !self.env.iter().any(|e| e.is_placed())
+            }
+            None => self.env.is_empty() || !self.env.iter().all(|e| e.needs_generator()),
+        }
+    }
+
     /// Whether a school of it may spawn in this water at this temperature.
     pub fn lives_in(&self, class: WaterClass, temperature_c: f32, limits: &WaterLimits) -> bool {
         temperature_c >= limits.freezes_c
@@ -308,8 +498,12 @@ pub struct SpawnSettings {
     pub despawn_m: f32,
     /// Spawn attempts a second.
     pub attempts_per_s: f32,
-    /// Schools of every species at once, at most.
+    /// Schools of fish (what bites) at once, at most.
     pub max_schools: u8,
+    /// Groups of everything else in the water at once (crawlers, floaters,
+    /// protected swimmers), at most: their own cap, so they never crowd
+    /// the fish a line is cast for (`ocean-environments` 7.1).
+    pub max_life: u8,
     /// The schools step at this rate, Hz, on the simulation clock.
     pub step_hz: f32,
 }
@@ -321,6 +515,7 @@ impl Default for SpawnSettings {
             despawn_m: 90.0,
             attempts_per_s: 4.0,
             max_schools: 8,
+            max_life: 6,
             step_hz: 30.0,
         }
     }
@@ -648,11 +843,15 @@ fn home_roster() -> Vec<Species> {
                 entry: entry.into(),
                 tip: tip.into(),
             },
+            mover: Mover::School,
+            env: Vec::new(),
+            behaviour: Behaviour::None,
+            shy_m: 0.0,
         }
     }
     use WaterClass::*;
     let tenebris = |kind: &str| Origin::Tenebris(kind.into());
-    vec![
+    let mut roster = vec![
         sp(
             "minnow",
             "Minnow",
@@ -821,6 +1020,318 @@ fn home_roster() -> Vec<Species> {
             "Rare and solitary, found only past the drop-off in any deep sea that does not freeze. A serpent seldom takes a lure and pulls like a boat. Every angler has a story about one that got away.",
             "There is at most one in any water. Deep water, a long cast and patience.",
         ),
+    ];
+    roster.extend(water_life());
+    roster
+}
+
+/// The water life appended after the eight fish (`ocean-environments` 7.1):
+/// crawlers, floaters and protected swimmers. APPEND ONLY, like the fish.
+fn water_life() -> Vec<Species> {
+    use Environment::*;
+    use WaterClass::*;
+    vec![
+        Species {
+            id: "shore_crab".into(),
+            name: "Shore crab".into(),
+            from: Origin::New,
+            class: Class::Arthropod,
+            status: Status::WildOnly,
+            water: vec![River, Shallows],
+            temp_c: (2.0, 30.0),
+            length_m: 0.1,
+            speed_mps: (0.08, 0.35),
+            depth_m: (0.3, 6.0),
+            bed: true,
+            school: (2, 4),
+            max_schools: 2,
+            sense_m: 3.0,
+            bite: 0.0,
+            pull: 0.2,
+            strength: 1,
+            colour: [0.8, 0.36, 0.18],
+            shape: [1.6, 0.4, 0.9],
+            icon: "water_life/shore_crab".into(),
+            guide: Guide {
+                entry: "A small green-brown crab of every warm or cool shore, in rock pools, river mouths and the sand of the shallows. It walks sideways along the bed and scuttles off when a shadow comes near.".into(),
+                tip: "Look in the shallows by the rocks. It does not take a lure.".into(),
+            },
+            mover: Mover::Crawler,
+            env: vec![Coast, Pool, Estuary, Mudflat],
+            behaviour: Behaviour::None,
+            shy_m: 2.5,
+        },
+        Species {
+            id: "lobster".into(),
+            name: "Spiny lobster".into(),
+            from: Origin::New,
+            class: Class::Arthropod,
+            status: Status::WildOnly,
+            water: vec![Shallows, Shelf],
+            temp_c: (4.0, 26.0),
+            length_m: 0.4,
+            speed_mps: (0.05, 0.25),
+            depth_m: (2.0, 40.0),
+            bed: true,
+            school: (1, 2),
+            max_schools: 1,
+            sense_m: 4.0,
+            bite: 0.0,
+            pull: 0.5,
+            strength: 1,
+            colour: [0.55, 0.2, 0.12],
+            shape: [0.5, 0.35, 1.0],
+            icon: "water_life/lobster".into(),
+            guide: Guide {
+                entry: "A long-feelered crawler of rocky shelf and reef, from cool kelp to warm coral. It keeps to the bed in ones and twos and backs away from anything that swims too close.".into(),
+                tip: "On the bed of the shelf, under kelp or along a reef. It does not take a lure.".into(),
+            },
+            mover: Mover::Crawler,
+            env: vec![Kelp, Reef],
+            behaviour: Behaviour::None,
+            shy_m: 3.0,
+        },
+        Species {
+            id: "giant_clam".into(),
+            name: "Giant clam".into(),
+            from: Origin::New,
+            class: Class::MolluscSoft,
+            status: Status::WildOnly,
+            water: vec![Shallows],
+            temp_c: (23.0, 32.0),
+            length_m: 0.6,
+            speed_mps: (0.001, 0.002),
+            depth_m: (1.0, 6.0),
+            bed: true,
+            school: (1, 3),
+            max_schools: 1,
+            sense_m: 4.0,
+            bite: 0.0,
+            pull: 0.1,
+            strength: 1,
+            colour: [0.35, 0.55, 0.75],
+            shape: [1.2, 0.6, 0.8],
+            icon: "water_life/giant_clam".into(),
+            guide: Guide {
+                entry: "A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four metres and opens again once it has gone.".into(),
+                tip: "Swim up slowly and it still shuts. Wait a while at a distance and it opens.".into(),
+            },
+            mover: Mover::Crawler,
+            env: vec![Reef],
+            behaviour: Behaviour::Shuts,
+            shy_m: 4.0,
+        },
+        Species {
+            id: "reef_turtle".into(),
+            name: "Reef turtle".into(),
+            from: Origin::New,
+            class: Class::ReptileAmphibian,
+            status: Status::Protected,
+            water: vec![Shallows, Shelf],
+            temp_c: (20.0, 32.0),
+            length_m: 0.9,
+            speed_mps: (0.4, 1.2),
+            depth_m: (1.0, 8.0),
+            bed: false,
+            school: (1, 1),
+            max_schools: 1,
+            sense_m: 10.0,
+            bite: 0.0,
+            pull: 1.0,
+            strength: 3,
+            colour: [0.36, 0.45, 0.25],
+            shape: [1.0, 0.35, 1.1],
+            icon: "water_life/reef_turtle".into(),
+            guide: Guide {
+                entry: "A slow, old swimmer of warm reefs and the shelf beyond them, alone and unhurried. Reef turtles are protected: none may be caught.".into(),
+                tip: "Watch it go by. A line cast at one is refused.".into(),
+            },
+            mover: Mover::School,
+            env: vec![Reef, Coast],
+            behaviour: Behaviour::None,
+            shy_m: 0.0,
+        },
+        Species {
+            id: "sea_otter".into(),
+            name: "Sea otter".into(),
+            from: Origin::New,
+            class: Class::Mammal,
+            status: Status::Protected,
+            water: vec![Shallows, Shelf],
+            temp_c: (2.0, 16.0),
+            length_m: 1.2,
+            speed_mps: (0.2, 0.8),
+            depth_m: (1.0, 40.0),
+            bed: false,
+            school: (1, 3),
+            max_schools: 1,
+            sense_m: 8.0,
+            bite: 0.0,
+            pull: 1.0,
+            strength: 3,
+            colour: [0.36, 0.24, 0.15],
+            shape: [0.35, 0.25, 1.0],
+            icon: "water_life/sea_otter".into(),
+            guide: Guide {
+                entry: "Rafts of two or three float on their backs over cool kelp and rocky coasts, and paddle off when a swimmer comes near. Sea otters are protected: none may be caught.".into(),
+                tip: "Cool coasts, over kelp. Keep your distance and they stay.".into(),
+            },
+            mover: Mover::Floater,
+            env: vec![Kelp, Coast],
+            behaviour: Behaviour::None,
+            shy_m: 8.0,
+        },
+        Species {
+            id: "reed_dabbler".into(),
+            name: "Reed dabbler".into(),
+            from: Origin::New,
+            class: Class::Bird,
+            status: Status::Protected,
+            water: vec![River, Shallows],
+            temp_c: (2.0, 30.0),
+            length_m: 0.5,
+            speed_mps: (0.15, 0.6),
+            depth_m: (0.3, 6.0),
+            bed: false,
+            school: (3, 8),
+            max_schools: 2,
+            sense_m: 6.0,
+            bite: 0.0,
+            pull: 0.3,
+            strength: 1,
+            colour: [0.42, 0.36, 0.22],
+            shape: [0.45, 0.4, 1.0],
+            icon: "water_life/reed_dabbler".into(),
+            guide: Guide {
+                entry: "The common duck of rivers, marsh pools and quiet shallows. Dabblers float in small flocks, tip up to feed with their tails in the air, paddle off when you come close and sleep on the water at night. Ducks are protected; their eggs and feathers are gathered, not taken.".into(),
+                tip: "Slow water near reeds. Come up quietly or they paddle off.".into(),
+            },
+            mover: Mover::Floater,
+            env: vec![Marsh, Pool, Estuary, Riffle],
+            behaviour: Behaviour::Dabbles,
+            shy_m: 9.0,
+        },
+        Species {
+            id: "pond_diver".into(),
+            name: "Pond diver".into(),
+            from: Origin::New,
+            class: Class::Bird,
+            status: Status::Protected,
+            water: vec![River, Shallows],
+            temp_c: (2.0, 28.0),
+            length_m: 0.42,
+            speed_mps: (0.2, 0.7),
+            depth_m: (1.0, 6.0),
+            bed: false,
+            school: (1, 3),
+            max_schools: 1,
+            sense_m: 6.0,
+            bite: 0.0,
+            pull: 0.3,
+            strength: 1,
+            colour: [0.12, 0.12, 0.14],
+            shape: [0.42, 0.38, 1.0],
+            icon: "water_life/pond_diver".into(),
+            guide: Guide {
+                entry: "A dark little duck that dives for its food and comes up somewhere else. Pond divers keep to deeper pools and slow river reaches in ones and twos. Ducks are protected.".into(),
+                tip: "Watch the water where it went under; it surfaces a few metres off.".into(),
+            },
+            mover: Mover::Floater,
+            env: vec![Marsh, Pool],
+            behaviour: Behaviour::Dives,
+            shy_m: 9.0,
+        },
+        // The octopus, the plume worm and the seal (B9), appended.
+        Species {
+            id: "octopus".into(),
+            name: "Den octopus".into(),
+            from: Origin::New,
+            class: Class::MolluscSoft,
+            status: Status::WildOnly,
+            water: vec![Shallows, Shelf],
+            temp_c: (6.0, 32.0),
+            length_m: 0.5,
+            speed_mps: (0.05, 0.3),
+            depth_m: (1.0, 40.0),
+            bed: true,
+            school: (1, 1),
+            max_schools: 1,
+            sense_m: 6.0,
+            bite: 0.0,
+            pull: 0.6,
+            strength: 2,
+            colour: [0.83, 0.27, 0.17],
+            shape: [0.8, 0.4, 1.0],
+            icon: "water_life/octopus".into(),
+            guide: Guide {
+                entry: "A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the colour of the rock when still and flushes red when it moves. Come within six metres and it inks and jets home, and stays hidden until you have gone.".into(),
+                tip: "Look for the shells at its door, then keep back and wait.".into(),
+            },
+            mover: Mover::Crawler,
+            env: vec![Reef],
+            behaviour: Behaviour::Hides,
+            shy_m: 6.0,
+        },
+        Species {
+            id: "tube_worm".into(),
+            name: "Plume worm".into(),
+            from: Origin::New,
+            class: Class::MolluscSoft,
+            status: Status::WildOnly,
+            water: vec![Deep],
+            temp_c: (-1.8, 32.0),
+            length_m: 1.4,
+            speed_mps: (0.0005, 0.001),
+            depth_m: (90.0, 145.0),
+            bed: true,
+            school: (10, 16),
+            max_schools: 1,
+            sense_m: 5.0,
+            bite: 0.0,
+            pull: 0.1,
+            strength: 1,
+            colour: [0.82, 0.18, 0.25],
+            shape: [0.15, 0.05, 0.15],
+            icon: "water_life/tube_worm".into(),
+            guide: Guide {
+                entry: "White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five metres. They live on the vent, not on the light.".into(),
+                tip: "Only at the vents on the deepest floor. Nothing worth taking; the vent is the prize.".into(),
+            },
+            mover: Mover::Crawler,
+            env: vec![Vent],
+            behaviour: Behaviour::Shuts,
+            shy_m: 5.0,
+        },
+        Species {
+            id: "seal".into(),
+            name: "Ice seal".into(),
+            from: Origin::New,
+            class: Class::Mammal,
+            status: Status::Protected,
+            water: vec![Shallows, Shelf],
+            temp_c: (-1.8, 14.0),
+            length_m: 1.6,
+            speed_mps: (0.3, 1.5),
+            depth_m: (1.0, 40.0),
+            bed: false,
+            school: (1, 3),
+            max_schools: 1,
+            sense_m: 9.0,
+            bite: 0.0,
+            pull: 1.0,
+            strength: 3,
+            colour: [0.36, 0.47, 0.55],
+            shape: [0.4, 0.35, 1.0],
+            icon: "water_life/seal".into(),
+            guide: Guide {
+                entry: "Grey seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine metres, then surface somewhere else a while later. Seals are protected: none may be caught.".into(),
+                tip: "Cold water, near the ice or the kelp. Where seals are, the fish are.".into(),
+            },
+            mover: Mover::Floater,
+            env: vec![UnderIce, Kelp],
+            behaviour: Behaviour::HaulsOut,
+            shy_m: 9.0,
+        },
     ]
 }
 

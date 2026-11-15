@@ -26,10 +26,10 @@ struct WaterView {
     camera_time: vec4<f32>,   // xyz camera in the local frame, w seconds * time_scale
     planet_center: vec4<f32>, // xyz body centre in the local frame, w sea radius m
     sun: vec4<f32>,           // xyz toward the sun, w specular intensity
-    waves: vec4<f32>,         // xyz spare, w the ripples' steepness (the swell is `sea`)
+    waves: vec4<f32>,         // xyz the downwelling per metre (`ocean-environments` B2), w the ripples' steepness (the swell is `sea`)
     ripple: vec4<f32>,        // ripple scale cells/m, ripple speed, rain ripple cells/m, rain ripple strength
     refraction: vec4<f32>,    // strength, max uv offset, slope cap, max path m
-    absorption: vec4<f32>,    // rgb per metre, w spare
+    absorption: vec4<f32>,    // rgb per metre along the view, w the turbidity at the eye per metre
     deep_color: vec4<f32>,    // rgb the deep's albedo, w falling-face flow speed
     shallow: vec4<f32>,       // rgb the shallows' albedo, w horizon (grazing) reflection floor
     water_light: vec4<f32>,   // rgb the light on open water at the camera, w shallows' depth m
@@ -127,11 +127,25 @@ struct WaterView {
     // sky's nine L2 coefficients at the camera, mixed by the cover.
     haze_weather: vec4<f32>,
     sky_sh: array<vec4<f32>, 9>,
+    // Under the water (`ocean-environments` B5): the shafts' strength and
+    // reach m, the marine snow's strength and the depth it shows from m;
+    // then the snow's own glow, the wind at the sea m/s, the spray's start
+    // m/s and its strength.
+    under: vec4<f32>,
+    under_more: vec4<f32>,
+    // The column tier (`water-flow` E6, design 13): xyz its anchor, w its
+    // reach, m. A far river's sheet and the tier's own water are dithered
+    // across its last 25 m, so neither pops in.
+    column: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
 @group(0) @binding(2) var<storage,read> water: array<u32>;
-@group(0) @binding(3) var<storage,read> flow: array<vec2<f32>>;
+// The game's own water that the sheet does not draw (`water-flow` E6): three
+// lanes a vertex, triangles end to end. xyz body-local position, w the sky's
+// share; xyz the face's normal, w its kind (1 a top, 2 a falling face, 3 a
+// still face); xy the flow in the face's tangent frame, m/s over 0.35.
+@group(0) @binding(3) var<storage,read> flowing: array<vec4<f32>>;
 @group(0) @binding(4) var<storage,read> rain_map: array<f32>;
 @group(1) @binding(0) var scene_color: texture_2d<f32>;
 #ifdef MULTISAMPLED
@@ -181,7 +195,7 @@ struct VertexOut {
     @location(1) normal: vec3<f32>,
     @location(2) sky_light: f32,
     @location(3) body_position: vec3<f32>,
-    @location(4) flow_uv: vec2<f32>,
+    @location(4) flow_uv: vec3<f32>,
     @location(5) @interpolate(flat) level: u32,
     @location(6) @interpolate(flat) owner_a: vec3<f32>,
     @location(7) @interpolate(flat) owner_b: vec3<f32>,
@@ -193,6 +207,8 @@ struct VertexOut {
     // Which partition the sheet is drawn for while a landing dissolves, as
     // the terrain marks it (`two-set-dissolve`): 0 both, 1 the new, 2 the old.
     @location(10) @interpolate(flat) part_mark: u32,
+    // 0 the sea sheet; else the flowing water's face kind (`vertex_flowing`).
+    @location(11) @interpolate(flat) kind: u32,
 }
 fn safe_normal(v: vec3<f32>) -> vec3<f32> { return v * inverseSqrt(max(dot(v,v),1e-12)); }
 
@@ -319,14 +335,27 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     if (triangle < degree && corner != 0u) {
         ray = cell.corners[(triangle+corner-1u)%degree].xyz;
     }
-    let p = ray*sea;
+    // A far river (`spare.w`, design 13): a still sheet at its own surface,
+    // a hair over the cell's ground where the cell is wider than the river.
+    let river = cell.spare.w != 0u;
+    var radius = sea;
+    if river {
+        let surface_m = bitcast<f32>(cell.spare.w);
+        radius = view.planet_center.w + view.sea_frame.x
+            + max(surface_m, cell.direction_height.w + 0.05);
+    }
+    let p = ray*radius;
     // The sea the hulls float on (`pbd::sea`), in body-local metres so a
     // floating-origin shift cannot shift the phase. The cell's height is its
     // seabed; the filter drops any wave its own corners are too far apart to
     // draw.
     let depth = -cell.direction_height.w - view.sea_frame.x;
     let spacing = length(cell.corners[0].xyz - axis)*sea;
-    let surface = sea_surface(view.sea, p, ray, depth, spacing);
+    var surface = sea_surface(view.sea, p, ray, depth, spacing);
+    if river {
+        surface.height = 0.0;
+        surface.gradient = vec3<f32>(0.0);
+    }
     let displaced = p + ray*surface.height;
     var out: VertexOut;
     out.sea_slope = surface.gradient;
@@ -337,8 +366,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // The sheet is open sky by construction in a heightfield; the cell's
     // baked occlusion is the seabed's and would tile the sea by column.
     out.sky_light = 1.0;
-    out.flow_uv = vec2<f32>(0.0);
-    if (id < arrayLength(&flow)) { out.flow_uv = flow[id]; }
+    out.flow_uv = vec3<f32>(0.0);
+    out.kind = select(0u, 4u, river);
     out.level = level;
     out.owner_a = cell.owner_a.xyz;
     out.owner_b = cell.owner_b.xyz;
@@ -355,6 +384,30 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.part_mark = mark;
     return out;
 }
+// The game's own water (`water-flow` E6): the mesher's triangles, drawn by
+// the sea's own fragment so a poured pool and the sea are one water.
+@vertex
+fn vertex_flowing(@builtin(vertex_index) vertex: u32) -> VertexOut {
+    let a = flowing[vertex*3u];
+    let b = flowing[vertex*3u + 1u];
+    let c = flowing[vertex*3u + 2u];
+    var out: VertexOut;
+    out.body_position = a.xyz;
+    out.local_position = view.planet_center.xyz + a.xyz;
+    out.clip = view.clip_from_local*vec4<f32>(out.local_position, 1.0);
+    out.normal = b.xyz;
+    out.sky_light = a.w;
+    out.flow_uv = c.xyz;
+    out.level = 0u;
+    out.owner_a = safe_normal(a.xyz);
+    out.owner_b = out.owner_a;
+    out.sea_slope = vec3<f32>(0.0);
+    out.fade_t = vec3<f32>(1.0, 1.0, 0.0);
+    out.part_mark = 0u;
+    out.kind = max(u32(b.w + 0.5), 1u);
+    return out;
+}
+
 fn water_band_cos(level: u32) -> f32 {
     return water_lane(view.bands, level);
 }
@@ -408,9 +461,121 @@ fn reconstruct_local(uv: vec2<f32>, depth: f32) -> vec3<f32> {
 // Lit, not luminous: it darkens with the land at dusk, under cloud and at
 // night. It was a fixed deep colour scaled only by a day/night floor, a
 // glowing blue under a black sky.
+//
+// The light reaching that depth is the DOWNWELLING's (`ocean-environments`
+// B2), not the view's absorption: it fades fast enough that blue keeps 15%
+// at 40 m and 1.7% at 90 m, so the deep goes dark inside the column.
 fn murk(eye_depth: f32, radial: vec3<f32>) -> vec3<f32> {
-    let absorption = max(view.absorption.rgb,vec3<f32>(0.0));
-    return view.deep_color.rgb*view.water_light.rgb*exp(-absorption*max(eye_depth,0.0));
+    return view.deep_color.rgb*view.water_light.rgb*light_left(eye_depth);
+}
+
+// The share of daylight left per colour `depth` metres under the surface
+// (`pbd_core::ocean::light_left`).
+fn light_left(depth: f32) -> vec3<f32> {
+    return exp(-max(view.waves.xyz,vec3<f32>(0.0))*max(depth,0.0));
+}
+
+// The view's extinction per metre through water: the absorption per colour
+// and the turbidity at the eye, which takes every colour toward the murk
+// (`ocean-environments` B3). Turbidity rides in the absorption lane's w.
+fn view_extinction() -> vec3<f32> {
+    return max(view.absorption.rgb,vec3<f32>(0.0)) + vec3<f32>(max(view.absorption.w,0.0));
+}
+
+// Light shafts seen from under the water by day (`ocean-environments` B5):
+// samples along the view ray, each lit where the line from it toward the
+// (refracted) sun leaves the water through a bright patch of a slow pattern
+// on the surface, so the shafts are columns that lean with the sun and sway.
+// Each sample is as lit as the light left at its depth and dimmed on its way
+// back to the eye; brightest looking toward the sun.
+fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: f32, extinction: vec3<f32>) -> vec3<f32> {
+    let strength = view.under.x;
+    let reach = min(dist, view.under.y);
+    if (strength <= 0.0 || reach <= 0.0) { return vec3<f32>(0.0); }
+    let up = safe_normal(origin-center);
+    let sun = view.sun.xyz;
+    let sun_up = dot(sun, up);
+    if (sun_up <= 0.02) { return vec3<f32>(0.0); }
+    // Snell: the sun's slant shrinks by the water's index.
+    let across = sun - up*sun_up;
+    let sin_w = min(length(across)/1.333, 0.99);
+    let cos_w = sqrt(1.0-sin_w*sin_w);
+    let sun_w = safe_normal(across)*sin_w + up*cos_w;
+    // Body-fixed coordinates across the radial's main axis (a cube face), so
+    // the shafts stay put as the eye moves.
+    let a = abs(up);
+    var axes = vec2<u32>(0u, 2u);
+    if (a.x >= a.y && a.x >= a.z) { axes = vec2<u32>(1u, 2u); } else if (a.z >= a.y) { axes = vec2<u32>(0u, 1u); }
+    let t = view.camera_time.w;
+    var gathered = vec3<f32>(0.0);
+    let steps = 10;
+    // A per-ray offset of the samples, so their spacing never shows as bands.
+    let jitter = fract(sin(dot(dir, vec3<f32>(12.9898, 78.233, 37.719)))*43758.5453);
+    for (var i = 0; i < steps; i++) {
+        let d = reach*(f32(i)+jitter)/f32(steps);
+        let q = origin + dir*d;
+        let depth = sea - length(q-center);
+        if (depth <= 0.0) { continue; }
+        let s = q + sun_w*(depth/cos_w);
+        let uv = vec2<f32>(s[axes.x], s[axes.y])*1.4;
+        let a = sin(uv.x + 1.7*sin(uv.y*0.43 + t*0.21) + t*0.33);
+        let b = sin(uv.y*1.13 + 1.7*sin(uv.x*0.37 - t*0.17) - t*0.29);
+        let bright = pow(max(a*b, 0.0), 6.0);
+        gathered += bright*light_left(depth)*exp(-extinction*d);
+    }
+    let toward = max(dot(dir, sun_w), 0.0);
+    let phase = 0.3 + 1.6*pow(toward, 6.0);
+    return gathered*(reach/f32(steps))*0.3*strength*phase*view.rain_sun.rgb;
+}
+
+// What the eye in the water sees added along `dist` metres of its view: the
+// shafts, and the marine snow over the twilight and midnight zones, lit by
+// what light is left at the eye and a faint glow of its own. Zero above water.
+fn under_water_light(origin: vec3<f32>, dir: vec3<f32>, dist: f32) -> vec3<f32> {
+    let center = view.planet_center.xyz;
+    let sea = view.planet_center.w;
+    let eye_depth = sea - length(origin-center);
+    if (eye_depth <= 0.0) { return vec3<f32>(0.0); }
+    var add = shafts(origin, dir, dist, center, sea, view_extinction());
+    let snow_on = view.under.z*smoothstep(view.under.w, view.under.w+15.0, eye_depth);
+    if (snow_on > 0.0) {
+        let speck = marine_snow(origin, dir, dist, safe_normal(origin-center));
+        let lit = view.water_light.rgb*light_left(eye_depth)*0.6 + vec3<f32>(view.under_more.x);
+        add += vec3<f32>(0.80,0.86,0.88)*lit*(speck*snow_on*2.0);
+    }
+    return add;
+}
+
+// A cheap hash of a cell, three values in 0..1.
+fn snow_hash(c: vec3<f32>) -> vec4<f32> {
+    var p = vec3<u32>(vec3<i32>(c) + vec3<i32>(1<<20));
+    p = p*vec3<u32>(1664525u, 1013904223u, 2654435769u) + p.yzx*vec3<u32>(22695477u, 1103515245u, 1664525u);
+    p ^= p >> vec3<u32>(16u);
+    p = p*vec3<u32>(2246822519u, 3266489917u, 668265263u) + p.zxy;
+    p ^= p >> vec3<u32>(13u);
+    let w = (p.x ^ p.y ^ p.z)*747796405u;
+    return vec4<f32>(vec4<u32>(p, w) >> vec4<u32>(8u))/16777216.0;
+}
+
+// Marine snow (`ocean-environments` B5): specks drifting down round the eye,
+// on three shells at 1.2, 2.4 and 4.8 m, from a grid anchored to the body so
+// they stay put as the eye turns. How much of a speck this pixel shows, 0..1.
+fn marine_snow(origin: vec3<f32>, dir: vec3<f32>, dist: f32, up: vec3<f32>) -> f32 {
+    let t = view.camera_time.w;
+    var seen = 0.0;
+    for (var k = 0; k < 3; k++) {
+        let r = 1.2*exp2(f32(k));
+        if (r > dist) { break; }
+        let cell = 0.03*r;
+        let q = (origin + dir*r + up*(t*0.05))/cell;
+        let c = floor(q);
+        let h = snow_hash(c);
+        if (h.w > 0.45) { continue; }
+        let at = 0.2 + 0.6*h.xyz;
+        let off = length(q - c - at);
+        seen += (1.0 - smoothstep(0.08, 0.15, off))*(1.0 - 0.25*f32(k));
+    }
+    return min(seen, 1.0);
 }
 
 // The terrain's sky frame (`sky_frame` in `planet_surface.wgsl`): a
@@ -482,6 +647,15 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     }
     let m = water_bayer4(in.clip.xy);
     if (in.fade_t.z > m) { discard; }
+    // The tier's water and the far river's sheet share its last 25 m by the
+    // same dither, so the one gives way to the other with no seam (design 13).
+    if (in.kind != 0u && view.column.w > 0.0) {
+        let from_anchor = acos(clamp(dot(radial, safe_normal(view.column.xyz)), -1.0, 1.0))
+            * length(in.body_position);
+        let far = smoothstep(view.column.w - 25.0, view.column.w - 5.0, from_anchor);
+        if (in.kind == 4u && far <= m) { discard; }
+        if (in.kind != 4u && far > m) { discard; }
+    }
     if (in.level > u32(view.lod.w)) {
         let owner_t = select(in.fade_t.y, in.fade_t.x, dot(radial, in.owner_a) >= dot(radial, in.owner_b));
         if (owner_t <= m) { discard; }
@@ -498,8 +672,10 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let horizontal = abs(dot(face,radial));
     // Flow: horizontal faces stream along the per-cell flow, vertical faces
     // scroll radially at the falling speed. A zero field is the unadvected form.
+    // A still face of the game's water (kind 3) does not stream down.
+    let falls = select(1.0, 0.0, in.kind == 3u);
     let advected = in.body_position
-        + radial*(time*view.deep_color.w*(1.0-horizontal))
+        + radial*(time*view.deep_color.w*(1.0-horizontal)*falls)
         - (tangent_u*in.flow_uv.x + tangent_v*in.flow_uv.y)*time*0.35*horizontal;
     let p = advected*view.ripple.x;
     let t = time*view.ripple.y;
@@ -522,6 +698,9 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
             // rule, at full strength each.
             g = rain_rings(uv,time,view.fx.z)*view.ripple.w;
         }
+        // Only on water that faces up (owner, 2026-11-15: "when raining - no
+        // droplets on vertical water"): a fall's or a wall's face takes none.
+        g *= smoothstep(0.7, 0.95, horizontal);
         gradient += tangent_u*g.x + tangent_v*g.y;
     }
     // Slope cap BEFORE the gradient bends the normal: the rain kernel spikes it
@@ -559,6 +738,9 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         path_length = min(path_length,max(length(background-view.camera_time.xyz)-camera_distance,0.0));
         depth_under = max(length(in.body_position)-length(background-view.planet_center.xyz),0.0);
     }
+    // A wall of the game's water is a cell or two thick, however far the
+    // ground behind it is: the light crosses that much water, not the view.
+    if (in.kind >= 2u) { path_length = min(path_length, 2.0); depth_under = min(depth_under, 1.0); }
     let absorption = max(view.absorption.rgb,vec3<f32>(0.));
     // Seen from below: decided by where the camera is, not by the polygon's
     // winding. The swell tilts a 2.8 m cap by several degrees, more than the
@@ -568,14 +750,30 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let camera_body = view.camera_time.xyz - view.planet_center.xyz;
     let camera_radius = length(camera_body);
     let sheet_radius = length(in.body_position);
-    let below = camera_radius < sheet_radius || (camera_radius == sheet_radius && !front);
+    var below = camera_radius < sheet_radius || (camera_radius == sheet_radius && !front);
+    // The game's own water has true faces: the camera is under one when it
+    // is behind it.
+    if (in.kind != 0u) {
+        below = dot(view.camera_time.xyz - in.local_position, face) < 0.0;
+        // Its back seen from dry air is the inside of a block of water the
+        // eye is not in: the face toward the eye draws it, this one does not.
+        if (below && view.fx.y < 0.75) { discard; }
+    }
     if (below) {
         // Seen from below: the murk by camera distance, and Snell's window.
         let deep = murk(sheet_radius-camera_radius,safe_normal(camera_body));
-        let underwater = mix(deep,scene,exp(-absorption*camera_distance));
-        return vec4<f32>(mix(deep,underwater,smoothstep(0.55,0.75,dot(-look,normal))),1.);
+        let underwater = mix(deep,scene,exp(-view_extinction()*camera_distance));
+        var seen = mix(deep,underwater,smoothstep(0.55,0.75,dot(-look,normal)));
+        // The shafts and the snow between the eye and the sheet, as the
+        // composite draws them in front of the seabed (`ocean-environments`
+        // B5): the sheet is drawn over the composite, so it carries its own.
+        seen += under_water_light(view.camera_time.xyz, -look, camera_distance);
+        return vec4<f32>(seen,1.);
     }
-    let reflected_ray = reflect(-look,normal);
+    var reflected_ray = reflect(-look,normal);
+    // A wall of the game's water (a fall, a sheet's edge) mirrors the sky as
+    // the surface over it does, not the ground at its foot.
+    if (in.kind != 0u && horizontal < 0.5) { reflected_ray = reflect(-look,radial); }
     let reflection_height = clamp(dot(reflected_ray,radial),0.,1.);
     let fresnel = (0.02+0.98*pow(1.0-max(dot(look,normal),0.0),5.0))
         * mix(clamp(view.shallow.w,0.,1.),1.,reflection_height);
@@ -595,10 +793,39 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // is already lit.
     let water_lit = view.water_light.rgb*clamp(in.sky_light,0.,1.);
     let albedo = mix(view.shallow.rgb,view.deep_color.rgb,smoothstep(0.0,max(view.water_light.w,1e-3),depth_under));
-    let transmitted = mix(albedo*water_lit,scene,exp(-absorption*path_length));
+    let transmitted = mix(albedo*water_lit,scene,exp(-view_extinction()*path_length));
     let crest = smoothstep(view.foam_crest.x,max(view.foam_crest.y,view.foam_crest.x+1e-4),height)*view.foam_crest.z;
     let slope = smoothstep(view.foam_slope.x,max(view.foam_slope.y,view.foam_slope.x+1e-4),raw_slope)*view.foam_slope.z;
-    let foam = clamp(max(crest,slope)*view.foam_color.w,0.,1.);
+    var foam = clamp(max(crest,slope)*view.foam_color.w,0.,1.);
+    // A falling face of the game's water is white water: froth streaming down
+    // its own advected waves (`water-flow` 7a, the mockups' fall froth).
+    // White water on a fall (owner, 2026-11-15: "vertical water should have
+    // a bit froth to it"): streaks of froth stretched down the face and
+    // scrolled down it with the fall's own advection, denser at a fall's lip
+    // and foot (the mesher's froth weight, `flow_uv.x` on a falling face).
+    if (in.kind == 2u && horizontal < 0.5) {
+        let down_p = advected*vec3<f32>(1.0, 1.0, 1.0);
+        let along = vec3<f32>(dot(down_p, tangent_u), dot(down_p, radial), dot(down_p, tangent_v));
+        let streak_p = vec3<f32>(along.x*5.0, along.y*0.35, along.z*5.0) + vec3<f32>(0.0, time*0.6, 0.0);
+        let n = gnoise3(streak_p)*0.5 + gnoise3(streak_p*2.3)*0.3 + 0.5;
+        let weight = clamp(in.flow_uv.x, 0.35, 1.0);
+        let froth = smoothstep(0.42, 0.7, n)*0.75 + 0.15;
+        foam = max(foam, clamp(froth*weight + 0.12, 0.0, 0.92));
+    }
+    // A gale and up (`ocean-environments` 4.3): foam torn into streaks along
+    // the wind and spray off the crests, growing from `spray_from_mps` to
+    // twice it. Streaks are the noise stretched twenty to one down the wind
+    // sea's heading; the spray is the crest foam widened and whitened.
+    let gale = clamp((view.under_more.y - view.under_more.z)/max(view.under_more.z,1.0), 0.0, 1.0)*view.under_more.w;
+    let heading = view.sea.heading.xyz;
+    if (gale > 0.0 && dot(heading, heading) > 0.5 && !below) {
+        let along = dot(in.body_position, heading);
+        let across = dot(in.body_position, safe_normal(cross(radial, heading)));
+        let streak_p = vec3<f32>(along*0.035 - time*0.4, across*0.7, time*0.05);
+        let streaks = smoothstep(0.42, 0.62, gnoise3(streak_p)*0.5 + gnoise3(streak_p*2.1)*0.25 + 0.5)*detail;
+        let spray = smoothstep(view.foam_crest.x*0.6, view.foam_crest.y, height);
+        foam = clamp(foam + gale*(0.55*streaks + 0.6*spray), 0.0, 1.0);
+    }
     // Foam is lit as the water is; the glint is the sun as it reaches the
     // water, after the air and the cloud (`rain_sun`), gone at night.
     var color = mix(mix(transmitted,reflected,fresnel),view.foam_color.rgb*water_lit,foam);
@@ -742,9 +969,14 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     } else {
         travel = max(0.0,-pixel_alt);
     }
-    let absorption = max(view.absorption.rgb,vec3<f32>(0.));
+    let extinction = view_extinction();
     let deep = murk(cam_gap,safe_normal(ray.origin-center));
-    color = mix(color, mix(deep,color,exp(-absorption*travel)), wet);
+    color = mix(color, mix(deep,color,exp(-extinction*travel)), wet);
+    // From under the water: the sun's shafts and the marine snow
+    // (`ocean-environments` B5), both over the murk, both for the eye in it.
+    if (under && wet > 0.0) {
+        color += under_water_light(ray.origin, ray.direction, select(view_dist, 1.0e4, sky))*wet;
+    }
     // Depth blur while the lens is wet: the distance softens, the foreground stays crisp.
     let dz_amt = max(view.rain.x,view.fx.w);
     if (dz_amt > 0.001 && !under) {
