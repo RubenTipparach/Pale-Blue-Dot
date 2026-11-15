@@ -1,0 +1,128 @@
+# Starter missions: design
+
+## Decisions
+
+Recommendations taken (ask only with screenshots) unless quoted.
+
+1. **Data, not code.** Each mission is
+   `{ id, title, help, needs: [ids], objectives: [{ kind, what, count }] }`.
+   - Kinds: `craft`, `place`, `gather`, `catch`, `cook`, `find`, `plant`,
+     `harvest`, `tame`, `pen`, `collect`, `smelt`, `fell`, `cast`.
+   - Ids are append-only short codes, so a saved record keeps its meaning.
+2. **Counted from events the game already raises.** The systems that do the
+   thing send an event, and the missions system counts it:
+   - the recipe completes;
+   - `apply_edit` places a block;
+   - the fishing catch is landed;
+   - the harvest happens.
+
+   No mission reads the screen, and no mission gives an item. Rewards are the
+   next mission. Coins come with the townsfolk phase.
+3. **Only the current missions count.**
+   - An open mission counts events from the moment it opens.
+   - Events from before the mission opened are not counted, except that
+     state-shaped objectives can already be met when it opens: `craft` of a
+     tool owned, or `place` of a station already in the world.
+4. **A new world starts the chain. An old world joins it**, with every
+   state-met mission marked done on open.
+5. **One line on the HUD** shows the current mission and its count ("Catch
+   fish 1/3"). The pack's Missions tab lists the chain: done, current, and
+   locked missions with their titles.
+6. **Skippable.** A setting hides the HUD line. The chain still records
+   progress.
+
+## Risks
+
+- **The chain can name something that is not built yet.** Each mission is
+  added to the data only once its system is in the game, and a data test
+  checks every `what` against the goods, recipes and species tables.
+
+## Build decisions (2026-11-14)
+
+Recommendations taken (ask only with screenshots) while building the change
+on `claude/starter-missions`, branched from `claude/phase-1` (farming,
+smelting, animal husbandry and cooking merged). Tool crafting is built in
+parallel on `claude/tool-crafting` and was not on the remote when this was
+written, so its codes are the ones its design names.
+
+7. **The chain is `assets/config/missions.ron`, read by
+   `pbd_core::missions`.** A mission is
+   `(id, title, help, needs, objectives)`; an objective is
+   `(kind, what, count, label)`.
+   - `what` is one name, several names joined by `|` (any of them counts),
+     `any`, or a group: `seed` (any crop's seed), `crop` (any crop's
+     produce), `ingot` (a good whose code ends `-ingot`), `fish` (any
+     species).
+   - Names are the recipe table's own: a good by its code (`wheat-seed`), a
+     block as `block:<name>` (`block:forge`), a tool as `tool:<name>`
+     (`tool:pickaxe`), a recipe as `recipe:<code>` (`recipe:bronze`), an
+     animal or a fish by its roster name, lower case (`yard hen`).
+   - Kinds, and what each counts (the event that raises it):
+     `gather` (a block dug, or a good turned up), `craft` (an item made at a
+     station or by hand; `recipe:<code>` for one recipe), `place` (a block
+     placed by the player), `cast` (the float lands on water), `catch` (a
+     fish landed), `cook` (a dish collected, by recipe code), `find` (a good
+     found in grass or picked from a wild plant), `till` (a cell tilled),
+     `plant` (a seed planted, by seed code), `harvest` (produce harvested),
+     `tame`, `pen` (a kept animal let go in a pen), `build-pen` (a pen closed
+     with a gate), `collect` (an egg, wool or milk), `smelt` (an ingot made),
+     `fell` (a tree felled).
+8. **Pending rows.** An objective whose `what` this build cannot resolve is
+   pending when every unknown name is listed in the file's `awaited` (the
+   tool-crafting codes); any other unknown name is an error at load, as in
+   `cooking.ron`. A `craft` of an item no recipe makes (`tool:pickaxe`,
+   `block:campfire` today) is pending too, and `fell` is pending while the
+   game has no felling. A mission with a pending objective is **skipped**:
+   logged at load (`mission <id> is pending: ...`), listed in the tab as
+   "not in this build yet", and treated as met by the missions that need
+   it. So on this branch the chain plays from "Go fishing", and the missions
+   before it light up after the tool-crafting merge, with the state-met rule
+   (decision 4) closing any the world already holds.
+9. **Current missions.** A mission is open when every mission it needs is
+   done or pending. Several can be open; the first open one in file order is
+   *the* current mission, shown on the HUD. Every open mission counts.
+10. **State-met objectives** are checked when a mission opens and when a
+    world opens: `craft` of a tool the world owns or an item the slots hold
+    `count` of, and `place` of a block the world's edits hold `count` of
+    (the save's edits, so a forge dealt in the kit counts only once placed).
+    Nothing else is state-met: a fish caught before the mission opened is not
+    counted.
+11. **The record.** Kind `missions`, id 0, schema 1, a player record stored
+    through `WorldSave::store` as the player's: the done ids and the counts
+    of the open missions. Written on every change of count (a handful of
+    lines a minute at most). A world with no record (every world before this
+    change, and every new one) starts the chain and joins it with the
+    state-met missions done; done ids that this build's chain lacks are kept
+    in the record as they are, so a newer chain's progress survives an older
+    build.
+12. **The HUD line** sits top-left under the compass strip, in the kit's
+    face with its shadow: `Catch fish 1/3`, or for a mission of several
+    objectives the first unmet one, `Make a fire: place 0/1`. When a mission
+    is done it reads `Done: <title>` for four seconds, then the next. The
+    completion is logged (`mission done: <id>`). There is no audio engine
+    yet, so the `ui_*` chime waits for it.
+13. **The Missions tab.** `O` opens it on foot, as `I` opens the pack, and
+    a pair of oak tabs over both panels (PACK, MISSIONS) switches between
+    them. It lists the chain in order: done (ticked, dim), current (bright,
+    with each objective's count), open, locked, and pending.
+14. **The setting** "Mission line" (Settings, World tab) hides the HUD line;
+    the chain still counts. On by default. The settings file goes to
+    version 4; an older file reads it as on.
+15. **Events.** The missions system reads the messages the game already
+    raises (`hotbar::Gained`, `hotbar::Planted`, `husbandry::Deed`,
+    `kitchen::Cooked`) and one new message, `missions::Did`, raised where
+    nothing said it before: a block dug or placed by the player
+    (`digging`), the float landing on water and a fish landed (`fish`), a
+    cell tilled (`farm`), and a station recipe collected (`forge`, as
+    `recipe:<code>`). Tool crafting raises `Gained { how: Made }` for what
+    it makes and, for its workbench, `Did` with `recipe:<code>`.
+16. **Counts** are picked by the time each takes in this build, not
+    measured with a stopwatch: three fish, three dishes, four seeds, four
+    tilled and planted cells, four produce, one animal, one pen, one
+    product, three ingots. Harvest waits on a crop's growth, which is world
+    time (`farming.ron`); its count is the one harvest of two plots.
+17. **The capture instrument** `--missions` (a capture flag) raises the
+    messages the systems raise, in the chain's order, one every few frames,
+    through the same missions system the game runs, so the HUD line, the tab
+    and the record are photographed mid-chain on a fresh world. It is a
+    measurement instrument: it plays no fishing or farming itself.
