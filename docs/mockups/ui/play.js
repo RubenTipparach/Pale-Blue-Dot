@@ -528,7 +528,7 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
     const k = !touch && window.innerWidth - 40 >= 1440 ? 1 : 0.5;
     const sc = h('div', { class: 'scene', tabindex: '0', 'aria-label': 'The Play demo: click to walk', style: `width:${1440 * k}px;height:${900 * k}px;--k:${k};--s:${Math.round(2 * k)};cursor:crosshair` });
     const canvas = h('canvas', { class: 'gl' }); const ui = h('div', { class: 'ui' });
-    sc.append(canvas, ui, h('div', { class: 'hint', id: 'playHint' }, touch ? 'left: walk; drag right: look; buttons: jump, use, dig, place' : 'click to walk: WASD, Space, mouse; E use, Esc pause, I pack, M map'));
+    sc.append(canvas, ui, h('div', { class: 'hint', id: 'playHint' }, touch ? 'left: walk; drag right: look; buttons: jump, use, dig, place' : 'click to walk: WASD, Space, mouse to look; E use and close, Esc pause, I pack, M map'));
     // The view scales as one picture to fit the page, or the whole screen in fullscreen.
     const inner = h('div', { class: 'scenebox', style: `width:${1440 * k}px;max-width:none;overflow:hidden;transform-origin:0 0` }, sc);
     // wrap is what goes fullscreen; stage holds the view and its controls, and turns sideways when a
@@ -553,7 +553,7 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
       fsBtn.textContent = full ? '✕' : '⤢'; fsBtn.setAttribute('aria-label', full ? 'Exit fullscreen' : 'Fullscreen');
     };
     const goFull = () => {
-      const after = () => { const o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => {}).finally(fit); fit(); };
+      const after = () => { if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(['Escape']).catch(() => {}); const o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => {}).finally(fit); fit(); };
       const fallback = () => { wrap.classList.add('fs'); after(); };
       if (wrap.requestFullscreen) wrap.requestFullscreen().then(after).catch(fallback); else fallback();
     };
@@ -583,7 +583,7 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
     S.ui = new GameUI(ui, {
       box: sc, mode: 'play', screen: 'hud', town: 'Dunmouth 1 km', mapBg: 'ui/game/map-before.jpg', captured: () => S.locked || document.activeElement === sc,
       onRun: (kind, on) => { S.running[kind] = on; if (kind === 'press' && !on) S.beltT = 2.5; },
-      onScreen: (scr) => { if (S.pad) S.pad.classList.toggle('menu', scr !== 'hud'); if (scr !== 'hud') { S.keys = {}; if (document.pointerLockElement) { S.menuRelease = true; document.exitPointerLock(); } } },
+      onScreen: (scr) => { if (S.pad) S.pad.classList.toggle('menu', scr !== 'hud'); if (scr === 'hud' && S.wasFree && S.setFree) { S.wasFree = false; S.setFree(true); } if (scr !== 'hud') { S.keys = {}; if (S.free) S.wasFree = true; if (S.setFree) S.setFree(false); if (document.pointerLockElement) { S.menuRelease = true; document.exitPointerLock(); } } },
     });
     const keydown = (e) => {
       if (e.defaultPrevented) return;
@@ -594,29 +594,34 @@ varying vec3 vWP; uniform vec4 uLP[${MAXL}]; uniform vec4 uLC[${MAXL}]; uniform 
     sc.addEventListener('keydown', keydown);
     sc.addEventListener('keyup', (e) => { S.keys[e.code] = false; });
     sc.addEventListener('blur', () => { S.keys = {}; });
-    // mouse: pointer lock on click; drag to look where the lock is refused
-    let drag = null;
-    canvas.addEventListener('mousedown', (e) => {
+    // Mouse, as in a first-person game (owner, 2026-11-14: "when on mouse it should work like an fps,
+    // not click and drag"). A click in the view asks for the pointer lock, every time until it is had.
+    // Where the browser refuses it (a page in a frame can be refused), the view still turns with the
+    // mouse's plain movement over it, no button held, and the cursor is hidden there: free look.
+    // The game UI's layer lies over the whole canvas, so presses are taken on the scene and left to
+    // the UI only where they land on one of its controls (a slot, a button, a panel).
+    const onControl = (t) => t !== canvas && t !== ui && !!(t.closest && t.closest('.slots, button, input, .nine, [data-act], .playstart, .hint'));
+    const look = (dx, dy) => { S.player.yaw -= dx * 0.0025; S.player.pitch = Math.max(-1.45, Math.min(1.45, S.player.pitch - dy * 0.0025)); };
+    const setFree = (on) => { S.free = on; sc.style.cursor = on ? 'none' : 'crosshair'; };
+    S.setFree = setFree;
+    const askLock = () => {
+      if (!canvas.requestPointerLock) return;
+      try { const p = canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => { try { const q = canvas.requestPointerLock(); if (q && q.catch) q.catch(() => {}); } catch (err) { /* refused: free look */ } }); } catch (err) { /* refused: free look */ }
+    };
+    sc.addEventListener('mousedown', (e) => {
       sc.focus({ preventScroll: true });
       if (S.touch) return; // touch plays with the on-screen controls
       if (S.ui.menuOpen) return;
-      if (S.locked) { if (e.button === 0) dig(); if (e.button === 2) place(); return; }
-      drag = { x: e.clientX, y: e.clientY, moved: 0, b: e.button };
+      if (!S.locked && onControl(e.target)) return;
+      if (S.locked || S.free) { if (e.button === 0) dig(); if (e.button === 2) place(); if (!S.locked) askLock(); return; }
+      // the first click takes the mouse: it does not dig
+      setFree(true); askLock();
     });
     window.addEventListener('mousemove', (e) => {
-      if (S.locked) { S.player.yaw -= e.movementX * 0.0025; S.player.pitch = Math.max(-1.45, Math.min(1.45, S.player.pitch - e.movementY * 0.0025)); return; }
-      if (!drag) return;
-      const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.moved += Math.abs(dx) + Math.abs(dy); drag.x = e.clientX; drag.y = e.clientY;
-      S.player.yaw -= dx * 0.005; S.player.pitch = Math.max(-1.45, Math.min(1.45, S.player.pitch - dy * 0.005));
+      if (S.locked) { look(e.movementX, e.movementY); return; }
+      if (S.free && !S.ui.menuOpen && sc.contains(e.target)) look(e.movementX, e.movementY);
     });
-    window.addEventListener('mouseup', (e) => {
-      if (!drag) return; const d = drag; drag = null;
-      if (d.moved < 4) {
-        if (d.b === 0 && !S.triedLock && canvas.requestPointerLock) { S.triedLock = true; try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (err) { /* refused: drag to look */ } return; }
-        if (d.b === 0) dig(); if (d.b === 2) place();
-      }
-    });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    sc.addEventListener('contextmenu', (e) => { if (!S.ui.menuOpen) e.preventDefault(); });
     document.addEventListener('pointerlockchange', () => {
       const was = S.locked; S.locked = document.pointerLockElement === canvas;
       if (was && !S.locked && !S.menuRelease && !S.ui.menuOpen) S.ui.go('pause'); // Esc while walking: the browser takes it to free the mouse

@@ -319,6 +319,7 @@ mod tests {
             tools: Vec::new(),
             hand: Handle::default(),
             lights: Vec::new(),
+            fish_names: Vec::new(),
         });
         app.add_systems(Update, spawn);
         app.update();

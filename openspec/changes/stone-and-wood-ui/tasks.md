@@ -99,21 +99,34 @@
       slot and picker; the pack; the compass; the map frame, drawer and
       readout; the overlay legend; the field guide; the loading slab. Captures
       in `docs/screenshots/stone-and-wood-ui/` (lavapipe, no GPU).
-- [ ] Capture: a frame at scale 2 draws its corners 28 px, pixel exact (the
-      slicer arithmetic is pinned by a test; a pixel-measured capture is not
-      taken yet).
+- [x] Capture: a frame at scale 2 draws its corners 28 px, pixel exact,
+      measured off the PNG (`tools/art/measure_corners.py` against the frame
+      as the game bakes it; README, "Corners").
 
 ## 2. Screens, one at a time, each with day and night captures
-- [ ] Pause, settings, saves (`menu.rs`) in the timber set, plaques in every
-      state, Input in sub-tabs with rebinding; delete the palette copies as
-      each file moves to the tokens.
-- [ ] Slots, tool slot, pack (`slots.rs`, `equipment.rs`, `pack.rs`), tooltips.
-- [ ] Compass bar (`compass_bar.rs`).
-- [ ] Map frame and overlay drawer (`map_screen.rs`, `overlay_ui.rs`).
-- [ ] Loading screen (`loading.rs`), its images and fonts in the prewarm;
-      no `LATE_PIPELINE`.
-- [ ] Guide, time and weather bars (`guide.rs`, `time_ui.rs`, `weather_ui.rs`).
-- [ ] `perf_suite.py` on the owner's desktop, before and after.
+(Design, "Section 2: Input in sub-tabs with rebinding, sliders, tooltips",
+written before the code. Captures in `docs/screenshots/stone-and-wood-ui/`,
+lavapipe, no GPU; frame cost not measured.)
+- [x] Pause, settings, saves (`menu.rs`) in the timber set, plaques in every
+      state, Input in sub-tabs with rebinding (`controls::remap_keys`, the
+      rebinds kept in `settings.ron` version 3); the frame limit and render
+      scale as stone sliders; no palette copies left (pinned by
+      `ui_kit::tests::no_ui_file_keeps_its_own_palette`).
+- [x] Slots, tool slot, pack (`slots.rs`, `equipment.rs`, `pack.rs`), tooltips
+      (`ui_kit::Tooltip`, standing over the slot).
+- [x] Compass bar (`compass_bar.rs`).
+- [x] Map frame and overlay drawer (`map_screen.rs`, `overlay_ui.rs`). The
+      drawer stays open by default: shutting it is a behaviour change, kept
+      as a recommendation (design, "The map's drawer stays open"; the
+      change's spec delta).
+- [x] Loading screen (`loading.rs`), its images and fonts in the prewarm;
+      no `LATE_PIPELINE` after `READY` from the UI (the real-time run in the
+      README; the capture's own `screenshot-to-screen` is the one late one).
+- [x] Guide, time and weather bars (`guide.rs`, `time_ui.rs`, `weather_ui.rs`).
+- [ ] The map's drawer shut by default behind a DRAWER plaque: a
+      recommendation, not done (the spec delta's one requirement).
+- [ ] `perf_suite.py` on the owner's desktop, before and after (the cloud has
+      no GPU; frame cost not measured here).
 
 ## 3. Video (batched with the others)
 - [ ] The step's video, when the owner calls for the batch.

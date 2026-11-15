@@ -139,6 +139,7 @@
     const it = ITEMS[id]; if (!it) return null;
     const ic = h('div', { class: 'ic' + (it.tile ? ' tile' : ''), role: 'img', 'aria-label': it.name });
     if (it.tile) ic.style.backgroundPosition = `calc(${-it.tile[0] * 16}px * var(--s)) calc(${-it.tile[1] * 16}px * var(--s))`;
+    if (it.tile) { ic.style.setProperty('--tx', it.tile[0]); ic.style.setProperty('--ty', it.tile[1]); }
     else ic.style.background = `url(${it.img}) 0 0 / 100% 100%`;
     return ic;
   }
@@ -204,6 +205,14 @@
     mill: { title: 'Water mill', verb: 'Grind', recipes: [['flour', 1, [['grain', 2]]]] },
     press: { title: 'Brick press', verb: 'Press', recipes: [['brick', 2, [['cobble', 3]]]] },
   };
+  // Made in the pack, by hand, with no station (owner, 2026-11-14: "the pack should also include some
+  // kind of basic crafting system, with a drop down list, and a button to look at crafting
+  // trees/recipes"). Mockup recipes: the game has no crafting yet.
+  const HAND = { title: 'By hand', verb: 'Craft', recipes: [['planks', 4, [['log', 1]]], ['torch', 4, [['planks', 1], ['coal', 1]]], ['shovel', 1, [['planks', 2], ['cobble', 1]]],
+    ['axe', 1, [['planks', 2], ['cobble', 3]]], ['rod', 1, [['planks', 3]]]] };
+  // Where each item is made: the first place that makes it (the tree follows these).
+  const MADE = (() => { const m = {}; for (const [k, S] of [['hand', HAND], ...Object.entries(STATIONS)]) for (const [out, n, ins] of S.recipes) if (!m[out]) m[out] = { at: k, n, ins, fuel: S.fuel }; return m; })();
+  const madeAt = (k) => (k === 'hand' ? HAND : STATIONS[k]).title;
 
   // ------------------------------------------------------------------ compass
   function compass(el, heading, towns) {
@@ -247,7 +256,7 @@
       this.st = {
         screen: o.screen || 'hud', back: null, settingsTab: o.settingsTab || 'picture', inputTab: 'foot',
         set: { bloom: true, frame: 60, scale: 85, rain: false, step: false }, binds: freshBinds(), rebind: null, changed: new Set(),
-        drawer: o.drawer ?? false, overlay: 1, talk: 'start', station: o.station || 'forge', recipe: 0, run: null, out: null,
+        drawer: o.drawer ?? false, overlay: 1, talk: 'start', station: o.station || 'forge', recipe: 0, run: null, out: null, craft: 0, craftOpen: false, tree: 'lantern',
         offer: [], ask: [], stock: STOCK(), chest: [['cobble', 20], ['ore', 4], ['grain', 8], ['coal', 6], null, null, null, null, null, null, null, null, null, null, null, null],
         heading: o.heading || 0, towns: o.towns || [-22, 38], townName: o.town || '', prompt: '', toast: '', quit: false, saveAsk: -1, load: 0, loadRun: false,
       };
@@ -279,7 +288,10 @@
       if ((k === 'KeyI' || k === 'Tab') && ['hud', 'pack'].includes(st.screen)) { e.preventDefault(); this.go(st.screen === 'pack' ? 'hud' : 'pack'); return true; }
       if (k === 'KeyM' && ['hud', 'map'].includes(st.screen)) { e.preventDefault(); this.go(st.screen === 'map' ? 'hud' : 'map'); return true; }
       if (k.startsWith('Digit') && ['hud', 'pack'].includes(st.screen)) { this.inv.sel = (parseInt(k.slice(5), 10) + 9) % 10; this.render(); return true; }
-      if (k === 'KeyE' && ['station', 'talk', 'trade', 'chest'].includes(st.screen)) { e.preventDefault(); this.go('hud'); return true; }
+      // E closes whatever is open, a step back as Esc does: in fullscreen the browser takes Esc to leave
+      // fullscreen (owner, 2026-11-14: "esc also closes out of big screen ... add e as exit instead").
+      // On the HUD E is still "use".
+      if (k === 'KeyE' && !['hud', 'title', 'loading'].includes(st.screen) && !(e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName))) { e.preventDefault(); this.back(); return true; }
       return false;
     }
     wheel(e) {
@@ -313,7 +325,8 @@
     // button to close or exit use modal").
     back() {
       const st = this.st;
-      const back = { hud: 'pause', pause: 'hud', settings: this.o.title ? 'title' : 'pause', saves: this.o.title ? 'title' : 'pause', title: 'title' }[st.screen] || 'hud';
+      if (st.screen === 'pack' && st.craftOpen) { st.craftOpen = false; this.render(); return; }
+      const back = { recipes: 'pack', hud: 'pause', pause: 'hud', settings: this.o.title ? 'title' : 'pause', saves: this.o.title ? 'title' : 'pause', title: 'title' }[st.screen] || 'hud';
       if (st.screen === 'settings' && st.back) this.go(st.back); else this.go(back);
     }
     render() {
@@ -330,7 +343,7 @@
         u.append(this.hotbar());
       }
       const panel = ({ pause: () => this.pause(), settings: () => this.settings(), saves: () => this.saves(), title: () => this.title(), pack: () => this.pack(), map: () => this.map(),
-        station: () => this.station(), chest: () => this.chestPanel(), talk: () => this.talk(), trade: () => this.trade(), loading: () => this.loading() })[sc];
+        station: () => this.station(), chest: () => this.chestPanel(), talk: () => this.talk(), trade: () => this.trade(), loading: () => this.loading(), recipes: () => this.recipes() })[sc];
       if (panel) {
         const el = panel(); u.append(el);
         // Every open panel can be shut without a keyboard (the owner, on a phone, 2026-11-14:
@@ -509,12 +522,68 @@
 
     // ---- rock (in play): pack, map, stations, chest, talk, trade, loading
     pack() {
+      const st = this.st;
       const grid = h('div', { class: 'grid10' }, ...this.inv.pack.map((c, i) => { const s = slotEl(c, 'click'); this.slotEvents(s, this.inv.pack, i); return s; }));
       const hot = h('div', { class: 'grid10', style: 'margin-top:calc(3px*var(--s))' }, ...this.inv.hot.map((c, i) => { const s = slotEl(c, 'click' + (i === this.inv.sel ? ' sel' : '')); this.slotEvents(s, this.inv.hot, i); return s; }));
-      return h('div', { class: 'centre' }, rockPanel('pack', { 'data-panel': 'pack' }, lintel('Pack'),
+      return h('div', { class: 'centre' }, rockPanel('pack-craft', { 'data-panel': 'pack' }, lintel('Pack'),
         h('div', { style: 'display:flex;justify-content:flex-end;margin:calc(-14px*var(--s)) 0 calc(3px*var(--s))' },
           h('button', { class: 'ki', type: 'button', 'aria-label': 'close', style: '--k:var(--i-icon-close);width:calc(11px*var(--s));height:calc(11px*var(--s));border:0;padding:0;cursor:pointer', onclick: () => this.go('hud') })),
-        grid, h('div', { class: 'carved', style: 'margin-top:calc(5px*var(--s));color:var(--text-dim)' }, P('Hotbar')), hot));
+        grid, h('div', { class: 'carved', style: 'margin-top:calc(5px*var(--s));color:var(--text-dim)' }, P('Hotbar')), hot, this.craftRow()));
+    }
+    // The pack's own crafting: a drop-down of what the hands can make, what it takes against what is
+    // carried, the result, Craft, and Recipes for the trees.
+    craftRow() {
+      const st = this.st, R = HAND.recipes[st.craft], [out, n, ins] = R;
+      const can = ins.every(([id, k]) => this.inv.count(id) >= k);
+      const canOf = (r) => r[2].every(([id, k]) => this.inv.count(id) >= k);
+      const dd = h('button', { class: 'btn dd', type: 'button', 'data-act': 'craft-pick', 'aria-haspopup': 'listbox', 'aria-expanded': String(st.craftOpen),
+        style: 'width:calc(92px*var(--s));height:calc(24px*var(--s));border-width:calc(5px*var(--s));display:flex;align-items:center;gap:calc(3px*var(--s));justify-content:flex-start;padding:0' },
+        h('span', { class: 'ddi' }, icon(out)), P(ITEMS[out].name + (n > 1 ? ' x' + n : '')), h('span', { class: 'ddcaret', style: 'margin-left:auto' }));
+      dd.addEventListener('click', (e) => { e.stopPropagation(); st.craftOpen = !st.craftOpen; this.render(); });
+      const kids = [dd];
+      if (st.craftOpen) {
+        kids.push(h('div', { class: 'nine p-frame face', role: 'listbox', 'data-panel': 'craft-list', style: 'position:absolute;left:0;bottom:calc(100% + 2px*var(--s));z-index:30;display:grid;gap:calc(1px*var(--s));min-width:calc(120px*var(--s))' },
+          ...HAND.recipes.map((r, i) => { const ok = canOf(r);
+            const row = h('div', { role: 'option', 'aria-selected': String(i === st.craft), 'data-craft': i, tabindex: '0', style: `display:flex;align-items:center;gap:calc(3px*var(--s));cursor:pointer;${i === st.craft ? 'color:var(--title)' : ''}${ok ? '' : ';opacity:.55'}` },
+              h('span', { class: 'ddi' }, icon(r[0])), P(ITEMS[r[0]].name + (r[1] > 1 ? ' x' + r[1] : '')), h('span', { class: 'dim', style: 'margin-left:auto' }, P(ok ? '' : 'short')));
+            row.addEventListener('click', (e) => { e.stopPropagation(); st.craft = i; st.craftOpen = false; this.render(); });
+            return row; })));
+      }
+      const need = ins.map(([id, k]) => { const have = this.inv.count(id); const s = slotEl([id, k], have >= k ? 'hov' : 'off'); s.title = `${ITEMS[id].name}: need ${k}, have ${have}`; s.dataset.need = have >= k ? 'ok' : 'short'; return s; });
+      while (need.length < 2) need.push(slotEl(null, 'off'));
+      const craft = btn('Craft', { act: 'craft', disabled: !can, on: () => {
+        if (!ins.every(([id, k]) => this.inv.count(id) >= k)) return;
+        ins.forEach(([id, k]) => this.inv.take(id, k)); this.inv.add(out, n); this.toast(`+${n} ${ITEMS[out].name}`); } });
+      craft.style.cssText += ';height:calc(24px*var(--s));min-width:calc(44px*var(--s))';
+      const tree = btn('Recipes', { act: 'recipes', on: () => this.go('recipes', { tree: out, craftOpen: false }) });
+      tree.style.cssText += ';height:calc(14px*var(--s));border-width:calc(5px*var(--s));min-width:0';
+      return h('div', { 'data-panel': 'craft', style: 'margin-top:calc(5px*var(--s))' },
+        h('div', { style: 'display:flex;justify-content:space-between;align-items:center;height:calc(14px*var(--s))' }, h('div', { class: 'carved', style: 'color:var(--text-dim)' }, P('Craft')), tree),
+        h('div', { style: 'position:relative;display:flex;align-items:center;gap:calc(3px*var(--s));margin-top:calc(3px*var(--s))' },
+          ...kids, h('div', { class: 'slots' }, ...need), P('\u2192'), slotEl([out, n], can ? 'r-uncommon' : ''), h('span', { style: 'margin-left:auto' }, craft)));
+    }
+    // Recipes: every made thing, and the tree under the one picked, down to what is dug or caught.
+    recipes() {
+      const st = this.st, all = Object.keys(MADE);
+      const pick = h('div', { class: 'grid4', style: 'align-content:start' }, ...all.map((id) => { const s = slotEl([id, 1], 'click' + (id === st.tree ? ' sel' : '')); s.title = ITEMS[id].name; s.dataset.tree = id;
+        s.addEventListener('click', (e) => { e.stopPropagation(); st.tree = id; this.render(); }); return s; }));
+      const rows = [];
+      const walk = (id, k, depth, seen) => {
+        const m = MADE[id], have = this.inv.count(id);
+        rows.push(h('div', { style: `display:flex;align-items:center;gap:calc(3px*var(--s));padding-left:calc(${depth * 10}px*var(--s));height:calc(14px*var(--s))`, 'data-node': id },
+          depth ? h('span', { class: 'elbow' }) : null, h('span', { class: 'ddi' }, icon(id)), P(`${ITEMS[id].name} x${k}`, depth ? '' : 'carved'),
+          h('span', { class: 'dim', style: 'margin-left:auto;white-space:nowrap' }, P(m ? (m.at === 'hand' ? 'by hand' : 'at the ' + madeAt(m.at).toLowerCase()) + (m.fuel ? ', ' + ITEMS[m.fuel].name.toLowerCase() : '') : `found${have ? ', have ' + have : ''}`))));
+        if (!m || seen.has(id) || depth > 3) return;
+        const runs = Math.ceil(k / m.n);
+        for (const [ins, kk] of m.ins) walk(ins, kk * runs, depth + 1, new Set([...seen, id]));
+      };
+      walk(st.tree, MADE[st.tree] ? MADE[st.tree].n : 1, 0, new Set());
+      const handIdx = HAND.recipes.findIndex((r) => r[0] === st.tree);
+      const foot = h('div', { style: 'display:flex;justify-content:flex-end;gap:calc(4px*var(--s));margin-top:calc(4px*var(--s))' },
+        handIdx >= 0 ? btn('Craft in the pack', { act: 'tree-craft', on: () => this.go('pack', { craft: handIdx }) }) : null,
+        btn('Back', { act: 'tree-back', on: () => this.go('pack') }));
+      return h('div', { class: 'centre' }, rockPanel('chest', { 'data-panel': 'recipes' }, lintel('Recipes'),
+        h('div', { style: 'display:flex;gap:calc(8px*var(--s))' }, pick, h('div', { style: 'flex:1;min-width:0;display:grid;align-content:start;gap:calc(1px*var(--s))', 'data-panel': 'tree' }, ...rows)), foot));
     }
     map() {
       const st = this.st, u = [];
@@ -871,7 +940,7 @@
   // "rock_panels" of ui/rendered/slices.json), so the page draws at once instead of waiting on two
   // fetches (the owner, 2026-11-14: "there's some weird delay in loading ui").
   FONT = {"source":"tools/art/ui_art.py","height":7,"spacing":1,"space":3,"case":"upper (lower case is drawn as upper)","glyphs":{"A":{"x":0,"w":5,"rows":[".###.","#...#","#...#","#####","#...#","#...#","#...#"]},"B":{"x":6,"w":5,"rows":["####.","#...#","#...#","####.","#...#","#...#","####."]},"C":{"x":12,"w":5,"rows":[".####","#....","#....","#....","#....","#....",".####"]},"D":{"x":18,"w":5,"rows":["####.","#...#","#...#","#...#","#...#","#...#","####."]},"E":{"x":24,"w":5,"rows":["#####","#....","#....","####.","#....","#....","#####"]},"F":{"x":30,"w":5,"rows":["#####","#....","#....","####.","#....","#....","#...."]},"G":{"x":36,"w":5,"rows":[".####","#....","#....","#.###","#...#","#...#",".###."]},"H":{"x":42,"w":5,"rows":["#...#","#...#","#...#","#####","#...#","#...#","#...#"]},"I":{"x":48,"w":3,"rows":["###",".#.",".#.",".#.",".#.",".#.","###"]},"J":{"x":52,"w":5,"rows":["..###","...#.","...#.","...#.","#..#.","#..#.",".##.."]},"K":{"x":58,"w":5,"rows":["#...#","#..#.","#.#..","##...","#.#..","#..#.","#...#"]},"L":{"x":64,"w":5,"rows":["#....","#....","#....","#....","#....","#....","#####"]},"M":{"x":70,"w":5,"rows":["#...#","##.##","#.#.#","#.#.#","#...#","#...#","#...#"]},"N":{"x":76,"w":5,"rows":["#...#","##..#","#.#.#","#..##","#...#","#...#","#...#"]},"O":{"x":82,"w":5,"rows":[".###.","#...#","#...#","#...#","#...#","#...#",".###."]},"P":{"x":88,"w":5,"rows":["####.","#...#","#...#","####.","#....","#....","#...."]},"Q":{"x":94,"w":5,"rows":[".###.","#...#","#...#","#...#","#.#.#","#..#.",".##.#"]},"R":{"x":100,"w":5,"rows":["####.","#...#","#...#","####.","#.#..","#..#.","#...#"]},"S":{"x":106,"w":5,"rows":[".####","#....","#....",".###.","....#","....#","####."]},"T":{"x":112,"w":5,"rows":["#####","..#..","..#..","..#..","..#..","..#..","..#.."]},"U":{"x":118,"w":5,"rows":["#...#","#...#","#...#","#...#","#...#","#...#",".###."]},"V":{"x":124,"w":5,"rows":["#...#","#...#","#...#","#...#",".#.#.",".#.#.","..#.."]},"W":{"x":130,"w":5,"rows":["#...#","#...#","#...#","#.#.#","#.#.#","##.##","#...#"]},"X":{"x":136,"w":5,"rows":["#...#",".#.#.",".#.#.","..#..",".#.#.",".#.#.","#...#"]},"Y":{"x":142,"w":5,"rows":["#...#","#...#",".#.#.","..#..","..#..","..#..","..#.."]},"Z":{"x":148,"w":5,"rows":["#####","....#","...#.","..#..",".#...","#....","#####"]},"0":{"x":154,"w":5,"rows":[".###.","#...#","#..##","#.#.#","##..#","#...#",".###."]},"1":{"x":160,"w":3,"rows":[".#.","##.",".#.",".#.",".#.",".#.","###"]},"2":{"x":164,"w":5,"rows":[".###.","#...#","....#","...#.","..#..",".#...","#####"]},"3":{"x":170,"w":5,"rows":["####.","....#","....#",".###.","....#","....#","####."]},"4":{"x":176,"w":5,"rows":["...#.","..##.",".#.#.","#..#.","#####","...#.","...#."]},"5":{"x":182,"w":5,"rows":["#####","#....","####.","....#","....#","#...#",".###."]},"6":{"x":188,"w":5,"rows":[".###.","#....","#....","####.","#...#","#...#",".###."]},"7":{"x":194,"w":5,"rows":["#####","....#","...#.","..#..","..#..","..#..","..#.."]},"8":{"x":200,"w":5,"rows":[".###.","#...#","#...#",".###.","#...#","#...#",".###."]},"9":{"x":206,"w":5,"rows":[".###.","#...#","#...#",".####","....#","....#",".###."]}," ":{"x":212,"w":3,"rows":["...","...","...","...","...","...","..."]},".":{"x":216,"w":1,"rows":[".",".",".",".",".",".","#"]},",":{"x":218,"w":2,"rows":["..","..","..","..","..",".#","#."]},":":{"x":221,"w":1,"rows":[".",".","#",".",".","#","."]},";":{"x":223,"w":2,"rows":["..","..",".#","..","..",".#","#."]},"!":{"x":226,"w":1,"rows":["#","#","#","#","#",".","#"]},"?":{"x":228,"w":5,"rows":[".###.","#...#","....#","...#.","..#..",".....","..#.."]},"'":{"x":234,"w":1,"rows":["#","#",".",".",".",".","."]},"\"":{"x":236,"w":3,"rows":["#.#","#.#","...","...","...","...","..."]},"-":{"x":240,"w":3,"rows":["...","...","...","###","...","...","..."]},"+":{"x":244,"w":5,"rows":[".....","..#..","..#..","#####","..#..","..#..","....."]},"=":{"x":250,"w":4,"rows":["....","....","####","....","####","....","...."]},"/":{"x":255,"w":5,"rows":["....#","....#","...#.","..#..",".#...","#....","#...."]},"(":{"x":261,"w":2,"rows":[".#","#.","#.","#.","#.","#.",".#"]},")":{"x":264,"w":2,"rows":["#.",".#",".#",".#",".#",".#","#."]},"&":{"x":267,"w":5,"rows":[".##..","#..#.","#.#..",".#...","#.#.#","#..#.",".##.#"]},"%":{"x":273,"w":5,"rows":["##..#","##..#","...#.","..#..",".#...","#..##","#..##"]},"#":{"x":279,"w":5,"rows":[".#.#.",".#.#.","#####",".#.#.","#####",".#.#.",".#.#."]},"<":{"x":285,"w":4,"rows":["...#","..#.",".#..","#...",".#..","..#.","...#"]},">":{"x":290,"w":4,"rows":["#...",".#..","..#.","...#","..#.",".#..","#..."]},"_":{"x":295,"w":4,"rows":["....","....","....","....","....","....","####"]},"\u00b7":{"x":300,"w":1,"rows":[".",".",".","#",".",".","."]},"\u2191":{"x":302,"w":5,"rows":["..#..",".###.","#.#.#","..#..","..#..","..#..","..#.."]},"\u2193":{"x":308,"w":5,"rows":["..#..","..#..","..#..","..#..","#.#.#",".###.","..#.."]},"\u2190":{"x":314,"w":7,"rows":[".......","..#....",".#.....","#######",".#.....","..#....","......."]},"\u2192":{"x":322,"w":7,"rows":[".......","....#..",".....#.","#######",".....#.","....#..","......."]}}};
-  ROCKS = {"pack":[268,152],"station":[230,156],"chest":[372,168],"talk":[270,124],"trade":[308,148],"loading":[150,148],"sample":[192,96],"kit-48":[48,48],"kit-128":[128,64],"kit-200":[200,100]};
+  ROCKS = {"pack":[268,152],"pack-craft":[268,204],"station":[230,156],"chest":[372,168],"talk":[270,124],"trade":[308,148],"loading":[150,148],"sample":[192,96],"kit-48":[48,48],"kit-128":[128,64],"kit-200":[200,100]};
   // Fetch every kit piece and rock frame of the open look now, and the other looks when idle, so a
   // panel never appears before its art.
   const KEEP = [];

@@ -1,10 +1,12 @@
 # Vehicles Specification
 
 ## Purpose
-The Kestrel, the Tern and the Loon: three craft stepped by one rigid-body
-model in `pbd-core` against the same sea, wind, rain and current the world
-draws, boarded and left without ever ceasing to exist, and saved through the
-durable path.
+The Tern and the Loon, and the harbours' rowboats and cog: craft stepped by
+one rigid-body model in `pbd-core` against the same sea, wind, rain and
+current the world draws, boarded and left without ever ceasing to exist, and
+saved through the durable path. The Kestrel tiltrotor is retired
+(`retire-kestrel`, owner 2026-11-14): a save's record of one is kept and not
+flown, and aircraft return with `vehicle-yards`.
 
 ## Requirements
 
@@ -33,30 +35,6 @@ and induced drag.
 #### Scenario: Past the stall
 - **WHEN** a foil's angle of attack rises past its stall angle
 - **THEN** its lift falls and its drag rises
-
-### Requirement: The VTOL converts from rotor lift to wing lift
-The Kestrel's rotors SHALL tilt between vertical and horizontal under the
-pilot's control, their thrust SHALL fall with inflow along their axis and rise
-in ground effect, and its wing SHALL carry the craft only above its stall
-speed.
-
-#### Scenario: Hover takeoff with assist
-- **WHEN** the pilot holds climb with the nacelles vertical and assist on
-- **THEN** the craft climbs at the commanded vertical speed without rolling
-  or pitching more than a few degrees
-
-#### Scenario: Converting too slowly
-- **WHEN** the nacelles are tilted fully forward below the wing's stall speed
-- **THEN** the craft sinks and the stall is shown
-
-### Requirement: Assist in the hover is a dampener
-With assist on and the stick centred, the Kestrel in the hover SHALL hold its
-attitude, its vertical speed and zero velocity over the ground; with assist
-off the stick SHALL act directly.
-
-#### Scenario: A crosswind hover
-- **WHEN** the Kestrel hovers with assist on and no input in a 10 m/s wind
-- **THEN** it tilts into the wind and its ground speed stays near zero
 
 ### Requirement: A sailing boat is driven by the apparent wind on its sail
 The Tern's boom SHALL swing free with the apparent wind until the sheet stops
@@ -144,10 +122,14 @@ remain in the world, simulated or asleep under the documented unattended
 policy, and boardable with the same ID.
 
 #### Scenario: Leave in the air, reload, reboard
-- **WHEN** the pilot leaves the Kestrel in flight, the world is saved and
+- **WHEN** the sailor leaves the Tern under way (the name is kept from when
+  this was the Kestrel in the air), the world is saved and
   reloaded
-- **THEN** the Kestrel with the same ID is in the world where the unattended
+- **THEN** the Tern with the same ID is in the world where the unattended
   policy put it, and F boards it
+
+Pinned by
+`vehicles::tests::a_craft_left_behind_stays_boardable_and_comes_back_from_its_save`.
 
 ### Requirement: Vehicle records use the durable save path
 A craft's record (ID, kind, frame, pose, velocity, water aboard, mooring and
@@ -165,7 +147,7 @@ not saved: a player who quits aboard is loaded on foot beside the craft.
 One key, F, SHALL board the craft in reach from on foot and leave the craft
 the player is in, on the press, and it SHALL appear in the binding table that
 the settings page and `--help` print. It SHALL NOT be a key a craft uses as a
-control (Q and E are yaw, hiking and the blade as a rudder), nor the tool
+control (Q and E are hiking and the blade as a rudder), nor the tool
 picker's key (G).
 
 #### Scenario: Boarding the canoe from the pier
@@ -187,20 +169,6 @@ normal incidence through an artificial normal-vector sign change.
 #### Scenario: Reverse flow from below
 - **WHEN** a symmetric horizontal foil meets reverse flow from below
 - **THEN** its vertical force is upward, and its net force does nonpositive work against its motion through the fluid
-
-### Requirement: Rotor steering requires rotor power
-The Kestrel's rotor steering SHALL be bounded by delivered rotor power.
-Zero throttle with assist off SHALL produce no powered rotor force or
-cyclic/yaw torque. Assisted controls SHALL stay finite when local gravity
-falls to zero.
-
-#### Scenario: Unpowered controls
-- **WHEN** an airborne stationary Kestrel has zero throttle and assist off and the pilot requests rotation
-- **THEN** its rotors produce no thrust or steering torque
-
-#### Scenario: Gravity fades away
-- **WHEN** the assisted Kestrel is stepped with zero local gravity and centred input
-- **THEN** its pose, velocity and controls remain finite
 
 ### Requirement: Fleet placement respects the planet frame
 A new fleet SHALL be placed from the player's body-local position regardless
@@ -262,15 +230,49 @@ and a labeled hull-speed percentage.
 - **WHEN** apparent wind comes from either side of the Tern
 - **THEN** the panel identifies port or starboard and shows apparent-wind angle and windward VMG
 
-### Requirement: Vehicle visuals follow configured surfaces and blade state
-The Kestrel's drawn wing panels SHALL match their configured area, incidence
-and dihedral. The Loon's drawn blade SHALL match its configured area and
-its working stroke or stern-rudder position, including at zero water speed.
+### Requirement: The Loon's blade is drawn as configured and where it works
+The Loon's drawn blade SHALL match its configured area and its working stroke
+or stern-rudder position, including at zero water speed
+(`vehicles::draw::tests::paddle_mesh_and_motion_follow_area_and_working_rudder_without_force`).
 
 #### Scenario: Paddle held as a rudder
 - **WHEN** the occupied Loon holds a stern rudder with no power stroke active
 - **THEN** the blade is shown at the working stern position on the selected side
 
-#### Scenario: Wing configuration
-- **WHEN** the Kestrel mesh is built from its vehicle configuration
-- **THEN** both panel areas and foil axes agree with the simulation configuration
+### Requirement: A retired craft in a save is kept and not flown
+A saved craft record whose kind the game has retired SHALL be held aside on
+load and SHALL NOT be drawn, boarded or simulated. Every rewrite of the
+vehicle file SHALL write it back unchanged, and no new craft SHALL take its ID.
+The vehicle file's layout stays version 1
+(`vehicles::tests::a_world_saved_with_a_kestrel_opens_with_its_boats_and_keeps_the_record`,
+`vehicles::tests::a_held_record_keeps_its_id_from_every_new_craft`; the
+fixture is an old build's own file, `vehicles/fixtures/kestrel-era-vehicles.ron`).
+
+#### Scenario: Opening a world saved with a Kestrel
+- **WHEN** a world whose vehicle file holds a Kestrel, a Tern and a Loon is
+  opened, a boat is moved, and the world is saved
+- **THEN** the world has the Tern and the Loon, no Kestrel is drawn, and the
+  Kestrel's record in the saved file is byte-identical to the one read
+
+### Requirement: A retired craft's saved rebinds are kept and read by nothing
+A rebind in the player's settings file of a key only a retired craft read
+SHALL be ignored on load, SHALL move no key, and SHALL be written back with
+the rest of the file on the next change
+(`settings::tests::a_rebind_of_a_retired_slot_is_ignored_and_kept`,
+`controls::tests::rebinds_round_trip_through_their_names`).
+
+#### Scenario: A Kestrel rebind in an old settings file
+- **WHEN** a settings file that rebinds `kestrel:KeyW` is read and a setting
+  is then changed
+- **THEN** no key stands for that rebind, and the file written still holds it
+
+### Requirement: A new world's fleet is the boats
+A new world's fleet SHALL be the Tern and the Loon, placed from the player's
+start as before, and the start SHALL be found by the same rule as before
+(`vehicles::tests::a_new_world_places_each_craft_where_it_can_work`,
+`walking::tests::a_new_world_starts_on_level_ground_and_old_versions_keep_their_start`).
+
+#### Scenario: A new world
+- **WHEN** a new world is made
+- **THEN** its fleet is a Tern and a Loon, no aircraft is placed, and the
+  player's start is the same place it was before this change

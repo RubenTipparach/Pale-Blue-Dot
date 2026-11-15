@@ -1,7 +1,8 @@
 //! Where a world's craft come from: back from its save exactly where they were
 //! left, or, in a world that has none yet, placed once near the player - the
-//! Kestrel on dry, level ground, the Tern and the Loon at anchor in water deep
-//! enough for each.
+//! Tern and the Loon at anchor in water deep enough for each. (The Kestrel,
+//! placed on dry, level ground beside them until `retire-kestrel`, is no
+//! longer placed; a save's Kestrel is held aside as its record.)
 
 use super::{Fleet, Vehicle, draw};
 use crate::planet::PlanetContact;
@@ -11,30 +12,30 @@ use crate::walking::Walker;
 use avian3d::prelude::Position;
 use bevy::math::DMat3;
 use bevy::prelude::*;
-use pbd_core::vehicle::{Craft, Kind, Mooring};
+use pbd_core::vehicle::{Craft, Kind, KindKey, Mooring};
 use pbd_core::{DQuat, DVec3};
 
 /// How far out the search for a berth goes, m, and its steps.
 const SEARCH_MAX_M: f32 = 2500.0;
 const SEARCH_STEP_M: f32 = 4.0;
 const SEARCH_BEARINGS: usize = 24;
-/// The Kestrel stands this far from the player, m.
-const PAD_M: [f32; 2] = [16.0, 40.0];
-/// The pad is level if its corners are within this of each other, m, over
-/// this far out from the centre.
-const PAD_LEVEL_M: f32 = 0.6;
-const PAD_HALF_M: f32 = 5.5;
+/// The inside of the band round a new world's start that is searched for
+/// level ground, m: the ring `level_plain` samples begins 4 m past it. (It
+/// was where the Kestrel's pad could stand, 16 to 40 m from the player; the
+/// numbers are kept so a new world starts where it always has.)
+const PLAIN_INNER_M: f32 = 16.0;
+/// A spot is level if the ground four probes out round it is within this of
+/// its own, m, the probes this far out from the centre.
+const LEVEL_M: f32 = 0.6;
+const LEVEL_HALF_M: f32 = 5.5;
 /// A new world's start is a level plain: this many of the 120 samples in the
-/// ring 20 to 36 m round it take the Kestrel's pad (`level_plain`).
-const START_PADS: usize = 8;
+/// ring 20 to 36 m round it are level spots (`level_plain`).
+const START_LEVEL_SPOTS: usize = 8;
 /// Water a boat is put in, m under the sea surface, and how far apart the two
 /// boats lie.
 const TERN_DEPTH_M: f32 = 3.0;
 const LOON_DEPTH_M: f32 = 1.2;
 const BOATS_APART_M: f32 = 14.0;
-/// The Kestrel's reference point over the ground, m: its gear reaches
-/// 1.25 m down, and it settles the rest.
-const GEAR_CLEARANCE_M: f64 = 1.3;
 /// A new anchor's rode, per metre of depth, plus a margin, m.
 const RODE_PER_DEPTH: f64 = 3.0;
 const RODE_MARGIN_M: f64 = 2.0;
@@ -44,22 +45,22 @@ pub fn spawn_fleet(world: &mut World) {
     if world.get_resource::<Fleet>().is_none_or(|f| f.spawned) {
         return;
     }
-    // The craft are placed round the walker; a capture with no walker that
-    // holds the Kestrel somewhere (`--ship-in-cave`) places them there.
-    let held = world
-        .get_resource::<super::CraftHold>()
-        .and_then(|hold| hold.0)
-        .map(|(at, _)| at.as_vec3());
+    // The craft are placed round the walker.
     let Some(walker) = world
         .query_filtered::<&Position, With<Walker>>()
         .iter(world)
         .next()
         .map(|p| p.0)
-        .or(held)
     else {
         return;
     };
-    let Some((crafts, next_id, fresh)) = gather(world, walker) else {
+    let Some(Gathered {
+        crafts,
+        retired,
+        next_id,
+        fresh,
+    }) = gather(world, walker)
+    else {
         return;
     };
     let center = world.resource::<crate::planet::PlanetRenderFrame>().center;
@@ -73,8 +74,15 @@ pub fn spawn_fleet(world: &mut World) {
         );
         spawn_craft(world, craft);
     }
+    for record in &retired {
+        info!(
+            "craft {} is a retired {}: kept in the save, not in the world",
+            record.id, record.kind
+        );
+    }
     let mut fleet = world.resource_mut::<Fleet>();
     fleet.next_id = next_id;
+    fleet.retired = retired;
     fleet.spawned = true;
     // A new fleet is a world mutation like any other: written now.
     fleet.dirty |= fresh;
@@ -96,9 +104,19 @@ pub(crate) fn spawn_craft(world: &mut World, craft: Craft) -> Entity {
     entity
 }
 
+/// What [`gather`] finds: the craft to put in the world, the save's records
+/// of retired kinds to hold aside, the next ID to give, and whether the fleet
+/// is new.
+struct Gathered {
+    crafts: Vec<Craft>,
+    retired: Vec<pbd_core::vehicle::record::VehicleRecord>,
+    next_id: u64,
+    fresh: bool,
+}
+
 /// The craft this world should have: its save's, or a new placement round
 /// the walker. `None` until the planet and the sea are ready to ask.
-fn gather(world: &World, walker: Vec3) -> Option<(Vec<Craft>, u64, bool)> {
+fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
     // The contact field has to exist (it is how the walker stands, and it
     // says the planet is built) but the berths are judged on the height
     // field below, not on it.
@@ -114,12 +132,20 @@ fn gather(world: &World, walker: Vec3) -> Option<(Vec<Craft>, u64, bool)> {
     let fleet = world.resource::<Fleet>();
     let (specs, hulls) = (fleet.specs.clone(), fleet.hulls.clone());
     let mut crafts = Vec::new();
+    let mut retired = Vec::new();
     let mut next_id = 1;
     let fresh = saved.is_none();
     match saved {
         Some(file) => {
             next_id = file.next_id;
             for record in &file.vehicles {
+                // A retired kind is held aside exactly as read, and its ID
+                // is never given again (`retire-kestrel` decision 1).
+                if Kind::parse(&record.kind) == Some(KindKey::Retired) {
+                    next_id = next_id.max(record.id + 1);
+                    retired.push(record.clone());
+                    continue;
+                }
                 match Craft::from_record(record, specs.clone(), hulls.clone()) {
                     Ok(craft) => {
                         next_id = next_id.max(craft.id + 1);
@@ -159,7 +185,12 @@ fn gather(world: &World, walker: Vec3) -> Option<(Vec<Craft>, u64, bool)> {
             }
         }
     }
-    Some((crafts, next_id, fresh))
+    Some(Gathered {
+        crafts,
+        retired,
+        next_id,
+        fresh,
+    })
 }
 
 /// A place and a pose for a new craft.
@@ -171,7 +202,7 @@ struct Berth {
     anchor_floor: Option<f64>,
 }
 
-struct Berths([(Kind, Option<Berth>); 3]);
+struct Berths([(Kind, Option<Berth>); 2]);
 
 #[cfg(test)]
 mod frame_tests {
@@ -192,17 +223,17 @@ mod frame_tests {
             crate::flight_view::FlightViewConfig::default().spawn_direction,
         );
         let walker = (start * PLANET_RADIUS).round();
-        let original = gather(&world, walker).unwrap().0;
+        let original = gather(&world, walker).unwrap().crafts;
         let offset = DVec3::new(8192.0, -4096.0, 2048.0);
         world
             .resource_mut::<crate::planet::PlanetRenderFrame>()
             .center = offset;
         let translated = gather(&world, (walker.as_dvec3() + offset).as_vec3())
             .unwrap()
-            .0;
+            .crafts;
         assert_eq!(
             original.len(),
-            3,
+            2,
             "{:?}",
             original.iter().map(|c| c.kind).collect::<Vec<_>>()
         );
@@ -215,18 +246,12 @@ mod frame_tests {
 }
 
 impl Berths {
-    /// The Kestrel on the first level pad round the player; the Loon in the
-    /// nearest water deep enough for it; and the Tern in the nearest water
-    /// deep enough for IT round the Loon, so both boats lie off one shore
-    /// rather than wherever each happened to find water first.
+    /// The Loon in the nearest water deep enough for it, and the Tern in the
+    /// nearest water deep enough for IT round the Loon, so both boats lie off
+    /// one shore rather than wherever each happened to find water first.
     fn find(sea: &Sea, up: Vec3) -> Self {
         let radius = sea.radius;
         let depth = |direction: Vec3| radius - floor(direction);
-        let pad = rings(radius, up, |direction, distance| {
-            (PAD_M[0]..=PAD_M[1]).contains(&distance)
-                && depth(direction) < -0.3
-                && level(direction, floor(direction))
-        });
         let loon = rings(radius, up, |direction, _| depth(direction) >= LOON_DEPTH_M);
         let tern = loon.and_then(|(from, _)| {
             rings(radius, from, |direction, distance| {
@@ -239,30 +264,18 @@ impl Berths {
             orientation: facing(direction.as_dvec3(), outward.as_dvec3()),
             anchor_floor: Some(floor(direction) as f64),
         };
-        Self([
-            (
-                Kind::Kestrel,
-                pad.map(|(direction, outward)| Berth {
-                    position: direction.as_dvec3() * (floor(direction) as f64 + GEAR_CLEARANCE_M),
-                    // Nose toward the player, so the first thing seen is it.
-                    orientation: facing(direction.as_dvec3(), -outward.as_dvec3()),
-                    anchor_floor: None,
-                }),
-            ),
-            (Kind::Tern, tern.map(boat)),
-            (Kind::Loon, loon.map(boat)),
-        ])
+        Self([(Kind::Tern, tern.map(boat)), (Kind::Loon, loon.map(boat))])
     }
 }
 
-/// Whether `direction` stands on a level plain, found as the Kestrel's pad
-/// is: the ground there is over the sea and its four probes lie within the
-/// pad's level, and the ring 20 to 36 m round it holds the Kestrel's pad
-/// again and again. Where a new world on a generator with ranges starts
-/// (`taller-mountains` decision 8, survey H4: "recommended"), so a player
-/// opens facing land they can walk and the Kestrel has somewhere to stand.
-/// The ring is inside the Kestrel's own 16 to 40 m from a walker set down up
-/// to 4 m from the start.
+/// Whether `direction` stands on a level plain: the ground there is over the
+/// sea and its four probes lie within [`LEVEL_M`] of it, and the ring 20 to
+/// 36 m round it holds such a level spot again and again. Where a new world
+/// on a generator with ranges starts (`taller-mountains` decision 8, survey
+/// H4: "recommended"), so a player opens facing land they can walk. The rule
+/// is the one the Kestrel's pad was found by, kept exactly when the Kestrel
+/// was retired (`retire-kestrel` decision 4), so new worlds start where they
+/// did.
 ///
 /// Read on the generator's own ground ([`natural_floor`]), not the towns':
 /// a town's terrace is a level plain, and a world whose towns stood before
@@ -278,21 +291,21 @@ pub fn level_plain(sea_radius: f32, direction: Vec3) -> bool {
     if !good(centre) {
         return false;
     }
-    // A level pad on one-metre layers is a knife edge: a probe half a metre
+    // A level spot on one-metre layers is a knife edge: a probe half a metre
     // over can cross a layer. So the start is a level plain, not a level
-    // spot: at least `START_PADS` of the ring's samples take a pad.
+    // spot: at least `START_LEVEL_SPOTS` of the ring's samples are level.
     let east = Vec3::Y.cross(centre).normalize_or(Vec3::X);
     let north = centre.cross(east);
-    let mut pads = 0;
+    let mut spots = 0;
     for k in 0..=4 {
-        let distance = PAD_M[0] + 4.0 + k as f32 * 4.0;
+        let distance = PLAIN_INNER_M + 4.0 + k as f32 * 4.0;
         for i in 0..SEARCH_BEARINGS {
             let bearing = i as f32 / SEARCH_BEARINGS as f32 * std::f32::consts::TAU;
             let tangent = east * bearing.cos() + north * bearing.sin();
             let angle = distance / sea_radius;
             if good(centre * angle.cos() + tangent * angle.sin()) {
-                pads += 1;
-                if pads >= START_PADS {
+                spots += 1;
+                if spots >= START_LEVEL_SPOTS {
                     return true;
                 }
             }
@@ -345,19 +358,15 @@ pub(crate) fn natural_floor(direction: Vec3) -> f32 {
         )
 }
 
-/// Whether the ground round `direction` is level enough to land a gear on.
-fn level(direction: Vec3, ground: f32) -> bool {
-    level_on(direction, ground, floor)
-}
-
-/// [`level`] on the ground `floor` gives.
+/// Whether the ground round `direction`, `ground` from the centre, is level
+/// on the ground `floor` gives: its four probes lie within [`LEVEL_M`].
 fn level_on(direction: Vec3, ground: f32, floor: impl Fn(Vec3) -> f32) -> bool {
     let east = Vec3::Y.cross(direction).normalize_or(Vec3::X);
     let north = direction.cross(east);
     let r = ground.max(1.0);
     [east, -east, north, -north].iter().all(|tangent| {
-        let probe = (direction + *tangent * (PAD_HALF_M / r)).normalize();
-        (floor(probe) - ground).abs() <= PAD_LEVEL_M
+        let probe = (direction + *tangent * (LEVEL_HALF_M / r)).normalize();
+        (floor(probe) - ground).abs() <= LEVEL_M
     })
 }
 

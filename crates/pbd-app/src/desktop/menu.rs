@@ -13,13 +13,14 @@
 //! node is still laid out and still PICKED, so an invisible panel goes on
 //! swallowing clicks over the middle of the screen for as long as it is shut.
 
+use bevy::ui::RelativeCursorPosition;
 use bevy::{
     app::AppExit,
     ecs::system::SystemParam,
     input::keyboard::{Key, KeyboardInput},
     prelude::*,
 };
-use pbd_app::controls::{BINDINGS, MenuOpen};
+use pbd_app::controls::{self, BINDINGS, KeyBinds, MenuOpen, Tab};
 use pbd_app::saves::{self, Slot, WorldSave};
 use pbd_app::settings::{PlayerSettings, SettingsFile};
 use pbd_app::ui_kit::{self, KitPiece, KitText, Plaque, Set, UiKit, plaque, plaque_label};
@@ -104,6 +105,8 @@ pub enum MenuAction {
     AutoStep,
     /// Turn the rain shadow (the rain volume) on or off.
     RainShadows,
+    /// Put the open Input sub-tab's keys back to their defaults.
+    ResetTab,
 }
 
 /// A panel the mouse wheel scrolls.
@@ -132,14 +135,152 @@ pub fn wheel_scroll(
     }
 }
 
-/// What a value plaque on the settings page says (`player-settings`): the
-/// frame limit and the render scale, which a press steps through.
+/// The frame limit's steps along its slider, low to high: the plaque's own
+/// values (`FrameLimit`), off first.
+const FRAME_STEPS: [pbd_app::settings::FrameLimit; 3] = [
+    pbd_app::settings::FrameLimit::Off,
+    pbd_app::settings::FrameLimit::Fps60,
+    pbd_app::settings::FrameLimit::Fps120,
+];
+
+/// The render scale's steps along its slider, low to high: `SCALES`.
+fn scale_steps() -> Vec<u32> {
+    let mut steps = pbd_app::settings::SCALES.to_vec();
+    steps.sort_unstable();
+    steps
+}
+
+/// How many steps a settings slider has, and which one the player is on.
+fn slider_step(action: MenuAction, player: &PlayerSettings) -> Option<(usize, usize)> {
+    Some(match action {
+        MenuAction::FrameLimit => (
+            FRAME_STEPS.len(),
+            FRAME_STEPS
+                .iter()
+                .position(|f| *f == player.frame_limit)
+                .unwrap_or(0),
+        ),
+        MenuAction::RenderScale => {
+            let steps = scale_steps();
+            (
+                steps.len(),
+                steps
+                    .iter()
+                    .position(|s| *s == player.render_scale)
+                    .unwrap_or(steps.len() - 1),
+            )
+        }
+        _ => return None,
+    })
+}
+
+/// The settings with a slider set to step `step`.
+fn with_step(action: MenuAction, player: PlayerSettings, step: usize) -> PlayerSettings {
+    let mut changed = player;
+    match action {
+        MenuAction::FrameLimit => {
+            changed.frame_limit = FRAME_STEPS[step.min(FRAME_STEPS.len() - 1)];
+        }
+        MenuAction::RenderScale => {
+            let steps = scale_steps();
+            changed.render_scale = steps[step.min(steps.len() - 1)];
+        }
+        _ => {}
+    }
+    changed
+}
+
+/// What a settings slider says beside it.
 fn settings_value(action: MenuAction, player: &PlayerSettings) -> Option<String> {
     Some(match action {
         MenuAction::FrameLimit => player.frame_limit.label().to_uppercase(),
         MenuAction::RenderScale => format!("{}%", player.render_scale),
         _ => return None,
     })
+}
+
+/// The step nearest a cursor `x` across a slider of `count` steps (0 at the
+/// left edge, 1 at the right).
+fn nearest_step(x: f32, count: usize) -> usize {
+    let last = count.saturating_sub(1) as f32;
+    (x.clamp(0.0, 1.0) * last).round() as usize
+}
+
+/// A settings slider's groove, by what it sets.
+#[derive(Component)]
+pub struct SettingSlider(pub MenuAction);
+
+/// The lit part of a settings slider.
+#[derive(Component)]
+pub struct SettingFill(pub MenuAction);
+
+/// A settings slider's grip.
+#[derive(Component)]
+pub struct SettingKnob(pub MenuAction);
+
+/// The value beside a settings slider.
+#[derive(Component)]
+pub struct SettingValue(pub MenuAction);
+
+/// A press on a settings slider, and every frame it is held, sets the step
+/// nearest the cursor, and keeps it.
+pub fn drag_settings(
+    bars: Query<(&Interaction, &RelativeCursorPosition, &SettingSlider)>,
+    mut player: ResMut<PlayerSettings>,
+    keys: Res<KeyBinds>,
+    file: Res<SettingsFile>,
+) {
+    for (interaction, cursor, slider) in &bars {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+        let (Some(at), Some((count, _))) = (cursor.normalized, slider_step(slider.0, &player))
+        else {
+            continue;
+        };
+        // Normalised is centred on the node: -0.5 at the left edge.
+        let changed = with_step(slider.0, *player, nearest_step(at.x + 0.5, count));
+        if changed != *player {
+            *player = changed;
+            file.keep(&player, &keys);
+        }
+    }
+}
+
+/// Each settings slider's grip and lit groove at its step, the value beside.
+#[allow(clippy::type_complexity)]
+pub fn show_settings(
+    player: Res<PlayerSettings>,
+    mut fills: Query<(&SettingFill, &mut Node), Without<SettingKnob>>,
+    mut knobs: Query<(&SettingKnob, &mut Node), Without<SettingFill>>,
+    mut values: Query<(&SettingValue, &mut KitText)>,
+) {
+    let at = |action: MenuAction| {
+        slider_step(action, &player).map(|(count, step)| {
+            percent(step as f32 / count.saturating_sub(1).max(1) as f32 * 100.0)
+        })
+    };
+    for (fill, mut node) in &mut fills {
+        if let Some(at) = at(fill.0)
+            && node.width != at
+        {
+            node.width = at;
+        }
+    }
+    for (knob, mut node) in &mut knobs {
+        if let Some(at) = at(knob.0)
+            && node.left != at
+        {
+            node.left = at;
+        }
+    }
+    for (value, mut text) in &mut values {
+        if let Some(label) = settings_value(value.0, &player)
+            && text.text != label
+        {
+            text.text = label;
+        }
+    }
 }
 
 /// Whether a checkbox on the settings page is ticked: bloom, the rain
@@ -164,6 +305,7 @@ pub fn press_graphics(
     rows: Query<(&Interaction, &MenuAction), Changed<Interaction>>,
     mut graphics: ResMut<pbd_app::tone::Graphics>,
     mut player: ResMut<PlayerSettings>,
+    keys: Res<KeyBinds>,
     file: Res<SettingsFile>,
 ) {
     for (interaction, action) in &rows {
@@ -176,48 +318,29 @@ pub fn press_graphics(
                 graphics.bloom = !graphics.bloom;
                 graphics.keep();
             }
-            MenuAction::FrameLimit => changed.frame_limit = changed.frame_limit.next(),
-            MenuAction::RenderScale => {
-                changed.render_scale = pbd_app::settings::next_scale(changed.render_scale)
-            }
             MenuAction::AutoStep => changed.auto_step = !changed.auto_step,
             MenuAction::RainShadows => changed.rain_shadows = !changed.rain_shadows,
             _ => {}
         }
         if changed != *player {
             *player = changed;
-            file.keep(&player);
+            file.keep(&player, &keys);
         }
     }
 }
 
-/// The settings controls say what is chosen: a checkbox shows its tick, a
-/// value plaque its value.
+/// The settings checkboxes show their ticks.
 pub fn label_graphics(
     kit: Res<UiKit>,
     graphics: Res<pbd_app::tone::Graphics>,
     player: Res<PlayerSettings>,
     mut checks: Query<(&MenuAction, &mut ImageNode), With<Check>>,
-    rows: Query<(&MenuAction, &Children), With<Plaque>>,
-    mut texts: Query<&mut KitText>,
 ) {
     for (action, mut image) in &mut checks {
         if let Some(on) = settings_checked(*action, &graphics, &player) {
             let want = kit.image(if on { "check-on" } else { "check-off" });
             if image.image != want {
                 image.image = want;
-            }
-        }
-    }
-    for (action, children) in &rows {
-        let Some(label) = settings_value(*action, &player) else {
-            continue;
-        };
-        for child in children.iter() {
-            if let Ok(mut text) = texts.get_mut(child)
-                && text.text != label
-            {
-                text.text = label.clone();
             }
         }
     }
@@ -305,6 +428,7 @@ pub fn opening_screen(menu: Option<&str>, world_named: bool, capture: bool) -> S
         Some("saves") => Screen::Saves,
         Some("pack") => Screen::Pack,
         Some("map") => Screen::Map,
+        Some("guide") => Screen::Guide,
         _ if !world_named && !capture => Screen::Saves,
         _ => Screen::Playing,
     }
@@ -653,8 +777,8 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                             "costs ~2.4 ms on a Mac",
                             MenuAction::Bloom,
                         );
-                        value_row(rows, kit, "Frame limit", "", MenuAction::FrameLimit);
-                        value_row(
+                        slider_row(rows, kit, "Frame limit", "", MenuAction::FrameLimit);
+                        slider_row(
                             rows,
                             kit,
                             "Render scale",
@@ -695,51 +819,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                     });
                     let input = page(panel, 4);
                     panel.commands().entity(input).with_children(|page| {
-                        // Taller than the page (every binding is listed), so it is
-                        // held inside it and scrolls with the wheel.
-                        page.spawn((
-                            Node {
-                                height: px(176),
-                                flex_direction: FlexDirection::Column,
-                                overflow: Overflow::scroll_y(),
-                                row_gap: px(1),
-                                ..default()
-                            },
-                            ScrollPosition::default(),
-                            WheelScrolls,
-                        ))
-                        .with_children(|list| {
-                            // Off the one binding table, a heading per context and
-                            // a row per action with its keys in caps.
-                            for group in &BINDINGS {
-                                section(list, group.heading);
-                                for binding in group.rows {
-                                    list.spawn(Node {
-                                        justify_content: JustifyContent::SpaceBetween,
-                                        align_items: AlignItems::Center,
-                                        min_height: px(18),
-                                        column_gap: px(4),
-                                        flex_shrink: 0.0,
-                                        ..default()
-                                    })
-                                    .with_children(|line| {
-                                        line.spawn(body(binding.does, 10.0, ui_kit::TEXT));
-                                        line.spawn(Node {
-                                            column_gap: px(1),
-                                            flex_shrink: 0.0,
-                                            ..default()
-                                        })
-                                        .with_children(
-                                            |caps| {
-                                                for key in binding.keys {
-                                                    key_cap(caps, kit, key.label());
-                                                }
-                                            },
-                                        );
-                                    });
-                                }
-                            }
-                        });
+                        spawn_input_page(page, kit);
                     });
                     panel
                         .spawn(Node {
@@ -860,8 +940,15 @@ fn check_row(
     });
 }
 
-/// A row whose plaque steps through values.
-fn value_row(
+/// The width of a settings slider's groove, native px.
+const SETTING_SLIDER: f32 = 70.0;
+
+/// Between a settings slider's groove and its value, native px: the grip's
+/// overhang past the groove's end (half its 9 px, rounded up) and 4 clear.
+const SLIDER_VALUE_GAP: f32 = 9.0;
+
+/// A row whose stone slider steps through values, the value beside it.
+fn slider_row(
     rows: &mut ChildSpawnerCommands,
     kit: &UiKit,
     label: &str,
@@ -869,11 +956,381 @@ fn value_row(
     action: MenuAction,
 ) {
     setting_row(rows, label, note, |row| {
-        row.spawn((plaque(kit, Set::Oak, 64.0), action))
-            .with_children(|p| {
-                p.spawn(plaque_label(Set::Oak, ""));
-            });
+        row.spawn(Node {
+            // The grip (9 px, centred on its step) stands 5 px past the
+            // groove's end at the top value: the gap keeps 4 px clear of the
+            // value beside it (the coordinator's review of the first
+            // capture, where the grip covered "100%").
+            column_gap: px(SLIDER_VALUE_GAP),
+            align_items: AlignItems::Center,
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(|control| {
+            slider(
+                control,
+                kit,
+                SETTING_SLIDER,
+                (
+                    SettingSlider(action),
+                    Button,
+                    RelativeCursorPosition::default(),
+                ),
+                SettingFill(action),
+                SettingKnob(action),
+            );
+            control.spawn((
+                KitText::new("", ui_kit::LABEL).shadow(ui_kit::INK),
+                Node {
+                    min_width: px(42),
+                    ..default()
+                },
+                SettingValue(action),
+            ));
+        });
     });
+}
+
+/// Which Input sub-tab is open, by `Tab::ALL` index.
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct InputTab(pub u8);
+
+/// The slot a cap is waiting on a key for, by name (`controls::Slot::name`).
+#[derive(Resource, Default, Clone, PartialEq, Eq, Debug)]
+pub struct Rebinding(pub Option<String>);
+
+/// An Input sub-tab's own oak tab.
+#[derive(Component)]
+pub struct InputTabButton(pub u8);
+
+/// An Input sub-tab's list of rows, rebuilt when a key changes.
+#[derive(Component)]
+pub struct InputList(pub u8);
+
+/// A key cap that changes its slot's key when pressed.
+#[derive(Component, Clone)]
+pub struct RebindCap(pub String);
+
+/// The Input page: the sub-tabs, a list for each (one shown, the wheel
+/// scrolls it), and RESET TAB. The rows are drawn by `rebuild_input`.
+fn spawn_input_page(page: &mut ChildSpawnerCommands, kit: &UiKit) {
+    page.spawn(Node {
+        column_gap: px(1),
+        margin: UiRect::bottom(px(2)),
+        ..default()
+    })
+    .with_children(|tabs| {
+        for (i, tab) in Tab::ALL.iter().enumerate() {
+            let open = i == 0;
+            let piece = if open { "tab-open" } else { "tab-shut" };
+            tabs.spawn((
+                Button,
+                kit.nine(Set::Oak, piece),
+                KitPiece(Set::Oak.key(piece)),
+                InputTabButton(i as u8),
+                Node {
+                    height: px(18),
+                    padding: UiRect::new(px(8), px(8), px(7), px(0)),
+                    flex_shrink: 0.0,
+                    ..default()
+                },
+            ))
+            .with_children(|cap| {
+                cap.spawn(KitText::new(
+                    tab.label(),
+                    if open {
+                        ui_kit::OAK_LABEL
+                    } else {
+                        ui_kit::LABEL
+                    },
+                ));
+            });
+        }
+    });
+    for i in 0..Tab::ALL.len() {
+        page.spawn((
+            Node {
+                height: px(150),
+                flex_direction: FlexDirection::Column,
+                overflow: Overflow::scroll_y(),
+                row_gap: px(1),
+                display: if i == 0 { Display::Flex } else { Display::None },
+                ..default()
+            },
+            ScrollPosition::default(),
+            WheelScrolls,
+            InputList(i as u8),
+        ));
+    }
+    page.spawn(Node {
+        justify_content: JustifyContent::SpaceBetween,
+        align_items: AlignItems::Center,
+        margin: UiRect::top(px(2)),
+        ..default()
+    })
+    .with_children(|foot| {
+        foot.spawn(body(
+            "Click a key, then press the new one. Esc cancels.",
+            9.0,
+            ui_kit::TEXT_DIM,
+        ));
+        small(foot, kit, "RESET TAB", MenuAction::ResetTab);
+    });
+}
+
+/// Draw each sub-tab's rows off the one binding table, with the player's
+/// keys: a heading per group, a row per action, a cap per key (an oak
+/// plaque where it can be changed, a flat cap where it cannot), and on a
+/// row whose key another live action reads, "also:" and that action.
+/// Rebuilt when the keys or the waiting cap change.
+pub fn rebuild_input(
+    mut commands: Commands,
+    kit: Res<UiKit>,
+    binds: Res<KeyBinds>,
+    waiting: Res<Rebinding>,
+    lists: Query<(Entity, &InputList)>,
+) {
+    if !binds.is_changed() && !waiting.is_changed() {
+        return;
+    }
+    let kit = &*kit;
+    for (entity, list) in &lists {
+        let tab = Tab::ALL[list.0 as usize];
+        commands.entity(entity).despawn_related::<Children>();
+        commands.entity(entity).with_children(|rows| {
+            for group in BINDINGS.iter().filter(|g| g.tab == tab) {
+                section(rows, group.heading);
+                for binding in group.rows {
+                    let clashes: Vec<&str> = (0..binding.keys.len())
+                        .filter_map(|i| controls::slot_at(group, binding, i))
+                        .flat_map(|slot| binds.clashes(&slot))
+                        .fold(Vec::new(), |mut all, does| {
+                            if !all.contains(&does) {
+                                all.push(does);
+                            }
+                            all
+                        });
+                    rows.spawn(Node {
+                        justify_content: JustifyContent::SpaceBetween,
+                        align_items: AlignItems::Center,
+                        min_height: px(20),
+                        column_gap: px(4),
+                        flex_shrink: 0.0,
+                        ..default()
+                    })
+                    .with_children(|line| {
+                        line.spawn((
+                            body(binding.does, 10.0, ui_kit::TEXT),
+                            Node {
+                                flex_shrink: 1.0,
+                                ..default()
+                            },
+                        ));
+                        line.spawn(Node {
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::FlexEnd,
+                            flex_shrink: 0.0,
+                            ..default()
+                        })
+                        .with_children(|right| {
+                            right
+                                .spawn(Node {
+                                    column_gap: px(1),
+                                    align_items: AlignItems::Center,
+                                    ..default()
+                                })
+                                .with_children(|caps| {
+                                    for (i, key) in binding.keys.iter().enumerate() {
+                                        if i > 0 && binding.range {
+                                            caps.spawn(body("-", 10.0, ui_kit::TEXT_DIM));
+                                        }
+                                        match controls::slot_at(group, binding, i) {
+                                            Some(slot) => {
+                                                let name = slot.name();
+                                                let label = if waiting.0.as_ref() == Some(&name) {
+                                                    "PRESS A KEY"
+                                                } else {
+                                                    controls::key_label(binds.key(&slot))
+                                                };
+                                                rebind_cap(caps, kit, label, name, &waiting);
+                                            }
+                                            None => key_cap(caps, kit, key.label()),
+                                        }
+                                    }
+                                });
+                            if !clashes.is_empty() {
+                                right.spawn(body(
+                                    format!("also: {}", clashes.join(", ")),
+                                    8.0,
+                                    ui_kit::TITLE,
+                                ));
+                            }
+                        });
+                    });
+                }
+            }
+        });
+    }
+}
+
+/// A key cap that can be changed: a small oak plaque, focused with the rune
+/// while it waits for a key.
+fn rebind_cap(
+    parent: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    label: &str,
+    slot: String,
+    waiting: &Rebinding,
+) {
+    let focus = waiting.0.as_ref() == Some(&slot);
+    parent
+        .spawn((plaque(kit, Set::Oak, 18.0), RebindCap(slot)))
+        .insert((
+            Plaque {
+                focus,
+                ..Plaque::new(Set::Oak)
+            },
+            Node {
+                min_width: px(18),
+                height: px(18),
+                padding: UiRect::new(px(6), px(6), px(6), px(0)),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::FlexStart,
+                flex_shrink: 0.0,
+                ..default()
+            },
+        ))
+        .with_children(|cap| {
+            cap.spawn(plaque_label(Set::Oak, label));
+        });
+}
+
+/// The Input sub-tabs: a press opens one (and stops any cap waiting), the
+/// open one wears the oak cap, and only its list is laid out.
+#[allow(clippy::type_complexity)]
+pub fn input_tabs(
+    kit: Res<UiKit>,
+    mut tab: ResMut<InputTab>,
+    mut waiting: ResMut<Rebinding>,
+    pressed: Query<(&Interaction, &InputTabButton), Changed<Interaction>>,
+    mut tabs: Query<(&InputTabButton, &mut ImageNode, &mut KitPiece, &Children)>,
+    mut labels: Query<&mut KitText>,
+    mut lists: Query<(&InputList, &mut Node)>,
+) {
+    for (interaction, button) in &pressed {
+        if *interaction == Interaction::Pressed && tab.0 != button.0 {
+            tab.0 = button.0;
+            if waiting.0.is_some() {
+                waiting.0 = None;
+            }
+        }
+    }
+    if !tab.is_changed() {
+        return;
+    }
+    for (button, mut image, mut piece, children) in &mut tabs {
+        let open = button.0 == tab.0;
+        let key = Set::Oak.key(if open { "tab-open" } else { "tab-shut" });
+        if piece.0 != key {
+            image.image = kit.image(&key);
+            piece.0 = key;
+        }
+        for child in children.iter() {
+            if let Ok(mut text) = labels.get_mut(child) {
+                text.colour = if open {
+                    ui_kit::OAK_LABEL
+                } else {
+                    ui_kit::LABEL
+                };
+            }
+        }
+    }
+    for (list, mut node) in &mut lists {
+        node.display = if list.0 == tab.0 {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+}
+
+/// A press on a cap makes it wait for a key (a second press, or a press on
+/// another, moves or stops the wait); RESET TAB puts the open sub-tab's keys
+/// back and keeps the file.
+#[allow(clippy::too_many_arguments)]
+pub fn press_bindings(
+    caps: Query<(&Interaction, &RebindCap), Changed<Interaction>>,
+    resets: Query<(&Interaction, &MenuAction), Changed<Interaction>>,
+    tab: Res<InputTab>,
+    mut waiting: ResMut<Rebinding>,
+    mut binds: ResMut<KeyBinds>,
+    player: Res<PlayerSettings>,
+    file: Res<SettingsFile>,
+) {
+    for (interaction, cap) in &caps {
+        if *interaction == Interaction::Pressed {
+            waiting.0 = if waiting.0.as_ref() == Some(&cap.0) {
+                None
+            } else {
+                Some(cap.0.clone())
+            };
+        }
+    }
+    for (interaction, action) in &resets {
+        if *interaction == Interaction::Pressed && *action == MenuAction::ResetTab {
+            let before = binds.clone();
+            binds.reset(Tab::ALL[tab.0 as usize]);
+            waiting.0 = None;
+            if *binds != before {
+                file.keep(&player, &binds);
+            }
+        }
+    }
+}
+
+/// The key a waiting cap takes: the first key pressed this frame that a
+/// slot can be given, in `controls::ASSIGNABLE`'s order (one order, whatever
+/// the keyboard's), or none.
+pub fn key_taken(keys: &ButtonInput<KeyCode>) -> Option<KeyCode> {
+    controls::ASSIGNABLE
+        .iter()
+        .map(|(key, _)| *key)
+        .find(|key| keys.just_pressed(*key))
+}
+
+/// While a cap waits: Esc cancels (and is consumed, so the page stays), a
+/// key a slot can take is taken, kept, and consumed, so nothing else acts on
+/// it; anything else is waited through. Leaving the settings stops the wait.
+/// Runs in `PreUpdate` before `toggle`, with the remap off (a menu is open).
+pub fn capture_rebind(
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    screen: Res<Screen>,
+    mut waiting: ResMut<Rebinding>,
+    mut binds: ResMut<KeyBinds>,
+    player: Res<PlayerSettings>,
+    file: Res<SettingsFile>,
+) {
+    let Some(name) = waiting.0.clone() else {
+        return;
+    };
+    if *screen != Screen::Settings {
+        waiting.0 = None;
+        return;
+    }
+    if keys.just_pressed(KeyCode::Escape) {
+        keys.clear_just_pressed(KeyCode::Escape);
+        waiting.0 = None;
+        return;
+    }
+    let Some(key) = key_taken(&keys) else {
+        return;
+    };
+    keys.clear_just_pressed(key);
+    if let Some(slot) = controls::slots().find(|s| s.name() == name) {
+        binds.set(&slot, key);
+        file.keep(&player, &binds);
+    }
+    waiting.0 = None;
 }
 
 /// A key in a cap: the oak-rimmed tooltip with the key cut in the kit's font.
@@ -1269,7 +1726,8 @@ pub fn press(
             | MenuAction::FrameLimit
             | MenuAction::RenderScale
             | MenuAction::AutoStep
-            | MenuAction::RainShadows => {}
+            | MenuAction::RainShadows
+            | MenuAction::ResetTab => {}
             MenuAction::Load(row) => {
                 let Some(slot) = index.slots.get(row).cloned() else {
                     continue;
@@ -1450,5 +1908,159 @@ mod tests {
         ] {
             assert_eq!(screen != Screen::Playing, held, "{screen:?}");
         }
+    }
+
+    /// The frame limit and render scale sliders keep the plaques' values and
+    /// steps: off, 60, 120; 50, 67, 75, 85, 100; a press lands on the step
+    /// nearest the cursor.
+    #[test]
+    fn the_sliders_keep_the_plaques_values_and_steps() {
+        use pbd_app::settings::FrameLimit;
+        let player = PlayerSettings::default();
+        assert_eq!(scale_steps(), vec![50, 67, 75, 85, 100]);
+        assert_eq!(slider_step(MenuAction::FrameLimit, &player), Some((3, 1)));
+        assert_eq!(slider_step(MenuAction::RenderScale, &player), Some((5, 3)));
+        assert_eq!(nearest_step(0.0, 3), 0);
+        assert_eq!(nearest_step(0.74, 3), 1);
+        assert_eq!(nearest_step(1.2, 3), 2);
+        assert_eq!(nearest_step(0.49, 5), 2);
+        let off = with_step(MenuAction::FrameLimit, player, 0);
+        assert_eq!(off.frame_limit, FrameLimit::Off);
+        assert_eq!(
+            with_step(MenuAction::FrameLimit, player, 2).frame_limit,
+            FrameLimit::Fps120
+        );
+        assert_eq!(
+            with_step(MenuAction::RenderScale, player, 0).render_scale,
+            50
+        );
+        assert_eq!(
+            with_step(MenuAction::RenderScale, player, 4).render_scale,
+            100
+        );
+        assert_eq!(
+            settings_value(MenuAction::FrameLimit, &off).as_deref(),
+            Some("OFF")
+        );
+        // Every offered value is a step, and every step an offered value.
+        for scale in pbd_app::settings::SCALES {
+            assert!(scale_steps().contains(&scale));
+        }
+    }
+
+    fn rebind_app(waiting: Option<&str>) -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<ButtonInput<KeyCode>>()
+            .insert_resource(Screen::Settings)
+            .insert_resource(Rebinding(waiting.map(String::from)))
+            .init_resource::<KeyBinds>()
+            .init_resource::<PlayerSettings>()
+            .init_resource::<SettingsFile>()
+            .add_systems(Update, capture_rebind);
+        app
+    }
+
+    /// Click a binding, press a key: the slot takes it and the key is
+    /// consumed. Esc cancels and is consumed, so the page stays open. A key
+    /// no slot can take is waited through.
+    #[test]
+    fn a_cap_takes_the_next_key_and_esc_cancels() {
+        let mut app = rebind_app(Some("on_foot:ShiftLeft"));
+        let press = |app: &mut App, key: KeyCode| {
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.clear();
+            keys.press(key);
+            app.update();
+        };
+        press(&mut app, KeyCode::Lang1);
+        assert!(
+            app.world().resource::<Rebinding>().0.is_some(),
+            "still waiting"
+        );
+        press(&mut app, KeyCode::KeyE);
+        assert_eq!(app.world().resource::<Rebinding>().0, None);
+        let sprint = controls::slots()
+            .find(|s| s.name() == "on_foot:ShiftLeft")
+            .unwrap();
+        assert_eq!(
+            app.world().resource::<KeyBinds>().key(&sprint),
+            KeyCode::KeyE
+        );
+        assert!(
+            !app.world()
+                .resource::<ButtonInput<KeyCode>>()
+                .just_pressed(KeyCode::KeyE),
+            "the key is the cap's, not the world's"
+        );
+
+        app.world_mut().resource_mut::<Rebinding>().0 = Some("hands:KeyE".into());
+        press(&mut app, KeyCode::Escape);
+        assert_eq!(app.world().resource::<Rebinding>().0, None, "Esc cancels");
+        assert!(
+            !app.world()
+                .resource::<ButtonInput<KeyCode>>()
+                .just_pressed(KeyCode::Escape),
+            "and is consumed, so the page does not step back"
+        );
+        let door = controls::slots()
+            .find(|s| s.name() == "hands:KeyE")
+            .unwrap();
+        assert_eq!(app.world().resource::<KeyBinds>().key(&door), KeyCode::KeyE);
+
+        // Leaving the settings stops a wait.
+        app.world_mut().resource_mut::<Rebinding>().0 = Some("hands:KeyE".into());
+        *app.world_mut().resource_mut::<Screen>() = Screen::Pause;
+        press(&mut app, KeyCode::KeyK);
+        assert_eq!(app.world().resource::<Rebinding>().0, None);
+        assert_eq!(app.world().resource::<KeyBinds>().key(&door), KeyCode::KeyE);
+    }
+
+    /// The Input page: five oak sub-tabs, one list each, a changeable cap
+    /// for every slot, and a clash flagged on its row (the change's
+    /// "Rebinding a key" scenario, with the game's own rows).
+    #[test]
+    fn the_input_page_lists_every_slot_and_flags_a_clash() {
+        let mut app = App::new();
+        pbd_app::ui_kit::install_bare(&mut app);
+        app.init_resource::<KeyBinds>()
+            .init_resource::<Rebinding>()
+            .add_systems(Startup, spawn)
+            .add_systems(Update, rebuild_input);
+        app.update();
+        app.update();
+        let world = app.world_mut();
+        assert_eq!(world.query::<&InputTabButton>().iter(world).count(), 5);
+        assert_eq!(world.query::<&InputList>().iter(world).count(), 5);
+        let caps = world.query::<&RebindCap>().iter(world).count();
+        assert_eq!(caps, controls::slots().count());
+        let also = |world: &mut World| {
+            world
+                .query::<&Text>()
+                .iter(world)
+                .filter(|t| t.0.starts_with("also:"))
+                .map(|t| t.0.clone())
+                .collect::<Vec<_>>()
+        };
+        assert!(also(world).is_empty(), "the defaults never clash");
+        let sprint = controls::slots()
+            .find(|s| s.name() == "on_foot:ShiftLeft")
+            .unwrap();
+        world.resource_mut::<KeyBinds>().set(&sprint, KeyCode::KeyE);
+        app.update();
+        let world = app.world_mut();
+        let flagged = also(world);
+        assert!(
+            flagged.contains(&"also: open or shut a door".to_string()),
+            "{flagged:?}"
+        );
+        assert!(flagged.contains(&"also: sprint".to_string()), "{flagged:?}");
+        // The rebound cap reads its new key.
+        let labels: Vec<String> = world
+            .query::<&KitText>()
+            .iter(world)
+            .map(|t| t.text.clone())
+            .collect();
+        assert!(labels.contains(&"E".to_string()));
     }
 }

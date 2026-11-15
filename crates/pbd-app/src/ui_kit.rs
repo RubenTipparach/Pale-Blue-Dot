@@ -977,18 +977,133 @@ pub fn paint_plaques(
     }
 }
 
+/// What the kit shows beside the pointer while it is over this node (which
+/// needs an `Interaction`): an item's name and count, what is in hand. Empty
+/// shows nothing. Shown only while a menu holds the pointer: in play there
+/// is no cursor to show it by.
+#[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
+pub struct Tooltip(pub String);
+
+/// The one tooltip: a stone `tooltip` piece over every panel.
+#[derive(Component)]
+pub struct TooltipBox;
+
+/// The tooltip's words.
+#[derive(Component)]
+pub struct TooltipWords;
+
+/// The gap between a tooltip and its node, and its least distance from the
+/// window's edge, native px.
+const TOOLTIP_GAP: f32 = 3.0;
+
+/// Spawn the tooltip, hidden.
+pub fn spawn_tooltip(mut commands: Commands, kit: Res<UiKit>) {
+    commands
+        .spawn((
+            kit.nine(Set::Stone, "tooltip"),
+            KitPiece("tooltip".into()),
+            Node {
+                position_type: PositionType::Absolute,
+                padding: UiRect::new(px(6), px(6), px(3), px(3)),
+                display: Display::None,
+                ..default()
+            },
+            GlobalZIndex(40),
+            TooltipBox,
+        ))
+        .with_children(|tip| {
+            tip.spawn((
+                Text::default(),
+                TextFont {
+                    font_size: 10.0,
+                    ..default()
+                },
+                TextColor(TEXT),
+                text_shadow(),
+                TooltipWords,
+            ));
+        });
+}
+
+/// Where a tooltip `tip` (its size) goes for the hovered node `over`, in a
+/// window `window`, all native px: above the node and centred on it, so it
+/// never covers the node or the counts below and beside it, and below the
+/// node only when there is no room above; clamped inside the window on every
+/// side. Its top-left corner.
+pub fn tooltip_at(over: Rect, tip: Vec2, window: Vec2) -> Vec2 {
+    let edge = TOOLTIP_GAP;
+    let left = (over.center().x - tip.x / 2.0).clamp(edge, (window.x - tip.x - edge).max(edge));
+    let above = over.min.y - TOOLTIP_GAP - tip.y;
+    let top = if above >= edge {
+        above
+    } else {
+        over.max.y + TOOLTIP_GAP
+    };
+    Vec2::new(left, top.clamp(edge, (window.y - tip.y - edge).max(edge)))
+}
+
+/// Show the hovered node's tooltip over it, or none.
+#[allow(clippy::type_complexity)]
+pub fn show_tooltip(
+    menu: Option<Res<crate::controls::MenuOpen>>,
+    hovered: Query<(
+        &Interaction,
+        &Tooltip,
+        &InheritedVisibility,
+        &ComputedNode,
+        &UiGlobalTransform,
+    )>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    mut boxes: Query<(&mut Node, &ComputedNode), (With<TooltipBox>, Without<Tooltip>)>,
+    mut words: Query<&mut Text, With<TooltipWords>>,
+) {
+    let free = menu.is_some_and(|m| m.0);
+    let over = hovered
+        .iter()
+        .find(|(i, tip, shown, ..)| **i != Interaction::None && !tip.0.is_empty() && shown.get())
+        .map(|(_, tip, _, node, at)| {
+            // Physical px to native px: the node's own inverse scale holds
+            // the window's factor and the UI scale both.
+            let k = node.inverse_scale_factor();
+            let centre = at.translation * k;
+            let half = node.size() * k / 2.0;
+            (tip.0.clone(), Rect::from_center_half_size(centre, half), k)
+        });
+    let window = windows.single().ok().map(|w| w.physical_size().as_vec2());
+    let (Some((text, rect, k)), Some(window), true) = (over, window, free) else {
+        for (mut node, _) in &mut boxes {
+            if node.display != Display::None {
+                node.display = Display::None;
+            }
+        }
+        return;
+    };
+    for (mut node, computed) in &mut boxes {
+        let at = tooltip_at(rect, computed.size() * k, window * k);
+        node.display = Display::Flex;
+        node.left = px(at.x);
+        node.top = px(at.y);
+    }
+    for mut words in &mut words {
+        if words.0 != text {
+            words.0 = text.clone();
+        }
+    }
+}
+
 /// Install the kit before the first frame and keep it following the window.
 pub struct UiKitPlugin;
 
 impl Plugin for UiKitPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            PostUpdate,
-            (follow_window, paint_plaques, draw_kit_text)
-                .chain()
-                .before(UiSystems::Prepare)
-                .run_if(resource_exists::<UiKit>),
-        );
+        app.add_systems(Startup, spawn_tooltip.run_if(resource_exists::<UiKit>))
+            .add_systems(
+                PostUpdate,
+                (follow_window, paint_plaques, show_tooltip, draw_kit_text)
+                    .chain()
+                    .before(UiSystems::Prepare)
+                    .run_if(resource_exists::<UiKit>),
+            );
     }
 
     fn finish(&self, app: &mut App) {
@@ -1113,6 +1228,18 @@ mod tests {
         for c in ('A'..='Z').chain('0'..='9') {
             assert!(have.contains(&c), "{c}");
         }
+        // Every key cap the Input page can print, a rebind's and a fixed
+        // one's, and its waiting cap.
+        let caps = crate::controls::ASSIGNABLE
+            .iter()
+            .map(|(_, label)| *label)
+            .chain(["ESC", "LEFT CLICK", "RIGHT CLICK", "WHEEL", "PRESS A KEY"])
+            .chain(crate::controls::Tab::ALL.map(|t| t.label()));
+        for label in caps {
+            for c in label.chars().filter(|c| *c != ' ') {
+                assert!(have.contains(&c), "{c} in {label}");
+            }
+        }
         assert_eq!(layout.len(), order.len());
     }
 
@@ -1173,6 +1300,109 @@ mod tests {
         for (what, a, b) in pairs {
             let c = contrast(a, b);
             assert!(c >= 4.5, "{what}: {c:.2}:1");
+        }
+    }
+
+    /// The tooltip stands above its slot, clear of the slot's and its
+    /// neighbours' counts, below it only with no room above, and inside the
+    /// window; it shows only over a node with words while a menu holds the
+    /// pointer.
+    #[test]
+    fn a_tooltip_stands_over_its_slot_only_while_a_menu_holds_the_pointer() {
+        let window = Vec2::new(720.0, 450.0);
+        let tip = Vec2::new(60.0, 14.0);
+        // Above a slot in the middle, centred on it.
+        let slot = Rect::new(100.0, 200.0, 124.0, 224.0);
+        assert_eq!(tooltip_at(slot, tip, window), Vec2::new(82.0, 183.0));
+        // The hotbar at the bottom: above it still, never off the bottom.
+        let hotbar = Rect::new(220.0, 416.0, 244.0, 440.0);
+        assert_eq!(tooltip_at(hotbar, tip, window).y, 399.0);
+        // At the left edge it is held inside the window; at the top, with no
+        // room above, it goes below.
+        let corner = Rect::new(0.0, 0.0, 24.0, 24.0);
+        assert_eq!(tooltip_at(corner, tip, window), Vec2::new(3.0, 27.0));
+        let right = Rect::new(700.0, 200.0, 720.0, 224.0);
+        assert_eq!(tooltip_at(right, tip, window).x, 657.0);
+
+        let mut app = App::new();
+        install_bare(&mut app);
+        app.insert_resource(crate::controls::MenuOpen(true))
+            .insert_resource(UiScale(2.0))
+            .add_systems(Startup, spawn_tooltip)
+            .add_systems(Update, show_tooltip);
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        let slot = app
+            .world_mut()
+            .spawn((
+                Node::default(),
+                Interaction::Hovered,
+                Tooltip("Stone x 12".into()),
+                InheritedVisibility::VISIBLE,
+                ComputedNode {
+                    size: Vec2::splat(48.0),
+                    inverse_scale_factor: 0.5,
+                    ..default()
+                },
+                UiGlobalTransform::from_xy(224.0, 424.0),
+            ))
+            .id();
+        app.update();
+        let shown = |app: &mut App| {
+            let world = app.world_mut();
+            let node = world
+                .query_filtered::<&Node, With<TooltipBox>>()
+                .single(world)
+                .unwrap()
+                .clone();
+            let words = world
+                .query_filtered::<&Text, With<TooltipWords>>()
+                .single(world)
+                .unwrap()
+                .0
+                .clone();
+            (node.display, node.left, words)
+        };
+        // Over the slot (native 100..124 across), centred: the box has no
+        // size before its first layout.
+        assert_eq!(
+            shown(&mut app),
+            (Display::Flex, px(112.0), "Stone x 12".to_string())
+        );
+        app.world_mut()
+            .resource_mut::<crate::controls::MenuOpen>()
+            .0 = false;
+        app.update();
+        assert_eq!(shown(&mut app).0, Display::None, "no tooltip in play");
+        app.world_mut()
+            .resource_mut::<crate::controls::MenuOpen>()
+            .0 = true;
+        *app.world_mut().get_mut::<Interaction>(slot).unwrap() = Interaction::None;
+        app.update();
+        assert_eq!(shown(&mut app).0, Display::None, "nothing hovered");
+    }
+
+    /// An instrument for the "corners 28 px, pixel exact at scale 2"
+    /// capture (`docs/screenshots/stone-and-wood-ui/README.md`): writes the
+    /// oak and stone frames as the game bakes them at scale 2 to
+    /// `target/kit-dump/`, for `tools/art/measure_corners.py` to find in a
+    /// capture. Run with `--ignored`; it asserts nothing the other tests do
+    /// not.
+    #[test]
+    #[ignore]
+    fn dump_the_frames_baked_at_scale_two() {
+        let slices = Slices::load();
+        let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/kit-dump");
+        std::fs::create_dir_all(&out).unwrap();
+        for (name, path) in [
+            ("oak-frame", "ui/oak/frame.png"),
+            ("stone-frame", "ui/stone/frame.png"),
+        ] {
+            let pixels = decode(&assets_dir().join(path));
+            let image = bake(&pixels, slices.render_px, 2, None);
+            let size = image.size();
+            let data = image.data.clone().expect("baked on the CPU");
+            let png = RgbaImage::from_raw(size.x, size.y, data).expect("rgba8");
+            png.save(out.join(format!("{name}@2.png"))).unwrap();
         }
     }
 }

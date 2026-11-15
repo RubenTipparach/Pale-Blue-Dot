@@ -416,7 +416,9 @@ GAME_FILES = {
     "pickaxe.png": "assets/items/tools/pickaxe.png",
     "lantern_post.png": "assets/items/lights/lantern_post.png",
     "torch.png": "assets/items/lights/torch.png",
-    "kestrel.glb": "assets/models/vehicles/kestrel/kestrel.glb",
+    # The Kestrel's model left the game with it (`retire-kestrel`, owner
+    # 2026-11-14). The mockup keeps the copy taken before, game/kestrel.glb
+    # and game/kestrel.gltf.json, which this script no longer refreshes.
     "tern.glb": "assets/models/vehicles/tern/tern.glb",
     "loon.glb": "assets/models/vehicles/loon/loon.glb",
 }

@@ -118,3 +118,66 @@ the face it is drawn on, in every state of the control that carries it.
   4.5:1
 
 Pinned by `ui_kit::tests::tokens_clear_four_and_a_half_to_one`.
+
+### Requirement: Key bindings are grouped by context and can be changed
+The settings' Input page SHALL group the bindings into sub-tabs by context
+(on foot, hands, flying, vehicles, menus), one row per action with its keys
+in caps, off the one binding table. Every keyboard key of a row, except Esc
+and the number row's range, SHALL be changeable: a click on its cap waits
+for a key, the next key it can take is taken and kept in the player's
+settings file, and Esc cancels without leaving the page. A row whose key
+another action reads in a context live at the same time SHALL say so
+("also:" and that action); the defaults SHALL flag none. A reset SHALL put
+the open sub-tab's keys back. The game SHALL obey a rebind in the contexts
+its group is read in, and with no rebinds SHALL read the keyboard exactly as
+before. A settings file from before rebinds SHALL still load, with none.
+The owner, 2026-11-14: "organize the input menu better with tabs or
+something instead of big uber list".
+
+#### Scenario: Rebinding a key
+- **WHEN** the player clicks the cap of "sprint" on the On foot sub-tab and
+  presses E
+- **THEN** the cap reads E, the row says "also: open or shut a door", E
+  sprints on foot and still rolls in flight, and Reset tab puts SHIFT back
+
+#### Scenario: An old settings file
+- **WHEN** a version 2 settings file is read
+- **THEN** its frame limit, render scale, auto step and rain shadow are
+  read, there are no rebinds, and the next change writes version 3
+
+Pinned by `controls::tests::every_slot_has_its_own_name`,
+`controls::tests::the_input_page_has_five_sub_tabs_and_every_group_is_on_one`,
+`controls::tests::the_defaults_never_clash_and_a_rebind_onto_a_live_key_does`,
+`controls::tests::rebinds_round_trip_through_their_names`,
+`controls::tests::a_rebound_key_presses_the_default_its_readers_read`,
+`settings::tests::a_file_from_before_rebinds_reads_none_and_an_unknown_one_is_skipped`,
+`settings::tests::settings_round_trip_through_the_file`,
+`menu::tests::a_cap_takes_the_next_key_and_esc_cancels` and
+`menu::tests::the_input_page_lists_every_slot_and_flags_a_clash`.
+
+### Requirement: The frame limit and render scale are stone sliders
+The settings' frame limit and render scale SHALL be stone sliders with an
+oak grip and the value beside them, stepping through the same values as
+before (off, 60, 120 frames a second; 50, 67, 75, 85 and 100 %), a press or
+a drag setting the step nearest the pointer and keeping it.
+
+#### Scenario: Dragging the render scale
+- **WHEN** the player drags the render scale's grip to the left end
+- **THEN** the render scale is 50 % and the value beside the slider reads 50%
+
+Pinned by `menu::tests::the_sliders_keep_the_plaques_values_and_steps`.
+
+### Requirement: Slots carry tooltips from the kit
+While a menu holds the pointer, a slot of the pack or the hotbar, and the
+tool slot, SHALL show a stone tooltip with what it holds (a block's name and
+count, a tool's name and use, a fish's species; the tool slot what is in
+hand; an empty slot nothing), standing above the slot and clear of its
+neighbours' counts, below it only with no room above, and inside the
+window. In play, with no cursor, none SHALL show.
+
+#### Scenario: Hovering the hotbar in the pack
+- **WHEN** the pack is open and the pointer is over a hotbar slot of 48 stone
+- **THEN** a tooltip reading "Stone x 48" stands over that slot
+
+Pinned by `ui_kit::tests::a_tooltip_stands_over_its_slot_only_while_a_menu_holds_the_pointer`
+and `slots::tests::a_slot_says_what_it_holds`.

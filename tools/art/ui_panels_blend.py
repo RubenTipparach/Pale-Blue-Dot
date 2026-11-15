@@ -1477,7 +1477,7 @@ def measure(name, px, scale):
 # docs/mockups/ui/game-ui.js reads these from rendered/slices.json ("rock_panels") and sizes each panel
 # exactly; the drawn look still draws the 48 px drawn slab as a 9-slice.
 ROCK_PANELS = {
-    "pack": (268, 152), "station": (230, 156), "chest": (372, 168), "talk": (270, 124), "trade": (308, 148),
+    "pack": (268, 152), "pack-craft": (268, 204), "station": (230, 156), "chest": (372, 168), "talk": (270, 124), "trade": (308, 148),
     "loading": (150, 148), "sample": (192, 96), "kit-48": (48, 48), "kit-128": (128, 64), "kit-200": (200, 100),
 }
 
@@ -1601,10 +1601,11 @@ def render_kit(only=""):
         print(f"{name:18s} {dt:5.1f}s  plain-sides {changed:4d} px  {c1 or ''}")
     # The selection rune on the well, and the icon inlay on a face, as in the drawn kit.
     if not only or "rock" in only:
-        report["rock_render_seconds"] = render_rocks(arg("--rocks", ""))
+        # a partial run (--rocks a,b) adds to the record rather than replacing the others
+        report["rock_render_seconds"] = {**report.get("rock_render_seconds", {}), **render_rocks(arg("--rocks", ""))}
     report["rock_panels"] = {k: list(v) for k, v in ROCK_PANELS.items()}
     if ROCK_CONTRAST:
-        report["rock_contrast"] = ROCK_CONTRAST
+        report["rock_contrast"] = {**report.get("rock_contrast", {}), **ROCK_CONTRAST}
     report["rock_px"] = ROCK_PX
     report["light"] = "the approved base rock's (Euler -40, -28, 0; 3.2; sky 0.35; roughness 0.7)"
     report["tokens"] = slices["tokens"]

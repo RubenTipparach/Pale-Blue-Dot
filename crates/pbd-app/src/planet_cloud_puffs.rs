@@ -297,9 +297,24 @@ mod tests {
         for v in &mut maps.cloud {
             *v = [0.6, 0.2, 0.0, 30.0];
         }
-        sites.build(1, &maps, &maps, 0.0, eye, None, &settings, &mut out);
-        let share = out.len() as f32 / sites.sites.len() as f32;
+        let counts = sites.build(1, &maps, &maps, 0.0, eye, None, &settings, &mut out);
+        // The share is of the puffs BUILT, one a carrying site: what is drawn
+        // from 50 m over the layer is that less the far side of the planet,
+        // which the horizon cull drops (design 3b; pinned by
+        // `pbd_core::cloud_puffs`'s horizon test). Measured on `out`, the
+        // share was the cull's (0.12 from here, the cap the horizon leaves),
+        // and the test could never pass: the cull came in the same commit.
+        let share = counts.built as f32 / sites.sites.len() as f32;
         assert!(share > 0.5 && share < 0.75, "{share}");
+        assert_eq!(
+            out.len(),
+            counts.over_horizon,
+            "no view, so no frustum cull"
+        );
+        assert!(
+            counts.over_horizon > 0 && counts.over_horizon < counts.built,
+            "the far side is culled and the near side drawn: {counts:?}"
+        );
         let d: Vec<f32> = out
             .iter()
             .map(|p| Vec3::from_slice(&p.centre_seed[..3]).distance(eye))

@@ -13,7 +13,7 @@
 //! tile they stand on - asked for a second time.
 
 use bevy::prelude::*;
-use pbd_app::ui_kit::{self, KitText, Set, UiKit};
+use pbd_app::ui_kit::{self, KitText, Set, Tooltip, UiKit};
 use pbd_core::inventory::{Item, SLOTS};
 use pbd_core::terrain::Material;
 
@@ -106,6 +106,8 @@ pub struct ItemIcons {
     pub hand: Handle<Image>,
     /// In `Material::LAMPS` order.
     pub lights: Vec<Handle<Image>>,
+    /// The roster's names, by roster index, for a fish's tooltip.
+    pub fish_names: Vec<String>,
 }
 
 impl ItemIcons {
@@ -127,12 +129,12 @@ pub fn load_icons(
     fauna: Res<pbd_app::config::FaunaConfig>,
     body: Res<pbd_app::fish::Body>,
 ) {
-    let fish = fauna
-        .0
-        .roster(&body.0)
+    let roster = fauna.0.roster(&body.0);
+    let fish = roster
         .iter()
         .map(|species| assets.load(pbd_app::fish::species_icon(species)))
         .collect();
+    let fish_names = roster.iter().map(|species| species.name.clone()).collect();
     let tools = pbd_core::inventory::Tool::ALL
         .iter()
         .map(|tool| assets.load(pbd_app::fish::tool_icon(*tool)))
@@ -148,6 +150,7 @@ pub fn load_icons(
         tools,
         hand: assets.load(pbd_app::fish::HAND_ICON),
         lights,
+        fish_names,
     });
 }
 
@@ -210,7 +213,8 @@ pub fn spawn(
         })
         .with_children(|row| {
             for index in 0..SLOTS {
-                cell(row, &kit, index, &atlas, ());
+                // Hovered while the pack has the pointer, for its tooltip.
+                cell(row, &kit, index, &atlas, Interaction::default());
             }
         });
 }
@@ -234,6 +238,7 @@ pub fn cell(
         },
         kit.whole(Set::Stone, slot_piece(index == 0)),
         SlotCell(index),
+        Tooltip::default(),
         extra,
     ))
     .with_children(|cell| {
@@ -322,6 +327,33 @@ pub fn paint_icon(
     node.color = tint;
 }
 
+/// What a slot's tooltip says: nothing for an empty slot; a tool's name and
+/// what it is for; a fish's species; a block's name and how many.
+pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -> String {
+    let Some(stack) = stack else {
+        return String::new();
+    };
+    let name = match stack.item {
+        Item::Tool(tool) => return format!("{}: {}", tool.name(), tool.purpose()),
+        Item::Fish(species) => items
+            .fish_names
+            .get(species as usize)
+            .cloned()
+            .unwrap_or_else(|| stack.item.name().into()),
+        Item::Block(_) => stack.item.name().into(),
+    };
+    let mut letters = name.chars();
+    let name = letters
+        .next()
+        .map(|first| first.to_uppercase().chain(letters).collect::<String>())
+        .unwrap_or_default();
+    if stack.count > 1 {
+        format!("{name} x {}", stack.count)
+    } else {
+        name
+    }
+}
+
 /// Repaint the row from the store. Everything a slot shows is derived here, so
 /// the store stays the one place that knows what is carried.
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
@@ -333,6 +365,7 @@ pub fn update(
     mut cells: Query<(&SlotCell, &mut ImageNode), Without<SlotIcon>>,
     icons_query: Query<(&SlotIcon, &mut ImageNode), Without<SlotCell>>,
     mut counts: Query<(&SlotCount, &mut KitText)>,
+    mut tips: Query<(&SlotCell, &mut Tooltip)>,
     mut art_ready: Local<bool>,
 ) {
     // Repaint when the store moves, and ALSO until the art has arrived once.
@@ -367,6 +400,12 @@ pub fn update(
     }
     for (icon, mut node) in &mut icons {
         paint_icon(&mut node, slots.get(icon.0), &items, &images);
+    }
+    for (cell, mut tip) in &mut tips {
+        let want = stack_tip(slots.get(cell.0), &items);
+        if tip.0 != want {
+            tip.0 = want;
+        }
     }
     for (count, mut text) in &mut counts {
         let label = match slots.get(count.0) {
@@ -493,5 +532,45 @@ mod tests {
         let stone = block_art(Material::Stone).unwrap();
         assert_eq!((stone.top, stone.side), (stone.under, stone.under));
         assert_eq!(thumbnail(Material::Dirt).unwrap().2, Color::WHITE);
+    }
+
+    /// A slot's tooltip: nothing when empty, a block's name and count, a
+    /// tool's name and purpose, a fish's species.
+    #[test]
+    fn a_slot_says_what_it_holds() {
+        use pbd_core::inventory::{Stack, Tool};
+        let items = ItemIcons {
+            atlas: Handle::default(),
+            fish: Vec::new(),
+            tools: Vec::new(),
+            hand: Handle::default(),
+            lights: Vec::new(),
+            fish_names: vec!["Perch".into(), "Char".into()],
+        };
+        assert_eq!(stack_tip(None, &items), "");
+        let stone = Stack {
+            item: Item::Block(Material::Stone),
+            count: 12,
+        };
+        assert_eq!(stack_tip(Some(stone), &items), "Stone x 12");
+        let one = Stack { count: 1, ..stone };
+        assert_eq!(stack_tip(Some(one), &items), "Stone");
+        let rod = Stack {
+            item: Item::Tool(Tool::Rod),
+            count: 1,
+        };
+        assert_eq!(
+            stack_tip(Some(rod), &items),
+            "Fishing rod: cast, hook, reel"
+        );
+        let char_ = Stack {
+            item: Item::Fish(1),
+            count: 3,
+        };
+        assert_eq!(stack_tip(Some(char_), &items), "Char x 3");
+        assert_eq!(
+            super::super::equipment::hand_tip(None),
+            "Bare hands: breaks nothing"
+        );
     }
 }
