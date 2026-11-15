@@ -37,6 +37,7 @@ https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk (`docs/mockups/tracker.html`, 
 | 25 | 2026-11-14 | Antimatter and interstellar travel added after exo-industry; advanced engines now stop at fusion. |
 | 26 | 2026-11-14 | Space freighters added to phase 9 ("9 should also include space freighers"). |
 | 27 | 2026-11-14 | Finance and space stations added after rocketry (phase 8): stock market, space trading posts, space casinos. |
+| 28 | 2026-11-14 | Space tourism added to phase 9, space exploration and colonization. |
 
 **Back on one account (2026-11-14).** On 2026-11-13 a cloud session republished this week's pages
 on a second claude.ai account and moved every link here to it; later sessions added M25 to M29

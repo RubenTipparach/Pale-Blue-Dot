@@ -346,7 +346,8 @@ which wait for a request.
   (M11).
 - **Then space exploration and colonization** ("after rocketry, we'll get
   into space exploration and colonization"): the system's other worlds (M1,
-  M2, `interplanetary-travel`) and settling them (M10 stations and outposts).
+  M2, `interplanetary-travel`), space tourism ("in 9 , add in \"space
+  tourism\""), and settling them (M10 stations and outposts).
 - **Then exo-industry and advanced propulsion** ("after colonization, we'll
   do exo-industrialiozation + advanced rocket engines + particle colliders"):
   industry off the home planet (M20, M10), engines past chemical rockets
