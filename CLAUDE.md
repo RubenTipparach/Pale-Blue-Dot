@@ -299,6 +299,26 @@ the owner calls the rain drops.
 The player's RAIN SHADOW setting (`player-settings` 8) turns all of it off,
 and is off by default.
 
+## The first game loop (owner, 2026-11-14)
+
+**Standing direction from the user:** "so initial game loop will be:
+crafting tools, fishing, farming, herding, cooking". That loop is what the
+game is built toward first. The parts and where each stands:
+
+1. **Crafting tools**: `tool-crafting` (written up, not built). The tools are
+   made, not handed out; it rests on the station and recipe mechanism that
+   `basic-smelting` builds.
+2. **Fishing**: built (`fishing-and-equipment`).
+3. **Farming**: being built (`farming`, branch `claude/farming-smelting`).
+4. **Herding**: being built (`animal-husbandry`, branch
+   `claude/animal-husbandry`).
+5. **Cooking**: written up (`cooking`), built after farming lands.
+
+Each part feeds the next: crafted tools dig, fish and till; crops feed the
+herd and the pot; the herd's eggs, milk and meat go in the pot too. Work on
+the loop comes before the other drafted mockups (ships, stations, markets),
+which wait for a request.
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
