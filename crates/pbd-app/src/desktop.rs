@@ -625,7 +625,7 @@ impl Launch {
                     result.settings_tab = menu::SETTINGS_TABS
                         .iter()
                         .position(|t| t.eq_ignore_ascii_case(name))
-                        .expect("--settings-tab takes picture, weather, world, movement or input")
+                        .expect("--settings-tab takes picture, weather, world, movement, input or sound")
                         as u8;
                 }
                 "--input-tab" => {

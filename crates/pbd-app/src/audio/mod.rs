@@ -279,6 +279,42 @@ enum Playable {
 }
 
 impl Playable {
+    /// A bed's file: streamed, or decoded whole under a capture.
+    fn open(path: &std::path::Path, decode: bool) -> Result<Self, String> {
+        if decode {
+            kira::sound::static_sound::StaticSoundData::from_file(path)
+                .map(Playable::Static)
+                .map_err(|e| e.to_string())
+        } else {
+            StreamingSoundData::from_file(path)
+                .map(Playable::Stream)
+                .map_err(|e| e.to_string())
+        }
+    }
+
+    fn duration_s(&self) -> f64 {
+        match self {
+            Playable::Static(d) => d.duration().as_secs_f64(),
+            Playable::Stream(d) => d.duration().as_secs_f64(),
+        }
+    }
+
+    /// Looped from `start` seconds, silent until eased up.
+    fn bed(self, start: f64) -> Self {
+        match self {
+            Playable::Static(d) => Playable::Static(
+                d.loop_region(..)
+                    .start_position(start)
+                    .volume(Decibels::SILENCE),
+            ),
+            Playable::Stream(d) => Playable::Stream(
+                d.loop_region(..)
+                    .start_position(start)
+                    .volume(Decibels::SILENCE),
+            ),
+        }
+    }
+
     fn play_on(self, track: &mut TrackHandle) -> Result<VoiceSound, String> {
         match self {
             Playable::Static(d) => track
@@ -295,7 +331,7 @@ impl Playable {
 
 /// One playing bed.
 struct BedVoice {
-    sound: StreamingSoundHandle<FromFileError>,
+    sound: VoiceSound,
     /// Eased amplitude, linear.
     level: f32,
     rate: f32,
@@ -504,7 +540,8 @@ fn mix_frame(
     data: Res<AudioData>,
     settings: Option<Res<PlayerSettings>>,
     time: Res<Time>,
-    ready: Option<Res<crate::loading::Warming>>,
+    warming: Option<Res<crate::loading::Warming>>,
+    loading: Option<Res<crate::WorldLoading>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
 ) {
     let requests = std::mem::take(&mut sfx.requests);
@@ -630,7 +667,7 @@ fn mix_frame(
     for voice in &mut mixer.voices {
         voice.asked = false;
     }
-    let ready_now = ready.is_none();
+    let ready_now = warming.is_none() && loading.is_none();
     let Some(bank) = mixer.loaded.as_ref() else {
         if ready_now {
             for r in &requests {
@@ -751,7 +788,36 @@ fn mix_frame(
             StartTime::Immediate
         };
         let loop_from = mixer.dice.unit() as f64;
-        let sound = if cue.stream {
+        // A capture decodes what is otherwise streamed, so the mock mixer
+        // never waits on a stream's thread and its WAV is the same each run.
+        let sound = if cue.stream && engine.is_mock() {
+            let file = &cue.files(request.cue)[take];
+            match kira::sound::static_sound::StaticSoundData::from_file(
+                engine::audio_dir().join("sfx").join(file),
+            ) {
+                Ok(data) => {
+                    let mut data = data
+                        .volume(Decibels(db + decibels(gain)))
+                        .panning(Panning(p))
+                        .playback_rate(PlaybackRate(rate as f64))
+                        .start_time(start);
+                    if cue.looped {
+                        let length = data.duration().as_secs_f64();
+                        data = data
+                            .loop_region(..)
+                            .start_position(loop_from * length)
+                            .fade_in_tween(Some(tween(mix.loop_fade_s)));
+                    }
+                    Playable::Static(data)
+                }
+                Err(e) => {
+                    if mixer.unknown.insert(request.cue) {
+                        error!("AUDIO {file}: {e}");
+                    }
+                    continue;
+                }
+            }
+        } else if cue.stream {
             let file = &cue.files(request.cue)[take];
             match StreamingSoundData::from_file(engine::audio_dir().join("sfx").join(file)) {
                 Ok(data) => {
@@ -911,15 +977,11 @@ fn mix_frame(
                     let path = engine::audio_dir()
                         .join("ambience")
                         .join(format!("{}.ogg", bed.name()));
-                    match StreamingSoundData::from_file(&path) {
+                    match Playable::open(&path, engine.is_mock()) {
                         Ok(data) => {
-                            let length = data.duration().as_secs_f64();
+                            let length = data.duration_s();
                             let start = mixer.dice.unit() as f64 * length;
-                            let data = data
-                                .loop_region(..)
-                                .start_position(start)
-                                .volume(Decibels::SILENCE);
-                            match engine.ambience.play(data) {
+                            match data.bed(start).play_on(&mut engine.ambience) {
                                 Ok(sound) => {
                                     if mixer.log {
                                         info!("AUDIO bed start {} at {:.1} s", bed.name(), start);
@@ -978,7 +1040,9 @@ fn mix_frame(
                 .iter()
                 .filter_map(|b| {
                     mixer.beds[b.index()].as_mut().map(|v| {
-                        if let Some(e) = v.sound.pop_error() {
+                        if let VoiceSound::Stream(stream) = &mut v.sound
+                            && let Some(e) = stream.pop_error()
+                        {
                             warn!("AUDIO bed {} stream error: {e}", b.name());
                         }
                         let state = match v.sound.state() {
@@ -1006,12 +1070,66 @@ fn mix_frame(
     if let Some(why) = engine.device_error() {
         warn!("AUDIO the sound device reported: {why}; kira restarts the stream");
     }
-    engine.advance();
+    // The mock backend mixes one frame's samples a frame from `READY`, when
+    // a capture's frames start counting, so the WAV is in step with them.
+    if ready_now {
+        engine.advance();
+    }
     if let (Some(tap), Some(wav)) = (engine.tap.as_ref(), mixer.wav.as_mut()) {
         let samples = std::mem::take(&mut *tap.lock().unwrap_or_else(|e| e.into_inner()));
         if let Err(e) = wav.append(&samples) {
             warn!("AUDIO --audio-wav: {e}");
             mixer.wav = None;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Task 4.3: only `emitter - eye` reaches the engine, so moving the whole
+    /// scene (a floating-origin rebase) moves no sound.
+    #[test]
+    fn an_origin_rebase_moves_no_sound() {
+        let mix = MixConfig::default();
+        let cue = pbd_core::audio::Cue {
+            full_within_m: 2.0,
+            audible_m: 30.0,
+            ..Default::default()
+        };
+        let turn = Quat::from_rotation_y(0.7);
+        let at = |shift: Vec3| {
+            let listener = Listener {
+                eye: Vec3::new(10.0, 4800.0, -3.0) + shift,
+                inverse: turn.inverse(),
+                forward: turn * Vec3::NEG_Z,
+                valid: true,
+            };
+            place(
+                &mix,
+                &cue,
+                &listener,
+                Where::At(Vec3::new(30.0, 4801.0, 12.0) + shift),
+            )
+        };
+        let (g0, p0, c0, d0) = at(Vec3::ZERO);
+        let (g1, p1, c1, d1) = at(Vec3::new(4096.0, -2048.0, 1024.0));
+        assert!(
+            (g0 - g1).abs() < 1e-3 && (p0 - p1).abs() < 1e-3,
+            "{g0} {g1} {p0} {p1}"
+        );
+        assert!((c0 - c1).abs() / c0 < 1e-3 && (d0 - d1).abs() < 1e-2);
+        assert!(
+            g0 > 0.0 && p0.abs() > 0.1,
+            "a placed, panned sound: {g0} {p0}"
+        );
+    }
+
+    #[test]
+    fn a_volume_of_nought_is_silent_and_full_is_unity() {
+        assert_eq!(volume_db(100), 0.0);
+        assert!(volume_db(0) <= -100.0);
+        assert!((volume_db(50) + 12.04).abs() < 0.01);
     }
 }
