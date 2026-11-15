@@ -271,6 +271,7 @@ dialog.keys .close{float:right}
   <p>Press <b>Fly it</b> to take off in the craft you are looking at. Drag the mouse to look round; scroll to zoom.</p>
   <h4>Planes</h4>
   <table><tr><td><kbd>Shift</kbd> or <kbd>R</kbd></td><td><b>Throttle up</b>: more engine power. More power means more speed, and more speed means more lift, so the plane climbs.</td></tr><tr><td><kbd>Ctrl</kbd> or <kbd>F</kbd></td><td><b>Throttle down</b>: less engine power, to slow down or come down. The HUD shows the throttle as a %; it starts at 70%.</td></tr><tr><td><kbd>S</kbd></td><td>Nose up: pull back to climb.</td></tr><tr><td><kbd>W</kbd></td><td>Nose down: push forward to dive.</td></tr><tr><td><kbd>A</kbd> <kbd>D</kbd></td><td>Roll left, roll right. Roll, then pull up with S, to turn.</td></tr><tr><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Rudder: swing the nose left or right. On the runway A, D, Q and E steer.</td></tr></table>
+  <table><tr><td><kbd>[</kbd> <kbd>]</kbd></td><td><b>Trim</b> nose down, nose up: the speed the plane settles at with the stick let go. It starts trimmed to fly level at its cruise speed on the starting throttle; trim up to fly slower and climb, down to fly faster. The Trim row on the instruments shows it.</td></tr></table>
   <p>Nothing flies the plane for you: it goes where you point it. The wing keeps its lift up to a steep 35 degrees, so pulling up climbs instead of stalling.</p>
   <h4>Helicopters and Puffin</h4>
   <table><tr><td><kbd>Shift</kbd> <kbd>Ctrl</kbd></td><td>Up and down (the collective; on Puffin, the power).</td></tr><tr><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></td><td>Tilt forward, left, back, right, and it flies that way.</td></tr><tr><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Turn left, turn right.</td></tr></table>
@@ -672,8 +673,28 @@ const qmul = (a, b) => [a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3], a
 const qrot = (q, v) => { const r = qmul(qmul(q, [0, v[0], v[1], v[2]]), [q[0], -q[1], -q[2], -q[3]]); return [r[1], r[2], r[3]]; };
 const qinv = (q, v) => qrot([q[0], -q[1], -q[2], -q[3]], v);
 const qyaw = a => [Math.cos(a / 2), 0, Math.sin(a / 2), 0];
+// The trim the tail holds hands-off (owner, 2026-11-15: "why does the plane autopitch up?"). The tail
+// used to hold one fixed angle (ATRIM) on every design; at cruise that angle made far more lift than
+// the plane weighs, so it climbed on its own. Now each design starts trimmed for level flight at its
+// cruise speed on the starting throttle (where thrust meets drag with lift equal to weight), and the
+// pilot moves the trim with [ and ], as a real trim wheel: the stick still does all the flying.
+function cruiseTrim(m, power) {
+  if (!m.S || m.kind !== "plane") return ATRIM;
+  const W = m.m * G1, aOf = CL => CLMAX / CLA * Math.atanh(Math.min(0.98, CL / CLMAX));
+  let best = null;
+  for (let V = 12; V <= 260; V += 0.5) {
+    const q = 0.5 * RHO * V * V, CL = W / (q * m.S);
+    if (CL >= CLMAX * 0.98) continue;
+    const D = q * (m.CdA + m.S * CL * CL / (Math.PI * m.AR * 0.8)), T = power * m.Peff / Math.max(V, 10);
+    if (T >= D) best = V; else if (best !== null) break;   // the fast side, where thrust falls to drag
+  }
+  const V = best || m.s.stall * 1.4, q = 0.5 * RHO * V * V;
+  return Math.max(-0.2, Math.min(0.3, aOf(W / (q * m.S)) - INCID));
+}
+const TRIM_STEP = 0.5 * Math.PI / 180;   // one press of [ or ]: half a degree of trimmed angle
 function newFlight(model, at) {
-  return {p: at.p.slice(), v: [0, 0, 0], q: qyaw(at.yaw || 0), w: [0, 0, 0], power: model.kind === "plane" ? 0.7 : 0, gy: 0, expert: false, crashed: null, ground: true, defl: {ail: 0, elev: 0, rud: 0}, tilt: 0, stall: false, alpha: 0, airspeed: 0, hc: at.hc, rotorAngle: 0};
+  const power0 = model.kind === "plane" ? 0.7 : 0;
+  return {trim: cruiseTrim(model, power0), p: at.p.slice(), v: [0, 0, 0], q: qyaw(at.yaw || 0), w: [0, 0, 0], power: power0, gy: 0, expert: false, crashed: null, ground: true, defl: {ail: 0, elev: 0, rud: 0}, tilt: 0, stall: false, alpha: 0, airspeed: 0, hc: at.hc, rotorAngle: 0};
 }
 // inputs: pitch (+1 nose up: S), roll (+1 right: D), yaw (+1 left: Q), each -1..1; power changes with Shift/Ctrl
 function stepFlight(m, st, inp, dt) {
@@ -719,7 +740,7 @@ function stepFlight(m, st, inp, dt) {
   tau[2] += surf * q * m.Se * DCL * st.defl.elev * m.armE;
   tau[1] += surf * q * m.Sr * DCL * st.defl.rud * m.armR * 3;   // a rudder with enough bite to swing the nose
   // weathercock and pitch stability, from the tail; damping grows with q
-  tau[2] += -surf * q * m.Se * 4.0 * (alpha - ATRIM) * m.armE;
+  tau[2] += -surf * q * m.Se * 4.0 * (alpha - (st.trim ?? ATRIM)) * m.armE;
   tau[1] += -surf * q * m.Sv * 3.0 * beta * m.armV;
   tau[0] += DIHED * surf * q * (m.S || 0) * 0.08 * beta;   // dihedral: a sideslip rolls the wings against it, as a real wing does (no input of its own)
   const damp = [(2.5 + q / 120), (1.5 + q / 200), (3.0 + q / 60)];   // the air stops a rotation, never starts one: a held stick gives a steady rate
@@ -1905,7 +1926,8 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
   let fly = null;
   const keys = new Set(), hud = document.getElementById("flyHud"), flyBtn = document.getElementById("flyBtn");
   const FLYKEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "KeyR", "KeyF", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "ArrowUp", "ArrowDown"]);
-  window.addEventListener("keydown", e => { if (!fly || TAB !== "airfield" || (e.target.closest && e.target.closest("input,textarea"))) return; if (FLYKEYS.has(e.code)) { keys.add(e.code); e.preventDefault(); } });
+  window.addEventListener("keydown", e => { if (!fly || TAB !== "airfield" || (e.target.closest && e.target.closest("input,textarea"))) return; if (FLYKEYS.has(e.code)) { keys.add(e.code); e.preventDefault(); }
+    if ((e.code === "BracketLeft" || e.code === "BracketRight") && fly.st && fly.st.trim !== undefined && !fly.air) { fly.st.trim = Math.max(-0.2, Math.min(0.3, fly.st.trim + (e.code === "BracketRight" ? TRIM_STEP : -TRIM_STEP))); e.preventDefault(); } });
   window.addEventListener("keyup", e => keys.delete(e.code));
   window.addEventListener("blur", () => keys.clear());
   const k = c => keys.has(c) ? 1 : 0;
@@ -1956,10 +1978,10 @@ uniform float uLampOn;`).replace("#include <lights_fragment_end>", `#include <li
       row("Airspeed", `${st.airspeed.toFixed(0)} m/s`) + row("Height", `${Math.max(0, st.p[1] - st.hc - (st.gy || 0)).toFixed(0)} m`) +
       row("Pitch / bank", `${sgn(a.pitch * deg)}&deg; / ${sgn(a.bank * deg)}&deg;`) + row("Heading", `${((90 - a.heading * deg) % 360 + 360).toFixed(0) % 360}&deg;`) +
       row(m.kind === "heli" ? "Collective" : "Throttle", `${pw}%`) + (m.kind === "vtol" ? row("Nacelles", `${Math.round(st.tilt * 90)}&deg; forward`) : "") +
-      row("Ail / elev / rud", `${sgn(D.ail)} ${sgn(D.elev)} ${sgn(D.rud)}&deg;`) +
+      row("Ail / elev / rud", `${sgn(D.ail)} ${sgn(D.elev)} ${sgn(D.rud)}&deg;`) + (m.kind === "plane" && st.trim !== undefined ? row("Trim", `${sgn((st.trim + INCID) * deg)}&deg; wing`) : "") +
       (m.S ? row("Stall at", `${m.s.stall.toFixed(0)} m/s`) : row("Hover at", `${Math.round(100 / Math.max(0.01, m.hover))}%`)) +
       (fly.crash ? `<div class="stall">CRASHED into ${fly.crash.what}</div>` : st.stall ? `<div class="stall">STALL</div>` : "") + "" +
-      `<div class="keys">${m.kind === "heli" ? "Shift/Ctrl collective, W A S D cyclic, Q E tail rotor" : "W nose down, S nose up, A D roll, Q E rudder, Shift/Ctrl throttle"}; drag to look round</div>`;
+      `<div class="keys">${m.kind === "heli" ? "Shift/Ctrl collective, W A S D cyclic, Q E tail rotor" : "W nose down, S nose up, A D roll, Q E rudder, Shift/Ctrl throttle, [ ] trim"}; drag to look round</div>`;
     // the attitude ball: sky above the horizon, turned by the bank, moved by the pitch
     const cv = document.getElementById("adi"), g2 = cv.getContext("2d"), w = 96, h = 64;
     g2.save(); g2.translate(w / 2, h / 2); g2.rotate(-a.bank); g2.translate(0, a.pitch * deg * 1.2);
