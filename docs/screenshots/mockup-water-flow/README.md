@@ -41,3 +41,29 @@ One fix in the shared builder, which M25's sim takes too: a source is drawn 6 cm
 (0.94 against 1.0 of its layer), so arrows ran into a pool of sources and every pool and falling column grew a 6 cm
 sliver of froth. The flow now runs on the head (a source an eighth above level 7) and no fall is drawn for a step
 under 7 cm; real steps (an eighth and up) keep their sheets. M25's Waterfall preset: 532 sheets before, 417 after.
+
+## The owner's phone notes (2026-11-15): edge walls, sorting, the arrows' toggle, flow, and a panned texture
+
+openspec/changes/water-flow design 7b and 7c. Headless Chromium on SwiftShader (no GPU in the cloud session): the look,
+never the frame rate. Before is the branch at `26829d0`, after is this change, same camera, same settled preset.
+
+| Before | After | Shows |
+| --- | --- | --- |
+| `flowtex-phone-default-before.png` | `flowtex-phone-default-after.png` | M28 at 390 × 844 (2x), the default view: the outer sea sheet is gone; Tenebris's water tile on the patch's sea. |
+| `flowtex-front-edge-before.png` | `flowtex-front-edge-after.png` | "The very front part of the cell doesn't have any geometry": the near edge's walls, hidden under the outer sea before, show down to the base; the sea cells stand as a water wall at the edge. |
+| `flowtex-sort-side-before.png`, `flowtex-sort-down-before.png` | `flowtex-sort-side-after.png`, `flowtex-sort-down-after.png` | The spring's falls from two low side views: before, sheets behind sheets blended through each other; after, only the nearest water draws, the tile panning down each fall. |
+| `flowtex-phone-spring-default-before.png`, `flowtex-phone-spring-low-before.png`, `flowtex-phone-spring-night-before.png` | the same `-after` | The spring on a phone: default view, a low view across the falls, and 22:00 (each lamp lights the water and foam near it). |
+| `flowtex-basin-arrows-before.png` | `flowtex-basin-arrows-after.png` | "we can see 1 arrow in a cell with 4 pads": the basin's pool, 6 arrows before, 18 after (every cap but the pool's still middle). |
+| `flowtex-front-arrows-before.png` | `flowtex-front-arrows-after.png` | The spring 9 ticks in, still spreading: the front caps now point on into the dry plain. |
+| | `flowtex-move-flow-a.png`, `flowtex-move-flow-b.png` | Two frames a second apart over flowing caps and falls (arrows off): the tile has moved downstream and down the falls; 10.8 % of pixels changed by more than 24 levels. |
+| | `flowtex-move-still-a.png`, `flowtex-move-still-b.png` | The same over the still sea: 0.4 % changed (the waves' own shading). |
+| `flowtex-m25-sim-before.png` | `flowtex-m25-sim-after.png`, `flowtex-m25-sim-arrowsoff-after.png`, `flowtex-m25-sim-night-after.png` | M25's Water sim (Waterfall, settled): its 1-layer front edge walled with water standing on it; "Arrows: on" and "Arrows: off"; at night. |
+| `flowtex-m25-river-before.png` | `flowtex-m25-river-after.png` | M25's river at its waterfall: the fall's froth from the panned tile, the river's caps streaked along the flow. |
+| `flowtex-m25-coast-before.png` | `flowtex-m25-coast-after.png` | M25's coast: the sea and its surf unchanged (the tile is off on the sea); the tide pools take the still tile. |
+
+Checks (Playwright): M28 at 390 × 844, M25 #sim, #river and #coast: no console errors, one WebGL context, no horizontal
+scroll at 390 px. Arrows: "Arrows: off" hides them and sets `aria-pressed` false, "Arrows: on" brings them back, on both
+pages. Flow on caps (settled): spring 230 flowing caps, 229 with an arrow and the one without has nowhere to go; basin
+12 of 12, plus 6 of its 7 sources (water leaves them); channel 20 of 20; pair 190 of 190. The arrows and the texture read
+the same flow vector. Nothing moves on its own: camera and every object's rotation unchanged over 2 s idle. The liquid
+rule is untouched.
