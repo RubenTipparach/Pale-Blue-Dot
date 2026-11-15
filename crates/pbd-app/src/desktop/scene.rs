@@ -190,7 +190,10 @@ pub fn move_moon(
     if let Some(which) = launch.tide.as_deref()
         && let Some((at, _)) = cameras.iter().find(|(_, c)| c.is_active)
     {
-        let planet = scene.states.first().map_or(bevy::math::DVec3::ZERO, |s| s.position);
+        let planet = scene
+            .states
+            .first()
+            .map_or(bevy::math::DVec3::ZERO, |s| s.position);
         let up = (at.translation().as_dvec3() + frame.0.origin - planet)
             .as_vec3()
             .normalize_or(Vec3::Y);
