@@ -38,7 +38,7 @@
       splashes, rain strength, day and night with lamps, slow motion, density
       and size; splashes animated in the vertex shader. Stills in
       `docs/screenshots/mockup-rain-splashes/`.
-- [ ] 6.3 The owner's approval of the mockup's look (and of the density and
+- [x] 6.3 (2026-11-15, the owner: "approve rain splashes"; density and size start from the mockup's defaults, recommendation taken. The perf condition the owner set for the water smoothing applies here too: 6.5 gates the push.) The owner's approval of the mockup's look (and of the density and
       size the game should start from), on the tracker.
 - [ ] 6.4 The game port, after the approval and on a request: the near
       column list (rebuilt on a cell crossing or an edit), one instanced
