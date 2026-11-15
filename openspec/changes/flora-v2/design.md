@@ -195,3 +195,195 @@ what this change does with each:
 
 And one of this change's own: **Pixel grass is off by default** (1), the
 owner's to switch on and judge.
+
+## 9. The approved mockup into the engine (M13, group 6)
+
+**The owner approved M13 on 2026-11-15** ("commence implementation of all env
+changes"). The mockup gained a run of changes after the slices above were
+built (`docs/mockups/mockup-work.md`, row M13, and its captures in
+`docs/screenshots/mockup-foliage/`). This section says, item by item, how each
+goes into the game, or why it does not. Everything here is still derived
+decoration or art: no cell, collision, save record or generator version moves,
+and no pipeline, binding or texture is added (the loading screen's prewarm has
+nothing new to compile).
+
+### 9.1 Tufts coloured from the ground they grow on
+
+The mockup reads each biome's tuft ramp off its own ground tile
+(`foliage.html`, `groundRamp`): the tile's 1,024 texels sorted by luminance
+(Rec. 709 weights, a stable sort), cut in thirds, and each third's commonest
+colour (the first to reach the highest count, in row-major order) is its
+dark, mid and light. The game's grassy caps (codes 2, 3, 7) all draw tile
+(0,0) of the biome's sheet, so that tile is the ground the tufts stand on.
+
+`pbd_core::flora::TUFT_RAMPS` keeps its shape and takes those colours. They
+are constants because the shader reads them from the uniform, but they are
+not hand-made: `planet_terrain`'s test recomputes `groundRamp` off the
+committed `assets/tilesets/atlas.png` (after 9.5, so without the painted
+flowers) and fails on any difference, printing the table to paste. The atlas
+is the one source; the table is its checked copy.
+
+### 9.2 One art style: plant contrast pulled to the texture's mean
+
+The mockup draws every plant and prop in its texture's palette but not its
+full contrast (`alb = mix(mean, alb, detail)`): leaves and bushes at 0.45,
+bark, pebbles and other solids at 0.7, cut-out cards (tufts, flowers, ferns)
+and the ground itself at 1. The game has the same split:
+
+| piece | code | detail |
+| --- | --- | --- |
+| tree crown, bush | 9 (kinds 2, 3) | 0.45 |
+| trunk, dead shrub twig | 8 (kinds 2, 3) | 0.7 |
+| pebble | 5 (kind 3) | 0.7 |
+| tuft, flower head, fern, mushroom, ground | - | 1 (unchanged) |
+
+The mean is each tile's mean **linear** colour, per biome sheet, for the
+three tiles the plants wear: leaves (0,2), bark (2,1) and stone (3,0).
+`pbd_core::flora::PLANT_MEANS` holds them as `0xRRGGBB` (the linear mean,
+sRGB-encoded so it packs like the ramps), and the same atlas test holds them to
+the file. They reach the shader in a new uniform lane (9.8).
+
+**No outlines.** The game's world art is the atlas, which has no outline ring
+and no ink seams; the procedural pieces (flower heads, caps, tufts, fruit)
+are drawn without one. `world_art.py` has nothing to port: the rule already
+holds, and this change keeps it for the fruit (9.6).
+
+### 9.3 Each LOD distance doubled, as the default
+
+The mockup's three plant rings (near 22 -> 44 m, mid 45 -> 90 m, draw 80 ->
+160 m) map onto the game's plant reaches as follows:
+
+- **The clutter's reach** (grass, flowers, pebbles, bushes, shrubs,
+  mushrooms, ferns, the new fruit) is the game's near ring: `clutter_radius_m`
+  60 -> **120 m**, and its dither-out band `clutter_fade_m` 15 -> **30 m**, in
+  `scatter.ron`.
+- **Trees** already stand to the edge of the terrain's coarsest fine band
+  (`FOLIAGE_DRAW_DISTANCE = BAND_M[0]`, 1,200 m, seven times the mockup's
+  doubled draw distance). Doubling it would double the terrain's own LOD band,
+  which is the terrain's change, not the plants'; it is **not** doubled.
+  `tree_fade_m` is a fade width, not a distance, and stays.
+
+Frame cost: the clutter's area grows four times (about 1,300 grassy cells
+inside 60 m becomes about 5,000 inside 120 m). **Frame cost was not
+measured** in this session (the owner's perf sitting); the knob is one number
+in `scatter.ron` to take back.
+
+### 9.4 Fallen leaves in the terrain shader
+
+The mockup's fallen leaves (`#ifdef TERRAIN` block) port to the cap fragment
+as written: on an up-facing ground face, the cap's own 32-texel grid is cut
+into slots of `max(1.6, 2.4 * leaf_size)` texels; each slot holds two leaves,
+each with its own moment in the fall (a hash); a leaf whose moment is under
+the current reach is an ellipse of texels in one of six fallen-leaf colours
+(rust, ochre, oak brown, tan, dull red, old gold; never a saturated orange),
+the first down browned, a lit half and a shaded half. The leaves are texels
+of the ground, so they never swim.
+
+- **When.** The mockup's slider is per season (autumn 0.45, winter 0.6 of it,
+  none in spring or summer). The game's year is continuous, so a new bump
+  in `pbd_core::flora::Season`, `litter`: rising over `SEASON_LITTER_IN`
+  (from the start of the turn to its peak), holding through the bare months
+  at 0.6 of the peak, and gone over `SEASON_LITTER_OUT` before spring. It
+  takes the same tropic fade as the rest, and only deciduous biomes
+  (`BiomeFlora::deciduous`: fields, beach, swamp) lay leaves. The shader's
+  copy of the constants is held to the core's by the existing season test.
+- **Thicker under trees.** The mockup thickens the fall under the crowns
+  (`Gather under trees`, 0.7). In the game a crown covers its own cell, so a
+  cap whose cell stands a tree (`flora::grows_tree`'s rule, which the
+  visibility pass already runs, repeated in the vertex shader with the same
+  density table) takes the "under" weight across the cell.
+- **Winter.** The fall is browned and wet in the bare months (the mockup's
+  "browned on winter snow"). The game lays no seasonal snow (snow is the
+  generator's material), so there are no leaves on snow to frost.
+- **Knobs** in `scatter.ron`: `leaf_fall` 0.45, `leaf_under` 0.7, `leaf_size`
+  1.0, validated in 0..1 (size 0.5..2).
+
+### 9.5 No painted flowers on the ground tiles
+
+`docs/mockups/foliage/no_flowers.py`'s four rules (the daisies off the
+fields grass top and sod lip, the pale sprouts off the swamp moss, the orange
+dots off the tundra top) become a step of `tools/build_tileset_atlas.py`,
+applied to the baked atlas after sampling. The source sheets stay as
+generated; the atlas is rebuilt from them and `--check` holds it. The result
+is byte-for-byte the mockup's own `foliage/game/atlas.png` (checked when this
+was written: the mockup's copy is exactly the game's atlas after
+`no_flowers.py`). This is art, not generation: no cell changes.
+
+### 9.6 Wild fruit and pine cones hanging from the trees
+
+The mockup hangs fruit in the crowns of some trees (about half), with a few
+fallen under them, kinds by biome (`FRUIT`), "on wood, never floating". The
+game's trees are the Tenebris hex prisms (Q1 A), which have no branches; the
+mockup's own rule for its hex trees is "fruit sits just inside the leaf
+block's rim". So:
+
+- **Where.** The foliage draw grows by **60 vertices** (198 -> 258): four
+  hanging fruit, each two crossed cut-out cards (12 vertices), hanging from
+  the underside of the lower leaf layer just inside its rim (a pine's from its
+  lower skirt, part way out), and two fallen fruit lying flat on the cap
+  under the crown (6 vertices each). The clutter's first vertex moves 258 ->
+  318 and the column tier's 822 -> 882, in both shaders and the test-only
+  arithmetic in `planet.rs`, as the leaf cards once did.
+- **Which trees.** A tree fruits on its own roll (`fruit_chance`, 0.5), inside
+  the clutter's reach (fruit beyond 120 m is a pixel and costs nothing but
+  the degenerate vertex), and dithers out at the reach's edge like the
+  clutter.
+- **Kinds** (the mockup's table on the game's biomes; recommendation taken,
+  ask only with screenshots): fields - apple, pear, plum, cherry; jungle -
+  mango, papaya; beach (the savanna's stand-in, as for its tuft ramp) -
+  marula, baobab; tundra pines - pine cones; swamp, desert, mountains, ocean -
+  none (the swamp's fruit are forage plants in the mockup). Neighbouring
+  trees tend to the same kind (patches), on a coarse hash of the tree's
+  direction.
+- **Drawn** in the fragment like the tufts: a 16 px pixel sprite cut out by a
+  mask (round fruit with a stem pixel and a leaf; a pine cone a tapering
+  ellipse of scales), in the fruit's three-tone ramp from `fruit_art.py`'s
+  palette (`FRUIT_RAMPS`), lit top-left, no outline. The fruit keeps its own
+  colour so it can be spotted.
+- **Season.** Heaviest in autumn and thinned in winter (the mockup's keep:
+  summer 0.85, autumn all, winter 0.08), by the same `Season`; pine cones
+  stay all year.
+- **Not gatherable yet.** Fruit is decoration in this change: picking it
+  needs items, icons and a gather rule, which belong with the forage loop. The
+  phase-1 wild plants (`farming-and-smelting` design 14) are the game's
+  forage plants and are reused as they are; no second set is added.
+
+### 9.7 Dry olive crowns where the leaf tile does not suit (savanna)
+
+The mockup's savanna acacias and bushes wear the game's leaves through a
+dry-olive gradient map (`RAMPS.savannaLeaf`: linear luminance 0.07..0.23 onto
+`#3e3a1a`, `#7a7432`, `#b7a95a`), because the pale sage they wore read as
+frost. The game's equivalent is the beach (the biome the flora tables already
+read as the savanna): its leaf tile (0,2) is "beach grass ground", pale sand
+with grass, which on a crown reads as frost in exactly the same way. So a beach
+crown or bush draws the **fields** sheet's leaves through that gradient map,
+and its mean (9.2) is the gradient map of the fields leaves' mean.
+
+### 9.8 Data and the uniform
+
+`PlanetParams` gains, before `night` (the visibility pass's prefix still ends
+where it did, and the struct-size test catches a mismatch):
+
+```
+plant_means: array<vec4<u32>,8>  per Biome: leaves, bark, stone mean 0xRRGGBB; w the fruit kinds (bits)
+flora_fall: vec4<f32>            x leaf fall, y gather under trees, z leaf size, w fruit chance
+```
+
+### 9.9 Not built, and why
+
+- **Winter sod lip under snow.** The mockup's fix whitens the green lip of a
+  column side under its seasonal snow cover. The game lays no seasonal snow:
+  its snow is the generator's material, whose side already draws the tundra
+  sheet's snow-over-soil tile. There is no green lip under snow to fix. Not
+  built.
+- **Far trees with no baked season.** A fix to the mockup's baked impostors;
+  the game has no baked impostor (Q2 deferred), and its prism crowns take the
+  season live. Nothing to port.
+- **Fungal forest** (violet caps, warm stalks, dark violet moss). No game
+  biome is a fungal forest; a new biome is a new generator version, its own
+  change (Q7). Not built.
+- **Crops and gardens layer.** The game's crops are the phase-1 farming
+  (`farming-and-smelting`), grown by the player on tilled soil; the mockup's
+  layer is M8's crops shown in place. Nothing to add here.
+- **Forage plants.** Reused: the phase-1 wild plants (above).
+- **Picking fruit.** Not in the game yet (9.6).

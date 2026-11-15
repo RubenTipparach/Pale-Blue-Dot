@@ -37,3 +37,17 @@ Ordered by value. Captures go in
 - [x] 5.2 A fresh world launched (not a capture) to READY with no ERROR and no `LATE_PIPELINE`.
 - [ ] 5.3 The fungal forest (Q7). Not in this change: a new biome is a new generator version, its own change.
 - [ ] 5.4 The owner's video waits for the batch (CLAUDE.md, 2026-09-27); frame cost is the owner's perf sitting.
+
+## 6. The approved mockup into the engine (M13 approved 2026-11-15; design 9)
+
+On `claude/env-flora`. Captures in `docs/screenshots/flora-v2/` (the
+`m13-*` set). Frame cost not measured.
+
+- [ ] 6.1 Painted flowers off the ground tiles: `no_flowers.py`'s rules as a step of `tools/build_tileset_atlas.py`; atlas rebuilt. Verify: `--check` passes; the atlas equals the mockup's copy.
+- [ ] 6.2 Tuft ramps from each biome's ground tile, and the plants' tile means, in `pbd_core::flora`. Verify: a test recomputes both off `atlas.png`.
+- [ ] 6.3 Plant contrast pulled to the tile's mean (crowns and bushes 0.45; trunks, twigs, pebbles 0.7); beach crowns and bushes in the dry olive gradient map. Verify: shader compiles; captures.
+- [ ] 6.4 Clutter reach doubled (120 m, fade 30 m). Verify: config validation; captures.
+- [ ] 6.5 Fallen leaves in the cap fragment: `Season::litter`, thicker under a tree, browned in winter, deciduous biomes only; `leaf_fall`, `leaf_under`, `leaf_size`. Verify: core tests on `litter`; the season constants test; captures at `--day` in autumn, winter and summer.
+- [ ] 6.6 Fruit and pine cones on the trees, and fallen fruit: foliage draw 258 vertices, offsets moved in both shaders; kinds per biome; season keep. Verify: the vertex-arithmetic tests; captures close on fruit trees.
+- [ ] 6.7 Checks: fmt, clippy, pbd-core and pbd-app tests, `openspec validate --all`; a normal launch to READY with no ERROR and no `LATE_PIPELINE`.
+- [ ] 6.8 Not built (design 9.9): the winter sod lip (no seasonal snow in the game), unbaked far trees (no impostors), the fungal forest (a new generator version), crops and forage plants (phase 1's are reused), picking fruit.
