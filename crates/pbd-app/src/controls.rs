@@ -1159,7 +1159,11 @@ mod tests {
         binds.set(&sprint, KeyCode::KeyE);
         assert_eq!(binds.clashes(&sprint), vec!["open or shut a door"]);
         // E is the Tern's hiking too, but never on foot.
-        assert!(!binds.clashes(&sprint).contains(&"hike to port or starboard"));
+        assert!(
+            !binds
+                .clashes(&sprint)
+                .contains(&"hike to port or starboard")
+        );
         // A digit is the number row's, which reads every digit.
         binds.set(&sprint, KeyCode::Digit5);
         assert_eq!(binds.clashes(&sprint), vec!["select a slot"]);

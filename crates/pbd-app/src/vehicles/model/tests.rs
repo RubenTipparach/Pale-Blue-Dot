@@ -57,7 +57,8 @@ struct Swatch {
 
 #[test]
 fn generated_source_swatches_have_provenance_exact_palette_scale_and_wrap_edges() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/models/vehicles/swatches");
+    let root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/models/vehicles/swatches");
     let manifest: SwatchManifest =
         serde_json::from_slice(&std::fs::read(root.join("manifest.json")).unwrap()).unwrap();
     assert_eq!(manifest.pixels_per_metre, 16);

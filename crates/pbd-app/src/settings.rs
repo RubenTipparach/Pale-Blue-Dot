@@ -829,12 +829,18 @@ mod tests {
         let (again, keys_again, _) = PlayerSettings::parse(&text).unwrap();
         assert_eq!(again.render_scale, 50, "the change is written");
         assert_eq!(
-            keys_again.to_names().get("kestrel:KeyW").map(String::as_str),
+            keys_again
+                .to_names()
+                .get("kestrel:KeyW")
+                .map(String::as_str),
             Some("KeyI"),
             "and the retired rebind is still in the file: {text}"
         );
         assert_eq!(
-            keys_again.to_names().get("on_foot:ShiftLeft").map(String::as_str),
+            keys_again
+                .to_names()
+                .get("on_foot:ShiftLeft")
+                .map(String::as_str),
             Some("KeyK")
         );
         let _ = std::fs::remove_file(&path);

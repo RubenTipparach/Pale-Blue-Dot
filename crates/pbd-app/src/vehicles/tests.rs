@@ -85,7 +85,11 @@ fn a_new_world_places_each_craft_where_it_can_work() {
     assert!(app.world().resource::<Fleet>().spawned);
     let all = crafts(&mut app);
     let kinds: Vec<Kind> = all.iter().map(|(_, c)| c.kind).collect();
-    assert_eq!(kinds, [Kind::Tern, Kind::Loon], "the two boats, in ID order");
+    assert_eq!(
+        kinds,
+        [Kind::Tern, Kind::Loon],
+        "the two boats, in ID order"
+    );
     let sea = app.world().resource::<Sea>().clone();
     for (_, craft) in &all {
         let at = craft.reference_position().as_vec3();
@@ -1210,7 +1214,10 @@ fn a_world_saved_with_a_kestrel_opens_with_its_boats_and_keeps_the_record() {
         .filter(|r| r.kind != "kestrel")
         .map(|r| r.id)
         .collect();
-    assert_eq!(ids, boats, "the world opens with two craft, the Tern and the Loon");
+    assert_eq!(
+        ids, boats,
+        "the world opens with two craft, the Tern and the Loon"
+    );
     // This test's planet starts its walker elsewhere than the world the file
     // came from, so the boats are stowed. Bring the Tern's record near the
     // walker, as coming near it does, and it is in the world.
@@ -1245,15 +1252,20 @@ fn a_world_saved_with_a_kestrel_opens_with_its_boats_and_keeps_the_record() {
         "no Kestrel is drawn"
     );
     let fleet = app.world().resource::<Fleet>();
-    assert_eq!(fleet.retired, [kestrel.clone()], "held aside as read");
+    assert_eq!(
+        fleet.retired,
+        std::slice::from_ref(&kestrel),
+        "held aside as read"
+    );
     assert!(fleet.next_id > kestrel.id, "its ID is never given again");
     // Move the Tern and save.
     let (entity, tern) = all.into_iter().find(|(_, c)| c.kind == Kind::Tern).unwrap();
     {
         let mut vehicle = app.world_mut().get_mut::<Vehicle>(entity).unwrap();
-        let moved = tern.reference_position()
-            + tern.body.axis(pbd_core::vehicle::FORWARD) * 3.0;
-        vehicle.craft.set_reference_pose(moved, tern.body.orientation);
+        let moved = tern.reference_position() + tern.body.axis(pbd_core::vehicle::FORWARD) * 3.0;
+        vehicle
+            .craft
+            .set_reference_pose(moved, tern.body.orientation);
     }
     app.world_mut().resource_mut::<Fleet>().dirty = true;
     app.update();
@@ -1283,7 +1295,11 @@ fn a_world_saved_with_a_kestrel_opens_with_its_boats_and_keeps_the_record() {
 #[test]
 fn a_held_record_keeps_its_id_from_every_new_craft() {
     let mut old: VehicleFile = ron::from_str(KESTREL_ERA).unwrap();
-    let kestrel = old.vehicles.iter_mut().find(|r| r.kind == "kestrel").unwrap();
+    let kestrel = old
+        .vehicles
+        .iter_mut()
+        .find(|r| r.kind == "kestrel")
+        .unwrap();
     kestrel.id = 9;
     old.next_id = 4;
     let mut save = crate::saves::WorldSave::memory_only();
@@ -1292,7 +1308,11 @@ fn a_held_record_keeps_its_id_from_every_new_craft() {
     app.update();
     let fleet = app.world().resource::<Fleet>();
     assert_eq!(fleet.retired.len(), 1);
-    assert!(fleet.next_id >= 10, "next_id {} is not past 9", fleet.next_id);
+    assert!(
+        fleet.next_id >= 10,
+        "next_id {} is not past 9",
+        fleet.next_id
+    );
     let file = fleet.file(std::iter::empty());
     assert!(file.next_id >= 10);
 }

@@ -253,8 +253,7 @@ fn side(angle: f64) -> &'static str {
 mod tests {
     use super::*;
     use pbd_core::vehicle::{
-        Craft, Hulls, Kind, LoonTelemetry, Mooring, TernTelemetry,
-        spec::VehicleSpecs,
+        Craft, Hulls, Kind, LoonTelemetry, Mooring, TernTelemetry, spec::VehicleSpecs,
     };
     use pbd_core::{DQuat, DVec3};
     use std::sync::Arc;

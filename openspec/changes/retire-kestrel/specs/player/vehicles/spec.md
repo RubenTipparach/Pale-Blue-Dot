@@ -4,6 +4,10 @@
 A saved craft record whose kind the game has retired SHALL be held aside on
 load and SHALL NOT be drawn, boarded or simulated. Every rewrite of the
 vehicle file SHALL write it back unchanged, and no new craft SHALL take its ID.
+The vehicle file's layout stays version 1
+(`vehicles::tests::a_world_saved_with_a_kestrel_opens_with_its_boats_and_keeps_the_record`,
+`vehicles::tests::a_held_record_keeps_its_id_from_every_new_craft`; the
+fixture is an old build's own file, `vehicles/fixtures/kestrel-era-vehicles.ron`).
 
 #### Scenario: Opening a world saved with a Kestrel
 - **WHEN** a world whose vehicle file holds a Kestrel, a Tern and a Loon is
@@ -11,9 +15,23 @@ vehicle file SHALL write it back unchanged, and no new craft SHALL take its ID.
 - **THEN** the world has the Tern and the Loon, no Kestrel is drawn, and the
   Kestrel's record in the saved file is byte-identical to the one read
 
+### Requirement: A retired craft's saved rebinds are kept and read by nothing
+A rebind in the player's settings file of a key only a retired craft read
+SHALL be ignored on load, SHALL move no key, and SHALL be written back with
+the rest of the file on the next change
+(`settings::tests::a_rebind_of_a_retired_slot_is_ignored_and_kept`,
+`controls::tests::rebinds_round_trip_through_their_names`).
+
+#### Scenario: A Kestrel rebind in an old settings file
+- **WHEN** a settings file that rebinds `kestrel:KeyW` is read and a setting
+  is then changed
+- **THEN** no key stands for that rebind, and the file written still holds it
+
 ### Requirement: A new world's fleet is the boats
 A new world's fleet SHALL be the Tern and the Loon, placed from the player's
-start as before, and the start SHALL be found by the same rule as before.
+start as before, and the start SHALL be found by the same rule as before
+(`vehicles::tests::a_new_world_places_each_craft_where_it_can_work`,
+`walking::tests::a_new_world_starts_on_level_ground_and_old_versions_keep_their_start`).
 
 #### Scenario: A new world
 - **WHEN** a new world is made
@@ -22,7 +40,8 @@ start as before, and the start SHALL be found by the same rule as before.
 
 ### Requirement: The Loon's blade is drawn as configured and where it works
 The Loon's drawn blade SHALL match its configured area and its working stroke
-or stern-rudder position, including at zero water speed.
+or stern-rudder position, including at zero water speed
+(`vehicles::draw::tests::paddle_mesh_and_motion_follow_area_and_working_rudder_without_force`).
 
 #### Scenario: Paddle held as a rudder
 - **WHEN** the occupied Loon holds a stern rudder with no power stroke active
@@ -41,6 +60,26 @@ policy, and boardable with the same ID.
   reloaded
 - **THEN** the Tern with the same ID is in the world where the unattended
   policy put it, and F boards it
+
+Pinned by
+`vehicles::tests::a_craft_left_behind_stays_boardable_and_comes_back_from_its_save`.
+
+### Requirement: One interaction key boards and leaves
+One key, F, SHALL board the craft in reach from on foot and leave the craft
+the player is in, on the press, and it SHALL appear in the binding table that
+the settings page and `--help` print. It SHALL NOT be a key a craft uses as a
+control (Q and E are hiking and the blade as a rudder), nor the tool
+picker's key (G).
+
+#### Scenario: Boarding the canoe from the pier
+- **WHEN** a walker stands within reach of the Loon's boarding point and
+  presses F
+- **THEN** the walker is aboard as the paddler and the vehicle camera is active
+
+#### Scenario: G beside a craft
+- **WHEN** a walker within reach of a craft holds G
+- **THEN** the tool picker opens and the walker is not aboard
+  (`vehicles::tests::holding_g_beside_a_craft_boards_nothing`)
 
 ## REMOVED Requirements
 

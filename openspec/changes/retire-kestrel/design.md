@@ -95,3 +95,54 @@ spawn digest tests are untouched and must still pass.
   work starts after that lands, on top of it.
 - **M19's mockup still shows the Kestrel.** It is the design record of a
   retired craft. Its row says so, and the page is not republished for this.
+
+## Findings when the code was met (2026-11-15)
+
+What the design assumed and the code turned out to say, and what was done.
+Each is a recommendation taken (ask only with screenshots) where it needed a
+choice.
+
+- **The saved kind is `"kestrel"`, lower case.** Decision 1 writes
+  `kind: "Kestrel"`; a record's `kind` is `Kind::key()`, and every save says
+  `kind: "kestrel"`. The retired list (`Kind::RETIRED`) holds `"kestrel"`, and
+  `Kind::parse` reports it as `KindKey::Retired`. Nothing else changes.
+- **The Flying sub-tab is not only the Kestrel's.** It holds two groups:
+  FLYING, the free flight's keys (R toggles walking and flying), and KESTREL.
+  The free flight stays, and `interface-look` ("Key bindings are grouped by
+  context and can be changed") requires a flying sub-tab and pins that E
+  "still rolls in flight". So only the KESTREL group left the table, `--help`
+  and the Input tab; the Flying sub-tab stays, holding the free flight's
+  keys. Removing the tab would have moved the free flight's bindings
+  somewhere the design does not say.
+- **The rebinding rule did not keep an unknown rebind.** Decision 3 says a
+  removed action's rebind is kept "by the same rule the rebinding design
+  uses for an unknown action". That rule (`stone-and-wood-ui`, "Rebinding: the
+  file") skipped it with a warning, and the next write dropped it, because
+  the file is written from the binds that were read. Keeping it needed
+  `KeyBinds` to carry what it skipped (`kept`) and write it back. That now
+  holds for every rebind this build does not know, a later build's as well
+  as a removed one's. A kept rebind moves no key and is never shown. Pinned by
+  `settings::tests::a_rebind_of_a_retired_slot_is_ignored_and_kept`.
+- **The authored-model loader served only the Kestrel.** `model::AUTHORED`
+  listed the Kestrel alone (the Tern and the Loon are built from their numbers;
+  their Blender sources in `assets/models/vehicles/` are not registered). The
+  loader stays for the next authored craft, with an empty list. The Kestrel's
+  export contract, and the checks only it used, are removed. The tests that
+  run per registered craft now run over none, and they will run again when a
+  craft is added. The swatch provenance test still checks every swatch left.
+- **`--ship-in-cave` had no lighting test of its own.** Its one test held the
+  Kestrel where the rig put it, and that test goes with the rig. What the
+  scene showed, the moving things lit by the field, is pinned on the boats
+  instead: `vehicles::tests::every_craft_is_lit_by_the_field`. The field's
+  own tests never used the Kestrel.
+- **An old world's boats can be stowed when it opens.** The fixture is an old
+  build's own file, and its Tern lay 1.4 km from that world's start. The test
+  planet starts its walker elsewhere, so both boats open stowed
+  (`cities-in-the-world` 4.2b). The test counts the world's craft and the
+  stowed ones, then brings the Tern near the walker before moving it.
+- **`inputs.json` was already stale** (no cog or rowboat). Only its Kestrel
+  entries (`specs.kestrel`, `wing_panels`) were removed. It was not
+  regenerated, so the Tern and Loon inputs are byte for byte as they were.
+- **`tools/art/ship_tiers_art.py` copied the Kestrel's model** into the
+  ship-tiers mockup. It no longer does. The copy the mockup already has is
+  kept, and the page is not republished.

@@ -269,7 +269,7 @@ pub(super) fn build(world: &mut World, owner: Entity, craft: &Craft) -> Result<(
         let model = &cache.0[index].1;
         model.data.validate_config(craft.kind, craft.specs())?;
         for root in &model.data.roots {
-            instantiate(world, model, *root, owner, owner, craft.kind);
+            instantiate(world, model, *root, owner, owner);
         }
         Ok(())
     })();
@@ -288,7 +288,6 @@ fn instantiate(
     index: usize,
     parent: Entity,
     owner: Entity,
-    kind: Kind,
 ) {
     let node = &model.data.nodes[index];
     let entity = world
@@ -314,6 +313,6 @@ fn instantiate(
         world.entity_mut(entity).add_child(child);
     }
     for child in &node.children {
-        instantiate(world, model, *child, entity, owner, kind);
+        instantiate(world, model, *child, entity, owner);
     }
 }

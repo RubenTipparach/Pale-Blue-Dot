@@ -121,11 +121,7 @@ impl Builder<'_> {
         let owner = self.owner;
         let child = self
             .world
-            .spawn((
-                at,
-                Visibility::default(),
-                Part { owner, kind },
-            ))
+            .spawn((at, Visibility::default(), Part { owner, kind }))
             .id();
         self.world.entity_mut(parent).add_child(child);
         child
