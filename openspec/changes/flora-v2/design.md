@@ -108,23 +108,25 @@ The visibility pass lists a cell for them on the same rolls and the same
 weights (both read them from the uniform), so a listed cell always grows what
 it was listed for.
 
-## 4. ~~Leaf cards on the hex-prism trees~~ (dropped; Q1 A, the owner's)
+## 4. Leaf cards on the hex-prism trees (dropped), and the record corrected
 
 The owner, 2026-11-15, on the leaf cards as first built: *"Hmm trees have
 weird leave structures on them I don't really like"*.
 
-Eighteen cut-out leaf cards per tree were built round the crown (hanging from
-each layer's rim and standing on the top, foliage draw 198 -> 306 vertices)
-and are taken off again in the same change. **Q1 is A: trees stay the
-Tenebris hex prisms as today** - the owner's own decision, not a
-recommendation taken. The foliage draw is back to 198 vertices and the trees
-cast and dither exactly as before this change.
+Eighteen cut-out leaf cards per tree were built round the Tenebris hex-prism
+crown (the mockup's flora-v2 option C: hanging from each layer's rim and
+standing on the top, foliage draw 198 -> 306 vertices) and taken off again in
+the same change. That much stands: cards stuck on prisms are gone.
 
-**Not built: the baked mid and far tree** (Q2). Recommendation taken (crossed
-cards mid, billboard far, baked from the near tree); its build is a
-render-to-texture bake and an atlas, deferred to its own task; with the
-cards gone the question is open again. The game's mid and far tree is the
-prism crown it already draws.
+**What this section used to say was wrong.** It read the owner's dislike as
+choosing option A, "trees stay the Tenebris hex prisms as today", and called
+that the owner's own decision. It was not. The dislike was of leaf cards
+stuck on the hex prisms. The look the owner approved is M13, the Foliage
+Detail Playground (`docs/mockups/foliage.html`), whose default tree geometry
+is *"Detailed: parametric trunk, branches, leaf cards"* (`treeStyle:
+"detail"`), with mid and far trees baked from the near model. The owner,
+2026-11-15, on the shipped prisms: *"why didnt you implement new trees for env
+2"*. The detailed trees are section 10.
 
 ## 5. Seasons on plants (Q5 A)
 
@@ -180,13 +182,13 @@ settings file migrates forward (version 5, the new field defaulted).
 ## 8. Decisions taken (ask only with screenshots)
 
 From the mockup's notes, the recommendations taken (recommendation taken, ask
-only with screenshots) - except Q1, which is the owner's own answer - with
+only with screenshots) - except Q1, which is the owner's approved mockup - with
 what this change does with each:
 
 | # | question | taken | here |
 | --- | --- | --- | --- |
-| 1 | near tree | **A, hex prisms as today - the owner's own decision** (2026-11-15, after seeing C) | cards built, then removed (4) |
-| 2 | mid ring for trees | A mid, B far, baked | deferred (4) |
+| 1 | near tree | **M13's approved default, the detailed trees.** The owner disliked leaf cards stuck on the hex prisms (option C); that was misread here as choosing A, prisms as today. The owner, 2026-11-15: "why didnt you implement new trees for env 2" | cards on prisms removed (4); detailed trees built (10) |
+| 2 | mid ring for trees | A mid, B far, baked | built with the detailed trees (10) |
 | 3 | fade width | 0.3 | kept (2) |
 | 4 | grass past its rings | A, the ground tile carries it | kept: no far grass level |
 | 5 | seasons | A, one calendar per planet | built (5) |
@@ -313,9 +315,10 @@ was written: the mockup's copy is exactly the game's atlas after
 
 The mockup hangs fruit in the crowns of some trees (about half), with a few
 fallen under them, kinds by biome (`FRUIT`), "on wood, never floating". The
-game's trees are the Tenebris hex prisms (Q1 A), which have no branches; the
-mockup's own rule for its hex trees is "fruit sits just inside the leaf
-block's rim". So:
+game's trees were the Tenebris hex prisms when this was built, which have no
+branches; the mockup's own rule for its hex trees is "fruit sits just inside
+the leaf block's rim". So (superseded by section 10.6, which hangs the fruit
+from the detailed model's own anchors):
 
 - **Where.** The foliage draw grows by **60 vertices** (198 -> 258): four
   hanging fruit, each two crossed cut-out cards (12 vertices), hanging from
@@ -387,3 +390,183 @@ flora_fall: vec4<f32>            x leaf fall, y gather under trees, z leaf size,
   layer is M8's crops shown in place. Nothing to add here.
 - **Forage plants.** Reused: the phase-1 wild plants (above).
 - **Picking fruit.** Not in the game yet (9.6).
+
+## 10. The detailed trees (M13's approved default)
+
+The owner approved M13, whose default tree geometry is *"Detailed: parametric
+trunk, branches, leaf cards"*; the game shipped the Tenebris prisms instead
+(section 4 says why that was a misreading). The owner, 2026-11-15: *"why didnt
+you implement new trees for env 2"*. This section ports the mockup's trees
+(`foliage.html`: `branchTree`, `TREE_BUILD`, `leafCard`, `maskOf`, the
+impostor bake `bakeImpostors`, the cross-fade `updateLOD`) into the engine.
+
+### 10.1 What does not change: where a tree stands, and chopping it
+
+The trees are a new **look** for the same trees. The placement rule
+(`pbd_core::flora::grows_tree`, the visibility pass's `has_nearby_foliage`,
+the surface pass's `stands_tree`) is not touched, so the cells that stand a
+tree, the cells the axe can work, the fallen leaves gathered under them and
+every saved world are exactly as before. No generator version moves.
+
+**Which species a tree is, and its variant, turn and size, are decoration
+derived at draw time** from the tree's own id (the record's `spare.x`, the
+finest cell's id), hashed with salts of their own, and the biome's species mix
+(the mockup's `BIOMES[...].trees`). Nothing is stored and nothing is
+generated; the same id draws the same tree on every machine and every visit.
+The mix, on the game's biomes (the same mapping the tufts and fruit use):
+
+| game biome | species (share) | mockup biome |
+| --- | --- | --- |
+| Fields | oak 0.6, birch 0.4 | temperate forest |
+| Jungle | kapok 0.55, palm 0.45 | jungle |
+| Beach | acacia 1 (in the dry olive, 9.7) | savanna |
+| Swamp | willow 0.75, birch 0.25 | swamp |
+| Tundra | pine 0.85, birch 0.15 | taiga |
+| Desert | cactus (scenery, below) | desert scrub |
+
+**Cacti are scenery, not trees.** The game's desert grows no tree (the
+generator's own words: "sand broken by rock, no trees"), so a cactus there
+cannot be a tree without changing which cells can be chopped. A desert sand
+cell grows a cactus on a roll of its own (`cactus_chance`, 8 in 256, the
+mockup's `treeP` 0.07 times the cactus share), drawn by the tree draw with the
+tree's LOD, but `grows_tree` stays false for it: it is not choppable and lays
+no leaves, like a bush. The mockup's desert palm (0.2 of its desert trees) is
+not drawn: there is no oasis in the game's desert to stand it in.
+
+The glowcap, crystal and kelp species are the mockup's alien biomes, which the
+game does not have (Q7); they are not ported.
+
+### 10.2 The near tree: the mockup's model, built once on the CPU
+
+`pbd_core::tree_kit` ports the mockup's builders line for line: the seeded
+generator (`rngOf`, xorshift32 on `9000 + 31 v + 7 len(name)`), `branchTree`
+with each species' parameters (`TREE_BUILD`: oak trunk 2.4 m, radius 0.24,
+four crown limbs, depth 2, three kids, and so on), the willow's hanging
+strands, the acacia's flat crown, the pine's whorls with needle sprays rooted
+on each branch, the kapok's buttresses and long limbs, the palm's leaning
+trunk and nine four-segment fronds, the cactus's ribbed arms; `leafCard` (root
+edge half the tip's width, on the branch, normal blended toward the crown's
+outward); and the fruit anchors (the last twigs' ends and 0.6 along them; the
+pine's branches part way out; the palm's head). **Four variants per species**,
+as the mockup builds, with the mockup's seeds, so a variant is the same tree
+the mockup draws.
+
+The meshes are built once at startup into a **tree kit**: one read-only
+storage buffer (a new binding, 11, of the planet draw layout) holding a header
+per species and variant (vertex range, anchors, height and width, the baked
+views' offsets, the textures' means), the vertices (position, normal, uv, the
+card's id, its root-to-tip AO and whether it is bark or leaf: six words), the
+anchors, the four tiles the trees wear that the atlas lacks, and the baked
+impostor pixels. The vertex shader pulls vertices from it by `vertex_index`,
+as every other part of the planet is pulled; no vertex buffer and **no new
+pipeline**: the draws are more indirect draws on the same pipelines, so the
+loading screen's prewarm compiles what it did. The kit is built behind the
+loading screen (its time is logged).
+
+**Textures, nearest-sampled, the game's own** (the mockup's `SPECIES` table):
+oak, kapok and willow wear their biome sheet's bark (2,1) and leaves (0,2);
+acacia the fields sheet's bark and the settlement `leaves.png` through the dry
+olive; birch `leaves.png` and the mockup's outline-free birch bark
+(`docs/mockups/foliage/bark_birch.png`, from `world_art.py`, copied into
+`assets/textures/flora/` with its provenance); pine the redwood sheet's bark
+and the settlement `needles.png`; palm the mockup's palm bark
+(`bark_palm.png`, from `tools/art/foliage_art.py`) and the jungle sheet's
+leaves; cactus the desert sheet's (2,1). A leaf card's shape is cut from its
+tile by the mockup's pixel masks (`maskOf`: leaves on a twig, a needle spray,
+a frond), alpha-tested, never blended. Contrast is pulled to each texture's
+mean (leaves 0.45, bark 0.7, design 9.2); the means are computed off the tiles
+when the kit is built. No outlines.
+
+**Wind.** The mockup's sway: a bend growing with the square of height over
+the tree's base (leaves 0.16, bark 0.1, over 8 m), a slow sway and a rolling
+gust, and the cards' own flutter masked by v squared so a card's root stays on
+its branch. Trees move because the wind moves them (CLAUDE.md allows it).
+
+### 10.3 Mid and far: baked from the near model, on the CPU
+
+The mockup bakes each variant's near model from 8 bearings into a strip of
+48 x 72 px views (orthographic, tilted 0.55 rad, rendered at 3x), snaps every
+pixel to Sweaft-64 in OKLab (chroma weighted 8; the acacia's olive ramp
+colours added to the palette), and folds each 3 x 3 block to one pixel (the
+commonest colour where 6 of 9 are covered; the bark laid over the crown only
+where it fills a block). The engine does the same **on the CPU** with a small
+rasteriser in `pbd_core::tree_kit` (depth-tested triangles, nearest texels,
+the bake's own key light and half-metre bands): deterministic, testable,
+nothing read back from the GPU, no render pass. Deciduous species (oak,
+birch, willow) bake twice, leafy and bare (bark only). Seasons are laid on
+live, as the mockup does: the bake is in no season.
+
+- **Mid** (the mockup's Q2 A): four crossed cards through the tree's axis,
+  each showing the view baked from its own side.
+- **Far** (Q2 B): one billboard turned to the camera, showing the baked view
+  nearest the camera's bearing in the tree's own frame.
+
+A coarser level's tree (`distance-lod-fade`: a quarter of the trees, each
+standing for four) draws its billboard as wide as the prism grew, and half as
+much taller, so a far forest keeps its cover.
+
+### 10.4 No pop: one tree, cross-faded
+
+The mockup's "fade" LOD, as `detail-fade` does elsewhere: each ring's end has
+a band of 0.3 of its distance; across it the outgoing level keeps the pixels
+whose screen-door threshold is under `1 - t` and the incoming one the rest,
+so every pixel of the tree is drawn exactly once and the tree never appears,
+vanishes or changes. The threshold is the 4 x 4 Bayer mask offset per tree
+(the mockup's `floor(seed * 4) * (1, 2)`). Distances from the camera to the
+tree's base:
+
+| ring | to | band | drawn by |
+| --- | --- | --- | --- |
+| near | `tree_near_m` 44 m | 30.8-44 m | the near draws (one per species) |
+| mid | `tree_mid_m` 90 m | 63-90 m | the impostor draw's crossed cards |
+| far | the foliage range (unchanged) | `tree_fade_m` (unchanged) | the impostor draw's billboard |
+
+The mockup's doubled values (design 9.3), as `scatter.ron` knobs
+(`tree_near_m` validated 10..60, `tree_mid_m` above it). Fruit fades with the
+near tree it hangs on. The landing dissolve and the band cross-fade of
+`distance-lod-fade` apply to every level as they did to the prisms.
+
+### 10.5 The draws and their budgets
+
+- **The impostor draw** is the old foliage draw (`args[1]`), every tree the
+  visibility pass lists, at **30 vertices** (four crossed cards, 24, and the
+  billboard, 6), down from 258; a part the tree's distance does not need is a
+  degenerate triangle. The clutter's first vertex moves 318 -> 90 and the
+  column tier's 882 -> 654.
+- **The near draws** are eight more indirect draws (`args[5..13]`, one per
+  species), each at its species' largest variant's vertex count plus 60 fruit
+  vertices, its first vertex `NEAR_TREE_FIRST_VERTEX + species << 16` (so the
+  shader knows the species from the vertex index). The visibility pass lists a
+  tree within `tree_near_m` into its species' region of a new list (binding 8
+  of the cull; 8 regions of 4,096: the most finest cells inside 60 m, twice
+  over for a landing's dissolve, is about 3,300). The sun cascades draw the
+  near trees as well, so the detailed tree casts its own shadow.
+- The vertex counts per variant and the instance counts are logged at
+  startup and in the write-up. **Frame cost is not measured in this session**
+  (the owner's perf sitting); the knobs to take it back are `tree_near_m` and
+  `tree_mid_m`.
+
+### 10.6 Fruit on the model's anchors, and seasons
+
+- **Fruit** moves from the prism's rim to the near model's own anchors (the
+  mockup's `anchors`: "on wood, never floating"): four hanging fruit, each at
+  an anchor picked by the tree's roll, and two fallen under the crown, with
+  the kinds, chances and season keep of 9.6 unchanged. The near draw's last 60
+  vertices are the fruit.
+- **Autumn**: a near leaf card turns as the mockup's do, the whole card to
+  one colour between rust and orange by its id, more cards as the turn
+  deepens; on the impostors, the crown's green pixels take the same turn.
+- **Winter**: a deciduous tree's leaf cards drop out one by one as `bare`
+  rises (each card on its own roll, so the crown thins rather than switching),
+  and its impostors cross from the leafy bake to the bare one through the same
+  roll per pixel. Pines, palms, kapok, acacia and cacti keep theirs.
+- Snow on branches is not added: snow is the generator's material (5).
+
+### 10.7 Not built
+
+- The mockup's vines on jungle and swamp trees (a layer of its own), the
+  glowing fungal and crystal and kelp species (no such biome, Q7), the
+  desert palm (no oasis), and snow on the branches (5).
+- The mockup's per-plant colour variation and baked canopy occlusion: the
+  game lights the trees with its own sun, sky, shadow cascades and voxel
+  field instead.

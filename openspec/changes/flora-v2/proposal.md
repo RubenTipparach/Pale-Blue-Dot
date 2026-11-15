@@ -36,8 +36,14 @@ Ordered by value, each a slice that stands on its own:
 3. ~~Leaf cards on the hex-prism trees~~ - **dropped by the owner.** They were
    built and then taken off. The owner, 2026-11-15, on the leaf cards as first built: *"Hmm trees have
    weird leave structures on them I don't really like"*.
-   Trees stay the hex prisms they are today (mockup Q1 A, the owner's own
-   decision).
+   That dislike was of cards stuck on the hex prisms, and was misread as
+   choosing "hex prisms as today". The approved M13 default is the detailed
+   trees (the owner, 2026-11-15: *"why didnt you implement new trees for env
+   2"*): item 5.
+5. **The detailed trees** (M13's default, design 10): parametric trunks,
+   branches and leaf cards per species, with mid and far trees baked from the
+   near model and cross-faded by a dither. A new look for the same trees: where
+   a tree stands and what can be chopped do not change.
 4. **Seasons on plants** (mockup Q5 A, one calendar per planet). The clock's
    year (`orbit-and-seasons`, already built) turns the prism trees' deciduous
    leaves gold and red in autumn and dull toward bare twigs in winter, and dries the grass to straw, flipped by
