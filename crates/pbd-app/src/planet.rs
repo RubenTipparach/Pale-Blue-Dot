@@ -27,6 +27,8 @@ pub(crate) mod lod;
 mod reflect;
 #[path = "planet_shadow.rs"]
 pub mod shadow;
+#[path = "planet_splash.rs"]
+pub mod splash;
 #[path = "planet_ssr.rs"]
 mod ssr;
 #[path = "planet_terrain.rs"]
@@ -362,6 +364,7 @@ impl Plugin for PlanetPlugin {
             clock.0 = time.elapsed_secs();
         });
         weather_maps::build(app);
+        splash::build(app);
         let render_app = app.sub_app_mut(RenderApp);
         render_app
             .init_resource::<SpecializedRenderPipelines<PlanetPipeline>>()
@@ -379,6 +382,7 @@ impl Plugin for PlanetPlugin {
         water::build(render_app);
         ssr::build(render_app);
         reflect::build(render_app);
+        splash::build_render(render_app);
         let mut graph = render_app.world_mut().resource_mut::<RenderGraph>();
         graph.add_node(PlanetComputeLabel, PlanetComputeNode::default());
         graph.add_node_edge(PlanetComputeLabel, bevy::render::graph::CameraDriverLabel);

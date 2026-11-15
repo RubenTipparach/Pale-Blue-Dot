@@ -3890,13 +3890,14 @@ fn write_frame_log(
 /// wet ground's traces in it at `reflect_render_scale: 1.0`, else in
 /// `reflect_half` and `reflect_compose`. A pass that did not run in a frame
 /// reads 0; spans not named here are summed in `gpu_other_ms`.
-const PASS_COLUMNS: [&str; 21] = [
+const PASS_COLUMNS: [&str; 22] = [
     "planet_cull",
     "planet_shadow",
     "main_opaque_pass_3d",
     "planet_terrain",
     "reflect_half",
     "reflect_compose",
+    "rain_splash",
     "main_transparent_pass_3d",
     "water_compose",
     "ssr_capture",
