@@ -1,2 +1,5 @@
+   Compiling pbd-core v0.1.0 (/home/user/Pale-Blue-Dot/crates/pbd-core)
+    Finished `fast` profile [optimized] target(s) in 47.44s
+     Running `target/core/fast/examples/fish_ranges 1 /tmp/claude-0/-home-user-Pale-Blue-Dot/5763ffc2-4239-523c-8a62-2ca72f541e6b/scratchpad/fresh/fish_day1.bin`
 10242 cells, 181 m apart; running 1 days (1 years of 100 days)
-simulated in 14 s, rastered in 2.2 s, wrote /tmp/claude-0/-home-user/15bd0d6f-2dd4-555e-8015-874fd8576585/scratchpad/fish_fields_day1.bin (5 planes)
+simulated in 13 s, rastered in 2.8 s, wrote /tmp/claude-0/-home-user-Pale-Blue-Dot/5763ffc2-4239-523c-8a62-2ca72f541e6b/scratchpad/fresh/fish_day1.bin (5 planes)
