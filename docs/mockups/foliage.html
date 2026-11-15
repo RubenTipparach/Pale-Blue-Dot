@@ -1178,9 +1178,9 @@ function keyedTex(name, biome) {
       if (!canvasReadable()) throw new Error("canvas read-back is not trustworthy here");
       const gr = rp("terrain:" + B.sheet + ":" + groundIdx(B), B).ramp;
       const ramp = groundRamp(at, B.sheet, groundIdx(B)).map(c => c.match(/\d+/g).map(Number)).map(c => gr ? rampRGB(c, gr) : c);
-      const d = g.getImageData(0, 0, cv.width, cv.height);
+      const d = g.getImageData(0, 0, cv.width, cv.height);   // matched with a tolerance: a browser may jitter read-back
       for (let i = 0; i < d.data.length; i += 4) for (let k = 0; k < 3; k++)
-        if (d.data[i + 3] >= 128 && Math.abs(d.data[i] - KEY_RGB[k][0]) <= 6 && Math.abs(d.data[i + 1] - KEY_RGB[k][1]) <= 6 && Math.abs(d.data[i + 2] - KEY_RGB[k][2]) <= 6) {   // a tolerance: a browser may jitter read-back d.data[i] = ramp[k][0]; d.data[i + 1] = ramp[k][1]; d.data[i + 2] = ramp[k][2]; }
+        if (d.data[i + 3] >= 128 && Math.abs(d.data[i] - KEY_RGB[k][0]) <= 6 && Math.abs(d.data[i + 1] - KEY_RGB[k][1]) <= 6 && Math.abs(d.data[i + 2] - KEY_RGB[k][2]) <= 6) { d.data[i] = ramp[k][0]; d.data[i + 1] = ramp[k][1]; d.data[i + 2] = ramp[k][2]; }
       g.putImageData(d, 0, 0);
     } catch (e) { /* unreadable: the drawn greens stay */ }
     t.needsUpdate = true; dirty = true; return true;
