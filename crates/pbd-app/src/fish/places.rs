@@ -264,6 +264,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         let mut g = HashMap::new();
         // Branching: a clump of fingers on a low dome.
         let mut k = Kit::default();
+        k.tile("polyps");
         k.add(ell(0.3, 0.14, 0.3, 7, 3), at([0.0, 0.04, 0.0]), 0xc8c8c8);
         for i in 0..20 {
             let a = i as f32 * 2.4;
@@ -275,6 +276,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
                 atr([x, 0.08, z], [z * 1.5, 0.0, -x * 1.5]),
                 up(0.1 + h * 0.75, 0xe4e4e4),
             );
+            k.tile("knobs");
             if i % 3 == 0 {
                 k.add(
                     translate(ocyl(0.016, 0.024, h * 0.6, 4), [0.0, h * 0.3, 0.0]),
@@ -285,10 +287,12 @@ fn library() -> &'static HashMap<Kind, Shape> {
                     0xe8e8e8,
                 );
             }
+            k.tile("polyps");
         }
         g.insert(Kind::Branch, k.build());
         // Finger, knobbly like a cauliflower.
         let mut k = Kit::default();
+        k.tile("polyps");
         for i in 0..12 {
             let a = i as f32 * 2.2;
             let rr = if i == 0 { 0.0 } else { 0.1 + 0.14 * hh(i, 3) };
@@ -303,6 +307,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Finger, k.build());
         // Boulder and brain: faces in two tones, the grooves.
         let mut k = Kit::default();
+        k.tile("brain");
         k.add_with(
             scaled(icosphere1(0.5), Vec3::new(1.0, 0.58, 1.0)),
             at([0.0, 0.16, 0.0]),
@@ -317,7 +322,9 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Boulder, k.build());
         // Table: a plate with a hard rim on a short stalk.
         let mut k = Kit::default();
+        k.tile("polyps");
         k.add(cyl(0.07, 0.11, 0.48, 5), at([0.0, 0.24, 0.0]), 0xb4b4b4);
+        k.tile("plate");
         k.add_with(cyl(1.0, 0.9, 0.08, 10), at([0.0, 0.5, 0.0]), |c, _| {
             if c.y > 0.5 { 0xffffff } else { 0xa8a8a8 }
         });
@@ -326,6 +333,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Table, k.build());
         // Soft coral tufts.
         let mut k = Kit::default();
+        k.tile("stripes");
         for i in 0..16 {
             let a = i as f32 * 2.4;
             let t = 0.25 + 0.6 * hh(i, 5);
@@ -339,6 +347,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Soft, k.build());
         // Tube sponges, dark mouths.
         let mut k = Kit::default();
+        k.tile("pores");
         for i in 0..5 {
             let a = i as f32 * 1.9;
             let rr = if i == 0 { 0.0 } else { 0.12 };
@@ -358,6 +367,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Tube, k.build());
         // A barrel sponge.
         let mut k = Kit::default();
+        k.tile("pores");
         k.add_with(cyl(0.32, 0.22, 0.5, 8), at([0.0, 0.25, 0.0]), |_, n| {
             if n % 2 == 1 { 0xffffff } else { 0xdcdcdc }
         });
@@ -365,6 +375,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Barrel, k.build());
         // A sea fan: a lattice fan on a stem.
         let mut k = Kit::default();
+        k.tile("lattice");
         let mut pts = vec![[0.0, 0.0]];
         for i in 0..=8 {
             let a = 0.35 + i as f32 * (PI - 0.7) / 8.0;
@@ -385,6 +396,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Hero, anemone(220, 0.55, 0.5));
         // Algae turf.
         let mut k = Kit::default();
+        k.tile("veins");
         for i in 0..8 {
             let a = i as f32 * 2.3;
             let h = 0.1 + 0.16 * hh(i, 15);
@@ -397,6 +409,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Turf, k.build());
         // Sea grass.
         let mut k = Kit::default();
+        k.tile("veins");
         for i in 0..7 {
             let a = i as f32 * 2.1;
             let h = 0.3 + 0.3 * hh(i, 16);
@@ -412,6 +425,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Grass, k.build());
         // Seaweed.
         let mut k = Kit::default();
+        k.tile("veins");
         for j in 0..3 {
             let a = j as f32 * 2.1;
             let tall = 1.6 + j as f32 * 0.5;
@@ -431,6 +445,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Weed, k.build());
         // Rubble.
         let mut k = Kit::default();
+        k.tile("grit");
         k.add_with(
             scaled(icosahedron(0.15), Vec3::new(1.0, 0.5, 1.0)),
             at([0.0, 0.04, 0.0]),
@@ -444,6 +459,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Rubble, k.build());
         // Shells.
         let mut k = Kit::default();
+        k.tile("ridges");
         k.add_with(
             super::bodies::rotate_z(cyl(0.0, 0.05, 0.11, 5), FRAC_PI_2),
             at([0.0, 0.035, 0.0]),
@@ -458,6 +474,7 @@ fn library() -> &'static HashMap<Kind, Shape> {
         // A black smoker: narrowing prisms of basalt (the mouth's glow is
         // its own mesh, `glow`).
         let mut k = Kit::default();
+        k.tile("basalt");
         let mut y = 0.0;
         for i in 0..5 {
             let r = 1.2 - i as f32 * 0.17;
@@ -474,9 +491,11 @@ fn library() -> &'static HashMap<Kind, Shape> {
         g.insert(Kind::Chimney, k.build());
         // A bacterial mat and a mussel bed round a vent.
         let mut k = Kit::default();
+        k.tile("mat");
         k.add(disc(0.9, 7), at([0.0, 0.02, 0.0]), 0xffffff);
         g.insert(Kind::Mat, k.build());
         let mut k = Kit::default();
+        k.tile("ridges");
         for i in 0..9 {
             let a = i as f32 * 2.4;
             let rr = 0.08 + 0.3 * ((i as f32 + 0.5) / 9.0).sqrt();
@@ -493,12 +512,14 @@ fn library() -> &'static HashMap<Kind, Shape> {
 
 fn anemone(n: usize, r: f32, l: f32) -> Shape {
     let mut k = Kit::default();
+    k.tile("pores");
     k.add(
         cyl(r, r * 1.15, r * 0.5, 8),
         at([0.0, r * 0.25, 0.0]),
         0x9e3ba2,
     );
     k.add(disc(r * 0.5, 8), at([0.0, r * 0.5 + 0.004, 0.0]), 0x7d2dbd);
+    k.tile("stripes");
     for i in 0..n {
         let a = i as f32 * 2.39996;
         let rr = r * ((i as f32 + 0.5) / n as f32).sqrt() * 0.95;
@@ -834,26 +855,30 @@ fn lay(
     axes: (Vec3, Vec3, Vec3),
     scale: Vec3,
     tint: [f32; 3],
-    positions: &mut Vec<[f32; 3]>,
-    colours: &mut Vec<[f32; 4]>,
+    out: &mut Verts,
 ) {
     for (p, c) in shape.positions.iter().zip(&shape.colours) {
         let m = *p * scale;
-        positions.push((origin + axes.0 * m.x + axes.1 * m.y + axes.2 * m.z).to_array());
-        colours.push([c[0] * tint[0], c[1] * tint[1], c[2] * tint[2], 1.0]);
+        out.positions
+            .push((origin + axes.0 * m.x + axes.1 * m.y + axes.2 * m.z).to_array());
+        out.colours
+            .push([c[0] * tint[0], c[1] * tint[1], c[2] * tint[2], 1.0]);
     }
+    out.uvs.extend_from_slice(&shape.uvs);
 }
 
-fn kelp_stand(
-    origin: Vec3,
-    axes: (Vec3, Vec3, Vec3),
-    height: f32,
-    k: f32,
-    positions: &mut Vec<[f32; 3]>,
-    colours: &mut Vec<[f32; 4]>,
-) {
+/// A mesh's vertices being built: where, what colour, where in the atlas.
+#[derive(Default)]
+struct Verts {
+    positions: Vec<[f32; 3]>,
+    colours: Vec<[f32; 4]>,
+    uvs: Vec<[f32; 2]>,
+}
+
+fn kelp_stand(origin: Vec3, axes: (Vec3, Vec3, Vec3), height: f32, k: f32, out: &mut Verts) {
     let cols = [0x8d4526, 0xc56d25, 0x559642, 0x297537].map(lin);
     let mut kit = Kit::default();
+    kit.tile("veins");
     for stipe in 0..3 {
         let a = stipe as f32 * 2.1 + k;
         let top = height * (0.85 + 0.15 * (stipe as f32 * 1.7 + k).sin().abs());
@@ -894,21 +919,18 @@ fn kelp_stand(
     }
     let shape = kit.build();
     for (n, (p, c)) in shape.positions.iter().zip(&shape.colours).enumerate() {
-        positions.push((origin + axes.0 * p.x + axes.1 * p.y + axes.2 * p.z).to_array());
+        out.positions
+            .push((origin + axes.0 * p.x + axes.1 * p.y + axes.2 * p.z).to_array());
         let tint = cols[(n / 3 / 6) % cols.len()];
-        colours.push([c[0] * tint[0], c[1] * tint[1], c[2] * tint[2], 1.0]);
+        out.colours
+            .push([c[0] * tint[0], c[1] * tint[1], c[2] * tint[2], 1.0]);
     }
+    out.uvs.extend_from_slice(&shape.uvs);
 }
 
-fn floe(
-    origin: Vec3,
-    axes: (Vec3, Vec3, Vec3),
-    r: f32,
-    above: f32,
-    positions: &mut Vec<[f32; 3]>,
-    colours: &mut Vec<[f32; 4]>,
-) {
+fn floe(origin: Vec3, axes: (Vec3, Vec3, Vec3), r: f32, above: f32, out: &mut Verts) {
     let mut k = Kit::default();
+    k.tile("ice");
     let h = above + 0.6;
     k.add_with(
         cyl(r, r * 0.92, h, 6),
@@ -924,7 +946,7 @@ fn floe(
         },
     );
     let s = k.build();
-    lay(&s, origin, axes, Vec3::ONE, [1.0; 3], positions, colours);
+    lay(&s, origin, axes, Vec3::ONE, [1.0; 3], out);
 }
 
 /// A part of a tile drawn afresh each frame near the eye: a cloud of reef
@@ -945,6 +967,7 @@ enum Ambient {
 struct Sway {
     rest: Vec<Vec3>,
     colours: Vec<[f32; 4]>,
+    uvs: Vec<[f32; 2]>,
     height: Vec<f32>,
     axis: Vec<Vec3>,
     phase: Vec<f32>,
@@ -952,10 +975,8 @@ struct Sway {
 
 #[derive(Default)]
 struct Built {
-    positions: Vec<[f32; 3]>,
-    colours: Vec<[f32; 4]>,
-    glow_positions: Vec<[f32; 3]>,
-    glow_colours: Vec<[f32; 4]>,
+    pieces: Verts,
+    glow: Verts,
     sway: Sway,
     ambient: Vec<Ambient>,
 }
@@ -988,6 +1009,7 @@ fn lay_swaying(
         sway.axis.push(axes.0);
         sway.phase.push(phase);
     }
+    sway.uvs.extend_from_slice(&shape.uvs);
 }
 
 fn build_tile(
@@ -1005,14 +1027,7 @@ fn build_tile(
         let axes = frame_at(p.dir, p.yaw);
         if p.floe {
             let origin = p.dir * sea_radius - anchor;
-            floe(
-                origin,
-                axes,
-                p.reach,
-                p.tall,
-                &mut out.positions,
-                &mut out.colours,
-            );
+            floe(origin, axes, p.reach, p.tall, &mut out.pieces);
             // A seal hauled out on one floe in nine.
             if hh(i as i64, seed as i64) < 0.11 {
                 out.ambient.push(Ambient::Seal {
@@ -1029,17 +1044,11 @@ fn build_tile(
             None => {
                 // Kelp, to the surface, swaying.
                 let height = (sea_radius - ground - 0.3).max(1.0);
-                let (mut positions, mut colours) = (Vec::new(), Vec::new());
-                kelp_stand(
-                    origin,
-                    axes,
-                    height,
-                    i as f32 * 0.37,
-                    &mut positions,
-                    &mut colours,
-                );
+                let mut kelp = Verts::default();
+                kelp_stand(origin, axes, height, i as f32 * 0.37, &mut kelp);
                 let light = dimmed(downwell, height * 0.5);
-                for (q, c) in positions.into_iter().zip(colours) {
+                out.sway.uvs.extend_from_slice(&kelp.uvs);
+                for (q, c) in kelp.positions.into_iter().zip(kelp.colours) {
                     let q = Vec3::from_array(q);
                     out.sway.rest.push(q);
                     out.sway
@@ -1072,15 +1081,7 @@ fn build_tile(
                         &mut out.sway,
                     );
                 } else {
-                    lay(
-                        shape,
-                        origin,
-                        axes,
-                        scale,
-                        tint,
-                        &mut out.positions,
-                        &mut out.colours,
-                    );
+                    lay(shape, origin, axes, scale, tint, &mut out.pieces);
                 }
                 if kind == Kind::Hero {
                     out.ambient.push(Ambient::Clowns {
@@ -1099,15 +1100,7 @@ fn build_tile(
                     k.add(bx(0.6, 0.25, 0.6), at([0.0, top + 0.12, 0.0]), 0xff7a2a);
                     k.add(cyl(0.2, 0.35, 0.3, 6), at([0.0, top - 0.1, 0.0]), 0xfe6420);
                     let glow = k.build();
-                    lay(
-                        &glow,
-                        origin,
-                        axes,
-                        Vec3::ONE,
-                        [1.0; 3],
-                        &mut out.glow_positions,
-                        &mut out.glow_colours,
-                    );
+                    lay(&glow, origin, axes, Vec3::ONE, [1.0; 3], &mut out.glow);
                     out.ambient.push(Ambient::Smoke {
                         at: origin + p.dir * (top + 0.25),
                         up: p.dir,
@@ -1135,12 +1128,12 @@ fn ambient(
     list: &[Ambient],
     t: f32,
     eye: Vec3,
-    lit: (&mut Vec<[f32; 3]>, &mut Vec<[f32; 4]>),
+    lit: &mut Verts,
     smoke: (&mut Vec<[f32; 3]>, &mut Vec<[f32; 4]>),
 ) {
     use super::bodies::{Look, Place, emit, model_for};
     use pbd_core::fauna::Pose;
-    let (lp, lc) = lit;
+    let (lp, lc, lu) = (&mut lit.positions, &mut lit.colours, &mut lit.uvs);
     let (sp, sc) = smoke;
     let fish = |model: &str,
                 at: Vec3,
@@ -1148,9 +1141,11 @@ fn ambient(
                 up: Vec3,
                 len: f32,
                 phase: f32,
+                id: u32,
                 lp: &mut Vec<[f32; 3]>,
-                lc: &mut Vec<[f32; 4]>| {
-        let body = model_for(model, 0);
+                lc: &mut Vec<[f32; 4]>,
+                lu: &mut Vec<[f32; 2]>| {
+        let body = model_for(model, id);
         let forward = (along - up * along.dot(up)).normalize_or(up.any_orthonormal_vector());
         let side = forward.cross(up);
         let place = Place {
@@ -1170,6 +1165,7 @@ fn ambient(
             [1.0; 3],
             lp,
             lc,
+            lu,
         );
     };
     for a in list {
@@ -1191,8 +1187,10 @@ fn ambient(
                         up,
                         0.11 + 0.04 * r(7),
                         r(8) * TAU,
+                        k,
                         lp,
                         lc,
+                        lu,
                     );
                 }
             }
@@ -1204,7 +1202,18 @@ fn ambient(
                         + (e * a0.cos() + n * a0.sin()) * 0.45
                         + up * (0.06 * (t * 1.3 + k as f32).sin());
                     let along = -e * a0.sin() + n * a0.cos();
-                    fish("darter", pos, along, up, 0.13, k as f32 * 2.0, lp, lc);
+                    fish(
+                        "darter",
+                        pos,
+                        along,
+                        up,
+                        0.13,
+                        k as f32 * 2.0,
+                        k,
+                        lp,
+                        lc,
+                        lu,
+                    );
                 }
             }
             Ambient::Seal { at, up, yaw } => {
@@ -1232,6 +1241,7 @@ fn ambient(
                     [1.0; 3],
                     lp,
                     lc,
+                    lu,
                 );
             }
             Ambient::Smoke { at, up, seed } => {
@@ -1366,13 +1376,18 @@ fn warm_glow(
     commands.insert_resource(GlowMaterial(glow));
 }
 
-fn mesh_of(positions: Vec<[f32; 3]>, colours: Vec<[f32; 4]>) -> Mesh {
+/// A mesh of a part of a tile; `textured` for the pieces and the life (the
+/// water life's atlas), not for the unlit glow.
+fn mesh_of(verts: Verts, textured: bool) -> Mesh {
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     );
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, verts.positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, verts.colours);
+    if textured {
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, verts.uvs);
+    }
     mesh.compute_flat_normals();
     mesh
 }
@@ -1495,25 +1510,23 @@ fn tiles(
         }
         // The ambient life and the plumes, near the eye; none further off.
         if !drawn.ambient.is_empty() {
-            let (mut lp, mut lc, mut sp, mut sc) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+            let (mut lit, mut smoke) = (Verts::default(), Verts::default());
             if near {
                 ambient(
                     &drawn.ambient,
                     seconds,
                     local_eye,
-                    (&mut lp, &mut lc),
-                    (&mut sp, &mut sc),
+                    &mut lit,
+                    (&mut smoke.positions, &mut smoke.colours),
                 );
             }
-            for (positions, colours, handle) in [
-                (lp, lc, Some(&drawn.life.1)),
-                (sp, sc, drawn.smoke.as_ref().map(|s| &s.1)),
-            ] {
-                if let Some(handle) = handle
-                    && let Some(mesh) = meshes.get_mut(handle)
-                {
-                    write_mesh(mesh, positions, colours);
-                }
+            if let Some(mesh) = meshes.get_mut(&drawn.life.1) {
+                write_mesh(mesh, lit, true);
+            }
+            if let Some((_, handle)) = &drawn.smoke
+                && let Some(mesh) = meshes.get_mut(handle)
+            {
+                write_mesh(mesh, smoke, false);
             }
         }
     }
@@ -1613,25 +1626,29 @@ fn tiles(
         commands.entity(root).add_child(id);
         id
     };
-    if !built.positions.is_empty() {
+    if !built.pieces.positions.is_empty() {
         child(
             &mut commands,
-            meshes.add(mesh_of(built.positions, built.colours)),
+            meshes.add(mesh_of(built.pieces, true)),
             life.0.clone(),
             "Sea pieces",
         );
     }
-    let glow_id = (!built.glow_positions.is_empty()).then(|| {
+    let glow_id = (!built.glow.positions.is_empty()).then(|| {
         child(
             &mut commands,
-            meshes.add(mesh_of(built.glow_positions, built.glow_colours)),
+            meshes.add(mesh_of(built.glow, false)),
             glow.0.clone(),
             "Vent glow",
         )
     });
     let sway = (!built.sway.rest.is_empty()).then(|| {
-        let positions: Vec<[f32; 3]> = built.sway.rest.iter().map(|p| p.to_array()).collect();
-        let handle = meshes.add(mesh_of(positions, built.sway.colours.clone()));
+        let verts = Verts {
+            positions: built.sway.rest.iter().map(|p| p.to_array()).collect(),
+            colours: built.sway.colours.clone(),
+            uvs: built.sway.uvs.clone(),
+        };
+        let handle = meshes.add(mesh_of(verts, true));
         (
             child(
                 &mut commands,
@@ -1644,15 +1661,15 @@ fn tiles(
     });
     // The ambient meshes start with one hidden triangle, so the field gives
     // them their material at once and they never need it again.
-    let blank = || {
+    let blank = |textured: bool| {
         let mut m = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
         );
-        write_mesh(&mut m, vec![[0.0; 3]; 3], vec![[0.0; 4]; 3]);
+        write_mesh(&mut m, Verts::default(), textured);
         m
     };
-    let life_handle = meshes.add(blank());
+    let life_handle = meshes.add(blank(true));
     let life_id = child(
         &mut commands,
         life_handle.clone(),
@@ -1664,7 +1681,7 @@ fn tiles(
         .iter()
         .any(|a| matches!(a, Ambient::Smoke { .. }))
         .then(|| {
-            let handle = meshes.add(blank());
+            let handle = meshes.add(blank(false));
             (
                 child(&mut commands, handle.clone(), glow.0.clone(), "Vent smoke"),
                 handle,
@@ -1687,14 +1704,21 @@ fn tiles(
     );
 }
 
-fn write_mesh(mesh: &mut Mesh, positions: Vec<[f32; 3]>, colours: Vec<[f32; 4]>) {
-    let (positions, colours) = if positions.is_empty() {
-        (vec![[0.0; 3]; 3], vec![[0.0; 4]; 3])
+fn write_mesh(mesh: &mut Mesh, verts: Verts, textured: bool) {
+    let verts = if verts.positions.is_empty() {
+        Verts {
+            positions: vec![[0.0; 3]; 3],
+            colours: vec![[0.0; 4]; 3],
+            uvs: vec![[0.0; 2]; 3],
+        }
     } else {
-        (positions, colours)
+        verts
     };
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, verts.positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, verts.colours);
+    if textured {
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, verts.uvs);
+    }
     mesh.remove_indices();
     mesh.compute_flat_normals();
 }
@@ -1781,5 +1805,195 @@ mod tests {
             lon: 95.043f32.to_radians(),
         });
         assert!(plan(&cfg, key_of(d, cfg.radius_m)).is_empty());
+    }
+
+    fn inside(uv: [f32; 2], r: [f32; 4]) -> bool {
+        uv[0] > r[0] && uv[0] < r[0] + r[2] && uv[1] > r[1] && uv[1] < r[1] + r[3]
+    }
+
+    /// Every piece of the reef, the kelp and the floes has a UV a vertex,
+    /// each inside one of the atlas's reef tiles (`ocean-environments` B14),
+    /// so nearest sampling never reads a fish's skin or the gutter.
+    #[test]
+    fn every_piece_is_laid_into_a_reef_tile() {
+        use super::super::bodies::{atlas, rect_uv};
+        let tiles: Vec<[f32; 4]> = atlas().tiles.values().map(|r| rect_uv(*r)).collect();
+        let check = |what: &str, positions: usize, uvs: &[[f32; 2]]| {
+            assert_eq!(positions, uvs.len(), "{what}: a UV a vertex");
+            for uv in uvs {
+                assert!(
+                    tiles.iter().any(|r| inside(*uv, *r)),
+                    "{what}: {uv:?} in no tile"
+                );
+            }
+        };
+        for (kind, shape) in library() {
+            assert!(!shape.positions.is_empty(), "{kind:?} has faces");
+            check(&format!("{kind:?}"), shape.positions.len(), &shape.uvs);
+        }
+        let axes = (Vec3::X, Vec3::Y, Vec3::Z);
+        let mut kelp = Verts::default();
+        kelp_stand(Vec3::ZERO, axes, 8.0, 0.3, &mut kelp);
+        check("kelp", kelp.positions.len(), &kelp.uvs);
+        let mut ice = Verts::default();
+        floe(Vec3::ZERO, axes, 2.0, 0.4, &mut ice);
+        check("floe", ice.positions.len(), &ice.uvs);
+    }
+
+    /// Every fish variant is M9's body: faces, a UV a vertex, each in its own
+    /// skin, its own fin tile or the white texel (the eyes).
+    #[test]
+    fn every_fish_variant_wears_its_own_skin() {
+        use super::super::bodies::{VARIANTS, atlas, model_for, rect_uv, white_uv};
+        let plans = &atlas().fish;
+        for id in [
+            "minnow",
+            "silverfin",
+            "perch",
+            "ray",
+            "eel",
+            "reef",
+            "deepback",
+            "serpent",
+            "darter",
+            "anthias",
+        ] {
+            for v in 0..VARIANTS {
+                let plan = plans
+                    .iter()
+                    .find(|p| p.id == id && p.variant == v)
+                    .unwrap_or_else(|| panic!("{id} variant {v} in the atlas"));
+                let body = model_for(id, v + VARIANTS * 3);
+                let (skin, fin) = (rect_uv(plan.skin), rect_uv(plan.fin_tile));
+                assert!(body.triangles() > 100, "{id}: {} faces", body.triangles());
+                assert!(body.triangles() < 500, "{id}: {} faces", body.triangles());
+                assert_eq!(body.base.uvs.len(), body.base.positions.len());
+                for uv in &body.base.uvs {
+                    assert!(
+                        inside(*uv, skin) || inside(*uv, fin) || *uv == white_uv(),
+                        "{id}: {uv:?}"
+                    );
+                }
+            }
+        }
+        // The creatures M9's fish do not cover keep their bodies, on the
+        // white texel.
+        let crab = model_for("shore_crab", 0);
+        assert!(crab.base.uvs.iter().all(|uv| *uv == white_uv()));
+    }
+
+    /// Writes the game's sea pieces and every water creature's body, at rest,
+    /// to `docs/mockups/fish/water_life_models.js` for M9's "Reef and sea
+    /// floor" tab, so the mockup draws the game's own models in the game's
+    /// own atlas (`ocean-environments` B14). Run on purpose:
+    /// `cargo test -p pbd-app --profile fast export_water_life_models -- --ignored`.
+    #[test]
+    #[ignore]
+    fn export_water_life_models() {
+        use super::super::bodies::{Look, MODELS, Place, emit, model_for};
+        use std::fmt::Write;
+        let num = |v: f32| {
+            let r = (v * 1000.0).round() / 1000.0;
+            if r == 0.0 {
+                "0".to_string()
+            } else {
+                format!("{r}")
+            }
+        };
+        let list =
+            |vals: &mut dyn Iterator<Item = f32>| vals.map(&num).collect::<Vec<_>>().join(",");
+        let entry = |id: &str, name: &str, group: &str, v: &Verts, palette: &[u32]| {
+            let mut e = String::new();
+            write!(
+                e,
+                "{{\"id\":\"{id}\",\"name\":\"{name}\",\"group\":\"{group}\",\"pos\":[{}],\"uv\":[{}],\"col\":[{}],\"palette\":[{}]}}",
+                list(&mut v.positions.iter().flatten().copied()),
+                list(&mut v.uvs.iter().flatten().copied()),
+                list(&mut v.colours.iter().flat_map(|c| [c[0], c[1], c[2]])),
+                list(&mut palette.iter().flat_map(|h| {
+                    let c = lin(*h);
+                    [c[0], c[1], c[2]]
+                })),
+            )
+            .unwrap();
+            e
+        };
+        let axes = (Vec3::X, Vec3::Y, Vec3::Z);
+        let mut out = Vec::new();
+        let lib = library();
+        let kinds = [
+            (Kind::Branch, "branch", "Branching coral"),
+            (Kind::Finger, "finger", "Finger coral"),
+            (Kind::Boulder, "boulder", "Boulder and brain coral"),
+            (Kind::Table, "table", "Table coral"),
+            (Kind::Soft, "soft", "Soft coral"),
+            (Kind::Tube, "tube", "Tube sponge"),
+            (Kind::Barrel, "barrel", "Barrel sponge"),
+            (Kind::Fan, "fan", "Sea fan"),
+            (Kind::Anemone, "anemone", "Anemone"),
+            (Kind::Hero, "hero", "Giant anemone"),
+            (Kind::Turf, "turf", "Algae turf"),
+            (Kind::Grass, "grass", "Sea grass"),
+            (Kind::Weed, "weed", "Seaweed"),
+            (Kind::Rubble, "rubble", "Coral rubble"),
+            (Kind::Shell, "shell", "Shells"),
+            (Kind::Chimney, "chimney", "Black smoker"),
+            (Kind::Mat, "mat", "Bacterial mat"),
+            (Kind::Mussels, "mussels", "Mussel bed"),
+        ];
+        for (kind, id, name) in kinds {
+            let mut v = Verts::default();
+            lay(&lib[&kind], Vec3::ZERO, axes, Vec3::ONE, [1.0; 3], &mut v);
+            let group = if kind == Kind::Chimney || kind == Kind::Mat || kind == Kind::Mussels {
+                "vent"
+            } else {
+                "reef"
+            };
+            out.push(entry(id, name, group, &v, palette(kind)));
+        }
+        let mut kelp = Verts::default();
+        kelp_stand(Vec3::ZERO, axes, 5.0, 0.0, &mut kelp);
+        out.push(entry("kelp", "Kelp", "kelp", &kelp, &[0xffffff]));
+        let mut ice = Verts::default();
+        floe(Vec3::ZERO, axes, 1.4, 0.4, &mut ice);
+        out.push(entry("floe", "Ice floe", "ice", &ice, &[0xffffff]));
+        for model in MODELS {
+            let id = match *model {
+                "dabbler_drake" => "reed_dabbler",
+                "dabbler_hen" => "reed_dabbler",
+                other => other,
+            };
+            let body = model_for(id, if *model == "dabbler_hen" { 1 } else { 0 });
+            let mut v = Verts::default();
+            emit(
+                body,
+                &Look {
+                    t: 0.0,
+                    phase: 0.0,
+                    pose: pbd_core::fauna::Pose::Moving,
+                },
+                &Place {
+                    origin: Vec3::ZERO,
+                    forward: Vec3::X,
+                    up: Vec3::Y,
+                    scale: 1.0 / body.length,
+                },
+                [1.0; 3],
+                &mut v.positions,
+                &mut v.colours,
+                &mut v.uvs,
+            );
+            out.push(entry(model, model, "creature", &v, &[0xffffff]));
+        }
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../docs/mockups/fish/water_life_models.js");
+        std::fs::write(
+            &path,
+            format!(
+                "// Written by places::tests::export_water_life_models; do not edit.\nwindow.WATER_LIFE_MODELS = {{\"models\":[\n{}\n]}};\n",
+                out.join(",\n")
+            ),
+        )
+        .unwrap();
     }
 }

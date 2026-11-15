@@ -18,12 +18,13 @@ use std::collections::HashMap;
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use std::sync::OnceLock;
 
-/// A shape: a triangle list and one colour a vertex (the same three times a
-/// face).
+/// A shape: a triangle list, one colour a vertex (the same three times a
+/// face) and its place in the water life's atlas (`ocean-environments` B14).
 #[derive(Clone, Default, Debug)]
 pub struct Shape {
     pub positions: Vec<Vec3>,
     pub colours: Vec<[f32; 4]>,
+    pub uvs: Vec<[f32; 2]>,
 }
 
 /// A moving part on its pivot.
@@ -57,6 +58,9 @@ pub enum Sway {
     None,
     Fish,
     Eel,
+    /// M9's flat plan: the wings flap by their distance from the spine, and
+    /// the whip bends behind them.
+    Ray,
 }
 
 #[derive(Clone, Debug)]
@@ -116,10 +120,20 @@ pub(crate) fn atr(p: [f32; 3], r: [f32; 3]) -> Mat4 {
     tf(p, r, [1.0; 3])
 }
 
+/// A shape being built. Each part added is laid into `tile` (a rect of the
+/// atlas in UV) by a box projection: every face by the axis its normal is
+/// nearest, at one scale for the whole part (its longest side across the
+/// tile), so no face crosses the tile's edge. With no tile, the white
+/// texel.
 #[derive(Default)]
-pub(crate) struct Kit(pub(crate) Shape);
+pub(crate) struct Kit(pub(crate) Shape, pub(crate) Option<[f32; 4]>);
 
 impl Kit {
+    /// Lay the parts added from now on into the atlas's tile `name`.
+    pub(crate) fn tile(&mut self, name: &str) {
+        self.1 = Some(tile(name));
+    }
+
     /// Add a triangle list, coloured per face by `colour(centre, face)`.
     pub(crate) fn add_with(
         &mut self,
@@ -127,16 +141,27 @@ impl Kit {
         m: Mat4,
         colour: impl Fn(Vec3, usize) -> u32,
     ) {
-        for (n, tri) in tris.chunks_exact(3).enumerate() {
-            let t = [
-                m.transform_point3(tri[0]),
-                m.transform_point3(tri[1]),
-                m.transform_point3(tri[2]),
-            ];
+        let placed: Vec<Vec3> = tris.iter().map(|p| m.transform_point3(*p)).collect();
+        let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
+        for p in &placed {
+            lo = lo.min(*p);
+            hi = hi.max(*p);
+        }
+        let k = 1.0 / (hi - lo).max_element().max(1e-5);
+        for (n, t) in placed.chunks_exact(3).enumerate() {
             let c = lin(colour((t[0] + t[1] + t[2]) / 3.0, n));
+            let normal = (t[1] - t[0]).cross(t[2] - t[0]).abs();
             for p in t {
-                self.0.positions.push(p);
+                let q = (*p - lo) * k;
+                let uv = match self.1 {
+                    None => white_uv(),
+                    Some(r) if normal.y >= normal.x && normal.y >= normal.z => in_rect(r, q.x, q.z),
+                    Some(r) if normal.x >= normal.z => in_rect(r, q.z, 1.0 - q.y),
+                    Some(r) => in_rect(r, q.x, 1.0 - q.y),
+                };
+                self.0.positions.push(*p);
                 self.0.colours.push(c);
+                self.0.uvs.push(uv);
             }
         }
     }
@@ -393,226 +418,491 @@ pub(crate) fn translate(tris: Vec<Vec3>, by: [f32; 3]) -> Vec<Vec3> {
 
 pub(crate) const EYE: u32 = 0x161612;
 
-// ---- fish (after fish.html's buildFish) ------------------------------------
+// ---- the water life's atlas (`ocean-environments` B14) ----------------------
 
-#[derive(Clone, Copy)]
-enum Tail {
-    Fork,
-    Deep,
-    Lunate,
-    Trunc,
-    Round,
+/// The manifest `tools/water_life_atlas.py` writes beside the atlas: every
+/// rect, and each fish variant's genome and body plan (M9's numbers, read
+/// here rather than copied).
+#[derive(serde::Deserialize, Debug)]
+pub struct Atlas {
+    pub size: (u32, u32),
+    pub tiles: HashMap<String, (u32, u32, u32, u32)>,
+    pub fish: Vec<FishPlan>,
 }
 
-#[derive(Clone)]
-struct FishP {
-    back: u32,
-    side: u32,
-    belly: u32,
-    fin: u32,
-    tail_c: Option<u32>,
-    head: Option<u32>,
-    h: f32,
-    w: f32,
-    tail: Tail,
-    dorsal: Option<Vec<[f32; 3]>>,
-    bands: Vec<(f32, f32, u32)>,
-    lateral: Option<u32>,
-    spots: Option<(f32, u32)>,
-    eel: bool,
-    peak: f32,
+/// One fish variant: M9's `genome(species, seed)` and its species' plan.
+#[derive(serde::Deserialize, Debug, Clone)]
+pub struct FishPlan {
+    pub id: String,
+    pub variant: u32,
+    pub seed: u32,
+    pub skin: (u32, u32, u32, u32),
+    pub fin_tile: (u32, u32, u32, u32),
+    pub profile: String,
+    pub tail: String,
+    pub d: f32,
+    pub w: f32,
+    pub u_max: f32,
+    pub ped: f32,
+    pub body: f32,
+    pub eel: bool,
+    pub flat: bool,
+    pub depth: f32,
+    pub width: f32,
+    pub fin: f32,
+    pub length_k: f32,
+    pub dorsal: Vec<(f32, f32, f32, String)>,
+    pub anal: Vec<(f32, f32, f32)>,
+    pub pec: f32,
+    pub eye: f32,
+    pub crest: bool,
 }
 
-impl FishP {
-    fn new(back: u32, side: u32, belly: u32, fin: u32, h: f32, w: f32, tail: Tail) -> Self {
-        Self {
-            back,
-            side,
-            belly,
-            fin,
-            tail_c: None,
-            head: None,
-            h,
-            w,
-            tail,
-            dorsal: None,
-            bands: Vec::new(),
-            lateral: None,
-            spots: None,
-            eel: false,
-            peak: 0.32,
-        }
-    }
+/// The atlas's path under `assets/`.
+pub const ATLAS_PNG: &str = "textures/water_life/atlas.png";
+/// Variants a fish species has in the atlas; a creature wears `id % this`.
+pub const VARIANTS: u32 = 4;
+
+pub fn atlas() -> &'static Atlas {
+    static ATLAS: OnceLock<Atlas> = OnceLock::new();
+    ATLAS.get_or_init(|| {
+        ron::from_str(include_str!(
+            "../../../../assets/textures/water_life/atlas.ron"
+        ))
+        .expect("assets/textures/water_life/atlas.ron")
+    })
 }
 
-fn fish_geo(p: &FishP) -> Shape {
-    let mut k = Kit::default();
-    let eel = p.eel;
-    let nu = if eel { 16 } else { 9 };
-    let bl = if eel { 0.98 } else { 0.8 };
-    let (hh_, wd) = (p.h / 2.0, p.w / 2.0);
-    let x_at = |u: f32| 0.5 - u * bl;
-    let u_at = |x: f32| (0.5 - x) / bl;
-    let peak = p.peak;
-    let prof = |u: f32| -> f32 {
-        if eel {
-            if u < 0.07 {
-                (u / 0.07 * FRAC_PI_2).sin().powf(0.8)
-            } else {
-                1.0 - 0.8 * ((u - 0.07) / 0.93).powf(1.6)
-            }
-        } else if u < peak {
-            (u / peak * FRAC_PI_2).sin().powf(0.75)
-        } else {
-            0.17 + 0.83 * (1.0 - (u - peak) / (1.0 - peak)).max(0.0).powf(1.25)
-        }
-    };
-    let mut rings = Vec::new();
-    for i in 0..=nu {
-        let u = i as f32 / nu as f32;
-        let f = if i == 0 { 0.0 } else { prof(u) };
-        rings.push([x_at(u), hh_ * f, wd * f, 0.0]);
-    }
-    rings.push([x_at(1.0) - 0.004, 0.0, 0.0, 0.0]);
-    let body = lathe(&rings, 6, PI / 6.0);
-    k.add_with(body, Mat4::IDENTITY, |c, n| {
-        let u = u_at(c.x).clamp(0.0, 1.0);
-        let hy = (hh_ * prof(u)).max(1e-4);
-        let yn = c.y / hy;
-        for &(u0, u1, colour) in &p.bands {
-            if u >= u0 && u <= u1 {
-                return colour;
-            }
-        }
-        if let Some((tenths, colour)) = p.spots
-            && hh(n as i64, 7) < tenths / 10.0
-            && yn > -0.2
-        {
-            return colour;
-        }
-        if let Some(l) = p.lateral
-            && yn.abs() < 0.22
-            && u > 0.15
-        {
-            return l;
-        }
-        if let Some(h) = p.head
-            && u < 0.22
-        {
-            return h;
-        }
-        if yn > 0.3 {
-            p.back
-        } else if yn < -0.35 {
-            p.belly
-        } else {
-            p.side
-        }
-    });
-    let fin = p.fin;
-    let xt = x_at(1.0);
-    let hp = (hh_ * prof(1.0)).max(0.012);
-    let tl = if eel { 0.06 } else { xt + 0.52 };
-    if !eel {
-        let tail: Vec<[f32; 2]> = match p.tail {
-            Tail::Fork => vec![
-                [xt + 0.02, hp],
-                [xt - tl, hp + tl * 0.8],
-                [xt - tl * 0.55, 0.0],
-                [xt - tl, -hp - tl * 0.8],
-                [xt + 0.02, -hp],
-            ],
-            Tail::Deep => vec![
-                [xt + 0.02, hp],
-                [xt - tl * 1.05, hp + tl],
-                [xt - tl * 0.8, hp + tl * 0.7],
-                [xt - tl * 0.45, 0.0],
-                [xt - tl * 0.8, -hp - tl * 0.7],
-                [xt - tl * 1.05, -hp - tl],
-                [xt + 0.02, -hp],
-            ],
-            Tail::Lunate => vec![
-                [xt + 0.02, hp],
-                [xt - tl, hp + tl * 1.05],
-                [xt - tl * 0.55, hp * 0.4],
-                [xt - tl * 0.5, 0.0],
-                [xt - tl * 0.55, -hp * 0.4],
-                [xt - tl, -hp - tl * 1.05],
-                [xt + 0.02, -hp],
-            ],
-            Tail::Trunc => vec![
-                [xt + 0.02, hp],
-                [xt - tl, hp + tl * 0.55],
-                [xt - tl * 1.04, 0.0],
-                [xt - tl, -hp - tl * 0.55],
-                [xt + 0.02, -hp],
-            ],
-            Tail::Round => vec![
-                [xt + 0.02, hp],
-                [xt - tl * 0.6, hp + tl * 0.45],
-                [xt - tl, 0.0],
-                [xt - tl * 0.6, -hp - tl * 0.45],
-                [xt + 0.02, -hp],
-            ],
-        };
-        k.add(shape(&tail), Mat4::IDENTITY, p.tail_c.unwrap_or(fin));
-    }
-    let fins = |list: &[[f32; 3]], sgn: f32, k: &mut Kit| {
-        for &[u0, u1, hgt] in list {
-            let base: Vec<[f32; 2]> = (0..=6)
-                .map(|i| {
-                    let u = u0 + (u1 - u0) * i as f32 / 6.0;
-                    [x_at(u), sgn * hh_ * prof(u) * 0.86]
-                })
-                .collect();
-            let mut poly = vec![base[0]];
-            poly.push([base[1][0] + hgt * 0.1, base[1][1] + sgn * hgt]);
-            poly.push([base[6][0] - hgt * 0.45, base[6][1] + sgn * hgt * 0.3]);
-            poly.push(base[6]);
-            for i in (1..6).rev() {
-                poly.push(base[i]);
-            }
-            k.add(shape(&poly), Mat4::IDENTITY, fin);
-        }
-    };
-    let dorsal = p.dorsal.clone().unwrap_or_else(|| {
-        if eel {
-            vec![[0.12, 0.97, 0.03]]
-        } else {
-            vec![[0.28, 0.62, hh_ * 0.9]]
-        }
-    });
-    fins(&dorsal, 1.0, &mut k);
-    let anal = if eel {
-        vec![[0.4, 0.97, 0.025]]
+/// A rect of the atlas in UV: x, y, width, height, each 0..1.
+pub fn rect_uv(r: (u32, u32, u32, u32)) -> [f32; 4] {
+    let (w, h) = atlas().size;
+    [
+        r.0 as f32 / w as f32,
+        r.1 as f32 / h as f32,
+        r.2 as f32 / w as f32,
+        r.3 as f32 / h as f32,
+    ]
+}
+
+/// A reef tile's rect in UV, by its name in the manifest.
+pub fn tile(name: &str) -> [f32; 4] {
+    rect_uv(
+        *atlas()
+            .tiles
+            .get(name)
+            .unwrap_or_else(|| panic!("water-life tile {name}")),
+    )
+}
+
+/// A point `(s, t)` (0..1 each, t down) inside a rect, held a quarter texel
+/// in from its edges so nearest sampling never reads the gutter.
+pub fn in_rect(r: [f32; 4], s: f32, t: f32) -> [f32; 2] {
+    let (w, h) = atlas().size;
+    let (ix, iy) = (0.25 / w as f32, 0.25 / h as f32);
+    [
+        r[0] + ix + s.clamp(0.0, 1.0) * (r[2] - 2.0 * ix),
+        r[1] + iy + t.clamp(0.0, 1.0) * (r[3] - 2.0 * iy),
+    ]
+}
+
+/// The UV of an untextured face: the middle of the white tile.
+pub fn white_uv() -> [f32; 2] {
+    static WHITE: OnceLock<[f32; 2]> = OnceLock::new();
+    *WHITE.get_or_init(|| in_rect(tile("white"), 0.5, 0.5))
+}
+
+// ---- fish (M9's buildFish, `docs/mockups/fish.html`) -----------------------
+
+/// M9's `profH`: the body's depth along it, 0 at the nose to the stalk.
+fn prof_h(u: f32, p: &FishPlan) -> f32 {
+    let mut h = if u <= p.u_max {
+        let t = u / p.u_max;
+        (2.0 * t - t * t).max(0.0).sqrt()
     } else {
-        vec![[0.6, 0.82, hh_ * 0.5]]
+        let t = (u - p.u_max) / (1.0 - p.u_max);
+        p.ped + (1.0 - p.ped) * 0.5 * (1.0 + (PI * t).cos())
     };
-    fins(&anal, -1.0, &mut k);
-    if !eel {
-        for s in [1.0f32, -1.0] {
-            let pw = hh_ * 0.55;
-            let g = shape(&[[0.0, 0.0], [-pw, 0.03], [-pw * 0.8, -pw * 0.45]]);
-            k.add(
-                g,
-                atr(
-                    [x_at(0.27), -hh_ * 0.25, s * wd * 0.75],
-                    [s * 0.9, 0.0, 0.0],
-                ),
-                fin,
-            );
+    if p.eel {
+        h *= (1.0 - u.powi(3)).max(0.04);
+    }
+    h
+}
+
+/// M9's `rayW`: a diamond in plan.
+fn ray_w(u: f32) -> f32 {
+    if u < 0.4 {
+        (u / 0.4).powf(0.95)
+    } else {
+        ((1.0 - u) / 0.6).powf(1.25) * 0.97 + 0.03
+    }
+}
+
+/// Texels of the fin tile a model unit (M9's 8 px tile repeated nine times).
+const FIN_TEXELS_PER_UNIT: f32 = 72.0;
+
+struct FishKit {
+    shape: Shape,
+}
+
+impl FishKit {
+    fn tri(&mut self, p: [Vec3; 3], uv: [[f32; 2]; 3], colour: [f32; 4]) {
+        // A face with no area (the nose's point, a cap) is dropped: it has
+        // no normal.
+        if (p[1] - p[0]).cross(p[2] - p[0]).length_squared() < 1e-14 {
+            return;
+        }
+        for i in 0..3 {
+            self.shape.positions.push(p[i]);
+            self.shape.colours.push(colour);
+            self.shape.uvs.push(uv[i]);
         }
     }
-    let eu = if eel { 0.04 } else { 0.13 };
-    let (ex, ew) = (x_at(eu), wd * prof(eu));
-    for s in [1.0f32, -1.0] {
-        k.add(
-            bx(0.045, 0.045, 0.03),
-            at([ex, hh_ * 0.25, s * (ew + 0.008)]),
-            EYE,
+
+    /// A flat fin in the XY plane, through `m`, in the fin tile.
+    fn fin(&mut self, pts: &[[f32; 2]], m: Mat4, tile: [f32; 4]) {
+        let (mut lo, mut hi) = (Vec2::splat(f32::INFINITY), Vec2::splat(f32::NEG_INFINITY));
+        for p in pts {
+            lo = lo.min(Vec2::from(*p));
+            hi = hi.max(Vec2::from(*p));
+        }
+        let span = (hi - lo).max_element().max(1e-4) * FIN_TEXELS_PER_UNIT;
+        let k = (31.5 / span).min(1.0) * FIN_TEXELS_PER_UNIT / 32.0;
+        let tris = shape(pts);
+        for t in tris.chunks_exact(3) {
+            let uv = [t[0], t[1], t[2]].map(|p| in_rect(tile, (p.x - lo.x) * k, (hi.y - p.y) * k));
+            let p = [t[0], t[1], t[2]].map(|p| m.transform_point3(p));
+            self.tri(p, uv, [1.0; 4]);
+        }
+    }
+
+    /// A box in one colour on the white texel (M9's block eye).
+    fn block(&mut self, size: Vec3, at: Vec3, hex: u32) {
+        let w = white_uv();
+        let c = lin(hex);
+        let tris = bx(size.x, size.y, size.z);
+        for t in tris.chunks_exact(3) {
+            self.tri([t[0] + at, t[1] + at, t[2] + at], [w; 3], c);
+        }
+    }
+}
+
+/// A fish of length one, head along +X and back along +Y, from its M9 plan:
+/// a six-sided body in rings, its skin by length and the angle round it,
+/// the tail, dorsal and anal fins, an eel's ribbons and a serpent's crest,
+/// the pectorals, a ray's whip, and the block eyes.
+fn m9_fish(p: &FishPlan) -> Shape {
+    let mut k = FishKit {
+        shape: Shape::default(),
+    };
+    let skin = rect_uv(p.skin);
+    let fin_tile = rect_uv(p.fin_tile);
+    let d = p.d * p.depth;
+    let wd = p.w * p.width;
+    let bl = p.body;
+    let x0 = 0.5;
+    let nu = if p.eel { 22 } else { 12 };
+    let nv = 6;
+    let h_at = |u: f32| d * prof_h(u, p);
+    let w_at = |u: f32| {
+        if p.flat {
+            wd * ray_w(u)
+        } else {
+            wd * prof_h(u, p)
+        }
+    };
+    let x_at = |u: f32| x0 - u * bl;
+    // The body's rings, as M9 lays them.
+    let mut ring: Vec<Vec<(Vec3, [f32; 2])>> = Vec::new();
+    for i in 0..=nu + 1 {
+        let u = (i as f32 / nu as f32).min(1.0);
+        let cap = i == nu + 1;
+        let xx = x0 - u * bl - if cap { 0.004 } else { 0.0 };
+        let (h, w) = if cap { (0.0, 0.0) } else { (h_at(u), w_at(u)) };
+        ring.push(
+            (0..=nv)
+                .map(|j| {
+                    let th = TAU * j as f32 / nv as f32 + PI / nv as f32;
+                    let belly = if th.cos() < 0.0 { 0.94 } else { 1.0 };
+                    (
+                        Vec3::new(xx, h * th.cos() * belly, w * th.sin()),
+                        in_rect(skin, u, j as f32 / nv as f32),
+                    )
+                })
+                .collect(),
         );
     }
-    k.build()
+    for i in 0..=nu {
+        for j in 0..nv {
+            let (a, a1) = (ring[i][j], ring[i][j + 1]);
+            let (b, b1) = (ring[i + 1][j], ring[i + 1][j + 1]);
+            k.tri([a.0, b.0, a1.0], [a.1, b.1, a1.1], [1.0; 4]);
+            k.tri([b.0, b1.0, a1.0], [b.1, b1.1, a1.1], [1.0; 4]);
+        }
+    }
+    let f = p.fin;
+    let xt = x_at(1.0);
+    let hp = h_at(1.0).max(0.012);
+    let tl = (1.0 - bl + 0.04) * f;
+    let tail: Vec<[f32; 2]> = match p.tail.as_str() {
+        "forked" => vec![
+            [xt + 0.01, hp],
+            [xt - tl, hp + tl * 0.75],
+            [xt - tl * 0.55, 0.0],
+            [xt - tl, -hp - tl * 0.75],
+            [xt + 0.01, -hp],
+        ],
+        "deepfork" => vec![
+            [xt + 0.01, hp],
+            [xt - tl * 1.05, hp + tl * 0.95],
+            [xt - tl * 0.85, hp + tl * 0.7],
+            [xt - tl * 0.45, 0.0],
+            [xt - tl * 0.85, -hp - tl * 0.7],
+            [xt - tl * 1.05, -hp - tl * 0.95],
+            [xt + 0.01, -hp],
+        ],
+        "lunate" => vec![
+            [xt + 0.01, hp],
+            [xt - tl * 1.05, hp + tl * 1.05],
+            [xt - tl * 0.6, hp * 0.5],
+            [xt - tl * 0.5, 0.0],
+            [xt - tl * 0.6, -hp * 0.5],
+            [xt - tl * 1.05, -hp - tl * 1.05],
+            [xt + 0.01, -hp],
+        ],
+        "truncate" => vec![
+            [xt + 0.01, hp],
+            [xt - tl, hp + tl * 0.6],
+            [xt - tl * 1.03, 0.0],
+            [xt - tl, -hp - tl * 0.6],
+            [xt + 0.01, -hp],
+        ],
+        "rounded" => {
+            let mut pts = vec![[xt + 0.01, hp]];
+            for i in 0..=12 {
+                let a = -FRAC_PI_2 + PI * i as f32 / 12.0;
+                pts.push([
+                    xt - tl * 0.3 - tl * 0.75 * a.cos(),
+                    -(hp + tl * 0.55) * a.sin(),
+                ]);
+            }
+            pts.push([xt + 0.01, -hp]);
+            pts
+        }
+        _ => Vec::new(),
+    };
+    if !tail.is_empty() {
+        k.fin(&tail, Mat4::IDENTITY, fin_tile);
+    }
+    let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
+    for (u0, u1, hh_, kind) in &p.dorsal {
+        let h = hh_ * f;
+        let base: Vec<[f32; 2]> = (0..=10)
+            .map(|i| {
+                let u = lerp(*u0, *u1, i as f32 / 10.0);
+                [x_at(u), h_at(u) * 0.86]
+            })
+            .collect();
+        let rev = |from: usize, to: usize| base[from..to].iter().rev().copied();
+        let pts: Vec<[f32; 2]> = match kind.as_str() {
+            "spiny" => {
+                let mut pts = vec![base[0]];
+                for (i, b) in base.iter().enumerate() {
+                    let up = if i % 2 == 1 { 0.55 } else { 0.95 };
+                    pts.push([b[0], b[1] + h * up * (1.0 - 0.3 * i as f32 / 10.0)]);
+                }
+                pts.extend(base.iter().rev().copied());
+                pts
+            }
+            "tall" => [
+                base[0],
+                [base[1][0] + h * 0.15, base[1][1] + h * 1.3],
+                [base[10][0] - h * 0.5, base[10][1] + h * 0.6],
+                base[10],
+            ]
+            .into_iter()
+            .chain(rev(1, 10))
+            .collect(),
+            _ => [
+                base[0],
+                [base[3][0] + h * 0.1, base[3][1] + h],
+                [base[10][0] - h * 0.35, base[10][1] + h * 0.25],
+                base[10],
+            ]
+            .into_iter()
+            .chain(rev(1, 10))
+            .collect(),
+        };
+        k.fin(&dedup(pts), Mat4::IDENTITY, fin_tile);
+    }
+    for (u0, u1, hh_) in &p.anal {
+        let h = hh_ * f;
+        let base: Vec<[f32; 2]> = (0..=8)
+            .map(|i| {
+                let u = lerp(*u0, *u1, i as f32 / 8.0);
+                [x_at(u), -h_at(u) * 0.84]
+            })
+            .collect();
+        let pts: Vec<[f32; 2]> = [
+            base[0],
+            [base[2][0] - h * 0.3, base[2][1] - h],
+            [base[8][0] - h * 0.3, base[8][1] - h * 0.3],
+            base[8],
+        ]
+        .into_iter()
+        .chain(base[1..8].iter().rev().copied())
+        .collect();
+        k.fin(&pts, Mat4::IDENTITY, fin_tile);
+    }
+    if p.eel {
+        // Two thin ribbons along the back and the belly, meeting at the tip.
+        let n = 24;
+        let mut up = Vec::new();
+        let mut dn = Vec::new();
+        let mut in_up = Vec::new();
+        let mut in_dn = Vec::new();
+        for i in 0..=n {
+            let u = lerp(0.35, 1.0, i as f32 / n as f32);
+            let h = h_at(u);
+            let fw = (0.003 + 0.007 * (u - 0.35) / 0.65) * f;
+            up.push([x_at(u), h + fw]);
+            dn.push([x_at(u), -h - fw]);
+            in_up.push([x_at(u), h * 0.85]);
+            in_dn.push([x_at(u), -h * 0.85]);
+        }
+        let tip = [x_at(1.0) - 0.03, 0.0];
+        let top: Vec<[f32; 2]> = up
+            .iter()
+            .copied()
+            .chain([tip])
+            .chain(in_up.iter().rev().copied())
+            .collect();
+        let bottom: Vec<[f32; 2]> = in_dn
+            .iter()
+            .copied()
+            .chain([tip])
+            .chain(dn.iter().rev().copied())
+            .collect();
+        k.fin(&dedup(top), Mat4::IDENTITY, fin_tile);
+        k.fin(&dedup(bottom), Mat4::IDENTITY, fin_tile);
+        if p.crest {
+            let mut pts = Vec::new();
+            for i in 0..=18 {
+                let u = lerp(0.03, 0.55, i as f32 / 18.0);
+                let h = h_at(u);
+                let spike = if i % 2 == 1 { 0.05 } else { 0.016 };
+                pts.push([
+                    x_at(u) + 0.004,
+                    h * 0.8 + spike * f * (1.0 - i as f32 / 22.0),
+                ]);
+            }
+            for i in (0..=18).rev() {
+                let u = lerp(0.03, 0.55, i as f32 / 18.0);
+                pts.push([x_at(u), h_at(u) * 0.6]);
+            }
+            k.fin(&pts, Mat4::IDENTITY, fin_tile);
+        }
+    }
+    if p.pec > 0.0 {
+        let u = if p.eel { 0.07 } else { 0.24 };
+        let s = p.pec * f;
+        let pts = [
+            [0.0, 0.0],
+            [-s * 1.3, s * 0.15],
+            [-s * 1.6, -s * 0.35],
+            [-s * 0.9, -s * 0.5],
+            [0.0, -s * 0.18],
+        ];
+        for side in [1.0f32, -1.0] {
+            let m = Mat4::from_rotation_translation(
+                Quat::from_rotation_y(side * 0.5),
+                Vec3::new(x_at(u), -h_at(u) * 0.25, side * w_at(u) * 0.9),
+            );
+            k.fin(&pts, m, fin_tile);
+        }
+    }
+    if p.flat {
+        // The whip: a thin cone in eight rings, so the tail can bend.
+        let (x1, len) = (x_at(1.0), 0.62);
+        let rings: Vec<[f32; 4]> = (0..=8)
+            .map(|i| {
+                let t = i as f32 / 8.0;
+                let r = 0.016 + (0.004 - 0.016) * t;
+                [x1 + 0.02 - t * len, r, r, 0.01]
+            })
+            .collect();
+        let tris = lathe(&rings, 6, PI / 6.0);
+        for t in tris.chunks_exact(3) {
+            let uv = [t[0], t[1], t[2]].map(|q| in_rect(fin_tile, (x1 + 0.02 - q.x) / len, 0.5));
+            k.tri([t[0], t[1], t[2]], uv, [1.0; 4]);
+        }
+    }
+    let eu = if p.eel {
+        0.045
+    } else if p.flat {
+        0.22
+    } else {
+        0.08
+    };
+    let er = p.eye;
+    for side in [1.0f32, -1.0] {
+        let ey = if p.flat {
+            h_at(eu) * 0.9
+        } else {
+            h_at(0.2f32.min(p.u_max)) * 0.32
+        };
+        let ez = if p.flat {
+            side * w_at(eu) * 0.35
+        } else {
+            side * (w_at(eu) * 0.9 + er * 0.25)
+        };
+        let e = Vec3::new(x_at(eu), ey, ez);
+        k.block(Vec3::new(er * 1.8, er * 1.8, er * 1.2), e, 0xf4f0e2);
+        let pupil = e + Vec3::new(
+            er * 0.12,
+            if p.flat { er * 0.55 } else { 0.0 },
+            side * er * 0.55,
+        );
+        k.block(Vec3::new(er, er, er * 0.4), pupil, 0x0c0a10);
+    }
+    k.shape
+}
+
+/// A polygon with no point repeated next to itself (M9's `spiny` fin starts
+/// on its first base point twice).
+fn dedup(pts: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
+    let mut out: Vec<[f32; 2]> = Vec::with_capacity(pts.len());
+    for p in pts {
+        if out
+            .last()
+            .is_none_or(|q| (q[0] - p[0]).abs() + (q[1] - p[1]).abs() > 1e-6)
+        {
+            out.push(p);
+        }
+    }
+    while out.len() > 3
+        && (out[0][0] - out[out.len() - 1][0]).abs() + (out[0][1] - out[out.len() - 1][1]).abs()
+            < 1e-6
+    {
+        out.pop();
+    }
+    out
+}
+
+/// The fish a plan builds, with its sway: an eel's wave, a ray's flap, or
+/// the tail's beat.
+fn m9_body(p: &FishPlan) -> Body {
+    let sway = if p.eel {
+        Sway::Eel
+    } else if p.flat {
+        Sway::Ray
+    } else {
+        Sway::Fish
+    };
+    let kind = if p.flat { Kind::Ray } else { Kind::Fish };
+    let mut body = Body::new(kind, sway, m9_fish(p), Vec::new());
+    // M9 builds a fish of length one and scales it by the species' length.
+    body.length = 1.0;
+    body
 }
 
 // ---- crawlers --------------------------------------------------------------
@@ -807,55 +1097,6 @@ fn turtle_geo() -> (Shape, Vec<Part>) {
             at: Vec3::new(-0.22, 0.0, -0.22),
             yaw: 0.0,
             shape: flipper(false, -1.0),
-        },
-    ];
-    (k.build(), parts)
-}
-
-fn ray_geo() -> (Shape, Vec<Part>) {
-    let (top, under, spot) = (0x8c7a58, 0xd8cfb0, 0xb9a57d);
-    let mut k = Kit::default();
-    k.add_with(
-        lathe6(&[
-            [0.42, 0.0, 0.0],
-            [0.3, 0.04, 0.14],
-            [0.05, 0.06, 0.2],
-            [-0.15, 0.05, 0.14],
-            [-0.3, 0.02, 0.05],
-            [-0.33, 0.0, 0.0],
-        ]),
-        Mat4::IDENTITY,
-        |c, _| if c.y > 0.0 { top } else { under },
-    );
-    k.add(
-        rotate_z(cyl(0.004, 0.018, 0.5, 4), FRAC_PI_2),
-        at([-0.55, 0.0, 0.0]),
-        top,
-    );
-    for s in [1.0f32, -1.0] {
-        k.add(bx(0.04, 0.03, 0.03), at([0.2, 0.05, s * 0.07]), EYE);
-    }
-    let wing = |s: f32| {
-        let mut k = Kit::default();
-        k.add_with(
-            shape(&[[0.32, 0.0], [-0.25, 0.0], [-0.02, s * 0.5]]),
-            atr([0.0; 3], [FRAC_PI_2, 0.0, 0.0]),
-            |_, n| if hh(n as i64, 9) < 0.2 { spot } else { top },
-        );
-        k.build()
-    };
-    let parts = vec![
-        Part {
-            name: "wingR",
-            at: Vec3::new(0.0, 0.0, 0.1),
-            yaw: 0.0,
-            shape: wing(1.0),
-        },
-        Part {
-            name: "wingL",
-            at: Vec3::new(0.0, 0.0, -0.1),
-            yaw: 0.0,
-            shape: wing(-1.0),
         },
     ];
     (k.build(), parts)
@@ -1211,11 +1452,6 @@ fn bird_geo(p: &BirdP) -> (Shape, Vec<Part>) {
 
 // ---- the species ------------------------------------------------------------
 
-fn fish_body(p: FishP) -> Body {
-    let sway = if p.eel { Sway::Eel } else { Sway::Fish };
-    Body::new(Kind::Fish, sway, fish_geo(&p), Vec::new())
-}
-
 impl Body {
     fn new(kind: Kind, sway: Sway, base: Shape, parts: Vec<Part>) -> Self {
         let mut body = Self {
@@ -1242,61 +1478,10 @@ impl Body {
     }
 }
 
+/// A model by name that is not one of M9's fish (those are built from the
+/// atlas's plans, [`model_for`]).
 fn build(model: &str) -> Body {
-    use Tail::*;
     match model {
-        // The reef's ambient fish (`places`): not species, never caught.
-        "darter" => fish_body(FishP {
-            tail_c: Some(0x8d4526),
-            bands: vec![
-                (0.13, 0.19, 0xfffefe),
-                (0.42, 0.5, 0xfffefe),
-                (0.74, 0.8, 0xfffefe),
-            ],
-            dorsal: Some(vec![[0.22, 0.7, 0.12]]),
-            ..FishP::new(0xc56d25, 0xfb902f, 0xfaaf5c, 0xfb902f, 0.36, 0.14, Round)
-        }),
-        "anthias" => fish_body(FishP {
-            tail_c: Some(0xdd576d),
-            lateral: Some(0xfaaf5c),
-            ..FishP::new(0xdd576d, 0xfb902f, 0xfaaf5c, 0xfb902f, 0.3, 0.1, Lunate)
-        }),
-        "minnow" => fish_body(FishP {
-            lateral: Some(0x3c4c5c),
-            ..FishP::new(0x54697e, 0x7896b4, 0xbcd0e4, 0x7896b4, 0.2, 0.1, Fork)
-        }),
-        "silverfin" => fish_body(FishP::new(
-            0x9fb9c2, 0xcfe3ea, 0xf0f6f8, 0x9fb9c2, 0.22, 0.11, Deep,
-        )),
-        "perch" => fish_body(FishP {
-            bands: vec![
-                (0.22, 0.28, 0x6b4a18),
-                (0.4, 0.46, 0x6b4a18),
-                (0.58, 0.64, 0x6b4a18),
-            ],
-            dorsal: Some(vec![[0.22, 0.45, 0.13], [0.5, 0.7, 0.09]]),
-            ..FishP::new(0x6b4a18, 0xd8a13a, 0xe8c878, 0xc8612b, 0.3, 0.13, Trunc)
-        }),
-        "eel" => fish_body(FishP {
-            eel: true,
-            ..FishP::new(0x4c562e, 0x788248, 0xa8b070, 0x4c562e, 0.07, 0.06, Fork)
-        }),
-        "serpent" => fish_body(FishP {
-            eel: true,
-            dorsal: Some(vec![[0.08, 0.98, 0.04]]),
-            ..FishP::new(0x1e5042, 0x307866, 0xb6d0b2, 0x307866, 0.06, 0.05, Fork)
-        }),
-        "reef" => fish_body(FishP::new(
-            0x246064, 0x3c9696, 0x96d6d6, 0x246064, 0.38, 0.1, Lunate,
-        )),
-        "deepback" => fish_body(FishP {
-            dorsal: Some(vec![[0.25, 0.7, 0.16]]),
-            ..FishP::new(0x4f6f8f, 0x6f8faf, 0x9fb6c9, 0x4f6f8f, 0.3, 0.14, Trunc)
-        }),
-        "ray" => {
-            let (base, parts) = ray_geo();
-            Body::new(Kind::Ray, Sway::None, base, parts)
-        }
         "shore_crab" => Body::new(
             Kind::Crab,
             Sway::None,
@@ -1379,10 +1564,7 @@ fn build(model: &str) -> Body {
             crest: Some(0x161612),
             ..default()
         }),
-        _ => fish_body(FishP {
-            lateral: Some(0x3c4c5c),
-            ..FishP::new(0x54697e, 0x7896b4, 0xbcd0e4, 0x7896b4, 0.2, 0.1, Fork)
-        }),
+        other => panic!("no body for {other}"),
     }
 }
 
@@ -1417,17 +1599,38 @@ pub const MODELS: &[&str] = &[
     "anthias",
 ];
 
-/// The model a species' creature `id` wears: its own, the hen for every
-/// second reed dabbler, and the minnow's for a species with none.
+/// The model a species' creature `id` wears: a fish its M9 variant
+/// `id % VARIANTS` (`ocean-environments` B14), the hen for every second
+/// reed dabbler, and the minnow's for a species with none.
 pub fn model_for(species: &str, id: u32) -> &'static Body {
-    static BODIES: OnceLock<HashMap<&'static str, Body>> = OnceLock::new();
-    let bodies = BODIES.get_or_init(|| MODELS.iter().map(|m| (*m, build(m))).collect());
+    static FISH: OnceLock<HashMap<(String, u32), Body>> = OnceLock::new();
+    static OTHERS: OnceLock<HashMap<&'static str, Body>> = OnceLock::new();
+    let fish = FISH.get_or_init(|| {
+        atlas()
+            .fish
+            .iter()
+            .map(|plan| ((plan.id.clone(), plan.variant), m9_body(plan)))
+            .collect()
+    });
+    let variant = id % VARIANTS;
+    if let Some(body) = fish.get(&(species.to_string(), variant)) {
+        return body;
+    }
+    let others = OTHERS.get_or_init(|| {
+        MODELS
+            .iter()
+            .filter(|m| !fish.contains_key(&(m.to_string(), 0)))
+            .map(|m| (*m, build(m)))
+            .collect()
+    });
     let name = match species {
         "reed_dabbler" if id % 2 == 1 => "dabbler_hen",
         "reed_dabbler" => "dabbler_drake",
         other => other,
     };
-    bodies.get(name).unwrap_or_else(|| &bodies["minnow"])
+    others
+        .get(name)
+        .unwrap_or_else(|| &fish[&("minnow".to_string(), variant)])
 }
 
 /// Whether a species has a model of its own.
@@ -1510,17 +1713,31 @@ fn animate(kind: Kind, name: &str, index: usize, yaw: f32, look: &Look) -> (Quat
     }
 }
 
-/// The sway of a swimmer's vertex, model units across (+Z).
-fn sway(kind: Sway, x: f32, look: &Look) -> f32 {
+/// The sway of a swimmer's vertex at `p`, model units.
+fn sway(kind: Sway, p: Vec3, look: &Look) -> Vec3 {
+    let x = p.x;
     match kind {
-        Sway::None => 0.0,
+        Sway::None => Vec3::ZERO,
         Sway::Fish => {
             let w = ((0.3 - x) / 0.8).clamp(0.0, 1.0);
-            (look.t * 7.0 + look.phase - x * 6.0).sin() * 0.075 * w * w
+            Vec3::Z * (look.t * 7.0 + look.phase - x * 6.0).sin() * 0.075 * w * w
         }
         Sway::Eel => {
             let w = ((0.55 - x) / 1.0).clamp(0.15, 1.0);
-            (look.t * 3.5 + look.phase - x * 13.0).sin() * 0.06 * w
+            Vec3::Z * (look.t * 3.5 + look.phase - x * 13.0).sin() * 0.06 * w
+        }
+        Sway::Ray => {
+            // M9's `swim` for the flat plan.
+            let ph = look.phase + look.t * 1.6;
+            let s = 0.5 - x;
+            let zz = p.z.abs() / 0.44;
+            let flap = 0.07 * (ph - s * 2.5).sin() * zz * zz;
+            let whip = if s > 1.0 {
+                0.05 * (ph * 0.7 - s * 3.0).sin() * (s - 1.0)
+            } else {
+                0.0
+            };
+            Vec3::new(0.0, flap, whip)
         }
     }
 }
@@ -1545,6 +1762,7 @@ pub fn emit(
     tint: [f32; 3],
     positions: &mut Vec<[f32; 3]>,
     colours: &mut Vec<[f32; 4]>,
+    uvs: &mut Vec<[f32; 2]>,
 ) {
     let side = place.forward.cross(place.up);
     // A model turned for the pose before it is placed: a dabbler upended,
@@ -1566,10 +1784,10 @@ pub fn emit(
     };
     let tinted = |c: [f32; 4]| [c[0] * tint[0], c[1] * tint[1], c[2] * tint[2], 1.0];
     for (p, c) in body.base.positions.iter().zip(&body.base.colours) {
-        let m = Vec3::new(p.x, p.y, p.z + sway(body.sway, p.x, look));
-        positions.push(to_world(m));
+        positions.push(to_world(*p + sway(body.sway, *p, look)));
         colours.push(tinted(*c));
     }
+    uvs.extend_from_slice(&body.base.uvs);
     for (index, part) in body.parts.iter().enumerate() {
         let (turn, stretch) = animate(body.kind, part.name, index, part.yaw, look);
         for (p, c) in part.shape.positions.iter().zip(&part.shape.colours) {
@@ -1577,5 +1795,6 @@ pub fn emit(
             positions.push(to_world(m));
             colours.push(tinted(*c));
         }
+        uvs.extend_from_slice(&part.shape.uvs);
     }
 }
