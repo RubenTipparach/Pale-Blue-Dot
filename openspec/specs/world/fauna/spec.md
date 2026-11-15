@@ -118,3 +118,29 @@ itself, and SHALL be rebuilt from the save on load.
 - **WHEN** reef fish are caught and the world is reloaded
 - **THEN** the record shows the count and the best length
   (`saves::tests::catches_and_the_tool_in_hand_come_back`)
+
+### Requirement: Bed crawlers and surface floaters move with the world
+Besides schools, the fauna SHALL have bed crawlers that walk the bed and
+surface floaters that ride the sea function, appended to the roster after
+the fish. Both SHALL be simulated on the CPU and deterministically, as
+schools are, and have their own spawn cap so they never take a school of
+fish's place.
+
+#### Scenario: A floater rides the drawn sea
+- **WHEN** a floating otter and the sea function are sampled at the same
+  point and time
+- **THEN** the otter's height is the sea's height
+
+#### Scenario: A crawler keeps to the bed
+- **WHEN** a crab walks for two minutes over a shelving bed
+- **THEN** it is never more than 0.4 m off the bed nor in it
+
+### Requirement: Protected creatures cannot be caught
+Reef turtles, sea otters and ducks SHALL NOT be caught: only fish that swim
+in schools take a lure, and a catch of a protected creature SHALL be refused
+with the reason.
+
+#### Scenario: A line over a turtle
+- **WHEN** the float lands by a reef turtle
+- **THEN** no turtle takes the lure, and the reason is "protected: it may
+  not be caught"

@@ -38,9 +38,9 @@ against what it would cost.
 
 ## 7. Water life (requested 2026-11-15)
 
-- [ ] 7.1 The new species appended to `fauna.ron` with `env:` tags; the bed crawler and the surface floater. Verify: the append-only test; spawn tests per environment.
-- [ ] 7.2 Behaviours: clams, the octopus, tube worms, seals, ducks. Verify: core tests of each state machine against the eye's distance.
-- [ ] 7.3 Protected species refuse capture. Verify: a test per species.
+- [ ] 7.1 (First cut built 2026-11-15: seven appended, `shore_crab`, `lobster`, `giant_clam`, `reef_turtle`, `sea_otter`, `reed_dabbler`, `pond_diver`, with `env` tags, the crawler and the floater, their own spawn cap `max_life`; the append-only and mover tests pass. Open: the other 31 species, and spawning by environment, which needs 6.1.) The new species appended to `fauna.ron` with `env:` tags; the bed crawler and the surface floater. Verify: the append-only test; spawn tests per environment.
+- [ ] 7.2 (Clams and ducks built 2026-11-15, `pose` and `School::notice`, with core tests; the octopus, tube worms and seals wait for their species.) Behaviours: clams, the octopus, tube worms, seals, ducks. Verify: core tests of each state machine against the eye's distance.
+- [x] 7.3 Protected species refuse capture. Verify: a test per species. (Built 2026-11-15: `catch_refusal`, `can_bite`; a float over one says why, once a cast.)
 
 ## 8. Fresh water (after volumetric water phases 2 and 3)
 

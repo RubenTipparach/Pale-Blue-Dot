@@ -418,6 +418,22 @@ the zone it puts the point in: sunlit while blue keeps over 15%, twilight to
   never.
 - Creatures are drawn as the schools are today (small lit meshes) until the
   pixel cards (Q2) are judged.
+- **Seven species in the first cut**, appended after the fish: shore crab,
+  spiny lobster, giant clam (crawlers), reef turtle (a protected swimmer),
+  sea otter, reed dabbler and pond diver (protected floaters). The rest of
+  the bestiary's 41 waits for the environments that place them.
+- **Their own spawn cap** (`spawn.max_life`, 6) beside the fish's 8, so a
+  raft of ducks never takes a school's place and the starter missions'
+  "catch x fish" finds fish as before.
+- **Poses, not new movers**, carry the behaviours: a clam within 4 m of the
+  eye shuts and opens 6 s after it leaves; a dabbler tips up about 30% of
+  the day on its own hashed cycle, paddles off within 9 m and sleeps on the
+  water at night; a diver goes under about a third of the time by day.
+  Startled is the school's existing `spook`, so a frightened crab scuttles
+  at twice its pace as a frightened fish swims.
+- **Known limit**: a creature is lit as a lit mesh is, not darkened by the
+  downwelling at its depth; the crawlers live in the sunlit zone (to 40 m),
+  where that shows least.
 
 ## Recommendations taken (ask only with screenshots)
 

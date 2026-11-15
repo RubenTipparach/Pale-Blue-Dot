@@ -26,18 +26,6 @@ body's roster.
 - **WHEN** the new species are added to Tenebris's roster (`home` in `fauna.ron`)
 - **THEN** every species already on it keeps its index
 
-### Requirement: Bed crawlers and surface floaters move with the world
-
-Besides schools, the fauna SHALL have bed crawlers that walk the tops of the
-cells and surface floaters that ride the sea function. Both SHALL be
-simulated on the CPU and deterministically, as schools are.
-
-#### Scenario: A floater rides the drawn sea
-
-- **WHEN** a floating otter and the sea function are sampled at the same
-  point and time
-- **THEN** the otter's height is the sea's height plus its float offset
-
 ### Requirement: Some creatures react to the player coming close
 
 Clams SHALL shut, tube worms SHALL pull their plumes in, octopuses SHALL ink
@@ -62,13 +50,3 @@ surface elsewhere. Their eggs and feathers SHALL be gathered as drops.
 
 - **WHEN** the player startles a flock on a marsh pool
 - **THEN** the ducks lift, circle, and land on the water again
-
-### Requirement: Protected creatures cannot be caught
-
-Reef turtles, sea otters, seals and ducks SHALL NOT be caught: the action
-SHALL be refused with the reason.
-
-#### Scenario: An otter on the line
-
-- **WHEN** the player tries to catch a sea otter
-- **THEN** the catch is refused and nothing enters the slots

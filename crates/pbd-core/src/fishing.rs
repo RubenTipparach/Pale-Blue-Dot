@@ -469,6 +469,12 @@ impl Line {
             let Some(species) = roster.get(school.species as usize) else {
                 continue;
             };
+            // Only a fish that may be caught takes the lure: a crawler, a
+            // floater or a protected swimmer never does (`ocean-environments`
+            // 7.3).
+            if !species.can_bite() {
+                continue;
+            }
             let d = tangent(school.centre() - lure, lure).length();
             if d > s.scent_reach * species.sense_m {
                 continue;

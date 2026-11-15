@@ -11,7 +11,7 @@
 //! steered to a lure or held at it by the line; that is how the fish that
 //! bites is a fish that was swimming there.
 
-use super::{FlockSettings, Rng, Species, hash2};
+use super::{Behaviour, FlockSettings, Mover, Pose, Rng, Species, hash2};
 use glam::Vec3;
 
 /// The water a school swims in: the sea surface and the ground under a
@@ -133,6 +133,21 @@ impl School {
             })
     }
 
+    /// The player's eye at `eye`: every creature of a shy species within its
+    /// `shy_m` is startled for `hold_s` (a clam shuts, a duck paddles off, a
+    /// crab scuttles), and stays so while the eye stays near
+    /// (`ocean-environments` 7.2).
+    pub fn notice(&mut self, eye: Vec3, species: &Species, hold_s: f32) {
+        if species.shy_m <= 0.0 || !eye.is_finite() {
+            return;
+        }
+        for i in 0..self.len() {
+            if self.positions[i].distance(eye) <= species.shy_m {
+                self.frighten(i, hold_s);
+            }
+        }
+    }
+
     /// Frighten one fish.
     pub fn frighten(&mut self, fish: usize, seconds: f32) {
         if let Some(s) = self.spook.get_mut(fish) {
@@ -231,6 +246,20 @@ impl School {
             if r > 0.0 && clamped.is_finite() {
                 p *= clamped / r;
             }
+            // A crawler stands on the bed and a floater rides the surface
+            // (`ocean-environments` 7.1): along it, never off it.
+            let ride = match species.mover {
+                Mover::School => None,
+                Mover::Crawler => Some(water.bed(p) + crawl_lift(species)),
+                Mover::Floater => Some(water.surface(p)),
+            };
+            if let Some(radius) = ride
+                && radius.is_finite()
+            {
+                let up = p.normalize_or(Vec3::Y);
+                p = up * radius;
+                v -= up * v.dot(up);
+            }
             if p.is_finite() {
                 self.positions[i] = p;
                 self.velocities[i] = v;
@@ -312,6 +341,11 @@ impl School {
     /// under the surface, or just off the bed for a bed dweller.
     fn depth_for(&mut self, species: &Species, point: Vec3, water: &impl Water) -> f32 {
         let (surface, bed) = (water.surface(point), water.bed(point));
+        match species.mover {
+            Mover::Crawler => return bed + crawl_lift(species),
+            Mover::Floater => return surface,
+            Mover::School => {}
+        }
         if species.bed {
             return bed + SKIN_M + 0.1;
         }
@@ -339,6 +373,52 @@ impl School {
             self.anchor
         } else {
             self.goal
+        }
+    }
+}
+
+/// How far a crawler's middle stands off the bed, m: half its height.
+fn crawl_lift(species: &Species) -> f32 {
+    0.02 + 0.5 * species.length_m * species.shape[1]
+}
+
+/// How a creature is posed now (`ocean-environments` 7.2), from its species'
+/// behaviour, whether it is startled, the world clock and whether it is
+/// night. Deterministic: the same school, fish and time give the same pose.
+pub fn pose(species: &Species, school: &School, fish: usize, seconds: f64, night: bool) -> Pose {
+    let startled = school.spook.get(fish).is_some_and(|s| *s > 0.0);
+    let id = school.ids.get(fish).copied().unwrap_or(0);
+    // Each creature's own phase in a cycle of `period` seconds, 0..1.
+    let phase = |period: f64| {
+        let offset = (hash2(school.seed, u64::from(id)) >> 40) as f64 / (1u64 << 24) as f64;
+        (seconds / period + offset).rem_euclid(1.0)
+    };
+    match species.behaviour {
+        Behaviour::None => Pose::Moving,
+        Behaviour::Shuts => {
+            if startled {
+                Pose::Shut
+            } else {
+                Pose::Moving
+            }
+        }
+        Behaviour::Dabbles => {
+            if startled {
+                Pose::Moving
+            } else if night {
+                Pose::Asleep
+            } else if phase(9.0) < 0.3 {
+                Pose::TippedUp
+            } else {
+                Pose::Moving
+            }
+        }
+        Behaviour::Dives => {
+            if !startled && !night && phase(14.0) < 0.35 {
+                Pose::Under
+            } else {
+                Pose::Moving
+            }
         }
     }
 }
