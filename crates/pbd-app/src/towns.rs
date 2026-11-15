@@ -1537,7 +1537,7 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
     let centre = world
         .get_resource::<PlanetRenderFrame>()
         .map_or(Vec3::ZERO, |f| f.center.as_vec3());
-    let parts: Vec<(Mesh, Handle<Image>, bool)> = {
+    let parts: Vec<(Mesh, Option<Handle<Image>>, bool)> = {
         let assets = world.resource::<AssetServer>();
         let cut = cut_textures();
         // The outside takes the field vertex by vertex once baked
@@ -1557,7 +1557,10 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
                         Mesh::ATTRIBUTE_COLOR,
                         vec![UNBAKED_BEFORE; buf.positions.len()],
                     );
-                (mesh, texture(assets, name), cut.contains(name))
+                // A flame is drawn unlit and is no texture, outside as in a
+                // room (decision 7a).
+                let image = (name != FLAME).then(|| texture(assets, name));
+                (mesh, image, cut.contains(name))
             })
             .collect()
     };
@@ -1590,7 +1593,7 @@ fn spawn_town(world: &mut World, laid: &Laid) -> Entity {
         .id();
     let pieces = parts
         .into_iter()
-        .map(|(mesh, image, cut)| (None, mesh, Some(image), cut))
+        .map(|(mesh, image, cut)| (None, mesh, image, cut))
         .chain(
             rooms
                 .into_iter()
