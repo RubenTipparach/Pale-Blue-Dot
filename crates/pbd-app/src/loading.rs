@@ -89,6 +89,8 @@ pub enum Step {
     Ground,
     Planet,
     Shaders,
+    /// The sound bank decoding (`audio-and-ambience` task 4.2).
+    Sounds,
     Standing,
 }
 
@@ -101,6 +103,7 @@ impl Step {
             3 => Self::Ground,
             4 => Self::Planet,
             5 => Self::Shaders,
+            6 => Self::Sounds,
             _ => Self::Standing,
         }
     }
@@ -113,6 +116,7 @@ impl Step {
             Self::Ground => "THE TOWNS' GROUND",
             Self::Planet => "BUILDING THE PLANET",
             Self::Shaders => "COMPILING SHADERS",
+            Self::Sounds => "TUNING THE AIR",
             Self::Standing => "STANDING THE TOWNS",
         }
     }
@@ -125,7 +129,8 @@ impl Step {
             Self::Laying => (0.15, 0.1),
             Self::Ground => (0.25, 0.05),
             Self::Planet => (0.3, 0.4),
-            Self::Shaders => (0.7, 0.25),
+            Self::Shaders => (0.7, 0.23),
+            Self::Sounds => (0.93, 0.02),
             Self::Standing => (0.95, 0.05),
         }
     }
@@ -868,15 +873,21 @@ pub fn warm(world: &mut World) {
     };
     let looked = frames >= LOOK_FROM + 4 * LOOK_FRAMES + STILL_FRAMES;
     let compiling = waiting > 0 || quiet < QUIET_FRAMES || !looked;
+    // Every sound decoded before play (`audio-and-ambience` task 4.2).
+    let sounds = world
+        .get_resource::<crate::audio::SoundsReady>()
+        .is_none_or(crate::audio::SoundsReady::ready);
     let (step, fraction) = if compiling {
         let done = total.saturating_sub(waiting) as f32 / total.max(1) as f32;
         (Step::Shaders, done)
+    } else if !sounds {
+        (Step::Sounds, 0.5)
     } else {
         (Step::Standing, 0.5)
     };
     paint(world, step, fraction, String::new());
     let world_s = world.get_resource::<Preparing>().map_or(0.0, |p| p.world_s);
-    let done = immediate || (frames >= MIN_WARM_FRAMES && !compiling && towns_settled);
+    let done = sounds && (immediate || (frames >= MIN_WARM_FRAMES && !compiling && towns_settled));
     let capped = elapsed > WARM_CAP;
     if !done && !capped {
         return;
@@ -1135,6 +1146,7 @@ mod tests {
             Step::Ground,
             Step::Planet,
             Step::Shaders,
+            Step::Sounds,
             Step::Standing,
         ];
         let mut end = 0.0;

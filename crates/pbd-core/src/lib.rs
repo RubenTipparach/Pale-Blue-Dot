@@ -3,6 +3,7 @@
 
 pub mod aim;
 pub mod atmosphere;
+pub mod audio;
 pub mod bounce;
 pub mod cell_key;
 pub mod cloud_puffs;
