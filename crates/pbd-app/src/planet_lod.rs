@@ -441,9 +441,10 @@ impl FineSet {
             let Some(&slot) = self.columns.slots.get(record) else {
                 continue;
             };
-            if let (Some(column), Some(cell)) =
-                (self.columns.columns.get(slot), self.levels[3].get_mut(record))
-            {
+            if let (Some(column), Some(cell)) = (
+                self.columns.columns.get(slot),
+                self.levels[3].get_mut(record),
+            ) {
                 column::mark_sheet(cell, column);
             }
         }

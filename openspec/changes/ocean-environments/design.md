@@ -641,6 +641,10 @@ the zone it puts the point in: sunlit while blue keeps over 15%, twilight to
   sea had left. A tide needs the sheet to follow the shoreline cells, which
   is volumetric water's job (decision 9). Written up here rather than
   shipped with a lip at every coast.
+  *Update, `claude/env-water`:* built. The sheet is listed over every cell
+  under high water (the ground hides it where the ground stands higher), and
+  the ground's tint follows the tide at the camera, so neither the lip nor
+  the tinted dry sand is left. The walker's swim still reads the static sea.
 - **Places in the generator (group 6) are not built.** The rules in
   decision 4 read the sea's yearly temperature normals and the plate field,
   which the game does not have yet (`climate-and-fish-maps`); a reef placed

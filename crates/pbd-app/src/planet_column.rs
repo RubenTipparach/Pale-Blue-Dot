@@ -368,7 +368,12 @@ impl ColumnTier {
     pub fn tick_water(&mut self, max: usize) -> Vec<(usize, usize, Material)> {
         let mut queue = std::mem::take(&mut self.water.queue);
         let mut changed = Vec::new();
-        queue.tick(&mut TierGrid(self), liquid::Rules::default(), max, &mut changed);
+        queue.tick(
+            &mut TierGrid(self),
+            liquid::Rules::default(),
+            max,
+            &mut changed,
+        );
         self.water.queue = queue;
         let out: Vec<(usize, usize, Material)> = changed
             .into_iter()
@@ -2756,7 +2761,11 @@ mod water_tier_tests {
         tier
     }
 
-    fn carve(tier: &mut ColumnTier, slots: std::ops::RangeInclusive<usize>, layers: std::ops::RangeInclusive<usize>) {
+    fn carve(
+        tier: &mut ColumnTier,
+        slots: std::ops::RangeInclusive<usize>,
+        layers: std::ops::RangeInclusive<usize>,
+    ) {
         for slot in slots {
             for layer in layers.clone() {
                 tier.columns[slot].set(layer, Material::Air);
@@ -2792,7 +2801,11 @@ mod water_tier_tests {
             assert_eq!(tier.columns[7].material(layer), Material::Air, "{layer}");
         }
         for slot in 9..=10 {
-            assert_eq!(tier.columns[slot].material(BED + 6), Material::Air, "sealed");
+            assert_eq!(
+                tier.columns[slot].material(BED + 6),
+                Material::Air,
+                "sealed"
+            );
         }
         assert_eq!(
             tier.columns[11].material(BED + 6),
@@ -2841,7 +2854,10 @@ mod water_tier_tests {
             material: Material::Air,
         });
         old.queue_edited_water(&edits);
-        assert!(old.water.queue.is_empty(), "no water in the edits: nothing queued");
+        assert!(
+            old.water.queue.is_empty(),
+            "no water in the edits: nothing queued"
+        );
         assert!(old.tick_water(liquid::LOOP_MAX).is_empty());
 
         let mut tier = line();
@@ -2869,7 +2885,10 @@ mod water_tier_tests {
         // over it on its own layer, and falls from there.
         assert!(m(4).flow().is_some());
         assert!(
-            tier.columns[4].material(at - 1).flow().is_some_and(|(_, falling)| falling)
+            tier.columns[4]
+                .material(at - 1)
+                .flow()
+                .is_some_and(|(_, falling)| falling)
                 || tier.columns[4].material(at - 1).is_water(),
             "and falls toward the sea"
         );

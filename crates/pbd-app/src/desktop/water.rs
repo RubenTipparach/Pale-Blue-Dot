@@ -79,10 +79,22 @@ fn pour(world: &mut Edited, eye: Vec3, look: Vec3) -> Option<(u32, usize)> {
     let place = if look == Vec3::ZERO {
         drop_ray(world, eye)?.1
     } else {
-        aim::march(eye, look, |point| sample_at(world.fine, world.contact, point))?.place?
+        aim::march(eye, look, |point| {
+            sample_at(world.fine, world.contact, point)
+        })?
+        .place?
     };
-    apply_edit(world, Hands::Empty, place.cell, place.layer, Material::Water)?;
-    info!("poured water into cell {} layer {}", place.cell, place.layer);
+    apply_edit(
+        world,
+        Hands::Empty,
+        place.cell,
+        place.layer,
+        Material::Water,
+    )?;
+    info!(
+        "poured water into cell {} layer {}",
+        place.cell, place.layer
+    );
     Some((place.cell, place.layer))
 }
 
@@ -187,7 +199,12 @@ pub fn scripted(
         return;
     }
     *done = true;
-    let changed = run_ticks(&mut fine, &mut contact, &mut save, launch.water_ticks as usize);
+    let changed = run_ticks(
+        &mut fine,
+        &mut contact,
+        &mut save,
+        launch.water_ticks as usize,
+    );
     info!(
         "scripted water: {poured} poured, {} ticks run, {changed} cells changed, {} still queued",
         launch.water_ticks,
@@ -216,7 +233,13 @@ fn dig_pit(world: &mut Edited, from: Vec3, depth: u32) -> usize {
         let Some(key) = world.fine.set.finest_records().get(record).map(|c| c.key()) else {
             continue;
         };
-        let Some(top) = world.fine.set.columns.column(record).and_then(|c| c.surface()) else {
+        let Some(top) = world
+            .fine
+            .set
+            .columns
+            .column(record)
+            .and_then(|c| c.surface())
+        else {
             continue;
         };
         for k in 0..depth as usize {

@@ -355,7 +355,12 @@ fn basis(up: Vec3) -> (Vec3, Vec3) {
 }
 
 /// Mesh every water cell of the tier the sea sheet does not draw.
-pub fn liquid_mesh(tier: &ColumnTier, finest: &[GpuCell], radius: f32, sea_level_m: f32) -> LiquidMesh {
+pub fn liquid_mesh(
+    tier: &ColumnTier,
+    finest: &[GpuCell],
+    radius: f32,
+    sea_level_m: f32,
+) -> LiquidMesh {
     let mut out = LiquidMesh::default();
     let sea = sea_layer();
     let material = |slot: usize, layer: usize| -> Material {
@@ -529,7 +534,13 @@ pub fn liquid_mesh(tier: &ColumnTier, finest: &[GpuCell], radius: f32, sea_level
             // The bottom, over air.
             if column.material(layer - 1) == Material::Air {
                 let uv = |p: Vec3| Vec2::new(p.dot(t), p.dot(b)) / TILE_M;
-                let c = out.vertex(at(centre, 0.0), -centre, uv(at(centre, 0.0)), Vec2::ZERO, lit);
+                let c = out.vertex(
+                    at(centre, 0.0),
+                    -centre,
+                    uv(at(centre, 0.0)),
+                    Vec2::ZERO,
+                    lit,
+                );
                 let ring: Vec<u32> = (0..degree)
                     .map(|i| {
                         let p = at(corners[i], 0.0);
@@ -616,7 +627,7 @@ fn rebuild_water(
 
 /// Each frame: the pattern panned along the flow, the light by the hour, the
 /// meshes on the planet as its frame moves, the arrows shown or not.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn animate_water(
     time: Res<Time>,
     sun: Option<Res<crate::sky::Sun>>,
@@ -739,10 +750,18 @@ mod tests {
             0.02,
             "two of three air: down to the floor"
         );
-        let mean = corner_level(&[side(f(7), false), side(f(5), false), side(Material::Air, false)]);
+        let mean = corner_level(&[
+            side(f(7), false),
+            side(f(5), false),
+            side(Material::Air, false),
+        ]);
         assert!((mean - (7.5 + 5.5) / 16.0).abs() < 1e-6);
         assert_eq!(
-            corner_level(&[side(Material::Stone, false), side(Material::Stone, false), None]),
+            corner_level(&[
+                side(Material::Stone, false),
+                side(Material::Stone, false),
+                None
+            ]),
             0.5
         );
     }

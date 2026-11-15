@@ -137,6 +137,7 @@ fn init_sea(mut commands: Commands, water: Res<WaterSettings>) {
 }
 
 /// The sea state at the active camera, as the shader's table.
+#[allow(clippy::too_many_arguments)]
 fn publish_sea(
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     frame: Res<crate::planet::PlanetRenderFrame>,

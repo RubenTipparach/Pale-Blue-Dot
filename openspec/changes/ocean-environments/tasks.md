@@ -32,7 +32,7 @@ against what it would cost.
 
 ## 5. Tides (requested 2026-11-15, after group 7, on the 1 mm condition)
 
-- [ ] 5.1 (Not built 2026-11-15: the sheet is drawn only over water cells, so a tide leaves a lip at every shore; design B7.) The tide as an offset of the sea function, from the body's moon. Verify: the shader-against-core test still agrees within 1 mm with the tide on; a core test of the range and period.
+- [x] 5.1 (Built 2026-11-15 on `claude/env-water`: `pbd_core::sea::tide_m`, the moon's second Legendre term scaled to `tide_range_m` (3 m, `water.ron`), in `LocalSea` and `sea.wgsl` alike, so hulls, the line and the camera float on it; the sheet listed over every cell under high water so no lip stands at a shore, the ground's tint following the tide at the camera. The sea parity test now runs on Metal too, the tide on, 360 points within 1 mm; `the_tide_ranges_twice_a_turn_and_keeps_the_seas_volume`; `docs/screenshots/water-flow/tide-high-beach.jpg`, `tide-low-beach.jpg`. Not done: the walker's swim still reads the column's static sea level, so a walker on a beach under high water is not swimming.) (Was: not built 2026-11-15, design B7.) The tide as an offset of the sea function, from the body's moon. Verify: the shader-against-core test still agrees within 1 mm with the tide on; a core test of the range and period.
 
 ## 6. Places in the generator (requested 2026-11-15, if time remains)
 

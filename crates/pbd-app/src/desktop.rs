@@ -259,6 +259,9 @@ pub struct Launch {
     pub pour_ahead: f32,
     /// `--pit DEPTH`: dig a pit that deep two cells short of the pour.
     pub pit: u32,
+    /// `--tide high|low`: the tide's moon over the camera or a quarter turn
+    /// round (`ocean-environments` 5.1), for the tide's captures.
+    pub tide: Option<String>,
     /// `--arrows` turns the flow-arrow overlay on (`water-flow` 3.4).
     pub arrows: bool,
     /// `--torch` puts one torch on the ground under the capture camera. A
@@ -410,6 +413,7 @@ impl Launch {
             water_ticks: 0,
             pour_ahead: 0.0,
             pit: 0,
+            tide: None,
             arrows: false,
             lamps: false,
             lamps_at: 5.0,
@@ -524,6 +528,12 @@ impl Launch {
                         .expect("--water-ticks requires a count");
                 }
                 "--arrows" => result.arrows = true,
+                "--tide" => {
+                    i += 1;
+                    let which = args.get(i).expect("--tide requires high or low").clone();
+                    assert!(matches!(which.as_str(), "high" | "low"), "--tide high|low");
+                    result.tide = Some(which);
+                }
                 "--pit" => {
                     i += 1;
                     result.pit = args

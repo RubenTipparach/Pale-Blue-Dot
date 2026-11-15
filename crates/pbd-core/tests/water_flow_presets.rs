@@ -160,7 +160,11 @@ fn presets() -> Vec<Preset> {
 #[test]
 fn every_mockup_preset_settles_to_the_mockups_field() {
     let all = presets();
-    assert_eq!(all.len(), 8, "spring, channel, basin, pair, runaway, recede, pond, fall");
+    assert_eq!(
+        all.len(),
+        8,
+        "spring, channel, basin, pair, runaway, recede, pond, fall"
+    );
     for mut preset in all {
         let rules = Rules {
             renew: preset.renew,
@@ -175,7 +179,9 @@ fn every_mockup_preset_settles_to_the_mockups_field() {
                 tick += 1;
             }
             let i = preset.patch.idx(q, r, y);
-            preset.patch.set(i, if pour { Cell::Source } else { Cell::Air });
+            preset
+                .patch
+                .set(i, if pour { Cell::Source } else { Cell::Air });
             queue.touch(&preset.patch, i);
         }
         let mut ticks = 0;
@@ -203,7 +209,11 @@ fn every_mockup_preset_settles_to_the_mockups_field() {
             "{}: sources, flowing, falling",
             preset.name
         );
-        assert_eq!(field, preset.expected, "{}: the field, cell for cell", preset.name);
+        assert_eq!(
+            field, preset.expected,
+            "{}: the field, cell for cell",
+            preset.name
+        );
     }
 }
 

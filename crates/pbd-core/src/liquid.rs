@@ -55,7 +55,10 @@ pub enum Cell {
     /// Floodable.
     Air,
     Source,
-    Flowing { level: u8, falling: bool },
+    Flowing {
+        level: u8,
+        falling: bool,
+    },
 }
 
 impl Cell {
@@ -150,9 +153,7 @@ fn offered(level: u8, falling: bool, place: usize, current: i8) -> i8 {
     match place {
         // Water falling onto this cell: its level plus the boost, at most
         // seven.
-        UP if level + DROP_BOOST as i8 > current => {
-            (level + DROP_BOOST as i8).min(LEVEL_MAX as i8)
-        }
+        UP if level + DROP_BOOST as i8 > current => (level + DROP_BOOST as i8).min(LEVEL_MAX as i8),
         UP if level > current => level,
         // A side gives one less, unless it is falling: water drops before it
         // spreads.
@@ -394,7 +395,11 @@ mod tests {
         assert_eq!(Cell::of(Material::Water), Cell::Source);
         assert_eq!(Cell::of(Material::Air), Cell::Air);
         assert_eq!(Cell::of(Material::Stone), Cell::Neutral);
-        assert_eq!(Cell::of(Material::Torch), Cell::Neutral, "a lamp is never washed away");
+        assert_eq!(
+            Cell::of(Material::Torch),
+            Cell::Neutral,
+            "a lamp is never washed away"
+        );
         for level in 0..=7 {
             for falling in [false, true] {
                 let m = Material::flowing(level, falling);
@@ -412,7 +417,11 @@ mod tests {
     #[test]
     fn water_falls_before_it_spreads() {
         // Air beside a source on a floor: level 7.
-        let out = transform(Cell::Air, &around(&[(SIDE, Cell::Source)]), Rules::default());
+        let out = transform(
+            Cell::Air,
+            &around(&[(SIDE, Cell::Source)]),
+            Rules::default(),
+        );
         assert_eq!(out.changed, Some(F7));
         // The same with air under it: level 7, falling.
         let out = transform(
@@ -465,11 +474,7 @@ mod tests {
             range: 4,
             ..Rules::default()
         };
-        let out = transform(
-            Cell::Air,
-            &around(&[(SIDE, flowing(4, false))]),
-            short,
-        );
+        let out = transform(Cell::Air, &around(&[(SIDE, flowing(4, false))]), short);
         assert_eq!(out.changed, None, "level 3 is out of a range of four");
     }
 
@@ -478,7 +483,10 @@ mod tests {
     #[test]
     fn three_sources_renew_and_two_do_not() {
         let two = around(&[(SIDE, Cell::Source), (SIDE + 1, Cell::Source)]);
-        assert_eq!(transform(Cell::Air, &two, Rules::default()).changed, Some(F7));
+        assert_eq!(
+            transform(Cell::Air, &two, Rules::default()).changed,
+            Some(F7)
+        );
         let three = around(&[
             (SIDE, Cell::Source),
             (SIDE + 1, Cell::Source),
@@ -503,7 +511,10 @@ mod tests {
             renew: 2,
             ..Rules::default()
         };
-        assert_eq!(transform(Cell::Air, &two, luanti).changed, Some(Cell::Source));
+        assert_eq!(
+            transform(Cell::Air, &two, luanti).changed,
+            Some(Cell::Source)
+        );
     }
 
     /// A pentagon has five sides: the sixth is absent, and the rule counts
@@ -551,7 +562,6 @@ mod tests {
             // neighbours, and one outer cell 6..=10); 6..=10 the outer ring.
             let mut sides = vec![vec![1, 2, 3, 4, 5]];
             for i in 0..5u32 {
-                let me = 1 + i;
                 let prev = 1 + (i + 4) % 5;
                 let next = 1 + (i + 1) % 5;
                 sides.push(vec![0, prev, next, 6 + i]);

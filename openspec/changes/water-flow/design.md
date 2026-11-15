@@ -417,6 +417,16 @@ the water does not leave stand still. The flow-arrow overlay (task 3.4) is
 a second mesh of arrows over every flowing top and down every fall, hidden
 unless F5 or the player setting "Flow arrows" (off by default) turns it on.
 
+**E8. What was built, and what was not (2026-11-15).** All of E1 to E7 is
+built and tested in `pbd-core` and the tier (see tasks). Not measured: the
+frame cost (3.3). Not checked: the pan's "two frames a second apart" (3.5).
+A set built while water is ticking would land without the ticks in flight,
+so the tick waits while a set is in flight; the existing "undone when it
+lands" behaviour of edits is unchanged. The sea floods a channel dug from it
+as sources to sea level (`volumetric-water` phase 2) rather than as M28's
+"Channel from the sea" flowing sheet: in the game the sea is the sea's
+table. Recommendation taken (ask only with screenshots).
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With
