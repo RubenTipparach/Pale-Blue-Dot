@@ -102,7 +102,8 @@ textarea { font: 400 14px/1.45 var(--mono); color: var(--ink); background: var(-
 .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 10px; counter-reset: step; }
 .step { counter-increment: step; background: var(--slot); border: 2px solid var(--line); box-shadow: inset 2px 2px 0 var(--bevel-hi), inset -2px -2px 0 var(--bevel-lo); padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
 .step .top { display: flex; gap: 8px; align-items: baseline; }
-.step .top::before { content: counter(step); font: 600 12px/1 var(--mono); color: var(--accent); border: 1px solid currentColor; padding: 3px 6px; font-variant-numeric: tabular-nums; }
+.phase-h .pnum { font: 600 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--bg); background: var(--accent); padding: 5px 8px; }
+.step .top::before { content: attr(data-n); font: 600 12px/1 var(--mono); color: var(--accent); border: 1px solid currentColor; padding: 3px 6px; font-variant-numeric: tabular-nums; }
 .step b { font: 700 18px/1.1 var(--display); }
 .step p { margin: 0; font-size: 13px; color: var(--muted); }
 .step .refs { display: flex; flex-wrap: wrap; gap: 6px; font: 500 12px/1.3 var(--mono); }
@@ -197,7 +198,7 @@ const MOCKUPS = [
   { id: 'M12', batch: 'new', title: 'Exchange Terminal', change: '', page: 'docs/mockups/market.html',
     url: 'https://claude.ai/artifact/MepSVNts31YTwsZ4QmZhPK', published: '2026-11-12',
     summary: 'Each station\'s stock of eight goods sets its prices; haulers chase the gaps, events widen them, five companies trade.' },
-  { id: 'M13', batch: 'new', title: 'Foliage Detail Playground', change: '', page: 'docs/mockups/foliage.html',
+  { id: 'M13', batch: 'new', title: 'Foliage Detail Playground', change: 'flora-v2', recorded: 'impl', recordedNote: 'Approved for build and the game in chat (owner, 2026-11-15): "m13, 25,28 water and env v2 are apopoved locked and loaded". Building on claude/env-v2.', page: 'docs/mockups/foliage.html',
     url: 'https://claude.ai/artifact/PnPpDKgcqqbGyBHdXxsiBF', published: '2026-11-12',
     summary: 'Ground cover on a hex patch: pick a biome, tune the layers, scrub the clock into night.' },
   { id: 'M14', batch: 'old', title: 'Pale Blue Dot Lighting', change: 'lighting-model', page: 'docs/mockups/lighting.html',
@@ -237,7 +238,7 @@ const MOCKUPS = [
   { id: 'M24', batch: 'new', title: 'Hangar and Chibi Aircraft', change: 'vehicle-yards', page: 'docs/mockups/hangar.html',
     url: 'https://claude.ai/artifact/HrLdbcwrwbAD7PN1KojKKu', published: '2026-11-13', version: 9,
     summary: 'Chibi planes, helicopters, VTOLs and airships on a painted 1 m grid, then fly them easily over kilometres of hex hills, towns and sea, crashing into what is solid.' },
-  { id: 'M25', batch: 'new', title: 'Seas, Rivers and Marshes', change: 'ocean-environments', page: 'docs/mockups/ocean.html',
+  { id: 'M25', batch: 'new', title: 'Seas, Rivers and Marshes', change: 'ocean-environments', recorded: 'impl', recordedNote: 'Approved for build and the game in chat (owner, 2026-11-15): "m13, 25,28 water and env v2 are apopoved locked and loaded". Building on claude/env-v2.', page: 'docs/mockups/ocean.html',
     url: 'https://claude.ai/artifact/W2RzYUDG1pAXy6nZxPHh2z', published: '2026-11-14', version: 1,
     summary: 'Reefs, kelp, polar ice, deep vents and wrecks; a river from source to mouth, a beaver dam going up over 40 days, a marsh full of ducks; 61 species of water life. Its river, dam and marsh water run on Luanti\'s liquid rule, and its Water sim tab is the playable sim (M28 folded in, 2026-11-15).' },
   { id: 'M26', batch: 'new', title: 'Pens, Nests and Pedigrees', change: 'animal-husbandry', page: 'docs/mockups/husbandry.html',
@@ -246,7 +247,7 @@ const MOCKUPS = [
   { id: 'M27', batch: 'new', title: 'Hearth and Kitchen', change: 'cooking', page: 'docs/mockups/cooking.html',
     url: 'https://claude.ai/artifact/7iAumiZw36HXhNW6orRAj8', published: '2026-11-14', version: 2,
     summary: 'Cooking: a kitchen yard, bakery, inn kitchen and ship galley lit at night; a cook panel; 104 recipes (bread, pizza, pasta, noodles, stir fry, meats, fish, calamari, shrimp) from field, ranch and sea to plate; 12 new crops.' },
-  { id: 'M28', batch: 'new', title: 'Water That Flows', change: 'water-flow', page: 'docs/mockups/water-flow.html',
+  { id: 'M28', batch: 'new', title: 'Water That Flows', change: 'water-flow', recorded: 'impl', recordedNote: 'Approved for build and the game in chat (owner, 2026-11-15): "m13, 25,28 water and env v2 are apopoved locked and loaded". Building on claude/env-v2.', page: 'docs/mockups/water-flow.html',
     url: 'https://claude.ai/artifact/62ZUMdb7iZZtcXRMqD4ewi', published: '2026-11-14', version: 1,
     summary: 'Merged into M25 (owner, 2026-11-15): the sim, its patch and its presets are M25\'s Water sim tab; this page points there. Luanti\'s liquid rule ported to the hex grid (LGPL-2.1-or-later).' },
   { id: 'M29', batch: 'new', title: 'Stone and Timber', change: 'stone-and-wood-ui', page: 'docs/mockups/ui.html',
@@ -458,7 +459,7 @@ function linkCard(a) {
 // The roadmap (owner, 2026-11-14): the first game loop, environment v2, the townsfolk, town building and civil engineering, mass transportation, the age of flight and industry, nuclear and rocketry, finance and space stations, space exploration and colonization, exo-industry and advanced propulsion, then antimatter and interstellar travel. `refs` are mockup ids;
 // `change` is the OpenSpec change. Status: built, building, planned (written up), later (not started).
 const ROADMAP = [
-  { title: 'The first game loop', when: 'now', note: 'Crafting tools, fishing, farming, herding, cooking: each feeds the next. All built on the phase-1 branch, waiting to merge.', steps: [
+  { title: 'The first game loop', when: 'now', note: 'Crafting tools, fishing, farming, herding, cooking: each feeds the next. Merged to main (PR #37); its last fixes and the audio in PR #41.', steps: [
     { title: 'Crafting tools', status: 'built', change: 'tool-crafting', refs: ['M3'], text: 'Dig by hand, planks, rope and a workbench, stone tools, then bronze and iron from the forge. On the phase-1 branch.' },
     { title: 'Fishing', status: 'built', change: 'fishing-and-equipment', refs: ['M18', 'M9'], text: 'Casting, the bite, schools and bait; the fish lab later.' },
     { title: 'Farming', status: 'built', change: 'farming-and-smelting', refs: ['M8'], text: 'Seeds from grass and wild plants; till, plant, grow on world time, harvest; the forge smelts ore. On the phase-1 branch.' },
@@ -466,9 +467,10 @@ const ROADMAP = [
     { title: 'Cooking', status: 'built', change: 'cooking', refs: ['M27'], text: 'A campfire that cooks fish, crops and eggs into dishes that give effects. On the phase-1 branch; oven and pot later.' },
     { title: 'Starter missions', status: 'built', change: 'starter-missions', refs: [], text: 'Nineteen missions through the loop, from gathering by hand to a farm meal, with a HUD line and a Missions tab (O). On the phase-1 branch.' },
   ] },
-  { title: 'Environment v2', when: 'next', note: 'The environmental overhaul, after the loop. Not started.', steps: [
-    { title: 'Advanced foliage and flora', status: 'later', change: '', refs: ['M13'], text: 'Richer ground cover and plants, biome by biome, by day and night. The wild plants that give seeds come early, with farming.' },
-    { title: 'Underwater overhaul', status: 'later', change: 'ocean-environments', refs: ['M25'], text: 'Seas, rivers and marshes: what lives under the water and how it looks.' },
+  { title: 'Environment v2', when: 'now', note: 'The environmental overhaul. M13, M25 and M28 approved by the owner (2026-11-15); being built on claude/env-v2.', steps: [
+    { title: 'Advanced foliage and flora', status: 'building', change: 'flora-v2', refs: ['M13'], text: 'Pixel tufts, per-biome clutter, seasons, fallen leaves, wild fruit, biome by biome.' },
+    { title: 'Underwater overhaul', status: 'building', change: 'ocean-environments', refs: ['M25'], text: 'Seas, rivers and marshes: light under water, reefs, kelp and vents, and 3D water life.' },
+    { title: 'Water that flows', status: 'building', change: 'water-flow', refs: ['M28', 'M25'], text: 'Luanti\'s liquid rule on the hex grid: water that floods, spreads and falls; tides.' },
   ] },
   { title: 'Townsfolk', when: 'later', note: 'After environment v2. Not started.', steps: [
     { title: 'NPCs', status: 'later', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, talk and trade.' },
@@ -522,9 +524,11 @@ const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later
 function roadmap() {
   const root = document.getElementById('roadmap');
   let n = 0;
-  for (const ph of ROADMAP) {
+  ROADMAP.forEach((ph, k) => {
+    const p = k + 1;
     const list = el('ol', { class: 'steps' });
-    for (const st of ph.steps) {
+    ph.steps.forEach((st, j) => {
+      const i = j + 1;
       n++;
       const refs = el('div', { class: 'refs' });
       for (const id of st.refs) {
@@ -534,14 +538,14 @@ function roadmap() {
       if (!st.refs.length) refs.append(el('span', { text: 'no mockup yet' }));
       if (st.change) refs.append(el('span', { text: st.change }));
       list.append(el('li', { class: 'step' },
-        el('div', { class: 'top' }, el('b', { text: st.title })),
+        el('div', { class: 'top', 'data-n': `${p}.${i}` }, el('b', { text: st.title })),
         el('span', { class: `st ${st.status}`, text: STATUS[st.status] }),
         el('p', { text: st.text }), refs));
-    }
-    root.append(el('div', { class: 'phase' },
-      el('div', { class: 'phase-h' }, el('h3', { text: ph.title }), el('span', { class: `when ${ph.when}`, text: ({ now: 'Now', next: 'Next', later: 'Later' })[ph.when] }), el('p', { text: ph.note })),
+    });
+    root.append(el('div', { class: 'phase', id: `phase-${p}` },
+      el('div', { class: 'phase-h' }, el('span', { class: 'pnum', text: `Phase ${p}` }), el('h3', { text: ph.title }), el('span', { class: `when ${ph.when}`, text: ({ now: 'Now', next: 'Next', later: 'Later' })[ph.when] }), el('p', { text: ph.note })),
       list));
-  }
+  });
   document.getElementById('n-roadmap').textContent = `${n} steps`;
 }
 

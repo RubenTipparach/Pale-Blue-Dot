@@ -15,6 +15,7 @@ atlas to the sources.
 No third-party dependencies: stdlib and zlib, like the other generators here.
 """
 
+import statistics
 import struct
 import sys
 import zlib
@@ -135,8 +136,75 @@ def bake():
     return pixels
 
 
+# Painted flowers taken off the grassy ground tiles (owner, 2026-11-15: "I would
+# also remove the flowers from the ground texture as well, we have actual
+# flowers already"; `flora-v2` design 9.5). The rules are the M13 mockup's
+# `docs/mockups/foliage/no_flowers.py`, run on the baked atlas so the source
+# sheets stay as generated and `--check` still holds the atlas to them:
+#   fields (slot 4) grass top and sod lip: daisies, a near-white petal or a warm
+#   yellow centre; swamp (12) moss top: the pale yellow sprouts; tundra (13) top:
+#   the orange flower dots. Each marked texel, and its neighbours that match a
+#   looser form of the rule, takes the median colour of the unmarked ground in
+#   its 5 x 5 neighbourhood. The result is byte-for-byte the mockup's own copy.
+FLOWER_RULES = {
+    (4, (0, 0)): (
+        lambda r, g, b: min(r, g, b) > 185 or (r > g + 4 and r > 170),
+        lambda r, g, b: r + g + b > 420,
+    ),
+    (4, (1, 0)): (
+        lambda r, g, b: min(r, g, b) > 185 or (r > g + 4 and r > 170),
+        lambda r, g, b: r + g + b > 420,
+    ),
+    (12, (0, 0)): (
+        lambda r, g, b: r > 125 and r >= g - 12,
+        lambda r, g, b: r > 110 and r >= g - 16,
+    ),
+    (13, (0, 0)): (
+        lambda r, g, b: r > g + 20 and b < 140,
+        lambda r, g, b: r > g + 8 and b < 150,
+    ),
+}
+
+
+def clean_flowers(pixels):
+    for (slot, (tx, ty)), (strict, loose) in FLOWER_RULES.items():
+        x0 = (slot % SETS) * TILES * TEXELS + tx * TEXELS
+        y0 = (slot // SETS) * TILES * TEXELS + ty * TEXELS
+
+        def at(x, y):
+            return pixels[y0 + y][x0 + x]
+
+        mark = {
+            (x, y) for y in range(TEXELS) for x in range(TEXELS) if strict(*at(x, y))
+        }
+        grow = set()
+        for x, y in mark:
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if (
+                    0 <= nx < TEXELS
+                    and 0 <= ny < TEXELS
+                    and (nx, ny) not in mark
+                    and loose(*at(nx, ny))
+                ):
+                    grow.add((nx, ny))
+        mark |= grow
+        for x, y in sorted(mark):
+            near = [
+                at(i, j)
+                for j in range(y - 2, y + 3)
+                for i in range(x - 2, x + 3)
+                if 0 <= i < TEXELS and 0 <= j < TEXELS and (i, j) not in mark
+            ]
+            if near:
+                pixels[y0 + y][x0 + x] = tuple(
+                    int(statistics.median(c[k] for c in near)) for k in range(3)
+                )
+    return pixels
+
+
 def main():
-    baked = encode(bake())
+    baked = encode(clean_flowers(bake()))
     if "--check" in sys.argv:
         if not OUT.exists():
             raise SystemExit(f"{OUT} is missing; run this tool without --check")

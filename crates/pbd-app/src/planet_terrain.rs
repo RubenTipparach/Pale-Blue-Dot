@@ -622,6 +622,97 @@ mod tests {
         );
     }
 
+    /// `flora-v2` design 9.1, 9.2: the tuft ramps and the plants' tile means
+    /// in `pbd_core::flora` are read off the committed atlas, by the mockup's
+    /// own rules (`foliage.html`, `groundRamp` and the mean linear colour).
+    /// The atlas is the one source; on a difference this prints the table to
+    /// paste, so a repainted tile moves the tufts with it.
+    #[test]
+    fn the_plants_colours_are_the_atlas_s() {
+        use pbd_core::flora::{PLANT_MEANS, TUFT_RAMPS};
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/tilesets/atlas.png");
+        let atlas = image::open(path).expect("the atlas decodes").to_rgb8();
+        let tile = |slot: u32, tx: u32, ty: u32| -> Vec<[u8; 3]> {
+            let (x0, y0) = ((slot % 4) * 128 + tx * 32, (slot / 4) * 128 + ty * 32);
+            (0..32)
+                .flat_map(|y| (0..32).map(move |x| (x, y)))
+                .map(|(x, y)| atlas.get_pixel(x0 + x, y0 + y).0)
+                .collect()
+        };
+        let pack = |c: [u8; 3]| (c[0] as u32) << 16 | (c[1] as u32) << 8 | c[2] as u32;
+        // `groundRamp`: sorted by Rec. 709 luminance (stable), cut in thirds,
+        // each third's commonest colour, the first to reach the top count.
+        let ramp = |texels: Vec<[u8; 3]>| -> [u32; 3] {
+            let luma =
+                |c: &[u8; 3]| 0.2126 * c[0] as f64 + 0.7152 * c[1] as f64 + 0.0722 * c[2] as f64;
+            let mut sorted = texels;
+            sorted.sort_by(|a, b| luma(a).total_cmp(&luma(b)));
+            let n = sorted.len();
+            std::array::from_fn(|k| {
+                let part = &sorted[n * k / 3..n * (k + 1) / 3];
+                let mut count = std::collections::HashMap::new();
+                let (mut best, mut top) = (part[0], 0);
+                for c in part {
+                    let seen = count.entry(*c).or_insert(0);
+                    *seen += 1;
+                    if *seen > top {
+                        top = *seen;
+                        best = *c;
+                    }
+                }
+                pack(best)
+            })
+        };
+        // The mean LINEAR colour, written through the shader's `pow(1/2.2)`.
+        let mean = |texels: Vec<[u8; 3]>| -> u32 {
+            let lin = |v: u8| {
+                let v = v as f64 / 255.0;
+                if v <= 0.04045 {
+                    v / 12.92
+                } else {
+                    ((v + 0.055) / 1.055).powf(2.4)
+                }
+            };
+            let n = texels.len() as f64;
+            let m: [u8; 3] = std::array::from_fn(|i| {
+                let sum: f64 = texels.iter().map(|c| lin(c[i])).sum();
+                (255.0 * (sum / n).powf(1.0 / 2.2)).round() as u8
+            });
+            pack(m)
+        };
+        let mut ramps = [[0; 3]; 8];
+        let mut means = [[0; 3]; 8];
+        let biomes = [
+            Biome::Ocean,
+            Biome::Beach,
+            Biome::Fields,
+            Biome::Desert,
+            Biome::Jungle,
+            Biome::Swamp,
+            Biome::Mountains,
+            Biome::Tundra,
+        ];
+        for (i, biome) in biomes.into_iter().enumerate() {
+            assert_eq!(biome as usize, i, "the tables are in `Biome` order");
+            let slot = tileset_slot(biome);
+            ramps[i] = ramp(tile(slot, 0, 0));
+            means[i] = [
+                mean(tile(slot, 0, 2)),
+                mean(tile(slot, 2, 1)),
+                mean(tile(slot, 3, 0)),
+            ];
+        }
+        assert_eq!(
+            ramps, TUFT_RAMPS,
+            "TUFT_RAMPS should be {ramps:#08x?}, off the atlas"
+        );
+        assert_eq!(
+            means, PLANT_MEANS,
+            "PLANT_MEANS should be {means:#08x?}, off the atlas"
+        );
+    }
+
     use super::*;
     #[test]
     fn clearance_is_finite_quantized_and_covers_land_and_ocean() {

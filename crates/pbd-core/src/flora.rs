@@ -166,17 +166,80 @@ pub const BIOME_FLORA: [BiomeFlora; 8] = [
 ];
 
 /// The pixel tuft's three tones per biome, root to tip, as `0xRRGGBB`, in
-/// `planet_gen::Biome` order (`flora-v2` design 1). The mockup's ramps
-/// (`foliage.html`, `TUFT_RAMP`); fields is the Play demo's own greens.
+/// `planet_gen::Biome` order (`flora-v2` design 1, 9.1). Read off the ground
+/// the tufts stand on, as the approved mockup does (`foliage.html`,
+/// `groundRamp`): the biome sheet's ground tile (0,0) in
+/// `assets/tilesets/atlas.png`, its texels sorted by luminance and cut in
+/// thirds, each third's commonest colour. `planet_terrain`'s atlas test
+/// recomputes this table off the committed file and fails on any difference.
 pub const TUFT_RAMPS: [[u32; 3]; 8] = [
-    [0x0e4a3e, 0x2a7a64, 0x6ab8a0], // ocean: the kelp ramp
-    [0x6b5a1e, 0xa8913a, 0xd8c070], // beach: the savanna ramp
-    [0x05582d, 0x559642, 0x9bb675], // fields: temperate
-    [0x5c5a2a, 0x8a8448, 0xb9b07a], // desert
-    [0x0a4a24, 0x2f7d32, 0x6fb043], // jungle
-    [0x2f3d16, 0x5a6a26, 0x8c9446], // swamp
-    [0x1d3f2c, 0x3d6a48, 0x7c9a6a], // mountains: the taiga ramp
-    [0x1d3f2c, 0x3d6a48, 0x7c9a6a], // tundra: taiga
+    [0xb8cba8, 0xcbd6b0, 0xcfdab3], // ocean: seabed sand
+    [0xe0c996, 0xe2cb98, 0xe3cc98], // beach: dry shell sand
+    [0x617741, 0x5f7841, 0xb8c25f], // fields: pasture grass
+    [0xeac385, 0xebc586, 0xecc587], // desert: pale sand
+    [0x164a35, 0x194a35, 0x2f673a], // jungle: jungle grass
+    [0x2b3831, 0x475230, 0x5e6634], // swamp: swamp moss
+    [0x374051, 0x374352, 0x808a94], // mountains: scree
+    [0x536155, 0x637261, 0xe9eeec], // tundra: snowy moss
+];
+
+/// The mean colour of the three tiles the plants wear, per biome sheet, in
+/// `planet_gen::Biome` order (`flora-v2` design 9.2): leaves (0,2), bark
+/// (2,1) and stone (3,0). Each is the tile's mean LINEAR colour (the atlas is
+/// sRGB, so the mean is taken after decoding), written as `0xRRGGBB` through
+/// the shader's own `pow(1/2.2)`, so `rgb8` reads it back as that mean. A
+/// plant is drawn part way from its texel toward this, the mockup's "one art
+/// style". The same atlas test holds the table to the file.
+pub const PLANT_MEANS: [[u32; 3]; 8] = [
+    [0x87a78d, 0x48776a, 0x7ca499], // ocean
+    [0xb3a378, 0x826e5d, 0xbc9f73], // beach
+    [0x5f703c, 0x6c553e, 0xa6a5a4], // fields
+    [0xb17b4e, 0x5d6c43, 0xb46546], // desert
+    [0x33643d, 0x58492e, 0x2f3e3e], // jungle
+    [0x565f3c, 0x5c5643, 0x5e654f], // swamp
+    [0x7d8381, 0x807879, 0x596472], // mountains
+    [0x687767, 0x73624e, 0x707d7b], // tundra
+];
+
+/// How much of a texel's own contrast a plant keeps (`flora-v2` design 9.2,
+/// the mockup's `detail`): leaves and bushes, and the solids (trunks, twigs,
+/// pebbles). `planet_surface.wgsl` carries the same pair.
+pub const LEAF_DETAIL: f32 = 0.45;
+pub const SOLID_DETAIL: f32 = 0.7;
+
+/// The fruit that hang from the trees (`flora-v2` design 9.6), in the order
+/// their bits in [`BIOME_FRUIT`] and the shader's `fruit_ramp` count them.
+pub const FRUIT_KINDS: [&str; 9] = [
+    "apple", "pear", "plum", "cherry", "mango", "papaya", "marula", "baobab", "pinecone",
+];
+/// Each fruit's three tones, dark to light, `0xRRGGBB`: the mockup's palette
+/// (`docs/mockups/foliage/fruit_art.py`, `FRUIT`). The shader's `fruit_ramp`
+/// is the same table, which a test holds.
+pub const FRUIT_RAMPS: [[u32; 3]; 9] = [
+    [0xa61e1f, 0xd12d41, 0xfa3a64], // apple
+    [0xc56d25, 0xfaaf5c, 0xeab798], // pear
+    [0x4f1d83, 0x7d2dbd, 0x9e3ba2], // plum
+    [0x841c1d, 0xd12d41, 0xfa3a64], // cherry
+    [0xd4462b, 0xfb902f, 0xfaaf5c], // mango
+    [0xc56d25, 0xfe6420, 0xfb902f], // papaya
+    [0xc56d25, 0xfaaf5c, 0xeab798], // marula
+    [0xa09f91, 0xcfaa81, 0xeab798], // baobab
+    [0x522b2f, 0x7d4636, 0xab8465], // pine cone
+];
+/// Which fruit a biome's trees bear, as bits of [`FRUIT_KINDS`], in
+/// `planet_gen::Biome` order: the mockup's `FRUIT` table on the game's biomes
+/// (recommendation taken, ask only with screenshots). The beach is the
+/// savanna's stand-in, as for its tuft ramp; the swamp's fruit are forage
+/// plants in the mockup, and phase 1's wild plants are the game's.
+pub const BIOME_FRUIT: [u32; 8] = [
+    0,               // ocean
+    1 << 6 | 1 << 7, // beach: marula, baobab
+    0b1111,          // fields: apple, pear, plum, cherry
+    0,               // desert: no trees
+    1 << 4 | 1 << 5, // jungle: mango, papaya
+    0,               // swamp
+    0,               // mountains: no trees
+    1 << 8,          // tundra: pine cones
 ];
 
 /// Where the seasons start and reach full strength, as the sine of the
@@ -190,6 +253,13 @@ pub const SEASON_TURN: [f32; 2] = [0.27, 0.15];
 pub const SEASON_BARE: [f32; 2] = [0.5, 0.13];
 /// Dry grass, a little before midwinter and wider. `SEASON_STRAW`.
 pub const SEASON_STRAW: [f32; 2] = [0.47, 0.22];
+/// Fallen leaves on the ground (`flora-v2` design 9.4): they land from the
+/// start of the turn to its peak (the first pair), lie through the bare
+/// months, and are gone before spring (the second pair). `SEASON_LITTER`.
+pub const SEASON_LITTER: [f32; 4] = [0.15, 0.27, 0.55, 0.68];
+/// How much of the autumn fall still lies at midwinter: the mockup's winter
+/// is 0.6 of its autumn. `LITTER_WINTER` in the shader.
+pub const LITTER_WINTER: f32 = 0.6;
 
 /// How far into each of the plants' seasonal looks a place is, each 0..1.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -200,6 +270,8 @@ pub struct Season {
     pub bare: f32,
     /// Grass dried to straw.
     pub straw: f32,
+    /// Fallen leaves on the ground under deciduous trees.
+    pub litter: f32,
 }
 
 fn smooth(lo: f32, hi: f32, x: f32) -> f32 {
@@ -230,7 +302,17 @@ pub fn season_at(year_fraction: f64, latitude_sin: f32) -> Season {
         turn: strength * bump(local, SEASON_TURN),
         bare: strength * bump(local, SEASON_BARE),
         straw: strength * bump(local, SEASON_STRAW),
+        litter: strength * litter(local),
     }
+}
+
+/// How much of the year's fall lies on the ground at `local` (0 a place's
+/// midsummer), 0..1: landing through autumn, thinned to [`LITTER_WINTER`] by
+/// midwinter, gone before spring.
+fn litter(local: f32) -> f32 {
+    let [a, b, c, d] = SEASON_LITTER;
+    let fall = smooth(a, b, local) * (1.0 - smooth(c, d, local));
+    fall * (1.0 - (1.0 - LITTER_WINTER) * bump(local, SEASON_BARE))
 }
 
 #[cfg(test)]
@@ -320,20 +402,20 @@ mod tests {
     /// the tip, and its own flora row.
     #[test]
     fn every_biome_has_a_ramp_dark_to_light() {
+        // The ramp is sorted by the mockup's own Rec. 709 luminance; the
+        // table's colours are pinned to the atlas in `planet_terrain`.
         let luma = |c: u32| {
             let (r, g, b) = ((c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff);
-            0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32
+            0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32
         };
         assert_eq!(TUFT_RAMPS.len(), 8);
         for ramp in TUFT_RAMPS {
             assert!(ramp.iter().all(|c| *c <= 0xff_ffff));
             assert!(
-                luma(ramp[0]) < luma(ramp[1]) && luma(ramp[1]) < luma(ramp[2]),
+                luma(ramp[0]) <= luma(ramp[1]) && luma(ramp[1]) <= luma(ramp[2]),
                 "{ramp:x?}"
             );
         }
-        // The fields' ramp is the Play demo's own greens.
-        assert_eq!(TUFT_RAMPS[2], [0x05582d, 0x559642, 0x9bb675]);
     }
 
     /// The table's weights are weights, every biome grows some flower colour,
@@ -372,6 +454,36 @@ mod tests {
         // Midsummer: green everywhere.
         let summer = season_at(0.0, 0.7);
         assert_eq!((summer.turn, summer.bare, summer.straw), (0.0, 0.0, 0.0));
+        assert_eq!(summer.litter, 0.0);
+    }
+
+    /// The leaves land through autumn, lie thinner at midwinter, and are
+    /// gone by spring; none in the tropics.
+    #[test]
+    fn the_leaves_fall_in_autumn_and_are_gone_by_spring() {
+        let at = |yf: f64| season_at(yf, 0.7).litter;
+        assert!(at(0.10) < 0.01, "summer");
+        assert!(at(0.27) > 0.99, "autumn's peak");
+        assert!(at(0.20) > 0.1 && at(0.20) < at(0.27), "landing");
+        assert!((at(0.5) - LITTER_WINTER).abs() < 0.02, "midwinter");
+        assert!(at(0.72) < 0.01 && at(0.85) < 0.01, "spring");
+        assert_eq!(season_at(0.27, 0.05).litter, 0.0);
+        // The southern hemisphere's autumn is half a year on.
+        assert!(season_at(0.77, -0.7).litter > 0.99);
+    }
+
+    /// Every fruit has a ramp and every bit a biome names is a fruit; the
+    /// trees that bear none are the ones the mockup gives none.
+    #[test]
+    fn the_fruit_table_is_whole() {
+        assert_eq!(FRUIT_KINDS.len(), FRUIT_RAMPS.len());
+        for bits in BIOME_FRUIT {
+            assert!(bits < 1 << FRUIT_KINDS.len());
+        }
+        assert_eq!(BIOME_FRUIT[2].count_ones(), 4);
+        assert_eq!(BIOME_FRUIT[7], 1 << 8);
+        assert_eq!(BIOME_FRUIT[5], 0);
+        assert!(FRUIT_RAMPS.iter().flatten().all(|c| *c <= 0xff_ffff));
     }
 
     /// No seasons at the equator, all of them from about 27 degrees, and the
