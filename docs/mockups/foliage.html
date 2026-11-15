@@ -331,7 +331,7 @@ const SPECIES = {
   acacia: { bark: "A:4:6", leaf: "T:game/leaves", mask: 1, decid: false },   // in the savanna's dry olive (RAMPS)
   willow: { bark: "S:6", leaf: "S:8", mask: 4, decid: true, snow: true },
   cactus: { bark: "A:3:6", leaf: null, decid: false },
-  glowcap: { bark: "A:11:6", leaf: "A:11:9", mask: 0, decid: false, glow: [0.35, 1.0, 0.82], glowReach: 9 },
+  glowcap: { bark: "A:11:6", leaf: "A:11:9", mask: 0, decid: false, glow: [0.4, 0.78, 1.0], glowReach: 9 },   // a cool cyan, as the icon's spots
   crystal: { bark: "A:5:5", leaf: null, decid: false, glow: [0.45, 0.8, 1.0], glowReach: 7 },
   kelp: { bark: "A:9:6", leaf: "A:9:6", mask: 6, decid: false },
 };
@@ -511,7 +511,7 @@ const FRAG = `
 uniform sampler2D map;
 uniform vec3 uSunDir, uSunCol, uSkyAmb, uGndAmb, uFogCol, uLodCol, uEmitCol, uAt, uMean;
 uniform float uLeafFall, uLeafUnder, uLeafSize;
-uniform float uRamp, uRampLo, uRampHi; uniform vec3 uR0, uR1, uR2;
+uniform float uRamp, uRampLo, uRampHi; uniform vec3 uR0, uR1, uR2; uniform vec2 uEmitSpot;
 uniform float uBake, uFogNear, uFogFar, uLodVis, uMaskVis, uColVar, uAutumn, uSpring, uWinter, uSnow, uSnowable, uLeafy, uDecid, uEmit, uCardLit, uAlphaTest, uKeep, uExposure, uTime, uNight, uFlicker, uUseAt, uMask, uSwayMask, uRep, uImp, uGrass, uViews, uDetail;
 varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vTint; varying vec3 vBlock; varying float vFade; varying vec2 vSeed; varying float vAo; varying float vCard; varying float vSway;
 float bayer2(vec2 a){ a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
@@ -669,7 +669,7 @@ void main(){
     // a card is frosted evenly, never speckled
     float s = uCardLit > 0.5 ? 0.05 * uSnow : step(0.55, N.y) * uSnow;
     alb = mix(alb, sn, s);
-    if (leafHit > 0.5) alb = mix(leafAlb, sn, 0.3);   // winter: the browned leaves show through, frosted
+    if (leafHit > 0.5) alb = mix(leafAlb, sn, 0.06);   // winter: the browned leaves lie on the snow, lightly frosted
   }
   float nd = dot(N, uSunDir);
   float diff = mix(max(nd, 0.0), 0.35 + 0.65 * max(nd, 0.0), uCardLit);
@@ -679,7 +679,9 @@ void main(){
   vec3 light = uSunCol * diff * occ * ao + amb * ao * mix(0.65, 1.0, occ) + vBlock;
   vec3 col = alb * light;
   float fl = 1.0 + uFlicker * (0.2 * sin(uTime * 13.0) + 0.12 * sin(uTime * 23.0 + 1.0));
-  col += uEmitCol * uEmit * (0.25 + grain) * fl * mix(0.3, 1.0, uNight) * 0.4;
+  // a glowing cap glows in its spots (its texture's brightest texels), so the cap itself keeps its violet at night
+  float spot = uEmitSpot.y > 0.0 ? smoothstep(uEmitSpot.x, uEmitSpot.y, grain) * 2.2 : 1.0;
+  col += uEmitCol * uEmit * (0.25 + grain) * spot * fl * mix(0.3, 1.0, uNight) * 0.4;
   if (uLodVis > 0.5) col = mix(col, uLodCol * (0.25 + dot(light, vec3(0.2))), 0.65);
   if (uBake > 0.5) { // baking an impostor: the albedo, shaped by a fixed key light and the AO, nothing else
     // a fixed neutral daylight; a card's back face is as bright as its front, so a needle seen
@@ -760,7 +762,7 @@ function mat(key, o) {
     uViews: { value: o.views || 0 }, uMask: { value: o.mask || 0 }, uSwayMask: { value: o.sway ? 1 : 0 },
     uScale: o.scaleU || G.uPlantScale, uWindAmp: { value: o.windAmp ?? 0.2 }, uWindH: { value: o.windH ?? 1 }, uFlutter: { value: o.flutter ?? 0 },
     uUpN: { value: o.upN ?? 0 }, uLodCol: { value: LODCOL[o.level || 0] }, uEmitCol: { value: new THREE.Color().fromArray(o.emitCol || [0, 0, 0]) },
-    uEmit: { value: o.emit ?? 0 }, uCardLit: { value: o.card ? 1 : 0 }, uAlphaTest: { value: o.alpha ? 0.5 : -1 },
+    uEmit: { value: o.emit ?? 0 }, uEmitSpot: { value: new THREE.Vector2(...(o.emitSpot || [0, 0])) }, uCardLit: { value: o.card ? 1 : 0 }, uAlphaTest: { value: o.alpha ? 0.5 : -1 },
     uLeafy: { value: o.leafy ? 1 : 0 }, uDecid: { value: o.decid ? 1 : 0 },
     uSnowable: { value: o.snowable ? 1 : 0 }, uKeep: o.keep || { value: 2 }, uFlicker: { value: o.flicker ? 1 : 0 }, uImp: { value: o.imp ? 1 : 0 }, uGrass: { value: o.grass ? 1 : 0 },
     uMean: { value: new THREE.Vector3() }, uDetail: { value: 1 },
@@ -1475,7 +1477,7 @@ function buildLayers(B) {
     for (const [sp] of species) {
       const SP = SPECIES[sp]; kit[sp] = [];
       const bareImp = S.season === "winter" && SP.decid && !hex && !B.alien;
-      const impO = { tex: "imp_" + sp + (bareImp ? "_bare" : ""), views: 8, card: true, alpha: true, imp: true, leafy: !bareImp, decid: SP.decid, windAmp: 0.08, windH: 8, upN: 0.4, scaleU: G.uTreeScale, emit: SP.glow ? 1.2 : 0, emitCol: SP.glow || [0, 0, 0] };
+      const impO = { tex: "imp_" + sp + (bareImp ? "_bare" : ""), views: 8, card: true, alpha: true, imp: true, leafy: !bareImp, decid: SP.decid, windAmp: 0.08, windH: 8, upN: 0.4, scaleU: G.uTreeScale, emit: SP.glow ? 1.2 : 0, emitCol: SP.glow || [0, 0, 0], emitSpot: sp === "glowcap" ? [0.5, 0.56] : null };
       // the game's tree wears its biome sheet's wood (2,1) and leaves (0,2): material codes 8 and 9
       const barkS = hex ? "S:6" : SP.bark, leafS = hex ? "S:8" : (B.leaf && B.leaf[sp]) || SP.leaf;
       for (let v = 0; v < VARS; v++) {
@@ -1487,7 +1489,7 @@ function buildLayers(B) {
         let lm = null;
         if (lg) lm = hex
           ? mat("leafblock:" + B.sheet, { ...spec(leafS, B), ...rp(leafS, B), leafy: true, decid: false, windAmp: 0.04, windH: 8, scaleU: G.uTreeScale, single: true, snowable: SP.snow, emit: SP.glow ? 1.4 : 0, emitCol: SP.glow || [0, 0, 0] })
-          : sp === "glowcap" ? mat("cap:" + leafS, { ...spec(leafS, B), ...rp(leafS, B), windAmp: 0.1, windH: 8, scaleU: G.uTreeScale, emit: 1.0, emitCol: SP.glow })
+          : sp === "glowcap" ? mat("cap:" + leafS, { ...spec(leafS, B), ...rp(leafS, B), windAmp: 0.1, windH: 8, scaleU: G.uTreeScale, emit: 1.0, emitCol: SP.glow, emitSpot: [0.7, 0.85] })
           : mat("leaf:" + leafS + ":" + B.sheet + ":" + SP.mask, { ...spec(leafS, B), ...rp(leafS, B), card: true, mask: SP.mask, sway: true, leafy: true, decid: SP.decid, snowable: SP.snow, windAmp: B.lowg ? 0.7 : 0.16, windH: 8, flutter: 0.05, scaleU: G.uTreeScale });
         const near = [nb(bg, bm, 0)]; if (lg) near.push(nb(lg, lm, 0));
         // mid and far come FROM this near tree: it is baked from 8 bearings into an atlas once its
@@ -1501,7 +1503,7 @@ function buildLayers(B) {
         // sprays, and drawn they would turn a 48 px crown into a thatch of red bark
         let bakeParts = near.map(b => [b.base, b.material]);
         if (false && SP.cone && !hex && lg) { const tr = new GB(); tr.tube([0, 0, 0], [0, Hh * 0.45, 0], 0.2, 0.12, 6, 1.2); bakeParts = [[tr.geo(), bm], [lg, lm]]; }
-        BAKES.push({ label: sp + " " + (hex ? "hex" : "detailed") + " v" + v + (bareImp ? " bare" : ""), parts: bakeParts, Wd, lo, hi, mats: [mid, far] });
+        BAKES.push({ label: sp + " " + (hex ? "hex" : "detailed") + " v" + v + (bareImp ? " bare" : ""), noSplit: sp === "glowcap", parts: bakeParts, Wd, lo, hi, mats: [mid, far] });
         kit[sp].push({ anchors: bk.anchors || null, near, midB: nb(impostorCards(Wd, hi - lo, 8, lo), mid, 1), farB: nb(billboardQuad(Wd, hi - lo, lo), far, 2), H: Hh, Wd });
       }
     }
@@ -1615,7 +1617,7 @@ function buildLayers(B) {
     const L = makeLayer("mush", () => [B.mush.glow ? S.mid : S.near * 0.7]);
     const glow = !!B.mush.glow;
     const vars = [0, 1, 2].map(v => { const [st, cp] = mushGeo(rngOf(600 + v));
-      return [nb(st, mat("mstem", { at: [SHEET.sporewood, 6], ...rp("A:11:6", B), windAmp: 0, single: true, keep: G.uKeepMush }), 0), nb(cp, mat("mcap:" + B.mush.tex, { ...spec(B.mush.tex, B), ...rp(B.mush.tex, B), windAmp: 0, keep: G.uKeepMush, emit: glow ? 2.2 : 0, emitCol: [0.4, 1, 0.85] }), 0)]; });
+      return [nb(st, mat("mstem", { at: [SHEET.sporewood, 6], ...rp("A:11:6", B), windAmp: 0, single: true, keep: G.uKeepMush }), 0), nb(cp, mat("mcap:" + B.mush.tex, { ...spec(B.mush.tex, B), ...rp(B.mush.tex, B), windAmp: 0, keep: G.uKeepMush, emit: glow ? 2.2 : 0, emitCol: [0.4, 0.85, 1], emitSpot: glow ? [0.7, 0.85] : null }), 0)]; });
     for (const c of CELLS) { if (!usable(c)) continue; const n = countIn(c, B.mush.n * D("mush") * (0.2 + c.forest * 1.5), 601);
       for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 602), s = (glow ? 1.6 : 1) * (0.8 + hash(c.id, k, 603) * 0.8);
         obj(L, x, c.h, z, hash(c.id, k, 604) * 6.28, s, [vars[(hash(c.id, k, 605) * 3) | 0]], hash(c.id, k, 606), { ly: 0.1 });
@@ -1843,7 +1845,9 @@ function bakeImpostors() {
     const extra = [...new Set(job.parts.flatMap(([, m]) => m.userData.ramp ? m.userData.ramp.c : []))].map(h => [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)));
     PAL = SWEAFT.concat(extra); PAL_LAB = PAL.map(c => oklab(c[0], c[1], c[2]));
     const cam = new THREE.OrthographicCamera(-job.Wd / 2, job.Wd / 2, job.hi, job.lo, 0.1, 400);
-    const split = job.parts.length > 1;   // a tree with leaves: bark is its first part
+    // a tree with leaves: bark is its first part. Not a glowcap: its bark holds the cap's underside, which the bark
+    // pass (drawn without the crown in front) would lay over the whole cap
+    const split = job.parts.length > 1 && !job.noSplit;
     const crown = snapOf((split ? job.parts.slice(1) : job.parts).map(([geo, m]) => bakeMesh(geo, m)), cam);
     const bark = split ? snapOf([bakeMesh(job.parts[0][0], job.parts[0][1])], cam) : null;
     const out = new Uint8Array(W * H * 4);
