@@ -1,5 +1,6 @@
 use super::chart::{Patch, chart};
 use super::ground::{GroundAt, TownGround};
+use super::pieces::harbour as pier_cut;
 use super::pieces::{Meshes, cut_building};
 use super::*;
 use crate::topology::dual_sphere;
@@ -1541,9 +1542,10 @@ fn the_walled_towns_wall_stands_and_its_gates_open() {
         move |d| natural(d).floor(),
     )
     .unwrap_or_else(|e| panic!("{e}"));
+    // The buildings, their path stairs (`path-stairs`), and the masonry.
     assert_eq!(
         b.solids.len(),
-        template.buildings.len() + template.masonry.len()
+        template.buildings.len() + b.stairs.len() + template.masonry.len()
     );
     assert_eq!(b.rooms.len(), b.solids.len());
     let datum = record::datum(&template);
@@ -1552,7 +1554,7 @@ fn the_walled_towns_wall_stands_and_its_gates_open() {
     for (m, s) in template
         .masonry
         .iter()
-        .zip(&b.solids[template.buildings.len()..])
+        .zip(&b.solids[b.solids.len() - template.masonry.len()..])
     {
         let top = town.terrace as f32 + (m.to - datum) as f32;
         let up = s.frame.origin.normalize();
@@ -1610,7 +1612,7 @@ fn a_gate_passage_is_walled_on_both_sides() {
     .unwrap_or_else(|e| panic!("{e}"));
     let wall = template.masonry_material.clone().unwrap_or_default().wall;
     let mesh = &b.meshes[&wall];
-    let solids = &b.solids[template.buildings.len()..];
+    let solids = &b.solids[b.solids.len() - template.masonry.len()..];
     let at: std::collections::BTreeMap<(i32, i32), usize> = template
         .masonry
         .iter()
@@ -1714,7 +1716,7 @@ fn a_stair_tower_climbs_to_the_walk_and_the_keep_to_its_roof() {
             .masonry
             .iter()
             .position(|m| (m.c, m.r) == (c, r))
-            .map(|k| &b.solids[template.buildings.len() + k])
+            .map(|k| &b.solids[b.solids.len() - template.masonry.len() + k])
     };
     let (mut towers, mut keeps) = (0, 0);
     for (def, s) in town.buildings.iter().zip(&b.solids) {
@@ -2163,8 +2165,9 @@ fn feet_on(b: &record::Built, p: Vec3) -> Option<f32> {
 }
 
 /// Slice 4d: the walker along the harbour's main pier from the quay to its
-/// head, the feet on the planks at 1 m over the sea all the way and the
-/// body in nothing of the pier's.
+/// head, the feet on the planks at 1 m over the sea all the way, but on
+/// the beach, where the planks lie 0.12 m over the sand (`pier-landfall`),
+/// and the body in nothing of the pier's.
 #[test]
 fn a_walker_goes_down_the_main_pier_to_its_head() {
     let (template, _, b) = cut_harbour();
@@ -2178,6 +2181,13 @@ fn a_walker_goes_down_the_main_pier_to_its_head() {
         })
         .expect("a pier");
     let deck = RADIUS_M + pier.from[1];
+    let cell_m = template.grid.cell_m;
+    let natural = coast();
+    let ground = |d: Vec3| {
+        let n = natural(d).floor();
+        b.ground.at(d).map_or(n, |g| g.height(n))
+    };
+    let cut = pier_cut::stretches(patch, &b.chart, pier, cell_m, 0.0, &ground);
     let steps = 120;
     for k in 0..=steps {
         let t = k as f32 / steps as f32;
@@ -2192,8 +2202,19 @@ fn a_walker_goes_down_the_main_pier_to_its_head() {
                 t * (pier.to[2] - pier.from[2]).abs()
             )
         });
+        // At a joint, the stretch lapping over the other holds the feet.
+        let s = pier_cut::along(pier, x, z);
+        let tops: Vec<f32> = [s - 0.06, s, s + 0.06]
+            .iter()
+            .filter_map(|&s| pier_cut::top_at(&cut, s))
+            .collect();
         assert!(
-            (feet - deck).abs() < 0.03,
+            tops.iter()
+                .all(|&t| t == pier.from[1] || t == pier.from[1] + 0.12),
+            "{tops:?}"
+        );
+        assert!(
+            tops.iter().any(|&t| (feet - (RADIUS_M + t)).abs() < 0.03),
             "the deck at {} m",
             feet - RADIUS_M
         );
@@ -2206,6 +2227,74 @@ fn a_walker_goes_down_the_main_pier_to_its_head() {
             "held on the pier at {t:.2}"
         );
     }
+}
+
+/// `pier-landfall`: no stretch of any pier's planks lies under the ground
+/// beneath it. Where the ground reaches the deck (the beach the export
+/// rounds up to the deck's layer) the stretch lies on it; every other
+/// stretch stands at the template's deck. The test coast has both.
+#[test]
+fn a_piers_planks_lie_on_the_beach_never_in_it() {
+    let (template, town, b) = cut_harbour();
+    let (patch, _) = patch();
+    let cell_m = template.grid.cell_m;
+    let terrace = town.terrace as f32;
+    let natural = coast();
+    let ground = |d: Vec3| {
+        let n = natural(d).floor();
+        b.ground.at(d).map_or(n, |g| g.height(n))
+    };
+    let (mut lying, mut standing) = (0, 0);
+    for pier in &template.piers {
+        let len = pier_cut::along(pier, pier.to[0], pier.to[2]);
+        let (ux, uz) = (
+            (pier.to[0] - pier.from[0]) / len,
+            (pier.to[2] - pier.from[2]) / len,
+        );
+        let cut = pier_cut::stretches(patch, &b.chart, pier, cell_m, terrace, &ground);
+        assert!((cut[0].s0).abs() < 1e-4 && (cut[cut.len() - 1].s1 - len).abs() < 1e-3);
+        for w in cut.windows(2) {
+            assert!((w[0].s1 - w[1].s0).abs() < 1e-4, "a gap in the pier");
+            assert!(
+                w[0].s1 - w[0].s0 <= 2.2 * 1.5,
+                "a stretch too long to stay flat"
+            );
+        }
+        for &pier_cut::Stretch { s0, s1, top_m: top } in &cut {
+            // The highest ground under the stretch, sampled finer than the
+            // cut reads it.
+            let mut high = f32::MIN;
+            for i in 0..=40 {
+                let s = s0 + (s1 - s0) * i as f32 / 40.0;
+                for j in 0..=8 {
+                    let w = (j as f32 / 8.0 - 0.5) * pier.width_m;
+                    let (x, z) = (
+                        pier.from[0] + ux * s - uz * w,
+                        pier.from[2] + uz * s + ux * w,
+                    );
+                    if let Some(d) = sea::point(&b.chart, patch, x, z, cell_m) {
+                        high = high.max(ground(d));
+                    }
+                }
+            }
+            assert!(
+                top - 0.12 >= high - 1e-4,
+                "planks under the ground: {top} over {high}"
+            );
+            if high > terrace + pier.from[1] - 0.12 {
+                assert_eq!(top, high + 0.12);
+                lying += 1;
+            } else {
+                assert_eq!(top, terrace + pier.from[1]);
+                standing += 1;
+            }
+        }
+    }
+    println!("{lying} stretches lie on the beach, {standing} stand on piles");
+    assert!(
+        lying > 0 && standing > lying,
+        "{lying} lying, {standing} standing"
+    );
 }
 
 /// Slice 4d: a boathouse has no wall on its seaward edges, so the walker
@@ -3875,4 +3964,554 @@ fn print_the_towns_vertex_counts() {
             b.meshes.len()
         );
     }
+}
+
+/// Measurement instrument (`roof-speckle`): every pair of faces in a village
+/// building that face the same way within `GAP` of each other and overlap,
+/// the geometry a depth buffer can fight over.
+#[test]
+#[ignore]
+fn measure_faces_that_can_fight() {
+    const GAP: f32 = 0.03;
+    let (patch, at) = patch();
+    let village = village();
+    let kits = kits();
+    let (_, east) = crate::geo::north_east(patch.cells[*at].direction);
+    let d0 = patch.side_toward(*at, east);
+    let chart = chart(patch, (25, 17), *at, d0, &wanted(&village)).expect("charted");
+    let mut tally: std::collections::BTreeMap<String, (usize, f32, f32, Vec3)> = Default::default();
+    for b in &village.buildings {
+        let kit = kits.get(&b.kit).unwrap();
+        let mut meshes = Meshes::new();
+        let cut = cut_building(
+            &mut meshes,
+            &|_: &str| 2.0,
+            patch,
+            &chart,
+            b,
+            kit,
+            RADIUS_M,
+            10.0,
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let f = cut.frame;
+        let mut tris: Vec<([Vec3; 3], String)> = Vec::new();
+        for (set, tag) in [(&meshes, "out"), (&cut.rooms, "room")] {
+            for (name, m) in set {
+                for t in m.positions.chunks(3) {
+                    let v: [Vec3; 3] = [0, 1, 2].map(|k| f.local(Vec3::from_array(t[k])));
+                    tris.push((v, format!("{tag}:{name}")));
+                }
+            }
+        }
+        let normal = |t: &[Vec3; 3]| (t[1] - t[0]).cross(t[2] - t[0]).normalize_or_zero();
+        let inside = |t: &[Vec3; 3], n: Vec3, p: Vec3| {
+            (0..3).all(|k| (t[(k + 1) % 3] - t[k]).cross(p - t[k]).dot(n) > 1e-4)
+        };
+        for i in 0..tris.len() {
+            let (a, an) = (&tris[i].0, normal(&tris[i].0));
+            if an == Vec3::ZERO {
+                continue;
+            }
+            for j in i + 1..tris.len() {
+                let (c, cn) = (&tris[j].0, normal(&tris[j].0));
+                if an.dot(cn) < 0.995 {
+                    continue;
+                }
+                let gap = (c[0] - a[0]).dot(an);
+                if gap.abs() > GAP {
+                    continue;
+                }
+                // Points well inside `a`, dropped onto `c`'s plane.
+                let mut hit = 0;
+                let mut at_p = Vec3::ZERO;
+                for u in 1..8 {
+                    for v in 1..8 - u {
+                        let (s, t) = (u as f32 / 8.0, v as f32 / 8.0);
+                        let p = a[0] + (a[1] - a[0]) * s + (a[2] - a[0]) * t;
+                        let q = p - cn * (p - c[0]).dot(cn);
+                        if inside(c, cn, q) {
+                            hit += 1;
+                            at_p = p;
+                        }
+                    }
+                }
+                if hit > 0 {
+                    let mut names = [tris[i].1.clone(), tris[j].1.clone()];
+                    names.sort();
+                    let key = format!(
+                        "{} | {} vs {} | n {:.2} {:.2} {:.2}",
+                        b.name, names[0], names[1], an.x, an.y, an.z
+                    );
+                    let e = tally.entry(key).or_insert((0, f32::MAX, 0.0, at_p));
+                    e.0 += 1;
+                    e.1 = e.1.min(gap.abs());
+                    e.2 = e.2.max(gap.abs());
+                    e.3 = at_p;
+                }
+            }
+        }
+    }
+    for (k, (n, lo, hi, p)) in &tally {
+        println!("{k}: {n} pairs, gap {lo:.4}..{hi:.4} m, e.g. at {p:.2}");
+    }
+}
+
+/// Measurement instrument (`roof-speckle`): every room face lying on the
+/// edge of the band of height a room light lights, within its reach.
+#[test]
+#[ignore]
+fn measure_faces_on_a_lights_band_edge() {
+    let (village, cut) = cut_village();
+    for (b, s) in village.buildings.iter().zip(&cut) {
+        let f = s.frame;
+        let mut on_edge: std::collections::BTreeMap<String, usize> = Default::default();
+        for l in &s.lights {
+            let at = f.local(l.at);
+            let edges = [at.y - l.below_m, at.y + l.above_m];
+            for (name, m) in &s.rooms {
+                for t in m.positions.chunks(3) {
+                    let v: Vec<Vec3> = t.iter().map(|p| f.local(Vec3::from_array(*p))).collect();
+                    let n = (v[1] - v[0]).cross(v[2] - v[0]).normalize_or_zero();
+                    let c = (v[0] + v[1] + v[2]) / 3.0;
+                    if (c - at).length() > l.kind.reach_m() {
+                        continue;
+                    }
+                    for (k, e) in edges.iter().enumerate() {
+                        let lo = v.iter().map(|p| p.y).fold(f32::MAX, f32::min);
+                        let hi = v.iter().map(|p| p.y).fold(f32::MIN, f32::max);
+                        if lo - 0.003 <= *e && *e <= hi + 0.003 && n.y.abs() > 0.9 {
+                            *on_edge
+                                .entry(format!(
+                                    "{:?} at y {:.2} band {} {:.3}: {name} face y {:.3} n.y {:.0}",
+                                    l.kind,
+                                    at.y,
+                                    ["bottom", "top"][k],
+                                    e,
+                                    c.y,
+                                    n.y
+                                ))
+                                .or_default() += 1;
+                        }
+                    }
+                }
+            }
+        }
+        for (k, n) in on_edge {
+            println!("{}: {k} ({n} triangles)", b.name);
+        }
+    }
+}
+
+// ---- path-stairs ---------------------------------------------------------
+
+/// A template laid and cut on the test patch, and its natural ground, with
+/// the cells `yielded` holds left to the player (`path-stairs`).
+fn cut_yielding(
+    template: &Template,
+    yielded: &dyn Fn(u32) -> bool,
+) -> (record::Town, record::Built, Box<dyn Fn(Vec3) -> f32>) {
+    let (patch, _) = patch();
+    let (town, natural): (record::Town, Box<dyn Fn(Vec3) -> f32>) = if template.sea {
+        let (_, town, _) = laid_harbour();
+        let n = coast();
+        (town, Box::new(move |d| n(d).floor()))
+    } else {
+        let n = slope();
+        (laid_village(template), Box::new(move |d| n(d).floor()))
+    };
+    let b = record::build_town_yielding(
+        &town,
+        Some(template),
+        patch,
+        &kits(),
+        &|_: &str| 2.0,
+        RADIUS_M,
+        SHEET_M,
+        &natural,
+        yielded,
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    (town, b, natural)
+}
+
+/// Where a walker's feet stand at `feet` (planet-local), as
+/// `walking::footprint_in` finds it: the highest of the town's ground and
+/// the pieces' floors within `reach` over the feet, at the feet and 0.3 m
+/// four ways round them. A radius.
+fn support_at(b: &record::Built, natural: &dyn Fn(Vec3) -> f32, feet: Vec3, reach: f32) -> f32 {
+    let up = feet.normalize();
+    let t = up.any_orthonormal_vector() * 0.3;
+    let c = up.cross(t);
+    let mut best = f32::MIN;
+    for o in [Vec3::ZERO, t, -t, c, -c] {
+        let p = (feet + o).normalize() * feet.length();
+        let d = p.normalize();
+        let n = natural(d);
+        let ground = RADIUS_M + b.ground.at(d).map_or(n, |g| g.height(n));
+        let piece = b
+            .solids
+            .iter()
+            .filter_map(|s| s.stand(p, reach).0)
+            .fold(f32::MIN, f32::max);
+        best = best.max(ground).max(piece);
+    }
+    best
+}
+
+/// A walker along `path` (planet-local points, their heights ignored) in
+/// 0.1 m pieces, with auto step off: every piece's rise or drop of the feet
+/// (and so the eye) is at most 0.1 m, so it never hops and never leaves the
+/// ground (the hold is 0.35 m). It starts on what stands within half a
+/// metre of `from` (a radius) at the first point. Where it ends, a radius.
+fn walk_steady(
+    b: &record::Built,
+    natural: &dyn Fn(Vec3) -> f32,
+    path: &[Vec3],
+    from: f32,
+    what: &str,
+) -> f32 {
+    let mut feet = support_at(b, natural, path[0].normalize() * (from + 0.5), 0.6);
+    for w in path.windows(2) {
+        let (a, z) = (w[0].normalize(), w[1].normalize());
+        let pieces = ((a.distance(z) * RADIUS_M) / 0.1).ceil().max(1.0) as usize;
+        for k in 1..=pieces {
+            let d = a.lerp(z, k as f32 / pieces as f32).normalize();
+            let next = support_at(b, natural, d * feet, 1.05);
+            assert!(
+                (next - feet).abs() <= 0.101,
+                "{what}: the eye jumps {:+.3} m at {:.2} m",
+                next - feet,
+                feet - RADIUS_M
+            );
+            feet = next;
+        }
+    }
+    feet
+}
+
+/// `path-stairs`: in every template, every riser between two path cells
+/// (more than 0.35 m and at most 1.25 m) has a stair: street steps in the
+/// mockup's step cells, a flight against any other. The village, desert,
+/// tundra and jungle have no such riser; the walled town has 18 edges in 12
+/// cells, the harbour 12 in 6.
+#[test]
+fn every_risers_path_has_its_stair() {
+    use pieces::steps;
+    for (template, cells, edges) in [
+        (village(), 0, 0),
+        (walled(), 12, 18),
+        (harbour(), 6, 12),
+        (desert(), 0, 0),
+        (tundra(), 0, 0),
+        (jungle(), 0, 0),
+    ] {
+        let (town, b, _) = cut_yielding(&template, &|_| false);
+        let risers = steps::risers(&town, &template);
+        let n: usize = risers.iter().map(|r| r.ups.len()).sum();
+        assert_eq!(
+            (risers.len(), n),
+            (cells, edges),
+            "{}: its risers",
+            template.scene
+        );
+        assert_eq!(b.stairs_yielded, 0);
+        for r in &risers {
+            for &(d, rise) in &r.ups {
+                assert!((rise - 1.0).abs() < 1e-4, "{}: {rise} m", template.scene);
+                assert!(
+                    b.stairs
+                        .iter()
+                        .any(|(_, c)| c.cell == r.cell && c.edges.contains(&d)),
+                    "{} {:?} edge {d}: no stair",
+                    template.scene,
+                    r.cell
+                );
+            }
+            // The mockup's step cells take its street steps.
+            if r.kind == steps::PathCell::Steps {
+                assert!(
+                    b.stairs
+                        .iter()
+                        .any(|(_, c)| c.cell == r.cell && c.street_steps),
+                    "{} {:?}",
+                    template.scene,
+                    r.cell
+                );
+            }
+        }
+        // The north gate (G1): street steps in (19, 7) and (20, 7), and a
+        // flight from the gate's passage onto the wall lane.
+        if template.scene == walled().scene {
+            for cell in [(19, 7), (20, 7)] {
+                assert!(
+                    b.stairs
+                        .iter()
+                        .any(|(_, c)| c.cell == cell && c.street_steps)
+                );
+            }
+            assert!(
+                b.stairs
+                    .iter()
+                    .any(|(_, c)| c.cell == (19, 6) && !c.street_steps)
+            );
+        }
+    }
+}
+
+/// `path-stairs`: a walker with auto step off climbs every path stair of
+/// the walled town and the harbour and comes down it, from the stair's foot
+/// over the riser into the higher cell, across each edge it climbs to: no
+/// rise or drop of the eye over 0.1 m in any 0.1 m, so never a hop and
+/// never a tick in the air.
+#[test]
+fn a_walker_climbs_every_path_stair_without_a_hop() {
+    use pieces::Surface;
+    let (patch, _) = patch();
+    let mut walked = 0;
+    for template in [walled(), harbour()] {
+        let (_, b, natural) = cut_yielding(&template, &|_| false);
+        for (i, cut) in &b.stairs {
+            let s = &b.solids[*i];
+            let f = s.frame;
+            let on = |p: Vec2| f.world(Vec3::new(p.x, 0.0, p.y)).normalize();
+            let (c, r) = cut.cell;
+            let hex = pier_cut::corners(patch, &b.chart, &f, c, r).unwrap();
+            let centre = hex.iter().fold(Vec2::ZERO, |s, p| s + *p) / 6.0;
+            let paths: Vec<Vec<Vec2>> = match &s.surfaces[0] {
+                Surface::Steps { foot, dir, .. } => cut
+                    .edges
+                    .iter()
+                    .map(|&d| {
+                        let m = (hex[d] + hex[(d + 1) % 6]) * 0.5;
+                        let out = (m - centre).normalize();
+                        vec![*foot + *dir * 0.4, centre, m, m + out * 1.0]
+                    })
+                    .collect(),
+                Surface::Flight { foot, dir, len, .. } => {
+                    vec![vec![*foot - *dir * 0.5, *foot + *dir * (*len + 1.0)]]
+                }
+                other => panic!("{other:?}"),
+            };
+            let base = f.origin.length();
+            for p in paths {
+                let up: Vec<Vec3> = p.iter().map(|&q| on(q)).collect();
+                let start = support_at(&b, &natural, up[0] * (base + 0.5), 0.6);
+                let what = format!("{} {:?} up", template.scene, cut.cell);
+                let top = walk_steady(&b, &natural, &up, base, &what);
+                assert!(
+                    (top - base - 1.0).abs() < 0.02,
+                    "{what}: ends {:.2} m up",
+                    top - base
+                );
+                let down: Vec<Vec3> = up.iter().rev().copied().collect();
+                let what = format!("{} {:?} down", template.scene, cut.cell);
+                let low = walk_steady(&b, &natural, &down, base + 1.0, &what);
+                assert!(
+                    (low - start).abs() < 0.02,
+                    "{what}: ends {:.2} m, from {:.2} m",
+                    low - base,
+                    start - base
+                );
+                walked += 1;
+            }
+        }
+    }
+    assert_eq!(walked, 30, "every riser edge walked");
+}
+
+/// `path-stairs`: a stair never stands in the player's work. With an edit
+/// in a step cell, or in the cell it climbs to, that riser keeps its bare
+/// step, and every other stair stands.
+#[test]
+fn a_stair_yields_to_an_edit() {
+    let template = walled();
+    let (town, _, _) = cut_yielding(&template, &|_| false);
+    let (patch, _) = patch();
+    let chart = record::chart_of(&town, patch).unwrap();
+    let key = |c: i32, r: i32| patch.keys[chart.cell(c, r).unwrap()];
+    // (19, 7) itself, and the gate street (19, 17) that (19, 16) climbs to.
+    let (dug, built_on) = (key(19, 7), key(19, 17));
+    let (_, b, _) = cut_yielding(&template, &|k| k == dug || k == built_on);
+    // (19, 17) is the cell (20, 16)'s steps climb to as well.
+    for cell in [(19, 7), (19, 16), (20, 16)] {
+        assert!(
+            !b.stairs.iter().any(|(_, c)| c.cell == cell),
+            "{cell:?} stands in the player's work"
+        );
+    }
+    assert_eq!(b.stairs.len(), 12 - 3);
+    assert!(b.stairs_yielded >= 4, "{}", b.stairs_yielded);
+}
+
+/// `path-stairs`: a town stored before stairs opens unchanged but for them.
+/// Its records round-trip as they were; built from them with every cell
+/// yielded (the cut before stairs) and with none, every other piece and the
+/// ground are the same, the stairs are added, and no mesh loses a vertex.
+#[test]
+fn a_stored_town_gains_only_its_stairs() {
+    let (patch, _) = patch();
+    for template in [walled(), harbour()] {
+        let (town, _, natural) = cut_yielding(&template, &|_| false);
+        let records = record::to_records(&town);
+        let mut store = crate::records::Records::new();
+        for r in records.clone() {
+            store.put(r);
+        }
+        let record::Stored::Town(stored) = record::from_records(&store, town.site) else {
+            panic!("not stored");
+        };
+        assert_eq!(stored, town);
+        assert_eq!(record::to_records(&stored), records);
+        let build = |all: bool| {
+            record::build_town_yielding(
+                &stored,
+                Some(&template),
+                patch,
+                &kits(),
+                &|_: &str| 2.0,
+                RADIUS_M,
+                SHEET_M,
+                &natural,
+                &move |_| all,
+            )
+            .unwrap()
+        };
+        let (before, after) = (build(true), build(false));
+        assert!(before.stairs.is_empty());
+        assert!(!after.stairs.is_empty());
+        let stairs: BTreeSet<usize> = after.stairs.iter().map(|s| s.0).collect();
+        let kept: Vec<String> = after
+            .solids
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !stairs.contains(i))
+            .map(|(_, s)| format!("{s:?}"))
+            .collect();
+        let was: Vec<String> = before.solids.iter().map(|s| format!("{s:?}")).collect();
+        assert!(kept == was, "{}: a piece changed", template.scene);
+        for c in &patch.cells {
+            let (a, z) = (before.ground.at(c.direction), after.ground.at(c.direction));
+            assert_eq!(a, z, "{}: the ground moved", template.scene);
+        }
+        for (name, m) in &before.meshes {
+            assert!(after.meshes[name].positions.len() >= m.positions.len());
+        }
+    }
+}
+
+/// `path-stairs` (W20): where a pier crosses a bank a metre over its deck,
+/// a timber stair climbs onto the planks over the bank and another comes
+/// down off them, and a walker goes along the pier over both without a hop.
+#[test]
+fn a_pier_climbs_a_bank_by_a_stair_at_each_end() {
+    let (template, town, b) = cut_harbour();
+    let (patch, _) = patch();
+    let pier = template
+        .piers
+        .iter()
+        .max_by(|a, z| {
+            let l = |p: &Pier| (p.to[2] - p.from[2]).abs() + (p.to[0] - p.from[0]).abs();
+            l(a).total_cmp(&l(z))
+        })
+        .unwrap();
+    let cell_m = template.grid.cell_m;
+    let len = pier_cut::along(pier, pier.to[0], pier.to[2]);
+    let (ux, uz) = (
+        (pier.to[0] - pier.from[0]) / len,
+        (pier.to[2] - pier.from[2]) / len,
+    );
+    let at = |s: f32| {
+        sea::point(
+            &b.chart,
+            patch,
+            pier.from[0] + ux * s,
+            pier.from[2] + uz * s,
+            cell_m,
+        )
+        .unwrap()
+    };
+    // A bank under two thirds of the way out, a metre over the deck.
+    let bank = at(len * 0.66);
+    let deck = town.terrace as f32 + pier.from[1];
+    let natural = coast();
+    let ground = |d: Vec3| {
+        if (d - bank).length() * RADIUS_M < 1.5 {
+            return deck + 1.0;
+        }
+        let n = natural(d).floor();
+        b.ground.at(d).map_or(n, |g| g.height(n))
+    };
+    let terrace = town.terrace as f32;
+    let cut = pier_cut::stretches(patch, &b.chart, pier, cell_m, terrace, &ground);
+    let stairs = pier_cut::stairs(&cut);
+    assert_eq!(stairs.len(), 2, "{cut:?}");
+    let mut meshes = Meshes::new();
+    let pieces = pier_cut::pier(
+        &mut meshes,
+        &|_: &str| 2.0,
+        patch,
+        &b.chart,
+        pier,
+        cell_m,
+        RADIUS_M,
+        terrace,
+        &ground,
+        &|_| false,
+    )
+    .unwrap();
+    assert_eq!(pieces.len(), cut.len() + 2);
+    // Yielded, the stairs are left out.
+    let bare = pier_cut::pier(
+        &mut Meshes::new(),
+        &|_: &str| 2.0,
+        patch,
+        &b.chart,
+        pier,
+        cell_m,
+        RADIUS_M,
+        terrace,
+        &ground,
+        &|_| true,
+    )
+    .unwrap();
+    assert_eq!(bare.len(), cut.len());
+    // Along the pier's middle over both stairs, the feet on its planks and
+    // stairs only.
+    let floor = |p: Vec3| {
+        let up = p.normalize();
+        let t = up.any_orthonormal_vector() * 0.3;
+        let c = up.cross(t);
+        [Vec3::ZERO, t, -t, c, -c]
+            .iter()
+            .filter_map(|&o| {
+                let q = (p + o).normalize() * p.length();
+                pieces
+                    .iter()
+                    .filter_map(|s| s.stand(q, 1.05).0)
+                    .max_by(f32::total_cmp)
+            })
+            .fold(f32::MIN, f32::max)
+    };
+    let s0 = stairs[0].foot.min(stairs[1].foot) - 1.0;
+    let s1 = stairs[0].foot.max(stairs[1].foot) + 1.0;
+    let mut feet = floor(at(s0) * (RADIUS_M + deck + 0.5));
+    let mut high = feet;
+    let mut s = s0;
+    while s < s1 {
+        s += 0.1;
+        let next = floor(at(s) * feet);
+        assert!(
+            (next - feet).abs() <= 0.101,
+            "at {s:.2} m the eye jumps {:+.3} m",
+            next - feet
+        );
+        feet = next;
+        high = high.max(feet);
+    }
+    assert!(
+        high - RADIUS_M > deck + 1.0,
+        "over the bank at {}",
+        high - RADIUS_M
+    );
 }

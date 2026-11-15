@@ -29,13 +29,7 @@ const PORCH_WIDTH_M: f32 = 1.1;
 
 /// A cell's corners in a frame, in the mockup's corner order (edge `d` from
 /// corner `d` to `d + 1`), as `cut_building` takes them.
-pub(super) fn corners(
-    patch: &Patch,
-    chart: &Chart,
-    frame: &Frame,
-    c: i32,
-    r: i32,
-) -> Option<[Vec2; 6]> {
+pub fn corners(patch: &Patch, chart: &Chart, frame: &Frame, c: i32, r: i32) -> Option<[Vec2; 6]> {
     let at = chart.cells.get(&(c, r))?;
     let cell = &patch.cells[at.cell];
     let mut out = [Vec2::ZERO; 6];
@@ -166,12 +160,124 @@ pub fn stilts(
     Ok(())
 }
 
+/// How far apart, along a pier, the ground under it is read: a run of its
+/// planks starts and ends on one of these.
+const PIER_READ_M: f32 = 0.25;
+
+/// One flat piece of a pier's planks, `s0` to `s1` metres along it from
+/// `from`, its top `top_m` metres over the radius.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Stretch {
+    pub s0: f32,
+    pub s1: f32,
+    pub top_m: f32,
+}
+
+/// The stretches a pier is cut in (`pier-landfall`). Its planks stand at
+/// the template's deck, `terrace_m` and the pier's height, on piles, where
+/// the ground under them is lower than the planks; where the ground
+/// reaches them (the beach the template's export rounds up to the deck's
+/// layer, a bank of the planet's own ground) they lie on it instead, their
+/// underside on the highest ground under them, so the planks are never in
+/// the ground. The ground is read every [`PIER_READ_M`] along the pier,
+/// across its width; a run of one height is cut in pieces of about
+/// [`PIER_STRETCH_M`], each flat in its own frame. A pier over the water
+/// all the way is cut as it always was. `ground` is the ground's height at
+/// a direction, metres over the radius, the town's where it is laid.
+pub fn stretches(
+    patch: &Patch,
+    chart: &Chart,
+    pier: &Pier,
+    cell_m: f32,
+    terrace_m: f32,
+    ground: &dyn Fn(Vec3) -> f32,
+) -> Vec<Stretch> {
+    let deck_m = terrace_m + pier.from[1];
+    let (dx, dz) = (pier.to[0] - pier.from[0], pier.to[2] - pier.from[2]);
+    let len = (dx * dx + dz * dz).sqrt();
+    if len < 0.1 {
+        return Vec::new();
+    }
+    let (ux, uz) = (dx / len, dz / len);
+    // The highest ground across the deck at each reading.
+    let reads = ((len / PIER_READ_M).ceil() as usize).max(1);
+    let high: Vec<f32> = (0..=reads)
+        .map(|i| {
+            let s = len * i as f32 / reads as f32;
+            [-0.5f32, -0.25, 0.0, 0.25, 0.5]
+                .iter()
+                .filter_map(|w| {
+                    let w = w * pier.width_m;
+                    let (x, z) = (
+                        pier.from[0] + ux * s - uz * w,
+                        pier.from[2] + uz * s + ux * w,
+                    );
+                    sea::point(chart, patch, x, z, cell_m).map(ground)
+                })
+                .fold(f32::MIN, f32::max)
+        })
+        .collect();
+    // Each reading's interval's top, and runs of one top.
+    let mut runs: Vec<(usize, usize, f32)> = Vec::new();
+    for i in 0..reads {
+        let g = high[i].max(high[i + 1]);
+        let top = if g > deck_m - DECK_M {
+            g + DECK_M
+        } else {
+            deck_m
+        };
+        match runs.last_mut() {
+            Some(run) if run.2 == top => run.1 = i + 1,
+            _ => runs.push((i, i + 1, top)),
+        }
+    }
+    let mut out = Vec::new();
+    for (i0, i1, top_m) in runs {
+        let (r0, r1) = (
+            len * i0 as f32 / reads as f32,
+            len * i1 as f32 / reads as f32,
+        );
+        let n = (((r1 - r0) / PIER_STRETCH_M).round() as usize).max(1);
+        for k in 0..n {
+            out.push(Stretch {
+                s0: r0 + (r1 - r0) * k as f32 / n as f32,
+                s1: r0 + (r1 - r0) * (k + 1) as f32 / n as f32,
+                top_m,
+            });
+        }
+    }
+    out
+}
+
+/// How far along a pier the mockup's point `(x, z)` is, metres from its
+/// `from`.
+pub fn along(pier: &Pier, x: f32, z: f32) -> f32 {
+    let (dx, dz) = (pier.to[0] - pier.from[0], pier.to[2] - pier.from[2]);
+    let len = (dx * dx + dz * dz).sqrt().max(1e-6);
+    ((x - pier.from[0]) * dx + (z - pier.from[2]) * dz) / len
+}
+
+/// The top of the stretch `s` metres along a pier, of `stretches`: the
+/// last one starting at or before it.
+pub fn top_at(stretches: &[Stretch], s: f32) -> Option<f32> {
+    stretches
+        .iter()
+        .rev()
+        .find(|t| t.s0 <= s)
+        .or(stretches.first())
+        .map(|t| t.top_m)
+}
+
 /// A pier (the mockup's `bridge` with piles): planks `width_m` wide from
-/// one end to the other at its height over `terrace_m`, cut in stretches of
-/// about [`PIER_STRETCH_M`], each flat in its own frame and lapping the
-/// next, with a pile either side at every joint down to the ground. Its
-/// edges are open. Ends are the mockup's metres, placed on the chart as
-/// [`sea::point`] places them.
+/// one end to the other, cut in the [`stretches`] the ground under it
+/// gives, each flat in its own frame and lapping the next: at its height
+/// over `terrace_m` with a pile either side at every joint down to the
+/// ground, or lying on the ground where the ground reaches its planks
+/// (`pier-landfall`). Its edges are open. Ends are the mockup's metres,
+/// placed on the chart as [`sea::point`] places them. Where two stretches
+/// differ by a riser the walker does not hold, a timber stair stands on the
+/// lower one against it ([`stairs`], `path-stairs`), unless a cell under it
+/// is `yielded` (holds a player's edit, by exact key).
 #[allow(clippy::too_many_arguments)]
 pub fn pier(
     meshes: &mut Meshes,
@@ -183,6 +289,7 @@ pub fn pier(
     radius_m: f32,
     terrace_m: f32,
     ground: &dyn Fn(Vec3) -> f32,
+    yielded: &dyn Fn(u32) -> bool,
 ) -> Result<Vec<BuildingSolids>, String> {
     let (from, to) = (pier.from, pier.to);
     let (dx, dz) = (to[0] - from[0], to[2] - from[2]);
@@ -191,23 +298,21 @@ pub fn pier(
         return Ok(Vec::new());
     }
     let (ux, uz) = (dx / len, dz / len);
-    let stretches = ((len / PIER_STRETCH_M).round() as usize).max(1);
-    let deck_m = terrace_m + from[1];
     let at = |s: f32| -> Result<Vec3, String> {
         let (x, z) = (from[0] + ux * s, from[2] + uz * s);
         sea::point(chart, patch, x, z, cell_m)
             .ok_or_else(|| format!("a pier at ({x:.1}, {z:.1}) is off the chart"))
     };
-    let mut out = Vec::with_capacity(stretches);
-    for k in 0..stretches {
-        let s0 = len * k as f32 / stretches as f32;
-        let s1 = len * (k + 1) as f32 / stretches as f32;
+    let cut = stretches(patch, chart, pier, cell_m, terrace_m, ground);
+    let mut out = Vec::with_capacity(cut.len());
+    for (k, stretch) in cut.iter().enumerate() {
+        let Stretch { s0, s1, top_m } = *stretch;
         let (a, b) = (at(s0 - PIER_LAP_M)?, at(s1 + PIER_LAP_M)?);
         let y = (a + b).normalize();
         let along = b - a;
         let x = (along - y * along.dot(y)).normalize();
         let frame = Frame {
-            origin: y * (radius_m + deck_m),
+            origin: y * (radius_m + top_m),
             x,
             y,
             z: x.cross(y),
@@ -222,17 +327,16 @@ pub fn pier(
             top: 0.0,
             bottom: -DECK_M,
         });
-        // Piles at the joint this stretch starts at, and the last one's end.
+        // Piles at the joint this stretch starts at, and at its end where
+        // the next stretch is at another height or there is none. A stretch
+        // on the ground gets none: the ground is under its planks.
         let inset = side.normalize() * (pier.width_m / 2.0 - 0.08);
-        let joints: &[f32] = if k + 1 == stretches {
-            &[0.0, 1.0]
-        } else {
-            &[0.0]
-        };
-        for &t in joints {
-            let at = frame.plane(if t == 0.0 { at(s0)? } else { at(s1)? });
+        let ends = cut.get(k + 1).is_none_or(|next| next.top_m != top_m);
+        let joints: &[f32] = if ends { &[s0, s1] } else { &[s0] };
+        for &s in joints {
+            let at = frame.plane(at(s)?);
             for p in [at + inset, at - inset] {
-                pile(&mut sink, p.x, p.y, -DECK_M, ground, deck_m);
+                pile(&mut sink, p.x, p.y, -DECK_M, ground, top_m);
             }
         }
         let reach_m = rect.iter().map(|p| p.length()).fold(0.0f32, f32::max) + 1.0;
@@ -248,7 +352,111 @@ pub fn pier(
             lights: Vec::new(),
         });
     }
+    for stair in stairs(&cut) {
+        // The cells under it, read at its foot, middle and head across its
+        // width: a player's edit there keeps it out.
+        let held = [0.0f32, 0.5, 1.0].iter().any(|&f| {
+            let s = stair.head + (stair.foot - stair.head) * f;
+            [-0.5f32, 0.0, 0.5].iter().any(|&w| {
+                let w = w * pier.width_m;
+                let (x, z) = (from[0] + ux * s - uz * w, from[2] + uz * s + ux * w);
+                let (c, r) = sea::cell_at(x, z, cell_m);
+                chart.cell(c, r).is_none_or(|i| yielded(patch.keys[i]))
+            })
+        });
+        if held {
+            continue;
+        }
+        let (h, f) = (at(stair.head)?, at(stair.foot)?);
+        let y = (h + f).normalize();
+        let along = h - f;
+        let x = (along - y * along.dot(y)).normalize();
+        let frame = Frame {
+            origin: y * (radius_m + stair.base_m),
+            x,
+            y,
+            z: x.cross(y),
+        };
+        let (ph, pf) = (frame.plane(h), frame.plane(f));
+        let dir = (ph - pf).normalize();
+        let mut sink = Sink::new(meshes, repeat_m, frame);
+        super::steps::steps_along(
+            &mut sink,
+            ph,
+            dir,
+            stair.rise_m,
+            stair.run_m,
+            pier.width_m - 0.2,
+            ("plank", "timber"),
+        );
+        let reach_m = ph.length().max(pf.length()) + pier.width_m + 1.0;
+        out.push(super::dressing::finish(sink, frame, reach_m));
+    }
     Ok(out)
+}
+
+/// A stair on a pier (`path-stairs`): on the lower of two stretches that
+/// differ by more than the walker holds, its head at their joint, `head`
+/// metres along the pier, and its foot at `foot`, toward the lower run; it
+/// climbs `rise_m` from the lower top, `base_m` over the radius, on treads of
+/// `run_m`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PierStair {
+    pub head: f32,
+    pub foot: f32,
+    pub base_m: f32,
+    pub rise_m: f32,
+    pub run_m: f32,
+}
+
+/// The stairs a pier cut in `cut` stands: one against each joint where the
+/// planks step by more than [`super::steps::HOLD_M`] and no more than
+/// [`super::steps::MAX_RISE_M`], on the lower side, its treads
+/// [`super::steps::FLIGHT_RUN_M`] or shorter to fit the run of planks at
+/// the lower height (0.22 m at the least).
+pub fn stairs(cut: &[Stretch]) -> Vec<PierStair> {
+    use super::steps::{FLIGHT_RISE_M, FLIGHT_RUN_M, HOLD_M, MAX_RISE_M};
+    let mut out = Vec::new();
+    for k in 0..cut.len().saturating_sub(1) {
+        let (a, b) = (cut[k], cut[k + 1]);
+        let rise = (b.top_m - a.top_m).abs();
+        if rise <= HOLD_M || rise > MAX_RISE_M {
+            continue;
+        }
+        let risers = ((rise / FLIGHT_RISE_M).round() as usize).max(2);
+        // The run of planks at the lower height, from the joint.
+        let (head, base, room) = if b.top_m > a.top_m {
+            let start = cut[..=k]
+                .iter()
+                .rev()
+                .take_while(|t| t.top_m == a.top_m)
+                .last()
+                .map_or(a.s0, |t| t.s0);
+            (b.s0, a.top_m, b.s0 - start)
+        } else {
+            let end = cut[k + 1..]
+                .iter()
+                .take_while(|t| t.top_m == b.top_m)
+                .last()
+                .map_or(b.s1, |t| t.s1);
+            (a.s1, b.top_m, end - a.s1)
+        };
+        let run = (room / risers as f32).clamp(0.22, FLIGHT_RUN_M);
+        let len = run * risers as f32;
+        let foot = if b.top_m > a.top_m {
+            head - len
+        } else {
+            head + len
+        };
+        out.push(PierStair {
+            head,
+            foot,
+            base_m: base,
+            rise_m: rise,
+            run_m: run,
+        });
+    }
+    out
 }
 
 /// The harbour's light (the mockup's on its mole): a round tower of stone,

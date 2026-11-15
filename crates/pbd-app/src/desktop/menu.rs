@@ -40,6 +40,12 @@ pub enum Screen {
     Pack,
     /// The world map, opened with M (`world-map`).
     Map,
+    /// A station's panel, opened with E on it (`farming-and-smelting`).
+    Forge,
+    /// A kitchen station's panel, opened with E on a campfire (`cooking`).
+    Kitchen,
+    /// The starter missions, opened with O (`starter-missions`).
+    Missions,
 }
 
 impl Screen {
@@ -60,7 +66,13 @@ impl Screen {
         }
         match self {
             Screen::Playing => Screen::Pause,
-            Screen::Pause | Screen::Guide | Screen::Pack | Screen::Map => Screen::Playing,
+            Screen::Pause
+            | Screen::Guide
+            | Screen::Pack
+            | Screen::Map
+            | Screen::Forge
+            | Screen::Kitchen
+            | Screen::Missions => Screen::Playing,
             Screen::Settings | Screen::Saves => Screen::Pause,
         }
     }
@@ -105,6 +117,8 @@ pub enum MenuAction {
     AutoStep,
     /// Turn the rain shadow (the rain volume) on or off.
     RainShadows,
+    /// The starter mission's HUD line, on or off.
+    MissionLine,
     /// Put the open Input sub-tab's keys back to their defaults.
     ResetTab,
 }
@@ -294,6 +308,7 @@ fn settings_checked(
     Some(match action {
         MenuAction::Bloom => graphics.bloom,
         MenuAction::RainShadows => player.rain_shadows,
+        MenuAction::MissionLine => player.mission_line,
         MenuAction::AutoStep => player.auto_step,
         _ => return None,
     })
@@ -320,6 +335,7 @@ pub fn press_graphics(
             }
             MenuAction::AutoStep => changed.auto_step = !changed.auto_step,
             MenuAction::RainShadows => changed.rain_shadows = !changed.rain_shadows,
+            MenuAction::MissionLine => changed.mission_line = !changed.mission_line,
             _ => {}
         }
         if changed != *player {
@@ -429,6 +445,7 @@ pub fn opening_screen(menu: Option<&str>, world_named: bool, capture: bool) -> S
         Some("pack") => Screen::Pack,
         Some("map") => Screen::Map,
         Some("guide") => Screen::Guide,
+        Some("missions") => Screen::Missions,
         _ if !world_named && !capture => Screen::Saves,
         _ => Screen::Playing,
     }
@@ -806,6 +823,13 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                     panel.commands().entity(world).with_children(|rows| {
                         super::time_ui::spawn(rows, kit);
                         super::overlay_ui::spawn_row(rows, kit);
+                        check_row(
+                            rows,
+                            kit,
+                            "Mission line",
+                            "the current mission on the HUD",
+                            MenuAction::MissionLine,
+                        );
                     });
                     let movement = page(panel, 3);
                     panel.commands().entity(movement).with_children(|rows| {
@@ -1727,6 +1751,7 @@ pub fn press(
             | MenuAction::RenderScale
             | MenuAction::AutoStep
             | MenuAction::RainShadows
+            | MenuAction::MissionLine
             | MenuAction::ResetTab => {}
             MenuAction::Load(row) => {
                 let Some(slot) = index.slots.get(row).cloned() else {
@@ -2051,7 +2076,9 @@ mod tests {
         let world = app.world_mut();
         let flagged = also(world);
         assert!(
-            flagged.contains(&"also: open or shut a door".to_string()),
+            flagged.contains(
+                &"also: use: a door, a forge, a campfire, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till".to_string()
+            ),
             "{flagged:?}"
         );
         assert!(flagged.contains(&"also: sprint".to_string()), "{flagged:?}");

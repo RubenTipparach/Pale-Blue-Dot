@@ -1,14 +1,20 @@
+mod arrival;
 mod compass_bar;
 mod cracks;
+mod craft;
 mod digging;
 mod drops_view;
 mod equipment;
+mod farm;
+mod forge;
 mod frame_graph;
 mod guide;
 mod hud;
+mod kitchen;
 mod map_screen;
 mod map_sites;
 mod menu;
+mod missions;
 mod overlay_ui;
 mod pack;
 mod scene;
@@ -131,6 +137,11 @@ pub struct Launch {
     /// photographed and the fishery's numbers logged. A capture instrument,
     /// like `--swim`: a headless run has no hand on the mouse.
     pub fish: bool,
+    /// `--husbandry SCENE`: set a farm scene in front of the walker through
+    /// the player's own paths (`wild`, `tame`, `pen` or `collect`), so the
+    /// animals can be photographed (`animal-husbandry` S12). A capture
+    /// instrument, like `--fish`.
+    pub husbandry: Option<String>,
     /// `--aboard KIND` boards a craft of that kind once the fleet is in (a
     /// cog or a rowboat once a harbour has made one), and `--seat` takes the
     /// seat rather than the chase view: a headless run has nobody to walk up
@@ -154,9 +165,19 @@ pub struct Launch {
     /// for that long, with `--tool` in hand (the shovel if none), so a capture
     /// can photograph the cracks at a chosen stage. Implies `--walk`.
     pub break_s: Option<f32>,
-    /// `--tool rod|shovel|pickaxe|axe`: the tool in hand for a capture, with
-    /// or without `--break`. Implies nothing else.
+    /// `--tool rod|shovel|pickaxe|axe|hand`: the tool in hand for a capture,
+    /// with or without `--break`; `hand` is bare hands. A new world owns no
+    /// tool, so the rig gives it the tool first, at `--tier` (stone when
+    /// none follows). Implies nothing else.
     pub tool: Option<pbd_core::inventory::Tool>,
+    /// `--tool hand`: bare hands.
+    pub bare: bool,
+    /// `--tier stone|bronze|iron|steel`, for `--tool`.
+    pub tier: pbd_core::inventory::Tier,
+    /// `--craft pack|bench [metres]` (`tool-crafting` task 4.2, a capture
+    /// instrument): the pack's Craft row mid-craft, or a workbench that far
+    /// ahead with its panel open mid-craft.
+    pub craft: Option<(String, f32)>,
     /// `--place N` stacks N stones on the last hole, so a tower somebody built
     /// can be photographed wearing the stone it is made of.
     pub place: u32,
@@ -233,6 +254,29 @@ pub struct Launch {
     pub lamps: bool,
     pub lamps_at: f32,
     pub lamps_across: f32,
+    /// `--farm [metres]` (`farming-and-smelting` task 5.1, a capture
+    /// instrument): tills two rows of four cells that far ahead, sows wheat
+    /// and turnip in them at staggered world times so the rows show all four
+    /// stages, tills one grassy cell so its seed floats, and stands a street
+    /// lantern by the field for a night shot.
+    pub farm: Option<f32>,
+    /// `--farm-harvest`: with `--farm`, harvests the ripe cells and picks the
+    /// nearest wild plant, so the hotbar shows what came of it.
+    pub farm_harvest: bool,
+    /// `--forge [metres]`: a forge that far ahead, stocked and given two jobs,
+    /// the first part done; with `--forge-panel`, its panel open.
+    pub forge: Option<f32>,
+    pub forge_panel: bool,
+    /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
+    /// campfire that far ahead, stocked, flatbread done on it and a fish
+    /// grilling; with `--campfire-panel`, its panel open.
+    pub campfire: Option<f32>,
+    pub campfire_panel: bool,
+    /// `--eat <dish,dish>`: each dish given and eaten, for the effects row.
+    pub eat: Vec<String>,
+    /// `--missions <n>`: the starter missions capture instrument raises the
+    /// first `n` steps of its scripted chain (`starter-missions` design 17).
+    pub missions: Option<usize>,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -253,6 +297,11 @@ pub struct Launch {
     /// a load does to a running game: an old world's planet switched in
     /// place, say (`bigger-biomes` task 2.2c). The save must already exist.
     pub load: Option<String>,
+    /// `--new-world <name>`: a capture instrument (`new-world-arrival`). A
+    /// third of the way to the shot, make a world of that name and enter it as
+    /// the saves page's NEW WORLD does, so a capture shows what making a new
+    /// world while one is open does to a running game.
+    pub new_world: Option<String>,
     /// `--menu pause|settings|saves|pack|map|guide` opens that screen at startup. A headless run has
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
@@ -311,6 +360,7 @@ impl Launch {
             walk: false,
             swim: false,
             fish: false,
+            husbandry: None,
             aboard: None,
             seat: false,
             sail: None,
@@ -328,6 +378,7 @@ impl Launch {
             up: 0.0,
             world: None,
             load: None,
+            new_world: None,
             time: None,
             day: None,
             overlay: None,
@@ -336,6 +387,17 @@ impl Launch {
             lamps: false,
             lamps_at: 5.0,
             lamps_across: 0.0,
+            farm: None,
+            farm_harvest: false,
+            forge: None,
+            forge_panel: false,
+            bare: false,
+            tier: pbd_core::inventory::Tier::Stone,
+            craft: None,
+            campfire: None,
+            campfire_panel: false,
+            eat: Vec::new(),
+            missions: None,
             dig_ahead: false,
             pitch: None,
             yaw: None,
@@ -376,8 +438,34 @@ impl Launch {
                         "shovel" => Tool::Shovel,
                         "pickaxe" => Tool::Pickaxe,
                         "axe" => Tool::Axe,
-                        _ => panic!("--tool {name}: rod, shovel, pickaxe or axe"),
+                        "hand" => {
+                            result.bare = true;
+                            Tool::Shovel
+                        }
+                        _ => panic!("--tool {name}: rod, shovel, pickaxe, axe or hand"),
                     });
+                }
+                "--tier" => {
+                    i += 1;
+                    let name = args.get(i).expect("--tier requires a tier").to_lowercase();
+                    result.tier = pbd_core::inventory::Tier::ALL
+                        .into_iter()
+                        .find(|t| t.code() == name)
+                        .expect("--tier takes stone, bronze, iron or steel");
+                }
+                "--craft" => {
+                    i += 1;
+                    let scene = args.get(i).expect("--craft requires pack or bench").clone();
+                    assert!(
+                        matches!(scene.as_str(), "pack" | "bench" | "bench-view"),
+                        "--craft takes pack, bench or bench-view"
+                    );
+                    let mut metres = 4.0;
+                    if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
+                        metres = m;
+                        i += 1;
+                    }
+                    result.craft = Some((scene, metres));
                 }
                 "--dig" => {
                     i += 1;
@@ -412,6 +500,50 @@ impl Launch {
                             i += 1;
                         }
                     }
+                }
+                "--farm" | "--forge" => {
+                    let farm = args[i] == "--farm";
+                    let mut metres = 6.0;
+                    if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
+                        assert!(
+                            m.is_finite() && m > 0.0,
+                            "--farm and --forge take metres ahead"
+                        );
+                        metres = m;
+                        i += 1;
+                    }
+                    if farm {
+                        result.farm = Some(metres);
+                    } else {
+                        result.forge = Some(metres);
+                    }
+                }
+                "--farm-harvest" => result.farm_harvest = true,
+                "--forge-panel" => result.forge_panel = true,
+                "--campfire" => {
+                    let mut metres = 4.0;
+                    if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
+                        assert!(m.is_finite() && m > 0.0, "--campfire takes metres ahead");
+                        metres = m;
+                        i += 1;
+                    }
+                    result.campfire = Some(metres);
+                }
+                "--campfire-panel" => result.campfire_panel = true,
+                "--eat" => {
+                    i += 1;
+                    let dishes = args
+                        .get(i)
+                        .expect("--eat takes dish codes, comma separated");
+                    result.eat = dishes.split(',').map(str::to_string).collect();
+                }
+                "--missions" => {
+                    i += 1;
+                    result.missions = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .expect("--missions takes how many scripted steps to raise"),
+                    );
                 }
                 "--dig-ahead" => result.dig_ahead = true,
                 "--pitch" => {
@@ -463,17 +595,22 @@ impl Launch {
                     i += 1;
                     result.load = Some(args.get(i).expect("--load requires a name").clone());
                 }
+                "--new-world" => {
+                    i += 1;
+                    result.new_world =
+                        Some(args.get(i).expect("--new-world requires a name").clone());
+                }
                 "--menu" => {
                     i += 1;
-                    let screen = args
-                        .get(i)
-                        .expect("--menu requires pause, settings, saves, pack, map or guide");
+                    let screen = args.get(i).expect(
+                        "--menu requires pause, settings, saves, pack, map, guide or missions",
+                    );
                     assert!(
                         matches!(
                             screen.as_str(),
-                            "pause" | "settings" | "saves" | "pack" | "map" | "guide"
+                            "pause" | "settings" | "saves" | "pack" | "map" | "guide" | "missions"
                         ),
-                        "--menu takes pause, settings, saves, pack, map or guide"
+                        "--menu takes pause, settings, saves, pack, map, guide or missions"
                     );
                     result.menu = Some(screen.clone());
                 }
@@ -719,6 +856,15 @@ impl Launch {
                 "--fish" => {
                     result.walk = true;
                     result.fish = true;
+                }
+                "--husbandry" => {
+                    i += 1;
+                    result.walk = true;
+                    result.husbandry = Some(
+                        args.get(i)
+                            .expect("--husbandry requires a scene: wild, tame, pen or collect")
+                            .clone(),
+                    );
                 }
                 "--aboard" => {
                     i += 1;
@@ -977,6 +1123,21 @@ pub fn run(args: &[String]) {
         launch.capture.is_some(),
     );
     let restored = world.pose;
+    // Where and when a world with no pose starts, from the launch alone, for
+    // a new world made later from the saves page (`new-world-arrival`).
+    let new_world_start = NewWorldStart {
+        direction: spawn_direction(&launch),
+        clock: pbd_core::daylight::Clock::at(
+            launch.day.unwrap_or(0),
+            launch.time.unwrap_or(pbd_core::daylight::START_HOUR),
+        ),
+    };
+    // The world's name when the player is first in it; not in a capture,
+    // whose shots would change.
+    let arrival = world
+        .slot()
+        .filter(|_| launch.capture.is_none())
+        .map(|slot| arrival::Arrival::new(&slot.file.name, restored.is_none()));
     let step = Duration::from_secs_f64(1.0 / FIXED_HZ);
     let mut app = App::new();
     app.add_plugins(
@@ -1088,6 +1249,26 @@ pub fn run(args: &[String]) {
     .init_resource::<pbd_app::fish::Body>()
     .init_resource::<guide::GuidePage>()
     .init_resource::<pack::PackHand>()
+    // Farming and the forge (`farming-and-smelting`).
+    .init_resource::<farm::FarmNote>()
+    .init_resource::<farm::StationAt>()
+    .init_resource::<craft::CraftPick>()
+    .add_message::<pbd_app::hotbar::Gained>()
+    .add_message::<pbd_app::hotbar::Planted>()
+    // Cooking (`cooking` design S5, S6).
+    .init_resource::<pbd_app::kitchen::MealEffects>()
+    .add_message::<pbd_app::kitchen::Cooked>()
+    .add_message::<pbd_app::kitchen::Ate>()
+    // The starter missions (`starter-missions`): the chain, its counting
+    // and the player's record; the HUD line and the tab are `missions`.
+    .add_plugins(pbd_app::missions::MissionsPlugin)
+    .add_systems(
+        Update,
+        (
+            (missions::press_tabs, missions::paint, missions::show_line).chain(),
+            missions::scripted.run_if(pbd_app::loading::ready),
+        ),
+    )
     // The world, loaded before the planet is built: `create_planet` reads its
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
@@ -1137,6 +1318,8 @@ pub fn run(args: &[String]) {
             photo_camera,
             overlay_ui::spawn,
             cracks::spawn,
+            farm::make_looks,
+            farm::spawn_note,
         ),
     )
     // The column tier is built by a startup system and its records land when
@@ -1161,6 +1344,10 @@ pub fn run(args: &[String]) {
                     guide::spawn,
                     drops_view::dress,
                     pack::spawn,
+                    forge::spawn,
+                    kitchen::spawn,
+                    kitchen::spawn_effects,
+                    missions::spawn,
                 ),
             )
                 .chain(),
@@ -1231,6 +1418,34 @@ pub fn run(args: &[String]) {
     )
     .add_systems(
         Update,
+        (
+            (
+                farm::use_key,
+                forge::work,
+                forge::grey,
+                forge::paint,
+                craft::press,
+                craft::collect_hands,
+                craft::paint,
+            )
+                .chain()
+                .after(digging::dig_and_place)
+                .after(pbd_app::husbandry::HusbandryHands),
+            // The campfire's panel opens from `farm::use_key` (after the
+            // husbandry hands, which clear an E they used).
+            (kitchen::work, kitchen::grey, kitchen::paint, kitchen::eat)
+                .chain()
+                .after(farm::use_key)
+                .after(pbd_app::husbandry::HusbandryHands),
+            (pbd_app::kitchen::refresh_effects, kitchen::show_effects),
+            kitchen::scripted.after(farm::scripted),
+            (farm::show, farm::show_note),
+            farm::scripted.after(digging::scripted_dig),
+            craft::scripted.after(digging::scripted_dig),
+        ),
+    )
+    .add_systems(
+        Update,
         landing_shots
             .run_if(|launch: Res<Launch>| {
                 launch.capture.is_some() && std::env::var_os("PBD_LANDING_SHOTS").is_some()
@@ -1240,9 +1455,13 @@ pub fn run(args: &[String]) {
     )
     .init_resource::<menu::SaveIndex>()
     .init_resource::<menu::LoadRequest>()
+    .insert_resource(new_world_start)
+    .add_systems(Update, arrival::banner.run_if(pbd_app::loading::ready))
     .add_systems(
         PreUpdate,
-        (load_on_cue, load_world).chain().after(menu::toggle),
+        (load_on_cue, load_world, arrive)
+            .chain()
+            .after(menu::toggle),
     )
     .insert_resource(FrameLog::open(
         launch.frame_log.as_deref(),
@@ -1353,6 +1572,7 @@ pub fn run(args: &[String]) {
             pbd_app::vehicles::VehiclePlugin,
             pbd_app::fish::FishPlugin,
             pbd_app::held::HeldPlugin,
+            pbd_app::husbandry::HusbandryPlugin,
         ))
         .insert_resource(pbd_app::vehicles::VehicleScript {
             board: launch.aboard,
@@ -1373,6 +1593,9 @@ pub fn run(args: &[String]) {
         }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
+        }
+        if let Some(scene) = launch.husbandry.clone() {
+            app.insert_resource(pbd_app::husbandry::HusbandryScript { scene });
         }
         if launch.fish {
             app.add_systems(
@@ -1445,6 +1668,22 @@ pub fn run(args: &[String]) {
     {
         app.insert_resource(pbd_app::loading::CaptureLoading(path.clone()));
     }
+    if let Some(arrival) = arrival {
+        app.insert_resource(arrival);
+    }
+    // `--new-world` in a capture: the world being left, the switch's loading
+    // screen and the arrival, each photographed beside the shot.
+    if launch.new_world.is_some()
+        && let Some(path) = &launch.capture
+    {
+        let beside = |what: &str| {
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("shot");
+            path.with_file_name(format!("{stem}-{what}.png"))
+        };
+        app.insert_resource(pbd_app::loading::CaptureSwitch(beside("loading")));
+        app.insert_resource(arrival::ArrivalShot(beside("arrival")));
+        app.insert_resource(LeavingShot(beside("leaving")));
+    }
     app.run();
 }
 
@@ -1507,18 +1746,51 @@ fn open_world(launch: &Launch) -> WorldSave {
 
 /// Ask for the `--load` world's load a third of the way to the shot, as the
 /// saves page's LOAD would, once.
+/// `--new-world` in a capture: the world being left, photographed on the
+/// frame the new one is asked for.
+#[derive(Resource, Clone)]
+struct LeavingShot(std::path::PathBuf);
+
 fn load_on_cue(
+    mut commands: Commands,
+    leaving: Option<Res<LeavingShot>>,
     launch: Res<Launch>,
     state: Res<CaptureState>,
     mut load: ResMut<menu::LoadRequest>,
     mut asked: Local<bool>,
+    mut photographed: Local<bool>,
 ) {
-    let Some(name) = launch.load.as_deref() else {
-        return;
-    };
+    // The world being left, a few frames before it is left, so the shot is
+    // not of the loading screen that replaces it.
+    if let Some(shot) = leaving.filter(|_| !*photographed)
+        && state.frame + 10 >= launch.frames / 3
+    {
+        *photographed = true;
+        commands
+            .spawn(Screenshot::primary_window())
+            .observe(bevy::render::view::screenshot::save_to_disk(shot.0.clone()));
+    }
     if *asked || state.frame < launch.frames / 3 {
         return;
     }
+    if let Some(name) = launch.new_world.as_deref() {
+        *asked = true;
+        let seed = pbd_core::planet_gen::TerrainConfig::TENEBRIS.seed;
+        match saves::create(std::path::Path::new(saves::ROOT), name, seed) {
+            Ok(slot) => {
+                info!(
+                    "--new-world: made '{name}' ({}) at frame {}",
+                    slot.id, state.frame
+                );
+                load.0 = Some(slot);
+            }
+            Err(error) => warn!("--new-world: could not make '{name}': {error}"),
+        }
+        return;
+    }
+    let Some(name) = launch.load.as_deref() else {
+        return;
+    };
     *asked = true;
     let id = saves::slot_id(name);
     match saves::list(std::path::Path::new(saves::ROOT))
@@ -1533,52 +1805,124 @@ fn load_on_cue(
     }
 }
 
-/// Carry out a load the saves screen asked for.
+/// Where and when a new world starts, as the launch decided before anything
+/// was restored: the launch's spawn direction (not the restored pose's) and
+/// its new-world clock (`new-world-arrival` decisions 3 and 5).
+#[derive(Resource, Clone, Copy)]
+struct NewWorldStart {
+    direction: Vec3,
+    clock: pbd_core::daylight::Clock,
+}
+
+/// What a switch begun by [`load_world`] still has to do on arrival.
+#[derive(Resource)]
+struct SwitchNote {
+    name: String,
+    /// The planet was switched to another generator.
+    switched: bool,
+}
+
+/// Begin a load the saves screen asked for.
 ///
 /// An exclusive system, because a load touches more of the world than one set
-/// of borrows can hold: the save, the hotbar, the tier's refresh and the
-/// walker's own body. It happens between frames rather than inside the press
+/// of borrows can hold. The leaving world is written and drained here; the
+/// world asked for is opened and prepared behind the loading screen, as a
+/// launch opens one (`new-world-arrival`), and [`arrive`] finishes it on the
+/// first open frame. It happens between frames rather than inside the press
 /// that asked for it, which is also why `LoadRequest` exists at all.
 fn load_world(world: &mut World) {
+    if world.contains_resource::<pbd_app::WorldLoading>() {
+        // One world opening at a time: the one in hand finishes first, and
+        // a request waits for it.
+        return;
+    }
     let Some(slot) = world.resource_mut::<menu::LoadRequest>().0.take() else {
         return;
     };
+    info!("WORLD_SWITCH before {}", switch_line(world));
     let name = slot.file.name.clone();
-    // The craft of the world being left are written into it before the queue
-    // is drained, and are gone from the scene before the next world's arrive.
-    if let Some(file) = pbd_app::vehicles::put_away(world) {
-        world.resource_mut::<WorldSave>().snapshot_vehicles(&file);
-    }
+    // The world being left is written as the exit path writes it: where the
+    // player stands and the hour, its weather, and its craft (which leave the
+    // scene before the next world's arrive); then everything queued for it
+    // goes down before the writer is let go. A half-written world is the one
+    // thing a save must never leave behind.
+    let pose = {
+        let state = world.get_resource::<pbd_app::walking::WalkingState>();
+        let view = state.map(pbd_app::walking::WalkingState::view);
+        let mut walkers =
+            world.query_filtered::<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>();
+        let position = walkers.iter(world).next().map(|p| p.0);
+        view.zip(position).map(|((heading, pitch), position)| Pose {
+            position,
+            heading,
+            pitch,
+            selected: world.resource::<slots::Hotbar>().selected(),
+        })
+    };
+    let seconds = world.resource::<pbd_app::sky::Sun>().clock.seconds;
+    let weather = world
+        .get_resource::<pbd_app::atmosphere::Air>()
+        .map(|air| air.now.to_bytes());
+    let craft = pbd_app::vehicles::put_away(world);
     let root = {
-        let open = world.resource::<WorldSave>();
-        // Everything queued for the world being left goes down before the
-        // writer moves: the queue is ordered, and a half-written world is the
-        // one thing a save must never leave behind.
+        let mut open = world.resource_mut::<WorldSave>();
+        if let Some(pose) = pose {
+            open.snapshot(pose, seconds);
+        }
+        if let Some(bytes) = weather {
+            open.snapshot_weather(bytes);
+        }
+        if let Some(file) = craft {
+            open.snapshot_vehicles(&file);
+        }
         open.drain();
         open.root().to_path_buf()
     };
-    let mut opened = WorldSave::open(root, slot);
     // A world made by another generator than the planet's: the planet is
-    // switched to it here, in place, before anything reads it, and never by
+    // switched to it here, in place, before the thread builds it, and never by
     // relaunching (`bigger-biomes` decision 8; the owner: "Should not
     // restart"). The saves page refuses a version this build lacks, so a
     // refusal here keeps the planet as it is.
-    let switched = match pbd_app::planet::switch_generator(opened.identity.generator) {
+    let switched = match pbd_app::planet::switch_generator(saves::generator_of(&slot)) {
         Ok(switched) => switched,
         Err(why) => {
             warn!("{name}: {why}; the planet stays as it is");
             false
         }
     };
-    let hotbar = slots::Hotbar::restore(&mut opened);
-    let tools = pbd_app::fish::ToolSlot::restore(&opened);
-    let drops = pbd_app::drops::Drops::restore(&opened);
-    let pose = opened.pose;
-    // The world resumes in its season and at its hour; one never played
-    // keeps the clock it had.
-    if let Some(seconds) = opened.world_seconds {
-        world.resource_mut::<pbd_app::sky::Sun>().clock.seconds = seconds;
-    }
+    let direction = world.resource::<NewWorldStart>().direction;
+    world.insert_resource(SwitchNote { name, switched });
+    pbd_app::loading::begin_switch(world, root, slot, direction);
+}
+
+/// Finish a switch on the first open frame, behind the loading screen: the
+/// new world's save, planet, sites and towns are in place, and what the
+/// binary owns is restored from the save, or dealt new.
+fn arrive(world: &mut World) {
+    let Some(arrived) = world.remove_resource::<pbd_app::loading::Arrived>() else {
+        return;
+    };
+    let SwitchNote { name, switched } =
+        world.remove_resource::<SwitchNote>().unwrap_or(SwitchNote {
+            name: String::new(),
+            switched: false,
+        });
+    let start = *world.resource::<NewWorldStart>();
+    let hotbar =
+        world.resource_scope(|_, mut save: Mut<WorldSave>| slots::Hotbar::restore(&mut save));
+    let (tools, drops, pose, seconds) = {
+        let save = world.resource::<WorldSave>();
+        (
+            pbd_app::fish::ToolSlot::restore(save),
+            pbd_app::drops::Drops::restore(save),
+            save.pose,
+            save.world_seconds,
+        )
+    };
+    // The world resumes in its season and at its hour; a new one starts on
+    // the new-world clock, not the last world's (decision 5).
+    world.resource_mut::<pbd_app::sky::Sun>().clock =
+        seconds.map_or(start.clock, |seconds| pbd_core::daylight::Clock { seconds });
     // And under its own sky: the saved weather, or a new one spun up.
     let air = {
         let config = world.resource::<pbd_app::config::AtmosphereConfig>().0;
@@ -1586,47 +1930,23 @@ fn load_world(world: &mut World) {
         let mut air = pbd_app::atmosphere::Air::open(
             config,
             pbd_app::planet::terrain_config().seed,
-            opened.weather.as_deref(),
+            world.resource::<WorldSave>().weather.as_deref(),
             sun.clock.seconds,
         );
         air.in_place = !sun.running;
         air
     };
     world.insert_resource(air);
-    world.insert_resource(opened);
     world.insert_resource(hotbar);
     world.insert_resource(tools);
     world.insert_resource(drops);
-    if switched {
-        // The planet itself, built for this world's generator round where
-        // the world resumes, with its edits, before the walker stands on it;
-        // and the map's picture of the other planet goes with it.
-        let near = pose.map_or(
-            world
-                .resource::<pbd_app::flight_view::FlightViewConfig>()
-                .spawn_direction,
-            |pose| pose.position.normalize_or(Vec3::Y),
-        );
-        pbd_app::planet::rebuild_planet(world, near);
-        if world.contains_resource::<map_screen::MapRaster>() {
-            world.insert_resource(map_screen::MapRaster::default());
-        }
-        if pose.is_none() {
-            pbd_app::walking::find_spawn_again(world);
-        }
-        info!(
-            "switched the planet to generator {} for '{name}'",
-            pbd_app::planet::generator_version()
-        );
+    if switched && world.contains_resource::<map_screen::MapRaster>() {
+        // The map's picture of the other planet goes with it.
+        world.insert_resource(map_screen::MapRaster::default());
     }
     // The water of the world being left is not this world's water.
     if let Some(mut fishery) = world.get_resource_mut::<pbd_app::fish::Fishery>() {
         *fishery = pbd_app::fish::Fishery::default();
-    }
-    // The tier is standing where the last world left it with the last world's
-    // holes in it. The distance rule cannot know that, so the load says so.
-    if let Some(mut refresh) = world.get_resource_mut::<pbd_app::planet::LodRefresh>() {
-        refresh.force();
     }
     if world
         .get_resource::<pbd_app::walking::WalkingState>()
@@ -1641,8 +1961,9 @@ fn load_world(world: &mut World) {
                     pitch: pose.pitch,
                 },
             ),
-            // A world nobody has played yet starts where a new world starts.
-            None => pbd_app::walking::respawn(world),
+            // A world nobody has played yet starts where a new world starts:
+            // the launch's spawn, not where the last world's player stood.
+            None => pbd_app::walking::arrive_new(world, start.direction),
         }
     }
     if let Some(pose) = pose {
@@ -1650,7 +1971,60 @@ fn load_world(world: &mut World) {
     }
     // The list shows which world is open, so it is drawn again now one is.
     world.resource_mut::<menu::SaveIndex>().set_changed();
-    info!("loaded world '{name}'");
+    if world.resource::<WorldSave>().slot().is_some() {
+        world.insert_resource(arrival::Arrival::new(&name, arrived.fresh));
+    }
+    info!(
+        "loaded world '{name}' ({})",
+        if arrived.fresh { "new" } else { "resumed" }
+    );
+    info!("WORLD_SWITCH after {}", switch_line(world));
+}
+
+/// One line of what world is open and where the player is in it, for the
+/// `WORLD_SWITCH` log (`new-world-arrival`, a measurement instrument).
+fn switch_line(world: &mut World) -> String {
+    let save = world.resource::<WorldSave>();
+    let slot = save.slot().map_or_else(
+        || "memory-only".to_string(),
+        |s| format!("'{}' ({})", s.file.name, s.id),
+    );
+    let saved = save.pose.map_or_else(
+        || "none".to_string(),
+        |p| {
+            format!(
+                "{:.1},{:.1},{:.1}",
+                p.position.x, p.position.y, p.position.z
+            )
+        },
+    );
+    let head = format!(
+        "world {slot} seed {} generator {} edits {} saved_pose {saved}",
+        save.identity.seed,
+        save.identity.generator,
+        save.edits.len()
+    );
+    let mut walkers =
+        world.query_filtered::<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>();
+    let walker = walkers.iter(world).next().map_or_else(
+        || "none".to_string(),
+        |p| {
+            // As `--at` takes it, through the one place the screen reads.
+            let place = pbd_app::place::Place::of(p.0);
+            format!(
+                "{:.1},{:.1},{:.1} (lat {:.4} lon {:.4})",
+                p.0.x, p.0.y, p.0.z, place.lat, place.lon
+            )
+        },
+    );
+    let spawn = world
+        .get_resource::<pbd_app::walking::WalkingState>()
+        .map_or_else(
+            || "none".to_string(),
+            |s| format!("{:.4?}", s.spawn_direction()),
+        );
+    let clock = world.resource::<pbd_app::sky::Sun>().clock.seconds;
+    format!("{head} walker {walker} spawn_dir {spawn} clock_s {clock:.0}")
 }
 
 /// Write the pose on a timer, and whenever a menu opens.
@@ -2833,10 +3207,11 @@ fn coast_script(
             walk.trapped += 1;
             walk.trap_at.get_or_insert(here);
             walk.anchor = Some((here, now));
-            let (lat, lon) = pbd_core::geo::lat_lon(up).degrees();
             info!(
-                "COAST_TURN stalled 1.5 s at {:.0} m walked, at {lat:.4} {lon:.4}, {} in this spot",
-                walk.walked_m, walk.trapped
+                "COAST_TURN stalled 1.5 s at {:.0} m walked, {}, {} in this spot",
+                walk.walked_m,
+                pbd_app::place::Place::of(here).line(),
+                walk.trapped
             );
         }
     }
@@ -2999,7 +3374,15 @@ fn break_script(
     if *frame < 90 || !state.active {
         return;
     }
-    tools.hold(launch.tool.unwrap_or(pbd_core::inventory::Tool::Shovel));
+    if launch.bare {
+        tools.hold(None);
+    } else {
+        let tool = launch.tool.unwrap_or(pbd_core::inventory::Tool::Shovel);
+        // A capture's world is new and owns nothing: the rig gives it the
+        // tool asked for (its save is memory-only).
+        let _ = tools.0.grant(tool, launch.tier);
+        tools.hold(tool);
+    }
     let Some(hold) = launch.break_s else {
         return;
     };

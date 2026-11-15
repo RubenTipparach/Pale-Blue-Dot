@@ -36,9 +36,18 @@ use std::sync::Mutex;
 pub struct ToolSlot(pub Equipment);
 
 impl ToolSlot {
-    /// The tool slot a world opens with: the save's, or the new world's kit.
+    /// The tool slot a world opens with: the save's; or, in a world that
+    /// never recorded one, nothing for a world made with tool crafting and
+    /// all four at the stone tier for one made before (`tool-crafting`
+    /// decision 8).
     pub fn restore(save: &WorldSave) -> Self {
-        Self(save.equipment.unwrap_or_default())
+        Self(save.equipment.unwrap_or_else(|| {
+            if save.identity.crafts_its_tools() {
+                Equipment::new_world()
+            } else {
+                Equipment::default()
+            }
+        }))
     }
 }
 
@@ -109,6 +118,7 @@ pub struct FishPlugin;
 impl Plugin for FishPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Fishery>()
+            .add_message::<crate::missions::Did>()
             .init_resource::<FishingStatus>()
             .init_resource::<ToolSlot>()
             .init_resource::<Body>()
@@ -200,6 +210,8 @@ struct Surroundings<'w, 's> {
     time: Res<'w, Time>,
     walkers: Query<'w, 's, &'static Position, With<Walker>>,
     cameras: Query<'w, 's, &'static GlobalTransform, With<WalkingCamera>>,
+    /// Steady hands (`cooking` design S5).
+    meals: Option<Res<'w, crate::kitchen::MealEffects>>,
 }
 
 /// One frame of fishing: the line, the schools, and spawning round the
@@ -211,6 +223,7 @@ fn fish(
     mut status: ResMut<FishingStatus>,
     mut hotbar: Option<ResMut<Hotbar>>,
     mut save: Option<ResMut<WorldSave>>,
+    mut did: MessageWriter<crate::missions::Did>,
 ) {
     let Some(sea) = world.sea.as_deref() else {
         return;
@@ -286,26 +299,33 @@ fn fish(
                 .fishing
                 .bite_factor(sample.cover, sample.rain_rate * 3600.0)
         });
+        // Steady hands: the line's rules eased while the effect runs.
+        let fishing = pbd_core::cooking::steadied(
+            &settings.fishing,
+            world.meals.as_deref().map_or(1.0, |m| m.steady),
+        );
         let events = fishery.line.step(
             dt,
             controls,
             &angler,
             &mut fishery.schools,
             roster,
-            &settings.fishing,
+            &fishing,
             &settings.flock,
             &water,
             crate::sea::surface_gravity(),
             factor,
         );
         for event in events {
-            report(
+            if let Some(happened) = report(
                 &mut status,
                 event,
                 roster,
                 hotbar.as_deref_mut(),
                 save.as_deref_mut(),
-            );
+            ) {
+                did.write(happened);
+            }
         }
     }
     if status.hold_s <= 0.0 {
@@ -445,14 +465,16 @@ fn try_spawn(
 }
 
 /// What a line event means to the player, and what a catch does to the
-/// hotbar and the save.
+/// hotbar and the save. What the starter missions count comes back: the
+/// float on water, and a fish landed (`starter-missions` design 15).
 fn report(
     status: &mut FishingStatus,
     event: Event,
     roster: &[Species],
     hotbar: Option<&mut Hotbar>,
     save: Option<&mut WorldSave>,
-) {
+) -> Option<crate::missions::Did> {
+    use pbd_core::missions::Kind;
     let name = |species: u16| {
         roster
             .get(species as usize)
@@ -482,10 +504,18 @@ fn report(
         ),
         Event::Caught { species, length_cm } => {
             status.say(format!("{} - {length_cm} cm", name(species)), 3.0);
-            land(species, length_cm, hotbar, save, status);
+            if land(species, length_cm, hotbar, save, status) {
+                return Some(crate::missions::Did::new(
+                    Kind::Catch,
+                    name(species).to_lowercase(),
+                    1,
+                ));
+            }
         }
+        Event::Splash => return Some(crate::missions::Did::new(Kind::Cast, "water", 1)),
         _ => {}
     }
+    None
 }
 
 /// A landed fish goes into the hotbar and the catch goes into the save, on

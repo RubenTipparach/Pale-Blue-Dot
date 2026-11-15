@@ -1,6 +1,62 @@
 use super::*;
 use crate::sites::{list_spawn, load_rules};
 
+/// `roof-speckle`: at the game's radius, no level room face in a light's
+/// reach lies within a centimetre of its band's edges as `field_lit.wgsl`'s
+/// `room_lights` measures them, in f32 and widened by the slack. With no
+/// slack the Fieldstone house's newel sconces end their bands exactly on its
+/// top ceiling and on its stair, and the faces flipped in and out of the
+/// light pixel by pixel.
+#[test]
+fn no_room_face_lies_on_a_lights_band_edge() {
+    use pbd_core::settlement::pieces::BAND_SLACK_M;
+    let site = holbrook();
+    let config = *crate::planet::terrain_config();
+    let town = lay_out(&site, &load_template("village"), &config).unwrap();
+    let laid = build(
+        &site,
+        &town,
+        None,
+        &load_kits(),
+        &|_: &str| 2.0,
+        &config,
+        sheet(&config),
+    )
+    .unwrap();
+    let on_edge = |slack: f32| {
+        let mut found = Vec::new();
+        for (lights, rooms) in laid.lights.iter().zip(&laid.rooms) {
+            for l in lights {
+                let up = l.at.normalize();
+                let edges = [-l.below_m - slack, l.above_m + slack];
+                for (name, m) in rooms {
+                    for t in m.positions.chunks(3) {
+                        let v: Vec<Vec3> = t.iter().map(|p| Vec3::from_array(*p)).collect();
+                        let n = (v[1] - v[0]).cross(v[2] - v[0]).normalize_or_zero();
+                        if n.dot(up).abs() < 0.9 {
+                            continue;
+                        }
+                        let centre = (v[0] + v[1] + v[2]) / 3.0;
+                        if (centre - l.at).length() >= l.kind.reach_m() {
+                            continue;
+                        }
+                        for p in &v {
+                            let rise = (*p - l.at).dot(up);
+                            if edges.iter().any(|e| (rise - e).abs() < 0.01) {
+                                found.push(format!("{:?} {name} rise {rise:.4}", l.kind));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        found
+    };
+    println!("faces on an edge with no slack: {}", on_edge(0.0).len());
+    let found = on_edge(BAND_SLACK_M);
+    assert!(found.is_empty(), "faces on a band's edge: {found:?}");
+}
+
 /// Holbrook, as a new world's list places it.
 fn holbrook() -> Site {
     let list = pbd_core::sites::generate(
@@ -969,8 +1025,8 @@ fn every_walled_town_lays_and_cuts_on_its_levels() {
         );
         assert_eq!(
             laid.solids.len(),
-            template.buildings.len() + template.masonry.len(),
-            "{}: every building and every cell of the wall",
+            template.buildings.len() + 12 + template.masonry.len(),
+            "{}: every building, its 12 path stairs and every cell of the wall",
             site.name
         );
         assert!(levels.len() >= 3, "{}: levels {levels:?}", site.name);
@@ -2405,4 +2461,267 @@ fn print_the_lamps_in_their_columns() {
         ground::install(None);
     });
     println!("{stood} lamps stand in their columns, {missing} do not");
+}
+
+/// `pier-landfall`: an instrument. For each harbour of the shipped seed and
+/// each of its piers, the highest ground under each of its stretches (as
+/// `harbour::pier` cuts them), across the deck's width, as the column has
+/// it (the town's where laid or eased, the planet's elsewhere, on its
+/// layer), against the deck's top. A stretch whose ground reaches the deck
+/// has its planks inside the ground.
+#[test]
+#[ignore = "instrument: the ground under each harbour pier's stretches"]
+fn print_the_ground_under_the_harbour_piers() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let cell_m = template.grid.cell_m;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, ground) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let nat = natural(&config);
+        for (i, p) in template.piers.iter().enumerate() {
+            let deck = town.terrace as f32 + p.from[1];
+            let (dx, dz) = (p.to[0] - p.from[0], p.to[2] - p.from[2]);
+            let len = (dx * dx + dz * dz).sqrt();
+            let (ux, uz) = (dx / len, dz / len);
+            let stretches = ((len / 2.2).round() as usize).max(1);
+            let mut tops = Vec::new();
+            for k in 0..stretches {
+                let (s0, s1) = (
+                    len * k as f32 / stretches as f32,
+                    len * (k + 1) as f32 / stretches as f32,
+                );
+                let mut top = f32::MIN;
+                let mut s = s0;
+                while s <= s1 + 1e-3 {
+                    for w in [-0.5f32, 0.0, 0.5] {
+                        let w = w * p.width_m;
+                        let (x, z) = (p.from[0] + ux * s - uz * w, p.from[2] + uz * s + ux * w);
+                        if let Some(d) = sea::point(&chart, &patch, x, z, cell_m) {
+                            let n = nat(d);
+                            top = top.max(ground.at(d).map_or(n, |g| g.height(n)).floor());
+                        }
+                    }
+                    s += 0.25;
+                }
+                tops.push(top - deck);
+            }
+            if tops.iter().any(|&t| t >= 0.0) {
+                let text: Vec<String> = tops.iter().map(|t| format!("{t:+.0}")).collect();
+                println!(
+                    "{} pier {i} ({len:.1} m): ground under each stretch against the deck at {deck}: {}",
+                    site.name,
+                    text.join(" ")
+                );
+                // And how the pier is cut now: each piece, its top.
+                let under = |d: Vec3| {
+                    let n = nat(d);
+                    ground.at(d).map_or(n, |g| g.height(n))
+                };
+                let terrace = town.terrace as f32;
+                let cut = pbd_core::settlement::pieces::harbour::stretches(
+                    &patch, &chart, p, cell_m, terrace, &under,
+                );
+                let text: Vec<String> = cut
+                    .iter()
+                    .map(|t| format!("{:.2}-{:.2} at {:.2}", t.s0, t.s1, t.top_m))
+                    .collect();
+                println!("   cut: {}", text.join(", "));
+            }
+        }
+    }
+}
+
+/// `pier-landfall`: on every harbour of the shipped seed, every pier
+/// stretch's planks are over the ground under it (read finer than the cut
+/// reads it): on the beach they lie on it, and over the water they stand at
+/// the template's deck, a metre over the sea.
+#[test]
+fn every_harbours_piers_lie_on_their_ground_never_in_it() {
+    use pbd_core::settlement::pieces::harbour;
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let cell_m = template.grid.cell_m;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, ground) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let nat = natural(&config);
+        let under = |d: Vec3| {
+            let n = nat(d);
+            ground.at(d).map_or(n, |g| g.height(n))
+        };
+        let terrace = town.terrace as f32;
+        let (mut lying, mut standing) = (0, 0);
+        for p in &template.piers {
+            let len = harbour::along(p, p.to[0], p.to[2]);
+            let (ux, uz) = ((p.to[0] - p.from[0]) / len, (p.to[2] - p.from[2]) / len);
+            for t in harbour::stretches(&patch, &chart, p, cell_m, terrace, &under) {
+                let (s0, s1, top) = (t.s0, t.s1, t.top_m);
+                let mut high = f32::MIN;
+                for i in 0..=40 {
+                    let s = s0 + (s1 - s0) * i as f32 / 40.0;
+                    for j in 0..=8 {
+                        let w = (j as f32 / 8.0 - 0.5) * p.width_m;
+                        let (x, z) = (p.from[0] + ux * s - uz * w, p.from[2] + uz * s + ux * w);
+                        if let Some(d) = sea::point(&chart, &patch, x, z, cell_m) {
+                            high = high.max(under(d));
+                        }
+                    }
+                }
+                assert!(
+                    top - 0.12 >= high - 1e-4,
+                    "{}: planks at {top} under the ground at {high}",
+                    site.name
+                );
+                if top > terrace + p.from[1] {
+                    lying += 1;
+                } else {
+                    assert_eq!(top, terrace + p.from[1], "{}", site.name);
+                    standing += 1;
+                }
+            }
+        }
+        println!(
+            "{}: {lying} pier stretches lie on the beach, {standing} stand on piles",
+            site.name
+        );
+        assert!(lying > 0 && standing > lying, "{}", site.name);
+    }
+}
+
+/// `path-stairs` (an instrument): where to stand for the shots of each
+/// harbour's up street, from the lane below its first street steps, (22, 19)
+/// and (23, 19), looking up the street through (22, 21) and (23, 21).
+#[test]
+#[ignore]
+fn print_the_harbours_up_street_spots() {
+    let config = *crate::planet::terrain_config();
+    let template = load_template("coast");
+    let cell_m = template.grid.cell_m;
+    for site in harbours() {
+        let town = lay_out(&site, &template, &config).unwrap();
+        let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+        let (chart, _) =
+            record::ground_of(&town, &patch, config.radius_m, natural(&config)).unwrap();
+        let point = |x: f32, z: f32| sea::point(&chart, &patch, x, z, cell_m).unwrap();
+        let between = |a: (i32, i32), b: (i32, i32)| {
+            let (ax, az) = sea::centre(a.0, a.1, cell_m);
+            let (bx, bz) = sea::centre(b.0, b.1, cell_m);
+            point((ax + bx) / 2.0, (az + bz) / 2.0)
+        };
+        let at = |d: Vec3| {
+            let (lat, lon) = pbd_core::geo::lat_lon(d).degrees();
+            format!("--at {lat:.5} {lon:.5}")
+        };
+        let yaw = |from: Vec3, to: Vec3| {
+            let up = from.normalize();
+            let base = Vec3::Y.cross(up).normalize();
+            let along = to - from;
+            let t = (along - up * along.dot(up)).normalize();
+            -base.cross(t).dot(up).atan2(base.dot(t)).to_degrees()
+        };
+        let below = between((22, 18), (23, 18));
+        let steps = between((22, 21), (23, 21));
+        let side = between((20, 20), (21, 20));
+        println!(
+            "{} up street: below {} --yaw {:.1}; beside {} --yaw {:.1}",
+            site.name,
+            at(below),
+            yaw(below, steps),
+            at(side),
+            yaw(side, steps),
+        );
+    }
+}
+
+/// `path-stairs`: every town of the shipped seed, of every kind, as a
+/// world lays it and cuts it: each riser between two of its path cells has
+/// a stair and none is left bare (no edits), and the harbours' piers stand
+/// a stair at each end of a raised stretch: two at Marenstrand's bank, and
+/// none on any other pier.
+#[test]
+fn every_towns_path_risers_have_their_stairs() {
+    use pbd_core::settlement::pieces::{harbour, steps};
+    let config = *crate::planet::terrain_config();
+    let kits = load_kits();
+    for (kind, name) in [
+        (SiteKind::Village, "village"),
+        (SiteKind::Walled, "town"),
+        (SiteKind::Harbour, "coast"),
+        (SiteKind::Desert, "desert"),
+        (SiteKind::Tundra, "tundra"),
+        (SiteKind::Jungle, "jungle"),
+    ] {
+        let template = load_template(name);
+        let cell_m = template.grid.cell_m;
+        let (mut towns, mut edges, mut stairs) = (0, 0, 0);
+        for site in sites_of(kind) {
+            let town =
+                lay_out(&site, &template, &config).unwrap_or_else(|e| panic!("{}: {e}", site.name));
+            let patch = patch_round(site.direction, config.radius_m, patch_m(site.kind));
+            let built = record::build_town(
+                &town,
+                Some(&template),
+                &patch,
+                &kits,
+                &|_: &str| 2.0,
+                config.radius_m,
+                sheet(&config),
+                natural(&config),
+            )
+            .unwrap_or_else(|e| panic!("{}: {e}", site.name));
+            assert_eq!(built.stairs_yielded, 0, "{}", site.name);
+            for r in steps::risers(&town, &template) {
+                for &(d, _) in &r.ups {
+                    assert!(
+                        built
+                            .stairs
+                            .iter()
+                            .any(|(_, c)| c.cell == r.cell && c.edges.contains(&d)),
+                        "{} {:?} edge {d}: no stair",
+                        site.name,
+                        r.cell
+                    );
+                    edges += 1;
+                }
+            }
+            stairs += built.stairs.len();
+            towns += 1;
+            if template.sea {
+                let nat = natural(&config);
+                let under = |d: Vec3| {
+                    let n = nat(d);
+                    built.ground.at(d).map_or(n, |g| g.height(n))
+                };
+                for (i, p) in template.piers.iter().enumerate() {
+                    let cut = harbour::stretches(
+                        &patch,
+                        &built.chart,
+                        p,
+                        cell_m,
+                        town.terrace as f32,
+                        &under,
+                    );
+                    let n = harbour::stairs(&cut).len();
+                    let want = if site.name == "Marenstrand" && i == 0 {
+                        2
+                    } else {
+                        0
+                    };
+                    assert_eq!(n, want, "{} pier {i}: its stairs", site.name);
+                }
+            }
+        }
+        println!("{name}: {towns} towns, {edges} risers, {stairs} path stairs");
+        let (e, s) = match name {
+            "town" => (18, 12),
+            "coast" => (12, 6),
+            _ => (0, 0),
+        };
+        assert_eq!((edges, stairs), (e * towns, s * towns), "{name}");
+    }
 }

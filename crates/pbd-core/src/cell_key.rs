@@ -23,7 +23,8 @@
 //! the ground looks exactly as it did. Only what an edit is saved and found
 //! by changes.
 
-use crate::topology::ICOSAHEDRON_FACES;
+use crate::topology::{ICOSAHEDRON_FACES, icosahedron, midpoint};
+use glam::Vec3;
 
 /// The coarsest level that carries a key: the first fine level.
 pub const FIRST_LEVEL: u8 = 8;
@@ -191,6 +192,56 @@ pub fn each_point(level: u8, mut visit: impl FnMut(Address)) {
     }
 }
 
+/// Where the point `a` names lies: a unit vector in the planet's frame.
+///
+/// The same construction as `planet_lattice`'s and `dual_sphere`'s: a point
+/// of level `L` is the normalised midpoint of the level `L - 1` edge it
+/// bisects. This descends from the face's triangle, keeping the child that
+/// holds the point, so it costs a few midpoints per level and no table.
+pub fn direction(a: Address) -> Vec3 {
+    let (vertices, faces) = icosahedron();
+    let face = faces[a.face as usize % faces.len()];
+    let mut corners = [vertices[face[0]], vertices[face[1]], vertices[face[2]]];
+    // The point's weight on each corner, in lattice steps of this triangle.
+    let mut w = a.weights();
+    let mut side = a.side();
+    loop {
+        if let Some(k) = (0..3).find(|&k| w[k] == side) {
+            return corners[k];
+        }
+        if side <= 1 {
+            return corners[0];
+        }
+        let half = side / 2;
+        let (m01, m12, m20) = (
+            midpoint(corners[0], corners[1]),
+            midpoint(corners[1], corners[2]),
+            midpoint(corners[2], corners[0]),
+        );
+        if w[0] >= half {
+            corners = [corners[0], m01, m20];
+            w[0] -= half;
+        } else if w[1] >= half {
+            corners = [m01, corners[1], m12];
+            w[1] -= half;
+        } else if w[2] >= half {
+            corners = [m20, m12, corners[2]];
+            w[2] -= half;
+        } else {
+            // The middle child, turned over: its corner opposite each side
+            // of the parent is that side's midpoint.
+            corners = [m12, m20, m01];
+            w = [half - w[0], half - w[1], half - w[2]];
+        }
+        side = half;
+    }
+}
+
+/// Where the cell with this key lies, or `None` for a number no cell has.
+pub fn key_direction(key: u32) -> Option<Vec3> {
+    unpack(key).map(direction)
+}
+
 /// How many points the lattice has at `level`: `10 * 4^level + 2`.
 pub fn point_count(level: u8) -> u64 {
     10 * (1u64 << (2 * level as u64)) + 2
@@ -343,5 +394,57 @@ mod tests {
         assert!(key(a(8)).is_some());
         assert!(key(a(11)).is_some());
         assert_eq!(key(a(12)), None);
+    }
+
+    /// A key's direction is the lattice's point: a face's corners are the
+    /// icosahedron's, an edge's middle is their midpoint, every edge address
+    /// of a point gives the same place, and neighbours are a tile apart.
+    #[test]
+    fn a_keys_direction_is_its_lattice_point() {
+        let (vertices, faces) = icosahedron();
+        let n = 1u32 << 11;
+        let at = |face: u8, i: u32, j: u32| {
+            direction(Address {
+                face,
+                level: 11,
+                i,
+                j,
+            })
+        };
+        for (f, face) in faces.iter().enumerate() {
+            let f = f as u8;
+            assert_eq!(at(f, 0, 0), vertices[face[0]]);
+            assert_eq!(at(f, n, 0), vertices[face[1]]);
+            assert_eq!(at(f, 0, n), vertices[face[2]]);
+            assert_eq!(
+                at(f, n / 2, 0),
+                midpoint(vertices[face[0]], vertices[face[1]])
+            );
+            assert_eq!(
+                at(f, n / 2, n / 2),
+                midpoint(vertices[face[1]], vertices[face[2]])
+            );
+        }
+        // Every address of an edge point lands on the same place.
+        let edge = Address {
+            face: 0,
+            level: 11,
+            i: 700,
+            j: 0,
+        };
+        let places: Vec<Vec3> = addresses(edge).into_iter().map(direction).collect();
+        assert!(places.len() >= 2);
+        assert!(places.iter().all(|p| p.distance(places[0]) < 1e-6));
+        // Neighbouring points are about a finest tile apart on the planet.
+        let step = at(3, 900, 300).distance(at(3, 901, 300)) * 4800.0;
+        assert!((2.0..4.0).contains(&step), "{step} m between neighbours");
+        let keyed = key(Address {
+            face: 3,
+            level: 11,
+            i: 900,
+            j: 300,
+        })
+        .unwrap();
+        assert_eq!(key_direction(keyed), Some(at(3, 900, 300)));
     }
 }

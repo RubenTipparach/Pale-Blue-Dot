@@ -326,6 +326,12 @@ impl WalkingState {
         (self.heading, self.pitch)
     }
 
+    /// Where [`respawn`] puts the walker: the direction this world's walker
+    /// started from (for a restored world, where its pose was).
+    pub fn spawn_direction(&self) -> Vec3 {
+        self.spawn_direction
+    }
+
     /// Point the walker at `target` while standing on `up`. The capture
     /// scripts need it; gameplay turns with the mouse.
     pub fn face(&mut self, up: Vec3, target: Vec3) {
@@ -419,22 +425,7 @@ fn setup_walking(world: &mut World) {
             let sea = world
                 .get_resource::<crate::sea::Sea>()
                 .map_or(crate::planet::terrain::PLANET_RADIUS, |sea| sea.radius);
-            let center = if config.exact_start {
-                direction.normalize()
-            } else {
-                new_world_start(ground, sea, direction)
-            };
-            // Cosmetic trunks occupy cell centers. Start four metres beside the
-            // trunk, still safely inside this cap, so the first-person view
-            // opens onto the land. An exact start (a capture's `--at`) stands
-            // where it was asked.
-            let up = if config.exact_start {
-                center
-            } else {
-                (center * ground.sample(center).radius
-                    + tangent_heading(Vec3::Y.cross(center), center) * 4.0)
-                    .normalize()
-            };
+            let up = new_world_up(ground, sea, direction, config.exact_start);
             let support = footprint(ground, up * (ground.sample(up).radius + HALF_HEIGHT)).support;
             (up * (support + HALF_HEIGHT + CONTACT_SKIN), up)
         }
@@ -773,6 +764,38 @@ pub fn find_spawn_again(world: &mut World) {
     }
 }
 
+/// Where a new world's walker stands, as a direction from the centre: the
+/// level ground nearest `direction`, four metres off the cell's trunk so the
+/// first view opens onto the land; or exactly `direction` for an exact start
+/// (a capture's `--at`). What a launch into a new world and a new world made
+/// from the saves page share (`new-world-arrival` decision 3).
+pub fn new_world_up(ground: &PlanetContact, sea_radius: f32, direction: Vec3, exact: bool) -> Vec3 {
+    if exact {
+        return direction.normalize();
+    }
+    let center = new_world_start(ground, sea_radius, direction);
+    // Cosmetic trunks occupy cell centers. Start four metres beside the
+    // trunk, still safely inside this cap.
+    (center * ground.sample(center).radius + tangent_heading(Vec3::Y.cross(center), center) * 4.0)
+        .normalize()
+}
+
+/// Stand the walker at a NEW world's spawn round `direction` (the launch's
+/// spawn direction), and make that this world's spawn for the reset key. Not
+/// the last world's: its spawn direction is where its player was standing
+/// when it was opened (`new-world-arrival`).
+pub fn arrive_new(world: &mut World, direction: Vec3) {
+    let exact = world
+        .get_resource::<WalkingConfig>()
+        .is_some_and(|c| c.exact_start);
+    let sea = world
+        .get_resource::<crate::sea::Sea>()
+        .map_or(crate::planet::terrain::PLANET_RADIUS, |sea| sea.radius);
+    let up = new_world_up(world.resource::<PlanetContact>(), sea, direction, exact);
+    world.resource_mut::<WalkingState>().spawn_direction = up;
+    place_walker(world, up, None);
+}
+
 /// Put the walker back at this world's spawn, which is what a NEW world and
 /// the reset key both want.
 pub fn respawn(world: &mut World) {
@@ -941,7 +964,7 @@ fn ride_decks(
     }
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn drive_walker(
     mut state: ResMut<WalkingState>,
     config: Res<WalkingConfig>,
@@ -961,7 +984,11 @@ fn drive_walker(
         >,
         Query<Forces, With<Walker>>,
     )>,
+    meals: Option<Res<crate::kitchen::MealEffects>>,
 ) {
+    // Stride (`cooking` design S5): sprinting and swimming are faster while
+    // it runs; walking is not.
+    let stride = meals.as_deref().map_or(1.0, |m| m.stride);
     if !state.active {
         return;
     }
@@ -983,12 +1010,15 @@ fn drive_walker(
             ground.grounded = false;
         }
         let mut speed = if state.sprinting {
-            config.sprint_speed
+            config.sprint_speed * stride
         } else {
             config.walk_speed
         };
         if wet.body {
             speed *= config.water_movement_mult;
+            if !state.sprinting {
+                speed *= stride;
+            }
         }
         // A deck's way, kept off it (`sail-the-cog` design 6), until the
         // feet are down; water takes it off as it takes a fall.
@@ -1469,6 +1499,40 @@ mod tests {
         app.cleanup();
         app.update();
         app
+    }
+
+    /// A new world made while another is open (`new-world-arrival`): the
+    /// walker of a world opened somewhere else stands, on arrival, exactly
+    /// where a launch into a new world stands it, and the reset key returns
+    /// there; not where the last world's player was.
+    #[test]
+    fn a_new_world_starts_at_the_new_world_spawn_not_the_last_worlds_pose() {
+        let spawn = FlightViewConfig::default().spawn_direction;
+        let fresh = app_with_terrain_at(PlanetContact::test_planet(5), spawn);
+        let fresh_at = {
+            let body = fresh.world().resource::<WalkingState>().body;
+            fresh.world().entity(body).get::<Position>().unwrap().0
+        };
+        // A world opened round somewhere else, as a saved pose opens one.
+        let elsewhere = Quat::from_rotation_y(0.4) * Quat::from_rotation_z(-0.3) * spawn;
+        let mut app = app_with_terrain_at(PlanetContact::test_planet(5), elsewhere);
+        let body = app.world().resource::<WalkingState>().body;
+        let was = app.world().entity(body).get::<Position>().unwrap().0;
+        assert!(
+            was.normalize().angle_between(fresh_at.normalize()) > 0.1,
+            "the last world's walker stands elsewhere"
+        );
+        arrive_new(app.world_mut(), spawn);
+        let now = app.world().entity(body).get::<Position>().unwrap().0;
+        assert!(
+            now.normalize().angle_between(fresh_at.normalize()) < 1e-4,
+            "the new world's walker stands at the new-world spawn: {now} against {fresh_at}"
+        );
+        let spawn_now = app.world().resource::<WalkingState>().spawn_direction;
+        assert!(
+            spawn_now.angle_between(fresh.world().resource::<WalkingState>().spawn_direction)
+                < 1e-5
+        );
     }
 
     #[test]

@@ -8,6 +8,7 @@
 
 use crate::saves::WorldSave;
 use bevy::prelude::*;
+use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Slots};
 use pbd_core::terrain::Material;
 
@@ -33,18 +34,34 @@ const KIT_BASE: [(Material, u16); 4] = [
 /// world is dealt the base and all of these; a saved world is dealt the ones
 /// past the version its log records. Append, never reorder: a saved version
 /// names a prefix of this table.
-const KIT_GRANTS: [&[(Material, u16)]; 2] = [
+const KIT_GRANTS: [&[(Item, u16)]; 6] = [
     // Something to see with. A kit that could dig into the dark and not light
     // it was a kit that could only dig in daylight.
-    &[(Material::Torch, 16)],
+    &[(Item::Block(Material::Torch), 16)],
     // The city's lights (`lamps-and-lanterns` task 5.4).
     &[
-        (Material::LanternPost, 8),
-        (Material::LanternWall, 8),
-        (Material::LanternHanging, 8),
-        (Material::Brazier, 4),
-        (Material::Candle, 16),
+        (Item::Block(Material::LanternPost), 8),
+        (Item::Block(Material::LanternWall), 8),
+        (Item::Block(Material::LanternHanging), 8),
+        (Item::Block(Material::Brazier), 4),
+        (Item::Block(Material::Candle), 16),
     ],
+    // Version 3 dealt a forge, coal and seeds (`farming-and-smelting`
+    // decision 9) while the forge could not be made. Emptied by
+    // `tool-crafting` decision 10: the first loop's steps are earned (the
+    // forge is made at the workbench, seeds are found in the grass and the
+    // wild), and no save outside the phase-1 branches was ever dealt it. A
+    // save that was keeps what it has; the version stays so the order holds.
+    &[],
+    // A pen's pieces (`animal-husbandry` design 12, S6): enough fence for a
+    // pen of seven cells, and its gate, with one of each to spare.
+    &[(Item::Good(Good::FENCE), 24), (Item::Good(Good::GATE), 2)],
+    // Version 5 was held for `tool-crafting`, which deals nothing: tools
+    // are made, and a new world owns none (`tool-crafting` decision 8).
+    &[],
+    // Version 6 dealt a campfire (`cooking` design S3) until the hands could
+    // make one; they can (`tool-crafting` decision 10), so it is empty.
+    &[],
 ];
 
 /// A light's own icon, as an asset path, or `None` for a block that is not
@@ -59,8 +76,40 @@ pub fn light_icon(material: Material) -> Option<&'static str> {
         Material::LanternHanging => "items/lights/lantern_hanging.png",
         Material::Brazier => "items/lights/brazier.png",
         Material::Candle => "items/lights/candle.png",
+        Material::Campfire => "items/lights/campfire.png",
         _ => return None,
     })
+}
+
+/// Something came into the player's hands, for whatever counts it (the
+/// `starter-missions` chain: "find seeds", "harvest"). Raised on the frame
+/// the durable write was accepted, never before.
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Gained {
+    pub item: Item,
+    pub count: u16,
+    pub how: How,
+}
+
+/// How a [`Gained`] came about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum How {
+    /// Turned up by digging or tilling grass.
+    Found,
+    /// Picked from a wild plant.
+    Picked,
+    /// Harvested from a crop.
+    Harvested,
+    /// Made at a station.
+    Made,
+    /// Collected from a kept animal (`animal-husbandry`): an egg, wool, milk.
+    Collected,
+}
+
+/// A seed was planted (`starter-missions`: "plant").
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Planted {
+    pub crop: pbd_core::farming::Crop,
 }
 
 /// The player's slots as a Bevy resource.
@@ -94,7 +143,15 @@ impl Hotbar {
     /// path on the frame it is dealt, so it is dealt exactly once.
     pub fn restore(save: &mut WorldSave) -> Self {
         let Some(mut slots) = save.carried.clone() else {
-            return Self::starting_kit();
+            // A new world's kit is recorded as dealt, at this version, the
+            // moment it is dealt. Before `tool-crafting` it was not, so the
+            // first line that carried the slots left the log at kit 0 and
+            // the next open dealt every grant again on top of them.
+            let kit = Self::starting_kit();
+            if !save.deal_kit(KIT_VERSION, &kit.0) {
+                warn!("starting kit: the save did not take the deal");
+            }
+            return kit;
         };
         let dealt = save.kit;
         if dealt < KIT_VERSION {
@@ -121,20 +178,20 @@ impl Hotbar {
 /// What a deal gave, and what it had no room for.
 #[derive(Debug, Default, PartialEq)]
 struct Grant {
-    given: Vec<(Material, u16)>,
-    no_room: Vec<(Material, u16)>,
+    given: Vec<(Item, u16)>,
+    no_room: Vec<(Item, u16)>,
 }
 
 /// Deal every grant past `dealt` into `slots`, into whatever room they have.
 fn grant_since(slots: &mut Slots, dealt: u32) -> Grant {
     let mut grant = Grant::default();
-    for &(material, count) in KIT_GRANTS.iter().skip(dealt as usize).copied().flatten() {
-        let left = slots.give(Item::Block(material), count);
+    for &(item, count) in KIT_GRANTS.iter().skip(dealt as usize).copied().flatten() {
+        let left = slots.give(item, count);
         if left < count {
-            grant.given.push((material, count - left));
+            grant.given.push((item, count - left));
         }
         if left > 0 {
-            grant.no_room.push((material, left));
+            grant.no_room.push((item, left));
         }
     }
     grant
@@ -145,12 +202,7 @@ mod kit_tests {
     use super::*;
 
     fn count(slots: &Slots, material: Material) -> u32 {
-        slots
-            .iter()
-            .flatten()
-            .filter(|stack| stack.item == Item::Block(material))
-            .map(|stack| u32::from(stack.count))
-            .sum()
+        slots.count(Item::Block(material))
     }
 
     /// A new world is dealt the base and every grant: the kit is one table
@@ -160,17 +212,28 @@ mod kit_tests {
     #[test]
     fn a_new_world_is_dealt_the_base_and_every_grant() {
         let kit = Hotbar::starting_kit();
-        for (material, expected) in KIT_BASE.iter().chain(KIT_GRANTS.iter().copied().flatten()) {
+        for (material, expected) in KIT_BASE.iter() {
             assert_eq!(count(&kit, *material), u32::from(*expected), "{material:?}");
         }
-        assert_eq!(KIT_VERSION, 2);
+        for (item, expected) in KIT_GRANTS.iter().copied().flatten() {
+            assert_eq!(kit.count(*item), u32::from(*expected), "{item:?}");
+        }
+        assert_eq!(KIT_VERSION, 6);
         assert!(
             kit.hotbar().all(|slot| slot.is_some()),
             "ten slots, all full"
         );
         for light in Material::LAMPS {
+            if light == Material::Campfire {
+                // Made by hand, never dealt (`tool-crafting` decision 10).
+                assert_eq!(count(&kit, light), 0);
+                continue;
+            }
             assert!(count(&kit, light) > 0, "{light:?} is in the kit");
         }
+        // No free station: the forge is made at the workbench.
+        assert_eq!(count(&kit, Material::Forge), 0);
+        assert_eq!(count(&kit, Material::Workbench), 0);
         for dug in [Material::Snow, Material::Rock, Material::Ore] {
             assert_eq!(count(&kit, dug), 0, "{dug:?} is dug, not dealt");
         }
@@ -204,7 +267,11 @@ mod kit_tests {
         save.kit = 1;
         let mut slots = the_old_kit();
         let grant = grant_since(&mut slots, 1);
-        assert_eq!(grant.given.len(), 5, "every light is dealt");
+        assert_eq!(
+            grant.given.len(),
+            7,
+            "every light, then the pen's: no free station (tool-crafting)"
+        );
         assert!(grant.no_room.is_empty());
         assert_eq!(
             slots.get(8).map(|s| s.item),
@@ -240,9 +307,55 @@ mod kit_tests {
         let mut slots = full.clone();
         let grant = grant_since(&mut slots, 1);
         assert!(grant.given.is_empty());
-        assert_eq!(grant.no_room.len(), 5, "every light is named");
+        assert_eq!(
+            grant.no_room.len(),
+            7,
+            "every light and the pen's are named"
+        );
         let restored = Hotbar::restore(&mut save);
         assert_eq!(restored.0, full, "nothing moved");
+        assert_eq!(save.kit, KIT_VERSION);
+    }
+
+    /// A world dealt kit 2 (every save before `farming-and-smelting`) is
+    /// dealt the pen's pieces once, no free station (`tool-crafting`
+    /// decision 10), and keeps all it had.
+    #[test]
+    fn a_save_from_before_farming_is_dealt_no_free_station() {
+        let mut save = WorldSave::memory_only();
+        let mut old = Slots::new();
+        old.give(Item::Block(Material::Ore), 7);
+        save.carried = Some(old);
+        save.kit = 2;
+        let restored = Hotbar::restore(&mut save);
+        assert_eq!(restored.count(Item::Block(Material::Forge)), 0);
+        assert_eq!(restored.count(Item::Block(Material::Campfire)), 0);
+        assert_eq!(restored.count(Item::Good(Good::WHEAT_SEED)), 0);
+        assert_eq!(restored.count(Item::Good(Good::FENCE)), 24);
+        assert_eq!(restored.count(Item::Block(Material::Ore)), 7);
+        assert_eq!(
+            restored.count(Item::Block(Material::Torch)),
+            0,
+            "v1 not again"
+        );
+        let again = Hotbar::restore(&mut save);
+        assert_eq!(again.count(Item::Good(Good::FENCE)), 24, "not twice");
+    }
+
+    /// A world dealt kit 5 keeps the forge it was dealt and is dealt no
+    /// campfire (`tool-crafting` decision 10: the hands make one).
+    #[test]
+    fn a_save_from_before_cooking_keeps_its_forge_and_gets_no_campfire() {
+        let mut save = WorldSave::memory_only();
+        let mut old = Slots::new();
+        old.give(Item::Block(Material::Forge), 1);
+        save.carried = Some(old);
+        save.kit = 5;
+        let restored = Hotbar::restore(&mut save);
+        assert_eq!(restored.count(Item::Block(Material::Campfire)), 0);
+        assert_eq!(restored.count(Item::Good(Good::FENCE)), 0, "v4 not again");
+        assert_eq!(restored.count(Item::Block(Material::Forge)), 1);
+        assert_eq!(restored.count(Item::Good(Good::COAL)), 0, "v3 not again");
         assert_eq!(save.kit, KIT_VERSION);
     }
 
@@ -315,6 +428,17 @@ mod kit_tests {
         ] {
             assert!(light_icon(block).is_none(), "{block:?} is not a light");
         }
+    }
+
+    /// A new world's kit is recorded as dealt, so a world played and opened
+    /// again is not dealt it a second time (`tool-crafting`).
+    #[test]
+    fn a_new_world_is_dealt_its_kit_once() {
+        let mut save = WorldSave::memory_only();
+        let first = Hotbar::restore(&mut save);
+        assert_eq!(save.kit, KIT_VERSION, "the deal is recorded");
+        let again = Hotbar::restore(&mut save);
+        assert_eq!(again.0, first.0, "and not dealt twice");
     }
 
     /// A save that spent its torches is not refilled: the deal is by version,

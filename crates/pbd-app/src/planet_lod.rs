@@ -2369,3 +2369,43 @@ mod key_tests {
         }
     }
 }
+
+/// `tool-crafting` task 1.4: the ground a new world starts on has what the
+/// hands need within 200 m of the default spawn - trees (the foliage pass's
+/// own rule, `pbd_core::flora::grows_tree`, on the ids and words the records
+/// carry), grass for fibre and earth for loose stone - so the route the core
+/// tests (`gather::a_new_world_reaches_a_stone_pick_by_hand`) can be walked.
+#[cfg(test)]
+mod tool_crafting_ground {
+    use super::*;
+
+    #[test]
+    fn the_spawn_has_trees_grass_and_earth_within_200_m() {
+        let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        assert!(surface_height(spawn) > 0.0, "the spawn is dry land");
+        let cells =
+            Lattice::default().cells_in_band(FINEST_LEVEL, spawn, 0.0, 200.0 / PLANET_RADIUS);
+        assert!(cells.len() > 1000, "{} cells", cells.len());
+        let (mut trees, mut grass, mut land) = (0, 0, 0);
+        for local in &cells {
+            let height = surface_height(local.cell.direction);
+            if height <= 0.0 {
+                continue;
+            }
+            land += 1;
+            let word = surface_code(local.cell.direction, height);
+            if matches!(word & 0xff, 2 | 3 | 7) {
+                grass += 1;
+            }
+            if pbd_core::flora::grows_tree(tree_id(local), word) {
+                trees += 1;
+            }
+        }
+        // Three branches make a workbench and a pick; the earth under any
+        // dry cell gives loose stone, the grass fibre.
+        assert!(trees >= 3, "{trees} trees within 200 m");
+        assert!(grass >= 30, "{grass} grass cells");
+        assert!(land >= 100, "{land} dry cells");
+        eprintln!("within 200 m of the spawn: {trees} trees, {grass} grass cells, {land} dry");
+    }
+}

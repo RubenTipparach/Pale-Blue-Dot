@@ -12,7 +12,7 @@
 //! Engine-free: the app hands [`Breaking::step`] the target, the button and
 //! the frame's time, and takes the block when it says so.
 
-use crate::inventory::Tool;
+use crate::inventory::{Tier, Tool};
 use crate::terrain::Material;
 use serde::{Deserialize, Serialize};
 
@@ -27,8 +27,8 @@ pub enum Class {
     Rock,
     /// Ore, the hardest.
     Ore,
-    /// Wood. No material is wood until trees can be felled
-    /// (`fishing-and-equipment` design section 5); the row is ready for it.
+    /// Wood: the workbench (`tool-crafting` decision 5), and a tree's trunk
+    /// when it is worked for logs (decision 3).
     Wood,
     /// Something placed on the ground, a torch.
     Placed,
@@ -56,16 +56,19 @@ impl Class {
             | Material::Soil
             | Material::Dirt
             | Material::Sand
-            | Material::Snow => Class::Dirt,
-            Material::Stone => Class::Stone,
+            | Material::Snow
+            | Material::Tilled => Class::Dirt,
+            Material::Stone | Material::Forge => Class::Stone,
             Material::Rock => Class::Rock,
             Material::Ore => Class::Ore,
+            Material::Workbench => Class::Wood,
             Material::Torch
             | Material::LanternPost
             | Material::LanternWall
             | Material::LanternHanging
             | Material::Brazier
-            | Material::Candle => Class::Placed,
+            | Material::Candle
+            | Material::Campfire => Class::Placed,
             Material::Air | Material::Water => return None,
         })
     }
@@ -132,6 +135,42 @@ pub struct DigSettings {
     /// With the button still held, the next block starts this long after the
     /// last one broke, s.
     pub between_s: f32,
+    /// Bare hands' speed on soft ground and placed lights, against the stone
+    /// shovel's 1.0 (`tool-crafting` decision 1): a fraction, no unit.
+    pub hand_speed: f32,
+    /// Each tier's speed, stone first (M3 section 7): the matrix's time over
+    /// this. A fraction, no unit; the stone tier is the matrix itself.
+    pub tier_speeds: [f32; 4],
+}
+
+/// What is breaking a block: bare hands, or a tool of a tier.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Digger {
+    Hands,
+    Tool(Tool, Tier),
+}
+
+/// Why a block does not break for what is breaking it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Refusal {
+    /// Hands take only soft ground and placed lights.
+    NotByHand,
+    /// The rod breaks nothing.
+    NotADiggingTool,
+    /// Ore above the tool's reach: the tier of tool it wants.
+    TierTooLow(Tier),
+    /// Air and water are not blocks.
+    NotABlock,
+}
+
+/// The ore tier of a material (M3 section 2): 0 for everything that is not
+/// ore. The ground's one ore is mixed ore, tier 1 (copper, tin and coal), so
+/// a stone tool takes it; the gate is for the ore veins of a later generator.
+pub fn ore_tier(material: Material) -> u8 {
+    match material {
+        Material::Ore => 1,
+        _ => 0,
+    }
 }
 
 impl Default for DigSettings {
@@ -144,6 +183,8 @@ impl Default for DigSettings {
             wood: ToolTimes::new(2.5, 2.0, 0.6),
             placed: ToolTimes::new(0.1, 0.1, 0.1),
             between_s: 0.15,
+            hand_speed: 0.25,
+            tier_speeds: [1.0, 1.6, 2.4, 3.6],
         }
     }
 }
@@ -177,6 +218,21 @@ impl DigSettings {
                 }
             }
         }
+        if !(self.hand_speed.is_finite() && self.hand_speed > 0.0 && self.hand_speed <= 1.0) {
+            return Err(format!(
+                "dig.hand_speed must be in (0, 1], got {}",
+                self.hand_speed
+            ));
+        }
+        let mut last = 0.0;
+        for (tier, speed) in self.tier_speeds.iter().enumerate() {
+            if !(speed.is_finite() && *speed > last && *speed <= 20.0) {
+                return Err(format!(
+                    "dig.tier_speeds[{tier}] must rise from above 0 to at most 20, got {speed}"
+                ));
+            }
+            last = *speed;
+        }
         if !(self.between_s.is_finite() && (0.0..=2.0).contains(&self.between_s)) {
             return Err(format!(
                 "dig.between_s must be in [0, 2] s, got {}",
@@ -191,6 +247,34 @@ impl DigSettings {
     /// blocks.
     pub fn secs(&self, material: Material, tool: Tool) -> Option<f32> {
         self.row(Class::of(material)?).of(tool)
+    }
+
+    /// How long `material` takes to break for `digger`, s, or why it does
+    /// not break (`tool-crafting` decisions 1 and 6): a tool's matrix time
+    /// over its tier's speed, hands the stone shovel's time over the hand
+    /// speed on soft ground and placed lights only, and ore above a tool's
+    /// reach not at all.
+    pub fn secs_by(&self, material: Material, digger: Digger) -> Result<f32, Refusal> {
+        let class = Class::of(material).ok_or(Refusal::NotABlock)?;
+        let row = self.row(class);
+        match digger {
+            Digger::Hands => match class {
+                Class::Dirt | Class::Placed => Ok(row.shovel / self.hand_speed),
+                _ => Err(Refusal::NotByHand),
+            },
+            Digger::Tool(tool, tier) => {
+                let secs = row.of(tool).ok_or(Refusal::NotADiggingTool)?;
+                let wants = ore_tier(material);
+                if wants > tier.reach() {
+                    let needed = Tier::ALL
+                        .into_iter()
+                        .find(|t| t.reach() >= wants)
+                        .unwrap_or(Tier::Steel);
+                    return Err(Refusal::TierTooLow(needed));
+                }
+                Ok(secs / self.tier_speeds[usize::from(tier.digit())])
+            }
+        }
     }
 }
 
@@ -443,6 +527,104 @@ mod tests {
         assert!(bad.validate().is_err());
         let bad = DigSettings {
             stone: ToolTimes::new(4.0, 0.0, 3.0),
+            ..Default::default()
+        };
+        assert!(bad.validate().is_err());
+    }
+
+    /// Hands take soft ground at a quarter of the stone shovel's speed, and
+    /// no rock, ore or wood (`tool-crafting` task 1.1).
+    #[test]
+    fn bare_hands_dig_soft_ground_four_times_slower_and_nothing_hard() {
+        let s = DigSettings::default();
+        let shovel = s
+            .secs_by(Material::Dirt, Digger::Tool(Tool::Shovel, Tier::Stone))
+            .unwrap();
+        let hands = s.secs_by(Material::Dirt, Digger::Hands).unwrap();
+        assert!(
+            (hands - 4.0 * shovel).abs() < 1e-6,
+            "{hands} against {shovel}"
+        );
+        for soft in [
+            Material::Grass,
+            Material::Soil,
+            Material::Sand,
+            Material::Snow,
+            Material::Tilled,
+            Material::Torch,
+        ] {
+            assert!(s.secs_by(soft, Digger::Hands).is_ok(), "{soft:?}");
+        }
+        for hard in [
+            Material::Stone,
+            Material::Rock,
+            Material::Ore,
+            Material::Forge,
+            Material::Workbench,
+        ] {
+            assert_eq!(
+                s.secs_by(hard, Digger::Hands),
+                Err(Refusal::NotByHand),
+                "{hard:?}"
+            );
+        }
+        assert_eq!(
+            s.secs_by(Material::Dirt, Digger::Tool(Tool::Rod, Tier::Iron)),
+            Err(Refusal::NotADiggingTool)
+        );
+        assert_eq!(
+            s.secs_by(Material::Water, Digger::Hands),
+            Err(Refusal::NotABlock)
+        );
+    }
+
+    /// M3 section 7: break time is the stone tier's over the tier's speed,
+    /// 1.0, 1.6, 2.4 and 3.6, and the stone tier is the matrix as it was, so
+    /// an old world digs exactly as before (`tool-crafting` task 1.3).
+    #[test]
+    fn a_tier_divides_the_time_by_its_speed() {
+        let s = DigSettings::default();
+        for material in [
+            Material::Stone,
+            Material::Rock,
+            Material::Ore,
+            Material::Dirt,
+        ] {
+            for tool in [Tool::Shovel, Tool::Pickaxe, Tool::Axe] {
+                let stone = s.secs(material, tool).unwrap();
+                for (tier, speed) in Tier::ALL.into_iter().zip([1.0, 1.6, 2.4, 3.6]) {
+                    let secs = s.secs_by(material, Digger::Tool(tool, tier)).unwrap();
+                    assert!(
+                        (secs - stone / speed).abs() < 1e-5,
+                        "{material:?} {tool:?} {tier:?}: {secs}"
+                    );
+                }
+            }
+        }
+        // M3's own row, with its hardness as the stone pick's time: stone
+        // 1.2 s at stone, 0.75 s bronze, 0.5 s iron, a third of a second steel.
+        let pick = |tier| {
+            s.secs_by(Material::Stone, Digger::Tool(Tool::Pickaxe, tier))
+                .unwrap()
+        };
+        assert!((pick(Tier::Bronze) - 0.75).abs() < 1e-6);
+        assert!((pick(Tier::Iron) - 0.5).abs() < 1e-6);
+        // Mixed ore is tier 1, inside every tier's reach.
+        for tier in Tier::ALL {
+            assert!(
+                s.secs_by(Material::Ore, Digger::Tool(Tool::Pickaxe, tier))
+                    .is_ok()
+            );
+        }
+        assert_eq!(ore_tier(Material::Ore), 1);
+        assert_eq!(ore_tier(Material::Stone), 0);
+        let bad = DigSettings {
+            tier_speeds: [1.0, 0.9, 2.4, 3.6],
+            ..Default::default()
+        };
+        assert!(bad.validate().is_err(), "a tier slower than the last");
+        let bad = DigSettings {
+            hand_speed: 0.0,
             ..Default::default()
         };
         assert!(bad.validate().is_err());

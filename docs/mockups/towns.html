@@ -127,6 +127,7 @@ body.coarse .keys,body.coarse .hint{display:none}
 
   <section class="panel town" aria-label="Town">
     <div class="townhead"><h1>Tenebris towns<span>PROTOTYPE</span></h1><button class="small" id="townToggle" aria-expanded="true" aria-controls="goto">Hide</button></div>
+    <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
     <div class="field scenefield"><label for="scene">Settlement</label>
       <select id="scene">
         <option value="town">Walled town, fields</option>
@@ -2442,6 +2443,7 @@ function makeCoast() {
     const low = TOP[idx(c, r)] - 1; TOP[idx(c, r)] = low; STEPCELL.add(idx(c, r));
     let up = 1; for (const d of [1, 2]) { const [c2, r2] = nb(c, r, d); if (TOPMAT[idx(c2, r2)] === "cobble" && TOP[idx(c2, r2)] === low + 1) { up = d; break; } }
     streetSteps(c, r, up, low);
+    AREA[idx(c, r)] = AREA[idx(c, r)] + ", steps";
   }
   // houses on the three terraces, whitewash and driftwood among the others
   const homes = [

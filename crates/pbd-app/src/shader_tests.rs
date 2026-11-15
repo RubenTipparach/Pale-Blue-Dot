@@ -309,6 +309,48 @@ fn rain_detail_is_gated_near_the_eye_in_the_new_model_only() {
     }
 }
 
+/// `sun-in-space`: the sun is one function, `sun_disc_light`, which the dome
+/// adds only from inside the shell (from outside it has fragments only where
+/// its shell is, and the sun above the rim had none) and the `SUN_DISC` quad
+/// adds from outside, through the air's extinction faded in over the
+/// `high-haze` hand-over. Its quad reaches past where the glow is visible.
+#[test]
+fn the_sun_is_drawn_from_outside_the_shell_by_its_own_quad() {
+    let src = include_str!("../../../assets/shaders/sky_atmosphere.wgsl").replace("\r\n", "\n");
+    let light = wgsl_fn_body(&src, "sun_disc_light");
+    assert!(light.contains("let glow = pow(max(cosine,0.0),1800.0)*0.55;"));
+    let quad = src.find("#ifdef SUN_DISC").expect("the SUN_DISC variant");
+    let dome = src.find("#else\n@fragment").expect("the dome's variant");
+    assert!(quad < dome && src.trim_end().ends_with("#endif"));
+    let (quad_src, dome_src) = (&src[quad..dome], &src[dome..]);
+    assert!(quad_src.contains("fn vertex(") && quad_src.contains("fn fragment("));
+    assert!(
+        dome_src.contains(
+            "    if (inside) {\n        let sun_light = sun_disc_light(cosine,camera,sun);"
+        ),
+        "the dome draws the sun from inside the shell only"
+    );
+    assert_eq!(dome_src.matches("sun_disc_light(").count(), 1);
+    for line in [
+        "if (length(camera) < sky.atmosphere.x) {",
+        "let light = sun_disc_light(clamp(dot(direction,sun),-1.0,1.0),camera,sun);",
+        "let handover = smoothstep(0.0,GROUND_HANDOVER_M,max(altitude-shell,0.0));",
+        "let through = mix(vec3<f32>(1.0),exp(-beta*depth),handover);",
+        "return vec4<f32>(light.rgb*through,0.0);",
+    ] {
+        assert!(quad_src.contains(line), "missing `{line}`");
+    }
+    // The quad's edge is where the glow has faded to nothing.
+    let reach: f32 = src
+        .split("const SUN_REACH_TAN: f32 = ")
+        .nth(1)
+        .and_then(|rest| rest.split(';').next())
+        .and_then(|v| v.parse().ok())
+        .expect("SUN_REACH_TAN");
+    let edge = 0.55 * (1.0 / (1.0 + reach * reach).sqrt()).powf(1800.0);
+    assert!(edge < 1e-5, "the glow at the quad's edge is {edge}");
+}
+
 /// `dusk-sky`: seen from the ground the dome is lit on the ground's twilight,
 /// not through the small planet's shadow, which kept high air lit to 34
 /// degrees under and drew its edge across the sky.
@@ -379,8 +421,9 @@ fn each_puff_is_hazed_once_to_its_own_distance() {
         .find("if (a < 0.004) { discard; }")
         .expect("the discard is on the plain coverage");
     let seen = puff
-        .find("let seen = a*cloud_air(eye, look, dist);")
+        .find("var air = cloud_air(eye, look, dist);")
         .expect("the air is measured to this puff, along this ray");
+    assert!(puff.contains("let seen = a*air;"));
     assert!(
         discard < seen,
         "the distances are written wherever the puff is"
@@ -410,6 +453,29 @@ fn each_puff_is_hazed_once_to_its_own_distance() {
         !composite.contains("upsampled*cloud_air("),
         "the composite must not haze the puffs a second time"
     );
+}
+
+/// `space-clouds` design 2: a puff whose ray stops on a surface is faded only
+/// by the share of the air in front of it that the air behind it, to that
+/// surface, would also hide; with the sky behind it fades as before.
+#[test]
+fn a_puff_over_a_surface_fades_only_by_the_air_it_does_not_share() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let puff = wgsl_fn_body(&src, "cloud_puff_fragment");
+    let to_puff = puff
+        .find("var air = cloud_air(eye, look, dist);")
+        .expect("the air to the puff");
+    let gate = puff
+        .find("if (far < CLOUD_FAR_CAP_M*0.999) {")
+        .expect("only short of the far cap");
+    let behind = puff
+        .find("let behind = cloud_air(in.body, look, max(far - dist, 0.0));")
+        .expect("the air from the puff to the ray's stop");
+    let mixed = puff
+        .find("air = 1.0 - (1.0 - behind)*(1.0 - air);")
+        .expect("the haze scaled by the air behind");
+    let seen = puff.find("let seen = a*air;").expect("the coverage seen");
+    assert!(to_puff < gate && gate < behind && behind < mixed && mixed < seen);
 }
 
 /// `puff-haze` design 3a, mirrored: what the puff pass's blend states and the
@@ -473,4 +539,231 @@ fn the_puff_blend_is_the_air_over_each_puff_with_no_step() {
         assert!((next - last).abs() < 0.01, "a step inside the puff");
         last = next;
     }
+}
+
+/// `water.wgsl` as Bevy's composer hands it to naga, single-sampled: its
+/// three imports replaced by those modules' items and the `MULTISAMPLED`
+/// branches taken as off. `water-lit` 3.4: the pieces tested on their own
+/// passed with a helper the module calls deleted from it; this is the whole
+/// file, with every entry point its pipelines name.
+pub(crate) fn water_source() -> String {
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let clouds: String = include_str!("../../../assets/shaders/clouds.wgsl")
+        .lines()
+        .filter(|line| !line.starts_with("#define_import_path"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut out = String::new();
+    // Inside `#ifdef MULTISAMPLED` (skipped) or its `#else` (kept).
+    let mut skipping = false;
+    for line in water.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("#import pbd::clouds::") {
+            out.push_str(&clouds);
+        } else if trimmed.starts_with("#import pbd::sea::") {
+            out.push_str(&sea_source());
+        } else if trimmed.starts_with("#import pbd::sun_shadow::") {
+            out.push_str(&sun_shadow_source());
+        } else if trimmed == "#ifdef MULTISAMPLED" {
+            skipping = true;
+        } else if trimmed == "#else" || trimmed == "#endif" {
+            skipping = false;
+        } else if trimmed.starts_with('#') {
+            panic!("water.wgsl has a directive this splice does not know: {trimmed}");
+        } else if !skipping {
+            out.push_str(line);
+        }
+        out.push('\n');
+    }
+    out
+}
+
+#[test]
+fn the_water_shader_compiles_with_the_entry_points_its_pipelines_name() {
+    let entries = validated_entry_points("water.wgsl", &water_source());
+    for entry in [
+        "vertex",
+        "fragment",
+        "compose",
+        "lens",
+        "lens_mist_pass",
+        "cloud_march_pass",
+        "cloud_resolve",
+        "clouds",
+        "cloud_puff_vertex",
+        "cloud_puff_fragment",
+        "rain",
+        "rain_half",
+        "rain_compose",
+        "overlay",
+    ] {
+        assert!(
+            entries.iter().any(|name| name == entry),
+            "water.wgsl declares {entries:?}, and a water pipeline asks for `{entry}`"
+        );
+    }
+}
+
+/// `rain-under-water`: the rain is in the air. From a camera under the sea
+/// both rain renderers draw nothing (what the eye sees of the air through the
+/// surface is the sheet's), and the CPU does not run the rain passes there.
+#[test]
+fn the_rain_volume_is_not_drawn_under_the_sea() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    assert!(src.contains("fn rain_under_water() -> bool { return view.fx.y > 0.75; }"));
+    assert!(
+        wgsl_fn_body(&src, "rain_far")
+            .contains("if (range <= 0.0 || rain_under_water()) { return 0.0; }"),
+        "the small rain gathers under the sea"
+    );
+    assert!(
+        wgsl_fn_body(&src, "rain")
+            .contains("if (range <= 0.0 || rain_under_water()) { return vec4<f32>(scene,1.0); }"),
+        "the full-size rain draws under the sea"
+    );
+    let cpu = include_str!("planet_water.rs");
+    let start = cpu.find("let rain_needed = map.is_some()").unwrap();
+    let gate = &cpu[start..start + cpu[start..].find(';').unwrap()];
+    assert!(
+        gate.contains("&& state <= 0.75"),
+        "the rain passes run under the sea"
+    );
+}
+
+/// `dusk-clouds` design 1-2: the shaders light a cloud by the core's sun and
+/// sky, number for number, the puffs and the march alike.
+#[test]
+fn clouds_are_lit_by_the_cores_sun_and_sky() {
+    let clouds = include_str!("../../../assets/shaders/clouds.wgsl").replace("\r\n", "\n");
+    // Named apart from the terrain's, which share a module with them in
+    // the planet surface's test build.
+    sun_constants_match(
+        &clouds
+            .replace("CLOUD_TAU_M", "SKY_TAU_M")
+            .replace("CLOUD_TAU", "SKY_TAU")
+            .replace("CLOUD_SUN_NOW", "SUN_NOW")
+            .replace("CLOUD_SUN_NORM", "SUN_NORM"),
+    );
+    use pbd_core::sky_light as core;
+    let vec_of = |name: &str| -> Vec<f32> {
+        let at = clouds
+            .find(&format!("const {name} = vec"))
+            .unwrap_or_else(|| panic!("{name} is gone from clouds.wgsl"));
+        let rest = &clouds[at..];
+        let open = rest.find('(').unwrap() + 1;
+        let close = rest.find(')').unwrap();
+        rest[open..close]
+            .split(',')
+            .map(|x| x.trim().parse().unwrap())
+            .collect()
+    };
+    for (name, rows) in [
+        ("CLEAR", core::CLOUD_SKY_CLEAR),
+        ("OVERCAST", core::CLOUD_SKY_OVERCAST),
+    ] {
+        for (row, part) in ["NIGHT", "HORIZON", "ZENITH"].iter().enumerate() {
+            assert_eq!(
+                vec_of(&format!("CLOUD_SKY_{name}_{part}")),
+                rows[row].to_vec(),
+                "{name} {part}"
+            );
+        }
+    }
+    assert_eq!(
+        vec_of("CLOUD_SKY_TWILIGHT"),
+        core::CLOUD_SKY_TWILIGHT.to_vec()
+    );
+    assert_eq!(vec_of("CLOUD_SKY_RISE"), core::CLOUD_SKY_RISE.to_vec());
+    assert!(clouds.contains(&format!("const CLOUD_SUN_LIFT = {};", core::CLOUD_SUN_LIFT)));
+    assert!(clouds.contains(&format!(
+        "const CLOUD_SUN_TOP_M = {:.1};",
+        core::CLOUD_SUN_TOP_M
+    )));
+    let light = wgsl_fn_body(&clouds, "cloud_light");
+    assert!(
+        light.contains("let sun_colour = cloud_sunlight(elevation, length(p) - layer.cells.w);")
+    );
+    assert!(light.contains("let sky = cloud_sky_light(elevation, local.x);"));
+    let water = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let puff = wgsl_fn_body(&water, "cloud_puff_fragment");
+    assert!(puff.contains("let sun_colour = cloud_sunlight(elevation, r - view.planet_center.w);"));
+    assert!(puff.contains("let sky = cloud_sky_light(elevation, puff.layer.z);"));
+}
+
+/// `dusk-clouds` design 3: under the puffs, with the sky behind, the scene
+/// is hidden by the puffs' own coverage and the air adds the sky's light
+/// without its stars.
+#[test]
+fn cloud_hides_the_stars() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let composite = wgsl_fn_body(&src, "clouds");
+    for line in [
+        "let upsampled = cloud_upsampled(uv, far, &at, &own);",
+        "if (view.cloud_puff_fade.w > 0.5 && far >= CLOUD_FAR_CAP_M*0.999 && own > cloud.w) {",
+        "let air_light = sky_without_stars(uv, scene);",
+        "behind = scene*(1.0-own) + cloud.rgb + air_light*(own - cloud.w);",
+    ] {
+        assert!(composite.contains(line), "missing `{line}`");
+    }
+    let sky = wgsl_fn_body(&src, "sky_without_stars");
+    assert!(sky.contains("let px = 3.0/vec2<f32>(textureDimensions(scene_color));"));
+    assert!(sky.contains("if (load_depth(at) > 1e-7) { continue; }"));
+    assert!(sky.contains("if (l < best_l) { best = c; best_l = l; }"));
+}
+
+/// `wall-foot-speckle`: the lamp bake and the sun bounce are sampled half a
+/// metre off a face, and a floor's sample sits exactly on a whole layer. In
+/// f32 at the game's radius it lands either side of that layer from point to
+/// point, which flipped `floor` between the layer under the floor and the one
+/// over it and drew dark speckle along every wall's foot. Both samplers take
+/// the altitude through `sample_layer`, and every floor sample lies within its
+/// snap.
+#[test]
+fn a_floor_reads_one_layer_of_baked_light() {
+    let src = include_str!("../../../assets/shaders/planet_surface.wgsl").replace("\r\n", "\n");
+    assert!(src.contains("const LAYER_SNAP_M: f32 = 0.01;"));
+    let snap = 0.01_f32;
+    let helper = wgsl_fn_body(&src, "sample_layer");
+    assert!(helper.contains("select(alt, whole, abs(alt - whole) < LAYER_SNAP_M)"));
+    for name in ["lamp_near", "bounce_near"] {
+        let body = wgsl_fn_body(&src, name);
+        assert!(
+            body.contains(
+                "let alt = sample_layer(length(q) - params.settings.x - COLUMN_BASE_M - 0.5);"
+            ),
+            "`{name}` samples its layer without the snap"
+        );
+    }
+    // Floor points on a patch round a direction, at whole altitudes, built in
+    // f64 and cast as an interpolated vertex position is, then measured in
+    // f32 as the shader measures them.
+    let radius = 4_800.0_f32;
+    let base = pbd_core::column::BASE_M as f32;
+    let (mut below, mut above, mut worst) = (0usize, 0usize, 0.0_f32);
+    for h in [0.0_f64, 1.0, 2.0, 7.0, 31.0] {
+        for i in 0..400 {
+            let a = 0.4 + i as f64 * 1.3e-5;
+            let b = -0.9 + (i * 7 % 400) as f64 * 1.1e-5;
+            let dir = bevy::math::DVec3::new(a.cos() * b.cos(), a.sin() * b.cos(), b.sin());
+            let p = (dir * (radius as f64 + h)).as_vec3();
+            let up = p.normalize();
+            let q = p + up * 0.5;
+            let alt = q.length() - radius - base - 0.5;
+            let whole = (h as f32) - base;
+            if alt < whole {
+                below += 1;
+            } else {
+                above += 1;
+            }
+            worst = worst.max((alt - whole).abs());
+        }
+    }
+    assert!(
+        below > 0 && above > 0,
+        "the floor's sample did not straddle its layer ({below} below, {above} above)"
+    );
+    assert!(
+        worst < snap * 0.25,
+        "a floor's sample lies {worst} m off its layer"
+    );
 }

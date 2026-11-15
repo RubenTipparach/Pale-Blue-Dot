@@ -287,6 +287,16 @@ pub struct WorldSave {
     slot: Option<Slot>,
     root: PathBuf,
     writer: SaveWriter,
+    /// Which opening of a world this is, unique for the run: what a system
+    /// that keeps state per world (`missions`) compares to see that a load
+    /// replaced the save.
+    serial: u64,
+}
+
+/// The next [`WorldSave::serial`].
+fn next_serial() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl Default for WorldSave {
@@ -312,6 +322,7 @@ impl Default for WorldSave {
             slot: None,
             root: PathBuf::from(ROOT),
             writer: SaveWriter::none(),
+            serial: next_serial(),
         }
     }
 }
@@ -385,6 +396,7 @@ impl WorldSave {
             slot: Some(slot),
             writer,
             root,
+            serial: next_serial(),
         }
     }
 
@@ -393,6 +405,11 @@ impl WorldSave {
     /// need no branch.
     pub fn memory_only() -> Self {
         Self::default()
+    }
+
+    /// Which opening of a world this is: unique for the run.
+    pub fn serial(&self) -> u64 {
+        self.serial
     }
 
     pub fn slot(&self) -> Option<&Slot> {
@@ -580,6 +597,29 @@ impl WorldSave {
         Some(last)
     }
 
+    /// Store a record of the player's and the slots after it in one line
+    /// (`farming-and-smelting` decision 4): a crop planted or harvested, a
+    /// station's job queued or collected. The kind is noted in the identity
+    /// the first time it is stored. `false`, and nothing kept, once the
+    /// writer has failed.
+    pub fn store_with_hands(
+        &mut self,
+        record: StoredRecord,
+        schema_of_kind: u32,
+        carried: &Slots,
+    ) -> bool {
+        if self.writer.failure().is_some() {
+            return false;
+        }
+        let kind = record.kind.clone();
+        let before = self.records.put(record.clone());
+        self.yields.touch_record(before.as_ref(), &record);
+        self.carried = Some(carried.clone());
+        self.writer.append(format::with_line_of(&record, carried));
+        self.note_record_kinds(&[(kind.as_str(), schema_of_kind)]);
+        true
+    }
+
     /// A world process's changes for a period, taken whole or refused whole
     /// (`world-persistence` decision 6): refused, with nothing written, if
     /// any of it would change a cell or a record field the player has.
@@ -762,6 +802,12 @@ fn replay(text: &str) -> Replayed {
                     out.yields.touch_record(before.as_ref(), &record);
                 }
                 out.records.put(record);
+            }
+            Record::Handed { record, slots } => {
+                let before = out.records.get(&record.kind, record.id).cloned();
+                out.yields.touch_record(before.as_ref(), &record);
+                out.records.put(record);
+                out.carried = Some(slots);
             }
         }
     }
@@ -950,6 +996,60 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// `tool-crafting` task 3.1: a world made by this build owns no tools,
+    /// and still owns none after it has been played and reopened; a tool it
+    /// makes comes back with its tier; a world from before (no `tools` in its
+    /// identity, no `hand` line) opens with all four at the stone tier.
+    #[test]
+    fn a_new_world_owns_no_tools_and_an_old_one_keeps_four() {
+        use crate::fish::ToolSlot;
+        use pbd_core::inventory::{Equipment, Tier, Tool};
+        let root = temporary("tools");
+        let slot = create(&root, "Tools", 5).unwrap();
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            assert!(save.identity.crafts_its_tools());
+            assert!(ToolSlot::restore(&save).tools().is_empty());
+            assert!(save.accept(
+                Edit {
+                    cell: 77,
+                    layer: 200,
+                    material: Material::Air,
+                },
+                None,
+                &Slots::new()
+            ));
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        assert!(
+            ToolSlot::restore(&reopened).tools().is_empty(),
+            "played and reopened, still nothing owned"
+        );
+        {
+            let mut save = reopened;
+            let mut kit = Equipment::new_world();
+            kit.grant(Tool::Pickaxe, Tier::Iron).unwrap();
+            kit.hold(Tool::Pickaxe);
+            assert!(save.record_hand(&kit));
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        let tools = ToolSlot::restore(&reopened);
+        assert_eq!(tools.tier(Tool::Pickaxe), Some(Tier::Iron));
+        assert_eq!(tools.held(), Some(Tool::Pickaxe));
+        assert_eq!(tools.tools(), vec![Tool::Pickaxe]);
+        // An old world: its identity written before `tools` existed.
+        let old = root.join(&list(&root)[0].id).join(IDENTITY);
+        std::fs::write(&old, "(seed: 5, generator: 4, topology: 1, keys: 1)").unwrap();
+        std::fs::remove_file(root.join(&list(&root)[0].id).join(LOG)).unwrap();
+        let old_world = WorldSave::open(root.clone(), list(&root)[0].clone());
+        assert!(!old_world.identity.crafts_its_tools());
+        let tools = ToolSlot::restore(&old_world);
+        assert_eq!(tools.tiers(), [Some(Tier::Stone); 4], "all four, stone");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// A catch and a change of tool come back from the disk: the fish in the
     /// hotbar, the field guide's count and best, and the tool in hand.
     #[test]
@@ -1121,6 +1221,95 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// NEW WORLD while a world is open (`new-world-arrival`): the open world
+    /// is written and drained, the new one is its own directory and opens
+    /// with no edits, no pose, no clock and no weather, and nothing done in
+    /// it touches a byte of the old world's files.
+    #[test]
+    fn a_new_world_made_while_one_is_open_is_its_own_and_leaves_the_old_alone() {
+        let root = temporary("new-while-open");
+        let old = create(&root, "Old", 4242).unwrap();
+        let mut carried = Slots::new();
+        carried.give(Item::Block(Material::Dirt), 1);
+        let mut open = WorldSave::open(root.clone(), old.clone());
+        assert!(open.accept(
+            Edit {
+                cell: 77,
+                layer: 200,
+                material: Material::Air,
+            },
+            None,
+            &carried
+        ));
+        open.snapshot(
+            Pose {
+                position: Vec3::new(4279.3, 2305.0, 112.1),
+                heading: Vec3::X,
+                pitch: 0.0,
+                selected: 1,
+            },
+            1440.0,
+        );
+        open.snapshot_weather(vec![1, 2, 3]);
+        open.drain();
+        let files = |id: &str| -> Vec<(PathBuf, Vec<u8>)> {
+            let mut all: Vec<_> = std::fs::read_dir(root.join(id))
+                .unwrap()
+                .map(|e| {
+                    let path = e.unwrap().path();
+                    let bytes = std::fs::read(&path).unwrap();
+                    (path, bytes)
+                })
+                .collect();
+            all.sort();
+            all
+        };
+        let before = files(&old.id);
+        // The new world is made while the old is still open, and opened in
+        // its place.
+        let new = create(&root, "Old", 4242).unwrap();
+        assert_ne!(
+            new.id, old.id,
+            "its own directory, even under the same name"
+        );
+        drop(open);
+        let mut fresh = WorldSave::open(root.clone(), new.clone());
+        assert!(fresh.edits.is_empty(), "none of the old world's edits");
+        assert!(fresh.pose.is_none(), "no pose: it starts at the spawn");
+        assert!(fresh.world_seconds.is_none(), "and on the new-world clock");
+        assert!(fresh.weather.is_none(), "under its own sky");
+        assert!(fresh.accept(
+            Edit {
+                cell: 78,
+                layer: 200,
+                material: Material::Air,
+            },
+            None,
+            &carried
+        ));
+        fresh.snapshot(
+            Pose {
+                position: Vec3::new(1.0, 2.0, 3.0),
+                heading: Vec3::X,
+                pitch: 0.0,
+                selected: 0,
+            },
+            10.0,
+        );
+        fresh.drain();
+        drop(fresh);
+        assert_eq!(files(&old.id), before, "the old world's files untouched");
+        let listed = list(&root).into_iter().find(|s| s.id == old.id).unwrap();
+        let reopened = WorldSave::open(root.clone(), listed);
+        assert_eq!(reopened.edits.for_cell(77), &[(200, Material::Air)]);
+        assert!(reopened.edits.for_cell(78).is_empty());
+        assert_eq!(
+            reopened.pose.map(|p| p.position),
+            Some(Vec3::new(4279.3, 2305.0, 112.1))
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// A new world is made with its identity, written before its world file,
     /// naming this build's versions; the list reads it back
     /// (`world-persistence` 2.1).
@@ -1245,6 +1434,39 @@ mod tests {
     /// each key; a log from before authors replays as it always did and is
     /// the player's; a torn record line at the end costs that line alone
     /// (task 3.2).
+    /// A plot planted with the hands: the record and the slots come back
+    /// together, and the identity names the kind. An old log beside it
+    /// (lines written before goods) still reads as it did.
+    #[test]
+    fn a_record_stored_with_the_hands_comes_back_with_them() {
+        use pbd_core::farming::{Crop, PLOT_KIND, PLOT_SCHEMA, Plot};
+        use pbd_core::goods::Good;
+        let root = temporary("handed");
+        let slot = create(&root, "Handed", 23).unwrap();
+        let old = "77 200 0\n";
+        std::fs::write(root.join(&slot.id).join(LOG), old).unwrap();
+        let mut slots = pbd_core::inventory::Slots::new();
+        slots.give(Item::Good(Good::WHEAT_SEED), 3);
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            let plot = StoredRecord::of(
+                PLOT_KIND,
+                5,
+                PLOT_SCHEMA,
+                &Plot::sown(60, Crop::WHEAT, 10.0),
+            );
+            assert!(save.store_with_hands(plot, PLOT_SCHEMA, &slots));
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        let plot: Plot = reopened.records.get(PLOT_KIND, 5).unwrap().read().unwrap();
+        assert_eq!(plot.crop(), Some(Crop::WHEAT));
+        assert_eq!(reopened.carried, Some(slots));
+        assert_eq!(reopened.edits.for_cell(77), &[(200, Material::Air)]);
+        assert_eq!(reopened.identity.records.get(PLOT_KIND), Some(&PLOT_SCHEMA));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn records_come_back_and_a_torn_record_line_costs_only_itself() {
         let root = temporary("records");
