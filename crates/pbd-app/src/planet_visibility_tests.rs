@@ -358,6 +358,8 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         ssr_eye: Vec4::ZERO,
         rain_near: Vec4::ZERO,
         light_ease: Vec4::new(1.0, 0.0, 0.0, 0.0),
+        night: Vec4::ZERO,
+        night_lights: [Vec4::ZERO; 2 * crate::night_lights::MAX_FAR_LIGHTS],
     }
 }
 

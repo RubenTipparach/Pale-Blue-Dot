@@ -20,3 +20,10 @@ flames run white-gold at the root to orange at the tip, as the game draws
 them. `hotbar::light_icon` names each file, and
 `kit_tests::every_light_has_its_own_icon_and_nothing_else_does` checks that
 each is a 16x16 picture on a transparent ground.
+
+## campfire.png (`cooking` design S2)
+
+Made by `tools/art/cooking_icons.py` from M27's `st_campfire.png`
+(`docs/mockups/cooking/`, the balatro-pixel-art kit, Sweaft-64), reduced
+from 32 px to 16 px by area, cut at half alpha, every pixel snapped to a
+colour of its own source.

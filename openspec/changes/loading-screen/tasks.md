@@ -44,8 +44,8 @@
 
 ## 5. Left for later
 
-- [ ] 5.1 Switching worlds from the saves page through the same screen and
-      the same build-once path (`load_world` still rebuilds in place).
+- [x] 5.1 Switching worlds from the saves page through the same screen and
+      the same build-once path (`new-world-arrival`).
 - [ ] 5.2 The perf suite counts its warm-up from `READY`.
 - [ ] 5.3 Prewarm what `LATE_PIPELINE` names (map screen, vehicles, water
       from below, rain at night) by showing each once behind the screen.

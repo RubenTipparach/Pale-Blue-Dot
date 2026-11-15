@@ -114,6 +114,9 @@ const ROOM_BOUNCE: vec3<f32> = vec3<f32>(0.30, 0.24, 0.16);
 // 22:30 stayed in the deep orange under the tonemapper's shoulder where the
 // mockup's is a warm tan (`docs/screenshots/sun-shadows`).
 const ROOM_LIGHT_GAIN: f32 = 1.0;
+// Metres a room light's band of height is widened by on both edges:
+// `pbd_core::settlement::pieces::BAND_SLACK_M` (`roof-speckle`).
+const BAND_SLACK: f32 = 0.05;
 
 // What a building's own fires and candles lay on a room face at `body`
 // facing `n` (`cities-in-the-world` decision 7a, the mockup's `blockLighter`):
@@ -137,7 +140,10 @@ fn room_lights(body: vec3<f32>, n: vec3<f32>, night: f32) -> vec3<f32> {
         }
         let rise = dot(body - at.xyz, normalize(at.xyz));
         let span = light.span;
-        if rise < span.x || rise > span.y {
+        // Widened by `BAND_SLACK`, so a face built on an edge is wholly in
+        // (`roof-speckle`): `rise` steps every half millimetre this far from
+        // the centre, and an edge on a face flipped it pixel by pixel.
+        if rise < span.x - BAND_SLACK || rise > span.y + BAND_SLACK {
             continue;
         }
         let facing = dot(to, n) / max(d, 1e-3);

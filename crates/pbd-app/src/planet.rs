@@ -268,6 +268,7 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<bounce::LampBakeField>::default(),
             ExtractResourcePlugin::<lod::DuskRelight>::default(),
         ))
+        .add_plugins(crate::night_lights::NightLightsPlugin)
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
         .init_resource::<lod::DuskRelight>()
@@ -431,11 +432,37 @@ pub fn rebuild_planet(world: &mut World, near: Vec3) {
     let started = std::time::Instant::now();
     let columns = world.resource::<crate::config::ColumnSettings>().clone();
     let scatter = world.resource::<crate::config::ScatterSettings>().clone();
-    let dusk = world.resource::<lod::DuskLamps>().lit;
     let built = {
         let edits = &world.resource::<crate::saves::WorldSave>().edits;
         build_planet(near, &columns, &scatter, edits)
     };
+    install(world, built);
+    info!(
+        "planet rebuilt for generator {} round {:?} in {:.2}s",
+        terrain::generator_version(),
+        near,
+        started.elapsed().as_secs_f64()
+    );
+}
+
+/// Put a planet the loading thread built in place of the one standing, as
+/// [`rebuild_planet`] does with one it builds: a world opened from the saves
+/// page (`new-world-arrival` decision 2). False when it was taken already.
+pub fn install_prepared(world: &mut World, mut prepared: PreparedPlanet) -> bool {
+    let Some(built) = prepared.0.take() else {
+        return false;
+    };
+    let anchor = built.anchor;
+    install(world, built);
+    info!(
+        "planet put in place for generator {} round {anchor:?}",
+        terrain::generator_version()
+    );
+    true
+}
+
+fn install(world: &mut World, built: BuiltPlanet) {
+    let dusk = world.resource::<lod::DuskLamps>().lit;
     let mut fine = Arc::unwrap_or_clone(built.fine);
     fine.columns.set_dusk(dusk);
     let fine = Arc::new(fine);
@@ -450,12 +477,6 @@ pub fn rebuild_planet(world: &mut World, near: Vec3) {
     world.insert_resource(contacts);
     world.insert_resource(lod::PlanetFine { set: fine, version });
     world.resource_mut::<lod::LodRefresh>().abandon();
-    info!(
-        "planet rebuilt for generator {} round {:?} in {:.2}s",
-        terrain::generator_version(),
-        built.anchor,
-        started.elapsed().as_secs_f64()
-    );
 }
 
 fn create_planet(
@@ -714,6 +735,12 @@ struct PlanetParams {
     // newest; z one while the other half holds the field it blends from; w
     // spare.
     light_ease: Vec4,
+    // `night-lights-from-space`: x how many far lights `night_lights` holds,
+    // yzw spare; then two vec4 a light (`night_lights::FarLights::pack`).
+    // Last, so the visibility pass, which reads a prefix of this uniform,
+    // never sees them.
+    night: Vec4,
+    night_lights: [Vec4; 2 * crate::night_lights::MAX_FAR_LIGHTS],
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1519,6 +1546,8 @@ pub(crate) struct Tunables<'w> {
     /// Whether an overlay is showing: the map hides the clouds, and so their
     /// shadows.
     maps: Res<'w, weather_maps::WeatherMapsNow>,
+    /// The night side's far lights (`night-lights-from-space`).
+    far: Option<Res<'w, crate::night_lights::FarLights>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1601,6 +1630,13 @@ fn prepare_views(
         trace!(
             "planet view {entity}: camera {camera_position:?}, lod player {:?}, base {} fine {:?}",
             lod.player, planet.base_count, planet.counts
+        );
+        let (night, night_lights) = tunables.far.as_ref().map_or(
+            (
+                Vec4::ZERO,
+                [Vec4::ZERO; 2 * crate::night_lights::MAX_FAR_LIGHTS],
+            ),
+            |far| far.pack(sun.direction(), camera_position, PLANET_RADIUS),
         );
         let params = PlanetParams {
             clip_from_body,
@@ -1770,6 +1806,8 @@ fn prepare_views(
                 planet.light_from_s,
                 clock.0,
             ),
+            night,
+            night_lights,
             // w: there is a history to read, so not while the capture is off.
             ssr_eye: existing.as_ref().map_or(Vec4::ZERO, |gpu| {
                 gpu.last_camera.extend(if lighting.reflect_capture_on() {

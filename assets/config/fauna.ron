@@ -74,6 +74,8 @@
                 id: "minnow",
                 name: "Minnow",
                 from: Tenebris("Fish"),
+                class: Fish,
+                status: WildOnly,
                 water: [
                     River,
                     Shallows,
@@ -101,6 +103,8 @@
                 id: "silverfin",
                 name: "Silverfin",
                 from: New,
+                class: Fish,
+                status: WildOnly,
                 water: [
                     Shallows,
                     Shelf,
@@ -128,6 +132,8 @@
                 id: "perch",
                 name: "Banded perch",
                 from: New,
+                class: Fish,
+                status: WildOnly,
                 water: [
                     River,
                 ],
@@ -154,6 +160,8 @@
                 id: "ray",
                 name: "Ray",
                 from: Tenebris("FlatFish"),
+                class: Fish,
+                status: WildOnly,
                 water: [
                     Shallows,
                     Shelf,
@@ -181,6 +189,8 @@
                 id: "eel",
                 name: "Eel",
                 from: Tenebris("LongFish"),
+                class: Fish,
+                status: WildOnly,
                 water: [
                     River,
                     Shallows,
@@ -208,6 +218,8 @@
                 id: "reef",
                 name: "Reef fish",
                 from: Tenebris("LargeFish"),
+                class: Fish,
+                status: WildOnly,
                 water: [
                     Shallows,
                 ],
@@ -234,6 +246,8 @@
                 id: "deepback",
                 name: "Deepback",
                 from: New,
+                class: Fish,
+                status: WildOnly,
                 water: [
                     Shelf,
                     Deep,
@@ -261,6 +275,8 @@
                 id: "serpent",
                 name: "Sea serpent",
                 from: Tenebris("SerpentFish"),
+                class: Fish,
+                status: WildOnly,
                 water: [
                     Deep,
                 ],

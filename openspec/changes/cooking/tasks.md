@@ -43,3 +43,11 @@ against what it would cost.
 ## 8. Kitchens in the game (on request, after approval)
 
 - [ ] 8.1 Station models and their lights; kitchens in towns (the bakery, the inn's kitchen). Verify: captures by day and at night; `tools/perf_suite.py` before and after on the owner's hardware, since each oven and fire is a lamp.
+
+## 9. The first playable slice (design S1 to S8, the owner's go-ahead 2026-11-14)
+
+- [x] 9.1 Dishes as goods rows; `cooking.ron` with recipes, effects and pending rows; the kitchen's recipes in the one recipe book; any fish at queue time. Verify: core tests that the shipped file resolves, that only awaited goods make a recipe pending, that any fish is taken.
+- [x] 9.2 `Material::Campfire` (code 21): a light, a station, the seventh lamp kind drawn by the column pass; kit v6 deals one; the `campfire` hand recipe. Verify: material, lamp and save-code tests; the shader declares `LAMP_CAMPFIRE`; prewarm with no `LATE_PIPELINE`.
+- [x] 9.3 The campfire's panel; collecting raises `Cooked` and `Gained`. Verify: a capture of a fish cooking.
+- [x] 9.4 Eating: right button with a dish selected; three effects, stride, steady hands and keen wired; a `meal` record in a `with` line; buff icons over the hotbar; `Ate`. Verify: core tests for the effect rules and the record round trip; a capture after eating.
+- [x] 9.5 Captures: a lit campfire by day and at night, a fish cooking, flatbread from wheat, eating with the effect shown, in `docs/screenshots/cooking/`.

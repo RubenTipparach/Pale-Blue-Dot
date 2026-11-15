@@ -1,0 +1,13 @@
+// Tier 0 off the ground (pbd_core::gather, `tool-crafting` decisions 2 and
+// 3). A find is picked by the cell and layer, so a cell always answers the
+// same, and a placed block turns up nothing.
+//
+// The code defaults written out; a test holds the two together.
+(
+    // Dug grass gives plant fibre in one cell in this many.
+    fibre_one_in: 3,
+    // Dug dirt, soil and sand give loose stone in one cell in this many.
+    stone_one_in: 3,
+    // The most logs a tree gives an axe, counting the branch a hand took.
+    axe_logs: 4,
+)

@@ -47,6 +47,8 @@ struct Params {
     ssr_eye: vec4<f32>,        // and its eye; w one once there is a history
     rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m
     light_ease: vec4<f32>,     // `baked-light-ease` 7.3: x the light field's newest half blended in 0..1, y that half, z one while the other is blended from
+    night: vec4<f32>,          // `night-lights-from-space`: x how many far lights `night_lights` holds
+    night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -244,6 +246,7 @@ const LAMP_WALL: u32 = 2u;
 const LAMP_HANGING: u32 = 3u;
 const LAMP_BRAZIER: u32 = 4u;
 const LAMP_CANDLE: u32 = 5u;
+const LAMP_CAMPFIRE: u32 = 6u;
 // The column pass's lamps are their own draw kind, so the fragment colours
 // them from the part (iron, wax, glass, flame) rather than from the layer's
 // material, which for a lamp's cell is nothing that looks like a lamp.
@@ -252,6 +255,8 @@ const KIND_LAMP: u32 = 5u;
 const LAMP_IRON_CODE: u32 = 240u;
 const LAMP_WAX_CODE: u32 = 241u;
 const LAMP_WOOD_CODE: u32 = 243u;
+// A campfire's ring of stones (`cooking` design S2).
+const LAMP_STONE_CODE: u32 = 245u;
 // A lantern's glass while it is out: dark panes in the iron frame.
 const LAMP_GLASS_CODE: u32 = 242u;
 // What a lit part carries in the block channel instead of a level, so the
@@ -270,6 +275,9 @@ const GLOW_LIT_BIT: u32 = 0x20000000u;
 // A glowing flower's head by day: pale, and cooler than the white and warm
 // blooms, so the species is known before dark.
 const BLOOM_CODE: u32 = 244u;
+// How bright a glowing flower's head burns: a quarter of what it was, the
+// owner's "1/4 brightness on the flower lights" (`night-lights-from-space`).
+const GLOW_HEAD_GAIN: f32 = 0.25;
 // A flame also carries how far up it is, 0 at its root and 1 at its tip, as
 // `LAMP_FLAME + FLAME_RISE * rise`, so it shades from root to tip without a
 // varying of its own.
@@ -1067,7 +1075,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     var half = vec3(0.);
                     // A brazier's and a candle's light is a bare flame; the
                     // three lanterns' is lit glass in an iron frame.
-                    let flame = which == LAMP_BRAZIER || which == LAMP_CANDLE;
+                    let flame = which == LAMP_BRAZIER || which == LAMP_CANDLE || which == LAMP_CAMPFIRE;
                     var code = LAMP_IRON_CODE;
                     if box == 1u && !flame { code = LAMP_GLASS_CODE; }
                     let glow = box == 1u && lamp_lit(rec);
@@ -1084,6 +1092,11 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                         // An iron basket on its stand, and the fire in it.
                         if box == 0u { centre = axis*(foot+0.3); half = vec3(0.26,0.26,0.3); }
                         else { centre = axis*(foot+0.82); half = vec3(0.17,0.17,0.22); }
+                    } else if which == LAMP_CAMPFIRE {
+                        // A low ring of stones, wide on the ground, and the
+                        // fire on it (`cooking` design S2).
+                        if box == 0u { centre = axis*(foot+0.09); half = vec3(0.40,0.40,0.09); code = LAMP_STONE_CODE; }
+                        else { centre = axis*(foot+0.42); half = vec3(0.19,0.19,0.24); }
                     } else {
                         if box == 0u { centre = axis*(foot+0.12); half = vec3(0.045,0.045,0.12); code = LAMP_WAX_CODE; }
                         else { centre = axis*(foot+0.29); half = vec3(0.022,0.022,0.05); }
@@ -1528,6 +1541,14 @@ fn tileset_slot(biome: u32) -> u32 {
 const DIRT_CODE = 10u;
 const GRASS_SIDE_CODE = 11u;
 const SNOW_SIDE_CODE = 12u;
+// `farming-and-smelting`: tilled soil and a station block are materials of
+// their own, drawn from one sheet wherever they lie: the fields sheet's
+// tilled soil, the mountains sheet's slate bricks. `planet_terrain.rs`'s
+// TILLED and FORGE, and the biomes' order in `Biome`; a test holds them.
+const TILLED_CODE = 14u;
+const FORGE_CODE = 15u;
+const FIELDS_BIOME = 2u;
+const MOUNTAINS_BIOME = 6u;
 // What the side tile averages to. A face seen from far enough away fades to
 // it, exactly as a cap fades to its flat base, because a point-sampled tile
 // at range is shimmer rather than detail. The earth is two thirds of the tile
@@ -1540,6 +1561,8 @@ const GROUND_MEAN = vec3(0.466,0.342,0.255);
 // themselves, and `params.ground` carries its two depths, so the rule is
 // written twice and its numbers have one source.
 fn face_code(cap: u32, depth: f32) -> u32 {
+    // A furrow's side is the earth it was turned from.
+    if cap == TILLED_CODE { return DIRT_CODE; }
     if depth <= params.ground.x {
         // Sward, jungle and marsh all fade into earth; snow fades into it too,
         // which is Tenebris's `dirt_snow`. Sand, stone and earth show their own
@@ -1887,12 +1910,24 @@ fn column_pair(q: vec3<f32>, slot: u32) -> vec3<f32> {
     let w = 0.5*(1.0 - smoothstep(0.0, 0.8, first_score - second_score));
     return vec3(f32(first), f32(second), w);
 }
+// A sample's altitude in layers, snapped to the whole layer when it lies
+// within `LAYER_SNAP_M` of one (`wall-foot-speckle`). A floor's sample half a
+// metre up sits exactly on a whole layer, and at 4,800 m `length` steps every
+// 0.49 mm, so `floor` flipped from pixel to pixel between the layer under the
+// floor and the one over it. Where `column_pair` blends in a wall's column the
+// two differ (the wall's rock is empty in the bake), and the flip drew dark
+// speckle along every wall's foot.
+const LAYER_SNAP_M: f32 = 0.01;
+fn sample_layer(alt: f32) -> f32 {
+    let whole = round(alt);
+    return select(alt, whole, abs(alt - whole) < LAYER_SNAP_M);
+}
 // The bounce half a metre off a face, between the two layers it falls
 // between; a layer that is rock (none) gives way to the other.
 fn bounce_near(position: vec3<f32>, n: vec3<f32>, slot: u32) -> vec3<f32> {
     let q = position + n*0.5;
     let pair = column_pair(q, slot);
-    let alt = length(q) - params.settings.x - COLUMN_BASE_M - 0.5;
+    let alt = sample_layer(length(q) - params.settings.x - COLUMN_BASE_M - 0.5);
     if alt < 0.0 { return vec3(0.0); }
     let l0 = u32(floor(alt));
     let f = fract(alt);
@@ -1944,7 +1979,7 @@ fn lamp_cell(half: u32, slot: u32, layer: u32, p: vec3<f32>, n: vec3<f32>) -> ve
 fn lamp_near(half: u32, position: vec3<f32>, n: vec3<f32>, slot: u32) -> vec4<f32> {
     let q = position + n*0.5;
     let pair = column_pair(q, slot);
-    let alt = length(q) - params.settings.x - COLUMN_BASE_M - 0.5;
+    let alt = sample_layer(length(q) - params.settings.x - COLUMN_BASE_M - 0.5);
     if alt < 0.0 { return vec4(0.0, 0.0, 0.0, -1.0); }
     let l0 = u32(floor(alt));
     let here = lamp_column(half, u32(pair.x), l0, fract(alt), position, n);
@@ -2192,10 +2227,93 @@ fn reflect_gather(@builtin(position) at: vec4<f32>) -> GatherOut {
 }
 
 // The distance haze and the limb, the last of every terrain fragment.
+// ---- `night-lights-from-space`: the night side's far lights -------------
+//
+// Each settlement, and each group of the player's lights past the threshold,
+// is a warm cluster of points over a soft glow, added to the ground before
+// its haze (`finish`), so the clouds drawn over the ground hide it. The CPU
+// decides each light's strength now (the sky's night term there, gone near
+// the camera where the town itself stands): `night_lights::FarLights::pack`.
+var<private> far_glow: vec3<f32> = vec3<f32>(0.0);
+const FAR_LIGHT_TINT: vec3<f32> = vec3<f32>(1.0, 0.70, 0.36);
+// How bright a point of a light of strength one is, HDR.
+const FAR_LIGHT_GAIN: f32 = 3.0;
+// A point's own size, metres; a pixel's footprint widens it.
+const FAR_POINT_M: f32 = 2.5;
+// The share of a town's grid cells, at its centre, that hold a lit point.
+const FAR_LIT_SHARE: f32 = 0.5;
+// The glow under the points, as a share of a point: what a town is from so
+// far off that its points are under a pixel.
+const FAR_GLOW_SHARE: f32 = 0.02;
+fn far_night_lights(position: vec3<f32>, foot: f32) -> vec3<f32> {
+    let count = min(u32(params.night.x), 64u);
+    if count == 0u { return vec3(0.0); }
+    // Not under the sea: the water drawn over a harbour's quay would tint
+    // its lights as the seabed.
+    if length(position) < params.water_absorption.w { return vec3(0.0); }
+    let radial = normalized(position);
+    // A point's blob: its own size, or 1.5 pixels where that is wider. A
+    // widened point is dimmer by as much, so a far town reads as sparks.
+    let blob = max(FAR_POINT_M, foot*1.5);
+    let dilute = FAR_POINT_M/blob;
+    var sum = 0.0;
+    for (var i = 0u; i < count; i++) {
+        let a = params.night_lights[2u*i];
+        let c = dot(radial, a.xyz);
+        if c < a.w { continue; }
+        let b = params.night_lights[2u*i + 1u];
+        let radius = max(b.x, 1.0);
+        let spacing = max(b.w, 1.0);
+        let seed = u32(b.z);
+        // The light's tangent plane, metres from its centre.
+        let up = a.xyz;
+        let axis = select(vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0), abs(up.y) > 0.9);
+        let e1 = normalized(cross(axis, up));
+        let e2 = cross(up, e1);
+        let off = (radial - up*c)*params.settings.x;
+        let uv = vec2(dot(off, e1), dot(off, e2));
+        let rr = length(uv)/radius;
+        // Gone at the edge of its reach, so it never ends on a ring.
+        let edge = 1.0 - smoothstep(0.75, 1.0, sqrt(max(1.0 - c, 0.0)/max(1.0 - a.w, 1e-9)));
+        // Up close, the points themselves: one at most in each cell of the
+        // grid, by the cell's hash, likelier toward the centre and in some
+        // quarters (blocks of four cells) than others, so a town is ragged
+        // rather than a disc.
+        var points = 0.0;
+        let base = floor(uv/spacing);
+        for (var dy = -1; dy <= 1; dy++) {
+            for (var dx = -1; dx <= 1; dx++) {
+                let cell = base + vec2(f32(dx), f32(dy));
+                let ci = vec2<i32>(cell);
+                let h = hash((seed*0x9e3779b9u) ^ (bitcast<u32>(ci.x)*0x85ebca6bu)
+                    ^ (bitcast<u32>(ci.y)*0xc2b2ae35u));
+                let q = hash((seed*0x27d4eb2fu) ^ (bitcast<u32>(ci.x >> 2u)*0x165667b1u)
+                    ^ (bitcast<u32>(ci.y >> 2u)*0xd3a2646cu));
+                let quarter = 0.25 + f32(q & 1023u)/1023.0;
+                let cr = length((cell + 0.5)*spacing)/radius;
+                if f32(h & 1023u)/1023.0 > FAR_LIT_SHARE*quarter*exp(-2.5*cr*cr) { continue; }
+                let at = (cell + vec2(f32((h >> 10u) & 255u), f32((h >> 18u) & 255u))/255.0)*spacing;
+                let d = length(uv - at)/blob;
+                points += (0.6 + 0.8*f32((h >> 26u) & 63u)/63.0)*exp(-2.0*d*d);
+            }
+        }
+        // From afar, where a pixel holds several cells, what they average to.
+        let mean = FAR_LIT_SHARE*0.75*exp(-2.5*rr*rr)*1.5708*(blob/spacing)*(blob/spacing);
+        let p = mix(points, mean, smoothstep(0.5, 1.5, blob/spacing));
+        sum += b.y*edge*(p*dilute + FAR_GLOW_SHARE*exp(-4.0*rr*rr));
+    }
+    if sum <= 0.0 { return vec3(0.0); }
+    // A deck over the light hides most of it, by the cover the weather maps
+    // hold there, before the clouds pass draws the deck itself over it.
+    let cover = textureSampleLevel(weather_cloud, weather_sampler, radial, 0.0).x;
+    return FAR_LIGHT_TINT*(FAR_LIGHT_GAIN*sum*(1.0 - 0.97*smoothstep(0.2, 0.85, cover)));
+}
+
 fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
           distance_to_camera: f32, sun_elevation: f32, daylight: f32, cover: f32,
           skylight: f32) -> vec4<f32> {
-    var color = lit;
+    // The far lights go under the haze like the ground they stand on.
+    var color = lit + far_glow;
     // Tenebris-style limb and distance haze, all in the same body-local frame.
     let altitude = max(length(params.camera.xyz)-params.settings.x,0.);
     let air = exp(-altitude/1050.);
@@ -2281,6 +2399,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let sun = params.sun.xyz;
     let toward_camera = normalized(params.camera.xyz-input.position);
     let distance_to_camera = distance(input.position,params.camera.xyz);
+    far_glow = far_night_lights(input.position, foot);
     let sun_elevation = dot(radial,sun);
     let daylight = smoothstep(-0.13,0.20,sun_elevation);
     // Overcast: the cover over the player takes the sun down by
@@ -2360,6 +2479,9 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         if abs(facing) < 0.5 {
             if grassy(own) { code = GRASS_SIDE_CODE; }
             if own == 6u { code = SNOW_SIDE_CODE; }
+            if own == TILLED_CODE { code = DIRT_CODE; }
+        } else if facing < -0.5 && own == TILLED_CODE {
+            code = DIRT_CODE;
         } else if facing < -0.5 && grassy(own) {
             code = DIRT_CODE;
         }
@@ -2383,6 +2505,10 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     if code==7u { base=vec3(0.32,0.36,0.22); }
     if code==8u { base=vec3(0.16,0.105,0.055); tile=vec2(2.,1.); }
     if code==9u { base=vec3(0.085,0.24,0.060); tile=vec2(0.,2.); }
+    if code==14u { base=vec3(0.36,0.25,0.16); tile=vec2(2.,3.); }
+    if code==15u { base=vec3(0.30,0.31,0.33); tile=vec2(1.,3.); }
+    if code==TILLED_CODE { slot = tileset_slot(FIELDS_BIOME); }
+    if code==FORGE_CODE { slot = tileset_slot(MOUNTAINS_BIOME); }
     if code==6u || code==SNOW_SIDE_CODE { slot = u32(params.ground.z); }
     // A face is drawn in its tile's COLOURS - the grass top is the grass art,
     // a wall's first metre is the sod-into-earth transition - and fades at
@@ -2394,7 +2520,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // underneath: three pictures, none of them a tint.
     var far = base;
     if code>=LAMP_IRON_CODE { tile = vec2(3.,0.); }
-    if code>=DIRT_CODE && code<LAMP_IRON_CODE {
+    if code>=DIRT_CODE && code<=SNOW_SIDE_CODE {
         tile = vec2(2.,0.);
         if code>=GRASS_SIDE_CODE { tile = vec2(1.,0.); }
         far = GROUND_MEAN;
@@ -2414,6 +2540,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         var part = vec3(0.16, 0.15, 0.14);
         if cap == LAMP_WAX_CODE { part = vec3(0.86, 0.80, 0.66); }
         if cap == LAMP_WOOD_CODE { part = vec3(0.36, 0.22, 0.12); }
+        if cap == LAMP_STONE_CODE { part = vec3(0.44, 0.42, 0.39); }
         if cap == LAMP_GLASS_CODE && !lantern_frame(input.uv, up) { part = vec3(0.20, 0.25, 0.27); }
         albedo = part*(0.75 + 0.5*grain);
     }
@@ -2503,7 +2630,7 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // A glowing flower's head at night: its own cool light, whatever the
     // field around it holds.
     if lamp > LAMP_BLOOM - 0.25 {
-        color = vec3(0.62, 1.0, 0.88)*(0.85 + 0.3*grain);
+        color = vec3(0.62, 1.0, 0.88)*(0.85 + 0.3*grain)*GLOW_HEAD_GAIN;
     } else if input.kind == KIND_LAMP && lamp > LAMP_PANES - 0.5 {
         if lamp > LAMP_FLAME - 0.5 {
             let height = clamp((lamp - LAMP_FLAME)/FLAME_RISE, 0.0, 1.0);

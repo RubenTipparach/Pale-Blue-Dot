@@ -51,7 +51,9 @@ Where it stalled is not yet known.
 3. Before-and-after shots in the passage of a walled town and a tundra camp,
    for the owner.
 4. The riser inside the north gate is recorded here. A stair would change the
-   template's look, so it is asked about with shots, not made.
+   template's look, so it is asked about with shots, not made. **Answered
+   (G1), by the owner's rule of 2026-11-14:** "where theres a step on a path
+   there should be staris". Built in `path-stairs`.
 
 ## Not in this change
 

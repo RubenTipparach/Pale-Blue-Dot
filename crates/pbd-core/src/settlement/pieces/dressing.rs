@@ -185,7 +185,8 @@ fn on_pier(p: &Pier, x: f32, z: f32) -> bool {
 }
 
 /// What a thing at the mockup's `(x, y, z)` stands on in the game, metres
-/// over the radius: the highest of a pier's deck under it and the ground
+/// over the radius: the highest of a pier's deck under it (its stretch's
+/// planks, on the beach where they lie on it, `pier-landfall`) and the ground
 /// that is no more than [`STAND_OVER_M`] over the mockup's own height, or
 /// the ground where nothing is. `ground` is the ground's height at a
 /// direction, the town's where it is laid.
@@ -207,7 +208,11 @@ pub fn stand(
         .piers
         .iter()
         .filter(|p| on_pier(p, x, z))
-        .map(|p| terrace_m + p.from[1])
+        .filter_map(|p| {
+            let cell_m = template.grid.cell_m;
+            let cut = super::harbour::stretches(patch, chart, p, cell_m, terrace_m, ground);
+            super::harbour::top_at(&cut, super::harbour::along(p, x, z))
+        })
         .chain([floor])
         .filter(|&h| h <= limit)
         .fold(None, |best: Option<f32>, h| {

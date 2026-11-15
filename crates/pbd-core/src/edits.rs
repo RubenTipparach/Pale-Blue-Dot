@@ -40,6 +40,9 @@ pub struct Edit {
 #[derive(Clone, Debug, Default)]
 pub struct Edits {
     cells: HashMap<u32, Vec<(u16, Material)>>,
+    /// Bumped by every [`Edits::set`]: what a thing derived from the edits
+    /// (the player's far lights) compares to know it is stale.
+    revision: u64,
 }
 
 impl Edits {
@@ -57,6 +60,12 @@ impl Edits {
         self.cells.values().map(Vec::len).sum()
     }
 
+    /// How many changes have been recorded: different after every
+    /// [`Edits::set`], so anything derived from the edits can tell it is stale.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     pub fn is_empty(&self) -> bool {
         self.cells.is_empty()
     }
@@ -66,6 +75,7 @@ impl Edits {
     /// from, so a cell dug and refilled a hundred times is two entries, not a
     /// hundred, and its position in the order does not drift.
     pub fn set(&mut self, edit: Edit) {
+        self.revision += 1;
         let layers = self.cells.entry(edit.cell).or_default();
         match layers.iter_mut().find(|(layer, _)| *layer == edit.layer) {
             Some(slot) => slot.1 = edit.material,

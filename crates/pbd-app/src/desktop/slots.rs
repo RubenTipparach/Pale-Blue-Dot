@@ -72,12 +72,26 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         Material::Snow => one(snow_slot(), 0., 0.),
         Material::Ore => one(home(Biome::Fields), 0., 1.),
         Material::Water => one(home(Biome::Ocean), 2., 2.),
+        // The fields sheet's own tilled soil over its earth, as the ground
+        // draws it (`farming-and-smelting` decision 2).
+        Material::Tilled => BlockArt {
+            sheet: home(Biome::Fields),
+            top: Vec2::new(2., 3.),
+            side: Vec2::new(2., 0.),
+            under: Vec2::new(2., 0.),
+        },
+        // Slate bricks all round (decision 8).
+        Material::Forge => one(home(Biome::Mountains), 1., 3.),
+        // Cut oak boards (`tool-crafting` decision 5); its slot draws M3's
+        // own picture, so this is only the floating drop's face.
+        Material::Workbench => one(home(Biome::Fields), 1., 3.),
         Material::Torch
         | Material::LanternPost
         | Material::LanternWall
         | Material::LanternHanging
         | Material::Brazier
-        | Material::Candle => return None,
+        | Material::Candle
+        | Material::Campfire => return None,
     })
 }
 
@@ -108,6 +122,15 @@ pub struct ItemIcons {
     pub lights: Vec<Handle<Image>>,
     /// The roster's names, by roster index, for a fish's tooltip.
     pub fish_names: Vec<String>,
+    /// Every good's icon, in goods-table order (`pbd_core::goods`).
+    pub goods: Vec<Handle<Image>>,
+    /// The forge's own picture, M3's, for its block in a slot.
+    pub forge: Handle<Image>,
+    /// The workbench's, M3's (`tool-crafting`).
+    pub workbench: Handle<Image>,
+    /// Each tool at stone, bronze and iron, in `Tool::ALL` order; steel
+    /// draws as iron until it is made. The rod's three are the rod.
+    pub tiered: Vec<[Handle<Image>; 3]>,
 }
 
 impl ItemIcons {
@@ -118,6 +141,28 @@ impl ItemIcons {
     /// What the tool slot shows for what is in hand: a tool, or bare hands.
     pub fn in_hand(&self, held: Option<pbd_core::inventory::Tool>) -> Handle<Image> {
         held.map_or_else(|| self.hand.clone(), |tool| self.tool(tool))
+    }
+
+    /// A tool's picture at its tier (`tool-crafting`).
+    pub fn tool_at(
+        &self,
+        tool: pbd_core::inventory::Tool,
+        tier: pbd_core::inventory::Tier,
+    ) -> Handle<Image> {
+        let k = usize::from(tier.digit()).min(2);
+        self.tiered
+            .get(tool.index())
+            .map_or_else(|| self.tool(tool), |row| row[k].clone())
+    }
+
+    /// What the tool slot shows for the tool in hand at its tier.
+    pub fn in_hand_at(&self, equipment: &pbd_core::inventory::Equipment) -> Handle<Image> {
+        match equipment.held() {
+            Some(tool) => equipment
+                .tier(tool)
+                .map_or_else(|| self.tool(tool), |tier| self.tool_at(tool, tier)),
+            None => self.hand.clone(),
+        }
     }
 }
 
@@ -151,6 +196,20 @@ pub fn load_icons(
         hand: assets.load(pbd_app::fish::HAND_ICON),
         lights,
         fish_names,
+        goods: pbd_core::goods::Good::all()
+            .map(|good| assets.load(good.icon()))
+            .collect(),
+        forge: assets.load("items/stations/forge.png"),
+        workbench: assets.load("items/stations/workbench.png"),
+        tiered: pbd_core::inventory::Tool::ALL
+            .iter()
+            .map(|tool| {
+                ["stone", "bronze", "iron"].map(|tier| match tool {
+                    pbd_core::inventory::Tool::Rod => assets.load(pbd_app::fish::tool_icon(*tool)),
+                    _ => assets.load(format!("items/tools/{tier}-{}.png", tool.code())),
+                })
+            })
+            .collect(),
     });
 }
 
@@ -285,10 +344,13 @@ pub fn paint_icon(
     let own = stack.and_then(|stack| match stack.item {
         Item::Fish(species) => items.fish.get(species as usize).cloned(),
         Item::Tool(tool) => Some(items.tool(tool)),
+        Item::Block(Material::Forge) => Some(items.forge.clone()),
+        Item::Block(Material::Workbench) => Some(items.workbench.clone()),
         Item::Block(material) => Material::LAMPS
             .iter()
             .position(|&light| light == material)
             .and_then(|index| items.lights.get(index).cloned()),
+        Item::Good(good) => items.goods.get(good.index()).cloned(),
     });
     if let Some(image) = own {
         node.image = image;
@@ -299,7 +361,7 @@ pub fn paint_icon(
     node.image = items.atlas.clone();
     let art = stack.and_then(|stack| match stack.item {
         Item::Block(material) => thumbnail(material),
-        Item::Tool(_) | Item::Fish(_) => None,
+        Item::Tool(_) | Item::Fish(_) | Item::Good(_) => None,
     });
     let Some((slot, tile, tint)) = art else {
         node.color = Color::NONE;
@@ -340,7 +402,7 @@ pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -
             .get(species as usize)
             .cloned()
             .unwrap_or_else(|| stack.item.name().into()),
-        Item::Block(_) => stack.item.name().into(),
+        Item::Block(_) | Item::Good(_) => stack.item.name().into(),
     };
     let mut letters = name.chars();
     let name = letters
@@ -546,6 +608,10 @@ mod tests {
             hand: Handle::default(),
             lights: Vec::new(),
             fish_names: vec!["Perch".into(), "Char".into()],
+            goods: Vec::new(),
+            forge: Handle::default(),
+            workbench: Handle::default(),
+            tiered: Vec::new(),
         };
         assert_eq!(stack_tip(None, &items), "");
         let stone = Stack {
@@ -569,8 +635,8 @@ mod tests {
         };
         assert_eq!(stack_tip(Some(char_), &items), "Char x 3");
         assert_eq!(
-            super::super::equipment::hand_tip(None),
-            "Bare hands: breaks nothing"
+            super::super::equipment::hand_tip(&pbd_core::inventory::Equipment::new_world()),
+            "Bare hands: digs soft ground"
         );
     }
 }

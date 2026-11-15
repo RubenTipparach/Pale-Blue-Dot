@@ -6,6 +6,7 @@
 //! they depend on nothing but the material enum beside them. Drawing a slot is
 //! the app's business; deciding what is in it is not.
 
+use crate::goods::Good;
 use crate::terrain::Material;
 
 /// How many hotbar slots the player carries. Ten, selected with the number
@@ -33,6 +34,10 @@ pub enum Item {
     /// (`fauna::Roster`). An index rather than a name because a slot is `Copy`
     /// and saved as a short code; the roster is append-only for that reason.
     Fish(u16),
+    /// A good: a row of the one goods table (`crate::goods`), saved by its
+    /// short code. Seeds, produce, coal, ore, ingots; food and animal
+    /// products to come, as rows.
+    Good(Good),
 }
 
 /// The four tools, in the order the picker lists them.
@@ -69,6 +74,16 @@ impl Tool {
         }
     }
 
+    /// Its code in a recipe's `tool:<tier>-<code>` (`tool-crafting`).
+    pub fn code(self) -> &'static str {
+        match self {
+            Tool::Rod => "rod",
+            Tool::Shovel => "shovel",
+            Tool::Pickaxe => "pickaxe",
+            Tool::Axe => "axe",
+        }
+    }
+
     /// What it is for, in the picker's second line.
     pub fn purpose(self) -> &'static str {
         match self {
@@ -86,33 +101,117 @@ impl Tool {
     }
 }
 
-/// The tool slot: which tools the player owns and which one, if any, is in
-/// hand.
+/// A tool's tier (`tool-crafting` decision 6, M3 section 7): what it is made
+/// of, which sets how fast it breaks things and which ore it can take.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Tier {
+    Stone = 0,
+    Bronze = 1,
+    Iron = 2,
+    Steel = 3,
+}
+
+impl Tier {
+    /// Every tier, lowest first.
+    pub const ALL: [Tier; 4] = [Tier::Stone, Tier::Bronze, Tier::Iron, Tier::Steel];
+
+    /// The tier a saved digit names.
+    pub fn of_digit(digit: u8) -> Option<Tier> {
+        Tier::ALL.get(usize::from(digit)).copied()
+    }
+
+    pub fn digit(self) -> u8 {
+        self as u8
+    }
+
+    /// The word in front of a tool's name: "Stone", "Iron".
+    pub fn name(self) -> &'static str {
+        match self {
+            Tier::Stone => "Stone",
+            Tier::Bronze => "Bronze",
+            Tier::Iron => "Iron",
+            Tier::Steel => "Steel",
+        }
+    }
+
+    /// Its code in a recipe's `tool:<tier>-<tool>`.
+    pub fn code(self) -> &'static str {
+        match self {
+            Tier::Stone => "stone",
+            Tier::Bronze => "bronze",
+            Tier::Iron => "iron",
+            Tier::Steel => "steel",
+        }
+    }
+
+    /// The highest ore tier a tool of this tier takes: M3's reach, stone
+    /// takes tiers 0 and 1, bronze 2, iron 3, steel 4.
+    pub fn reach(self) -> u8 {
+        self as u8 + 1
+    }
+}
+
+/// A tool as the player holds it: its name, with its tier in front for
+/// everything but the rod ("Stone" is never said of a rod).
+pub fn tool_title(tool: Tool, tier: Tier) -> String {
+    match tool {
+        Tool::Rod => tool.name().to_string(),
+        _ => format!("{} {}", tier.name(), tool.name().to_lowercase()),
+    }
+}
+
+/// Why a tool was not given.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotBetter {
+    /// The player already owns this tool at this tier or a higher one.
+    Owned(Tier),
+}
+
+/// The tool slot: which tools the player owns, at which tier, and which one,
+/// if any, is in hand.
 ///
 /// Its own store beside the ten slots, because a tool is not a stack and a
 /// tool held in a slot would compete with blocks and fish for room.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Equipment {
-    owned: [bool; 4],
+    /// Each tool's tier, in `Tool::ALL` order; `None` is not owned.
+    tiers: [Option<Tier>; 4],
     /// `None` is bare hands (`inventory-grid` decision 8).
     held: Option<Tool>,
 }
 
 impl Default for Equipment {
-    /// A new world's kit: all four owned, nothing in hand.
+    /// A world made before `tool-crafting`: all four owned at the stone
+    /// tier, nothing in hand. A world made since starts with
+    /// [`Equipment::new_world`].
     fn default() -> Self {
         Self {
-            owned: [true; 4],
+            tiers: [Some(Tier::Stone); 4],
             held: None,
         }
     }
 }
 
 impl Equipment {
-    /// Rebuild from a save's record; a held tool that is not owned leaves the
-    /// hands bare rather than handing the player something they do not have.
+    /// A new world's kit (`tool-crafting` decision 8): nothing owned, nothing
+    /// in hand. Tools are made.
+    pub fn new_world() -> Self {
+        Self {
+            tiers: [None; 4],
+            held: None,
+        }
+    }
+
+    /// Rebuild from a save's record written before tiers: every owned tool
+    /// at the stone tier. A held tool that is not owned leaves the hands
+    /// bare rather than handing the player something they do not have.
     pub fn from_parts(owned: [bool; 4], held: Option<Tool>) -> Self {
-        let mut equipment = Self { owned, held };
+        Self::from_tiers(owned.map(|o| o.then_some(Tier::Stone)), held)
+    }
+
+    /// Rebuild from a save's record with tiers.
+    pub fn from_tiers(tiers: [Option<Tier>; 4], held: Option<Tool>) -> Self {
+        let mut equipment = Self { tiers, held };
         if held.is_some_and(|t| !equipment.owns(t)) {
             equipment.held = None;
         }
@@ -125,22 +224,61 @@ impl Equipment {
     }
 
     /// The tool the left button digs with: the one in hand, if it digs.
-    /// Bare hands break nothing, as the rod breaks nothing.
+    /// `None` is bare hands or the rod; [`Equipment::bare_handed`] tells them
+    /// apart.
     pub fn digging_tool(&self) -> Option<Tool> {
         self.held.filter(|t| t.digs())
     }
 
+    /// The tool in hand with its tier, if it digs.
+    pub fn digging(&self) -> Option<(Tool, Tier)> {
+        let tool = self.digging_tool()?;
+        Some((tool, self.tier(tool)?))
+    }
+
+    /// Whether the hands are empty: what digs soft ground slowly
+    /// (`tool-crafting` decision 1).
+    pub fn bare_handed(&self) -> bool {
+        self.held.is_none()
+    }
+
     pub fn owned(&self) -> [bool; 4] {
-        self.owned
+        self.tiers.map(|t| t.is_some())
+    }
+
+    /// Each tool's tier, in `Tool::ALL` order; `None` is not owned.
+    pub fn tiers(&self) -> [Option<Tier>; 4] {
+        self.tiers
+    }
+
+    pub fn tier(&self, tool: Tool) -> Option<Tier> {
+        self.tiers[tool.index()]
     }
 
     pub fn owns(&self, tool: Tool) -> bool {
-        self.owned[tool.index()]
+        self.tier(tool).is_some()
     }
 
     /// The owned tools, in order.
     pub fn tools(&self) -> Vec<Tool> {
         Tool::ALL.into_iter().filter(|t| self.owns(*t)).collect()
+    }
+
+    /// Whether a tool of this tier would be an upgrade: not owned, or owned
+    /// at a lower tier (`tool-crafting` decision 6).
+    pub fn would_take(&self, tool: Tool, tier: Tier) -> Result<(), NotBetter> {
+        match self.tier(tool) {
+            Some(have) if have >= tier => Err(NotBetter::Owned(have)),
+            _ => Ok(()),
+        }
+    }
+
+    /// Own a tool at a tier, replacing a lower one. Refused, and nothing
+    /// changed, when it is not an upgrade.
+    pub fn grant(&mut self, tool: Tool, tier: Tier) -> Result<(), NotBetter> {
+        self.would_take(tool, tier)?;
+        self.tiers[tool.index()] = Some(tier);
+        Ok(())
     }
 
     /// Put a tool in hand, or empty the hands with `None`. Refused, and
@@ -176,6 +314,7 @@ impl Item {
             Item::Tool(_) => 1,
             // A creel's worth: a fish is a thing you carry a few of.
             Item::Fish(_) => 16,
+            Item::Good(good) => good.stack_limit(),
         }
     }
 
@@ -189,11 +328,12 @@ impl Item {
             // The species' own name is the roster's; the item alone only
             // knows it is a fish.
             Item::Fish(_) => "fish",
+            Item::Good(good) => good.name(),
         }
     }
 }
 
-fn material_name(material: Material) -> &'static str {
+pub fn material_name(material: Material) -> &'static str {
     match material {
         Material::Air => "air",
         Material::Stone => "stone",
@@ -213,6 +353,10 @@ fn material_name(material: Material) -> &'static str {
         Material::LanternHanging => "hanging lantern",
         Material::Brazier => "brazier",
         Material::Candle => "candle",
+        Material::Tilled => "tilled soil",
+        Material::Forge => "forge",
+        Material::Workbench => "workbench",
+        Material::Campfire => "campfire",
     }
 }
 
@@ -454,6 +598,35 @@ impl Slots {
                 }
             }
         }
+    }
+
+    /// How many of `item` the slots hold, hotbar and pack together.
+    pub fn count(&self, item: Item) -> u32 {
+        self.slots
+            .iter()
+            .flatten()
+            .filter(|stack| stack.item == item)
+            .map(|stack| u32::from(stack.count))
+            .sum()
+    }
+
+    /// Take `count` of `item`, from the hotbar's slots first and then the
+    /// pack's, in index order. All or nothing: `false`, and nothing taken,
+    /// when the slots hold fewer.
+    pub fn take_item(&mut self, item: Item, count: u16) -> bool {
+        if self.count(item) < u32::from(count) {
+            return false;
+        }
+        let mut left = count;
+        for index in 0..CARRIED {
+            if left == 0 {
+                break;
+            }
+            if self.get(index).is_some_and(|s| s.item == item) {
+                left -= self.take(index, left);
+            }
+        }
+        true
     }
 
     /// Take one from the selected slot: what placing a block will ask for.
@@ -841,5 +1014,49 @@ mod tests {
         let partial = Equipment::from_parts([true, false, true, false], Some(Tool::Rod));
         assert_eq!(partial.step_from(Some(Tool::Rod), 1), Some(Tool::Pickaxe));
         assert_eq!(partial.step_from(Some(Tool::Pickaxe), 1), None);
+    }
+
+    /// A new world owns nothing; a better tool replaces a worse, and the same
+    /// or a worse is refused with nothing changed (`tool-crafting` 1.2).
+    #[test]
+    fn tools_are_owned_by_tier_and_only_upgraded() {
+        let mut kit = Equipment::new_world();
+        assert!(kit.tools().is_empty(), "a new world owns no tool");
+        assert_eq!(kit.held(), None);
+        assert!(!kit.hold(Tool::Pickaxe), "not owned");
+        assert!(kit.bare_handed());
+        assert_eq!(kit.step_from(None, 1), None, "only bare hands to pick");
+        assert_eq!(kit.grant(Tool::Pickaxe, Tier::Stone), Ok(()));
+        assert_eq!(kit.tier(Tool::Pickaxe), Some(Tier::Stone));
+        assert!(kit.hold(Tool::Pickaxe));
+        assert_eq!(kit.digging(), Some((Tool::Pickaxe, Tier::Stone)));
+        assert_eq!(
+            kit.grant(Tool::Pickaxe, Tier::Stone),
+            Err(NotBetter::Owned(Tier::Stone)),
+            "the same tier is refused"
+        );
+        assert_eq!(kit.grant(Tool::Pickaxe, Tier::Iron), Ok(()));
+        assert_eq!(
+            kit.digging(),
+            Some((Tool::Pickaxe, Tier::Iron)),
+            "kept in hand"
+        );
+        let before = kit;
+        assert_eq!(
+            kit.grant(Tool::Pickaxe, Tier::Bronze),
+            Err(NotBetter::Owned(Tier::Iron))
+        );
+        assert_eq!(kit, before, "a refusal changes nothing");
+        // An old world's kit and an old save's line are the stone tier.
+        assert_eq!(Equipment::default().tiers(), [Some(Tier::Stone); 4]);
+        assert_eq!(
+            Equipment::from_parts([true, false, true, false], None).tiers(),
+            [Some(Tier::Stone), None, Some(Tier::Stone), None]
+        );
+        assert_eq!(tool_title(Tool::Pickaxe, Tier::Iron), "Iron pickaxe");
+        assert_eq!(tool_title(Tool::Rod, Tier::Stone), "Fishing rod");
+        assert_eq!(Tier::Stone.reach(), 1);
+        assert_eq!(Tier::of_digit(2), Some(Tier::Iron));
+        assert_eq!(Tier::of_digit(4), None);
     }
 }

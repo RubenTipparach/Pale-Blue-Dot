@@ -38,7 +38,8 @@ struct CloudLayer {
     // octaves' erosion, the wind shear's factor and the speed it reaches it at.
     shape: vec4<f32>,
     // How far convective cloud takes the cellular texture, the march's
-    // nearest step (m), its most steps, and one spare (`cloud-budget`).
+    // nearest step (m), its most steps (`cloud-budget`), and the sea's
+    // radius (m), which a cloud's sun is lifted from (`dusk-clouds`).
     cells: vec4<f32>,
 }
 
@@ -353,9 +354,9 @@ fn cloud_sun_sky(p: vec3<f32>, layer: CloudLayer, local: vec4<f32>, wind: vec3<f
         extinction: f32, sun: vec3<f32>, cos_theta: f32, cells_tex: texture_3d<f32>,
         cells_sampler: sampler) -> vec2<f32> {
     let radial = normalize(p);
-    let day = smoothstep(-0.10, 0.15, dot(radial, sun));
+    // Past the dome's twilight no part of a cloud is sunlit (`dusk-clouds`).
     var sunlit = 0.0;
-    if (day > 0.0) {
+    if (dot(radial, sun) > -0.12) {
         let tau_sun = cloud_light_depth(p, sun, layer, local, wind, extinction, 4u,
             cells_tex, cells_sampler);
         var a = 1.0;
@@ -378,17 +379,77 @@ fn cloud_sun_sky(p: vec3<f32>, layer: CloudLayer, local: vec4<f32>, wind: vec3<f
 // sunlight and depth overhead. Sky light from above and light bounced off
 // the ground from below: the cloud standing over a base is what makes it
 // dark, so a thick storm goes slate and a thin cumulus stays grey.
+// ---- The sky's light on a cloud (`dusk-clouds`) ------------------------------
+// The sun and the sky the dome and the ground are lit by
+// (`pbd_core::sky_light`), so a cloud at dusk is no brighter than the sky's
+// light makes it. Tests hold these constants to the core's.
+const CLOUD_TAU = vec3<f32>(0.040, 0.100, 0.240);
+const CLOUD_TAU_M = 0.07;
+const CLOUD_SUN_NOW = vec3<f32>(1.12, 1.03, 0.87);
+const CLOUD_SUN_NORM = vec3<f32>(0.880787, 0.821865, 0.699257);
+// `sky_light::CLOUD_SKY_CLEAR` and `CLOUD_SKY_OVERCAST`: night, horizon, zenith.
+const CLOUD_SKY_CLEAR_NIGHT = vec3<f32>(0.0092, 0.0128, 0.0235);
+const CLOUD_SKY_CLEAR_HORIZON = vec3<f32>(0.0563, 0.0979, 0.1404);
+const CLOUD_SKY_CLEAR_ZENITH = vec3<f32>(0.0833, 0.1619, 0.2694);
+const CLOUD_SKY_OVERCAST_NIGHT = vec3<f32>(0.0335, 0.0365, 0.0457);
+const CLOUD_SKY_OVERCAST_HORIZON = vec3<f32>(0.0970, 0.1019, 0.1071);
+const CLOUD_SKY_OVERCAST_ZENITH = vec3<f32>(0.1674, 0.1764, 0.1878);
+const CLOUD_SKY_TWILIGHT = vec2<f32>(-0.16, 0.02);
+const CLOUD_SKY_RISE = vec2<f32>(0.0, 0.5);
+const CLOUD_SUN_LIFT = 0.22;
+const CLOUD_SUN_TOP_M = 960.0;
+// Today's day blue: the sky term by day, which also carries the sunlight
+// scattered inside the cloud, and so goes with the sun.
+const CLOUD_DAY_SKY = vec3<f32>(0.55, 0.68, 0.92);
+
+fn cloud_airmass(e: f32) -> f32 {
+    let h = asin(clamp(e, 0.0, 1.0));
+    return 1.0/(sin(h) + 0.50572*pow(h*57.29578 + 6.07995, -1.6364));
+}
+
+fn cloud_sun_air(e: f32) -> vec3<f32> {
+    let t = exp(-(CLOUD_TAU + CLOUD_TAU_M)*cloud_airmass(e));
+    return t/CLOUD_SUN_NORM*CLOUD_SUN_NOW*smoothstep(-0.02, 0.01, e);
+}
+
+// `sky_light::cloud_sun`, as `cloud_sunlight`: the sun on a cloud `height` metres above the sea,
+// the sun's elevation sine there `e`, against the noon sun.
+fn cloud_sunlight(e: f32, height: f32) -> vec3<f32> {
+    let up = e + CLOUD_SUN_LIFT*clamp(height/CLOUD_SUN_TOP_M, 0.0, 1.0);
+    let k = smoothstep(-0.12, 0.0, e)/max(smoothstep(-0.02, 0.01, up), 1e-3);
+    return cloud_sun_air(up)/CLOUD_SUN_NOW*k;
+}
+
+// `sky_light::cloud_sky`: the sky's mean light from above at `e` and `cover`.
+fn cloud_sky(e: f32, cover: f32) -> vec3<f32> {
+    let w = smoothstep(CLOUD_SKY_TWILIGHT.x, CLOUD_SKY_TWILIGHT.y, e);
+    let r = smoothstep(CLOUD_SKY_RISE.x, CLOUD_SKY_RISE.y, e);
+    let clear = mix(CLOUD_SKY_CLEAR_NIGHT, mix(CLOUD_SKY_CLEAR_HORIZON, CLOUD_SKY_CLEAR_ZENITH, r), w);
+    let overcast = mix(CLOUD_SKY_OVERCAST_NIGHT, mix(CLOUD_SKY_OVERCAST_HORIZON, CLOUD_SKY_OVERCAST_ZENITH, r), w);
+    return mix(clear, overcast, clamp(cover, 0.0, 1.0));
+}
+
+// The share of the day's sky term that is the sun's light inside the cloud.
+fn cloud_day_share(e: f32) -> f32 {
+    return smoothstep(-0.02, 0.15, e);
+}
+
+// The sky term on a cloud: the sky's own light, rising to the day blue as
+// the sun is up.
+fn cloud_sky_light(e: f32, cover: f32) -> vec3<f32> {
+    return mix(cloud_sky(e, cover), CLOUD_DAY_SKY, cloud_day_share(e));
+}
+
 fn cloud_light(p: vec3<f32>, layer: CloudLayer, local: vec4<f32>, sun: vec3<f32>,
         sun_sky: vec2<f32>) -> vec3<f32> {
     let elevation = dot(normalize(p), sun);
-    let day = smoothstep(-0.10, 0.15, elevation);
-    let low_sun = smoothstep(0.0, 0.35, elevation);
-    let sun_colour = mix(vec3<f32>(1.0,0.62,0.36), vec3<f32>(1.0,0.97,0.92), low_sun);
-    let sky = mix(vec3<f32>(0.03,0.04,0.07), vec3<f32>(0.55,0.68,0.92), day);
+    let day = cloud_day_share(elevation);
+    let sun_colour = cloud_sunlight(elevation, length(p) - layer.cells.w);
+    let sky = cloud_sky_light(elevation, local.x);
     let top = layer.clouds.x + layer.slab.x*clamp(local.y, 0.2, 1.0);
     let height = clamp((length(p)-layer.clouds.x)/max(top-layer.clouds.x, 1.0), 0.0, 1.0);
     let ground = vec3<f32>(0.30,0.32,0.28)*day*(1.0-height);
-    return sun_colour*sun_sky.x*layer.light.x*day
+    return sun_colour*sun_sky.x*layer.light.x
         + sky*layer.clouds.y*exp(-sun_sky.y)
         + ground*layer.slab.y
         + vec3<f32>(layer.clouds.w)

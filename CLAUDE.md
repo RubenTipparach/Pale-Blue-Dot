@@ -188,7 +188,7 @@ answer, and answers are folded back into the OpenSpec changes they shape.
 **The survey is an HTML page (owner, 2026-11-12):** "can you create a mockup
 tracking dock, and a survey html tracker? both of these skills are found in
 fleet command repo". Questions go into
-https://claude.ai/artifact/S3hRQL12WLctoD21jar1yT (`docs/design/survey.html`),
+https://claude.ai/artifact/3ViY6udhFkkx5Wzx4jn3w5 (`docs/design/survey.html`),
 whose database holds the answers; the `html-survey` skill
 (`.claude/skills/html-survey`) says how to ask, read the answers back with
 `ArtifactData`, and move them to "Already decided". Keep republishing that
@@ -330,6 +330,79 @@ the owner calls the rain drops.
 The player's RAIN SHADOW setting (`player-settings` 8) turns all of it off,
 and is off by default.
 
+## The first game loop (owner, 2026-11-14)
+
+**Standing direction from the user:** "so initial game loop will be:
+crafting tools, fishing, farming, herding, cooking". That loop is what the
+game is built toward first. The parts and where each stands:
+
+1. **Crafting tools**: built (`tool-crafting`). The tools are made, not
+   handed out, on the station and recipe mechanism of `farming-and-smelting`.
+2. **Fishing**: built (`fishing-and-equipment`).
+3. **Farming**: built (`farming-and-smelting`, with basic smelting).
+   Seeds drop from grass and from wild plants ("we might need to combine env
+   v2 in this first step"): the wild plants farming needs are pulled forward
+   from environment v2's flora; the rest of environment v2 stays after the
+   loop (recommendation taken, ask only with screenshots).
+4. **Herding**: built (`animal-husbandry`).
+5. **Cooking**: built (`cooking`): the campfire and its dishes.
+6. **Starter missions**: built (`starter-missions`): a
+   chain that walks a new player through the loop ("start a fcrafting
+   table", make mining tools, make fishing rood, make axe, make fire... etc";
+   "go fishing, catch x fish, cook x fish"; "farm x plants").
+
+The owner, 2026-11-14: "try to do all of step 1 over the next 24 hours".
+All of it is on `claude/phase-1` (2026-11-15), waiting to merge; none of
+the phase-1 changes is archived until the owner has played it.
+
+Each part feeds the next: crafted tools dig, fish and till; crops feed the
+herd and the pot; the herd's eggs, milk and meat go in the pot too. Work on
+the loop comes before the other drafted mockups (ships, stations, markets),
+which wait for a request.
+
+**After the loop (owner, 2026-11-14; "dont start this stuff yet"):**
+- **Environment v2, an environmental overhaul**: advanced foliage and flora (M13), and an
+  underwater overhaul (M25, `ocean-environments`).
+- **Then the townsfolk** ("townsfolk comes after env v2"): NPCs (M5, `townsfolk`), missions, carpentry and
+  house building (M6, M22, `player-building`), and power generation, its
+  first rungs only: water and wind (M20).
+- **Then town building and civil engineering** ("the after env v2, we'll
+  down town building, civil engineerring"): towns built and grown on the grid (M15,
+  M22), and the works between buildings (roads, bridges); no mockup yet for
+  the second.
+- **Then mass transportation** ("then after civil engineering, we'll get
+  into mass transportation"): airships (M24), sea ships, sailing and
+  navigation (M23, `steer-and-sail`), hiring workers to transport goods, and
+  basic conveyors, aqueducts and minecart track (M20, M28).
+- **Then the age of flight and industry** ("after mass transit we'll get
+  into age of flight and mass mining, oil, industrialization, advanced power
+  generation"): aircraft (M24), mass mining, oil, industry and the power
+  ladder past water and wind to coal and oil (M20, `industry-tiers`).
+- **Then nuclear and rocketry** ("then after that we'll get into nuclear,
+  and rocketry"): the fission plant (M20) and rockets to orbit (M21,
+  `ship-tiers`).
+- **Then finance and space stations** ("after 7 lets also add in finance and
+  space stations exploration: stock market, space trading posts, and space
+  casinos"): the stock market and trading posts (M12, M10) and the casinos
+  (M11).
+- **Then space exploration and colonization** ("after rocketry, we'll get
+  into space exploration and colonization"): the system's other worlds (M1,
+  M2, `interplanetary-travel`), space tourism ("in 9 , add in \"space
+  tourism\""), and settling them (M10 stations and outposts).
+- **Then exo-industry and advanced propulsion** ("after colonization, we'll
+  do exo-industrialiozation + advanced rocket engines + particle colliders"):
+  industry off the home planet (M20, M10), engines past chemical rockets
+  (M21's fusion drives), space freighters ("9 should also include space
+  freighers": M21's freighters, M12's markets), and particle colliders
+  (M20's collider, the antimatter source).
+- **Then antimatter and interstellar travel** ("then we'll do antimatterm
+  interstellar travel"): antimatter as power and fuel (M20, M21's landers)
+  and travel to other stars (M1, M2, `star-systems`).
+
+None of these starts until the owner asks. The tracker's Roadmap section
+lists every phase with its mockups; keep it in step with this list
+("I'm just building a road map for the mockup tracker doc").
+
 ## Current priorities (owner, 2026-09-25)
 
 In this order. Each is written up in `openspec/` before code, like everything
@@ -419,16 +492,16 @@ The `lighting-model` cost on the desktop (RTX 3070; main before the merge,
 the new model and `PBD_LIGHTING=today`, then by part and at night;
 `docs/benchmarks/2026-11-12-lighting-model-clean/`, a quiet machine; the
 2026-11-11 sitting it replaces was contaminated; plan in `lighting-perf`)
-is https://claude.ai/artifact/EqzrbQjpB7HxEQ3QDogBAv.
+is https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9.
 The `lighting-perf` close (main's lighting, `f15a647`, against the branch
 after 2.8's half-size reflections: every scenario inside 16.7 ms at p99;
 `docs/benchmarks/2026-11-12-worst-case-60/`) is
-https://claude.ai/artifact/DahhhtX5wbwTxPUAnkppZA.
+https://claude.ai/artifact/DiyFFNobHpBLsuCpvB5ssk.
 The `lighting-perf` checkpoint (the desktop, main's `f15a647` against the
 branch before it and the branch with frame latency 2 and the L8 fixes, every
 scenario, at night, with vsync, and the slow frames classified;
 `docs/benchmarks/2026-11-12-lighting-perf/`) is
-https://claude.ai/artifact/1LQaNTQW3d2sdngM2Uj8oc.
+https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH.
 The one-part-off breakdown (where the frame goes, the same Mac) is
 https://claude.ai/artifact/3hvQJvSQJJhAQX7hUjHzQn.
 

@@ -29,8 +29,9 @@ use std::time::{Duration, Instant};
 /// The file's version. A file with none is read as version 0, which had the
 /// same fields as 1; version 2 added `rain_shadows`, which an older file
 /// reads as its default; version 3 added `keys`, the player's rebinds
-/// (`stone-and-wood-ui`), which an older file reads as none.
-pub const VERSION: u32 = 3;
+/// (`stone-and-wood-ui`), which an older file reads as none; version 4 added
+/// `mission_line` (`starter-missions`), which an older file reads as on.
+pub const VERSION: u32 = 4;
 
 /// The render scales offered, in percent, in the order a press cycles them.
 pub const SCALES: [u32; 5] = [100, 85, 75, 67, 50];
@@ -115,6 +116,9 @@ pub struct PlayerSettings {
     /// and the animated streaks behind the near rain (the full-screen rain
     /// pass). Off, the near shower, the wet ground and the lens still draw.
     pub rain_shadows: bool,
+    /// The current starter mission's line on the HUD (`starter-missions`
+    /// design 14). Off hides it; the chain still counts.
+    pub mission_line: bool,
 }
 
 /// A new player's settings, the owner's choice (2026-11-13, "default to
@@ -127,6 +131,7 @@ impl Default for PlayerSettings {
             render_scale: 85,
             auto_step: false,
             rain_shadows: false,
+            mission_line: true,
         }
     }
 }
@@ -141,6 +146,7 @@ impl PlayerSettings {
         render_scale: 100,
         auto_step: true,
         rain_shadows: true,
+        mission_line: true,
     };
 }
 
@@ -155,6 +161,7 @@ struct File {
     render_scale: u32,
     auto_step: bool,
     rain_shadows: bool,
+    mission_line: bool,
     /// Slot name to key name (`controls::KeyBinds::to_names`).
     keys: BTreeMap<String, String>,
 }
@@ -168,6 +175,7 @@ impl Default for File {
             render_scale: base.render_scale,
             auto_step: base.auto_step,
             rain_shadows: base.rain_shadows,
+            mission_line: base.mission_line,
             keys: BTreeMap::new(),
         }
     }
@@ -206,6 +214,7 @@ impl PlayerSettings {
             render_scale: snap_scale(file.render_scale),
             auto_step: file.auto_step,
             rain_shadows: file.rain_shadows,
+            mission_line: file.mission_line,
         };
         let (keys, skipped) = KeyBinds::from_names(&file.keys);
         for rebind in skipped {
@@ -223,6 +232,7 @@ impl PlayerSettings {
                 render_scale: self.render_scale,
                 auto_step: self.auto_step,
                 rain_shadows: self.rain_shadows,
+                mission_line: self.mission_line,
                 keys: keys.to_names(),
             },
             ron::ser::PrettyConfig::default(),
@@ -264,6 +274,7 @@ impl PlayerSettings {
             render_scale: overrides.render_scale.map_or(self.render_scale, snap_scale),
             auto_step: overrides.auto_step.unwrap_or(self.auto_step),
             rain_shadows: overrides.rain_shadows.unwrap_or(self.rain_shadows),
+            mission_line: self.mission_line,
         }
     }
 }
@@ -677,6 +688,8 @@ mod tests {
                 render_scale: 67,
                 auto_step: true,
                 rain_shadows: false,
+                // Version 4's field: an older file reads it as on.
+                mission_line: true,
             }
         );
         assert!(
@@ -693,6 +706,7 @@ mod tests {
             render_scale: 67,
             auto_step: false,
             rain_shadows: true,
+            mission_line: false,
         };
         let mut keys = KeyBinds::default();
         let roll = crate::controls::slots()
@@ -788,7 +802,7 @@ mod tests {
         // Written back, a file with no rebinds says so, and an older build
         // ignores the field.
         let text = PlayerSettings::default().to_text(&KeyBinds::default());
-        assert!(text.contains("version: 3"), "{text}");
+        assert!(text.contains("version: 4"), "{text}");
         let (_, none, _) = PlayerSettings::parse(&text).unwrap();
         assert!(none.is_empty());
     }
@@ -875,6 +889,7 @@ mod tests {
             render_scale: 50,
             auto_step: false,
             rain_shadows: false,
+            mission_line: true,
         };
         let flags = Overrides {
             render_scale: Some(100),

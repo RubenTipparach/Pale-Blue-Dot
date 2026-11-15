@@ -411,7 +411,11 @@ const ON_FOOT: [Binding; 3] = [
 ];
 
 const HANDS: [Binding; 6] = [
-    row(&[Key::Board(KeyCode::KeyE)], " ", "open or shut a door"),
+    row(
+        &[Key::Board(KeyCode::KeyE)],
+        " ",
+        "use: a door, a forge, a campfire, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till",
+    ),
     row(
         &[Key::Mouse(MouseButton::Left)],
         " ",
@@ -420,7 +424,7 @@ const HANDS: [Binding; 6] = [
     row(
         &[Key::Mouse(MouseButton::Right)],
         " ",
-        "place the held block, or wind the line in",
+        "place the held block, plant a seed, or wind the line in",
     ),
     Binding {
         range: true,
@@ -504,7 +508,7 @@ const WORLD: [Binding; 5] = [
     row(&[Key::Board(KeyCode::KeyL)], " ", "noon or midnight"),
 ];
 
-const SCREEN: [Binding; 5] = [
+const SCREEN: [Binding; 6] = [
     row(&[Key::Board(KeyCode::Escape)], " ", "menu"),
     row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
     row(
@@ -512,6 +516,7 @@ const SCREEN: [Binding; 5] = [
         " ",
         "the pack: thirty more slots",
     ),
+    row(&[Key::Board(KeyCode::KeyO)], " ", "the starter missions"),
     row(&[Key::Board(KeyCode::F12)], " ", "screenshot"),
     row(&[Key::Board(KeyCode::F3)], " ", "frame graph"),
 ];
@@ -1157,7 +1162,12 @@ mod tests {
         let sprint = slots().find(|s| s.name() == "on_foot:ShiftLeft").unwrap();
         let mut binds = KeyBinds::default();
         binds.set(&sprint, KeyCode::KeyE);
-        assert_eq!(binds.clashes(&sprint), vec!["open or shut a door"]);
+        assert_eq!(
+            binds.clashes(&sprint),
+            vec![
+                "use: a door, a forge, a campfire, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till"
+            ]
+        );
         // E is the Tern's hiking too, but never on foot.
         assert!(
             !binds

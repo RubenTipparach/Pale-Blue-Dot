@@ -127,7 +127,7 @@
     // metre for the view and the light, fair and at full cover.
     cloud_extinction: 0.0115,
     cloud_storm_extinction: 0.03,
-    cloud_night_floor: 0.045,
+    cloud_night_floor: 0.008,
     // The sun's strength on a cloud, sky light from above and ground bounce
     // from below; the cloud over a sample dims the sky light, which is what
     // darkens a thick base.
@@ -185,7 +185,7 @@
     cloud_puff_base_shade: 0.45,
     cloud_puff_storm_shade: 0.75,
     cloud_puff_silver: 1.6,
-    cloud_puff_optical_depth: 15.0,
+    cloud_puff_optical_depth: 4.0,
     cloud_puff_erosion: 0.55,
     cloud_puff_soft_m: 60.0,
     cloud_puff_near_m: 120.0,

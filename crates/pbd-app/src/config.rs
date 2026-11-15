@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 /// The shipped `assets/config` directory, resolved the same way the desktop
 /// app resolves its asset root.
-fn config_dir() -> PathBuf {
+pub fn config_dir() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/config"))
 }
 
@@ -670,7 +670,7 @@ impl Default for WeatherSettings {
             cloud_shadow: 0.8,
             cloud_extinction: 0.0115,
             cloud_storm_extinction: 0.03,
-            cloud_night_floor: 0.045,
+            cloud_night_floor: 0.008,
             cloud_sun: 0.55,
             cloud_ambient_sky: 0.9,
             cloud_ambient_ground: 0.35,
@@ -697,7 +697,7 @@ impl Default for WeatherSettings {
             cloud_puff_base_shade: 0.45,
             cloud_puff_storm_shade: 0.75,
             cloud_puff_silver: 1.6,
-            cloud_puff_optical_depth: 15.0,
+            cloud_puff_optical_depth: 4.0,
             cloud_puff_erosion: 0.55,
             cloud_puff_soft_m: 60.0,
             cloud_puff_near_m: 120.0,
@@ -1123,7 +1123,7 @@ impl Default for ColumnSettings {
             worm_start_depth_m: worms.start_depth_m,
             worm_steer_scale_m: worms.steer_scale_m,
             cave_floor_layers: worms.floor_layers as u32,
-            glow_flower_chance: 0.04,
+            glow_flower_chance: 0.01,
         }
     }
 }
@@ -1211,6 +1211,17 @@ impl Validated for pbd_core::fauna::FaunaSettings {
 #[derive(Resource, Clone, Debug, PartialEq, Default)]
 pub struct FaunaConfig(pub pbd_core::fauna::FaunaSettings);
 
+/// Keeping animals (`pbd_core::husbandry`), from `husbandry.ron`.
+impl Validated for pbd_core::husbandry::HusbandrySettings {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::husbandry::HusbandrySettings::validate(self)
+    }
+}
+
+/// Every land species and how each is kept, loaded once.
+#[derive(Resource, Clone, Debug, PartialEq, Default)]
+pub struct HusbandryConfig(pub pbd_core::husbandry::HusbandrySettings);
+
 /// How long each material takes to break with each tool (`pbd_core::dig`).
 impl Validated for pbd_core::dig::DigSettings {
     fn validate(&self) -> Result<(), String> {
@@ -1221,6 +1232,71 @@ impl Validated for pbd_core::dig::DigSettings {
 /// The break times, loaded once.
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
 pub struct DigConfig(pub pbd_core::dig::DigSettings);
+
+impl Validated for pbd_core::farming::FarmSettings {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::farming::FarmSettings::validate(self)
+    }
+}
+
+/// The crops' days and yields (`farming.ron`), loaded once.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
+pub struct FarmConfig(pub pbd_core::farming::FarmSettings);
+
+impl Validated for pbd_core::station::RecipeFile {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::station::RecipeFile::validate(self)
+    }
+}
+
+impl Validated for pbd_core::gather::GatherSettings {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::gather::GatherSettings::validate(self)
+    }
+}
+
+/// Tier 0 off the ground (`gather.ron`, `tool-crafting`), loaded once.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
+pub struct GatherConfig(pub pbd_core::gather::GatherSettings);
+
+/// Every station's recipes (`recipes.ron`, then the kitchen's from
+/// `cooking.ron`), resolved once: one book, so every station follows one
+/// set of rules (`cooking` design S4).
+#[derive(Resource, Clone, Debug, PartialEq, Default)]
+pub struct Recipes(pub pbd_core::station::RecipeBook);
+
+impl Validated for pbd_core::cooking::CookingFile {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::cooking::CookingFile::validate(self)
+    }
+}
+
+/// The kitchen (`cooking.ron`), resolved once: dishes, effects, and the
+/// recipes waiting on another branch's goods.
+#[derive(Resource, Clone, Debug, PartialEq, Default)]
+pub struct KitchenConfig(pub pbd_core::cooking::Kitchen);
+
+/// The station recipes and the kitchen's in one book, and the kitchen.
+pub fn recipe_book() -> (Recipes, KitchenConfig) {
+    let mut book = load::<pbd_core::station::RecipeFile>("recipes")
+        .resolve()
+        .expect("validated on load");
+    let kitchen = load::<pbd_core::cooking::CookingFile>("cooking")
+        .resolve()
+        .expect("validated on load");
+    for (code, missing) in &kitchen.pending {
+        info!("recipe {code} is pending: no {missing:?} in this build");
+    }
+    for recipe in &kitchen.recipes {
+        assert!(
+            book.get(&recipe.code).is_none(),
+            "recipe {} is in recipes.ron and cooking.ron",
+            recipe.code
+        );
+    }
+    book.recipes.extend(kitchen.recipes.iter().cloned());
+    (Recipes(book), KitchenConfig(kitchen))
+}
 
 /// Where the tool in hand sits and how it moves (`held.rs`).
 #[cfg(feature = "desktop")]
@@ -1554,6 +1630,7 @@ pub struct ConfigPlugin;
 
 impl Plugin for ConfigPlugin {
     fn build(&self, app: &mut App) {
+        let (recipes, kitchen) = recipe_book();
         app.insert_resource(load::<WaterSettings>("water"))
             .insert_resource(load::<WeatherSettings>("weather"))
             .insert_resource(load::<ScatterSettings>("scatter"))
@@ -1562,7 +1639,12 @@ impl Plugin for ConfigPlugin {
             .insert_resource(AtmosphereConfig(load("atmosphere")))
             .insert_resource(VehiclesConfig(load("vehicles")))
             .insert_resource(FaunaConfig(load("fauna")))
-            .insert_resource(DigConfig(load("dig")));
+            .insert_resource(HusbandryConfig(load("husbandry")))
+            .insert_resource(DigConfig(load("dig")))
+            .insert_resource(FarmConfig(load("farming")))
+            .insert_resource(GatherConfig(load("gather")))
+            .insert_resource(recipes)
+            .insert_resource(kitchen);
         #[cfg(feature = "desktop")]
         app.insert_resource(HeldConfig(load("held")));
         app.add_plugins((
@@ -1625,9 +1707,21 @@ mod tests {
         let fauna: pbd_core::fauna::FaunaSettings = ron::from_str(FAUNA_RON).unwrap();
         Validated::validate(&fauna).unwrap();
         assert_eq!(fauna, Default::default());
+        let husbandry: pbd_core::husbandry::HusbandrySettings =
+            ron::from_str(pbd_core::husbandry::HUSBANDRY_RON).unwrap();
+        Validated::validate(&husbandry).unwrap();
+        assert_eq!(husbandry, Default::default());
         let dig: pbd_core::dig::DigSettings = ron::from_str(DIG_RON).unwrap();
         Validated::validate(&dig).unwrap();
         assert_eq!(dig, Default::default());
+        let farm: pbd_core::farming::FarmSettings =
+            ron::from_str(include_str!("../../../assets/config/farming.ron")).unwrap();
+        Validated::validate(&farm).unwrap();
+        assert_eq!(farm, Default::default());
+        let gather: pbd_core::gather::GatherSettings =
+            ron::from_str(include_str!("../../../assets/config/gather.ron")).unwrap();
+        Validated::validate(&gather).unwrap();
+        assert_eq!(gather, Default::default());
         #[cfg(feature = "desktop")]
         {
             let held: crate::held::HeldSettings = ron::from_str(HELD_RON).unwrap();
@@ -1700,5 +1794,39 @@ mod tests {
         assert!(with(0.5, 0.2, f32::INFINITY).validate().is_err());
         // Tenebris's unnormalised knob is gone, not silently ignored.
         assert!(ron::from_str::<WeatherSettings>("(rain_lens_refract: 1.7)").is_err());
+    }
+
+    /// `space-clouds`: with the shipped settings a column of the shown maps'
+    /// median optical depth (7) is drawn mostly opaque; a thin one stays thin.
+    #[test]
+    fn a_median_cloud_column_is_mostly_opaque() {
+        use pbd_core::cloud_puffs::{Layer, Look, Site, puffs_at};
+        let s: WeatherSettings = ron::from_str(WEATHER_RON).unwrap();
+        let layer = Layer {
+            base_radius_m: crate::sky::CLOUD_RADIUS,
+            thickness_m: crate::sky::CLOUD_THICKNESS,
+            spacing_m: s.cloud_puff_spacing_m,
+            opacity: s.cloud_puff_opacity,
+            deck_floor: s.cloud_deck_floor,
+            optical_depth_scale: s.cloud_puff_optical_depth,
+        };
+        let site = Site {
+            direction: bevy::math::Vec3::Y,
+            threshold: 0.0,
+            size: 0.5,
+            seed: 0.0,
+        };
+        let opacity = |od: f32| {
+            let mut out = Vec::new();
+            let look = Look {
+                cover: 1.0,
+                top: 1.0,
+                optical_depth: od,
+            };
+            puffs_at(&site, look, &layer, &mut out);
+            out[0].opacity
+        };
+        assert!(opacity(7.0) >= 0.75, "{}", opacity(7.0));
+        assert!(opacity(1.0) < 0.3, "{}", opacity(1.0));
     }
 }

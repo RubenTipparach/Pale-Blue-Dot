@@ -22,7 +22,13 @@
 
 ## 3. Ask
 
-- [ ] 3.1 The riser inside the north gate, with shots: leave it, or make it a
+- [x] 3.1 The riser inside the north gate, with shots: leave it, or make it a
       stair (a template change, a new template version, so towns already
       laid keep theirs). Asked as G1 in the owner survey, 2026-10-08, with
       the outside and passage shots; recommendation: a stone stair.
+      **Answered by the owner's rule, 2026-11-14:** "where theres a step on
+      a path there should be staris". Built in `path-stairs`: the mockup's
+      stone street steps in (19, 7) and (20, 7), and a flight from the
+      passage's corner onto the wall lane. Not a template version: the
+      stairs are pieces cut from the stored town, so towns already laid get
+      them too (`path-stairs` design, decision 2).

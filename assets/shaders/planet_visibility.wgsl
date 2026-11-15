@@ -41,6 +41,8 @@ struct Params {
     ssr_eye: vec4<f32>,
     rain_near: vec4<f32>,
     light_ease: vec4<f32>,
+    night: vec4<f32>,                   // `night-lights-from-space`, unread here
+    night_lights: array<vec4<f32>,128>,
 }
 fn base_level() -> u32 { return u32(params.lod.w); }
 fn finest_level() -> u32 { return base_level() + 4u; }

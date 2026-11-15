@@ -1,0 +1,12 @@
+# name lat lon height pitch yaw time [extra]
+# The camera's yaw and pitch put the sun near the frame's centre (README).
+orbit-above-rim 0 0 6000 -52 -134.9 3.6 --rain 0
+orbit-on-rim 0 0 6000 -55 -131.6 3.4 --rain 0
+orbit-through-air 0 0 6000 -58 -125.7 3.1 --rain 0
+orbit-half-limb 0 0 6000 -60 -115.9 2.7 --rain 0
+orbit-behind 0 0 6000 -62 -93.8 2.0 --rain 0
+crossing-inside 0 0 900 -1 -156.4 7.5 --rain 0
+crossing-outside 0 0 1050 -1 -156.4 7.5 --rain 0
+ground-noon 0 0 2 55 -125.2 12.7 --rain 0
+ground-sunset 0 0 2 8 -23.6 19.5 --rain 0
+in-cloud 16.86 57.63 400 22 -161.6 5.5 --weather-at 0
