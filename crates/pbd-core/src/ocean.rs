@@ -18,6 +18,9 @@
 //!
 //! Everything here is derived and never saved.
 
+pub mod places;
+pub mod plates;
+
 use crate::fauna::WaterClass;
 use serde::{Deserialize, Serialize};
 

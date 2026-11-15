@@ -57,7 +57,11 @@ fn the_defaults_validate_and_carry_the_eight_fish_then_the_water_life() {
             "reef_turtle",
             "sea_otter",
             "reed_dabbler",
-            "pond_diver"
+            "pond_diver",
+            // The octopus, the plume worm and the seal (B9), appended.
+            "octopus",
+            "tube_worm",
+            "seal"
         ],
         "the roster is append-only: a saved fish is its index"
     );
@@ -608,4 +612,156 @@ fn a_dabbler_tips_up_by_day_paddles_off_when_startled_and_sleeps_at_night() {
         Pose::Moving,
         "awake once startled"
     );
+}
+
+/// The octopus (`ocean-environments` B9): out while the eye is far; within
+/// its 6 m it inks and jets home; home, it hides, and stays hidden while the
+/// eye is within 8 m, and for 12 s after the eye has gone.
+#[test]
+fn an_octopus_inks_jets_home_and_hides_until_the_eye_has_gone() {
+    let water = Shore { max_depth: 30.0 };
+    let flock = FlockSettings::default();
+    let r = roster();
+    let i = index_of("octopus");
+    let sp = &r[i];
+    let mut school = School::spawn(i as u16, sp, at(0.0, 1.0, 20.0), 21, &water);
+    let home = school.homes[0];
+    let pose_now = |s: &School| pose(sp, s, 0, 100.0, false);
+    // A minute of crawling takes it from its den.
+    for _ in 0..(60 * 30) {
+        school.step(1.0 / 30.0, sp, &flock, &water, None);
+    }
+    assert_eq!(pose_now(&school), Pose::Moving);
+    let away = school.positions[0].distance(home);
+    assert!(away > 0.3, "it crawled out, {away} m");
+    let up = school.positions[0].normalize();
+    // The eye 10 m off: nothing.
+    school.notice(school.positions[0] + up * 10.0, sp, 6.0);
+    assert_eq!(pose_now(&school), Pose::Moving, "10 m off: still out");
+    // The eye 5 m off: it inks and jets.
+    let eye = school.positions[0] + up * 5.0;
+    school.notice(eye, sp, 6.0);
+    assert_eq!(pose_now(&school), Pose::Inking, "5 m off: inking");
+    let mut home_by = None;
+    for tick in 0..(10 * 30) {
+        school.notice(eye, sp, 6.0);
+        school.step(1.0 / 30.0, sp, &flock, &water, None);
+        if home_by.is_none() && pose_now(&school) == Pose::Hidden {
+            home_by = Some(tick as f32 / 30.0);
+        }
+    }
+    let home_by = home_by.expect("it reached its den");
+    assert!(
+        home_by <= away / (sp.speed_mps.1 * JET) + 0.2,
+        "it jetted home at four times its pace: {home_by} s for {away} m"
+    );
+    // The eye backs off to 7 m: still within 8, still hidden however long.
+    let near = home + up * 7.0;
+    for _ in 0..(30 * 30) {
+        school.notice(near, sp, 6.0);
+        school.step(1.0 / 30.0, sp, &flock, &water, None);
+    }
+    assert_eq!(pose_now(&school), Pose::Hidden, "7 m off: hidden");
+    // The eye 9 m off: 11 s later still hidden, 13 s later out.
+    let far = home + up * 9.0;
+    for _ in 0..(11 * 30) {
+        school.notice(far, sp, 6.0);
+        school.step(1.0 / 30.0, sp, &flock, &water, None);
+    }
+    assert_eq!(pose_now(&school), Pose::Hidden, "hidden for 12 s");
+    for _ in 0..(2 * 30) {
+        school.notice(far, sp, 6.0);
+        school.step(1.0 / 30.0, sp, &flock, &water, None);
+    }
+    assert_eq!(pose_now(&school), Pose::Moving, "out again");
+}
+
+/// A plume worm's plume snaps in within 5 m and comes out after the hold, as
+/// a clam; it never leaves its place.
+#[test]
+fn a_plume_worm_pulls_its_plume_in_within_five_metres() {
+    let water = Shore { max_depth: 6.0 };
+    let flock = FlockSettings::default();
+    let r = roster();
+    let i = index_of("tube_worm");
+    let sp = &r[i];
+    let mut school = School::spawn(i as u16, sp, at(0.0, 1.0, 12.0), 3, &water);
+    assert!(school.len() >= 10, "a cluster");
+    let worm = school.positions[0];
+    let up = worm.normalize();
+    school.notice(worm + up * 5.5, sp, 6.0);
+    assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::Moving);
+    school.notice(worm + up * 4.5, sp, 6.0);
+    assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::Shut);
+    for _ in 0..(10 * 30) {
+        school.step(1.0 / 30.0, sp, &flock, &water, None);
+    }
+    assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::Moving);
+    assert!(
+        school.positions[0].distance(worm) < 0.2,
+        "it stays in its tube"
+    );
+}
+
+/// A seal lies out when calm, slides under within 9 m, and hauls out again
+/// 20 s after the eye has gone.
+#[test]
+fn a_seal_slides_in_within_nine_metres_and_hauls_out_after() {
+    let flock = FlockSettings::default();
+    let r = roster();
+    let i = index_of("seal");
+    let sp = &r[i];
+    assert_eq!(sp.catch_refusal(), Some("protected: it may not be caught"));
+    let mut school = School::spawn(i as u16, sp, at(0.0, 1.0, 12.0), 4, &Swell);
+    let seal = school.positions[0];
+    let up = seal.normalize();
+    assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::HauledOut);
+    school.notice(seal + up * 10.0, sp, 6.0);
+    assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::HauledOut);
+    school.notice(seal + up * 8.0, sp, 6.0);
+    assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::Under);
+    for _ in 0..(19 * 30) {
+        school.step(1.0 / 30.0, sp, &flock, &Swell, None);
+    }
+    assert_eq!(
+        pose(sp, &school, 0, 0.0, false),
+        Pose::Under,
+        "under 19 s on"
+    );
+    for _ in 0..(2 * 30) {
+        school.step(1.0 / 30.0, sp, &flock, &Swell, None);
+    }
+    assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::HauledOut);
+}
+
+/// The spawn rule reads the place (6.1): a reef creature only on the reef,
+/// a vent creature only at a vent, a duck (whose places wait for fresh
+/// water) by its water classes as before; on a world made before the sea's
+/// places, everything but the vent's life as it always did.
+#[test]
+fn a_species_spawns_only_in_its_place_once_the_places_exist() {
+    let r = roster();
+    let get = |id: &str| &r[index_of(id)];
+    use Environment::*;
+    assert!(get("giant_clam").env_allows(Some(Reef)));
+    assert!(!get("giant_clam").env_allows(Some(Open)));
+    assert!(!get("giant_clam").env_allows(Some(Kelp)));
+    assert!(get("tube_worm").env_allows(Some(Vent)));
+    assert!(!get("tube_worm").env_allows(Some(Reef)));
+    assert!(
+        !get("tube_worm").env_allows(None),
+        "no vents on an old world"
+    );
+    assert!(get("seal").env_allows(Some(UnderIce)));
+    assert!(!get("seal").env_allows(Some(Reef)));
+    assert!(
+        get("reed_dabbler").env_allows(Some(Open)),
+        "fresh water waits"
+    );
+    assert!(get("minnow").env_allows(Some(Trench)), "no tags: anywhere");
+    for sp in &r {
+        if sp.id != "tube_worm" {
+            assert!(sp.env_allows(None), "{} on an old world", sp.id);
+        }
+    }
 }

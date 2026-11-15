@@ -11,10 +11,11 @@ use crate::hex::{Hex, Voxel};
 /// fourfold and moves its thresholds, which changes which biome the dry land
 /// is and nothing about its shape; version 6 (`taller-mountains`) raises
 /// mountain ranges to about 290 m in regions of their own and caps them with
-/// snow above 200 m. A new world is made with this version;
+/// snow above 200 m; version 7 (`ocean-environments` B10) adds the sea's
+/// places and carves its trenches. A new world is made with this version;
 /// a saved one keeps the version it was made with
 /// ([`crate::planet_gen::TerrainConfig::for_version`]).
-pub const GENERATOR_VERSION: u32 = 6;
+pub const GENERATOR_VERSION: u32 = 7;
 
 /// The topology a world's cells are cut from: the Goldberg levels and the
 /// finest cell keys (`pbd_core::cell_key`). A save records it beside the

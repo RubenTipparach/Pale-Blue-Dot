@@ -1631,7 +1631,17 @@ pub fn run(args: &[String]) {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
         }
         if let Some(id) = launch.life.clone() {
-            app.insert_resource(pbd_app::fish::LifeScript { id, placed: false });
+            // `--life ID:METRES` puts the group that far ahead, for a close
+            // look at something small.
+            let (id, metres) = match id.split_once(':') {
+                Some((id, m)) => (id.to_string(), m.parse().ok()),
+                None => (id, None),
+            };
+            app.insert_resource(pbd_app::fish::LifeScript {
+                id,
+                metres,
+                placed: false,
+            });
         }
         if let Some(scene) = launch.husbandry.clone() {
             app.insert_resource(pbd_app::husbandry::HusbandryScript { scene });
