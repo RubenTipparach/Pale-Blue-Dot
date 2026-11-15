@@ -1109,6 +1109,56 @@ move as before. In the fish's budget: 150 (worm) to 470 (lobster)
 triangles, pinned under 500 with every UV in a tile by a test. M9's "Reef &
 sea floor" tab draws the same meshes.
 
+### B16. Kelp that reads as kelp (owner, 2026-11-15: "kelp needs fixing")
+
+The owner's reference is the "Kelp forest" frame of the phase-2 montage
+(`docs/screenshots/step-videos/phase-2-tech-montage-sheet.jpg` on
+`claude/env-v2`, captured at `--walk --at 71.308 -8.196 --time 12`): the
+kelp stands as huge flat slabs and ribbons, much wider than fronds, with
+hard edges, little shading and a patchy mix of dark and lime greens. Blue
+blobs lie on the floor at their feet.
+
+**Finding.**
+- **The shape is M9's tank kelp, stretched.** `places::kelp_stand` builds
+  M9's 5 m aquarium model (`fish/water_life_models.js`, "kelp"): three
+  stipes of flat strips 0.24 m wide, each 0.7 m segment turned 0.6 rad
+  from the last, and four flat 1.6 m blades at the top. Stretched up a
+  6 to 40 m water column it has no fronds along its length at all. Seen
+  from inside the forest, the twisted strips read as slabs and ribbons.
+- **The colours cycle by triangle.** A tint is chosen from four colours
+  (rust, orange, lime, dark green) every six triangles, so neighbouring
+  segments jump between dark and lime: the patchy mix.
+- **The blue blobs are coral boulders.** A kelp stand puts a `Boulder`
+  piece at its foot half the time, and `Boulder` is the reef's brain-coral
+  kind, coloured from the coral palette (blue-greys, teal, pink).
+- The light is not at fault. The kelp shares the reef pieces' material, is
+  lit by the field and dimmed by depth as they are, and sways (B13).
+
+**The approved look** is M25's kelp forest (`docs/mockups/ocean.html`,
+"Kelp forest"; its frond is `tools/art/ocean_art.py` `kelp_card`): a
+slender stipe with narrow blades alternating up it, a gas float at each
+blade's base, in giant kelp's golden olive (M25's `kelp` ramp), with one
+blade in three in the green of its `kelpg` ramp, and a canopy spreading at
+the surface.
+
+**Change** (drawing only; where kelp stands is unchanged, so no generator
+version):
+- **The stand**: two or three stipes, each two crossed strips 0.07 m wide,
+  so a stipe reads from every side. Narrow tapered blades (0.85 m long,
+  0.12 m at the widest) every 0.6 m up it, spiralling round the stipe and
+  angled up about 40 degrees. A small gas float (two crossed diamonds,
+  0.08 m) sits at each blade's base. Near the surface, four longer blades
+  (1.3 m) lie out flat as the canopy.
+- **The colours**: one per part, not cycled per triangle. Stipe `#725244`;
+  blades `#ab8465`, with one in three `#559642`; floats `#c56d25` (M25's
+  frond). The kelp's `veins` tile still gives the blades their grain.
+  Depth dimming and the field light are unchanged.
+- **The rocks at its foot** keep their place and shape, but take the
+  rock's palette (`#434137`, `#725244`, `#a09f91`), not the coral's.
+- **Verified** by captures at the owner's spot, before and after, and a
+  test that a stand's blades are narrow (no part wider than 0.15 m but
+  the canopy) and that its colours are only the frond's.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with
