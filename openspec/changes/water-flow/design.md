@@ -110,7 +110,10 @@ foaming fall sheet and lip on every step down, and the sim's water builder
 whose water stands lower, by how much lower, and a chevron on each flowing
 cap behind a Flow arrows toggle). Both pages load it, as both load
 `water-flow/liquid.js`. M28 feeds it its own lamps, a depth map baked from
-the patch, and its fog. The rule is untouched: every preset settles in the
+the patch, and its fog. One fix rides with it, for both pages: a source is
+drawn 6 cm below the level-7 water beside it, so the flow is worked out on
+the head (a source an eighth above level 7) and no fall is drawn for a step
+under 7 cm; arrows no longer run into a pool of sources. The rule is untouched: every preset settles in the
 same ticks to the same cell counts as before. This is the mockup's look,
 not a decision about the game's water renderer, which stays decision 7.
 

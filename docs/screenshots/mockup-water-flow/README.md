@@ -26,12 +26,18 @@ preset, settled, from the same camera.
 | `sync-spring-before.png` | `sync-spring-after.png` | The spring off the ledge: the flat pale sides become foaming fall walls down the cliff; arrows on every flowing cap point downstream. |
 | `sync-spring-night-before.png` | `sync-spring-night-after.png` | The same at 22:00: the seven lamps light the water and the foam near them, dark between; the arrows are dimmed at night. |
 | `sync-channel-before.png` | `sync-channel-after.png` | The channel from the sea: the arrows run from the beach into the basin. |
-| `sync-basin-night-before.png` | `sync-basin-night-after.png` | Three sources make a pool, at night: the outer ring's arrows point out of the pool of sources. |
+| `sync-basin-night-before.png` | `sync-basin-night-after.png` | Three sources make a pool, at night: the arrows run out of the pool's sources into the ring round them, lit by the basin's lamp. |
 | | `sync-390-after.png`, `sync-390-modal-after.png` | 390 px wide: no horizontal scroll; the descriptive text in its modal. |
-| | `sync-m25-sim-after.png` | M25's Water sim tab on the shared file, unchanged in look (its Waterfall preset, Close view). |
+| | `sync-m25-sim-after.png` | M25's Water sim tab on the shared file (its Waterfall preset, Close view): as before, less the 6 cm slivers of froth noted below. |
 
 Checks (Playwright): every M28 preset settles in the same ticks to the same source, flowing and falling counts as
 before, and "Settle from scratch" differs by 0 cells (spring 22 ticks, 580 / 380 / 126; channel 7, 580 / 22 / 1;
 basin 4, 586 / 12 / 0; pair 13, 581 / 208 / 12; runaway 19, 896 / 38 / 19; recede 31 after the dig, 579 / 0 / 0).
 Both pages: no console errors, one WebGL context; camera and every object's rotation unchanged over 2 s idle. Spring:
-506 fall sheets, 205 arrows, each along its cap's flow vector, with lower water within 60 degrees of where it points.
+499 fall sheets, 186 arrows, each along its cap's flow vector, with lower water (by head) within 60 degrees of
+where it points.
+
+One fix in the shared builder, which M25's sim takes too: a source is drawn 6 cm below the level-7 water beside it
+(0.94 against 1.0 of its layer), so arrows ran into a pool of sources and every pool and falling column grew a 6 cm
+sliver of froth. The flow now runs on the head (a source an eighth above level 7) and no fall is drawn for a step
+under 7 cm; real steps (an eighth and up) keep their sheets. M25's Waterfall preset: 532 sheets before, 417 after.

@@ -367,7 +367,6 @@ function resetWorld() {
     for (let y = Y0; y < H; y++) { const i = idx(q, r, y); kind[i] = SOLID; cmat[i] = y === H - 1 ? (isBeach(q, r) ? M.sand : M.grass) : y >= H - 3 ? (isBeach(q, r) ? M.sand : M.dirt) : M.stone; }
     if (isBeach(q, r)) for (let y = H; y < SEA_TOP; y++) kind[idx(q, r, y)] = SRC; }   // the sea: sources, never queued (design 5); the basin inland starts dry
 }
-const surf = i => { const [q, r, y] = unidx(i), up = inside(q, r, y + 1) ? kind[idx(q, r, y + 1)] : AIR; if (up === SRC || up === FLOW) return y + 1; return kind[i] === SRC || down[i] ? y + 0.94 : y + (lvl[i] + 1) / 8; };
 
 // ===================================================================
 // Drawing: the ground is rebuilt on an edit, the water every tick that changed it
