@@ -397,11 +397,13 @@ decisions 1 to 11 because something they lean on is not in the game yet:
   lasts two world days. Water: a pen cell next to water. Shelter: never met
   (there are no buildings yet), so a content animal is food plus space (50),
   with water 75. Space: the pen's cells against the herd's space. A loose
-  animal has space and no grazing. Mood, health, sickness and straying as
-  decision 6; neglect never kills.
+  animal has space and no grazing. Health recovers while the animal is content and falls
+  while it is not (decision 6 says "while two or more needs are unmet", which
+  with shelter unmeetable would sicken every animal; it returns with
+  buildings). Sickness and straying as decision 6; neglect never kills.
 - **S9. Products accrue continuously.** Each content, healthy day adds
   `amount x (0.6 + 0.8 x yield) / period` to the product's tally; whole units
-  are waiting, at most three periods' worth. Collecting takes the whole units
+  are waiting, at most four days' worth (or one period, if longer). Collecting takes the whole units
   and keeps the fraction. Milk is a plodder cow's, daily, without a calf in
   this slice (calves are task 8).
 - **S10. Wild herds are derived from the world seed.** The surface is cut

@@ -1,0 +1,140 @@
+// Keeping animals (pbd_core::husbandry; openspec/changes/animal-husbandry,
+// design decision 12): taming, needs, wild herds, and every body's land
+// species. This file is also the code's one source of defaults. Metres,
+// seconds, world days (48 minutes of play) and trust out of 100 unless a
+// name says otherwise. The doc comments in crates/pbd-core/src/husbandry/
+// say what each field is.
+//
+// A body's land species are in roster order and the order is APPEND ONLY: a
+// kept animal's record names its species by index. No species may appear on
+// two bodies, nor share an id with a fish, and a body with none has no land
+// life (every airless body).
+(
+    taming: (
+        fear_moving_m: 9.0,
+        fear_still_m: 4.5,
+        reach_m: 2.5,
+        spook_cost: 10.0,
+        decay_per_hour: 5.0,
+        follow_s: 60.0,
+    ),
+    needs: (
+        mood_per_need: 25.0,
+        content_mood: 50.0,
+        health_per_day: 10.0,
+        sick_below: 30.0,
+        stray_after_days: 5.0,
+        hand_feed_days: 2.0,
+        cap_days: 4.0,
+    ),
+    herds: (
+        square_m: 160.0,
+        chance: 0.35,
+        spread_m: 9.0,
+        near_m: 150.0,
+        fade_s: 1.0,
+    ),
+    land: {
+        "home": [
+            (
+                id: "meadow-hen",
+                name: "Yard hen",
+                class: Bird,
+                status: Tameable,
+                plan: Bird,
+                herd: (4, 7),
+                length_m: 0.42,
+                height_m: 0.42,
+                walk_mps: 0.6,
+                run_mps: 3.0,
+                stride_m: 0.16,
+                colours: ((0.93, 0.89, 0.80), (0.80, 0.16, 0.12), (0.92, 0.70, 0.22), (0.95, 0.92, 0.85)),
+                keep: Some((
+                    // PLACEHOLDER until farming lands: grain.
+                    food: Turf,
+                    trust_gain: 34.0,
+                    space_cells: 0.2,
+                    grazing_cells: 0.2,
+                    products: [
+                        (good: "egg", amount: 1.0, period_days: 1.0, sex: Some(F)),
+                    ],
+                    coats: ["cream", "russet", "black"],
+                    patterns: ["plain", "speckled"],
+                    morph: "golden",
+                    adult_days: 10.0,
+                    male_one_in: 6,
+                )),
+                guide: (
+                    entry: "A meadow hen scratches for seed in the long grass and runs from anything taller than a fence post. Kept in a yard she lays an egg a day.",
+                    tip: "Stand still with turf in hand and let her come to you. Three feeds and she follows.",
+                ),
+            ),
+            (
+                id: "woolback",
+                name: "Woolback",
+                class: Mammal,
+                status: Tameable,
+                plan: Quadruped,
+                herd: (3, 6),
+                length_m: 1.2,
+                height_m: 0.8,
+                walk_mps: 0.9,
+                run_mps: 4.0,
+                stride_m: 0.7,
+                colours: ((0.90, 0.87, 0.78), (0.82, 0.78, 0.68), (0.20, 0.17, 0.15), (0.24, 0.20, 0.18)),
+                keep: Some((
+                    // PLACEHOLDER until farming lands: grain.
+                    food: Turf,
+                    trust_gain: 25.0,
+                    space_cells: 1.0,
+                    grazing_cells: 1.0,
+                    products: [
+                        (good: "wool", amount: 3.0, period_days: 4.0, sex: None),
+                    ],
+                    coats: ["cream", "grey", "black"],
+                    patterns: ["plain", "piebald"],
+                    morph: "melanic",
+                    adult_days: 12.0,
+                    male_one_in: 5,
+                )),
+                guide: (
+                    entry: "Woolbacks graze the open fields in loose flocks, heads down, and lift them all at once at a sound. A kept one grows a fleece worth shearing every four days.",
+                    tip: "Four feeds of turf, standing still. Pen them on grass and they feed themselves.",
+                ),
+            ),
+            (
+                id: "plodder",
+                name: "Plodder",
+                class: Mammal,
+                status: Tameable,
+                plan: Quadruped,
+                herd: (2, 4),
+                length_m: 2.0,
+                height_m: 1.35,
+                walk_mps: 0.8,
+                run_mps: 3.2,
+                stride_m: 1.1,
+                colours: ((0.52, 0.34, 0.20), (0.92, 0.88, 0.80), (0.30, 0.22, 0.16), (0.46, 0.30, 0.18)),
+                keep: Some((
+                    // PLACEHOLDER until farming lands: turnips.
+                    food: Turf,
+                    trust_gain: 20.0,
+                    space_cells: 2.0,
+                    grazing_cells: 2.0,
+                    products: [
+                        (good: "milk", amount: 1.0, period_days: 1.0, sex: Some(F)),
+                    ],
+                    coats: ["brown", "red", "dun"],
+                    patterns: ["plain", "belted"],
+                    morph: "albino",
+                    adult_days: 16.0,
+                    male_one_in: 4,
+                )),
+                guide: (
+                    entry: "The plodder is the great slow beast of the fields: two metres of patience that grazes from dawn to dusk. A kept cow gives a pail of milk a day.",
+                    tip: "Five feeds. It needs two cells of grass each in its pen.",
+                ),
+            ),
+        ],
+    },
+)

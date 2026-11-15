@@ -21,6 +21,7 @@ pub mod geo;
 pub mod gravity;
 pub mod hex;
 pub mod hexel;
+pub mod husbandry;
 pub mod inventory;
 pub mod lamp_bake;
 pub mod light;

@@ -175,6 +175,11 @@ fn stack_text(stack: Option<Stack>) -> String {
             item: Item::Fish(species),
             count,
         }) => format!("f{species},{count}"),
+        // Husbandry items (`animal-husbandry` S6): `h<code>`.
+        Some(Stack {
+            item: Item::Husbandry(good),
+            count,
+        }) => format!("h{},{count}", good.code()),
     }
 }
 
@@ -189,6 +194,7 @@ fn stack_of(text: &str) -> Option<Option<Stack>> {
         "b" => Item::Block(material_of(code.parse().ok()?)?),
         "t" => Item::Tool(tool_of(code.parse().ok()?)?),
         "f" => Item::Fish(code.parse().ok()?),
+        "h" => Item::Husbandry(pbd_core::inventory::Good::of_code(code.parse().ok()?)?),
         _ => return None,
     };
     Some(Some(Stack::new(item, count)))

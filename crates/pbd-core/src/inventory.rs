@@ -33,6 +33,70 @@ pub enum Item {
     /// (`fauna::Roster`). An index rather than a name because a slot is `Copy`
     /// and saved as a short code; the roster is append-only for that reason.
     Fish(u16),
+    // ---- Husbandry items (`animal-husbandry` design 12, S6) --------------
+    // One variant for every item the animal slice adds, so the farming
+    // branch's items merge beside it rather than through it. Saved as
+    // `h<code>` ([`Good::code`]); codes are append-only.
+    /// A fence or gate piece, or something a kept animal gave.
+    Husbandry(Good),
+    // ---- end of husbandry items ------------------------------------------
+}
+
+/// What the animal slice adds to the item table (`animal-husbandry` S6):
+/// the pieces a pen is built from and what kept animals give. Each has a
+/// saved code that never moves; a new one takes the next code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Good {
+    /// A fence piece, placed on a hex edge.
+    Fence,
+    /// A gate piece: a fence a pen needs at least one of.
+    Gate,
+    /// A hen's egg (to eat; fertile eggs are task 7).
+    Egg,
+    /// A woolback's fleece, shorn.
+    Wool,
+    /// A pail of a plodder's milk.
+    Milk,
+}
+
+impl Good {
+    /// Every good, in code order. Append only: a slot is saved by the code.
+    pub const ALL: [Good; 5] = [Good::Fence, Good::Gate, Good::Egg, Good::Wool, Good::Milk];
+
+    /// Its saved code: its place in [`Good::ALL`].
+    pub fn code(self) -> u8 {
+        Good::ALL
+            .iter()
+            .position(|g| *g == self)
+            .expect("every good is in ALL") as u8
+    }
+
+    /// The good a saved code names; `None` for a code nothing names.
+    pub fn of_code(code: u8) -> Option<Good> {
+        Good::ALL.get(code as usize).copied()
+    }
+
+    /// Its name, in `husbandry.ron`, in a record's product tally and in a
+    /// tooltip.
+    pub fn key(self) -> &'static str {
+        match self {
+            Good::Fence => "fence",
+            Good::Gate => "gate",
+            Good::Egg => "egg",
+            Good::Wool => "wool",
+            Good::Milk => "milk",
+        }
+    }
+
+    /// The good named `key`.
+    pub fn named(key: &str) -> Option<Good> {
+        Good::ALL.into_iter().find(|g| g.key() == key)
+    }
+
+    /// Whether it is a pen piece rather than a product.
+    pub fn is_piece(self) -> bool {
+        matches!(self, Good::Fence | Good::Gate)
+    }
 }
 
 /// The four tools, in the order the picker lists them.
@@ -176,6 +240,8 @@ impl Item {
             Item::Tool(_) => 1,
             // A creel's worth: a fish is a thing you carry a few of.
             Item::Fish(_) => 16,
+            Item::Husbandry(good) if good.is_piece() => 64,
+            Item::Husbandry(_) => 32,
         }
     }
 
@@ -189,6 +255,7 @@ impl Item {
             // The species' own name is the roster's; the item alone only
             // knows it is a fish.
             Item::Fish(_) => "fish",
+            Item::Husbandry(good) => good.key(),
         }
     }
 }
