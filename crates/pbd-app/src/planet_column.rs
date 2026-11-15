@@ -920,6 +920,48 @@ impl ColumnTier {
     }
 }
 
+#[cfg(test)]
+impl ColumnTier {
+    /// A tier of these columns, slot `i` finest record `i` and key `100 + i`,
+    /// side `s` of slot `i` being `sides[i][s]` (`NO_NEIGHBOR` off it), every
+    /// cell a hexagon and none rim: what a test outside this module (the
+    /// water mesher's) builds a small tier with.
+    pub(crate) fn for_tests(columns: Vec<Column>, sides: &[[u32; 6]]) -> Self {
+        let n = columns.len();
+        let records = (0..n)
+            .map(|i| GpuColumn {
+                runs: columns[i].packed_runs(render_code),
+                neighbors: [sides[i][0], sides[i][1], sides[i][2], sides[i][3]],
+                more: [
+                    sides[i][4],
+                    sides[i][5],
+                    6,
+                    state_word(&columns[i], false, false),
+                ],
+            })
+            .collect();
+        let mut tier = ColumnTier {
+            columns,
+            slots: (0..n).collect(),
+            records,
+            light: Vec::new(),
+            dusk: false,
+            glow: vec![false; n],
+            centres: vec![Vec3::Y; n],
+            sides: Vec::new(),
+            relit: 0,
+            lamps: Vec::new(),
+            water: TierWater {
+                queue: liquid::Queue::new(),
+                keys: (0..n as u32).map(|i| 100 + i).collect(),
+                records: (0..n).collect(),
+            },
+        };
+        tier.sides = tier.neighbor_slots();
+        tier
+    }
+}
+
 /// Make a cell RECORD agree with the column under it.
 ///
 /// **There are two representations of where the ground is**, and this is the

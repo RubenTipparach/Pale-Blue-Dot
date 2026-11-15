@@ -1184,6 +1184,8 @@ pub(super) struct WaterSky<'w> {
     rain_shadows: Option<Res<'w, RainShadows>>,
     /// The game's own water the sheet does not draw (`water-flow` E6).
     flowing: Option<Res<'w, crate::water_flow::FlowingWater>>,
+    /// How far the drawing is through the water's last tick.
+    ease: Option<Res<'w, crate::water_flow::WaterEase>>,
     /// The column tier's reach, for the far rivers' fade (design 13).
     columns: Option<Res<'w, crate::config::ColumnSettings>>,
 }
@@ -1237,8 +1239,10 @@ fn prepare_water_views(
         fine,
         rain_shadows,
         flowing,
+        ease,
         columns,
     } = sky;
+    let ease = ease.as_deref().copied().unwrap_or_default();
     let lit_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
     let rain_shadows = rain_shadows.is_none_or(|r| r.0);
     // `lighting-model`: under the new model the rain's rings on the water are
@@ -1459,7 +1463,7 @@ fn prepare_water_views(
                 .map_or(camera, |gpu| gpu.prev_camera)
                 .extend(0.0),
             sea: SeaView::from(&sea_now.gpu),
-            sea_frame: Vec4::new(s.depth_offset_m, 0.0, 0.0, 0.0),
+            sea_frame: Vec4::new(s.depth_offset_m, ease.smooth, ease.linear, 0.0),
             mist: Vec4::new(
                 weather_settings.lens_mist_fog_s,
                 weather_settings.lens_mist_clear_s,
@@ -1631,7 +1635,8 @@ fn prepare_water_views(
                 if !bytes.is_empty() {
                     queue.write_buffer(&gpu.flowing, 0, bytes);
                 }
-                gpu.flowing_count = (flowing.lanes.len() / 3) as u32;
+                gpu.flowing_count =
+                    (flowing.lanes.len() / crate::water_flow::LANES_PER_VERTEX) as u32;
                 gpu.flowing_version = flowing.version;
             }
             let resized = gpu.history_size != history_size;
@@ -1714,7 +1719,7 @@ fn prepare_water_views(
         if !lanes.is_empty() {
             queue.write_buffer(&flow, 0, bytemuck::cast_slice(lanes.as_slice()));
         }
-        let flowing_count = (lanes.len() / 3) as u32;
+        let flowing_count = (lanes.len() / crate::water_flow::LANES_PER_VERTEX) as u32;
         let rain_buffer = device.create_buffer(&BufferDescriptor {
             label: Some("precipitation map"),
             size: RAIN_MAP_MAX * RAIN_MAP_MAX * 4,
@@ -1812,7 +1817,7 @@ fn prepare_water_views(
 fn flowing_buffer(device: &RenderDevice, lanes: usize) -> Buffer {
     device.create_buffer(&BufferDescriptor {
         label: Some("flowing water vertices"),
-        size: (lanes.max(3) as u64 * 16).next_power_of_two(),
+        size: (lanes.max(crate::water_flow::LANES_PER_VERTEX) as u64 * 16).next_power_of_two(),
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     })

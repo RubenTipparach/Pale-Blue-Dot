@@ -40,7 +40,7 @@ pub fn layer_at(altitude: f32) -> Option<usize> {
 }
 
 /// One cell's stack.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Column {
     layers: [Material; LAYERS],
 }

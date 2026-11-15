@@ -265,6 +265,10 @@ pub struct Launch {
     /// started again in turn so water flows, falls and dries the whole
     /// while; logs `POUR_START` and `POUR_DONE` and quits after that long.
     pub pour_for: Option<f32>,
+    /// `--water-tick-frac F` (0..1): the water drawn F of the way through the
+    /// last of `--water-ticks`, and held there: the rule does not tick on
+    /// its own, so a capture shows smooth water mid-tick (`water-flow` 5.3).
+    pub water_tick_frac: Option<f32>,
     /// `--tide high|low`: the tide's moon over the camera or a quarter turn
     /// round (`ocean-environments` 5.1), for the tide's captures.
     pub tide: Option<String>,
@@ -420,6 +424,7 @@ impl Launch {
             pour_ahead: 0.0,
             pit: 0,
             pour_for: None,
+            water_tick_frac: None,
             tide: None,
             arrows: false,
             lamps: false,
@@ -559,6 +564,18 @@ impl Launch {
                         "--pour-for takes seconds"
                     );
                     result.pour_for = Some(seconds);
+                }
+                "--water-tick-frac" => {
+                    i += 1;
+                    let frac: f32 = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--water-tick-frac requires a fraction");
+                    assert!(
+                        (0.0..=1.0).contains(&frac),
+                        "--water-tick-frac takes 0 to 1"
+                    );
+                    result.water_tick_frac = Some(frac);
                 }
                 "--pour-ahead" => {
                     i += 1;

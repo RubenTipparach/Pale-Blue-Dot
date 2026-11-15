@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use pbd_app::drops::Drops;
 use pbd_app::planet::{PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
-use pbd_app::water_flow::{FlowArrows, run_ticks};
+use pbd_app::water_flow::{FlowArrows, WaterStep, run_ticks};
 use pbd_core::aim;
 use pbd_core::terrain::Material;
 
@@ -113,7 +113,15 @@ pub fn scripted(
     refresh: Res<pbd_app::planet::LodRefresh>,
     mut done: Local<bool>,
     mut sources: ResMut<PourSources>,
+    mut step: ResMut<WaterStep>,
 ) {
+    // `--water-tick-frac F`: the water frozen F of the way through its last
+    // tick, from the first frame, so the rule never ticks on its own.
+    if let Some(frac) = launch.water_tick_frac
+        && step.hold.is_none()
+    {
+        step.hold = Some(frac);
+    }
     if *done || (launch.capture.is_none() && launch.pour_for.is_none()) {
         return;
     }
@@ -204,6 +212,7 @@ pub fn scripted(
         &mut contact,
         &mut save,
         launch.water_ticks as usize,
+        &mut step,
     );
     info!(
         "scripted water: {poured} poured, {} ticks run, {changed} cells changed, {} still queued",
