@@ -1199,10 +1199,35 @@ fn a_world_saved_with_a_kestrel_opens_with_its_boats_and_keeps_the_record() {
     std::fs::write(&path, KESTREL_ERA).unwrap();
     let mut app = app(crate::saves::WorldSave::open(root.clone(), slot));
     app.update();
-    // Its two boats, no Kestrel in the world and none drawn.
-    let all = crafts(&mut app);
-    let kinds: Vec<Kind> = all.iter().map(|(_, c)| c.kind).collect();
-    assert_eq!(kinds, [Kind::Tern, Kind::Loon], "the world opens with two craft");
+    // Its two boats, stowed where they lie far from this test's walker and
+    // in the world when the walker is near, and no Kestrel in either.
+    let mut ids: Vec<u64> = crafts(&mut app).iter().map(|(_, c)| c.id).collect();
+    ids.extend(app.world().resource::<Fleet>().stowed.iter().map(|r| r.id));
+    ids.sort();
+    let boats: Vec<u64> = old
+        .vehicles
+        .iter()
+        .filter(|r| r.kind != "kestrel")
+        .map(|r| r.id)
+        .collect();
+    assert_eq!(ids, boats, "the world opens with two craft, the Tern and the Loon");
+    let tern_at = pbd_core::DVec3::from(
+        old.vehicles.iter().find(|r| r.kind == "tern").unwrap().position,
+    );
+    let mut all = Vec::new();
+    for _ in 0..240 {
+        stand_at(&mut app, (tern_at + tern_at.normalize() * 2.0).as_vec3());
+        app.update();
+        all = crafts(&mut app);
+        eprintln!("DBG walker {:?} tern_at {:?} stowed {:?} in {:?}", walker(&mut app), tern_at, app.world().resource::<Fleet>().stowed.iter().map(|r| r.id).collect::<Vec<_>>(), all.iter().map(|(_, c)| c.id).collect::<Vec<_>>());
+        if all.iter().any(|(_, c)| c.kind == Kind::Tern) {
+            break;
+        }
+    }
+    assert!(
+        all.iter().any(|(_, c)| c.kind == Kind::Tern),
+        "the Tern is in the world beside its walker"
+    );
     let mut names = app.world_mut().query::<&Name>();
     assert!(
         names.iter(app.world()).all(|n| n.as_str() != "Kestrel"),
@@ -1240,4 +1265,38 @@ fn a_world_saved_with_a_kestrel_opens_with_its_boats_and_keeps_the_record() {
     let put = put_away(app.world_mut()).expect("a spawned fleet");
     assert_eq!(put.vehicles.last(), Some(&kestrel));
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// `retire-kestrel` decision 1: a held record's ID is never given again,
+/// even where the file's own `next_id` has fallen behind it.
+#[test]
+fn a_held_record_keeps_its_id_from_every_new_craft() {
+    let mut old: VehicleFile = ron::from_str(KESTREL_ERA).unwrap();
+    let kestrel = old.vehicles.iter_mut().find(|r| r.kind == "kestrel").unwrap();
+    kestrel.id = 9;
+    old.next_id = 4;
+    let mut save = crate::saves::WorldSave::memory_only();
+    assert!(save.snapshot_vehicles(&old));
+    let mut app = app(save);
+    app.update();
+    let fleet = app.world().resource::<Fleet>();
+    assert_eq!(fleet.retired.len(), 1);
+    assert!(fleet.next_id >= 10, "next_id {} is not past 9", fleet.next_id);
+    let file = fleet.file(std::iter::empty());
+    assert!(file.next_id >= 10);
+}
+
+/// The moving things' light (`lamps-and-lanterns` decision 10), pinned on
+/// the boats now that the Kestrel and its cave rig are gone
+/// (`retire-kestrel` decision 5): every craft placed is lit by the field.
+#[test]
+fn every_craft_is_lit_by_the_field() {
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.update();
+    let mut lit = app
+        .world_mut()
+        .query_filtered::<&Vehicle, With<crate::field_light::LitByField>>();
+    let kinds: Vec<Kind> = lit.iter(app.world()).map(|v| v.craft.kind).collect();
+    assert_eq!(kinds.len(), crafts(&mut app).len());
+    assert!(kinds.contains(&Kind::Tern) && kinds.contains(&Kind::Loon));
 }
