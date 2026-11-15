@@ -2061,7 +2061,7 @@ mod tests {
         let flagged = also(world);
         assert!(
             flagged.contains(
-                &"also: use: a door, a forge, a ripe crop; with the shovel, till".to_string()
+                &"also: use: a door, a forge, a campfire, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till".to_string()
             ),
             "{flagged:?}"
         );

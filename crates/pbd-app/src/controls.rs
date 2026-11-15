@@ -414,7 +414,7 @@ const HANDS: [Binding; 6] = [
     row(
         &[Key::Board(KeyCode::KeyE)],
         " ",
-        "use: a door, a forge, a ripe crop; with the shovel, till",
+        "use: a door, a forge, a campfire, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till",
     ),
     row(
         &[Key::Mouse(MouseButton::Left)],
@@ -1163,7 +1163,9 @@ mod tests {
         binds.set(&sprint, KeyCode::KeyE);
         assert_eq!(
             binds.clashes(&sprint),
-            vec!["use: a door, a forge, a ripe crop; with the shovel, till"]
+            vec![
+                "use: a door, a forge, a campfire, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till"
+            ]
         );
         // E is the Tern's hiking too, but never on foot.
         assert!(

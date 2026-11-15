@@ -506,6 +506,7 @@ mod tests {
             "flatbread",
             "roast-turnip",
             "kale-skewer",
+            "fried-egg",
             "campfire",
         ] {
             assert!(live.contains(&code), "{code}");
@@ -545,7 +546,7 @@ mod tests {
         codes.dedup();
         assert_eq!(codes.len(), book.recipes.len());
         assert!(book.recipes.len() > n);
-        assert_eq!(book.at("campfire").count(), 5);
+        assert_eq!(book.at("campfire").count(), 6);
         let row = station_by_code("campfire").unwrap();
         assert_eq!(row.material, Some(Material::Campfire));
         assert_eq!(

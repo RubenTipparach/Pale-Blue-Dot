@@ -77,7 +77,7 @@
             inputs: [("frost-kale", 2), ("turnip", 1)],
             outputs: [("kale-skewer", 1)],
         ),
-        // Pending until `animal-husbandry` adds the egg.
+        // The hen's egg (`animal-husbandry`).
         (
             code: "fried-egg",
             name: "FRIED EGG",

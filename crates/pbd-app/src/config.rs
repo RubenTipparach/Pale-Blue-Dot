@@ -1211,6 +1211,17 @@ impl Validated for pbd_core::fauna::FaunaSettings {
 #[derive(Resource, Clone, Debug, PartialEq, Default)]
 pub struct FaunaConfig(pub pbd_core::fauna::FaunaSettings);
 
+/// Keeping animals (`pbd_core::husbandry`), from `husbandry.ron`.
+impl Validated for pbd_core::husbandry::HusbandrySettings {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::husbandry::HusbandrySettings::validate(self)
+    }
+}
+
+/// Every land species and how each is kept, loaded once.
+#[derive(Resource, Clone, Debug, PartialEq, Default)]
+pub struct HusbandryConfig(pub pbd_core::husbandry::HusbandrySettings);
+
 /// How long each material takes to break with each tool (`pbd_core::dig`).
 impl Validated for pbd_core::dig::DigSettings {
     fn validate(&self) -> Result<(), String> {
@@ -1618,6 +1629,7 @@ impl Plugin for ConfigPlugin {
             .insert_resource(AtmosphereConfig(load("atmosphere")))
             .insert_resource(VehiclesConfig(load("vehicles")))
             .insert_resource(FaunaConfig(load("fauna")))
+            .insert_resource(HusbandryConfig(load("husbandry")))
             .insert_resource(DigConfig(load("dig")))
             .insert_resource(FarmConfig(load("farming")))
             .insert_resource(recipes)
@@ -1684,6 +1696,10 @@ mod tests {
         let fauna: pbd_core::fauna::FaunaSettings = ron::from_str(FAUNA_RON).unwrap();
         Validated::validate(&fauna).unwrap();
         assert_eq!(fauna, Default::default());
+        let husbandry: pbd_core::husbandry::HusbandrySettings =
+            ron::from_str(pbd_core::husbandry::HUSBANDRY_RON).unwrap();
+        Validated::validate(&husbandry).unwrap();
+        assert_eq!(husbandry, Default::default());
         let dig: pbd_core::dig::DigSettings = ron::from_str(DIG_RON).unwrap();
         Validated::validate(&dig).unwrap();
         assert_eq!(dig, Default::default());

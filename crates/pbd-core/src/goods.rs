@@ -72,7 +72,14 @@ pub const GOODS: &[GoodRow] = &[
         99,
         "items/goods/bronze-ingot.png",
     ),
-    // ---- Append new goods here (animal products, food, feed ...).
+    // ---- animal-husbandry: a pen's pieces (fences and gates stand on hex
+    // edges as `fence` records, not as blocks) and what kept animals give.
+    row("fence", "fence", 64, "items/goods/fence.png"),
+    row("gate", "gate", 64, "items/goods/gate.png"),
+    row("egg", "egg", 32, "items/goods/egg.png"),
+    row("wool", "wool", 32, "items/goods/wool.png"),
+    row("milk", "pail of milk", 16, "items/goods/milk.png"),
+    // ---- Append new goods here (food, feed ...).
     // cooking (`cooking` design S1): the campfire's dishes. Saved by code.
     row(
         "grilled-fish",
@@ -116,6 +123,12 @@ impl Good {
     pub const COPPER_INGOT: Good = Good(10);
     pub const IRON_INGOT: Good = Good(11);
     pub const BRONZE_INGOT: Good = Good(12);
+    // animal-husbandry
+    pub const FENCE: Good = Good(13);
+    pub const GATE: Good = Good(14);
+    pub const EGG: Good = Good(15);
+    pub const WOOL: Good = Good(16);
+    pub const MILK: Good = Good(17);
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
@@ -190,6 +203,11 @@ mod tests {
             (Good::COPPER_INGOT, "copper-ingot"),
             (Good::IRON_INGOT, "iron-ingot"),
             (Good::BRONZE_INGOT, "bronze-ingot"),
+            (Good::FENCE, "fence"),
+            (Good::GATE, "gate"),
+            (Good::EGG, "egg"),
+            (Good::WOOL, "wool"),
+            (Good::MILK, "milk"),
         ] {
             assert_eq!(good.code(), code);
             assert_eq!(Good::by_code(code), Some(good));

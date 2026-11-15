@@ -121,6 +121,52 @@ pub enum Origin {
     New,
 }
 
+/// A species' body form (`animal-husbandry` decision 1): what the body is
+/// like, which is how the Kingdom groups every world's animals.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub enum Class {
+    Mammal,
+    Bird,
+    ReptileAmphibian,
+    #[default]
+    Fish,
+    Arthropod,
+    MolluscSoft,
+    /// Sequoia's two-legged tailed walkers (alien branch).
+    Twostrider,
+    /// Sequoia's fungal animals (alien branch).
+    Sporekin,
+    /// Wick's twilight-ring life (alien branch).
+    Ringling,
+}
+
+/// Whether a species can be kept (`animal-husbandry` decision 2).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub enum Status {
+    /// Never tamed: predators, migrants, the too-skittish, swarms of light,
+    /// and every fish (kept in tanks, not pens).
+    #[default]
+    WildOnly,
+    /// Can become domestic by its species' way.
+    Tameable,
+    /// Born on a farm or tamed.
+    Domestic,
+    /// May not be caught (M25).
+    Protected,
+}
+
+impl Status {
+    /// Why taming is refused, or `None` where it is not.
+    pub fn refusal(self, class: Class) -> Option<&'static str> {
+        match (self, class) {
+            (Status::Tameable | Status::Domestic, _) => None,
+            (Status::Protected, _) => Some("protected: it may not be caught"),
+            (Status::WildOnly, Class::Fish) => Some("wild only: fish are kept in tanks, not pens"),
+            (Status::WildOnly, _) => Some("wild only: it cannot be tamed"),
+        }
+    }
+}
+
 /// A species' field-guide entry: the text the guide shows beside the numbers
 /// it reads off the record itself.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -138,6 +184,12 @@ pub struct Species {
     pub id: String,
     pub name: String,
     pub from: Origin,
+    /// Its body form (`animal-husbandry` decision 1); every fish is `Fish`.
+    #[serde(default)]
+    pub class: Class,
+    /// Whether it can be kept; every fish is `WildOnly`.
+    #[serde(default)]
+    pub status: Status,
     /// The water classes it lives in.
     pub water: Vec<WaterClass>,
     /// The water temperature it spawns in, deg C, inclusive.
@@ -575,6 +627,8 @@ fn home_roster() -> Vec<Species> {
             id: id.into(),
             name: name.into(),
             from,
+            class: Class::Fish,
+            status: Status::WildOnly,
             water: water.to_vec(),
             temp_c,
             length_m,
