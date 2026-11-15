@@ -14,6 +14,7 @@ mod kitchen;
 mod map_screen;
 mod map_sites;
 mod menu;
+mod missions;
 mod overlay_ui;
 mod pack;
 mod scene;
@@ -273,6 +274,9 @@ pub struct Launch {
     pub campfire_panel: bool,
     /// `--eat <dish,dish>`: each dish given and eaten, for the effects row.
     pub eat: Vec<String>,
+    /// `--missions <n>`: the starter missions capture instrument raises the
+    /// first `n` steps of its scripted chain (`starter-missions` design 17).
+    pub missions: Option<usize>,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -393,6 +397,7 @@ impl Launch {
             campfire: None,
             campfire_panel: false,
             eat: Vec::new(),
+            missions: None,
             dig_ahead: false,
             pitch: None,
             yaw: None,
@@ -532,6 +537,14 @@ impl Launch {
                         .expect("--eat takes dish codes, comma separated");
                     result.eat = dishes.split(',').map(str::to_string).collect();
                 }
+                "--missions" => {
+                    i += 1;
+                    result.missions = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .expect("--missions takes how many scripted steps to raise"),
+                    );
+                }
                 "--dig-ahead" => result.dig_ahead = true,
                 "--pitch" => {
                     i += 1;
@@ -589,15 +602,15 @@ impl Launch {
                 }
                 "--menu" => {
                     i += 1;
-                    let screen = args
-                        .get(i)
-                        .expect("--menu requires pause, settings, saves, pack, map or guide");
+                    let screen = args.get(i).expect(
+                        "--menu requires pause, settings, saves, pack, map, guide or missions",
+                    );
                     assert!(
                         matches!(
                             screen.as_str(),
-                            "pause" | "settings" | "saves" | "pack" | "map" | "guide"
+                            "pause" | "settings" | "saves" | "pack" | "map" | "guide" | "missions"
                         ),
-                        "--menu takes pause, settings, saves, pack, map or guide"
+                        "--menu takes pause, settings, saves, pack, map, guide or missions"
                     );
                     result.menu = Some(screen.clone());
                 }
@@ -1246,6 +1259,16 @@ pub fn run(args: &[String]) {
     .init_resource::<pbd_app::kitchen::MealEffects>()
     .add_message::<pbd_app::kitchen::Cooked>()
     .add_message::<pbd_app::kitchen::Ate>()
+    // The starter missions (`starter-missions`): the chain, its counting
+    // and the player's record; the HUD line and the tab are `missions`.
+    .add_plugins(pbd_app::missions::MissionsPlugin)
+    .add_systems(
+        Update,
+        (
+            (missions::press_tabs, missions::paint, missions::show_line).chain(),
+            missions::scripted.run_if(pbd_app::loading::ready),
+        ),
+    )
     // The world, loaded before the planet is built: `create_planet` reads its
     // edits for the first tier, so a save's holes are there on the first frame
     // rather than appearing when the player first walks.
@@ -1324,6 +1347,7 @@ pub fn run(args: &[String]) {
                     forge::spawn,
                     kitchen::spawn,
                     kitchen::spawn_effects,
+                    missions::spawn,
                 ),
             )
                 .chain(),

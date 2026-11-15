@@ -129,3 +129,39 @@ written, so its codes are the ones its design names.
     through the same missions system the game runs, so the HUD line, the tab
     and the record are photographed mid-chain on a fresh world. It is a
     measurement instrument: it plays no fishing or farming itself.
+
+## After the tool-crafting merge (2026-11-14)
+
+`claude/phase-1` gained tool crafting while this was built, and was merged
+in. Recommendations taken (ask only with screenshots):
+
+18. **Nothing is pending.** Its goods (`fibre`, `stone`, `log`, `planks`,
+    `rope`), the workbench (`block:workbench`) and its recipes (`planks`,
+    `rope`, `workbench`, `stone-pickaxe`, `stone-shovel`, `stone-axe`,
+    `rod`, `forge`, `bronze-*`, `iron-*`, and `campfire` in `cooking.ron`)
+    are named in the chain as they are, and `awaited` is empty. The pending
+    machinery (decision 8) stays for the next chain that names another
+    branch's work.
+19. **"Make an axe, and fell a tree" is "make an axe and cut logs x3".**
+    Trees give logs (a branch by hand, up to four with an axe) and are not
+    felled, so the objective is `gather log x3`. `fell` stays a kind that
+    nothing raises, and so is pending wherever a chain names it.
+20. **A tool counts by kind and by recipe.** Tool crafting gives a tool to
+    the tool slot and raises `Gained { item: Tool(..), how: Made }`, whose
+    item has no tier, so `tool:pickaxe` is any pickaxe. The station collect
+    (`desktop/craft.rs`, every station and the hands) also raises
+    `missions::Did(craft, recipe:<code>)`, which is how "Make a metal tool"
+    names `recipe:bronze-axe` and the rest.
+21. **A world joins where it stands** (refines decision 10). State-shaped
+    objectives are checked when the world opens and after every count, and
+    a mission the world holds whole closes even while locked; closing a
+    mission closes the missions it needs, in order. So an old world, which
+    owns all four tools at the stone tier and has a campfire placed, opens
+    at "Go fishing", and a new world (no tools, no free stations since
+    tool crafting) opens at "Gather by hand".
+22. **The chain's order** follows the proposal with two moves: "Farm
+    plants" (harvest) and "Collect from the herd" come after "Make a metal
+    tool", because a crop ripens in four to six world days and an egg comes
+    once a day; planting and taming come early so that the waiting happens
+    while the player smelts. Those two are the missions that cannot be one
+    to three minutes; every other count is.

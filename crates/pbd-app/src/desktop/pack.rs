@@ -98,14 +98,20 @@ pub fn open(
     mut screen: ResMut<Screen>,
     walking: Option<Res<WalkingReadout>>,
 ) {
-    if !keys.just_pressed(KeyCode::KeyI) {
+    // I is the pack and O the starter missions (`starter-missions` design
+    // 13): each opens its own screen from the world, shuts it again, and
+    // switches to it from the other.
+    let to = if keys.just_pressed(KeyCode::KeyI) {
+        Screen::Pack
+    } else if keys.just_pressed(KeyCode::KeyO) {
+        Screen::Missions
+    } else {
         return;
-    }
+    };
     match *screen {
-        Screen::Playing if walking.is_some_and(|readout| readout.active) => {
-            *screen = Screen::Pack;
-        }
-        Screen::Pack => *screen = Screen::Playing,
+        Screen::Playing if walking.is_some_and(|readout| readout.active) => *screen = to,
+        open if open == to => *screen = Screen::Playing,
+        Screen::Pack | Screen::Missions => *screen = to,
         _ => {}
     }
 }
