@@ -455,7 +455,7 @@ function linkCard(a) {
     el('div', { class: 'row' }, el('a', { class: 'open', href: a.url, target: '_blank', rel: 'noopener' }, 'Open')));
 }
 
-// The roadmap (owner, 2026-11-14): the first game loop, environment v2, town building and civil engineering, then the townsfolk. `refs` are mockup ids;
+// The roadmap (owner, 2026-11-14): the first game loop, environment v2, town building and civil engineering, mass transportation, then the townsfolk. `refs` are mockup ids;
 // `change` is the OpenSpec change. Status: built, building, planned (written up), later (not started).
 const ROADMAP = [
   { title: 'The first game loop', when: 'now', note: 'Crafting tools, fishing, farming, herding, cooking: each feeds the next.', steps: [
@@ -473,7 +473,13 @@ const ROADMAP = [
     { title: 'Town building', status: 'later', change: 'tenebris-towns', refs: ['M15', 'M22'], text: 'Building and growing towns on the hex grid, from the reference town.' },
     { title: 'Civil engineering', status: 'later', change: '', refs: [], text: 'The works between buildings: roads, bridges and the like. No mockup yet.' },
   ] },
-  { title: 'Townsfolk', when: 'later', note: 'After town building. Not started.', steps: [
+  { title: 'Mass transportation', when: 'later', note: 'After civil engineering. Not started.', steps: [
+    { title: 'Airships', status: 'later', change: 'vehicle-yards', refs: ['M24'], text: 'Airships built in the hangar and flown between towns.' },
+    { title: 'Sea ships, sailing and navigation', status: 'later', change: 'steer-and-sail', refs: ['M23'], text: 'Hex-cell ships from the drydock, sails, and a GPS that coaches the helm.' },
+    { title: 'Hired haulers', status: 'later', change: '', refs: ['M20', 'M12'], text: 'Workers hired to carry goods between places for you.' },
+    { title: 'Conveyors, aqueducts and minecart tracks', status: 'later', change: 'water-flow', refs: ['M20', 'M28'], text: 'Basic belts, water carried in channels, and track for carts.' },
+  ] },
+  { title: 'Townsfolk', when: 'later', note: 'Not started. Its place in the order is open: hired haulers need townsfolk to hire.', steps: [
     { title: 'NPCs', status: 'later', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, talk and trade.' },
     { title: 'Missions', status: 'later', change: '', refs: ['M11'], text: 'Jobs and contracts from the townsfolk.' },
     { title: 'Carpentry and house building', status: 'later', change: 'player-building', refs: ['M6', 'M22'], text: 'Walls, floors and storeys on the hex grid; cranes and scaffold.' },

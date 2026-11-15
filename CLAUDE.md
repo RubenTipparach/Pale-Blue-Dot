@@ -326,7 +326,12 @@ which wait for a request.
   down town building, civil engineerring"): towns built and grown on the grid (M15,
   M22), and the works between buildings (roads, bridges); no mockup yet for
   the second.
-- **Then the townsfolk**: NPCs (M5, `townsfolk`), missions, carpentry and
+- **Then mass transportation** ("then after civil engineering, we'll get
+  into mass transportation"): airships (M24), sea ships, sailing and
+  navigation (M23, `steer-and-sail`), hiring workers to transport goods, and
+  basic conveyors, aqueducts and minecart track (M20, M28).
+- **The townsfolk**, its place in the order not yet set (hired haulers need
+  people to hire): NPCs (M5, `townsfolk`), missions, carpentry and
   house building (M6, M22, `player-building`), and power generation, its
   first rungs only: water and wind (M20).
 
