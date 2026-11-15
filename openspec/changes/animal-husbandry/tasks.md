@@ -39,9 +39,9 @@ judged against what it would cost.
 
 ## 7. Eggs and young (on request, after approval)
 
-- [ ] 7.1 Fertile eggs, broody hens, the incubator; life stages from the birth day. Verify: a test that an egg set on day d hatches on day d + 3 and lays from day d + 13.
+- [ ] 7.1 Fertile eggs, broody hens, the incubator; life stages from the birth day (design 13, E1-E5, E10). Verify: a test that an egg set on day d hatches on day d + 3 and lays from day d + 13.
 
 ## 8. Breeding (on request, after approval)
 
-- [ ] 8.1 Pairing, gestation, cooldown; inheritance with mutation; Wright's F from the pedigree. Verify: a test that the four predicted values for a gene are exactly the ones births produce over many seeds; siblings give F = 0.25.
-- [ ] 8.2 The breeding screen and the pedigree. Verify: a capture beside the mockup's Breeding tab.
+- [ ] 8.1 Pairing, gestation, cooldown; inheritance with mutation; Wright's F from the pedigree (design 13, E6-E8). Verify: a test that catching up in one evaluation writes the same births as evaluating every half day; a test that a world with no broods opens unchanged and writes nothing; a test that the four predicted values for a gene are exactly the ones births produce over many seeds; siblings give F = 0.25.
+- [ ] 8.2 The breeding screen and the pedigree (design 13, E9). Verify: a capture beside the mockup's Breeding tab.
