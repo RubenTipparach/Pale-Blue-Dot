@@ -292,21 +292,21 @@ const ENV = [
     where: "Trenches where the generator's plates meet under the sea; caves where the worm carve meets the seabed; wrecks are stored records, a ship lost by a player or placed by a story.",
     today: "Worm caves exist and volumetric-water phase 1 makes their air dry and their water wet. The trench (a deeper basin to the column floor), a wreck as a record, and the cave's lit pocket are new."},
   {id: "river", water: "fresh", name: "River, source to mouth", lede: "A spring in the hills, riffles, a waterfall into a plunge pool, meanders and gravel bars, and a mouth at the sea; every step a 1 m layer.",
-    sdesc: "A river from a spring among rocks to the sea. Because the ground is cells, the river comes down in steps: one-layer riffles, a four-layer waterfall into a plunge pool, slow meanders with gravel bars, then the estuary. Flow streaks run downstream on every cap and fall down every face. Redrun salmon run upstream and leap the fall; trout hold in the pool (Drop a catch puts a caught fish on the bank as its 2D item icon, beside the live 3D fish: the one way an animal is a sprite); a kingfisher dives from a willow; a heron stands in the shallows; diving ducks work the pool.",
+    sdesc: "A river from a spring among rocks to the sea. Because the ground is cells, the river comes down in steps: one-layer riffles, a four-layer waterfall into a plunge pool, meanders with gravel bars, then the estuary. The water is the Water sim's: sources at the spring, in the plunge pool and under each deep reach, the sea at the mouth, and everything else flowing by Luanti's rule, settled before you look. Each reach runs at most eight cells from where it is fed, so the river steps a layer every 10 m, its tops slope down each reach, every falling cell down the waterfall is a whole block, and the arrows and the water's texture follow the flow. Redrun salmon run upstream and leap the fall; trout hold in the pool (Drop a catch puts a caught fish on the bank as its 2D item icon, beside the live 3D fish: the one way an animal is a sprite); a kingfisher dives from a willow; a heron stands in the shallows; diving ducks work the pool.",
     look: "White water at each step, still dark pools, gravel bars, willows and reeds on the banks. Clear in the hills, browner toward the mouth.",
     life: ["redrun", "trout", "perch", "crayfish", "riverotter", "kingfisher", "heron", "rivermussel", "dragonfly", "diver", "minnow", "glowmoth", "firefly"],
     does: "Fishes the pools and the run, traps crayfish, collects river mussels (pearls are rarer than in clams), builds a mill or a water wheel at a fall, crosses at a ford.",
     where: "From the generator's drainage: rivers start where rain gathers above a threshold and run down the steepest descent to the sea. A step of one layer is a riffle, two or three a rapid, four or more a fall.",
     today: "The generator carves river channels today, but only below 40 m altitude and down to sea level: the water in them is the sea's, flat and still (<code>water-flow</code>'s flow field is zero because there are no rivers above the sea). Rivers that step down from a source need volumetric water (phases 2 and 3) and a river pass in a new generator version."},
   {id: "dam", water: "fresh", name: "Beavers and dams", lede: "A colony fells the trees, builds a dam cell by cell, floods the stream into a pond and raises a lodge in it.",
-    sdesc: "A stream in temperate woods. Drag the days: the beavers fell trees by the bank (stumps are left), build the dam a cell at a time from the stream bed up, the pond fills behind it and floods the cells upstream, and a lodge rises in the pond. The journal beside shows every change as an entry authored by the colony. Break the dam, or put a jetty where the dam would go, and see the world yield to the player.",
+    sdesc: "A stream in temperate woods. Drag the days: the beavers fell trees by the bank (stumps are left), build the dam a cell at a time from the stream bed up, the pond fills behind it and floods the cells upstream, and a lodge rises in the pond. The water is the Water sim's: the stream runs from a spring by Luanti's rule, a layer down every 10 m; the pond is sources, one layer over the dam's lowest cell (the spillway the colony leaves a layer short), so a full pond spills over it and the stream below runs on. Breach the dam digs its middle out and the pond pours through. The journal beside shows every change as an entry authored by the colony. Break the dam, or put a jetty where the dam would go, and see the world yield to the player.",
     look: "A stepped dam of stick-and-mud cells, a still pond with drowned stumps, a dome of sticks in it, lilies and ducks once it settles.",
     life: ["beaver", "dabbler_drake", "duckling", "diver", "frog", "trout", "dragonfly", "heron", "firefly"],
     does: "Watches a valley change: a pond to fish and water a farm from, felled timber to take. Breaking a dam drains the pond; building on the stream first keeps the colony away.",
     where: "Where the beaver's range (temperate forest, the fields and redwood biomes at 40 to 60 degrees) meets a stream small enough to dam: a river cell whose flow is under a threshold, with trees within 20 m.",
     today: "Nothing of this exists in the game. The journal with authors is designed in <code>world-persistence</code>; the beaver colony is a world process on it; the pond above the stream needs volumetric water."},
   {id: "marsh", water: "brackish", name: "Marsh and estuary", lede: "Reed beds and shallow pools between peat hummocks, mist at dawn and fireflies at night, opening to mangroves and mudflats where the river meets the sea.",
-    sdesc: "A flat wet lowland. Pools stand a few tens of centimetres deep between hummocks of peat and moss; reeds, cattails and lily pads fill them. To one side the land runs out into mangroves on mudflats and the brackish estuary. Ducks dabble and upend in the pools and a mother leads her ducklings in a line; press Startle and the flock lifts and comes back down. At dawn mist lies on the water; at night fireflies, glowmoths and a faint marsh-gas glow drift over it.",
+    sdesc: "A flat wet lowland. Pools stand a metre deep between hummocks of peat and moss; reeds, cattails and lily pads fill them. The pools are the Water sim's still water: sources in basins the hummocks rim, drawn by the same mesher as the river. To one side the land runs out into mangroves on mudflats and the brackish estuary. Ducks dabble and upend in the pools and a mother leads her ducklings in a line; press Startle and the flock lifts and comes back down. At dawn mist lies on the water; at night fireflies, glowmoths and a faint marsh-gas glow drift over it.",
     look: "Low, flat, wet and green-brown; still water everywhere in small pools; reeds taller than the walker; mud and roots at the sea edge.",
     life: ["dabbler_drake", "dabbler_hen", "duckling", "diver", "heron", "frog", "bog_toad", "mire_lurker", "eel", "minnow", "fiddler", "firefly", "glowmoth", "dragonfly"],
     does: "Cuts reed (thatch) and peat (fuel), gathers duck eggs and feathers, hunts the pools for eels and frogs, and crosses carefully: the mire lurker waits in the deeper pools.",
@@ -722,8 +722,9 @@ function glowHook(W) { W.cards = W.cards || []; W.timeHooks.push((n, T) => { W.g
 <script>
 "use strict";
 // ======================= the water surface =======================
-// The water material, its controller and the hex caps with their foaming falls live in water-flow/water-look.js, which
-// M28 (water-flow.html) loads too, so the two pages draw water one way. What it reads from a scene: W.U (lamps, the
+// The water material, its controller, the liquid mesher every tab's fresh water is drawn with (cellWater, below) and
+// the flat caps the coast's rock pools and the cave pocket keep live in water-flow/water-look.js (M28's page is folded
+// into this one's Water sim tab), so the water is drawn one way. What it reads from a scene: W.U (lamps, the
 // baked water-level map, absorption, haze), W.opts.dim, W.skyCol, W.sunK, and W.seas, all made by World above.
 const {WAVES, seaH, WAVE_GLSL, waterMat, waterCtl, makeCaps, FALL_OFF} = PBDWater;
 // the open sea: a polar mesh that follows the eye, its rings spreading with distance
@@ -1565,7 +1566,7 @@ function sceneRiver(stage) {
   W.update = (t, dt) => { const cp = W.camera.position, cwl = W.waterAt(cp.x, cp.z), under = cp.y < cwl; CW.step(dt); for (const l of life) l.update(t, cp, dt); ff.update(t); gm.update(t); lamp.update(under, cwl - cp.y);
     for (const d of DROPS) { if (d.m.position.y > d.g + 0.02) { d.vy -= 9.8 * dt; d.m.position.y = Math.max(d.g + 0.02, d.m.position.y + d.vy * dt); } d.m.rotation.set(0, Math.atan2(cp.x - d.m.position.x, cp.z - d.m.position.z), 0); } };
   window.__river = {CW, cells, wlx, zc};
-  W.setViews({"Bank": [[-22, bed(-22, zc(-22) + 5.2) + 0.3, zc(-22) + 4.2], 1.1, 0.35, 5.5], "Waterfall": [[-31, PL + 1, zc(-31)], 1.62, 0.2, 21], "Source": [[-80, wlx(-80) + 1, zc(-80)], 0.8, 0.45, 40], "Meanders": [[30, wlx(30) + 1, 4], 0.4, 0.75, 70], "Mouth": [[80, 0, 4], 1.6, 0.3, 40], "Plunge pool": [[-26, PL - 1.8, zc(-26)], 1.5, 0.08, 6]});
+  W.setViews({"Bank": [[-22, bed(-22, zc(-22) + 5.2) + 0.3, zc(-22) + 4.2], 1.1, 0.35, 5.5], "Waterfall": [[-31, PL + 1, zc(-31)], 1.62, 0.2, 21], "Source": [[-84, wlx(-84) + 0.5, zc(-84)], 1.45, 0.72, 30], "Meanders": [[30, wlx(30) + 1, 4], 0.4, 0.75, 70], "Mouth": [[80, 0, 4], 1.6, 0.3, 40], "Plunge pool": [[-26, PL - 1.8, zc(-26)], 1.5, 0.08, 6]});
   W.lampBtn(); finish(W, "Waterfall"); return W;
 }
 
@@ -1581,11 +1582,12 @@ function sceneDam(stage) {
   W.water = WATERS.river; W.U.uWLdef.value = -1000;
   const M = commonMats(W), B = SHEET, {AIR, SOLID, SRC} = PBDLiquid;
   const zc = x => 2 * Math.sin(x / 18);
-  // T: the top of the stream's water layer, a layer down every 10 m from the spring (x < -62) to the valley's foot
-  const STEPS = [[-999, 12], [-62, 11], [-52, 10], [-42, 9], [-32, 8], [-22, 7], [-12, 6], [-2, 5], [8, 4], [18, 3], [28, 2]];
-  const SPRING_X = -62;
+  // T: the top of the stream's water layer, a layer down every 10 m from the spring (x < -65) to the valley's foot,
+  // each dam site in the middle of a reach
+  const STEPS = [[-999, 12], [-65, 11], [-55, 10], [-45, 9], [-35, 8], [-25, 7], [-15, 6], [-5, 5], [5, 4], [15, 3], [25, 2], [35, 1]];
+  const SPRING_X = -65;
   const wlx = x => { let v = STEPS[0][1]; for (const [s, l] of STEPS) if (x >= s) v = l; return v; };
-  const ground = new Map(), cellsG = rectRegion(-70, 40, -30, 30, (q, r, x, z) => { const d = Math.abs(z - zc(x)), T = wlx(x); if (d < 2.3) return {h: T - 1, s: B.swamp, top: [0, 3], stream: true}; const h = T + Math.floor((d - 2.3) * 0.36 + fbm(x / 12, z / 12) * 1.2); return {h, s: B.fields, top: [0, 0]}; });
+  const ground = new Map(), cellsG = rectRegion(-70, 40, -30, 30, (q, r, x, z) => { const d = Math.abs(z - zc(x)), T = wlx(x); if (d < 2.3) return {h: T - 1, s: B.swamp, top: [0, 3], stream: true}; const h = T + Math.floor(Math.max(0, d - 6) * 0.36 + fbm(x / 12, z / 12) * 1.2); return {h, s: B.fields, top: [0, 0]}; });   // a flat meadow either side, for the pond to flood
   for (const [k, c] of cellsG) ground.set(k, c);
   buildColumns(W, cellsG, M); const bed = bedSampler(cellsG);
   // a dam: every cell of its line lower than four layers over the stream's bed there, built a layer at a time from the
@@ -1807,7 +1809,7 @@ function sceneMarsh(stage) {
 // Two patches: M28's, the sea to the west, a beach, a plain with a dry basin, a ledge and a plateau (12 cells from its
 // middle, layers -6 to 13); and this tab's own small one (9 cells, layers 0 to 15). Each preset names its patch.
 const SIM_PATCH = {
-  m28: {N: 12, Y0: -6, Y1: 13, lamps: [[6, 0], [3, 3], [-1, 4], [-5, 2], [9, -5], [-2, -4], [1, -6]], patchView: [[2, 0, 0], 0.55, 0.66, 66]},
+  m28: {N: 12, Y0: -6, Y1: 13, lamps: [[6, 0], [3, 3], [-1, 4], [-5, 2], [9, -5], [-2, -4], [1, -6]], trees: [[-6, 9], [-8, 10], [3, 9], [6, 8], [-1, -10], [4, -11], [9, 2], [10, 1], [-3, -8]], patchView: [[2, 0, 0], 0.55, 0.66, 66]},
   m25: {N: 9, Y0: 0, Y1: 15, lamps: [[8, -4], [-8, 4], [3, 5], [-4, -5], [6, 2], [-2, 8]], patchView: [[0, 4, 0], 0.7, 0.62, 52]},
 };
 const hexDistA = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
@@ -1840,7 +1842,7 @@ function sceneSim(stage) {
     <div class="lab2"><span>Range</span><b id="simRangeV">8 levels</b></div><input type="range" id="simRange" min="1" max="8" value="8" aria-label="Range in levels" style="width:100%;accent-color:var(--amber)">
     <div class="seg"><button id="simCmp">Settle from scratch and compare</button></div><div class="lab2" id="simCmpO" style="text-transform:none"></div>`;
   const L = PBDLiquid, {AIR, SOLID, FLOW, SRC} = L;
-  const atlas = atlasMat(W), granite = W.std({map: tex("game/granite", 2)}), iron = W.std({map: tex("game/iron", 1)});
+  const atlas = atlasMat(W), granite = W.std({map: tex("game/granite", 2)}), iron = W.std({map: tex("game/iron", 1)}), treeMats = {bark: W.std({map: tex("game/bark", 1)}), leaves: W.std({map: tex("game/leaves", 2)})};
   const S = {preset: "fall", tool: "pour", run: true, rate: 4, acc: 0, ground: null, water: null, patch: null};
   // one rule state and one water mesh a patch, made when a preset first needs it
   const PATCHES = {};
@@ -1851,12 +1853,14 @@ function sceneSim(stage) {
     // lamp posts at the patch's edge: at night the water is lit by them
     const posts = o.lamps.map(([q, r]) => { const X = hx(q, r) + (name === "m28" ? 0.6 : 0), Z = hz(r), post = box(W, iron, 0.14, 3, 0.14, X, 0, Z), lamp = W.lamp(X, 3.2, Z, 0xffc070, 2.4, 12, {size: 0.3}); return {q, r, post, lamp}; });
     W.LAMPS = W.LAMPS.filter(l => !posts.some(p => p.lamp === l));   // lit only while their patch is the one shown
-    return (PATCHES[name] = {name, o, LQ, SW, posts, cmat: new Uint8Array(LQ.NCELL)});
+    // M28's trees on its plain, each standing while its cell is the ground it grew on
+    const trees = (o.trees || []).map(([q, r]) => ({q, r, h: m28Ground(q, r), g: tree(W, treeMats, hx(q, r), m28Ground(q, r), hz(r), 0.9)}));
+    return (PATCHES[name] = {name, o, LQ, SW, posts, trees, cmat: new Uint8Array(LQ.NCELL)});
   }
   let P = null, LQ = null, SIM = null, kind = null, lvl = null, down = null, idx = null, inside = null, unidx = null, cmat = null, SW = null;
   function usePatch(name) {
     if (P && P.name === name) return;
-    for (const Q2 of Object.values(PATCHES)) { if (Q2.SW.mesh) Q2.SW.mesh.visible = false; if (Q2.SW.arrows) Q2.SW.arrows.visible = false; for (const p of Q2.posts) { p.post.visible = false; if (p.lamp.bulb) p.lamp.bulb.visible = false; W.LAMPS = W.LAMPS.filter(l => l !== p.lamp); } }
+    for (const Q2 of Object.values(PATCHES)) { if (Q2.SW.mesh) Q2.SW.mesh.visible = false; if (Q2.SW.arrows) Q2.SW.arrows.visible = false; for (const p of Q2.posts) { p.post.visible = false; if (p.lamp.bulb) p.lamp.bulb.visible = false; W.LAMPS = W.LAMPS.filter(l => l !== p.lamp); } for (const t of Q2.trees) t.g.visible = false; }
     P = patch(name); ({LQ, SW, cmat} = P); ({SIM, kind, lvl, down, idx, inside, unidx} = LQ);
     for (const p of P.posts) { p.post.visible = true; W.LAMPS.push(p.lamp); }
     SW.setArrows(arrowsBtn.getAttribute("aria-pressed") === "true");
@@ -1904,6 +1908,7 @@ function sceneSim(stage) {
         if (m === 4) hexSide(GG, X, Z, k, y, y + 1, () => [[0, 0.5], [0.7, 0.5], [0.7, 0], [0, 0]]);
         else { const t = open && m === 1 ? SIDES[1] : SIDES[m === 1 ? 2 : m]; hexSide(GA, X, Z, k, y, y + 1, () => [auv(t[0], t[1], t[2], 0, 0), auv(t[0], t[1], t[2], 1, 0), auv(t[0], t[1], t[2], 1, 1), auv(t[0], t[1], t[2], 0, 1)]); } } }
     S.ground = [meshOf(GA, atlas), meshOf(GG, granite)]; S.ground.forEach(m => W.scene.add(m));
+    for (const t of P.trees) t.g.visible = S.topOf(t.q, t.r) === t.h;
   }
   // The sim's water: PBDWater.simWater (water-flow/water-look.js, the river, the dam and the marsh draw with it too)
   // meshes every water cell as Luanti's liquid mesher does (water-flow design 7e): sloped tops from shared corner

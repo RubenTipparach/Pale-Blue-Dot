@@ -1,6 +1,6 @@
-// The water look shared by the mockups that draw hex water: M25 (ocean.html: the sea, every fresh-water cap and fall,
-// and the "Water sim" tab) and M28 (water-flow.html). One copy, loaded by both pages, as water-flow/liquid.js is for
-// the rule, so the sim's water in the two can never look different. Needs three.js r128 (THREE) before it; the sim
+// The water look of M25 (ocean.html): the sea, and every tab's fresh water on cells (the river, the dam's stream and
+// pond, the marsh pools and the "Water sim" tab, which M28, water-flow.html, is folded into since 2026-11-15). One copy,
+// as water-flow/liquid.js is for the rule, so the water on every tab looks one way. Needs three.js r128 (THREE) before it; the sim
 // builder (simWater) needs water-flow/liquid.js (PBDLiquid) too.
 //
 // What a page gives it: a scene object W = {scene, U, opts, seas}. W.U holds the uniforms the water shares with the

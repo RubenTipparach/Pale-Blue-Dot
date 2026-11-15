@@ -319,6 +319,27 @@ The game's water mesher should do the same (requirement "Flowing water is
 meshed per cell from its corner levels", task 3.6). Proposed only; no game
 code until the owner approves the mockup and asks.
 
+**7f. Rivers run on the rule too; M28 folds into M25 (owner, 2026-11-15).**
+"water that flows - make sure the rivers use that too, so merge these
+artifacts together so we get it more consistent". M25's river, dam stream and
+pond, and marsh pools now run on `liquid.js` and draw with `liquidMesh`
+(`ocean-environments` design 12), and M25's Water sim tab carries M28's
+patch, presets and controls; `water-flow.html` points there. The rule is
+unchanged and every preset settles as before.
+
+What a river asks of the rule, measured on M25's river (a Node run of
+`liquid.js` on its cells): a flowing reach runs eight cells from where it is
+fed and dries beyond, and a step down feeds the reach below to the lip's
+level plus three for one layer, to the full seven for two or more. A river on
+cells therefore steps a layer at most four cells (11 m) apart, or two layers
+at most seven apart; the river's old meanders, a layer every 22 to 28 m,
+dried 17 m below each step. Still water (a spring, a pool, a pond, the bed
+under a deep reach) is sources, and a reach's lip is kept one layer deep so
+the still water of one reach never touches the flowing water of the next,
+where renewal could turn the river to sources. The game's river pass
+(`ocean-environments` task 8.1) has to lay rivers out the same way: proposed
+only.
+
 **8. The game's code is written from the rule, not translated.** The mockup
 is a line-by-line port of LGPL-2.1-or-later code and says so. The Rust
 version is written from decisions 1 to 6 and Luanti's rule as described in

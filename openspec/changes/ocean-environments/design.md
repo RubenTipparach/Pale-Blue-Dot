@@ -258,6 +258,9 @@ authors.
 
 ### 9. Rivers and marsh pools wait for volumetric water
 
+(In the mockup they are drawn by the Water sim's rule since 2026-11-15:
+decision 12. In the game they still wait, as below.)
+
 A river that steps down from a spring, a marsh pool 0.6 m above the sea and a
 beaver pond all need water above sea level. They are built after
 `volumetric-water` phases 2 and 3 and a drainage river pass in a new generator
@@ -366,6 +369,92 @@ console errors and one WebGL context; the camera stays put when idle; no
 horizontal scroll at 390 px; the sim spreads water from a poured source tick
 by tick. Screenshots in `docs/screenshots/mockup-ocean/` (`*-before.jpg` and
 `*-after.jpg`, `sim-*.jpg`). Frame cost was not measured.
+
+### 12. Fresh water on cells is the Water sim's, on every tab; M28 folded in
+
+The owner, 2026-11-15: "water that flows - make sure the rivers use that
+too, so merge these artifacts together so we get it more consistent". Until
+then the river, the dam and the marsh drew their water with hand-placed caps
+(`makeCaps`: a fixed level per cell, a fixed flow vector, falling sheets),
+while the Water sim tab and M28 ran Luanti's rule and drew it with Luanti's
+mesher. Now every tab's fresh water that stands or flows on cells is
+simulated by the rule (`water-flow/liquid.js`, unchanged) and drawn by the
+mesher (`PBDWater.simWater` in `water-flow/water-look.js`), through one
+helper (`cellWater` in `ocean.html`):
+- **Still water is sources**, as the world's generated water is: the river's
+  spring, its plunge pool and the bed under each deep reach, the beaver pond,
+  the marsh pools, the sea's cells at the river mouth. Everything else
+  follows from the sources and the cells by the rule, settled from scratch
+  (every source queued, ticks until nothing is) before the first frame, so a
+  tab opens on running water, not an empty bed.
+- **The sea stays the wave surface** (`makeSea`): the open sea, the coast and
+  its surf are not cells. At the river mouth the sea is also sources at sea
+  level in the rule's patch, as M28's "Channel from the sea" has it, so the
+  river runs into it; the mesher leaves those cells to the wave surface (a
+  `skip` hook in `liquidMesh`) and draws the river's water spreading over it.
+  The coast's rock pools and the cave pocket are sea water and keep their
+  caps.
+
+**What the rule asks of a river.** A reach of flowing water runs eight cells
+from where it is fed (levels 7 to 0) and dries beyond. A step down feeds the
+reach below anew: one layer gives the lip's level plus three
+(`WATER_DROP_BOOST` 4, less the one the falling cell loses), two layers or
+more the full seven. Measured on the river with the old levels (a Node run of
+`liquid.js` on the tab's own cells): the hills' riffles, 8 to 10 m apart,
+ran; the meanders, one layer every 22 to 28 m, dried 17 m below each step,
+68 of 154 river cells dry. So a river on cells steps a layer at most four
+cells apart, or two layers at most seven apart. The meanders now step a layer
+every 10 m and the whole river stands four layers higher than its caps did
+(the spring at 19, the fall from 14 to 10, the last reach at 1, the sea at
+0); settled in 81 ticks, no river cell dry, 1,095 sources (the sea's
+included), 230 flowing, 51 of them falling. A deep reach is two layers, a
+source under the flowing layer, except its lip (a cell beside a lower reach),
+which is one layer deep, so the still water of one reach never touches the
+flowing layer of the next and nothing renews down the river. The plunge pool
+is three deep; the four-layer fall into it is four whole falling blocks.
+The game's river pass (task 8.1) has the same constraint: proposed, written
+in `water-flow` design 7f.
+
+**The dam.** The stream comes down its valley a layer every 10 m from a
+spring at its head, each dam site in the middle of a reach, a flat meadow
+either side for the pond to flood. A dam is solid cells of sticks four
+layers over the stream's bed, and the colony leaves the stream's middle cell
+one layer short: the spillway. The pond is sources filled from just behind
+the dam up to one layer over its lowest cell, rising a layer at a time as
+the days pass, so a full pond spills over the spillway and the stream below
+runs on by the rule; while the dam is going up the pond spills over whatever
+is lowest. "Breach the dam" (as in the Water sim) digs the spillway and the
+cell beside it to the bed and lets the rule run live: the pond pours through,
+and since a source never drains, it keeps pouring. The player's break on day
+30 still drains the pond (it is the history's), and the stream runs through
+the gap. Day 40: 105 sources, 246 flowing, settled in 25 ticks.
+
+**The marsh.** Its pools are sources in basins: a source's top is its
+layer's full height, so the pools stand at 1 m over their beds and the
+hummocks and peat a layer higher, at 2 (they were 0.6 m water against 1 m
+hummocks). A pool cell beside the channel, the mudflats or the patch's edge
+is a hummock, so every pool holds: 393 sources, nothing flows.
+
+**M28 is folded into M25.** The Water sim tab is the one place for the
+playable sim. It carries M28's coast patch (the sea, a beach, a plain with a
+dry basin, a ledge and a plateau) and every preset (spring, channel, basin,
+pair, runaway, recede) beside its own (pond, waterfall, dam, flat), the
+renew toggle (3, 2, off), the range slider, speeds of 1, 4 and 16 ticks a
+second, step, reset, the pour, dig and place tools, the arrows' toggle and
+M28's "Settle from scratch and compare". Each preset settles in the same
+ticks to the same counts as on M28 (spring 22 ticks, 580 sources and 380
+flowing, 126 falling; channel 7, 580/22 (1); basin 4, 586/12 (0); pair 13,
+581/208 (12); runaway 19, 896/38 (19); recede 53, 579/0) and as before here
+(pond 5, 7/30; waterfall 27, 1/452 (182); dam 0, 78/0). `water-flow.html`
+is now a short page pointing to `ocean.html#sim`, with the tracker link and
+the LGPL notice; `water-flow/liquid.js`, `water-look.js` and
+`COPYING.LESSER` stay where they are, since M25 loads them.
+
+Checked headless (Chromium on SwiftShader, no GPU, so the look only, never
+the frame cost): every tab opens with no console errors and one WebGL
+context, nothing moves when idle, night is lit, no horizontal scroll at
+390 px. Screenshots `river-sim-*`, `dam-sim-*`, `marsh-sim-*` and
+`sim-presets-*` in `docs/screenshots/mockup-ocean/`.
 
 ## In the engine, part by part
 
