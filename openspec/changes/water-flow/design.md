@@ -639,6 +639,25 @@ A **Pops (today) / Smoothed** switch sits beside **Pour again** and a tick
 speed. The first tab, the fall look, is unchanged. Only one 3D view draws
 at a time.
 
+**Approved (2026-11-15).** The owner, on M31 version 2: *"the waterfall look
+is pretty good, need to be a bit careful with perf on that, on my laptop it is
+a bit rough, so hopefulyy in game it will work well"*.
+
+The mockup's cost does not carry over to the game. The page rebuilds its
+geometry in JavaScript every tick and copies the framebuffer for refraction
+every frame through three.js. The game already meshes on the CPU once a
+tick and already draws this froth.
+
+The port adds:
+- one float per top vertex;
+- one uniform;
+- one tick's dried cells.
+
+It is measured, not assumed. A `perf_suite.py` A/B on the release build
+(main's water against the smoothed water), on a pour scene and the walk,
+goes in `docs/benchmarks/` with the port. Any slower frame is fixed before
+the push.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With
