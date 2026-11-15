@@ -90,7 +90,7 @@ impl FarmState {
         n: &NeedSettings,
     ) -> FarmState {
         let mut s = self.clone();
-        if !(to > s.as_of) {
+        if to.partial_cmp(&s.as_of) != Some(std::cmp::Ordering::Greater) {
             return s;
         }
         // A hand feed running out is the one boundary inside the span.

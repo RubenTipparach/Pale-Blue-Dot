@@ -121,31 +121,31 @@ FARM = {
 }
 
 ICONS.update({
-    "husbandry/fence": ([
+    "goods/fence": ([
         "................", "................", "..kk.......kk...", ".kWWk.....kWWk..",
         ".kWwkkkkkkkWwk..", ".kWwWWWWWWWWwk..", ".kWwwwwwwwwwwk..", ".kWwkkkkkkkWwk..",
         ".kWwk.....kWwk..", ".kWwkkkkkkkWwk..", ".kWwWWWWWWWWwk..", ".kWwwwwwwwwwwk..",
         ".kWwkkkkkkkWwk..", ".kWwk.....kWwk..", ".kkkk.....kkkk..", "................",
     ], FARM),
-    "husbandry/gate": ([
+    "goods/gate": ([
         "................", "................", ".kk..........kk.", "kWWk........kWWk",
         "kWwkkkkkkkkkkWwk", "kWwWWWWWWWWWWWwk", "kWwkkkkkkkkWWkwk", "kWwk.....kWWkkwk",
         "kWwk...kWWk..Wwk", "kWwkkkWWkkkkkWwk", "kWwWWWWWWWWWWWwk", "kWwkkkkkkkkkkWwk",
         "kWwk........kWwk", "kWwk........kWwk", "kkkk........kkkk", "................",
     ], FARM),
-    "husbandry/egg": ([
+    "goods/egg": ([
         "................", "................", "................", "......kkkk......",
         ".....keeeek.....", "....keeeeeek....", "....keemeeek....", "...keemeeeeek...",
         "...keeeeeeeek...", "...keeeeeeeek...", "...keeeeeeEEk...", "....keeeeEEk....",
         "....kEeeEEEk....", ".....kEEEEk.....", "......kkkk......", "................",
     ], FARM),
-    "husbandry/wool": ([
+    "goods/wool": ([
         "................", "................", "................", "......kk.kk.....",
         "....kkmmkmmkk...", "...kmmmmmmmmmk..", "..kmmMmmmmMmmmk.", "..kmmmmmMmmmmmk.",
         ".kmmMmmmmmmmMmk.", ".kmmmmmMmmmmmmk.", "..kmmmmmmmMmmk..", "..kMmmMmmmmmMk..",
         "...kkMMkkMMkkk..", ".....kk..kk.....", "................", "................",
     ], FARM),
-    "husbandry/milk": ([
+    "goods/milk": ([
         "................", "................", "....kkkkkkkk....", "...k........k...",
         "..k..........k..", ".kiiiiiiiiiiiik.", ".kImmmmmmmmmmIk.", ".kIMmmmmmmmmMIk.",
         "..kIiiiiiiiiIk..", "..kIiIIIIIIiIk..", "..kIiiiiiiiiIk..", "..kIiIIIIIIiIk..",

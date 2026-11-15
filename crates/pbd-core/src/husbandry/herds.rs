@@ -123,7 +123,7 @@ pub fn herd_in(
         .map(|i| {
             let seed = hash2(h, 100 + i);
             // The first of a herd is its male; the rest by chance.
-            let sex = if i == 0 || hash2(seed, 9) % male_one_in == 0 {
+            let sex = if i == 0 || hash2(seed, 9).is_multiple_of(male_one_in) {
                 Sex::M
             } else {
                 Sex::F

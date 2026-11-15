@@ -32,8 +32,8 @@ fn a_tamed_animal_survives_quit_and_reload_with_its_genome() {
     };
     let edge = Edge::new(4242, 4243);
     let mut carried = Slots::new();
-    carried.give(Item::Husbandry(Good::Fence), 23);
-    carried.give(Item::Husbandry(Good::Egg), 2);
+    carried.give(Item::Good(Good::FENCE), 23);
+    carried.give(Item::Good(Good::EGG), 2);
     {
         let mut save = WorldSave::open(root.clone(), slot.clone());
         note_kinds(&mut save);
@@ -109,31 +109,28 @@ fn a_world_saved_before_opens_and_gains_no_animals() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// A husbandry stack's saved code reads back, and an unknown code does not
-/// become an item.
+/// The slice's goods are saved by their codes, read back, and each has its
+/// icon on disk.
 #[test]
-fn every_good_round_trips_its_slot_code() {
+fn every_good_round_trips_its_slot_code_and_has_its_icon() {
+    let goods = [Good::FENCE, Good::GATE, Good::EGG, Good::WOOL, Good::MILK];
     let mut slots = Slots::new();
-    for (k, good) in Good::ALL.into_iter().enumerate() {
-        slots.set(k, Some(Stack::new(Item::Husbandry(good), 3)));
+    for (k, good) in goods.into_iter().enumerate() {
+        slots.set(k, Some(Stack::new(Item::Good(good), 3)));
     }
     let line = crate::saves::format::pack_line_of(&slots);
-    assert!(line.contains(" h0,3 h1,3 h2,3 h3,3 h4,3"), "{line}");
+    assert!(
+        line.contains(" gfence,3 ggate,3 gegg,3 gwool,3 gmilk,3"),
+        "{line}"
+    );
     let back = crate::saves::format::parse_line(&line);
     assert!(
         matches!(back, Some(crate::saves::format::Record::Pack { slots: ref s }) if *s == slots),
         "{back:?}"
     );
-    let unknown = line.replace("h4,3", "h99,3");
-    assert!(crate::saves::format::parse_line(&unknown).is_none());
-}
-
-/// Every good has its icon on disk.
-#[test]
-fn every_good_has_its_icon() {
     let assets = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets"));
-    for good in Good::ALL {
-        assert!(assets.join(good_icon(good)).exists(), "{good:?}");
+    for good in goods {
+        assert!(assets.join(good.icon()).exists(), "{good:?}");
     }
 }
 

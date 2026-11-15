@@ -414,7 +414,7 @@ const HANDS: [Binding; 6] = [
     row(
         &[Key::Board(KeyCode::KeyE)],
         " ",
-        "open or shut a door; feed, lead or collect from an animal; take up a fence",
+        "use: a door, a forge, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till",
     ),
     row(
         &[Key::Mouse(MouseButton::Left)],
@@ -424,7 +424,7 @@ const HANDS: [Binding; 6] = [
     row(
         &[Key::Mouse(MouseButton::Right)],
         " ",
-        "place the held block, or wind the line in",
+        "place the held block, plant a seed, or wind the line in",
     ),
     Binding {
         range: true,
@@ -1161,7 +1161,12 @@ mod tests {
         let sprint = slots().find(|s| s.name() == "on_foot:ShiftLeft").unwrap();
         let mut binds = KeyBinds::default();
         binds.set(&sprint, KeyCode::KeyE);
-        assert_eq!(binds.clashes(&sprint), vec!["open or shut a door"]);
+        assert_eq!(
+            binds.clashes(&sprint),
+            vec![
+                "use: a door, a forge, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till"
+            ]
+        );
         // E is the Tern's hiking too, but never on foot.
         assert!(
             !binds

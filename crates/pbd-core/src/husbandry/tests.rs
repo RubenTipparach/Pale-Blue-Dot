@@ -129,12 +129,21 @@ fn a_wild_only_or_protected_species_refuses_with_its_reason() {
     fox.keep = None;
     assert_eq!(fox.refusal(), Some("wild only: it cannot be tamed"));
     assert_eq!(species("meadow-hen").refusal(), None);
-    // Food: turf is the placeholder (S3).
-    let food = species("woolback").keep.unwrap().food;
-    assert!(food.is(crate::inventory::Item::Block(
+    // Food (S3): a woolback eats wheat and turf, a hen seed and wheat.
+    let keep = species("woolback").keep.unwrap();
+    assert!(keep.eats(crate::inventory::Item::Good(crate::goods::Good::WHEAT)));
+    assert!(
+        !species("meadow-hen")
+            .keep
+            .unwrap()
+            .eats(crate::inventory::Item::Block(
+                crate::terrain::Material::Grass
+            ))
+    );
+    assert!(keep.eats(crate::inventory::Item::Block(
         crate::terrain::Material::Grass
     )));
-    assert!(!food.is(crate::inventory::Item::Block(
+    assert!(!keep.eats(crate::inventory::Item::Block(
         crate::terrain::Material::Stone
     )));
 }
@@ -264,7 +273,7 @@ fn a_removed_piece_is_not_standing() {
     );
     records.put(FenceBody::default().record(Edge::new(2, 3)));
     assert_eq!(record::pieces(&records).len(), 2);
-    assert_eq!(record::pieces(&records)[&e], true);
+    assert!(record::pieces(&records)[&e]);
     records.put(
         FenceBody {
             gate: true,

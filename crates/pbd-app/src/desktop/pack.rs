@@ -321,6 +321,7 @@ mod tests {
             lights: Vec::new(),
             fish_names: Vec::new(),
             goods: Vec::new(),
+            forge: Handle::default(),
         });
         app.add_systems(Update, spawn);
         app.update();

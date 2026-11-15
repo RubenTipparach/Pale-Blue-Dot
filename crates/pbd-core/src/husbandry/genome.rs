@@ -54,7 +54,7 @@ impl Genome {
             *byte = match gene {
                 COAT => (h % coats.max(1) as u64) as u8,
                 PATTERN => (h % patterns.max(1) as u64) as u8,
-                MORPH => u8::from(h % MORPH_ONE_IN == 0),
+                MORPH => u8::from(h.is_multiple_of(MORPH_ONE_IN)),
                 _ => (h >> 56) as u8,
             };
         }

@@ -1233,6 +1233,26 @@ impl Validated for pbd_core::dig::DigSettings {
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
 pub struct DigConfig(pub pbd_core::dig::DigSettings);
 
+impl Validated for pbd_core::farming::FarmSettings {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::farming::FarmSettings::validate(self)
+    }
+}
+
+/// The crops' days and yields (`farming.ron`), loaded once.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Default)]
+pub struct FarmConfig(pub pbd_core::farming::FarmSettings);
+
+impl Validated for pbd_core::station::RecipeFile {
+    fn validate(&self) -> Result<(), String> {
+        pbd_core::station::RecipeFile::validate(self)
+    }
+}
+
+/// Every station's recipes (`recipes.ron`), resolved once.
+#[derive(Resource, Clone, Debug, PartialEq, Default)]
+pub struct Recipes(pub pbd_core::station::RecipeBook);
+
 /// Where the tool in hand sits and how it moves (`held.rs`).
 #[cfg(feature = "desktop")]
 impl Validated for crate::held::HeldSettings {
@@ -1574,7 +1594,13 @@ impl Plugin for ConfigPlugin {
             .insert_resource(VehiclesConfig(load("vehicles")))
             .insert_resource(FaunaConfig(load("fauna")))
             .insert_resource(HusbandryConfig(load("husbandry")))
-            .insert_resource(DigConfig(load("dig")));
+            .insert_resource(DigConfig(load("dig")))
+            .insert_resource(FarmConfig(load("farming")))
+            .insert_resource(Recipes(
+                load::<pbd_core::station::RecipeFile>("recipes")
+                    .resolve()
+                    .expect("validated on load"),
+            ));
         #[cfg(feature = "desktop")]
         app.insert_resource(HeldConfig(load("held")));
         app.add_plugins((
@@ -1644,6 +1670,10 @@ mod tests {
         let dig: pbd_core::dig::DigSettings = ron::from_str(DIG_RON).unwrap();
         Validated::validate(&dig).unwrap();
         assert_eq!(dig, Default::default());
+        let farm: pbd_core::farming::FarmSettings =
+            ron::from_str(include_str!("../../../assets/config/farming.ron")).unwrap();
+        Validated::validate(&farm).unwrap();
+        assert_eq!(farm, Default::default());
         #[cfg(feature = "desktop")]
         {
             let held: crate::held::HeldSettings = ron::from_str(HELD_RON).unwrap();

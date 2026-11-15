@@ -21,7 +21,8 @@ pub mod record;
 pub mod taming;
 
 use crate::fauna::{Class, Guide, Status};
-use crate::inventory::{Good, Item};
+use crate::goods::Good;
+use crate::inventory::Item;
 use crate::terrain::Material;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -53,29 +54,34 @@ pub enum Sex {
     M,
 }
 
-/// What a species eats from the hand.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+/// Something a species eats from the hand (S3).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Food {
-    /// PLACEHOLDER until farming lands (S3): a grass block, which every kit
-    /// holds and a shovel gives back. Farming's grain, turnips and kale take
-    /// its place per species when the branches merge.
+    /// A grass block, which every kit holds and a shovel gives back: what a
+    /// grazer eats in its pen anyway, so it eats it from the hand too.
     Turf,
+    /// A good, by its saved code: farming's wheat, turnips and seed.
+    Good(String),
 }
 
 impl Food {
     /// Whether `item` is this food.
-    pub fn is(self, item: Item) -> bool {
+    pub fn is(&self, item: Item) -> bool {
         match self {
             Food::Turf => matches!(
                 item,
                 Item::Block(Material::Grass | Material::DryGrass | Material::JungleGrass)
             ),
+            Food::Good(code) => Good::by_code(code).is_some_and(|g| item == Item::Good(g)),
         }
     }
 
-    pub fn name(self) -> &'static str {
+    pub fn name(&self) -> String {
         match self {
-            Food::Turf => "turf (a grass block)",
+            Food::Turf => "turf (a grass block)".into(),
+            Food::Good(code) => {
+                Good::by_code(code).map_or_else(|| code.clone(), |g| g.name().into())
+            }
         }
     }
 }
@@ -84,7 +90,7 @@ impl Food {
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Product {
-    /// The good's key (`Good::key`): egg, wool, milk.
+    /// The good's saved code (`goods::GOODS`): egg, wool, milk.
     pub good: String,
     /// Units per period at a yield factor of one.
     pub amount: f32,
@@ -97,7 +103,7 @@ pub struct Product {
 
 impl Product {
     pub fn good(&self) -> Option<Good> {
-        Good::named(&self.good)
+        Good::by_code(&self.good)
     }
 
     pub fn gives(&self, sex: Sex) -> bool {
@@ -105,12 +111,25 @@ impl Product {
     }
 }
 
+impl Keeping {
+    /// Whether it eats `item` from the hand.
+    pub fn eats(&self, item: Item) -> bool {
+        self.foods.iter().any(|f| f.is(item))
+    }
+
+    /// What it eats, for the HUD: "wheat seed or wheat".
+    pub fn food_name(&self) -> String {
+        let names: Vec<String> = self.foods.iter().map(Food::name).collect();
+        names.join(" or ")
+    }
+}
+
 /// How a tameable species is kept (decisions 3, 4, 6).
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Keeping {
-    /// Its favourite food, fed from the hand.
-    pub food: Food,
+    /// What it eats from the hand, its favourite first.
+    pub foods: Vec<Food>,
     /// Trust one feed gives a calm animal (full is 100).
     pub trust_gain: f32,
     /// Pen cells each animal needs for space.
@@ -334,11 +353,22 @@ impl HusbandrySettings {
                         &at,
                         &[k.trust_gain, k.space_cells, k.grazing_cells, k.adult_days],
                     )?;
-                    if k.coats.is_empty() || k.patterns.is_empty() || k.male_one_in == 0 {
+                    for f in &k.foods {
+                        if let Food::Good(code) = f
+                            && Good::by_code(code).is_none()
+                        {
+                            return Err(format!("{at}: eats {code}, which is no good"));
+                        }
+                    }
+                    if k.foods.is_empty()
+                        || k.coats.is_empty()
+                        || k.patterns.is_empty()
+                        || k.male_one_in == 0
+                    {
                         return Err(format!("{at}: coats, patterns and sexes"));
                     }
                     for p in &k.products {
-                        if p.good().is_none_or(Good::is_piece) {
+                        if p.good().is_none_or(|g| g == Good::FENCE || g == Good::GATE) {
                             return Err(format!("{at}: {} is not a product", p.good));
                         }
                         positive(&at, &[p.amount, p.period_days])?;

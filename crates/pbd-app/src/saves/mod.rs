@@ -580,6 +580,29 @@ impl WorldSave {
         Some(last)
     }
 
+    /// Store a record of the player's and the slots after it in one line
+    /// (`farming-and-smelting` decision 4): a crop planted or harvested, a
+    /// station's job queued or collected. The kind is noted in the identity
+    /// the first time it is stored. `false`, and nothing kept, once the
+    /// writer has failed.
+    pub fn store_with_hands(
+        &mut self,
+        record: StoredRecord,
+        schema_of_kind: u32,
+        carried: &Slots,
+    ) -> bool {
+        if self.writer.failure().is_some() {
+            return false;
+        }
+        let kind = record.kind.clone();
+        let before = self.records.put(record.clone());
+        self.yields.touch_record(before.as_ref(), &record);
+        self.carried = Some(carried.clone());
+        self.writer.append(format::with_line_of(&record, carried));
+        self.note_record_kinds(&[(kind.as_str(), schema_of_kind)]);
+        true
+    }
+
     /// A world process's changes for a period, taken whole or refused whole
     /// (`world-persistence` decision 6): refused, with nothing written, if
     /// any of it would change a cell or a record field the player has.
@@ -762,6 +785,12 @@ fn replay(text: &str) -> Replayed {
                     out.yields.touch_record(before.as_ref(), &record);
                 }
                 out.records.put(record);
+            }
+            Record::Handed { record, slots } => {
+                let before = out.records.get(&record.kind, record.id).cloned();
+                out.yields.touch_record(before.as_ref(), &record);
+                out.records.put(record);
+                out.carried = Some(slots);
             }
         }
     }
@@ -1334,6 +1363,39 @@ mod tests {
     /// each key; a log from before authors replays as it always did and is
     /// the player's; a torn record line at the end costs that line alone
     /// (task 3.2).
+    /// A plot planted with the hands: the record and the slots come back
+    /// together, and the identity names the kind. An old log beside it
+    /// (lines written before goods) still reads as it did.
+    #[test]
+    fn a_record_stored_with_the_hands_comes_back_with_them() {
+        use pbd_core::farming::{Crop, PLOT_KIND, PLOT_SCHEMA, Plot};
+        use pbd_core::goods::Good;
+        let root = temporary("handed");
+        let slot = create(&root, "Handed", 23).unwrap();
+        let old = "77 200 0\n";
+        std::fs::write(root.join(&slot.id).join(LOG), old).unwrap();
+        let mut slots = pbd_core::inventory::Slots::new();
+        slots.give(Item::Good(Good::WHEAT_SEED), 3);
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            let plot = StoredRecord::of(
+                PLOT_KIND,
+                5,
+                PLOT_SCHEMA,
+                &Plot::sown(60, Crop::WHEAT, 10.0),
+            );
+            assert!(save.store_with_hands(plot, PLOT_SCHEMA, &slots));
+            save.drain();
+        }
+        let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+        let plot: Plot = reopened.records.get(PLOT_KIND, 5).unwrap().read().unwrap();
+        assert_eq!(plot.crop(), Some(Crop::WHEAT));
+        assert_eq!(reopened.carried, Some(slots));
+        assert_eq!(reopened.edits.for_cell(77), &[(200, Material::Air)]);
+        assert_eq!(reopened.identity.records.get(PLOT_KIND), Some(&PLOT_SCHEMA));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn records_come_back_and_a_torn_record_line_costs_only_itself() {
         let root = temporary("records");

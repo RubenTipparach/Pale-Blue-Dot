@@ -1,0 +1,30 @@
+// Station recipes (pbd_core::station, `farming-and-smelting` decisions 6 and
+// 10). Each is made at one station, takes `secs` of WORLD time (time passes
+// only while the world is played) and takes its inputs, fuel included, when
+// it is queued. Items are a good's code (`coal`) or `block:<name>` for a
+// block (`block:ore` is mixed ore). A recipe's `code` is saved in a station's
+// queue: never rename one that has shipped.
+//
+// The code defaults written out; a test holds the two together. Numbers are
+// M3's (docs/mockups/crafting.html): mixed ore at its fixed split, 2 copper :
+// 1 iron : 1 tin per 4, and bronze.
+(
+    recipes: [
+        (
+            code: "mixed-ore",
+            name: "SMELT ORE",
+            station: "forge",
+            secs: 8.0,
+            inputs: [("block:ore", 4), ("coal", 2)],
+            outputs: [("copper-ingot", 2), ("iron-ingot", 1), ("tin-ore", 1)],
+        ),
+        (
+            code: "bronze",
+            name: "BRONZE",
+            station: "forge",
+            secs: 5.0,
+            inputs: [("copper-ingot", 1), ("tin-ore", 1), ("coal", 1)],
+            outputs: [("bronze-ingot", 2)],
+        ),
+    ],
+)

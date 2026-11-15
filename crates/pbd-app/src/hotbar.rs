@@ -8,7 +8,8 @@
 
 use crate::saves::WorldSave;
 use bevy::prelude::*;
-use pbd_core::inventory::{Good, Item, Slots};
+use pbd_core::goods::Good;
+use pbd_core::inventory::{Item, Slots};
 use pbd_core::terrain::Material;
 
 /// The starting kit's version: the number of grants in [`KIT_GRANTS`]. A save
@@ -33,7 +34,7 @@ const KIT_BASE: [(Material, u16); 4] = [
 /// world is dealt the base and all of these; a saved world is dealt the ones
 /// past the version its log records. Append, never reorder: a saved version
 /// names a prefix of this table.
-const KIT_GRANTS: [&[(Item, u16)]; 3] = [
+const KIT_GRANTS: [&[(Item, u16)]; 4] = [
     // Something to see with. A kit that could dig into the dark and not light
     // it was a kit that could only dig in daylight.
     &[(Item::Block(Material::Torch), 16)],
@@ -45,12 +46,17 @@ const KIT_GRANTS: [&[(Item, u16)]; 3] = [
         (Item::Block(Material::Brazier), 4),
         (Item::Block(Material::Candle), 16),
     ],
+    // A forge and a start at a farm (`farming-and-smelting` decision 9): the
+    // forge cannot be made yet, and coal and seeds start the loop.
+    &[
+        (Item::Block(Material::Forge), 1),
+        (Item::Good(Good::COAL), 8),
+        (Item::Good(Good::WHEAT_SEED), 4),
+        (Item::Good(Good::TURNIP_SEED), 4),
+    ],
     // A pen's pieces (`animal-husbandry` design 12, S6): enough fence for a
     // pen of seven cells, and its gate, with one of each to spare.
-    &[
-        (Item::Husbandry(Good::Fence), 24),
-        (Item::Husbandry(Good::Gate), 2),
-    ],
+    &[(Item::Good(Good::FENCE), 24), (Item::Good(Good::GATE), 2)],
 ];
 
 /// A light's own icon, as an asset path, or `None` for a block that is not
@@ -67,6 +73,37 @@ pub fn light_icon(material: Material) -> Option<&'static str> {
         Material::Candle => "items/lights/candle.png",
         _ => return None,
     })
+}
+
+/// Something came into the player's hands, for whatever counts it (the
+/// `starter-missions` chain: "find seeds", "harvest"). Raised on the frame
+/// the durable write was accepted, never before.
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Gained {
+    pub item: Item,
+    pub count: u16,
+    pub how: How,
+}
+
+/// How a [`Gained`] came about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum How {
+    /// Turned up by digging or tilling grass.
+    Found,
+    /// Picked from a wild plant.
+    Picked,
+    /// Harvested from a crop.
+    Harvested,
+    /// Made at a station.
+    Made,
+    /// Collected from a kept animal (`animal-husbandry`): an egg, wool, milk.
+    Collected,
+}
+
+/// A seed was planted (`starter-missions`: "plant").
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Planted {
+    pub crop: pbd_core::farming::Crop,
 }
 
 /// The player's slots as a Bevy resource.
@@ -151,16 +188,7 @@ mod kit_tests {
     use super::*;
 
     fn count(slots: &Slots, material: Material) -> u32 {
-        count_item(slots, Item::Block(material))
-    }
-
-    fn count_item(slots: &Slots, item: Item) -> u32 {
-        slots
-            .iter()
-            .flatten()
-            .filter(|stack| stack.item == item)
-            .map(|stack| u32::from(stack.count))
-            .sum()
+        slots.count(Item::Block(material))
     }
 
     /// A new world is dealt the base and every grant: the kit is one table
@@ -170,21 +198,16 @@ mod kit_tests {
     #[test]
     fn a_new_world_is_dealt_the_base_and_every_grant() {
         let kit = Hotbar::starting_kit();
-        for (material, expected) in KIT_BASE {
-            assert_eq!(count(&kit, material), u32::from(expected), "{material:?}");
+        for (material, expected) in KIT_BASE.iter() {
+            assert_eq!(count(&kit, *material), u32::from(*expected), "{material:?}");
         }
         for (item, expected) in KIT_GRANTS.iter().copied().flatten() {
-            assert_eq!(count_item(&kit, *item), u32::from(*expected), "{item:?}");
+            assert_eq!(kit.count(*item), u32::from(*expected), "{item:?}");
         }
-        assert_eq!(KIT_VERSION, 3);
+        assert_eq!(KIT_VERSION, 4);
         assert!(
             kit.hotbar().all(|slot| slot.is_some()),
             "ten slots, all full"
-        );
-        assert_eq!(
-            kit.get(10).map(|s| s.item),
-            Some(Item::Husbandry(Good::Fence)),
-            "the pen's pieces go to the pack"
         );
         for light in Material::LAMPS {
             assert!(count(&kit, light) > 0, "{light:?} is in the kit");
@@ -222,7 +245,11 @@ mod kit_tests {
         save.kit = 1;
         let mut slots = the_old_kit();
         let grant = grant_since(&mut slots, 1);
-        assert_eq!(grant.given.len(), 7, "every light and the pen's pieces");
+        assert_eq!(
+            grant.given.len(),
+            11,
+            "every light, then the forge's grant, then the pen's"
+        );
         assert!(grant.no_room.is_empty());
         assert_eq!(
             slots.get(8).map(|s| s.item),
@@ -258,10 +285,37 @@ mod kit_tests {
         let mut slots = full.clone();
         let grant = grant_since(&mut slots, 1);
         assert!(grant.given.is_empty());
-        assert_eq!(grant.no_room.len(), 7, "every light and piece is named");
+        assert_eq!(
+            grant.no_room.len(),
+            11,
+            "every light, the forge's grant and the pen's are named"
+        );
         let restored = Hotbar::restore(&mut save);
         assert_eq!(restored.0, full, "nothing moved");
         assert_eq!(save.kit, KIT_VERSION);
+    }
+
+    /// A world dealt kit 2 (every save before `farming-and-smelting`) is
+    /// dealt the forge, the coal and the seeds once, and keeps all it had.
+    #[test]
+    fn a_save_from_before_farming_is_dealt_the_forge_once() {
+        let mut save = WorldSave::memory_only();
+        let mut old = Slots::new();
+        old.give(Item::Block(Material::Ore), 7);
+        save.carried = Some(old);
+        save.kit = 2;
+        let restored = Hotbar::restore(&mut save);
+        assert_eq!(restored.count(Item::Block(Material::Forge)), 1);
+        assert_eq!(restored.count(Item::Good(Good::COAL)), 8);
+        assert_eq!(restored.count(Item::Good(Good::WHEAT_SEED)), 4);
+        assert_eq!(restored.count(Item::Block(Material::Ore)), 7);
+        assert_eq!(
+            restored.count(Item::Block(Material::Torch)),
+            0,
+            "v1 not again"
+        );
+        let again = Hotbar::restore(&mut save);
+        assert_eq!(again.count(Item::Block(Material::Forge)), 1, "not twice");
     }
 
     /// The owner's report: a world saved before torches joined the kit had

@@ -72,6 +72,24 @@ pub fn dress(
                 .insert(item, (meshes.add(prism(faces)), atlas.clone()));
         }
     }
+    // A good's card wears its own icon, as a light's does
+    // (`farming-and-smelting`: a seed turned up by a till floats out).
+    for good in pbd_core::goods::Good::all() {
+        let Some(icon) = icons.goods.get(good.index()) else {
+            continue;
+        };
+        looks.cards.insert(
+            Item::Good(good),
+            materials.add(StandardMaterial {
+                base_color_texture: Some(icon.clone()),
+                alpha_mode: AlphaMode::Mask(0.5),
+                double_sided: true,
+                cull_mode: None,
+                perceptual_roughness: 0.9,
+                ..default()
+            }),
+        );
+    }
     commands.insert_resource(looks);
 }
 

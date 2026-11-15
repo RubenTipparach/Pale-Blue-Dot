@@ -40,6 +40,8 @@ pub enum Screen {
     Pack,
     /// The world map, opened with M (`world-map`).
     Map,
+    /// A station's panel, opened with E on it (`farming-and-smelting`).
+    Forge,
 }
 
 impl Screen {
@@ -60,7 +62,9 @@ impl Screen {
         }
         match self {
             Screen::Playing => Screen::Pause,
-            Screen::Pause | Screen::Guide | Screen::Pack | Screen::Map => Screen::Playing,
+            Screen::Pause | Screen::Guide | Screen::Pack | Screen::Map | Screen::Forge => {
+                Screen::Playing
+            }
             Screen::Settings | Screen::Saves => Screen::Pause,
         }
     }
@@ -2051,7 +2055,9 @@ mod tests {
         let world = app.world_mut();
         let flagged = also(world);
         assert!(
-            flagged.contains(&"also: open or shut a door".to_string()),
+            flagged.contains(
+                &"also: use: a door, a forge, a ripe crop; with the shovel, till".to_string()
+            ),
             "{flagged:?}"
         );
         assert!(flagged.contains(&"also: sprint".to_string()), "{flagged:?}");

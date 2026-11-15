@@ -27,12 +27,13 @@ use bevy::mesh::PrimitiveTopology;
 use bevy::prelude::*;
 use pbd_core::daylight::DAY_S;
 use pbd_core::fauna::{Rng, hash2};
+use pbd_core::goods::Good;
 use pbd_core::husbandry::farm::{Conditions, FarmState};
 use pbd_core::husbandry::record::{self, AnimalBody, FenceBody, Standing};
 use pbd_core::husbandry::{
     Edge, Genome, HusbandrySettings, LandSpecies, Pen, Plan, Sex, Trust, herds, taming,
 };
-use pbd_core::inventory::{Good, Item, Slots};
+use pbd_core::inventory::{Item, Slots};
 use pbd_core::records::Author;
 use pbd_core::terrain::Material;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -50,16 +51,24 @@ pub struct HusbandryScript {
     pub scene: String,
 }
 
-/// The icon an item of the slice shows.
-pub fn good_icon(good: Good) -> &'static str {
-    match good {
-        Good::Fence => "items/husbandry/fence.png",
-        Good::Gate => "items/husbandry/gate.png",
-        Good::Egg => "items/husbandry/egg.png",
-        Good::Wool => "items/husbandry/wool.png",
-        Good::Milk => "items/husbandry/milk.png",
-    }
+/// Something the player did with animals, as a message on the frame its
+/// durable write was accepted (`starter-missions`: "tame an animal",
+/// "build a pen"). What they collect is a [`crate::hotbar::Gained`] with
+/// [`crate::hotbar::How::Collected`].
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Deed {
+    /// A wild animal of this land species (roster index) was tamed.
+    Tamed { species: u16 },
+    /// A kept animal was let go inside a pen.
+    Penned { species: u16 },
+    /// A piece closed a pen with a gate: the pen's id and how many cells.
+    PenBuilt { pen: u32, cells: usize },
 }
+
+/// The use key's reader, so other readers of E (`desktop::farm::use_key`)
+/// run after it and do not act on a press it used.
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct HusbandryHands;
 
 /// Whose an animal is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -186,6 +195,9 @@ pub struct Farmyard {
     hold_s: f32,
     fences_drawn: Option<(BTreeMap<Edge, bool>, usize)>,
     material: Option<Handle<StandardMaterial>>,
+    /// What the player did this frame, announced as messages.
+    deeds: Vec<Deed>,
+    gained: Vec<(Item, u16)>,
 }
 
 impl Default for Farmyard {
@@ -198,6 +210,8 @@ impl Default for Farmyard {
             hold_s: 0.0,
             fences_drawn: None,
             material: None,
+            deeds: Vec::new(),
+            gained: Vec::new(),
         }
     }
 }
@@ -225,10 +239,21 @@ impl Plugin for HusbandryPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Farmyard>()
             .init_resource::<AimedGround>()
+            .add_message::<Deed>()
+            .add_message::<crate::hotbar::Gained>()
             .add_systems(Startup, spawn)
             .add_systems(
                 Update,
-                (sync, hands, script, step, draw, draw_fences, hud)
+                (
+                    sync,
+                    hands.in_set(HusbandryHands),
+                    script,
+                    announce,
+                    step,
+                    draw,
+                    draw_fences,
+                    hud,
+                )
                     .chain()
                     .after(crate::fish::FishSet),
             );
@@ -667,7 +692,7 @@ fn grassy_land(world: &World, d: Vec3) -> bool {
 #[allow(clippy::too_many_arguments)]
 fn hands(
     world: World,
-    keys: Option<Res<ButtonInput<KeyCode>>>,
+    mut keys: Option<ResMut<ButtonInput<KeyCode>>>,
     buttons: Option<Res<ButtonInput<MouseButton>>>,
     menu: Option<Res<crate::controls::MenuOpen>>,
     aimed: Res<AimedGround>,
@@ -703,21 +728,28 @@ fn hands(
         .as_ref()
         .is_some_and(|b| b.just_pressed(MouseButton::Right));
     if placed
-        && let Some(Item::Husbandry(good)) = hotbar.held().map(|s| s.item)
-        && good.is_piece()
+        && let Some(Item::Good(good)) = hotbar.held().map(|s| s.item)
+        && (good == Good::FENCE || good == Good::GATE)
     {
         if let Some(point) = aimed.0 {
-            place_piece(&world, &mut yard, hotbar, save, point, good == Good::Gate);
+            place_piece(&world, &mut yard, hotbar, save, point, good == Good::GATE);
         }
         return;
     }
     if !used {
         return;
     }
-    if let Some(k) = aimed_beast(&world, &yard) {
+    let used_it = if let Some(k) = aimed_beast(&world, &yard) {
         use_on(&world, &mut yard, hotbar, save, k);
+        true
     } else if let Some(point) = aimed.0 {
-        take_piece(&world, &mut yard, hotbar, save, point);
+        take_piece(&world, &mut yard, hotbar, save, point)
+    } else {
+        false
+    };
+    // A press used on an animal or a piece is not also a door's or a crop's.
+    if used_it && let Some(keys) = keys.as_deref_mut() {
+        keys.clear_just_pressed(KeyCode::KeyE);
     }
 }
 
@@ -751,13 +783,24 @@ fn note_kinds(save: &mut WorldSave) {
     ]);
 }
 
-/// Spend one of the selected stack, durably.
-fn spend_one(hotbar: &mut Slots, save: &mut WorldSave) -> bool {
+/// Spend one of the selected stack. The caller writes the slots, with the
+/// record the spending made where there is one (`store_with_hands`).
+fn spend_one(hotbar: &mut Slots) -> bool {
     let at = hotbar.selected();
-    if hotbar.take(at, 1) == 0 {
-        return false;
+    hotbar.take(at, 1) > 0
+}
+
+/// Store a kept animal's record as the player's, with the slots after the
+/// action in the same line where they changed.
+fn store_animal(save: &mut WorldSave, body: &AnimalBody, id: u64, hands: Option<&Slots>) -> bool {
+    match hands {
+        Some(slots) => save.store_with_hands(body.record(id), record::ANIMAL_SCHEMA, slots),
+        None => {
+            note_kinds(save);
+            save.store(&Author::Player(0), vec![body.record(id)])
+                .is_some()
+        }
     }
-    save.record_pack(hotbar)
 }
 
 /// E on an animal.
@@ -777,11 +820,11 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
                 return;
             }
             let keep = sp.keep.as_ref().expect("tameable");
-            if !held.is_some_and(|i| keep.food.is(i)) {
+            if !held.is_some_and(|i| keep.eats(i)) {
                 yard.say(
                     format!(
                         "{name} eats {}: hold some and stand still",
-                        keep.food.name()
+                        keep.food_name()
                     ),
                     2.5,
                 );
@@ -805,12 +848,13 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
                 if waiting == 0 {
                     continue;
                 }
-                let left = hotbar.give(Item::Husbandry(good), waiting as u16);
+                let left = hotbar.give(Item::Good(good), waiting as u16);
                 let took = waiting - u32::from(left);
                 if let Some(t) = now.made.get_mut(&p.good) {
                     *t -= took as f32;
                 }
                 if took > 0 {
+                    yard.gained.push((Item::Good(good), took as u16));
                     got.push(match (p.good.as_str(), took) {
                         ("egg", 1) => "an egg".to_string(),
                         ("egg", n) => format!("{n} eggs"),
@@ -822,18 +866,17 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
             }
             if !got.is_empty() {
                 body.set_farm(&now);
-                save.store(&Author::Player(0), vec![body.record(id)]);
-                save.record_pack(hotbar);
+                store_animal(save, &body, id, Some(hotbar));
                 yard.say(format!("{name}: collected {}", got.join(", ")), 2.5);
                 return;
             }
-            if held.is_some_and(|i| sp.keep.as_ref().is_some_and(|k| k.food.is(i))) {
-                if !spend_one(hotbar, save) {
+            if held.is_some_and(|i| sp.keep.as_ref().is_some_and(|k| k.eats(i))) {
+                if !spend_one(hotbar) {
                     return;
                 }
                 now.hand_feed(world.day(), &s.needs);
                 body.set_farm(&now);
-                save.store(&Author::Player(0), vec![body.record(id)]);
+                store_animal(save, &body, id, Some(hotbar));
                 yard.say(
                     format!("{name} is fed for {} days", s.needs.hand_feed_days),
                     2.5,
@@ -872,7 +915,7 @@ fn feed_wild(
     let Who::Wild { seed } = b.who else {
         return;
     };
-    if !spend_one(hotbar, save) {
+    if !spend_one(hotbar) {
         return;
     }
     let factor = b.genome.trust_factor();
@@ -880,6 +923,8 @@ fn feed_wild(
     let b = &mut yard.beasts[k];
     if !b.trust.feed(keep.trust_gain, factor) {
         let pct = b.trust.value.round();
+        // A feed that does not tame changes only the hands.
+        save.record_pack(hotbar);
         b.mode = Mode::Idle;
         b.head_goal = 1.2;
         yard.say(format!("{name} eats from your hand - trust {pct}%"), 2.0);
@@ -903,10 +948,7 @@ fn feed_wild(
     body.set_farm(&farm);
     let id = record::next_animal_id(&save.records);
     note_kinds(save);
-    if save
-        .store(&Author::Player(0), vec![body.record(id)])
-        .is_none()
-    {
+    if !store_animal(save, &body, id, Some(hotbar)) {
         warn!("husbandry: the save refused the tamed {name}");
         return;
     }
@@ -914,6 +956,8 @@ fn feed_wild(
     b.who = Who::Kept { id };
     b.mode = Mode::Follow;
     b.mode_s = s.taming.follow_s;
+    let species = b.species;
+    yard.deeds.push(Deed::Tamed { species });
     yard.say(
         format!("{name} trusts you and follows (E to let it stay)"),
         3.0,
@@ -947,7 +991,10 @@ fn settle(world: &World, yard: &mut Farmyard, save: &mut WorldSave, k: usize) {
     let pen = pen_at(world, yard, &pieces, cell);
     body.home = cell;
     body.pen = pen.as_ref().map(|p| p.id);
-    save.store(&Author::Player(0), vec![body.record(id)]);
+    store_animal(save, &body, id, None);
+    if pen.is_some() {
+        yard.deeds.push(Deed::Penned { species: body.sp });
+    }
     let herd: Vec<(u16, Sex)> = match &pen {
         Some(p) => record::animals(&save.records)
             .into_iter()
@@ -1043,42 +1090,40 @@ fn place_piece(
         gate,
         state: Standing::Placed,
     };
-    if save
-        .store(&Author::Player(0), vec![piece.record(edge)])
-        .is_none()
+    if !spend_one(hotbar)
+        || !save.store_with_hands(piece.record(edge), record::FENCE_SCHEMA, hotbar)
     {
         return false;
     }
-    spend_one(hotbar, save);
     yard.say(if gate { "Gate set" } else { "Fence set" }, 1.0);
+    closed_pen(world, yard, save, edge);
     true
 }
 
-/// E on a piece: take it back.
+/// E on a piece: take it back. Whether there was one to take.
 fn take_piece(
     world: &World,
     yard: &mut Farmyard,
     hotbar: &mut Slots,
     save: &mut WorldSave,
     point: Vec3,
-) {
+) -> bool {
     let Some((edge, _, _)) = edge_at(world, point) else {
-        return;
+        return false;
     };
     let Some(&gate) = record::pieces(&save.records).get(&edge) else {
-        return;
+        return false;
     };
-    let good = if gate { Good::Gate } else { Good::Fence };
-    if hotbar.give(Item::Husbandry(good), 1) > 0 {
+    let good = if gate { Good::GATE } else { Good::FENCE };
+    if hotbar.give(Item::Good(good), 1) > 0 {
         yard.say("No room to carry it", 1.5);
-        return;
+        return true;
     }
     let piece = FenceBody {
         gate,
         state: Standing::Removed,
     };
-    save.store(&Author::Player(0), vec![piece.record(edge)]);
-    save.record_pack(hotbar);
+    save.store_with_hands(piece.record(edge), record::FENCE_SCHEMA, hotbar);
     yard.say(
         if gate {
             "Gate taken up"
@@ -1087,6 +1132,44 @@ fn take_piece(
         },
         1.0,
     );
+    true
+}
+
+/// Whether a piece just set closed a pen, and if so, say so.
+fn closed_pen(world: &World, yard: &mut Farmyard, save: &WorldSave, edge: Edge) {
+    let pieces = record::pieces(&save.records);
+    let (a, b) = edge.cells();
+    for cell in [a, b] {
+        if let Some(pen) = pen_at(world, yard, &pieces, cell) {
+            yard.deeds.push(Deed::PenBuilt {
+                pen: pen.id,
+                cells: pen.cells.len(),
+            });
+            yard.say(
+                format!("A pen of {} cells, with a gate", pen.cells.len()),
+                2.0,
+            );
+            return;
+        }
+    }
+}
+
+/// Announce what the hands did this frame.
+fn announce(
+    mut yard: ResMut<Farmyard>,
+    mut deeds: MessageWriter<Deed>,
+    mut gained: MessageWriter<crate::hotbar::Gained>,
+) {
+    for deed in std::mem::take(&mut yard.deeds) {
+        deeds.write(deed);
+    }
+    for (item, count) in std::mem::take(&mut yard.gained) {
+        gained.write(crate::hotbar::Gained {
+            item,
+            count,
+            how: crate::hotbar::How::Collected,
+        });
+    }
 }
 
 /// Move and animate every animal.
@@ -1123,7 +1206,7 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
             let food = sp
                 .keep
                 .as_ref()
-                .is_some_and(|kp| held.is_some_and(|i| kp.food.is(i)));
+                .is_some_and(|kp| held.is_some_and(|i| kp.eats(i)));
             let fear = taming::fear_radius(&s.taming, moving, food);
             if d < fear && !night {
                 if b.mode != Mode::Flee {
@@ -1597,7 +1680,7 @@ fn describe(world: &World, save: Option<&WorldSave>, yard: &mut Farmyard) -> Opt
                 "{} (wild, {sex}) - trust {:.0}% - E with {}",
                 sp.name,
                 b.trust.value,
-                k.food.name()
+                k.food_name()
             ),
             _ => sp.name.clone(),
         }),
@@ -1703,8 +1786,11 @@ fn script(
     // (a capture's save is memory-only, so nothing is kept).
     for (item, count) in [
         (Item::Block(Material::Grass), 64),
-        (Item::Husbandry(Good::Fence), 24),
-        (Item::Husbandry(Good::Gate), 2),
+        (Item::Good(Good::WHEAT_SEED), 16),
+        (Item::Good(Good::WHEAT), 16),
+        (Item::Good(Good::TURNIP), 16),
+        (Item::Good(Good::FENCE), 24),
+        (Item::Good(Good::GATE), 2),
     ] {
         if !hotbar.iter().flatten().any(|s| s.item == item) {
             hotbar.give(item, count);
@@ -1732,7 +1818,7 @@ fn script(
         }
         "tame" => {
             let k = wild(&mut yard, index("woolback"), 1, feet + ahead * 2.0);
-            select_turf(hotbar);
+            select_food(hotbar, &roster[index("woolback") as usize]);
             for _ in 0..12 {
                 if matches!(yard.beasts[k].who, Who::Kept { .. }) {
                     break;
@@ -1761,9 +1847,9 @@ fn script(
                 ("woolback", 4, -2.2, -0.6),
                 ("plodder", 5, 0.3, 2.6),
             ];
-            select_turf(hotbar);
             for (id, n, x, y) in herd {
                 let k = wild(&mut yard, index(id), n + 10, spot + right * x + ahead * y);
+                select_food(hotbar, &roster[index(id) as usize]);
                 // Hens: no cockerel in the script but the first.
                 for _ in 0..12 {
                     if matches!(yard.beasts[k].who, Who::Kept { .. }) {
@@ -1805,15 +1891,28 @@ fn script(
     );
 }
 
-/// Select the hotbar slot holding turf.
-fn select_turf(hotbar: &mut Slots) {
-    if let Some(k) = (0..pbd_core::inventory::SLOTS).find(|&k| {
-        hotbar
-            .get(k)
-            .is_some_and(|s| s.item == Item::Block(Material::Grass))
-    }) {
-        hotbar.select(k);
-    }
+/// Put the species' favourite food in hand, from the pack if need be, as a
+/// player would.
+fn select_food(hotbar: &mut Slots, species: &LandSpecies) {
+    let Some(keep) = species.keep.as_ref() else {
+        return;
+    };
+    let Some(k) = (0..pbd_core::inventory::CARRIED)
+        .find(|&k| hotbar.get(k).is_some_and(|s| keep.eats(s.item)))
+    else {
+        return;
+    };
+    // From the pack, swapped with the last hotbar slot.
+    let k = if k >= pbd_core::inventory::SLOTS {
+        let last = pbd_core::inventory::SLOTS - 1;
+        let (a, b) = (hotbar.get(last), hotbar.get(k));
+        hotbar.set(last, b);
+        hotbar.set(k, a);
+        last
+    } else {
+        k
+    };
+    hotbar.select(k);
 }
 
 /// A ring of fence round a cell and its neighbours, the gate on the side
@@ -1870,22 +1969,18 @@ fn build_ring(
         .map(|e| e.0);
     for (edge, mid) in edges {
         let is_gate = Some(edge) == gate;
-        let good = if is_gate { Good::Gate } else { Good::Fence };
-        if let Some(k) = (0..pbd_core::inventory::CARRIED).find(|&k| {
-            hotbar
-                .get(k)
-                .is_some_and(|s| s.item == Item::Husbandry(good))
-        }) {
+        let good = if is_gate { Good::GATE } else { Good::FENCE };
+        if let Some(k) = (0..pbd_core::inventory::CARRIED)
+            .find(|&k| hotbar.get(k).is_some_and(|s| s.item == Item::Good(good)))
+        {
             // The pack's pieces are moved to the hand, as a player would.
             if k >= pbd_core::inventory::SLOTS {
                 hotbar.send(k);
             }
         }
-        if let Some(k) = (0..pbd_core::inventory::SLOTS).find(|&k| {
-            hotbar
-                .get(k)
-                .is_some_and(|s| s.item == Item::Husbandry(good))
-        }) {
+        if let Some(k) = (0..pbd_core::inventory::SLOTS)
+            .find(|&k| hotbar.get(k).is_some_and(|s| s.item == Item::Good(good)))
+        {
             hotbar.select(k);
         }
         // Aimed a hand's breadth inside the cell, toward the edge's middle.
@@ -1921,14 +2016,13 @@ fn place_piece_at(
         gate,
         state: Standing::Placed,
     };
-    if save
-        .store(&Author::Player(0), vec![piece.record(edge)])
-        .is_none()
+    if !spend_one(hotbar)
+        || !save.store_with_hands(piece.record(edge), record::FENCE_SCHEMA, hotbar)
     {
         return;
     }
-    spend_one(hotbar, save);
     yard.fences_drawn = None;
+    closed_pen(world, yard, save, edge);
 }
 
 #[cfg(test)]

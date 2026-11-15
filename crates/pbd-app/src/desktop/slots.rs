@@ -72,6 +72,16 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         Material::Snow => one(snow_slot(), 0., 0.),
         Material::Ore => one(home(Biome::Fields), 0., 1.),
         Material::Water => one(home(Biome::Ocean), 2., 2.),
+        // The fields sheet's own tilled soil over its earth, as the ground
+        // draws it (`farming-and-smelting` decision 2).
+        Material::Tilled => BlockArt {
+            sheet: home(Biome::Fields),
+            top: Vec2::new(2., 3.),
+            side: Vec2::new(2., 0.),
+            under: Vec2::new(2., 0.),
+        },
+        // Slate bricks all round (decision 8).
+        Material::Forge => one(home(Biome::Mountains), 1., 3.),
         Material::Torch
         | Material::LanternPost
         | Material::LanternWall
@@ -108,8 +118,10 @@ pub struct ItemIcons {
     pub lights: Vec<Handle<Image>>,
     /// The roster's names, by roster index, for a fish's tooltip.
     pub fish_names: Vec<String>,
-    /// The husbandry items, in `Good::ALL` order (`animal-husbandry` S6).
+    /// Every good's icon, in goods-table order (`pbd_core::goods`).
     pub goods: Vec<Handle<Image>>,
+    /// The forge's own picture, M3's, for its block in a slot.
+    pub forge: Handle<Image>,
 }
 
 impl ItemIcons {
@@ -153,10 +165,10 @@ pub fn load_icons(
         hand: assets.load(pbd_app::fish::HAND_ICON),
         lights,
         fish_names,
-        goods: pbd_core::inventory::Good::ALL
-            .iter()
-            .map(|good| assets.load(pbd_app::husbandry::good_icon(*good)))
+        goods: pbd_core::goods::Good::all()
+            .map(|good| assets.load(good.icon()))
             .collect(),
+        forge: assets.load("items/stations/forge.png"),
     });
 }
 
@@ -291,11 +303,12 @@ pub fn paint_icon(
     let own = stack.and_then(|stack| match stack.item {
         Item::Fish(species) => items.fish.get(species as usize).cloned(),
         Item::Tool(tool) => Some(items.tool(tool)),
+        Item::Block(Material::Forge) => Some(items.forge.clone()),
         Item::Block(material) => Material::LAMPS
             .iter()
             .position(|&light| light == material)
             .and_then(|index| items.lights.get(index).cloned()),
-        Item::Husbandry(good) => items.goods.get(good.code() as usize).cloned(),
+        Item::Good(good) => items.goods.get(good.index()).cloned(),
     });
     if let Some(image) = own {
         node.image = image;
@@ -306,7 +319,7 @@ pub fn paint_icon(
     node.image = items.atlas.clone();
     let art = stack.and_then(|stack| match stack.item {
         Item::Block(material) => thumbnail(material),
-        Item::Tool(_) | Item::Fish(_) | Item::Husbandry(_) => None,
+        Item::Tool(_) | Item::Fish(_) | Item::Good(_) => None,
     });
     let Some((slot, tile, tint)) = art else {
         node.color = Color::NONE;
@@ -347,7 +360,7 @@ pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -
             .get(species as usize)
             .cloned()
             .unwrap_or_else(|| stack.item.name().into()),
-        Item::Block(_) | Item::Husbandry(_) => stack.item.name().into(),
+        Item::Block(_) | Item::Good(_) => stack.item.name().into(),
     };
     let mut letters = name.chars();
     let name = letters
@@ -554,6 +567,7 @@ mod tests {
             lights: Vec::new(),
             fish_names: vec!["Perch".into(), "Char".into()],
             goods: Vec::new(),
+            forge: Handle::default(),
         };
         assert_eq!(stack_tip(None, &items), "");
         let stone = Stack {
