@@ -7,13 +7,25 @@ Planning only. Nothing below starts until the owner asks for it (CLAUDE.md,
 - [x] 0.1 Read Tenebris's orbital mechanics (`tenebris-rs/crates/tenebris-core`:
       `orbit.rs`, `nav.rs`, `nav_ui.rs`, `planet.rs`) and summarise it (design 1).
 - [x] 0.2 Mockup `docs/mockups/ship-tiers.html`: the hex VAB, tier 1 in orbit
-      in both fields, tier 2 courses, freighters and a lander, tier 3 landers,
-      starship, warp and star map. Art per `docs/mockups/ART-DIRECTION.md`
+      in both fields, tier 2 courses, freighters and a lander, tier 3 landers.
+      (Its starship, warp and star map were taken out on 2026-11-12: "Let's
+      not do warp".) Art per `docs/mockups/ART-DIRECTION.md`
       (`tools/art/ship_tiers_art.py`).
+- [x] 0.2a The owner's review (2026-11-12): no warp; the assembly grid four
+      rings out with crew decks, ladders and hatches inside; more presets.
+      The mockup's VAB and tier 3 tab redone to match, and republished.
 - [x] 0.3 GPU screenshots of every tab, day and night where there is ground,
       in `docs/screenshots/mockup-ship-tiers/`.
 - [x] 0.4 Published, on the tracker, G4 in the survey with tab 2 and tab 3's
       screenshots.
+- [x] 0.4a The owner's ask of 2026-11-14 (design 11): the launch field with a
+      far LOD ring, Pad B and a walk view; Taper, the 600 m test moon; the
+      planner tab with the Aubade system, the integrated line and maneuver
+      nodes; Halcyon renamed Aubade. Verified in headless Chromium
+      (SwiftShader), screenshots in `docs/screenshots/mockup-ship-tiers/`,
+      republished.
+- [ ] 0.4b G4a in the survey with the planner's screenshots: may maneuver
+      nodes on the integrated line join the invariant? Folded in when answered.
 - [ ] 0.5 The owner's answer to G4 folded in; the provisional flight delta
       kept, changed or dropped to match.
 - [ ] 0.6 The owner approves the mockup for build on the tracker.
@@ -62,10 +74,5 @@ Planning only. Nothing below starts until the owner asks for it (CLAUDE.md,
       freighter.
 - [ ] 4.4 Landers: lift to low orbit, dock, refuel in orbit.
 
-## 5. Tier 3: antimatter (after stations; the multi-system engine is its own change)
-- [ ] 5.1 A change for multiple star systems: system records, a galaxy list,
-      an f64 root frame per system, saves per system, frame re-rooting at a
-      tick boundary.
+## 5. Tier 3: antimatter
 - [ ] 5.2 Antimatter landers surface to surface.
-- [ ] 5.3 Starships, the warp ring and the jump.
-- [ ] 5.4 The star map.

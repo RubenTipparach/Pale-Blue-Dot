@@ -691,30 +691,30 @@ mod draw {
         commands
             .spawn(Node {
                 position_type: PositionType::Absolute,
-                bottom: px(110),
+                bottom: px(55),
                 left: percent(50),
-                width: px(420),
-                margin: UiRect::left(px(-210)),
+                width: px(210),
+                margin: UiRect::left(px(-105)),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
-                row_gap: px(5),
+                row_gap: px(3),
                 ..default()
             })
             .with_children(|hud| {
                 hud.spawn((
                     Text::new(""),
                     TextFont {
-                        font_size: 15.0,
+                        font_size: 11.0,
                         ..default()
                     },
                     TextColor(Color::srgb(0.95, 0.83, 0.52)),
-                    TextShadow::default(),
+                    crate::ui_kit::text_shadow(),
                     StatusText,
                 ));
                 hud.spawn((
                     Node {
-                        width: px(260),
-                        height: px(8),
+                        width: px(130),
+                        height: px(4),
                         border: UiRect::all(px(1)),
                         display: Display::None,
                         ..default()

@@ -1,8 +1,8 @@
 //! What a craft looks like: procedural meshes built from the same numbers its
-//! physics is (the hull's own loft, the wing's own span and chord, the rotor's
-//! own hub and radius), and the parts that move with its state - the
-//! Kestrel's nacelles and rotors, the Tern's boom and tiller, the Loon's
-//! paddle, the cog's yard and sail - placed from that state every frame.
+//! physics is (the hull's own loft, the sail's own mast and boom, the blade's
+//! own area), and the parts that move with its state - the Tern's boom and
+//! tiller, the Loon's paddle, the cog's yard and sail - placed from that
+//! state every frame.
 //! The cog is the harbour's ship as its piece is cut. Nothing here decides
 //! anything.
 
@@ -13,8 +13,6 @@ use bevy::prelude::*;
 use pbd_core::vehicle::{Craft, CraftState, Kind};
 use std::f32::consts::FRAC_PI_2;
 
-/// Visual rotor speed at full power, rad/s: slow enough to read as blades.
-const ROTOR_SPIN: f32 = 18.0;
 /// How far a recovering paddle blade is lifted clear of the water, m.
 const RECOVERY_LIFT_M: f32 = 0.45;
 const BLADE_HEIGHT_M: f32 = 0.45;
@@ -28,16 +26,10 @@ fn paddle_blade(area_m2: f32) -> Mesh {
 pub struct Part {
     owner: Entity,
     kind: Moving,
-    /// A rotor's own angle, rad.
-    spin: f32,
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum Moving {
-    /// The right (+1) or left (-1) nacelle.
-    Nacelle(f32),
-    Rotor,
-    Surface(usize),
     Boom,
     Tiller,
     Paddle,
@@ -58,26 +50,15 @@ enum Moving {
 }
 
 impl Part {
-    pub(super) fn named(owner: Entity, craft: Kind, name: &str) -> Option<Self> {
+    pub(super) fn named(owner: Entity, name: &str) -> Option<Self> {
         let kind = match name {
-            "nacelle_left" => Moving::Nacelle(-1.0),
-            "nacelle_right" => Moving::Nacelle(1.0),
-            "rotor_left" | "rotor_right" => Moving::Rotor,
-            "flaperon_left" => Moving::Surface(0),
-            "flaperon_right" => Moving::Surface(1),
-            "elevator" => Moving::Surface(2),
-            "rudder" if craft == Kind::Kestrel => Moving::Surface(3),
             "rudder" | "tiller" => Moving::Tiller,
             "boom" => Moving::Boom,
             "paddle" => Moving::Paddle,
             "crew" => Moving::Crew,
             _ => return None,
         };
-        Some(Self {
-            owner,
-            kind,
-            spin: 0.0,
-        })
+        Some(Self { owner, kind })
     }
 }
 
@@ -140,15 +121,7 @@ impl Builder<'_> {
         let owner = self.owner;
         let child = self
             .world
-            .spawn((
-                at,
-                Visibility::default(),
-                Part {
-                    owner,
-                    kind,
-                    spin: 0.0,
-                },
-            ))
+            .spawn((at, Visibility::default(), Part { owner, kind }))
             .id();
         self.world.entity_mut(parent).add_child(child);
         child
@@ -196,7 +169,6 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
     };
     let specs = craft.specs().clone();
     match craft.kind {
-        Kind::Kestrel => unreachable!("authored Kestrel loaded above"),
         Kind::Tern => {
             let s = &specs.tern;
             let shape = craft.hull().expect("a boat has a hull").clone();
@@ -339,7 +311,6 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
                         Part {
                             owner: entity,
                             kind: Moving::Flame,
-                            spin: 0.0,
                         },
                     ));
                 }
@@ -385,7 +356,6 @@ pub struct CarriedLight {
 /// Put every craft where the physics says it is and move its parts.
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn place(
-    time: Res<Time>,
     frame: Res<crate::planet::PlanetRenderFrame>,
     view: Res<VehicleView>,
     aboard: Res<super::Aboard>,
@@ -414,26 +384,12 @@ pub fn place(
         transform.translation = (frame.center + craft.reference_position()).as_vec3();
         transform.rotation = craft.body.orientation.as_quat();
     }
-    let dt = time.delta_secs();
-    for (mut part, mut transform, mut visibility) in &mut parts {
+    for (part, mut transform, mut visibility) in &mut parts {
         let Ok((entity, vehicle, _)) = crafts.get(part.owner) else {
             continue;
         };
         let craft = &vehicle.craft;
         match (part.kind, &craft.state) {
-            (Moving::Nacelle(_), CraftState::Kestrel(s)) => {
-                transform.rotation = Quat::from_rotation_x(s.nacelle as f32 - FRAC_PI_2);
-            }
-            (Moving::Rotor, CraftState::Kestrel(s)) => {
-                part.spin =
-                    (part.spin + ROTOR_SPIN * s.throttle as f32 * dt) % std::f32::consts::TAU;
-                transform.rotation = Quat::from_rotation_y(part.spin);
-            }
-            (Moving::Surface(index), CraftState::Kestrel(_)) => {
-                if let pbd_core::vehicle::Telemetry::Kestrel(t) = &craft.telemetry {
-                    transform.rotation = Quat::from_rotation_x(t.surface_deflections[index] as f32);
-                }
-            }
             (Moving::Boom, CraftState::Tern(s)) => {
                 transform.rotation = Quat::from_rotation_y(s.boom as f32);
             }

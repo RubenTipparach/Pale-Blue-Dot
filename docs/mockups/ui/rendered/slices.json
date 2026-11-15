@@ -1,0 +1,945 @@
+{
+ "source": "tools/art/ui_panels_blend.py",
+ "renderer": "Cycles (bpy 4.5), CPU, no GPU",
+ "samples": 24,
+ "render_px_per_native_px": 8,
+ "pieces": {
+  "frame": {
+   "w": 48,
+   "h": 48,
+   "slice": 14,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "dressed-stone moulding round the face: drawers and sub-panels"
+  },
+  "lintel": {
+   "w": 40,
+   "h": 16,
+   "slice": [
+    5,
+    9,
+    5,
+    9
+   ],
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "timber accent: the carved oak title board over a menu"
+  },
+  "slot-idle": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-hover": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-selected": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-disabled": {
+   "w": 24,
+   "h": 24,
+   "note": "hotbar and pack slot, 16 px icon well at 4,4"
+  },
+  "slot-uncommon": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, uncommon"
+  },
+  "slot-rare": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, rare"
+  },
+  "slot-epic": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, epic"
+  },
+  "slot-legendary": {
+   "w": 24,
+   "h": 24,
+   "note": "item frame, legendary"
+  },
+  "button-idle": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "raised stone plaque"
+  },
+  "button-hover": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "raised stone plaque"
+  },
+  "button-pressed": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "raised stone plaque"
+  },
+  "button-disabled": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "raised stone plaque"
+  },
+  "button-focus": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "raised stone plaque"
+  },
+  "tab-open": {
+   "w": 40,
+   "h": 18,
+   "slice": 7,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "stone; timber accent: the oak cap"
+  },
+  "tab-shut": {
+   "w": 40,
+   "h": 18,
+   "slice": 7,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "scroll-track": {
+   "w": 8,
+   "h": 24,
+   "slice": 4,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "scroll-thumb": {
+   "w": 8,
+   "h": 16,
+   "slice": 4,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "slider-track": {
+   "w": 32,
+   "h": 8,
+   "slice": 3,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "slider-knob": {
+   "w": 9,
+   "h": 13
+  },
+  "check-off": {
+   "w": 12,
+   "h": 12
+  },
+  "check-on": {
+   "w": 12,
+   "h": 12
+  },
+  "tooltip": {
+   "w": 24,
+   "h": 18,
+   "slice": 6,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "bar": {
+   "w": 40,
+   "h": 10,
+   "slice": 4,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "channel x 4..35, y 2..7; fill drawn in x 5..34, y 3..6"
+  },
+  "fill-health": {
+   "w": 2,
+   "h": 4
+  },
+  "fill-stamina": {
+   "w": 2,
+   "h": 4
+  },
+  "fill-breath": {
+   "w": 2,
+   "h": 4
+  },
+  "fill-progress": {
+   "w": 2,
+   "h": 4
+  },
+  "compass": {
+   "w": 80,
+   "h": 18,
+   "slice": [
+    9,
+    10,
+    9,
+    10
+   ],
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "slices top, right, bottom, left: it stretches along x only"
+  },
+  "compass-pointer": {
+   "w": 7,
+   "h": 6,
+   "note": "timber accent: oak wedge, iron tip"
+  },
+  "compass-town": {
+   "w": 5,
+   "h": 5
+  },
+  "map-frame": {
+   "w": 64,
+   "h": 64,
+   "slice": 22,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "portrait": {
+   "w": 32,
+   "h": 32,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "emblem": {
+   "w": 48,
+   "h": 48
+  },
+  "icon-close": {
+   "w": 11,
+   "h": 11,
+   "note": "inlaid light, for a stone face"
+  },
+  "icon-back": {
+   "w": 11,
+   "h": 11,
+   "note": "inlaid light, for a stone face"
+  },
+  "icon-gear": {
+   "w": 11,
+   "h": 11,
+   "note": "inlaid light, for a stone face"
+  },
+  "icon-map": {
+   "w": 11,
+   "h": 11,
+   "note": "inlaid light, for a stone face"
+  },
+  "icon-pack": {
+   "w": 11,
+   "h": 11,
+   "note": "inlaid light, for a stone face"
+  },
+  "oak/frame": {
+   "w": 48,
+   "h": 48,
+   "slice": 14,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "oak moulding round a dressed-stone face"
+  },
+  "oak/button-idle": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "carved oak plaque"
+  },
+  "oak/button-hover": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "carved oak plaque"
+  },
+  "oak/button-pressed": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "carved oak plaque"
+  },
+  "oak/button-disabled": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "carved oak plaque"
+  },
+  "oak/button-focus": {
+   "w": 48,
+   "h": 22,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch",
+   "note": "carved oak plaque"
+  },
+  "oak/tab-open": {
+   "w": 40,
+   "h": 18,
+   "slice": 7,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "oak/tab-shut": {
+   "w": 40,
+   "h": 18,
+   "slice": 7,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "oak/scroll-thumb": {
+   "w": 8,
+   "h": 16,
+   "slice": 4,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "oak/slider-knob": {
+   "w": 9,
+   "h": 13
+  },
+  "oak/tooltip": {
+   "w": 24,
+   "h": 18,
+   "slice": 6,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "oak/portrait": {
+   "w": 32,
+   "h": 32,
+   "slice": 8,
+   "sides": "stretch",
+   "centre": "stretch"
+  },
+  "oak/icon-close": {
+   "w": 11,
+   "h": 11
+  },
+  "oak/icon-back": {
+   "w": 11,
+   "h": 11
+  },
+  "oak/icon-gear": {
+   "w": 11,
+   "h": 11
+  },
+  "oak/icon-map": {
+   "w": 11,
+   "h": 11
+  },
+  "oak/icon-pack": {
+   "w": 11,
+   "h": 11
+  }
+ },
+ "contrast": {
+  "frame": {
+   "TEXT": 6.49,
+   "TITLE": 6.29
+  },
+  "lintel": {
+   "OAK_LABEL": 6.21
+  },
+  "slot-idle": {
+   "TEXT": 6.49
+  },
+  "button-idle": {
+   "LABEL": 7.38
+  },
+  "button-hover": {
+   "LABEL": 4.65
+  },
+  "button-pressed": {
+   "LABEL": 11.55
+  },
+  "button-disabled": {
+   "LABEL_DIM": 6.66
+  },
+  "button-focus": {
+   "LABEL": 7.38
+  },
+  "tab-open": {
+   "LABEL": 7.38
+  },
+  "tab-shut": {
+   "TAB_DIM": 7.0
+  },
+  "tooltip": {
+   "TEXT": 6.49
+  },
+  "compass": {
+   "CUT": 6.66,
+   "NORTH": 6.09
+  },
+  "oak/frame": {
+   "TEXT": 6.49,
+   "TITLE": 6.29
+  },
+  "oak/button-idle": {
+   "OAK_LABEL": 6.21
+  },
+  "oak/button-hover": {
+   "OAK_LABEL": 6.21
+  },
+  "oak/button-pressed": {
+   "OAK_LABEL": 6.21
+  },
+  "oak/button-disabled": {
+   "LABEL_DIM": 4.72
+  },
+  "oak/button-focus": {
+   "OAK_LABEL": 6.21
+  },
+  "oak/tab-open": {
+   "OAK_LABEL": 6.21
+  },
+  "oak/tab-shut": {
+   "LABEL": 6.94
+  },
+  "oak/tooltip": {
+   "TEXT": 6.49
+  }
+ },
+ "contrast_smooth": {
+  "frame": {
+   "TEXT": 6.04,
+   "TITLE": 5.85
+  },
+  "lintel": {
+   "OAK_LABEL": 4.77
+  },
+  "slot-idle": {
+   "TEXT": 6.88
+  },
+  "button-idle": {
+   "LABEL": 7.88
+  },
+  "button-hover": {
+   "LABEL": 5.48
+  },
+  "button-pressed": {
+   "LABEL": 10.73
+  },
+  "button-disabled": {
+   "LABEL_DIM": 5.64
+  },
+  "button-focus": {
+   "LABEL": 7.88
+  },
+  "tab-open": {
+   "LABEL": 7.88
+  },
+  "tab-shut": {
+   "TAB_DIM": 6.51
+  },
+  "tooltip": {
+   "TEXT": 6.03
+  },
+  "compass": {
+   "CUT": 4.96,
+   "NORTH": 4.53
+  },
+  "oak/frame": {
+   "TEXT": 6.11,
+   "TITLE": 5.91
+  },
+  "oak/button-idle": {
+   "OAK_LABEL": 5.26
+  },
+  "oak/button-hover": {
+   "OAK_LABEL": 7.85
+  },
+  "oak/button-pressed": {
+   "OAK_LABEL": 5.27
+  },
+  "oak/button-disabled": {
+   "LABEL_DIM": 4.78
+  },
+  "oak/button-focus": {
+   "OAK_LABEL": 5.26
+  },
+  "oak/tab-open": {
+   "OAK_LABEL": 4.95
+  },
+  "oak/tab-shut": {
+   "LABEL": 7.62
+  },
+  "oak/tooltip": {
+   "TEXT": 6.11
+  }
+ },
+ "plain_sides_changed_px": {
+  "frame": 14,
+  "lintel": 22,
+  "slot-idle": 0,
+  "slot-hover": 0,
+  "slot-selected": 0,
+  "slot-disabled": 0,
+  "slot-uncommon": 0,
+  "slot-rare": 0,
+  "slot-epic": 0,
+  "slot-legendary": 0,
+  "button-idle": 3,
+  "button-hover": 36,
+  "button-pressed": 0,
+  "button-disabled": 6,
+  "button-focus": 8,
+  "tab-open": 0,
+  "tab-shut": 2,
+  "scroll-track": 0,
+  "scroll-thumb": 2,
+  "slider-track": 0,
+  "slider-knob": 0,
+  "check-off": 0,
+  "check-on": 0,
+  "tooltip": 3,
+  "bar": 40,
+  "fill-health": 0,
+  "fill-stamina": 0,
+  "fill-breath": 0,
+  "fill-progress": 0,
+  "compass": 2,
+  "compass-pointer": 0,
+  "compass-town": 0,
+  "map-frame": 46,
+  "portrait": 1,
+  "emblem": 0,
+  "icon-close": 0,
+  "icon-back": 0,
+  "icon-gear": 0,
+  "icon-map": 0,
+  "icon-pack": 0,
+  "oak/frame": 9,
+  "oak/button-idle": 4,
+  "oak/button-hover": 78,
+  "oak/button-pressed": 4,
+  "oak/button-disabled": 14,
+  "oak/button-focus": 3,
+  "oak/tab-open": 1,
+  "oak/tab-shut": 5,
+  "oak/scroll-thumb": 1,
+  "oak/slider-knob": 0,
+  "oak/tooltip": 1,
+  "oak/portrait": 5,
+  "oak/icon-close": 0,
+  "oak/icon-back": 0,
+  "oak/icon-gear": 0,
+  "oak/icon-map": 0,
+  "oak/icon-pack": 0
+ },
+ "render_seconds": {
+  "frame": 6.0,
+  "lintel": 1.3,
+  "slot-idle": 1.3,
+  "slot-hover": 1.3,
+  "slot-selected": 1.4,
+  "slot-disabled": 1.3,
+  "slot-uncommon": 1.3,
+  "slot-rare": 1.3,
+  "slot-epic": 1.3,
+  "slot-legendary": 1.4,
+  "button-idle": 2.4,
+  "button-hover": 2.5,
+  "button-pressed": 2.5,
+  "button-disabled": 14.6,
+  "button-focus": 2.9,
+  "tab-open": 1.8,
+  "tab-shut": 1.7,
+  "scroll-track": 0.4,
+  "scroll-thumb": 0.3,
+  "slider-track": 0.5,
+  "slider-knob": 0.3,
+  "check-off": 0.3,
+  "check-on": 0.4,
+  "tooltip": 1.1,
+  "bar": 1.0,
+  "fill-health": 0.0,
+  "fill-stamina": 0.0,
+  "fill-breath": 0.0,
+  "fill-progress": 0.0,
+  "compass": 3.5,
+  "compass-pointer": 0.1,
+  "compass-town": 0.1,
+  "map-frame": 14.5,
+  "portrait": 2.7,
+  "emblem": 6.2,
+  "icon-close": 0.3,
+  "icon-back": 0.3,
+  "icon-gear": 0.3,
+  "icon-map": 0.3,
+  "icon-pack": 0.3,
+  "oak/frame": 6.6,
+  "oak/button-idle": 2.6,
+  "oak/button-hover": 2.7,
+  "oak/button-pressed": 2.6,
+  "oak/button-disabled": 2.5,
+  "oak/button-focus": 2.8,
+  "oak/tab-open": 1.2,
+  "oak/tab-shut": 1.3,
+  "oak/scroll-thumb": 0.3,
+  "oak/slider-knob": 0.3,
+  "oak/tooltip": 1.0,
+  "oak/portrait": 2.5,
+  "oak/icon-close": 0.3,
+  "oak/icon-back": 0.3,
+  "oak/icon-gear": 0.3,
+  "oak/icon-map": 0.3,
+  "oak/icon-pack": 0.3
+ },
+ "face_adjust": {
+  "frame": 1.0,
+  "lintel": 1.0,
+  "slot-idle": 1.0,
+  "slot-hover": 1.0,
+  "slot-selected": 1.0,
+  "slot-disabled": 1.0,
+  "slot-uncommon": 1.0,
+  "slot-rare": 1.0,
+  "slot-epic": 1.0,
+  "slot-legendary": 1.0,
+  "button-idle": 1.0,
+  "button-hover": 1.0,
+  "button-pressed": 1.0,
+  "button-disabled": 0.444,
+  "button-focus": 1.0,
+  "tab-open": 1.0,
+  "tab-shut": 1.0,
+  "scroll-track": 1.0,
+  "scroll-thumb": 1.0,
+  "slider-track": 1.0,
+  "slider-knob": 1.0,
+  "check-off": 1.0,
+  "check-on": 1.0,
+  "tooltip": 1.0,
+  "bar": 1.0,
+  "fill-health": 1.0,
+  "fill-stamina": 1.0,
+  "fill-breath": 1.0,
+  "fill-progress": 1.0,
+  "compass": 1.0,
+  "compass-pointer": 1.0,
+  "compass-town": 1.0,
+  "map-frame": 1.0,
+  "portrait": 1.0,
+  "emblem": 1.0,
+  "icon-close": 1.0,
+  "icon-back": 1.0,
+  "icon-gear": 1.0,
+  "icon-map": 1.0,
+  "icon-pack": 1.0,
+  "oak/frame": 1.0,
+  "oak/button-idle": 1.0,
+  "oak/button-hover": 1.0,
+  "oak/button-pressed": 1.0,
+  "oak/button-disabled": 1.0,
+  "oak/button-focus": 1.0,
+  "oak/tab-open": 1.0,
+  "oak/tab-shut": 1.0,
+  "oak/scroll-thumb": 1.0,
+  "oak/slider-knob": 1.0,
+  "oak/tooltip": 1.0,
+  "oak/portrait": 1.0,
+  "oak/icon-close": 1.0,
+  "oak/icon-back": 1.0,
+  "oak/icon-gear": 1.0,
+  "oak/icon-map": 1.0,
+  "oak/icon-pack": 1.0
+ },
+ "rock_render_seconds": {
+  "pack": 15.1,
+  "station": 13.1,
+  "chest": 25.4,
+  "talk": 12.5,
+  "trade": 16.6,
+  "loading": 8.3,
+  "sample": 6.6,
+  "kit-48": 1.0,
+  "kit-128": 2.9,
+  "kit-200": 7.2,
+  "pack-craft": 31.4
+ },
+ "rock_panels": {
+  "pack": [
+   268,
+   152
+  ],
+  "pack-craft": [
+   268,
+   204
+  ],
+  "station": [
+   230,
+   156
+  ],
+  "chest": [
+   372,
+   168
+  ],
+  "talk": [
+   270,
+   124
+  ],
+  "trade": [
+   308,
+   148
+  ],
+  "loading": [
+   150,
+   148
+  ],
+  "sample": [
+   192,
+   96
+  ],
+  "kit-48": [
+   48,
+   48
+  ],
+  "kit-128": [
+   128,
+   64
+  ],
+  "kit-200": [
+   200,
+   100
+  ]
+ },
+ "rock_contrast": {
+  "pack": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  },
+  "station": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  },
+  "chest": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  },
+  "talk": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  },
+  "trade": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  },
+  "loading": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  },
+  "sample": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  },
+  "kit-48": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.02,
+    "TEXT_DIM": 4.99,
+    "TITLE": 5.83
+   }
+  },
+  "kit-128": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  },
+  "kit-200": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  },
+  "pack-craft": {
+   "px": {
+    "TEXT": 6.49,
+    "TEXT_DIM": 5.38,
+    "TITLE": 6.29
+   },
+   "smooth": {
+    "TEXT": 6.03,
+    "TEXT_DIM": 5.0,
+    "TITLE": 5.84
+   }
+  }
+ },
+ "rock_px": 4,
+ "light": "the approved base rock's (Euler -40, -28, 0; 3.2; sky 0.35; roughness 0.7)",
+ "tokens": {
+  "INK": "#010000",
+  "SEAM": "#170916",
+  "FACE": "#1f3b52",
+  "WELL": "#011c34",
+  "TEXT": "#eab798",
+  "TEXT_DIM": "#cfaa81",
+  "TITLE": "#faaf5c",
+  "LABEL": "#fffefe",
+  "LABEL_DIM": "#92a3b2",
+  "TAB_DIM": "#bfcad7",
+  "CUT": "#011c34",
+  "NORTH": "#4a051e",
+  "OAK_LABEL": "#010000",
+  "STONE_MID": "#5d778d"
+ },
+ "ramps": {
+  "STONE": [
+   "#011c34",
+   "#1f3b52",
+   "#3e586e",
+   "#92a3b2",
+   "#bfcad7"
+  ],
+  "ROCK": [
+   "#010e1a",
+   "#1f3b52",
+   "#3e586e",
+   "#5d778d",
+   "#92a3b2"
+  ],
+  "WOOD": [
+   "#2f1525",
+   "#41322c",
+   "#725244",
+   "#ab8465",
+   "#cfaa81"
+  ],
+  "IRON": [
+   "#010000",
+   "#161612",
+   "#2c2c25",
+   "#434137",
+   "#a09f91"
+  ],
+  "BRASS": [
+   "#733126",
+   "#c56d25",
+   "#fb902f",
+   "#faaf5c"
+  ],
+  "RUNE": [
+   "#204f63",
+   "#53998b",
+   "#84e3b5",
+   "#c1f1d8"
+  ],
+  "HEALTH": [
+   "#4a051e",
+   "#a61e1f",
+   "#d12d41",
+   "#fa3a64"
+  ],
+  "STAMINA": [
+   "#733126",
+   "#c56d25",
+   "#fb902f",
+   "#faaf5c"
+  ],
+  "BREATH": [
+   "#0c2f44",
+   "#15578a",
+   "#1096c3",
+   "#74effe"
+  ]
+ },
+ "palette": "Sweaft-64"
+}

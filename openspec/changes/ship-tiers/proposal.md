@@ -1,11 +1,11 @@
-# Proposal: ship tiers, from hex-stack rockets to warp starships
+# Proposal: ship tiers, from hex-stack rockets to antimatter landers
 
 Status: **planning only**. Nothing here is built. One decision is the owner's
 (G4 in the survey, the orbital-mechanics invariant); the plan is written for
 the recommendation and marked provisional until it is answered.
 
 Mockup: `docs/mockups/ship-tiers.html`, published at
-https://claude.ai/artifact/2Sb7mNRv4wauJh8WFoR9eD (link recorded in `docs/mockups/mockup-work.md`,
+https://claude.ai/artifact/4e3jLcjN4yH6NhJmyWKuY5 (link recorded in `docs/mockups/mockup-work.md`,
 id M21 on the tracker). Screenshots: `docs/screenshots/mockup-ship-tiers/` (the
 assembly building's four so far; the GPU screenshot gate, including G4's
 orbit shots for the survey, was not run: mockup work moved off the desktop
@@ -27,6 +27,18 @@ The owner, 2026-11-12, verbatim:
 > antimater engines:
 > * landers are the standard to traveling anywhere
 > * starships are now possible - they can travel between stars using warp drives. Unlocks the ability to travel to other solar systems.
+
+Withdrawn the same day: "Let's not do warp." Starships, warp and other star
+systems are out of this change.
+
+The owner, 2026-11-14: "update the rocket sim to have a larger ground area,
+and maybe a small planet to test orbit transitions around, and a solar system
+with navigation nodes to plot flight paths and rocket burns". The mockup gets a
+launch field 2.4 km across (the game's cells near the pad, a cheap far ring),
+Taper, a 600 m test moon 14 km out, and a planner tab: the whole system, a
+predicted line integrated forward, and maneuver nodes. Nodes contradict the
+flight invariant; they are in the mockup only, and the invariant is asked
+about (survey G4a, design 11.4).
 
 Today a ship is one craft flown by assisted Newtonian flight with a bounded
 gravity field, and the earlier mockups (`ship-crafting.html`, `travel.html`)
@@ -74,24 +86,34 @@ commit that builds it, with its test.
   thrust, TWR and delta-v per stage.
 - **Tier 1, chemical and nuclear rockets.** TWR over 1 to leave the pad,
   delta-v to reach orbit; solid boosters, a nuclear thermal upper stage fed by
-  the industry chain's fuel rods. Orbit Pale Blue, reach Lantern on an arc.
+  the industry chain's fuel rods. Orbit Tenebris, reach Lantern on an arc.
 - **Tier 2, fusion.** Ships built in orbit that never land; a nav computer that
   plots and flies burn-flip-brake courses; automated freighters on routes;
   landers that lift to low orbit to meet them.
 - **Tier 3, antimatter.** Landers that fly surface to surface anywhere in the
-  system; starships with a warp ring; neighbouring star systems.
-- Engine work the tiers need: an orbital field for rockets (if B), multiple
-  star systems with their own f64 root frames and saves, freighter routes as
-  stored records that move goods through the durable save path.
+  system. No warp and no other star systems (the owner, 2026-11-12: "Let's
+  not do warp").
+- **Bigger rockets you walk inside** (the owner, 2026-11-12: "Make me some
+  more rocket building presets. Allow larger rockets with more leg room to
+  walk around in. (3-4 radius? Blocks)"): the assembly building's grid
+  reaches four rings out from the core, a rocket up to nine cells (25 m)
+  across, with crew decks, ladders and hatches inside, and more presets.
+- Engine work the tiers need: an orbital field for rockets (if B), and
+  freighter routes as stored records that move goods through the durable
+  save path.
+
+- **The planner (mockup, 2026-11-14):** maneuver nodes with prograde, normal
+  and radial handles on the integrated line, chained, flown by hand; Taper to
+  practise launch, orbit, transfer, capture, landing and return; the Aubade
+  system to scale. Provisional on G4a; not in the spec deltas.
 
 ## What does not change
 
 - Planets, moons and stations stay on analytic rails.
 - f64 system coordinates, bounded f32 local frames, rebasing at tick
-  boundaries (CLAUDE.md). A warp jump re-roots a frame; it never makes one f64
-  frame span two stars.
-- Saved games: a ship design, a rocket in flight, a freighter route and a
-  visited star system are records that migrate forward; nothing a player built
+  boundaries (CLAUDE.md). There is one star system.
+- Saved games: a ship design, a rocket in flight and a freighter route are
+  records that migrate forward; nothing a player built
   is dropped (CLAUDE.md, "Saved games survive every change").
 - The Kestrel, Tern and Loon are untouched; they are the craft before the
   tiers.
@@ -105,8 +127,8 @@ commit that builds it, with its test.
   grid moves onto hex cells and becomes the tier-2 ship builder),
   `travel.html` (its transit drive is the tier-2 nav course; its free hover is
   a tier-2 lander and tier-3 feature), `industry.html` (the power ladder),
-  `stations.html` (where fusion ships and starships are built and dock).
+  `stations.html` (where fusion ships are built and dock).
 - Code: `pbd-core` (part catalogue, stage maths, orbital field, path
-  prediction, nav-computer solver, system records), `pbd-app` (the VAB, the
-  rocket flight mode, the HUD readouts, freighters, warp). None of it is
+  prediction, nav-computer solver), `pbd-app` (the VAB, the rocket flight
+  mode, the HUD readouts, freighters). None of it is
   started.

@@ -19,6 +19,8 @@
 //! reader applies to its own capture flag.
 
 use bevy::{ecs::system::SystemParam, prelude::*};
+use pbd_core::vehicle::Kind;
+use std::collections::BTreeMap;
 
 /// Whether a menu holds the pointer and the keyboard.
 ///
@@ -128,45 +130,132 @@ pub enum Key {
     Wheel,
 }
 
+/// The keys a slot can be given, and what a cap prints for each: every label
+/// is in the kit's font (`ui_kit::tests::the_kit_font_has_every_label_glyph`
+/// reads this table). A key outside it is not taken by a rebind, and a cap
+/// waits for another.
+pub const ASSIGNABLE: [(KeyCode, &str); 87] = [
+    (KeyCode::KeyA, "A"),
+    (KeyCode::KeyB, "B"),
+    (KeyCode::KeyC, "C"),
+    (KeyCode::KeyD, "D"),
+    (KeyCode::KeyE, "E"),
+    (KeyCode::KeyF, "F"),
+    (KeyCode::KeyG, "G"),
+    (KeyCode::KeyH, "H"),
+    (KeyCode::KeyI, "I"),
+    (KeyCode::KeyJ, "J"),
+    (KeyCode::KeyK, "K"),
+    (KeyCode::KeyL, "L"),
+    (KeyCode::KeyM, "M"),
+    (KeyCode::KeyN, "N"),
+    (KeyCode::KeyO, "O"),
+    (KeyCode::KeyP, "P"),
+    (KeyCode::KeyQ, "Q"),
+    (KeyCode::KeyR, "R"),
+    (KeyCode::KeyS, "S"),
+    (KeyCode::KeyT, "T"),
+    (KeyCode::KeyU, "U"),
+    (KeyCode::KeyV, "V"),
+    (KeyCode::KeyW, "W"),
+    (KeyCode::KeyX, "X"),
+    (KeyCode::KeyY, "Y"),
+    (KeyCode::KeyZ, "Z"),
+    (KeyCode::Digit0, "0"),
+    (KeyCode::Digit1, "1"),
+    (KeyCode::Digit2, "2"),
+    (KeyCode::Digit3, "3"),
+    (KeyCode::Digit4, "4"),
+    (KeyCode::Digit5, "5"),
+    (KeyCode::Digit6, "6"),
+    (KeyCode::Digit7, "7"),
+    (KeyCode::Digit8, "8"),
+    (KeyCode::Digit9, "9"),
+    (KeyCode::F1, "F1"),
+    (KeyCode::F2, "F2"),
+    (KeyCode::F3, "F3"),
+    (KeyCode::F4, "F4"),
+    (KeyCode::F5, "F5"),
+    (KeyCode::F6, "F6"),
+    (KeyCode::F7, "F7"),
+    (KeyCode::F8, "F8"),
+    (KeyCode::F9, "F9"),
+    (KeyCode::F10, "F10"),
+    (KeyCode::F11, "F11"),
+    (KeyCode::F12, "F12"),
+    (KeyCode::Space, "SPACE"),
+    (KeyCode::Tab, "TAB"),
+    (KeyCode::Enter, "ENTER"),
+    (KeyCode::Backspace, "BACK"),
+    (KeyCode::CapsLock, "CAPS"),
+    (KeyCode::ShiftLeft, "SHIFT"),
+    (KeyCode::ShiftRight, "R SHIFT"),
+    (KeyCode::ControlLeft, "CTRL"),
+    (KeyCode::ControlRight, "R CTRL"),
+    (KeyCode::AltLeft, "ALT"),
+    (KeyCode::AltRight, "R ALT"),
+    (KeyCode::ArrowUp, "↑"),
+    (KeyCode::ArrowDown, "↓"),
+    (KeyCode::ArrowLeft, "←"),
+    (KeyCode::ArrowRight, "→"),
+    (KeyCode::Home, "HOME"),
+    (KeyCode::End, "END"),
+    (KeyCode::Insert, "INS"),
+    (KeyCode::Delete, "DEL"),
+    (KeyCode::PageUp, "PG UP"),
+    (KeyCode::PageDown, "PG DN"),
+    (KeyCode::Minus, "-"),
+    (KeyCode::Equal, "="),
+    (KeyCode::Semicolon, ";"),
+    (KeyCode::Quote, "'"),
+    (KeyCode::Comma, ","),
+    (KeyCode::Period, "."),
+    (KeyCode::Slash, "/"),
+    (KeyCode::Numpad0, "NUM 0"),
+    (KeyCode::Numpad1, "NUM 1"),
+    (KeyCode::Numpad2, "NUM 2"),
+    (KeyCode::Numpad3, "NUM 3"),
+    (KeyCode::Numpad4, "NUM 4"),
+    (KeyCode::Numpad5, "NUM 5"),
+    (KeyCode::Numpad6, "NUM 6"),
+    (KeyCode::Numpad7, "NUM 7"),
+    (KeyCode::Numpad8, "NUM 8"),
+    (KeyCode::Numpad9, "NUM 9"),
+    (KeyCode::NumpadEnter, "NUM ENTER"),
+];
+
+/// What a cap prints for a keyboard key: its `ASSIGNABLE` label, `ESC` for
+/// the menu key, and nothing for a key the table does not know.
+pub fn key_label(code: KeyCode) -> &'static str {
+    if code == KeyCode::Escape {
+        return "ESC";
+    }
+    ASSIGNABLE
+        .iter()
+        .find(|(k, _)| *k == code)
+        .map_or("", |(_, label)| *label)
+}
+
+/// How a key is written in the settings file: Bevy's own name (`KeyQ`).
+pub fn key_name(code: KeyCode) -> String {
+    format!("{code:?}")
+}
+
+/// The key a name in the settings file names, if it is one a slot can take.
+pub fn key_named(name: &str) -> Option<KeyCode> {
+    ASSIGNABLE
+        .iter()
+        .map(|(k, _)| *k)
+        .find(|k| key_name(*k) == name)
+}
+
 impl Key {
-    /// What the settings page and `--help` print. ASCII only, which is the
-    /// inherited rule for anything a player reads.
+    /// What the settings page and `--help` print. A keyboard key is printed
+    /// as its cap (`key_label`): the default shift and ctrl are the left
+    /// ones, and the readers take either side, so they print plain.
     pub fn label(self) -> &'static str {
         match self {
-            Key::Board(code) => match code {
-                KeyCode::KeyA => "A",
-                KeyCode::KeyB => "B",
-                KeyCode::KeyD => "D",
-                KeyCode::KeyE => "E",
-                KeyCode::KeyC => "C",
-                KeyCode::KeyF => "F",
-                KeyCode::KeyG => "G",
-                KeyCode::KeyH => "H",
-                KeyCode::KeyI => "I",
-                KeyCode::KeyJ => "J",
-                KeyCode::KeyL => "L",
-                KeyCode::KeyM => "M",
-                KeyCode::KeyP => "P",
-                KeyCode::KeyQ => "Q",
-                KeyCode::KeyR => "R",
-                KeyCode::KeyS => "S",
-                KeyCode::KeyT => "T",
-                KeyCode::KeyV => "V",
-                KeyCode::KeyW => "W",
-                KeyCode::KeyX => "X",
-                KeyCode::KeyZ => "Z",
-                KeyCode::Space => "SPACE",
-                KeyCode::ShiftLeft | KeyCode::ShiftRight => "SHIFT",
-                KeyCode::ControlLeft | KeyCode::ControlRight => "CTRL",
-                KeyCode::Escape => "ESC",
-                KeyCode::F12 => "F12",
-                KeyCode::F3 => "F3",
-                KeyCode::Digit0 => "0",
-                KeyCode::Digit1 => "1",
-                // A key with no label would print as nothing at all, which is
-                // a blank row in the settings page. The test refuses one.
-                _ => "",
-            },
+            Key::Board(code) => key_label(code),
             Key::Mouse(MouseButton::Left) => "LEFT CLICK",
             Key::Mouse(MouseButton::Right) => "RIGHT CLICK",
             Key::Mouse(_) => "",
@@ -188,6 +277,7 @@ impl Key {
 }
 
 /// One control and what it does.
+#[derive(Debug)]
 pub struct Binding {
     /// The keys, in the order they are printed. Several means either: `W A S D`
     /// is four keys for one action, and `SPACE / CTRL` is a pair.
@@ -195,16 +285,112 @@ pub struct Binding {
     /// The separator between them when printed.
     pub joiner: &'static str,
     pub does: &'static str,
+    /// A range (the number row's `1 - 0`): its caps are its ends, and it is
+    /// read as every key between, so no key of it can be rebound alone.
+    pub range: bool,
+}
+
+/// The sub-tab of the settings' Input page a group is listed on (decision 6:
+/// "organize the input menu better with tabs or something instead of big uber
+/// list").
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Tab {
+    OnFoot,
+    Hands,
+    Flying,
+    Vehicles,
+    Menus,
+}
+
+impl Tab {
+    pub const ALL: [Tab; 5] = [
+        Tab::OnFoot,
+        Tab::Hands,
+        Tab::Flying,
+        Tab::Vehicles,
+        Tab::Menus,
+    ];
+
+    /// The sub-tab's label, in the kit's font.
+    pub fn label(self) -> &'static str {
+        match self {
+            Tab::OnFoot => "ON FOOT",
+            Tab::Hands => "HANDS",
+            Tab::Flying => "FLYING",
+            Tab::Vehicles => "VEHICLES",
+            Tab::Menus => "MENUS",
+        }
+    }
+}
+
+/// Where the player is, as far as which keys mean what: the remap's context.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Live {
+    OnFoot,
+    Flying,
+    Aboard(Kind),
+}
+
+impl Live {
+    /// Every context, for asking whether two groups can be live together.
+    pub const ALL: [Live; 6] = [
+        Live::OnFoot,
+        Live::Flying,
+        Live::Aboard(Kind::Tern),
+        Live::Aboard(Kind::Loon),
+        Live::Aboard(Kind::Rowboat),
+        Live::Aboard(Kind::Cog),
+    ];
+}
+
+/// When a group's keys are read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum When {
+    Always,
+    OnFoot,
+    Flying,
+    /// On foot (F boards) and aboard anything (F steps off, V, T).
+    OnFootOrAboard,
+    Aboard(Kind),
+}
+
+impl When {
+    pub fn live(self, now: Live) -> bool {
+        match (self, now) {
+            (When::Always, _) => true,
+            (When::OnFoot, Live::OnFoot) | (When::Flying, Live::Flying) => true,
+            (When::OnFootOrAboard, Live::OnFoot | Live::Aboard(_)) => true,
+            (When::Aboard(kind), Live::Aboard(now)) => kind == now,
+            _ => false,
+        }
+    }
+
+    /// Whether two groups' keys can be read at the same moment.
+    pub fn together(self, other: When) -> bool {
+        Live::ALL
+            .iter()
+            .any(|&now| self.live(now) && other.live(now))
+    }
 }
 
 /// A heading and the controls under it.
+#[derive(Debug)]
 pub struct Group {
     pub heading: &'static str,
+    /// The Input sub-tab it is listed on.
+    pub tab: Tab,
+    /// When its keys are read, which is when a rebind of them applies.
+    pub when: When,
     pub rows: &'static [Binding],
 }
 
 const fn row(keys: &'static [Key], joiner: &'static str, does: &'static str) -> Binding {
-    Binding { keys, joiner, does }
+    Binding {
+        keys,
+        joiner,
+        does,
+        range: false,
+    }
 }
 
 const WASD: [Key; 4] = [
@@ -214,7 +400,7 @@ const WASD: [Key; 4] = [
     Key::Board(KeyCode::KeyD),
 ];
 
-const ON_FOOT: [Binding; 11] = [
+const ON_FOOT: [Binding; 3] = [
     row(&WASD, " ", "move"),
     row(
         &[Key::Board(KeyCode::Space)],
@@ -222,6 +408,9 @@ const ON_FOOT: [Binding; 11] = [
         "jump, and rise in water",
     ),
     row(&[Key::Board(KeyCode::ShiftLeft)], " ", "sprint"),
+];
+
+const HANDS: [Binding; 6] = [
     row(&[Key::Board(KeyCode::KeyE)], " ", "open or shut a door"),
     row(
         &[Key::Mouse(MouseButton::Left)],
@@ -233,22 +422,19 @@ const ON_FOOT: [Binding; 11] = [
         " ",
         "place the held block, or wind the line in",
     ),
-    row(
-        &[Key::Board(KeyCode::Digit1), Key::Board(KeyCode::Digit0)],
-        " - ",
-        "select a slot",
-    ),
+    Binding {
+        range: true,
+        ..row(
+            &[Key::Board(KeyCode::Digit1), Key::Board(KeyCode::Digit0)],
+            " - ",
+            "select a slot",
+        )
+    },
     row(&[Key::Wheel], " ", "step through the slots"),
     row(
         &[Key::Board(KeyCode::KeyG)],
         " ",
         "hold for the tools; the wheel picks one",
-    ),
-    row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
-    row(
-        &[Key::Board(KeyCode::KeyI)],
-        " ",
-        "the pack: thirty more slots",
     ),
 ];
 
@@ -281,24 +467,6 @@ const VEHICLES: [Binding; 3] = [
         " ",
         "anchor a boat, or weigh it",
     ),
-];
-
-const KESTREL: [Binding; 7] = [
-    row(&W_S, "/", "pitch"),
-    row(&A_D, "/", "roll"),
-    row(&Q_E, "/", "yaw"),
-    row(
-        &[Key::Board(KeyCode::Space), Key::Board(KeyCode::ControlLeft)],
-        "/",
-        "power",
-    ),
-    row(
-        &[Key::Board(KeyCode::KeyZ), Key::Board(KeyCode::KeyC)],
-        "/",
-        "nacelles ahead or up",
-    ),
-    row(&[Key::Board(KeyCode::KeyX)], " ", "assist"),
-    row(&[Key::Board(KeyCode::KeyB)], " ", "wheel brake"),
 ];
 
 const TERN: [Binding; 4] = [
@@ -336,95 +504,432 @@ const WORLD: [Binding; 5] = [
     row(&[Key::Board(KeyCode::KeyL)], " ", "noon or midnight"),
 ];
 
-const SCREEN: [Binding; 3] = [
+const SCREEN: [Binding; 5] = [
     row(&[Key::Board(KeyCode::Escape)], " ", "menu"),
+    row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
+    row(
+        &[Key::Board(KeyCode::KeyI)],
+        " ",
+        "the pack: thirty more slots",
+    ),
     row(&[Key::Board(KeyCode::F12)], " ", "screenshot"),
     row(&[Key::Board(KeyCode::F3)], " ", "frame graph"),
 ];
 
-/// Every control in the game, once.
-pub const BINDINGS: [Group; 10] = [
+const fn group(heading: &'static str, tab: Tab, when: When, rows: &'static [Binding]) -> Group {
     Group {
-        heading: "ON FOOT",
-        rows: &ON_FOOT,
-    },
-    Group {
-        heading: "FLYING",
-        rows: &FLYING,
-    },
-    Group {
-        heading: "VEHICLES",
-        rows: &VEHICLES,
-    },
-    Group {
-        heading: "KESTREL",
-        rows: &KESTREL,
-    },
-    Group {
-        heading: "TERN",
-        rows: &TERN,
-    },
-    Group {
-        heading: "LOON",
-        rows: &LOON,
-    },
-    Group {
-        heading: "ROWBOAT",
-        rows: &ROWBOAT,
-    },
-    Group {
-        heading: "COG",
-        rows: &COG,
-    },
-    Group {
-        heading: "WORLD",
-        rows: &WORLD,
-    },
-    Group {
-        heading: "SCREEN",
-        rows: &SCREEN,
-    },
+        heading,
+        tab,
+        when,
+        rows,
+    }
+}
+
+/// Every control in the game, once. (The Kestrel's group, KESTREL on the
+/// Flying sub-tab, went with it in `retire-kestrel`; a saved rebind of one of
+/// its slots is kept in the file and read by nothing.)
+pub static BINDINGS: [Group; 10] = [
+    group("ON FOOT", Tab::OnFoot, When::OnFoot, &ON_FOOT),
+    group("HANDS", Tab::Hands, When::OnFoot, &HANDS),
+    group("FLYING", Tab::Flying, When::Flying, &FLYING),
+    group("VEHICLES", Tab::Vehicles, When::OnFootOrAboard, &VEHICLES),
+    group("TERN", Tab::Vehicles, When::Aboard(Kind::Tern), &TERN),
+    group("LOON", Tab::Vehicles, When::Aboard(Kind::Loon), &LOON),
+    group(
+        "ROWBOAT",
+        Tab::Vehicles,
+        When::Aboard(Kind::Rowboat),
+        &ROWBOAT,
+    ),
+    group("COG", Tab::Vehicles, When::Aboard(Kind::Cog), &COG),
+    group("WORLD", Tab::Menus, When::Always, &WORLD),
+    group("SCREEN", Tab::Menus, When::Always, &SCREEN),
+];
+
+/// One key of one row that a player can change: named by its group and its
+/// default key (`"flying:KeyQ"`), which is the key the game's readers press,
+/// so the name says exactly what a rebind stands in for.
+#[derive(Clone, Copy, Debug)]
+pub struct Slot {
+    pub group: &'static Group,
+    pub row: &'static Binding,
+    /// Where in the row's keys it is.
+    pub index: usize,
+    pub default: KeyCode,
+}
+
+impl Slot {
+    /// The slot's name in the settings file.
+    pub fn name(&self) -> String {
+        format!(
+            "{}:{}",
+            self.group.heading.to_lowercase().replace(' ', "_"),
+            key_name(self.default)
+        )
+    }
+}
+
+/// Whether a key of a row can be given another key: a keyboard key, not the
+/// menu's Escape, not part of a range.
+fn is_slot(row: &Binding, key: Key) -> Option<KeyCode> {
+    match key {
+        Key::Board(code) if code != KeyCode::Escape && !row.range => Some(code),
+        _ => None,
+    }
+}
+
+/// Every slot in the table, in its order.
+pub fn slots() -> impl Iterator<Item = Slot> {
+    BINDINGS.iter().flat_map(|group| {
+        group.rows.iter().flat_map(move |row| {
+            row.keys
+                .iter()
+                .enumerate()
+                .filter_map(move |(index, &key)| {
+                    is_slot(row, key).map(|default| Slot {
+                        group,
+                        row,
+                        index,
+                        default,
+                    })
+                })
+        })
+    })
+}
+
+/// The slot of a group's row at a key, if it is one.
+pub fn slot_at(group: &'static Group, row: &'static Binding, index: usize) -> Option<Slot> {
+    is_slot(row, *row.keys.get(index)?).map(|default| Slot {
+        group,
+        row,
+        index,
+        default,
+    })
+}
+
+/// The player's rebinds: slot name to key, only for a slot moved off its
+/// default, kept in `settings.ron` (`settings::VERSION` 3). Empty for a
+/// player who never rebinds, for every capture and for every benchmark, and
+/// then [`remap_keys`] touches nothing.
+#[derive(Resource, Clone, Debug, Default, PartialEq, Eq)]
+pub struct KeyBinds {
+    moved: BTreeMap<String, KeyCode>,
+    /// The file's rebinds this build does not know (a removed slot's, such
+    /// as the retired Kestrel's, or a later build's): read by nothing, and
+    /// written back as they were read, so the file is never rewritten
+    /// without them (`retire-kestrel` decision 3).
+    kept: BTreeMap<String, String>,
+}
+
+impl KeyBinds {
+    /// The key a slot reads now.
+    pub fn key(&self, slot: &Slot) -> KeyCode {
+        self.moved
+            .get(&slot.name())
+            .copied()
+            .unwrap_or(slot.default)
+    }
+
+    /// Give a slot a key; its own default takes it off the list.
+    pub fn set(&mut self, slot: &Slot, key: KeyCode) {
+        self.kept.remove(&slot.name());
+        if key == slot.default {
+            self.moved.remove(&slot.name());
+        } else {
+            self.moved.insert(slot.name(), key);
+        }
+    }
+
+    /// Put every slot on a sub-tab back to its default.
+    pub fn reset(&mut self, tab: Tab) {
+        for slot in slots().filter(|s| s.group.tab == tab) {
+            self.moved.remove(&slot.name());
+            self.kept.remove(&slot.name());
+        }
+    }
+
+    /// No rebind is read: a kept one this build does not know moves no key.
+    pub fn is_empty(&self) -> bool {
+        self.moved.is_empty()
+    }
+
+    /// The file's `keys`: slot name to key name, in one order, the ones this
+    /// build does not know among them as they were read.
+    pub fn to_names(&self) -> BTreeMap<String, String> {
+        self.kept
+            .iter()
+            .map(|(slot, key)| (slot.clone(), key.clone()))
+            .chain(
+                self.moved
+                    .iter()
+                    .map(|(slot, key)| (slot.clone(), key_name(*key))),
+            )
+            .collect()
+    }
+
+    /// From the file's `keys`. A slot or a key this build does not know (a
+    /// removed slot's, or a later build's) is skipped, named in the second
+    /// list, and kept to be written back; the rest load.
+    pub fn from_names(names: &BTreeMap<String, String>) -> (Self, Vec<String>) {
+        let known: Vec<Slot> = slots().collect();
+        let mut binds = Self::default();
+        let mut skipped = Vec::new();
+        for (slot, key) in names {
+            match (known.iter().find(|s| s.name() == *slot), key_named(key)) {
+                (Some(slot), Some(key)) => binds.set(slot, key),
+                _ => {
+                    skipped.push(format!("{slot} = {key}"));
+                    binds.kept.insert(slot.clone(), key.clone());
+                }
+            }
+        }
+        (binds, skipped)
+    }
+
+    /// The other actions that read `slot`'s key while it is read: a clash to
+    /// flag on its row. The defaults share keys only between contexts that
+    /// are never live together (W is move on foot and sheet in in the Tern),
+    /// so with no rebinds nothing is flagged.
+    pub fn clashes(&self, slot: &Slot) -> Vec<&'static str> {
+        let key = self.key(slot);
+        let mut also: Vec<&'static str> = Vec::new();
+        for group in &BINDINGS {
+            if !group.when.together(slot.group.when) {
+                continue;
+            }
+            for row in group.rows {
+                let reads = |other: KeyCode| -> bool {
+                    if row.range {
+                        // The number row reads every digit between its ends.
+                        return DIGITS.contains(&other);
+                    }
+                    row.keys.iter().enumerate().any(|(index, &k)| {
+                        let read = slot_at(group, row, index)
+                            .map(|s| self.key(&s))
+                            .or(match k {
+                                Key::Board(code) => Some(code),
+                                _ => None,
+                            });
+                        let same = std::ptr::eq(row, slot.row) && index == slot.index;
+                        !same && read == Some(other)
+                    })
+                };
+                if reads(key) && !also.contains(&row.does) {
+                    also.push(row.does);
+                }
+            }
+        }
+        also
+    }
+}
+
+/// The number row, which the slots read one key each.
+const DIGITS: [KeyCode; 10] = [
+    KeyCode::Digit0,
+    KeyCode::Digit1,
+    KeyCode::Digit2,
+    KeyCode::Digit3,
+    KeyCode::Digit4,
+    KeyCode::Digit5,
+    KeyCode::Digit6,
+    KeyCode::Digit7,
+    KeyCode::Digit8,
+    KeyCode::Digit9,
 ];
 
 impl Binding {
-    /// The key column: what the settings page and `--help` both print on the
-    /// left. One function, so the two cannot print a control differently.
-    pub fn keys_label(&self) -> String {
-        self.keys
+    /// The key column with the player's keys: what the settings page, an
+    /// instrument panel and `--help` print. One function, so they cannot
+    /// print a control differently.
+    pub fn keys_label(&'static self, group: &'static Group, binds: &KeyBinds) -> String {
+        let this = self;
+        this.keys
             .iter()
-            .map(|key| key.label())
+            .enumerate()
+            .map(|(index, key)| match slot_at(group, this, index) {
+                Some(slot) => key_label(binds.key(&slot)),
+                None => key.label(),
+            })
             .collect::<Vec<_>>()
-            .join(self.joiner)
+            .join(this.joiner)
     }
 }
 
 /// The controls under one heading, as one line: what an instrument panel
-/// prints, off the same table the settings page reads.
-pub fn line(heading: &str) -> String {
+/// prints, off the same table the settings page reads, with the player's keys.
+pub fn line(heading: &str, binds: &KeyBinds) -> String {
     BINDINGS
         .iter()
         .filter(|group| group.heading == heading)
-        .flat_map(|group| group.rows)
-        .map(|binding| format!("{} {}", binding.keys_label(), binding.does))
+        .flat_map(|group| group.rows.iter().map(move |row| (group, row)))
+        .map(|(group, binding)| format!("{} {}", binding.keys_label(group, binds), binding.does))
         .collect::<Vec<_>>()
         .join("   ")
 }
 
 /// The binding list for `--help`, so the terminal and the settings page read
-/// the same table.
+/// the same table. The defaults: `--help` reads no settings file.
 pub fn help_text() -> String {
+    let binds = KeyBinds::default();
     let mut out = String::new();
     for group in &BINDINGS {
         out.push_str(&format!("\n  {}\n", group.heading));
         for binding in group.rows {
             out.push_str(&format!(
                 "    {:<16}{}\n",
-                binding.keys_label(),
+                binding.keys_label(group, &binds),
                 binding.does
             ));
         }
     }
     out
+}
+
+/// Where the player is: aboard a craft of its kind, else on foot while the
+/// walker is active, else flying.
+fn live_now(world_aboard: Option<Kind>, walking: bool) -> Live {
+    match world_aboard {
+        Some(kind) => Live::Aboard(kind),
+        None if walking => Live::OnFoot,
+        None => Live::Flying,
+    }
+}
+
+/// [`remap_keys`]'s memory between frames: the physical keyboard, and the
+/// keys it set last frame with how it set them.
+#[derive(Default)]
+pub struct RemapState {
+    physical: ButtonInput<KeyCode>,
+    touched: Vec<KeyCode>,
+    held: Vec<KeyCode>,
+}
+
+/// The pairs the remap applies now: each live slot's default key and the key
+/// that stands for it. None while a menu is open (the menus, the name field
+/// and the rebind capture read the real keyboard) or with no rebinds.
+pub fn live_pairs(binds: &KeyBinds, now: Live, menu_open: bool) -> Vec<(KeyCode, KeyCode)> {
+    if menu_open || binds.is_empty() {
+        return Vec::new();
+    }
+    slots()
+        .filter(|slot| slot.group.when.live(now))
+        .map(|slot| (slot.default, binds.key(&slot)))
+        .collect()
+}
+
+/// The pressed state every key the remap owns should have this frame, from
+/// the physical keyboard: a live slot's default key is down while any key
+/// standing for it is; any other key it owns is its physical self.
+pub fn remapped(
+    pairs: &[(KeyCode, KeyCode)],
+    physical: &ButtonInput<KeyCode>,
+    owned: &[KeyCode],
+) -> Vec<(KeyCode, bool)> {
+    owned
+        .iter()
+        .map(|&key| {
+            let mut stands_for = pairs
+                .iter()
+                .filter(|(default, _)| *default == key)
+                .peekable();
+            let down = if stands_for.peek().is_some() {
+                stands_for.any(|(_, by)| physical.pressed(*by))
+            } else {
+                physical.pressed(key)
+            };
+            (key, down)
+        })
+        .collect()
+}
+
+/// Rebinding without rewriting a reader (design, "how the game obeys it"):
+/// after Bevy's input systems and before every reader, set the state of the
+/// keys a rebind touches in `ButtonInput<KeyCode>` from the physical
+/// keyboard, so each reader goes on reading its default key. With no
+/// rebinds, and while a menu is open, it touches nothing but what it touched
+/// last frame, which it hands back to the physical keyboard.
+#[allow(clippy::too_many_arguments)]
+pub fn remap_keys(
+    keys: Option<ResMut<ButtonInput<KeyCode>>>,
+    typed: Option<MessageReader<bevy::input::keyboard::KeyboardInput>>,
+    lost: Option<MessageReader<bevy::input::keyboard::KeyboardFocusLost>>,
+    binds: Option<Res<KeyBinds>>,
+    menu: Option<Res<MenuOpen>>,
+    walking: Option<Res<crate::walking::WalkingReadout>>,
+    aboard: Option<Res<crate::vehicles::Aboard>>,
+    vehicles: Query<&crate::vehicles::Vehicle>,
+    mut state: Local<RemapState>,
+) {
+    // A world with no keyboard (a test's, a headless tool's) has nothing to
+    // remap.
+    let (Some(mut keys), Some(mut typed), Some(mut lost)) = (keys, typed, lost) else {
+        return;
+    };
+    // The physical keyboard, kept as Bevy keeps its own.
+    state.physical.clear();
+    for event in typed.read() {
+        if event.state.is_pressed() {
+            state.physical.press(event.key_code);
+        } else {
+            state.physical.release(event.key_code);
+        }
+    }
+    if lost.read().count() > 0 {
+        state.physical.release_all();
+    }
+    let none = KeyBinds::default();
+    let binds = binds.as_deref().unwrap_or(&none);
+    if binds.is_empty() && state.touched.is_empty() {
+        return;
+    }
+    let kind = aboard
+        .and_then(|a| a.0)
+        .and_then(|e| vehicles.get(e).ok())
+        .map(|v| v.craft.kind);
+    let now = live_now(kind, walking.is_some_and(|w| w.active));
+    let pairs = live_pairs(binds, now, menu.is_some_and(|m| m.0));
+    let mut owned: Vec<KeyCode> = Vec::new();
+    for &(default, by) in pairs.iter().filter(|(d, b)| d != b) {
+        for key in [default, by] {
+            if !owned.contains(&key) {
+                owned.push(key);
+            }
+        }
+    }
+    let previous = std::mem::take(&mut state.touched);
+    let was_held = std::mem::take(&mut state.held);
+    let mut all = owned.clone();
+    for key in &previous {
+        if !all.contains(key) {
+            all.push(*key);
+        }
+    }
+    for (key, down) in remapped(&pairs, &state.physical, &all) {
+        // Down last frame: as this system left it, or, for a key it did not
+        // own, as Bevy's own system kept it.
+        let was = if previous.contains(&key) {
+            was_held.contains(&key)
+        } else {
+            (keys.pressed(key) && !keys.just_pressed(key)) || keys.just_released(key)
+        };
+        keys.release(key);
+        keys.clear_just_released(key);
+        keys.clear_just_pressed(key);
+        if down {
+            keys.press(key);
+            if was {
+                keys.clear_just_pressed(key);
+            }
+        } else if was {
+            keys.press(key);
+            keys.release(key);
+            keys.clear_just_pressed(key);
+        }
+        if down && owned.contains(&key) {
+            state.held.push(key);
+        }
+    }
+    state.touched = owned;
 }
 
 #[cfg(test)]
@@ -591,5 +1096,206 @@ mod tests {
             hand_over_pointer(false, &mut was_open, &mut captured);
         }
         assert!(!captured, "nothing opened, so nothing was handed back");
+    }
+
+    /// A slot is named by its group and its default key, so no key may
+    /// appear twice in one group, and every name is a different slot.
+    #[test]
+    fn every_slot_has_its_own_name() {
+        let names: Vec<String> = slots().map(|s| s.name()).collect();
+        for (i, name) in names.iter().enumerate() {
+            assert!(!names[..i].contains(name), "two slots are {name}");
+        }
+        assert!(names.contains(&"flying:KeyQ".to_string()));
+        assert!(names.contains(&"on_foot:ShiftLeft".to_string()));
+        // Not slots: the mouse, the wheel, the number row's range and Esc.
+        assert!(
+            !names
+                .iter()
+                .any(|n| n.contains("Digit") || n.contains("Escape"))
+        );
+        // Every default a slot names is a key a cap can print and the file
+        // can write back.
+        for slot in slots() {
+            assert!(!key_label(slot.default).is_empty(), "{}", slot.name());
+            assert_eq!(key_named(&key_name(slot.default)), Some(slot.default));
+        }
+    }
+
+    /// Every sub-tab has rows, and every group is on one (decision 6).
+    #[test]
+    fn the_input_page_has_five_sub_tabs_and_every_group_is_on_one() {
+        for tab in Tab::ALL {
+            assert!(
+                BINDINGS.iter().any(|g| g.tab == tab),
+                "{} is empty",
+                tab.label()
+            );
+        }
+        let on = |heading: &str| BINDINGS.iter().find(|g| g.heading == heading).unwrap().tab;
+        assert_eq!(on("ON FOOT"), Tab::OnFoot);
+        assert_eq!(on("HANDS"), Tab::Hands);
+        assert_eq!(on("FLYING"), Tab::Flying);
+        assert_eq!(on("COG"), Tab::Vehicles);
+        assert_eq!(on("SCREEN"), Tab::Menus);
+    }
+
+    /// The defaults share keys only between contexts that are never live
+    /// together, so a player who never rebinds sees no clash; a rebind onto
+    /// a key a live action reads is flagged with that action.
+    #[test]
+    fn the_defaults_never_clash_and_a_rebind_onto_a_live_key_does() {
+        let none = KeyBinds::default();
+        for slot in slots() {
+            assert!(
+                none.clashes(&slot).is_empty(),
+                "{} clashes with {:?}",
+                slot.name(),
+                none.clashes(&slot)
+            );
+        }
+        let sprint = slots().find(|s| s.name() == "on_foot:ShiftLeft").unwrap();
+        let mut binds = KeyBinds::default();
+        binds.set(&sprint, KeyCode::KeyE);
+        assert_eq!(binds.clashes(&sprint), vec!["open or shut a door"]);
+        // E is the Tern's hiking too, but never on foot.
+        assert!(
+            !binds
+                .clashes(&sprint)
+                .contains(&"hike to port or starboard")
+        );
+        // A digit is the number row's, which reads every digit.
+        binds.set(&sprint, KeyCode::Digit5);
+        assert_eq!(binds.clashes(&sprint), vec!["select a slot"]);
+        // The other side of the clash is flagged too.
+        binds.set(&sprint, KeyCode::KeyE);
+        let door = slots().find(|s| s.name() == "hands:KeyE").unwrap();
+        assert_eq!(binds.clashes(&door), vec!["sprint"]);
+        // Its own default takes a slot off the list; a tab resets its own.
+        binds.set(&sprint, KeyCode::ShiftLeft);
+        assert!(binds.is_empty());
+        binds.set(&sprint, KeyCode::KeyK);
+        binds.reset(Tab::Hands);
+        assert!(!binds.is_empty(), "another tab's reset leaves it");
+        binds.reset(Tab::OnFoot);
+        assert!(binds.is_empty());
+    }
+
+    /// The file's names round trip, and a slot or key this build does not
+    /// know is skipped, not fatal, and kept to be written back.
+    #[test]
+    fn rebinds_round_trip_through_their_names() {
+        let mut binds = KeyBinds::default();
+        let roll = slots().find(|s| s.name() == "flying:KeyQ").unwrap();
+        binds.set(&roll, KeyCode::ArrowLeft);
+        let names = binds.to_names();
+        assert_eq!(
+            names.get("flying:KeyQ").map(String::as_str),
+            Some("ArrowLeft")
+        );
+        let (back, skipped) = KeyBinds::from_names(&names);
+        assert_eq!(back, binds);
+        assert!(skipped.is_empty());
+        let mut later = names.clone();
+        later.insert("jetpack:KeyJ".into(), "KeyU".into());
+        later.insert("on_foot:KeyW".into(), "Hyper".into());
+        let (read, skipped) = KeyBinds::from_names(&later);
+        assert_eq!(read.moved, binds.moved, "only the known one is read");
+        assert_eq!(skipped.len(), 2);
+        assert_eq!(read.to_names(), later, "and the rest are written back");
+        assert_eq!(
+            line("FLYING", &binds).split("   ").nth(2),
+            Some("← / E roll")
+        );
+    }
+
+    /// The remap: a moved slot's default key is down while its new key is,
+    /// not while its old one is; a key of another context is its own self;
+    /// a menu hands the real keyboard back; and with no rebinds nothing is
+    /// touched at all.
+    #[test]
+    fn a_rebound_key_presses_the_default_its_readers_read() {
+        use bevy::input::{ButtonState, keyboard::Key as Logical, keyboard::KeyboardInput};
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, bevy::input::InputPlugin))
+            .insert_resource(MenuOpen(false))
+            .insert_resource(crate::walking::WalkingReadout {
+                active: true,
+                ..default()
+            })
+            .init_resource::<KeyBinds>()
+            .add_systems(PreUpdate, remap_keys.after(bevy::input::InputSystems));
+        let send = |app: &mut App, key: KeyCode, down: bool| {
+            app.world_mut().write_message(KeyboardInput {
+                key_code: key,
+                logical_key: Logical::Unidentified(bevy::input::keyboard::NativeKey::Unidentified),
+                state: if down {
+                    ButtonState::Pressed
+                } else {
+                    ButtonState::Released
+                },
+                text: None,
+                repeat: false,
+                window: Entity::PLACEHOLDER,
+            });
+        };
+        let keys = |app: &App| app.world().resource::<ButtonInput<KeyCode>>().clone();
+
+        // No rebinds: the remap leaves what is set alone (a capture's press).
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        app.update();
+        assert!(
+            keys(&app).pressed(KeyCode::KeyW),
+            "untouched with no rebinds"
+        );
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::KeyW);
+
+        // The door (on foot) moved from E to K.
+        let door = slots().find(|s| s.name() == "hands:KeyE").unwrap();
+        app.world_mut()
+            .resource_mut::<KeyBinds>()
+            .set(&door, KeyCode::KeyK);
+        send(&mut app, KeyCode::KeyK, true);
+        app.update();
+        assert!(keys(&app).just_pressed(KeyCode::KeyE), "K opens the door");
+        app.update();
+        assert!(keys(&app).pressed(KeyCode::KeyE) && !keys(&app).just_pressed(KeyCode::KeyE));
+        send(&mut app, KeyCode::KeyK, false);
+        app.update();
+        assert!(keys(&app).just_released(KeyCode::KeyE) && !keys(&app).pressed(KeyCode::KeyE));
+        send(&mut app, KeyCode::KeyE, true);
+        app.update();
+        assert!(
+            !keys(&app).pressed(KeyCode::KeyE),
+            "E no longer opens it on foot"
+        );
+        assert!(!keys(&app).just_pressed(KeyCode::KeyE));
+
+        // Flying, E is the roll's own again, held as it is.
+        app.world_mut()
+            .resource_mut::<crate::walking::WalkingReadout>()
+            .active = false;
+        app.update();
+        assert!(keys(&app).pressed(KeyCode::KeyE), "E rolls in flight");
+        send(&mut app, KeyCode::KeyE, false);
+        app.update();
+
+        // A menu hands the real keyboard back: K is K and opens nothing.
+        app.world_mut()
+            .resource_mut::<crate::walking::WalkingReadout>()
+            .active = true;
+        app.world_mut().resource_mut::<MenuOpen>().0 = true;
+        send(&mut app, KeyCode::KeyK, true);
+        app.update();
+        assert!(keys(&app).just_pressed(KeyCode::KeyK));
+        assert!(
+            !keys(&app).pressed(KeyCode::KeyE),
+            "the menu reads the real keys"
+        );
     }
 }

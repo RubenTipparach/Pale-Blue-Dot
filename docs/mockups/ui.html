@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stone and Timber</title>
+<meta name="description" content="Pale Blue Dot's desktop UI: rock and slate-blue stone in play, carved oak for the out-of-play menus, each drawn, rendered in Blender and pixelated, or smooth; a walkable three.js demo with every menu working.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=VT323&display=swap">
+<style id="lookvars"></style>
+<style>
+/* Tokens: the kit's colours (tools/art/ui_art.py, every one Sweaft-64). The game UI has one look by
+   day and by night, so the page's light and dark schemes share them. */
+:root {
+  --ink: #010000; --seam: #170916; --face: #1f3b52; --well: #011c34;
+  --text: #eab798; --text-dim: #cfaa81; --title: #faaf5c; --label: #fffefe; --label-dim: #92a3b2; --tab-dim: #bfcad7;
+  --cut: #011c34; --north: #4a051e; --oak-label: #010000; --stone-mid: #5d778d;
+  --oak-0: #2f1525; --oak-1: #41322c; --oak-2: #725244; --oak-3: #ab8465; --oak-4: #cfaa81;
+  --stone-0: #011c34; --stone-1: #1f3b52; --stone-2: #3e586e; --stone-3: #92a3b2; --stone-4: #bfcad7;
+  --rune: #84e3b5; --rune-dim: #53998b;
+  --page: #010e1a; --page-2: #011c34; --page-line: #1f3b52; --page-text: #bfcad7; --page-dim: #92a3b2;
+  --s: 2; --k: 1; --m: 1; --ir: pixelated;
+  --display: "Pixelify Sans", "VT323", ui-monospace, monospace;
+  --body: "VT323", ui-monospace, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #010e1a; } }
+:root[data-theme="dark"] { --page: #010e1a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--page-text); font: 18px/1.35 var(--body); overflow-x: hidden; }
+a { color: var(--rune); }
+code { font: 0.95em/1 var(--body); color: var(--text-dim); }
+header.top { padding: 14px 16px 8px; border-bottom: 1px solid var(--page-line); }
+header.top h1 { font: 600 28px/1.1 var(--display); color: var(--title); margin: 0; letter-spacing: 1px; text-shadow: 0 2px 0 var(--ink); }
+header.top p { margin: 4px 0 0; color: var(--page-dim); max-width: 1000px; }
+.pbd-tracker { font: 500 14px/1.4 var(--body); }
+.lookbar { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 8px; }
+.lookprev { line-height: 0; }
+.looktoast { font: 600 13px/1 VT323, monospace; color: #84e3b5; opacity: 0; transition: opacity .25s; }
+.looktoast.on { opacity: 1; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+.seg button { font: 16px var(--body); background: var(--page-2); color: var(--page-text); border: 1px solid var(--page-line); padding: 6px 12px; min-height: 36px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--page-line); color: var(--rune); border-color: var(--rune-dim); }
+.seg button:focus-visible { outline: 2px solid var(--rune); }
+nav.tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 2px 4px; padding: 10px 16px 0; border-bottom: 4px solid var(--stone-2); scrollbar-width: thin; }
+nav.tabs a { flex: none; }
+nav.tabs a { display: inline-block; text-decoration: none; color: var(--tab-dim); font: 600 16px/1 var(--display);
+  padding: 10px 12px 8px; border-style: solid; border-width: 14px 14px 0 14px; image-rendering: var(--ir);
+  border-image: var(--i-tab-shut) calc(7 * var(--m)) calc(7 * var(--m)) 0 calc(7 * var(--m)) fill stretch; min-height: 36px; }
+nav.tabs a[aria-selected="true"] { border-image-source: var(--i-tab-open); color: var(--label); }
+nav.tabs a span { position: relative; top: -6px; }
+nav.tabs a:focus-visible { outline: 2px solid var(--rune); outline-offset: 1px; }
+main { padding: 12px 16px 40px; }
+section.tab { display: none; }
+section.tab.open { display: block; }
+h2 { font: 600 22px/1.2 var(--display); color: var(--title); margin: 18px 0 6px; }
+h3 { font: 600 17px/1.2 var(--display); color: var(--text-dim); margin: 14px 0 4px; }
+p.note { color: var(--page-dim); margin: 4px 0 8px; max-width: 1000px; }
+.row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.row > * { max-width: 100%; }
+.card { background: var(--page-2); border: 1px solid var(--page-line); padding: 10px; max-width: 100%; }
+.card .cap { font: 15px/1.2 var(--body); color: var(--page-dim); margin-top: 6px; }
+.ask { border-left: 4px solid var(--title); padding: 6px 10px; background: var(--page-2); margin: 8px 0; max-width: 1000px; }
+.ask.done { border-left-color: var(--rune); }
+table.t { border-collapse: collapse; font-size: 16px; }
+table.t td, table.t th { border-bottom: 1px solid var(--page-line); padding: 3px 8px; text-align: left; vertical-align: top; }
+.tok { display: inline-flex; align-items: center; gap: 8px; margin: 2px 12px 2px 0; font-size: 16px; }
+.tok i { width: 22px; height: 22px; display: inline-block; border: 1px solid #000; }
+.scrollx { max-width: 100%; overflow-x: auto; }
+
+/* ---- the kit's pieces. Each image is a custom property (--i-* stone and rock, --o-* oak) set per
+   look by the script: drawn ui/, rendered ui/rendered/, smooth ui/rendered/hires/ (8x, so every
+   slice is the drawn margin times --m = 8). --ir is pixelated, or auto for the smooth look. ---- */
+.nine { border-style: solid; image-rendering: var(--ir); }
+.ki { display: inline-block; background: var(--k) 0 0 / 100% 100% no-repeat; image-rendering: var(--ir); flex: none; }
+.p-rock { border-width: calc(14px * var(--s)); border-image: var(--i-rock) calc(14 * var(--m)) fill repeat; }
+.p-frame { border-width: calc(14px * var(--s)); border-image: var(--i-frame) calc(14 * var(--m)) fill stretch; }
+.p-oak { border-width: calc(14px * var(--s)); border-image: var(--o-frame) calc(14 * var(--m)) fill stretch; }
+.p-tip { border-width: calc(6px * var(--s)); border-image: var(--i-tooltip) calc(6 * var(--m)) fill stretch; }
+.p-otip { border-width: calc(6px * var(--s)); border-image: var(--o-tooltip) calc(6 * var(--m)) fill stretch; }
+.p-map { border-width: calc(22px * var(--s)); border-image: var(--i-map-frame) calc(22 * var(--m)) stretch; }
+.p-portrait { border-width: calc(8px * var(--s)); border-image: var(--i-portrait) calc(8 * var(--m)) fill stretch; }
+.p-compass { border-width: calc(9px * var(--s)) calc(10px * var(--s)); border-image: var(--i-compass) calc(9 * var(--m)) calc(10 * var(--m)) fill stretch; }
+.p-bar { border-width: calc(4px * var(--s)); border-image: var(--i-bar) calc(4 * var(--m)) fill stretch; }
+.p-track-v { border-width: calc(4px * var(--s)); border-image: var(--i-scroll-track) calc(4 * var(--m)) fill stretch; }
+.p-track-h { border-width: calc(3px * var(--s)); border-image: var(--i-slider-track) calc(3 * var(--m)) fill stretch; }
+.p-thumb { border-width: calc(4px * var(--s)); border-image: var(--i-scroll-thumb) calc(4 * var(--m)) fill stretch; }
+.oakset .p-thumb { border-image-source: var(--o-scroll-thumb); }
+.p-lintel { border-style: solid; border-width: calc(5px * var(--s)) calc(9px * var(--s)); border-image: var(--i-lintel) calc(5 * var(--m)) calc(9 * var(--m)) fill stretch;
+  image-rendering: var(--ir); display: inline-flex; align-items: center; justify-content: center; min-height: calc(16px * var(--s));
+  color: var(--oak-label); padding: 0 calc(2px * var(--s)); white-space: nowrap; }
+.lintel-row { display: flex; justify-content: center; margin: calc(-15px * var(--s)) 0 calc(4px * var(--s)); }
+.face { color: var(--text); font: calc(10px * var(--s))/1.1 var(--body); }
+.carved { color: var(--title); --pt-shadow: var(--ink); }
+.dim { color: var(--text-dim); }
+
+/* The kit's bitmap font (ui/font/kit-font.json): an inline SVG of whole pixels, filled with the
+   element's colour, a one-pixel shadow under it (--pt-shadow). Its height is 8 native px. */
+.pt { display: inline-flex; vertical-align: middle; line-height: 0; }
+.pt svg { height: calc(8px * var(--s) * var(--fz, 1)); width: auto; display: block; overflow: visible; }
+.pt .sh { fill: var(--pt-shadow, transparent); }
+.pt .fg { fill: currentColor; }
+.big { --fz: 2; }
+
+/* Plaques (buttons): stone in play, oak (.oak) in the timber menus. */
+.btn { border-style: solid; border-width: calc(8px * var(--s)); border-image: var(--i-button-idle) calc(8 * var(--m)) fill stretch;
+  image-rendering: var(--ir); background: none; color: var(--label); cursor: pointer; --pt-shadow: var(--stone-0);
+  height: calc(22px * var(--s)); min-width: calc(48px * var(--s)); padding: 0 calc(2px * var(--s)); display: inline-flex;
+  align-items: center; justify-content: center; font: inherit; }
+.btn > .pt { position: relative; top: calc(0.5px * var(--s)); }
+.btn:hover, .btn.is-hover { border-image-source: var(--i-button-hover); }
+.btn:active, .btn.is-pressed, .btn[aria-pressed="true"] { border-image-source: var(--i-button-pressed); }
+.btn:active > .pt, .btn.is-pressed > .pt, .btn[aria-pressed="true"] > .pt { top: calc(1.5px * var(--s)); }
+.btn:focus-visible, .btn.is-focus { outline: none; border-image-source: var(--i-button-focus); }
+.btn:disabled, .btn.is-disabled { border-image-source: var(--i-button-disabled); color: var(--label-dim); cursor: default; }
+.btn.oak { border-image-source: var(--o-button-idle); color: var(--oak-label); --pt-shadow: transparent; }
+.btn.oak:hover, .btn.oak.is-hover { border-image-source: var(--o-button-hover); }
+.btn.oak:active, .btn.oak.is-pressed, .btn.oak[aria-pressed="true"] { border-image-source: var(--o-button-pressed); }
+.btn.oak:focus-visible, .btn.oak.is-focus { border-image-source: var(--o-button-focus); }
+.btn.oak:disabled, .btn.oak.is-disabled { border-image-source: var(--o-button-disabled); color: var(--label-dim); }
+.btn.sm { min-width: calc(30px * var(--s)); }
+
+/* Tabs in a panel */
+.ptabs { display: flex; gap: calc(1px * var(--s)); margin-bottom: calc(3px * var(--s)); flex-wrap: wrap; }
+.ptab { border-style: solid; border-width: calc(7px * var(--s)) calc(7px * var(--s)) 0; image-rendering: var(--ir); cursor: pointer; background: none; white-space: nowrap; flex: none;
+  border-image: var(--i-tab-shut) calc(7 * var(--m)) calc(7 * var(--m)) 0 fill stretch; padding: 0 calc(3px * var(--s)) calc(3px * var(--s));
+  color: var(--tab-dim); --pt-shadow: var(--stone-0); font: inherit; }
+.ptab[aria-selected="true"] { border-image-source: var(--i-tab-open); color: var(--label); }
+.ptab.oak { border-image-source: var(--o-tab-shut); color: var(--label); --pt-shadow: transparent; }
+.ptab.oak[aria-selected="true"] { border-image-source: var(--o-tab-open); color: var(--oak-label); }
+.ptab:focus-visible { outline: 2px solid var(--rune); }
+.subtabs .btn { height: calc(16px * var(--s)); border-width: calc(5px * var(--s)); border-image-slice: calc(8 * var(--m)); min-width: 0; }
+
+/* Slots */
+.slot { position: relative; width: calc(24px * var(--s)); height: calc(24px * var(--s)); background: var(--i-slot-idle) 0 0 / 100% 100%;
+  image-rendering: var(--ir); flex: none; }
+.slot.sel { background-image: var(--i-slot-selected); }
+.slot.hov, .slot.click:hover { background-image: var(--i-slot-hover); }
+.slot.off { background-image: var(--i-slot-disabled); }
+.slot.r-uncommon { background-image: var(--i-slot-uncommon); } .slot.r-rare { background-image: var(--i-slot-rare); }
+.slot.r-epic { background-image: var(--i-slot-epic); } .slot.r-legendary { background-image: var(--i-slot-legendary); }
+.slot .ic { position: absolute; left: calc(4px * var(--s)); top: calc(4px * var(--s)); width: calc(16px * var(--s)); height: calc(16px * var(--s)); image-rendering: pixelated; }
+.slot .ic.tile { background-image: url(ui/game/atlas.png); background-size: calc(256px * var(--s)) calc(256px * var(--s)); }
+/* the pack's crafting: a small icon beside a name (the drop-down, its list, the recipe tree) */
+.ddi { position: relative; display: inline-block; flex: none; width: calc(12px * var(--s)); height: calc(12px * var(--s)); }
+.ddi .ic { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.ddi .ic.tile { background-image: url(ui/game/atlas.png); background-size: calc(192px * var(--s)) calc(192px * var(--s)); background-position: calc(var(--tx) * -12px * var(--s)) calc(var(--ty) * -12px * var(--s)) !important; }
+.btn.dd .pt { white-space: nowrap; }
+.ddcaret { flex: none; width: 0; height: 0; margin-right: calc(3px * var(--s)); border-left: calc(4px * var(--s)) solid transparent; border-right: calc(4px * var(--s)) solid transparent; border-top: calc(4px * var(--s)) solid currentColor; }
+.elbow { flex: none; width: calc(5px * var(--s)); height: calc(7px * var(--s)); margin-top: calc(-7px * var(--s)); border-left: calc(1px * var(--s)) solid var(--text-dim); border-bottom: calc(1px * var(--s)) solid var(--text-dim); }
+.slot .n { position: absolute; right: calc(2px * var(--s)); bottom: calc(1px * var(--s)); color: var(--text); --pt-shadow: var(--ink); }
+.slot .n .pt svg { height: calc(8px * var(--s)); }
+.slot.click { cursor: pointer; }
+.slot:focus-visible { outline: 2px solid var(--rune); }
+.slots { display: flex; }
+.grid10 { display: grid; grid-template-columns: repeat(10, calc(24px * var(--s))); }
+.grid4 { display: grid; grid-template-columns: repeat(4, calc(24px * var(--s))); }
+
+/* Scenes: a game screen at 1440 x 900, shown at k = 1 or 1/2 with the UI over it at --s = 2k (the
+   game's own proportion, pixel art at whole scales). Desktop only: on a narrow page the scene scrolls
+   inside its own box and the page never scrolls sideways. A scene box takes keyboard focus; only then
+   do Esc, I, Tab, M, E, 1-0 and the wheel act on it, so the page still scrolls. */
+.scenebox { max-width: 100%; overflow-x: auto; }
+.scene { position: relative; overflow: hidden; background: #000 center / cover no-repeat; flex: none; outline: none; }
+.scene:focus-visible { box-shadow: 0 0 0 2px var(--rune); }
+.scene .ui { position: absolute; inset: 0; }
+.scene .tag { position: absolute; left: 6px; top: 6px; font: 15px var(--body); background: rgba(1,14,26,.85); color: var(--page-text); padding: 2px 6px; z-index: 5; pointer-events: none; }
+.scene .hint { position: absolute; right: 6px; top: 6px; font: 15px var(--body); background: rgba(1,14,26,.85); color: var(--page-dim); padding: 2px 6px; z-index: 5; pointer-events: none; max-width: 46%; text-align: right; }
+.scene canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cross { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1px; background: rgba(224,240,232,.85); pointer-events: none; }
+.hud-hotbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(20px * var(--k)); }
+.hud-compass { position: absolute; left: 50%; transform: translateX(-50%); top: calc(2px * var(--k)); width: calc(280px * var(--s)); height: calc(18px * var(--s)); }
+.hud-compass .inner { position: absolute; inset: calc(-9px * var(--s)) calc(-6px * var(--s)); overflow: hidden; }
+.hud-compass .mark { position: absolute; top: calc(2.5px * var(--s)); color: var(--cut); }
+.hud-compass .mark.n { color: var(--north); }
+.hud-compass .tick { position: absolute; top: calc(4px * var(--s)); width: calc(1px * var(--s)); height: calc(4px * var(--s)); background: var(--cut); }
+.hud-compass .town { position: absolute; top: calc(11px * var(--s)); width: calc(5px * var(--s)); height: calc(5px * var(--s)); --k: var(--i-compass-town); }
+.hud-compass .ptr { position: absolute; left: 50%; top: calc(-10px * var(--s)); width: calc(7px * var(--s)); height: calc(6px * var(--s)); margin-left: calc(-3.5px * var(--s)); --k: var(--i-compass-pointer); }
+.hud-name { position: absolute; left: 50%; transform: translateX(-50%); top: calc(2px * var(--k) + 19px * var(--s)); color: var(--text); --pt-shadow: var(--ink); white-space: nowrap; pointer-events: none; }
+.prompt { position: absolute; left: 50%; top: calc(50% + 14px * var(--s)); transform: translateX(-50%); color: var(--text); pointer-events: none; }
+.toast { position: absolute; left: 50%; bottom: calc(20px * var(--k) + 30px * var(--s)); transform: translateX(-50%); color: var(--text); pointer-events: none; }
+.centre { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.dimmer { position: absolute; inset: 0; background: rgba(1, 14, 26, .45); }
+.tipfloat { position: absolute; z-index: 30; pointer-events: none; white-space: nowrap; }
+.held { position: absolute; pointer-events: none; z-index: 40; }
+.keycap { display: inline-flex; align-items: center; justify-content: center; height: calc(18px * var(--s)); border-style: solid; image-rendering: var(--ir);
+  border-width: calc(6px * var(--s)); border-image: var(--i-tooltip) calc(6 * var(--m)) fill stretch; color: var(--text); padding: 0; min-width: calc(18px * var(--s)); }
+.oakset .keycap { border-image-source: var(--o-tooltip); }
+.keycap > .pt { margin: calc(-1px * var(--s)) 0; }
+.bindrow { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: calc(4px * var(--s)); min-height: calc(22px * var(--s)); }
+.bindrow .warn { color: var(--title); font-size: calc(8px * var(--s)); line-height: 1; }
+.listbox { overflow: hidden; position: relative; }
+.prog { height: calc(4px * var(--s)); margin: calc(-1px * var(--s)); background: var(--k) 0 0 / 100% 100%; image-rendering: var(--ir); }
+.big2 { --s: 2; } .big3 { --s: 3; } .big1 { --s: 1; }
+.playctl { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 8px; }
+.playctl input[type=range] { width: 200px; max-width: 60vw; }
+.keybar { display: flex; gap: 6px; margin: 6px 0 2px; flex-wrap: wrap; }
+.keybar button { font: 16px var(--body); background: var(--page-2); color: var(--page-text); border: 1px solid var(--page-line); padding: 8px 14px; min-height: 40px; }
+.fitbox { position: relative; }
+/* The Play demo: fullscreen, and touch controls over it (the mockup page only; the game is desktop) */
+.playwrap { position: relative; max-width: 100%; overflow: hidden; }
+.playwrap.fs { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; z-index: 1000; background: #000; display: flex; align-items: center; justify-content: center; max-width: none; }
+.playwrap:fullscreen { background: #000; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; max-width: none; }
+.fsbtn { position: absolute; right: 8px; bottom: 8px; z-index: 30; font: 16px var(--body); background: rgba(1,14,26,.85); color: var(--page-text); border: 1px solid var(--rune-dim); padding: 6px 12px; min-height: 36px; cursor: pointer; }
+.touchpad { position: absolute; inset: 0; z-index: 20; pointer-events: none; touch-action: none; }
+.touchpad .look { position: absolute; right: 0; top: 0; width: 50%; height: 70%; pointer-events: auto; touch-action: none; }
+.touchpad .stick { position: absolute; left: 18px; bottom: 18px; width: 120px; height: 120px; border-radius: 50%; background: rgba(1,14,26,.45); border: 2px solid rgba(146,163,178,.6); pointer-events: auto; touch-action: none; }
+.touchpad .stick i { position: absolute; left: 40px; top: 40px; width: 40px; height: 40px; border-radius: 50%; background: rgba(191,202,215,.75); }
+.touchpad .tbtns { position: absolute; right: 10px; bottom: 60px; display: grid; grid-template-columns: repeat(2, 64px); gap: 6px; pointer-events: auto; }
+.touchpad .tbtns button { font: 15px var(--body); min-height: 44px; background: rgba(1,14,26,.7); color: var(--page-text); border: 1px solid rgba(146,163,178,.7); border-radius: 6px; touch-action: manipulation; }
+.touchpad.menu .look, .touchpad.menu .stick { display: none; }
+.playwrap .stage:not(.full) .touchpad { display: none; } /* the touch controls are for fullscreen; in the page the view is too small to steer */
+.playwrap.fs .hint, .playwrap:fullscreen .hint { display: none; }
+.infobtn { font: 600 15px/1 var(--body); width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--rune-dim); background: var(--page-2); color: var(--rune); cursor: pointer; vertical-align: middle; margin-left: 8px; }
+.titlerow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.titlerow h1, .titlerow h2 { margin-right: 4px; }
+dialog.infomodal { max-width: min(760px, 94vw); max-height: 86vh; max-height: 86dvh; padding: 0; border: 4px solid var(--stone-2); outline: 2px solid var(--ink); background: var(--page-2); color: var(--page-text); }
+dialog.infomodal::backdrop { background: rgba(1, 14, 26, .72); }
+dialog.infomodal .mhead { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; background: var(--face); border-bottom: 2px solid var(--stone-0); }
+dialog.infomodal .mhead b { font: 600 18px/1.2 var(--display); color: var(--title); }
+dialog.infomodal .mhead button { font: 18px var(--body); min-width: 40px; min-height: 40px; background: var(--page-2); color: var(--page-text); border: 1px solid var(--page-line); cursor: pointer; }
+dialog.infomodal .mbody { padding: 10px 16px 16px; overflow: auto; }
+dialog.infomodal .mbody .ask, dialog.infomodal .mbody p { max-width: none; }
+.playstart { position: absolute; inset: 0; z-index: 25; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(1, 14, 26, .35); cursor: pointer; }
+.playstart button { font: 600 22px/1 var(--display); padding: 16px 26px; min-height: 56px; background: var(--face); color: var(--title); border: 3px solid var(--stone-3); outline: 2px solid var(--ink); cursor: pointer; }
+.playstart span { font: 15px var(--body); color: var(--page-text); background: rgba(1, 14, 26, .7); padding: 2px 8px; }
+.fsbtn.icon { font: 20px/1 var(--body); padding: 6px 10px; }
+.playwrap .stage { position: relative; width: 100%; height: 100%; }
+.playwrap .stage.full { position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; height: 100dvh; }
+.playwrap .stage.full.rot { width: 100vh; width: 100dvh; height: 100vw; height: 100dvw; transform: rotate(90deg) translateY(-100%); transform-origin: top left; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 480px) { header.top h1 { font-size: 24px; } header.top p { font-size: 15px; } p.note { font-size: 15px; } nav.tabs a { font-size: 14px; padding: 10px 6px 8px; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Stone and Timber</h1>
+  <p class="pbd-tracker"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+  <p class="info">The owner, 2026-11-14: <em>"show me the game with that 3d rendered look"</em>, <em>"yea the 3d rendered look as a whole kit, also make the menus interactive please"</em>, <em>"make a 3js demo"</em>, <em>"do all three"</em>, <em>"main menu I think should use the timber stuff, but the game I like the rock stuff, just need to determine which rock thing to use"</em>, <em>"pause menu = timber too"</em>. So: <b>carved oak for the menus out of play</b> (title screen, pause, settings), <b>rock and slate-blue stone for everything in play</b> (HUD, pack, map, machines, talk and trade). Every piece exists three ways; the switch below swaps the whole page, the demo included. Design: <code>openspec/changes/stone-and-wood-ui</code>. Desktop only.</p>
+  <div class="lookbar"><span>Look:</span><div class="seg" id="lookSeg" role="group" aria-label="Look of the kit">
+    <button data-look="drawn" aria-pressed="true">Drawn</button><button data-look="rendered" aria-pressed="false">Rendered (pixelated)</button><button data-look="smooth" aria-pressed="false">Smooth (Cycles)</button></div>
+    <div class="lookprev" aria-hidden="true" title="What the look changes: the rock panels, slots and plaques"><div class="nine p-rock face" data-rock="kit-128" style="--s:1;width:128px;height:64px;display:flex;align-items:center;justify-content:center;gap:6px"><span style="--s:1;width:24px;height:24px;display:inline-block;background:var(--i-slot-selected) 0 0/100% 100%;image-rendering:var(--ir)"></span><span style="--s:1;width:24px;height:24px;display:inline-block;background:var(--i-slot-idle) 0 0/100% 100%;image-rendering:var(--ir)"></span></div></div>
+    <span class="looktoast" id="lookToast" role="status" aria-live="polite"></span>
+    <span class="info">Drawn: pixel by pixel (<code>ui_art.py</code>). Rendered: modelled in Blender, Cycles on the CPU (no GPU here), reduced to the same pixels and palette. Smooth: the 8x render itself, sampled linear (breaks the nearest-sampling rule: a question, not a decision).</span></div>
+</header>
+<nav class="tabs" role="tablist" aria-label="Screens">
+  <a href="#play" role="tab"><span>Play</span></a>
+  <a href="#title" role="tab"><span>Main menu</span></a>
+  <a href="#kit" role="tab"><span>Kit</span></a>
+  <a href="#hud" role="tab"><span>HUD</span></a>
+  <a href="#pack" role="tab"><span>Pack</span></a>
+  <a href="#menu" role="tab"><span>Pause</span></a>
+  <a href="#map" role="tab"><span>Map</span></a>
+  <a href="#station" role="tab"><span>Station</span></a>
+  <a href="#talk" role="tab"><span>Talk</span></a>
+  <a href="#loading" role="tab"><span>Loading</span></a>
+</nav>
+<main>
+
+<!-- ================================ PLAY ================================ -->
+<section class="tab" id="play" role="tabpanel">
+  <h2>Play</h2>
+  <p class="note">A small patch of Tenebris in three.js r128: hex columns 2.833 m across and 1 m high, the game's atlas tiles sampled nearest, a stream with a water wheel, a stone workshop, machines. <b>Click the view</b> to walk: the mouse looks as in a first-person game, with no button held (pointer lock where the browser allows it, free look where it does not). WASD, Space to jump. Left click digs the block you look at into the pack, right click places the selected block. <b>E</b> uses what you face: the bench, the forge and bellows, the hearth, the mill, the press, the chest, or Wren the smith. <b>Esc</b> pauses (timber); <b>E</b> closes whatever is open, which matters in fullscreen, where the browser takes Esc, <b>I</b> or <b>Tab</b> the pack, <b>M</b> the map, 1-0 and the wheel pick a slot. Keys act only while the view has focus. The frame rate was not measured here (no GPU; SwiftShader).</p>
+  <div class="row" id="playScenes"></div>
+  <div class="playctl"><div class="seg" id="todSeg"><button data-t="17.6" aria-pressed="true">Golden hour</button><button data-t="12" aria-pressed="false">Day</button><button data-t="19.2" aria-pressed="false">Dusk</button><button data-t="23" aria-pressed="false">Night</button></div>
+    <label>Time <input type="range" id="todRange" min="0" max="24" step="0.1" value="17.6"> <span id="todVal">17:36</span></label></div>
+</section>
+
+<!-- ================================ TITLE ================================ -->
+<section class="tab" id="title" role="tabpanel">
+  <h2>The main menu, in carved oak</h2>
+  <p class="note">The front door before play, in the timber kit (owner: <em>"main menu I think should use the timber stuff"</em>). What it holds follows the game: a world to continue, a new world, the saves (<code>save-slots</code>, <code>launch-on-the-saves</code>), settings, quit. Play runs the loading screen, then opens the Play tab. The backdrop is a still of the Play demo at golden hour.</p>
+  <div class="row" id="titleScenes"></div>
+</section>
+
+<!-- ================================ KIT ================================ -->
+<section class="tab" id="kit" role="tabpanel">
+  <h2>Q1: which rock?</h2>
+  <div class="ask"><b>Q1. Which rock for the game?</b> The owner, 2026-11-14: <em>"the game I like the rock stuff, just need to determine which rock thing to use"</em>. The same in-play screens three ways: <b>drawn rock</b> (pixel by pixel), <b>rendered rock</b> (the approved base rock, rendered in Blender at the panel's size and reduced to the kit's pixels and rock ramp, no outline), <b>smooth rock</b> (the same render, not pixelated, sampled linear). Smooth breaks the art direction's nearest-sampled pixel rule for the UI, so it is a question for the owner, not taken as decided. Screenshots: <code>docs/screenshots/mockup-ui/q1-which-rock-hud.jpg</code>, <code>q1-which-rock-pack.jpg</code>. The comparison is after both rock-lines fixes (the drawn rock's dashes, the render's strata rings), so it is fair.</div>
+  <div class="row" id="q1Rows"></div>
+
+  <h2>Timber out of play, rock in play</h2>
+  <div class="ask done"><b>Decided (owner, 2026-11-14).</b> <em>"main menu I think should use the timber stuff, but the game I like the rock stuff"</em>, then <em>"pause menu = timber too"</em>. Timber (the carved-oak set in <code>ui/oak/</code>): the main menu, pause, settings, saves. Rock and stone: the HUD, pack, map, machines and stations, talk and trade, chests.</div>
+  <div class="row" id="splitRow"></div>
+
+  <h2>The kit's font</h2>
+  <p class="note">The owner, of a <em>PACK</em> lintel that read as PAOK in Pixelify Sans: <em>"the c there is kinda weird, which you'd fix it"</em>. Every title, plaque and tab label, section label, compass letter and key cap is now drawn in the kit's own 5 x 7 pixel font (<code>ui/font/kit-font.png</code> and <code>.json</code>, by <code>ui_art.py</code>): C and G open, E flat-backed, 0 slashed against O, 1 flagged against I. Body text stays VT323.</p>
+  <div class="row big2" id="fontRow"></div>
+
+  <h2 class="info">The rock had lines</h2>
+  <p class="note">The owner: <em>"how come the rock one has lines in it?"</em>, then <em>"the 3d rendered one"</em>. The old render's rim had strata made as rings of equal distance from the edge (<code>sin(d * 3.1) &gt; 0.92</code>), which read as straight stitched lines; the drawn rock had evenly spaced dashes on rows 5 and 42. Both are now isotropic rock: Voronoi chips and pits, short cracks of varied length and angle, speckle, periodic in the 20 px tile. Before and after: <code>docs/screenshots/mockup-ui/rock-lines-before-after.png</code>.</p>
+
+  <h2>The base rock (approved)</h2>
+  <p class="note">The owner, of the first smooth render: <em>"I liked this version, please keep this version, but I want one without the lines!"</em>; of the sample made from it: <em>"Ok good continue with the mockups"</em> (2026-11-14). The base rock is that render exactly (<code>rock_field</code>, its light, camera and colours), with two changes only: the strata rings are gone, and each panel's rock is rendered at the panel's own size, so its rim and the shadow of its lip never repeat. No outline in any look. Every in-play panel has its own render (sizes in <code>ui/rendered/slices.json</code>, <code>rock_panels</code>); every other stone piece carries the same material. Fixed images below, not switched by the look.</p>
+  <div class="row big2" id="rockVariants"></div>
+
+  <h2>Panels at three sizes (9-slice)</h2>
+  <p class="note">Each frame at three sizes in the current look. The rock: in the drawn look the 48 px slab as a 9-slice (its sides tile on 20 px); in the rendered and smooth looks a render at exactly that size. The dressed-stone and oak frames are 9-slices: finished corners, sides that vary only across themselves, a one-colour centre; the smooth look's slices are the drawn ones times 8.</p>
+  <div class="row big2" id="sizes"></div>
+
+  <h2>Every piece</h2>
+  <div class="row big2" id="pieces"></div>
+
+  <h2 class="info">Contrast, measured</h2>
+  <p class="note">Every text pair a player reads is at least 4.5:1 in every look. Drawn: measured on the tokens by <code>ui_art.py</code>. Rendered: on the commonest colour of each text area, and on any colour that covers a tenth of it. Smooth: on the 10th, 50th and 90th luminance percentile of the area. The oak disabled plaque was darkened a step (WOOD[0]) after the smooth render measured 4.4:1.</p>
+  <div class="scrollx"><table class="t" id="contrast"></table></div>
+
+  <h2 class="info">Materials and tokens</h2>
+  <div id="tokens" class="info"></div>
+</section>
+
+<!-- ================================ HUD ================================ -->
+<section class="tab" id="hud" role="tabpanel">
+  <h2>The HUD in play, by day and by night</h2>
+  <p class="note">Real game shots. Before: today's translucent squares and text strip. After: the hotbar and compass in stone, the compass pointer the one bit of oak. Click a scene to give it focus: 1-0 and the wheel pick a slot, I opens the pack, M the map, Esc pauses.</p>
+  <div class="seg" data-for="hud"><button aria-pressed="false" data-v="before">Before</button><button aria-pressed="true" data-v="after">After</button></div>
+  <div class="row" id="hudScenes"></div>
+</section>
+
+<!-- ================================ PACK ================================ -->
+<section class="tab" id="pack" role="tabpanel">
+  <h2>The pack</h2>
+  <p class="note">Thirty slots and the hotbar. Click picks a stack up and puts it down; right click takes half; hover for its name and count; 1-0 and the wheel move the hotbar selection. I, Tab or Esc shuts it.</p>
+  <div class="seg" data-for="pack"><button aria-pressed="false" data-v="before">Before</button><button aria-pressed="true" data-v="after">After</button></div>
+  <div class="row" id="packScenes"></div>
+</section>
+
+<!-- ================================ MENU ================================ -->
+<section class="tab" id="menu" role="tabpanel">
+  <h2>Pause and settings, in timber</h2>
+  <p class="note">Pause: resume, saves, settings, quit (the game's four). Settings: Picture, Weather, Movement and Input tabs; Input split by context into sub-tabs, each row an action, its key cap and Change (press a key; Esc cancels; a key already used in that tab is flagged), with Reset. Keys and rows are the game's (<code>controls.rs</code> BINDINGS); the few marked <em>proposed</em> are not in the game. Rain shadow is off by default (player-settings 8).</p>
+  <div class="seg" data-for="menu"><button aria-pressed="false" data-v="before">Before</button><button aria-pressed="true" data-v="after">After</button></div>
+  <div class="row" id="menuScenes"></div>
+</section>
+
+<!-- ================================ MAP ================================ -->
+<section class="tab" id="map" role="tabpanel">
+  <h2>The world map</h2>
+  <p class="note">The map is the game's render; around it a dressed-stone moulding with rough-rock corner blocks. The overlays live in a drawer, shut by default: open it with the map plaque, pick an overlay row, shut it with the close mark.</p>
+  <div class="seg" data-for="map"><button aria-pressed="false" data-v="before">Before</button><button aria-pressed="true" data-v="after">After</button></div>
+  <div class="row" id="mapScenes"></div>
+</section>
+
+<!-- ================================ STATION ================================ -->
+<section class="tab" id="station" role="tabpanel">
+  <h2>Machines and stations</h2>
+  <p class="note">The crafting (M3) and cooking (M27) panels in the rock kit, working: pick a recipe and its ingredients light up from the pack's real counts; Make or Cook runs the bar and drops the result in the output slot, then into the pack. Recipes are illustrative.</p>
+  <div class="seg" data-for="station"><button aria-pressed="true" data-v="forge">Forge</button><button aria-pressed="false" data-v="hearth">Hearth</button><button aria-pressed="false" data-v="bench">Bench</button><button aria-pressed="false" data-v="mill">Mill</button><button aria-pressed="false" data-v="chest">Chest</button></div>
+  <div class="row" id="stationScenes"></div>
+</section>
+
+<!-- ================================ TALK ================================ -->
+<section class="tab" id="talk" role="tabpanel">
+  <h2>Talk and trade</h2>
+  <p class="note">The townsfolk (M5) conversation and the market's (M12) barter, at night in Dunmouth. Choices advance the talk; in trade, click a stack to put it on the table or take it back, and the running total says whether the trade is fair.</p>
+  <div class="seg" data-for="talk"><button aria-pressed="true" data-v="talk">Talk</button><button aria-pressed="false" data-v="trade">Trade</button></div>
+  <div class="row" id="talkScenes"></div>
+</section>
+
+<!-- ================================ LOADING ================================ -->
+<section class="tab" id="loading" role="tabpanel">
+  <h2>The loading screen</h2>
+  <p class="note">From the first frame (CLAUDE.md, "A loading screen on boot"): the emblem cut in a rock slab, the name, the step, and a rune bar. Play runs it once.</p>
+  <div class="seg" data-for="loading"><button aria-pressed="false" data-v="before">Before</button><button aria-pressed="true" data-v="after">After</button></div>
+  <div class="row" id="loadingScenes"></div>
+</section>
+
+</main>
+<script src="ui/game-ui.js"></script>
+</body>
+</html>

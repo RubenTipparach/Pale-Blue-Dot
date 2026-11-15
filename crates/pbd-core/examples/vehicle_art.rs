@@ -29,7 +29,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         "schema": 1,
         "axes": "+X right, +Y up, +Z aft; metres",
         "specs": specs,
-        "wing_panels": specs.kestrel.wing.panels(),
         "hulls": {"tern": shape(specs.tern.hull), "loon": shape(specs.loon.hull)},
     });
     std::fs::create_dir_all(output.parent().ok_or("output needs a parent directory")?)?;

@@ -13,56 +13,50 @@ use bevy::prelude::*;
 use pbd_app::compass::{self, CompassView, DIRECTIONS, MarkKind, Place};
 use pbd_app::planet::PLANET_RADIUS;
 use pbd_app::sites::WorldSites;
+use pbd_app::ui_kit::{self, KitPiece, KitText, Set, UiKit};
 
-/// The bar's height and the width of a letter's box, px. The letters and
-/// ticks take its upper part and the towns' diamonds a row along its foot,
+/// The strip, native pixels: the light dressed-stone `compass` piece
+/// (`stone-and-wood-ui`), as the mockup's HUD draws it. Its letters and ticks
+/// are cut into its upper part and the towns' brass studs sit along its foot,
 /// so a town never hides a letter.
-const BAR_H: f32 = 32.0;
-const LETTER_W: f32 = 30.0;
+const BAR_W: f32 = 280.0;
+const BAR_H: f32 = 18.0;
+/// The window the marks slide in: the strip less its end caps.
+const INSET: f32 = 4.0;
+const INNER_W: f32 = BAR_W - 2.0 * INSET;
 /// The most towns drawn on the bar at once: the nearest.
 const PLACES: usize = 12;
-/// The diamond's side, px.
-const DIAMOND: f32 = 7.0;
+/// A town's brass stud.
+const STUD: f32 = 5.0;
 
-const INK: (f32, f32, f32) = (0.9, 0.95, 0.93);
-/// North's own colour: the bar's one warm accent.
-const NORTH: (f32, f32, f32) = (1.0, 0.72, 0.42);
-const PLACE: (f32, f32, f32) = (0.98, 0.86, 0.55);
-
+/// The bar's root, shown only while walking or flying low.
 #[derive(Component)]
 pub struct CompassRoot;
 
+/// The strip.
 #[derive(Component)]
 pub struct CompassBar;
 
-/// One of the 24 directions, by its index in [`DIRECTIONS`].
+/// One of the 24 marks: a tick, or a letter, by its index in `DIRECTIONS`.
 #[derive(Component)]
 pub struct CompassMark(usize);
 
-/// One diamond of the pool the towns are drawn with.
+/// One of the town studs, by slot.
 #[derive(Component)]
 pub struct CompassPlace(usize);
 
-/// The line under the bar that names the town in the middle.
+/// The line naming the town nearest the middle.
 #[derive(Component)]
 pub struct CompassName;
 
-fn colour((r, g, b): (f32, f32, f32), alpha: f32) -> Color {
-    Color::srgba(r, g, b, alpha.clamp(0.0, 1.0))
-}
-
-/// The bar's width for a window: 36% of it, held between 320 and 640 px.
-pub fn bar_width(window_width: f32) -> f32 {
-    (window_width * 0.36).clamp(320.0, 640.0)
-}
-
-pub fn spawn(mut commands: Commands) {
+pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
+    let kit = &*kit;
     commands
         .spawn((
             CompassRoot,
             Node {
                 position_type: PositionType::Absolute,
-                top: px(8),
+                top: px(4),
                 left: px(0),
                 width: percent(100),
                 flex_direction: FlexDirection::Column,
@@ -74,132 +68,122 @@ pub fn spawn(mut commands: Commands) {
         .with_children(|root| {
             root.spawn((
                 CompassBar,
+                kit.nine(Set::Stone, "compass"),
+                KitPiece("compass".into()),
                 Node {
-                    width: px(bar_width(1280.0)),
+                    width: px(BAR_W),
                     height: px(BAR_H),
-                    border: UiRect::vertical(px(1)),
-                    overflow: Overflow::clip(),
+                    flex_shrink: 0.0,
                     ..default()
                 },
-                BackgroundColor(Color::srgba(0.02, 0.05, 0.06, 0.45)),
-                BorderColor::all(Color::srgba(0.85, 0.92, 0.9, 0.35)),
             ))
             .with_children(|bar| {
-                for (i, label) in DIRECTIONS.iter().enumerate() {
-                    if label.is_empty() {
-                        bar.spawn((
-                            CompassMark(i),
+                bar.spawn(Node {
+                    position_type: PositionType::Absolute,
+                    left: px(INSET),
+                    top: px(0),
+                    width: px(INNER_W),
+                    height: px(BAR_H),
+                    overflow: Overflow::clip(),
+                    ..default()
+                })
+                .with_children(|inner| {
+                    for (i, label) in DIRECTIONS.iter().enumerate() {
+                        if label.is_empty() {
+                            inner.spawn((
+                                CompassMark(i),
+                                Node {
+                                    position_type: PositionType::Absolute,
+                                    width: px(1),
+                                    height: px(4),
+                                    top: px(4),
+                                    display: Display::None,
+                                    ..default()
+                                },
+                                BackgroundColor(ui_kit::CUT),
+                            ));
+                        } else {
+                            inner.spawn((
+                                CompassMark(i),
+                                KitText::new(
+                                    *label,
+                                    if i == 0 { ui_kit::NORTH } else { ui_kit::CUT },
+                                ),
+                                Node {
+                                    position_type: PositionType::Absolute,
+                                    top: px(3),
+                                    display: Display::None,
+                                    ..default()
+                                },
+                            ));
+                        }
+                    }
+                    for k in 0..PLACES {
+                        inner.spawn((
+                            CompassPlace(k),
+                            kit.whole(Set::Stone, "compass-town"),
                             Node {
                                 position_type: PositionType::Absolute,
-                                width: px(1),
-                                height: px(6),
-                                top: px(8.0),
-                                display: Display::None,
-                                ..default()
-                            },
-                            BackgroundColor(colour(INK, 0.5)),
-                        ));
-                    } else {
-                        let cardinal = i % 6 == 0;
-                        bar.spawn((
-                            CompassMark(i),
-                            Text::new(*label),
-                            TextFont {
-                                font_size: if cardinal { 15.0 } else { 11.0 },
-                                ..default()
-                            },
-                            TextLayout::new_with_justify(Justify::Center),
-                            TextColor(colour(if i == 0 { NORTH } else { INK }, 1.0)),
-                            TextShadow::default(),
-                            Node {
-                                position_type: PositionType::Absolute,
-                                width: px(LETTER_W),
-                                top: px(if cardinal { 1.0 } else { 3.5 }),
+                                width: px(STUD),
+                                height: px(STUD),
+                                top: px(11),
                                 display: Display::None,
                                 ..default()
                             },
                         ));
                     }
-                }
-                for k in 0..PLACES {
-                    bar.spawn((
-                        CompassPlace(k),
-                        Node {
-                            position_type: PositionType::Absolute,
-                            width: px(DIAMOND),
-                            height: px(DIAMOND),
-                            top: px(BAR_H - 2.0 - DIAMOND - 4.0),
-                            display: Display::None,
-                            ..default()
-                        },
-                        UiTransform::from_rotation(Rot2::degrees(45.0)),
-                        BackgroundColor(colour(PLACE, 1.0)),
-                        BorderColor::all(Color::srgba(0.1, 0.07, 0.02, 0.7)),
-                    ));
-                }
-                // The notch at the middle, where the view is facing.
+                });
+                // The oak pointer over the middle (design 3, accent 3).
                 bar.spawn((
+                    kit.whole(Set::Stone, "compass-pointer"),
                     Node {
                         position_type: PositionType::Absolute,
                         left: percent(50),
-                        margin: UiRect::left(px(-1)),
-                        bottom: px(0),
-                        width: px(2),
-                        height: px(5),
+                        margin: UiRect::left(px(-3)),
+                        top: px(-1),
+                        width: px(7),
+                        height: px(6),
                         ..default()
                     },
-                    BackgroundColor(colour(INK, 0.85)),
                 ));
             });
             root.spawn((
                 CompassName,
-                Text::new(""),
-                TextFont {
-                    font_size: 11.0,
-                    ..default()
-                },
-                TextColor(colour(PLACE, 0.95)),
-                TextShadow::default(),
+                KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
-                    margin: UiRect::top(px(3)),
+                    margin: UiRect::top(px(2)),
                     ..default()
                 },
             ));
         });
 }
 
-/// Lay the bar out for the view: hidden off the world and high up, the
-/// letters and ticks at their offsets, the nearest towns as diamonds, the one
-/// in the middle named.
+/// Lay the marks out for this frame's heading, fade the whole bar with
+/// altitude, and name the town nearest the middle. Hidden on any menu
+/// screen, and when the view is high enough that a ground compass means
+/// nothing.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn update(
     view: Res<CompassView>,
     screen: Res<Screen>,
     sites: Option<Res<WorldSites>>,
-    windows: Query<&Window>,
+    kit: Res<UiKit>,
     mut root: Query<&mut Visibility, With<CompassRoot>>,
-    mut bar: Query<
-        &mut Node,
-        (
-            With<CompassBar>,
-            Without<CompassMark>,
-            Without<CompassPlace>,
-        ),
-    >,
+    mut bar: Query<&mut ImageNode, (With<CompassBar>, Without<CompassPlace>)>,
     mut marks: Query<
         (
             &CompassMark,
             &mut Node,
-            Option<&mut TextColor>,
+            Option<&mut KitText>,
             Option<&mut BackgroundColor>,
         ),
         Without<CompassPlace>,
     >,
-    mut diamonds: Query<
-        (&CompassPlace, &mut Node, &mut BackgroundColor),
+    mut studs: Query<
+        (&CompassPlace, &mut Node, &mut ImageNode),
         (Without<CompassMark>, Without<CompassBar>),
     >,
-    mut name: Query<&mut Text, (With<CompassName>, Without<CompassMark>)>,
+    mut name: Query<&mut KitText, (With<CompassName>, Without<CompassMark>)>,
 ) {
     let Ok(mut visibility) = root.single_mut() else {
         return;
@@ -211,18 +195,16 @@ pub fn update(
         return;
     };
     *visibility = Visibility::Inherited;
-    let width = windows
-        .iter()
-        .next()
-        .map_or(bar_width(1280.0), |w| bar_width(w.width()));
-    if let Ok(mut node) = bar.single_mut()
-        && node.width != px(width)
-    {
-        node.width = px(width);
+    for mut image in &mut bar {
+        let want = Color::WHITE.with_alpha(alpha);
+        if image.color != want {
+            image.color = want;
+        }
     }
-    let x = |offset: f32, box_w: f32| px(width / 2.0 * (1.0 + offset) - box_w / 2.0);
+    // A mark's box `w` wide centred at `offset` (-1..1 across the window),
+    // on a whole native pixel.
+    let x = |offset: f32, w: f32| px((INNER_W / 2.0 * (1.0 + offset) - w / 2.0).round());
 
-    // The towns in reach, nearest first, as many as the pool holds.
     let mut towns: Vec<(&str, Place)> = sites
         .as_ref()
         .and_then(|s| s.ready())
@@ -255,18 +237,22 @@ pub fn update(
             MarkKind::Tick => {
                 node.left = x(m.offset, 1.0);
                 if let Some(mut background) = background {
-                    background.0 = colour(INK, 0.5 * fade);
+                    background.0 = ui_kit::CUT.with_alpha(fade);
                 }
             }
             kind => {
-                node.left = x(m.offset, LETTER_W);
-                let (ink, strength) = match kind {
-                    MarkKind::Cardinal if mark.0 == 0 => (NORTH, 1.0),
-                    MarkKind::Cardinal => (INK, 1.0),
-                    _ => (INK, 0.7),
+                let label = DIRECTIONS[mark.0];
+                node.left = x(m.offset, kit.font.width(label) as f32);
+                let ink = if kind == MarkKind::Cardinal && mark.0 == 0 {
+                    ui_kit::NORTH
+                } else {
+                    ui_kit::CUT
                 };
                 if let Some(mut text) = text {
-                    text.0 = colour(ink, strength * fade);
+                    let want = ink.with_alpha(fade);
+                    if text.colour != want {
+                        text.colour = want;
+                    }
                 }
             }
         }
@@ -275,12 +261,12 @@ pub fn update(
         .iter()
         .filter(|m| matches!(m.kind, MarkKind::Place(_)))
         .collect();
-    for (slot, mut node, mut background) in &mut diamonds {
+    for (slot, mut node, mut image) in &mut studs {
         match shown.get(slot.0) {
             Some(m) => {
                 node.display = Display::Flex;
-                node.left = x(m.offset, DIAMOND);
-                background.0 = colour(PLACE, m.fade * alpha);
+                node.left = x(m.offset, STUD);
+                image.color = Color::WHITE.with_alpha(m.fade * alpha);
             }
             None => node.display = Display::None,
         }
@@ -289,14 +275,14 @@ pub fn update(
         let line = compass::named(heading, &places)
             .map(|i| {
                 format!(
-                    "{}  {}",
+                    "{} {}",
                     towns[i].0,
                     compass::distance_text(towns[i].1.distance_m)
                 )
             })
             .unwrap_or_default();
-        if text.0 != line {
-            text.0 = line;
+        if text.text != line {
+            text.text = line;
         }
     }
 }

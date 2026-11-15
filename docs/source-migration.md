@@ -25,6 +25,7 @@ do not validate the five standalone ports on hardware before their integration.
 | --- | --- | --- |
 | [RubenTipparach/tenebris](https://github.com/RubenTipparach/tenebris) | `ef9865166349c7a3c4ae09acdd20640daf85b4fd` | `tenebris-rs/` |
 | [RubenTipparach/swarm-demo](https://github.com/RubenTipparach/swarm-demo) | `625596b437fec454412b3c7083a3a04e510617f1` | `crates/swarm_core/`, `crates/swarm_app/` |
+| [luanti-org/luanti](https://github.com/luanti-org/luanti) (LGPL-2.1-or-later) | `a10dc8dbff3b0af8295ae55df44f65b1d9ee92c7` | `src/servermap.cpp` (`transformLiquidsLocal`, `get_max_liquid_level`): ported into the mockup `docs/mockups/water-flow.html` only, with its notice and `docs/mockups/water-flow/COPYING.LESSER`; the game's version is to be written from `openspec/changes/water-flow` (design 8) |
 
 The optional shallow `.reference/` checkouts are research inputs only. Runtime
 assets, shaders, and builds must be self-contained in Pale Blue Dot. Links below

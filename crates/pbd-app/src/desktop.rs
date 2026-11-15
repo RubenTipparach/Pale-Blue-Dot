@@ -221,12 +221,6 @@ pub struct Launch {
     /// `--turn DEG_PER_S`: the walker's view turns right at this rate, a
     /// measurement instrument for the clouds' history (`cloud-ghosting`).
     pub turn: f32,
-    /// `--walk --ship-in-cave` starts the walker in a cave chamber (the one
-    /// `--view cave` photographs), looking down the tunnel, and parks the
-    /// Kestrel nine metres ahead, nose away: the moving things' light in a
-    /// cave (`lamps-and-lanterns` task 3.3). Vehicles and the light field are
-    /// the walker's, so the rig is too.
-    pub ship_in_cave: bool,
     /// `--torch` puts one torch on the ground under the capture camera. A
     /// headless run has no hands, and a lamp is the one thing in this world
     /// whose whole point is what it does to a dark place.
@@ -265,10 +259,23 @@ pub struct Launch {
     /// the saves page's NEW WORLD does, so a capture shows what making a new
     /// world while one is open does to a running game.
     pub new_world: Option<String>,
-    /// `--menu pause|settings|saves|pack|map` opens that screen at startup. A headless run has
+    /// `--menu pause|settings|saves|pack|map|guide` opens that screen at startup. A headless run has
     /// no pointer and no keyboard, so a screen a player reaches with `Escape`
     /// has to be reachable by a flag or it can never be photographed.
     pub menu: Option<String>,
+    /// `--settings-tab picture|weather|world|movement|input` and
+    /// `--input-tab on-foot|hands|flying|vehicles|menus`: the tab and the
+    /// Input sub-tab the settings open on, for a capture of each.
+    pub settings_tab: u8,
+    pub input_tab: u8,
+    /// `--rebind SLOT=KEY` (repeatable, e.g. `on_foot:ShiftLeft=KeyE`): a
+    /// rebind for this run only, so a capture, which reads no settings file,
+    /// can show one and its clash. An instrument; nothing is kept.
+    pub rebinds: Vec<(String, String)>,
+    /// `--cursor X Y`: hold the pointer at this window position (logical px)
+    /// every frame, so a capture can show what hovering shows (a slot's
+    /// tooltip). An instrument for a headless run, which has no mouse.
+    pub cursor: Option<Vec2>,
     /// How the map opens, for its captures: `--map-mpp <metres>` is its zoom
     /// as metres a screen pixel at the centre, `--map-overlay <name>` a
     /// weather overlay, `--map-layer <name>` a raster layer such as
@@ -333,7 +340,6 @@ impl Launch {
             overlay: None,
             map: map_screen::MapLaunch::default(),
             torch: false,
-            ship_in_cave: false,
             lamps: false,
             lamps_at: 5.0,
             lamps_across: 0.0,
@@ -342,6 +348,10 @@ impl Launch {
             yaw: None,
             turn: 0.0,
             menu: None,
+            settings_tab: 0,
+            input_tab: 0,
+            rebinds: Vec::new(),
+            cursor: None,
         };
         let mut i = 0;
         while i < args.len() {
@@ -391,7 +401,6 @@ impl Launch {
                         .expect("--place requires a count");
                 }
                 "--torch" => result.torch = true,
-                "--ship-in-cave" => result.ship_in_cave = true,
                 "--lamps" => {
                     result.lamps = true;
                     if let Some(metres) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
@@ -470,15 +479,48 @@ impl Launch {
                     i += 1;
                     let screen = args
                         .get(i)
-                        .expect("--menu requires pause, settings, saves, pack or map");
+                        .expect("--menu requires pause, settings, saves, pack, map or guide");
                     assert!(
                         matches!(
                             screen.as_str(),
-                            "pause" | "settings" | "saves" | "pack" | "map"
+                            "pause" | "settings" | "saves" | "pack" | "map" | "guide"
                         ),
-                        "--menu takes pause, settings, saves, pack or map"
+                        "--menu takes pause, settings, saves, pack, map or guide"
                     );
                     result.menu = Some(screen.clone());
+                }
+                "--settings-tab" => {
+                    i += 1;
+                    let name = args.get(i).expect("--settings-tab requires a tab");
+                    result.settings_tab = menu::SETTINGS_TABS
+                        .iter()
+                        .position(|t| t.eq_ignore_ascii_case(name))
+                        .expect("--settings-tab takes picture, weather, world, movement or input")
+                        as u8;
+                }
+                "--input-tab" => {
+                    i += 1;
+                    let name = args.get(i).expect("--input-tab requires a sub-tab");
+                    result.input_tab = pbd_app::controls::Tab::ALL
+                        .iter()
+                        .position(|t| t.label().eq_ignore_ascii_case(&name.replace('-', " ")))
+                        .expect("--input-tab takes on-foot, hands, flying, vehicles or menus")
+                        as u8;
+                }
+                "--cursor" => {
+                    let at = |k: usize| -> f32 {
+                        args.get(i + k)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--cursor takes X Y in logical px")
+                    };
+                    result.cursor = Some(Vec2::new(at(1), at(2)));
+                    i += 2;
+                }
+                "--rebind" => {
+                    i += 1;
+                    let pair = args.get(i).expect("--rebind requires SLOT=KEY");
+                    let (slot, key) = pair.split_once('=').expect("--rebind takes SLOT=KEY");
+                    result.rebinds.push((slot.into(), key.into()));
                 }
                 "--map-mpp" => {
                     i += 1;
@@ -695,7 +737,7 @@ impl Launch {
                     let key = args.get(i).expect("--aboard requires a craft");
                     result.aboard = Some(
                         pbd_core::vehicle::Kind::from_key(key)
-                            .expect("--aboard knows kestrel, tern, loon, cog and rowboat"),
+                            .expect("--aboard knows tern, loon, cog and rowboat"),
                     );
                     result.walk = true;
                 }
@@ -1128,13 +1170,12 @@ pub fn run(args: &[String]) {
     // that schedule's commands apply, so a camera that wants to stand inside a
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
-    .add_systems(
-        PostStartup,
-        park_in_cave.before(pbd_app::walking::WalkingSetup),
-    )
     .insert_resource(opening)
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
+    .insert_resource(menu::SettingsTab(launch.settings_tab))
+    .insert_resource(menu::InputTab(launch.input_tab))
+    .init_resource::<menu::Rebinding>()
     .add_systems(Startup, menu::spawn)
     .add_systems(
         PostStartup,
@@ -1157,6 +1198,7 @@ pub fn run(args: &[String]) {
     .add_systems(
         PreUpdate,
         (
+            menu::capture_rebind,
             menu::name_input,
             menu::toggle,
             guide::open,
@@ -1164,13 +1206,20 @@ pub fn run(args: &[String]) {
             map_screen::open,
         )
             .chain()
-            .after(bevy::input::InputSystems),
+            .after(bevy::input::InputSystems)
+            .after(pbd_app::controls::remap_keys),
     )
     .add_systems(
         Update,
         (
             menu::press_graphics,
             menu::label_graphics,
+            menu::drag_settings,
+            menu::show_settings,
+            menu::settings_tabs,
+            menu::input_tabs,
+            menu::press_bindings,
+            menu::rebuild_input,
             menu::wheel_scroll,
         )
             .chain(),
@@ -1260,7 +1309,7 @@ pub fn run(args: &[String]) {
     // The player's settings (`player-settings`): the file in a plain run;
     // in a capture or a benchmark the defaults, so its picture or its numbers
     // are its flags' alone. Read here, once the logger is up.
-    let (player, kept) = pbd_app::settings::for_launch(
+    let (player, mut keys, kept) = pbd_app::settings::for_launch(
         launch.capture.is_some() || launch.frame_log.is_some(),
         &launch.settings,
     );
@@ -1274,7 +1323,21 @@ pub fn run(args: &[String]) {
             .as_ref()
             .map_or("none".into(), |p| p.display().to_string()),
     );
+    if !launch.rebinds.is_empty() {
+        let mut names = keys.to_names();
+        names.extend(launch.rebinds.iter().cloned());
+        let (laid, skipped) = pbd_app::controls::KeyBinds::from_names(&names);
+        assert!(
+            skipped.is_empty(),
+            "--rebind names no slot or key: {skipped:?}"
+        );
+        keys = laid;
+    }
+    if !keys.is_empty() {
+        info!("PLAYER_KEYS {:?}", keys.to_names());
+    }
     app.insert_resource(player)
+        .insert_resource(keys)
         .insert_resource(kept)
         .insert_resource(if launch.upscale_nearest {
             pbd_app::settings::Upscale::Nearest
@@ -1387,6 +1450,21 @@ pub fn run(args: &[String]) {
     if launch.fixed || (launch.capture.is_some() && !launch.real_time) {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(step));
     }
+    if let Some(at) = launch.cursor {
+        app.add_systems(
+            First,
+            move |mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>| {
+                for mut window in &mut windows {
+                    if window.cursor_position() != Some(at) {
+                        window.set_cursor_position(Some(at));
+                    }
+                }
+            },
+        );
+    }
+    // The UI kit (`stone-and-wood-ui`): its pieces, fonts and scale are in
+    // place in `finish`, before the loading screen's first frame.
+    app.add_plugins(pbd_app::ui_kit::UiKitPlugin);
     // The loading screen (`loading-screen`): added last, because it takes
     // over `Main` from the plugins that made it.
     app.add_plugins(pbd_app::loading::LoadingPlugin {
@@ -2173,47 +2251,6 @@ fn cave_chamber(
         }
     }
     best
-}
-
-/// `--walk --ship-in-cave`: the walker starts in the capture cave's chamber
-/// looking down its tunnel, and the Kestrel is held nine metres ahead,
-/// halfway up the chamber, nose down the tunnel.
-fn park_in_cave(
-    mut commands: Commands,
-    launch: Res<Launch>,
-    fine: Res<pbd_app::planet::PlanetFine>,
-    config: Option<ResMut<WalkingConfig>>,
-) {
-    if !launch.ship_in_cave || !launch.walk {
-        return;
-    }
-    let Some(mut config) = config else {
-        return;
-    };
-    let Some((_, here, floor, roof, along)) = cave_chamber(&fine, false) else {
-        panic!("no chamber in the column tier to park the Kestrel in")
-    };
-    let gap = roof - floor;
-    config.restored = Some(RestoredPose {
-        position: here * (PLANET_RADIUS + floor + 1.0),
-        heading: along,
-        pitch: 0.0,
-    });
-    // Nose down the tunnel, seen from behind as the chase view sees it: side
-    // on, its length would run into both walls of a tunnel four metres wide.
-    let at_dir = (here + along * (9.0 / PLANET_RADIUS)).normalize();
-    let at = at_dir * (PLANET_RADIUS + floor + gap * 0.5);
-    let facing = Transform::from_translation(at)
-        .looking_to(along, at_dir)
-        .rotation;
-    info!(
-        "the walker starts in a {gap:.0} m cave chamber and the Kestrel is parked 9 m down it, {:.1} m above the floor",
-        gap * 0.5
-    );
-    commands.insert_resource(pbd_app::vehicles::CraftHold(Some((
-        at.as_dvec3(),
-        facing.as_dquat(),
-    ))));
 }
 
 fn cave_camera(

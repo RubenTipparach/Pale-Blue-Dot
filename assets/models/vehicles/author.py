@@ -162,48 +162,6 @@ def crew(eye):
         box('crew_leg_'+str(side), (.17,.18,.48), (side*.13,-.90,-.15), 'navy', parent)
 
 
-def build_kestrel():
-    s = reset('kestrel')
-    rings('fuselage', [(-4.75,.025,.025),(-3.5,.66,.62),(-2.2,.75,.72),
-                      (1.8,.68,.63),(3.8,.36,.38,.55),(5.25,.16,.21,.72)], 'white')
-    rings('canopy', [(-3.15,.12,.10),(-2.6,.53,.47),(-1.65,.55,.43),(-1.05,.12,.08)],
-          'navy', at=(0,.63,0), sides=8)
-    box('nose_badge', (.31,.02,.50), (0,.64,-3.0), 'coral')
-    box('cabin_hatch', (.025,.64,1.05), (.71,.03,-.20), 'coral')
-    for side, spec in zip(('left','right'), DATA['wing_panels']):
-        # panel order follows core; names are chosen from the physical X sign.
-        side = 'right' if spec['at'][0] > 0 else 'left'
-        span = math.sqrt(s['wing']['panel_area_m2']*s['wing']['aspect']*2)/2
-        airfoil('wing_'+side, spec, span, spec['area_m2']/span, 'flaperon_'+side)
-    for name, control in (('tail','elevator'),('fin','rudder')):
-        f = s[name]
-        span = math.sqrt(f['area_m2']*f['aspect'])
-        airfoil(name, f, span, f['area_m2']/span, control)
-    for i,g in enumerate(s['gear']):
-        at = g['at']
-        rings('gear_'+str(i), [(0,.055,.055),(.90,.055,.055)], 'metal',
-              at=(at[0],at[1]+.20,at[2]), axis='Y', sides=6)
-        rings('wheel_'+str(i), [(-.11,.23,.23),(.11,.23,.23)], 'ink',
-              at=(at[0],at[1]+.23,at[2]), axis='X', sides=12)
-    for side, sign in (('left',-1),('right',1)):
-        at = s['rotor']['at']
-        nac = node('nacelle_'+side, at=(sign*at[0],at[1],at[2]))
-        rings('nacelle_skin_'+side, [(-1.25,.23,.23),(-.95,.37,.37),(.35,.35,.35),(.65,.23,.23)],
-              'coral', nac, axis='Y', sides=10)
-        rings('nacelle_collar_'+side, [(.32,.36,.36),(.47,.30,.30)], 'white', nac, axis='Y')
-        rotor = node('rotor_'+side, nac, (0,.8,0))
-        rings('rotor_hub_'+side, [(-.08,.18,.18),(.08,.18,.18),(.14,.06,.06)],
-              'metal', rotor, axis='Y', sides=8)
-        radius = s['rotor']['radius_m']
-        tip = math.sqrt(radius*radius-.06*.06)
-        for j in range(3):
-            angle = j*2*math.pi/3
-            outline = [(-.07,.18),(-.12,.65*radius),(-.06,tip),(.06,tip),(.10,.6*radius),(.06,.18)]
-            outline = [(x*math.cos(angle)+z*math.sin(angle),-x*math.sin(angle)+z*math.cos(angle)) for x,z in outline]
-            prism('blade_'+side+'_'+str(j), outline, .045, 'navy', rotor)
-    crew(s['seat']['eye'])
-
-
 def fixed_foil(name, spec, parent=None, at=None, thickness=.06):
     frame=node(name,parent,spec['at'] if at is None else at,foil_frame(spec))
     span=math.sqrt(spec['area_m2']*spec['aspect'])
@@ -383,7 +341,6 @@ def painted_tile(chart, obj, u_axis, v_axis, lo, plane):
     material={'white':'white-panels','coral':'coral-trim','navy':'rotor','ink':'rotor',
               'metal':'gear-metal','pale':'white-panels','amber':'coral-trim','teal':'teal-hull'}[tag]
     if wood: material='varnished-wood'
-    if name=='canopy': material='canopy'
     if KIND=='tern':
         if name=='hull': material='white-topsides'
         if name=='deck' or name.startswith('cockpit_'): material='coral-deck'
@@ -410,19 +367,6 @@ def painted_tile(chart, obj, u_axis, v_axis, lo, plane):
             # Unique trim, safety and identification marks. Swatches supply all
             # ordinary material seams, rivets, grille slots, grain and cloth.
             if tag=='coral' and (u==w-2 or v==h-2): color=bytes(rgba(RAMPS['coral'][2]))
-            if KIND=='kestrel':
-                if name.startswith('wing_') and abs(p.x)>1.65 and abs(world.x)<1.0:
-                    color=bytes(rgba(RAMPS['navy'][1 if (u+v)%4 else 2]))
-                if name=='canopy':
-                    if u<1 or v<1 or u>=w-1 or v>=h-1: color=bytes(rgba(RAMPS['navy'][0]))
-                    if w>5 and h>4 and v==h-3 and u in (2,3): color=bytes(rgba(RAMPS['white'][3]))
-                if name=='cabin_hatch' and w>=12 and h>=7:
-                    sx,sy=u-3,v-2
-                    if 0<=sx<9 and 0<=sy<5 and stencil[4-sy][sx]=='1': color=bytes(rgba(RAMPS['navy'][0]))
-                if name.startswith('nacelle_skin'):
-                    if -.8<p.y<-.25: color=sample_swatch('intake-grille',u,p.y*16)
-                    if .15<p.y<.35: color=bytes(rgba(RAMPS['amber'][2] if (u+v)//2%2 else RAMPS['navy'][0]))
-                if name.startswith('blade_') and math.hypot(p.x,p.z)>1.7: color=bytes(rgba(RAMPS['coral'][2]))
             if KIND=='tern' and name=='hull':
                 if world.y<-.0625: color=sample_swatch('antifouling',su,sv)
                 elif world.y<.0625: color=bytes(rgba(RAMPS['coral'][1]))
@@ -581,15 +525,14 @@ def texture_and_export():
             space.overlay.show_overlays=False
             space.region_3d.view_rotation=Euler((math.radians(65),0,math.radians(135))).to_quaternion()
             space.region_3d.view_location=C@Vector((0,3.1 if KIND=='tern' else .6,0))
-            space.region_3d.view_distance=17 if KIND=='kestrel' else 12.5 if KIND=='tern' else 8
+            space.region_3d.view_distance=12.5 if KIND=='tern' else 8
     print(json.dumps({'craft':KIND,'objects':len(SCENE.objects),'charts':len(charts),'tiles':len(regions),'colors':len(palette),'atlas':[width,height],
         'triangles':sum(len(p.vertices)-2 for o in SCENE.objects if o.type=='MESH' for p in o.data.polygons),
         'atlas_occupied_fraction':sum(r['rect'][2]*r['rect'][3] for r in regions)/(width*height)}))
 
 
 def build(kind):
-    if kind=='kestrel': build_kestrel()
-    elif kind=='tern': build_tern()
+    if kind=='tern': build_tern()
     elif kind=='loon': build_loon()
     else: raise ValueError('Craft authoring is not implemented: '+kind)
     texture_and_export()

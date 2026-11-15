@@ -11,6 +11,7 @@
 //! ([`Overrides`]), so a picture or a perf number is a function of its command
 //! line, whatever the player last chose.
 
+use crate::controls::KeyBinds;
 use bevy::{
     camera::{ImageRenderTarget, RenderTarget},
     core_pipeline::tonemapping::{DebandDither, Tonemapping},
@@ -21,13 +22,15 @@ use bevy::{
     window::{PrimaryWindow, WindowRef},
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 /// The file's version. A file with none is read as version 0, which had the
 /// same fields as 1; version 2 added `rain_shadows`, which an older file
-/// reads as its default.
-pub const VERSION: u32 = 2;
+/// reads as its default; version 3 added `keys`, the player's rebinds
+/// (`stone-and-wood-ui`), which an older file reads as none.
+pub const VERSION: u32 = 3;
 
 /// The render scales offered, in percent, in the order a press cycles them.
 pub const SCALES: [u32; 5] = [100, 85, 75, 67, 50];
@@ -152,6 +155,8 @@ struct File {
     render_scale: u32,
     auto_step: bool,
     rain_shadows: bool,
+    /// Slot name to key name (`controls::KeyBinds::to_names`).
+    keys: BTreeMap<String, String>,
 }
 
 impl Default for File {
@@ -163,6 +168,7 @@ impl Default for File {
             render_scale: base.render_scale,
             auto_step: base.auto_step,
             rain_shadows: base.rain_shadows,
+            keys: BTreeMap::new(),
         }
     }
 }
@@ -190,8 +196,10 @@ impl Loaded {
 }
 
 impl PlayerSettings {
-    /// Settings from a file's text, and its version (0 when it names none).
-    pub fn parse(text: &str) -> Result<(Self, u32), String> {
+    /// Settings and rebinds from a file's text, and its version (0 when it
+    /// names none). A rebind this build does not know is skipped with a
+    /// warning and the rest is read.
+    pub fn parse(text: &str) -> Result<(Self, KeyBinds, u32), String> {
         let file: File = ron::from_str(text).map_err(|e| e.to_string())?;
         let settings = Self {
             frame_limit: file.frame_limit,
@@ -199,11 +207,15 @@ impl PlayerSettings {
             auto_step: file.auto_step,
             rain_shadows: file.rain_shadows,
         };
-        Ok((settings, file.version))
+        let (keys, skipped) = KeyBinds::from_names(&file.keys);
+        for rebind in skipped {
+            warn!("settings: a rebind this build does not know, skipped: {rebind}");
+        }
+        Ok((settings, keys, file.version))
     }
 
-    /// The file's text for these settings, at [`VERSION`].
-    pub fn to_text(&self) -> String {
+    /// The file's text for these settings and rebinds, at [`VERSION`].
+    pub fn to_text(&self, keys: &KeyBinds) -> String {
         ron::ser::to_string_pretty(
             &File {
                 version: VERSION,
@@ -211,6 +223,7 @@ impl PlayerSettings {
                 render_scale: self.render_scale,
                 auto_step: self.auto_step,
                 rain_shadows: self.rain_shadows,
+                keys: keys.to_names(),
             },
             ron::ser::PrettyConfig::default(),
         )
@@ -219,27 +232,28 @@ impl PlayerSettings {
 
     /// Read the file at `path`. Missing or broken gives defaults; a broken
     /// file is not touched.
-    pub fn load_from(path: &Path) -> (Self, Loaded) {
+    pub fn load_from(path: &Path) -> (Self, KeyBinds, Loaded) {
+        let none = KeyBinds::default;
         match std::fs::read_to_string(path) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                (Self::default(), Loaded::Missing)
+                (Self::default(), none(), Loaded::Missing)
             }
-            Err(e) => (Self::default(), Loaded::Broken(e.to_string())),
+            Err(e) => (Self::default(), none(), Loaded::Broken(e.to_string())),
             Ok(text) => match Self::parse(&text) {
-                Ok((settings, version)) => (settings, Loaded::Read(version)),
-                Err(why) => (Self::default(), Loaded::Broken(why)),
+                Ok((settings, keys, version)) => (settings, keys, Loaded::Read(version)),
+                Err(why) => (Self::default(), none(), Loaded::Broken(why)),
             },
         }
     }
 
     /// Write the settings to `path`, through a temporary file and a rename,
     /// so a crash mid-write leaves the old file rather than half a new one.
-    pub fn keep_to(&self, path: &Path) -> std::io::Result<()> {
+    pub fn keep_to(&self, keys: &KeyBinds, path: &Path) -> std::io::Result<()> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
         let temporary = path.with_extension("ron.tmp");
-        std::fs::write(&temporary, self.to_text())?;
+        std::fs::write(&temporary, self.to_text(keys))?;
         std::fs::rename(&temporary, path)
     }
 
@@ -295,35 +309,42 @@ pub struct SettingsFile {
 }
 
 impl SettingsFile {
-    /// Keep a change. A failed write is logged and the game goes on: it is a
+    /// Keep a change, the settings and the rebinds together in the one
+    /// file. A failed write is logged and the game goes on: it is a
     /// preference, not a save.
-    pub fn keep(&self, settings: &PlayerSettings) {
+    pub fn keep(&self, settings: &PlayerSettings, keys: &KeyBinds) {
         let Some(path) = &self.path else {
             info!("settings: changed for this run only");
             return;
         };
-        if let Err(error) = settings.keep_to(path) {
+        if let Err(error) = settings.keep_to(keys, path) {
             warn!("could not keep {}: {error}", path.display());
         }
     }
 }
 
-/// The settings a launch runs with, and where a change is kept. `isolated`
-/// is a capture or a benchmark, which reads no file and keeps nothing.
-pub fn for_launch(isolated: bool, overrides: &Overrides) -> (PlayerSettings, SettingsFile) {
+/// The settings and rebinds a launch runs with, and where a change is kept.
+/// `isolated` is a capture or a benchmark, which reads no file, has no
+/// rebinds and keeps nothing.
+pub fn for_launch(
+    isolated: bool,
+    overrides: &Overrides,
+) -> (PlayerSettings, KeyBinds, SettingsFile) {
     if isolated {
         return (
             PlayerSettings::ISOLATED.with(overrides),
+            KeyBinds::default(),
             SettingsFile::default(),
         );
     }
     let Some(path) = settings_path() else {
         return (
             PlayerSettings::default().with(overrides),
+            KeyBinds::default(),
             SettingsFile::default(),
         );
     };
-    let (settings, loaded) = PlayerSettings::load_from(&path);
+    let (settings, keys, loaded) = PlayerSettings::load_from(&path);
     match &loaded {
         Loaded::Broken(why) => warn!(
             "settings: {} is not readable ({why}); using defaults, file left as it is",
@@ -338,7 +359,7 @@ pub fn for_launch(isolated: bool, overrides: &Overrides) -> (PlayerSettings, Set
     let file = SettingsFile {
         path: loaded.writable().then_some(path),
     };
-    (settings.with(overrides), file)
+    (settings.with(overrides), keys, file)
 }
 
 /// Holds the main loop to a frame-rate cap. Deadlines are one period apart,
@@ -646,8 +667,9 @@ mod tests {
     #[test]
     fn a_file_from_before_rain_shadows_reads_them_off_and_keeps_the_rest() {
         let text = "(version: 1, frame_limit: Fps120, render_scale: 67, auto_step: true)";
-        let (read, version) = PlayerSettings::parse(text).unwrap();
+        let (read, keys, version) = PlayerSettings::parse(text).unwrap();
         assert_eq!(version, 1);
+        assert!(keys.is_empty(), "a file from before rebinds has none");
         assert_eq!(
             read,
             PlayerSettings {
@@ -672,9 +694,15 @@ mod tests {
             auto_step: false,
             rain_shadows: true,
         };
-        chosen.keep_to(&path).unwrap();
-        let (read, loaded) = PlayerSettings::load_from(&path);
+        let mut keys = KeyBinds::default();
+        let roll = crate::controls::slots()
+            .find(|s| s.name() == "flying:KeyQ")
+            .unwrap();
+        keys.set(&roll, KeyCode::KeyZ);
+        chosen.keep_to(&keys, &path).unwrap();
+        let (read, read_keys, loaded) = PlayerSettings::load_from(&path);
         assert_eq!(read, chosen);
+        assert_eq!(read_keys, keys, "the rebinds come back with the rest");
         assert_eq!(loaded, Loaded::Read(VERSION));
         assert!(!path.with_extension("ron.tmp").exists());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
@@ -683,8 +711,9 @@ mod tests {
     #[test]
     fn a_missing_file_gives_defaults_and_writes_nothing() {
         let path = scratch("missing");
-        let (read, loaded) = PlayerSettings::load_from(&path);
+        let (read, keys, loaded) = PlayerSettings::load_from(&path);
         assert_eq!(read, PlayerSettings::default());
+        assert!(keys.is_empty());
         assert_eq!(loaded, Loaded::Missing);
         assert!(loaded.writable());
         assert!(!path.exists(), "a load never writes");
@@ -695,7 +724,7 @@ mod tests {
         let path = scratch("broken");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "(frame_limit: Fps60, render_scale: ").unwrap();
-        let (read, loaded) = PlayerSettings::load_from(&path);
+        let (read, _, loaded) = PlayerSettings::load_from(&path);
         assert_eq!(read, PlayerSettings::default());
         assert!(matches!(loaded, Loaded::Broken(_)));
         assert_eq!(
@@ -707,7 +736,7 @@ mod tests {
 
     #[test]
     fn an_old_file_keeps_what_it_says_and_defaults_the_rest() {
-        let (read, version) = PlayerSettings::parse("(render_scale: 75)").unwrap();
+        let (read, _, version) = PlayerSettings::parse("(render_scale: 75)").unwrap();
         assert_eq!(version, 0);
         assert_eq!(
             read,
@@ -716,18 +745,105 @@ mod tests {
                 ..default()
             }
         );
-        let (empty, _) = PlayerSettings::parse("()").unwrap();
+        let (empty, _, _) = PlayerSettings::parse("()").unwrap();
         assert_eq!(empty, PlayerSettings::default());
     }
 
     #[test]
     fn a_newer_file_is_read_and_never_written_back() {
         let text = "(version: 7, frame_limit: Fps60, brightness: 3)";
-        let (read, version) = PlayerSettings::parse(text).unwrap();
+        let (read, _, version) = PlayerSettings::parse(text).unwrap();
         assert_eq!(read.frame_limit, FrameLimit::Fps60);
         assert_eq!(version, 7);
         assert!(!Loaded::Read(7).writable());
         assert!(Loaded::Read(VERSION).writable());
+    }
+
+    /// A version-2 file (the last before rebinds) reads every field it has
+    /// and no rebinds, and takes them on its next write; a version-3 file
+    /// with a rebind this build does not know reads the rest.
+    #[test]
+    fn a_file_from_before_rebinds_reads_none_and_an_unknown_one_is_skipped() {
+        let old = "(version: 2, frame_limit: Fps120, render_scale: 50, auto_step: true, rain_shadows: true)";
+        let (read, keys, version) = PlayerSettings::parse(old).unwrap();
+        assert_eq!(version, 2);
+        assert_eq!(read.render_scale, 50);
+        assert!(read.rain_shadows && read.auto_step);
+        assert!(keys.is_empty());
+        assert!(Loaded::Read(2).writable());
+        let now = r#"(version: 3, render_scale: 75, keys: {"flying:KeyQ": "KeyZ", "jetpack:KeyJ": "KeyU"})"#;
+        let (read, keys, _) = PlayerSettings::parse(now).unwrap();
+        assert_eq!(read.render_scale, 75);
+        assert_eq!(
+            keys.to_names().get("flying:KeyQ").map(String::as_str),
+            Some("KeyZ")
+        );
+        // The unknown one moves no key, and is kept to be written back
+        // (`retire-kestrel` decision 3).
+        assert!(!keys.is_empty());
+        assert_eq!(
+            keys.to_names().get("jetpack:KeyJ").map(String::as_str),
+            Some("KeyU")
+        );
+        // Written back, a file with no rebinds says so, and an older build
+        // ignores the field.
+        let text = PlayerSettings::default().to_text(&KeyBinds::default());
+        assert!(text.contains("version: 3"), "{text}");
+        let (_, none, _) = PlayerSettings::parse(&text).unwrap();
+        assert!(none.is_empty());
+    }
+
+    /// `retire-kestrel` decision 3: a rebind of a key the retired Kestrel
+    /// read (its group went with it) is ignored on load, moves no key, and
+    /// is still in the file after the next change is written.
+    #[test]
+    fn a_rebind_of_a_retired_slot_is_ignored_and_kept() {
+        let path = scratch("retired-slot");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            r#"(version: 3, render_scale: 75, keys: {"kestrel:KeyW": "KeyI", "on_foot:ShiftLeft": "KeyK"})"#,
+        )
+        .unwrap();
+        let (read, keys, loaded) = PlayerSettings::load_from(&path);
+        assert_eq!(loaded, Loaded::Read(3));
+        assert!(
+            crate::controls::slots().all(|s| s.name() != "kestrel:KeyW"),
+            "no slot reads it"
+        );
+        let pairs = crate::controls::live_pairs(
+            &keys,
+            crate::controls::Live::Aboard(pbd_core::vehicle::Kind::Tern),
+            false,
+        );
+        assert!(
+            pairs.iter().all(|(_, by)| *by != KeyCode::KeyI),
+            "I stands for nothing aboard"
+        );
+        let changed = PlayerSettings {
+            render_scale: 50,
+            ..read
+        };
+        changed.keep_to(&keys, &path).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let (again, keys_again, _) = PlayerSettings::parse(&text).unwrap();
+        assert_eq!(again.render_scale, 50, "the change is written");
+        assert_eq!(
+            keys_again
+                .to_names()
+                .get("kestrel:KeyW")
+                .map(String::as_str),
+            Some("KeyI"),
+            "and the retired rebind is still in the file: {text}"
+        );
+        assert_eq!(
+            keys_again
+                .to_names()
+                .get("on_foot:ShiftLeft")
+                .map(String::as_str),
+            Some("KeyK")
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -735,7 +851,7 @@ mod tests {
         assert_eq!(snap_scale(66), 67);
         assert_eq!(snap_scale(10), 50);
         assert_eq!(snap_scale(250), 100);
-        let (read, _) = PlayerSettings::parse("(render_scale: 80)").unwrap();
+        let (read, _, _) = PlayerSettings::parse("(render_scale: 80)").unwrap();
         assert!(SCALES.contains(&read.render_scale));
         // A press cycles every scale and comes back.
         let mut s = 100;
@@ -764,8 +880,9 @@ mod tests {
         assert!(!run.auto_step);
         assert!(run.rain_shadows);
         // A capture or a benchmark reads no file and keeps nothing.
-        let (isolated, keep) = for_launch(true, &Overrides::default());
+        let (isolated, keys, keep) = for_launch(true, &Overrides::default());
         assert_eq!(isolated, PlayerSettings::ISOLATED);
+        assert!(keys.is_empty(), "a capture has no rebinds");
         assert!(keep.path.is_none());
     }
 

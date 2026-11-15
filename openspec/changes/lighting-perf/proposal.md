@@ -11,7 +11,7 @@ The lighting model was priced part by part on an M4 Max on 2026-10-29
 the owner's desktop (RTX 3070, Vulkan), and the Mac cannot time passes on
 the GPU. The clean sitting of 2026-11-12 on the desktop, on a quiet machine
 (`docs/benchmarks/2026-11-12-lighting-model-clean`,
-https://claude.ai/artifact/JvXq67Da4F59y2ZocmwKG9), measured it there. It
+https://claude.ai/artifact/EqzrbQjpB7HxEQ3QDogBAv), measured it there. It
 replaces the sitting of 2026-11-11, which ran beside mockup agents rendering
 on SwiftShader; the model's costs agree between the two within 0.3 ms at p50.
 

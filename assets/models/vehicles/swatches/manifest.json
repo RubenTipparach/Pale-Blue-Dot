@@ -60,58 +60,6 @@
       ]
     },
     {
-      "name": "canopy",
-      "prompt": "Use case: stylized-concept. Asset type: seamless tileable pixel-art albedo material swatch for a low-poly vehicle game. Output one square swatch filling the entire image, no border, no labels, no text, no objects or environment. Flat-lit orthographic top-down surface. Draw on a strict logical 32 by 32 pixel grid, enlarged with nearest neighbor into a large square image. This tile represents 2 by 2 metres at 16 pixels/metre. Compact hand-placed pixel clusters, restrained four-color palette, visible hard texels. Seamless periodic repeat in both directions, opposite edges match. No perspective, no photographic noise, no random speckle, no gradients, no cast shadows, no ambient occlusion, no baked sunlight or directional shading. Material construction and wear only.  Fully opaque image, alpha 255 everywhere, solid painted material across the entire tile.Dark navy opaque cockpit material swatch: a simple regular grid of slim black-navy structural mullions separating broad SOLID UNIFORM navy rectangular panes, a few tiny frame fasteners. Pane interiors must be entirely uniform flat navy. NO diagonal marks, NO reflection triangles, NO glints, NO shine, NO lighting, NO transparency. Four shades #182731 #263A49 #405965 #71888C.",
-      "generated": "generated/canopy.png",
-      "normalized": "canopy.png",
-      "size": [
-        32,
-        32
-      ],
-      "repeat_metres": [
-        2,
-        2
-      ],
-      "palette": [
-        "182731",
-        "263A49",
-        "405965",
-        "71888C"
-      ],
-      "ramp": "navy",
-      "alpha_background": "263A49",
-      "source_size": [
-        1254,
-        1254
-      ]
-    },
-    {
-      "name": "intake-grille",
-      "prompt": "Use case: stylized-concept. Asset type: seamless tileable pixel-art albedo material swatch for a low-poly vehicle game. Output one square swatch filling the entire image, no border, no labels, no text, no objects or environment. Flat-lit orthographic top-down surface. Draw on a strict logical 32 by 32 pixel grid, enlarged with nearest neighbor into a large square image. This tile represents 2 by 2 metres at 16 pixels/metre. Compact hand-placed pixel clusters, restrained four-color palette, visible hard texels. Seamless periodic repeat in both directions, opposite edges match. No perspective, no photographic noise, no random speckle, no gradients, no cast shadows, no ambient occlusion, no baked sunlight or directional shading. Material construction and wear only. Dark navy nacelle intake grille: regularly spaced narrow parallel slots and short cross braces in compact mechanical pixel clusters, flat graphic construction. Four shades #182731 #263A49 #405965 #71888C.",
-      "generated": "generated/intake-grille.png",
-      "normalized": "intake-grille.png",
-      "size": [
-        32,
-        32
-      ],
-      "repeat_metres": [
-        2,
-        2
-      ],
-      "palette": [
-        "182731",
-        "263A49",
-        "405965",
-        "71888C"
-      ],
-      "ramp": "navy",
-      "alpha_background": "263A49",
-      "source_size": [
-        1254,
-        1254
-      ]
-    },
-    {
       "name": "rotor",
       "prompt": "Use case: stylized-concept. Asset type: seamless tileable pixel-art albedo material swatch for a low-poly vehicle game. Output one square swatch filling the entire image, no border, no labels, no text, no objects or environment. Flat-lit orthographic top-down surface. Draw on a strict logical 32 by 32 pixel grid, enlarged with nearest neighbor into a large square image. This tile represents 2 by 2 metres at 16 pixels/metre. Compact hand-placed pixel clusters, restrained four-color palette, visible hard texels. Seamless periodic repeat in both directions, opposite edges match. No perspective, no photographic noise, no random speckle, no gradients, no cast shadows, no ambient occlusion, no baked sunlight or directional shading. Material construction and wear only.  Fully opaque image, alpha 255 everywhere, solid painted material across the entire tile.Dark navy painted rotor blade material, subtle longitudinal construction seam and a few short lighter scuff clusters. No tip stripe (added later). Four shades #182731 #263A49 #405965 #71888C.",
       "generated": "generated/rotor.png",

@@ -69,13 +69,7 @@ impl World {
 }
 
 fn craft(kind: Kind, height: f64, heading: f64) -> Craft {
-    let mut specs = VehicleSpecs::default();
-    // Optional measurement-only calibration of cyclic/yaw ratings; runtime
-    // defaults and the shipped config are not modified by this instrument.
-    let scale = torque_scale();
-    specs.kestrel.rotor.pitch_torque *= scale;
-    specs.kestrel.rotor.yaw_torque *= scale;
-    let specs = Arc::new(specs);
+    let specs = Arc::new(VehicleSpecs::default());
     let hulls = Hulls::new(&specs);
     let mut c = Craft::new(
         kind,
@@ -89,97 +83,13 @@ fn craft(kind: Kind, height: f64, heading: f64) -> Craft {
     c
 }
 
-fn torque_scale() -> f32 {
-    let scale = std::env::args().nth(1).map_or(1.0, |v| {
-        v.parse::<f32>()
-            .expect("optional positive rotor torque scale")
-    });
-    assert!(scale.is_finite() && scale > 0.0);
-    scale
-}
-
 fn heading(c: &Craft) -> f64 {
     let bow = c.body.axis(FORWARD);
     (-bow.x).atan2(-bow.z)
 }
 
 fn main() {
-    println!("measurement rotor torque scale={}", torque_scale());
     println!("defaults; R=4799.5m; g=25m/s^2; 60Hz x4; flat sea; no gusts; clock=1000s");
-    let mut w = World::new();
-    let mut c = craft(Kind::Kestrel, 100.0, 0.0);
-    w.run(&mut c, 3.0, |_| Input {
-        collective: 1.0,
-        ..Default::default()
-    });
-    if let Telemetry::Kestrel(t) = &c.telemetry {
-        println!(
-            "Kestrel climb 3s: vertical={:.4}m/s tilt={:.4}deg",
-            t.vertical_speed,
-            c.body
-                .axis(UP)
-                .angle_between(c.body.position.normalize())
-                .to_degrees()
-        );
-    }
-    let mut w = World::new();
-    w.wind = Vec3::X * 10.0;
-    let mut c = craft(Kind::Kestrel, 100.0, 0.0);
-    w.run(&mut c, 20.0, |_| Input::default());
-    let up = c.body.position.normalize();
-    println!(
-        "Kestrel 10m/s crosswind 20s: drift={:.4}m/s height={:.4}m",
-        (c.body.velocity - up * c.body.velocity.dot(up)).length(),
-        c.body.position.length() - R
-    );
-
-    let mut w = World::new();
-    let mut c = craft(Kind::Kestrel, 100.0, 0.0);
-    w.run(&mut c, 5.0, |_| Input::default());
-    let mut max_pitch = 0.0_f64;
-    let mut min_height = 100.0_f64;
-    w.run(&mut c, 6.1, |c| {
-        max_pitch = max_pitch.max(
-            c.body
-                .axis(FORWARD)
-                .dot(c.body.position.normalize())
-                .asin()
-                .abs()
-                .to_degrees(),
-        );
-        min_height = min_height.min(c.body.position.length() - R);
-        Input {
-            tilt: -1.0,
-            ..Default::default()
-        }
-    });
-    if let Telemetry::Kestrel(t) = &c.telemetry {
-        println!(
-            "Kestrel conversion tilt=-1 6.1s after 5s hover: air={:.4}m/s climb={:.4}m/s wing={:.4} max_pitch={max_pitch:.4}deg min_height={min_height:.4}m",
-            t.airspeed, t.vertical_speed, t.wing_share
-        );
-    }
-    let mut w = World::new();
-    w.gravity = 0.0;
-    let mut c = craft(Kind::Kestrel, 100.0, 0.0);
-    w.run(&mut c, DT, |_| Input::default());
-    println!("Kestrel zero gravity one tick: finite={}", c.is_finite());
-    let mut w = World::new();
-    w.gravity = 0.0;
-    let mut c = craft(Kind::Kestrel, 100.0, 0.0);
-    if let CraftState::Kestrel(s) = &mut c.state {
-        s.assist = false;
-    }
-    w.run(&mut c, DT, |_| Input {
-        pitch: 1.0,
-        yaw: 1.0,
-        ..Default::default()
-    });
-    println!(
-        "Kestrel unpowered pitch+yaw one tick: angular_speed={:.6}rad/s",
-        c.body.angular_velocity.length()
-    );
-
     let mut w = World::new();
     w.wind = Vec3::X * 11.0;
     let course = 30_f64.to_radians();
@@ -241,7 +151,17 @@ fn main() {
             heading(&c).to_degrees()
         );
     }
-    let spec = VehicleSpecs::default().kestrel.tail;
+    // A symmetric horizontal foil, a tailplane's size (the retired Kestrel's
+    // tail's numbers).
+    let spec = foil::FoilSpec {
+        at: [0.0, 0.95, 4.9],
+        chord: [0.0, 0.0, -1.0],
+        normal: [0.0, 1.0, 0.0],
+        area_m2: 3.4,
+        aspect: 4.5,
+        cl_max: 1.2,
+        cd0: 0.012,
+    };
     for z in [-20.0, 20.0] {
         let mut b = body::RigidBody::new(1.0, DVec3::ONE);
         b.velocity = DVec3::new(0.0, -2.0, z);

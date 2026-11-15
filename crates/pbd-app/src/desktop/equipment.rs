@@ -17,6 +17,7 @@ use bevy::prelude::*;
 use pbd_app::controls::PickerKey;
 use pbd_app::fish::ToolSlot;
 use pbd_app::saves::WorldSave;
+use pbd_app::ui_kit::{self, KitPiece, KitText, Set, Tooltip, UiKit};
 use pbd_core::inventory::Tool;
 
 /// The picker's highlight while G is held: a tool, or `None` for bare hands.
@@ -49,13 +50,15 @@ impl PickerWheel<'_> {
     }
 }
 
-const SIZE: f32 = 52.0;
+const SIZE: f32 = super::slots::SLOT;
 /// The hotbar's own width: ten 44 px slots four apart.
-const HOTBAR: f32 = 10.0 * 48.0 - 4.0;
+const HOTBAR: f32 = 10.0 * super::slots::SLOT;
 /// How far left of the hotbar the tool slot stands.
-const APART: f32 = 14.0;
-const AMBER: Color = Color::srgb(0.96, 0.72, 0.30);
-const AMBER_DIM: Color = Color::srgba(0.96, 0.72, 0.30, 0.45);
+const APART: f32 = 4.0;
+/// The lit row of the picker: the rune's dim step under it.
+fn lit_row() -> Color {
+    ui_kit::RUNE_DIM.with_alpha(0.45)
+}
 
 #[derive(Component)]
 pub struct ToolIcon;
@@ -72,65 +75,62 @@ pub struct PickerIcon;
 
 /// Build the tool slot and the (hidden) picker above it. `PostStartup` beside
 /// the hotbar, after the icons are loaded.
-pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, existing: Query<(), With<ToolIcon>>) {
+pub fn spawn(
+    mut commands: Commands,
+    icons: Res<ItemIcons>,
+    kit: Res<UiKit>,
+    existing: Query<(), With<ToolIcon>>,
+) {
     if !existing.is_empty() {
         return;
     }
     let left = -HOTBAR / 2.0 - APART - SIZE;
     commands
-        .spawn(Node {
-            position_type: PositionType::Absolute,
-            bottom: px(18),
-            left: percent(50),
-            margin: UiRect::left(px(left)),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Center,
-            row_gap: px(3),
-            ..default()
-        })
-        .with_children(|column| {
-            column
-                .spawn((
-                    Node {
-                        width: px(SIZE),
-                        height: px(SIZE),
-                        border: UiRect::all(px(2)),
-                        padding: UiRect::all(px(6)),
-                        ..default()
-                    },
-                    BorderColor::all(AMBER),
-                    BackgroundColor(Color::srgba(0.08, 0.06, 0.03, 0.85)),
-                ))
-                .with_children(|cell| {
-                    cell.spawn((
-                        ImageNode::new(icons.in_hand(None)),
-                        Node {
-                            width: percent(100.0),
-                            height: percent(100.0),
-                            ..default()
-                        },
-                        ToolIcon,
-                    ));
-                });
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                bottom: px(super::slots::HOTBAR_BOTTOM),
+                left: percent(50),
+                margin: UiRect::left(px(left)),
+                width: px(SIZE),
+                height: px(SIZE),
+                ..default()
+            },
+            kit.whole(Set::Stone, "slot-idle"),
+            // Hovered while the pack has the pointer: what is in hand.
+            Interaction::default(),
+            Tooltip(hand_tip(None)),
+            ToolSlotCell,
+        ))
+        .with_children(|cell| {
+            cell.spawn((
+                ImageNode::new(icons.in_hand(None)),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(4),
+                    top: px(4),
+                    width: px(16),
+                    height: px(16),
+                    ..default()
+                },
+                ToolIcon,
+            ));
         });
-    // The picker opens upward from the tool slot, one row per tool, so its
-    // bottom sits just over the slot and the wheel runs along it.
     commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                bottom: px(18.0 + SIZE + 10.0),
+                bottom: px(super::slots::HOTBAR_BOTTOM + SIZE + 6.0),
                 left: percent(50),
                 margin: UiRect::left(px(left)),
                 flex_direction: FlexDirection::Column,
-                row_gap: px(4),
-                padding: UiRect::all(px(6)),
-                border: UiRect::all(px(1)),
+                row_gap: px(2),
+                padding: UiRect::all(px(14)),
                 display: Display::None,
                 ..default()
             },
-            BorderColor::all(AMBER_DIM),
-            BackgroundColor(Color::srgba(0.03, 0.05, 0.06, 0.92)),
+            kit.nine(Set::Stone, "frame"),
+            KitPiece("frame".into()),
             GlobalZIndex(5),
             PickerColumn,
         ))
@@ -144,13 +144,11 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, existing: Query<(), 
                     .spawn((
                         Node {
                             align_items: AlignItems::Center,
-                            column_gap: px(8),
-                            padding: UiRect::axes(px(6), px(4)),
-                            border: UiRect::all(px(1)),
-                            width: px(230),
+                            column_gap: px(4),
+                            padding: UiRect::axes(px(3), px(2)),
+                            width: px(140),
                             ..default()
                         },
-                        BorderColor::all(Color::NONE),
                         BackgroundColor(Color::NONE),
                         PickerRow(tool),
                     ))
@@ -158,32 +156,30 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, existing: Query<(), 
                         row.spawn((
                             ImageNode::new(icons.in_hand(tool)),
                             Node {
-                                width: px(32),
-                                height: px(32),
+                                width: px(16),
+                                height: px(16),
+                                flex_shrink: 0.0,
                                 ..default()
                             },
                             PickerIcon,
                         ));
                         row.spawn(Node {
                             flex_direction: FlexDirection::Column,
+                            row_gap: px(1),
                             ..default()
                         })
                         .with_children(|words| {
-                            words.spawn((
-                                Text::new(name.to_uppercase()),
-                                TextFont {
-                                    font_size: 13.0,
-                                    ..default()
-                                },
-                                TextColor(Color::srgb(0.92, 0.97, 0.95)),
-                            ));
+                            words.spawn(
+                                KitText::new(name.to_uppercase(), ui_kit::TITLE)
+                                    .shadow(ui_kit::INK),
+                            );
                             words.spawn((
                                 Text::new(purpose),
                                 TextFont {
-                                    font_size: 10.0,
+                                    font_size: 9.0,
                                     ..default()
                                 },
-                                TextColor(Color::srgb(0.62, 0.72, 0.72)),
+                                TextColor(ui_kit::TEXT_DIM),
                             ));
                         });
                     });
@@ -191,19 +187,14 @@ pub fn spawn(mut commands: Commands, icons: Res<ItemIcons>, existing: Query<(), 
             column.spawn((
                 Text::new("wheel to choose, let go of G"),
                 TextFont {
-                    font_size: 10.0,
+                    font_size: 9.0,
                     ..default()
                 },
-                TextColor(AMBER_DIM),
+                TextColor(ui_kit::TEXT_DIM),
             ));
         });
 }
 
-/// Open, steer and close the picker, and put the chosen tool in hand.
-///
-/// The wheel itself is read by `slots::input`, which owns the one wheel reader
-/// and hands the step to the picker while G is held: two readers of one
-/// message stream would each see every notch.
 pub fn pick(
     key: Res<PickerKey>,
     mut tools: ResMut<ToolSlot>,
@@ -230,7 +221,20 @@ pub fn pick(
     }
 }
 
+/// The tool slot itself, which carries its tooltip.
+#[derive(Component)]
+pub struct ToolSlotCell;
+
+/// What the tool slot's tooltip says: the tool in hand and what it is for.
+pub fn hand_tip(held: Option<Tool>) -> String {
+    let (name, purpose) = held.map_or(("Bare hands", "breaks nothing"), |t| {
+        (t.name(), t.purpose())
+    });
+    format!("{name}: {purpose}")
+}
+
 /// Paint the tool slot and the picker from the resources.
+#[allow(clippy::too_many_arguments)]
 pub fn paint(
     key: Res<PickerKey>,
     tools: Res<ToolSlot>,
@@ -238,16 +242,15 @@ pub fn paint(
     icons: Res<ItemIcons>,
     mut slot: Query<&mut ImageNode, (With<ToolIcon>, Without<PickerIcon>)>,
     mut column: Query<&mut Node, With<PickerColumn>>,
-    mut rows: Query<
-        (
-            &PickerRow,
-            &mut Node,
-            &mut BorderColor,
-            &mut BackgroundColor,
-        ),
-        Without<PickerColumn>,
-    >,
+    mut rows: Query<(&PickerRow, &mut Node, &mut BackgroundColor), Without<PickerColumn>>,
+    mut tips: Query<&mut Tooltip, With<ToolSlotCell>>,
 ) {
+    for mut tip in &mut tips {
+        let want = hand_tip(tools.held());
+        if tip.0 != want {
+            tip.0 = want;
+        }
+    }
     for mut image in &mut slot {
         let want = icons.in_hand(tools.held());
         if image.image != want {
@@ -264,19 +267,14 @@ pub fn paint(
     if !open {
         return;
     }
-    for (row, mut node, mut border, mut fill) in &mut rows {
+    for (row, mut node, mut fill) in &mut rows {
         node.display = if row.0.is_none_or(|t| tools.owns(t)) {
             Display::Flex
         } else {
             Display::None
         };
         let lit = row.0 == picker.highlight;
-        *border = BorderColor::all(if lit { AMBER } else { Color::NONE });
-        fill.0 = if lit {
-            Color::srgba(0.30, 0.20, 0.06, 0.6)
-        } else {
-            Color::NONE
-        };
+        fill.0 = if lit { lit_row() } else { Color::NONE };
     }
 }
 

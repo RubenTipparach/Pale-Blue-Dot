@@ -13,6 +13,7 @@
 //! tile they stand on - asked for a second time.
 
 use bevy::prelude::*;
+use pbd_app::ui_kit::{self, KitText, Set, Tooltip, UiKit};
 use pbd_core::inventory::{Item, SLOTS};
 use pbd_core::terrain::Material;
 
@@ -105,6 +106,8 @@ pub struct ItemIcons {
     pub hand: Handle<Image>,
     /// In `Material::LAMPS` order.
     pub lights: Vec<Handle<Image>>,
+    /// The roster's names, by roster index, for a fish's tooltip.
+    pub fish_names: Vec<String>,
 }
 
 impl ItemIcons {
@@ -126,12 +129,12 @@ pub fn load_icons(
     fauna: Res<pbd_app::config::FaunaConfig>,
     body: Res<pbd_app::fish::Body>,
 ) {
-    let fish = fauna
-        .0
-        .roster(&body.0)
+    let roster = fauna.0.roster(&body.0);
+    let fish = roster
         .iter()
         .map(|species| assets.load(pbd_app::fish::species_icon(species)))
         .collect();
+    let fish_names = roster.iter().map(|species| species.name.clone()).collect();
     let tools = pbd_core::inventory::Tool::ALL
         .iter()
         .map(|tool| assets.load(pbd_app::fish::tool_icon(*tool)))
@@ -147,6 +150,7 @@ pub fn load_icons(
         tools,
         hand: assets.load(pbd_app::fish::HAND_ICON),
         lights,
+        fish_names,
     });
 }
 
@@ -160,26 +164,25 @@ pub struct SlotIcon(pub usize);
 #[derive(Component)]
 pub struct SlotCount(pub usize);
 
-const SLOT: f32 = 44.0;
-const GAP: f32 = 4.0;
+/// A slot, native pixels: the dressed-stone well of `slot-idle` (24 x 24)
+/// with its 16 px icon floor at 4, 4, the item PNGs' own size.
+pub const SLOT: f32 = 24.0;
+const ICON_AT: f32 = 4.0;
+const ICON: f32 = 16.0;
+/// The hotbar row stands this far off the bottom of the window.
+pub const HOTBAR_BOTTOM: f32 = 10.0;
 
-pub fn border_of(selected: bool) -> Color {
+/// The stone slot piece for a slot that is or is not the selected one: the
+/// selected wears the rune (design 5).
+pub fn slot_piece(selected: bool) -> &'static str {
     if selected {
-        Color::srgb(0.92, 0.97, 0.95)
+        "slot-selected"
     } else {
-        Color::srgba(0.55, 0.75, 0.74, 0.5)
+        "slot-idle"
     }
 }
 
-fn fill_of(selected: bool) -> Color {
-    if selected {
-        Color::srgba(0.09, 0.16, 0.18, 0.92)
-    } else {
-        Color::srgba(0.02, 0.06, 0.08, 0.72)
-    }
-}
-
-/// Build the row. One parent, ten children, each a bordered square holding an
+/// Build the row. One parent, ten children, each a stone slot holding an
 /// icon and a count.
 ///
 /// `PostStartup` rather than `Startup`, because `PlanetArt` is inserted BY a
@@ -191,6 +194,7 @@ fn fill_of(selected: bool) -> Color {
 /// happened to win.
 pub fn spawn(
     mut commands: Commands,
+    kit: Res<UiKit>,
     atlas: Res<pbd_app::planet::PlanetArt>,
     existing: Query<(), With<SlotCell>>,
 ) {
@@ -202,24 +206,25 @@ pub fn spawn(
     commands
         .spawn(Node {
             position_type: PositionType::Absolute,
-            bottom: px(22),
+            bottom: px(HOTBAR_BOTTOM),
             left: percent(50),
-            margin: UiRect::left(px(-(SLOTS as f32 * (SLOT + GAP) - GAP) / 2.0)),
-            column_gap: px(GAP),
+            margin: UiRect::left(px(-(SLOTS as f32 * SLOT) / 2.0)),
             ..default()
         })
         .with_children(|row| {
             for index in 0..SLOTS {
-                cell(row, index, &atlas, ());
+                // Hovered while the pack has the pointer, for its tooltip.
+                cell(row, &kit, index, &atlas, Interaction::default());
             }
         });
 }
 
-/// One slot's square: a bordered cell holding an icon and a count, marked
-/// with its index so [`update`] paints it. The hotbar row and the pack's grid
-/// are built from these, with `extra` on the square (the pack's are buttons).
+/// One slot: the stone well holding an icon and a count, marked with its
+/// index so [`update`] paints it. The hotbar row and the pack's grid are
+/// built from these, with `extra` on the slot (the pack's are buttons).
 pub fn cell(
     row: &mut ChildSpawnerCommands,
+    kit: &UiKit,
     index: usize,
     atlas: &Handle<Image>,
     extra: impl Bundle,
@@ -228,13 +233,12 @@ pub fn cell(
         Node {
             width: px(SLOT),
             height: px(SLOT),
-            border: UiRect::all(px(1)),
-            padding: UiRect::all(px(4)),
+            flex_shrink: 0.0,
             ..default()
         },
-        BorderColor::all(border_of(index == 0)),
-        BackgroundColor(fill_of(index == 0)),
+        kit.whole(Set::Stone, slot_piece(index == 0)),
         SlotCell(index),
+        Tooltip::default(),
         extra,
     ))
     .with_children(|cell| {
@@ -245,24 +249,23 @@ pub fn cell(
                 ..default()
             },
             Node {
-                width: percent(100.0),
-                height: percent(100.0),
+                position_type: PositionType::Absolute,
+                left: px(ICON_AT),
+                top: px(ICON_AT),
+                width: px(ICON),
+                height: px(ICON),
                 ..default()
             },
             SlotIcon(index),
         ));
         cell.spawn((
-            Text::new(""),
-            TextFont {
-                font_size: 10.0,
-                ..default()
-            },
-            TextColor(Color::srgb(0.92, 0.97, 0.95)),
-            TextShadow::default(),
+            // In the slot's bottom-right corner, over the rim rather than the
+            // icon, outlined in ink so it reads on any tile.
+            KitText::new("", ui_kit::LABEL).outline(ui_kit::INK),
             Node {
                 position_type: PositionType::Absolute,
                 bottom: px(1),
-                right: px(3),
+                right: px(1),
                 ..default()
             },
             SlotCount(index),
@@ -324,16 +327,45 @@ pub fn paint_icon(
     node.color = tint;
 }
 
+/// What a slot's tooltip says: nothing for an empty slot; a tool's name and
+/// what it is for; a fish's species; a block's name and how many.
+pub fn stack_tip(stack: Option<pbd_core::inventory::Stack>, items: &ItemIcons) -> String {
+    let Some(stack) = stack else {
+        return String::new();
+    };
+    let name = match stack.item {
+        Item::Tool(tool) => return format!("{}: {}", tool.name(), tool.purpose()),
+        Item::Fish(species) => items
+            .fish_names
+            .get(species as usize)
+            .cloned()
+            .unwrap_or_else(|| stack.item.name().into()),
+        Item::Block(_) => stack.item.name().into(),
+    };
+    let mut letters = name.chars();
+    let name = letters
+        .next()
+        .map(|first| first.to_uppercase().chain(letters).collect::<String>())
+        .unwrap_or_default();
+    if stack.count > 1 {
+        format!("{name} x {}", stack.count)
+    } else {
+        name
+    }
+}
+
 /// Repaint the row from the store. Everything a slot shows is derived here, so
 /// the store stays the one place that knows what is carried.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn update(
     slots: Res<Hotbar>,
     icons: Option<Res<ItemIcons>>,
     images: Res<Assets<Image>>,
-    mut cells: Query<(&SlotCell, &mut BorderColor, &mut BackgroundColor)>,
-    icons_query: Query<(&SlotIcon, &mut ImageNode)>,
-    mut counts: Query<(&SlotCount, &mut Text)>,
+    kit: Res<UiKit>,
+    mut cells: Query<(&SlotCell, &mut ImageNode), Without<SlotIcon>>,
+    icons_query: Query<(&SlotIcon, &mut ImageNode), Without<SlotCell>>,
+    mut counts: Query<(&SlotCount, &mut KitText)>,
+    mut tips: Query<(&SlotCell, &mut Tooltip)>,
     mut art_ready: Local<bool>,
 ) {
     // Repaint when the store moves, and ALSO until the art has arrived once.
@@ -360,21 +392,28 @@ pub fn update(
     }
     *art_ready = ready;
     let mut icons = icons_query;
-    for (cell, mut border, mut background) in &mut cells {
-        let selected = cell.0 == slots.selected();
-        *border = BorderColor::all(border_of(selected));
-        background.0 = fill_of(selected);
+    for (cell, mut image) in &mut cells {
+        let want = kit.image(slot_piece(cell.0 == slots.selected()));
+        if image.image != want {
+            image.image = want;
+        }
     }
     for (icon, mut node) in &mut icons {
         paint_icon(&mut node, slots.get(icon.0), &items, &images);
+    }
+    for (cell, mut tip) in &mut tips {
+        let want = stack_tip(slots.get(cell.0), &items);
+        if tip.0 != want {
+            tip.0 = want;
+        }
     }
     for (count, mut text) in &mut counts {
         let label = match slots.get(count.0) {
             Some(stack) if stack.count > 1 => stack.count.to_string(),
             _ => String::new(),
         };
-        if text.0 != label {
-            text.0 = label;
+        if text.text != label {
+            text.text = label;
         }
     }
 }
@@ -493,5 +532,45 @@ mod tests {
         let stone = block_art(Material::Stone).unwrap();
         assert_eq!((stone.top, stone.side), (stone.under, stone.under));
         assert_eq!(thumbnail(Material::Dirt).unwrap().2, Color::WHITE);
+    }
+
+    /// A slot's tooltip: nothing when empty, a block's name and count, a
+    /// tool's name and purpose, a fish's species.
+    #[test]
+    fn a_slot_says_what_it_holds() {
+        use pbd_core::inventory::{Stack, Tool};
+        let items = ItemIcons {
+            atlas: Handle::default(),
+            fish: Vec::new(),
+            tools: Vec::new(),
+            hand: Handle::default(),
+            lights: Vec::new(),
+            fish_names: vec!["Perch".into(), "Char".into()],
+        };
+        assert_eq!(stack_tip(None, &items), "");
+        let stone = Stack {
+            item: Item::Block(Material::Stone),
+            count: 12,
+        };
+        assert_eq!(stack_tip(Some(stone), &items), "Stone x 12");
+        let one = Stack { count: 1, ..stone };
+        assert_eq!(stack_tip(Some(one), &items), "Stone");
+        let rod = Stack {
+            item: Item::Tool(Tool::Rod),
+            count: 1,
+        };
+        assert_eq!(
+            stack_tip(Some(rod), &items),
+            "Fishing rod: cast, hook, reel"
+        );
+        let char_ = Stack {
+            item: Item::Fish(1),
+            count: 3,
+        };
+        assert_eq!(stack_tip(Some(char_), &items), "Char x 3");
+        assert_eq!(
+            super::super::equipment::hand_tip(None),
+            "Bare hands: breaks nothing"
+        );
     }
 }

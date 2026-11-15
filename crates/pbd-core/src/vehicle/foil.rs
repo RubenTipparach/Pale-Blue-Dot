@@ -187,9 +187,23 @@ pub(crate) fn smoothstep(lo: f64, hi: f64, x: f64) -> f64 {
 mod tests {
     use super::*;
 
+    /// A symmetric horizontal foil, a tailplane's size (the retired Kestrel's
+    /// tail, kept here so the foil model's tests keep their numbers).
+    fn horizontal() -> FoilSpec {
+        FoilSpec {
+            at: [0.0, 0.95, 4.9],
+            chord: [0.0, 0.0, -1.0],
+            normal: [0.0, 1.0, 0.0],
+            area_m2: 3.4,
+            aspect: 4.5,
+            cl_max: 1.2,
+            cd0: 0.012,
+        }
+    }
+
     #[test]
     fn forward_and_reverse_flow_from_below_both_lift_without_adding_energy() {
-        let spec = crate::vehicle::spec::VehicleSpecs::default().kestrel.tail;
+        let spec = horizontal();
         for z in [-20.0, 20.0] {
             for y in [-2.0, 2.0] {
                 let mut body = RigidBody::new(100.0, DVec3::ONE);
@@ -226,7 +240,7 @@ mod tests {
 
     #[test]
     fn lift_turns_continuously_through_normal_incidence() {
-        let spec = crate::vehicle::spec::VehicleSpecs::default().kestrel.tail;
+        let spec = horizontal();
         let force = |z: f64| {
             let mut body = RigidBody::new(100.0, DVec3::ONE);
             body.velocity = DVec3::new(0.0, -20.0, z);

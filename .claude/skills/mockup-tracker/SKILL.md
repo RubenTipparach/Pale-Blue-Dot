@@ -55,7 +55,7 @@ shouldn't include the tracker itself lol"). The tracker is the same idea as the 
 A `MOCKUPS` entry:
 
 ```js
-{ id: 'M1', title: 'The Halcyon System', change: 'planets', page: 'docs/mockups/planets.html',
+{ id: 'M1', title: 'The Aubade System', change: 'planets', page: 'docs/mockups/planets.html',
   url: 'https://claude.ai/artifact/...', published: '2026-11-12', version: 2,
   summary: 'One short line: what the owner will see and do on the page.' }
 ```

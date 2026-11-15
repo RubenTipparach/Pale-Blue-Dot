@@ -46,7 +46,7 @@
   are heard, each with what it is and its source, light and dark, phone
   width), its MP3s are in `docs/mockups/sounds/` and its `files` map is
   `docs/mockups/sounds.files.json`; published 2026-11-14 at
-  https://claude.ai/artifact/AmHnQnrzU4bJhFtDDrSjnc and on the tracker as M25;
+  https://claude.ai/artifact/AmHnQnrzU4bJhFtDDrSjnc and on the tracker as M30;
   the owner's listen is still to come.
 
 ## 3. The rules (`pbd_core::audio`)
