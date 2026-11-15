@@ -117,11 +117,16 @@ struct DrawArgs {
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
 @group(0) @binding(2) var<storage,read_write> visible: array<u32>;
-@group(0) @binding(3) var<storage,read_write> args: array<DrawArgs,5>;
+@group(0) @binding(3) var<storage,read_write> args: array<DrawArgs,13>;
 @group(0) @binding(4) var<storage,read_write> foliage: array<u32>;
 @group(0) @binding(5) var<storage,read_write> water: array<u32>;
 @group(0) @binding(6) var<storage,read_write> clutter: array<u32>;
 @group(0) @binding(7) var<storage,read_write> column: array<u32>;
+// `flora-v2` design 10.5: the near detailed trees, a region of NEAR_CAP
+// entries per species, drawn by `args[5 + species]`, whose vertex counts and
+// first vertices the CPU wrote when the buffer was made.
+@group(0) @binding(8) var<storage,read_write> near: array<u32>;
+const NEAR_CAP: u32 = 4096u;
 
 // The bottom of a column's span, metres against sea level. `column::BASE_M` in
 // pbd-core is the one source; planet_surface.wgsl carries the same constant and
@@ -135,8 +140,9 @@ fn clear_indirect() {
     atomicStore(&args[0].instance_count, 0u);
     args[0].first_vertex = 0u;
     args[0].first_instance = 0u;
-    // The trunk and two leaf layers, then `flora-v2`'s fruit (design 9.6).
-    args[1].vertex_count = 258u;
+    // A tree's mid cards and far billboard (`flora-v2` design 10.5); the
+    // near model is the near draws'.
+    args[1].vertex_count = 30u;
     atomicStore(&args[1].instance_count, 0u);
     args[1].first_vertex = 60u;
     args[1].first_instance = 0u;
@@ -151,7 +157,7 @@ fn clear_indirect() {
     // the two together.
     args[3].vertex_count = 564u;
     atomicStore(&args[3].instance_count, 0u);
-    args[3].first_vertex = 318u;
+    args[3].first_vertex = 90u;
     args[3].first_instance = 0u;
     // The inside of the world: a ceiling and a floor per run, then a flank per
     // side per run per stretch of the neighbour's air, then a lamp.
@@ -159,8 +165,12 @@ fn clear_indirect() {
     // arithmetic and a test holds them together.
     args[4].vertex_count = 936u;
     atomicStore(&args[4].instance_count, 0u);
-    args[4].first_vertex = 882u;
+    args[4].first_vertex = 654u;
     args[4].first_instance = 0u;
+    // The near trees: only their instances are counted here.
+    for (var s = 5u; s < 13u; s++) {
+        atomicStore(&args[s].instance_count, 0u);
+    }
 }
 
 fn hash(x: u32) -> u32 {
@@ -269,7 +279,30 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
     if biome==2u || biome==1u { density = 13u; }
     if biome==7u { density = 2u; }
     let tree = (grass||pine) && roll < density;
-    return tree && distance(params.camera.xyz,center)<params.settings.w;
+    // `flora-v2` design 10.1: a desert cactus, scenery the tree draw draws
+    // but not a tree (`pbd_core::tree_kit::grows_cactus`): it cannot be
+    // chopped, so it is no part of the rule above.
+    let cactus = biome==3u && (material==1u || material==4u)
+        && (hash(cell.spare.x ^ SALT_CACTUS) & 0xffu) < CACTUS_DENSITY;
+    return (tree || cactus) && distance(params.camera.xyz,center)<params.settings.w;
+}
+
+// `flora-v2` design 10.1: which species a tree is, by its biome's mix
+// (`pbd_core::tree_kit::BIOME_TREES`, `pick`), as an index of the near
+// draws: oak, birch, kapok, palm, acacia, pine, willow, cactus. The surface
+// pass's copy is the same lines.
+const SALT_SPECIES: u32 = 0x59u;
+const SALT_CACTUS: u32 = 0x5du;
+const CACTUS_DENSITY: u32 = 8u;
+fn tree_species(id: u32, biome: u32) -> u32 {
+    let r = roll(id, SALT_SPECIES);
+    if biome == 1u { return 4u; }
+    if biome == 2u { return select(1u, 0u, r < 0.6); }
+    if biome == 3u { return 7u; }
+    if biome == 4u { return select(3u, 2u, r < 0.55); }
+    if biome == 5u { return select(1u, 6u, r < 0.75); }
+    if biome == 7u { return select(1u, 5u, r < 0.85); }
+    return 0u;
 }
 
 // Whether this cell has a voxel column to draw the inside of. The CPU decides
@@ -445,6 +478,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // The terrain and foliage lists take a cell twice while a landing
     // cross-fades, once per partition (`detail-fade`), so they hold two.
     if arrayLength(&cells)<count || arrayLength(&visible)<2u*count || arrayLength(&foliage)<2u*count || arrayLength(&column)<count { return; }
+    if arrayLength(&near) < 8u*NEAR_CAP { return; }
     // The sea list takes a cell twice as well, once per partition.
     if !cascade && (arrayLength(&water)<2u*count || arrayLength(&clutter)<count) { return; }
     if id.x >= count { return; }
@@ -541,10 +575,20 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     let trees = listing(kind, fading, tree_now, tree_before, alike);
     if (trees.now || trees.before || trees.both) && in_frustum(center,15.) {
         let entries = emit(id.x, trees);
+        // Inside the near ring, the near model as well (design 10.4): it
+        // cross-fades with the mid cards across the ring's last 0.3.
+        let close = distance(params.camera.xyz, center) < params.flora_more.z;
+        let species = tree_species(cell.spare.x, (cell.metadata.y >> 8u) & 0xffu);
         for (var e = 0u; e < 2u; e++) {
             if entries[e] != 0xffffffffu {
                 let slot = atomicAdd(&args[1].instance_count,1u);
                 foliage[slot] = entries[e];
+                if close {
+                    let k = atomicAdd(&args[5u + species].instance_count, 1u);
+                    // The ring's 60 m ceiling keeps a region under its cap; a
+                    // tree past it would read the next species' list.
+                    if k < NEAR_CAP { near[species*NEAR_CAP + k] = entries[e]; }
+                }
             }
         }
     }
