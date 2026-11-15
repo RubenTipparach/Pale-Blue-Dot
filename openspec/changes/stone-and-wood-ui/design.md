@@ -772,3 +772,24 @@ and a button to look at crafting trees/recipes". The M29 mockup now shows it
   own recipes. The game has no crafting yet.
 - **Not built:** this is a design shown in the mockup, not a requirement. It joins the game through
   its own change when the owner asks for crafting there.
+
+## No notes in the game's screens (owner, 2026-11-15)
+
+The owner: "notes belong in mockups and chats, not the real game" (CLAUDE.md,
+"Notes stay out of the game"). The settings pages carried developer notes as
+hints beside their labels. These are removed, and the rows keep their labels
+and controls. (Bloom's "costs ~2.4 ms on a Mac" is the owner's to remove:
+"dont worry about the mac note ... I'm removing it".)
+- Render scale: "the HUD stays sharp".
+- Rain shadow: "the rain fog and streaks; off by default".
+- The line under it: "The near shower, the wet ground and the drops on the
+  lens still draw."
+- Auto step: "walk up one layer without a key".
+
+The Input page's "Click a key, then press the new one. Esc cancels." stays: it
+is how the control is used. The "also: …" note on a clashing key also stays: it
+shows the player's own bindings, not a design note.
+
+The debug readout (column, position, elevation) is a developer overlay. A
+recommendation, not done here: show it only behind its debug key and keep it
+off by default. That changes behaviour, so it waits for its own go-ahead.

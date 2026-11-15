@@ -896,15 +896,22 @@ mod tests {
             crate::controls::slots().all(|s| s.name() != "kestrel:KeyW"),
             "no slot reads it"
         );
-        let pairs = crate::controls::live_pairs(
-            &keys,
+        // Every key reads as it would with only the known rebind.
+        let (known, _) = KeyBinds::from_names(&BTreeMap::from([(
+            "on_foot:ShiftLeft".to_string(),
+            "KeyK".to_string(),
+        )]));
+        for now in [
+            crate::controls::Live::OnFoot,
+            crate::controls::Live::Flying,
             crate::controls::Live::Aboard(pbd_core::vehicle::Kind::Tern),
-            false,
-        );
-        assert!(
-            pairs.iter().all(|(_, by)| *by != KeyCode::KeyI),
-            "I stands for nothing aboard"
-        );
+        ] {
+            assert_eq!(
+                crate::controls::live_pairs(&keys, now, false),
+                crate::controls::live_pairs(&known, now, false),
+                "the retired rebind moves no key"
+            );
+        }
         let changed = PlayerSettings {
             render_scale: 50,
             ..read

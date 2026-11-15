@@ -118,7 +118,6 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
 <section class="panel scene" id="scenePanel" data-open="true" aria-label="Scene">
   <div class="headrow"><h1>Foliage detail<span class="tag">PROPOSAL</span></h1><button class="btn" id="sceneToggle" aria-expanded="true">Hide</button></div>
   <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
-  <p class="lede">A playground for detailed ground cover on a hex patch: 2.833 m cells, 1 m steps. Pick a biome, tune the layers, scrub the clock into night. Nothing here is built in the game yet.</p>
   <div class="eyebrow">Biome</div>
   <div class="biomes" id="biomes"></div>
   <div class="field"><label for="time">Time of day</label><output id="timeOut">16:30</output><input type="range" id="time" min="0" max="24" step="0.05" value="16.5"></div>
@@ -135,7 +134,7 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   <div class="row">
     <button class="btn" data-preset="default">Default</button><button class="btn" data-preset="lush">Lush</button><button class="btn" data-preset="sparse">Sparse</button><button class="btn" data-preset="perf">Perf budget</button>
   </div>
-  <button class="btn" id="openNotes">Notes and questions for the owner</button>
+  <button class="btn" id="openNotes" aria-haspopup="dialog">i&nbsp; Notes and questions for the owner</button>
 </section>
 
 <section class="panel rack" id="rack" data-open="true" aria-label="Tuning">
@@ -143,7 +142,11 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   <details open><summary>Layers</summary><div class="body" id="layers"></div></details>
   <details open><summary>Trees and plants</summary><div class="body">
     <div class="field"><label for="treeStyle">Tree geometry</label><select id="treeStyle"><option value="detail">Detailed: parametric trunk, branches, leaf cards (proposal)</option><option value="hex">Tenebris hex prisms, game textures (what the game draws)</option></select></div>
-    <div class="field"><label for="grassStyle">Grass</label><select id="grassStyle"><option value="blades">Blades cut from the ground tile (proposal)</option><option value="tufts">Pixel tufts, from the Stone and Timber Play demo</option></select></div>
+    <div class="field"><label for="grassStyle">Grass</label><select id="grassStyle"><option value="tufts">Pixel tufts, coloured from the ground</option><option value="blades">Blades cut from the ground tile</option></select></div>
+    <div class="field"><label for="leafFall">Fallen leaves <output id="leafFallOut"></output></label><input id="leafFall" type="range" min="0" max="1" step="0.01"></div>
+    <div class="field"><label for="leafUnder">Gather under trees <output id="leafUnderOut"></output></label><input id="leafUnder" type="range" min="0" max="1" step="0.01"></div>
+    <div class="field"><label for="leafSize">Leaf size <output id="leafSizeOut"></output></label><input id="leafSize" type="range" min="0.5" max="2" step="0.05"></div>
+    <div class="row3"><button class="btn" id="leafPlay" aria-pressed="false" title="Leaves keep falling until the ground is covered">&#9654; Let them fall</button></div>
     <div class="field"><label for="treeScale">Tree scale</label><output id="treeScaleOut"></output><input type="range" id="treeScale" min="0.5" max="1.6" step="0.01" value="1"></div>
     <div class="field"><label for="plantScale">Plant and clutter scale</label><output id="plantScaleOut"></output><input type="range" id="plantScale" min="0.5" max="2" step="0.01" value="1"></div>
     <div class="field"><label for="colVar">Colour variation</label><output id="colVarOut"></output><input type="range" id="colVar" min="0" max="1" step="0.01" value="0.35"></div>
@@ -155,9 +158,9 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
   </div></details>
   <details open><summary>LOD and distance</summary><div class="body">
     <div class="field"><label for="lodMode">Switching</label><select id="lodMode"><option value="timed">Timed dithered cross-fade (no pop, no standing dither)</option><option value="fade">Distance cross-fade band (distance-lod-fade)</option><option value="cut">Hard cut (what popping looks like)</option></select></div>
-    <div class="field"><label for="near">Near ring: full geometry, to</label><output id="nearOut"></output><input type="range" id="near" min="5" max="80" step="1" value="22"></div>
-    <div class="field"><label for="mid">Mid ring: cards, to</label><output id="midOut"></output><input type="range" id="mid" min="10" max="150" step="1" value="45"></div>
-    <div class="field"><label for="draw">Draw distance: far impostors, to</label><output id="drawOut"></output><input type="range" id="draw" min="20" max="250" step="1" value="80"></div>
+    <div class="field"><label for="near">Near ring: full geometry, to</label><output id="nearOut"></output><input type="range" id="near" min="5" max="160" step="1" value="44"></div>
+    <div class="field"><label for="mid">Mid ring: cards, to</label><output id="midOut"></output><input type="range" id="mid" min="10" max="300" step="1" value="90"></div>
+    <div class="field"><label for="draw">Draw distance: far impostors, to</label><output id="drawOut"></output><input type="range" id="draw" min="20" max="500" step="1" value="160"></div>
     <div class="field"><label for="fadeW" id="fadeWLabel">Fade time</label><output id="fadeWOut"></output><input type="range" id="fadeW" min="0.02" max="0.6" step="0.01" value="0.3"></div>
     <label class="check"><input type="checkbox" id="lodVis"> Colour by LOD level</label>
     <label class="check"><input type="checkbox" id="maskVis"> Show wind mask on cards (black root, white tip)</label>
@@ -189,21 +192,31 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;resize:vertical;backg
 <div class="panel loading" id="loading">Loading the patch...</div>
 
 <section class="panel notes" id="notes" hidden aria-label="Notes and questions">
-  <button class="btn close" id="closeNotes">Close</button>
+  <button class="btn close" id="closeNotes" aria-label="Close">&#x2715;</button>
   <h2>Foliage detail playground</h2>
+  <p>A playground for detailed ground cover on a hex patch: 2.833 m cells, 1 m steps. Pick a biome, tune the layers, scrub the clock into night. Nothing here is built in the game yet.</p>
   <p><b>A proposal, not built behaviour.</b> The owner asked for "a new foliage detail mockup too so I can play around with detailed envs". This page is that: a patch of hex columns to tune ground cover on, by biome, season and time of day. None of it is in the game. What the game draws today is the Tenebris hex-prism tree (the "Tenebris hex prisms" choice under Trees) and the clutter in <code>tenebris-ground-clutter</code>.</p>
 
   <h3>Whose textures these are</h3>
   <p><b>The game's own, wherever it has one</b> (byte-identical copies in <code>docs/mockups/foliage/game/</code>, sources named in its README):</p>
   <ul>
     <li><b>Terrain:</b> <code>assets/tilesets/atlas.png</code>, sampled as <code>planet_surface.wgsl</code>'s <code>pixel_tile</code> does (32 texels a tile, nearest). Each biome draws its game sheet: the top is tile (0,0); a wall is the sod-into-earth side (1,0) for its first metre, the earth (2,0) down to 4 m, then the stone (3,0); sand biomes show their own sand to 4 m; snow is the tundra sheet's (2,2). Top UVs are the game's: the cell's local position over 1.5 tile widths.</li>
-    <li><b>Grass: pixel tufts</b> (owner, 2026-11-14: "this grass is actually better than what we have in the game ... add it to the foliage pack, add a toggle for me to try this alternate grass in the different biomes"). The Grass switch swaps the blades cut from the ground tile for the Play demo's tufts (Stone and Timber, <code>ui/play.js</code>): nine one-pixel blades on a 16 px card, dark root to light tip, on two crossed cards 0.8 m across and 0.6 m tall, sampled nearest. Each biome has its own three-tone ramp, the temperate one being the demo's greens; they still sway in the wind and turn to straw under snow. Nothing here is in the game.</li>
+    <li><b>Grass: pixel tufts, the default</b> (owner, 2026-11-14: "this grass is actually better than what we have in the game"; 2026-11-15: "first default to pixel tufts, make sure its color matches the ground though"). The Play demo's tuft (Stone and Timber, <code>ui/play.js</code>): nine one-pixel blades on a 16 px card, dark root to light tip, on two crossed cards 0.8 m across and 0.6 m tall, sampled nearest. Each biome's three tones are read off its own ground tile, the one its terrain top wears: the tile's 1,024 texels sorted by brightness and split in thirds, each third giving its commonest colour, so the tufts are the ground's own dark, mid and light. They sway in the wind and turn to straw under snow. The Grass switch still offers the blades cut from the ground tile. Nothing here is in the game.</li>
     <li><b>The game's trees</b> (Tree geometry: Tenebris hex prisms): wood is the biome sheet's tile (2,1) and leaves its (0,2), as material codes 8 and 9 are. The detailed trees use the same bark and leaf tiles, plus <code>needles</code>, <code>leaves</code> and <code>sage</code> from <code>assets/textures/settlement/</code>.</li>
     <li><b>Grass blades</b> crop a vertical strip 0.18 wide of their ground tile, as the clutter pass does. Rocks and pebbles are the sheet's stone, logs its bark, reeds and litter the settlement <code>reed</code> and <code>litter</code>, the lanterns <code>timber</code> and <code>iron</code>. The fungal forest is the game's sporewood sheet (stalk, cap skin, spore clusters), the crystals the frozen wastes sheet's ice and frost crystals, the kelp the ocean sheet's kelp mat.</li>
   </ul>
-  <p><b>Mockup-only: pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style</b> (<code>tools/art/foliage_art.py</code>: native 16 to 56 px canvases, Sweaft-64 colours, short ramps lit from the top left, a 1 px outline, alpha 0 or 255, sampled nearest and alpha-tested), because the game has no texture for them: flower heads and the glowing bloom, red and brown mushroom caps, birch and palm bark, and the species icons. The painted tree impostors are only a placeholder for the moment before the bake below finishes. A card's leaf, needle, frond or blade <i>shape</i> is cut from the game tile by a pixel mask in the shader, so no leaf texture is drawn at all.</p>
+  <p><b>One art style, no outlines in the world</b> (owner, 2026-11-15: "outlines are for sprites in the ui inventory system, there is no need for that in the world, this game looks much better without harsh outlines"). Every plant and prop is drawn in its texture's palette but pulled toward that texture's own mean colour (leaf, needle, frond, litter and bush cards keep 45% of their contrast, bark, rock, logs, caps and stalks 70%; the ground keeps all of it), so a tree reads as a soft mass lit like the ground rather than salt-and-pepper speckle, and the baked impostors' light and dark bands are gentle. The biome picker's icons are UI and keep their outline.</p>
+  <p><b>Mockup-only: pixel art drawn in code with the balatro-pixel-art kit</b> (<code>tools/art/foliage_art.py</code>: native 16 to 56 px canvases, Sweaft-64 colours, short ramps lit from the top left, alpha 0 or 255, sampled nearest and alpha-tested), because the game has no texture for them: flower heads and the glowing bloom, red and brown mushroom caps, birch and palm bark, and the species icons. The world's versions (flowers, impostors, birch bark) are redrawn without the outline ring or seams by <code>foliage/world_art.py</code>.</p>
+  <p><b>Crops and gardens</b> (owner, 2026-11-15: "make sure to add plants and farmable stuff in foliage thing too"): M8's crops, in the same outline-free world stages the farming mockup's plot draws (<code>farming/world_art.py</code> writes both copies), on small plots of the fields sheet's tilled soil at all four stages (seeded, sprout, growing, ripe), and a few gone wild. Which crop grows where is M8's: temperate wheat, turnip and frost kale; jungle chili, rice and sun melon; savanna and desert sun melon and chili; taiga frost kale and turnip; swamp rice and turnip; glowcaps in the fungal forest, under its roof of caps; none on the crystal or kelp worlds.</p>
+  <p><b>Wild fruit</b> (owner, 2026-11-15: "fruits to be found in the wild ... mango, kiwi, regional fruits"): fruit hangs in the crowns of some of a biome's trees, with a few fallen under them, and forage plants grow in patches. Temperate: apple, pear, plum and cherry on the oaks; wild strawberry, blackberry, raspberry, blueberry, tomato and kiwi vines. Jungle: mango and papaya on the kapoks, banana and coconut on the palms; watermelon and tomato. Savanna: baobab fruit and marula on the acacias; wild watermelon. Taiga: pine nuts in cones; lingonberry, cloudberry and blueberry. Desert: dates on the oasis palms; prickly pear. Swamp: cranberry and elderberry. Fungal forest: glowfruit under the glowcaps and on stalks. Crystal flora: gem berries. Kelp drift: bladder pods. Drawn by <code>foliage/fruit_art.py</code> without outlines; leaves and vines are recoloured to the biome's ground ramp as the tufts are, the fruit keeps its own colour so it can be spotted. Fruit thins out in winter and is heaviest in autumn.</p>
+  <p>The painted tree impostors are only a placeholder for the moment before the bake below finishes. A card's leaf, needle, frond or blade <i>shape</i> is cut from the game tile by a pixel mask in the shader, so no leaf texture is drawn at all.</p>
   <div class="artrow" id="artrow"></div>
-  <p><b>Mid and far trees are baked from the near tree.</b> Once a biome's textures have loaded, every tree variant's real near model (its branches, needle sprays and game textures, in the current season, bare in winter) is rendered orthographically from 8 bearings into a strip of 48 x 72 px views, read back, snapped to the Sweaft-64 palette with alpha 0 or 255, and given to that variant's mid cards (four crossed planes, each showing the view baked from its own side) and far billboard (the view nearest the camera's bearing). Near, mid and far are one tree, so the cross-fade between them never changes what the tree is.</p>
+  <p><b>Mid and far trees are baked from the near tree.</b> Once a biome's textures have loaded, every tree variant's real near model (its branches, needle sprays and game textures, in no season, bare in winter; autumn and spring are laid on live) is rendered orthographically from 8 bearings into a strip of 48 x 72 px views, read back, snapped to the Sweaft-64 palette with alpha 0 or 255, and given to that variant's mid cards (four crossed planes, each showing the view baked from its own side) and far billboard (the view nearest the camera's bearing). Near, mid and far are one tree, so the cross-fade between them never changes what the tree is.</p>
+  <p><b>Fallen leaves</b> (owner, 2026-11-15: "autumn ground should have some leaf coverage, maybe use shader for this so we can kind of customize it", "and show gradually more leaves"). Drawn by the terrain shader on what faces up, in the ground tile's own texels: a leaf is a blob of two or three texels, fixed to its cell, never swimming. Each slot of about two texels holds two leaves, each with its own moment in the fall, so they land one by one as Fallen leaves rises; under a crown more have landed (Gather under trees). Their colours are fallen leaves' (rust, ochre, oak brown, tan, old gold), lit and shaded as the ground is, with 12% of the ground's own colour mixed in. Autumn shows the slider's fall times the biome's broadleaf share; winter keeps 60% of it, browned, frosted, lying on the snow; spring and summer have none. "Let them fall" runs the fall from bare ground to covered over 40 s; it is off until pressed.</p>
+  <p><b>No painted flowers on the ground</b> (owner, 2026-11-15: "I would also remove the flowers from the ground texture as well, we have actual flowers already"). <code>foliage/no_flowers.py</code> takes the daisies off the fields grass top and sod lip (temperate), the pale sprouts off the swamp moss, and the orange flower dots off the tundra top (the taiga's ground), in this mockup's copy of the atlas only. The jungle's yellow fern sprigs are leaves and stay.</p>
+  <p><b>Palettes that fit the place.</b> Where a game tile does not suit the biome it stands in, it is drawn through a three-colour gradient map of its own luminance (<code>RAMPS</code>), so it keeps its pixel pattern and wears the place's colours: the savanna's acacias and bushes use the game's <code>leaves</code> in a dry olive (the pale grey-white <code>sage</code> they wore read as frost); in the fungal forest the sporewood cap skin is the icon's violet, the stalks a darker warm cream, and the pale mint moss a dark violet moss, under a darker sky, so the cyan glow reads at night. The tufts and the fruit plants' leaves take the same ground palette.</p>
+  <p><b>Fruit hangs on wood.</b> Each tree model records the points fruit may hang from (a pine's branches part way to their tips, an oak's twigs, an acacia's crown twigs, a palm's head, a glowcap's gills); a fruit card hangs down from one of them, turned and scaled with its tree (and with Tree scale), so no cone or fruit floats beside the crown.</p>
+  <p><b>What made the far trees' colour fragile, and what holds it now.</b> The baked impostors were made in whatever season was showing, and only a rebuild re-bakes; switching from autumn back to summer does not rebuild, so a forest baked in autumn (after a biome change, Let them fall, or a page left in autumn while textures loaded) kept peach-brown far trees in summer. That is not one browser's: it reproduces in Chromium. The bake is now seasonless (autumn and spring are laid on live, as on the near leaves). The other read-backs were browser-dependent: the means and tuft ramps came from <code>getImageData</code> and the bake from <code>readPixels</code>, which Firefox with resistFingerprinting (and Tor Browser) answers with white or random pixels, and its fingerprinting protection jitters. Both are now tested once on a known pattern; if the read-back is not trustworthy the plants keep their full texture, the tufts a painted ramp, and the trees the painted impostors. The 2D canvases ask for sRGB explicitly; the PNGs carry no colour chunks and three.js r128 uploads with colour-space conversion off and no premultiply, so nothing else is converted. A mean that lands after a bake re-bakes the trees that use it.</p>
   <p><b>Leaf cards hang from their branches.</b> Every leaf, needle, frond and willow card has its root edge on the branch it grows from and points out along it. A wind mask, zero at the root and one at the tip (the square of the distance along the card), scales the card's own flutter, so the root stays pinned while the tree's sway moves branch and card together. "Show wind mask" colours cards black at the root and white at the tip.</p>
 
   <h3>How it stays consistent with the plans</h3>
@@ -286,20 +299,21 @@ const BIOMES = {
     trees: { kapok: 0.55, palm: 0.45 }, treeP: 0.55, extra: 2, grass: 3, bush: { tex: "S:8", n: 0.75 }, flowers: { tex: ["flower_red", "flower_yellow"], n: 0.12 },
     ferns: { kind: "fern", tex: "S:9", n: 1.4 }, mush: { tex: "P:cap_brown", n: 0.15 }, rocks: 0.25, logs: 0.05, vines: 0.7, litter: 0.6, snow: false, fireflies: true },
   savanna: { name: "Savanna", icon: "acacia", amp: 1.5, sheet: SHEET.desert, topIdx: 8, notGame: true, sky: [0x86b6e0, 0xf0dcb0], fog: 0xe0d2b0,
-    trees: { acacia: 1 }, treeP: 0.06, extra: 0, grass: 6, bush: { tex: "T:game/sage", n: 0.12 }, flowers: { tex: ["flower_yellow"], n: 0.06 },
+    trees: { acacia: 1 }, treeP: 0.06, extra: 0, grass: 6, bush: { tex: "T:game/leaves", n: 0.12 }, ramp: { "T:game/leaves": "savannaLeaf" }, flowers: { tex: ["flower_yellow"], n: 0.06 },
     ferns: { kind: "twig", n: 0.08 }, mush: null, rocks: 0.6, logs: 0.01, vines: 0, litter: 0.0, snow: false, fireflies: false },
   taiga: { name: "Taiga", icon: "pine", amp: 4, sheet: SHEET.tundra, sky: [0x9ab8d4, 0xdde6ee], fog: 0xc6d2dc,
     trees: { pine: 0.85, birch: 0.15 }, treeP: 0.3, extra: 3, grass: 2.5, bush: { tex: "T:game/needles", n: 0.15, needle: true }, flowers: { tex: ["flower_white", "flower_blue"], n: 0.1 },
     ferns: { kind: "twig", n: 0.12 }, mush: { tex: "P:cap_brown", n: 0.12 }, rocks: 0.8, logs: 0.04, vines: 0, litter: 0.15, snow: true, coldTop: true, fireflies: false },
   desert: { name: "Desert scrub", icon: "cactus", amp: 3, sheet: SHEET.desert, sandy: true, sky: [0x7fb4e8, 0xf2e0c0], fog: 0xead8b8,
-    trees: { cactus: 1 }, treeP: 0.07, extra: 0, grass: 0.6, bush: { dead: true, n: 0.2 }, flowers: { tex: ["flower_red"], n: 0.02 },
+    trees: { cactus: 0.8, palm: 0.2 }, leaf: { palm: "A:6:8" }, treeP: 0.07, extra: 0, grass: 0.6, bush: { dead: true, n: 0.2 }, flowers: { tex: ["flower_red"], n: 0.02 },
     ferns: { kind: "twig", n: 0.18 }, mush: null, rocks: 0.9, logs: 0.0, vines: 0, litter: 0.0, snow: false, fireflies: false },
   swamp: { name: "Swamp", icon: "willow", amp: 1.2, water: true, sheet: SHEET.swamp, sky: [0x8aa8b8, 0xc8d0c0], fog: 0xa8b4a4,
     trees: { willow: 0.75, birch: 0.25 }, treeP: 0.26, extra: 3, grass: 3, bush: { tex: "S:8", n: 0.3 }, flowers: { tex: ["flower_white", "flower_yellow"], n: 0.08 },
     ferns: { kind: "reed", n: 1.1 }, mush: { tex: "P:cap_brown", n: 0.25 }, rocks: 0.15, logs: 0.06, vines: 0.5, litter: 0.3, snow: true, fireflies: true },
-  fungal: { name: "Glowing fungal forest", icon: "glowcap", alien: true, amp: 3, sheet: SHEET.sporewood, sky: [0x5a5490, 0xb8a0c8], fog: 0x8a7ea8,
+  fungal: { name: "Glowing fungal forest", icon: "glowcap", alien: true, amp: 3, sheet: SHEET.sporewood, sky: [0x2e2458, 0x7a5c9a], fog: 0x4e3e6c,
+    ramp: { "A:11:9": "fungalCap", "S:9": "fungalCap", "A:11:6": "fungalStalk", "S:14": "fungalVine", "terrain:11:0": "fungalGround", "terrain:11:1": "fungalLip" },
     trees: { glowcap: 1 }, treeP: 0.2, extra: 0, grass: 3, bush: { tex: "S:10", n: 0.15, glow: true }, flowers: { tex: ["flower_glow"], n: 0.25, glow: true },
-    ferns: { kind: "twig", n: 0.0 }, mush: { tex: "S:9", n: 0.7, glow: true }, rocks: 0.3, logs: 0.0, vines: 0.2, litter: 0.0, snow: false, fireflies: true, spores: true },
+    ferns: { kind: "twig", n: 0.0 }, mush: { tex: "S:9", n: 0.7, glow: true }, rocks: 0.3, logs: 0.0, vines: 0.2, vine: "S:14", litter: 0.0, snow: false, fireflies: true, spores: true },
   crystal: { name: "Crystal flora", icon: "crystal", alien: true, amp: 5, sheet: SHEET.frozen_wastes, sky: [0x8ab0d8, 0xe6d8f0], fog: 0xc8c0dc,
     trees: { crystal: 1 }, treeP: 0.14, extra: 0, grass: 1.2, bush: null, flowers: { tex: ["flower_blue", "flower_white"], n: 0.08 },
     ferns: { kind: "shard", n: 0.35 }, mush: null, rocks: 1.2, logs: 0, vines: 0, litter: 0, snow: false, fireflies: false },
@@ -314,13 +328,35 @@ const SPECIES = {
   pine: { bark: "A:10:6", leaf: "T:game/needles", mask: 2, decid: false, snow: true, cone: true },
   kapok: { bark: "S:6", leaf: "S:8", mask: 1, decid: false },
   palm: { bark: "P:bark_palm", leaf: "S:8", mask: 4, decid: false },
-  acacia: { bark: "A:4:6", leaf: "T:game/sage", mask: 1, decid: false },
+  acacia: { bark: "A:4:6", leaf: "T:game/leaves", mask: 1, decid: false },   // in the savanna's dry olive (RAMPS)
   willow: { bark: "S:6", leaf: "S:8", mask: 4, decid: true, snow: true },
   cactus: { bark: "A:3:6", leaf: null, decid: false },
-  glowcap: { bark: "A:11:6", leaf: "A:11:9", mask: 0, decid: false, glow: [0.35, 1.0, 0.82], glowReach: 9 },
+  glowcap: { bark: "A:11:6", leaf: "A:11:9", mask: 0, decid: false, glow: [0.4, 0.78, 1.0], glowReach: 9 },   // a cool cyan, as the icon's spots
   crystal: { bark: "A:5:5", leaf: null, decid: false, glow: [0.45, 0.8, 1.0], glowReach: 7 },
   kelp: { bark: "A:9:6", leaf: "A:9:6", mask: 6, decid: false },
 };
+
+// Palettes for game tiles that do not suit the biome they stand in (owner, 2026-11-15: savanna acacia leaves "again
+// wrong color", the fungal forest "dont think this should be white either"). A gradient map: the texture's linear
+// luminance from lo to hi runs through three sRGB colours, so the tile's pixel pattern stays and its colours become
+// the place's. lo and hi are each tile's 5th and 95th luminance percentiles, measured off the PNG.
+const RAMPS = {
+  savannaLeaf: { lo: 0.07, hi: 0.23, c: ["3e3a1a", "7a7432", "b7a95a"] },   // the game's leaves as a dry olive acacia canopy
+  fungalCap: { lo: 0.20, hi: 0.70, c: ["2e0f52", "7a2db8", "d06ab4"] },     // the sporewood cap skin as the icon's violet cap
+  fungalStalk: { lo: 0.05, hi: 0.56, c: ["3a2440", "86627a", "d4ae98"] },   // stalks: a warm, darker cream
+  fungalGround: { lo: 0.18, hi: 0.60, c: ["170b28", "3a2858", "6a5290"] },  // the pale mint moss as dark violet moss
+  fungalLip: { lo: 0.04, hi: 0.40, c: ["170b28", "3a2858", "6a5290"] },     // the sod side's mint lip, the same
+  fungalVine: { lo: 0.05, hi: 0.48, c: ["2a1838", "6a4a78", "b48ab0"] },
+};
+for (const [name, r] of Object.entries(RAMPS)) { r.name = name; r.lin = r.c.map(h => [0, 2, 4].map(i => (parseInt(h.slice(i, i + 2), 16) / 255) ** 2.2)); }
+// the JS twin of rampC, for what is drawn on a canvas (the tufts, the fruit plants' leaves): an sRGB [r, g, b] in 0..255
+function rampRGB(rgb, r) {
+  const lin = rgb.map(v => (v / 255) ** 2.2), l = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  const t = Math.min(1, Math.max(0, (l - r.lo) / (r.hi - r.lo))), [a, b, u] = t < 0.5 ? [r.lin[0], r.lin[1], t * 2] : [r.lin[1], r.lin[2], t * 2 - 1];
+  return a.map((v, i) => Math.round(255 * (v + (b[i] - v) * u) ** (1 / 2.2)));
+}
+// a texture spec's palette in a biome (B.ramp maps a spec, or "terrain:<slot>:<tile>", to a RAMPS name)
+const rp = (sp, B) => (B.ramp && B.ramp[sp] ? { ramp: RAMPS[B.ramp[sp]] } : {});
 
 // =====================================================================
 // Settings
@@ -328,7 +364,7 @@ const SPECIES = {
 const LAYER_DEFS = [
   ["trees", "Trees", "one per cell, by biome rate"],
   ["bushes", "Bushes", ""],
-  ["grass", "Grass", "blades near, cards mid"],
+  ["grass", "Grass", ""],
   ["flowers", "Flowers", ""],
   ["ferns", "Ferns, reeds, undergrowth", ""],
   ["mush", "Mushrooms", ""],
@@ -336,19 +372,21 @@ const LAYER_DEFS = [
   ["logs", "Fallen logs", ""],
   ["vines", "Vines", "hung from crowns"],
   ["litter", "Leaf litter", ""],
+  ["crops", "Crops and gardens", "tilled plots, wild crops"],
+  ["fruit", "Wild fruit", "on trees, fallen, bushes"],
   ["lights", "Lanterns and campfire", ""],
   ["fireflies", "Fireflies and spores", "moving lights"],
 ];
 const DEFAULTS = {
-  biome: "temperate", season: "summer", time: 16.5, treeStyle: "detail", grassStyle: "blades", treeScale: 1, plantScale: 1, colVar: 0.35,
-  wind: 0.35, gust: 0.5, windDir: 60, lodMode: "timed", near: 22, mid: 45, draw: 80, fadeW: 0.3, lodVis: false, maskVis: false, atlasVis: false, patch: 26,
+  biome: "temperate", season: "summer", time: 16.5, treeStyle: "detail", grassStyle: "tufts", leafFall: 0.45, leafUnder: 0.7, leafSize: 1, treeScale: 1, plantScale: 1, colVar: 0.35,
+  wind: 0.35, gust: 0.5, windDir: 60, lodMode: "timed", near: 44, mid: 90, draw: 160,   /* doubled (owner, 2026-11-15: "2x each LOD level distance") */ fadeW: 0.3, lodVis: false, maskVis: false, atlasVis: false, patch: 26,
   layers: Object.fromEntries(LAYER_DEFS.map(([k]) => [k, { on: true, dens: 1 }])),
 };
 const PRESETS = {
   default: {},
-  lush: { near: 30, mid: 70, draw: 140, wind: 0.45, layers: { trees: { on: true, dens: 1.4 }, bushes: { on: true, dens: 1.6 }, grass: { on: true, dens: 1.8 }, flowers: { on: true, dens: 1.6 }, ferns: { on: true, dens: 1.6 }, mush: { on: true, dens: 1.4 }, rocks: { on: true, dens: 1 }, logs: { on: true, dens: 1.5 }, vines: { on: true, dens: 1.5 }, litter: { on: true, dens: 1.5 } } },
+  lush: { near: 60, mid: 140, draw: 280, wind: 0.45, layers: { trees: { on: true, dens: 1.4 }, bushes: { on: true, dens: 1.6 }, grass: { on: true, dens: 1.8 }, flowers: { on: true, dens: 1.6 }, ferns: { on: true, dens: 1.6 }, mush: { on: true, dens: 1.4 }, rocks: { on: true, dens: 1 }, logs: { on: true, dens: 1.5 }, vines: { on: true, dens: 1.5 }, litter: { on: true, dens: 1.5 } } },
   sparse: { layers: { trees: { on: true, dens: 0.35 }, bushes: { on: true, dens: 0.4 }, grass: { on: true, dens: 0.35 }, flowers: { on: true, dens: 0.4 }, ferns: { on: true, dens: 0.3 }, mush: { on: true, dens: 0.3 }, rocks: { on: true, dens: 1.2 }, logs: { on: true, dens: 0.5 }, vines: { on: true, dens: 0.3 }, litter: { on: true, dens: 0.4 } } },
-  perf: { near: 14, mid: 32, draw: 60, fadeW: 0.25, layers: { trees: { on: true, dens: 0.8 }, bushes: { on: true, dens: 0.6 }, grass: { on: true, dens: 0.5 }, flowers: { on: true, dens: 0.5 }, ferns: { on: true, dens: 0.5 }, mush: { on: true, dens: 0.4 }, rocks: { on: true, dens: 0.6 }, logs: { on: true, dens: 0.5 }, vines: { on: false, dens: 0.5 }, litter: { on: false, dens: 0.5 } } },
+  perf: { near: 28, mid: 64, draw: 120, fadeW: 0.25, layers: { trees: { on: true, dens: 0.8 }, bushes: { on: true, dens: 0.6 }, grass: { on: true, dens: 0.5 }, flowers: { on: true, dens: 0.5 }, ferns: { on: true, dens: 0.5 }, mush: { on: true, dens: 0.4 }, rocks: { on: true, dens: 0.6 }, logs: { on: true, dens: 0.5 }, vines: { on: false, dens: 0.5 }, litter: { on: false, dens: 0.5 } } },
 };
 const S = JSON.parse(JSON.stringify(DEFAULTS));
 
@@ -363,7 +401,7 @@ const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 1200);
 camera.rotation.order = "YXZ";
 
 const TEXDIR = "foliage/";
-const ART_V = 8;   // cache-bust: bump whenever any PNG changes, so no browser shows stale art
+const ART_V = 12;   // cache-bust: bump whenever any PNG changes, so no browser shows stale art
 const TEX = {};
 const loader = new THREE.TextureLoader();
 let pending = 0, loadedOnce = false;
@@ -399,7 +437,7 @@ const G = { // shared uniforms
   uAutumn: { value: 0 }, uSpring: { value: 0 }, uWinter: { value: 0 }, uSnow: { value: 0 },
   uFF: { value: Array.from({ length: 16 }, () => new THREE.Vector3(0, -999, 0)) }, uFFCol: { value: new THREE.Color(0.9, 1.0, 0.4) }, uFFOn: { value: 0 },
   uLodVis: { value: 0 }, uMaskVis: { value: 0 }, uColVar: { value: 0.35 }, uTreeScale: { value: 1 }, uPlantScale: { value: 1 }, uExposure: { value: 0.8 },
-  uKeepFlower: { value: 1 }, uKeepGrass: { value: 2 }, uKeepLitter: { value: 1 }, uKeepMush: { value: 1 }, uLowG: { value: 0 }, uNight: { value: 0 }, uBake: { value: 0 },
+  uKeepFlower: { value: 1 }, uKeepGrass: { value: 2 }, uKeepLitter: { value: 1 }, uKeepMush: { value: 1 }, uKeepFruit: { value: 1 }, uLeafFall: { value: 0 }, uLeafUnder: { value: 0.7 }, uLeafSize: { value: 1 }, uLowG: { value: 0 }, uNight: { value: 0 }, uBake: { value: 0 },
 };
 
 const VERT = `
@@ -409,7 +447,7 @@ attribute vec3 lampV; attribute vec3 glowV; attribute float occV;
 #else
 attribute float aFade; attribute vec3 aTint; attribute vec3 aLamp; attribute vec3 aGlow; attribute vec2 aSeed;
 #endif
-uniform float uTime, uWind, uGust, uScale, uWindAmp, uWindH, uFlutter, uUpN, uLampOn, uFFOn, uLowG, uSwayMask, uViews;
+uniform float uTime, uWind, uGust, uScale, uWindAmp, uWindH, uFlutter, uUpN, uLampOn, uFFOn, uLowG, uSwayMask, uViews, uNight;
 uniform vec2 uWindDir; uniform vec3 uFF[16]; uniform vec3 uFFCol;
 varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vTint; varying vec3 vBlock; varying float vFade; varying vec2 vSeed; varying float vAo; varying float vCard; varying float vSway;
 void main(){
@@ -420,7 +458,7 @@ void main(){
 #ifdef TERRAIN
   vec3 w = (modelMatrix * vec4(position,1.0)).xyz;
   vN = normal; vTint = vec3(1.0); vFade = 1.0; vSeed = vec2(0.0, occV);
-  vBlock = lampV * uLampOn + glowV;
+  vBlock = lampV * uLampOn + glowV * mix(0.35, 1.0, uNight);   // always-on glows: a third as strong by day
 #else
   vec3 org = instanceMatrix[3].xyz;
   float sc = length(instanceMatrix[0].xyz) * uScale;
@@ -459,7 +497,7 @@ void main(){
   w += vec3(sin(uTime*7.0*speed + card*40.0 + ph), cos(uTime*6.0*speed + card*31.0), sin(uTime*5.0*speed + card*23.0)) * uFlutter * (uWind + gust * 0.5) * step(0.001, card) * sw;
   vN = normalize(mix(vN, vec3(0.0,1.0,0.0), uUpN));
   vTint = aTint; vFade = aFade; vSeed = aSeed;
-  vBlock = aLamp * uLampOn + aGlow;
+  vBlock = aLamp * uLampOn + aGlow * mix(0.35, 1.0, uNight);
 #endif
   // the fireflies: all sixteen light everything near them, wherever the camera is
   vec3 ff = vec3(0.0);
@@ -471,12 +509,20 @@ void main(){
 
 const FRAG = `
 uniform sampler2D map;
-uniform vec3 uSunDir, uSunCol, uSkyAmb, uGndAmb, uFogCol, uLodCol, uEmitCol, uAt;
-uniform float uBake, uFogNear, uFogFar, uLodVis, uMaskVis, uColVar, uAutumn, uSpring, uWinter, uSnow, uSnowable, uLeafy, uDecid, uEmit, uCardLit, uAlphaTest, uKeep, uExposure, uTime, uNight, uFlicker, uUseAt, uMask, uSwayMask, uRep, uImp, uGrass, uViews;
+uniform vec3 uSunDir, uSunCol, uSkyAmb, uGndAmb, uFogCol, uLodCol, uEmitCol, uAt, uMean;
+uniform float uLeafFall, uLeafUnder, uLeafSize;
+uniform float uRamp, uRampLo, uRampHi; uniform vec3 uR0, uR1, uR2; uniform vec2 uEmitSpot;
+uniform float uBake, uFogNear, uFogFar, uLodVis, uMaskVis, uColVar, uAutumn, uSpring, uWinter, uSnow, uSnowable, uLeafy, uDecid, uEmit, uCardLit, uAlphaTest, uKeep, uExposure, uTime, uNight, uFlicker, uUseAt, uMask, uSwayMask, uRep, uImp, uGrass, uViews, uDetail;
 varying vec2 vUv; varying vec3 vN; varying vec3 vW; varying vec3 vTint; varying vec3 vBlock; varying float vFade; varying vec2 vSeed; varying float vAo; varying float vCard; varying float vSway;
 float bayer2(vec2 a){ a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
 float bayer4(vec2 a){ return bayer2(0.5 * a) * 0.25 + bayer2(a); }
 float h12(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// A material's palette: its texture's luminance mapped onto three colours of the biome (a gradient map), so a game
+// tile keeps its pixel pattern but wears the colours of the place it stands in (RAMPS in the script).
+vec3 rampC(vec3 c){
+  float t = clamp((dot(c, vec3(0.2126, 0.7152, 0.0722)) - uRampLo) / (uRampHi - uRampLo), 0.0, 1.0);
+  return t < 0.5 ? mix(uR0, uR1, t * 2.0) : mix(uR1, uR2, t * 2.0 - 1.0);
+}
 vec3 aces(vec3 x){ return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 // planet_surface.wgsl pixel_tile: sheet by slot, tile by (column, row), 32 texels a tile, nearest
 vec4 atlasTile(vec2 uv, vec3 at){
@@ -545,9 +591,17 @@ void main(){
   if (tx.a < uAlphaTest) discard;
   float grain = dot(tx.rgb, vec3(0.299, 0.587, 0.114));
   vec3 alb = pow(tx.rgb, vec3(2.2));
+  vec3 mean = uMean;
+  if (uRamp > 0.5) { alb = rampC(alb); mean = rampC(mean); }
+  // one art style (owner, 2026-11-15): a plant or prop keeps its texture's palette but not its
+  // full contrast, pulled toward the texture's own mean colour, so it reads as a soft mass lit
+  // like the ground rather than salt-and-pepper speckle. The ground itself keeps uDetail = 1.
+  // a baked crown is seen at 48 px: there its leaf tile's speckle would be salt-and-pepper, so it keeps less
+  alb = mix(mean, alb, uBake > 0.5 && uLeafy > 0.5 && uDetail < 1.0 ? 0.2 : uDetail);
   // the palette's greens are more saturated than the near tree's game texture: measured on the
   // near/far side-by-side, pull the baked crown back to the near crown's mean colour
-  if (uImp > 0.5 && uViews > 0.5) { float l = dot(alb, vec3(0.2126, 0.7152, 0.0722)); alb = mix(vec3(l), alb, 0.5) * vec3(0.92, 0.95, 0.72); }
+  // (green crown pixels only: a violet cap or an olive acacia was never too saturated, and greyed it read as frost)
+  if (uImp > 0.5 && uViews > 0.5 && tx.g > max(tx.r, tx.b) * 1.05) { float l = dot(alb, vec3(0.2126, 0.7152, 0.0722)); alb = mix(vec3(l), alb, 0.5) * vec3(0.92, 0.95, 0.72); }
   alb *= max(vec3(0.0), vec3(1.0) + vTint * uColVar);   // per-plant colour variation
   if (uLeafy > 0.5) {                                    // seasons, on leaves
     // on a far impostor only the crown's green pixels are leaves; the trunk is left alone
@@ -558,10 +612,50 @@ void main(){
     }
     float lum = dot(alb, vec3(0.3, 0.55, 0.15));
     float k = h12(vec2(floor(vSeed.x * 97.0), floor(vCard * 61.0)));
-    vec3 aut = mix(vec3(0.55, 0.12, 0.02), vec3(0.75, 0.42, 0.04), k) * (0.6 + lum * 3.0);
+    vec3 aut = mix(vec3(0.46, 0.10, 0.025), vec3(0.66, 0.34, 0.04), k) * (0.55 + lum * 2.6);
     alb = mix(alb, aut, uAutumn * uDecid * leafPix * smoothstep(0.1, 0.6, k + 0.35));
     alb = mix(alb, alb * vec3(1.05, 1.2, 0.8) + vec3(0.01, 0.02, 0.0), uSpring * leafPix);
   }
+  vec3 leafAlb = vec3(0.0); float leafHit = 0.0;
+#ifdef TERRAIN
+  // Fallen leaves (owner, 2026-11-15: "autumn ground should have some leaf coverage, maybe use shader for this so we can
+  // kind of customize it", "and show gradually more leaves"). Leaves lie on what faces up, drawn in the ground's own
+  // texels: the texel grid is the terrain tile's (32 a tile, fixed to each cell), so a leaf is a little pixel blob of
+  // two or three texels that never swims. The cell is split into slots of about two texels (Leaf size scales them);
+  // each slot holds two leaves, each with its own moment in the fall, so as uLeafFall rises from 0 to 1 they land
+  // one by one. Under a crown (the terrain's canopy shade, vSeed.y) more of them have landed (Gather under trees).
+  if (uLeafFall > 0.0 && normalize(vN).y > 0.55) {
+    vec2 tp = floor(vUv * 32.0) + 0.5;                                        // this texel's centre, in texels
+    vec2 cc = floor((vW.xz - (vUv - 0.5) * ${(1.5 * W).toFixed(4)}) * 2.0 + 0.5);   // the cell, from its centre
+    float Gs = max(1.6, 2.4 * uLeafSize);
+    float under = clamp(vSeed.y * 2.2, 0.0, 1.0);
+    float reach = uLeafFall * mix(1.0 - uLeafUnder * 0.85, 1.0, under) * (0.8 + 0.45 * under * uLeafUnder);
+    float top = -1.0; vec2 hk = vec2(0.0); float side = 0.0;
+    vec2 s0 = floor(tp / Gs);
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) for (int n = 0; n < 2; n++) {
+      vec2 sl = s0 + vec2(float(i), float(j)), key = sl * 1.37 + cc * 17.31 + float(n) * 53.7;
+      float when = h12(key + 31.7);
+      if (when >= reach || when <= top) continue;                              // not fallen yet, or under a later leaf
+      vec2 ctr = (sl + 0.15 + 0.7 * vec2(h12(key + 1.3), h12(key + 2.9))) * Gs;
+      float an = h12(key + 4.1) * 3.14159; vec2 ax = vec2(cos(an), sin(an));
+      vec2 d = tp - ctr; float a = dot(d, ax), b = dot(d, vec2(-ax.y, ax.x));
+      float L = Gs * 0.62 * (0.75 + 0.5 * h12(key + 5.7)), Wd = L * 0.5;
+      if (a * a / (L * L) + b * b / (Wd * Wd) < 1.0) { top = when; hk = key; side = b; }
+    }
+    if (top >= 0.0) {
+      // real fallen leaves: rust, ochre, oak brown, tan, a little dull red and old gold; never a saturated orange
+      float hue = h12(hk + 3.1);
+      vec3 c = hue < 0.22 ? vec3(0.553, 0.271, 0.149) : hue < 0.42 ? vec3(0.659, 0.388, 0.243) : hue < 0.60 ? vec3(0.490, 0.275, 0.212)
+             : hue < 0.74 ? vec3(0.671, 0.518, 0.396) : hue < 0.88 ? vec3(0.722, 0.553, 0.294) : vec3(0.451, 0.192, 0.149);
+      c = mix(c, vec3(0.353, 0.235, 0.165), smoothstep(0.0, 0.8, reach - top) * 0.45);   // the first down have browned
+      c = mix(c, vec3(0.29, 0.19, 0.13), uWinter * 0.7);                            // under winter's snow: browned and wet
+      vec3 lc = pow(c, vec3(2.2)) * (side > 0.0 ? 1.08 : 0.86);               // a lit half and a shaded half
+      leafAlb = mix(lc, alb, 0.12);                                           // in the ground's light and palette
+      leafHit = 1.0;
+      alb = leafAlb;
+    }
+  }
+#endif
   // under snow, grass is dead straw, not summer green
   if (uGrass > 0.5 && uSnow > 0.0) alb = mix(alb, vec3(0.20, 0.14, 0.06) * (0.55 + grain), 0.9);
   vec3 N = normalize(vN);
@@ -574,7 +668,14 @@ void main(){
     // snow lies crisply on what faces up (trunks, branches, rocks, the ground);
     // a card is frosted evenly, never speckled
     float s = uCardLit > 0.5 ? 0.05 * uSnow : step(0.55, N.y) * uSnow;
+#ifdef TERRAIN
+    // the sod lip on a column's side is grass too: under snow it whitens with the top (owner, 2026-11-15: "some green
+    // grass during winter"). Only the green texels go, so the dirt and stone below keep their own colours.
+    float green = step(tx.r * 1.04, tx.g) * step(tx.b * 1.1, tx.g);
+    if (N.y < 0.55) s = max(s, green * uSnow);
+#endif
     alb = mix(alb, sn, s);
+    if (leafHit > 0.5) alb = mix(leafAlb, sn, 0.06);   // winter: the browned leaves lie on the snow, lightly frosted
   }
   float nd = dot(N, uSunDir);
   float diff = mix(max(nd, 0.0), 0.35 + 0.65 * max(nd, 0.0), uCardLit);
@@ -584,17 +685,18 @@ void main(){
   vec3 light = uSunCol * diff * occ * ao + amb * ao * mix(0.65, 1.0, occ) + vBlock;
   vec3 col = alb * light;
   float fl = 1.0 + uFlicker * (0.2 * sin(uTime * 13.0) + 0.12 * sin(uTime * 23.0 + 1.0));
-  col += uEmitCol * uEmit * (0.25 + grain) * fl * mix(0.3, 1.0, uNight) * 0.4;
+  // a glowing cap glows in its spots (its texture's brightest texels), so the cap itself keeps its violet at night
+  float spot = uEmitSpot.y > 0.0 ? smoothstep(uEmitSpot.x, uEmitSpot.y, grain) * 2.2 : 1.0;
+  col += uEmitCol * uEmit * (0.25 + grain) * spot * fl * mix(0.3, 1.0, uNight) * 0.4;
   if (uLodVis > 0.5) col = mix(col, uLodCol * (0.25 + dot(light, vec3(0.2))), 0.65);
   if (uBake > 0.5) { // baking an impostor: the albedo, shaped by a fixed key light and the AO, nothing else
     // a fixed neutral daylight; a card's back face is as bright as its front, so a needle seen
     // from behind does not go dark and snap to grey-brown
     float key = uCardLit > 0.5 ? 1.15 : 0.85 + 0.3 * max(dot(N, normalize(vec3(-0.5, 0.8, 0.4))), 0.0);
-    // cards: dark where they root on the branch, bright at their tips, so each whorl reads as a layer
     // cards: horizontal bands, light on top and dark underneath, one band per half metre (the whorl
     // spacing); a band, not a per-card shade, so no dark pixel stands alone as speckle
     float bandY = fract(vW.y / 0.5);
-    float layer = uCardLit > 0.5 ? (bandY < 0.3 ? 0.55 : bandY > 0.65 ? 1.25 : 1.0) : 1.0;
+    float layer = uCardLit > 0.5 ? (bandY < 0.3 ? 0.85 : bandY > 0.65 ? 1.08 : 1.0) : 1.0;   // gentle: no dark band reads as speckle
     gl_FragColor = vec4(pow(clamp(alb * key * layer, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
     return;
   }
@@ -607,10 +709,58 @@ void main(){
 }`;
 
 const MATS = {};
+// The mean linear colour of a texture, or of one atlas tile, read off the loaded image.
+const MEANS = {}, MEAN_Q = [];
+// Every pixel read off an image goes through a 2D canvas in sRGB with no alpha premultiply in the result
+// (getImageData is unpremultiplied by spec; pixels under half alpha are never used). The PNGs carry no gAMA, iCCP or
+// sRGB chunk, so no browser colour-converts them. What a browser CAN do is refuse or poison the read-back: Firefox
+// with resistFingerprinting (or Tor Browser) hands back white or random pixels, and its fingerprinting protection
+// jitters a few. So the read-back is tested once on a known pattern, and if it is not trustworthy every consumer
+// keeps a safe default: a plant keeps its texture's full detail, the tufts their painted ramp.
+const CTX2D = { willReadFrequently: true, colorSpace: "srgb" };
+let READ_OK = null;
+function canvasReadable() {
+  if (READ_OK !== null) return READ_OK;
+  try {
+    const cv = document.createElement("canvas"); cv.width = cv.height = 8; const g = cv.getContext("2d", CTX2D);
+    const id = g.createImageData(8, 8); for (let i = 0; i < 64; i++) { id.data[i * 4] = (i * 37) & 255; id.data[i * 4 + 1] = (i * 91 + 40) & 255; id.data[i * 4 + 2] = (i * 13 + 200) & 255; id.data[i * 4 + 3] = 255; }
+    g.putImageData(id, 0, 0); const d = g.getImageData(0, 0, 8, 8).data; let err = 0, worst = 0;
+    for (let i = 0; i < d.length; i++) { const e = Math.abs(d[i] - id.data[i]); err += e; worst = Math.max(worst, e); }
+    READ_OK = err / d.length < 2 && worst < 24;
+  } catch (e) { READ_OK = false; }
+  return READ_OK;
+}
+function imagePixels(img, x0, y0, w, h) {
+  if (!canvasReadable()) throw new Error("canvas read-back is not trustworthy here");
+  const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const g = cv.getContext("2d", CTX2D);
+  g.drawImage(img, x0, y0, w, h, 0, 0, w, h); return g.getImageData(0, 0, w, h).data;
+}
+// an atlas tile's pixel rectangle, as atlasTile samples it: sheet by slot in a 4 x 4 grid of
+// 128 px sheets, tile (column, row) in the sheet, 32 px a tile
+function tileRect(img, slot, idx) { const k = img.width / 512; return [((slot % 4) * 128 + (idx % 4) * 32) * k, (Math.floor(slot / 4) * 128 + Math.floor(idx / 4) * 32) * k, 32 * k, 32 * k]; }
+function meanOf(img, rect) {
+  const key = img.src + "|" + rect.join(",");
+  if (MEANS[key]) return MEANS[key];
+  const d = imagePixels(img, ...rect); let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i + 3] >= 128) { r += (d[i] / 255) ** 2.2; g += (d[i + 1] / 255) ** 2.2; b += (d[i + 2] / 255) ** 2.2; n++; }
+  return (MEANS[key] = n ? [r / n, g / n, b / n] : null);
+}
+function resolveMeans() {
+  for (let i = MEAN_Q.length - 1; i >= 0; i--) {
+    const q = MEAN_Q[i], img = TEX[q.tex] && TEX[q.tex].image;
+    if (!img || !img.complete || !img.naturalWidth) continue;
+    MEAN_Q.splice(i, 1);
+    try {
+      const mn = meanOf(img, q.at ? tileRect(img, q.at.x, q.at.y + q.at.z * 4) : [0, 0, img.naturalWidth, img.naturalHeight]);
+      if (mn) { q.m.uniforms.uMean.value.set(mn[0], mn[1], mn[2]); q.m.uniforms.uDetail.value = q.detail; if (!BAKES.length && BAKED_JOBS.some(j => j.parts.some(pt => pt[1] === q.m))) BAKES.push(...BAKED_JOBS); }   // a bake made before this mean is made again
+    } catch (e) { /* an unreadable image keeps its full detail */ }
+  }
+  for (let i = TUFT_Q.length - 1; i >= 0; i--) if (TUFT_Q[i]()) TUFT_Q.splice(i, 1);
+}
 const LODCOL = [new THREE.Color(0x7be08a), new THREE.Color(0xf2d24a), new THREE.Color(0xe46ad8)];
 // o: at [slot, tile index] or tex, plus card, mask, sway, wind, seasons, glow
 function mat(key, o) {
-  const k = key + "|" + (o.level || 0) + (o.billboard ? "|bb" : "");
+  const k = key + "|" + (o.level || 0) + (o.billboard ? "|bb" : "") + (o.ramp ? "|" + o.ramp.name : "");
   if (MATS[k]) return MATS[k];
   const at = o.at ? new THREE.Vector3(o.at[0], o.at[1] % 4, Math.floor(o.at[1] / 4)) : new THREE.Vector3();
   const u = Object.assign({}, G, {
@@ -618,13 +768,21 @@ function mat(key, o) {
     uViews: { value: o.views || 0 }, uMask: { value: o.mask || 0 }, uSwayMask: { value: o.sway ? 1 : 0 },
     uScale: o.scaleU || G.uPlantScale, uWindAmp: { value: o.windAmp ?? 0.2 }, uWindH: { value: o.windH ?? 1 }, uFlutter: { value: o.flutter ?? 0 },
     uUpN: { value: o.upN ?? 0 }, uLodCol: { value: LODCOL[o.level || 0] }, uEmitCol: { value: new THREE.Color().fromArray(o.emitCol || [0, 0, 0]) },
-    uEmit: { value: o.emit ?? 0 }, uCardLit: { value: o.card ? 1 : 0 }, uAlphaTest: { value: o.alpha ? 0.5 : -1 },
+    uEmit: { value: o.emit ?? 0 }, uEmitSpot: { value: new THREE.Vector2(...(o.emitSpot || [0, 0])) }, uCardLit: { value: o.card ? 1 : 0 }, uAlphaTest: { value: o.alpha ? 0.5 : -1 },
     uLeafy: { value: o.leafy ? 1 : 0 }, uDecid: { value: o.decid ? 1 : 0 },
     uSnowable: { value: o.snowable ? 1 : 0 }, uKeep: o.keep || { value: 2 }, uFlicker: { value: o.flicker ? 1 : 0 }, uImp: { value: o.imp ? 1 : 0 }, uGrass: { value: o.grass ? 1 : 0 },
+    uMean: { value: new THREE.Vector3() }, uDetail: { value: 1 },
+    uRamp: { value: o.ramp ? 1 : 0 }, uRampLo: { value: o.ramp ? o.ramp.lo : 0 }, uRampHi: { value: o.ramp ? o.ramp.hi : 1 },
+    uR0: { value: new THREE.Vector3(...(o.ramp ? o.ramp.lin[0] : [0, 0, 0])) }, uR1: { value: new THREE.Vector3(...(o.ramp ? o.ramp.lin[1] : [0, 0, 0])) }, uR2: { value: new THREE.Vector3(...(o.ramp ? o.ramp.lin[2] : [0, 0, 0])) },
   });
   const defines = {}; if (o.terrain) defines.TERRAIN = ""; if (o.billboard) defines.BILLBOARD = "";
   // cutouts are alpha-TESTED, never blended: opaque, depth written, no sorting
   const m = new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, defines, side: o.single ? THREE.FrontSide : THREE.DoubleSide, transparent: false, depthWrite: true });
+  // how much of its texture's contrast an in-world thing keeps (1 = all, the ground's own tiles,
+  // the baked impostors, flowers and tufts); set once the texture's mean is known (resolveMeans)
+  const detail = o.detail ?? (o.terrain || o.imp || o.alpha || o.grass ? 1 : (o.leafy || o.mask) ? 0.45 : 0.7);
+  if (detail < 1) MEAN_Q.push({ m, detail, at: o.at ? at.clone().setX(o.at[0]) : null, tex: o.at ? "game/atlas" : o.tex });
+  if (o.ramp) m.userData.ramp = o.ramp;
   if (o.decal) { m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -4; }
   MATS[k] = m; return m;
 }
@@ -733,6 +891,8 @@ function branchTree(bark, leaves, rnd, P) {
     }
     leafCard(leaves, tw.b, norm(add(tw.d, [0, 0.2, 0])), P.leafS, P.leafS * 0.8, rnd, cid, [0, 1, 0], norm(sub(tw.b, centre)));
   }
+  // where fruit hangs: on the last twigs, at their ends and part way along, so a fruit is always on wood
+  bark.anchors = twigs.flatMap(tw => [tw.b, lerp3(tw.a, tw.b, 0.6)]);
   return twigs;
 }
 
@@ -757,6 +917,7 @@ const TREE_BUILD = {
       const e = add([0, 1.9, 0], scl(d, 2.4)); b.tube([0, 1.9, 0], e, 0.13, 0.07, 5);
       for (let j = 0; j < 2; j++) {
         const az2 = az + (j - 0.5) * 0.9, e2 = add(e, [Math.cos(az2) * 1.2, 0.35, Math.sin(az2) * 1.2]); b.tube(e, e2, 0.07, 0.04, 5);
+        (b.anchors = b.anchors || []).push(lerp3(e, e2, 0.55), lerp3(e, e2, 0.85));   // fruit hangs under the flat crown, on the twig
         const tw = norm(sub(e2, e)), cid = 0.1 + rnd() * 0.9;
         for (let c = 0; c < 5; c++) { // a flat crown: sprays lying along the twig, rooted on it
           const root = lerp3(e, e2, 0.4 + c * 0.15), a = (c - 2) * 0.5 + (rnd() - 0.5) * 0.3;
@@ -787,6 +948,8 @@ const TREE_BUILD = {
           leafCard(l, root, dir, len, 0.55, rnd, cid, face);
         }
         leafCard(l, add(base, scl(d, L * 0.92)), norm(add(d, [0, -0.25, 0])), 0.4, 0.36, rnd, cid, norm(add([0, 1, 0], scl(side, 0.8))));
+        // a cone hangs from the branch itself, part way out toward its tip, where the sprays are thick
+        if (t > 0.25 && t < 0.8) (b.anchors = b.anchors || []).push(add(base, scl(d, L * (0.55 + 0.3 * rnd()))));
       }
     }
     for (let k = 0; k < 3; k++) { const a = k * 2.1; leafCard(l, [0, H - 0.7, 0], norm([Math.cos(a) * 0.3, 1, Math.sin(a) * 0.3]), 0.8, 0.4, rnd, 0.5, [Math.cos(a + 1.57), 0, Math.sin(a + 1.57)]); }
@@ -799,6 +962,7 @@ const TREE_BUILD = {
     for (let k = 0; k < 6; k++) {
       const az = k / 6 * 6.28 + rnd() * 0.5, e = [Math.cos(az) * (2.4 + rnd()), H + 0.6 + rnd() * 0.6, Math.sin(az) * (2.4 + rnd())];
       const s = [0, H - 0.4, 0]; b.tube(s, e, 0.16, 0.07, 5);
+      (b.anchors = b.anchors || []).push(lerp3(s, e, 0.55), lerp3(s, e, 0.8));
       const d = norm(sub(e, s)), side = norm(cross(d, [0, 1, 0])), cid = 0.1 + rnd() * 0.9;
       for (let c = 0; c < 6; c++) {
         const root = lerp3(s, e, 0.45 + c * 0.1);
@@ -812,6 +976,7 @@ const TREE_BUILD = {
     let prev = [0, 0, 0];
     for (let i = 1; i <= 6; i++) { const t = i / 6, p = [lean * t * t, H * t, 0]; b.tube(prev, p, 0.19 - t * 0.05, 0.19 - t * 0.06, 6, 0.6); prev = p; }
     const top = prev;
+    b.anchors = [0, 1, 2, 3, 4, 5].map(k => add(top, [Math.cos(k * 1.05) * 0.22, -0.05, Math.sin(k * 1.05) * 0.22]));   // a bunch under the fronds, on the trunk's head
     for (let k = 0; k < 9; k++) { // fronds: rooted at the crown, running out and drooping; v runs root to tip
       const az = k / 9 * 6.28 + rnd() * 0.3, d = [Math.cos(az), 0, Math.sin(az)], side = [-d[2], 0, d[0]], cid = 0.1 + rnd() * 0.9;
       for (let s = 0; s < 4; s++) {
@@ -839,6 +1004,7 @@ const TREE_BUILD = {
     const b = new GB(), l = new GB(), H = 3.2 + rnd() * 2, Rc = 1.3 + rnd() * 0.8, bend = (rnd() - 0.5) * 0.8;
     b.tube([0, 0, 0], [bend * 0.5, H * 0.5, 0], 0.3, 0.24, 8, 1.2); b.tube([bend * 0.5, H * 0.5, 0], [bend, H, 0], 0.24, 0.2, 8, 1.2);
     const top = [bend, H, 0], segs = 14, rings = 4;
+    b.anchors = [0, 1, 2, 3, 4, 5, 6, 7].map(k => add(top, [Math.cos(k * 0.785) * Rc * 0.55, -Rc * 0.08, Math.sin(k * 0.785) * Rc * 0.55]));   // hung from the gills
     for (let r = 0; r < rings; r++) for (let s = 0; s < segs; s++) {
       const P = (ri, si) => { const t = ri / rings, a = si / segs * 6.28, rr = Rc * Math.sin((1 - t) * 1.45 + 0.12), y = Rc * 0.55 * Math.cos((1 - t) * 1.45 + 0.12) - Rc * 0.05; return add(top, [Math.cos(a) * rr, y, Math.sin(a) * rr]); };
       const A = P(r, s), B = P(r, s + 1), C = P(r + 1, s + 1), D = P(r + 1, s), nn = norm(sub(add(A, C), scl(add(top, [0, -Rc * 0.6, 0]), 2)));
@@ -925,8 +1091,10 @@ function grassTuft(rnd, n = 9) {
 // The Play demo's grass (docs/mockups/ui/play.js, tuftTex): a 16 px tuft of nine one-pixel blades,
 // dark at the root and light at the tip, cut out with alpha, on two crossed cards. Owner, 2026-11-14:
 // "this grass is actually better than what we have in the game ... add a toggle for me to try this
-// alternate grass in the different biomes". Each biome gets its own three-tone ramp; temperate is
-// the demo's own.
+// alternate grass in the different biomes"; 2026-11-15: "first default to pixel tufts, make sure
+// its color matches the ground though". So the tufts are the default, and each biome's three-tone
+// ramp is read off its own ground tile (groundRamp), never a fixed green.
+// TUFT_RAMP is only the fallback for a browser that cannot read the atlas's pixels.
 const TUFT_RAMP = {
   temperate: ["#05582d", "#559642", "#9bb675"], jungle: ["#0a4a24", "#2f7d32", "#6fb043"],
   savanna: ["#6b5a1e", "#a8913a", "#d8c070"], taiga: ["#1d3f2c", "#3d6a48", "#7c9a6a"],
@@ -934,17 +1102,100 @@ const TUFT_RAMP = {
   fungal: ["#2a1a4a", "#6a3a9a", "#c08ae0"], crystal: ["#2a4a6a", "#5a8ab8", "#a8d0f0"],
   kelp: ["#0e4a3e", "#2a7a64", "#6ab8a0"],
 };
+// The tile a biome's grass grows from: its terrain top (0,0), or topIdx where the biome sets one,
+// and the kelp drift's kelp mat (grassIdx), the same tile the blades crop.
+const groundIdx = B => B.grassIdx !== undefined ? B.grassIdx : (B.topIdx || 0);
+// A ground tile's dark, mid and light colours: its 1,024 texels sorted by luminance and split in
+// thirds, each third giving its commonest colour. They are the tile's own palette colours, so a
+// tuft sits in the ground's palette (and is lit by the same light) rather than on top of it.
+const RAMPS_OF = {};
+function groundRamp(img, slot, idx) {
+  const key = slot + ":" + idx;
+  if (RAMPS_OF[key]) return RAMPS_OF[key];
+  const d = imagePixels(img, ...tileRect(img, slot, idx)), px = [];
+  for (let i = 0; i < d.length; i += 4) px.push([d[i], d[i + 1], d[i + 2], 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]]);
+  px.sort((a, b) => a[3] - b[3]);
+  const ramp = [0, 1, 2].map(t => {
+    const part = px.slice(Math.floor(px.length * t / 3), Math.floor(px.length * (t + 1) / 3)), count = new Map();
+    let best = part[0], bn = 0;
+    for (const p of part) { const k = (p[0] << 16) | (p[1] << 8) | p[2], n = (count.get(k) || 0) + 1; count.set(k, n); if (n > bn) { bn = n; best = p; } }
+    return "rgb(" + best[0] + "," + best[1] + "," + best[2] + ")";
+  });
+  return (RAMPS_OF[key] = ramp);
+}
+const TUFT_RAMP_FALLBACK = new Set(Object.values(TUFT_RAMP));   // the fallback ramps are already in the biome's palette
+const TUFT_Q = [];   // tufts waiting for the atlas to load; drawn by resolveMeans
 const tuftHash = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
 function tuftTex(biome, v) {
   const key = "tuft:" + biome + ":" + v;
   if (TEX[key]) return key;
-  const ramp = TUFT_RAMP[biome] || TUFT_RAMP.temperate;
+  const B = BIOMES[biome], atlas = tex("game/atlas");
   const cv = document.createElement("canvas"); cv.width = cv.height = 16; const g = cv.getContext("2d");
-  for (let i = 0; i < 9; i++) {
-    const x = 1 + Math.floor(tuftHash(i, 2 + v * 7) * 14), hgt = 5 + Math.floor(tuftHash(i, 5 + v * 3) * 9);
-    for (let y = 0; y < hgt; y++) { g.fillStyle = ramp[Math.min(2, Math.floor(y / 4))]; g.fillRect(x + (y > 6 && i % 2 ? 1 : 0), 15 - y, 1, 1); }
-  }
   const t = new THREE.CanvasTexture(cv); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  const draw = () => {
+    const img = atlas.image;
+    if (!img || !img.complete || !img.naturalWidth) return false;
+    let ramp;
+    try { ramp = groundRamp(img, B.sheet, groundIdx(B)); } catch (e) { ramp = TUFT_RAMP[biome] || TUFT_RAMP.temperate; }
+    const gr = rp("terrain:" + B.sheet + ":" + groundIdx(B), B).ramp;   // a ground worn in the biome's palette: the tufts too
+    if (gr && !TUFT_RAMP_FALLBACK.has(ramp)) ramp = ramp.map(c => "rgb(" + rampRGB(c.match(/\d+/g).map(Number), gr).join(",") + ")");
+    g.clearRect(0, 0, 16, 16);
+    for (let i = 0; i < 9; i++) {
+      const x = 1 + Math.floor(tuftHash(i, 2 + v * 7) * 14), hgt = 5 + Math.floor(tuftHash(i, 5 + v * 3) * 9);
+      for (let y = 0; y < hgt; y++) { g.fillStyle = ramp[Math.min(2, Math.floor(y / 4))]; g.fillRect(x + (y > 6 && i % 2 ? 1 : 0), 15 - y, 1, 1); }
+    }
+    t.needsUpdate = true; dirty = true; return true;
+  };
+  if (!draw()) TUFT_Q.push(draw);
+  TEX[key] = t; return key;
+}
+// ---- crops and wild fruit, by biome ----
+// Crops (M8's roster and climates: farming.html CROPS): temperate wheat, turnip, kale; hot sun melon, chili,
+// rice where it is wet; cold kale and turnip; the glowcap in the fungal forest, whose canopy is its roof.
+const CROPS_BY = {
+  temperate: ["wheat", "turnip", "frost_kale"], jungle: ["chili", "rice", "sun_melon"], savanna: ["sun_melon", "chili"],
+  taiga: ["frost_kale", "turnip"], desert: ["sun_melon", "chili"], swamp: ["rice", "turnip"], fungal: ["glowcap"], crystal: [], kelp: [],
+};
+// Wild fruit (owner, 2026-11-15): `hang` is fruit in the crowns of a host species (and a few fallen under
+// it), `plants` the forage plants on the ground. Art: foliage/fruit_art.py.
+const FRUIT = {
+  temperate: { hang: { oak: ["apple", "pear", "plum", "cherry"] }, plants: ["strawberry", "blackberry", "raspberry", "blueberry", "tomato", "kiwi"] },
+  jungle: { hang: { kapok: ["mango", "papaya"], palm: ["banana", "coconut"] }, plants: ["watermelon", "tomato"] },
+  savanna: { hang: { acacia: ["baobab", "marula"] }, plants: ["watermelon"] },
+  taiga: { hang: { pine: ["pinecone"] }, plants: ["lingonberry", "cloudberry", "blueberry"] },
+  desert: { hang: { palm: ["date"] }, plants: ["prickly_pear"] },
+  swamp: { hang: {}, plants: ["cranberry", "elderberry"] },
+  fungal: { hang: { glowcap: ["glowfruit"] }, plants: ["glowfruit"] },
+  crystal: { hang: {}, plants: ["gem_berry"] },
+  kelp: { hang: {}, plants: ["bladder_pod"] },
+};
+const FORAGE_SIZE = { blueberry: 0.9, raspberry: 1.2, blackberry: 1.2, elderberry: 1.5, strawberry: 0.5, lingonberry: 0.45, cloudberry: 0.5, cranberry: 0.45,
+  tomato: 1.1, watermelon: 0.9, kiwi: 1.3, prickly_pear: 1.4, glowfruit: 1.0, gem_berry: 0.9, bladder_pod: 1.2 };
+// A fruit sprite with its leaves in the biome's ground palette: fruit_art.py draws leaves, stems and vines
+// in three KEY colours, swapped here for groundRamp's dark, mid and light (as the tufts are coloured).
+const KEY_RGB = [[5, 88, 45], [85, 150, 66], [155, 182, 117]];
+function keyedTex(name, biome) {
+  const key = "keyed:" + name + ":" + biome;
+  if (TEX[key]) return key;
+  const B = BIOMES[biome], src = tex(name), atlas = tex("game/atlas");
+  const cv = document.createElement("canvas"); const g = cv.getContext("2d", CTX2D);
+  const t = new THREE.CanvasTexture(cv); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  const draw = () => {
+    const im = src.image, at = atlas.image;
+    if (!im || !im.complete || !im.naturalWidth || !at || !at.complete || !at.naturalWidth) return false;
+    cv.width = im.naturalWidth; cv.height = im.naturalHeight; g.drawImage(im, 0, 0);
+    try {
+      if (!canvasReadable()) throw new Error("canvas read-back is not trustworthy here");
+      const gr = rp("terrain:" + B.sheet + ":" + groundIdx(B), B).ramp;
+      const ramp = groundRamp(at, B.sheet, groundIdx(B)).map(c => c.match(/\d+/g).map(Number)).map(c => gr ? rampRGB(c, gr) : c);
+      const d = g.getImageData(0, 0, cv.width, cv.height);   // matched with a tolerance: a browser may jitter read-back
+      for (let i = 0; i < d.data.length; i += 4) for (let k = 0; k < 3; k++)
+        if (d.data[i + 3] >= 128 && Math.abs(d.data[i] - KEY_RGB[k][0]) <= 6 && Math.abs(d.data[i + 1] - KEY_RGB[k][1]) <= 6 && Math.abs(d.data[i + 2] - KEY_RGB[k][2]) <= 6) { d.data[i] = ramp[k][0]; d.data[i + 1] = ramp[k][1]; d.data[i + 2] = ramp[k][2]; }
+      g.putImageData(d, 0, 0);
+    } catch (e) { /* unreadable: the drawn greens stay */ }
+    t.needsUpdate = true; dirty = true; return true;
+  };
+  if (!draw()) TUFT_Q.push(draw);
   TEX[key] = t; return key;
 }
 function crossedCards(w, h, n = 2, yOff = 0) {
@@ -1119,7 +1370,7 @@ function buildTerrain(B) {
   const top0 = B.topIdx || 0;
   for (const c of CELLS) {
     const y = c.h;
-    const tb = c.cold ? buf("top", SNOW[0], SNOW[1]) : buf("top", B.sheet, top0);
+    const tb = c.cold ? buf("top", SNOW[0], SNOW[1]) : c.tilled ? buf("top", SHEET.fields, 14) : buf("top", B.sheet, top0);   // a plot: the fields sheet's tilled soil, as M8's
     const cs = []; for (let i = 0; i < 6; i++) { const [cx, cz] = hexCorner(i); cs.push([c.x + cx, c.z + cz]); }
     const tuv = (px, pz) => [(px - c.x) / (1.5 * W) + 0.5, (pz - c.z) / (1.5 * W) + 0.5];
     for (let i = 0; i < 6; i++) { const a = cs[i], b = cs[(i + 1) % 6]; vert(tb, [c.x, y, c.z], [0, 1, 0], tuv(c.x, c.z)); vert(tb, [b[0], y, b[1]], [0, 1, 0], tuv(b[0], b[1])); vert(tb, [a[0], y, a[1]], [0, 1, 0], tuv(a[0], a[1])); }
@@ -1145,7 +1396,7 @@ function buildTerrain(B) {
     g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2)); g.setAttribute("lampV", new THREE.Float32BufferAttribute(b.lamp, 3));
     g.setAttribute("glowV", new THREE.Float32BufferAttribute(b.glow, 3)); g.setAttribute("occV", new THREE.Float32BufferAttribute(b.occ, 1));
     g.setAttribute("card", new THREE.Float32BufferAttribute(new Float32Array(nv), 1)); g.setAttribute("ao", new THREE.Float32BufferAttribute(new Float32Array(nv).fill(1), 1));
-    const m = new THREE.Mesh(g, mat("terrain:" + b.kind + ":" + b.slot + ":" + b.idx, { at: [b.slot, b.idx], terrain: true, snowable: B.snow && b.kind === "top" && b.slot !== SNOW[0], single: true }));
+    const m = new THREE.Mesh(g, mat("terrain:" + b.kind + ":" + b.slot + ":" + b.idx, { at: [b.slot, b.idx], ...rp("terrain:" + b.slot + ":" + b.idx, B), terrain: true, snowable: B.snow && b.slot !== SNOW[0], single: true   /* sides too: their grass lip whitens (the shader snows only green texels on a side) */ }));
     m.matrixAutoUpdate = false; ROOT.add(m); TERRAIN.push(m);
   }
   // far ground past the patch, so the land does not end in a cliff over nothing
@@ -1156,7 +1407,7 @@ function buildTerrain(B) {
   fg.setAttribute("uv", new THREE.Float32BufferAttribute(fuv, 2));
   for (const [a, n] of [["lampV", 3], ["glowV", 3], ["occV", 1], ["card", 1]]) fg.setAttribute(a, new THREE.Float32BufferAttribute(new Float32Array(cnt * n), n));
   fg.setAttribute("ao", new THREE.Float32BufferAttribute(new Float32Array(cnt).fill(1), 1));
-  const fm = new THREE.Mesh(fg, mat("terrain:top:" + B.sheet + ":" + top0, { at: [B.sheet, top0], terrain: true, snowable: B.snow, single: true })); ROOT.add(fm); TERRAIN.push(fm);
+  const fm = new THREE.Mesh(fg, mat("terrain:top:" + B.sheet + ":" + top0, { at: [B.sheet, top0], ...rp("terrain:" + B.sheet + ":" + top0, B), terrain: true, snowable: B.snow, single: true })); ROOT.add(fm); TERRAIN.push(fm);
   if (B.water) {
     const wg = new THREE.CircleGeometry(N * W * 1.05, 64); wg.rotateX(-Math.PI / 2); wg.translate(0, 0.35, 0);
     const wm = new THREE.Mesh(wg, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: G,
@@ -1186,12 +1437,18 @@ function obj(L, x, y, z, yaw, s, lv, seed, extra) {
 
 function buildLayers(B) {
   for (const b of BATCHES) if (b.mesh) { ROOT.remove(b.mesh); b.mesh.geometry.dispose(); }
-  BATCHES = []; LAYERS = []; LIGHTS = []; TGRID = new Map(); BAKES.length = 0; BAKE_LOG.length = 0;
+  BATCHES = []; LAYERS = []; LIGHTS = []; TGRID = new Map(); BAKES.length = 0; BAKED_JOBS.length = 0; BAKE_LOG.length = 0;
   const nb = (gb, m, lvl) => { const b = newBatch(gb, m, lvl); BATCHES.push(b); return b; };
   const ON = k => S.layers[k].on, D = k => S.layers[k].dens;
-  const usable = c => !c.wet && !c.path && !c.clear;
+  const usable = c => !c.wet && !c.path && !c.clear && !c.tilled;
   const ends3 = () => [S.near, S.mid, S.draw];
-  const ground = B.grassIdx !== undefined ? B.grassIdx : (B.topIdx || 0);   // the tile the blades crop
+  const ground = groundIdx(B);   // the tile the blades (and the tufts' colours) come from
+  // garden plots are chosen first, so trees and clutter keep off the tilled cells
+  const cropList = CROPS_BY[S.biome] || [], plots = [];
+  if (ON("crops") && cropList.length) for (const c of CELLS) {
+    if (!(!c.wet && !c.path && !c.clear) || c.cold || c.forest > 0.55) continue;
+    if (hash(c.id, 1, 1101) < 0.03 * D("crops") * (1.4 - c.forest)) { c.tilled = true; plots.push(c); }
+  }
 
   // ---- lanterns and the campfire (lit first, so everything else can bake them)
   if (ON("lights")) {
@@ -1226,20 +1483,20 @@ function buildLayers(B) {
     for (const [sp] of species) {
       const SP = SPECIES[sp]; kit[sp] = [];
       const bareImp = S.season === "winter" && SP.decid && !hex && !B.alien;
-      const impO = { tex: "imp_" + sp + (bareImp ? "_bare" : ""), views: 8, card: true, alpha: true, imp: true, leafy: !bareImp, decid: SP.decid, windAmp: 0.08, windH: 8, upN: 0.4, scaleU: G.uTreeScale, emit: SP.glow ? 1.2 : 0, emitCol: SP.glow || [0, 0, 0] };
+      const impO = { tex: "imp_" + sp + (bareImp ? "_bare" : ""), views: 8, card: true, alpha: true, imp: true, leafy: !bareImp, decid: SP.decid, windAmp: 0.08, windH: 8, upN: 0.4, scaleU: G.uTreeScale, emit: SP.glow ? 1.2 : 0, emitCol: SP.glow || [0, 0, 0], emitSpot: sp === "glowcap" ? [0.5, 0.56] : null };
       // the game's tree wears its biome sheet's wood (2,1) and leaves (0,2): material codes 8 and 9
-      const barkS = hex ? "S:6" : SP.bark, leafS = hex ? "S:8" : SP.leaf;
+      const barkS = hex ? "S:6" : SP.bark, leafS = hex ? "S:8" : (B.leaf && B.leaf[sp]) || SP.leaf;
       for (let v = 0; v < VARS; v++) {
         const [bk, lf] = hex ? hexTree(sp, B.extra, v) : TREE_BUILD[sp](rngOf(9000 + v * 31 + sp.length * 7));
         const bg = bk.geo(), box = bg.boundingBox.clone(); let lg = null;
         if (lf && lf.tris) { lg = lf.geo(); box.union(lg.boundingBox); }
         const Hh = box.max.y * 1.02, Wd = 2 * Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z) * 1.04;
-        const bm = mat("bark:" + barkS + ":" + B.sheet + (SP.glow ? ":g" : ""), { ...spec(barkS, B), windAmp: B.lowg ? 0.5 : 0.1, windH: 8, scaleU: G.uTreeScale, single: true, snowable: SP.snow, emit: sp === "crystal" ? 0.8 : 0, emitCol: SP.glow || [0, 0, 0] });
+        const bm = mat("bark:" + barkS + ":" + B.sheet + (SP.glow ? ":g" : ""), { ...spec(barkS, B), ...rp(barkS, B), windAmp: B.lowg ? 0.5 : 0.1, windH: 8, scaleU: G.uTreeScale, single: true, snowable: SP.snow, emit: sp === "crystal" ? 0.8 : 0, emitCol: SP.glow || [0, 0, 0] });
         let lm = null;
         if (lg) lm = hex
-          ? mat("leafblock:" + B.sheet, { ...spec(leafS, B), leafy: true, decid: false, windAmp: 0.04, windH: 8, scaleU: G.uTreeScale, single: true, snowable: SP.snow, emit: SP.glow ? 1.4 : 0, emitCol: SP.glow || [0, 0, 0] })
-          : sp === "glowcap" ? mat("cap:" + leafS, { ...spec(leafS, B), windAmp: 0.1, windH: 8, scaleU: G.uTreeScale, emit: 1.0, emitCol: SP.glow })
-          : mat("leaf:" + leafS + ":" + B.sheet + ":" + SP.mask, { ...spec(leafS, B), card: true, mask: SP.mask, sway: true, leafy: true, decid: SP.decid, snowable: SP.snow, windAmp: B.lowg ? 0.7 : 0.16, windH: 8, flutter: 0.05, scaleU: G.uTreeScale });
+          ? mat("leafblock:" + B.sheet, { ...spec(leafS, B), ...rp(leafS, B), leafy: true, decid: false, windAmp: 0.04, windH: 8, scaleU: G.uTreeScale, single: true, snowable: SP.snow, emit: SP.glow ? 1.4 : 0, emitCol: SP.glow || [0, 0, 0] })
+          : sp === "glowcap" ? mat("cap:" + leafS, { ...spec(leafS, B), ...rp(leafS, B), windAmp: 0.1, windH: 8, scaleU: G.uTreeScale, emit: 1.0, emitCol: SP.glow, emitSpot: [0.7, 0.85] })
+          : mat("leaf:" + leafS + ":" + B.sheet + ":" + SP.mask, { ...spec(leafS, B), ...rp(leafS, B), card: true, mask: SP.mask, sway: true, leafy: true, decid: SP.decid, snowable: SP.snow, windAmp: B.lowg ? 0.7 : 0.16, windH: 8, flutter: 0.05, scaleU: G.uTreeScale });
         const near = [nb(bg, bm, 0)]; if (lg) near.push(nb(lg, lm, 0));
         // mid and far come FROM this near tree: it is baked from 8 bearings into an atlas once its
         // textures are loaded (bakeImpostors); the painted pixel impostor shows only until then
@@ -1252,8 +1509,8 @@ function buildLayers(B) {
         // sprays, and drawn they would turn a 48 px crown into a thatch of red bark
         let bakeParts = near.map(b => [b.base, b.material]);
         if (false && SP.cone && !hex && lg) { const tr = new GB(); tr.tube([0, 0, 0], [0, Hh * 0.45, 0], 0.2, 0.12, 6, 1.2); bakeParts = [[tr.geo(), bm], [lg, lm]]; }
-        BAKES.push({ label: sp + " " + (hex ? "hex" : "detailed") + " v" + v + (bareImp ? " bare" : ""), parts: bakeParts, Wd, lo, hi, mats: [mid, far] });
-        kit[sp].push({ near, midB: nb(impostorCards(Wd, hi - lo, 8, lo), mid, 1), farB: nb(billboardQuad(Wd, hi - lo, lo), far, 2), H: Hh, Wd });
+        BAKES.push({ label: sp + " " + (hex ? "hex" : "detailed") + " v" + v + (bareImp ? " bare" : ""), noSplit: sp === "glowcap", parts: bakeParts, Wd, lo, hi, mats: [mid, far] });
+        kit[sp].push({ anchors: bk.anchors || null, near, midB: nb(impostorCards(Wd, hi - lo, 8, lo), mid, 1), farB: nb(billboardQuad(Wd, hi - lo, lo), far, 2), H: Hh, Wd });
       }
     }
     const total = species.reduce((a, [, w]) => a + w, 0);
@@ -1268,7 +1525,7 @@ function buildLayers(B) {
       // a bare broadleaf tree in winter keeps its branches through the mid ring: a leafy card would be wrong there
       const bare = S.season === "winter" && SPECIES[sp].decid && !hex && !B.alien;
       const o = obj(L, c.x, c.h, c.z, yaw, s, [K.near, bare ? K.near : [K.midB], [K.farB]], hash(c.id, 6, 101), { ly: K.H * 0.6 * s });
-      o.H = K.H * s; o.cr = K.Wd * 0.5 * s; treeObjs.push(o);
+      o.H = K.H * s; o.cr = K.Wd * 0.5 * s; o.sp = sp; o.cell = c; o.yaw = yaw; o.s = s; o.anchors = K.anchors; treeObjs.push(o);
       const SP = SPECIES[sp];
       if (SP.glow) addLight(c.x, c.h + K.H * s * 0.8, c.z, SP.glow, SP.glowReach, 0.9, false);
     }
@@ -1289,7 +1546,7 @@ function buildLayers(B) {
         vars.push([nb(g0, m0, 0), nb(crossedCards(0.8, 0.6, 2), mat("shrubcard", { at: [SHEET.beach, 6], card: true, mask: 4, level: 1 }), 1)]);
         continue;
       }
-      const mk = B.bush.needle ? 2 : 1, o = { ...spec(B.bush.tex, B), card: true, mask: mk, sway: true, leafy: !B.bush.glow, decid: !B.bush.needle && !B.bush.glow, snowable: B.snow, windAmp: 0.15, windH: 1, flutter: 0.03, emit: B.bush.glow ? 1.4 : 0, emitCol: [0.4, 1, 0.85] };
+      const mk = B.bush.needle ? 2 : 1, o = { ...spec(B.bush.tex, B), ...rp(B.bush.tex, B), card: true, mask: mk, sway: true, leafy: !B.bush.glow, decid: !B.bush.needle && !B.bush.glow, snowable: B.snow, windAmp: 0.15, windH: 1, flutter: 0.03, emit: B.bush.glow ? 1.4 : 0, emitCol: [0.4, 1, 0.85] };
       g0 = bushGeo(r, B.bush.glow ? 0.5 : 0.75);
       m0 = mat("bush:" + B.bush.tex + ":" + B.sheet, o);
       m1 = mat("bush:" + B.bush.tex + ":" + B.sheet, { ...o, upN: 0.4, level: 1 });
@@ -1314,7 +1571,7 @@ function buildLayers(B) {
       nb(grassTuft(rngOf(700 + v), 9), mat("blade:" + B.sheet + ":" + ground, { at: [B.sheet, ground], card: true, grass: true, keep: G.uKeepGrass, windAmp: 0.18, windH: 0.6, upN: 1, snowable: B.snow }), 0),
       nb(crossedCards(0.9, 0.55, 2), mat("gcard:" + B.sheet + ":" + ground, { at: [B.sheet, ground], card: true, grass: true, keep: G.uKeepGrass, mask: 3, windAmp: 0.15, windH: 0.6, upN: 1, snowable: B.snow, level: 1 }), 1)]);
     for (const c of CELLS) {
-      if (c.path || c.wet) continue;
+      if (c.path || c.wet || c.tilled) continue;
       const n = countIn(c, B.grass * D("grass") * (c.cold ? 0.15 : 1) * (1 - c.forest * 0.4) * (c.clear ? 0.4 : 1), 301);
       for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 302), v = vars[(hash(c.id, k, 303) * 3) | 0], s = 0.8 + hash(c.id, k, 304) * 0.5;
         obj(L, x, c.h, z, hash(c.id, k, 305) * 6.28, s, [[v[0]], [v[1]]], hash(c.id, k, 306), { ly: 0.2 }); }
@@ -1352,7 +1609,7 @@ function buildLayers(B) {
       vars.push([nb(g0, m0, 0), nb(g1, m1, 1)]);
     }
     for (const c of CELLS) {
-      if (c.path || c.clear) continue; if (c.wet && kind !== "reed") continue;
+      if (c.path || c.clear || c.tilled) continue; if (c.wet && kind !== "reed") continue;
       const n = countIn(c, B.ferns.n * D("ferns") * (kind === "reed" ? (c.wet ? 1.6 : 0.4) : 0.4 + c.forest), 501);
       for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 502), v = vars[(hash(c.id, k, 503) * 3) | 0];
         obj(L, x, c.h, z, hash(c.id, k, 504) * 6.28, 0.75 + hash(c.id, k, 505) * 0.5, [[v[0]], [v[1]]], hash(c.id, k, 506), { ly: 0.4 });
@@ -1366,7 +1623,7 @@ function buildLayers(B) {
     const L = makeLayer("mush", () => [B.mush.glow ? S.mid : S.near * 0.7]);
     const glow = !!B.mush.glow;
     const vars = [0, 1, 2].map(v => { const [st, cp] = mushGeo(rngOf(600 + v));
-      return [nb(st, mat("mstem", { at: [SHEET.sporewood, 6], windAmp: 0, single: true, keep: G.uKeepMush }), 0), nb(cp, mat("mcap:" + B.mush.tex, { ...spec(B.mush.tex, B), windAmp: 0, keep: G.uKeepMush, emit: glow ? 2.2 : 0, emitCol: [0.4, 1, 0.85] }), 0)]; });
+      return [nb(st, mat("mstem", { at: [SHEET.sporewood, 6], ...rp("A:11:6", B), windAmp: 0, single: true, keep: G.uKeepMush }), 0), nb(cp, mat("mcap:" + B.mush.tex, { ...spec(B.mush.tex, B), ...rp(B.mush.tex, B), windAmp: 0, keep: G.uKeepMush, emit: glow ? 2.2 : 0, emitCol: [0.4, 0.85, 1], emitSpot: glow ? [0.7, 0.85] : null }), 0)]; });
     for (const c of CELLS) { if (!usable(c)) continue; const n = countIn(c, B.mush.n * D("mush") * (0.2 + c.forest * 1.5), 601);
       for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 602), s = (glow ? 1.6 : 1) * (0.8 + hash(c.id, k, 603) * 0.8);
         obj(L, x, c.h, z, hash(c.id, k, 604) * 6.28, s, [vars[(hash(c.id, k, 605) * 3) | 0]], hash(c.id, k, 606), { ly: 0.1 });
@@ -1378,7 +1635,7 @@ function buildLayers(B) {
   if (ON("rocks") && B.rocks) {
     const big = makeLayer("rocks", () => [S.mid]), peb = makeLayer("pebbles", () => [S.near * 0.6]);
     const rv = [0, 1, 2, 3].map(v => nb(rockGeo(rngOf(100 + v)), mat("rock:" + B.sheet, { at: [B.sheet, 3], windAmp: 0, single: true, snowable: B.snow }), 0));
-    for (const c of CELLS) { if (c.wet) continue;
+    for (const c of CELLS) { if (c.wet || c.tilled) continue;
       const nbig = countIn(c, B.rocks * D("rocks") * 0.12, 701), np = countIn(c, B.rocks * D("rocks") * 1.2, 702);
       for (let k = 0; k < nbig; k++) { const [x, z] = placeIn(c, k, 703); obj(big, x, c.h - 0.1, z, hash(c.id, k, 704) * 6.28, 0.45 + hash(c.id, k, 705) * 0.7, [[rv[(hash(c.id, k, 706) * 4) | 0]]], hash(c.id, k, 707), { ly: 0.3 }); }
       for (let k = 0; k < np; k++) { const [x, z] = placeIn(c, k + 10, 703); obj(peb, x, c.h - 0.02, z, hash(c.id, k, 714) * 6.28, 0.08 + hash(c.id, k, 715) * 0.12, [[rv[(hash(c.id, k, 716) * 4) | 0]]], hash(c.id, k, 717), { ly: 0.05 }); }
@@ -1399,7 +1656,7 @@ function buildLayers(B) {
   // ---- vines, hung by their root from the crowns of the trees placed above
   if (ON("vines") && B.vines && treeObjs.length && S.treeStyle !== "hex") {
     const L = makeLayer("vines", () => [S.near * 1.1]);
-    const vars = [0, 1, 2].map(v => nb(vineStrand(rngOf(900 + v)), mat("vine", { tex: "game/leaves", card: true, mask: 4, sway: true, leafy: true, windAmp: 0.0, windH: 3, upN: 0.3, flutter: 0.08 }), 0));
+    const vars = [0, 1, 2].map(v => nb(vineStrand(rngOf(900 + v)), mat("vine:" + (B.vine || "T:game/leaves") + ":" + B.sheet, { ...spec(B.vine || "T:game/leaves", B), ...rp(B.vine || "T:game/leaves", B), card: true, mask: 4, sway: true, leafy: true, windAmp: 0.0, windH: 3, upN: 0.3, flutter: 0.08 }), 0));
     for (const t of treeObjs) { const seed = t.seed * 1e6 | 0; if (hash(seed, 1, 901) > B.vines * D("vines")) continue;
       const n = 3 + ((hash(seed, 2, 901) * 4) | 0);
       for (let k = 0; k < n; k++) { const a = hash(seed, k, 902) * 6.28, r = t.cr * (0.4 + hash(seed, k, 903) * 0.5), x = t.x + Math.cos(a) * r, z = t.z + Math.sin(a) * r, y = t.y + t.H * (0.6 + hash(seed, k, 904) * 0.25);
@@ -1411,9 +1668,89 @@ function buildLayers(B) {
   if (ON("litter") && B.litter) {
     const L = makeLayer("litter", () => [S.near * 0.7]);
     const vars = [0, 1].map(v => nb(litterGeo(rngOf(950 + v)), mat("litter", { tex: "game/litter", card: true, mask: 5, windAmp: 0, upN: 1, keep: G.uKeepLitter, snowable: B.snow, decal: true }), 0));
-    for (const c of CELLS) { if (c.wet || c.path) continue; const n = countIn(c, B.litter * D("litter") * (0.2 + c.forest * 1.6), 1001);
+    for (const c of CELLS) { if (c.wet || c.path || c.tilled) continue; const n = countIn(c, B.litter * D("litter") * (0.2 + c.forest * 1.6), 1001);
       for (let k = 0; k < n; k++) { const a = hash(c.id, k, 1002) * 6.28, rr = Math.sqrt(hash(c.id, k, 1005)) * (R * 0.866 - 0.55), x = c.x + Math.cos(a) * rr, z = c.z + Math.sin(a) * rr; obj(L, x, c.h, z, hash(c.id, k, 1003) * 6.28, 1, [[vars[k % 2]]], hash(c.id, k, 1004), { ly: 0.02 }); } }
     LAYERS.push(L);
+  }
+
+  // ---- crops and gardens: M8's crops in their world stages (farming/world_art.py, copied to foliage/crops/),
+  // on small tilled plots of the fields sheet's tilled soil, and a few growing wild
+  if (ON("crops") && cropList.length) {
+    const L = makeLayer("crops", () => [S.near, S.mid * 0.7]);
+    const SIZE = [0.9, 1.0, 1.25, 1.45];   // M8's stage sizes, metres
+    const kit = {};
+    const cropB = (id, st) => kit[id + st] || (kit[id + st] = (() => {
+      const o = { tex: "crops/" + id + "_" + st, card: true, alpha: true, windAmp: 0.12, windH: 0.9, upN: 1, snowable: B.snow, emit: id === "glowcap" && st === 3 ? 1.6 : 0, emitCol: [0.4, 0.9, 1] };
+      return [nb(crossedCards(SIZE[st], SIZE[st], 2), mat("crop:" + id + st, o), 0), nb(crossedCards(SIZE[st], SIZE[st], 2), mat("crop:" + id + st, { ...o, level: 1 }), 1)];
+    })());
+    const SPOTS = [[0, 0], [0.75, 0.35], [-0.6, 0.5], [0.15, -0.8], [-0.7, -0.45], [0.75, -0.5]];   // M8's six per cell
+    for (const c of plots) {
+      const id = cropList[(hash(c.id, 2, 1101) * cropList.length) | 0], st = (hash(c.id, 3, 1101) * 4) | 0, v = cropB(id, st);
+      for (const [dx, dz] of st === 0 ? SPOTS.slice(0, 3) : SPOTS)
+        obj(L, c.x + dx * 0.9, c.h, c.z + dz * 0.9, hash(c.id, 4, 1101) * 6.28 + dx, 1, [[v[0]], [v[1]]], hash(c.id + dx * 7, 5, 1101), { ly: 0.4 });
+    }
+    for (const c of CELLS) { if (!usable(c) || c.cold) continue; if (hash(c.id, 6, 1101) >= 0.025 * D("crops")) continue;   // wild: one crop gone feral
+      const id = cropList[(hash(c.id, 7, 1101) * cropList.length) | 0], st = 2 + ((hash(c.id, 8, 1101) * 2) | 0), v = cropB(id, st), n = 1 + ((hash(c.id, 9, 1101) * 3) | 0);
+      for (let k = 0; k < n; k++) { const [x, z] = placeIn(c, k, 1102); obj(L, x, c.h, z, hash(c.id, k, 1103) * 6.28, 0.8 + hash(c.id, k, 1104) * 0.3, [[v[0]], [v[1]]], hash(c.id, k, 1105), { ly: 0.4 }); }
+    }
+    LAYERS.push(L);
+  }
+
+  // ---- wild fruit: clusters in the crowns of host trees and a few fallen under them, and forage plants on the ground
+  const FR = FRUIT[S.biome];
+  if (ON("fruit") && FR) {
+    const hangL = makeLayer("fruit", () => [S.mid]), fallL = makeLayer("fallen", () => [S.near]), plantL = makeLayer("forage", () => [S.near, S.mid * 0.7]);
+    const keep = G.uKeepFruit, HB = {}, PB = {};
+    const hangB = k => HB[k] || (HB[k] = (() => {
+      const o = { tex: keyedTex("fruit/hang_" + k, S.biome), card: true, alpha: true, windAmp: 0, upN: 0.5, keep, emit: k === "glowfruit" ? 2.2 : 0, emitCol: [0.4, 1, 0.95] };
+      return { hang: nb(crossedCards(0.5, 0.5, 2, -0.5), mat("hang:" + S.biome + ":" + k, o), 0), fall: nb(litterGeo(rngOf(1200)), mat("fall:" + S.biome + ":" + k, { ...o, upN: 1, decal: true }), 0) };
+    })());
+    for (const t of treeObjs) {
+      const kinds = FR.hang[t.sp]; if (!kinds) continue;
+      const seed = t.seed * 1e6 | 0; if (hash(seed, 1, 1201) > 0.5 * D("fruit")) continue;
+      // one fruit per tree, in patches of the same kind
+      const k = kinds[Math.floor(fbm(t.x * 0.04, t.z * 0.04, 41) * kinds.length * 1.6 + hash(seed, 2, 1201) * 0.6) % kinds.length], b = hangB(k);
+      const cap = t.sp === "glowcap", n = cap ? 4 : 5 + ((hash(seed, 3, 1201) * 4) | 0);
+      // Each fruit hangs from a point on the tree's own wood (its model's anchors: a pine's branches, an oak's twigs,
+      // the gills of a cap), turned and scaled with the tree, so none floats beside it (owner, 2026-11-15: "pine
+      // cones are floating"). The card hangs down from that point. The hex-prism trees have no branches: there fruit
+      // sits just inside the leaf block's rim.
+      const used = new Set();
+      for (let i = 0; i < n; i++) {
+        let off;
+        if (t.anchors && t.anchors.length) {
+          let ai = (hash(seed, i, 1202) * t.anchors.length) | 0; for (let g = 0; g < t.anchors.length && used.has(ai); g++) ai = (ai + 7) % t.anchors.length; used.add(ai);
+          const v = new THREE.Vector3(...t.anchors[ai]).applyAxisAngle(UP, t.yaw).multiplyScalar(t.s); off = [v.x, v.y + 0.04, v.z];
+        } else {
+          const a = hash(seed, i, 1202) * 6.28, r = t.cr * (0.35 + 0.3 * hash(seed, i, 1203));
+          off = [Math.cos(a) * r, t.H * (cap ? 0.8 : t.sp === "palm" ? 0.86 : 0.55 + 0.2 * hash(seed, i, 1204)), Math.sin(a) * r];
+        }
+        const ts = G.uTreeScale.value, f = obj(hangL, t.x + off[0] * ts, t.y + off[1] * ts, t.z + off[2] * ts, hash(seed, i, 1210) * 6.28, 0.9 + 0.3 * hash(seed, i, 1205), [[b.hang]], hash(seed, i, 1206), { ly: -1 });
+        f.base = [t.x, t.y, t.z]; f.off = off;
+        if (k === "glowfruit" && i === 0) addLight(t.x + off[0], t.y + off[1] - 0.3, t.z + off[2], [0.4, 1, 0.95], 3, 0.4, false);
+      }
+      for (let i = 0; i < 2 + ((hash(seed, 4, 1201) * 3) | 0); i++) {
+        const a = hash(seed, i, 1207) * 6.28, r = t.cr * (0.3 + 0.6 * hash(seed, i, 1208)), x = t.x + Math.cos(a) * r, z = t.z + Math.sin(a) * r, c = cellAt(x, z);
+        if (!c || c.wet || Math.abs(c.h - t.y) > 0.01) continue;   // only on the tree's own level, never hanging off a step
+        obj(fallL, x, c.h, z, a, 0.55, [[b.fall]], hash(seed, i, 1209), { ly: 0.02 });
+      }
+    }
+    const plantB = k => PB[k] || (PB[k] = (() => {
+      const sz = FORAGE_SIZE[k] || 1.0, o = { tex: keyedTex("fruit/plant_" + k, S.biome), card: true, alpha: true, windAmp: 0.1, windH: sz, upN: 0.8, keep: k === "glowfruit" || k === "gem_berry" ? undefined : keep, snowable: B.snow, emit: k === "glowfruit" || k === "gem_berry" ? 1.6 : 0, emitCol: k === "gem_berry" ? [0.6, 0.6, 1] : [0.4, 1, 0.95] };
+      return [nb(crossedCards(sz, sz, 2), mat("plant:" + S.biome + ":" + k, o), 0), nb(crossedCards(sz, sz, 2), mat("plant:" + S.biome + ":" + k, { ...o, level: 1 }), 1)];
+    })());
+    if (FR.plants.length) for (const c of CELLS) {
+      if (!usable(c) || c.cold) continue;
+      const n = countIn(c, 0.22 * D("fruit") * (0.5 + c.forest), 1301);
+      for (let k = 0; k < n; k++) {
+        const [x, z] = placeIn(c, k + 20, 1302);
+        // patches: neighbouring cells tend to grow the same plant, as wild berries do
+        const kind = FR.plants[Math.floor(fbm(c.x * 0.06 + 5, c.z * 0.06, 43) * FR.plants.length * 1.6 + hash(c.id, k, 1303) * 0.7) % FR.plants.length];
+        obj(plantL, x, c.h, z, hash(c.id, k, 1304) * 6.28, 0.85 + hash(c.id, k, 1305) * 0.3, plantB(kind).map(b => [b]), hash(c.id, k, 1306), { ly: 0.4 });
+        if (kind === "glowfruit" || kind === "gem_berry") addLight(x, c.h + 0.6, z, kind === "gem_berry" ? [0.6, 0.6, 1] : [0.4, 1, 0.95], 2.6, 0.35, false);
+      }
+    }
+    LAYERS.push(hangL, fallL, plantL);
   }
 
   // bake light and canopy occlusion into every object
@@ -1421,7 +1758,7 @@ function buildLayers(B) {
   const tl = [0, 0, 0], tg = [0, 0, 0];
   for (const L of LAYERS) for (const o of L.objs) {
     lightAt(o.x, o.y + Math.max(0.1, o.ly), o.z, null, tl, tg); o.lamp = tl.slice(); o.glow = tg.slice();
-    o.occ = L.key === "trees" ? occAt(o.x, o.z) * 0.25 : occAt(o.x, o.z) * (o.ly < 0 ? 0.3 : 1);
+    o.occ = L.key === "trees" ? occAt(o.x, o.z) * 0.25 : occAt(o.x, o.z) * (L.key === "fruit" ? 0.9 : o.ly < 0 ? 0.3 : 1);   // fruit hangs inside the crown, in its shade
   }
   for (const b of BATCHES) realise(b);
 }
@@ -1433,7 +1770,7 @@ function buildLayers(B) {
 // snapped to the Sweaft-64 palette with alpha 0 or 255, and handed to that
 // variant's mid cards and far billboard. Near, mid and far are one tree.
 // =====================================================================
-const BAKES = [];
+const BAKES = [], BAKED_JOBS = [];   // waiting to bake; baked for the current build (made again if a mean lands late)
 const VIEW_W = 48, VIEW_H = 72, VIEWS = 8, BAKE_TILT = 0.55;
 const SWEAFT = ["010e1a", "011c34", "1f3b52", "3e586e", "5d778d", "92a3b2", "bfcad7", "fffefe", "a09f91", "434137", "2c2c25", "161612", "010000", "1c020d", "4a051e", "841c1d", "d4462b", "fe6420", "fb902f", "faaf5c", "003227", "05582d", "297537", "559642", "9bb675", "0c2f44", "204f63", "53998b", "84e3b5", "c1f1d8", "191954", "15578a", "1096c3", "74effe", "d2f8ff", "230c44", "4f1d83", "7d2dbd", "9e3ba2", "c34988", "dd576d", "2b1f35", "3e3551", "69608b", "170916", "2f1525", "522b2f", "7d4636", "a8633e", "e69d69", "eab798", "41322c", "725244", "ab8465", "cfaa81", "561c27", "733126", "8d4526", "c56d25", "2e0d06", "681712", "a61e1f", "d12d41", "fa3a64"]
   .map(h => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]);
@@ -1464,9 +1801,25 @@ function bakeImpostors() {
   // short red strokes rather than a thatch over the crown.
   const S3 = 3, W = VIEW_W * VIEWS, H = VIEW_H, W3 = W * S3, H3 = H * S3;
   if (!bakeRT) bakeRT = new THREE.WebGLRenderTarget(W3, H3, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
-  const keep = { wind: G.uWind.value, gust: G.uGust.value, ts: G.uTreeScale.value, ff: G.uFFOn.value, lv: G.uLodVis.value, mv: G.uMaskVis.value, cv: G.uColVar.value, cc: renderer.getClearColor(new THREE.Color()), ca: renderer.getClearAlpha() };
-  G.uWind.value = 0; G.uGust.value = 0; G.uTreeScale.value = 1; G.uFFOn.value = 0; G.uLodVis.value = 0; G.uMaskVis.value = 0; G.uColVar.value = 0; G.uBake.value = 1;
+  // The bake is the tree in no season: autumn's colours and spring's tint are laid on the baked crown's green pixels
+  // live, as they are on the near leaves, so the bake never keeps the season it was made in. (It did: a forest baked
+  // in autumn kept peach-brown far trees after the switch back to summer, which does not rebuild. Owner, 2026-11-15:
+  // "summer LOD trees are shaded wrong".) Winter rebuilds, with bare impostors, so its snow may stay in the bake.
+  const keep = { wind: G.uWind.value, gust: G.uGust.value, ts: G.uTreeScale.value, ff: G.uFFOn.value, lv: G.uLodVis.value, mv: G.uMaskVis.value, cv: G.uColVar.value, au: G.uAutumn.value, sp: G.uSpring.value, cc: renderer.getClearColor(new THREE.Color()), ca: renderer.getClearAlpha() };
+  const restore = () => {
+    bakeRT.scissorTest = false; renderer.setRenderTarget(null); renderer.setClearColor(keep.cc, keep.ca);
+    G.uWind.value = keep.wind; G.uGust.value = keep.gust; G.uTreeScale.value = keep.ts; G.uFFOn.value = keep.ff; G.uLodVis.value = keep.lv; G.uMaskVis.value = keep.mv; G.uColVar.value = keep.cv; G.uAutumn.value = keep.au; G.uSpring.value = keep.sp; G.uBake.value = 0;
+  };
+  G.uWind.value = 0; G.uGust.value = 0; G.uTreeScale.value = 1; G.uFFOn.value = 0; G.uLodVis.value = 0; G.uMaskVis.value = 0; G.uColVar.value = 0; G.uAutumn.value = 0; G.uSpring.value = 0; G.uBake.value = 1;
   const buf = new Uint8Array(W3 * H3 * 4);
+  // the read-back is tested first on a known clear colour: a browser that refuses or poisons readPixels (Firefox's
+  // resistFingerprinting) would bake white or noise; then the painted impostors stay, which are right in every season
+  {
+    renderer.setRenderTarget(bakeRT); renderer.setClearColor(new THREE.Color(0x4080c0), 1); bakeRT.scissorTest = false; renderer.clear();
+    const t = new Uint8Array(4 * 4 * 4); renderer.readRenderTargetPixels(bakeRT, 0, 0, 4, 4, t); let worst = 0;
+    for (let i = 0; i < 16; i++) worst = Math.max(worst, Math.abs(t[i * 4] - 0x40), Math.abs(t[i * 4 + 1] - 0x80), Math.abs(t[i * 4 + 2] - 0xc0), Math.abs(t[i * 4 + 3] - 255));
+    if (worst > 24) { restore(); BAKES.length = 0; BAKE_FAILED = true; return; }
+  }
   const snapOf = (meshes, cam) => {
     meshes.forEach(m => bakeScene.add(m));
     renderer.setRenderTarget(bakeRT); renderer.setClearColor(0x000000, 0); bakeRT.scissorTest = false; renderer.clear();
@@ -1484,16 +1837,23 @@ function bakeImpostors() {
       snap[i] = -1;
       if (buf[i * 4 + 3] < 128) continue;
       const q = oklab(buf[i * 4], buf[i * 4 + 1], buf[i * 4 + 2]); let best = 0, bd = 1e9;
-      for (let c = 0; c < SWEAFT_LAB.length; c++) { const p = SWEAFT_LAB[c], d = (p[0] - q[0]) ** 2 + 8 * ((p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2); if (d < bd) { bd = d; best = c; } }
+      for (let c = 0; c < PAL_LAB.length; c++) { const p = PAL_LAB[c], d = (p[0] - q[0]) ** 2 + 8 * ((p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2); if (d < bd) { bd = d; best = c; } }
       snap[i] = best;
     }
     return snap;
   };
   const blockOf = (snap, x, y) => { const ids = []; for (let j = 0; j < S3; j++) for (let i = 0; i < S3; i++) { const c = snap[(S3 * y + j) * W3 + S3 * x + i]; if (c >= 0) ids.push(c); } return ids; };
-  const mode = ids => { let best = ids[0], bn = 0; for (const c of ids) { let n = 0; for (const d of ids) if (d === c) n++; if (n > bn || (n === bn && SWEAFT_LAB[c][1] < SWEAFT_LAB[best][1])) { bn = n; best = c; } } return best; };
+  const mode = ids => { let best = ids[0], bn = 0; for (const c of ids) { let n = 0; for (const d of ids) if (d === c) n++; if (n > bn || (n === bn && PAL_LAB[c][1] < PAL_LAB[best][1])) { bn = n; best = c; } } return best; };
+  // the snap palette is Sweaft-64 plus the place's own colours where a tree wears a palette (RAMPS): Sweaft has no
+  // dry olive, so an acacia crown snapped to it alone came out tan and brown
+  let PAL = SWEAFT, PAL_LAB = SWEAFT_LAB;
   for (const job of BAKES) {
+    const extra = [...new Set(job.parts.flatMap(([, m]) => m.userData.ramp ? m.userData.ramp.c : []))].map(h => [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)));
+    PAL = SWEAFT.concat(extra); PAL_LAB = PAL.map(c => oklab(c[0], c[1], c[2]));
     const cam = new THREE.OrthographicCamera(-job.Wd / 2, job.Wd / 2, job.hi, job.lo, 0.1, 400);
-    const split = job.parts.length > 1;   // a tree with leaves: bark is its first part
+    // a tree with leaves: bark is its first part. Not a glowcap: its bark holds the cap's underside, which the bark
+    // pass (drawn without the crown in front) would lay over the whole cap
+    const split = job.parts.length > 1 && !job.noSplit;
     const crown = snapOf((split ? job.parts.slice(1) : job.parts).map(([geo, m]) => bakeMesh(geo, m)), cam);
     const bark = split ? snapOf([bakeMesh(job.parts[0][0], job.parts[0][1])], cam) : null;
     const out = new Uint8Array(W * H * 4);
@@ -1502,20 +1862,19 @@ function bakeImpostors() {
       if (ids.length >= 6) best = mode(ids);   // clear if 4 of 9 are: the sky gaps at the whorl tips survive
       if (bark) { const b = blockOf(bark, x, y); if (b.length >= 6 || (best < 0 && b.length >= 5)) best = mode(b); }
       if (best < 0) continue;
-      const o = (y * W + x) * 4; out[o] = SWEAFT[best][0]; out[o + 1] = SWEAFT[best][1]; out[o + 2] = SWEAFT[best][2]; out[o + 3] = 255;
+      const o = (y * W + x) * 4; out[o] = PAL[best][0]; out[o + 1] = PAL[best][1]; out[o + 2] = PAL[best][2]; out[o + 3] = 255;
     }
     const t = new THREE.DataTexture(out, W, H, THREE.RGBAFormat);
     t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; t.needsUpdate = true;
     for (const m of job.mats) { if (m.userData.baked && m.userData.baked !== t) m.userData.baked.dispose(); m.uniforms.map.value = t; m.userData.baked = t; }
     BAKED++; BAKE_LOG.push({ label: job.label, w: W, h: H, data: out });
   }
-  bakeRT.scissorTest = false; renderer.setRenderTarget(null);
-  renderer.setClearColor(keep.cc, keep.ca);
-  G.uWind.value = keep.wind; G.uGust.value = keep.gust; G.uTreeScale.value = keep.ts; G.uFFOn.value = keep.ff; G.uLodVis.value = keep.lv; G.uMaskVis.value = keep.mv; G.uColVar.value = keep.cv; G.uBake.value = 0;
+  restore();
+  for (const j of BAKES) if (!BAKED_JOBS.includes(j)) BAKED_JOBS.push(j);
   BAKES.length = 0;
   drawAtlas();
 }
-let BAKED = 0;
+let BAKED = 0, BAKE_FAILED = false;
 // The debug view of what the bake made: every view of every baked tree, 3x, nearest.
 const BAKE_LOG = [];
 function drawAtlas() {
@@ -1760,17 +2119,28 @@ function buildLayerRows() {
 const LIVE = [["treeScale", v => v.toFixed(2) + "x"], ["plantScale", v => v.toFixed(2) + "x"], ["colVar", v => v.toFixed(2)], ["wind", v => v.toFixed(2)], ["gust", v => v.toFixed(2)], ["windDir", v => v + "°"],
   ["near", v => v + " m"], ["mid", v => v + " m"], ["draw", v => v + " m"], ["fadeW", v => S.lodMode === "timed" ? (v * 2).toFixed(2) + " s" : v.toFixed(2)]];
 function applyLive() {
+  if (G.uTreeScale.value !== S.treeScale) {   // fruit hangs on the trees' wood: it moves out and up as they grow
+    const ts = S.treeScale, L = LAYERS.find(l => l.key === "fruit");
+    if (L) for (const o of L.objs) if (o.base) { o.x = o.base[0] + o.off[0] * ts; o.y = o.base[1] + o.off[1] * ts; o.z = o.base[2] + o.off[2] * ts; o.m[12] = o.x; o.m[13] = o.y; o.m[14] = o.z; }
+  }
   G.uTreeScale.value = S.treeScale; G.uPlantScale.value = S.plantScale; G.uColVar.value = S.colVar;
   G.uWind.value = S.wind * (BIOMES[S.biome].lowg ? 1.3 : 1); G.uGust.value = S.gust; const a = S.windDir * Math.PI / 180; G.uWindDir.value.set(Math.cos(a), Math.sin(a));
   G.uLodVis.value = S.lodVis ? 1 : 0; G.uMaskVis.value = S.maskVis ? 1 : 0; G.uLowG.value = BIOMES[S.biome].lowg ? 1 : 0;
   const B = BIOMES[S.biome], se = S.season;
   G.uAutumn.value = se === "autumn" ? 1 : 0; G.uSpring.value = se === "spring" ? 1 : 0; G.uWinter.value = se === "winter" ? 1 : 0;
   G.uSnow.value = se === "winter" && B.snow ? 1 : 0;
+  // fallen leaves: only where trees drop them (the biome's broadleaf share), in autumn, and browned under winter's snow
+  const tw = B.trees || {}, tot = Object.values(tw).reduce((a, b) => a + b, 0) || 1, decid = Object.entries(tw).reduce((a, [k, w]) => a + (SPECIES[k] && SPECIES[k].decid ? w : 0), 0) / tot;
+  G.uLeafFall.value = B.alien ? 0 : (se === "autumn" ? S.leafFall : se === "winter" ? 0.6 * S.leafFall : 0) * Math.min(1, decid * 1.25);
+  G.uLeafUnder.value = S.leafUnder; G.uLeafSize.value = S.leafSize;
+  for (const [id, v] of [["leafFall", S.leafFall], ["leafUnder", S.leafUnder], ["leafSize", S.leafSize]]) { const el = $(id); if (el && +el.value !== v) el.value = v; }
+  if ($("leafFallOut")) { $("leafFallOut").textContent = Math.round(S.leafFall * 100) + "%"; $("leafUnderOut").textContent = Math.round(S.leafUnder * 100) + "%"; $("leafSizeOut").textContent = "x" + S.leafSize.toFixed(2); }
   G.uKeepFlower.value = { spring: 1.01, summer: 0.75, autumn: 0.3, winter: 0 }[se];
   G.uKeepLitter.value = { spring: 0.35, summer: 0.5, autumn: 1.01, winter: 0.6 }[se];
   G.uKeepMush.value = { spring: 0.4, summer: 0.6, autumn: 1.01, winter: 0.1 }[se];
+  G.uKeepFruit.value = { spring: 0.35, summer: 0.85, autumn: 1.01, winter: 0.08 }[se];   // fruit ripens through the year
   G.uKeepGrass.value = se === "winter" && B.snow ? 0.18 : 2;
-  if (B.alien) { G.uKeepFlower.value = 1.01; G.uKeepMush.value = 1.01; G.uKeepLitter.value = 1.01; G.uAutumn.value = 0; G.uWinter.value = 0; G.uSpring.value = 0; }
+  if (B.alien) { G.uKeepFlower.value = 1.01; G.uKeepMush.value = 1.01; G.uKeepFruit.value = 1.01; G.uKeepLitter.value = 1.01; G.uAutumn.value = 0; G.uWinter.value = 0; G.uSpring.value = 0; }
   const fogFar = Math.max(S.draw * 1.6, 120); G.uFogFar.value = fogFar; G.uFogNear.value = fogFar * 0.3;
   $("legend").hidden = !S.lodVis;
   $("fadeWLabel").textContent = S.lodMode === "timed" ? "Fade time" : "Fade width (fraction of the ring)";
@@ -1781,11 +2151,11 @@ function applyLive() {
 function syncUI() {
   for (const [k, fmt] of LIVE) { $(k).value = S[k]; $(k + "Out").textContent = fmt(+S[k]); }
   $("time").value = S.time; $("timeOut").textContent = fmtTime(S.time);
-  $("treeStyle").value = S.treeStyle; $("grassStyle").value = S.grassStyle || "blades"; $("lodMode").value = S.lodMode; $("lodVis").checked = S.lodVis; $("maskVis").checked = S.maskVis; $("atlasVis").checked = !!S.atlasVis; $("patch").value = String(S.patch);
+  $("treeStyle").value = S.treeStyle; $("grassStyle").value = S.grassStyle || "tufts"; $("lodMode").value = S.lodMode; $("lodVis").checked = S.lodVis; $("maskVis").checked = S.maskVis; $("atlasVis").checked = !!S.atlasVis; $("patch").value = String(S.patch);
   for (const b of $("season").children) b.setAttribute("aria-pressed", b.dataset.v === S.season);
   for (const b of $("biomes").children) b.setAttribute("aria-pressed", b.dataset.v === S.biome);
   const B = BIOMES[S.biome];
-  const avail = { trees: true, bushes: !!B.bush, grass: true, flowers: !!B.flowers, ferns: !!(B.ferns && B.ferns.n), mush: !!B.mush, rocks: !!B.rocks, logs: !!B.logs, vines: !!B.vines && S.treeStyle !== "hex", litter: !!B.litter, lights: true, fireflies: !!B.fireflies };
+  const avail = { trees: true, bushes: !!B.bush, grass: true, flowers: !!B.flowers, ferns: !!(B.ferns && B.ferns.n), mush: !!B.mush, rocks: !!B.rocks, logs: !!B.logs, vines: !!B.vines && S.treeStyle !== "hex", litter: !!B.litter, crops: !!(CROPS_BY[S.biome] || []).length, fruit: !!FRUIT[S.biome], lights: true, fireflies: !!B.fireflies };
   for (const [k] of LAYER_DEFS) {
     $("on_" + k).checked = S.layers[k].on; $("row_" + k).classList.toggle("na", !avail[k]);
     $("row_" + k).title = avail[k] ? "" : "Not in this biome";
@@ -1800,6 +2170,10 @@ for (const [k, fmt] of LIVE) $(k).addEventListener("input", e => { S[k] = +e.tar
 $("time").addEventListener("input", e => { S.time = +e.target.value; $("timeOut").textContent = fmtTime(S.time); setWhere(); applyLive(); });
 $("treeStyle").onchange = e => { S.treeStyle = e.target.value; syncUI(); rebuild(); };
 $("grassStyle").onchange = e => { S.grassStyle = e.target.value; syncUI(); rebuild(); };
+for (const id of ["leafFall", "leafUnder", "leafSize"]) $(id).oninput = e => { S[id] = +e.target.value; applyLive(); };
+// "Let them fall": from bare ground, slowly, to a covered ground, then stops. Off by default.
+let leafRun = false;
+$("leafPlay").onclick = () => { leafRun = !leafRun; if (leafRun) S.leafFall = 0; if (leafRun && S.season !== "autumn") { S.season = "autumn"; syncUI(); rebuild(); } $("leafPlay").setAttribute("aria-pressed", String(leafRun)); applyLive(); };
 $("lodMode").onchange = e => { S.lodMode = e.target.value; applyLive(); };
 $("lodVis").onchange = e => { S.lodVis = e.target.checked; applyLive(); };
 $("maskVis").onchange = e => { S.maskVis = e.target.checked; applyLive(); };
@@ -1818,7 +2192,7 @@ for (const b of document.querySelectorAll("[data-preset]")) b.onclick = () => {
   S.layers = Object.assign(JSON.parse(JSON.stringify(DEFAULTS.layers)), p.layers ? JSON.parse(JSON.stringify(p.layers)) : {});
   syncUI(); rebuild(); toast("Preset: " + b.textContent);
 };
-function shareObj() { return { biome: S.biome, season: S.season, time: +S.time.toFixed(2), treeStyle: S.treeStyle, grassStyle: S.grassStyle, treeScale: S.treeScale, plantScale: S.plantScale, colVar: S.colVar, wind: S.wind, gust: S.gust, windDir: S.windDir, lodMode: S.lodMode, near: S.near, mid: S.mid, draw: S.draw, fadeW: S.fadeW, patch: S.patch, layers: S.layers }; }
+function shareObj() { return { biome: S.biome, season: S.season, time: +S.time.toFixed(2), treeStyle: S.treeStyle, grassStyle: S.grassStyle, leafFall: S.leafFall, leafUnder: S.leafUnder, leafSize: S.leafSize, treeScale: S.treeScale, plantScale: S.plantScale, colVar: S.colVar, wind: S.wind, gust: S.gust, windDir: S.windDir, lodMode: S.lodMode, near: S.near, mid: S.mid, draw: S.draw, fadeW: S.fadeW, patch: S.patch, layers: S.layers }; }
 let shareEdited = false;
 function updateShare() { if (!shareEdited) $("share").value = JSON.stringify(shareObj(), null, 1); }
 $("share").addEventListener("input", () => { shareEdited = true; });
@@ -1833,7 +2207,9 @@ $("applyShare").onclick = () => {
 function panelToggle(btn, panel) { $(btn).onclick = () => { const open = $(panel).dataset.open !== "true"; $(panel).dataset.open = open; $(btn).textContent = open ? "Hide" : "Show"; $(btn).setAttribute("aria-expanded", open); }; }
 panelToggle("sceneToggle", "scenePanel"); panelToggle("rackToggle", "rack");
 $("openNotes").onclick = () => { $("notes").hidden = false; $("closeNotes").focus(); };
-$("closeNotes").onclick = () => { $("notes").hidden = true; };
+$("closeNotes").onclick = () => { $("notes").hidden = true; $("openNotes").focus(); };
+// a tap outside the notes closes them, as Esc and the close button do
+addEventListener("pointerdown", e => { if (!$("notes").hidden && !$("notes").contains(e.target) && e.target !== $("openNotes")) $("notes").hidden = true; });
 addEventListener("keydown", e => { if (e.key === "Escape") $("notes").hidden = true; });
 { const row = $("artrow"); for (const n of ["flower_red", "flower_yellow", "flower_glow", "cap_red", "cap_brown", "bark_birch", "bark_palm", "imp_oak", "imp_oak_bare", "imp_pine", "icon_glowcap", "icon_crystal"]) { const i = document.createElement("img"); i.src = TEXDIR + n + ".png?v=" + ART_V; i.alt = n.replace("_", " "); row.appendChild(i); } }
 if (matchMedia("(max-width:860px)").matches) { $("rack").dataset.open = "false"; $("rackToggle").textContent = "Show"; $("scenePanel").dataset.open = "false"; $("sceneToggle").textContent = "Show"; }
@@ -1858,8 +2234,10 @@ function frame() {
   const now = performance.now();   // one clock for animation and fades (a rAF timestamp can lag it)
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   G.uTime.value = now / 1000;
+  if (leafRun) { S.leafFall = Math.min(1, S.leafFall + dt / 40); applyLive(); if (S.leafFall >= 1) { leafRun = false; $("leafPlay").setAttribute("aria-pressed", "false"); } }
   updateCamera(dt);
   moveFireflies(now / 1000);
+  resolveMeans();
   bakeImpostors();
   updateLOD(now / 1000);
   sky.position.copy(camera.position);
