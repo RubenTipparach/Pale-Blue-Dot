@@ -1826,7 +1826,7 @@ const hexDistA = (q, r) => Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
 function sceneSim(stage) {
   const W = setupStage("sim", stage, {marine: false, water: "river", far: 500,
     extraTop: `<div class="seg" role="group" aria-label="Tool" id="simTool"><button data-k="pour" aria-pressed="true">Pour water</button><button data-k="dig" aria-pressed="false">Dig</button><button data-k="block" aria-pressed="false">Place block</button></div>`,
-    extra: `<div class="seg"><button id="simRun" aria-pressed="true">Pause</button><button id="simStep">Step</button><button id="simReset">Reset</button><button id="simBreach" hidden>Breach the dam</button><button class="info" id="simInfo" aria-label="How the water sim works">i</button></div>
+    extra: `<div class="seg"><button id="simRun" aria-pressed="true">Pause</button><button id="simStep">Step</button><button id="simReset">Reset</button><button id="simBreach" hidden>Breach the dam</button><button id="simArrows" aria-pressed="true" title="Arrows on the water: which way each cell flows">Flow arrows</button><button class="info" id="simInfo" aria-label="How the water sim works">i</button></div>
       <div class="lab2"><span>Tick speed</span><b id="simRateV">4 ticks/s</b></div><input type="range" id="simRate" min="1" max="20" value="4" aria-label="Ticks a second">
       <div class="seg" role="group" aria-label="Preset" id="simPreset">${Object.entries(SIM_PRESETS).map(([k, p]) => `<button data-p="${k}" aria-pressed="false">${p.name}</button>`).join("")}</div>
       <div class="seg" role="group" aria-label="Renewal" id="simRenew"><button data-r="3" aria-pressed="true">Renew at 3 (hex)</button><button data-r="2" aria-pressed="false">2 (Luanti)</button><button data-r="99" aria-pressed="false">Off</button></div>`});
@@ -1835,7 +1835,6 @@ function sceneSim(stage) {
   const LQ = L.create({N, Y0, Y1, range: 8, renew: 3}), {kind, lvl, down, idx, inside, unidx, SIM} = LQ;
   const cmat = new Uint8Array(LQ.NCELL);   // 1 grass top, 2 dirt, 3 stone, 4 placed granite
   const atlas = atlasMat(W), granite = W.std({map: tex("game/granite", 2)});
-  const wMat = W.std({vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false, roughness: 0.3, side: THREE.DoubleSide});   // the side walls and falls are wound inward; drawn from both sides they show (owner, 2026-11-15: "water sim is missing the wall/waterfalls part")
   const S = {preset: "fall", tool: "pour", run: true, rate: 4, acc: 0, ground: null, water: null};
   const setCell = (q, r, y, k, m = 0) => { if (!inside(q, r, y)) return false; const i = idx(q, r, y); kind[i] = k; lvl[i] = 0; down[i] = 0; cmat[i] = m; LQ.touch(q, r, y); return true; };
   S.pour = (q, r, y) => inside(q, r, y) && kind[idx(q, r, y)] !== SOLID && setCell(q, r, y, SRC);
@@ -1869,19 +1868,39 @@ function sceneSim(stage) {
   }
   // water: tinted by its level, as M28 and the game tint water: sources deep blue, flowing lighter as its level falls,
   // falling water palest. A cap where nothing wet is above; a side wherever the neighbour is not solid and lower.
-  const C_SRC = new THREE.Color(0x2a6a92).convertSRGBToLinear(), C_FLOW = new THREE.Color(0x4a9cbc).convertSRGBToLinear(), C_FALL = new THREE.Color(0x9fd2e4).convertSRGBToLinear(), cc = new THREE.Color();
   const surf = i => { const [q, r, y] = unidx(i), up = inside(q, r, y + 1) ? kind[idx(q, r, y + 1)] : AIR; if (up === SRC || up === FLOW) return y + 1; return kind[i] === SRC || down[i] ? y + 0.94 : y + (lvl[i] + 1) / 8; };
+  // The sim's water is drawn as the river's is (owner, 2026-11-15: "can we have the frothy walls and edges like the
+  // river demo you had and show flow direction?"): one cap per column at its top water surface, through makeCaps, so
+  // every step down to a lower column gets the river's foaming fall sheet and lip, and each cap carries a flow vector
+  // the streaks advect along: towards the neighbours whose water stands lower, by how much lower (Luanti's levels
+  // falling outward). A column falling straight down carries none.
+  let simMat = null;
   function rebuildWater() {
-    const P = [], Cl = [], tri = (a, b, c) => { P.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) Cl.push(cc.r, cc.g, cc.b); };
-    for (let i = 0; i < LQ.NCELL; i++) { const k = kind[i]; if (k !== SRC && k !== FLOW) continue; const [q, r, y] = unidx(i), h = surf(i), X = hx(q, r), Z = hz(r);
-      if (k === SRC) cc.copy(C_SRC); else if (down[i]) cc.copy(C_FALL); else cc.copy(C_SRC).lerp(C_FLOW, 1 - lvl[i] / 7);
-      const up = inside(q, r, y + 1) ? kind[idx(q, r, y + 1)] : AIR;
-      if (up !== SRC && up !== FLOW) for (let k2 = 0; k2 < 6; k2++) { const [ax, az] = CORNER[k2], [bx, bz] = CORNER[(k2 + 1) % 6]; tri([X, h, Z], [X + bx, h, Z + bz], [X + ax, h, Z + az]); }
-      for (let sd = 0; sd < 6; sd++) { const nq = q + DIRS[sd][0], nr = r + DIRS[sd][1]; let lo = y;
-        if (inside(nq, nr, y)) { const n = idx(nq, nr, y), kn = kind[n]; if (kn === SOLID) continue; if (kn === SRC || kn === FLOW) { lo = Math.max(y, surf(n)); if (lo >= h - 0.01) continue; } } else continue;
-        const [ax, az] = CORNER[sd], [bx, bz] = CORNER[(sd + 1) % 6]; tri([X + ax, lo, Z + az], [X + bx, lo, Z + bz], [X + bx, h, Z + bz]); tri([X + ax, lo, Z + az], [X + bx, h, Z + bz], [X + ax, h, Z + az]); } }
-    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(Cl, 3)); g.computeVertexNormals();
-    if (S.water) { S.water.geometry.dispose(); S.water.geometry = g; } else { S.water = new THREE.Mesh(g, wMat); S.water.renderOrder = 3; W.scene.add(S.water); }
+    const tops = new Map();
+    for (let i = 0; i < LQ.NCELL; i++) { const k = kind[i]; if (k !== SRC && k !== FLOW) continue; const [q, r, y] = unidx(i), key = q + "," + r, h = surf(i);
+      const t = tops.get(key); if (!t || h > t.wl) tops.set(key, {q, r, wl: h, fall: k === FLOW && !!down[i]}); }
+    const cells = new Map();
+    for (const [key, t] of tops) {
+      const X = hx(t.q, t.r), Z = hz(t.r); let fx = 0, fz = 0;
+      if (!t.fall) for (const [dq, dr] of DIRS) { const n = tops.get((t.q + dq) + "," + (t.r + dr)); if (!n || n.wl >= t.wl - 0.02) continue;
+        const dx = hx(t.q + dq, t.r + dr) - X, dz = hz(t.r + dr) - Z, l = Math.hypot(dx, dz) || 1, w = Math.min(1, t.wl - n.wl); fx += dx / l * w; fz += dz / l * w; }
+      const m = Math.hypot(fx, fz), sp = Math.min(0.9, m * 0.9);
+      cells.set(key, {wl: t.wl, flow: m > 1e-4 ? [fx / m * sp, fz / m * sp] : [0, 0]});
+    }
+    if (S.water) { W.scene.remove(S.water); S.water.geometry.dispose(); }
+    S.water = makeCaps(W, cells, simMat ? {mat: simMat} : {amp: 0.01, mud: 0, minA: 0.78});
+    if (!simMat) simMat = S.water.material;
+    // flow arrows: a flat chevron on each flowing cap, pointing downstream, longer the faster it runs
+    if (!S.arrows) {
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute([0.55, 0, 0, -0.35, 0, 0.42, -0.12, 0, 0, 0.55, 0, 0, -0.12, 0, 0, -0.35, 0, -0.42], 3));
+      S.arrows = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({color: 0xf4fbff, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide}), 2400);
+      S.arrows.renderOrder = 6; S.arrows.frustumCulled = false; W.scene.add(S.arrows);
+    }
+    const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), SC = new THREE.Vector3(), UPA = new THREE.Vector3(0, 1, 0); let na = 0;
+    for (const [key, c] of cells) { const sp = Math.hypot(c.flow[0], c.flow[1]); if (sp < 0.05 || na >= 2400) continue; const [q, r] = key.split(",").map(Number);
+      Q.setFromAxisAngle(UPA, -Math.atan2(c.flow[1], c.flow[0])); V.set(hx(q, r), c.wl + 0.04, hz(r)); const k = 0.9 + 0.9 * sp; SC.set(k, 1, 1.2);
+      M4.compose(V, Q, SC); S.arrows.setMatrixAt(na++, M4); }
+    S.arrows.count = na; S.arrows.instanceMatrix.needsUpdate = true; S.arrows.visible = S.showArrows !== false;
   }
   const count = () => { let s = 0, f = 0, d = 0; for (let i = 0; i < LQ.NCELL; i++) { if (kind[i] === SRC) s++; else if (kind[i] === FLOW) { f++; if (down[i]) d++; } } return {s, f, d}; };
   // lamp posts at the patch's edge: at night the water is lit by them
@@ -1895,6 +1914,8 @@ function sceneSim(stage) {
     const ok = S.tool === "pour" ? S.pour(q, r, y) : S.tool === "dig" ? S.dig(q, r, y) : S.place(q, r, y);
     if (ok) { if (S.tool !== "pour") { rebuildGround(); placePosts(); } rebuildWater(); }
   };
+  const arrowsBtn = stage.querySelector("#simArrows");
+  arrowsBtn.addEventListener("click", () => { S.showArrows = S.showArrows === false; arrowsBtn.setAttribute("aria-pressed", String(S.showArrows)); if (S.arrows) S.arrows.visible = S.showArrows; });
   const runBtn = stage.querySelector("#simRun"), rateEl = stage.querySelector("#simRate");
   const setRun = v => { S.run = v; runBtn.setAttribute("aria-pressed", v); runBtn.textContent = v ? "Pause" : "Play"; };
   runBtn.addEventListener("click", () => setRun(!S.run));
