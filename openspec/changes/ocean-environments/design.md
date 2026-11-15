@@ -320,6 +320,105 @@ the coast tab's low and high tide screenshots.
 - **Q3. The deep fitted to the column.** `light-40m.jpg`, `light-90m.jpg`,
   `light-140m.jpg`, `deep-day.jpg`. Recommend fitting.
 
+## Building it (2026-11-15)
+
+The owner, 2026-11-15, on the roadmap's phase 2 ("advanced foliage and flora
+(M13), and an underwater overhaul (M25)"): "continue with next phase while i
+rewview". That is the request to build. Q1 to Q3 are still unanswered, so
+their recommendations are taken as provisional (recommendation taken, ask
+only with screenshots) and each is easy to turn back: the zones are two
+numbers, tides are one range, the cards are the movers' drawing. Branch
+`claude/underwater-v2`. Land flora, grass and trees are another agent's, and
+nothing here touches them.
+
+Order: group 4 (light), then group 7 (water life), then group 5 (tides) only
+if the shader-against-core sea test still agrees within 1 mm and hulls still
+float, then group 6 in a new generator version if time remains. Group 8 waits
+for volumetric water, as decision 9 says.
+
+### B1. What was measured first
+
+Captures of the walker standing on the seabed (`--walk --at`, fixed step,
+the M4 Max Mac, `--profile fast`), level and looking up 40 degrees, in
+`docs/screenshots/underwater-v2/before-*.jpg`:
+- **The 140 m shot cannot be taken on the shipped seed.** The deepest
+  seabed the generator makes is 125 m (10.5, -88.0); within reach of the
+  same daylight, 103 m. The fourth depth is 123 m, the deepest there is, and
+  every depth is the eye's depth on a real floor.
+- **Before, 90 m is still lit blue** (the floor reads about (0, 1, 13) of
+  255 and the water overhead a clear blue), as the proposal said: one
+  absorption fades the light so slowly that the twilight zone never comes.
+- **The deep's colour is near black at any depth.** `deep_color` is an
+  albedo of 0.04 at most, so the water seen across a distance is dark
+  navy even at 10 m; that is the open water's look and is left alone.
+
+### B2. Where the two coefficients go
+
+- `downwell_per_m` (new in `water.ron`, 0.40 / 0.065 / 0.046) is the light
+  ARRIVING: the seabed's light at its depth (`planet_surface.wgsl`, which
+  used the absorption for this) and the murk's light at the eye's depth
+  (`murk` in `water.wgsl`).
+- `absorption_per_m` (0.32 / 0.035 / 0.012, unchanged) stays the view's path
+  through water, in the composite and in the sheet. The design table's 0.25
+  for red is not taken: the shallows were tuned on 0.32 (`water-lit`) and
+  the split is the change, not a new red.
+- The terrain's uniform keeps its lane: `water_absorption.rgb` carries the
+  downwelling now (its only reader was the seabed's light), and its name
+  says so in a comment, to keep the Rust and WGSL layouts as they are.
+
+### B3. Turbidity before the environment function
+
+`ocean::environment` (6.1) needs the climate normals and the generator's new
+places, so it comes with group 6. Until then the turbidity at the eye is read
+off what the game already knows: the water class under the eye
+(`fauna::water_class`) and the depth. River 0.12; the sea from coast 0.07 in
+the shallows to open ocean 0.022 past the shelf, smoothly by depth; eased
+over two seconds so crossing a class never steps. It thickens the view's
+path toward the murk colour, in the composite and from the sheet. Reef,
+kelp, polar and marsh values wait in `water.ron` for 6.1.
+
+### B4. The zones as a core rule
+
+`pbd_core::ocean` holds the light left at a depth (`exp(-downwell * d)`) and
+the zone it puts the point in: sunlit while blue keeps over 15%, twilight to
+1.7%, midnight below. A test pins 40 m and 90 m for ocean water and the
+"red goes first" scenario, and that both lie above `column::BASE_M`.
+
+### B5. Caustics, shafts, snow and spray
+
+- **Caustics**: on up-facing seabed lit by the sun, a moving web projected
+  along the sun, in 0.25 m steps, scaled by the light left at the face's
+  depth and faded out by `caustics.fade_m`; none at night (it rides the
+  sun's own term, so cloud, shade and night take it).
+- **Shafts**: from under the water by day, a few samples along the view ray
+  of a slow pattern on the surface traced back along the sun, each lit by
+  the light left at its depth; strongest looking toward the sun.
+- **Marine snow**: specks on three shells round the eye in a grid anchored
+  to the body, sinking, from the twilight zone down, lit by what light is
+  left and a faint glow of their own (`snow.glow`) so the midnight zone has
+  something in it to judge depth by.
+- **Spray and streaks**: from `spray_from_mps` (a gale, 17 m/s) up, foam
+  streaks laid along the wind sea's heading and spray on the crests, both
+  growing with the wind past it.
+- All four are drawn, derived and never saved. Their strengths are
+  `water.ron` numbers; zero turns each off.
+
+### B6. Water life, first cut
+
+- Species are appended to `home` in `fauna.ron` (the index is the save).
+  Each gains `env` (empty: anywhere its water class fits) and a `mover`:
+  `School` (today's), `Crawler` (walks the bed: crabs, lobsters, clams) or
+  `Floater` (rides the sea: ducks, otters). Old entries default to
+  `School` and no environment, so the eight fish are unchanged.
+- Environment tags that need 6.1 (reef, kelp, vent, under-ice) are carried
+  but read as "open water" until it lands; the spawn rule today is class,
+  temperature and, for a crawler, the bed depth.
+- **Protected** species refuse the catch with the reason. The rod's bite
+  is only by fish (`Class::Fish`); a crawler is taken by hand and a floater
+  never.
+- Creatures are drawn as the schools are today (small lit meshes) until the
+  pixel cards (Q2) are judged.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with
