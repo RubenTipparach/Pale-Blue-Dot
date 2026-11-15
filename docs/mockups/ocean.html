@@ -806,7 +806,10 @@ void main() {
     // swash at the sand itself.
     float brkD = clamp(1.8 + uAmp * 8.0, 1.6, 4.0);
     float surfBand = smoothstep(brkD - 1.1, brkD - 0.3, depth) * (1.0 - smoothstep(brkD + 0.2, brkD + 1.2, depth));
-    float rollIn = step(fract(depth / brkD * 2.0 + uT * 0.22), 0.22) * step(0.25, depth) * (1.0 - smoothstep(brkD - 0.4, brkD, depth));
+    // the white water rolls in on the main swell's own crests (its phase, smooth in space and time), not on the
+    // depth, which steps a metre at every hex column and made whole cells blink: depth only says where the surf zone is
+    float swellPh = sin(${WAVES[2].k.toFixed(4)} * dot(vec2(${WAVES[2].dx.toFixed(4)}, ${WAVES[2].dz.toFixed(4)}), vW.xz) - ${WAVES[2].w.toFixed(4)} * uT + ${WAVES[2].ph.toFixed(4)});
+    float rollIn = smoothstep(0.55, 0.9, swellPh) * step(0.25, depth) * (1.0 - smoothstep(brkD - 0.4, brkD + 0.4, depth));
     float swash = 1.0 - smoothstep(0.0, 0.3, depth);
     foam += (surfBand * (0.45 + 0.45 * nse) + rollIn * (0.25 + 0.35 * nse) + swash * 0.35 * nse) * step(0.15, uAmp);
     float spd = length(vFlow);
@@ -854,7 +857,7 @@ function makeCaps(W, cells, o = {}) {
     const [q, r] = key.split(",").map(Number), X = hx(q, r), Z = hz(r), f = c.flow || [0, 0];
     for (let i = 0; i < 6; i++) { const [ax, az] = CORNER[i], [bx, bz] = CORNER[(i + 1) % 6]; push([X, c.wl, Z], f, 0); push([X + bx, c.wl, Z + bz], f, 0); push([X + ax, c.wl, Z + az], f, 0); }
     for (let i = 0; i < 6; i++) {
-      const nb = cells.get((q + DIRS[i][0]) + "," + (r + DIRS[i][1])); if (o.noFalls || !nb || nb.wl >= c.wl - 0.05) continue;
+      const nk = (q + DIRS[i][0]) + "," + (r + DIRS[i][1]), nb = cells.get(nk) || (o.lower && o.lower.get(nk)); if (o.noFalls || !nb || nb.wl >= c.wl - 0.05) continue;   // o.lower: water drawn by another mesh (the sea), so the last step still falls into it (owner, 2026-11-15: "last part of this water fall is missing")
       // The falling sheet stands FALL_OFF in front of the cell's edge, toward the lower cell: the cliff face (the column's
       // side) is on the edge itself, and a sheet on the same plane z-fights with it. The sheet runs from the lip of the
       // upper cap down a hair into the pool below, so no seam opens at either end.
@@ -1600,7 +1603,7 @@ function sceneRiver(stage) {
   buildColumns(W, cells, M); const bed = bedSampler(cells);
   // the river's caps: each water cell at its level, flowing downstream along the channel, falling down every step
   const rc = new Map(); for (const [k, c] of cells) if (c.river) { const [q, r] = k.split(",").map(Number), x = hx(q, r); const dz = (zc(x + 1) - zc(x - 1)) / 2, L = Math.hypot(1, dz), fast = (x > -76 && x < -40) || (x > -16 && x < 0) ? 0.9 : x > 70 ? 0 : 0.35; rc.set(k, {wl: c.river.wl, flow: [fast / L, fast * dz / L]}); }
-  makeCaps(W, new Map([...rc].filter(([k, c]) => c.wl > 0.1)), {amp: 0.015, mud: 0.4});
+  makeCaps(W, new Map([...rc].filter(([k, c]) => c.wl > 0.1)), {amp: 0.015, mud: 0.4, lower: rc});
   const sea = makeSea(W, {amp: 0.25, seaOnly: true});
   const wl = (x, z) => { const k = cellOf(x, z), key = k[0] + "," + k[1], c = rc.get(key); if (c) return c.wl; if (x > 72) { const g = cells.get(key); if (!g || g.h < 0.1) return 0; } return -1000; };
   bakeWater(W, wl, -100, -40, 100, 40, 256, bed);
@@ -1832,7 +1835,7 @@ function sceneSim(stage) {
   const LQ = L.create({N, Y0, Y1, range: 8, renew: 3}), {kind, lvl, down, idx, inside, unidx, SIM} = LQ;
   const cmat = new Uint8Array(LQ.NCELL);   // 1 grass top, 2 dirt, 3 stone, 4 placed granite
   const atlas = atlasMat(W), granite = W.std({map: tex("game/granite", 2)});
-  const wMat = W.std({vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false, roughness: 0.3});
+  const wMat = W.std({vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false, roughness: 0.3, side: THREE.DoubleSide});   // the side walls and falls are wound inward; drawn from both sides they show (owner, 2026-11-15: "water sim is missing the wall/waterfalls part")
   const S = {preset: "fall", tool: "pour", run: true, rate: 4, acc: 0, ground: null, water: null};
   const setCell = (q, r, y, k, m = 0) => { if (!inside(q, r, y)) return false; const i = idx(q, r, y); kind[i] = k; lvl[i] = 0; down[i] = 0; cmat[i] = m; LQ.touch(q, r, y); return true; };
   S.pour = (q, r, y) => inside(q, r, y) && kind[idx(q, r, y)] !== SOLID && setCell(q, r, y, SRC);
