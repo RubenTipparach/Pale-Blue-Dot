@@ -137,7 +137,11 @@ struct WaterView {
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
 @group(0) @binding(2) var<storage,read> water: array<u32>;
-@group(0) @binding(3) var<storage,read> flow: array<vec2<f32>>;
+// The game's own water that the sheet does not draw (`water-flow` E6): three
+// lanes a vertex, triangles end to end. xyz body-local position, w the sky's
+// share; xyz the face's normal, w its kind (1 a top, 2 a falling face, 3 a
+// still face); xy the flow in the face's tangent frame, m/s over 0.35.
+@group(0) @binding(3) var<storage,read> flowing: array<vec4<f32>>;
 @group(0) @binding(4) var<storage,read> rain_map: array<f32>;
 @group(1) @binding(0) var scene_color: texture_2d<f32>;
 #ifdef MULTISAMPLED
@@ -199,6 +203,8 @@ struct VertexOut {
     // Which partition the sheet is drawn for while a landing dissolves, as
     // the terrain marks it (`two-set-dissolve`): 0 both, 1 the new, 2 the old.
     @location(10) @interpolate(flat) part_mark: u32,
+    // 0 the sea sheet; else the flowing water's face kind (`vertex_flowing`).
+    @location(11) @interpolate(flat) kind: u32,
 }
 fn safe_normal(v: vec3<f32>) -> vec3<f32> { return v * inverseSqrt(max(dot(v,v),1e-12)); }
 
@@ -344,7 +350,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // baked occlusion is the seabed's and would tile the sea by column.
     out.sky_light = 1.0;
     out.flow_uv = vec2<f32>(0.0);
-    if (id < arrayLength(&flow)) { out.flow_uv = flow[id]; }
+    out.kind = 0u;
     out.level = level;
     out.owner_a = cell.owner_a.xyz;
     out.owner_b = cell.owner_b.xyz;
@@ -361,6 +367,30 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     out.part_mark = mark;
     return out;
 }
+// The game's own water (`water-flow` E6): the mesher's triangles, drawn by
+// the sea's own fragment so a poured pool and the sea are one water.
+@vertex
+fn vertex_flowing(@builtin(vertex_index) vertex: u32) -> VertexOut {
+    let a = flowing[vertex*3u];
+    let b = flowing[vertex*3u + 1u];
+    let c = flowing[vertex*3u + 2u];
+    var out: VertexOut;
+    out.body_position = a.xyz;
+    out.local_position = view.planet_center.xyz + a.xyz;
+    out.clip = view.clip_from_local*vec4<f32>(out.local_position, 1.0);
+    out.normal = b.xyz;
+    out.sky_light = a.w;
+    out.flow_uv = c.xy;
+    out.level = 0u;
+    out.owner_a = safe_normal(a.xyz);
+    out.owner_b = out.owner_a;
+    out.sea_slope = vec3<f32>(0.0);
+    out.fade_t = vec3<f32>(1.0, 1.0, 0.0);
+    out.part_mark = 0u;
+    out.kind = max(u32(b.w + 0.5), 1u);
+    return out;
+}
+
 fn water_band_cos(level: u32) -> f32 {
     return water_lane(view.bands, level);
 }
@@ -616,8 +646,10 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let horizontal = abs(dot(face,radial));
     // Flow: horizontal faces stream along the per-cell flow, vertical faces
     // scroll radially at the falling speed. A zero field is the unadvected form.
+    // A still face of the game's water (kind 3) does not stream down.
+    let falls = select(1.0, 0.0, in.kind == 3u);
     let advected = in.body_position
-        + radial*(time*view.deep_color.w*(1.0-horizontal))
+        + radial*(time*view.deep_color.w*(1.0-horizontal)*falls)
         - (tangent_u*in.flow_uv.x + tangent_v*in.flow_uv.y)*time*0.35*horizontal;
     let p = advected*view.ripple.x;
     let t = time*view.ripple.y;
@@ -686,7 +718,15 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let camera_body = view.camera_time.xyz - view.planet_center.xyz;
     let camera_radius = length(camera_body);
     let sheet_radius = length(in.body_position);
-    let below = camera_radius < sheet_radius || (camera_radius == sheet_radius && !front);
+    var below = camera_radius < sheet_radius || (camera_radius == sheet_radius && !front);
+    // The game's own water has true faces: the camera is under one when it
+    // is behind it.
+    if (in.kind != 0u) {
+        below = dot(view.camera_time.xyz - in.local_position, face) < 0.0;
+        // Its back seen from dry air is the inside of a block of water the
+        // eye is not in: the face toward the eye draws it, this one does not.
+        if (below && view.fx.y < 0.25) { discard; }
+    }
     if (below) {
         // Seen from below: the murk by camera distance, and Snell's window.
         let deep = murk(sheet_radius-camera_radius,safe_normal(camera_body));
@@ -698,7 +738,10 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         seen += under_water_light(view.camera_time.xyz, -look, camera_distance);
         return vec4<f32>(seen,1.);
     }
-    let reflected_ray = reflect(-look,normal);
+    var reflected_ray = reflect(-look,normal);
+    // A wall of the game's water (a fall, a sheet's edge) mirrors the sky as
+    // the surface over it does, not the ground at its foot.
+    if (in.kind != 0u && horizontal < 0.5) { reflected_ray = reflect(-look,radial); }
     let reflection_height = clamp(dot(reflected_ray,radial),0.,1.);
     let fresnel = (0.02+0.98*pow(1.0-max(dot(look,normal),0.0),5.0))
         * mix(clamp(view.shallow.w,0.,1.),1.,reflection_height);
@@ -722,6 +765,11 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let crest = smoothstep(view.foam_crest.x,max(view.foam_crest.y,view.foam_crest.x+1e-4),height)*view.foam_crest.z;
     let slope = smoothstep(view.foam_slope.x,max(view.foam_slope.y,view.foam_slope.x+1e-4),raw_slope)*view.foam_slope.z;
     var foam = clamp(max(crest,slope)*view.foam_color.w,0.,1.);
+    // A falling face of the game's water is white water: froth streaming down
+    // its own advected waves (`water-flow` 7a, the mockups' fall froth).
+    if (in.kind == 2u && horizontal < 0.5) {
+        foam = max(foam, 0.08 + 0.3*smoothstep(0.0, 0.5, height));
+    }
     // A gale and up (`ocean-environments` 4.3): foam torn into streaks along
     // the wind and spray off the crests, growing from `spray_from_mps` to
     // twice it. Streaks are the noise stretched twenty to one down the wind

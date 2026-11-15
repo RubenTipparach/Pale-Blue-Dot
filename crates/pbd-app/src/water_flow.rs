@@ -13,36 +13,36 @@ use crate::planet::column::{ColumnTier, sea_layer};
 use crate::planet::{GpuCell, PLANET_RADIUS, PlanetContact, PlanetFine, PlanetRenderFrame};
 use crate::saves::WorldSave;
 use bevy::asset::RenderAssetUsages;
-use bevy::image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use pbd_core::column::{self, LAYERS};
 use pbd_core::edits::Edit;
 use pbd_core::liquid;
 use pbd_core::terrain::Material;
 use std::sync::Arc;
 
-/// Tenebris's water tile (`tenebris-rs/assets/textures/water.png`, 16 x 16,
-/// at `RubenTipparach/tenebris` `ef9865166349c7a3c4ae09acdd20640daf85b4fd`),
-/// as each pixel's colour index, top row first: the same 256 indices the
-/// mockups carry (`docs/mockups/water-flow/water-look.js`, `TEX_IDX`).
-const TILE: &str = "0000011000111100100000000000000000010121000000001000000000001012001000000100000000001001000000000000000000110010010000000000000000000101201000001000000000000122000000000000000010112221010001000000000000000000001000000002100020001001100000010000000000000000";
-/// The tile's three colours, darkest first: the body, a ripple, a glint.
-const TILE_COLOURS: [[u8; 3]; 3] = [[29, 43, 83], [28, 94, 172], [88, 138, 192]];
-/// Metres one tile covers: 12.5 cm a pixel, an eighth of a layer.
-const TILE_M: f32 = 2.0;
-/// Metres a second a flowing top's pattern pans at a slope of `PAN_SLOPE`.
+/// Metres a second a flowing top's waves stream at a slope of `PAN_SLOPE`
+/// (the mockups' 1.6 m/s, design 7c).
 const PAN_K: f32 = 1.6;
-/// The slope, metres a metre, that pans at `PAN_K`.
+/// The slope, metres a metre, that streams at `PAN_K`.
 const PAN_SLOPE: f32 = 0.12;
-/// Metres a second a falling face's pattern pans down; a flowing cell's wall
-/// pans at a third of it.
-const FALL_PAN: f32 = 2.4;
+/// The sea's fragment streams a top by `flow_uv * 0.35` metres a second.
+const SHADER_FLOW: f32 = 0.35;
 /// How far over the water the arrows float, m.
 const ARROW_LIFT: f32 = 0.05;
-/// The water's opacity.
-const WATER_ALPHA: f32 = 0.8;
+/// The kinds of face the sea's fragment is told (`vertex_flowing`).
+const KIND_TOP: f32 = 1.0;
+const KIND_FALLING: f32 = 2.0;
+const KIND_STILL: f32 = 3.0;
+
+/// The game's own water as the water pass draws it (`water-flow` E6): three
+/// lanes a vertex, triangles end to end (`vertex_flowing` in `water.wgsl`),
+/// and which make of it this is.
+#[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
+pub struct FlowingWater {
+    pub lanes: Arc<Vec<[f32; 4]>>,
+    pub version: u64,
+}
 
 /// When the next tick is due.
 #[derive(Resource, Default)]
@@ -67,21 +67,13 @@ impl FlowArrows {
 }
 
 #[derive(Component)]
-struct WaterMesh;
-
-#[derive(Component)]
 struct ArrowMesh;
 
-/// What the mesher made, kept so a frame only moves the texture and the
-/// light rather than meshing again.
+/// Which fine set the mesher last made the water for.
 #[derive(Resource, Default)]
 struct Meshed {
     version: u64,
     set: usize,
-    uv: Vec<[f32; 2]>,
-    pan: Vec<[f32; 2]>,
-    /// Sky and block light, 0..1, per vertex.
-    light: Vec<[f32; 2]>,
 }
 
 /// Run `ticks` of the rule over the tier now, as a tick does: every change
@@ -161,89 +153,27 @@ fn tick_water(
     );
 }
 
-/// The tile as an image: nearest, repeating, never filtered.
-fn tile_image() -> Image {
-    let mut data = Vec::with_capacity(16 * 16 * 4);
-    // The ripple and the glint eased toward the body, as the mockups draw
-    // them as tones of the water they are on (design 7c): the tile's own
-    // colours at full contrast read as confetti from a walker's height.
-    let body = TILE_COLOURS[0].map(f32::from);
-    for c in TILE.bytes() {
-        let index = usize::from(c - b'0').min(2);
-        let ease = [0.0, 0.45, 0.6][index];
-        let tone = TILE_COLOURS[index].map(f32::from);
-        let [r, g, b] = [0, 1, 2].map(|k| (body[k] + (tone[k] - body[k]) * ease).round() as u8);
-        data.extend_from_slice(&[r, g, b, 255]);
-    }
-    let mut image = Image::new(
-        Extent3d {
-            width: 16,
-            height: 16,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        data,
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::RENDER_WORLD,
-    );
-    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
-        address_mode_u: ImageAddressMode::Repeat,
-        address_mode_v: ImageAddressMode::Repeat,
-        mag_filter: ImageFilterMode::Nearest,
-        min_filter: ImageFilterMode::Nearest,
-        mipmap_filter: ImageFilterMode::Nearest,
-        ..default()
-    });
-    image
-}
-
-/// A mesh of one degenerate triangle with the water's attributes: what the
-/// entities are born with, so the loading screen builds the pipeline the
-/// real mesh will use (CLAUDE.md, "A loading screen on boot").
-fn placeholder(uv: bool) -> Mesh {
-    let mut mesh = Mesh::new(
+/// A mesh of one degenerate triangle with the arrows' attributes: what the
+/// arrows are born with, so the loading screen builds their pipeline.
+fn placeholder() -> Mesh {
+    Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD,
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vec![[0.0f32; 3]; 3])
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0f32, 1.0, 0.0]; 3]);
-    if uv {
-        mesh = mesh
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0f32; 2]; 3])
-            .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32; 4]; 3]);
-    }
-    mesh.with_inserted_indices(Indices::U32(vec![0, 1, 2]))
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0f32, 1.0, 0.0]; 3])
+    .with_inserted_indices(Indices::U32(vec![0, 1, 2]))
 }
 
-fn spawn_water(
+fn spawn_arrows(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut images: ResMut<Assets<Image>>,
 ) {
-    let tile = images.add(tile_image());
-    commands.spawn((
-        Name::new("Flowing water"),
-        WaterMesh,
-        Mesh3d(meshes.add(placeholder(true))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgba(1.0, 1.0, 1.0, WATER_ALPHA),
-            base_color_texture: Some(tile),
-            unlit: true,
-            alpha_mode: AlphaMode::Blend,
-            cull_mode: None,
-            double_sided: true,
-            ..default()
-        })),
-        Transform::IDENTITY,
-        bevy::camera::visibility::NoFrustumCulling,
-        bevy::light::NotShadowCaster,
-        bevy::light::NotShadowReceiver,
-    ));
     commands.spawn((
         Name::new("Flow arrows"),
         ArrowMesh,
-        Mesh3d(meshes.add(placeholder(false))),
+        Mesh3d(meshes.add(placeholder())),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.95, 0.12, 0.10),
             unlit: true,
@@ -265,10 +195,11 @@ fn spawn_water(
 pub struct LiquidMesh {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
-    pub uv: Vec<[f32; 2]>,
-    /// Texture coordinates a second, per vertex: the pan.
-    pub pan: Vec<[f32; 2]>,
-    pub light: Vec<[f32; 2]>,
+    /// The flow in the face's tangent frame as the sea's fragment reads it.
+    pub flow: Vec<[f32; 2]>,
+    /// The face's kind, and the sky's share at it, 0..1.
+    pub kind: Vec<f32>,
+    pub sky: Vec<f32>,
     pub indices: Vec<u32>,
     pub arrow_positions: Vec<[f32; 3]>,
     pub arrow_indices: Vec<u32>,
@@ -278,14 +209,37 @@ pub struct LiquidMesh {
     pub flowing_tops: usize,
 }
 
+/// The tangent frame the sea's fragment builds off a face (`fragment` in
+/// `water.wgsl`): X, or Y where the face is near X, off the face.
+fn shader_frame(face: Vec3) -> (Vec3, Vec3) {
+    let reference = if face.x.abs() > 0.9 { Vec3::Y } else { Vec3::X };
+    let u = (reference - face * reference.dot(face)).normalize_or(Vec3::X);
+    (u, face.cross(u))
+}
+
 impl LiquidMesh {
-    fn vertex(&mut self, p: Vec3, n: Vec3, uv: Vec2, pan: Vec2, light: [f32; 2]) -> u32 {
+    fn vertex(&mut self, p: Vec3, n: Vec3, flow: Vec2, kind: f32, sky: f32) -> u32 {
         self.positions.push(p.to_array());
         self.normals.push(n.to_array());
-        self.uv.push(uv.to_array());
-        self.pan.push(pan.to_array());
-        self.light.push(light);
+        self.flow.push(flow.to_array());
+        self.kind.push(kind);
+        self.sky.push(sky);
         (self.positions.len() - 1) as u32
+    }
+
+    /// The triangles as the water pass reads them: three lanes a vertex.
+    pub fn lanes(&self) -> Vec<[f32; 4]> {
+        let mut out = Vec::with_capacity(self.indices.len() * 3);
+        for &i in &self.indices {
+            let i = i as usize;
+            let [x, y, z] = self.positions[i];
+            let [nx, ny, nz] = self.normals[i];
+            let [fx, fy] = self.flow[i];
+            out.push([x, y, z, self.sky[i]]);
+            out.push([nx, ny, nz, self.kind[i]]);
+            out.push([fx, fy, 0.0, 0.0]);
+        }
+        out
     }
 
     fn arrow(&mut self, at: Vec3, along: Vec3, across: Vec3, length: f32) {
@@ -346,14 +300,6 @@ fn corner_level(cells: &[Option<Side>; 3]) -> f32 {
     }
 }
 
-/// The tangent basis the tops' texture is laid in: the same for every cell
-/// near `up`, so a pattern runs on across cells.
-fn basis(up: Vec3) -> (Vec3, Vec3) {
-    let reference = if up.y.abs() < 0.9 { Vec3::Y } else { Vec3::X };
-    let t = (reference - up * reference.dot(up)).normalize_or(Vec3::X);
-    (t, up.cross(t))
-}
-
 /// Mesh every water cell of the tier the sea sheet does not draw.
 pub fn liquid_mesh(
     tier: &ColumnTier,
@@ -383,7 +329,7 @@ pub fn liquid_mesh(
             .collect();
         let sides = tier.sides_of(slot);
         let under_sea = cell.direction_height[3] < sea_level_m;
-        let (t, b) = basis(centre);
+        let (t, b) = shader_frame(centre);
         for layer in 1..LAYERS - 1 {
             let here = column.material(layer);
             if !here.is_water() {
@@ -418,10 +364,7 @@ pub fn liquid_mesh(
             let lit = {
                 let own = tier.light_at(slot, layer);
                 let up = tier.light_at(slot, layer + 1);
-                [
-                    f32::from(own.sky().max(up.sky())) / 15.0,
-                    f32::from(own.block().max(up.block())) / 15.0,
-                ]
+                f32::from(own.sky().max(up.sky())) / 15.0
             };
             let at = |dir: Vec3, fraction: f32| dir * (radius + floor + fraction);
             out.cells += 1;
@@ -446,23 +389,26 @@ pub fn liquid_mesh(
             let flowing = flow.is_some() && slope.length() > 1e-3;
             if !above_water && !sheet {
                 out.tops += 1;
+                // The waves stream along the flow, faster on a steeper top.
                 let pan = if flowing {
                     let speed = PAN_K * (slope.length() / PAN_SLOPE).clamp(0.35, 1.5);
                     let dir = slope.normalize();
-                    -Vec2::new(dir.dot(t), dir.dot(b)) * speed / TILE_M
+                    Vec2::new(dir.dot(t), dir.dot(b)) * speed / SHADER_FLOW
                 } else {
                     Vec2::ZERO
                 };
-                let uv = |p: Vec3| Vec2::new(p.dot(t), p.dot(b)) / TILE_M;
-                let c = out.vertex(middle, centre, uv(middle), pan, lit);
-                let ring: Vec<u32> = (0..degree)
-                    .map(|i| {
-                        let p = at(corners[i], levels[i]);
-                        out.vertex(p, centre, uv(p), pan, lit)
-                    })
-                    .collect();
+                // Each triangle lit by its own slope, so a top running down to
+                // a sheet's edge reads as water tilted, not a mirror on edge.
                 for i in 0..degree {
-                    out.indices.extend([c, ring[i], ring[(i + 1) % degree]]);
+                    let (p, q) = (at(corners[i], levels[i]), at(corners[(i + 1) % degree], levels[(i + 1) % degree]));
+                    let mut n = (p - middle).cross(q - middle).normalize_or(centre);
+                    if n.dot(centre) < 0.0 {
+                        n = -n;
+                    }
+                    for v in [middle, p, q] {
+                        let id = out.vertex(v, n, pan, KIND_TOP, lit);
+                        out.indices.push(id);
+                    }
                 }
                 if flowing {
                     out.flowing_tops += 1;
@@ -502,18 +448,15 @@ pub fn liquid_mesh(
                     continue;
                 }
                 let normal = ((a + z) * 0.5 - centre).normalize_or(centre);
+                let normal = (normal - centre * normal.dot(centre)).normalize_or(normal);
                 let edge = (z - a).normalize_or(t);
-                let pan = Vec2::new(
-                    0.0,
-                    if falling {
-                        FALL_PAN
-                    } else if flow.is_some() {
-                        FALL_PAN / 3.0
-                    } else {
-                        0.0
-                    } / TILE_M,
-                );
-                let uv = |p: Vec3, alt: f32| Vec2::new(p.dot(edge) / TILE_M, alt / TILE_M);
+                // A falling cell's face is white water streaming down; a
+                // sheet's edge and a source's face stand still.
+                let kind = if falling || above_water && flow.is_some() {
+                    KIND_FALLING
+                } else {
+                    KIND_STILL
+                };
                 let pts = [
                     (at(a, bottom_a), floor + bottom_a),
                     (at(z, bottom_z), floor + bottom_z),
@@ -522,7 +465,7 @@ pub fn liquid_mesh(
                 ];
                 let ids: Vec<u32> = pts
                     .iter()
-                    .map(|&(p, alt)| out.vertex(p, normal, uv(p, alt), pan, lit))
+                    .map(|&(p, _)| out.vertex(p, normal, Vec2::ZERO, kind, lit))
                     .collect();
                 out.indices
                     .extend([ids[0], ids[1], ids[2], ids[0], ids[2], ids[3]]);
@@ -533,18 +476,11 @@ pub fn liquid_mesh(
             }
             // The bottom, over air.
             if column.material(layer - 1) == Material::Air {
-                let uv = |p: Vec3| Vec2::new(p.dot(t), p.dot(b)) / TILE_M;
-                let c = out.vertex(
-                    at(centre, 0.0),
-                    -centre,
-                    uv(at(centre, 0.0)),
-                    Vec2::ZERO,
-                    lit,
-                );
+                let c = out.vertex(at(centre, 0.0), -centre, Vec2::ZERO, KIND_STILL, lit);
                 let ring: Vec<u32> = (0..degree)
                     .map(|i| {
                         let p = at(corners[i], 0.0);
-                        out.vertex(p, -centre, uv(p), Vec2::ZERO, lit)
+                        out.vertex(p, -centre, Vec2::ZERO, KIND_STILL, lit)
                     })
                     .collect();
                 for i in 0..degree {
@@ -557,13 +493,12 @@ pub fn liquid_mesh(
 }
 
 /// Mesh the tier's water again when the fine set changes.
-#[allow(clippy::type_complexity)]
 fn rebuild_water(
     fine: Option<Res<PlanetFine>>,
     mut meshed: ResMut<Meshed>,
+    mut flowing: ResMut<FlowingWater>,
     mut meshes: ResMut<Assets<Mesh>>,
-    water: Query<&Mesh3d, (With<WaterMesh>, Without<ArrowMesh>)>,
-    arrows: Query<&Mesh3d, (With<ArrowMesh>, Without<WaterMesh>)>,
+    arrows: Query<&Mesh3d, With<ArrowMesh>>,
 ) {
     let Some(fine) = fine else {
         return;
@@ -591,31 +526,13 @@ fn rebuild_water(
             started.elapsed().as_secs_f64() * 1e3
         );
     }
-    if let Ok(handle) = water.single()
-        && let Some(mesh) = meshes.get_mut(&handle.0)
-    {
-        if made.indices.is_empty() {
-            *mesh = placeholder(true);
-            meshed.uv = vec![[0.0; 2]; 3];
-            meshed.pan = vec![[0.0; 2]; 3];
-            meshed.light = vec![[0.0; 2]; 3];
-        } else {
-            let colours = vec![[1.0f32; 4]; made.positions.len()];
-            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, made.positions);
-            mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, made.normals);
-            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, made.uv.clone());
-            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
-            mesh.insert_indices(Indices::U32(made.indices));
-            meshed.uv = made.uv;
-            meshed.pan = made.pan;
-            meshed.light = made.light;
-        }
-    }
+    flowing.lanes = Arc::new(made.lanes());
+    flowing.version += 1;
     if let Ok(handle) = arrows.single()
         && let Some(mesh) = meshes.get_mut(&handle.0)
     {
         if made.arrow_indices.is_empty() {
-            *mesh = placeholder(false);
+            *mesh = placeholder();
         } else {
             let normals = vec![[0.0f32, 1.0, 0.0]; made.arrow_positions.len()];
             mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, made.arrow_positions);
@@ -625,83 +542,29 @@ fn rebuild_water(
     }
 }
 
-/// Each frame: the pattern panned along the flow, the light by the hour, the
-/// meshes on the planet as its frame moves, the arrows shown or not.
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
-fn animate_water(
-    time: Res<Time>,
-    sun: Option<Res<crate::sky::Sun>>,
+/// The arrows on the planet as its frame moves, shown or not.
+fn show_arrows(
     frame: Option<Res<PlanetRenderFrame>>,
-    meshed: Res<Meshed>,
     arrows_on: Res<FlowArrows>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut water: Query<(&Mesh3d, &mut Transform), (With<WaterMesh>, Without<ArrowMesh>)>,
-    mut arrows: Query<(&mut Transform, &mut Visibility), (With<ArrowMesh>, Without<WaterMesh>)>,
+    mut arrows: Query<(&mut Transform, &mut Visibility), With<ArrowMesh>>,
 ) {
     let Some(frame) = frame else {
         return;
     };
     let centre = frame.center.as_vec3();
-    let shown = arrows_on.shown();
+    let want = if arrows_on.shown() {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
     for (mut transform, mut visibility) in &mut arrows {
         if transform.translation != centre {
             transform.translation = centre;
         }
-        let want = if shown {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
         if *visibility != want {
             *visibility = want;
         }
     }
-    let Ok((handle, mut transform)) = water.single_mut() else {
-        return;
-    };
-    if transform.translation != centre {
-        transform.translation = centre;
-    }
-    if meshed.uv.is_empty() || meshed.pan.iter().all(|p| *p == [0.0; 2]) && meshed.uv.len() <= 3 {
-        return;
-    }
-    let up = cameras
-        .iter()
-        .find(|(_, c)| c.is_active)
-        .map(|(g, _)| (g.translation() - centre).normalize_or(Vec3::Y))
-        .unwrap_or(Vec3::Y);
-    let elevation = sun.as_ref().map_or(1.0, |s| s.direction().dot(up));
-    let day = smoothstep(-0.12, 0.2, elevation);
-    let sky = Vec3::new(0.10, 0.12, 0.20).lerp(Vec3::ONE, day);
-    let lamp = Vec3::new(1.0, 0.72, 0.42);
-    let t = time.elapsed_secs_wrapped() % 3600.0;
-    let Some(mesh) = meshes.get_mut(&handle.0) else {
-        return;
-    };
-    let uv: Vec<[f32; 2]> = meshed
-        .uv
-        .iter()
-        .zip(&meshed.pan)
-        .map(|(uv, pan)| [uv[0] + pan[0] * t, uv[1] + pan[1] * t])
-        .collect();
-    let colours: Vec<[f32; 4]> = meshed
-        .light
-        .iter()
-        .map(|&[s, b]| {
-            let c = (sky * s.max(0.08) + lamp * b * b).min(Vec3::splat(1.2));
-            [c.x, c.y, c.z, 1.0]
-        })
-        .collect();
-    if uv.len() == colours.len() && mesh.count_vertices() == uv.len() {
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uv);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
-    }
-}
-
-fn smoothstep(a: f32, b: f32, x: f32) -> f32 {
-    let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
 }
 
 /// The water's systems.
@@ -712,8 +575,12 @@ impl Plugin for WaterFlowPlugin {
         app.init_resource::<WaterClock>()
             .init_resource::<FlowArrows>()
             .init_resource::<Meshed>()
-            .add_systems(Startup, spawn_water)
-            .add_systems(Update, (tick_water, rebuild_water, animate_water).chain());
+            .init_resource::<FlowingWater>()
+            .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
+                FlowingWater,
+            >::default())
+            .add_systems(Startup, spawn_arrows)
+            .add_systems(Update, (tick_water, rebuild_water, show_arrows).chain());
     }
 }
 
@@ -766,11 +633,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn the_tile_is_sixteen_by_sixteen_in_three_colours() {
-        assert_eq!(TILE.len(), 256);
-        assert!(TILE.bytes().all(|c| (b'0'..=b'2').contains(&c)));
-        let image = tile_image();
-        assert_eq!(image.width(), 16);
-    }
 }
