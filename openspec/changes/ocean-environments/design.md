@@ -63,7 +63,7 @@ What the game gives us, measured on `main`:
 
 ## Decisions
 
-### 1. One page, fourteen tabs in three rows
+### 1. One page, fifteen tabs in three rows
 
 `docs/mockups/ocean.html`, titled "Seas, Rivers and Marshes" (the owner widened
 "ocean" to rivers and marshes; the file keeps the name the task gave it).
@@ -71,7 +71,7 @@ What the game gives us, measured on `main`:
 | Row | Tabs |
 | --- | --- |
 | Sea | Open sea; Coast and tide; Coral reef; Kelp forest; Polar sea; The deep and vents; Trench, caves, wrecks |
-| Fresh | River, source to mouth; Beavers and dams; Marsh and estuary |
+| Fresh | River, source to mouth; Beavers and dams; Marsh and estuary; Water sim (added 2026-11-15, decision 11) |
 | Guide | How underwater looks; Water life; Where they occur; In the engine |
 
 The page follows `docs/mockups/ART-DIRECTION.md` and CLAUDE.md's mockup rules:
@@ -225,9 +225,10 @@ In the engine:
   eggs (M7's icons), gathered, not shot.
 - **Protected**: reef turtles, sea otters, seals and ducks are not caught;
   the action is refused, as a town's livestock is.
-- Creatures are pixel cards: a side view turned along the heading and toward
-  the eye, a crawler laid flat. Recommendation; the owner's Q2, with
-  screenshots.
+- Creatures were pixel cards in the first draft (a side view turned along the
+  heading, a crawler laid flat). The owner answered Q2 on 2026-11-15: every
+  animal alive in the world is a low-poly 3D body, and a caught fish dropped
+  by the player is a 2D item sprite (decision 11).
 
 ### 8. Beavers and dams: the world changing itself
 
@@ -273,6 +274,99 @@ the clock, never saved. Rock pools hold water above a falling sea once water
 can stand above the sea (decision 9). Recommendation; the owner's Q1, with
 the coast tab's low and high tide screenshots.
 
+### 11. The owner's review of 2026-11-15: 3D animals, a water sim, a denser reef
+
+The owner, looking at the river tab's waterfall:
+- "there should be a sim where I can place water blocks and see how their
+  physics plays out, I had asked to look at minetest source code for water
+  implementation"
+- "ducks should be 3d, birds in general are 3d, this water fall has zfighting"
+- "all fish should also be 3d, unless they are caught, and a player drops them
+  as 2d sprites"
+
+And of the reef, the same day: "coral reefs need to be denser, with
+vegetation and stuff", with a reference photo ("just look at this scene!").
+The photo is not in the repository (its licence is unknown); what it shows,
+and what the reef tab now aims at: wide flat table corals on short stalks,
+dark teal-green with a hard rim, layered at different heights as the skyline
+in the middle distance; dense rounded clumps of branching and finger corals in
+cream, lilac, pink, mauve and tan, some knobbly like cauliflower, crowded edge
+to edge with no sand between them near the eye; a big anemone, long waving
+yellow-green tentacles over a purple foot, with an orange clownfish in it;
+boulder and brain corals, sponges and rubble in greys, greens and pinks in
+every gap, small yellow soft-coral tufts; a cloud of hundreds of small orange
+anthias over the reef and dark damselfish higher up; bright cyan water above,
+deep blue in the distance, colour most saturated near the eye.
+
+What changed in the mockup:
+- **Animals are 3D in the world** (this answers Q2). Every duck (drake, hen,
+  duckling, diver), the heron, kingfisher and gulls, every fish, eel, ray,
+  squid, jelly and octopus, every crab, lobster, crayfish, hermit, starfish,
+  urchin, clam and mussel, and the seals, otters, beavers, frogs, toads,
+  turtle, mire lurker and dragonflies are low-poly meshes
+  (`docs/mockups/ocean/creatures3d.js`): flat shaded, one colour per face, the
+  colours read off each creature's own sprite. The fish body follows
+  `fish.html`'s `buildFish` (M9): a six-sided body in rings with tail, dorsal,
+  anal and pectoral fins. A swimmer sways from the tail in the vertex shader;
+  a duck paddles, tips up, tucks its head to sleep and flies with its wings;
+  a heron strikes with its neck; a ray and a turtle flap; an octopus's arms
+  move; a jelly's bell pulses; the fiddler waves its claw. Behaviour is
+  unchanged (`duckFamily`, `duckFlock`, the octopus, the clams, the seals):
+  only how they are drawn. A school is one `InstancedMesh`.
+- **A dropped catch is a 2D item sprite.** The river tab's "Drop a catch"
+  drops a caught fish on the bank as its item icon (the game's own,
+  `assets/items/fish`), standing on the ground and turned to the eye, beside
+  the live 3D trout and perch in the pool. It is the only animal left as a
+  sprite in a scene. The bestiary keeps the sprites as portraits; plant cards
+  (kelp, reeds, lilies, mangroves) stay cards.
+- **The reef is packed**: a jittered grid every 0.62 m, dense within 24 m and
+  round the default view, thinner to 46 m, each point something, clustered by
+  kind and grown on one another (branching and finger corals on boulders),
+  with turf and rubble filling the gaps and the eye's line to the anemone kept
+  low. Fourteen kinds (branching, finger, boulder and brain, table, soft
+  tufts, tube and barrel sponges, fans, anemones, algae turf, sea grass,
+  seaweed, rubble, shells) and the big anemone: 9,568 pieces in 15 instanced
+  draws, coloured per instance from the kind's palette; 540 anthias, 40
+  damsels and the reef's other fish in instanced schools. The default view
+  ("Reef") draws 88 calls and about 0.96 million triangles (SwiftShader, so
+  only the counts are meaningful). Two new species in the bestiary, the reef
+  anthias and the sooty damsel. At night the reef is dim, lit by its glowing
+  life, the sea sparkle and the diver's lamp.
+- **The waterfall's z-fighting is gone.** A falling sheet stood on the cell's
+  edge, the same plane as the cliff face (the upper column's side), and the
+  two fought. Each sheet now stands 0.08 m in front of the edge, toward the
+  lower cell, reaching 0.05 m past each corner to meet the next sheet round a
+  bend, with a strip of cap over the lip so the water runs onto it; it runs
+  4 cm into the pool below so no seam opens. No polygon offset. The flow
+  streaks are drawn in the water's own shader (foam advected along the flow
+  vector), not as overlay geometry, so they cannot fight the faces under
+  them; caps of neighbouring cells never share a plane (a lower neighbour
+  gets a falling sheet, a level one no face).
+- **A water sim tab** ("Water sim"): a hex patch nine cells from its middle,
+  layers 0 to 15, where a click pours a source, digs or places a block, and
+  the water moves by Luanti's (Minetest's) liquid rule,
+  `ServerMap::transformLiquidsLocal` and `get_max_liquid_level`
+  (`src/servermap.cpp` at `a10dc8d`), as M28 ported it to the hex grid:
+  sources and flowing levels, range 8, falling water first, renewal at 3 on
+  hex with Luanti's 2 and off as a toggle. The rule moved out of
+  `water-flow.html` into `docs/mockups/water-flow/liquid.js`, which both pages
+  load (M28 settles every preset as before; its from-scratch check stays at
+  nought). Play, pause, step, a tick-speed slider, reset, and presets: a pond
+  (three sources renew into a pool), a waterfall down cell steps, and a dam
+  whose reservoir pours through when "Breach the dam" digs a gap. Its
+  how-it-works text is in a modal and names the Luanti source and licence
+  (LGPL-2.1-or-later, `water-flow/COPYING.LESSER`).
+- **Descriptive text moved into modals** (CLAUDE.md, "Descriptive text goes in
+  modals"): the page's about, each place's description, the light tab's
+  how-to, the bestiary's cards (a compact grid on screen, the card in a
+  modal), the chart's rules and the engine tab's tables and decisions.
+
+All checked headless (Chromium on SwiftShader, no GPU): every tab opens with no
+console errors and one WebGL context; the camera stays put when idle; no
+horizontal scroll at 390 px; the sim spreads water from a poured source tick
+by tick. Screenshots in `docs/screenshots/mockup-ocean/` (`*-before.jpg` and
+`*-after.jpg`, `sim-*.jpg`). Frame cost was not measured.
+
 ## In the engine, part by part
 
 | Part | Today | New | Config |
@@ -304,8 +398,10 @@ the coast tab's low and high tide screenshots.
 - **Caustics and snow cost frame time.** The caustic term is a few sines per
   wet fragment; snow is a few hundred points. Measured on the owner's desktop
   before shipping (`tools/perf_suite.py`), not here.
-- **Cards seen edge on.** A side card turned toward the eye about its heading
-  is thin only when the eye is straight ahead of or behind the creature.
+- **3D bodies cost more than cards.** Hundreds of fish are one instanced draw
+  per species with the sway in the vertex shader, and the reef one draw per
+  kind, so the cost is triangles, not draws: about 0.96 million in the reef's
+  default view (decision 11). Judged on the owner's desktop, not here.
 - **Fitting the deep to 145 m** makes the twilight zone shallower than Earth's.
   The planet is small (150 m summits), so the scale is consistent.
 - **A beaver colony can flood a field.** It never floods a cell the player
@@ -315,8 +411,9 @@ the coast tab's low and high tide screenshots.
 
 - **Q1. Tides.** `coast-low-tide-day.jpg` beside `coast-high-tide-day.jpg`.
   Recommend yes, 3 m from the moon.
-- **Q2. Creatures as pixel cards.** `reef-life-day.jpg`, `marsh-ducks-day.jpg`,
-  `sea-life-day.jpg`. Recommend cards for anything smaller than a walker.
+- **Q2. Creatures as pixel cards.** Answered by the owner, 2026-11-15: animals
+  are 3D in the world; a dropped catch is a 2D item sprite (decision 11). Mark
+  it answered in the survey.
 - **Q3. The deep fitted to the column.** `light-40m.jpg`, `light-90m.jpg`,
   `light-140m.jpg`, `deep-day.jpg`. Recommend fitting.
 
