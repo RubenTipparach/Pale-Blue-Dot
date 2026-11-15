@@ -547,6 +547,43 @@ counted.
 degrees, 0 north, 90 east) and `--pitch` (degrees, negative down) beside
 `--at` and `--height`, so a capture can look down on a river from the air.
 
+## The owner's fall look (2026-11-15, after the fifth pass)
+
+The fifth pass's ribbons and whitened lip were rejected and taken out: "wait
+what? all the afters are bad", "dont do that". The owner's direction: "the
+wall should be skewed", "look at waterfall images", "its definitely not
+discrete noise". The two photos (a tall curtain like Skogafoss; a wide fall
+behind a small weir) show long continuous vertical strands, a sheet bowing
+out from the cliff, a glassy rounded lip, a churned white band at the foot
+spreading onto the pool, and a soft mist cloud rising from it.
+
+**E18. The sheet bows out.** A falling face is the path water takes leaving
+its lip at 0.9 m/s under gravity: out by `0.9 * sqrt(2 d / g)` at `d` metres
+under the lip, at most 0.6 m, brought back in over the last 1.5 m to meet
+its pool. The face is cut into rows (six in the top cell, where the path
+bends from level, two below), and its normal tips up where the sheet leans
+out, so the bend from the cap into the fall is rounded. Each corner moves
+the same way for every falling cell round it (away from their centres), so
+neighbouring columns' faces still meet; a corner beside water that is not
+falling stays put.
+
+**E13, replaced: strands, not noise blobs.** The fall's face is drawn as many
+fine strands: gradient noise in four octaves across the face (2.5 to 51 per
+metre) and almost none down it, so each strand runs from the lip to the
+foot. Down the face the noise is read at the time the water left the lip,
+so a strand's slow change in brightness runs down faster as the water
+falls. The strands open out over the first two metres under a lip that is
+glassy and a little darker, and the last 1.5 m of a fall taller than three
+churns white. The fall's own round waves are off (they read as blobs), and
+the position across the face comes from the mesher in f64, modulo 64 m:
+taken in the fragment off body-frame positions, the centimetres a strand is
+were lost and the face read as grain.
+
+**E14, again: the foot.** Pool tops beside a fall's foot carry a churned
+foam band that fades out across the cell, and the mist is bigger and softer
+from a tall fall: up to forty puffs, up to 5.5 m across, rising and spreading
+up to 9 m, each fading in and out.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With

@@ -150,3 +150,26 @@ Honest notes:
   was dropped).
 - Captures in the `--capture` fixed-step mode on the Mac (M4 Max); frame
   cost not measured.
+
+## The owner's fall look (2026-11-15, after the fifth pass)
+
+The fifth pass's ribbons and whitened lip were rejected ("all the afters are
+bad") and taken out; `froth-lip-before-after.jpg` above is that rejected look.
+
+| File | What it shows |
+| --- | --- |
+| `fall-sheet-before-after.jpg` | The poured 9-layer pit fall (`--pour 1 --pour-ahead 12 --pit 9 --water-ticks 10 --time 11 --rain 0`), before (left, the look after the revert) and after (right): the owner's view (`--walk --pitch -40 --yaw 90`), `--pitch -15`, and from above (`--fly --at 24.117 -2.964 --height 3 --yaw 90 --pitch -35`). After: the sheet bows out from the edge; fine strands run continuously top to bottom with clear water between them; the lip is glassy; mist at the foot. |
+
+Honest notes:
+
+- Up close the strands are crisp-edged bands rather than soft spray, and they
+  do not change down a face in a still frame; their motion is for the
+  recording.
+- At one inner corner of the poured fall a light wedge shows between the
+  sloped cap and the bowed sheet, where the cap runs down to the cell's edge
+  and the sheet has moved out from it.
+- The foam band on the pool is only seen from above; the pit's walls hide
+  the foot in the owner's view. The cyan haze at the foot is the mist seen
+  through the sheet.
+- Not compared against a natural river fall: the captures are the poured
+  pit. Frame cost not measured (Mac, fixed-step capture).
