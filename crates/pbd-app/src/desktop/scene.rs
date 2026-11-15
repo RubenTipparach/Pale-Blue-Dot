@@ -167,12 +167,21 @@ pub fn move_moon(
     time: Res<pbd_app::SimulationClock>,
     frame: Res<pbd_app::PhysicsFrame>,
     sun: Res<pbd_app::sky::Sun>,
+    scene: Res<pbd_app::CelestialScene>,
+    sea: Option<ResMut<pbd_app::sea::Sea>>,
     mut moons: Query<(&MoonOrbit, &mut Transform)>,
 ) {
     let turn = sun.sky_rotation().as_dquat();
+    let mut toward = None;
     for (orbit, mut transform) in &mut moons {
         let position = turn * orbit.0.sample(time.seconds).position;
         transform.translation = (position - frame.0.origin).as_vec3();
+        let planet = scene.states.first().map_or(bevy::math::DVec3::ZERO, |s| s.position);
+        toward = Some((position - planet).as_vec3());
+    }
+    // The tide follows this moon (`ocean-environments` design 10).
+    if let (Some(mut sea), Some(toward)) = (sea, toward) {
+        sea.set_moon(toward);
     }
 }
 

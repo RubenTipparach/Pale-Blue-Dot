@@ -1596,6 +1596,8 @@ pub(crate) struct Tunables<'w> {
     far: Option<Res<'w, crate::night_lights::FarLights>>,
     /// The player's grass (`flora-v2`).
     flora: Option<Res<'w, FloraLook>>,
+    /// The sea now, for the tide (`ocean-environments` 5.1).
+    sea_now: Option<Res<'w, crate::sea::SeaNow>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1616,6 +1618,15 @@ fn prepare_views(
     mut views: Query<(Entity, &ExtractedView, Option<&mut PlanetViewGpu>), With<Msaa>>,
 ) {
     let water_settings = &tunables.water;
+    let (tide_here, sheet_reach) = tunables.sea_now.as_deref().map_or((0.0, 0.0), |now| {
+        let range = now.gpu.tide.w;
+        let reach = if range > 0.0 {
+            pbd_core::sea::tide_high_m(range) - water_settings.depth_offset_m + 1.0
+        } else {
+            0.0
+        };
+        (now.tide_here, reach.max(0.0))
+    });
     let weather_settings = &tunables.weather;
     let scatter = &tunables.scatter;
     let columns = &tunables.columns;
@@ -1697,7 +1708,10 @@ fn prepare_views(
             // only reader is that light, and the sea radius in w.
             water_absorption: Vec3::from_array(water_settings.downwell_per_m)
                 .extend(PLANET_RADIUS - water_settings.depth_offset_m),
-            water_deep: Vec3::from_array(water_settings.deep_color).extend(0.),
+            // w: the tide at the camera, m, which lifts or lowers the sea's
+            // tint on the ground with the drawn sheet (`ocean-environments`
+            // 5.1). The tide moves by centimetres over a view.
+            water_deep: Vec3::from_array(water_settings.deep_color).extend(tide_here),
             weather: Vec4::new(
                 weather.wetness,
                 weather.rain,
@@ -1816,7 +1830,11 @@ fn prepare_views(
                 water_settings.caustics,
                 water_settings.caustic_cell_m,
                 water_settings.caustic_fade_m,
-                0.0,
+                // The visibility pass lists the sea sheet over every cell
+                // whose ground is under this height (m over sea level): the
+                // highest the tide brings the sheet, so at high water it runs
+                // on over the beach and never stands as a lip (B7).
+                sheet_reach,
             ),
             anchor: anchor.extend(0.0),
             bands_in: lod.bands_in,

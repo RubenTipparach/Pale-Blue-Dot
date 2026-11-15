@@ -132,11 +132,16 @@ pub fn run_ticks(
 fn tick_water(
     time: Res<Time>,
     mut clock: ResMut<WaterClock>,
-    mut fine: ResMut<PlanetFine>,
-    mut contact: ResMut<PlanetContact>,
-    mut save: ResMut<WorldSave>,
-    refresh: Res<crate::planet::LodRefresh>,
+    fine: Option<ResMut<PlanetFine>>,
+    contact: Option<ResMut<PlanetContact>>,
+    save: Option<ResMut<WorldSave>>,
+    refresh: Option<Res<crate::planet::LodRefresh>>,
 ) {
+    let (Some(mut fine), Some(mut contact), Some(mut save), Some(refresh)) =
+        (fine, contact, save, refresh)
+    else {
+        return;
+    };
     if fine.set.columns.water.queue.is_empty() {
         clock.since_s = 0.0;
         return;
@@ -543,12 +548,15 @@ pub fn liquid_mesh(tier: &ColumnTier, finest: &[GpuCell], radius: f32, sea_level
 /// Mesh the tier's water again when the fine set changes.
 #[allow(clippy::type_complexity)]
 fn rebuild_water(
-    fine: Res<PlanetFine>,
+    fine: Option<Res<PlanetFine>>,
     mut meshed: ResMut<Meshed>,
     mut meshes: ResMut<Assets<Mesh>>,
     water: Query<&Mesh3d, (With<WaterMesh>, Without<ArrowMesh>)>,
     arrows: Query<&Mesh3d, (With<ArrowMesh>, Without<WaterMesh>)>,
 ) {
+    let Some(fine) = fine else {
+        return;
+    };
     let set = Arc::as_ptr(&fine.set) as usize;
     if meshed.version == fine.version && meshed.set == set {
         return;
@@ -612,7 +620,7 @@ fn rebuild_water(
 fn animate_water(
     time: Res<Time>,
     sun: Option<Res<crate::sky::Sun>>,
-    frame: Res<PlanetRenderFrame>,
+    frame: Option<Res<PlanetRenderFrame>>,
     meshed: Res<Meshed>,
     arrows_on: Res<FlowArrows>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
@@ -620,6 +628,9 @@ fn animate_water(
     mut water: Query<(&Mesh3d, &mut Transform), (With<WaterMesh>, Without<ArrowMesh>)>,
     mut arrows: Query<(&mut Transform, &mut Visibility), (With<ArrowMesh>, Without<WaterMesh>)>,
 ) {
+    let Some(frame) = frame else {
+        return;
+    };
     let centre = frame.center.as_vec3();
     let shown = arrows_on.shown();
     for (mut transform, mut visibility) in &mut arrows {

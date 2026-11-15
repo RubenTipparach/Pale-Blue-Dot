@@ -232,6 +232,8 @@ pub(crate) struct SeaView {
     phase: [Vec4; pbd_core::sea::COMPONENTS / 4],
     heading: Vec4,
     limits: Vec4,
+    /// The tide: the moon's direction and the range (`pbd_core::sea::tide_m`).
+    tide: Vec4,
 }
 
 impl From<&pbd_core::sea::SeaGpu> for SeaView {
@@ -242,6 +244,7 @@ impl From<&pbd_core::sea::SeaGpu> for SeaView {
             phase: sea.phase,
             heading: sea.heading,
             limits: sea.limits,
+            tide: sea.tide,
         }
     }
 }

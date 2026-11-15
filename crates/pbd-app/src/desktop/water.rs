@@ -107,7 +107,9 @@ pub fn scripted(
     if launch.arrows {
         arrows.debug = true;
     }
-    if (launch.pour == 0 && launch.water_ticks == 0) || refresh.in_flight_s().is_some() {
+    if (launch.pour == 0 && launch.water_ticks == 0 && launch.pit == 0)
+        || refresh.in_flight_s().is_some()
+    {
         return;
     }
     // After any scripted dig, which runs on the first frame the tier is
@@ -132,11 +134,14 @@ pub fn scripted(
     } else {
         Vec3::ZERO
     };
-    // `--pit DEPTH`: a pit two cells past the pour, its cell and the six
+    // `--pit DEPTH`: a pit two cells short of the pour, its cell and the six
     // round it dug DEPTH layers down, for the water to fall into.
     if launch.pit > 0 && ahead != Vec3::ZERO {
         let level = ahead.normalize_or(Vec3::X) - up * ahead.normalize_or(Vec3::X).dot(up);
-        let from = eye + ahead + level.normalize_or(Vec3::X) * 5.6;
+        // With nothing to pour, the pit is where the pour would be: a pit
+        // dug beside the sea, which the sea floods (`volumetric-water`).
+        let short = if launch.pour == 0 { 0.0 } else { 5.6 };
+        let from = eye + ahead - level.normalize_or(Vec3::X) * short;
         let dug = dig_pit(
             &mut Edited {
                 fine: &mut fine,

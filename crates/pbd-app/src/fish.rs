@@ -162,7 +162,8 @@ impl<'a> PlanetWater<'a> {
         let state = sea.state_at(air, direction);
         let local = sea
             .table
-            .local(&state, direction, sea.depth_at(direction), seconds);
+            .local(&state, direction, sea.depth_at(direction), seconds)
+            .with_tide(sea.tide);
         Self {
             sea,
             local,

@@ -177,6 +177,10 @@ pub struct WaterSettings {
     pub emerge_dry_s: f32,
     /// Radial scroll speed of the wave field on vertical water faces.
     pub flow_uv_speed_falling: f32,
+    /// How far the tide rises and falls at one place over a day, m, from the
+    /// body's moon (`ocean-environments` design 10): 3 on Tenebris, nought
+    /// for no tide.
+    pub tide_range_m: f32,
     /// How fast the wave normal and crest foam fade as the fbm's features fall
     /// under a pixel: the gradient is scaled by `1 / (1 + footprint * fade)`
     /// where footprint is the per-pixel change of the noise coordinate. Zero
@@ -233,6 +237,7 @@ impl Default for WaterSettings {
             partial_band_m: 0.8,
             emerge_dry_s: 2.6,
             flow_uv_speed_falling: 1.0,
+            tide_range_m: 3.0,
             detail_fade: 4.0,
         }
     }
@@ -265,6 +270,7 @@ impl Validated for WaterSettings {
                 s.partial_band_m,
                 s.emerge_dry_s,
                 s.flow_uv_speed_falling,
+                s.tide_range_m,
                 s.detail_fade,
             ],
         )?;

@@ -2933,10 +2933,16 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // was a dry room full of ocean. The column says that pocket is air.
     // Capped at the sheet, which is where the sea's own surface is drawn, so
     // a column whose water reaches sea level reads exactly as it did.
-    var water_surface = params.water_absorption.w;
+    // The tide (`water_deep.w`, at the camera) lifts or lowers the sheet, and
+    // the tint with it; a column's own water is the sea where it reaches sea
+    // level, and takes the tide too (`ocean-environments` 5.1).
+    let tided = params.water_absorption.w + params.water_deep.w;
+    var water_surface = tided;
     if input.slot != 0u {
-        water_surface = min(water_surface,
-            params.settings.x + column_water_top_m(columns[input.slot-1u]));
+        let column_top = column_water_top_m(columns[input.slot-1u]);
+        if column_top < -0.5 {
+            water_surface = min(water_surface, params.settings.x + column_top);
+        }
     }
     let water_depth = max(water_surface - length(input.position), 0.);
     if water_depth > 0. {

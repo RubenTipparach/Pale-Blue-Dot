@@ -1037,6 +1037,22 @@ const _: () = assert!(GLOW_LIT_BIT > LAMP_LIT_BIT);
 /// chosen once from the cell's exact key (`pbd_core::flora::glows`).
 pub const GLOW_FLOWER_BIT: u32 = 1;
 
+/// Set in a finest record's `spare[2]` where its cell's ground is under sea
+/// level and yet its column holds no water at the sheet's layer: a pit dug
+/// below sea level that nothing has flooded. The visibility pass lists no sea
+/// sheet over it (`volumetric-water` phase 2), so a sealed pocket is dry on
+/// screen as it is in the column.
+pub const DRY_SHEET_BIT: u32 = 2;
+
+/// Mark or clear a record's [`DRY_SHEET_BIT`] from its column.
+pub fn mark_sheet(cell: &mut GpuCell, column: &Column) {
+    let sea = sea_layer();
+    let dry = sea > 0
+        && cell.direction_height[3] < terrain_config().sea_level_m
+        && !column.material(sea - 1).is_water();
+    cell.spare[2] = (cell.spare[2] & !DRY_SHEET_BIT) | if dry { DRY_SHEET_BIT } else { 0 };
+}
+
 /// Whether a record's cell grows a glowing flower.
 fn glows(cell: &GpuCell) -> bool {
     cell.spare[2] & GLOW_FLOWER_BIT != 0
@@ -1222,6 +1238,10 @@ pub fn build(
     }
     // Water the edits hold picks up where it was (`water-flow` E4).
     tier.queue_edited_water(edits);
+    // And no sea sheet over a pit the sea has not reached.
+    for (slot, &index) in members.iter().enumerate() {
+        mark_sheet(&mut finest[index], &tier.columns[slot]);
+    }
     // The light comes last, because it is a function of the finished columns:
     // the rim's solid ring and every edit are already in them, and lighting
     // before either would light a world that is not the one being drawn.

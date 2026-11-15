@@ -434,6 +434,21 @@ impl FineSet {
         column::reconcile_surface(&mut self.levels[3], &self.finest_neighbors, record, &column);
     }
 
+    /// Whether the sea sheet is drawn over a record and the slots' records,
+    /// from their columns (`planet::column::mark_sheet`).
+    pub fn mark_sheets(&mut self, records: impl IntoIterator<Item = usize>) {
+        for record in records {
+            let Some(&slot) = self.columns.slots.get(record) else {
+                continue;
+            };
+            if let (Some(column), Some(cell)) =
+                (self.columns.columns.get(slot), self.levels[3].get_mut(record))
+            {
+                column::mark_sheet(cell, column);
+            }
+        }
+    }
+
     /// The column a finest record would have if the tier adopted it now:
     /// solid, as the rim is, with the save's edits for its cell. What an edit
     /// reads the material it takes from, before anything is committed.

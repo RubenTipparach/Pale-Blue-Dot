@@ -389,7 +389,8 @@ pub fn apply_edit(
     // sea floods what this opened onto it, and the cell and its neighbours
     // are queued for the rule, so a dig beside water or a poured source
     // starts it moving.
-    for slot in set.columns.water_after_edit(record, layer, &save.edits) {
+    let flooded = set.columns.water_after_edit(record, layer, &save.edits);
+    for &slot in &flooded {
         set.columns.repack_slot(slot);
     }
     // And the SURFACE, which is a second representation of where the ground
@@ -399,6 +400,13 @@ pub fn apply_edit(
     // build pass says what it looks like in as many words, "a meadow over the
     // hole and a wall across it", and that pass ran only at build.
     set.reconcile(record);
+    // Whether the sea sheet lies over the edited cell and what the flood
+    // reached: a pit dug below sea level is dry until the sea comes in.
+    let flooded: Vec<usize> = flooded
+        .iter()
+        .filter_map(|&slot| set.columns.water.records.get(slot).copied())
+        .collect();
+    set.mark_sheets(std::iter::once(record).chain(flooded));
     // The whole tier, at the measured six milliseconds. A block changes what
     // light reaches every cell it can be seen from, which is not a region this
     // code can name: a dug shaft lets daylight forty metres down, and a torch

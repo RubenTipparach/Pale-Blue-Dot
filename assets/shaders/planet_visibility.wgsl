@@ -502,7 +502,14 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // at a landing it dissolves with the seabed under it rather than taking
     // the new partition's coastline at once (`two-set-dissolve`). The clutter
     // and the columns are drawn for the current partition only.
-    if !cascade && cell.direction_height.w < 0.0 {
+    // Not over a pit dug below sea level that the sea has not reached: its
+    // column says dry (`volumetric-water` phase 2, the record's
+    // `DRY_SHEET_BIT` in `spare.z`).
+    // Under the tide's high water too (`lod_spare.w`, nought with no tide),
+    // so the sheet runs on over a beach the tide covers (`ocean-environments`
+    // B7); where the ground stands over the sheet, the ground hides it.
+    if !cascade && cell.direction_height.w < max(params.lod_spare.w, 0.0)
+        && (cell.spare.z & 2u) == 0u {
         let sea = params.water_absorption.w;
         let sheet = cell.direction_height.xyz*sea;
         var reach = 0.0;

@@ -257,7 +257,7 @@ pub struct Launch {
     pub water_ticks: u32,
     /// `--pour-ahead M`: pour straight down M metres ahead of the eye.
     pub pour_ahead: f32,
-    /// `--pit DEPTH`: dig a pit that deep two cells past the pour.
+    /// `--pit DEPTH`: dig a pit that deep two cells short of the pour.
     pub pit: u32,
     /// `--arrows` turns the flow-arrow overlay on (`water-flow` 3.4).
     pub arrows: bool,
@@ -1527,8 +1527,16 @@ pub fn run(args: &[String]) {
             farm::scripted.after(digging::scripted_dig),
             craft::scripted.after(digging::scripted_dig),
             // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
-            water::scripted.after(digging::scripted_dig),
-            water::keys.after(digging::dig_and_place),
+            water::scripted
+                .after(digging::scripted_dig)
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
+                .run_if(resource_exists::<pbd_app::drops::Drops>),
+            water::keys
+                .after(digging::dig_and_place)
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
+                .run_if(resource_exists::<pbd_app::drops::Drops>),
         ),
     )
     .add_systems(
