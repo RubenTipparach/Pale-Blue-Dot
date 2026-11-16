@@ -1023,6 +1023,73 @@ rule. Water the player pours over grass draws the grass under it as dirt
 too, and the sward comes back when the water goes: one rule for every
 water.
 
+### 12.11 Nothing grows where the sea or the tide stands (owner, 2026-11-16)
+
+The owner, on the sea-shore waterline video
+(`docs/screenshots/river-fixes/videos/sea-shore-after-sheet.jpg`): "is that
+tree in your screenshot in the river?" An acacia stands in the sea a few
+metres off a version 10 beach (`18.86 27.54`).
+
+**Why, measured** (a probe over the finest cells within 80 m of that spot,
+version 10, the far record against the column tier's):
+- The far records stand no tree there: every tree within 80 m is on grass
+  11 m or more over the sea.
+- The column tier stands 18 beach trees in the sea and 11 in the tide.
+  - **In the sea:** cells whose top is sand at -1 m, the sea's water over
+    it. `reconcile_surface` draws a top under water as a bed only above the
+    sea's level (12.10 kept the near seabed as it was), so the record's
+    code is `render_code(Sand)`, 1, the beach's sand. The far record draws
+    the same cell as the seabed, 0. Version 10's beach (biome 1) grows trees
+    on code 1, so the tier stands an acacia in the sea.
+  - **In the tide:** sand tops at 0 m and 1 m, dry at the mean sea but
+    under the drawn sheet at high water. The sheet stands at the sea level
+    less `depth_offset_m` (0.5 m) plus the tide, which reaches
+    `tide_high_m(3.0)`, 2 m, so a top under 1.5 m is under water for part
+    of every day. 12.10 knows nothing of the tide.
+
+**The rule.** A cell water stands on at any tide grows nothing: no tree,
+cactus, tuft, flower, fern, mushroom, bush or pebble. It is a draw-time
+rule, as 12.10 is:
+- **A new bit in the record's material word, bit 25 (`FLOODED_BIT`).** It is
+  set where the top is under the high-water line (the sea level less the
+  sheet's offset plus the tide's highest, 1.5 m with the shipped
+  `water.ron`), and on the column tier also where the column holds water on
+  its top (a river, a pool, water the player poured). `surface_code` sets it
+  for the far records; `reconcile_surface` sets or clears it for the tier's,
+  so a pool that drains grows its plants again.
+- **The material code is not changed.** The beach keeps its sand's look and
+  the near seabed keeps its code: the bit says only that nothing grows.
+- **Every reader of where plants stand reads the bit.** The tree rule in the
+  visibility pass (`has_nearby_foliage`, which also places the cactus), its
+  copy in the surface pass (`stands_tree`, which gathers the fallen leaves),
+  the CPU's `TreeTable::grows` (which the axe and the fruit read, so a tree
+  that is not drawn cannot be chopped or picked), and the clutter rule
+  (`has_clutter`).
+- **The tide line is read from the water settings.** `water.ron` is loaded
+  before any record is built and sets the line once
+  (`planet::terrain::set_high_water`); a test or tool that loads no settings
+  reads the shipped defaults.
+
+**Saves.** Nothing generated changes and nothing new is saved:
+- no generator version moves, and the v4 and v5 ground digests and the tree
+  digests (`every_version_keeps_where_its_trees_stand`, which folds bits up
+  to 24) are untouched;
+- a `tree` record (a felled or picked tree) in the band is kept, and its tree
+  is simply not drawn, as in 12.10.
+
+**What it leaves.**
+- A beach's trees now start at the 2 m line. That is a look change on every
+  beach, which the owner's question asks for.
+- A tide range set to nought in `water.ron` puts the line at the sheet,
+  0.5 m under the sea level, which is what the sea covers then.
+
+**Verify.**
+- A test at the owner's spot: no tier or far record under the high-water
+  line grows a tree or clutter. It fails before: 29 tier trees.
+- A test that bit 25 stops `grows_tree`.
+- A shader test holding the visibility and surface passes to the bit.
+- Before and after `--capture` of the shore in `docs/screenshots/water-gameplay/`.
+
 ## 13. Trees in rain, and a fade that ends (owner, 2026-11-16)
 
 The owner, on a terraced valley in rain: "theres massive artifacts here";
@@ -1204,4 +1271,13 @@ Checked every place a plant could borrow the ground's colour:
 - Frame cost not measured (a Mac sitting is owed with the branch; the
   changes remove work from plants in rain and add two distance tests a tree
   vertex).
+
+### Pixel tufts are the only grass (owner, 2026-11-16)
+
+The owner: *"grass should be pixel tufts, remove the other grass"*, then *"no
+setting to swap, just the new stuff"*. The blade grass is removed: from the
+surface shader, the Pixel grass row on the settings screen, `FloraLook` and
+its system. `--grass` now takes only `tufts`, so old capture recipes still
+run, and `blades` is refused. A settings file's `pixel_grass` value is still
+read, so old files load, but nothing reads it any more.
 

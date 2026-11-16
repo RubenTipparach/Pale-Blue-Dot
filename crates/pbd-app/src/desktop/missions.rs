@@ -209,7 +209,13 @@ fn script() -> Vec<Scripted> {
         S::Did(Kind::Cast, "water"),
     ]);
     steps.extend(n(3, S::Did(Kind::Catch, "minnow")));
-    steps.extend(n(3, S::Did(Kind::Species, "fish")));
+    steps.push(S::Gained(good("bait"), 3, Found));
+    steps.extend(n(3, S::Did(Kind::Baited, "minnow")));
+    steps.extend([
+        S::Did(Kind::Species, "minnow"),
+        S::Did(Kind::Species, "banded perch"),
+        S::Did(Kind::Species, "eel"),
+    ]);
     steps.extend([S::Did(Kind::Open, "map"), S::Did(Kind::Reach, "marked")]);
     steps.extend(n(3, S::Did(Kind::Waters, "sea")));
     steps.extend(n(3, S::Did(Kind::Waters, "fresh")));
@@ -430,8 +436,6 @@ mod tests {
     }
 }
 
-/// How far from where the map was read a player walks for "Read the map".
-pub const MAP_WALK_M: f32 = 200.0;
 /// How near a town's terrace counts as reaching it.
 pub const TOWN_NEAR_M: f32 = 60.0;
 
@@ -440,9 +444,9 @@ pub const TOWN_NEAR_M: f32 = 60.0;
 pub struct AboutState {
     /// The screen last frame.
     screen: Option<Screen>,
-    /// Where the map was first read, for its walk.
-    read_at: Option<Vec3>,
-    reached_mark: bool,
+    /// The waypoint last counted as reached, so standing at one counts it
+    /// once.
+    reached_mark: Option<[f32; 3]>,
     /// The last place the walker was counted from, in the water.
     swam_from: Option<Vec3>,
     swum_m: f32,
@@ -453,8 +457,8 @@ pub struct AboutState {
     reef: bool,
 }
 
-/// Getting about (`starter-missions` T.2): the map opened, the walk from
-/// where it was read, metres swum, a boat boarded and the metres it went, a
+/// Getting about (`starter-missions` T.2): the map opened, the player's
+/// mark reached (G3), metres swum, a boat boarded and the metres it went, a
 /// town and a reef reached. Each is raised where the game already knows it:
 /// the screen, the walker's position against the sea and the towns, the
 /// craft the player is aboard.
@@ -465,6 +469,7 @@ pub fn about_watch(
     vehicles: Query<&pbd_app::vehicles::Vehicle>,
     towns: Option<Res<pbd_app::towns::Towns>>,
     walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    save: Option<Res<pbd_app::saves::WorldSave>>,
     mut did: MessageWriter<pbd_app::missions::Did>,
     mut state: Local<AboutState>,
 ) {
@@ -475,20 +480,21 @@ pub fn about_watch(
     if state.screen != Some(*screen) {
         if *screen == Screen::Map {
             did.write(Did::new(Kind::Open, "map", 1));
-            if state.read_at.is_none() {
-                state.read_at = at;
-            }
         }
         state.screen = Some(*screen);
     }
     let Some(feet) = at else { return };
     let up = feet.normalize_or(Vec3::Y);
-    // The walk from where the map was read.
-    if let Some(read) = state.read_at
-        && !state.reached_mark
-        && read.normalize_or(Vec3::Y).distance(up) * PLANET_RADIUS >= MAP_WALK_M
+    // A waypoint reached: one set far enough away counts once.
+    let marks = save
+        .as_deref()
+        .map(super::map_screen::marks_of)
+        .unwrap_or_default();
+    if let Some(mark) = marks
+        .iter()
+        .find(|m| state.reached_mark != Some(m.at) && m.reached_far(feet, PLANET_RADIUS))
     {
-        state.reached_mark = true;
+        state.reached_mark = Some(mark.at);
         did.write(Did::new(Kind::Reach, "marked", 1));
     }
     // Swimming: the feet under the sea's level over the sea floor.

@@ -4,7 +4,7 @@ A walled market town for a people with medieval tools: stone, timber, wattle and
 daub, thatch, iron hinges, a forge. Every building can be entered, every floor
 reached by a stair a person would recognise, and every wall, door and table
 stops the walker. The JS prototype is `docs/mockups/towns.html`
-([published](https://claude.ai/artifact/59zS9ERBTkrVrzPedfoUL2)). Nothing in the engine is
+([published](https://claude.ai/artifact/B5FqbGTTMsznmUiP4rSLUv)). Nothing in the engine is
 built yet.
 
 ## 1. What the engine has today

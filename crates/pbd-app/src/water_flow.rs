@@ -8,8 +8,20 @@
 //! the sea sheet does not draw is drawn, as Luanti's liquid mesher draws a
 //! node (`content_mapblock.cpp`, `drawLiquidNode`), on the hex grid (design
 //! 7e).
+//!
+//! Between two ticks the water is drawn easing from the last tick to this one
+//! (design, "Smooth water between ticks", M31's Pour tab, approved
+//! 2026-11-15): the mesher keeps the tick before, every vertex carries where
+//! it was as well as where it is, and `vertex_flowing` eases between them. A
+//! level eases (S1, smoothstepped); a newly wet cell sweeps in from the side
+//! its water came from (S2) or grows down from the water over it (S3); a
+//! dried cell shrinks back toward where its water went and is drawn for that
+//! one tick only (S4). Fronts ease linearly, so a pour creeps at one speed.
+//! The rule, its tick and the save are untouched. `PBD_WATER_SMOOTH=0` draws
+//! each tick as it lands, as before.
 
 use crate::planet::column::{ColumnTier, sea_layer};
+use crate::planet::lod::FineSet;
 use crate::planet::{GpuCell, PLANET_RADIUS, PlanetContact, PlanetFine, PlanetRenderFrame};
 use crate::saves::WorldSave;
 use bevy::asset::RenderAssetUsages;
@@ -34,8 +46,19 @@ const ARROW_LIFT: f32 = 0.05;
 const KIND_TOP: f32 = 1.0;
 const KIND_FALLING: f32 = 2.0;
 const KIND_STILL: f32 = 3.0;
+/// How thin a cell that flows in (S2) starts, or one that dries (S4) ends,
+/// as a share of its height: M31's `POUR.THIN`.
+pub const THIN: f32 = 0.25;
+/// A vertex's ease flags (`vertex_flowing`): a front (S2-S4 and a piece
+/// that appears or goes in S1), eased linearly; else a level, smoothstepped.
+pub const EASE_FRONT: u32 = 1;
+/// A dried cell's piece, or one a cell lost this tick: hidden once the
+/// tick has played.
+pub const EASE_GONE: u32 = 2;
+/// Lanes (vec4s) a vertex in the water pass's buffer.
+pub const LANES_PER_VERTEX: usize = 4;
 
-/// The game's own water as the water pass draws it (`water-flow` E6): three
+/// The game's own water as the water pass draws it (`water-flow` E6): four
 /// lanes a vertex, triangles end to end (`vertex_flowing` in `water.wgsl`),
 /// and which make of it this is.
 #[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
@@ -44,12 +67,61 @@ pub struct FlowingWater {
     pub version: u64,
 }
 
+/// How far the drawing is through the tick that last landed: `linear`
+/// 0..1 for the fronts, `smooth` its smoothstep for the levels. Both 1 when
+/// the water is drawn as it is (`PBD_WATER_SMOOTH=0`, or the tick played).
+#[derive(
+    Resource, Clone, Copy, Debug, PartialEq, bevy::render::extract_resource::ExtractResource,
+)]
+pub struct WaterEase {
+    pub linear: f32,
+    pub smooth: f32,
+}
+
+impl Default for WaterEase {
+    fn default() -> Self {
+        Self {
+            linear: 1.0,
+            smooth: 1.0,
+        }
+    }
+}
+
 /// When the next tick is due.
 #[derive(Resource, Default)]
 pub struct WaterClock {
     since_s: f32,
     /// Ticks run, for the log.
     pub ticks: u64,
+}
+
+/// The tick the drawing eases across: the fine set before it, which set it
+/// made, and how long since it landed.
+#[derive(Resource)]
+pub struct WaterStep {
+    /// The set before the last tick, until the mesher has used it.
+    prev: Option<Arc<FineSet>>,
+    /// The version and set the last tick made, which `prev` eases into.
+    after: Option<(u64, usize)>,
+    /// Seconds since the last tick landed.
+    pub since_s: f32,
+    /// A capture's frozen fraction of the tick (`--water-tick-frac`): the
+    /// rule does not tick on its own while it is set.
+    pub hold: Option<f32>,
+    /// Whether to ease at all (`PBD_WATER_SMOOTH=0` turns it off).
+    pub smooth: bool,
+}
+
+impl Default for WaterStep {
+    fn default() -> Self {
+        Self {
+            prev: None,
+            after: None,
+            since_s: liquid::TICK_S,
+            hold: None,
+            smooth: std::env::var("PBD_WATER_SMOOTH").map_or(true, |v| v.trim() != "0"),
+        }
+    }
 }
 
 /// Whether the flow arrows are drawn: the player's setting, or the debug key
@@ -79,21 +151,31 @@ struct Meshed {
 /// Run `ticks` of the rule over the tier now, as a tick does: every change
 /// journaled under the water, the changed records repacked, the contact and
 /// the fine set's version moved. Returns how many cells changed. Nothing
-/// moves if the save refuses.
+/// moves if the save refuses. The set before the last of them is kept in
+/// `step` for the drawing to ease from.
 pub fn run_ticks(
     fine: &mut PlanetFine,
     contact: &mut PlanetContact,
     save: &mut WorldSave,
     ticks: usize,
+    step: &mut WaterStep,
 ) -> usize {
     if fine.set.columns.water.queue.is_empty() || ticks == 0 {
         return 0;
     }
+    let before = fine.set.clone();
     let mut set = (*fine.set).clone();
+    let mut last_before: Option<Arc<FineSet>> = None;
+    let mut ran = 0;
     let mut changed = 0;
-    for _ in 0..ticks {
+    for i in 0..ticks {
         if set.columns.water.queue.is_empty() {
             break;
+        }
+        // Only the last tick is eased across: keep the set before it (the
+        // one already published when it is the only tick).
+        if step.smooth && i > 0 && i + 1 == ticks {
+            last_before = Some(Arc::new(set.clone()));
         }
         let made = set.columns.tick_water(liquid::LOOP_MAX);
         let edits: Vec<Edit> = made
@@ -128,11 +210,24 @@ pub fn run_ticks(
             return 0;
         }
         changed += made.len();
+        ran += 1;
     }
     let set = Arc::new(set);
     contact.set_fine(&set);
+    let made = Arc::as_ptr(&set) as usize;
     fine.set = set;
     fine.version += 1;
+    step.prev = if !step.smooth {
+        None
+    } else if ran == 1 && ticks == 1 {
+        Some(before)
+    } else if ran == ticks {
+        last_before
+    } else {
+        None
+    };
+    step.after = step.prev.as_ref().map(|_| (fine.version, made));
+    step.since_s = 0.0;
     changed
 }
 
@@ -141,11 +236,16 @@ pub fn run_ticks(
 fn tick_water(
     time: Res<Time>,
     mut clock: ResMut<WaterClock>,
+    mut step: ResMut<WaterStep>,
     fine: Option<ResMut<PlanetFine>>,
     contact: Option<ResMut<PlanetContact>>,
     save: Option<ResMut<WorldSave>>,
     refresh: Option<Res<crate::planet::LodRefresh>>,
 ) {
+    step.since_s += time.delta_secs();
+    if step.hold.is_some() {
+        return;
+    }
     let (Some(mut fine), Some(mut contact), Some(mut save), Some(refresh)) =
         (fine, contact, save, refresh)
     else {
@@ -161,13 +261,30 @@ fn tick_water(
     }
     clock.since_s -= liquid::TICK_S;
     clock.since_s = clock.since_s.min(liquid::TICK_S);
-    let changed = run_ticks(&mut fine, &mut contact, &mut save, 1);
+    let changed = run_ticks(&mut fine, &mut contact, &mut save, 1, &mut step);
     clock.ticks += 1;
     debug!(
         "water tick {}: {changed} cells changed, {} queued",
         clock.ticks,
         fine.set.columns.water.queue.len()
     );
+}
+
+/// How far through the tick the drawing is, for the water pass and the
+/// splash.
+fn ease_water(step: Res<WaterStep>, mut ease: ResMut<WaterEase>) {
+    let linear = if step.smooth {
+        (step.hold.unwrap_or(step.since_s) / liquid::TICK_S).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let want = WaterEase {
+        linear,
+        smooth: linear * linear * (3.0 - 2.0 * linear),
+    };
+    if *ease != want {
+        *ease = want;
+    }
 }
 
 /// A mesh of one degenerate triangle with the arrows' attributes: what the
@@ -207,28 +324,53 @@ fn spawn_arrows(
     ));
 }
 
-/// What the mesher makes: the water's triangles and the arrows'.
-#[derive(Default, Debug)]
-pub struct LiquidMesh {
-    pub positions: Vec<[f32; 3]>,
-    pub normals: Vec<[f32; 3]>,
+/// One vertex of the water as the pass draws it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlowVertex {
+    /// Where it is this tick, body-local.
+    pub position: Vec3,
+    /// Where it was the tick before; `position` when it has not moved.
+    pub prev: Vec3,
+    pub normal: Vec3,
     /// The flow in the face's tangent frame as the sea's fragment reads it.
     /// The flow lane: a top's pan (xy) and how near a fall's lip it is (z);
     /// a face's froth weight (x) and how far under its fall's lip it is (z).
-    pub flow: Vec<[f32; 3]>,
+    pub flow: Vec3,
     /// The face's kind, and the sky's share at it, 0..1.
-    pub kind: Vec<f32>,
-    pub sky: Vec<f32>,
-    pub indices: Vec<u32>,
+    pub kind: f32,
+    pub sky: f32,
+    /// `EASE_FRONT` and `EASE_GONE`.
+    pub flags: u32,
+}
+
+/// A fall's foot: where it lands (body-local), how many layers it fell, the
+/// sky's share there, and whether it landed this tick (its splash starts
+/// when the column reaches it, not when the tick starts).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Foot {
+    pub at: Vec3,
+    pub height: f32,
+    pub sky: f32,
+    pub born: bool,
+}
+
+/// What the mesher makes: the water's triangles and the arrows'.
+#[derive(Default, Debug)]
+pub struct LiquidMesh {
+    /// Triangles end to end.
+    pub vertices: Vec<FlowVertex>,
     pub arrow_positions: Vec<[f32; 3]>,
     pub arrow_indices: Vec<u32>,
     /// Water cells drawn, tops drawn, and tops with a flow.
     pub cells: usize,
     pub tops: usize,
     pub flowing_tops: usize,
-    /// The foot of every fall: where it lands (body-local), how many layers
-    /// it fell, and the sky's share there. What the splash draws from.
-    pub feet: Vec<(Vec3, f32, f32)>,
+    /// Cells wet this tick and not the last (S2, S3), and the other way
+    /// round (S4, drawn this one tick more).
+    pub born: usize,
+    pub dried: usize,
+    /// The foot of every fall: what the splash draws from.
+    pub feet: Vec<Foot>,
 }
 
 /// The tangent frame the sea's fragment builds off a face (`fragment` in
@@ -240,30 +382,14 @@ fn shader_frame(face: Vec3) -> (Vec3, Vec3) {
 }
 
 impl LiquidMesh {
-    fn vertex(&mut self, p: Vec3, n: Vec3, flow: Vec2, kind: f32, sky: f32) -> u32 {
-        self.vertex_with(p, n, flow.extend(0.0), kind, sky)
-    }
-
-    fn vertex_with(&mut self, p: Vec3, n: Vec3, flow: Vec3, kind: f32, sky: f32) -> u32 {
-        self.positions.push(p.to_array());
-        self.normals.push(n.to_array());
-        self.flow.push(flow.to_array());
-        self.kind.push(kind);
-        self.sky.push(sky);
-        (self.positions.len() - 1) as u32
-    }
-
-    /// The triangles as the water pass reads them: three lanes a vertex.
+    /// The triangles as the water pass reads them: four lanes a vertex.
     pub fn lanes(&self) -> Vec<[f32; 4]> {
-        let mut out = Vec::with_capacity(self.indices.len() * 3);
-        for &i in &self.indices {
-            let i = i as usize;
-            let [x, y, z] = self.positions[i];
-            let [nx, ny, nz] = self.normals[i];
-            let [fx, fy, fz] = self.flow[i];
-            out.push([x, y, z, self.sky[i]]);
-            out.push([nx, ny, nz, self.kind[i]]);
-            out.push([fx, fy, fz, 0.0]);
+        let mut out = Vec::with_capacity(self.vertices.len() * LANES_PER_VERTEX);
+        for v in &self.vertices {
+            out.push(v.position.extend(v.sky).to_array());
+            out.push(v.normal.extend(v.kind).to_array());
+            out.push(v.flow.extend(0.0).to_array());
+            out.push(v.prev.extend(v.flags as f32).to_array());
         }
         out
     }
@@ -289,6 +415,36 @@ impl LiquidMesh {
         }
         self.arrow_indices
             .extend([0, 1, 2, 0, 2, 3, 4, 5, 6].map(|i| base + i));
+    }
+
+    /// One piece's vertices: where each is (`now`), where it was (`was`).
+    fn emit(&mut self, piece: &Piece, now: &[Vec3], was: &[Vec3], sky: f32, flags: u32) {
+        for ((v, &position), &prev) in piece.v[..piece.n].iter().zip(now).zip(was) {
+            self.vertices.push(FlowVertex {
+                position,
+                prev,
+                normal: v.n,
+                flow: v.flow,
+                kind: v.kind,
+                sky,
+                flags,
+            });
+        }
+    }
+
+    /// A piece drawn where it is, not moving.
+    fn emit_still(&mut self, piece: &Piece, sky: f32) {
+        for v in &piece.v[..piece.n] {
+            self.vertices.push(FlowVertex {
+                position: v.p,
+                prev: v.p,
+                normal: v.n,
+                flow: v.flow,
+                kind: v.kind,
+                sky,
+                flags: 0,
+            });
+        }
     }
 }
 
@@ -326,20 +482,534 @@ fn corner_level(cells: &[Option<Side>; 3]) -> f32 {
     }
 }
 
-/// Mesh every water cell of the tier the sea sheet does not draw.
+/// Which piece of a cell: matched by this across two ticks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PieceId {
+    /// The top, over no water.
+    Top,
+    /// A side, over air or a fall's side over lower water.
+    Side(usize),
+    /// The bottom, over air.
+    Bottom,
+}
+
+/// One vertex of a piece.
+#[derive(Clone, Copy, Debug, Default)]
+struct PieceVertex {
+    p: Vec3,
+    n: Vec3,
+    flow: Vec3,
+    kind: f32,
+}
+
+/// The most vertices a piece has: a hexagonal top or bottom, six triangles.
+const PIECE_MAX: usize = 18;
+
+/// One piece of one wet cell in one tick: its triangles' vertices, and the
+/// same piece collapsed (a top pressed to the cell's top, a side's bottom
+/// raised to its top), which is where a piece that is in only one of two
+/// ticks starts or ends (M31's `cellPieces`).
+#[derive(Clone, Copy, Debug)]
+struct Piece {
+    id: PieceId,
+    n: usize,
+    v: [PieceVertex; PIECE_MAX],
+    alt: [Vec3; PIECE_MAX],
+}
+
+impl Piece {
+    fn new(id: PieceId) -> Self {
+        Self {
+            id,
+            n: 0,
+            v: [PieceVertex::default(); PIECE_MAX],
+            alt: [Vec3::ZERO; PIECE_MAX],
+        }
+    }
+
+    fn push(&mut self, v: PieceVertex, alt: Vec3) {
+        self.v[self.n] = v;
+        self.alt[self.n] = alt;
+        self.n += 1;
+    }
+
+    /// Its vertices' positions; the first `n` are its own.
+    fn positions(&self) -> [Vec3; PIECE_MAX] {
+        let mut out = [Vec3::ZERO; PIECE_MAX];
+        for (o, v) in out.iter_mut().zip(&self.v[..self.n]) {
+            *o = v.p;
+        }
+        out
+    }
+}
+
+/// A cell's shape, the same in every tick.
+struct CellFrame {
+    degree: usize,
+    centre: Vec3,
+    corners: [Vec3; 6],
+    sides: [Option<usize>; 6],
+    under_sea: bool,
+    /// The shader's tangent frame at the centre.
+    t: Vec3,
+    b: Vec3,
+}
+
+impl CellFrame {
+    fn of(tier: &ColumnTier, slot: usize, cell: &GpuCell, sea_level_m: f32) -> Self {
+        let degree = cell.degree().min(6);
+        let centre = Vec3::from_slice(&cell.direction_height[..3]).normalize_or(Vec3::Y);
+        let mut corners = [centre; 6];
+        for (i, corner) in corners.iter_mut().enumerate().take(degree) {
+            *corner = Vec3::from_slice(&cell.corners[i][..3]).normalize_or(centre);
+        }
+        let (t, b) = shader_frame(centre);
+        Self {
+            degree,
+            centre,
+            corners,
+            sides: tier.sides_of(slot),
+            under_sea: cell.direction_height[3] < sea_level_m,
+            t,
+            b,
+        }
+    }
+
+    /// Side `s`'s outward normal, in the tangent plane at the centre.
+    fn side_normal(&self, s: usize) -> Vec3 {
+        let (a, z) = (self.corners[s], self.corners[(s + 1) % self.degree]);
+        let normal = ((a + z) * 0.5 - self.centre).normalize_or(self.centre);
+        (normal - self.centre * normal.dot(self.centre)).normalize_or(normal)
+    }
+}
+
+/// The height the water's top at `slot`, `layer` is DRAWN at, metres over
+/// the radius, at the cell's centre: the mean of its corners' levels
+/// (Luanti's corner rule, `corner_level`), as `cell_pieces` meshes it. `None`
+/// where the layer is not water, water stands on it, or it is the sea's own
+/// top, which the sheet draws. What decides whether the eye is under a
+/// river's water (`ocean-environments` B17): the surface the eye sees, not
+/// the cell's own level, which the drawn top stands over by up to a layer's
+/// share where a neighbour is full.
+pub fn drawn_top_m(tier: &ColumnTier, slot: usize, layer: usize) -> Option<f32> {
+    let column = tier.columns.get(slot)?;
+    let here = column.material(layer);
+    if !here.is_water() || column.material(layer + 1).is_water() {
+        return None;
+    }
+    let sea = sea_layer();
+    if here == Material::Water && layer + 1 == sea {
+        return None;
+    }
+    let degree = tier.degree_of(slot);
+    let sides = tier.sides_of(slot);
+    let side_of = |s: usize| -> Option<Side> {
+        let n = sides[s]?;
+        Some(Side {
+            material: material_in(tier, n, layer),
+            above_water: material_in(tier, n, layer + 1).is_water(),
+        })
+    };
+    let me = Some(Side {
+        material: here,
+        above_water: false,
+    });
+    let mean = (0..degree)
+        .map(|i| corner_level(&[me, side_of((i + degree - 1) % degree), side_of(i)]))
+        .sum::<f32>()
+        / degree.max(1) as f32;
+    Some(column::layer_altitude(layer) + mean)
+}
+
+/// A layer's material in a tier, stone off it.
+fn material_in(tier: &ColumnTier, slot: usize, layer: usize) -> Material {
+    tier.columns
+        .get(slot)
+        .map_or(Material::Stone, |c| c.material(layer))
+}
+
+fn is_falling(m: Material) -> bool {
+    m.flow().is_some_and(|(_, f)| f)
+}
+
+/// The pieces of the water cell at `slot`, `layer` in `tier` (which must be
+/// water there), into `pieces`. With `out`, the cell is this tick's: it is
+/// counted, its arrows drawn and its fall's foot returned (where and how far
+/// it fell).
+#[allow(clippy::too_many_arguments)]
+fn cell_pieces(
+    tier: &ColumnTier,
+    f: &CellFrame,
+    slot: usize,
+    layer: usize,
+    radius: f32,
+    pieces: &mut Vec<Piece>,
+    mut out: Option<&mut LiquidMesh>,
+) -> Option<(Vec3, f32)> {
+    pieces.clear();
+    let sea = sea_layer();
+    let material = |slot: usize, layer: usize| material_in(tier, slot, layer);
+    let column = &tier.columns[slot];
+    let degree = f.degree;
+    let (centre, corners, sides) = (f.centre, &f.corners, &f.sides);
+    let here = column.material(layer);
+    let floor = column::layer_altitude(layer);
+    let above_water = column.material(layer + 1).is_water();
+    let flow = here.flow();
+    let falling = flow.is_some_and(|(_, f)| f);
+    // The sea's own top: the sheet draws it.
+    let sheet = here == Material::Water && layer + 1 == sea && f.under_sea;
+    let side_of = |s: usize| -> Option<Side> {
+        let n = sides[s]?;
+        Some(Side {
+            material: material(n, layer),
+            above_water: material(n, layer + 1).is_water(),
+        })
+    };
+    let me = Some(Side {
+        material: here,
+        above_water,
+    });
+    let mut levels = [0.0f32; 6];
+    for (i, level) in levels.iter_mut().enumerate().take(degree) {
+        *level = if above_water {
+            1.0
+        } else {
+            corner_level(&[me, side_of((i + degree - 1) % degree), side_of(i)])
+        };
+    }
+    let at = |dir: Vec3, fraction: f32| dir * (radius + floor + fraction);
+    let top_of = |p: Vec3| p.normalize_or(centre) * (radius + floor + 1.0);
+    if let Some(out) = out.as_deref_mut() {
+        out.cells += 1;
+    }
+    // The top, through the corners, unless water stands on it.
+    let mean = levels[..degree].iter().sum::<f32>() / degree.max(1) as f32;
+    let middle = at(centre, mean);
+    // Luanti's flow, down the corner slope: the least-squares slope of the
+    // corners about the middle.
+    let mut gradient = Vec3::ZERO;
+    let mut spread = 0.0;
+    for (i, &k) in corners.iter().enumerate().take(degree) {
+        let offset = at(k, mean) - middle;
+        let offset = offset - centre * offset.dot(centre);
+        gradient += offset * (levels[i] - mean);
+        spread += offset.length_squared();
+    }
+    let slope = if spread > 0.0 {
+        -gradient / (spread / 2.0)
+    } else {
+        Vec3::ZERO
+    };
+    let flowing = flow.is_some() && slope.length() > 1e-3;
+    // The foot of a fall: water that is not falling, with falling water on
+    // it. How far it fell is the falling run above. On the landing cell's
+    // own surface, so the splash starts at the water, never in it.
+    let foot = (!falling && is_falling(column.material(layer + 1))).then(|| {
+        let height = (layer + 1..LAYERS)
+            .take_while(|&l| is_falling(column.material(l)))
+            .count();
+        (middle, height as f32)
+    });
+    if !above_water && !sheet {
+        if let Some(out) = out.as_deref_mut() {
+            out.tops += 1;
+        }
+        // The waves stream along the flow, faster on a steeper top.
+        let pan = if flowing {
+            let speed = PAN_K * (slope.length() / PAN_SLOPE).clamp(0.35, 1.5);
+            let dir = slope.normalize();
+            Vec2::new(dir.dot(f.t), dir.dot(f.b)) * speed / SHADER_FLOW
+        } else {
+            Vec2::ZERO
+        };
+        // How near each corner is to a fall's lip (owner, 2026-11-15:
+        // "can we have the edge transition into froth?"): one at a corner on
+        // a side whose water goes over an edge, so the top whitens and speeds
+        // up toward the fall across its last metre or so. An edge goes over
+        // where the side's water falls, or falls from under it, or this
+        // cell's own water falls below.
+        let over = |s: usize| -> bool {
+            sides[s].is_some_and(|n| {
+                is_falling(material(n, layer))
+                    || (!tier.columns[n].solid(layer) && is_falling(material(n, layer - 1)))
+            })
+        };
+        let own_lip = is_falling(column.material(layer - 1));
+        let mut lips = [0.0f32; 6];
+        for (i, lip) in lips.iter_mut().enumerate().take(degree) {
+            if own_lip || over((i + degree - 1) % degree) || over(i) {
+                *lip = 1.0;
+            }
+        }
+        let middle_lip = if own_lip { 0.6 } else { 0.0 };
+        // Each triangle lit by its own slope, so a top running down to a
+        // sheet's edge reads as water tilted, not a mirror on edge.
+        let mut top = Piece::new(PieceId::Top);
+        for i in 0..degree {
+            let (p, q) = (
+                at(corners[i], levels[i]),
+                at(corners[(i + 1) % degree], levels[(i + 1) % degree]),
+            );
+            let mut n = (p - middle).cross(q - middle).normalize_or(centre);
+            if n.dot(centre) < 0.0 {
+                n = -n;
+            }
+            let j = (i + 1) % degree;
+            for (v, lip) in [(middle, middle_lip), (p, lips[i]), (q, lips[j])] {
+                top.push(
+                    PieceVertex {
+                        p: v,
+                        n,
+                        flow: pan.extend(lip),
+                        kind: KIND_TOP,
+                    },
+                    top_of(v),
+                );
+            }
+        }
+        pieces.push(top);
+        if flowing && let Some(out) = out.as_deref_mut() {
+            out.flowing_tops += 1;
+            let along = slope.normalize();
+            let across = centre.cross(along);
+            let length = 0.8 + 0.8 * (slope.length() / PAN_SLOPE).min(1.0);
+            out.arrow(middle + centre * ARROW_LIFT, along, across, length);
+        }
+    }
+    // The sides: Luanti's `drawLiquidSides`.
+    for s in 0..degree {
+        let Some(n) = sides[s] else {
+            continue;
+        };
+        let there = material(n, layer);
+        let there_above = material(n, layer + 1).is_water();
+        let (a, z) = (corners[s], corners[(s + 1) % degree]);
+        let (top_a, top_z) = (levels[s], levels[(s + 1) % degree]);
+        let (bottom_a, bottom_z) = if there.is_water() {
+            // Only a fall's side over lower water, down to it.
+            if !above_water || there_above {
+                continue;
+            }
+            (top_a, top_z)
+        } else if tier.columns[n].solid(layer) {
+            continue;
+        } else {
+            (0.0, 0.0)
+        };
+        let (top_a, top_z) = if above_water {
+            (1.0, 1.0)
+        } else {
+            (top_a, top_z)
+        };
+        if sheet && layer + 1 == sea {
+            // The sea's side at its surface is the sheet's lip.
+            continue;
+        }
+        let normal = f.side_normal(s);
+        let edge = (z - a).normalize_or(f.t);
+        // A falling cell's face is white water streaming down; a sheet's
+        // edge and a source's face stand still. A fall's froth is densest at
+        // its lip and its foot.
+        let froth = if !falling {
+            0.5
+        } else if !is_falling(column.material(layer + 1)) || !is_falling(column.material(layer - 1))
+        {
+            1.0
+        } else {
+            0.55
+        };
+        let kind = if falling || above_water && flow.is_some() {
+            KIND_FALLING
+        } else {
+            KIND_STILL
+        };
+        // How far under its fall's lip each corner is, metres: the falling
+        // run over this layer, and the fraction into it.
+        let run = if falling {
+            (layer + 1..LAYERS)
+                .take_while(|&l| is_falling(column.material(l)))
+                .count() as f32
+        } else {
+            0.0
+        };
+        let under = |fraction: f32| if falling { run + 1.0 - fraction } else { 0.0 };
+        let pts = [
+            (at(a, bottom_a), bottom_a),
+            (at(z, bottom_z), bottom_z),
+            (at(z, top_z), top_z),
+            (at(a, top_a), top_a),
+        ];
+        let mut piece = Piece::new(PieceId::Side(s));
+        // Two triangles, and the side collapsed: its bottom raised to its top.
+        for (k, raised) in [(0, 3), (1, 2), (2, 2), (0, 3), (2, 2), (3, 3)] {
+            let (p, fraction) = pts[k];
+            piece.push(
+                PieceVertex {
+                    p,
+                    n: normal,
+                    flow: Vec3::new(froth, 0.0, under(fraction)),
+                    kind,
+                },
+                pts[raised].0,
+            );
+        }
+        pieces.push(piece);
+        if falling
+            && !there.is_water()
+            && let Some(out) = out.as_deref_mut()
+        {
+            let mid = (pts[0].0 + pts[1].0 + pts[2].0 + pts[3].0) * 0.25;
+            out.arrow(mid + normal * ARROW_LIFT, -centre, edge, 0.7);
+        }
+    }
+    // The bottom, over air.
+    if column.material(layer - 1) == Material::Air {
+        let mut bottom = Piece::new(PieceId::Bottom);
+        let c = at(centre, 0.0);
+        for i in 0..degree {
+            for p in [c, at(corners[(i + 1) % degree], 0.0), at(corners[i], 0.0)] {
+                bottom.push(
+                    PieceVertex {
+                        p,
+                        n: -centre,
+                        flow: Vec3::ZERO,
+                        kind: KIND_STILL,
+                    },
+                    p,
+                );
+            }
+        }
+        pieces.push(bottom);
+    }
+    foot
+}
+
+/// Where a cell that appears (S2, S3) starts, or one that dries (S4) ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Squash {
+    /// Pressed up to its top: a fall arriving from the water over it.
+    Top,
+    /// Pressed down to its floor: a fall's tail draining into the water
+    /// under it.
+    Floor,
+    /// A thin sheet (`THIN` of its height) on side `s`: the side its water
+    /// came from or went to.
+    Side(usize),
+}
+
+impl Squash {
+    /// Where `p`, a point of the cell at `floor` metres, starts or ends.
+    fn apply(self, f: &CellFrame, radius: f32, floor: f32, p: Vec3) -> Vec3 {
+        let base = radius + floor;
+        let dir = p.normalize_or(f.centre);
+        match self {
+            Squash::Top => dir * (base + 1.0),
+            Squash::Floor => dir * base,
+            Squash::Side(s) => {
+                let n = f.side_normal(s);
+                let edge = f.corners[s];
+                // At or under zero inside the cell: how far in from the side.
+                let d = (dir - edge).dot(n);
+                let onto = (dir - n * d).normalize_or(dir);
+                let height = p.length() - base;
+                onto * (base + height * THIN)
+            }
+        }
+    }
+}
+
+/// The side of `slot` whose water at `layer` stands highest in `tier` (a
+/// source counts 8, a flowing cell its level), or `None` where no side is
+/// wet: where a newly wet cell's water came from, or a dried one's went.
+fn wettest_side(tier: &ColumnTier, f: &CellFrame, layer: usize) -> Option<usize> {
+    let mut best = None;
+    let mut rank = -1i32;
+    for s in 0..f.degree {
+        let Some(n) = f.sides[s] else {
+            continue;
+        };
+        let m = material_in(tier, n, layer);
+        let r = if m == Material::Water {
+            8
+        } else if let Some((level, _)) = m.flow() {
+            i32::from(level)
+        } else {
+            -1
+        };
+        if r > rank {
+            rank = r;
+            best = Some(s);
+        }
+    }
+    best
+}
+
+/// Whether nothing the cell's pieces are shaped by changed between two
+/// ticks: its own column round the layer, and its sides' at, over and under
+/// it. Such a cell is drawn still, without meshing it twice.
+fn same_shape(
+    prev: &ColumnTier,
+    tier: &ColumnTier,
+    f: &CellFrame,
+    slot: usize,
+    layer: usize,
+) -> bool {
+    let same = |s: usize| {
+        (layer - 1..=layer + 1).all(|l| material_in(prev, s, l) == material_in(tier, s, l))
+    };
+    same(slot) && f.sides[..f.degree].iter().flatten().all(|&n| same(n))
+}
+
+/// Whether the cell at `slot`, `layer` of `tier` is a fall's foot.
+fn is_foot(tier: &ColumnTier, slot: usize, layer: usize) -> bool {
+    let m = material_in(tier, slot, layer);
+    m.is_water() && !is_falling(m) && is_falling(material_in(tier, slot, layer + 1))
+}
+
+/// Mesh every water cell of the tier the sea sheet does not draw, as it is.
 pub fn liquid_mesh(
     tier: &ColumnTier,
     finest: &[GpuCell],
     radius: f32,
     sea_level_m: f32,
 ) -> LiquidMesh {
+    liquid_mesh_eased(tier, None, finest, radius, sea_level_m)
+}
+
+/// Mesh every water cell of the tier the sea sheet does not draw, each
+/// vertex easing from `prev`, the tier the tick before (same slots), when
+/// there is one (M31's `pourMesh`):
+/// - S1, a cell wet in both: its pieces ease from the last tick's to this
+///   one's; a piece it gained grows from its collapsed self, one it lost
+///   collapses away and goes;
+/// - S2, wet now and not before: squashed onto the side its water came from;
+/// - S3, the same under last tick's water: pressed up to its top, so a fall
+///   grows down;
+/// - S4, wet before and not now: drawn this one tick more, shrinking onto the
+///   side its water went to (or down into the water under it), then gone.
+pub fn liquid_mesh_eased(
+    tier: &ColumnTier,
+    prev: Option<&ColumnTier>,
+    finest: &[GpuCell],
+    radius: f32,
+    sea_level_m: f32,
+) -> LiquidMesh {
     let mut out = LiquidMesh::default();
-    let sea = sea_layer();
-    let material = |slot: usize, layer: usize| -> Material {
-        tier.columns
-            .get(slot)
-            .map_or(Material::Stone, |c| c.material(layer))
-    };
+    // The tick before is eased from only when it is the same tier.
+    let prev = prev
+        .filter(|p| p.columns.len() == tier.columns.len() && p.water.records == tier.water.records);
+    let mut now = Vec::with_capacity(8);
+    let mut was = Vec::with_capacity(8);
+    let mut to = [Vec3::ZERO; PIECE_MAX];
+    // The columns the tick changed: only cells in or beside one can move.
+    let changed: Vec<bool> = prev.map_or_else(Vec::new, |p| {
+        p.columns
+            .iter()
+            .zip(&tier.columns)
+            .map(|(a, b)| a != b)
+            .collect()
+    });
     for slot in 0..tier.columns.len() {
         let Some(&record) = tier.water.records.get(slot) else {
             continue;
@@ -348,236 +1018,125 @@ pub fn liquid_mesh(
             continue;
         };
         let column = &tier.columns[slot];
-        let degree = cell.degree().min(6);
-        let centre = Vec3::from_slice(&cell.direction_height[..3]).normalize_or(Vec3::Y);
-        let corners: Vec<Vec3> = (0..degree)
-            .map(|i| Vec3::from_slice(&cell.corners[i][..3]).normalize_or(centre))
-            .collect();
-        let sides = tier.sides_of(slot);
-        let under_sea = cell.direction_height[3] < sea_level_m;
-        let (t, b) = shader_frame(centre);
+        // An unchanged column was wet where it is wet now.
+        let before = prev.filter(|_| changed[slot]).map(|p| &p.columns[slot]);
+        // The cell's shape, and the tick to ease across when the cell or a
+        // side of it changed in it; made at its first wet layer.
+        let mut frame: Option<(CellFrame, Option<&ColumnTier>)> = None;
         for layer in 1..LAYERS - 1 {
-            let here = column.material(layer);
-            if !here.is_water() {
+            let wet_now = column.material(layer).is_water();
+            let wet_was = before.map_or(wet_now, |b| b.material(layer).is_water());
+            if !wet_now && !wet_was {
                 continue;
             }
-            let floor = column::layer_altitude(layer);
-            let above_water = column.material(layer + 1).is_water();
-            let flow = here.flow();
-            let falling = flow.is_some_and(|(_, f)| f);
-            // The sea's own top: the sheet draws it.
-            let sheet = here == Material::Water && layer + 1 == sea && under_sea;
-            let side_of = |s: usize| -> Option<Side> {
-                let n = sides[s]?;
-                Some(Side {
-                    material: material(n, layer),
-                    above_water: material(n, layer + 1).is_water(),
-                })
-            };
-            let me = Some(Side {
-                material: here,
-                above_water,
+            let (f, prev) = &*frame.get_or_insert_with(|| {
+                let f = CellFrame::of(tier, slot, cell, sea_level_m);
+                let near = prev.is_some()
+                    && (changed[slot] || f.sides[..f.degree].iter().flatten().any(|&n| changed[n]));
+                (f, prev.filter(|_| near))
             });
-            let levels: Vec<f32> = (0..degree)
-                .map(|i| {
-                    if above_water {
-                        1.0
-                    } else {
-                        corner_level(&[me, side_of((i + degree - 1) % degree), side_of(i)])
-                    }
-                })
-                .collect();
+            let prev = *prev;
             let lit = {
                 let own = tier.light_at(slot, layer);
                 let up = tier.light_at(slot, layer + 1);
                 f32::from(own.sky().max(up.sky())) / 15.0
             };
-            let at = |dir: Vec3, fraction: f32| dir * (radius + floor + fraction);
-            out.cells += 1;
-            // The top, through the corners, unless water stands on it.
-            let mean = levels.iter().sum::<f32>() / degree.max(1) as f32;
-            let middle = at(centre, mean);
-            // Luanti's flow, down the corner slope: the least-squares slope
-            // of the corners about the middle.
-            let mut gradient = Vec3::ZERO;
-            let mut spread = 0.0;
-            for (i, &k) in corners.iter().enumerate() {
-                let offset = at(k, mean) - middle;
-                let offset = offset - centre * offset.dot(centre);
-                gradient += offset * (levels[i] - mean);
-                spread += offset.length_squared();
-            }
-            let slope = if spread > 0.0 {
-                -gradient / (spread / 2.0)
-            } else {
-                Vec3::ZERO
-            };
-            let flowing = flow.is_some() && slope.length() > 1e-3;
-            // The foot of a fall: water that is not falling, with falling
-            // water on it. How far it fell is the falling run above.
-            let is_falling = |m: Material| m.flow().is_some_and(|(_, f)| f);
-            if !falling && is_falling(column.material(layer + 1)) {
-                let height = (layer + 1..LAYERS)
-                    .take_while(|&l| is_falling(column.material(l)))
-                    .count();
-                // On the landing cell's own surface, so the splash starts
-                // at the water, never in it.
-                out.feet.push((middle, height as f32, lit));
-            }
-            if !above_water && !sheet {
-                out.tops += 1;
-                // The waves stream along the flow, faster on a steeper top.
-                let pan = if flowing {
-                    let speed = PAN_K * (slope.length() / PAN_SLOPE).clamp(0.35, 1.5);
-                    let dir = slope.normalize();
-                    Vec2::new(dir.dot(t), dir.dot(b)) * speed / SHADER_FLOW
-                } else {
-                    Vec2::ZERO
-                };
-                // How near each corner is to a fall's lip (owner, 2026-11-15:
-                // "can we have the edge transition into froth?"): one at a
-                // corner on a side whose water goes over an edge, so the top
-                // whitens and speeds up toward the fall across its last metre
-                // or so. An edge goes over where the side's water falls, or
-                // falls from under it, or this cell's own water falls below.
-                let over = |s: usize| -> bool {
-                    sides[s].is_some_and(|n| {
-                        is_falling(material(n, layer))
-                            || (!tier.columns[n].solid(layer) && is_falling(material(n, layer - 1)))
-                    })
-                };
-                let own_lip = is_falling(column.material(layer - 1));
-                let lips: Vec<f32> = (0..degree)
-                    .map(|i| {
-                        if own_lip || over((i + degree - 1) % degree) || over(i) {
-                            1.0
-                        } else {
-                            0.0
+            let floor = column::layer_altitude(layer);
+            match prev {
+                Some(p) if wet_was && wet_now && !same_shape(p, tier, f, slot, layer) => {
+                    // S1: the same cell in both ticks; its pieces ease.
+                    cell_pieces(p, f, slot, layer, radius, &mut was, None);
+                    let foot = cell_pieces(tier, f, slot, layer, radius, &mut now, Some(&mut out));
+                    let mut used = [false; 8];
+                    for c in &now {
+                        let matched = was
+                            .iter()
+                            .position(|w| w.id == c.id && w.n == c.n)
+                            .filter(|&i| !used[i]);
+                        let positions = c.positions();
+                        match matched {
+                            Some(i) => {
+                                used[i] = true;
+                                let from = was[i].positions();
+                                out.emit(c, &positions, &from, lit, 0);
+                            }
+                            // A piece new this tick grows from its collapsed self.
+                            None => out.emit(c, &positions, &c.alt[..c.n], lit, EASE_FRONT),
                         }
-                    })
-                    .collect();
-                let middle_lip = if own_lip { 0.6 } else { 0.0 };
-                // Each triangle lit by its own slope, so a top running down to
-                // a sheet's edge reads as water tilted, not a mirror on edge.
-                for i in 0..degree {
-                    let (p, q) = (
-                        at(corners[i], levels[i]),
-                        at(corners[(i + 1) % degree], levels[(i + 1) % degree]),
-                    );
-                    let mut n = (p - middle).cross(q - middle).normalize_or(centre);
-                    if n.dot(centre) < 0.0 {
-                        n = -n;
                     }
-                    let j = (i + 1) % degree;
-                    for (v, lip) in [(middle, middle_lip), (p, lips[i]), (q, lips[j])] {
-                        let id = out.vertex_with(v, n, pan.extend(lip), KIND_TOP, lit);
-                        out.indices.push(id);
+                    // And one gone this tick collapses away.
+                    for (i, w) in was.iter().enumerate() {
+                        if !used[i] {
+                            let from = w.positions();
+                            out.emit(w, &w.alt[..w.n], &from, lit, EASE_FRONT | EASE_GONE);
+                        }
+                    }
+                    if let Some((at, height)) = foot {
+                        out.feet.push(Foot {
+                            at,
+                            height,
+                            sky: lit,
+                            born: !is_foot(p, slot, layer),
+                        });
                     }
                 }
-                if flowing {
-                    out.flowing_tops += 1;
-                    let along = slope.normalize();
-                    let across = centre.cross(along);
-                    let length = 0.8 + 0.8 * (slope.length() / PAN_SLOPE).min(1.0);
-                    out.arrow(middle + centre * ARROW_LIFT, along, across, length);
-                }
-            }
-            // The sides: Luanti's `drawLiquidSides`.
-            for s in 0..degree {
-                let Some(n) = sides[s] else {
-                    continue;
-                };
-                let there = material(n, layer);
-                let there_above = material(n, layer + 1).is_water();
-                let (a, z) = (corners[s], corners[(s + 1) % degree]);
-                let (top_a, top_z) = (levels[s], levels[(s + 1) % degree]);
-                let (bottom_a, bottom_z) = if there.is_water() {
-                    // Only a fall's side over lower water, down to it.
-                    if !above_water || there_above {
-                        continue;
+                Some(p) if wet_now && !wet_was => {
+                    // S2 and S3: newly wet.
+                    out.born += 1;
+                    let how = if material_in(p, slot, layer + 1).is_water() {
+                        Squash::Top
+                    } else {
+                        wettest_side(p, f, layer).map_or(Squash::Top, Squash::Side)
+                    };
+                    let foot = cell_pieces(tier, f, slot, layer, radius, &mut now, Some(&mut out));
+                    for c in &now {
+                        let positions = c.positions();
+                        for (t, &p) in to.iter_mut().zip(&positions) {
+                            *t = how.apply(f, radius, floor, p);
+                        }
+                        out.emit(c, &positions, &to[..c.n], lit, EASE_FRONT);
                     }
-                    (top_a, top_z)
-                } else if tier.columns[n].solid(layer) {
-                    continue;
-                } else {
-                    (0.0, 0.0)
-                };
-                let (top_a, top_z) = if above_water {
-                    (1.0, 1.0)
-                } else {
-                    (top_a, top_z)
-                };
-                if sheet && layer + 1 == sea {
-                    // The sea's side at its surface is the sheet's lip.
-                    continue;
+                    if let Some((at, height)) = foot {
+                        out.feet.push(Foot {
+                            at,
+                            height,
+                            sky: lit,
+                            born: true,
+                        });
+                    }
                 }
-                let normal = ((a + z) * 0.5 - centre).normalize_or(centre);
-                let normal = (normal - centre * normal.dot(centre)).normalize_or(normal);
-                let edge = (z - a).normalize_or(t);
-                // A falling cell's face is white water streaming down; a
-                // sheet's edge and a source's face stand still.
-                // A fall's froth is densest at its lip and its foot.
-                let froth = if !falling {
-                    0.5
-                } else if !is_falling(column.material(layer + 1))
-                    || !is_falling(column.material(layer - 1))
-                {
-                    1.0
-                } else {
-                    0.55
-                };
-                let kind = if falling || above_water && flow.is_some() {
-                    KIND_FALLING
-                } else {
-                    KIND_STILL
-                };
-                // How far under its fall's lip each corner is, metres: the
-                // falling run over this layer, and the fraction into it.
-                let run = if falling {
-                    (layer + 1..LAYERS)
-                        .take_while(|&l| is_falling(column.material(l)))
-                        .count() as f32
-                } else {
-                    0.0
-                };
-                let under = |fraction: f32| if falling { run + 1.0 - fraction } else { 0.0 };
-                let pts = [
-                    (at(a, bottom_a), floor + bottom_a),
-                    (at(z, bottom_z), floor + bottom_z),
-                    (at(z, top_z), floor + top_z),
-                    (at(a, top_a), floor + top_a),
-                ];
-                let ids: Vec<u32> = pts
-                    .iter()
-                    .zip([bottom_a, bottom_z, top_z, top_a])
-                    .map(|(&(p, _), fraction)| {
-                        out.vertex_with(
-                            p,
-                            normal,
-                            Vec3::new(froth, 0.0, under(fraction)),
-                            kind,
-                            lit,
-                        )
-                    })
-                    .collect();
-                out.indices
-                    .extend([ids[0], ids[1], ids[2], ids[0], ids[2], ids[3]]);
-                if falling && !there.is_water() {
-                    let mid = (pts[0].0 + pts[1].0 + pts[2].0 + pts[3].0) * 0.25;
-                    out.arrow(mid + normal * ARROW_LIFT, -centre, edge, 0.7);
+                Some(p) if wet_was && !wet_now => {
+                    // S4: dried; drawn this one tick more, shrinking back.
+                    out.dried += 1;
+                    let how = if material_in(tier, slot, layer - 1).is_water() {
+                        Squash::Floor
+                    } else {
+                        wettest_side(tier, f, layer).map_or(Squash::Floor, Squash::Side)
+                    };
+                    cell_pieces(p, f, slot, layer, radius, &mut was, None);
+                    for w in &was {
+                        let from = w.positions();
+                        for (t, &p) in to.iter_mut().zip(&from) {
+                            *t = how.apply(f, radius, floor, p);
+                        }
+                        out.emit(w, &to[..w.n], &from, lit, EASE_FRONT | EASE_GONE);
+                    }
                 }
-            }
-            // The bottom, over air.
-            if column.material(layer - 1) == Material::Air {
-                let c = out.vertex(at(centre, 0.0), -centre, Vec2::ZERO, KIND_STILL, lit);
-                let ring: Vec<u32> = (0..degree)
-                    .map(|i| {
-                        let p = at(corners[i], 0.0);
-                        out.vertex(p, -centre, Vec2::ZERO, KIND_STILL, lit)
-                    })
-                    .collect();
-                for i in 0..degree {
-                    out.indices.extend([c, ring[(i + 1) % degree], ring[i]]);
+                _ => {
+                    // As it is: no tick to ease across, or nothing round the
+                    // cell changed in it.
+                    let foot = cell_pieces(tier, f, slot, layer, radius, &mut now, Some(&mut out));
+                    for c in &now {
+                        out.emit_still(c, lit);
+                    }
+                    if let Some((at, height)) = foot {
+                        out.feet.push(Foot {
+                            at,
+                            height,
+                            sky: lit,
+                            born: false,
+                        });
+                    }
                 }
             }
         }
@@ -585,10 +1144,12 @@ pub fn liquid_mesh(
     out
 }
 
-/// Mesh the tier's water again when the fine set changes.
+/// Mesh the tier's water again when the fine set changes: easing from the
+/// set before when the change is the tick that set made.
 fn rebuild_water(
     fine: Option<Res<PlanetFine>>,
     mut meshed: ResMut<Meshed>,
+    mut step: ResMut<WaterStep>,
     mut flowing: ResMut<FlowingWater>,
     mut feet: ResMut<FallFeet>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -604,19 +1165,26 @@ fn rebuild_water(
     meshed.version = fine.version;
     meshed.set = set;
     let started = std::time::Instant::now();
-    let made = liquid_mesh(
+    let prev = step
+        .prev
+        .take()
+        .filter(|_| step.after == Some((fine.version, set)));
+    let made = liquid_mesh_eased(
         &fine.set.columns,
+        prev.as_deref().map(|p| &p.columns),
         fine.set.finest_records(),
         PLANET_RADIUS,
         crate::planet::terrain_config().sea_level_m,
     );
     if made.cells > 0 {
         debug!(
-            "water mesh: {} cells, {} tops ({} flowing), {} triangles in {:.2} ms",
+            "water mesh: {} cells ({} new, {} dried), {} tops ({} flowing), {} triangles in {:.2} ms",
             made.cells,
+            made.born,
+            made.dried,
             made.tops,
             made.flowing_tops,
-            made.indices.len() / 3,
+            made.vertices.len() / 3,
             started.elapsed().as_secs_f64() * 1e3
         );
     }
@@ -671,14 +1239,26 @@ impl Plugin for WaterFlowPlugin {
             .init_resource::<FlowArrows>()
             .init_resource::<Meshed>()
             .init_resource::<FlowingWater>()
+            .init_resource::<WaterStep>()
+            .init_resource::<WaterEase>()
             .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
                 FlowingWater,
+            >::default())
+            .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
+                WaterEase,
             >::default())
             .init_resource::<FallFeet>()
             .add_systems(Startup, (spawn_arrows, spawn_splash))
             .add_systems(
                 Update,
-                (tick_water, rebuild_water, show_arrows, animate_splash).chain(),
+                (
+                    tick_water,
+                    rebuild_water,
+                    ease_water,
+                    show_arrows,
+                    animate_splash,
+                )
+                    .chain(),
             );
     }
 }
@@ -731,15 +1311,222 @@ mod tests {
             0.5
         );
     }
+
+    // ---- Smooth water between ticks (M31's Pour tab, `water-flow` 5.3)
+
+    /// The ground's top, layers.
+    const LAND: usize = 150;
+    /// The water's layer, on the ground.
+    const AT: usize = LAND + 1;
+    const RADIUS: f32 = 1000.0;
+    /// Centre to centre, m: the gold standard's tile width.
+    const SPACING: f32 = 2.833;
+
+    /// Slot 0 and the six round it, slot `k + 1` across slot 0's side `k`.
+    /// Side `s` of a cell spans its corners `s` and `s + 1`, corner `i`
+    /// at `60 i` degrees round it.
+    fn ring_sides() -> Vec<[u32; 6]> {
+        use crate::planet::column::NO_NEIGHBOR;
+        let mut sides = vec![[1, 2, 3, 4, 5, 6]];
+        for k in 0..6usize {
+            let mut s = [NO_NEIGHBOR; 6];
+            s[(k + 3) % 6] = 0;
+            s[(k + 2) % 6] = ((k + 1) % 6 + 1) as u32;
+            s[(k + 4) % 6] = ((k + 5) % 6 + 1) as u32;
+            sides.push(s);
+        }
+        sides
+    }
+
+    /// The seven cells' records: hexagons on a sphere of `RADIUS`, over
+    /// the sea.
+    fn ring_cells() -> Vec<GpuCell> {
+        let flat = |x: f32, z: f32| Vec3::new(x, RADIUS, z);
+        let centre_of = |slot: usize| {
+            if slot == 0 {
+                flat(0.0, 0.0)
+            } else {
+                let a = (60.0 * (slot - 1) as f32 + 30.0).to_radians();
+                flat(SPACING * a.cos(), SPACING * a.sin())
+            }
+        };
+        (0..7)
+            .map(|slot| {
+                let c = centre_of(slot);
+                let mut cell: GpuCell = bytemuck::Zeroable::zeroed();
+                let d = c.normalize();
+                cell.direction_height = [d.x, d.y, d.z, 1000.0];
+                for i in 0..6 {
+                    let a = (60.0 * i as f32).to_radians();
+                    let k =
+                        (c + Vec3::new(a.cos(), 0.0, a.sin()) * SPACING / 3f32.sqrt()).normalize();
+                    cell.corners[i] = [k.x, k.y, k.z, 0.0];
+                }
+                cell.metadata[0] = 6;
+                cell
+            })
+            .collect()
+    }
+
+    /// The ring on ground at `LAND`, with water where `wet` says.
+    fn ring(wet: &[(usize, usize, Material)]) -> ColumnTier {
+        let columns = (0..7)
+            .map(|slot| {
+                let mut column = pbd_core::column::Column::bedrock();
+                for layer in 1..=LAND {
+                    column.set(layer, Material::Stone);
+                }
+                for &(s, layer, m) in wet {
+                    if s == slot {
+                        column.set(layer, m);
+                    }
+                }
+                column
+            })
+            .collect();
+        ColumnTier::for_tests(columns, &ring_sides())
+    }
+
+    fn mesh(now: &ColumnTier, before: Option<&ColumnTier>) -> LiquidMesh {
+        liquid_mesh_eased(now, before, &ring_cells(), RADIUS, 0.0)
+    }
+
+    /// S2: a cell that turns wet starts as a thin sheet on the side its
+    /// water came from: every vertex it eases from lies on that side's edge,
+    /// within `THIN` of the cell's floor.
+    #[test]
+    fn a_new_wet_cell_flows_in_from_its_source_edge() {
+        let before = ring(&[(0, AT, Material::Water)]);
+        let now = ring(&[
+            (0, AT, Material::Water),
+            (1, AT, Material::flowing(7, false)),
+        ]);
+        let made = mesh(&now, Some(&before));
+        assert_eq!((made.born, made.dried), (1, 0));
+        let cells = ring_cells();
+        let f = CellFrame::of(&now, 1, &cells[1], 0.0);
+        // Slot 1's side toward slot 0 is its side 3.
+        assert_eq!(f.sides[3], Some(0));
+        let (n, edge) = (f.side_normal(3), f.corners[3]);
+        let base = RADIUS + column::layer_altitude(AT);
+        let new: Vec<&FlowVertex> = made
+            .vertices
+            .iter()
+            .filter(|v| v.flags == EASE_FRONT)
+            .collect();
+        assert!(!new.is_empty(), "the new cell is drawn");
+        let mut moved = 0;
+        for v in &new {
+            let dir = v.prev.normalize();
+            let off = (dir - edge).dot(n) * RADIUS;
+            assert!(off.abs() < 1e-2, "{off} m off the source edge");
+            let height = v.prev.length() - base;
+            assert!(
+                (-1e-3..=THIN + 1e-3).contains(&height),
+                "{height} m over the floor"
+            );
+            assert!(v.position.is_finite() && v.prev.is_finite());
+            if v.position.distance(v.prev) > 0.1 {
+                moved += 1;
+            }
+        }
+        assert!(moved > 0, "the front sweeps across the cell");
+        // The pass reads four lanes a vertex.
+        assert_eq!(made.lanes().len(), made.vertices.len() * LANES_PER_VERTEX);
+    }
+
+    /// S3: a cell that turns wet under last tick's water grows down from
+    /// its top: it starts pressed to the top of its layer.
+    #[test]
+    fn a_new_cell_under_water_grows_down_from_its_top() {
+        let falling = Material::flowing(7, true);
+        let before = ring(&[(0, AT + 1, Material::Water), (1, AT + 1, falling)]);
+        let now = ring(&[
+            (0, AT + 1, Material::Water),
+            (1, AT + 1, falling),
+            (1, AT, Material::flowing(7, false)),
+        ]);
+        let made = mesh(&now, Some(&before));
+        assert_eq!(made.born, 1);
+        let top = RADIUS + column::layer_altitude(AT) + 1.0;
+        let grown: Vec<&FlowVertex> = made
+            .vertices
+            .iter()
+            .filter(|v| v.flags == EASE_FRONT && v.position.length() < top - 0.5)
+            .collect();
+        assert!(!grown.is_empty());
+        for v in grown {
+            assert!((v.prev.length() - top).abs() < 1e-3, "starts at the top");
+        }
+    }
+
+    /// S4: a dried cell is drawn for exactly one tick more, shrinking onto
+    /// the side its water went to, and is gone from the mesh after.
+    #[test]
+    fn a_dried_cell_is_kept_exactly_one_tick() {
+        let wet = ring(&[
+            (0, AT, Material::Water),
+            (1, AT, Material::flowing(7, false)),
+        ]);
+        let dry = ring(&[(0, AT, Material::Water)]);
+        let made = mesh(&dry, Some(&wet));
+        assert_eq!((made.born, made.dried), (0, 1));
+        let gone: Vec<&FlowVertex> = made
+            .vertices
+            .iter()
+            .filter(|v| v.flags & EASE_GONE != 0)
+            .collect();
+        assert!(!gone.is_empty(), "the dried cell is drawn this tick");
+        let f = CellFrame::of(&dry, 1, &ring_cells()[1], 0.0);
+        let base = RADIUS + column::layer_altitude(AT);
+        let mut on_edge = 0;
+        for v in &gone {
+            assert!(v.flags & EASE_FRONT != 0, "a front: eased linearly");
+            let off = (v.position.normalize() - f.corners[3]).dot(f.side_normal(3)) * RADIUS;
+            if off.abs() < 1e-2 && v.position.length() - base <= THIN + 1e-3 {
+                on_edge += 1;
+            }
+        }
+        // The slot's own pieces end on its edge toward the source; the
+        // source's side that the dried cell had covered goes the same way.
+        assert!(on_edge > 0);
+        // The tick after: nothing of it is left.
+        let next = mesh(&dry, Some(&dry));
+        assert_eq!(next.dried, 0);
+        assert!(next.vertices.iter().all(|v| v.flags & EASE_GONE == 0));
+        assert_eq!(next.vertices.len(), mesh(&dry, None).vertices.len());
+    }
+
+    /// Water that did not change, or no tick to ease across: every vertex
+    /// stands where it is, as today's mesher drew it.
+    #[test]
+    fn still_water_and_the_pops_path_do_not_move() {
+        let pool = ring(&[
+            (0, AT, Material::Water),
+            (1, AT, Material::flowing(7, false)),
+        ]);
+        for made in [mesh(&pool, Some(&pool)), mesh(&pool, None)] {
+            assert!(!made.vertices.is_empty());
+            assert!(
+                made.vertices
+                    .iter()
+                    .all(|v| v.prev == v.position && v.flags == 0)
+            );
+        }
+        assert_eq!(
+            mesh(&pool, Some(&pool)).vertices,
+            mesh(&pool, None).vertices
+        );
+    }
 }
 
 // ---- The splash at a fall's foot (owner, 2026-11-15: "can you also add some
 // particle fx to bottom of the waterfall? more fx based on distance it fell")
 
 /// Every fall's foot in the tier, as the mesher found them: where, how many
-/// layers it fell, and the sky's share there.
+/// layers it fell, the sky's share there, and whether it landed this tick.
 #[derive(Resource, Default)]
-pub struct FallFeet(pub Vec<(Vec3, f32, f32)>);
+pub struct FallFeet(pub Vec<Foot>);
 
 #[derive(Component)]
 struct Splash;
@@ -850,6 +1637,7 @@ fn animate_splash(
     sun: Option<Res<crate::sky::Sun>>,
     frame: Option<Res<PlanetRenderFrame>>,
     feet: Res<FallFeet>,
+    ease: Res<WaterEase>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut splash: Query<(&Mesh3d, &mut Transform), With<Splash>>,
@@ -872,12 +1660,15 @@ fn animate_splash(
         ((e + 0.12) / 0.32).clamp(0.0, 1.0)
     });
     let t = time.elapsed_secs_wrapped();
-    let mut near: Vec<&(Vec3, f32, f32)> = feet
+    // A fall that lands this tick splashes when its column reaches the
+    // foot, at the end of the tick, not when the tick starts (S3).
+    let landed = ((ease.linear - 0.95) / 0.05).clamp(0.0, 1.0);
+    let mut near: Vec<&Foot> = feet
         .0
         .iter()
-        .filter(|(p, ..)| p.distance(eye) < SPLASH_REACH_M)
+        .filter(|f| f.at.distance(eye) < SPLASH_REACH_M && (!f.born || landed > 0.0))
         .collect();
-    near.sort_by(|a, b| a.0.distance(eye).total_cmp(&b.0.distance(eye)));
+    near.sort_by(|a, b| a.at.distance(eye).total_cmp(&b.at.distance(eye)));
     let (mut positions, mut uv, mut colours) = (Vec::new(), Vec::new(), Vec::new());
     let mut quad = |p: Vec3, size: f32, rgba: [f32; 4], positions: &mut Vec<[f32; 3]>| {
         let (r, u) = (right * size, up_cam * size);
@@ -892,12 +1683,14 @@ fn animate_splash(
             colours.push(rgba);
         }
     };
-    for (foot, height, sky) in near {
+    for f in near {
         if positions.len() / 4 >= SPLASH_BUDGET {
             break;
         }
+        let (foot, height, sky) = (&f.at, &f.height, &f.sky);
         let distance = foot.distance(eye);
-        let fade = 1.0 - ((distance - (SPLASH_REACH_M - 15.0)) / 15.0).clamp(0.0, 1.0);
+        let gain = if f.born { landed } else { 1.0 };
+        let fade = gain * (1.0 - ((distance - (SPLASH_REACH_M - 15.0)) / 15.0).clamp(0.0, 1.0));
         let up = foot.normalize_or(Vec3::Y);
         let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
         let north = up.cross(east);

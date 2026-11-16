@@ -49,6 +49,85 @@ pub fn base_texel(cfg: &TerrainConfig, direction: Vec3) -> Texel {
     }
 }
 
+/// The record kind of the player's waypoints, its schema and its one id
+/// (`starter-missions` G3). Schema 2 is the list; schema 1 was one optional
+/// mark, and still reads ([`read_marks`]).
+pub const MARK_KIND: &str = "map-mark";
+pub const MARK_SCHEMA: u32 = 2;
+pub const MARK_ID: u64 = 0;
+
+/// The most waypoints a player keeps; a new one past this removes the
+/// oldest (owner, 2026-11-16).
+pub const MARKS_MAX: usize = 4;
+
+/// The least distance a mark is set from the player for "Read the map" to
+/// count reaching it, m.
+pub const MARK_FAR_M: f32 = 200.0;
+/// How near the mark the walker counts as reaching it, m.
+pub const MARK_NEAR_M: f32 = 8.0;
+
+/// The player's mark on the map: one place, set and moved by a right click
+/// on the map, saved as a `map-mark` record. A world without one has no
+/// record.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct Mark {
+    /// The place, a unit direction from the planet's centre.
+    pub at: [f32; 3],
+    /// How far, along the ground, the player stood from it when it was set.
+    pub set_from_m: f32,
+}
+
+impl Mark {
+    /// A mark at `at` set by a player standing at `from` (directions from
+    /// the planet's centre, any length) on a planet of `radius_m`. `None`
+    /// for a direction that cannot be normalised.
+    pub fn set(at: Vec3, from: Vec3, radius_m: f32) -> Option<Self> {
+        let at = at.try_normalize()?;
+        let set_from_m = from
+            .try_normalize()
+            .map_or(0.0, |from| ground_m(at, from, radius_m));
+        Some(Self {
+            at: at.to_array(),
+            set_from_m,
+        })
+    }
+
+    pub fn direction(&self) -> Vec3 {
+        Vec3::from_array(self.at)
+    }
+
+    /// Whether a walker at `feet` has reached the mark, and the mark was set
+    /// far enough away for "Read the map" ([`MARK_FAR_M`]).
+    pub fn reached_far(&self, feet: Vec3, radius_m: f32) -> bool {
+        let Some(feet) = feet.try_normalize() else {
+            return false;
+        };
+        self.set_from_m >= MARK_FAR_M && ground_m(self.direction(), feet, radius_m) <= MARK_NEAR_M
+    }
+}
+
+/// Add a waypoint, oldest first, dropping the oldest past [`MARKS_MAX`].
+pub fn add_mark(marks: &mut Vec<Mark>, mark: Mark) {
+    marks.push(mark);
+    let over = marks.len().saturating_sub(MARKS_MAX);
+    marks.drain(..over);
+}
+
+/// The waypoints a `map-mark` record's body holds: a schema 2 list, or a
+/// schema 1 body of one optional mark. `None` for a body that is neither.
+pub fn read_marks(body: &str) -> Option<Vec<Mark>> {
+    ron::from_str::<Vec<Mark>>(body).ok().or_else(|| {
+        ron::from_str::<Option<Mark>>(body)
+            .ok()
+            .map(|m| m.into_iter().collect())
+    })
+}
+
+/// The distance along the ground between two unit directions, m.
+fn ground_m(a: Vec3, b: Vec3, radius_m: f32) -> f32 {
+    a.dot(b).clamp(-1.0, 1.0).acos() * radius_m
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,6 +177,50 @@ mod tests {
         assert!(
             (2_000..8_000).contains(&land),
             "{land} of 10,000 on land: the sample is not all one thing"
+        );
+    }
+
+    /// A mark counts when the walker comes within 8 m of it, and only a
+    /// mark set 200 m or more away does (`starter-missions` G3); it reads
+    /// back from its record.
+    #[test]
+    fn a_far_mark_is_reached_within_eight_metres() {
+        let r = 4_800.0;
+        let home = Vec3::Y;
+        // 250 m along the ground to the east.
+        let east = |m: f32| Vec3::new((m / r).sin(), (m / r).cos(), 0.0);
+        let far = Mark::set(east(250.0) * r, home * r, r).unwrap();
+        assert!((far.set_from_m - 250.0).abs() < 0.5, "{}", far.set_from_m);
+        assert!(!far.reached_far(home, r), "not yet");
+        assert!(!far.reached_far(east(240.0), r), "10 m short");
+        assert!(far.reached_far(east(244.0), r), "6 m short");
+        assert!(far.reached_far(east(250.0) * 3.0, r), "any length");
+        let near = Mark::set(east(150.0), home, r).unwrap();
+        assert!(!near.reached_far(east(150.0), r), "set too near");
+        assert!(Mark::set(Vec3::ZERO, home, r).is_none());
+        let body = ron::to_string(&far).unwrap();
+        assert_eq!(ron::from_str::<Mark>(&body).unwrap(), far);
+    }
+
+    /// Four waypoints at most, oldest dropped first; a schema 1 body reads
+    /// as none or one (owner, 2026-11-16).
+    #[test]
+    fn a_fifth_waypoint_drops_the_first() {
+        let mark = |x: f32| Mark::set(Vec3::new(x, 1.0, 0.0), Vec3::Y, 4_800.0).unwrap();
+        let mut marks = Vec::new();
+        for k in 0..5 {
+            add_mark(&mut marks, mark(k as f32 * 0.01));
+        }
+        assert_eq!(marks.len(), MARKS_MAX);
+        assert_eq!(marks[0], mark(0.01), "the first is gone");
+        assert_eq!(marks[3], mark(0.04));
+        let body = ron::to_string(&marks).unwrap();
+        assert_eq!(read_marks(&body), Some(marks));
+        let one = ron::to_string(&Some(mark(0.0))).unwrap();
+        assert_eq!(read_marks(&one), Some(vec![mark(0.0)]));
+        assert_eq!(
+            read_marks(&ron::to_string(&None::<Mark>).unwrap()),
+            Some(vec![])
         );
     }
 

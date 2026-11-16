@@ -327,8 +327,10 @@ pub struct Launched(pub Instant);
 
 /// A stand-in shown behind the screen so the warm-up builds a material and
 /// vertex layout it would not otherwise see (decision 6); gone at `READY`.
+/// Public so a screen built hidden (the map) can show a stand-in of its own
+/// UI materials behind the loading screen (decision 7).
 #[derive(Component)]
-struct PrewarmProxy;
+pub struct PrewarmProxy;
 
 #[derive(Component)]
 struct LoadingRoot;
@@ -871,6 +873,14 @@ pub fn warm(world: &mut World) {
         warming.quiet = if waiting == 0 { warming.quiet + 1 } else { 0 };
         (warming.frames, warming.quiet, warming.started.elapsed())
     };
+    // Decision 7: one throwaway screenshot behind the screen, so the
+    // screenshot's blit (`screenshot-to-screen`) is made in the warm-up and
+    // not at the first F12, repro press or `--capture --real-time` still.
+    if frames == 1 && !immediate {
+        world
+            .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
+            .observe(|_: On<bevy::render::view::screenshot::ScreenshotCaptured>| {});
+    }
     let looked = frames >= LOOK_FROM + 4 * LOOK_FRAMES + STILL_FRAMES;
     let compiling = waiting > 0 || quiet < QUIET_FRAMES || !looked;
     // Every sound decoded before play (`audio-and-ambience` task 4.2).

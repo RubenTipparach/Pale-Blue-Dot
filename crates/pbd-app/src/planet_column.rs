@@ -226,6 +226,13 @@ impl ColumnTier {
     }
 
     /// A slot's neighbours across its sides, `None` off the tier.
+    /// How many sides the cell at `slot` has: 6, or 5 at a pentagon.
+    pub fn degree_of(&self, slot: usize) -> usize {
+        self.records
+            .get(slot)
+            .map_or(6, |record| ((record.more[2] & DEGREE_MASK) as usize).min(6))
+    }
+
     pub fn sides_of(&self, slot: usize) -> [Option<usize>; 6] {
         let mut out = [None; 6];
         let (Some(record), Some(sides)) = (self.records.get(slot), self.sides.get(slot)) else {
@@ -568,6 +575,14 @@ impl ColumnTier {
                 record.more[3] = (record.more[3] & RIM_BIT) | state_word(column, lit, glow);
             }
         }
+    }
+
+    /// The slot of a finest record, if that record is in the tier.
+    pub fn slot(&self, record: usize) -> Option<usize> {
+        self.slots
+            .get(record)
+            .copied()
+            .filter(|&s| s < self.columns.len())
     }
 
     /// The column of a finest record, if that record is in the tier.
@@ -930,6 +945,48 @@ impl ColumnTier {
     }
 }
 
+#[cfg(test)]
+impl ColumnTier {
+    /// A tier of these columns, slot `i` finest record `i` and key `100 + i`,
+    /// side `s` of slot `i` being `sides[i][s]` (`NO_NEIGHBOR` off it), every
+    /// cell a hexagon and none rim: what a test outside this module (the
+    /// water mesher's) builds a small tier with.
+    pub(crate) fn for_tests(columns: Vec<Column>, sides: &[[u32; 6]]) -> Self {
+        let n = columns.len();
+        let records = (0..n)
+            .map(|i| GpuColumn {
+                runs: columns[i].packed_runs(render_code),
+                neighbors: [sides[i][0], sides[i][1], sides[i][2], sides[i][3]],
+                more: [
+                    sides[i][4],
+                    sides[i][5],
+                    6,
+                    state_word(&columns[i], false, false),
+                ],
+            })
+            .collect();
+        let mut tier = ColumnTier {
+            columns,
+            slots: (0..n).collect(),
+            records,
+            light: Vec::new(),
+            dusk: false,
+            glow: vec![false; n],
+            centres: vec![Vec3::Y; n],
+            sides: Vec::new(),
+            relit: 0,
+            lamps: Vec::new(),
+            water: TierWater {
+                queue: liquid::Queue::new(),
+                keys: (0..n as u32).map(|i| 100 + i).collect(),
+                records: (0..n).collect(),
+            },
+        };
+        tier.sides = tier.neighbor_slots();
+        tier
+    }
+}
+
 /// Make a cell RECORD agree with the column under it.
 ///
 /// **There are two representations of where the ground is**, and this is the
@@ -965,7 +1022,15 @@ pub fn reconcile_surface(
     } else {
         render_code(column.drawn_material(top))
     };
-    finest[index].metadata[1] = (finest[index].metadata[1] & !0xff) | code;
+    // And whether water stands on it at any tide (`flora-v2` 12.11): the
+    // column's own water on its top, or a top under the high tide's sheet.
+    // Set or cleared, so a pool that drains grows its plants again. The code
+    // above is left as it was: under the sea it is the beach's sand, which
+    // stood a beach tree in the sea before this bit.
+    let flooded = column.water_over(top) || top_m < super::terrain::high_water_m();
+    let flood_bit = 1 << super::terrain::FLOODED_BIT;
+    let word = finest[index].metadata[1] & !0xff & !flood_bit;
+    finest[index].metadata[1] = word | code | if flooded { flood_bit } else { 0 };
     let Some(table) = neighbors.get(index).copied() else {
         return;
     };
@@ -1158,9 +1223,14 @@ pub const DRY_SHEET_BIT: u32 = 2;
 /// Mark or clear a record's [`DRY_SHEET_BIT`] from its column.
 pub fn mark_sheet(cell: &mut GpuCell, column: &Column) {
     let sea = sea_layer();
+    // Dry where the sea's layer holds no water; and where a river's water
+    // stands on over the sea's level (a mouth whose bed is under the sea):
+    // the river's own top is that cell's one surface, and the sheet under
+    // it was a second one inside the river's water (`ocean-environments`
+    // B18, the junction check).
     let dry = sea > 0
         && cell.direction_height[3] < terrain_config().sea_level_m
-        && !column.material(sea - 1).is_water();
+        && (!column.material(sea - 1).is_water() || column.material(sea).is_water());
     cell.spare[2] = (cell.spare[2] & !DRY_SHEET_BIT) | if dry { DRY_SHEET_BIT } else { 0 };
 }
 

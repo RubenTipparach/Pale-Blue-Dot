@@ -69,7 +69,8 @@ pub enum Kind {
     Night,
     /// Water poured from a bucket (`water`).
     Pour,
-    /// A fish species caught for the first time (`fish`).
+    /// A fish landed, by its species' name: counted once a name in each
+    /// mission ("Three kinds of fish", design "Closing the tree's gaps" G4).
     Species,
     /// A fish caught from the `sea` or from `fresh` water.
     Waters,
@@ -83,13 +84,15 @@ pub enum Kind {
     Travel,
     /// A screen opened by its key (`map`).
     Open,
+    /// A fish landed on a baited line, by its species' name (G1).
+    Baited,
 }
 
 impl Kind {
     /// The kinds a chain may name whatever the build: every kind the game
     /// raises an event for (all of them, since felling, eating and the
     /// night came in with the Homestead chain).
-    pub const LIVE: [Kind; 26] = [
+    pub const LIVE: [Kind; 27] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -116,6 +119,7 @@ impl Kind {
         Kind::Board,
         Kind::Travel,
         Kind::Open,
+        Kind::Baited,
     ];
 }
 
@@ -219,7 +223,7 @@ impl Group {
             Group::Seed => CROPS.iter().any(|c| c.seed.code() == what),
             Group::Crop => CROPS.iter().any(|c| c.produce.code() == what),
             Group::Ingot => what.ends_with("-ingot"),
-            Group::Fish => kind == Kind::Catch,
+            Group::Fish => matches!(kind, Kind::Catch | Kind::Baited),
         }
     }
 }
@@ -331,13 +335,12 @@ impl Catalog {
                 }
             }
             Kind::Cook => self.recipes.contains(name),
-            Kind::Catch => self.fish.contains(name),
+            Kind::Catch | Kind::Baited | Kind::Species => self.fish.contains(name),
             Kind::Tame | Kind::Pen => self.animals.contains(name),
             Kind::Cast => name == "water",
             Kind::Fell => name == "tree",
             Kind::Night => name == "light",
             Kind::Pour | Kind::Swim => name == "water",
-            Kind::Species => name == "fish",
             Kind::Waters => matches!(name, "sea" | "fresh"),
             Kind::Reach => matches!(name, "marked" | "reef" | "town"),
             Kind::Board | Kind::Travel => name == "boat",
@@ -551,6 +554,11 @@ pub struct Progress {
     pub done: BTreeSet<String>,
     /// Each open mission's count per objective, in the chain's order.
     pub counts: BTreeMap<String, Vec<u32>>,
+    /// The names an open mission's `species` objectives have counted, so a
+    /// kind counts once a mission (G4). Absent from a record written before
+    /// it, and dropped with the mission's counts.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub seen: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl Progress {
@@ -616,14 +624,31 @@ impl Progress {
         let open: Vec<Mission> = self.open(chain).cloned().collect();
         for mission in &open {
             let mut counts = self.counts(mission);
+            let mut named = false;
             for (count, objective) in counts.iter_mut().zip(&mission.objectives) {
                 if objective.kind == happened.kind
                     && objective.want.matches(happened.kind, &happened.what)
                     && *count < objective.count
                 {
-                    *count = (*count + happened.count).min(objective.count);
+                    if happened.kind == Kind::Species {
+                        // A kind counts once a mission, however often landed.
+                        let seen = self.seen.get(&mission.id);
+                        if seen.is_some_and(|s| s.contains(&happened.what)) {
+                            continue;
+                        }
+                        named = true;
+                        *count = (*count + 1).min(objective.count);
+                    } else {
+                        *count = (*count + happened.count).min(objective.count);
+                    }
                     changed = true;
                 }
+            }
+            if named {
+                self.seen
+                    .entry(mission.id.clone())
+                    .or_default()
+                    .insert(happened.what.clone());
             }
             if counts.iter().any(|c| *c > 0) {
                 self.counts.insert(mission.id.clone(), counts);
@@ -707,6 +732,9 @@ impl Progress {
         self.counts
             .retain(|id, counts| open.contains(id) && counts.iter().any(|c| *c > 0));
         step.changed |= self.counts.len() != before;
+        let before = self.seen.len();
+        self.seen.retain(|id, _| open.contains(id));
+        step.changed |= self.seen.len() != before;
         step
     }
 

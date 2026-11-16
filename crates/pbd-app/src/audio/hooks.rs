@@ -281,6 +281,34 @@ fn read_surroundings(
     env.beds = Some(bed_weights(mix, &surroundings));
 }
 
+/// What the walker's sounds hear of the water at a body-local walker
+/// position (its body's centre): whether the feet are in water, so a step is
+/// a splash, and whether the body is, so entering and leaving it are heard.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Underfoot {
+    pub feet_wet: bool,
+    pub in_water: bool,
+}
+
+/// [`Underfoot`] at `position`: the walker's own answer
+/// ([`crate::walking::Sea`]), so a walker the physics wades is the walker
+/// the audio splashes. The column's sea tops at the sea level whatever the
+/// tide; the drawn sheet is half a metre under it and moves with the tide,
+/// and the walker swims to the sheet, so a seabed block over the low tide
+/// is dry land to both (owner, 2026-11-16: "water sfx also plays when I'm
+/// standing on land").
+pub(crate) fn water_underfoot(
+    sea: &crate::walking::Sea,
+    config: &WalkingConfig,
+    position: Vec3,
+) -> Underfoot {
+    let wet = sea.state(config, position);
+    Underfoot {
+        feet_wet: wet.depth > 0.0,
+        in_water: wet.depth > HALF_HEIGHT,
+    }
+}
+
 /// The walker's own sounds: steps, jumps, landings, and the water (design
 /// section 4, Steps and Water).
 #[derive(Default)]
@@ -303,6 +331,7 @@ fn walker_sounds(
     walkers: Query<(&Position, &LinearVelocity, &GroundState), With<Walker>>,
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
     contact: Option<Res<PlanetContact>>,
+    sea: Option<crate::walking::Sea>,
     fine: Option<Res<PlanetFine>>,
     weather: Option<Res<crate::weather::Weather>>,
     listener: Res<Listener>,
@@ -313,7 +342,8 @@ fn walker_sounds(
     mut body: Local<Body>,
 ) {
     let _spent = super::Spent::new("walker_sounds");
-    let (Some(walking), Some(config), Some(contact)) = (walking, config, contact) else {
+    let (Some(walking), Some(config), Some(contact), Some(sea)) = (walking, config, contact, sea)
+    else {
         return;
     };
     let Ok((position, velocity, ground)) = walkers.single() else {
@@ -334,11 +364,7 @@ fn walker_sounds(
     let v = velocity.0;
     let up_speed = v.dot(up);
     let flat = (v - up * up_speed).length();
-    // The water at the walker's column: the surface over the floor.
-    let stand = contact.stand(feet);
-    let surface = (stand.water_depth > 0.0).then_some(stand.floor_radius + stand.water_depth);
-    let feet_wet = surface.is_some_and(|s| feet.length() < s);
-    let in_water = surface.is_some_and(|s| position.length() < s);
+    let Underfoot { feet_wet, in_water } = water_underfoot(&sea, &config, position);
     let eyes_under = env.underwater;
     if !body.seen {
         // The first frame on foot sets the state without a sound.
@@ -767,6 +793,71 @@ fn scatters(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Design "Water sounds read the walker's water" (owner, 2026-11-16:
+    /// "water sfx also plays when I'm standing on land (the blue stuff
+    /// peeking above water)"). On the real column tier at a version 10 sea
+    /// shore, a seabed block 1 m under the sea level, the sea's water in its
+    /// column over it: at the lowest tide it stands over the drawn sheet and
+    /// is dry to the steps; at the highest it is under it and wet. Before,
+    /// the audio read the column's own sea, which tops at the sea level
+    /// whatever the tide, and splashed at every tide.
+    #[test]
+    fn a_seabed_block_over_the_low_tide_is_dry_underfoot() {
+        use pbd_core::column::layer_altitude;
+        let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: 18.86_f32.to_radians(),
+            lon: 27.54_f32.to_radians(),
+        });
+        let set = std::sync::Arc::new(crate::planet::lod::generate_fine(
+            d,
+            &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
+        ));
+        let sea_level = crate::planet::terrain_config().sea_level_m;
+        let block = (0..set.finest_records().len())
+            .find(|&i| {
+                set.columns.column(i).is_some_and(|c| {
+                    c.surface().is_some_and(|top| {
+                        layer_altitude(top) + 1.0 == sea_level - 1.0 && c.water_over(top)
+                    })
+                })
+            })
+            .expect("a seabed block 1 m under the sea level at the shore");
+        let up = Vec3::from_slice(&set.finest_records()[block].direction_height[..3]).normalize();
+        let position = up * (PLANET_RADIUS + sea_level - 1.0 + 0.01 + HALF_HEIGHT);
+        let water = crate::config::WaterSettings::default();
+        // The moon over the block is the highest tide; a quarter turn away,
+        // the lowest.
+        for (moon, wet) in [(up.any_orthonormal_vector(), false), (up, true)] {
+            let mut contact = PlanetContact::test_planet(5);
+            contact.set_fine(&set);
+            let mut sea = crate::sea::Sea::new(&water);
+            sea.set_moon(moon);
+            let mut world = World::new();
+            world.insert_resource(contact);
+            world.insert_resource(water.clone());
+            world.insert_resource(sea);
+            let heard = bevy::ecs::system::RunSystemOnce::run_system_once(
+                &mut world,
+                move |sea: crate::walking::Sea| {
+                    water_underfoot(&sea, &WalkingConfig::default(), position)
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                heard.feet_wet,
+                wet,
+                "the moon {}: the feet are {}",
+                if wet {
+                    "overhead"
+                } else {
+                    "a quarter turn away"
+                },
+                if heard.feet_wet { "wet" } else { "dry" }
+            );
+        }
+    }
 
     fn book() -> pbd_core::audio::CueBook {
         ron::from_str(include_str!("../../../../assets/config/audio/cues.ron")).unwrap()

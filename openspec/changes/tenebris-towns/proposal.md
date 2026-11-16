@@ -39,7 +39,7 @@ Three things stand between the engine and a town you can walk into:
 ## What changes
 
 - **A mockup came first, as asked.** `docs/mockups/towns.html`, published at
-  <https://claude.ai/artifact/59zS9ERBTkrVrzPedfoUL2>, is a three.js walled market town on
+  <https://claude.ai/artifact/B5FqbGTTMsznmUiP4rSLUv>, is a three.js walled market town on
   three terraces: an inn with a hall and rooms upstairs, twelve houses, a
   smithy, a moot hall, a three-storey keep, two wall towers, a quay, a market
   and sixteen townsfolk. Every room can be entered. The walker is

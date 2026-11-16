@@ -90,8 +90,11 @@ struct WaterView {
     // The sea's table (`pbd::sea`), the same one the hulls float on.
     sea: SeaView,
     // x how far the sheet sits below sea level (`depth_offset_m`); y the
-    // surface of the inland water the eye is in, a body radius, nought for
-    // the sea (`ocean-environments` B17); zw spare.
+    // surface of the water the eye is in or over, a body radius: an inland
+    // water's drawn top, else the sea's tided, swelling surface at the eye
+    // (`ocean-environments` B17, B18); z and w how far the drawing is
+    // through the water's last tick, smoothstepped (the levels) and linear
+    // (the fronts), both one when it is drawn as it is (`water_flow::WaterEase`).
     sea_frame: vec4<f32>,
     // The lens mist (`lens-weather`): seconds to mist over and to clear
     // standing still, how much faster per m/s of airspeed, its strength; then
@@ -148,10 +151,12 @@ struct WaterView {
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
 @group(0) @binding(2) var<storage,read> water: array<u32>;
-// The game's own water that the sheet does not draw (`water-flow` E6): three
+// The game's own water that the sheet does not draw (`water-flow` E6): four
 // lanes a vertex, triangles end to end. xyz body-local position, w the sky's
 // share; xyz the face's normal, w its kind (1 a top, 2 a falling face, 3 a
-// still face); xy the flow in the face's tangent frame, m/s over 0.35.
+// still face); xy the flow in the face's tangent frame, m/s over 0.35; xyz
+// where the vertex was the tick before, w its ease flags (1 a front, eased
+// linearly; 2 a dried piece, hidden once the tick has played).
 @group(0) @binding(3) var<storage,read> flowing: array<vec4<f32>>;
 @group(0) @binding(4) var<storage,read> rain_map: array<f32>;
 @group(1) @binding(0) var scene_color: texture_2d<f32>;
@@ -395,18 +400,28 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
 // the sea's own fragment so a poured pool and the sea are one water.
 @vertex
 fn vertex_flowing(@builtin(vertex_index) vertex: u32) -> VertexOut {
-    let a = flowing[vertex*3u];
-    let b = flowing[vertex*3u + 1u];
-    let c = flowing[vertex*3u + 2u];
+    let a = flowing[vertex*4u];
+    let b = flowing[vertex*4u + 1u];
+    let c = flowing[vertex*4u + 2u];
+    let d = flowing[vertex*4u + 3u];
+    // Smooth water between ticks (M31's Pour tab): eased from where the
+    // vertex was the tick before. Fronts at one speed, levels smoothstepped.
+    let flags = u32(d.w + 0.5);
+    let t = select(view.sea_frame.z, view.sea_frame.w, (flags & 1u) != 0u);
+    let p = mix(d.xyz, a.xyz, t);
     var out: VertexOut;
-    out.body_position = a.xyz;
-    out.local_position = view.planet_center.xyz + a.xyz;
+    out.body_position = p;
+    out.local_position = view.planet_center.xyz + p;
     out.clip = view.clip_from_local*vec4<f32>(out.local_position, 1.0);
+    // A dried cell, its tick played: gone (outside the clip volume).
+    if ((flags & 2u) != 0u && view.sea_frame.w > 0.999) {
+        out.clip = vec4<f32>(0.0, 0.0, 2.0, 1.0);
+    }
     out.normal = b.xyz;
     out.sky_light = a.w;
     out.flow_uv = c.xyz;
     out.level = 0u;
-    out.owner_a = safe_normal(a.xyz);
+    out.owner_a = safe_normal(p);
     out.owner_b = out.owner_a;
     out.sea_slope = vec3<f32>(0.0);
     out.fade_t = vec3<f32>(1.0, 1.0, 0.0);
@@ -495,6 +510,9 @@ fn view_extinction() -> vec3<f32> {
 // on the surface, so the shafts are columns that lean with the sun and sway.
 // Each sample is as lit as the light left at its depth and dimmed on its way
 // back to the eye; brightest looking toward the sun.
+// The shafts' pattern's mean over its plane, `pow(max(a b, 0), 6)` of two
+// sines: what a sample spanning many of its cells sees (B19).
+const SHAFT_MEAN: f32 = 0.045;
 fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: f32, extinction: vec3<f32>) -> vec3<f32> {
     let strength = view.under.x;
     let reach = min(dist, view.under.y);
@@ -516,10 +534,22 @@ fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: 
     let t = view.camera_time.w;
     var gathered = vec3<f32>(0.0);
     let steps = 10;
-    // A per-ray offset of the samples, so their spacing never shows as bands.
-    let jitter = fract(sin(dot(dir, vec3<f32>(12.9898, 78.233, 37.719)))*43758.5453);
+    // One offset for every ray (B19): a random offset per ray put each
+    // pixel's samples on a different part of the pattern, per-pixel speckle
+    // wherever the samples stood further apart than the pattern is wide.
+    // Neighbouring rays now sample neighbouring points and the shafts are
+    // smooth; the packed spacing below keeps the slices from showing.
+    let jitter = 0.5;
+    // The samples are packed toward the eye (B19): spread evenly over 40 m
+    // they stood 4 m apart in a pattern about 4.5 m across, each pixel's
+    // jitter landed on a different part of it, and the far end of a river's
+    // channel was a band of per-pixel speckle. Each sample now weighs its
+    // own stretch of the ray and fades to the pattern's mean where that
+    // stretch outgrows the pattern.
     for (var i = 0; i < steps; i++) {
-        let d = reach*(f32(i)+jitter)/f32(steps);
+        let u = (f32(i)+jitter)/f32(steps);
+        let d = reach*u*u;
+        let stretch = 2.0*reach*max(u, 0.5/f32(steps))/f32(steps);
         let q = origin + dir*d;
         let depth = sea - length(q-center);
         if (depth <= 0.0) { continue; }
@@ -527,12 +557,12 @@ fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: 
         let uv = vec2<f32>(s[axes.x], s[axes.y])*1.4;
         let a = sin(uv.x + 1.7*sin(uv.y*0.43 + t*0.21) + t*0.33);
         let b = sin(uv.y*1.13 + 1.7*sin(uv.x*0.37 - t*0.17) - t*0.29);
-        let bright = pow(max(a*b, 0.0), 6.0);
-        gathered += bright*light_left(depth)*exp(-extinction*d);
+        let bright = mix(pow(max(a*b, 0.0), 6.0), SHAFT_MEAN, smoothstep(0.8, 2.5, stretch));
+        gathered += bright*light_left(depth)*exp(-extinction*d)*stretch;
     }
     let toward = max(dot(dir, sun_w), 0.0);
     let phase = 0.3 + 1.6*pow(toward, 6.0);
-    return gathered*(reach/f32(steps))*0.3*strength*phase*view.rain_sun.rgb;
+    return gathered*0.3*strength*phase*view.rain_sun.rgb;
 }
 
 // How far under the surface the composite's waterline mask fades in, m: the
@@ -540,9 +570,21 @@ fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: 
 // surface is ever wet.
 const WATERLINE_EDGE_M: f32 = 0.1;
 
-// The surface of the water the eye is in, as a body radius: a river's or a
-// pool's where the eye is in inland water, the sea's sphere otherwise
-// (`ocean-environments` B17). Everything the underwater view measures, depth,
+// The sheet nearer the eye than this is behind the near plane (0.2 m), m:
+// the composite stands in for it.
+const NEAR_SHEET_M: f32 = 0.3;
+
+// Past this distance from the eye the sea's sheet is seen from the side the
+// eye is on, not by each fragment's wave height, m (B19).
+const SEA_SIDE_NEAR_M: f32 = 3.0;
+// The eye's surface is the sea's when it is within this of the sea's mean
+// sheet, m: the tide's whole range and some.
+const SEA_EYE_RANGE_M: f32 = 3.0;
+
+// The surface of the water the eye is in or over, as a body radius: a
+// river's or a pool's drawn top where the eye is in inland water, the sea's
+// tided, swelling surface at the eye otherwise (`ocean-environments` B17,
+// B18). Everything the underwater view measures, depth,
 // the waterline, the sky's exit, is measured from it.
 fn eye_water_surface() -> f32 {
     return select(view.planet_center.w, view.sea_frame.y, view.sea_frame.y > 0.0);
@@ -784,19 +826,41 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     let camera_radius = length(camera_body);
     let sheet_radius = length(in.body_position);
     var below = camera_radius < sheet_radius || (camera_radius == sheet_radius && !front);
+    // Past a few metres the sea is seen from the side of it the EYE is on
+    // (`ocean-environments` B19): with the eye in the swell's reach of the
+    // surface, a far crest over the eye's height was drawn as seen from
+    // below, a dark band at the far waterline with the eye above the water.
+    // Near the eye the wave under it still decides.
+    let sea_eye = view.sea_frame.y > 0.0 && abs(view.sea_frame.y - view.planet_center.w) < SEA_EYE_RANGE_M;
+    if (in.kind == 0u && sea_eye && camera_distance > SEA_SIDE_NEAR_M) {
+        below = camera_radius < view.sea_frame.y;
+    }
     // The game's own water has true faces: the camera is under one when it
     // is behind it.
     if (in.kind != 0u) {
         below = dot(view.camera_time.xyz - in.local_position, face) < 0.0;
         // Its back seen from dry air is the inside of a block of water the
         // eye is not in: the face toward the eye draws it, this one does not.
-        if (below && view.fx.y < 0.75) { discard; }
+        // An eye at its own water's surface (the straddle) is under the
+        // face it is below, and sees it from below: without it the surface
+        // overhead vanished for the frames the eye crossed it (owner,
+        // 2026-11-16: "I dont see water surface above the player").
+        if (below && view.fx.y < 0.25) { discard; }
     }
     if (below) {
         // Seen from below: the murk by camera distance, and Snell's window.
-        let deep = murk(sheet_radius-camera_radius,safe_normal(camera_body));
+        let deep = murk(max(sheet_radius-camera_radius,0.0),safe_normal(camera_body));
         let underwater = mix(deep,scene,exp(-view_extinction()*camera_distance));
-        var seen = mix(deep,underwater,smoothstep(0.55,0.75,dot(-look,normal)));
+        // Outside Snell's window the surface mirrors the water under it
+        // (B19): it was the flat murk, a dark navy ceiling over a lit river
+        // bed, with the channel's lit walls ending against it as if
+        // floating. Only a face that faces up mirrors: the side face of a
+        // step or a fall is where the water leaves, and stays the murk.
+        var mirror = deep;
+        if (in.kind == 0u || horizontal >= 0.5) {
+            mirror = under_mirror(in.body_position, -look, normal, radial, camera_distance, deep, true);
+        }
+        var seen = mix(mirror,underwater,smoothstep(0.55,0.75,dot(-look,normal)));
         // The shafts and the snow between the eye and the sheet, as the
         // composite draws them in front of the seabed (`ocean-environments`
         // B5): the sheet is drawn over the composite, so it carries its own.
@@ -881,6 +945,10 @@ fn sea_ssr_uv(p: vec3<f32>) -> vec3<f32> {
     if (clip.w <= 1e-4) { return vec3<f32>(-1.0); }
     return vec3<f32>(clip.x/clip.w*0.5 + 0.5, 0.5 - clip.y/clip.w*0.5, 1.0);
 }
+// How far along its ray the last `sea_ssr` hit was, m: the surface seen
+// from below needs the length of the mirrored path (`ocean-environments`
+// B19).
+var<private> sea_ssr_t: f32 = 0.0;
 fn sea_ssr(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
     if (view.ssr_eye.w < 0.5) { return vec4<f32>(0.0); }
     let size = vec2<f32>(textureDimensions(ssr_history));
@@ -908,12 +976,64 @@ fn sea_ssr(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
         let thickness = clamp(0.4 + 0.08*t, 0.4, 3.0);
         if (behind > 0.0 && behind_before < 0.0 && behind < thickness) {
             let edge = min(min(at.x, 1.0 - at.x), min(at.y, 1.0 - at.y));
+            sea_ssr_t = t;
             return vec4<f32>(texel.rgb, smoothstep(0.0, 0.08, edge)*(1.0 - smoothstep(0.75*reach, reach, t)));
         }
         behind_before = behind;
     }
     return vec4<f32>(0.0);
 }
+
+// The surface seen from under it, outside Snell's window: total internal
+// reflection, a mirror of what is under the water (`ocean-environments`
+// B19). `p` is the point on the surface (body frame), `v` the ray from the
+// eye to it, `n` the surface's normal (up), `eye_dist` how far the eye is
+// from `p`, `up` the radial there. The underwater scene is traced in the
+// screen history, which the composite has already seen through water from
+// the eye; the light that comes by the mirror crosses more water than that,
+// and takes the rest. The waves bend the mirror a quarter as much as they
+// bend the window: at the grazing angles under the surface their full tilt
+// swung the reflected ray across the screen and the mirror swirled. Where
+// the trace finds nothing, what the eye sees in the mirrored ray's
+// direction, `MIRROR_FAR_M` out; off the screen, the murk.
+fn under_mirror(p: vec3<f32>, v: vec3<f32>, n: vec3<f32>, up: vec3<f32>, eye_dist: f32, deep: vec3<f32>, trace: bool) -> vec3<f32> {
+    let r = reflect(v, safe_normal(up + (n - up)*0.25));
+    var hit = vec4<f32>(0.0);
+    if (trace) { hit = sea_ssr(p - up*0.05, r); }
+    var fallback = deep;
+    if (view.ssr_eye.w >= 0.5) {
+        let far = sea_ssr_uv(p + r*MIRROR_FAR_M);
+        if (far.z > 0.0 && all(far.xy >= vec2<f32>(0.0)) && all(far.xy <= vec2<f32>(1.0))) {
+            let size = vec2<f32>(textureDimensions(ssr_history));
+            let texel = textureLoad(ssr_history, vec2<i32>(far.xy*(size - 1.0)), 0);
+            // That light came the mirrored way: first up to the surface,
+            // then as far as the eye's own view of it, which the history
+            // has already seen through water. The first leg is the rest.
+            // Only what stands within that reach: past it (the sky over a
+            // river's lower reach) the mirrored ray going down meets the
+            // bed first, and a sliver of sky was mirrored in the surface.
+            if (texel.w > 0.0 && texel.w <= MIRROR_FAR_M) {
+                fallback = mix(deep, texel.rgb, exp(-view_extinction()*eye_dist));
+            }
+        }
+    }
+    // Far off, the mirror gives way to the murk: past `MIRROR_FADE_M` the
+    // trace's hits and misses alternate pixel to pixel under the waves,
+    // and the far ceiling of a channel was a grain of them.
+    let far_off = smoothstep(MIRROR_FADE_M.x, MIRROR_FADE_M.y, eye_dist);
+    if (hit.a <= 0.0) { return mix(fallback, deep, far_off); }
+    let eye = view.camera_time.xyz - view.planet_center.xyz;
+    let straight = distance(p + r*sea_ssr_t, eye);
+    let extra = max(eye_dist + sea_ssr_t - straight, 0.0);
+    let seen = mix(deep, hit.rgb, exp(-view_extinction()*extra));
+    return mix(mix(fallback, seen, hit.a), deep, far_off);
+}
+
+// Where the mirror fades into the murk, from and to, m from the eye (B19).
+const MIRROR_FADE_M: vec2<f32> = vec2<f32>(6.0, 20.0);
+
+// How far out the mirror looks where its trace finds nothing, m (B19).
+const MIRROR_FAR_M: f32 = 25.0;
 
 // ---- The composite: compose before the cap, lens after it ------------------
 // Tenebris's composite.fs.glsl. `fx.y` is the submersion tri-state decided on
@@ -993,7 +1113,16 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // so the ground just over the water took the murk and the wobble; what
     // lies under a crest above the mean surface is behind the sheet, which
     // draws its own.
-    let mask = select(1.0-smoothstep(-WATERLINE_EDGE_M,0.0,pixel_alt),1.0,sky);
+    //
+    // With the eye fully under, EVERYTHING not hidden by a sheet is seen
+    // through water (owner, 2026-11-16: "you must be submerged at just the
+    // right height"): a river's water stands at a different height cell to
+    // cell, so one waterline sphere left the walls under a higher neighbour's
+    // water dry and bright, and at the sea's shore the bank between the
+    // drawn sheet and the cell's top was seen through the gap past the
+    // sheet's edge as a bright strip. What lies above the surface is drawn
+    // by the sheet from below, from the scene before this pass.
+    let mask = select(1.0-smoothstep(-WATERLINE_EDGE_M,0.0,pixel_alt),1.0,sky || under);
     wet *= mask;
     var color = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
     if (wet > 0.0 && view.fx.x > 0.0) {
@@ -1009,14 +1138,47 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         travel = select(view_dist, select(100000.0, cam_gap/ray_d_up, ray_d_up > 0.0008), sky);
     } else {
         travel = max(0.0,-pixel_alt);
+        // An eye a hand over the surface, looking down: the sheet nearer than
+        // the near plane is clipped, and what is under it was seen dry
+        // through the hole. There the light crosses the water from the
+        // surface to the pixel (the waterline videos, 2026-11-16).
+        let eye_over = length(ray.origin-center) - sea;
+        if (!sky && pixel_alt < 0.0 && ray_d_up < -1e-4 && eye_over >= 0.0) {
+            let t_cross = eye_over/(-ray_d_up);
+            if (t_cross < NEAR_SHEET_M) {
+                travel = max(travel, view_dist - t_cross);
+            }
+        }
     }
     let extinction = view_extinction();
     let deep = murk(cam_gap,safe_normal(ray.origin-center));
     color = mix(color, mix(deep,color,exp(-extinction*travel)), wet);
+    // The sheet the near plane clips, for an eye under the surface (B19):
+    // a ray that crosses the surface nearer than `NEAR_SHEET_M` saw the sky
+    // nearly clear and the bank above as a silhouette through the hole,
+    // bright bands over the dark ones. Shade it as the sheet would: the
+    // mirror outside Snell's window, the view through it inside.
+    var light_reach = select(view_dist, 1.0e4, sky);
+    if (cam_gap > 0.0 && ray_d_up > 1e-4) {
+        let t_cross = cam_gap/ray_d_up;
+        if (t_cross < NEAR_SHEET_M && (sky || view_dist > t_cross)) {
+            let up = safe_normal(ray.origin-center);
+            let at = ray.origin - center + ray.direction*t_cross;
+            let raw = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
+            let through = mix(deep, raw, exp(-extinction*t_cross));
+            // No trace from a point this near the eye: its march starts
+            // behind the near plane, and one frame in a crossing came back
+            // as a grid of misses. The mirrored direction's view is enough
+            // over the few centimetres the stand-in covers.
+            let mirror = under_mirror(at, ray.direction, up, up, t_cross, deep, false);
+            color = mix(mirror, through, smoothstep(0.55,0.75,ray_d_up));
+            light_reach = t_cross;
+        }
+    }
     // From under the water: the sun's shafts and the marine snow
     // (`ocean-environments` B5), both over the murk, both for the eye in it.
     if (under && wet > 0.0) {
-        color += under_water_light(ray.origin, ray.direction, select(view_dist, 1.0e4, sky))*wet;
+        color += under_water_light(ray.origin, ray.direction, light_reach)*wet;
     }
     // Depth blur while the lens is wet: the distance softens, the foreground stays crisp.
     let dz_amt = max(view.rain.x,view.fx.w);

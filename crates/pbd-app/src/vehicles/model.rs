@@ -20,8 +20,8 @@ pub(super) const AUTHORED: &[Kind] = &[];
 pub(super) type Result<T> = std::result::Result<T, String>;
 
 pub(super) fn folder(kind: Kind) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../assets/models/vehicles")
+    crate::paths::assets_dir()
+        .join("models/vehicles")
         .join(kind.name().to_ascii_lowercase())
 }
 

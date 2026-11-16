@@ -746,17 +746,6 @@ pub fn follow_flow_arrows(
     }
 }
 
-/// The grass's look follows the setting, for the render world
-/// (`planet::FloraLook`, `flora-v2` design 1).
-pub fn follow_pixel_grass(
-    settings: Res<PlayerSettings>,
-    mut look: ResMut<crate::planet::FloraLook>,
-) {
-    if look.tufts != settings.pixel_grass {
-        look.tufts = settings.pixel_grass;
-    }
-}
-
 /// The settings' systems: the render scale, auto step and the rain's
 /// shadows each frame, the pacer last. `capture` stands the pacer down.
 pub struct PlayerSettingsPlugin {
@@ -780,7 +769,6 @@ impl Plugin for PlayerSettingsPlugin {
                     follow_auto_step,
                     follow_rain_shadows,
                     follow_reflections,
-                    follow_pixel_grass,
                     follow_flow_arrows,
                 ),
             );

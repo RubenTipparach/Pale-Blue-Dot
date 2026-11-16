@@ -299,6 +299,10 @@ pub struct Binding {
     /// A range (the number row's `1 - 0`): its caps are its ends, and it is
     /// read as every key between, so no key of it can be rebound alone.
     pub range: bool,
+    /// A chord (`SHIFT + ALT + F`): every key held together. Listed, never
+    /// rebindable, and read by its own reader off the physical keyboard, so
+    /// it clashes with nothing that reads one of its keys alone.
+    pub chord: bool,
 }
 
 /// The sub-tab of the settings' Input page a group is listed on (decision 6:
@@ -407,6 +411,7 @@ const fn row(keys: &'static [Key], joiner: &'static str, does: &'static str) -> 
         joiner,
         does,
         range: false,
+        chord: false,
     }
 }
 
@@ -565,7 +570,16 @@ const WORLD: [Binding; 5] = [
     row(&[Key::Board(KeyCode::KeyL)], " ", "noon or midnight"),
 ];
 
-const SCREEN: [Binding; 8] = [
+/// The repro key (`repro-capture`; the owner, 2026-11-16: "add a button
+/// for capturing location data so I can help repro stuff (shift alt F or
+/// something)").
+const REPRO_KEYS: [Key; 3] = [
+    Key::Board(KeyCode::ShiftLeft),
+    Key::Board(KeyCode::AltLeft),
+    Key::Board(KeyCode::KeyF),
+];
+
+const SCREEN: [Binding; 9] = [
     row(&[Key::Board(KeyCode::Escape)], " ", "menu"),
     row(&[Key::Board(KeyCode::KeyJ)], " ", "the field guide"),
     row(
@@ -575,6 +589,10 @@ const SCREEN: [Binding; 8] = [
     ),
     row(&[Key::Board(KeyCode::KeyO)], " ", "the starter missions"),
     row(&[Key::Board(KeyCode::F12)], " ", "screenshot"),
+    Binding {
+        chord: true,
+        ..row(&REPRO_KEYS, " + ", "copy the location for a bug report")
+    },
     row(
         &[Key::Board(KeyCode::F3)],
         " ",
@@ -645,7 +663,7 @@ impl Slot {
 /// menu's Escape, not part of a range.
 fn is_slot(row: &Binding, key: Key) -> Option<KeyCode> {
     match key {
-        Key::Board(code) if code != KeyCode::Escape && !row.range => Some(code),
+        Key::Board(code) if code != KeyCode::Escape && !row.range && !row.chord => Some(code),
         _ => None,
     }
 }
@@ -772,6 +790,11 @@ impl KeyBinds {
             }
             for row in group.rows {
                 let reads = |other: KeyCode| -> bool {
+                    if row.chord {
+                        // Read whole, off the physical keyboard: F alone is
+                        // still interact's.
+                        return false;
+                    }
                     if row.range {
                         // The number row reads every digit between its ends.
                         return DIGITS.contains(&other);
@@ -1111,7 +1134,7 @@ mod tests {
     /// Every file that presses the keyboard or the mouse. The test reads their
     /// SOURCE rather than a second list in here, which is this repository's
     /// rule for a representation it cannot collapse: check the real artifact.
-    const READERS: [(&str, &str); 13] = [
+    const READERS: [(&str, &str); 14] = [
         ("controls.rs", include_str!("controls.rs")),
         ("fish.rs", include_str!("fish.rs")),
         ("desktop/guide.rs", include_str!("desktop/guide.rs")),
@@ -1128,6 +1151,7 @@ mod tests {
         ("desktop/digging.rs", include_str!("desktop/digging.rs")),
         ("desktop/menu.rs", include_str!("desktop/menu.rs")),
         ("desktop.rs", include_str!("desktop.rs")),
+        ("desktop/repro.rs", include_str!("desktop/repro.rs")),
     ];
 
     /// A binding list that names a key nothing reads is a lie a player acts
