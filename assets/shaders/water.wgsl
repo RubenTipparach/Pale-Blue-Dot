@@ -137,6 +137,11 @@ struct WaterView {
     // reach, m. A far river's sheet and the tier's own water are dithered
     // across its last 25 m, so neither pops in.
     column: vec4<f32>,
+    // The height fog in the rain volume's place while RAIN SHADOW is off
+    // (`weather-rain` 7): x the extinction per metre at the reference level
+    // (zero: none), y the falloff height m, z the reference level's radius
+    // from the body's centre (the ground or the sea under the eye) m.
+    height_fog: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -1626,11 +1631,58 @@ fn cloud_air(eye: vec3<f32>, direction: vec3<f32>, d: f32) -> f32 {
     return exp(-depth);
 }
 
+// ---- The height fog with RAIN SHADOW off (`weather-rain` 7) -----------------
+// The owner: "if we have rain shadow turned off can we just do normal
+// distance fog?", then "or height fog?". With the rain volume off, rain over
+// the eye lays an exponential height fog in its place, at the end of the
+// clouds' composite (no pass of its own). Its density at a height h over the
+// reference level (the ground or the sea under the eye, along the body's own
+// up) is sigma0 exp(-h/H): the volume's extinction at the player's feet,
+// thicker in the valley below, thinner up the hill and the sky. Integrated
+// along the ray in closed form, the height taken linear in distance between
+// the ray's two ends, each measured exactly on the sphere. It stops where the
+// volume would have: the ground, the sea, the cloud base or the range.
+// Coloured as the volume is lit, without its shadows and lamps: the rain's
+// tint in the sky's mean light and the sun's forward scatter.
+const HEIGHT_FOG_DEEPEST: f32 = 2.5;
+fn height_fog(uv: vec2<f32>, color: vec3<f32>) -> vec3<f32> {
+    let sigma0 = view.height_fog.x;
+    if (sigma0 <= 0.0) { return color; }
+    let far = rain_far(uv);
+    if (far <= 0.0) { return color; }
+    let ray = view_ray(uv);
+    let eye = ray.origin-view.planet_center.xyz;
+    let fall = max(view.height_fog.y, 1.0);
+    let ground = view.height_fog.z;
+    let ha = max((length(eye) - ground)/fall, -HEIGHT_FOG_DEEPEST);
+    let hb = max((length(eye + ray.direction*far) - ground)/fall, -HEIGHT_FOG_DEEPEST);
+    let dh = hb - ha;
+    // The mean of exp(-h) over the ray, h linear from ha to hb.
+    var mean = exp(-ha)*(1.0 - 0.5*dh);
+    if (abs(dh) > 1e-3) { mean = (exp(-ha) - exp(-hb))/dh; }
+    let depth = sigma0*far*max(mean, 0.0);
+    let kept = exp(-depth);
+    // As the renderer it stands in for lights its rain: the volume by
+    // `rain_light` (the sun's height and the cover), the shells by the sky's
+    // light and the sun's forward scatter.
+    var tint = view.rain_tint.rgb*view.rain_look.z;
+    if (view.rain_shell.w > 0.5 && view.rain_sky.w > 0.5) {
+        let mu = dot(ray.direction, safe_normal(view.sun.xyz));
+        tint = view.rain_tint.rgb*(view.rain_sky.rgb
+            + view.rain_sun.rgb*rain_phase(mu, view.rain_sun.w)*12.566371);
+    }
+    return color*kept + tint*(1.0 - kept);
+}
+
 @fragment
 fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let uv = in.uv;
+    return vec4<f32>(height_fog(in.uv, clouds_over(in.uv)), 1.0);
+}
+
+// The clouds laid over the scene at `uv`.
+fn clouds_over(uv: vec2<f32>) -> vec3<f32> {
     let scene = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
-    if (view.fx.y > 0.75) { return vec4<f32>(scene,1.0); }
+    if (view.fx.y > 0.75) { return scene; }
     // This pixel's own ray against its own depth: where it cannot reach the
     // layer (a hill in front of the cloud) nothing is laid over it, so the
     // hill keeps a full-resolution edge however coarse the march.
@@ -1638,7 +1690,7 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let eye = ray.origin-view.planet_center.xyz;
     let far = cloud_far(ray, uv, vec2<f32>(0.0), eye);
     let span = cloud_span(eye,ray.direction,0.0,far,cloud_layer());
-    if (span.y <= span.x) { return vec4<f32>(scene,1.0); }
+    if (span.y <= span.x) { return scene; }
     // The air in front of the cloud fades it into what is behind, its light
     // and its cover alike, measured to where the texels it came from hold
     // their cloud (`cloud-close-up`).
@@ -1671,9 +1723,9 @@ fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // (`cloud-entry`).
     let near_m = cloud_near_reach(cloud_layer());
     let slab = clamp(min(far, near_m) - span.x, 0.0, near_m);
-    if (slab <= 0.0) { return vec4<f32>(behind,1.0); }
+    if (slab <= 0.0) { return behind; }
     let fog = textureSampleLevel(cloud_near, cloud_history_sampler, uv, 0.0);
-    return vec4<f32>(mix(behind, fog.rgb, 1.0 - exp(-max(fog.a, 0.0)*slab)),1.0);
+    return mix(behind, fog.rgb, 1.0 - exp(-max(fog.a, 0.0)*slab));
 }
 
 // ---- The puffs (`cloud-puffs`) ---------------------------------------------

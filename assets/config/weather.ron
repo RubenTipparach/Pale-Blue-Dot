@@ -213,6 +213,11 @@
     rain_volume_density: 0.003,
     rain_volume_range_m: 2000.0,
     rain_volume_stretch: 10.0,
+    // With RAIN SHADOW off the volume does not draw; a height fog takes its
+    // place (`weather-rain` 7), its density falling by e every this many
+    // metres over the ground or sea under the eye at full rain (half as deep
+    // at no rain), at the volume's own density where the player stands.
+    rain_height_fog_falloff_m: 250.0,
     rain_volume_color: (0.55, 0.58, 0.62),
     // Or streaks on six cylinders round the eye, 6 to 1,500 m out, each standing
     // for the air between it and the next (`rain-shells`). Volume until the

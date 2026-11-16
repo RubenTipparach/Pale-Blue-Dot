@@ -241,7 +241,10 @@ fog** takes the volume's place:
   from a height the murk is below.
 - **Falloff** `H = rain_height_fog_falloff_m * (0.5 + 0.5 * rain)`: the
   layer is shallower in light rain and deeper in a storm. The knob is new in
-  `weather.ron`, 120 m.
+  `weather.ron`, 250 m. (A first cut at 120 m left the horizon a third as
+  murky as the volume: on a 4.8 km body a level ray rises 400 m in its 2 km,
+  so the fog thinned out of it. At 250 m the sky at the horizon and the far
+  sea read within a few levels of the volume's, measured on the beach shot.)
 - **Integrated along the ray**, analytically: with the ray's heights at the
   eye and at its end, `h_a` and `h_b` (each `|p| - R - h0`, exact on the
   sphere), the optical depth over the length `L` is `sigma0 * L * e^(-h_a/H)
@@ -255,12 +258,14 @@ fog** takes the volume's place:
   base or `rain_volume_range_m`, whichever is first (`rain_far`). No fog
   above the cloud base, none under the sea, and none from an eye above the
   cloud base, where the clouds hide the storm, as the volume does.
-- **Colour** is the volume's lit colour without its shadows and lamps: the
-  rain's tint times the sky's mean radiance at the camera (`rain_sky`) plus
-  the sun after the air and the cloud through the volume's forward phase
-  (`rain_sun`, `rain_phase`). So it is dark at night and lit by day, grey
-  under a full deck and warm toward a low sun. Under the old lighting model
-  it is the tint times `rain_light`, as the volume's is.
+- **Colour** is the colour the renderer it stands in for gives its rain,
+  without its streaks, shadows and lamps. The shipped renderer is the volume
+  (`rain_renderer: Volume`), which lights its rain by `rain_light`: the
+  rain's tint times a light set by the sun's height and the cover, which is
+  the sky's light at that hour (dark at night, lit by day, greyed under the
+  deck). Under the shells it is their light: the tint times the sky's mean
+  radiance (`rain_sky`) plus the sun through the forward phase (`rain_sun`,
+  `rain_phase`).
 
 ### Where it runs: no new pass
 

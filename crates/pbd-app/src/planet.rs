@@ -1134,6 +1134,9 @@ struct PlanetViewGpu {
     /// for the sea's trace as well as the terrain's.
     ssr_clip: Mat4,
     ssr_eye: Vec4,
+    /// Whether the capture runs this frame, so the next frame's traces have
+    /// a history of the frame before them (`reflection-quality` 4).
+    captured: bool,
 }
 
 /// The slowest the fade centre catches up with the camera after a landing,
@@ -1648,6 +1651,8 @@ pub(crate) struct Tunables<'w> {
     scatter: Res<'w, crate::config::ScatterSettings>,
     columns: Res<'w, crate::config::ColumnSettings>,
     lighting: Res<'w, crate::config::LightingSettings>,
+    /// The player's REFLECTIONS (`reflection-quality`).
+    reflect_quality: Option<Res<'w, crate::config::ReflectQuality>>,
     /// The fine set, for the lights near the camera (`lighting-model`).
     fine: Option<Res<'w, lod::PlanetFine>>,
     /// L4: the bounce baked for it.
@@ -1696,6 +1701,11 @@ fn prepare_views(
     let scatter = &tunables.scatter;
     let columns = &tunables.columns;
     let lighting = &tunables.lighting;
+    let level = tunables
+        .reflect_quality
+        .as_deref()
+        .map_or_else(default, |q| q.0);
+    let capture_on = lighting.reflect_capture_on(level);
     let Some(planet) = planet else {
         return;
     };
@@ -1927,17 +1937,22 @@ fn prepare_views(
                 .as_ref()
                 .map(|fine| near_lamps(&fine.set.columns, camera_position, 32.0))
                 .unwrap_or([Vec4::ZERO; NEAR_LAMPS]),
-            // x the voxel walk, w the screen trace (`PBD_REFLECT`).
+            // x the voxel walk, w the screen trace (`PBD_REFLECT` and the
+            // player's REFLECTIONS), y their reach.
             reflect: Vec4::new(
-                if lighting.reflect_walk_on() { 1.0 } else { 0.0 },
-                lighting.reflection_reach_m,
+                if lighting.reflect_walk_on(level) {
+                    1.0
+                } else {
+                    0.0
+                },
+                lighting.reflect_reach_m(level),
                 bounce_gain(
                     lighting,
                     tunables.fine.as_deref(),
                     tunables.bounce.as_deref(),
                     clock.0,
                 ),
-                if lighting.reflect_screen_on() {
+                if lighting.reflect_screen_on(level) {
                     1.0
                 } else {
                     0.0
@@ -1983,19 +1998,20 @@ fn prepare_views(
             night_lights,
             felled,
             picked,
-            // w: there is a history to read, so not while the capture is off.
+            // w: there is a history to read, so not while the capture is off,
+            // nor the frame it comes back on (REFLECTIONS raised from OFF):
+            // the history is then of a frame from before (`reflection-quality`
+            // 4).
             ssr_eye: existing.as_ref().map_or(Vec4::ZERO, |gpu| {
-                gpu.last_camera.extend(if lighting.reflect_capture_on() {
-                    1.0
-                } else {
-                    0.0
-                })
+                gpu.last_camera
+                    .extend(if capture_on && gpu.captured { 1.0 } else { 0.0 })
             }),
         };
         let (ssr_clip, ssr_eye) = (params.ssr_clip, params.ssr_eye);
         if let Some(mut gpu) = existing {
             gpu.ssr_clip = ssr_clip;
             gpu.ssr_eye = ssr_eye;
+            gpu.captured = capture_on;
             gpu.uniform.set(params);
             gpu.uniform.write_buffer(&device, &queue);
             gpu.centre = centre;
@@ -2126,6 +2142,7 @@ fn prepare_views(
             last_clip: clip_from_body,
             ssr_clip,
             ssr_eye,
+            captured: capture_on,
         });
     }
 }
@@ -2142,12 +2159,14 @@ struct PlanetDraw {
 /// `planet_reflect.rs`), between Bevy's transmissive and transparent passes:
 /// where it drew before as the transparent phase's first item, so after the
 /// opaque towns and before every transparent mesh.
+#[allow(clippy::too_many_arguments)]
 fn queue_planet(
     mut commands: Commands,
     pipeline: Res<PlanetPipeline>,
     mut specialized: ResMut<SpecializedRenderPipelines<PlanetPipeline>>,
     cache: Res<PipelineCache>,
     lighting: Option<Res<crate::config::LightingSettings>>,
+    quality: Option<Res<crate::config::ReflectQuality>>,
     views: Query<(Entity, &ExtractedView, &Msaa)>,
     surfaces: Query<(), With<PlanetSurface>>,
 ) {
@@ -2157,11 +2176,20 @@ fn queue_planet(
         }
         return;
     }
-    let split_on = lighting.is_some_and(|l| l.reflect_split_on());
+    let level = quality.map_or_else(default, |q| q.0);
+    let split_on = lighting.as_ref().is_some_and(|l| l.reflect_split_on(level));
+    let split_possible = lighting.is_some_and(|l| l.reflect_split_possible());
     for (entity, view, msaa) in &views {
         // The half-size passes are built for the camera's MSAA and HDR
         // target; any other view traces inline.
-        let split = split_on && msaa.samples() == reflect::SAMPLES && view.hdr;
+        let fits = msaa.samples() == reflect::SAMPLES && view.hdr;
+        let split = split_on && fits;
+        // The other entry too, so a REFLECTIONS level switched in play finds
+        // its pipeline compiled behind the loading screen
+        // (`reflection-quality` 4); after the first frame a cache lookup.
+        if split_possible && fits {
+            specialized.specialize(&cache, &pipeline, (msaa.samples(), view.hdr, !split));
+        }
         let pipeline = specialized.specialize(&cache, &pipeline, (msaa.samples(), view.hdr, split));
         commands
             .entity(entity)
