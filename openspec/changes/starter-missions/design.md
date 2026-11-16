@@ -503,3 +503,18 @@ for takes several, in which case it asks for what that recipe takes.
 Unchanged: crafting and placing at 1, or at the multiple a recipe needs
 (fences, planks, rope, bronze, torches); fish caught (3), species (3), logs
 (10), stone dug (10), and the explorer's goals.
+
+### The mission card's frame (owner, 2026-11-16: "9 slice lines broo")
+
+The mockup's cards and log drew the kit's `tooltip` piece whole. That PNG
+(24 x 18 native, 8 render pixels a native pixel) keeps one native pixel of
+render background round the slab, and its right and bottom bevels fall into
+near-black shade. Stretched down a card's side, those two outer columns read
+as a black stripe and then a pale blue line outside the frame: the seam
+lines the owner saw. The mockup now slices a copy trimmed by that native
+pixel on every side (`mission-tree/ui/*-tooltip-trim.png`, slice 40 = 5
+native, border 10 px so a native pixel stays 2 CSS pixels). The game's
+mission tree (`desktop/mission_tree.rs`) draws the same `tooltip` piece; the
+lasting fix is in the art (`tools/art/ui_panels_blend.py` `r_tooltip` and
+`r_oak_tooltip`, whose outside should render transparent), which needs
+Blender and waits for a request.
