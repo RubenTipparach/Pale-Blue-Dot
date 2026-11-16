@@ -54,8 +54,24 @@ pub struct School {
     pub lure: Option<(usize, Vec3)>,
     /// One fish held at a point: nibbling, biting or on the line.
     pub held: Option<(usize, Vec3)>,
+    /// How far each creature has dived from the surface, 0 lying out to 1
+    /// under: a startled seal goes under over [`DIVE_S`] and comes up over
+    /// [`SURFACE_S`], so it is never drawn gone in one frame
+    /// (`ocean-environments` B17).
+    pub under: Vec<f32>,
+    /// The eye a startled floater is swimming away from, this step.
+    flee: Option<Vec3>,
     rng: Rng,
 }
+
+/// How long a startled seal takes to go under, s.
+pub const DIVE_S: f32 = 1.2;
+/// How long a seal takes to come back up, s.
+pub const SURFACE_S: f32 = 2.0;
+/// How far on a startled floater makes for, away from the eye, m.
+pub const FLEE_M: f32 = 12.0;
+/// How long a diving duck takes to go under, and to come up, s.
+pub const DUCK_DIVE_S: f32 = 0.6;
 
 impl School {
     /// A school of `species` spawned about `anchor`, which the spawner has
@@ -90,6 +106,8 @@ impl School {
             lured: false,
             lure: None,
             held: None,
+            under: vec![0.0; count as usize],
+            flee: None,
             rng,
         };
         for _ in 0..count {
@@ -157,6 +175,10 @@ impl School {
                 && d <= species.shy_m * super::HIDE_UNTIL;
             if d <= species.shy_m || keeps {
                 self.frighten(i, hold_s);
+                // A floater startled swims off, away from the eye.
+                if species.mover == Mover::Floater {
+                    self.flee = Some(eye);
+                }
             }
         }
     }
@@ -187,6 +209,9 @@ impl School {
         self.ids.swap_remove(fish);
         if fish < self.homes.len() {
             self.homes.swap_remove(fish);
+        }
+        if fish < self.under.len() {
+            self.under.swap_remove(fish);
         }
         self.lure = None;
         self.held = None;
@@ -228,6 +253,35 @@ impl School {
             self.goal = self.pick_goal(species, flock.goal_reach_m, water);
             self.goal_t = self.rng.range(flock.goal_every_s.0, flock.goal_every_s.1);
             self.lured = false;
+        }
+        // A startled floater makes for water away from the eye, where it is
+        // seen going (`ocean-environments` B17).
+        if let Some(eye) = self.flee.take()
+            && !self.lured
+        {
+            let centre = self.centre();
+            let up = centre.normalize_or(Vec3::Y);
+            let away = centre - eye;
+            let away = (away - up * away.dot(up)).normalize_or(tangents(up).0);
+            let at = (centre + away * FLEE_M).normalize_or(up) * self.anchor.length();
+            if species.fits(water.depth(at)) {
+                let point = at.normalize_or(up) * water.surface(at);
+                self.goal = at.normalize_or(up) * self.depth_for(species, point, water);
+                self.goal_t = self.goal_t.max(4.0);
+            }
+        }
+        // A startled seal goes under, and comes back up, over time.
+        if self.under.len() != self.len() {
+            self.under.resize(self.len(), 0.0);
+        }
+        for i in 0..self.len() {
+            let want = species.behaviour == Behaviour::HaulsOut && self.spook[i] > 0.0;
+            let u = &mut self.under[i];
+            *u = if want {
+                (*u + dt / DIVE_S).min(1.0)
+            } else {
+                (*u - dt / SURFACE_S).max(0.0)
+            };
         }
         let n = self.len();
         let accelerations: Vec<Vec3> = (0..n)
@@ -460,7 +514,7 @@ pub fn pose(species: &Species, school: &School, fish: usize, seconds: f64, night
             }
         }
         Behaviour::Dives => {
-            if !startled && !night && phase(14.0) < 0.35 {
+            if !startled && !night && phase(DIVE_PERIOD_S) < DIVE_SHARE {
                 Pose::Under
             } else {
                 Pose::Moving
@@ -480,6 +534,46 @@ pub fn pose(species: &Species, school: &School, fish: usize, seconds: f64, night
         }
     }
 }
+
+/// How far under the surface a creature is drawn now, 0 on it to 1 wholly
+/// dived (`ocean-environments` B17): a seal by its eased [`School::under`],
+/// a diving duck by its clock, sinking over [`DUCK_DIVE_S`] at the start of
+/// its dive and rising over the same at the end. Every other creature, 0.
+/// It never jumps: a dive is seen, not cut.
+pub fn under_share(
+    species: &Species,
+    school: &School,
+    fish: usize,
+    seconds: f64,
+    night: bool,
+) -> f32 {
+    let ease = |x: f32| {
+        let x = x.clamp(0.0, 1.0);
+        x * x * (3.0 - 2.0 * x)
+    };
+    match species.behaviour {
+        Behaviour::HaulsOut => ease(school.under.get(fish).copied().unwrap_or(0.0)),
+        Behaviour::Dives => {
+            let startled = school.spook.get(fish).is_some_and(|s| *s > 0.0);
+            if startled || night {
+                return 0.0;
+            }
+            let id = school.ids.get(fish).copied().unwrap_or(0);
+            let offset = (hash2(school.seed, u64::from(id)) >> 40) as f64 / (1u64 << 24) as f64;
+            let t = ((seconds / DIVE_PERIOD_S + offset).rem_euclid(1.0) * DIVE_PERIOD_S) as f32;
+            let window = (DIVE_PERIOD_S * DIVE_SHARE) as f32;
+            if t >= window {
+                return 0.0;
+            }
+            ease((t / DUCK_DIVE_S).min((window - t) / DUCK_DIVE_S))
+        }
+        _ => 0.0,
+    }
+}
+
+/// A diving duck's cycle, s, and the share of it spent under.
+const DIVE_PERIOD_S: f64 = 14.0;
+const DIVE_SHARE: f64 = 0.35;
 
 /// Two tangents at a direction, stable away from the poles' axis.
 fn tangents(up: Vec3) -> (Vec3, Vec3) {
