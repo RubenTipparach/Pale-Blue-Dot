@@ -44,9 +44,6 @@
 - [x] 5.2 (2026-11-15, the owner on M31 version 2: "the waterfall look is pretty good, need to be a bit careful with perf on that, on my laptop it is a bit rough, so hopefulyy in game it will work well", then "I will aprpove the mockup, but with performance being the condition you need to validate".) The owner's approval of the mockup. No game code before it.
 - [ ] 5.3 In the game: previous heights in the mesher's lanes, the kept dried cells, the tick uniform, `vertex_flowing` easing. Verify: captures mid-tick; a launch to READY with no `LATE_PIPELINE`; THE CONDITION OF APPROVAL: a `perf_suite.py` A/B on the release build (before = claude/env-v2 without it, after = with it), interleaved, on a live pour scene and the `walk`, with no regression past the spread between repeats, reported in `docs/benchmarks/2026-11-15-water-smooth/` and published.
 
-## 7. Rain rings that alias (design "Rain rings that alias"; owner, 2026-11-16)
-
-- [ ] 7.1 The water's rain rings fade with their footprint. Verify: the valley's river in rain from 25 m and from the bank, before and after, with the speckle measure (`hf.py`) against the dry frame; the falls' froth unchanged.
 ## 6. Splashes (design "Splashes that show, and better ones", 2026-11-16)
 
 - [ ] 6.1 Blended effects over water (fall spray and mist, the near shower)
@@ -58,3 +55,6 @@
 - [ ] 6.4 M31 Splash tab: fall foot, entry, cast, fish, wake, beside today's
       spray; the owner's approval before game code.
 
+## 7. Rain rings that alias (design "Rain rings that alias"; owner, 2026-11-16)
+
+- [ ] 7.1 The water's rain rings fade with their footprint. Verify: the valley's river in rain from 25 m and from the bank, before and after, with the speckle measure (`hf.py`) against the dry frame; the falls' froth unchanged.

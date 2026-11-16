@@ -658,7 +658,6 @@ It is measured, not assumed. A `perf_suite.py` A/B on the release build
 goes in `docs/benchmarks/` with the port. Any slower frame is fixed before
 the push.
 
-<<<<<<< HEAD
 ## Rain rings that alias (owner, 2026-11-16)
 
 The owner's valley in rain shows the river "covered in a dense white
@@ -687,7 +686,6 @@ are weighed by `1 - smoothstep(0.2, 0.45, c)`, whole while a ring spans
 five pixels or more and gone by about two. Near water keeps its rings; the
 far river and a sheet seen at a grazing angle keep the waves only. The
 falls' froth and the fall look (`dc0c5cb`) are not touched.
-=======
 ## Splashes that show, and better ones (owner, 2026-11-16)
 
 The owner, on a river in rain: "these water splash fx are weak, I expected
@@ -749,7 +747,6 @@ The plan, in order:
    spreads and fades on the surface, and mist, all lit by the scene; shown
    beside today's spray for the owner's approval before any game code.
    Crab Breeze's source or a clip of its splashes would be the reference.
->>>>>>> origin/claude/env-v2
 
 ## Risks / Trade-offs
 
