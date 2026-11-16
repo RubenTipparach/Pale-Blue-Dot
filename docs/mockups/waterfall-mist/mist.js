@@ -899,14 +899,24 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     return close(FALLS[NF - 1], "under");
   }
   const VIEWS = {above: () => look("above"), side: () => look("side"), under: () => look("under")};
-  const ptrs = new Map(); let pinch0 = 0;
-  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+  const ptrs = new Map(); let pinch0 = 0, panning = false;
+  // Middle-button drag pans: the point looked at slides with the mouse, at the distance looked from.
+  function pan(dx, dy) {
+    const k = 2 * V.dist * Math.tan(camera.fov * Math.PI / 360) / Math.max(1, canvas.clientHeight);
+    camera.updateMatrixWorld(); const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    V.target.addScaledVector(right, -dx * k).addScaledVector(up, dy * k); place();
+  }
+  canvas.addEventListener("mousedown", e => { if (e.button === 1) e.preventDefault(); });
+  canvas.addEventListener("auxclick", e => { if (e.button === 1) e.preventDefault(); });
+  canvas.addEventListener("pointerdown", e => { if (e.button === 1) { e.preventDefault(); panning = true; } canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
   canvas.addEventListener("pointermove", e => {
     if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    if (ptrs.size === 1) { V.yaw += (e.clientX - px) * 0.006; V.pitch = Math.max(-1.45, Math.min(1.2, V.pitch - (e.clientY - py) * 0.006)); place(); }
+    if (panning) pan(e.clientX - px, e.clientY - py);
+    else if (ptrs.size === 1) { V.yaw += (e.clientX - px) * 0.006; V.pitch = Math.max(-1.45, Math.min(1.2, V.pitch - (e.clientY - py) * 0.006)); place(); }
     else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 > 0) { V.dist = Math.max(1, Math.min(90, V.dist * pinch0 / d)); place(); } pinch0 = d; }
   });
-  const up_ = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
+  const up_ = e => { ptrs.delete(e.pointerId); pinch0 = 0; if (!ptrs.size) panning = false; };
   canvas.addEventListener("pointerup", up_); canvas.addEventListener("pointercancel", up_);
   canvas.addEventListener("wheel", e => { e.preventDefault(); V.dist = Math.max(1, Math.min(90, V.dist * Math.exp(e.deltaY * 0.001))); place(); }, {passive: false});
   // ---- each fall's label, over its lip

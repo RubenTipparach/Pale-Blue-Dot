@@ -85,7 +85,7 @@ button{font:inherit;color:inherit}
   </header>
   <nav class="seg tabs" id="tabs" aria-label="Tabs"><button data-tab="today" aria-pressed="true">Game today</button><button data-tab="fixed" aria-pressed="false">Fixed order</button><button data-tab="new" aria-pressed="false">New mist + bubbles</button></nav>
   <div class="stage">
-    <canvas id="view" aria-label="A waterfall into a pool: drag to turn, wheel or pinch to come closer"></canvas>
+    <canvas id="view" aria-label="A waterfall into a pool: drag to turn, middle-drag to pan, wheel or pinch to come closer"></canvas>
     <div class="flabels" id="flabels"></div>
     <div class="vtitle" id="vtitle">Game today</div>
     <div class="ref" id="ref" hidden><img id="refImg" src="waterfall-mist/game-down-today.jpg" alt="The game's own capture of a fall into a pool"><span id="refLbl">The game</span></div>
@@ -141,7 +141,7 @@ button{font:inherit;color:inherit}
     <li><b>Riffle</b>: a river stepping down one layer. The source spills into a falling cell over a channel one layer lower, whose shallow water (0.7 m) runs on. It drops about 1 m.</li>
     <li><b>1, 2, 4 and 9 layers</b>: a fall of that many layers into a pool 3.35 m deep, dug into a shore one layer under the lip less than the fall. The 9 is the scene the owner tuned the mist on (a pit two rings wide); the others are one ring wide.</li>
   </ul>
-  <p><b>Fall</b> picks one to come close to; <b>All</b> frames them together. <b>Under</b> is always one pool (the 9's for All). Cells are the game's: 2.833 m across, 1 m layers. Drag to turn, wheel or pinch to come closer. The water and the splash move; nothing else does. At night two lamps by each fall light the ground, the water, the new mist and the bubbles.</p>
+  <p><b>Fall</b> picks one to come close to; <b>All</b> frames them together. <b>Under</b> is always one pool (the 9's for All). Cells are the game's: 2.833 m across, 1 m layers. Drag to turn, middle-drag to pan, wheel or pinch to come closer. The water and the splash move; nothing else does. At night two lamps by each fall light the ground, the water, the new mist and the bubbles.</p>
   <h3>Where the game shows the fall animation</h3>
   <p>The scrolling froth is drawn on a water face of kind 2 (<code>KIND_FALLING</code>). The mesher (<code>cell_pieces</code>, <code>water_flow.rs</code>) gives a side that kind when its cell is falling, or when it is flowing with water on top of it:</p>
   <ul>
@@ -214,7 +214,7 @@ button{font:inherit;color:inherit}
 <template id="tab-fixed"><p><b>Fixed order.</b> The same splash, drawn after the water against its depth: in front of the water, hidden by it. The pool shows its own deep colour. The mist is the game's gradient dot.</p></template>
 <template id="tab-new"><p><b>New mist + bubbles.</b> The fixed order, with lumpy lit mist puffs in place of the dot, bubbles rising in the pool under the fall, and the aerated teal over them. <b>Mist opacity</b> scales the puffs; 0.80 matches the dot's total cover.</p><p><b>Mist rule</b>: <b>Proposed</b> mists every fall by the metres it drops, with a floor, so the riffle and the 1 and 2-layer falls read as misty; <b>Game's</b> is today's count by whole falling layers. <b>Fall speed-up</b>: the falling faces scroll faster further down, so a taller fall's foot runs fastest (0 is the game's one speed). The About modal has the rules and numbers.</p></template>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="waterfall-mist/mist.js?v=14"></script>
+<script src="waterfall-mist/mist.js?v=15"></script>
 <script>
 "use strict";
 let MODAL_BACK = null;
