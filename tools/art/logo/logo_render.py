@@ -21,6 +21,7 @@ import logo_height as LH  # noqa: E402  (the layout: where the marble and the mo
 
 field_dir, planet_png, out_png = sys.argv[1:4]
 samples = int(sys.argv[4]) if len(sys.argv) > 4 else 64
+PREVIEW = os.environ.get("PREVIEW") == "1"   # a quick look: 40% size (owner: "render me a quick preview")
 STEP = 2                                   # px per mesh vertex
 U = 100.0                                  # px per Blender unit
 
@@ -196,7 +197,17 @@ mt.links.new(mb.outputs["BSDF"], add.inputs[0])
 mt.links.new(rim.outputs["Emission"], add.inputs[1])
 mt.links.new(mb.outputs["BSDF"], mix.inputs[1])
 mt.links.new(add.outputs["Shader"], mix.inputs[2])
-mt.links.new(mix.outputs["Shader"], outn.inputs["Surface"])
+# the glass's shadow, cheaply (owner: "its gotta have that ray trace shadow thing", "I heard there
+# was a way to kind of cheaply make it"): a shadow ray passes the ball tinted, so the shadow is a
+# light blue-grey glass shadow, not a black disc; the bright focused spot in it is a spotlight below
+lp = mt.nodes.new("ShaderNodeLightPath")
+tr = mt.nodes.new("ShaderNodeBsdfTransparent")
+tr.inputs["Color"].default_value = (0.42, 0.55, 0.75, 1)
+mix2 = mt.nodes.new("ShaderNodeMixShader")
+mt.links.new(lp.outputs["Is Shadow Ray"], mix2.inputs["Fac"])
+mt.links.new(mix.outputs["Shader"], mix2.inputs[1])
+mt.links.new(tr.outputs["BSDF"], mix2.inputs[2])
+mt.links.new(mix2.outputs["Shader"], outn.inputs["Surface"])
 marble.data.materials.append(mm)
 # the ball's own light on the ring round it
 glowl = bpy.data.lights.new("ballglow", "POINT")
@@ -206,7 +217,9 @@ glowl.shadow_soft_size = R * 0.9
 gl_o = bpy.data.objects.new("ballglow", glowl)
 gl_o.location = (ecx / U, -ecy / U, socket_floor(ecx, ecy) + R * 1.05)
 scene.collection.objects.link(gl_o)
-marble.visible_shadow = False
+# the ball casts its shadow (owner: "crystal ball dont have shadow"); its own glow casts none,
+# so it still reaches the ring
+glowl.use_shadow = False
 # point lights for the glass to catch as glints (owner: "the multiple point light source idea was
 # better"): small and bright, seen only in reflections
 for name, loc, energy, col in (("glint1", (-3.2, 3.0, 4.0), 1400.0, (1.0, 0.97, 0.92)),
@@ -300,6 +313,25 @@ sun.color = (1.0, 0.95, 0.88)
 so = bpy.data.objects.new("sun", sun)
 so.rotation_euler = (math.radians(62), 0, math.radians(-135))   # from the upper left, low: long shadows
 scene.collection.objects.link(so)
+# the caustic: where the sun, bent through the ball, gathers on the stone behind it
+import mathutils  # noqa: E402
+bpy.context.view_layer.update()
+sund = (so.matrix_world.to_3x3() @ mathutils.Vector((0, 0, -1))).normalized()
+c0 = mathutils.Vector(marble.location)
+floor_z = socket_floor(ecx + 40, ecy + 40)
+t = (c0.z - floor_z) / max(-sund.z, 1e-3)
+spot_at = c0 + sund * t * 1.05
+cs = bpy.data.lights.new("caustic", "SPOT")
+cs.energy = 2600.0
+cs.color = (1.0, 0.97, 0.88)
+cs.spot_size = math.radians(16)
+cs.spot_blend = 1.0
+cs.shadow_soft_size = 0.05
+cs.use_shadow = False
+co_ = bpy.data.objects.new("caustic", cs)
+co_.location = (spot_at.x, spot_at.y, floor_z + 3.0)
+scene.collection.objects.link(co_)
+co_.visible_glossy = False
 fill = bpy.data.lights.new("fill", "SUN")
 fill.energy = 0.6
 fill.color = (0.70, 0.80, 1.0)
@@ -326,6 +358,8 @@ scene.cycles.samples = samples
 scene.cycles.use_denoising = True
 scene.render.resolution_x = Ww
 scene.render.resolution_y = Hh
+if PREVIEW:
+    scene.render.resolution_percentage = 40
 scene.render.film_transparent = True
 scene.render.image_settings.file_format = "PNG"
 scene.render.image_settings.color_mode = "RGBA"

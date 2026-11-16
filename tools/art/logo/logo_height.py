@@ -35,7 +35,7 @@ FONT = "/mnt/skills/examples/canvas-design/canvas-fonts/YoungSerif-Regular.ttf" 
 FONT_DOT = FONT
 
 # Where things stand (px, canvas origin top left).
-TABLET = (230, 760, 2970, 1440)          # x0, y0, x1, y1
+TABLET = (230, 690, 2970, 1460)          # x0, y0, x1, y1
 DOTSTONE = (900, 1290, 2300, 1900)
 EMBLEM = (1600, 470, 435)                # cx, cy, radius
 MARBLE_R = 268                           # the planet marble's radius
@@ -373,23 +373,27 @@ def glyphs(draw, x, y, s, which, w):
             L((a - 0.05, b), (a + 0.05, b)); L((a, b - 0.05), (a, b + 0.05))
         return 1.45
     if which == "starship":
-        # the story's end: the starship, built from all of it, leaving for the stars
-        draw.polygon([(x + 0.15 * s, y - 0.2 * s), (x + 1.25 * s, y - 0.32 * s), (x + 1.45 * s, y - 0.2 * s),
-                      (x + 1.25 * s, y - 0.08 * s)], fill=255)
-        draw.polygon([(x + 0.55 * s, y - 0.25 * s), (x + 0.3 * s, y - 0.55 * s), (x + 0.75 * s, y - 0.26 * s)], fill=255)
-        draw.polygon([(x + 0.55 * s, y - 0.15 * s), (x + 0.3 * s, y + 0.15 * s), (x + 0.75 * s, y - 0.14 * s)], fill=255)
-        for k in range(3):
-            L((0.12, -0.2 + (k - 1) * 0.06), (-0.05, -0.2 + (k - 1) * 0.12))
-        for a, b in ((1.5, -0.6), (1.6, 0.1), (1.0, -0.65)):
-            L((a - 0.05, b), (a + 0.05, b)); L((a, b - 0.05), (a, b + 0.05))
-        return 1.65
+        # the story's end: the interstellar ship (the owner's reference): a block of panels at the
+        # back, a cluster of round tanks, a long thin truss, a habitat ring and a dish shield ahead
+        draw.rectangle([x + 0.0 * s, y - 0.34 * s, x + 0.42 * s, y - 0.08 * s], fill=255)          # the panels
+        for k in range(1, 4):
+            L((k * 0.105, -0.34), (k * 0.105, -0.08))
+        L((-0.08, -0.21), (0.0, -0.21))
+        for k in range(4):
+            cxk = 0.55 + k * 0.17
+            D(cxk, -0.29, 0.085); D(cxk, -0.13, 0.085)                                              # the tanks
+        L((1.15, -0.21), (1.85, -0.21))                                                              # the truss
+        draw.ellipse([x + 1.52 * s, y - 0.42 * s, x + 1.64 * s, y + 0.0 * s], outline=255, width=w)   # the ring
+        L((1.58, -0.21), (1.58, -0.21))
+        draw.ellipse([x + 1.86 * s, y - 0.4 * s, x + 1.98 * s, y - 0.02 * s], fill=255)             # the shield
+        return 2.05
     raise ValueError(which)
 
 
 SPAN = {"hunting": 2.1, "fishing": 2.0, "farming": 2.1, "sailing": 2.0, "rocketry": 2.1,
         "comet": 1.4, "rafting": 1.3, "flying": 1.3, "shipbuilding": 1.65, "mining": 1.45, "windmill": 1.2,
         "watermill": 1.45, "nuclear": 1.25, "fusion": 1.3, "antimatter": 1.4, "dyson": 1.3, "computer": 1.45,
-        "solar": 1.4, "station": 1.35, "colony": 1.45, "starship": 1.65,
+        "solar": 1.4, "station": 1.35, "colony": 1.45, "starship": 2.05,
         "spiral": 1.0, "sun": 0.9, "fish": 0.9, "bird": 0.8, "star": 0.6, "hand": 0.75, "stag": 0.95}
 
 
@@ -557,7 +561,7 @@ def main(out):
     h += np.where(t_mask, t_border, 0)
     inner = t_in - 154          # the field inside the frame
     # the letters stand well proud (owner: "make text pop out more so theres more dramatic shadows")
-    letters, _ = text_mask("PALE BLUE", 370, (tx0 + tx1) / 2, tmid + 20, spacing=0.03)
+    letters, _ = text_mask("PALE BLUE", 370, (tx0 + tx1) / 2, tmid + 60, spacing=0.03)
     letters &= t_mask
     h += raised(letters, 0.55, 9.0, 0)
     mcx, mcy, mr = MOON
@@ -605,14 +609,47 @@ def main(out):
     he = np.where(e_mask, he, 0.0)
     h = np.where(e_mask, np.maximum(he, h), h)
 
-    # the rays: carved from the ball's centre across the tablet's field, behind the letters
+    # the star map (owner: "can we add something like this to show the solar system and surrounding
+    # stars?", the Pioneer plaque without its people or craft): lines of the nearby stars radiating
+    # from the crystal ball, each its own length, each carrying its own binary code of short and
+    # long ticks along it
     rays = Image.new("L", (W, H), 0)
     rd = ImageDraw.Draw(rays)
-    for k in [k for k in range(-9, 10) if k != 0]:
-        a = math.pi / 2 + k * math.radians(8.5)
-        rd.line([(ecx + math.cos(a) * (er + 30), ecy + math.sin(a) * (er + 30)), (ecx + math.cos(a) * 3800, ecy + math.sin(a) * 3800)], fill=255, width=7)
+    sr = np.random.default_rng(1972)
+    angles = [math.pi / 2 + k * math.radians(9.3) + sr.uniform(-0.05, 0.05) for k in range(-8, 9) if k != 0]
+    for a in angles:
+        r0, r1 = er + 30, er + 30 + sr.uniform(380, 1500)
+        ux, uy = math.cos(a), math.sin(a)
+        rd.line([(ecx + ux * r0, ecy + uy * r0), (ecx + ux * r1, ecy + uy * r1)], fill=255, width=5)
+        # the code: ticks across the line, short for 0 and long for 1
+        n = int(sr.integers(6, 11))
+        for j in range(n):
+            t = r0 + (r1 - r0) * (0.25 + 0.7 * j / n)
+            hl = 16 if sr.random() < 0.45 else 8
+            px_, py_ = ecx + ux * t, ecy + uy * t
+            rd.line([(px_ - uy * hl, py_ + ux * hl), (px_ + uy * hl, py_ - ux * hl)], fill=255, width=5)
     ray_mask = (np.array(rays) > 127) & t_mask & (inner > 10) & ~ndimage.binary_dilation(letters | dot_letters, iterations=24) & ~e_mask & (rr > MOON_SOCKET + 30)
     h += groove(ray_mask, 0.035, 4.0)
+    # the solar system, as on the plaque: the sun, then its worlds in a row along the field over the
+    # words, the home world third, and an arc from it up into the crystal ball
+    sol = Image.new("L", (W, H), 0)
+    sd = ImageDraw.Draw(sol)
+    sy = ty0 + 215
+    x0s = tx0 + 330
+    sd.ellipse([x0s - 34, sy - 34, x0s + 34, sy + 34], outline=255, width=6)          # the sun
+    sizes = [7, 9, 11, 8, 20, 17, 13, 13]
+    xs = [x0s + 90 + k * 78 for k in range(8)]
+    for k, (xp, rp) in enumerate(zip(xs, sizes)):
+        sd.ellipse([xp - rp, sy - rp, xp + rp, sy + rp], outline=255, width=5)
+        if k == 5:
+            sd.line([(xp - rp - 12, sy + 3), (xp + rp + 12, sy - 3)], fill=255, width=5)   # a ringed world
+    # the home world, third, marked only by a thin line under the row from it onward (owner: "no
+    # arrow, maybe just a line underneath, more subtle")
+    hx = xs[2]
+    sd.line([(hx, sy + 34), (xs[-1] + 30, sy + 34)], fill=255, width=3)
+    sd.line([(hx, sy + 24), (hx, sy + 34)], fill=255, width=3)
+    sol_mask = (np.array(sol) > 127) & t_mask & ~e_mask & ~ndimage.binary_dilation(letters, iterations=14)
+    h += groove(sol_mask, 0.05, 4.0)
 
     tether = Image.new("L", (W, H), 0)
     tdr = ImageDraw.Draw(tether)
@@ -624,7 +661,7 @@ def main(out):
     mask = t_mask | d_mask | e_mask
     # ---- the cave scenes, etched into the frame on purpose (owner: "purposefully etched into the
     # decor/border would be awesome"), red ochre rubbed into the cuts
-    glyph_mask = (t_etch & t_mask & ~e_mask) | (d_etch & d_mask) | tether_mask
+    glyph_mask = (t_etch & t_mask & ~e_mask) | (d_etch & d_mask) | tether_mask | sol_mask
     paint = glyph_mask.astype(np.uint8)
     # cracks: a few thin random walks, cut shallow
     crack = Image.new("L", (W, H), 0)
