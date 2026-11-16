@@ -87,6 +87,9 @@ pub enum Until {
 pub enum Act {
     /// Stand and watch for this many seconds.
     Wait(f32),
+    /// Stand and watch until the clock reaches this hour (with the shot's
+    /// `rate`, a captioned wait for the morning).
+    Hour(f32),
     /// Turn the look: yaw right by degrees, to an absolute pitch, over
     /// seconds.
     Look(f32, f32, f32),

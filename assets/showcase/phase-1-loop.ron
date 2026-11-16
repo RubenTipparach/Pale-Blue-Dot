@@ -69,7 +69,7 @@
         (
             caption: "Go fishing: cast, wait for the bite, reel",
             until: ["go-fishing"],
-            max_s: 300.0,
+            max_s: 480.0,
             acts: [Hand("rod"), Fish(Mission("go-fishing")), Still],
         ),
         // ---- Farming.
@@ -120,6 +120,13 @@
                 Bench("fence", 6),
                 Bench("gate", 1),
             ],
+        ),
+        (
+            // Animals come to food only by day.
+            caption: "The next morning",
+            rate: Some(300.0),
+            max_s: 60.0,
+            acts: [Hour(8.0)],
         ),
         (
             caption: "Tame a hen: stand still with seed in hand, and feed her",

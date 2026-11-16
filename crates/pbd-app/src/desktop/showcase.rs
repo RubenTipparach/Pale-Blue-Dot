@@ -161,9 +161,15 @@ struct Bot {
     detour_s: f32,
     roam_to: Option<Vec3>,
     climb_s: f32,
+    /// Where the bot last got stuck, and until when it builds itself up.
+    stuck_at: Option<Vec3>,
+    climb_until: f32,
+    fail_frames: u32,
     /// Where the bot started: what it roams round before it has a bench.
     home: Option<Vec3>,
     roam_s: f32,
+    /// The first cast's water and stand, for casting round it.
+    fish_from: Option<(Vec3, Vec3)>,
     /// The tops of the cells the bot dug holes in, to walk round.
     holes: Vec<Vec3>,
     look_goal: Option<(Vec3, f32, f32)>,
@@ -209,6 +215,7 @@ struct Sight<'a> {
     picker: Option<Tool>,
     picking: bool,
     tally: Tally,
+    hour: f32,
 }
 
 fn tangent(v: Vec3, up: Vec3) -> Vec3 {
@@ -357,7 +364,9 @@ impl Bot {
         }
         // In a hole of its own digging: up out of it, as a player does,
         // a block set under the feet at the top of each jump.
-        if self.in_pit(s) {
+        // Or stuck twice over in the same spot: a trench of its own digging
+        // the pit test misses. Up a few blocks, then on.
+        if self.in_pit(s) || s.now < self.climb_until {
             self.climb(s, out);
             return Walked::Going;
         }
@@ -375,6 +384,15 @@ impl Bot {
                 // Round it: a quarter turn and a few steps.
                 self.walk_anchor = Some((s.feet, s.now));
                 self.detour_s = 1.5;
+                let here = self
+                    .stuck_at
+                    .filter(|p| tangent(*p - s.feet, s.up).length() < 2.0);
+                if here.is_some() {
+                    self.climb_until = s.now + 4.5;
+                    self.stuck_at = None;
+                } else {
+                    self.stuck_at = Some(s.feet);
+                }
                 return Walked::Stuck;
             }
         }
@@ -762,6 +780,7 @@ pub struct World<'w, 's> {
     picker: Res<'w, super::equipment::Picker>,
     key: Option<Res<'w, pbd_app::controls::PickerKey>>,
     tally: Res<'w, Tally>,
+    sun: Res<'w, pbd_app::sky::Sun>,
 }
 
 /// The bot's frame: look, decide, press.
@@ -789,7 +808,15 @@ pub fn drive(
         hands.mouse.release(MouseButton::Right);
         bot.rmb_down = false;
     }
-    if w.state.as_ref().is_some_and(|s| !s.active) || bot.failed {
+    if bot.failed {
+        // A few frames for the stall's still, then out with an error.
+        bot.fail_frames += 1;
+        if bot.fail_frames == 20 {
+            exit.write(AppExit::error());
+        }
+        return;
+    }
+    if w.state.as_ref().is_some_and(|s| !s.active) {
         return;
     }
     let now = w.time.elapsed_secs();
@@ -869,6 +896,7 @@ pub fn drive(
         picker: w.picker.highlight,
         picking: w.key.as_deref().is_some_and(|k| k.holding),
         tally: *w.tally,
+        hour: w.sun.clock.hour(),
     };
     let Some(shot) = player.file.shots.get(bot.shot).cloned() else {
         bot.ended = Some(now);
@@ -993,7 +1021,14 @@ pub fn drive(
                 shot.acts.get(bot.act)
             );
             bot.failed = true;
-            exit.write(AppExit::error());
+            // What it was looking at, for whoever reads the stall.
+            if let Some(dir) = player.stills.as_ref() {
+                commands
+                    .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
+                    .observe(bevy::render::view::screenshot::save_to_disk(
+                        dir.join("stall.png"),
+                    ));
+            }
             return;
         }
     }
@@ -1017,7 +1052,12 @@ impl Bot {
 
 /// Press what the frame asks for.
 fn apply(bot: &mut Bot, hands: &mut Hands, w: &World, pending: &mut PendingClick, out: Intent) {
-    for key in [KeyCode::KeyW, KeyCode::ShiftLeft, KeyCode::KeyG] {
+    for key in [
+        KeyCode::KeyW,
+        KeyCode::KeyS,
+        KeyCode::ShiftLeft,
+        KeyCode::KeyG,
+    ] {
         if out.held.contains(&key) {
             hands.keys.press(key);
         } else if hands.keys.pressed(key) {
@@ -1117,6 +1157,14 @@ fn run(
     match act {
         Act::Wait(secs) => {
             if bot.act_s >= *secs {
+                Status::Done
+            } else {
+                Status::Running
+            }
+        }
+        Act::Hour(hour) => {
+            let behind = (hour - s.hour).rem_euclid(24.0);
+            if behind < 0.5 || behind > 23.5 {
                 Status::Done
             } else {
                 Status::Running
@@ -1831,8 +1879,9 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
         }
         3 => {
             // Charge: the button held, then let go.
-            out.lmb = bot.phase_s < 0.9;
-            if bot.phase_s > 1.1 {
+            // A long charge: the float lands well out, in deeper water.
+            out.lmb = bot.phase_s < 1.4;
+            if bot.phase_s > 1.6 {
                 bot.line_was_out = false;
                 bot.next_phase();
             }
@@ -1869,13 +1918,27 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
                     bot.phase_s = 0.0;
                     bot.tries += 1;
                 }
-                Phase::Floating | Phase::Nibble if bot.phase_s > 45.0 => {
+                Phase::Floating | Phase::Nibble if bot.phase_s > 35.0 => {
                     // Nothing biting here: wind in and try along the shore.
                     out.rmb_tap = true;
                     bot.phase = 2;
                     bot.phase_s = 0.0;
-                    let turn = Quat::from_axis_angle(s.up, 0.5) * s.heading;
-                    bot.look_goal = Some((turn, -0.12, 0.0));
+                    bot.tries += 1;
+                    // Cast along the shore instead, at open water only: a
+                    // turn from the first cast, one side then the other.
+                    if let Some(Goal::Point(water, stand)) = bot.goal {
+                        let first = *bot.fish_from.get_or_insert((water, stand));
+                        let sides = [0.45_f32, -0.45, 0.9, -0.9, 0.0];
+                        let k = bot.tries as usize % sides.len();
+                        let turned = Quat::from_axis_angle(s.up, sides[k]) * (first.0 - first.1);
+                        let at = first.1 + turned;
+                        let open = (1..=3).all(|m| {
+                            surface_height((first.1 + turned * (m as f32 / 3.0)).normalize()) < -0.6
+                                || m == 1
+                        });
+                        let at = if open { at } else { first.0 };
+                        bot.goal = Some(Goal::Point(at, first.1));
+                    }
                 }
                 _ => bot.bite_s = 0.0,
             }
@@ -1986,15 +2049,25 @@ fn plant(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
         bot.tries += 3;
         return Status::Running;
     };
-    if top.distance(s.eye) > 4.5 {
-        bot.walk_to(s, out, top, 2.0);
+    let off = tangent(top - s.feet, s.up).length();
+    if off > 3.6 {
+        bot.walk_to(s, out, top, 2.6);
+        bot.phase_s = 0.0;
         return Status::Running;
     }
-    let aimed = bot.aim_at(s, out, top - s.up * 0.2);
+    if off < 1.4 {
+        // Standing on it: a step back to see it.
+        out.held.insert(KeyCode::KeyS);
+    }
+    bot.aim_at(s, out, top - s.up * 0.2);
     let on = bot.aimed_cell(s).is_some_and(|(c, _)| c == key);
-    if aimed && on && bot.phase_s > 0.4 {
+    if on && bot.phase_s > 0.5 {
         out.rmb_tap = true;
         bot.tries += 1;
+        bot.phase_s = 0.0;
+    } else if bot.phase_s > 4.0 {
+        // Out of sight from here: the next cell.
+        bot.tries += 3;
         bot.phase_s = 0.0;
     }
     if bot.act_s > 60.0 {
@@ -2182,21 +2255,39 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
     let centre = animal.pos + animal.pos.normalize() * 0.35;
     match bot.phase {
         1 => {
-            // Near, but not so near it bolts.
-            if bot.walk_to(s, out, animal.pos, 6.5) == Walked::There {
+            // Near, but outside the distance a moving player scares it at
+            // (`taming.fear_moving_m`), then still; or a few steps in from
+            // where it would not come.
+            let far = dist > 12.0;
+            let stop = if far || bot.tries == 0 {
+                10.0
+            } else {
+                (dist - 2.5).max(2.5)
+            };
+            if bot.walk_to(s, out, animal.pos, stop) == Walked::There || (!far && bot.phase_s > 8.0)
+            {
                 bot.next_phase();
             }
         }
         _ => {
             // Still, food in hand, looking at it; feed it when it comes.
             bot.aim_at(s, out, centre);
+            if (bot.phase_s % 4.0) < s.dt {
+                info!(
+                    "showcase: waiting for the {} at {dist:.1} m, {:?} in hand, {} wild in sight",
+                    sp.name,
+                    s.slots.held().map(|st| st.item),
+                    animals(s, species).filter(|(a, _)| a.wild).count()
+                );
+            }
             if dist < 2.3 && bot.phase_s > 1.1 && s.screen == Screen::Playing {
                 out.taps.push(KeyCode::KeyE);
                 bot.phase_s = 0.0;
             }
-            if dist > 9.0 && bot.phase_s > 12.0 {
+            if dist > 3.0 && bot.phase_s > 10.0 {
                 bot.phase = 1;
                 bot.phase_s = 0.0;
+                bot.tries += 1;
             }
         }
     }
