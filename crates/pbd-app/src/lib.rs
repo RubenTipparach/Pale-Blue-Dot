@@ -7,6 +7,7 @@ pub mod atmosphere;
 pub mod audio;
 #[cfg(feature = "desktop")]
 pub mod bloom;
+pub mod clutter;
 #[cfg(feature = "desktop")]
 pub mod coast_walk;
 #[cfg(feature = "desktop")]
@@ -41,6 +42,7 @@ pub mod missions;
 pub mod night_lights;
 #[cfg(feature = "desktop")]
 pub mod overlay;
+pub mod paths;
 #[cfg(feature = "desktop")]
 pub mod place;
 #[cfg(feature = "desktop")]
@@ -73,6 +75,8 @@ pub mod water_flow;
 pub mod weather;
 pub mod world_map;
 
+#[cfg(all(test, feature = "desktop"))]
+mod clutter_gpu_tests;
 #[cfg(all(test, feature = "desktop"))]
 mod lens_gpu_tests;
 #[cfg(all(test, feature = "desktop"))]

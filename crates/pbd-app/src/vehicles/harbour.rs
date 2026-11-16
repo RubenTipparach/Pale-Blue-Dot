@@ -362,6 +362,7 @@ pub fn moor_harbours(world: &mut World, mut done: Local<BTreeSet<u32>>) {
         return;
     }
     let sea_radius = sea.radius;
+    let tide = sea.tide;
     let templates: Vec<Option<Template>> = harbours
         .iter()
         .map(|h| assets.template_named(&h.town.template).cloned())
@@ -405,6 +406,11 @@ pub fn moor_harbours(world: &mut World, mut done: Local<BTreeSet<u32>>) {
                 &mut next,
             );
             let has_cog = cog.is_some();
+            // The boats on the tide (`small-boats`); the cog lies on its
+            // swing, which keeps it at its berth.
+            for craft in &mut crafts {
+                place::on_the_tide(craft, tide);
+            }
             crafts.extend(cog);
             fleet.next_id = next;
             (crafts, skipped, has_cog)

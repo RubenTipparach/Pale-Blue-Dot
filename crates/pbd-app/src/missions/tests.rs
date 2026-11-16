@@ -194,8 +194,26 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
         }
     }
     assert!(done(&app, "go-fishing"));
-    // Bait waits for a good, so the three kinds are next (M33 version 3).
-    assert_eq!(line(&app).as_deref(), Some("Three kinds of fish 0/3"));
+    // Bait is a good now: digging it and landing fish on it is next (G1).
+    assert_eq!(line(&app).as_deref(), Some("Dig for bait: dig bait 0/3"));
+    app.world_mut().write_message(Gained {
+        item: Item::Good(Good::BAIT),
+        count: 3,
+        how: How::Found,
+    });
+    for _ in 0..3 {
+        app.world_mut()
+            .write_message(Did::new(Kind::Baited, "minnow", 1));
+    }
+    app.update();
+    assert!(done(&app, "bait"));
+    // A kind counts once (G4): two minnows and a perch are two kinds.
+    for kind in ["minnow", "minnow", "banded perch"] {
+        app.world_mut()
+            .write_message(Did::new(Kind::Species, kind, 1));
+    }
+    app.update();
+    assert_eq!(line(&app).as_deref(), Some("Three kinds of fish 2/3"));
 }
 
 /// An old world, saved before missions and before tool crafting, opens with

@@ -112,9 +112,14 @@ pub fn setup(mut commands: Commands, launch: Res<super::Launch>) {
 pub fn toggle(
     keys: Res<ButtonInput<KeyCode>>,
     mut graphs: Query<&mut Visibility, With<FrameGraph>>,
+    debug: Option<ResMut<pbd_app::controls::DebugOverlay>>,
 ) {
     if !keys.just_pressed(KeyCode::F3) {
         return;
+    }
+    // The boat instruments come and go with the graph.
+    if let Some(mut debug) = debug {
+        debug.0 = !debug.0;
     }
     for mut visibility in &mut graphs {
         *visibility = match *visibility {

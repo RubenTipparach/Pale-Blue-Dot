@@ -1690,10 +1690,9 @@ pub fn press(
         front,
         name,
     } = &mut page;
-    let root = save.as_ref().map_or_else(
-        || std::path::PathBuf::from(saves::ROOT),
-        |s| s.root().into(),
-    );
+    let root = save
+        .as_ref()
+        .map_or_else(pbd_app::paths::saves_dir, |s| s.root().into());
     let seed = pbd_app::planet::terrain_config().seed;
     // Enter in the name field is the NEW WORLD button pressed.
     let submitted = std::mem::take(&mut name.submit);
@@ -1842,10 +1841,9 @@ pub fn paint(
         if *screen == Screen::Saves {
             // Read the directory on the way IN, however the screen was
             // opened, so the list is always what is on disk right now.
-            let root = save.as_ref().map_or_else(
-                || std::path::PathBuf::from(saves::ROOT),
-                |s| s.root().into(),
-            );
+            let root = save
+                .as_ref()
+                .map_or_else(pbd_app::paths::saves_dir, |s| s.root().into());
             index.slots = saves::list(&root);
             index.asking = None;
             index.trouble = None;

@@ -112,16 +112,54 @@ pub fn river_channel(cfg: &TerrainConfig, direction: Vec3) -> f32 {
 ///
 /// Bit [`CLEARED_BIT`] is set in a town's footprint (`cities-in-the-world`
 /// decision 3): the foliage pass grows no tree there.
+///
+/// Bit [`FLOODED_BIT`] is set where the top is under the high tide's sheet
+/// ([`high_water_m`], `flora-v2` 12.11): nothing grows there.
 pub fn surface_code(direction: Vec3, height: f32) -> u32 {
     let d = direction.normalize_or(Vec3::Y);
     let biome = planet_gen::biome_at(terrain_config(), d, height);
     let cleared = pbd_core::settlement::ground::cleared(terrain_config(), d);
-    material_index(d, height, biome) | (biome as u32) << 8 | u32::from(cleared) << CLEARED_BIT
+    material_index(d, height, biome)
+        | (biome as u32) << 8
+        | u32::from(cleared) << CLEARED_BIT
+        | u32::from(height < high_water_m()) << FLOODED_BIT
 }
 
 /// The bit of a record's material word that says no tree grows on it.
 /// `planet_visibility.wgsl`'s foliage pass reads it.
 pub const CLEARED_BIT: u32 = 24;
+
+/// The bit of a record's material word that says water stands on the cell
+/// at some tide, so nothing grows there (`flora-v2` 12.11).
+pub const FLOODED_BIT: u32 = pbd_core::flora::FLOODED_BIT;
+
+/// How far over the sea level the drawn sea stands at its highest tide, as
+/// `f32` bits; `u32::MAX` until the water settings are loaded, when the
+/// shipped settings stand in. Set once at launch ([`set_high_water`]).
+static HIGH_WATER: AtomicU32 = AtomicU32::new(u32::MAX);
+
+/// How far over the sea level the drawn sea stands at its highest tide, m:
+/// the tide's highest less the depth the sheet is drawn under the sea's
+/// layer top (`flora-v2` 12.11).
+pub fn high_water_over_sea(water: &crate::config::WaterSettings) -> f32 {
+    pbd_core::sea::tide_high_m(water.tide_range_m) - water.depth_offset_m
+}
+
+/// Take the high-water line from the loaded water settings, before any
+/// record is built.
+pub fn set_high_water(water: &crate::config::WaterSettings) {
+    HIGH_WATER.store(high_water_over_sea(water).to_bits(), Ordering::Release);
+}
+
+/// The high-water line, metres over the radius: a top under it has water
+/// standing on it for part of every day, and grows nothing.
+pub fn high_water_m() -> f32 {
+    let over = match HIGH_WATER.load(Ordering::Acquire) {
+        u32::MAX => high_water_over_sea(&crate::config::WaterSettings::default()),
+        bits => f32::from_bits(bits),
+    };
+    terrain_config().sea_level_m + over
+}
 
 /// The record's code for a top with water standing on it, already
 /// [`Material::drowned`] (`flora-v2` 12.10): sand is the seabed's (0), as

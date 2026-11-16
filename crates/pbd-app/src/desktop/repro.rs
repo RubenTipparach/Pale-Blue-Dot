@@ -210,6 +210,58 @@ pub fn scripted_press(
     }
 }
 
+/// MEASUREMENT (`loading-screen` 5.3c): `PBD_KEY_SCRIPT=<frame>:<key>,...`
+/// presses each key (Bevy's name, `KeyM`, `Escape`) on that capture frame
+/// and lets it go two frames later, through the keyboard's own messages, so
+/// a real-time run can open the pack, the map and the menu after `READY` and
+/// its log show whether doing so compiles a pipeline late. Nothing reads it
+/// in the game.
+pub fn scripted_keys(
+    state: Res<super::CaptureState>,
+    windows: Query<Entity, With<bevy::window::PrimaryWindow>>,
+    mut keys: MessageWriter<KeyboardInput>,
+    script: Local<std::sync::OnceLock<Vec<(u32, KeyCode)>>>,
+) {
+    let script = script.get_or_init(|| {
+        std::env::var("PBD_KEY_SCRIPT")
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|step| {
+                let (frame, key) = step.trim().split_once(':')?;
+                let code = match key.trim() {
+                    "Escape" => KeyCode::Escape,
+                    name => pbd_app::controls::key_named(name)?,
+                };
+                Some((frame.trim().parse().ok()?, code))
+            })
+            .collect()
+    });
+    let window = windows.iter().next().unwrap_or(Entity::PLACEHOLDER);
+    for &(frame, key) in script {
+        let down = state.frame == frame;
+        if !down && state.frame != frame + 2 {
+            continue;
+        }
+        if down {
+            info!("PBD_KEY_SCRIPT: {key:?} at frame {frame}");
+        }
+        keys.write(KeyboardInput {
+            key_code: key,
+            logical_key: bevy::input::keyboard::Key::Unidentified(
+                bevy::input::keyboard::NativeKey::Unidentified,
+            ),
+            state: if down {
+                ButtonState::Pressed
+            } else {
+                ButtonState::Released
+            },
+            text: None,
+            repeat: false,
+            window,
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

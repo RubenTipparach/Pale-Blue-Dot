@@ -2840,3 +2840,62 @@ mod landing_replay {
         }
     }
 }
+
+/// `flora-v2` 12.11: the owner's sea shore (`18.86 27.54`, "is that tree in
+/// your screenshot in the river?"). No record under the high-water line, on
+/// the column tier or beyond it, stands a tree; the same words without the
+/// bit, which is what the records were before, stood beach trees in the sea
+/// and the tide.
+#[cfg(test)]
+mod flooded_ground {
+    use super::*;
+
+    #[test]
+    fn no_tree_stands_where_the_sea_or_the_tide_covers_the_cell() {
+        let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: 18.86_f32.to_radians(),
+            lon: 27.54_f32.to_radians(),
+        });
+        let cfg = crate::planet::terrain_config();
+        let line = crate::planet::terrain::high_water_m();
+        let flooded = 1 << crate::planet::terrain::FLOODED_BIT;
+        let cells = Lattice::default().cells_in_band(FINEST_LEVEL, d, 0.0, 80.0 / PLANET_RADIUS);
+        let (mut under, mut stood_before) = (0, 0);
+        for local in &cells {
+            let height = surface_height(local.cell.direction);
+            let far = surface_code(local.cell.direction, height);
+            // On the tier: the record reconciled from the generated column.
+            let column = pbd_core::column::generate_solid(cfg, local.cell.direction);
+            let mut finest = vec![<crate::planet::GpuCell as bytemuck::Zeroable>::zeroed()];
+            finest[0].metadata[1] = far;
+            crate::planet::column::reconcile_surface(&mut finest, &[], 0, &column);
+            let near = finest[0].metadata[1];
+            let top = column
+                .surface()
+                .map(|t| pbd_core::column::layer_altitude(t) + 1.0);
+            let id = tree_id(local);
+            for (word, top_m) in [(far, Some(height)), (near, top)] {
+                let wet = top_m.is_some_and(|t| t < line);
+                assert_eq!(
+                    word & flooded != 0,
+                    wet,
+                    "the bit at {top_m:?} against {line}"
+                );
+                if wet {
+                    under += 1;
+                    assert!(
+                        !pbd_core::flora::grows_tree(&cfg.trees, id, word),
+                        "a tree under the high water at {top_m:?}"
+                    );
+                    stood_before +=
+                        usize::from(pbd_core::flora::grows_tree(&cfg.trees, id, word & !flooded));
+                }
+            }
+        }
+        assert!(under > 100, "{under} records under the line");
+        assert!(
+            stood_before > 0,
+            "the spot stood no tree in the water before"
+        );
+    }
+}

@@ -50,6 +50,10 @@ pub struct VehicleRecord {
     /// cog, so every other craft's record is as it was.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub yard: Option<f64>,
+    /// A boat the player made and launched (`small-boats` design 4). Written
+    /// only for one, so every other craft's record is as it was.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub made: bool,
 }
 
 /// Every craft in a world, as the save file holds them.
@@ -92,6 +96,7 @@ impl Craft {
             sheet,
             berth: self.berth,
             yard,
+            made: self.made,
         }
     }
 
@@ -143,6 +148,7 @@ impl Craft {
         craft.body.velocity = DVec3::from(record.velocity);
         craft.body.angular_velocity = DVec3::from(record.angular_velocity);
         craft.berth = record.berth;
+        craft.made = record.made;
         craft.mooring = record.mooring.map(|(at, length, anchored)| Mooring {
             at: DVec3::from(at),
             length,
@@ -206,6 +212,34 @@ mod tests {
         assert_eq!(back.bilge_kg, 12.5);
         assert_eq!(back.mooring, craft.mooring);
         assert!(!back.occupied);
+    }
+
+    /// A made boat keeps its mark through a save (`small-boats` 1.2), and a
+    /// craft that is not made writes no `made` at all, so every record from
+    /// before reads and writes as it did.
+    #[test]
+    fn a_made_boat_is_marked_and_no_other_record_changes() {
+        let specs = Arc::new(VehicleSpecs::default());
+        let hulls = Hulls::new(&specs);
+        let mut raft = Craft::new(
+            Kind::Raft,
+            7,
+            specs.clone(),
+            hulls.clone(),
+            DVec3::new(0.0, 4799.8, 0.0),
+            DQuat::IDENTITY,
+        );
+        raft.made = true;
+        let text = ron::to_string(&raft.record()).unwrap();
+        assert!(text.contains("made:true"), "{text}");
+        let back = Craft::from_record(&ron::from_str(&text).unwrap(), specs.clone(), hulls.clone())
+            .unwrap();
+        assert!(back.made && back.kind == Kind::Raft);
+        let loon = Craft::new(Kind::Loon, 1, specs, hulls, DVec3::Y, DQuat::IDENTITY);
+        let text = ron::to_string(&loon.record()).unwrap();
+        assert!(!text.contains("made"), "{text}");
+        let old: VehicleRecord = ron::from_str(&text).unwrap();
+        assert!(!old.made);
     }
 
     #[test]

@@ -63,6 +63,7 @@ struct Params {
     night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
     felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty
     picked: array<vec4<u32>,8>,   // and the trees picked bare
+    clutter_taken: array<vec4<u32>,16>, // `gather-by-hand`: cells with a piece taken, two a lane (id, a sink byte a piece), zero empty
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(3) var atlas: texture_2d<f32>;

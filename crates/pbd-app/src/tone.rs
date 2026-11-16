@@ -113,7 +113,7 @@ struct Preferences {
 }
 
 fn preferences_path() -> std::path::PathBuf {
-    std::path::Path::new(crate::saves::ROOT).join("preferences.ron")
+    crate::paths::saves_dir().join("preferences.ron")
 }
 
 impl Graphics {

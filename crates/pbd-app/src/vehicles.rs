@@ -11,12 +11,14 @@
 mod chase;
 mod draw;
 pub(crate) mod harbour;
+pub mod hold;
 mod hud;
+pub mod launch;
 mod model;
 pub(crate) mod place;
-mod view;
+pub(crate) mod view;
 
-pub use view::VehicleCamera;
+pub use view::{VehicleCamera, VehicleView};
 
 use crate::atmosphere::Air;
 use crate::config::WeatherSettings;
@@ -193,6 +195,14 @@ impl Plugin for VehiclePlugin {
                     .before(bevy::transform::TransformSystems::Propagate)
                     .run_if(crate::world_open),
             )
+            .init_resource::<launch::TakingUp>()
+            .init_resource::<crate::controls::DebugOverlay>()
+            .add_systems(
+                Update,
+                launch::launch_and_take_up
+                    .run_if(crate::world_open)
+                    .before(save_vehicles),
+            )
             .add_systems(Update, (hud::show, save_vehicles, view::look))
             .add_systems(
                 PostUpdate,
@@ -247,12 +257,20 @@ fn step_vehicles(
         let sample = world.air.as_deref().map(|air| air.now.sample(direction));
         let over_land = crate::planet::terrain::surface_height(direction) >= 0.0;
         let global = world.frame.center + craft.body.position + world.physics.0.origin;
+        // A river or a lake over the sea's level floats the craft on its own
+        // surface (`small-boats` design 2b): no tide, its waves shoaled
+        // to nothing, and the surface's slope as the current.
+        let fresh = contact.and_then(|c| fresh_water(c, craft.body.position));
         let env = Surroundings {
             sea: &sea.table,
             sea_state: sea.state_at(world.air.as_deref(), direction),
-            tide: sea.tide,
-            sea_radius: sea.radius as f64,
-            depth: sea.depth_at(direction),
+            tide: if fresh.is_some() {
+                Vec4::ZERO
+            } else {
+                sea.tide
+            },
+            sea_radius: fresh.map_or(sea.radius as f64, |f| f.surface),
+            depth: fresh.map_or(sea.depth_at(direction), |f| f.depth),
             air: AirHere {
                 wind: sample.map_or(Vec3::ZERO, |s| s.wind),
                 upper: sample.map_or(Vec3::ZERO, |s| s.upper),
@@ -261,7 +279,10 @@ fn step_vehicles(
             },
             gusts: &world.weather.gusts,
             gravity: world.scene.gravity_at(global).acceleration(),
-            current: sample.map_or(DVec3::ZERO, |s| s.current.as_dvec3()),
+            current: fresh.map_or_else(
+                || sample.map_or(DVec3::ZERO, |s| s.current.as_dvec3()),
+                |f| f.current,
+            ),
             ground: &ground,
             seconds: clock.0,
         };
@@ -279,6 +300,30 @@ fn step_vehicles(
             let entry = timing.1.entry(vehicle.craft.kind.name()).or_default();
             entry.0 += 1;
             entry.1 += started.elapsed().as_secs_f64();
+        }
+        // MEASUREMENT (`small-boats` 2b): the water the craft aboard floats
+        // on, about once a second, with `PBD_BOAT_TRACE` set.
+        if aboard.0 == Some(entity)
+            && std::env::var_os("PBD_BOAT_TRACE").is_some()
+            && ((clock.0 * 60.0) as u64).is_multiple_of(60)
+        {
+            let craft = &vehicle.craft;
+            let planet = f64::from(crate::planet::PLANET_RADIUS);
+            let at = craft.reference_position();
+            let freeboard = match &craft.telemetry {
+                pbd_core::vehicle::Telemetry::Loon(t) => t.freeboard,
+                _ => f64::NAN,
+            };
+            info!(
+                "BOAT_TRACE {} ref {:+.3} m, water {:+.3} m ({}), ground {:+.3} m, vy {:+.3}, freeboard {:+.3}",
+                craft.kind.name(),
+                at.length() - planet,
+                env.sea_radius - planet,
+                if fresh.is_some() { "fresh" } else { "sea" },
+                ground(craft.body.position) - planet,
+                craft.body.velocity.dot(at.normalize()),
+                freeboard
+            );
         }
         // The player aboard is carried: the walker stands at the craft's exit,
         // so a save taken aboard puts them on foot beside it on reload.
@@ -371,6 +416,73 @@ pub fn ground_under(contact: Option<&PlanetContact>, point: DVec3) -> f64 {
     }
 }
 
+/// Water standing over the sea's level where a craft is: a river or a lake
+/// in the column tier (`small-boats` design 2b).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FreshWater {
+    /// The surface's radius, m.
+    pub surface: f64,
+    /// The depth the sea's waves are shoaled to: a river's ripples, not the
+    /// open sea's swell.
+    pub depth: f32,
+    /// The water's flow along the surface, m/s: downhill, as the drawn
+    /// water streams (`water_flow`'s pan).
+    pub current: DVec3,
+}
+
+/// How deep the waves on fresh water are allowed to think it is, m.
+const FRESH_WAVE_DEPTH_M: f32 = 0.15;
+/// A river's surface current per unit slope, and its cap, m/s: the water
+/// mesher's pan, 1.6 m/s at a slope of 0.12.
+const FRESH_FLOW_PER_SLOPE: f64 = 1.6 / 0.12;
+const FRESH_FLOW_MAX: f64 = 2.0;
+/// How far round a craft the surface's slope is read, m.
+const FRESH_PROBE_M: f64 = 1.5;
+
+/// The fresh water at a body-local point, if a column holds water there whose
+/// top stands more than a quarter metre over the sea's own cells' top; `None` over the
+/// sea, on land, or off the column tier. The point is probed where it is and
+/// half a metre under, so a hull riding a little high still finds its water.
+pub fn fresh_water(contact: &PlanetContact, point: DVec3) -> Option<FreshWater> {
+    let up = point.normalize_or(DVec3::Y);
+    let top = |p: DVec3| -> Option<f32> {
+        [p, p - up * 0.5, p - up * 1.0]
+            .into_iter()
+            .find_map(|q| contact.column_water(q.as_vec3()).flatten())
+    };
+    let here = top(point)?;
+    // The sea's own cells fill every layer under the sea layer, so their
+    // top is that layer's bottom; the sea is DRAWN `depth_offset_m` lower
+    // (`Sea::radius`), and craft at sea float on the drawn sheet as before.
+    // Only water standing over the sea's top is a river or a lake.
+    let sea_top = pbd_core::column::layer_altitude(crate::planet::column::sea_layer());
+    if here <= sea_top + 0.25 {
+        return None;
+    }
+    let surface = f64::from(crate::planet::PLANET_RADIUS + here);
+    // The slope, by the surface either side along two tangents; a side
+    // with no water there reads as level.
+    let east = up.any_orthonormal_vector();
+    let north = up.cross(east);
+    let mut slope = DVec3::ZERO;
+    for axis in [east, north] {
+        let at = |sign: f64| {
+            let q = point + axis * (sign * FRESH_PROBE_M);
+            top(q).unwrap_or(here)
+        };
+        slope += axis * f64::from(at(1.0) - at(-1.0)) / (2.0 * FRESH_PROBE_M);
+    }
+    let mut current = -slope * FRESH_FLOW_PER_SLOPE;
+    if current.length() > FRESH_FLOW_MAX {
+        current = current.normalize() * FRESH_FLOW_MAX;
+    }
+    Some(FreshWater {
+        surface,
+        depth: FRESH_WAVE_DEPTH_M,
+        current,
+    })
+}
+
 /// Everything round a craft the step reads.
 #[derive(bevy::ecs::system::SystemParam)]
 struct StepWorld<'w> {
@@ -415,7 +527,7 @@ fn read_controls(
             input.sheet = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.crew = axis(KeyCode::KeyE, KeyCode::KeyQ);
         }
-        Kind::Loon | Kind::Rowboat => {
+        Kind::Loon | Kind::Rowboat | Kind::Tube | Kind::Raft => {
             input.forward = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
             input.rudder = axis(KeyCode::KeyQ, KeyCode::KeyE);
@@ -593,6 +705,29 @@ fn scripted_board(world: &mut World) {
     if found.is_none() && matches!(kind, Kind::Cog | Kind::Rowboat) {
         return;
     }
+    // A made boat a fresh world has none of: launched where its Loon lies,
+    // as a player would launch it (`small-boats`).
+    let found = found.or_else(|| {
+        if !matches!(kind, Kind::Tube | Kind::Raft) {
+            return None;
+        }
+        let loon = world
+            .query::<&Vehicle>()
+            .iter(world)
+            .find(|v| v.craft.kind == Kind::Loon)
+            .map(|v| v.craft.body.position)?;
+        let sea = world.resource::<Sea>();
+        // Clear of the Loon, in water deep enough to float free.
+        let on = place::open_water_near(sea, loon.normalize().as_vec3(), 8.0, 1.5)?;
+        let toward = (on - loon).normalize_or(on.normalize().any_orthonormal_vector());
+        let tide = world.resource::<Sea>().tide;
+        let mut craft = launch::made_craft(&mut world.resource_mut::<Fleet>(), kind, on, toward);
+        place::on_the_tide(&mut craft, tide);
+        let entity = place::spawn_craft(world, craft);
+        launch::write_fleet(world);
+        info!("--aboard: launched a {} for the capture", kind.name());
+        Some(entity)
+    });
     world.resource_mut::<VehicleScript>().board = None;
     let Some(entity) = found else {
         warn!("--aboard: this world has no {}", kind.name());
@@ -685,7 +820,12 @@ fn make_fast_or_cast_off(world: &mut World, entity: Entity) {
         world.get_resource::<PlanetContact>(),
         direction * bow.length(),
     );
-    let sea = world.resource::<Sea>().radius as f64;
+    // The water it lies in: a river's own surface, else the sea's.
+    let sea_radius = world.resource::<Sea>().radius;
+    let sea = world
+        .get_resource::<PlanetContact>()
+        .and_then(|c| fresh_water(c, vehicle.craft.body.position))
+        .map_or(sea_radius as f64, |f| f.surface);
     let depth = sea - floor;
     if !(0.0..=ANCHOR_DEPTH_M).contains(&depth) {
         info!("too deep to anchor: {depth:.0} m");

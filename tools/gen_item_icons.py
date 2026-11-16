@@ -195,6 +195,52 @@ ICONS.update({
 })
 
 
+# Bait (`starter-missions` G1): a lump of wet shore earth with two worms
+# curling out of it, in the bucket's dark outline and the earth's browns.
+BAIT = {
+    "k": "#2a1a10", "e": "#6b4a2e", "E": "#8a6440", "w": "#4a3220",
+    "p": "#c8707a", "P": "#e8a0a4", "q": "#9a4a56",
+}
+
+ICONS.update({
+    "goods/bait": ([
+        "................", "................", "......kk........", ".....kPpk.......",
+        ".....kpqk...kk..", "......kpk..kPpk.", "......kpk..kpqk.", "...kkkkpkkkkpk..",
+        "..kEEeekpeEepkk.", ".kEeeewekeeekEk.", ".keeEeeweeEeeek.", ".kweeeeeeeweeek.",
+        ".keeweEeeeeewek.", "..kweeeeweeeek..", "...kkkkkkkkkk...", "................",
+    ], BAIT),
+})
+
+
+# The made boats (`small-boats` design 3): the inner tube M34's felted-wool
+# ring, sealed with pitch, in its felt browns with the dark seam; the raft five logs in the
+# log's browns with rope across; the rowboat a planked hull seen from above
+# with its thwart and two oars, in the fence's wood.
+BOATS = dict(FARM, **{"f": "#665133", "F": "#8a7048", "d": "#3a2d1c",
+                      "r": "#4a3b26", "R": "#a88a52"})
+
+ICONS.update({
+    "goods/inner-tube": ([
+        "................", "................", ".....kkkkkk.....", "...kkfFFFFfkk...",
+        "..kfFfdrdffFfk..", "..kFfkkkkkkfFk..", ".kfFk......kFfk.", ".kFdk......kdFk.",
+        ".kFrk......krFk.", ".kfFk......kFfk.", "..kFfkkkkkkfFk..", "..kfFfdrdffFfk..",
+        "...kkfdddddkk...", ".....kkkkkk.....", "................", "................",
+    ], BOATS),
+    "goods/raft": ([
+        "................", "................", ".kkkkkkkkkkkkkk.", ".kWWWWWWWWWWWWk.",
+        ".kwwwwwwwwwwwwk.", ".kkRkkkkkkkkRkk.", ".kWRWWWWWWWWRWk.", ".kwRwwwwwwwwRwk.",
+        ".kkRkkkkkkkkRkk.", ".kWRWWWWWWWWRWk.", ".kwRwwwwwwwwRwk.", ".kkRkkkkkkkkRkk.",
+        ".kWWWWWWWWWWWWk.", ".kwwwwwwwwwwwwk.", ".kkkkkkkkkkkkkk.", "................",
+    ], BOATS),
+    "goods/rowboat": ([
+        "................", ".......kk.......", "......kWWk......", ".....kWwwWk.....",
+        "....kWwddwWk....", "....kWddddWk....", "k...kWddddWk...k", ".kkkkkkkkkkkkkk.",
+        "....kWddddWk....", "....kWddddWk....", "k...kWddddWk...k", ".kk.kWddddWk.kk.",
+        "....kWwddwWk....", "....kkWwwWkk....", "......kkkk......", "................",
+    ], BOATS),
+})
+
+
 def rgba(hex_colour):
     h = hex_colour.lstrip("#")
     return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"

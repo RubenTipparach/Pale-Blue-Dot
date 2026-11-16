@@ -385,6 +385,7 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         night_lights: [Vec4::ZERO; 2 * crate::night_lights::MAX_FAR_LIGHTS],
         felled: [UVec4::ZERO; crate::trees_taken::FELLED / 4],
         picked: [UVec4::ZERO; crate::trees_taken::PICKED / 4],
+        clutter_taken: [UVec4::ZERO; crate::clutter::TAKEN_CELLS / 2],
     }
 }
 

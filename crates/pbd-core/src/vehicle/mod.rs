@@ -12,6 +12,7 @@
 pub mod body;
 pub mod cog;
 pub mod foil;
+pub mod hold;
 pub mod hull;
 mod loon;
 pub mod record;
@@ -50,10 +51,45 @@ pub enum Kind {
     /// The harbour's rowboat: the Loon's stroke on the towns' wider,
     /// deeper hull.
     Rowboat,
+    /// The inner tube (`small-boats`): a ring the player sits in and
+    /// paddles by hand, on the Loon's stroke.
+    Tube,
+    /// The raft (`small-boats`): logs lashed side by side, paddled, with a
+    /// hold.
+    Raft,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 4] = [Kind::Tern, Kind::Loon, Kind::Cog, Kind::Rowboat];
+    pub const ALL: [Kind; 6] = [
+        Kind::Tern,
+        Kind::Loon,
+        Kind::Cog,
+        Kind::Rowboat,
+        Kind::Tube,
+        Kind::Raft,
+    ];
+
+    /// The boats paddled on the Loon's stroke, whose paddler can also fish
+    /// (`small-boats` design 6).
+    pub fn paddled(self) -> bool {
+        matches!(self, Kind::Loon | Kind::Rowboat | Kind::Tube | Kind::Raft)
+    }
+
+    /// The good a made boat is carried as, by its code (`small-boats`
+    /// design 3); none for a kind that is not made.
+    pub fn good_code(self) -> Option<&'static str> {
+        match self {
+            Kind::Tube => Some("inner-tube"),
+            Kind::Raft => Some("raft"),
+            Kind::Rowboat => Some("rowboat"),
+            _ => None,
+        }
+    }
+
+    /// The kind a boat good launches.
+    pub fn of_good_code(code: &str) -> Option<Kind> {
+        Kind::ALL.into_iter().find(|k| k.good_code() == Some(code))
+    }
 
     pub fn name(self) -> &'static str {
         match self {
@@ -61,6 +97,8 @@ impl Kind {
             Kind::Loon => "Loon",
             Kind::Rowboat => "Rowboat",
             Kind::Cog => "Cog",
+            Kind::Tube => "Inner tube",
+            Kind::Raft => "Raft",
         }
     }
 
@@ -71,6 +109,8 @@ impl Kind {
             Kind::Loon => "loon",
             Kind::Rowboat => "rowboat",
             Kind::Cog => "cog",
+            Kind::Tube => "tube",
+            Kind::Raft => "raft",
         }
     }
 
@@ -183,6 +223,8 @@ pub struct Hulls {
     pub loon: Arc<Hull>,
     pub cog: Arc<Hull>,
     pub rowboat: Arc<Hull>,
+    pub tube: Arc<Hull>,
+    pub raft: Arc<Hull>,
 }
 
 impl Hulls {
@@ -191,6 +233,8 @@ impl Hulls {
             tern: Arc::new(Hull::new(specs.tern.hull)),
             loon: Arc::new(Hull::new(specs.loon.hull)),
             rowboat: Arc::new(Hull::new(specs.rowboat.hull)),
+            tube: Arc::new(Hull::new(specs.tube.hull)),
+            raft: Arc::new(Hull::new(specs.raft.hull)),
             cog: Arc::new(Hull::new(specs.cog.hull)),
         }
     }
@@ -213,6 +257,9 @@ pub struct Craft {
     /// harbour's site and its number there, so the harbour never makes it
     /// twice. `None` for every other craft.
     pub berth: Option<(u32, u32)>,
+    /// Made by the player and launched from a boat good (`small-boats`
+    /// design 4): only such a craft is taken up again.
+    pub made: bool,
     pub state: CraftState,
     pub telemetry: Telemetry,
     specs: Arc<VehicleSpecs>,
@@ -400,7 +447,9 @@ impl Craft {
     ) -> Self {
         let state = match kind {
             Kind::Tern => CraftState::Tern(TernState::default()),
-            Kind::Loon | Kind::Rowboat => CraftState::Loon(LoonState::default()),
+            Kind::Loon | Kind::Rowboat | Kind::Tube | Kind::Raft => {
+                CraftState::Loon(LoonState::default())
+            }
             Kind::Cog => CraftState::Cog(CogState::default()),
         };
         let mut craft = Self {
@@ -412,6 +461,7 @@ impl Craft {
             bilge_kg: 0.0,
             mooring: None,
             berth: None,
+            made: false,
             state,
             telemetry: Telemetry::None,
             specs,
@@ -451,6 +501,8 @@ impl Craft {
     pub fn loon_spec(&self) -> &LoonSpec {
         match self.kind {
             Kind::Rowboat => &self.specs.rowboat,
+            Kind::Tube => &self.specs.tube,
+            Kind::Raft => &self.specs.raft,
             _ => &self.specs.loon,
         }
     }
@@ -460,6 +512,8 @@ impl Craft {
             Kind::Tern => Some(&self.hulls.tern),
             Kind::Loon => Some(&self.hulls.loon),
             Kind::Rowboat => Some(&self.hulls.rowboat),
+            Kind::Tube => Some(&self.hulls.tube),
+            Kind::Raft => Some(&self.hulls.raft),
             Kind::Cog => Some(&self.hulls.cog),
         }
     }
@@ -507,7 +561,7 @@ impl Craft {
                 }
                 mass_model(&parts, &s.inertia_box)
             }
-            Kind::Loon | Kind::Rowboat => {
+            Kind::Loon | Kind::Rowboat | Kind::Tube | Kind::Raft => {
                 let s = self.loon_spec();
                 let mut parts = s.parts.to_vec();
                 parts.push(Part {
@@ -562,7 +616,7 @@ impl Craft {
     pub fn eye(&self) -> DVec3 {
         let seat = match self.kind {
             Kind::Tern => self.specs.tern.seat,
-            Kind::Loon | Kind::Rowboat => self.loon_spec().seat,
+            Kind::Loon | Kind::Rowboat | Kind::Tube | Kind::Raft => self.loon_spec().seat,
             Kind::Cog => self.specs.cog.seat,
         };
         let mut eye = seat.eye;
@@ -581,7 +635,7 @@ impl Craft {
     pub fn seat(&self) -> spec::SeatSpec {
         match self.kind {
             Kind::Tern => self.specs.tern.seat,
-            Kind::Loon | Kind::Rowboat => self.loon_spec().seat,
+            Kind::Loon | Kind::Rowboat | Kind::Tube | Kind::Raft => self.loon_spec().seat,
             Kind::Cog => self.specs.cog.seat,
         }
     }
@@ -590,7 +644,9 @@ impl Craft {
     pub fn bow(&self) -> DVec3 {
         match self.kind {
             Kind::Tern => self.reference_point(self.specs.tern.bow),
-            Kind::Loon | Kind::Rowboat => self.reference_point(self.loon_spec().bow),
+            Kind::Loon | Kind::Rowboat | Kind::Tube | Kind::Raft => {
+                self.reference_point(self.loon_spec().bow)
+            }
             Kind::Cog => self.reference_point(self.specs.cog.bow),
         }
     }
@@ -622,7 +678,9 @@ impl Craft {
             self.body.push_centre(env.gravity * self.body.mass);
             match self.kind {
                 Kind::Tern => tern::forces(self, &input, &cx),
-                Kind::Loon | Kind::Rowboat => loon::forces(self, &input, &cx),
+                Kind::Loon | Kind::Rowboat | Kind::Tube | Kind::Raft => {
+                    loon::forces(self, &input, &cx)
+                }
                 Kind::Cog => cog::forces(self, &input, &cx),
             }
             self.moor();

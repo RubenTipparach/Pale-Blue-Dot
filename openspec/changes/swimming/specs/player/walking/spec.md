@@ -32,6 +32,13 @@ take a standing jump.
 - **THEN** they rise continuously toward a terminal speed
 - **AND** releasing it returns them to sinking
 
+#### Scenario: Swimming up out of water two layers deep
+- **WHEN** a walker on the bed of water up to two layers deep, eyes under,
+  holds the jump control
+- **THEN** they rise until their eyes are over the surface
+- **AND** only a jump taken from the ground in that water rises with land
+  gravity and no drag
+
 #### Scenario: Jumping from the seabed
 - **WHEN** a walker standing on the seabed with their body in water jumps
 - **THEN** the jump is weaker than the same jump on dry land

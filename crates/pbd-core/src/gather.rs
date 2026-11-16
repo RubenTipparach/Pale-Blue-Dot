@@ -22,6 +22,12 @@ pub struct GatherSettings {
     pub stone_one_in: u32,
     /// The most logs a tree gives an axe, counting the branch a hand took.
     pub axe_logs: u16,
+    /// Wet ground at the shore gives bait in one cell in this many
+    /// (`starter-missions` G1).
+    pub bait_one_in: u32,
+    /// Wet ground: a dug layer whose altitude, m from the sea's level, lies
+    /// in this band, lowest first.
+    pub bait_band_m: (f32, f32),
 }
 
 impl Default for GatherSettings {
@@ -30,6 +36,8 @@ impl Default for GatherSettings {
             fibre_one_in: 3,
             stone_one_in: 3,
             axe_logs: 4,
+            bait_one_in: 3,
+            bait_band_m: (-2.0, 1.0),
         }
     }
 }
@@ -54,7 +62,52 @@ impl GatherSettings {
                 self.axe_logs
             ));
         }
+        if !(1..=64).contains(&self.bait_one_in) {
+            return Err(format!(
+                "gather.bait_one_in must be 1 to 64, got {}",
+                self.bait_one_in
+            ));
+        }
+        let (low, high) = self.bait_band_m;
+        if !(low.is_finite() && high.is_finite() && low < high) {
+            return Err(format!(
+                "gather.bait_band_m must be two finite metres, lowest first, got {:?}",
+                self.bait_band_m
+            ));
+        }
         Ok(())
+    }
+
+    /// Bait out of `material` dug from `cell`/`layer`, whose altitude is
+    /// `altitude_m` from the sea's level: earth, grass or sand in the wet
+    /// band at the shore, one cell in a few, never from a block a player
+    /// `placed`. A find beside [`Self::find`], from its own hash, so the
+    /// fibre and stone a cell gives do not change.
+    pub fn bait(
+        &self,
+        material: Material,
+        cell: u32,
+        layer: u16,
+        placed: bool,
+        altitude_m: f32,
+    ) -> Option<Good> {
+        let (low, high) = self.bait_band_m;
+        let wet = altitude_m.is_finite() && (low..=high).contains(&altitude_m);
+        let earth = matches!(
+            material,
+            Material::Grass
+                | Material::DryGrass
+                | Material::JungleGrass
+                | Material::Dirt
+                | Material::Soil
+                | Material::Sand
+        );
+        if placed || !wet || !earth {
+            return None;
+        }
+        let h = mix((u64::from(cell) << 16 | u64::from(layer)) ^ 0xba17_e000_u64);
+        h.is_multiple_of(u64::from(self.bait_one_in))
+            .then_some(Good::BAIT)
     }
 
     /// What digging `material` out of `cell`/`layer` turns up besides the
@@ -152,6 +205,29 @@ mod tests {
             assert_eq!(g.find(Material::Grass, c, 7, true), None, "placed");
             assert_eq!(g.find(Material::Rock, c, 7, false), None);
             assert_eq!(g.find(Material::Tilled, c, 7, false), None);
+        }
+    }
+
+    /// Bait turns up in a third of wet shore cells, the same cells every
+    /// time, and never above or below the band, from rock or a placed block
+    /// (`starter-missions` G1).
+    #[test]
+    fn wet_ground_at_the_shore_gives_bait_in_a_share_of_cells() {
+        let g = GatherSettings::default();
+        let share = (0..30_000u32)
+            .filter(|&c| g.bait(Material::Sand, c, 145, false, 0.0) == Some(Good::BAIT))
+            .count();
+        assert!((9_000..11_000).contains(&share), "{share}");
+        for c in 0..2_000 {
+            assert_eq!(
+                g.bait(Material::Dirt, c, 144, false, -1.0),
+                g.bait(Material::Dirt, c, 144, false, -1.0)
+            );
+            assert_eq!(g.bait(Material::Dirt, c, 150, false, 5.0), None, "dry");
+            assert_eq!(g.bait(Material::Dirt, c, 140, false, -6.0), None, "deep");
+            assert_eq!(g.bait(Material::Grass, c, 145, true, 0.0), None, "placed");
+            assert_eq!(g.bait(Material::Rock, c, 145, false, 0.0), None, "rock");
+            assert_eq!(g.bait(Material::Dirt, c, 145, false, f32::NAN), None);
         }
     }
 

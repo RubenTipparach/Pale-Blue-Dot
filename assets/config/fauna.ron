@@ -68,6 +68,9 @@
         cover_bite: 0.35,
         rain_bite: 0.7,
         rain_full_mm_h: 5.0,
+        // A cast with bait in the pack: the bite factor times 1 + this
+        // (`starter-missions` G1).
+        bait_bite: 0.5,
     ),
     bodies: {
         "home": [

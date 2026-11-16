@@ -232,6 +232,49 @@ fn pick(
     note.say(wall_s, format!("Picked wild {}: +{seeds} seed", row.name));
 }
 
+/// Take a piece of the ground clutter by hand (`gather-by-hand`): its goods
+/// into the hands and the cell's `clutter` record, in one line.
+#[allow(clippy::too_many_arguments)]
+pub fn gather(
+    save: &mut WorldSave,
+    slots: &mut super::slots::Hotbar,
+    key: u32,
+    kind: pbd_core::scatter::Kind,
+    day: f64,
+    note: &mut FarmNote,
+    wall_s: f32,
+    gained: &mut MessageWriter<Gained>,
+) -> bool {
+    use pbd_core::scatter::{CLUTTER_KIND, CLUTTER_SCHEMA};
+    let (code, count) = kind.gives();
+    let Some(good) = pbd_core::goods::Good::by_code(code) else {
+        return false;
+    };
+    let mut taken = pbd_app::clutter::taken_at(save, key);
+    if !taken.take(kind, day) {
+        return false;
+    }
+    let mut moved = slots.0.clone();
+    if moved.give(Item::Good(good), count) > 0 {
+        note.say(wall_s, "No room in the pack");
+        return false;
+    }
+    let record = StoredRecord::of(CLUTTER_KIND, u64::from(key), CLUTTER_SCHEMA, &taken);
+    if !save.store_with_hands(record, CLUTTER_SCHEMA, &moved) {
+        error!("gather BLOCKED: the save did not accept it");
+        return false;
+    }
+    slots.0 = moved;
+    gained.write(Gained {
+        item: Item::Good(good),
+        count,
+        how: How::Gathered,
+    });
+    note.say(wall_s, format!("+{count} {}", good.name()));
+    info!("gathered {kind:?} at cell {key}: +{count} {code}");
+    true
+}
+
 /// Whether a block may be placed into `cell`/`layer`: not into the air a
 /// growing crop stands in.
 pub fn crop_in_the_way(fine: &PlanetFine, save: &WorldSave, cell: u32, layer: usize) -> bool {
@@ -421,6 +464,11 @@ pub enum FarmAct {
     },
     /// Pick a wild plant.
     Wild { cell: u32, crop: Crop },
+    /// Take a piece of the ground clutter (`gather-by-hand`).
+    Gather {
+        key: u32,
+        kind: pbd_core::scatter::Kind,
+    },
     /// Till the top with the shovel.
     Till {
         cell: u32,
@@ -439,6 +487,13 @@ impl FarmAct {
                 crop.row().name.to_lowercase(),
             ),
             FarmAct::Wild { crop, .. } => Offer::new(Act::PickWild, crop.row().name.to_lowercase()),
+            FarmAct::Gather { kind, .. } => {
+                let (code, _) = kind.gives();
+                Offer::new(
+                    Act::Gather,
+                    pbd_core::goods::Good::by_code(code).map_or(code, |g| g.name()),
+                )
+            }
             FarmAct::Till { material, .. } => Offer::new(
                 Act::Till,
                 match material {
@@ -453,9 +508,11 @@ impl FarmAct {
 }
 
 /// What F does on the farm with the eye on `aim`, a plant met by its shape
-/// `plant`, and `shovel` in hand: a station the ray meets first, then the
-/// plant (a crop, then a wild one) the ray meets before the ground, then a
-/// crop or wild plant on the cell the ray lands in, then tilling it.
+/// `plant`, a piece of ground clutter `clutter`, and `shovel` in hand: a
+/// station the ray meets first, then the plant (a crop, then a wild one) the
+/// ray meets before the ground, then the clutter it meets before the ground
+/// (`gather-by-hand`), then a crop or wild plant on the cell the ray lands
+/// in, then tilling it.
 #[allow(clippy::too_many_arguments)]
 pub fn farm_act(
     fine: &PlanetFine,
@@ -463,6 +520,7 @@ pub fn farm_act(
     farm: &FarmConfig,
     aim: Option<&pbd_core::aim::Target>,
     plant: Option<PlantHit>,
+    clutter: Option<pbd_app::clutter::ClutterHit>,
     shovel: bool,
     now_s: f64,
 ) -> Option<FarmAct> {
@@ -503,6 +561,22 @@ pub fn farm_act(
         return Some(FarmAct::Open { cell, layer, row });
     }
     if let Some(p) = plant
+        && clutter.is_none_or(|c| p.distance <= c.distance)
+        && let Some(act) = crop_on(p.cell, p.layer).or_else(|| wild_on(p.cell, p.layer))
+    {
+        return Some(act);
+    }
+    // A piece stands on the ground the ray goes on to meet: it is what the
+    // eye is on when it lies no further than a hand's breadth past it.
+    if let Some(c) = clutter
+        && on_ground.is_none_or(|(_, _, _, d)| c.distance <= d + 0.3)
+    {
+        return Some(FarmAct::Gather {
+            key: c.key,
+            kind: c.kind,
+        });
+    }
+    if let Some(p) = plant
         && let Some(act) = crop_on(p.cell, p.layer).or_else(|| wild_on(p.cell, p.layer))
     {
         return Some(act);
@@ -530,21 +604,27 @@ fn eye_ray(cameras: &Query<(&GlobalTransform, &Camera), With<Camera3d>>) -> Opti
 }
 
 /// Offer the farm's act to the interact key.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn offer(
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     aim: Res<Aim>,
     tools: Res<pbd_app::fish::ToolSlot>,
     farm: Res<FarmConfig>,
-    (fine, save, sun, time): (
+    (fine, save, sun, time, scatter): (
         Res<PlanetFine>,
         Res<WorldSave>,
         Res<pbd_app::sky::Sun>,
         Res<Time>,
+        Option<Res<pbd_app::config::ScatterSettings>>,
     ),
     mut interact: ResMut<Interact>,
-    mut last: Local<(pbd_app::interact::Recheck, Option<PlantHit>)>,
+    mut last: Local<(
+        pbd_app::interact::Recheck,
+        Option<PlantHit>,
+        Option<pbd_app::clutter::ClutterHit>,
+        u64,
+    )>,
 ) {
     if !walking.is_some_and(|w| w.active) {
         return;
@@ -552,9 +632,22 @@ pub fn offer(
     let Some((eye, look)) = eye_ray(&cameras) else {
         return;
     };
-    let (recheck, plant) = &mut *last;
-    if recheck.due(eye, look, fine.version, time.delta_secs()) {
+    let (recheck, plant, clutter, records) = &mut *last;
+    // A take changes what stands without moving the eye or the fine set.
+    let stored = save.records.len() as u64;
+    if recheck.due(eye, look, fine.version, time.delta_secs()) || *records != stored {
+        *records = stored;
         *plant = plant_on_ray(&fine, &save, &farm, eye, look);
+        *clutter = scatter.as_deref().and_then(|s| {
+            pbd_app::clutter::clutter_on_ray(
+                &fine,
+                &save,
+                &pbd_app::clutter::odds(s),
+                pbd_app::clutter::day_of(sun.clock.seconds),
+                eye,
+                look,
+            )
+        });
     }
     let shovel = tools.0.held() == Some(Tool::Shovel);
     if let Some(act) = farm_act(
@@ -563,6 +656,7 @@ pub fn offer(
         &farm,
         aim.target.as_ref(),
         *plant,
+        *clutter,
         shovel,
         sun.clock.seconds,
     ) {
@@ -582,9 +676,10 @@ pub fn use_key(
     mut station_at: ResMut<StationAt>,
     mut note: ResMut<FarmNote>,
     time: Res<Time>,
-    (cameras, interact): (
+    (cameras, interact, scatter): (
         Query<(&GlobalTransform, &Camera), With<Camera3d>>,
         Option<Res<Interact>>,
+        Option<Res<pbd_app::config::ScatterSettings>>,
     ),
     (mut gained, mut did): (MessageWriter<Gained>, MessageWriter<pbd_app::missions::Did>),
     (mut fine, mut contact, mut save, mut slots, mut drops, sun): (
@@ -617,6 +712,19 @@ pub fn use_key(
     let now_s = sun.clock.seconds;
     let plant =
         eye_ray(&cameras).and_then(|(eye, look)| plant_on_ray(&fine, &save, &farm, eye, look));
+    let day = pbd_app::clutter::day_of(now_s);
+    let clutter = eye_ray(&cameras)
+        .zip(scatter.as_deref())
+        .and_then(|((eye, look), s)| {
+            pbd_app::clutter::clutter_on_ray(
+                &fine,
+                &save,
+                &pbd_app::clutter::odds(s),
+                day,
+                eye,
+                look,
+            )
+        });
     let shovel = tools.0.held() == Some(Tool::Shovel);
     let act = farm_act(
         &fine,
@@ -624,6 +732,7 @@ pub fn use_key(
         &farm,
         aim.target.as_ref(),
         plant,
+        clutter,
         shovel,
         now_s,
     );
@@ -671,6 +780,19 @@ pub fn use_key(
                 cell,
                 crop,
                 now_s,
+                &mut note,
+                wall_s,
+                &mut gained,
+            );
+            return;
+        }
+        FarmAct::Gather { key, kind } => {
+            gather(
+                &mut save,
+                &mut slots,
+                key,
+                kind,
+                day,
                 &mut note,
                 wall_s,
                 &mut gained,
@@ -1303,6 +1425,68 @@ pub fn show(
 
 // ---------------------------------------------------------------- capture rig
 
+/// `--gather-around <metres>` (`gather-by-hand`): a measurement instrument
+/// for the headless captures, which have no hands. Once the ground round the
+/// player is in, every piece of clutter within `metres` is taken through
+/// [`gather`], as F takes one, dated a little before now so a still shows it
+/// sunk away rather than mid-fade. The capture's save is memory-only.
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+pub fn scripted_gather(
+    launch: Res<super::Launch>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    refresh: Res<pbd_app::planet::LodRefresh>,
+    (fine, mut save, mut slots, sun, scatter): (
+        Res<PlanetFine>,
+        ResMut<WorldSave>,
+        ResMut<super::slots::Hotbar>,
+        Res<pbd_app::sky::Sun>,
+        Res<pbd_app::config::ScatterSettings>,
+    ),
+    (mut note, time, mut gained): (ResMut<FarmNote>, Res<Time>, MessageWriter<Gained>),
+    mut frames: Local<u32>,
+) {
+    let Some(metres) = launch.gather_around else {
+        return;
+    };
+    if *frames == u32::MAX || refresh.in_flight_s().is_some() {
+        return;
+    }
+    // A few frames for the fine set round the player to land.
+    *frames += 1;
+    if *frames < 20 {
+        return;
+    }
+    let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
+        return;
+    };
+    *frames = u32::MAX;
+    let up = transform.translation().normalize_or(Vec3::Y);
+    let odds = pbd_app::clutter::odds(&scatter);
+    // A hundredth of a day ago: long past the sink, far short of regrowth.
+    let day = pbd_app::clutter::day_of(sun.clock.seconds) - 0.01;
+    let wall_s = time.elapsed_secs();
+    let mut taken = 0;
+    for record in fine.set.finest_records() {
+        let at = Vec3::from_slice(&record.direction_height[..3]).normalize_or(Vec3::Y);
+        if at.angle_between(up) * PLANET_RADIUS > metres {
+            continue;
+        }
+        for piece in pbd_app::clutter::pieces_of(record, &odds) {
+            taken += usize::from(gather(
+                &mut save,
+                &mut slots,
+                record.key(),
+                piece.kind,
+                day,
+                &mut note,
+                wall_s,
+                &mut gained,
+            ));
+        }
+    }
+    info!("scripted gather: took {taken} pieces within {metres} m");
+}
+
 /// `--farm` and `--forge` (`farming-and-smelting` task 5.1): a measurement
 /// instrument for the headless captures. A capture has no hands, so this
 /// does through the same durable paths what a player would: till, sow at
@@ -1846,6 +2030,7 @@ mod tests {
                     layer: wild.1,
                     distance: 1.0,
                 }),
+                None,
                 false,
                 0.0,
             )
@@ -1877,5 +2062,172 @@ mod tests {
             app.update();
         }
         assert_eq!(app.world().resource::<Interact>().now, None);
+    }
+
+    /// F on the ground clutter (`gather-by-hand`; owner, 2026-11-16: "if I
+    /// see like a shrub or something I should be able press F to collect
+    /// it. same with a rock"): standing by a piece the draw puts down and
+    /// looking at it, through the real input path, the prompt offers it and
+    /// F takes its goods into the pack, a `clutter` record into the save,
+    /// and the piece off the ground, so it is not offered again.
+    #[test]
+    fn f_gathers_a_stone_or_fibre_from_the_ground_clutter() {
+        use bevy::time::TimeUpdateStrategy;
+        use pbd_app::interact::{InteractSet, resolve};
+        use std::time::Duration;
+        let anchor = super::super::spawn_direction(&super::super::Launch::parse(&[
+            "--walk".into(),
+            "--spawn".into(),
+            "fields".into(),
+        ]));
+        let (fine, contact) = pbd_app::planet::test_ground(anchor);
+        let scatter = pbd_app::config::ScatterSettings::default();
+        let odds = pbd_app::clutter::odds(&scatter);
+        // The nearest pebble and the nearest fibre-giver on dry, level
+        // ground, each with a place to stand 1.4 m off it.
+        let mut found: Vec<(f32, u32, pbd_core::scatter::Piece, Vec3)> = Vec::new();
+        for record in fine.set.finest_records() {
+            let up = Vec3::from_slice(&record.direction_height[..3]).normalize();
+            let d = up.distance(anchor) * PLANET_RADIUS;
+            if d > 120.0 {
+                continue;
+            }
+            for piece in pbd_app::clutter::pieces_of(record, &odds) {
+                let east = Vec3::Y.cross(up).normalize();
+                let stand = (piece.seat + east * 1.4).normalize();
+                let height = pbd_app::planet::surface_height(stand);
+                if height < 0.5 || (PLANET_RADIUS + height - piece.seat.length()).abs() > 0.3 {
+                    continue;
+                }
+                let eye = stand * (PLANET_RADIUS + height + pbd_app::walking::EYE_HEIGHT);
+                found.push((d, record.key(), piece, eye));
+            }
+        }
+        found.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let pebble = *found
+            .iter()
+            .find(|f| f.2.kind == pbd_core::scatter::Kind::Pebble)
+            .expect("a pebble near the fields spawn");
+        let fibre = *found
+            .iter()
+            .find(|f| f.2.kind != pbd_core::scatter::Kind::Pebble)
+            .expect("a bush, shrub or fern near the fields spawn");
+        let mut save = WorldSave::memory_only();
+        let hotbar = super::super::slots::Hotbar::restore(&mut save);
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, TransformPlugin))
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+                1.0 / 60.0,
+            )))
+            .insert_resource(fine)
+            .insert_resource(contact)
+            .insert_resource(save)
+            .insert_resource(hotbar)
+            .insert_resource(FarmConfig::default())
+            .insert_resource(scatter)
+            .insert_resource(pbd_app::walking::WalkingReadout {
+                active: true,
+                captured: true,
+                ..default()
+            })
+            .insert_resource(pbd_app::sky::Sun::default())
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<Aim>()
+            .init_resource::<Screen>()
+            .init_resource::<pbd_app::fish::ToolSlot>()
+            .init_resource::<Drops>()
+            .init_resource::<FarmNote>()
+            .init_resource::<StationAt>()
+            .init_resource::<Interact>()
+            .add_message::<Gained>()
+            .add_message::<pbd_app::missions::Did>()
+            .configure_sets(
+                PostUpdate,
+                (InteractSet::Offer, InteractSet::Resolve).chain(),
+            )
+            .add_systems(Update, use_key)
+            .add_systems(
+                PostUpdate,
+                (
+                    offer.in_set(InteractSet::Offer),
+                    resolve.in_set(InteractSet::Resolve),
+                ),
+            );
+        let camera = app
+            .world_mut()
+            .spawn((Camera3d::default(), Camera::default(), Transform::default()))
+            .id();
+        let carried = |app: &App, code: &str| {
+            app.world()
+                .resource::<super::super::slots::Hotbar>()
+                .0
+                .count(Item::Good(pbd_core::goods::Good::by_code(code).unwrap()))
+        };
+        for (_, key, piece, eye) in [pebble, fibre] {
+            let up = piece.seat.normalize();
+            let at = Transform::from_translation(eye).looking_at(piece.centre, up);
+            app.world_mut()
+                .entity_mut(camera)
+                .insert((at, GlobalTransform::from(at)));
+            let look = at.forward().as_vec3();
+            let target = {
+                let world = app.world();
+                let (fine, contact) = (
+                    world.resource::<PlanetFine>(),
+                    world.resource::<PlanetContact>(),
+                );
+                pbd_core::aim::march(eye, look, |p| digging::sample_at(fine, contact, p))
+            };
+            app.world_mut().resource_mut::<Aim>().target = target;
+            for _ in 0..3 {
+                app.update();
+            }
+            let (code, count) = piece.kind.gives();
+            let name = pbd_core::goods::Good::by_code(code).unwrap().name();
+            assert_eq!(
+                app.world()
+                    .resource::<Interact>()
+                    .now
+                    .as_ref()
+                    .map(Offer::words),
+                Some(format!("Gather {name}")),
+                "{:?} at cell {key}",
+                piece.kind
+            );
+            let before = carried(&app, code);
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::KeyF);
+            app.update();
+            {
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.release(KeyCode::KeyF);
+                keys.clear();
+            }
+            assert_eq!(
+                carried(&app, code),
+                before + u32::from(count),
+                "{code} in the pack"
+            );
+            let world = app.world();
+            let save = world.resource::<WorldSave>();
+            let day = pbd_app::clutter::day_of(world.resource::<pbd_app::sky::Sun>().clock.seconds);
+            assert!(
+                pbd_app::clutter::taken_at(save, key).gone(piece.kind, day),
+                "the take is in the save"
+            );
+            let again = pbd_app::clutter::clutter_on_ray(
+                world.resource::<PlanetFine>(),
+                save,
+                &odds,
+                day,
+                eye,
+                look,
+            );
+            assert!(
+                again.is_none_or(|h| !(h.key == key && h.kind == piece.kind)),
+                "a taken piece is not offered again"
+            );
+        }
     }
 }

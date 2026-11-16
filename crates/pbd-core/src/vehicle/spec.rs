@@ -20,6 +20,10 @@ pub struct VehicleSpecs {
     /// The harbour's rowboat (`cities-in-the-world` task 4.2b): the
     /// mockup's, rowed with the Loon's stroke.
     pub rowboat: LoonSpec,
+    /// The inner tube (`small-boats`): paddled by hand.
+    pub tube: LoonSpec,
+    /// The raft (`small-boats`): logs, paddled.
+    pub raft: LoonSpec,
 }
 
 impl Default for VehicleSpecs {
@@ -29,6 +33,8 @@ impl Default for VehicleSpecs {
             loon: Default::default(),
             cog: Default::default(),
             rowboat: LoonSpec::rowboat(),
+            tube: LoonSpec::tube(),
+            raft: LoonSpec::raft(),
         }
     }
 }
@@ -38,6 +44,8 @@ impl VehicleSpecs {
         self.tern.validate()?;
         self.loon.validate()?;
         self.rowboat.validate()?;
+        self.tube.validate()?;
+        self.raft.validate()?;
         self.cog.validate()
     }
 }
@@ -594,6 +602,187 @@ impl LoonSpec {
         }
     }
 
+    /// The inner tube (`small-boats` design 2): M34's (`river-craft`, the
+    /// Tube tab), a felted-wool ring sealed with pitch, 0.52 m to the middle
+    /// of the tube and 0.22 m thick, so 1.48 m across; its paddler sits in
+    /// it and paddles with their hands. Round in plan (end powers of 2) and
+    /// in section; decked, since the ring takes no water in. Slow, and quick
+    /// to turn. 115 kg with its paddler, as M34's.
+    pub fn tube() -> Self {
+        Self {
+            parts: [Part {
+                mass_kg: 35.0,
+                at: [0.0, 0.0, 0.0],
+            }],
+            inertia_box: InertiaBox {
+                mass_kg: 35.0,
+                size_m: [1.48, 0.44, 1.48],
+            },
+            paddler: Part {
+                mass_kg: 80.0,
+                at: [0.0, -0.02, 0.06],
+            },
+            hull: HullSpec {
+                length_m: 1.48,
+                beam_m: 1.48,
+                depth_m: 0.44,
+                sheer_m: 0.27,
+                cell_m: 0.06,
+                bow_power: 2.0,
+                stern_power: 2.0,
+                section_power: 2.0,
+                deck: true,
+            },
+            lateral: FoilSpec {
+                at: [0.0, -0.1, 0.0],
+                chord: [0.0, 0.0, -1.0],
+                normal: [1.0, 0.0, 0.0],
+                area_m2: 0.2,
+                aspect: 0.3,
+                cl_max: 0.4,
+                cd0: 0.05,
+            },
+            skeg: FoilSpec {
+                at: [0.0, -0.1, 0.45],
+                chord: [0.0, 0.0, -1.0],
+                normal: [1.0, 0.0, 0.0],
+                area_m2: 0.02,
+                aspect: 0.5,
+                cl_max: 0.6,
+                cd0: 0.05,
+            },
+            paddle: PaddleSpec {
+                reach_m: 0.62,
+                depth_m: -0.12,
+                catch_z: -0.3,
+                stroke_m: 0.55,
+                power_s: 0.45,
+                recovery_s: 0.4,
+                blade_m2: 0.035,
+                blade_cd: 1.2,
+                rudder_at: [0.55, 0.5],
+                rudder_m2: 0.02,
+            },
+            resistance: ResistanceSpec {
+                at: [0.0, -0.06, 0.0],
+                wetted_m2: 1.3,
+                waterline_m: 1.1,
+                lateral_m2: 0.3,
+                friction: 0.006,
+            },
+            windage: WindageSpec {
+                at: [0.0, 0.4, 0.0],
+                area_m2: [0.6, 0.5, 0.6],
+            },
+            windage_empty_m2: [0.25, 0.4, 0.25],
+            bilge: sealed_bilge(),
+            contacts: [
+                seabed([0.0, -0.17, 0.0], 8_000.0, 1_200.0),
+                seabed([0.0, -0.05, -0.6], 8_000.0, 1_200.0),
+                seabed([0.0, -0.05, 0.6], 8_000.0, 1_200.0),
+            ],
+            heave_damping: 6_000.0,
+            angular_damping: 10.0,
+            bow: [0.0, 0.2, -0.74],
+            // The rider lies back against the ring: the eye low and aft.
+            seat: SeatSpec {
+                eye: [0.0, 0.5, 0.58],
+                reach_m: 2.6,
+                exit: [0.0, 0.3, 0.0],
+            },
+        }
+    }
+
+    /// The raft (`small-boats` design 2): M34's (`river-craft`, the Raft
+    /// tab), five logs 4.4 m long and 0.25 m round lashed side by side under
+    /// three cross planks, 2.4 m across, worked with a pole. Boxy in plan and
+    /// round in section, as a row of logs is, and decked, so it does not
+    /// swamp. It floats with its logs half under, as M34's draws it.
+    pub fn raft() -> Self {
+        Self {
+            parts: [Part {
+                mass_kg: 2000.0,
+                at: [0.0, -0.04, 0.0],
+            }],
+            inertia_box: InertiaBox {
+                mass_kg: 2000.0,
+                size_m: [2.4, 0.5, 4.4],
+            },
+            paddler: Part {
+                mass_kg: 80.0,
+                at: [0.35, 0.9, 0.7],
+            },
+            hull: HullSpec {
+                length_m: 4.4,
+                beam_m: 2.4,
+                depth_m: 0.5,
+                sheer_m: 0.21,
+                cell_m: 0.12,
+                bow_power: 8.0,
+                stern_power: 8.0,
+                section_power: 2.0,
+                deck: true,
+            },
+            lateral: FoilSpec {
+                at: [0.0, -0.08, 0.0],
+                chord: [0.0, 0.0, -1.0],
+                normal: [1.0, 0.0, 0.0],
+                area_m2: 0.9,
+                aspect: 0.12,
+                cl_max: 0.45,
+                cd0: 0.03,
+            },
+            skeg: FoilSpec {
+                at: [0.0, -0.2, 2.0],
+                chord: [0.0, 0.0, -1.0],
+                normal: [1.0, 0.0, 0.0],
+                area_m2: 0.08,
+                aspect: 0.5,
+                cl_max: 0.8,
+                cd0: 0.03,
+            },
+            paddle: PaddleSpec {
+                reach_m: 1.35,
+                depth_m: -0.3,
+                catch_z: -0.2,
+                stroke_m: 1.4,
+                power_s: 0.8,
+                recovery_s: 0.7,
+                blade_m2: 0.28,
+                blade_cd: 1.25,
+                rudder_at: [1.2, 2.0],
+                rudder_m2: 0.14,
+            },
+            resistance: ResistanceSpec {
+                at: [0.0, -0.06, 0.0],
+                wetted_m2: 11.0,
+                waterline_m: 4.3,
+                lateral_m2: 1.2,
+                friction: 0.006,
+            },
+            windage: WindageSpec {
+                at: [0.0, 0.5, 0.0],
+                area_m2: [2.0, 10.5, 1.4],
+            },
+            windage_empty_m2: [1.2, 10.5, 0.8],
+            bilge: sealed_bilge(),
+            contacts: [
+                seabed([0.0, -0.29, 0.0], 60_000.0, 8_000.0),
+                seabed([0.0, -0.2, -2.0], 60_000.0, 8_000.0),
+                seabed([0.0, -0.2, 2.0], 60_000.0, 8_000.0),
+            ],
+            heave_damping: 40_000.0,
+            angular_damping: 8.0,
+            bow: [0.0, 0.25, -2.2],
+            // The poler stands on the planks aft of the middle, as M34's.
+            seat: SeatSpec {
+                eye: [0.35, 1.75, 0.7],
+                reach_m: 3.8,
+                exit: [0.35, 0.35, 0.7],
+            },
+        }
+    }
+
     fn validate(&self) -> Result<(), String> {
         positive(
             "loon sizes",
@@ -610,6 +799,22 @@ impl LoonSpec {
         self.hull.validate("loon")?;
         self.lateral.validate("loon.lateral")?;
         self.skeg.validate("loon.skeg")
+    }
+}
+
+/// A decked float's bilge (`small-boats`): no rim lets water in, no rain
+/// lies on it, and what does come aboard runs off at once.
+fn sealed_bilge() -> BilgeSpec {
+    BilgeSpec {
+        open_m2: 0.0,
+        rim_share: 0.0,
+        rim_from_z: 99.0,
+        drain_kgps: 50.0,
+        bail_kgps: 6.0,
+        capacity_kg: 20.0,
+        at: [0.0, 0.0, 0.0],
+        slosh: 0.0,
+        slosh_max_m: 0.0,
     }
 }
 

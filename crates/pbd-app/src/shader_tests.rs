@@ -888,3 +888,19 @@ fn the_height_fog_rides_the_clouds_composite() {
         assert!(fog.contains(line), "missing `{line}`");
     }
 }
+
+/// `flora-v2` 12.11: both passes' tree rules and the clutter rule leave a
+/// cell water stands on (`FLOODED_BIT`) bare.
+#[test]
+fn nothing_grows_where_water_stands() {
+    assert_eq!(pbd_core::flora::FLOODED_BIT, 25);
+    let visibility = include_str!("../../../assets/shaders/planet_visibility.wgsl");
+    let surface = include_str!("../../../assets/shaders/planet_surface.wgsl");
+    let trees = "if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }";
+    assert!(wgsl_fn_body(visibility, "has_nearby_foliage").contains(trees));
+    assert!(wgsl_fn_body(surface, "stands_tree").contains(trees));
+    assert!(
+        wgsl_fn_body(visibility, "has_clutter")
+            .contains("if ((cell.metadata.y >> 25u) & 1u) == 1u { return false; }")
+    );
+}

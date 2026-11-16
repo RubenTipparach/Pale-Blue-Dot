@@ -124,6 +124,6 @@
       report and page in `docs/benchmarks/<date>-lighting-perf/`.
       (A checkpoint toward "get worst case to 60": flight is inside the
       floor at p99, on foot in rain is not;
-      https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH.)
+      https://claude.ai/artifact/Mytd1vV76J9UqSBfkQv6QQ.)
 - [ ] 3.2 Move the requirements below into `openspec/specs/platform/
       performance` with the tests and the suite rows that prove them.

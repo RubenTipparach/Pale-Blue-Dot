@@ -157,6 +157,7 @@ fn happenings(c: &mut Counting) -> Vec<Happened> {
         let kinds: &[Kind] = match gained.how {
             How::Found => &[Kind::Find, Kind::Gather],
             How::Picked => &[Kind::Find],
+            How::Gathered => &[Kind::Gather],
             How::Harvested => &[Kind::Harvest],
             How::Collected => &[Kind::Collect],
             How::Made if what.ends_with("-ingot") => &[Kind::Craft, Kind::Smelt],

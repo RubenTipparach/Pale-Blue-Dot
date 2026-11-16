@@ -68,6 +68,8 @@ pub(super) fn forces(craft: &mut Craft, input: &Input, cx: &Context) {
     let specs = craft.specs.clone();
     let (s, hull) = match craft.kind {
         Kind::Rowboat => (&specs.rowboat, craft.hulls.rowboat.clone()),
+        Kind::Tube => (&specs.tube, craft.hulls.tube.clone()),
+        Kind::Raft => (&specs.raft, craft.hulls.raft.clone()),
         _ => (&specs.loon, craft.hulls.loon.clone()),
     };
     let p = &s.paddle;

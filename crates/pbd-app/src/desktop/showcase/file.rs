@@ -103,6 +103,11 @@ pub enum Act {
     /// Walk this many metres from where the act began, over dry ground,
     /// keeping on as straight as the land allows.
     Away(f32),
+    /// Mark a place this many metres away on the map: open it with M, put
+    /// the pointer on dry ground that far off, right-click, close it.
+    Mark(f32),
+    /// Walk to the newest waypoint on the map.
+    ToMark,
     /// The right button once, on what is aimed at, with what is in hand
     /// (the bucket filled at the water or poured).
     Use,
@@ -133,6 +138,9 @@ pub enum Act {
     Plant(u32),
     /// Pick this many wild plants.
     Pick(u32),
+    /// Pick up stones, or pull fibre from bushes, shrubs and ferns, with F
+    /// (`gather-by-hand`), until: `Have("stone", n)` or `Have("fibre", n)`.
+    PickUp(Until),
     /// Harvest the field's ripe crops.
     Harvest(u32),
     /// Feed a wild animal of this species (`any` for the nearest one the
