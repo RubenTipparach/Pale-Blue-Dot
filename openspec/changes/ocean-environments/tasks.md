@@ -67,3 +67,11 @@ against what it would cost.
 
 - [x] 11.1 (Built 2026-11-15, cloud session, lavapipe: `a_kelp_stand_is_slender_and_in_the_frond_s_colours`; `docs/screenshots/ocean-environments/kelp-before-after.jpg` at the owner's spot, with `kelp-after-first.jpg` the take before the green was deepened. The rocks read pale cyan: grey rock under the water's tint. Frame cost not measured.) The kelp stand redrawn after M25's frond: slender crossed stipes, narrow spiralling blades with gas floats, a surface canopy, one colour a part in the frond's palette; the rocks at its foot in the rock's palette. Placement unchanged. Verify: a test of the stand's widths and colours; captures at `--walk --at 71.308 -8.196 --time 12` before and after.
 
+
+## 12. Sea life that vanishes up close, floes on the beach (owner, 2026-11-16; design B17)
+
+- [ ] 12.1 Floes only where they float at low water; none on beaches or terraces. Verify: an app test that no floe is laid over ground above its draft; captures at the polar shore before and after.
+- [ ] 12.2 A floe seal slides off and swims away, and climbs back later; never skipped in one frame. Verify: an app test over the slide that it is drawn every frame.
+- [ ] 12.3 A startled seal dives over time and swims away; a diving duck sinks and rises, never skipped. Verify: core tests of the `under` rate and the flee goal; the `--life seal` approach sequence 30 m to 2 m.
+- [ ] 12.4 Ambient life fades with its tile (no 30 m cut); the sway eases out. Verify: captures; the tile-fade test.
+- [ ] 12.5 Schools fade in when spawned and out before they are dropped. Verify: an app test of the fade; READY with no new `LATE_PIPELINE`.
