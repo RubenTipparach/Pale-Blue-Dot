@@ -69,3 +69,12 @@ falls too". Proposed; the mockups (M25, M28) show it.
   that faces air, and each falling cell under the lip is drawn as its own
   full block with sides, the column growing a block a tick to the plain
 
+
+### Requirement: Rain rings never alias on the water
+The rain's rings on the water SHALL fade with their footprint, so that where
+a ring falls under a few pixels the water shows its waves and no per-pixel
+speckle.
+
+#### Scenario: A river in rain from the bank
+- **WHEN** a river 10 to 60 m away is seen in full rain
+- **THEN** the near water shows rings and the far water shows its waves, without white speckle

@@ -30,3 +30,17 @@ past the shelf), eased so it never steps.
 - **WHEN** the turbidity is read every 25 cm from the shore out past the
   shelf
 - **THEN** no two readings differ by more than 0.002 per metre
+
+### Requirement: The eye under any water sees the underwater view
+
+When the eye is in water (the sea, a river, a pool, flowing water), the
+underwater view SHALL be measured from the surface of the water the eye is
+in: the depth fog and colour, the turbidity, the surface seen from below,
+the light shafts and the distortion, as the sea gives them. The swell SHALL
+be added only to the sea's surface.
+
+#### Scenario: Down in a river
+
+- **WHEN** the eye is under a river's water, above sea level
+- **THEN** the view is fogged and tinted by the river's water from its own surface
+- **AND** the river's sheet is drawn from below as the sea's is

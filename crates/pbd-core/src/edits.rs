@@ -88,6 +88,25 @@ impl Edits {
         self.cells.get(&cell).map_or(&[], Vec::as_slice)
     }
 
+    /// The cells whose changes are not what `older` holds for them, in key
+    /// order: what something built from `older` has not seen (a fine set
+    /// requested before them, `edit-pipeline` 1b). Changes are only ever added
+    /// or replaced, never taken away, so every cell `older` names is here too
+    /// and comparing this side's cells is the whole of it.
+    pub fn changed_since(&self, older: &Edits) -> Vec<u32> {
+        if self.revision == older.revision {
+            return Vec::new();
+        }
+        let mut cells: Vec<u32> = self
+            .cells
+            .iter()
+            .filter(|(cell, layers)| older.for_cell(**cell) != layers.as_slice())
+            .map(|(cell, _)| *cell)
+            .collect();
+        cells.sort_unstable();
+        cells
+    }
+
     /// Every edit, cell by cell, for writing a save. Sorted by cell ID so the
     /// same world writes the same file: a save whose bytes depend on a hash
     /// map's order is a save that cannot be compared.
@@ -163,5 +182,30 @@ mod tests {
             "sorted by cell, so a save's bytes do not depend on a hash order"
         );
         assert_eq!(first, edits.all(), "and the same every time it is asked");
+    }
+
+    #[test]
+    fn the_cells_changed_since_a_copy_are_the_ones_it_has_not_seen() {
+        let edit = |cell, layer, material| Edit {
+            cell,
+            layer,
+            material,
+        };
+        let mut edits = Edits::new();
+        edits.set(edit(5, 10, Material::Air));
+        edits.set(edit(8, 10, Material::Stone));
+        let copy = edits.clone();
+        assert!(edits.changed_since(&copy).is_empty(), "nothing since");
+        // A new cell, a new layer of one the copy has, and one replaced.
+        edits.set(edit(12, 200, Material::Torch));
+        edits.set(edit(5, 11, Material::Air));
+        edits.set(edit(8, 10, Material::Dirt));
+        edits.set(edit(3, 40, Material::Candle));
+        assert_eq!(
+            edits.changed_since(&copy),
+            vec![3, 5, 8, 12],
+            "in key order"
+        );
+        assert!(copy.changed_since(&copy).is_empty());
     }
 }

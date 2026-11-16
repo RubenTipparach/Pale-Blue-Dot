@@ -1,15 +1,20 @@
-//! Farming in play (`farming-and-smelting` decisions 2 to 5): the use key's
-//! verbs on the ground, planting from the right button, and the crops and
-//! forges drawn.
+//! Farming in play (`farming-and-smelting` decisions 2 to 5): the interact
+//! key's verbs on the ground, planting from the right button, and the crops
+//! and forges drawn.
 //!
 //! The rules are the core's (`pbd_core::farming`, `pbd_core::station`). What
 //! is here is which cell the eye is on, the durable writes, and the meshes.
 //!
-//! The use key (`E`, which opens doors in towns) on what the eye ray meets:
+//! The interact key (`F`, `pbd_app::interact`) on what the eye ray meets
+//! ([`farm_act`], one decision for the key and its prompt):
 //! - a station block opens its panel (`super::forge`);
 //! - a ripe crop is harvested; an unripe one says what it is and how long;
+//! - a wild plant is picked;
 //! - with the shovel in hand, a grass, dirt, soil or sand top is tilled, and
 //!   a grassy one turns up a seed.
+//!
+//! A crop or a wild plant is found by its own shape ([`plant_on_ray`]), not
+//! only by the cell under it, so aiming at its leaves finds it.
 
 use super::digging::{self, Aim, Edited, Hands, apply_edit};
 use super::menu::Screen;
@@ -18,6 +23,7 @@ use pbd_app::config::{FarmConfig, Recipes};
 use pbd_app::drops::Drops;
 use pbd_app::field_light::{Faded, LitByField, LitLikeTerrain};
 use pbd_app::hotbar::{Gained, How, Planted};
+use pbd_app::interact::{Act, Interact, Offer, Reader};
 use pbd_app::planet::{PLANET_RADIUS, PlanetContact, PlanetFine};
 use pbd_app::saves::WorldSave;
 use pbd_core::column;
@@ -108,7 +114,7 @@ pub fn plant(
     let ground = digging::material_of(world.fine, world.save, (cell, layer));
     let over = digging::material_of(world.fine, world.save, (cell, layer + 1));
     if ground != Some(Material::Tilled) || over != Some(Material::Air) {
-        note.say(wall_s, "Plant on tilled soil: E with the shovel tills");
+        note.say(wall_s, "Plant on tilled soil: F with the shovel tills");
         return false;
     }
     if live_crop(world.fine, world.save, cell).is_some() {
@@ -240,7 +246,325 @@ pub fn station_state(
         .unwrap_or_else(|| StationState::new(row))
 }
 
-/// The use key.
+/// The radius and height of a sown crop's three clumps, m: what the eye
+/// ray finds it by.
+const CROP_SHAPE_M: (f32, f32) = (0.9, 1.1);
+/// The same for a wild plant's one bush.
+const WILD_SHAPE_M: (f32, f32) = (0.55, 0.95);
+
+/// Where along the ray `eye + look * t` (look a unit vector) it first meets
+/// an upright cylinder standing on `base` along `up`, through its side or
+/// its top, within `reach`.
+pub fn ray_meets_upright(
+    eye: Vec3,
+    look: Vec3,
+    base: Vec3,
+    up: Vec3,
+    (radius, height): (f32, f32),
+    reach: f32,
+) -> Option<f32> {
+    let rel = eye - base;
+    let across = |t: f32| {
+        let p = rel + look * t;
+        (p - up * p.dot(up)).length()
+    };
+    let mut best: Option<f32> = None;
+    let mut take = |t: f32| {
+        if (0.0..=reach).contains(&t) && best.is_none_or(|b| t < b) {
+            best = Some(t);
+        }
+    };
+    // The side.
+    let d_across = look - up * look.dot(up);
+    let p_across = rel - up * rel.dot(up);
+    let a = d_across.length_squared();
+    if a > 1e-6 {
+        let b = 2.0 * p_across.dot(d_across);
+        let c = p_across.length_squared() - radius * radius;
+        let disc = b * b - 4.0 * a * c;
+        if disc >= 0.0 {
+            for t in [
+                (-b - disc.sqrt()) / (2.0 * a),
+                (-b + disc.sqrt()) / (2.0 * a),
+            ] {
+                let h = (rel + look * t).dot(up);
+                if (0.0..=height).contains(&h) {
+                    take(t);
+                }
+            }
+        }
+    }
+    // The top, looked down onto.
+    let down = look.dot(up);
+    if down.abs() > 1e-6 {
+        let t = (height - rel.dot(up)) / down;
+        if across(t) <= radius {
+            take(t);
+        }
+    }
+    best
+}
+
+/// A crop or wild plant the eye ray meets by its own shape.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlantHit {
+    pub cell: u32,
+    /// The layer its ground is.
+    pub layer: usize,
+    /// How far along the ray, m.
+    pub distance: f32,
+}
+
+/// The nearest sown crop or wild plant the eye ray meets within reach, by
+/// its own shape (the clumps or the bush), so aiming at its leaves finds it
+/// rather than the ground behind.
+pub fn plant_on_ray(
+    fine: &PlanetFine,
+    save: &WorldSave,
+    farm: &FarmConfig,
+    eye: Vec3,
+    look: Vec3,
+) -> Option<PlantHit> {
+    let reach = pbd_core::aim::REACH_M;
+    let look = look.normalize_or_zero();
+    let mut best: Option<PlantHit> = None;
+    let mut take = |hit: PlantHit| {
+        if best.is_none_or(|b| hit.distance < b.distance) {
+            best = Some(hit);
+        }
+    };
+    let toward = eye.normalize_or(Vec3::Y);
+    let near = ((reach + 2.0) / PLANET_RADIUS).cos();
+    let mut sown = std::collections::HashSet::new();
+    for record in save.records.of_kind(PLOT_KIND) {
+        let cell = record.id as u32;
+        let Some((plot, _)) = live_crop(fine, save, cell) else {
+            continue;
+        };
+        sown.insert(cell);
+        let Some(index) = digging::record_of(fine, cell) else {
+            continue;
+        };
+        let Some(up) = direction_of(fine, index) else {
+            continue;
+        };
+        if up.dot(toward) < near {
+            continue;
+        }
+        let layer = usize::from(plot.layer);
+        let base = up * (PLANET_RADIUS + column::layer_altitude(layer) + 1.0);
+        if let Some(distance) = ray_meets_upright(eye, look, base, up, CROP_SHAPE_M, reach) {
+            take(PlantHit {
+                cell,
+                layer,
+                distance,
+            });
+        }
+    }
+    for (index, record) in fine.set.finest_records().iter().enumerate() {
+        let up = Vec3::from_slice(&record.direction_height[..3]);
+        if up.dot(toward) < near * up.length() {
+            continue;
+        }
+        let cell = record.key();
+        if sown.contains(&cell) {
+            continue;
+        }
+        let Some(column) = fine.set.columns.column(index) else {
+            continue;
+        };
+        let Some(top) = column.surface() else {
+            continue;
+        };
+        if !farming::sprouts_seed(column.material(top)) || column.material(top + 1) != Material::Air
+        {
+            continue;
+        }
+        let up = up.normalize_or(Vec3::Y);
+        let base = up * (PLANET_RADIUS + column::layer_altitude(top) + 1.0);
+        let Some(distance) = ray_meets_upright(eye, look, base, up, WILD_SHAPE_M, reach) else {
+            continue;
+        };
+        if wild_at(fine, save, farm, cell, top).is_some() {
+            take(PlantHit {
+                cell,
+                layer: top,
+                distance,
+            });
+        }
+    }
+    best
+}
+
+/// What the interact key does on the farm: one decision, read by the key
+/// ([`use_key`]) and by its prompt ([`offer`]).
+#[derive(Clone, Debug)]
+pub enum FarmAct {
+    /// Open a station's panel.
+    Open {
+        cell: u32,
+        layer: usize,
+        row: &'static station::StationRow,
+    },
+    /// A sown crop: harvest it if ripe, else say how long.
+    Crop {
+        cell: u32,
+        plot: Plot,
+        crop: Crop,
+        ripe: bool,
+    },
+    /// Pick a wild plant.
+    Wild { cell: u32, crop: Crop },
+    /// Till the top with the shovel.
+    Till {
+        cell: u32,
+        layer: usize,
+        material: Material,
+    },
+}
+
+impl FarmAct {
+    /// Its row of `interact::ACTS` and what it is done to.
+    pub fn offer(&self) -> Offer {
+        match *self {
+            FarmAct::Open { row, .. } => Offer::new(Act::Open, row.name),
+            FarmAct::Crop { crop, ripe, .. } => Offer::new(
+                if ripe { Act::Harvest } else { Act::Check },
+                crop.row().name.to_lowercase(),
+            ),
+            FarmAct::Wild { crop, .. } => Offer::new(Act::PickWild, crop.row().name.to_lowercase()),
+            FarmAct::Till { material, .. } => Offer::new(
+                Act::Till,
+                match material {
+                    Material::Grass | Material::DryGrass | Material::JungleGrass => "grass",
+                    Material::Dirt => "dirt",
+                    Material::Sand => "sand",
+                    _ => "soil",
+                },
+            ),
+        }
+    }
+}
+
+/// What F does on the farm with the eye on `aim`, a plant met by its shape
+/// `plant`, and `shovel` in hand: a station the ray meets first, then the
+/// plant (a crop, then a wild one) the ray meets before the ground, then a
+/// crop or wild plant on the cell the ray lands in, then tilling it.
+#[allow(clippy::too_many_arguments)]
+pub fn farm_act(
+    fine: &PlanetFine,
+    save: &WorldSave,
+    farm: &FarmConfig,
+    aim: Option<&pbd_core::aim::Target>,
+    plant: Option<PlantHit>,
+    shovel: bool,
+    now_s: f64,
+) -> Option<FarmAct> {
+    let crop_on = |cell: u32, layer: usize| {
+        live_crop(fine, save, cell)
+            .filter(|(p, _)| usize::from(p.layer) == layer)
+            .map(|(plot, crop)| FarmAct::Crop {
+                cell,
+                ripe: farm.0.stage(crop, plot.planted_s, now_s) == Stage::Ripe,
+                plot,
+                crop,
+            })
+    };
+    let wild_on = |cell: u32, layer: usize| {
+        wild_at(fine, save, farm, cell, layer).map(|crop| FarmAct::Wild { cell, crop })
+    };
+    let on_ground = aim.and_then(|target| {
+        let (cell, layer) = (target.dig.cell, target.dig.layer);
+        let material = digging::material_of(fine, save, (cell, layer))?;
+        // A campfire is a light, walked through and passed by the eye ray,
+        // so the ray meets the ground it stands on: F there opens it
+        // (`step-videos` 5.2, found by the showcase's bot, which could not
+        // open one any other way).
+        let over = digging::material_of(fine, save, (cell, layer + 1))
+            .filter(|m| m.is_lamp() && station::station_of(*m).is_some());
+        let (layer, material) = match over {
+            Some(lit) => (layer + 1, lit),
+            None => (layer, material),
+        };
+        Some((cell, layer, material, target.distance))
+    });
+    // A plant nearer than the block the ray meets is what the eye is on.
+    let plant = plant.filter(|p| on_ground.is_none_or(|(_, _, _, d)| p.distance <= d + 0.05));
+    if let Some((cell, layer, material, d)) = on_ground
+        && let Some(row) = station::station_of(material)
+        && plant.is_none_or(|p| d <= p.distance)
+    {
+        return Some(FarmAct::Open { cell, layer, row });
+    }
+    if let Some(p) = plant
+        && let Some(act) = crop_on(p.cell, p.layer).or_else(|| wild_on(p.cell, p.layer))
+    {
+        return Some(act);
+    }
+    let (cell, layer, material, _) = on_ground?;
+    if let Some(act) = crop_on(cell, layer).or_else(|| wild_on(cell, layer)) {
+        return Some(act);
+    }
+    (shovel
+        && farming::tillable(material)
+        && digging::material_of(fine, save, (cell, layer + 1)) == Some(Material::Air))
+    .then_some(FarmAct::Till {
+        cell,
+        layer,
+        material,
+    })
+}
+
+/// The eye and its look, from the active 3D camera.
+fn eye_ray(cameras: &Query<(&GlobalTransform, &Camera), With<Camera3d>>) -> Option<(Vec3, Vec3)> {
+    cameras
+        .iter()
+        .find(|(_, c)| c.is_active)
+        .map(|(t, _)| (t.translation(), t.forward().as_vec3()))
+}
+
+/// Offer the farm's act to the interact key.
+#[allow(clippy::too_many_arguments)]
+pub fn offer(
+    walking: Option<Res<pbd_app::walking::WalkingReadout>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    aim: Res<Aim>,
+    tools: Res<pbd_app::fish::ToolSlot>,
+    farm: Res<FarmConfig>,
+    (fine, save, sun, time): (
+        Res<PlanetFine>,
+        Res<WorldSave>,
+        Res<pbd_app::sky::Sun>,
+        Res<Time>,
+    ),
+    mut interact: ResMut<Interact>,
+    mut last: Local<(pbd_app::interact::Recheck, Option<PlantHit>)>,
+) {
+    if !walking.is_some_and(|w| w.active) {
+        return;
+    }
+    let Some((eye, look)) = eye_ray(&cameras) else {
+        return;
+    };
+    let (recheck, plant) = &mut *last;
+    if recheck.due(eye, look, fine.version, time.delta_secs()) {
+        *plant = plant_on_ray(&fine, &save, &farm, eye, look);
+    }
+    let shovel = tools.0.held() == Some(Tool::Shovel);
+    if let Some(act) = farm_act(
+        &fine,
+        &save,
+        &farm,
+        aim.target.as_ref(),
+        *plant,
+        shovel,
+        sun.clock.seconds,
+    ) {
+        interact.offer(act.offer());
+    }
+}
+
+/// The interact key on the farm: does what [`farm_act`] says.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn use_key(
     keys: Res<ButtonInput<KeyCode>>,
@@ -252,6 +576,10 @@ pub fn use_key(
     mut station_at: ResMut<StationAt>,
     mut note: ResMut<FarmNote>,
     time: Res<Time>,
+    (cameras, interact): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<Interact>>,
+    ),
     (mut gained, mut did): (MessageWriter<Gained>, MessageWriter<pbd_app::missions::Did>),
     (mut fine, mut contact, mut save, mut slots, mut drops, sun): (
         ResMut<PlanetFine>,
@@ -262,10 +590,10 @@ pub fn use_key(
         Res<pbd_app::sky::Sun>,
     ),
 ) {
-    if !keys.just_pressed(KeyCode::KeyE) {
+    if !keys.just_pressed(KeyCode::KeyF) {
         return;
     }
-    // E shuts a station's panel as it opened it.
+    // F shuts a station's panel as it opened it.
     if matches!(*screen, Screen::Forge | Screen::Kitchen) {
         *screen = Screen::Playing;
         return;
@@ -276,70 +604,79 @@ pub fn use_key(
     if !walking.is_some_and(|w| w.active && w.captured) {
         return;
     }
-    let Some(target) = aim.target else {
+    if !pbd_app::interact::may(interact.as_deref(), Reader::Farm) {
         return;
-    };
+    }
     let wall_s = time.elapsed_secs();
     let now_s = sun.clock.seconds;
-    let (cell, layer) = (target.dig.cell, target.dig.layer);
-    let Some(material) = digging::material_of(&fine, &save, (cell, layer)) else {
+    let plant =
+        eye_ray(&cameras).and_then(|(eye, look)| plant_on_ray(&fine, &save, &farm, eye, look));
+    let shovel = tools.0.held() == Some(Tool::Shovel);
+    let act = farm_act(
+        &fine,
+        &save,
+        &farm,
+        aim.target.as_ref(),
+        plant,
+        shovel,
+        now_s,
+    );
+    let Some(act) = act else {
+        // Tillable ground under a block: say why F does nothing.
+        if shovel
+            && let Some(target) = aim.target
+            && digging::material_of(&fine, &save, (target.dig.cell, target.dig.layer))
+                .is_some_and(farming::tillable)
+        {
+            note.say(wall_s, "Nothing tills under a block");
+        }
         return;
     };
-    // A campfire is a light, walked through and passed by the eye ray, so
-    // the ray meets the ground it stands on: E there opens it
-    // (`step-videos` 5.2, found by the showcase's bot, which could not open
-    // one any other way).
-    let over = digging::material_of(&fine, &save, (cell, layer + 1))
-        .filter(|m| m.is_lamp() && station::station_of(*m).is_some());
-    let (layer, material) = match over {
-        Some(lit) => (layer + 1, lit),
-        None => (layer, material),
+    let (cell, layer, material) = match act {
+        FarmAct::Open { cell, layer, row } => {
+            station_at.0 = Some((cell, layer as u16));
+            // The kitchen's stations have their own panel (`cooking` design S4).
+            *screen = super::kitchen::screen_for(row);
+            info!("opened the {} at cell {cell} layer {layer}", row.name);
+            return;
+        }
+        FarmAct::Crop {
+            cell, plot, crop, ..
+        } => {
+            harvest(
+                &mut save,
+                &mut slots,
+                &farm,
+                cell,
+                plot,
+                crop,
+                now_s,
+                &mut note,
+                wall_s,
+                &mut gained,
+            );
+            return;
+        }
+        FarmAct::Wild { cell, crop } => {
+            pick(
+                &mut save,
+                &mut slots,
+                &farm,
+                cell,
+                crop,
+                now_s,
+                &mut note,
+                wall_s,
+                &mut gained,
+            );
+            return;
+        }
+        FarmAct::Till {
+            cell,
+            layer,
+            material,
+        } => (cell, layer, material),
     };
-    if let Some(row) = station::station_of(material) {
-        station_at.0 = Some((cell, layer as u16));
-        // The kitchen's stations have their own panel (`cooking` design S4).
-        *screen = super::kitchen::screen_for(row);
-        info!("opened the {} at cell {cell} layer {layer}", row.name);
-        return;
-    }
-    if let Some((plot, crop)) =
-        live_crop(&fine, &save, cell).filter(|(p, _)| usize::from(p.layer) == layer)
-    {
-        harvest(
-            &mut save,
-            &mut slots,
-            &farm,
-            cell,
-            plot,
-            crop,
-            now_s,
-            &mut note,
-            wall_s,
-            &mut gained,
-        );
-        return;
-    }
-    if let Some(crop) = wild_at(&fine, &save, &farm, cell, layer) {
-        pick(
-            &mut save,
-            &mut slots,
-            &farm,
-            cell,
-            crop,
-            now_s,
-            &mut note,
-            wall_s,
-            &mut gained,
-        );
-        return;
-    }
-    if tools.0.held() != Some(Tool::Shovel) || !farming::tillable(material) {
-        return;
-    }
-    if digging::material_of(&fine, &save, (cell, layer + 1)) != Some(Material::Air) {
-        note.say(wall_s, "Nothing tills under a block");
-        return;
-    }
     let seed = farming::sprouts_seed(material)
         .then(|| farming::seed_turned_up(cell, climate_at(&fine, cell, layer)))
         .flatten();
@@ -439,7 +776,7 @@ pub fn spawn_note(mut commands: Commands) {
         Node {
             position_type: PositionType::Absolute,
             left: percent(50),
-            top: percent(56),
+            top: percent(60),
             margin: UiRect::left(px(-120)),
             width: px(240),
             justify_content: JustifyContent::Center,
@@ -1045,6 +1382,7 @@ pub fn scripted(
         let mut ripe = Vec::new();
         for (row, crop) in [Crop::WHEAT, Crop::TURNIP].into_iter().enumerate() {
             for (col, share) in [0.1, 0.4, 0.8, 1.2].into_iter().enumerate() {
+                let share = if launch.farm_ripe { 1.2 } else { share };
                 let mut across = (col as f32 - 1.5) * STEP;
                 let mut found = None;
                 for _ in 0..12 {
@@ -1245,5 +1583,293 @@ mod tests {
     fn a_crop_is_three_crossed_clumps() {
         let mesh = clumps_mesh(1.0, 0.5);
         assert_eq!(mesh.count_vertices(), 3 * 2 * 4);
+    }
+
+    /// A ray meets an upright cylinder through its side and, looked down
+    /// onto, through its top; past it or beside it, not at all.
+    #[test]
+    fn a_ray_meets_a_plant_by_its_side_and_its_top() {
+        let (base, up) = (Vec3::ZERO, Vec3::Y);
+        let shape = (0.5, 1.0);
+        let side = ray_meets_upright(Vec3::new(-3.0, 0.5, 0.0), Vec3::X, base, up, shape, 5.0);
+        assert!((side.unwrap() - 2.5).abs() < 1e-4);
+        let top = ray_meets_upright(Vec3::new(0.0, 3.0, 0.0), -Vec3::Y, base, up, shape, 5.0);
+        assert!((top.unwrap() - 2.0).abs() < 1e-4);
+        assert!(
+            ray_meets_upright(Vec3::new(-3.0, 1.5, 0.0), Vec3::X, base, up, shape, 5.0).is_none()
+        );
+        assert!(
+            ray_meets_upright(Vec3::new(-3.0, 0.5, 0.0), Vec3::X, base, up, shape, 2.0).is_none()
+        );
+    }
+
+    /// A grassy cell and where to look at it from: its cell, its top layer,
+    /// its up, the base of a plant on it, and an eye 1.6 m off.
+    type Spot = (u32, usize, Vec3, Vec3, Vec3);
+
+    /// Grassy, level cells round the fields spawn, each with a place to
+    /// stand 1.6 m off it at the same height: (cell, top layer, up, the
+    /// plant's base, where the eye stands).
+    fn grassy_spots(fine: &PlanetFine, anchor: Vec3) -> Vec<Spot> {
+        let mut spots: Vec<(f32, Spot)> = fine
+            .set
+            .finest_records()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, record)| {
+                let column = fine.set.columns.column(index)?;
+                let top = column.surface()?;
+                if !farming::sprouts_seed(column.material(top))
+                    || column.material(top + 1) != Material::Air
+                {
+                    return None;
+                }
+                let up = Vec3::from_slice(&record.direction_height[..3]).normalize();
+                let ground = PLANET_RADIUS + column::layer_altitude(top) + 1.0;
+                let base = up * ground;
+                let east = Vec3::Y.cross(up).normalize();
+                let stand = (base + east * 1.6).normalize();
+                let height = pbd_app::planet::surface_height(stand);
+                ((PLANET_RADIUS + height - ground).abs() < 0.3).then(|| {
+                    let eye = stand * (PLANET_RADIUS + height + pbd_app::walking::EYE_HEIGHT);
+                    (up.distance(anchor), (record.key(), top, up, base, eye))
+                })
+            })
+            .collect();
+        spots.sort_by(|a, b| a.0.total_cmp(&b.0));
+        spots.into_iter().map(|(_, spot)| spot).collect()
+    }
+
+    /// Interact on F (owner, 2026-11-16: "I should be able to harvest
+    /// plants by pressing F on them"): looking at a ripe crop's leaves, or a
+    /// wild plant's, through the real input path - the farm's offer, the
+    /// prompt's resolve, F, `use_key` - names it in the prompt, and F
+    /// harvests the crop and picks the plant into the pack and the save.
+    /// The plant is found by its own shape: the block the eye ray meets is
+    /// the ground beyond it.
+    #[test]
+    fn f_harvests_a_ripe_crop_and_picks_a_wild_plant() {
+        use bevy::time::TimeUpdateStrategy;
+        use pbd_app::interact::{InteractSet, resolve};
+        use std::time::Duration;
+        let anchor = super::super::spawn_direction(&super::super::Launch::parse(&[
+            "--walk".into(),
+            "--spawn".into(),
+            "fields".into(),
+        ]));
+        let (fine, contact) = pbd_app::planet::test_ground(anchor);
+        let farm = FarmConfig::default();
+        let mut save = WorldSave::memory_only();
+        let spots = grassy_spots(&fine, anchor);
+        let wild = *spots
+            .iter()
+            .find(|(cell, top, ..)| wild_at(&fine, &save, &farm, *cell, *top).is_some())
+            .expect("a wild plant near the fields spawn");
+        let sown = *spots
+            .iter()
+            .find(|(cell, top, ..)| {
+                *cell != wild.0 && wild_at(&fine, &save, &farm, *cell, *top).is_none()
+            })
+            .expect("a grassy cell to sow");
+        let hotbar = super::super::slots::Hotbar::restore(&mut save);
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, TransformPlugin))
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+                1.0 / 60.0,
+            )))
+            .insert_resource(fine)
+            .insert_resource(contact)
+            .insert_resource(save)
+            .insert_resource(hotbar)
+            .insert_resource(farm)
+            .insert_resource(pbd_app::walking::WalkingReadout {
+                active: true,
+                captured: true,
+                ..default()
+            })
+            .insert_resource(pbd_app::sky::Sun::default())
+            .init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<Aim>()
+            .init_resource::<Screen>()
+            .init_resource::<pbd_app::fish::ToolSlot>()
+            .init_resource::<Drops>()
+            .init_resource::<FarmNote>()
+            .init_resource::<StationAt>()
+            .init_resource::<Interact>()
+            .add_message::<Gained>()
+            .add_message::<pbd_app::missions::Did>()
+            .configure_sets(
+                PostUpdate,
+                (InteractSet::Offer, InteractSet::Resolve).chain(),
+            )
+            .add_systems(Update, use_key)
+            .add_systems(
+                PostUpdate,
+                (
+                    offer.in_set(InteractSet::Offer),
+                    resolve.in_set(InteractSet::Resolve),
+                ),
+            );
+        // Till and sow the crop's cell, sown long enough ago to be ripe.
+        {
+            let world = app.world_mut();
+            let now_s = world.resource::<pbd_app::sky::Sun>().clock.seconds;
+            world.resource_scope(|world, mut fine: Mut<PlanetFine>| {
+                world.resource_scope(|world, mut contact: Mut<PlanetContact>| {
+                    world.resource_scope(|world, mut save: Mut<WorldSave>| {
+                        world.resource_scope(
+                            |world, mut slots: Mut<super::super::slots::Hotbar>| {
+                                let mut drops = world.resource_mut::<Drops>();
+                                let tilled = apply_edit(
+                                    &mut Edited {
+                                        fine: &mut fine,
+                                        contact: &mut contact,
+                                        save: &mut save,
+                                        slots: &mut slots,
+                                        drops: &mut drops,
+                                        now_s,
+                                    },
+                                    Hands::Till(None),
+                                    sown.0,
+                                    sown.1,
+                                    Material::Tilled,
+                                );
+                                assert!(tilled.is_some(), "the cell is tilled");
+                                let plot = Plot::sown(sown.1 as u16, Crop::WHEAT, now_s - 1.0e8);
+                                assert!(save.store_with_hands(
+                                    plot_record(sown.0, &plot),
+                                    PLOT_SCHEMA,
+                                    &slots.0
+                                ));
+                            },
+                        );
+                    });
+                });
+            });
+        }
+        let camera = app
+            .world_mut()
+            .spawn((Camera3d::default(), Camera::default(), Transform::default()))
+            .id();
+        // Stand 1.6 m off a plant and look at its leaves, 0.9 m up: the ray goes on to the ground two metres past it, outside its cell.
+        let look_at = |app: &mut App, (_, _, up, base, eye): Spot| {
+            let at = Transform::from_translation(eye).looking_at(base + up * 0.9, up);
+            app.world_mut()
+                .entity_mut(camera)
+                .insert((at, GlobalTransform::from(at)));
+            let look = at.forward().as_vec3();
+            let target = {
+                let world = app.world();
+                let (fine, contact) = (
+                    world.resource::<PlanetFine>(),
+                    world.resource::<PlanetContact>(),
+                );
+                pbd_core::aim::march(eye, look, |p| digging::sample_at(fine, contact, p))
+            };
+            app.world_mut().resource_mut::<Aim>().target = target;
+            for _ in 0..3 {
+                app.update();
+            }
+            target
+        };
+        let press_f = |app: &mut App| {
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::KeyF);
+            app.update();
+            let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            keys.release(KeyCode::KeyF);
+            keys.clear();
+        };
+        let carried = |app: &App, good: pbd_core::goods::Good| {
+            app.world()
+                .resource::<super::super::slots::Hotbar>()
+                .0
+                .count(Item::Good(good))
+        };
+
+        // The ripe wheat.
+        let target = look_at(&mut app, sown);
+        let world = app.world();
+        let plant = {
+            let (eye, look) = {
+                let t = world.get::<GlobalTransform>(camera).unwrap();
+                (t.translation(), t.forward().as_vec3())
+            };
+            plant_on_ray(
+                world.resource::<PlanetFine>(),
+                world.resource::<WorldSave>(),
+                world.resource::<FarmConfig>(),
+                eye,
+                look,
+            )
+            .expect("the ray meets the wheat")
+        };
+        assert_eq!(plant.cell, sown.0);
+        assert!(
+            target.is_none_or(|t| t.dig.cell != sown.0 && t.distance > plant.distance),
+            "the block the ray meets is beyond the plant: {target:?}"
+        );
+        assert_eq!(
+            world.resource::<Interact>().now.as_ref().map(Offer::words),
+            Some("Harvest wheat".to_string())
+        );
+        press_f(&mut app);
+        let save = app.world().resource::<WorldSave>();
+        assert_eq!(
+            plot_at(save, sown.0).and_then(|p| p.crop),
+            None,
+            "the plot is saved bare"
+        );
+        assert!(
+            carried(&app, Crop::WHEAT.row().produce) > 0,
+            "wheat in the pack"
+        );
+
+        // The wild plant.
+        look_at(&mut app, wild);
+        let crop = {
+            let world = app.world();
+            farm_act(
+                world.resource::<PlanetFine>(),
+                world.resource::<WorldSave>(),
+                world.resource::<FarmConfig>(),
+                None,
+                Some(PlantHit {
+                    cell: wild.0,
+                    layer: wild.1,
+                    distance: 1.0,
+                }),
+                false,
+                0.0,
+            )
+        };
+        let Some(FarmAct::Wild { crop, .. }) = crop else {
+            panic!("a wild plant: {crop:?}");
+        };
+        assert_eq!(
+            app.world()
+                .resource::<Interact>()
+                .now
+                .as_ref()
+                .map(Offer::words),
+            Some(format!("Pick wild {}", crop.row().name.to_lowercase()))
+        );
+        let seeds = carried(&app, crop.row().seed);
+        press_f(&mut app);
+        let save = app.world().resource::<WorldSave>();
+        assert!(
+            save.records.get(WILD_KIND, u64::from(wild.0)).is_some(),
+            "the picked plant is in the save"
+        );
+        assert!(
+            carried(&app, crop.row().seed) > seeds,
+            "its seeds in the pack"
+        );
+        // Nothing left to do there: the prompt goes after its hold.
+        for _ in 0..30 {
+            app.update();
+        }
+        assert_eq!(app.world().resource::<Interact>().now, None);
     }
 }

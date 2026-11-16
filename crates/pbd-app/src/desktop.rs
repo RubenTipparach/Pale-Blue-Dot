@@ -268,6 +268,16 @@ pub struct Launch {
     pub pour_ahead: f32,
     /// `--pit DEPTH`: dig a pit that deep two cells short of the pour.
     pub pit: u32,
+    /// `--pour-for SECONDS`: a measurement instrument (`water-flow` 5.3,
+    /// `perf_suite.py`'s `pour`). The `--pour`/`--pit` script runs in real
+    /// time without a capture, then the poured sources are stopped and
+    /// started again in turn so water flows, falls and dries the whole
+    /// while; logs `POUR_START` and `POUR_DONE` and quits after that long.
+    pub pour_for: Option<f32>,
+    /// `--water-tick-frac F` (0..1): the water drawn F of the way through the
+    /// last of `--water-ticks`, and held there: the rule does not tick on
+    /// its own, so a capture shows smooth water mid-tick (`water-flow` 5.3).
+    pub water_tick_frac: Option<f32>,
     /// `--tide high|low`: the tide's moon over the camera or a quarter turn
     /// round (`ocean-environments` 5.1), for the tide's captures.
     pub tide: Option<String>,
@@ -295,6 +305,15 @@ pub struct Launch {
     /// `--farm-harvest`: with `--farm`, harvests the ripe cells and picks the
     /// nearest wild plant, so the hotbar shows what came of it.
     pub farm_harvest: bool,
+    /// `--farm-ripe`: with `--farm`, every crop of the field is sown ripe
+    /// (a capture's instrument, `stone-and-wood-ui` 4.8: the crop the eye
+    /// is on is one F harvests).
+    pub farm_ripe: bool,
+    /// `--hold-pointer`: a capture's instrument (`stone-and-wood-ui` 4.8).
+    /// The walker holds the pointer as a player's does after a click, so the
+    /// aim and the interact prompt show in a still capture, whose window
+    /// never has the focus.
+    pub hold_pointer: bool,
     /// `--forge [metres]`: a forge that far ahead, stocked and given two jobs,
     /// the first part done; with `--forge-panel`, its panel open.
     pub forge: Option<f32>,
@@ -441,6 +460,8 @@ impl Launch {
             water_ticks: 0,
             pour_ahead: 0.0,
             pit: 0,
+            pour_for: None,
+            water_tick_frac: None,
             tide: None,
             arrows: false,
             lamps: false,
@@ -448,6 +469,8 @@ impl Launch {
             lamps_across: 0.0,
             farm: None,
             farm_harvest: false,
+            hold_pointer: false,
+            farm_ripe: false,
             forge: None,
             forge_panel: false,
             bare: false,
@@ -580,6 +603,30 @@ impl Launch {
                         .and_then(|n| n.parse().ok())
                         .expect("--pit requires a depth");
                 }
+                "--pour-for" => {
+                    i += 1;
+                    let seconds: f32 = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--pour-for requires seconds");
+                    assert!(
+                        seconds.is_finite() && seconds > 0.0,
+                        "--pour-for takes seconds"
+                    );
+                    result.pour_for = Some(seconds);
+                }
+                "--water-tick-frac" => {
+                    i += 1;
+                    let frac: f32 = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--water-tick-frac requires a fraction");
+                    assert!(
+                        (0.0..=1.0).contains(&frac),
+                        "--water-tick-frac takes 0 to 1"
+                    );
+                    result.water_tick_frac = Some(frac);
+                }
                 "--pour-ahead" => {
                     i += 1;
                     result.pour_ahead = args
@@ -624,6 +671,8 @@ impl Launch {
                     }
                 }
                 "--farm-harvest" => result.farm_harvest = true,
+                "--hold-pointer" => result.hold_pointer = true,
+                "--farm-ripe" => result.farm_ripe = true,
                 "--forge-panel" => result.forge_panel = true,
                 "--campfire" => {
                     let mut metres = 4.0;
@@ -919,6 +968,16 @@ impl Launch {
                         "off" => false,
                         _ => panic!("--rain-shadows takes on or off"),
                     });
+                }
+                "--reflections" => {
+                    i += 1;
+                    let level = args
+                        .get(i)
+                        .expect("--reflections requires off, low, medium or high");
+                    result.settings.reflections = Some(
+                        pbd_app::config::Reflections::parse(level)
+                            .expect("--reflections takes off, low, medium or high"),
+                    );
                 }
                 "--grass" => {
                     i += 1;
@@ -1452,6 +1511,7 @@ pub fn run(args: &[String]) {
     .init_resource::<pack::PackHand>()
     // Farming and the forge (`farming-and-smelting`).
     .init_resource::<farm::FarmNote>()
+    .init_resource::<water::PourSources>()
     .init_resource::<farm::StationAt>()
     .init_resource::<craft::CraftPick>()
     .add_message::<pbd_app::hotbar::Gained>()
@@ -1540,6 +1600,22 @@ pub fn run(args: &[String]) {
             cracks::spawn,
             farm::make_looks,
             farm::spawn_note,
+            pbd_app::interact::spawn_prompt.run_if(resource_exists::<pbd_app::ui_kit::UiKit>),
+        ),
+    )
+    // The interact key's offers from the fruit and the farm (the husbandry
+    // hands, the doors and the boats offer from their own plugins), and the
+    // prompt that names the one F will do (`stone-and-wood-ui`, "Interact on
+    // F").
+    .add_systems(
+        PostUpdate,
+        (
+            fruit::offer.in_set(pbd_app::interact::InteractSet::Offer),
+            farm::offer
+                .in_set(pbd_app::interact::InteractSet::Offer)
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::saves::WorldSave>),
+            pbd_app::interact::show_prompt.after(pbd_app::interact::InteractSet::Resolve),
         ),
     )
     // The column tier is built by a startup system and its records land when
@@ -1645,7 +1721,7 @@ pub fn run(args: &[String]) {
         Update,
         (
             // Picking fruit from a tree (`flora-v2` 12.5), ahead of the
-            // farm's E, after the husbandry hands'.
+            // farm's F, after the husbandry hands'.
             fruit::scripted
                 .after(digging::scripted_dig)
                 .run_if(pbd_app::loading::ready),
@@ -1666,7 +1742,7 @@ pub fn run(args: &[String]) {
                 .after(digging::dig_and_place)
                 .after(pbd_app::husbandry::HusbandryHands),
             // The campfire's panel opens from `farm::use_key` (after the
-            // husbandry hands, which clear an E they used).
+            // husbandry hands, which clear an F they used).
             (
                 kitchen::work,
                 kitchen::grey,
@@ -1685,6 +1761,12 @@ pub fn run(args: &[String]) {
             // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
             water::scripted
                 .after(digging::scripted_dig)
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
+                .run_if(resource_exists::<pbd_app::drops::Drops>),
+            water::pour_cycle
+                .after(water::scripted)
+                .run_if(|launch: Res<Launch>| launch.pour_for.is_some())
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
                 .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
                 .run_if(resource_exists::<pbd_app::drops::Drops>),
@@ -1876,6 +1958,16 @@ pub fn run(args: &[String]) {
                 since: None,
             })
             .add_systems(Update, sail_for);
+        }
+        if launch.hold_pointer {
+            app.add_systems(
+                PreUpdate,
+                (|mut state: ResMut<pbd_app::walking::WalkingState>| {
+                    state.scripted = true;
+                    state.captured = true;
+                })
+                .after(bevy::input::InputSystems),
+            );
         }
         if launch.walk_distance.is_some() {
             // Where the swim's keys go, for the same reason (below).
@@ -3758,6 +3850,9 @@ const LANDING_SHOT_LAST: u32 = 70;
 type WatchedLanding = (u64, Option<u32>);
 
 /// MEASUREMENT (`two-set-dissolve` design section 5): with
+/// `PBD_CAPTURE_RUN`'s stretch: where, the first and the end frame, the stride.
+type CaptureRun = (PathBuf, u64, u64, u64);
+
 /// `PBD_LANDING_SHOTS=27,28` in a capture, frames round the landing of fine
 /// set 27 (and 28) are saved beside the `--capture` path as
 /// `landing-<set>-f<frame>.png`, with a `LANDING_SHOT` line naming the set
@@ -3838,7 +3933,7 @@ fn capture(
     progress: Res<TourProgress>,
     mut exit: MessageWriter<AppExit>,
     count: Option<Res<pbd_app::loading::FrameCount>>,
-    mut burst: Local<Option<Option<(PathBuf, u64, u64)>>>,
+    mut burst: Local<Option<Option<CaptureRun>>>,
 ) {
     state.frame += 1;
     // MEASUREMENT (`baked-light-ease`): `PBD_CAPTURE_RUN=<dir>,<first>,<count>`
@@ -3846,18 +3941,26 @@ fn capture(
     // world's first open frame, as `--frames` is, so a run that loads slowly
     // saves the same stretch) for `count` frames, so a swap can be seen frame
     // by frame. Each is named by the frame log's frame number, which the
-    // `BAKED_LIGHT` lines give.
+    // `BAKED_LIGHT` lines give. An optional fourth field saves every
+    // `stride`th frame of the stretch instead (`weather-rain` R5: seconds of
+    // a lens drying, not every frame of them).
     let run = burst.get_or_insert_with(|| {
         let spec = std::env::var("PBD_CAPTURE_RUN").ok()?;
         let mut parts = spec.split(',');
         let dir = PathBuf::from(parts.next()?.trim());
         let first = parts.next()?.trim().parse().ok()?;
         let count: u64 = parts.next()?.trim().parse().ok()?;
+        let stride: u64 = parts
+            .next()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(1)
+            .max(1);
         std::fs::create_dir_all(&dir).ok()?;
-        Some((dir, first, first + count))
+        Some((dir, first, first + count, stride))
     });
-    if let (Some((dir, first, end)), Some(count)) = (run.as_ref(), count.as_ref())
+    if let (Some((dir, first, end, stride)), Some(count)) = (run.as_ref(), count.as_ref())
         && (*first..*end).contains(&u64::from(state.frame))
+        && (u64::from(state.frame) - *first).is_multiple_of(*stride)
     {
         let path = dir.join(format!("f{:06}.png", count.0));
         commands.spawn(Screenshot::primary_window()).observe(

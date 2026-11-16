@@ -137,8 +137,9 @@ something instead of big uber list".
 #### Scenario: Rebinding a key
 - **WHEN** the player clicks the cap of "sprint" on the On foot sub-tab and
   presses E
-- **THEN** the cap reads E, the row says "also: open or shut a door", E
-  sprints on foot and still rolls in flight, and Reset tab puts SHIFT back
+- **THEN** the cap reads E, E sprints on foot and still rolls in flight,
+  and Reset tab puts SHIFT back; pressed F instead, the row says "also:"
+  and the interact row
 
 #### Scenario: An old settings file
 - **WHEN** a version 2 settings file is read
@@ -181,3 +182,52 @@ window. In play, with no cursor, none SHALL show.
 
 Pinned by `ui_kit::tests::a_tooltip_stands_over_its_slot_only_while_a_menu_holds_the_pointer`
 and `slots::tests::a_slot_says_what_it_holds`.
+
+### Requirement: F is the interact key and does one thing per press
+
+On foot, one key, F by default, SHALL interact with what the player is
+looking at: open a station, harvest a ripe crop, pick a wild plant or a
+tree's fruit, till with the shovel, feed, lead and collect from an animal,
+take up a piece, open or shut a door; with nothing of those aimed, it SHALL
+board a craft in reach, and aboard it SHALL step off. One press SHALL do
+exactly one thing, the highest of one priority table. E SHALL do nothing on
+foot, and Q/E SHALL still roll in flight. A player's saved rebind of "use"
+SHALL be kept as their interact key. The owner, 2026-11-16: "we should use F
+for interact since E will be used for roll in space".
+
+#### Scenario: Harvesting with F
+- **WHEN** the player looks at a ripe crop's leaves and presses F
+- **THEN** the crop is harvested into the pack and the plot is saved bare
+
+#### Scenario: A rebind from before
+- **WHEN** a version 7 settings file with `hands:KeyE: "KeyK"` is read
+- **THEN** K is the interact key and F is not
+
+Pinned by `controls::tests::an_old_use_or_board_rebind_becomes_the_interact_key`,
+`settings::tests::an_old_file_with_a_custom_use_key_keeps_it`,
+`desktop::farm::tests::f_harvests_a_ripe_crop_and_picks_a_wild_plant`,
+`desktop::farm::tests::a_ray_meets_a_plant_by_its_side_and_its_top`,
+`vehicles::tests::f_boards_a_craft_only_when_nothing_usable_is_aimed`,
+`interact::tests::the_highest_offer_wins` and
+`controls::tests::a_rebound_key_presses_the_default_its_readers_read`.
+
+### Requirement: A prompt names what F will do
+
+While the player on foot looks at something F acts on, a prompt under the
+crosshair SHALL show the bound key and the verb and the thing (`F  Harvest
+wheat`), and nothing else; it SHALL name the action the next press performs,
+SHALL hide when nothing is offered and while a panel or menu is open, and
+SHALL NOT blink out as the aim crosses between cells. The owner, 2026-11-16:
+"F to harvest should popup, or F to open work bench etc."
+
+#### Scenario: Looking along a field
+- **WHEN** the aim sweeps across a row of ripe wheat
+- **THEN** the prompt reads `F  Harvest wheat` throughout, and goes when the
+  aim leaves the field
+
+Pinned by `interact::tests::the_prompt_holds_across_a_seam_and_goes_after`,
+`interact::tests::every_act_has_one_row_and_a_verb`,
+`interact::tests::with_nothing_named_every_reader_may_act` and
+`desktop::farm::tests::f_harvests_a_ripe_crop_and_picks_a_wild_plant` (the
+prompt's words before each press); the look in
+`docs/screenshots/interact-f/`.

@@ -374,6 +374,11 @@ impl RainRenderer {
 pub struct WeatherSettings {
     /// Seconds for ground wetness to follow the rain intensity (e-fold).
     pub wet_fade_tau_s: f32,
+    /// Seconds (e-fold) for the water that falls to give way to snow, and
+    /// back, where what falls changes between rain and snow: the lens drops,
+    /// the puddle rings, the rain fog and the wet sheen ease out rather than
+    /// switching (`rain-matches-map`).
+    pub snow_switch_s: f32,
     /// The wind a craft feels: the atmosphere's wind sheared with height and
     /// gusting (`pbd_core::wind`).
     pub gusts: pbd_core::wind::GustSettings,
@@ -485,6 +490,17 @@ pub struct WeatherSettings {
     /// (`0 <= fade <= reach`). Past the reach the ground is only wet.
     pub rain_detail_reach_m: f32,
     pub rain_detail_fade_m: f32,
+    /// What rain does to a plant (`flora-v2` 13.2; owner, 2026-11-16: "grass
+    /// blades shouldnt have rain shader on them"): a detailed tree and every
+    /// piece of ground clutter take only this darkening at full wetness, 0..1
+    /// (one: none), and none of the wet ground's film.
+    pub rain_plant_darken: f32,
+    /// The drops on the lens wet and dry over time (`weather-rain` R3; owner,
+    /// 2026-11-16): seconds (e-fold) for the lens's wetness to rise toward
+    /// the rain reaching it, and to fall when it stops or the eye is under
+    /// cover. Both positive.
+    pub lens_wet_tau_s: f32,
+    pub lens_dry_tau_s: f32,
     /// `weather-rain` 6.4, splashes where rain lands (the approved M32
     /// mockup): slots per near column (S), each firing once a cycle when the
     /// rain says so, and droplets per slot (K). The draw is S x K droplets a
@@ -657,6 +673,11 @@ pub struct WeatherSettings {
     pub rain_volume_range_m: f32,
     /// How much longer than wide a falling streak of the volume is.
     pub rain_volume_stretch: f32,
+    /// With RAIN SHADOW off (the volume off), the height fog in its place
+    /// (`weather-rain` 7): the height over the ground or sea under the eye,
+    /// along the body's local up, in which its density falls by e at full
+    /// rain, metres. Half as deep at no rain.
+    pub rain_height_fog_falloff_m: f32,
     /// The volume's colour, display (sRGB) RGB. Snow is `snow_color`.
     pub rain_volume_color: [f32; 3],
     /// Which renderer draws it (`rain-shells`): `Volume`, the march, or
@@ -692,6 +713,7 @@ impl Default for WeatherSettings {
     fn default() -> Self {
         Self {
             wet_fade_tau_s: 1.6,
+            snow_switch_s: 3.0,
             gusts: pbd_core::wind::GustSettings::default(),
             rain_fall_mps: 70.0,
             rain_width_m: 0.012,
@@ -744,6 +766,9 @@ impl Default for WeatherSettings {
             rain_lamp_specular: 1.0,
             rain_detail_reach_m: 20.0,
             rain_detail_fade_m: 4.0,
+            rain_plant_darken: 0.88,
+            lens_wet_tau_s: 3.0,
+            lens_dry_tau_s: 2.5,
             splash_slots: 48,
             splash_droplets: 8,
             splash_period_s: 0.5,
@@ -806,6 +831,7 @@ impl Default for WeatherSettings {
             rain_volume_density: 0.003,
             rain_volume_range_m: 2000.0,
             rain_volume_stretch: 10.0,
+            rain_height_fog_falloff_m: 250.0,
             rain_renderer: RainRenderer::Volume,
             rain_shell_soft_m: 4.0,
             rain_volume_color: [0.55, 0.58, 0.62],
@@ -880,12 +906,15 @@ impl Validated for WeatherSettings {
             .then_some(())
             .ok_or("snow_density must be within 0..=10")?;
         non_negative("rain_volume_color", &s.rain_volume_color)?;
+        positive("rain_height_fog_falloff_m", &[s.rain_height_fog_falloff_m])?;
         non_negative("rain_lamp_specular", &[s.rain_lamp_specular])?;
         positive("rain_detail_reach_m", &[s.rain_detail_reach_m])?;
         (s.rain_detail_fade_m.is_finite()
             && (0.0..=s.rain_detail_reach_m).contains(&s.rain_detail_fade_m))
         .then_some(())
         .ok_or("rain_detail_fade_m must be within 0..=rain_detail_reach_m")?;
+        unit("rain_plant_darken", s.rain_plant_darken)?;
+        positive("lens taus", &[s.lens_wet_tau_s, s.lens_dry_tau_s])?;
         (1..=64)
             .contains(&s.splash_slots)
             .then_some(())
@@ -1042,6 +1071,9 @@ impl Validated for WeatherSettings {
         (s.wet_fade_tau_s > 0.0)
             .then_some(())
             .ok_or("wet_fade_tau_s must be positive")?;
+        (s.snow_switch_s > 0.0)
+            .then_some(())
+            .ok_or("snow_switch_s must be positive")?;
         (s.rain_glint_power >= 1.0)
             .then_some(())
             .ok_or("rain_glint_power must be at least 1")?;
@@ -1137,6 +1169,16 @@ pub struct ScatterSettings {
     /// The mid ring's crossed cards to this distance, cross-fading into the
     /// far billboard the same way; past it the billboard to the trees' range.
     pub tree_mid_m: f32,
+    /// A tree's cross-fade is a moment in time, never a place (`flora-v2`
+    /// 13.3; owner, 2026-11-16: "dithering should either stay or go"): the
+    /// seconds a tree takes to fade from one representation to the next once
+    /// the camera has carried it across a threshold (zero: a hard switch).
+    pub tree_fade_s: f32,
+    /// The furthest, metres, the point the trees' representations are
+    /// decided at may trail the camera: the fade is shortened to keep under
+    /// it when the camera moves fast. Within 1..=6 m, inside the margins the
+    /// visibility pass lists the near model and the cards with.
+    pub tree_fade_lag_m: f32,
 }
 
 impl Default for ScatterSettings {
@@ -1171,6 +1213,8 @@ impl Default for ScatterSettings {
             fruit_chance: 0.5,
             tree_near_m: 44.,
             tree_mid_m: 90.,
+            tree_fade_s: 0.5,
+            tree_fade_lag_m: 5.0,
         }
     }
 }
@@ -1218,6 +1262,12 @@ impl Validated for ScatterSettings {
             && self.tree_mid_m <= crate::planet::BAND_M[1])
             .then_some(())
             .ok_or("tree_mid_m must lie between tree_near_m and the trees' range")?;
+        (self.tree_fade_s.is_finite() && (0.0..=2.0).contains(&self.tree_fade_s))
+            .then_some(())
+            .ok_or("tree_fade_s must lie within 0 and 2 s")?;
+        (self.tree_fade_lag_m.is_finite() && (1.0..=6.0).contains(&self.tree_fade_lag_m))
+            .then_some(())
+            .ok_or("tree_fade_lag_m must lie within 1 and 6 m")?;
         (self.leaf_size.is_finite() && (0.5..=2.0).contains(&self.leaf_size))
             .then_some(())
             .ok_or("leaf_size must lie within 0.5 and 2")?;
@@ -1675,33 +1725,53 @@ impl LightingSettings {
         self.reflect_base() && !REFLECT_OFF.all()
     }
 
-    /// L8: whether a wet face's reflected ray walks the columns.
-    pub fn reflect_walk_on(&self) -> bool {
-        self.reflect_base() && !REFLECT_OFF.walk
+    /// L8: whether a wet face's reflected ray walks the columns at the
+    /// player's `level`: the voxel walk, which LOW and OFF leave out
+    /// (`reflection-quality`: the owner's "raycast thing where it finds the
+    /// geometry facing groundward").
+    pub fn reflect_walk_on(&self, level: Reflections) -> bool {
+        self.reflect_base() && !REFLECT_OFF.walk && level >= Reflections::Medium
     }
 
     /// L8: whether a wet face's ray that the walk did not stop marches the
-    /// screen (last frame's capture).
-    pub fn reflect_screen_on(&self) -> bool {
-        self.reflect_base() && !REFLECT_OFF.screen
+    /// screen (last frame's capture). OFF leaves it out.
+    pub fn reflect_screen_on(&self, level: Reflections) -> bool {
+        self.reflect_base() && !REFLECT_OFF.screen && level >= Reflections::Low
     }
 
-    /// L8: whether the sea's reflected ray marches the screen.
-    pub fn reflect_sea_on(&self) -> bool {
-        self.reflect_base() && !REFLECT_OFF.sea
+    /// L8: whether the sea's reflected ray marches the screen. OFF leaves it
+    /// out.
+    pub fn reflect_sea_on(&self, level: Reflections) -> bool {
+        self.reflect_base() && !REFLECT_OFF.sea && level >= Reflections::Low
     }
 
     /// L8: whether last frame's colour and distances are captured for the
     /// screen traces to read. Off, both screen traces see no history and
-    /// return nothing, as they do on the first frame.
-    pub fn reflect_capture_on(&self) -> bool {
-        self.reflect_base() && !REFLECT_OFF.capture
+    /// return nothing, as they do on the first frame. OFF captures nothing.
+    pub fn reflect_capture_on(&self, level: Reflections) -> bool {
+        self.reflect_base() && !REFLECT_OFF.capture && level >= Reflections::Low
     }
 
     /// L8 (`lighting-perf` 2.8): whether the terrain leaves its traces to the
     /// half-size pass. Both traces off, there is nothing to trace.
-    pub fn reflect_split_on(&self) -> bool {
-        self.reflect_scale() < 1.0 && (self.reflect_walk_on() || self.reflect_screen_on())
+    pub fn reflect_split_on(&self, level: Reflections) -> bool {
+        self.reflect_scale() < 1.0 && (self.reflect_walk_on(level) || self.reflect_screen_on(level))
+    }
+
+    /// Whether some level splits, so its pipeline is compiled behind the
+    /// loading screen whatever level the game starts at (`reflection-quality`
+    /// 4).
+    pub fn reflect_split_possible(&self) -> bool {
+        self.reflect_split_on(Reflections::High)
+    }
+
+    /// How far wet ground's walk and screen trace reach, m: MEDIUM halves
+    /// `reflection_reach_m` (`reflection-quality` 2).
+    pub fn reflect_reach_m(&self, level: Reflections) -> f32 {
+        match level {
+            Reflections::Medium => self.reflection_reach_m * 0.5,
+            _ => self.reflection_reach_m,
+        }
     }
 
     /// L8's trace scale, after the environment's say (`PBD_REFLECT_SCALE`).
@@ -1719,6 +1789,50 @@ impl LightingSettings {
         ENV.lighting.unwrap_or(self.new_model)
     }
 }
+
+/// The player's REFLECTIONS (`reflection-quality`), laid over the switches
+/// above: HIGH is L8 as it was; MEDIUM halves wet ground's reach; LOW drops
+/// the voxel walk and keeps the screen traces; OFF runs no reflection pass.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, Deserialize,
+)]
+pub enum Reflections {
+    Off,
+    Low,
+    Medium,
+    #[default]
+    High,
+}
+
+impl Reflections {
+    /// Low to high: the slider's steps.
+    pub const ALL: [Self; 4] = [Self::Off, Self::Low, Self::Medium, Self::High];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => "OFF",
+            Self::Low => "LOW",
+            Self::Medium => "MEDIUM",
+            Self::High => "HIGH",
+        }
+    }
+
+    /// From a flag's word.
+    pub fn parse(word: &str) -> Option<Self> {
+        match word {
+            "off" => Some(Self::Off),
+            "low" => Some(Self::Low),
+            "medium" | "med" => Some(Self::Medium),
+            "high" => Some(Self::High),
+            _ => None,
+        }
+    }
+}
+
+/// The level the render world draws at; the player's setting follows into it
+/// (`settings::follow_reflections`). HIGH where nothing has chosen.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq, ExtractResource)]
+pub struct ReflectQuality(pub Reflections);
 
 /// `PBD_REFLECT`: a pricing instrument (`lighting-perf` 1.1), not a
 /// setting. `0` switches every part of L8 off, as it always has; otherwise a
@@ -1836,7 +1950,9 @@ impl Plugin for ConfigPlugin {
             bevy::render::extract_resource::ExtractResourcePlugin::<ScatterSettings>::default(),
             bevy::render::extract_resource::ExtractResourcePlugin::<ColumnSettings>::default(),
             bevy::render::extract_resource::ExtractResourcePlugin::<LightingSettings>::default(),
+            bevy::render::extract_resource::ExtractResourcePlugin::<ReflectQuality>::default(),
         ));
+        app.init_resource::<ReflectQuality>();
     }
 }
 
@@ -1856,6 +1972,41 @@ mod tests {
         assert!(terrain.walk && terrain.screen && terrain.capture && !terrain.sea);
         assert!(ReflectOff::parse(Some("walk,screen,sea,capture")).all());
         assert_eq!(ReflectOff::parse(Some("1")), ReflectOff::default());
+    }
+
+    /// `reflection-quality`: what each REFLECTIONS level runs. HIGH is L8 as
+    /// it was; MEDIUM halves the reach; LOW drops the voxel walk and keeps
+    /// the screen traces; OFF runs nothing, so nothing splits.
+    #[test]
+    fn each_reflections_level_runs_its_parts() {
+        use super::{LightingSettings, Reflections};
+        let l = LightingSettings::default();
+        let parts = |level| {
+            (
+                l.reflect_capture_on(level),
+                l.reflect_walk_on(level),
+                l.reflect_screen_on(level),
+                l.reflect_sea_on(level),
+                l.reflect_split_on(level),
+            )
+        };
+        assert_eq!(parts(Reflections::High), (true, true, true, true, true));
+        assert_eq!(parts(Reflections::Medium), (true, true, true, true, true));
+        assert_eq!(parts(Reflections::Low), (true, false, true, true, true));
+        assert_eq!(parts(Reflections::Off), (false, false, false, false, false));
+        assert_eq!(l.reflect_reach_m(Reflections::High), l.reflection_reach_m);
+        assert_eq!(
+            l.reflect_reach_m(Reflections::Medium),
+            l.reflection_reach_m * 0.5
+        );
+        assert!(l.reflect_split_possible());
+        assert_eq!(Reflections::default(), Reflections::High);
+        for level in Reflections::ALL {
+            assert_eq!(
+                Reflections::parse(&level.label().to_lowercase()),
+                Some(level)
+            );
+        }
     }
 
     use super::*;

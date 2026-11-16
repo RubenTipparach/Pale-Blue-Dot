@@ -50,7 +50,7 @@ struct Params {
     lamp_bake: vec4<f32>,      // L7: x the newest bake's fade-in 0..1, y the older half holds this set, z the newest does, w the newest half
     ssr_clip: mat4x4<f32>,     // L8 (10.2): the screen trace history's clip_from_body
     ssr_eye: vec4<f32>,        // and its eye; w one once there is a history
-    rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m
+    rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m; z a plant's darkening at full wetness (`flora-v2` 13.2)
     light_ease: vec4<f32>,     // `baked-light-ease` 7.3: x the light field's newest half blended in 0..1, y that half, z one while the other is blended from
     flora: vec4<f32>,          // `flora-v2`: x tufts per cell (zero: blades), y tuft width m, z tuft height m, w the year 0..1
     flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
@@ -58,6 +58,7 @@ struct Params {
     tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
     plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits (low 16), tree table (high 16)
     flora_fall: vec4<f32>,     // 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w fruit chance
+    tree_fade: array<vec4<f32>,2>, // `flora-v2` 13.3: the point the trees' cross-fade runs from (w its progress 0..1), the point it runs to
     night: vec4<f32>,          // `night-lights-from-space`: x how many far lights `night_lights` holds
     night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
     felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty

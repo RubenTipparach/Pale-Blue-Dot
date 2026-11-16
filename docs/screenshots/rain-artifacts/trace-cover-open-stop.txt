@@ -1,0 +1,320 @@
+WEATHER_TRACE t 0.25 rain 1.000 wetness 0.991 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 0.25 lens_rain 1.000 lens_wet 0.079 drop_clock 0.25
+WEATHER_TRACE t 0.50 rain 1.000 wetness 0.992 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 0.50 lens_rain 1.000 lens_wet 0.152 drop_clock 0.50
+WEATHER_TRACE t 0.75 rain 1.000 wetness 0.993 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 0.75 lens_rain 1.000 lens_wet 0.220 drop_clock 0.75
+WEATHER_TRACE t 1.00 rain 1.000 wetness 0.994 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 1.00 lens_rain 1.000 lens_wet 0.282 drop_clock 1.00
+WEATHER_TRACE t 1.25 rain 1.000 wetness 0.995 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 1.25 lens_rain 1.000 lens_wet 0.340 drop_clock 1.25
+WEATHER_TRACE t 1.50 rain 1.000 wetness 0.996 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 1.50 lens_rain 1.000 lens_wet 0.392 drop_clock 1.50
+WEATHER_TRACE t 1.75 rain 1.000 wetness 0.996 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 1.75 lens_rain 1.000 lens_wet 0.441 drop_clock 1.75
+WEATHER_TRACE t 2.00 rain 1.000 wetness 0.997 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 2.00 lens_rain 1.000 lens_wet 0.486 drop_clock 2.00
+WEATHER_TRACE t 2.25 rain 1.000 wetness 0.997 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 2.25 lens_rain 1.000 lens_wet 0.527 drop_clock 2.25
+WEATHER_TRACE t 2.50 rain 1.000 wetness 0.998 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 2.50 lens_rain 1.000 lens_wet 0.565 drop_clock 2.50
+WEATHER_TRACE t 2.75 rain 1.000 wetness 0.998 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 2.75 lens_rain 1.000 lens_wet 0.599 drop_clock 2.75
+WEATHER_TRACE t 3.00 rain 1.000 wetness 0.998 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 3.00 lens_rain 1.000 lens_wet 0.631 drop_clock 3.00
+WEATHER_TRACE t 3.25 rain 1.000 wetness 0.998 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 3.25 lens_rain 1.000 lens_wet 0.661 drop_clock 3.25
+WEATHER_TRACE t 3.50 rain 1.000 wetness 0.999 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 3.50 lens_rain 1.000 lens_wet 0.688 drop_clock 3.50
+WEATHER_TRACE t 3.75 rain 1.000 wetness 0.999 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 3.75 lens_rain 1.000 lens_wet 0.713 drop_clock 3.75
+WEATHER_TRACE t 4.00 rain 1.000 wetness 0.999 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 4.00 lens_rain 1.000 lens_wet 0.736 drop_clock 4.00
+WEATHER_TRACE t 4.25 rain 1.000 wetness 0.999 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 4.25 lens_rain 1.000 lens_wet 0.757 drop_clock 4.25
+WEATHER_TRACE t 4.50 rain 1.000 wetness 0.999 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 4.50 lens_rain 1.000 lens_wet 0.776 drop_clock 4.50
+WEATHER_TRACE t 4.75 rain 1.000 wetness 0.999 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 4.75 lens_rain 1.000 lens_wet 0.794 drop_clock 4.75
+WEATHER_SCRIPT cover at frame 846
+WEATHER_TRACE t 5.00 rain 1.000 wetness 0.999 sheltered true shower_open 0.959 streaks 3105
+LENS_TRACE t 5.00 lens_rain 0.000 lens_wet 0.804 drop_clock 4.98
+WEATHER_TRACE t 5.25 rain 1.000 wetness 0.999 sheltered true shower_open 0.513 streaks 2328
+LENS_TRACE t 5.25 lens_rain 0.000 lens_wet 0.728 drop_clock 4.98
+WEATHER_TRACE t 5.50 rain 1.000 wetness 0.999 sheltered true shower_open 0.275 streaks 1943
+LENS_TRACE t 5.50 lens_rain 0.000 lens_wet 0.658 drop_clock 4.98
+WEATHER_TRACE t 5.75 rain 1.000 wetness 0.999 sheltered true shower_open 0.147 streaks 1725
+LENS_TRACE t 5.75 lens_rain 0.000 lens_wet 0.596 drop_clock 4.98
+WEATHER_TRACE t 6.00 rain 1.000 wetness 0.999 sheltered true shower_open 0.079 streaks 1604
+LENS_TRACE t 6.00 lens_rain 0.000 lens_wet 0.539 drop_clock 4.98
+WEATHER_TRACE t 6.25 rain 1.000 wetness 0.999 sheltered true shower_open 0.042 streaks 1551
+LENS_TRACE t 6.25 lens_rain 0.000 lens_wet 0.488 drop_clock 4.98
+WEATHER_TRACE t 6.50 rain 1.000 wetness 0.999 sheltered true shower_open 0.023 streaks 1516
+LENS_TRACE t 6.50 lens_rain 0.000 lens_wet 0.441 drop_clock 4.98
+WEATHER_TRACE t 6.75 rain 1.000 wetness 1.000 sheltered true shower_open 0.012 streaks 1504
+LENS_TRACE t 6.75 lens_rain 0.000 lens_wet 0.399 drop_clock 4.98
+WEATHER_TRACE t 7.00 rain 1.000 wetness 1.000 sheltered true shower_open 0.006 streaks 1496
+LENS_TRACE t 7.00 lens_rain 0.000 lens_wet 0.361 drop_clock 4.98
+WEATHER_TRACE t 7.25 rain 1.000 wetness 1.000 sheltered true shower_open 0.003 streaks 1489
+LENS_TRACE t 7.25 lens_rain 0.000 lens_wet 0.327 drop_clock 4.98
+WEATHER_TRACE t 7.50 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 7.50 lens_rain 0.000 lens_wet 0.296 drop_clock 4.98
+WEATHER_TRACE t 7.75 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 7.75 lens_rain 0.000 lens_wet 0.268 drop_clock 4.98
+WEATHER_TRACE t 8.00 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+WEATHER_TRACE t 8.02 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 8.00 lens_rain 0.000 lens_wet 0.242 drop_clock 4.98
+WEATHER_TRACE t 8.25 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 8.25 lens_rain 0.000 lens_wet 0.219 drop_clock 4.98
+WEATHER_TRACE t 8.50 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 8.50 lens_rain 0.000 lens_wet 0.198 drop_clock 4.98
+WEATHER_TRACE t 8.75 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 8.75 lens_rain 0.000 lens_wet 0.179 drop_clock 4.98
+WEATHER_TRACE t 9.00 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 9.00 lens_rain 0.000 lens_wet 0.162 drop_clock 4.98
+WEATHER_TRACE t 9.25 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 9.25 lens_rain 0.000 lens_wet 0.147 drop_clock 4.98
+WEATHER_TRACE t 9.50 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 9.50 lens_rain 0.000 lens_wet 0.133 drop_clock 4.98
+WEATHER_TRACE t 9.75 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 9.75 lens_rain 0.000 lens_wet 0.120 drop_clock 4.98
+WEATHER_TRACE t 10.00 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 10.00 lens_rain 0.000 lens_wet 0.109 drop_clock 4.98
+WEATHER_TRACE t 10.25 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 10.25 lens_rain 0.000 lens_wet 0.098 drop_clock 4.98
+WEATHER_TRACE t 10.50 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 10.50 lens_rain 0.000 lens_wet 0.089 drop_clock 4.98
+WEATHER_TRACE t 10.75 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 10.75 lens_rain 0.000 lens_wet 0.081 drop_clock 4.98
+WEATHER_TRACE t 11.00 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 11.00 lens_rain 0.000 lens_wet 0.073 drop_clock 4.98
+WEATHER_TRACE t 11.25 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 11.25 lens_rain 0.000 lens_wet 0.066 drop_clock 4.98
+WEATHER_TRACE t 11.50 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 11.50 lens_rain 0.000 lens_wet 0.060 drop_clock 4.98
+WEATHER_TRACE t 11.75 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 11.75 lens_rain 0.000 lens_wet 0.054 drop_clock 4.98
+WEATHER_TRACE t 12.00 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 12.00 lens_rain 0.000 lens_wet 0.049 drop_clock 4.98
+WEATHER_TRACE t 12.25 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 12.25 lens_rain 0.000 lens_wet 0.044 drop_clock 4.98
+WEATHER_TRACE t 12.50 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 12.50 lens_rain 0.000 lens_wet 0.040 drop_clock 4.98
+WEATHER_TRACE t 12.75 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 12.75 lens_rain 0.000 lens_wet 0.036 drop_clock 4.98
+WEATHER_TRACE t 13.00 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 13.00 lens_rain 0.000 lens_wet 0.033 drop_clock 4.98
+WEATHER_TRACE t 13.25 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 13.25 lens_rain 0.000 lens_wet 0.030 drop_clock 4.98
+WEATHER_TRACE t 13.50 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 13.50 lens_rain 0.000 lens_wet 0.027 drop_clock 4.98
+WEATHER_TRACE t 13.75 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 13.75 lens_rain 0.000 lens_wet 0.024 drop_clock 4.98
+WEATHER_TRACE t 14.00 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 14.00 lens_rain 0.000 lens_wet 0.022 drop_clock 4.98
+WEATHER_TRACE t 14.25 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 14.25 lens_rain 0.000 lens_wet 0.020 drop_clock 4.98
+WEATHER_TRACE t 14.50 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 14.50 lens_rain 0.000 lens_wet 0.018 drop_clock 4.98
+WEATHER_TRACE t 14.75 rain 1.000 wetness 1.000 sheltered true shower_open 0.000 streaks 1482
+LENS_TRACE t 14.75 lens_rain 0.000 lens_wet 0.016 drop_clock 4.98
+WEATHER_SCRIPT open at frame 1446
+WEATHER_TRACE t 15.00 rain 1.000 wetness 1.000 sheltered false shower_open 0.041 streaks 1547
+LENS_TRACE t 15.00 lens_rain 1.000 lens_wet 0.020 drop_clock 5.00
+WEATHER_TRACE t 15.25 rain 1.000 wetness 1.000 sheltered false shower_open 0.487 streaks 2280
+LENS_TRACE t 15.25 lens_rain 1.000 lens_wet 0.099 drop_clock 5.25
+WEATHER_TRACE t 15.50 rain 1.000 wetness 1.000 sheltered false shower_open 0.725 streaks 2669
+LENS_TRACE t 15.50 lens_rain 1.000 lens_wet 0.171 drop_clock 5.50
+WEATHER_TRACE t 15.75 rain 1.000 wetness 1.000 sheltered false shower_open 0.853 streaks 2924
+LENS_TRACE t 15.75 lens_rain 1.000 lens_wet 0.237 drop_clock 5.75
+WEATHER_TRACE t 16.00 rain 1.000 wetness 1.000 sheltered false shower_open 0.921 streaks 3037
+LENS_TRACE t 16.00 lens_rain 1.000 lens_wet 0.298 drop_clock 6.00
+WEATHER_TRACE t 16.25 rain 1.000 wetness 1.000 sheltered false shower_open 0.958 streaks 3103
+LENS_TRACE t 16.25 lens_rain 1.000 lens_wet 0.354 drop_clock 6.25
+WEATHER_TRACE t 16.50 rain 1.000 wetness 1.000 sheltered false shower_open 0.977 streaks 3146
+LENS_TRACE t 16.50 lens_rain 1.000 lens_wet 0.406 drop_clock 6.50
+WEATHER_TRACE t 16.75 rain 1.000 wetness 1.000 sheltered false shower_open 0.988 streaks 3164
+LENS_TRACE t 16.75 lens_rain 1.000 lens_wet 0.453 drop_clock 6.75
+WEATHER_TRACE t 17.00 rain 1.000 wetness 1.000 sheltered false shower_open 0.994 streaks 3172
+LENS_TRACE t 17.00 lens_rain 1.000 lens_wet 0.497 drop_clock 7.00
+WEATHER_TRACE t 17.25 rain 1.000 wetness 1.000 sheltered false shower_open 0.997 streaks 3177
+LENS_TRACE t 17.25 lens_rain 1.000 lens_wet 0.537 drop_clock 7.25
+WEATHER_TRACE t 17.50 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 17.50 lens_rain 1.000 lens_wet 0.574 drop_clock 7.50
+WEATHER_TRACE t 17.75 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 17.75 lens_rain 1.000 lens_wet 0.608 drop_clock 7.75
+WEATHER_TRACE t 18.00 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 18.00 lens_rain 1.000 lens_wet 0.639 drop_clock 8.00
+WEATHER_TRACE t 18.25 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 18.25 lens_rain 1.000 lens_wet 0.668 drop_clock 8.25
+WEATHER_TRACE t 18.50 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 18.50 lens_rain 1.000 lens_wet 0.695 drop_clock 8.50
+WEATHER_TRACE t 18.75 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 18.75 lens_rain 1.000 lens_wet 0.719 drop_clock 8.75
+WEATHER_TRACE t 19.00 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 19.00 lens_rain 1.000 lens_wet 0.741 drop_clock 9.00
+WEATHER_TRACE t 19.25 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 19.25 lens_rain 1.000 lens_wet 0.762 drop_clock 9.25
+WEATHER_TRACE t 19.50 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 19.50 lens_rain 1.000 lens_wet 0.781 drop_clock 9.50
+WEATHER_TRACE t 19.75 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 19.75 lens_rain 1.000 lens_wet 0.799 drop_clock 9.75
+WEATHER_TRACE t 20.00 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 20.00 lens_rain 1.000 lens_wet 0.815 drop_clock 10.00
+WEATHER_TRACE t 20.25 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 20.25 lens_rain 1.000 lens_wet 0.829 drop_clock 10.25
+WEATHER_TRACE t 20.50 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 20.50 lens_rain 1.000 lens_wet 0.843 drop_clock 10.50
+WEATHER_TRACE t 20.75 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 20.75 lens_rain 1.000 lens_wet 0.856 drop_clock 10.75
+WEATHER_TRACE t 21.00 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 21.00 lens_rain 1.000 lens_wet 0.867 drop_clock 11.00
+WEATHER_TRACE t 21.25 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 21.25 lens_rain 1.000 lens_wet 0.878 drop_clock 11.25
+WEATHER_TRACE t 21.50 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 21.50 lens_rain 1.000 lens_wet 0.887 drop_clock 11.50
+WEATHER_TRACE t 21.75 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 21.75 lens_rain 1.000 lens_wet 0.896 drop_clock 11.75
+WEATHER_TRACE t 22.00 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 22.00 lens_rain 1.000 lens_wet 0.905 drop_clock 12.00
+WEATHER_TRACE t 22.25 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 22.25 lens_rain 1.000 lens_wet 0.912 drop_clock 12.25
+WEATHER_TRACE t 22.50 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 22.50 lens_rain 1.000 lens_wet 0.919 drop_clock 12.50
+WEATHER_TRACE t 22.75 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 22.75 lens_rain 1.000 lens_wet 0.926 drop_clock 12.75
+WEATHER_TRACE t 23.00 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 23.00 lens_rain 1.000 lens_wet 0.932 drop_clock 13.00
+WEATHER_TRACE t 23.25 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 23.25 lens_rain 1.000 lens_wet 0.937 drop_clock 13.25
+WEATHER_TRACE t 23.50 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 23.50 lens_rain 1.000 lens_wet 0.942 drop_clock 13.50
+WEATHER_TRACE t 23.75 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 23.75 lens_rain 1.000 lens_wet 0.947 drop_clock 13.75
+WEATHER_TRACE t 24.00 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 24.00 lens_rain 1.000 lens_wet 0.951 drop_clock 14.00
+WEATHER_TRACE t 24.25 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 24.25 lens_rain 1.000 lens_wet 0.955 drop_clock 14.25
+WEATHER_TRACE t 24.50 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 24.50 lens_rain 1.000 lens_wet 0.958 drop_clock 14.50
+WEATHER_TRACE t 24.75 rain 1.000 wetness 1.000 sheltered false shower_open 1.000 streaks 3181
+LENS_TRACE t 24.75 lens_rain 1.000 lens_wet 0.962 drop_clock 14.75
+WEATHER_SCRIPT dry at frame 2046
+WEATHER_TRACE t 25.00 rain 0.999 wetness 1.000 sheltered false shower_open 1.000 streaks 3179
+LENS_TRACE t 25.00 lens_rain 0.999 lens_wet 0.965 drop_clock 15.00
+WEATHER_TRACE t 25.25 rain 0.986 wetness 0.999 sheltered false shower_open 1.000 streaks 3158
+LENS_TRACE t 25.25 lens_rain 0.986 lens_wet 0.967 drop_clock 15.25
+WEATHER_TRACE t 25.50 rain 0.974 wetness 0.996 sheltered false shower_open 1.000 streaks 3138
+LENS_TRACE t 25.50 lens_rain 0.974 lens_wet 0.968 drop_clock 15.50
+WEATHER_TRACE t 25.75 rain 0.962 wetness 0.992 sheltered false shower_open 1.000 streaks 3117
+LENS_TRACE t 25.75 lens_rain 0.962 lens_wet 0.968 drop_clock 15.75
+WEATHER_TRACE t 26.00 rain 0.950 wetness 0.986 sheltered false shower_open 1.000 streaks 3097
+LENS_TRACE t 26.00 lens_rain 0.950 lens_wet 0.967 drop_clock 16.00
+WEATHER_TRACE t 26.25 rain 0.938 wetness 0.980 sheltered false shower_open 1.000 streaks 3077
+LENS_TRACE t 26.25 lens_rain 0.938 lens_wet 0.965 drop_clock 16.24
+WEATHER_TRACE t 26.50 rain 0.927 wetness 0.973 sheltered false shower_open 1.000 streaks 3057
+LENS_TRACE t 26.50 lens_rain 0.927 lens_wet 0.961 drop_clock 16.48
+WEATHER_TRACE t 26.75 rain 0.915 wetness 0.966 sheltered false shower_open 1.000 streaks 3037
+LENS_TRACE t 26.75 lens_rain 0.915 lens_wet 0.958 drop_clock 16.72
+WEATHER_TRACE t 27.00 rain 0.904 wetness 0.957 sheltered false shower_open 1.000 streaks 3018
+LENS_TRACE t 27.00 lens_rain 0.904 lens_wet 0.953 drop_clock 16.96
+WEATHER_TRACE t 27.25 rain 0.893 wetness 0.949 sheltered false shower_open 1.000 streaks 2999
+LENS_TRACE t 27.25 lens_rain 0.893 lens_wet 0.948 drop_clock 17.20
+WEATHER_TRACE t 27.50 rain 0.881 wetness 0.940 sheltered false shower_open 1.000 streaks 2980
+LENS_TRACE t 27.50 lens_rain 0.881 lens_wet 0.942 drop_clock 17.43
+WEATHER_TRACE t 27.75 rain 0.871 wetness 0.930 sheltered false shower_open 1.000 streaks 2961
+LENS_TRACE t 27.75 lens_rain 0.871 lens_wet 0.936 drop_clock 17.66
+WEATHER_TRACE t 28.00 rain 0.860 wetness 0.921 sheltered false shower_open 1.000 streaks 2943
+LENS_TRACE t 28.00 lens_rain 0.860 lens_wet 0.929 drop_clock 17.90
+WEATHER_TRACE t 28.25 rain 0.849 wetness 0.911 sheltered false shower_open 1.000 streaks 2925
+LENS_TRACE t 28.25 lens_rain 0.849 lens_wet 0.922 drop_clock 18.13
+WEATHER_TRACE t 28.50 rain 0.838 wetness 0.901 sheltered false shower_open 1.000 streaks 2907
+LENS_TRACE t 28.50 lens_rain 0.838 lens_wet 0.914 drop_clock 18.36
+WEATHER_TRACE t 28.75 rain 0.828 wetness 0.891 sheltered false shower_open 1.000 streaks 2889
+LENS_TRACE t 28.75 lens_rain 0.828 lens_wet 0.906 drop_clock 18.59
+WEATHER_TRACE t 29.00 rain 0.818 wetness 0.881 sheltered false shower_open 1.000 streaks 2872
+LENS_TRACE t 29.00 lens_rain 0.818 lens_wet 0.898 drop_clock 18.81
+WEATHER_TRACE t 29.25 rain 0.808 wetness 0.871 sheltered false shower_open 1.000 streaks 2854
+LENS_TRACE t 29.25 lens_rain 0.808 lens_wet 0.890 drop_clock 19.04
+WEATHER_TRACE t 29.50 rain 0.798 wetness 0.861 sheltered false shower_open 1.000 streaks 2837
+LENS_TRACE t 29.50 lens_rain 0.798 lens_wet 0.882 drop_clock 19.27
+WEATHER_TRACE t 29.75 rain 0.788 wetness 0.851 sheltered false shower_open 1.000 streaks 2821
+LENS_TRACE t 29.75 lens_rain 0.788 lens_wet 0.873 drop_clock 19.49
+WEATHER_TRACE t 30.00 rain 0.778 wetness 0.841 sheltered false shower_open 1.000 streaks 2804
+LENS_TRACE t 30.00 lens_rain 0.778 lens_wet 0.865 drop_clock 19.72
+WEATHER_TRACE t 30.25 rain 0.768 wetness 0.831 sheltered false shower_open 1.000 streaks 2787
+LENS_TRACE t 30.25 lens_rain 0.768 lens_wet 0.856 drop_clock 19.94
+WEATHER_TRACE t 30.50 rain 0.759 wetness 0.822 sheltered false shower_open 1.000 streaks 2771
+LENS_TRACE t 30.50 lens_rain 0.759 lens_wet 0.847 drop_clock 20.17
+WEATHER_TRACE t 30.75 rain 0.749 wetness 0.812 sheltered false shower_open 1.000 streaks 2755
+LENS_TRACE t 30.75 lens_rain 0.749 lens_wet 0.838 drop_clock 20.39
+WEATHER_TRACE t 31.00 rain 0.740 wetness 0.802 sheltered false shower_open 1.000 streaks 2739
+LENS_TRACE t 31.00 lens_rain 0.740 lens_wet 0.829 drop_clock 20.61
+WEATHER_TRACE t 31.25 rain 0.731 wetness 0.792 sheltered false shower_open 1.000 streaks 2724
+LENS_TRACE t 31.25 lens_rain 0.731 lens_wet 0.820 drop_clock 20.84
+WEATHER_TRACE t 31.50 rain 0.722 wetness 0.783 sheltered false shower_open 1.000 streaks 2708
+LENS_TRACE t 31.50 lens_rain 0.722 lens_wet 0.811 drop_clock 21.06
+WEATHER_TRACE t 31.75 rain 0.713 wetness 0.773 sheltered false shower_open 1.000 streaks 2693
+LENS_TRACE t 31.75 lens_rain 0.713 lens_wet 0.802 drop_clock 21.28
+WEATHER_TRACE t 32.00 rain 0.704 wetness 0.764 sheltered false shower_open 1.000 streaks 2678
+LENS_TRACE t 32.00 lens_rain 0.704 lens_wet 0.793 drop_clock 21.50
+WEATHER_TRACE t 32.25 rain 0.695 wetness 0.754 sheltered false shower_open 1.000 streaks 2663
+LENS_TRACE t 32.25 lens_rain 0.695 lens_wet 0.784 drop_clock 21.73
+WEATHER_TRACE t 32.50 rain 0.686 wetness 0.745 sheltered false shower_open 1.000 streaks 2649
+LENS_TRACE t 32.50 lens_rain 0.686 lens_wet 0.775 drop_clock 21.95
+WEATHER_TRACE t 32.75 rain 0.678 wetness 0.736 sheltered false shower_open 1.000 streaks 2634
+LENS_TRACE t 32.75 lens_rain 0.678 lens_wet 0.767 drop_clock 22.17
+WEATHER_TRACE t 33.00 rain 0.670 wetness 0.727 sheltered false shower_open 1.000 streaks 2620
+LENS_TRACE t 33.00 lens_rain 0.670 lens_wet 0.758 drop_clock 22.39
+WEATHER_TRACE t 33.25 rain 0.661 wetness 0.718 sheltered false shower_open 1.000 streaks 2606
+LENS_TRACE t 33.25 lens_rain 0.661 lens_wet 0.749 drop_clock 22.61
+WEATHER_TRACE t 33.50 rain 0.653 wetness 0.709 sheltered false shower_open 1.000 streaks 2592
+LENS_TRACE t 33.50 lens_rain 0.653 lens_wet 0.740 drop_clock 22.83
+WEATHER_TRACE t 33.75 rain 0.645 wetness 0.700 sheltered false shower_open 1.000 streaks 2578
+LENS_TRACE t 33.75 lens_rain 0.645 lens_wet 0.731 drop_clock 23.05
+WEATHER_TRACE t 34.00 rain 0.637 wetness 0.692 sheltered false shower_open 1.000 streaks 2564
+LENS_TRACE t 34.00 lens_rain 0.637 lens_wet 0.723 drop_clock 23.27
+WEATHER_TRACE t 34.25 rain 0.629 wetness 0.683 sheltered false shower_open 1.000 streaks 2551
+LENS_TRACE t 34.25 lens_rain 0.629 lens_wet 0.714 drop_clock 23.49
+WEATHER_TRACE t 34.50 rain 0.621 wetness 0.675 sheltered false shower_open 1.000 streaks 2537
+LENS_TRACE t 34.50 lens_rain 0.621 lens_wet 0.706 drop_clock 23.71
+WEATHER_TRACE t 34.75 rain 0.613 wetness 0.666 sheltered false shower_open 1.000 streaks 2524
+LENS_TRACE t 34.75 lens_rain 0.613 lens_wet 0.697 drop_clock 23.93
+WEATHER_TRACE t 35.00 rain 0.606 wetness 0.658 sheltered false shower_open 1.000 streaks 2511
+LENS_TRACE t 35.00 lens_rain 0.606 lens_wet 0.689 drop_clock 24.15
+WEATHER_TRACE t 35.25 rain 0.598 wetness 0.650 sheltered false shower_open 1.000 streaks 2499
+LENS_TRACE t 35.25 lens_rain 0.598 lens_wet 0.681 drop_clock 24.37
+WEATHER_TRACE t 35.50 rain 0.591 wetness 0.642 sheltered false shower_open 1.000 streaks 2486
+LENS_TRACE t 35.50 lens_rain 0.591 lens_wet 0.672 drop_clock 24.59
+WEATHER_TRACE t 35.75 rain 0.584 wetness 0.634 sheltered false shower_open 1.000 streaks 2473
+LENS_TRACE t 35.75 lens_rain 0.584 lens_wet 0.664 drop_clock 24.81
+WEATHER_TRACE t 36.00 rain 0.576 wetness 0.626 sheltered false shower_open 1.000 streaks 2461
+LENS_TRACE t 36.00 lens_rain 0.576 lens_wet 0.656 drop_clock 25.03
+WEATHER_TRACE t 36.25 rain 0.569 wetness 0.618 sheltered false shower_open 1.000 streaks 2449
+LENS_TRACE t 36.25 lens_rain 0.569 lens_wet 0.648 drop_clock 25.25
+WEATHER_TRACE t 36.50 rain 0.562 wetness 0.611 sheltered false shower_open 1.000 streaks 2437
+LENS_TRACE t 36.50 lens_rain 0.562 lens_wet 0.640 drop_clock 25.47
+WEATHER_TRACE t 36.75 rain 0.555 wetness 0.603 sheltered false shower_open 1.000 streaks 2425
+LENS_TRACE t 36.75 lens_rain 0.555 lens_wet 0.632 drop_clock 25.69
+WEATHER_TRACE t 37.00 rain 0.548 wetness 0.596 sheltered false shower_open 1.000 streaks 2413
+LENS_TRACE t 37.00 lens_rain 0.548 lens_wet 0.625 drop_clock 25.91
+WEATHER_TRACE t 37.25 rain 0.541 wetness 0.588 sheltered false shower_open 1.000 streaks 2402
+LENS_TRACE t 37.25 lens_rain 0.541 lens_wet 0.617 drop_clock 26.13
+WEATHER_TRACE t 37.50 rain 0.535 wetness 0.581 sheltered false shower_open 1.000 streaks 2390
+LENS_TRACE t 37.50 lens_rain 0.535 lens_wet 0.610 drop_clock 26.35
+WEATHER_TRACE t 37.75 rain 0.528 wetness 0.574 sheltered false shower_open 1.000 streaks 2379
+LENS_TRACE t 37.75 lens_rain 0.528 lens_wet 0.602 drop_clock 26.57
+WEATHER_TRACE t 38.00 rain 0.521 wetness 0.567 sheltered false shower_open 1.000 streaks 2368
+LENS_TRACE t 38.00 lens_rain 0.521 lens_wet 0.595 drop_clock 26.79
+WEATHER_TRACE t 38.25 rain 0.515 wetness 0.559 sheltered false shower_open 1.000 streaks 2357
+LENS_TRACE t 38.25 lens_rain 0.515 lens_wet 0.587 drop_clock 27.00
+WEATHER_TRACE t 38.50 rain 0.509 wetness 0.553 sheltered false shower_open 1.000 streaks 2346
+LENS_TRACE t 38.50 lens_rain 0.509 lens_wet 0.580 drop_clock 27.22
+WEATHER_TRACE t 38.75 rain 0.502 wetness 0.546 sheltered false shower_open 1.000 streaks 2335
+LENS_TRACE t 38.75 lens_rain 0.502 lens_wet 0.573 drop_clock 27.44
+WEATHER_TRACE t 39.00 rain 0.496 wetness 0.539 sheltered false shower_open 1.000 streaks 2325
+LENS_TRACE t 39.00 lens_rain 0.496 lens_wet 0.566 drop_clock 27.66
+WEATHER_TRACE t 39.25 rain 0.490 wetness 0.532 sheltered false shower_open 1.000 streaks 2314
+LENS_TRACE t 39.25 lens_rain 0.490 lens_wet 0.559 drop_clock 27.88
+WEATHER_TRACE t 39.50 rain 0.484 wetness 0.526 sheltered false shower_open 1.000 streaks 2304
+LENS_TRACE t 39.50 lens_rain 0.484 lens_wet 0.552 drop_clock 28.10

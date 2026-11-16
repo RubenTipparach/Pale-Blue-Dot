@@ -1411,39 +1411,20 @@ fn spawn_doors(world: &mut World, root: Entity, site: u32, solids: &[BuildingSol
     }
 }
 
-/// E opens or shuts the door in reach: the nearest doorway within
-/// [`DOOR_REACH_M`] of the eye and in front of it. The change is the
-/// player's, and it is written to the save before the leaf moves; a save
-/// that refuses it leaves the door as it was.
-pub fn use_doors(
-    keys: Option<Res<ButtonInput<KeyCode>>>,
-    walking: Option<Res<WalkingState>>,
-    walker: Query<&avian3d::prelude::Position, With<Walker>>,
-    structures: Option<ResMut<Structures>>,
-    towns: Res<Towns>,
-    save: Option<ResMut<WorldSave>>,
-    doors: Query<&TownDoor>,
-) {
-    // A camera that does not walk (a capture's view from above) opens no
-    // door.
-    let (Some(keys), Some(walking)) = (keys, walking) else {
-        return;
-    };
-    if !keys.just_pressed(KeyCode::KeyE) || !walking.active {
-        return;
-    }
-    if !(walking.captured || walking.scripted) {
-        return;
-    }
-    let (Some(mut structures), Ok(position)) = (structures, walker.single()) else {
-        return;
-    };
-    let up = position.0.normalize_or(Vec3::Y);
-    let eye = position.0 + up * (EYE_HEIGHT - HALF_HEIGHT);
+/// The door in reach: the nearest doorway within [`DOOR_REACH_M`] of the
+/// eye and in front of it. What F opens and what the prompt names.
+fn door_in_reach<'a>(
+    walking: &WalkingState,
+    position: Vec3,
+    structures: &Structures,
+    towns: &Towns,
+    doors: impl Iterator<Item = &'a TownDoor>,
+) -> Option<TownDoor> {
+    let up = position.normalize_or(Vec3::Y);
+    let eye = position + up * (EYE_HEIGHT - HALF_HEIGHT);
     let (heading, pitch) = walking.view();
     let look = heading * pitch.cos() + up * pitch.sin();
-    let nearest = doors
-        .iter()
+    doors
         .filter_map(|door| {
             let b = structures.0.get(towns.index(door.site, door.building)?)?;
             let d = b.doors.get(door.door)?;
@@ -1452,8 +1433,73 @@ pub fn use_doors(
             let dist = to.length();
             (dist <= DOOR_REACH_M && to.dot(look) >= 0.3 * dist).then_some((dist, *door))
         })
-        .min_by(|a, b| a.0.total_cmp(&b.0));
-    let Some((_, door)) = nearest else {
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, door)| door)
+}
+
+/// Offer the door in reach to the interact key: open it, or shut it.
+pub fn offer_doors(
+    walking: Option<Res<WalkingState>>,
+    walker: Query<&avian3d::prelude::Position, With<Walker>>,
+    structures: Option<Res<Structures>>,
+    towns: Res<Towns>,
+    doors: Query<&TownDoor>,
+    mut interact: ResMut<crate::interact::Interact>,
+) {
+    let (Some(walking), Some(structures), Ok(position)) = (walking, structures, walker.single())
+    else {
+        return;
+    };
+    if !walking.active {
+        return;
+    }
+    let Some(door) = door_in_reach(&walking, position.0, &structures, &towns, doors.iter()) else {
+        return;
+    };
+    let open = towns
+        .index(door.site, door.building)
+        .and_then(|i| structures.0.get(i))
+        .and_then(|b| b.doors.get(door.door))
+        .is_some_and(|d| d.open);
+    use crate::interact::{Act, Offer};
+    interact.offer(Offer::new(
+        if open { Act::ShutDoor } else { Act::OpenDoor },
+        "door",
+    ));
+}
+
+/// F opens or shuts the door in reach ([`door_in_reach`]). The change is
+/// the player's, and it is written to the save before the leaf moves; a
+/// save that refuses it leaves the door as it was.
+#[allow(clippy::too_many_arguments)]
+pub fn use_doors(
+    keys: Option<Res<ButtonInput<KeyCode>>>,
+    walking: Option<Res<WalkingState>>,
+    walker: Query<&avian3d::prelude::Position, With<Walker>>,
+    structures: Option<ResMut<Structures>>,
+    towns: Res<Towns>,
+    save: Option<ResMut<WorldSave>>,
+    doors: Query<&TownDoor>,
+    interact: Option<Res<crate::interact::Interact>>,
+) {
+    // A camera that does not walk (a capture's view from above) opens no
+    // door.
+    let (Some(keys), Some(walking)) = (keys, walking) else {
+        return;
+    };
+    if !keys.just_pressed(KeyCode::KeyF) || !walking.active {
+        return;
+    }
+    if !(walking.captured || walking.scripted) {
+        return;
+    }
+    if !crate::interact::may(interact.as_deref(), crate::interact::Reader::Doors) {
+        return;
+    }
+    let (Some(mut structures), Ok(position)) = (structures, walker.single()) else {
+        return;
+    };
+    let Some(door) = door_in_reach(&walking, position.0, &structures, &towns, doors.iter()) else {
         return;
     };
     let Some(index) = towns.index(door.site, door.building) else {
@@ -1808,6 +1854,12 @@ impl Plugin for TownsPlugin {
                     rooms_follow_doors,
                 )
                     .chain(),
+            )
+            .add_systems(
+                PostUpdate,
+                offer_doors
+                    .in_set(crate::interact::InteractSet::Offer)
+                    .run_if(resource_exists::<crate::interact::Interact>),
             );
     }
 }

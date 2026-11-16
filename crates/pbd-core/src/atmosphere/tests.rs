@@ -1054,3 +1054,103 @@ fn the_rain_seen_is_not_saved_and_starts_at_the_rain_as_it_stands() {
     }
     assert!(raining > 0, "the brewed storm still rains");
 }
+
+/// No rain falls on the desert (`rain-matches-map`; the owner, 2026-11-16:
+/// "avoid rain cells over desert"). With every desert cell loaded with cloud
+/// far past the rain threshold, charged to strike every step, and run on
+/// through a turning sun, its rain rate and the rain seen there stay at
+/// nothing: what falls out of the cloud evaporates on the way down (virga)
+/// and goes back to vapour. Cloud may still stand over it. Wet ground under
+/// the same cloud does rain, so the rule is the ground's, not a cap.
+#[test]
+fn no_rain_falls_on_the_desert() {
+    let terrain = TerrainConfig::TENEBRIS;
+    let settings = AtmosphereSettings {
+        strike_chance: 1.0,
+        ..quiet()
+    };
+    let mut a = Atmosphere::new(&terrain, settings, 99);
+    let desert: Vec<usize> = (0..a.grid.len())
+        .filter(|&i| {
+            let c = a.grid.centre[i];
+            let height = crate::planet_gen::surface_altitude(&terrain, c);
+            height >= terrain.sea_level_m
+                && crate::planet_gen::biome_at(&terrain, c, height)
+                    == crate::planet_gen::Biome::Desert
+        })
+        .collect();
+    assert!(desert.len() >= 5, "only {} desert cells", desert.len());
+    let wet: Vec<usize> = (0..a.grid.len())
+        .filter(|&i| a.surface.wetness[i] >= settings.virga_wet_wetness)
+        .collect();
+    let mut wet_rained = false;
+    for step in 0..600u32 {
+        if step % 50 == 0 {
+            for &i in desert.iter().chain(&wet) {
+                a.cloud[i] = settings.rain_threshold_kg * 3.0;
+                a.charge[i] = settings.strike_charge * 2.0;
+            }
+        }
+        let turn = step as f32 * 0.01;
+        a.step(Vec3::new(turn.cos(), 0.3, turn.sin()).normalize(), &[]);
+        for &i in &desert {
+            assert_eq!(
+                a.rain_rate[i], 0.0,
+                "rain on desert cell {i} at step {step}"
+            );
+            if step > 0 {
+                assert!(
+                    a.rain_seen[i] < 1e-6,
+                    "rain seen {} on desert cell {i} at step {step}",
+                    a.rain_seen[i]
+                );
+            }
+        }
+        wet_rained |= wet.iter().any(|&i| a.rain_rate[i] >= settings.raining_rate);
+    }
+    assert!(
+        desert.iter().any(|&i| a.cover(i) > 0.0),
+        "cloud still passes over the desert"
+    );
+    assert!(wet_rained, "the same cloud over wet ground rains");
+}
+
+/// No rain in the cold (`rain-matches-map`; the owner, 2026-11-16: "no rain
+/// in the cold regions, snow only please"): wherever the air at the ground is
+/// at or below freezing, what falls is snow, never rain, through the one rule
+/// every reader takes (`weather::shown_precipitation`). Snow does fall
+/// somewhere on the planet, and rain where it is warm.
+#[test]
+fn what_falls_in_freezing_air_is_snow() {
+    let mut a = air(quiet());
+    let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+    let points: Vec<Vec3> = (0..2000)
+        .map(|i| {
+            let y = 1.0 - 2.0 * (i as f32 + 0.5) / 2000.0;
+            let r = (1.0 - y * y).sqrt();
+            let a = golden * i as f32;
+            Vec3::new(r * a.cos(), y, r * a.sin())
+        })
+        .collect();
+    let (mut snowed, mut rained) = (0, 0);
+    for step in 0..900u32 {
+        let turn = step as f32 * 0.01;
+        a.step(Vec3::new(turn.cos(), 0.3, turn.sin()).normalize(), &[]);
+        if step % 30 != 0 {
+            continue;
+        }
+        for &p in &points {
+            let sample = a.sample(p);
+            let falls = crate::weather::shown_precipitation(&sample);
+            if sample.air_c <= 0.0 {
+                assert!(falls <= 0.0, "rain {falls} in air at {} C", sample.air_c);
+            }
+            if falls < 0.0 {
+                assert!(sample.air_c <= 0.0, "snow in air at {} C", sample.air_c);
+                snowed += 1;
+            }
+            rained += usize::from(falls > 0.0);
+        }
+    }
+    assert!(snowed > 0 && rained > 0, "snow {snowed}, rain {rained}");
+}

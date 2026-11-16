@@ -73,7 +73,7 @@ slot for its tooltip).
 | `s2-pause-{day,night}.jpg` | `--menu pause` | Pause in the carved oak, Resume with the rune focus |
 | `s2-saves-{day,night}.jpg` | `--menu saves` | The worlds page in oak: the name field, New world, Back |
 | `s2-settings-picture-{day,night}.jpg` | `--menu settings --settings-tab picture` | Bloom's checkbox; the frame limit and render scale as stone sliders with oak grips and their values beside them (the value 4 px clear of the grip at the top step) |
-| `s2-settings-weather-{day,night}.jpg` | `--settings-tab weather` | The rain shadow (off by default) and the storm bar |
+| `s2-settings-weather-{day,night}.jpg` | `--settings-tab weather` | The rain shadow (off by default) and the storm bar. Since `reflection-quality` (2026-11-16) the rain shadow is on PICTURE: `--settings-tab picture` shows it, beside Reflections |
 | `s2-settings-world-{day,night}.jpg` | `--settings-tab world` | The clock's bar with Day and Night, the globe overlay |
 | `s2-settings-movement-{day,night}.jpg` | `--settings-tab movement` | Auto step |
 | `s2-settings-input-{day,night}.jpg` | `--settings-tab input --input-tab on-foot` | Input's five oak sub-tabs, On foot open; each changeable key an oak plaque, Reset tab |

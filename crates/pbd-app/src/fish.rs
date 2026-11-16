@@ -67,6 +67,44 @@ pub struct Fishery {
     beds: Mutex<HashMap<(i32, i32, i32), f32>>,
     /// The cast a refusal was last said for, so it is said once a cast.
     told_refusal: bool,
+    /// Each school's fade by its seed, 0 drawn whole to 1 gone, and whether
+    /// it is on its way out: a school fades in when spawned and out before
+    /// it is dropped, never there or gone in one frame
+    /// (`ocean-environments` B18).
+    fades: HashMap<u64, (f32, bool)>,
+}
+
+/// How long a school takes to fade in when spawned, or out before it is
+/// dropped, s: the sea places' landing fade.
+const SCHOOL_FADE_S: f32 = 0.8;
+
+impl Fishery {
+    /// How far a school has faded out, 0 whole to 1 gone; one not yet
+    /// stepped is gone, so it fades in from its first frame.
+    pub fn fade_of(&self, school: &School) -> f32 {
+        self.fades.get(&school.seed).map_or(1.0, |f| f.0)
+    }
+
+    /// Fade every school a frame on: in, or out if it is leaving; forget
+    /// the ones no longer there.
+    fn fade(&mut self, dt: f32) {
+        let step = dt / SCHOOL_FADE_S;
+        let mut kept = HashMap::with_capacity(self.schools.len());
+        for school in &self.schools {
+            let (fade, leaving) = self
+                .fades
+                .get(&school.seed)
+                .copied()
+                .unwrap_or((1.0, false));
+            let fade = if leaving {
+                (fade + step).min(1.0)
+            } else {
+                (fade - step).max(0.0)
+            };
+            kept.insert(school.seed, (fade, leaving));
+        }
+        self.fades = kept;
+    }
 }
 
 impl Default for Fishery {
@@ -80,6 +118,7 @@ impl Default for Fishery {
             rng: fauna::Rng::new(0x5c4001),
             beds: Mutex::new(HashMap::new()),
             told_refusal: false,
+            fades: HashMap::new(),
         }
     }
 }
@@ -397,8 +436,40 @@ fn fish(
             school.step(step, species, &settings.flock, &water, splash);
         }
     }
+    // `PBD_LIFE_TRACE=1`, a measurement instrument (`ocean-environments`
+    // B18): each frame, each school's nearest creature to the eye, how far
+    // under it is drawn and how far its school has faded, so an approach
+    // can be read off the log frame by frame. Changes nothing drawn.
+    if std::env::var_os("PBD_LIFE_TRACE").is_some() {
+        let night = world
+            .sun
+            .as_ref()
+            .is_some_and(|sun| sun.direction().dot(up) < -0.05);
+        for school in &fishery.schools {
+            let Some(species) = roster.get(school.species as usize) else {
+                continue;
+            };
+            let nearest = (0..school.len()).min_by(|&a, &b| {
+                school.positions[a]
+                    .distance(eye)
+                    .total_cmp(&school.positions[b].distance(eye))
+            });
+            if let Some(i) = nearest {
+                info!(
+                    "LIFE_TRACE {} eye {:.2} m under {:.3} fade {:.3} spook {:.1}",
+                    species.id,
+                    school.positions[i].distance(eye),
+                    fauna::under_share(species, school, i, seconds, night),
+                    fishery.fade_of(school),
+                    school.spook[i],
+                );
+            }
+        }
+    }
 
-    // Spawning and dropping round the player.
+    // Spawning and dropping round the player; a school fades as it comes
+    // and goes.
+    fishery.fade(dt);
     fishery.spawn_s += dt;
     let every = 1.0 / settings.spawn.attempts_per_s;
     if fishery.spawn_s >= every {
@@ -606,15 +677,25 @@ fn lineup(
 /// How long a startled shy creature stays so after the eye has gone, s.
 const SHY_HOLD_S: f32 = 6.0;
 
-/// Drop the schools that have gone too far or been fished out, keeping the
+/// Drop the schools that have been fished out, and the ones gone too far
+/// once they have faded out (a far one starts fading here), keeping the
 /// line's target pointing at the same school.
 fn drop_far(fishery: &mut Fishery, feet: Vec3, despawn_m: f32) {
     let target = fishery.line.target.map(|t| t.school);
+    for (k, school) in fishery.schools.iter().enumerate() {
+        if Some(k) != target
+            && school.centre().distance(feet) > despawn_m
+            && let Some(fade) = fishery.fades.get_mut(&school.seed)
+        {
+            fade.1 = true;
+        }
+    }
+    let fades = &fishery.fades;
     let mut index = 0;
     let mut remap = Vec::with_capacity(fishery.schools.len());
     fishery.schools.retain(|school| {
-        let keep = Some(remap.len()) == target
-            || (!school.is_empty() && school.centre().distance(feet) <= despawn_m);
+        let gone = fades.get(&school.seed).is_some_and(|f| f.1 && f.0 >= 1.0);
+        let keep = Some(remap.len()) == target || (!school.is_empty() && !gone);
         remap.push(keep.then_some(index));
         if keep {
             index += 1;
@@ -928,8 +1009,13 @@ pub(crate) mod draw {
     //! The fish, the rod, the float and the line, drawn.
     use super::*;
 
+    /// A school's drawn root: which school, and its mesh (on a child, so the
+    /// root's [`crate::field_light::Faded`] reaches it).
     #[derive(Component)]
-    pub struct SchoolMesh(pub usize);
+    pub struct SchoolMesh {
+        pub index: usize,
+        pub mesh: Handle<Mesh>,
+    }
 
     #[derive(Component)]
     pub struct Float;
@@ -1118,8 +1204,10 @@ pub(crate) mod draw {
         }
     }
 
-    /// One mesh per school, rebuilt from its fish each frame; entities made
-    /// and dropped as schools come and go.
+    /// One mesh per school, rebuilt from its fish each frame, under a root
+    /// that carries its fade (`ocean-environments` B18): made and dropped as
+    /// schools come and go, and drawn through the terrain's screen-door mask
+    /// as a school fades in on spawning and out before it is dropped.
     #[allow(clippy::too_many_arguments)]
     pub fn schools(
         mut commands: Commands,
@@ -1128,7 +1216,12 @@ pub(crate) mod draw {
         body: Res<Body>,
         frame: Res<crate::planet::PlanetRenderFrame>,
         mut meshes: ResMut<Assets<Mesh>>,
-        mut drawn: Query<(Entity, &SchoolMesh, &Mesh3d, &mut Transform)>,
+        mut drawn: Query<(
+            Entity,
+            &SchoolMesh,
+            &mut Transform,
+            &mut crate::field_light::Faded,
+        )>,
         life: Res<LifeMaterial>,
         water: Option<Res<crate::config::WaterSettings>>,
         sea: Option<Res<Sea>>,
@@ -1146,17 +1239,21 @@ pub(crate) mod draw {
             .zip(water.as_deref())
             .map(|(sea, water)| (sea.radius, water.downwell_per_m));
         let mut seen = vec![false; fishery.schools.len()];
-        for (entity, school_mesh, mesh, mut transform) in &mut drawn {
-            let Some(school) = fishery.schools.get(school_mesh.0) else {
+        for (entity, school_mesh, mut transform, mut faded) in &mut drawn {
+            let Some(school) = fishery.schools.get(school_mesh.index) else {
                 commands.entity(entity).despawn();
                 continue;
             };
             let Some(species) = roster.get(school.species as usize) else {
                 continue;
             };
-            seen[school_mesh.0] = true;
+            seen[school_mesh.index] = true;
             transform.translation = (frame.center + school.anchor.as_dvec3()).as_vec3();
-            if let Some(mesh) = meshes.get_mut(&mesh.0) {
+            let fade = fishery.fade_of(school);
+            if faded.0 != fade {
+                faded.0 = fade;
+            }
+            if let Some(mesh) = meshes.get_mut(&school_mesh.mesh) {
                 build(mesh, school, species, now, dim);
             }
         }
@@ -1173,17 +1270,34 @@ pub(crate) mod draw {
                 RenderAssetUsages::default(),
             );
             build(&mut mesh, school, species, now, dim);
-            commands.spawn((
-                Name::new(format!("{} school", species.name)),
-                SchoolMesh(index),
-                crate::field_light::LitByField,
-                Mesh3d(meshes.add(mesh)),
-                MeshMaterial3d(material),
-                Transform::from_translation((frame.center + school.anchor.as_dvec3()).as_vec3()),
-                Visibility::default(),
-            ));
+            let handle = meshes.add(mesh);
+            commands
+                .spawn((
+                    Name::new(format!("{} school", species.name)),
+                    SchoolMesh {
+                        index,
+                        mesh: handle.clone(),
+                    },
+                    crate::field_light::LitByField,
+                    crate::field_light::Faded(fishery.fade_of(school)),
+                    Transform::from_translation(
+                        (frame.center + school.anchor.as_dvec3()).as_vec3(),
+                    ),
+                    Visibility::default(),
+                ))
+                .with_children(|root| {
+                    root.spawn((
+                        Mesh3d(handle),
+                        MeshMaterial3d(material),
+                        Transform::default(),
+                        Visibility::default(),
+                    ));
+                });
         }
     }
+
+    /// How far under a diving duck is drawn when wholly dived, m.
+    const DUCK_UNDER_M: f32 = 0.8;
 
     /// A school's creatures as one triangle list: each its own low-poly body
     /// (`bodies`, `ocean-environments` design B8), posed for what it is doing
@@ -1211,9 +1325,11 @@ pub(crate) mod draw {
             let pose = now.map_or(fauna::Pose::Moving, |(seconds, sun)| {
                 fauna::pose(species, school, i, seconds, sun.dot(up) < -0.05)
             });
-            if pose == fauna::Pose::Under && species.id != "seal" {
-                continue;
-            }
+            // How far under it has gone: a dive is drawn, never cut
+            // (`ocean-environments` B18).
+            let under = now.map_or(0.0, |(seconds, sun)| {
+                fauna::under_share(species, school, i, seconds, sun.dot(up) < -0.05)
+            });
             let id = school.ids.get(i).copied().unwrap_or(0);
             let body = bodies::model_for(&species.id, id);
             let phase = (fauna::hash2(school.seed, u64::from(id)) >> 40) as f32
@@ -1233,7 +1349,7 @@ pub(crate) mod draw {
                 forward = up.cross(flat).normalize_or(flat);
             }
             let side = forward.cross(up).normalize_or(up.any_orthonormal_vector());
-            let top = side.cross(forward);
+            let mut top = side.cross(forward);
             let length = school.length_cm(i, species) as f32 / 100.0;
             let mut scale = length / body.length;
             let at = *p - school.anchor;
@@ -1242,10 +1358,17 @@ pub(crate) mod draw {
                 _ => at,
             };
             match (body.kind, pose) {
-                (bodies::Kind::Seal, fauna::Pose::Under) => origin -= up * (1.2 + 0.13 * scale),
-                (bodies::Kind::Seal, _) => origin -= up * 0.1 * scale,
+                (bodies::Kind::Seal, _) => {
+                    origin -= up * (0.1 * scale + (1.2 + 0.03 * scale) * under);
+                }
                 (bodies::Kind::Otter, _) => origin -= up * 0.03 * scale,
-                (bodies::Kind::Bird, _) => origin -= up * 0.02,
+                (bodies::Kind::Bird, _) => {
+                    origin -= up * (0.02 + DUCK_UNDER_M * under);
+                    // Nose first as it goes.
+                    let tip = Quat::from_axis_angle(side, -0.9 * under.min(1.0 - under) * 2.0);
+                    forward = tip * forward;
+                    top = tip * top;
+                }
                 (bodies::Kind::Octopus, fauna::Pose::Hidden) => scale *= 0.5,
                 _ => {}
             }

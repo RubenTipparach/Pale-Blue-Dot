@@ -147,3 +147,22 @@ turn forces `c` to jump, logged as `LOD_FIT jump`.
   same at nearly every landing, so the cover is capped at a level's own
   margin; past it, section 4's fallback draws the new partition whole.
 
+
+## A fade is a moment in time, never a place (owner, 2026-11-16)
+
+The owner: "dithering should either stay or go, dont have it linger if the
+player isnt moving" (CLAUDE.md, priority 1). The bands' cross-fade here is
+by distance: a cell (and the tree it carries, `kind == 2`'s
+`min(fade_t.x, fade_t.y)`) inside the last `lod_fade_width` of a band is
+drawn dithered between its two levels for as long as it sits there, a ring
+of half-drawn cells round a still camera. The trees' own rings (near model,
+mid cards, far billboard, the foliage edge) and the clutter's reach were the
+lingering the owner saw at 20 to 100 m, and are now by time (`flora-v2`
+13.3, branch `claude/rain-artifacts`). This ring is not changed yet: it
+starts 210 m out (the 300 m finest band's last 0.3) and is mostly a cell
+against its own coarser self in the same colours, where the trees' rings
+were a tree against the sky. The same two-snapshot scheme would carry over
+(the band decided at `from` and at `to`, the Bayer split by the fade's
+progress), but the partition here also decides which records the
+visibility pass lists, so both levels would have to be listed for the
+length of a fade; that is its own change. Proposed, not built.

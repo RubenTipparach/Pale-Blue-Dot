@@ -40,7 +40,7 @@ pub fn layer_at(altitude: f32) -> Option<usize> {
 }
 
 /// One cell's stack.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Column {
     layers: [Material; LAYERS],
 }
@@ -118,6 +118,24 @@ impl Column {
             ceiling,
             water,
         }
+    }
+
+    /// The material a layer is DRAWN as (`flora-v2` 12.10): its own, but a
+    /// top with water standing on it is a bed ([`Material::drowned`]), so a
+    /// river's bed is dirt and grows nothing. Derived at draw time; what the
+    /// column holds, and what digging it gives, are unchanged.
+    pub fn drawn_material(&self, layer: usize) -> Material {
+        let material = self.material(layer);
+        if self.water_over(layer) {
+            material.drowned()
+        } else {
+            material
+        }
+    }
+
+    /// Whether water stands on this layer: the layer over it is water.
+    pub fn water_over(&self, layer: usize) -> bool {
+        layer + 1 < LAYERS && self.material(layer + 1).is_water()
     }
 
     /// The altitude of the surface of the water this altitude is IN, or `None`
@@ -261,7 +279,8 @@ impl Column {
     pub fn packed_runs(&self, code: impl Fn(Material) -> u32) -> [u32; MAX_RUNS] {
         let mut words = [Run::ABSENT; MAX_RUNS];
         for (word, run) in words.iter_mut().zip(self.drawn_runs()) {
-            *word = run.packed(code(run.material), code(run.body));
+            // The cap as it is drawn: a drowned top is a bed (12.10).
+            *word = run.packed(code(self.drawn_material(run.to - 1)), code(run.body));
         }
         words
     }
@@ -596,6 +615,44 @@ mod rain_tests {
 #[cfg(test)]
 mod water_tests {
     use super::*;
+
+    /// `flora-v2` 12.10: a top with water standing on it is drawn as a bed.
+    /// Grass of every kind and snow are dirt; sand, stone and the rest are
+    /// themselves; the column's own material is unchanged, and with the water
+    /// gone the top is drawn as it is again.
+    #[test]
+    fn a_drowned_top_is_drawn_as_a_bed() {
+        for (top, drawn) in [
+            (Material::Grass, Material::Dirt),
+            (Material::DryGrass, Material::Dirt),
+            (Material::JungleGrass, Material::Dirt),
+            (Material::Snow, Material::Dirt),
+            (Material::Sand, Material::Sand),
+            (Material::Stone, Material::Stone),
+            (Material::Dirt, Material::Dirt),
+            (Material::Tilled, Material::Tilled),
+        ] {
+            let mut column = flooded(20, 22);
+            column.set(20, top);
+            assert!(column.water_over(20));
+            assert_eq!(column.drawn_material(20), drawn, "{top:?} under water");
+            assert_eq!(column.material(20), top, "the column keeps its material");
+            let cap = column.packed_runs(|m| m as u32)[0];
+            assert_eq!(
+                (cap >> 18) & 0xf,
+                drawn as u32 & 0xf,
+                "the cap is drawn as a bed"
+            );
+            // Flowing water stands on it as the source does.
+            column.set(21, Material::flowing(3, false));
+            assert_eq!(column.drawn_material(20), drawn);
+            // Dry again: drawn as itself.
+            column.set(21, Material::Air);
+            column.set(22, Material::Air);
+            assert!(!column.water_over(20));
+            assert_eq!(column.drawn_material(20), top);
+        }
+    }
 
     /// A column with rock to `ground` and water over it to `sea`.
     fn flooded(ground: usize, sea: usize) -> Column {
@@ -1188,9 +1245,10 @@ mod tests {
         eprintln!("ore within 14 m of the surface in {found} of {land} land columns ({share:.2})");
     }
 
-    /// Version 10's columns pinned as it lands (x86_64; the ground under
-    /// them differs between targets, `flora-v2` 12.1).
-    #[cfg(target_arch = "x86_64")]
+    /// Version 10's columns pinned as it lands, on x86_64 Linux. The
+    /// materials agree on the Mac too, aarch64 and x86_64 (measured
+    /// 2026-11-16): the platforms part only in an altitude's last bits
+    /// (`terrain` spec, "The generator is versioned"), so it runs everywhere.
     #[test]
     fn version_10_s_columns_are_pinned() {
         let v10 = planet_gen::TerrainConfig::TENEBRIS_V10;
@@ -1204,6 +1262,5 @@ mod tests {
         assert_eq!(hash, VERSION_10_COLUMN_DIGEST);
     }
 
-    #[cfg(target_arch = "x86_64")]
     const VERSION_10_COLUMN_DIGEST: u64 = 7_866_721_340_977_067_839;
 }

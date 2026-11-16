@@ -546,6 +546,21 @@ pub fn water(cfg: &TerrainConfig, d: Vec3) -> Vec<(i32, Material)> {
     out
 }
 
+/// Whether a river's water stands over the ground at `d` (`flora-v2`
+/// 12.10): the same answer as [`water`] being non-empty, without building
+/// the list. What the far records ask to draw a river's bed as a bed.
+pub fn floods(cfg: &TerrainConfig, d: Vec3) -> bool {
+    let Some(settings) = cfg.rivers.as_ref() else {
+        return false;
+    };
+    let d = d.normalize_or(Vec3::Y);
+    let Some(top) = top_at(cfg, settings, map(cfg, settings), d) else {
+        return false;
+    };
+    let sea = cfg.sea_level_m.round() as i32;
+    (planet_gen::surface_altitude(cfg, d).floor() as i32 - sea) < top
+}
+
 /// The water's top at a point of a river's channel, whole metres over sea
 /// level, or `None` off the channel or at the sea.
 fn top_at(cfg: &TerrainConfig, settings: &RiverSettings, map: &RiverMap, d: Vec3) -> Option<i32> {
@@ -629,6 +644,67 @@ mod tests {
 
     /// At the finest scale: the column's water sits on its own carved bed,
     /// all along a river.
+    #[test]
+    fn version_10_s_river_beds_are_drawn_as_beds() {
+        // `flora-v2` 12.10: wherever a river's water stands over the ground,
+        // the column has water over its top and that top is drawn as a bed:
+        // never a grass or snow, so no tuft, flower, mushroom or tree. And
+        // `floods`, which the far records ask, is the column's own answer.
+        let cfg = TerrainConfig::for_version(10).unwrap();
+        let settings = cfg.rivers.unwrap();
+        let map = map(&cfg, &settings);
+        let (mut beds, mut grassy) = (0, 0);
+        for k in map.rivers().step_by(53).take(300) {
+            let Some(down) = map.down(k) else {
+                continue;
+            };
+            let (a, b) = (map.centre(k), map.centre(down));
+            for step in 0..=12 {
+                let p = a.lerp(b, step as f32 / 12.0).normalize();
+                if crate::settlement::ground::top(&cfg, p).is_some() {
+                    continue;
+                }
+                let column = crate::column::generate_solid(&cfg, p);
+                let top = column.surface().expect("bedrock");
+                let flooded = floods(&cfg, p);
+                if planet_gen::surface_altitude(&cfg, p) >= cfg.sea_level_m {
+                    assert_eq!(flooded, !water(&cfg, p).is_empty(), "floods is water()");
+                }
+                if !flooded {
+                    continue;
+                }
+                assert!(
+                    column.water_over(top),
+                    "a flooded column has water on its top"
+                );
+                let drawn = column.drawn_material(top);
+                assert!(
+                    !matches!(
+                        drawn,
+                        Material::Grass
+                            | Material::DryGrass
+                            | Material::JungleGrass
+                            | Material::Snow
+                    ),
+                    "a bed drawn as {drawn:?}"
+                );
+                if matches!(
+                    column.material(top),
+                    Material::Grass | Material::DryGrass | Material::JungleGrass | Material::Snow
+                ) {
+                    grassy += 1;
+                }
+                beds += 1;
+            }
+        }
+        // The case the owner saw is the common one: a meadow's top under the
+        // river, drawn as dirt.
+        assert!(
+            beds > 300 && grassy > beds / 4,
+            "{beds} beds, {grassy} grassy"
+        );
+    }
+
     #[test]
     fn a_rivers_water_sits_on_its_own_bed() {
         let cfg = v8();

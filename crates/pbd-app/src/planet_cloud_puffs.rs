@@ -259,6 +259,7 @@ mod tests {
                 })
                 .collect(),
             wind: vec![[0.0; 4]; texels],
+            rain_seen: vec![0.0; texels],
         };
         let (a, b, c) = (maps(0.0), maps(1.3), maps(2.9));
         let settings = WeatherSettings::default();
@@ -284,6 +285,7 @@ mod tests {
         let mut maps = WeatherMaps {
             cloud: vec![[0.0; 4]; texels],
             wind: vec![[0.0; 4]; texels],
+            rain_seen: vec![0.0; texels],
         };
         let mut sites = PuffSites::new(250.0);
         // No lanes, so one puff a carrying site.

@@ -224,8 +224,8 @@ mod tests {
 
     #[test]
     fn the_rain_says_which_end_is_snow() {
-        assert_eq!(end_label(Overlay::Rain, -10.0), "10 mm/h SNOW");
-        assert_eq!(end_label(Overlay::Rain, 10.0), "10 mm/h RAIN");
+        assert_eq!(end_label(Overlay::Rain, -100.0), "100 % SNOW");
+        assert_eq!(end_label(Overlay::Rain, 100.0), "100 % RAIN");
         assert_eq!(end_label(Overlay::Wind, 20.0), "20 m/s");
     }
 }

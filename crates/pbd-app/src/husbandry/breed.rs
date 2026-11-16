@@ -282,7 +282,7 @@ fn set_eggs(
     Ok(set)
 }
 
-/// E on a hen of yours with fertile eggs in hand: she goes broody on up to
+/// F on a hen of yours with fertile eggs in hand: she goes broody on up to
 /// a clutch (E4). Whether the press was hers.
 pub(super) fn set_under_hen(
     world: &World,
@@ -391,7 +391,7 @@ pub(super) fn place_incubator(
     true
 }
 
-/// E on an incubator: set fertile eggs in it, or with empty hands take it
+/// F on an incubator: set fertile eggs in it, or with empty hands take it
 /// up while it holds none. Whether there was one.
 pub(super) fn use_incubator(
     world: &World,
@@ -456,7 +456,7 @@ pub(super) fn describe_incubator(world: &World, save: &WorldSave, point: Vec3) -
         .reduce(f64::min);
     Some(match (holds, lamp, due) {
         (0, false, _) => "Incubator - needs a lamp beside it".to_string(),
-        (0, true, _) => "Incubator - E with fertile eggs".to_string(),
+        (0, true, _) => "Incubator - set fertile eggs in it".to_string(),
         (n, false, _) => format!("Incubator - {n} eggs - the lamp is out"),
         (n, true, Some(d)) => format!(
             "Incubator - {n} eggs - hatching in {:.1} days",

@@ -31,9 +31,13 @@ pub struct Weather {
     /// Cloud cover over the player, 0..1. The sky shader reads it, so the
     /// overcast a player stands under is the same one that is raining on them.
     pub cover: f32,
-    /// What is falling here. The shower draws rain streaks either way until
-    /// there is a snow particle; the field knows the difference already.
+    /// What is falling here, from `pbd_core::weather::shown_precipitation`:
+    /// snow where the air at the ground is at or below freezing.
     pub snowing: bool,
+    /// How far what falls has turned to snow, 0..1: follows `snowing` over
+    /// `snow_switch_s`, so the water's effects ease out where rain turns to
+    /// snow rather than switching. Read through [`Weather::liquid`].
+    pub snow_share: f32,
     /// Whether something solid stands over the camera's eye, so the rain in
     /// the sky does not reach it: no drops on the lens and no shower round
     /// it. The column's answer (`PlanetContact::open_to_sky`).
@@ -52,7 +56,7 @@ impl Weather {
     /// The rain that is WATER: what wets the ground, runs down the lens and
     /// rings the sea. Snow is precipitation and none of those.
     pub fn liquid(&self) -> f32 {
-        if self.snowing { 0.0 } else { self.rain }
+        self.rain * (1.0 - self.snow_share.clamp(0.0, 1.0))
     }
 }
 
@@ -126,8 +130,49 @@ pub fn settle_wetness(wetness: f32, rain: f32, dt: f32, tau: f32) -> f32 {
     (wetness + (rain - wetness) * blend).clamp(0.0, 1.0)
 }
 
+/// MEASUREMENT (`weather-rain` R5): `PBD_WEATHER_SCRIPT=<frame>:<event>,...`
+/// changes, from the `frame`th frame the weather is sampled on, what reaches
+/// the player: `dry` takes the rain away and `rain` gives it back, each eased
+/// on the field's own rise and fall (`rain_rise_s`, `rain_fall_s`, as the
+/// shown rain builds in and dies away), and `cover` and `open` take the eye
+/// as under a roof or out from under it. For capture sequences of the lens,
+/// the shower and the ground; nothing else reads it. Each event is logged as
+/// `WEATHER_SCRIPT` with the frame log's frame number.
+static WEATHER_SCRIPT: std::sync::LazyLock<Vec<(u32, String)>> = std::sync::LazyLock::new(|| {
+    std::env::var("PBD_WEATHER_SCRIPT")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|step| {
+            let (frame, event) = step.trim().split_once(':')?;
+            Some((frame.trim().parse().ok()?, event.trim().to_owned()))
+        })
+        .collect()
+});
+
+/// Whether `PBD_WEATHER_SCRIPT` is set: the shower and the lens then log a
+/// `WEATHER_TRACE` / `LENS_TRACE` line every quarter second, so a sequence's
+/// easing is read off numbers as well as frames.
+pub fn weather_scripted() -> bool {
+    !WEATHER_SCRIPT.is_empty()
+}
+
+/// The script's state: frames sampled, the rain's share let through (eased),
+/// whether it is held off, and the cover it forces.
+#[derive(Default)]
+struct WeatherScript {
+    frame: u32,
+    share: Option<f32>,
+    dry: bool,
+    cover: Option<bool>,
+}
+
 /// Sample the weather under the player. This is the only place `rain` is set.
+#[allow(clippy::too_many_arguments)]
 fn sample_field(
+    time: Res<Time>,
+    atmosphere: Option<Res<crate::config::AtmosphereConfig>>,
+    count: Option<Res<crate::loading::FrameCount>>,
+    mut script: Local<WeatherScript>,
     air: Res<Air>,
     frame: Res<PlanetRenderFrame>,
     contact: Option<Res<PlanetContact>>,
@@ -176,6 +221,41 @@ fn sample_field(
     let point = body_local.as_vec3();
     weather.sheltered = contact.is_some_and(|contact| !contact.open_to_sky(point))
         || structures.is_some_and(|s| s.0.iter().any(|b| b.shelters(point)));
+    if !WEATHER_SCRIPT.is_empty() {
+        let script = &mut *script;
+        script.frame += 1;
+        for (frame, event) in WEATHER_SCRIPT.iter() {
+            if *frame != script.frame {
+                continue;
+            }
+            match event.as_str() {
+                "dry" => script.dry = true,
+                "rain" => script.dry = false,
+                "cover" => script.cover = Some(true),
+                "open" => script.cover = Some(false),
+                other => warn!("PBD_WEATHER_SCRIPT: no event {other}"),
+            }
+            info!(
+                "WEATHER_SCRIPT {event} at frame {}",
+                count.as_ref().map_or(0, |c| c.0)
+            );
+        }
+        let target = if script.dry { 0.0 } else { 1.0 };
+        let share = script.share.get_or_insert(target);
+        let (rise, fall) = atmosphere.as_ref().map_or_else(
+            || {
+                let d = pbd_core::atmosphere::AtmosphereSettings::default();
+                (d.rain_rise_s, d.rain_fall_s)
+            },
+            |a| (a.0.rain_rise_s, a.0.rain_fall_s),
+        );
+        let tau = if target > *share { rise } else { fall };
+        *share = settle_wetness(*share, target, time.delta_secs(), tau);
+        weather.rain *= *share;
+        if let Some(cover) = script.cover {
+            weather.sheltered = cover;
+        }
+    }
     // Every twentieth the cover moves, and whenever the eye goes under or out
     // from under rock, so a capture says what weather it was taken under.
     let step = (cell.cover * 20.0).round() as i32 * 2 + i32::from(weather.sheltered);
@@ -203,6 +283,13 @@ fn falling(a: &field::CloudCell, b: &field::CloudCell, t: f32) -> Precip {
 }
 
 fn follow_rain(time: Res<Time>, settings: Res<WeatherSettings>, mut weather: ResMut<Weather>) {
+    let snow = if weather.snowing { 1.0 } else { 0.0 };
+    weather.snow_share = settle_wetness(
+        weather.snow_share,
+        snow,
+        time.delta_secs(),
+        settings.snow_switch_s,
+    );
     // Snow does not wet the ground.
     let liquid = weather.liquid();
     weather.wetness = settle_wetness(
@@ -533,15 +620,40 @@ pub fn rain_light(sun_elevation: f32, cover: f32, settings: &WeatherSettings) ->
 /// values for a renderer that writes them straight to the screen; taken as
 /// linear they come out far lighter here, and grey rain reads as white. The mesh is unlit, so the light is applied here or nowhere: without
 /// it a night storm glowed at noon's grey against a black sky.
-fn vertex_color(display: [f32; 3], light: f32, alpha: f32) -> [f32; 4] {
+fn vertex_color(display: [f32; 3], light: Vec3, alpha: f32) -> [f32; 4] {
     let linear = LinearRgba::from(Srgba::rgb(display[0], display[1], display[2]));
-    let light = light.clamp(0.0, 1.0);
+    let light = light.clamp(Vec3::ZERO, Vec3::ONE);
     [
-        linear.red * light,
-        linear.green * light,
-        linear.blue * light,
+        linear.red * light.x,
+        linear.green * light.y,
+        linear.blue * light.z,
         alpha.clamp(0.0, 1.0),
     ]
+}
+
+/// How brightly rain is lit under the new lighting model (`weather-rain` R1;
+/// owner, 2026-11-16: the bright blue lines): the light a standing face takes
+/// from the sky at the camera, the sky's nine coefficients for the sun's
+/// elevation sine `e` mixed by the `cover` (`lighting-model` L2, as the
+/// ground's `sh_irradiance`), averaged over four bearings. Rain is lit by the
+/// sky round it and never by the sun through the cloud it falls out of.
+/// `rain_light`'s curve was the old model's, and under a full deck it lit a
+/// streak for a sky twice as bright as the one the ground now has.
+pub fn rain_sky_light(e: f32, cover: f32) -> Vec3 {
+    let sh = crate::planet::sky_sh_pair(e);
+    let cover = cover.clamp(0.0, 1.0);
+    let coeffs: [[f32; 3]; 9] =
+        std::array::from_fn(|k| sh[k].lerp(sh[k + 9], cover).truncate().to_array());
+    let mut sum = Vec3::ZERO;
+    for n in [
+        [1.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, -1.0],
+    ] {
+        sum += Vec3::from_array(pbd_core::sky_light::sh_irradiance(&coeffs, n)).max(Vec3::ZERO);
+    }
+    sum * 0.25
 }
 
 /// The shower mesh under construction: camera-facing quads, one colour each.
@@ -583,9 +695,29 @@ struct ShowerFrame<'a> {
     up: Vec3,
     right: Vec3,
     now: f32,
-    /// How brightly the rain is lit (`rain_light`), at the camera.
-    light: f32,
+    /// How brightly the rain is lit at the camera: `rain_sky_light` under the
+    /// new model, `rain_light` under today's.
+    light: Vec3,
+    /// How much of the near shower is out in the open, 0..1, eased
+    /// (`ShowerOpen`).
+    open: f32,
 }
+
+/// The near shower's share left open, following `!sheltered` on
+/// `SHOWER_OPEN_TAU_S` (`weather-rain` R4): walking under a roof thins the
+/// disk of streaks round the eye over a moment, not in one frame.
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct ShowerOpen(pub f32);
+
+impl Default for ShowerOpen {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
+/// The e-fold of `ShowerOpen`, seconds: the streaks round the eye are in the
+/// open or not as fast as one walks under a roof.
+const SHOWER_OPEN_TAU_S: f32 = 0.4;
 
 /// The near shower: a dense disk of streaks round the camera while it is
 /// raining or snowing HERE: streaks, or flakes that sway.
@@ -619,6 +751,12 @@ fn near_shower(frame: &ShowerFrame, rain: f32, snow: bool, quads: &mut Quads) {
         // A streak passing a metre from the eye is a bar across the screen,
         // not a raindrop; fade the ones that close out.
         let near = (top.distance(frame.eye) - 1.0).clamp(0.0, 3.0) / 3.0;
+        // Each streak's own share of the shower left open (`weather-rain` R4):
+        // under cover the disk thins streak by streak over a moment rather
+        // than going in one frame.
+        if phase >= frame.open {
+            continue;
+        }
         let color = vertex_color(fall.color, frame.light, alpha * near);
         quads.push(
             top,
@@ -744,12 +882,15 @@ static SHOWER_OFF: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
 #[allow(clippy::too_many_arguments)]
 fn rebuild_shower(
     time: Res<Time>,
+    lighting: Res<crate::config::LightingSettings>,
+    mut open: ResMut<ShowerOpen>,
     sun: Res<crate::sky::Sun>,
     air: Res<Air>,
     settings: Res<WeatherSettings>,
     weather: Res<Weather>,
     frame: Res<PlanetRenderFrame>,
     contact: Option<Res<PlanetContact>>,
+    eye_water: Option<Res<crate::planet::EyeWaterState>>,
     mut meshes: ResMut<Assets<Mesh>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut showers: Query<(Entity, &mut Transform, &Mesh3d, &mut Visibility), With<Shower>>,
@@ -778,7 +919,13 @@ fn rebuild_shower(
     // inside a cave, and from a cave mouth it is the rain you are sheltering
     // from. Whether the eye is under rock is the column's answer, read off
     // `Weather` so the lens and the shower cannot disagree about it.
-    let submerged = surface_height(up) < 0.0 && radius < PLANET_RADIUS;
+    // Under a river or a pool too: the column's water at the eye
+    // (`ocean-environments` B17).
+    let in_inland_water = eye_water
+        .as_deref()
+        .and_then(|e| crate::planet::inland_surface(e.0))
+        .is_some_and(|surface| radius < surface);
+    let submerged = (surface_height(up) < 0.0 && radius < PLANET_RADIUS) || in_inland_water;
     let drawn = radius >= 1.0
         && !submerged
         && !*SHOWER_OFF
@@ -799,7 +946,21 @@ fn rebuild_shower(
         up,
         right,
         now: time.elapsed_secs(),
-        light: rain_light(sun.elevation(up), weather.cover, &settings),
+        light: if lighting.new_model_on() {
+            rain_sky_light(sun.elevation(up), weather.cover)
+        } else {
+            Vec3::splat(rain_light(sun.elevation(up), weather.cover, &settings))
+        },
+        open: {
+            let target = if weather.sheltered { 0.0 } else { 1.0 };
+            open.0 = settle_wetness(open.0, target, time.delta_secs(), SHOWER_OPEN_TAU_S);
+            // Settled within a hair counts as there, so a still eye is not
+            // left with one streak in a thousand missing.
+            if (open.0 - target).abs() < 0.002 {
+                open.0 = target;
+            }
+            open.0
+        },
     };
     let mut quads = Quads::default();
     if weather.flash.w > 0.0 {
@@ -812,10 +973,23 @@ fn rebuild_shower(
         );
     }
     if drawn {
-        if !weather.sheltered {
+        if shower.open > 0.0 {
             near_shower(&shower, weather.rain, weather.snowing, &mut quads);
         }
         cell_shafts(&shower, &air.shown, &mut quads);
+    }
+    if weather_scripted() {
+        let now = time.elapsed_secs();
+        if (now * 4.0).floor() != ((now - time.delta_secs()) * 4.0).floor() {
+            info!(
+                "WEATHER_TRACE t {now:.2} rain {:.3} wetness {:.3} sheltered {} shower_open {:.3} streaks {}",
+                weather.rain,
+                weather.wetness,
+                weather.sheltered,
+                shower.open,
+                quads.indices.len() / 6
+            );
+        }
     }
     *visibility = if quads.positions.is_empty() {
         Visibility::Hidden
@@ -897,11 +1071,13 @@ impl Plugin for WeatherPlugin {
             wetness: forcing,
             cover: forcing,
             snowing: false,
+            snow_share: 0.0,
             sheltered: false,
             flash: Vec4::ZERO,
             here: Vec3::ZERO,
         })
         .insert_resource(StormForcing(forcing))
+        .init_resource::<ShowerOpen>()
         .insert_resource(WeatherEpoch(self.weather_at))
         .init_resource::<RainMap>()
         .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
@@ -1033,5 +1209,67 @@ mod tests {
         assert!(dry < 0.01, "five e-folds should be dry, got {dry}");
         assert_eq!(settle_wetness(0.5, 0.5, 100.0, tau), 0.5);
         assert_eq!(settle_wetness(0.3, 1.0, 0.0, tau), 0.3);
+    }
+
+    /// Where rain turns to snow (`rain-matches-map`: "no rain in the cold
+    /// regions, snow only please"), the water's effects (everything that
+    /// reads `liquid`: the lens, the rings, the rain fog, the wet ground)
+    /// ease out over `snow_switch_s` and are gone once it is snow, and come
+    /// back the same way.
+    #[test]
+    fn rain_gives_way_to_snow_over_the_switch_time() {
+        let mut app = App::new();
+        app.insert_resource(WeatherSettings::default())
+            .insert_resource(Time::<()>::default())
+            .insert_resource(Weather {
+                rain: 1.0,
+                snowing: true,
+                ..default()
+            })
+            .add_systems(Update, follow_rain);
+        let tau = WeatherSettings::default().snow_switch_s;
+        let mut seen = Vec::new();
+        for _ in 0..(tau * 10.0 * 10.0) as u32 {
+            app.world_mut()
+                .resource_mut::<Time>()
+                .advance_by(std::time::Duration::from_millis(100));
+            app.update();
+            seen.push(app.world().resource::<Weather>().liquid());
+        }
+        assert!(
+            seen[0] > 0.9,
+            "the water does not vanish at once: {}",
+            seen[0]
+        );
+        let at_tau = seen[(tau * 10.0) as usize - 1];
+        assert!(
+            (at_tau - (-1.0f32).exp()).abs() < 0.05,
+            "one e-fold: {at_tau}"
+        );
+        assert!(*seen.last().unwrap() < 1e-3, "snow is not water");
+        assert!(seen.windows(2).all(|w| w[1] <= w[0]), "it only eases out");
+        let full = Weather {
+            rain: 1.0,
+            snow_share: 1.0,
+            ..default()
+        };
+        assert_eq!(full.liquid(), 0.0);
+    }
+
+    /// `weather-rain` R1: under a full deck at noon the rain is lit by the
+    /// sky a standing face takes, which is darker than the old model's curve
+    /// lit it; and no channel is negative or past one at noon, clear.
+    #[test]
+    fn the_rain_takes_the_sky_a_standing_face_takes() {
+        let s = WeatherSettings::default();
+        let storm = rain_sky_light(1.0, 1.0);
+        assert!(
+            storm.max_element() < rain_light(1.0, 1.0, &s),
+            "a storm's streak lit at {storm} against the old curve's {}",
+            rain_light(1.0, 1.0, &s)
+        );
+        let clear = rain_sky_light(1.0, 0.0);
+        assert!(clear.min_element() >= 0.0 && clear.max_element() <= 1.0);
+        assert!(rain_sky_light(-0.5, 1.0).max_element() < storm.max_element());
     }
 }
