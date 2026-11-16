@@ -502,22 +502,28 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       const cell = newPuffs ? Math.floor(r(5) * 4) * 4 + Math.min(3, Math.floor(phase * 4)) : -1;
       quad({x: foot.x + Math.cos(a) * d, y, z: foot.z + Math.sin(a) * d}, size, [light, light, light, alpha], cell, r(6) < 0.5 ? 1 : 0);
     }
-    // The veil (New tab only, mockup): mist shed by the falling sheet itself. Puffs leave the column's face at a
-    // height along the drop, drift out and a little down while they swell and fray, and fade; more of them low down,
-    // where the water has fallen furthest and broken up most.
-    const veil = Math.round(Math.min(48, 2.5 * h) * veilN);
+    // Fall droplets (New tab only, mockup; owner: "fall mist shouldnt be mist, should be like water droplets fx").
+    // Drops shaken off the falling sheet: each leaves the sheet's face at a height along the drop, already moving
+    // down at the fall's speed there, flung a little outward, and falls under gravity until it reaches the pool.
+    // More of them low down, where the water has fallen furthest and broken up most. Drawn as hard 8-texel
+    // droplets (cell -2), not soft puffs.
+    const veil = Math.round(Math.min(160, 9 * h) * veilN);
+    const G = 15;  // the splash's own gravity, m/s^2
     for (let i = 0; i < veil; i++) {
       const r = k => hash01((seed ^ 0x5C3E) >>> 0, i * 8 + k);
-      const period = 1.6 + 1.2 * r(0), phase = (t / period + r(1)) % 1, s = phase * period;
-      const along = Math.pow(r(2), 0.6);                         // 0 at the lip .. 1 at the foot, weighted low
+      const along = Math.pow(r(2), 0.7);                          // 0 at the lip .. 1 at the foot
+      const fallen = h * along, y0 = foot.y + h - fallen;
+      const vDown = Math.sqrt(2 * G * Math.max(fallen, 0.2));      // the sheet's speed where it leaves
+      const vOut = (0.6 + 1.6 * r(4)) * (0.5 + 0.5 * along);       // flung out, m/s
+      const tLand = (-vDown + Math.sqrt(vDown * vDown + 2 * G * Math.max(y0 - foot.y, 0.05))) / G;
+      const period = tLand + 0.15 + 0.4 * r(0), s = ((t / period + r(1)) % 1) * period;
+      if (s > tLand) continue;                                      // gone into the pool
       const a = r(3) * Math.PI * 2;
-      const d = SPLASH_EDGE_M * 0.9 + (0.25 + 0.5 * r(4)) * s;   // out from the sheet, m
-      const size = (0.35 + 0.25 * along) * (0.6 + 0.9 * phase) * mistS;
-      const y = foot.y + h * (1 - along) - 0.35 * s + size * 0.5 + SPLASH_CLEAR_M;
-      if (y < foot.y + SPLASH_CLEAR_M + size * 0.5) continue;
-      const alpha = (0.10 + 0.22 * along) * Math.sin(Math.PI * phase) * fade;
-      const cell = Math.floor(r(5) * 4) * 4 + Math.min(3, Math.floor(phase * 4));
-      quad({x: foot.x + Math.cos(a) * d, y, z: foot.z + Math.sin(a) * d}, size, [light, light, light, alpha], cell, r(6) < 0.5 ? 1 : 0);
+      const d = SPLASH_EDGE_M * 0.95 + vOut * s;
+      const y = y0 - vDown * s - 0.5 * G * s * s;
+      const size = (0.035 + 0.05 * r(6)) * mistS;
+      const alpha = 0.9 * Math.min(1, s / 0.05) * fade;
+      quad({x: foot.x + Math.cos(a) * d, y, z: foot.z + Math.sin(a) * d}, size, [light, light, light * 1.03, alpha], -2, 0);
     }
   }
 }
@@ -545,7 +551,13 @@ function splashMesh(U, sheet) {
       ${LIGHT_GLSL} ${UNDER_GLSL}
       void main() {
         vec3 rgb; float a;
-        if (vCell.x < -0.5) {
+        if (vCell.x < -1.5) {
+          // A fall droplet: 8 texels, sampled nearest; a bright core, a lit rim, a glint, no outline.
+          vec2 tx = clamp(floor(vUV*8.0), 0.0, 7.0); float r = length((tx + 0.5)/4.0 - 1.0);
+          if (r > 0.95) discard;
+          a = r < 0.55 ? 0.95 : 0.7; rgb = vec3(0.86, 0.95, 1.0);
+          if (tx.x == 2.0 && tx.y == 2.0) rgb = vec3(1.25);
+        } else if (vCell.x < -0.5) {
           // The game's dot: alpha (1 - r)^2 at the texel's centre, a byte, sampled nearest.
           vec2 texel = clamp(floor(vUV*32.0), 0.0, 31.0);
           float r = length((texel + 0.5)/32.0*2.0 - 1.0), k = clamp(1.0 - r, 0.0, 1.0);
