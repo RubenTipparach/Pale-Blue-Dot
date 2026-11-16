@@ -256,22 +256,15 @@
     return isOpen(byId[id], st.done) ? "open" : "locked";
   }
 
-  // ---- layout. Zoom is virtual (starter-missions TS.3; owner, 2026-11-16: "I would opt to
-  // virtualize them, so that way we still control how we want to zoom in"): the world is never
-  // scaled, so a card's 9-slice frame (10 CSS px = 5 art px, the tooltip without its outer ring) is always 2 CSS px an art pixel. A
-  // level is a designed view: the card's size and detail, the gaps and the type, all in whole
-  // (even) CSS pixels. 0 is the overview (each card its icon), 1 icon, title and badge, 2 icon, title and badge,
-  // 3 the full card packed close, 4 the native card, 5 and 6 bigger cards with bigger type.
-  const LEVELS = [
-    { cw: 52, ch: 52, gx: 10, gy: 10, lanes: false },
-    { cw: 200, ch: 52, gx: 16, gy: 12, lanes: false },
-    { cw: 236, ch: 72, gx: 24, gy: 16, lanes: false },
-    { cw: 236, ch: 188, gx: 40, gy: 32, lanes: false },
-    { cw: 236, ch: 188, gx: 110, gy: 104, lanes: true },
-    { cw: 300, ch: 236, gx: 120, gy: 110, lanes: true },
-    { cw: 356, ch: 284, gx: 130, gy: 120, lanes: true },
-  ];
-  const OPEN = 4;
+  // ---- layout. Every card keeps one shape at every zoom (owner, 2026-11-16: "chaning shape of
+  // these nodes is annoying, I wish they stayed the same size, and maybe had 2x spacing", "this
+  // shape is best" of the full card): the full card, its frame 10 CSS px = 5 art px, laid out with
+  // twice the gaps the native view had. A zoom level is a scale of the whole tree, in fixed steps;
+  // below one the frames are smoothed rather than pixel-sampled, so a 9-slice never tears.
+  const CARD = { cw: 236, ch: 188, gx: 220, gy: 208, lanes: true };
+  const SCALES = [0.2, 0.3, 0.42, 0.6, 0.8, 1, 1.4, 2];
+  const LEVELS = SCALES.map(() => CARD);
+  const OPEN = 5;
   let lv = OPEN;
   let CW, CH, GX, GY, OX = 40, OY;
   const setLevel = (n) => {
@@ -351,7 +344,7 @@
   // Size and place every card, line and plaque for the level.
   function relayout() {
     [W, H] = sizeAt(lv);
-    world.className = "lv" + lv;
+    world.className = "lv4" + (SCALES[lv] < 1 ? " small" : "");
     world.style.width = W + "px";
     world.style.height = H + "px";
     svg.setAttribute("width", W);
@@ -544,7 +537,7 @@
   // world is scaled once by a fixed factor that does, never by the zoom.
   let tx = 0, ty = 0;
   const dpr = () => window.devicePixelRatio || 1;
-  const unit = () => Math.max(1, Math.round(2 * dpr())) / (2 * dpr());
+  const unit = () => SCALES[lv] * Math.max(1, Math.round(2 * dpr())) / (2 * dpr());
   const snap = (v) => Math.round(v * dpr()) / dpr();
   function apply() {
     tx = snap(tx);
@@ -567,16 +560,18 @@
   }
   function fit() {
     const r = view.getBoundingClientRect();
-    const pad = 12, q = unit();
+    const pad = 12;
     const bottomRoom = Math.min(130, r.height * 0.22); // the log sits at the foot
     let n = LEVELS.length - 1;
     while (n > 0) {
       const [w, h] = sizeAt(n);
-      if (w * q <= r.width - pad * 2 && h * q <= r.height - pad - bottomRoom) break;
+      const qn = SCALES[n] * Math.max(1, Math.round(2 * dpr())) / (2 * dpr());
+      if (w * qn <= r.width - pad * 2 && h * qn <= r.height - pad - bottomRoom) break;
       n--;
     }
     setLevel(n);
     relayout();
+    const q = unit();
     tx = (r.width - W * q) / 2;
     ty = pad + Math.max(0, (r.height - pad - bottomRoom - H * q) / 2);
     apply();
@@ -703,5 +698,6 @@
   // test hooks for the stills
   window.missionTree = { steps: steps.length, missions: M.length, unlocks: M.reduce((n, m) => n + m.unl.length, 0), setStep, select, fit, focus, sample, levels: LEVELS.length, level: () => lv };
   setStep(sample);
-  fit();
+  // Open at full size on the mission the bot is playing; Fit shows the whole tree.
+  focus("go-fishing", OPEN);
 })();

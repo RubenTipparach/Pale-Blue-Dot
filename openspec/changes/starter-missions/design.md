@@ -523,3 +523,15 @@ The overview level (TS.3's level 0) showed bare frames; the owner on it:
 "bad, wheres the icons". Level 0 is now the tree of icons (52 px cards,
 each its mission's icon in a 32 px slot), and level 1 keeps the icon
 beside the title.
+
+A locked card carries no badge, in the mockup and the game's tree (the
+owner, 2026-11-16: "we dont need locked, its obvious"): its dim silhouettes
+say so. The side panel's line under the title is then the branch alone.
+
+The owner on the virtual zoom (2026-11-16): "changing shape of these nodes
+is annoying, I wish they stayed the same size, and maybe had 2x spacing",
+and of the full card: "this shape is best". Every card is now the full card
+at every zoom, laid out with twice the native gaps (220 by 208 px); zoom
+scales the whole tree in fixed steps (0.2 to 2), with the frames smoothed
+below full size so a 9-slice never tears. The page opens at full size on
+the bot's current mission; Fit shows the whole tree.
