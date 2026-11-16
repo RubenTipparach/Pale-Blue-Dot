@@ -436,6 +436,36 @@ fn fish(
             school.step(step, species, &settings.flock, &water, splash);
         }
     }
+    // `PBD_LIFE_TRACE=1`, a measurement instrument (`ocean-environments`
+    // B17): each frame, each school's nearest creature to the eye, how far
+    // under it is drawn and how far its school has faded, so an approach
+    // can be read off the log frame by frame. Changes nothing drawn.
+    if std::env::var_os("PBD_LIFE_TRACE").is_some() {
+        let night = world
+            .sun
+            .as_ref()
+            .is_some_and(|sun| sun.direction().dot(up) < -0.05);
+        for school in &fishery.schools {
+            let Some(species) = roster.get(school.species as usize) else {
+                continue;
+            };
+            let nearest = (0..school.len()).min_by(|&a, &b| {
+                school.positions[a]
+                    .distance(eye)
+                    .total_cmp(&school.positions[b].distance(eye))
+            });
+            if let Some(i) = nearest {
+                info!(
+                    "LIFE_TRACE {} eye {:.2} m under {:.3} fade {:.3} spook {:.1}",
+                    species.id,
+                    school.positions[i].distance(eye),
+                    fauna::under_share(species, school, i, seconds, night),
+                    fishery.fade_of(school),
+                    school.spook[i],
+                );
+            }
+        }
+    }
 
     // Spawning and dropping round the player; a school fades as it comes
     // and goes.

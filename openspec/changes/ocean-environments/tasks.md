@@ -70,8 +70,8 @@ against what it would cost.
 
 ## 12. Sea life that vanishes up close, floes on the beach (owner, 2026-11-16; design B17)
 
-- [ ] 12.1 Floes only where they float at low water; none on beaches or terraces. Verify: an app test that no floe is laid over ground above its draft; captures at the polar shore before and after.
-- [ ] 12.2 A floe seal slides off and swims away, and climbs back later; never skipped in one frame. Verify: an app test over the slide that it is drawn every frame.
-- [ ] 12.3 A startled seal dives over time and swims away; a diving duck sinks and rises, never skipped. Verify: core tests of the `under` rate and the flee goal; the `--life seal` approach sequence 30 m to 2 m.
-- [ ] 12.4 Ambient life fades with its tile (no 30 m cut); the sway eases out. Verify: captures; the tile-fade test.
-- [ ] 12.5 Schools fade in when spawned and out before they are dropped. Verify: an app test of the fade; READY with no new `LATE_PIPELINE`.
+- [x] 12.1 (Built 2026-11-16 on `claude/sea-life-fixes`; `docs/screenshots/sea-life-fixes/`.) Floes only where they float at low water; none on beaches or terraces. Verify: an app test that no floe is laid over ground above its draft; captures at the polar shore before and after.
+- [x] 12.2 (Built 2026-11-16 on `claude/sea-life-fixes`; `docs/screenshots/sea-life-fixes/`.) A floe seal slides off and swims away, and climbs back later; never skipped in one frame. Verify: an app test over the slide that it is drawn every frame.
+- [x] 12.3 (Built 2026-11-16 on `claude/sea-life-fixes`; `docs/screenshots/sea-life-fixes/`.) A startled seal dives over time and swims away; a diving duck sinks and rises, never skipped. Verify: core tests of the `under` rate and the flee goal; the `--life seal` approach sequence 30 m to 2 m.
+- [x] 12.4 (Built 2026-11-16 on `claude/sea-life-fixes`; `docs/screenshots/sea-life-fixes/`.) Ambient life fades with its tile (no 30 m cut); the sway eases out. Verify: captures; the tile-fade test.
+- [x] 12.5 (Built 2026-11-16 on `claude/sea-life-fixes`; `docs/screenshots/sea-life-fixes/`.) Schools fade in when spawned and out before they are dropped. Verify: an app test of the fade; READY with no new `LATE_PIPELINE`.

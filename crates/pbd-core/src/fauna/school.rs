@@ -61,6 +61,8 @@ pub struct School {
     pub under: Vec<f32>,
     /// The eye a startled floater is swimming away from, this step.
     flee: Option<Vec3>,
+    /// Making for the water away from the eye, with the pull of a lure.
+    fleeing: bool,
     rng: Rng,
 }
 
@@ -108,6 +110,7 @@ impl School {
             held: None,
             under: vec![0.0; count as usize],
             flee: None,
+            fleeing: false,
             rng,
         };
         for _ in 0..count {
@@ -253,9 +256,11 @@ impl School {
             self.goal = self.pick_goal(species, flock.goal_reach_m, water);
             self.goal_t = self.rng.range(flock.goal_every_s.0, flock.goal_every_s.1);
             self.lured = false;
+            self.fleeing = false;
         }
         // A startled floater makes for water away from the eye, where it is
-        // seen going (`ocean-environments` B17).
+        // seen going (`ocean-environments` B17): straight away if the water
+        // there fits it, else the nearest bearing off that does, nearer.
         if let Some(eye) = self.flee.take()
             && !self.lured
         {
@@ -263,11 +268,19 @@ impl School {
             let up = centre.normalize_or(Vec3::Y);
             let away = centre - eye;
             let away = (away - up * away.dot(up)).normalize_or(tangents(up).0);
-            let at = (centre + away * FLEE_M).normalize_or(up) * self.anchor.length();
-            if species.fits(water.depth(at)) {
-                let point = at.normalize_or(up) * water.surface(at);
-                self.goal = at.normalize_or(up) * self.depth_for(species, point, water);
-                self.goal_t = self.goal_t.max(4.0);
+            let side = up.cross(away);
+            'search: for reach in [FLEE_M, FLEE_M * 0.6] {
+                for turn in [0.0f32, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5] {
+                    let dir = away * turn.cos() + side * turn.sin();
+                    let at = (centre + dir * reach).normalize_or(up) * self.anchor.length();
+                    if species.fits(water.depth(at)) {
+                        let point = at.normalize_or(up) * water.surface(at);
+                        self.goal = at.normalize_or(up) * self.depth_for(species, point, water);
+                        self.goal_t = self.goal_t.max(4.0);
+                        self.fleeing = true;
+                        break 'search;
+                    }
+                }
             }
         }
         // A startled seal goes under, and comes back up, over time.
@@ -404,7 +417,7 @@ impl School {
             .map(|(_, point)| point);
         let (target, weight) = match lure {
             Some(point) => (point, flock.lure),
-            None if self.lured => (self.goal, flock.lured),
+            None if self.lured || self.fleeing => (self.goal, flock.lured),
             None => (self.goal, flock.goal),
         };
         let want = target - p;
