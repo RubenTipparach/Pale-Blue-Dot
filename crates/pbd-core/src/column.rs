@@ -1245,9 +1245,10 @@ mod tests {
         eprintln!("ore within 14 m of the surface in {found} of {land} land columns ({share:.2})");
     }
 
-    /// Version 10's columns pinned as it lands (x86_64; the ground under
-    /// them differs between targets, `flora-v2` 12.1).
-    #[cfg(target_arch = "x86_64")]
+    /// Version 10's columns pinned as it lands, on x86_64 Linux. The
+    /// materials agree on the Mac too, aarch64 and x86_64 (measured
+    /// 2026-11-16): the platforms part only in an altitude's last bits
+    /// (`terrain` spec, "The generator is versioned"), so it runs everywhere.
     #[test]
     fn version_10_s_columns_are_pinned() {
         let v10 = planet_gen::TerrainConfig::TENEBRIS_V10;
@@ -1261,6 +1262,5 @@ mod tests {
         assert_eq!(hash, VERSION_10_COLUMN_DIGEST);
     }
 
-    #[cfg(target_arch = "x86_64")]
     const VERSION_10_COLUMN_DIGEST: u64 = 7_866_721_340_977_067_839;
 }

@@ -696,6 +696,46 @@ write-up); it pins version 10's digests per target
 aarch64 ones so both machines' test runs mean something, and lists the
 cross-machine drift as an open question for the owner.
 
+**Versions 4 and 5 on the Mac, bisected and measured (2026-11-16,
+`claude/old-ground-digests`).** `version_4_makes_the_ground_every_old_world_was_made_on`
+and `version_5_makes_the_ground_its_worlds_were_made_on` failed on the M4 Max
+Mac. There is no breaking commit to bisect to: each test already fails on the
+Mac at the commit that added it, `69cf22a` (version 4's digest) and `792a6f0`
+(version 5's), with the very values the branch gives today (version 4
+`7957956841201382435`, version 5 `10767986828596518258`). The pinned values
+were taken in the cloud container (x86_64 Linux). Nothing moved the old
+ground; the digest was never the Mac's.
+
+The proof, run with each commit's own source (`git archive`, a probe test
+added to the scratch copy only): for each of the 10,000 digest directions,
+the direction's bits, the altitude's bits, the biome and the top block were
+written out for versions 4 and 5.
+
+| Run | Version 4 dump (sha1) | Version 5 dump (sha1) |
+| --- | --- | --- |
+| `69cf22a`, aarch64 Mac | `b2fce595...` | (version 5 not yet made) |
+| `792a6f0`, aarch64 Mac | `b2fce595...` | `3c748530...` |
+| `b924ff8` (`claude/env-v2`), aarch64 Mac | `b2fce595...` | `3c748530...` |
+| `b924ff8`, x86_64 Mac (Rosetta) | `b2fce595...` | `3c748530...` |
+
+Byte for byte the same ground, from the commit that pinned each version to
+today. The top-block digests (`3219747905282479865`, `13661571992430582298`)
+match the pinned values on the Mac, as on Linux.
+
+What this corrects in the paragraph above: the split is the **operating
+system's maths library**, not the processor. An x86_64 build on the Mac makes
+the aarch64 values for versions 4 to 9, so `cfg(target_arch)` was the wrong
+switch. The digests are now pinned per `cfg(target_os = "macos")`, versions 4
+and 5 included, with the Linux values kept as they were. Version 10's column
+digest (materials only, pinned on x86_64 Linux) passes on both Mac targets
+too, so its `cfg(target_arch = "x86_64")` gate is dropped: on those 2,000
+columns the platforms part in an altitude's last bits, not in which material
+a cell holds. Which call differs (the test's own `sin` and `cos` that lay out
+the sample directions, or the generator's `f64` `powf`) was not isolated
+without a Linux machine; Windows (the desktop) was not measured, and gets the
+Linux values as before. Whether worlds made on one OS and opened on another
+can differ in the odd cell stays the open question above.
+
 ### 12.2 M13's densities
 
 M13 rolls a tree on a cell with probability `treeP × (0.25 + 1.5 × forest)`,

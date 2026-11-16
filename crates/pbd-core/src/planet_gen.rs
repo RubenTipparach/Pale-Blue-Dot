@@ -825,6 +825,18 @@ mod tests {
     }
 
     /// The digest of version 4's ground on 10,000 directions.
+    ///
+    /// The digest differs with the platform's maths library, not with the
+    /// ground (`terrain` spec, "The generator is versioned"): the value
+    /// pinned in `69cf22a` was taken in the cloud container (x86_64 Linux),
+    /// and macOS has given the other value since that very commit, on
+    /// aarch64 and on x86_64 alike. Every altitude, biome and top
+    /// block of the 10,000 samples is byte for byte what `69cf22a` and
+    /// `792a6f0` made on the Mac (measured 2026-11-16). The top blocks
+    /// agree on every platform.
+    #[cfg(target_os = "macos")]
+    const VERSION_4_DIGEST: u64 = 7_957_956_841_201_382_435;
+    #[cfg(not(target_os = "macos"))]
     const VERSION_4_DIGEST: u64 = 12_573_173_393_310_104_260;
 
     /// The digest of the top block a column of `cfg` shows, on `n`
@@ -868,6 +880,12 @@ mod tests {
     }
 
     /// The digests of version 5's ground and top blocks on 10,000 directions.
+    /// The ground digest differs by platform as version 4's does: `792a6f0`
+    /// pinned the Linux value, and the Mac has made the other since that
+    /// commit, sample for sample the same ground (measured 2026-11-16).
+    #[cfg(target_os = "macos")]
+    const VERSION_5_DIGEST: u64 = 10_767_986_828_596_518_258;
+    #[cfg(not(target_os = "macos"))]
     const VERSION_5_DIGEST: u64 = 17_903_191_863_826_077_473;
     const VERSION_5_TOP_DIGEST: u64 = 13_661_571_992_430_582_298;
 
@@ -885,12 +903,14 @@ mod tests {
 
     /// The digests of version 6's ground and top blocks on 10,000 directions,
     /// taken on the M4 Max Mac (2026-11-15).
-    /// The ground digest differs by target: the Mac's (aarch64) and the
-    /// desktop's and this container's (x86_64), measured 2026-11-15
-    /// (`flora-v2` design 12.1). The top blocks agree on both.
-    #[cfg(target_arch = "aarch64")]
+    /// The ground digest differs by platform: the Mac's and the Linux
+    /// container's, measured 2026-11-15 (`flora-v2` design 12.1). The split
+    /// is the operating system's maths library, not the processor: an
+    /// x86_64 build on the Mac gives the Mac's value (2026-11-16). The top
+    /// blocks agree on both.
+    #[cfg(target_os = "macos")]
     const VERSION_6_DIGEST: u64 = 1_195_572_018_390_891_724;
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(not(target_os = "macos"))]
     const VERSION_6_DIGEST: u64 = 10_265_201_514_255_625_508;
     const VERSION_6_TOP_DIGEST: u64 = 2_881_052_872_441_172_356;
 
@@ -985,30 +1005,36 @@ mod tests {
         assert_eq!(v10.ore, Some(crate::ore::OreVeins::V10));
     }
 
-    /// The ground digest differs by target: the Mac's (aarch64) and the
-    /// desktop's and this container's (x86_64), measured 2026-11-15
-    /// (`flora-v2` design 12.1). The top blocks agree on both.
-    #[cfg(target_arch = "aarch64")]
+    /// The ground digest differs by platform: the Mac's and the Linux
+    /// container's, measured 2026-11-15 (`flora-v2` design 12.1). The split
+    /// is the operating system's maths library, not the processor: an
+    /// x86_64 build on the Mac gives the Mac's value (2026-11-16). The top
+    /// blocks agree on both.
+    #[cfg(target_os = "macos")]
     const VERSION_9_DIGEST: u64 = 15_558_980_979_595_432_169;
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(not(target_os = "macos"))]
     const VERSION_9_DIGEST: u64 = 4_200_192_246_974_754_388;
     const VERSION_9_TOP_DIGEST: u64 = 13_002_675_292_541_232_770;
 
-    /// The ground digest differs by target: the Mac's (aarch64) and the
-    /// desktop's and this container's (x86_64), measured 2026-11-15
-    /// (`flora-v2` design 12.1). The top blocks agree on both.
-    #[cfg(target_arch = "aarch64")]
+    /// The ground digest differs by platform: the Mac's and the Linux
+    /// container's, measured 2026-11-15 (`flora-v2` design 12.1). The split
+    /// is the operating system's maths library, not the processor: an
+    /// x86_64 build on the Mac gives the Mac's value (2026-11-16). The top
+    /// blocks agree on both.
+    #[cfg(target_os = "macos")]
     const VERSION_8_DIGEST: u64 = 15_558_980_979_595_432_169;
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(not(target_os = "macos"))]
     const VERSION_8_DIGEST: u64 = 4_200_192_246_974_754_388;
     const VERSION_8_TOP_DIGEST: u64 = 13_002_675_292_541_232_770;
 
-    /// The ground digest differs by target: the Mac's (aarch64) and the
-    /// desktop's and this container's (x86_64), measured 2026-11-15
-    /// (`flora-v2` design 12.1). The top blocks agree on both.
-    #[cfg(target_arch = "aarch64")]
+    /// The ground digest differs by platform: the Mac's and the Linux
+    /// container's, measured 2026-11-15 (`flora-v2` design 12.1). The split
+    /// is the operating system's maths library, not the processor: an
+    /// x86_64 build on the Mac gives the Mac's value (2026-11-16). The top
+    /// blocks agree on both.
+    #[cfg(target_os = "macos")]
     const VERSION_7_DIGEST: u64 = 9_167_527_543_725_899_224;
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(not(target_os = "macos"))]
     const VERSION_7_DIGEST: u64 = 5_065_085_066_077_397_351;
     const VERSION_7_TOP_DIGEST: u64 = 10_634_382_923_396_087_003;
 

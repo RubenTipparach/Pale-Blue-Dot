@@ -23,6 +23,15 @@ the shipped generator moves on.
 - **THEN** its heights, biomes and top blocks are the ones its worlds were
   made on, pinned by a digest taken before the next version landed
 
+#### Scenario: A ground digest is pinned for each platform's maths library
+- **WHEN** a carried version's ground digest is checked on macOS or on Linux
+- **THEN** it is compared with the value that platform makes, both pinned
+  beside each other, because the platforms' `sin`, `cos` and `pow` differ in
+  the last bit and the digest folds every altitude bit for bit; the top
+  blocks and the columns' materials agree on both and are pinned once
+- **AND** a platform's value is pinned only once its samples are shown to be,
+  byte for byte, what the commit that pinned the version made on that platform
+
 #### Scenario: A new world
 - **WHEN** a new world is made
 - **THEN** its save records the current generator version
