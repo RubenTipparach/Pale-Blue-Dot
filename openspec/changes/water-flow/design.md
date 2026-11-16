@@ -777,6 +777,12 @@ The fix, order and depth only:
   and not written. So from above a pool the splash stands on the surface,
   behind a fall's column it is hidden by the column, and from under the pool
   the surface overhead hides it.
+- With the eye fully under water, what no sheet hides is murked by the
+  compose's own terms and distance, as it was when the splash was part of
+  the scene. (Measured on the captures: some spray and mist stand under a
+  pool's surface or poke into the next column's water; from above they are
+  now hidden, from under they read as before. Where they are placed is the
+  splash's look, item 4 above, and not touched here.)
 - Its pipeline is one of the water's, queued with the others when the view's
   water state is made, so the loading screen compiles it before `READY`.
 
