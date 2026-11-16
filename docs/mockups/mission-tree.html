@@ -112,6 +112,18 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .card.st-now .badge { color: var(--ink); background: var(--title); border-color: var(--title); }
 .card.st-open .badge { color: var(--stone-4); }
 .card.st-locked { opacity: .82; }
+/* zoomed out: each card its mission's icon, big, in the same frame; a done card keeps its check */
+#world.icons .card { padding: 0; }
+#world.icons .card > :not(.hd), #world.icons .card .hd > :not(.slot):not(.ck) { display: none; }
+#world.icons .card .hd { height: 100%; justify-content: center; align-items: center; }
+#world.icons .card .hd .slot { width: 150px; height: 150px; }
+#world.icons .card .hd .slot img { width: 120px; height: 120px; }
+#world.icons .card .ck.big { width: 56px; height: 56px; right: -10px; top: -12px; }
+/* the full card on hover, at full size, over everything */
+.card.tip { position: fixed; z-index: 20; pointer-events: none; display: none; }
+#world.small .card, #world.small .lane, #world.small .slot { image-rendering: auto; }
+/* a locked card reads as locked by its dim silhouettes; no badge (owner, 2026-11-16) */
+.card.st-locked .badge { display: none; }
 .card.st-locked .tt b { color: var(--label-dim); }
 .card.st-locked .obj li, .card.st-locked .obj li em { color: var(--label-dim); }
 .card.st-locked .hd .slot img { filter: brightness(0) invert(1) brightness(.34); }
@@ -123,11 +135,15 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 
 /* the zoom levels (TS.3): the world is never scaled, so a card's frame is always 2 CSS px an art
    pixel; a level sets the card's size (from tree.js), its detail and its type */
-#world.lv0 .card > *, #world.lv0 .lane, #world.lv1 .lane, #world.lv2 .lane, #world.lv3 .lane { display: none; }
+#world.lv0 .card > :not(.hd), #world.lv0 .card .hd > :not(.slot), #world.lv0 .lane, #world.lv1 .lane, #world.lv2 .lane, #world.lv3 .lane { display: none; }
 #world.lv0 .card { padding: 0; }
+/* the overview is the tree of icons: each card its mission's icon in its slot */
+#world.lv0 .card .hd { min-height: 0; height: 100%; justify-content: center; }
+#world.lv0 .card .hd .slot, #world.lv1 .card .hd .slot { width: 32px; height: 32px; }
+#world.lv0 .card .hd .slot img, #world.lv1 .card .hd .slot img { width: 24px; height: 24px; }
 #world.lv0 #edges path, #world.lv1 #edges path { stroke-width: 2; }
 #world.lv0 #edges path.e-hl, #world.lv1 #edges path.e-hl { stroke-width: 4; }
-#world.lv1 .card .obj, #world.lv1 .card .un, #world.lv1 .card .tt small, #world.lv1 .card .hd .slot,
+#world.lv1 .card .obj, #world.lv1 .card .un, #world.lv1 .card .tt small,
 #world.lv2 .card .obj, #world.lv2 .card .un, #world.lv2 .card .tt small { display: none; }
 #world.lv1 .card, #world.lv2 .card { padding: 0 4px; justify-content: center; }
 #world.lv1 .card .hd { min-height: 0; }

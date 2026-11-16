@@ -527,3 +527,29 @@ mission tree (`desktop/mission_tree.rs`) draws the same `tooltip` piece; the
 lasting fix is in the art (`tools/art/ui_panels_blend.py` `r_tooltip` and
 `r_oak_tooltip`, whose outside should render transparent), which needs
 Blender and waits for a request.
+
+The overview level (TS.3's level 0) showed bare frames; the owner on it:
+"bad, wheres the icons". Level 0 is now the tree of icons (52 px cards,
+each its mission's icon in a 32 px slot), and level 1 keeps the icon
+beside the title.
+
+A locked card carries no badge, in the mockup and the game's tree (the
+owner, 2026-11-16: "we dont need locked, its obvious"): its dim silhouettes
+say so. The side panel's line under the title is then the branch alone.
+
+The owner on the virtual zoom (2026-11-16): "changing shape of these nodes
+is annoying, I wish they stayed the same size, and maybe had 2x spacing",
+and of the full card: "this shape is best". Every card is now the full card
+at every zoom, laid out with twice the native gaps (220 by 208 px); zoom
+scales the whole tree in fixed steps (0.2 to 2), with the frames smoothed
+below full size so a 9-slice never tears. The page opens at full size on
+the bot's current mission; Fit shows the whole tree.
+
+Then (owner, 2026-11-16): "the zoom is now completely broken" (it kept the
+old scale when re-anchoring), "it should be big icons when zoomed out",
+"I can hover over nodes to get more info", "zoom should make sure ... the
+cursor is at the same tree position", "a max bounds so the user doesnt get
+lost". The zoom keeps the tree point under the cursor fixed; at 0.6 and
+below a card is its mission's icon filling the same frame, and hovering
+one shows the full card beside the pointer; a pan stops when no card would
+keep 40 px in view; scales run 0.1 to 2, so Fit shows the whole tree.
