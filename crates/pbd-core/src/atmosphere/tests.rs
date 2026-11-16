@@ -1132,7 +1132,7 @@ fn what_falls_in_freezing_air_is_snow() {
             Vec3::new(r * a.cos(), y, r * a.sin())
         })
         .collect();
-    let (mut snowed, mut rained) = (0, 0);
+    let (mut snowed, mut rained, mut snowy_seen) = (0, 0, 0);
     for step in 0..900u32 {
         let turn = step as f32 * 0.01;
         a.step(Vec3::new(turn.cos(), 0.3, turn.sin()).normalize(), &[]);
@@ -1145,12 +1145,30 @@ fn what_falls_in_freezing_air_is_snow() {
             if sample.air_c <= 0.0 {
                 assert!(falls <= 0.0, "rain {falls} in air at {} C", sample.air_c);
             }
+            // Snow over snowy ground whatever the air (owner, 2026-11-16:
+            // "if snow on the ground, no rain, if snow biome, must snow not
+            // rain"); elsewhere only in freezing air.
+            let (cells, w) = a.grid.locate(p);
+            let snowy: f32 = cells
+                .iter()
+                .zip(w)
+                .map(|(&c, w)| if a.surface.snowy[c as usize] { w } else { 0.0 })
+                .sum();
+            if snowy > 0.5 {
+                assert!(falls <= 0.0, "rain {falls} on snowy ground");
+                snowy_seen += usize::from(falls < 0.0);
+            }
             if falls < 0.0 {
-                assert!(sample.air_c <= 0.0, "snow in air at {} C", sample.air_c);
+                assert!(
+                    sample.air_c <= 0.0 || snowy > 0.5,
+                    "snow in air at {} C over bare ground",
+                    sample.air_c
+                );
                 snowed += 1;
             }
             rained += usize::from(falls > 0.0);
         }
     }
     assert!(snowed > 0 && rained > 0, "snow {snowed}, rain {rained}");
+    assert!(snowy_seen > 0, "nothing fell on snowy ground in the run");
 }
