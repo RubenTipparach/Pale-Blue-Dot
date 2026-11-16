@@ -902,3 +902,135 @@ next step (task 9.9) and not taken here.
   fungal forest.
 - The cross-machine digest drift (12.1), written up, not fixed.
 - Frame cost, not measured (no GPU in the cloud session).
+
+## 13. Trees in rain, and a fade that ends (owner, 2026-11-16)
+
+The owner, on a terraced valley in rain: "theres massive artifacts here";
+then "distant forest stuff has that weird pale ghost look too" (a jungle in
+rain), "no rain drops on tree leaves either" (looking up into an oak), and
+"dithering should either stay or go, dont have it linger if the player isnt
+moving" (a jungle at night, the camera still). The pictures are in
+`docs/screenshots/rain-artifacts/` (`owner-*`), and the captures that
+reproduce them are listed in its README.
+
+### 13.1 What the ghost trees are
+
+Two causes, measured apart.
+
+**The wet ground's whole block runs on the trees.** `planet_surface.wgsl`'s
+rain branch (`wet_amt > 0.001`) gates on `rain_open`, which is 1 for every
+tree vertex, and its puddle test `floor_like` is "not grass, not leaves"
+by material code, which every tree code passes (`TREE_BARK_CODE` to
+`IMPOSTOR_CODE` are none of 2, 3, 7, 9). A mid card and a far billboard
+take the tree's up axis as their normal (`normal = axis`; the billboard
+`0.4` sideways), so to the wet block they are a flat floor: a puddle
+(`flat` 1 on a card, about 0.5 on a billboard), with the full Fresnel
+mirror of the sky at the grazing angle a standing card is seen from, the
+rings, the sheet's waves, the GGX glint and a reflection request. A card
+in rain is drawn as a pale sky-coloured sheet in the shape of a tree: the
+"ghost trees". The near model's leaf cards turn to the eye, many of them
+tilted up, and take the same rings, sheet and sheen ("no rain drops on tree
+leaves"). Evidence: `before-valley-dry.jpg` against `before-valley-rain.jpg`,
+one spot, one frame count, the forcing the only change: every mid and far
+tree turns from green to pale grey-blue blotches.
+
+**The cross-fade dither lingers.** The near model, the mid cards and the
+far billboard cross-fade over the last 0.3 of each ring (`ring_t`, design
+10.4) by a Bayer mask, by distance. A tree that stands inside a ring is
+drawn half in one representation and half in the next for as long as it
+stands there: on a still camera, a permanent screen-door of tree pixels and
+background pixels. Against a pale sky or the rain's haze that reads as a
+grey checker ("pale dithered checker patches at the canopy line"). Evidence:
+`before-jungle-rain.jpg` with the clouds pass off (`PBD_PASS_OFF=clouds`)
+and with the rain passes off still shows the checker behind the near
+kapoks, so it is neither the clouds' upsampling nor the rain volume. The
+foliage range's outer edge thins trees by the same mask over
+`tree_fade_m` (the same lingering, at a longer range).
+
+### 13.2 The fix for the first: a tree is not a floor
+
+The rain branch gives a detailed tree (`kind == 2`) and every piece of
+ground clutter (`kind == 3`: tufts, blades, flowers, ferns, mushrooms,
+pebbles, fallen fruit) one thing only: a uniform darkening by
+`rain_plant_darken` (`weather.ron`, 0.88 at full wetness) times the
+wetness. No puddle, rings, sheet, rivulets, mirror, glint, lamp glints or
+reflection request. Bark takes the same: the weather-rain design's
+"rivulets down trunks" were Tenebris's prism trunks, and on the detailed
+trees' 20 cm limbs the kernel is noise; recommendation taken (ask only with
+screenshots).
+
+### 13.3 The fix for the second: a fade is a moment in time
+
+The rule (CLAUDE.md, priority 1, owner 2026-11-16): "A dither cross-fade
+starts when something crosses its distance, runs to the end over its fade
+time, and finishes. Nothing is drawn half-dithered for as long as it sits
+inside a distance band, and a still camera sees no dithered object once the
+fade time has passed."
+
+**Two camera snapshots, no per-tree state.** The CPU keeps two points in
+the body's frame, `from` and `to`, and a clock. Each tree's representation
+is decided at both points by hard thresholds (no ring): the near model
+inside `0.85 * tree_near_m`, the mid cards inside `0.85 * tree_mid_m`, the
+far billboard beyond, and nothing past the foliage range's edge (its
+`TREE_FADE_MARGIN_M` and half the old thinning band inside the reach). If a
+tree's representation at `from` equals the one at `to`, it is drawn whole in
+it: no dither at all. If they differ, the one at `to` comes in and the one
+at `from` goes out through the existing Bayer split, by the fade's progress
+`t = (now - start) / fade_s`, not by distance. When `t` reaches 1 the CPU
+sets `from = to`; while the camera has moved since, it then sets `to` to the
+camera and starts the next fade. A still camera therefore has `from == to`
+one fade after it stops: nothing dithered. Hysteresis comes free: the
+snapshot moves only with the camera, so a tree beside a threshold cannot
+flap while the camera stands.
+
+**Fade time and speed.** `tree_fade_s` 0.5 s (`scatter.ron`). The level is
+decided at `to`, which trails the camera by at most the fade time; so the
+fade is shortened to keep that lag under `tree_fade_lag_m` 5 m
+(`fade = min(tree_fade_s, tree_fade_lag_m / speed)`): 0.5 s on foot, about
+0.17 s at 30 m/s, a frame or two in flight, where the camera's own motion
+already hides a fade. The 5 m lag sits inside the margins the visibility
+pass lists with (the near list to `tree_near_m`, the cards from
+`0.7 * tree_near_m` to `tree_mid_m`, the billboard past `0.7 * tree_mid_m`),
+so both representations of a tree in its fade are always listed: the
+switches at 0.85 of each range leave 6.6 m and 13.5 m either side.
+
+**What stays.** The billboard's growth past the fine band
+(`distance-lod-fade`) is a size, not a dither, and stays. The terrain's own
+band cross-fade (`fade_t`) and the clutter's reach are spatial too; the
+terrain's is measured and written up in `distance-lod-fade`; the clutter's
+reach takes the same two snapshots (a piece is shown or not at each, faded
+by `t` between).
+
+**Verify.** A still camera in a forest captured at 0 s, 0.3 s and 2 s after
+it stops (`PBD_CAPTURE_RUN` frames): dithered tree pixels at 2 s, none. A
+walk through a forest shows no pop (every change fades over its time). A
+launch to READY with no `LATE_PIPELINE`.
+
+### 13.4 The far trees glow at night
+
+The owner, at night by a jungle and the sea: "distant trees appear to be
+glowing evenly, there should be some sort of lighting? idk"
+(`owner-far-trees-glow-night.webp`). Reproduced at the owner's spot
+(`--walk --at 28.2398 -19.596 --yaw 330 --pitch -5 --time 2`,
+`before-far-trees-night.jpg`): the mean sRGB of the far band is
+(0.4, 12.9, 14.1), the near kapoks' crowns beside it (0.5, 9.5, 12.4), the
+ground (0.3, 7.6, 22.8). The far band is a third brighter than the near
+crowns and flat.
+
+**Cause.** The impostors are lit by the terrain's own fragment, like the
+near trees, the ground and the cascades' shadow, so they do take the sun,
+the sky, the lamps, the field's sky light and the haze; what differs is the
+normal. A mid card's is the tree's up axis, the billboard's nearly so
+(`0.4` toward the eye). Lit as a floor, a card takes the zenith's full sky
+irradiance and the sun from above, all of it the same on every pixel, while
+the near crown's leaf cards turn to face the eye and take the light of a
+standing face, which at night is a fraction of the zenith's. The bake's
+brightness was matched to the near crown's mean (design 10.7), so the whole
+difference is the normal.
+
+**Fix.** Both impostors take a standing normal: toward the eye across the
+ground, tilted up by `0.35` (the near crown's leaves face the eye and lean
+a little skyward), so a card is lit as the near crown's leaves are, the
+sun-side brighter and the far side darker. Nothing else of the lighting
+changes. Verify: the same view at night and by day, near and far trees in
+one frame, before and after, with the band's mean against the near crowns'.
