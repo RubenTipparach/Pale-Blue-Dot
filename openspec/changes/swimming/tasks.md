@@ -69,15 +69,17 @@
 blocks". The rule and its numbers are in the design, "Auto-climb out of the
 water".
 
-- [ ] The knobs in `WalkingConfig`: `water_climb_m`, `water_climb_wade_m`,
+- [x] The knobs in `WalkingConfig`: `water_climb_m`, `water_climb_wade_m`,
       `water_climb_reach_m`, `water_climb_facing`, `water_climb_secs`,
       `water_climb_forward_m`.
-- [ ] The trigger in `resolve_ground` on a refused move, and the eased climb,
+- [x] The trigger in `resolve_ground` on a refused move, and the eased climb,
       with the motor and gravity standing down while it runs. Off with auto
       step.
-- [ ] Tests on the test planet: a swimmer facing a 1-layer bank climbs out;
+- [x] Tests on the test planet: a swimmer facing a 1-layer bank climbs out;
       so does a 2-layer bank; a 3-layer bank does not; moving along the bank
       does not climb; a wader at a 2-layer bank climbs.
-- [ ] Captures, a short sequence of swimming up to a bank and climbing out, in
-      `docs/screenshots/water-autoclimb/`.
+- [x] Captures, a short sequence of swimming up to a bank and climbing out, in
+      `docs/screenshots/water-autoclimb/` (`--climb-out --time 21`).
+- [ ] The footprint's flip on the great circle z = 0 (design, "Found on the
+      way"): its own write-up and fix.
 - [ ] The owner swims up to a bank in the running game.

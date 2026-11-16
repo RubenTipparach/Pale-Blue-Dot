@@ -323,6 +323,62 @@ impl PlanetContact {
             .map(|record| record.key())
     }
 
+    /// A capture's bank (`swimming` 4, `--climb-out`): on the resident
+    /// column tier within `radius_m` of `near`, the finest cell nearest it
+    /// whose water stands at least `deep` metres over its bed, beside a dry
+    /// cell whose top stands `rise` metres over that water's layer top. The
+    /// two cells' centres as directions, the water's first. A measurement of
+    /// the generated ground for a scripted shot, not a gameplay query.
+    pub fn bank_near(
+        &self,
+        near: Vec3,
+        radius_m: f32,
+        deep: f32,
+        rise: std::ops::RangeInclusive<f32>,
+    ) -> Option<(Vec3, Vec3)> {
+        use pbd_core::column::layer_altitude;
+        let fine = self.fine.as_ref()?;
+        let near = near.try_normalize()?;
+        let centre = |i: usize| Vec3::from_slice(&fine.tier.columns[i].direction_height[..3]);
+        let top = |i: usize| {
+            fine.set
+                .columns
+                .column(i)
+                .and_then(|c| c.surface().map(|s| (c, layer_altitude(s) + 1.0)))
+        };
+        let mut best: Option<(f32, Vec3, Vec3)> = None;
+        for i in 0..fine.tier.columns.len() {
+            let distance = (centre(i) - near).length() * PLANET_RADIUS;
+            if distance > radius_m || best.is_some_and(|(d, _, _)| d <= distance) {
+                continue;
+            }
+            let Some((column, bed)) = top(i) else {
+                continue;
+            };
+            let Some(water) = column.water_surface(bed + 0.5) else {
+                continue;
+            };
+            if water - bed < deep {
+                continue;
+            }
+            let degree = fine.tier.columns[i].degree();
+            for &n in &fine.tier.neighbors[i][..degree] {
+                if n == u32::MAX {
+                    continue;
+                }
+                let n = n as usize;
+                let Some((bank, ground)) = top(n) else {
+                    continue;
+                };
+                if bank.water_surface(ground + 0.5).is_none() && rise.contains(&(ground - water)) {
+                    best = Some((distance, centre(i), centre(n)));
+                    break;
+                }
+            }
+        }
+        best.map(|(_, water, bank)| (water, bank))
+    }
+
     /// The water at a body-local point by the column there: `None` off the
     /// tier (the height field answers), `Some(None)` where the column holds
     /// no water at that height, `Some(Some(top))` the altitude of the top of
