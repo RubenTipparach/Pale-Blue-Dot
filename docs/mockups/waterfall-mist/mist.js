@@ -583,7 +583,7 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       if (lift < SPLASH_CLEAR_M + size) continue;
       const d = SPLASH_EDGE_M + outR * s + 0.4 * r(5);
       quad({x: foot.x + Math.cos(a) * d, y: foot.y + lift, z: foot.z + Math.sin(a) * d}, size,
-        [light, light, light * 1.02, 0.75 * (1 - phase) * fade], -1, 0);
+        [light, light, light * 1.02, 0.75 * (1 - phase) * (newPuffs ? Math.min(1, phase / 0.15) : 1) * fade], -1, 0);
     }
     const puffs = Math.round(R.puffs * mistN);
     for (let i = 0; i < puffs; i++) {
@@ -594,7 +594,10 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       const size = R.size(h) * (0.6 + 0.8 * phase) * mistS;
       const d = SPLASH_EDGE_M + spread * (0.3 + phase) * r(3);
       const y = foot.y + R.rise(h) * s + size + SPLASH_CLEAR_M;
-      const alpha = R.alpha(h) * (1 - phase) * fade;
+      // New tab: each puff fades in over the first fifth of its life instead of being born at full alpha, which
+      // read as puffs flickering in and out on the tall fall's big puffs (owner, 2026-11-16).
+      const born = newPuffs ? Math.min(1, phase / 0.2) : 1;
+      const alpha = R.alpha(h) * (1 - phase) * born * fade;
       // The new puffs: a variant by the puff's own hash, its frame by its age.
       const cell = newPuffs ? Math.floor(r(5) * 4) * 4 + Math.min(3, Math.floor(phase * 4)) : -1;
       quad({x: foot.x + Math.cos(a) * d, y, z: foot.z + Math.sin(a) * d}, size, [light, light, light, alpha], cell, r(6) < 0.5 ? 1 : 0);
@@ -809,7 +812,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   const bubbles = FALLS.map((F, i) => { const b = bubblePoints(F, U); b.material.uniforms.uFoot.value.copy(feet[i].at); opaque.add(b); return b; });
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
-  const S = {variant: "today", night: false, running: true, gain: 1.5, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 1,
+  const S = {variant: "new", night: false, running: true, gain: 1.5, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 1,
     rule: "new", accel: 1};
   // The eye's pool (the cell under it, if it is a basin's), for the view from under the water.
   let eyePool = null;

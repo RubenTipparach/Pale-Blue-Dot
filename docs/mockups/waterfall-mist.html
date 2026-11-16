@@ -83,11 +83,11 @@ button{font:inherit;color:inherit}
     <h1>Waterfall Mist</h1>
     <button class="info" data-modal="aboutTpl" data-title="About this mockup" aria-label="About this mockup">About</button>
   </header>
-  <nav class="seg tabs" id="tabs" aria-label="Tabs"><button data-tab="today" aria-pressed="true">Game today</button><button data-tab="fixed" aria-pressed="false">Fixed order</button><button data-tab="new" aria-pressed="false">New mist + bubbles</button></nav>
+  <nav class="seg tabs" id="tabs" aria-label="Tabs"><button data-tab="new" aria-pressed="true">New mist + bubbles</button><button data-tab="fixed" aria-pressed="false">Fixed order</button></nav>
   <div class="stage">
     <canvas id="view" aria-label="A waterfall into a pool: drag to turn, middle-drag to pan, wheel or pinch to come closer"></canvas>
     <div class="flabels" id="flabels"></div>
-    <div class="vtitle" id="vtitle">Game today</div>
+    <div class="vtitle" id="vtitle">New mist + bubbles</div>
     <div class="ref" id="ref" hidden><img id="refImg" src="waterfall-mist/game-down-today.jpg" alt="The game's own capture of a fall into a pool"><span id="refLbl">The game</span></div>
   </div>
   <div class="bar">
@@ -214,7 +214,7 @@ button{font:inherit;color:inherit}
 <template id="tab-fixed"><p><b>Fixed order.</b> The same splash, drawn after the water against its depth: in front of the water, hidden by it. The pool shows its own deep colour. The mist is the game's gradient dot.</p></template>
 <template id="tab-new"><p><b>New mist + bubbles.</b> The fixed order, with lumpy lit mist puffs in place of the dot, bubbles rising in the pool under the fall, and the aerated teal over them. <b>Mist opacity</b> scales the puffs; 0.80 matches the dot's total cover.</p><p><b>Mist rule</b>: <b>Proposed</b> mists every fall by the metres it drops, with a floor, so the riffle and the 1 and 2-layer falls read as misty; <b>Game's</b> is today's count by whole falling layers. <b>Fall speed-up</b>: the falling faces scroll faster further down, so a taller fall's foot runs fastest (0 is the game's one speed). The About modal has the rules and numbers.</p></template>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="waterfall-mist/mist.js?v=15"></script>
+<script src="waterfall-mist/mist.js?v=16"></script>
 <script>
 "use strict";
 let MODAL_BACK = null;
@@ -225,7 +225,7 @@ function openModal(title, node) {
 }
 function closeModal() { const m = document.getElementById("modal"); if (m.hidden) return; m.hidden = true; if (MODAL_BACK && MODAL_BACK.focus) MODAL_BACK.focus(); }
 const TITLES = {today: "Game today", fixed: "Fixed order", new: "New mist + bubbles"};
-let TAB = "today", VIEW = "above";
+let TAB = "new", VIEW = "above";
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-modal], #tabInfo"); if (!b) return;
   const ids = b.id === "tabInfo" ? ["tab-" + TAB] : b.dataset.modal.split(" ");
@@ -247,7 +247,7 @@ function refresh() {
   document.getElementById("ref").hidden = !document.getElementById("showRef").checked;
 }
 function showTab(name) {
-  if (!TITLES[name]) name = "today";
+  if (!TITLES[name] || name === "today") name = "new";
   TAB = name; P.S.variant = name; P.apply();
   for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-pressed", String(b.dataset.tab === name));
   if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
@@ -290,7 +290,7 @@ for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"], ["mist", "mist"],
   }
 })();
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
-showTab(location.hash.slice(1) || "today");
+showTab(location.hash.slice(1) || "new");
 P.start();
 window.PAGE = {P, showTab, setView: v => document.querySelector(`#views button[data-view="${v}"]`).click(),
   setFocus: f => document.querySelector(`#focus button[data-focus="${f}"]`).click(), setNight: n => document.querySelector(`#tod button[data-tod="${n ? "night" : "day"}"]`).click()};
