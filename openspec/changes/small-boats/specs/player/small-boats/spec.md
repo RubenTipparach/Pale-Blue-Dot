@@ -15,8 +15,8 @@ slot.
 
 #### Scenario: Making an inner tube
 
-- **WHEN** a player with eight fibre and two rope crafts INNER TUBE at a workbench
-- **THEN** the fibre and rope are taken and an inner tube lands in the slots
+- **WHEN** a player with four wool and two rope crafts INNER TUBE at a workbench
+- **THEN** the wool and rope are taken and an inner tube lands in the slots
 
 ### Requirement: The tube and the raft float upright and paddle
 

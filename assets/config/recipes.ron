@@ -200,7 +200,7 @@
             name: "INNER TUBE",
             station: "workbench",
             secs: 4.0,
-            inputs: [("fibre", 8), ("rope", 2)],
+            inputs: [("wool", 4), ("rope", 2)],
             outputs: [("inner-tube", 1)],
         ),
         (

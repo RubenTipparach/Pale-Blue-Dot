@@ -43,6 +43,41 @@ Specs are `LoonSpec::tube()` and `LoonSpec::raft()`, written out to
 `vehicles.ron` as `tube:` and `raft:`. `VehicleSpecs` is `#[serde(default)]`,
 so a file without them still reads.
 
+## 2a. The models are M34's (owner, 2026-11-16: "you should use the same models from the mockup")
+
+The tube and the raft are drawn as M34 River Craft draws them
+(`docs/mockups/river-craft/scenes.js` on `claude/env-v2`, `tubeModel` and
+`raftModel`), at its sizes:
+
+- **The inner tube.**
+  - A felted-wool ring sealed with pine pitch: 0.52 m to the middle of the
+    tube, 0.22 m thick.
+  - A darker pitched seam over a quarter of it.
+  - A lantern on a short pole tied to the ring.
+  - Its paddler sits low in the ring, leaning back, arms out over it.
+- **The raft.**
+  - Five six-sided logs, 4.4 m long and 0.25 m round, bark round and rings
+    on the ends.
+  - Three planks across them, and a crate.
+  - A lantern on a post at the bow's corner.
+  - A standing poler with a 4.6 m pole, held upright at rest. A stroke
+    works the pole where the paddle stroke puts it.
+- **The people** are M34's blocky villager: legs, body, head and hat.
+
+Colours are M34's tiles under its tints, taken down about 30% so they read
+as the mockup's under the game's brighter noon. The hulls in section 2 take
+M34's sizes:
+
+| Craft | Hull, m | With paddler | Waterline |
+| --- | --- | --- | --- |
+| Tube | 1.48 x 1.48 x 0.44 | 115 kg | the ring about half under |
+| Raft | 4.4 x 2.4 x 0.5 | 2.08 t | the logs a little over half under, as the mockup draws them |
+
+The raft is heavy because a raft of green logs is.
+
+`docs/screenshots/small-boats/{raft,tube}-beside-m34.jpg` show each beside
+the mockup's.
+
 ## 2b. Rivers and lakes float a boat (found building it)
 
 Craft floated only on the sea: `Surroundings.sea_radius` was the drawn sea
@@ -105,15 +140,16 @@ bug fix, not a look change.
 
 | Code | Name | Station | Takes | Gives |
 | --- | --- | --- | --- | --- |
-| `inner-tube` | INNER TUBE | workbench | fibre 8, rope 2 | `inner-tube` x1 |
+| `inner-tube` | INNER TUBE | workbench | wool 4, rope 2 | `inner-tube` x1 |
 | `raft` | RAFT | workbench | log 6, rope 4 | `raft` x1 |
 | `rowboat` | ROWBOAT | workbench | planks 16, rope 2 | `rowboat` x1 |
 
-- **The tube comes first and is cheap.** It is reed fibre bound into a ring,
-  made at the workbench. It was planned by hand, but the pack's Craft list
+- **The tube is M34's**: felted wool made into a ring and sealed with pitch
+  (the world has no pitch yet, so the rope's tar stands for it), made at the
+  workbench. Its wool comes from the herd. A first boat that needs no
+  herding is the raft. It was planned by hand, but the pack's Craft list
   shows six rows and the hands already make six things (cooking adds the
-  campfire). A seventh row would have pushed the campfire off the list, and
-  the workbench is six planks.
+  campfire). A seventh row would have pushed the campfire off the list.
   The world has no rubber, and the owner calls it an inner tube, so it is
   named one.
 - **The raft is logs**, so an axe and a few trees.

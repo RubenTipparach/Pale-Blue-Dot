@@ -195,12 +195,12 @@ ICONS.update({
 })
 
 
-# The made boats (`small-boats` design 3): the inner tube a ring of bound
-# reed fibre in the fibre's straw with rope lashings; the raft five logs in the
+# The made boats (`small-boats` design 3): the inner tube M34's felted-wool
+# ring, sealed with pitch, in its felt browns with the dark seam; the raft five logs in the
 # log's browns with rope across; the rowboat a planked hull seen from above
 # with its thwart and two oars, in the fence's wood.
-BOATS = dict(FARM, **{"f": "#c9a46a", "F": "#e3c98f", "d": "#8a6a3a",
-                      "r": "#d8c08a", "R": "#a88a52"})
+BOATS = dict(FARM, **{"f": "#665133", "F": "#8a7048", "d": "#3a2d1c",
+                      "r": "#4a3b26", "R": "#a88a52"})
 
 ICONS.update({
     "goods/inner-tube": ([

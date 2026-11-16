@@ -312,7 +312,7 @@ impl Default for RecipeFile {
                 "INNER TUBE",
                 "workbench",
                 4.0,
-                &[("fibre", 8), ("rope", 2)],
+                &[("wool", 4), ("rope", 2)],
                 &[("inner-tube", 1)],
             ),
             recipe(

@@ -69,7 +69,7 @@ outline of an inventory icon (the sprite's darkest tone at 45%) by
 ## small-boats design 3: the made boats
 
 `inner-tube`, `raft` and `rowboat` are drawn by `tools/gen_item_icons.py`
-(`BOATS`): the tube a ring of bound fibre with rope lashings, the raft five
+(`BOATS`): the tube M34's felted-wool ring with its pitched seam, the raft five
 logs with rope across, and the rowboat a planked hull from above with its
 thwart and oars. The palette is the fence's two browns and ink (`FARM`),
 with the fibre's straw and the rope's tan. Each is an inventory icon with

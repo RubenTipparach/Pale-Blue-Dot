@@ -11,6 +11,8 @@ scope (they need a dock).
 - [x] 1.3 Rivers and lakes float a craft on their own surface, with the slope's current (design 2b). Verify: the trace on a sea berth reads "sea" at the drawn sheet; a capture on a river.
 - [x] 1.4 The sea's reach counts the tide; new craft are made on the tide (design 2c). Verify: `every_boat_floats_on_the_tide` (fails without the fix); the new world's Loon captured dry.
 
+- [x] 1.5 The tube and the raft drawn as M34 River Craft's models at its sizes (owner: "you should use the same models from the mockup"). Verify: captures beside the mockup's.
+
 ## 2. Recipes and goods
 
 - [x] 2.1 Goods `inner-tube`, `raft`, `rowboat`, appended, stack 1, 16 px icons with provenance. Verify: the goods table test.

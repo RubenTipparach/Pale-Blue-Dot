@@ -378,10 +378,10 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
             // a felted-wool ring sealed with pine pitch, 0.52 m to the middle
             // of the tube and 0.22 m thick, a darker pitched seam over a
             // quarter of it, and a lantern on a short pole tied to the ring.
-            // Colours are the mockup's tiles under its tints, as it draws
-            // them.
-            let ring = paint(b.world, Color::srgb_u8(0x66, 0x51, 0x33), false);
-            let seam = paint(b.world, Color::srgb_u8(0x4a, 0x3b, 0x26), false);
+            // Colours are the mockup's tiles under its tints, taken down to
+            // read as it does under the game's brighter noon.
+            let ring = paint(b.world, Color::srgb_u8(0x52, 0x40, 0x28), false);
+            let seam = paint(b.world, Color::srgb_u8(0x38, 0x2c, 0x1c), false);
             b.piece(
                 entity,
                 Torus::new(0.52 - 0.22, 0.52 + 0.22)
@@ -439,11 +439,11 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
             // crate lashed aft of the bow, a lantern on a post at the bow's
             // corner, and the pole it is worked with.
             let s = *craft.loon_spec();
-            let bark = paint(b.world, Color::srgb_u8(0x6b, 0x4a, 0x2c), false);
-            let rings = paint(b.world, Color::srgb_u8(0xc8, 0xa0, 0x6a), false);
-            let planks = paint(b.world, Color::srgb_u8(0xa5, 0x7a, 0x48), false);
+            let bark = paint(b.world, Color::srgb_u8(0x4a, 0x33, 0x1f), false);
+            let rings = paint(b.world, Color::srgb_u8(0x9a, 0x7a, 0x50), false);
+            let planks = paint(b.world, Color::srgb_u8(0x74, 0x55, 0x32), false);
             let dark_planks = paint(b.world, Color::srgb_u8(0x6e, 0x4f, 0x30), false);
-            let crate_wood = paint(b.world, Color::srgb_u8(0x9c, 0x74, 0x44), false);
+            let crate_wood = paint(b.world, Color::srgb_u8(0x6d, 0x51, 0x30), false);
             const LOG_M: f32 = 4.4;
             const LOG_R: f32 = 0.25;
             for i in 0..5 {
@@ -677,6 +677,13 @@ fn paddle(craft: &Craft, state: &pbd_core::vehicle::LoonState) -> Transform {
         return Transform::from_translation(at.as_vec3());
     }
     let Some(stroke) = state.stroke else {
+        // The raft's pole stands in its poler's hand, as M34's: the hand at
+        // 1.45 m, a third of the way down its 4.6 m (the pole is drawn 0.35 m
+        // over its pivot).
+        if craft.kind == Kind::Raft {
+            return Transform::from_xyz(0.62, 1.45 - 1.4 - 0.35, 0.55)
+                .with_rotation(Quat::from_rotation_x(-0.12));
+        }
         // Resting across the gunwales.
         return Transform::from_xyz(0.0, 0.35, 0.5).with_rotation(Quat::from_rotation_z(FRAC_PI_2));
     };
