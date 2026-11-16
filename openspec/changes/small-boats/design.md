@@ -137,6 +137,8 @@ key's name with the name carved in as a stone plaque's label is
   - then a row a control, each key its own stone glyph, followed by what it
     does;
   - every word outlined in ink, so it reads over water and sand alike.
+  - no row for moving on W, A, S and D (owner: "we probably dont need WASD,
+    its obvious enough"); a row the player has rebound to other keys shows.
 - The F3 instruments stay plain text, a developer's.
 
 ## 2b. Rivers and lakes float a boat (found building it)

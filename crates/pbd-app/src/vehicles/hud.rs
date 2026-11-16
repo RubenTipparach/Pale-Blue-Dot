@@ -232,6 +232,12 @@ fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> Lines {
         if what == "bail" && !bail {
             continue;
         }
+        // Moving on W, A, S and D goes without saying (owner, 2026-11-16:
+        // "we probably dont need WASD, its obvious enough"); a row the
+        // player has moved to other keys is shown.
+        if keys.iter().all(|k| ["W", "A", "S", "D"].contains(k)) {
+            continue;
+        }
         lines.rows.push((keys, what.to_string()));
     }
     let anchor = match craft.mooring {
@@ -428,15 +434,14 @@ mod tests {
         let text = panel(&v, &Default::default()).text();
         for want in [
             "RAFT",
-            "W/S  pole forward or back",
-            "A/D  turn",
+            "Q/E  steer with the pole",
             "drop the anchor",
             "step off",
             "camera",
         ] {
             assert!(text.contains(want), "missing {want}: {text}");
         }
-        for not in ["m/s", "freeboard", "slip", "bail", "deg"] {
+        for not in ["W/S", "A/D", "m/s", "freeboard", "slip", "bail", "deg"] {
             assert!(!text.contains(not), "{not} in the panel: {text}");
         }
         v.craft.bilge_kg = 80.0;
