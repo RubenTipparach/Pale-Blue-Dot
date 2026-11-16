@@ -42,3 +42,8 @@ Done on `claude/starter-missions` (2026-11-14): tests in `pbd_core::missions` an
 - [ ] T.4 The locked silhouette and its mission name in the recipe lists. Verify: captures of the bench and the pack with locked and open recipes.
 - [ ] T.5 The bot plays the tree: trunk, branches, cooking, each a goal (`step-videos` 5.x). Verify: a run ends with the tree done in the save and every unlock seen.
 
+## TS. The tree in the game (M33 version 3 approved: "that tree is better, I approve", "implement in game", 2026-11-15)
+
+- [ ] TS.1 `missions.ron` as the strict tree (design "One parent per mission"): one parent per mission, `after` gates, fire in the trunk, cooking spread to its food. Verify: core tests that every mission has at most one parent, every `after` names a mission, and the tree is reachable from `gather`; the old-world tests still pass.
+- [ ] TS.2 The Missions tab (O) drawn as M33's tree: the cards with their states, the one-parent elbows, branch labels, pan and zoom, and a click opening the side panel with objectives, help and unlocks, in the stone-and-oak kit with its readable type. Verify: captures beside M33's stills; no `LATE_PIPELINE`.
+
