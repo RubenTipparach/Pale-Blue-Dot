@@ -414,6 +414,8 @@ pub struct LensWet {
     pub wet: f32,
     pub clock: f32,
     last_s: f32,
+    /// When the instrument last logged (`weather::weather_scripted`).
+    last_trace: f32,
 }
 
 impl LensWet {
@@ -1326,6 +1328,7 @@ fn prepare_water_views(
                 wet: lens_rain,
                 clock: clock.0,
                 last_s: clock.0,
+                last_trace: clock.0,
             },
             |gpu| gpu.lens_wet,
         );
@@ -1335,6 +1338,15 @@ fn prepare_water_views(
             weather_settings.lens_wet_tau_s,
             weather_settings.lens_dry_tau_s,
         );
+        if crate::weather::weather_scripted()
+            && (clock.0 * 4.0).floor() != (lens.last_trace * 4.0).floor()
+        {
+            info!(
+                "LENS_TRACE t {:.2} lens_rain {lens_rain:.3} lens_wet {:.3} drop_clock {:.2}",
+                clock.0, lens.wet, lens.clock
+            );
+        }
+        lens.last_trace = clock.0;
         // The lens mist's clock and the eye's airspeed (`lens-weather`), and
         // whether the eye is in the cloud layer's shell, the only place the
         // density the probe samples can be above zero.
@@ -1443,8 +1455,21 @@ fn prepare_water_views(
                 weather_settings.overcast_sky_dim,
             ),
             foam_color: v3(s.foam_color).extend(s.foam_intensity),
-            foam_crest: Vec4::new(s.foam_crest_lo, s.foam_crest_hi, s.foam_crest_weight, 0.0),
-            foam_slope: Vec4::new(s.foam_slope_lo, s.foam_slope_hi, s.foam_slope_weight, 0.0),
+            // w: rain's fine detail's reach and fade (`wet-near-detail`), which
+            // the water's rings honour as the ground's do (`water-flow` "Rain
+            // rings that alias").
+            foam_crest: Vec4::new(
+                s.foam_crest_lo,
+                s.foam_crest_hi,
+                s.foam_crest_weight,
+                weather_settings.rain_detail_reach_m,
+            ),
+            foam_slope: Vec4::new(
+                s.foam_slope_lo,
+                s.foam_slope_hi,
+                s.foam_slope_weight,
+                weather_settings.rain_detail_fade_m,
+            ),
             sun_tint: v3(s.sun_tint).extend(s.specular_power),
             fog_night: FOG_NIGHT_SKY.extend(FOG_DENSITY_PER_M),
             fog_day: FOG_DAY_SKY.extend(FOG_HEIGHT_M),
@@ -2749,5 +2774,48 @@ mod tests {
         // Diving again: no drips while under, then a fresh window on surfacing.
         assert_eq!(emerge(10.0, 1.0, false, &mut until, dry), 0.0);
         assert_eq!(emerge(11.0, 0.0, true, &mut until, dry), 1.0);
+    }
+}
+
+#[cfg(test)]
+mod lens_wet_tests {
+    use super::LensWet;
+
+    /// `weather-rain` R3: the lens wets and dries on its own time constants,
+    /// and the drops' clock stops while no rain reaches the glass.
+    #[test]
+    fn the_lens_wets_and_dries_over_time_and_grows_no_drop_while_dry() {
+        let (wet_tau, dry_tau) = (3.0, 2.5);
+        let mut lens = LensWet {
+            wet: 1.0,
+            clock: 0.0,
+            last_s: 0.0,
+            last_trace: 0.0,
+        };
+        // Under cover: one e-fold of drying in dry_tau, and the clock still.
+        let mut t = 0.0;
+        while t < dry_tau - 1e-4 {
+            t += 1.0 / 60.0;
+            lens.step(0.0, t, wet_tau, dry_tau);
+        }
+        assert!(
+            (lens.wet - (-1.0f32).exp()).abs() < 0.02,
+            "wet {}",
+            lens.wet
+        );
+        assert!(lens.clock < 0.02, "the drops kept running: {}", lens.clock);
+        // No step on any frame either way.
+        let before = lens.wet;
+        lens.step(1.0, t + 1.0 / 60.0, wet_tau, dry_tau);
+        assert!((lens.wet - before).abs() < 0.02);
+        // Back in the rain: up on wet_tau, the clock running.
+        let start = lens.clock;
+        let mut u = t + 1.0 / 60.0;
+        while u < t + 3.0 * wet_tau {
+            u += 1.0 / 60.0;
+            lens.step(1.0, u, wet_tau, dry_tau);
+        }
+        assert!(lens.wet > 0.94);
+        assert!(lens.clock - start > 8.0);
     }
 }

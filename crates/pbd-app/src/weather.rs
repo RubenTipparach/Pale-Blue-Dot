@@ -145,6 +145,13 @@ static WEATHER_SCRIPT: std::sync::LazyLock<Vec<(u32, String)>> = std::sync::Lazy
         .collect()
 });
 
+/// Whether `PBD_WEATHER_SCRIPT` is set: the shower and the lens then log a
+/// `WEATHER_TRACE` / `LENS_TRACE` line every quarter second, so a sequence's
+/// easing is read off numbers as well as frames.
+pub fn weather_scripted() -> bool {
+    !WEATHER_SCRIPT.is_empty()
+}
+
 /// The script's state: frames sampled, the rain's share let through (eased),
 /// whether it is held off, and the cover it forces.
 #[derive(Default)]
@@ -862,7 +869,6 @@ static SHOWER_OFF: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
 });
 
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_arguments)]
 fn rebuild_shower(
     time: Res<Time>,
     lighting: Res<crate::config::LightingSettings>,
@@ -953,6 +959,19 @@ fn rebuild_shower(
             near_shower(&shower, weather.rain, weather.snowing, &mut quads);
         }
         cell_shafts(&shower, &air.shown, &mut quads);
+    }
+    if weather_scripted() {
+        let now = time.elapsed_secs();
+        if (now * 4.0).floor() != ((now - time.delta_secs()) * 4.0).floor() {
+            info!(
+                "WEATHER_TRACE t {now:.2} rain {:.3} wetness {:.3} sheltered {} shower_open {:.3} streaks {}",
+                weather.rain,
+                weather.wetness,
+                weather.sheltered,
+                shower.open,
+                quads.indices.len() / 6
+            );
+        }
     }
     *visibility = if quads.positions.is_empty() {
         Visibility::Hidden
@@ -1171,5 +1190,22 @@ mod tests {
         assert!(dry < 0.01, "five e-folds should be dry, got {dry}");
         assert_eq!(settle_wetness(0.5, 0.5, 100.0, tau), 0.5);
         assert_eq!(settle_wetness(0.3, 1.0, 0.0, tau), 0.3);
+    }
+
+    /// `weather-rain` R1: under a full deck at noon the rain is lit by the
+    /// sky a standing face takes, which is darker than the old model's curve
+    /// lit it; and no channel is negative or past one at noon, clear.
+    #[test]
+    fn the_rain_takes_the_sky_a_standing_face_takes() {
+        let s = WeatherSettings::default();
+        let storm = rain_sky_light(1.0, 1.0);
+        assert!(
+            storm.max_element() < rain_light(1.0, 1.0, &s),
+            "a storm's streak lit at {storm} against the old curve's {}",
+            rain_light(1.0, 1.0, &s)
+        );
+        let clear = rain_sky_light(1.0, 0.0);
+        assert!(clear.min_element() >= 0.0 && clear.max_element() <= 1.0);
+        assert!(rain_sky_light(-0.5, 1.0).max_element() < storm.max_element());
     }
 }

@@ -871,7 +871,23 @@ pub struct TreeFade {
     len_s: f32,
     last_s: f32,
     last_eye: Vec3,
+    /// Whether `PBD_TREE_ARRIVE` has been applied.
+    arrived: bool,
 }
+
+/// MEASUREMENT (`flora-v2` 13.3): `PBD_TREE_ARRIVE=<metres>@<seconds>`: at
+/// that time on the planet clock the trees are taken as if the camera had
+/// just come that far across the ground and stopped, so the ones it carried
+/// across a threshold fade, and a capture run shows the frames 0, 0.3 and 2 s
+/// after. It changes nothing else.
+static TREE_ARRIVE: std::sync::LazyLock<Option<(f32, f32)>> = std::sync::LazyLock::new(|| {
+    let spec = std::env::var("PBD_TREE_ARRIVE").ok()?;
+    let (metres, at) = spec.split_once('@')?;
+    let metres: f32 = metres.trim().parse().ok()?;
+    let at: f32 = at.trim().parse().ok()?;
+    (metres.is_finite() && metres > 0.0 && metres < TREE_FADE_JUMP_M && at.is_finite())
+        .then_some((metres, at))
+});
 
 /// A camera that moves further than this in one frame has been put somewhere,
 /// not walked or flown there: the trees are decided where it now is.
@@ -886,6 +902,7 @@ impl TreeFade {
             len_s: 0.0,
             last_s: now_s,
             last_eye: eye,
+            arrived: false,
         }
     }
 
@@ -901,7 +918,23 @@ impl TreeFade {
         self.last_s = now_s;
         self.last_eye = eye;
         if eye.distance(self.to) > TREE_FADE_JUMP_M || !eye.is_finite() {
+            let arrived = self.arrived;
             *self = Self::new(eye, now_s);
+            self.arrived = arrived;
+            return;
+        }
+        if let Some((metres, at_s)) = *TREE_ARRIVE
+            && !self.arrived
+            && now_s >= at_s
+            && let Some(up) = eye.try_normalize()
+        {
+            let across = Vec3::Y.cross(up).try_normalize().unwrap_or(Vec3::X);
+            self.arrived = true;
+            self.from = eye + across * metres;
+            self.to = eye;
+            self.start_s = now_s;
+            self.len_s = fade_s;
+            info!("TREE_ARRIVE {metres} m at {now_s:.2} s, fading over {fade_s} s");
             return;
         }
         if self.progress(now_s) < 1.0 {
@@ -1815,9 +1848,10 @@ fn prepare_views(
             .unwrap_or_default();
         let lod = &planet.lod;
         let landing = planet.lod_prev.map(|(_, landed)| landed);
-        let mut tree_fade = existing
-            .as_ref()
-            .map_or(TreeFade::new(camera_position, clock.0), |gpu| gpu.tree_fade);
+        let mut tree_fade = existing.as_ref().map_or_else(
+            || TreeFade::new(camera_position, clock.0),
+            |gpu| gpu.tree_fade,
+        );
         tree_fade.step(
             camera_position,
             clock.0,
@@ -2458,6 +2492,50 @@ impl render_graph::Node for PlanetComputeNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `flora-v2` 13.3: a fade is a moment in time, never a place. A still
+    /// camera has nothing to fade; one that moves fades from where it was to
+    /// where it is over the fade time and then is whole there; a fast one
+    /// fades quicker so the point the trees are decided at keeps up.
+    #[test]
+    fn the_trees_fade_by_time_and_a_still_camera_is_whole() {
+        let eye = Vec3::new(0.0, 4800.0, 0.0);
+        let mut fade = TreeFade::new(eye, 0.0);
+        for k in 1..60 {
+            fade.step(eye, k as f32 / 60.0, 0.5, 5.0);
+        }
+        assert_eq!(fade.from, fade.to);
+        assert_eq!(fade.progress(1.0), 1.0, "still: nothing fading");
+        // Walk 2 m over a second and stop: a fade starts there and ends 0.5 s on.
+        let moved = eye + Vec3::X * 2.0;
+        fade.step(moved, 2.0, 0.5, 5.0);
+        assert_eq!(fade.to, moved);
+        assert_ne!(fade.from, fade.to);
+        assert!((fade.progress(2.25) - 0.5).abs() < 1e-4);
+        let mut t = 2.0;
+        while t < 2.6 {
+            t += 1.0 / 60.0;
+            fade.step(moved, t, 0.5, 5.0);
+        }
+        assert_eq!(
+            fade.from, fade.to,
+            "the fade ends and the camera stood still"
+        );
+        assert_eq!(fade.progress(t), 1.0);
+        // Flying at 100 m/s the fade shortens to keep within 5 m.
+        let mut fast = TreeFade::new(eye, 0.0);
+        fast.step(eye + Vec3::X * (100.0 / 60.0), 1.0 / 60.0, 0.5, 5.0);
+        fast.step(eye + Vec3::X * (200.0 / 60.0), 2.0 / 60.0, 0.5, 5.0);
+        assert!(
+            fast.len_s <= 0.05 + 1e-4,
+            "fade {} s at 100 m/s",
+            fast.len_s
+        );
+        // A teleport is no fade at all.
+        let mut jump = TreeFade::new(eye, 0.0);
+        jump.step(eye + Vec3::X * 500.0, 1.0 / 60.0, 0.5, 5.0);
+        assert_eq!(jump.from, jump.to);
+    }
 
     /// `baked-light-ease` 7.2 and 7.7: a lamp bake that came with its set's
     /// landing is whole from its first frame (the set before drew the same

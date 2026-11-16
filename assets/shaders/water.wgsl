@@ -35,8 +35,8 @@ struct WaterView {
     water_light: vec4<f32>,   // rgb the light on open water at the camera, w shallows' depth m
     haze: vec4<f32>,          // the terrain's cloud_fog_add, rain_fog_mult, overcast blue cut, overcast dim
     foam_color: vec4<f32>,    // rgb, w foam intensity
-    foam_crest: vec4<f32>,    // lo, hi, weight, spare
-    foam_slope: vec4<f32>,    // lo, hi, weight, spare
+    foam_crest: vec4<f32>,    // lo, hi, weight, w rain's fine detail's reach m (`wet-near-detail`)
+    foam_slope: vec4<f32>,    // lo, hi, weight, w the fade band before that reach m
     sun_tint: vec4<f32>,      // rgb, w specular power
     fog_night: vec4<f32>,     // rgb sky colour at night, w fog density per metre
     fog_day: vec4<f32>,       // rgb sky colour by day, w fog height m
@@ -697,7 +697,12 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // five pixels or more, gone by about two; past that the rings fell under
     // a pixel and point-sampled into per-pixel noise the mirror lit white.
     let ring_cycles = length(fwidth(in.body_position))*view.ripple.z*31.0/6.2831853;
-    let ring_detail = 1.0 - smoothstep(0.2, 0.45, ring_cycles);
+    // And only within rain's fine detail's reach, as on the ground
+    // (`wet-near-detail`): past it the water keeps its broad waves.
+    let ring_reach = max(view.foam_crest.w, 0.0);
+    let ring_near = 1.0 - smoothstep(ring_reach - max(view.foam_slope.w, 0.0), ring_reach,
+        length(view.camera_time.xyz - in.local_position));
+    let ring_detail = (1.0 - smoothstep(0.2, 0.45, ring_cycles))*ring_near;
     if (view.fx.z > 0.001 && ring_detail > 0.0) {
         let uv = vec2<f32>(dot(in.body_position,tangent_u),dot(in.body_position,tangent_v))*view.ripple.z;
         var g = rain_ripple_grad(uv,time)*(view.fx.z*view.ripple.w);

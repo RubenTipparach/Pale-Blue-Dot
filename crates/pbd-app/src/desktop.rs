@@ -3758,6 +3758,9 @@ const LANDING_SHOT_LAST: u32 = 70;
 type WatchedLanding = (u64, Option<u32>);
 
 /// MEASUREMENT (`two-set-dissolve` design section 5): with
+/// `PBD_CAPTURE_RUN`'s stretch: where, the first and the end frame, the stride.
+type CaptureRun = (PathBuf, u64, u64, u64);
+
 /// `PBD_LANDING_SHOTS=27,28` in a capture, frames round the landing of fine
 /// set 27 (and 28) are saved beside the `--capture` path as
 /// `landing-<set>-f<frame>.png`, with a `LANDING_SHOT` line naming the set
@@ -3838,7 +3841,7 @@ fn capture(
     progress: Res<TourProgress>,
     mut exit: MessageWriter<AppExit>,
     count: Option<Res<pbd_app::loading::FrameCount>>,
-    mut burst: Local<Option<Option<(PathBuf, u64, u64, u64)>>>,
+    mut burst: Local<Option<Option<CaptureRun>>>,
 ) {
     state.frame += 1;
     // MEASUREMENT (`baked-light-ease`): `PBD_CAPTURE_RUN=<dir>,<first>,<count>`
