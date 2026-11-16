@@ -939,6 +939,9 @@ the one speed until the owner approves.
 **Owner's tuning, 2026-11-16 (mockup M35):**
 - "fall mist shouldnt be mist, should be like water droplets fx": the mist shed down the fall became droplets, flung off the sheet at the fall's speed and falling under gravity into the pool.
 - "mist size = 1.65", "mist opac = 1.50": the mist puffs are drawn at 1.65x the game's puff size and 1.50 opacity on the new sheet. Mist size also scales the fall droplets.
+- 2026-11-16: "opacity = 2", "fall speed up = 2", "also please do smooth": the mockup now opens at Mist opacity 2.00, Fall speed-up 2.00 and FX Smooth (the puffs, fall droplets and bubbles drawn smooth rather than pixelated). The owner, the same day: "smooth mist is better", so a port draws the mist smooth.
+- 2026-11-16: "disable droplets streak by default, make a note that I dont want them in game yet right now": **droplet streaks are not to go into the game for now.** The mockup opens with Droplet streak at 0 (each fall droplet a single drop); the slider stays in the mockup to try them. A port of the fall droplets leaves the streak trail out until the owner asks for it.
+- 2026-11-16: "mist seems to not be connecting with the bottom": a puff's centre now sits 0.2 of its size above the foot (it was its full size plus 5 cm, so its lower edge floated clear of the pool), and the wall blend fades it against the water's surface as well as the ground and walls, so the mist meets the pool softly. In the game the soft fade would read the depth after the water pass.
 
 These are now the mockup's defaults. The other sliders (mist amount, fall droplets, wall blend, bubbles, teal churn) stay at 1.00 / 1.20 until the owner says otherwise.
 

@@ -603,7 +603,10 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       const spread = Math.min(0.5 + 0.12 * h, 5);
       const size = R.size(h) * (0.6 + 0.8 * phase) * mistS;
       const d = SPLASH_EDGE_M + spread * (0.3 + phase) * r(3);
-      const y = foot.y + R.rise(h) * s + size + SPLASH_CLEAR_M;
+      // New tab: the puff's centre sits low, so its body reaches into the pool and the wall blend (which now reads
+      // the water's depth too) fades it out at the waterline; a puff no longer floats clear of the water (owner,
+      // 2026-11-16: "mist seems to not be connecting with the bottom"). The game's: its full size above the foot.
+      const y = foot.y + R.rise(h) * s + (newPuffs ? 0.2 * size : size + SPLASH_CLEAR_M);
       // New tab: each puff fades in over the first fifth of its life instead of being born at full alpha, which
       // read as puffs flickering in and out on the tall fall's big puffs (owner, 2026-11-16).
       const born = newPuffs ? Math.min(1, phase / 0.2) : 1;
@@ -840,8 +843,8 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   const bubbles = FALLS.map((F, i) => { const b = bubblePoints(F, U); b.material.uniforms.uFoot.value.copy(feet[i].at); opaque.add(b); return b; });
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
-  const S = {variant: "new", night: false, running: true, gain: 1.5, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 1,
-    rule: "new", accel: 1, pixel: true};
+  const S = {variant: "new", night: false, running: true, gain: 2, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 0,
+    rule: "new", accel: 2, pixel: false};
   // The eye's pool (the cell under it, if it is a basin's), for the view from under the water.
   let eyePool = null;
   function murk(open) {
@@ -996,7 +999,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     if (depthRT && front.visible && front.material.uniforms.uSoft.value > 0) {
       // The ground and walls' depth, for the wall blend: the opaque scene once more into a depth target.
       front.material.uniforms.uNear.value = camera.near; front.material.uniforms.uFar.value = camera.far;
-      renderer.setRenderTarget(depthRT); renderer.clear(); renderer.render(opaque, camera); renderer.setRenderTarget(null);
+      renderer.setRenderTarget(depthRT); renderer.clear(); renderer.render(opaque, camera); renderer.render(waterScene, camera); renderer.setRenderTarget(null);
     }
     renderer.clear();
     renderer.render(opaque, camera);
