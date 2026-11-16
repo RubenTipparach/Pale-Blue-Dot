@@ -204,6 +204,29 @@ pub struct WalkingConfig {
     /// depth the walker stands on the bed and jumps at full strength even with
     /// its eyes under; deeper is swum. In metres.
     pub water_wade_depth: f32,
+    /// Auto-climb out of the water (`swimming` 4; owner, 2026-11-16:
+    /// "introduce auto climb when in water and trying to climb up a ledge of
+    /// 1 or 2 blocks"): the most a ledge's top may stand over the water
+    /// surface for a walker in water pressing into it to climb onto it. Two
+    /// layers, plus the sea sheet's half metre under its layer top and a
+    /// skin. In metres. The climb follows [`Self::auto_step`].
+    pub water_climb_m: f32,
+    /// The same for a walker standing on the bed, measured over its feet: two
+    /// layers and a skin, so a bank whose top is at the surface of a two-layer
+    /// shallow climbs. In metres.
+    pub water_climb_wade_m: f32,
+    /// The most the feet may be under the ledge's top: deeper, a swimmer
+    /// swims up first. In metres.
+    pub water_climb_reach_m: f32,
+    /// How squarely the heading must point into the face, as the cosine of
+    /// the angle between them: 0.7 is within about 45 degrees, so swimming
+    /// along a bank, whose hex faces meet it at 30 degrees, does not climb.
+    pub water_climb_facing: f32,
+    /// How long a climb takes, in seconds.
+    pub water_climb_secs: f32,
+    /// How far forward of where the face stopped it the climb stands the
+    /// walker, in metres: past the face by more than the body's radius.
+    pub water_climb_forward_m: f32,
 }
 
 /// Exactly where a save left the player.
@@ -248,6 +271,12 @@ impl Default for WalkingConfig {
             // Two terrain layers of water, plus a skin for the tide and the
             // sheet's offset.
             water_wade_depth: 2.0 * crate::planet::column::STEP_M + 0.1,
+            water_climb_m: 2.0 * crate::planet::column::STEP_M + 0.6,
+            water_climb_wade_m: 2.0 * crate::planet::column::STEP_M + 0.1,
+            water_climb_reach_m: 4.5,
+            water_climb_facing: 0.7,
+            water_climb_secs: 0.4,
+            water_climb_forward_m: 0.8,
         }
     }
 }
@@ -315,6 +344,42 @@ pub struct WalkingState {
     pitch: f32,
     spawn_direction: Vec3,
     body: Entity,
+    /// A climb out of the water under way (`swimming` 4).
+    climb: Option<Climb>,
+}
+
+/// A climb out of the water onto a ledge (`swimming` 4): the body rises to
+/// stand on the ledge, then steps forward onto it, eased, over
+/// [`WalkingConfig::water_climb_secs`]. Planet-local centres.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Climb {
+    from: Vec3,
+    to: Vec3,
+    /// How far along, 0 to 1.
+    t: f32,
+}
+
+impl Climb {
+    /// The share of the climb spent rising before the step forward starts.
+    const RISE: f32 = 0.6;
+
+    /// Where the body's centre is at `t`: the rise first, straight up from
+    /// where it started, then forward onto the ledge at the ledge's height,
+    /// so the feet are over the top before they cross the face.
+    fn at(&self, t: f32) -> Vec3 {
+        let ease = |x: f32| {
+            let x = x.clamp(0.0, 1.0);
+            x * x * (3.0 - 2.0 * x)
+        };
+        let rise = ease(t / Self::RISE);
+        let along = ease((t - Self::RISE) / (1.0 - Self::RISE));
+        let radius = self.from.length() + (self.to.length() - self.from.length()) * rise;
+        self.from
+            .normalize()
+            .lerp(self.to.normalize(), along)
+            .normalize()
+            * radius
+    }
 }
 
 impl WalkingState {
@@ -486,6 +551,7 @@ fn setup_walking(world: &mut World) {
             .clamp(-PITCH_LIMIT, PITCH_LIMIT),
         spawn_direction: up,
         body,
+        climb: None,
     };
     world.spawn((
         Name::new("First-person walking camera"),
@@ -678,6 +744,7 @@ pub fn drop_walker(world: &mut World, eye: Vec3, velocity: Vec3, view: Quat) {
     state.transport_up(up);
     state.axes = Vec2::ZERO;
     state.jump = false;
+    state.climb = None;
     state.look_along(view, up);
 }
 
@@ -714,6 +781,7 @@ pub fn restore(world: &mut World, pose: RestoredPose) {
     state.pitch = pose.pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT);
     state.axes = Vec2::ZERO;
     state.jump = false;
+    state.climb = None;
 }
 
 /// Where a new world's walker starts, from the spawn direction: the nearest
@@ -858,6 +926,7 @@ fn place_walker(world: &mut World, up: Vec3, view: Option<Quat>) {
     state.transport_up(up);
     state.axes = Vec2::ZERO;
     state.jump = false;
+    state.climb = None;
     if let Some(view) = view {
         state.look_along(view, up);
     }
@@ -1001,6 +1070,15 @@ fn drive_walker(
     // it runs; walking is not.
     let stride = meals.as_deref().map_or(1.0, |m| m.stride);
     if !state.active {
+        return;
+    }
+    // A climb out of the water (`swimming` 4) places the body itself: the
+    // motor and gravity stand down, and nothing is carried in or left over.
+    if state.climb.is_some() {
+        for (_, mut velocity, _, _) in &mut walkers.p0() {
+            velocity.0 = Vec3::ZERO;
+        }
+        state.jump = false;
         return;
     }
     // Forces already writes LinearVelocity and reads Rotation internally. Keep
@@ -1401,7 +1479,7 @@ fn sweep(
 /// swept again, twice at most, for a corner (`tenebris-towns` section 4).
 #[allow(clippy::too_many_arguments)]
 fn resolve_ground(
-    state: Res<WalkingState>,
+    mut state: ResMut<WalkingState>,
     config: Res<WalkingConfig>,
     terrain: Res<PlanetContact>,
     sea: Sea,
@@ -1422,11 +1500,26 @@ fn resolve_ground(
         piece.and_then(|p| motion_of(decks.as_deref(), crafts.as_deref(), p))
     };
     for (mut position, mut velocity, mut ground) in &mut walkers {
+        if let Some(mut climb) = state.climb {
+            climb.t = (climb.t + time.delta_secs() / config.water_climb_secs.max(1e-3)).min(1.0);
+            position.0 = climb.at(climb.t);
+            ground.previous = position.0;
+            velocity.0 = Vec3::ZERO;
+            ground.drift = Vec3::ZERO;
+            ground.on = None;
+            ground.on_deck = None;
+            ground.grounded = climb.t >= 1.0;
+            state.climb = (climb.t < 1.0).then_some(climb);
+            continue;
+        }
         let was_grounded = ground.grounded;
         let mut start = ground.previous;
         let mut destination = position.0;
         let mut accepted = start;
         let mut grounded = false;
+        // The face the move was first refused at, for the climb out of the
+        // water (`swimming` 4).
+        let mut face = None;
         for slide in 0..3 {
             let swept = sweep(
                 start,
@@ -1442,6 +1535,7 @@ fn resolve_ground(
             let Some((normal, tangential)) = swept.blocked else {
                 break;
             };
+            face = face.or(Some(normal));
             let up = accepted.normalize();
             let rest = destination - accepted;
             let rest = rest - up * rest.dot(up);
@@ -1480,6 +1574,34 @@ fn resolve_ground(
                 velocity.0 -= up * rise;
             }
         }
+        // Pressing into a low bank from the water climbs it (`swimming` 4).
+        if let Some(face) = face
+            && config.auto_step
+            && wet.body
+            && state.axes.y > 0.0
+            && let Some(to) = water_climb(
+                &config,
+                &terrain,
+                meets,
+                wet,
+                accepted,
+                tangent_heading(state.heading, accepted.normalize()),
+                face,
+            )
+        {
+            state.climb = Some(Climb {
+                from: accepted,
+                to,
+                t: 0.0,
+            });
+            position.0 = accepted;
+            ground.previous = accepted;
+            ground.grounded = false;
+            ground.on = None;
+            ground.on_deck = None;
+            velocity.0 = Vec3::ZERO;
+            continue;
+        }
         // The eye probe has the last word: a swimmer is never grounded, so
         // gravity keeps acting and the standing jump stays out of reach.
         let submerged = wet.eyes;
@@ -1517,6 +1639,69 @@ fn resolve_ground(
         });
         ground.on = on;
     }
+}
+
+/// Where a walker in the water at `at`, pressing along `heading` into the face
+/// whose normal is `face` (pointing back at it), climbs to: the centre of a
+/// body standing on the ledge past the face, or `None` where the rule
+/// (`swimming` 4) says it stays in the water.
+#[allow(clippy::too_many_arguments)]
+fn water_climb(
+    config: &WalkingConfig,
+    terrain: &PlanetContact,
+    meets: Meets,
+    wet: WaterState,
+    at: Vec3,
+    heading: Vec3,
+    face: Vec3,
+) -> Option<Vec3> {
+    if heading.dot(-face) < config.water_climb_facing {
+        return None;
+    }
+    let feet = at.length() - HALF_HEIGHT;
+    let surface = feet + wet.depth;
+    // Standing on the bed: the wader's own test, over its feet.
+    let on_bed =
+        feet - footprint_in(terrain, meets, at, config.step_height).support < CONTACT_SKIN + 0.05;
+    let wading = on_bed && wet.wading(config);
+    // The ledge's top, looked for from above the highest a climb may reach:
+    // a column answers the floor at or below the point asked.
+    let look = (surface + config.water_climb_m).max(feet + config.water_climb_wade_m) + 0.05;
+    let over = (at + heading * config.water_climb_forward_m).normalize();
+    let ledge = footprint_in(
+        terrain,
+        meets,
+        over * (look + HALF_HEIGHT),
+        config.step_height,
+    );
+    let top = ledge.support;
+    let climbs_over_surface = top >= surface - 0.1 && top - surface <= config.water_climb_m;
+    let climbs_over_feet = wading && top - feet <= config.water_climb_wade_m;
+    if top - feet <= 0.03
+        || top - feet > config.water_climb_reach_m
+        || !(climbs_over_surface || climbs_over_feet)
+    {
+        return None;
+    }
+    // Room to stand there, and to rise to it where the walker is.
+    let to = over * (top + CONTACT_SKIN + HALF_HEIGHT);
+    let standing = footprint_in(terrain, meets, to, config.step_height);
+    if (standing.support - top).abs() > 0.05
+        || !headroom(standing.support, standing.ceiling)
+        || meets.holds(to)
+    {
+        return None;
+    }
+    let risen = at.normalize() * to.length();
+    let rising = footprint_in(terrain, meets, at, config.step_height);
+    if rising
+        .ceiling
+        .is_some_and(|c| c < to.length() + HALF_HEIGHT + CONTACT_SKIN)
+        || meets.holds(risen)
+    {
+        return None;
+    }
+    Some(to)
 }
 
 fn follow_walker(
@@ -2612,6 +2797,280 @@ mod tests {
         );
         assert!(up.end.y >= 2.95, "reached {} m", up.end.y);
         assert_eq!(up.airborne, 0, "ticks in the air going up");
+    }
+
+    /// A pool beside a bank on the real column tier (`swimming` 4): round a
+    /// finest cell `W` on generated land, every column within 25 m is made
+    /// either water `depth` layers deep, its surface at `W`'s old ground, or a
+    /// bank `rise` layers over that surface. The bank is the row of cells
+    /// past `W`'s neighbours `B1` and `B2`, so its edge is the hex zig-zag
+    /// whose faces meet the row at 30 degrees.
+    struct Pool {
+        terrain: PlanetContact,
+        /// `W`'s direction.
+        w: Vec3,
+        /// Into the face `W | B1`.
+        heading: Vec3,
+        /// Along the bank's row.
+        along: Vec3,
+        /// The unit normal into the bank.
+        into: Vec3,
+        /// The water's surface, a radius.
+        surface: f32,
+    }
+
+    fn pool_and_bank(depth: usize, rise: usize) -> Pool {
+        use pbd_core::{column::layer_altitude, terrain::Material};
+        // Land, and off the great circle z = 0, where the footprint's
+        // tangent flips (written up in `swimming` 4).
+        let inland = (0..4096)
+            .map(|index| {
+                let y = 1.0 - 2.0 * (index as f32 + 0.5) / 4096.0;
+                let r = (1.0 - y * y).max(0.0).sqrt();
+                let a = std::f32::consts::PI * (3.0 - 5_f32.sqrt()) * index as f32;
+                Vec3::new(r * a.cos(), y, r * a.sin())
+            })
+            .find(|d| d.z.abs() > 0.3 && crate::planet::surface_height(*d) > 10.0)
+            .expect("land on the test planet");
+        let mut set = crate::planet::lod::generate_fine(
+            inland,
+            &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
+        );
+        let records = set.finest_records().to_vec();
+        let centre = |i: usize| Vec3::from_slice(&records[i].direction_height[..3]);
+        let w = (0..records.len())
+            .max_by(|&a, &b| centre(a).dot(inland).total_cmp(&centre(b).dot(inland)))
+            .unwrap();
+        let wc = centre(w);
+        let (b1, b2) = (
+            set.finest_neighbors[w][0] as usize,
+            set.finest_neighbors[w][1] as usize,
+        );
+        let tangent = |v: Vec3| (v - wc * v.dot(wc)).normalize();
+        let into = tangent((centre(b1) + centre(b2)) * 0.5 - wc);
+        let heading = tangent(centre(b1) - wc);
+        let along = wc.cross(into).normalize();
+        let g = set.columns.column(w).and_then(|c| c.surface()).unwrap();
+        let surface = layer_altitude(g) + 1.0;
+        assert!(
+            surface > crate::planet::terrain_config().sea_level_m + 2.0,
+            "a pool above the sea, not the sea: {surface}"
+        );
+        let spacing = (centre(b1) - wc).length() * PLANET_RADIUS;
+        let near: Vec<usize> = (0..records.len())
+            .filter(|&i| wc.angle_between(centre(i)) * PLANET_RADIUS < 25.0)
+            .collect();
+        for i in near {
+            let s = (centre(i) - wc).dot(into) * PLANET_RADIUS;
+            let top = if s > 0.4 * spacing {
+                g + rise
+            } else {
+                g - depth
+            };
+            let column = set.columns.column_mut(i).expect("a column");
+            for layer in 1..pbd_core::column::LAYERS {
+                let material = if layer <= top {
+                    Material::Stone
+                } else if layer <= g {
+                    Material::Water
+                } else {
+                    Material::Air
+                };
+                column.set(layer, material);
+            }
+        }
+        let mut terrain = PlanetContact::test_planet(5);
+        terrain.set_fine(&std::sync::Arc::new(set));
+        Pool {
+            terrain,
+            w: wc,
+            heading,
+            along,
+            into,
+            surface: PLANET_RADIUS + surface,
+        }
+    }
+
+    /// What a run in the pool did: the feet over the surface at the end,
+    /// whether grounded, how far into the bank (metres along its normal from
+    /// `W`), the ticks a climb ran, and the longest step between ticks.
+    struct Swim {
+        feet_over_surface: f32,
+        grounded: bool,
+        into_bank: f32,
+        climb_ticks: u32,
+        longest_step: f32,
+    }
+
+    /// How a run in the pool starts: feet `under` metres under the surface
+    /// (on the bed when `on_bed`), `offset` metres from `W` toward the bank,
+    /// heading into the face or along the bank, auto step on or off.
+    #[derive(Clone, Copy)]
+    struct Start {
+        under: f32,
+        on_bed: bool,
+        offset: f32,
+        along_bank: bool,
+        auto_step: bool,
+    }
+
+    const SWIMMING: Start = Start {
+        under: 1.0,
+        on_bed: false,
+        offset: 0.0,
+        along_bank: false,
+        auto_step: true,
+    };
+
+    /// Put a walker in the pool and hold forward for two seconds.
+    fn swim_into_bank(depth: usize, rise: usize, start: Start) -> Swim {
+        let pool = pool_and_bank(depth, rise);
+        let (wc, into, surface) = (pool.w, pool.into, pool.surface);
+        let heading = if start.along_bank {
+            pool.along
+        } else {
+            pool.heading
+        };
+        let mut app = app_with_terrain_at(pool.terrain, wc);
+        app.world_mut().resource_mut::<WalkingConfig>().auto_step = start.auto_step;
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+            1.0 / 64.0,
+        )));
+        let at = (wc * surface + into * start.offset).normalize();
+        let walker = place_at(
+            &mut app,
+            at * (surface - start.under + HALF_HEIGHT),
+            start.on_bed,
+        );
+        {
+            let mut state = app.world_mut().resource_mut::<WalkingState>();
+            state.up = at;
+            state.heading = tangent_heading(heading, at);
+            state.pitch = 0.0;
+            state.captured = true;
+            state.scripted = true;
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        let mut climb_ticks = 0;
+        let mut longest_step = 0.0_f32;
+        let mut last = app.world().get::<Position>(walker).unwrap().0;
+        for _ in 0..128 {
+            app.update();
+            if app.world().resource::<WalkingState>().climb.is_some() {
+                climb_ticks += 1;
+            }
+            let now = app.world().get::<Position>(walker).unwrap().0;
+            longest_step = longest_step.max(now.distance(last));
+            last = now;
+        }
+        let ground = app.world().get::<GroundState>(walker).unwrap();
+        Swim {
+            feet_over_surface: last.length() - HALF_HEIGHT - surface,
+            grounded: ground.grounded,
+            into_bank: (last.normalize() - wc).dot(into) * PLANET_RADIUS,
+            climb_ticks,
+            longest_step,
+        }
+    }
+
+    /// `swimming` 4: a swimmer at the surface pressing into a bank one or two
+    /// layers over the water climbs onto it, in about 0.4 s and no jump.
+    #[test]
+    fn a_swimmer_climbs_out_onto_a_one_or_two_layer_bank() {
+        for rise in [1, 2] {
+            let swim = swim_into_bank(4, rise, SWIMMING);
+            assert!(
+                swim.grounded && (swim.feet_over_surface - rise as f32).abs() < 0.1,
+                "a {rise}-layer bank: feet {:.2} m over the surface, grounded {}",
+                swim.feet_over_surface,
+                swim.grounded
+            );
+            assert!(swim.into_bank > 1.5, "on the bank: {:.2} m", swim.into_bank);
+            // 0.4 s at 64 Hz is 26 ticks; the step is eased, never a jump.
+            assert!(
+                (19..=32).contains(&swim.climb_ticks),
+                "the climb ran {} ticks",
+                swim.climb_ticks
+            );
+            assert!(
+                swim.longest_step < 0.35,
+                "a step of {:.2} m in one tick",
+                swim.longest_step
+            );
+        }
+    }
+
+    /// Three layers over the water is not climbed: the swimmer stays in.
+    #[test]
+    fn a_swimmer_does_not_climb_a_three_layer_bank() {
+        let swim = swim_into_bank(4, 3, SWIMMING);
+        assert_eq!(swim.climb_ticks, 0);
+        assert!(
+            swim.feet_over_surface < 0.0 && swim.into_bank < 1.5,
+            "still in the water: feet {:.2} m over the surface, {:.2} m in",
+            swim.feet_over_surface,
+            swim.into_bank
+        );
+    }
+
+    /// Swimming along a one-layer bank, brushing its faces, does not climb.
+    #[test]
+    fn a_swimmer_moving_along_the_bank_does_not_climb() {
+        let swim = swim_into_bank(
+            4,
+            1,
+            Start {
+                offset: 1.2,
+                along_bank: true,
+                ..SWIMMING
+            },
+        );
+        assert_eq!(swim.climb_ticks, 0, "climbed swimming along the bank");
+        assert!(swim.feet_over_surface < 0.0);
+    }
+
+    /// A walker wading on the bed of a one-layer shallow climbs a bank two
+    /// layers over its feet; so does one in a two-layer shallow whose bank's
+    /// top is level with the surface.
+    #[test]
+    fn a_wading_walker_climbs_a_two_layer_bank() {
+        for (depth, rise) in [(1, 1), (2, 0)] {
+            let swim = swim_into_bank(
+                depth,
+                rise,
+                Start {
+                    under: depth as f32 - CONTACT_SKIN,
+                    on_bed: true,
+                    ..SWIMMING
+                },
+            );
+            assert!(
+                swim.climb_ticks > 0
+                    && swim.grounded
+                    && (swim.feet_over_surface - rise as f32).abs() < 0.1,
+                "wading {depth} deep at a bank {rise} over the surface: feet {:.2} m over it, {} climb ticks",
+                swim.feet_over_surface,
+                swim.climb_ticks
+            );
+        }
+    }
+
+    /// With auto step off the climb is off too, and the bank stops the swimmer.
+    #[test]
+    fn with_auto_step_off_a_swimmer_does_not_auto_climb() {
+        let swim = swim_into_bank(
+            4,
+            1,
+            Start {
+                auto_step: false,
+                ..SWIMMING
+            },
+        );
+        assert_eq!(swim.climb_ticks, 0);
+        assert!(swim.feet_over_surface < 0.0, "still in the water");
     }
 
     /// `taller-mountains` decision 8, survey H4: a new version-6 world starts

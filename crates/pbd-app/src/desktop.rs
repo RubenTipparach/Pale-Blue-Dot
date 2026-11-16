@@ -141,6 +141,11 @@ pub struct Launch {
     /// Walk mode, placed at the shoreline and holding forward, so a capture can
     /// photograph the water being entered. A walker with no input never moves.
     pub swim: bool,
+    /// `--climb-out`: put the walker in the sea a tile off a bank one or two
+    /// layers over the water, facing it, and hold forward once the column
+    /// tier is under it, so a capture can photograph the climb out of the
+    /// water (`swimming` 4). A capture instrument.
+    pub climb_out: bool,
     /// `--fish`: stand on a warm shore facing the sea with the rod, and cast
     /// once, scripted, so the float, the line and the schools can be
     /// photographed and the fishery's numbers logged. A capture instrument,
@@ -427,6 +432,7 @@ impl Launch {
             fly: false,
             walk: false,
             swim: false,
+            climb_out: false,
             fish: false,
             husbandry: None,
             life: None,
@@ -1084,6 +1090,10 @@ impl Launch {
                 "--swim" => {
                     result.walk = true;
                     result.swim = true;
+                }
+                "--climb-out" => {
+                    result.walk = true;
+                    result.climb_out = true;
                 }
                 "--fish" => {
                     result.walk = true;
@@ -2019,6 +2029,9 @@ pub fn run(args: &[String]) {
             // a plain photo has no `WalkingState`, and a system that asks for
             // one unconditionally panics the first frame.
             app.add_systems(PreUpdate, swim_script.after(bevy::input::InputSystems));
+        }
+        if launch.climb_out {
+            app.add_systems(PreUpdate, climb_out_script.after(bevy::input::InputSystems));
         }
     }
     if launch.fixed || (launch.capture.is_some() && !launch.real_time) {
@@ -3751,6 +3764,153 @@ fn swim_script(
     if launch.swim {
         keys.press(KeyCode::KeyW);
     }
+}
+
+/// The frames after the go `--climb-out` photographs: the swim up to the
+/// bank, the rise, the step onto it and standing on it.
+const CLIMB_SHOTS: [u32; 6] = [2, 30, 38, 44, 52, 75];
+
+/// Where `--climb-out` swims from: along the parallels from 10 to 80
+/// degrees, a tile at a time, the first sea cell three layers deep (else
+/// two) whose next cell east is a bank one or two layers over sea level
+/// (else level with it), with deep water a tile further out. The
+/// swimmer's start (the sea cell) and the bank, as directions.
+fn climb_out_site() -> Option<(Vec3, Vec3)> {
+    let step = tile_width_m(FINEST_LEVEL) / PLANET_RADIUS;
+    for (deep, banks) in [(-3.0, 1.0..=2.0), (-2.0, 1.0..=2.0), (-2.0, 0.0..=2.0)] {
+        if let Some(site) = climb_out_site_with(step, deep, banks) {
+            return Some(site);
+        }
+    }
+    None
+}
+
+fn climb_out_site_with(
+    step: f32,
+    deep: f32,
+    banks: std::ops::RangeInclusive<f32>,
+) -> Option<(Vec3, Vec3)> {
+    for lat in (10..=80).step_by(2) {
+        let lat = (lat as f32).to_radians();
+        let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
+        let mut lon = 0.0_f32;
+        while lon < std::f32::consts::TAU {
+            let (out, sea, bank) = (at(lon - step), at(lon), at(lon + step));
+            if surface_height(out) <= -3.0
+                && surface_height(sea) <= deep
+                && banks.contains(&surface_height(bank))
+            {
+                return Some((sea, bank));
+            }
+            lon += step / lat.cos().max(0.2);
+        }
+    }
+    None
+}
+
+/// The scripted climb out of the water (`swimming` 4): the walker is held in
+/// the sea at [`climb_out_site`], its feet a metre under the sheet and facing
+/// the bank, until the column tier is under it, and then holds forward and
+/// nothing else. It logs `CLIMB_GO <frame>` when it lets go, and each frame
+/// after `CLIMB <frame> <feet over the datum> <metres from the bank's centre>`.
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+fn climb_out_script(
+    mut commands: Commands,
+    launch: Res<Launch>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    mut coarse_site: Local<Option<Option<(Vec3, Vec3)>>>,
+    mut site: Local<Option<(Vec3, Vec3)>>,
+    mut go: Local<Option<u32>>,
+    mut frame: Local<u32>,
+    terrain: Res<pbd_app::planet::PlanetContact>,
+    mut walkers: Query<
+        (
+            &mut Position,
+            &mut LinearVelocity,
+            &mut pbd_app::walking::GroundState,
+            &mut Transform,
+        ),
+        With<pbd_app::walking::Walker>,
+    >,
+) {
+    if !state.active {
+        return;
+    }
+    *frame += 1;
+    let Some((coarse, _)) = *coarse_site.get_or_insert_with(|| {
+        let found = climb_out_site();
+        if found.is_none() {
+            warn!("CLIMB_SITE none");
+        }
+        found
+    }) else {
+        return;
+    };
+    let Ok((mut position, mut velocity, mut ground, mut transform)) = walkers.single_mut() else {
+        return;
+    };
+    // Held at the coarse site until the column tier is under it, then at the
+    // nearest bank the tier itself has, one or two layers over the water.
+    if site.is_none() && terrain.finest_cell(coarse).is_some() {
+        *site = terrain
+            .bank_near(coarse, 120.0, 3.0, 1.0..=2.0)
+            .or_else(|| terrain.bank_near(coarse, 120.0, 2.0, 1.0..=2.0));
+        match *site {
+            Some((water, _)) => {
+                info!("CLIMB_SITE {water}");
+                *go = Some(*frame + 60);
+            }
+            None => warn!("CLIMB_SITE no bank on the tier"),
+        }
+    }
+    let (out, bank) = site.unwrap_or((coarse, coarse));
+    if go.is_none_or(|g| *frame < g) {
+        let sheet = PLANET_RADIUS - 0.5;
+        // Half a tile further out than the water cell's centre, so the
+        // first shots see the bank whole.
+        let from = if site.is_some() {
+            (out + (out - bank) * 0.5).normalize()
+        } else {
+            out
+        };
+        let start = from * (sheet - 1.0 + pbd_app::walking::HALF_HEIGHT);
+        position.0 = start;
+        transform.translation = start;
+        velocity.0 = Vec3::ZERO;
+        ground.previous = start;
+        ground.grounded = false;
+        state.captured = true;
+        state.scripted = true;
+        if site.is_some() {
+            state.face(from, (bank - from).normalize_or_zero());
+        }
+        return;
+    }
+    if *go == Some(*frame) {
+        info!("CLIMB_GO {}", *frame);
+    }
+    // The sequence, frames after letting go, beside the capture's own shot:
+    // `<capture>-climb-<frames>.png`. Counted from the go, which follows the
+    // tier's landing on the wall clock, so it has to come out of one run.
+    if let (Some(path), Some(g)) = (launch.capture.as_ref(), *go) {
+        let after = *frame - g;
+        if CLIMB_SHOTS.contains(&after) {
+            let stem = path.with_extension("");
+            let shot = format!("{}-climb-{after:02}.png", stem.display());
+            info!("CLIMB_SHOT {after} {shot}");
+            commands
+                .spawn(Screenshot::primary_window())
+                .observe(bevy::render::view::screenshot::save_to_disk(shot));
+        }
+    }
+    keys.press(KeyCode::KeyW);
+    info!(
+        "CLIMB {} {:.2} {:.2}",
+        *frame,
+        position.0.length() - pbd_app::walking::HALF_HEIGHT - PLANET_RADIUS,
+        (position.0.normalize() - bank).length() * PLANET_RADIUS
+    );
 }
 
 /// `--break SECONDS`: from frame 90, hold the use button on whatever is under

@@ -62,3 +62,24 @@
       first frame. It is registered beside the walker it drives now.
 - [ ] Ask the owner to swim in the running game. The feel of water is exactly
       the sort of thing a green test cannot settle.
+
+## 4. Auto-climb out of the water (owner, 2026-11-16)
+
+"introduce auto climb when in water and trying to climb up a ledge of 1 or 2
+blocks". The rule and its numbers are in the design, "Auto-climb out of the
+water".
+
+- [x] The knobs in `WalkingConfig`: `water_climb_m`, `water_climb_wade_m`,
+      `water_climb_reach_m`, `water_climb_facing`, `water_climb_secs`,
+      `water_climb_forward_m`.
+- [x] The trigger in `resolve_ground` on a refused move, and the eased climb,
+      with the motor and gravity standing down while it runs. Off with auto
+      step.
+- [x] Tests on the test planet: a swimmer facing a 1-layer bank climbs out;
+      so does a 2-layer bank; a 3-layer bank does not; moving along the bank
+      does not climb; a wader at a 2-layer bank climbs.
+- [x] Captures, a short sequence of swimming up to a bank and climbing out, in
+      `docs/screenshots/water-autoclimb/` (`--climb-out --time 21`).
+- [ ] The footprint's flip on the great circle z = 0 (design, "Found on the
+      way"): its own write-up and fix.
+- [ ] The owner swims up to a bank in the running game.
