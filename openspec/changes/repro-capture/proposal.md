@@ -28,9 +28,17 @@ weather, the settings) is in four other places or nowhere.
     ready-to-paste command line that puts an agent there with `--capture`.
 - Both go to `repro/<date>-<time>.{png,txt}`, beside `saves/`. The log gets
   one line, `REPRO <path> <command line>`.
-- The command line is copied to the clipboard by the platform's own clipboard
-  command (`pbcopy`, `clip`, `wl-copy` or `xclip`), with no new crate.
-- On screen: "LOCATION SAVED" for 2 s on the line under the crosshair the
+- The blocks round the player (owner, 2026-11-16: "Shift alt F should also
+  read local block data as well within a range of 3 of the player", "So 3 up
+  3 down 3 forward, left etc"): every cell within 3 hex rings, the layers 3
+  below the feet to 3 above the head, with material, edit or generated,
+  water and the records on each cell; a table in the text and a JSON file
+  beside it. Read from resident data only.
+- The whole record goes on the clipboard (owner: "It should auto save to my
+  clipboard"): the command first, then the fields, the block table and the
+  screenshot's path, by the platform's own clipboard command (`pbcopy`,
+  `clip`, `wl-copy` or `xclip`), with no new crate.
+- On screen: "LOCATION COPIED" for 2 s on the line under the crosshair the
   farm's notes use. Nothing else.
 - The key is a row of the controls table (SCREEN), drawn on the settings
   page and in `--help`.

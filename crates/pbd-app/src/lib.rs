@@ -46,6 +46,8 @@ pub mod place;
 #[cfg(feature = "desktop")]
 pub mod planet;
 #[cfg(feature = "desktop")]
+pub mod repro;
+#[cfg(feature = "desktop")]
 pub mod saves;
 #[cfg(feature = "desktop")]
 pub mod sea;

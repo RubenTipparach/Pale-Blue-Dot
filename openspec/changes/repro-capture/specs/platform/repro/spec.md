@@ -20,3 +20,23 @@ also interact.
 #### Scenario: A repro never writes to the player's world
 - **WHEN** the record's command line is run
 - **THEN** it opens no saved world, because it names none
+
+### Requirement: The repro record carries the blocks round the player
+The record SHALL list every cell within three hex rings of the player's cell
+and, in each, the layers from three below the feet's layer to three above the
+head's, with each layer's material as the game has it, whether it is an edit,
+its water, and the stored records on the cell, read from resident data only;
+as a table in the text and as JSON beside it.
+
+#### Scenario: The dump is what the tier holds
+- **WHEN** a dump is taken over a fine set with a dig in it
+- **THEN** its cells are the neighbour table's three rings, each layer's material is the column's, and the dug layer reads as air and as an edit
+
+### Requirement: The repro record goes on the clipboard
+The whole record text SHALL be put on the clipboard as written to its file,
+the command line first and the screenshot's path last; a failed copy SHALL be
+a warning and SHALL NOT stop the files being written.
+
+#### Scenario: The clipboard gets the file's text
+- **WHEN** a record is written
+- **THEN** the clipboard is handed exactly the text the file holds

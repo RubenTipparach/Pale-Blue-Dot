@@ -1,0 +1,2972 @@
+{
+  "distance": "hex rings over the finest level's neighbour table",
+  "player_cell": 387769521,
+  "facing_side": 0,
+  "facing_bearing_deg": 305.67236,
+  "feet_layer": 196,
+  "head_layer": 197,
+  "from_layer": 193,
+  "to_layer": 200,
+  "cells": [
+    {
+      "key": 387769521,
+      "ring": 0,
+      "forward": 0.0,
+      "right": 0.0,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387765426,
+      "ring": 1,
+      "forward": 0.872158,
+      "right": -0.39425865,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387765425,
+      "ring": 1,
+      "forward": 0.19182545,
+      "right": -1.0681211,
+      "surface_height_m": 50.0,
+      "surface_layer": 194,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387769520,
+      "ring": 1,
+      "forward": -0.68029004,
+      "right": -0.6740313,
+      "surface_height_m": 50.0,
+      "surface_layer": 194,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387773616,
+      "ring": 1,
+      "forward": -0.8721823,
+      "right": 0.39418906,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387773617,
+      "ring": 1,
+      "forward": -0.19182327,
+      "right": 1.0681427,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387769522,
+      "ring": 1,
+      "forward": 0.6803676,
+      "right": 0.67393076,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387761331,
+      "ring": 2,
+      "forward": 1.7443553,
+      "right": -0.78846055,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387761330,
+      "ring": 2,
+      "forward": 1.0639771,
+      "right": -1.4623355,
+      "surface_height_m": 50.0,
+      "surface_layer": 194,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387765427,
+      "ring": 2,
+      "forward": 1.5525107,
+      "right": 0.27973935,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387761329,
+      "ring": 2,
+      "forward": 0.38366792,
+      "right": -2.1362882,
+      "surface_height_m": 50.0,
+      "surface_layer": 194,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387765424,
+      "ring": 2,
+      "forward": -0.48844132,
+      "right": -1.7422427,
+      "surface_height_m": 50.0,
+      "surface_layer": 194,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387769519,
+      "ring": 2,
+      "forward": -1.360669,
+      "right": -1.3480661,
+      "surface_height_m": 50.0,
+      "surface_layer": 194,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387773615,
+      "ring": 2,
+      "forward": -1.5524946,
+      "right": -0.2799449,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387777711,
+      "ring": 2,
+      "forward": -1.7443476,
+      "right": 0.7883323,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "desert",
+      "top": "Sand",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387777712,
+      "ring": 2,
+      "forward": -1.0639927,
+      "right": 1.4622973,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "desert",
+      "top": "Sand",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387777713,
+      "ring": 2,
+      "forward": -0.3854057,
+      "right": 2.1344547,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "desert",
+      "top": "Sand",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387773618,
+      "ring": 2,
+      "forward": 0.48679146,
+      "right": 1.7401984,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387769523,
+      "ring": 2,
+      "forward": 1.3589675,
+      "right": 1.3460536,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387757236,
+      "ring": 3,
+      "forward": 2.616505,
+      "right": -1.1826419,
+      "surface_height_m": 50.0,
+      "surface_layer": 194,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387757235,
+      "ring": 3,
+      "forward": 1.9361373,
+      "right": -1.8565727,
+      "surface_height_m": 50.0,
+      "surface_layer": 194,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387761332,
+      "ring": 3,
+      "forward": 2.4246562,
+      "right": -0.114430524,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387757234,
+      "ring": 3,
+      "forward": 1.2558694,
+      "right": -2.5305016,
+      "surface_height_m": 49.0,
+      "surface_layer": 193,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387765428,
+      "ring": 3,
+      "forward": 2.231078,
+      "right": 0.95181555,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387757233,
+      "ring": 3,
+      "forward": 0.5755921,
+      "right": -3.2045672,
+      "surface_height_m": 49.0,
+      "surface_layer": 193,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387761328,
+      "ring": 3,
+      "forward": -0.29660505,
+      "right": -2.8103652,
+      "surface_height_m": 49.0,
+      "surface_layer": 193,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387765423,
+      "ring": 3,
+      "forward": -1.1688415,
+      "right": -2.4161658,
+      "surface_height_m": 50.0,
+      "surface_layer": 194,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387769518,
+      "ring": 3,
+      "forward": -2.0410388,
+      "right": -2.0219095,
+      "surface_height_m": 50.0,
+      "surface_layer": 194,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387773614,
+      "ring": 3,
+      "forward": -2.232858,
+      "right": -0.95383275,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387777710,
+      "ring": 3,
+      "forward": -2.4246895,
+      "right": 0.114332914,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387781806,
+      "ring": 3,
+      "forward": -2.6165042,
+      "right": 1.1824527,
+      "surface_height_m": 52.0,
+      "surface_layer": 196,
+      "biome": "desert",
+      "top": "Sand",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387781807,
+      "ring": 3,
+      "forward": -1.936173,
+      "right": 1.8565079,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "desert",
+      "top": "Sand",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387781808,
+      "ring": 3,
+      "forward": -1.2575105,
+      "right": 2.528543,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "desert",
+      "top": "Sand",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387781809,
+      "ring": 3,
+      "forward": -0.57898587,
+      "right": 3.200788,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "desert",
+      "top": "Sand",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387777714,
+      "ring": 3,
+      "forward": 0.2932028,
+      "right": 2.8065548,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "desert",
+      "top": "Sand",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "Sand",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387773619,
+      "ring": 3,
+      "forward": 1.1653436,
+      "right": 2.4123416,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    },
+    {
+      "key": 387769524,
+      "ring": 3,
+      "forward": 2.037543,
+      "right": 2.018107,
+      "surface_height_m": 51.0,
+      "surface_layer": 195,
+      "biome": "fields",
+      "top": "DryGrass",
+      "town_ground": false,
+      "column_resident": true,
+      "water_top_m": null,
+      "layers": [
+        {
+          "layer": 193,
+          "altitude_m": 48.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 194,
+          "altitude_m": 49.0,
+          "material": "Soil",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 195,
+          "altitude_m": 50.0,
+          "material": "DryGrass",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 196,
+          "altitude_m": 51.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 197,
+          "altitude_m": 52.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 198,
+          "altitude_m": 53.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 199,
+          "altitude_m": 54.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        },
+        {
+          "layer": 200,
+          "altitude_m": 55.0,
+          "material": "Air",
+          "edit": false,
+          "water": null,
+          "water_top_m": null
+        }
+      ],
+      "records": []
+    }
+  ]
+}

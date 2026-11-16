@@ -58,6 +58,38 @@ impl Place {
     }
 }
 
+/// The way a start faces at `up` for a `--yaw` of `yaw` radians: the
+/// walker's start and the flight's start both read it, so the flag means one
+/// thing on foot and in the air. Yaw 0 faces compass west (`Y x up`, the
+/// pole's frame west) and a positive yaw turns clockwise seen from above, so
+/// 90 degrees faces compass north. At a pole, where west is undefined, it is
+/// taken from +X.
+pub fn heading_at_yaw(up: Vec3, yaw: f32) -> Vec3 {
+    let up = up.normalize_or(Vec3::Y);
+    let west = Vec3::Y.cross(up).normalize_or(Vec3::X);
+    Quat::from_axis_angle(up, -yaw) * west
+}
+
+/// The `--yaw`, radians in `-pi..=pi`, that [`heading_at_yaw`] turns into
+/// the way `forward` faces along the ground at `up`. Its inverse: a repro
+/// record reads the camera's forward back into the flag.
+pub fn yaw_of(up: Vec3, forward: Vec3) -> f32 {
+    let up = up.normalize_or(Vec3::Y);
+    let west = Vec3::Y.cross(up).normalize_or(Vec3::X);
+    let along = forward - up * forward.dot(up);
+    -along.dot(up.cross(west)).atan2(along.dot(west))
+}
+
+/// The look's pitch off the ground at `up`, radians, up positive: what
+/// `--pitch` takes in degrees.
+pub fn pitch_of(up: Vec3, forward: Vec3) -> f32 {
+    forward
+        .normalize_or(Vec3::NEG_Z)
+        .dot(up.normalize_or(Vec3::Y))
+        .clamp(-1.0, 1.0)
+        .asin()
+}
+
 /// The active 3D camera's place, if one is drawing.
 pub(crate) fn of_active_camera<'a>(
     frame: &PlanetRenderFrame,
@@ -148,5 +180,36 @@ mod tests {
             "{line}"
         );
         assert!(line.ends_with("| 1.6 m above ground"), "{line}");
+    }
+
+    /// A yaw read back off the heading it starts is the same yaw, at the
+    /// equator, near a pole and in every quarter; and 90 degrees faces the
+    /// compass's north.
+    #[test]
+    fn a_yaw_reads_back_off_the_heading_it_starts() {
+        for (lat, lon) in [
+            (0.0f32, 0.0f32),
+            (-28.25, 0.75),
+            (63.0, -140.0),
+            (-89.5, 10.0),
+        ] {
+            let up = geo::direction(geo::LatLon {
+                lat: lat.to_radians(),
+                lon: lon.to_radians(),
+            });
+            for degrees in [-179.0f32, -90.0, -12.5, 0.0, 45.0, 90.0, 132.4, 179.0] {
+                let heading = heading_at_yaw(up, degrees.to_radians());
+                assert!(heading.dot(up).abs() < 1e-5, "along the ground");
+                let back = yaw_of(up, heading + up * 0.3).to_degrees();
+                assert!(
+                    (back - degrees).abs() < 1e-3,
+                    "{lat} {lon}: {degrees} read {back}"
+                );
+            }
+            if lat.abs() < 80.0 {
+                let (north, _) = geo::compass_north_east(up);
+                assert!(heading_at_yaw(up, 90f32.to_radians()).dot(north) > 0.999);
+            }
+        }
     }
 }

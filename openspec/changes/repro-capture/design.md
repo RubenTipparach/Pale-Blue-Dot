@@ -102,10 +102,22 @@ profile's binary (`.exe` on Windows).
 ## 4. The files
 
 `repro/` beside `saves/` (both relative to the working directory). Not inside
-`saves/`: every directory there is listed as a world. Names are local
-date and time, `YYYY-MM-DD-HHMMSS`, then `.png` and `.txt`; a second press in
-the same second gets `-2`. The text is `key: value` lines, one per field, with
-the command last, so a person reads it and a script greps it.
+`saves/`: every directory there is listed as a world. Names are the UTC
+date and time, `YYYY-MM-DD-HHMMSS`, then `.png`, `.txt` and `.blocks.json`; a
+second press in the same second gets `-2`. The text is, in order: the command
+line, the `key: value` fields, the block table (section 6), and the
+screenshot's path last.
+
+**Clipboard (owner, 2026-11-16: "It should auto save to my clipboard").**
+The whole text, exactly as written to the `.txt`, goes on the clipboard, so
+the owner pastes it straight into a chat; the image cannot go on a text
+clipboard, so its path is the last line. It goes through a `Clipboard` trait
+(`repro::write_record`), the game's `SystemClipboard` running the platform's
+own command (`pbcopy` on macOS, `clip` on Windows, `wl-copy` or `xclip` on
+Linux) on a thread, so no crate is added (`arboard` would bring its own
+objc2 and windows bindings for one debug key). A failed copy is a warning;
+the files are written regardless. A test hands a fake the record and checks
+it got the file's text byte for byte.
 
 The PNG is written by the `Screenshot` observer, as F12's is; the text and
 the note are written when the PNG is, so a failed shot says so instead of
@@ -113,8 +125,50 @@ claiming success, and the note is not in the shot.
 
 ## 5. The note
 
-`farm::FarmNote`, the line under the crosshair, for 2 s: "LOCATION SAVED".
+`farm::FarmNote`, the line under the crosshair, for 2 s: "LOCATION COPIED".
 A failed write says "LOCATION NOT SAVED". Nothing else is drawn.
+
+## 6. The blocks round the player
+
+The owner, 2026-11-16: "Shift alt F should also read local block data as
+well within a range of 3 of the player", then "So 3 up 3 down 3 forward,
+left etc".
+
+- **The box.** Every cell within 3 HEX RINGS of the player's cell, counted
+  over the finest level's own neighbour table (`FineSet::finest_neighbors`,
+  five sides at a pentagon): 37 cells away from a pentagon. In each, the
+  layers from 3 below the feet's layer to 3 above the head's (the feet's
+  layer is the one the soles stand in, the head's the eye's): 8 layers on
+  foot.
+- **Facing.** The side of the player's cell the look faces most nearly
+  (0..5 in the neighbour table's order) and its compass bearing. Each cell is
+  labelled with its ring and its offset from the player's cell in cell
+  spacings, forward or back along the look and left or right across it.
+- **Per cell:** its key; the record's surface height and the column's
+  surface layer; the biome and the cleared-for-a-town bit, from the
+  record's material word (`terrain::surface_code`, already resident: not
+  re-generated); the top material; the water standing over the surface.
+- **Per layer:** the column's material (edits applied: the tier's columns
+  are what the game walks on and draws), whether the save holds an edit at
+  that layer (`Edits::for_cell`), and its water: source, flowing N or
+  falling N, and the top of its run.
+- **Records on the cell:** every stored record whose id names it: a tree
+  (logs taken, and "felled" at the gathering's axe count), a picked wild
+  plant, a plot, fruit, a station (`id >> 16`), a fence or gate (either of
+  its edge's two cells), an animal living there. Lamps are materials, so
+  they are in the layers.
+- **Resident only.** Nothing is generated: the records and columns of the
+  current fine set and the save's edits and records. A cell with no
+  resident column says so and lists no layers. Measured cost: **0.11 ms**
+  to gather the whole record with its 37-cell dump on the M4 Max Mac (one
+  frame, on the press only; the `REPRO gathered in` log line).
+- **Out:** a table in the text record, compact (one line of layers per
+  cell, top down, `*` marking an edit), and the same as JSON in
+  `<stem>.blocks.json` for an agent to load.
+- **Test.** The dump is compared with the tier read directly: the same cells
+  as a walk of the neighbour table to 3 rings, each layer's material the
+  column's, and a dig made through `Edits` flagged as an edit and read as
+  air.
 
 ## Verification
 
@@ -125,3 +179,20 @@ A failed write says "LOCATION NOT SAVED". Nothing else is drawn.
 - In the game: the key pressed by a scripted input on a running `--walk`,
   then the written command run; the two screenshots side by side in
   `docs/screenshots/repro-capture/`.
+
+## Result (2026-11-16, the M4 Max Mac, `--profile fast`)
+
+- `PBD_PRESS_REPRO=200` pressed Shift+Alt+F through the keyboard's own
+  messages on a `--walk --at 20.3 40.2 --yaw 60 --pitch -10 --time 15 --day 2`
+  run. It wrote the PNG, the text and the JSON (37 cells, 8 layers each),
+  logged `REPRO`, put the text on the clipboard (`pbpaste` matched the file
+  byte for byte) and gathered in 0.11 ms. F did not interact.
+- The written command, run as written, gave the same view
+  (`docs/screenshots/repro-capture/pressed.png` against `reproduced.png`:
+  mean absolute difference 3.8 of 255, the grass and leaves' sway).
+- A plain launch (`--walk --world reprotest`) reached READY with no
+  `LATE_PIPELINE`. The two `--capture` runs log `LATE_PIPELINE` lines for
+  Bevy's standard mesh pipelines after READY; this change adds no render
+  code, so they come from the capture path's own prewarm (50 pipelines
+  against a play launch's 111), not from this change. Not compared against
+  a build of the branch before it.

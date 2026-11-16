@@ -474,10 +474,7 @@ fn setup_walking(world: &mut World) {
         scripted: false,
         heading: match config.restored {
             Some(pose) => tangent_heading(pose.heading, up),
-            None => tangent_heading(
-                Quat::from_axis_angle(up, -config.yaw) * Vec3::Y.cross(up),
-                up,
-            ),
+            None => tangent_heading(crate::place::heading_at_yaw(up, config.yaw), up),
         },
         up,
         pitch: config
@@ -1097,7 +1094,7 @@ fn drive_walker(
 /// The surface is the radius the water pass DRAWS the sheet at, so the physics
 /// and the picture cannot disagree about where the sea is.
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
-pub(crate) struct WaterState {
+pub struct WaterState {
     pub body: bool,
     pub eyes: bool,
     /// How deep the water is over the feet, in metres; 0 where dry.
@@ -1172,6 +1169,31 @@ impl Sea<'_> {
             depth: (surface - feet).max(0.0),
         }
     }
+}
+
+/// Where the walker is against the water now, the same answer its own
+/// motion reads: for a repro record (`repro-capture`). `None` with no walker
+/// or no terrain yet.
+pub fn walker_water(world: &mut World) -> Option<WaterState> {
+    let config = *world.get_resource::<WalkingConfig>()?;
+    world.get_resource::<PlanetContact>()?;
+    let position = world
+        .query_filtered::<&Position, With<Walker>>()
+        .iter(world)
+        .next()?
+        .0;
+    let mut sea = bevy::ecs::system::SystemState::<Sea>::new(world);
+    Some(sea.get(world).state(&config, position))
+}
+
+/// The walker's feet, body-local: where it stands, for a repro record.
+pub fn walker_feet(world: &mut World) -> Option<Vec3> {
+    let position = world
+        .query_filtered::<&Position, With<Walker>>()
+        .iter(world)
+        .next()?
+        .0;
+    Some(position - position.normalize_or(Vec3::Y) * HALF_HEIGHT)
 }
 
 /// The surface a body swims under, as a radius, or `None` where it is dry
