@@ -1248,7 +1248,11 @@ impl Plugin for WaterFlowPlugin {
                 WaterEase,
             >::default())
             .init_resource::<FallFeet>()
-            .add_systems(Startup, (spawn_arrows, spawn_splash))
+            .init_resource::<SplashQuads>()
+            .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
+                SplashQuads,
+            >::default())
+            .add_systems(Startup, spawn_arrows)
             .add_systems(
                 Update,
                 (
@@ -1528,8 +1532,16 @@ mod tests {
 #[derive(Resource, Default)]
 pub struct FallFeet(pub Vec<Foot>);
 
-#[derive(Component)]
-struct Splash;
+/// The splash's quads as the water pass draws them (`water-flow` 6.1): drawn
+/// after the water, against its depth, so a splash over a pool stands on the
+/// pool's surface rather than under it. `lanes[0]` is the camera's right and
+/// `lanes[1]` its up the quads face along, then two lanes a quad: its centre
+/// (body-local) and half size, and its colour (rgb unlit, a its alpha). Empty
+/// when nothing splashes.
+#[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
+pub struct SplashQuads {
+    pub lanes: Vec<[f32; 4]>,
+}
 
 /// How far out from a fall's foot the splash starts: the falling column's
 /// half width (half the 2.833 m cell, flat to flat), so nothing is drawn
@@ -1540,85 +1552,9 @@ const SPLASH_EDGE_M: f32 = 1.42;
 const SPLASH_CLEAR_M: f32 = 0.05;
 
 /// The most quads the splash draws in a frame, drops and mist together.
-const SPLASH_BUDGET: usize = 4000;
+pub const SPLASH_BUDGET: usize = 4000;
 /// Feet are drawn out to this far, fading out over the last 15 m.
 const SPLASH_REACH_M: f32 = 70.0;
-
-/// A soft round dot, white, alpha falling off to its edge.
-fn splash_dot() -> Image {
-    use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-    let size = 32u32;
-    let mut data = Vec::with_capacity((size * size * 4) as usize);
-    for y in 0..size {
-        for x in 0..size {
-            let dx = (x as f32 + 0.5) / size as f32 * 2.0 - 1.0;
-            let dy = (y as f32 + 0.5) / size as f32 * 2.0 - 1.0;
-            let r = (dx * dx + dy * dy).sqrt();
-            let a = (1.0 - r).clamp(0.0, 1.0);
-            data.extend_from_slice(&[255, 255, 255, (a * a * 255.0) as u8]);
-        }
-    }
-    Image::new(
-        Extent3d {
-            width: size,
-            height: size,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        data,
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::RENDER_WORLD,
-    )
-}
-
-fn splash_mesh(positions: Vec<[f32; 3]>, uv: Vec<[f32; 2]>, colours: Vec<[f32; 4]>) -> Mesh {
-    let n = positions.len();
-    let indices: Vec<u32> = (0..n as u32 / 4)
-        .flat_map(|q| [0, 1, 2, 0, 2, 3].map(|i| q * 4 + i))
-        .collect();
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD,
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0f32, 1.0, 0.0]; n])
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uv)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
-    .with_inserted_indices(Indices::U32(indices))
-}
-
-/// The splash's one mesh, born with one invisible quad so the loading screen
-/// builds its pipeline.
-fn spawn_splash(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    let dot = images.add(splash_dot());
-    commands.spawn((
-        Name::new("Waterfall splash"),
-        Splash,
-        Mesh3d(meshes.add(splash_mesh(
-            vec![[0.0; 3]; 4],
-            vec![[0.0; 2]; 4],
-            vec![[0.0; 4]; 4],
-        ))),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::WHITE,
-            base_color_texture: Some(dot),
-            unlit: true,
-            alpha_mode: AlphaMode::Blend,
-            cull_mode: None,
-            double_sided: true,
-            ..default()
-        })),
-        Transform::IDENTITY,
-        bevy::camera::visibility::NoFrustumCulling,
-        bevy::light::NotShadowCaster,
-        bevy::light::NotShadowReceiver,
-    ));
-}
 
 fn hash01(a: u32, b: u32) -> f32 {
     let mut h = a.wrapping_mul(0x9E37_79B9) ^ b.wrapping_mul(0x85EB_CA6B);
@@ -1639,17 +1575,19 @@ fn animate_splash(
     feet: Res<FallFeet>,
     ease: Res<WaterEase>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut splash: Query<(&Mesh3d, &mut Transform), With<Splash>>,
+    mut splash: ResMut<SplashQuads>,
 ) {
-    let (Some(frame), Ok((handle, mut transform))) = (frame, splash.single_mut()) else {
+    let Some(frame) = frame else {
+        if !splash.lanes.is_empty() {
+            splash.lanes.clear();
+        }
         return;
     };
     let centre = frame.center.as_vec3();
-    if transform.translation != centre {
-        transform.translation = centre;
-    }
     let Some((camera, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
+        if !splash.lanes.is_empty() {
+            splash.lanes.clear();
+        }
         return;
     };
     let eye = camera.translation() - centre;
@@ -1669,22 +1607,19 @@ fn animate_splash(
         .filter(|f| f.at.distance(eye) < SPLASH_REACH_M && (!f.born || landed > 0.0))
         .collect();
     near.sort_by(|a, b| a.at.distance(eye).total_cmp(&b.at.distance(eye)));
-    let (mut positions, mut uv, mut colours) = (Vec::new(), Vec::new(), Vec::new());
-    let mut quad = |p: Vec3, size: f32, rgba: [f32; 4], positions: &mut Vec<[f32; 3]>| {
-        let (r, u) = (right * size, up_cam * size);
-        for (c, tex) in [
-            (-r - u, [0.0, 1.0]),
-            (r - u, [1.0, 1.0]),
-            (r + u, [1.0, 0.0]),
-            (u - r, [0.0, 0.0]),
-        ] {
-            positions.push((p + c).to_array());
-            uv.push(tex);
-            colours.push(rgba);
-        }
+    // The same quads, nearest foot first, as the mesh they were drawn as:
+    // the water pass expands each to its corners along the camera's right
+    // and up (`splash_vertex`).
+    let mut lanes = std::mem::take(&mut splash.lanes);
+    lanes.clear();
+    lanes.push(right.extend(0.0).to_array());
+    lanes.push(up_cam.extend(0.0).to_array());
+    let quad = |p: Vec3, size: f32, rgba: [f32; 4], lanes: &mut Vec<[f32; 4]>| {
+        lanes.push(p.extend(size).to_array());
+        lanes.push(rgba);
     };
     for f in near {
-        if positions.len() / 4 >= SPLASH_BUDGET {
+        if (lanes.len() - 2) / 2 >= SPLASH_BUDGET {
             break;
         }
         let (foot, height, sky) = (&f.at, &f.height, &f.sky);
@@ -1716,7 +1651,7 @@ fn animate_splash(
             }
             let p = *foot + up * lift + dir * (SPLASH_EDGE_M + out * s + 0.4 * r(5));
             let alpha = 0.75 * (1.0 - phase) * fade;
-            quad(p, size, [light, light, light * 1.02, alpha], &mut positions);
+            quad(p, size, [light, light, light * 1.02, alpha], &mut lanes);
         }
         // Mist: a low white puff, bigger and denser from a taller fall.
         let puffs = ((h - 1.0) * 1.5).clamp(1.0, 24.0) as u32;
@@ -1735,16 +1670,11 @@ fn animate_splash(
                 + up * ((0.25 + 0.04 * h) * s + size + SPLASH_CLEAR_M)
                 + dir * (SPLASH_EDGE_M + spread * (0.3 + phase) * r(3));
             let alpha = (0.12 + 0.33 * (h / 8.0).min(1.0)) * (1.0 - phase) * fade;
-            quad(p, size, [light, light, light, alpha], &mut positions);
+            quad(p, size, [light, light, light, alpha], &mut lanes);
         }
     }
-    let Some(mesh) = meshes.get_mut(&handle.0) else {
-        return;
-    };
-    if positions.is_empty() {
-        positions = vec![[0.0; 3]; 4];
-        uv = vec![[0.0; 2]; 4];
-        colours = vec![[0.0; 4]; 4];
+    if lanes.len() == 2 {
+        lanes.clear();
     }
-    *mesh = splash_mesh(positions, uv, colours);
+    splash.lanes = lanes;
 }

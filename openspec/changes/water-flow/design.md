@@ -751,6 +751,72 @@ The plan, in order:
    beside today's spray for the owner's approval before any game code.
    Crab Breeze's source or a clip of its splashes would be the reference.
 
+### The fall splash drawn after the water (6.1, 2026-11-16)
+
+The owner again: "water fall splash fx still not drawn in front of water"
+(`docs/screenshots/handoff/fall-splash-behind-water.webp`). The cause is the
+one measured above: the spray and mist are a Transparent3d mesh, and the
+water composite runs after `EndMainPass` and paints over them, with no depth
+of theirs to stop it. The sharp white panels in that shot are not the splash
+but the lip froth on the pool's side faces (item 2 above), which is a look
+change and waits for M31.
+
+The fix, order and depth only:
+
+- `animate_splash` keeps building exactly the same quads (same count,
+  places, sizes, colours, alpha, nearest first) but hands them to the render
+  world as a list (`SplashQuads`: the camera's right and up, then a centre,
+  size and colour per quad) instead of rewriting a Bevy mesh; the Bevy mesh
+  and its `StandardMaterial` go.
+- The water's pass draws them last, after the cap and the flowing water, in
+  `water.wgsl`'s `splash_vertex` / `splash_fragment`: the same 32-texel dot
+  sampled nearest (as `ImagePlugin::default_nearest` sampled the image), the
+  same unlit colour, the same straight alpha blend.
+- Hidden by terrain in front by the cap's own test against the main pass's
+  depth; hidden by water in front by the water's depth attachment, tested
+  and not written. So from above a pool the splash stands on the surface,
+  behind a fall's column it is hidden by the column, and from under the pool
+  the surface overhead hides it.
+- With the eye fully under water, what no sheet hides is murked by the
+  compose's own terms and distance, as it was when the splash was part of
+  the scene. (Measured on the captures: some spray and mist stand under a
+  pool's surface or poke into the next column's water; from above they are
+  now hidden, from under they read as before. Where they are placed is the
+  splash's look, item 4 above, and not touched here.)
+- Its pipeline is one of the water's, queued with the others when the view's
+  water state is made, so the loading screen compiles it before `READY`.
+
+### Mist puffs and bubbles, in a mockup first (6.5, owner, 2026-11-16)
+
+The owner, on the 4-way sheets of the order fix: "design better mist instead
+of just a gradient circle puff, use blender/krita or whatever, look at crab
+breeze smoke puffs as a model", and "in the water there should be bubbles
+particles, this should give it that teal color". The order fix stays (the
+mist in front of the water). Both looks are shown first in
+`docs/mockups/waterfall-mist.html`, beside the game's look today and the
+order fix with the old dot, from above, from the side and from under, by day
+and by night. Game code waits for the owner's approval.
+
+- **Mist puffs.** A 4 x 4 sheet of 32-texel cells
+  (`assets/textures/fx/mist_puffs/`, made by `tools/fx/mist_puffs_blender.py`
+  and `mist_puffs_post.py`, provenance in its `SOURCE.md`): four lumpy
+  billowing puffs, four frames of a puff's life each, a five-tone ramp lit
+  from above, soft over the outer three texels, no outline. Each mist quad of
+  `animate_splash` picks a row by its hash and a column by its age, in place
+  of the dot. At an opacity of 0.80 a puff covers the same total as the dot.
+  The sheet carries normals for lighting by the sun, as Crab Breeze's
+  `smoke_lit` does.
+- **Bubbles.** Under the surface at the fall's foot: 60 + 14 per metre fallen,
+  born under the falling column and round it, down to 0.6 m + 0.22 m per
+  metre fallen, rising at 0.35 to 0.7 m/s and gone at the surface. Each is an
+  8-texel sprite (a bright rim, a clear middle, a glint). They are drawn
+  before the water so the water's own transmission tints them from above, and
+  are murked by distance from under the pool. In the game they would be
+  points made on the GPU in the water's pass.
+- **The aerated colour.** Over the bubbles the water's transmitted colour
+  moves toward a lighter teal (the churn scattering light back up), fading
+  out over 2.2 m + 0.15 m per metre fallen from the foot.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With

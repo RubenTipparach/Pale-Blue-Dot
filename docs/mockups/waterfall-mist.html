@@ -1,0 +1,235 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Waterfall Mist</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap">
+<style>
+/* The waterfall mist and bubbles, in a mockup first (CLAUDE.md, owner 2026-11-16). Dark, as M31 is. */
+:root{
+  color-scheme: dark;
+  --ground:#0a1014; --panel:#111a20; --panel-2:#16222a; --line:rgba(130,175,180,.24); --line-2:rgba(130,175,180,.4);
+  --ink:#e4ecee; --muted:#94a8ad; --amber:#e8b040; --sky:#8fc3d8;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{background:var(--ground);overflow-x:hidden}
+body{margin:0;color:var(--ink);font:15px/1.5 var(--body);padding:12px max(16px,env(safe-area-inset-right,0px)) 28px max(16px,env(safe-area-inset-left,0px))}
+main{max-width:1180px;margin:0 auto;display:grid;gap:10px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+h1{font:700 clamp(24px,5vw,34px)/1.05 var(--display);letter-spacing:.02em;margin:0}
+.tracker{flex-basis:100%;margin:0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.tracker a{color:inherit}
+button{font:inherit;color:inherit}
+.info{all:unset;cursor:pointer;display:inline-grid;place-items:center;min-width:30px;height:30px;padding:0 10px;border:1px solid var(--line-2);border-radius:15px;font:600 14px var(--display);letter-spacing:.06em;color:var(--sky)}
+.info:hover,.info:focus-visible{border-color:var(--amber);color:var(--amber);outline:none}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:7px 11px;font:600 15px var(--display);letter-spacing:.04em;color:var(--muted);background:var(--panel)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:rgba(232,176,64,.16);color:var(--amber)}
+.seg button:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.lbl{font:600 12px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.stage{position:relative;width:100%;aspect-ratio:16/10;max-height:72vh;min-height:300px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#000}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.vtitle{position:absolute;left:10px;top:8px;font:700 18px var(--display);letter-spacing:.03em;text-shadow:0 1px 3px #000;pointer-events:none}
+.ref{position:absolute;right:8px;top:8px;width:min(42%,360px);border:1px solid var(--line-2);border-radius:4px;box-shadow:0 2px 10px #000}
+.ref img{display:block;width:100%}
+.ref span{position:absolute;left:4px;bottom:3px;font:600 12px var(--display);letter-spacing:.06em;text-shadow:0 1px 2px #000}
+.sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 16px;min-height:0}
+.sl{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+.sl label{font:600 14px var(--display);letter-spacing:.04em}
+.sl output{font:500 13px ui-monospace,Menlo,monospace;color:var(--amber);min-width:44px;text-align:right}
+.sl input{width:100%;min-width:0;accent-color:var(--amber)}
+.chk{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel);font:600 15px var(--display);letter-spacing:.04em;cursor:pointer}
+.chk input{accent-color:var(--amber);margin:0}
+.modal{position:fixed;inset:0;z-index:100;background:rgba(3,6,9,.72);display:grid;place-items:center;padding:12px}
+.modal[hidden]{display:none}
+.modal .mbox{background:var(--panel);border:1px solid var(--line-2);border-radius:8px;width:min(780px,100%);max-height:min(88vh,920px);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+.modal .mhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.modal .mhead h2{margin:0;font:700 20px var(--display);letter-spacing:.03em}
+.modal .mclose{all:unset;cursor:pointer;font-size:18px;line-height:1;padding:4px 8px;border-radius:4px}
+.modal .mclose:hover{color:var(--amber)} .modal .mclose:focus-visible{outline:2px solid var(--amber)}
+.modal .mbody{overflow:auto;padding:12px 14px;display:grid;gap:10px;min-width:0}
+.mbody h3{margin:6px 0 0;font:700 17px var(--display);letter-spacing:.03em;color:var(--sky)}
+.mbody p,.mbody ul{margin:0} .mbody ul{padding-left:20px}
+.mbody q{color:var(--amber);quotes:"\201C" "\201D"}
+.mbody img{max-width:100%;border-radius:4px;border:1px solid var(--line)}
+.mbody code{font:13px ui-monospace,Menlo,monospace;color:#cfe3e6;overflow-wrap:anywhere}
+.mbody table{border-collapse:collapse;width:100%;font-size:13.5px}
+.mbody td,.mbody th{border-top:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
+.mbody th{font:600 12px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tw{overflow-x:auto}
+.tabs{align-self:start}
+.tabs button{font-size:17px;padding:7px 16px}
+.act{all:unset;cursor:pointer;padding:6px 11px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel);font:600 15px var(--display);letter-spacing:.04em}
+.act:hover{border-color:var(--amber);color:var(--amber)} .act:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.tab{display:grid;gap:10px;min-width:0}
+.tab[hidden]{display:none}
+.ptick{position:absolute;right:10px;top:10px;font:500 13px ui-monospace,Menlo,monospace;color:var(--muted);text-shadow:0 1px 3px #000;pointer-events:none}
+<style>
+.sheet{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px}
+.sheet figure{margin:0;display:grid;gap:4px}
+.sheet img,.sheet canvas{image-rendering:pixelated;background:#1d3a44;border:1px solid var(--line);max-width:100%;height:auto}
+.sheet figcaption{font:600 13px var(--display);letter-spacing:.05em;color:var(--muted)}
+</style>
+<main>
+  <header>
+    <p class="tracker"><a href="https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+    <h1>Waterfall Mist</h1>
+    <button class="info" data-modal="aboutTpl" data-title="About this mockup" aria-label="About this mockup">About</button>
+  </header>
+  <nav class="seg tabs" id="tabs" aria-label="Tabs"><button data-tab="today" aria-pressed="true">Game today</button><button data-tab="fixed" aria-pressed="false">Fixed order</button><button data-tab="new" aria-pressed="false">New mist + bubbles</button></nav>
+  <div class="stage">
+    <canvas id="view" aria-label="A waterfall into a pool: drag to turn, wheel or pinch to come closer"></canvas>
+    <div class="vtitle" id="vtitle">Game today</div>
+    <div class="ref" id="ref" hidden><img id="refImg" src="waterfall-mist/game-down-today.jpg" alt="The game's own capture of a fall into a pool"><span id="refLbl">The game</span></div>
+  </div>
+  <div class="bar">
+    <span class="lbl">View</span>
+    <span class="seg" id="views"><button data-view="above" aria-pressed="true">Above</button><button data-view="side" aria-pressed="false">Side</button><button data-view="under" aria-pressed="false">Under</button></span>
+    <span class="seg" id="tod"><button data-tod="day" aria-pressed="true">Day</button><button data-tod="night" aria-pressed="false">Night</button></span>
+    <label class="chk"><input type="checkbox" id="showRef"> Game shot</label>
+    <label class="chk"><input type="checkbox" id="pause"> Pause</label>
+    <button class="info" id="tabInfo" aria-label="What this tab shows">i</button>
+  </div>
+  <section id="newPanel" hidden>
+    <div class="sl one"><label for="gain">Mist opacity</label><input id="gain" type="range" min="0.2" max="1.5" step="0.05" value="0.8"><output id="gainOut">0.80</output></div>
+    <div class="sl one"><label for="mist">Mist amount</label><input id="mist" type="range" min="0" max="3" step="0.05" value="1"><output id="mistOut">1.00</output></div>
+    <div class="sl one"><label for="mistSize">Mist size</label><input id="mistSize" type="range" min="0.4" max="2" step="0.05" value="1"><output id="mistSizeOut">1.00</output></div>
+    <div class="sl one"><label for="veil">Fall mist</label><input id="veil" type="range" min="0" max="3" step="0.05" value="1"><output id="veilOut">1.00</output></div>
+    <div class="sl one"><label for="soft">Wall blend</label><input id="soft" type="range" min="0" max="3" step="0.05" value="1.2"><output id="softOut">1.20</output></div>
+    <div class="sl one"><label for="bub">Bubbles</label><input id="bub" type="range" min="0" max="2" step="0.05" value="1"><output id="bubOut">1.00</output></div>
+    <div class="sl one"><label for="teal">Teal churn</label><input id="teal" type="range" min="0" max="2" step="0.05" value="1"><output id="tealOut">1.00</output></div>
+    <div class="sheet" style="margin-top:10px">
+      <figure><img src="waterfall-mist/mist_puffs.png?v=1" width="384" height="384" alt="The new mist puff sheet: four puffs, four frames each"><figcaption>Mist puffs, 4 x 4 cells of 32 texels (3x)</figcaption></figure>
+      <figure><canvas id="bubbleSwatch" width="8" height="8" style="width:96px;height:96px"></canvas><figcaption>Bubble, 8 texels (12x)</figcaption></figure>
+    </div>
+  </section>
+</main>
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="mbox"><div class="mhead"><h2 id="modalTitle"></h2><button class="mclose" id="modalClose" aria-label="Close">&#x2715;</button></div><div class="mbody" id="modalBody"></div></div></div>
+<template id="aboutTpl">
+  <p>How the spray and mist at a fall's foot look once they draw in front of the water, and the bubbles under it, in a mockup before any game code (CLAUDE.md, "Waterfalls are designed in a mockup first").</p>
+  <h3>What the owner asked</h3>
+  <ul>
+    <li><q>water fall splash fx still not drawn in front of water</q>: the order fix (branch <code>claude/fall-splash-order</code>).</li>
+    <li><q>design better mist instead of just a gradient circle puff, use blender/krita or whatever, look at crab breeze smoke puffs as a model</q>.</li>
+    <li><q>in the water there should be bubbles particles, this should give it that teal color</q>.</li>
+  </ul>
+  <h3>The tabs</h3>
+  <ul>
+    <li><b>Game today</b>: the splash is drawn with the scene before the water. The water reads it as what lies behind it and paints over it, so the mist never stands on the pool; it only leaks through as a teal glow.</li>
+    <li><b>Fixed order</b>: the same drops and puffs, drawn after the water and tested against its depth: in front of the water, hidden under it. The pool shows its own deep colour.</li>
+    <li><b>New mist + bubbles</b>: the fixed order, with lumpy lit puffs in place of the gradient dot, and bubbles rising in the pool under the fall, which make the churned water there a lighter, aerated teal.</li>
+  </ul>
+  <h3>The scene</h3>
+  <p>A source pours over the lip of a pit 12 layers deep and falls about 9 m into a pool 3.35 m deep. Cells are the game's: 2.833 m across, 1 m layers. Drag to turn, wheel or pinch to come closer. The water and the splash move; nothing else does. At night three lamps light the ground, the water, the new mist and the bubbles.</p>
+  <h3>What is the game's here</h3>
+  <ul>
+    <li><b>The water</b>: M31's port of the game's water fragment (<code>water.wgsl</code> at <code>dc0c5cb</code>): its colours, absorption, Fresnel, sky and froth. Added here: the pool's real depth under each cap, and the game's view from below (the murk by distance, Snell's window).</li>
+    <li><b>The splash</b>: a line-for-line port of the game's <code>animate_splash</code> (<code>water_flow.rs</code>): the same drops, puffs, sizes, timings and alpha, and the same 32-texel dot sampled nearest.</li>
+    <li><b>The draw order</b> of each tab is the game's: today's (splash with the scene, before the water) and the branch's (after the water, against its depth).</li>
+    <li><b>Mockup-only</b>: the ground's sand, the sky, the lamps, the new puff sheet, the bubbles and the aerated colour.</li>
+  </ul>
+  <h3>The new puffs</h3>
+  <ul>
+    <li>Modelled after Crab Breeze's <code>smoke_puffs</code> and <code>smoke_lit</code> (a 4 x 4 sheet of lumpy puffs, with normals so the sun can light them).</li>
+    <li>Built in Blender (<code>tools/fx/mist_puffs_blender.py</code>): each puff is a cluster of metaballs roughened into billows, rendered face-on.</li>
+    <li>Cut to the game's pixel look by <code>tools/fx/mist_puffs_post.py</code>: 32-texel cells sampled nearest, a five-tone ramp lit from above, soft over the outer three texels, no outline.</li>
+    <li>Rows are four puffs; columns are a puff's life: tight as it leaves the foot, swelling, then fraying. Each mist puff of the game's splash picks a row by its own hash and a column by its age.</li>
+    <li><b>Mist opacity</b> scales the puffs' alpha. At 0.80 a puff covers the same total as the dot it replaces.</li>
+    <li><b>Mist amount</b> scales how many puffs rise (1.00 is the game's count, up to 24 a fall; 0 none, 3 triple). <b>Mist size</b> scales each puff.</li>
+    <li><b>Fall mist</b> (new): mist shed by the falling sheet all the way down, more of it low where the water has broken up most. 1.00 is about 2.5 puffs per metre fallen; 0 none.</li>
+    <li><b>Wall blend</b> (new): each puff fades out as it nears the wall or ground behind it, over this many metres, so a puff meeting a wall leaves no hard edge (a soft particle; 0 is off, the game today).</li>
+    <li><b>Bubbles</b> scales how many bubbles rise (1.00 is the default count, 60 plus 14 per metre fallen; 0 none, 2 double).</li>
+    <li><b>Teal churn</b> scales how strongly the water over the bubbles turns aerated teal (1.00 default, 0 none).</li>
+    <li>The sheet's normals (<code>assets/textures/fx/mist_puffs/normal.png</code>) are made for lighting by the sun in the game. The page uses the shade baked into the sheet.</li>
+  </ul>
+  <h3>The bubbles</h3>
+  <ul>
+    <li>60 + 14 per metre fallen, born under the falling column and round it, down to 0.6 m + 0.22 m per metre fallen.</li>
+    <li>They rise at 0.35 to 0.7 m/s, wobbling, and are gone at the surface. Each is an 8-texel sprite: a bright rim, a clear middle and a glint.</li>
+    <li>They are drawn under the water, so from above the water's own transmission tints them. From under the pool the eye sees them through the murk.</li>
+    <li>Over them the pool's colour moves toward a lighter teal and the eye sees less deep into it: the churn of air in the water.</li>
+    <li>In the game they would run on the GPU in the water's own pass, as the splash now does.</li>
+  </ul>
+  <h3>Game shot</h3>
+  <p>The toggle shows the game's own capture for the open view: today's build on <b>Game today</b>, the order fix on the other two. The captures are of a different fall (9 layers into a pool, in jungle), so they show the kind of look rather than the same place.</p>
+</template>
+<template id="tab-today"><p><b>Game today.</b> The splash is drawn with the scene, before the water. The water paints over it, so the mist and drops over the pool are lost and leak through as a teal glow.</p></template>
+<template id="tab-fixed"><p><b>Fixed order.</b> The same splash, drawn after the water against its depth: in front of the water, hidden by it. The pool shows its own deep colour. The mist is the game's gradient dot.</p></template>
+<template id="tab-new"><p><b>New mist + bubbles.</b> The fixed order, with lumpy lit mist puffs in place of the dot, bubbles rising in the pool under the fall, and the aerated teal over them. <b>Mist opacity</b> scales the puffs; 0.80 matches the dot's total cover.</p></template>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="waterfall-mist/mist.js?v=8"></script>
+<script>
+"use strict";
+let MODAL_BACK = null;
+function openModal(title, node) {
+  const m = document.getElementById("modal"), body = document.getElementById("modalBody");
+  document.getElementById("modalTitle").textContent = title; body.innerHTML = ""; body.appendChild(node);
+  MODAL_BACK = document.activeElement; m.hidden = false; body.scrollTop = 0; document.getElementById("modalClose").focus();
+}
+function closeModal() { const m = document.getElementById("modal"); if (m.hidden) return; m.hidden = true; if (MODAL_BACK && MODAL_BACK.focus) MODAL_BACK.focus(); }
+const TITLES = {today: "Game today", fixed: "Fixed order", new: "New mist + bubbles"};
+let TAB = "today", VIEW = "above";
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-modal], #tabInfo"); if (!b) return;
+  const ids = b.id === "tabInfo" ? ["tab-" + TAB] : b.dataset.modal.split(" ");
+  const frag = document.createDocumentFragment();
+  for (const id of ids) { const t = document.getElementById(id); if (t) frag.appendChild(t.content.cloneNode(true)); }
+  openModal(b.id === "tabInfo" ? TITLES[TAB] : (b.dataset.title || ""), frag);
+});
+document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
+document.getElementById("modalClose").addEventListener("click", closeModal);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+const P = PBDMist(document.getElementById("view"), "waterfall-mist/mist_puffs.png?v=1");
+function refresh() {
+  document.getElementById("vtitle").textContent = TITLES[TAB];
+  document.getElementById("newPanel").hidden = TAB !== "new";
+  const which = TAB === "today" ? "today" : "fixed";
+  document.getElementById("refImg").src = `waterfall-mist/game-${VIEW === "above" ? "down" : VIEW}-${which}.jpg`;
+  document.getElementById("refLbl").textContent = which === "today" ? "The game today" : "The game, order fixed";
+  document.getElementById("ref").hidden = !document.getElementById("showRef").checked;
+}
+function showTab(name) {
+  if (!TITLES[name]) name = "today";
+  TAB = name; P.S.variant = name; P.apply();
+  for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-pressed", String(b.dataset.tab === name));
+  if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+  refresh();
+}
+document.getElementById("tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+document.getElementById("views").addEventListener("click", e => {
+  const b = e.target.closest("button[data-view]"); if (!b) return; VIEW = b.dataset.view; P.views[VIEW]();
+  for (const x of document.querySelectorAll("#views button")) x.setAttribute("aria-pressed", String(x === b)); refresh();
+});
+document.getElementById("tod").addEventListener("click", e => {
+  const b = e.target.closest("button[data-tod]"); if (!b) return; P.S.night = b.dataset.tod === "night"; P.apply();
+  for (const x of document.querySelectorAll("#tod button")) x.setAttribute("aria-pressed", String(x === b));
+});
+document.getElementById("pause").addEventListener("change", e => { P.S.running = !e.target.checked; });
+document.getElementById("showRef").addEventListener("change", refresh);
+const gain = document.getElementById("gain");
+gain.addEventListener("input", () => { P.S.gain = +gain.value; document.getElementById("gainOut").textContent = (+gain.value).toFixed(2); P.apply(); });
+for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"], ["mist", "mist"], ["mistSize", "mistSize"], ["veil", "veil"], ["soft", "soft"]]) {
+  const el = document.getElementById(id);
+  el.addEventListener("input", () => { P.S[key] = +el.value; document.getElementById(id + "Out").textContent = (+el.value).toFixed(2); P.apply(); });
+}
+// The bubble swatch: the same 8 texels the shader draws.
+(function () {
+  const g = document.getElementById("bubbleSwatch").getContext("2d");
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    const dx = (x + 0.5) / 4 - 1, dy = (y + 0.5) / 4 - 1, r = Math.hypot(dx, dy); if (r > 1) continue;
+    const t = Math.min(1, Math.max(0, (r - 0.55) / 0.25)), s = t * t * (3 - 2 * t);
+    let a = 0.28 + (0.9 - 0.28) * s, c = [219, 247, 255];
+    if (x === 2 && y === 2) { c = [255, 255, 255]; a = 1; }
+    g.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a})`; g.fillRect(x, y, 1, 1);
+  }
+})();
+window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+showTab(location.hash.slice(1) || "today");
+P.start();
+window.PAGE = {P, showTab, setView: v => document.querySelector(`#views button[data-view="${v}"]`).click(), setNight: n => document.querySelector(`#tod button[data-tod="${n ? "night" : "day"}"]`).click()};
+</script>
