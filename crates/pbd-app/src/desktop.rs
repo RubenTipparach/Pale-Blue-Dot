@@ -268,6 +268,16 @@ pub struct Launch {
     pub pour_ahead: f32,
     /// `--pit DEPTH`: dig a pit that deep two cells short of the pour.
     pub pit: u32,
+    /// `--pour-for SECONDS`: a measurement instrument (`water-flow` 5.3,
+    /// `perf_suite.py`'s `pour`). The `--pour`/`--pit` script runs in real
+    /// time without a capture, then the poured sources are stopped and
+    /// started again in turn so water flows, falls and dries the whole
+    /// while; logs `POUR_START` and `POUR_DONE` and quits after that long.
+    pub pour_for: Option<f32>,
+    /// `--water-tick-frac F` (0..1): the water drawn F of the way through the
+    /// last of `--water-ticks`, and held there: the rule does not tick on
+    /// its own, so a capture shows smooth water mid-tick (`water-flow` 5.3).
+    pub water_tick_frac: Option<f32>,
     /// `--tide high|low`: the tide's moon over the camera or a quarter turn
     /// round (`ocean-environments` 5.1), for the tide's captures.
     pub tide: Option<String>,
@@ -450,6 +460,8 @@ impl Launch {
             water_ticks: 0,
             pour_ahead: 0.0,
             pit: 0,
+            pour_for: None,
+            water_tick_frac: None,
             tide: None,
             arrows: false,
             lamps: false,
@@ -590,6 +602,30 @@ impl Launch {
                         .get(i)
                         .and_then(|n| n.parse().ok())
                         .expect("--pit requires a depth");
+                }
+                "--pour-for" => {
+                    i += 1;
+                    let seconds: f32 = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--pour-for requires seconds");
+                    assert!(
+                        seconds.is_finite() && seconds > 0.0,
+                        "--pour-for takes seconds"
+                    );
+                    result.pour_for = Some(seconds);
+                }
+                "--water-tick-frac" => {
+                    i += 1;
+                    let frac: f32 = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--water-tick-frac requires a fraction");
+                    assert!(
+                        (0.0..=1.0).contains(&frac),
+                        "--water-tick-frac takes 0 to 1"
+                    );
+                    result.water_tick_frac = Some(frac);
                 }
                 "--pour-ahead" => {
                     i += 1;
@@ -1475,6 +1511,7 @@ pub fn run(args: &[String]) {
     .init_resource::<pack::PackHand>()
     // Farming and the forge (`farming-and-smelting`).
     .init_resource::<farm::FarmNote>()
+    .init_resource::<water::PourSources>()
     .init_resource::<farm::StationAt>()
     .init_resource::<craft::CraftPick>()
     .add_message::<pbd_app::hotbar::Gained>()
@@ -1724,6 +1761,12 @@ pub fn run(args: &[String]) {
             // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
             water::scripted
                 .after(digging::scripted_dig)
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
+                .run_if(resource_exists::<pbd_app::drops::Drops>),
+            water::pour_cycle
+                .after(water::scripted)
+                .run_if(|launch: Res<Launch>| launch.pour_for.is_some())
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
                 .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
                 .run_if(resource_exists::<pbd_app::drops::Drops>),

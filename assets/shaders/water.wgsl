@@ -91,7 +91,9 @@ struct WaterView {
     sea: SeaView,
     // x how far the sheet sits below sea level (`depth_offset_m`); y the
     // surface of the inland water the eye is in, a body radius, nought for
-    // the sea (`ocean-environments` B17); zw spare.
+    // the sea (`ocean-environments` B17); z and w how far the drawing is
+    // through the water's last tick, smoothstepped (the levels) and linear
+    // (the fronts), both one when it is drawn as it is (`water_flow::WaterEase`).
     sea_frame: vec4<f32>,
     // The lens mist (`lens-weather`): seconds to mist over and to clear
     // standing still, how much faster per m/s of airspeed, its strength; then
@@ -148,10 +150,12 @@ struct WaterView {
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
 @group(0) @binding(2) var<storage,read> water: array<u32>;
-// The game's own water that the sheet does not draw (`water-flow` E6): three
+// The game's own water that the sheet does not draw (`water-flow` E6): four
 // lanes a vertex, triangles end to end. xyz body-local position, w the sky's
 // share; xyz the face's normal, w its kind (1 a top, 2 a falling face, 3 a
-// still face); xy the flow in the face's tangent frame, m/s over 0.35.
+// still face); xy the flow in the face's tangent frame, m/s over 0.35; xyz
+// where the vertex was the tick before, w its ease flags (1 a front, eased
+// linearly; 2 a dried piece, hidden once the tick has played).
 @group(0) @binding(3) var<storage,read> flowing: array<vec4<f32>>;
 @group(0) @binding(4) var<storage,read> rain_map: array<f32>;
 @group(1) @binding(0) var scene_color: texture_2d<f32>;
@@ -395,18 +399,28 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
 // the sea's own fragment so a poured pool and the sea are one water.
 @vertex
 fn vertex_flowing(@builtin(vertex_index) vertex: u32) -> VertexOut {
-    let a = flowing[vertex*3u];
-    let b = flowing[vertex*3u + 1u];
-    let c = flowing[vertex*3u + 2u];
+    let a = flowing[vertex*4u];
+    let b = flowing[vertex*4u + 1u];
+    let c = flowing[vertex*4u + 2u];
+    let d = flowing[vertex*4u + 3u];
+    // Smooth water between ticks (M31's Pour tab): eased from where the
+    // vertex was the tick before. Fronts at one speed, levels smoothstepped.
+    let flags = u32(d.w + 0.5);
+    let t = select(view.sea_frame.z, view.sea_frame.w, (flags & 1u) != 0u);
+    let p = mix(d.xyz, a.xyz, t);
     var out: VertexOut;
-    out.body_position = a.xyz;
-    out.local_position = view.planet_center.xyz + a.xyz;
+    out.body_position = p;
+    out.local_position = view.planet_center.xyz + p;
     out.clip = view.clip_from_local*vec4<f32>(out.local_position, 1.0);
+    // A dried cell, its tick played: gone (outside the clip volume).
+    if ((flags & 2u) != 0u && view.sea_frame.w > 0.999) {
+        out.clip = vec4<f32>(0.0, 0.0, 2.0, 1.0);
+    }
     out.normal = b.xyz;
     out.sky_light = a.w;
     out.flow_uv = c.xyz;
     out.level = 0u;
-    out.owner_a = safe_normal(a.xyz);
+    out.owner_a = safe_normal(p);
     out.owner_b = out.owner_a;
     out.sea_slope = vec3<f32>(0.0);
     out.fade_t = vec3<f32>(1.0, 1.0, 0.0);
