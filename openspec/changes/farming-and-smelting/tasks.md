@@ -55,3 +55,11 @@
       `docs/screenshots/basic-smelting/` with a README of commands; no
       `LATE_PIPELINE` in the log.
 - [ ] 5.3 Video for the owner's batch (deferred with the others).
+
+## 6. Crops in the world's style (decision 16)
+
+- [x] 6.1 `world_art.py`: no sparkles, and each ramp's lightest tone folded
+      to the one below; copied to `assets/items/crops/`.
+- [x] 6.2 Before-and-after shots of a ripe wild kale in rain and in sun, in
+      `docs/screenshots/farming/`.
+

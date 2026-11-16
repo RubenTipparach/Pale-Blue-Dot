@@ -281,6 +281,33 @@ harvested, made, and `Planted { crop }`), written on the frame the durable
 write was accepted. The coming `starter-missions` chain ("find seeds",
 "plant", "harvest") counts them; nothing in this change reads them.
 
+### 16. Crops in the world are drawn in the world's style (owner, 2026-11-16)
+
+The owner, on a ripe wild frost kale in a rainy meadow: "these plants need
+fixing", "they dont seem to obey lighting", "or they are two contrasting
+colors ontop of eachother". Measured: the world draws the outline-free stages
+of `docs/mockups/farming/world_art.py` (`flora-v2` design 11), which dropped
+the outline and the seams and lifted each near-black tone a step. Two things
+were left of the inventory art. The ripe kale and glowcap keep their two cyan
+frost sparkles, drawn as glow. Every ramp keeps its brightest tone, so the
+kale shows mint (`#84e3b5`) laid over the lifted navy (`#204f63`, `#15578a`):
+a lit top and a dark underside that the sprite bakes in from the top left,
+which the scene's light cannot undo. The material already takes the
+terrain's fill and sun (`LitByField`, `LitLikeTerrain`); the fault is the
+picture.
+
+`world_art.py` goes one step further, by the same rule ("no harsh
+contrasting detail", 2026-11-15):
+
+- no sparkles: `spark` draws nothing in the world copy;
+- every ramp of four or more tones has its lightest tone drawn as the one
+  below, as the darkest was already lifted, so a plant's light and shade are
+  the scene's and not the sprite's. Still Sweaft-64 only, alpha 0 or 255.
+
+The mockup's outlined stages and the 16 px slot icons keep the full art, as
+UI icons keep their outline. Nothing stored changes: a crop's stage is
+derived from its record.
+
 ### 13. What is derived and what is stored
 
 | Thing | Stored | Derived |
