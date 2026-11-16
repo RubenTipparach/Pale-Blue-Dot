@@ -92,7 +92,17 @@ and the contact sheets are in `docs/screenshots/river-fixes/videos/`.
    the body is in. Pin it with a test in `walking.rs` beside the pool tests
    (`pool_rows`), and record it with the owner's Shift+Alt+F record if they
    send one.
-6. **Two open items from the last river pass:**
+6. **The waterfall's splash is drawn behind the water** (owner, 2026-11-16:
+   "water fall splash fx still not drawn in front of water"; shot
+   `docs/screenshots/handoff/fall-splash-behind-water.webp`, looking down a
+   fall into a pool). The white splash and froth panels at the foot are
+   hidden or cut by the pool's surface instead of sitting on top of it.
+   Check the draw order and depth test of the splash or foam pass against
+   the water surface pass in `water.wgsl` / `planet_water.rs`. The splash
+   must draw after the surface, depth-tested against the terrain only.
+   Per CLAUDE.md "Waterfalls are designed in a mockup first", this is a
+   draw-order fix, not a look change: keep the `dc0c5cb` froth.
+7. **Two open items from the last river pass:**
    - a tributary riffle frame (f512) seen through a cell's side face;
    - mouth f804-808: the eye reads "above" for 5 frames after a 40 m capture
      teleport while the terrain rebuilds.
