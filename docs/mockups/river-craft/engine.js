@@ -430,7 +430,7 @@ RC.waterMesh = function (river, U) {
           vec3 l = uLampPos[i] - vP; float d = length(l); l /= max(d, 1e-4);
           c += uLampCol[i]*pow(max(dot(n, normalize(l + v)), 0.0), 90.0)*lampFall(d, 26.0)*6.0;
         }
-        c += uSunCol*pow(max(dot(n, normalize(uSunDir + v)), 0.0), 160.0)*0.5*(1.0 - uNight);
+        c += uSunCol*pow(max(dot(n, normalize(uSunDir + v)), 0.0), 320.0)*0.22*(1.0 - uNight);
         c = mix(c, FOAM*lit*0.85, fo);
         float a = clamp(0.38 + 0.42*(1.0 - exp(-vDepth*0.9)) + fres*0.3 + fo, 0.0, 0.93);
         gl_FragColor = vec4(toSrgb(fogged(c, vP)), a);
@@ -534,7 +534,7 @@ RC.Stage = function (canvas, def) {
   // ---- lights
   function lighting() {
     if (!S.night) { U.uSunDir.value.set(0.5, 0.75, -0.4).normalize(); U.uSunCol.value.set(1.0, 0.95, 0.88); U.uAmb.value.set(0.34, 0.38, 0.44); U.uFog.value.set(0.62, 0.72, 0.82); }
-    else { U.uSunDir.value.set(-0.4, 0.5, 0.6).normalize(); U.uSunCol.value.set(0.016, 0.020, 0.036); U.uAmb.value.set(0.010, 0.013, 0.024); U.uFog.value.set(0.012, 0.016, 0.030); }
+    else { U.uSunDir.value.set(-0.4, 0.5, 0.6).normalize(); U.uSunCol.value.set(0.016, 0.020, 0.036); U.uAmb.value.set(0.007, 0.009, 0.018); U.uFog.value.set(0.012, 0.016, 0.030); }
     U.uNight.value = S.night ? 1 : 0;
   }
   const _v = new THREE.Vector3();
