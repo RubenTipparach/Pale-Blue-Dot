@@ -55,3 +55,30 @@ nearest shore.
 - **THEN** the walker appears under the ship, with their feet at the water
   surface, not grounded
 - **AND** the swim model takes over from there
+
+### Requirement: A walker in water climbs a low bank on its own
+While the walker's body is in water and the forward control presses it into a
+bank face it is facing, the walker SHALL climb onto the ledge, without the jump
+control, when the ledge's top is above the water surface and no more than two
+layers over it (or, wading, no more than two layers over the feet), and SHALL
+do so as a rise and a step forward of about 0.4 s, never a jump in position.
+A higher ledge SHALL NOT be climbed this way. The climb SHALL follow the auto
+step setting.
+
+#### Scenario: Swimming up to a one- or two-layer bank
+- **WHEN** a swimmer at the surface holds forward into a bank one or two layers
+  over the water
+- **THEN** they rise and step onto it within half a second and stand there
+
+#### Scenario: A three-layer bank
+- **WHEN** a swimmer holds forward into a bank three layers over the water
+- **THEN** they stay in the water
+
+#### Scenario: Swimming along the bank
+- **WHEN** a swimmer moves along a low bank rather than into it
+- **THEN** they do not climb it
+
+#### Scenario: Wading at a two-layer bank
+- **WHEN** a walker wading in a shallow holds forward into a bank two layers
+  over the feet
+- **THEN** they climb onto it

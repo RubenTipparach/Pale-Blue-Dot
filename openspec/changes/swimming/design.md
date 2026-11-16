@@ -63,3 +63,75 @@ Two real defects, both found only because a headless capture had to press a key:
 Both are the same shape as the tests: a test that sets the movement axes
 directly passes while the real input path is broken, because the axes are
 rewritten from the keyboard every frame. The tests drive keys now.
+
+## Auto-climb out of the water (owner, 2026-11-16)
+
+The owner: *"introduce auto climb when in water and trying to climb up a ledge
+of 1 or 2 blocks"*.
+
+### What is there today, measured off `walking.rs`
+
+- A swimmer leaves the water only by holding jump: the swim thrust
+  (`water_swim_force` 20 m/s², drag 3/s) rises at about 4.2 m/s until the body
+  probe clears the surface, and the swimmer then has to be moving forward at
+  the instant the feet clear the ledge. In practice it is a bob against the
+  bank.
+- Wading (water up to `water_wade_depth`, two layers plus 0.1 m, over the
+  feet) is grounded, so auto step (`step_height`, one layer, 1.05 m) already
+  walks up a ONE-layer bank out of a shallow; a two-layer bank stops the wader.
+- The sweep (`sweep` in `resolve_ground`) refuses a move into a rise it cannot
+  step and reports the face's normal along the ground; the slide takes the part
+  of the move along the face.
+
+### The rule
+
+While the walker's **body is in water** (the body probe, 0.5 m over the feet,
+under the surface: swimming or wading), the **forward control is held**, and
+the sweep **refused the move against a face** the heading points into, the
+walker climbs onto the ledge beyond the face when:
+
+| test | value | knob |
+| --- | ---: | --- |
+| facing the face: heading · (into the face) | at least **0.5** (within 60°) | `water_climb_facing` |
+| ledge top over the water surface | at most **2.7 m** (two layers, 2 × 1.05, plus the sea sheet's 0.5 m under its layer top and a 0.1 m skin) | `water_climb_m` |
+| or, wading, ledge top over the feet | at most **2.2 m** (two layers plus 0.1, the wade depth) | `water_climb_wade_m` |
+| ledge top over the surface | **above it** (a step still under water is the seabed's, and swimming down past it is left alone) | - |
+| ledge top over the feet | at most **4.5 m** (a body's length under the surface plus two layers; a swimmer deeper than that swims up first) | `water_climb_reach_m` |
+| room on the ledge | the body stands there under any ceiling, and no town solid holds it | - |
+| how long | **0.4 s**: the body rises to stand on the ledge over the first 60 % and moves **0.8 m** forward onto it over the rest, both eased | `water_climb_secs`, `water_climb_forward_m` |
+
+Why two references: the brief's "2 layers above the water surface, or above
+the feet when wading". A wader is allowed either test, so standing on the bed
+is never worse than floating over it. The sea's drawn sheet sits 0.5 m under
+the top of its layer (`depth_offset_m`), so a beach cap two layers over sea
+level is 2.5 m over the sheet; the 0.6 m over two layers is what keeps "two
+blocks" meaning two blocks at sea, in a river (whose surface is a layer top)
+and in a flowing cell (whose surface sits a fraction into its layer). A cap
+three layers up is 3.0 to 3.5 m over any of them and does not climb.
+
+During the climb the motor and gravity stand down and the body is placed on the
+eased path each tick (no velocity carried in, none left over); it lands
+grounded. It is never a teleport: each tick moves the body at most the path's
+share of 0.4 s.
+
+What does not climb: a ledge more than the table allows (the swimmer stays in
+the water or uses the swim rise, unchanged); a walker moving away from the bank
+or along it (no refused move, or a heading within 60° of along the face); a
+swimmer under water beside a step whose top is still under the surface; a
+swimmer more than 4.5 m under the ledge top; a walker with the forward control
+up.
+
+### Shared with auto step
+
+The climb follows the **auto step** player setting (`player-settings` 5):
+on (the default) it climbs; off, it does not, and the swim rise is the way out
+as before. Auto step is the setting that says "the walker goes up a rise
+without a key"; a player who turned it off to have rises stop them asked for
+that in water too. Recommendation taken (ask only with screenshots).
+
+### Where it is
+
+Water of every kind: the probe is `Sea::state`, whose surface is the column's
+water (sea at the tided sheet, a river, a flowing cell, a poured pool) on the
+tier and the height field's sea off it, so the climb is measured against the
+surface the walker is actually swimming in.
