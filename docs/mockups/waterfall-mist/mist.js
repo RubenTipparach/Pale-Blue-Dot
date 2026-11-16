@@ -533,13 +533,15 @@ function splashMesh(U, sheet) {
   g.setAttribute("aCell", new THREE.BufferAttribute(cell, 2));
   const mat = new THREE.ShaderMaterial({transparent: true, depthWrite: false, depthTest: true,
     uniforms: Object.assign({uRight: {value: new THREE.Vector3()}, uUpCam: {value: new THREE.Vector3()}, uSheet: {value: sheet},
-      uGain: {value: 1}, uLamps: {value: 0}}, U),
+      uGain: {value: 1}, uLamps: {value: 0},
+      uDepthTex: {value: null}, uDRes: {value: new THREE.Vector2(1, 1)}, uNear: {value: 0.05}, uFar: {value: 600}, uSoft: {value: 0}}, U),
     vertexShader: `attribute vec2 aCorner; attribute vec4 aC; attribute vec4 aCol; attribute vec2 aCell; uniform vec3 uRight; uniform vec3 uUpCam;
-      varying vec2 vUV; varying vec4 vCol; varying vec2 vCell; varying vec3 vP;
-      void main() { vec3 p = aC.xyz + (uRight*aCorner.x + uUpCam*aCorner.y)*aC.w; vP = p;
+      varying vec2 vUV; varying vec4 vCol; varying vec2 vCell; varying vec3 vP; varying float vViewZ;
+      void main() { vec3 p = aC.xyz + (uRight*aCorner.x + uUpCam*aCorner.y)*aC.w; vP = p; vViewZ = -(viewMatrix*vec4(p, 1.0)).z;
         vUV = vec2(0.5*(aCorner.x + 1.0), 0.5*(1.0 - aCorner.y)); if (aCell.y > 0.5) vUV.x = 1.0 - vUV.x;
         vCol = aCol; vCell = aCell; gl_Position = projectionMatrix*viewMatrix*vec4(p, 1.0); }`,
-    fragmentShader: `uniform sampler2D uSheet; uniform float uGain; uniform float uLamps; varying vec2 vUV; varying vec4 vCol; varying vec2 vCell; varying vec3 vP;
+    fragmentShader: `uniform sampler2D uSheet; uniform float uGain; uniform float uLamps; varying vec2 vUV; varying vec4 vCol; varying vec2 vCell; varying vec3 vP; varying float vViewZ;
+      uniform sampler2D uDepthTex; uniform vec2 uDRes; uniform float uNear; uniform float uFar; uniform float uSoft;
       ${LIGHT_GLSL} ${UNDER_GLSL}
       void main() {
         vec3 rgb; float a;
@@ -556,6 +558,14 @@ function splashMesh(U, sheet) {
         }
         vec3 c = rgb*vCol.rgb + rgb*lampLight(vP, vec3(0.0, 1.0, 0.0), 1.0)*uLamps;
         if (uEyeUnder > 0.5) c = mix(uMurk, c, exp(-uExt*length(vP - cameraPosition)));
+        // Wall blend (New tab, mockup): a soft particle. The puff fades out as it nears the ground or wall behind it,
+        // by the view-space distance between them, so a quad cutting into a wall leaves no hard edge. The game has
+        // the same depth to read (the main pass's depth), so this ports as one texture read.
+        if (uSoft > 0.0) {
+          float d = texture2D(uDepthTex, gl_FragCoord.xy/uDRes).x;
+          float sceneZ = 2.0*uNear*uFar/(uFar + uNear - (2.0*d - 1.0)*(uFar - uNear));
+          a *= smoothstep(0.0, 1.0, clamp((sceneZ - vViewZ)/uSoft, 0.0, 1.0));
+        }
         gl_FragColor = vec4(toSrgb(c), vCol.a*a);
       }`});
   const m = new THREE.Mesh(g, mat); m.frustumCulled = false;
@@ -674,8 +684,8 @@ window.PBDMist = function (canvas, sheetUrl) {
   const front = splashMesh(U, sheet); fx.add(front);
   const bubbles = bubblePoints(F, U); bubbles.material.uniforms.uFoot.value.copy(foot); opaque.add(bubbles);
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
-  let copyTex = null, copyW = 0, copyH = 0;
-  const S = {variant: "today", night: false, running: true, gain: 0.8, bubbles: 1, teal: 1, mist: 1, mistSize: 1, veil: 1};
+  let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
+  const S = {variant: "today", night: false, running: true, gain: 0.8, bubbles: 1, teal: 1, mist: 1, mistSize: 1, veil: 1, soft: 1.2};
   function murk(open) {
     // The game's murk: the deep's albedo lit by the light on open water, dimmed by the water above the eye.
     const eyeDepth = Math.max(0, F.poolY - camera.position.y);
@@ -701,6 +711,7 @@ window.PBDMist = function (canvas, sheetUrl) {
     bubbles.visible = v === "new"; wmat.uniforms.uAer.value = v === "new" ? 1 : 0;
     bubbles.material.uniforms.uAmt.value = S.bubbles; wmat.uniforms.uAerAmt.value = S.teal;
     front.material.uniforms.uGain.value = S.gain; front.material.uniforms.uLamps.value = v === "new" ? 1 : 0;
+    front.material.uniforms.uSoft.value = v === "new" ? S.soft : 0;
     lighting();
   }
   function resize() {
@@ -714,6 +725,11 @@ window.PBDMist = function (canvas, sheetUrl) {
       copyTex = new THREE.DataTexture(new Uint8Array(copyW * copyH * 3), copyW, copyH, THREE.RGBFormat);
       copyTex.minFilter = copyTex.magFilter = THREE.NearestFilter; copyTex.generateMipmaps = false; copyTex.needsUpdate = true;
       wmat.uniforms.uScene.value = copyTex; wmat.uniforms.uRes.value.set(copyW, copyH);
+      if (depthRT) depthRT.dispose();
+      depthRT = new THREE.WebGLRenderTarget(copyW, copyH);
+      depthRT.depthTexture = new THREE.DepthTexture(copyW, copyH); depthRT.depthTexture.type = THREE.UnsignedIntType;
+      depthRT.depthTexture.minFilter = depthRT.depthTexture.magFilter = THREE.NearestFilter;
+      front.material.uniforms.uDepthTex.value = depthRT.depthTexture; front.material.uniforms.uDRes.value.set(copyW, copyH);
     }
     bubbles.material.uniforms.uPx.value = sz.y / (2 * Math.tan(camera.fov * Math.PI / 360));
   }
@@ -765,6 +781,11 @@ window.PBDMist = function (canvas, sheetUrl) {
       splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q, {mist: S.mist, mistSize: S.mistSize, veil: S.veil});
       m.material.uniforms.uRight.value.copy(right); m.material.uniforms.uUpCam.value.copy(upCam);
       m.userData.upload();
+    }
+    if (depthRT && front.visible && front.material.uniforms.uSoft.value > 0) {
+      // The ground and walls' depth, for the wall blend: the opaque scene once more into a depth target.
+      front.material.uniforms.uNear.value = camera.near; front.material.uniforms.uFar.value = camera.far;
+      renderer.setRenderTarget(depthRT); renderer.clear(); renderer.render(opaque, camera); renderer.setRenderTarget(null);
     }
     renderer.clear();
     renderer.render(opaque, camera);
