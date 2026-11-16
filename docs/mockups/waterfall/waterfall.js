@@ -15,8 +15,9 @@ const key = (q, r) => q + "," + r;
 const hexDist = (q, r) => (Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2;
 
 // ---------------- the world: cells and their tops ----------------
-const GRID = 10;
+const GRID = 10, GRID_LOOK = GRID;
 const PIT = new Set([key(0, 0), ...DIRS.map(([q, r]) => key(q, r))]);
+const topLook = (q, r) => top(q, r);
 function top(q, r) {
   if (hexDist(q, r) > GRID) return null;
   if (PIT.has(key(q, r))) return -9;          // the pit: the cell and the six round it, 9 layers down
@@ -112,7 +113,9 @@ function sandTexture() {
   const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.generateMipmaps = false;
   return t;
 }
-function groundMesh(U) {
+// o (optional, the Pour tab's): {top(q, r), grid, deep}; by default the Look tab's pit scene.
+function groundMesh(U, o) {
+  const top = (o && o.top) || topLook, GRID = (o && o.grid) || GRID_LOOK, DEEP = (o && o.deep) || -14;
   const pos = [], nor = [], uvw = [];
   const tri = (a, b, c, n, uv) => { pos.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) nor.push(...n); uvw.push(...uv); };
   for (let q = -GRID; q <= GRID; q++) for (let r = -GRID; r <= GRID; r++) {
@@ -122,7 +125,7 @@ function groundMesh(U) {
       const a = cornerXZ(q, r, i), b = cornerXZ(q, r, (i + 1) % 6);
       tri(c, [b[0], t, b[1]], [a[0], t, a[1]], [0, 1, 0], [c[0], c[2], 0, b[0], b[1], 0, a[0], a[1], 0]);
       const [nq, nr] = [q + DIRS[i][0], r + DIRS[i][1]];
-      let nt = top(nq, nr); if (nt === null) nt = -14;
+      let nt = top(nq, nr); if (nt === null) nt = DEEP;
       if (nt < t) {
         const n = sideN(i), A = [a[0], t, a[1]], B = [b[0], t, b[1]], A0 = [a[0], nt, a[1]], B0 = [b[0], nt, b[1]];
         const ua = a[0] * -n[1] + a[1] * n[0], ub = b[0] * -n[1] + b[1] * n[0];
@@ -137,7 +140,7 @@ function groundMesh(U) {
   g.setAttribute("aUV", new THREE.Float32BufferAttribute(uvw, 3));
   // The cells' tops as a texture, for the sun's shadow: a march toward the sun over the hex height field.
   const N = 2 * GRID + 1, tops = new Float32Array(N * N * 4);
-  for (let q = -GRID; q <= GRID; q++) for (let r = -GRID; r <= GRID; r++) { const t = top(q, r); tops[4 * ((r + GRID) * N + (q + GRID))] = t === null ? -14 : t; }
+  for (let q = -GRID; q <= GRID; q++) for (let r = -GRID; r <= GRID; r++) { const t = top(q, r); tops[4 * ((r + GRID) * N + (q + GRID))] = t === null ? DEEP : t; }
   const topTex = new THREE.DataTexture(tops, N, N, THREE.RGBAFormat, THREE.FloatType);
   topTex.minFilter = topTex.magFilter = THREE.NearestFilter; topTex.generateMipmaps = false; topTex.needsUpdate = true;
   const mat = new THREE.ShaderMaterial({uniforms: Object.assign({uSand: {value: sandTexture()}, uTops: {value: topTex}}, U), side: THREE.DoubleSide,
@@ -149,7 +152,7 @@ function groundMesh(U) {
         float rq = floor(q + 0.5), rr = floor(r + 0.5), rs = floor(s + 0.5);
         float dq = abs(rq - q), dr = abs(rr - r), ds = abs(rs - s);
         if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
-        if (abs(rq) > ${GRID}.0 || abs(rr) > ${GRID}.0) return -14.0;
+        if (abs(rq) > ${GRID}.0 || abs(rr) > ${GRID}.0) return ${DEEP.toFixed(1)};
         return texture2D(uTops, (vec2(rq, rr) + ${GRID}.5)/${N}.0).r;
       }
       float sunShadow(vec3 p, vec3 n) {
@@ -293,8 +296,8 @@ function smooth(a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
 // The game's water fragment, for the game's own water (the cap and its kind): water.wgsl dc0c5cb `fragment`, cut to
 // what a fall and a pool use. The scene behind is the opaque pass copied before the water draws, as the game's
 // scene_color is. Body frame: uM turns the page's local frame (y up) into a planet's at the capture's latitude.
-function waterMaterial(U) {
-  return new THREE.ShaderMaterial({
+function waterMaterial(U, vertexShader) {
+  const m = new THREE.ShaderMaterial({
     uniforms: Object.assign({
       uM: {value: new THREE.Matrix3()}, uRp: {value: 2400}, uTime: {value: 0}, uScene: {value: null}, uRes: {value: new THREE.Vector2(1, 1)},
       uStretch: {value: 1}, uSpeed: {value: 1}, uAccel: {value: 0}, uLip: {value: 0}, uFallFrame: {value: 0},
@@ -306,6 +309,7 @@ function waterMaterial(U) {
       varying vec3 vFlowN; varying vec3 vFlow; varying float vSky; varying vec3 vP;
       void main() { vRest = aRest; vFaceN = aFaceN; vKind = aKind; vFroth = aFroth; vPath = aPath; vTop = aTop; vFlowN = aFlowN;
         vFlow = aFlow; vSky = aSky; vP = position; gl_Position = projectionMatrix*viewMatrix*vec4(position, 1.0); }`,
+    // (the Pour tab passes its own vertex shader: the same varyings, eased between two ticks)
     fragmentShader: `uniform mat3 uM; uniform float uRp; uniform float uTime; uniform sampler2D uScene; uniform vec2 uRes;
       uniform float uStretch; uniform float uSpeed; uniform float uAccel; uniform float uLip; uniform float uFallFrame;
       uniform vec3 uOpen; uniform float uNight; uniform float uRain; uniform float uSunI;
@@ -414,6 +418,8 @@ function waterMaterial(U) {
         gl_FragColor = vec4(toSrgb(color), 1.0);
       }`
   });
+  if (vertexShader) m.vertexShader = vertexShader;
+  return m;
 }
 
 // ---------------- splash and mist at the foot ----------------
@@ -430,7 +436,7 @@ function splashPoints(F, U) {
   g.setAttribute("aSeed", new THREE.BufferAttribute(seed, 4));
   const mat = new THREE.ShaderMaterial({transparent: true, depthWrite: false,
     uniforms: Object.assign({uFoot: {value: new THREE.Vector3()}, uFlowA: {value: Math.atan2(F.flow[1], F.flow[0])}, uH: {value: F.H}, uPoolY: {value: F.poolY},
-      uTime: {value: 0}, uOpen: {value: new THREE.Vector3(1, 1, 1)}, uPx: {value: 600}}, U),
+      uTime: {value: 0}, uOpen: {value: new THREE.Vector3(1, 1, 1)}, uPx: {value: 600}, uGain: {value: 1}}, U),
     vertexShader: `attribute vec4 aSeed; uniform vec3 uFoot; uniform float uFlowA; uniform float uH; uniform float uPoolY; uniform float uTime; uniform float uPx;
       varying float vA; varying float vMist; varying vec3 vP;
       void main() {
@@ -457,10 +463,10 @@ function splashPoints(F, U) {
         gl_PointSize = vA > 0.0 ? size*uPx/max(-mv.z, 0.1) : 0.0;
         gl_Position = projectionMatrix*mv;
       }`,
-    fragmentShader: `uniform vec3 uOpen; varying float vA; varying float vMist; varying vec3 vP; ${LIGHT_GLSL}
+    fragmentShader: `uniform vec3 uOpen; uniform float uGain; varying float vA; varying float vMist; varying vec3 vP; ${LIGHT_GLSL}
       void main() {
         vec2 d = gl_PointCoord*2.0 - 1.0; float r2 = dot(d, d); if (r2 > 1.0) discard;
-        float a = vA*(vMist > 0.5 ? exp(-r2*2.5) : 1.0);
+        float a = vA*uGain*(vMist > 0.5 ? exp(-r2*2.5) : 1.0);
         vec3 lit = uOpen*0.9 + lampLight(vP, vec3(0.0, 1.0, 0.0), 1.0);
         gl_FragColor = vec4(toSrgb(vec3(0.86, 0.93, 1.0)*lit), a);
       }`});
@@ -618,6 +624,336 @@ window.PBDFalls = function (canvas) {
     stop() { cancelAnimationFrame(raf); raf = 0; },
     setTime(sec) { simT = sec; draw(); },
     info() { const gl = renderer.getContext(); const ext = gl.getExtension("WEBGL_debug_renderer_info"); return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); },
+  };
+};
+// ======================================================================================================================
+// The Pour tab: smooth water between ticks (openspec/changes/water-flow/design.md, "Smooth water between ticks, in a
+// mockup first"; owner, 2026-11-15: "for water is there a better way to lerp the sim? so it doesn look like it just
+// pops in?", "yea mock it up"). The rule is water-flow/liquid.js (PBDLiquid, the Luanti port the game's rule came
+// from), unchanged, ticking every tickS seconds. Only the drawing between two ticks differs:
+//   Pops      each tick's cells drawn as they are, as the game does today;
+//   Smoothed  the mesh keeps the last tick's cells, every vertex carries where it was (aPrev) and where it is
+//             (position), and the vertex shader eases between them: S1 levels ease; S2 a newly wet cell sweeps in
+//             from the side its water came from; S3 a new falling cell grows down from the one above; S4 a dried
+//             cell shrinks back toward where its water went, then goes.
+// The mesher is the game's (water_flow.rs liquid_mesh, Luanti's drawLiquidNode on hex): corner levels, sloped tops,
+// sides only over air, falling faces with the fall's froth weights. Needs PBDLiquid (water-flow/liquid.js) before it.
+// ======================================================================================================================
+const POUR = {N: 6, Y0: 0, Y1: 12, YOFF: 10, SRC: [-5, 0, 10], PIT: [3, 0], THIN: 0.25};
+const AIRK = 0, SOLIDK = 1, FLOWK = 2, SRCK = 3;          // PBDLiquid's kinds
+const PAN_K = 1.6, PAN_SLOPE = 0.12, SHADER_FLOW = 0.35;  // water_flow.rs: how fast a top's waves stream down its slope
+// The ground: solid layers per column. Three 1 m terraces stepping down east, then a pit 5 layers deeper.
+function pourGround(q, r) {
+  if (hexDist(q, r) > POUR.N) return null;
+  if (hexDist(q - POUR.PIT[0], r - POUR.PIT[1]) <= 1) return 3;
+  const x = q + r / 2;
+  return x <= -3.5 ? 10 : x <= -1.5 ? 9 : 8;
+}
+const pourTop = (q, r) => { const g = pourGround(q, r); return g === null ? null : g - POUR.YOFF; };
+function pourSim() { return PBDLiquid.create({N: POUR.N, Y0: POUR.Y0, Y1: POUR.Y1, range: 8, renew: 3}); }
+function pourClear(sim) {
+  sim.clear();
+  for (let q = -POUR.N; q <= POUR.N; q++) for (let r = -POUR.N; r <= POUR.N; r++) {
+    const g = pourGround(q, r); if (g === null) continue;
+    for (let y = POUR.Y0; y < g && y <= POUR.Y1; y++) sim.kind[sim.idx(q, r, y)] = SOLIDK;
+  }
+}
+function pourPlace(sim) { const [q, r, y] = POUR.SRC, i = sim.idx(q, r, y); sim.kind[i] = SRCK; sim.lvl[i] = 0; sim.down[i] = 0; sim.touch(q, r, y); }
+function pourStopSource(sim) { const [q, r, y] = POUR.SRC, i = sim.idx(q, r, y); if (sim.kind[i] !== SRCK) return; sim.kind[i] = AIRK; sim.touch(q, r, y); }
+const snapOf = sim => ({kind: sim.kind.slice(), lvl: sim.lvl.slice(), down: sim.down.slice()});
+
+// One tick's cells, read the way the mesher needs them.
+function pourView(sim, st) {
+  const K = (q, r, y) => { if (hexDist(q, r) > sim.N) return -1; if (y < sim.Y0) return SOLIDK; if (y > sim.Y1) return AIRK; return st.kind[sim.idx(q, r, y)]; };
+  const L = (q, r, y) => sim.inside(q, r, y) ? st.lvl[sim.idx(q, r, y)] : 0;
+  const wet = (q, r, y) => K(q, r, y) >= FLOWK;
+  const falling = (q, r, y) => K(q, r, y) === FLOWK && sim.inside(q, r, y) && st.down[sim.idx(q, r, y)] === 1;
+  const rank = (q, r, y) => { const k = K(q, r, y); return k === SRCK ? 8 : k === FLOWK ? L(q, r, y) : -1; };
+  // the side whose water is highest (a source counts 8), or -1
+  const bestSide = (q, r, y) => { let b = -1, bv = -1; for (let s = 0; s < 6; s++) { const v = rank(q + DIRS[s][0], r + DIRS[s][1], y); if (v > bv) { bv = v; b = s; } } return b; };
+  return {K, L, wet, falling, bestSide};
+}
+// water_flow.rs corner_level: over the three cells round a corner, full where any is a source or has water on it; at
+// the floor (2 cm up) where two or more are air; else the mean of the flowing levels; the middle where none flows.
+function cornerLevel(cells) {
+  let sum = 0, count = 0, air = 0;
+  for (const c of cells) {
+    if (!c) continue;
+    if (c.above || c.k === SRCK) return 1;
+    if (c.k === FLOWK) { sum += (c.lvl + 0.5) / 8; count++; } else if (c.k === AIRK) air++;
+  }
+  return air >= 2 ? 0.02 : count > 0 ? sum / count : 0.5;
+}
+const skyAtY = y => y >= -2 ? 1 : mix(0.62, 1, smooth(-7, -2, y));
+// The pieces of one wet cell in one tick, each with an id so the same piece can be matched across two ticks:
+// 'top' (over no water), 's0'..'s5' (a side over air), 'b' (a bottom over air). Each piece's v are its triangles'
+// vertices; alt the same piece collapsed (a top pressed to the cell's top, a side's bottom raised to its top), used
+// as where a piece that exists in only one of the two ticks starts or ends.
+function cellPieces(V, q, r, y) {
+  const k = V.K(q, r, y), floor = y - POUR.YOFF, isFlow = k === FLOWK, fall = V.falling(q, r, y);
+  const above = V.wet(q, r, y + 1);
+  const info = (qq, rr) => { const kk = V.K(qq, rr, y); return kk < 0 ? null : {k: kk, lvl: V.L(qq, rr, y), above: V.wet(qq, rr, y + 1)}; };
+  const me = {k, lvl: V.L(q, r, y), above};
+  const sides = DIRS.map(([dq, dr]) => info(q + dq, r + dr));
+  const lv = [0, 1, 2, 3, 4, 5].map(i => above ? 1 : cornerLevel([me, sides[(i + 5) % 6], sides[i]]));
+  const mean = lv.reduce((a, b) => a + b, 0) / 6;
+  const c = [cx(q, r), cz(r)], cs = [0, 1, 2, 3, 4, 5].map(i => cornerXZ(q, r, i));
+  const sky = skyAtY(floor);
+  // Luanti's flow, down the corner slope: the least-squares slope of the corners about the middle.
+  let gx = 0, gz = 0, spread = 0;
+  for (let i = 0; i < 6; i++) { const ox = cs[i][0] - c[0], oz = cs[i][1] - c[1]; gx += ox * (lv[i] - mean); gz += oz * (lv[i] - mean); spread += ox * ox + oz * oz; }
+  const sx = -gx / (spread / 2), sz = -gz / (spread / 2), sl = Math.hypot(sx, sz);
+  const pan = isFlow && sl > 1e-3 ? PAN_K * Math.min(1.5, Math.max(0.35, sl / PAN_SLOPE)) / SHADER_FLOW / sl : 0;
+  const pieces = [];
+  if (!above) {
+    const v = [], mid = [c[0], floor + mean, c[1]];
+    for (let i = 0; i < 6; i++) { const a = cs[i], b = cs[(i + 1) % 6]; v.push(mid, [a[0], floor + lv[i], a[1]], [b[0], floor + lv[(i + 1) % 6], b[1]]); }
+    pieces.push({id: "top", v, alt: v.map(p => [p[0], floor + 1, p[2]]), n: [0, 1, 0], kind: 0, froth: 0, flow: [sx * pan, 0, sz * pan], sky});
+  }
+  // The sides: Luanti's drawLiquidSides, as the game has it: only over air (a solid or a wet neighbour has none).
+  const froth = !fall ? 0.5 : (!V.falling(q, r, y + 1) || !V.falling(q, r, y - 1)) ? 1 : 0.55;
+  const kind = fall || (above && isFlow) ? 2 : 3;
+  for (let s = 0; s < 6; s++) {
+    const nb = sides[s]; if (!nb || nb.k !== AIRK) continue;
+    const a = cs[s], z = cs[(s + 1) % 6], ta = above ? 1 : lv[s], tz = above ? 1 : lv[(s + 1) % 6];
+    const A0 = [a[0], floor, a[1]], Z0 = [z[0], floor, z[1]], Z1 = [z[0], floor + tz, z[1]], A1 = [a[0], floor + ta, a[1]];
+    const n = sideN(s);
+    pieces.push({id: "s" + s, v: [A0, Z0, Z1, A0, Z1, A1], alt: [A1, Z1, Z1, A1, Z1, A1], n: [n[0], 0, n[1]], kind, froth, flow: [0, 0, 0], sky});
+  }
+  // The bottom, over air.
+  if (V.K(q, r, y - 1) === AIRK) {
+    const v = [], mid = [c[0], floor, c[1]];
+    for (let i = 0; i < 6; i++) { const a = cs[i], b = cs[(i + 1) % 6]; v.push(mid, [b[0], floor, b[1]], [a[0], floor, a[1]]); }
+    pieces.push({id: "b", v, alt: v, n: [0, -1, 0], kind: 3, froth: 0.5, flow: [0, 0, 0], sky});
+  }
+  return pieces;
+}
+// Where a cell that appears (S2, S3) starts, or one that dries (S4) ends: squashed onto the side its water came from
+// or went to, as a thin sheet (THIN of its height), or pressed up to its top (a fall arriving from above) or down to its
+// floor (a fall draining away below it).
+function squasher(q, r, y, how) {
+  const floor = y - POUR.YOFF;
+  if (how.to === "top") return p => [p[0], floor + 1, p[2]];
+  if (how.to === "floor") return p => [p[0], floor, p[2]];
+  const e = cornerXZ(q, r, how.side), n = sideN(how.side);  // n points from the cell toward that side
+  return p => {
+    const d = (p[0] - e[0]) * n[0] + (p[2] - e[1]) * n[1];  // <= 0 inside the cell: how far from the side's edge
+    return [p[0] - n[0] * d, floor + (p[1] - floor) * POUR.THIN, p[2] - n[1] * d];
+  };
+}
+// The mesh for one tick: every cell wet in either tick, with each vertex where it was (prev) and where it is (pos).
+// aEase 1: a piece that sweeps in, grows, shrinks or appears (eased linearly, so a front moves at one speed);
+// 0: a level easing (smoothstepped). aGone 1: a dried cell's piece, hidden once its tick has played.
+function pourMesh(sim, prevSt, curSt) {
+  const P = pourView(sim, prevSt), C = pourView(sim, curSt);
+  const A = {position: [], aPrev: [], aFaceN: [], aKind: [], aFroth: [], aFlow: [], aSky: [], aEase: [], aGone: []};
+  const stats = {both: 0, born: 0, dried: 0, verts: 0, falls: 0};
+  function emit(piece, cur, prev, ease, gone) {
+    for (let j = 0; j < cur.length; j++) {
+      A.position.push(...cur[j]); A.aPrev.push(...prev[j]); A.aFaceN.push(...piece.n); A.aKind.push(piece.kind);
+      A.aFroth.push(piece.froth); A.aFlow.push(...piece.flow); A.aSky.push(piece.sky); A.aEase.push(ease); A.aGone.push(gone);
+    }
+  }
+  const feet = [];
+  for (let q = -sim.N; q <= sim.N; q++) for (let r = -sim.N; r <= sim.N; r++) {
+    if (hexDist(q, r) > sim.N) continue;
+    for (let y = sim.Y0; y <= sim.Y1; y++) {
+      const wp = P.wet(q, r, y), wc = C.wet(q, r, y);
+      if (!wp && !wc) continue;
+      if (wp && wc) {                                        // S1: the same cell in both ticks; its levels ease
+        stats.both++;
+        const pp = cellPieces(P, q, r, y), cp = cellPieces(C, q, r, y);
+        const byId = new Map(pp.map(p => [p.id, p]));
+        for (const c of cp) {
+          const p = byId.get(c.id);
+          if (p) { emit(c, c.v, p.v, 0, 0); byId.delete(c.id); }
+          else emit(c, c.v, c.alt, 1, 0);                    // a piece new this tick grows from its collapsed self
+        }
+        for (const p of byId.values()) emit(p, p.alt, p.v, 1, 1);   // and one gone this tick collapses away
+      } else if (wc) {                                       // S2/S3: newly wet
+        stats.born++;
+        let how;
+        if (P.wet(q, r, y + 1)) how = {to: "top"};           // S3: falls in from the cell above
+        else { const s = P.bestSide(q, r, y); how = s >= 0 ? {side: s} : {to: "top"}; }   // S2: from its source side
+        const sq = squasher(q, r, y, how);
+        for (const c of cellPieces(C, q, r, y)) emit(c, c.v, c.v.map(sq), 1, 0);
+      } else {                                               // S4: dried; drawn one more tick, shrinking back
+        stats.dried++;
+        let how;
+        if (C.wet(q, r, y - 1)) how = {to: "floor"};         // a fall's tail drains down into the water under it
+        else { const s = C.bestSide(q, r, y); how = s >= 0 ? {side: s} : {to: "floor"}; }
+        const sq = squasher(q, r, y, how);
+        for (const p of cellPieces(P, q, r, y)) emit(p, p.v.map(sq), p.v, 1, 1);
+      }
+      // The foot of a fall: water not falling, with falling water on it (water_flow.rs's feet). Its splash.
+      if (wc && !C.falling(q, r, y) && C.falling(q, r, y + 1)) {
+        let H = 0; while (C.falling(q, r, y + 1 + H)) H++;
+        const s = C.bestSide(q, r, y + H);                   // where the lip's water came from: the way the spray goes
+        const ang = s >= 0 ? Math.atan2(-sideN(s)[1], -sideN(s)[0]) : 0;
+        const wasFoot = P.wet(q, r, y) && !P.falling(q, r, y) && P.falling(q, r, y + 1);
+        feet.push({x: cx(q, r), y: y - POUR.YOFF + 0.85, z: cz(r), H, ang, born: !wasFoot});
+        stats.falls++;
+      }
+    }
+  }
+  stats.verts = A.position.length / 3;
+  return {A, feet, stats};
+}
+
+// The vertex shader: waterMaterial's varyings, the vertex eased from its last tick to this one. The froth and the
+// ripples are read where the vertex is now (vRest = the eased point), so a sweeping front carries the water's own
+// pattern, world-anchored, never a stretched copy.
+const POUR_VS = `attribute vec3 aPrev; attribute vec3 aFaceN; attribute float aKind; attribute float aFroth; attribute vec3 aFlow;
+  attribute float aSky; attribute float aEase; attribute float aGone;
+  uniform float uT; uniform float uTl;
+  varying vec3 vRest; varying vec3 vFaceN; varying float vKind; varying float vFroth; varying vec3 vPath; varying float vTop;
+  varying vec3 vFlowN; varying vec3 vFlow; varying float vSky; varying vec3 vP;
+  void main() {
+    float t = aEase > 0.5 ? uTl : uT;
+    vec3 p = mix(aPrev, position, t);
+    vRest = p; vFaceN = aFaceN; vKind = aKind; vFroth = aFroth; vPath = vec3(p.x, p.z, -p.y); vTop = 0.0;
+    vFlowN = vec3(1.0, 0.0, 0.0); vFlow = aFlow; vSky = aSky; vP = p;
+    gl_Position = projectionMatrix*viewMatrix*vec4(p, 1.0);
+    if (aGone > 0.5 && uTl > 0.999) gl_Position = vec4(0.0, 0.0, 2.0, 1.0);   // a dried cell, its tick played: gone
+  }`;
+
+window.PBDPourCore = {POUR, pourGround, pourTop, pourSim, pourClear, pourPlace, pourStopSource, snapOf, pourMesh, cornerLevel};
+
+window.PBDPour = function (canvas) {
+  const renderer = new THREE.WebGLRenderer({canvas, antialias: false, preserveDrawingBuffer: true});
+  renderer.autoClear = false;
+  const LAMPS = [[-4, -2], [2, -2], [4, 1]].map(([q, r]) => [cx(q, r), pourTop(q, r), cz(r)]);
+  const U = {uSunDir: {value: new THREE.Vector3()}, uSunCol: {value: new THREE.Vector3()}, uAmb: {value: new THREE.Vector3()},
+    uLampPos: {value: LAMPS.map(([x, y, z]) => new THREE.Vector3(x, y + 2.55, z))}, uLampCol: {value: LAMPS.map(() => new THREE.Vector3(1.0, 0.62, 0.30).multiplyScalar(1.7))}, uLampOn: {value: 0}};
+  const opaque = new THREE.Scene(), waterScene = new THREE.Scene(), fx = new THREE.Scene();
+  const skyMat = new THREE.ShaderMaterial({side: THREE.BackSide, depthWrite: false, uniforms: Object.assign({uNight: {value: 0}}, U),
+    vertexShader: `varying vec3 vD; void main() { vD = position; vec4 p = projectionMatrix*viewMatrix*vec4(position + cameraPosition, 1.0); gl_Position = p.xyww; }`,
+    fragmentShader: `uniform float uNight; varying vec3 vD; ${LIGHT_GLSL} void main() { vec3 d = normalize(vD);
+      vec3 c = skyRad(d, uNight); float s = max(dot(d, uSunDir), 0.0); c += uSunCol*pow(s, 400.0)*4.0*(1.0 - uNight); gl_FragColor = vec4(toSrgb(c), 1.0); }`});
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 24, 12), skyMat); sky.frustumCulled = false; sky.renderOrder = -1; opaque.add(sky);
+  opaque.add(groundMesh(U, {top: pourTop, grid: POUR.N, deep: -14}));
+  const lamps = LAMPS.map(([x, y, z]) => { const m = lampMesh(x, y, z); opaque.add(m); return m; });
+  const wmat = waterMaterial(U, POUR_VS);
+  wmat.uniforms.uT = {value: 1}; wmat.uniforms.uTl = {value: 1};
+  const lat = 24.117 * Math.PI / 180, lon = -2.964 * Math.PI / 180;
+  const up = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon));
+  const east = new THREE.Vector3(0, 1, 0).cross(up).normalize(), north = up.clone().cross(east);
+  wmat.uniforms.uM.value.set(north.x, up.x, east.x, north.y, up.y, east.y, north.z, up.z, east.z);
+  const water = new THREE.Mesh(new THREE.BufferGeometry(), wmat); water.frustumCulled = false; waterScene.add(water);
+  // Splashes: a few emitters, each put on a fall's foot as the ticks make them.
+  const splashes = Array.from({length: 8}, () => { const p = splashPoints({H: 5, flow: [1, 0], poolY: 0}, U); p.visible = false; fx.add(p); return p; });
+  const rain = rainLines(U); fx.add(rain);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
+  let copyTex = null, copyW = 0, copyH = 0;
+  const S = {smooth: true, tickS: 1, paused: false, night: false, rain: false};
+  const sim = pourSim();
+  let prev = null, cur = null, feet = [], since = 0, stepping = false, simT = 0, ticks = 0;
+  const listeners = [];
+  function rebuild() {
+    const m = pourMesh(sim, prev, cur);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(m.A.position, 3));
+    for (const [k, n] of [["aPrev", 3], ["aFaceN", 3], ["aKind", 1], ["aFroth", 1], ["aFlow", 3], ["aSky", 1], ["aEase", 1], ["aGone", 1]])
+      g.setAttribute(k, new THREE.Float32BufferAttribute(m.A[k], n));
+    water.geometry.dispose(); water.geometry = g;
+    feet = m.feet.slice().sort((a, b) => b.H - a.H).slice(0, splashes.length);   // the tallest falls get the splashes
+    splashes.forEach((p, i) => {
+      const f = feet[i]; p.visible = !!f; if (!f) return;
+      const u = p.material.uniforms; u.uFoot.value.set(f.x, f.y, f.z); u.uPoolY.value = f.y; u.uH.value = Math.max(1, f.H); u.uFlowA.value = f.ang;
+    });
+    for (const fn of listeners) fn(ticks, m.stats);
+  }
+  function pour() { pourClear(sim); prev = snapOf(sim); pourPlace(sim); cur = snapOf(sim); since = 0; ticks = 0; rebuild(); }
+  function tick() { prev = cur; sim.tick(); cur = snapOf(sim); ticks++; rebuild(); }
+  function lighting() {
+    if (!S.night) { U.uSunDir.value.set(0.5, 0.72, -0.48).normalize(); U.uSunCol.value.set(1.0, 0.96, 0.9); U.uAmb.value.set(0.30, 0.34, 0.40); U.uLampOn.value = 0; }
+    else { U.uSunDir.value.set(0.3, 0.75, -0.4).normalize(); U.uSunCol.value.set(0.020, 0.026, 0.050); U.uAmb.value.set(0.010, 0.013, 0.026); U.uLampOn.value = 1; }
+    const open = U.uSunCol.value.clone().multiplyScalar(Math.max(U.uSunDir.value.y, 0)).add(U.uAmb.value).multiplyScalar(S.night ? 1 : 0.82);
+    wmat.uniforms.uOpen.value.copy(open); wmat.uniforms.uNight.value = S.night ? 1 : 0; wmat.uniforms.uSunI.value = S.night ? 0 : 1;
+    skyMat.uniforms.uNight.value = S.night ? 1 : 0;
+    for (const p of splashes) p.material.uniforms.uOpen.value.copy(open);
+    rain.material.uniforms.uOpen.value.copy(open);
+    for (const l of lamps) l.userData.bulb.color.set(S.night ? 0xffd28a : 0x443322);
+  }
+  function apply() { wmat.uniforms.uRain.value = S.rain ? 1 : 0; rain.visible = S.rain; lighting(); }
+  function resize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    const sz = renderer.getDrawingBufferSize(new THREE.Vector2());
+    if (sz.x !== copyW || sz.y !== copyH) {
+      if (copyTex) copyTex.dispose();
+      copyW = sz.x; copyH = sz.y;
+      copyTex = new THREE.DataTexture(new Uint8Array(copyW * copyH * 3), copyW, copyH, THREE.RGBFormat);
+      copyTex.minFilter = copyTex.magFilter = THREE.NearestFilter; copyTex.generateMipmaps = false; copyTex.needsUpdate = true;
+      wmat.uniforms.uScene.value = copyTex; wmat.uniforms.uRes.value.set(copyW, copyH);
+    }
+    for (const p of splashes) p.material.uniforms.uPx.value = sz.y / (2 * Math.tan(camera.fov * Math.PI / 360));
+  }
+  // ---- the view: orbit about a target; drag to turn, wheel or pinch to come closer. Nothing turns on its own.
+  const V = {target: new THREE.Vector3(), yaw: 0, pitch: -0.6, dist: 28};
+  function place() {
+    const d = new THREE.Vector3(Math.cos(V.pitch) * Math.cos(V.yaw), Math.sin(V.pitch), Math.cos(V.pitch) * Math.sin(V.yaw));
+    camera.position.copy(V.target).addScaledVector(d, -V.dist); camera.lookAt(V.target);
+    rain.material.uniforms.uCenter.value.copy(V.target);
+  }
+  const VIEWS = {
+    // from the south-east, over the pit: the terraces' steps and the fall into the pit face the camera
+    terraces: () => { V.target.set(-2.5, -3.2, 0.5); V.yaw = 118 * Math.PI / 180; V.pitch = -32 * Math.PI / 180; V.dist = 27; place(); },
+    fall: () => { V.target.set(cx(2, 0), -4.5, cz(0)); V.yaw = 150 * Math.PI / 180; V.pitch = -22 * Math.PI / 180; V.dist = 11; place(); },
+  };
+  const ptrs = new Map(); let pinch0 = 0;
+  canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+  canvas.addEventListener("pointermove", e => {
+    if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 1) { V.yaw += (e.clientX - px) * 0.006; V.pitch = Math.max(-1.45, Math.min(0.6, V.pitch - (e.clientY - py) * 0.006)); place(); }
+    else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 > 0) { V.dist = Math.max(2, Math.min(70, V.dist * pinch0 / d)); place(); } pinch0 = d; }
+  });
+  const up_ = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
+  canvas.addEventListener("pointerup", up_); canvas.addEventListener("pointercancel", up_);
+  canvas.addEventListener("wheel", e => { e.preventDefault(); V.dist = Math.max(2, Math.min(70, V.dist * Math.exp(e.deltaY * 0.001))); place(); }, {passive: false});
+  // ---- the frame: a tick every tickS seconds; between ticks t runs 0..1 (Pops holds it at 1)
+  let raf = 0, last = performance.now();
+  function frame(now) {
+    raf = requestAnimationFrame(frame);
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (!S.paused) {
+      simT += dt; since += dt;
+      if (since >= S.tickS) { since = Math.min(since - S.tickS, S.tickS * 0.5); tick(); }
+    } else if (stepping) {                                   // a stepped tick plays out its easing, then holds
+      simT += dt; since = Math.min(S.tickS, since + dt); if (since >= S.tickS) stepping = false;
+    }
+    draw();
+  }
+  function draw() {
+    const tl = S.smooth ? Math.min(1, Math.max(0, since / S.tickS)) : 1;
+    wmat.uniforms.uTl.value = tl; wmat.uniforms.uT.value = tl * tl * (3 - 2 * tl);
+    wmat.uniforms.uTime.value = simT * 0.75;
+    splashes.forEach((p, i) => {
+      const f = feet[i]; if (!f) return;
+      // a new fall's splash starts when the column lands (the end of its tick), not when the tick starts
+      p.material.uniforms.uGain.value = f.born && S.smooth ? Math.min(1, Math.max(0, (tl - 0.95) / 0.05)) : 1;
+      p.material.uniforms.uTime.value = simT;
+    });
+    rain.material.uniforms.uTime.value = simT;
+    renderer.clear();
+    renderer.render(opaque, camera);
+    renderer.copyFramebufferToTexture(new THREE.Vector2(0, 0), copyTex);
+    renderer.render(waterScene, camera);
+    renderer.render(fx, camera);
+  }
+  resize(); VIEWS.terraces(); apply(); pour();
+  window.addEventListener("resize", resize);
+  return {
+    S, apply, resize, views: VIEWS, sim,
+    pour, tick, onTick(fn) { listeners.push(fn); },
+    stopSource() { pourStopSource(sim); },
+    step() { S.paused = true; since = 0; tick(); stepping = true; },
+    // for stills: n ticks at once, then hold at fraction frac of the last one
+    hold(n, frac) { for (let i = 0; i < (n || 0); i++) tick(); S.paused = true; stepping = false; since = (frac ?? 1) * S.tickS; draw(); },
+    ticks: () => ticks,
+    start() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } },
+    stop() { cancelAnimationFrame(raf); raf = 0; },
   };
 };
 })();

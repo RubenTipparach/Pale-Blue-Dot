@@ -2563,3 +2563,25 @@ mod tests {
         assert!(world.resource::<lod::LodRefresh>().in_flight_s().is_none());
     }
 }
+
+/// The finest set round `anchor` and a contact serving it, with no edits:
+/// the ground an app test outside this crate stands on (the desktop
+/// binary's showcase test, `step-videos` 5.1). Not for the game, which
+/// builds its sets on the loading thread.
+#[doc(hidden)]
+pub fn test_ground(anchor: Vec3) -> (PlanetFine, PlanetContact) {
+    let set = Arc::new(lod::generate_fine_live(
+        anchor,
+        lod::BAND_M,
+        lod::REGEN_DISTANCE_M,
+        &crate::config::ColumnSettings::default(),
+        &pbd_core::edits::Edits::new(),
+        4,
+        None,
+        0.0,
+    ));
+    let cells = topology::dual_sphere(5);
+    let mut contact = PlanetContact::new(Arc::new(lod::base_records(&cells)), &cells);
+    contact.set_fine(&set);
+    (PlanetFine { set, version: 1 }, contact)
+}

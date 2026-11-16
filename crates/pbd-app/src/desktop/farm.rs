@@ -285,6 +285,16 @@ pub fn use_key(
     let Some(material) = digging::material_of(&fine, &save, (cell, layer)) else {
         return;
     };
+    // A campfire is a light, walked through and passed by the eye ray, so
+    // the ray meets the ground it stands on: E there opens it
+    // (`step-videos` 5.2, found by the showcase's bot, which could not open
+    // one any other way).
+    let over = digging::material_of(&fine, &save, (cell, layer + 1))
+        .filter(|m| m.is_lamp() && station::station_of(*m).is_some());
+    let (layer, material) = match over {
+        Some(lit) => (layer + 1, lit),
+        None => (layer, material),
+    };
     if let Some(row) = station::station_of(material) {
         station_at.0 = Some((cell, layer as u16));
         // The kitchen's stations have their own panel (`cooking` design S4).

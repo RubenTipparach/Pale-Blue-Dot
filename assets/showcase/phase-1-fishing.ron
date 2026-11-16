@@ -1,0 +1,35 @@
+// The phase-1 showcase, one file per branch of the mission tree
+// (`step-videos` 5.2, `starter-missions` T.5): a bot plays the branch
+// through the player's own inputs, each shot ending when its missions are
+// done, or the run failing as stalled. Fishing: a rod, then fish from the shore.
+//
+// Each branch starts from the world the earlier ones left: run them in
+// order on one `--world` (trunk, fishing, farming, herding, cooking, then
+// mining, light and about). Nothing is set; every mission is played.
+//
+// The start is a level pasture with the sea within thirty metres (measured
+// once: the only such place within 3 km of the fields spawn).
+(
+    goal: "Goal: fishing, a rod and three fish",
+    at: Some((11.5085, -25.0992)),
+    hour: 8.5,
+    shots: [
+        (
+            caption: "Fishing. Make a rod",
+            until: ["rod"],
+            max_s: 300.0,
+            acts: [Hand("shovel"), Dig(Have("fibre", 8), 1), Craft("rope", 2), Bench("rod", 1)],
+        ),
+        (
+            caption: "Go fishing: cast, wait for the bite, reel",
+            until: ["go-fishing"],
+            max_s: 480.0,
+            acts: [Hand("rod"), Fish(Mission("go-fishing")), Still],
+        ),
+        (
+            caption: "Fishing done",
+            max_s: 20.0,
+            acts: [Missions(6.0)],
+        ),
+    ],
+)

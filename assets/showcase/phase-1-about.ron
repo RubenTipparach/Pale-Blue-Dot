@@ -1,0 +1,41 @@
+// The phase-1 showcase, one file per branch of the mission tree
+// (`step-videos` 5.2, `starter-missions` T.5): a bot plays the branch
+// through the player's own inputs, each shot ending when its missions are
+// done, or the run failing as stalled. Getting about: the map read and followed, into the sea.
+//
+// Each branch starts from the world the earlier ones left: run them in
+// order on one `--world` (trunk, fishing, farming, herding, cooking, then
+// mining, light and about). Nothing is set; every mission is played.
+//
+// The start is a level pasture with the sea within thirty metres (measured
+// once: the only such place within 3 km of the fields spawn).
+(
+    goal: "Goal: getting about, the map and a swim",
+    at: Some((11.5085, -25.0992)),
+    hour: 8.5,
+    shots: [
+        (
+            caption: "Getting about. Read the map",
+            max_s: 30.0,
+            acts: [Map(4.0)],
+        ),
+        (
+            caption: "Walk 200 m from where the map was read",
+            until: ["map"],
+            max_s: 240.0,
+            acts: [Away(210.0)],
+        ),
+        (
+            caption: "Into the water: swim",
+            until: ["swim"],
+            repeat: true,
+            max_s: 200.0,
+            acts: [Shore, Walk(8.0), Still],
+        ),
+        (
+            caption: "Getting about, as far as a swim",
+            max_s: 20.0,
+            acts: [Missions(6.0)],
+        ),
+    ],
+)

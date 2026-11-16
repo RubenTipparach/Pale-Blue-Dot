@@ -61,15 +61,25 @@ button{font:inherit;color:inherit}
 .mbody td,.mbody th{border-top:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
 .mbody th{font:600 12px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .tw{overflow-x:auto}
+.tabs{align-self:start}
+.tabs button{font-size:17px;padding:7px 16px}
+.act{all:unset;cursor:pointer;padding:6px 11px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel);font:600 15px var(--display);letter-spacing:.04em}
+.act:hover{border-color:var(--amber);color:var(--amber)} .act:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.tab{display:grid;gap:10px;min-width:0}
+.tab[hidden]{display:none}
+.ptick{position:absolute;right:10px;top:10px;font:500 13px ui-monospace,Menlo,monospace;color:var(--muted);text-shadow:0 1px 3px #000;pointer-events:none}
+.sl.one{max-width:340px}
 </style>
 <main>
   <header>
     <p class="tracker"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
     <h1>Waterfall Look</h1>
-    <button class="info" data-modal="aboutTpl" data-title="About this mockup" aria-label="About this mockup: the owner's words, what each variant is">About</button>
+    <button class="info" data-modal="aboutTpl pourTpl" data-title="About this mockup" aria-label="About this mockup: the owner's words, what each variant is">About</button>
     <button class="info" data-modal="checkTpl" data-title="Variant A against the game" aria-label="How close variant A is to the game's screenshot">Check A</button>
     <button class="info" data-modal="portTpl" data-title="Porting the approved one" aria-label="Which game constants each variant maps to">Porting</button>
   </header>
+  <nav class="seg tabs" id="tabs" aria-label="Tabs"><button data-tab="look" aria-pressed="true">Look</button><button data-tab="pour" aria-pressed="false">Pour</button></nav>
+  <section class="tab" id="tab-look">
   <div class="bar" role="group" aria-label="Variant">
     <span class="lbl">Variant</span>
     <span class="seg" id="variants">
@@ -92,6 +102,31 @@ button{font:inherit;color:inherit}
     <label class="chk"><input type="checkbox" id="pause"> Pause</label>
   </div>
   <div class="sliders" id="sliders"></div>
+  </section>
+  <section class="tab" id="tab-pour" hidden>
+  <div class="bar" role="group" aria-label="Drawing">
+    <span class="seg" id="pmode"><button data-m="pops" aria-pressed="false">Pops (today)</button><button data-m="smooth" aria-pressed="true">Smoothed</button></span>
+    <button class="info" data-modal="pourTpl" data-title="The Pour tab" aria-label="What Pops and Smoothed do">i</button>
+  </div>
+  <div class="stage">
+    <canvas id="pview" aria-label="Water poured down terraces into a pit: drag to turn, wheel or pinch to come closer"></canvas>
+    <div class="vtitle" id="pmodeLbl">Smoothed</div>
+    <div class="ptick" id="ptick">tick 0</div>
+  </div>
+  <div class="bar">
+    <button class="act" id="pPour">Pour again</button>
+    <button class="act" id="pStop">Stop source</button>
+    <label class="chk"><input type="checkbox" id="pPause"> Pause</label>
+    <button class="act" id="pStep">Step one tick</button>
+  </div>
+  <div class="bar">
+    <span class="lbl">View</span>
+    <span class="seg" id="pviews"><button data-view="terraces" aria-pressed="true">Terraces</button><button data-view="fall" aria-pressed="false">Fall</button></span>
+    <span class="seg" id="ptod"><button data-tod="day" aria-pressed="true">Day</button><button data-tod="night" aria-pressed="false">Night</button></span>
+    <label class="chk"><input type="checkbox" id="prain"> Rain</label>
+  </div>
+  <div class="sl one"><label for="pTick">Tick</label><input id="pTick" type="range" min="0.25" max="2" step="0.25" value="1"><output id="pTickOut">1.00 s</output></div>
+  </section>
 </main>
 
 <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="mbox"><div class="mhead"><h2 id="modalTitle"></h2><button class="mclose" id="modalClose" aria-label="Close">&#x2715;</button></div><div class="mbody" id="modalBody"></div></div></div>
@@ -149,13 +184,33 @@ button{font:inherit;color:inherit}
   </table></div>
 </template>
 
+<template id="pourTpl">
+  <h3>The Pour tab: smooth water between ticks</h3>
+  <p>The owner: <q>for water is there a better way to lerp the sim? so it doesn look like it just pops in?</q>, then <q>yea mock it up</q>. A source poured on a slope of three 1 m terraces runs across them, spreads, and falls 5 layers into a pit. Cells are the game's: 2.833 m across, 1 m layers.</p>
+  <ul>
+    <li><b>Pops (today)</b> draws each tick's cells as they are, as the game does: a cell turning wet appears whole, a level steps an eighth of a layer at once, a fall stands at full height at once, a dried cell vanishes.</li>
+    <li><b>Smoothed</b> keeps the last tick's cells in the mesh, gives every vertex where it was and where it is, and eases between them over the tick:
+      <ul>
+        <li><b>S1</b> levels ease (smoothstepped): a pool rises and drains, a slope tilts;</li>
+        <li><b>S2</b> a newly wet cell starts as a thin sheet on the side its water came from (the wettest neighbour) and its front sweeps across the cell along the flow. No fade in place;</li>
+        <li><b>S3</b> a new falling cell grows down from the water above it, so a fall pours down a layer a tick; its splash starts when it lands;</li>
+        <li><b>S4</b> a dried cell is drawn one tick more, shrinking back toward the water it drained to (down a fall, or toward the wettest side), then goes.</li>
+      </ul>
+      Fronts (S2 to S4) move at one speed through the tick, so a pour creeps steadily; levels are smoothstepped.</li>
+  </ul>
+  <p><b>The rule is unchanged.</b> Both modes run the same rule at the same tick; only the drawing between two ticks differs. <b>Stop source</b> takes the source away, so the water drains and S4 shows. <b>Step one tick</b> runs one tick and plays its easing.</p>
+  <p>The water is drawn with this page's port of the game's shader, the <code>dc0c5cb</code> fall froth (the Look tab's A), unchanged. The mesh is the game's mesher (<code>water_flow.rs</code>, Luanti's <code>drawLiquidNode</code> on hex): sloped tops at corner levels, sides only over air, falling cells as columns.</p>
+  <p><b>Provenance.</b> The rule is <code>water-flow/liquid.js</code>, a port of Luanti's <code>transformLiquidsLocal</code> (celeron55, Perttu Ahola and contributors), LGPL-2.1-or-later; the licence text is <code>water-flow/COPYING.LESSER</code>. Design: <code>openspec/changes/water-flow/design.md</code>, "Smooth water between ticks".</p>
+</template>
+
 <template id="vA"><p><b>A: today, the approved baseline.</b> The game's fall froth at <code>dc0c5cb</code>, ported line for line: blotches of white water streaming down each falling face, denser on the lip's and the foot's layers. Nothing to set.</p></template>
 <template id="vB"><p><b>B: the original froth, stretched down the fall.</b> <q>I said stretched out, like maybe 2x of the original</q>. The same pattern as A, read with the height below the lip divided by <b>Stretch</b> (2.0 by default, 1 is A). <b>Speed</b> scales how fast it streams down (1.0 is the game's; stretched, it covers twice the ground in the same time, as a stretched film would).</p></template>
 <template id="vC"><p><b>C: B, leaning out from the lip.</b> <q>the wall should be skewed</q>. The sheet is pushed out along the flow by <b>Lean</b> metres at its foot, steepest just under the lip, as water thrown off an edge falls. 0 is today's straight drop. The top and the sheet share the lip's vertices, so no gap opens there; the sheet's sides pull away from the pit wall as a real curtain does. The froth is B's pattern, bent with the sheet.</p></template>
 <template id="vD"><p><b>D: C, with froth into the edge and a gentle speed-up.</b> <q>can we have the edge transition into froth? and somehow show that it is speeding up in velocity/flow in to the wall</q>. <b>Lip + speed-up</b> sets both: the top whitens over its last 1.5 m before the edge, with the same froth that then goes over and down as one pattern, and the froth speeds up as it falls, so its blotches lengthen lower down. At 0 this is C (on one frame per fall).</p></template>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="waterfall/waterfall.js?v=1"></script>
+<script src="water-flow/liquid.js?v=1"></script>
+<script src="waterfall/waterfall.js?v=2"></script>
 <script>
 "use strict";
 // ---- the modal: one for the page, filled from a template; closes with its X, Esc or a tap outside
@@ -166,7 +221,12 @@ function openModal(title, node) {
   MODAL_BACK = document.activeElement; m.hidden = false; body.scrollTop = 0; document.getElementById("modalClose").focus();
 }
 function closeModal() { const m = document.getElementById("modal"); if (m.hidden) return; m.hidden = true; if (MODAL_BACK && MODAL_BACK.focus) MODAL_BACK.focus(); }
-document.addEventListener("click", e => { const b = e.target.closest("[data-modal]"); if (b) { const t = document.getElementById(b.dataset.modal); if (t) openModal(b.dataset.title || "", t.content.cloneNode(true)); } });
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-modal]"); if (!b) return;
+  const frag = document.createDocumentFragment();
+  for (const id of b.dataset.modal.split(" ")) { const t = document.getElementById(id); if (t) frag.appendChild(t.content.cloneNode(true)); }
+  openModal(b.dataset.title || "", frag);
+});
 document.getElementById("modal").addEventListener("click", e => { if (e.target.id === "modal") closeModal(); });
 document.getElementById("modalClose").addEventListener("click", closeModal);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
@@ -203,9 +263,7 @@ function pick(v) {
     inp.addEventListener("input", () => { d.put(F.S, +inp.value); out.textContent = d.fmt(+inp.value); F.apply(); });
     box.appendChild(row);
   }
-  if (location.hash.slice(1) !== v) history.replaceState(null, "", "#" + v);
 }
-F = PBDFalls(document.getElementById("view"));
 document.getElementById("variants").addEventListener("click", e => { const b = e.target.closest("button[data-v]"); if (b) pick(b.dataset.v); });
 document.getElementById("varInfo").addEventListener("click", () => openModal("Variant " + CUR, document.getElementById("v" + CUR).content.cloneNode(true)));
 document.getElementById("views").addEventListener("click", e => {
@@ -220,7 +278,61 @@ document.getElementById("rain").addEventListener("change", e => { F.S.rain = e.t
 document.getElementById("splash").addEventListener("change", e => { F.S.splash = e.target.checked; F.apply(); });
 document.getElementById("showRef").addEventListener("change", e => { document.getElementById("ref").hidden = !e.target.checked; });
 document.getElementById("pause").addEventListener("change", e => { F.S.running = !e.target.checked; });
-window.addEventListener("hashchange", () => pick(location.hash.slice(1)));
-pick(location.hash.slice(1) || "A");
-F.start();
+
+// ---- the Pour tab
+let P = null;
+function pourInit() {
+  P = PBDPour(document.getElementById("pview"));
+  const lbl = document.getElementById("pmodeLbl"), tk = document.getElementById("ptick");
+  P.onTick(n => { tk.textContent = "tick " + n; });
+  tk.textContent = "tick " + P.ticks();
+  document.getElementById("pmode").addEventListener("click", e => {
+    const b = e.target.closest("button[data-m]"); if (!b) return; P.S.smooth = b.dataset.m === "smooth";
+    lbl.textContent = P.S.smooth ? "Smoothed" : "Pops (today)";
+    for (const x of document.querySelectorAll("#pmode button")) x.setAttribute("aria-pressed", String(x === b));
+  });
+  const pause = document.getElementById("pPause");
+  document.getElementById("pPour").addEventListener("click", () => P.pour());
+  document.getElementById("pStop").addEventListener("click", () => P.stopSource());
+  pause.addEventListener("change", () => { P.S.paused = pause.checked; });
+  document.getElementById("pStep").addEventListener("click", () => { P.step(); pause.checked = true; });
+  const tin = document.getElementById("pTick"), tout = document.getElementById("pTickOut");
+  tin.addEventListener("input", () => { P.S.tickS = +tin.value; tout.textContent = (+tin.value).toFixed(2) + " s"; });
+  document.getElementById("pviews").addEventListener("click", e => {
+    const b = e.target.closest("button[data-view]"); if (!b) return; P.views[b.dataset.view]();
+    for (const x of document.querySelectorAll("#pviews button")) x.setAttribute("aria-pressed", String(x === b));
+  });
+  document.getElementById("ptod").addEventListener("click", e => {
+    const b = e.target.closest("button[data-tod]"); if (!b) return; P.S.night = b.dataset.tod === "night"; P.apply();
+    for (const x of document.querySelectorAll("#ptod button")) x.setAttribute("aria-pressed", String(x === b));
+  });
+  document.getElementById("prain").addEventListener("change", e => { P.S.rain = e.target.checked; P.apply(); });
+}
+
+// ---- tabs: one 3D view at a time. Each tab's renderer is made the first time it opens; the hidden one's loop stops.
+// The open tab is the link's anchor: #look or #pour (the old #A to #D open Look on that variant).
+function showTab(name, variant) {
+  if (name !== "pour") name = "look";
+  document.getElementById("tab-look").hidden = name !== "look";
+  document.getElementById("tab-pour").hidden = name !== "pour";
+  for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-pressed", String(b.dataset.tab === name));
+  if (name === "look") {
+    if (P) P.stop();
+    if (!F) { F = PBDFalls(document.getElementById("view")); pick(variant || "A"); }
+    else if (variant) pick(variant);
+    F.resize(); F.start();
+  } else {
+    if (F) F.stop();
+    if (!P) pourInit();
+    P.resize(); P.start();
+  }
+  if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+}
+function fromHash() {
+  const h = location.hash.slice(1);
+  if (VARS[h]) showTab("look", h); else showTab(h === "pour" ? "pour" : "look");
+}
+document.getElementById("tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+window.addEventListener("hashchange", fromHash);
+fromHash();
 </script>

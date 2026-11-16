@@ -93,12 +93,20 @@ pub fn spawn(
                                         p.spawn(ui_kit::plaque_label(Set::Stone, &recipe.name));
                                     });
                                     for &input in &recipe.inputs {
-                                        icon(row, &atlas, input);
+                                        icon(row, &atlas, input, &recipe.code);
                                     }
                                     row.spawn(KitText::new("→", ui_kit::TEXT).shadow(ui_kit::INK));
                                     for &output in &recipe.outputs {
-                                        icon(row, &atlas, output);
+                                        icon(row, &atlas, output, &recipe.code);
                                     }
+                                    row.spawn((
+                                        KitText::new("", ui_kit::LABEL_DIM).shadow(ui_kit::INK),
+                                        Node {
+                                            display: Display::None,
+                                            ..default()
+                                        },
+                                        super::craft::LockLine(recipe.code.clone()),
+                                    ));
                                 });
                             }
                         });
@@ -145,7 +153,7 @@ pub fn spawn(
 }
 
 /// One item picture with its count.
-fn icon(row: &mut ChildSpawnerCommands, atlas: &Handle<Image>, (it, n): (Item, u16)) {
+fn icon(row: &mut ChildSpawnerCommands, atlas: &Handle<Image>, (it, n): (Item, u16), code: &str) {
     row.spawn((
         ImageNode {
             image: atlas.clone(),
@@ -159,6 +167,7 @@ fn icon(row: &mut ChildSpawnerCommands, atlas: &Handle<Image>, (it, n): (Item, u
             ..default()
         },
         CookIcon(it, n),
+        super::craft::LockTint(code.to_string()),
     ))
     .with_children(|icon| {
         icon.spawn((
@@ -303,6 +312,7 @@ pub fn work(
     plaques: Query<(&Interaction, &CookPlaque), Changed<Interaction>>,
     mut line: Query<&mut KitText, With<CookLine>>,
     mut fill: Query<&mut Node, With<CookFill>>,
+    locks: Res<pbd_app::missions::RecipeLocks>,
 ) {
     if *screen != Screen::Kitchen {
         return;
@@ -312,6 +322,10 @@ pub fn work(
     let wall_s = time.elapsed_secs();
     for (interaction, plaque) in &plaques {
         if *interaction == Interaction::Pressed {
+            if let Some(opens) = locks.locked(&plaque.0) {
+                note.say(wall_s, format!("Opens with: {opens}"));
+                continue;
+            }
             queue(
                 &mut save,
                 &mut hotbar,
@@ -371,6 +385,7 @@ pub fn grey(
     recipes: Res<Recipes>,
     save: Res<WorldSave>,
     hotbar: Res<slots::Hotbar>,
+    locks: Res<pbd_app::missions::RecipeLocks>,
     mut plaques: Query<(&CookPlaque, &mut Plaque)>,
 ) {
     if *screen != Screen::Kitchen {
@@ -382,8 +397,9 @@ pub fn grey(
             continue;
         };
         let queue = station_state(&save, cell, layer, recipe.station);
-        let disabled =
-            !cooking::have(recipe, &hotbar.0) || queue.jobs.len() >= recipe.station.max_jobs;
+        let disabled = !cooking::have(recipe, &hotbar.0)
+            || queue.jobs.len() >= recipe.station.max_jobs
+            || locks.locked(&recipe.code).is_some();
         if state.disabled != disabled {
             state.disabled = disabled;
         }
@@ -475,6 +491,7 @@ pub fn eat(
     mut hotbar: ResMut<slots::Hotbar>,
     mut note: ResMut<FarmNote>,
     mut ate: MessageWriter<Ate>,
+    mut did: MessageWriter<pbd_app::missions::Did>,
 ) {
     if !buttons.just_pressed(MouseButton::Right) || *screen != Screen::Playing {
         return;
@@ -490,6 +507,12 @@ pub fn eat(
             dish: dish.good,
             effect: dish.effect,
         });
+        // What the missions count: a dish eaten (`starter-missions` H.1).
+        did.write(pbd_app::missions::Did::new(
+            pbd_core::missions::Kind::Eat,
+            dish.good.code(),
+            1,
+        ));
         note.say(
             time.elapsed_secs(),
             format!(

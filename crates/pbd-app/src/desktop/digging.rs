@@ -560,6 +560,7 @@ pub fn dig_and_place(
                 &mut note,
                 time.elapsed_secs(),
                 &mut gained,
+                &mut did,
             );
         }
         return;
@@ -763,6 +764,7 @@ pub fn dig_and_place(
             } else {
                 Good::WATER_BUCKET
             };
+            let poured = full;
             if apply_edit(
                 &mut Edited {
                     fine: &mut fine,
@@ -787,6 +789,13 @@ pub fn dig_and_place(
                         "took water from"
                     }
                 );
+                if poured {
+                    did.write(pbd_app::missions::Did::new(
+                        pbd_core::missions::Kind::Pour,
+                        "water",
+                        1,
+                    ));
+                }
             }
             return;
         }
@@ -801,7 +810,7 @@ pub fn dig_and_place(
         // A block may not be placed into the player. Sealing yourself into
         // rock is a world you cannot move in, and the walker's own feet and
         // eye are what say where you are.
-        if occupies(eye, place) {
+        if occupies(&fine, &contact, eye, place) {
             info!("edit refused: that cell is where the player stands");
             return;
         }
@@ -902,6 +911,7 @@ fn take_log(
     note: &mut super::farm::FarmNote,
     wall_s: f32,
     gained: &mut MessageWriter<pbd_app::hotbar::Gained>,
+    did: &mut MessageWriter<pbd_app::missions::Did>,
 ) {
     use pbd_core::gather::{TREE_KIND, TREE_SCHEMA, TreeSpent, TreeTaken};
     let taken: TreeTaken = save
@@ -953,20 +963,46 @@ fn take_log(
         },
     );
     info!("took log {} from the tree at cell {tree}", taken.logs + 1);
+    // The axe's last log fells the tree (`starter-missions` H.1).
+    if by_axe && gather.0.tree_gives(taken.logs + 1, true).is_err() {
+        did.write(pbd_app::missions::Did::new(
+            pbd_core::missions::Kind::Fell,
+            "tree",
+            1,
+        ));
+        info!("felled the tree at cell {tree}");
+    }
 }
 
 /// Whether the player's own body stands in this cell and layer.
 ///
 /// The eye is the camera; the body is the two layers under it, which is the
-/// walker's capsule rounded to the lattice. A block placed in either is a
-/// block placed in the player.
-fn occupies(eye: Vec3, place: Sample) -> bool {
+/// walker's capsule rounded to the lattice, in the cells the capsule's
+/// footprint touches. A block placed in either is a block placed in the
+/// player. Only those cells: the layer alone refused every block set on
+/// level ground beside the player, a workbench or a campfire included
+/// (`step-videos` 5.2, found by the showcase's bot).
+fn occupies(fine: &PlanetFine, contact: &PlanetContact, eye: Vec3, place: Sample) -> bool {
     let altitude = eye.length() - PLANET_RADIUS;
     let Some(head) = column::layer_at(altitude) else {
         return false;
     };
     let feet = head.saturating_sub(1);
-    (feet..=head).contains(&place.layer)
+    if !(feet..=head).contains(&place.layer) {
+        return false;
+    }
+    // The capsule's footprint: its axis and four points on its rim.
+    let up = eye.normalize_or(Vec3::Y);
+    let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
+    let north = up.cross(east);
+    let rim = 0.35;
+    [Vec3::ZERO, east, -east, north, -north]
+        .into_iter()
+        .filter_map(|offset| contact.finest_cell((eye + offset * rim).normalize()))
+        .filter_map(|i| fine.set.finest_records().get(i))
+        // Unknown ground answers as before: the body is there.
+        .any(|record| record.key() == place.cell)
+        || !contact.serves(&fine.set)
 }
 
 /// `--lamps`: every light in a row across the view, one cell apart, each on

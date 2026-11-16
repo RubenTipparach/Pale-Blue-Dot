@@ -16,10 +16,12 @@ mod kitchen;
 mod map_screen;
 mod map_sites;
 mod menu;
+mod mission_tree;
 mod missions;
 mod overlay_ui;
 mod pack;
 mod scene;
+mod showcase;
 mod slots;
 mod sounds;
 mod time_ui;
@@ -305,6 +307,9 @@ pub struct Launch {
     /// `--missions <n>`: the starter missions capture instrument raises the
     /// first `n` steps of its scripted chain (`starter-missions` design 17).
     pub missions: Option<usize>,
+    /// `--tree-select <id>`: the Missions tab opens with this mission's card
+    /// in the side panel (a capture instrument, `starter-missions` TS.2).
+    pub tree_select: Option<String>,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -353,6 +358,15 @@ pub struct Launch {
     /// `biomes`, `--map-night` and `--map-clouds` those live layers, and
     /// `--map-at <lat> <lon>` the centre in degrees (the player otherwise).
     pub map: map_screen::MapLaunch,
+    /// `--showcase <name>` (`step-videos` 2.1, 5.1): a bot plays
+    /// `assets/showcase/<name>.ron` toward its goal through the player's
+    /// own inputs, in real time, in a new world, and quits.
+    pub showcase: Option<(String, showcase::file::Showcase)>,
+    /// `--showcase-stills <dir>`: a showcase's `Still` acts save a PNG there.
+    pub showcase_stills: Option<PathBuf>,
+    /// `--showcase-from N`: start at shot N, a development aid with a
+    /// `--world` that already holds the shots before it.
+    pub showcase_from: usize,
 }
 
 impl Launch {
@@ -413,6 +427,9 @@ impl Launch {
             day: None,
             overlay: None,
             map: map_screen::MapLaunch::default(),
+            showcase: None,
+            showcase_stills: None,
+            showcase_from: 1,
             torch: false,
             pour: 0,
             water_ticks: 0,
@@ -434,6 +451,7 @@ impl Launch {
             campfire_panel: false,
             eat: Vec::new(),
             missions: None,
+            tree_select: None,
             dig_ahead: false,
             take_trees: false,
             pitch: None,
@@ -608,6 +626,14 @@ impl Launch {
                         .get(i)
                         .expect("--eat takes dish codes, comma separated");
                     result.eat = dishes.split(',').map(str::to_string).collect();
+                }
+                "--tree-select" => {
+                    i += 1;
+                    result.tree_select = Some(
+                        args.get(i)
+                            .expect("--tree-select takes a mission id")
+                            .clone(),
+                    );
                 }
                 "--missions" => {
                     i += 1;
@@ -800,6 +826,35 @@ impl Launch {
                     result.spawn = Some(spawn);
                 }
                 "--frame-graph" => result.frame_graph = true,
+                "--showcase" => {
+                    i += 1;
+                    let name = args.get(i).expect("--showcase requires a name").clone();
+                    let file = showcase::file::load(&name).unwrap_or_else(|e| panic!("{e}"));
+                    // A new world, on foot, where and when the shot list
+                    // says, with the clock running from its hour.
+                    result.walk = true;
+                    result.spawn = file.spawn.clone().or(result.spawn.take());
+                    result.at = file.at.or(result.at);
+                    result.yaw = file.yaw.or(result.yaw);
+                    result.time = Some(file.hour);
+                    result.day = file.day.or(result.day);
+                    result.clock_runs = true;
+                    result.showcase = Some((name, file));
+                }
+                "--showcase-from" => {
+                    i += 1;
+                    result.showcase_from = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .filter(|n| *n >= 1)
+                        .expect("--showcase-from takes a shot number from 1");
+                }
+                "--showcase-stills" => {
+                    i += 1;
+                    result.showcase_stills = Some(PathBuf::from(
+                        args.get(i).expect("--showcase-stills requires a directory"),
+                    ));
+                }
                 "--no-vsync" => result.no_vsync = true,
                 "--frame-latency" => {
                     i += 1;
@@ -1226,7 +1281,7 @@ pub fn run(args: &[String]) {
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
         launch.menu.as_deref(),
-        launch.world.is_some(),
+        launch.world.is_some() || launch.showcase.is_some(),
         launch.capture.is_some(),
     );
     let restored = world.pose;
@@ -1388,8 +1443,18 @@ pub fn run(args: &[String]) {
     .add_systems(
         Update,
         (
-            (missions::press_tabs, missions::paint, missions::show_line).chain(),
+            (
+                missions::press_tabs,
+                missions::paint,
+                missions::show_line,
+                mission_tree::steer,
+                mission_tree::place,
+                mission_tree::paint,
+            )
+                .chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
+            missions::night_watch.run_if(pbd_app::loading::ready),
+            missions::about_watch.run_if(pbd_app::loading::ready),
         ),
     )
     // The world, loaded before the planet is built: `create_planet` reads its
@@ -1454,6 +1519,7 @@ pub fn run(args: &[String]) {
     .insert_resource(opening)
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
+    .init_resource::<mission_tree::TreeView>()
     .insert_resource(menu::SettingsTab(launch.settings_tab))
     .insert_resource(menu::InputTab(launch.input_tab))
     .init_resource::<menu::Rebinding>()
@@ -1474,6 +1540,7 @@ pub fn run(args: &[String]) {
                     kitchen::spawn_effects,
                     missions::spawn,
                     breeding::spawn,
+                    mission_tree::spawn,
                 ),
             )
                 .chain(),
@@ -1570,7 +1637,13 @@ pub fn run(args: &[String]) {
                 .after(pbd_app::husbandry::HusbandryHands),
             // The campfire's panel opens from `farm::use_key` (after the
             // husbandry hands, which clear an E they used).
-            (kitchen::work, kitchen::grey, kitchen::paint, kitchen::eat)
+            (
+                kitchen::work,
+                kitchen::grey,
+                kitchen::paint,
+                kitchen::eat,
+                craft::paint_locks.after(forge::paint),
+            )
                 .chain()
                 .after(farm::use_key)
                 .after(pbd_app::husbandry::HusbandryHands),
@@ -1646,7 +1719,7 @@ pub fn run(args: &[String]) {
     // in a capture or a benchmark the defaults, so its picture or its numbers
     // are its flags' alone. Read here, once the logger is up.
     let (player, mut keys, kept) = pbd_app::settings::for_launch(
-        launch.capture.is_some() || launch.frame_log.is_some(),
+        launch.capture.is_some() || launch.frame_log.is_some() || launch.showcase.is_some(),
         &launch.settings,
     );
     info!(
@@ -1790,6 +1863,33 @@ pub fn run(args: &[String]) {
                     .run_if(pbd_app::loading::ready),
             );
         }
+        if let Some((name, file)) = launch.showcase.clone() {
+            if let Some(dir) = &launch.showcase_stills {
+                std::fs::create_dir_all(dir).expect("stills directory");
+            }
+            app.insert_resource(
+                showcase::Player::new(name, file, launch.showcase_stills.clone())
+                    .starting_at(launch.showcase_from),
+            )
+            .init_resource::<showcase::Tally>()
+            .init_resource::<showcase::PendingClick>()
+            .add_systems(Startup, showcase::spawn_caption)
+            .add_systems(Update, (showcase::hide_readout, showcase::warm_stills))
+            .add_systems(
+                PreUpdate,
+                (showcase::tally, showcase::drive)
+                    .chain()
+                    .after(bevy::input::InputSystems)
+                    .before(pbd_app::controls::remap_keys)
+                    .run_if(pbd_app::loading::ready),
+            )
+            .add_systems(
+                PreUpdate,
+                showcase::press_controls
+                    .after(bevy::ui::UiSystems::Focus)
+                    .after(showcase::drive),
+            );
+        }
         if launch.swim {
             // The scripted keys have to be written where the real ones are:
             // after the input clear and before the walking input reads them,
@@ -1874,7 +1974,9 @@ fn open_world(launch: &Launch) -> WorldSave {
     // world that chooses it is open.
     let seed = pbd_core::planet_gen::TerrainConfig::TENEBRIS.seed;
     let asked = launch.world.clone();
-    if asked.is_none() && launch.capture.is_some() {
+    // A showcase plays a new world, kept in memory unless `--world` names
+    // one: the owner's saves are not its to fill.
+    if asked.is_none() && (launch.capture.is_some() || launch.showcase.is_some()) {
         return WorldSave::memory_only();
     }
     let listed = saves::list(&root);

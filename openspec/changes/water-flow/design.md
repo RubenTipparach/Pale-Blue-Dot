@@ -592,6 +592,72 @@ game's sky light per vertex (a depth ramp stands in). The noise is read at
 a stand-in body position (a 2400 m planet at the capture's 24.1 N), so A
 draws the game's kind of blotches, not the same ones in the same places.
 
+## Smooth water between ticks, in a mockup first (owner, 2026-11-15)
+
+The owner: *"for water is there a better way to lerp the sim? so it doesn look
+like it just pops in?"*, then *"yea mock it up"*.
+
+**Today.** The water rule ticks once a second (`liquid::TICK_S = 1.0`). Each
+tick the CPU rebuilds the whole water mesh (`water_flow.rs`), and
+`vertex_flowing` draws it as given. A cell that turns wet appears whole in one
+frame. A level that moves steps 1/8 of a layer at once. A new fall stands at
+full height at once, and a dried cell vanishes.
+
+**Proposal.** The rule, its tick, and what is saved are unchanged; only the
+drawing between two ticks moves. The mesher keeps the last tick's cells and
+gives every vertex what it was as well as what it is. The vertex shader
+eases from one to the other over the tick, with `t = clamp(since_tick /
+TICK_S, 0, 1)` passed as a uniform and smoothstepped.
+
+- **S1. Levels ease.** A top vertex carries its last-tick height. A pool
+  rises and drains smoothly, and a slope tilts smoothly.
+- **S2. New water flows in from its source.** A cell wet this tick and dry
+  the last starts as a thin sheet on its source side, the neighbour it took
+  its water from. Its leading edge sweeps across the cell along the flow
+  vector over the tick, so the front visibly creeps. No fade in place.
+- **S3. Falls pour down.** A new falling column's bottom moves from the lip
+  to its foot over the tick. The splash at the foot starts when the column
+  lands, not when the tick starts. *This changes how falls look, so the
+  rule "Waterfalls are designed in a mockup first" applies: it is shown in
+  M31 beside today's look, and ported only on approval.*
+- **S4. Drying recedes.** A cell dry this tick and wet the last is drawn for
+  one more tick, shrinking back toward its source, then dropped.
+
+**Cost (estimated, not measured).**
+- one more float per top vertex, the previous height;
+- the dried cells of one tick kept for that tick;
+- one uniform.
+
+The mesher already runs once per tick. Saves, the rule and its tests are
+untouched.
+
+**The mockup.** M31 (`docs/mockups/waterfall.html`) gets a second 3D tab,
+**Pour**. A live pour runs on `water-flow/liquid.js`, the rule the game was
+ported from, at the game's 1 s tick. It is drawn with M31's port of the
+game's `dc0c5cb` fall look, over a terraced slope with a drop into a pool.
+A **Pops (today) / Smoothed** switch sits beside **Pour again** and a tick
+speed. The first tab, the fall look, is unchanged. Only one 3D view draws
+at a time.
+
+**Approved (2026-11-15).** The owner, on M31 version 2: *"the waterfall look
+is pretty good, need to be a bit careful with perf on that, on my laptop it is
+a bit rough, so hopefulyy in game it will work well"*.
+
+The mockup's cost does not carry over to the game. The page rebuilds its
+geometry in JavaScript every tick and copies the framebuffer for refraction
+every frame through three.js. The game already meshes on the CPU once a
+tick and already draws this froth.
+
+The port adds:
+- one float per top vertex;
+- one uniform;
+- one tick's dried cells.
+
+It is measured, not assumed. A `perf_suite.py` A/B on the release build
+(main's water against the smoothed water), on a pour scene and the walk,
+goes in `docs/benchmarks/` with the port. Any slower frame is fixed before
+the push.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With

@@ -336,12 +336,14 @@ fn fish(
                 event,
                 at: fishery.line.float,
             });
-            if let Some(happened) = report(
+            let float = fishery.line.float;
+            for happened in report(
                 &mut status,
                 event,
                 roster,
                 hotbar.as_deref_mut(),
                 save.as_deref_mut(),
+                float,
             ) {
                 did.write(happened);
             }
@@ -734,7 +736,8 @@ fn report(
     roster: &[Species],
     hotbar: Option<&mut Hotbar>,
     save: Option<&mut WorldSave>,
-) -> Option<crate::missions::Did> {
+    float: Vec3,
+) -> Vec<crate::missions::Did> {
     use pbd_core::missions::Kind;
     let name = |species: u16| {
         roster
@@ -765,18 +768,30 @@ fn report(
         ),
         Event::Caught { species, length_cm } => {
             status.say(format!("{} - {length_cm} cm", name(species)), 3.0);
+            let first = save.as_deref().is_some_and(|s| !s.has_caught(species));
             if land(species, length_cm, hotbar, save, status) {
-                return Some(crate::missions::Did::new(
-                    Kind::Catch,
-                    name(species).to_lowercase(),
+                use crate::missions::Did;
+                let mut did = vec![Did::new(Kind::Catch, name(species).to_lowercase(), 1)];
+                // A kind the field guide had not seen (`starter-missions`
+                // T.2, "Three kinds of fish").
+                if first {
+                    did.push(Did::new(Kind::Species, "fish", 1));
+                }
+                // The sea or fresh water: water standing above the sea's
+                // level is a river or a lake ("Off the shore").
+                let fresh = float.length() - crate::planet::PLANET_RADIUS > 0.6;
+                did.push(Did::new(
+                    Kind::Waters,
+                    if fresh { "fresh" } else { "sea" },
                     1,
                 ));
+                return did;
             }
         }
-        Event::Splash => return Some(crate::missions::Did::new(Kind::Cast, "water", 1)),
+        Event::Splash => return vec![crate::missions::Did::new(Kind::Cast, "water", 1)],
         _ => {}
     }
-    None
+    Vec::new()
 }
 
 /// A landed fish goes into the hotbar and the catch goes into the save, on

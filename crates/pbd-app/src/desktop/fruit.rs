@@ -23,7 +23,7 @@ use pbd_core::records::Record;
 
 /// E on a tree: pick its fruit. After the husbandry hands, which take an E
 /// they used, and before the farm's, so an E used here is not a crop's.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn pick(
     mut keys: ResMut<ButtonInput<KeyCode>>,
     screen: Res<Screen>,
