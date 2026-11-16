@@ -19,11 +19,13 @@
 // a good's code, `block:<name>`, `tool:<name>`, `recipe:<code>`; animals
 // and fish by their roster name in lower case. `fell` counts the axe's
 // last log from a tree, `eat` a dish eaten, `night` the clock passing 20:00
-// near a light in the world.
+// near a light in the world. `species` counts each kind of fish once in a
+// mission, `baited` a fish landed on bait, `reach marked` the walker at
+// the map's mark when it was set 200 m or more away.
 //
 // A craft of `recipe:<code>` counts the makes at a station, one a job, and
-// is never met by what the world carries (the starting kit deals fences,
-// gates and torches to every world today).
+// is never met by what the world carries (a world from before the tree may
+// carry the fences, gates and torches the old starting kit dealt).
 //
 // `awaited` names what another branch will bring: a mission naming only
 // these where it names anything unknown is PENDING - logged at load, shown
@@ -35,8 +37,7 @@
 // tree dropped (`metal-tool`) stays in an old world's record, unread.
 //
 (
-    // Bait has no good yet: "Dig for bait" waits for it.
-    awaited: ["bait"],
+    awaited: [],
     missions: [
         // ---- 0. The trunk: hands to tools, and a fire.
         (
@@ -147,11 +148,11 @@
             id: "bait",
             branch: "fishing",
             title: "Dig for bait",
-            help: "Dig wet ground by the water for bait, and cast again with it on the hook.",
+            help: "Dig wet ground at the water's edge for bait worms; cast with them in your pack and they go on the hook.",
             needs: ["go-fishing"],
             objectives: [
                 (kind: gather, what: "bait", count: 3, label: "dig bait"),
-                (kind: catch, what: "bait", count: 3, label: "catch with bait"),
+                (kind: baited, what: "any", count: 3, label: "catch with bait"),
             ],
         ),
         (
@@ -454,11 +455,11 @@
             id: "map",
             branch: "about",
             title: "Read the map",
-            help: "Open the map (M), and walk 200 m from where you read it.",
+            help: "Open the map (M), right-click a place at least 200 m away to mark it, and walk there.",
             needs: ["go-fishing"],
             objectives: [
                 (kind: open, what: "map", count: 1, label: "open the map"),
-                (kind: reach, what: "marked", count: 1, label: "walk 200 m"),
+                (kind: reach, what: "marked", count: 1, label: "reach the mark"),
             ],
         ),
         (

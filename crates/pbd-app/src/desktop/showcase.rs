@@ -118,6 +118,9 @@ struct Intent {
     look: Vec2,
     wheel: i32,
     click: Option<Click>,
+    /// The pointer moved to this place in the window, logical pixels, as a
+    /// player's hand moves the mouse over an open screen.
+    pointer: Option<Vec2>,
 }
 
 /// What an act says after a frame.
@@ -165,6 +168,8 @@ struct Bot {
     /// Where an `Away` began, and the point it walks to next.
     away_from: Option<Vec3>,
     away_to: Option<Vec3>,
+    /// The place `Mark` puts the map's mark on.
+    mark_goal: Option<Vec3>,
     /// Where the bot last got stuck, and until when it builds itself up.
     stuck_at: Option<Vec3>,
     climb_until: f32,
@@ -220,6 +225,9 @@ struct Sight<'a> {
     picking: bool,
     tally: Tally,
     hour: f32,
+    /// The map's view and the window's size, for pointing at the map.
+    map_view: Option<super::map_screen::MapView>,
+    window: Option<Vec2>,
 }
 
 fn tangent(v: Vec3, up: Vec3) -> Vec3 {
@@ -771,11 +779,13 @@ pub fn tally(
 
 /// The input side of the bot's frame.
 #[derive(bevy::ecs::system::SystemParam)]
-pub struct Hands<'w> {
+pub struct Hands<'w, 's> {
     keys: ResMut<'w, ButtonInput<KeyCode>>,
     mouse: ResMut<'w, ButtonInput<MouseButton>>,
     motion: ResMut<'w, AccumulatedMouseMotion>,
     wheel: MessageWriter<'w, MouseWheel>,
+    /// The window, for the pointer's place over an open screen.
+    pointer: Query<'w, 's, &'static mut Window, With<PrimaryWindow>>,
 }
 
 /// The world side of the bot's frame.
@@ -806,6 +816,7 @@ pub struct World<'w, 's> {
     key: Option<Res<'w, pbd_app::controls::PickerKey>>,
     tally: Res<'w, Tally>,
     sun: Res<'w, pbd_app::sky::Sun>,
+    map_view: Option<Res<'w, super::map_screen::MapView>>,
 }
 
 /// The bot's frame: look, decide, press.
@@ -922,6 +933,12 @@ pub fn drive(
         picking: w.key.as_deref().is_some_and(|k| k.holding),
         tally: *w.tally,
         hour: w.sun.clock.hour(),
+        map_view: w.map_view.as_deref().copied(),
+        window: hands
+            .pointer
+            .single()
+            .ok()
+            .map(|w| Vec2::new(w.width(), w.height())),
     };
     let Some(shot) = player.file.shots.get(bot.shot).cloned() else {
         bot.ended = Some(now);
@@ -1122,6 +1139,11 @@ fn apply(bot: &mut Bot, hands: &mut Hands, w: &World, pending: &mut PendingClick
     if out.click.is_some() {
         pending.0 = out.click;
     }
+    if let Some(at) = out.pointer
+        && let Ok(mut window) = hands.pointer.single_mut()
+    {
+        window.set_cursor_position(Some(at));
+    }
 }
 
 /// The panel control `drive` pressed this frame, for [`press_controls`]
@@ -1287,6 +1309,21 @@ fn run(
             }
             2 if bot.phase_s > 0.4 => Status::Done,
             _ => Status::Running,
+        },
+        Act::Mark(metres) => mark(bot, *metres, s, out),
+        Act::ToMark => match super::map_screen::mark_of(s.save) {
+            None => Status::Fail("no mark on the map".into()),
+            Some(mark) => {
+                let d = mark.direction();
+                let to = d * (PLANET_RADIUS + surface_height(d).max(0.0));
+                if mark.reached_far(s.feet, PLANET_RADIUS)
+                    || bot.walk_to(s, out, to, pbd_core::map::MARK_NEAR_M * 0.5) == Walked::There
+                {
+                    Status::Done
+                } else {
+                    Status::Running
+                }
+            }
         },
         Act::Shore => match bot.phase {
             0 => match shore(s) {
@@ -1871,6 +1908,72 @@ fn station(
 /// metres, the one with the highest ground that is not a climb, turned
 /// from the heading where it can be; the way inland when the bot is in the
 /// water.
+/// The `Mark` act: open the map, put the pointer on dry ground `metres`
+/// away, right-click it, and close the map, as a player marks a place
+/// (`starter-missions` G5).
+fn mark(bot: &mut Bot, metres: f32, s: &Sight, out: &mut Intent) -> Status {
+    match bot.phase {
+        0 => {
+            let Some(goal) = far_dry_ground(s, metres) else {
+                return Status::Fail(format!("no dry ground {metres} m away"));
+            };
+            bot.mark_goal = Some(goal);
+            if s.screen != Screen::Map {
+                out.taps.push(KeyCode::KeyM);
+            }
+            bot.next_phase();
+            Status::Running
+        }
+        1 if bot.phase_s > 0.8 && s.screen == Screen::Map => {
+            let (Some(view), Some(size), Some(goal)) = (s.map_view, s.window, bot.mark_goal) else {
+                return Status::Fail("the map is not up".into());
+            };
+            let at = view
+                .clamped(size)
+                .to_screen(pbd_core::geo::project(goal), size);
+            out.pointer = Some(at);
+            bot.next_phase();
+            Status::Running
+        }
+        2 if bot.phase_s > 0.3 => {
+            out.rmb_tap = true;
+            bot.next_phase();
+            Status::Running
+        }
+        3 if bot.phase_s > 1.0 => {
+            if super::map_screen::mark_of(s.save).is_none() {
+                return Status::Fail("the right click set no mark".into());
+            }
+            out.taps.push(KeyCode::KeyM);
+            bot.next_phase();
+            Status::Running
+        }
+        4 if bot.phase_s > 0.4 && s.screen != Screen::Map => Status::Done,
+        _ => Status::Running,
+    }
+}
+
+/// Dry ground `metres` from the feet with dry ground all the way to it, the
+/// bearing nearest the way the bot faces first; `None` when no bearing of
+/// sixteen has it.
+fn far_dry_ground(s: &Sight, metres: f32) -> Option<Vec3> {
+    let east = Vec3::Y.cross(s.up).normalize_or(Vec3::X);
+    let north = s.up.cross(east);
+    (0..16)
+        .filter_map(|k| {
+            let a = k as f32 / 16.0 * std::f32::consts::TAU;
+            let along = east * a.cos() + north * a.sin();
+            let at = |m: f32| {
+                let t = m / PLANET_RADIUS;
+                (s.up * t.cos() + along * t.sin()).normalize()
+            };
+            let dry = (1..=20).all(|i| surface_height(at(metres * i as f32 / 20.0)) > 0.5);
+            dry.then(|| (at(metres), signed_angle(s.heading, along, s.up).abs()))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(d, _)| d)
+}
+
 fn dry_ground(s: &Sight) -> Vec3 {
     let east = Vec3::Y.cross(s.up).normalize_or(Vec3::X);
     let north = s.up.cross(east);

@@ -195,6 +195,23 @@ ICONS.update({
 })
 
 
+# Bait (`starter-missions` G1): a lump of wet shore earth with two worms
+# curling out of it, in the bucket's dark outline and the earth's browns.
+BAIT = {
+    "k": "#2a1a10", "e": "#6b4a2e", "E": "#8a6440", "w": "#4a3220",
+    "p": "#c8707a", "P": "#e8a0a4", "q": "#9a4a56",
+}
+
+ICONS.update({
+    "goods/bait": ([
+        "................", "................", "......kk........", ".....kPpk.......",
+        ".....kpqk...kk..", "......kpk..kPpk.", "......kpk..kpqk.", "...kkkkpkkkkpk..",
+        "..kEEeekpeEepkk.", ".kEeeewekeeekEk.", ".keeEeeweeEeeek.", ".kweeeeeeeweeek.",
+        ".keeweEeeeeewek.", "..kweeeeweeeek..", "...kkkkkkkkkk...", "................",
+    ], BAIT),
+})
+
+
 def rgba(hex_colour):
     h = hex_colour.lstrip("#")
     return bytes(int(h[i:i + 2], 16) for i in (0, 2, 4)) + b"\xff"

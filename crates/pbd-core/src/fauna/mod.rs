@@ -579,6 +579,9 @@ pub struct FishingSettings {
     pub cover_bite: f32,
     pub rain_bite: f32,
     pub rain_full_mm_h: f32,
+    /// A baited line's bite factor is the weather's times `1 + bait_bite`
+    /// (`starter-missions` G1).
+    pub bait_bite: f32,
 }
 
 impl Default for FishingSettings {
@@ -612,6 +615,7 @@ impl Default for FishingSettings {
             cover_bite: 0.35,
             rain_bite: 0.7,
             rain_full_mm_h: 5.0,
+            bait_bite: 0.5,
         }
     }
 }
@@ -637,6 +641,16 @@ impl FishingSettings {
             0.0
         };
         1.0 + self.cover_bite * cover + self.rain_bite * rain
+    }
+
+    /// The bite factor of a line, baited or not, under a sky whose factor is
+    /// `weather` ([`Self::bite_factor`]).
+    pub fn baited(&self, weather: f32, baited: bool) -> f32 {
+        if baited {
+            weather * (1.0 + self.bait_bite)
+        } else {
+            weather
+        }
     }
 }
 
@@ -727,6 +741,12 @@ impl FaunaSettings {
                 r.rain_full_mm_h,
             ],
         )?;
+        if !(r.bait_bite.is_finite() && r.bait_bite >= 0.0) {
+            return Err(format!(
+                "fishing.bait_bite must be finite and not negative, got {}",
+                r.bait_bite
+            ));
+        }
         let mut seen = std::collections::BTreeSet::new();
         for (body, species) in &self.bodies {
             for sp in species {

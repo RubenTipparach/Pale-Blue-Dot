@@ -64,6 +64,16 @@ const KIT_GRANTS: [&[(Item, u16)]; 6] = [
     &[],
 ];
 
+/// What the mission tree earns, so a new world is not dealt it
+/// (`starter-missions` G2): fences and gates ("Make fences") and torches
+/// ("Light the night"). The grants keep them, so a save from before a grant
+/// is still dealt it; only [`Hotbar::starting_kit`] leaves them out.
+const EARNED: [Item; 3] = [
+    Item::Block(Material::Torch),
+    Item::Good(Good::FENCE),
+    Item::Good(Good::GATE),
+];
+
 /// A light's own icon, as an asset path, or `None` for a block that is not
 /// a light. Each light is its own picture, drawn by `tools/gen_item_icons.py`
 /// (`lamps-and-lanterns` task 5.3), rather than a tinted tile of a material
@@ -132,8 +142,12 @@ impl Hotbar {
         for (material, count) in KIT_BASE {
             slots.give(Item::Block(material), count);
         }
-        let dealt = grant_since(&mut slots, 0);
-        debug_assert!(dealt.no_room.is_empty(), "a new world's kit fits");
+        for &(item, count) in KIT_GRANTS.iter().copied().flatten() {
+            if !EARNED.contains(&item) {
+                let left = slots.give(item, count);
+                debug_assert_eq!(left, 0, "a new world's kit fits");
+            }
+        }
         Self(slots)
     }
 
@@ -205,31 +219,38 @@ mod kit_tests {
         slots.count(Item::Block(material))
     }
 
-    /// A new world is dealt the base and every grant: the kit is one table
-    /// and the version is its length, so a grant cannot be in one and not the
-    /// other. It fills the ten slots exactly, and holds every light but not
-    /// the blocks digging gives back (decision 12).
+    /// A new world is dealt the base and every grant but what the mission
+    /// tree earns (`starter-missions` G2): the kit is one table and the
+    /// version is its length, so a grant cannot be in one and not the other.
+    /// It fills nine of the ten slots, and holds every light but the torch
+    /// and the campfire, and not the blocks digging gives back (decision 12).
     #[test]
-    fn a_new_world_is_dealt_the_base_and_every_grant() {
+    fn a_new_world_is_dealt_the_base_and_every_grant_but_the_earned() {
         let kit = Hotbar::starting_kit();
         for (material, expected) in KIT_BASE.iter() {
             assert_eq!(count(&kit, *material), u32::from(*expected), "{material:?}");
         }
         for (item, expected) in KIT_GRANTS.iter().copied().flatten() {
-            assert_eq!(kit.count(*item), u32::from(*expected), "{item:?}");
+            let want = if EARNED.contains(item) { 0 } else { *expected };
+            assert_eq!(kit.count(*item), u32::from(want), "{item:?}");
         }
         assert_eq!(KIT_VERSION, 6);
-        assert!(
-            kit.hotbar().all(|slot| slot.is_some()),
-            "ten slots, all full"
+        assert_eq!(
+            kit.hotbar().filter(|slot| slot.is_some()).count(),
+            9,
+            "nine slots full, one free"
         );
         for light in Material::LAMPS {
-            if light == Material::Campfire {
-                // Made by hand, never dealt (`tool-crafting` decision 10).
-                assert_eq!(count(&kit, light), 0);
+            if matches!(light, Material::Campfire | Material::Torch) {
+                // Made by hand, never dealt (`tool-crafting` decision 10,
+                // `starter-missions` G2).
+                assert_eq!(count(&kit, light), 0, "{light:?}");
                 continue;
             }
             assert!(count(&kit, light) > 0, "{light:?} is in the kit");
+        }
+        for earned in [Good::FENCE, Good::GATE] {
+            assert_eq!(kit.count(Item::Good(earned)), 0, "{earned:?} is earned");
         }
         // No free station: the forge is made at the workbench.
         assert_eq!(count(&kit, Material::Forge), 0);

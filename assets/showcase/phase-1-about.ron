@@ -1,7 +1,7 @@
 // The phase-1 showcase, one file per branch of the mission tree
 // (`step-videos` 5.2, `starter-missions` T.5): a bot plays the branch
 // through the player's own inputs, each shot ending when its missions are
-// done, or the run failing as stalled. Getting about: the map read and followed, into the sea.
+// done, or the run failing as stalled. Getting about: a place marked on the map and walked to, into the sea.
 //
 // Each branch starts from the world the earlier ones left: run them in
 // order on one `--world` (trunk, fishing, farming, herding, cooking, then
@@ -15,15 +15,15 @@
     hour: 8.5,
     shots: [
         (
-            caption: "Getting about. Read the map",
+            caption: "Getting about. Read the map, and mark a place",
             max_s: 30.0,
-            acts: [Map(4.0)],
+            acts: [Map(4.0), Mark(230.0), Still],
         ),
         (
-            caption: "Walk 200 m from where the map was read",
+            caption: "Walk to the mark",
             until: ["map"],
             max_s: 240.0,
-            acts: [Away(210.0)],
+            acts: [ToMark],
         ),
         (
             caption: "Into the water: swim",

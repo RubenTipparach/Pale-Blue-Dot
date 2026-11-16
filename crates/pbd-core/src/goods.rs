@@ -140,6 +140,9 @@ pub const GOODS: &[GoodRow] = &[
     row("marula", "marula", 32, "items/goods/marula.png"),
     row("baobab", "baobab fruit", 32, "items/goods/baobab.png"),
     row("pine-cone", "pine cone", 32, "items/goods/pine-cone.png"),
+    // ---- starter-missions G1: worms dug from wet ground at the shore, put
+    // on the hook when a cast is made with them in the pack.
+    row("bait", "bait worms", 99, "items/goods/bait.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -198,6 +201,7 @@ impl Good {
     pub const WATER_BUCKET: Good = by_code_const("water-bucket");
     pub const FERTILE_EGG: Good = by_code_const("fertile-egg");
     pub const INCUBATOR: Good = by_code_const("incubator");
+    pub const BAIT: Good = by_code_const("bait");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
@@ -284,6 +288,7 @@ mod tests {
             (Good::ROPE, "rope"),
             (Good::FERTILE_EGG, "fertile-egg"),
             (Good::INCUBATOR, "incubator"),
+            (Good::BAIT, "bait"),
         ] {
             assert_eq!(good.code(), code);
             assert_eq!(Good::by_code(code), Some(good));
