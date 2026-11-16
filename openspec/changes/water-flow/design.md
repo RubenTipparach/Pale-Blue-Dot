@@ -658,6 +658,68 @@ It is measured, not assumed. A `perf_suite.py` A/B on the release build
 goes in `docs/benchmarks/` with the port. Any slower frame is fixed before
 the push.
 
+## Splashes that show, and better ones (owner, 2026-11-16)
+
+The owner, on a river in rain: "these water splash fx are weak, I expected
+them to be made really well like the crab breeze fx", "they also dont render
+when they are in front of water either", and "I approved of ground splash a
+while ago from rain drops, I dont see them here".
+
+Measured (read off the code, 2026-11-16):
+
+- **The fall-foot spray and mist are the only splash particles.** CPU
+  billboards rebuilt each frame (`water_flow.rs` `spawn_splash`,
+  `animate_splash`), up to 4000 soft white dots within 70 m, an unlit
+  `StandardMaterial` with `AlphaMode::Blend`: Bevy's Transparent3d phase,
+  no depth written. Nothing splashes where the player, a craft, a float or
+  a fish meets water; the fishing splash is a sound only.
+- **Why a splash vanishes over water.** All water is drawn by
+  `WaterCompositeNode`, after `Node3d::EndMainPass`, so after Transparent3d
+  (`planet_water.rs`). The flowing water reads the finished scene (spray
+  included) as "what is behind the water", absorbs it by the path through
+  the water and draws over it; it is discarded only where the main pass's
+  depth is nearer (`water.wgsl`, `own_depth > clip.z`), and the spray wrote
+  none. So a splash standing over a pool, which is where every fall's foot
+  is, is erased; it shows only against land or sky. The near rain shower
+  has the same flaw over water.
+- **The white ribbons along a bank** are the fall froth on the side faces of
+  flowing water: the mesher marks any flowing cell's side open to air as
+  falling (`falling || above_water && flow.is_some()`), so a river's edges
+  and level steps get the lip's streaked froth.
+- **The rain splashes** (M32, `weather-rain` 6.3, approved 2026-11-15) are
+  not in the game: tasks 6.4 (port), 6.5 (perf A/B, which gates the push)
+  and 6.6 (captures) are open. As designed they stand on ground tops only,
+  so a river or the sea would get none, and drawn after the opaque terrain
+  they would meet the same overdraw as the spray.
+- **Crab Breeze's effects** are not in this repository or `.reference/`:
+  the repo cites Crab Breeze for its water lighting, cloud puffs, frame
+  latency and audio tools, never for particles. Matching it needs its
+  source or a recording.
+
+The plan, in order:
+
+1. **Splashes drawn after the water (a fix, not a look change).** The
+   blended effects that stand over water (fall spray and mist, the near
+   shower, and the rain splashes when they land) draw in their own pass
+   after `WaterCompositeLabel`, depth-tested against the water's own depth,
+   so a splash in front of water shows and one behind it does not. This
+   restores what was approved; captures before and after, at a fall's foot.
+2. **River banks without lip froth.** Froth only on faces that really fall
+   (a step of a layer or more); a level river's side keeps the plain water
+   sides. This touches the fall look, so it is shown in M31 beside today's
+   first (the waterfall rule).
+3. **The rain splashes ported** (`weather-rain` 6.4 to 6.6), on water as
+   well as ground: rings already mark rain on water; a crown of droplets
+   over it is the M32 crown on the water's surface. The perf A/B that gates
+   the push runs on the owner's desktop.
+4. **Better splashes, in a mockup first.** A splash kit for every place
+   water is struck: fall foot, a player or craft entering water, a float's
+   cast, a fish breaking the surface, a wake. Built in M31 (a Splash tab)
+   with droplets that arc and fall under gravity, a crown, foam that
+   spreads and fades on the surface, and mist, all lit by the scene; shown
+   beside today's spray for the owner's approval before any game code.
+   Crab Breeze's source or a clip of its splashes would be the reference.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With

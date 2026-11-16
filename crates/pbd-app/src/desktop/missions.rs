@@ -183,10 +183,10 @@ fn script() -> Vec<Scripted> {
     let n = |k: usize, step: Scripted| std::iter::repeat_n(step, k);
     // The tree (`starter-missions` T.2) in the order the bot plays it.
     let mut steps = vec![
-        S::Gained(good("fibre"), 4, Found),
-        S::Gained(good("stone"), 4, Found),
+        S::Gained(good("fibre"), 8, Found),
+        S::Gained(good("stone"), 9, Found),
     ];
-    steps.extend(n(4, S::Did(Kind::Gather, "block:dirt")));
+    steps.extend(n(6, S::Did(Kind::Gather, "block:dirt")));
     steps.push(S::Did(Kind::Craft, "recipe:stone-axe"));
     steps.extend(n(2, S::Did(Kind::Fell, "tree")));
     steps.extend([
@@ -210,12 +210,9 @@ fn script() -> Vec<Scripted> {
     ]);
     steps.extend(n(3, S::Did(Kind::Catch, "minnow")));
     steps.extend(n(3, S::Did(Kind::Species, "fish")));
-    steps.extend([
-        S::Did(Kind::Waters, "sea"),
-        S::Did(Kind::Waters, "fresh"),
-        S::Did(Kind::Open, "map"),
-        S::Did(Kind::Reach, "marked"),
-    ]);
+    steps.extend([S::Did(Kind::Open, "map"), S::Did(Kind::Reach, "marked")]);
+    steps.extend(n(3, S::Did(Kind::Waters, "sea")));
+    steps.extend(n(3, S::Did(Kind::Waters, "fresh")));
     steps.extend(n(20, S::Did(Kind::Swim, "water")));
     steps.extend([
         S::Did(Kind::Reach, "reef"),
@@ -227,16 +224,16 @@ fn script() -> Vec<Scripted> {
         S::Cooked("grilled-fish", 2),
         S::Did(Kind::Eat, "grilled-fish"),
     ]);
-    steps.push(S::Gained(good("wheat-seed"), 2, Found));
-    steps.extend(n(4, S::Did(Kind::Till, "block:grass")));
-    steps.extend(n(4, S::Planted("wheat")));
+    steps.push(S::Gained(good("wheat-seed"), 10, Found));
+    steps.extend(n(6, S::Did(Kind::Till, "block:grass")));
+    steps.extend(n(6, S::Planted("wheat")));
     steps.push(S::Did(Kind::Pour, "water"));
     steps.extend([
-        S::Gained(good("wheat"), 4, Harvested),
+        S::Gained(good("wheat"), 6, Harvested),
         S::Cooked("flatbread", 2),
-        S::Gained(good("turnip"), 1, Harvested),
-        S::Gained(good("chili"), 1, Harvested),
-        S::Gained(good("frost-kale"), 1, Harvested),
+        S::Gained(good("turnip"), 3, Harvested),
+        S::Gained(good("chili"), 3, Harvested),
+        S::Gained(good("frost-kale"), 3, Harvested),
         S::Cooked("roast-turnip", 1),
     ]);
     steps.extend(n(6, S::Did(Kind::Craft, "recipe:fence")));
@@ -245,9 +242,9 @@ fn script() -> Vec<Scripted> {
         S::Deed(Deed::Tamed { species: 0 }),
         S::Deed(Deed::PenBuilt { pen: 1, cells: 7 }),
         S::Deed(Deed::Penned { species: 0 }),
-        S::Gained(good("egg"), 2, Collected),
+        S::Gained(good("egg"), 5, Collected),
         S::Deed(Deed::Tamed { species: 1 }),
-        S::Gained(good("wool"), 1, Collected),
+        S::Gained(good("wool"), 3, Collected),
         S::Cooked("fried-egg", 1),
         S::Did(Kind::Eat, "grilled-fish"),
         S::Did(Kind::Eat, "flatbread"),
@@ -256,7 +253,7 @@ fn script() -> Vec<Scripted> {
     steps.extend(n(10, S::Did(Kind::Gather, "block:stone")));
     steps.extend(n(4, S::Did(Kind::Gather, "block:ore")));
     steps.extend([
-        S::Gained(good("coal"), 2, Found),
+        S::Gained(good("coal"), 3, Found),
         S::Gained(Item::Block(Material::Forge), 1, Made),
         S::Did(Kind::Place, "block:forge"),
         S::Gained(good("bronze-ingot"), 2, Made),
@@ -264,7 +261,7 @@ fn script() -> Vec<Scripted> {
     ]);
     steps.extend(n(5, S::Did(Kind::Gather, "block:stone")));
     steps.extend([
-        S::Gained(good("iron-ingot"), 1, Made),
+        S::Gained(good("iron-ingot"), 3, Made),
         S::Did(Kind::Craft, "recipe:iron-pickaxe"),
     ]);
     steps

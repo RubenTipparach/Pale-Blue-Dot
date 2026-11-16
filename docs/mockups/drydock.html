@@ -212,6 +212,15 @@ header.compact details.about{flex-basis:100%}
 @media (max-width:900px){.sailmain{grid-template-columns:1fr}.gpsrow{grid-template-columns:1fr}.sailside{grid-template-columns:1fr 160px}}
 @media (max-width:1000px){.builder{grid-template-columns:1fr}.mods{grid-template-columns:repeat(2,minmax(0,1fr))}.prog{grid-template-columns:1fr}}
 @media (max-width:560px){.mods{grid-template-columns:1fr}.palette{grid-template-columns:repeat(4,minmax(0,1fr))}.ov.br{display:none}.stage{height:62vh}}
+/* the big map: M or the Map button opens the chart full size to lay the route (owner, 2026-11-16: "I also still dont have waypoint ability on the map") */
+dialog.bigmap{border:1px solid var(--line-2);border-radius:8px;background:var(--panel);color:var(--ink);padding:12px;width:min(1200px,calc(100vw - 32px));max-width:none}
+dialog.bigmap::backdrop{background:rgba(0,0,0,.6)}
+dialog.bigmap .mhead{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;margin-bottom:8px}
+dialog.bigmap h3{margin:0;font:600 18px var(--display);letter-spacing:.04em}
+dialog.bigmap p{margin:0;color:var(--muted);font-size:13.5px}
+dialog.bigmap #seamap{width:100%;height:auto;max-height:calc(100vh - 150px);object-fit:contain;cursor:crosshair;display:block}
+.mapslot{position:relative}
+.mapslot .mapopen{position:absolute;right:6px;bottom:6px}
 </style>
 
 <div class="wrap">
@@ -283,10 +292,15 @@ header.compact details.about{flex-basis:100%}
 <section aria-labelledby="s4">
   <h2 id="s4"><span class="n">4</span>Sail it</h2>
   <details class="sdesc"><summary>What this shows, and how to use it</summary><p><b>Rebuilt 2026-11-13 on the owner's report.</b> A sailing ship gets her drive only from the wind on her sails: the canvas she has set (<b>&uarr;</b> sets more, <b>&darr;</b> furls) times the force of the apparent wind on a sail at the angle the sheet holds it (<b>&larr;</b> hauls in, <b>&rarr;</b> eases out), resolved into drive ahead and a push to leeward that her keel resists. She cannot sail inside about 40 degrees of the wind (in irons), is fastest on a beam reach, and with her sails furled she drifts to a stop. A rowed ship gets her drive only from her oars: <b>W</b> and <b>S</b> set the stroke (back water, shipped, slow, cruise, ramming speed), every bench pulls in strokes, the crew tires, and with the helm over the rowers pull harder on the outside of the turn and back water on the inside. An engine's thrust (W and S, the telegraph) adds to any sail. Pale arrows drifting over the water are the wind; the instrument at the top right gives the true and apparent wind, the no-go zone and the sail's state. On the water: a white dashed line from her bow is where she will be in a minute; the cyan dotted line is the GPS's route, with a post at each tack; the pale trail astern is her wake; amber buoys are waypoints. On foot, walk her deck (WASD) while she sails on, Space climbs a ladder or a hatch, G runs the gangway out when she is stopped.</p><p>A sea chart drawn compass-north up, as the game's map is, with the wind as arrows: trades from the east-north-east in the south, westerlies in the north, a slack band between. Click the chart to add a waypoint, drag one to move it, right-click to take it away. Then press <b>Sail</b>. You start on foot on her deck by the wheel, first person in her frame (WASD walk, drag to look). <b>F</b> at the wheel takes the helm, and the view becomes a chase camera behind her: <b>A</b> and <b>D</b> put the helm over (a rudder is a foil: she turns only with way on), <b>&larr;</b> and <b>&rarr;</b> haul in and ease the sheet, <b>&uarr;</b> and <b>&darr;</b> set and furl sail (on a rowed ship <b>W</b> and <b>S</b> set the stroke; on a powered ship they step the telegraph through astern, stop, slow, half and full). <b>F</b> again lets go: she sails on holding rudder and sail while you walk her deck. Walk off the deck where there is no rail and you are in the water: with no one aboard her sails furl and she comes to rest; swim to her side and press <b>F</b> to climb aboard. Nothing steers for you: a sailing ship cannot point closer than about 40 degrees to the wind, so to reach a waypoint upwind she must tack. A waypoint counts as reached within 30 m, and the next one takes over. The GPS plans the route a sailor would sail, laid on the water as a thin cyan dotted line with a post at each tack (and on the chart, cyan dashes: straight when the mark can be laid on one board, close-hauled legs between the faint laylines when it is upwind, tack points as dots), marks the best heading on the compass bar (cyan) beside the waypoint (amber), and tells you which way to turn and how to trim. A curved arrow on the sail shows which way to swing it and how far, and turns into a tick when she is trimmed. It advises; it never steers.</p></details>
+<dialog class="bigmap" id="mapDlg" aria-labelledby="mapH">
+  <div class="mhead"><div><h3 id="mapH">Map: lay your route</h3><p><b>Click</b> the sea to add a waypoint &middot; <b>drag</b> one to move it &middot; <b>right-click</b> to remove it. The GPS then coaches you along it. <kbd>M</kbd> or <kbd>Esc</kbd> closes.</p></div>
+  <div class="seg"><button id="mapClear">Clear route</button><button id="mapClose">Close</button></div></div>
+  <div id="mapBig"></div>
+</dialog>
   <div class="sailwrap" id="sailWrap" tabindex="0" aria-label="Sail it: click the chart for waypoints, A and D steer, W and S sheet or throttle">
     <div class="sailbar">
       <div class="seg" id="sailShip" role="group" aria-label="Ship"></div>
-      <div class="seg"><button id="sailGo" class="go" aria-pressed="false">Sail</button><button id="sailReset">Reset</button><button id="sailClear">Clear route</button></div>
+      <div class="seg"><button id="sailGo" class="go" aria-pressed="false">Sail</button><button id="sailReset">Reset</button><button id="sailClear">Clear route</button><button id="mapBtn" title="Open the map to lay your route (M)">Map (M)</button></div>
       <div class="seg" id="sailWarp" role="group" aria-label="Time"><button data-x="1" aria-pressed="false">x1</button><button data-x="8" aria-pressed="true">x8</button><button data-x="32" aria-pressed="false">x32</button></div>
       <div class="seg" id="sailTime" role="group" aria-label="Time of day"><button data-t="day">Day</button><button data-t="night">Night</button></div>
     </div>
@@ -302,7 +316,10 @@ header.compact details.about{flex-basis:100%}
         <div class="seg helm" id="helmPad"><button data-k="a">A</button><button data-k="d">D</button><button data-k="arrowleft">&larr;</button><button data-k="arrowright">&rarr;</button><button data-k="arrowup">&uarr;</button><button data-k="arrowdown">&darr;</button><button data-k="w">W</button><button data-k="s">S</button><button data-k="g">G</button><button data-k=" ">&#9251;</button><button data-k="f" class="go">F</button><button id="gangBtn" aria-pressed="false">Gangway: in</button></div>
       </div>
       <div class="sailside">
-        <canvas id="seamap" width="960" height="640" aria-label="Sea chart, north up: click to add a waypoint, drag to move, right-click to remove"></canvas>
+        <div class="mapslot" id="mapSlot">
+          <canvas id="seamap" width="960" height="640" aria-label="Sea chart, north up: click to add a waypoint, drag to move, right-click to remove"></canvas>
+          <div class="seg mapopen"><button id="mapBtn2">Open map (M)</button></div>
+        </div>
         <canvas id="heel" width="300" height="300" aria-label="The ship from astern, heeling, and from above, with her sail and the apparent wind"></canvas>
         <p class="muted" id="sailState" style="font-size:12px"></p>
       </div>
@@ -1967,6 +1984,15 @@ let dockApi = null;
   map.addEventListener("pointerdown", e => { if (e.button !== 0) return; wrap.focus({preventScroll: true}); const p = toWorld(e); dragI = near(p); if (dragI >= 0) map.setPointerCapture(e.pointerId); });
   map.addEventListener("pointermove", e => { if (dragI < 0) return; const p = toWorld(e); wps[dragI].x = Math.max(0, Math.min(WX, p.x)); wps[dragI].y = Math.max(0, Math.min(WY, p.y)); draw(); });
   map.addEventListener("pointerup", e => { if (e.button !== 0) return; if (dragI < 0) { const p = toWorld(e); if (!isLand(p.x, p.y)) { wps.push(p); if (S.done) S.done = false; } } dragI = -1; draw(); });
+  // the big map: the same chart canvas moves into a window full size, so every click, drag and right-click works the same
+  { const dlg = document.getElementById("mapDlg"), big = document.getElementById("mapBig"), slot = document.getElementById("mapSlot");
+    const open = () => { if (dlg.open) return; [...keys].forEach(release); padShow(); big.appendChild(map); dlg.showModal(); draw(); };
+    dlg.addEventListener("close", () => { slot.insertBefore(map, slot.firstChild); draw(); wrap.focus({preventScroll: true}); });
+    for (const id of ["mapBtn", "mapBtn2"]) document.getElementById(id).addEventListener("click", open);
+    document.getElementById("mapClose").addEventListener("click", () => dlg.close());
+    document.getElementById("mapClear").addEventListener("click", () => { wps = []; ai = 0; draw(); });
+    document.addEventListener("keydown", e => { if (TAB !== "sail" || typing(e) || e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== "m") return; e.preventDefault(); dlg.open ? dlg.close() : open(); }, true);
+  }
   const sailBtn = document.getElementById("sailGo");
   const setRunning = r => { running = r; sailBtn.textContent = r ? "Pause" : "Sail"; sailBtn.setAttribute("aria-pressed", r); if (r) { wrap.focus({preventScroll: true}); last = performance.now(); requestAnimationFrame(loop); } };
   sailBtn.addEventListener("click", () => setRunning(!running));

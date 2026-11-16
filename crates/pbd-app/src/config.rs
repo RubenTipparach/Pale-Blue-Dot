@@ -490,6 +490,28 @@ pub struct WeatherSettings {
     /// (`0 <= fade <= reach`). Past the reach the ground is only wet.
     pub rain_detail_reach_m: f32,
     pub rain_detail_fade_m: f32,
+    /// `weather-rain` 6.4, splashes where rain lands (the approved M32
+    /// mockup): slots per near column (S), each firing once a cycle when the
+    /// rain says so, and droplets per slot (K). The draw is S x K droplets a
+    /// column; S is the first knob to turn down. `1..=64` and `1..=8`.
+    pub splash_slots: u32,
+    pub splash_droplets: u32,
+    /// A slot's cycle, seconds; a splash lives about its first 0.3 s.
+    pub splash_period_s: f32,
+    /// Droplet sizes, metres: a crown's, a wet-ground splash's, a grass
+    /// spray's, and the crown's late jet's.
+    pub splash_size_m: [f32; 4],
+    /// Launch speed up, m/s, at the low end of each kind's spread, in the
+    /// same order.
+    pub splash_up_mps: [f32; 4],
+    /// Launch speed out, m/s, likewise.
+    pub splash_out_mps: [f32; 4],
+    /// The share of a slot's cycles that fire in full rain: on a puddle, on
+    /// wet bare ground, on grass (grass takes about half, as it takes half
+    /// the rings).
+    pub splash_keep: [f32; 3],
+    /// The droplets' opacity, 0..1.
+    pub splash_alpha: f32,
 
     // ---- Overcast: what the cover over the player does to the light. Names
     // and values are Tenebris's. Each is a fraction taken off (or, for the
@@ -728,6 +750,14 @@ impl Default for WeatherSettings {
             rain_lamp_specular: 1.0,
             rain_detail_reach_m: 20.0,
             rain_detail_fade_m: 4.0,
+            splash_slots: 48,
+            splash_droplets: 8,
+            splash_period_s: 0.5,
+            splash_size_m: [0.016, 0.013, 0.011, 0.018],
+            splash_up_mps: [1.1, 0.75, 0.5, 1.4],
+            splash_out_mps: [0.3, 0.2, 0.15, 0.03],
+            splash_keep: [1.0, 0.8, 0.5],
+            splash_alpha: 1.0,
             overcast_sun_dim: 0.72,
             overcast_amb_dim: 0.48,
             overcast_sky_blue_cut: 0.75,
@@ -862,6 +892,34 @@ impl Validated for WeatherSettings {
             && (0.0..=s.rain_detail_reach_m).contains(&s.rain_detail_fade_m))
         .then_some(())
         .ok_or("rain_detail_fade_m must be within 0..=rain_detail_reach_m")?;
+        (1..=64)
+            .contains(&s.splash_slots)
+            .then_some(())
+            .ok_or("splash_slots must be within 1..=64")?;
+        (1..=8)
+            .contains(&s.splash_droplets)
+            .then_some(())
+            .ok_or("splash_droplets must be within 1..=8")?;
+        (s.splash_period_s.is_finite() && (0.1..=5.0).contains(&s.splash_period_s))
+            .then_some(())
+            .ok_or("splash_period_s must be within 0.1..=5")?;
+        s.splash_size_m
+            .iter()
+            .all(|m| m.is_finite() && *m > 0.0 && *m <= 0.2)
+            .then_some(())
+            .ok_or("splash_size_m must each be within 0 (exclusive) ..= 0.2")?;
+        s.splash_up_mps
+            .iter()
+            .chain(&s.splash_out_mps)
+            .all(|v| v.is_finite() && (0.0..=10.0).contains(v))
+            .then_some(())
+            .ok_or("splash_up_mps and splash_out_mps must each be within 0..=10")?;
+        s.splash_keep
+            .iter()
+            .chain(std::iter::once(&s.splash_alpha))
+            .all(|v| v.is_finite() && (0.0..=1.0).contains(v))
+            .then_some(())
+            .ok_or("splash_keep and splash_alpha must each be within 0..=1")?;
         for (name, value) in [
             ("rain_alpha_near", s.rain_alpha_near),
             ("rain_alpha_far", s.rain_alpha_far),
@@ -1903,6 +1961,33 @@ mod tests {
         assert!(with(20.0, -1.0).validate().is_err());
         assert!(with(f32::NAN, 4.0).validate().is_err());
         assert!(with(20.0, f32::NAN).validate().is_err());
+    }
+
+    /// `weather-rain` 6.4: the splash knobs validate, and their limits hold.
+    #[test]
+    fn splash_knobs_validate() {
+        let ok = WeatherSettings::default();
+        ok.validate().unwrap();
+        assert_eq!((ok.splash_slots, ok.splash_droplets), (48, 8));
+        let with = |f: &dyn Fn(&mut WeatherSettings)| {
+            let mut s = WeatherSettings::default();
+            f(&mut s);
+            s.validate()
+        };
+        assert!(with(&|s| s.splash_slots = 0).is_err());
+        assert!(with(&|s| s.splash_slots = 65).is_err());
+        assert!(with(&|s| s.splash_slots = 24).is_ok());
+        assert!(with(&|s| s.splash_droplets = 9).is_err());
+        assert!(with(&|s| s.splash_droplets = 0).is_err());
+        assert!(with(&|s| s.splash_period_s = 0.0).is_err());
+        assert!(with(&|s| s.splash_period_s = f32::NAN).is_err());
+        assert!(with(&|s| s.splash_size_m[1] = 0.0).is_err());
+        assert!(with(&|s| s.splash_size_m[3] = 0.5).is_err());
+        assert!(with(&|s| s.splash_up_mps[0] = -1.0).is_err());
+        assert!(with(&|s| s.splash_out_mps[2] = f32::INFINITY).is_err());
+        assert!(with(&|s| s.splash_keep[2] = 1.5).is_err());
+        assert!(with(&|s| s.splash_alpha = -0.1).is_err());
+        assert!(with(&|s| s.splash_keep = [0.0; 3]).is_ok());
     }
 
     /// `lens-drop-refraction`: past a bend of 2 a drop samples the scene from

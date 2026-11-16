@@ -883,6 +883,11 @@ fn open_air(
     commands.insert_resource(air);
 }
 
+/// The weather's own frame: where `rain`, `wetness` and the shower are
+/// settled. What reads them after (the rain splashes) runs after this.
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct WeatherSystems;
+
 pub struct WeatherPlugin {
     /// Rain intensity at launch, 0..1.
     pub rain: f32,
@@ -933,7 +938,8 @@ impl Plugin for WeatherPlugin {
                 strike_lightning,
                 rebuild_shower,
             )
-                .chain(),
+                .chain()
+                .in_set(WeatherSystems),
         );
     }
 }
