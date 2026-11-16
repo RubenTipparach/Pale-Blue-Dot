@@ -89,7 +89,9 @@ struct WaterView {
     cloud_prev_eye: vec4<f32>,
     // The sea's table (`pbd::sea`), the same one the hulls float on.
     sea: SeaView,
-    // x how far the sheet sits below sea level (`depth_offset_m`), yzw spare.
+    // x how far the sheet sits below sea level (`depth_offset_m`); y the
+    // surface of the inland water the eye is in, a body radius, nought for
+    // the sea (`ocean-environments` B17); zw spare.
     sea_frame: vec4<f32>,
     // The lens mist (`lens-weather`): seconds to mist over and to clear
     // standing still, how much faster per m/s of airspeed, its strength; then
@@ -528,12 +530,25 @@ fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: 
     return gathered*(reach/f32(steps))*0.3*strength*phase*view.rain_sun.rgb;
 }
 
+// How far under the surface the composite's waterline mask fades in, m: the
+// short soft edge of the underwater tint, wobble and fog. Nothing above the
+// surface is ever wet.
+const WATERLINE_EDGE_M: f32 = 0.1;
+
+// The surface of the water the eye is in, as a body radius: a river's or a
+// pool's where the eye is in inland water, the sea's sphere otherwise
+// (`ocean-environments` B17). Everything the underwater view measures, depth,
+// the waterline, the sky's exit, is measured from it.
+fn eye_water_surface() -> f32 {
+    return select(view.planet_center.w, view.sea_frame.y, view.sea_frame.y > 0.0);
+}
+
 // What the eye in the water sees added along `dist` metres of its view: the
 // shafts, and the marine snow over the twilight and midnight zones, lit by
 // what light is left at the eye and a faint glow of its own. Zero above water.
 fn under_water_light(origin: vec3<f32>, dir: vec3<f32>, dist: f32) -> vec3<f32> {
     let center = view.planet_center.xyz;
-    let sea = view.planet_center.w;
+    let sea = eye_water_surface();
     let eye_depth = sea - length(origin-center);
     if (eye_depth <= 0.0) { return vec3<f32>(0.0); }
     var add = shafts(origin, dir, dist, center, sea, view_extinction());
@@ -944,7 +959,9 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let sky = depth <= 1e-7;
     let ray = view_ray(uv);
     let center = view.planet_center.xyz;
-    let sea = view.planet_center.w;
+    // The surface of the water the eye is in: a river's above the sea, or
+    // the sea's sphere (`ocean-environments` B17).
+    let sea = eye_water_surface();
     let under = view.fx.y > 0.75;
     let straddle = view.fx.y > 0.25 && !under;
     let cam_gap = max(0.0, sea - length(ray.origin-center));
@@ -965,7 +982,13 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let straddle_sky = select(0.0, 1.0-smoothstep(0.02,0.12,ray_d_up), cam_gap > 0.0);
         wet = select(select(0.0,straddle_sky,straddle),1.0,under);
     }
-    let mask = select(1.0-smoothstep(-band,band,pixel_alt),1.0,sky);
+    // The waterline: a pixel is wet only below the surface, with a short
+    // soft edge under it (owner, 2026-11-16: "underwater ground tint is
+    // happening before the water line"). It reached `band` ABOVE the surface,
+    // so the ground just over the water took the murk and the wobble; what
+    // lies under a crest above the mean surface is behind the sheet, which
+    // draws its own.
+    let mask = select(1.0-smoothstep(-WATERLINE_EDGE_M,0.0,pixel_alt),1.0,sky);
     wet *= mask;
     var color = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
     if (wet > 0.0 && view.fx.x > 0.0) {

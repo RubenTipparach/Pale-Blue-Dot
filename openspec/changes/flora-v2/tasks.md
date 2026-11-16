@@ -88,8 +88,12 @@ The owner, 2026-11-15: "finish up fishing wiki, herding, and flora". Cloud sessi
 - [ ] 9.9 Ore drawn as ore: a fifth bit in the column's material word (six codes a word, Rust and WGSL), an ore code, and an ore tile on the stone sheet. Verify: a capture of a dug hillside showing the veins; the material word's packing tests.
 
 
-## 10. Trees in rain, and a fade that ends (design 13; owner, 2026-11-16)
+## 10. Nothing grows where water stands (owner, 2026-11-16: "river should be dirt"; design 12.10)
 
-- [ ] 10.1 Trees and ground clutter take no wet block: a uniform darkening by `rain_plant_darken` only (13.2). Verify: before and after captures at one spot in rain (the valley, the jungle, looking up into a tree, tufts close up); a test that the knob is in `weather.ron` and the shader's tree and clutter paths skip the block.
-- [ ] 10.3 The impostors take a standing normal (13.4). Verify: night and day captures of near and far trees in one frame, before and after, the far band's mean against the near crowns'.
-- [ ] 10.2 The trees' cross-fade by time, not distance (13.3): two snapshots and a clock in the uniform, hard thresholds at both, the Bayer split by the fade's progress; the foliage edge and the clutter reach the same way. Verify: a still camera at 0 s, 0.3 s and 2 s shows no dither at 2 s; a walk shows no pop; a launch reaches READY with no `LATE_PIPELINE`.
+- [x] 10.1 (Built 2026-11-16 on `claude/river-fixes`: `a_drowned_top_is_drawn_as_a_bed`, `version_10_s_river_beds_are_drawn_as_beds`, `a_river_bed_record_is_dirt_and_grows_nothing`; `docs/screenshots/river-fixes/{before,after}-{walk,air,under}.jpg`; no generator version moved, every digest test unchanged.) `Material::drowned` and `Column::drawn_material` in the core; the tier's codes (`packed_runs`, the per-layer words, `reconcile_surface`) and the far records (`surface_code` with `rivers::floods`) draw a top under water as a bed: grass and snow as dirt, sand as the seabed. No generator version. Verify: core tests that a drowned grass top is drawn as dirt and that along version 10's rivers no bed is drawn grassy and no tree stands; an app test that a river bed's record grows no tree or clutter; captures of a river bed before and after in `docs/screenshots/river-fixes/`; the version digests unchanged.
+
+## 11. Trees in rain, and a fade that ends (design 13; owner, 2026-11-16)
+
+- [ ] 11.1 Trees and ground clutter take no wet block: a uniform darkening by `rain_plant_darken` only (13.2). Verify: before and after captures at one spot in rain (the valley, the jungle, looking up into a tree, tufts close up); a test that the knob is in `weather.ron` and the shader's tree and clutter paths skip the block.
+- [ ] 11.2 The trees' cross-fade by time, not distance (13.3): two snapshots and a clock in the uniform, hard thresholds at both, the Bayer split by the fade's progress; the foliage edge and the clutter reach the same way. Verify: a still camera at 0 s, 0.3 s and 2 s shows no dither at 2 s; a walk shows no pop; a launch reaches READY with no `LATE_PIPELINE`.
+- [ ] 11.3 The impostors take a standing normal (13.4). Verify: night and day captures of near and far trees in one frame, before and after, the far band's mean against the near crowns'.

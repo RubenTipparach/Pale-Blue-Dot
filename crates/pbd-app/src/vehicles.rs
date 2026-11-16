@@ -193,7 +193,13 @@ impl Plugin for VehiclePlugin {
                     .before(bevy::transform::TransformSystems::Propagate)
                     .run_if(crate::world_open),
             )
-            .add_systems(Update, (hud::show, save_vehicles, view::look));
+            .add_systems(Update, (hud::show, save_vehicles, view::look))
+            .add_systems(
+                PostUpdate,
+                offer_board
+                    .in_set(crate::interact::InteractSet::Offer)
+                    .run_if(resource_exists::<crate::interact::Interact>),
+            );
     }
 }
 
@@ -436,8 +442,9 @@ fn board_or_leave(world: &mut World) {
         return;
     };
     let pressed = |k| keys.just_pressed(k);
-    // F is the interaction key: E is a craft's own control (yaw, hiking, the
-    // blade as a rudder), and G is the tool picker.
+    // F is the interact key (`interact`): E is a craft's own control
+    // (hiking, the blade as a rudder) and rolls in flight, and G is the tool
+    // picker. On foot F boards only when nothing usable is aimed.
     let (g, t, v) = (
         pressed(KeyCode::KeyF),
         pressed(KeyCode::KeyT),
@@ -448,7 +455,14 @@ fn board_or_leave(world: &mut World) {
     }
     let aboard = world.resource::<Aboard>().0;
     match aboard {
-        None if g => board(world),
+        None if g
+            && crate::interact::may(
+                world.get_resource::<crate::interact::Interact>(),
+                crate::interact::Reader::Boats,
+            ) =>
+        {
+            board(world)
+        }
         None => {}
         Some(entity) => {
             if g {
@@ -463,6 +477,43 @@ fn board_or_leave(world: &mut World) {
                 make_fast_or_cast_off(world, entity);
             }
         }
+    }
+}
+
+/// The nearest craft in reach of a walker at `walker` (render-frame
+/// local, f64): what F boards and the prompt names.
+fn nearest_in_reach<'a>(
+    vehicles: impl Iterator<Item = (Entity, &'a Vehicle)>,
+    walker: bevy::math::DVec3,
+) -> Option<(Entity, &'a Vehicle)> {
+    vehicles
+        .map(|(e, v)| (e, v, v.craft.body.position.distance(walker)))
+        .filter(|(_, v, distance)| *distance <= v.craft.seat().reach_m as f64)
+        .min_by(|a, b| a.2.total_cmp(&b.2))
+        .map(|(e, v, _)| (e, v))
+}
+
+/// Offer the craft in reach to the interact key: board it.
+fn offer_board(
+    walking: Option<Res<WalkingState>>,
+    aboard: Res<Aboard>,
+    frame: Res<crate::planet::PlanetRenderFrame>,
+    walkers: Query<&Position, With<Walker>>,
+    vehicles: Query<(Entity, &Vehicle)>,
+    mut interact: ResMut<crate::interact::Interact>,
+) {
+    if aboard.0.is_some() || !walking.is_some_and(|w| w.active) {
+        return;
+    }
+    let Some(walker) = walkers.iter().next() else {
+        return;
+    };
+    let at = walker.0.as_dvec3() - frame.center;
+    if let Some((_, vehicle)) = nearest_in_reach(vehicles.iter(), at) {
+        interact.offer(crate::interact::Offer::new(
+            crate::interact::Act::Board,
+            vehicle.craft.kind.name().to_lowercase(),
+        ));
     }
 }
 
@@ -484,19 +535,9 @@ fn board(world: &mut World) {
     else {
         return;
     };
-    let nearest = world
-        .query::<(Entity, &Vehicle)>()
-        .iter(world)
-        .map(|(e, v)| {
-            (
-                e,
-                v.craft.body.position.distance(walker),
-                v.craft.seat().reach_m as f64,
-            )
-        })
-        .filter(|(_, distance, reach)| distance <= reach)
-        .min_by(|a, b| a.1.total_cmp(&b.1));
-    let Some((entity, _, _)) = nearest else {
+    let nearest =
+        nearest_in_reach(world.query::<(Entity, &Vehicle)>().iter(world), walker).map(|(e, _)| e);
+    let Some(entity) = nearest else {
         return;
     };
     take_seat(world, entity, captured);

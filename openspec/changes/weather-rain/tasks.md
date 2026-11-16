@@ -70,6 +70,6 @@
 ## 7. Rain artifacts (design "Rain artifacts"; owner, 2026-11-16)
 
 - [ ] 7.1 R1: the shower and the shafts lit by the sky's irradiance on a standing face under the new model. Verify: before and after at one spot; a test that a full deck at noon lights a streak no brighter than the old curve.
-- [ ] 7.2 R2: tufts and all clutter take no wet block (with `flora-v2` 10.1). Verify: close-up captures in rain, before and after.
+- [ ] 7.2 R2: tufts and all clutter take no wet block (with `flora-v2` 11.1). Verify: close-up captures in rain, before and after.
 - [ ] 7.3 R3: the lens's wetness eases both ways (`lens_wet_tau_s`, `lens_dry_tau_s`), its drop clock stops while no rain reaches it. Verify: a test of the easing; capture sequences of rain stopping, rain starting, into cover and out of it.
 - [ ] 7.4 R4: the near shower thins over a moment under cover; the ground's wetness checked in a sequence. Verify: the sequences above.

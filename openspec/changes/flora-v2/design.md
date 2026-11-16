@@ -921,6 +921,68 @@ like play adds `--rain-shadows off`.
 - The cross-machine digest drift (12.1), written up, not fixed.
 - Frame cost, not measured (no GPU in the cloud session).
 
+### 12.10 Nothing grows where water stands; a drowned top is drawn as a bed (owner, 2026-11-16)
+
+The owner: "tree and grass is spawned there, river should be dirt"
+(`docs/screenshots/rain-artifacts/owner-river-43.webp`, `-44.webp`). On a
+river's bed stand grass tufts, a tree and red mushrooms, on a green sward.
+
+**Reproduced** at a version 10 river 60 m from the spawn
+(`docs/screenshots/river-fixes/before-*.jpg`).
+
+**Why, measured in the code.** The generator writes a column's top from
+`top_material`, which knows nothing of rivers: a river carves its bed two
+layers under its water and the bed keeps the meadow's top, `DryGrass` or
+`Grass` (`rivers::water` puts the water over it; at 28.25, 0.75 the ground
+is 63 m, `DryGrass`, with water to 65 m). Every plant is then decided at
+draw time from the cell record's material word: tufts, flowers, ferns and
+mushrooms on a grassy code (`grassy` in `planet_visibility.wgsl` and
+`planet_surface.wgsl`), a tree on a grass, snow or (version 10's beach)
+sand code (`TreeTable::grows`, the foliage pass). The record's code is the
+column's top (`reconcile_surface`) on the column tier and `surface_code`
+beyond it. No rule asks whether water stands over the cell.
+
+**Two ways to make the bed dirt.**
+
+1. *A new generator version, 11*, writing river beds as dirt. Honest for
+   digging (a bed would give dirt), but only for new worlds: every world
+   made so far keeps green beds, and version 10's digests and a new
+   version's would both have to be pinned and carried forever.
+2. *A draw-time rule*: a top with water standing on it is DRAWN as a bed.
+   The material the column holds is unchanged, nothing new is saved, no
+   generator version moves, and every world, old and new, shows it.
+
+**Chosen: 2, the draw-time rule**, because it is derived state (CLAUDE.md:
+"what the seed and the rules decide is derived and never saved"), fixes
+old worlds' beds as well as their plants, and puts no save at risk. The
+rule, one function in each place that turns a material into a drawn code:
+
+- `Material::drowned` (core): a grass of any kind or snow under water is
+  drawn as dirt; everything else as itself. `Column::drawn_material(layer)`
+  applies it where the layer over is water; `packed_runs` and the tier's
+  per-layer codes and `reconcile_surface` draw from it.
+- Sand under water is drawn as the seabed's sand (code 0), as
+  `material_index` already draws sand below the sea, so a version 10
+  acacia cannot stand in a river's mouth either. On the column tier this
+  applies only above the sea's level, so the near seabed is unchanged.
+- Beyond the column tier the record's word asks the generator's river
+  (`rivers::floods`: a reach's water stands over the ground here), the
+  same answer the column will give.
+
+Dirt (code 10) is neither `grassy` nor `bare`, so it grows no tufts,
+flowers, ferns, mushrooms, bushes or pebbles, and no tree's table names
+it. The CPU's tree list (`grows_tree` over the records, used by the axe
+and the fruit) reads the same words, so a tree that is not drawn cannot be
+chopped. A `tree` record for a cell that no longer stands one is kept and
+harmless: the tree is simply not there.
+
+**What it leaves.** Digging a drowned bed still gives what its material is
+(a grass block gives fibre and sod): the column is unchanged. If that
+matters, version 11 can write beds as dirt for new worlds on top of this
+rule. Water the player pours over grass draws the grass under it as dirt
+too, and the sward comes back when the water goes: one rule for every
+water.
+
 ## 13. Trees in rain, and a fade that ends (owner, 2026-11-16)
 
 The owner, on a terraced valley in rain: "theres massive artifacts here";

@@ -199,6 +199,108 @@ flight before it digs or places, so that a capture shows the edit. That
 changes when a capture places its blocks and nothing else. It is the
 workaround that let lamps-and-lanterns 3.3 be captured, and it is not the fix.
 
+### The owner met it as a lamp that vanished (2026-11-16)
+
+The owner: "I placed a lamp but it somehow despawned", and "lamps are immune
+to being wet, so idk whats going on here". It was night and raining. Their
+world is not on this machine, so the cause is argued from the code and
+reproduced in a test and a capture, not read off their save.
+
+**Cause: this section's bug.** A lamp is an edit like any other. Placed while a
+fine set is being built (a few seconds after every `REGEN_DISTANCE_M` walked,
+and longer while the set waits for the last landing's dissolve), it is drawn
+and lit at once by `apply_edit` on the standing set, journaled and kept in
+`WorldSave::edits`, and then the set built from the request's copy of the
+edits lands and replaces the tier whole, without it. The lamp's model and its
+light are both read off the tier's column (the record's lamp word and the
+light bake), so both go. The hotbar has already spent it. It comes back on the
+next rebuild that has walked far enough, or on reload, which is why it reads
+as despawned rather than destroyed. Night and rain are not part of it: lamps
+are just the edit a player looks at afterwards, because it is the one that
+lights up.
+
+**What else was checked, and why it is not the cause:**
+- `digging::occupies` (placing at foot level) only REFUSES a place; it cannot
+  write a lamp to a different cell or drop one already placed. A place is
+  written at `target.place`, the cell `apply_edit` was given, and saved there.
+- `apply_edit` spends the hotbar only after `WorldSave::accept` took the line,
+  so a refused place costs nothing and shows nothing.
+- Water: `pbd_core::liquid` never floods a lamp (pinned), and the tier build's
+  sea flood and river settle go through the same rule.
+- `farm::use_key` on a light-station opens its panel and returns; it never
+  edits the cell. Digging aims through a light (it is not solid) and takes the
+  ground under it; the lamp stays where it was.
+- World processes (`WorldSave::propose`) are refused any cell the player has
+  edited (`yields.touch_cell` on every accept).
+- Reload: the edit's line is in the log (a lamp is a `Material` like stone), and
+  a rebuild with the full edits draws it, so a reload brings it back.
+
+**Plan (task 1b).** The landing replays what the request's copy missed:
+1. `LodRefresh` keeps the edits it handed the task (an `Arc`, no second copy).
+2. At landing, if `Edits::revision` has moved, `Edits::changed_since` lists the
+   cells whose edit list differs from that copy, in key order (deterministic).
+3. For each such cell with a column in the new tier, the save's CURRENT edits
+   for the cell are written over its column. The column was built as
+   generation then the old edits; every layer the old edits named is named
+   again by the current list, so the result is exactly the column a build with
+   the current edits makes, worms and rim included, with no second generator
+   call. A cell the new tier has no column for is adopted, as `apply_edit`
+   adopts one past the edge.
+4. Each written layer goes through the same steps as `apply_edit`'s world half
+   (repack it and its neighbours, the sea's flood and the water queue,
+   reconcile the surface, the sheet), which move into one function on
+   `FineSet` that both call, then one relight and the contact rebuilt from
+   the replayed set. The lamp bake follows on its own: it re-bakes when the
+   tier's light version moves.
+
+The regression test builds a set from the edits before a lamp and a dig, puts
+both in the save, lands it through the replay, and checks the lamp's layer, its
+record's lamp word, its light and the hole, against a set built with the edits
+after. Saves are untouched: nothing about the log, its format or the generator
+changes, only how a derived tier catches up with it.
+
+### Built (2026-11-16), and a second fault the captures found
+
+The plan above is built as written (tasks 1b). `scripted_dig` no longer waits
+for a landing.
+
+**Removal logs** (the owner, the same day: "if an object a user placed
+despawns, i need logs", "my objects shouldnt be destroyed without any
+reason"). Every path that can take a player's change away now says so:
+- a dig or a place over a block a player put there:
+  `REMOVED <material> at cell C layer L by the player, now <material>` (info);
+- the water rule over a player's block or light: an `error!` line with what
+  was there and what replaces it (the rule moves only through air and water,
+  so this should never print);
+- every landing, and the first set of a load, compares the set's columns with
+  the save (`FineSet::missing_edits`) and prints
+  `REMOVED <saved> at cell C layer L by <landing|building the planet's first
+  fine set>, with no author` at `error!` for each change it does not hold. A
+  dug cell the sea has flooded since, and saved water the rule has settled
+  differently, are the world's and are not listed.
+- The world author (`WorldSave::propose`) was already refused any cell the
+  player has touched, and a reload is covered by the first-set check.
+
+**A rebuilt tier drew an edited cell's surface as generated.** Found by the
+reload capture (`docs/screenshots/lamp-vanishes/`). `column::build` reconciled
+a cell's record with its column only DOWNWARD, for the carve; the edit path
+reconciles both ways. So a cell whose column top was at or above the record
+after an edit (a block placed on the ground, or a dig that left the top where
+the record already was) was drawn live with the edit's cap and material, and
+after any rebuild or reload with the generator's. The cap's material is what
+the tree and plant rule reads, so a plant the edit had put out grew back, in
+the capture a cactus standing in front of the hanging lantern and hiding it,
+which is the owner's "despawned" seen from the other side. A cell with edits
+now reconciles both ways at build, exactly as the edit did; a cell without
+edits keeps the generator's rule. The regression test places a block and a
+torch on it and holds the replayed set to a fresh build, byte for byte, which
+fails without this.
+
+**What was not reproduced.** The owner's world is not here, so which of the
+two they met is not known. Both lose nothing from the save: the lamp comes back
+on the next rebuild (the first) or was never gone (the second). If it happens
+again, the `REMOVED` and `replayed` lines in the log say which.
+
 ## What is deliberately not decided here
 
 - **The protocol.** No sockets, no wire format, no server. The seam above is

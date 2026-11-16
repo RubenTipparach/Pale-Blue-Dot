@@ -52,7 +52,7 @@ pub use terrain::{
     nearest_ground_near, river_channel, snow_slot, surface_code, surface_height, switch_generator,
     terrain_config, terrain_epoch, terrain_radius, tileset_slot,
 };
-pub use water::{EyeWater, EyeWaterState, RainShadows, emerge, submersion};
+pub use water::{EyeWater, EyeWaterState, RainShadows, emerge, inland_surface, submersion};
 
 use bevy::math::{DMat4, DVec3};
 use bevy::{
@@ -431,6 +431,8 @@ fn build_planet(
         None,
         scatter.lod_fade_width,
     ));
+    // A world opened has every saved change in the set it opens on.
+    lod::report_missing_edits(&fine, edits, "building the planet's first fine set");
     contacts.set_fine(&fine);
     BuiltPlanet {
         cells,

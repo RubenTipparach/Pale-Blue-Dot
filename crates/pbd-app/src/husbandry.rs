@@ -68,7 +68,7 @@ pub enum Deed {
     PenBuilt { pen: u32, cells: usize },
 }
 
-/// The use key's reader, so other readers of E (`desktop::farm::use_key`)
+/// The interact key's reader, so other readers of F (`desktop::farm::use_key`)
 /// run after it and do not act on a press it used.
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HusbandryHands;
@@ -298,6 +298,12 @@ impl Plugin for HusbandryPlugin {
                 )
                     .chain()
                     .after(crate::fish::FishSet),
+            )
+            .add_systems(
+                PostUpdate,
+                offer_hands
+                    .in_set(crate::interact::InteractSet::Offer)
+                    .run_if(resource_exists::<crate::interact::Interact>),
             );
     }
 }
@@ -801,8 +807,102 @@ fn grassy_land(world: &World, d: Vec3) -> bool {
     )
 }
 
-/// The use key and the right button: feed, tame, collect, lead, and place
-/// or take back a fence piece.
+/// What F would do with the animal, incubator or piece aimed at: the
+/// husbandry hands' rows of `interact::ACTS`, in the order [`hands`] and
+/// [`use_on`] try them.
+fn offer(
+    world: &World,
+    yard: &mut Farmyard,
+    hotbar: &Slots,
+    save: &WorldSave,
+    aimed: Option<Vec3>,
+) -> Option<crate::interact::Offer> {
+    use crate::interact::{Act, Offer};
+    let held = hotbar.held().map(|st| st.item);
+    if let Some(k) = aimed_beast(world, yard) {
+        let (who, species) = (yard.beasts[k].who, yard.beasts[k].species);
+        let following = yard.beasts[k].mode == Mode::Follow;
+        let sp = world.roster().get(species as usize)?.clone();
+        let name = sp.name.to_lowercase();
+        let keep = sp.keep.as_ref();
+        return match who {
+            Who::Wild { .. } => {
+                (sp.refusal().is_none() && keep.is_some()).then(|| Offer::new(Act::Feed, name))
+            }
+            Who::Kept { id } => {
+                let body = save.records.get(record::ANIMAL, id)?.read::<AnimalBody>()?;
+                let keep = keep?;
+                if held == Some(Item::Good(Good::FERTILE_EGG))
+                    && matches!(keep.young.birth, pbd_core::husbandry::Birth::Eggs { .. })
+                {
+                    return Some(Offer::new(Act::SetEggs, name));
+                }
+                let now = farm_now(world, yard, save, id, &body);
+                let waiting: Vec<&str> = keep
+                    .products
+                    .iter()
+                    .filter(|p| now.waiting(&p.good) > 0 && p.good().is_some())
+                    .map(|p| match p.good.as_str() {
+                        "egg" => "eggs",
+                        good => good,
+                    })
+                    .collect();
+                if !waiting.is_empty() {
+                    return Some(Offer::new(Act::Collect, waiting.join(", ")));
+                }
+                if held.is_some_and(|i| keep.eats(i)) {
+                    return Some(Offer::new(Act::Feed, name));
+                }
+                Some(Offer::new(
+                    if following { Act::LetStay } else { Act::Lead },
+                    name,
+                ))
+            }
+        };
+    }
+    let point = aimed?;
+    if let Some(cell) = breed::incubator_at(world, save, point) {
+        let holds = pbd_core::husbandry::breeding::eggs_at(
+            &save.records,
+            pbd_core::husbandry::breeding::Place::Incubator(cell),
+        );
+        if held == Some(Item::Good(Good::FERTILE_EGG)) {
+            return Some(Offer::new(Act::SetInIncubator, "incubator"));
+        }
+        if holds == 0 && held.is_none() {
+            return Some(Offer::new(Act::TakeIncubator, "incubator"));
+        }
+        if holds > 0 {
+            return None;
+        }
+    }
+    let (edge, _, _) = edge_at(world, point)?;
+    let gate = *record::pieces(&save.records).get(&edge)?;
+    Some(Offer::new(Act::TakeUp, if gate { "gate" } else { "fence" }))
+}
+
+/// Offer the husbandry hands' act to the interact key.
+fn offer_hands(
+    world: World,
+    aimed: Res<AimedGround>,
+    mut yard: ResMut<Farmyard>,
+    hotbar: Option<Res<Hotbar>>,
+    save: Option<Res<WorldSave>>,
+    mut interact: ResMut<crate::interact::Interact>,
+) {
+    let (Some(hotbar), Some(save)) = (hotbar, save) else {
+        return;
+    };
+    if !world.walking.as_ref().is_some_and(|w| w.active) {
+        return;
+    }
+    if let Some(offer) = offer(&world, &mut yard, &hotbar, &save, aimed.0) {
+        interact.offer(offer);
+    }
+}
+
+/// The interact key and the right button: feed, tame, collect, lead, and
+/// place or take back a fence piece.
 #[allow(clippy::too_many_arguments)]
 fn hands(
     world: World,
@@ -813,6 +913,7 @@ fn hands(
     mut yard: ResMut<Farmyard>,
     mut hotbar: Option<ResMut<Hotbar>>,
     mut save: Option<ResMut<WorldSave>>,
+    interact: Option<Res<crate::interact::Interact>>,
 ) {
     let dt = world.time.delta_secs().min(0.1);
     yard.hold_s = (yard.hold_s - dt).max(0.0);
@@ -837,7 +938,8 @@ fn hands(
     if !walking || menu.as_ref().is_some_and(|m| m.0) {
         return;
     }
-    let used = keys.as_ref().is_some_and(|k| k.just_pressed(KeyCode::KeyE));
+    let used = keys.as_ref().is_some_and(|k| k.just_pressed(KeyCode::KeyF))
+        && crate::interact::may(interact.as_deref(), crate::interact::Reader::Husbandry);
     let placed = buttons
         .as_ref()
         .is_some_and(|b| b.just_pressed(MouseButton::Right));
@@ -870,7 +972,7 @@ fn hands(
     };
     // A press used on an animal or a piece is not also a door's or a crop's.
     if used_it && let Some(keys) = keys.as_deref_mut() {
-        keys.clear_just_pressed(KeyCode::KeyE);
+        keys.clear_just_pressed(KeyCode::KeyF);
     }
 }
 
@@ -924,7 +1026,7 @@ fn store_animal(save: &mut WorldSave, body: &AnimalBody, id: u64, hands: Option<
     }
 }
 
-/// E on an animal.
+/// F on an animal.
 fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut WorldSave, k: usize) {
     let roster = world.roster().to_vec();
     let s = world.settings().clone();
@@ -1025,7 +1127,7 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
             } else {
                 b.mode = Mode::Follow;
                 b.mode_s = s.taming.follow_s;
-                yard.say(format!("{name} follows you (E to let it stay)"), 2.5);
+                yard.say(format!("{name} follows you (F to let it stay)"), 2.5);
             }
         }
     }
@@ -1095,7 +1197,7 @@ fn feed_wild(
     let species = b.species;
     yard.deeds.push(Deed::Tamed { species });
     yard.say(
-        format!("{name} trusts you and follows (E to let it stay)"),
+        format!("{name} trusts you and follows (F to let it stay)"),
         3.0,
     );
 }
@@ -1236,7 +1338,7 @@ fn place_piece(
     true
 }
 
-/// E on a piece: take it back. Whether there was one to take.
+/// F on a piece: take it back. Whether there was one to take.
 fn take_piece(
     world: &World,
     yard: &mut Farmyard,
@@ -1870,7 +1972,7 @@ fn describe(world: &World, save: Option<&WorldSave>, yard: &mut Farmyard) -> Opt
         Who::Wild { .. } => Some(match (sp.refusal(), sp.keep.as_ref()) {
             (Some(why), _) => format!("{} (wild) - {why}", sp.name),
             (None, Some(k)) => format!(
-                "{} (wild, {sex}) - trust {:.0}% - E with {}",
+                "{} (wild, {sex}) - trust {:.0}% - eats {}",
                 sp.name,
                 b.trust.value,
                 k.food_name()
@@ -1908,7 +2010,7 @@ fn describe(world: &World, save: Option<&WorldSave>, yard: &mut Farmyard) -> Opt
                 format!("{}{young} ({sex}, {pen}{sitting}) - {c_mood}", sp.name)
             } else {
                 format!(
-                    "{}{young} ({sex}, {pen}{sitting}) - {c_mood} - {} waiting [E]",
+                    "{}{young} ({sex}, {pen}{sitting}) - {c_mood} - {} waiting",
                     sp.name,
                     waiting.join(", ")
                 )

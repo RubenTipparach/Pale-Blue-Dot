@@ -363,6 +363,10 @@ fn lamp_box(i: u32, c: vec3<f32>, x: vec3<f32>, y: vec3<f32>, z: vec3<f32>, e: v
 // one; `planet_column.rs` packs it and a test holds the two shifts together.
 const COLUMN_WATER_SHIFT: u32 = 4u;
 const COLUMN_WATER_MASK: u32 = 0x1ffu;
+// How far the top water layer's surface stands under its top, in eighths of
+// a metre: nought for a source, more for a flowing cell's lower level.
+const COLUMN_WATER_SHORT_SHIFT: u32 = 13u;
+const COLUMN_WATER_SHORT_MASK: u32 = 0x7u;
 // The altitude of this column's water SURFACE, or a depth no world reaches
 // when it holds none. Below the world rather than a flag, so the reader is a
 // `min` against the sheet and never a branch: a column with no water has its
@@ -370,7 +374,8 @@ const COLUMN_WATER_MASK: u32 = 0x1ffu;
 fn column_water_top_m(rec: ColumnRec) -> f32 {
     let packed = (rec.more[3] >> COLUMN_WATER_SHIFT) & COLUMN_WATER_MASK;
     if packed == 0u { return -1.0e9; }
-    return COLUMN_BASE_M + f32(packed);
+    let short = (rec.more[3] >> COLUMN_WATER_SHORT_SHIFT) & COLUMN_WATER_SHORT_MASK;
+    return COLUMN_BASE_M + f32(packed) - f32(short)*0.125;
 }
 const NO_NEIGHBOR: u32 = 0xffffffffu;
 
@@ -3692,12 +3697,19 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // The tide (`water_deep.w`, at the camera) lifts or lowers the sheet, and
     // the tint with it; a column's own water is the sea where it reaches sea
     // level, and takes the tide too (`ocean-environments` 5.1).
+    // Water standing over the sea's level (a river, a pool, a flowing sheet)
+    // is its own: the tint stops at ITS surface, the flowing level included,
+    // and never at the sea's (owner, 2026-11-16: "underwater ground tint is
+    // happening before the water line"). Each fragment is tested against it
+    // by its own radius.
     let tided = params.water_absorption.w + params.water_deep.w;
     var water_surface = tided;
     if input.slot != 0u {
         let column_top = column_water_top_m(columns[input.slot-1u]);
         if column_top < -0.5 {
             water_surface = min(water_surface, params.settings.x + column_top);
+        } else if column_top > 0.5 {
+            water_surface = params.settings.x + column_top;
         }
     }
     let water_depth = max(water_surface - length(input.position), 0.);
