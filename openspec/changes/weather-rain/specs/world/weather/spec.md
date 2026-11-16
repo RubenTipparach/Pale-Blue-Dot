@@ -41,3 +41,20 @@ brighter than the ground it falls in front of by more than its own colour.
 #### Scenario: A storm at noon
 - **WHEN** it rains under a full deck at noon
 - **THEN** the streaks read as grey-blue rain over the ground, not as bright lines
+
+### Requirement: With RAIN SHADOW off, rain still fogs the air
+While the rain volume is off (the player's RAIN SHADOW setting), rain over
+the camera on a planet with air SHALL draw an exponential height fog in its
+place, measured along the body's local up from the ground or sea under the
+eye, coloured by the sky's light at that hour, and thickening with the rain.
+It SHALL add no full-screen pass. While the rain volume is on, the fog SHALL
+NOT draw.
+
+#### Scenario: A storm with RAIN SHADOW off
+- **WHEN** the rain is at full and RAIN SHADOW is off
+- **THEN** the far side of a valley is lost in grey murk
+- **AND** the murk is thicker in the valley than at the hilltop
+
+#### Scenario: Clear air
+- **WHEN** there is no rain
+- **THEN** the picture is as it was before the fog existed

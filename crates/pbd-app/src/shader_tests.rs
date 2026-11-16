@@ -444,7 +444,7 @@ fn each_puff_is_hazed_once_to_its_own_distance() {
         "if (view.cloud_puff_fade.w > 0.5) { cloud.w = textureLoad(cloud_puff_cover, texel, 0).r; }"
     ));
 
-    let composite = wgsl_fn_body(&src, "clouds");
+    let composite = wgsl_fn_body(&src, "clouds_over");
     let gate = composite
         .find("if (view.cloud_puff_fade.w < 0.5) {")
         .expect("the composite hazes the march alone");
@@ -700,7 +700,7 @@ fn clouds_are_lit_by_the_cores_sun_and_sky() {
 #[test]
 fn cloud_hides_the_stars() {
     let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
-    let composite = wgsl_fn_body(&src, "clouds");
+    let composite = wgsl_fn_body(&src, "clouds_over");
     for line in [
         "let upsampled = cloud_upsampled(uv, far, &at, &own);",
         "if (view.cloud_puff_fade.w > 0.5 && far >= CLOUD_FAR_CAP_M*0.999 && own > cloud.w) {",
@@ -864,5 +864,27 @@ fn the_mockups_plants_are_the_cores() {
             visibility.contains(line),
             "the visibility pass's tree rule has no `{line}`"
         );
+    }
+}
+
+/// `weather-rain` 7: the height fog in the rain volume's place rides the
+/// clouds' composite (no pass of its own), takes no branch while its lane is
+/// zero (RAIN SHADOW on, or no rain), measures height along the body's own up
+/// from the reference level, and stops where the volume would have.
+#[test]
+fn the_height_fog_rides_the_clouds_composite() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let entry = wgsl_fn_body(&src, "clouds");
+    assert!(entry.contains("height_fog(in.uv, clouds_over(in.uv))"));
+    let fog = wgsl_fn_body(&src, "height_fog");
+    for line in [
+        "if (sigma0 <= 0.0) { return color; }",
+        "let far = rain_far(uv);",
+        "let ha = max((length(eye) - ground)/fall, -HEIGHT_FOG_DEEPEST);",
+        "let hb = max((length(eye + ray.direction*far) - ground)/fall, -HEIGHT_FOG_DEEPEST);",
+        "if (abs(dh) > 1e-3) { mean = (exp(-ha) - exp(-hb))/dh; }",
+        "return color*kept + tint*(1.0 - kept);",
+    ] {
+        assert!(fog.contains(line), "missing `{line}`");
     }
 }

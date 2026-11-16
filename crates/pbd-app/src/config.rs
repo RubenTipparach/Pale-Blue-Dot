@@ -673,6 +673,11 @@ pub struct WeatherSettings {
     pub rain_volume_range_m: f32,
     /// How much longer than wide a falling streak of the volume is.
     pub rain_volume_stretch: f32,
+    /// With RAIN SHADOW off (the volume off), the height fog in its place
+    /// (`weather-rain` 7): the height over the ground or sea under the eye,
+    /// along the body's local up, in which its density falls by e at full
+    /// rain, metres. Half as deep at no rain.
+    pub rain_height_fog_falloff_m: f32,
     /// The volume's colour, display (sRGB) RGB. Snow is `snow_color`.
     pub rain_volume_color: [f32; 3],
     /// Which renderer draws it (`rain-shells`): `Volume`, the march, or
@@ -826,6 +831,7 @@ impl Default for WeatherSettings {
             rain_volume_density: 0.003,
             rain_volume_range_m: 2000.0,
             rain_volume_stretch: 10.0,
+            rain_height_fog_falloff_m: 250.0,
             rain_renderer: RainRenderer::Volume,
             rain_shell_soft_m: 4.0,
             rain_volume_color: [0.55, 0.58, 0.62],
@@ -900,6 +906,7 @@ impl Validated for WeatherSettings {
             .then_some(())
             .ok_or("snow_density must be within 0..=10")?;
         non_negative("rain_volume_color", &s.rain_volume_color)?;
+        positive("rain_height_fog_falloff_m", &[s.rain_height_fog_falloff_m])?;
         non_negative("rain_lamp_specular", &[s.rain_lamp_specular])?;
         positive("rain_detail_reach_m", &[s.rain_detail_reach_m])?;
         (s.rain_detail_fade_m.is_finite()
@@ -1718,33 +1725,53 @@ impl LightingSettings {
         self.reflect_base() && !REFLECT_OFF.all()
     }
 
-    /// L8: whether a wet face's reflected ray walks the columns.
-    pub fn reflect_walk_on(&self) -> bool {
-        self.reflect_base() && !REFLECT_OFF.walk
+    /// L8: whether a wet face's reflected ray walks the columns at the
+    /// player's `level`: the voxel walk, which LOW and OFF leave out
+    /// (`reflection-quality`: the owner's "raycast thing where it finds the
+    /// geometry facing groundward").
+    pub fn reflect_walk_on(&self, level: Reflections) -> bool {
+        self.reflect_base() && !REFLECT_OFF.walk && level >= Reflections::Medium
     }
 
     /// L8: whether a wet face's ray that the walk did not stop marches the
-    /// screen (last frame's capture).
-    pub fn reflect_screen_on(&self) -> bool {
-        self.reflect_base() && !REFLECT_OFF.screen
+    /// screen (last frame's capture). OFF leaves it out.
+    pub fn reflect_screen_on(&self, level: Reflections) -> bool {
+        self.reflect_base() && !REFLECT_OFF.screen && level >= Reflections::Low
     }
 
-    /// L8: whether the sea's reflected ray marches the screen.
-    pub fn reflect_sea_on(&self) -> bool {
-        self.reflect_base() && !REFLECT_OFF.sea
+    /// L8: whether the sea's reflected ray marches the screen. OFF leaves it
+    /// out.
+    pub fn reflect_sea_on(&self, level: Reflections) -> bool {
+        self.reflect_base() && !REFLECT_OFF.sea && level >= Reflections::Low
     }
 
     /// L8: whether last frame's colour and distances are captured for the
     /// screen traces to read. Off, both screen traces see no history and
-    /// return nothing, as they do on the first frame.
-    pub fn reflect_capture_on(&self) -> bool {
-        self.reflect_base() && !REFLECT_OFF.capture
+    /// return nothing, as they do on the first frame. OFF captures nothing.
+    pub fn reflect_capture_on(&self, level: Reflections) -> bool {
+        self.reflect_base() && !REFLECT_OFF.capture && level >= Reflections::Low
     }
 
     /// L8 (`lighting-perf` 2.8): whether the terrain leaves its traces to the
     /// half-size pass. Both traces off, there is nothing to trace.
-    pub fn reflect_split_on(&self) -> bool {
-        self.reflect_scale() < 1.0 && (self.reflect_walk_on() || self.reflect_screen_on())
+    pub fn reflect_split_on(&self, level: Reflections) -> bool {
+        self.reflect_scale() < 1.0 && (self.reflect_walk_on(level) || self.reflect_screen_on(level))
+    }
+
+    /// Whether some level splits, so its pipeline is compiled behind the
+    /// loading screen whatever level the game starts at (`reflection-quality`
+    /// 4).
+    pub fn reflect_split_possible(&self) -> bool {
+        self.reflect_split_on(Reflections::High)
+    }
+
+    /// How far wet ground's walk and screen trace reach, m: MEDIUM halves
+    /// `reflection_reach_m` (`reflection-quality` 2).
+    pub fn reflect_reach_m(&self, level: Reflections) -> f32 {
+        match level {
+            Reflections::Medium => self.reflection_reach_m * 0.5,
+            _ => self.reflection_reach_m,
+        }
     }
 
     /// L8's trace scale, after the environment's say (`PBD_REFLECT_SCALE`).
@@ -1762,6 +1789,50 @@ impl LightingSettings {
         ENV.lighting.unwrap_or(self.new_model)
     }
 }
+
+/// The player's REFLECTIONS (`reflection-quality`), laid over the switches
+/// above: HIGH is L8 as it was; MEDIUM halves wet ground's reach; LOW drops
+/// the voxel walk and keeps the screen traces; OFF runs no reflection pass.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, Deserialize,
+)]
+pub enum Reflections {
+    Off,
+    Low,
+    Medium,
+    #[default]
+    High,
+}
+
+impl Reflections {
+    /// Low to high: the slider's steps.
+    pub const ALL: [Self; 4] = [Self::Off, Self::Low, Self::Medium, Self::High];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => "OFF",
+            Self::Low => "LOW",
+            Self::Medium => "MEDIUM",
+            Self::High => "HIGH",
+        }
+    }
+
+    /// From a flag's word.
+    pub fn parse(word: &str) -> Option<Self> {
+        match word {
+            "off" => Some(Self::Off),
+            "low" => Some(Self::Low),
+            "medium" | "med" => Some(Self::Medium),
+            "high" => Some(Self::High),
+            _ => None,
+        }
+    }
+}
+
+/// The level the render world draws at; the player's setting follows into it
+/// (`settings::follow_reflections`). HIGH where nothing has chosen.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq, ExtractResource)]
+pub struct ReflectQuality(pub Reflections);
 
 /// `PBD_REFLECT`: a pricing instrument (`lighting-perf` 1.1), not a
 /// setting. `0` switches every part of L8 off, as it always has; otherwise a
@@ -1879,7 +1950,9 @@ impl Plugin for ConfigPlugin {
             bevy::render::extract_resource::ExtractResourcePlugin::<ScatterSettings>::default(),
             bevy::render::extract_resource::ExtractResourcePlugin::<ColumnSettings>::default(),
             bevy::render::extract_resource::ExtractResourcePlugin::<LightingSettings>::default(),
+            bevy::render::extract_resource::ExtractResourcePlugin::<ReflectQuality>::default(),
         ));
+        app.init_resource::<ReflectQuality>();
     }
 }
 
@@ -1899,6 +1972,41 @@ mod tests {
         assert!(terrain.walk && terrain.screen && terrain.capture && !terrain.sea);
         assert!(ReflectOff::parse(Some("walk,screen,sea,capture")).all());
         assert_eq!(ReflectOff::parse(Some("1")), ReflectOff::default());
+    }
+
+    /// `reflection-quality`: what each REFLECTIONS level runs. HIGH is L8 as
+    /// it was; MEDIUM halves the reach; LOW drops the voxel walk and keeps
+    /// the screen traces; OFF runs nothing, so nothing splits.
+    #[test]
+    fn each_reflections_level_runs_its_parts() {
+        use super::{LightingSettings, Reflections};
+        let l = LightingSettings::default();
+        let parts = |level| {
+            (
+                l.reflect_capture_on(level),
+                l.reflect_walk_on(level),
+                l.reflect_screen_on(level),
+                l.reflect_sea_on(level),
+                l.reflect_split_on(level),
+            )
+        };
+        assert_eq!(parts(Reflections::High), (true, true, true, true, true));
+        assert_eq!(parts(Reflections::Medium), (true, true, true, true, true));
+        assert_eq!(parts(Reflections::Low), (true, false, true, true, true));
+        assert_eq!(parts(Reflections::Off), (false, false, false, false, false));
+        assert_eq!(l.reflect_reach_m(Reflections::High), l.reflection_reach_m);
+        assert_eq!(
+            l.reflect_reach_m(Reflections::Medium),
+            l.reflection_reach_m * 0.5
+        );
+        assert!(l.reflect_split_possible());
+        assert_eq!(Reflections::default(), Reflections::High);
+        for level in Reflections::ALL {
+            assert_eq!(
+                Reflections::parse(&level.label().to_lowercase()),
+                Some(level)
+            );
+        }
     }
 
     use super::*;

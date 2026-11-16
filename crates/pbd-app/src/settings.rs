@@ -11,6 +11,7 @@
 //! ([`Overrides`]), so a picture or a perf number is a function of its command
 //! line, whatever the player last chose.
 
+use crate::config::Reflections;
 use crate::controls::KeyBinds;
 use bevy::{
     camera::{ImageRenderTarget, RenderTarget},
@@ -38,8 +39,10 @@ use std::time::{Duration, Instant};
 /// which an older file reads as off; version 8 made "use" (`hands:KeyE`)
 /// and "board" (`vehicles:KeyF`) one slot, `interact:KeyF` (owner,
 /// 2026-11-16), and an older file's rebind of either moves onto it
-/// (`controls::KeyBinds::from_names`).
-pub const VERSION: u32 = 8;
+/// (`controls::KeyBinds::from_names`); version 9 added `reflections`
+/// (`reflection-quality`), which an older file reads as HIGH, the look it
+/// had.
+pub const VERSION: u32 = 9;
 
 /// The five sound volumes (`audio-and-ambience` design section 2), each a
 /// whole percent 0..=100 in steps of 10. 0 is silent.
@@ -183,6 +186,9 @@ pub struct PlayerSettings {
     /// Arrows on the flowing water, the way each cell flows (`water-flow`
     /// task 3.4): off by default.
     pub flow_arrows: bool,
+    /// REFLECTIONS (`reflection-quality`): HIGH is the reflections as they
+    /// were before the setting.
+    pub reflections: Reflections,
 }
 
 /// A new player's settings, the owner's choice (2026-11-13, "default to
@@ -199,6 +205,7 @@ impl Default for PlayerSettings {
             volumes: Volumes::default(),
             pixel_grass: true,
             flow_arrows: false,
+            reflections: Reflections::High,
         }
     }
 }
@@ -224,6 +231,7 @@ impl PlayerSettings {
         },
         pixel_grass: true,
         flow_arrows: false,
+        reflections: Reflections::High,
     };
 }
 
@@ -242,6 +250,7 @@ struct File {
     volumes: Volumes,
     pixel_grass: bool,
     flow_arrows: bool,
+    reflections: Reflections,
     /// Slot name to key name (`controls::KeyBinds::to_names`).
     keys: BTreeMap<String, String>,
 }
@@ -259,6 +268,7 @@ impl Default for File {
             volumes: base.volumes,
             pixel_grass: base.pixel_grass,
             flow_arrows: base.flow_arrows,
+            reflections: base.reflections,
             keys: BTreeMap::new(),
         }
     }
@@ -301,6 +311,7 @@ impl PlayerSettings {
             volumes: file.volumes.snapped(),
             pixel_grass: file.pixel_grass,
             flow_arrows: file.flow_arrows,
+            reflections: file.reflections,
         };
         let (keys, skipped) = KeyBinds::from_names(&file.keys);
         for rebind in skipped {
@@ -322,6 +333,7 @@ impl PlayerSettings {
                 volumes: self.volumes,
                 pixel_grass: self.pixel_grass,
                 flow_arrows: self.flow_arrows,
+                reflections: self.reflections,
                 keys: keys.to_names(),
             },
             ron::ser::PrettyConfig::default(),
@@ -367,12 +379,14 @@ impl PlayerSettings {
             volumes: self.volumes,
             pixel_grass: overrides.pixel_grass.unwrap_or(self.pixel_grass),
             flow_arrows: self.flow_arrows,
+            reflections: overrides.reflections.unwrap_or(self.reflections),
         }
     }
 }
 
 /// A launch's flags: `--frame-limit`, `--render-scale`, `--no-auto-step`,
-/// `--rain-shadows on|off`, `--grass tufts|blades`.
+/// `--rain-shadows on|off`, `--grass tufts|blades`,
+/// `--reflections off|low|medium|high`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Overrides {
     pub frame_limit: Option<FrameLimit>,
@@ -380,6 +394,7 @@ pub struct Overrides {
     pub auto_step: Option<bool>,
     pub rain_shadows: Option<bool>,
     pub pixel_grass: Option<bool>,
+    pub reflections: Option<Reflections>,
 }
 
 /// Where the file lives: `PBD_SETTINGS` if set, else the user's config
@@ -707,6 +722,17 @@ pub fn follow_rain_shadows(
     }
 }
 
+/// The reflections' level follows the setting, for the render world
+/// (`config::ReflectQuality`, `reflection-quality`).
+pub fn follow_reflections(
+    settings: Res<PlayerSettings>,
+    mut quality: ResMut<crate::config::ReflectQuality>,
+) {
+    if quality.0 != settings.reflections {
+        quality.0 = settings.reflections;
+    }
+}
+
 /// The flow arrows follow the setting (`water-flow` task 3.4); F5 lays its
 /// own switch over it for the session.
 pub fn follow_flow_arrows(
@@ -744,6 +770,7 @@ impl Plugin for PlayerSettingsPlugin {
             .init_resource::<Upscale>()
             .init_resource::<ScaledView>()
             .init_resource::<FramePacer>()
+            .init_resource::<crate::config::ReflectQuality>()
             .add_systems(
                 PostUpdate,
                 (
@@ -752,6 +779,7 @@ impl Plugin for PlayerSettingsPlugin {
                     apply_render_scale.before(bevy::camera::CameraUpdateSystems),
                     follow_auto_step,
                     follow_rain_shadows,
+                    follow_reflections,
                     follow_pixel_grass,
                     follow_flow_arrows,
                 ),
@@ -760,6 +788,37 @@ impl Plugin for PlayerSettingsPlugin {
             // After everything else in the frame, the frame log included.
             app.add_systems(Last, pace_frames.after(PacingSet));
         }
+        if CYCLE_REFLECTIONS.is_some() {
+            app.add_systems(Update, cycle_reflections.run_if(crate::loading::ready));
+        }
+    }
+}
+
+/// `PBD_CYCLE_REFLECTIONS=<frames>`: a check, not a setting
+/// (`reflection-quality` 3.3). Once the loading screen has lifted, REFLECTIONS
+/// steps to the next level every that many frames, through the player's
+/// setting as a press on the menu's slider does, so a run's log shows whether
+/// a level switched in play compiles a pipeline late (`LATE_PIPELINE`).
+static CYCLE_REFLECTIONS: std::sync::LazyLock<Option<u32>> = std::sync::LazyLock::new(|| {
+    std::env::var("PBD_CYCLE_REFLECTIONS")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .filter(|n| *n > 0)
+});
+
+fn cycle_reflections(mut settings: ResMut<PlayerSettings>, mut frames: Local<u32>) {
+    let Some(every) = *CYCLE_REFLECTIONS else {
+        return;
+    };
+    *frames += 1;
+    if (*frames).is_multiple_of(every) {
+        let all = Reflections::ALL;
+        let at = all
+            .iter()
+            .position(|r| *r == settings.reflections)
+            .unwrap_or(0);
+        settings.reflections = all[(at + 1) % all.len()];
+        info!("REFLECTIONS_SWITCHED {}", settings.reflections.label());
     }
 }
 
@@ -815,12 +874,54 @@ mod tests {
                 pixel_grass: true,
                 // Version 7's: off, the default.
                 flow_arrows: false,
+                // Version 9's: HIGH, the look it had.
+                reflections: Reflections::High,
             }
         );
         assert!(
             Loaded::Read(1).writable(),
             "an older file takes the new field"
         );
+    }
+
+    /// `reflection-quality`: a version-8 file (the last before REFLECTIONS)
+    /// reads HIGH, the reflections it was drawn with, and keeps every field
+    /// it has; it takes the field on its next write, at version 9.
+    #[test]
+    fn a_file_from_before_reflections_reads_them_high_and_keeps_the_rest() {
+        let old = "(version: 8, frame_limit: Fps120, render_scale: 67, auto_step: true, \
+                   rain_shadows: true, mission_line: false, volumes: (master: 40), \
+                   pixel_grass: false, flow_arrows: true)";
+        let (read, _, version) = PlayerSettings::parse(old).unwrap();
+        assert_eq!(version, 8);
+        assert_eq!(read.reflections, Reflections::High);
+        assert_eq!(
+            (read.frame_limit, read.render_scale, read.volumes.master),
+            (FrameLimit::Fps120, 67, 40)
+        );
+        assert!(read.auto_step && read.rain_shadows && !read.mission_line);
+        assert!(!read.pixel_grass && read.flow_arrows);
+        assert!(Loaded::Read(8).writable());
+        let text = read.to_text(&KeyBinds::default());
+        assert!(text.contains("version: 9"), "{text}");
+        assert!(text.contains("reflections: High"), "{text}");
+        // Each level round-trips, and a launch flag lays over the file.
+        for level in Reflections::ALL {
+            let chosen = PlayerSettings {
+                reflections: level,
+                ..read
+            };
+            let (back, _, _) =
+                PlayerSettings::parse(&chosen.to_text(&KeyBinds::default())).unwrap();
+            assert_eq!(back.reflections, level);
+        }
+        let flagged = read.with(&Overrides {
+            reflections: Some(Reflections::Low),
+            ..default()
+        });
+        assert_eq!(flagged.reflections, Reflections::Low);
+        assert_eq!(PlayerSettings::default().reflections, Reflections::High);
+        assert_eq!(PlayerSettings::ISOLATED.reflections, Reflections::High);
     }
 
     #[test]
@@ -838,6 +939,7 @@ mod tests {
             },
             pixel_grass: true,
             flow_arrows: true,
+            reflections: Reflections::Medium,
         };
         let mut keys = KeyBinds::default();
         let roll = crate::controls::slots()
@@ -978,7 +1080,7 @@ mod tests {
         let pairs = crate::controls::live_pairs(&keys, crate::controls::Live::OnFoot, false);
         assert!(pairs.contains(&(KeyCode::KeyF, KeyCode::KeyK)), "{pairs:?}");
         let text = read.to_text(&keys);
-        assert!(text.contains("version: 8"), "{text}");
+        assert!(text.contains(&format!("version: {VERSION}")), "{text}");
         assert!(text.contains("\"interact:KeyF\": \"KeyK\""), "{text}");
         assert!(!text.contains("hands:KeyE"), "{text}");
         let (_, again, _) = PlayerSettings::parse(&text).unwrap();
@@ -1100,6 +1202,7 @@ mod tests {
             volumes: Volumes::default(),
             pixel_grass: true,
             flow_arrows: false,
+            reflections: Reflections::High,
         };
         let flags = Overrides {
             render_scale: Some(100),

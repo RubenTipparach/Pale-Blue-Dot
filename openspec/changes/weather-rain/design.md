@@ -297,3 +297,91 @@ is held at 0 or let through, or the eye is taken as under cover or not. It
 changes nothing else, and only with `--capture`. With
 `PBD_CAPTURE_RUN` it gives the sequences: the rain stopping, the rain
 starting, walking into cover, walking out of it.
+
+## Height fog with RAIN SHADOW off (owner, 2026-11-16)
+
+**The owner's words:** "when on the planet, if we have rain shadow turned off
+can we just do normal distance fog?", and then "or height fog?".
+
+RAIN SHADOW is the whole rain volume (CLAUDE.md, "What the owner means by
+rain shadow"): the rain fog, the streaks on its shells and its lighting, the
+`rain` / `rain_half` / `rain_compose` passes in `water.wgsl`, run while
+`rain_needed` (`planet_water.rs`). With the setting off, which is the
+default, `rain_needed` is false and a storm gets no rain murk at all: the
+terrain's own haze thickens a little with the cover and the rain
+(`rain_fog_mult`), and that is all. A storm reads as a dark day.
+
+### What is drawn instead
+
+With RAIN SHADOW off, and only then, a standard analytic **exponential height
+fog** takes the volume's place:
+
+- **Density** at a height `h` above a reference level `h0`:
+  `sigma(h) = sigma0 * exp(-(h - h0) / H)`, with `sigma0 = rain *
+  rain_volume_density` (the volume's own extinction per metre of full rain,
+  0.003: a kilometre of full rain is an optical depth of 3) and `rain` the
+  rain over the camera (`haze_weather.y`, the haze's own).
+- **Height** is along the planet's local up, in the body-local frame: `h =
+  |p| - R`, never world Y. The reference `h0` is the ground or the sea under
+  the eye, whichever is higher (`terrain::surface_height` of the eye's
+  direction, at least 0), so the fog lies on the ground where the player is:
+  the valley below fills with murk (its density grows as it sinks below
+  `h0`), a hilltop stands clearer, the view up thins out, and looking down
+  from a height the murk is below.
+- **Falloff** `H = rain_height_fog_falloff_m * (0.5 + 0.5 * rain)`: the
+  layer is shallower in light rain and deeper in a storm. The knob is new in
+  `weather.ron`, 250 m. (A first cut at 120 m left the horizon a third as
+  murky as the volume: on a 4.8 km body a level ray rises 400 m in its 2 km,
+  so the fog thinned out of it. At 250 m the sky at the horizon and the far
+  sea read within a few levels of the volume's, measured on the beach shot.)
+- **Integrated along the ray**, analytically: with the ray's heights at the
+  eye and at its end, `h_a` and `h_b` (each `|p| - R - h0`, exact on the
+  sphere), the optical depth over the length `L` is `sigma0 * L * e^(-h_a/H)
+  * (1 - e^(-(h_b - h_a)/H)) / ((h_b - h_a)/H)` (the limit `sigma0 * L *
+  e^(-h_a/H)` when level). Taking the height linear in distance between the
+  two exact end heights is the flat-ground form laid on the sphere, and the
+  error is in the curvature between them. Each end's height is held at no
+  more than 2.5 `H` under `h0`, so a ray into a deep valley murks heavily but
+  never overflows.
+- **The ray's end** is the volume's: the scene's depth, the sea, the cloud
+  base or `rain_volume_range_m`, whichever is first (`rain_far`). No fog
+  above the cloud base, none under the sea, and none from an eye above the
+  cloud base, where the clouds hide the storm, as the volume does.
+- **Colour** is the colour the renderer it stands in for gives its rain,
+  without its streaks, shadows and lamps. The shipped renderer is the volume
+  (`rain_renderer: Volume`), which lights its rain by `rain_light`: the
+  rain's tint times a light set by the sun's height and the cover, which is
+  the sky's light at that hour (dark at night, lit by day, greyed under the
+  deck). Under the shells it is their light: the tint times the sky's mean
+  radiance (`rain_sky`) plus the sun through the forward phase (`rain_sun`,
+  `rain_phase`).
+
+### Where it runs: no new pass
+
+It is folded into the end of the `clouds` composite in `water.wgsl`, the
+full-screen pass that already lays the clouds over the scene and runs
+whenever the volume could (a planet with air, no map overlay). That is where
+the volume's light lands too (just after the clouds), so the fog lies over
+the clouds as the volume did. The pass gains one branch, taken only when
+`height_fog.x > 0` (a new `WaterView` lane): RAIN SHADOW off, rain at the
+camera, the eye under the cloud base and out of the sea. With RAIN SHADOW
+on, `height_fog.x` is zero and nothing changes, to the pixel.
+
+### Matching the volume, so the switch does not jump
+
+At the reference level along a level ray, the fog's optical depth is
+`rain * 0.003 * L`, the volume's mean (the volume's streak term averages
+about one: `0.3 + 1.4 * streak`, `streak` about one half). So the two agree
+where the player stands, and differ in what the cheap one leaves out: the
+volume's streaks, its sun shafts in the cascades, the lamps' glow in the
+rain, and rain that is falling somewhere else than over the camera (the
+volume reads the precipitation map per step; the fog takes the rain here).
+
+### Proof
+
+- Captures of a storm with RAIN SHADOW off, before and after, and with it
+  on for comparison; and one looking over a valley in a storm.
+- Its cost, in the `reflection-quality` sitting: `storm` with RAIN SHADOW
+  off, the fog off (`PBD_HEIGHT_FOG=0`, a pricing instrument, the
+  `PBD_REFLECT` kind: the fog's lane zero, so the frame is today's) against
+  on.

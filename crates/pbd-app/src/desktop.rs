@@ -933,6 +933,16 @@ impl Launch {
                         _ => panic!("--rain-shadows takes on or off"),
                     });
                 }
+                "--reflections" => {
+                    i += 1;
+                    let level = args
+                        .get(i)
+                        .expect("--reflections requires off, low, medium or high");
+                    result.settings.reflections = Some(
+                        pbd_app::config::Reflections::parse(level)
+                            .expect("--reflections takes off, low, medium or high"),
+                    );
+                }
                 "--grass" => {
                     i += 1;
                     let look = args.get(i).expect("--grass requires tufts or blades");

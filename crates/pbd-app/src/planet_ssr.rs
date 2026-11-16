@@ -166,9 +166,13 @@ impl ViewNode for SsrCaptureNode {
         (target, depth, view, msaa, _): QueryItem<'w, '_, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
+        // REFLECTIONS OFF (`reflection-quality`): no pass at all.
+        let level = world
+            .get_resource::<crate::config::ReflectQuality>()
+            .map_or_else(default, |q| q.0);
         let on = world
             .get_resource::<crate::config::LightingSettings>()
-            .is_some_and(|l| l.reflect_capture_on());
+            .is_some_and(|l| l.reflect_capture_on(level));
         let (Some(pipelines), Some(planet)) = (
             world.get_resource::<SsrPipelines>(),
             world.get_resource::<PlanetGpu>(),

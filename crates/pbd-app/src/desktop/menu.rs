@@ -20,6 +20,7 @@ use bevy::{
     input::keyboard::{Key, KeyboardInput},
     prelude::*,
 };
+use pbd_app::config::Reflections;
 use pbd_app::controls::{self, BINDINGS, KeyBinds, MenuOpen, Tab};
 use pbd_app::saves::{self, Slot, WorldSave};
 use pbd_app::settings::{PlayerSettings, SettingsFile};
@@ -120,6 +121,8 @@ pub enum MenuAction {
     AutoStep,
     /// Turn the rain shadow (the rain volume) on or off.
     RainShadows,
+    /// Set REFLECTIONS: off, low, medium, high (`reflection-quality`).
+    Reflections,
     /// The starter mission's HUD line, on or off.
     MissionLine,
     /// A sound volume (`audio-and-ambience` 7.2): 0 master, 1 effects,
@@ -205,6 +208,13 @@ fn slider_step(action: MenuAction, player: &PlayerSettings) -> Option<(usize, us
                 .position(|f| *f == player.frame_limit)
                 .unwrap_or(0),
         ),
+        MenuAction::Reflections => (
+            Reflections::ALL.len(),
+            Reflections::ALL
+                .iter()
+                .position(|r| *r == player.reflections)
+                .unwrap_or(Reflections::ALL.len() - 1),
+        ),
         MenuAction::RenderScale => {
             let steps = scale_steps();
             (
@@ -233,6 +243,9 @@ fn with_step(action: MenuAction, player: PlayerSettings, step: usize) -> PlayerS
         MenuAction::Volume(which) => {
             *volume_of(&mut changed.volumes, which) = step.min(10) as u32 * 10;
         }
+        MenuAction::Reflections => {
+            changed.reflections = Reflections::ALL[step.min(Reflections::ALL.len() - 1)];
+        }
         _ => {}
     }
     changed
@@ -243,6 +256,7 @@ fn settings_value(action: MenuAction, player: &PlayerSettings) -> Option<String>
     Some(match action {
         MenuAction::FrameLimit => player.frame_limit.label().to_uppercase(),
         MenuAction::RenderScale => format!("{}%", player.render_scale),
+        MenuAction::Reflections => player.reflections.label().to_string(),
         MenuAction::Volume(which) => {
             let mut volumes = player.volumes;
             format!("{}%", volume_of(&mut volumes, which))
@@ -408,8 +422,8 @@ pub fn label_graphics(
 #[derive(Component)]
 pub struct Check;
 
-/// The settings page's tabs: Picture, Weather (the rain shadow and the
-/// storm forcing), World (the clock and the globe overlay), Movement, Input.
+/// The settings page's tabs: Picture (with the rain shadow and the
+/// reflections), Weather (the storm forcing), World (the clock and the globe overlay), Movement, Input.
 pub const SETTINGS_TABS: [&str; 6] = ["PICTURE", "WEATHER", "WORLD", "MOVEMENT", "INPUT", "SOUND"];
 
 /// Which settings tab is open.
@@ -835,12 +849,15 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                         check_row(rows, kit, "Bloom", "", MenuAction::Bloom);
                         slider_row(rows, kit, "Frame limit", "", MenuAction::FrameLimit);
                         slider_row(rows, kit, "Render scale", "", MenuAction::RenderScale);
+                        slider_row(rows, kit, "Reflections", "", MenuAction::Reflections);
+                        // On PICTURE beside Reflections (owner, 2026-11-16:
+                        // "rain shadow should be under picture").
+                        check_row(rows, kit, "Rain shadow", "", MenuAction::RainShadows);
                         check_row(rows, kit, "Pixel grass", "", MenuAction::PixelGrass);
                         check_row(rows, kit, "Flow arrows", "", MenuAction::FlowArrows);
                     });
                     let weather = page(panel, 1);
                     panel.commands().entity(weather).with_children(|rows| {
-                        check_row(rows, kit, "Rain shadow", "", MenuAction::RainShadows);
                         super::weather_ui::spawn(rows, kit);
                     });
                     let world = page(panel, 2);
@@ -1776,6 +1793,7 @@ pub fn press(
             | MenuAction::RenderScale
             | MenuAction::AutoStep
             | MenuAction::RainShadows
+            | MenuAction::Reflections
             | MenuAction::MissionLine
             | MenuAction::Volume(_)
             | MenuAction::PixelGrass
@@ -1995,6 +2013,17 @@ mod tests {
             settings_value(MenuAction::FrameLimit, &off).as_deref(),
             Some("OFF")
         );
+        // REFLECTIONS (`reflection-quality`): four steps, HIGH at the top
+        // and the default, each reading its own name.
+        assert_eq!(slider_step(MenuAction::Reflections, &player), Some((4, 3)));
+        for (step, word) in ["OFF", "LOW", "MEDIUM", "HIGH"].iter().enumerate() {
+            let chosen = with_step(MenuAction::Reflections, player, step);
+            assert_eq!(chosen.reflections, Reflections::ALL[step]);
+            assert_eq!(
+                settings_value(MenuAction::Reflections, &chosen).as_deref(),
+                Some(*word)
+            );
+        }
         // Every offered value is a step, and every step an offered value.
         for scale in pbd_app::settings::SCALES {
             assert!(scale_steps().contains(&scale));

@@ -193,7 +193,33 @@ pub(super) struct WaterView {
     /// The column tier: xyz its anchor, w its reach, m (zero: none). The far
     /// river's sheet and the tier's water dither across its edge (design 13).
     column: Vec4,
+    /// The height fog in the rain volume's place while RAIN SHADOW is off
+    /// (`weather-rain` 7): x the extinction per metre at the reference level
+    /// (zero: none), y the falloff height, m, z the reference level's radius
+    /// from the body's centre (the ground or the sea under the eye), m.
+    height_fog: Vec4,
 }
+
+/// `weather-rain` 7: the height fog's lane. Only with the rain volume off,
+/// some rain over the eye, out of the sea and under the cloud base, where the
+/// volume would have drawn; zero otherwise, and then the composite takes no
+/// branch for it. `PBD_HEIGHT_FOG=0` prices it (zero always).
+fn height_fog_lane(volume_off: bool, rain: f32, s: &WeatherSettings, camera: Vec3) -> Vec4 {
+    let rain = rain.clamp(0.0, 1.0);
+    if !volume_off || rain <= 1e-3 || *HEIGHT_FOG_OFF || s.rain_volume_range_m <= 0.0 {
+        return Vec4::ZERO;
+    }
+    Vec4::new(
+        rain * s.rain_volume_density,
+        s.rain_height_fog_falloff_m * (0.5 + 0.5 * rain),
+        crate::planet::terrain::terrain_radius(camera),
+        0.0,
+    )
+}
+
+/// `PBD_HEIGHT_FOG=0`: a pricing instrument, not a setting (`weather-rain` 7).
+static HEIGHT_FOG_OFF: std::sync::LazyLock<bool> =
+    std::sync::LazyLock::new(|| std::env::var("PBD_HEIGHT_FOG").is_ok_and(|v| v == "0"));
 
 /// The light on open water and the sky's coefficients, both by the cover:
 /// the terrain's light for a cap under open sky (`water-lit`). `e` is the
@@ -1242,6 +1268,8 @@ pub(super) struct WaterSky<'w> {
     lighting: Option<Res<'w, crate::config::LightingSettings>>,
     fine: Option<Res<'w, super::lod::PlanetFine>>,
     rain_shadows: Option<Res<'w, RainShadows>>,
+    /// The player's REFLECTIONS (`reflection-quality`).
+    reflect_quality: Option<Res<'w, crate::config::ReflectQuality>>,
     /// The game's own water the sheet does not draw (`water-flow` E6).
     flowing: Option<Res<'w, crate::water_flow::FlowingWater>>,
     /// The column tier's reach, for the far rivers' fade (design 13).
@@ -1296,9 +1324,11 @@ fn prepare_water_views(
         lighting,
         fine,
         rain_shadows,
+        reflect_quality,
         flowing,
         columns,
     } = sky;
+    let reflect_level = reflect_quality.map_or_else(default, |q| q.0);
     let lit_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
     let rain_shadows = rain_shadows.is_none_or(|r| r.0);
     // `lighting-model`: under the new model the rain's rings on the water are
@@ -1636,10 +1666,18 @@ fn prepare_water_views(
                         .anchor
                         .extend(columns.as_deref().map_or(0.0, |c| c.reach_m))
                 }),
-            ssr_eye: if lighting
-                .as_ref()
-                .is_some_and(|l| l.reflect_sea_on() && l.reflect_capture_on())
-            {
+            height_fog: height_fog_lane(
+                !rain_shadows
+                    && state <= 0.75
+                    && camera.length() < clouds.clouds.x
+                    && rain_map.as_deref().is_some_and(|m| !m.values.is_empty()),
+                weather.rain,
+                &weather_settings,
+                camera,
+            ),
+            ssr_eye: if lighting.as_ref().is_some_and(|l| {
+                l.reflect_sea_on(reflect_level) && l.reflect_capture_on(reflect_level)
+            }) {
                 planet_view.ssr_eye
             } else {
                 Vec4::ZERO
@@ -2763,7 +2801,7 @@ mod tests {
         // And the sky's nine coefficients (`water-lit`).
         let sh = block.matches("array<vec4<f32>, 9>").count();
         let vec4 = block.matches("vec4<f32>").count() + 7 * lamps + 8 * sh;
-        assert_eq!((mat4, vec4, lamps, sh), (4, 77, 1, 1));
+        assert_eq!((mat4, vec4, lamps, sh), (4, 78, 1, 1));
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");
