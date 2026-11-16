@@ -189,5 +189,8 @@
  "sounds/amb_desert_day.mp3": "docs/mockups/sounds/amb_desert_day.mp3",
  "sounds/amb_town_day.mp3": "docs/mockups/sounds/amb_town_day.mp3",
  "sounds/amb_underwater.mp3": "docs/mockups/sounds/amb_underwater.mp3",
- "sounds/amb_cave.mp3": "docs/mockups/sounds/amb_cave.mp3"
+ "sounds/amb_cave.mp3": "docs/mockups/sounds/amb_cave.mp3",
+ "sounds/fall_light.mp3": "docs/mockups/sounds/fall_light.mp3",
+ "sounds/fall_medium.mp3": "docs/mockups/sounds/fall_medium.mp3",
+ "sounds/fall_roar.mp3": "docs/mockups/sounds/fall_roar.mp3"
 }

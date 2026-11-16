@@ -33,4 +33,14 @@
     enter_big_m_s: 6.0,
     breath_after_s: 10.0,
     fire_reach_m: 30.0,
+    // Falls (`water-flow` design "The sound of a fall"): the drop, lip water
+    // to landing water, from which a fall is medium and roaring; how many
+    // sound at once; feet this near are one fall; the fade in and out; the
+    // hold that keeps a sounding fall ranked ahead of a like one.
+    fall_medium_from_m: 3.0,
+    fall_roar_from_m: 6.0,
+    fall_voices: 4,
+    fall_merge_m: 10.0,
+    fall_fade_s: 1.5,
+    fall_hold_db: 3.0,
 )

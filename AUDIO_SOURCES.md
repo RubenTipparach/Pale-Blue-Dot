@@ -1,6 +1,6 @@
 # Audio sources
 
-Every recording Pale Blue Dot's sounds are cut from. 92 packs, every one CC0 or public domain by its own page when `tools/audio/fetch_cc0.py` read it (a pack whose page does not say so is refused), except the few the owner asked for under another licence (`tools/audio/licence_exceptions.json`), each printed with the credit its page asks for, which the game's credits must carry. CC0 asks for no credit; the people who recorded them are named anyway.
+Every recording Pale Blue Dot's sounds are cut from. 99 packs, every one CC0 or public domain by its own page when `tools/audio/fetch_cc0.py` read it (a pack whose page does not say so is refused), except the few the owner asked for under another licence (`tools/audio/licence_exceptions.json`), each printed with the credit its page asks for, which the game's credits must carry. CC0 asks for no credit; the people who recorded them are named anyway.
 
 This file is written by `python3 tools/audio/list_sources.py` (run by `tools/audio/render_sfx.sh`) from `tools/audio/cc0_cues.json` and `tools/audio/cc0_licences.json`: edit those, not this. Each cue's exact files and edits are in `assets/audio/sfx/SOURCES.md` and `assets/audio/ambience/SOURCES.md`. Freesound sounds are taken from the high-quality preview Freesound serves without an account (an MP3), under the same licence as the sound.
 
@@ -32,13 +32,17 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [FrogsAndCrickets_ExcerptB_JMA_24Bit_48k.wav](https://freesound.org/people/greysound/sounds/32655/) | Freesound | greysound | CC0 | `amb_night_frogs` |
 | [Village ambience rooster and light birds with wind .wav](https://freesound.org/people/The_Sound_Side/sounds/331442/) | Freesound | The_Sound_Side | CC0 | `amb_town_day` |
 | [Powerful helicopter sound Bell 407 OK-ALB](https://freesound.org/people/bzamecnik/sounds/348991/) | Freesound | bzamecnik | CC0 | `rotor_loop` |
+| [Mid-sized Waterfall](https://freesound.org/people/ProductionNow/sounds/352903/) | Freesound | ProductionNow | CC0 | `fall_medium` |
 | [Seagull on beach](https://freesound.org/people/squashy555/sounds/353416/) | Freesound | squashy555 | CC0 | `gull` |
 | [Shovel_dirt.wav](https://freesound.org/people/dr19/sounds/353907/) | Freesound | dr19 | CC0 | `break_dirt`, `break_dry`, `break_grass` |
+| [Water Pouring Onto Stone](https://freesound.org/people/TheWoodlandNomad/sounds/363119/) | Freesound | TheWoodlandNomad | CC0 | `fall_light` |
 | [Steam.wav](https://freesound.org/people/sniperous/sounds/365071/) | Freesound | sniperous | CC0 | `fire_hiss` |
 | [Waves Up Close 3](https://freesound.org/people/amholma/sounds/376805/) | Freesound | amholma | CC0 | `amb_surf` |
 | [MUDDY AND WET FOOTSTEPS.wav](https://freesound.org/people/Alex_hears_things/sounds/376809/) | Freesound | Alex_hears_things | CC0 | `step_wet` |
 | [Footsteps Dirt 01](https://freesound.org/people/aglinder/sounds/264469/) | Freesound | aglinder | CC0 | `step_dirt` |
 | [Swimming.wav](https://freesound.org/people/13FPanska_Marval_Lukas/sounds/379334/) | Freesound | 13FPanska_Marval_Lukas | CC0 | `swim_stroke`, `swim_stroke_under` |
+| [NIAGARA WATERS ROARING.mp3](https://freesound.org/people/KevinT1001/sounds/379905/) | Freesound | KevinT1001 | CC0 | `fall_roar` |
+| [Huge Waterfall](https://freesound.org/people/deleted_user_7146007/sounds/383732/) | Freesound | deleted_user_7146007 | CC0 | `fall_roar` |
 | [Foot_Step_grit_Sand.wav](https://freesound.org/people/savataivanov/sounds/384082/) | Freesound | savataivanov | CC0 | `jump_sand`, `land_sand`, `place_sand`, `step_sand` |
 | [Digging a Hole and Shovelling Soil/Dirt 2](https://freesound.org/people/Ali_6868/sounds/384362/) | Freesound | Ali_6868 | CC0 | `dig_dirt`, `dig_dry`, `dig_grass` |
 | [Torch - Ignite flame on soft](https://freesound.org/people/ldezem/sounds/386385/) | Freesound | ldezem | CC0 | `fire_ignite_small` |
@@ -51,7 +55,9 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Close lightning strike 2018 07 07](https://freesound.org/people/csengeri/sounds/434359/) | Freesound | csengeri | CC0 | `thunder_crack` |
 | [G54-27-Oars Rowing.wav](https://freesound.org/people/craigsmith/sounds/438846/) | Freesound | craigsmith | CC0 | `oar_stroke` |
 | [Big Water Splash](https://freesound.org/people/qubodup/sounds/442773/) | Freesound | qubodup | CC0 | `water_enter_big` |
+| [big_waterfall.wav](https://freesound.org/people/A.Deathy/sounds/44880/) | Freesound | A.Deathy | CC0 | `fall_roar` |
 | [flag.wav](https://freesound.org/people/GeorgeHopkins/sounds/448975/) | Freesound | GeorgeHopkins | CC0 | `sail_fill` |
+| [waterfall small or water fountain splashy close stream into water.flac](https://freesound.org/people/kyles/sounds/454340/) | Freesound | kyles | CC0 | `fall_light` |
 | [Autumn wind and dry leaves.wav](https://freesound.org/people/Stek59/sounds/457318/) | Freesound | Stek59 | CC0 | `amb_wind_low` |
 | [Footsteps on hollow wood](https://freesound.org/people/florianreichelt/sounds/459970/) | Freesound | florianreichelt | CC0 | `step_wood` |
 | [Owl Hoot](https://freesound.org/people/Breviceps/sounds/465697/) | Freesound | Breviceps | CC0 | `owl` |
@@ -64,6 +70,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Angel Fly Fish Reel Slow Wind_1.wav](https://freesound.org/people/paulprit/sounds/507078/) | Freesound | paulprit | CC0 | `reel_loop` |
 | [Rock Smash](https://freesound.org/people/NeoSpica/sounds/512243/) | Freesound | NeoSpica | CC0 | `strike_hit_ground` |
 | [Bubbles.wav](https://freesound.org/people/erkanozan/sounds/51745/) | Freesound | erkanozan | CC0 | `bubbles` |
+| [Medium Waterfall (Loopable).wav](https://freesound.org/people/Osiruswaltz/sounds/530170/) | Freesound | Osiruswaltz | CC0 | `fall_medium` |
 | [Footsteps_Boots_Gritty_Ground_(Gravel).wav](https://freesound.org/people/Nox_Sound/sounds/530589/) | Freesound | Nox_Sound | CC0 | `step_stone` |
 | [Ocean Waves.wav](https://freesound.org/people/Noted451/sounds/531015/) | Freesound | Noted451 | CC0 | `amb_gulls` |
 | [Thunderclap](https://freesound.org/people/Fission9/sounds/534023/) | Freesound | Fission9 | CC0 | `thunder_close` |

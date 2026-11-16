@@ -201,6 +201,20 @@ pub struct MixConfig {
     pub breath_after_s: f32,
     /// Fires (campfire, brazier) voiced within this distance.
     pub fire_reach_m: f32,
+    /// A fall that drops this far or more is `fall_medium`; less is
+    /// `fall_light` (`water-flow` design "The sound of a fall").
+    pub fall_medium_from_m: f32,
+    /// A fall that drops this far or more is `fall_roar`.
+    pub fall_roar_from_m: f32,
+    /// The most falls sounding at once, fading voices included.
+    pub fall_voices: usize,
+    /// Feet this near a louder foot are the same fall, heard once.
+    pub fall_merge_m: f32,
+    /// A fall fades in and out over this.
+    pub fall_fade_s: f32,
+    /// A fall already sounding is ranked this much louder, so two of a
+    /// like loudness do not trade places every frame.
+    pub fall_hold_db: f32,
 }
 
 impl Default for MixConfig {
@@ -237,6 +251,12 @@ impl Default for MixConfig {
             enter_big_m_s: 6.0,
             breath_after_s: 10.0,
             fire_reach_m: 30.0,
+            fall_medium_from_m: 3.0,
+            fall_roar_from_m: 6.0,
+            fall_voices: 4,
+            fall_merge_m: 10.0,
+            fall_fade_s: 1.5,
+            fall_hold_db: 3.0,
         }
     }
 }
@@ -258,6 +278,9 @@ impl MixConfig {
             ("stride_walk_m", self.stride_walk_m),
             ("step_rate_walk_hz", self.step_rate_walk_hz),
             ("step_rate_run_hz", self.step_rate_run_hz),
+            ("fall_medium_from_m", self.fall_medium_from_m),
+            ("fall_merge_m", self.fall_merge_m),
+            ("fall_fade_s", self.fall_fade_s),
         ];
         for (name, value) in positive {
             if !(value > 0.0 && value.is_finite()) {
@@ -286,6 +309,15 @@ impl MixConfig {
         }
         if self.max_voices == 0 {
             out.push("max_voices is 0".into());
+        }
+        if !(self.fall_roar_from_m > self.fall_medium_from_m && self.fall_roar_from_m.is_finite()) {
+            out.push("fall_roar_from_m is not above fall_medium_from_m".into());
+        }
+        if self.fall_voices == 0 {
+            out.push("fall_voices is 0".into());
+        }
+        if !(self.fall_hold_db >= 0.0 && self.fall_hold_db.is_finite()) {
+            out.push(format!("fall_hold_db {} is negative", self.fall_hold_db));
         }
         out
     }
@@ -803,6 +835,201 @@ pub fn thunder(
     })
 }
 
+/// A fall's sound by how far it drops (`water-flow` design "The sound of a
+/// fall", owner 2026-11-16: "light, medium, and roaring based on height").
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FallBand {
+    /// A riffle or a one- or two-layer fall: a trickle and splash.
+    Light,
+    /// Three to five layers: a steady pour.
+    Medium,
+    /// Six layers or more: a low, full roar.
+    Roar,
+}
+
+impl FallBand {
+    pub const ALL: [FallBand; 3] = [FallBand::Light, FallBand::Medium, FallBand::Roar];
+
+    /// The cue it loops.
+    pub fn cue(self) -> &'static str {
+        match self {
+            FallBand::Light => "fall_light",
+            FallBand::Medium => "fall_medium",
+            FallBand::Roar => "fall_roar",
+        }
+    }
+
+    pub fn index(self) -> usize {
+        self as usize
+    }
+}
+
+/// The band of a fall that drops `drop_m` metres, lip water to landing
+/// water (its falling run, one metre a layer).
+pub fn fall_band(mix: &MixConfig, drop_m: f32) -> FallBand {
+    if drop_m >= mix.fall_roar_from_m {
+        FallBand::Roar
+    } else if drop_m >= mix.fall_medium_from_m {
+        FallBand::Medium
+    } else {
+        FallBand::Light
+    }
+}
+
+/// How a band's cue is heard, from the cue book: its level and its distances.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FallReach {
+    pub volume_db: f32,
+    pub full_within_m: f32,
+    pub audible_m: f32,
+}
+
+/// A fall the ears can hear: where its loudest foot is, its band, and how
+/// loud it is there (the ranking's measure, not the voice's gain).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FallHeard {
+    pub at: Vec3,
+    pub band: FallBand,
+    pub loud: f32,
+}
+
+/// The loudest `mix.fall_voices` falls at `eye`, loudest first, into `out`
+/// (cleared; it never grows past the cap, so a reused one never allocates).
+/// `feet` are each foot's body-local point and drop in metres; `reach` is
+/// indexed by [`FallBand::index`]. Feet within `fall_merge_m` of a louder
+/// foot are the same fall. A fall near a voice in `sounding` of its band is
+/// ranked `fall_hold_db` louder.
+pub fn loudest_falls(
+    feet: impl IntoIterator<Item = (Vec3, f32)>,
+    eye: Vec3,
+    mix: &MixConfig,
+    reach: &[FallReach; 3],
+    sounding: &[FallVoice],
+    out: &mut Vec<FallHeard>,
+) {
+    out.clear();
+    let cap = mix.fall_voices;
+    let hold = amplitude(mix.fall_hold_db);
+    for (at, drop_m) in feet {
+        if !at.is_finite() {
+            continue;
+        }
+        let band = fall_band(mix, drop_m);
+        let r = reach[band.index()];
+        let d = at.distance(eye);
+        let mut loud = distance_gain(d, r.full_within_m, r.audible_m) * amplitude(r.volume_db);
+        if loud <= 0.0 {
+            continue;
+        }
+        if sounding
+            .iter()
+            .any(|v| v.band == band && v.level > 0.0 && v.at.distance(at) < mix.fall_merge_m)
+        {
+            loud *= hold;
+        }
+        let heard = FallHeard { at, band, loud };
+        if let Some(same) = out
+            .iter_mut()
+            .find(|h| h.at.distance(at) < mix.fall_merge_m)
+        {
+            if loud > same.loud {
+                *same = heard;
+            }
+            continue;
+        }
+        if out.len() < cap {
+            out.push(heard);
+        } else if let Some(quietest) = out.iter_mut().min_by(|a, b| a.loud.total_cmp(&b.loud))
+            && loud > quietest.loud
+        {
+            *quietest = heard;
+        }
+    }
+    out.sort_by(|a, b| b.loud.total_cmp(&a.loud));
+}
+
+/// One fall's voice: which loop, where, and how far faded in (0 silent,
+/// 1 full).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FallVoice {
+    /// Its loop's key: new for each voice, so a fall's voice keeps its loop
+    /// while it follows the fall.
+    pub id: u64,
+    pub band: FallBand,
+    pub at: Vec3,
+    pub level: f32,
+    /// Among the heard falls this frame.
+    pub heard: bool,
+}
+
+impl FallVoice {
+    /// The voice's gain from its level, eased so a fade starts and ends
+    /// gently.
+    pub fn gain(&self) -> f32 {
+        let l = self.level.clamp(0.0, 1.0);
+        l * l * (3.0 - 2.0 * l)
+    }
+}
+
+/// The falls' voices: at most `mix.fall_voices`, each fading in over
+/// `fall_fade_s` while its fall is heard and out over the same when it is
+/// not, let go only at silence.
+#[derive(Clone, Debug, Default)]
+pub struct FallVoices {
+    pub voices: Vec<FallVoice>,
+    next: u64,
+}
+
+impl FallVoices {
+    /// Follow the heard falls for a frame of `dt` seconds.
+    pub fn update(&mut self, heard: &[FallHeard], mix: &MixConfig, dt: f32) {
+        for v in &mut self.voices {
+            v.heard = false;
+        }
+        for h in heard {
+            // The voice already sounding this fall: its band, nearest within
+            // the merge distance, and not taken by a louder fall.
+            let own = self
+                .voices
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| {
+                    !v.heard && v.band == h.band && v.at.distance(h.at) < mix.fall_merge_m
+                })
+                .min_by(|a, b| a.1.at.distance(h.at).total_cmp(&b.1.at.distance(h.at)))
+                .map(|(i, _)| i);
+            match own {
+                Some(i) => {
+                    let v = &mut self.voices[i];
+                    v.at = h.at;
+                    v.heard = true;
+                }
+                // A new fall waits for a free voice.
+                None if self.voices.len() < mix.fall_voices => {
+                    self.next += 1;
+                    self.voices.push(FallVoice {
+                        id: self.next,
+                        band: h.band,
+                        at: h.at,
+                        level: 0.0,
+                        heard: true,
+                    });
+                }
+                None => {}
+            }
+        }
+        let step = (dt / mix.fall_fade_s.max(1e-3)).max(0.0);
+        for v in &mut self.voices {
+            v.level = if v.heard {
+                (v.level + step).min(1.0)
+            } else {
+                (v.level - step).max(0.0)
+            };
+        }
+        self.voices.retain(|v| v.heard || v.level > 0.0);
+    }
+}
+
 /// What happens to a new voice when a cue or the mixer is at its cap.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Admit {
@@ -1137,5 +1364,208 @@ mod tests {
         assert_eq!(admit(&[0.5, 0.2, 0.3], 3, 0.25), Admit::Replace(1));
         assert_eq!(admit(&[0.5, 0.2, 0.3], 3, 0.2), Admit::Drop);
         assert_eq!(admit(&[], 0, 1.0), Admit::Drop);
+    }
+
+    /// The reach `cues.ron` gives the fall cues.
+    const FALL_REACH: [FallReach; 3] = [
+        FallReach {
+            volume_db: -6.0,
+            full_within_m: 3.0,
+            audible_m: 40.0,
+        },
+        FallReach {
+            volume_db: -7.0,
+            full_within_m: 6.0,
+            audible_m: 90.0,
+        },
+        FallReach {
+            volume_db: -4.0,
+            full_within_m: 12.0,
+            audible_m: 220.0,
+        },
+    ];
+
+    #[test]
+    fn a_fall_is_light_medium_or_roaring_by_its_drop() {
+        let m = mix();
+        assert!(m.problems().is_empty(), "{:?}", m.problems());
+        for (drop_m, band) in [
+            (0.5, FallBand::Light),
+            (1.0, FallBand::Light),
+            (2.0, FallBand::Light),
+            (2.99, FallBand::Light),
+            (3.0, FallBand::Medium),
+            (5.0, FallBand::Medium),
+            (5.99, FallBand::Medium),
+            (6.0, FallBand::Roar),
+            (40.0, FallBand::Roar),
+        ] {
+            assert_eq!(fall_band(&m, drop_m), band, "a {drop_m} m drop");
+        }
+        assert_eq!(
+            FallBand::ALL.map(FallBand::cue),
+            ["fall_light", "fall_medium", "fall_roar"]
+        );
+        let backwards = MixConfig {
+            fall_roar_from_m: 3.0,
+            ..mix()
+        };
+        assert!(!backwards.problems().is_empty());
+    }
+
+    #[test]
+    fn the_loudest_falls_are_heard_and_a_wide_one_once() {
+        let m = mix();
+        let mut out = Vec::new();
+        // A trickle at 30 m, a roar at 100 m, and a river's row of feet 2 m
+        // apart at 8 m: the river is one fall, the roar outranks the trickle.
+        let mut feet = vec![
+            (Vec3::new(30.0, 0.0, 0.0), 1.0),
+            (Vec3::new(0.0, 0.0, 100.0), 9.0),
+        ];
+        for i in 0..5 {
+            feet.push((Vec3::new(-8.0, 0.0, i as f32 * 2.0), 4.0));
+        }
+        loudest_falls(
+            feet.iter().copied(),
+            Vec3::ZERO,
+            &m,
+            &FALL_REACH,
+            &[],
+            &mut out,
+        );
+        assert_eq!(out.len(), 3, "{out:?}");
+        assert_eq!(out[0].band, FallBand::Medium);
+        assert_eq!(
+            out[0].at,
+            Vec3::new(-8.0, 0.0, 0.0),
+            "the nearest foot of the row"
+        );
+        assert_eq!(out[1].band, FallBand::Roar);
+        assert_eq!(out[2].band, FallBand::Light);
+        // Out of every reach: nothing.
+        loudest_falls(
+            [
+                (Vec3::new(500.0, 0.0, 0.0), 20.0),
+                (Vec3::new(45.0, 0.0, 0.0), 1.0),
+            ],
+            Vec3::ZERO,
+            &m,
+            &FALL_REACH,
+            &[],
+            &mut out,
+        );
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn no_more_falls_than_the_cap_are_heard_or_voiced() {
+        let m = mix();
+        let mut out = Vec::new();
+        let mut voices = FallVoices::default();
+        // Twenty falls 20 m apart on a ring round the eye, moving as the eye
+        // walks: never more than the cap heard or sounding.
+        let feet: Vec<(Vec3, f32)> = (0..20)
+            .map(|i| {
+                let a = i as f32 / 20.0 * std::f32::consts::TAU;
+                (
+                    Vec3::new(a.cos(), 0.0, a.sin()) * 64.0,
+                    (i % 8) as f32 + 1.0,
+                )
+            })
+            .collect();
+        for frame in 0..600 {
+            let eye = Vec3::new((frame as f32 * 0.2).sin() * 40.0, 0.0, frame as f32 * 0.1);
+            loudest_falls(
+                feet.iter().copied(),
+                eye,
+                &m,
+                &FALL_REACH,
+                &voices.voices,
+                &mut out,
+            );
+            assert!(out.len() <= m.fall_voices);
+            voices.update(&out, &m, 1.0 / 60.0);
+            assert!(voices.voices.len() <= m.fall_voices);
+            assert!(out.capacity() <= 2 * m.fall_voices.max(4));
+        }
+    }
+
+    #[test]
+    fn a_fall_fades_in_and_out_never_pops() {
+        let m = mix();
+        let dt = 1.0 / 60.0;
+        let mut voices = FallVoices::default();
+        let fall = FallHeard {
+            at: Vec3::new(10.0, 0.0, 0.0),
+            band: FallBand::Roar,
+            loud: 0.5,
+        };
+        voices.update(&[fall], &m, dt);
+        let id = voices.voices[0].id;
+        let first = voices.voices[0].gain();
+        assert!(first < 0.01, "starts near silence: {first}");
+        // The level climbs a frame's share of the fade at a time.
+        let mut last = first;
+        for _ in 0..(m.fall_fade_s / dt) as usize + 2 {
+            voices.update(&[fall], &m, dt);
+            let g = voices.voices[0].gain();
+            assert!(g >= last && g - last < 0.05, "{last} to {g}");
+            last = g;
+        }
+        assert_eq!(last, 1.0);
+        // Following the fall to a neighbouring foot keeps the same voice.
+        let moved = FallHeard {
+            at: Vec3::new(12.0, 0.0, 0.0),
+            ..fall
+        };
+        voices.update(&[moved], &m, dt);
+        assert_eq!(voices.voices.len(), 1);
+        assert_eq!(voices.voices[0].id, id);
+        assert_eq!(voices.voices[0].at, moved.at);
+        // Gone: it fades out, then is let go.
+        let mut frames = 0;
+        while !voices.voices.is_empty() {
+            let before = voices.voices[0].gain();
+            voices.update(&[], &m, dt);
+            if let Some(v) = voices.voices.first() {
+                assert!(v.gain() <= before && before - v.gain() < 0.05);
+            }
+            frames += 1;
+            assert!(frames < 200);
+        }
+        assert!(frames as f32 * dt >= m.fall_fade_s * 0.95);
+    }
+
+    #[test]
+    fn a_new_fall_waits_for_a_free_voice() {
+        let m = MixConfig {
+            fall_voices: 1,
+            ..mix()
+        };
+        let dt = 0.1;
+        let mut voices = FallVoices::default();
+        let a = FallHeard {
+            at: Vec3::ZERO,
+            band: FallBand::Light,
+            loud: 0.2,
+        };
+        let b = FallHeard {
+            at: Vec3::new(50.0, 0.0, 0.0),
+            band: FallBand::Roar,
+            loud: 0.4,
+        };
+        for _ in 0..20 {
+            voices.update(&[a], &m, dt);
+        }
+        // B is louder now: A fades out first, then B takes its voice.
+        voices.update(&[b], &m, dt);
+        assert_eq!(voices.voices.len(), 1);
+        assert_eq!(voices.voices[0].band, FallBand::Light);
+        for _ in 0..20 {
+            voices.update(&[b], &m, dt);
+        }
+        assert_eq!(voices.voices.len(), 1);
+        assert_eq!(voices.voices[0].band, FallBand::Roar);
     }
 }
