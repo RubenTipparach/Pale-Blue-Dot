@@ -162,6 +162,9 @@ struct Bot {
     detour_s: f32,
     roam_to: Option<Vec3>,
     climb_s: f32,
+    /// Where an `Away` began, and the point it walks to next.
+    away_from: Option<Vec3>,
+    away_to: Option<Vec3>,
     /// Where the bot last got stuck, and until when it builds itself up.
     stuck_at: Option<Vec3>,
     climb_until: f32,
@@ -1181,6 +1184,25 @@ fn run(
             } else {
                 Status::Running
             }
+        }
+        Act::Away(metres) => {
+            let from = *bot.away_from.get_or_insert(s.feet);
+            let gone = from.normalize_or(Vec3::Y).distance(s.up) * PLANET_RADIUS;
+            if gone >= *metres {
+                bot.away_from = None;
+                return Status::Done;
+            }
+            let reached = bot
+                .away_to
+                .is_none_or(|to| tangent(to - s.feet, s.up).length() < 2.0);
+            if reached || bot.phase_s > 12.0 {
+                bot.away_to = Some(dry_ground(s));
+                bot.phase_s = 0.0;
+            }
+            if let Some(to) = bot.away_to {
+                bot.walk_to(s, out, to, 1.5);
+            }
+            Status::Running
         }
         Act::Use => {
             if bot.phase == 0 && bot.act_s > 0.4 {
@@ -2306,12 +2328,13 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
         })
         // A female first, for the eggs, milk or wool the herding asks
         // for later; the nearest of those.
+        // The nearest, a hen before a cock unless the cock is much nearer
+        // (a hen lays the eggs the herding asks for later).
         .min_by(|a, b| {
-            (!a.0.female as u8).cmp(&(!b.0.female as u8)).then(
-                a.0.pos
-                    .distance(s.feet)
-                    .total_cmp(&b.0.pos.distance(s.feet)),
-            )
+            let cost = |x: &pbd_app::husbandry::Seen| {
+                x.pos.distance(s.feet) + if x.female { 0.0 } else { 15.0 }
+            };
+            cost(&a.0).total_cmp(&cost(&b.0))
         });
     let Some((animal, sp)) = target else {
         // None in sight: look further.

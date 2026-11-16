@@ -45,6 +45,16 @@ Done on `claude/starter-missions` (2026-11-14): tests in `pbd_core::missions` an
   - A locked recipe's picture is a dim silhouette everywhere it is listed: the bench's recipe wells, the pack's recipe list and drop-down, the result well, and the forge's and the campfire's rows (`craft::SILHOUETTE`, `LockTint`). The CRAFT plaque reads LOCKED and the stations' plaques grey; the result well's tooltip, the bench's line, the forge's and campfire's rows (`LockLine`) and the refusal note say "Opens with: <mission>".
   - Captures: `docs/screenshots/recipe-locks/bench.png` (stone tools and fences open; forge, bucket, bronze and iron tools as silhouettes, the iron pick picked and LOCKED) and `pack.png` (a new world after gathering: the workbench locked). Found while capturing: a tool's tier-less name let a done stone-tools mission open the bronze and iron tools; only the stone tier counts now.
 - [ ] T.5 The bot plays the tree: trunk, branches, cooking, each a goal (`step-videos` 5.x). Verify: a run ends with the tree done in the save and every unlock seen.
+  - One showcase per branch, chained on one `--world` (`assets/showcase/phase-1-<branch>.ron`), each from the world the earlier ones left, nothing set. Results on 2026-11-16 (M4 Max, windowed, real time):
+    - trunk: passes from a new world, `gather` to `fire`, about 7.5 minutes.
+    - fishing: passes, `rod` and `go-fishing`, under 2 minutes.
+    - farming: passes, seeds to the harvest with the bucket filled at the sea and poured, about 2.5 minutes with the six days sped up.
+    - herding: stalls at `tame` (fences and gate done): the nearest hen is across terraces the bot cannot cross in time.
+    - cooking: `cook-fish`, `eat` and `bread` pass; `fried-egg` waits on herding's eggs.
+    - light: `build` and `torch` pass, in a run resumed at its second shot after the torch's materials were added; not yet in one fresh run of the final file.
+    - about: the map is opened; stalls on the 200 m walk; swim, reef, town and boat are not played yet.
+    - mining: written, not run: no generated ground holds ore until generator version 10.
+  - Stills of each passing branch are in `docs/screenshots/step-videos/phase-1-<branch>/`.
 
 ## TS. The tree in the game (M33 version 3 approved: "that tree is better, I approve", "implement in game", 2026-11-15)
 

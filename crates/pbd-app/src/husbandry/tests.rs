@@ -180,3 +180,75 @@ fn a_rig_builds_boxes_and_its_legs_follow_the_phase() {
         assert_ne!(a.positions, b.positions, "{}: the legs move", sp.id);
     }
 }
+
+/// MEASUREMENT (`step-videos` 5.2, the sturdier bot; run by hand with
+/// `--ignored`): level pasture by the sea with a wild Yard hen herd within
+/// 30 m, near the fields spawn, as `--at` degrees for the showcase's start.
+#[test]
+#[ignore]
+fn find_a_coastal_start_with_hens() {
+    use crate::planet::surface_height;
+    let settings: HusbandrySettings =
+        ron::from_str(include_str!("../../../../assets/config/husbandry.ron")).unwrap();
+    let roster = settings
+        .land
+        .values()
+        .find(|r| r.iter().any(|s| s.name == "Yard hen"))
+        .expect("a roster with the hen")
+        .clone();
+    let hen = roster.iter().position(|s| s.name == "Yard hen").unwrap() as u16;
+    let seed = crate::planet::terrain_config().seed;
+    let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+    let mut found = Vec::new();
+    for i in -500..=500 {
+        for j in -500..=500 {
+            let east = Vec3::Y.cross(spawn).normalize();
+            let north = spawn.cross(east);
+            let d = (spawn * PLANET_RADIUS + east * (i as f32 * 12.0) + north * (j as f32 * 12.0))
+                .normalize();
+            let h = surface_height(d);
+            if !(1.0..6.0).contains(&h) {
+                continue;
+            }
+            let e2 = Vec3::Y.cross(d).normalize();
+            let n2 = d.cross(e2);
+            let at = |r: f32, a: f32| {
+                (d * PLANET_RADIUS + (e2 * a.cos() + n2 * a.sin()) * r).normalize()
+            };
+            let sea = (0..12).any(|k| {
+                let a = k as f32 / 12.0 * std::f32::consts::TAU;
+                surface_height(at(25.0, a)) < -0.6
+            });
+            if !sea {
+                continue;
+            }
+            let level = (0..8).all(|k| {
+                let a = k as f32 / 8.0 * std::f32::consts::TAU;
+                [10.0, 20.0].iter().all(|r| {
+                    let hh = surface_height(at(*r, a));
+                    hh < 0.0 || (hh - h).abs() < 3.0
+                })
+            });
+            if !level {
+                continue;
+            }
+            let hens = herds::squares_near(d, 60.0, PLANET_RADIUS, &settings.herds)
+                .into_iter()
+                .filter_map(|sq| herds::herd_in(seed, sq, PLANET_RADIUS, &settings.herds, &roster))
+                .any(|herd| {
+                    herd.species == hen
+                        && herd.centre.angle_between(d) * PLANET_RADIUS < 45.0
+                        && surface_height(herd.centre) > 0.5
+                });
+            if hens {
+                found.push((d.distance(spawn) * PLANET_RADIUS, d));
+            }
+        }
+    }
+    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+    for (m, d) in found.iter().take(6) {
+        let (lat, lon) = pbd_core::geo::lat_lon(*d).degrees();
+        println!("COASTAL_HENS {m:.0} m: --at {lat:.4} {lon:.4}");
+    }
+    assert!(!found.is_empty());
+}

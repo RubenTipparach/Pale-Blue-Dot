@@ -100,6 +100,9 @@ pub enum Act {
     Smelt(String, u32),
     /// Open the map with M for seconds, then close it.
     Map(f32),
+    /// Walk this many metres from where the act began, over dry ground,
+    /// keeping on as straight as the land allows.
+    Away(f32),
     /// The right button once, on what is aimed at, with what is in hand
     /// (the bucket filled at the water or poured).
     Use,

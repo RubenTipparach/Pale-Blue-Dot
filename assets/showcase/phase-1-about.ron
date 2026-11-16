@@ -22,9 +22,8 @@
         (
             caption: "Walk 200 m from where the map was read",
             until: ["map"],
-            repeat: true,
             max_s: 240.0,
-            acts: [Walk(60.0)],
+            acts: [Away(210.0)],
         ),
         (
             caption: "Into the water: swim",
