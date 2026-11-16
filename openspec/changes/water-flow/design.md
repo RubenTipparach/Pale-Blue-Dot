@@ -960,3 +960,7 @@ The owner's tuning applies under the proposed mist rule too ("Mist on every fall
   fall, can we do something like that?"): the top's small waves die away over the last 2 m before the lip and the
   first ~0.5 m of the drop stays smooth and green, then thin strands appear and fill in to the full froth by 2.5 m
   down. The game's lip-whitening is off under it. A Lip switch (Froth / Glassy) compares it with the game's look.
+- **Rounded lip** (owner: "still looks kinda sharp there"): under Glassy the falling cell's top edge, on every side
+  but the one it is fed from, is a 0.45 m quarter-round: the top's vertices within 0.45 m of the rim move onto the
+  arc and take its normal, and the sides start 0.45 m below the top where the arc ends. In the game this is a mesher
+  change (the falling cell's cap and the top of its side quads), so it is the larger part of a port.

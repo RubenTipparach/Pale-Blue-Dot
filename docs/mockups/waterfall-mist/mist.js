@@ -248,6 +248,11 @@ function groundMesh(U, o) {
 //           the top and on the face are one pattern across the edge;
 //   aTop    the lip's height; aFlowN the fall's main face normal (D's one frame per fall); aFlow a cap's flow, m/s;
 //   aSky    how open to the sky (the pit's walls shade its foot).
+// Rounded lip (New tab, Lip: Glassy; owner, 2026-11-16: "still looks kinda sharp there"): the falling cell's top
+// edge, on every side but the one it is fed from, is a quarter-round of this radius. The top bends down over the
+// arc (its vertices within LIP_R of the rim are moved onto the arc, with the arc's normal), and the sides start
+// LIP_R below the top, where the arc ends. 0 is the game's square edge.
+let LIP_R = 0;
 function waterGeometry(lean) {
   const A = {position: [], aRest: [], aFaceN: [], aKind: [], aFroth: [], aPath: [], aTop: [], aFlowN: [], aFlow: [], aSky: [], aDepth: []};
   let depthNow = 0.35;
@@ -276,12 +281,26 @@ function waterGeometry(lean) {
     return {path: [px + dx * tOut, pz + dz * tOut, Math.min(L - tOut, 0)], fade: Math.min(1, Math.max(0, (tOut - tIn - 0.1) / 0.6))};
   }
   // A hex cap, its six triangles each cut into n x n, heights from corner heights (flat when one height).
-  function cap(F, q, r, hs, n, kind, sky, flow, lip) {
+  function cap(F, q, r, hs, n, kind, sky, flow, lip, round) {
     const c = [cx(q, r), cz(r)], hc = hs.reduce((a, b) => a + b, 0) / 6;
     for (let i = 0; i < 6; i++) {
       const a = cornerXZ(q, r, i), b = cornerXZ(q, r, (i + 1) % 6), ha = hs[i], hb = hs[(i + 1) % 6];
       const P = (u, v) => { const w = 1 - u - v; return [c[0] * w + a[0] * u + b[0] * v, hc * w + ha * u + hb * v, c[1] * w + a[1] * u + b[1] * v]; };
-      const emit = p => { const L = lip ? lipPath(F, p[0], p[2]) : {path: [p[0], p[2], -99], fade: 0}; vert(F, p, [0, 1, 0], kind, L.fade, L.path, sky, flow); };
+      const emit = p0 => {
+        let p = p0, nrm = [0, 1, 0];
+        if (round && LIP_R > 0) {
+          // Distance in from the rim (the nearest side but the fed one), and that side's normal.
+          let rim = 1e9, ni = 0;
+          for (let s2 = 0; s2 < 6; s2++) { if (s2 === F.iRS) continue; const n2 = sideN(s2), d2 = HW / 2 - ((p0[0] - c[0]) * n2[0] + (p0[2] - c[1]) * n2[1]); if (d2 < rim) { rim = d2; ni = s2; } }
+          if (rim < LIP_R) {
+            const th = (1 - Math.max(rim, 0) / LIP_R) * Math.PI / 2, inward = LIP_R * (1 - Math.sin(th));
+            const n2 = sideN(ni), push = rim - inward;   // move out along the side's normal by rim - inward
+            p = [p0[0] + n2[0] * push, p0[1] - LIP_R * (1 - Math.cos(th)), p0[2] + n2[1] * push];
+            nrm = [n2[0] * Math.sin(th), Math.cos(th), n2[1] * Math.sin(th)];
+          }
+        }
+        const L = lip ? lipPath(F, p0[0], p0[2]) : {path: [p0[0], p0[2], -99], fade: 0}; vert(F, p, nrm, kind, L.fade, L.path, sky, flow);
+      };
       for (let j = 0; j < n; j++) for (let k = 0; k < n - j; k++) {
         const p00 = P(j / n, k / n), p10 = P((j + 1) / n, k / n), p01 = P(j / n, (k + 1) / n);
         emit(p00); emit(p01); emit(p10);
@@ -306,7 +325,7 @@ function waterGeometry(lean) {
     const hsS = Array.from({length: 6}, (_, i) => (i === F.iSR || i === (F.iSR + 1) % 6) ? F.hR : F.levelS);
     cap(F, sq, sr, hsS, 10, 0, 1, flowW, true);
     // The falling cell's top: the lip; it shares its rim's vertices with the faces under it.
-    cap(F, rq, rr, Array(6).fill(F.hR), 10, 0, 1, flowW, true);
+    cap(F, rq, rr, Array(6).fill(F.hR), LIP_R > 0 ? 16 : 10, 0, 1, flowW, true, true);
     // The source's still sides over the ground (kind 3).
     for (let i = 0; i < 6; i++) {
       if (i === F.iSR) continue;
@@ -321,10 +340,10 @@ function waterGeometry(lean) {
       let nt = top(nq, nr); if (nt === null) nt = DEEP_M;
       const pl = poolAt(nq, nr); const bottom = pl !== null ? Math.max(nt, pl) : nt;
       const a = cornerXZ(rq, rr, i), b = cornerXZ(rq, rr, (i + 1) % 6), n = sideN(i);
-      if (bottom >= F.y0 - 0.01) { face(F, a, b, n, F.hR, F.y0, 2, 1.0, skyAt); continue; }
+      if (bottom >= F.y0 - 0.01) { face(F, a, b, n, F.hR - LIP_R, F.y0, 2, 1.0, skyAt); continue; }
       const lipLayer = Math.floor(F.y0), footLayer = Math.floor(bottom + 1e-3);
       for (let L = lipLayer; L >= footLayer; L--) {
-        const y1 = Math.min(L + 1, F.hR), y0 = Math.max(L, bottom);
+        const y1 = Math.min(L + 1, F.hR - LIP_R), y0 = Math.max(L, bottom);
         if (y1 - y0 < 1e-3) continue;
         face(F, a, b, n, y1, y0, 2, (L === lipLayer || L === footLayer) ? 1.0 : 0.55, skyAt);
       }
@@ -504,12 +523,12 @@ function waterMaterial(U, vertexShader) {
         float glass = 0.0;
         if (uGlass > 0.5) {
           if (vKind < 0.5 && vPath.z > -50.0 && vPath.z <= 0.0) glass = smoothstep(-2.0, -0.3, vPath.z);
-          if (fallFace) glass = 1.0 - smoothstep(0.15, 0.9, vPath.z);
+          if (fallFace) glass = 1.0 - smoothstep(0.55, 1.3, vPath.z);
           gradient *= 1.0 - 0.9*glass;
         }
         float raw_slope = length(gradient);
         vec3 capped = gradient*min(1.0, SLOPE_MAX/max(raw_slope, 1e-6));
-        vec3 normal = normalize(radial - capped*WAVE_STEEP);
+        vec3 normal = normalize((vKind < 0.5 ? face : radial) - capped*WAVE_STEEP);
         vec3 look = normalize(camB - posB);
         vec3 refl = reflect(-look, normal);
         if (vKind > 0.5 && horizontal < 0.5) refl = reflect(-look, radial);
@@ -574,8 +593,8 @@ function waterMaterial(U, vertexShader) {
             else {
               vec3 sp = vec3(along.x*16.0, along.y*0.12, along.z*16.0) + vec3(0.0, uTime*uSpeed*0.9, 0.0);
               float strands = smoothstep(0.55, 0.8, gnoise3(sp)*0.5 + gnoise3(sp*2.1)*0.25 + 0.5);
-              float s = vPath.z, fill = smoothstep(0.6, 2.5, s);
-              froth = mix(strands*0.85*smoothstep(0.2, 0.7, s), froth, fill);
+              float s = vPath.z, fill = smoothstep(1.0, 2.9, s);
+              froth = mix(strands*0.85*smoothstep(0.6, 1.1, s), froth, fill);
             }
           }
           if (fallFace) {
@@ -961,6 +980,8 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     for (const b of bubbles) { b.visible = v === "new"; b.material.uniforms.uAmt.value = S.bubbles; }
     wmat.uniforms.uAer.value = v === "new" ? 1 : 0;
     wmat.uniforms.uAerAmt.value = S.teal; wmat.uniforms.uRip.value = v === "new" ? S.rip : 0; wmat.uniforms.uOut.value = v === "new" ? S.out : 0; wmat.uniforms.uGlass.value = v === "new" && S.glass ? 1 : 0;
+    const wantR = v === "new" && S.glass ? 0.45 : 0;
+    if (wantR !== LIP_R) { LIP_R = wantR; water.geometry.dispose(); water.geometry = waterGeometry(0); }
     if (arrows) arrows.visible = v === "new" && S.arrows;
     wmat.uniforms.uG.value = v === "new" ? ACCEL_G * S.accel : 0; wmat.uniforms.uVmax.value = ACCEL_VMAX;
     front.material.uniforms.uGain.value = S.gain; front.material.uniforms.uLamps.value = v === "new" ? 1 : 0;
