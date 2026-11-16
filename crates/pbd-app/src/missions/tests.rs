@@ -77,6 +77,7 @@ fn every_kind_counts_from_its_message() {
                 needs: vec![],
                 objectives: vec![o.clone()],
                 unlocks: vec![],
+                after: vec![],
             })
             .collect(),
     };
@@ -174,6 +175,7 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
             "planks-rope",
             "crafting-table",
             "stone-tools",
+            "fire",
             "rod",
         ] {
             missions.progress.done.insert(id.into());
@@ -191,7 +193,8 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
         }
     }
     assert!(done(&app, "go-fishing"));
-    assert_eq!(line(&app).as_deref(), Some("Find seeds 0/2"));
+    // Cooking the catch hangs off fishing (M33 version 3).
+    assert_eq!(line(&app).as_deref(), Some("Cook fish 0/2"));
 }
 
 /// An old world, saved before missions and before tool crafting, opens with

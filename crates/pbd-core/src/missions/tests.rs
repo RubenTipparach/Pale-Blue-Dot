@@ -59,6 +59,7 @@ fn mission(id: &str, needs: &[&str], objectives: Vec<ObjectiveEntry>) -> Mission
         needs: needs.iter().map(|n| n.to_string()).collect(),
         objectives,
         unlocks: Vec::new(),
+        after: Vec::new(),
     }
 }
 
@@ -200,6 +201,7 @@ fn a_state_met_mission_completes_on_open() {
         "planks-rope",
         "crafting-table",
         "stone-tools",
+        "fire",
         "rod",
     ] {
         assert!(progress.is_done(id), "{id} in {:?}", step.done);
@@ -305,26 +307,64 @@ fn the_record_round_trips_and_keeps_what_it_does_not_know() {
     assert_eq!(read.line(&chain).as_deref(), Some("Gather wood: trees 0/2"));
 }
 
-/// The shipped tree (`starter-missions` T.2): every `what` names a known
-/// good, recipe, block, species or action, every `unlocks` a recipe, and
-/// played with the events the game raises it closes from the trunk through
-/// every branch to the feast.
+/// The shipped tree (`starter-missions` TS.1, M33 version 3): every `what`
+/// names a known good, recipe, block, species or action, every `unlocks` a
+/// recipe; it is a strict tree (one parent each, `after` gates naming
+/// missions) reachable from `gather`; and played with the events the game
+/// raises it closes every mission whose kind is live.
 #[test]
 fn the_shipped_chain_names_only_what_the_build_knows() {
     let book = shipped_book();
     let chain = shipped_file().resolve(&shipped_catalog(&book)).unwrap();
-    assert_eq!(chain.missions.len(), 31);
-    assert!(
-        chain.pending().next().is_none(),
-        "{:?}",
-        chain.pending().collect::<Vec<_>>()
-    );
+    assert_eq!(chain.missions.len(), 42);
+    // One parent each, and only `gather` without one.
+    for m in &chain.missions {
+        assert!(m.needs.len() <= 1, "{}: {:?}", m.id, m.needs);
+        assert_eq!(m.needs.is_empty(), m.id == "gather", "{}", m.id);
+        for gate in &m.after {
+            assert!(chain.get(gate).is_some(), "{}: after {gate}", m.id);
+        }
+    }
+    // Reachable from `gather` by the parent lines.
+    let mut reached = vec!["gather".to_string()];
+    let mut at = 0;
+    while at < reached.len() {
+        let id = reached[at].clone();
+        for m in chain.missions.iter().filter(|m| m.needs.contains(&id)) {
+            reached.push(m.id.clone());
+        }
+        at += 1;
+    }
+    assert_eq!(reached.len(), chain.missions.len(), "{reached:?}");
+    // The fire is in the trunk, and every branch hangs off it.
+    for id in ["rod", "find-seeds", "fence", "dig-deep", "build"] {
+        assert_eq!(chain.get(id).unwrap().needs, ["fire"], "{id}");
+    }
+    assert_eq!(chain.get("water-field").unwrap().after, ["go-fishing"]);
+    // What waits on the game: the kinds not raised yet, and bait.
+    let pending: Vec<&str> = chain.pending().map(|(id, _)| id).collect();
+    for id in &pending {
+        assert!(
+            [
+                "bait",
+                "three-kinds",
+                "sea-fishing",
+                "water-field",
+                "map",
+                "swim",
+                "reef",
+                "town",
+                "boat"
+            ]
+            .contains(id),
+            "{id} pending"
+        );
+    }
     let progress = Progress::default();
     assert_eq!(
         progress.current(&chain).map(|m| m.id.as_str()),
         Some("gather")
     );
-    // Every live objective resolved to something it can count.
     for mission in chain.missions.iter().filter(|m| m.pending.is_none()) {
         for objective in &mission.objectives {
             assert!(
@@ -335,7 +375,6 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
             );
         }
     }
-    // Locked at the start: what the trunk opens step by step.
     for code in [
         "stone-axe",
         "planks",
@@ -363,26 +402,37 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
         ev(Kind::Place, "block:workbench", 1),
         ev(Kind::Craft, "tool:pickaxe", 1),
         ev(Kind::Craft, "tool:shovel", 1),
-        ev(Kind::Place, "block:dirt", 20),
-        ev(Kind::Craft, "recipe:torch", 2),
-        ev(Kind::Place, "block:torch", 4),
-        ev(Kind::Night, "light", 1),
+        ev(Kind::Craft, "block:campfire", 1),
+        ev(Kind::Place, "block:campfire", 1),
         ev(Kind::Craft, "tool:rod", 1),
         ev(Kind::Cast, "water", 1),
         ev(Kind::Catch, "minnow", 3),
+        ev(Kind::Cook, "grilled-fish", 2),
+        ev(Kind::Eat, "grilled-fish", 1),
         ev(Kind::Find, "wheat-seed", 2),
         ev(Kind::Till, "any", 4),
         ev(Kind::Plant, "wheat-seed", 4),
         ev(Kind::Harvest, "wheat", 4),
+        ev(Kind::Cook, "flatbread", 2),
+        ev(Kind::Harvest, "turnip", 1),
+        ev(Kind::Harvest, "chili", 1),
+        ev(Kind::Harvest, "frost-kale", 1),
+        ev(Kind::Cook, "roast-turnip", 1),
         ev(Kind::Craft, "recipe:fence", 6),
         ev(Kind::Craft, "recipe:gate", 1),
         ev(Kind::Tame, "yard hen", 1),
         ev(Kind::BuildPen, "any", 1),
         ev(Kind::Pen, "yard hen", 1),
         ev(Kind::Collect, "egg", 2),
+        ev(Kind::Tame, "woolback", 1),
+        ev(Kind::Collect, "wool", 1),
+        ev(Kind::Cook, "fried-egg", 1),
+        ev(Kind::Eat, "grilled-fish", 1),
+        ev(Kind::Eat, "flatbread", 1),
+        ev(Kind::Eat, "fried-egg", 1),
         ev(Kind::Gather, "block:stone", 10),
-        ev(Kind::Gather, "block:ore", 4),
-        ev(Kind::Gather, "coal", 2),
+        ev(Kind::Gather, "block:ore", 1),
+        ev(Kind::Gather, "coal", 1),
         ev(Kind::Craft, "block:forge", 1),
         ev(Kind::Place, "block:forge", 1),
         ev(Kind::Smelt, "bronze-ingot", 2),
@@ -390,65 +440,61 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
         ev(Kind::Gather, "block:stone", 5),
         ev(Kind::Smelt, "iron-ingot", 1),
         ev(Kind::Craft, "recipe:iron-pickaxe", 1),
-        ev(Kind::Craft, "block:campfire", 1),
-        ev(Kind::Place, "block:campfire", 1),
-        ev(Kind::Cook, "grilled-fish", 2),
-        ev(Kind::Cook, "flatbread", 2),
-        ev(Kind::Eat, "flatbread", 1),
-        ev(Kind::Cook, "roast-turnip", 1),
-        ev(Kind::Cook, "fried-egg", 1),
-        ev(Kind::Eat, "grilled-fish", 1),
-        ev(Kind::Eat, "flatbread", 1),
-        ev(Kind::Eat, "fried-egg", 1),
+        ev(Kind::Place, "block:dirt", 20),
+        ev(Kind::Craft, "recipe:torch", 2),
+        ev(Kind::Place, "block:torch", 4),
+        ev(Kind::Night, "light", 1),
     ];
     let mut progress = Progress::default();
-    let mut done = Vec::new();
     for event in &events {
-        done.extend(progress.record(&chain, event, &none).done);
+        progress.record(&chain, event, &none);
     }
-    assert_eq!(
-        done,
-        [
-            "gather",
-            "axe",
-            "wood",
-            "planks-rope",
-            "crafting-table",
-            "stone-tools",
-            "build",
-            "torch",
-            "rod",
-            "go-fishing",
-            "find-seeds",
-            "till",
-            "plant",
-            "harvest",
-            "fence",
-            "tame",
-            "pen",
-            "collect",
-            "dig-deep",
-            "ore",
-            "forge",
-            "smelt",
-            "bronze-tool",
-            "iron",
-            "fire",
-            "cook-fish",
-            "bread",
-            "eat",
-            "farm-meal",
-            "fried-egg",
-            "feast",
-        ]
-    );
+    for m in chain.missions.iter().filter(|m| m.pending.is_none()) {
+        assert!(progress.is_done(&m.id), "{} not done", m.id);
+    }
     assert_eq!(progress.current(&chain), None);
-    // Every recipe a mission names is open once the tree is done.
     for m in &chain.missions {
         for code in &m.unlocks {
             assert!(chain.recipe_open(&progress, code, &[], false), "{code}");
         }
     }
+}
+
+/// A hidden gate holds a mission shut until it is done, and is not its
+/// parent; a second parent is refused (design "One parent per mission").
+#[test]
+fn an_after_gate_holds_a_mission_shut() {
+    let book = shipped_book();
+    let catalog = shipped_catalog(&book);
+    let mut gated = mission("b", &["a"], vec![objective(Kind::Cast, "water", 1)]);
+    gated.after = vec!["c".into()];
+    let file = MissionFile {
+        awaited: vec![],
+        missions: vec![
+            mission("a", &[], vec![objective(Kind::Till, "any", 1)]),
+            gated,
+            mission("c", &[], vec![objective(Kind::Craft, "planks", 1)]),
+        ],
+    };
+    let chain = file.resolve(&catalog).unwrap();
+    let mut progress = Progress::default();
+    progress.record(&chain, &Happened::new(Kind::Till, "any", 1), &none);
+    let b = chain.get("b").unwrap();
+    assert_eq!(progress.standing(&chain, b), Standing::Locked);
+    progress.record(&chain, &Happened::new(Kind::Craft, "planks", 1), &none);
+    assert_eq!(progress.standing(&chain, b), Standing::Open);
+    let two = MissionFile {
+        awaited: vec![],
+        missions: vec![
+            mission("a", &[], vec![objective(Kind::Till, "any", 1)]),
+            mission("c", &[], vec![objective(Kind::Till, "any", 1)]),
+            mission("b", &["a", "c"], vec![objective(Kind::Till, "any", 1)]),
+        ],
+    };
+    assert!(two.resolve(&catalog).is_err());
+    let mut bad = file.clone();
+    bad.missions[1].after = vec!["nowhere".into()];
+    assert!(bad.resolve(&catalog).is_err());
 }
 
 /// The Homestead's kinds (`starter-missions` H.1): a felling, a dish eaten

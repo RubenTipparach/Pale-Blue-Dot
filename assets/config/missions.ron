@@ -34,14 +34,11 @@
 // never renamed. The old line's ids keep their place in the tree; an id the
 // tree dropped (`metal-tool`) stays in an old world's record, unread.
 //
-// Still to come (T.2, a follow-up): fishing's `bait`, `three-kinds` and
-// `sea-fishing`, farming's `water-field` and `three-crops`, herding's
-// `flock`, and getting about (`map`, `swim`, `reef`, `town`, `boat`), which
-// need the `pour`, `reach`, `swim` and `board` kinds.
 (
-    awaited: [],
+    // Bait has no good yet: "Dig for bait" waits for it.
+    awaited: ["bait"],
     missions: [
-        // ---- 0. The trunk: hands to tools.
+        // ---- 0. The trunk: hands to tools, and a fire.
         (
             id: "gather",
             title: "Gather by hand",
@@ -65,7 +62,7 @@
         (
             id: "wood",
             title: "Gather wood",
-            help: "With the axe in hand (G), work trees for logs until they fall.",
+            help: "Hold the axe and strike a trunk until the tree falls.",
             needs: ["axe"],
             objectives: [
                 (kind: fell, what: "tree", count: 2, label: "trees"),
@@ -75,7 +72,7 @@
         ),
         (
             id: "planks-rope",
-            title: "Make planks and rope",
+            title: "Planks and rope",
             help: "In the pack (I), the Craft row makes planks from a log and rope from three fibre.",
             needs: ["wood"],
             objectives: [
@@ -105,12 +102,23 @@
                 (kind: craft, what: "tool:shovel|recipe:stone-shovel", count: 1, label: "shovel"),
             ],
         ),
+        (
+            id: "fire",
+            title: "Make a fire",
+            help: "Make a campfire in the Craft row from five loose stone and two logs, and set it down near water.",
+            needs: ["stone-tools"],
+            objectives: [
+                (kind: craft, what: "block:campfire|recipe:campfire", count: 1, label: "make"),
+                (kind: place, what: "block:campfire", count: 1, label: "place"),
+            ],
+            unlocks: ["grilled-fish", "chili-fish", "flatbread", "roast-turnip", "kale-skewer", "fried-egg"],
+        ),
         // ---- 1. Fishing.
         (
             id: "rod",
             title: "Make a fishing rod",
             help: "Make a rod at the workbench from planks, rope and fibre.",
-            needs: ["stone-tools"],
+            needs: ["fire"],
             objectives: [
                 (kind: craft, what: "tool:rod|recipe:rod", count: 1, label: "rod"),
             ],
@@ -118,7 +126,7 @@
         (
             id: "go-fishing",
             title: "Go fishing",
-            help: "Hold the rod (G), cast onto water, wait for the float to go under, click, and reel.",
+            help: "Hold the rod (G), hold the left button and let go to cast. When the float goes under, click and reel.",
             needs: ["rod"],
             objectives: [
                 (kind: cast, what: "water", count: 1, label: "cast"),
@@ -126,12 +134,59 @@
             ],
             unlocks: ["bucket"],
         ),
+        (
+            id: "bait",
+            title: "Dig for bait",
+            help: "Dig wet ground by the water for bait, and cast again with it on the hook.",
+            needs: ["go-fishing"],
+            objectives: [
+                (kind: gather, what: "bait", count: 1, label: "dig bait"),
+                (kind: catch, what: "bait", count: 1, label: "catch with bait"),
+            ],
+        ),
+        (
+            id: "three-kinds",
+            title: "Three kinds of fish",
+            help: "Fish in other water and at other hours; the field guide (J) fills in each new kind.",
+            needs: ["bait"],
+            objectives: [
+                (kind: species, what: "fish", count: 3, label: "species"),
+            ],
+        ),
+        (
+            id: "sea-fishing",
+            title: "Off the shore",
+            help: "Cast from the shore into the sea, then from a river bank or a lake.",
+            needs: ["three-kinds"],
+            objectives: [
+                (kind: waters, what: "sea", count: 1, label: "the sea"),
+                (kind: waters, what: "fresh", count: 1, label: "fresh water"),
+            ],
+        ),
+        (
+            id: "cook-fish",
+            title: "Cook fish",
+            help: "Open the campfire with E and grill the fish you caught.",
+            needs: ["go-fishing"],
+            objectives: [
+                (kind: cook, what: "grilled-fish|chili-fish", count: 2, label: "fish"),
+            ],
+        ),
+        (
+            id: "eat",
+            title: "Eat well",
+            help: "Put a dish on the hotbar and use it; its effect shows by the hotbar.",
+            needs: ["cook-fish"],
+            objectives: [
+                (kind: eat, what: "grilled-fish|chili-fish|flatbread|roast-turnip|kale-skewer|fried-egg", count: 1, label: "eat"),
+            ],
+        ),
         // ---- 2. Farming.
         (
             id: "find-seeds",
             title: "Find seeds",
             help: "Seeds turn up when you dig grass, and wild plants give them when picked (E).",
-            needs: ["stone-tools"],
+            needs: ["fire"],
             objectives: [
                 (kind: find, what: "seed", count: 2, label: "seeds"),
             ],
@@ -148,19 +203,69 @@
         (
             id: "plant",
             title: "Plant a field",
-            help: "Hold wheat seed and plant it on the tilled soil with the right button.",
+            help: "Plant wheat seed on tilled soil with the right button.",
             needs: ["till"],
             objectives: [
                 (kind: plant, what: "wheat-seed", count: 4, label: "plant"),
             ],
         ),
         (
+            id: "water-field",
+            title: "Water the field",
+            help: "Fill the bucket at water (E), then pour it beside the field.",
+            needs: ["plant"],
+            after: ["go-fishing"],
+            objectives: [
+                (kind: pour, what: "water", count: 1, label: "pour"),
+            ],
+        ),
+        (
             id: "harvest",
             title: "Harvest",
-            help: "Wheat is ripe after six days: E on it harvests grain and seed.",
-            needs: ["plant"],
+            help: "A crop is ripe when it is full grown: E on it harvests produce and seed.",
+            needs: ["water-field"],
             objectives: [
                 (kind: harvest, what: "wheat", count: 4, label: "wheat"),
+            ],
+        ),
+        (
+            id: "three-crops",
+            title: "A mixed field",
+            help: "Turnip and chili seeds come with the first harvest; frost kale grows where it is cold.",
+            needs: ["harvest"],
+            objectives: [
+                (kind: harvest, what: "turnip", count: 1, label: "turnip"),
+                (kind: harvest, what: "chili", count: 1, label: "chili"),
+                (kind: harvest, what: "frost-kale", count: 1, label: "frost kale"),
+            ],
+        ),
+        (
+            id: "bread",
+            title: "Bake bread",
+            help: "At the campfire, bake flatbread from wheat you grew.",
+            needs: ["harvest"],
+            objectives: [
+                (kind: cook, what: "flatbread", count: 2, label: "flatbread"),
+            ],
+        ),
+        (
+            id: "farm-meal",
+            title: "A farm meal",
+            help: "At the campfire, cook a dish from your field.",
+            needs: ["three-crops"],
+            objectives: [
+                (kind: cook, what: "roast-turnip|kale-skewer|chili-fish", count: 1, label: "dish"),
+            ],
+        ),
+        (
+            id: "feast",
+            title: "A feast",
+            help: "Eat three dishes: one from the sea, one from the field and one from the coop.",
+            needs: ["farm-meal"],
+            objectives: [
+                (kind: eat, what: "grilled-fish|chili-fish", count: 1, label: "from the sea"),
+                (kind: eat, what: "flatbread|roast-turnip|kale-skewer", count: 1, label: "from the field"),
+                (kind: eat, what: "fried-egg", count: 1, label: "from the coop"),
             ],
         ),
         // ---- 3. Herding.
@@ -168,7 +273,7 @@
             id: "fence",
             title: "Make fences",
             help: "At the workbench, make fences and a gate from planks and rope.",
-            needs: ["stone-tools"],
+            needs: ["fire"],
             objectives: [
                 (kind: craft, what: "recipe:fence", count: 6, label: "fences"),
                 (kind: craft, what: "recipe:gate", count: 1, label: "gate"),
@@ -177,7 +282,7 @@
         (
             id: "tame",
             title: "Tame an animal",
-            help: "Stand still with seed in hand and let a yard hen come to you, then feed it (E).",
+            help: "Stand still with its food in hand and let a wild animal come to you, then feed it.",
             needs: ["fence"],
             objectives: [
                 (kind: tame, what: "yard hen", count: 1, label: "tame"),
@@ -196,18 +301,37 @@
         (
             id: "collect",
             title: "Collect from the herd",
-            help: "A kept hen in a pen lays an egg a day: E on her collects it.",
+            help: "A kept animal in a pen gives an egg, wool or milk once a day: E on it collects.",
             needs: ["pen"],
             objectives: [
                 (kind: collect, what: "egg", count: 2, label: "eggs"),
+            ],
+        ),
+        (
+            id: "flock",
+            title: "A mixed herd",
+            help: "Woolbacks and plodders graze in open country; tame one as you did the hen.",
+            needs: ["collect"],
+            objectives: [
+                (kind: tame, what: "woolback|plodder", count: 1, label: "tame"),
+                (kind: collect, what: "wool|milk", count: 1, label: "wool or milk"),
+            ],
+        ),
+        (
+            id: "fried-egg",
+            title: "Breakfast",
+            help: "At the campfire, fry an egg from your own hens.",
+            needs: ["collect"],
+            objectives: [
+                (kind: cook, what: "fried-egg", count: 1, label: "egg"),
             ],
         ),
         // ---- 4. Mining and smelting.
         (
             id: "dig-deep",
             title: "Dig into the hill",
-            help: "With the stone pickaxe, dig down through the soil to the stone under it.",
-            needs: ["stone-tools"],
+            help: "Hold the stone pickaxe and dig into a hillside; stone comes out a cell at a time.",
+            needs: ["fire"],
             objectives: [
                 (kind: gather, what: "block:stone", count: 10, label: "stone"),
             ],
@@ -216,17 +340,17 @@
         (
             id: "ore",
             title: "Find ore",
-            help: "Ore lies in the stone: dig it with the pickaxe, and coal with it.",
+            help: "Copper and tin show in the rock as mixed ore; coal sits in dark seams.",
             needs: ["dig-deep"],
             objectives: [
-                (kind: gather, what: "block:ore", count: 4, label: "ore"),
-                (kind: gather, what: "coal", count: 2, label: "coal"),
+                (kind: gather, what: "block:ore", count: 1, label: "ore"),
+                (kind: gather, what: "coal", count: 1, label: "coal"),
             ],
         ),
         (
             id: "forge",
             title: "Build a forge",
-            help: "Make a forge at the workbench and place it.",
+            help: "Make a forge at the workbench and place it on the ground.",
             needs: ["ore"],
             objectives: [
                 (kind: craft, what: "block:forge", count: 1, label: "make"),
@@ -237,7 +361,7 @@
         (
             id: "smelt",
             title: "Smelt bronze",
-            help: "At the forge (E), smelt the ore, then alloy copper and tin into bronze.",
+            help: "Put ore and coal in the forge (E) and smelt bronze.",
             needs: ["forge"],
             objectives: [
                 (kind: smelt, what: "bronze-ingot", count: 2, label: "bronze"),
@@ -247,7 +371,7 @@
         (
             id: "bronze-tool",
             title: "Bronze tools",
-            help: "At the workbench, make a bronze pickaxe, and dig stone with it.",
+            help: "At the workbench, make a bronze pickaxe from ingots; it digs faster than stone.",
             needs: ["smelt"],
             objectives: [
                 (kind: craft, what: "recipe:bronze-pickaxe", count: 1, label: "pickaxe"),
@@ -258,7 +382,7 @@
         (
             id: "iron",
             title: "The iron age",
-            help: "Smelt iron at the forge and make an iron pickaxe.",
+            help: "Iron ore smelts hotter: feed the forge more coal.",
             needs: ["bronze-tool"],
             objectives: [
                 (kind: smelt, what: "iron-ingot", count: 1, label: "iron"),
@@ -266,80 +390,12 @@
             ],
             unlocks: ["iron-axe", "iron-shovel"],
         ),
-        // ---- 5. Cooking: once there is fish and a crop.
-        (
-            id: "fire",
-            title: "Make a fire",
-            help: "Make a campfire in the Craft row from loose stone and logs, and set it down near water.",
-            needs: ["go-fishing", "harvest"],
-            objectives: [
-                (kind: craft, what: "block:campfire|recipe:campfire", count: 1, label: "make"),
-                (kind: place, what: "block:campfire", count: 1, label: "place"),
-            ],
-            unlocks: ["grilled-fish", "chili-fish", "flatbread", "roast-turnip", "kale-skewer", "fried-egg"],
-        ),
-        (
-            id: "cook-fish",
-            title: "Cook fish",
-            help: "Open the campfire with E, and grill the fish you caught.",
-            needs: ["fire"],
-            objectives: [
-                (kind: cook, what: "grilled-fish|chili-fish", count: 2, label: "fish"),
-            ],
-        ),
-        (
-            id: "bread",
-            title: "Bake bread",
-            help: "At the campfire, bake flatbread from your wheat.",
-            needs: ["cook-fish"],
-            objectives: [
-                (kind: cook, what: "flatbread", count: 2, label: "flatbread"),
-            ],
-        ),
-        (
-            id: "eat",
-            title: "Eat well",
-            help: "Hold a dish and eat it with the right button: its effect shows by the hotbar.",
-            needs: ["bread"],
-            objectives: [
-                (kind: eat, what: "grilled-fish|chili-fish|flatbread|roast-turnip|kale-skewer|fried-egg|roast-meat", count: 1, label: "eat"),
-            ],
-        ),
-        (
-            id: "farm-meal",
-            title: "A farm meal",
-            help: "At the campfire, cook a dish from your field.",
-            needs: ["eat"],
-            objectives: [
-                (kind: cook, what: "roast-turnip|kale-skewer|chili-fish", count: 1, label: "dish"),
-            ],
-        ),
-        (
-            id: "fried-egg",
-            title: "Breakfast",
-            help: "Fry an egg from your hen at the campfire.",
-            needs: ["eat", "collect"],
-            objectives: [
-                (kind: cook, what: "fried-egg", count: 1, label: "egg"),
-            ],
-        ),
-        (
-            id: "feast",
-            title: "A feast",
-            help: "Eat three dishes: one from the sea, one from the field and one from the coop.",
-            needs: ["farm-meal", "fried-egg"],
-            objectives: [
-                (kind: eat, what: "grilled-fish|chili-fish", count: 1, label: "from the sea"),
-                (kind: eat, what: "flatbread|roast-turnip|kale-skewer", count: 1, label: "from the field"),
-                (kind: eat, what: "fried-egg", count: 1, label: "from the coop"),
-            ],
-        ),
         // ---- 6. Light and building.
         (
             id: "build",
             title: "Build a shelter",
-            help: "Place twenty blocks: planks, stone or soil.",
-            needs: ["stone-tools"],
+            help: "Hold planks, stone or soil and place blocks with the right button: walls and a roof.",
+            needs: ["fire"],
             objectives: [
                 (kind: place, what: "any", count: 20, label: "blocks"),
             ],
@@ -348,12 +404,60 @@
         (
             id: "torch",
             title: "Light the night",
-            help: "Make torches in the Craft row, set four down, and be beside them when night falls.",
+            help: "Set torches round your shelter and stay by them as night falls.",
             needs: ["build"],
             objectives: [
                 (kind: craft, what: "recipe:torch", count: 2, label: "make"),
                 (kind: place, what: "block:torch", count: 4, label: "place"),
                 (kind: night, what: "light", count: 1, label: "nightfall"),
+            ],
+        ),
+        // ---- 7. Getting about.
+        (
+            id: "map",
+            title: "Read the map",
+            help: "Open the map (M), mark a place 200 m off, and walk there.",
+            needs: ["go-fishing"],
+            objectives: [
+                (kind: open, what: "map", count: 1, label: "open the map"),
+                (kind: reach, what: "marked", count: 1, label: "reach the mark"),
+            ],
+        ),
+        (
+            id: "swim",
+            title: "Into the water",
+            help: "Walk into deep water and swim.",
+            needs: ["map"],
+            objectives: [
+                (kind: swim, what: "water", count: 20, label: "metres"),
+            ],
+        ),
+        (
+            id: "reef",
+            title: "See a reef",
+            help: "Swim down where the sea is warm and shallow.",
+            needs: ["swim"],
+            objectives: [
+                (kind: reach, what: "reef", count: 1, label: "reef"),
+            ],
+        ),
+        (
+            id: "town",
+            title: "Find a town",
+            help: "Towns show on the map; follow the compass to one.",
+            needs: ["reef"],
+            objectives: [
+                (kind: reach, what: "town", count: 1, label: "town"),
+            ],
+        ),
+        (
+            id: "boat",
+            title: "Take a boat",
+            help: "Board a rowboat or a cog at a town's quay (E) and head out.",
+            needs: ["town"],
+            objectives: [
+                (kind: board, what: "boat", count: 1, label: "board"),
+                (kind: travel, what: "boat", count: 100, label: "metres"),
             ],
         ),
     ],

@@ -359,6 +359,8 @@ fn script() -> Vec<Scripted> {
         S::Did(Kind::Place, "block:workbench"),
         S::Gained(Item::Tool(Tool::Pickaxe), 1, Made),
         S::Gained(Item::Tool(Tool::Shovel), 1, Made),
+        S::Gained(Item::Block(Material::Campfire), 1, Made),
+        S::Did(Kind::Place, "block:campfire"),
     ]);
     steps.extend(n(20, S::Did(Kind::Place, "block:dirt")));
     steps.extend(n(2, S::Did(Kind::Craft, "recipe:torch")));
@@ -369,10 +371,21 @@ fn script() -> Vec<Scripted> {
         S::Did(Kind::Cast, "water"),
     ]);
     steps.extend(n(3, S::Did(Kind::Catch, "minnow")));
+    steps.extend([
+        S::Cooked("grilled-fish", 2),
+        S::Did(Kind::Eat, "grilled-fish"),
+    ]);
     steps.push(S::Gained(good("wheat-seed"), 2, Found));
     steps.extend(n(4, S::Did(Kind::Till, "block:grass")));
     steps.extend(n(4, S::Planted("wheat")));
-    steps.push(S::Gained(good("wheat"), 4, Harvested));
+    steps.extend([
+        S::Gained(good("wheat"), 4, Harvested),
+        S::Cooked("flatbread", 2),
+        S::Gained(good("turnip"), 1, Harvested),
+        S::Gained(good("chili"), 1, Harvested),
+        S::Gained(good("frost-kale"), 1, Harvested),
+        S::Cooked("roast-turnip", 1),
+    ]);
     steps.extend(n(6, S::Did(Kind::Craft, "recipe:fence")));
     steps.extend([
         S::Did(Kind::Craft, "recipe:gate"),
@@ -380,6 +393,12 @@ fn script() -> Vec<Scripted> {
         S::Deed(Deed::PenBuilt { pen: 1, cells: 7 }),
         S::Deed(Deed::Penned { species: 0 }),
         S::Gained(good("egg"), 2, Collected),
+        S::Deed(Deed::Tamed { species: 1 }),
+        S::Gained(good("wool"), 1, Collected),
+        S::Cooked("fried-egg", 1),
+        S::Did(Kind::Eat, "grilled-fish"),
+        S::Did(Kind::Eat, "flatbread"),
+        S::Did(Kind::Eat, "fried-egg"),
     ]);
     steps.extend(n(10, S::Did(Kind::Gather, "block:stone")));
     steps.extend(n(4, S::Did(Kind::Gather, "block:ore")));
@@ -394,16 +413,6 @@ fn script() -> Vec<Scripted> {
     steps.extend([
         S::Gained(good("iron-ingot"), 1, Made),
         S::Did(Kind::Craft, "recipe:iron-pickaxe"),
-        S::Gained(Item::Block(Material::Campfire), 1, Made),
-        S::Did(Kind::Place, "block:campfire"),
-        S::Cooked("grilled-fish", 2),
-        S::Cooked("flatbread", 2),
-        S::Did(Kind::Eat, "flatbread"),
-        S::Cooked("roast-turnip", 1),
-        S::Cooked("fried-egg", 1),
-        S::Did(Kind::Eat, "grilled-fish"),
-        S::Did(Kind::Eat, "flatbread"),
-        S::Did(Kind::Eat, "fried-egg"),
     ]);
     steps
 }
@@ -543,7 +552,15 @@ mod tests {
         let chain = &app.world().resource::<MissionChain>().0;
         let missions = app.world().resource::<Missions>();
         assert_eq!(missions.progress.current(chain).map(|m| &m.id), None);
-        assert_eq!(missions.progress.done.len(), chain.missions.len());
+        // Every mission whose kind the game raises; the pending ones wait.
+        assert_eq!(
+            missions.progress.done.len(),
+            chain
+                .missions
+                .iter()
+                .filter(|m| m.pending.is_none())
+                .count()
+        );
     }
 
     /// Each plaque in the strip puts its own screen up from the pack

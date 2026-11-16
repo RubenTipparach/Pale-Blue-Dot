@@ -67,6 +67,22 @@ pub enum Kind {
     Eat,
     /// The clock passed 20:00 with the player near a light they placed.
     Night,
+    /// Water poured from a bucket (`water`).
+    Pour,
+    /// A fish species caught for the first time (`fish`).
+    Species,
+    /// A fish caught from the `sea` or from `fresh` water.
+    Waters,
+    /// A place reached: `marked` (a map mark), `reef`, `town`.
+    Reach,
+    /// Metres swum (`water`).
+    Swim,
+    /// A boat boarded (`boat`).
+    Board,
+    /// Metres travelled aboard a boat (`boat`).
+    Travel,
+    /// A screen opened by its key (`map`).
+    Open,
 }
 
 impl Kind {
@@ -145,6 +161,10 @@ pub struct MissionEntry {
     /// from the start.
     #[serde(default)]
     pub unlocks: Vec<String>,
+    /// Missions that must also be done before it opens (design "One parent
+    /// per mission"): a hidden gate, never drawn as a line.
+    #[serde(default)]
+    pub after: Vec<String>,
 }
 
 /// `assets/config/missions.ron`.
@@ -233,6 +253,8 @@ pub struct Mission {
     pub pending: Option<Vec<String>>,
     /// The recipe codes its completion opens.
     pub unlocks: Vec<String>,
+    /// Hidden gates: missions that must also be done before it opens.
+    pub after: Vec<String>,
 }
 
 /// What the build knows, for resolving names: built by the app from its
@@ -301,6 +323,12 @@ impl Catalog {
             Kind::Cast => name == "water",
             Kind::Fell => name == "tree",
             Kind::Night => name == "light",
+            Kind::Pour | Kind::Swim => name == "water",
+            Kind::Species => name == "fish",
+            Kind::Waters => matches!(name, "sea" | "fresh"),
+            Kind::Reach => matches!(name, "marked" | "reef" | "town"),
+            Kind::Board | Kind::Travel => name == "boat",
+            Kind::Open => name == "map",
             Kind::Eat => item(),
             Kind::Place => name.starts_with("block:") && item(),
             Kind::Till | Kind::BuildPen => false,
@@ -346,6 +374,9 @@ impl MissionFile {
             }
             if missions.iter().any(|m| &m.id == at) {
                 return Err(format!("mission {at} twice"));
+            }
+            if entry.needs.len() > 1 {
+                return Err(format!("{at}: more than one parent (use `after`)"));
             }
             for need in &entry.needs {
                 if !missions.iter().any(|m| &m.id == need) {
@@ -415,7 +446,15 @@ impl MissionFile {
                 objectives,
                 pending: (!missing.is_empty()).then_some(missing),
                 unlocks: entry.unlocks.clone(),
+                after: entry.after.clone(),
             });
+        }
+        for m in &missions {
+            for gate in &m.after {
+                if gate == &m.id || !missions.iter().any(|n| &n.id == gate) {
+                    return Err(format!("{}: after {gate:?}, which is no mission", m.id));
+                }
+            }
         }
         Ok(Chain { missions })
     }
@@ -514,6 +553,7 @@ impl Progress {
         } else if mission
             .needs
             .iter()
+            .chain(&mission.after)
             .all(|need| self.is_done(need) || chain.get(need).is_none_or(|m| m.pending.is_some()))
         {
             Standing::Open
