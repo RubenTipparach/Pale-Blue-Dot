@@ -554,6 +554,10 @@ fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: 
 // surface is ever wet.
 const WATERLINE_EDGE_M: f32 = 0.1;
 
+// The sheet nearer the eye than this is behind the near plane (0.2 m), m:
+// the composite stands in for it.
+const NEAR_SHEET_M: f32 = 0.3;
+
 // The surface of the water the eye is in, as a body radius: a river's or a
 // pool's where the eye is in inland water, the sea's sphere otherwise
 // (`ocean-environments` B17). Everything the underwater view measures, depth,
@@ -804,7 +808,11 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         below = dot(view.camera_time.xyz - in.local_position, face) < 0.0;
         // Its back seen from dry air is the inside of a block of water the
         // eye is not in: the face toward the eye draws it, this one does not.
-        if (below && view.fx.y < 0.75) { discard; }
+        // An eye at its own water's surface (the straddle) is under the
+        // face it is below, and sees it from below: without it the surface
+        // overhead vanished for the frames the eye crossed it (owner,
+        // 2026-11-16: "I dont see water surface above the player").
+        if (below && view.fx.y < 0.25) { discard; }
     }
     if (below) {
         // Seen from below: the murk by camera distance, and Snell's window.
@@ -1007,7 +1015,16 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // so the ground just over the water took the murk and the wobble; what
     // lies under a crest above the mean surface is behind the sheet, which
     // draws its own.
-    let mask = select(1.0-smoothstep(-WATERLINE_EDGE_M,0.0,pixel_alt),1.0,sky);
+    //
+    // With the eye fully under, EVERYTHING not hidden by a sheet is seen
+    // through water (owner, 2026-11-16: "you must be submerged at just the
+    // right height"): a river's water stands at a different height cell to
+    // cell, so one waterline sphere left the walls under a higher neighbour's
+    // water dry and bright, and at the sea's shore the bank between the
+    // drawn sheet and the cell's top was seen through the gap past the
+    // sheet's edge as a bright strip. What lies above the surface is drawn
+    // by the sheet from below, from the scene before this pass.
+    let mask = select(1.0-smoothstep(-WATERLINE_EDGE_M,0.0,pixel_alt),1.0,sky || under);
     wet *= mask;
     var color = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
     if (wet > 0.0 && view.fx.x > 0.0) {
@@ -1023,6 +1040,17 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         travel = select(view_dist, select(100000.0, cam_gap/ray_d_up, ray_d_up > 0.0008), sky);
     } else {
         travel = max(0.0,-pixel_alt);
+        // An eye a hand over the surface, looking down: the sheet nearer than
+        // the near plane is clipped, and what is under it was seen dry
+        // through the hole. There the light crosses the water from the
+        // surface to the pixel (the waterline videos, 2026-11-16).
+        let eye_over = length(ray.origin-center) - sea;
+        if (!sky && pixel_alt < 0.0 && ray_d_up < -1e-4 && eye_over >= 0.0) {
+            let t_cross = eye_over/(-ray_d_up);
+            if (t_cross < NEAR_SHEET_M) {
+                travel = max(travel, view_dist - t_cross);
+            }
+        }
     }
     let extinction = view_extinction();
     let deep = murk(cam_gap,safe_normal(ray.origin-center));

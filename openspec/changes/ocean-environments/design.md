@@ -1352,3 +1352,61 @@ underwater". Two faults, measured in the code:
 
 Captures: `before-skim.jpg` and `after-skim.jpg` (the eye at a river's
 surface), `after-bank.jpg` (from over the bank).
+
+### B18. The river's water from inside, third pass (owner, 2026-11-16: "rivers not validated")
+
+The owner, in the river at 28.250 0.750 (65.6 m, 2.6 m over the bed, by
+day under cloud): "I see rain shader at the bottom; I dont see water surface
+above the player; that gradient looks like an incorrect implementation of
+being underwater?", and on the bright strip: "you must be submerged at just
+the right height, if not 1 block try 2 blocks".
+
+**Reproduced** at that spot, and in the sea at about one and two layers down
+(`docs/screenshots/river-fixes/third-pass/`), with a capture-only camera
+path (`PBD_EYE_PATH`, `desktop/eye_path.rs`) that moves the eye through the
+surface over 720 frames at 60 fps with its height against the water burnt
+into a corner. Measured with a temporary log of the tri-state:
+
+1. **No surface overhead.** The straddle band, 0.8 m, holds the sea's swell.
+   A river has none, yet its eye was "straddling" for the 0.8 m under its
+   surface, and the game's own water discards a face seen from below by a
+   straddling eye. The owner's eye, 0.2 m under, saw no surface.
+2. **The surface the eye was measured against was not the one drawn.** A
+   flowing top is meshed through its corners (Luanti's corner rule): up to a
+   layer's share over the cell's own level where a neighbour is full. The
+   eye's water was the cell's level, so for the centimetres between the two
+   the eye was "dry" under a drawn top: the face was discarded and nothing
+   stood overhead.
+3. **The flat gradient, and the bright strip.** With the eye under, the
+   composite still masked wetness by a sphere at the eye's own surface. A
+   river stands at different heights cell to cell, so a wall under a
+   neighbour's higher water was dry and bright; and at the sea, one layer
+   down, the bank between the drawn sheet (0.5 m under sea level, plus the
+   tide) and the bank's top was seen past the sheet's edge, dry: the owner's
+   bright strip at the waterline (`before-sea-1-layer.jpg`).
+4. **Rain rings on the bed**: not reproduced at the spot after the first
+   pass (the terrain's rings stop where its own tint starts, and the bed's
+   column now carries its water); the videos show none under the surface.
+
+**Fixes.**
+- Inland water has no straddle band (`INLAND_BAND_M` = 0): the eye is under
+  a river's water as soon as it is below the drawn surface.
+- The eye's surface is the DRAWN top (`water_flow::drawn_top_m`, the mean of
+  the corner levels `cell_pieces` meshes), so the decision and the picture
+  agree to the centimetre.
+- A straddling eye draws the face it is under from below.
+- With the eye under, everything not hidden by a sheet is seen through
+  water: the composite's mask is gone for an eye under, as it should be (the
+  sheet draws what is above the surface from the scene before the pass).
+- An eye a hand over the surface looking down: the sheet nearer than the
+  near plane is clipped; the composite fogs what lies under it along the ray
+  from the surface (`NEAR_SHEET_M`).
+
+The underwater look is the sea's own model throughout (the same murk,
+absorption, shafts and the terrain's downwelling darkening); what differed
+was where it was applied.
+
+**Validation**: videos crossing the surface at the owner's spot, a river
+bank, the sea's shore and where waters meet, before and after, with every
+frame within 0.3 m of the surface stepped and listed (the report's issue
+list); numeric junction checks in `water_junction_tests`.

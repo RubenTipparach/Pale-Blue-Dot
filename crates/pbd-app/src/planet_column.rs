@@ -226,6 +226,13 @@ impl ColumnTier {
     }
 
     /// A slot's neighbours across its sides, `None` off the tier.
+    /// How many sides the cell at `slot` has: 6, or 5 at a pentagon.
+    pub fn degree_of(&self, slot: usize) -> usize {
+        self.records
+            .get(slot)
+            .map_or(6, |record| ((record.more[2] & DEGREE_MASK) as usize).min(6))
+    }
+
     pub fn sides_of(&self, slot: usize) -> [Option<usize>; 6] {
         let mut out = [None; 6];
         let (Some(record), Some(sides)) = (self.records.get(slot), self.sides.get(slot)) else {
@@ -568,6 +575,14 @@ impl ColumnTier {
                 record.more[3] = (record.more[3] & RIM_BIT) | state_word(column, lit, glow);
             }
         }
+    }
+
+    /// The slot of a finest record, if that record is in the tier.
+    pub fn slot(&self, record: usize) -> Option<usize> {
+        self.slots
+            .get(record)
+            .copied()
+            .filter(|&s| s < self.columns.len())
     }
 
     /// The column of a finest record, if that record is in the tier.

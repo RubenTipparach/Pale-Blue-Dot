@@ -388,6 +388,13 @@ pub fn inland_surface(eye: EyeWater) -> Option<f32> {
     }
 }
 
+/// The straddle band about an inland surface, m: none. A river or a pool has
+/// no swell for the band to hold, so the eye is under its water as soon as it
+/// is below the drawn surface, and over it as soon as it is above: a band
+/// let the eye a few centimetres under the surface see the bank above it
+/// past the sheet's edge, dry and bright (the frames of the waterline video).
+pub const INLAND_BAND_M: f32 = 0.0;
+
 /// Publish what the tier says is at the active camera's eye.
 pub(super) fn install_eye_water(app: &mut App) {
     app.init_resource::<EyeWaterState>().add_systems(
@@ -433,18 +440,34 @@ fn eye_water(
     let Some(direction) = body.try_normalize() else {
         return EyeWater::Unknown;
     };
-    let Some(column) = contact
+    let Some(record) = contact
         .finest_cell(direction)
         .filter(|_| contact.serves(&fine.set))
-        .and_then(|record| fine.set.columns.column(record))
     else {
+        return EyeWater::Unknown;
+    };
+    let Some(column) = fine.set.columns.column(record) else {
         return EyeWater::Unknown;
     };
     let altitude = body.length() - terrain::PLANET_RADIUS;
     match column.water_surface(altitude) {
-        Some(surface) => EyeWater::Water {
-            surface_radius: terrain::PLANET_RADIUS + surface,
-        },
+        Some(surface) => {
+            // The surface the eye SEES: a flowing top is drawn through its
+            // corners, up to a layer's share over the cell's own level, and
+            // the eye between the two is under the drawn water.
+            let top = pbd_core::column::layer_at(surface - 1e-3);
+            let drawn = fine
+                .set
+                .columns
+                .slot(record)
+                .zip(top)
+                .and_then(|(slot, top)| {
+                    crate::water_flow::drawn_top_m(&fine.set.columns, slot, top)
+                });
+            EyeWater::Water {
+                surface_radius: terrain::PLANET_RADIUS + drawn.unwrap_or(surface),
+            }
+        }
         // Rock reads as air: a camera inside a wall sees nothing, and what it
         // must not do is fill with sea.
         None => EyeWater::Air,
@@ -1348,7 +1371,15 @@ fn prepare_water_views(
             view.clip_from_world,
         );
         let sea_radius = terrain::PLANET_RADIUS - settings.depth_offset_m;
-        let band = settings.partial_band_m;
+        // The straddle band holds the sea's swell; inland water has none,
+        // so an eye a hand under a river's surface is under it, and the
+        // river's sheet is drawn from below (owner, 2026-11-16: "I dont see
+        // water surface above the player").
+        let band = if inland_surface(eye.0).is_some() {
+            settings.partial_band_m.min(INLAND_BAND_M)
+        } else {
+            settings.partial_band_m
+        };
         let state = submersion(camera, sea_radius, sea_now.camera_height, band, eye.0);
         let (mut was_under, mut emerge_until) = existing
             .as_ref()
@@ -2693,6 +2724,16 @@ mod tests {
             .water_surface(bed_m + 0.5)
             .expect("water stands on the river's bed");
         assert!(surface_m > terrain::terrain_config().sea_level_m + 1.0);
+        // The surface the eye is under is the DRAWN top (Luanti's corners),
+        // at or over the cell's own level and inside its layer.
+        let record = contact.finest_cell(river).unwrap();
+        let top_layer = pbd_core::column::layer_at(surface_m - 1e-3).unwrap();
+        let surface_m = set
+            .columns
+            .slot(record)
+            .and_then(|slot| crate::water_flow::drawn_top_m(&set.columns, slot, top_layer))
+            .unwrap_or(surface_m);
+        assert!(surface_m <= pbd_core::column::layer_altitude(top_layer) + 1.0);
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, TransformPlugin));
         install_eye_water(&mut app);
