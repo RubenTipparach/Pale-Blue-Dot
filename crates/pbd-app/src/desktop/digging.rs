@@ -365,6 +365,16 @@ pub fn apply_edit(
         }
         Hands::Empty | Hands::Till(None) => {}
     }
+    // Whether what this replaces is something a player put there: its
+    // removal is logged by author (the owner, 2026-11-16: "if an object a
+    // user placed despawns, i need logs").
+    let was_placed = !matches!(was, Material::Air)
+        && !was.is_water()
+        && save
+            .edits
+            .for_cell(cell)
+            .iter()
+            .any(|&(l, m)| usize::from(l) == layer && m == was);
     if !save.accept(
         Edit {
             cell,
@@ -379,6 +389,9 @@ pub fn apply_edit(
         error!("edit BLOCKED: the save did not accept cell {cell} layer {layer} {material:?}");
         return None;
     }
+    if was_placed {
+        info!("REMOVED {was:?} at cell {cell} layer {layer} by the player, now {material:?}");
+    }
     slots.0 = moved;
     drops.live.extend(dropped);
     let started = std::time::Instant::now();
@@ -390,35 +403,12 @@ pub fn apply_edit(
         debug_assert!(adopted, "adoption was checked before the save");
         info!("adopted cell {cell} into the tier ahead of the streaming");
     }
-    set.columns.set_layer(record, layer, material);
-    set.columns.repack(record);
-    for &neighbor in set.finest_neighbors[record].iter() {
-        if neighbor != u32::MAX {
-            set.columns.repack(neighbor as usize);
-        }
-    }
-    // The water (`water-flow` decision 5, `volumetric-water` phase 2): the
-    // sea floods what this opened onto it, and the cell and its neighbours
-    // are queued for the rule, so a dig beside water or a poured source
-    // starts it moving.
-    let flooded = set.columns.water_after_edit(record, layer, &save.edits);
-    for &slot in &flooded {
-        set.columns.repack_slot(slot);
-    }
-    // And the SURFACE, which is a second representation of where the ground
-    // is: the terrain pass draws its cap from the cell record and every
-    // neighbour draws its wall down to it. Repacking the runs and leaving that
-    // alone is the bug the owner reported as broken geometry - the tier's own
-    // build pass says what it looks like in as many words, "a meadow over the
-    // hole and a wall across it", and that pass ran only at build.
-    set.reconcile(record);
-    // Whether the sea sheet lies over the edited cell and what the flood
-    // reached: a pit dug below sea level is dry until the sea comes in.
-    let flooded: Vec<usize> = flooded
-        .iter()
-        .filter_map(|&slot| set.columns.water.records.get(slot).copied())
-        .collect();
-    set.mark_sheets(std::iter::once(record).chain(flooded));
+    // The column, its record and its neighbours', the water and the surface
+    // (`FineSet::write_layer`, the one path a landing's replay takes too).
+    // The surface matters as much as the runs: repacking the runs and leaving
+    // the record's cap alone is the bug the owner reported as broken geometry,
+    // "a meadow over the hole and a wall across it".
+    set.write_layer(record, layer, material, &save.edits);
     // The whole tier, at the measured six milliseconds. A block changes what
     // light reaches every cell it can be seen from, which is not a region this
     // code can name: a dug shaft lets daylight forty metres down, and a torch
@@ -1118,17 +1108,9 @@ pub fn scripted_dig(
     mut edits: ResMut<WorldSave>,
     mut slots: ResMut<super::slots::Hotbar>,
     (mut drops, sun): (ResMut<Drops>, Res<pbd_app::sky::Sun>),
-    refresh: Res<pbd_app::planet::LodRefresh>,
     mut done: Local<bool>,
 ) {
     if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch && !launch.lamps) {
-        return;
-    }
-    // A set in flight was built from the edits as they stood when it was
-    // asked for, and landing it would undo anything scripted since
-    // (`edit-pipeline` design, "undone when it lands"). Until that is fixed,
-    // the rig waits for the landing so the picture shows its edits.
-    if refresh.in_flight_s().is_some() {
         return;
     }
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {

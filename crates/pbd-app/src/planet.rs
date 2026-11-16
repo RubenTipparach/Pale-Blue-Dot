@@ -431,6 +431,8 @@ fn build_planet(
         None,
         scatter.lod_fade_width,
     ));
+    // A world opened has every saved change in the set it opens on.
+    lod::report_missing_edits(&fine, edits, "building the planet's first fine set");
     contacts.set_fine(&fine);
     BuiltPlanet {
         cells,

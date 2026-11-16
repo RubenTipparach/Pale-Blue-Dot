@@ -1286,11 +1286,16 @@ pub fn build(
             continue;
         };
         let top_m = column::layer_altitude(top) + 1.0;
-        // Only DOWNWARD at build time: a carve can only take the surface
-        // away, and a column top above the record is a fault a test holds
-        // out. An EDIT is the other case and reconciles both ways - see
-        // `reconcile_surface`.
-        if top_m >= finest[index].direction_height[3] {
+        // Only DOWNWARD for the generator: a carve can only take the surface
+        // away, and a generated column top above the record is a fault a
+        // test holds out. A cell a player EDITED reconciles both ways, as the
+        // edit did when it was made (`reconcile_surface`): a block placed on
+        // the ground raises the cap and wears the block's material, so a
+        // rebuild or a reload draws what the edit drew, and a tree the block
+        // put out does not grow back through it and whatever stands on it
+        // (`edit-pipeline`, the owner's vanished lamp, 2026-11-16).
+        let edited = !edits.for_cell(finest[index].key()).is_empty();
+        if top_m >= finest[index].direction_height[3] && !edited {
             continue;
         }
         reconcile_surface(finest, neighbors, index, column);
