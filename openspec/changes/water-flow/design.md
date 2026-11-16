@@ -547,6 +547,117 @@ counted.
 degrees, 0 north, 90 east) and `--pitch` (degrees, negative down) beside
 `--at` and `--height`, so a capture can look down on a river from the air.
 
+## The fall look, in a mockup first (owner, 2026-11-15)
+
+Two in-game fall looks were rejected (pass 5, `c620183`: "all the afters are
+bad"; the bowed strands, `b9c81ec`: "too smeared, theres also a geometric gap
+at the edge"). From here a fall's look is approved in a mockup before the game
+changes (CLAUDE.md, "Waterfalls are designed in a mockup first"). The mockup is
+`docs/mockups/waterfall.html` (`waterfall/waterfall.js`). It shows the game's
+test case (`--pour 1 --pour-ahead 12 --pit 9`: a source beside a 9-deep pit of
+seven cells) and a 2-layer step, on 2.833 m cells with 1 m layers. It shows them
+by day and at night under three lamps, with toggles for rain and splash. Its
+screenshots are in `docs/screenshots/mockup-waterfall/`. Not built in the game.
+
+The froth is a GLSL port of `water.wgsl` at `dc0c5cb`, the falling-face branch
+(`in.kind == 2u && horizontal < 0.5`). It keeps the same `gnoise3` (integer
+lattice hash), the same `fbm3`, the same tangent frame (body X projected off the
+face) and the same constants. Variant A is that port unchanged.
+
+One finding from the port: the froth's `along.y*0.35` was meant to stretch
+it down the fall, but it never could. On a vertical face the radial lies in
+the face's own plane, so it is already read at 5x through `tangent_u` and
+`tangent_v`. The 0.35 term adds about 0.1% to the noise's rate down the face.
+The approved blotches are round for that reason. B stretches that real look.
+
+| Variant | What it is | Game change to port it |
+| --- | --- | --- |
+| A Today | dc0c5cb as it is | none |
+| B Stretched | the same pattern, its height below the lip divided by `stretch` (default 2.0, range 1-4); a speed multiplier on the froth's time terms (default 1.0) | in the froth branch, read the noise at `p' = advected - radial*(h*(1 - 1/FALL_STRETCH))`, where `h` is the height above the lip's top (the mesher puts the lip height, or the metres under the lip it already writes in `flow_uv.z`, on each vertex). Multiply `time` by `FALL_FROTH_SPEED` in `advected`'s radial term and in the `+ time*0.6` term for the froth only |
+| C Leaning | B on a sheet that leans out along the flow: offset `lean * profile(depth/drop)` with `profile(u) = (sqrt(u+0.05) - sqrt(0.05)) / (sqrt(1.05) - sqrt(0.05))`, default lean 0.8 m; nothing above the lip's ground moves, so the top and the sheet share their rim vertices (no gap) | `water_flow.rs`: move each falling face's vertex out along the fall's flow direction by that offset, the same for every face at one depth (the column's corners stay joined). Carry the unmoved position as one more vertex attribute and read the froth there, so the pattern is B's, bent |
+| D Lip + speed-up | C, plus one amount (default 0.5): (1) the froth is read on one frame per fall (the face toward the flow) at the point where the flow leaves the falling cell, so the top and the face are one pattern across the edge; (2) the top whitens over its last 1.5 m (`smoothstep(-1.5, 0, s)*amount`); (3) the path below the lip is warped to time of flight, `c(s) = mix(s, (sqrt(1 + 2*3*s) - 1)/3, amount)` (1 m/s at the lip, 3 m/s^2), so the blotches lengthen as the water speeds up; on the top, `c = s - 0.6*amount*s^2` | mesher: per top vertex, the ray from the source cell's centre to where it leaves the falling cell (exit point and signed distance `s`), and per face vertex `s` = metres under the lip; shader: the froth's noise point `(exit.x, lip - c(s)/stretch, exit.z)` in body space, the ramp on tops |
+
+Splash and mist (every variant, toggle): drops and a mist sized by the fall's
+height H. There are about 26H drops and 7H mist puffs, thrown at
+`sqrt(H)`-scaled speeds. They start on the open side of the column, past the
+hex's corner radius from the leaned foot. They are never drawn below the
+pool's surface + 5 cm ("only outside"). Rain rings are multiplied by
+`smoothstep(0.7, 0.95, horizontal)` on the face's own normal, as in the game,
+so no falling face takes any.
+
+What the mockup does not port: the game's light and tone mapping (the
+sand, sky light and white are matched to the screenshot by eye), the
+screen-space reflection, the refraction offset, the distance fog and the
+game's sky light per vertex (a depth ramp stands in). The noise is read at
+a stand-in body position (a 2400 m planet at the capture's 24.1 N), so A
+draws the game's kind of blotches, not the same ones in the same places.
+
+## Smooth water between ticks, in a mockup first (owner, 2026-11-15)
+
+The owner: *"for water is there a better way to lerp the sim? so it doesn look
+like it just pops in?"*, then *"yea mock it up"*.
+
+**Today.** The water rule ticks once a second (`liquid::TICK_S = 1.0`). Each
+tick the CPU rebuilds the whole water mesh (`water_flow.rs`), and
+`vertex_flowing` draws it as given. A cell that turns wet appears whole in one
+frame. A level that moves steps 1/8 of a layer at once. A new fall stands at
+full height at once, and a dried cell vanishes.
+
+**Proposal.** The rule, its tick, and what is saved are unchanged; only the
+drawing between two ticks moves. The mesher keeps the last tick's cells and
+gives every vertex what it was as well as what it is. The vertex shader
+eases from one to the other over the tick, with `t = clamp(since_tick /
+TICK_S, 0, 1)` passed as a uniform and smoothstepped.
+
+- **S1. Levels ease.** A top vertex carries its last-tick height. A pool
+  rises and drains smoothly, and a slope tilts smoothly.
+- **S2. New water flows in from its source.** A cell wet this tick and dry
+  the last starts as a thin sheet on its source side, the neighbour it took
+  its water from. Its leading edge sweeps across the cell along the flow
+  vector over the tick, so the front visibly creeps. No fade in place.
+- **S3. Falls pour down.** A new falling column's bottom moves from the lip
+  to its foot over the tick. The splash at the foot starts when the column
+  lands, not when the tick starts. *This changes how falls look, so the
+  rule "Waterfalls are designed in a mockup first" applies: it is shown in
+  M31 beside today's look, and ported only on approval.*
+- **S4. Drying recedes.** A cell dry this tick and wet the last is drawn for
+  one more tick, shrinking back toward its source, then dropped.
+
+**Cost (estimated, not measured).**
+- one more float per top vertex, the previous height;
+- the dried cells of one tick kept for that tick;
+- one uniform.
+
+The mesher already runs once per tick. Saves, the rule and its tests are
+untouched.
+
+**The mockup.** M31 (`docs/mockups/waterfall.html`) gets a second 3D tab,
+**Pour**. A live pour runs on `water-flow/liquid.js`, the rule the game was
+ported from, at the game's 1 s tick. It is drawn with M31's port of the
+game's `dc0c5cb` fall look, over a terraced slope with a drop into a pool.
+A **Pops (today) / Smoothed** switch sits beside **Pour again** and a tick
+speed. The first tab, the fall look, is unchanged. Only one 3D view draws
+at a time.
+
+**Approved (2026-11-15).** The owner, on M31 version 2: *"the waterfall look
+is pretty good, need to be a bit careful with perf on that, on my laptop it is
+a bit rough, so hopefulyy in game it will work well"*.
+
+The mockup's cost does not carry over to the game. The page rebuilds its
+geometry in JavaScript every tick and copies the framebuffer for refraction
+every frame through three.js. The game already meshes on the CPU once a
+tick and already draws this froth.
+
+The port adds:
+- one float per top vertex;
+- one uniform;
+- one tick's dried cells.
+
+It is measured, not assumed. A `perf_suite.py` A/B on the release build
+(main's water against the smoothed water), on a pour scene and the walk,
+goes in `docs/benchmarks/` with the port. Any slower frame is fixed before
+the push.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With

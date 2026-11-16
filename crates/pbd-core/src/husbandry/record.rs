@@ -71,6 +71,11 @@ pub struct AnimalBody {
     pub hungry: f32,
     pub fed_until: f64,
     pub made: BTreeMap<String, f32>,
+    /// The brood it was born of (design 13, E5): a brood some animal names
+    /// is done. `None` for a tamed animal and every record written before.
+    pub brood: Option<u64>,
+    /// The sire the player chose for her on the breeding screen (E6).
+    pub mate: Option<u64>,
 }
 
 impl Default for AnimalBody {
@@ -95,6 +100,8 @@ impl Default for AnimalBody {
             hungry: 0.0,
             fed_until: 0.0,
             made: BTreeMap::new(),
+            brood: None,
+            mate: None,
         }
     }
 }

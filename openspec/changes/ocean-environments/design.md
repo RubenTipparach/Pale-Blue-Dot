@@ -961,6 +961,206 @@ not.
   1.7 m comes from the walker's own first step there, not from the ship.
   The test stays on open sea.
 
+### B14. Textures on the reef, and M9's fish in the water (2026-11-15, `claude/env-reef`)
+
+The owner, looking at the reef in the game: "reef needs some textures". Then,
+of the fish: "also please use proper fish models", refined to "use the fish
+species mockup to create proper fish": M9, *Fish Lab and Aquariums*
+(`docs/mockups/fish.html`, https://claude.ai/artifact/VbVmuUHVTUczkiMYGHEZSn),
+whose rule is that every fish is drawn from a species and a seed.
+
+**Finding.** The reef's pieces (B10, B13) and the creatures (B8) are flat,
+vertex-coloured faces with no texture at all: beside the terrain's 32 px
+pixel-art tiles they read as smooth plastic (`reef.jpg`, `kelp.jpg`,
+`vent.jpg`). The fish are the ocean mockup's six-sided darts, not M9's
+fish: no gill line, no scales, no pattern but a few coloured faces, and a
+species' shape only by its height and tail.
+
+**What is built** (the plan; the result is recorded under it once built):
+
+1. **One atlas for the water life**, `assets/textures/water_life/atlas.png`
+   (512 x 512, sRGB, nearest-point sampled, no mipmaps, as M9's own skins
+   are), drawn by a committed generator, `tools/water_life_atlas.py`
+   (PIL and numpy; Sweaft-64 palette, Bayer-4 dither, no outlines in the
+   world), with a manifest `atlas.ron` beside it naming every rect and
+   every fish variant's genome, and `PROVENANCE.md`.
+2. **The reef's tiles**, 32 x 32 each, greyscale near white so the pieces'
+   palettes stay (the texture multiplies the vertex colour, which keeps
+   the kind's palette, the per-face shades and the depth dimming): polyps
+   (branching and finger corals), brain grooves (boulders), plate rings
+   (table corals), pores (sponges), lattice (fans), tentacle stripes
+   (anemones, soft corals), blade veins (grass, turf, weed, kelp), grit
+   (rubble, shells, mussels, mats), basalt with sulfide crust (chimneys)
+   and ice. The world's art rule holds: no outline, the contrast kept near
+   each tile's mean (mean luminance about 0.85, darkest marks about 0.6),
+   so a tile reads as surface, not as a sticker.
+3. **UVs on the pieces**: each part a piece is built from (one `Kit::add`)
+   is box-projected by its face's normal into its kind's tile, at one
+   scale for the part (its longest side across the tile), so a triangle
+   never crosses a tile edge and nothing needs a repeat. The texture rides
+   on the one `LifeMaterial` the pieces already share; there is no new
+   material and no new draw call. Every mesh drawn with it carries `UV_0`
+   (pieces, swaying pieces, ambient life, schools, the loading screen's
+   warm mesh), so there is still one pipeline and the prewarm still covers
+   it. Sway moves positions only; the screen-door fade is the field's,
+   untouched.
+4. **M9's fish**, ported from `fish.html`'s `genome`, `paintSkin` and
+   `buildFish` rather than invented again:
+   - the body: M9's profile (`PROFILES`: fusiform, compressed, disc, eel,
+     flat) with its `profH` and the ray's diamond `rayW`, twelve rings of
+     six sides (twenty-two for an eel), a slightly flatter belly, the skin's
+     UV the length and the angle round the body as M9's;
+   - the tail fin by M9's tails (forked, deep fork, lunate, square,
+     rounded), the dorsal fins soft, spiny or tall, the anal fin, an eel's
+     ribbon fins, the serpent's crest, the pectoral fins and the ray's whip
+     tail, all thin double-sided surfaces with M9's fin-ray tile;
+   - M9's block eye (a pale block and its pupil);
+   - the skin: M9's `paintSkin` in Python, 64 x 32 (countershading in four
+     dithered Sweaft tones, then the species' stripes, bars, spots or
+     mottling and the dashed lateral line), and its 8 x 8 fin tile;
+   - the seed: each species has four variants in the atlas, each from M9's
+     `genome(species, seed)` with seeds 1 to 4 (its length factor, depth,
+     width, fin size, pattern density, hue and lightness, pattern seed), and
+     a creature wears variant `id % 4`. M9's rare morphs (golden, pale,
+     dark, one in 64) are not baked.
+   The game's own animation is kept: the tail sway and the eel's wave of
+   B8, and a new flap for the ray, whose wings are M9's one flat body
+   bent up and down by the distance from its spine (M9's `swim` for the
+   flat plan).
+
+**M9 to the game's ids.** The eight fish the game has are M9's first eight
+under the same ids: `minnow`, `silverfin`, `perch`, `ray`, `eel`, `reef`,
+`deepback`, `serpent`, each with M9's numbers (profile, tail, fins, eye,
+pattern, colours, variation). M9's five new species (`bloatfin`,
+`sunplate`, `lanternjaw`, `glassback`, `emberback`) are not in the game's
+roster and are not built. The reef's two ambient fish, which are not
+species, are given M9 definitions in the same form: `darter` (compressed,
+rounded tail, white bars on orange, the clownfish over the big anemone)
+and `anthias` (compressed, lunate, orange-pink with a gold lateral). The
+2D item sprite a caught fish becomes is unchanged; it is the species'
+icon, which M9 already draws beside its fish.
+
+**The other creatures** (crabs, lobsters, clams, turtles, otters, seals,
+ducks, the octopus, plume worms) keep their B8 bodies, flat-coloured, with
+their UVs on a white texel of the atlas; they are not rebuilt in this pass.
+
+**M9 is the library (owner, 2026-11-15).** "add more fish from the reef if
+needed, just keep that mockup updated since that represents our "Fish"
+library", "and coral and all underwater objects to the fish and aquariums doc
+too", "fish and aquariums doc should have at least 1 of everything". So M9
+gains the darter and the anthias as species entries (roster, sheet, lab,
+tank), icons in its manner (`tools/art/fish_art.py`), and a "Reef & sea
+floor" tab that draws one of everything the game's sea has (every reef
+piece, kelp, the smoker, mat, mussel bed, the floe, and every water
+creature's body) from the game's own meshes, written out by the app test
+`export_water_life_models` into `fish/water_life_models.js`, in the game's
+own atlas. The page's descriptive text moves into info modals as it is
+republished (owner, 2026-11-14).
+
+**Found while capturing: version 8 lost the reef.** On a 1-degree global
+scan of `ocean::places::environment`, version 7 has 55 reef samples and
+version 8 has 3; none is left within 10 degrees of (13.096, 94.896), where
+`reef.jpg` was taken, though kelp, vents and polar sea are unchanged. This
+is upstream of this branch (generator version 8, design 13) and is not fixed
+here; it wants its own look, since a saved version-8 world keeps what it
+has.
+
+**Cost.** A fish body is 221 to 288 triangles (a 12 x 6 body, its fins and
+the block eyes; the ray 288), an eel 416 and the serpent 452 (22 rings and
+the ribbons), pinned under 500 by a test. Schools are rebuilt on the CPU
+each frame as before, now also writing a UV per vertex. The frame cost is
+not measured on this branch.
+
+### B15. Generator version 9: the reefs back; the other creatures modelled (2026-11-15, `claude/env-reef`)
+
+**Why version 8 lost the reef.** A reef is kept clear of rivers
+(`reef_clear_m`, 60 m). Version 7 asked for a noise channel's *mouth*: the
+channel above its threshold where the ground would be land without the
+carve. Version 8 swapped that for `planet_gen::in_river`, which is true at
+*any* point of a noise channel, and the channels run through the open sea as
+well as into the land, so nearly every shallow warm sea was "near a river":
+on a one-degree globe scan version 7 has 55 reef samples and version 8 has 3.
+
+**Version 9** is version 8 with `OceanPlaces::V9`: version 7's numbers and
+`reef_mouths_only`, which clears a reef only near a channel's mouth (version
+7's test, the channel read on the ground without version 8's rivers) or a
+version 8 river's own reach. Version 8 is not edited; a world that names it
+keeps its 3 reefs. The reef is pieces, not ground, so version 9's altitudes,
+biomes and top blocks are version 8's digest for digest (both pinned);
+`GENERATOR_VERSION` is 9, and the settled climate g9 is g8's, as g8 was g7's.
+Tested: version 9's reef share on the scan is 55, version 7's exactly
+(`version_9_has_version_7s_reefs_again`). `reef-v9.jpg` is the old
+`reef.jpg` view, reef and all, on a new world.
+
+**The other creatures.** The owner: proper models "instead of placeholders".
+The crab, lobster, clam, turtle, otter, seal, the two ducks and the diver,
+the octopus and the plume worm are modelled again in M9's manner
+(`fish/bodies/creatures.rs`): skinned tubes and tapered limbs instead of
+boxes, each wearing a 64 x 32 skin drawn by M9's own `paintSkin` on the
+creature's colours and a pattern (`tools/water_life_atlas.py`,
+`CREATURE_SKINS`: 19 skins, the crab spotted, its legs barred, the
+lobster mottled with a barred tail, the clam's fluted shell and spotted
+blue mantle, the turtle's mottled shell and spotted skin, the drake's
+vermiculated grey and green head, the hen mottled, the diver spotted, the
+octopus mottled, the worm's ringed tube and banded plume). Every part and
+pivot keeps its posing name, so the ducks' heads, wings and feet, the
+turtle's flippers, the octopus's arms, the clam's lid and the worm's plume
+move as before. In the fish's budget: 150 (worm) to 470 (lobster)
+triangles, pinned under 500 with every UV in a tile by a test. M9's "Reef &
+sea floor" tab draws the same meshes.
+
+### B16. Kelp that reads as kelp (owner, 2026-11-15: "kelp needs fixing")
+
+The owner's reference is the "Kelp forest" frame of the phase-2 montage
+(`docs/screenshots/step-videos/phase-2-tech-montage-sheet.jpg` on
+`claude/env-v2`, captured at `--walk --at 71.308 -8.196 --time 12`): the
+kelp stands as huge flat slabs and ribbons, much wider than fronds, with
+hard edges, little shading and a patchy mix of dark and lime greens. Blue
+blobs lie on the floor at their feet.
+
+**Finding.**
+- **The shape is M9's tank kelp, stretched.** `places::kelp_stand` builds
+  M9's 5 m aquarium model (`fish/water_life_models.js`, "kelp"): three
+  stipes of flat strips 0.24 m wide, each 0.7 m segment turned 0.6 rad
+  from the last, and four flat 1.6 m blades at the top. Stretched up a
+  6 to 40 m water column it has no fronds along its length at all. Seen
+  from inside the forest, the twisted strips read as slabs and ribbons.
+- **The colours cycle by triangle.** A tint is chosen from four colours
+  (rust, orange, lime, dark green) every six triangles, so neighbouring
+  segments jump between dark and lime: the patchy mix.
+- **The blue blobs are coral boulders.** A kelp stand puts a `Boulder`
+  piece at its foot half the time, and `Boulder` is the reef's brain-coral
+  kind, coloured from the coral palette (blue-greys, teal, pink).
+- The light is not at fault. The kelp shares the reef pieces' material, is
+  lit by the field and dimmed by depth as they are, and sways (B13).
+
+**The approved look** is M25's kelp forest (`docs/mockups/ocean.html`,
+"Kelp forest"; its frond is `tools/art/ocean_art.py` `kelp_card`): a
+slender stipe with narrow blades alternating up it, a gas float at each
+blade's base, in giant kelp's golden olive (M25's `kelp` ramp), with one
+blade in three in the green of its `kelpg` ramp, and a canopy spreading at
+the surface.
+
+**Change** (drawing only; where kelp stands is unchanged, so no generator
+version):
+- **The stand**: two or three stipes, each two crossed strips 0.07 m wide,
+  so a stipe reads from every side. Narrow tapered blades (0.85 m long,
+  0.12 m at the widest) every 0.6 m up it, spiralling round the stipe and
+  angled up about 40 degrees. A small gas float (two crossed diamonds,
+  0.08 m) sits at each blade's base. Near the surface, four longer blades
+  (1.3 m) lie out flat as the canopy.
+- **The colours**: one per part, not cycled per triangle. Stipe `#725244`;
+  blades `#ab8465`, with one in three `#05582d`; floats `#c56d25` (M25's
+  frond; the green is the deep step of its `kelpg` ramp: the first after
+  shot, `kelp-after-first.jpg`, had the brighter `#559642`, which still
+  stood out lime in the water). The kelp's `veins` tile still gives the blades their grain.
+  Depth dimming and the field light are unchanged.
+- **The rocks at its foot** keep their place and shape, but take the
+  rock's palette (`#434137`, `#725244`, `#a09f91`), not the coral's.
+- **Verified** by captures at the owner's spot, before and after, and a
+  test that a stand's blades are narrow (no part wider than 0.15 m but
+  the canopy) and that its colours are only the frond's.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

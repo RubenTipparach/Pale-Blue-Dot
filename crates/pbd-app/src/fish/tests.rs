@@ -137,6 +137,57 @@ fn the_guide_reads_its_numbers_off_the_species() {
     }
 }
 
+/// The wiki page (`docs/wiki/fish.md`, written by `tools/gen_fish_wiki.py`)
+/// holds to the roster the game loads: one section per species in roster
+/// order under its icon, the species' own entry and tip, and every number the
+/// in-game guide shows for it, as `guide_facts` writes it. A roster change
+/// not regenerated into the page fails here.
+#[test]
+fn the_wiki_page_holds_to_the_roster() {
+    let page = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../docs/wiki/fish.md"
+    ))
+    .expect("docs/wiki/fish.md: run tools/gen_fish_wiki.py");
+    let fauna = pbd_core::fauna::FaunaSettings::default();
+    let sections: Vec<&str> = page.split("\n### ").skip(1).collect();
+    let species: Vec<_> = fauna.bodies.values().flatten().collect();
+    assert_eq!(
+        sections.len(),
+        species.len(),
+        "one section per species: run tools/gen_fish_wiki.py"
+    );
+    for (section, species) in sections.iter().zip(species) {
+        let heading = format!(
+            "![](../../assets/{}) {}\n",
+            species_icon(species),
+            species.name
+        );
+        assert!(
+            section.starts_with(&heading),
+            "{}: the section heading is not {heading:?}",
+            species.id
+        );
+        assert!(
+            section.contains(&species.guide.entry),
+            "{}: entry",
+            species.id
+        );
+        assert!(
+            section.contains(&format!("*Tip:* {}", species.guide.tip)),
+            "{}: tip",
+            species.id
+        );
+        for (label, value) in guide_facts(species, &fauna.fishing) {
+            assert!(
+                section.contains(&format!("| {label} | {value} |")),
+                "{}: {label} is not {value:?} on the page",
+                species.id
+            );
+        }
+    }
+}
+
 /// A world from before tool crafting with no tool record is dealt the four
 /// tools with nothing in hand (`inventory-grid` decision 8); a world made
 /// since owns none (`tool-crafting` decision 8); and one that recorded a

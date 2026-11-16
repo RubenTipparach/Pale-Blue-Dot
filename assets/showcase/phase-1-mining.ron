@@ -1,0 +1,47 @@
+// The phase-1 showcase, one file per branch of the mission tree
+// (`step-videos` 5.2, `starter-missions` T.5): a bot plays the branch
+// through the player's own inputs, each shot ending when its missions are
+// done, or the run failing as stalled. Mining and smelting: into the hill, ore, a forge, bronze. It needs ore in the ground (generator version 10).
+//
+// Each branch starts from the world the earlier ones left: run them in
+// order on one `--world` (trunk, fishing, farming, herding, cooking, then
+// mining, light and about). Nothing is set; every mission is played.
+//
+// The start is a level pasture with the sea within thirty metres (measured
+// once: the only such place within 3 km of the fields spawn).
+(
+    goal: "Goal: mining and smelting, from stone to bronze",
+    at: Some((11.5085, -25.0992)),
+    hour: 8.5,
+    shots: [
+        (
+            caption: "Mining. Dig into the hill with the pickaxe",
+            until: ["dig-deep"],
+            max_s: 300.0,
+            acts: [Hand("pickaxe"), Dig(Mission("dig-deep"), 4), Still],
+        ),
+        (
+            caption: "Find ore and coal in the rock",
+            until: ["ore"],
+            max_s: 400.0,
+            acts: [Hand("pickaxe"), Dig(Mission("ore"), 8), Still],
+        ),
+        (
+            caption: "Build a forge, and set it down",
+            until: ["forge"],
+            max_s: 200.0,
+            acts: [Bench("forge", 1), Place("block:forge")],
+        ),
+        (
+            caption: "Smelt bronze",
+            until: ["smelt"],
+            max_s: 300.0,
+            acts: [Smelt("mixed-ore", 2), Smelt("bronze", 2), Still],
+        ),
+        (
+            caption: "Mining done",
+            max_s: 20.0,
+            acts: [Missions(6.0)],
+        ),
+    ],
+)

@@ -8,32 +8,17 @@
 //!   one closes. The player's "Mission line" setting hides it.
 //! - **The tab** is a menu screen of its own (`Screen::Missions`), opened
 //!   with O, as the pack is with I; a strip of two oak tabs over both
-//!   switches between them. It lists the chain in order: done, the current
-//!   mission with each objective's count, open, locked and pending.
+//!   switches between them. The tab draws the tree (`mission_tree`).
 
-use super::menu::{self, Panel, Screen};
+use super::menu::Screen;
 use bevy::prelude::*;
 use pbd_app::missions::{MissionChain, Missions};
 use pbd_app::settings::PlayerSettings;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, UiKit};
-use pbd_core::missions::{Mission, Progress, Standing};
 
 /// The HUD line.
 #[derive(Component)]
 pub struct MissionLine;
-
-/// One mission's row in the tab, by its place in the chain: its title, its
-/// standing, and the line of counts under it.
-#[derive(Component)]
-pub struct RowTitle(pub usize);
-#[derive(Component)]
-pub struct RowStanding(pub usize);
-#[derive(Component)]
-pub struct RowCounts(pub usize);
-
-/// The current mission's line of help, at the foot of the tab.
-#[derive(Component)]
-pub struct HelpText;
 
 /// The strip of tabs over the pack and the missions, and what each opens.
 #[derive(Component)]
@@ -53,10 +38,7 @@ pub const TABS: [(&str, Screen); 5] = [
     ("MENU  ESC", Screen::Pause),
 ];
 
-/// The tab's width, native pixels.
-const WIDTH: f32 = 300.0;
-
-pub fn spawn(mut commands: Commands, kit: Res<UiKit>, chain: Res<MissionChain>) {
+pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
     let kit = &*kit;
     // The HUD line, under the compass strip at the right.
     commands.spawn((
@@ -95,81 +77,6 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, chain: Res<MissionChain>) 
                     });
             }
         });
-    // The tab's panel: the stone moulding, the lintel, a row per mission.
-    commands
-        .spawn((menu::layer(), GlobalZIndex(10), Panel(Screen::Missions)))
-        .with_children(|layer| {
-            layer
-                .spawn(menu::framed(kit, Set::Stone, WIDTH))
-                .with_children(|panel| {
-                    menu::lintel(panel, kit, "MISSIONS");
-                    for (index, _) in chain.0.missions.iter().enumerate() {
-                        panel
-                            .spawn(Node {
-                                flex_direction: FlexDirection::Column,
-                                ..default()
-                            })
-                            .with_children(|row| {
-                                row.spawn(Node {
-                                    justify_content: JustifyContent::SpaceBetween,
-                                    width: percent(100),
-                                    ..default()
-                                })
-                                .with_children(|line| {
-                                    line.spawn((
-                                        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
-                                        RowTitle(index),
-                                    ));
-                                    line.spawn((
-                                        KitText::new("", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
-                                        RowStanding(index),
-                                    ));
-                                });
-                                row.spawn((
-                                    KitText::new("", ui_kit::RUNE).shadow(ui_kit::INK),
-                                    Node {
-                                        margin: UiRect::new(px(8), px(0), px(2), px(1)),
-                                        display: Display::None,
-                                        ..default()
-                                    },
-                                    RowCounts(index),
-                                ));
-                            });
-                    }
-                    panel.spawn((
-                        menu::body("", 12.0, ui_kit::TEXT_DIM),
-                        Node {
-                            margin: UiRect::top(px(5)),
-                            max_width: px(WIDTH - 28.0),
-                            ..default()
-                        },
-                        HelpText,
-                    ));
-                });
-        });
-}
-
-/// What a row's right column says.
-fn standing_word(standing: Standing, current: bool) -> &'static str {
-    match standing {
-        Standing::Done => "DONE",
-        Standing::Open if current => "NOW",
-        Standing::Open => "OPEN",
-        Standing::Locked => "LOCKED",
-        Standing::Pending => "NOT YET IN THE GAME",
-    }
-}
-
-/// A row's line of counts: `SOIL 2/4 · FIBRE 0/3`.
-pub fn counts_line(progress: &Progress, mission: &Mission) -> String {
-    let counts = progress.counts(mission);
-    mission
-        .objectives
-        .iter()
-        .zip(counts)
-        .map(|(o, n)| format!("{} {n}/{}", o.label, o.count))
-        .collect::<Vec<_>>()
-        .join("  ·  ")
 }
 
 /// The HUD line: the current mission, or the one just done, unless the
@@ -209,22 +116,11 @@ pub fn show_line(
     }
 }
 
-/// Keep the tab's rows and the tab strip current.
-#[allow(clippy::too_many_arguments)]
-#[allow(clippy::type_complexity)]
+/// Keep the tab strip current (the tab itself is `mission_tree`).
 pub fn paint(
-    missions: Res<Missions>,
-    chain: Res<MissionChain>,
     screen: Res<Screen>,
-    mut strip: Query<&mut Node, (With<TabStrip>, Without<RowCounts>)>,
+    mut strip: Query<&mut Node, With<TabStrip>>,
     mut tabs: Query<(&TabTo, &mut Plaque)>,
-    mut titles: Query<(&RowTitle, &mut KitText), (Without<RowStanding>, Without<RowCounts>)>,
-    mut standings: Query<(&RowStanding, &mut KitText), (Without<RowTitle>, Without<RowCounts>)>,
-    mut counts: Query<
-        (&RowCounts, &mut KitText, &mut Node),
-        (Without<RowTitle>, Without<RowStanding>, Without<TabStrip>),
-    >,
-    mut help: Query<&mut Text, With<HelpText>>,
 ) {
     let open = matches!(*screen, Screen::Pack | Screen::Missions);
     for mut node in &mut strip {
@@ -237,64 +133,6 @@ pub fn paint(
         let latched = to.0 == *screen;
         if plaque.latched != latched {
             plaque.latched = latched;
-        }
-    }
-    if *screen != Screen::Missions || !(missions.is_changed() || screen.is_changed()) {
-        return;
-    }
-    let chain = &chain.0;
-    let progress = &missions.progress;
-    let current = progress.current(chain).map(|m| m.id.clone());
-    let standing = |i: usize| {
-        let mission = &chain.missions[i];
-        (
-            progress.standing(chain, mission),
-            current.as_deref() == Some(mission.id.as_str()),
-        )
-    };
-    for (row, mut text) in &mut titles {
-        let (s, now) = standing(row.0);
-        let colour = match s {
-            Standing::Done => ui_kit::TEXT_DIM,
-            Standing::Open if now => ui_kit::TITLE,
-            Standing::Open => ui_kit::TEXT,
-            Standing::Locked | Standing::Pending => ui_kit::LABEL_DIM,
-        };
-        let title = chain.missions[row.0].title.clone();
-        if text.text != title || text.colour != colour {
-            text.text = title;
-            text.colour = colour;
-        }
-    }
-    for (row, mut text) in &mut standings {
-        let (s, now) = standing(row.0);
-        let word = standing_word(s, now);
-        let colour = if now { ui_kit::RUNE } else { ui_kit::TEXT_DIM };
-        if text.text != word || text.colour != colour {
-            text.text = word.to_string();
-            text.colour = colour;
-        }
-    }
-    for (row, mut text, mut node) in &mut counts {
-        let (s, _) = standing(row.0);
-        let show = s == Standing::Open;
-        let want = if show { Display::Flex } else { Display::None };
-        if node.display != want {
-            node.display = want;
-        }
-        let line = counts_line(progress, &chain.missions[row.0]);
-        if show && text.text != line {
-            text.text = line;
-        }
-    }
-    let words = progress
-        .current(chain)
-        .map_or("Every starter mission is done.".to_string(), |m| {
-            m.help.clone()
-        });
-    for mut text in &mut help {
-        if text.0 != words {
-            text.0.clone_from(&words);
         }
     }
 }
@@ -342,51 +180,92 @@ fn script() -> Vec<Scripted> {
     use pbd_core::missions::Kind;
     use pbd_core::terrain::Material;
     let good = |code| Item::Good(Good::by_code(code).expect("a shipped good"));
+    let n = |k: usize, step: Scripted| std::iter::repeat_n(step, k);
+    // The tree (`starter-missions` T.2) in the order the bot plays it.
     let mut steps = vec![
-        S::Did(Kind::Gather, "block:dirt"),
-        S::Did(Kind::Gather, "block:dirt"),
-        S::Did(Kind::Gather, "block:grass"),
-        S::Did(Kind::Gather, "block:dirt"),
-        S::Gained(good("fibre"), 2, Found),
-        S::Gained(good("fibre"), 1, Found),
-        S::Gained(good("log"), 1, Found),
-        S::Gained(good("planks"), 4, Made),
-        S::Gained(good("rope"), 1, Made),
+        S::Gained(good("fibre"), 4, Found),
+        S::Gained(good("stone"), 4, Found),
+    ];
+    steps.extend(n(4, S::Did(Kind::Gather, "block:dirt")));
+    steps.push(S::Did(Kind::Craft, "recipe:stone-axe"));
+    steps.extend(n(2, S::Did(Kind::Fell, "tree")));
+    steps.extend([
+        S::Gained(good("log"), 10, Found),
+        S::Gained(good("planks"), 8, Made),
+        S::Gained(good("rope"), 2, Made),
         S::Gained(Item::Block(Material::Workbench), 1, Made),
         S::Did(Kind::Place, "block:workbench"),
         S::Gained(Item::Tool(Tool::Pickaxe), 1, Made),
         S::Gained(Item::Tool(Tool::Shovel), 1, Made),
-        S::Gained(Item::Tool(Tool::Axe), 1, Made),
-    ];
-    steps.extend((0..3).map(|_| S::Gained(good("log"), 1, Found)));
-    steps.extend([
-        S::Gained(Item::Tool(Tool::Rod), 1, Made),
         S::Gained(Item::Block(Material::Campfire), 1, Made),
         S::Did(Kind::Place, "block:campfire"),
+    ]);
+    steps.extend(n(20, S::Did(Kind::Place, "block:dirt")));
+    steps.extend(n(2, S::Did(Kind::Craft, "recipe:torch")));
+    steps.extend(n(4, S::Did(Kind::Place, "block:torch")));
+    steps.extend([
+        S::Did(Kind::Night, "light"),
+        S::Gained(Item::Tool(Tool::Rod), 1, Made),
         S::Did(Kind::Cast, "water"),
     ]);
-    steps.extend((0..3).map(|_| S::Did(Kind::Catch, "minnow")));
-    steps.extend((0..3).map(|_| S::Cooked("grilled-fish", 1)));
+    steps.extend(n(3, S::Did(Kind::Catch, "minnow")));
+    steps.extend(n(3, S::Did(Kind::Species, "fish")));
     steps.extend([
-        S::Gained(good("wheat-seed"), 1, Found),
-        S::Gained(good("turnip-seed"), 2, Picked),
-        S::Gained(good("wheat-seed"), 1, Found),
+        S::Did(Kind::Waters, "sea"),
+        S::Did(Kind::Waters, "fresh"),
+        S::Did(Kind::Open, "map"),
+        S::Did(Kind::Reach, "marked"),
     ]);
-    steps.extend((0..4).map(|_| S::Did(Kind::Till, "block:grass")));
-    steps.extend((0..4).map(|_| S::Planted("turnip")));
+    steps.extend(n(20, S::Did(Kind::Swim, "water")));
     steps.extend([
+        S::Did(Kind::Reach, "reef"),
+        S::Did(Kind::Reach, "town"),
+        S::Did(Kind::Board, "boat"),
+    ]);
+    steps.extend(n(100, S::Did(Kind::Travel, "boat")));
+    steps.extend([
+        S::Cooked("grilled-fish", 2),
+        S::Did(Kind::Eat, "grilled-fish"),
+    ]);
+    steps.push(S::Gained(good("wheat-seed"), 2, Found));
+    steps.extend(n(4, S::Did(Kind::Till, "block:grass")));
+    steps.extend(n(4, S::Planted("wheat")));
+    steps.push(S::Did(Kind::Pour, "water"));
+    steps.extend([
+        S::Gained(good("wheat"), 4, Harvested),
+        S::Cooked("flatbread", 2),
+        S::Gained(good("turnip"), 1, Harvested),
+        S::Gained(good("chili"), 1, Harvested),
+        S::Gained(good("frost-kale"), 1, Harvested),
+        S::Cooked("roast-turnip", 1),
+    ]);
+    steps.extend(n(6, S::Did(Kind::Craft, "recipe:fence")));
+    steps.extend([
+        S::Did(Kind::Craft, "recipe:gate"),
         S::Deed(Deed::Tamed { species: 0 }),
         S::Deed(Deed::PenBuilt { pen: 1, cells: 7 }),
         S::Deed(Deed::Penned { species: 0 }),
-        S::Did(Kind::Place, "block:forge"),
-        S::Gained(good("copper-ingot"), 2, Made),
-        S::Gained(good("iron-ingot"), 1, Made),
-        S::Did(Kind::Craft, "recipe:bronze-axe"),
-        S::Gained(good("egg"), 1, Collected),
-        S::Gained(good("turnip"), 2, Harvested),
-        S::Gained(good("turnip"), 2, Harvested),
-        S::Cooked("roast-turnip", 2),
+        S::Gained(good("egg"), 2, Collected),
+        S::Deed(Deed::Tamed { species: 1 }),
+        S::Gained(good("wool"), 1, Collected),
         S::Cooked("fried-egg", 1),
+        S::Did(Kind::Eat, "grilled-fish"),
+        S::Did(Kind::Eat, "flatbread"),
+        S::Did(Kind::Eat, "fried-egg"),
+    ]);
+    steps.extend(n(10, S::Did(Kind::Gather, "block:stone")));
+    steps.extend(n(4, S::Did(Kind::Gather, "block:ore")));
+    steps.extend([
+        S::Gained(good("coal"), 2, Found),
+        S::Gained(Item::Block(Material::Forge), 1, Made),
+        S::Did(Kind::Place, "block:forge"),
+        S::Gained(good("bronze-ingot"), 2, Made),
+        S::Did(Kind::Craft, "recipe:bronze-pickaxe"),
+    ]);
+    steps.extend(n(5, S::Did(Kind::Gather, "block:stone")));
+    steps.extend([
+        S::Gained(good("iron-ingot"), 1, Made),
+        S::Did(Kind::Craft, "recipe:iron-pickaxe"),
     ]);
     steps
 }
@@ -444,6 +323,58 @@ pub fn scripted(world: &mut World, mut at: Local<(usize, u32)>) {
     raise(step, world);
 }
 
+/// The hour a night by the lights is counted from.
+pub const NIGHT_HOUR: f32 = 20.0;
+/// How near a light the player placed they have to be, metres.
+pub const NIGHT_NEAR_M: f32 = 30.0;
+
+/// `night` (`starter-missions` H.1): the clock passes 20:00 with the
+/// player within 30 m of a light they placed. Raised once each evening.
+pub fn night_watch(
+    sun: Res<pbd_app::sky::Sun>,
+    save: Res<pbd_app::saves::WorldSave>,
+    fine: Option<Res<pbd_app::planet::PlanetFine>>,
+    walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    mut did: MessageWriter<pbd_app::missions::Did>,
+    mut was: Local<Option<f32>>,
+) {
+    let hour = sun.clock.hour();
+    let crossed = was.is_some_and(|h| h < NIGHT_HOUR && hour >= NIGHT_HOUR);
+    *was = Some(hour);
+    if !crossed {
+        return;
+    }
+    let (Some(fine), Ok(feet)) = (fine, walkers.single()) else {
+        return;
+    };
+    let lights: Vec<_> = save
+        .edits
+        .all()
+        .into_iter()
+        .filter(|e| pbd_app::hotbar::light_icon(e.material).is_some())
+        .collect();
+    if lights.is_empty() {
+        return;
+    }
+    let toward = feet.0.normalize_or(Vec3::Y);
+    let near = fine.set.finest_records().iter().any(|r| {
+        lights.iter().any(|e| e.cell == r.key())
+            && Vec3::from_slice(&r.direction_height[..3])
+                .normalize_or(Vec3::Y)
+                .distance(toward)
+                * pbd_app::planet::PLANET_RADIUS
+                < NIGHT_NEAR_M
+    });
+    if near {
+        info!("night by the lights at {hour:.2}");
+        did.write(pbd_app::missions::Did::new(
+            pbd_core::missions::Kind::Night,
+            "light",
+            1,
+        ));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -474,7 +405,15 @@ mod tests {
         let chain = &app.world().resource::<MissionChain>().0;
         let missions = app.world().resource::<Missions>();
         assert_eq!(missions.progress.current(chain).map(|m| &m.id), None);
-        assert_eq!(missions.progress.done.len(), chain.missions.len());
+        // Every mission whose kind the game raises; the pending ones wait.
+        assert_eq!(
+            missions.progress.done.len(),
+            chain
+                .missions
+                .iter()
+                .filter(|m| m.pending.is_none())
+                .count()
+        );
     }
 
     /// Each plaque in the strip puts its own screen up from the pack
@@ -491,5 +430,128 @@ mod tests {
             app.update();
             assert_eq!(*app.world().resource::<Screen>(), to, "{label}");
         }
+    }
+}
+
+/// How far from where the map was read a player walks for "Read the map".
+pub const MAP_WALK_M: f32 = 200.0;
+/// How near a town's terrace counts as reaching it.
+pub const TOWN_NEAR_M: f32 = 60.0;
+
+/// What `about_watch` carries between frames.
+#[derive(Default)]
+pub struct AboutState {
+    /// The screen last frame.
+    screen: Option<Screen>,
+    /// Where the map was first read, for its walk.
+    read_at: Option<Vec3>,
+    reached_mark: bool,
+    /// The last place the walker was counted from, in the water.
+    swam_from: Option<Vec3>,
+    swum_m: f32,
+    /// The craft boarded, and where it was last counted from.
+    aboard: Option<(Entity, Vec3)>,
+    travelled_m: f32,
+    town: Option<u32>,
+    reef: bool,
+}
+
+/// Getting about (`starter-missions` T.2): the map opened, the walk from
+/// where it was read, metres swum, a boat boarded and the metres it went, a
+/// town and a reef reached. Each is raised where the game already knows it:
+/// the screen, the walker's position against the sea and the towns, the
+/// craft the player is aboard.
+#[allow(clippy::too_many_arguments)]
+pub fn about_watch(
+    screen: Res<Screen>,
+    aboard: Option<Res<pbd_app::vehicles::Aboard>>,
+    vehicles: Query<&pbd_app::vehicles::Vehicle>,
+    towns: Option<Res<pbd_app::towns::Towns>>,
+    walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    mut did: MessageWriter<pbd_app::missions::Did>,
+    mut state: Local<AboutState>,
+) {
+    use pbd_app::missions::Did;
+    use pbd_app::planet::{PLANET_RADIUS, surface_height};
+    use pbd_core::missions::Kind;
+    let at = walkers.single().ok().map(|p| p.0);
+    if state.screen != Some(*screen) {
+        if *screen == Screen::Map {
+            did.write(Did::new(Kind::Open, "map", 1));
+            if state.read_at.is_none() {
+                state.read_at = at;
+            }
+        }
+        state.screen = Some(*screen);
+    }
+    let Some(feet) = at else { return };
+    let up = feet.normalize_or(Vec3::Y);
+    // The walk from where the map was read.
+    if let Some(read) = state.read_at
+        && !state.reached_mark
+        && read.normalize_or(Vec3::Y).distance(up) * PLANET_RADIUS >= MAP_WALK_M
+    {
+        state.reached_mark = true;
+        did.write(Did::new(Kind::Reach, "marked", 1));
+    }
+    // Swimming: the feet under the sea's level over the sea floor.
+    let ground = surface_height(up);
+    let altitude = feet.length() - PLANET_RADIUS;
+    if ground < -1.0 && altitude < -0.3 {
+        if let Some(from) = state.swam_from {
+            state.swum_m += (feet - from).length();
+        }
+        state.swam_from = Some(feet);
+        while state.swum_m >= 1.0 {
+            state.swum_m -= 1.0;
+            did.write(Did::new(Kind::Swim, "water", 1));
+        }
+        // A reef under the swimmer.
+        if !state.reef
+            && pbd_core::ocean::places::environment(pbd_app::planet::terrain_config(), up)
+                == Some(pbd_core::fauna::Environment::Reef)
+        {
+            state.reef = true;
+            did.write(Did::new(Kind::Reach, "reef", 1));
+        }
+    } else {
+        state.swam_from = None;
+    }
+    // A town reached.
+    if let Some(towns) = towns {
+        let near = towns.held.iter().find(|h| {
+            h.point(PLANET_RADIUS).normalize_or(Vec3::Y).distance(up) * PLANET_RADIUS < TOWN_NEAR_M
+        });
+        let id = near.map(|h| h.site.id);
+        if id.is_some() && id != state.town {
+            did.write(Did::new(Kind::Reach, "town", 1));
+        }
+        state.town = id;
+    }
+    // A boat boarded, and the metres it goes.
+    let craft = aboard
+        .and_then(|a| a.0)
+        .and_then(|e| vehicles.get(e).ok().map(|v| (e, v)))
+        .filter(|(_, v)| {
+            matches!(
+                v.craft.kind,
+                pbd_core::vehicle::Kind::Rowboat | pbd_core::vehicle::Kind::Cog
+            )
+        });
+    match (craft, state.aboard) {
+        (Some((e, v)), Some((was, from))) if e == was => {
+            let here = v.craft.body.position.as_vec3();
+            state.travelled_m += (here - from).length();
+            state.aboard = Some((e, here));
+            while state.travelled_m >= 1.0 {
+                state.travelled_m -= 1.0;
+                did.write(Did::new(Kind::Travel, "boat", 1));
+            }
+        }
+        (Some((e, v)), _) => {
+            did.write(Did::new(Kind::Board, "boat", 1));
+            state.aboard = Some((e, v.craft.body.position.as_vec3()));
+        }
+        (None, _) => state.aboard = None,
     }
 }

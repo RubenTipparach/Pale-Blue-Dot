@@ -102,3 +102,81 @@ puffs but is blocky, and blue-green rather than black, from the water between;
 the seals on floes are small at 10 m and pale; the chart's polar sea fills
 the map's bottom rows (the projection stretches the pole). The unlit vent
 glow and smoke cannot take the mask, so they appear and go at half fade.
+
+## Textures and M9's fish (B14, 2026-11-15, `claude/env-reef`)
+
+Fixed-step captures on the M4 Max Mac (Metal, GPU), `--profile fast`,
+memory-only worlds, **generator version 8** (the default). Looks only: frame
+time was NOT measured. `*-untextured.jpg` is the same frame from the same build
+with `PBD_PASS_OFF=life_texture` (the atlas off, everything else equal).
+
+**The reef moved.** Version 8 has almost no reef where version 7 had it: on a
+1-degree global scan of `ocean::places::environment` version 7 finds 55 reef
+samples and version 8 finds 3, and none within 10 degrees of (13.096, 94.896),
+where `reef.jpg` was taken. The reef shots are therefore at a version-8 reef,
+(-4.6, 155.04), in daylight there at `--time 6`, not at the old views. Kelp
+and the vent are where they were. (This loss is upstream of this branch and is
+reported, not fixed, here.)
+
+- `reef-textured.jpg` / `reef-untextured.jpg`: (-4.6, 155.04), `--time 6
+  --yaw 180 --pitch -12`, 240 frames.
+- `reef-anthias-textured.jpg` / `-untextured`: (-4.5597, 155.0378), `--yaw
+  180 --pitch 2`, 300 frames: an anthias cloud overhead.
+- `reef-anemone-textured.jpg` / `-untextured`: (-4.1058, 155.0938), `--pitch
+  -25`, 300 frames (a clownfish site; the table corals and brain boulders
+  fill the frame).
+- `kelp-textured.jpg` / `-untextured`: (71.308, -8.196), 12:00, pitch 10, as
+  `kelp.jpg`.
+- `vent-textured.jpg` / `-untextured`: (37.195, -59.018), 12:00, 2,800
+  frames, as `vent.jpg`.
+- `lineup-seabed-textured.jpg`, `lineup-seabed-close-textured.jpg`: `--life
+  lineup` at (3.5, -18.15), 11:00, pitch -32, 420 frames, as
+  `lineup-seabed.jpg`: the fish are M9's now.
+- `fish-close-textured.jpg`: four fish cropped from the lineup at full
+  resolution and doubled, nearest: the reef fish, the banded perch, the ray
+  and the eel (swimmers put ahead with `--life` swim off before the capture,
+  B8).
+
+Honest read, judged against the terrain beside them:
+
+- **The reef reads as the terrain's world now.** Table corals carry plate
+  rings, boulders a blotchy brain surface, finger and branching corals
+  polyp dots, sponges pores, fans a lattice, all at about the terrain's
+  texel size, so the pieces stop looking like smooth plastic beside the
+  pixel-art floor. The palettes and per-face shading are unchanged. The
+  brain tile reads as mottling more than as grooves; the barrel sponge's
+  pores are sparse at 0.5 m; both could be denser.
+- **Kelp** shows its blade veins faintly; the change is small at 10 m.
+- **The vent** barely changes: at 90 m the basalt and crust are too dark to
+  read, as the chimneys were before.
+- **The fish are M9's.** The banded perch with its spiny and soft dorsal fins
+  and red tail, the disc-bodied reef fish with its tall dorsal and gold
+  bars, the spotted ray with its whip, the mottled eel and the serpent's
+  crest all match `docs/mockups/fish/sheet/`, with M9's block eyes and fin
+  rays. Under water they take the sea's cyan cast and read brighter than
+  M9's lab renders. In the untextured frames the fish are white: their
+  colour is all in the skin now.
+- The other creatures (crab, lobster, clam, turtle, otter, seal, ducks,
+  octopus, plume worm) are unchanged.
+
+## Version 9 and the other creatures (B15, 2026-11-15)
+
+Same Mac, same method, generator version 9 (the new default).
+
+- `reef-v9.jpg`: the old `reef.jpg` view, (13.096, 94.896), 11:00, pitch
+  -12, 240 frames: version 9 has the reef back where version 8 lost it, the
+  same pieces as `reef.jpg` with B14's textures.
+- `creatures-before-after.jpg`: the lineup's creatures cropped, before (top,
+  the B8 bodies, taken earlier the same day) and after (bottom).
+- `lineup-creatures-modelled.jpg`: the whole lineup after.
+
+Honest read: the crab is a crab now (an oval spotted carapace, jointed
+barred legs, claws with fingers, eyes on stalks) where it was boxes; the
+lobster has a ridged barred tail, a fan, big claws and long feelers but is
+small at 0.5 m; the turtle's dome and flippers read, its mottled shell
+reads darker and more camouflage than a real turtle's; the ducks keep their
+shapes with feathered skins and a proper bill; the plume worm has its
+ringed tube and a crown of radioles; the octopus is a mottled mantle and
+tapered arms, its mantle blobby; the clam's fluted shells are fair but its
+open lid looks heavy; the otter and seal are smooth furred bodies. Under
+water they all take the cyan cast.

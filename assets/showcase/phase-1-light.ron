@@ -1,0 +1,42 @@
+// The phase-1 showcase, one file per branch of the mission tree
+// (`step-videos` 5.2, `starter-missions` T.5): a bot plays the branch
+// through the player's own inputs, each shot ending when its missions are
+// done, or the run failing as stalled. Light and building: blocks placed, torches round them, a night beside them.
+//
+// Each branch starts from the world the earlier ones left: run them in
+// order on one `--world` (trunk, fishing, farming, herding, cooking, then
+// mining, light and about). Nothing is set; every mission is played.
+//
+// The start is a level pasture with the sea within thirty metres (measured
+// once: the only such place within 3 km of the fields spawn).
+(
+    goal: "Goal: light and building, a shelter lit at night",
+    at: Some((11.5085, -25.0992)),
+    hour: 8.5,
+    shots: [
+        (
+            caption: "Light and building. Build a shelter: twenty blocks",
+            until: ["build"],
+            repeat: true,
+            max_s: 300.0,
+            acts: [Hand("hand"), Place("block:dirt")],
+        ),
+        (
+            caption: "Make torches, and set them round it",
+            max_s: 300.0,
+            acts: [Hand("axe"), Chop(Have("log", 1)), Craft("planks", 1), Hand("shovel"), Dig(Have("fibre", 2), 1), Hand("hand"), Craft("torch", 2), Place("block:torch"), Place("block:torch"), Place("block:torch"), Place("block:torch"), Still],
+        ),
+        (
+            caption: "Nightfall by the torches",
+            until: ["torch"],
+            rate: Some(300.0),
+            max_s: 90.0,
+            acts: [Hour(20.8), Wait(2.0), Still],
+        ),
+        (
+            caption: "Light and building done",
+            max_s: 20.0,
+            acts: [Missions(6.0)],
+        ),
+    ],
+)

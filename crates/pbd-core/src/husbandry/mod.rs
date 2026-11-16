@@ -13,12 +13,14 @@
 //! fish rule reads, so mixing animals into it would ask every one of those
 //! rules to filter.
 
+pub mod breeding;
 pub mod farm;
 pub mod genome;
 pub mod herds;
 pub mod pen;
 pub mod record;
 pub mod taming;
+pub mod young;
 
 use crate::fauna::{Class, Guide, Status};
 use crate::goods::Good;
@@ -32,6 +34,7 @@ pub use genome::Genome;
 pub use pen::{Edge, Pen, PenRefusal, find_pen};
 pub use record::{AnimalBody, FenceBody};
 pub use taming::Trust;
+pub use young::{Birth, Stage, Young};
 
 /// The shipped `husbandry.ron`, which is also the one source of the
 /// defaults: a missing file or field takes these.
@@ -146,6 +149,8 @@ pub struct Keeping {
     pub adult_days: f32,
     /// One in this many of a herd is male.
     pub male_one_in: u32,
+    /// Its life stages and how it is born (design 13, E1).
+    pub young: Young,
 }
 
 /// One land species (decision 1): what the field guide, the herds, the rig
@@ -239,12 +244,41 @@ pub struct HerdSettings {
 }
 
 /// `assets/config/husbandry.ron`.
+/// Eggs, pairing, inheritance and inbreeding (design 13, E3-E8).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct BreedingSettings {
+    /// A dam pairs only at this mood or more, 0..100.
+    pub mood_min: f32,
+    /// Both pair only at this health or more, 0..100.
+    pub health_min: f32,
+    /// The pairing check runs once a world day, at this fraction of it.
+    pub morning: f32,
+    /// One allele in this many mutates.
+    pub mutate_one_in: u32,
+    /// A quantitative allele mutates by up to this, 0..1.
+    pub mutate_step: f32,
+    /// The young's hardiness falls by this times F.
+    pub hardiness_per_f: f32,
+    /// Generations the pedigree is read back for F.
+    pub generations: u32,
+    /// The screen warns above this F (first cousins).
+    pub warn_f: f32,
+    /// A carried fertile egg is cold this long after it was laid, days.
+    pub cold_after_days: f32,
+    /// What one incubator holds.
+    pub incubator_eggs: u8,
+    /// A lamp must stand this near an incubator, metres.
+    pub lamp_m: f32,
+}
+
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HusbandrySettings {
     pub taming: TamingSettings,
     pub needs: NeedSettings,
     pub herds: HerdSettings,
+    pub breeding: BreedingSettings,
     /// Each body's land species, in roster order. APPEND ONLY: a record
     /// names its species by index. A body with none has no land life.
     pub land: BTreeMap<String, Vec<LandSpecies>>,
@@ -259,6 +293,7 @@ impl Default for HusbandrySettings {
             taming: TamingSettings,
             needs: NeedSettings,
             herds: HerdSettings,
+            breeding: BreedingSettings,
             land: BTreeMap<String, Vec<LandSpecies>>,
         }
         let w: Whole = ron::from_str(HUSBANDRY_RON).expect("the shipped husbandry.ron parses");
@@ -266,6 +301,7 @@ impl Default for HusbandrySettings {
             taming: w.taming,
             needs: w.needs,
             herds: w.herds,
+            breeding: w.breeding,
             land: w.land,
         }
     }
@@ -310,6 +346,26 @@ impl HusbandrySettings {
         positive("herds", &[h.square_m, h.spread_m, h.near_m, h.fade_s])?;
         if !(0.0..=1.0).contains(&h.chance) {
             return Err("herds: chance is 0..1".into());
+        }
+        let b = &self.breeding;
+        positive(
+            "breeding",
+            &[
+                b.mutate_step,
+                b.hardiness_per_f,
+                b.warn_f,
+                b.cold_after_days,
+                b.lamp_m,
+            ],
+        )?;
+        if !(0.0..=100.0).contains(&b.mood_min)
+            || !(0.0..=100.0).contains(&b.health_min)
+            || !(0.0..1.0).contains(&b.morning)
+            || b.mutate_one_in == 0
+            || b.generations == 0
+            || b.incubator_eggs == 0
+        {
+            return Err("breeding: mood and health 0..100, morning 0..1, counts at least 1".into());
         }
         let mut seen = std::collections::BTreeSet::new();
         for (body, species) in &self.land {
@@ -367,6 +423,7 @@ impl HusbandrySettings {
                     {
                         return Err(format!("{at}: coats, patterns and sexes"));
                     }
+                    k.young.validate(&at, k.adult_days)?;
                     for p in &k.products {
                         if p.good().is_none_or(|g| g == Good::FENCE || g == Good::GATE) {
                             return Err(format!("{at}: {} is not a product", p.good));

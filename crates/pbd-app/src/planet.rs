@@ -33,6 +33,8 @@ mod ssr;
 pub(crate) mod terrain;
 #[path = "planet_topology.rs"]
 pub(crate) mod topology;
+#[path = "planet_trees.rs"]
+pub(crate) mod trees;
 #[cfg(test)]
 #[path = "planet_visibility_tests.rs"]
 mod visibility_tests;
@@ -107,12 +109,12 @@ pub(crate) fn clutter_vertices() -> u32 {
     // fronds).
     GRASS_BLADE_BUDGET * 2 * 6 + 18 + 54 + 108 + 36 + 2 * 54 + 4 * 6
 }
-/// Vertices per tree: the trunk's 54, two leaf layers of 72, and
-/// `flora-v2`'s fruit (design 9.6): four hanging, each two crossed cards,
-/// and two fallen, a flat card each.
+/// Vertices per tree in the impostor draw (`flora-v2` design 10.5): the mid
+/// ring's four crossed cards, then the far billboard. The near model is
+/// drawn by the near draws (`trees::near_vertices`).
 #[cfg(test)]
 pub(crate) fn foliage_vertices() -> u32 {
-    54 + 2 * 72 + 4 * 12 + 2 * 6
+    4 * 6 + 6
 }
 /// Where the clutter branch starts in the shared vertex shader: after the
 /// terrain's 60 and the foliage.
@@ -127,7 +129,26 @@ pub(crate) fn clutter_first_vertex() -> u32 {
 /// on: a pipeline whose layout still says four is refused at creation with
 /// "shader global binding 3 is not available", which names the binding and not
 /// the draw that outgrew it.
-const INDIRECT_BYTES: u64 = 5 * 16;
+///
+/// Then eight more, the near trees, one per species (`flora-v2` design
+/// 10.5), whose vertex counts and first vertices the CPU writes once when
+/// the buffer is made (`near_args`) and the cull only counts instances into.
+pub(crate) const INDIRECT_BYTES: u64 = 13 * 16;
+/// Where the near draws' arguments start in the indirect buffer.
+pub(crate) const NEAR_ARGS_OFFSET: u64 = 5 * 16;
+
+/// The near draws' arguments, as the indirect buffer holds them after the
+/// first five: per species its vertex count, no instances yet, its first
+/// vertex (the species over bit 16) and no first instance.
+pub(crate) fn near_args() -> Vec<u32> {
+    trees::near_vertices()
+        .iter()
+        .enumerate()
+        .flat_map(|(s, n)| [*n, 0, trees::NEAR_FIRST_VERTEX + ((s as u32) << 16), 0])
+        .collect()
+}
+/// Bytes of the near-tree list: a region of `NEAR_CAP` entries per species.
+pub(crate) const NEAR_LIST_BYTES: u64 = 8 * trees::NEAR_CAP as u64 * 4;
 
 /// Vertices per column instance: a cave ceiling fan and a cave floor fan per
 /// run, then one flank quad per side per run per stretch of the NEIGHBOUR's
@@ -258,7 +279,8 @@ pub struct FloraLook {
 /// The per-biome flora tables as the shaders read them (`flora-v2` design
 /// 6): fern weight, mushroom weight, flower colour bits and deciduous per
 /// biome; then the tuft ramps as `0xRRGGBB`, w one for red caps; then the
-/// plants' tile means and, in w, the fruit the trees bear (design 9).
+/// plants' tile means and, in w, the fruit the trees bear (design 9) in the
+/// low half and the open world's tree table in the high half (design 12.1).
 fn flora_tables() -> ([Vec4; 8], [UVec4; 8], [UVec4; 8]) {
     use pbd_core::flora::{BIOME_FLORA, BIOME_FRUIT, PLANT_MEANS, TUFT_RAMPS};
     let biome = BIOME_FLORA.map(|b| {
@@ -275,7 +297,8 @@ fn flora_tables() -> ([Vec4; 8], [UVec4; 8], [UVec4; 8]) {
     }
     let mut means = [UVec4::ZERO; 8];
     for (i, m) in PLANT_MEANS.iter().enumerate() {
-        means[i] = UVec4::new(m[0], m[1], m[2], BIOME_FRUIT[i]);
+        let trees = terrain_config().trees.packed(i);
+        means[i] = UVec4::new(m[0], m[1], m[2], BIOME_FRUIT[i] | trees);
     }
     (biome, ramps, means)
 }
@@ -291,6 +314,9 @@ pub struct PlanetPlugin;
 
 impl Plugin for PlanetPlugin {
     fn build(&self, app: &mut App) {
+        // The detailed trees' kit builds on a thread of its own behind the
+        // loading screen (`flora-v2` design 10.2).
+        trees::prepare();
         app.add_plugins((crate::sea::SeaPlugin, shadow::SunShadowPlugin));
         water::install_eye_water(app);
         app.add_plugins((
@@ -311,6 +337,11 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<lod::DuskRelight>::default(),
         ))
         .add_plugins(crate::night_lights::NightLightsPlugin)
+        // What players took from the trees near the camera (`flora-v2`
+        // design 12.5): felled trees and picked fruit the draw leaves out.
+        .add_plugins(ExtractResourcePlugin::<crate::trees_taken::TreesTaken>::default())
+        .init_resource::<crate::trees_taken::TreesTaken>()
+        .add_systems(Update, crate::trees_taken::refresh)
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
         .init_resource::<lod::DuskRelight>()
@@ -800,6 +831,11 @@ struct PlanetParams {
     // never sees them.
     night: Vec4,
     night_lights: [Vec4; 2 * crate::night_lights::MAX_FAR_LIGHTS],
+    // `flora-v2` design 12.5: the ids of the felled trees and of the trees
+    // picked bare near the camera, four a lane, zero empty
+    // (`trees_taken::TreesTaken`).
+    felled: [UVec4; crate::trees_taken::FELLED / 4],
+    picked: [UVec4; crate::trees_taken::PICKED / 4],
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1009,6 +1045,8 @@ struct PlanetGpu {
     /// half the versions and the anchor it was baked for; which half is the
     /// newest, and when it landed.
     lamp_bake: Buffer,
+    /// `flora-v2` design 10.2: the detailed trees' kit (`planet_trees.rs`).
+    tree_kit: Buffer,
     /// L8 (10.2): the screen trace's history (`planet_ssr.rs`).
     #[allow(dead_code)]
     ssr: Texture,
@@ -1067,6 +1105,7 @@ struct PlanetViewGpu {
     _foliage: Buffer,
     _clutter: Buffer,
     _column_list: Buffer,
+    _near: Buffer,
     /// Water cell IDs the visibility pass listed; the water pass draws them.
     water: Buffer,
     indirect: Buffer,
@@ -1074,6 +1113,7 @@ struct PlanetViewGpu {
     foliage_bind_group: BindGroup,
     clutter_bind_group: BindGroup,
     column_bind_group: BindGroup,
+    near_bind_group: BindGroup,
     compute_bind_group: BindGroup,
     /// The fade centre (`distance-lod-fade`): the camera's ground point, held
     /// within the fine set's fit of its anchor and caught up at a bounded
@@ -1231,7 +1271,13 @@ fn upload_planet(
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
+    let tree_kit = device.create_buffer_with_data(&BufferInitDescriptor {
+        label: Some("Detailed trees: models, anchors, tiles and baked impostors"),
+        contents: bytemuck::cast_slice(&trees::kit().words),
+        usage: BufferUsages::STORAGE,
+    });
     commands.insert_resource(PlanetGpu {
+        tree_kit,
         light,
         materials,
         centres,
@@ -1458,6 +1504,8 @@ fn draw_layout() -> BindGroupLayoutDescriptor {
                 storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
                 storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
                 texture_2d(TextureSampleType::Float { filterable: false }),
+                // `flora-v2` design 10.2: the detailed trees' kit.
+                storage_buffer_read_only_sized(false, NonZeroU64::new(4)),
             ),
         ),
     )
@@ -1477,6 +1525,8 @@ fn compute_layout() -> BindGroupLayoutDescriptor {
                 storage_buffer_sized(false, NonZeroU64::new(4)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
                 storage_buffer_sized(false, NonZeroU64::new(4)),
+                // The near trees, a region per species (design 10.5).
+                storage_buffer_sized(false, NonZeroU64::new(NEAR_LIST_BYTES)),
             ),
         ),
     )
@@ -1611,6 +1661,8 @@ pub(crate) struct Tunables<'w> {
     flora: Option<Res<'w, FloraLook>>,
     /// The sea now, for the tide (`ocean-environments` 5.1).
     sea_now: Option<Res<'w, crate::sea::SeaNow>>,
+    /// The trees felled and picked near the camera (`flora-v2` 12.5).
+    taken: Option<Res<'w, crate::trees_taken::TreesTaken>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1664,6 +1716,11 @@ fn prepare_views(
             };
         let w = &weather_settings;
         let (flora_biome, tuft_ramps, plant_means) = flora_tables();
+        let (felled, picked) = tunables
+            .taken
+            .as_deref()
+            .map(crate::trees_taken::TreesTaken::packed)
+            .unwrap_or_default();
         let lod = &planet.lod;
         let landing = planet.lod_prev.map(|(_, landed)| landed);
         // The fade centre (`distance-lod-fade`): the ground under the camera,
@@ -1907,7 +1964,12 @@ fn prepare_views(
                 scatter.tuft_height_m,
                 sun.clock.year_fraction() as f32,
             ),
-            flora_more: Vec4::new(scatter.mushroom_chance, scatter.fern_chance, 0.0, 0.0),
+            flora_more: Vec4::new(
+                scatter.mushroom_chance,
+                scatter.fern_chance,
+                scatter.tree_near_m,
+                scatter.tree_mid_m,
+            ),
             flora_biome,
             tuft_ramps,
             plant_means,
@@ -1919,6 +1981,8 @@ fn prepare_views(
             ),
             night,
             night_lights,
+            felled,
+            picked,
             // w: there is a history to read, so not while the capture is off.
             ssr_eye: existing.as_ref().map_or(Vec4::ZERO, |gpu| {
                 gpu.last_camera.extend(if lighting.reflect_capture_on() {
@@ -1953,9 +2017,22 @@ fn prepare_views(
             mapped_at_creation: false,
         });
         let indirect = device.create_buffer(&BufferDescriptor {
-            label: Some("GPU planet indirect draws: terrain, foliage, water, clutter, columns"),
+            label: Some(
+                "GPU planet indirect draws: terrain, foliage, water, clutter, columns, near trees",
+            ),
             size: INDIRECT_BYTES,
-            usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
+            usage: BufferUsages::STORAGE | BufferUsages::INDIRECT | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        queue.write_buffer(
+            &indirect,
+            NEAR_ARGS_OFFSET,
+            bytemuck::cast_slice(&near_args()),
+        );
+        let near = device.create_buffer(&BufferDescriptor {
+            label: Some("GPU near detailed tree IDs, a region per species"),
+            size: NEAR_LIST_BYTES,
+            usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
         let foliage = device.create_buffer(&BufferDescriptor {
@@ -2002,6 +2079,7 @@ fn prepare_views(
                     planet.bounce.as_entire_binding(),
                     planet.lamp_bake.as_entire_binding(),
                     &planet.ssr_view,
+                    planet.tree_kit.as_entire_binding(),
                 )),
             )
         };
@@ -2018,23 +2096,27 @@ fn prepare_views(
                 water.as_entire_binding(),
                 clutter.as_entire_binding(),
                 column_list.as_entire_binding(),
+                near.as_entire_binding(),
             )),
         );
         let foliage_bind_group = view_bind_group("planet foliage view", &foliage);
         let clutter_bind_group = view_bind_group("planet clutter view", &clutter);
         let column_bind_group = view_bind_group("planet column view", &column_list);
+        let near_bind_group = view_bind_group("planet near trees view", &near);
         commands.entity(entity).insert(PlanetViewGpu {
             uniform,
             _visible: visible,
             _foliage: foliage,
             _clutter: clutter,
             _column_list: column_list,
+            _near: near,
             water,
             indirect,
             draw_bind_group,
             foliage_bind_group,
             clutter_bind_group,
             column_bind_group,
+            near_bind_group,
             compute_bind_group,
             centre,
             fitted: landing,
@@ -2101,6 +2183,11 @@ fn draw_terrain<'w>(
     pass.draw_indirect(&view.indirect, 0);
     pass.set_bind_group(0, &view.foliage_bind_group, &[]);
     pass.draw_indirect(&view.indirect, 16);
+    // The near trees, one draw per species (`flora-v2` design 10.5).
+    pass.set_bind_group(0, &view.near_bind_group, &[]);
+    for s in 0..8 {
+        pass.draw_indirect(&view.indirect, NEAR_ARGS_OFFSET + 16 * s);
+    }
     pass.set_bind_group(0, &view.clutter_bind_group, &[]);
     pass.draw_indirect(&view.indirect, 48);
     // The inside of the world, last: everything before it is the surface,
@@ -2159,9 +2246,9 @@ mod pipeline_tests {
         }
         for (layout, read_only_bindings) in [
             // 5 is the voxel sky light, 6 the layer materials, 7 the column
-            // centres, 8 the sun's bounce and 9 the lamp bake: read only, like the cells, the visible list and
-            // the column records they are sampled beside.
-            (draw_layout(), &[1, 2, 4, 5, 6, 7, 8, 9][..]),
+            // centres, 8 the sun's bounce, 9 the lamp bake and 11 the trees' kit: read only, like the
+            // cells, the visible list and the column records they are sampled beside.
+            (draw_layout(), &[1, 2, 4, 5, 6, 7, 8, 9, 11][..]),
             (compute_layout(), &[1][..]),
         ] {
             for entry in &layout.entries {
@@ -2475,4 +2562,26 @@ mod tests {
         assert!(world.contains_resource::<PlanetContact>());
         assert!(world.resource::<lod::LodRefresh>().in_flight_s().is_none());
     }
+}
+
+/// The finest set round `anchor` and a contact serving it, with no edits:
+/// the ground an app test outside this crate stands on (the desktop
+/// binary's showcase test, `step-videos` 5.1). Not for the game, which
+/// builds its sets on the loading thread.
+#[doc(hidden)]
+pub fn test_ground(anchor: Vec3) -> (PlanetFine, PlanetContact) {
+    let set = Arc::new(lod::generate_fine_live(
+        anchor,
+        lod::BAND_M,
+        lod::REGEN_DISTANCE_M,
+        &crate::config::ColumnSettings::default(),
+        &pbd_core::edits::Edits::new(),
+        4,
+        None,
+        0.0,
+    ));
+    let cells = topology::dual_sphere(5);
+    let mut contact = PlanetContact::new(Arc::new(lod::base_records(&cells)), &cells);
+    contact.set_fine(&set);
+    (PlanetFine { set, version: 1 }, contact)
 }

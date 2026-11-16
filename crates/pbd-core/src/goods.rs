@@ -120,6 +120,26 @@ pub const GOODS: &[GoodRow] = &[
         1,
         "items/goods/water-bucket.png",
     ),
+    // ---- animal-husbandry design 13: a hen's egg with a cockerel in her
+    // pen (its parentage rides in a `brood` record), and the incubator piece.
+    row(
+        "fertile-egg",
+        "fertile egg",
+        32,
+        "items/goods/fertile-egg.png",
+    ),
+    row("incubator", "incubator", 8, "items/goods/incubator.png"),
+    // ---- flora-v2 design 12.5: the trees' fruit, picked by hand, in
+    // `pbd_core::flora::FRUIT_KINDS` order.
+    row("apple", "apple", 32, "items/goods/apple.png"),
+    row("pear", "pear", 32, "items/goods/pear.png"),
+    row("plum", "plum", 32, "items/goods/plum.png"),
+    row("cherry", "cherry", 32, "items/goods/cherry.png"),
+    row("mango", "mango", 32, "items/goods/mango.png"),
+    row("papaya", "papaya", 32, "items/goods/papaya.png"),
+    row("marula", "marula", 32, "items/goods/marula.png"),
+    row("baobab", "baobab fruit", 32, "items/goods/baobab.png"),
+    row("pine-cone", "pine cone", 32, "items/goods/pine-cone.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -176,6 +196,8 @@ impl Good {
     pub const ROPE: Good = by_code_const("rope");
     pub const BUCKET: Good = by_code_const("bucket");
     pub const WATER_BUCKET: Good = by_code_const("water-bucket");
+    pub const FERTILE_EGG: Good = by_code_const("fertile-egg");
+    pub const INCUBATOR: Good = by_code_const("incubator");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
@@ -260,6 +282,8 @@ mod tests {
             (Good::LOG, "log"),
             (Good::PLANKS, "planks"),
             (Good::ROPE, "rope"),
+            (Good::FERTILE_EGG, "fertile-egg"),
+            (Good::INCUBATOR, "incubator"),
         ] {
             assert_eq!(good.code(), code);
             assert_eq!(Good::by_code(code), Some(good));

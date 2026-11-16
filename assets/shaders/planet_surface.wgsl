@@ -53,10 +53,12 @@ struct Params {
     flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
     flora_biome: array<vec4<f32>,8>, // per biome: fern weight, mushroom weight, flower bits, deciduous
     tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
-    plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits
+    plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits (low 16), tree table (high 16)
     flora_fall: vec4<f32>,     // 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w fruit chance
     night: vec4<f32>,          // `night-lights-from-space`: x how many far lights `night_lights` holds
     night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
+    felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty
+    picked: array<vec4<u32>,8>,   // and the trees picked bare
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -205,6 +207,10 @@ const LAMP_BAKE_GAIN: f32 = 2.4;
 // L8 (10.2): the screen trace's history (`planet_ssr.rs`): last frame's
 // colour, and in w each pixel's distance from that frame's eye.
 @group(0) @binding(10) var ssr_history: texture_2d<f32>;
+// `flora-v2` design 10.2: the detailed trees' kit (`pbd_core::tree_kit`):
+// per species a header, per variant a header, the kit's own tiles, the
+// vertices, the anchors and the baked impostors.
+@group(0) @binding(11) var<storage,read> kit: array<u32>;
 const MATERIAL_PER_WORD: u32 = 8u;
 const MATERIAL_WORDS: u32 = 63u;
 // The render code of the layer `layer` of column slot `slot` (plus one, as
@@ -226,11 +232,12 @@ const COLUMN_RUNS: u32 = 4u;
 // under the lowest, between each pair, and over the highest.
 const COLUMN_GAPS: u32 = COLUMN_RUNS + 1u;
 // Where the column branch starts in the shared vertex shader, after the
-// terrain's 60, the foliage's 258 (198, then `flora-v2`'s fruit: design 9.6)
-// and the clutter's 564 (432, then `flora-v2`'s mushroom and fern).
-const COLUMN_FIRST_VERTEX: u32 = 882u;
-// Where the clutter branch starts: after the terrain and the foliage.
-const CLUTTER_FIRST_VERTEX: u32 = 318u;
+// terrain's 60, the trees' 30 (`flora-v2` design 10.5: the mid cards and the
+// far billboard) and the clutter's 564 (432, then `flora-v2`'s mushroom and
+// fern).
+const COLUMN_FIRST_VERTEX: u32 = 654u;
+// Where the clutter branch starts: after the terrain and the trees.
+const CLUTTER_FIRST_VERTEX: u32 = 90u;
 // Per run, a cave ceiling fan and a cave floor fan.
 const COLUMN_CAP_VERTICES: u32 = COLUMN_RUNS * 36u;
 // Per side, per run, per neighbouring air gap, one quad.
@@ -696,6 +703,23 @@ struct VertexOut {
     // PART_NEW or PART_OLD.
     @location(15) @interpolate(flat) part_mark: u32,
 }
+// `flora-v2` design 12.5: whether a tree a player felled, or picked bare, is
+// in the uniform's short lists (`trees_taken::TreesTaken`, nearest first).
+fn tree_felled(id: u32) -> bool {
+    if id == 0u { return false; }
+    for (var i = 0u; i < 16u; i++) {
+        if any(params.felled[i] == vec4<u32>(id)) { return true; }
+    }
+    return false;
+}
+fn tree_picked(id: u32) -> bool {
+    if id == 0u { return false; }
+    for (var i = 0u; i < 8u; i++) {
+        if any(params.picked[i] == vec4<u32>(id)) { return true; }
+    }
+    return false;
+}
+
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
     h = ((h >> ((h >> 28u)+4u))^h)*277803737u;
@@ -753,15 +777,18 @@ fn stands_tree(cell: Cell) -> bool {
     let roll = hash(cell.spare.x) & 0xffu;
     let material = cell.metadata.y & 0xffu;
     let biome = (cell.metadata.y >> 8u) & 0xffu;
+    // `flora-v2` design 12.1: the world's tree table, from the uniform: the
+    // high half of `plant_means[biome].w` (`pbd_core::flora::TreeTable::packed`),
+    // so an old world keeps its trees and version 10 grows M13's forests.
+    let entry = params.plant_means[min(biome, 7u)].w;
+    let density = (entry >> 16u) & 0xffu;
     let grass = material==2u || material==3u || material==7u;
-    let pine = biome==7u && material==6u;
-    var density = 0u;
-    if biome==4u { density = 115u; }
-    if biome==5u { density = 34u; }
-    if biome==2u || biome==1u { density = 13u; }
-    if biome==7u { density = 2u; }
-    let tree = (grass||pine) && roll < density;
-    return tree;
+    let sand = ((entry >> 24u) & 1u) == 1u && material==1u;
+    let pine = ((entry >> 25u) & 1u) == 1u && material==6u;
+    let tree = (grass||sand||pine) && roll < density;
+    // A tree felled for its wood is gone (design 12.5).
+    let standing = tree && !tree_felled(cell.spare.x);
+    return standing;
 }
 
 // A tree's crown, metres over its cell and widths as a share of the cell:
@@ -843,13 +870,114 @@ fn prism_vertex(part: u32, base: vec3<f32>, up: vec3<f32>, tangent: vec3<f32>,
     return out;
 }
 
+
+// ---- `flora-v2` design 10: the detailed trees ----
+//
+// The near draws start at NEAR_TREE_FIRST_VERTEX with the species over bit
+// 16 (`planet.rs`, `near_args`), and read their instances from the species'
+// region of the near list. `pbd_core::tree_kit` packs the kit; its layout
+// constants are these and a test holds them.
+const NEAR_TREE_FIRST_VERTEX: u32 = 1048576u;
+const NEAR_CAP: u32 = 4096u;
+const KIT_SPECIES_WORDS: u32 = 16u;
+const KIT_VARIANT_BASE: u32 = 128u;
+const KIT_VARIANT_WORDS: u32 = 16u;
+const KIT_VERTEX_WORDS: u32 = 6u;
+const TREE_VARIANTS: u32 = 4u;
+const IMPOSTOR_VIEW_W: u32 = 48u;
+const IMPOSTOR_H: u32 = 72u;
+const IMPOSTOR_W: u32 = 384u;
+// The rings' cross-fade: the last share of each ring (the mockup's 0.3).
+const TREE_RING_FADE: f32 = 0.3;
+const TREE_BARK_CODE: u32 = 24u;
+const TREE_LEAF_CODE: u32 = 25u;
+const IMPOSTOR_CODE: u32 = 26u;
+// The species and variant ride over the material word's biome byte.
+const SPECIES_SHIFT: u32 = 17u;
+const VARIANT_SHIFT: u32 = 21u;
+const SALT_SPECIES: u32 = 0x59u;
+const SALT_VARIANT: u32 = 0x5au;
+const SALT_TURN: u32 = 0x5bu;
+const SALT_SIZE: u32 = 0x5cu;
+// The mockup's wind (`uWind`, `uGust`) and the trees' sway over 8 m.
+const TREE_WIND: f32 = 0.35;
+const TREE_GUST: f32 = 0.5;
+const TREE_WIND_H: f32 = 8.0;
+
+fn kit_f(i: u32) -> f32 { return bitcast<f32>(kit[i]); }
+fn kit_v3(i: u32) -> vec3<f32> { return vec3(kit_f(i), kit_f(i + 1u), kit_f(i + 2u)); }
+
+// Which species a tree is, by its biome's mix: the visibility pass's
+// `tree_species`, the same lines (`pbd_core::tree_kit::pick`).
+fn tree_species(id: u32, biome: u32) -> u32 {
+    let r = roll(id, SALT_SPECIES);
+    if biome == 1u { return 4u; }
+    if biome == 2u { return select(1u, 0u, r < 0.6); }
+    if biome == 3u { return 7u; }
+    if biome == 4u { return select(3u, 2u, r < 0.55); }
+    if biome == 5u { return select(1u, 6u, r < 0.75); }
+    if biome == 7u { return select(1u, 5u, r < 0.85); }
+    return 0u;
+}
+
+// A tree's frame on the body: its base, up, its own x and z axes turned by
+// its roll, and its size (`pbd_core::tree_kit::pick`).
+struct TreeFrame {
+    base: vec3<f32>, up: vec3<f32>, x: vec3<f32>, z: vec3<f32>,
+    species: u32, variant: u32, size: f32, header: u32,
+}
+fn tree_frame(id: u32, biome: u32, base: vec3<f32>, axis: vec3<f32>, tangent: vec3<f32>, bitangent: vec3<f32>) -> TreeFrame {
+    var t: TreeFrame;
+    t.base = base;
+    t.up = axis;
+    t.species = tree_species(id, biome);
+    t.variant = min(u32(roll(id, SALT_VARIANT)*f32(TREE_VARIANTS)), TREE_VARIANTS - 1u);
+    let turn = roll(id, SALT_TURN)*TAU;
+    t.x = tangent*cos(turn) + bitangent*sin(turn);
+    t.z = cross(t.x, axis);
+    t.size = 0.85 + roll(id, SALT_SIZE)*0.35;
+    t.header = KIT_VARIANT_BASE + (t.species*TREE_VARIANTS + t.variant)*KIT_VARIANT_WORDS;
+    return t;
+}
+fn tree_point(t: TreeFrame, p: vec3<f32>) -> vec3<f32> {
+    return t.base + (t.x*p.x + t.up*p.y + t.z*p.z)*t.size;
+}
+fn tree_dir(t: TreeFrame, n: vec3<f32>) -> vec3<f32> {
+    return normalized(t.x*n.x + t.up*n.y + t.z*n.z);
+}
+// The mockup's sway: a bend growing with the square of the height over the
+// base, a slow sway and a gust rolling across the land, and a cross wobble.
+fn tree_sway(t: TreeFrame, w: vec3<f32>, amp: f32) -> vec3<f32> {
+    let time = params.settings.z;
+    let wind = normalized(cross(t.up, normalized(vec3(0.31, 0.83, 0.47))));
+    let side = cross(t.up, wind);
+    let h = max(dot(w - t.base, t.up), 0.0)/TREE_WIND_H;
+    let ph = f32(hash(bitcast<u32>(t.base.x)) & 1023u)/1023.0*TAU;
+    var gust = sin(dot(w, wind)*0.06 - time*1.6)*0.5 + 0.5;
+    gust = gust*gust*gust*TREE_GUST;
+    let sway = TREE_WIND*(0.35 + 0.3*sin(time*1.9 + ph)) + gust*TREE_WIND*1.6;
+    let bend = h*h*amp;
+    return w + wind*bend*sway - t.up*bend*sway*sway*0.25*TREE_WIND_H
+        + side*bend*TREE_WIND*0.18*sin(time*2.7 + ph*1.7);
+}
+// The rings' weights at a tree `d` metres away (design 10.4): how far into
+// the near ring's cross-fade, and into the mid ring's, 0..1.
+fn ring_t(d: f32, end: f32) -> f32 {
+    return clamp((d - end*(1.0 - TREE_RING_FADE))/max(end*TREE_RING_FADE, 1e-3), 0.0, 1.0);
+}
+
 fn grassy(material: u32) -> bool { return material==2u || material==3u || material==7u; }
 fn bare(material: u32) -> bool { return material==1u || material==4u || material==5u || material==6u; }
 
 
 @vertex
 fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> VertexOut {
-    let listed = visible[instance];
+    // A near tree's draw reads its species' region of the near list.
+    var index = instance;
+    if vertex >= NEAR_TREE_FIRST_VERTEX {
+        index = min(((vertex - NEAR_TREE_FIRST_VERTEX) >> 16u), 7u)*NEAR_CAP + min(instance, NEAR_CAP - 1u);
+    }
+    let listed = visible[index];
     let mark = listed >> PART_SHIFT;
     let part = partition_of(mark);
     let cell = cells[listed & PART_MASK];
@@ -882,6 +1010,9 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // is the whole of what "baked vertex colours" means here: a face grades
     // across itself because its corners were sampled apart.
     var out_voxel = vec2(1., 0.);
+    // A tree's own (`flora-v2` design 10.4): its dither offset, a leaf
+    // card's id; carried where the partition's split plane is for the rest.
+    var tree_split = vec3(0.0);
     // Set for a glowing flower's head while it burns, and applied last, over
     // the field the clutter takes (`lamps-and-lanterns` decision 8).
     var bloom = false;
@@ -1013,6 +1144,130 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
             let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
             uv = side_uv[indices[i]]*vec2(1.,max(1.,(radius-lower)/1.0));
+        }
+    } else if vertex >= NEAR_TREE_FIRST_VERTEX {
+        // ---- A near detailed tree (`flora-v2` design 10.2): the mockup's
+        // model, pulled vertex by vertex from the kit, in the tree's own
+        // frame turned and sized by its roll; then its fruit on the
+        // model's own anchors (design 10.6).
+        kind = 2u;
+        let id = cell.spare.x;
+        let biome = (cell.metadata.y >> 8u) & 0xffu;
+        let t = tree_frame(id, biome, axis*radius, axis, tangent, bitangent);
+        out_flags = (t.species << SPECIES_SHIFT) | (t.variant << VARIANT_SHIFT);
+        tree_split = vec3(f32(hash(id) & 3u), 0.0, 0.0);
+        let local = (vertex - NEAR_TREE_FIRST_VERTEX) & 0xffffu;
+        // Outgoing across the near ring's last 0.3 (design 10.4).
+        out_height = 1.0 - ring_t(distance(params.camera.xyz, t.base), params.flora_more.z);
+        position = t.base;
+        let count = kit[t.header + 1u];
+        let vmax = kit[t.species*KIT_SPECIES_WORDS + 12u];
+        if local < count {
+            let first = kit[t.header];
+            let tri = local/3u;
+            let corner = local%3u;
+            var ps = array<vec3<f32>,3>(vec3(0.0), vec3(0.0), vec3(0.0));
+            for (var c = 0u; c < 3u; c++) {
+                ps[c] = tree_point(t, kit_v3(first + (tri*3u + c)*KIT_VERTEX_WORDS));
+            }
+            let leaf = ((kit[first + tri*3u*KIT_VERTEX_WORDS + 5u] >> 16u) & 1u) == 1u;
+            // A leaf card is seen from both sides, as the mockup's are: its
+            // triangle turns to face the eye (the pass culls back faces).
+            var pick = corner;
+            if leaf && dot(cross(ps[1] - ps[0], ps[2] - ps[0]), params.camera.xyz - ps[0]) < 0.0 {
+                pick = array<u32,3>(0u, 2u, 1u)[corner];
+            }
+            let w = first + (tri*3u + pick)*KIT_VERTEX_WORDS;
+            let uvw = kit[w + 4u];
+            uv = vec2(f32(uvw & 0xffffu), f32(uvw >> 16u))/4096.0;
+            let word = kit[w + 5u];
+            let card = f32(word & 0xffu)/255.0;
+            normal = tree_dir(t, unpack4x8snorm(kit[w + 3u]).xyz);
+            var p = tree_sway(t, ps[pick], select(0.1, 0.16, leaf));
+            if leaf {
+                // The card's own flutter, masked: its root stays on the branch.
+                let time = params.settings.z;
+                let ph = f32(hash(id) & 1023u)/1023.0*TAU;
+                let sw = clamp(uv.y, 0.0, 1.0)*clamp(uv.y, 0.0, 1.0);
+                let flutter = vec3(sin(time*7.0 + card*40.0 + ph), cos(time*6.0 + card*31.0), sin(time*5.0 + card*23.0));
+                p += (t.x*flutter.x + t.up*flutter.y + t.z*flutter.z)*0.05*TREE_WIND*1.2*sw;
+            }
+            position = p;
+            material = select(TREE_BARK_CODE, TREE_LEAF_CODE, leaf);
+            // The mockup's root-to-tip AO.
+            out_shade = mix(0.45, 1.0, f32((word >> 8u) & 0xffu)/255.0);
+            tree_split.y = card;
+        } else if local >= vmax && local < vmax + 60u {
+            // ---- fruit (`flora-v2` design 9.6, 10.6): four hanging from the
+            // model's anchors (its last twigs, "on wood, never floating"),
+            // and two fallen on the cap under the crown. Only a tree of a
+            // fruiting biome, on its own roll; anything else collapses to
+            // the base like a part a tree lacks.
+            let f = local - vmax;
+            let b = min(biome, 7u);
+            // The low half is the fruit; the high half the tree table (12.1).
+            let bits = params.plant_means[b].w & 0xffffu;
+            let anchors = kit[t.header + 3u];
+            if bits != 0u && anchors > 0u && roll(id,SALT_FRUIT) < params.flora_fall.w {
+                // Neighbouring trees tend to bear the same kind: a patch is a
+                // forty-metre stretch of the body.
+                let grove = vec3<i32>(floor(axis*params.settings.x/40.0));
+                let p = hash(u32(grove.x)*73856093u ^ u32(grove.y)*19349663u ^ u32(grove.z)*83492791u);
+                let count = countOneBits(bits);
+                var pick = (p + select(0u, 1u, roll(id,SALT_FRUIT+1u) < 0.25)) % count;
+                var which = 0u;
+                for (var q = 0u; q < 9u; q++) {
+                    if ((bits >> q) & 1u) == 1u {
+                        if pick == 0u { which = q; break; }
+                        pick -= 1u;
+                    }
+                }
+                let cone = which == 8u;
+                // The season keeps the fruit (the mockup's: summer 0.85, all
+                // in autumn, 0.08 in winter); a pine keeps its cones.
+                let season = season_at(axis);
+                let keep = select(mix(0.85, 1.01, season.x)*(1.0-0.92*season.y), 1.0, cone);
+                let item = select(4u + (f-48u)/6u, f/12u, f < 48u);
+                // A tree picked bare keeps only what fell (design 12.5).
+                if roll(id,SALT_FRUIT+2u+item) < keep && !(f < 48u && tree_picked(id)) {
+                    let size = select(0.40, 0.46, cone)*(0.9+0.3*roll(id,SALT_FRUIT+30u+item));
+                    var corners = array<vec3<f32>,4>(axis,axis,axis,axis);
+                    if f < 48u {
+                        // A hanging fruit: two crossed cards, the top edge at
+                        // an anchor, its stem on the wood.
+                        let at = min(u32(roll(id,SALT_FRUIT+10u+item)*f32(anchors)), anchors - 1u);
+                        let top = tree_sway(t, tree_point(t, kit_v3(kit[t.header + 2u] + at*3u)), 0.1);
+                        let a = roll(id,SALT_FRUIT+40u+item)*TAU+f32((f%12u)/6u)*TAU*0.25;
+                        let dir = tangent*cos(a)+bitangent*sin(a);
+                        let half_w = size*0.5;
+                        corners = array<vec3<f32>,4>(top-axis*size-dir*half_w,top-axis*size+dir*half_w,
+                            top+dir*half_w,top-dir*half_w);
+                    } else {
+                        // A fallen one, flat on the cap under the crown.
+                        let side_k = u32(roll(id,SALT_FRUIT+10u+item)*f32(degree)) % degree;
+                        let along = roll(id,SALT_FRUIT+20u+item);
+                        let rim = normalized(mix(cell.corners[side_k].xyz, cell.corners[(side_k+1u)%degree].xyz, along));
+                        let at = normalized(axis+(rim-axis)*(0.25+0.45*roll(id,SALT_FRUIT+50u+item)));
+                        let c = at*(radius+0.03);
+                        let a = roll(id,SALT_FRUIT+60u+item)*TAU;
+                        let u = (tangent*cos(a)+bitangent*sin(a))*(size*0.4);
+                        let w = cross(axis, u);
+                        corners = array<vec3<f32>,4>(c-u-w,c+u-w,c+u+w,c-u+w);
+                    }
+                    let i = f%6u;
+                    let facing = dot(cross(corners[1]-corners[0],corners[3]-corners[0]),params.camera.xyz-corners[0]);
+                    let forward = array<u32,6>(0u,1u,2u,0u,2u,3u);
+                    let reversed = array<u32,6>(0u,2u,1u,0u,3u,2u);
+                    var c = forward[i];
+                    if facing < 0. { c = reversed[i]; }
+                    position = corners[c];
+                    let k = f32(which);
+                    let card_uv = array<vec2<f32>,4>(vec2(k,0.),vec2(k+0.999,0.),vec2(k+0.999,1.),vec2(k,1.));
+                    uv = card_uv[c];
+                    normal = axis;
+                    material = FRUIT_CODE;
+                }
+            }
         }
     } else if vertex >= COLUMN_FIRST_VERTEX {
         // ---- The inside of the world.
@@ -1255,156 +1510,80 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             }
         }
     } else if vertex < CLUTTER_FIRST_VERTEX {
+        // ---- A tree's mid cards and far billboard (`flora-v2` design 10.3),
+        // baked from its near model. The tree is the finest cell's at this
+        // cell's centre (`distance-lod-fade`): it rolls on that id, so a
+        // coarse level draws the same tree the fine one did. The compute
+        // pass selects the cells; no tree vertex is invoked for a cell
+        // without one.
         kind = 2u;
-        // Tenebris's tree, which is not a mesh but voxels in ONE column drawn
-        // as ordinary hex prisms shrunk toward the tile centre: wood at 0.20
-        // of the cell and each leaf layer at 0.65 + 0.35 * its own hash, so a
-        // canopy is irregular rather than stamped. The record's corner rays
-        // are what a prism needs, and `shrink_corner` in the reference is the
-        // same lerp toward the centre. The compute pass selects the cells; no
-        // tree vertex is invoked for a cell without one.
-        // The tree is the finest cell's at this cell's centre
-        // (`distance-lod-fade`): its trunk and leaves roll on that id, so a
-        // coarse level draws the same tree the fine one did.
         let id = cell.spare.x;
         let biome = (cell.metadata.y >> 8u) & 0xffu;
-        let crown = crown_of(id, biome);
-        let trunk_top = crown.trunk_top;
-        let lo0 = crown.lo0; let hi0 = crown.hi0; let w0a = crown.w0a; let w0b = crown.w0b;
-        let lo1 = crown.lo1; let hi1 = crown.hi1; let w1a = crown.w1a; let w1b = crown.w1b;
-        // Bottom and top metre, and bottom and top width, of this vertex's
-        // part: the trunk, then a leaf layer's sides, floor and ceiling.
-        let v = vertex-60u;
-        var lo = 0.; var hi = trunk_top; var wa = 0.20; var wb = 0.20;
-        if v >= 198u {
-            // ---- fruit (`flora-v2` design 9.6): four hanging from the
-            // underside of the lower leaf layer just inside its rim (a
-            // pine's cones from its lower skirt, part way out), and two
-            // fallen on the cap under the crown. Only a tree of a fruiting
-            // biome, on its own roll, inside the clutter's reach; anything
-            // else collapses to the cell centre like a part a tree lacks.
-            let f = v-198u;
-            let b = min(biome, 7u);
-            let bits = params.plant_means[b].w;
-            let near = distance(params.camera.xyz, axis*radius) < params.clutter.x;
-            position = axis*radius;
-            if bits != 0u && near && roll(id,SALT_FRUIT) < params.flora_fall.w {
-                // Neighbouring trees tend to bear the same kind: a patch is a
-                // forty-metre stretch of the body.
-                let grove = vec3<i32>(floor(axis*params.settings.x/40.0));
-                let p = hash(u32(grove.x)*73856093u ^ u32(grove.y)*19349663u ^ u32(grove.z)*83492791u);
-                let count = countOneBits(bits);
-                var pick = (p + select(0u, 1u, roll(id,SALT_FRUIT+1u) < 0.25)) % count;
-                var which = 0u;
-                for (var q = 0u; q < 9u; q++) {
-                    if ((bits >> q) & 1u) == 1u {
-                        if pick == 0u { which = q; break; }
-                        pick -= 1u;
-                    }
-                }
-                let cone = which == 8u;
-                // The season keeps the fruit (the mockup's: summer 0.85, all
-                // in autumn, 0.08 in winter); a pine keeps its cones.
-                let season = season_at(axis);
-                let keep = select(mix(0.85, 1.01, season.x)*(1.0-0.92*season.y), 1.0, cone);
-                let item = select(4u + (f-48u)/6u, f/12u, f < 48u);
-                if roll(id,SALT_FRUIT+2u+item) < keep {
-                    let side_k = u32(roll(id,SALT_FRUIT+10u+item)*f32(degree)) % degree;
-                    let along = roll(id,SALT_FRUIT+20u+item);
-                    let rim = normalized(mix(cell.corners[side_k].xyz, cell.corners[(side_k+1u)%degree].xyz, along));
-                    let size = select(0.40, 0.46, cone)*(0.9+0.3*roll(id,SALT_FRUIT+30u+item));
-                    var corners = array<vec3<f32>,4>(axis,axis,axis,axis);
-                    if f < 48u {
-                        // A hanging fruit: two crossed cards, the top edge at
-                        // the leaf layer's underside, its stem on the wood.
-                        let reach = select(w0a*0.8, w0a*0.7, cone);
-                        let at = normalized(axis+(rim-axis)*reach);
-                        let top = at*(radius+lo0+0.02);
-                        let a = roll(id,SALT_FRUIT+40u+item)*TAU+f32((f%12u)/6u)*TAU*0.25;
-                        let dir = tangent*cos(a)+bitangent*sin(a);
-                        let half_w = size*0.5;
-                        corners = array<vec3<f32>,4>(top-axis*size-dir*half_w,top-axis*size+dir*half_w,
-                            top+dir*half_w,top-dir*half_w);
-                    } else {
-                        // A fallen one, flat on the cap under the crown.
-                        let at = normalized(axis+(rim-axis)*(0.25+0.45*roll(id,SALT_FRUIT+50u+item)));
-                        let c = at*(radius+0.03);
-                        let a = roll(id,SALT_FRUIT+60u+item)*TAU;
-                        let u = (tangent*cos(a)+bitangent*sin(a))*(size*0.4);
-                        let w = cross(axis, u);
-                        corners = array<vec3<f32>,4>(c-u-w,c+u-w,c+u+w,c-u+w);
-                    }
-                    let i = f%6u;
-                    let facing = dot(cross(corners[1]-corners[0],corners[3]-corners[0]),params.camera.xyz-corners[0]);
-                    let forward = array<u32,6>(0u,1u,2u,0u,2u,3u);
-                    let reversed = array<u32,6>(0u,2u,1u,0u,3u,2u);
-                    var c = forward[i];
-                    if facing < 0. { c = reversed[i]; }
-                    position = corners[c];
-                    let k = f32(which);
-                    let card_uv = array<vec2<f32>,4>(vec2(k,0.),vec2(k+0.999,0.),vec2(k+0.999,1.),vec2(k,1.));
-                    uv = card_uv[c];
-                    normal = axis;
-                    material = FRUIT_CODE;
-                }
-            }
-        } else {
-        // Its width, in the finest cell's, grows by half a level's across each
-        // ring it stands in, measured at its own centre: every level's copy of
-        // one tree reckons the same width, so the dither between them never
-        // shows, and past the ring it has the coarse cell's width, a quarter
-        // of the trees at four times the area (`distance-lod-fade`).
+        let t = tree_frame(id, biome, axis*radius, axis, tangent, bitangent);
+        out_flags = (t.species << SPECIES_SHIFT) | (t.variant << VARIANT_SHIFT);
+        tree_split = vec3(f32(hash(id) & 3u), 0.0, 0.0);
+        material = IMPOSTOR_CODE;
+        position = t.base;
+        normal = axis;
+        // Past the fine band a tree stands for four (`distance-lod-fade`):
+        // as wide as the prism grew, and half as much taller, so a far
+        // forest keeps its cover.
         var grown = 1.0;
         for (var l = finest_level(); l > finest_level() - 3u; l--) {
             grown = mix(2.0*grown, grown, band_t(axis, l, part));
         }
-        let shrink = grown/f32(1u << (finest_level() - level));
-        material = 8u;
-        if v >= 54u && v < 126u { lo = lo0; hi = hi0; wa = w0a; wb = w0b; material = 9u; }
-        if v >= 126u { lo = lo1; hi = hi1; wa = w1a; wb = w1b; material = 9u; }
-        wa *= shrink;
-        wb *= shrink;
-        let lower = radius+lo;
-        let upper = radius+hi;
-        let part = select(v-54u, v, v < 54u) % 72u;
-        if part < 36u {
-            // A side of the prism, built like the terrain wall so the two
-            // agree about which way a face points.
-            let side = part/6u;
-            let i = part%6u;
-            if side < degree {
-                let ca = cell.corners[side].xyz;
-                let cb = cell.corners[(side+1u)%degree].xyz;
-                let points = array<vec3<f32>,4>(
-                    (axis+(ca-axis)*wa)*lower,(axis+(cb-axis)*wa)*lower,
-                    (axis+(cb-axis)*wb)*upper,(axis+(ca-axis)*wb)*upper);
-                let indices = array<u32,6>(0u,1u,2u,0u,2u,3u);
-                position = points[indices[i]];
-                normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
-                let side_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
-                uv = side_uv[indices[i]]*vec2(1.,max(1.,hi-lo));
+        let half_w = kit_f(t.header + 5u)*0.5*t.size*grown;
+        let tall = t.size*sqrt(grown);
+        let y0 = kit_f(t.header + 6u)*tall;
+        let y1 = kit_f(t.header + 7u)*tall;
+        let d = distance(params.camera.xyz, t.base);
+        let near_m = params.flora_more.z;
+        let mid_m = params.flora_more.w;
+        let to_eye = params.camera.xyz - t.base;
+        let eye = vec2(dot(to_eye, t.x), dot(to_eye, t.z));
+        let v = vertex - 60u;
+        var shown = false;
+        var along = t.x;
+        var view = 0u;
+        var flip = false;
+        if v < 24u {
+            // The mid ring: four crossed cards, each showing the view baked
+            // from its own side (seen from behind, the view from there).
+            if d < mid_m && d > near_m*(1.0 - TREE_RING_FADE) {
+                shown = true;
+                // Incoming across the near ring's fade, outgoing across the mid's.
+                out_height = select(1.0 - ring_t(d, mid_m), 2.0 + ring_t(d, near_m), d < near_m);
+                let k = v/6u;
+                let phi = f32(k)*TAU/8.0;
+                along = t.x*cos(phi) - t.z*sin(phi);
+                flip = dot(eye, vec2(sin(phi), cos(phi))) < 0.0;
+                view = select(k, k + 4u, flip);
             }
-        } else {
-            // A cap: the fan the terrain cap already draws, at the shrunk
-            // corners. The trunk carries a top cap only, because it stands on
-            // the terrain and a narrow canopy does not cover it; a leaf layer
-            // carries both, because the layer it meets rolled its own width.
-            let up = v < 54u || part >= 54u;
-            let base = select(36u,54u,v >= 54u && up);
-            let t = (part-base)/3u;
-            let c = (part-base)%3u;
-            let r = select(lower,upper,up);
-            let w = select(wa,wb,up);
-            normal = select(-axis,axis,up);
-            position = axis*r;
-            if t < degree && c != 0u {
-                let k = select((t+2u-c)%degree,(t+c-1u)%degree,up);
-                let shrunk = axis+(cell.corners[k].xyz-axis)*w;
-                position = shrunk*r;
-                let local = (shrunk-axis)*params.settings.x;
-                uv = vec2(dot(local,tangent),dot(local,bitangent))/(1.5*tile)+0.5;
-            }
+        } else if d > mid_m*(1.0 - TREE_RING_FADE) {
+            // The far billboard, turned to the eye, showing the baked view
+            // nearest the eye's bearing in the tree's own frame.
+            shown = true;
+            out_height = 2.0 + ring_t(d, mid_m);
+            let l = length(eye);
+            let dir = select(vec2(0.0, 1.0), eye/max(l, 1e-6), l > 1e-3);
+            view = u32(floor(atan2(dir.x, dir.y)/(TAU/8.0) + 8.5)) % 8u;
+            along = t.x*dir.y - t.z*dir.x;
+            normal = normalized((t.x*dir.x + t.z*dir.y)*0.4 + axis);
         }
+        if shown {
+            let corners = array<vec3<f32>,4>(
+                tree_sway(t, t.base + axis*y0 - along*half_w, 0.08), tree_sway(t, t.base + axis*y0 + along*half_w, 0.08),
+                tree_sway(t, t.base + axis*y1 + along*half_w, 0.08), tree_sway(t, t.base + axis*y1 - along*half_w, 0.08));
+            let i = v%6u;
+            let facing = dot(cross(corners[1]-corners[0],corners[3]-corners[0]),params.camera.xyz-corners[0]);
+            let forward = array<u32,6>(0u,1u,2u,0u,2u,3u);
+            let reversed = array<u32,6>(0u,2u,1u,0u,3u,2u);
+            var c = forward[i];
+            if facing < 0. { c = reversed[i]; }
+            position = corners[c];
+            var u = array<f32,4>(0.0, 0.999, 0.999, 0.0)[c];
+            if flip { u = 0.999 - u; }
+            uv = vec2(f32(view) + u, select(0.0, 1.0, c >= 2u));
         }
     } else {
         kind = 3u;
@@ -1735,7 +1914,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // the owners (which owner a fragment of a split midpoint cell belongs to),
     // and the owners' fades and the finer level's fade at the centre. A cut
     // wall's finer fade is carried negative, less one, to mark it.
-    out.split = cell.owner_a.xyz - cell.owner_b.xyz;
+    out.split = select(cell.owner_a.xyz - cell.owner_b.xyz, tree_split, kind == 2u);
     let next_t = select(0.0, band_t(axis, level + 1u, part), level < finest_level());
     out.fade_t = vec3<f32>(band_t(cell.owner_a.xyz, level, part), band_t(cell.owner_b.xyz, level, part),
         select(next_t, -1.0 - next_t, cut_wall));
@@ -2082,7 +2261,8 @@ fn flora_albedo(input: VertexOut, albedo_in: vec3<f32>, grain: f32, variation: f
     }
     if !(leafy || grass) { return albedo; }
     let season = season_at(normalized(input.position));
-    if grass { albedo = mix(albedo, STRAW*(0.7 + 0.6*grain)*variation, season.z*0.65); }
+    // The tufts and blades dry with the ground under them (design 12.6).
+    if grass { albedo = mix(albedo, STRAW*(0.7 + 0.6*grain)*variation, ground_season(normalized(input.position)).x*0.65); }
     if leafy && params.flora_biome[biome].w > 0.5 {
         // Autumn: a texel at a time turns gold, orange or red, more of them
         // as the season deepens; winter fades the prism's leaves toward
@@ -2268,6 +2448,225 @@ fn fruit_colour(uv: vec2<f32>, tone: u32) -> vec3<f32> {
     return rgb8(select(select(ramp.z, ramp.y, tone == 2u), ramp.x, tone == 1u));
 }
 
+
+// ---- `flora-v2` design 10: the detailed trees' pixels ----
+
+const KIT_TILE_BASE: u32 = 640u;
+// A near leaf card's mean root-to-tip shade (`mix(0.45, 1, ao)` over the
+// mockup's 0.7 at the root to 1 at the tip).
+const NEAR_CROWN_SHADE: f32 = 0.87;
+
+// A texel of a tree's texture (`pbd_core::tree_kit::Tex`): an atlas tile, or
+// one of the kit's own, at a uv as the mockup samples it (v counted up from
+// the tile's foot), nearest; linear.
+fn tree_texel(tex: u32, uv: vec2<f32>) -> vec3<f32> {
+    let x = u32(floor(fract(uv.x)*32.0)) & 31u;
+    let y = u32(floor(fract(1.0 - uv.y)*32.0)) & 31u;
+    if (tex & 0x80000000u) != 0u {
+        let sheet = (tex >> 8u) & 0xffu;
+        let col = (tex >> 4u) & 0xfu;
+        let row = tex & 0xfu;
+        let k = max(textureDimensions(atlas).x/512u, 1u);
+        let p = vec2(((sheet%4u)*128u + col*32u + x)*k, ((sheet/4u)*128u + row*32u + y)*k);
+        return textureLoad(atlas, vec2<i32>(p), 0).rgb;
+    }
+    let w = kit[KIT_TILE_BASE + min(tex, 3u)*1024u + y*32u + x];
+    return pow(unpack4x8unorm(w).rgb, vec3(2.2));
+}
+
+// The mockup's `maskOf`: a card's shape cut from its tile by a pixel mask
+// (1 leaves alternating up a twig, 2 a needle spray, 4 a frond). v = 0 is
+// the root edge, on the branch.
+fn leaf_mask(uv: vec2<f32>, m: u32) -> bool {
+    let q = (floor(clamp(uv, vec2(0.0), vec2(0.999))*32.0) + 0.5)/32.0;
+    let x = q.x - 0.5;
+    let y = q.y;
+    let ax = abs(x);
+    if m == 1u {
+        if ax < 0.04 && y < 0.8 { return true; }
+        for (var k = 0u; k < 5u; k++) {
+            let fk = f32(k);
+            let s = f32(k%2u)*2.0 - 1.0;
+            var c = vec2(s*0.2*(1.0 - fk*0.1), 0.2 + fk*0.14);
+            var a2 = normalized(vec3(s*0.8, 1.0, 0.0)).xy;
+            if k == 4u { c = vec2(0.0, 0.8); a2 = vec2(0.0, 1.0); }
+            let d = vec2(x, y) - c;
+            let a = dot(d, a2);
+            let b = dot(d, vec2(-a2.y, a2.x));
+            let wd = 0.11*(1.0 - abs(a)/0.17*0.7);
+            if abs(a) < 0.17 && abs(b) < wd { return true; }
+        }
+        return false;
+    }
+    if m == 2u {
+        if ax < 0.035 && y < 0.95 { return true; }
+        if ax > 0.46*(1.0 - y*0.8) || y > 0.95 { return false; }
+        return fract(y*10.0 - ax*1.8) >= 0.45;
+    }
+    let env = 0.46*pow(sin(3.14159*clamp(y, 0.0, 1.0)), 0.7);
+    if ax < 0.035 && y < 0.97 { return true; }
+    if ax > env { return false; }
+    return fract(y*12.0 - ax*2.5) >= 0.35;
+}
+
+fn tree_header(input: VertexOut) -> u32 {
+    let species = min((input.material >> SPECIES_SHIFT) & 0xfu, 7u);
+    let variant = (input.material >> VARIANT_SHIFT) & 3u;
+    return KIT_VARIANT_BASE + (species*TREE_VARIANTS + variant)*KIT_VARIANT_WORDS;
+}
+fn tree_flags(input: VertexOut) -> u32 {
+    return kit[min((input.material >> SPECIES_SHIFT) & 0xfu, 7u)*KIT_SPECIES_WORDS + 3u];
+}
+
+// A baked impostor's pixel (design 10.3): the view in the uv's integer part,
+// the pixel by the uv's fraction. A deciduous tree's leafy bake gives way to
+// its bare one a texel at a time as winter comes (design 10.6).
+fn impostor_pixel(input: VertexOut) -> u32 {
+    let header = tree_header(input);
+    let view = min(u32(max(floor(input.uv.x), 0.0)), 7u);
+    let px = view*IMPOSTOR_VIEW_W + min(u32(fract(input.uv.x)*f32(IMPOSTOR_VIEW_W)), IMPOSTOR_VIEW_W - 1u);
+    let py = min(u32(clamp(input.uv.y, 0.0, 0.9999)*f32(IMPOSTOR_H)), IMPOSTOR_H - 1u);
+    var at = kit[header + 8u];
+    if (tree_flags(input) & 1u) != 0u {
+        let bare = season_at(normalized(input.position)).y;
+        if random(input.seed*977u + px*131u + py*7919u) < bare { at = kit[header + 9u]; }
+    }
+    return kit[at + py*IMPOSTOR_W + px];
+}
+
+// The mockup's autumn on a leaf: the whole card (or a far tree's crown) to
+// one colour between rust and orange by its id, more of them as the turn
+// deepens.
+fn tree_autumn(albedo: vec3<f32>, tree: f32, card: f32, turn: f32) -> vec3<f32> {
+    let lum = dot(albedo, vec3(0.3, 0.55, 0.15));
+    let k = h12(vec2(floor(tree*97.0), floor(card*61.0)));
+    let aut = mix(vec3(0.46, 0.10, 0.025), vec3(0.66, 0.34, 0.04), k)*(0.55 + lum*2.6);
+    return mix(albedo, aut, turn*smoothstep(0.1, 0.6, k + 0.35));
+}
+
+// The ground follows the seasons (design 12.6): `pbd_core::flora::
+// ground_season`, the trees' calendar. A grass texel keeps its own light and
+// dark; dry multiplies its luminance into the dried-grass ochre, frost lifts
+// it toward a pale rime. x dry, y frost.
+const GROUND_DRY = vec3<f32>(1.25, 1.0, 0.45);
+const GROUND_FROST = vec3<f32>(0.8, 0.84, 0.9);
+const GROUND_DRY_MIX: f32 = 0.6;
+const GROUND_FROST_MIX: f32 = 0.45;
+fn ground_season(radial: vec3<f32>) -> vec2<f32> {
+    let s = season_at(radial);
+    return vec2(max(s.z, s.y), s.y*smoothstep(SNOW_COLD.x, SNOW_COLD.y, abs(radial.y)));
+}
+fn ground_tint(albedo: vec3<f32>, radial: vec3<f32>) -> vec3<f32> {
+    let g = ground_season(radial);
+    if g.x <= 0.0 && g.y <= 0.0 { return albedo; }
+    let lum = dot(albedo, vec3(0.299, 0.587, 0.114));
+    let dried = mix(albedo, lum*GROUND_DRY, g.x*GROUND_DRY_MIX);
+    return mix(dried, GROUND_FROST*(0.6 + 0.8*lum), g.y*GROUND_FROST_MIX);
+}
+
+// Snow on the branches (design 12.3): `pbd_core::flora::winter_cover`, the
+// season's bare months times the cold of the latitude, laid on the up-facing
+// side of a near tree's bark and leaves and on the top of a baked crown. A
+// pine keeps its needles and carries the most; bare twigs a thin line.
+const SNOW_COLD = vec2<f32>(0.574, 0.766);
+const BRANCH_SNOW = vec3<f32>(0.80, 0.83, 0.88);
+fn winter_cover(radial: vec3<f32>) -> f32 {
+    return season_at(radial).y*smoothstep(SNOW_COLD.x, SNOW_COLD.y, abs(radial.y));
+}
+fn tree_snow(input: VertexOut, albedo: vec3<f32>, code: u32, deciduous: bool) -> vec3<f32> {
+    let radial = normalized(input.position);
+    let cover = winter_cover(radial);
+    if cover <= 0.0 { return albedo; }
+    var on = 0.0;
+    if code == IMPOSTOR_CODE {
+        // A baked view's rows run bottom up: the crown's top third.
+        on = smoothstep(0.55, 0.9, input.uv.y);
+    } else {
+        on = smoothstep(0.15, 0.6, dot(normalize(input.normal), radial));
+    }
+    // In clumps a texel across, not a wash.
+    let clump = 0.75 + 0.25*h12(floor(input.uv*16.0) + vec2(f32(input.seed & 255u), 0.0));
+    let amount = select(0.95, 0.6, deciduous);
+    // The snow keeps the scene's brightness (one art style): lit as the
+    // ground's own snow is, never a flat white.
+    return mix(albedo, BRANCH_SNOW, clamp(cover*on*amount*clump, 0.0, 1.0));
+}
+
+// A detailed tree's albedo: its bark or leaf texel pulled to the texture's
+// mean (design 9.2's 0.7 and 0.45), the acacia's leaves in the dry olive, or
+// a baked impostor's pixel; with the season laid on live, and its snow.
+fn tree_albedo(input: VertexOut) -> vec3<f32> {
+    let code = input.material & 0xffu;
+    let flags = kit[min((input.material >> SPECIES_SHIFT) & 0xfu, 7u)*KIT_SPECIES_WORDS + 3u];
+    return tree_snow(input, tree_albedo_bare(input), code, (flags & 1u) != 0u);
+}
+fn tree_albedo_bare(input: VertexOut) -> vec3<f32> {
+    let code = input.material & 0xffu;
+    let sh = min((input.material >> SPECIES_SHIFT) & 0xfu, 7u)*KIT_SPECIES_WORDS;
+    let flags = kit[sh + 3u];
+    let deciduous = (flags & 1u) != 0u;
+    let tree = random(input.seed);
+    if code == IMPOSTOR_CODE {
+        let pixel = impostor_pixel(input);
+        var albedo = pow(unpack4x8unorm(pixel).rgb, vec3(2.2));
+        // A crown pixel (alpha 255; the bark's is 254). The mockup pulls a
+        // baked crown's green pixels back toward the near crown by a factor
+        // it measured; here the bake snaps to the crown's own tones as well
+        // as Sweaft (`tree_bake::leaf_ramp`), and measured its crown's mean
+        // (words 10..12), whose brightness is met to the near leaves' under
+        // their root-to-tip AO, so near, mid and far are one colour.
+        if (pixel >> 24u) == 255u {
+            let header = tree_header(input);
+            let baked = vec3(kit_f(header + 10u), kit_f(header + 11u), kit_f(header + 12u));
+            let near = vec3(kit_f(sh + 8u), kit_f(sh + 9u), kit_f(sh + 10u))*NEAR_CROWN_SHADE;
+            let weights = vec3(0.2126, 0.7152, 0.0722);
+            albedo *= clamp(dot(near, weights)/max(dot(baked, weights), 1e-4), 0.5, 2.0);
+            if deciduous {
+                let season = season_at(normalized(input.position));
+                albedo = tree_autumn(albedo, tree, 0.0, max(season.x, season.y));
+            }
+        }
+        return albedo;
+    }
+    if code == TREE_LEAF_CODE {
+        var albedo = tree_texel(kit[sh + 1u], input.uv);
+        if (flags & 2u) != 0u { albedo = olive(albedo); }
+        albedo = mix(vec3(kit_f(sh + 8u), kit_f(sh + 9u), kit_f(sh + 10u)), albedo, LEAF_DETAIL);
+        // The last leaves hanging on into winter keep their autumn colour.
+        let season = season_at(normalized(input.position));
+        if deciduous { albedo = tree_autumn(albedo, tree, input.split.y, max(season.x, season.y)); }
+        return albedo;
+    }
+    return mix(vec3(kit_f(sh + 4u), kit_f(sh + 5u), kit_f(sh + 6u)), tree_texel(kit[sh], input.uv), SOLID_DETAIL);
+}
+
+// Whether a pixel of a detailed tree is left out (design 10.3, 10.4, 10.6):
+// an impostor's clear pixel, a card's cut-out, a deciduous card fallen for
+// winter, and the rings' cross-fade, the outgoing level keeping the pixels
+// whose threshold is under 1 - t and the incoming the rest.
+fn tree_dropped(input: VertexOut) -> bool {
+    let code = input.material & 0xffu;
+    if code == IMPOSTOR_CODE && (impostor_pixel(input) >> 24u) < 128u { return true; }
+    if code == TREE_LEAF_CODE {
+        let sh = min((input.material >> SPECIES_SHIFT) & 0xfu, 7u)*KIT_SPECIES_WORDS;
+        if !leaf_mask(input.uv, kit[sh + 2u]) { return true; }
+        if (kit[sh + 3u] & 1u) != 0u
+            && h12(vec2(floor(input.split.y*255.0), f32(input.seed & 1023u))) < season_at(normalized(input.position)).y {
+            return true;
+        }
+    }
+    if (code >= TREE_BARK_CODE && code <= IMPOSTOR_CODE) || code == FRUIT_CODE {
+        let f = input.height;
+        let th = bayer4(input.clip.xy + vec2(1.0, 2.0)*input.split.x);
+        if f < 1.5 {
+            if th >= f { return true; }
+        } else if th < 1.0 - (f - 2.0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Whether a pixel of this piece is left out: a landing's dissolve, a band's
 // cross-fade, a split midpoint cell's far half, a tree thinning at the edge of
 // its range (`detail-fade`, `distance-lod-fade`). The main pass and the sun's
@@ -2287,6 +2686,7 @@ fn dropped(input: VertexOut) -> bool {
         let left = params.clutter.x - 2.0 - distance(input.position, params.camera.xyz);
         if mask >= clamp(left/max(params.clutter.y, 0.001), 0.0, 1.0) { return true; }
     }
+    if input.kind == 2u && tree_dropped(input) { return true; }
     // A landing's dissolve (`detail-fade`): each pixel shows the new
     // partition where its mask is under the dissolve's progress and the old
     // one elsewhere. Its own mask, interleaved gradient noise, so it does not
@@ -3099,6 +3499,12 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         far = GROUND_MEAN;
     }
     var art = pixel_tile(input.uv,tile,slot);
+    // `flora-v2` design 10: a detailed tree's own texel, or its impostor's,
+    // which needs no far fade (it is already the far picture).
+    if input.kind == 2u && cap >= TREE_BARK_CODE && cap <= IMPOSTOR_CODE {
+        art = tree_albedo(input);
+        far = art;
+    }
     // `flora-v2` design 9.2, 9.7: a plant in its tile's palette but not its
     // full contrast, and a beach crown in the dry olive.
     if (input.kind==2u || input.kind==3u) && (code==9u || code==8u || code==5u) {
@@ -3115,6 +3521,12 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let up = dot(n, radial);
     if cap == BLOOM_CODE { albedo = vec3(0.55, 0.90, 0.82)*(0.75 + 0.5*grain); }
     albedo = flora_albedo(input, albedo, grain, cell_variation);
+    // Design 12.6: the ground's grass (a top, the sod lip down a column's
+    // side, a terrace) dries and frosts with the season.
+    if (input.kind == 0u || input.kind == 1u || input.kind == 4u)
+        && (code == 2u || code == 3u || code == 7u || code == GRASS_SIDE_CODE) {
+        albedo = ground_tint(albedo, normalized(input.position));
+    }
     // Design 9.4: the year's fallen leaves, in the cap's own texels.
     if input.kind == 0u && cap != 0u {
         albedo = fallen_leaves(input, albedo);

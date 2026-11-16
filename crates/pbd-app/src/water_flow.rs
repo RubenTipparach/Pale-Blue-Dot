@@ -403,7 +403,9 @@ pub fn liquid_mesh(
                 let height = (layer + 1..LAYERS)
                     .take_while(|&l| is_falling(column.material(l)))
                     .count();
-                out.feet.push((at(centre, 1.0), height as f32, lit));
+                // On the landing cell's own surface, so the splash starts
+                // at the water, never in it.
+                out.feet.push((middle, height as f32, lit));
             }
             if !above_water && !sheet {
                 out.tops += 1;
@@ -725,6 +727,14 @@ pub struct FallFeet(pub Vec<(Vec3, f32, f32)>);
 #[derive(Component)]
 struct Splash;
 
+/// How far out from a fall's foot the splash starts: the falling column's
+/// half width (half the 2.833 m cell, flat to flat), so nothing is drawn
+/// inside the falling water (owner, 2026-11-15: "make sure the water splash
+/// fx doesnt end up inside the water but only outside").
+const SPLASH_EDGE_M: f32 = 1.42;
+/// The least height over the pool's surface a splash particle keeps.
+const SPLASH_CLEAR_M: f32 = 0.05;
+
 /// The most quads the splash draws in a frame, drops and mist together.
 const SPLASH_BUDGET: usize = 4000;
 /// Feet are drawn out to this far, fading out over the last 15 m.
@@ -889,17 +899,14 @@ fn animate_splash(
             let a = r(4) * std::f32::consts::TAU;
             let dir = east * a.cos() + north * a.sin();
             let lift = rise * s - 0.5 * 15.0 * s * s;
-            if lift < -0.2 {
+            let size = 0.08 + 0.1 * r(6);
+            // A drop back down at the pool is gone: none is drawn under it.
+            if lift < SPLASH_CLEAR_M + size {
                 continue;
             }
-            let p = *foot + up * lift + dir * (out * s + 0.4 * r(5));
+            let p = *foot + up * lift + dir * (SPLASH_EDGE_M + out * s + 0.4 * r(5));
             let alpha = 0.75 * (1.0 - phase) * fade;
-            quad(
-                p,
-                0.08 + 0.1 * r(6),
-                [light, light, light * 1.02, alpha],
-                &mut positions,
-            );
+            quad(p, size, [light, light, light * 1.02, alpha], &mut positions);
         }
         // Mist: a low white puff, bigger and denser from a taller fall.
         let puffs = ((h - 1.0) * 1.5).clamp(1.0, 24.0) as u32;
@@ -911,9 +918,12 @@ fn animate_splash(
             let a = r(2) * std::f32::consts::TAU;
             let dir = east * a.cos() + north * a.sin();
             let spread = (0.5 + 0.12 * h).min(5.0);
-            let p =
-                *foot + up * ((0.25 + 0.04 * h) * s + 0.2) + dir * spread * (0.3 + phase) * r(3);
             let size = (0.5 + 0.18 * h).min(5.0) * (0.6 + 0.8 * phase);
+            // Outside the falling column, and lifted by its own size so its
+            // lower edge stays over the pool's surface.
+            let p = *foot
+                + up * ((0.25 + 0.04 * h) * s + size + SPLASH_CLEAR_M)
+                + dir * (SPLASH_EDGE_M + spread * (0.3 + phase) * r(3));
             let alpha = (0.12 + 0.33 * (h / 8.0).min(1.0)) * (1.0 - phase) * fade;
             quad(p, size, [light, light, light, alpha], &mut positions);
         }

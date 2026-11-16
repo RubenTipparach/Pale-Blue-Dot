@@ -450,6 +450,156 @@ with a better/same/worse arrow beside each (breeding is task 8).
 
 Frame cost: not measured. `perf_suite` waits for the owner's hardware.
 
+## 13. Eggs, young and breeding (tasks 7 and 8, planned 2026-11-15)
+
+The owner, 2026-11-15: "finish up fishing wiki, herding, and flora". This
+section is the plan for groups 7 and 8, written before their code. It keeps
+S7's premise: the farm is a closed form of world time, nothing steps a
+clock, and a farm costs nothing while the player is away. What is new is
+that some of what the farm does on its own now has to be WRITTEN, because a
+birth makes an animal that must outlive every rule change.
+
+- **E1. Life stages in data, derived from the birth day** (decision 8).
+  Each kept species gains a `young` block in `husbandry.ron`: its stages
+  (name, until what age in days, size against the adult), how it is born
+  (`Eggs { incubation_days, clutch_max }` for the hen, `Live
+  { gestation_days, litter: (min, max) }` for the woolback and plodder) and
+  its young's names. `husbandry::young::stage(species, born, day)` gives the
+  stage and the size; the app draws a kept animal scaled by it. Nothing about
+  a stage is stored. A female gives products only from `born + adult_days`
+  (a hen "lays from 10"): `FarmState::advance` takes the day it may start.
+  Numbers are decision 8's: hen chick 0-5 (0.29 of the adult), pullet 5-10
+  (0.71); woolback gestation 5, 1-2 lambs, lamb 0-6 (0.45), hogg 6-12 (0.75);
+  plodder gestation 8, one calf, calf 0-8 (0.40), young 8-16 (0.75). The
+  adult ages stay `adult_days` (10, 12, 16).
+- **E2. A brood is a stored record** (kind `brood`, schema 1, id from a
+  counter like an animal's): a clutch of eggs or a pregnancy, with its
+  species, dam, sire, how many, the day it started and where it is
+  (`Hen(id)`, `Incubator(cell)` or `Womb`). It is never deleted.
+- **E3. Fertile eggs.** A hen in a pen with an adult cockerel lays fertile
+  eggs. Collecting them gives the good `fertile-egg` (appended to the goods
+  table, with its icon) and, in the same `with ... rec @p` line, a `clutch`
+  of state `Carried` naming the hen and the cockerel and the day they were
+  taken: the parentage an egg item cannot carry rides in the record (M9 keeps
+  a fish's seed in its slot; a good is a count, so the record is the slot).
+  A carried egg goes cold a day after it was laid (decision 8): setting
+  takes parentage from the oldest warm carried clutch first, and eggs with
+  no warm parentage left are refused ("these eggs have gone cold"). A fertile
+  egg cooks like an egg.
+- **E4. Setting eggs.** `E` with fertile eggs in hand:
+  - on a hen of yours that is adult and not sitting: she goes **broody** and
+    sits on up to 8 of them (decision 8). A sitting hen lays nothing; her
+    product tally is re-based when she is set and when the clutch hatches.
+  - on an **incubator**: up to 6 eggs. The incubator is a husbandry piece
+    like a fence (S5): the good `incubator` (made at the workbench from 4
+    planks and 2 rope), set with right click on a cell as an `incubator`
+    record whose id is the cell's key, drawn as a small crate with a glass
+    lid; `E` with empty hands takes it up while it holds no eggs. It needs a
+    **lit lamp** within 3 m (a lamp block of any kind, `Material::is_lamp`);
+    without one it refuses eggs ("it needs a lamp beside it"), and a clutch
+    whose lamp is gone when the farm is next evaluated goes cold.
+  Either way the set brood is a player line, `rec @p brood`, with the hands.
+- **E5. Hatching and births are the world's lines, never the player's.** When
+  the farm is evaluated (the 0.5 s sync while the player is within 150 m,
+  and on opening the world) every brood due at or before now is realised in
+  due-day order: an egg clutch on `set + incubation_days`, a pregnancy on
+  `conceived + gestation_days`. Each young is a new `animal` record with
+  `via: Born`, `born` the due day (so its stage is right however late it is
+  realised), `sire`, `dam`, `brood` (the brood's id), its genome inherited
+  (E7) and its sex by hash, homed in its mother's pen. They are proposed
+  under `@whusbandry:brood/<id>` through `WorldSave::propose`, so the yield
+  set guards them; they only ever add records. A brood is *done* when some
+  animal names it, so the world never edits the player's brood line. The
+  premise is S7's: conditions are taken as they are now for the whole span.
+- **E6. Pairing** (decision 9). A dam of a live-bearing species conceives at
+  the first **morning** (world day + 0.25) at or after the day she and a sire
+  both qualify: same species, both alive and adult, both in the same pen,
+  her mood at least 60 and both healths at least 50 as the farm stands now,
+  she is not carrying, and her **cooldown** (one gestation after her last
+  birth) is over. The sire is the one the player chose for her on the
+  breeding screen (`mate`, a field she carries, player-written) if he is in
+  her pen, else the lowest-id adult male there. Conception is a `brood` of
+  place `Womb`, written by the world (`@whusbandry:pen/<pen>`) as in E5.
+  The event loop repeats until nothing more falls due by now, so a hundred
+  days away catch up in one evaluation, and the same events come out
+  whether it runs once or every half second (a test). Hens pair the same
+  way only to make their eggs fertile (E3).
+- **E7. Inheritance** (decision 9): one allele of each gene from each
+  parent, chosen by `hash(sire id, dam id, birth count, gene, side)`; each
+  allele mutates with probability 1/32, a quantitative one by up to ±0.15
+  (38 of 255), a discrete one to another of its list, the morph flips. The
+  birth count is the dam's young by this sire so far, so every young of a
+  pair differs and a replay agrees. `husbandry::breeding::offspring_values`
+  gives the four equally likely values of a quantitative gene before
+  mutation; a test holds births to exactly those four.
+- **E8. Inbreeding** (decision 9): Wright's F of the young is the kinship
+  of its parents, by the recursive method over the stored parents' ids
+  (the mockup's `makeKin`), looking back four generations; an animal with no
+  recorded parents is an unrelated founder. Full siblings give 0.25, half
+  siblings 0.125, first cousins 0.0625. The young's expressed hardiness is
+  lowered by `0.5 × F` and a litter's size is multiplied by `1 - F` (at
+  least one).
+- **E9. The breeding screen** (8.2), after M7's Breeding tab: a menu screen
+  (`menu::Screen::Breeding`), opened with `B` on foot, holding the pointer as
+  the field guide does. Left: the species tabs and the herd (kept, alive,
+  adult or not), each a pressable row with sex, id, generation and coat; a
+  press picks the sire (a male) or the dam (a female). Right: the pair, F
+  with the warning above 0.0625, each quantitative gene's bar with the four
+  ticks, the band, the parents' marks and the arrow (Q3's recommendation:
+  ticks and the arrow beside them), the coat, pattern and morph odds, and a
+  **PAIR** button that writes `mate` on the dam (`@p`). Below: the pedigree
+  of the last animal pressed, three columns (it, its parents, its
+  grandparents), "wild-caught founder" where a parent is unknown. Labels
+  only on screen (CLAUDE.md, "Notes stay out of the game").
+- **E10. Saves.** `brood` and `incubator` are new record kinds at schema 1,
+  noted in `identity.ron` the first time one is stored. The `animal` body
+  gains `brood` and `mate`, both `Option` with `None` defaults, so a body
+  written before them reads unchanged (S's own rule) and the schema stays 1.
+  A world with no broods opens with no births, no conceptions and nothing
+  written (a test), and an animal record written before this change opens
+  with the same fields it had.
+- **E11. What this pass leaves.** No duck eggs (the yard dabbler is not in
+  the roster). No egg item carries a seed: the record does. The steward
+  (`world-persistence` group 4) is still not built, so births are realised
+  only while the player is within 150 m or opens the world, which E5 makes
+  invisible: a birth's day is its due day whenever it is written.
+
+## 14. The pen in the game's own wood (owner, 2026-11-15)
+
+The owner, on the eggs capture: "some of the fence shot is missing
+textures".
+
+**Finding.** Every pen piece the game draws is a box of flat vertex colour
+on a plain white material: `husbandry::rig::Builder` writes positions,
+normals and one colour per box, and no UVs. The posts only seem to have a
+grain because the ground's light field and the shadow cascades fall across
+them; a rail, and above all the gate's pale boards, show the flat fill
+plainly. The approved mockup (M26, `docs/mockups/husbandry.html`, `pen()`)
+dresses the pen in the game's settlement textures: posts in `timber`, rails
+in `poles`, the gate in `boards`, a trough in `plank`. The first playable
+slice (S11, decision 12) drew them flat, and this pass's incubator followed
+it. The animals are the same: flat boxes, where M26 gives each box a tile of
+its hide.
+
+**Change** (drawing only; no record, rule or save changes):
+
+- `rig::Builder` gains UVs: a textured box lays its texture along each face
+  at the texture's `repeat_m` from `textures/settlement/manifest.ron` (the
+  towns' own scale), so a 2.8 m rail shows its grain at the same size a
+  town's beam does.
+- The fences are drawn as three meshes, one per texture: posts `timber`,
+  rails `poles`, gates `boards`, each on a `StandardMaterial` with that
+  texture sampled nearest and repeated (the towns' `texture()` settings),
+  lit by the field as the boxes were. The incubator's body is `plank`, its
+  legs `timber`, and its glass lid stays a flat pale blue (M26: "water,
+  glass and the sky are flat colour").
+- The textured fence pipeline is built behind the loading screen: a hidden
+  textured piece joins the yard's prewarm template.
+- **Not in this fix**: the animals' hides. Each species' hide strip has to
+  be drawn first (M26's `tools/art/husbandry_art.py` holds them, outlined;
+  the world's copy loses the outline, CLAUDE.md "No outlines in the world"),
+  and that is its own step, listed as task 9.2.
+
 ## Risks / Trade-offs
 
 - **Scope.** This is a large system. The tasks put it in slices: records and

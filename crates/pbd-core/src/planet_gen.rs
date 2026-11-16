@@ -116,6 +116,12 @@ pub struct TerrainConfig {
     /// in rimmed basins (`ocean-environments` design 13). `None` has the
     /// noise channels only (versions 4 to 7).
     pub rivers: Option<crate::rivers::RiverSettings>,
+    /// Where trees stand (`flora-v2` design 12.1): [`crate::flora::TreeTable::V4`]
+    /// for versions 4 to 9, M13's densities from version 10.
+    pub trees: crate::flora::TreeTable,
+    /// Ore veins in the stone (`flora-v2` design 12.8): `None` for versions
+    /// 4 to 9, version 10's from it.
+    pub ore: Option<crate::ore::OreVeins>,
 }
 
 /// A second ridge field, wider than the mountain field and standing only in
@@ -138,7 +144,28 @@ pub struct Ranges {
 impl TerrainConfig {
     /// The main body's generator as the running build makes a new world:
     /// the newest version [`Self::for_version`] carries.
-    pub const TENEBRIS: Self = Self::TENEBRIS_V8;
+    pub const TENEBRIS: Self = Self::TENEBRIS_V10;
+
+    /// Generator version 10 (`flora-v2` design 12): version 9 with M13's
+    /// forests, as dense as the approved mockup draws them, and the beach's
+    /// sand standing its acacias. The ground (heights, biomes, top blocks)
+    /// is version 9's; only where trees stand moves.
+    pub const TENEBRIS_V10: Self = Self {
+        trees: crate::flora::TreeTable::V10,
+        ore: Some(crate::ore::OreVeins::V10),
+        ..Self::TENEBRIS_V9
+    };
+
+    /// Generator version 9 (`ocean-environments` design B15): version 8 with
+    /// its reefs back. Version 8 kept a reef clear of every point of a noise
+    /// channel, which runs through the open sea too, and so lost almost every
+    /// reef version 7 had; version 9 clears a reef only near a channel's
+    /// mouth or a river's reach. The ground is version 8's: only where the
+    /// sea's pieces stand changes.
+    pub const TENEBRIS_V9: Self = Self {
+        ocean: Some(crate::ocean::places::OceanPlaces::V9),
+        ..Self::TENEBRIS_V8
+    };
 
     /// Generator version 8 (`ocean-environments` design 13): version 7 with
     /// rivers that run down to the sea reach by reach, from one drainage map
@@ -251,6 +278,8 @@ impl TerrainConfig {
         ranges: None,
         ocean: None,
         rivers: None,
+        trees: crate::flora::TreeTable::V4,
+        ore: None,
     };
 }
 
@@ -265,6 +294,8 @@ impl TerrainConfig {
             6 => Some(Self::TENEBRIS_V6),
             7 => Some(Self::TENEBRIS_V7),
             8 => Some(Self::TENEBRIS_V8),
+            9 => Some(Self::TENEBRIS_V9),
+            10 => Some(Self::TENEBRIS_V10),
             _ => None,
         }
     }
@@ -854,7 +885,13 @@ mod tests {
 
     /// The digests of version 6's ground and top blocks on 10,000 directions,
     /// taken on the M4 Max Mac (2026-11-15).
+    /// The ground digest differs by target: the Mac's (aarch64) and the
+    /// desktop's and this container's (x86_64), measured 2026-11-15
+    /// (`flora-v2` design 12.1). The top blocks agree on both.
+    #[cfg(target_arch = "aarch64")]
     const VERSION_6_DIGEST: u64 = 1_195_572_018_390_891_724;
+    #[cfg(not(target_arch = "aarch64"))]
+    const VERSION_6_DIGEST: u64 = 10_265_201_514_255_625_508;
     const VERSION_6_TOP_DIGEST: u64 = 2_881_052_872_441_172_356;
 
     /// Version 7's ground (the trench carved) and top blocks, pinned as it
@@ -907,10 +944,72 @@ mod tests {
         );
     }
 
+    /// Version 9 (`ocean-environments` B15) is version 8 with the sea's reef
+    /// rule mended, and the reef is pieces, not ground: its altitudes,
+    /// biomes and top blocks are version 8's, digest for digest, pinned on
+    /// its own constants so a later change to either version shows.
+    #[test]
+    fn version_9_makes_the_ground_its_worlds_are_made_on() {
+        let v9 = TerrainConfig::for_version(9).expect("version 9 is carried");
+        assert_eq!(v9, TerrainConfig::TENEBRIS_V9);
+        assert_eq!(digest(&v9, 10_000), VERSION_9_DIGEST);
+        assert_eq!(top_digest(&v9, 10_000), VERSION_9_TOP_DIGEST);
+        assert_eq!(VERSION_9_DIGEST, VERSION_8_DIGEST);
+        assert_eq!(VERSION_9_TOP_DIGEST, VERSION_8_TOP_DIGEST);
+    }
+
+    /// Version 10 (`flora-v2` design 12) is version 9's ground with M13's
+    /// forests: its heights, biomes and top blocks are version 9's, digest for
+    /// digest (compared live, so on every target), and only its tree table
+    /// differs (`flora::tests::every_version_keeps_where_its_trees_stand`).
+    #[test]
+    fn version_10_is_version_9_s_ground_with_m13_s_trees() {
+        let v10 = TerrainConfig::for_version(10).expect("version 10 is carried");
+        assert_eq!(v10, TerrainConfig::TENEBRIS_V10);
+        assert_eq!(TerrainConfig::TENEBRIS, v10, "a new world is made on 10");
+        let v9 = TerrainConfig::TENEBRIS_V9;
+        assert_eq!(digest(&v10, 10_000), VERSION_9_DIGEST);
+        assert_eq!(top_digest(&v10, 10_000), VERSION_9_TOP_DIGEST);
+        assert_eq!(digest(&v10, 10_000), digest(&v9, 10_000));
+        assert_eq!(
+            TerrainConfig {
+                trees: v9.trees,
+                ore: None,
+                ..v10
+            },
+            v9
+        );
+        assert_eq!(v9.trees, crate::flora::TreeTable::V4);
+        assert_eq!(v10.trees, crate::flora::TreeTable::V10);
+        assert_eq!(v9.ore, None, "version 9 grows no ore");
+        assert_eq!(v10.ore, Some(crate::ore::OreVeins::V10));
+    }
+
+    /// The ground digest differs by target: the Mac's (aarch64) and the
+    /// desktop's and this container's (x86_64), measured 2026-11-15
+    /// (`flora-v2` design 12.1). The top blocks agree on both.
+    #[cfg(target_arch = "aarch64")]
+    const VERSION_9_DIGEST: u64 = 15_558_980_979_595_432_169;
+    #[cfg(not(target_arch = "aarch64"))]
+    const VERSION_9_DIGEST: u64 = 4_200_192_246_974_754_388;
+    const VERSION_9_TOP_DIGEST: u64 = 13_002_675_292_541_232_770;
+
+    /// The ground digest differs by target: the Mac's (aarch64) and the
+    /// desktop's and this container's (x86_64), measured 2026-11-15
+    /// (`flora-v2` design 12.1). The top blocks agree on both.
+    #[cfg(target_arch = "aarch64")]
     const VERSION_8_DIGEST: u64 = 15_558_980_979_595_432_169;
+    #[cfg(not(target_arch = "aarch64"))]
+    const VERSION_8_DIGEST: u64 = 4_200_192_246_974_754_388;
     const VERSION_8_TOP_DIGEST: u64 = 13_002_675_292_541_232_770;
 
+    /// The ground digest differs by target: the Mac's (aarch64) and the
+    /// desktop's and this container's (x86_64), measured 2026-11-15
+    /// (`flora-v2` design 12.1). The top blocks agree on both.
+    #[cfg(target_arch = "aarch64")]
     const VERSION_7_DIGEST: u64 = 9_167_527_543_725_899_224;
+    #[cfg(not(target_arch = "aarch64"))]
+    const VERSION_7_DIGEST: u64 = 5_065_085_066_077_397_351;
     const VERSION_7_TOP_DIGEST: u64 = 10_634_382_923_396_087_003;
 
     /// A desert's rock follows the contours (survey G1): every desert cell at

@@ -68,4 +68,10 @@
     leaf_size: 1.0,
     // flora-v2 design 9.6: the share of a fruiting biome's trees that bear.
     fruit_chance: 0.5,
+    // flora-v2 design 10.4: the detailed trees' rings, the approved M13
+    // mockup's doubled near and mid (metres). The near model to tree_near_m
+    // (10..60), the mid cards to tree_mid_m, the far billboard past it; each
+    // cross-fades over the last 0.3 of its ring (the mockup's fade width).
+    tree_near_m: 44.0,
+    tree_mid_m: 90.0,
 )

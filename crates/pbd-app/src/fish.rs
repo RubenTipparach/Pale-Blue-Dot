@@ -336,12 +336,14 @@ fn fish(
                 event,
                 at: fishery.line.float,
             });
-            if let Some(happened) = report(
+            let float = fishery.line.float;
+            for happened in report(
                 &mut status,
                 event,
                 roster,
                 hotbar.as_deref_mut(),
                 save.as_deref_mut(),
+                float,
             ) {
                 did.write(happened);
             }
@@ -545,7 +547,7 @@ fn lineup(
         ("seal", 0, Pose::HauledOut),
     ]);
     let t = seconds.rem_euclid(3600.0) as f32;
-    let (mut positions, mut colours) = (Vec::new(), Vec::new());
+    let (mut positions, mut colours, mut uvs) = (Vec::new(), Vec::new(), Vec::new());
     for (k, (model, id, pose)) in entries.into_iter().enumerate() {
         let (row, col) = ((k / 5) as f32, (k % 5) as f32);
         let at = eye + ahead * (2.2 + row * 0.9) + right * ((col - 2.0) * 0.75);
@@ -580,7 +582,15 @@ fn lineup(
             phase: k as f32,
             pose,
         };
-        emit(body, &look, &place, [1.0; 3], &mut positions, &mut colours);
+        emit(
+            body,
+            &look,
+            &place,
+            [1.0; 3],
+            &mut positions,
+            &mut colours,
+            &mut uvs,
+        );
     }
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -588,6 +598,7 @@ fn lineup(
     );
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.compute_flat_normals();
     mesh
 }
@@ -725,7 +736,8 @@ fn report(
     roster: &[Species],
     hotbar: Option<&mut Hotbar>,
     save: Option<&mut WorldSave>,
-) -> Option<crate::missions::Did> {
+    float: Vec3,
+) -> Vec<crate::missions::Did> {
     use pbd_core::missions::Kind;
     let name = |species: u16| {
         roster
@@ -756,18 +768,30 @@ fn report(
         ),
         Event::Caught { species, length_cm } => {
             status.say(format!("{} - {length_cm} cm", name(species)), 3.0);
+            let first = save.as_deref().is_some_and(|s| !s.has_caught(species));
             if land(species, length_cm, hotbar, save, status) {
-                return Some(crate::missions::Did::new(
-                    Kind::Catch,
-                    name(species).to_lowercase(),
+                use crate::missions::Did;
+                let mut did = vec![Did::new(Kind::Catch, name(species).to_lowercase(), 1)];
+                // A kind the field guide had not seen (`starter-missions`
+                // T.2, "Three kinds of fish").
+                if first {
+                    did.push(Did::new(Kind::Species, "fish", 1));
+                }
+                // The sea or fresh water: water standing above the sea's
+                // level is a river or a lake ("Off the shore").
+                let fresh = float.length() - crate::planet::PLANET_RADIUS > 0.6;
+                did.push(Did::new(
+                    Kind::Waters,
+                    if fresh { "fresh" } else { "sea" },
                     1,
                 ));
+                return did;
             }
         }
-        Event::Splash => return Some(crate::missions::Did::new(Kind::Cast, "water", 1)),
+        Event::Splash => return vec![crate::missions::Did::new(Kind::Cast, "water", 1)],
         _ => {}
     }
-    None
+    Vec::new()
 }
 
 /// A landed fish goes into the hotbar and the catch goes into the save, on
@@ -928,11 +952,21 @@ pub(crate) mod draw {
         mut commands: Commands,
         mut meshes: ResMut<Assets<Mesh>>,
         mut materials: ResMut<Assets<StandardMaterial>>,
+        mut images: ResMut<Assets<Image>>,
     ) {
         // The creatures' material, with one tiny creature-shaped mesh held
         // hidden from the start so the loading screen warms its pipeline
         // before play (no schools exist until the walker is in the water).
-        let life = materials.add(life_material_desc());
+        // `PBD_PASS_OFF=life_texture` draws them as before the atlas, for a
+        // before-and-after capture of the same frame (`ocean-environments`
+        // B14).
+        let untextured = std::env::var("PBD_PASS_OFF")
+            .is_ok_and(|list| list.split(',').any(|p| p.trim() == "life_texture"));
+        let mut desc = life_material_desc(images.add(life_atlas()));
+        if untextured {
+            desc.base_color_texture = None;
+        }
+        let life = materials.add(desc);
         let mut warm = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
@@ -942,6 +976,7 @@ pub(crate) mod draw {
             vec![[0.0, 0.0, 0.0], [0.01, 0.0, 0.0], [0.0, 0.01, 0.0]],
         );
         warm.insert_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0f32; 4]; 3]);
+        warm.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![bodies::white_uv(); 3]);
         warm.compute_flat_normals();
         commands.spawn((
             Name::new("Water life (warm)"),
@@ -1047,14 +1082,34 @@ pub(crate) mod draw {
 
     const LINE_POINTS: usize = 24;
 
-    /// The one material every creature is drawn with: white, its colours in
+    /// The one material every creature and the sea's places are drawn with:
+    /// the water life's atlas (`ocean-environments` B14) times the colours in
     /// the vertices, both sides lit (a fin is one face).
     #[derive(Resource)]
     pub struct LifeMaterial(pub Handle<StandardMaterial>);
 
-    pub fn life_material_desc() -> StandardMaterial {
+    /// The water life's atlas (`tools/water_life_atlas.py`): pixel art,
+    /// sampled nearest with no mipmaps, decoded at startup so it is there
+    /// before the first creature or reef tile is drawn.
+    pub fn life_atlas() -> Image {
+        let pixels = image::load_from_memory(include_bytes!(
+            "../../../assets/textures/water_life/atlas.png"
+        ))
+        .expect("assets/textures/water_life/atlas.png")
+        .to_rgba8();
+        let mut image = Image::from_dynamic(
+            image::DynamicImage::ImageRgba8(pixels),
+            true,
+            RenderAssetUsages::default(),
+        );
+        image.sampler = bevy::image::ImageSampler::nearest();
+        image
+    }
+
+    pub fn life_material_desc(atlas: Handle<Image>) -> StandardMaterial {
         StandardMaterial {
             base_color: Color::WHITE,
+            base_color_texture: Some(atlas),
             perceptual_roughness: 0.85,
             reflectance: 0.3,
             cull_mode: None,
@@ -1149,6 +1204,7 @@ pub(crate) mod draw {
     ) {
         let mut positions: Vec<[f32; 3]> = Vec::new();
         let mut colours: Vec<[f32; 4]> = Vec::new();
+        let mut uvs: Vec<[f32; 2]> = Vec::new();
         let t = now.map_or(0.0, |(seconds, _)| seconds.rem_euclid(3600.0) as f32);
         for (i, p) in school.positions.iter().enumerate() {
             let up = p.normalize_or(Vec3::Y);
@@ -1212,16 +1268,29 @@ pub(crate) mod draw {
                 up: top,
                 scale,
             };
-            bodies::emit(body, &look, &place, tint, &mut positions, &mut colours);
+            bodies::emit(
+                body,
+                &look,
+                &place,
+                tint,
+                &mut positions,
+                &mut colours,
+                &mut uvs,
+            );
         }
-        let count = positions.len();
+        // A school with nobody drawn (all under, all gone) keeps one hidden
+        // triangle, so its mesh keeps the layout the loading screen warmed
+        // and never asks for a pipeline of its own.
+        if positions.is_empty() {
+            positions = vec![[0.0; 3]; 3];
+            colours = vec![[0.0; 4]; 3];
+            uvs = vec![bodies::white_uv(); 3];
+        }
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colours);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
         mesh.remove_indices();
         mesh.compute_flat_normals();
-        if count == 0 {
-            mesh.remove_attribute(Mesh::ATTRIBUTE_NORMAL);
-        }
     }
 
     /// The rod in hand, the float on the water, the line between them, and the

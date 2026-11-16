@@ -1,0 +1,65 @@
+// The phase-1 showcase, one file per branch of the mission tree
+// (`step-videos` 5.2, `starter-missions` T.5): a bot plays the branch
+// through the player's own inputs, each shot ending when its missions are
+// done, or the run failing as stalled. The trunk: from bare hands to stone tools and a fire.
+//
+// Each branch starts from the world the earlier ones left: run them in
+// order on one `--world` (trunk, fishing, farming, herding, cooking, then
+// mining, light and about). Nothing is set; every mission is played.
+//
+// The start is a level pasture with the sea within thirty metres (measured
+// once: the only such place within 3 km of the fields spawn).
+(
+    goal: "Goal: the trunk, from bare hands to a fire",
+    at: Some((11.5085, -25.0992)),
+    hour: 8.5,
+    shots: [
+        (
+            caption: "Gather by hand: fibre and loose stone turn up in the ground",
+            until: ["gather"],
+            max_s: 240.0,
+            acts: [Dig(Mission("gather"), 2), Still],
+        ),
+        (
+            caption: "Craft an axe: a branch pulled from a tree, then the pack's Craft row",
+            until: ["axe"],
+            max_s: 90.0,
+            acts: [Chop(Have("log", 1)), Craft("stone-axe", 1)],
+        ),
+        (
+            caption: "Gather wood: fell trees with the axe",
+            until: ["wood"],
+            max_s: 240.0,
+            acts: [Hand("axe"), Chop(Mission("wood")), Still],
+        ),
+        (
+            caption: "Make planks and rope",
+            until: ["planks-rope"],
+            max_s: 240.0,
+            acts: [Craft("planks", 2), Hand("hand"), Dig(Have("fibre", 6), 1), Craft("rope", 2)],
+        ),
+        (
+            caption: "Build a crafting bench",
+            until: ["crafting-table"],
+            max_s: 90.0,
+            acts: [Craft("workbench", 1), Place("block:workbench"), Look(-150.0, -10.0, 1.2)],
+        ),
+        (
+            caption: "Stone tools at the bench",
+            until: ["stone-tools"],
+            max_s: 300.0,
+            acts: [Craft("planks", 1), Dig(Have("stone", 6), 2), Bench("stone-shovel", 1), Bench("stone-pickaxe", 1), Still],
+        ),
+        (
+            caption: "Make a fire, and set it down by the water",
+            until: ["fire"],
+            max_s: 300.0,
+            acts: [Hand("axe"), Chop(Have("log", 2)), Hand("shovel"), Dig(Have("stone", 5), 2), Craft("campfire", 1), Shore, Place("block:campfire"), Still],
+        ),
+        (
+            caption: "The trunk is done: every branch opens",
+            max_s: 20.0,
+            acts: [Missions(6.0)],
+        ),
+    ],
+)

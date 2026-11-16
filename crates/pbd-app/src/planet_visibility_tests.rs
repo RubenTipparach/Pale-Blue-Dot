@@ -126,7 +126,17 @@ impl VisibilityGpu {
         let water = output("water visibility under test", capacities[0]);
         let clutter = output("clutter visibility under test", capacities[0]);
         let column = output("column tier visibility under test", capacities[0]);
-        let args = output("indirect arguments under test", ARG_WORDS);
+        // All thirteen draws are bound (the near trees' eight after the five);
+        // the first five are read back.
+        let args = output(
+            "indirect arguments under test",
+            (crate::planet::INDIRECT_BYTES / 4) as usize,
+        );
+        // The near trees' list (`flora-v2` design 10.5): bound, not read here.
+        let near = output(
+            "near tree visibility under test",
+            (crate::planet::NEAR_LIST_BYTES / 4) as usize,
+        );
         let bind_group = self.device.create_bind_group(
             "visibility regression inputs",
             &self.layout,
@@ -139,6 +149,7 @@ impl VisibilityGpu {
                 water.as_entire_binding(),
                 clutter.as_entire_binding(),
                 column.as_entire_binding(),
+                near.as_entire_binding(),
             )),
         );
         let list_bytes = capacities.map(|count| (count * size_of::<u32>()) as u64);
@@ -371,6 +382,8 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         flora_fall: Vec4::ZERO,
         night: Vec4::ZERO,
         night_lights: [Vec4::ZERO; 2 * crate::night_lights::MAX_FAR_LIGHTS],
+        felled: [UVec4::ZERO; crate::trees_taken::FELLED / 4],
+        picked: [UVec4::ZERO; crate::trees_taken::PICKED / 4],
     }
 }
 

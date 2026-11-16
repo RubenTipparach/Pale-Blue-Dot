@@ -1071,6 +1071,14 @@ pub struct ScatterSettings {
     pub leaf_size: f32,
     /// Probability a fruiting biome's tree bears fruit (`flora-v2` design 9.6).
     pub fruit_chance: f32,
+    /// The detailed trees' rings (`flora-v2` design 10.4): the near model is
+    /// drawn to this distance, metres, cross-fading into the mid cards over
+    /// the last 0.3 of it (the mockup's fade width). At most 60 m: the near list's regions
+    /// hold the finest cells inside that, twice over.
+    pub tree_near_m: f32,
+    /// The mid ring's crossed cards to this distance, cross-fading into the
+    /// far billboard the same way; past it the billboard to the trees' range.
+    pub tree_mid_m: f32,
 }
 
 impl Default for ScatterSettings {
@@ -1103,6 +1111,8 @@ impl Default for ScatterSettings {
             leaf_under: 0.7,
             leaf_size: 1.0,
             fruit_chance: 0.5,
+            tree_near_m: 44.,
+            tree_mid_m: 90.,
         }
     }
 }
@@ -1142,6 +1152,14 @@ impl Validated for ScatterSettings {
         unit("leaf_fall", self.leaf_fall)?;
         unit("leaf_under", self.leaf_under)?;
         unit("fruit_chance", self.fruit_chance)?;
+        (self.tree_near_m.is_finite() && (10.0..=60.0).contains(&self.tree_near_m))
+            .then_some(())
+            .ok_or("tree_near_m must lie within 10 and 60 m, the near list's reach")?;
+        (self.tree_mid_m.is_finite()
+            && self.tree_mid_m >= self.tree_near_m
+            && self.tree_mid_m <= crate::planet::BAND_M[1])
+            .then_some(())
+            .ok_or("tree_mid_m must lie between tree_near_m and the trees' range")?;
         (self.leaf_size.is_finite() && (0.5..=2.0).contains(&self.leaf_size))
             .then_some(())
             .ok_or("leaf_size must lie within 0.5 and 2")?;

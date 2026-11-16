@@ -1,0 +1,176 @@
+<title>Phase 1 and 2 Checklist</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* The tracker's look (docs/mockups/tracker.html): dark first, hotbar-slot rows. */
+:root {
+  --bg: #0b1119; --panel: #131c28; --slot: #0f1722; --ink: #dfe8f1; --muted: #8a9bb0; --line: #2a3a4f;
+  --accent: #e8b44c; --done: #7fcf86; --done-soft: #17301c; --go: #7fb2f0; --go-soft: #15263c;
+  --warn: #f07a6a; --warn-soft: #3a1a17; --part: #e8b44c; --part-soft: #3a2c12;
+  --display: "Pixelify Sans", "Courier New", monospace;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #e9eef3; --panel: #f7f9fb; --slot: #ffffff; --ink: #142030; --muted: #52637a; --line: #c5d0dc;
+    --accent: #9a6a10; --done: #2f7a3a; --done-soft: #dcefdc; --go: #2a5ea8; --go-soft: #dde8f7;
+    --warn: #b8392b; --warn-soft: #f8e1dd; --part: #9a6a10; --part-soft: #f6e6c4; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #e9eef3; --panel: #f7f9fb; --slot: #ffffff; --ink: #142030; --muted: #52637a; --line: #c5d0dc;
+  --accent: #9a6a10; --done: #2f7a3a; --done-soft: #dcefdc; --go: #2a5ea8; --go-soft: #dde8f7;
+  --warn: #b8392b; --warn-soft: #f8e1dd; --part: #9a6a10; --part-soft: #f6e6c4; color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 14px/1.5 var(--mono);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+.wrap { max-width: 1000px; margin: 0 auto; display: grid; gap: 22px; }
+header { padding-top: 24px; display: grid; gap: 8px; }
+h1 { font: 700 clamp(30px, 6vw, 46px)/1 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 700 24px/1.1 var(--display); margin: 0; }
+h3 { font: 700 17px/1.2 var(--display); margin: 0; letter-spacing: .02em; }
+a { color: var(--accent); }
+.top a { font-size: 12px; color: var(--muted); }
+.legend, .counts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); align-items: center; }
+.st { font: 600 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 4px 6px; border: 1px solid currentColor; white-space: nowrap; display: inline-block; }
+.st.built { color: var(--done); background: var(--done-soft); }
+.st.part { color: var(--part); background: var(--part-soft); }
+.st.no { color: var(--warn); background: var(--warn-soft); }
+.st.wip { color: var(--go); background: var(--go-soft); }
+.st.owner { color: var(--muted); }
+.phase { display: grid; gap: 12px; border-top: 2px solid var(--line); padding-top: 14px; }
+.part { background: var(--slot); border: 2px solid var(--line); padding: 12px; display: grid; gap: 8px; min-width: 0; }
+.part-h { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.part-h small { color: var(--muted); font-size: 12px; }
+ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 13px; }
+li span.t { min-width: 0; }
+.note { color: var(--muted); font-size: 12.5px; }
+@media (max-width: 480px) { li { grid-template-columns: 1fr; gap: 2px; } }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="top"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+  <h1>Phase 1 and 2 Checklist</h1>
+  <p class="note">What is in the game and what is not, for roadmap phase 1 (the first game loop) and phase 2 (environment v2). As of 2026-11-15, branch <code>claude/env-v2</code>. Read from each OpenSpec change's tasks and the code.</p>
+  <div class="legend">
+    <span class="st built">Built</span> in the game
+    <span class="st part">Partial</span> some of it
+    <span class="st wip">In progress</span> being built now
+    <span class="st no">Not built</span>
+    <span class="st owner">Your check</span> waits on you
+  </div>
+  <div class="counts" id="counts"></div>
+</header>
+<div id="phases"></div>
+</div>
+
+<script>
+// status: built | part | wip | no | owner
+const PHASES = [
+  { n: 1, title: 'The first game loop', parts: [
+    { title: 'Crafting tools', change: 'tool-crafting', items: [
+      ['built', 'Dig by hand, planks, rope, the workbench; stone, bronze and iron tools from the forge'],
+      ['built', 'Tab opens the pack; the pack links to missions, map, guide and menu'],
+    ]},
+    { title: 'Fishing', change: 'fishing-and-equipment', items: [
+      ['built', 'Casting, the bite and reel, schools, bait digging'],
+      ['built', 'Felling trees with the axe'],
+      ['no', 'The fish field-guide wiki generator and the range atlas reading fauna.ron'],
+      ['owner', 'Your in-game check of the bite and reel feel'],
+    ]},
+    { title: 'Farming and smelting', change: 'farming-and-smelting', items: [
+      ['built', 'Seeds from grass and wild plants; till, plant, grow on world time, harvest'],
+      ['built', 'The forge smelts ore'],
+      ['owner', 'Crop growing times'],
+    ]},
+    { title: 'Herding', change: 'animal-husbandry', items: [
+      ['built', 'Tame by feeding, pens of fence, eggs, milk and wool'],
+      ['no', 'Fertile eggs, broody hens, the incubator, life stages'],
+      ['no', 'Breeding, inheritance and pedigrees, and the breeding screen'],
+    ]},
+    { title: 'Cooking', change: 'cooking', items: [
+      ['built', 'The campfire and its dishes from fish, crops and eggs'],
+      ['no', 'Freshness and spoiling to compost'],
+      ['no', 'Kitchen stations (oven, pot) with fuel and the station panel'],
+      ['no', 'Eating effects (stride, steady hands, keen, glow) and buff icons'],
+      ['no', 'The twelve new crops'],
+      ['owner', 'The campfire\'s cube look'],
+    ]},
+    { title: 'Starter missions', change: 'starter-missions', items: [
+      ['built', 'Nineteen missions through the loop, the HUD line and the Missions tab'],
+      ['owner', 'The mission line has no backing strip'],
+    ]},
+    { title: 'Sound', change: 'audio-and-ambience', items: [
+      ['built', 'Steps, digs, water, fishing, menus, ambience beds, thunder, fire; the SOUND tab'],
+      ['no', 'Recovering when the audio device changes (headphones out)'],
+      ['no', 'Craft loop sounds; lightning strike sounds'],
+      ['owner', 'Your first listen'],
+    ]},
+  ]},
+  { n: 2, title: 'Environment v2', parts: [
+    { title: 'Flora (M13)', change: 'flora-v2', items: [
+      ['built', 'Pixel tuft grass by default, coloured from the ground'],
+      ['built', 'Plant contrast softened; painted flowers off the ground tiles'],
+      ['built', 'Clutter reach doubled (120 m), per-biome clutter, seasons on plants'],
+      ['built', 'Fallen leaves in autumn, browned in winter'],
+      ['built', 'Fruit and pine cones on trees (decoration; picking not in)'],
+      ['built', 'M13\'s detailed trees: oak, birch, kapok, palm, pine, cactus, willow, with baked mid and far trees that cross-fade'],
+      ['built', 'Crops and wild plants in the world\'s style: M8\'s outline-free stages, no ink rings'],
+      ['part', 'Acacias are built but never stand: beach cells are sand and trees need grass (your call to change placement)'],
+      ['no', 'Forests as dense as the mockup (placement density unchanged, so old worlds keep their trees)'],
+      ['no', 'Snow on the sod lip in winter (the game has no seasonal snow)'],
+      ['no', 'The fungal forest (needs a new biome)'],
+    ]},
+    { title: 'Water that flows (M28)', change: 'water-flow, volumetric-water', items: [
+      ['built', 'Luanti\'s flow rule on the hex grid; saved; old saves unchanged'],
+      ['built', 'The sea floods what is dug onto it'],
+      ['built', 'Flowing water in the sea\'s own look; no rain rings on falls'],
+      ['built', 'The wooden bucket; flow arrows (F5)'],
+      ['built', 'The splash at a fall\'s foot, kept outside the water'],
+      ['owner', 'The waterfall look: pick a variant on M31'],
+    ]},
+    { title: 'Seas, rivers and marshes (M25)', change: 'ocean-environments', items: [
+      ['built', 'Light under water: depth, turbidity, caustics, shafts, marine snow'],
+      ['built', 'Tides, and swimming in pools, flowing water and high tide'],
+      ['built', 'Reefs, kelp, vents with smoke, trenches, sea ice with seals (generator 7, reefs restored in 9)'],
+      ['built', 'Fish from M9, textured; proper models for every water creature'],
+      ['built', 'Rivers to the sea and marsh pools (generator 8)'],
+      ['built', 'The Sea places map layer'],
+      ['part', 'Gale spray and foam: built, never filmed in a real gale'],
+      ['no', 'Beavers and their dams'],
+      ['no', 'Reef rock, ice and basalt as diggable blocks (drawn as pieces)'],
+      ['no', 'Bug: switching to walk over a trench shifts you 1.7 m'],
+    ]},
+  ]},
+  { n: 0, title: 'Across both phases', parts: [
+    { title: 'Checks', change: '', items: [
+      ['built', 'Tests pass, except the two old ground-digest tests that also fail on main'],
+      ['no', 'Gameplay recordings of every phase 1 and phase 2 feature'],
+      ['no', 'Frame cost measured on your hardware (perf suite)'],
+      ['owner', 'Your playtest of the loop and of environment v2'],
+    ]},
+  ]},
+];
+const NAMES = { built: 'Built', part: 'Partial', wip: 'In progress', no: 'Not built', owner: 'Your check' };
+const el = (t, a = {}, ...k) => { const n = document.createElement(t); for (const [x, v] of Object.entries(a)) x === 'text' ? n.textContent = v : n.setAttribute(x, v); n.append(...k.filter(Boolean)); return n; };
+const tally = {};
+const root = document.getElementById('phases');
+for (const ph of PHASES) {
+  const sec = el('section', { class: 'phase', id: ph.n ? `phase-${ph.n}` : 'across' }, el('h2', { text: ph.n ? `Phase ${ph.n} · ${ph.title}` : ph.title }));
+  for (const p of ph.parts) {
+    const ul = el('ul');
+    for (const [s, t] of p.items) {
+      tally[s] = (tally[s] || 0) + 1;
+      ul.append(el('li', {}, el('span', {}, el('span', { class: `st ${s}`, text: NAMES[s] })), el('span', { class: 't', text: t })));
+    }
+    sec.append(el('div', { class: 'part' }, el('div', { class: 'part-h' }, el('h3', { text: p.title }), p.change ? el('small', { text: p.change }) : null), ul));
+  }
+  root.append(sec);
+}
+const c = document.getElementById('counts');
+for (const k of ['built', 'part', 'wip', 'no', 'owner']) if (tally[k]) c.append(el('span', {}, el('span', { class: `st ${k}`, text: `${tally[k]} ${NAMES[k]}` })));
+</script>

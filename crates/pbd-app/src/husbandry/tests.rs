@@ -180,3 +180,216 @@ fn a_rig_builds_boxes_and_its_legs_follow_the_phase() {
         assert_ne!(a.positions, b.positions, "{}: the legs move", sp.id);
     }
 }
+
+/// Design 13, E10: a world saved before breeding (an animal record with no
+/// `brood` or `mate`) opens with that animal as it was; the farm's own
+/// events write nothing for it however long it is left; and the identity
+/// gains no breeding kind until one is stored.
+#[test]
+fn a_world_saved_before_breeding_opens_unchanged_and_writes_nothing() {
+    use pbd_core::husbandry::breeding::{self, Fitness};
+    use pbd_core::records::Record;
+    let root = temporary("before-breeding");
+    let slot = create(&root, "Old farm", 5).unwrap();
+    // The line the build before design 13 wrote for a tamed ewe.
+    let old = "(body:\"home\",sp:1,sex:F,born:3.0,gen:[1,2,3,4,5,6,7,8,9,10,11,12,13,14],pen:Some(5),home:5,owner:0,state:Alive,via:Fed,wild:77,as_of:4.0,health:100.0,hungry:0.0,fed_until:6.0,made:{})";
+    {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        note_kinds(&mut save);
+        let line = Record {
+            kind: record::ANIMAL.into(),
+            id: 1,
+            schema: 1,
+            body: old.into(),
+        };
+        assert!(save.store(&Author::Player(0), vec![line]).is_some());
+        save.drain();
+    }
+    let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+    let kept = record::animals(&reopened.records);
+    assert_eq!(kept.len(), 1);
+    let body = &kept[0].1;
+    assert_eq!((body.brood, body.mate), (None, None));
+    assert_eq!(
+        (body.sp, body.home, body.pen, body.wild),
+        (1, 5, Some(5), 77)
+    );
+    assert_eq!(
+        reopened
+            .records
+            .get(record::ANIMAL, 1)
+            .map(|r| r.body.as_str()),
+        Some(old),
+        "the stored line itself is untouched"
+    );
+    let settings = HusbandrySettings::default();
+    let roster = settings.roster(pbd_core::fauna::HOME_BODY);
+    let content = |_: u64, _: &AnimalBody| Fitness {
+        mood: 100.0,
+        health: 100.0,
+    };
+    let events = breeding::farm_events(
+        &reopened.records,
+        roster,
+        &settings.breeding,
+        400.0,
+        &content,
+        &|_| true,
+    );
+    assert!(
+        events.is_empty(),
+        "a lone ewe and no broods: nothing to write"
+    );
+    assert!(
+        breeding::KINDS
+            .iter()
+            .all(|(kind, _)| !reopened.identity.records.contains_key(*kind)),
+        "no breeding kind is noted before one is stored"
+    );
+}
+
+/// Design 13, E3 and E10: fertile eggs in the pack and the carried clutch
+/// that holds their parentage survive a quit and a reload, and the kinds are
+/// noted.
+#[test]
+fn fertile_eggs_and_their_parentage_survive_a_reload() {
+    use pbd_core::husbandry::breeding::{self, BroodBody, Place};
+    let root = temporary("fertile");
+    let slot = create(&root, "Hatchery", 5).unwrap();
+    let brood = BroodBody {
+        sp: 0,
+        dam: 2,
+        sire: 1,
+        eggs: 3,
+        laid: 12.5,
+        ..BroodBody::default()
+    };
+    let mut carried = Slots::new();
+    carried.give(Item::Good(Good::FERTILE_EGG), 3);
+    {
+        let mut save = WorldSave::open(root.clone(), slot.clone());
+        assert!(save.store_with_hands(brood.record(1), breeding::BROOD_SCHEMA, &carried));
+        save.drain();
+    }
+    let reopened = WorldSave::open(root.clone(), list(&root)[0].clone());
+    let broods = breeding::broods(&reopened.records);
+    assert_eq!(broods.get(&1), Some(&brood));
+    assert_eq!(broods[&1].place, Place::Carried);
+    assert_eq!(reopened.carried.as_ref(), Some(&carried));
+    assert_eq!(
+        reopened.identity.records.get(breeding::BROOD),
+        Some(&breeding::BROOD_SCHEMA)
+    );
+}
+
+/// Design 14: a pen piece wears its texture at the manifest's scale. A
+/// 2.8 m rail of `poles` (2 m a repeat) spans 1.4 repeats along its length;
+/// an animal's flat box writes no UVs, so its mesh keeps its layout.
+#[test]
+fn a_textured_box_lays_its_texture_at_the_repeat() {
+    let mut rail = rig::Builder::default();
+    rail.textured_cuboid(
+        Vec3::ZERO,
+        [Vec3::X * 1.4, Vec3::Y * 0.05, Vec3::Z * 0.03],
+        2.0,
+    );
+    assert!(rail.textured);
+    assert_eq!(rail.uvs.len(), rail.positions.len());
+    let widest = rail
+        .uvs
+        .iter()
+        .map(|uv| uv[0].max(uv[1]))
+        .fold(0.0f32, f32::max);
+    assert!((widest - 1.4).abs() < 1e-5, "{widest}");
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    rail.write(&mut mesh);
+    assert!(mesh.attribute(Mesh::ATTRIBUTE_UV_0).is_some());
+    let mut animal = rig::Builder::default();
+    animal.cuboid(Vec3::ZERO, [Vec3::X, Vec3::Y, Vec3::Z], [0.5, 0.4, 0.3]);
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    animal.write(&mut mesh);
+    assert!(mesh.attribute(Mesh::ATTRIBUTE_UV_0).is_none());
+    // The pen's textures are the settlement manifest's own.
+    let repeats = crate::towns::load_repeats();
+    for name in PEN_TEXTURES {
+        assert!(repeats.contains_key(name), "{name} is a settlement texture");
+    }
+}
+
+/// MEASUREMENT (`step-videos` 5.2, the sturdier bot; run by hand with
+/// `--ignored`): level pasture by the sea with a wild Yard hen herd within
+/// 30 m, near the fields spawn, as `--at` degrees for the showcase's start.
+#[test]
+#[ignore]
+fn find_a_coastal_start_with_hens() {
+    use crate::planet::surface_height;
+    let settings: HusbandrySettings =
+        ron::from_str(include_str!("../../../../assets/config/husbandry.ron")).unwrap();
+    let roster = settings
+        .land
+        .values()
+        .find(|r| r.iter().any(|s| s.name == "Yard hen"))
+        .expect("a roster with the hen")
+        .clone();
+    let hen = roster.iter().position(|s| s.name == "Yard hen").unwrap() as u16;
+    let seed = crate::planet::terrain_config().seed;
+    let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+    let mut found = Vec::new();
+    for i in -500..=500 {
+        for j in -500..=500 {
+            let east = Vec3::Y.cross(spawn).normalize();
+            let north = spawn.cross(east);
+            let d = (spawn * PLANET_RADIUS + east * (i as f32 * 12.0) + north * (j as f32 * 12.0))
+                .normalize();
+            let h = surface_height(d);
+            if !(1.0..6.0).contains(&h) {
+                continue;
+            }
+            let e2 = Vec3::Y.cross(d).normalize();
+            let n2 = d.cross(e2);
+            let at = |r: f32, a: f32| {
+                (d * PLANET_RADIUS + (e2 * a.cos() + n2 * a.sin()) * r).normalize()
+            };
+            let sea = (0..12).any(|k| {
+                let a = k as f32 / 12.0 * std::f32::consts::TAU;
+                surface_height(at(25.0, a)) < -0.6
+            });
+            if !sea {
+                continue;
+            }
+            let level = (0..8).all(|k| {
+                let a = k as f32 / 8.0 * std::f32::consts::TAU;
+                [10.0, 20.0].iter().all(|r| {
+                    let hh = surface_height(at(*r, a));
+                    hh < 0.0 || (hh - h).abs() < 3.0
+                })
+            });
+            if !level {
+                continue;
+            }
+            let hens = herds::squares_near(d, 60.0, PLANET_RADIUS, &settings.herds)
+                .into_iter()
+                .filter_map(|sq| herds::herd_in(seed, sq, PLANET_RADIUS, &settings.herds, &roster))
+                .any(|herd| {
+                    herd.species == hen
+                        && herd.centre.angle_between(d) * PLANET_RADIUS < 45.0
+                        && surface_height(herd.centre) > 0.5
+                });
+            if hens {
+                found.push((d.distance(spawn) * PLANET_RADIUS, d));
+            }
+        }
+    }
+    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+    for (m, d) in found.iter().take(6) {
+        let (lat, lon) = pbd_core::geo::lat_lon(*d).degrees();
+        println!("COASTAL_HENS {m:.0} m: --at {lat:.4} {lon:.4}");
+    }
+    assert!(!found.is_empty());
+}

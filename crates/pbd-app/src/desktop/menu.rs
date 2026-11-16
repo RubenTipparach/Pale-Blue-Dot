@@ -46,6 +46,8 @@ pub enum Screen {
     Kitchen,
     /// The starter missions, opened with O (`starter-missions`).
     Missions,
+    /// The herd's breeding screen, opened with B on foot (`animal-husbandry`).
+    Breeding,
 }
 
 impl Screen {
@@ -72,7 +74,8 @@ impl Screen {
             | Screen::Map
             | Screen::Forge
             | Screen::Kitchen
-            | Screen::Missions => Screen::Playing,
+            | Screen::Missions
+            | Screen::Breeding => Screen::Playing,
             Screen::Settings | Screen::Saves => Screen::Pause,
         }
     }
@@ -128,6 +131,12 @@ pub enum MenuAction {
     FlowArrows,
     /// Put the open Input sub-tab's keys back to their defaults.
     ResetTab,
+    /// The breeding screen's species tab, by roster index.
+    BreedSpecies(u16),
+    /// A kept animal of the herd pressed: sire or dam by its sex.
+    BreedAnimal(u64),
+    /// Pair the chosen sire and dam.
+    BreedPair,
 }
 
 /// A panel the mouse wheel scrolls.
@@ -479,6 +488,7 @@ pub fn opening_screen(menu: Option<&str>, world_named: bool, capture: bool) -> S
         Some("map") => Screen::Map,
         Some("guide") => Screen::Guide,
         Some("missions") => Screen::Missions,
+        Some("breeding") => Screen::Breeding,
         _ if !world_named && !capture => Screen::Saves,
         _ => Screen::Playing,
     }
@@ -1758,6 +1768,8 @@ pub fn press(
             }
             // The guide's own system turns the page.
             MenuAction::Species(_) => {}
+            // The breeding screen's own (`breeding::press` acts).
+            MenuAction::BreedSpecies(_) | MenuAction::BreedAnimal(_) | MenuAction::BreedPair => {}
             // `press_graphics` acts.
             MenuAction::Bloom
             | MenuAction::FrameLimit

@@ -154,6 +154,27 @@ ICONS.update({
 })
 
 
+# Design 13's two (`animal-husbandry` E3, E4): the fertile egg is the egg
+# with the warm brown speckle of a laid-under-a-cockerel egg, and the
+# incubator a small crate of the fence's wood with a glass lid.
+HATCH = dict(FARM, **{"s": "#a8743f", "g": "#a9d8e8", "G": "#e8f6fb"})
+
+ICONS.update({
+    "goods/fertile-egg": ([
+        "................", "................", "................", "......kkkk......",
+        ".....keeeek.....", "....keseeeek....", "....keemeesk....", "...keemeeeeek...",
+        "...kseeeseeek...", "...keeeeeeesk...", "...keeseeeEEk...", "....keeeeEsk....",
+        "....kEseEEEk....", ".....kEEEEk.....", "......kkkk......", "................",
+    ], HATCH),
+    "goods/incubator": ([
+        "................", "................", "................", "................",
+        "..kkkkkkkkkkkk..", "..kGgggggggggk..", "..kgGgeeegegGk..", "..kggeeeeegegk..",
+        "..kkkkkkkkkkkk..", "..kWwWwWwWwWwk..", "..kWwkkkkkkWwk..", "..kWwWwWwWwWwk..",
+        "..kWwWwWwWwWwk..", "..kkkkkkkkkkkk..", "...kk......kk...", "................",
+    ], HATCH),
+})
+
+
 # The wooden bucket (`water-flow` E11): staves in the fence's two browns,
 # two iron hoops and a rope handle; full, the sea's own blues at its brim.
 BUCKET = dict(FARM, **{"r": "#c9a46a", "b": "#1c5ea0", "B": "#5a8ac0", "d": "#1d2b53"})

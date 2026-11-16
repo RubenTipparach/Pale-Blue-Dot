@@ -187,8 +187,8 @@ const MOCKUPS = [
     url: 'https://claude.ai/artifact/4uqkQQB55Hq8dbEc52scwD', published: '2026-11-12',
     summary: 'Till a cell, plant for the climate, water and harvest; greenhouses grow anything anywhere, pens hold tamed animals.' },
   { id: 'M9', batch: 'new', title: 'Fish Lab and Aquariums', change: 'fishing-and-equipment (extends it)', page: 'docs/mockups/fish.html',
-    url: 'https://claude.ai/artifact/VbVmuUHVTUczkiMYGHEZSn', published: '2026-11-13',
-    summary: 'Every fish drawn from a species and a seed, so a trophy in a tank is the fish you caught; tanks to keep them in.' },
+    url: 'https://claude.ai/artifact/VbVmuUHVTUczkiMYGHEZSn', published: '2026-11-15', version: 6,
+    summary: 'The library of everything underwater: every fish from a species and a seed, every reef, kelp, vent and ice piece and water creature in the game\'s own models and textures; tanks to keep them in.' },
   { id: 'M10', batch: 'new', title: 'Stations and Outposts', change: '', page: 'docs/mockups/stations.html',
     url: 'https://claude.ai/artifact/7tPp8n2btkNzx1tgeQF7P4', published: '2026-11-12',
     summary: 'The stations Meridian, Kessler and Gatehouse: their modules, docking, and life in sunlight and in the planet\'s shadow.' },
@@ -256,6 +256,15 @@ const MOCKUPS = [
   { id: 'M30', batch: 'new', title: 'Pale Blue Dot Sounds', change: 'audio-and-ambience', page: 'docs/mockups/sounds.html',
     url: 'https://claude.ai/artifact/AmHnQnrzU4bJhFtDDrSjnc', published: '2026-11-14', version: 2,
     summary: 'Every planned sound and ambience bed with a play button: steps and digs by surface, water, fishing, craft, thunder, fire, night, menus. Keep or send back each.' },
+  { id: 'M31', batch: 'new', title: 'Waterfall Look', change: 'water-flow', page: 'docs/mockups/waterfall.html',
+    url: 'https://claude.ai/artifact/WV314dictEeRDgP7E9CBHX', published: '2026-11-15', version: 2,
+    summary: 'The fall look decided before the game (A today, B stretched, C lean, D lip froth), and a live pour that pops as today or eases between ticks.' },
+  { id: 'M32', batch: 'new', title: 'Rain Splashes', change: 'weather-rain', page: 'docs/mockups/rain-splashes.html',
+    url: 'https://claude.ai/artifact/RWhyiQ2VjgrZ5bBA7eAaiG', published: '2026-11-15', version: 1,
+    summary: 'Where rain lands: crowns on puddles and spray on wet ground, GPU particles beside today\'s rain, by day and lit at night.' },
+  { id: 'M33', batch: 'new', title: 'Mission Tree', change: 'starter-missions', page: 'docs/mockups/mission-tree.html',
+    url: 'https://claude.ai/artifact/KbcisoBN426euC3rCEYzH1', published: '2026-11-15', version: 3,
+    summary: 'The missions as a tree that unlocks the tech: a trunk and seven branches, 42 missions, and a bot run that plays them.' },
 ];
 
 // Every other published artifact, by section, newest first.
@@ -264,6 +273,8 @@ const GUIDES = [
     published: '2026-09-24', summary: 'One range map per fish species, field-guide style, measured off the climate.' },
 ];
 const MISC = [
+  { title: 'Phase 1 and 2 Checklist', kind: 'Checklist', page: 'docs/design/phase-checklist.html', url: 'https://claude.ai/artifact/Th7hcbdbqmNp8EBkRjsQxb',
+    published: '2026-11-15', summary: 'What is built and what is not for phase 1 (the game loop) and phase 2 (environment v2).' },
   { title: 'Worst Case 60', kind: 'Benchmark', page: 'docs/benchmarks/2026-11-12-worst-case-60/report.html', url: 'https://claude.ai/artifact/DiyFFNobHpBLsuCpvB5ssk',
     published: '2026-11-12', summary: 'The lighting on main against the lighting-perf branch on the desktop: every scenario now inside 16.7 ms at p99, rain and night included.' },
   { title: 'Lighting perf checkpoint', kind: 'Benchmark', page: 'docs/benchmarks/2026-11-12-lighting-perf/report.html', url: 'https://claude.ai/artifact/Up2NNA9VWbFYA8inrfTuqH',
@@ -470,7 +481,7 @@ const ROADMAP = [
   { title: 'Environment v2', when: 'now', note: 'The environmental overhaul. M13, M25 and M28 approved by the owner (2026-11-15); being built on claude/env-v2.', steps: [
     { title: 'Advanced foliage and flora', status: 'building', change: 'flora-v2', refs: ['M13'], text: 'Pixel tufts, per-biome clutter, seasons, fallen leaves, wild fruit, biome by biome.' },
     { title: 'Underwater overhaul', status: 'building', change: 'ocean-environments', refs: ['M25'], text: 'Seas, rivers and marshes: light under water, reefs, kelp and vents, and 3D water life.' },
-    { title: 'Water that flows', status: 'building', change: 'water-flow', refs: ['M28', 'M25'], text: 'Luanti\'s liquid rule on the hex grid: water that floods, spreads and falls; tides.' },
+    { title: 'Water that flows', status: 'building', change: 'water-flow', refs: ['M28', 'M25', 'M31'], text: 'Luanti\'s liquid rule on the hex grid: water that floods, spreads and falls; tides.' },
   ] },
   { title: 'Townsfolk', when: 'later', note: 'After environment v2. Not started.', steps: [
     { title: 'NPCs', status: 'later', change: 'townsfolk', refs: ['M5'], text: 'The people of the towns, their day, talk and trade.' },

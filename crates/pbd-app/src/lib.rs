@@ -57,6 +57,7 @@ pub mod sky;
 pub mod tone;
 #[cfg(feature = "desktop")]
 pub mod towns;
+pub mod trees_taken;
 #[cfg(feature = "desktop")]
 pub mod ui_kit;
 #[cfg(feature = "desktop")]

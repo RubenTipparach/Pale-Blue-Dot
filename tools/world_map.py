@@ -198,7 +198,7 @@ def climate_and_fish(fields, out):
     Image.fromarray(ice, "RGBA").save(os.path.join(out, "sea-ice.png"))
 
     packed = np.zeros((h, w, 3), dtype=np.uint8)
-    for k, sp in enumerate(fr.SPECIES):
+    for k, sp in enumerate(fr.FISH):
         lo, hi = sp["temp"]
         home = np.zeros_like(water)
         for name in sp["water"]:
@@ -215,7 +215,7 @@ def climate_and_fish(fields, out):
     area = np.cos((0.5 - (np.arange(h) + 0.5) / h) * np.pi)[:, None] * np.ones((1, w))
     return {
         "climate_year": years,
-        "species": [dict(id=sp["id"], name=sp["name"], water=sp["water"], temp=sp["temp"]) for sp in fr.SPECIES],
+        "species": [dict(id=sp["id"], name=sp["name"], water=sp["water"], temp=sp["temp"]) for sp in fr.FISH],
         "surface_mean_c": round(float((area * t_mean).sum() / area.sum()), 2),
         "water_mean_c": round(float((area * t_mean)[water].sum() / (area * water).sum()), 2),
         "frozen_all_year_share_of_water": round(float((area * frozen).sum() / (area * water).sum()), 4),

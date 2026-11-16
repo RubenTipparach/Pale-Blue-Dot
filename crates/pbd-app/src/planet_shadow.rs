@@ -422,6 +422,7 @@ pub(super) struct PlanetShadowGpu {
     compute: Vec<BindGroup>,
     terrain: Vec<BindGroup>,
     foliage: Vec<BindGroup>,
+    near: Vec<BindGroup>,
     column: Vec<BindGroup>,
     casters: Vec<(UniformBuffer<Mat4>, BindGroup)>,
     /// Which cascades are drawn this frame.
@@ -582,12 +583,20 @@ fn prepare_shadows(
         let indirect = device.create_buffer(&BufferDescriptor {
             label: Some("sun cascade indirect draws"),
             size: INDIRECT_BYTES,
-            usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
+            usage: BufferUsages::STORAGE | BufferUsages::INDIRECT | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        queue.write_buffer(
+            &indirect,
+            super::NEAR_ARGS_OFFSET,
+            bytemuck::cast_slice(&super::near_args()),
+        );
+        // The near trees cast their own shadow (`flora-v2` design 10.5).
+        let near = list("sun cascade near tree IDs", super::NEAR_LIST_BYTES);
         let mut uniforms = Vec::new();
         let (mut compute, mut terrain, mut trees, mut columns, mut town) =
             (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        let mut near_trees = Vec::new();
         for i in 0..CASCADES {
             let mut uniform = UniformBuffer::from(params_for(i));
             uniform.write_buffer(&device, &queue);
@@ -607,11 +616,13 @@ fn prepare_shadows(
                         planet.bounce.as_entire_binding(),
                         planet.lamp_bake.as_entire_binding(),
                         &planet.ssr_view,
+                        planet.tree_kit.as_entire_binding(),
                     )),
                 )
             };
             terrain.push(draw_group("sun cascade terrain", &visible));
             trees.push(draw_group("sun cascade trees", &foliage));
+            near_trees.push(draw_group("sun cascade near trees", &near));
             columns.push(draw_group("sun cascade columns", &column));
             compute.push(device.create_bind_group(
                 Some("sun cascade cull"),
@@ -625,6 +636,7 @@ fn prepare_shadows(
                     water.as_entire_binding(),
                     clutter.as_entire_binding(),
                     column.as_entire_binding(),
+                    near.as_entire_binding(),
                 )),
             ));
             let mut caster = UniformBuffer::from(
@@ -641,11 +653,12 @@ fn prepare_shadows(
         }
         commands.entity(entity).insert(PlanetShadowGpu {
             uniforms,
-            _lists: vec![visible, foliage, column, water, clutter],
+            _lists: vec![visible, foliage, column, water, clutter, near],
             indirect,
             compute,
             terrain,
             foliage: trees,
+            near: near_trees,
             column: columns,
             casters: town,
             draw,
@@ -733,6 +746,11 @@ pub(super) fn draw_cascades(
         if !skip.contains("foliage") {
             pass.set_bind_group(0, &*gpu.foliage[i], &[]);
             pass.draw_indirect(&gpu.indirect, 16);
+            // The detailed near trees (`flora-v2` design 10) are foliage too.
+            pass.set_bind_group(0, &*gpu.near[i], &[]);
+            for s in 0..8 {
+                pass.draw_indirect(&gpu.indirect, super::NEAR_ARGS_OFFSET + 16 * s);
+            }
         }
         if !skip.contains("column") {
             pass.set_bind_group(0, &*gpu.column[i], &[]);

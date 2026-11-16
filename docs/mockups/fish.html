@@ -196,6 +196,15 @@ details.about[open]{display:grid;gap:10px}
 .addrow{grid-template-columns:minmax(0,1fr) 64px auto}
 @media (max-width:560px){.tabs button{padding:6px 9px;font-size:14px}}
 
+/* the sea's things (the game's own models) and the info modals */
+.seapick{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:4px;max-height:260px;overflow:auto}
+.seapick button{font:500 13px/1.2 var(--body);text-align:left;padding:5px 7px;border-radius:4px;border:1px solid var(--line);background:var(--deep);color:var(--ink);cursor:pointer}
+.seapick button[aria-pressed="true"]{border-color:var(--sea);color:var(--glow)}
+.info-btn{margin-left:8px;width:24px;height:24px;border-radius:50%;border:1px solid var(--line-strong);background:var(--deep);color:var(--sea);font:600 14px/1 var(--display);cursor:pointer;vertical-align:middle}
+.modal{position:fixed;inset:0;background:rgba(2,8,12,.72);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal[hidden]{display:none}
+.modal .sheetbox{background:var(--panel);border:1px solid var(--line-strong);border-radius:8px;max-width:680px;width:100%;max-height:86vh;overflow:auto;padding:18px 20px;position:relative}
+.modal .x{position:absolute;top:8px;right:10px;border:0;background:none;color:var(--muted);font-size:20px;cursor:pointer}
 </style>
 
 <div class="wrap">
@@ -210,7 +219,7 @@ details.about[open]{display:grid;gap:10px}
 </header>
 
 <nav class="tabs" role="tablist" aria-label="Parts of the mockup">
-  <button role="tab" data-tab="lab">Fish lab</button><button role="tab" data-tab="sheet">Species sheet</button><button role="tab" data-tab="roster">Roster</button><button role="tab" data-tab="parts">Parts and patterns</button><button role="tab" data-tab="tank">Aquarium</button><button role="tab" data-tab="engine">In the engine</button><button role="tab" data-tab="decisions">Decisions</button>
+  <button role="tab" data-tab="lab">Fish lab</button><button role="tab" data-tab="sheet">Species sheet</button><button role="tab" data-tab="roster">Roster</button><button role="tab" data-tab="parts">Parts and patterns</button><button role="tab" data-tab="tank">Aquarium</button><button role="tab" data-tab="sea">Reef &amp; sea floor</button><button role="tab" data-tab="engine">In the engine</button><button role="tab" data-tab="decisions">Decisions</button>
 </nav>
 
 <!-- ============================================================ LAB -->
@@ -297,9 +306,27 @@ details.about[open]{display:grid;gap:10px}
   </div>
 </section>
 
+<!-- ============================================================ SEA -->
+<section id="tab-sea" class="tabpanel" role="tabpanel" hidden>
+  <div class="sechead"><span class="eyebrow">6 &middot; Everything under the water</span><h2>Reef &amp; sea floor</h2>
+  <p>The game's own models, one of everything the sea has: every coral, sponge, fan, anemone, the turf, grass and weed, rubble and shells, kelp, the black smoker with its bacterial mat and mussel bed, the ice floe, and every water creature, the reef's darter and anthias among them. They are not redrawn here: the meshes are written out of the game (<code>fish::places</code>, test <code>export_water_life_models</code>, into <code>fish/water_life_models.js</code>) and wear the game's own atlas, <code>fish/water_life_atlas.png</code>, which <code>tools/water_life_atlas.py</code> draws for both. The game's fish skins in that atlas are this page's own <code>paintSkin</code>, ported pixel for pixel, four seeds a species. Pick one to see it alone, or All for the whole set. Drag to turn, scroll to come closer. Night lights them by a diver's lamp and the smokers' glow.</p></div>
+  <div class="bench">
+    <div class="view" id="seaView" data-fit><canvas id="seaCanvas" aria-label="The game's underwater models on a sand floor"></canvas>
+      <div class="hud"><span id="seaHud">-</span><span>drag, scroll</span></div></div>
+    <div class="controls" data-fit>
+      <div class="btns" role="group" aria-label="Time of day"><button class="btn" id="seaDay" aria-pressed="true">Day</button><button class="btn" id="seaNight" aria-pressed="false">Night</button><button class="btn" id="seaColour">Next colour</button><button class="btn" id="seaTex" aria-pressed="true">Textures</button></div>
+      <div class="eyebrow">Reef, kelp, vents and ice</div>
+      <div class="seapick" id="seaObjects"></div>
+      <div class="eyebrow">Creatures (the game's bodies)</div>
+      <div class="seapick" id="seaCreatures"></div>
+      <p class="small">A reef piece's colour is its kind's palette in the game (Next colour steps through it) times the atlas tile, a grey mask near white, so the palette stays and the tile adds its surface: polyps, brain grooves, plate rings, pores, lattice, stripes, veins, grit, ridges, basalt, ice and mat. The creatures M9's fish do not cover keep their flat colours on the atlas's white texel.</p>
+    </div>
+  </div>
+</section>
+
 <!-- ============================================================ ENGINE -->
 <section id="tab-engine" class="tabpanel" role="tabpanel" hidden>
-  <div class="sechead"><span class="eyebrow">6 &middot; How it would be built</span><h2>In the engine</h2></div>
+  <div class="sechead"><span class="eyebrow">7 &middot; How it would be built</span><h2>In the engine</h2></div>
   <div class="table-wrap"><table>
     <thead><tr><th>Piece</th><th>Proposal</th><th>Why</th></tr></thead>
     <tbody>
@@ -314,22 +341,23 @@ details.about[open]{display:grid;gap:10px}
 
 <!-- ============================================================ DECISIONS -->
 <section id="tab-decisions" class="tabpanel" role="tabpanel" hidden>
-  <div class="sechead"><span class="eyebrow">7 &middot; For the owner</span><h2>Decisions / questions for the owner</h2>
+  <div class="sechead"><span class="eyebrow">8 &middot; For the owner</span><h2>Decisions / questions for the owner</h2>
   <p>Each has a recommendation. The ones with something to look at are on this page; the rest take the recommendation unless you say otherwise.</p></div>
   <div class="qs" id="qs"></div>
 </section>
 
-<footer>Mockup for Pale Blue Dot, 2026-11-11, art reworked 2026-11-12. three.js r128. The game's art (fish icons, settlement textures, the stall texture) is copied byte for byte into <code>fish/game/</code>, listed in its README. The five new species' icons, the swatches, the decor icons and the fish skins are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/fish_art.py</code>). Species data for the eight existing fish from <code>openspec/changes/fishing-and-equipment</code>; the five new species, rarity, bait, time, season and the aquarium are proposals.</footer>
+<footer>Mockup for Pale Blue Dot, 2026-11-11, art reworked 2026-11-12. three.js r128. The game's art (fish icons, settlement textures, the stall texture) is copied byte for byte into <code>fish/game/</code>, listed in its README. The game's sea (the Reef &amp; sea floor tab) is the game's own meshes and atlas (<code>fish/water_life_models.js</code>, <code>fish/water_life_atlas.png</code>, ocean-environments B14). The five new species' icons, the darter's and anthias' icons, the swatches, the decor icons and the fish skins are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<code>tools/art/fish_art.py</code>). Species data for the eight existing fish from <code>openspec/changes/fishing-and-equipment</code>; the five new species, rarity, bait, time, season and the aquarium are proposals.</footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="fish/water_life_models.js"></script>
 <script>
 "use strict";
 // ------------------------------------------------------------------ tabs: one part of the mockup at a time, so only one
 // 3D view is ever on the page (owner, 2026-11-13). The open tab is the URL's bare hash (#lab, #sheet, #roster, #parts,
 // #tank, #engine, #decisions); #tank-day and #tank-night open the aquarium by day or by night. A tab's renderer is made
 // the first time the tab opens, and its frame loop runs only while the tab is showing.
-const TABS = ["lab", "sheet", "roster", "parts", "tank", "engine", "decisions"];
+const TABS = ["lab", "sheet", "roster", "parts", "tank", "sea", "engine", "decisions"];
 const TAB_HOOKS = {};   // tab -> { show(), hide() }, registered by each view
 const tabOf = h => { h = String(h || "").replace(/^#/, ""); if (TABS.includes(h)) return h; const b = h.split("-")[0]; return TABS.includes(b) ? b : null; };
 let TAB = tabOf(location.hash) || "lab";
@@ -459,6 +487,18 @@ const SPECIES = [
     pat:"mottled", den:1, con:0.9, cols:{back:"#463030",belly:"#785648",acc:"#ff8028",fin:"#6e3c30"}, hueVar:6,
     rarity:"rare", bait:"cut fish", time:"any", season:"all year (the vents do not change)", strength:4, school:"2-3", speed:[0.4,1.4],
     wiki:"Basalt-dark with cracks that glow like coals. It lives where the vent water is hot enough to scald a hand.", needs:"heater" },
+  // The reef's two ambient fish, which the game draws over its reefs (ocean-environments B14): not caught, added here so the
+  // library has every fish the game draws. tools/water_life_atlas.py carries the same numbers for the game's skins.
+  { id:"darter", name:"Darter", src:"reef", hab:["Shallow reef"], water:["salt"], wclass:"reefs, round the giant anemone", temp:[23,32], L:0.13,
+    prof:"compressed", dMul:1.1, tail:"rounded", dorsal:[[0.22,0.68,0.12,"spiny"]], anal:[[0.58,0.74,0.09]], pec:0.08, eye:0.04,
+    pat:"bars", bars:[3,0.07,1.0], den:1, con:1, cols:{back:"#c56d25",belly:"#faaf5c",acc:"#fffefe",fin:"#fb902f"}, hueVar:6,
+    rarity:"ambient", bait:"none (not caught)", time:"day", season:"all year", strength:1, school:"2", speed:[0.3,0.9],
+    wiki:"A small banded reef fish that never leaves its giant anemone; two circle each one. Part of the reef, not a catch.", needs:"coral" },
+  { id:"anthias", name:"Anthias", src:"reef", hab:["Shallow reef"], water:["salt"], wclass:"reefs, in clouds over the coral", temp:[23,32], L:0.12,
+    prof:"compressed", dMul:0.85, tail:"lunate", dorsal:[[0.24,0.66,0.10,"soft"]], anal:[[0.58,0.74,0.08]], pec:0.07, eye:0.036,
+    pat:"stripes", den:0.5, con:0.9, cols:{back:"#dd576d",belly:"#faaf5c",acc:"#fb902f",fin:"#dd576d"}, hueVar:10,
+    rarity:"ambient", bait:"none (not caught)", time:"day", season:"all year", strength:1, school:"40", speed:[0.4,1.2],
+    wiki:"Pink-orange fish that hang in clouds of forty over a packed reef and turn together. Part of the reef, not a catch.", needs:"coral" },
 ];
 const SP = Object.fromEntries(SPECIES.map(s => [s.id, s]));
 const GAME_ICONS = new Set(["minnow","silverfin","perch","ray","eel","reef","deepback","serpent"]);   // assets/items/fish, copied to fish/game/
@@ -961,7 +1001,7 @@ function buildRoster(){
   const grid = $("rosterGrid"); grid.innerHTML = "";
   for (const sp of SPECIES){
     if (habOn !== "All" && !sp.hab.includes(habOn)) continue;
-    const src = sp.src === "new" ? `<span class="chip src-new">New here</span>` : sp.src === "Tenebris" ? `<span class="chip">From Tenebris</span>` : `<span class="chip">fishing-and-equipment</span>`;
+    const src = sp.src === "new" ? `<span class="chip src-new">New here</span>` : sp.src === "reef" ? `<span class="chip">The game's reef</span>` : sp.src === "Tenebris" ? `<span class="chip">From Tenebris</span>` : `<span class="chip">fishing-and-equipment</span>`;
     const c = document.createElement("article"); c.className = "card";
     c.innerHTML = `<div class="top"><img src="${iconSrc(sp.id)}" alt="${sp.name}, ${GAME_ICONS.has(sp.id) ? "the game's icon" : "a new pixel-art icon"}"><div style="display:grid;gap:6px"><h3>${sp.name}</h3>
       <div class="chips"><span class="chip r-${sp.rarity}">${sp.rarity}</span>${src}</div><div class="chips">${sp.hab.map(h => `<span class="chip">${h}</span>`).join("")}</div><div class="chips"><span class="chip">${GAME_ICONS.has(sp.id) ? "icon: the game's" : "icon: new, mockup only"}</span></div></div></div>
@@ -1460,5 +1500,137 @@ const QS = [
 $("qs").innerHTML = QS.map(([h, p, r], i) => `<div class="q"><h3>${i + 1}. ${h}</h3><p>${p}</p><p class="rec"><b>Recommend</b>${r}</p></div>`).join("");
 // Deep links for review shots: #tank-day opens the aquarium by day, #tank-night by night.
 if (/^#tank/.test(location.hash) && /day/.test(location.hash)) $("dayBtn").click();
+
+// ------------------------------------------------------------------ the sea's things: the game's own models in the game's atlas
+// One view, made when the tab first opens; its loop runs only while the tab shows; nothing turns unless dragged.
+const seaView = (() => {
+  const canvas = $("seaCanvas"), DATA = (window.WATER_LIFE_MODELS || { models: [] }).models;
+  let renderer = null, raf = 0, atlas = null, pick = "all", night = false, colour = 0, textured = true;
+  let yaw = -0.7, pitch = 0.42, dist = 6, drag = null;
+  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(35, 16 / 10, 0.02, 200);
+  const hemi = new THREE.HemisphereLight("#bfefff", "#0a3040", 0.8); scene.add(hemi);
+  const sun = new THREE.DirectionalLight("#e8fbff", 1.0); sun.position.set(-3, 8, 4); scene.add(sun);
+  const lamp = new THREE.PointLight("#ffe2b0", 0, 9, 1.6); scene.add(lamp);        // the diver's lamp, at the eye
+  const glows = [];                                                                 // a smoker's mouth lights what is round it
+  const floorMat = new THREE.MeshStandardMaterial({ color: "#245a58", roughness: 1 });
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 6), floorMat); floor.rotation.x = -Math.PI / 2; scene.add(floor);
+  const group = new THREE.Group(); scene.add(group);
+  canvas.style.cursor = "grab";
+  canvas.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY, yaw, pitch]; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener("pointermove", e => { if (!drag) return; yaw = drag[2] + (e.clientX - drag[0]) * 0.01; pitch = clamp(drag[3] + (e.clientY - drag[1]) * 0.006, 0.05, 1.4); });
+  canvas.addEventListener("pointerup", () => { drag = null; });
+  canvas.addEventListener("wheel", e => { e.preventDefault(); dist = clamp(dist * (1 + Math.sign(e.deltaY) * 0.1), 0.4, 60); }, { passive: false });
+  const byId = Object.fromEntries(DATA.map(m => [m.id, m]));
+  const NAMES = { minnow:"Minnow", silverfin:"Silverfin", perch:"Banded perch", ray:"Ray", eel:"Eel", reef:"Reef fish", deepback:"Deepback",
+    serpent:"Sea serpent", darter:"Darter", anthias:"Anthias", shore_crab:"Shore crab", lobster:"Lobster", giant_clam:"Giant clam",
+    reef_turtle:"Reef turtle", sea_otter:"Sea otter", dabbler_drake:"Reed dabbler (drake)", dabbler_hen:"Reed dabbler (hen)",
+    pond_diver:"Pond diver", octopus:"Octopus", tube_worm:"Plume worm", seal:"Seal" };
+  const nameOf = m => m.group === "creature" ? (NAMES[m.id] || m.id) : m.name;
+  function mesh(m, k){
+    const g = new THREE.BufferGeometry(), n = m.pos.length / 3, col = new Float32Array(n * 3);
+    const pal = m.palette.length ? m.palette : [1, 1, 1], pi = (k % (pal.length / 3)) * 3;
+    for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) col[i * 3 + c] = m.col[i * 3 + c] * pal[pi + c];
+    g.setAttribute("position", new THREE.Float32BufferAttribute(m.pos, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(m.uv, 2));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    g.computeVertexNormals(); g.computeBoundingBox();
+    const mat = new THREE.MeshStandardMaterial({ map: textured ? atlas : null, vertexColors: true, roughness: 0.85, side: THREE.DoubleSide, flatShading: true });
+    return new THREE.Mesh(g, mat);
+  }
+  function clear(){ while (group.children.length){ const o = group.children.pop(); o.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); }); } glows.forEach(l => scene.remove(l)); glows.length = 0; }
+  function addGlow(x, y, z){ const l = new THREE.PointLight("#ff7a2a", night ? 2.2 : 0.6, 8, 1.5); l.position.set(x, y, z); scene.add(l); glows.push(l); }
+  function build(){
+    clear();
+    const list = pick === "all" ? DATA : [byId[pick]].filter(Boolean);
+    const cols = Math.ceil(Math.sqrt(list.length)), cell = pick === "all" ? 1.25 : 0;
+    list.forEach((m, i) => {
+      const o = mesh(m, colour), b = o.geometry.boundingBox, size = new THREE.Vector3(); b.getSize(size);
+      // M9's fish and the creatures are written at a length of one; a piece at its own size in metres.
+      const fit = pick === "all" ? 1 / Math.max(size.x, size.y, size.z) : 1;
+      o.scale.setScalar(fit);
+      const x = pick === "all" ? ((i % cols) - (cols - 1) / 2) * cell : 0, z = pick === "all" ? (Math.floor(i / cols) - (cols - 1) / 2) * cell : 0;
+      const lift = m.group === "creature" ? -b.min.y * fit + (m.id === "ray" || m.id.includes("crab") || m.id === "lobster" ? 0.02 : 0.15) : -b.min.y * fit;
+      o.position.set(x - (b.min.x + b.max.x) / 2 * fit, lift, z - (b.min.z + b.max.z) / 2 * fit);
+      group.add(o);
+      if (m.id === "chimney") addGlow(x, (b.max.y) * fit + 0.2, z);
+    });
+    if (pick !== "all"){ const b = new THREE.Box3().setFromObject(group), s = new THREE.Vector3(); b.getSize(s); dist = Math.max(0.8, Math.max(s.x, s.y, s.z) * 2.2); }
+    else dist = cols * cell * 1.15;
+    $("seaHud").textContent = pick === "all" ? `All ${list.length}: the game's sea, one of each` : nameOf(list[0] || { name: "-" , group: "" });
+    light();
+  }
+  function light(){
+    scene.background = new THREE.Color(night ? "#020a10" : "#0e4a5a"); scene.fog = new THREE.Fog(scene.background, dist * 0.8, dist * 3.2);
+    hemi.intensity = night ? 0.03 : 0.7; sun.intensity = night ? 0.02 : 0.8; lamp.intensity = night ? 1.8 : 0; lamp.distance = Math.max(9, dist * 2);
+    floorMat.color.set(night ? "#14302f" : "#245a58");
+    glows.forEach(l => l.intensity = night ? 2.2 : 0.6);
+  }
+  function frame(){
+    raf = requestAnimationFrame(frame);
+    const r = canvas.getBoundingClientRect(); if (!r.width) return;
+    if (canvas.width !== Math.round(r.width * renderer.getPixelRatio())){ renderer.setSize(r.width, r.height, false); cam.aspect = r.width / r.height; cam.updateProjectionMatrix(); }
+    const c = new THREE.Vector3(0, pick === "all" ? 0.3 : (new THREE.Box3().setFromObject(group).max.y) * 0.4, 0);
+    cam.position.set(c.x + Math.sin(yaw) * Math.cos(pitch) * dist, c.y + Math.sin(pitch) * dist, c.z + Math.cos(yaw) * Math.cos(pitch) * dist);
+    cam.lookAt(c); lamp.position.copy(cam.position).lerp(c, 0.35);
+    renderer.render(scene, cam);
+  }
+  function buttons(){
+    const add = (host, m) => { const b = document.createElement("button"); b.textContent = nameOf(m); b.dataset.id = m.id; b.setAttribute("aria-pressed", "false"); b.onclick = () => select(m.id); host.appendChild(b); };
+    const all = document.createElement("button"); all.textContent = "All"; all.dataset.id = "all"; all.setAttribute("aria-pressed", "true"); all.onclick = () => select("all"); $("seaObjects").appendChild(all);
+    DATA.filter(m => m.group !== "creature").forEach(m => add($("seaObjects"), m));
+    DATA.filter(m => m.group === "creature").forEach(m => add($("seaCreatures"), m));
+  }
+  function select(id){ pick = id; document.querySelectorAll("#tab-sea .seapick button").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === id)); build(); }
+  $("seaDay").onclick = () => { night = false; $("seaDay").setAttribute("aria-pressed", true); $("seaNight").setAttribute("aria-pressed", false); light(); };
+  $("seaNight").onclick = () => { night = true; $("seaDay").setAttribute("aria-pressed", false); $("seaNight").setAttribute("aria-pressed", true); light(); };
+  $("seaColour").onclick = () => { colour++; build(); };
+  $("seaTex").onclick = () => { textured = !textured; $("seaTex").setAttribute("aria-pressed", textured); build(); };
+  let made = false;
+  return {
+    show(){
+      if (!made){
+        made = true;
+        renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.outputEncoding = THREE.sRGBEncoding; renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+        atlas = new THREE.TextureLoader().load("fish/water_life_atlas.png", () => build());
+        atlas.flipY = false; atlas.magFilter = atlas.minFilter = THREE.NearestFilter; atlas.generateMipmaps = false; atlas.encoding = THREE.sRGBEncoding;
+        buttons(); build();
+      }
+      if (!raf) frame();
+    },
+    hide(){ cancelAnimationFrame(raf); raf = 0; },
+    select, night: v => (v ? $("seaNight") : $("seaDay")).click(),
+  };
+})();
+TAB_HOOKS.sea = seaView;
+if (/^#sea/.test(location.hash) && /night/.test(location.hash)) seaView.night(true);
+
+// ------------------------------------------------------------------ descriptive text in modals (owner, 2026-11-14)
+// The screen shows the thing itself; each tab's explanation, and the header's notes, open from a small (i) button.
+(function infoModals(){
+  const modal = document.createElement("div"); modal.className = "modal"; modal.hidden = true; modal.setAttribute("role", "dialog"); modal.setAttribute("aria-modal", "true");
+  modal.innerHTML = `<div class="sheetbox"><button class="x" aria-label="Close">&#x2715;</button><div class="body"></div></div>`;
+  document.body.appendChild(modal);
+  const body = modal.querySelector(".body"), close = () => { modal.hidden = true; body.innerHTML = ""; };
+  modal.querySelector(".x").onclick = close; modal.addEventListener("click", e => { if (e.target === modal) close(); });
+  addEventListener("keydown", e => { if (e.key === "Escape" && !modal.hidden) close(); });
+  const button = (heading, nodes, title) => {
+    const b = document.createElement("button"); b.className = "info-btn"; b.textContent = "i"; b.setAttribute("aria-label", "About " + title);
+    const box = document.createElement("div"); nodes.forEach(n => box.appendChild(n));
+    b.onclick = () => { body.innerHTML = `<h2>${title}</h2>`; body.appendChild(box.cloneNode(true)); modal.hidden = false; };
+    heading.appendChild(b);
+  };
+  const about = document.querySelector("header details.about");
+  if (about){ const nodes = [...about.childNodes].filter(n => n.nodeName !== "SUMMARY"); about.remove(); button(document.querySelector("header h1"), nodes, "About this mockup"); }
+  for (const t of TABS){
+    const sec = $("tab-" + t); if (!sec) continue;
+    const h2 = sec.querySelector(".sechead h2"); if (!h2) continue;
+    // The engine notes and the decision rows are all explanation: the whole of them goes in the modal.
+    const whole = t === "engine" || t === "decisions";
+    const nodes = [...sec.querySelectorAll(".sechead > p, :scope > p.small, .controls > p.small" + (whole ? ", :scope > .table-wrap, :scope > .qs" : ""))];
+    if (whole){ const hint = document.createElement("p"); hint.className = "small"; hint.textContent = "Open with the (i) beside the title."; sec.appendChild(hint); }
+    if (nodes.length) button(h2, nodes, h2.textContent);
+  }
+})();
 setTab(TAB, false);   // again, now every view has registered: makes the open tab's renderer and starts its loop
 </script>

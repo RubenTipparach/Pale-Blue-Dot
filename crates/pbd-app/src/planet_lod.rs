@@ -2430,7 +2430,11 @@ mod tool_crafting_ground {
             if matches!(word & 0xff, 2 | 3 | 7) {
                 grass += 1;
             }
-            if pbd_core::flora::grows_tree(tree_id(local), word) {
+            if pbd_core::flora::grows_tree(
+                &crate::planet::terrain_config().trees,
+                tree_id(local),
+                word,
+            ) {
                 trees += 1;
             }
         }

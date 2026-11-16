@@ -232,6 +232,15 @@ impl Default for CookingFile {
                     vec![pair("egg", 1)],
                     vec![pair("fried-egg", 1)],
                 ),
+                // A fertile egg cooks like an egg (`animal-husbandry` E3).
+                recipe(
+                    "fried-fertile-egg",
+                    "FRIED EGG",
+                    "campfire",
+                    15.0,
+                    vec![pair("fertile-egg", 1)],
+                    vec![pair("fried-egg", 1)],
+                ),
                 recipe(
                     "roast-meat",
                     "ROAST MEAT",
@@ -547,7 +556,8 @@ mod tests {
         codes.dedup();
         assert_eq!(codes.len(), book.recipes.len());
         assert!(book.recipes.len() > n);
-        assert_eq!(book.at("campfire").count(), 6);
+        // Six dishes, and a fertile egg fried like an egg (`animal-husbandry` E3).
+        assert_eq!(book.at("campfire").count(), 7);
         let row = station_by_code("campfire").unwrap();
         assert_eq!(row.material, Some(Material::Campfire));
         assert_eq!(

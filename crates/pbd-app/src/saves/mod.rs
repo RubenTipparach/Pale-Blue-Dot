@@ -509,6 +509,11 @@ impl WorldSave {
     /// Record a catch: the fish went into `carried`, which the line carries
     /// whole, and the field guide's record grows. The same durable path as an
     /// edit, on the frame of the catch.
+    /// Whether this world has landed `species` before.
+    pub fn has_caught(&self, species: u16) -> bool {
+        self.catches.contains_key(&species)
+    }
+
     pub fn record_catch(&mut self, species: u16, length_cm: u32, carried: &Slots) -> bool {
         if self.writer.failure().is_some() {
             return false;

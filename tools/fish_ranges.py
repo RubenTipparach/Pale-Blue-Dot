@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Range maps for the fish of Pale Blue Dot, drawn off the measured world.
 
-Reads the fields `cargo run --release -p pbd-core --example fish_ranges`
+Reads the fields `cargo run --profile fast -p pbd-core --example fish_ranges`
 writes (depth, rivers, and the water temperature over a simulated year) and
-applies the habitat rules proposed in
-`openspec/changes/fishing-and-equipment/design.md` section 7 to draw one
+applies the habitat rules of `assets/config/fauna.ron`
+(`openspec/changes/fishing-and-equipment/design.md` section 7) to draw one
 greyscale range map per species, in the manner of a field guide:
 
 - land is mid grey and water pale grey, shaded by depth;
@@ -23,10 +23,12 @@ it is drawn into OUT_DIR/ID/y1, OUT_DIR/ID/y2, ...; the run's own log, when
 given, supplies the sea temperature over time. With a page template,
 OUT_DIR/index.html is written with the measured numbers baked in.
 
-The rules live HERE only for the proposal. When the change is built they move
-to `assets/config/fauna.ron`, and this script reads them from there.
+The rules are the game's: the water limits and every species' classes and
+temperature window are read from `assets/config/fauna.ron`, so the atlas is
+drawn from the roster the spawner uses.
 """
 
+import base64
 import json
 import os
 import sys
@@ -34,25 +36,46 @@ import sys
 import numpy as np
 from PIL import Image
 
-# Water temperature at which the sea surface freezes, deg C.
-FREEZE_C = -1.8
-# Water classes by depth, m. Shallows are what a cast from the shore reaches.
-SHALLOW_M = 6.0
-SHELF_M = 40.0
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ron_read import load as _load_ron  # noqa: E402
 
-# The proposed rules: the water a species lives in and the temperature window
-# its water has to be inside, deg C. "river" is a channel the carve cut below
-# the sea; the rest are sea by depth.
-SPECIES = [
-    dict(id="minnow", name="Minnow", water=["river", "shallows"], temp=(10, 30)),
-    dict(id="silverfin", name="Silverfin", water=["shallows", "shelf"], temp=(-1.8, 17)),
-    dict(id="perch", name="Banded perch", water=["river"], temp=(-1.8, 24)),
-    dict(id="ray", name="Ray", water=["shallows", "shelf"], temp=(16, 32)),
-    dict(id="eel", name="Eel", water=["river", "shallows"], temp=(6, 28)),
-    dict(id="reef", name="Reef fish", water=["shallows"], temp=(23, 32)),
-    dict(id="deepback", name="Deepback", water=["shelf", "deep"], temp=(-1.5, 9)),
-    dict(id="serpent", name="Sea serpent", water=["deep"], temp=(-1.8, 32)),
-]
+FAUNA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "assets", "config", "fauna.ron")
+
+
+def roster(path=FAUNA, body="home"):
+    """The rules, read from the game's own roster (`fauna.ron`): the water
+    limits and, per species in roster order, the water classes it lives in and
+    its temperature window. A species' `env` tags narrow where it spawns
+    further (reefs, kelp, vents ...); the range maps draw the class and
+    temperature envelope those places sit inside, and list the tags."""
+    fauna = _load_ron(path)
+    water = fauna["water"]
+    species = [
+        dict(
+            id=sp["id"],
+            name=sp["name"],
+            water=[w.lower() for w in sp["water"]],
+            temp=tuple(sp["temp_c"]),
+            kind=sp.get("class", "Fish"),
+            env=list(sp.get("env") or []),
+            origin="Tenebris" if isinstance(sp["from"], dict) else "new",
+            bed=bool(sp["bed"]),
+            icon=f"{sp['icon']}.png",
+        )
+        for sp in fauna["bodies"][body]
+    ]
+    return water, species
+
+
+_WATER, SPECIES = roster()
+# Water temperature at which the sea surface freezes, deg C.
+FREEZE_C = _WATER["freezes_c"]
+# Water classes by depth, m. Shallows are what a cast from the shore reaches.
+SHALLOW_M = _WATER["shallows_max_m"]
+SHELF_M = _WATER["shelf_max_m"]
+# The fish, the species a rod takes: the world map packs these alone.
+FISH = [sp for sp in SPECIES if sp["kind"] == "Fish"]
 
 # Greys for the ground, and the two range colours.
 LAND = np.array([178, 178, 178])
@@ -177,12 +200,20 @@ def main():
         scenarios.append(dict(id=sid, label=label, years=drawn,
                               sea=sea_series(parts[3]) if len(parts) > 3 else []))
     json.dump(scenarios, open(f"{root}/summary.json", "w"), indent=1)
+    # The page draws each species' own 16 px icon, read from the game's items.
+    icons = {}
+    items = os.path.join(os.path.dirname(FAUNA), "..", "items")
+    for sp in SPECIES:
+        with open(os.path.join(items, sp["icon"]), "rb") as f:
+            icons[sp["id"]] = base64.b64encode(f.read()).decode()
     if page:
         text = open(page).read()
         marker = "/*SUMMARY*/null"
         if marker not in text:
             raise SystemExit(f"{page} has no {marker} to fill")
-        open(f"{root}/index.html", "w").write(text.replace(marker, json.dumps(scenarios)))
+        text = text.replace(marker, json.dumps(scenarios))
+        text = text.replace("/*ICONS*/null", json.dumps(icons))
+        open(f"{root}/index.html", "w").write(text)
 
 
 def draw_year(data, out, year, years):

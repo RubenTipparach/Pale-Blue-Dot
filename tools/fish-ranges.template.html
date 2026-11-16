@@ -169,6 +169,8 @@ td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
 <script>
 "use strict";
 const SUMMARY = /*SUMMARY*/null;
+// Every species' icon, read from assets/items by tools/fish_ranges.py.
+const ICONS = /*ICONS*/null;
 // The species' own look, as the mockup draws them: Tenebris's icons byte for
 // byte, and the three new ones on the same 16x16 grid.
 const TENEBRIS_PNG = {
@@ -199,24 +201,26 @@ const META = {
   eel:{from:"Tenebris", bed:true}, reef:{from:"Tenebris"}, deepback:{from:"new"}, serpent:{from:"Tenebris"},
 };
 const MAP_CAPTIONS = {
-  richness:"<b>Species count.</b> How many of the eight could spawn at each point in the period, from pale (one) to dark (four, the most anywhere). The richest water is warm-temperate shallows at river mouths, where river, shallows and shelf species overlap. On day one no open water has none.",
+  richness:"<b>Species count.</b> How many of the roster's species could spawn at each point in the period, from pale (one) to dark (eight or more). The richest water is warm-temperate shallows at river mouths, where river, shallows and shelf species overlap. On day one no open water has none.",
   temperature:"<b>Water temperature</b>, the year's mean of the daily means, from −20 °C (blue) through 5 °C (white) to 30 °C (red). Hatched water is frozen all year.",
   classes:"<b>Water classes.</b> Darker grey is shallower: shallows (6 m or less, reachable with a cast from the shore), then shelf (6 to 40 m), then deep (over 40 m, lightest). Rivers are dark lines: channels the terrain cuts below the sea across lowland.",
 };
 
 function icon(canvas, id){
   const x = canvas.getContext("2d"); x.imageSmoothingEnabled = false;
+  if (ICONS && ICONS[id]){ const img = new Image(); img.onload = () => x.drawImage(img, 0, 0); img.src = "data:image/png;base64," + ICONS[id]; return; }
   if (TENEBRIS_PNG[id]){ const img = new Image(); img.onload = () => x.drawImage(img, 0, 0); img.src = "data:image/png;base64," + TENEBRIS_PNG[id]; return; }
   const [rows, pal] = GRIDS[id];
   rows.forEach((row, y) => [...row].forEach((ch, i) => { if (pal[ch]){ x.fillStyle = pal[ch]; x.fillRect(i, y, 1, 1); } }));
 }
 const pct = v => v < 0.05 && v > 0 ? "<0.1%" : v.toFixed(1) + "%";
 const lat = b => b ? `${Math.abs(b[0]).toFixed(0)}°${b[0] < 0 ? "S" : "N"} – ${Math.abs(b[1]).toFixed(0)}°${b[1] < 0 ? "S" : "N"}` : "none";
+const placeName = p => ({ UnderIce:"under the ice", Vent:"deep vents", Pool:"rock pools", Mudflat:"mudflats", Estuary:"estuaries", Riffle:"riffles", Trench:"trenches", Open:"open water", Coast:"coasts", Reef:"reefs", Kelp:"kelp", Marsh:"marsh" })[p] || p;
 const waterName = { river:"rivers", shallows:"shallows", shelf:"shelf", deep:"deep" };
 
 const SCEN_NOTES = {
   sun1360: "<b>The proposed sun.</b> The same world with <code>solar_wm2</code> at 1360 W/m², the top-of-atmosphere value that Budyko's outgoing-longwave constants (203 + 2.09 T) are calibrated against. This is a retune the atmosphere change would have to make, measured here before anyone makes it.",
-  current: "<b>The shipped settings, left running.</b> The sea gives up more heat than it gets and drains toward freezing, and the spawn rule follows it. Warm-water ranges retreat to the equator and then go under the ice. Orange is water a species held for only part of the year, which here means until it froze out. This is the reason to fix the atmosphere before fish ship (design section 7, owner question 8).",
+  current: "<b>The shipped settings, left running for 200 days</b> (re-run 2026-11-15 with the full roster). The sea now holds its heat: its mean surface stays near 17 °C and no water is frozen all year, so the ranges keep their places through the seasons. Orange is water a species holds for only part of the year, as the seasons move its temperature window north and south.",
   day1: "<b>A new world, day one.</b> The climate the world is built to have: the latitude climatology <code>28 − 45·sin²(lat)</code> °C the atmosphere starts from, after its spin-up and one simulated day. <b>This is the plan.</b> One day carries no seasons, so nothing is orange here.",
 };
 let scen = 0, year = 1, overview = "richness";
@@ -237,7 +241,7 @@ function render(){
     ? `<span class="ramp" style="margin-top:6px"><span>−20 °C</span><i style="background:linear-gradient(90deg,#313695,#f5f5f5,#a50026)"></i><span>30 °C</span></span>` : "");
   const box = document.getElementById("species"); box.innerHTML = "";
   for (const sp of s.species){
-    const m = META[sp.id];
+    const m = META[sp.id] || { from: sp.origin === "Tenebris" ? "Tenebris" : "new", bed: sp.bed };
     const card = document.createElement("article"); card.className = "card"; card.id = sp.id;
     card.innerHTML = `
       <header><canvas width="16" height="16" aria-hidden="true"></canvas><div>
@@ -251,7 +255,7 @@ function render(){
         <div><dt>Part-year</dt><dd>${pct(sp.seasonal)}</dd></div>
         <div><dt>Latitudes</dt><dd>${lat(sp.latitudes)}</dd></div>
       </dl>
-      <p>${NOTES[sp.id]}</p>`;
+      <p>${NOTES[sp.id] || (sp.env && sp.env.length ? `Spawns only where the water is also one of its places: <b>${sp.env.map(placeName).join(", ")}</b>. The map is the water class and temperature those places sit inside.` : "")}</p>`;
     icon(card.querySelector("canvas"), sp.id);
     box.appendChild(card);
   }
@@ -261,7 +265,7 @@ function render(){
   document.getElementById("how").innerHTML = [
     `Terrain: the world's own generator (<code>planet_gen::surface_altitude</code>) sampled at 1440 × 720 points. Water is <b>${pct(c.river)}</b> rivers, <b>${pct(c.shallows)}</b> shallows, <b>${pct(c.shelf)}</b> shelf and <b>${pct(c.deep)}</b> deep. A river is water that is there only because of the river cut: the same generator run with the cut switched off calls it land.`,
     `Temperature: the world's atmosphere and ocean (<code>pbd_core::atmosphere</code>, 10,242 cells, 1 s steps) run forward from a new world. The water temperature of every cell is averaged over each day (8 samples), and each year's coldest, warmest and mean daily values are kept.`,
-    `Instrument: <code>cargo run --release -p pbd-core --example fish_ranges</code>, then <code>python3 tools/fish_ranges.py</code>, which applies the rules and draws these maps.`,
+    `Instrument: <code>cargo run --profile fast -p pbd-core --example fish_ranges</code>, then <code>python3 tools/fish_ranges.py</code>, which applies the rules and draws these maps.`,
   ].map(t => `<li>${t}</li>`).join("");
   document.getElementById("care").innerHTML = [
     `"Part of the year" is thin because the ocean is a slow flywheel. Its heat capacity is 3.0e6 J/m²K against a 100-day year, and the median gap between a point's coldest and warmest day here is ${s.swing_c[1].toFixed(2)} °C. Real migrations would need a shallower mixed layer, which is a decision about the atmosphere, not about fish.`,

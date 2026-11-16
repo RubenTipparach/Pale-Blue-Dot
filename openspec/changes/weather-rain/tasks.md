@@ -27,3 +27,27 @@
       shower drew nothing because the globe was queued LAST in the transparent
       phase (`f32::MAX` sorts nearest); at `f32::MIN` the streaks read as rain
       at Tenebris's own width.
+
+## 6. Splashes where rain lands (owner, 2026-11-15)
+- [x] 6.1 The write-up: design.md, "Splashes where rain lands": what is
+      missing, the look (crown on puddles, softer spray on grass), GPU
+      particles from a hashed seed and time with no per-frame upload, the
+      gates (rain, wetness, sky light, tops only), and the cost budget.
+- [x] 6.2 The mockup, `docs/mockups/rain-splashes.html` (M32): the game's hex
+      ground and atlas, wet darkening, puddles and rings, Today / With
+      splashes, rain strength, day and night with lamps, slow motion, density
+      and size; splashes animated in the vertex shader. Stills in
+      `docs/screenshots/mockup-rain-splashes/`.
+- [x] 6.3 (2026-11-15, the owner: "approve rain splashes"; density and size start from the mockup's defaults, recommendation taken. The perf condition the owner set for the water smoothing applies here too: 6.5 gates the push.) The owner's approval of the mockup's look (and of the density and
+      size the game should start from), on the tracker.
+- [ ] 6.4 The game port, after the approval and on a request: the near
+      column list (rebuilt on a cell crossing or an edit), one instanced
+      droplet draw in its own WGSL, gated by `rain`, `wetness`, sky light and
+      the shower's own suppression; knobs (`splash_slots`, `splash_droplets`,
+      `splash_period_s`, sizes and speeds) in `weather.ron`, validated.
+- [ ] 6.5 The perf A/B: `tools/perf_suite.py`, `--release`, old build against
+      new interleaved in one sitting, on `storm` and `rain-stroll`; within the
+      0.25 ms p50 budget or S and K reduced; report in `docs/benchmarks/`.
+- [ ] 6.6 Proof: `--capture` stills of a puddled path and a meadow in rain,
+      by day and at night under a lamp, before and after, in
+      `docs/screenshots/`.
