@@ -1477,7 +1477,7 @@ def measure(name, px, scale):
 # docs/mockups/ui/game-ui.js reads these from rendered/slices.json ("rock_panels") and sizes each panel
 # exactly; the drawn look still draws the 48 px drawn slab as a 9-slice.
 ROCK_PANELS = {
-    "pack": (268, 152), "pack-craft": (268, 204), "station": (230, 156), "chest": (372, 168), "talk": (270, 124), "trade": (308, 148),
+    "pack": (268, 152), "pack-craft": (268, 204), "pack-wide": (464, 200), "station": (230, 156), "chest": (372, 168), "talk": (270, 124), "trade": (308, 148),
     "loading": (150, 148), "sample": (192, 96), "kit-48": (48, 48), "kit-128": (128, 64), "kit-200": (200, 100),
 }
 
