@@ -529,7 +529,7 @@ function waterMaterial(U, vertexShader) {
 // ---------------- the splash: a port of the game's animate_splash (water_flow.rs) ----------------
 // Drops thrown up and out and falling back, and mist puffs, rebuilt every frame as camera-facing quads, nearest foot
 // first. The quads carry the dot (cell -1, the game's 32-texel soft dot) or a cell of the new puff sheet (0..15).
-const SPLASH_EDGE_M = 1.42, SPLASH_CLEAR_M = 0.05, SPLASH_BUDGET = 4000;
+const SPLASH_EDGE_M = 1.42, SPLASH_CLEAR_M = 0.05, SPLASH_BUDGET = 4000, SPLASH_REACH_NEW_M = 140;
 function hash01(a, b) {
   let h = (Math.imul(a, 0x9E3779B9) ^ Math.imul(b, 0x85EBCA6B)) >>> 0;
   h = (h ^ (h >>> 15)) >>> 0; h = Math.imul(h, 0x2C1B3C6D) >>> 0; h = (h ^ (h >>> 12)) >>> 0;
@@ -571,7 +571,17 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
   };
   const near = feet.slice().sort((a, b) => a.at.distanceTo(eye) - b.at.distanceTo(eye));
   for (const f of near) {
-    const R = rule(f), foot = f.at, h = R.m, fade = 1 - Math.min(1, Math.max(0, (foot.distanceTo(eye) - 55) / 15));
+    const R = rule(f), foot = f.at, h = R.m;
+    // The game's reach: drawn within 70 m, faded over the last 15 m by distance, so a zoom out pops it away.
+    // New tab (proposed; owner, 2026-11-16: "myst popping happens when I zoom out ... and then it disappears"):
+    // reach 140 m, and crossing it starts a 0.6 s fade in time (CLAUDE.md, "a fade is a moment in time"), so a
+    // still camera never holds a half-faded fall.
+    let fade;
+    if (newPuffs) {
+      const want = foot.distanceTo(eye) < SPLASH_REACH_NEW_M ? 1 : 0, dt = Math.max(0, Math.min(0.1, t - (f._t ?? t)));
+      f._t = t; f._vis = f._vis === undefined ? want : f._vis + Math.sign(want - f._vis) * Math.min(Math.abs(want - f._vis), dt / 0.6);
+      fade = f._vis; if (fade <= 0) continue;
+    } else fade = 1 - Math.min(1, Math.max(0, (foot.distanceTo(eye) - 55) / 15));
     const light = (0.12 + 0.88 * day) * Math.max(f.sky, 0.15);
     const seed = ((Math.trunc(foot.x * 7) >>> 0) ^ (((Math.trunc(foot.z * 13) >>> 0) << 11) | ((Math.trunc(foot.z * 13) >>> 0) >>> 21))) >>> 0;
     const drops = R.drops(h);
@@ -599,7 +609,9 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       const born = newPuffs ? Math.min(1, phase / 0.2) : 1;
       const alpha = R.alpha(h) * (1 - phase) * born * fade;
       // The new puffs: a variant by the puff's own hash, its frame by its age.
-      const cell = newPuffs ? Math.floor(r(5) * 4) * 4 + Math.min(3, Math.floor(phase * 4)) : -1;
+      // A continuous frame (variant*4 + 0..3); the shader cross-fades the two frames either side, so a big puff
+      // never changes shape in one frame (owner, 2026-11-16: "see the popping?").
+      const cell = newPuffs ? Math.floor(r(5) * 4) * 4 + Math.min(3, phase * 4) : -1;
       quad({x: foot.x + Math.cos(a) * d, y, z: foot.z + Math.sin(a) * d}, size, [light, light, light, alpha], cell, r(6) < 0.5 ? 1 : 0);
     }
     // Fall droplets (New tab only, mockup; owner: "fall mist shouldnt be mist, should be like water droplets fx").
@@ -674,9 +686,11 @@ function splashMesh(U, sheet) {
           float r = length((texel + 0.5)/32.0*2.0 - 1.0), k = clamp(1.0 - r, 0.0, 1.0);
           a = floor(k*k*255.0)/255.0; rgb = vec3(1.0);
         } else {
-          float cell = vCell.x; vec2 o = vec2(mod(cell, 4.0), floor(cell/4.0));
-          vec2 uv = (o*32.0 + clamp(floor(vUV*32.0), 0.0, 31.0) + 0.5)/128.0;
-          vec4 tex = texture2D(uSheet, vec2(uv.x, 1.0 - uv.y));
+          float vr = floor(vCell.x/4.0 + 1e-4), fr = clamp(vCell.x - vr*4.0, 0.0, 3.0);
+          float f0 = floor(fr), f1 = min(f0 + 1.0, 3.0), w = fr - f0;
+          vec2 tx = clamp(floor(vUV*32.0), 0.0, 31.0) + 0.5;
+          vec2 uv0 = (vec2(f0, vr)*32.0 + tx)/128.0, uv1 = (vec2(f1, vr)*32.0 + tx)/128.0;
+          vec4 tex = mix(texture2D(uSheet, vec2(uv0.x, 1.0 - uv0.y)), texture2D(uSheet, vec2(uv1.x, 1.0 - uv1.y)), w);
           rgb = pow(tex.rgb, vec3(2.2)); a = tex.a*uGain;
         }
         vec3 c = rgb*vCol.rgb + rgb*lampLight(vP, vec3(0.0, 1.0, 0.0), 1.0)*uLamps;
@@ -742,7 +756,7 @@ function bubblePoints(F, U) {
         gl_PointSize = vA > 0.0 ? max(2.0, size*uPx/max(-mv.z, 0.1)) : 0.0;
         gl_Position = projectionMatrix*mv;
       }`,
-    fragmentShader: `uniform vec3 uOpen; varying float vA; varying vec3 vP; ${LIGHT_GLSL} ${UNDER_GLSL}
+    fragmentShader: `uniform vec3 uOpen; uniform vec3 uFoot; varying float vA; varying vec3 vP; ${LIGHT_GLSL} ${UNDER_GLSL}
       void main() {
         // An 8-texel bubble, sampled nearest: a bright rim, a clear middle, a glint up and to the left. No outline:
         // the rim is the bubble.
@@ -754,6 +768,12 @@ function bubblePoints(F, U) {
         if (tx.x == 2.0 && tx.y == 2.0) { c = vec3(1.2); a = 1.0; }
         vec3 lit = uOpen*0.9 + lampLight(vP, vec3(0.0, 1.0, 0.0), 1.0);
         vec3 col = c*lit;
+        // Seen from above, a bubble is under the water: it takes the aerated water's teal and fades by its own
+        // depth below the surface (the water's transmission reads the pool's floor depth, not the bubble's, so
+        // without this a white bubble came through nearly white; owner, 2026-11-16: "they dont seem affected by
+        // water transparency").
+        float below = max(uFoot.y - vP.y, 0.0), k = exp(-1.6*below);
+        if (uEyeUnder < 0.5) { col = mix(vec3(0.16, 0.50, 0.46)*lit, col, 0.25 + 0.5*k); a *= 0.25 + 0.55*k; }
         if (uEyeUnder > 0.5) col = mix(uMurk, col, exp(-uExt*length(vP - cameraPosition)));
         gl_FragColor = vec4(toSrgb(col), a*vA);
       }`});
