@@ -165,6 +165,9 @@ pub struct MissionEntry {
     /// per mission"): a hidden gate, never drawn as a line.
     #[serde(default)]
     pub after: Vec<String>,
+    /// The branch it is drawn in (`trunk`, `fishing`, ...).
+    #[serde(default)]
+    pub branch: String,
 }
 
 /// `assets/config/missions.ron`.
@@ -255,6 +258,8 @@ pub struct Mission {
     pub unlocks: Vec<String>,
     /// Hidden gates: missions that must also be done before it opens.
     pub after: Vec<String>,
+    /// The branch it is drawn in.
+    pub branch: String,
 }
 
 /// What the build knows, for resolving names: built by the app from its
@@ -447,6 +452,7 @@ impl MissionFile {
                 pending: (!missing.is_empty()).then_some(missing),
                 unlocks: entry.unlocks.clone(),
                 after: entry.after.clone(),
+                branch: entry.branch.clone(),
             });
         }
         for m in &missions {

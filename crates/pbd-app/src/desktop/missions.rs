@@ -8,32 +8,17 @@
 //!   one closes. The player's "Mission line" setting hides it.
 //! - **The tab** is a menu screen of its own (`Screen::Missions`), opened
 //!   with O, as the pack is with I; a strip of two oak tabs over both
-//!   switches between them. It lists the chain in order: done, the current
-//!   mission with each objective's count, open, locked and pending.
+//!   switches between them. The tab draws the tree (`mission_tree`).
 
-use super::menu::{self, Panel, Screen};
+use super::menu::Screen;
 use bevy::prelude::*;
 use pbd_app::missions::{MissionChain, Missions};
 use pbd_app::settings::PlayerSettings;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, UiKit};
-use pbd_core::missions::{Mission, Progress, Standing};
 
 /// The HUD line.
 #[derive(Component)]
 pub struct MissionLine;
-
-/// One mission's row in the tab, by its place in the chain: its title, its
-/// standing, and the line of counts under it.
-#[derive(Component)]
-pub struct RowTitle(pub usize);
-#[derive(Component)]
-pub struct RowStanding(pub usize);
-#[derive(Component)]
-pub struct RowCounts(pub usize);
-
-/// The current mission's line of help, at the foot of the tab.
-#[derive(Component)]
-pub struct HelpText;
 
 /// The strip of tabs over the pack and the missions, and what each opens.
 #[derive(Component)]
@@ -53,10 +38,7 @@ pub const TABS: [(&str, Screen); 5] = [
     ("MENU  ESC", Screen::Pause),
 ];
 
-/// The tab's width, native pixels.
-const WIDTH: f32 = 300.0;
-
-pub fn spawn(mut commands: Commands, kit: Res<UiKit>, chain: Res<MissionChain>) {
+pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
     let kit = &*kit;
     // The HUD line, under the compass strip at the right.
     commands.spawn((
@@ -95,81 +77,6 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, chain: Res<MissionChain>) 
                     });
             }
         });
-    // The tab's panel: the stone moulding, the lintel, a row per mission.
-    commands
-        .spawn((menu::layer(), GlobalZIndex(10), Panel(Screen::Missions)))
-        .with_children(|layer| {
-            layer
-                .spawn(menu::framed(kit, Set::Stone, WIDTH))
-                .with_children(|panel| {
-                    menu::lintel(panel, kit, "MISSIONS");
-                    for (index, _) in chain.0.missions.iter().enumerate() {
-                        panel
-                            .spawn(Node {
-                                flex_direction: FlexDirection::Column,
-                                ..default()
-                            })
-                            .with_children(|row| {
-                                row.spawn(Node {
-                                    justify_content: JustifyContent::SpaceBetween,
-                                    width: percent(100),
-                                    ..default()
-                                })
-                                .with_children(|line| {
-                                    line.spawn((
-                                        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
-                                        RowTitle(index),
-                                    ));
-                                    line.spawn((
-                                        KitText::new("", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
-                                        RowStanding(index),
-                                    ));
-                                });
-                                row.spawn((
-                                    KitText::new("", ui_kit::RUNE).shadow(ui_kit::INK),
-                                    Node {
-                                        margin: UiRect::new(px(8), px(0), px(2), px(1)),
-                                        display: Display::None,
-                                        ..default()
-                                    },
-                                    RowCounts(index),
-                                ));
-                            });
-                    }
-                    panel.spawn((
-                        menu::body("", 12.0, ui_kit::TEXT_DIM),
-                        Node {
-                            margin: UiRect::top(px(5)),
-                            max_width: px(WIDTH - 28.0),
-                            ..default()
-                        },
-                        HelpText,
-                    ));
-                });
-        });
-}
-
-/// What a row's right column says.
-fn standing_word(standing: Standing, current: bool) -> &'static str {
-    match standing {
-        Standing::Done => "DONE",
-        Standing::Open if current => "NOW",
-        Standing::Open => "OPEN",
-        Standing::Locked => "LOCKED",
-        Standing::Pending => "NOT YET IN THE GAME",
-    }
-}
-
-/// A row's line of counts: `SOIL 2/4 · FIBRE 0/3`.
-pub fn counts_line(progress: &Progress, mission: &Mission) -> String {
-    let counts = progress.counts(mission);
-    mission
-        .objectives
-        .iter()
-        .zip(counts)
-        .map(|(o, n)| format!("{} {n}/{}", o.label, o.count))
-        .collect::<Vec<_>>()
-        .join("  ·  ")
 }
 
 /// The HUD line: the current mission, or the one just done, unless the
@@ -209,22 +116,11 @@ pub fn show_line(
     }
 }
 
-/// Keep the tab's rows and the tab strip current.
-#[allow(clippy::too_many_arguments)]
-#[allow(clippy::type_complexity)]
+/// Keep the tab strip current (the tab itself is `mission_tree`).
 pub fn paint(
-    missions: Res<Missions>,
-    chain: Res<MissionChain>,
     screen: Res<Screen>,
-    mut strip: Query<&mut Node, (With<TabStrip>, Without<RowCounts>)>,
+    mut strip: Query<&mut Node, With<TabStrip>>,
     mut tabs: Query<(&TabTo, &mut Plaque)>,
-    mut titles: Query<(&RowTitle, &mut KitText), (Without<RowStanding>, Without<RowCounts>)>,
-    mut standings: Query<(&RowStanding, &mut KitText), (Without<RowTitle>, Without<RowCounts>)>,
-    mut counts: Query<
-        (&RowCounts, &mut KitText, &mut Node),
-        (Without<RowTitle>, Without<RowStanding>, Without<TabStrip>),
-    >,
-    mut help: Query<&mut Text, With<HelpText>>,
 ) {
     let open = matches!(*screen, Screen::Pack | Screen::Missions);
     for mut node in &mut strip {
@@ -237,64 +133,6 @@ pub fn paint(
         let latched = to.0 == *screen;
         if plaque.latched != latched {
             plaque.latched = latched;
-        }
-    }
-    if *screen != Screen::Missions || !(missions.is_changed() || screen.is_changed()) {
-        return;
-    }
-    let chain = &chain.0;
-    let progress = &missions.progress;
-    let current = progress.current(chain).map(|m| m.id.clone());
-    let standing = |i: usize| {
-        let mission = &chain.missions[i];
-        (
-            progress.standing(chain, mission),
-            current.as_deref() == Some(mission.id.as_str()),
-        )
-    };
-    for (row, mut text) in &mut titles {
-        let (s, now) = standing(row.0);
-        let colour = match s {
-            Standing::Done => ui_kit::TEXT_DIM,
-            Standing::Open if now => ui_kit::TITLE,
-            Standing::Open => ui_kit::TEXT,
-            Standing::Locked | Standing::Pending => ui_kit::LABEL_DIM,
-        };
-        let title = chain.missions[row.0].title.clone();
-        if text.text != title || text.colour != colour {
-            text.text = title;
-            text.colour = colour;
-        }
-    }
-    for (row, mut text) in &mut standings {
-        let (s, now) = standing(row.0);
-        let word = standing_word(s, now);
-        let colour = if now { ui_kit::RUNE } else { ui_kit::TEXT_DIM };
-        if text.text != word || text.colour != colour {
-            text.text = word.to_string();
-            text.colour = colour;
-        }
-    }
-    for (row, mut text, mut node) in &mut counts {
-        let (s, _) = standing(row.0);
-        let show = s == Standing::Open;
-        let want = if show { Display::Flex } else { Display::None };
-        if node.display != want {
-            node.display = want;
-        }
-        let line = counts_line(progress, &chain.missions[row.0]);
-        if show && text.text != line {
-            text.text = line;
-        }
-    }
-    let words = progress
-        .current(chain)
-        .map_or("Every starter mission is done.".to_string(), |m| {
-            m.help.clone()
-        });
-    for mut text in &mut help {
-        if text.0 != words {
-            text.0.clone_from(&words);
         }
     }
 }

@@ -78,6 +78,7 @@ fn every_kind_counts_from_its_message() {
                 objectives: vec![o.clone()],
                 unlocks: vec![],
                 after: vec![],
+                branch: String::new(),
             })
             .collect(),
     };

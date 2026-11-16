@@ -60,6 +60,7 @@ fn mission(id: &str, needs: &[&str], objectives: Vec<ObjectiveEntry>) -> Mission
         objectives,
         unlocks: Vec::new(),
         after: Vec::new(),
+        branch: String::new(),
     }
 }
 

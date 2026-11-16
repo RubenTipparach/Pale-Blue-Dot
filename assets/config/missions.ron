@@ -41,6 +41,7 @@
         // ---- 0. The trunk: hands to tools, and a fire.
         (
             id: "gather",
+            branch: "trunk",
             title: "Gather by hand",
             help: "Dig soft ground with bare hands: fibre turns up in grass, loose stone in the soil under it.",
             objectives: [
@@ -52,6 +53,7 @@
         ),
         (
             id: "axe",
+            branch: "trunk",
             title: "Craft an axe",
             help: "Pull a branch from a tree by hand, then make a stone axe in the pack's Craft row (I).",
             needs: ["gather"],
@@ -61,6 +63,7 @@
         ),
         (
             id: "wood",
+            branch: "trunk",
             title: "Gather wood",
             help: "Hold the axe and strike a trunk until the tree falls.",
             needs: ["axe"],
@@ -72,6 +75,7 @@
         ),
         (
             id: "planks-rope",
+            branch: "trunk",
             title: "Planks and rope",
             help: "In the pack (I), the Craft row makes planks from a log and rope from three fibre.",
             needs: ["wood"],
@@ -83,6 +87,7 @@
         ),
         (
             id: "crafting-table",
+            branch: "trunk",
             title: "Build a crafting bench",
             help: "Make a workbench from six planks in the Craft row, then place it on the ground.",
             needs: ["planks-rope"],
@@ -94,6 +99,7 @@
         ),
         (
             id: "stone-tools",
+            branch: "trunk",
             title: "Stone tools",
             help: "At the workbench (E), make a stone pickaxe and a stone shovel.",
             needs: ["crafting-table"],
@@ -104,6 +110,7 @@
         ),
         (
             id: "fire",
+            branch: "trunk",
             title: "Make a fire",
             help: "Make a campfire in the Craft row from five loose stone and two logs, and set it down near water.",
             needs: ["stone-tools"],
@@ -116,6 +123,7 @@
         // ---- 1. Fishing.
         (
             id: "rod",
+            branch: "fishing",
             title: "Make a fishing rod",
             help: "Make a rod at the workbench from planks, rope and fibre.",
             needs: ["fire"],
@@ -125,6 +133,7 @@
         ),
         (
             id: "go-fishing",
+            branch: "fishing",
             title: "Go fishing",
             help: "Hold the rod (G), hold the left button and let go to cast. When the float goes under, click and reel.",
             needs: ["rod"],
@@ -136,6 +145,7 @@
         ),
         (
             id: "bait",
+            branch: "fishing",
             title: "Dig for bait",
             help: "Dig wet ground by the water for bait, and cast again with it on the hook.",
             needs: ["go-fishing"],
@@ -146,6 +156,7 @@
         ),
         (
             id: "three-kinds",
+            branch: "fishing",
             title: "Three kinds of fish",
             help: "Fish in other water and at other hours; the field guide (J) fills in each new kind.",
             needs: ["bait"],
@@ -155,6 +166,7 @@
         ),
         (
             id: "sea-fishing",
+            branch: "fishing",
             title: "Off the shore",
             help: "Cast from the shore into the sea, then from a river bank or a lake.",
             needs: ["three-kinds"],
@@ -165,6 +177,7 @@
         ),
         (
             id: "cook-fish",
+            branch: "cooking",
             title: "Cook fish",
             help: "Open the campfire with E and grill the fish you caught.",
             needs: ["go-fishing"],
@@ -174,6 +187,7 @@
         ),
         (
             id: "eat",
+            branch: "cooking",
             title: "Eat well",
             help: "Put a dish on the hotbar and use it; its effect shows by the hotbar.",
             needs: ["cook-fish"],
@@ -184,6 +198,7 @@
         // ---- 2. Farming.
         (
             id: "find-seeds",
+            branch: "farming",
             title: "Find seeds",
             help: "Seeds turn up when you dig grass, and wild plants give them when picked (E).",
             needs: ["fire"],
@@ -193,6 +208,7 @@
         ),
         (
             id: "till",
+            branch: "farming",
             title: "Break ground",
             help: "With the shovel in hand, E tills soil.",
             needs: ["find-seeds"],
@@ -202,6 +218,7 @@
         ),
         (
             id: "plant",
+            branch: "farming",
             title: "Plant a field",
             help: "Plant wheat seed on tilled soil with the right button.",
             needs: ["till"],
@@ -211,6 +228,7 @@
         ),
         (
             id: "water-field",
+            branch: "farming",
             title: "Water the field",
             help: "Fill the bucket at water (E), then pour it beside the field.",
             needs: ["plant"],
@@ -221,6 +239,7 @@
         ),
         (
             id: "harvest",
+            branch: "farming",
             title: "Harvest",
             help: "A crop is ripe when it is full grown: E on it harvests produce and seed.",
             needs: ["water-field"],
@@ -230,6 +249,7 @@
         ),
         (
             id: "three-crops",
+            branch: "farming",
             title: "A mixed field",
             help: "Turnip and chili seeds come with the first harvest; frost kale grows where it is cold.",
             needs: ["harvest"],
@@ -241,6 +261,7 @@
         ),
         (
             id: "bread",
+            branch: "farming",
             title: "Bake bread",
             help: "At the campfire, bake flatbread from wheat you grew.",
             needs: ["harvest"],
@@ -250,6 +271,7 @@
         ),
         (
             id: "farm-meal",
+            branch: "farming",
             title: "A farm meal",
             help: "At the campfire, cook a dish from your field.",
             needs: ["three-crops"],
@@ -259,6 +281,7 @@
         ),
         (
             id: "feast",
+            branch: "farming",
             title: "A feast",
             help: "Eat three dishes: one from the sea, one from the field and one from the coop.",
             needs: ["farm-meal"],
@@ -271,6 +294,7 @@
         // ---- 3. Herding.
         (
             id: "fence",
+            branch: "herding",
             title: "Make fences",
             help: "At the workbench, make fences and a gate from planks and rope.",
             needs: ["fire"],
@@ -281,6 +305,7 @@
         ),
         (
             id: "tame",
+            branch: "herding",
             title: "Tame an animal",
             help: "Stand still with its food in hand and let a wild animal come to you, then feed it.",
             needs: ["fence"],
@@ -290,6 +315,7 @@
         ),
         (
             id: "pen",
+            branch: "herding",
             title: "Build a pen",
             help: "Set fences on the cell edges round a yard, close it with a gate, and lead your animal in.",
             needs: ["tame"],
@@ -300,6 +326,7 @@
         ),
         (
             id: "collect",
+            branch: "herding",
             title: "Collect from the herd",
             help: "A kept animal in a pen gives an egg, wool or milk once a day: E on it collects.",
             needs: ["pen"],
@@ -309,6 +336,7 @@
         ),
         (
             id: "flock",
+            branch: "herding",
             title: "A mixed herd",
             help: "Woolbacks and plodders graze in open country; tame one as you did the hen.",
             needs: ["collect"],
@@ -319,6 +347,7 @@
         ),
         (
             id: "fried-egg",
+            branch: "herding",
             title: "Breakfast",
             help: "At the campfire, fry an egg from your own hens.",
             needs: ["collect"],
@@ -329,6 +358,7 @@
         // ---- 4. Mining and smelting.
         (
             id: "dig-deep",
+            branch: "mining",
             title: "Dig into the hill",
             help: "Hold the stone pickaxe and dig into a hillside; stone comes out a cell at a time.",
             needs: ["fire"],
@@ -339,6 +369,7 @@
         ),
         (
             id: "ore",
+            branch: "mining",
             title: "Find ore",
             help: "Copper and tin show in the rock as mixed ore; coal sits in dark seams.",
             needs: ["dig-deep"],
@@ -349,6 +380,7 @@
         ),
         (
             id: "forge",
+            branch: "mining",
             title: "Build a forge",
             help: "Make a forge at the workbench and place it on the ground.",
             needs: ["ore"],
@@ -360,6 +392,7 @@
         ),
         (
             id: "smelt",
+            branch: "mining",
             title: "Smelt bronze",
             help: "Put ore and coal in the forge (E) and smelt bronze.",
             needs: ["forge"],
@@ -370,6 +403,7 @@
         ),
         (
             id: "bronze-tool",
+            branch: "mining",
             title: "Bronze tools",
             help: "At the workbench, make a bronze pickaxe from ingots; it digs faster than stone.",
             needs: ["smelt"],
@@ -381,6 +415,7 @@
         ),
         (
             id: "iron",
+            branch: "mining",
             title: "The iron age",
             help: "Iron ore smelts hotter: feed the forge more coal.",
             needs: ["bronze-tool"],
@@ -393,6 +428,7 @@
         // ---- 6. Light and building.
         (
             id: "build",
+            branch: "light",
             title: "Build a shelter",
             help: "Hold planks, stone or soil and place blocks with the right button: walls and a roof.",
             needs: ["fire"],
@@ -403,6 +439,7 @@
         ),
         (
             id: "torch",
+            branch: "light",
             title: "Light the night",
             help: "Set torches round your shelter and stay by them as night falls.",
             needs: ["build"],
@@ -415,6 +452,7 @@
         // ---- 7. Getting about.
         (
             id: "map",
+            branch: "about",
             title: "Read the map",
             help: "Open the map (M), mark a place 200 m off, and walk there.",
             needs: ["go-fishing"],
@@ -425,6 +463,7 @@
         ),
         (
             id: "swim",
+            branch: "about",
             title: "Into the water",
             help: "Walk into deep water and swim.",
             needs: ["map"],
@@ -434,6 +473,7 @@
         ),
         (
             id: "reef",
+            branch: "about",
             title: "See a reef",
             help: "Swim down where the sea is warm and shallow.",
             needs: ["swim"],
@@ -443,6 +483,7 @@
         ),
         (
             id: "town",
+            branch: "about",
             title: "Find a town",
             help: "Towns show on the map; follow the compass to one.",
             needs: ["reef"],
@@ -452,6 +493,7 @@
         ),
         (
             id: "boat",
+            branch: "about",
             title: "Take a boat",
             help: "Board a rowboat or a cog at a town's quay (E) and head out.",
             needs: ["town"],

@@ -14,6 +14,7 @@ mod kitchen;
 mod map_screen;
 mod map_sites;
 mod menu;
+mod mission_tree;
 mod missions;
 mod overlay_ui;
 mod pack;
@@ -301,6 +302,9 @@ pub struct Launch {
     /// `--missions <n>`: the starter missions capture instrument raises the
     /// first `n` steps of its scripted chain (`starter-missions` design 17).
     pub missions: Option<usize>,
+    /// `--tree-select <id>`: the Missions tab opens with this mission's card
+    /// in the side panel (a capture instrument, `starter-missions` TS.2).
+    pub tree_select: Option<String>,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -442,6 +446,7 @@ impl Launch {
             campfire_panel: false,
             eat: Vec::new(),
             missions: None,
+            tree_select: None,
             dig_ahead: false,
             pitch: None,
             yaw: None,
@@ -615,6 +620,14 @@ impl Launch {
                         .get(i)
                         .expect("--eat takes dish codes, comma separated");
                     result.eat = dishes.split(',').map(str::to_string).collect();
+                }
+                "--tree-select" => {
+                    i += 1;
+                    result.tree_select = Some(
+                        args.get(i)
+                            .expect("--tree-select takes a mission id")
+                            .clone(),
+                    );
                 }
                 "--missions" => {
                     i += 1;
@@ -1413,7 +1426,15 @@ pub fn run(args: &[String]) {
     .add_systems(
         Update,
         (
-            (missions::press_tabs, missions::paint, missions::show_line).chain(),
+            (
+                missions::press_tabs,
+                missions::paint,
+                missions::show_line,
+                mission_tree::steer,
+                mission_tree::place,
+                mission_tree::paint,
+            )
+                .chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
             missions::night_watch.run_if(pbd_app::loading::ready),
         ),
@@ -1480,6 +1501,7 @@ pub fn run(args: &[String]) {
     .insert_resource(opening)
     .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
     .init_resource::<menu::NameField>()
+    .init_resource::<mission_tree::TreeView>()
     .insert_resource(menu::SettingsTab(launch.settings_tab))
     .insert_resource(menu::InputTab(launch.input_tab))
     .init_resource::<menu::Rebinding>()
@@ -1499,6 +1521,7 @@ pub fn run(args: &[String]) {
                     kitchen::spawn,
                     kitchen::spawn_effects,
                     missions::spawn,
+                    mission_tree::spawn,
                 ),
             )
                 .chain(),
