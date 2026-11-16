@@ -493,6 +493,12 @@ else here, and taken off this list when it lands.
    dithering is not done, there's a hard cut transition". `detail-fade` is
    built, but in flight a third to a half of the detail landings skip their
    fade and pop.
+   **A fade is a moment in time, never a place (owner, 2026-11-16):**
+   "dithering should either stay or go, dont have it linger if the player
+   isnt moving". A dither cross-fade starts when something crosses its
+   distance, runs to the end over its fade time, and finishes. Nothing is
+   drawn half-dithered for as long as it sits inside a distance band, and a
+   still camera sees no dithered object once the fade time has passed.
 2. **Cloud ghosting.** Clouds smear and ghost around objects in front of
    them. The history blend must never carry cloud across a silhouette.
 3. **Clouds up close and flying through them.** They must look right near the
