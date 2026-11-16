@@ -62,7 +62,7 @@
   const M = [
     // 0. Trunk
     { id: "gather", b: "trunk", col: 0, row: 3, icon: "hand", title: "Gather by hand", needs: [],
-      obj: [o("gather fibre", 4, "gather 4 fibre by hand"), o("gather stone", 4, "gather 4 stone by hand"), o("gather soil", 4, "gather 4 soil by hand")],
+      obj: [o("gather fibre", 8, "gather 8 fibre by hand"), o("gather stone", 9, "gather 9 stone by hand"), o("gather soil", 6, "gather 6 soil by hand")],
       unl: ["stone-axe"], help: "Dig soft ground with bare hands (fibre turns up in grass), and hit a tree by hand to pull down a branch." },
     { id: "axe", b: "trunk", col: 1, row: 3, icon: "stone-axe", title: "Craft an axe", needs: [["gather"]],
       obj: [o("craft a stone axe", 1, "craft stone-axe (in the pack)")],
@@ -87,31 +87,31 @@
       obj: [o("cast onto water", 1), o("catch fish", 3, "catch 3 fish")], unl: ["bucket"],
       help: "Hold the rod (G), hold the left button and let go to cast the float onto water. When it goes under, click and reel." },
     { id: "bait", b: "fishing", col: 8, row: 2, icon: "stone-shovel", title: "Dig for bait", needs: [["go-fishing"]],
-      obj: [o("dig bait", 1, "dig bait from wet ground"), o("catch with bait", 1, "catch 1 fish with bait")], unl: [],
+      obj: [o("dig bait", 3, "dig bait from wet ground"), o("catch with bait", 3, "catch 3 fish with bait")], unl: [],
       help: "Dig wet ground by the water for bait, and cast again with it on the hook." },
     { id: "three-kinds", b: "fishing", col: 9, row: 2, icon: "silverfin", title: "Three kinds of fish", needs: [["bait"]],
       obj: [o("catch species", 3, "catch 3 different species (the field guide, J, fills in)")], unl: ["cooking-branch"],
       help: "Fish in other water and at other hours; the field guide (J) fills in each new kind." },
     { id: "sea-fishing", b: "fishing", col: 10, row: 2, icon: "eel", title: "Off the shore", needs: [["three-kinds"]],
-      obj: [o("catch in the sea", 1, "catch 1 fish from the sea"), o("catch in fresh water", 1, "catch 1 fish from a river or lake")], unl: [],
+      obj: [o("catch in the sea", 3, "catch 3 fish from the sea"), o("catch in fresh water", 3, "catch 3 fish from a river or lake")], unl: [],
       help: "Cast from the shore into the sea, then from a river bank or a lake." },
 
     // 2. Farming
     { id: "find-seeds", b: "farming", col: 6, row: 4, icon: "chili-seed", title: "Find seeds", needs: [["fire"]],
-      obj: [o("dig grass for a seed", 1), o("pick a wild plant", 1, "pick 1 wild plant")], unl: ["tilling"],
+      obj: [o("dig grass for seeds", 5), o("pick wild plants", 5, "pick 5 wild plants")], unl: ["tilling"],
       help: "Seeds turn up when you dig grass, and wild plants give them when picked (E)." },
     { id: "till", b: "farming", col: 7, row: 4, icon: "stone-shovel", title: "Break ground", needs: [["find-seeds"]],
-      obj: [o("till cells", 4, "till 4 cells")], unl: [], help: "With the shovel in hand, E tills soil." },
+      obj: [o("till cells", 6, "till 6 cells")], unl: [], help: "With the shovel in hand, E tills soil." },
     { id: "plant", b: "farming", col: 8, row: 4, icon: "wheat-seed", title: "Plant a field", needs: [["till"]],
-      obj: [o("plant wheat seed", 4, "plant 4 wheat-seed")], unl: [], help: "Plant a seed on tilled soil with the right button." },
+      obj: [o("plant wheat seed", 6, "plant 6 wheat-seed")], unl: [], help: "Plant a seed on tilled soil with the right button." },
     { id: "water-field", b: "farming", col: 9, row: 4, icon: "water-bucket", title: "Water the field", needs: [["plant"]], after: ["go-fishing"],
       obj: [o("pour a water bucket", 1, "pour a water-bucket beside the field", true)], unl: [],
       help: "Fill the bucket at water (E), then pour it beside the field." },
     { id: "harvest", b: "farming", col: 10, row: 4, icon: "wheat", title: "Harvest", needs: [["water-field"]],
-      obj: [o("harvest wheat", 4, "harvest 4 wheat")], unl: ["turnip-seed", "chili-seed"],
+      obj: [o("harvest wheat", 6, "harvest 6 wheat")], unl: ["turnip-seed", "chili-seed"],
       help: "A crop is ripe when it is full grown: E on it harvests produce and seed." },
     { id: "three-crops", b: "farming", col: 11, row: 4, icon: "turnip", title: "A mixed field", needs: [["harvest"]],
-      obj: [o("harvest turnip", 1), o("harvest chili", 1), o("harvest frost kale", 1, "harvest frost-kale (kale where it is cold)")], unl: ["farm-dishes"],
+      obj: [o("harvest turnip", 3), o("harvest chili", 3), o("harvest frost kale", 3, "harvest frost-kale (kale where it is cold)")], unl: ["farm-dishes"],
       help: "Turnip and chili seeds come with the first harvest; frost kale grows where it is cold." },
 
     // 3. Herding
@@ -125,10 +125,10 @@
       obj: [o("build a pen with a gate", 1, "build a pen with a gate round tamed animals")], unl: [],
       help: "Set fences on the cell edges round a yard, close it with a gate, and lead your animal in." },
     { id: "collect", b: "herding", col: 9, row: 5, icon: "egg", title: "Collect from the herd", needs: [["pen"]],
-      obj: [o("collect eggs", 2, "collect 2 egg")], unl: [],
+      obj: [o("collect eggs", 5, "collect 5 eggs")], unl: [],
       help: "A kept animal in a pen gives an egg, wool or milk once a day: E on it collects." },
     { id: "flock", b: "herding", col: 10, row: 5, icon: "wool", title: "A mixed herd", needs: [["collect"]],
-      obj: [o("tame a woolback or plodder", 1, "tame a Woolback or a Plodder"), o("collect wool or milk", 1)], unl: ["egg-dishes"],
+      obj: [o("tame a woolback or plodder", 1, "tame a Woolback or a Plodder"), o("collect wool or milk", 3)], unl: ["egg-dishes"],
       help: "Woolbacks and plodders graze in open country; tame one as you did the hen." },
 
     // 4. Mining and smelting
@@ -136,7 +136,7 @@
       obj: [o("dig stone", 10, "dig 10 stone with the stone pickaxe")], unl: ["forge"],
       help: "Hold the stone pickaxe and dig into a hillside; stone comes out a cell at a time." },
     { id: "ore", b: "mining", col: 7, row: 6, icon: "tin-ore", title: "Find ore", needs: [["dig-deep"]],
-      obj: [o("dig mixed ore", 1, "dig mixed-ore (copper and tin)"), o("dig coal", 1)], unl: [],
+      obj: [o("dig mixed ore", 4, "dig mixed-ore (copper and tin)"), o("dig coal", 3)], unl: [],
       help: "Copper and tin show in the rock as mixed ore; coal sits in dark seams." },
     { id: "forge", b: "mining", col: 8, row: 6, icon: "forge", title: "Build a forge", needs: [["ore"]],
       obj: [o("craft a forge", 1, "craft forge"), o("place it", 1, "place forge")], unl: ["bronze"],
@@ -148,7 +148,7 @@
       obj: [o("craft a bronze pickaxe", 1, "craft bronze-pickaxe"), o("dig stone with it", 5, "dig 5 stone with it")], unl: ["iron-smelting"],
       help: "At the workbench, make a bronze pickaxe from ingots; it digs faster than stone." },
     { id: "iron", b: "mining", col: 11, row: 6, icon: "iron-pickaxe", title: "The iron age", needs: [["bronze-tool"]],
-      obj: [o("smelt an iron ingot", 1, "smelt iron-ingot"), o("craft an iron pickaxe", 1, "craft iron-pickaxe")], unl: ["iron-axe", "iron-shovel"],
+      obj: [o("smelt iron ingots", 3, "smelt 3 iron ingots"), o("craft an iron pickaxe", 1, "craft iron-pickaxe")], unl: ["iron-axe", "iron-shovel"],
       help: "Iron ore smelts hotter: feed the forge more coal." },
 
     // 5. Cooking
