@@ -312,7 +312,7 @@ function waterMaterial(U, vertexShader) {
       uM: {value: new THREE.Matrix3()}, uRp: {value: 2400}, uTime: {value: 0}, uScene: {value: null}, uRes: {value: new THREE.Vector2(1, 1)},
       uStretch: {value: 1}, uSpeed: {value: 1}, uAccel: {value: 0}, uLip: {value: 0}, uFallFrame: {value: 0},
       uOpen: {value: new THREE.Vector3(1, 1, 1)}, uNight: {value: 0}, uRain: {value: 0}, uSunI: {value: 1},
-      uFoot: {value: new THREE.Vector3()}, uFootH: {value: 9}, uAer: {value: 0}}, U),
+      uFoot: {value: new THREE.Vector3()}, uFootH: {value: 9}, uAer: {value: 0}, uAerAmt: {value: 1}}, U),
     side: THREE.DoubleSide,
     vertexShader: `attribute vec3 aRest; attribute vec3 aFaceN; attribute float aKind; attribute float aFroth; attribute vec3 aPath;
       attribute float aTop; attribute vec3 aFlowN; attribute vec3 aFlow; attribute float aSky; attribute float aDepth; varying float vDepth;
@@ -326,7 +326,7 @@ function waterMaterial(U, vertexShader) {
       uniform vec3 uOpen; uniform float uNight; uniform float uRain; uniform float uSunI;
       varying vec3 vRest; varying vec3 vFaceN; varying float vKind; varying float vFroth; varying vec3 vPath; varying float vTop;
       varying vec3 vFlowN; varying vec3 vFlow; varying float vSky; varying vec3 vP; varying float vDepth;
-      uniform vec3 uFoot; uniform float uFootH; uniform float uAer;
+      uniform vec3 uFoot; uniform float uFootH; uniform float uAer; uniform float uAerAmt;
       ${NOISE_GLSL}
       ${LIGHT_GLSL}
       ${UNDER_GLSL}
@@ -415,7 +415,7 @@ function waterMaterial(U, vertexShader) {
         vec3 scene = fromSrgb(texture2D(uScene, gl_FragCoord.xy/uRes).rgb);
         vec3 albedo = mix(SHALLOW, DEEP, smoothstep(0.0, SHALLOW_DEPTH, depth_under));
         vec3 transmitted = mix(albedo*water_lit, scene, exp(-(ABSORB + TURBID)*path_len));
-        transmitted = mix(transmitted, AER_COL*water_lit, aer*0.85);
+        transmitted = mix(transmitted, AER_COL*water_lit, clamp(aer*0.85*uAerAmt, 0.0, 1.0));
         float crest = smoothstep(0.35, 0.60, height)*0.55;
         float slope = smoothstep(0.50, 1.20, raw_slope)*0.26;
         float foam = clamp(max(crest, slope)*FOAM_INT, 0.0, 1.0);
@@ -559,17 +559,19 @@ function splashMesh(U, sheet) {
 // per bubble, its place a function of the time. Drawn before the water, so from above the water's own transmission
 // tints them (the game's scene_color), and from under the eye sees them through the murk.
 function bubblePoints(F, U) {
-  const N = Math.round(60 + 14 * F.H), seed = new Float32Array(N * 4), pos = new Float32Array(N * 3);
+  // Twice the default count is made; the Bubbles slider (uAmt, 0-2) shows the first uAmt/2 of them by rank.
+  const N = 2 * Math.round(60 + 14 * F.H), seed = new Float32Array(N * 4), pos = new Float32Array(N * 3), rank = new Float32Array(N);
   let s = 5; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < N; i++) seed.set([rnd(), rnd(), rnd(), rnd()], i * 4);
+  for (let i = 0; i < N; i++) { seed.set([rnd(), rnd(), rnd(), rnd()], i * 4); rank[i] = (i + 0.5) / N; }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   g.setAttribute("aSeed", new THREE.BufferAttribute(seed, 4));
+  g.setAttribute("aRank", new THREE.BufferAttribute(rank, 1));
   const depth = F.poolY - F.floor;
   const mat = new THREE.ShaderMaterial({transparent: true, depthWrite: false,
     uniforms: Object.assign({uFoot: {value: new THREE.Vector3()}, uH: {value: F.H}, uDepth: {value: depth}, uTime: {value: 0},
-      uOpen: {value: new THREE.Vector3(1, 1, 1)}, uPx: {value: 600}}, U),
-    vertexShader: `attribute vec4 aSeed; uniform vec3 uFoot; uniform float uH; uniform float uDepth; uniform float uTime; uniform float uPx;
+      uOpen: {value: new THREE.Vector3(1, 1, 1)}, uPx: {value: 600}, uAmt: {value: 1}}, U),
+    vertexShader: `attribute vec4 aSeed; attribute float aRank; uniform float uAmt; uniform vec3 uFoot; uniform float uH; uniform float uDepth; uniform float uTime; uniform float uPx;
       varying float vA; varying vec3 vP;
       void main() {
         float sq = sqrt(uH);
@@ -580,7 +582,7 @@ function bubblePoints(F, U) {
         float ang = aSeed.w*6.2831853, rad = pow(fract(aSeed.x*7.31 + aSeed.y*3.7), 0.7)*(1.2 + 0.09*uH);
         float y = uFoot.y - d0 + speed*tl;
         vec3 p = vec3(uFoot.x + cos(ang)*rad + 0.08*sin(tl*7.0 + aSeed.z*20.0), min(y, uFoot.y - 0.04), uFoot.z + sin(ang)*rad + 0.08*cos(tl*6.0 + aSeed.w*20.0));
-        vA = smoothstep(0.0, 0.25, tl)*(y < uFoot.y - 0.04 ? 1.0 : 0.0);
+        vA = smoothstep(0.0, 0.25, tl)*(y < uFoot.y - 0.04 ? 1.0 : 0.0)*(aRank < 0.5*uAmt ? 1.0 : 0.0);
         vP = p;
         vec4 mv = viewMatrix*vec4(p, 1.0);
         float size = 0.05 + 0.09*aSeed.z;
@@ -653,7 +655,7 @@ window.PBDMist = function (canvas, sheetUrl) {
   const bubbles = bubblePoints(F, U); bubbles.material.uniforms.uFoot.value.copy(foot); opaque.add(bubbles);
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0;
-  const S = {variant: "today", night: false, running: true, gain: 0.8};
+  const S = {variant: "today", night: false, running: true, gain: 0.8, bubbles: 1, teal: 1};
   function murk(open) {
     // The game's murk: the deep's albedo lit by the light on open water, dimmed by the water above the eye.
     const eyeDepth = Math.max(0, F.poolY - camera.position.y);
@@ -677,6 +679,7 @@ window.PBDMist = function (canvas, sheetUrl) {
     const v = S.variant;
     leak.visible = v === "today"; front.visible = v !== "today";
     bubbles.visible = v === "new"; wmat.uniforms.uAer.value = v === "new" ? 1 : 0;
+    bubbles.material.uniforms.uAmt.value = S.bubbles; wmat.uniforms.uAerAmt.value = S.teal;
     front.material.uniforms.uGain.value = S.gain; front.material.uniforms.uLamps.value = v === "new" ? 1 : 0;
     lighting();
   }
