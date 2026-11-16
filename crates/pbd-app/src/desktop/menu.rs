@@ -40,9 +40,9 @@ pub enum Screen {
     Pack,
     /// The world map, opened with M (`world-map`).
     Map,
-    /// A station's panel, opened with E on it (`farming-and-smelting`).
+    /// A station's panel, opened with F on it (`farming-and-smelting`).
     Forge,
-    /// A kitchen station's panel, opened with E on a campfire (`cooking`).
+    /// A kitchen station's panel, opened with F on a campfire (`cooking`).
     Kitchen,
     /// The starter missions, opened with O (`starter-missions`).
     Missions,
@@ -2047,7 +2047,7 @@ mod tests {
             "the key is the cap's, not the world's"
         );
 
-        app.world_mut().resource_mut::<Rebinding>().0 = Some("hands:KeyE".into());
+        app.world_mut().resource_mut::<Rebinding>().0 = Some("interact:KeyF".into());
         press(&mut app, KeyCode::Escape);
         assert_eq!(app.world().resource::<Rebinding>().0, None, "Esc cancels");
         assert!(
@@ -2057,16 +2057,16 @@ mod tests {
             "and is consumed, so the page does not step back"
         );
         let door = controls::slots()
-            .find(|s| s.name() == "hands:KeyE")
+            .find(|s| s.name() == "interact:KeyF")
             .unwrap();
-        assert_eq!(app.world().resource::<KeyBinds>().key(&door), KeyCode::KeyE);
+        assert_eq!(app.world().resource::<KeyBinds>().key(&door), KeyCode::KeyF);
 
         // Leaving the settings stops a wait.
-        app.world_mut().resource_mut::<Rebinding>().0 = Some("hands:KeyE".into());
+        app.world_mut().resource_mut::<Rebinding>().0 = Some("interact:KeyF".into());
         *app.world_mut().resource_mut::<Screen>() = Screen::Pause;
         press(&mut app, KeyCode::KeyK);
         assert_eq!(app.world().resource::<Rebinding>().0, None);
-        assert_eq!(app.world().resource::<KeyBinds>().key(&door), KeyCode::KeyE);
+        assert_eq!(app.world().resource::<KeyBinds>().key(&door), KeyCode::KeyF);
     }
 
     /// The Input page: five oak sub-tabs, one list each, a changeable cap
@@ -2099,14 +2099,13 @@ mod tests {
         let sprint = controls::slots()
             .find(|s| s.name() == "on_foot:ShiftLeft")
             .unwrap();
-        world.resource_mut::<KeyBinds>().set(&sprint, KeyCode::KeyE);
+        world.resource_mut::<KeyBinds>().set(&sprint, KeyCode::KeyF);
         app.update();
         let world = app.world_mut();
         let flagged = also(world);
         assert!(
-            flagged.contains(
-                &"also: use: a door, a forge, a campfire, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till".to_string()
-            ),
+            flagged
+                .contains(&"also: open, harvest, pick, feed, till; board or step off".to_string()),
             "{flagged:?}"
         );
         assert!(flagged.contains(&"also: sprint".to_string()), "{flagged:?}");
@@ -2116,6 +2115,6 @@ mod tests {
             .iter(world)
             .map(|t| t.text.clone())
             .collect();
-        assert!(labels.contains(&"E".to_string()));
+        assert!(labels.contains(&"F".to_string()));
     }
 }

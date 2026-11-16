@@ -31,13 +31,24 @@ body's roster.
 Clams SHALL shut, tube worms SHALL pull their plumes in, octopuses SHALL ink
 and return to their den, and seals SHALL slide into the water when the
 player comes within each species' distance, and SHALL return to their
-former state some time after the player has gone.
+former state some time after the player has gone. Every such change SHALL be
+seen happening: a seal slides off its floe and swims away under the surface,
+a diving duck sinks and rises, a startled floater swims away from the
+player. No creature SHALL appear or vanish in one frame, near or far: a
+school fades in when it is spawned and out before it is dropped, and
+ambient life fades with its tile.
 
 #### Scenario: A clam shuts
 
 - **WHEN** the player swims within 4 m of an open giant clam
 - **THEN** it shuts, and opening it with a knife is refused until it opens
   again
+
+#### Scenario: A seal is seen leaving
+
+- **WHEN** the player walks or swims toward a seal from 30 m to 2 m
+- **THEN** the seal is drawn in every frame of the approach: lying out, then
+  sliding in, then swimming off under the surface
 
 ### Requirement: Ducks live on fresh and brackish water
 

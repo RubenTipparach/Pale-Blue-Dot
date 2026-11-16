@@ -658,6 +658,34 @@ It is measured, not assumed. A `perf_suite.py` A/B on the release build
 goes in `docs/benchmarks/` with the port. Any slower frame is fixed before
 the push.
 
+## Rain rings that alias (owner, 2026-11-16)
+
+The owner's valley in rain shows the river "covered in a dense white
+speckle" (`docs/screenshots/rain-artifacts/owner-2026-11-16.webp`).
+
+**Cause, measured.** The sea fragment adds the rain's ring kernel
+(`rain_rings`, at `rain_ripple_scale` 3 per metre, strength 6) to the
+water's gradient at full strength at every distance. The kernel's rings are
+`sin(31 d)` in its uv: a wavelength of 6.8 cm on the water. A pixel at 25 m
+is about 2 cm across, and at the grazing angle a river is seen from, far
+more along the view: the rings fall under a pixel and point-sample into
+per-pixel noise, which the Fresnel mirror and the glint turn into white
+speckle. The waves' own fbm is faded by its footprint (`detail`), the
+terrain's rings by a 20 m reach (`wet-near-detail`); the water's rings by
+neither. Measured over the same patch of the valley's river from 25 m up
+(`hf.py`, mean absolute Laplacian of the luma, the rain composite, the lens
+and the shower off so only the sheet differs): dry 19.0, in rain 36.5, in
+rain with the water's rings off 27.1, with the river bed's wet block off as
+well 26.0. The rings are the speckle; the rest is the overcast light on the
+bed's own texture. Not the falls' froth: it is gated to falling faces
+(`kind == 2 && horizontal < 0.5`) and is untouched.
+
+**Fix.** The rings fade with their own footprint, as the waves do: with
+`c` the ring wavelengths per pixel (`length(fwidth(uv)) * 31 / 2pi`), they
+are weighed by `1 - smoothstep(0.2, 0.45, c)`, whole while a ring spans
+five pixels or more and gone by about two. Near water keeps its rings; the
+far river and a sheet seen at a grazing angle keep the waves only. The
+falls' froth and the fall look (`dc0c5cb`) are not touched.
 ## Splashes that show, and better ones (owner, 2026-11-16)
 
 The owner, on a river in rain: "these water splash fx are weak, I expected

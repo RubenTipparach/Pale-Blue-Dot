@@ -490,6 +490,17 @@ pub struct WeatherSettings {
     /// (`0 <= fade <= reach`). Past the reach the ground is only wet.
     pub rain_detail_reach_m: f32,
     pub rain_detail_fade_m: f32,
+    /// What rain does to a plant (`flora-v2` 13.2; owner, 2026-11-16: "grass
+    /// blades shouldnt have rain shader on them"): a detailed tree and every
+    /// piece of ground clutter take only this darkening at full wetness, 0..1
+    /// (one: none), and none of the wet ground's film.
+    pub rain_plant_darken: f32,
+    /// The drops on the lens wet and dry over time (`weather-rain` R3; owner,
+    /// 2026-11-16): seconds (e-fold) for the lens's wetness to rise toward
+    /// the rain reaching it, and to fall when it stops or the eye is under
+    /// cover. Both positive.
+    pub lens_wet_tau_s: f32,
+    pub lens_dry_tau_s: f32,
     /// `weather-rain` 6.4, splashes where rain lands (the approved M32
     /// mockup): slots per near column (S), each firing once a cycle when the
     /// rain says so, and droplets per slot (K). The draw is S x K droplets a
@@ -750,6 +761,9 @@ impl Default for WeatherSettings {
             rain_lamp_specular: 1.0,
             rain_detail_reach_m: 20.0,
             rain_detail_fade_m: 4.0,
+            rain_plant_darken: 0.88,
+            lens_wet_tau_s: 3.0,
+            lens_dry_tau_s: 2.5,
             splash_slots: 48,
             splash_droplets: 8,
             splash_period_s: 0.5,
@@ -892,6 +906,8 @@ impl Validated for WeatherSettings {
             && (0.0..=s.rain_detail_reach_m).contains(&s.rain_detail_fade_m))
         .then_some(())
         .ok_or("rain_detail_fade_m must be within 0..=rain_detail_reach_m")?;
+        unit("rain_plant_darken", s.rain_plant_darken)?;
+        positive("lens taus", &[s.lens_wet_tau_s, s.lens_dry_tau_s])?;
         (1..=64)
             .contains(&s.splash_slots)
             .then_some(())
@@ -1146,6 +1162,16 @@ pub struct ScatterSettings {
     /// The mid ring's crossed cards to this distance, cross-fading into the
     /// far billboard the same way; past it the billboard to the trees' range.
     pub tree_mid_m: f32,
+    /// A tree's cross-fade is a moment in time, never a place (`flora-v2`
+    /// 13.3; owner, 2026-11-16: "dithering should either stay or go"): the
+    /// seconds a tree takes to fade from one representation to the next once
+    /// the camera has carried it across a threshold (zero: a hard switch).
+    pub tree_fade_s: f32,
+    /// The furthest, metres, the point the trees' representations are
+    /// decided at may trail the camera: the fade is shortened to keep under
+    /// it when the camera moves fast. Within 1..=6 m, inside the margins the
+    /// visibility pass lists the near model and the cards with.
+    pub tree_fade_lag_m: f32,
 }
 
 impl Default for ScatterSettings {
@@ -1180,6 +1206,8 @@ impl Default for ScatterSettings {
             fruit_chance: 0.5,
             tree_near_m: 44.,
             tree_mid_m: 90.,
+            tree_fade_s: 0.5,
+            tree_fade_lag_m: 5.0,
         }
     }
 }
@@ -1227,6 +1255,12 @@ impl Validated for ScatterSettings {
             && self.tree_mid_m <= crate::planet::BAND_M[1])
             .then_some(())
             .ok_or("tree_mid_m must lie between tree_near_m and the trees' range")?;
+        (self.tree_fade_s.is_finite() && (0.0..=2.0).contains(&self.tree_fade_s))
+            .then_some(())
+            .ok_or("tree_fade_s must lie within 0 and 2 s")?;
+        (self.tree_fade_lag_m.is_finite() && (1.0..=6.0).contains(&self.tree_fade_lag_m))
+            .then_some(())
+            .ok_or("tree_fade_lag_m must lie within 1 and 6 m")?;
         (self.leaf_size.is_finite() && (0.5..=2.0).contains(&self.leaf_size))
             .then_some(())
             .ok_or("leaf_size must lie within 0.5 and 2")?;

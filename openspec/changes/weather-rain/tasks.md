@@ -66,3 +66,10 @@
       but lost in the game's grass; see that README.) Proof: `--capture` stills of a puddled path and a meadow in rain,
       by day and at night under a lamp, before and after, in
       `docs/screenshots/`.
+
+## 7. Rain artifacts (design "Rain artifacts"; owner, 2026-11-16)
+
+- [x] 7.1 R1 (Built: `rain_sky_light`; a streak (110, 128, 180) to (67, 81, 104) over a wall of (45, 53, 56); `the_rain_takes_the_sky_a_standing_face_takes`.): the shower and the shafts lit by the sky's irradiance on a standing face under the new model. Verify: before and after at one spot; a test that a full deck at noon lights a streak no brighter than the old curve.
+- [x] 7.2 R2 (Built with `flora-v2` 11.1: `crop3x-tufts.jpg`.): tufts and all clutter take no wet block (with `flora-v2` 11.1). Verify: close-up captures in rain, before and after.
+- [x] 7.3 R3 (Built: `LensWet`, `the_lens_wets_and_dries_over_time_and_grows_no_drop_while_dry`; `seq-lens-into-cover.jpg`, `seq-lens-out-of-cover.jpg`, `seq-rain-stops.jpg`, `seq-rain-starts.jpg` and their traces.): the lens's wetness eases both ways (`lens_wet_tau_s`, `lens_dry_tau_s`), its drop clock stops while no rain reaches it. Verify: a test of the easing; capture sequences of rain stopping, rain starting, into cover and out of it.
+- [x] 7.4 R4 (Built: `ShowerOpen`; the ground's wetness, the shower's count and the splashes all follow eased values (traces). The splashes end at 20 m in their shader.): the near shower thins over a moment under cover; the ground's wetness checked in a sequence. Verify: the sequences above.

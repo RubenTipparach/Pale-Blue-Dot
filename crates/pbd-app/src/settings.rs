@@ -35,8 +35,11 @@ use std::time::{Duration, Instant};
 /// reads as their defaults; version 6 added `pixel_grass` (`flora-v2`),
 /// which an older file reads as on (owner, 2026-11-15: "first default to
 /// pixel tufts"); version 7 added `flow_arrows` (`water-flow` task 3.4),
-/// which an older file reads as off.
-pub const VERSION: u32 = 7;
+/// which an older file reads as off; version 8 made "use" (`hands:KeyE`)
+/// and "board" (`vehicles:KeyF`) one slot, `interact:KeyF` (owner,
+/// 2026-11-16), and an older file's rebind of either moves onto it
+/// (`controls::KeyBinds::from_names`).
+pub const VERSION: u32 = 8;
 
 /// The five sound volumes (`audio-and-ambience` design section 2), each a
 /// whole percent 0..=100 in steps of 10. 0 is silent.
@@ -957,6 +960,29 @@ mod tests {
         assert!(text.contains(&format!("version: {VERSION}")), "{text}");
         let (_, none, _) = PlayerSettings::parse(&text).unwrap();
         assert!(none.is_empty());
+    }
+
+    /// Interact on F (settings version 8): a version-7 file whose player
+    /// moved "use" to K reads K as the interact key, F interacts no more,
+    /// and the next write is version 8 with the new slot's name.
+    #[test]
+    fn an_old_file_with_a_custom_use_key_keeps_it() {
+        let old = r#"(version: 7, render_scale: 75, keys: {"hands:KeyE": "KeyK", "flying:KeyQ": "KeyZ"})"#;
+        let (read, keys, version) = PlayerSettings::parse(old).unwrap();
+        assert_eq!(version, 7);
+        assert!(Loaded::Read(version).writable());
+        let interact = crate::controls::slots()
+            .find(|s| s.name() == crate::controls::INTERACT_SLOT)
+            .unwrap();
+        assert_eq!(keys.key(&interact), KeyCode::KeyK);
+        let pairs = crate::controls::live_pairs(&keys, crate::controls::Live::OnFoot, false);
+        assert!(pairs.contains(&(KeyCode::KeyF, KeyCode::KeyK)), "{pairs:?}");
+        let text = read.to_text(&keys);
+        assert!(text.contains("version: 8"), "{text}");
+        assert!(text.contains("\"interact:KeyF\": \"KeyK\""), "{text}");
+        assert!(!text.contains("hands:KeyE"), "{text}");
+        let (_, again, _) = PlayerSettings::parse(&text).unwrap();
+        assert_eq!(again, keys, "and reads back the same");
     }
 
     /// `retire-kestrel` decision 3: a rebind of a key the retired Kestrel

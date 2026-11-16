@@ -47,6 +47,7 @@ struct Params {
     tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
     plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits (low 16), tree table (high 16)
     flora_fall: vec4<f32>,     // 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w fruit chance
+    tree_fade: array<vec4<f32>,2>, // `flora-v2` 13.3: the point the trees' cross-fade runs from (w its progress 0..1), the point it runs to
     night: vec4<f32>,                   // `night-lights-from-space`, unread here
     night_lights: array<vec4<f32>,128>,
     felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty

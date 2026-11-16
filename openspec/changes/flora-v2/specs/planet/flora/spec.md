@@ -147,3 +147,33 @@ id at draw time and SHALL NOT enter a save.
 
 - **WHEN** a world saved before the detailed trees is opened
 - **THEN** a tree stands on exactly the cells it did, and the same cells can be chopped
+
+### Requirement: Plants are not wet ground
+A detailed tree (near model, mid cards, far billboard, fruit) and every piece
+of ground clutter SHALL take, in rain, at most a uniform darkening by the
+ground's wetness, and SHALL NOT take the wet ground's puddle mirror, rings,
+rippled sheet, rivulets, glint or reflection.
+
+#### Scenario: A forest in rain
+- **WHEN** the camera looks at trees 30 to 100 m away in full rain
+- **THEN** the trees keep their own colours, a little darker than dry
+- **AND** no tree or tuft shows the sky mirrored or a raindrop ring
+
+### Requirement: A tree's cross-fade is a moment in time
+A tree SHALL change between its near model, mid cards, far billboard and
+nothing by a dither cross-fade that starts when the camera has moved it
+across a threshold and runs to its end over the fade time; a tree SHALL NOT
+be drawn dithered while the camera stands still once that time has passed.
+
+#### Scenario: A still camera in a forest
+- **WHEN** the camera stops in a forest
+- **THEN** after the fade time no tree is drawn dithered
+- **AND** walking on, each tree that changes representation fades, none pops
+
+### Requirement: Far trees are lit as standing trees
+The mid cards and the far billboard SHALL be lit with a normal that stands
+toward the eye, as the near crown's leaves are, and not as a floor.
+
+#### Scenario: Near and far trees at night
+- **WHEN** near and far trees are in one frame at night
+- **THEN** the far band is no brighter than the near crowns beside it

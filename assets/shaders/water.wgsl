@@ -35,8 +35,8 @@ struct WaterView {
     water_light: vec4<f32>,   // rgb the light on open water at the camera, w shallows' depth m
     haze: vec4<f32>,          // the terrain's cloud_fog_add, rain_fog_mult, overcast blue cut, overcast dim
     foam_color: vec4<f32>,    // rgb, w foam intensity
-    foam_crest: vec4<f32>,    // lo, hi, weight, spare
-    foam_slope: vec4<f32>,    // lo, hi, weight, spare
+    foam_crest: vec4<f32>,    // lo, hi, weight, w rain's fine detail's reach m (`wet-near-detail`)
+    foam_slope: vec4<f32>,    // lo, hi, weight, w the fade band before that reach m
     sun_tint: vec4<f32>,      // rgb, w specular power
     fog_night: vec4<f32>,     // rgb sky colour at night, w fog density per metre
     fog_day: vec4<f32>,       // rgb sky colour by day, w fog height m
@@ -89,7 +89,9 @@ struct WaterView {
     cloud_prev_eye: vec4<f32>,
     // The sea's table (`pbd::sea`), the same one the hulls float on.
     sea: SeaView,
-    // x how far the sheet sits below sea level (`depth_offset_m`), yzw spare.
+    // x how far the sheet sits below sea level (`depth_offset_m`); y the
+    // surface of the inland water the eye is in, a body radius, nought for
+    // the sea (`ocean-environments` B17); zw spare.
     sea_frame: vec4<f32>,
     // The lens mist (`lens-weather`): seconds to mist over and to clear
     // standing still, how much faster per m/s of airspeed, its strength; then
@@ -528,12 +530,25 @@ fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: 
     return gathered*(reach/f32(steps))*0.3*strength*phase*view.rain_sun.rgb;
 }
 
+// How far under the surface the composite's waterline mask fades in, m: the
+// short soft edge of the underwater tint, wobble and fog. Nothing above the
+// surface is ever wet.
+const WATERLINE_EDGE_M: f32 = 0.1;
+
+// The surface of the water the eye is in, as a body radius: a river's or a
+// pool's where the eye is in inland water, the sea's sphere otherwise
+// (`ocean-environments` B17). Everything the underwater view measures, depth,
+// the waterline, the sky's exit, is measured from it.
+fn eye_water_surface() -> f32 {
+    return select(view.planet_center.w, view.sea_frame.y, view.sea_frame.y > 0.0);
+}
+
 // What the eye in the water sees added along `dist` metres of its view: the
 // shafts, and the marine snow over the twilight and midnight zones, lit by
 // what light is left at the eye and a faint glow of its own. Zero above water.
 fn under_water_light(origin: vec3<f32>, dir: vec3<f32>, dist: f32) -> vec3<f32> {
     let center = view.planet_center.xyz;
-    let sea = view.planet_center.w;
+    let sea = eye_water_surface();
     let eye_depth = sea - length(origin-center);
     if (eye_depth <= 0.0) { return vec3<f32>(0.0); }
     var add = shafts(origin, dir, dist, center, sea, view_extinction());
@@ -690,7 +705,20 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         fbm3(p+vec3<f32>(0.,0.08,0.),t)-fbm3(p,t),
         fbm3(p+vec3<f32>(0.,0.,0.08),t)-fbm3(p,t))*12.5*detail;
     gradient -= radial*dot(gradient,radial);
-    if (view.fx.z > 0.001) {
+    // The rain's rings fade with their own footprint (`water-flow` "Rain
+    // rings that alias"; owner, 2026-11-16: the river "covered in a dense
+    // white speckle"): a ring is `sin(31 d)` in the kernel's uv, so this is
+    // how many of its wavelengths one pixel spans. Whole while a ring spans
+    // five pixels or more, gone by about two; past that the rings fell under
+    // a pixel and point-sampled into per-pixel noise the mirror lit white.
+    let ring_cycles = length(fwidth(in.body_position))*view.ripple.z*31.0/6.2831853;
+    // And only within rain's fine detail's reach, as on the ground
+    // (`wet-near-detail`): past it the water keeps its broad waves.
+    let ring_reach = max(view.foam_crest.w, 0.0);
+    let ring_near = 1.0 - smoothstep(ring_reach - max(view.foam_slope.w, 0.0), ring_reach,
+        length(view.camera_time.xyz - in.local_position));
+    let ring_detail = (1.0 - smoothstep(0.2, 0.45, ring_cycles))*ring_near;
+    if (view.fx.z > 0.001 && ring_detail > 0.0) {
         let uv = vec2<f32>(dot(in.body_position,tangent_u),dot(in.body_position,tangent_v))*view.ripple.z;
         var g = rain_ripple_grad(uv,time)*(view.fx.z*view.ripple.w);
         if view.rain.w > 0.5 {
@@ -700,7 +728,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         }
         // Only on water that faces up (owner, 2026-11-15: "when raining - no
         // droplets on vertical water"): a fall's or a wall's face takes none.
-        g *= smoothstep(0.7, 0.95, horizontal);
+        g *= smoothstep(0.7, 0.95, horizontal)*ring_detail;
         gradient += tangent_u*g.x + tangent_v*g.y;
     }
     // Slope cap BEFORE the gradient bends the normal: the rain kernel spikes it
@@ -931,7 +959,9 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let sky = depth <= 1e-7;
     let ray = view_ray(uv);
     let center = view.planet_center.xyz;
-    let sea = view.planet_center.w;
+    // The surface of the water the eye is in: a river's above the sea, or
+    // the sea's sphere (`ocean-environments` B17).
+    let sea = eye_water_surface();
     let under = view.fx.y > 0.75;
     let straddle = view.fx.y > 0.25 && !under;
     let cam_gap = max(0.0, sea - length(ray.origin-center));
@@ -952,7 +982,13 @@ fn compose(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let straddle_sky = select(0.0, 1.0-smoothstep(0.02,0.12,ray_d_up), cam_gap > 0.0);
         wet = select(select(0.0,straddle_sky,straddle),1.0,under);
     }
-    let mask = select(1.0-smoothstep(-band,band,pixel_alt),1.0,sky);
+    // The waterline: a pixel is wet only below the surface, with a short
+    // soft edge under it (owner, 2026-11-16: "underwater ground tint is
+    // happening before the water line"). It reached `band` ABOVE the surface,
+    // so the ground just over the water took the murk and the wobble; what
+    // lies under a crest above the mean surface is behind the sheet, which
+    // draws its own.
+    let mask = select(1.0-smoothstep(-WATERLINE_EDGE_M,0.0,pixel_alt),1.0,sky);
     wet *= mask;
     var color = textureSampleLevel(scene_color,scene_sampler,uv,0.0).rgb;
     if (wet > 0.0 && view.fx.x > 0.0) {
@@ -1195,8 +1231,14 @@ fn lens(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // The drops `rain_lens_scale` times smaller than Tenebris's, trails and
     // beads with them (`lens-weather`).
     let drop_uv = tenebris_uv*max(view.mist_look.w, 0.05);
-    let t = view.camera_time.w*0.2*view.lens.z;
-    // The rain on the camera, not on the sea: under a roof it is none.
+    // The drops' own clock (`weather-rain` R3): it runs while rain lands on
+    // the glass and stops while none does, so a drying lens grows no new
+    // drop and the ones on it stay where they are as they shrink and fade.
+    let t = view.lens_look.z*0.2*view.lens.z;
+    // How wet the lens is, not the rain itself: it builds up over a few
+    // seconds in rain and dries off over a few out of it (owner, 2026-11-16:
+    // "fade out instead of abruptly cut", "gradually increase as well"). The
+    // layers thin with it, the drops shrink with it, and the whole fades.
     let rain = clamp(view.rain.x,0.0,1.0);
     var wipe = 0.0;
     var drops = vec4<f32>(0.0);
@@ -1231,7 +1273,7 @@ fn lens(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let emerge = clamp(view.fx.w,0.0,1.0);
     if (emerge > 0.001) {
         var dry = 0.0;
-        let r = refract_through_drops(uv,drop_uv,t,0.0,1.0,0.6,&dry);
+        let r = refract_through_drops(uv,drop_uv,view.camera_time.w*0.2*view.lens.z,0.0,1.0,0.6,&dry);
         color = mix(color,r.rgb,r.a*emerge*above_water);
     }
     return vec4<f32>(color,1.0);

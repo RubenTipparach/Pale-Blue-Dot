@@ -208,3 +208,92 @@ per-frame mesh rebuild and upload. It is recorded here as a candidate in the
 spirit of the owner's "the more gpu native rain we can have the better", and
 is a separate change with its own A/B; the mockup draws its streaks that way
 already, which is a demonstration, not a plan of record.
+
+## Rain artifacts (owner, 2026-11-16)
+
+The owner, on a terraced valley in rain: "theres massive artifacts here";
+then "grass blades shouldnt have rain shader on them", "the wet camera fx
+need to fade out instead of abruptly cut when going into a dry space (or
+rain stopped)" and "also wetness amount needs to gradually increase as
+well". Pictures and the captures that reproduce them:
+`docs/screenshots/rain-artifacts/` and its README. The trees' part is
+`flora-v2` design 13; the river's is `water-flow` "Rain rings that alias".
+
+### R1. The bright blue lines are the streaks, lit by the old model
+
+Measured off `before-valley-rain.jpg` (11:00, full cover, `--rain 1`): a
+near-shower streak is (110, 128, 180) in sRGB over a stone wall of
+(50, 60, 60) and grass of (28, 43, 32): two to three times brighter than
+everything it falls in front of, and saturated blue. The shower is an unlit
+mesh, so its light is `rain_light`: the old model's day curve times
+`1 - cover * overcast_amb_dim`, about 0.5 under a full deck at noon. The
+ground under the new lighting model (`lighting-model` L2, the default) is
+lit by the sky's nine coefficients mixed by the cover, which under a full
+deck is far dimmer: the streak is lit for a sky the ground no longer has,
+and at 0.78 alpha it glows. Their length is not the fault: 1.5 m at
+70 m/s, Tenebris's; a streak 3 to 6 m out spans a quarter of the screen
+whatever its brightness, and lit as the ground is it reads as rain.
+
+**Fix.** Under the new model the shower and the shafts take the light a
+standing face takes there: `sh_irradiance` of the camera's sky
+(`sky_sh_pair`, mixed by the cover) averaged over four horizontal normals,
+times `rain_color` (display to linear, as now). Today's model keeps
+`rain_light`. Expected from the numbers: a streak a little brighter and
+bluer than the wall behind it, not three times it.
+
+### R2. Tufts and every plant: no wet block
+
+The pixel tufts (`flora-v2` design 6) are clutter (`kind == 3`), and the
+rain branch's puddle test `floor_like` passes them (the tuft code is not 2,
+3, 7 or 9) where their normal faces up: puddle mirror, rings, the sheet's
+waves and the glint on a grass blade (`owner-tufts-wet.png`). The fix is
+`flora-v2` 13.2's: trees and all clutter take a uniform darkening by
+`rain_plant_darken` and nothing else.
+
+### R3. The lens dries and wets over time
+
+Today `lens_rain` is the rain, or 0 when `weather.sheltered`: the drops on
+the lens appear and vanish in one frame when the eye walks under cover or
+out of it, and follow the rain's own easing otherwise.
+
+**Fix.** `lens_wet`, per view in the render world, follows `lens_rain`
+exponentially, `lens_wet_tau_s` 3.0 s rising and `lens_dry_tau_s` 2.5 s
+falling (`weather.ron`), on the capture's own clock so a fixed-step capture
+dries as a live one does. The lens draws its drops from `lens_wet`, not the
+rain: their layers thin (`l0..l2` from `lens_wet`), the drop field is
+scaled by it so each drop shrinks under its edge threshold and the small
+ones go first, and the whole fades by it. **No new drops while dry**: the
+drops' clock (`t`, which slides them down and starts a new one at each
+cycle) advances only by `dt * lens_rain / max(lens_wet, eps)` clamped to
+one, so it stops when the rain stops reaching the lens and the drops that
+are there stay where they are, shrink and fade; back in the rain it runs
+again and drops build up as `lens_wet` rises. The emerge drips keep the
+camera clock.
+
+### R4. What else snaps (checked)
+
+- **The ground's wetness** eases both ways (`settle_wetness`, symmetric, on
+  `wet_fade_tau_s`), and the puddle mask, the darkening and the mirror all
+  read it (`params.weather.x`). The ring count reads the rain itself
+  (`params.weather.y`), which the field already builds in and dies away
+  (`smooth-weather` 1). No change; a sequence of the rain starting and
+  stopping shows it.
+- **The near shower** under cover: `near_shower` is skipped whole while
+  `weather.sheltered`, so walking under a roof takes the 18 m disk of
+  streaks away in one frame, including the streaks out in the open. Fix:
+  the shower's own `shower_open` follows `!sheltered` on
+  `lens_wet_tau_s` / `lens_dry_tau_s`'s faster half (0.4 s), so the disk
+  thins over a moment instead. (Drawing each streak only where its own
+  column is open would be truer; it costs 1,700 column lookups a frame and
+  is not taken here.)
+- **The splashes** are not on this branch (`claude/rain-splashes` is not
+  merged into `claude/env-v2`): nothing to check.
+
+### R5. Instruments
+
+`PBD_WEATHER_SCRIPT=<frame>:<event>,...` in a capture (events `dry`,
+`rain`, `cover`, `open`): from that capture frame the rain under the player
+is held at 0 or let through, or the eye is taken as under cover or not. It
+changes nothing else, and only with `--capture`. With
+`PBD_CAPTURE_RUN` it gives the sequences: the rain stopping, the rain
+starting, walking into cover, walking out of it.

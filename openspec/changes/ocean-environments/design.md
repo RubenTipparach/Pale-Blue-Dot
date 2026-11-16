@@ -1161,6 +1161,98 @@ version):
   test that a stand's blades are narrow (no part wider than 0.15 m but
   the canopy) and that its colours are only the frond's.
 
+### B18. Sea life that vanishes up close, and floes on the beach (owner, 2026-11-16)
+
+The owner, on a cold coast with sea ice: "what the heck are these fish
+doing" and "they disappear when I get close to them". Their frame: white hex
+floes tipped at odd angles and stacked between sandy, snow-topped terraces,
+and a dark rounded shape (a seal) between them.
+
+**Reproduced** at the polar shore of B13, `--walk --at 86.965 -17.827 --time
+12 --pitch -10` (`docs/screenshots/sea-life-fixes/`). The walker stands on
+sand 0.6 m above the sea, and floes lie all over that sand.
+
+**What was found, each from the code and the capture:**
+- **Floes are put on dry land.** `places::plan` puts a floe on every 2.8 m
+  lattice point the environment function calls `UnderIce`, and that
+  function is coarse (a 3 m lattice and a zone noise): it calls the beach
+  and the shore terraces under-ice too. `build_tile` then lays every floe at
+  the mean sea radius with 0.6 m of ice below it, whatever the ground there.
+  On a beach the terrain's hex columns stand up through the slab, so the
+  floes read as tipped and stacked; at low tide (a third of the 3 m range
+  below the mean) even the ones over shallow water sit in the sand. The
+  slabs themselves are flat: each is built square to its own up.
+- **A seal on a floe vanishes at 9 m.** `places::ambient` skips a floe's
+  seal in one frame once the eye is within nine metres ("slid in"). There
+  is no slide: it is there, then it is not.
+- **A swimming seal drops 1.2 m in one frame.** A seal of the schools is
+  `HaulsOut`: within its 9 m `shy_m` its pose becomes `Under`, and
+  `draw::build` draws it 1.2 m lower at once, under the surface; from above
+  the water that is a vanish. It does not swim away either: the startle only
+  raises its speed cap, so it keeps paddling round the goal it had.
+- **A diving duck vanishes.** A `Dives` duck is `Under` for a third of every
+  14 s cycle, and `draw::build` skips a creature that is `Under`: gone in
+  one frame, back in one frame.
+- **The reef's ambient life pops at 30 m.** A tile draws its anthias cloud,
+  clownfish and floe seals only while its middle is within `NEAR_M` (30 m),
+  but the tile itself is whole to 34 m and fades out from 34 to 46 m. The
+  life appears and goes in one frame at 30 m, in the whole part of the tile.
+  The sway snaps to rest at the same line.
+- **Schools appear and go in one frame.** A school is spawned 20 to 60 m out
+  and dropped at 90 m with no fade: a duck or a seal on the surface 20 m off
+  appears whole in one frame.
+- Not the cause: frustum culling (Bevy 0.18 recomputes a mesh's bounds when
+  its asset changes, and every school mesh is rebuilt each frame), the
+  camera's near plane (creatures are drawn at 2 m in the lineup), and the
+  fishing line (only a splash scatters fish, and they swim, not jump).
+
+**Change** (drawing and the creatures' state; no generator version, since
+floes are pieces drawn from the plan, not cells, and nothing is saved):
+- **Floes float or are not there.** A floe is laid only where the water
+  under its middle and its six corners is deep enough for its 0.6 m of ice
+  at low water (the mean less a third of the tide's range); elsewhere,
+  beaches and shore terraces included, there is none. The ones left still
+  ride the tide.
+- **A seal on a floe slides off.** When the eye first comes within 9 m, the
+  seal slides forward off its floe's edge and into the water over 1.2 s,
+  then swims away from the eye under the surface, visibly, and stays off
+  the floe until the eye has been gone 20 s; then it climbs back out over
+  1.2 s. Each step is a moment in time, keyed to when it started.
+- **A seal of the schools dives and swims off.** Each creature keeps an
+  `under` share, 0 on the surface to 1 dived, eased toward 1 over 1.2 s
+  while startled and back over 2 s after; it is drawn that share of 1.2 m
+  down. A startled floater (seal, otter, duck) also turns its school's goal
+  away from the eye, 12 m on in water that fits it, so it is seen leaving.
+- **A diving duck dives.** Its `Under` window ramps: it sinks nose-first
+  over its first 0.6 s and rises over its last 0.6 s, drawn under the water
+  in between, never skipped.
+- **Ambient life is drawn while its tile is drawn**, and so fades with the
+  tile's screen-door mask from 34 to 46 m. The sway eases out from 26 to
+  30 m rather than snapping.
+- **Schools fade in and out.** A new school fades in over 0.8 s through the
+  same screen-door mask as the sea's places; a school past 90 m fades out
+  over 0.8 s and only then is dropped.
+
+**Verified** by: core tests that a startled seal's `under` share moves no
+more than its rate allows in a step and that a startled floater's goal is
+away from the eye; app tests that no floe is laid over ground above its
+draft at low water, that a floe seal is drawn on every frame of its slide,
+and that a diver's submersion never jumps; captures before and after at the
+polar shore and the `--life` approach sequence at 30, 20, 12, 8, 5, 3 and
+2 m; READY with no new `LATE_PIPELINE`.
+
+**Built** (2026-11-16, `claude/sea-life-fixes`): as above. The first
+flee only aimed straight away and pulled at the goal's weak 0.45, and the
+seal stayed about 5 m off while it dived; it now tries bearings off the
+straight line and nearer reaches for water that fits, and pulls with a
+lure's weight, and swims from 5.6 m to 17 m in 6 s
+(`docs/screenshots/sea-life-fixes/seal-approach-trace.txt`). Known limit: a
+seal of the schools rides the water's surface and knows nothing of the
+floes, so in a dense floe field it can lie half inside one; hauling it out
+onto a floe needs the floes in the water the schools read, and is not done
+here. The `--life` approach ends at 5 m at the polar shore: no water nearer
+is deep enough for a seal.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with
@@ -1177,3 +1269,86 @@ screenshots)", not the owner's words:
 - D11. Turbidity per place, from reef (over 100 m of sight) to marsh (5 m).
 - The page's title is "Seas, Rivers and Marshes"; the file stays
   `ocean.html`.
+
+### B17. Under a river's water (owner, 2026-11-16)
+
+The owner: "problems with submerging in rivers"
+(`docs/screenshots/rain-artifacts/owner-river-43.webp`). Down in a river
+channel the river's sheet hangs over the eye as a thin translucent layer,
+and the view under it reads as dry air: no fog, no tint, no light.
+
+**Reproduced** (`docs/screenshots/river-fixes/before-under.jpg`,
+`before-up.jpg`): a version 10 world, a river 60 m from the spawn
+(`--fly --at 28.2500 0.7500 --height 0.8`: the ground at 63 m, the river's
+water's surface, as the column reports it at the eye, at 65.8 m, the eye at
+64.6 m).
+
+**What decides "under water" today, measured in the code:**
+- The eye's water is the column's: `publish_eye_water` asks the column at
+  the eye (`Column::water_surface`), which knows river and flowing water,
+  and `submersion` turns it into the tri-state `fx.y`. In the river it is
+  1, fully under: that is why the river's sheet is drawn at all from below
+  (`water.wgsl` discards the back of the game's own water unless `fx.y` is
+  over 0.75), and why audio already muffles there.
+- The composite that draws the underwater view (`compose` in `water.wgsl`)
+  then measures everything against the SEA's sphere, `planet_center.w`:
+  how deep the eye is (`cam_gap`), which pixels are under water (the
+  waterline mask `pixel_alt`), how far a sky ray travels to the surface,
+  and the shafts' and the snow's depth. A river stands over the sea, so
+  every pixel is "above the water", the mask is nought and the frame is
+  passed through untouched. The sea worked only because its surface IS
+  that sphere.
+- `submersion` also adds the sea's swell at the camera to the surface,
+  which a river does not have.
+- The near shower (`weather.rs`) stops only under the sea's level.
+
+**The fix: the eye's own surface.** The water view carries the surface of
+the water the eye is in (`sea_frame.y`, a spare lane: nought means the sea
+and the sphere as before). Every underwater term in `compose` and in
+`under_water_light` reads that surface instead of the sea's sphere when
+it is set: depth fog and colour by how far the view travels in the water,
+the turbidity, the sky seen through the surface, the shafts and the
+snow by depth under it, the distortion. The sheet's own from-below path
+already measures the murk from the sheet it draws, so the surface from
+below is the sea's (Snell's window, the murk past it). The swell is added
+only to the sea's surface; a river's is where the column puts it. The near
+shower stops when the eye's water says it is under.
+
+Everything else that asks "is the eye under" already reads `fx.y` or
+`EyeWaterState` (the clouds, the rain, the lens, the emerge drips, audio),
+so it follows.
+
+**Swimming** reads the column already (`walking::Sea::state`, `water-flow`
+E10): a walker in a river floats, swims and climbs out as in the sea. A
+test pins it.
+
+**Limit.** The mask is a sphere at the river's surface round the planet's
+centre, as the sea's is. A pixel of ground lower than the river's surface
+but seen past the river's end (down a fall, in the air) counts as wet. The
+river is narrow and its reach ends in a fall; the eye under it sees the
+fall's own sheet first. Written down, not fixed.
+
+**Second pass, the waterline (owner, 2026-11-16).** "underwater ground tint
+is happening before the water line", and "the land right above the water
+right there is also getting that subtle twisty effect from being
+underwater". Two faults, measured in the code:
+- The composite's waterline mask, `1 - smoothstep(-band, band, pixel_alt)`,
+  reached `partial_band_m` (0.8 m) ABOVE the surface, so ground just over
+  the water was fogged, tinted and wobbled. With the eye's own surface now
+  a river's, every eye at a river's waterline (the straddle) showed it on
+  the banks. The mask now fades in over the 0.1 m UNDER the surface
+  (`WATERLINE_EDGE_M`) and nothing above the surface is ever wet; what lies
+  under a crest over the mean sea is behind the sheet, which draws its own.
+- The terrain's own underwater tint, darkening and caustics
+  (`planet_surface.wgsl`) measured every column's water against the sea's
+  tided sheet unless the column's water stood under the sea's level: a
+  river's bed was never tinted, and a river's edge near the sea took the
+  tide's line rather than its own. A column's water over the sea's level is
+  now its own surface, and that surface is the water's own height, a
+  flowing top included: the record carries how far the top layer's water
+  stands under the layer's top in eighths (`WATER_SHORT_SHIFT`), so the
+  tint stops within 6 cm of the surface, where it stopped up to a metre
+  over a thin film. Rain rings follow (they stop where the tint starts).
+
+Captures: `before-skim.jpg` and `after-skim.jpg` (the eye at a river's
+surface), `after-bank.jpg` (from over the bank).

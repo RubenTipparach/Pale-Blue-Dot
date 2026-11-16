@@ -1331,3 +1331,82 @@ fn every_craft_is_lit_by_the_field() {
     assert_eq!(kinds.len(), crafts(&mut app).len());
     assert!(kinds.contains(&Kind::Tern) && kinds.contains(&Kind::Loon));
 }
+
+/// Interact on F (owner, 2026-11-16): beside a craft with nothing usable
+/// aimed, the prompt names the craft and F boards it; with something usable
+/// aimed (a ripe crop here, offered as the farm offers it), F does that and
+/// the craft is left where it is.
+#[test]
+fn f_boards_a_craft_only_when_nothing_usable_is_aimed() {
+    use crate::interact::{Act, Interact, InteractSet, Offer};
+    #[derive(Resource, Default)]
+    struct CropAimed(bool);
+    /// Where the walker is held for the offers (the walker settles back
+    /// between a test's teleport and the offers otherwise).
+    #[derive(Resource, Default)]
+    struct Pin(Option<Vec3>);
+    let mut app = app(crate::saves::WorldSave::memory_only());
+    app.init_resource::<CropAimed>()
+        .init_resource::<Pin>()
+        .add_systems(
+            PostUpdate,
+            (
+                (|pin: Res<Pin>,
+                  frame: Res<crate::planet::PlanetRenderFrame>,
+                  mut walkers: Query<&mut Position, With<Walker>>| {
+                    if let Some(at) = pin.0 {
+                        let up = (at.as_dvec3() - frame.center).normalize().as_vec3();
+                        for mut p in &mut walkers {
+                            p.0 = at + up * crate::walking::HALF_HEIGHT;
+                        }
+                    }
+                })
+                .before(InteractSet::Offer),
+                (|aimed: Res<CropAimed>, mut interact: ResMut<Interact>| {
+                    if aimed.0 {
+                        interact.offer(Offer::new(Act::Harvest, "wheat"));
+                    }
+                })
+                .in_set(InteractSet::Offer),
+            ),
+        );
+    app.update();
+    let (entity, tern) = crafts(&mut app)
+        .into_iter()
+        .find(|(_, c)| c.kind == Kind::Tern)
+        .unwrap();
+    let at = tern.exit().as_vec3();
+    // Stand by the craft for a frame, so the offers are seen, and press F.
+    let press_beside = |app: &mut App| {
+        app.world_mut().resource_mut::<WalkingState>().captured = true;
+        // The readout the prompt reads (a test world is never "open", so
+        // the walker does not publish it).
+        let mut readout = app
+            .world_mut()
+            .resource_mut::<crate::walking::WalkingReadout>();
+        (readout.active, readout.captured) = (true, true);
+        app.world_mut().resource_mut::<Pin>().0 = Some(at);
+        stand_at(app, at);
+        app.update();
+        stand_at(app, at);
+        let now = app.world().resource::<Interact>().now.clone();
+        tap(app, KeyCode::KeyF);
+        app.world_mut().resource_mut::<Pin>().0 = None;
+        now
+    };
+    // A ripe crop aimed beside the craft: the prompt names the crop, and F
+    // leaves the craft alone.
+    app.world_mut().resource_mut::<CropAimed>().0 = true;
+    assert_eq!(
+        press_beside(&mut app),
+        Some(Offer::new(Act::Harvest, "wheat"))
+    );
+    assert_eq!(app.world().resource::<Aboard>().0, None, "F harvested");
+    // Nothing usable aimed: the prompt names the craft, and F boards it.
+    app.world_mut().resource_mut::<CropAimed>().0 = false;
+    for _ in 0..30 {
+        app.update();
+    }
+    assert_eq!(press_beside(&mut app), Some(Offer::new(Act::Board, "tern")));
+    assert_eq!(app.world().resource::<Aboard>().0, Some(entity), "F boards");
+}

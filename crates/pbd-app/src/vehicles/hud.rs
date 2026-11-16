@@ -1,14 +1,13 @@
-//! The instruments aboard, and the prompt that says a craft is in reach. Both
-//! are read off the craft's own telemetry: the HUD computes nothing.
+//! The instruments aboard, read off the craft's own telemetry: the HUD
+//! computes nothing.
 //!
 //! The on-foot screen is kept bare on the owner's instruction, so this shows
-//! only while it is a control: the prompt while a craft can be boarded, the
-//! panel while one is being driven. Text is plain ASCII, as every string a
+//! only while a craft is being driven. A craft in reach on foot is named by
+//! the interact prompt (`crate::interact`), which knows whether F boards it
+//! or does something nearer first. Text is plain ASCII, as every string a
 //! player reads is.
 
 use super::{Aboard, Vehicle, view::VehicleView};
-use crate::walking::{Walker, WalkingState};
-use avian3d::prelude::Position;
 use bevy::prelude::*;
 use pbd_core::vehicle::{CraftState, Kind, SailState, Telemetry};
 use std::fmt::Write;
@@ -38,14 +37,10 @@ pub fn spawn(mut commands: Commands) {
     ));
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn show(
     aboard: Res<Aboard>,
     view: Res<VehicleView>,
-    walking: Option<Res<WalkingState>>,
-    frame: Res<crate::planet::PlanetRenderFrame>,
     vehicles: Query<&Vehicle>,
-    walkers: Query<&Position, With<Walker>>,
     mut text: Query<(&mut Text, &mut Visibility), With<VehicleText>>,
     binds: Option<Res<crate::controls::KeyBinds>>,
 ) {
@@ -54,27 +49,11 @@ pub fn show(
     let Ok((mut text, mut visibility)) = text.single_mut() else {
         return;
     };
-    let line = match aboard.0.and_then(|e| vehicles.get(e).ok()) {
-        Some(vehicle) => panel(vehicle, view.seat, binds),
-        None => walking
-            .filter(|w| w.active)
-            .and_then(|_| walkers.single().ok())
-            .and_then(|walker| {
-                let at = walker.0.as_dvec3() - frame.center;
-                vehicles
-                    .iter()
-                    .map(|v| (v, v.craft.body.position.distance(at)))
-                    .filter(|(v, d)| *d <= v.craft.seat().reach_m as f64)
-                    .min_by(|a, b| a.1.total_cmp(&b.1))
-                    .map(|(v, _)| {
-                        let board = crate::controls::slots()
-                            .find(|s| s.name() == "vehicles:KeyF")
-                            .map_or("F", |s| crate::controls::key_label(binds.key(&s)));
-                        format!("[{board}] board the {}", v.craft.kind.name())
-                    })
-            })
-            .unwrap_or_default(),
-    };
+    let line = aboard
+        .0
+        .and_then(|e| vehicles.get(e).ok())
+        .map(|vehicle| panel(vehicle, view.seat, binds))
+        .unwrap_or_default();
     *visibility = if line.is_empty() {
         Visibility::Hidden
     } else {
@@ -232,7 +211,8 @@ fn panel(vehicle: &Vehicle, seat: bool, binds: &crate::controls::KeyBinds) -> St
     );
     let _ = write!(
         s,
-        "{}   ({} view)",
+        "{} step off   {}   ({} view)",
+        crate::controls::key_label(crate::interact::key(binds)),
         crate::controls::line("VEHICLES", binds),
         if seat { "seat" } else { "chase" }
     );

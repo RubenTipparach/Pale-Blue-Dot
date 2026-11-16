@@ -825,7 +825,11 @@ fn the_plants_dither_out_and_cut_out_in_dropped() {
     for line in [
         "if code == TUFT_CODE && !tuft_on(input.uv) { return true; }",
         "if code == FERN_CODE && fern_cut(input.uv) { return true; }",
-        "let left = params.clutter.x - 2.0 - distance(input.position, params.camera.xyz);",
+        // Leaving at the reach's edge by the trees' time fade (`flora-v2`
+        // 13.3: a fade is a moment in time, never a place).
+        "let edge = params.clutter.x - 2.0 - 0.5*max(params.clutter.y, 0.0);",
+        "let was = distance(input.position, params.tree_fade[0].xyz) < edge;",
+        "let now = distance(input.position, params.tree_fade[1].xyz) < edge;",
     ] {
         assert!(body.contains(line), "dropped no longer says `{line}`");
     }
