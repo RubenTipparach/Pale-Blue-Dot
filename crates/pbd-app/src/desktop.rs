@@ -981,12 +981,10 @@ impl Launch {
                 }
                 "--grass" => {
                     i += 1;
-                    let look = args.get(i).expect("--grass requires tufts or blades");
-                    result.settings.pixel_grass = Some(match look.as_str() {
-                        "tufts" => true,
-                        "blades" => false,
-                        _ => panic!("--grass takes tufts or blades"),
-                    });
+                    // Tufts are the only grass (owner, 2026-11-16); the flag
+                    // stays so old capture recipes still run.
+                    let look = args.get(i).expect("--grass requires tufts");
+                    assert!(look == "tufts", "--grass takes tufts: the blades are gone");
                 }
                 "--upscale" => {
                     i += 1;

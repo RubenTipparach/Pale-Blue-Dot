@@ -1205,3 +1205,12 @@ Checked every place a plant could borrow the ground's colour:
   changes remove work from plants in rain and add two distance tests a tree
   vertex).
 
+### Pixel tufts are the only grass (owner, 2026-11-16)
+
+The owner: *"grass should be pixel tufts, remove the other grass"*, then *"no
+setting to swap, just the new stuff"*. The blade grass is removed: from the
+surface shader, the Pixel grass row on the settings screen, `FloraLook` and
+its system. `--grass` now takes only `tufts`, so old capture recipes still
+run, and `blades` is refused. A settings file's `pixel_grass` value is still
+read, so old files load, but nothing reads it any more.
+

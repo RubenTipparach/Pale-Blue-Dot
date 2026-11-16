@@ -1665,69 +1665,32 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         normal = axis;
 
         if v < 216u {
-            // ---- grass: a blade of two stacked quads that curve and taper.
+            // ---- grass: a pixel tuft, two crossed cards in the slot's twelve
+            // vertices (`flora-v2` design 1; the only grass since 2026-11-16,
+            // the owner: "grass should be pixel tufts, remove the other grass").
             let j = v/12u;
             let i = v%12u;
-            let blades = u32((0.6+0.4*roll(id,SALT_GRASS+1u))*params.clutter.z);
-            // `flora-v2` design 1: with the player's Pixel grass on, a slot
-            // is a tuft - two crossed cards, the same twelve vertices - on
-            // its own count, at the seat and facing the blade would take.
             let tufts = u32(round((0.6+0.4*roll(id,SALT_GRASS+1u))*params.flora.x));
-            if params.flora.x > 0. {
-                if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < tufts {
-                    let sj = SALT_GRASS+16u+j*8u;
-                    let k = u32(roll(id,sj)*f32(degree));
-                    let f0 = 0.15+0.60*roll(id,sj+1u);
-                    let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
-                    let size = 0.8+0.5*roll(id,sj+3u);
-                    let half_w = params.flora.y*size*0.5;
-                    let h = params.flora.z*size;
-                    let a = roll(id,sj+2u)*TAU+f32(i/6u)*TAU*0.25;
-                    let dir = tangent*cos(a)+bitangent*sin(a);
-                    // The tip row sways along the card; the root stays put.
-                    let sway = sin(1.7*params.settings.z+roll(id,sj+6u)*TAU)*0.06*h;
-                    let top = bottom+axis*h+dir*sway;
-                    quad = array<vec3<f32>,4>(bottom-dir*half_w,bottom+dir*half_w,
-                        top+dir*half_w,top-dir*half_w);
-                    // The variant in the integer part, the card in the fraction.
-                    let variant = f32(u32(roll(id,sj+5u)*3.));
-                    quad_uv = array<vec2<f32>,4>(vec2(variant,0.),vec2(variant+0.999,0.),
-                        vec2(variant+0.999,1.),vec2(variant,1.));
-                    material = TUFT_CODE;
-                    is_quad = true;
-                    grown = h > 0.0001;
-                }
-            } else if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < blades {
+            if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < tufts {
                 let sj = SALT_GRASS+16u+j*8u;
                 let k = u32(roll(id,sj)*f32(degree));
                 let f0 = 0.15+0.60*roll(id,sj+1u);
-                let seat_dir = axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0;
-                let bottom = seat_dir*radius;
-                let ang = roll(id,sj+2u)*TAU;
-                let side = tangent*cos(ang)+bitangent*sin(ang);
-                let across = tangent*cos(ang+0.9)+bitangent*sin(ang+0.9);
-                let h = params.clutter_size.x*(0.8+0.4*roll(id,sj+3u))*fade;
-                let hw = params.clutter_size.y*(0.7+0.6*roll(id,sj+4u));
-                // Each blade crops its own vertical strip of the ground tile,
-                // so neighbouring blades pick up different pixels of art the
-                // project already ships. That is the reference's
-                // `tile_uv_slice` and it is why clutter needs no new texture.
-                let strip = roll(id,sj+5u)*0.78;
-                let seg = i/6u;
-                let a = f32(seg)*0.5;
-                let b = f32(seg+1u)*0.5;
-                // One cross-section: the centre walks up and leans on the
-                // SQUARE of the height fraction, so the blade curves rather
-                // than shearing, and the half-width tapers toward the tip.
-                let ca = bottom+axis*(h*a)+across*(h*0.15*a*a);
-                let cb = bottom+axis*(h*b)+across*(h*0.15*b*b);
-                let wa = hw*(1.-0.55*a);
-                let wb = hw*(1.-0.55*b);
-                quad = array<vec3<f32>,4>(ca-side*wa,ca+side*wa,cb+side*wb,cb-side*wb);
-                quad_uv = array<vec2<f32>,4>(vec2(strip,1.-a),vec2(strip+0.18,1.-a),
-                    vec2(strip+0.18,1.-b),vec2(strip,1.-b));
-                shade_lo = mix(base_shade,1.,a);
-                shade_hi = mix(base_shade,1.,b);
+                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let size = 0.8+0.5*roll(id,sj+3u);
+                let half_w = params.flora.y*size*0.5;
+                let h = params.flora.z*size;
+                let a = roll(id,sj+2u)*TAU+f32(i/6u)*TAU*0.25;
+                let dir = tangent*cos(a)+bitangent*sin(a);
+                // The tip row sways along the card; the root stays put.
+                let sway = sin(1.7*params.settings.z+roll(id,sj+6u)*TAU)*0.06*h;
+                let top = bottom+axis*h+dir*sway;
+                quad = array<vec3<f32>,4>(bottom-dir*half_w,bottom+dir*half_w,
+                    top+dir*half_w,top-dir*half_w);
+                // The variant in the integer part, the card in the fraction.
+                let variant = f32(u32(roll(id,sj+5u)*3.));
+                quad_uv = array<vec2<f32>,4>(vec2(variant,0.),vec2(variant+0.999,0.),
+                    vec2(variant+0.999,1.),vec2(variant,1.));
+                material = TUFT_CODE;
                 is_quad = true;
                 grown = h > 0.0001;
             }

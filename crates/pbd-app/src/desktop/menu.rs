@@ -128,8 +128,6 @@ pub enum MenuAction {
     /// A sound volume (`audio-and-ambience` 7.2): 0 master, 1 effects,
     /// 2 ambience, 3 music, 4 menus, each 0..=100 % in steps of 10.
     Volume(u8),
-    /// The pixel tuft grass, on or off (`flora-v2`).
-    PixelGrass,
     /// Arrows on the flowing water, on or off (`water-flow` 3.4).
     FlowArrows,
     /// Put the open Input sub-tab's keys back to their defaults.
@@ -361,7 +359,6 @@ fn settings_checked(
         MenuAction::Bloom => graphics.bloom,
         MenuAction::RainShadows => player.rain_shadows,
         MenuAction::MissionLine => player.mission_line,
-        MenuAction::PixelGrass => player.pixel_grass,
         MenuAction::FlowArrows => player.flow_arrows,
         MenuAction::AutoStep => player.auto_step,
         _ => return None,
@@ -390,7 +387,6 @@ pub fn press_graphics(
             MenuAction::AutoStep => changed.auto_step = !changed.auto_step,
             MenuAction::RainShadows => changed.rain_shadows = !changed.rain_shadows,
             MenuAction::MissionLine => changed.mission_line = !changed.mission_line,
-            MenuAction::PixelGrass => changed.pixel_grass = !changed.pixel_grass,
             MenuAction::FlowArrows => changed.flow_arrows = !changed.flow_arrows,
             _ => {}
         }
@@ -853,7 +849,6 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                         // On PICTURE beside Reflections (owner, 2026-11-16:
                         // "rain shadow should be under picture").
                         check_row(rows, kit, "Rain shadow", "", MenuAction::RainShadows);
-                        check_row(rows, kit, "Pixel grass", "", MenuAction::PixelGrass);
                         check_row(rows, kit, "Flow arrows", "", MenuAction::FlowArrows);
                     });
                     let weather = page(panel, 1);
@@ -1796,7 +1791,6 @@ pub fn press(
             | MenuAction::Reflections
             | MenuAction::MissionLine
             | MenuAction::Volume(_)
-            | MenuAction::PixelGrass
             | MenuAction::FlowArrows
             | MenuAction::ResetTab => {}
             MenuAction::Load(row) => {
