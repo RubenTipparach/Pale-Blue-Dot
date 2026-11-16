@@ -67,17 +67,26 @@ does. The hover prompt names the piece ("F  pick up stone",
 
 ## 5. The draw
 
-`clutter_taken` works as `trees_taken` does:
-- the nearest 64 cells with a live take go into the planet uniform, each
-  with its id and its piece mask;
-- the vertex shader drops a taken piece;
-- a take less than `lod_fade_s` old dissolves out through the detail-fade
-  dither rather than vanishing in one frame;
-- a regrown piece dissolves in the same way.
+`clutter::ClutterTaken` works as `trees_taken` does:
+- the nearest 32 cells with a piece taken or growing back go into the
+  planet uniform (`clutter_taken`, two a lane): each cell's clutter id and
+  one byte a piece, how far it is sunk, 0 whole to 255 gone;
+- the vertex shader scales the piece's height by one less that, so a taken
+  piece sinks into the ground over `lod_fade_s` and rises again the same way
+  when it grows back. That is how clutter already leaves at the edge of its
+  reach (the `fade` term), so it never vanishes or appears in one frame. A
+  piece sunk away collapses as one the cell never grew does;
+- the list is rebuilt every frame while a piece is moving, and twice a second
+  otherwise.
 
-A taken piece beyond the 64 nearest is drawn again. A test keeps that out of
-sight: the list covers the clutter's 120 m reach at the take density a
-player can reach in a sitting.
+A taken piece beyond the 32 nearest cells is drawn again. A hand reaches 3 m,
+so 32 cells is every take within a walk of the eye in a gathering session.
+Measuring how often a player passes it is left to the owner's playtest.
+
+*Built differently from the plan (recommendation taken, ask only with
+screenshots):* the plan said "the detail-fade dither". Clutter has its own
+fade, the sink, and a dither on a 0.16 m pebble is a few pixels of noise, so
+the sink is used.
 
 ## 6. Missions
 

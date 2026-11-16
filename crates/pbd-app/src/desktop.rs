@@ -307,6 +307,10 @@ pub struct Launch {
     /// `--forge [metres]`: a forge that far ahead, stocked and given two jobs,
     /// the first part done; with `--forge-panel`, its panel open.
     pub forge: Option<f32>,
+    /// `--gather-around <metres>` (`gather-by-hand`, a capture instrument):
+    /// once the ground is in, every stone and shrub that near the player is
+    /// taken through the same path F takes one, so a still shows them gone.
+    pub gather_around: Option<f32>,
     pub forge_panel: bool,
     /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
     /// campfire that far ahead, stocked, flatbread done on it and a fish
@@ -462,6 +466,7 @@ impl Launch {
             hold_pointer: false,
             farm_ripe: false,
             forge: None,
+            gather_around: None,
             forge_panel: false,
             bare: false,
             tier: pbd_core::inventory::Tier::Stone,
@@ -635,6 +640,15 @@ impl Launch {
                     } else {
                         result.forge = Some(metres);
                     }
+                }
+                "--gather-around" => {
+                    i += 1;
+                    result.gather_around = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .filter(|m: &f32| m.is_finite() && *m > 0.0)
+                            .expect("--gather-around requires metres"),
+                    );
                 }
                 "--farm-harvest" => result.farm_harvest = true,
                 "--hold-pointer" => result.hold_pointer = true,
@@ -1731,6 +1745,7 @@ pub fn run(args: &[String]) {
             kitchen::scripted.after(farm::scripted),
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
+            farm::scripted_gather.after(digging::scripted_dig),
             craft::scripted.after(digging::scripted_dig),
             // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
             water::scripted

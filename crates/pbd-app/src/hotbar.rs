@@ -114,6 +114,9 @@ pub enum How {
     Made,
     /// Collected from a kept animal (`animal-husbandry`): an egg, wool, milk.
     Collected,
+    /// Taken by hand from the ground clutter (`gather-by-hand`): a stone
+    /// from a pebble, fibre from a bush, shrub or fern.
+    Gathered,
 }
 
 /// A seed was planted (`starter-missions`: "plant").

@@ -88,6 +88,7 @@ pub struct Tally {
     penned: u32,
     cooked: u32,
     ate: u32,
+    gathered: u32,
 }
 
 /// The caption bar's text (`step-videos` 2.2).
@@ -170,6 +171,11 @@ struct Bot {
     away_to: Option<Vec3>,
     /// The place `Mark` puts the map's mark on.
     mark_goal: Option<Vec3>,
+    /// The piece of clutter `PickUp` is going for: its cell's key, kind and
+    /// middle.
+    clutter_goal: Option<(u32, pbd_core::scatter::Kind, Vec3)>,
+    /// Pieces it gave up on, by cell key and kind.
+    clutter_gave_up: HashSet<(u32, pbd_core::scatter::Kind)>,
     /// Where the bot last got stuck, and until when it builds itself up.
     stuck_at: Option<Vec3>,
     climb_until: f32,
@@ -228,6 +234,9 @@ struct Sight<'a> {
     /// The map's view and the window's size, for pointing at the map.
     map_view: Option<super::map_screen::MapView>,
     window: Option<Vec2>,
+    /// The ground clutter's odds and the world's day (`gather-by-hand`).
+    odds: Option<pbd_core::scatter::Odds>,
+    day: f64,
 }
 
 fn tangent(v: Vec3, up: Vec3) -> Vec3 {
@@ -762,6 +771,7 @@ pub fn tally(
             pbd_app::hotbar::How::Picked => tally.picked += 1,
             pbd_app::hotbar::How::Harvested => tally.harvested += 1,
             pbd_app::hotbar::How::Collected => tally.collected += 1,
+            pbd_app::hotbar::How::Gathered => tally.gathered += 1,
             _ => {}
         }
     }
@@ -817,6 +827,7 @@ pub struct World<'w, 's> {
     tally: Res<'w, Tally>,
     sun: Res<'w, pbd_app::sky::Sun>,
     map_view: Option<Res<'w, super::map_screen::MapView>>,
+    scatter: Option<Res<'w, pbd_app::config::ScatterSettings>>,
 }
 
 /// The bot's frame: look, decide, press.
@@ -939,6 +950,8 @@ pub fn drive(
             .single()
             .ok()
             .map(|w| Vec2::new(w.width(), w.height())),
+        odds: w.scatter.as_deref().map(pbd_app::clutter::odds),
+        day: pbd_app::clutter::day_of(w.sun.clock.seconds),
     };
     let Some(shot) = player.file.shots.get(bot.shot).cloned() else {
         bot.ended = Some(now);
@@ -1359,6 +1372,7 @@ fn run(
         Act::Till(n) => till(bot, *n, s, out),
         Act::Plant(n) => plant(bot, *n, s, out),
         Act::Pick(n) => pick(bot, *n, s, out),
+        Act::PickUp(until) => pick_up(bot, until, s, out),
         Act::Harvest(n) => harvest(bot, *n, s, out),
         Act::Tame(species) => tame(bot, species, s, out),
         Act::Pen => pen(bot, s, out),
@@ -2354,6 +2368,84 @@ fn pick(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
             if bot.phase_s > 3.0 {
                 bot.gave_up.insert(key);
                 bot.goal = None;
+            }
+        }
+    }
+    Status::Running
+}
+
+/// `PickUp` (`gather-by-hand`): walk to the nearest stone, or bush, shrub or
+/// fern, that gives what `until` wants, look at it and press F, until.
+fn pick_up(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
+    use pbd_core::scatter::Kind;
+    let gathered = s.tally.gathered - bot.mark.gathered;
+    if gathered > bot.count {
+        bot.count = gathered;
+        bot.clutter_goal = None;
+        bot.phase = 0;
+    }
+    if bot.until_met(s, until) {
+        return Status::Done;
+    }
+    let Some(odds) = s.odds else {
+        return Status::Fail("no clutter odds".into());
+    };
+    let wants = |kind: Kind| match until {
+        Until::Have(name, _) => kind.gives().0 == name,
+        _ => true,
+    };
+    let Some((key, kind, centre)) = bot.clutter_goal else {
+        let toward = s.feet.normalize_or(Vec3::Y);
+        let cos = (80.0 / PLANET_RADIUS).cos();
+        let mut best: Option<((u32, Kind, Vec3), f32)> = None;
+        for r in s.fine.set.finest_records() {
+            let Some(d) = Vec3::from_slice(&r.direction_height[..3]).try_normalize() else {
+                continue;
+            };
+            if d.dot(toward) < cos || r.direction_height[3] < 0.3 {
+                continue;
+            }
+            let taken = pbd_app::clutter::taken_at(s.save, r.key());
+            for piece in pbd_app::clutter::pieces_of(r, &odds) {
+                if !wants(piece.kind)
+                    || taken.gone(piece.kind, s.day)
+                    || bot.clutter_gave_up.contains(&(r.key(), piece.kind))
+                {
+                    continue;
+                }
+                let dist = piece.seat.distance(s.feet);
+                if best.is_none_or(|b| dist < b.1) {
+                    best = Some(((r.key(), piece.kind, piece.centre), dist));
+                }
+            }
+        }
+        let Some((goal, _)) = best else {
+            return Status::Fail("no stone or shrub within 80 m".into());
+        };
+        bot.clutter_goal = Some(goal);
+        bot.phase = 0;
+        bot.phase_s = 0.0;
+        return Status::Running;
+    };
+    let give_up = |bot: &mut Bot| {
+        bot.clutter_gave_up.insert((key, kind));
+        bot.clutter_goal = None;
+        bot.phase = 0;
+    };
+    match bot.phase {
+        0 => match bot.walk_to(s, out, centre, 1.4) {
+            Walked::There => bot.next_phase(),
+            _ if bot.phase_s > 40.0 => give_up(bot),
+            _ => {}
+        },
+        _ => {
+            let aimed = bot.aim_at(s, out, centre);
+            if aimed && bot.phase_s > 0.4 {
+                out.taps.push(KeyCode::KeyF);
+                bot.phase_s = -1.0;
+            }
+            if bot.phase_s > 3.0 {
+                give_up(bot);
             }
         }
     }

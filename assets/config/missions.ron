@@ -44,7 +44,7 @@
             id: "gather",
             branch: "trunk",
             title: "Gather by hand",
-            help: "Dig soft ground with bare hands: fibre turns up in grass, loose stone in the soil under it.",
+            help: "Pick up loose stones and pull fibre from shrubs and ferns with F, and dig soft ground with bare hands for soil.",
             objectives: [
                 (kind: gather, what: "fibre", count: 8, label: "fibre"),
                 (kind: gather, what: "stone", count: 9, label: "stone"),

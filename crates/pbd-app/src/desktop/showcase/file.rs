@@ -138,6 +138,9 @@ pub enum Act {
     Plant(u32),
     /// Pick this many wild plants.
     Pick(u32),
+    /// Pick up stones, or pull fibre from bushes, shrubs and ferns, with F
+    /// (`gather-by-hand`), until: `Have("stone", n)` or `Have("fibre", n)`.
+    PickUp(Until),
     /// Harvest the field's ripe crops.
     Harvest(u32),
     /// Feed a wild animal of this species (`any` for the nearest one the

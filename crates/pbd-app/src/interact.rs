@@ -40,6 +40,8 @@ pub enum Act {
     Harvest,
     Check,
     PickWild,
+    /// Take a stone or fibre from the ground clutter (`gather-by-hand`).
+    Gather,
     OpenDoor,
     ShutDoor,
     Till,
@@ -62,7 +64,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 17] = [
+pub const ACTS: [Row; 18] = [
     row(Act::Collect, "Collect", Reader::Husbandry),
     row(Act::SetEggs, "Set eggs under", Reader::Husbandry),
     row(Act::Feed, "Feed", Reader::Husbandry),
@@ -76,6 +78,7 @@ pub const ACTS: [Row; 17] = [
     row(Act::Harvest, "Harvest", Reader::Farm),
     row(Act::Check, "Check", Reader::Farm),
     row(Act::PickWild, "Pick wild", Reader::Farm),
+    row(Act::Gather, "Gather", Reader::Farm),
     row(Act::OpenDoor, "Open", Reader::Doors),
     row(Act::ShutDoor, "Shut", Reader::Doors),
     row(Act::Till, "Till", Reader::Farm),
