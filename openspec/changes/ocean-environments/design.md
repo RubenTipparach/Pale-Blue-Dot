@@ -1421,3 +1421,120 @@ list); numeric junction checks in `water_junction_tests`.
 - **The capture label** now uses that same surface and the same eye rule (`eye_water_at`), for this frame's eye.
 - **The river reads darker than the sea.** I measured frames at the same depth (`videos/same-depth-sea-vs-river.jpg`). The open water is the same in both: (6, 29, 43) against (6, 27, 37) at 1 m down. What differs is the bed. The sea's is sand on an open shore. The river's is dirt, as the owner asked, in a channel whose walls shade it. A capture with the water composite switched off shows the same gap in the terrain's own shading, so the water model is the same in both. Matching the brightness would mean a lighter bed (sand or gravel) for river beds. That is the owner's call, so it is not made here.
 - **The riffle.** At a step, the eye a few centimetres under a thin cell's drawn top can see out through that cell's side face, over the lower reach beyond. That frame is lit as water seen from inside, which is what it is. It shows only on the capture path, which follows the water's height as it jumps up and down at each step.
+
+### B19. The waterline from just under, the river's ceiling, the speckle (owner, 2026-11-16)
+
+The owner, standing in shallow sea at `52.053 -118.367` (the eye at -0.4 m):
+"the water line shades above it", with a dark blue band over the bank and
+sand above the water from the waterline up, the left bank's base dark teal
+"as if under water", and bright bands on the far side. Under a river at
+`56.322 -117.795`: "getting better, but still lots of work to do": a dark
+navy ceiling with blotches, a band of speckled noise at the far end of the
+channel, and sand rims at the channel's top edge that look like they float.
+
+**Reproduced** with the capture path (`PBD_EYE_PATH`) at both spots, the
+eye held at +0.15, +0.05, -0.03, -1 and -2 m against the water at four
+headings, at the default, low and high tide
+(`docs/screenshots/waterline-3/`). Measured in the code:
+
+1. **The dark band is the surface seen from just under it.** With the eye a
+   few centimetres under the sea's tided surface (the owner's -0.4 m is
+   within a few centimetres of the -0.42 m sheet; the swell takes the eye
+   across it), every ray that rises less than about 40 degrees meets the
+   surface outside Snell's window. The sheet's from-below path paints all of
+   it the flat murk colour (`murk`), so the band of rays just over the
+   horizon, exactly where the bank above the water would be, is a flat dark
+   navy band starting at the waterline, and the bank under it is (rightly)
+   seen through water: the "dark teal base".
+2. **The bright bands are a hole in the surface.** The sheet nearer the eye
+   than the near plane (0.2 m) is clipped. An eye 3 cm under sees every ray
+   rising more than about 9 degrees cross the surface inside that distance,
+   so the top of the frame looks through the hole: the sky nearly clear (the
+   composite fogs a sky ray by its 3 cm of water) and the trees as dark
+   silhouettes, over the navy band.
+3. **The sea's sheet flips per fragment.** The sea's `below` test compares
+   the eye's radius with each fragment's, waves included. With the eye
+   within the swell of the surface, a far crest over the eye's height is
+   drawn as if seen from below (murk) while the eye is above the water: a
+   dark band at the far waterline that comes and goes with the waves.
+4. **The ceiling: navy with blotches.** Outside Snell's window the surface
+   from below is total internal reflection: it mirrors what is under the
+   water, the bed and the walls. The game paints it the murk colour, which
+   in a shallow river with a lit bed and lit walls is far darker than
+   everything round it. The blotches are Snell's window cut by the waves'
+   normals into bright patches. The sea shows the same model; it reads
+   better there only because the open sea's fog is the same colour.
+5. **The floating rims.** The channel's walls are lit to their tops, and
+   immediately over them is the flat murk of the ceiling: a lit wall that
+   ends against a dark sky reads as a slab floating, where in the water it
+   would meet its own mirror image at the surface.
+6. **The speckle.** Two terms point-sample a pattern finer than their
+   sampling, so the far end of the channel turns to per-pixel noise:
+   - the shafts march 10 samples, evenly spread over up to 40 m and offset
+     by a per-pixel random jitter, through a bright pattern about 4.5 m
+     across: 4 m between samples, so every pixel lands on a different part
+     of the pattern;
+   - the caustic web on the bed is snapped to 0.25 m and has no footprint
+     filter; past a few metres a pixel spans several of its blocks.
+
+**Fixes.**
+- **The surface from below mirrors the water** (fixes 1, 4, 5). Outside
+  Snell's window the sheet shows the underwater scene reflected in it,
+  traced in the screen history the sea already uses for its reflections
+  (`sea_ssr`, `lighting-model` L8), with the extra water the reflected light
+  crosses on its way. Where the trace finds nothing, what the eye sees in
+  the mirrored ray's direction 25 m out, fogged for the leg from the eye
+  up to the surface, if what the eye sees there stands within those 25 m
+  (past them, the sky over a river's lower reach was mirrored as a sliver);
+  otherwise the murk as before. The waves tilt the mirror a quarter as much
+  as the window (at their full tilt the grazing mirror swirled), and past
+  6 to 20 m from the eye the mirror gives way to the murk (the trace's hits
+  and misses alternated pixel to pixel there, a grain). Only a face that
+  faces up mirrors: the side face of a step or a fall stays the murk (the
+  first cut mirrored them too, a bright slab at the channel's far end).
+  Inside the window the sky, as before; the window's edge is the same
+  Fresnel ramp. The walls now meet their mirror at the surface, and the
+  ceiling is as bright as the water under it.
+- **No hole near the eye** (fixes 2). The composite stands in for the
+  clipped sheet: a ray from an eye under the surface that crosses it within
+  `NEAR_SHEET_M` is shaded as the sheet would shade it, the mirror outside
+  the window and the view through it inside. Its mirror is the eye's own
+  view in the mirrored direction, not a trace: a trace from a point a few
+  centimetres from the eye starts behind the near plane, and one frame of
+  a crossing came back as a grid of misses.
+- **The sea's side is the eye's** (fixes 3). A sea fragment more than a few
+  metres away is seen from below only when the eye is under its own
+  surface (`eye_water_surface`); within those metres the wave under the eye
+  still decides, so a crest passing over the eye is seen from below.
+- **No per-pixel noise** (fixes 6). The shafts' samples take one offset
+  for every ray instead of a random one per pixel, so neighbouring pixels
+  sample neighbouring points; they are packed toward the eye (quadratic
+  spacing), and each fades to the pattern's mean where its stretch of the
+  ray outgrows the pattern, so the slices never show. The caustic web fades
+  to its mean where a pixel's footprint outgrows its 0.25 m blocks. Fading
+  every sample but the first (tried) took the shafts out altogether, a
+  dropped effect; this keeps them.
+
+**Not changed.** The river bed's material and colour (the owner's call, task
+12.5's side-by-side). The look of the sea seen from above.
+
+**The capture items from B18.**
+- **Mouth f804-808** (the eye "above" for 5 frames): the capture path
+  teleported the eye 40 m, and for the frames the tier took to serve the new
+  cell the eye's water was `Unknown`, which reads the sea's height field.
+  That is the capture tool; a walker cannot move 40 m in a frame. The
+  validation videos of this pass never teleport.
+- **The tributary riffle f512**: the capture path followed the water's
+  height up a step, so the eye was a few centimetres under a thin cell's
+  top and saw out through that cell's own side face. The picture was right
+  for where the eye was; the path was the problem. This pass's paths are
+  fixed in height and place through each crossing (owner, 2026-11-16: "if
+  you smooth the up and down test for water line, then that might be a
+  better test").
+
+**Validation.** Before and after MP4s at 1080p60 at the owner's two spots,
+a sea shore and a river mouth: one steady descent and one steady ascent at
+0.1 m/s through ±0.4 m of the surface, the place fixed, the eye's height
+burnt in. On Drive as `waterline3-<place>-<before|after>-1080p60.mp4`;
+contact sheets and the frame-by-frame list in
+`docs/screenshots/waterline-3/README.md`.
