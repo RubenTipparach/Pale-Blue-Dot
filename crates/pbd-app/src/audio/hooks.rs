@@ -376,9 +376,18 @@ fn walker_sounds(
             } else {
                 0.0
             };
-            sfx.play_with(named("step", family), at, quiet, 1.0);
-            if wet && family.takes_wet() {
-                sfx.play_with("step_wet", at, quiet, 1.0);
+            if wet && family == Family::Dirt {
+                // Wet dirt is mud: the squelch is the step, brought up to a
+                // step's level (`step_wet` sits 6 dB under `step_dirt` in
+                // the book, as a layer). The owner, 2026-11-16: "walking
+                // outside sounds like walking on wet wood, but the ground is
+                // wet dirt".
+                sfx.play_with("step_wet", at, quiet + 6.0, 1.0);
+            } else {
+                sfx.play_with(named("step", family), at, quiet, 1.0);
+                if wet && family.takes_wet() {
+                    sfx.play_with("step_wet", at, quiet, 1.0);
+                }
             }
         }
     }
@@ -398,7 +407,11 @@ fn walker_sounds(
             // thump, please get rid of that, regular step when falling and
             // hitting ground is fine"). The `land_*` and `land_hard` takes
             // stay in the book, unplayed.
-            sfx.play(named("step", family), at);
+            if wet && family == Family::Dirt {
+                sfx.play_with("step_wet", at, 6.0, 1.0);
+            } else {
+                sfx.play(named("step", family), at);
+            }
         }
         body.stride.reset();
     }
