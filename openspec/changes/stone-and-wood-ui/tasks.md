@@ -130,3 +130,19 @@ lavapipe, no GPU; frame cost not measured.)
 
 ## 3. Video (batched with the others)
 - [ ] The step's video, when the owner calls for the batch.
+
+## 4. Interact on F, and its prompt (owner, 2026-11-16)
+(Design, "Interact on F, and the prompt that names it", written before the code.)
+- [ ] One INTERACT slot, `interact:KeyF`, replacing `hands:KeyE` and
+      `vehicles:KeyF`; the F readers (husbandry, fruit, farm, doors,
+      boarding) read F; E free on foot, Q/E still roll.
+- [ ] `pbd_app::interact`: the priority table, the offers, `now` with its
+      0.15 s hold; each reader acts only on its own row.
+- [ ] `farm::plant_on_ray`: crops and wild plants found by their own shape.
+- [ ] The prompt under the crosshair, with the bound key; hidden in panels.
+- [ ] Settings version 8: the old slots' rebinds migrate.
+- [ ] Texts: missions help, notes, showcase presses.
+- [ ] Tests: rebinds, an F harvest and pick through the input path, an old
+      file's custom use binding kept, F boards with nothing usable aimed.
+- [ ] Captures in `docs/screenshots/interact-f/`: the controls page and a
+      prompt of each kind.
