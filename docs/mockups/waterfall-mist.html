@@ -60,6 +60,10 @@ button{font:inherit;color:inherit}
 .mbody table{border-collapse:collapse;width:100%;font-size:13.5px}
 .mbody td,.mbody th{border-top:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
 .mbody th{font:600 12px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.grp{background:var(--panel);border:1px solid var(--line);border-radius:6px;margin-bottom:8px}
+.grp>summary{cursor:pointer;padding:7px 10px;font:700 16px var(--display);letter-spacing:.05em;color:var(--sky);list-style:revert}
+.grp[open]>summary{border-bottom:1px solid var(--line)}
+.grpb{display:grid;gap:6px;padding:8px}
 .tw{overflow-x:auto}
 .tabs{align-self:start}
 .tabs button{font-size:17px;padding:7px 16px}
@@ -71,7 +75,6 @@ button{font:inherit;color:inherit}
 .flabels span{position:absolute;left:0;top:0;padding:1px 6px;border-radius:3px;background:rgba(8,14,18,.62);font:600 13px var(--display);letter-spacing:.05em;white-space:nowrap}
 .flabels span[hidden]{display:none}
 .ptick{position:absolute;right:10px;top:10px;font:500 13px ui-monospace,Menlo,monospace;color:var(--muted);text-shadow:0 1px 3px #000;pointer-events:none}
-<style>
 .sheet{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px}
 .sheet figure{margin:0;display:grid;gap:4px}
 .sheet img,.sheet canvas{image-rendering:pixelated;background:#1d3a44;border:1px solid var(--line);max-width:100%;height:auto}
@@ -101,27 +104,42 @@ button{font:inherit;color:inherit}
     <button class="info" id="tabInfo" aria-label="What this tab shows">i</button>
   </div>
   <section id="newPanel" hidden>
-    <div class="bar" style="margin-bottom:8px"><span class="lbl">Mist rule</span><span class="seg" id="rule"><button data-rule="game" aria-pressed="false">Game's</button><button data-rule="new" aria-pressed="true">Proposed</button></span></div>
-    <div class="bar" style="margin-bottom:8px"><span class="lbl">FX</span><span class="seg" id="pix"><button data-pix="1" aria-pressed="false">Pixelated</button><button data-pix="0" aria-pressed="true">Smooth</button></span></div>
-    <div class="bar" style="margin-bottom:8px"><span class="lbl">Lip</span><span class="seg" id="glass"><button data-glass="0" aria-pressed="false">Froth</button><button data-glass="1" aria-pressed="true">Glassy</button></span></div>
-    <div class="sl one"><label for="accel">Fall speed-up</label><input id="accel" type="range" min="0" max="2" step="0.05" value="2"><output id="accelOut">2.00</output></div>
-    <div class="sl one"><label for="gain">Mist opacity</label><input id="gain" type="range" min="0.2" max="2" step="0.05" value="2"><output id="gainOut">2.00</output></div>
-    <div class="sl one"><label for="mist">Mist amount</label><input id="mist" type="range" min="0" max="3" step="0.05" value="1"><output id="mistOut">1.00</output></div>
-    <div class="sl one"><label for="mistSize">Mist size</label><input id="mistSize" type="range" min="0.4" max="2.5" step="0.05" value="1.65"><output id="mistSizeOut">1.65</output></div>
-    <div class="sl one"><label for="veil">Fall droplets</label><input id="veil" type="range" min="0" max="3" step="0.05" value="1"><output id="veilOut">1.00</output></div>
-    <div class="sl one"><label for="streak">Droplet streak</label><input id="streak" type="range" min="0" max="3" step="0.05" value="0"><output id="streakOut">0.00</output></div>
-    <div class="sl one"><label for="soft">Wall blend</label><input id="soft" type="range" min="0" max="3" step="0.05" value="1.2"><output id="softOut">1.20</output></div>
-    <div class="sl one"><label for="bub">Bubbles</label><input id="bub" type="range" min="0" max="2" step="0.05" value="1"><output id="bubOut">1.00</output></div>
-    <div class="sl one"><label for="rip">Ripple height</label><input id="rip" type="range" min="0" max="3" step="0.05" value="0.5"><output id="ripOut">0.50</output></div>
-    <div class="sl one"><label for="ripLen">Ripple size, m</label><input id="ripLen" type="range" min="0.3" max="3" step="0.05" value="0.9"><output id="ripLenOut">0.90</output></div>
-    <div class="sl one"><label for="ripReach">Ripple reach, m</label><input id="ripReach" type="range" min="1" max="15" step="0.25" value="6"><output id="ripReachOut">6.00</output></div>
-    <div class="sl one"><label for="out">Pool flow</label><input id="out" type="range" min="0" max="3" step="0.05" value="0.1"><output id="outOut">0.10</output></div>
-    <div class="sl one"><label for="outReach">Flow reach, m</label><input id="outReach" type="range" min="1" max="15" step="0.25" value="6"><output id="outReachOut">6.00</output></div>
-    <div class="sl one"><label for="teal">Teal churn</label><input id="teal" type="range" min="0" max="2" step="0.05" value="1"><output id="tealOut">1.00</output></div>
-    <div class="sheet" style="margin-top:10px">
+    <details class="grp" data-grp="Mist"><summary>Mist</summary><div class="grpb">
+      <div class="bar"><span class="lbl">Mist rule</span><span class="seg" id="rule"><button data-rule="game" aria-pressed="false">Game's</button><button data-rule="new" aria-pressed="true">Proposed</button></span></div>
+      <div class="bar"><span class="lbl">FX</span><span class="seg" id="pix"><button data-pix="1" aria-pressed="false">Pixelated</button><button data-pix="0" aria-pressed="true">Smooth</button></span></div>
+      <div class="sl one"><label for="gain">Mist opacity</label><input id="gain" type="range" min="0.2" max="2" step="0.05" value="2"><output id="gainOut">2.00</output></div>
+      <div class="sl one"><label for="mist">Mist amount</label><input id="mist" type="range" min="0" max="3" step="0.05" value="1"><output id="mistOut">1.00</output></div>
+      <div class="sl one"><label for="mistSize">Mist size</label><input id="mistSize" type="range" min="0.4" max="2.5" step="0.05" value="1.65"><output id="mistSizeOut">1.65</output></div>
+      <div class="sl one"><label for="soft">Wall blend</label><input id="soft" type="range" min="0" max="3" step="0.05" value="1.2"><output id="softOut">1.20</output></div>
+    </div></details>
+    <details class="grp" data-grp="Falling water"><summary>Falling water</summary><div class="grpb">
+      <div class="sl one"><label for="accel">Fall speed-up</label><input id="accel" type="range" min="0" max="2" step="0.05" value="2"><output id="accelOut">2.00</output></div>
+      <div class="sl one"><label for="veil">Fall droplets</label><input id="veil" type="range" min="0" max="3" step="0.05" value="1"><output id="veilOut">1.00</output></div>
+      <div class="sl one"><label for="streak">Droplet streak</label><input id="streak" type="range" min="0" max="3" step="0.05" value="0"><output id="streakOut">0.00</output></div>
+    </div></details>
+    <details class="grp" data-grp="Edge"><summary>Edge</summary><div class="grpb">
+      <div class="bar"><span class="lbl">Lip</span><span class="seg" id="glass"><button data-glass="0" aria-pressed="false">Froth</button><button data-glass="1" aria-pressed="true">Glassy</button></span></div>
+      <div class="sl one"><label for="glassTop">Smooth before edge, m</label><input id="glassTop" type="range" min="0" max="5" step="0.05" value="2"><output id="glassTopOut">2.00</output></div>
+      <div class="sl one"><label for="glassFace">Glassy over edge, m</label><input id="glassFace" type="range" min="0" max="3" step="0.05" value="0.9"><output id="glassFaceOut">0.90</output></div>
+      <div class="sl one"><label for="fill">Froth fills by, m</label><input id="fill" type="range" min="0.2" max="6" step="0.05" value="2.5"><output id="fillOut">2.50</output></div>
+      <div class="sl one"><label for="glassTint">Glassy green</label><input id="glassTint" type="range" min="0" max="1" step="0.05" value="0.7"><output id="glassTintOut">0.70</output></div>
+      <div class="sl one"><label for="edgeHi">Edge highlight</label><input id="edgeHi" type="range" min="0" max="2" step="0.05" value="0"><output id="edgeHiOut">0.00</output></div>
+    </div></details>
+    <details class="grp" data-grp="Pool"><summary>Pool</summary><div class="grpb">
+      <div class="sl one"><label for="bub">Bubbles</label><input id="bub" type="range" min="0" max="2" step="0.05" value="1"><output id="bubOut">1.00</output></div>
+      <div class="sl one"><label for="teal">Teal churn</label><input id="teal" type="range" min="0" max="2" step="0.05" value="1"><output id="tealOut">1.00</output></div>
+      <div class="sl one"><label for="rip">Ripple height</label><input id="rip" type="range" min="0" max="3" step="0.05" value="0.5"><output id="ripOut">0.50</output></div>
+      <div class="sl one"><label for="ripLen">Ripple size, m</label><input id="ripLen" type="range" min="0.3" max="3" step="0.05" value="0.9"><output id="ripLenOut">0.90</output></div>
+      <div class="sl one"><label for="ripReach">Ripple reach, m</label><input id="ripReach" type="range" min="1" max="15" step="0.25" value="6"><output id="ripReachOut">6.00</output></div>
+      <div class="sl one"><label for="out">Pool flow</label><input id="out" type="range" min="0" max="3" step="0.05" value="0.1"><output id="outOut">0.10</output></div>
+      <div class="sl one"><label for="outReach">Flow reach, m</label><input id="outReach" type="range" min="1" max="15" step="0.25" value="6"><output id="outReachOut">6.00</output></div>
+    </div></details>
+    <details class="grp" data-grp="Art"><summary>Art</summary><div class="grpb">
+    <div class="sheet">
       <figure><img src="waterfall-mist/mist_puffs.png?v=1" width="384" height="384" alt="The new mist puff sheet: four puffs, four frames each"><figcaption>Mist puffs, 4 x 4 cells of 32 texels (3x)</figcaption></figure>
       <figure><canvas id="bubbleSwatch" width="8" height="8" style="width:96px;height:96px"></canvas><figcaption>Bubble, 8 texels (12x)</figcaption></figure>
     </div>
+    </div></details>
   </section>
 </main>
 <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="mbox"><div class="mhead"><h2 id="modalTitle"></h2><button class="mclose" id="modalClose" aria-label="Close">&#x2715;</button></div><div class="mbody" id="modalBody"></div></div></div>
@@ -221,7 +239,7 @@ button{font:inherit;color:inherit}
 <template id="tab-fixed"><p><b>Fixed order.</b> The same splash, drawn after the water against its depth: in front of the water, hidden by it. The pool shows its own deep colour. The mist is the game's gradient dot.</p></template>
 <template id="tab-new"><p><b>New mist + bubbles.</b> The fixed order, with lumpy lit mist puffs in place of the dot, bubbles rising in the pool under the fall, and the aerated teal over them. <b>Mist opacity</b> scales the puffs; 0.80 matches the dot's total cover.</p><p><b>Mist rule</b>: <b>Proposed</b> mists every fall by the metres it drops, with a floor, so the riffle and the 1 and 2-layer falls read as misty; <b>Game's</b> is today's count by whole falling layers. <b>Fall speed-up</b>: the falling faces scroll faster further down, so a taller fall's foot runs fastest (0 is the game's one speed). The About modal has the rules and numbers.</p></template>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="waterfall-mist/mist.js?v=26"></script>
+<script src="waterfall-mist/mist.js?v=27"></script>
 <script>
 "use strict";
 let MODAL_BACK = null;
@@ -290,7 +308,7 @@ document.getElementById("pause").addEventListener("change", e => { P.S.running =
 document.getElementById("showRef").addEventListener("change", refresh);
 const gain = document.getElementById("gain");
 gain.addEventListener("input", () => { P.S.gain = +gain.value; document.getElementById("gainOut").textContent = (+gain.value).toFixed(2); P.apply(); });
-for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"], ["mist", "mist"], ["mistSize", "mistSize"], ["veil", "veil"], ["soft", "soft"], ["streak", "streak"], ["accel", "accel"], ["rip", "rip"], ["out", "out"], ["ripLen", "ripLen"], ["ripReach", "ripReach"], ["outReach", "outReach"]]) {
+for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"], ["mist", "mist"], ["mistSize", "mistSize"], ["veil", "veil"], ["soft", "soft"], ["streak", "streak"], ["accel", "accel"], ["rip", "rip"], ["out", "out"], ["ripLen", "ripLen"], ["ripReach", "ripReach"], ["outReach", "outReach"], ["glassTop", "glassTop"], ["glassFace", "glassFace"], ["fill", "fill"], ["glassTint", "glassTint"], ["edgeHi", "edgeHi"]]) {
   const el = document.getElementById(id);
   el.addEventListener("input", () => { P.S[key] = +el.value; document.getElementById(id + "Out").textContent = (+el.value).toFixed(2); P.apply(); });
 }
@@ -305,6 +323,11 @@ for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"], ["mist", "mist"],
     g.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a})`; g.fillRect(x, y, 1, 1);
   }
 })();
+// Setting groups open and close; which are open is remembered in this browser only.
+for (const d of document.querySelectorAll("details.grp")) {
+  try { if (localStorage.getItem("wm-grp-" + d.dataset.grp) === "1") d.open = true; } catch (e) {}
+  d.addEventListener("toggle", () => { try { localStorage.setItem("wm-grp-" + d.dataset.grp, d.open ? "1" : "0"); } catch (e) {} });
+}
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
 showTab(location.hash.slice(1) || "new");
 P.start();

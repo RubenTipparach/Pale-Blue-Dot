@@ -381,7 +381,7 @@ function waterMaterial(U, vertexShader) {
       uM: {value: new THREE.Matrix3()}, uRp: {value: 2400}, uTime: {value: 0}, uScene: {value: null}, uRes: {value: new THREE.Vector2(1, 1)},
       uStretch: {value: 1}, uSpeed: {value: 1}, uAccel: {value: 0}, uLip: {value: 0}, uFallFrame: {value: 0},
       uOpen: {value: new THREE.Vector3(1, 1, 1)}, uNight: {value: 0}, uRain: {value: 0}, uSunI: {value: 1},
-      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1}, uRip: {value: 0}, uOut: {value: 0}, uGlass: {value: 0}, uRipLen: {value: 0.9}, uRipReach: {value: 6}, uOutReach: {value: 6},
+      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1}, uRip: {value: 0}, uOut: {value: 0}, uGlass: {value: 0}, uRipLen: {value: 0.9}, uGlassTop: {value: 2}, uGlassFace: {value: 0.9}, uFill: {value: 2.5}, uGlassTint: {value: 0.7}, uEdgeHi: {value: 0}, uRipReach: {value: 6}, uOutReach: {value: 6},
       uG: {value: 0}, uVmax: {value: 8}}, U),
     side: THREE.DoubleSide,
     vertexShader: `attribute vec3 aRest; attribute vec3 aFaceN; attribute float aKind; attribute float aFroth; attribute vec3 aPath;
@@ -396,7 +396,7 @@ function waterMaterial(U, vertexShader) {
       uniform vec3 uOpen; uniform float uNight; uniform float uRain; uniform float uSunI;
       varying vec3 vRest; varying vec3 vFaceN; varying float vKind; varying float vFroth; varying vec3 vPath; varying float vTop;
       varying vec3 vFlowN; varying vec3 vFlow; varying float vSky; varying vec3 vP; varying float vDepth;
-      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt; uniform float uRip; uniform float uOut; uniform float uGlass; uniform float uRipLen; uniform float uRipReach; uniform float uOutReach;
+      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt; uniform float uRip; uniform float uOut; uniform float uGlass; uniform float uRipLen; uniform float uGlassTop; uniform float uGlassFace; uniform float uFill; uniform float uGlassTint; uniform float uEdgeHi; uniform float uRipReach; uniform float uOutReach;
       uniform float uG; uniform float uVmax;
       ${NOISE_GLSL}
       ${LIGHT_GLSL}
@@ -529,8 +529,8 @@ function waterMaterial(U, vertexShader) {
         // and the sky's reflection runs unbroken), and stays glassy over the first half-metre of the drop.
         float glass = 0.0;
         if (uGlass > 0.5) {
-          if (vKind < 0.5 && vPath.z > -50.0 && vPath.z <= 0.0) glass = smoothstep(-2.0, -0.3, vPath.z);
-          if (fallFace) glass = 1.0 - smoothstep(0.15, 0.9, vPath.z);
+          if (vKind < 0.5 && vPath.z > -50.0 && vPath.z <= 0.0) glass = smoothstep(-max(uGlassTop, 0.05), -0.15*uGlassTop, vPath.z);
+          if (fallFace) glass = 1.0 - smoothstep(0.17*uGlassFace, max(uGlassFace, 0.02), vPath.z);
           gradient *= 1.0 - 0.9*glass;
         }
         float raw_slope = length(gradient);
@@ -572,7 +572,7 @@ function waterMaterial(U, vertexShader) {
         transmitted = mix(transmitted, AER_COL*water_lit, clamp(aer*0.85*uAerAmt, 0.0, 1.0));
         // Glassy lip: the smooth sheet over the edge is a thick body of water, so it shows the water's own green,
         // not the wall behind it.
-        if (fallFace && glass > 0.0) transmitted = mix(transmitted, mix(SHALLOW, DEEP, 0.35)*water_lit*1.3, 0.7*glass);
+        if (fallFace && glass > 0.0) transmitted = mix(transmitted, mix(SHALLOW, DEEP, 0.35)*water_lit*1.3, clamp(uGlassTint*glass, 0.0, 1.0));
         float crest = smoothstep(0.35, 0.60, height)*0.55;
         float slope = smoothstep(0.50, 1.20, raw_slope)*0.26;
         float foam = clamp(max(crest, slope)*FOAM_INT + ripFoam, 0.0, 1.0);
@@ -600,8 +600,8 @@ function waterMaterial(U, vertexShader) {
             else {
               vec3 sp = vec3(along.x*16.0, along.y*0.12, along.z*16.0) + vec3(0.0, uTime*uSpeed*0.9, 0.0);
               float strands = smoothstep(0.55, 0.8, gnoise3(sp)*0.5 + gnoise3(sp*2.1)*0.25 + 0.5);
-              float s = vPath.z, fill = smoothstep(0.6, 2.5, s);
-              froth = mix(strands*0.85*smoothstep(0.2, 0.7, s), froth, fill);
+              float s = vPath.z, fill = smoothstep(0.24*uFill, max(uFill, 0.05), s);
+              froth = mix(strands*0.85*smoothstep(0.22*uGlassFace, 0.78*uGlassFace, s), froth, fill);
             }
           }
           if (fallFace) {
@@ -614,6 +614,14 @@ function waterMaterial(U, vertexShader) {
           }
         }
         vec3 color = mix(mix(transmitted, reflected, fresnel), FOAM_COL*water_lit, foam);
+        // Edge highlight (Glassy, mockup): the light a rounded lip would catch, as a soft bright band either side of
+        // the edge (on the top's last few centimetres and the face's first), without changing the shape.
+        if (uGlass > 0.5 && uEdgeHi > 0.0) {
+          float e = 0.0;
+          if (vKind < 0.5 && vPath.z > -50.0 && vPath.z <= 0.0) e = 1.0 - smoothstep(0.0, 0.25, -vPath.z);
+          if (fallFace) e = 1.0 - smoothstep(0.0, 0.3, vPath.z);
+          color = mix(color, mix(FOAM_COL, skyRad(transpose(uM)*radial, uNight), 0.4)*water_lit*1.15, clamp(e*e*0.6*uEdgeHi, 0.0, 1.0));
+        }
         vec3 h = normalize(look + uM*uSunDir);
         color += SUN_TINT*pow(max(dot(normal, h), 0.0), SPEC_P)*SPEC_I*uSunI*vSky*4.0;
         gl_FragColor = vec4(toSrgb(color), 1.0);
@@ -955,7 +963,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
   const S = {variant: "new", night: false, running: true, gain: 2, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 0,
-    rule: "new", accel: 2, pixel: false, rip: 0.5, out: 0.1, arrows: false, glass: true, ripLen: 0.9, ripReach: 6, outReach: 6};
+    rule: "new", accel: 2, pixel: false, rip: 0.5, out: 0.1, arrows: false, glass: true, ripLen: 0.9, ripReach: 6, outReach: 6, glassTop: 2, glassFace: 0.9, fill: 2.5, glassTint: 0.7, edgeHi: 0};
   // The eye's pool (the cell under it, if it is a basin's), for the view from under the water.
   let eyePool = null;
   function murk(open) {
@@ -986,7 +994,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     for (const b of bubbles) { b.visible = v === "new"; b.material.uniforms.uAmt.value = S.bubbles; }
     wmat.uniforms.uAer.value = v === "new" ? 1 : 0;
     wmat.uniforms.uAerAmt.value = S.teal; wmat.uniforms.uRip.value = v === "new" ? S.rip : 0; wmat.uniforms.uOut.value = v === "new" ? S.out : 0;
-    wmat.uniforms.uRipLen.value = S.ripLen; wmat.uniforms.uRipReach.value = S.ripReach; wmat.uniforms.uOutReach.value = S.outReach;
+    wmat.uniforms.uRipLen.value = S.ripLen; for (const k of ["GlassTop", "GlassFace", "Fill", "GlassTint", "EdgeHi"]) wmat.uniforms["u" + k].value = S[k[0].toLowerCase() + k.slice(1)]; wmat.uniforms.uRipReach.value = S.ripReach; wmat.uniforms.uOutReach.value = S.outReach;
     for (const arr of arrows.children) {
       const {x, H} = arr.userData, R = S.outReach, sm = (a, b, t) => { const u = Math.min(1, Math.max(0, (t - a) / (b - a))); return u * u * (3 - 2 * u); };
       const sp = S.out * (0.5 + 0.07 * Math.min(H, 10)) * Math.exp(-Math.max(x, 0) / Math.min(2.5 + 0.3 * H, R)) * (1 - sm(0.6 * R, R, x));
