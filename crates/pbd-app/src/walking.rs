@@ -339,6 +339,10 @@ pub struct WalkingState {
     /// is an impulse and an edge; a swim thrust is an acceleration and needs
     /// to know the control is still down.
     jump_held: bool,
+    /// A jump taken from the ground in wading water is still rising
+    /// (`swimming` 6): it rises at full strength, with land gravity and no
+    /// drag. Any other rise in water is swimming.
+    wade_jump: bool,
     heading: Vec3,
     up: Vec3,
     pitch: f32,
@@ -536,6 +540,7 @@ fn setup_walking(world: &mut World) {
         sprinting: false,
         jump: false,
         jump_held: false,
+        wade_jump: false,
         scripted: false,
         heading: match config.restored {
             Some(pose) => tangent_heading(pose.heading, up),
@@ -1134,11 +1139,18 @@ fn drive_walker(
                         1.0
                     };
                 ground.grounded = false;
+                state.wade_jump = wading;
             }
         }
         // A jump out of wading water rises at full strength: the drag is
         // for a swimmer and a fall into water, not a jump out of a shallow.
-        let wading_jump = wading && vertical > 0.0;
+        // Only a JUMP (`swimming` 6): a swimmer holding the control in water
+        // two layers deep is rising too, and taking that for a jump put land
+        // gravity against the swim thrust, which lost, so a river's bed held
+        // the swimmer with its eyes under. The jump's rise ends when the
+        // walker stops rising or leaves the wading water.
+        state.wade_jump &= wading && vertical > 0.0;
+        let wading_jump = state.wade_jump;
         // Nor does it lighten gravity under one: the jump goes as high as
         // it does on land.
         submerged = wet.body && !wading_jump;
@@ -2951,7 +2963,18 @@ mod tests {
     /// row through `W` first and the last row going on: the owner's
     /// staircase (`swimming` 5) is `[-2, -1, 0]`.
     fn pool_rows(rows: &[isize], on_circle: bool) -> Pool {
+        pool_rows_under(rows, &[], on_circle)
+    }
+
+    /// [`pool_rows`] with each row's own water: row `k`'s water stands
+    /// `waters[k]` layers over the pool's surface (nought where `waters` is
+    /// short), so a higher reach can stand beside the pool, as the reach
+    /// above a fall does over its foot (`swimming` 6). [`Pool::surface`]
+    /// stays the surface of the water in the row through `W`, which must be
+    /// nought.
+    fn pool_rows_under(rows: &[isize], waters: &[isize], on_circle: bool) -> Pool {
         use pbd_core::{column::layer_altitude, terrain::Material};
+        assert_eq!(waters.first().copied().unwrap_or(0), 0, "W's water");
         let fibonacci = (0..4096).map(|index| {
             let y = 1.0 - 2.0 * (index as f32 + 0.5) / 4096.0;
             let r = (1.0 - y * y).max(0.0).sqrt();
@@ -3018,11 +3041,12 @@ mod tests {
             let s = (centre(i) - wc).dot(into) * PLANET_RADIUS;
             let row = ((s / pitch).round().max(0.0) as usize).min(rows.len() - 1);
             let top = (g as isize + rows[row]) as usize;
+            let water = (g as isize + waters.get(row).copied().unwrap_or(0)) as usize;
             let column = set.columns.column_mut(i).expect("a column");
             for layer in 1..pbd_core::column::LAYERS {
                 let material = if layer <= top {
                     Material::Stone
-                } else if layer <= g {
+                } else if layer <= water {
                     Material::Water
                 } else {
                     Material::Air
@@ -3174,6 +3198,51 @@ mod tests {
             swim.feet_over_surface,
             swim.into_bank
         );
+    }
+
+    /// `swimming` 6 (owner, 2026-11-16: "in river, I can't swim to the
+    /// surface if I start at a lower block on a waterfall"): a walker on the
+    /// bed holding the swim control brings its eyes over the surface, in a
+    /// river's two layers and in a fall's four-layer pool under a higher
+    /// reach. Before, any rise in water up to two layers deep was taken for
+    /// a wading jump (land gravity, no drag), the thrust lost to gravity, and
+    /// the eyes stayed 0.4 m under.
+    #[test]
+    fn a_walker_on_a_river_bed_swims_up_to_the_surface() {
+        for (rows, waters) in [
+            (&[-2isize, -2][..], &[0isize, 0][..]),
+            (&[-4, 0][..], &[0, 2][..]),
+        ] {
+            let pool = pool_rows_under(rows, waters, false);
+            let (wc, surface) = (pool.w, pool.surface);
+            let mut app = app_with_terrain_at(pool.terrain, wc);
+            app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+                1.0 / 64.0,
+            )));
+            // Sunk to the bed, as a swimmer who dived is: eyes under, so
+            // not grounded, and no jump to take.
+            let bed = surface + rows[0] as f32;
+            let walker = place_at(&mut app, wc * (bed + HALF_HEIGHT + 0.01), false);
+            {
+                let mut state = app.world_mut().resource_mut::<WalkingState>();
+                state.up = wc;
+                state.captured = true;
+                state.scripted = true;
+            }
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::Space);
+            let mut highest = f32::MIN;
+            for _ in 0..192 {
+                app.update();
+                let p = app.world().get::<Position>(walker).unwrap().0;
+                highest = highest.max(p.length() - HALF_HEIGHT + EYE_HEIGHT - surface);
+            }
+            assert!(
+                highest > 0.3,
+                "{rows:?} under {waters:?}: the eyes rose to {highest:.2} m over the surface"
+            );
+        }
     }
 
     /// Swimming along a one-layer bank, brushing its faces, does not climb.

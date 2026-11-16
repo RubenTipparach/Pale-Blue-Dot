@@ -124,10 +124,13 @@ the design, "Stepping up a submerged step".
 waterfall". The finding and the rule are in the design, "Swimming up out of
 shallow water".
 
-- [ ] 6.1 The wading jump is only a jump: a flag on `WalkingState` set by a
+- [x] 6.1 (Built 2026-11-16, `claude/water-gameplay`: `WalkingState::wade_jump`.)
+      The wading jump is only a jump: a flag on `WalkingState` set by a
       jump taken in wading water, cleared when the rise ends; a held swim
       in wading water takes the water's drag and gravity.
-- [ ] 6.2 A test on the pool (`pool_rows`): a walker on the bed of two- and
+- [x] 6.2 (Built: `a_walker_on_a_river_bed_swims_up_to_the_surface`, with
+      `pool_rows_under`; before, the eyes rose to -0.38 m in two layers;
+      every walking test passes after.) A test on the pool (`pool_rows`): a walker on the bed of two- and
       four-layer water beside a higher reach, holding the swim control,
       brings its eyes over the surface (fails before).
 - [ ] 6.3 The owner swims up from a river's bed in the running game.
