@@ -1141,4 +1141,117 @@ mod tests {
             );
         }
     }
+
+    /// A measurement instrument for the `rain-matches-map` change: where the
+    /// player stands in rain the map does not show. On the shipped settled
+    /// climate, at 3,000 places every 10 s through ten minutes, the rain the
+    /// player stands in (`weather::cloud_cell(..).rain`, what `sample_field`
+    /// makes `Weather.rain`) against what the map draws there: the "Clouds
+    /// and rain" layer's blue (`cloud_bytes` and `map_live.wgsl`: 0.55 of the
+    /// smoothed mm/h over 8) and the RAIN overlay's (`overlay_rgba` at the
+    /// map's 0.9). Run with
+    /// `cargo test -p pbd-app --profile fast --lib map_rain_against_local -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn map_rain_against_local() {
+        use pbd_core::overlay::Overlay;
+        let settings = pbd_core::atmosphere::AtmosphereSettings::default();
+        let start = 0.4 * pbd_core::daylight::DAY_S as f64;
+        let air = Air::open(settings, terrain_config().seed, None, start);
+        let mut atmosphere = (*air.now).clone();
+        let places = 3000;
+        let golden = std::f32::consts::PI * (3.0 - 5f32.sqrt());
+        let points: Vec<Vec3> = (0..places)
+            .map(|i| {
+                let y = 1.0 - 2.0 * (i as f32 + 0.5) / places as f32;
+                let r = (1.0 - y * y).sqrt();
+                let a = golden * i as f32;
+                Vec3::new(r * a.cos(), y, r * a.sin())
+            })
+            .collect();
+        // The owner's place, 2026-11-16: map 26.562S 14.111W, which is
+        // `--at 26.562 -14.111` (the frame's latitude is the map's negated).
+        let owner = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: 26.562f32.to_radians(),
+            lon: (-14.111f32).to_radians(),
+        });
+        let threshold_mmh = settings.raining_rate * 3600.0;
+        let mut t = start;
+        // (local rain, rain rate mm/h, layer alpha, overlay alpha, overlay blue)
+        let mut raining: Vec<(f32, f32, f32, f32, f32)> = Vec::new();
+        let mut owner_rows = Vec::new();
+        for step in 0..=600u32 {
+            if step % 10 == 0 {
+                for p in points.iter().chain(std::iter::once(&owner)) {
+                    let cell = pbd_core::weather::cloud_cell(&atmosphere, *p);
+                    if cell.precip != pbd_core::weather::Precip::Rain {
+                        if p == &owner {
+                            owner_rows.push((step, cell.rain, 0.0, 0.0, 0.0));
+                        }
+                        continue;
+                    }
+                    let s = atmosphere.sample(*p);
+                    let mmh = s.rain_rate * 3600.0;
+                    let layer =
+                        0.55 * (smoothed(&atmosphere, *p).rain_rate * 3600.0 / 8.0).clamp(0.0, 1.0);
+                    let rgba =
+                        crate::overlay::overlay_rgba(Overlay::Rain, Overlay::Rain.texel(&s), 0.9);
+                    let alpha = rgba[3] as f32 / 255.0;
+                    let blue = alpha * (rgba[2] as f32 - rgba[0] as f32).max(0.0) / 255.0;
+                    if p == &owner {
+                        owner_rows.push((step, cell.rain, mmh, layer, blue));
+                    } else {
+                        raining.push((cell.rain, mmh, layer, alpha, blue));
+                    }
+                }
+            }
+            t += settings.dt_s as f64;
+            atmosphere.step(Clock { seconds: t }.sun(), &[]);
+        }
+        let heavy: Vec<_> = raining.iter().filter(|r| r.0 >= 0.3).collect();
+        let n = heavy.len().max(1) as f32;
+        let share = |f: &dyn Fn(&&(f32, f32, f32, f32, f32)) -> bool| {
+            100.0 * heavy.iter().filter(|r| f(r)).count() as f32 / n
+        };
+        eprintln!(
+            "samples where the player stands in rain of 0.3 or more: {}",
+            heavy.len()
+        );
+        eprintln!(
+            "  rain rate under the raining threshold ({threshold_mmh:.2} mm/h), the rain lingering: {:.1}%",
+            share(&|r| r.1 < threshold_mmh)
+        );
+        for (lo, hi) in [(0.0, 0.72), (0.72, 1.5), (1.5, 3.0), (3.0, 8.0), (8.0, 1e9)] {
+            eprintln!(
+                "  rain rate {lo}-{hi} mm/h: {:.1}%",
+                share(&|r| r.1 >= lo && r.1 < hi)
+            );
+        }
+        for floor in [0.05f32, 0.1, 0.2] {
+            eprintln!(
+                "  the clouds layer's blue under {floor}: {:.1}%; the overlay's blue under {floor}: {:.1}%",
+                share(&|r| r.2 < floor),
+                share(&|r| r.4 < floor)
+            );
+        }
+        let mut sorted: Vec<f32> = heavy.iter().map(|r| r.1).collect();
+        sorted.sort_by(f32::total_cmp);
+        if !sorted.is_empty() {
+            eprintln!(
+                "  rain rate mm/h: 10th {:.2}, median {:.2}, 90th {:.2}",
+                sorted[sorted.len() / 10],
+                sorted[sorted.len() / 2],
+                sorted[sorted.len() * 9 / 10]
+            );
+        }
+        eprintln!(
+            "the owner's place, every 10 s: step, local rain, mm/h, layer blue, overlay blue"
+        );
+        for row in owner_rows {
+            eprintln!(
+                "  {:4} {:.2} {:.2} {:.3} {:.3}",
+                row.0, row.1, row.2, row.3, row.4
+            );
+        }
+    }
 }
