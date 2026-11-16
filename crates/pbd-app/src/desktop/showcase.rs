@@ -97,8 +97,8 @@ pub struct CaptionText;
 /// A panel control to press this frame, after the UI's focus pass.
 #[derive(Clone, Debug, PartialEq)]
 enum Click {
-    DropDown,
-    DropOption(usize),
+    /// A row of the pack's recipe list, by the hands' recipe index.
+    Recipe(usize),
     CraftHand,
     Well(usize),
     CraftBench,
@@ -1136,8 +1136,7 @@ pub fn press_controls(
     mut pending: ResMut<PendingClick>,
     mut controls: Query<(
         &mut Interaction,
-        Option<&super::craft::DropDown>,
-        Option<&super::craft::DropOption>,
+        Option<&super::craft::RecipeRow>,
         Option<&super::craft::CraftButton>,
         Option<&super::craft::Well>,
         Option<&super::kitchen::CookPlaque>,
@@ -1149,10 +1148,9 @@ pub fn press_controls(
         return;
     };
     let mut hit = false;
-    for (mut interaction, drop, option, button, well, cook, cell, smelt) in &mut controls {
+    for (mut interaction, row, button, well, cook, cell, smelt) in &mut controls {
         let this = match &click {
-            Click::DropDown => drop.is_some(),
-            Click::DropOption(k) => option.is_some_and(|o| o.0 == *k),
+            Click::Recipe(k) => row.is_some_and(|r| r.0 == *k),
             Click::CraftHand => button.is_some_and(|b| b.0 == "hand"),
             Click::CraftBench => button.is_some_and(|b| b.0 == "workbench"),
             Click::Well(k) => well.is_some_and(|w| {
@@ -1606,8 +1604,8 @@ fn dig(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) ->
     Status::Running
 }
 
-/// The pack's Craft row: open the pack, pick the recipe in the drop-down,
-/// press CRAFT once per make and wait for the hands to finish, shut it.
+/// The pack's Craft panel: open the pack, click the recipe's row in the
+/// list, press CRAFT once per make and wait for the hands to finish, shut it.
 fn craft(bot: &mut Bot, code: &str, times: u32, s: &Sight, out: &mut Intent) -> Status {
     let Some(k) = s.recipes.0.at("hand").position(|r| r.code == code) else {
         return Status::Fail(format!("no hand recipe {code}"));
@@ -1627,13 +1625,10 @@ fn craft(bot: &mut Bot, code: &str, times: u32, s: &Sight, out: &mut Intent) -> 
             bot.next_phase();
         }
         1 if bot.phase_s > 0.7 => {
-            out.click = Some(Click::DropDown);
+            out.click = Some(Click::Recipe(k));
             bot.next_phase();
         }
-        2 if bot.phase_s > 0.5 => {
-            out.click = Some(Click::DropOption(k));
-            bot.next_phase();
-        }
+        2 if bot.phase_s > 0.5 => bot.next_phase(),
         3 if bot.phase_s > 0.5 => {
             if bot.count >= times {
                 bot.phase = 5;
@@ -2838,15 +2833,10 @@ mod tests {
             Camera::default(),
             Transform::from_translation(eye).looking_to(toward, up),
         ));
-        // The pack's Craft row: the drop-down, its options and CRAFT.
-        app.world_mut()
-            .spawn((Interaction::None, super::super::craft::DropDown));
+        // The pack's Craft panel: its recipe rows and CRAFT.
         for k in 0..hand.len() {
-            app.world_mut().spawn((
-                Interaction::None,
-                Button,
-                super::super::craft::DropOption(k),
-            ));
+            app.world_mut()
+                .spawn((Interaction::None, Button, super::super::craft::RecipeRow(k)));
         }
         app.world_mut().spawn((
             Interaction::None,

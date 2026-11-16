@@ -476,3 +476,80 @@ reference shows how it can read clearly:
 This stays a proposal until the owner asks for it. The strict tree remains
 the approved design.
 
+
+### Goals worth doing: more of the common things (owner, 2026-11-16)
+
+The owner, on M33's "Find seeds" card ("dig grass for a seed 0/1, pick a
+wild plant 0/1"): "for items like this, I think there should be more.
+instead of get 1 resource, more common resource should be either 5-10, for
+uncommon things like fish, 3-5 is fine", and "crafting 1 item is fine,
+unless a recipe requires multiples".
+
+**Rule.** A goal to gather a common thing asks for 5 to 10; an uncommon
+thing (fish, ore, coal, the less common crops, wool and milk) 3 to 5; a
+goal to craft or place asks for 1, unless the recipe the player is heading
+for takes several, in which case it asks for what that recipe takes.
+
+**The counts**, in `assets/config/missions.ron` (the game) and M33's
+`docs/mockups/mission-tree/tree.js` alike:
+
+| Goal | Was | Now | Why |
+| --- | ---: | ---: | --- |
+| Gather fibre | 4 | 8 | common |
+| Gather stone | 4 | 9 | common; three stone tools take 3 each |
+| Gather soil | 4 | 6 | common |
+| Find seeds: dig grass, pick a wild plant | 1 + 1 (the game: 2 seeds) | 5 + 5 (the game: 10 seeds) | common |
+| Till; plant wheat; harvest wheat | 4 | 6 each | common field work |
+| Harvest turnip, chili, frost kale | 1 each | 3 each | uncommon crops |
+| Collect eggs | 2 | 5 | common |
+| Collect wool or milk | 1 | 3 | uncommon |
+| Dig bait; catch with bait | 1 | 3 | uncommon |
+| Catch in the sea; in fresh water | 1 each | 3 each | fish |
+| Dig mixed ore | 1 | 4 | the forge's smelt takes 4 |
+| Dig coal | 1 | 3 | uncommon |
+| Smelt iron | 1 | 3 | the iron pickaxe takes 3 ingots |
+
+Unchanged: crafting and placing at 1, or at the multiple a recipe needs
+(fences, planks, rope, bronze, torches); fish caught (3), species (3), logs
+(10), stone dug (10), and the explorer's goals.
+
+### The mission card's frame (owner, 2026-11-16: "9 slice lines broo")
+
+The mockup's cards and log drew the kit's `tooltip` piece whole. That PNG
+(24 x 18 native, 8 render pixels a native pixel) keeps one native pixel of
+render background round the slab, and its right and bottom bevels fall into
+near-black shade. Stretched down a card's side, those two outer columns read
+as a black stripe and then a pale blue line outside the frame: the seam
+lines the owner saw. The mockup now slices a copy trimmed by that native
+pixel on every side (`mission-tree/ui/*-tooltip-trim.png`, slice 40 = 5
+native, border 10 px so a native pixel stays 2 CSS pixels). The game's
+mission tree (`desktop/mission_tree.rs`) draws the same `tooltip` piece; the
+lasting fix is in the art (`tools/art/ui_panels_blend.py` `r_tooltip` and
+`r_oak_tooltip`, whose outside should render transparent), which needs
+Blender and waits for a request.
+
+The overview level (TS.3's level 0) showed bare frames; the owner on it:
+"bad, wheres the icons". Level 0 is now the tree of icons (52 px cards,
+each its mission's icon in a 32 px slot), and level 1 keeps the icon
+beside the title.
+
+A locked card carries no badge, in the mockup and the game's tree (the
+owner, 2026-11-16: "we dont need locked, its obvious"): its dim silhouettes
+say so. The side panel's line under the title is then the branch alone.
+
+The owner on the virtual zoom (2026-11-16): "changing shape of these nodes
+is annoying, I wish they stayed the same size, and maybe had 2x spacing",
+and of the full card: "this shape is best". Every card is now the full card
+at every zoom, laid out with twice the native gaps (220 by 208 px); zoom
+scales the whole tree in fixed steps (0.2 to 2), with the frames smoothed
+below full size so a 9-slice never tears. The page opens at full size on
+the bot's current mission; Fit shows the whole tree.
+
+Then (owner, 2026-11-16): "the zoom is now completely broken" (it kept the
+old scale when re-anchoring), "it should be big icons when zoomed out",
+"I can hover over nodes to get more info", "zoom should make sure ... the
+cursor is at the same tree position", "a max bounds so the user doesnt get
+lost". The zoom keeps the tree point under the cursor fixed; at 0.6 and
+below a card is its mission's icon filling the same frame, and hovering
+one shows the full card beside the pointer; a pan stops when no card would
+keep 40 px in view; scales run 0.1 to 2, so Fit shows the whole tree.
