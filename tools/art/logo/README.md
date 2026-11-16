@@ -15,14 +15,18 @@ point-light glints).
     (cd tools/art/logo && PLANET_CX=801 PLANET_CY=810 PLANET_R=566 \
         ../../../bpyenv/bin/python logo_render.py ../../../out planet.png ../../../out/logo.png 48)
     # the dark rim, the drop shadow and the deliverables
-    python3 tools/art/logo/logo_finish.py out/logo.png docs/logo
+    python3 tools/art/logo/logo_finish.py out/logo.png docs/promo
 
-Outputs are in `docs/logo/`: the transparent logo at full size and 1024 px wide, and a copy on the
+Outputs are in `docs/promo/`: the transparent logo at full size and 1024 px wide, and a copy on the
 game's night blue.
 
 Fonts: Young Serif (SIL Open Font License), read from the system's canvas-fonts folder at build
 time and not committed here. The planet is the game's own render.
 
-The key (`docs/logo/pale-blue-dot-logo-key.jpg`), every etched scene numbered and the story under it:
+The key (`docs/promo/pale-blue-dot-logo-key.jpg`), every etched scene numbered and the story under it:
 
-    python3 tools/art/logo/logo_key.py out/logo.png out/glyphs.json docs/logo/pale-blue-dot-logo-key.jpg
+    python3 tools/art/logo/logo_key.py out/logo.png out/glyphs.json docs/promo/pale-blue-dot-logo-key.jpg
+
+The covers (itch.io's 630 x 500, and 3150 x 2500, five times it), on space and transparent:
+
+    bpyenv/bin/python tools/art/logo/logo_cover.py docs/promo/pale-blue-dot-logo.png docs/promo

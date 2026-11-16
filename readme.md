@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="docs/logo/pale-blue-dot-logo-1024.png" alt="Pale Blue Dot" width="760">
+  <img src="docs/promo/pale-blue-dot-logo-1024.png" alt="Pale Blue Dot" width="760">
 </h1>
 
 A playable planet-exploration prototype in Rust, Bevy 0.18.1 and Avian 0.6.1.
