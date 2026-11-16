@@ -74,4 +74,11 @@
     // cross-fades over the last 0.3 of its ring (the mockup's fade width).
     tree_near_m: 44.0,
     tree_mid_m: 90.0,
+    // flora-v2 design 13.3 (owner, 2026-11-16: "dithering should either stay
+    // or go, dont have it linger if the player isnt moving"): a tree crossing
+    // a ring fades over this many seconds and is then whole; a still camera
+    // sees no dithered tree. The fade is shortened so the point the rings
+    // are decided at never trails the camera by more than the lag, metres.
+    tree_fade_s: 0.5,
+    tree_fade_lag_m: 5.0,
 )

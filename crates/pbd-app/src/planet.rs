@@ -802,7 +802,8 @@ struct PlanetParams {
     ssr_clip: Mat4,
     ssr_eye: Vec4,
     // `wet-near-detail`: x how far from the eye rain's fine detail is drawn,
-    // metres; y the band it fades out over before that; zw spare.
+    // metres; y the band it fades out over before that; z a plant's
+    // darkening at full wetness (`flora-v2` 13.2); w spare.
     rain_near: Vec4,
     // `baked-light-ease` 7.3: the light field across a dusk or dawn relight:
     // x how far the newest half has blended in, 0..1; y which half is the
@@ -825,6 +826,9 @@ struct PlanetParams {
     // Design 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w
     // fruit chance.
     flora_fall: Vec4,
+    // `flora-v2` 13.3: the trees' cross-fade by time (`TreeFade`): the point
+    // it fades from with its progress 0..1, then the point it fades to (w 1).
+    tree_fade: [Vec4; 2],
     // `night-lights-from-space`: x how many far lights `night_lights` holds,
     // yzw spare; then two vec4 a light (`night_lights::FarLights::pack`).
     // Last, so the visibility pass, which reads a prefix of this uniform,
@@ -845,6 +849,88 @@ const LIGHT_HALF_WORDS: usize = column::COLUMN_CAPACITY as usize * column::LIGHT
 /// How far the newest lamp bake shows over the one before it
 /// (`baked-light-ease`): whole from its first frame when it came with its
 /// set's landing (7.2), else the rule's blend from when it landed (7.7).
+/// The trees' cross-fade by time (`flora-v2` 13.3; owner, 2026-11-16: "dithering
+/// should either stay or go, dont have it linger if the player isnt moving").
+///
+/// Two points the camera stood at, `from` and `to`, body-local, and the fade
+/// between them: the surface shader decides each tree's representation (near
+/// model, mid cards, far billboard, none) at both by hard thresholds, draws it
+/// whole where they agree and dithers from the one to the other by the fade's
+/// progress where they do not. A new fade starts only when the last has run
+/// out and the camera has moved, so a still camera has `from == to` one fade
+/// after it stops, and nothing is dithered. No state per tree.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TreeFade {
+    pub from: Vec3,
+    pub to: Vec3,
+    start_s: f32,
+    len_s: f32,
+    last_s: f32,
+    last_eye: Vec3,
+}
+
+/// A camera that moves further than this in one frame has been put somewhere,
+/// not walked or flown there: the trees are decided where it now is.
+const TREE_FADE_JUMP_M: f32 = 200.0;
+
+impl TreeFade {
+    pub fn new(eye: Vec3, now_s: f32) -> Self {
+        Self {
+            from: eye,
+            to: eye,
+            start_s: now_s,
+            len_s: 0.0,
+            last_s: now_s,
+            last_eye: eye,
+        }
+    }
+
+    /// One frame: the camera at `eye` at `now_s`; the fade takes `fade_s`,
+    /// shortened so `to` never trails a moving camera by more than `lag_m`.
+    pub fn step(&mut self, eye: Vec3, now_s: f32, fade_s: f32, lag_m: f32) {
+        let dt = now_s - self.last_s;
+        let speed = if dt > 1e-4 {
+            self.last_eye.distance(eye) / dt
+        } else {
+            0.0
+        };
+        self.last_s = now_s;
+        self.last_eye = eye;
+        if eye.distance(self.to) > TREE_FADE_JUMP_M || !eye.is_finite() {
+            *self = Self::new(eye, now_s);
+            return;
+        }
+        if self.progress(now_s) < 1.0 {
+            return;
+        }
+        self.from = self.to;
+        if eye.distance(self.to) <= 0.01 {
+            return;
+        }
+        let len = fade_s.min(lag_m / speed.max(1e-3));
+        self.to = eye;
+        self.start_s = now_s;
+        self.len_s = len;
+        if len <= 1e-3 {
+            self.from = eye;
+        }
+    }
+
+    /// How far the fade from `from` to `to` has come, 0..1; one when they agree.
+    pub fn progress(&self, now_s: f32) -> f32 {
+        if self.from == self.to || self.len_s <= 0.0 {
+            1.0
+        } else {
+            ((now_s - self.start_s) / self.len_s).clamp(0.0, 1.0)
+        }
+    }
+
+    /// The uniform's two lanes: `from` with the progress, `to` with a one.
+    fn lanes(&self, now_s: f32) -> [Vec4; 2] {
+        [self.from.extend(self.progress(now_s)), self.to.extend(1.0)]
+    }
+}
+
 fn lamp_fade(at_once: bool, landed_s: f32, now_s: f32) -> f32 {
     if at_once {
         1.0
@@ -1134,6 +1220,8 @@ struct PlanetViewGpu {
     /// for the sea's trace as well as the terrain's.
     ssr_clip: Mat4,
     ssr_eye: Vec4,
+    /// The trees' cross-fade by time (`flora-v2` 13.3).
+    tree_fade: TreeFade,
 }
 
 /// The slowest the fade centre catches up with the camera after a landing,
@@ -1723,6 +1811,15 @@ fn prepare_views(
             .unwrap_or_default();
         let lod = &planet.lod;
         let landing = planet.lod_prev.map(|(_, landed)| landed);
+        let mut tree_fade = existing
+            .as_ref()
+            .map_or(TreeFade::new(camera_position, clock.0), |gpu| gpu.tree_fade);
+        tree_fade.step(
+            camera_position,
+            clock.0,
+            scatter.tree_fade_s,
+            scatter.tree_fade_lag_m,
+        );
         // The fade centre (`distance-lod-fade`): the ground under the camera,
         // held within what the records hold round the anchor, and caught up
         // after a landing at twice the camera's speed rather than jumping.
@@ -1947,7 +2044,12 @@ fn prepare_views(
             ssr_clip: existing
                 .as_ref()
                 .map_or(Mat4::IDENTITY, |gpu| gpu.last_clip),
-            rain_near: Vec4::new(w.rain_detail_reach_m, w.rain_detail_fade_m, 0.0, 0.0),
+            rain_near: Vec4::new(
+                w.rain_detail_reach_m,
+                w.rain_detail_fade_m,
+                w.rain_plant_darken,
+                0.0,
+            ),
             light_ease: light_ease_state(
                 planet.light_new,
                 planet.light_blending,
@@ -1979,6 +2081,7 @@ fn prepare_views(
                 scatter.leaf_size,
                 scatter.fruit_chance,
             ),
+            tree_fade: tree_fade.lanes(clock.0),
             night,
             night_lights,
             felled,
@@ -2004,6 +2107,7 @@ fn prepare_views(
             gpu.last = now;
             gpu.last_camera = camera_position;
             gpu.last_clip = clip_from_body;
+            gpu.tree_fade = tree_fade;
             continue;
         }
         let mut uniform = UniformBuffer::from(params);
@@ -2126,6 +2230,7 @@ fn prepare_views(
             last_clip: clip_from_body,
             ssr_clip,
             ssr_eye,
+            tree_fade,
         });
     }
 }
