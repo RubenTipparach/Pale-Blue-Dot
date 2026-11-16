@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>River Craft</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Pale Blue Dot mockup M34: rafting, a tug and its tow, a log drive with a boom, a net boat and anchoring, as playable toys on the game's flowing river.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
+<style>
+/* One screen: the header, the tab bar, the river (one 3D view), the controls under it.
+   Tokens: the stone-and-carved-wood kit's colours (tools/art/ui_art.py, Sweaft-64), as mission-tree.html.
+   The game UI has one look by day and by night, so the page commits to it in every theme. */
+:root {
+  --ink: #010000; --face: #1f3b52; --well: #011c34;
+  --text: #eab798; --text-dim: #cfaa81; --title: #faaf5c; --label: #fffefe; --label-dim: #92a3b2;
+  --oak-label: #010000; --stone-0: #011c34; --stone-1: #1f3b52; --stone-2: #3e586e; --stone-3: #92a3b2; --stone-4: #bfcad7;
+  --rune: #84e3b5; --rune-dim: #53998b; --warn: #ff8a3d;
+  --page: #010e1a; --page-2: #011c34; --page-line: #1f3b52; --page-text: #bfcad7; --page-dim: #92a3b2;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #010e1a; color-scheme: dark; } }
+:root[data-theme="dark"] { --page: #010e1a; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--page); color: var(--page-text); font: 17px/1.3 var(--body); display: flex; flex-direction: column; overflow-x: hidden; }
+a { color: var(--rune); }
+.wrap { padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+
+header.top { padding-block: 6px 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; border-bottom: 1px solid var(--page-line); }
+.pbd-tracker { flex-basis: 100%; margin: 0; font: 15px/1.2 var(--body); }
+header.top h1 { font: 700 24px/1.1 var(--display); color: var(--title); margin: 0; letter-spacing: 1px; text-shadow: 0 2px 0 var(--ink); }
+.infobtn { font: 600 18px/1 var(--body); width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--rune-dim); background: var(--page-2); color: var(--rune); cursor: pointer; }
+.infobtn:hover { border-color: var(--rune); }
+.infobtn:focus-visible { outline: 2px solid var(--rune); outline-offset: 2px; }
+
+/* the tab bar: carved oak tabs; the open one is a bare #anchor */
+nav.tabs { display: flex; gap: 2px; padding-block: 6px 0; overflow-x: auto; scrollbar-width: none; }
+.tab { border-style: solid; border-width: 10px 12px 0; border-image: url(river-craft/ui/oak-tab-shut.png) 56 56 0 fill stretch; image-rendering: pixelated;
+  background: none; color: var(--label); font: 600 17px/1 var(--display); letter-spacing: .5px; height: 38px; padding: 0 6px 6px; cursor: pointer; white-space: nowrap; text-shadow: 0 2px 0 var(--ink); flex: none; }
+.tab[aria-selected="true"] { border-image-source: url(river-craft/ui/oak-tab-open.png); color: var(--oak-label); text-shadow: none; }
+.tab:focus-visible { outline: 2px solid var(--rune); outline-offset: -2px; }
+
+/* the river: one canvas a tab, only the open one drawn */
+.stage { position: relative; flex: 1 1 auto; min-height: 280px; background: #000; border-top: 4px solid var(--stone-2); border-bottom: 4px solid var(--stone-2); overflow: hidden; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.stage canvas[hidden] { display: none; }
+.hud { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 4px; pointer-events: none; max-width: 640px; }
+.chip { background: rgba(1, 14, 26, .78); border: 1px solid var(--stone-1); padding: 3px 7px 2px; font: 15px/1.1 var(--body); color: var(--text); text-shadow: 0 1px 0 var(--ink); white-space: nowrap; }
+.chip b { font-weight: 600; color: var(--label-dim); margin-right: 5px; }
+.chip.on { color: var(--rune); border-color: var(--rune-dim); }
+.chip.warn { color: var(--warn); border-color: var(--warn); }
+.paused { position: absolute; right: 10px; top: 8px; font: 600 15px/1 var(--display); color: var(--title); background: rgba(1, 14, 26, .78); border: 1px solid var(--stone-2); padding: 4px 8px 3px; letter-spacing: 1px; pointer-events: none; }
+.pad { position: absolute; right: max(8px, env(safe-area-inset-right, 0px)); bottom: 8px; display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(2, 46px); gap: 4px; }
+.pad .btn { width: 46px; height: 46px; min-width: 0; padding: 0; font-size: 20px; opacity: .92; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pad .u { grid-column: 2; grid-row: 1; } .pad .l { grid-column: 1; grid-row: 2; } .pad .d { grid-column: 2; grid-row: 2; } .pad .r { grid-column: 3; grid-row: 2; }
+
+/* the controls: plaques from the kit */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding-block: 6px; background: var(--page-2); }
+.bar + .bar { border-top: 1px solid var(--page-line); }
+.grp { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.lab { font: 600 14px/1 var(--display); color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; margin-right: 2px; }
+.btn { border-style: solid; border-width: 10px; border-image: url(river-craft/ui/stone-button-idle.png) 64 fill stretch; image-rendering: pixelated;
+  background: none; color: var(--label); cursor: pointer; height: 40px; min-width: 52px; padding: 0 4px; font: 18px/1 var(--body);
+  text-shadow: 0 2px 0 var(--stone-0); display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; }
+.btn:hover { border-image-source: url(river-craft/ui/stone-button-hover.png); }
+.btn:active, .btn[aria-pressed="true"], .btn.held { border-image-source: url(river-craft/ui/stone-button-pressed.png); }
+.btn:focus-visible { outline: none; border-image-source: url(river-craft/ui/stone-button-focus.png); }
+.btn:disabled { border-image-source: url(river-craft/ui/stone-button-disabled.png); color: var(--label-dim); cursor: default; }
+.btn.oak { border-image-source: url(river-craft/ui/oak-button-idle.png); color: var(--oak-label); text-shadow: none; }
+.btn.oak:hover { border-image-source: url(river-craft/ui/oak-button-hover.png); }
+.btn.oak:active, .btn.oak[aria-pressed="true"] { border-image-source: url(river-craft/ui/oak-button-pressed.png); }
+.btn kbd { font: 13px/1 var(--body); color: var(--label-dim); }
+.btn.oak kbd { color: #3a2a1a; }
+select.speed { font: 17px var(--body); height: 36px; background: var(--well); color: var(--label); border: 2px solid var(--stone-2); padding: 0 6px; }
+select.speed:focus-visible { outline: 2px solid var(--rune); }
+
+/* the info modal */
+dialog.infomodal { width: min(780px, 94vw); max-height: 88vh; max-height: 88dvh; padding: 0; border: 4px solid var(--stone-2); outline: 2px solid var(--ink); background: var(--page-2); color: var(--page-text); }
+dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
+.mhead { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; background: var(--face); border-bottom: 2px solid var(--stone-0); z-index: 1; }
+.mhead b { font: 700 20px/1.2 var(--display); color: var(--title); }
+.mhead button { font: 18px var(--body); min-width: 40px; min-height: 40px; background: var(--page-2); color: var(--page-text); border: 1px solid var(--page-line); cursor: pointer; }
+.mhead button:focus-visible { outline: 2px solid var(--rune); }
+.mnav { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 8px 16px 0; font-size: 15px; }
+.mbody { padding: 4px 16px 18px; font-size: 16.5px; line-height: 1.45; }
+.mbody h2 { font: 700 20px/1.2 var(--display); color: var(--title); margin: 20px 0 6px; scroll-margin-top: 64px; }
+.mbody h3 { font: 600 17px/1.2 var(--display); color: var(--text-dim); margin: 12px 0 4px; }
+.mbody p, .mbody li { margin: 4px 0; max-width: 70ch; }
+.mbody ul { padding-left: 20px; margin: 4px 0; }
+.mbody q { color: var(--text); }
+.mbody code { color: var(--text-dim); font: .95em ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.tw { overflow-x: auto; }
+.mbody table { border-collapse: collapse; font-size: 15px; min-width: 420px; }
+.mbody th, .mbody td { border-top: 1px solid var(--page-line); padding: 4px 8px; text-align: left; vertical-align: top; }
+.mbody th { color: var(--label-dim); font-weight: 600; }
+
+@media (max-width: 560px) {
+  header.top h1 { font-size: 21px; }
+  .tab { font-size: 16px; border-width: 10px 9px 0; }
+  .btn { height: 38px; font-size: 16px; min-width: 44px; }
+  .btn kbd { display: none; }
+  .chip { font-size: 13.5px; }
+  .stage { min-height: 300px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<header class="top wrap">
+  <p class="pbd-tracker"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+  <h1>River Craft</h1>
+  <button class="infobtn" id="info" aria-label="About this mockup: the tabs, the controls, the physics and the engine notes">i</button>
+</header>
+<nav class="tabs wrap" role="tablist" aria-label="River craft">
+  <button class="tab" role="tab" data-tab="raft" aria-selected="true">Raft</button>
+  <button class="tab" role="tab" data-tab="tube" aria-selected="false">Tube</button>
+  <button class="tab" role="tab" data-tab="tug" aria-selected="false">Tug</button>
+  <button class="tab" role="tab" data-tab="logs" aria-selected="false">Log drive</button>
+  <button class="tab" role="tab" data-tab="nets" aria-selected="false">Nets</button>
+  <button class="tab" role="tab" data-tab="anchor" aria-selected="false">Anchor</button>
+</nav>
+<div class="stage" id="stage">
+  <canvas data-tab="raft" aria-label="The raft on the river: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
+  <canvas data-tab="tube" aria-label="Floating down the river in an inner tube: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
+  <canvas data-tab="tug" aria-label="The tug and its barges: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
+  <canvas data-tab="logs" aria-label="The log drive, the narrows and the boom: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
+  <canvas data-tab="nets" aria-label="The net boat and the fish: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
+  <canvas data-tab="anchor" aria-label="The anchored skiff: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
+  <div class="hud" id="hud" aria-live="off"></div>
+  <div class="paused" id="paused">PAUSED</div>
+  <div class="pad" role="group" aria-label="Steer">
+    <button class="btn u" data-dir="up" aria-label="Ahead">&#9650;</button>
+    <button class="btn l" data-dir="left" aria-label="Left">&#9664;</button>
+    <button class="btn d" data-dir="down" aria-label="Back">&#9660;</button>
+    <button class="btn r" data-dir="right" aria-label="Right">&#9654;</button>
+  </div>
+</div>
+<div class="bar wrap" role="group" aria-label="Time and view">
+  <span class="grp">
+    <button class="btn oak" id="play" aria-pressed="false">Play <kbd>Space</kbd></button>
+    <button class="btn" id="step">Step</button>
+    <label class="lab" for="speed">Speed</label>
+    <select class="speed" id="speed"><option value="0.25">0.25x</option><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+  </span>
+  <span class="grp" role="group" aria-label="Time of day">
+    <button class="btn" id="day" aria-pressed="true">Day</button><button class="btn" id="night" aria-pressed="false">Night</button>
+  </span>
+  <span class="grp">
+    <button class="btn" id="arrows" aria-pressed="false">Flow arrows</button>
+    <button class="btn" id="follow" aria-pressed="true">Follow</button>
+    <button class="btn" id="reset">Reset</button>
+  </span>
+</div>
+<div class="bar wrap" id="acts" role="group" aria-label="Actions"></div>
+
+<dialog class="infomodal" id="modal" aria-labelledby="mtitle">
+  <div class="mhead"><b id="mtitle">River Craft</b><button id="mclose" aria-label="Close">&#x2715;</button></div>
+  <nav class="mnav"><a href="#m-about">About</a><a href="#m-raft">Raft</a><a href="#m-tube">Tube</a><a href="#m-tug">Tug</a><a href="#m-logs">Log drive</a><a href="#m-nets">Nets</a><a href="#m-anchor">Anchor</a><a href="#m-controls">Controls</a><a href="#m-physics">Physics</a><a href="#m-engine">In the engine</a></nav>
+  <div class="mbody" id="mbody">
+    <h2 id="m-about">About M34, River Craft</h2>
+    <p>The owner, 2026-11-16, playing the new flowing rivers: <q>dude the river stuff is so much fun, can you make a mock up of stuff like rafting physics? or design a boat that can tug other boats? log hauling? boats with nets, also anchoring</q>.</p>
+    <p>Six toys on one kind of river, each in its own tab with its own reach of water. The river is a flow field over a channel of the game's hex cells (2.833 m flat to flat, 1 m layers): fastest mid-stream, slow at the banks, bent round rocks with an eddy behind each, quicker where the channel narrows, and over a one-layer fall on the Raft tab. Everything is the game's art style: blocky pixel textures on the ground and the craft, lit like the ground, with no outlines.</p>
+    <p>Nothing moves until you press <b>Play</b> or a control, except the water itself. The view turns only when you drag it; <b>Follow</b> keeps the craft in the middle without turning. <b>Night</b> lights each scene by its own lamps: a lantern post on the bank and a lantern on each boat, every one lighting what is near it; the moon is dim. The open tab is in the link (<code>#raft</code>, <code>#tube</code>, <code>#tug</code>, <code>#logs</code>, <code>#nets</code>, <code>#anchor</code>); only its view is made and drawn.</p>
+    <p>OpenSpec change: <code>openspec/changes/river-craft</code>. This page is a mockup; no game code changes until the owner approves it and asks for the port.</p>
+
+    <h2 id="m-raft">Raft</h2>
+    <p>A raft of five logs and a poler on the current. Let it drift and it finds the fast water, turns where the current shears (a bank on one side, a rock on the other), slides into the eddy behind a rock and is held there, and bumps off rocks and banks. Below the rocks the channel narrows, speeds up and goes over a one-layer fall into a deeper pool, with standing waves below it.</p>
+    <ul>
+      <li><b>Pole</b> where the bed is in reach (under 2.7 m of water): a strong push off the bottom.</li>
+      <li><b>Paddle</b> where it is not (the pool below the fall): a weaker push off the water. The chip at the top left says which.</li>
+      <li><b>Flow arrows</b> draw the current on the water: each chevron points with the flow, longer where it runs faster. Look behind a rock: they point back upstream.</li>
+    </ul>
+
+    <h2 id="m-tube">Tube</h2>
+    <p>The owner, 2026-11-16: <q>also what about innertubes?</q> One person sitting in an inner tube, legs over the front, carried down a slow, shallow reach. The tube has almost no keel, so the current does nearly all of it: it takes the fast water, and where one side of the ring is in faster water than the other (a bank, a rock, the edge of the riffle) the ring turns slowly. Hands in the water give a little push and a little turn, enough to stay off a rock, not enough to go upstream.</p>
+    <ul>
+      <li><b>W S</b> paddle forward or back with both hands; <b>A D</b> one hand, to turn. The arms swing while they paddle.</li>
+      <li><b>Get off</b> (<b>E</b>): wade or swim to the nearer bank and pick the tube up. Carried, it rides on the back like a pack frame. <b>Get on</b> walks in to waist depth and sits back into the ring.</li>
+      <li>At night a small lantern on a stick is tied to the ring.</li>
+    </ul>
+    <h3>How a tube is made</h3>
+    <p>The game has no rubber or hide, so the tube is made from what it has: a ring of felted <b>wool</b> over a frame of <b>rope</b>, sealed with <b>pine pitch</b> and blown up. Proposed, for the port:</p>
+    <ul>
+      <li><b>Pine pitch</b>: 3 pine cones cooked down on the campfire, 1 pitch. A new good.</li>
+      <li><b>Inner tube</b>: 6 wool, 2 rope, 2 pine pitch at the workbench. A new item, carried in the pack, placed on water like a boat.</li>
+      <li>A tube on its own drifts away; a tube left on the bank stays. Picking it up puts it back in the pack.</li>
+    </ul>
+
+    <h2 id="m-tug">Tug</h2>
+    <p>A small steam tug with two barges on tow lines, crates on the first and logs on the second. The lines start slack. Ahead on the throttle and the first line comes up taut, then the second; the barges follow with their own drag and swing wide on a turn. Ease off and the barges run on and the lines go slack, lying on the water and drifting with it. The chips show each line's state and its tension.</p>
+    <ul><li><b>Cast off</b> lets the tow line go; <b>Make fast</b> takes it again when the barge is within reach. <b>Long line</b> and <b>Short line</b> change both lines' lengths.</li></ul>
+
+    <h2 id="m-logs">Log drive</h2>
+    <p>On Play the crew starts rolling logs off the rollway on the left bank, one every second and a half. The logs float down as a drive, turn in the current and crowd at the narrows, where a rock splits the channel into two gaps a cell wide. A log that comes crosswise jams there and the logs behind pile up on it (the <b>Jam</b> chip). <b>Break jam</b> pries the key log, the one furthest downstream holding the rest, end-on to the flow and shoves it through.</p>
+    <p>Below the narrows a boom (floating logs chained bank to bank, at a slant) catches the drive and the current slides it along to the boom's pocket by the right bank. With four or more logs held there, <b>Bundle</b> binds up to nine of them into a raft-bundle. Steer the boom boat to it and <b>Hitch</b> a tow line, <b>Open boom</b> to swing the boom aside, and haul the bundle downstream.</p>
+
+    <h2 id="m-nets">Nets</h2>
+    <p>A skiff with two spars at its stern and a net between them: a cork line on top that floats, a lead line below that sinks, twine between. <b>Cast net</b> pays it out behind. Row against the current and the water streams the net out into a bag; drift with the current and it hangs slack. Three schools of fish hold in the river: in the eddy behind the rock, in the pool, and off the left bank. They dart from the hull, but a fish the net sweeps round is caught and stays in the bag. Every fish makes the net drag harder and slows the boat (the <b>Net drag</b> chip). <b>Haul in</b> draws the net up to the spars over five seconds and lands the catch; the boat sits lower for it.</p>
+
+    <h2 id="m-anchor">Anchor</h2>
+    <p>A skiff in a strong current (1.45 m/s mid-stream), with a bow anchor and a stern anchor. <b>Drop bow</b>: the anchor falls to the bed and the rode (a chain) pays out to five times the depth. Until the anchor bites it drags along the bed, leaving a furrow; once it holds, the boat swings to the current and lies downstream of it on the rode. <b>Drop stern</b> as well for a two-point mooring that holds the boat's heading. <b>Weigh</b> hauls the rode in: the boat is pulled up to the anchor, the rode comes up steep, the anchor breaks out and comes aboard.</p>
+    <ul>
+      <li><b>Sand</b>: the anchor ploughs and never fully sets. In this current it drags slowly, the dragging-anchor case.</li>
+      <li><b>Mud</b>: it digs in within about a metre and holds.</li>
+      <li><b>Rock</b>: it skips over the bed until a fluke catches a crack, then holds hardest of all.</li>
+      <li><b>Pay out</b> and <b>Shorten</b> change the bow rode. A short rode lifts the anchor's shank, and a lifted anchor holds less: shorten too far and it drags.</li>
+    </ul>
+
+    <h2 id="m-controls">Controls</h2>
+    <div class="tw"><table>
+      <tr><th>Key</th><th>On screen</th><th>Does</th></tr>
+      <tr><td>Space</td><td>Play</td><td>Run or pause the craft (off on load). Step runs a tenth of a second; Speed sets 0.25x to 2x.</td></tr>
+      <tr><td>W, S or the arrows</td><td>&#9650; &#9660;</td><td>Raft: pole or paddle ahead or back. Tug and boom boat: throttle up or down a notch a tap (astern 2 to ahead 4). Skiffs: row ahead or back.</td></tr>
+      <tr><td>A, D or the arrows</td><td>&#9664; &#9654;</td><td>Turn: pole or paddle off a corner, the rudder, or one oar.</td></tr>
+      <tr><td>C, L</td><td>Cast off, Long line</td><td>Tug: let go or make fast the tow; change the lines' length.</td></tr>
+      <tr><td>P, B, H, O</td><td>Break jam, Bundle, Hitch, Open boom</td><td>Log drive.</td></tr>
+      <tr><td>C, H</td><td>Cast net, Haul in</td><td>Nets.</td></tr>
+      <tr><td>Z, X, R, F</td><td>Drop or weigh bow and stern, Pay out, Shorten</td><td>Anchor (R and F while held).</td></tr>
+    </table></div>
+    <p>Pressing a craft control also starts Play. Drag the view to turn it, wheel or pinch to come closer.</p>
+
+    <h2 id="m-physics">The physics model</h2>
+    <p>Every simulation steps at a fixed 1/120 s with semi-implicit Euler (velocity first, then position), only while playing, and each body is a handful of points.</p>
+    <h3>The river</h3>
+    <ul>
+      <li>A 2D flow field over the channel: along the channel's centre line at a speed that falls from mid-stream to zero at the banks (<code>U sqrt(1 - s^4)</code>, s the distance across as a share of the half-width), scaled up where the channel narrows (the same water through less width) and over a fall.</li>
+      <li>Each rock bends the flow as a cylinder does in potential flow, and puts an eddy in its lee where the water runs back upstream.</li>
+      <li>The water's surface is a level that falls gently downstream and drops a layer at a fall, with standing waves below it. Its slope pushes a floating body downhill.</li>
+      <li>The bed and the banks are the cells: a cell's top under the river is its bed, a bank cell stands a layer or two above the water, a rock is a stone cell standing out of it.</li>
+    </ul>
+    <h3>A hull</h3>
+    <ul>
+      <li>Free in the plane (x, z and heading); heave, pitch and roll are springs toward the least-squares plane through the water under its float points (3 to 9 of them).</li>
+      <li>At each float point the water moving past drags it, split along the hull and across it (a hull slips along easily and resists going sideways): <code>F = c (u - v) (|u - v| + 0.25)</code>. Different currents at different points make a torque: that is the spin from shear, and the eddy's grip.</li>
+      <li>Where a float point is on the bed the hull scrapes (friction) and sits on it. An outline point inside a cell that stands above the hull's bottom is pushed out through the nearest open side, with an impulse (a little bounce, a little friction) and a kick of roll: the bump.</li>
+      <li>Hulls meet as capsules (logs, barges, the tug), with the same impulse.</li>
+    </ul>
+    <h3>Lines, ropes, a net, an anchor</h3>
+    <ul>
+      <li><b>A tow line or a rode</b>, for its force, is slack until its ends are further apart than its length, then a spring that only pulls: <code>k = min(40 m, 4000) N/m</code>, damping <code>1.6 sqrt(k m)</code>, m the two ends' reduced mass. The game's own mooring rule.</li>
+      <li><b>The line drawn</b> is a chain of points (position-based, never longer than its length): it sags, floats on the water (a rope) or sinks to the bed (a chain), and the current drags it.</li>
+      <li><b>The net</b> is a 13 by 3 cloth of points: corks that float, a lead line that sinks, twine that can bunch but not stretch. Each point is dragged toward the water's velocity, and the sum of that drag is the pull on the boat at its spars; each fish in the bag adds to it.</li>
+      <li><b>The anchor</b> holds up to <code>bed hold x set x lift</code>. Set grows with the distance dragged: in mud it reaches 1 in about a metre, in sand it stops at a quarter, on rock it is near zero until a fluke catches. Lift falls as the rode's angle at the anchor rises (zero by about 29 degrees), so a short rode breaks it out. When the rode's pull exceeds the hold the anchor drags toward the boat at a speed set by the excess.</li>
+    </ul>
+
+    <h2 id="m-engine">In the engine</h2>
+    <ul>
+      <li><b>Craft</b> already step themselves in <code>pbd_core::vehicle</code>: one <code>RigidBody</code> each, integrated at the substep rate (<code>SUBSTEPS = 4</code> per fixed tick) because buoyancy is stiff, with the Avian body in <code>pbd-app</code> placed where the core says (<code>crates/pbd-app/src/vehicles.rs</code>). A raft, a tug, a barge, a bundle and a net boat are new <code>Kind</code>s with their own state beside <code>Tern</code>, <code>Loon</code> and <code>Cog</code>.</li>
+      <li><b>The current is new.</b> <code>Surroundings</code> carries the sea table, the sea state, the tide and the depth, but no water velocity. The port adds one: sampled per float point from the column tier's flowing water (<code>openspec/changes/water-flow</code>; <code>pbd_core::liquid</code>, <code>water_flow.rs</code>). A flowing top already has a flow direction (the lane the shader pans along); its speed would come from the level's fall to the next cell, so a river's current is derived, never saved.</li>
+      <li><b>Tow lines and rodes</b> are the existing <code>Mooring</code> (<code>at</code>, <code>length</code>, <code>anchored</code>) and its <code>moor</code> rule, generalised from craft-to-point to craft-to-craft. The drawn rope is derived state.</li>
+      <li><b>Anchors</b> today hold at a point once dropped (<code>T</code> in the <code>vehicles</code> change; rode 3 x depth + 2 m, at most 35 m deep). Holding by bed (the bed cell's material: sand, mud, rock), set and lift, and dragging, are new.</li>
+      <li><b>Logs</b> are items: a tree felled with an axe gives logs (<code>tool-crafting</code>). A log dropped in water becomes a floating body until it beaches or is picked up. The bundle and the boom are placed structures with a durable record each.</li>
+      <li><b>Nets and fish</b> join <code>fishing-and-equipment</code>: the fish schools are its schools, a net is a tool with its own catch rule beside the rod.</li>
+      <li><b>Saves</b>: every craft, line, anchor, boom and bundle is a record on the durable path; old saves have none and load unchanged.</li>
+      <li><b>Not like the game here</b>: the water is a cut-down stand-in for <code>water.wgsl</code> (its colours, a ripple carried along the flow, foam where it runs fast); the river is one smooth field, where the game's is cells with eight levels; there are no shadows; the page renders on the GPU it is given (a cloud check runs on a software renderer).</li>
+    </ul>
+  </div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="river-craft/engine.js?v=1"></script>
+<script src="river-craft/physics.js?v=1"></script>
+<script src="river-craft/scenes.js?v=1"></script>
+<script src="river-craft/app.js?v=1"></script>
+</body>
+</html>

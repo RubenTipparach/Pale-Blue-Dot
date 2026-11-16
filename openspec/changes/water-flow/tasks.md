@@ -51,7 +51,7 @@
       captures of a fall's foot before and after.
 - [ ] 6.2 M31: froth only on faces that fall a layer or more, beside today's
       bank; the owner's approval before game code.
-- [ ] 6.3 The rain splashes (`weather-rain` 6.4-6.6) on ground and water.
+- [ ] 6.3 The rain splashes (built for ground, `weather-rain` 6.4) on water as well.
 - [ ] 6.4 M31 Splash tab: fall foot, entry, cast, fish, wake, beside today's
       spray; the owner's approval before game code.
 
