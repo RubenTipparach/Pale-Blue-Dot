@@ -697,7 +697,7 @@ window.PBDMist = function (canvas, sheetUrl) {
   const bubbles = bubblePoints(F, U); bubbles.material.uniforms.uFoot.value.copy(foot); opaque.add(bubbles);
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
-  const S = {variant: "today", night: false, running: true, gain: 0.8, bubbles: 1, teal: 1, mist: 1, mistSize: 1, veil: 1, soft: 1.2};
+  const S = {variant: "today", night: false, running: true, gain: 1.5, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2};
   function murk(open) {
     // The game's murk: the deep's albedo lit by the light on open water, dimmed by the water above the eye.
     const eyeDepth = Math.max(0, F.poolY - camera.position.y);

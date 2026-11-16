@@ -832,3 +832,9 @@ and by night. Game code waits for the owner's approval.
 
 - Mockup first (tasks section 1). The game waits for the owner's approval of
   the mockup, then a request (CLAUDE.md, the mockup tracker).
+
+**Owner's tuning, 2026-11-16 (mockup M35):**
+- "fall mist shouldnt be mist, should be like water droplets fx": the mist shed down the fall became droplets, flung off the sheet at the fall's speed and falling under gravity into the pool.
+- "mist size = 1.65", "mist opac = 1.50": the mist puffs are drawn at 1.65x the game's puff size and 1.50 opacity on the new sheet. Mist size also scales the fall droplets.
+
+These are now the mockup's defaults. The other sliders (mist amount, fall droplets, wall blend, bubbles, teal churn) stay at 1.00 / 1.20 until the owner says otherwise.
