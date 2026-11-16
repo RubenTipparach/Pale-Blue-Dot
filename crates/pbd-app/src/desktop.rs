@@ -3822,7 +3822,7 @@ fn capture(
     progress: Res<TourProgress>,
     mut exit: MessageWriter<AppExit>,
     count: Option<Res<pbd_app::loading::FrameCount>>,
-    mut burst: Local<Option<Option<(PathBuf, u64, u64)>>>,
+    mut burst: Local<Option<Option<(PathBuf, u64, u64, u64)>>>,
 ) {
     state.frame += 1;
     // MEASUREMENT (`baked-light-ease`): `PBD_CAPTURE_RUN=<dir>,<first>,<count>`
@@ -3830,18 +3830,26 @@ fn capture(
     // world's first open frame, as `--frames` is, so a run that loads slowly
     // saves the same stretch) for `count` frames, so a swap can be seen frame
     // by frame. Each is named by the frame log's frame number, which the
-    // `BAKED_LIGHT` lines give.
+    // `BAKED_LIGHT` lines give. An optional fourth field saves every
+    // `stride`th frame of the stretch instead (`weather-rain` R5: seconds of
+    // a lens drying, not every frame of them).
     let run = burst.get_or_insert_with(|| {
         let spec = std::env::var("PBD_CAPTURE_RUN").ok()?;
         let mut parts = spec.split(',');
         let dir = PathBuf::from(parts.next()?.trim());
         let first = parts.next()?.trim().parse().ok()?;
         let count: u64 = parts.next()?.trim().parse().ok()?;
+        let stride: u64 = parts
+            .next()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(1)
+            .max(1);
         std::fs::create_dir_all(&dir).ok()?;
-        Some((dir, first, first + count))
+        Some((dir, first, first + count, stride))
     });
-    if let (Some((dir, first, end)), Some(count)) = (run.as_ref(), count.as_ref())
+    if let (Some((dir, first, end, stride)), Some(count)) = (run.as_ref(), count.as_ref())
         && (*first..*end).contains(&u64::from(state.frame))
+        && (u64::from(state.frame) - *first).is_multiple_of(*stride)
     {
         let path = dir.join(format!("f{:06}.png", count.0));
         commands.spawn(Screenshot::primary_window()).observe(
