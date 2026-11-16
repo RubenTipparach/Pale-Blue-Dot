@@ -1771,9 +1771,12 @@ fn water_climb(
     let top = ledge.support;
     let climbs_over_surface = top >= surface - 0.1 && top - surface <= config.water_climb_m;
     let climbs_over_feet = wading && top - feet <= config.water_climb_wade_m;
+    // A step in the bed still under the water (`swimming` 5): the feet meet
+    // it, so it is measured from them, as a wader's bank is.
+    let steps_under_water = top < surface - 0.1 && top - feet <= config.water_climb_wade_m;
     if top - feet <= 0.03
         || top - feet > config.water_climb_reach_m
-        || !(climbs_over_surface || climbs_over_feet)
+        || !(climbs_over_surface || climbs_over_feet || steps_under_water)
     {
         return None;
     }
@@ -2913,14 +2916,19 @@ mod tests {
         surface: f32,
     }
 
-    fn pool_and_bank(depth: usize, rise: usize) -> Pool {
-        pool_and_bank_at(depth, rise, false)
+    /// Water `depth` layers deep round `W` and a bank `rise` layers over its
+    /// surface past it; with `on_circle` the pool sits on the great circle
+    /// z = 0, where `any_orthonormal_vector` flips (`wall-snap`), with the
+    /// bank's row crossing that circle as steeply as the hex allows.
+    fn pool_and_bank_at(depth: usize, rise: usize, on_circle: bool) -> Pool {
+        pool_rows(&[-(depth as isize), rise as isize], on_circle)
     }
 
-    /// [`pool_and_bank`], and with `on_circle` the pool sits on the great
-    /// circle z = 0, where `any_orthonormal_vector` flips (`wall-snap`), with
-    /// the bank's row crossing that circle as steeply as the hex allows.
-    fn pool_and_bank_at(depth: usize, rise: usize, on_circle: bool) -> Pool {
+    /// A pool whose bed or bank in each row of cells parallel to the bank is
+    /// `rows[k]` layers over the water's surface (negative: under it), the
+    /// row through `W` first and the last row going on: the owner's
+    /// staircase (`swimming` 5) is `[-2, -1, 0]`.
+    fn pool_rows(rows: &[isize], on_circle: bool) -> Pool {
         use pbd_core::{column::layer_altitude, terrain::Material};
         let fibonacci = (0..4096).map(|index| {
             let y = 1.0 - 2.0 * (index as f32 + 0.5) / 4096.0;
@@ -2979,17 +2987,15 @@ mod tests {
             surface > crate::planet::terrain_config().sea_level_m + 2.0,
             "a pool above the sea, not the sea: {surface}"
         );
-        let spacing = (centre(b1) - wc).length() * PLANET_RADIUS;
+        // The distance between rows of cells along the bank's normal.
+        let pitch = ((centre(b1) + centre(b2)) * 0.5 - wc).length() * PLANET_RADIUS;
         let near: Vec<usize> = (0..records.len())
             .filter(|&i| wc.angle_between(centre(i)) * PLANET_RADIUS < 25.0)
             .collect();
         for i in near {
             let s = (centre(i) - wc).dot(into) * PLANET_RADIUS;
-            let top = if s > 0.4 * spacing {
-                g + rise
-            } else {
-                g - depth
-            };
+            let row = ((s / pitch).round().max(0.0) as usize).min(rows.len() - 1);
+            let top = (g as isize + rows[row]) as usize;
             let column = set.columns.column_mut(i).expect("a column");
             for layer in 1..pbd_core::column::LAYERS {
                 let material = if layer <= top {
@@ -3023,6 +3029,8 @@ mod tests {
         into_bank: f32,
         climb_ticks: u32,
         longest_step: f32,
+        /// The lowest the feet went, metres over the surface.
+        lowest_feet: f32,
     }
 
     /// How a run in the pool starts: feet `under` metres under the surface
@@ -3047,7 +3055,12 @@ mod tests {
 
     /// Put a walker in the pool and hold forward for two seconds.
     fn swim_into_bank(depth: usize, rise: usize, start: Start) -> Swim {
-        let pool = pool_and_bank(depth, rise);
+        swim_into_rows(&[-(depth as isize), rise as isize], start, 128)
+    }
+
+    /// [`swim_into_bank`] in a [`pool_rows`] pool, holding forward `ticks`.
+    fn swim_into_rows(rows: &[isize], start: Start, ticks: u32) -> Swim {
+        let pool = pool_rows(rows, false);
         let (wc, into, surface) = (pool.w, pool.into, pool.surface);
         let heading = if start.along_bank {
             pool.along
@@ -3079,13 +3092,15 @@ mod tests {
         let mut climb_ticks = 0;
         let mut longest_step = 0.0_f32;
         let mut last = app.world().get::<Position>(walker).unwrap().0;
-        for _ in 0..128 {
+        let mut lowest_feet = f32::MAX;
+        for _ in 0..ticks {
             app.update();
             if app.world().resource::<WalkingState>().climb.is_some() {
                 climb_ticks += 1;
             }
             let now = app.world().get::<Position>(walker).unwrap().0;
             longest_step = longest_step.max(now.distance(last));
+            lowest_feet = lowest_feet.min(now.length() - HALF_HEIGHT - surface);
             last = now;
         }
         let ground = app.world().get::<GroundState>(walker).unwrap();
@@ -3095,6 +3110,7 @@ mod tests {
             into_bank: (last.normalize() - wc).dot(into) * PLANET_RADIUS,
             climb_ticks,
             longest_step,
+            lowest_feet,
         }
     }
 
@@ -3178,6 +3194,85 @@ mod tests {
                 swim.climb_ticks
             );
         }
+    }
+
+    /// `swimming` 5, the owner: "Often times I'm swimming in 2 depth water
+    /// and my feet hits the floor when swimming to depth 1." A swimmer in
+    /// mid-water over a two-layer pool, its feet under the top of a shelf
+    /// one layer under the surface and off the bed, holding forward into the
+    /// shelf, steps up onto it before it has sunk to the bed (where a wader's
+    /// rule would take it), and carries on over it.
+    #[test]
+    fn a_swimmer_steps_from_two_layer_water_onto_a_one_layer_shelf() {
+        for (under, offset) in [(1.3, 0.5), (1.5, 0.5), (1.5, 0.3)] {
+            let swim = swim_into_rows(
+                &[-2, -1],
+                Start {
+                    under,
+                    offset,
+                    ..SWIMMING
+                },
+                128,
+            );
+            let what = format!("{under} m under, {offset} m toward the shelf");
+            assert!(swim.climb_ticks > 0, "{what}: no step up");
+            assert!(
+                swim.lowest_feet > -1.9,
+                "{what}: sank to the bed first, feet {:.2} m under the surface",
+                -swim.lowest_feet
+            );
+            assert!(
+                swim.into_bank > 4.0 && swim.feet_over_surface > -1.1,
+                "{what}: {:.2} m on, feet {:.2} m over the surface",
+                swim.into_bank,
+                swim.feet_over_surface
+            );
+            assert!(
+                swim.longest_step < 0.35,
+                "{what}: a step of {:.2} m in one tick",
+                swim.longest_step
+            );
+        }
+    }
+
+    /// The owner's sketch: water two deep, a shelf one deep, then the bank
+    /// level with the surface. Holding forward ends standing on the bank.
+    #[test]
+    fn a_swimmer_climbs_the_owners_staircase_onto_the_bank() {
+        for (under, offset) in [(1.0, 0.0), (1.5, 0.5)] {
+            let swim = swim_into_rows(
+                &[-2, -1, 0],
+                Start {
+                    under,
+                    offset,
+                    ..SWIMMING
+                },
+                256,
+            );
+            assert!(
+                swim.grounded && swim.feet_over_surface.abs() < 0.1 && swim.into_bank > 4.5,
+                "{under} m under: {:.2} m on, feet {:.2} m over the surface, grounded {}",
+                swim.into_bank,
+                swim.feet_over_surface,
+                swim.grounded
+            );
+        }
+    }
+
+    /// Swimming along a submerged step, brushing it, does not climb it.
+    #[test]
+    fn a_swimmer_moving_along_a_submerged_step_does_not_climb() {
+        let swim = swim_into_rows(
+            &[-2, -1],
+            Start {
+                under: 1.5,
+                offset: 0.6,
+                along_bank: true,
+                ..SWIMMING
+            },
+            128,
+        );
+        assert_eq!(swim.climb_ticks, 0, "climbed swimming along the step");
     }
 
     /// With auto step off the climb is off too, and the bank stops the swimmer.

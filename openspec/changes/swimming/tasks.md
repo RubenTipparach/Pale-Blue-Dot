@@ -108,10 +108,12 @@ water".
 swimming to depth 1. I expect auto climb to work here too." The rule is in
 the design, "Stepping up a submerged step".
 
-- [ ] `water_climb` takes a step whose top is under the surface, up to two
-      layers over the feet (`water_climb_wade_m`), with the same gates.
-- [ ] Tests on the pool: a swimmer at the surface over two-layer water steps
-      onto a one-layer shelf and carries on; the owner's staircase (two
-      deep, a one-deep shelf, the bank) ends on the bank; swimming along a
-      submerged step does not climb.
+- [x] `water_climb` takes a step whose top is under the surface, up to two
+      layers over the feet (`water_climb_wade_m`), with the same gates
+      (`steps_under_water`).
+- [x] Tests on the pool (`pool_rows`):
+      `a_swimmer_steps_from_two_layer_water_onto_a_one_layer_shelf` (fails
+      before: the swimmer sinks to the bed first);
+      `a_swimmer_climbs_the_owners_staircase_onto_the_bank`;
+      `a_swimmer_moving_along_a_submerged_step_does_not_climb`.
 - [ ] The owner swims the staircase in the running game.

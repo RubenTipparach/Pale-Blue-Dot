@@ -262,3 +262,20 @@ water climb's two.
 What still does not climb: a step more than two layers over the feet (swim up
 first); a step met swimming along it (the facing test); auto step off.
 
+### Built (2026-11-16)
+
+The rule is one more case in `water_climb`, `steps_under_water`. Measured on
+the pool, where the bed or bank in each row of cells is set by `pool_rows`:
+
+- **Before:** a swimmer in mid-water over a two-layer pool, its feet 1.3 m
+  under the surface, held forward into a one-layer shelf. Its feet stopped
+  at the shelf, and it sank to the bed (1.95 m under) before the wader's rule
+  took it up.
+- **After:** it steps onto the shelf from mid-water and carries on past the
+  shelf's first row.
+
+A swimmer floating with its feet at or over the shelf's top glides onto it,
+as before. The owner's staircase (two deep, a one-deep shelf, the bank level
+with the surface) ends standing on the bank both ways. It passed before as
+well, by the slower way: sinking to the bed, then the wader's rule.
+
