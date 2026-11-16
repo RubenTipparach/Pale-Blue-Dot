@@ -36,6 +36,20 @@ fix (design B17, second pass).
 | `after-bank.jpg` | `--fly --at 28.7500 0.7500 --height 7 --time 12 --pitch -22` | From over the bank: the banks dry and untinted to the water's edge; the bed under the water tinted by the terrain's own underwater term, which a river's bed never had. |
 | `after-under.jpg`, `after-up.jpg`, `after-walk.jpg`, `after-air.jpg` | as above | Retaken where the shared GPU allowed; `after-under` and `after-up` are the first pass's (the waterline fix does not change a view from well under the surface). |
 
+## Third look: "the blocks right before water line gets bright" (owner, 2026-11-16)
+
+Not reproduced on this branch (merged with `claude/env-v2` at `dfb2416`).
+Night captures in rain, with the lens and the rain volume off:
+
+| Files | Flags | What it shows |
+| --- | --- | --- |
+| `night-river-bank.jpg` | `--fly --at 28.7500 0.7500 --height 7 --time 5 --pitch -22 --rain 1` | The river's banks at night: the cells at the waterline as dark as their dry neighbours. |
+| `night-sea-shore-rain.jpg`, `night-sea-shore-dry.jpg` | `--walk --at 20.0 26.0 --time 5 --pitch -10`, with and without `--rain 1` | A sea shore at night. The far shore has a thin mustard strip at the water: the beach band's sand. Measured, it is no brighter than the near dry sand of the same material (mean (31, 29, 9) on the strip against (46-50, 39-43, 18-22) on the near sand), and it is the same wet and dry. |
+
+So no change was made for it: nothing found lights a waterline cell
+differently from its dry neighbours here. The owner's shot (its place and
+time) is needed to find it.
+
 Honest notes:
 
 - The owner's own shot (a sandy channel near the sea, in rain) was not
