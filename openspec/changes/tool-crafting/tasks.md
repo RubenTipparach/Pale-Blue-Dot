@@ -29,8 +29,8 @@ crafting tools, fishing, farming, herding, cooking" (2026-11-14).
 
 ## 5. The pack, wider (owner, 2026-11-16: "this menu should be wider", "I expect craft to be a menu on the side not on the bottom")
 
-- [ ] 5.1 The `pack-wide` rock (456 x 200) rendered by `ui_panels_blend.py` and copied into `assets/ui/rock/`. Verify: the kit loads it; a test pins the pack's frame to it.
-- [ ] 5.2 The pack in two columns (decision 12): slots and hotbar left, the Craft list and its row right, nothing outside the rock. Verify: a test that every recipe has a row, each row's width and the craft row fit the column; the pack's existing tests.
-- [ ] 5.3 Locked rows: disabled plaque, silhouette, "Opens with" tooltip; a click picks nothing. Verify: a test.
-- [ ] 5.4 The showcase's craft act clicks the row. Verify: the showcase test.
-- [ ] 5.5 Captures before and after in `docs/screenshots/pack-layout/`: nothing chosen, a recipe chosen, a locked row hovered; `--craft pack-empty|pack-pick|pack-locked` are the instruments.
+- [x] 5.1 The `pack-wide` rock (464 x 200) rendered by `ui_panels_blend.py` and copied into `assets/ui/rock/`. Verify: the kit loads it; a test pins the pack's frame to it.
+- [x] 5.2 The pack in two columns (decision 12): slots and hotbar left, the Craft list and its row right, nothing outside the rock. Verify: a test that every recipe has a row, each row's width and the craft row fit the column; the pack's existing tests.
+- [x] 5.3 Locked rows: disabled plaque, silhouette, "Opens with" tooltip; a click picks nothing. Verify: a test.
+- [x] 5.4 The showcase's craft act clicks the row. Verify: the showcase test.
+- [x] 5.5 Captures before and after in `docs/screenshots/pack-layout/`: nothing chosen, a recipe chosen, a locked row hovered; `--craft pack-empty|pack-pick|pack-locked` are the instruments.

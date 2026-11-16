@@ -182,7 +182,7 @@ with a capture once it is built.
     result, plaque) is wider than the ten slots it sits under, and its
     plaque, reading LOCKED, hung outside the rock's right edge.
     - **One wider rock, two columns.** The pack's rock is rendered at its own
-      new size, `pack-wide` 456 x 200 native px (the approved base rock, by
+      new size, `pack-wide` 464 x 200 native px (the approved base rock, by
       `tools/art/ui_panels_blend.py`, as every in-play panel's is: one render
       per size, never tiled or stretched). Left: the thirty pack slots, and
       the hotbar's ten at the foot of the column. Right: the Craft panel. Each
@@ -190,9 +190,10 @@ with a capture once it is built.
     - **Craft is a list.** The hands' recipes stand in a column, one stone
       plaque each (22 px, the plaque's own height): the recipe's icon at
       native 16 px, its name, and its count ("X4") at the right. Hover,
-      pressed, latched (the chosen recipe) and disabled are the kit's plaque
-      pieces. Six rows show (the hands make six things today); a longer list
-      scrolls with the wheel inside its own box.
+      pressed, focus (the chosen recipe, ringed with the rune as a chosen
+      slot is) and disabled are the kit's plaque pieces. Six rows show (the
+      hands make six things today); a longer list scrolls with the wheel
+      (it has no scroll bar until it needs one).
     - **Locked rows** are disabled plaques with the icon as the silhouette
       (`starter-missions` T.4), and their tooltip says "Opens with:
       <mission>". A click on one picks nothing and says the same under the
@@ -208,8 +209,8 @@ with a capture once it is built.
       at a whole number of screen pixels (no fractional scaling, the seam the
       mission tree had). The drop-down's 12 px icons, a 16 px icon squeezed,
       go with it.
-    - **Fits.** 456 x 200 at UI scale 1 (1280 x 720) leaves the tab strip
-      and the hotbar clear; at 2880 x 1800 (scale 4) it is 1824 x 800.
+    - **Fits.** 464 x 200 at UI scale 1 (1280 x 720) leaves the tab strip
+      and the hotbar clear; at 2880 x 1800 (scale 4) it is 1856 x 800.
     - **The bot** picks a recipe by clicking its row, where it opened the
       drop-down and clicked an option.
     - Sketch, native px (the rock's 14 px rim round it):
@@ -225,7 +226,7 @@ with a capture once it is built.
  | HOTBAR                 |  [ic CAMPFIRE               ]      |
  | [][][][][][][][][][]   |  [n][n][n] -> [r]     [CRAFT]      |
  +------------------------------------------------------------+
-   240 px                 16  172 px
+   240 px                 16  180 px
 ```
 
 ## Risks

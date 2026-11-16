@@ -249,7 +249,7 @@ pub const OAK: [&str; 10] = [
 
 /// The rock panels the game draws, by their name in `rock_panels`
 /// (`assets/ui/rock/rock-<w>x<h>.png`).
-pub const ROCKS: [&str; 4] = ["pack", "loading", "pack-craft", "chest"];
+pub const ROCKS: [&str; 4] = ["pack", "loading", "pack-wide", "chest"];
 
 /// Which set a control is drawn in: dressed stone in play, carved oak out of
 /// play (owner, 2026-11-14: "main menu I think should use the timber stuff,
