@@ -48,9 +48,9 @@ jobs:
           - platform: linux
             os: ubuntu-latest
             exe: pbd-app
-          # macos-14 is Apple Silicon (arm64). There is no Intel build.
+          # macos-15 is Apple Silicon (arm64). There is no Intel build.
           - platform: mac
-            os: macos-14
+            os: macos-15
             exe: pbd-app
     defaults:
       run:

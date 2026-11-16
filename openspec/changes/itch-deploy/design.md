@@ -16,7 +16,7 @@ Inputs:
 Jobs:
 
 - **`build`** is a matrix over `windows-latest`, `ubuntu-latest` and
-  `macos-14` (Apple Silicon), with `fail-fast: false` so one platform's
+  `macos-15` (Apple Silicon), with `fail-fast: false` so one platform's
   failure does not hide the others'. Each job:
   - checks out the code;
   - installs the pinned toolchain, `dtolnay/rust-toolchain@1.97.1`. That is
@@ -133,7 +133,7 @@ writable in both cases.
   `xattr -dr com.apple.quarantine <folder>` once, or right-clicks the exe and
   chooses Open. The itch app does not set the quarantine flag, so a player who
   installs through it is not affected. The README says this.
-- **Apple Silicon only** (`macos-14` is arm64). An Intel or universal build
+- **Apple Silicon only** (`macos-15` is arm64). An Intel or universal build
   would add an `x86_64-apple-darwin` target and `lipo`. That was not asked for.
 - **Build time.** A cold `--release` build (thin LTO) is long: the desktop
   takes 9-15 minutes, and GitHub's runners are slower. `rust-cache` keeps
