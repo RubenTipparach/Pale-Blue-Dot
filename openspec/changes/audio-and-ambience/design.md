@@ -616,3 +616,17 @@ Sounds page and the first take, and any of them can be turned there.
 None for the owner now. When the Sounds page exists, its first version is
 the place to ask which takes and beds to keep, with each one playing beside
 the question.
+
+## No wet layer on grass (owner, 2026-11-16)
+
+The owner: *"theres also some weird twig snapping sound when i walk, I dont
+like that, just the grass sound on my feet is nice"*, then *"could it be
+because of light rain?"*. It was. Once the ground's `wetness` passes
+`wet_step_from` (0.4), a step on grass played `step_wet` (freesound 376809,
+a squelch) on top of `step_grass`, and on grass that squelch reads as a twig
+snapping.
+
+Grass now takes no wet layer: a step on grass is `step_grass` alone, in rain
+or not. Stone keeps its wet layer, and wet dirt keeps the squelch as its step
+(mud). `Family::takes_wet` is the one rule, and a test pins it.
+

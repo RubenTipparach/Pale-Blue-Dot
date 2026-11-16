@@ -413,7 +413,9 @@ impl Family {
 
     /// Whether wet ground lays `step_wet` under this family's step.
     pub fn takes_wet(self) -> bool {
-        matches!(self, Family::Stone | Family::Dirt | Family::Grass)
+        // Not grass: on grass the squelch read as a twig snapping (owner,
+        // 2026-11-16: "just the grass sound on my feet is nice").
+        matches!(self, Family::Stone | Family::Dirt)
     }
 
     /// Whether this family has dig, break and place cues (water does not).
@@ -825,6 +827,14 @@ pub fn admit(playing: &[f32], cap: usize, gain: f32) -> Admit {
 
 #[cfg(test)]
 mod tests {
+    /// A step on grass is the grass step alone, wet or dry (owner,
+    /// 2026-11-16); stone and dirt keep their wet layer.
+    #[test]
+    fn grass_takes_no_wet_layer() {
+        assert!(!Family::Grass.takes_wet());
+        assert!(Family::Stone.takes_wet() && Family::Dirt.takes_wet());
+    }
+
     use super::*;
 
     const R: f32 = 4800.0;

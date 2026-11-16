@@ -178,7 +178,7 @@ pub struct PlayerSettings {
     /// The five sound volumes (`audio-and-ambience`).
     pub volumes: Volumes,
     /// The pixel tuft grass in place of the blades cut from the ground tile
-    /// (`flora-v2` design 1): the owner's toggle to try it, off by default.
+    /// (`flora-v2` design 1): on by default; off draws the blades.
     pub pixel_grass: bool,
     /// Arrows on the flowing water, the way each cell flows (`water-flow`
     /// task 3.4): off by default.
@@ -210,8 +210,9 @@ impl Default for PlayerSettings {
 impl PlayerSettings {
     /// What a capture or a benchmark runs with before its flags: the engine
     /// as it was before these settings existed (uncapped, full size, auto
-    /// step on), so no picture or perf number moved when the player's
-    /// defaults did.
+    /// step on), so no perf number moved when the player's defaults did.
+    /// The grass is the player's tufts (`flora-v2` 12.10): a capture shows
+    /// the ground the player sees, and `--grass blades` still draws the old.
     pub const ISOLATED: Self = Self {
         frame_limit: FrameLimit::Off,
         render_scale: 100,
@@ -225,7 +226,7 @@ impl PlayerSettings {
             music: 60,
             menus: 70,
         },
-        pixel_grass: false,
+        pixel_grass: true,
         flow_arrows: false,
         reflections: Reflections::High,
     };
@@ -1005,7 +1006,7 @@ mod tests {
         assert!(read.rain_shadows && !read.mission_line && read.render_scale == 75);
         assert!(PlayerSettings::default().pixel_grass);
         let isolated = PlayerSettings::ISOLATED;
-        assert!(!isolated.pixel_grass, "captures keep the blades");
+        assert!(isolated.pixel_grass, "captures draw the player's tufts");
         let flags = Overrides {
             pixel_grass: Some(false),
             ..default()

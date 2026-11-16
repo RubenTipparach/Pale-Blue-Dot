@@ -594,13 +594,14 @@ fn spawn_side(layer: &mut ChildSpawnerCommands, kit: &UiKit) {
         });
 }
 
-/// What a card's badge says, and its colour.
+/// What a card's badge says, and its colour. A locked card has none: its dim
+/// silhouettes say so (owner, 2026-11-16: "we dont need locked, its obvious").
 fn badge(standing: Standing, now: bool) -> (&'static str, Color) {
     match standing {
         Standing::Done => ("DONE", ui_kit::RUNE),
         Standing::Open if now => ("NOW", ui_kit::TITLE),
         Standing::Open => ("OPEN", ui_kit::TEXT),
-        Standing::Locked => ("LOCKED", ui_kit::LABEL_DIM),
+        Standing::Locked => ("", ui_kit::LABEL_DIM),
         Standing::Pending => ("NOT YET", ui_kit::LABEL_DIM),
     }
 }
@@ -804,7 +805,10 @@ pub fn paint(
         let (words, c) = match which {
             SideText::Title => (m.title.clone(), ui_kit::TITLE),
             SideText::Sub => (
-                format!("{} · {}", branch_name(&m.branch), badge(s, now).0),
+                match badge(s, now).0 {
+                    "" => branch_name(&m.branch).to_string(),
+                    word => format!("{} · {}", branch_name(&m.branch), word),
+                },
                 ui_kit::LABEL_DIM,
             ),
             SideText::Objectives => (

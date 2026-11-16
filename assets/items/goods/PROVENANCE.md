@@ -11,7 +11,7 @@ balatro-pixel-art kit in the Sweaft-64 palette:
 
 | Where | What | How |
 | --- | --- | --- |
-| `assets/items/crops/<crop>_<stage>.png` | M8's four stage sprites per crop, in their outline-free world version (`docs/mockups/farming/world/`, drawn by `docs/mockups/farming/world_art.py`; since 2026-11-15, `flora-v2` design 11) | copied byte for byte, 32 px |
+| `assets/items/crops/<crop>_<stage>.png` | M8's four stage sprites per crop, in their outline-free world version (`docs/mockups/farming/world/`, drawn by `docs/mockups/farming/world_art.py`; since 2026-11-15, `flora-v2` design 11; no sparkles and folded highlights since 2026-11-16, `farming-and-smelting` decision 16) | copied byte for byte, 32 px |
 | `assets/items/crops/flame.png` | the forge's flame in the world | the fire of M3's `forge.png`, cut out alone |
 | `assets/items/goods/<crop>.png` | produce | M8's produce, reduced to 16 px |
 | `assets/items/goods/<crop>-seed.png` | seeds | M8's seed sack at 16 px, the produce as a 9 px badge |

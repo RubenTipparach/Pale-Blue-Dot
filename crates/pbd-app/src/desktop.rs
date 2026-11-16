@@ -186,9 +186,11 @@ pub struct Launch {
     pub bare: bool,
     /// `--tier stone|bronze|iron|steel`, for `--tool`.
     pub tier: pbd_core::inventory::Tier,
-    /// `--craft pack|bench [metres]` (`tool-crafting` task 4.2, a capture
-    /// instrument): the pack's Craft row mid-craft, or a workbench that far
-    /// ahead with its panel open mid-craft.
+    /// `--craft pack|pack-empty|pack-pick|pack-locked|bench [metres]`
+    /// (`tool-crafting` tasks 4.2 and 5.5, a capture instrument): the pack's
+    /// Craft panel (mid-craft, with nothing chosen, on a recipe, or with a
+    /// locked row hovered), or a workbench that far ahead with its panel
+    /// open mid-craft.
     pub craft: Option<(String, f32)>,
     /// `--place N` stacks N stones on the last hole, so a tower somebody built
     /// can be photographed wearing the stone it is made of.
@@ -517,8 +519,16 @@ impl Launch {
                     i += 1;
                     let scene = args.get(i).expect("--craft requires pack or bench").clone();
                     assert!(
-                        matches!(scene.as_str(), "pack" | "bench" | "bench-view"),
-                        "--craft takes pack, bench or bench-view"
+                        matches!(
+                            scene.as_str(),
+                            "pack"
+                                | "pack-empty"
+                                | "pack-pick"
+                                | "pack-locked"
+                                | "bench"
+                                | "bench-view"
+                        ),
+                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench or bench-view"
                     );
                     let mut metres = 4.0;
                     if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
@@ -1463,6 +1473,12 @@ pub fn run(args: &[String]) {
     // The starter missions (`starter-missions`): the chain, its counting
     // and the player's record; the HUD line and the tab are `missions`.
     .add_plugins(pbd_app::missions::MissionsPlugin)
+    // `--craft pack-locked`'s pointer, after the UI's focus pass (a capture
+    // instrument, `tool-crafting` 5.5).
+    .add_systems(
+        PreUpdate,
+        craft::hover_locked.after(bevy::ui::UiSystems::Focus),
+    )
     .add_systems(
         Update,
         (
@@ -4045,13 +4061,14 @@ fn write_frame_log(
 /// wet ground's traces in it at `reflect_render_scale: 1.0`, else in
 /// `reflect_half` and `reflect_compose`. A pass that did not run in a frame
 /// reads 0; spans not named here are summed in `gpu_other_ms`.
-const PASS_COLUMNS: [&str; 21] = [
+const PASS_COLUMNS: [&str; 22] = [
     "planet_cull",
     "planet_shadow",
     "main_opaque_pass_3d",
     "planet_terrain",
     "reflect_half",
     "reflect_compose",
+    "rain_splash",
     "main_transparent_pass_3d",
     "water_compose",
     "ssr_capture",

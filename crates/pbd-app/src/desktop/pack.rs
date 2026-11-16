@@ -116,11 +116,22 @@ pub fn open(
     }
 }
 
+/// The pack's columns, native px (`tool-crafting` decision 12): the ten
+/// slots on the left, the gap, and the Craft panel on the right. With the
+/// rock's rim on both sides they are the `pack-wide` rock's width exactly.
+pub const PACK_COLUMN: f32 = 10.0 * slots::SLOT;
+pub const COLUMN_GAP: f32 = 16.0;
+/// The rock's rim, inside which everything stands.
+pub const RIM: f32 = 14.0;
+
 /// The pack's panel: the approved base rock baked at the pack's own size
-/// (`rock_panels.pack`, 268 x 152 native px), the oak lintel carrying its
-/// title, the thirty slots and the hotbar's ten under them. Nothing else on
-/// it: no close button (owner, 2026-11-14: "In desktop esc will do just
-/// fine"; I shuts it too) and no line of instructions.
+/// (`rock_panels.pack-wide`, 464 x 200 native px), in two columns
+/// (`tool-crafting` decision 12; owner, 2026-11-16: "this menu should be
+/// wider", "I expect craft to be a menu on the side not on the bottom").
+/// Left, under the PACK lintel: the thirty slots, and the hotbar's ten at
+/// the column's foot. Right, under the CRAFT lintel: the hands' recipes and
+/// the chosen one's row. No close button (owner, 2026-11-14: "In desktop esc
+/// will do just fine"; I shuts it too) and no line of instructions.
 pub fn spawn(
     mut commands: Commands,
     icons: Res<ItemIcons>,
@@ -129,8 +140,7 @@ pub fn spawn(
 ) {
     let atlas = icons.atlas.clone();
     let kit = &*kit;
-    // M29's rock, grown for the Craft row (`tool-crafting` decision 9).
-    let (rock, (w, h)) = kit.rock("pack-craft");
+    let (rock, (w, h)) = kit.rock("pack-wide");
     commands
         .spawn((menu::layer(), GlobalZIndex(10), Panel(Screen::Pack)))
         .with_children(|layer| {
@@ -140,32 +150,50 @@ pub fn spawn(
                     Node {
                         width: px(w),
                         height: px(h),
-                        padding: UiRect::all(px(14)),
-                        flex_direction: FlexDirection::Column,
+                        padding: UiRect::all(px(RIM)),
+                        column_gap: px(COLUMN_GAP),
                         ..default()
                     },
                 ))
                 .with_children(|panel| {
-                    menu::lintel(panel, kit, "PACK");
-                    let rows = PACK / SLOTS;
-                    for row in 0..=rows {
-                        let first = if row < rows { SLOTS + row * SLOTS } else { 0 };
-                        if row == rows {
-                            panel.spawn((
-                                KitText::new("HOTBAR", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
-                                Node {
-                                    margin: UiRect::new(px(0), px(0), px(5), px(3)),
+                    panel
+                        .spawn(Node {
+                            width: px(PACK_COLUMN),
+                            flex_shrink: 0.0,
+                            flex_direction: FlexDirection::Column,
+                            justify_content: JustifyContent::SpaceBetween,
+                            ..default()
+                        })
+                        .with_children(|column| {
+                            column
+                                .spawn(Node {
+                                    flex_direction: FlexDirection::Column,
                                     ..default()
-                                },
-                            ));
-                        }
-                        panel.spawn(Node::default()).with_children(|line| {
-                            for index in first..first + SLOTS {
-                                slots::cell(line, kit, index, &atlas, (Button, PackCell(index)));
-                            }
+                                })
+                                .with_children(|top| {
+                                    menu::lintel(top, kit, "PACK");
+                                    for row in 0..PACK / SLOTS {
+                                        slot_line(top, kit, &atlas, SLOTS + row * SLOTS);
+                                    }
+                                });
+                            column
+                                .spawn(Node {
+                                    flex_direction: FlexDirection::Column,
+                                    ..default()
+                                })
+                                .with_children(|foot| {
+                                    foot.spawn((
+                                        KitText::new("HOTBAR", ui_kit::TEXT_DIM)
+                                            .shadow(ui_kit::INK),
+                                        Node {
+                                            margin: UiRect::bottom(px(3)),
+                                            ..default()
+                                        },
+                                    ));
+                                    slot_line(foot, kit, &atlas, 0);
+                                });
                         });
-                    }
-                    super::craft::spawn_pack_row(panel, kit, &atlas, &recipes);
+                    super::craft::spawn_pack_craft(panel, kit, &atlas, &recipes);
                 });
         });
     commands
@@ -197,6 +225,15 @@ pub fn spawn(
                 HeldCount,
             ));
         });
+}
+
+/// Ten slots in a row, from slot `first`.
+fn slot_line(parent: &mut ChildSpawnerCommands, kit: &UiKit, atlas: &Handle<Image>, first: usize) {
+    parent.spawn(Node::default()).with_children(|line| {
+        for index in first..first + SLOTS {
+            slots::cell(line, kit, index, atlas, (Button, PackCell(index)));
+        }
+    });
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -321,7 +358,7 @@ mod tests {
 
     /// In play is rock: the pack is framed in the base rock baked at the
     /// pack's own size, drawn whole (never tiled), its slots are dressed
-    /// stone, and its title is on the oak lintel.
+    /// stone, and each column's title is on an oak lintel.
     #[test]
     fn the_pack_is_framed_in_its_own_rock() {
         let mut app = App::new();
@@ -347,7 +384,7 @@ mod tests {
         let (rock, lintel, slots) = {
             let kit = world.resource::<UiKit>();
             (
-                kit.image("rock/pack-craft"),
+                kit.image("rock/pack-wide"),
                 kit.image("lintel"),
                 [kit.image("slot-idle"), kit.image("slot-selected")],
             )
@@ -365,15 +402,30 @@ mod tests {
             "drawn whole"
         );
         let node = world.get::<Node>(frame).unwrap();
-        // M29's rock, grown for the Craft row (`tool-crafting` decision 9).
-        assert_eq!((node.width, node.height), (px(268), px(204)));
+        // The wide pack (`tool-crafting` decision 12): its rim and columns
+        // are the rock's width exactly, so nothing stands outside it.
+        assert_eq!((node.width, node.height), (px(464), px(200)));
+        assert_eq!(
+            RIM * 2.0 + PACK_COLUMN + COLUMN_GAP + super::super::craft::CRAFT_COLUMN,
+            464.0
+        );
         let mut wells = world.query::<&super::super::craft::Well>();
         assert!(wells.iter(world).count() >= 2, "the needs and the result");
+        let mut rows = world.query::<&super::super::craft::RecipeRow>();
+        assert_eq!(
+            rows.iter(world).count(),
+            world
+                .resource::<pbd_app::config::Recipes>()
+                .0
+                .at("hand")
+                .count(),
+            "a row for every recipe the hands make"
+        );
         let mut images = world.query::<&ImageNode>();
         assert_eq!(
             images.iter(world).filter(|i| i.image == lintel).count(),
-            1,
-            "one oak lintel"
+            2,
+            "an oak lintel over each column, PACK and CRAFT"
         );
         let mut cells = world.query_filtered::<&ImageNode, With<PackCell>>();
         let n = cells.iter(world).count();

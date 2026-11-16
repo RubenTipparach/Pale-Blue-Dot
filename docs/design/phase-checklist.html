@@ -55,7 +55,7 @@ li span.t { min-width: 0; }
 <header>
   <p class="top"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
   <h1>Phase 1 and 2 Checklist</h1>
-  <p class="note">What is in the game and what is not, for roadmap phase 1 (the first game loop) and phase 2 (environment v2). As of 2026-11-15, branch <code>claude/env-v2</code>. Read from each OpenSpec change's tasks and the code.</p>
+  <p class="note">What is in the game and what is not, for roadmap phase 1 (the first game loop) and phase 2 (environment v2). As of 2026-11-16, branch <code>claude/env-v2</code> (PR #45 into main). Read from each OpenSpec change's tasks and the code.</p>
   <div class="legend">
     <span class="st built">Built</span> in the game
     <span class="st part">Partial</span> some of it
@@ -79,18 +79,23 @@ const PHASES = [
     { title: 'Fishing', change: 'fishing-and-equipment', items: [
       ['built', 'Casting, the bite and reel, schools, bait digging'],
       ['built', 'Felling trees with the axe'],
-      ['no', 'The fish field-guide wiki generator and the range atlas reading fauna.ron'],
+      ['built', 'The fish wiki page for all 18 water species, and the range atlas regenerated from fauna.ron'],
+      ['built', 'A tree felled for all its wood is gone (the 64 nearest the camera)'],
       ['owner', 'Your in-game check of the bite and reel feel'],
     ]},
     { title: 'Farming and smelting', change: 'farming-and-smelting', items: [
       ['built', 'Seeds from grass and wild plants; till, plant, grow on world time, harvest'],
       ['built', 'The forge smelts ore'],
+      ['built', 'Ore veins in the stone of new worlds (generator 10): dug ore gives coal or mixed ore'],
+      ['part', 'Ore is drawn as stone in a dug wall (needs a fifth material bit and an ore tile)'],
       ['owner', 'Crop growing times'],
     ]},
     { title: 'Herding', change: 'animal-husbandry', items: [
       ['built', 'Tame by feeding, pens of fence, eggs, milk and wool'],
-      ['no', 'Fertile eggs, broody hens, the incubator, life stages'],
-      ['no', 'Breeding, inheritance and pedigrees, and the breeding screen'],
+      ['built', 'Fertile eggs, broody hens, the incubator by a lamp, chicks, lambs and calves growing up'],
+      ['built', 'Pairing, births, inheritance with mutation, inbreeding, and the breeding screen (B) with pedigrees'],
+      ['built', 'Fences, gates and the incubator in timber, poles, boards and plank'],
+      ['no', 'The animals in their hides (still flat-coloured boxes)'],
     ]},
     { title: 'Cooking', change: 'cooking', items: [
       ['built', 'The campfire and its dishes from fish, crops and eggs'],
@@ -102,6 +107,7 @@ const PHASES = [
     ]},
     { title: 'Starter missions', change: 'starter-missions', items: [
       ['built', 'Nineteen missions through the loop, the HUD line and the Missions tab'],
+      ['built', 'The Missions tab as M33\'s mission tree; locked recipes shown as silhouettes'],
       ['owner', 'The mission line has no backing strip'],
     ]},
     { title: 'Sound', change: 'audio-and-ambience', items: [
@@ -117,12 +123,15 @@ const PHASES = [
       ['built', 'Plant contrast softened; painted flowers off the ground tiles'],
       ['built', 'Clutter reach doubled (120 m), per-biome clutter, seasons on plants'],
       ['built', 'Fallen leaves in autumn, browned in winter'],
-      ['built', 'Fruit and pine cones on trees (decoration; picking not in)'],
+      ['built', 'Fruit and pine cones on trees; E picks a tree\'s fruit, which grows back in 8 days'],
+      ['part', 'A picked tree\'s fruit leaves the draw: built, not yet shown in a capture'],
       ['built', 'M13\'s detailed trees: oak, birch, kapok, palm, pine, cactus, willow, with baked mid and far trees that cross-fade'],
       ['built', 'Crops and wild plants in the world\'s style: M8\'s outline-free stages, no ink rings'],
-      ['part', 'Acacias are built but never stand: beach cells are sand and trees need grass (your call to change placement)'],
-      ['no', 'Forests as dense as the mockup (placement density unchanged, so old worlds keep their trees)'],
-      ['no', 'Snow on the sod lip in winter (the game has no seasonal snow)'],
+      ['built', 'Forests as dense as the mockup, and acacias on beach sand (generator 10; old worlds keep their trees)'],
+      ['built', 'The ground follows the seasons: grass dries in autumn and winter, frost where it is cold'],
+      ['built', 'Snow on the branches in cold winters'],
+      ['part', 'Vines on jungle and swamp trees: built, faint from the ground'],
+      ['owner', 'How white the snow on near pines should be'],
       ['no', 'The fungal forest (needs a new biome)'],
     ]},
     { title: 'Water that flows (M28)', change: 'water-flow, volumetric-water', items: [
@@ -137,6 +146,8 @@ const PHASES = [
       ['built', 'Light under water: depth, turbidity, caustics, shafts, marine snow'],
       ['built', 'Tides, and swimming in pools, flowing water and high tide'],
       ['built', 'Reefs, kelp, vents with smoke, trenches, sea ice with seals (generator 7, reefs restored in 9)'],
+      ['built', 'Kelp redrawn after M25: slender stipes, narrow fronds with floats, rock-coloured rocks'],
+      ['built', 'Ice floes ride the tide'],
       ['built', 'Fish from M9, textured; proper models for every water creature'],
       ['built', 'Rivers to the sea and marsh pools (generator 8)'],
       ['built', 'The Sea places map layer'],
@@ -148,7 +159,7 @@ const PHASES = [
   ]},
   { n: 0, title: 'Across both phases', parts: [
     { title: 'Checks', change: '', items: [
-      ['built', 'Tests pass, except the two old ground-digest tests that also fail on main'],
+      ['built', 'Tests pass on both machines: the ground digests are pinned for the Mac and for x86, which differ'],
       ['no', 'Gameplay recordings of every phase 1 and phase 2 feature'],
       ['no', 'Frame cost measured on your hardware (perf suite)'],
       ['owner', 'Your playtest of the loop and of environment v2'],
