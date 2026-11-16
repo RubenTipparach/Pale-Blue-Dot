@@ -1352,3 +1352,72 @@ underwater". Two faults, measured in the code:
 
 Captures: `before-skim.jpg` and `after-skim.jpg` (the eye at a river's
 surface), `after-bank.jpg` (from over the bank).
+
+### B18. The river's water from inside, third pass (owner, 2026-11-16: "rivers not validated")
+
+The owner, in the river at 28.250 0.750 (65.6 m, 2.6 m over the bed, by
+day under cloud): "I see rain shader at the bottom; I dont see water surface
+above the player; that gradient looks like an incorrect implementation of
+being underwater?", and on the bright strip: "you must be submerged at just
+the right height, if not 1 block try 2 blocks".
+
+**Reproduced** at that spot, and in the sea at about one and two layers down
+(`docs/screenshots/river-fixes/third-pass/`), with a capture-only camera
+path (`PBD_EYE_PATH`, `desktop/eye_path.rs`) that moves the eye through the
+surface over 720 frames at 60 fps with its height against the water burnt
+into a corner. Measured with a temporary log of the tri-state:
+
+1. **No surface overhead.** The straddle band, 0.8 m, holds the sea's swell.
+   A river has none, yet its eye was "straddling" for the 0.8 m under its
+   surface, and the game's own water discards a face seen from below by a
+   straddling eye. The owner's eye, 0.2 m under, saw no surface.
+2. **The surface the eye was measured against was not the one drawn.** A
+   flowing top is meshed through its corners (Luanti's corner rule): up to a
+   layer's share over the cell's own level where a neighbour is full. The
+   eye's water was the cell's level, so for the centimetres between the two
+   the eye was "dry" under a drawn top: the face was discarded and nothing
+   stood overhead.
+3. **The flat gradient, and the bright strip.** With the eye under, the
+   composite still masked wetness by a sphere at the eye's own surface. A
+   river stands at different heights cell to cell, so a wall under a
+   neighbour's higher water was dry and bright; and at the sea, one layer
+   down, the bank between the drawn sheet (0.5 m under sea level, plus the
+   tide) and the bank's top was seen past the sheet's edge, dry: the owner's
+   bright strip at the waterline (`before-sea-1-layer.jpg`).
+4. **Rain rings on the bed**: not reproduced at the spot after the first
+   pass (the terrain's rings stop where its own tint starts, and the bed's
+   column now carries its water); the videos show none under the surface.
+
+**Fixes.**
+- Inland water has no straddle band (`INLAND_BAND_M` = 0): the eye is under
+  a river's water as soon as it is below the drawn surface.
+- The eye's surface is the DRAWN top (`water_flow::drawn_top_m`, the mean of
+  the corner levels `cell_pieces` meshes), so the decision and the picture
+  agree to the centimetre.
+- A straddling eye draws the face it is under from below.
+- With the eye under, everything not hidden by a sheet is seen through
+  water: the composite's mask is gone for an eye under, as it should be (the
+  sheet draws what is above the surface from the scene before the pass).
+- An eye a hand over the surface looking down: the sheet nearer than the
+  near plane is clipped; the composite fogs what lies under it along the ray
+  from the surface (`NEAR_SHEET_M`).
+
+The underwater look is the sea's own model throughout (the same murk,
+absorption, shafts and the terrain's downwelling darkening); what differed
+was where it was applied.
+
+**Validation**: videos crossing the surface at the owner's spot, a river
+bank, the sea's shore and where waters meet, before and after, with every
+frame within 0.3 m of the surface stepped and listed (the report's issue
+list); numeric junction checks in `water_junction_tests`.
+
+**Where waters meet** (B18, the junction check). The check runs on 5 mouths, 3 tributaries and 3 falls from the generator's rivers, on a real tier. It samples every metre along a line from upstream to 40 m past the junction.
+- **Mouths: fixed.** Before the fix, every mouth drew two surfaces in 22 to 37 cells: the sea's sheet under the river's own water, wherever the bed is below sea level. The sheet is now marked dry wherever water stands over the sea's layer. All 11 lines read no double surface and no flip in the eye's decision.
+- **Steps are kept.** The steps along a line are the river's own: riffles under a metre, and falls of 4 to 11 m at the mouths' cut. They are not seams.
+- **Not built.** Lakes are not generated. Marsh pools do not join rivers. No fall drops into the sea. Poured water meeting a river and the tide against a reach have no generated instance to test on; the tide's sheet is the one the eye now follows.
+
+**Second review of the videos (2026-11-16).**
+- **A dark sky over the water.** The sky darkened with the eye up to half a metre over the sea. The tri-state took the column's own sea top as the surface, which stands half a metre over the drawn sheet, and added the tide and the swell to it. So an eye over the drawn, tided sheet read as under, and the whole sky went to murk. The fix: one function, `eye_surface_radius`, now gives the surface that the tri-state, the composite and the capture label all judge the eye against. It is an inland water's drawn top, or the sea's sheet lifted by the tide and never by the waves. A pool in a cave below the sea's level is inland water too.
+- **The capture label** now uses that same surface and the same eye rule (`eye_water_at`), for this frame's eye.
+- **The river reads darker than the sea.** I measured frames at the same depth (`videos/same-depth-sea-vs-river.jpg`). The open water is the same in both: (6, 29, 43) against (6, 27, 37) at 1 m down. What differs is the bed. The sea's is sand on an open shore. The river's is dirt, as the owner asked, in a channel whose walls shade it. A capture with the water composite switched off shows the same gap in the terrain's own shading, so the water model is the same in both. Matching the brightness would mean a lighter bed (sand or gravel) for river beds. That is the owner's call, so it is not made here.
+- **The riffle.** At a step, the eye a few centimetres under a thin cell's drawn top can see out through that cell's side face, over the lower reach beyond. That frame is lit as water seen from inside, which is what it is. It shows only on the capture path, which follows the water's height as it jumps up and down at each step.

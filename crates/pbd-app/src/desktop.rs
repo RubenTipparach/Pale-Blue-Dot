@@ -6,6 +6,7 @@ mod craft;
 mod digging;
 mod drops_view;
 mod equipment;
+mod eye_path;
 mod farm;
 mod forge;
 mod frame_graph;
@@ -1334,7 +1335,7 @@ impl Launch {
 
 #[derive(Resource)]
 struct CaptureState {
-    frame: u32,
+    pub(crate) frame: u32,
     requested: bool,
     saved: bool,
     finish_frame: u32,
@@ -1820,6 +1821,22 @@ pub fn run(args: &[String]) {
                 .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
                 .run_if(resource_exists::<pbd_app::drops::Drops>),
         ),
+    )
+    // MEASUREMENT: `PBD_EYE_PATH`, the waterline videos' camera (`eye_path`).
+    .add_systems(Startup, eye_path::setup)
+    .add_systems(
+        PostUpdate,
+        eye_path::drive
+            .after(pbd_app::flight_view::follow_flight_camera)
+            .before(bevy::transform::TransformSystems::Propagate)
+            .run_if(resource_exists::<eye_path::EyePathNow>),
+    )
+    .add_systems(
+        PostUpdate,
+        eye_path::label
+            .after(eye_path::drive)
+            .before(bevy::ui::UiSystems::Layout)
+            .run_if(resource_exists::<eye_path::EyePathNow>),
     )
     .add_systems(
         Update,

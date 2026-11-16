@@ -767,7 +767,7 @@ fn update_route_camera(
     );
 }
 
-fn follow_flight_camera(
+pub fn follow_flight_camera(
     config: Res<FlightViewConfig>,
     intent: Res<FlightInputState>,
     route: Option<Res<RouteState>>,

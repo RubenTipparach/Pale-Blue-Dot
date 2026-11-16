@@ -226,6 +226,13 @@ impl ColumnTier {
     }
 
     /// A slot's neighbours across its sides, `None` off the tier.
+    /// How many sides the cell at `slot` has: 6, or 5 at a pentagon.
+    pub fn degree_of(&self, slot: usize) -> usize {
+        self.records
+            .get(slot)
+            .map_or(6, |record| ((record.more[2] & DEGREE_MASK) as usize).min(6))
+    }
+
     pub fn sides_of(&self, slot: usize) -> [Option<usize>; 6] {
         let mut out = [None; 6];
         let (Some(record), Some(sides)) = (self.records.get(slot), self.sides.get(slot)) else {
@@ -568,6 +575,14 @@ impl ColumnTier {
                 record.more[3] = (record.more[3] & RIM_BIT) | state_word(column, lit, glow);
             }
         }
+    }
+
+    /// The slot of a finest record, if that record is in the tier.
+    pub fn slot(&self, record: usize) -> Option<usize> {
+        self.slots
+            .get(record)
+            .copied()
+            .filter(|&s| s < self.columns.len())
     }
 
     /// The column of a finest record, if that record is in the tier.
@@ -1200,9 +1215,14 @@ pub const DRY_SHEET_BIT: u32 = 2;
 /// Mark or clear a record's [`DRY_SHEET_BIT`] from its column.
 pub fn mark_sheet(cell: &mut GpuCell, column: &Column) {
     let sea = sea_layer();
+    // Dry where the sea's layer holds no water; and where a river's water
+    // stands on over the sea's level (a mouth whose bed is under the sea):
+    // the river's own top is that cell's one surface, and the sheet under
+    // it was a second one inside the river's water (`ocean-environments`
+    // B18, the junction check).
     let dry = sea > 0
         && cell.direction_height[3] < terrain_config().sea_level_m
-        && !column.material(sea - 1).is_water();
+        && (!column.material(sea - 1).is_water() || column.material(sea).is_water());
     cell.spare[2] = (cell.spare[2] & !DRY_SHEET_BIT) | if dry { DRY_SHEET_BIT } else { 0 };
 }
 

@@ -583,6 +583,44 @@ impl CellFrame {
     }
 }
 
+/// The height the water's top at `slot`, `layer` is DRAWN at, metres over
+/// the radius, at the cell's centre: the mean of its corners' levels
+/// (Luanti's corner rule, `corner_level`), as `cell_pieces` meshes it. `None`
+/// where the layer is not water, water stands on it, or it is the sea's own
+/// top, which the sheet draws. What decides whether the eye is under a
+/// river's water (`ocean-environments` B17): the surface the eye sees, not
+/// the cell's own level, which the drawn top stands over by up to a layer's
+/// share where a neighbour is full.
+pub fn drawn_top_m(tier: &ColumnTier, slot: usize, layer: usize) -> Option<f32> {
+    let column = tier.columns.get(slot)?;
+    let here = column.material(layer);
+    if !here.is_water() || column.material(layer + 1).is_water() {
+        return None;
+    }
+    let sea = sea_layer();
+    if here == Material::Water && layer + 1 == sea {
+        return None;
+    }
+    let degree = tier.degree_of(slot);
+    let sides = tier.sides_of(slot);
+    let side_of = |s: usize| -> Option<Side> {
+        let n = sides[s]?;
+        Some(Side {
+            material: material_in(tier, n, layer),
+            above_water: material_in(tier, n, layer + 1).is_water(),
+        })
+    };
+    let me = Some(Side {
+        material: here,
+        above_water: false,
+    });
+    let mean = (0..degree)
+        .map(|i| corner_level(&[me, side_of((i + degree - 1) % degree), side_of(i)]))
+        .sum::<f32>()
+        / degree.max(1) as f32;
+    Some(column::layer_altitude(layer) + mean)
+}
+
 /// A layer's material in a tier, stone off it.
 fn material_in(tier: &ColumnTier, slot: usize, layer: usize) -> Material {
     tier.columns
