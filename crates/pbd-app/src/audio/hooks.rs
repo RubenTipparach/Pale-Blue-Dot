@@ -180,6 +180,7 @@ fn read_surroundings(
     mut env: ResMut<Environment>,
     mut last: Local<(f32, Vec3)>,
 ) {
+    let _spent = super::Spent::new("read_surroundings");
     let _ = menu;
     let (since, was) = &mut *last;
     *since += time.delta_secs();
@@ -311,6 +312,7 @@ fn walker_sounds(
     mut sfx: ResMut<Sfx>,
     mut body: Local<Body>,
 ) {
+    let _spent = super::Spent::new("walker_sounds");
     let (Some(walking), Some(config), Some(contact)) = (walking, config, contact) else {
         return;
     };
@@ -480,6 +482,7 @@ fn deeds(
     mut sfx: ResMut<Sfx>,
     mut slot: Local<Option<usize>>,
 ) {
+    let _spent = super::Spent::new("deeds");
     let hand = in_hand(&listener);
     if gained.read().count() > 0 {
         sfx.play("pickup", Where::Menu);
@@ -520,6 +523,7 @@ fn fishing(
     mut sfx: ResMut<Sfx>,
     listener: Res<Listener>,
 ) {
+    let _spent = super::Spent::new("fishing");
     for FishHeard { event, at } in heard.read() {
         let at = Where::At(*at);
         match event {
@@ -558,6 +562,7 @@ fn menus(
     mut was: Local<std::collections::HashMap<Entity, Interaction>>,
     mut sfx: ResMut<Sfx>,
 ) {
+    let _spent = super::Spent::new("menus");
     for (entity, interaction) in &buttons {
         let before = was.insert(entity, *interaction);
         match interaction {
@@ -585,6 +590,7 @@ fn fires(
     mut sfx: ResMut<Sfx>,
     mut cache: Local<FireCache>,
 ) {
+    let _spent = super::Spent::new("fires");
     let Some(fine) = fine else {
         return;
     };
@@ -637,6 +643,7 @@ fn thunder_from_strikes(
     mut sfx: ResMut<Sfx>,
     mut heard: Local<(Option<u64>, f32)>,
 ) {
+    let _spent = super::Spent::new("thunder_from_strikes");
     let (Some(air), Some(sun)) = (air, sun) else {
         return;
     };
@@ -704,6 +711,7 @@ fn scatters(
     mut sfx: ResMut<Sfx>,
     mut state: Local<(f32, u64)>,
 ) {
+    let _spent = super::Spent::new("scatters");
     let Some(beds) = env.beds else {
         return;
     };

@@ -36,6 +36,12 @@ use std::sync::{
 };
 use std::time::Duration;
 
+/// A bed starts above this level and stops below [`BED_STOP`], so one that
+/// hovers at the edge is not reopened again and again (a storm flight
+/// reopened the low wind three times).
+const BED_START: f32 = 0.02;
+const BED_STOP: f32 = 0.01;
+
 /// How this run sounds, from its flags.
 #[derive(Clone, Debug, Default)]
 pub struct AudioLaunch {
@@ -361,6 +367,10 @@ pub struct Mixer {
     loaded: Option<Bank>,
     voices: Vec<Voice>,
     beds: [Option<BedVoice>; Bed::COUNT],
+    /// A bed's file being opened on the IO pool (`main-perf-2026-11`):
+    /// opening one took 1.4 to 3.5 ms of the main thread, and a scene change
+    /// opens several in one frame.
+    opening: [Option<bevy::tasks::Task<Result<Playable, String>>>; Bed::COUNT],
     dice: Dice,
     last_take: HashMap<&'static str, usize>,
     late: BTreeSet<&'static str>,
@@ -403,6 +413,7 @@ impl Plugin for AudioPlugin {
             loaded: None,
             voices: Vec::new(),
             beds: Default::default(),
+            opening: Default::default(),
             dice: Dice(if launch.capture {
                 0x9E37_79B9_7F4A_7C15
             } else {
@@ -485,12 +496,33 @@ impl Plugin for AudioPlugin {
     }
 }
 
+/// A measurement instrument (`audio-perf`): logs `SPENT <ms> ms audio
+/// <system>` when a sound system takes over a millisecond of the main
+/// thread, so `tools/frame_graph.py` lines it up with the slow frames.
+pub(crate) struct Spent(&'static str, std::time::Instant);
+
+impl Spent {
+    pub(crate) fn new(what: &'static str) -> Self {
+        Self(what, std::time::Instant::now())
+    }
+}
+
+impl Drop for Spent {
+    fn drop(&mut self) {
+        let ms = self.1.elapsed().as_secs_f64() * 1000.0;
+        if ms > 1.0 {
+            info!("SPENT {ms:.1} ms audio {}", self.0);
+        }
+    }
+}
+
 /// The listener from the active 3D camera.
 fn track_listener(
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut listener: ResMut<Listener>,
 ) {
+    let _spent = Spent::new("track_listener");
     let Some(frame) = frame else {
         return;
     };
@@ -544,6 +576,7 @@ fn mix_frame(
     loading: Option<Res<crate::WorldLoading>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
 ) {
+    let _spent = Spent::new("mix_frame");
     let requests = std::mem::take(&mut sfx.requests);
     let mixer = &mut *mixer;
     if mixer.loaded.is_none()
@@ -973,12 +1006,37 @@ fn mix_frame(
             };
             let slot = &mut mixer.beds[bed.index()];
             match slot {
-                None if target > 0.01 => {
+                None if target > BED_START => {
                     let path = engine::audio_dir()
                         .join("ambience")
                         .join(format!("{}.ogg", bed.name()));
-                    match Playable::open(&path, engine.is_mock()) {
-                        Ok(data) => {
+                    let opening = &mut mixer.opening[bed.index()];
+                    // A capture opens in the frame (it steps a fixed clock
+                    // and decodes beds whole); play opens on the IO pool.
+                    let opened = if engine.is_mock() {
+                        Some(Playable::open(&path, true))
+                    } else if let Some(task) = opening.as_mut() {
+                        let done = bevy::tasks::block_on(
+                            bevy::tasks::futures_lite::future::poll_once(task),
+                        );
+                        if done.is_some() {
+                            *opening = None;
+                        }
+                        done
+                    } else {
+                        // Decoded whole, not streamed: kira gives every
+                        // stream a thread that wakes each millisecond, and a
+                        // storm's five to seven beds took that from the
+                        // fine-set rebuild's workers (`main-perf-2026-11`).
+                        *opening = Some(
+                            bevy::tasks::IoTaskPool::get()
+                                .spawn(async move { Playable::open(&path, true) }),
+                        );
+                        None
+                    };
+                    match opened {
+                        None => {}
+                        Some(Ok(data)) => {
                             let length = data.duration_s();
                             let start = mixer.dice.unit() as f64 * length;
                             match data.bed(start).play_on(&mut engine.ambience) {
@@ -995,12 +1053,12 @@ fn mix_frame(
                                 Err(e) => warn!("AUDIO bed {}: {e}", bed.name()),
                             }
                         }
-                        Err(e) => warn!("AUDIO bed {}: {e}", path.display()),
+                        Some(Err(e)) => warn!("AUDIO bed {}: {e}", bed.name()),
                     }
                 }
                 Some(voice) => {
                     voice.level += (target - voice.level) * ease;
-                    if voice.level < 0.01 && target < 0.01 {
+                    if voice.level < BED_STOP && target < BED_STOP {
                         voice.sound.stop(tween(0.3));
                         if mixer.log {
                             info!("AUDIO bed stop {}", bed.name());
