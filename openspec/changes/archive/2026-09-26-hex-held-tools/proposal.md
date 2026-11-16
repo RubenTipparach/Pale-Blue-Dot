@@ -6,7 +6,7 @@ The tools in hand are built by sampling each tool's 16 px icon onto a hex
 grid (`held.rs`, `pbd_core::hexel::hexels`). The owner rejected that: a
 diagonal handle sampled onto hex rows is a zigzag, there is no hand, and the
 tools are small. The owner then worked the replacement out in a mockup
-(`docs/mockups/held-tools.html`, [Hex Tool Bench](https://claude.ai/artifact/YEf1BuLEk9Dppk55znZ5gr)),
+(`docs/mockups/held-tools.html`, [Hex Tool Bench](https://claude.ai/artifact/V5xpTns8YqzGJPumBaij6f)),
 checked from several angles in Blender, and approved it ("Perfect"). This
 change builds that mockup into the game.
 

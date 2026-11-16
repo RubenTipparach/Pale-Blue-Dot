@@ -36,7 +36,7 @@ There are three gaps, and a vehicle needs all three closed:
 ## What changes
 
 - **A mockup came first, as asked.** `docs/mockups/vehicles.html`, published
-  at <https://claude.ai/artifact/UJebv7EdJUg1NLpvfVHi3D>, is a three.js
+  at <https://claude.ai/artifact/AbkZFGps6XzcwhfbAYPwDk>, is a three.js
   prototype of all three craft. They sit on the engine's own sphere
   (sea radius 4,799.5 m, gravity 25 m/s²) in adjustable wind, gusts, rain and
   current, and you can switch between today's swell and the proposed sea.

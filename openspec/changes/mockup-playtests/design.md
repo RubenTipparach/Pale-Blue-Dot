@@ -80,7 +80,7 @@ milestone, from the page's first load, with nothing in the playtest file.
 | Rule (CLAUDE.md) | How it is checked |
 | --- | --- |
 | No errors | Every `pageerror` and console error fails the run. |
-| The tracker link | `a[href*="EwNcNzHQU3B7C3jyi629Wk"]` sits in the first screenful. |
+| The tracker link | `a[href*="PXs3jhCUa5e5tch6Ru4tFu"]` sits in the first screenful. |
 | One 3D view at a time | Count WebGL contexts by wrapping `getContext` before load, and count drawing canvases by `requestAnimationFrame` calls that render. In each tab, exactly one canvas draws; hidden tabs have no running loop. A tab's renderer does not exist until its tab first opens. |
 | Tabs are links | Each tab's `#anchor` opened cold lands on that tab. |
 | Nothing spins on its own | With Run off, two screenshots of the 3D canvas 2 s apart differ by under 0.5% of pixels. A page whose world moves on its own (sea, wind turbines, a station ring) lists those regions as `"moving"` masks in its file, with the reason. |
