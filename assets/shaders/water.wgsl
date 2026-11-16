@@ -2544,3 +2544,71 @@ fn overlay(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let grey = vec3<f32>(dot(scene,vec3<f32>(0.2126,0.7152,0.0722)));
     return vec4<f32>(mix(grey,colour,alpha),1.0);
 }
+
+// ---- The fall splash, after the water (`water-flow` 6.1) --------------------
+// The spray and mist at a fall's foot (`water_flow.rs` `animate_splash`): the
+// same camera-facing quads, the same 32-texel dot sampled nearest and the
+// same unlit colour and straight alpha the main pass drew them with, but
+// drawn here after the water so a splash over a pool stands on its surface.
+// The water's depth attachment hides it behind water in front (tested, not
+// written); the main pass's depth hides it behind the terrain, as the cap's
+// own test. Lane 0 the camera's right, lane 1 its up, then per quad its
+// body-local centre and half size, and its colour.
+@group(3) @binding(17) var<storage, read> splash_quads: array<vec4<f32>>;
+
+struct SplashOut {
+    @builtin(position) clip: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+    @location(1) colour: vec4<f32>,
+}
+
+@vertex
+fn splash_vertex(@builtin(vertex_index) vertex: u32) -> SplashOut {
+    let quad = vertex/6u;
+    // Two triangles, 0 1 2 and 0 2 3, of the corners -r-u, r-u, r+u, u-r.
+    let k = vertex%6u;
+    let corner = select(select(k, k - 2u, k >= 3u), 0u, k == 3u);
+    let sx = select(-1.0, 1.0, corner == 1u || corner == 2u);
+    let sy = select(-1.0, 1.0, corner >= 2u);
+    let centre = splash_quads[2u + quad*2u];
+    let p = centre.xyz + (splash_quads[0].xyz*sx + splash_quads[1].xyz*sy)*centre.w;
+    var out: SplashOut;
+    out.clip = view.clip_from_local*vec4<f32>(view.planet_center.xyz + p, 1.0);
+    out.uv = vec2<f32>(0.5*(sx + 1.0), 0.5*(1.0 - sy));
+    out.colour = splash_quads[3u + quad*2u];
+    return out;
+}
+
+@fragment
+fn splash_fragment(in: SplashOut) -> @location(0) vec4<f32> {
+    // Behind the terrain: the main pass's depth is nearer (reversed Z).
+    let screen = in.clip.xy/vec2<f32>(textureDimensions(scene_depth));
+    if (load_depth(screen) > in.clip.z + 1e-6) { discard; }
+    // The dot's texel, as `splash_dot` baked it: alpha (1 - r)^2 at the
+    // texel's centre, stored in a byte.
+    let texel = clamp(floor(in.uv*32.0), vec2<f32>(0.0), vec2<f32>(31.0));
+    let r = length((texel + 0.5)/32.0*2.0 - 1.0);
+    let a = clamp(1.0 - r, 0.0, 1.0);
+    let dot_alpha = floor(a*a*255.0)/255.0;
+    var colour = in.colour.rgb;
+    // With the eye fully under, what no sheet hides is seen through water:
+    // the murk the compose lays over this pixel of the scene, by the same
+    // terms and the same distance (the scene's, behind the splash), as it
+    // did when the splash was drawn into the scene before it.
+    if (view.fx.y > 0.75) {
+        let center = view.planet_center.xyz;
+        let eye = view.camera_time.xyz;
+        let cam_gap = max(0.0, eye_water_surface() - length(eye - center));
+        let behind = load_depth(screen);
+        var travel = 100000.0;
+        if (behind > 1e-7) {
+            travel = length(reconstruct_local(screen, behind) - eye);
+        } else {
+            let ray_d_up = dot(view_ray(screen).direction, safe_normal(eye - center));
+            if (ray_d_up > 0.0008) { travel = cam_gap/ray_d_up; }
+        }
+        let deep = murk(cam_gap, safe_normal(eye - center));
+        colour = mix(deep, colour, exp(-view_extinction()*travel));
+    }
+    return vec4<f32>(colour, in.colour.a*dot_alpha);
+}

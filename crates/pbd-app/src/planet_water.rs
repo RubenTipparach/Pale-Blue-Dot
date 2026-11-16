@@ -610,6 +610,8 @@ struct WaterPipelines {
     rain_compose_layout: BindGroupLayoutDescriptor,
     /// The puffs' fourth group (`cloud-puffs`): this frame's instances.
     puff_layout: BindGroupLayoutDescriptor,
+    /// The fall splash's fourth group (`water-flow` 6.1): its quads.
+    splash_layout: BindGroupLayoutDescriptor,
     /// The rain's fourth group (`lighting-model`, the rain fog lit): the sun's
     /// cascades, their comparison sampler and where each stands.
     rain_light_layout: BindGroupLayoutDescriptor,
@@ -702,6 +704,24 @@ fn puff_layout() -> BindGroupLayoutDescriptor {
         ),
     )
 }
+
+/// The fall splash's quads (`water-flow` 6.1), as `SplashQuads` holds them.
+fn splash_layout() -> BindGroupLayoutDescriptor {
+    BindGroupLayoutDescriptor::new(
+        "water: the fall splash",
+        &BindGroupLayoutEntries::with_indices(
+            ShaderStages::VERTEX,
+            ((
+                17,
+                storage_buffer_read_only_sized(false, NonZeroU64::new(16)),
+            ),),
+        ),
+    )
+}
+
+/// Room for the splash's whole budget: the camera's right and up, then two
+/// lanes a quad.
+const SPLASH_BUFFER_BYTES: u64 = ((2 + 2 * crate::water_flow::SPLASH_BUDGET) * 16) as u64;
 
 fn ssr_layout() -> BindGroupLayoutDescriptor {
     BindGroupLayoutDescriptor::new(
@@ -877,6 +897,7 @@ fn initialize_pipelines(
         lens_layout: lens_layout(),
         rain_compose_layout: rain_compose_layout(),
         puff_layout: puff_layout(),
+        splash_layout: splash_layout(),
         sampler: device.create_sampler(&SamplerDescriptor {
             label: Some("water scene sampler"),
             mag_filter: FilterMode::Linear,
@@ -893,6 +914,9 @@ enum Pass {
     Cap,
     /// The game's own water, by the cap's fragment (`water-flow` E6).
     Flowing,
+    /// The fall splash, after the water and against its depth (`water-flow`
+    /// 6.1).
+    Splash,
     Compose,
     CloudMarch,
     CloudResolve,
@@ -966,6 +990,16 @@ impl SpecializedRenderPipeline for WaterPipelines {
                     ..default()
                 },
                 "fragment",
+            ),
+            Pass::Splash => (
+                "Fall splash over the water, against its depth",
+                VertexState {
+                    shader: self.shader.clone(),
+                    shader_defs: defs.clone(),
+                    entry_point: Some(Cow::Borrowed("splash_vertex")),
+                    ..default()
+                },
+                "splash_fragment",
             ),
             Pass::Compose => (
                 "Water compose: underwater fog, distortion, blur",
@@ -1048,7 +1082,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
             pass => Some(DepthStencilState {
                 format: WATER_DEPTH_FORMAT,
                 depth_write_enabled: matches!(pass, Pass::Cap | Pass::Flowing),
-                depth_compare: if matches!(pass, Pass::Cap | Pass::Flowing) {
+                depth_compare: if matches!(pass, Pass::Cap | Pass::Flowing | Pass::Splash) {
                     CompareFunction::GreaterEqual
                 } else {
                     CompareFunction::Always
@@ -1073,6 +1107,13 @@ impl SpecializedRenderPipeline for WaterPipelines {
                         Pass::CloudPuffs => self.puff_layout.clone(),
                         _ => self.composite_layout.clone(),
                     },
+                ]
+            } else if key.pass == Pass::Splash {
+                vec![
+                    self.data_layout.clone(),
+                    scene,
+                    super::weather_maps::layout(),
+                    self.splash_layout.clone(),
                 ]
             } else if matches!(key.pass, Pass::Cap | Pass::Flowing | Pass::Compose) {
                 vec![
@@ -1181,6 +1222,14 @@ impl SpecializedRenderPipeline for WaterPipelines {
                             write_mask: ColorWrites::ALL,
                         }),
                     ]
+                } else if key.pass == Pass::Splash {
+                    // Straight alpha "over", as the splash's `AlphaMode::Blend`
+                    // material blended in the main pass.
+                    vec![Some(ColorTargetState {
+                        format: key.format,
+                        blend: Some(BlendState::ALPHA_BLENDING),
+                        write_mask: ColorWrites::ALL,
+                    })]
                 } else if key.pass == Pass::LensMist {
                     vec![Some(ColorTargetState {
                         format: MIST_FORMAT,
@@ -1218,6 +1267,10 @@ pub(super) struct WaterViewGpu {
     flowing: Buffer,
     flowing_version: u64,
     flowing_count: u32,
+    /// The fall splash (`water-flow` 6.1): its quads, how many, its pipeline.
+    splash: Buffer,
+    splash_count: u32,
+    splash_pipe: CachedRenderPipelineId,
     data_bind_group: BindGroup,
     cap: CachedRenderPipelineId,
     flowing_pipe: CachedRenderPipelineId,
@@ -1349,6 +1402,8 @@ pub(super) struct WaterSky<'w> {
     flowing: Option<Res<'w, crate::water_flow::FlowingWater>>,
     /// How far the drawing is through the water's last tick.
     ease: Option<Res<'w, crate::water_flow::WaterEase>>,
+    /// The fall splash's quads (`water-flow` 6.1).
+    splash: Option<Res<'w, crate::water_flow::SplashQuads>>,
     /// The column tier's reach, for the far rivers' fade (design 13).
     columns: Option<Res<'w, crate::config::ColumnSettings>>,
 }
@@ -1404,8 +1459,15 @@ fn prepare_water_views(
         reflect_quality,
         flowing,
         ease,
+        splash,
         columns,
     } = sky;
+    // The fall splash's quads, within the buffer's room.
+    let splash_lanes: &[[f32; 4]] = splash.as_deref().map_or(&[], |q| {
+        let room = (SPLASH_BUFFER_BYTES / 16) as usize;
+        &q.lanes[..q.lanes.len().min(room)]
+    });
+    let splash_count = (splash_lanes.len().saturating_sub(2) / 2) as u32;
     let reflect_level = reflect_quality.map_or_else(default, |q| q.0);
     let ease = ease.as_deref().copied().unwrap_or_default();
     let lit_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
@@ -1917,6 +1979,10 @@ fn prepare_water_views(
                 }
                 queue.write_buffer(&gpu.puff_buffer, 0, bytes);
             }
+            gpu.splash_count = splash_count;
+            if splash_count > 0 {
+                queue.write_buffer(&gpu.splash, 0, bytemuck::cast_slice(splash_lanes));
+            }
             gpu.prev_clip = clip_from_body;
             gpu.prev_camera = camera;
             gpu.rain_velocity = rain_velocity;
@@ -1960,6 +2026,15 @@ fn prepare_water_views(
             queue.write_buffer(&flow, 0, bytemuck::cast_slice(lanes.as_slice()));
         }
         let flowing_count = (lanes.len() / crate::water_flow::LANES_PER_VERTEX) as u32;
+        let splash_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("fall splash quads"),
+            size: SPLASH_BUFFER_BYTES,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        if splash_count > 0 {
+            queue.write_buffer(&splash_buffer, 0, bytemuck::cast_slice(splash_lanes));
+        }
         let rain_buffer = device.create_buffer(&BufferDescriptor {
             label: Some("precipitation map"),
             size: RAIN_MAP_MAX * RAIN_MAP_MAX * 4,
@@ -2003,6 +2078,9 @@ fn prepare_water_views(
             flowing: flow,
             flowing_version,
             flowing_count,
+            splash: splash_buffer,
+            splash_count,
+            splash_pipe: pipeline(Pass::Splash),
             compose: pipeline(Pass::Compose),
             cloud_march: pipeline(Pass::CloudMarch),
             cloud_resolve: pipeline(Pass::CloudResolve),
@@ -2253,6 +2331,12 @@ impl ViewNode for WaterCompositeNode {
             &cache.get_bind_group_layout(&pipelines.ssr_layout),
             &BindGroupEntries::with_indices(((14, &planet_gpu.ssr_view),)),
         );
+        // The fall splash's quads (`water-flow` 6.1), drawn after the water.
+        let splash_group = device.create_bind_group(
+            Some("water: the fall splash"),
+            &cache.get_bind_group_layout(&pipelines.splash_layout),
+            &BindGroupEntries::with_indices(((17, water.splash.as_entire_binding()),)),
+        );
         // Compose then the cap, both reading the scene and writing the other
         // main texture. Compose touches every pixel, so nothing needs clearing.
         {
@@ -2298,6 +2382,16 @@ impl ViewNode for WaterCompositeNode {
             {
                 pass.set_render_pipeline(flowing);
                 pass.draw(0..water.flowing_count, 0..1);
+            }
+            // The fall splash last (`water-flow` 6.1): over the water it
+            // stands in front of, against the water's depth, and behind the
+            // terrain by the main pass's (`splash_fragment`).
+            if water.splash_count > 0
+                && let Some(splash) = cache.get_render_pipeline(water.splash_pipe)
+            {
+                pass.set_bind_group(3, &splash_group, &[]);
+                pass.set_render_pipeline(splash);
+                pass.draw(0..water.splash_count * 6, 0..1);
             }
             span.end(&mut pass);
         }

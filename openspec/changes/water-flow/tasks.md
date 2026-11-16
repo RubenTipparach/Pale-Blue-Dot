@@ -46,9 +46,15 @@
 
 ## 6. Splashes (design "Splashes that show, and better ones", 2026-11-16)
 
-- [ ] 6.1 Blended effects over water (fall spray and mist, the near shower)
+- [x] 6.1 (The fall spray and mist, 2026-11-16, design "The fall splash drawn
+      after the water": `SplashQuads` drawn by the water's pass after the cap
+      and the flowing water, against the water's depth and the main pass's;
+      the near shower is not moved yet.) Blended effects over water (fall
+      spray and mist, the near shower)
       drawn after the water composite, depth-tested against the water;
-      captures of a fall's foot before and after.
+      captures of a fall's foot before and after. Verify:
+      `docs/screenshots/fall-splash-order/` (down, side, under the pool,
+      under the river); a launch to READY with no LATE_PIPELINE.
 - [ ] 6.2 M31: froth only on faces that fall a layer or more, beside today's
       bank; the owner's approval before game code.
 - [ ] 6.3 The rain splashes (built for ground, `weather-rain` 6.4) on water as well.
