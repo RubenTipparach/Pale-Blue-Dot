@@ -64,8 +64,17 @@ const _: () = assert!(Material::LAMPS.len() <= 8);
 /// that against the shader's own copy of the shift.
 pub const WATER_SHIFT: u32 = 4;
 pub const WATER_MASK: u32 = 0x1ff;
+/// How far the top water layer's surface stands under that layer's top, in
+/// eighths of a metre, three bits above the water's layer: nought for a
+/// source, more for a flowing cell's lower level (`liquid::top_fraction`).
+/// So the terrain's underwater tint stops at the water's own surface, not a
+/// whole layer over a thin film (owner, 2026-11-16: "underwater ground tint
+/// is happening before the water line").
+pub const WATER_SHORT_SHIFT: u32 = 13;
+pub const WATER_SHORT_MASK: u32 = 0x7;
 const _: () = assert!(LAYERS < WATER_MASK as usize);
-const _: () = assert!(WATER_SHIFT + 9 <= TORCH_SHIFT);
+const _: () = assert!(WATER_SHIFT + 9 <= WATER_SHORT_SHIFT);
+const _: () = assert!(WATER_SHORT_SHIFT + 3 <= TORCH_SHIFT);
 
 /// Where a cell record carries its column slot, plus one: the HIGH half of
 /// `metadata.z`, whose low half is the baked sky occlusion in 0..65535.
@@ -729,7 +738,8 @@ impl ColumnTier {
             for layer in 0..LAYERS {
                 let word = slot * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
                 let shift = (layer % MATERIAL_PER_WORD) * 4;
-                words[word] |= (render_code(column.material(layer)) & 0xf) << shift;
+                // As drawn: a drowned top is a bed (`flora-v2` 12.10).
+                words[word] |= (render_code(column.drawn_material(layer)) & 0xf) << shift;
             }
         }
         words
@@ -947,7 +957,14 @@ pub fn reconcile_surface(
     };
     let top_m = column::layer_altitude(top) + 1.0;
     finest[index].direction_height[3] = top_m;
-    let code = render_code(column.material(top));
+    // A top with water standing on it is drawn as a bed, and grows nothing
+    // (`flora-v2` 12.10); under the sea's own level the tier keeps drawing
+    // its seabed as it did.
+    let code = if column.water_over(top) && top_m > terrain_config().sea_level_m {
+        super::terrain::bed_code(column.drawn_material(top))
+    } else {
+        render_code(column.drawn_material(top))
+    };
     finest[index].metadata[1] = (finest[index].metadata[1] & !0xff) | code;
     let Some(table) = neighbors.get(index).copied() else {
         return;
@@ -1091,11 +1108,20 @@ pub(crate) fn reach_rings(records: &[GpuColumn], centres: &[Vec3], reach_m: f32)
 /// surface, which is what decides whether a face under sea level is wet.
 fn water_word(column: &Column) -> u32 {
     for layer in (1..LAYERS).rev() {
-        if column.material(layer).is_water() {
-            return (layer as u32 + 1) << WATER_SHIFT;
+        let material = column.material(layer);
+        if material.is_water() {
+            return (layer as u32 + 1) << WATER_SHIFT | water_short(material) << WATER_SHORT_SHIFT;
         }
     }
     0
+}
+
+/// [`WATER_SHORT_SHIFT`]'s eighths for a column's top water layer: how far
+/// its surface stands under the layer's top, rounded down, so the tint stops
+/// at most an eighth of a metre over the water's own surface.
+pub fn water_short(top: Material) -> u32 {
+    let fraction = pbd_core::liquid::top_fraction(top).clamp(0.0, 1.0);
+    (((1.0 - fraction) * 8.0).floor() as u32).min(WATER_SHORT_MASK)
 }
 
 /// Everything in `more[3]` that is the COLUMN's rather than the tier's: where
@@ -1457,6 +1483,36 @@ mod water_word_tests {
             0,
             "the rim is the tier's"
         );
+    }
+
+    /// The owner, 2026-11-16: "underwater ground tint is happening before
+    /// the water line". The record carries how far a flowing top's surface
+    /// stands under its layer's top, so the shader's surface
+    /// (`column_water_top_m`) is the water's own, within an eighth of a metre
+    /// and never over it; a source's is the layer's top, as before.
+    #[test]
+    fn a_flowing_tops_surface_rides_its_record_to_the_eighth() {
+        let read = |column: &Column| {
+            let word = state_word(column, false, false);
+            let packed = (word >> WATER_SHIFT) & WATER_MASK;
+            let short = (word >> WATER_SHORT_SHIFT) & WATER_SHORT_MASK;
+            pbd_core::column::BASE_M as f32 + packed as f32 - short as f32 * 0.125
+        };
+        let source = flooded(20, 40);
+        assert_eq!(read(&source), pbd_core::column::layer_altitude(40) + 1.0);
+        for level in 0..8u8 {
+            let mut column = flooded(20, 39);
+            column.set(40, Material::flowing(level, false));
+            let surface = column.water_surface(pbd_core::column::layer_altitude(40) + 0.01);
+            let surface = surface.expect("in the flowing layer");
+            let drawn = read(&column);
+            assert!(
+                drawn >= surface && drawn - surface <= 0.125 + 1e-4,
+                "level {level}: the tint stops at {drawn}, the water at {surface}"
+            );
+            // The rest of the word is untouched.
+            assert_eq!(water_top_layer(&column), Some(40));
+        }
     }
 }
 
