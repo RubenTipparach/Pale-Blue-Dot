@@ -117,6 +117,7 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 </header>
 <nav class="tabs wrap" role="tablist" aria-label="River craft">
   <button class="tab" role="tab" data-tab="raft" aria-selected="true">Raft</button>
+  <button class="tab" role="tab" data-tab="tube" aria-selected="false">Tube</button>
   <button class="tab" role="tab" data-tab="tug" aria-selected="false">Tug</button>
   <button class="tab" role="tab" data-tab="logs" aria-selected="false">Log drive</button>
   <button class="tab" role="tab" data-tab="nets" aria-selected="false">Nets</button>
@@ -124,6 +125,7 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 </nav>
 <div class="stage" id="stage">
   <canvas data-tab="raft" aria-label="The raft on the river: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
+  <canvas data-tab="tube" aria-label="Floating down the river in an inner tube: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
   <canvas data-tab="tug" aria-label="The tug and its barges: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
   <canvas data-tab="logs" aria-label="The log drive, the narrows and the boom: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
   <canvas data-tab="nets" aria-label="The net boat and the fish: drag to turn the view, wheel or pinch to come closer" hidden></canvas>
@@ -157,12 +159,12 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 
 <dialog class="infomodal" id="modal" aria-labelledby="mtitle">
   <div class="mhead"><b id="mtitle">River Craft</b><button id="mclose" aria-label="Close">&#x2715;</button></div>
-  <nav class="mnav"><a href="#m-about">About</a><a href="#m-raft">Raft</a><a href="#m-tug">Tug</a><a href="#m-logs">Log drive</a><a href="#m-nets">Nets</a><a href="#m-anchor">Anchor</a><a href="#m-controls">Controls</a><a href="#m-physics">Physics</a><a href="#m-engine">In the engine</a></nav>
+  <nav class="mnav"><a href="#m-about">About</a><a href="#m-raft">Raft</a><a href="#m-tube">Tube</a><a href="#m-tug">Tug</a><a href="#m-logs">Log drive</a><a href="#m-nets">Nets</a><a href="#m-anchor">Anchor</a><a href="#m-controls">Controls</a><a href="#m-physics">Physics</a><a href="#m-engine">In the engine</a></nav>
   <div class="mbody" id="mbody">
     <h2 id="m-about">About M34, River Craft</h2>
     <p>The owner, 2026-11-16, playing the new flowing rivers: <q>dude the river stuff is so much fun, can you make a mock up of stuff like rafting physics? or design a boat that can tug other boats? log hauling? boats with nets, also anchoring</q>.</p>
-    <p>Five toys on one kind of river, each in its own tab with its own reach of water. The river is a flow field over a channel of the game's hex cells (2.833 m flat to flat, 1 m layers): fastest mid-stream, slow at the banks, bent round rocks with an eddy behind each, quicker where the channel narrows, and over a one-layer fall on the Raft tab. Everything is the game's art style: blocky pixel textures on the ground and the craft, lit like the ground, with no outlines.</p>
-    <p>Nothing moves until you press <b>Play</b> or a control, except the water itself. The view turns only when you drag it; <b>Follow</b> keeps the craft in the middle without turning. <b>Night</b> lights each scene by its own lamps: a lantern post on the bank and a lantern on each boat, every one lighting what is near it; the moon is dim. The open tab is in the link (<code>#raft</code>, <code>#tug</code>, <code>#logs</code>, <code>#nets</code>, <code>#anchor</code>); only its view is made and drawn.</p>
+    <p>Six toys on one kind of river, each in its own tab with its own reach of water. The river is a flow field over a channel of the game's hex cells (2.833 m flat to flat, 1 m layers): fastest mid-stream, slow at the banks, bent round rocks with an eddy behind each, quicker where the channel narrows, and over a one-layer fall on the Raft tab. Everything is the game's art style: blocky pixel textures on the ground and the craft, lit like the ground, with no outlines.</p>
+    <p>Nothing moves until you press <b>Play</b> or a control, except the water itself. The view turns only when you drag it; <b>Follow</b> keeps the craft in the middle without turning. <b>Night</b> lights each scene by its own lamps: a lantern post on the bank and a lantern on each boat, every one lighting what is near it; the moon is dim. The open tab is in the link (<code>#raft</code>, <code>#tube</code>, <code>#tug</code>, <code>#logs</code>, <code>#nets</code>, <code>#anchor</code>); only its view is made and drawn.</p>
     <p>OpenSpec change: <code>openspec/changes/river-craft</code>. This page is a mockup; no game code changes until the owner approves it and asks for the port.</p>
 
     <h2 id="m-raft">Raft</h2>
@@ -171,6 +173,21 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
       <li><b>Pole</b> where the bed is in reach (under 2.7 m of water): a strong push off the bottom.</li>
       <li><b>Paddle</b> where it is not (the pool below the fall): a weaker push off the water. The chip at the top left says which.</li>
       <li><b>Flow arrows</b> draw the current on the water: each chevron points with the flow, longer where it runs faster. Look behind a rock: they point back upstream.</li>
+    </ul>
+
+    <h2 id="m-tube">Tube</h2>
+    <p>The owner, 2026-11-16: <q>also what about innertubes?</q> One person sitting in an inner tube, legs over the front, carried down a slow, shallow reach. The tube has almost no keel, so the current does nearly all of it: it takes the fast water, and where one side of the ring is in faster water than the other (a bank, a rock, the edge of the riffle) the ring turns slowly. Hands in the water give a little push and a little turn, enough to stay off a rock, not enough to go upstream.</p>
+    <ul>
+      <li><b>W S</b> paddle forward or back with both hands; <b>A D</b> one hand, to turn. The arms swing while they paddle.</li>
+      <li><b>Get off</b> (<b>E</b>): wade or swim to the nearer bank and pick the tube up. Carried, it rides on the back like a pack frame. <b>Get on</b> walks in to waist depth and sits back into the ring.</li>
+      <li>At night a small lantern on a stick is tied to the ring.</li>
+    </ul>
+    <h3>How a tube is made</h3>
+    <p>The game has no rubber or hide, so the tube is made from what it has: a ring of felted <b>wool</b> over a frame of <b>rope</b>, sealed with <b>pine pitch</b> and blown up. Proposed, for the port:</p>
+    <ul>
+      <li><b>Pine pitch</b>: 3 pine cones cooked down on the campfire, 1 pitch. A new good.</li>
+      <li><b>Inner tube</b>: 6 wool, 2 rope, 2 pine pitch at the workbench. A new item, carried in the pack, placed on water like a boat.</li>
+      <li>A tube on its own drifts away; a tube left on the bank stays. Picking it up puts it back in the pack.</li>
     </ul>
 
     <h2 id="m-tug">Tug</h2>

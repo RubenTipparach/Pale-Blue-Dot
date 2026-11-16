@@ -669,4 +669,118 @@ RC.scenes.anchor = function () {
   };
   return def;
 };
+
+// ======================================================================================================================
+// 6. Tube: one person in an inner tube, carried by the current and turning slowly, steered a little with the hands.
+// The tube is a felted-wool ring sealed with pine pitch and blown up (owner, 2026-11-16: "also what about innertubes?").
+function tubeModel(U) {
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(RC.tiled(new THREE.TorusGeometry(0.52, 0.22, 8, 14), "canvas", 3, 1), RC.litMaterial(U, {tint: 0x3a2a1c}));
+  ring.rotation.x = Math.PI / 2; ring.position.y = 0.05; g.add(ring);
+  // the pitched seam: a darker band round the ring
+  const seam = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.225, 4, 14, Math.PI * 0.25), RC.litMaterial(U, {tint: 0x1e1610}));
+  seam.rotation.x = Math.PI / 2; seam.position.y = 0.05; g.add(seam);
+  const man = RC.person(U, 0x3f7a6a); man.position.set(0, -0.62, 0); man.rotation.z = -0.35; g.add(man);
+  const arms = [];
+  for (const s of [-1, 1]) {
+    const a = new THREE.Group(); a.position.set(0.0, 0.42, s * 0.24); g.add(a);
+    a.add(mk(RC.box(0.12, 0.12, 0.55, "canvas"), RC.litMaterial(U, {tint: 0x3f7a6a}), 0, 0, s * 0.3));
+    a.add(mk(RC.box(0.13, 0.1, 0.13, "canvas"), RC.litMaterial(U, {tint: 0xd9a77c}), 0, 0, s * 0.6));
+    arms.push(a);
+  }
+  // a lantern on a short pole tied to the ring, for night floats
+  const pole = mk(RC.box(0.05, 0.7, 0.05, "darkPlanks"), mat(U), -0.55, 0.4, 0); g.add(pole);
+  const lan = RC.lantern(U, 0.55); lan.position.set(-0.55, 0.82, 0); g.add(lan);
+  g.userData = {lantern: lan, arms, man};
+  return g;
+}
+RC.scenes.tube = function () {
+  const half = x => 9.5 - 2.4 * Math.exp(-(((x - 30) / 12) ** 2));
+  const river = {x0: -80, x1: 95, z0: -34, z1: 36, center: x => 5 * Math.sin(x / 24), half,
+    depth: x => x > 22 && x < 40 ? 1.1 : 1.7, U: x => 0.8 * 9.5 / half(x), level0: 0.55, slope: 0.0025, steps: [],
+    rocks: [[-12, 3.0], [8, -3.4], [33, 2.0], [55, -2.6]], bed: (x, z) => (x > 20 && x < 42) ? "gravel" : "sand"};
+  let ctx, R, tube, model, carried, onboard = true, bumpT = 0, stroke = 0, bank = {x: 0, z: 0, side: 1};
+  const inp = hold();
+  const man = () => model.userData.man;
+  function landAt(x, side) {   // stand on the bank beside the river at x
+    const c = R.cfg.center(x), hw = R.cfg.half(x);
+    bank = {x, z: c + side * (hw + 1.6), side};
+  }
+  const def = {
+    river, posts: [[-40, 1], [48, -1]], followDefault: true,
+    home: {yaw: 0.55, pitch: -0.4, dist: 11},
+    hold: inp,
+    build(c) {
+      ctx = c; R = c.river;
+      tube = new RC.Hull({L: 1.3, B: 1.3, m: 115, draft: 0.2, cA: 150, cS: 150, nx: 3, nz: 3, R: 0.68});
+      model = tubeModel(c.U); c.scene.add(model);
+      // the tube as carried on the bank: the same ring, upright on the walker's back
+      carried = RC.person(c.U, 0x3f7a6a);
+      const ring = new THREE.Mesh(RC.tiled(new THREE.TorusGeometry(0.52, 0.2, 8, 14), "canvas", 3, 1), RC.litMaterial(c.U, {tint: 0x3a2a1c}));
+      ring.position.set(-0.32, 1.05, 0); ring.rotation.y = Math.PI / 2; carried.add(ring);
+      carried.visible = false; c.scene.add(carried);
+      def.reset();
+    },
+    reset() {
+      tube.x = -62; tube.z = R.cfg.center(-62) - 1; tube.yaw = 0.3; tube.vx = tube.vz = tube.w = 0; tube.settle(R);
+      onboard = true; bumpT = 0; carried.visible = false; model.visible = true;
+    },
+    step(h) {
+      if (!onboard) return;
+      tube.water(R);
+      // the current's shear across the ring turns it: faster water on one side, a slow spin
+      const c = Math.cos(tube.yaw), s = Math.sin(tube.yaw);
+      const l = [0, 0], r = [0, 0];
+      R.flow(tube.x - s * 0.6, tube.z + c * 0.6, l); R.flow(tube.x + s * 0.6, tube.z - c * 0.6, r);
+      const ul = l[0] * c + l[1] * s, ur = r[0] * c + r[1] * s;
+      tube.tq += (ul - ur) * 55 - tube.w * 18;
+      // hands: a little thrust and a little turn, no more
+      stroke = rowDrive(tube, inp, {thrust: 75, turn: 38});
+      tube.integrate(h, R);
+      tube.terrain(R);
+      if (tube.bumped > 0) { bumpT = 1.2; tube.bumped = 0; }
+      bumpT = Math.max(0, bumpT - h);
+      if (tube.x > R.cfg.x1 - 6) def.reset();
+    },
+    sync() {
+      place(model, tube);
+      const t = ctx.S.simT, [a0, a1] = model.userData.arms;
+      const f = (inp.up ? 1 : 0) - (inp.down ? 1 : 0), turn = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
+      const sw = k => (f || turn) ? Math.sin(t * 6 + k) * 0.7 : 0;
+      a0.rotation.set(0, (f || turn < 0 ? sw(0) : 0), -0.6 - 0.3 * Math.abs(sw(0)));
+      a1.rotation.set(0, (f || turn > 0 ? sw(Math.PI) : 0), -0.6 - 0.3 * Math.abs(sw(Math.PI)));
+      if (!onboard) {
+        const y = R.top(bank.x, bank.z);
+        carried.position.set(bank.x, y, bank.z); carried.rotation.y = bank.side > 0 ? -Math.PI / 2 : Math.PI / 2;
+      }
+    },
+    lanterns: () => [model.userData.lantern],
+    follow: () => onboard ? [tube.x, tube.y, tube.z] : [bank.x, R.top(bank.x, bank.z) + 1, bank.z],
+    hud() {
+      if (!onboard) return [["", "On the bank, tube carried", "on"]];
+      const depth = R.surf(tube.x, tube.z) - R.top(tube.x, tube.z);
+      R.flow(tube.x, tube.z, OUT);
+      return [["", "Floating", "on"], ["Speed", speedOf(tube).toFixed(1) + " m/s"], ["Current", Math.hypot(OUT[0], OUT[1]).toFixed(1) + " m/s"],
+        ["Turning", Math.abs(tube.w * 180 / Math.PI).toFixed(0) + "°/s"], ["Depth", depth.toFixed(1) + " m"],
+        ...(bumpT > 0 ? [["", "Bump", "warn"]] : []), ...(tube.grounded ? [["", "Bottom", "warn"]] : [])];
+    },
+    keys: "W S paddle · A D turn · E get on or off",
+    actions: [
+      {id: "onoff", label: "Get off", key: "E", run() {
+        if (onboard) {
+          // off: wade or swim to the nearer bank and pick the tube up
+          const side = tube.z >= R.cfg.center(tube.x) ? 1 : -1;
+          landAt(tube.x, side); onboard = false; model.visible = false; carried.visible = true;
+        } else {
+          // on: walk in where the water is waist deep and sit down in the ring
+          const c = R.cfg.center(bank.x), hw = R.cfg.half(bank.x);
+          tube.x = bank.x; tube.z = c + bank.side * (hw - 1.8); tube.yaw = 0; tube.vx = tube.vz = tube.w = 0; tube.settle(R);
+          onboard = true; model.visible = true; carried.visible = false;
+        }
+      }, label2: () => onboard ? "Get off" : "Get on"},
+    ],
+  };
+  return def;
+};
+
 })();

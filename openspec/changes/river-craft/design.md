@@ -163,3 +163,19 @@ and the moon is dim.
 
 None for the owner yet: the mockup is the question. If its look is
 approved, the in-game captures go to the survey beside the mockup's shots.
+
+## The inner tube (owner, 2026-11-16: "also what about innertubes?")
+
+A sixth tab, Tube (`#tube`): one person in an inner tube on a slow, shallow
+reach. The ring is a hull with no keel (equal drag along and across, 115 kg
+with its rider), so the current carries it; a torque from the difference in
+current across the ring turns it slowly where one side runs faster (a bank,
+a rock, a riffle's edge), damped so it never spins up. Hands give 75 N of
+push and a small turn. **Get off** (E) wades or swims to the nearer bank
+and picks the tube up, carried on the back; **Get on** walks in to waist
+depth and sits back into the ring.
+
+Made from what the game has (it has no rubber or hide), proposed for the
+port: **pine pitch** (3 pine cones on the campfire) and an **inner tube**
+(6 wool, 2 rope, 2 pine pitch at the workbench), a pack item placed on water
+like a boat. A tube left on water drifts; one on the bank stays.

@@ -3,7 +3,7 @@
 (function () {
 "use strict";
 const RC = window.RC;
-const TABS = ["raft", "tug", "logs", "nets", "anchor"];
+const TABS = ["raft", "tube", "tug", "logs", "nets", "anchor"];
 const stages = {}, defs = {};
 const shared = {night: false, arrows: false, speed: 1};
 let cur = null;

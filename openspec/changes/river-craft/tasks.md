@@ -48,3 +48,11 @@
       old saves open unchanged (design 7).
 - [ ] 3.8 In-game captures of each, beside the mockup's shots, and the
       step's video task left open for the batch (CLAUDE.md).
+
+## Inner tube (2026-11-16)
+
+- [x] Tube tab in M34: drift, slow turn from the current's shear, hand
+      paddling, get on and off at the bank, a lantern at night; stills
+      `docs/screenshots/mockup-river-craft/tube-*.png`.
+- [ ] The owner's look at the Tube tab; the recipe (pine pitch, inner tube)
+      goes into the port on a request.
