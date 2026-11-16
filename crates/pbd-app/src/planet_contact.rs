@@ -311,6 +311,18 @@ impl PlanetContact {
         self.fine.as_ref()?.locate(direction)
     }
 
+    /// The key of the finest cell in `direction`, read from the set this
+    /// tier was built from. A cell's key is the same in every set, so this
+    /// answers even while the tier lags a newer set (just after an edit).
+    pub fn finest_key(&self, direction: Vec3) -> Option<u32> {
+        let fine = self.fine.as_ref()?;
+        let index = fine.locate(direction)?;
+        fine.set
+            .finest_records()
+            .get(index)
+            .map(|record| record.key())
+    }
+
     /// The water at a body-local point by the column there: `None` off the
     /// tier (the height field answers), `Some(None)` where the column holds
     /// no water at that height, `Some(Some(top))` the altitude of the top of

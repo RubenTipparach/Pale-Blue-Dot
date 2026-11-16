@@ -115,7 +115,7 @@ pub enum Act {
     Chop(Until),
     /// Dig fresh ground ahead, `depth` blocks down a cell, until.
     Dig(Until, u32),
-    /// The pack's Craft row: a recipe, this many times.
+    /// The pack's Craft panel: a recipe, this many times.
     Craft(String, u32),
     /// Set a block or a station down on the ground ahead.
     Place(String),

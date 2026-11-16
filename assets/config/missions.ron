@@ -45,9 +45,9 @@
             title: "Gather by hand",
             help: "Dig soft ground with bare hands: fibre turns up in grass, loose stone in the soil under it.",
             objectives: [
-                (kind: gather, what: "fibre", count: 4, label: "fibre"),
-                (kind: gather, what: "stone", count: 4, label: "stone"),
-                (kind: gather, what: "block:dirt|block:grass|block:soil|block:sand", count: 4, label: "soil"),
+                (kind: gather, what: "fibre", count: 8, label: "fibre"),
+                (kind: gather, what: "stone", count: 9, label: "stone"),
+                (kind: gather, what: "block:dirt|block:grass|block:soil|block:sand", count: 6, label: "soil"),
             ],
             unlocks: ["stone-axe"],
         ),
@@ -150,8 +150,8 @@
             help: "Dig wet ground by the water for bait, and cast again with it on the hook.",
             needs: ["go-fishing"],
             objectives: [
-                (kind: gather, what: "bait", count: 1, label: "dig bait"),
-                (kind: catch, what: "bait", count: 1, label: "catch with bait"),
+                (kind: gather, what: "bait", count: 3, label: "dig bait"),
+                (kind: catch, what: "bait", count: 3, label: "catch with bait"),
             ],
         ),
         (
@@ -171,8 +171,8 @@
             help: "Cast from the shore into the sea, then from a river bank or a lake.",
             needs: ["three-kinds"],
             objectives: [
-                (kind: waters, what: "sea", count: 1, label: "the sea"),
-                (kind: waters, what: "fresh", count: 1, label: "fresh water"),
+                (kind: waters, what: "sea", count: 3, label: "the sea"),
+                (kind: waters, what: "fresh", count: 3, label: "fresh water"),
             ],
         ),
         (
@@ -203,7 +203,7 @@
             help: "Seeds turn up when you dig grass, and wild plants give them when picked (F).",
             needs: ["fire"],
             objectives: [
-                (kind: find, what: "seed", count: 2, label: "seeds"),
+                (kind: find, what: "seed", count: 10, label: "seeds"),
             ],
         ),
         (
@@ -213,7 +213,7 @@
             help: "With the shovel in hand, F tills soil.",
             needs: ["find-seeds"],
             objectives: [
-                (kind: till, what: "any", count: 4, label: "till"),
+                (kind: till, what: "any", count: 6, label: "till"),
             ],
         ),
         (
@@ -223,7 +223,7 @@
             help: "Plant wheat seed on tilled soil with the right button.",
             needs: ["till"],
             objectives: [
-                (kind: plant, what: "wheat-seed", count: 4, label: "plant"),
+                (kind: plant, what: "wheat-seed", count: 6, label: "plant"),
             ],
         ),
         (
@@ -244,7 +244,7 @@
             help: "A crop is ripe when it is full grown: F on it harvests produce and seed.",
             needs: ["water-field"],
             objectives: [
-                (kind: harvest, what: "wheat", count: 4, label: "wheat"),
+                (kind: harvest, what: "wheat", count: 6, label: "wheat"),
             ],
         ),
         (
@@ -254,9 +254,9 @@
             help: "Turnip and chili seeds come with the first harvest; frost kale grows where it is cold.",
             needs: ["harvest"],
             objectives: [
-                (kind: harvest, what: "turnip", count: 1, label: "turnip"),
-                (kind: harvest, what: "chili", count: 1, label: "chili"),
-                (kind: harvest, what: "frost-kale", count: 1, label: "frost kale"),
+                (kind: harvest, what: "turnip", count: 3, label: "turnip"),
+                (kind: harvest, what: "chili", count: 3, label: "chili"),
+                (kind: harvest, what: "frost-kale", count: 3, label: "frost kale"),
             ],
         ),
         (
@@ -331,7 +331,7 @@
             help: "A kept animal in a pen gives an egg, wool or milk once a day: F on it collects.",
             needs: ["pen"],
             objectives: [
-                (kind: collect, what: "egg", count: 2, label: "eggs"),
+                (kind: collect, what: "egg", count: 5, label: "eggs"),
             ],
         ),
         (
@@ -342,7 +342,7 @@
             needs: ["collect"],
             objectives: [
                 (kind: tame, what: "woolback|plodder", count: 1, label: "tame"),
-                (kind: collect, what: "wool|milk", count: 1, label: "wool or milk"),
+                (kind: collect, what: "wool|milk", count: 3, label: "wool or milk"),
             ],
         ),
         (
@@ -374,8 +374,8 @@
             help: "Copper and tin show in the rock as mixed ore; coal sits in dark seams.",
             needs: ["dig-deep"],
             objectives: [
-                (kind: gather, what: "block:ore", count: 1, label: "ore"),
-                (kind: gather, what: "coal", count: 1, label: "coal"),
+                (kind: gather, what: "block:ore", count: 4, label: "ore"),
+                (kind: gather, what: "coal", count: 3, label: "coal"),
             ],
         ),
         (
@@ -420,7 +420,7 @@
             help: "Iron ore smelts hotter: feed the forge more coal.",
             needs: ["bronze-tool"],
             objectives: [
-                (kind: smelt, what: "iron-ingot", count: 1, label: "iron"),
+                (kind: smelt, what: "iron-ingot", count: 3, label: "iron"),
                 (kind: craft, what: "recipe:iron-pickaxe", count: 1, label: "pickaxe"),
             ],
             unlocks: ["iron-axe", "iron-shovel"],
