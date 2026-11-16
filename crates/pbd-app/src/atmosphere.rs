@@ -43,6 +43,11 @@ pub struct WeatherMaps {
     pub cloud: Vec<[f32; 4]>,
     /// The wind at cloud height, m/s, body frame; w unused.
     pub wind: Vec<[f32; 4]>,
+    /// What falls as a person sees it (`weather::shown_precipitation`): the
+    /// rain seen 0..1, negative for snow, at the texel's own direction and
+    /// unsmoothed, as the player's own rain is read. The world map draws its
+    /// rain from this (`rain-matches-map`); it is not uploaded to the GPU.
+    pub rain_seen: Vec<f32>,
 }
 
 /// The longest a blend between two shown states runs, seconds of world time
@@ -421,11 +426,16 @@ pub fn weather_maps(atmosphere: &Atmosphere) -> WeatherMaps {
     let mut maps = WeatherMaps {
         cloud: Vec::with_capacity(texels),
         wind: Vec::with_capacity(texels),
+        rain_seen: Vec::with_capacity(texels),
     };
     for face in 0..6 {
         for row in 0..MAP_SIZE {
             for column in 0..MAP_SIZE {
-                let s = smoothed(atmosphere, cube_direction(face, row, column, MAP_SIZE));
+                let direction = cube_direction(face, row, column, MAP_SIZE);
+                maps.rain_seen.push(pbd_core::weather::shown_precipitation(
+                    &atmosphere.sample(direction),
+                ));
+                let s = smoothed(atmosphere, direction);
                 let rain_mmh = s.rain_rate * 3600.0 * if s.snow { -1.0 } else { 1.0 };
                 maps.cloud
                     .push([s.cover, s.cloud_top, rain_mmh, s.optical_depth]);
@@ -1149,7 +1159,9 @@ mod tests {
     /// makes `Weather.rain`) against what the map draws there: the "Clouds
     /// and rain" layer's blue (`cloud_bytes` and `map_live.wgsl`: 0.55 of the
     /// smoothed mm/h over 8) and the RAIN overlay's (`overlay_rgba` at the
-    /// map's 0.9). Run with
+    /// map's 0.9). The layer's formula is the one the map drew before the
+    /// change, written out here; the overlay is read as it now stands, so
+    /// after the change its blue follows the rain seen. Run with
     /// `cargo test -p pbd-app --profile fast --lib map_rain_against_local -- --ignored --nocapture`.
     #[test]
     #[ignore]
@@ -1210,9 +1222,9 @@ mod tests {
         }
         let heavy: Vec<_> = raining.iter().filter(|r| r.0 >= 0.3).collect();
         let n = heavy.len().max(1) as f32;
-        let share = |f: &dyn Fn(&&(f32, f32, f32, f32, f32)) -> bool| {
-            100.0 * heavy.iter().filter(|r| f(r)).count() as f32 / n
-        };
+        type Row = (f32, f32, f32, f32, f32);
+        let share =
+            |f: &dyn Fn(&&Row) -> bool| 100.0 * heavy.iter().filter(|r| f(r)).count() as f32 / n;
         eprintln!(
             "samples where the player stands in rain of 0.3 or more: {}",
             heavy.len()
@@ -1252,6 +1264,51 @@ mod tests {
                 "  {:4} {:.2} {:.2} {:.3} {:.3}",
                 row.0, row.1, row.2, row.3, row.4
             );
+        }
+    }
+
+    /// A measurement instrument for the `rain-matches-map` captures: moments,
+    /// as a capture at `--time 22` with `--weather-at` builds them, when a
+    /// place on land near the owner's (map 26.562S 14.111W) stands in rain
+    /// seen of 0.5 or more while its rain rate is under the threshold, which
+    /// is where the map drew no rain. Prints the first few as `--at` and
+    /// `--weather-at` arguments. Run with
+    /// `cargo test -p pbd-app --profile fast --lib rain_gap_near_owner -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn rain_gap_near_owner() {
+        let settings = pbd_core::atmosphere::AtmosphereSettings::default();
+        let clock = 22.0 / 24.0 * pbd_core::daylight::DAY_S as f64;
+        let mut air = Air::open(settings, terrain_config().seed, None, clock);
+        let mut found = 0;
+        for step in 1..=900u32 {
+            air.run(1, &[]);
+            if step % 5 != 0 {
+                continue;
+            }
+            for i in -12..=12 {
+                for j in -12..=12 {
+                    let (lat, lon) = (26.562 + i as f32 * 0.1, -14.111 + j as f32 * 0.1);
+                    let p = pbd_core::geo::direction(pbd_core::geo::LatLon {
+                        lat: lat.to_radians(),
+                        lon: lon.to_radians(),
+                    });
+                    let s = air.now.sample(p);
+                    let land = crate::planet::surface_height(p) > 2.0;
+                    if land && !s.snow && s.rain_seen >= 0.5 && s.rain_rate < settings.raining_rate
+                    {
+                        eprintln!(
+                            "--at {lat:.3} {lon:.3} --weather-at {step}: rain seen {:.2}, rate {:.2} mm/h",
+                            s.rain_seen,
+                            s.rain_rate * 3600.0
+                        );
+                        found += 1;
+                        if found >= 12 {
+                            return;
+                        }
+                    }
+                }
+            }
         }
     }
 }
