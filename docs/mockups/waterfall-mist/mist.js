@@ -530,7 +530,7 @@ function waterMaterial(U, vertexShader) {
         float glass = 0.0;
         if (uGlass > 0.5) {
           if (vKind < 0.5 && vPath.z > -50.0 && vPath.z <= 0.0) glass = smoothstep(-2.0, -0.3, vPath.z);
-          if (fallFace) glass = 1.0 - smoothstep(0.55, 1.3, vPath.z);
+          if (fallFace) glass = 1.0 - smoothstep(0.15, 0.9, vPath.z);
           gradient *= 1.0 - 0.9*glass;
         }
         float raw_slope = length(gradient);
@@ -600,8 +600,8 @@ function waterMaterial(U, vertexShader) {
             else {
               vec3 sp = vec3(along.x*16.0, along.y*0.12, along.z*16.0) + vec3(0.0, uTime*uSpeed*0.9, 0.0);
               float strands = smoothstep(0.55, 0.8, gnoise3(sp)*0.5 + gnoise3(sp*2.1)*0.25 + 0.5);
-              float s = vPath.z, fill = smoothstep(1.0, 2.9, s);
-              froth = mix(strands*0.85*smoothstep(0.6, 1.1, s), froth, fill);
+              float s = vPath.z, fill = smoothstep(0.6, 2.5, s);
+              froth = mix(strands*0.85*smoothstep(0.2, 0.7, s), froth, fill);
             }
           }
           if (fallFace) {
@@ -992,8 +992,8 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
       const sp = S.out * (0.5 + 0.07 * Math.min(H, 10)) * Math.exp(-Math.max(x, 0) / Math.min(2.5 + 0.3 * H, R)) * (1 - sm(0.6 * R, R, x));
       arr.visible = sp > 0.02; if (arr.visible) arr.setLength(Math.max(0.3, sp * 1.6), 0.22, 0.14);
     } wmat.uniforms.uGlass.value = v === "new" && S.glass ? 1 : 0;
-    const wantR = v === "new" && S.glass ? 0.45 : 0;
-    if (wantR !== LIP_R) { LIP_R = wantR; water.geometry.dispose(); water.geometry = waterGeometry(0); }
+    // The rounded lip (LIP_R 0.45 under Glassy) was tried and taken back (owner, 2026-11-16: "nope go back"):
+    // the edge stays square.
     if (arrows) arrows.visible = v === "new" && S.arrows;
     wmat.uniforms.uG.value = v === "new" ? ACCEL_G * S.accel : 0; wmat.uniforms.uVmax.value = ACCEL_VMAX;
     front.material.uniforms.uGain.value = S.gain; front.material.uniforms.uLamps.value = v === "new" ? 1 : 0;

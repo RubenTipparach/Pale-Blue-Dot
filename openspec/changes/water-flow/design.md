@@ -964,3 +964,4 @@ The owner's tuning applies under the proposed mist rule too ("Mist on every fall
   but the one it is fed from, is a 0.45 m quarter-round: the top's vertices within 0.45 m of the rim move onto the
   arc and take its normal, and the sides start 0.45 m below the top where the arc ends. In the game this is a mesher
   change (the falling cell's cap and the top of its side quads), so it is the larger part of a port.
+  **Taken back** (owner, on seeing it: "nope go back"): the lip stays square; Glassy keeps only its shading.
