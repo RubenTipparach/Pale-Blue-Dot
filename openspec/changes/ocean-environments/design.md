@@ -1410,3 +1410,8 @@ was where it was applied.
 bank, the sea's shore and where waters meet, before and after, with every
 frame within 0.3 m of the surface stepped and listed (the report's issue
 list); numeric junction checks in `water_junction_tests`.
+
+**Where waters meet** (B18, the junction check). The check runs on 5 mouths, 3 tributaries and 3 falls from the generator's rivers, on a real tier. It samples every metre along a line from upstream to 40 m past the junction.
+- **Mouths: fixed.** Before the fix, every mouth drew two surfaces in 22 to 37 cells: the sea's sheet under the river's own water, wherever the bed is below sea level. The sheet is now marked dry wherever water stands over the sea's layer. All 11 lines read no double surface and no flip in the eye's decision.
+- **Steps are kept.** The steps along a line are the river's own: riffles under a metre, and falls of 4 to 11 m at the mouths' cut. They are not seams.
+- **Not built.** Lakes are not generated. Marsh pools do not join rivers. No fall drops into the sea. Poured water meeting a river and the tide against a reach have no generated instance to test on; the tide's sheet is the one the eye now follows.

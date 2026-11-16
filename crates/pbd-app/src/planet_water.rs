@@ -486,8 +486,9 @@ fn eye_water(
         // "submerged at just the right height": one layer down at high
         // water the column held only air, and the eye was dry under the
         // sheet).
-        None if pbd_core::column::layer_at(altitude)
-            .is_some_and(|l| column.material(l) == pbd_core::terrain::Material::Air)
+        None if altitude < terrain::terrain_config().sea_level_m + high_water
+            && pbd_core::column::layer_at(altitude)
+                .is_some_and(|l| column.material(l) == pbd_core::terrain::Material::Air)
             && column.open_to_sky(altitude)
             && column.surface().is_none_or(|top| {
                 pbd_core::column::layer_altitude(top) + 1.0
@@ -3274,7 +3275,7 @@ mod water_junction_tests {
         let tributaries: Vec<(usize, usize)> = by_distance
             .iter()
             .filter(|&&k| upstream.get(&k).is_some_and(|u| u.len() >= 2) && map.down(k).is_some())
-            .filter_map(|&k| Some((upstream[&k][1], k)))
+            .map(|&k| (upstream[&k][1], k))
             .take(3)
             .collect();
         // Falls of three layers or more: into a river's pool, into the sea.
