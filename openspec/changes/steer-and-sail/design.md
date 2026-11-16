@@ -321,6 +321,15 @@ cell each unless noted. Numbers are mockup first guesses.
 - **Every view stays still until the viewer acts** (CLAUDE.md, "Nothing in
   a mockup spins on its own"). Play, Fly and Sail start on a press.
 
+### 3c. Laying the route on a big map (the owner, 2026-11-16)
+
+"I also still dont have waypoint ability on the map": the drydock's chart
+took waypoints, but as a small panel beside the view it read as a minimap.
+M, or a Map button, opens the same chart full size in a window: click the
+sea to add a waypoint, drag to move it, right-click to remove it, M or Esc
+to close. Recommendation taken (ask only with screenshots): the game's map
+screen is where a route is laid, the same way.
+
 ### 6a. As the hangar mockup built it (M24, 2026-11-13)
 
 Recommendations taken (ask only with screenshots):

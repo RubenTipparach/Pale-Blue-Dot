@@ -59,7 +59,7 @@ struct ReflectViewUniform {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct PlanetTerrainLabel;
+pub(super) struct PlanetTerrainLabel;
 
 #[derive(Resource)]
 struct ReflectPipelines {

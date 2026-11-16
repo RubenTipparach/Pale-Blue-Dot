@@ -31,3 +31,15 @@ Checked in the logs: every scripted till and sowing landed, and a normal
 (warming) launch of the same build logged `READY` with no `LATE_PIPELINE`
 line (`--world warm-a1 --walk --spawn fields`, 45 s). A capture does not
 warm, so its logs list pipelines as late by design.
+
+## Crops in the world's style (decision 16, 2026-11-16)
+
+Captured in a Claude Code cloud session on lavapipe (no GPU), fast build,
+`--world <new> --walk --spawn fields --weather-at 1800 --time 10 --yaw 110
+--pitch -12 --frames 150`, with `--rain 0.8` for the rain pair. The same
+binary drew both; only `assets/items/crops/` changed between runs.
+
+| file | what it shows |
+| --- | --- |
+| `wild-kale-world-style.jpg` | The wild frost kale on the ledge, enlarged three times: before (left) and after (right), in sun (top) and in rain (bottom). Before: cyan frost sparkles round it, mint tops over a navy underside. After: no sparkles, one teal-green body in the meadow's tones. |
+| `wild-kale-rain-before.jpg`, `wild-kale-rain-after.jpg` | The whole rain frame each side. |

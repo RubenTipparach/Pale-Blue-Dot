@@ -8,9 +8,11 @@
 //! the slots and the tool slot. What is here is the durable writes and the
 //! stone-and-wood widgets.
 //!
-//! - **The pack's row**, under the hotbar: a drop-down of what the hands make
-//!   (a recipe short of something dimmed), the wells of what it takes lit or
-//!   dark against what is carried, an arrow, the result, and CRAFT. The hands
+//! - **The pack's Craft panel**, at the pack's right (decision 12): what the
+//!   hands make as a list of plaques (a recipe short of something has its
+//!   icon dimmed, a locked one is a disabled plaque with a silhouette), and
+//!   under it the chosen recipe's row: the wells of what it takes lit or dark
+//!   against what is carried, an arrow, the result, and CRAFT. The hands
 //!   make one thing at a time; the plaque counts the job up while it runs,
 //!   and the result lands by the give order.
 //! - **The workbench's panel**: its recipes as a grid of wells (a click picks
@@ -31,14 +33,13 @@ use pbd_core::station::{
     self, HAND_RECORD_ID, Recipe, STATION_KIND, STATION_SCHEMA, StationRow, StationState,
 };
 
-/// Which recipe each widget has picked, and whether the drop-down is open.
+/// Which recipe each widget has picked.
 #[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CraftPick {
-    /// Into the hands' recipes, in file order.
-    pub hand: usize,
+    /// Into the hands' recipes, in file order; none until a row is clicked.
+    pub hand: Option<usize>,
     /// Into the workbench's.
     pub bench: usize,
-    pub list_open: bool,
 }
 
 /// What a well shows.
@@ -70,18 +71,22 @@ pub struct CraftButton(pub &'static str);
 #[derive(Component)]
 pub struct CraftLabel(pub &'static str);
 
-/// The hands' drop-down, its picture and its words.
+/// A row of the pack's recipe list: the hands' `k`th recipe.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RecipeRow(pub usize);
+/// A recipe row's picture.
 #[derive(Component)]
-pub struct DropDown;
-#[derive(Component)]
-pub struct DropIcon;
-#[derive(Component)]
-pub struct DropLabel;
-/// The open list, and one of its options by index.
-#[derive(Component)]
-pub struct DropList;
-#[derive(Component)]
-pub struct DropOption(pub usize);
+pub struct RowIcon(pub usize);
+
+/// The Craft panel's width in the pack, native px (decision 12).
+pub const CRAFT_COLUMN: f32 = 180.0;
+/// A recipe row's height: the stone plaque's own (`button-idle`, 22 px).
+pub const ROW: f32 = 22.0;
+/// The rows shown before the list scrolls.
+pub const ROWS_SHOWN: usize = 6;
+/// The CRAFT plaque's width, wide enough for its longest word (LOCKED), so
+/// it never grows past the row.
+pub const CRAFT_PLAQUE: f32 = 56.0;
 
 /// The workbench panel's queue line and bar.
 #[derive(Component)]
@@ -136,11 +141,21 @@ fn shown(recipe: &Recipe) -> Option<(Item, u16, Option<Tier>)> {
         .map(|&(tool, tier)| (Item::Tool(tool), 1, Some(tier)))
 }
 
-/// What a recipe's name says in a list: "PLANKS X4".
-fn label(recipe: &Recipe) -> String {
+/// What a recipe's row says: its name, and the count it makes ("X4") at the
+/// row's end. A name that already ends in its count ("TORCH X2") gives it
+/// to the count rather than saying it twice.
+fn row_words(recipe: &Recipe) -> (String, String) {
     match shown(recipe) {
-        Some((_, n, _)) if n > 1 => format!("{} X{n}", recipe.name),
-        _ => recipe.name.clone(),
+        Some((_, n, _)) if n > 1 => {
+            let count = format!("X{n}");
+            let name = recipe
+                .name
+                .strip_suffix(&format!(" {count}"))
+                .unwrap_or(&recipe.name)
+                .to_string();
+            (name, count)
+        }
+        _ => (recipe.name.clone(), String::new()),
     }
 }
 
@@ -327,25 +342,23 @@ fn well(parent: &mut ChildSpawnerCommands, kit: &UiKit, atlas: &Handle<Image>, w
 }
 
 /// The row both widgets share: `needs` wells, an arrow, the result, and
-/// CRAFT, after whatever `lead` puts first.
+/// CRAFT.
 fn craft_row(
     parent: &mut ChildSpawnerCommands,
     kit: &UiKit,
     atlas: &Handle<Image>,
     station: &'static str,
     needs: usize,
-    lead: impl FnOnce(&mut ChildSpawnerCommands),
 ) {
     parent
         .spawn(Node {
             align_items: AlignItems::Center,
             column_gap: px(3),
             margin: UiRect::top(px(3)),
-            position_type: PositionType::Relative,
+            flex_shrink: 0.0,
             ..default()
         })
         .with_children(|row| {
-            lead(row);
             for k in 0..needs {
                 well(
                     row,
@@ -371,127 +384,126 @@ fn craft_row(
                 flex_grow: 1.0,
                 ..default()
             });
-            row.spawn((ui_kit::plaque(kit, Set::Stone, 44.0), CraftButton(station)))
-                .with_children(|p| {
-                    p.spawn((
-                        ui_kit::plaque_label(Set::Stone, "CRAFT"),
-                        CraftLabel(station),
-                    ));
-                });
+            row.spawn((
+                ui_kit::plaque(kit, Set::Stone, CRAFT_PLAQUE),
+                CraftButton(station),
+            ))
+            .with_children(|p| {
+                p.spawn((
+                    ui_kit::plaque_label(Set::Stone, "CRAFT"),
+                    CraftLabel(station),
+                ));
+            });
         });
 }
 
-/// The pack's Craft row (M29), spawned inside the pack under its hotbar.
-pub fn spawn_pack_row(
+/// The pack's Craft panel (decision 12), the pack's right-hand column: the
+/// CRAFT lintel, the hands' recipes as a list of stone plaques, and the
+/// chosen recipe's row at the column's foot, level with the hotbar.
+pub fn spawn_pack_craft(
     panel: &mut ChildSpawnerCommands,
     kit: &UiKit,
     atlas: &Handle<Image>,
     recipes: &Recipes,
 ) {
-    panel.spawn((
-        KitText::new("CRAFT", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+    let hand: Vec<&Recipe> = recipes.0.at("hand").collect();
+    let needs = hand.iter().map(|r| r.inputs.len()).max().unwrap_or(1);
+    panel
+        .spawn(Node {
+            width: px(CRAFT_COLUMN),
+            flex_shrink: 0.0,
+            flex_direction: FlexDirection::Column,
+            justify_content: JustifyContent::SpaceBetween,
+            ..default()
+        })
+        .with_children(|column| {
+            column
+                .spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    ..default()
+                })
+                .with_children(|top| {
+                    super::menu::lintel(top, kit, "CRAFT");
+                    // Six rows show; a longer list scrolls with the wheel.
+                    top.spawn((
+                        Node {
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(1),
+                            // A scroll box has no height of its own: it is
+                            // set to the rows it shows.
+                            height: px(list_height(hand.len())),
+                            flex_shrink: 0.0,
+                            overflow: Overflow::scroll_y(),
+                            ..default()
+                        },
+                        ScrollPosition::default(),
+                        super::menu::WheelScrolls,
+                    ))
+                    .with_children(|list| {
+                        for (k, recipe) in hand.iter().enumerate() {
+                            recipe_row(list, kit, atlas, k, recipe);
+                        }
+                    });
+                });
+            craft_row(column, kit, atlas, "hand", needs);
+        });
+}
+
+/// The recipe list's height for `rows` recipes, native px: every row up to
+/// [`ROWS_SHOWN`], each `ROW` tall with a pixel between.
+pub fn list_height(rows: usize) -> f32 {
+    let shown = rows.clamp(1, ROWS_SHOWN) as f32;
+    ROW * shown + (shown - 1.0)
+}
+
+/// One recipe in the pack's list: a stone plaque the column's width, the
+/// recipe's icon at its native 16 px, its name, and its count at the end.
+fn recipe_row(
+    list: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    atlas: &Handle<Image>,
+    k: usize,
+    recipe: &Recipe,
+) {
+    let (name, count) = row_words(recipe);
+    list.spawn((
+        Button,
+        kit.nine(Set::Stone, "button-idle"),
+        ui_kit::KitPiece(Set::Stone.key("button-idle")),
+        Plaque::new(Set::Stone),
+        Tooltip::default(),
         Node {
-            margin: UiRect::new(px(0), px(0), px(6), px(0)),
+            width: px(CRAFT_COLUMN),
+            height: px(ROW),
+            flex_shrink: 0.0,
+            align_items: AlignItems::Center,
+            column_gap: px(4),
+            padding: UiRect::new(px(4), px(6), px(0), px(0)),
             ..default()
         },
-    ));
-    let hand: Vec<&Recipe> = recipes.0.at("hand").collect();
-    // The hands' recipes take at most two things, which leaves the row room
-    // for the drop-down inside the pack's 240 px.
-    let needs = hand.iter().map(|r| r.inputs.len()).max().unwrap_or(1);
-    craft_row(panel, kit, atlas, "hand", needs, |row| {
+        RecipeRow(k),
+    ))
+    .with_children(|row| {
         row.spawn((
-            kit.nine(Set::Stone, "button-idle"),
-            Button,
+            ImageNode {
+                image: atlas.clone(),
+                color: Color::NONE,
+                ..default()
+            },
             Node {
-                width: px(82),
-                height: px(24),
-                align_items: AlignItems::Center,
-                column_gap: px(3),
-                padding: UiRect::new(px(5), px(5), px(0), px(0)),
+                width: px(16),
+                height: px(16),
                 flex_shrink: 0.0,
                 ..default()
             },
-            DropDown,
-        ))
-        .with_children(|dd| {
-            dd.spawn((
-                ImageNode {
-                    image: atlas.clone(),
-                    color: Color::NONE,
-                    ..default()
-                },
-                Node {
-                    width: px(12),
-                    height: px(12),
-                    flex_shrink: 0.0,
-                    ..default()
-                },
-                DropIcon,
-            ));
-            dd.spawn((
-                KitText::new("", ui_kit::LABEL).shadow(ui_kit::WELL),
-                DropLabel,
-            ));
-            dd.spawn(Node {
-                flex_grow: 1.0,
-                ..default()
-            });
-            dd.spawn(KitText::new("↓", ui_kit::LABEL).shadow(ui_kit::WELL));
+            RowIcon(k),
+        ));
+        row.spawn(ui_kit::plaque_label(Set::Stone, &name));
+        row.spawn(Node {
+            flex_grow: 1.0,
+            ..default()
         });
-        // The list opens upward over the hotbar, in the kit's frame.
-        row.spawn((
-            kit.nine(Set::Stone, "frame"),
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(0),
-                bottom: px(26),
-                flex_direction: FlexDirection::Column,
-                row_gap: px(1),
-                padding: UiRect::all(px(8)),
-                min_width: px(120),
-                display: Display::None,
-                ..default()
-            },
-            GlobalZIndex(30),
-            DropList,
-        ))
-        .with_children(|list| {
-            for (k, recipe) in hand.iter().enumerate() {
-                list.spawn((
-                    Button,
-                    Node {
-                        align_items: AlignItems::Center,
-                        column_gap: px(3),
-                        padding: UiRect::axes(px(2), px(1)),
-                        ..default()
-                    },
-                    BackgroundColor(Color::NONE),
-                    DropOption(k),
-                ))
-                .with_children(|option| {
-                    option.spawn((
-                        ImageNode {
-                            image: atlas.clone(),
-                            color: Color::NONE,
-                            ..default()
-                        },
-                        Node {
-                            width: px(12),
-                            height: px(12),
-                            flex_shrink: 0.0,
-                            ..default()
-                        },
-                        DropIcon,
-                        DropOption(k),
-                    ));
-                    option.spawn((
-                        KitText::new(label(recipe), ui_kit::TEXT).shadow(ui_kit::INK),
-                        DropOption(k),
-                    ));
-                });
-            }
-        });
+        row.spawn(ui_kit::plaque_label(Set::Stone, &count));
     });
 }
 
@@ -542,7 +554,7 @@ pub fn spawn_bench(
                         );
                     }
                 });
-            craft_row(panel, kit, atlas, "workbench", 3, |_| {});
+            craft_row(panel, kit, atlas, "workbench", 3);
             panel.spawn((
                 KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
                 Node {
@@ -579,14 +591,15 @@ pub fn spawn_bench(
 /// The recipe a widget shows: the hands' picked one, or the workbench's.
 fn picked<'a>(recipes: &'a Recipes, pick: &CraftPick, station: &str) -> Option<&'a Recipe> {
     let k = if station == "hand" {
-        pick.hand
+        pick.hand?
     } else {
         pick.bench
     };
     recipes.0.at(station).nth(k)
 }
 
-/// Clicks: the drop-down and its options, a workbench well, and CRAFT.
+/// Clicks: a recipe row of the pack, a workbench well, and CRAFT. A locked
+/// row picks nothing and names the mission that opens it.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn press(
     screen: Res<Screen>,
@@ -599,27 +612,24 @@ pub fn press(
     mut hotbar: ResMut<Hotbar>,
     tools: Res<ToolSlot>,
     mut note: ResMut<FarmNote>,
-    dropdown: Query<&Interaction, (Changed<Interaction>, With<DropDown>)>,
-    options: Query<(&Interaction, &DropOption), (Changed<Interaction>, With<Button>)>,
+    rows: Query<(&Interaction, &RecipeRow), Changed<Interaction>>,
     wells: Query<(&Interaction, &Well), Changed<Interaction>>,
     buttons: Query<(&Interaction, &CraftButton, &Plaque), Changed<Interaction>>,
     locks: Res<pbd_app::missions::RecipeLocks>,
 ) {
     if *screen != Screen::Pack && *screen != Screen::Forge {
-        if pick.list_open {
-            pick.list_open = false;
-        }
         return;
     }
-    for interaction in &dropdown {
-        if *interaction == Interaction::Pressed {
-            pick.list_open = !pick.list_open;
+    for (interaction, row) in &rows {
+        if *interaction != Interaction::Pressed {
+            continue;
         }
-    }
-    for (interaction, option) in &options {
-        if *interaction == Interaction::Pressed && pick.list_open {
-            pick.hand = option.0;
-            pick.list_open = false;
+        let Some(recipe) = recipes.0.at("hand").nth(row.0) else {
+            continue;
+        };
+        match locks.locked(&recipe.code) {
+            Some(opens) => note.say(time.elapsed_secs(), format!("Opens with: {opens}")),
+            None => pick.hand = Some(row.0),
         }
     }
     for (interaction, well) in &wells {
@@ -784,28 +794,16 @@ pub fn paint(
     kit: Res<UiKit>,
     mut wells: Query<(&Well, &Children, &mut ImageNode, &mut Tooltip), Without<WellIcon>>,
     mut well_icons: Query<&mut ImageNode, (With<WellIcon>, Without<Well>)>,
-    mut counts: Query<&mut KitText, (With<WellCount>, Without<CraftLabel>, Without<DropLabel>)>,
+    mut counts: Query<&mut KitText, (With<WellCount>, Without<CraftLabel>)>,
     mut buttons: Query<(&CraftButton, &mut Plaque)>,
-    mut labels: Query<(&CraftLabel, &mut KitText), (Without<WellCount>, Without<DropLabel>)>,
-    mut drop: (
-        Query<&mut KitText, (With<DropLabel>, Without<WellCount>, Without<CraftLabel>)>,
-        Query<
-            (&mut ImageNode, Option<&DropOption>),
-            (With<DropIcon>, Without<Well>, Without<WellIcon>),
-        >,
-        Query<&mut Node, With<DropList>>,
+    mut labels: Query<(&CraftLabel, &mut KitText), Without<WellCount>>,
+    mut rows: (
+        Query<(&RecipeRow, &mut Plaque, &mut Tooltip), (Without<Well>, Without<CraftButton>)>,
+        Query<(&RowIcon, &mut ImageNode), (Without<Well>, Without<WellIcon>)>,
     ),
     mut bench_line: (
-        Query<
-            &mut KitText,
-            (
-                With<BenchLine>,
-                Without<WellCount>,
-                Without<CraftLabel>,
-                Without<DropLabel>,
-            ),
-        >,
-        Query<&mut Node, (With<BenchFill>, Without<DropList>)>,
+        Query<&mut KitText, (With<BenchLine>, Without<WellCount>, Without<CraftLabel>)>,
+        Query<&mut Node, With<BenchFill>>,
     ),
 ) {
     if *screen != Screen::Pack && *screen != Screen::Forge {
@@ -941,43 +939,37 @@ pub fn paint(
             text.text = want;
         }
     }
-    let (drop_label, drop_icons, drop_list) = &mut drop;
+    // The pack's list: the chosen row ringed with the rune (the focus
+    // plaque, as a chosen slot wears it), a locked one dead with its
+    // picture a silhouette and the mission that opens it in its tooltip, one
+    // short of something with its picture dimmed.
+    let (row_plaques, row_icons) = &mut rows;
     let hand_recipes: Vec<&Recipe> = recipes.0.at("hand").collect();
-    if let Some((recipe, _, _)) = &hand {
-        for mut text in drop_label.iter_mut() {
-            let want = label(recipe);
-            if text.text != want {
-                text.text = want;
-            }
+    for (row, mut plaque, mut tip) in row_plaques.iter_mut() {
+        let shut = hand_recipes.get(row.0).and_then(|r| locks.locked(&r.code));
+        let chosen = pick.hand == Some(row.0) && shut.is_none();
+        if plaque.disabled != shut.is_some() || plaque.focus != chosen {
+            plaque.disabled = shut.is_some();
+            plaque.focus = chosen;
+        }
+        let words = shut.map(|m| format!("Opens with: {m}")).unwrap_or_default();
+        if tip.0 != words {
+            tip.0 = words;
         }
     }
-    for (mut image, option) in drop_icons.iter_mut() {
-        let k = option.map_or(pick.hand, |o| o.0);
-        let item = hand_recipes.get(k).and_then(|r| shown(r));
-        paint_well(&mut image, item, &icons, &images);
-        if let Some(recipe) = hand_recipes.get(k)
-            && locks.locked(&recipe.code).is_some()
-        {
-            image.color = SILHOUETTE;
-        } else if let Some(recipe) = hand_recipes.get(k)
-            && option.is_some()
-            && recipe
+    for (row, mut image) in row_icons.iter_mut() {
+        let recipe = hand_recipes.get(row.0);
+        paint_well(&mut image, recipe.and_then(|r| shown(r)), &icons, &images);
+        if let Some(recipe) = recipe {
+            if locks.locked(&recipe.code).is_some() {
+                image.color = SILHOUETTE;
+            } else if recipe
                 .inputs
                 .iter()
                 .any(|&(i, n)| carried(i) < u32::from(n))
-        {
-            // Short of something: dimmed.
-            image.color = image.color.with_alpha(0.45);
-        }
-    }
-    for mut node in drop_list.iter_mut() {
-        let want = if pick.list_open && *screen == Screen::Pack {
-            Display::Flex
-        } else {
-            Display::None
-        };
-        if node.display != want {
-            node.display = want;
+            {
+                image.color = image.color.with_alpha(0.45);
+            }
         }
     }
     let (line, fill) = &mut bench_line;
@@ -1013,11 +1005,14 @@ pub fn paint(
 
 // ---------------------------------------------------------------- capture rig
 
-/// `--craft pack|bench|bench-view [metres]` (`tool-crafting` task 4.2): a
-/// measurement instrument for the headless captures, which have no hands.
-/// Through the same durable paths a player's clicks take: `pack` stocks the
-/// slots, queues planks by hand part done and opens the pack on the
-/// workbench recipe; `bench` places a workbench that far ahead, stocks the
+/// `--craft pack|pack-empty|pack-pick|pack-locked|bench|bench-view [metres]`
+/// (`tool-crafting` tasks 4.2 and 5.5): a measurement instrument for the
+/// headless captures, which have no hands. Through the same durable paths a
+/// player's clicks take: `pack` stocks the slots, queues planks by hand part
+/// done and opens the pack on the workbench recipe; `pack-empty` stocks the
+/// slots and opens the pack with nothing chosen; `pack-pick` opens it on
+/// planks; `pack-locked` does too and holds the pointer over the stone
+/// axe's row ([`hover_locked`]); `bench` places a workbench that far ahead, stocks the
 /// slots, queues a stone pickaxe half done and opens its panel on the iron
 /// pickaxe; `bench-view` only places the workbench. The capture's save is
 /// memory-only, so nothing is kept.
@@ -1065,12 +1060,18 @@ pub fn scripted(
             .position(|r| r.code == code)
             .unwrap_or(0)
     };
-    if scene == "pack" {
+    if scene.starts_with("pack") {
         *done = true;
         slots.give(Item::Good(Good::LOG), 2);
         slots.give(Item::Good(Good::FIBRE), 4);
         slots.give(Item::Good(Good::PLANKS), 6);
         slots.give(Item::Good(Good::LOOSE_STONE), 2);
+        *screen = Screen::Pack;
+        if scene != "pack" {
+            pick.hand = (scene != "pack-empty").then(|| index_of("hand", "planks"));
+            info!("scripted craft: the pack, {scene}");
+            return;
+        }
         queue(
             &mut save,
             &mut slots,
@@ -1082,8 +1083,7 @@ pub fn scripted(
             &mut note,
             wall_s,
         );
-        pick.hand = index_of("hand", "workbench");
-        *screen = Screen::Pack;
+        pick.hand = Some(index_of("hand", "workbench"));
         info!("scripted craft: the pack, planks part made by hand");
         return;
     }
@@ -1141,4 +1141,117 @@ pub fn scripted(
     pick.bench = index_of("workbench", "iron-pickaxe");
     station_at.0 = Some(at);
     *screen = Screen::Forge;
+}
+
+/// `--craft pack-locked`'s pointer: the stone axe's row held hovered after
+/// the UI's focus pass, as a pointer over it would, so its tooltip shows in
+/// a capture (which has no pointer). A capture instrument (task 5.5).
+pub fn hover_locked(
+    launch: Res<super::Launch>,
+    recipes: Res<Recipes>,
+    mut rows: Query<(&RecipeRow, &mut Interaction)>,
+) {
+    if !launch
+        .craft
+        .as_ref()
+        .is_some_and(|(scene, _)| scene == "pack-locked")
+    {
+        return;
+    }
+    let Some(k) = recipes.0.at("hand").position(|r| r.code == "stone-axe") else {
+        return;
+    };
+    for (row, mut interaction) in &mut rows {
+        if row.0 == k && *interaction != Interaction::Hovered {
+            *interaction = Interaction::Hovered;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn book() -> Recipes {
+        pbd_app::config::recipe_book().0
+    }
+
+    fn hand_index(recipes: &Recipes, code: &str) -> usize {
+        recipes.0.at("hand").position(|r| r.code == code).unwrap()
+    }
+
+    /// A row says the name once and the count at its end: "TORCH X2" gives
+    /// its X2 to the count, planks gains one, the workbench has none.
+    #[test]
+    fn a_row_names_its_recipe_and_counts_once() {
+        let recipes = book();
+        let words = |code: &str| row_words(recipes.0.get(code).unwrap());
+        assert_eq!(words("torch"), ("TORCH".into(), "X2".into()));
+        assert_eq!(words("planks"), ("PLANKS".into(), "X4".into()));
+        assert_eq!(words("workbench"), ("WORKBENCH".into(), String::new()));
+    }
+
+    /// Decision 12: every hand recipe shows at today's count, and the
+    /// lintel, the list and the craft row stand inside the pack's rock; the
+    /// craft row at its widest (the most inputs, LOCKED on the plaque) fits
+    /// the column. In whole native pixels.
+    #[test]
+    fn the_craft_panel_fits_inside_the_rock() {
+        let mut app = App::new();
+        ui_kit::install_bare(&mut app);
+        let kit = app.world().resource::<UiKit>();
+        let (_, (_, h)) = kit.rock("pack-wide");
+        let recipes = book();
+        let hand = recipes.0.at("hand").count();
+        assert!(hand <= ROWS_SHOWN, "{hand} hand recipes: the list scrolls");
+        // The lintel's flow (16 tall, pulled up 15, 4 under), the list, the
+        // craft row's margin and its wells.
+        let column = 1.0 + 4.0 + list_height(hand) + 3.0 + slots::SLOT;
+        assert!(column <= h as f32 - 28.0, "{column} px in {h}");
+        let needs = recipes.0.at("hand").map(|r| r.inputs.len()).max().unwrap() as f32;
+        let arrow = kit.font.width("→") as f32;
+        let row = needs * slots::SLOT + arrow + slots::SLOT + CRAFT_PLAQUE + 3.0 * (needs + 2.0);
+        assert!(row <= CRAFT_COLUMN, "the craft row is {row} px");
+        let locked = kit.font.width("LOCKED") as f32 + 20.0;
+        assert!(locked <= CRAFT_PLAQUE, "LOCKED needs {locked} px");
+        for size in [ROW, CRAFT_COLUMN, list_height(hand), CRAFT_PLAQUE] {
+            assert_eq!(size.fract(), 0.0, "whole pixels");
+        }
+    }
+
+    /// A click on an open row chooses it; a click on a locked row chooses
+    /// nothing and names the mission that opens it.
+    #[test]
+    fn a_locked_row_picks_nothing() {
+        let recipes = book();
+        let axe = hand_index(&recipes, "stone-axe");
+        let planks = hand_index(&recipes, "planks");
+        let mut locks = pbd_app::missions::RecipeLocks::default();
+        locks.0.insert("stone-axe".into(), "Gather by hand".into());
+        let mut app = App::new();
+        app.insert_resource(Screen::Pack)
+            .insert_resource(recipes)
+            .insert_resource(locks)
+            .insert_resource(WorldSave::memory_only())
+            .init_resource::<StationAt>()
+            .init_resource::<pbd_app::sky::Sun>()
+            .init_resource::<Time>()
+            .init_resource::<CraftPick>()
+            .init_resource::<Hotbar>()
+            .init_resource::<ToolSlot>()
+            .init_resource::<FarmNote>()
+            .add_systems(Update, press);
+        app.world_mut()
+            .spawn((Interaction::Pressed, RecipeRow(axe)));
+        app.update();
+        assert_eq!(app.world().resource::<CraftPick>().hand, None);
+        assert_eq!(
+            app.world().resource::<FarmNote>().text,
+            "OPENS WITH: GATHER BY HAND"
+        );
+        app.world_mut()
+            .spawn((Interaction::Pressed, RecipeRow(planks)));
+        app.update();
+        assert_eq!(app.world().resource::<CraftPick>().hand, Some(planks));
+    }
 }

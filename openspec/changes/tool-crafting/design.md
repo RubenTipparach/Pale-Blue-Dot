@@ -175,6 +175,60 @@ with a capture once it is built.
     for each output, a tool as `Item::Tool`; fibre, loose stone and logs raise
     `Gained { how: Found }`. `starter-missions` counts them.
 
+12. **The pack, wider, with Craft at its side (owner, 2026-11-16).** On the
+    pack of decision 9 the owner said "this menu should be wider" and "I
+    expect craft to be a menu on the side not on the bottom". Their
+    screenshot showed why: the Craft row (drop-down, two wells, arrow,
+    result, plaque) is wider than the ten slots it sits under, and its
+    plaque, reading LOCKED, hung outside the rock's right edge.
+    - **One wider rock, two columns.** The pack's rock is rendered at its own
+      new size, `pack-wide` 464 x 200 native px (the approved base rock, by
+      `tools/art/ui_panels_blend.py`, as every in-play panel's is: one render
+      per size, never tiled or stretched). Left: the thirty pack slots, and
+      the hotbar's ten at the foot of the column. Right: the Craft panel. Each
+      column has its own oak lintel, PACK and CRAFT.
+    - **Craft is a list.** The hands' recipes stand in a column, one stone
+      plaque each (22 px, the plaque's own height): the recipe's icon at
+      native 16 px, its name, and its count ("X4") at the right. Hover,
+      pressed, focus (the chosen recipe, ringed with the rune as a chosen
+      slot is) and disabled are the kit's plaque pieces. Six rows show (the
+      hands make six things today); a longer list scrolls with the wheel
+      (it has no scroll bar until it needs one).
+    - **Locked rows** are disabled plaques with the icon as the silhouette
+      (`starter-missions` T.4), and their tooltip says "Opens with:
+      <mission>". A click on one picks nothing and says the same under the
+      crosshair. A recipe short of something keeps its plaque and dims its
+      icon, as the drop-down did.
+    - **Under the list**, the chosen recipe's row: the wells of what it takes
+      (lit or dark against what is carried), an arrow, the result, and the
+      CRAFT plaque, which counts a running job up as before. Nothing is
+      chosen when the pack first opens: the wells stand empty and CRAFT is
+      disabled until a row is clicked.
+    - **Whole pixels.** Every size above is a whole number of native pixels,
+      so at the integer UI scale every 9-slice corner and every icon is drawn
+      at a whole number of screen pixels (no fractional scaling, the seam the
+      mission tree had). The drop-down's 12 px icons, a 16 px icon squeezed,
+      go with it.
+    - **Fits.** 464 x 200 at UI scale 1 (1280 x 720) leaves the tab strip
+      and the hotbar clear; at 2880 x 1800 (scale 4) it is 1856 x 800.
+    - **The bot** picks a recipe by clicking its row, where it opened the
+      drop-down and clicked an option.
+    - Sketch, native px (the rock's 14 px rim round it):
+
+```text
+     [ PACK ]                          [ CRAFT ]
+ +------------------------------------------------------------+
+ | [][][][][][][][][][]   |  [ic PLANKS               X4]      |
+ | [][][][][][][][][][]   |  [ic ROPE                   ]      |
+ | [][][][][][][][][][]   |  [ic WORKBENCH              ]      |
+ |                        |  [ic STONE AXE              ]      |
+ |                        |  [ic TORCH                X2]      |
+ | HOTBAR                 |  [ic CAMPFIRE               ]      |
+ | [][][][][][][][][][]   |  [n][n][n] -> [r]     [CRAFT]      |
+ +------------------------------------------------------------+
+   240 px                 16  180 px
+```
+
 ## Risks
 
 - **A new world could stall** if the first log is hard to get. Decision 3 and
