@@ -77,6 +77,31 @@ fn mesh(positions: Vec<Vec3>, indices: Vec<u32>) -> Mesh {
     mesh
 }
 
+/// A piece of a torus round +y: `major` to the middle of the tube, `minor`
+/// round, over `arc` radians from +x, in `along` x `round` quads (M34's
+/// pitched seam on the tube).
+fn torus_arc(major: f32, minor: f32, arc: f32, along: u32, round: u32) -> Mesh {
+    let mut positions = Vec::new();
+    for i in 0..=along {
+        let a = arc * i as f32 / along as f32;
+        let (sa, ca) = a.sin_cos();
+        for j in 0..round {
+            let t = std::f32::consts::TAU * j as f32 / round as f32;
+            let r = major + minor * t.cos();
+            positions.push(Vec3::new(r * ca, minor * t.sin(), -r * sa));
+        }
+    }
+    let mut indices = Vec::new();
+    for i in 0..along {
+        for j in 0..round {
+            let k = |i: u32, j: u32| i * round + j % round;
+            let (a, b, c, d) = (k(i, j), k(i + 1, j), k(i + 1, j + 1), k(i, j + 1));
+            indices.extend([a, c, b, a, d, c]);
+        }
+    }
+    mesh(positions, indices)
+}
+
 fn paint(world: &mut World, color: Color, double: bool) -> Handle<StandardMaterial> {
     world
         .resource_mut::<Assets<StandardMaterial>>()
@@ -133,6 +158,77 @@ impl Builder<'_> {
             Cuboid::from_size(size).into(),
             paint,
             Transform::from_translation(at),
+        );
+    }
+
+    /// M34's person (`river-craft`): blocky, coloured like a villager, as
+    /// the figure aboard (shown from the chase view). `eye` is the seat's
+    /// eye, the middle of the head; the figure stands on its feet under it.
+    /// Returns the figure, for a pose.
+    fn person(&mut self, parent: Entity, eye: [f32; 3], shirt: Color) -> Entity {
+        let eye = Vec3::from(eye);
+        let at = self.pivot(parent, Moving::Crew, Transform::from_translation(eye));
+        let figure = self
+            .world
+            .spawn((Transform::IDENTITY, Visibility::Inherited))
+            .id();
+        self.world.entity_mut(at).add_child(figure);
+        let legs = paint(self.world, Color::srgb_u8(0x73, 0x70, 0x5f), false);
+        let body = paint(self.world, shirt, false);
+        let head = paint(self.world, Color::srgb_u8(0xbb, 0x9c, 0x6e), false);
+        let hat = paint(self.world, Color::srgb_u8(0x87, 0x73, 0x4a), false);
+        // The mockup's heights over the feet, less the head's 1.47.
+        self.cuboid(
+            figure,
+            Vec3::new(0.34, 0.7, 0.24),
+            Vec3::Y * (0.35 - 1.47),
+            &legs,
+        );
+        self.cuboid(
+            figure,
+            Vec3::new(0.44, 0.62, 0.28),
+            Vec3::Y * (1.0 - 1.47),
+            &body,
+        );
+        self.cuboid(figure, Vec3::splat(0.28), Vec3::ZERO, &head);
+        self.cuboid(
+            figure,
+            Vec3::new(0.36, 0.08, 0.36),
+            Vec3::Y * (1.64 - 1.47),
+            &hat,
+        );
+        figure
+    }
+
+    /// M34's lantern (`river-craft`): an iron cage top and bottom round
+    /// dark glass, scaled; the glass glows while the dusk lamps burn.
+    fn lantern(&mut self, parent: Entity, at: Vec3, scale: f32) {
+        let iron = paint(self.world, Color::srgb_u8(0x4a, 0x4d, 0x52), false);
+        let glass = paint(self.world, Color::srgb_u8(0x3a, 0x32, 0x26), false);
+        let s = scale;
+        for y in [0.17, -0.17] {
+            self.cuboid(
+                parent,
+                Vec3::new(0.26 * s, 0.05 * s, 0.26 * s),
+                at + Vec3::Y * y * s,
+                &iron,
+            );
+        }
+        self.cuboid(parent, Vec3::new(0.2 * s, 0.3 * s, 0.2 * s), at, &glass);
+        let warm = self
+            .world
+            .resource_mut::<Assets<StandardMaterial>>()
+            .add(StandardMaterial {
+                base_color: Color::srgb(1.0, 0.8, 0.5),
+                emissive: LinearRgba::rgb(4.0, 2.4, 1.0),
+                ..default()
+            });
+        let flame = self.pivot(parent, Moving::Flame, Transform::from_translation(at));
+        self.cuboid(
+            flame,
+            Vec3::new(0.205 * s, 0.305 * s, 0.205 * s),
+            Vec3::ZERO,
+            &warm,
         );
     }
 
@@ -276,6 +372,135 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
                 );
             }
             b.crew(entity, s.seat.eye, &crew);
+        }
+        Kind::Tube => {
+            // M34's inner tube (`river-craft`, the Tube tab; `small-boats`):
+            // a felted-wool ring sealed with pine pitch, 0.52 m to the middle
+            // of the tube and 0.22 m thick, a darker pitched seam over a
+            // quarter of it, and a lantern on a short pole tied to the ring.
+            // Colours are the mockup's tiles under its tints, as it draws
+            // them.
+            let ring = paint(b.world, Color::srgb_u8(0x66, 0x51, 0x33), false);
+            let seam = paint(b.world, Color::srgb_u8(0x4a, 0x3b, 0x26), false);
+            b.piece(
+                entity,
+                Torus::new(0.52 - 0.22, 0.52 + 0.22)
+                    .mesh()
+                    .minor_resolution(8)
+                    .major_resolution(14)
+                    .into(),
+                &ring,
+                Transform::from_xyz(0.0, 0.05, 0.0),
+            );
+            b.piece(
+                entity,
+                torus_arc(0.52, 0.225, std::f32::consts::PI * 0.25, 4, 4),
+                &seam,
+                Transform::from_xyz(0.0, 0.05, 0.0),
+            );
+            let wood = paint(b.world, Color::srgb_u8(0x6e, 0x4f, 0x30), false);
+            b.cuboid(
+                entity,
+                Vec3::new(0.05, 0.7, 0.05),
+                Vec3::new(0.0, 0.4, 0.55),
+                &wood,
+            );
+            b.lantern(entity, Vec3::new(0.0, 0.82, 0.55), 0.55);
+            // Its paddler sits low in the ring, leaning back, arms out over it.
+            let figure = b.person(
+                entity,
+                craft.loon_spec().seat.eye,
+                Color::srgb_u8(0x6b, 0x87, 0x66),
+            );
+            b.world
+                .entity_mut(figure)
+                .insert(Transform::from_rotation(Quat::from_rotation_x(0.35)));
+            let sleeve = paint(b.world, Color::srgb_u8(0x6b, 0x87, 0x66), false);
+            let skin = paint(b.world, Color::srgb_u8(0xbb, 0x9c, 0x6e), false);
+            for side in [-1.0_f32, 1.0] {
+                b.cuboid(
+                    figure,
+                    Vec3::new(0.55, 0.12, 0.12),
+                    Vec3::new(side * 0.54, -0.43, 0.0),
+                    &sleeve,
+                );
+                b.cuboid(
+                    figure,
+                    Vec3::new(0.13, 0.1, 0.13),
+                    Vec3::new(side * 0.84, -0.43, 0.0),
+                    &skin,
+                );
+            }
+        }
+        Kind::Raft => {
+            // M34's raft (`river-craft`, the Raft tab; `small-boats`): five
+            // logs 4.4 m long and 0.25 m round (six-sided, bark round and
+            // rings on the ends) side by side, three planks across them, a
+            // crate lashed aft of the bow, a lantern on a post at the bow's
+            // corner, and the pole it is worked with.
+            let s = *craft.loon_spec();
+            let bark = paint(b.world, Color::srgb_u8(0x6b, 0x4a, 0x2c), false);
+            let rings = paint(b.world, Color::srgb_u8(0xc8, 0xa0, 0x6a), false);
+            let planks = paint(b.world, Color::srgb_u8(0xa5, 0x7a, 0x48), false);
+            let dark_planks = paint(b.world, Color::srgb_u8(0x6e, 0x4f, 0x30), false);
+            let crate_wood = paint(b.world, Color::srgb_u8(0x9c, 0x74, 0x44), false);
+            const LOG_M: f32 = 4.4;
+            const LOG_R: f32 = 0.25;
+            for i in 0..5 {
+                let x = -0.96 + i as f32 * 0.48;
+                let along = Quat::from_rotation_x(FRAC_PI_2);
+                b.piece(
+                    entity,
+                    Cylinder::new(LOG_R, LOG_M).mesh().resolution(6).into(),
+                    &bark,
+                    Transform::from_xyz(x, -0.04, 0.0).with_rotation(along),
+                );
+                for end in [-1.0_f32, 1.0] {
+                    b.piece(
+                        entity,
+                        RegularPolygon::new(LOG_R * 0.98, 6).into(),
+                        &rings,
+                        Transform::from_xyz(x, -0.04, end * (LOG_M / 2.0 + 0.002)).with_rotation(
+                            Quat::from_rotation_y(if end > 0.0 {
+                                0.0
+                            } else {
+                                std::f32::consts::PI
+                            }) * Quat::from_rotation_z(FRAC_PI_2),
+                        ),
+                    );
+                }
+            }
+            for z in [-1.5_f32, 0.0, 1.5] {
+                b.cuboid(
+                    entity,
+                    Vec3::new(2.5, 0.08, 0.3),
+                    Vec3::new(0.0, 0.24, z),
+                    &planks,
+                );
+            }
+            b.cuboid(
+                entity,
+                Vec3::new(0.6, 0.5, 0.7),
+                Vec3::new(0.5, 0.53, -1.2),
+                &crate_wood,
+            );
+            b.cuboid(
+                entity,
+                Vec3::new(0.1, 1.1, 0.1),
+                Vec3::new(-0.95, 0.8, -1.95),
+                &dark_planks,
+            );
+            b.lantern(entity, Vec3::new(-0.95, 1.45, -1.95), 0.9);
+            // The pole: M34's, 4.6 m, held a third of the way down; it works
+            // where the stroke puts it.
+            let pole = b.pivot(entity, Moving::Paddle, Transform::IDENTITY);
+            b.cuboid(pole, Vec3::new(0.07, 4.6, 0.07), Vec3::Y * 0.35, &planks);
+            let _ = s;
+            b.person(
+                entity,
+                craft.loon_spec().seat.eye,
+                Color::srgb_u8(0x8f, 0x7d, 0x4d),
+            );
         }
         Kind::Cog => {
             // The harbour's ship, as its piece is cut (`sail-the-cog` step

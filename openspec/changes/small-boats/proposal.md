@@ -32,8 +32,7 @@ What the game has today, checked on `main` at `d1191ded`:
 
    All three are paddled with the Loon's stroke, on hulls of their own.
 2. **Recipes:**
-   - INNER TUBE by hand;
-   - RAFT and ROWBOAT at the workbench.
+   - INNER TUBE, RAFT and ROWBOAT, all at the workbench.
 
    Each gives a boat as a good in the slots.
 3. **Launching and taking up.** Holding a boat good, the place button on water

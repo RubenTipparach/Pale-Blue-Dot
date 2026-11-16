@@ -193,5 +193,31 @@
             inputs: [("iron-ingot", 3), ("planks", 2)],
             outputs: [("tool:iron-axe", 1)],
         ),
+        // ---- small-boats design 3: the boats, up to a small rowboat. Each
+        // gives its boat as a good, launched on water from the hotbar.
+        (
+            code: "inner-tube",
+            name: "INNER TUBE",
+            station: "workbench",
+            secs: 4.0,
+            inputs: [("fibre", 8), ("rope", 2)],
+            outputs: [("inner-tube", 1)],
+        ),
+        (
+            code: "raft",
+            name: "RAFT",
+            station: "workbench",
+            secs: 6.0,
+            inputs: [("log", 6), ("rope", 4)],
+            outputs: [("raft", 1)],
+        ),
+        (
+            code: "rowboat",
+            name: "ROWBOAT",
+            station: "workbench",
+            secs: 10.0,
+            inputs: [("planks", 16), ("rope", 2)],
+            outputs: [("rowboat", 1)],
+        ),
     ],
 )

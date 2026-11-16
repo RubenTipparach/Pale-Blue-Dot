@@ -192,7 +192,7 @@ pub fn material_of(code: u8) -> Option<Material> {
     })
 }
 
-fn stack_text(stack: Option<Stack>) -> String {
+pub fn stack_text(stack: Option<Stack>) -> String {
     match stack {
         None => "-".into(),
         Some(Stack {
@@ -216,7 +216,7 @@ fn stack_text(stack: Option<Stack>) -> String {
     }
 }
 
-fn stack_of(text: &str) -> Option<Option<Stack>> {
+pub fn stack_of(text: &str) -> Option<Option<Stack>> {
     if text == "-" {
         return Some(None);
     }

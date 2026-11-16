@@ -43,6 +43,7 @@ pub fn show(
     vehicles: Query<&Vehicle>,
     mut text: Query<(&mut Text, &mut Visibility), With<VehicleText>>,
     binds: Option<Res<crate::controls::KeyBinds>>,
+    menu: Option<Res<crate::controls::MenuOpen>>,
 ) {
     let none = crate::controls::KeyBinds::default();
     let binds = binds.as_deref().unwrap_or(&none);
@@ -54,7 +55,10 @@ pub fn show(
         .and_then(|e| vehicles.get(e).ok())
         .map(|vehicle| panel(vehicle, view.seat, binds))
         .unwrap_or_default();
-    *visibility = if line.is_empty() {
+    // A menu aboard (the pack, with a raft's hold) stands over the
+    // instruments, which would draw through it.
+    let menu = menu.is_some_and(|m| m.0);
+    *visibility = if line.is_empty() || menu {
         Visibility::Hidden
     } else {
         Visibility::Inherited
@@ -138,6 +142,8 @@ fn panel(vehicle: &Vehicle, seat: bool, binds: &crate::controls::KeyBinds) -> St
                 "recovering"
             } else if craft.kind == Kind::Rowboat {
                 "oars resting"
+            } else if craft.kind == Kind::Tube {
+                "hands resting"
             } else {
                 "paddle resting"
             };

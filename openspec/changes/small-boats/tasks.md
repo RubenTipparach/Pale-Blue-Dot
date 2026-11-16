@@ -5,13 +5,16 @@ scope (they need a dock).
 
 ## 1. Craft (`pbd-core`)
 
-- [ ] 1.1 `Kind::Tube` and `Kind::Raft` (keys `tube`, `raft`), each with its own `LoonSpec` (`tube()`, `raft()`) and hull, stepped by the Loon's model; `vehicles.ron` regenerated. Verify: core tests that each floats upright at rest with its paddler, deck clear, and moves ahead on a forward stroke.
-- [ ] 1.2 `VehicleRecord.made`, written only when set. Verify: a record round trip; an old record writes byte for byte as before.
+- [x] 1.1 `Kind::Tube` and `Kind::Raft` (keys `tube`, `raft`), each with its own `LoonSpec` (`tube()`, `raft()`) and hull, stepped by the Loon's model; `vehicles.ron` regenerated. Verify: core tests that each floats upright at rest with its paddler, deck clear, and moves ahead on a forward stroke.
+- [x] 1.2 `VehicleRecord.made`, written only when set. Verify: a record round trip; an old record writes byte for byte as before.
+
+- [x] 1.3 Rivers and lakes float a craft on their own surface, with the slope's current (design 2b). Verify: the trace on a sea berth reads "sea" at the drawn sheet; a capture on a river.
+- [x] 1.4 The sea's reach counts the tide; new craft are made on the tide (design 2c). Verify: `every_boat_floats_on_the_tide` (fails without the fix); the new world's Loon captured dry.
 
 ## 2. Recipes and goods
 
-- [ ] 2.1 Goods `inner-tube`, `raft`, `rowboat`, appended, stack 1, 16 px icons with provenance. Verify: the goods table test.
-- [ ] 2.2 Recipes INNER TUBE (hand), RAFT and ROWBOAT (workbench), in `recipes.ron` and the code default. Verify: the recipe data test.
+- [x] 2.1 Goods `inner-tube`, `raft`, `rowboat`, appended, stack 1, 16 px icons with provenance. Verify: the goods table test.
+- [x] 2.2 Recipes INNER TUBE, RAFT and ROWBOAT at the workbench (the tube moved off the hands: the pack's list holds six and the campfire is the sixth), in `recipes.ron` and the code default. Verify: the recipe data test.
 
 ## 3. Launch and take up (`pbd-app`)
 

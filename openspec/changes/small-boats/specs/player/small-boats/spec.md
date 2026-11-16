@@ -9,13 +9,13 @@ from a paddled boat.
 
 ### Requirement: Boats up to a small rowboat are crafted
 
-The recipe table SHALL hold an inner tube made by hand, and a raft and a
-rowboat made at the workbench. Each SHALL give its boat as a good, one to a
+The recipe table SHALL hold an inner tube, a raft and a rowboat, each made
+at the workbench. Each SHALL give its boat as a good, one to a
 slot.
 
 #### Scenario: Making an inner tube
 
-- **WHEN** a player with eight fibre and two rope crafts INNER TUBE by hand
+- **WHEN** a player with eight fibre and two rope crafts INNER TUBE at a workbench
 - **THEN** the fibre and rope are taken and an inner tube lands in the slots
 
 ### Requirement: The tube and the raft float upright and paddle

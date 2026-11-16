@@ -434,12 +434,16 @@ impl LocalSea {
             + tide_m(p, self.tide)
     }
 
-    /// The highest the surface can stand above the mean here, m.
+    /// The highest the surface can stand above the mean here, m: every
+    /// wave at its crest, on the tide at its highest. (The tide was left out
+    /// until `small-boats`: at high water every hull cell more than the waves'
+    /// reach over the mean was counted dry, and boats sank to the tide.)
     pub fn reach(&self) -> f32 {
         self.components[..self.count]
             .iter()
             .map(|c| c.amplitude)
-            .sum()
+            .sum::<f32>()
+            + tide_high_m(self.tide.w.max(0.0))
     }
 }
 

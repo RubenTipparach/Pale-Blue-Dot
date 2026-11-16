@@ -181,6 +181,7 @@ fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
                         anchored: true,
                     });
                 }
+                on_the_tide(&mut craft, sea.tide);
                 crafts.push(craft);
             }
         }
@@ -266,6 +267,23 @@ impl Berths {
         };
         Self([(Kind::Tern, tern.map(boat)), (Kind::Loon, loon.map(boat))])
     }
+}
+
+/// The water a new world's Loon would be berthed in round `up`, body-local.
+#[cfg(test)]
+pub(crate) fn berth_near(sea: &Sea, up: Vec3) -> Option<DVec3> {
+    Berths::find(sea, up).0[1].1.map(|b| b.position)
+}
+
+/// Open water at least `apart_m` from `from` and `depth_m` deep, nearest
+/// first, body-local on the sea's surface: where a capture script launches
+/// a made boat (`small-boats`), clear of the boats already there.
+pub(crate) fn open_water_near(sea: &Sea, from: Vec3, apart_m: f32, depth_m: f32) -> Option<DVec3> {
+    let radius = sea.radius;
+    rings(radius, from, |direction, distance| {
+        distance >= apart_m && radius - floor(direction) >= depth_m
+    })
+    .map(|(direction, _)| direction.as_dvec3() * radius as f64)
 }
 
 /// Whether `direction` stands on a level plain: the ground there is over the
@@ -376,6 +394,19 @@ fn level_on(direction: Vec3, ground: f32, floor: impl Fn(Vec3) -> f32) -> bool {
 /// The rode an anchor pays out in `depth` metres of water, m.
 pub fn rode(depth: f64) -> f64 {
     depth * RODE_PER_DEPTH + RODE_MARGIN_M
+}
+
+/// Put a new craft, made on the sea's mean surface, on the water as it
+/// stands now: the tide's height over the mean there (`small-boats`). A boat
+/// put on the mean under a high tide had the water over its gunwale before
+/// it could rise, and swamped. Only for a craft being made: one restored
+/// from a save is where it was left.
+pub(crate) fn on_the_tide(craft: &mut Craft, tide: Vec4) {
+    let at = craft.reference_position();
+    let up = at.normalize_or(DVec3::Y);
+    let tide = f64::from(pbd_core::sea::tide_m(up.as_vec3(), tide));
+    let orientation = craft.body.orientation;
+    craft.set_reference_pose(at + up * tide, orientation);
 }
 
 /// The pose standing on `up` with its bow (-z) along `forward`.

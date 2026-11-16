@@ -89,14 +89,15 @@ pub struct PickerKey {
     pub let_go: bool,
 }
 
-/// Read `G` into [`PickerKey`]. Only on foot: aboard or flying, G does
-/// nothing, and a menu forgets the key so Escape closes the picker without
+/// Read `G` into [`PickerKey`]. Only on foot or paddling a small boat:
+/// aboard anything else or flying, G does nothing, and a menu forgets the key so Escape closes the picker without
 /// equipping anything.
 pub fn read_picker_key(
     keys: Option<Res<ButtonInput<KeyCode>>>,
     menu: Option<Res<MenuOpen>>,
     walking: Option<Res<crate::walking::WalkingReadout>>,
     aboard: Option<Res<crate::vehicles::Aboard>>,
+    vehicles: Query<&crate::vehicles::Vehicle>,
     mut key: ResMut<PickerKey>,
 ) {
     key.let_go = false;
@@ -107,8 +108,13 @@ pub fn read_picker_key(
         *key = PickerKey::default();
         return;
     }
-    let seated = aboard.is_some_and(|a| a.0.is_some());
-    let on_foot = walking.is_some_and(|w| w.active) && !seated;
+    let seat = aboard.and_then(|a| a.0);
+    // A paddled boat's paddler takes up tools too: the rod, to fish
+    // (`small-boats` design 6).
+    let paddling = seat
+        .and_then(|e| vehicles.get(e).ok())
+        .is_some_and(|v| v.craft.kind.paddled());
+    let on_foot = (walking.is_some_and(|w| w.active) && seat.is_none()) || paddling;
     if keys.just_pressed(KeyCode::KeyG) && on_foot {
         key.holding = true;
     }
@@ -333,13 +339,15 @@ pub enum Live {
 
 impl Live {
     /// Every context, for asking whether two groups can be live together.
-    pub const ALL: [Live; 6] = [
+    pub const ALL: [Live; 8] = [
         Live::OnFoot,
         Live::Flying,
         Live::Aboard(Kind::Tern),
         Live::Aboard(Kind::Loon),
         Live::Aboard(Kind::Rowboat),
         Live::Aboard(Kind::Cog),
+        Live::Aboard(Kind::Tube),
+        Live::Aboard(Kind::Raft),
     ];
 }
 
@@ -353,6 +361,8 @@ pub enum When {
     /// V, T).
     OnFootOrAboard,
     Aboard(Kind),
+    /// Aboard a paddled boat, whose paddler can fish (`small-boats`).
+    Paddled,
 }
 
 impl When {
@@ -362,6 +372,7 @@ impl When {
             (When::OnFoot, Live::OnFoot) | (When::Flying, Live::Flying) => true,
             (When::OnFootOrAboard, Live::OnFoot | Live::Aboard(_)) => true,
             (When::Aboard(kind), Live::Aboard(now)) => kind == now,
+            (When::Paddled, Live::Aboard(now)) => now.paddled(),
             _ => false,
         }
     }
@@ -508,6 +519,33 @@ const ROWBOAT: [Binding; 4] = [
     row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
 ];
 
+const TUBE: [Binding; 3] = [
+    row(&W_S, "/", "paddle ahead or back"),
+    row(&A_D, "/", "steer"),
+    row(&Q_E, "/", "drag a hand as a rudder"),
+];
+
+const RAFT: [Binding; 3] = [
+    row(&W_S, "/", "paddle ahead or back"),
+    row(&A_D, "/", "steer"),
+    row(&Q_E, "/", "blade as a rudder"),
+];
+
+/// The rod from a paddled boat's seat (`small-boats` design 6).
+const AFLOAT: [Binding; 3] = [
+    row(
+        &[Key::Mouse(MouseButton::Left)],
+        " ",
+        "with the rod: hold to cast, press to strike, hold to reel",
+    ),
+    row(&[Key::Mouse(MouseButton::Right)], " ", "wind the line in"),
+    row(
+        &[Key::Board(KeyCode::KeyG)],
+        " ",
+        "hold for the tools; the wheel picks one",
+    ),
+];
+
 const COG: [Binding; 3] = [
     row(&A_D, "/", "tiller"),
     row(&W_S, "/", "brace the yard round"),
@@ -549,7 +587,7 @@ const fn group(heading: &'static str, tab: Tab, when: When, rows: &'static [Bind
 /// Every control in the game, once. (The Kestrel's group, KESTREL on the
 /// Flying sub-tab, went with it in `retire-kestrel`; a saved rebind of one of
 /// its slots is kept in the file and read by nothing.)
-pub static BINDINGS: [Group; 11] = [
+pub static BINDINGS: [Group; 14] = [
     group("ON FOOT", Tab::OnFoot, When::OnFoot, &ON_FOOT),
     group("INTERACT", Tab::Hands, When::OnFootOrAboard, &INTERACT),
     group("HANDS", Tab::Hands, When::OnFoot, &HANDS),
@@ -564,6 +602,9 @@ pub static BINDINGS: [Group; 11] = [
         &ROWBOAT,
     ),
     group("COG", Tab::Vehicles, When::Aboard(Kind::Cog), &COG),
+    group("INNER TUBE", Tab::Vehicles, When::Aboard(Kind::Tube), &TUBE),
+    group("RAFT", Tab::Vehicles, When::Aboard(Kind::Raft), &RAFT),
+    group("FISHING AFLOAT", Tab::Vehicles, When::Paddled, &AFLOAT),
     group("WORLD", Tab::Menus, When::Always, &WORLD),
     group("SCREEN", Tab::Menus, When::Always, &SCREEN),
 ];
