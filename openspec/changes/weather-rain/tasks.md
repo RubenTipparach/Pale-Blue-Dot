@@ -78,4 +78,6 @@
       valley in a storm (`docs/screenshots/height-fog/`). The falloff went
       from 120 m to 250 m on the first look: at 120 m the horizon was a
       third as murky as the volume's.
-- [ ] 7.4 Its cost on `storm`, RAIN SHADOW off, fog off against on.
+- [ ] 7.4 Its cost on `storm`, RAIN SHADOW off, fog off against on. Not
+      measured yet: the sitting is `reflection-quality` 3.2's, which waits
+      for a quiet machine.
