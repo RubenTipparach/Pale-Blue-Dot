@@ -946,3 +946,17 @@ the one speed until the owner approves.
 These are now the mockup's defaults. The other sliders (mist amount, fall droplets, wall blend, bubbles, teal churn) stay at 1.00 / 1.20 until the owner says otherwise.
 
 The owner's tuning applies under the proposed mist rule too ("Mist on every fall" above): the New tab opens on the proposed rule, with a Mist rule switch back to the game's, and on Fall speed-up 1.00 (g = 3 m/s^2, at most 8 m/s); both are recommendations, not the owner's choices, until the owner reviews the mockup.
+
+#### Mockup additions, 2026-11-16 (waterfall-mist, New tab; not in the game)
+
+- **Foot ripples** (owner: "is there some rippling you can do here too? to show water being pushed outward"): rings run
+  out from the falling column across the pool, 0.9 m apart at 1.3 m/s, dying over 2 + 0.35 h metres; they tilt the
+  water's normal and whiten faintly on their crests near the column. Slider 0-3.
+- **Pool flow away from the fall** (owner: "set some flow direction away from the source too (add toggle for flow
+  arrows)"): the pool's waves and foam drift outward, 0.5 + 0.07 h m/s at the column, slowing over 2.5 + 0.3 h
+  metres, by the two-phase flow-map method (two copies of the waves, each dragged 2 s and reset, cross-faded). A Flow
+  arrows checkbox draws the field.
+- **Glassy lip** (owner, with a photo of travertine falls: "check out the transition between smooth water and water
+  fall, can we do something like that?"): the top's small waves die away over the last 2 m before the lip and the
+  first ~0.5 m of the drop stays smooth and green, then thin strands appear and fill in to the full froth by 2.5 m
+  down. The game's lip-whitening is off under it. A Lip switch (Froth / Glassy) compares it with the game's look.

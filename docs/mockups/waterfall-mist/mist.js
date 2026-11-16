@@ -362,7 +362,7 @@ function waterMaterial(U, vertexShader) {
       uM: {value: new THREE.Matrix3()}, uRp: {value: 2400}, uTime: {value: 0}, uScene: {value: null}, uRes: {value: new THREE.Vector2(1, 1)},
       uStretch: {value: 1}, uSpeed: {value: 1}, uAccel: {value: 0}, uLip: {value: 0}, uFallFrame: {value: 0},
       uOpen: {value: new THREE.Vector3(1, 1, 1)}, uNight: {value: 0}, uRain: {value: 0}, uSunI: {value: 1},
-      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1}, uRip: {value: 0}, uOut: {value: 0},
+      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1}, uRip: {value: 0}, uOut: {value: 0}, uGlass: {value: 0},
       uG: {value: 0}, uVmax: {value: 8}}, U),
     side: THREE.DoubleSide,
     vertexShader: `attribute vec3 aRest; attribute vec3 aFaceN; attribute float aKind; attribute float aFroth; attribute vec3 aPath;
@@ -377,7 +377,7 @@ function waterMaterial(U, vertexShader) {
       uniform vec3 uOpen; uniform float uNight; uniform float uRain; uniform float uSunI;
       varying vec3 vRest; varying vec3 vFaceN; varying float vKind; varying float vFroth; varying vec3 vPath; varying float vTop;
       varying vec3 vFlowN; varying vec3 vFlow; varying float vSky; varying vec3 vP; varying float vDepth;
-      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt; uniform float uRip; uniform float uOut;
+      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt; uniform float uRip; uniform float uOut; uniform float uGlass;
       uniform float uG; uniform float uVmax;
       ${NOISE_GLSL}
       ${LIGHT_GLSL}
@@ -497,6 +497,16 @@ function waterMaterial(U, vertexShader) {
             ripFoam = max(ripFoam, smoothstep(0.55, 0.95, sin(ph))*env*exp(-x/1.2)*0.6);
           }
         }
+        // Glassy lip (New tab, mockup; owner, 2026-11-16, a photo of travertine falls: "check out the transition
+        // between smooth water and water fall, can we do something like that?"): the water speeds up and its
+        // surface pulls smooth over the last 2 m before the lip, so the top goes glassy (its small waves die away
+        // and the sky's reflection runs unbroken), and stays glassy over the first half-metre of the drop.
+        float glass = 0.0;
+        if (uGlass > 0.5) {
+          if (vKind < 0.5 && vPath.z > -50.0 && vPath.z <= 0.0) glass = smoothstep(-2.0, -0.3, vPath.z);
+          if (fallFace) glass = 1.0 - smoothstep(0.15, 0.9, vPath.z);
+          gradient *= 1.0 - 0.9*glass;
+        }
         float raw_slope = length(gradient);
         vec3 capped = gradient*min(1.0, SLOPE_MAX/max(raw_slope, 1e-6));
         vec3 normal = normalize(radial - capped*WAVE_STEEP);
@@ -534,6 +544,9 @@ function waterMaterial(U, vertexShader) {
         vec3 albedo = mix(SHALLOW, DEEP, smoothstep(0.0, SHALLOW_DEPTH, depth_under));
         vec3 transmitted = mix(albedo*water_lit, scene, exp(-(ABSORB + TURBID)*path_len));
         transmitted = mix(transmitted, AER_COL*water_lit, clamp(aer*0.85*uAerAmt, 0.0, 1.0));
+        // Glassy lip: the smooth sheet over the edge is a thick body of water, so it shows the water's own green,
+        // not the wall behind it.
+        if (fallFace && glass > 0.0) transmitted = mix(transmitted, mix(SHALLOW, DEEP, 0.35)*water_lit*1.3, 0.7*glass);
         float crest = smoothstep(0.35, 0.60, height)*0.55;
         float slope = smoothstep(0.50, 1.20, raw_slope)*0.26;
         float foam = clamp(max(crest, slope)*FOAM_INT + ripFoam, 0.0, 1.0);
@@ -554,12 +567,23 @@ function waterMaterial(U, vertexShader) {
           vec3 streak_p = vec3(along.x*5.0, along.y*0.35, along.z*5.0) + vec3(0.0, uTime*uSpeed*0.6, 0.0);
           float n = gnoise3(streak_p)*0.5 + gnoise3(streak_p*2.3)*0.3 + 0.5;
           float froth = smoothstep(0.42, 0.7, n)*0.75 + 0.15;
+          if (uGlass > 0.5) {
+            // Glassy lip: no whitening on the top; on the face, thin strands first (narrow, long streaks with clear
+            // water between), filling in to the full froth over the first 2.5 m down.
+            if (!fallFace) froth = 0.0;
+            else {
+              vec3 sp = vec3(along.x*16.0, along.y*0.12, along.z*16.0) + vec3(0.0, uTime*uSpeed*0.9, 0.0);
+              float strands = smoothstep(0.55, 0.8, gnoise3(sp)*0.5 + gnoise3(sp*2.1)*0.25 + 0.5);
+              float s = vPath.z, fill = smoothstep(0.6, 2.5, s);
+              froth = mix(strands*0.85*smoothstep(0.2, 0.7, s), froth, fill);
+            }
+          }
           if (fallFace) {
             float weight = clamp(vFroth, 0.35, 1.0);
-            foam = max(foam, clamp(froth*weight + 0.12, 0.0, 0.92));
+            foam = max(foam, clamp(froth*weight + 0.12*(1.0 - glass), 0.0, 0.92));
           } else {
             // D: the top whitens into the edge over its last 1.5 m.
-            float ramp = smoothstep(-1.5, 0.0, vPath.z)*vFroth*uLip;
+            float ramp = smoothstep(-1.5, 0.0, vPath.z)*vFroth*uLip*(1.0 - uGlass);
             foam = max(foam, clamp((froth + 0.12)*ramp, 0.0, 0.92));
           }
         }
@@ -906,7 +930,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
   const S = {variant: "new", night: false, running: true, gain: 2, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 0,
-    rule: "new", accel: 2, pixel: false, rip: 1, out: 1, arrows: false};
+    rule: "new", accel: 2, pixel: false, rip: 1, out: 1, arrows: false, glass: true};
   // The eye's pool (the cell under it, if it is a basin's), for the view from under the water.
   let eyePool = null;
   function murk(open) {
@@ -936,7 +960,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     leak.visible = v === "today"; front.visible = v !== "today";
     for (const b of bubbles) { b.visible = v === "new"; b.material.uniforms.uAmt.value = S.bubbles; }
     wmat.uniforms.uAer.value = v === "new" ? 1 : 0;
-    wmat.uniforms.uAerAmt.value = S.teal; wmat.uniforms.uRip.value = v === "new" ? S.rip : 0; wmat.uniforms.uOut.value = v === "new" ? S.out : 0;
+    wmat.uniforms.uAerAmt.value = S.teal; wmat.uniforms.uRip.value = v === "new" ? S.rip : 0; wmat.uniforms.uOut.value = v === "new" ? S.out : 0; wmat.uniforms.uGlass.value = v === "new" && S.glass ? 1 : 0;
     if (arrows) arrows.visible = v === "new" && S.arrows;
     wmat.uniforms.uG.value = v === "new" ? ACCEL_G * S.accel : 0; wmat.uniforms.uVmax.value = ACCEL_VMAX;
     front.material.uniforms.uGain.value = S.gain; front.material.uniforms.uLamps.value = v === "new" ? 1 : 0;
