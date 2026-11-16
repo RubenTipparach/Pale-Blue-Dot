@@ -44,6 +44,7 @@ pub fn show(
     mut text: Query<(&mut Text, &mut Visibility), With<VehicleText>>,
     binds: Option<Res<crate::controls::KeyBinds>>,
     menu: Option<Res<crate::controls::MenuOpen>>,
+    debug: Option<Res<crate::controls::DebugOverlay>>,
 ) {
     let none = crate::controls::KeyBinds::default();
     let binds = binds.as_deref().unwrap_or(&none);
@@ -53,7 +54,17 @@ pub fn show(
     let line = aboard
         .0
         .and_then(|e| vehicles.get(e).ok())
-        .map(|vehicle| panel(vehicle, view.seat, binds))
+        .map(|vehicle| {
+            if debug.is_some_and(|d| d.0) {
+                format!(
+                    "{}\n\n{}",
+                    panel(vehicle, binds),
+                    instruments(vehicle, view.seat)
+                )
+            } else {
+                panel(vehicle, binds)
+            }
+        })
         .unwrap_or_default();
     // A menu aboard (the pack, with a raft's hold) stands over the
     // instruments, which would draw through it.
@@ -68,16 +79,75 @@ pub fn show(
     }
 }
 
-/// The instruments and the keys for the craft aboard.
-fn panel(vehicle: &Vehicle, seat: bool, binds: &crate::controls::KeyBinds) -> String {
+/// The key a player has on a slot (`"vehicles:KeyT"`), as its label.
+fn bound(name: &str, default: KeyCode, binds: &crate::controls::KeyBinds) -> &'static str {
+    let key = crate::controls::slots()
+        .find(|s| s.name() == name)
+        .map_or(default, |s| binds.key(&s));
+    crate::controls::key_label(key)
+}
+
+/// Water aboard, kg, over which the panel says to bail.
+const BAIL_KG: f64 = 20.0;
+
+/// What a player reads aboard (owner, 2026-11-16: "please just show simple
+/// raft controls, make it user friendly"): the craft's name, whether it is at
+/// anchor, its keys one to a line off the one bindings table, the anchor and
+/// the camera, and a word to bail only when there is water to bail. The
+/// instruments are a developer's and stand behind F3 with the frame graph
+/// ([`instruments`]).
+fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> String {
     let craft = &vehicle.craft;
     let mut s = String::new();
     let moored = match craft.mooring {
-        Some(m) if m.anchored => "  ANCHORED",
-        Some(_) => "  MOORED",
+        Some(m) if m.anchored => " - at anchor",
+        Some(_) => " - tied up",
         None => "",
     };
     let _ = writeln!(s, "{}{moored}", craft.kind.name().to_uppercase());
+    let bail = craft.bilge_kg > BAIL_KG;
+    for row in crate::controls::rows(&craft.kind.name().to_uppercase(), binds) {
+        // The bail key only while there is water to bail.
+        if row.ends_with("bail") && !bail {
+            continue;
+        }
+        let _ = writeln!(s, "{row}");
+    }
+    let t = bound("vehicles:KeyT", KeyCode::KeyT, binds);
+    let anchor = match craft.mooring {
+        Some(m) if m.anchored => "raise the anchor",
+        Some(_) => "cast off",
+        None => "drop the anchor",
+    };
+    let _ = writeln!(s, "{t}  {anchor}");
+    let _ = write!(
+        s,
+        "{}  step off   {}  camera",
+        crate::controls::key_label(crate::interact::key(binds)),
+        bound("vehicles:KeyV", KeyCode::KeyV, binds)
+    );
+    if bail {
+        let _ = write!(
+            s,
+            "\nWater aboard: bail with {}",
+            bound(
+                &format!(
+                    "{}:KeyB",
+                    craft.kind.name().to_lowercase().replace(' ', "_")
+                ),
+                KeyCode::KeyB,
+                binds
+            )
+        );
+    }
+    s
+}
+
+/// The instruments, behind F3 (`DebugOverlay`): what the panel showed before
+/// it was made simple, kept for whoever tunes a hull.
+fn instruments(vehicle: &Vehicle, seat: bool) -> String {
+    let craft = &vehicle.craft;
+    let mut s = String::new();
     match (&craft.telemetry, &craft.state) {
         (Telemetry::Tern(t), CraftState::Tern(_)) => {
             let sail = match t.sail_state {
@@ -198,30 +268,7 @@ fn panel(vehicle: &Vehicle, seat: bool, binds: &crate::controls::KeyBinds) -> St
         }
         _ => {}
     }
-    if craft.mooring.is_some() {
-        let _ = writeln!(
-            s,
-            "{} to get underway.",
-            if craft.mooring.is_some_and(|m| m.anchored) {
-                "Weigh anchor"
-            } else {
-                "Cast off"
-            }
-        );
-    }
-    // The keys come off the one bindings table, never a copy of it here.
-    let _ = writeln!(
-        s,
-        "{}",
-        crate::controls::line(&craft.kind.name().to_uppercase(), binds)
-    );
-    let _ = write!(
-        s,
-        "{} step off   {}   ({} view)",
-        crate::controls::key_label(crate::interact::key(binds)),
-        crate::controls::line("VEHICLES", binds),
-        if seat { "seat" } else { "chase" }
-    );
+    let _ = write!(s, "({} view)", if seat { "seat" } else { "chase" });
     s
 }
 
@@ -238,9 +285,7 @@ fn side(angle: f64) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pbd_core::vehicle::{
-        Craft, Hulls, Kind, LoonTelemetry, Mooring, TernTelemetry, spec::VehicleSpecs,
-    };
+    use pbd_core::vehicle::{Craft, Hulls, Kind, LoonTelemetry, Mooring, spec::VehicleSpecs};
     use pbd_core::{DQuat, DVec3};
     use std::sync::Arc;
 
@@ -256,64 +301,46 @@ mod tests {
         ))
     }
 
+    /// The panel is the name and plain keys; the bail word only with water
+    /// aboard; the instruments only behind F3.
     #[test]
-    fn sailing_panel_labels_water_ground_wind_side_vmg_and_action() {
-        let mut v = vehicle(Kind::Tern);
-        for (angle, side) in [
-            (60_f64.to_radians(), "STBD"),
-            (-60_f64.to_radians(), "PORT"),
+    fn the_panel_is_simple_and_the_instruments_are_behind_f3() {
+        let mut v = vehicle(Kind::Raft);
+        v.craft.telemetry = Telemetry::Loon(LoonTelemetry {
+            water_speed: 1.0,
+            speed: 2.0,
+            ..default()
+        });
+        let text = panel(&v, &Default::default());
+        for want in [
+            "RAFT",
+            "W/S  pole forward or back",
+            "A/D  turn",
+            "drop the anchor",
+            "step off",
+            "camera",
         ] {
-            v.craft.telemetry = Telemetry::Tern(TernTelemetry {
-                water_speed: 2.0,
-                speed: 3.0,
-                apparent: DVec3::X * 8.0,
-                apparent_angle: angle,
-                upwind: 1.2,
-                hull_speed: 0.75,
-                sail_state: SailState::Stalled,
-                ..default()
-            });
-            let text = panel(&v, false, &Default::default());
-            for value in [
-                "water  2.0 m/s",
-                "ground  3.0 m/s",
-                "hull speed  75%",
-                "apparent wind  8.0 m/s",
-                side,
-                "60 deg",
-                "VMG (ground) +1.2 m/s",
-                "Ease the sheet",
-            ] {
-                assert!(text.contains(value), "missing {value}: {text}");
-            }
+            assert!(text.contains(want), "missing {want}: {text}");
         }
+        for not in ["m/s", "freeboard", "slip", "bail", "deg"] {
+            assert!(!text.contains(not), "{not} in the panel: {text}");
+        }
+        v.craft.bilge_kg = 80.0;
         v.craft.mooring = Some(Mooring {
             at: DVec3::ZERO,
             length: 10.0,
             anchored: true,
         });
-        assert!(panel(&v, false, &Default::default()).contains("Weigh anchor to get underway"));
-    }
-
-    #[test]
-    fn the_paddle_panel_explains_the_active_control_state() {
-        let mut v = vehicle(Kind::Loon);
-        v.craft.telemetry = Telemetry::Loon(LoonTelemetry {
-            rudder_at: Some(DVec3::ZERO),
-            water_speed: 1.0,
-            speed: 2.0,
-            ..default()
-        });
-        let text = panel(&v, false, &Default::default());
-        for value in [
-            "stern rudder",
-            "water  1.0",
-            "ground  2.0",
-            "water slip",
-            "freeboard",
-            "water aboard",
-        ] {
-            assert!(text.contains(value), "missing {value}: {text}");
-        }
+        let text = panel(&v, &Default::default());
+        assert!(
+            text.contains("at anchor") && text.contains("raise the anchor"),
+            "{text}"
+        );
+        assert!(text.contains("Water aboard: bail with B"), "{text}");
+        let deep = instruments(&v, false);
+        assert!(
+            deep.contains("water  1.0") && deep.contains("freeboard"),
+            "{deep}"
+        );
     }
 }

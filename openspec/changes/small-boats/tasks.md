@@ -13,6 +13,8 @@ scope (they need a dock).
 
 - [x] 1.5 The tube and the raft drawn as M34 River Craft's models at its sizes (owner: "you should use the same models from the mockup"). Verify: captures beside the mockup's.
 
+- [x] 1.6 The tube's rider lies back with two-part arms; every boat's panel is its name and plain keys, the instruments behind F3 (design 2a-1). Verify: `the_panel_is_simple_and_the_instruments_are_behind_f3`; captures.
+
 ## 2. Recipes and goods
 
 - [x] 2.1 Goods `inner-tube`, `raft`, `rowboat`, appended, stack 1, 16 px icons with provenance. Verify: the goods table test.

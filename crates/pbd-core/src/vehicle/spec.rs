@@ -620,7 +620,7 @@ impl LoonSpec {
             },
             paddler: Part {
                 mass_kg: 80.0,
-                at: [0.0, -0.1, 0.0],
+                at: [0.0, -0.02, 0.06],
             },
             hull: HullSpec {
                 length_m: 1.48,
@@ -684,8 +684,9 @@ impl LoonSpec {
             heave_damping: 6_000.0,
             angular_damping: 10.0,
             bow: [0.0, 0.2, -0.74],
+            // The rider lies back against the ring: the eye low and aft.
             seat: SeatSpec {
-                eye: [0.0, 0.85, 0.05],
+                eye: [0.0, 0.5, 0.58],
                 reach_m: 2.6,
                 exit: [0.0, 0.3, 0.0],
             },

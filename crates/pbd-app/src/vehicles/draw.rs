@@ -200,6 +200,27 @@ impl Builder<'_> {
         figure
     }
 
+    /// A limb from joint `a` to joint `b`: a block `size` thick, laid
+    /// along the line between them.
+    fn limb(
+        &mut self,
+        parent: Entity,
+        a: Vec3,
+        b: Vec3,
+        size: Vec2,
+        paint: &Handle<StandardMaterial>,
+    ) {
+        let along = b - a;
+        let length = along.length().max(1e-3);
+        let turn = Quat::from_rotation_arc(Vec3::Y, along / length);
+        self.piece(
+            parent,
+            Cuboid::new(size.x, length, size.y).into(),
+            paint,
+            Transform::from_translation((a + b) / 2.0).with_rotation(turn),
+        );
+    }
+
     /// M34's lantern (`river-craft`): an iron cage top and bottom round
     /// dark glass, scaled; the glass glows while the dusk lamps burn.
     fn lantern(&mut self, parent: Entity, at: Vec3, scale: f32) {
@@ -406,28 +427,52 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
                 &wood,
             );
             b.lantern(entity, Vec3::new(0.0, 0.82, 0.55), 0.55);
-            // Its paddler sits low in the ring, leaning back, arms out over it.
-            let figure = b.person(
-                entity,
-                craft.loon_spec().seat.eye,
-                Color::srgb_u8(0x6b, 0x87, 0x66),
-            );
-            b.world
-                .entity_mut(figure)
-                .insert(Transform::from_rotation(Quat::from_rotation_x(0.35)));
-            let sleeve = paint(b.world, Color::srgb_u8(0x6b, 0x87, 0x66), false);
+            // Its rider lies back in the ring (owner, 2026-11-16: "shouldnt the
+            // dude be laid back"): seat in the water through the hole, back
+            // against the ring's far side, knees over its near side, and each
+            // arm in two parts - the upper arm out to the ring, the forearm
+            // along it (owner: "maybe need 2 joints for the arms").
+            let eye = Vec3::from(craft.loon_spec().seat.eye);
+            let at = b.pivot(entity, Moving::Crew, Transform::from_translation(eye));
+            let shirt = paint(b.world, Color::srgb_u8(0x6b, 0x87, 0x66), false);
+            let trousers = paint(b.world, Color::srgb_u8(0x73, 0x70, 0x5f), false);
             let skin = paint(b.world, Color::srgb_u8(0xbb, 0x9c, 0x6e), false);
+            let hat = paint(b.world, Color::srgb_u8(0x87, 0x73, 0x4a), false);
+            // Joints in the tube's frame (+z aft, the ring's back), then
+            // under the eye's pivot.
+            let hips = Vec3::new(0.0, -0.12, 0.12);
+            let neck = Vec3::new(0.0, 0.3, 0.46);
+            let shoulder = Vec3::new(0.0, 0.26, 0.42);
+            let lp = |p: Vec3| p - eye;
+            b.limb(at, lp(hips), lp(neck), Vec2::new(0.44, 0.26), &shirt);
+            b.cuboid(at, Vec3::splat(0.28), lp(Vec3::new(0.0, 0.48, 0.6)), &skin);
+            b.cuboid(
+                at,
+                Vec3::new(0.36, 0.08, 0.36),
+                lp(Vec3::new(0.0, 0.64, 0.64)),
+                &hat,
+            );
             for side in [-1.0_f32, 1.0] {
-                b.cuboid(
-                    figure,
-                    Vec3::new(0.55, 0.12, 0.12),
-                    Vec3::new(side * 0.54, -0.43, 0.0),
-                    &sleeve,
+                let x = side * 0.12;
+                let knee = Vec3::new(x, 0.32, -0.5);
+                let foot = Vec3::new(x, -0.02, -0.74);
+                b.limb(
+                    at,
+                    lp(hips + Vec3::X * x),
+                    lp(knee),
+                    Vec2::splat(0.16),
+                    &trousers,
                 );
+                b.limb(at, lp(knee), lp(foot), Vec2::splat(0.14), &trousers);
+                let top = shoulder + Vec3::X * side * 0.24;
+                let elbow = Vec3::new(side * 0.6, 0.33, 0.3);
+                let wrist = Vec3::new(side * 0.68, 0.32, -0.08);
+                b.limb(at, lp(top), lp(elbow), Vec2::splat(0.12), &shirt);
+                b.limb(at, lp(elbow), lp(wrist), Vec2::splat(0.11), &shirt);
                 b.cuboid(
-                    figure,
-                    Vec3::new(0.13, 0.1, 0.13),
-                    Vec3::new(side * 0.84, -0.43, 0.0),
+                    at,
+                    Vec3::new(0.12, 0.09, 0.13),
+                    lp(wrist + Vec3::new(0.0, -0.01, -0.08)),
                     &skin,
                 );
             }

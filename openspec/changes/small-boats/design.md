@@ -78,6 +78,39 @@ The raft is heavy because a raft of green logs is.
 `docs/screenshots/small-boats/{raft,tube}-beside-m34.jpg` show each beside
 the mockup's.
 
+## 2a-1. The tube's rider, and the boat panel (owner, 2026-11-16)
+
+**The rider.** The owner, on the first port: "shouldnt the dude be laid
+back, also his arms are in a weird spot, maybe need 2 joints for the arms".
+The rider now lies back in the ring:
+- seat in the water through the hole, back against the ring's far side;
+- knees over its near side, shins hanging over it;
+- each arm in two parts: the upper arm out to the ring, the forearm resting
+  along it to the hand.
+
+The parts are blocks laid joint to joint (`Builder::limb`). The seat's eye
+moves low and aft to the head (0.5 m up, 0.58 m aft). The rider's mass is
+over the hips (0.06 m aft), and the tube leans back about 3.5 degrees with
+them in it.
+
+**The panel.** The owner, on the boat panel: "please just show simple raft
+controls, make it user friendly. I dont know if this text is just debug or
+part of the game". Every boat's panel was instruments, water slip, ground
+drift, strokes a minute and sailing advice, over one long line of keys. It
+is now:
+- the boat's name, with "at anchor" when it is;
+- its keys one to a line, in plain words (`controls.rs`: "pole forward or
+  back", "turn", "steer with the pole"; the Tern's "steer", "pull the sail in
+  or let it out", "lean out left or right");
+- the anchor key, named for what it will do now;
+- step off and camera;
+- "Water aboard: bail with B" only when there is water to bail; the bail key
+  shows only then too.
+
+Every label is read off the bindings, so a rebind shows. The instruments
+moved behind F3 with the frame graph (`controls::DebugOverlay`), for whoever
+tunes a hull.
+
 ## 2b. Rivers and lakes float a boat (found building it)
 
 Craft floated only on the sea: `Surroundings.sea_radius` was the drawn sea

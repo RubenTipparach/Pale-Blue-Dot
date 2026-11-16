@@ -196,6 +196,7 @@ impl Plugin for VehiclePlugin {
                     .run_if(crate::world_open),
             )
             .init_resource::<launch::TakingUp>()
+            .init_resource::<crate::controls::DebugOverlay>()
             .add_systems(
                 Update,
                 launch::launch_and_take_up
