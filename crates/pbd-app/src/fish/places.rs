@@ -2020,7 +2020,7 @@ fn write_mesh(mesh: &mut Mesh, verts: Verts, textured: bool) {
 mod tests {
     use super::*;
 
-    /// Design B17: a floe is laid only where its ice clears the ground at
+    /// Design B18: a floe is laid only where its ice clears the ground at
     /// low water, so none stands on a beach or a terrace; and the floe seal
     /// is drawn on every frame of its slide off, its swim and its climb back,
     /// never moving further in a frame than it could swim.
