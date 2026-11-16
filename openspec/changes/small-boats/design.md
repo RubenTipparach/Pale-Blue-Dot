@@ -131,9 +131,12 @@ button (`button-idle`, the approved stone-and-wood art), 9-sliced to the
 key's name with the name carved in as a stone plaque's label is
 (`ui_kit::key_cap`).
 - **The interact prompt** draws its key this way (it was the oak tooltip).
-- **The boat panel** is now the kit's stone tooltip panel: the boat's name
-  in the title colour, then a row a control, each key its own glyph,
-  followed by what it does.
+- **The boat panel** has no background of its own (owner: "probably leave
+  off the background here, and add drop shadow or outline for text"):
+  - the boat's name in the title colour;
+  - then a row a control, each key its own stone glyph, followed by what it
+    does;
+  - every word outlined in ink, so it reads over water and sand alike.
 - The F3 instruments stay plain text, a developer's.
 
 ## 2b. Rivers and lakes float a boat (found building it)

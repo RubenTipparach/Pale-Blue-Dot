@@ -113,7 +113,7 @@ pub fn show(
         return;
     };
     if panels.is_empty() {
-        spawn_panel(&mut commands, &kit);
+        spawn_panel(&mut commands);
         *shown = None;
         return;
     }
@@ -142,17 +142,16 @@ pub fn show(
     }
 }
 
-/// The stone panel, empty and hidden, bottom left.
-fn spawn_panel(commands: &mut Commands, kit: &crate::ui_kit::UiKit) {
-    use crate::ui_kit::{KitPiece, Set};
+/// The panel, empty and hidden, bottom left: no background of its own
+/// (owner, 2026-11-16: "probably leave off the background here, and add drop
+/// shadow or outline for text"), its words outlined so they read over water
+/// and sand alike.
+fn spawn_panel(commands: &mut Commands) {
     commands.spawn((
-        kit.nine(Set::Stone, "tooltip"),
-        KitPiece("tooltip".into()),
         Node {
             position_type: PositionType::Absolute,
-            left: px(5),
+            left: px(8),
             bottom: px(40),
-            padding: UiRect::new(px(7), px(8), px(6), px(6)),
             flex_direction: FlexDirection::Column,
             row_gap: px(3),
             ..default()
@@ -168,7 +167,7 @@ fn spawn_panel(commands: &mut Commands, kit: &crate::ui_kit::UiKit) {
 fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lines) {
     use crate::ui_kit::{INK, KitText, LABEL, TITLE};
     body.spawn((
-        KitText::new(lines.title.clone(), TITLE).shadow(INK),
+        KitText::new(lines.title.clone(), TITLE).outline(INK),
         Node {
             margin: UiRect::bottom(px(2)),
             ..default()
@@ -185,7 +184,7 @@ fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lin
                 crate::ui_kit::key_cap(row, kit, key, ());
             }
             row.spawn((
-                KitText::new(what.clone(), LABEL).shadow(INK),
+                KitText::new(what.clone(), LABEL).outline(INK),
                 Node {
                     margin: UiRect::left(px(4)),
                     padding: UiRect::top(px(2)),
@@ -195,7 +194,7 @@ fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lin
         });
     }
     if let Some(w) = &lines.warning {
-        body.spawn(KitText::new(w.clone(), TITLE).shadow(INK));
+        body.spawn(KitText::new(w.clone(), TITLE).outline(INK));
     }
 }
 
