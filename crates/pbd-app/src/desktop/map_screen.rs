@@ -1716,6 +1716,39 @@ pub fn first_view(
     }
 }
 
+/// `loading-screen` decision 7: the map is built hidden, so its two UI
+/// materials and the overlay key's gradient bar were first drawn, and their
+/// pipelines made, the first time the map opened in play (`LATE_PIPELINE
+/// ui_material_pipeline` twice and `ui_gradient_pipeline`). While the world
+/// warms, one pixel of each is shown under the loading screen, tagged as a
+/// prewarm proxy so it goes at `READY`.
+fn warm(mut commands: Commands, live: Option<Res<MapLive>>, mut done: Local<bool>) {
+    let Some(live) = live else {
+        return;
+    };
+    if std::mem::replace(&mut *done, true) {
+        return;
+    }
+    let pixel = || Node {
+        position_type: PositionType::Absolute,
+        width: px(1),
+        height: px(1),
+        ..default()
+    };
+    use pbd_app::loading::PrewarmProxy;
+    commands.spawn((PrewarmProxy, pixel(), MaterialNode(live.material.clone())));
+    commands.spawn((PrewarmProxy, pixel(), MaterialNode(live.base.clone())));
+    let stops = RAMPS[0]
+        .iter()
+        .map(|&[r, g, b]| ColorStop::auto(Color::srgb(r, g, b)))
+        .collect();
+    commands.spawn((
+        PrewarmProxy,
+        pixel(),
+        BackgroundGradient::from(LinearGradient::to_right(stops)),
+    ));
+}
+
 /// The map's plugin: its material, its resources and its systems.
 pub struct MapScreenPlugin;
 
@@ -1733,6 +1766,10 @@ impl Plugin for MapScreenPlugin {
                 layers.add(places_layer());
             })
             .add_systems(Startup, spawn)
+            .add_systems(
+                Update,
+                warm.run_if(resource_exists::<pbd_app::loading::Warming>),
+            )
             .add_systems(
                 Update,
                 (
@@ -2449,5 +2486,44 @@ mod tests {
             between_bursts > 0,
             "no texel between two bursts: the case the owner saw is not covered"
         );
+    }
+
+    /// `loading-screen` decision 7: what the map draws only once opened, its
+    /// two UI materials and the key's gradient, each has a stand-in shown
+    /// behind the loading screen, tagged to go at `READY`, and only once.
+    #[test]
+    fn the_map_shows_its_ui_pipelines_to_the_warm_up_once() {
+        use pbd_app::loading::PrewarmProxy;
+        let mut world = World::new();
+        world.insert_resource(MapLive {
+            material: Handle::default(),
+            base: Handle::default(),
+            cloud: Handle::default(),
+            overlay: Handle::default(),
+            cloud_generation: 0,
+            overlay_built: None,
+            task: None,
+        });
+        let mut schedule = Schedule::default();
+        schedule.add_systems(warm);
+        for _ in 0..3 {
+            schedule.run(&mut world);
+        }
+        let count = |world: &mut World, f: fn(EntityRef) -> bool| {
+            let mut q = world.query_filtered::<EntityRef, With<PrewarmProxy>>();
+            q.iter(world).filter(|e| f(*e)).count()
+        };
+        assert_eq!(count(&mut world, |_| true), 3);
+        assert_eq!(
+            count(&mut world, |e| e
+                .contains::<MaterialNode<MapLiveMaterial>>()),
+            1
+        );
+        assert_eq!(
+            count(&mut world, |e| e
+                .contains::<MaterialNode<MapImageMaterial>>()),
+            1
+        );
+        assert_eq!(count(&mut world, |e| e.contains::<BackgroundGradient>()), 1);
     }
 }

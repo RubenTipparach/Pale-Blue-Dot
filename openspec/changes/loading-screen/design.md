@@ -184,6 +184,74 @@ the counted frames, so a capture's log names water and cloud pipelines as
 late by design. Recommendation taken (ask only with screenshots): a capture
 stays deterministic rather than warmed.
 
+## Decision 7: what a real-time session still compiled late (2026-11-16)
+
+A water agent's `--capture` runs at a sea shore and a river logged about 30
+`LATE_PIPELINE` lines each. Those are decision 5, not misses: a capture
+skips the warm-up, so every pipeline after its first frame is "late" (a
+fixed-step capture at the sea shore, rerun for this: 33, the whole water,
+rain, cloud, tonemapping, UI and mesh set, against 50 before `READY`). What
+the prewarm misses is what a **real-time** run compiles after `READY`.
+
+**Measured** (the Mac, M4 Max, Metal, `--profile fast`, each run
+`--capture <png> --frames <n> --real-time`, so the loading screen warms as a
+launch does; `PBD_SETTINGS` in a scratch file):
+
+| Session | How | `LATE_PIPELINE` before |
+| --- | --- | --- |
+| A plain walk | `--walk` | screenshot |
+| The four waterline-3 places, crossing the surface, 0.6 to 2 m under, looking up, down and round | `PBD_EYE_PATH` (`PBD_EYE_PATH_RELATIVE=1`), `--fly --at <place>`, by day and at night in rain | screenshot |
+| Swimming at the sea shore at night | `--swim --at 18.86 27.54 --time 23` | screenshot |
+| Rain at night, turning | `--walk --rain 1 --time 23 --turn 90` | screenshot |
+| Rain taken away and given back, cover and open | `PBD_WEATHER_SCRIPT=10:dry,300:rain,500:cover,600:open` | screenshot |
+| A fall into a still reach | `--walk --at -34.6830 101.4869 --yaw 14 --pitch -6 --time 5` (`water-flow`'s `river-valley-day`) | screenshot |
+| The scenic route, ground to orbit | `--route scenic`, 3000 frames | screenshot |
+| Every REFLECTIONS level, switched in play | `PBD_CYCLE_REFLECTIONS=120` (nine switches) | screenshot |
+| The pack, the map and the pause menu opened and shut after `READY` | `PBD_KEY_SCRIPT=400:KeyI,500:KeyI,560:KeyM,700:KeyM,760:Escape,860:Escape` | **map**: `ui_material_pipeline` twice, `ui_gradient_pipeline` (`IN_OKLAB`, `ANTI_ALIAS`); screenshot |
+
+Four labels, two causes, both "queued only on first use":
+
+- **`screenshot-to-screen`**: Bevy's blit of a `Screenshot` into its
+  readback buffer, specialized for the window's format, made the first time
+  a screenshot is taken. In play that is the first F12, the first repro
+  press (Shift+Alt+F) or a `--capture --real-time` still: a hitch exactly when
+  the player asks for a picture. Only `--showcase-stills` warmed it
+  (`showcase::warm_stills`).
+- **The map's `ui_material_pipeline` x2 (`MapLiveMaterial`,
+  `MapImageMaterial`) and `ui_gradient_pipeline`**: the map screen is built
+  hidden at `Startup`, and Bevy's UI queues a node's pipeline only when it is
+  drawn, so its two UI materials and the overlay key's gradient bar (the only
+  gradients in the game, `map_screen` and `map_sites`; radial and linear share
+  one pipeline per colour space) were made the first time M was pressed.
+  `show_unseen` covers 3D mesh materials only.
+
+No shader-def variant, MSAA, HDR or pass-flag key was missed: the water,
+rain, cloud, lens and splash passes specialize for every view from the first
+frame whether or not they draw, and the waterline, rain, fall and REFLECTIONS
+runs compiled nothing late.
+
+**The fix**, behind the screen as decision 6 does:
+
+- `warm` takes one throwaway screenshot on the first warm frame of every
+  real-time launch (a capture keeps decision 5); its pipeline is then waited
+  for like any other.
+- The map shows the warm-up one 1 px node of each of its UI materials and a
+  gradient, absolute, under the loading overlay, tagged `PrewarmProxy` so they
+  go at `READY` with the mesh proxies (`map_screen::warm`).
+
+**After** (the same sessions, the same sitting): no `LATE_PIPELINE` in any
+of them, the map opened and shut included. Time to `READY`, a `--walk`
+launch, before and after interleaved, three each: before 4.93, 5.00,
+5.03 s (warm 1.17 to 1.21 s, 95 pipelines); after 4.94, 4.96, 5.04 s (warm
+1.20 to 1.21 s, 97 pipelines). Unchanged within the spread; two more
+pipelines made behind the screen.
+
+`PBD_KEY_SCRIPT` is a measurement instrument (`desktop/repro.rs`): it presses
+keys through the keyboard's own messages on given capture frames, so a
+real-time run can open screens after `READY`. The settings page is a tab of
+the pause menu, opened by a click, and was not reached by key; it draws only
+the kit's plain nodes, text and slices, which the HUD already warms.
+
 ## Found in the build: a new world started on a town's terrace
 
 Before the screen, a new world's walker was set down at `Startup` on a

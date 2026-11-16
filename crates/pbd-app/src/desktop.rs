@@ -1712,7 +1712,7 @@ pub fn run(args: &[String]) {
     .add_systems(Update, repro::save)
     .add_systems(
         First,
-        repro::scripted_press.run_if(resource_exists::<CaptureState>),
+        (repro::scripted_press, repro::scripted_keys).run_if(resource_exists::<CaptureState>),
     )
     .add_systems(Update, (breeding::press, breeding::paint).chain())
     .add_systems(
