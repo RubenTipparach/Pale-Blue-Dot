@@ -16,7 +16,7 @@ after the loading screen has lifted.
 
 #### Scenario: An older settings file
 
-- **WHEN** a settings file of version 7 is read
+- **WHEN** a settings file of version 8 is read
 - **THEN** REFLECTIONS is HIGH and every other field it holds is kept
 
 #### Scenario: Turned off in play

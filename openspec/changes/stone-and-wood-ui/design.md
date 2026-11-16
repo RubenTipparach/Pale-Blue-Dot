@@ -793,3 +793,137 @@ shows the player's own bindings, not a design note.
 The debug readout (column, position, elevation) is a developer overlay. A
 recommendation, not done here: show it only behind its debug key and keep it
 off by default. That changes behaviour, so it waits for its own go-ahead.
+
+## Interact on F, and the prompt that names it (owner, 2026-11-16; written before the code)
+
+The owner: "interaction with plants, I should be able to harvest plants by
+pressing F on them, we should use F for interact since E will be used for
+roll in space", and then "F to harvest should popup, or F to open work
+bench etc." Everything below beyond those words is a recommendation taken
+(ask only with screenshots).
+
+### The key move
+
+- **F is the one interact key on foot**, for everything E did: open a
+  station (workbench, forge, campfire), harvest a ripe crop, pick a wild
+  plant or a tree's fruit, till with the shovel, feed, tame, lead and
+  collect from an animal, take up a fence piece or an incubator, open or
+  shut a door. F also still boards a craft, and aboard it steps off.
+- **E is freed on foot.** Flying, Q/E roll as before; aboard a boat, Q/E
+  stay the boat's own (hiking, the blade or an oar as a rudder).
+- The two rows of the old table, `hands:KeyE` ("use: ...") and
+  `vehicles:KeyF` ("board, or step off"), become **one row in one slot**,
+  `interact:KeyF`, in a new INTERACT group on the HANDS sub-tab, live on
+  foot and aboard. One slot is the only honest shape: the remap
+  (section 2, "how the game obeys it") makes every reader read a slot's
+  default key, so two slots with the default F could never be told apart
+  once one was moved; and one key that does one thing per press is what
+  the owner asked for. Rebinding INTERACT moves use, board and step-off
+  together, and the prompt shows the new key.
+
+### One press, one thing: the priority table
+
+`pbd_app::interact` holds one table, `ACTS`: each row is a thing F can act
+on and the verb it is named by, **in priority order**. Every frame, the
+systems that know a kind of thing (husbandry, fruit, the farm and its
+stations, the town doors, the boats) offer what the eye is on and what F
+would do to it; the highest row offered wins and is the frame's one
+`Interact::now`. Then:
+- **the prompt prints `now`** (its key, its verb, its thing), and
+- **an F reader stands aside when `now` names another reader's row**, so
+  F does what the prompt said: a crop beside a moored boat is harvested,
+  not boarded. With nothing named (no offer was seen yet), each reader does
+  what it did before and the first to use the press takes it, as the
+  husbandry hands always have; so a press is never lost to a frame's lag.
+
+| Rank | Thing aimed at | Prompt | Reader |
+| --- | --- | --- | --- |
+| 1 | a kept animal with eggs, milk or wool waiting | `F  Collect eggs` | husbandry |
+| 2 | a hen, fertile eggs in hand | `F  Set eggs under hen` | husbandry |
+| 3 | an animal, its food in hand (wild or kept) or a wild one to tame | `F  Feed hen` | husbandry |
+| 4 | a kept animal following / standing | `F  Let hen stay` / `F  Lead hen` | husbandry |
+| 5 | an incubator | `F  Set eggs in incubator` / `F  Take incubator` | husbandry |
+| 6 | a fence or gate piece | `F  Take up fence` | husbandry |
+| 7 | a fruiting tree with fruit hanging | `F  Pick apples` | fruit |
+| 8 | a workbench, forge or campfire | `F  Open workbench` | farm |
+| 9 | a ripe crop | `F  Harvest wheat` | farm |
+| 10 | a growing crop | `F  Check wheat` (says how long) | farm |
+| 11 | a wild plant | `F  Pick wild chili` | farm |
+| 12 | a door in reach | `F  Open door` / `F  Shut door` | towns |
+| 13 | tillable ground, shovel in hand | `F  Till grass` | farm |
+| 14 | a craft in reach (nothing above it aimed) | `F  Board rowboat` | vehicles |
+
+The ranks keep today's order where today had one (the husbandry hands ran
+first and took a press they used, then the fruit, then the farm); the door,
+which today could open in the same press as a crop, and boarding, which
+today could happen in the same press as anything, are placed below them.
+Boarding is last: a craft is boarded by walking up to it, so anything aimed
+at is the more deliberate choice.
+
+### Aiming at the plant itself
+
+The eye ray stops at the first solid block, and a crop or a wild plant is
+not a block: it stands in the air over its cell. Today `E` acts on the
+cell the ray lands in, so aiming at a plant's leaves acted on the ground
+behind it. A plant gets its own hit test, `farm::plant_on_ray`: an upright
+cylinder per sown crop (radius 0.9 m, 1.1 m tall: the three clumps) and per
+wild plant (0.55 m, 0.95 m: the one bush) within reach, the nearest hit
+taken; a plant hit nearer than the block the ray meets wins over that
+block. The ground cell under a plant still finds it, as before.
+
+### The prompt
+
+A small stone tooltip just under the crosshair: the bound key in an oak cap
+(the settings page's own cap), then the verb and the thing in the kit's
+font, e.g. `F  Harvest wheat`. Nothing else: no reason, no note. It shows
+only on foot with the pointer held; it hides while a panel or menu is open,
+and when nothing is offered. It does not flicker: a thing stays named for
+0.15 s after the aim leaves it (`interact::HOLD_S`), so crossing the seam
+between two cells of a field changes the name, never blinks it out. The
+same hold applies to `now` itself, so the prompt and F never disagree. The
+boats' on-foot line `[F] board the rowboat` is replaced by the prompt, and
+aboard, the panel's keys line names the interact key for stepping off.
+The farm's note (what the last press did) moves down from 56% to 60% of the
+window, below the prompt, so the two never overlap.
+
+### Saved rebinds (old settings files still load)
+
+Settings files go to **version 8**. Reading any version, the rebinds of the
+two retired slots migrate to the new one:
+- `hands:KeyE = K` (a player who moved "use") becomes `interact:KeyF = K`:
+  **a player who rebound use keeps their key**; only the default moved;
+- otherwise `vehicles:KeyF = K` becomes `interact:KeyF = K`;
+- if both were moved to different keys, use's wins and the board's is kept
+  in the file, unread, as any unknown slot is (section 2's `kept`);
+- a player who never rebound reads none, and F is interact.
+The next write is version 8 with `interact:KeyF`. An older build reading a
+version-8 file keeps the unknown slot and, as today, refuses to write a
+newer file back.
+
+### Text
+
+Every text that names E for use now names F: the INTERACT row, the starter
+missions' help lines (`missions.ron`), the farm and husbandry notes, the
+showcase bot's presses, and the doc comments. Two help lines were wrong and
+are corrected while there: the bucket fills with the right button, and a
+boat is boarded with F. The husbandry line under the hotbar no longer says
+which key to press (`E with turf`, `[E]`): the prompt says it, with the
+player's own key; it says what the animal eats instead.
+
+### Capture instruments
+
+Two capture-only flags were added for the screenshots, as instruments
+(CLAUDE.md, "Write it up before touching code"), and change nothing a player
+runs: `--hold-pointer` makes the walker hold the pointer as a player's does
+after a click (a still capture's window never has the focus, so without it
+there is no aim and no prompt), and `--farm-ripe` sows `--farm`'s field
+ripe, so the crop in front of the eye is one F harvests.
+
+### Found while capturing (not changed)
+
+The fruit's hit test (`digging::tree_on_ray`, which the axe and the fruit
+have always used) is an upright cylinder on the tree's cell centre. In
+`docs/screenshots/interact-f/prompt-pick-fruit.jpg` the prompt names the
+plums while the crosshair is on the grass beside the drawn trunk: the hit
+cylinder and the drawn trunk do not quite agree. This is not new (E picked
+the plums there too); the prompt now shows it. Left for its own change.

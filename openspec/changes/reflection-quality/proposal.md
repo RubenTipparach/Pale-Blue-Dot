@@ -42,7 +42,7 @@ names, and drops the search through the world's own geometry.
   screen traces stay. **OFF** runs none of the passes: no capture, no
   half-size gather or compose, no sea trace. Water and wet ground keep the
   sky, the fresnel and the sun's and lamps' glints they already draw.
-- The settings file goes to version 8 with `reflections`; an older file
+- The settings file goes to version 9 with `reflections`; an older file
   reads HIGH, so nobody's picture changes on upgrade. A new player gets
   HIGH (today's look is what ships). Captures and benchmarks take HIGH.
 - `--reflections off|low|medium|high` for captures and perf runs.

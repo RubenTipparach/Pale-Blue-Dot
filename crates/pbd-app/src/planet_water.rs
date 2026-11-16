@@ -138,7 +138,9 @@ pub(super) struct WaterView {
     cloud_prev_eye: Vec4,
     /// The sea's table (`pbd::sea` in `sea.wgsl`), the one the hulls float on.
     sea: SeaView,
-    /// x how far the sheet sits below sea level, m; yzw spare.
+    /// x how far the sheet sits below sea level, m; y the surface of the
+    /// inland water the eye is in, a body radius, nought for the sea
+    /// (`inland_surface`); zw spare.
     sea_frame: Vec4,
     /// The lens mist (`lens-weather`): seconds to mist over and to clear
     /// standing still, how much faster per m/s of airspeed, its strength.
@@ -354,7 +356,14 @@ pub fn submersion(camera_body: Vec3, sea_radius: f32, wave: f32, band: f32, eye:
         }
     };
     // The band stands about the surface as it is under the camera now: a
-    // trough passing under a camera just over the sea leaves it dry.
+    // trough passing under a camera just over the sea leaves it dry. The
+    // swell is the sea's: a river's or a pool's surface is where the column
+    // puts it (`ocean-environments` B17).
+    let wave = if inland_surface(eye).is_some() {
+        0.0
+    } else {
+        wave
+    };
     let surface = surface + wave;
     let radius = camera_body.length();
     if radius < surface - band {
@@ -363,6 +372,19 @@ pub fn submersion(camera_body: Vec3, sea_radius: f32, wave: f32, band: f32, eye:
         0.5
     } else {
         0.0
+    }
+}
+
+/// The surface of the water the eye is in, as a body radius, where that
+/// water is not the sea's: a river, a pool, flowing water standing over the
+/// sea's level (`ocean-environments` B17). `None` for the sea, for air and
+/// off the tier. The underwater view is measured from this surface instead
+/// of the sea's sphere, which a river stands above.
+pub fn inland_surface(eye: EyeWater) -> Option<f32> {
+    let sea = terrain::PLANET_RADIUS + terrain::terrain_config().sea_level_m;
+    match eye {
+        EyeWater::Water { surface_radius } if surface_radius > sea + 0.05 => Some(surface_radius),
+        _ => None,
     }
 }
 
@@ -1489,7 +1511,14 @@ fn prepare_water_views(
                 .map_or(camera, |gpu| gpu.prev_camera)
                 .extend(0.0),
             sea: SeaView::from(&sea_now.gpu),
-            sea_frame: Vec4::new(s.depth_offset_m, 0.0, 0.0, 0.0),
+            // y the surface of the inland water the eye is in, nought for
+            // the sea (`ocean-environments` B17).
+            sea_frame: Vec4::new(
+                s.depth_offset_m,
+                inland_surface(eye.0).unwrap_or(0.0),
+                0.0,
+                0.0,
+            ),
             mist: Vec4::new(
                 weather_settings.lens_mist_fog_s,
                 weather_settings.lens_mist_clear_s,
@@ -2533,6 +2562,135 @@ mod tests {
         app.world_mut().get_mut::<Camera>(parked).unwrap().is_active = true;
         app.update();
         assert_eq!(app.world().resource::<EyeWaterState>().0, EyeWater::Air);
+    }
+
+    /// The river the owner's picture stands in, 60 m from the version 10
+    /// spawn (`docs/screenshots/river-fixes/`): a direction where the
+    /// generator's river stands two layers over a meadow's bed.
+    fn river_at_the_spawn() -> Vec3 {
+        let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: 28.25_f32.to_radians(),
+            lon: 0.75_f32.to_radians(),
+        });
+        assert!(
+            pbd_core::rivers::floods(terrain::terrain_config(), d),
+            "the river is still there"
+        );
+        d
+    }
+
+    /// `ocean-environments` B17: an eye in a river's water, over the sea's
+    /// level, reads as under water against the RIVER's surface: the column
+    /// at the eye says water, the tri-state says fully under whatever the
+    /// sea's swell is doing, and the view uniform carries the river's
+    /// surface for the composite to measure from. Out of the water, dry.
+    #[test]
+    fn an_eye_in_a_river_reads_as_under_the_river() {
+        use std::sync::Arc;
+        let river = river_at_the_spawn();
+        let set = Arc::new(super::super::lod::generate_fine(
+            river,
+            &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
+        ));
+        let mut contact = crate::planet::PlanetContact::test_planet(5);
+        contact.set_fine(&set);
+        let column = contact
+            .finest_cell(river)
+            .and_then(|record| set.columns.column(record))
+            .expect("the river's column is on the tier");
+        let bed = column.surface().expect("a bed");
+        let bed_m = pbd_core::column::layer_altitude(bed) + 1.0;
+        let surface_m = column
+            .water_surface(bed_m + 0.5)
+            .expect("water stands on the river's bed");
+        assert!(surface_m > terrain::terrain_config().sea_level_m + 1.0);
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, TransformPlugin));
+        install_eye_water(&mut app);
+        let offset = bevy::math::DVec3::new(8192.0, -4096.0, 2048.0);
+        app.insert_resource(PlanetRenderFrame { center: offset })
+            .insert_resource(contact)
+            .insert_resource(crate::planet::PlanetFine { set, version: 1 });
+        let at = |m: f32| (offset + (river * (terrain::PLANET_RADIUS + m)).as_dvec3()).as_vec3();
+        let camera = app
+            .world_mut()
+            .spawn((
+                Camera3d::default(),
+                Camera::default(),
+                Transform::from_translation(at(surface_m - 0.8)),
+            ))
+            .id();
+        app.update();
+        let eye = app.world().resource::<EyeWaterState>().0;
+        let surface = terrain::PLANET_RADIUS + surface_m;
+        assert_eq!(
+            eye,
+            EyeWater::Water {
+                surface_radius: surface
+            }
+        );
+        assert_eq!(
+            inland_surface(eye),
+            Some(surface),
+            "the river's, not the sea's"
+        );
+        let sea = terrain::PLANET_RADIUS - WaterSettings::default().depth_offset_m;
+        let body = river * (surface - 0.8);
+        for swell in [-1.5, 0.0, 1.5] {
+            assert_eq!(submersion(body, sea, swell, 0.3, eye), 1.0, "swell {swell}");
+        }
+        // Out over the river: dry.
+        app.world_mut()
+            .get_mut::<Transform>(camera)
+            .unwrap()
+            .translation = at(surface_m + 1.5);
+        app.update();
+        let eye = app.world().resource::<EyeWaterState>().0;
+        assert_eq!(eye, EyeWater::Air);
+        assert_eq!(inland_surface(eye), None);
+        // The sea's own water keeps the sea's sphere.
+        let at_sea = EyeWater::Water {
+            surface_radius: terrain::PLANET_RADIUS + terrain::terrain_config().sea_level_m,
+        };
+        assert_eq!(inland_surface(at_sea), None);
+    }
+
+    /// `ocean-environments` B17: a walker in the same river swims in it to
+    /// its own surface (the walker's rule, `walking::swim_surface`, over the
+    /// column's answer), and with its feet on the bank over the water is out.
+    #[test]
+    fn a_walker_swims_in_a_river_and_climbs_out() {
+        let river = river_at_the_spawn();
+        let set = super::super::lod::generate_fine(
+            river,
+            &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
+        );
+        let mut contact = crate::planet::PlanetContact::test_planet(5);
+        contact.set_fine(&std::sync::Arc::new(set));
+        let r = terrain::PLANET_RADIUS;
+        let bed = r + terrain::surface_height(river);
+        let water = contact
+            .column_water(river * (bed + 0.5))
+            .flatten()
+            .map(|top| r + top)
+            .expect("the river's water on its bed");
+        let sea = r + terrain::terrain_config().sea_level_m;
+        let sheet = r - WaterSettings::default().depth_offset_m;
+        let surface = crate::walking::swim_surface(true, Some(water), sheet, sea, bed, true);
+        assert_eq!(
+            surface,
+            Some(water),
+            "swum to the river's surface, not the sea's"
+        );
+        // Feet a metre over the river's surface, on its bank: dry.
+        let over = contact.column_water(river * (water + 1.0)).flatten();
+        assert_eq!(over, None, "no water over the river's surface");
+        assert_eq!(
+            crate::walking::swim_surface(true, over, sheet, sea, water + 1.0, true),
+            None
+        );
     }
 
     #[test]

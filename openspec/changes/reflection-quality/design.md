@@ -93,9 +93,10 @@ when the capture ran the frame before. No frame reflects a stale image.
 
 - `PlayerSettings::reflections`, default `High`; `ISOLATED` (captures and
   benchmarks) `High`.
-- The file's version 8 adds `reflections`. A file of version 7 or older has
+- The file's version 9 adds `reflections` (version 8 was `interact:KeyF`,
+  landed beside this change). A file of version 8 or older has
   no such field and reads `High`, the default: nobody's picture changes on
-  upgrade. A test reads a version-7 file.
+  upgrade. A test reads a version-8 file.
 - `--reflections off|low|medium|high` overrides it for a launch.
 
 ## 6. The menu

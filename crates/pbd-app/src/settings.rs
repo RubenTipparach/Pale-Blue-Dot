@@ -36,10 +36,13 @@ use std::time::{Duration, Instant};
 /// reads as their defaults; version 6 added `pixel_grass` (`flora-v2`),
 /// which an older file reads as on (owner, 2026-11-15: "first default to
 /// pixel tufts"); version 7 added `flow_arrows` (`water-flow` task 3.4),
-/// which an older file reads as off; version 8 added `reflections`
+/// which an older file reads as off; version 8 made "use" (`hands:KeyE`)
+/// and "board" (`vehicles:KeyF`) one slot, `interact:KeyF` (owner,
+/// 2026-11-16), and an older file's rebind of either moves onto it
+/// (`controls::KeyBinds::from_names`); version 9 added `reflections`
 /// (`reflection-quality`), which an older file reads as HIGH, the look it
 /// had.
-pub const VERSION: u32 = 8;
+pub const VERSION: u32 = 9;
 
 /// The five sound volumes (`audio-and-ambience` design section 2), each a
 /// whole percent 0..=100 in steps of 10. 0 is silent.
@@ -871,7 +874,7 @@ mod tests {
                 pixel_grass: true,
                 // Version 7's: off, the default.
                 flow_arrows: false,
-                // Version 8's: HIGH, the look it had.
+                // Version 9's: HIGH, the look it had.
                 reflections: Reflections::High,
             }
         );
@@ -881,16 +884,16 @@ mod tests {
         );
     }
 
-    /// `reflection-quality`: a version-7 file (the last before REFLECTIONS)
+    /// `reflection-quality`: a version-8 file (the last before REFLECTIONS)
     /// reads HIGH, the reflections it was drawn with, and keeps every field
-    /// it has; it takes the field on its next write, at version 8.
+    /// it has; it takes the field on its next write, at version 9.
     #[test]
     fn a_file_from_before_reflections_reads_them_high_and_keeps_the_rest() {
-        let old = "(version: 7, frame_limit: Fps120, render_scale: 67, auto_step: true, \
+        let old = "(version: 8, frame_limit: Fps120, render_scale: 67, auto_step: true, \
                    rain_shadows: true, mission_line: false, volumes: (master: 40), \
                    pixel_grass: false, flow_arrows: true)";
         let (read, _, version) = PlayerSettings::parse(old).unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
         assert_eq!(read.reflections, Reflections::High);
         assert_eq!(
             (read.frame_limit, read.render_scale, read.volumes.master),
@@ -898,9 +901,9 @@ mod tests {
         );
         assert!(read.auto_step && read.rain_shadows && !read.mission_line);
         assert!(!read.pixel_grass && read.flow_arrows);
-        assert!(Loaded::Read(7).writable());
+        assert!(Loaded::Read(8).writable());
         let text = read.to_text(&KeyBinds::default());
-        assert!(text.contains("version: 8"), "{text}");
+        assert!(text.contains("version: 9"), "{text}");
         assert!(text.contains("reflections: High"), "{text}");
         // Each level round-trips, and a launch flag lays over the file.
         for level in Reflections::ALL {
@@ -1059,6 +1062,29 @@ mod tests {
         assert!(text.contains(&format!("version: {VERSION}")), "{text}");
         let (_, none, _) = PlayerSettings::parse(&text).unwrap();
         assert!(none.is_empty());
+    }
+
+    /// Interact on F (settings version 8): a version-7 file whose player
+    /// moved "use" to K reads K as the interact key, F interacts no more,
+    /// and the next write is version 8 with the new slot's name.
+    #[test]
+    fn an_old_file_with_a_custom_use_key_keeps_it() {
+        let old = r#"(version: 7, render_scale: 75, keys: {"hands:KeyE": "KeyK", "flying:KeyQ": "KeyZ"})"#;
+        let (read, keys, version) = PlayerSettings::parse(old).unwrap();
+        assert_eq!(version, 7);
+        assert!(Loaded::Read(version).writable());
+        let interact = crate::controls::slots()
+            .find(|s| s.name() == crate::controls::INTERACT_SLOT)
+            .unwrap();
+        assert_eq!(keys.key(&interact), KeyCode::KeyK);
+        let pairs = crate::controls::live_pairs(&keys, crate::controls::Live::OnFoot, false);
+        assert!(pairs.contains(&(KeyCode::KeyF, KeyCode::KeyK)), "{pairs:?}");
+        let text = read.to_text(&keys);
+        assert!(text.contains(&format!("version: {VERSION}")), "{text}");
+        assert!(text.contains("\"interact:KeyF\": \"KeyK\""), "{text}");
+        assert!(!text.contains("hands:KeyE"), "{text}");
+        let (_, again, _) = PlayerSettings::parse(&text).unwrap();
+        assert_eq!(again, keys, "and reads back the same");
     }
 
     /// `retire-kestrel` decision 3: a rebind of a key the retired Kestrel

@@ -6,7 +6,7 @@
 ## 2. The setting
 - [x] 2.1 `config::Reflections` and `ReflectQuality`, extracted; the
       `LightingSettings` reflection switches take the level; MEDIUM's reach.
-- [x] 2.2 `PlayerSettings::reflections`, the file's version 8, an old-file
+- [x] 2.2 `PlayerSettings::reflections`, the file's version 9, an old-file
       test, the `--reflections` flag, `follow_reflections`.
 - [x] 2.3 The PICTURE row (a four-step slider), and RAIN SHADOW moved from
       WEATHER to PICTURE.

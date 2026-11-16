@@ -63,3 +63,7 @@ the lights (group 7) before `world-map` starts.
   It is published on the gate page with a before-and-after set of stills. Verify: the page exists and is linked from the PR.
 - [ ] 7.2 Record that frame cost was not measured in the cloud session (CLAUDE.md), and ask the owner to run `tools/perf_suite.py` on real hardware. Verify: the note is in the PR.
 - [x] 7.3 The owner approves the lights. (On the screenshots, 2026-09-27; the video is 7.1's, in the owner's batch.) Verify: the owner's words are quoted in `proposal.md` under Why. Archive this change once 7.1 is done.
+
+## 8. A placed lamp that vanished (owner, 2026-11-16)
+
+- [x] 8.1 "I placed a lamp but it somehow despawned." The cause is `edit-pipeline`'s "An edit made while the tier is being rebuilt is undone when it lands": a lamp placed while a fine set is in flight is saved and drawn, then the landing set, built from the edits as they stood at its request, replaces the tier without it until the next rebuild or a reload. Written up there (2026-11-16), fixed by its task 1b. Verify: the app test there, and `docs/screenshots/lamp-vanishes/` with every light still standing after a landing, a walk away and back, a flight and landing, and a reload.

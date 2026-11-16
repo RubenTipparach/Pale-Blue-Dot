@@ -30,6 +30,8 @@ pub mod hotbar;
 #[cfg(feature = "desktop")]
 pub mod husbandry;
 #[cfg(feature = "desktop")]
+pub mod interact;
+#[cfg(feature = "desktop")]
 pub mod kitchen;
 #[cfg(feature = "desktop")]
 pub mod loading;
@@ -231,6 +233,15 @@ impl Plugin for PaleBlueDotPlugin {
         app.init_resource::<controls::MenuOpen>()
             .init_resource::<controls::PickerKey>()
             .init_resource::<controls::KeyBinds>()
+            .init_resource::<interact::Interact>()
+            .configure_sets(
+                PostUpdate,
+                (interact::InteractSet::Offer, interact::InteractSet::Resolve).chain(),
+            )
+            .add_systems(
+                PostUpdate,
+                interact::resolve.in_set(interact::InteractSet::Resolve),
+            )
             .add_systems(
                 PreUpdate,
                 (
