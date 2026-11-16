@@ -702,7 +702,7 @@ pub fn dig_and_place(
     let line_out = fishery.is_some_and(|f| f.line.phase != pbd_core::fishing::Phase::Ready);
     if buttons.just_pressed(MouseButton::Right) && !line_out {
         let Some(place) = target.place else {
-            info!("edit refused: no air along the ray to place into");
+            info!("PLACE refused: no air along the ray to place into");
             return;
         };
         let wall_s = time.elapsed_secs();
@@ -751,12 +751,13 @@ pub fn dig_and_place(
                 .map(|t| (t.dig.cell, t.dig.layer))
             };
             let Some((cell, layer)) = at else {
+                info!("PLACE refused: the bucket found no water or cell along the ray");
                 return;
             };
             let Some(now) = material_of(&fine, &edits, (cell, layer))
                 .and_then(|was| pbd_core::liquid::bucket(full, was))
             else {
-                info!("edit refused: the bucket has nothing to take or nowhere to pour");
+                info!("PLACE refused: the bucket has nothing to take or nowhere to pour");
                 return;
             };
             let swapped = if full {
@@ -800,10 +801,14 @@ pub fn dig_and_place(
             return;
         }
         let Some(Item::Block(material)) = slots.held().map(|stack| stack.item) else {
-            info!("edit refused: the selected slot holds no block");
+            info!("PLACE refused: the selected slot holds no block");
             return;
         };
         if super::farm::crop_in_the_way(&fine, &edits, place.cell, place.layer) {
+            info!(
+                "PLACE refused: a crop grows in cell {} layer {}",
+                place.cell, place.layer
+            );
             note.say(wall_s, "A crop grows there");
             return;
         }
@@ -811,7 +816,10 @@ pub fn dig_and_place(
         // rock is a world you cannot move in, and the walker's own feet and
         // eye are what say where you are.
         if occupies(&fine, &contact, eye, place) {
-            info!("edit refused: that cell is where the player stands");
+            info!(
+                "PLACE refused: {material:?} into cell {} layer {} is where the player stands",
+                place.cell, place.layer
+            );
             return;
         }
         if apply_edit(
@@ -831,13 +839,19 @@ pub fn dig_and_place(
         .is_some()
         {
             info!(
-                "placed {material:?} in cell {} layer {}, fine set version {}",
+                "PLACE ok: {material:?} in cell {} layer {}, fine set version {}",
                 place.cell, place.layer, fine.version
             );
             did.write(pbd_app::missions::Did::block(
                 pbd_core::missions::Kind::Place,
                 material,
             ));
+        } else {
+            // The reason is the `edit refused` / `edit BLOCKED` line just above.
+            info!(
+                "PLACE refused: {material:?} into cell {} layer {} (reason in the line above)",
+                place.cell, place.layer
+            );
         }
     }
 }
@@ -996,13 +1010,19 @@ fn occupies(fine: &PlanetFine, contact: &PlanetContact, eye: Vec3, place: Sample
     let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
     let north = up.cross(east);
     let rim = 0.35;
-    [Vec3::ZERO, east, -east, north, -north]
+    // Keys from the contact tier's own set: a key is the same in every set,
+    // so this holds while the tier lags the newest set after an edit. Asking
+    // `contact.serves(&fine.set)` here refused every place at foot level in
+    // that window, and the window followed every edit (owner, 2026-11-16:
+    // "now suddenly I cant place anything").
+    let _ = fine;
+    let keys: Vec<u32> = [Vec3::ZERO, east, -east, north, -north]
         .into_iter()
-        .filter_map(|offset| contact.finest_cell((eye + offset * rim).normalize()))
-        .filter_map(|i| fine.set.finest_records().get(i))
-        // Unknown ground answers as before: the body is there.
-        .any(|record| record.key() == place.cell)
-        || !contact.serves(&fine.set)
+        .filter_map(|offset| contact.finest_key((eye + offset * rim).normalize()))
+        .collect();
+    // No contact tier at all (the first frames): the body may be anywhere,
+    // so refuse, as before.
+    keys.is_empty() || keys.contains(&place.cell)
 }
 
 /// `--lamps`: every light in a row across the view, one cell apart, each on
