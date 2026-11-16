@@ -40,15 +40,30 @@
       `docs/screenshots/mockup-rain-splashes/`.
 - [x] 6.3 (2026-11-15, the owner: "approve rain splashes"; density and size start from the mockup's defaults, recommendation taken. The perf condition the owner set for the water smoothing applies here too: 6.5 gates the push.) The owner's approval of the mockup's look (and of the density and
       size the game should start from), on the tracker.
-- [ ] 6.4 The game port, after the approval and on a request: the near
+- [x] 6.4 (2026-11-15, `claude/rain-splashes` `49ceaa5`: `planet_splash.rs`
+      and `rain_splash.wgsl`; 48 slots x 8 droplets per column, the mockup's
+      sizes and speeds; the gates as written plus a town roof taking its
+      column out of the list; `PBD_PASS_OFF=splash` prices it; the pipeline
+      is queued from the first frame, READY with no `LATE_PIPELINE` in rain.
+      Tests hold the copied terrain terms word for word, the uniform and
+      record layouts, the classes and the near list.) The game port, after the approval and on a request: the near
       column list (rebuilt on a cell crossing or an edit), one instanced
       droplet draw in its own WGSL, gated by `rain`, `wetness`, sky light and
       the shower's own suppression; knobs (`splash_slots`, `splash_droplets`,
       `splash_period_s`, sizes and speeds) in `weather.ron`, validated.
-- [ ] 6.5 The perf A/B: `tools/perf_suite.py`, `--release`, old build against
+- [ ] 6.5 (2026-11-15: NOT measured. The release exes are built and kept,
+      `output/perf/rain-splash-exe/` (before `ea9df4d`, after `49ceaa5`), but
+      the shared Mac never gave a quiet sitting: a showcase run, then Chrome
+      relaunched mid-sitting and the suite refused; the water sitting before
+      it lost window focus on every walk. Run
+      `--scenarios storm,rain-stroll --repeats 2 --variant "before|<before exe>||ea9df4d" --variant "after|<after exe>||49ceaa5"`
+      on a quiet machine. The push waits on it.) The perf A/B: `tools/perf_suite.py`, `--release`, old build against
       new interleaved in one sitting, on `storm` and `rain-stroll`; within the
       0.25 ms p50 budget or S and K reduced; report in `docs/benchmarks/`.
-- [ ] 6.6 Proof: `--capture` stills of a puddled path and a meadow in rain,
+- [x] 6.6 (2026-11-15: `docs/screenshots/weather-rain/splash-*`, before
+      with `PBD_PASS_OFF=splash` on the same binary. The path's crowns read;
+      the grass spray is barely visible in a still, as faint as the mockup's
+      but lost in the game's grass; see that README.) Proof: `--capture` stills of a puddled path and a meadow in rain,
       by day and at night under a lamp, before and after, in
       `docs/screenshots/`.
 
