@@ -553,3 +553,92 @@ lost". The zoom keeps the tree point under the cursor fixed; at 0.6 and
 below a card is its mission's icon filling the same frame, and hovering
 one shows the full card beside the pointer; a pan stops when no card would
 keep 40 px in view; scales run 0.1 to 2, so Fit shows the whole tree.
+
+### Closing the tree's gaps (owner, 2026-11-16: "fix the gaps")
+
+T.2 and T.5 left five gaps between M33 version 3 and the game. Each is closed
+here. None of these decisions came with a picture to choose between, so
+each is a recommendation taken (ask only with screenshots), not the owner's
+words.
+
+**G1. Bait is a good, dug from wet ground.** "Dig for bait" waited on a bait
+item nothing made.
+- **The good.** `bait` ("bait worms", a stack of 99, `items/goods/bait.png`,
+  drawn by `tools/gen_item_icons.py`), appended to the goods table.
+- **Where it turns up.** Digging dirt, soil, grass or sand, by hand or by
+  tool, where the dug layer is wet ground at the shore. That means its
+  altitude is within `bait_band_m` of the sea's level (from 2 m under to
+  1 m over). It turns up in one such cell in `bait_one_in` (3), picked by
+  the cell's hash as fibre and loose stone are:
+  - the same cell always answers the same;
+  - a block a player placed turns up nothing;
+  - nothing is stored.
+
+  It is a third find beside the seed and the fibre or stone, so digging
+  anywhere else gives exactly what it gave before. A find is not terrain:
+  no generator version moves, and no saved cell changes.
+- **On the hook.** A cast made while the pack holds bait is baited. A baited
+  float draws bites more readily: the weather's bite factor is multiplied by
+  `1 + bait_bite` (0.5, in `fauna.ron`'s `fishing`). A fish landed on a
+  baited line uses one bait, taken through the same durable write as the
+  catch. A miss, a snap or a reel-in uses none.
+- **Counting.** A fish landed on bait raises the new kind `baited`, with the
+  species' name. "Dig for bait" becomes `gather bait 3` and
+  `baited any 3`, and `awaited` is empty.
+
+**G2. The starting kit stops dealing what the tree earns.** A new world is
+no longer dealt fences, gates or torches, so "Make fences" and "Light the
+night" are the first time a player has them. The kit's version and its
+grant table do not change:
+- a save keeps what it was dealt;
+- a save from before the pen's grant (kit version under 4) is still dealt
+  the fences when it opens, as T.3 promised every old world.
+
+Only `Hotbar::starting_kit`, which a new world alone reads, leaves the
+earned items out. Its hotbar is then nine full slots and one free. The
+missions keep counting `recipe:fence`, `recipe:gate` and `recipe:torch`
+(one make at a station), so an old world that carries the kit's fences is
+not handed the mission for nothing.
+
+**G3. The map marks a place.** "Read the map" counted a 200 m walk because
+nothing could be marked.
+- **Making a mark.** A right click on the map sets the player's mark there.
+  There is one mark at a time, so a new right click moves it. A right click
+  within 12 px of the mark clears it. It shows as a pin on the map.
+- **It is saved.** The mark is a `map-mark` record, authored by the player,
+  through the save's durable path. It holds the direction and how far it
+  was from the player when it was set.
+- **Counting.** `reach marked` counts when the walker comes within
+  `MARK_NEAR_M` (8 m) of a mark that was set at least `MAP_WALK_M` (200 m)
+  from where the player stood. A mark set nearer is still a mark, but it
+  does not count.
+- **On screen.** The mission's help says how: open the map (M), right-click
+  a place at least 200 m away, walk there. Its label reads "reach the mark".
+- The plain 200 m walk is gone.
+
+**G4. "Three kinds of fish" counts kinds new to the mission.** `species`
+was raised only for a kind the world had never landed, so a player who had
+fished widely had nothing left to find. Now:
+- every catch raises `species` with the species' name;
+- an open mission remembers the names it has counted (`Progress::seen`),
+  and counts a name once;
+- `seen` is dropped when the mission closes, and is an optional field, so
+  a record without it still reads;
+- a world mid-mission keeps its count, and the kinds behind it are not
+  known, so one of them could count again. That is accepted.
+
+**G5. The bot follows the mark.** The about branch stalled on the 200 m
+walk. It now plays the mark the way a player does, with two new acts:
+- `Mark(metres)`: open the map, put the pointer on a dry place that far
+  away, right-click, and close the map;
+- `ToMark`: walk to the mark until "Read the map" closes.
+
+The herding stall (a hen across terraces the bot cannot cross) and the
+mining branch's first run stay open for a real-time run on the owner's
+machine. A cloud container renders with no GPU, and a showcase's real-time
+limits stall there. The mining branch is no longer blocked: generator
+version 10 has ore in the ground.
+
+**Superseded, not a gap.** "Cooking needs fishing and one of farming or
+herding" could not be written as one `needs` list. One parent per mission
+replaced it: cooking is spread to where its food comes from.
