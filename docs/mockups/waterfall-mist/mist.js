@@ -463,7 +463,9 @@ function hash01(a, b) {
   return (h & 0xFFFF) / 65535;
 }
 // foot {at: Vector3 (the landing cell's surface), h: layers fallen, sky}; light the game's (0.12 + 0.88 day) * sky.
-function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out) {
+// tune (New tab only): {mist: puff count x, mistSize: puff size x}; 1, 1 is the game's.
+function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
+  const mistN = newPuffs && tune ? tune.mist : 1, mistS = newPuffs && tune ? tune.mistSize : 1;
   out.n = 0;
   const quad = (p, size, rgba, cell, flip) => {
     if (out.n >= SPLASH_BUDGET) return;
@@ -486,12 +488,12 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out) {
       quad({x: foot.x + Math.cos(a) * d, y: foot.y + lift, z: foot.z + Math.sin(a) * d}, size,
         [light, light, light * 1.02, 0.75 * (1 - phase) * fade], -1, 0);
     }
-    const puffs = Math.min(24, Math.max(1, (h - 1) * 1.5)) | 0;
+    const puffs = Math.round((Math.min(24, Math.max(1, (h - 1) * 1.5)) | 0) * mistN);
     for (let i = 0; i < puffs; i++) {
       const r = k => hash01((seed ^ 0xA5A5) >>> 0, i * 8 + k);
       const period = 2 + 1.5 * r(0), phase = (t / period + r(1)) % 1, s = phase * period;
       const a = r(2) * Math.PI * 2, spread = Math.min(0.5 + 0.12 * h, 5);
-      const size = Math.min(0.5 + 0.18 * h, 5) * (0.6 + 0.8 * phase);
+      const size = Math.min(0.5 + 0.18 * h, 5) * (0.6 + 0.8 * phase) * mistS;
       const d = SPLASH_EDGE_M + spread * (0.3 + phase) * r(3);
       const y = foot.y + (0.25 + 0.04 * h) * s + size + SPLASH_CLEAR_M;
       const alpha = (0.12 + 0.33 * Math.min(h / 8, 1)) * (1 - phase) * fade;
@@ -655,7 +657,7 @@ window.PBDMist = function (canvas, sheetUrl) {
   const bubbles = bubblePoints(F, U); bubbles.material.uniforms.uFoot.value.copy(foot); opaque.add(bubbles);
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0;
-  const S = {variant: "today", night: false, running: true, gain: 0.8, bubbles: 1, teal: 1};
+  const S = {variant: "today", night: false, running: true, gain: 0.8, bubbles: 1, teal: 1, mist: 1, mistSize: 1};
   function murk(open) {
     // The game's murk: the deep's albedo lit by the light on open water, dimmed by the water above the eye.
     const eyeDepth = Math.max(0, F.poolY - camera.position.y);
@@ -742,7 +744,7 @@ window.PBDMist = function (canvas, sheetUrl) {
     const day = S.night ? 0 : 1;
     for (const m of [leak, front]) {
       if (!m.visible) continue;
-      splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q);
+      splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q, {mist: S.mist, mistSize: S.mistSize});
       m.material.uniforms.uRight.value.copy(right); m.material.uniforms.uUpCam.value.copy(upCam);
       m.userData.upload();
     }

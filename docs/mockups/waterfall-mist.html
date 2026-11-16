@@ -96,6 +96,8 @@ button{font:inherit;color:inherit}
   </div>
   <section id="newPanel" hidden>
     <div class="sl one"><label for="gain">Mist opacity</label><input id="gain" type="range" min="0.2" max="1.5" step="0.05" value="0.8"><output id="gainOut">0.80</output></div>
+    <div class="sl one"><label for="mist">Mist amount</label><input id="mist" type="range" min="0" max="3" step="0.05" value="1"><output id="mistOut">1.00</output></div>
+    <div class="sl one"><label for="mistSize">Mist size</label><input id="mistSize" type="range" min="0.4" max="2" step="0.05" value="1"><output id="mistSizeOut">1.00</output></div>
     <div class="sl one"><label for="bub">Bubbles</label><input id="bub" type="range" min="0" max="2" step="0.05" value="1"><output id="bubOut">1.00</output></div>
     <div class="sl one"><label for="teal">Teal churn</label><input id="teal" type="range" min="0" max="2" step="0.05" value="1"><output id="tealOut">1.00</output></div>
     <div class="sheet" style="margin-top:10px">
@@ -135,6 +137,7 @@ button{font:inherit;color:inherit}
     <li>Cut to the game's pixel look by <code>tools/fx/mist_puffs_post.py</code>: 32-texel cells sampled nearest, a five-tone ramp lit from above, soft over the outer three texels, no outline.</li>
     <li>Rows are four puffs; columns are a puff's life: tight as it leaves the foot, swelling, then fraying. Each mist puff of the game's splash picks a row by its own hash and a column by its age.</li>
     <li><b>Mist opacity</b> scales the puffs' alpha. At 0.80 a puff covers the same total as the dot it replaces.</li>
+    <li><b>Mist amount</b> scales how many puffs rise (1.00 is the game's count, up to 24 a fall; 0 none, 3 triple). <b>Mist size</b> scales each puff.</li>
     <li><b>Bubbles</b> scales how many bubbles rise (1.00 is the default count, 60 plus 14 per metre fallen; 0 none, 2 double).</li>
     <li><b>Teal churn</b> scales how strongly the water over the bubbles turns aerated teal (1.00 default, 0 none).</li>
     <li>The sheet's normals (<code>assets/textures/fx/mist_puffs/normal.png</code>) are made for lighting by the sun in the game. The page uses the shade baked into the sheet.</li>
@@ -154,7 +157,7 @@ button{font:inherit;color:inherit}
 <template id="tab-fixed"><p><b>Fixed order.</b> The same splash, drawn after the water against its depth: in front of the water, hidden by it. The pool shows its own deep colour. The mist is the game's gradient dot.</p></template>
 <template id="tab-new"><p><b>New mist + bubbles.</b> The fixed order, with lumpy lit mist puffs in place of the dot, bubbles rising in the pool under the fall, and the aerated teal over them. <b>Mist opacity</b> scales the puffs; 0.80 matches the dot's total cover.</p></template>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="waterfall-mist/mist.js?v=5"></script>
+<script src="waterfall-mist/mist.js?v=6"></script>
 <script>
 "use strict";
 let MODAL_BACK = null;
@@ -206,7 +209,7 @@ document.getElementById("pause").addEventListener("change", e => { P.S.running =
 document.getElementById("showRef").addEventListener("change", refresh);
 const gain = document.getElementById("gain");
 gain.addEventListener("input", () => { P.S.gain = +gain.value; document.getElementById("gainOut").textContent = (+gain.value).toFixed(2); P.apply(); });
-for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"]]) {
+for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"], ["mist", "mist"], ["mistSize", "mistSize"]]) {
   const el = document.getElementById(id);
   el.addEventListener("input", () => { P.S[key] = +el.value; document.getElementById(id + "Out").textContent = (+el.value).toFixed(2); P.apply(); });
 }
