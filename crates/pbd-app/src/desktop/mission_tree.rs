@@ -16,19 +16,213 @@ use pbd_app::missions::{MissionChain, Missions};
 use pbd_app::ui_kit::{self, KitText, Set, UiKit};
 use pbd_core::missions::{Chain, Standing};
 
-/// A card's width and height, and the gaps between columns and rows, in
-/// the UI's native pixels at a zoom of 1.
-const CW: f32 = 132.0;
-const CH: f32 = 96.0;
-const GX: f32 = 46.0;
-const GY: f32 = 40.0;
-/// The margin round the tree, with room above a row for a branch's name.
+/// One zoom level of the tree: a designed view, not a scale. The cards are
+/// always drawn at the UI kit's own scale (the tree's `UiTransform` scale is
+/// 1, so a 9-slice frame is never resampled and never tears); a level sets
+/// the card's size and detail, the gaps between cards and the type size, all
+/// in whole UI pixels (owner, 2026-11-16: "I would opt to virtualize them,
+/// so that way we still control how we want to zoom in").
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Level {
+    /// A card's width and height.
+    pub cw: f32,
+    pub ch: f32,
+    /// The gaps between columns and rows (even, so a line's elbow sits on a
+    /// whole pixel).
+    pub gx: f32,
+    pub gy: f32,
+    /// The card's title and badge; without them a card is its frame only,
+    /// the overview that fits the whole tree on a screen.
+    pub text: bool,
+    /// The whole card (objectives and unlocks), or its title and badge only.
+    pub full: bool,
+    /// The branch plaques drawn over each branch's first card.
+    pub labels: bool,
+    /// Type sizes: the title, the branch line, an objective, the unlocks.
+    pub title: f32,
+    pub sub: f32,
+    pub line: f32,
+    /// The badge's kit-text multiple (a whole number of art pixels).
+    pub badge: u32,
+    /// The card's padding, left and right, top and bottom.
+    pub pad: (f32, f32),
+}
+
+/// The levels, farthest first. 0 is the overview, each card its frame
+/// only; 1 and 2 collapse a card to its title and badge; 3 is the full card
+/// packed close; 4 is the kit's native card; 5 and 6 are bigger cards with
+/// bigger type.
+pub const LEVELS: [Level; 7] = [
+    Level {
+        cw: 40.0,
+        ch: 12.0,
+        gx: 4.0,
+        gy: 4.0,
+        text: false,
+        full: false,
+        labels: false,
+        title: 8.0,
+        sub: 8.0,
+        line: 8.0,
+        badge: 1,
+        pad: (0.0, 0.0),
+    },
+    Level {
+        cw: 112.0,
+        ch: 18.0,
+        gx: 10.0,
+        gy: 6.0,
+        text: true,
+        full: false,
+        labels: false,
+        title: 8.0,
+        sub: 8.0,
+        line: 8.0,
+        badge: 1,
+        pad: (5.0, 4.0),
+    },
+    Level {
+        cw: 132.0,
+        ch: 24.0,
+        gx: 18.0,
+        gy: 10.0,
+        text: true,
+        full: false,
+        labels: false,
+        title: 10.0,
+        sub: 8.0,
+        line: 8.0,
+        badge: 1,
+        pad: (6.0, 5.0),
+    },
+    Level {
+        cw: 132.0,
+        ch: 96.0,
+        gx: 22.0,
+        gy: 18.0,
+        text: true,
+        full: true,
+        labels: false,
+        title: 10.0,
+        sub: 8.0,
+        line: 9.0,
+        badge: 1,
+        pad: (7.0, 5.0),
+    },
+    Level {
+        cw: 132.0,
+        ch: 96.0,
+        gx: 46.0,
+        gy: 40.0,
+        text: true,
+        full: true,
+        labels: true,
+        title: 10.0,
+        sub: 8.0,
+        line: 9.0,
+        badge: 1,
+        pad: (7.0, 5.0),
+    },
+    Level {
+        cw: 176.0,
+        ch: 124.0,
+        gx: 56.0,
+        gy: 48.0,
+        text: true,
+        full: true,
+        labels: true,
+        title: 13.0,
+        sub: 10.0,
+        line: 11.0,
+        badge: 1,
+        pad: (9.0, 7.0),
+    },
+    Level {
+        cw: 224.0,
+        ch: 156.0,
+        gx: 64.0,
+        gy: 56.0,
+        text: true,
+        full: true,
+        labels: true,
+        title: 16.0,
+        sub: 12.0,
+        line: 13.0,
+        badge: 2,
+        pad: (11.0, 9.0),
+    },
+];
+/// The level the tab opens at: the native card.
+pub const OPEN_LEVEL: usize = 4;
+/// A tick's size: the kit's check, one art pixel a UI pixel.
+const CHECK: f32 = 12.0;
+/// The margin round the tree, with room above a row for a branch's name
+/// where the level draws the names.
 const OX: f32 = 20.0;
 const OY: f32 = 34.0;
+const OY_BARE: f32 = 12.0;
 /// The side panel's width.
 const SIDE_W: f32 = 190.0;
 /// A line's thickness.
 const LINE: f32 = 2.0;
+
+impl Level {
+    /// Where the tree's first card sits.
+    pub fn origin(&self) -> Vec2 {
+        Vec2::new(OX, if self.labels { OY } else { OY_BARE })
+    }
+    /// From one card to the next, across and down.
+    pub fn pitch(&self) -> Vec2 {
+        Vec2::new(self.cw + self.gx, self.ch + self.gy)
+    }
+    /// A card's top left corner.
+    pub fn card(&self, (col, row): (usize, usize)) -> Vec2 {
+        self.origin() + Vec2::new(col as f32, row as f32) * self.pitch()
+    }
+    /// The whole tree's size, `cols` by `rows` cards.
+    pub fn size(&self, cols: usize, rows: usize) -> Vec2 {
+        self.card((cols, rows)) - Vec2::new(self.gx, self.gy) + Vec2::splat(OX)
+    }
+}
+
+/// The tree's columns and rows.
+fn extent(at: &[(usize, usize)]) -> (usize, usize) {
+    (
+        at.iter().map(|a| a.0).max().unwrap_or(0) + 1,
+        at.iter().map(|a| a.1).max().unwrap_or(0) + 1,
+    )
+}
+
+/// The three segments of the line from a parent's card to its child's:
+/// out of the parent's side, along the gap, into the child's side. `None`
+/// for the middle one when the two share a row.
+fn edge_segments(lv: &Level, parent: (usize, usize), child: (usize, usize)) -> [Option<Rect>; 3] {
+    let (p, c) = (lv.card(parent), lv.card(child));
+    let (x1, y1) = (p.x + lv.cw, p.y + lv.ch / 2.0);
+    let (x2, y2) = (c.x, c.y + lv.ch / 2.0);
+    let xm = x1 + lv.gx / 2.0;
+    let h = LINE / 2.0;
+    let r = |x: f32, y: f32, w: f32, hh: f32| {
+        Rect::from_corners(Vec2::new(x, y), Vec2::new(x + w, y + hh))
+    };
+    [
+        Some(r(x1, y1 - h, xm - x1 + h, LINE)),
+        ((y2 - y1).abs() > 0.5).then(|| r(xm - h, y1.min(y2) - h, LINE, (y2 - y1).abs() + LINE)),
+        Some(r(xm - h, y2 - h, x2 - xm + h, LINE)),
+    ]
+}
+
+/// A point snapped to whole physical pixels, `k` of them a UI pixel.
+pub fn snap(p: Vec2, k: f32) -> Vec2 {
+    if k <= 0.0 { p } else { (p * k).round() / k }
+}
+
+/// The pan that keeps the tree point under `at` under it from one level to
+/// another, by its place between the cards.
+pub fn rezoom(pan: Vec2, at: Vec2, from: &Level, to: &Level) -> Vec2 {
+    let u = (at - pan - from.origin()) / from.pitch();
+    at - to.origin() - u * to.pitch()
+}
 
 /// The branches in M33's order, with the names drawn over them.
 pub const BRANCHES: [(&str, &str); 8] = [
@@ -101,19 +295,13 @@ pub fn layout(chain: &Chain) -> Vec<(usize, usize)> {
     at
 }
 
-fn card_x(col: usize) -> f32 {
-    OX + col as f32 * (CW + GX)
-}
-fn card_y(row: usize) -> f32 {
-    OY + row as f32 * (CH + GY)
-}
-
 /// Where the tree is looked at from, and which card is open in the side
-/// panel. `pan` is where the tree's corner is on screen, native pixels.
+/// panel. `pan` is where the tree's corner is on screen, UI pixels, snapped
+/// to whole physical pixels; `level` indexes `LEVELS`.
 #[derive(Resource, Clone, PartialEq, Debug)]
 pub struct TreeView {
     pub pan: Vec2,
-    pub zoom: f32,
+    pub level: usize,
     pub selected: Option<usize>,
     /// The view was placed on the current mission since the tab opened.
     pub placed: bool,
@@ -126,7 +314,7 @@ impl Default for TreeView {
     fn default() -> Self {
         Self {
             pan: Vec2::ZERO,
-            zoom: 1.0,
+            level: OPEN_LEVEL,
             selected: None,
             placed: false,
             touched: false,
@@ -155,6 +343,16 @@ pub struct CardUnlocks(pub usize);
 /// One segment of the line from a mission's parent to it.
 #[derive(Component)]
 pub struct Edge(pub usize);
+/// Which of an edge's three segments.
+#[derive(Component)]
+pub struct EdgeSeg(pub usize);
+/// A branch's plaque, over the card of the mission at this index.
+#[derive(Component)]
+pub struct BranchLabel(pub usize);
+/// A part of a card a collapsed card hides: its branch line, objectives
+/// and unlocks.
+#[derive(Component)]
+pub struct CardDetail;
 #[derive(Component)]
 pub struct SidePanel;
 #[derive(Component)]
@@ -177,11 +375,7 @@ fn body(text: &str, size: f32, colour: Color) -> impl Bundle {
 pub fn spawn(mut commands: Commands, kit: Res<UiKit>, chain: Res<MissionChain>) {
     let kit = &*kit;
     let chain = &chain.0;
-    let at = layout(chain);
-    let cols = at.iter().map(|a| a.0).max().unwrap_or(0) + 1;
-    let rows = at.iter().map(|a| a.1).max().unwrap_or(0) + 1;
-    let width = card_x(cols) - GX + OX;
-    let height = card_y(rows) - GY + OX;
+    // `relayout` sizes and places every part for the view's level.
     commands
         .spawn((
             menu::layer(),
@@ -211,18 +405,16 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, chain: Res<MissionChain>) 
                                 position_type: PositionType::Absolute,
                                 left: px(0),
                                 top: px(0),
-                                width: px(width),
-                                height: px(height),
                                 ..default()
                             },
                             UiTransform::default(),
                             TreeWorld,
                         ))
                         .with_children(|world| {
-                            spawn_edges(world, chain, &at);
-                            spawn_labels(world, kit, chain, &at);
+                            spawn_edges(world, chain);
+                            spawn_labels(world, kit, chain);
                             for (i, m) in chain.missions.iter().enumerate() {
-                                spawn_card(world, kit, i, m, at[i]);
+                                spawn_card(world, kit, i, m);
                             }
                         });
                 });
@@ -230,44 +422,26 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, chain: Res<MissionChain>) 
         });
 }
 
-fn spawn_edges(world: &mut ChildSpawnerCommands, chain: &Chain, at: &[(usize, usize)]) {
-    let index = |id: &str| chain.missions.iter().position(|m| m.id == id);
+fn spawn_edges(world: &mut ChildSpawnerCommands, chain: &Chain) {
     for (i, m) in chain.missions.iter().enumerate() {
-        let Some(p) = m.needs.first().and_then(|p| index(p)) else {
+        if m.needs.is_empty() {
             continue;
-        };
-        let (x1, y1) = (card_x(at[p].0) + CW, card_y(at[p].1) + CH / 2.0);
-        let (x2, y2) = (card_x(at[i].0), card_y(at[i].1) + CH / 2.0);
-        let xm = x1 + GX / 2.0;
-        let mut segments = vec![(x1, y1 - LINE / 2.0, xm - x1 + LINE / 2.0, LINE)];
-        if (y2 - y1).abs() > 0.5 {
-            let top = y1.min(y2) - LINE / 2.0;
-            segments.push((xm - LINE / 2.0, top, LINE, (y2 - y1).abs() + LINE));
         }
-        segments.push((xm - LINE / 2.0, y2 - LINE / 2.0, x2 - xm + LINE / 2.0, LINE));
-        for (x, y, w, h) in segments {
+        for k in 0..3 {
             world.spawn((
                 Node {
                     position_type: PositionType::Absolute,
-                    left: px(x),
-                    top: px(y),
-                    width: px(w),
-                    height: px(h),
                     ..default()
                 },
                 BackgroundColor(ui_kit::STONE_MID),
                 Edge(i),
+                EdgeSeg(k),
             ));
         }
     }
 }
 
-fn spawn_labels(
-    world: &mut ChildSpawnerCommands,
-    kit: &UiKit,
-    chain: &Chain,
-    at: &[(usize, usize)],
-) {
+fn spawn_labels(world: &mut ChildSpawnerCommands, kit: &UiKit, chain: &Chain) {
     for (n, (key, name)) in BRANCHES.iter().enumerate() {
         let Some(first) = chain.missions.iter().position(|m| m.branch == *key) else {
             continue;
@@ -277,11 +451,10 @@ fn spawn_labels(
                 kit.nine(Set::Oak, "button-idle"),
                 Node {
                     position_type: PositionType::Absolute,
-                    left: px(card_x(at[first].0)),
-                    top: px(card_y(at[first].1) - 24.0),
                     padding: UiRect::new(px(8), px(8), px(4), px(3)),
                     ..default()
                 },
+                BranchLabel(first),
             ))
             .with_children(|plaque| {
                 plaque.spawn(KitText::new(format!("{n} · {name}"), ui_kit::OAK_LABEL));
@@ -294,7 +467,6 @@ fn spawn_card(
     kit: &UiKit,
     i: usize,
     m: &pbd_core::missions::Mission,
-    (col, row): (usize, usize),
 ) {
     world
         .spawn((
@@ -302,11 +474,6 @@ fn spawn_card(
             kit.nine(Set::Stone, "tooltip"),
             Node {
                 position_type: PositionType::Absolute,
-                left: px(card_x(col)),
-                top: px(card_y(row)),
-                width: px(CW),
-                height: px(CH),
-                padding: UiRect::new(px(7), px(7), px(5), px(5)),
                 flex_direction: FlexDirection::Column,
                 row_gap: px(2),
                 border: UiRect::all(px(1)),
@@ -335,20 +502,23 @@ fn spawn_card(
                     CardBadge(i),
                 ));
             });
-            card.spawn((body("", 8.0, ui_kit::LABEL_DIM), CardSub(i)));
+            card.spawn((body("", 8.0, ui_kit::LABEL_DIM), CardSub(i), CardDetail));
             for (k, objective) in m.objectives.iter().enumerate() {
-                card.spawn(Node {
-                    align_items: AlignItems::Center,
-                    column_gap: px(3),
-                    width: percent(100),
-                    ..default()
-                })
+                card.spawn((
+                    Node {
+                        align_items: AlignItems::Center,
+                        column_gap: px(3),
+                        width: percent(100),
+                        ..default()
+                    },
+                    CardDetail,
+                ))
                 .with_children(|line| {
                     line.spawn((
                         kit.whole(Set::Stone, "check-off"),
                         Node {
-                            width: px(9),
-                            height: px(9),
+                            width: px(CHECK),
+                            height: px(CHECK),
                             flex_shrink: 0.0,
                             ..default()
                         },
@@ -367,6 +537,7 @@ fn spawn_card(
                     ..default()
                 },
                 CardUnlocks(i),
+                CardDetail,
             ));
         });
 }
@@ -703,14 +874,17 @@ pub fn paint(
     }
 }
 
-/// The zoom the tab opens at.
-const OPEN_ZOOM: f32 = 0.75;
-/// The view's zoom limits.
-const ZOOM: (f32, f32) = (0.2, 2.0);
+/// How far a pixel-unit wheel must turn for one level.
+const WHEEL_PIXELS: f32 = 40.0;
 
-/// Pan by dragging, zoom by the wheel about the pointer, a click on a card
-/// opens it in the side panel, the ✕ or Esc-free click on the ground
-/// closes it; the view opens on the current mission.
+/// The pan that puts a card at the middle of the screen.
+fn centred(lv: &Level, at: (usize, usize), size: Vec2) -> Vec2 {
+    size / 2.0 - (lv.card(at) + Vec2::new(lv.cw, lv.ch) / 2.0)
+}
+
+/// Pan by dragging, step through the levels by the wheel about the pointer,
+/// a click on a card opens it in the side panel, the ✕ or a click on the
+/// ground closes it; the view opens on the current mission.
 #[allow(clippy::too_many_arguments)]
 pub fn steer(
     screen: Res<Screen>,
@@ -727,10 +901,12 @@ pub fn steer(
     launch: Res<super::Launch>,
     keys: Res<ButtonInput<KeyCode>>,
     mut press: Local<Option<(Vec2, Option<usize>, bool)>>,
+    mut spin: Local<f32>,
 ) {
     if *screen != Screen::Missions {
         wheel.clear();
         *press = None;
+        *spin = 0.0;
         if view.placed {
             view.placed = false;
             view.touched = false;
@@ -741,6 +917,8 @@ pub fn steer(
         return;
     };
     let scale = ui_scale.map_or(1.0, |s| s.0);
+    // Physical pixels a UI pixel: the kit's whole art scale.
+    let k = scale * window.scale_factor();
     let size = Vec2::new(window.width(), window.height()) / scale;
     let pointer = window.cursor_position().map(|p| p / scale);
     let mut next = view.clone();
@@ -752,33 +930,45 @@ pub fn steer(
             .current(&chain.0)
             .and_then(|m| chain.0.missions.iter().position(|n| n.id == m.id))
             .unwrap_or(0);
-        let (col, row) = at[current];
-        next.zoom = OPEN_ZOOM;
-        next.pan =
-            size / 2.0 - Vec2::new(card_x(col) + CW / 2.0, card_y(row) + CH / 2.0) * OPEN_ZOOM;
         if !next.placed
             && let Some(id) = launch.tree_select.as_deref()
         {
             next.selected = chain.0.missions.iter().position(|m| m.id == id);
-            if id == "fit" {
-                next = fitted(&chain.0, size, next);
-                next.touched = true;
-            }
+        }
+        next.level = launch.tree_zoom.unwrap_or(OPEN_LEVEL).min(LEVELS.len() - 1);
+        next.pan = centred(
+            &LEVELS[next.level],
+            at[next.selected.unwrap_or(current)],
+            size,
+        );
+        if !next.placed && launch.tree_select.as_deref() == Some("fit") {
+            next = fitted(&chain.0, size, next);
+            next.touched = true;
         }
         next.placed = true;
     }
     let over = viewport.iter().any(|i| *i != Interaction::None);
     for event in wheel.read() {
         let steps = match event.unit {
-            MouseScrollUnit::Line => event.y,
-            MouseScrollUnit::Pixel => event.y / 40.0,
+            MouseScrollUnit::Line => event.y.signum() * event.y.abs().round().max(1.0),
+            MouseScrollUnit::Pixel => {
+                *spin += event.y;
+                let whole = (*spin / WHEEL_PIXELS).trunc();
+                *spin -= whole * WHEEL_PIXELS;
+                whole
+            }
         };
-        if over && let Some(at) = pointer {
-            next.touched = true;
-            let zoom = (next.zoom * 1.2f32.powf(steps)).clamp(ZOOM.0, ZOOM.1);
-            // The point under the pointer stays under it.
-            next.pan = at - (at - next.pan) * (zoom / next.zoom);
-            next.zoom = zoom;
+        if steps == 0.0 || !over {
+            continue;
+        }
+        if let Some(at) = pointer {
+            let to = (next.level as i32 + steps as i32).clamp(0, LEVELS.len() as i32 - 1) as usize;
+            if to != next.level {
+                next.touched = true;
+                // The point under the pointer stays under it.
+                next.pan = rezoom(next.pan, at, &LEVELS[next.level], &LEVELS[to]);
+                next.level = to;
+            }
         }
     }
     let on_card = cards
@@ -791,7 +981,7 @@ pub fn steer(
     {
         *press = Some((at, on_card, false));
     }
-    if let (Some((from, card, moved)), Some(at)) = (press.as_mut(), pointer)
+    if let (Some((from, _, moved)), Some(at)) = (press.as_mut(), pointer)
         && mouse.pressed(MouseButton::Left)
     {
         let d = at - *from;
@@ -801,7 +991,6 @@ pub fn steer(
             next.pan += d;
             *from = at;
         }
-        let _ = card;
     }
     if mouse.just_released(MouseButton::Left)
         && let Some((_, card, moved)) = press.take()
@@ -818,36 +1007,151 @@ pub fn steer(
         next.selected = None;
         *press = None;
     }
+    next.pan = snap(next.pan, k);
     if next != *view {
         *view = next;
     }
 }
 
-/// The whole tree on screen, under the tab strip.
+/// The whole tree on screen, under the tab strip: the largest level it
+/// fits at, or the farthest.
 fn fitted(chain: &Chain, size: Vec2, mut view: TreeView) -> TreeView {
-    let at = layout(chain);
-    let cols = at.iter().map(|a| a.0).max().unwrap_or(0) + 1;
-    let rows = at.iter().map(|a| a.1).max().unwrap_or(0) + 1;
-    let tree = Vec2::new(card_x(cols) - GX + OX, card_y(rows) - GY + OX);
+    let (cols, rows) = extent(&layout(chain));
     let room = size - Vec2::new(0.0, 30.0);
-    view.zoom = (room.x / tree.x).min(room.y / tree.y).clamp(ZOOM.0, ZOOM.1);
-    view.pan = Vec2::new((size.x - tree.x * view.zoom) / 2.0, 30.0);
+    view.level = (0..LEVELS.len())
+        .rev()
+        .find(|&l| {
+            let tree = LEVELS[l].size(cols, rows);
+            tree.x <= room.x && tree.y <= room.y
+        })
+        .unwrap_or(0);
+    let tree = LEVELS[view.level].size(cols, rows);
+    view.pan = Vec2::new(
+        (size.x - tree.x) / 2.0,
+        30.0 + ((room.y - tree.y) / 2.0).max(0.0),
+    );
     view
 }
 
-/// Move and scale the tree to the view.
-pub fn place(
+/// Size and place every card, line and plaque for the view's level, when
+/// the level changes or the tab is built.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
+pub fn relayout(
     view: Res<TreeView>,
-    mut world: Query<(&ComputedNode, &mut UiTransform), With<TreeWorld>>,
+    chain: Res<MissionChain>,
+    added: Query<(), Added<Card>>,
+    mut last: Local<Option<usize>>,
+    mut nodes: ParamSet<(
+        Query<(&Card, &mut Node)>,
+        Query<(&Edge, &EdgeSeg, &mut Node)>,
+        Query<(&BranchLabel, &mut Node)>,
+        Query<&mut Node, With<CardDetail>>,
+        Query<&mut Node, With<TreeWorld>>,
+        Query<&mut Node, Or<(With<CardTitle>, With<CardBadge>)>>,
+    )>,
+    mut fonts: ParamSet<(
+        Query<(&mut TextFont, &mut TextLayout), With<CardTitle>>,
+        Query<&mut TextFont, With<CardSub>>,
+        Query<&mut TextFont, With<CardObjective>>,
+        Query<&mut TextFont, With<CardUnlocks>>,
+    )>,
+    mut badges: Query<&mut KitText, With<CardBadge>>,
 ) {
-    for (node, mut transform) in &mut world {
-        // `UiTransform` scales about the node's centre: put the corner at
-        // `pan`.
-        let half = node.size() * node.inverse_scale_factor() / 2.0;
-        let t = view.pan + half * view.zoom - half;
+    if added.is_empty() && *last == Some(view.level) {
+        return;
+    }
+    *last = Some(view.level);
+    let lv = &LEVELS[view.level.min(LEVELS.len() - 1)];
+    let chain = &chain.0;
+    let at = layout(chain);
+    let (cols, rows) = extent(&at);
+    for mut node in &mut nodes.p4() {
+        let size = lv.size(cols, rows);
+        node.width = px(size.x);
+        node.height = px(size.y);
+    }
+    for (card, mut node) in &mut nodes.p0() {
+        let p = lv.card(at[card.0]);
+        node.left = px(p.x);
+        node.top = px(p.y);
+        node.width = px(lv.cw);
+        node.height = px(lv.ch);
+        node.padding = UiRect::axes(px(lv.pad.0), px(lv.pad.1));
+    }
+    let index = |id: &str| chain.missions.iter().position(|m| m.id == id);
+    for (edge, seg, mut node) in &mut nodes.p1() {
+        let m = &chain.missions[edge.0];
+        let Some(p) = m.needs.first().and_then(|p| index(p)) else {
+            continue;
+        };
+        match edge_segments(lv, at[p], at[edge.0])[seg.0] {
+            Some(r) => {
+                node.display = Display::Flex;
+                node.left = px(r.min.x);
+                node.top = px(r.min.y);
+                node.width = px(r.width());
+                node.height = px(r.height());
+            }
+            None => node.display = Display::None,
+        }
+    }
+    for (label, mut node) in &mut nodes.p2() {
+        let p = lv.card(at[label.0]);
+        node.display = if lv.labels {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        node.left = px(p.x);
+        node.top = px(p.y - 24.0);
+    }
+    let detail = if lv.full {
+        Display::Flex
+    } else {
+        Display::None
+    };
+    for mut node in &mut nodes.p3() {
+        node.display = detail;
+    }
+    let text = if lv.text {
+        Display::Flex
+    } else {
+        Display::None
+    };
+    for mut node in &mut nodes.p5() {
+        node.display = text;
+    }
+    for (mut font, mut text) in &mut fonts.p0() {
+        font.font_size = lv.title;
+        text.linebreak = if lv.full {
+            LineBreak::WordBoundary
+        } else {
+            LineBreak::NoWrap
+        };
+    }
+    for mut font in &mut fonts.p1() {
+        font.font_size = lv.sub;
+    }
+    for mut font in &mut fonts.p2() {
+        font.font_size = lv.line;
+    }
+    for mut font in &mut fonts.p3() {
+        font.font_size = lv.sub;
+    }
+    for mut text in &mut badges {
+        if text.size != lv.badge {
+            text.size = lv.badge;
+        }
+    }
+}
+
+/// Move the tree to the view. Its scale is always 1: the cards are drawn at
+/// the kit's own scale, and the pan is on whole physical pixels.
+pub fn place(view: Res<TreeView>, mut world: Query<&mut UiTransform, With<TreeWorld>>) {
+    for mut transform in &mut world {
         let want = UiTransform {
-            translation: Val2::px(t.x, t.y),
-            scale: Vec2::splat(view.zoom),
+            translation: Val2::px(view.pan.x, view.pan.y),
             ..default()
         };
         if *transform != want {
@@ -900,5 +1204,62 @@ mod tests {
         for m in &chain.missions {
             assert!(branch_rank(&m.branch) < BRANCHES.len(), "{}", m.id);
         }
+    }
+
+    /// Every level is whole UI pixels, so with the tree's scale at 1 one
+    /// art pixel is the kit's whole scale in physical pixels: every card,
+    /// line and plaque lands on whole pixels, and a snapped pan does too.
+    #[test]
+    fn every_level_is_whole_pixels() {
+        let chain = shipped();
+        let at = layout(&chain);
+        let whole = |v: f32| v.fract() == 0.0;
+        for (n, lv) in LEVELS.iter().enumerate() {
+            for v in [
+                lv.cw, lv.ch, lv.gx, lv.gy, lv.title, lv.sub, lv.line, lv.pad.0, lv.pad.1,
+            ] {
+                assert!(whole(v), "level {n}: {v}");
+            }
+            assert!(lv.badge >= 1, "level {n}");
+            for (i, m) in chain.missions.iter().enumerate() {
+                let p = lv.card(at[i]);
+                assert!(whole(p.x) && whole(p.y), "level {n}: {} at {p}", m.id);
+                let Some(parent) = m.needs.first() else {
+                    continue;
+                };
+                let parent = chain.missions.iter().position(|q| &q.id == parent).unwrap();
+                for r in edge_segments(lv, at[parent], at[i]).into_iter().flatten() {
+                    for v in [r.min.x, r.min.y, r.max.x, r.max.y] {
+                        assert!(whole(v), "level {n}: {} line {r:?}", m.id);
+                    }
+                }
+            }
+        }
+        // The levels widen from the farthest to the nearest.
+        for w in LEVELS.windows(2) {
+            assert!(w[1].pitch().x >= w[0].pitch().x && w[1].pitch().y >= w[0].pitch().y);
+        }
+        // A pan snapped at an art scale of k is k whole physical pixels a
+        // UI pixel.
+        for k in 1..=4 {
+            let k = k as f32;
+            for pan in [Vec2::new(10.37, -3.2), Vec2::new(-511.5, 77.75)] {
+                let p = snap(pan, k) * k;
+                assert!(whole(p.x) && whole(p.y), "{pan} at {k}");
+            }
+        }
+    }
+
+    /// A step of the wheel keeps the point under the pointer between the
+    /// same cards.
+    #[test]
+    fn a_level_step_keeps_the_point_under_the_pointer() {
+        let at = Vec2::new(400.0, 300.0);
+        let pan = Vec2::new(-120.0, 40.0);
+        let (a, b) = (&LEVELS[OPEN_LEVEL], &LEVELS[1]);
+        let u = (at - pan - a.origin()) / a.pitch();
+        let pan2 = rezoom(pan, at, a, b);
+        let u2 = (at - pan2 - b.origin()) / b.pitch();
+        assert!((u - u2).length() < 1e-4);
     }
 }

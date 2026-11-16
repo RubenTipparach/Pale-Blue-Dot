@@ -310,6 +310,10 @@ pub struct Launch {
     /// `--tree-select <id>`: the Missions tab opens with this mission's card
     /// in the side panel (a capture instrument, `starter-missions` TS.2).
     pub tree_select: Option<String>,
+    /// `--tree-zoom <level>`: the Missions tab opens at this zoom level,
+    /// 0 (farthest) to 6, on the selected card or the current mission (a
+    /// capture instrument, `starter-missions` TS.3).
+    pub tree_zoom: Option<usize>,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -452,6 +456,7 @@ impl Launch {
             eat: Vec::new(),
             missions: None,
             tree_select: None,
+            tree_zoom: None,
             dig_ahead: false,
             take_trees: false,
             pitch: None,
@@ -626,6 +631,14 @@ impl Launch {
                         .get(i)
                         .expect("--eat takes dish codes, comma separated");
                     result.eat = dishes.split(',').map(str::to_string).collect();
+                }
+                "--tree-zoom" => {
+                    i += 1;
+                    result.tree_zoom = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--tree-zoom takes a level, 0 to 6"),
+                    );
                 }
                 "--tree-select" => {
                     i += 1;
@@ -1448,6 +1461,7 @@ pub fn run(args: &[String]) {
                 missions::paint,
                 missions::show_line,
                 mission_tree::steer,
+                mission_tree::relayout,
                 mission_tree::place,
                 mission_tree::paint,
             )

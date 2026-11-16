@@ -444,18 +444,27 @@ we dont have 9 slice seems - or virtualize the zooms"*.
 
 **Zoom.** Today the tab scales the whole tree by any factor (`UiTransform`,
 x1.2 a wheel step, 0.2 to 2.0), so a 9-slice frame lands between screen
-pixels and its slices pull apart. Instead:
-- **Cards only at whole-pixel scales.** A card's art is drawn only at a
-  scale where one art pixel is a whole number of screen pixels:
-  `UiScale x zoom` is an integer, so `zoom = k / UiScale` for k = 1, 2, 3....
-- **Below 1:1, zoom is virtual.** The cards keep their 1:1 size, and
-  zooming out shrinks the spacing between them (and so the canvas). At the
-  farthest steps a card shows only its icon and title. Zooming in uses the
-  integer scales above.
-- **The pan snaps to whole screen pixels.**
-- **The wheel steps through the levels.** F fits to the largest level
-  that shows the whole tree.
-- **The mockup does the same,** in CSS pixels times the device pixel ratio.
+pixels and its slices pull apart. The owner offered two ways out, integer
+zooms or virtual ones, and chose: *"I would opt to virtualize them, so that
+way we still control how we want to zoom in"*. So zoom is fully virtual:
+- **The art is never scaled.** The tree's `UiTransform` scale stays 1 (in
+  M33, the world has no `scale()`), so a card's frame is always drawn at the
+  UI kit's own whole-pixel scale and cannot tear.
+- **Each level is a designed view.** It sets the card's size and detail, the
+  gaps between cards and the type size, all in whole UI pixels; positions
+  come from the layout with that level's spacing. Seven levels, farthest
+  first: 0, the overview, each card its frame alone (it is the level that
+  fits the whole tree on a screen); 1, a card's title and badge; 2 (in M33,
+  icon, title and badge; the game's card has no icon); 3, the full card
+  packed close; 4, the kit's native card, where the tab opens; 5 and 6,
+  bigger cards with bigger type, the objectives and unlocks in full. The
+  branch plaques show at 4 to 6, where there is room above a row.
+- **The pan snaps to whole physical pixels**, and so does every card.
+- **The wheel steps one level at a time about the pointer**: the point under
+  it stays between the same cards. F fits to the largest level that shows
+  the whole tree.
+- **The mockup does the same,** in CSS pixels, with the pan snapped to whole
+  device pixels.
 
 **Converging links (an option, not built).** The approved tree has one
 parent per mission. If a node is ever to have more than one parent, the
