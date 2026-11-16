@@ -101,7 +101,7 @@
             id: "stone-tools",
             branch: "trunk",
             title: "Stone tools",
-            help: "At the workbench (E), make a stone pickaxe and a stone shovel.",
+            help: "At the workbench (F), make a stone pickaxe and a stone shovel.",
             needs: ["crafting-table"],
             objectives: [
                 (kind: craft, what: "tool:pickaxe|recipe:stone-pickaxe", count: 1, label: "pickaxe"),
@@ -179,7 +179,7 @@
             id: "cook-fish",
             branch: "cooking",
             title: "Cook fish",
-            help: "Open the campfire with E and grill the fish you caught.",
+            help: "Open the campfire with F and grill the fish you caught.",
             needs: ["go-fishing"],
             objectives: [
                 (kind: cook, what: "grilled-fish|chili-fish", count: 2, label: "fish"),
@@ -200,7 +200,7 @@
             id: "find-seeds",
             branch: "farming",
             title: "Find seeds",
-            help: "Seeds turn up when you dig grass, and wild plants give them when picked (E).",
+            help: "Seeds turn up when you dig grass, and wild plants give them when picked (F).",
             needs: ["fire"],
             objectives: [
                 (kind: find, what: "seed", count: 2, label: "seeds"),
@@ -210,7 +210,7 @@
             id: "till",
             branch: "farming",
             title: "Break ground",
-            help: "With the shovel in hand, E tills soil.",
+            help: "With the shovel in hand, F tills soil.",
             needs: ["find-seeds"],
             objectives: [
                 (kind: till, what: "any", count: 4, label: "till"),
@@ -230,7 +230,7 @@
             id: "water-field",
             branch: "farming",
             title: "Water the field",
-            help: "Fill the bucket at water (E), then pour it beside the field.",
+            help: "Fill the bucket at water (right click), then pour it beside the field.",
             needs: ["plant"],
             after: ["go-fishing"],
             objectives: [
@@ -241,7 +241,7 @@
             id: "harvest",
             branch: "farming",
             title: "Harvest",
-            help: "A crop is ripe when it is full grown: E on it harvests produce and seed.",
+            help: "A crop is ripe when it is full grown: F on it harvests produce and seed.",
             needs: ["water-field"],
             objectives: [
                 (kind: harvest, what: "wheat", count: 4, label: "wheat"),
@@ -328,7 +328,7 @@
             id: "collect",
             branch: "herding",
             title: "Collect from the herd",
-            help: "A kept animal in a pen gives an egg, wool or milk once a day: E on it collects.",
+            help: "A kept animal in a pen gives an egg, wool or milk once a day: F on it collects.",
             needs: ["pen"],
             objectives: [
                 (kind: collect, what: "egg", count: 2, label: "eggs"),
@@ -394,7 +394,7 @@
             id: "smelt",
             branch: "mining",
             title: "Smelt bronze",
-            help: "Put ore and coal in the forge (E) and smelt bronze.",
+            help: "Put ore and coal in the forge (F) and smelt bronze.",
             needs: ["forge"],
             objectives: [
                 (kind: smelt, what: "bronze-ingot", count: 2, label: "bronze"),
@@ -495,7 +495,7 @@
             id: "boat",
             branch: "about",
             title: "Take a boat",
-            help: "Board a rowboat or a cog at a town's quay (E) and head out.",
+            help: "Board a rowboat or a cog at a town's quay (F) and head out.",
             needs: ["town"],
             objectives: [
                 (kind: board, what: "boat", count: 1, label: "board"),

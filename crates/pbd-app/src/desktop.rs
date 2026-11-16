@@ -293,6 +293,15 @@ pub struct Launch {
     /// `--farm-harvest`: with `--farm`, harvests the ripe cells and picks the
     /// nearest wild plant, so the hotbar shows what came of it.
     pub farm_harvest: bool,
+    /// `--farm-ripe`: with `--farm`, every crop of the field is sown ripe
+    /// (a capture's instrument, `stone-and-wood-ui` 4.8: the crop the eye
+    /// is on is one F harvests).
+    pub farm_ripe: bool,
+    /// `--hold-pointer`: a capture's instrument (`stone-and-wood-ui` 4.8).
+    /// The walker holds the pointer as a player's does after a click, so the
+    /// aim and the interact prompt show in a still capture, whose window
+    /// never has the focus.
+    pub hold_pointer: bool,
     /// `--forge [metres]`: a forge that far ahead, stocked and given two jobs,
     /// the first part done; with `--forge-panel`, its panel open.
     pub forge: Option<f32>,
@@ -446,6 +455,8 @@ impl Launch {
             lamps_across: 0.0,
             farm: None,
             farm_harvest: false,
+            hold_pointer: false,
+            farm_ripe: false,
             forge: None,
             forge_panel: false,
             bare: false,
@@ -614,6 +625,8 @@ impl Launch {
                     }
                 }
                 "--farm-harvest" => result.farm_harvest = true,
+                "--hold-pointer" => result.hold_pointer = true,
+                "--farm-ripe" => result.farm_ripe = true,
                 "--forge-panel" => result.forge_panel = true,
                 "--campfire" => {
                     let mut metres = 4.0;
@@ -1524,6 +1537,22 @@ pub fn run(args: &[String]) {
             cracks::spawn,
             farm::make_looks,
             farm::spawn_note,
+            pbd_app::interact::spawn_prompt.run_if(resource_exists::<pbd_app::ui_kit::UiKit>),
+        ),
+    )
+    // The interact key's offers from the fruit and the farm (the husbandry
+    // hands, the doors and the boats offer from their own plugins), and the
+    // prompt that names the one F will do (`stone-and-wood-ui`, "Interact on
+    // F").
+    .add_systems(
+        PostUpdate,
+        (
+            fruit::offer.in_set(pbd_app::interact::InteractSet::Offer),
+            farm::offer
+                .in_set(pbd_app::interact::InteractSet::Offer)
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::saves::WorldSave>),
+            pbd_app::interact::show_prompt.after(pbd_app::interact::InteractSet::Resolve),
         ),
     )
     // The column tier is built by a startup system and its records land when
@@ -1629,7 +1658,7 @@ pub fn run(args: &[String]) {
         Update,
         (
             // Picking fruit from a tree (`flora-v2` 12.5), ahead of the
-            // farm's E, after the husbandry hands'.
+            // farm's F, after the husbandry hands'.
             fruit::scripted
                 .after(digging::scripted_dig)
                 .run_if(pbd_app::loading::ready),
@@ -1650,7 +1679,7 @@ pub fn run(args: &[String]) {
                 .after(digging::dig_and_place)
                 .after(pbd_app::husbandry::HusbandryHands),
             // The campfire's panel opens from `farm::use_key` (after the
-            // husbandry hands, which clear an E they used).
+            // husbandry hands, which clear an F they used).
             (
                 kitchen::work,
                 kitchen::grey,
@@ -1860,6 +1889,16 @@ pub fn run(args: &[String]) {
                 since: None,
             })
             .add_systems(Update, sail_for);
+        }
+        if launch.hold_pointer {
+            app.add_systems(
+                PreUpdate,
+                (|mut state: ResMut<pbd_app::walking::WalkingState>| {
+                    state.scripted = true;
+                    state.captured = true;
+                })
+                .after(bevy::input::InputSystems),
+            );
         }
         if launch.walk_distance.is_some() {
             // Where the swim's keys go, for the same reason (below).

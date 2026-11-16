@@ -132,17 +132,29 @@ lavapipe, no GPU; frame cost not measured.)
 - [ ] The step's video, when the owner calls for the batch.
 
 ## 4. Interact on F, and its prompt (owner, 2026-11-16)
-(Design, "Interact on F, and the prompt that names it", written before the code.)
-- [ ] One INTERACT slot, `interact:KeyF`, replacing `hands:KeyE` and
+(Design, "Interact on F, and the prompt that names it", written before the
+code. Built on `claude/interact-f`; captures in
+`docs/screenshots/interact-f/`, Metal on the M4 Max Mac; frame cost not
+measured.)
+- [x] One INTERACT slot, `interact:KeyF`, replacing `hands:KeyE` and
       `vehicles:KeyF`; the F readers (husbandry, fruit, farm, doors,
       boarding) read F; E free on foot, Q/E still roll.
-- [ ] `pbd_app::interact`: the priority table, the offers, `now` with its
-      0.15 s hold; each reader acts only on its own row.
-- [ ] `farm::plant_on_ray`: crops and wild plants found by their own shape.
-- [ ] The prompt under the crosshair, with the bound key; hidden in panels.
-- [ ] Settings version 8: the old slots' rebinds migrate.
-- [ ] Texts: missions help, notes, showcase presses.
-- [ ] Tests: rebinds, an F harvest and pick through the input path, an old
-      file's custom use binding kept, F boards with nothing usable aimed.
-- [ ] Captures in `docs/screenshots/interact-f/`: the controls page and a
-      prompt of each kind.
+- [x] `pbd_app::interact`: the priority table `ACTS`, the offers, `now`
+      with its 0.15 s hold; a reader stands aside when `now` is another's.
+- [x] `farm::plant_on_ray`: crops and wild plants found by their own shape.
+- [x] The prompt under the crosshair, with the bound key; hidden in panels
+      and menus; the farm's note moved below it.
+- [x] Settings version 8: the old slots' rebinds migrate.
+- [x] Texts: missions help, notes, showcase presses, the husbandry line.
+- [x] Tests: `controls::tests::an_old_use_or_board_rebind_becomes_the_interact_key`,
+      `settings::tests::an_old_file_with_a_custom_use_key_keeps_it`,
+      `farm::tests::f_harvests_a_ripe_crop_and_picks_a_wild_plant`,
+      `farm::tests::a_ray_meets_a_plant_by_its_side_and_its_top`,
+      `vehicles::tests::f_boards_a_craft_only_when_nothing_usable_is_aimed`,
+      `interact::tests::*`; the rebinding tests moved to the new slot.
+- [x] Captures: the controls page and a prompt of each kind but board and
+      collect (README says why).
+- [ ] The step's video, with the batch.
+- [ ] `perf_suite.py` on the owner's machine: the offers search the cells
+      round the eye each frame the eye moves, else every 0.25 s (not measured
+      here).

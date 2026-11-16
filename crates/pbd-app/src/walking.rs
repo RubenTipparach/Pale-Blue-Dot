@@ -2977,17 +2977,17 @@ mod tests {
         app.world_mut().resource_mut::<WalkingState>().captured = true;
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyE);
+            .press(KeyCode::KeyF);
         app.update();
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .release(KeyCode::KeyE);
+            .release(KeyCode::KeyF);
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .clear_just_pressed(KeyCode::KeyE);
+            .clear_just_pressed(KeyCode::KeyF);
         assert!(
             app.world().resource::<Structures>().0[0].doors[0].open,
-            "E opened it"
+            "F opened it"
         );
         let save = app.world().resource::<crate::saves::WorldSave>();
         assert!(

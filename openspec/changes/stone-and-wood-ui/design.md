@@ -830,9 +830,11 @@ stations, the town doors, the boats) offer what the eye is on and what F
 would do to it; the highest row offered wins and is the frame's one
 `Interact::now`. Then:
 - **the prompt prints `now`** (its key, its verb, its thing), and
-- **each F reader acts only when `now` is its own row**, so F does exactly
-  what the prompt said: a crop beside a moored boat is harvested, not
-  boarded.
+- **an F reader stands aside when `now` names another reader's row**, so
+  F does what the prompt said: a crop beside a moored boat is harvested,
+  not boarded. With nothing named (no offer was seen yet), each reader does
+  what it did before and the first to use the press takes it, as the
+  husbandry hands always have; so a press is never lost to a frame's lag.
 
 | Rank | Thing aimed at | Prompt | Reader |
 | --- | --- | --- | --- |
@@ -879,7 +881,10 @@ and when nothing is offered. It does not flicker: a thing stays named for
 0.15 s after the aim leaves it (`interact::HOLD_S`), so crossing the seam
 between two cells of a field changes the name, never blinks it out. The
 same hold applies to `now` itself, so the prompt and F never disagree. The
-boats' on-foot line `[F] board the rowboat` is replaced by the prompt.
+boats' on-foot line `[F] board the rowboat` is replaced by the prompt, and
+aboard, the panel's keys line names the interact key for stepping off.
+The farm's note (what the last press did) moves down from 56% to 60% of the
+window, below the prompt, so the two never overlap.
 
 ### Saved rebinds (old settings files still load)
 
@@ -901,4 +906,24 @@ Every text that names E for use now names F: the INTERACT row, the starter
 missions' help lines (`missions.ron`), the farm and husbandry notes, the
 showcase bot's presses, and the doc comments. Two help lines were wrong and
 are corrected while there: the bucket fills with the right button, and a
-boat is boarded with F.
+boat is boarded with F. The husbandry line under the hotbar no longer says
+which key to press (`E with turf`, `[E]`): the prompt says it, with the
+player's own key; it says what the animal eats instead.
+
+### Capture instruments
+
+Two capture-only flags were added for the screenshots, as instruments
+(CLAUDE.md, "Write it up before touching code"), and change nothing a player
+runs: `--hold-pointer` makes the walker hold the pointer as a player's does
+after a click (a still capture's window never has the focus, so without it
+there is no aim and no prompt), and `--farm-ripe` sows `--farm`'s field
+ripe, so the crop in front of the eye is one F harvests.
+
+### Found while capturing (not changed)
+
+The fruit's hit test (`digging::tree_on_ray`, which the axe and the fruit
+have always used) is an upright cylinder on the tree's cell centre. In
+`docs/screenshots/interact-f/prompt-pick-fruit.jpg` the prompt names the
+plums while the crosshair is on the grass beside the drawn trunk: the hit
+cylinder and the drawn trunk do not quite agree. This is not new (E picked
+the plums there too); the prompt now shows it. Left for its own change.

@@ -9,7 +9,7 @@
 //! - the look moves by the mouse's motion (`AccumulatedMouseMotion`), at a
 //!   turn rate a hand would make, so the walker's own mouse-look turns it;
 //! - the hotbar is picked with its number keys, the tool with G held and
-//!   the wheel, a panel opened with its key (I, E, O) and shut with it;
+//!   the wheel, a panel opened with its key (I, F, O) and shut with it;
 //! - a panel's button is pressed as the pointer presses it: its
 //!   `Interaction` goes to `Pressed` after the UI's focus pass, which is what
 //!   the button's own handler reads.
@@ -1739,8 +1739,8 @@ fn place(bot: &mut Bot, name: &str, s: &Sight, out: &mut Intent) -> Status {
     Status::Running
 }
 
-/// A station's panel: walk to the nearest placed one, E, press the recipe
-/// once per make and wait for it, E to shut.
+/// A station's panel: walk to the nearest placed one, F, press the recipe
+/// once per make and wait for it, F to shut.
 fn station(
     bot: &mut Bot,
     material: Material,
@@ -1796,7 +1796,7 @@ fn station(
         }
         1 => {
             // Its top half: from below, the middle sits on the block under it.
-            // A campfire is a light the eye ray passes: E goes on the
+            // A campfire is a light the eye ray passes: F goes on the
             // ground it stands on.
             let (point, want) = if material.is_lamp() {
                 (at - s.up * 0.6, (cell, layer - 1))
@@ -1806,7 +1806,7 @@ fn station(
             bot.aim_at(s, out, point);
             let on = bot.aimed_cell(s) == Some(want);
             if on && bot.phase_s > 0.3 {
-                out.taps.push(KeyCode::KeyE);
+                out.taps.push(KeyCode::KeyF);
                 bot.next_phase();
             } else if bot.phase_s > 3.0 {
                 bot.phase = 0;
@@ -1854,7 +1854,7 @@ fn station(
         }
         5 => {
             if s.screen == open {
-                out.taps.push(KeyCode::KeyE);
+                out.taps.push(KeyCode::KeyF);
             }
             bot.next_phase();
         }
@@ -2060,7 +2060,7 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
 }
 
 /// Till a small field with the shovel: a fresh cell ahead and its grassy
-/// neighbours, E on each.
+/// neighbours, F on each.
 fn till(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     if s.tools.held() != Some(Tool::Shovel) {
         return Status::Fail("the shovel is not in hand".into());
@@ -2108,7 +2108,7 @@ fn till(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     let aimed = bot.aim_at(s, out, top - s.up * 0.25);
     let on = bot.aimed_cell(s).is_some_and(|(c, _)| c == key);
     if aimed && on && bot.phase_s > 0.35 && bot.tries < 2 {
-        out.taps.push(KeyCode::KeyE);
+        out.taps.push(KeyCode::KeyF);
         bot.tries += 1;
         bot.phase_s = 0.0;
     }
@@ -2186,7 +2186,7 @@ fn plant(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     Status::Running
 }
 
-/// Pick wild plants: walk to each, E.
+/// Pick wild plants: walk to each, F.
 fn pick(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     let picked = s.tally.picked - bot.mark.picked;
     if picked / 2 > bot.count {
@@ -2246,7 +2246,7 @@ fn pick(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
             let aimed = bot.aim_at(s, out, top - s.up * 0.25);
             let on = bot.aimed_cell(s).is_some_and(|(c, _)| c == key);
             if aimed && on && bot.phase_s > 0.4 {
-                out.taps.push(KeyCode::KeyE);
+                out.taps.push(KeyCode::KeyF);
                 bot.phase_s = -1.0;
             }
             if bot.phase_s > 3.0 {
@@ -2258,7 +2258,7 @@ fn pick(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     Status::Running
 }
 
-/// Harvest the field: E on each of its cells.
+/// Harvest the field: F on each of its cells.
 fn harvest(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     let got = (s.tally.harvested - bot.mark.harvested) / 2;
     if got > bot.count {
@@ -2286,7 +2286,7 @@ fn harvest(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     bot.aim_at(s, out, top - s.up * 0.2);
     let on = bot.aimed_cell(s).is_some_and(|(c, _)| c == key);
     if on && bot.phase_s > 0.6 {
-        out.taps.push(KeyCode::KeyE);
+        out.taps.push(KeyCode::KeyF);
         bot.tries += 1;
         bot.phase_s = 0.0;
     } else if bot.phase_s > 4.0 {
@@ -2392,7 +2392,7 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
                 );
             }
             if dist < 2.3 && bot.phase_s > 1.1 && s.screen == Screen::Playing {
-                out.taps.push(KeyCode::KeyE);
+                out.taps.push(KeyCode::KeyF);
                 bot.phase_s = 0.0;
             }
             if dist > 3.0 && bot.phase_s > 10.0 {
@@ -2499,7 +2499,7 @@ fn pen(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
     Status::Running
 }
 
-/// Lead a kept animal into the pen: E to have it follow, walk in, E to let
+/// Lead a kept animal into the pen: F to have it follow, walk in, F to let
 /// it stay.
 fn lead(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
     if s.tally.penned > bot.mark.penned {
@@ -2533,7 +2533,7 @@ fn lead(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
         1 => {
             let aimed = bot.aim_at(s, out, centre_of);
             if aimed && bot.phase_s > 0.4 {
-                out.taps.push(KeyCode::KeyE);
+                out.taps.push(KeyCode::KeyF);
                 bot.phase_s = -0.8;
             }
             if animal.following {
@@ -2552,7 +2552,7 @@ fn lead(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
             let near = animal.pos.distance(s.feet) < 2.4;
             let aimed = bot.aim_at(s, out, centre_of);
             if near && aimed && bot.phase_s > 1.0 {
-                out.taps.push(KeyCode::KeyE);
+                out.taps.push(KeyCode::KeyF);
                 bot.phase_s = -1.0;
             }
             if !animal.following && bot.phase_s > 2.0 {
@@ -2567,7 +2567,7 @@ fn lead(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
     Status::Running
 }
 
-/// E on a kept animal until it gives what it has.
+/// F on a kept animal until it gives what it has.
 fn collect(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
     if s.tally.collected > bot.mark.collected {
         return Status::Done;
@@ -2592,7 +2592,7 @@ fn collect(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status 
         _ => {
             let aimed = bot.aim_at(s, out, centre);
             if aimed && bot.phase_s > 0.5 {
-                out.taps.push(KeyCode::KeyE);
+                out.taps.push(KeyCode::KeyF);
                 bot.phase_s = -1.5;
             }
             if animal.pos.distance(s.feet) > 2.6 {

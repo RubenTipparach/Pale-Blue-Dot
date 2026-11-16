@@ -1,4 +1,4 @@
-//! Picking the trees' fruit (`flora-v2` design 12.5): E on a fruiting tree
+//! Picking the trees' fruit (`flora-v2` design 12.5): F on a fruiting tree
 //! takes what hangs on it. Which tree bears what, and how much the season
 //! keeps, is the tree draw's own rule (`pbd_core::flora::hanging_fruit`);
 //! what was taken is a `fruit` record by the tree's cell, written with the
@@ -10,6 +10,7 @@ use super::farm::FarmNote;
 use super::menu::Screen;
 use bevy::prelude::*;
 use pbd_app::hotbar::{Gained, How};
+use pbd_app::interact::{Act, Interact, Offer, Reader};
 use pbd_app::planet::{PLANET_RADIUS, PlanetFine};
 use pbd_app::saves::WorldSave;
 use pbd_core::daylight::DAY_S;
@@ -21,8 +22,125 @@ use pbd_core::goods::Good;
 use pbd_core::inventory::Item;
 use pbd_core::records::Record;
 
-/// E on a tree: pick its fruit. After the husbandry hands, which take an E
-/// they used, and before the farm's, so an E used here is not a crop's.
+/// The fruiting tree the eye is on, as it stands.
+struct OnTree {
+    cell: u32,
+    /// Its fruit, an index of `FRUIT_GOODS`.
+    kind: usize,
+    /// How many hang on it this season.
+    hanging: u32,
+    felled: bool,
+    /// Picked bare: the days until it bears again.
+    bare_for: Option<f64>,
+    day: f64,
+}
+
+impl OnTree {
+    /// Whether F takes something from it.
+    fn has_fruit(&self) -> bool {
+        !self.felled && self.bare_for.is_none() && self.hanging > 0
+    }
+}
+
+/// The fruiting tree on the eye ray, if one bears anything.
+#[allow(clippy::too_many_arguments)]
+fn on_tree(
+    fine: &PlanetFine,
+    save: &WorldSave,
+    scatter: &pbd_app::config::ScatterSettings,
+    gather: &pbd_app::config::GatherConfig,
+    sun: Option<&pbd_app::sky::Sun>,
+    eye: Vec3,
+    look: Vec3,
+) -> Option<OnTree> {
+    let cell = tree_on_ray(fine, eye, look, pbd_core::aim::REACH_M)?;
+    let record = fine.set.finest_records().iter().find(|r| r.key() == cell)?;
+    let day = sun.map_or(0.0, |s| s.clock.seconds / f64::from(DAY_S));
+    let year = sun.map_or(0.0, |s| s.clock.year_fraction());
+    let axis = Vec3::from_slice(&record.direction_height[..3]).normalize_or(Vec3::Y);
+    let biome = (record.metadata[1] >> 8) & 0xff;
+    let (kind, hanging) = hanging_fruit(
+        record.spare[0],
+        biome,
+        axis.to_array(),
+        PLANET_RADIUS,
+        year,
+        scatter.fruit_chance,
+    )?;
+    let felled = save
+        .records
+        .get(TREE_KIND, u64::from(cell))
+        .and_then(|r| r.read::<TreeTaken>())
+        .is_some_and(|t| t.logs >= gather.0.axe_logs);
+    let bare_for = save
+        .records
+        .get(FRUIT_RECORD, u64::from(cell))
+        .and_then(|r| r.read::<FruitPicked>())
+        .filter(|p| p.bare_at(day))
+        .map(|p| (p.day + FRUIT_REGROW_DAYS - day).max(0.0));
+    Some(OnTree {
+        cell,
+        kind,
+        hanging,
+        felled,
+        bare_for,
+        day,
+    })
+}
+
+/// A fruit's name as the prompt says it, many: "apples", "cherries".
+pub fn many(name: &str) -> String {
+    let name = name.to_lowercase();
+    if let Some(stem) = name.strip_suffix('y')
+        && !stem.ends_with(['a', 'e', 'i', 'o', 'u'])
+    {
+        return format!("{stem}ies");
+    }
+    if name.ends_with('o') {
+        return format!("{name}es");
+    }
+    format!("{name}s")
+}
+
+/// Offer the fruit on the tree aimed at to the interact key.
+#[allow(clippy::too_many_arguments)]
+pub fn offer(
+    walking: Option<Res<pbd_app::walking::WalkingReadout>>,
+    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    fine: Option<Res<PlanetFine>>,
+    save: Option<Res<WorldSave>>,
+    sun: Option<Res<pbd_app::sky::Sun>>,
+    scatter: Option<Res<pbd_app::config::ScatterSettings>>,
+    gather: Option<Res<pbd_app::config::GatherConfig>>,
+    time: Res<Time>,
+    mut interact: ResMut<Interact>,
+    mut last: Local<(pbd_app::interact::Recheck, Option<Offer>)>,
+) {
+    let (Some(fine), Some(save), Some(scatter), Some(gather)) = (fine, save, scatter, gather)
+    else {
+        return;
+    };
+    if !walking.is_some_and(|w| w.active) {
+        return;
+    }
+    let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
+        return;
+    };
+    let (eye, look) = (transform.translation(), transform.forward().as_vec3());
+    let (recheck, offered) = &mut *last;
+    if recheck.due(eye, look, fine.version, time.delta_secs()) {
+        *offered = on_tree(&fine, &save, &scatter, &gather, sun.as_deref(), eye, look)
+            .filter(OnTree::has_fruit)
+            .and_then(|tree| Good::by_code(FRUIT_GOODS[tree.kind]))
+            .map(|good| Offer::new(Act::PickFruit, many(good.row().name)));
+    }
+    if let Some(offer) = offered.clone() {
+        interact.offer(offer);
+    }
+}
+
+/// F on a tree: pick its fruit. After the husbandry hands, which take an F
+/// they used, and before the farm's, so an F used here is not a crop's.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn pick(
     mut keys: ResMut<ButtonInput<KeyCode>>,
@@ -34,11 +152,12 @@ pub fn pick(
     scatter: Option<Res<pbd_app::config::ScatterSettings>>,
     gather: Option<Res<pbd_app::config::GatherConfig>>,
     time: Res<Time>,
-    (mut save, slots, note, mut gained): (
+    (mut save, slots, note, mut gained, interact): (
         Option<ResMut<WorldSave>>,
         Option<ResMut<super::slots::Hotbar>>,
         Option<ResMut<FarmNote>>,
         MessageWriter<Gained>,
+        Option<Res<Interact>>,
     ),
 ) {
     // A still capture has no walker, hands or gathering: nothing to pick.
@@ -47,10 +166,13 @@ pub fn pick(
     else {
         return;
     };
-    if !keys.just_pressed(KeyCode::KeyE) || *screen != Screen::Playing {
+    if !keys.just_pressed(KeyCode::KeyF) || *screen != Screen::Playing {
         return;
     }
     if !walking.is_some_and(|w| w.active && w.captured) {
+        return;
+    }
+    if !pbd_app::interact::may(interact.as_deref(), Reader::Fruit) {
         return;
     }
     let (Some(fine), Some(save)) = (fine, save.as_deref_mut()) else {
@@ -60,45 +182,17 @@ pub fn pick(
         return;
     };
     let (eye, look) = (transform.translation(), transform.forward().as_vec3());
-    let Some(cell) = tree_on_ray(&fine, eye, look, pbd_core::aim::REACH_M) else {
+    let Some(tree) = on_tree(&fine, save, &scatter, &gather, sun.as_deref(), eye, look) else {
+        // A tree that bears nothing: the F is someone else's.
         return;
     };
-    let Some(record) = fine.set.finest_records().iter().find(|r| r.key() == cell) else {
-        return;
-    };
-    let wall_s = time.elapsed_secs();
-    let day = sun
-        .as_ref()
-        .map_or(0.0, |s| s.clock.seconds / f64::from(DAY_S));
-    let year = sun.as_ref().map_or(0.0, |s| s.clock.year_fraction());
-    let axis = Vec3::from_slice(&record.direction_height[..3]).normalize_or(Vec3::Y);
-    let biome = (record.metadata[1] >> 8) & 0xff;
-    let Some((kind, hanging)) = hanging_fruit(
-        record.spare[0],
-        biome,
-        axis.to_array(),
-        PLANET_RADIUS,
-        year,
-        scatter.fruit_chance,
-    ) else {
-        // A tree that bears nothing: the E is someone else's.
-        return;
-    };
-    keys.clear_just_pressed(KeyCode::KeyE);
-    let felled = save
-        .records
-        .get(TREE_KIND, u64::from(cell))
-        .and_then(|r| r.read::<TreeTaken>())
-        .is_some_and(|t| t.logs >= gather.0.axe_logs);
-    if felled {
+    keys.clear_just_pressed(KeyCode::KeyF);
+    if tree.felled {
         return;
     }
-    let picked = save
-        .records
-        .get(FRUIT_RECORD, u64::from(cell))
-        .and_then(|r| r.read::<FruitPicked>());
-    if let Some(p) = picked.filter(|p| p.bare_at(day)) {
-        let left = (p.day + FRUIT_REGROW_DAYS - day).max(0.0);
+    let wall_s = time.elapsed_secs();
+    let (cell, kind, hanging, day) = (tree.cell, tree.kind, tree.hanging, tree.day);
+    if let Some(left) = tree.bare_for {
         note.say(
             wall_s,
             format!("Picked bare: it bears again in {left:.0} days"),
