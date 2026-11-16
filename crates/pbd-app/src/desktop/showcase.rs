@@ -88,6 +88,7 @@ pub struct Tally {
     penned: u32,
     cooked: u32,
     ate: u32,
+    gathered: u32,
 }
 
 /// The caption bar's text (`step-videos` 2.2).
@@ -118,6 +119,9 @@ struct Intent {
     look: Vec2,
     wheel: i32,
     click: Option<Click>,
+    /// The pointer moved to this place in the window, logical pixels, as a
+    /// player's hand moves the mouse over an open screen.
+    pointer: Option<Vec2>,
 }
 
 /// What an act says after a frame.
@@ -165,6 +169,13 @@ struct Bot {
     /// Where an `Away` began, and the point it walks to next.
     away_from: Option<Vec3>,
     away_to: Option<Vec3>,
+    /// The place `Mark` puts the map's mark on.
+    mark_goal: Option<Vec3>,
+    /// The piece of clutter `PickUp` is going for: its cell's key, kind and
+    /// middle.
+    clutter_goal: Option<(u32, pbd_core::scatter::Kind, Vec3)>,
+    /// Pieces it gave up on, by cell key and kind.
+    clutter_gave_up: HashSet<(u32, pbd_core::scatter::Kind)>,
     /// Where the bot last got stuck, and until when it builds itself up.
     stuck_at: Option<Vec3>,
     climb_until: f32,
@@ -220,6 +231,12 @@ struct Sight<'a> {
     picking: bool,
     tally: Tally,
     hour: f32,
+    /// The map's view and the window's size, for pointing at the map.
+    map_view: Option<super::map_screen::MapView>,
+    window: Option<Vec2>,
+    /// The ground clutter's odds and the world's day (`gather-by-hand`).
+    odds: Option<pbd_core::scatter::Odds>,
+    day: f64,
 }
 
 fn tangent(v: Vec3, up: Vec3) -> Vec3 {
@@ -754,6 +771,7 @@ pub fn tally(
             pbd_app::hotbar::How::Picked => tally.picked += 1,
             pbd_app::hotbar::How::Harvested => tally.harvested += 1,
             pbd_app::hotbar::How::Collected => tally.collected += 1,
+            pbd_app::hotbar::How::Gathered => tally.gathered += 1,
             _ => {}
         }
     }
@@ -771,11 +789,13 @@ pub fn tally(
 
 /// The input side of the bot's frame.
 #[derive(bevy::ecs::system::SystemParam)]
-pub struct Hands<'w> {
+pub struct Hands<'w, 's> {
     keys: ResMut<'w, ButtonInput<KeyCode>>,
     mouse: ResMut<'w, ButtonInput<MouseButton>>,
     motion: ResMut<'w, AccumulatedMouseMotion>,
     wheel: MessageWriter<'w, MouseWheel>,
+    /// The window, for the pointer's place over an open screen.
+    pointer: Query<'w, 's, &'static mut Window, With<PrimaryWindow>>,
 }
 
 /// The world side of the bot's frame.
@@ -806,6 +826,8 @@ pub struct World<'w, 's> {
     key: Option<Res<'w, pbd_app::controls::PickerKey>>,
     tally: Res<'w, Tally>,
     sun: Res<'w, pbd_app::sky::Sun>,
+    map_view: Option<Res<'w, super::map_screen::MapView>>,
+    scatter: Option<Res<'w, pbd_app::config::ScatterSettings>>,
 }
 
 /// The bot's frame: look, decide, press.
@@ -922,6 +944,14 @@ pub fn drive(
         picking: w.key.as_deref().is_some_and(|k| k.holding),
         tally: *w.tally,
         hour: w.sun.clock.hour(),
+        map_view: w.map_view.as_deref().copied(),
+        window: hands
+            .pointer
+            .single()
+            .ok()
+            .map(|w| Vec2::new(w.width(), w.height())),
+        odds: w.scatter.as_deref().map(pbd_app::clutter::odds),
+        day: pbd_app::clutter::day_of(w.sun.clock.seconds),
     };
     let Some(shot) = player.file.shots.get(bot.shot).cloned() else {
         bot.ended = Some(now);
@@ -1122,6 +1152,11 @@ fn apply(bot: &mut Bot, hands: &mut Hands, w: &World, pending: &mut PendingClick
     if out.click.is_some() {
         pending.0 = out.click;
     }
+    if let Some(at) = out.pointer
+        && let Ok(mut window) = hands.pointer.single_mut()
+    {
+        window.set_cursor_position(Some(at));
+    }
 }
 
 /// The panel control `drive` pressed this frame, for [`press_controls`]
@@ -1288,6 +1323,21 @@ fn run(
             2 if bot.phase_s > 0.4 => Status::Done,
             _ => Status::Running,
         },
+        Act::Mark(metres) => mark(bot, *metres, s, out),
+        Act::ToMark => match super::map_screen::marks_of(s.save).last().copied() {
+            None => Status::Fail("no mark on the map".into()),
+            Some(mark) => {
+                let d = mark.direction();
+                let to = d * (PLANET_RADIUS + surface_height(d).max(0.0));
+                if mark.reached_far(s.feet, PLANET_RADIUS)
+                    || bot.walk_to(s, out, to, pbd_core::map::MARK_NEAR_M * 0.5) == Walked::There
+                {
+                    Status::Done
+                } else {
+                    Status::Running
+                }
+            }
+        },
         Act::Shore => match bot.phase {
             0 => match shore(s) {
                 Some((water, stand)) => {
@@ -1322,6 +1372,7 @@ fn run(
         Act::Till(n) => till(bot, *n, s, out),
         Act::Plant(n) => plant(bot, *n, s, out),
         Act::Pick(n) => pick(bot, *n, s, out),
+        Act::PickUp(until) => pick_up(bot, until, s, out),
         Act::Harvest(n) => harvest(bot, *n, s, out),
         Act::Tame(species) => tame(bot, species, s, out),
         Act::Pen => pen(bot, s, out),
@@ -1871,6 +1922,76 @@ fn station(
 /// metres, the one with the highest ground that is not a climb, turned
 /// from the heading where it can be; the way inland when the bot is in the
 /// water.
+/// The `Mark` act: open the map, put the pointer on dry ground `metres`
+/// away, right-click it, and close the map, as a player marks a place
+/// (`starter-missions` G5).
+fn mark(bot: &mut Bot, metres: f32, s: &Sight, out: &mut Intent) -> Status {
+    match bot.phase {
+        0 => {
+            let Some(goal) = far_dry_ground(s, metres) else {
+                return Status::Fail(format!("no dry ground {metres} m away"));
+            };
+            bot.mark_goal = Some(goal);
+            if s.screen != Screen::Map {
+                out.taps.push(KeyCode::KeyM);
+            }
+            bot.next_phase();
+            Status::Running
+        }
+        1 if bot.phase_s > 0.8 && s.screen == Screen::Map => {
+            let (Some(view), Some(size), Some(goal)) = (s.map_view, s.window, bot.mark_goal) else {
+                return Status::Fail("the map is not up".into());
+            };
+            let at = view
+                .clamped(size)
+                .to_screen(pbd_core::geo::project(goal), size);
+            out.pointer = Some(at);
+            bot.next_phase();
+            Status::Running
+        }
+        2 if bot.phase_s > 0.3 => {
+            out.rmb_tap = true;
+            bot.next_phase();
+            Status::Running
+        }
+        3 if bot.phase_s > 1.0 => {
+            let set = super::map_screen::marks_of(s.save)
+                .last()
+                .zip(bot.mark_goal)
+                .is_some_and(|(m, goal)| m.direction().distance(goal.normalize()) < 0.01);
+            if !set {
+                return Status::Fail("the right click set no waypoint".into());
+            }
+            out.taps.push(KeyCode::KeyM);
+            bot.next_phase();
+            Status::Running
+        }
+        4 if bot.phase_s > 0.4 && s.screen != Screen::Map => Status::Done,
+        _ => Status::Running,
+    }
+}
+
+/// Dry ground `metres` from the feet with dry ground all the way to it, the
+/// bearing nearest the way the bot faces first; `None` when no bearing of
+/// sixteen has it.
+fn far_dry_ground(s: &Sight, metres: f32) -> Option<Vec3> {
+    let east = Vec3::Y.cross(s.up).normalize_or(Vec3::X);
+    let north = s.up.cross(east);
+    (0..16)
+        .filter_map(|k| {
+            let a = k as f32 / 16.0 * std::f32::consts::TAU;
+            let along = east * a.cos() + north * a.sin();
+            let at = |m: f32| {
+                let t = m / PLANET_RADIUS;
+                (s.up * t.cos() + along * t.sin()).normalize()
+            };
+            let dry = (1..=20).all(|i| surface_height(at(metres * i as f32 / 20.0)) > 0.5);
+            dry.then(|| (at(metres), signed_angle(s.heading, along, s.up).abs()))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(d, _)| d)
+}
+
 fn dry_ground(s: &Sight) -> Vec3 {
     let east = Vec3::Y.cross(s.up).normalize_or(Vec3::X);
     let north = s.up.cross(east);
@@ -2247,6 +2368,84 @@ fn pick(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
             if bot.phase_s > 3.0 {
                 bot.gave_up.insert(key);
                 bot.goal = None;
+            }
+        }
+    }
+    Status::Running
+}
+
+/// `PickUp` (`gather-by-hand`): walk to the nearest stone, or bush, shrub or
+/// fern, that gives what `until` wants, look at it and press F, until.
+fn pick_up(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
+    use pbd_core::scatter::Kind;
+    let gathered = s.tally.gathered - bot.mark.gathered;
+    if gathered > bot.count {
+        bot.count = gathered;
+        bot.clutter_goal = None;
+        bot.phase = 0;
+    }
+    if bot.until_met(s, until) {
+        return Status::Done;
+    }
+    let Some(odds) = s.odds else {
+        return Status::Fail("no clutter odds".into());
+    };
+    let wants = |kind: Kind| match until {
+        Until::Have(name, _) => kind.gives().0 == name,
+        _ => true,
+    };
+    let Some((key, kind, centre)) = bot.clutter_goal else {
+        let toward = s.feet.normalize_or(Vec3::Y);
+        let cos = (80.0 / PLANET_RADIUS).cos();
+        let mut best: Option<((u32, Kind, Vec3), f32)> = None;
+        for r in s.fine.set.finest_records() {
+            let Some(d) = Vec3::from_slice(&r.direction_height[..3]).try_normalize() else {
+                continue;
+            };
+            if d.dot(toward) < cos || r.direction_height[3] < 0.3 {
+                continue;
+            }
+            let taken = pbd_app::clutter::taken_at(s.save, r.key());
+            for piece in pbd_app::clutter::pieces_of(r, &odds) {
+                if !wants(piece.kind)
+                    || taken.gone(piece.kind, s.day)
+                    || bot.clutter_gave_up.contains(&(r.key(), piece.kind))
+                {
+                    continue;
+                }
+                let dist = piece.seat.distance(s.feet);
+                if best.is_none_or(|b| dist < b.1) {
+                    best = Some(((r.key(), piece.kind, piece.centre), dist));
+                }
+            }
+        }
+        let Some((goal, _)) = best else {
+            return Status::Fail("no stone or shrub within 80 m".into());
+        };
+        bot.clutter_goal = Some(goal);
+        bot.phase = 0;
+        bot.phase_s = 0.0;
+        return Status::Running;
+    };
+    let give_up = |bot: &mut Bot| {
+        bot.clutter_gave_up.insert((key, kind));
+        bot.clutter_goal = None;
+        bot.phase = 0;
+    };
+    match bot.phase {
+        0 => match bot.walk_to(s, out, centre, 1.4) {
+            Walked::There => bot.next_phase(),
+            _ if bot.phase_s > 40.0 => give_up(bot),
+            _ => {}
+        },
+        _ => {
+            let aimed = bot.aim_at(s, out, centre);
+            if aimed && bot.phase_s > 0.4 {
+                out.taps.push(KeyCode::KeyF);
+                bot.phase_s = -1.0;
+            }
+            if bot.phase_s > 3.0 {
+                give_up(bot);
             }
         }
     }

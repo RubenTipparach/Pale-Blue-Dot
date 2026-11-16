@@ -118,6 +118,17 @@ fn clouds_and_rain_make_fish_bite_more_readily() {
     assert_eq!(s.bite_factor(f32::NAN, f32::NAN), 1.0);
 }
 
+/// A baited line draws bites more readily than a bare hook, under any sky
+/// (`starter-missions` G1).
+#[test]
+fn bait_makes_fish_bite_more_readily() {
+    let s = FishingSettings::default();
+    for weather in [1.0, s.bite_factor(1.0, 50.0)] {
+        assert_eq!(s.baited(weather, false), weather);
+        assert!((s.baited(weather, true) - weather * 1.5).abs() < 1e-6);
+    }
+}
+
 /// The spawn gate: the class must match, the temperature must be inside the
 /// window, and nothing spawns in frozen water.
 #[test]

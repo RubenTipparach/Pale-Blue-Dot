@@ -342,9 +342,9 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
         assert_eq!(chain.get(id).unwrap().needs, ["fire"], "{id}");
     }
     assert_eq!(chain.get("water-field").unwrap().after, ["go-fishing"]);
-    // What waits on the game: only bait, which has no good yet.
+    // Nothing waits on the game: bait is a good now (G1).
     let pending: Vec<&str> = chain.pending().map(|(id, _)| id).collect();
-    assert_eq!(pending, ["bait"]);
+    assert!(pending.is_empty(), "{pending:?}");
     let progress = Progress::default();
     assert_eq!(
         progress.current(&chain).map(|m| m.id.as_str()),
@@ -392,7 +392,12 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
         ev(Kind::Craft, "tool:rod", 1),
         ev(Kind::Cast, "water", 1),
         ev(Kind::Catch, "minnow", 3),
-        ev(Kind::Species, "fish", 3),
+        ev(Kind::Gather, "bait", 3),
+        ev(Kind::Baited, "minnow", 3),
+        ev(Kind::Species, "minnow", 1),
+        ev(Kind::Species, "minnow", 1),
+        ev(Kind::Species, "perch", 1),
+        ev(Kind::Species, "pike", 1),
         ev(Kind::Waters, "sea", 3),
         ev(Kind::Waters, "fresh", 3),
         ev(Kind::Open, "map", 1),
@@ -641,4 +646,34 @@ fn a_mission_unlocks_its_recipes() {
         missions: vec![first],
     };
     assert!(bad.resolve(&catalog).is_err());
+}
+
+/// "Three kinds of fish" (G4): a kind counts once in a mission however often
+/// it is landed, the names go with the mission when it closes, and a record
+/// written before `seen` still reads.
+#[test]
+fn a_kind_of_fish_counts_once_a_mission() {
+    let file = MissionFile {
+        awaited: vec![],
+        missions: vec![mission(
+            "kinds",
+            &[],
+            vec![objective(Kind::Species, "any", 3)],
+        )],
+    };
+    let chain = file.resolve(&shipped_catalog(&shipped_book())).unwrap();
+    let none = |_: &Objective| 0;
+    let mut progress = Progress::default();
+    for name in ["minnow", "minnow", "perch", "minnow"] {
+        progress.record(&chain, &Happened::new(Kind::Species, name, 1), &none);
+    }
+    assert_eq!(progress.counts(chain.get("kinds").unwrap()), [2]);
+    assert_eq!(progress.seen["kinds"].len(), 2);
+    let step = progress.record(&chain, &Happened::new(Kind::Species, "pike", 1), &none);
+    assert_eq!(step.done, ["kinds"]);
+    assert!(progress.seen.is_empty(), "the names close with the mission");
+    // A record from before `seen`.
+    let old: Progress = ron::from_str(r#"(done: ["gather"], counts: {"kinds": [1]})"#).unwrap();
+    assert!(old.seen.is_empty());
+    assert_eq!(old.counts["kinds"], [1]);
 }

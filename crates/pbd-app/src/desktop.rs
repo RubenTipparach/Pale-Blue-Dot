@@ -307,6 +307,10 @@ pub struct Launch {
     /// `--forge [metres]`: a forge that far ahead, stocked and given two jobs,
     /// the first part done; with `--forge-panel`, its panel open.
     pub forge: Option<f32>,
+    /// `--gather-around <metres>` (`gather-by-hand`, a capture instrument):
+    /// once the ground is in, every stone and shrub that near the player is
+    /// taken through the same path F takes one, so a still shows them gone.
+    pub gather_around: Option<f32>,
     pub forge_panel: bool,
     /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
     /// campfire that far ahead, stocked, flatbread done on it and a fish
@@ -371,7 +375,9 @@ pub struct Launch {
     /// as metres a screen pixel at the centre, `--map-overlay <name>` a
     /// weather overlay, `--map-layer <name>` a raster layer such as
     /// `biomes`, `--map-night` and `--map-clouds` those live layers, and
-    /// `--map-at <lat> <lon>` the centre in degrees (the player otherwise).
+    /// `--map-at <lat> <lon>` the centre in degrees (the player otherwise);
+    /// `--map-mark-east <metres>`, repeatable, adds a waypoint that far
+    /// from the player, the first due east (a capture instrument).
     pub map: map_screen::MapLaunch,
     /// `--showcase <name>` (`step-videos` 2.1, 5.1): a bot plays
     /// `assets/showcase/<name>.ron` toward its goal through the player's
@@ -460,6 +466,7 @@ impl Launch {
             hold_pointer: false,
             farm_ripe: false,
             forge: None,
+            gather_around: None,
             forge_panel: false,
             bare: false,
             tier: pbd_core::inventory::Tier::Stone,
@@ -633,6 +640,15 @@ impl Launch {
                     } else {
                         result.forge = Some(metres);
                     }
+                }
+                "--gather-around" => {
+                    i += 1;
+                    result.gather_around = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .filter(|m: &f32| m.is_finite() && *m > 0.0)
+                            .expect("--gather-around requires metres"),
+                    );
                 }
                 "--farm-harvest" => result.farm_harvest = true,
                 "--hold-pointer" => result.hold_pointer = true,
@@ -811,6 +827,15 @@ impl Launch {
                     i += 1;
                     result.map.layer =
                         Some(args.get(i).expect("--map-layer requires a name").clone());
+                }
+                "--map-mark-east" => {
+                    i += 1;
+                    result.map.mark_east_m.push(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .filter(|m: &f32| m.is_finite() && *m > 0.0)
+                            .expect("--map-mark-east requires metres"),
+                    );
                 }
                 "--map-night" => result.map.night = true,
                 "--map-clouds" => result.map.clouds = true,
@@ -1720,6 +1745,7 @@ pub fn run(args: &[String]) {
             kitchen::scripted.after(farm::scripted),
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
+            farm::scripted_gather.after(digging::scripted_dig),
             craft::scripted.after(digging::scripted_dig),
             // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
             water::scripted

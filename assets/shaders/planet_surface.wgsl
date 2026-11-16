@@ -60,6 +60,7 @@ struct Params {
     night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
     felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty
     picked: array<vec4<u32>,8>,   // and the trees picked bare
+    clutter_taken: array<vec4<u32>,16>, // `gather-by-hand`: cells with a piece taken, two a lane (id, a sink byte a piece), zero empty
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -726,6 +727,11 @@ fn tree_picked(id: u32) -> bool {
     return false;
 }
 
+// clutter:shared begin
+// What the ground clutter is rolled from, shared with `pbd_core::scatter`,
+// which a GPU test (`clutter_gpu_tests.rs`) holds to it: the hash, the rolls
+// and their salts, the grounds, and where and whether a piece a hand can
+// take stands. Standalone: it reads no binding.
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
     h = ((h >> ((h >> 28u)+4u))^h)*277803737u;
@@ -758,6 +764,40 @@ const SALT_SHRUB: u32 = 0x55u;
 const SALT_MUSH: u32 = 0x56u;
 const SALT_FERN: u32 = 0x57u;
 const SALT_FRUIT: u32 = 0x58u;
+fn grassy(material: u32) -> bool { return material==2u || material==3u || material==7u; }
+fn bare(material: u32) -> bool { return material==1u || material==4u || material==5u || material==6u; }
+// Where a piece salted `salt` stands on a cell: the reference's lerp from the
+// cap's centre toward a hashed corner, at the cap's radius.
+fn clutter_seat(id: u32, salt: u32, degree: u32, axis: vec3<f32>,
+        corners: array<vec4<f32>,6>, radius: f32) -> vec3<f32> {
+    let k = u32(roll(id,salt+1u)*f32(degree));
+    let f0 = 0.15+0.60*roll(id,salt+2u);
+    return (axis*(1.-f0)+corners[min(k,degree-1u)].xyz*f0)*radius;
+}
+// Whether a piece a hand can take grows on a cell: 0 a pebble, 1 a bush,
+// 2 a dead shrub, 3 a fern, at `chance` (a fern's with its biome's weight).
+fn clutter_grows(piece: u32, id: u32, material: u32, chance: f32) -> bool {
+    let green = grassy(material);
+    let dry = bare(material);
+    if piece == 0u {
+        return (green||dry) && roll(id,SALT_ROCK) < select(chance*0.3,chance,dry);
+    }
+    if piece == 1u { return green && roll(id,SALT_BUSH) < chance; }
+    if piece == 2u { return (material==4u||material==6u) && roll(id,SALT_SHRUB) < chance; }
+    return green && roll(id,SALT_FERN) < chance;
+}
+// clutter:shared end
+// How far a piece a hand took is sunk into the ground, 0 whole to 1 gone
+// (`gather-by-hand`): its byte in the taken cells' list, nought off it.
+fn clutter_sunk(id: u32, piece: u32) -> f32 {
+    for (var i = 0u; i < 16u; i++) {
+        let lane = params.clutter_taken[i];
+        if lane.x == 0u && lane.z == 0u { break; }
+        if lane.x == id { return f32((lane.y >> (8u*piece)) & 0xffu)/255.; }
+        if lane.z == id { return f32((lane.w >> (8u*piece)) & 0xffu)/255.; }
+    }
+    return 0.;
+}
 const TAU: f32 = 6.28318530718;
 
 // `flora-v2`: the plants' own material codes, past the ground's (0-15) and
@@ -997,8 +1037,6 @@ fn tree_show(base: vec3<f32>, r: u32) -> f32 {
     return 0.0;
 }
 
-fn grassy(material: u32) -> bool { return material==2u || material==3u || material==7u; }
-fn bare(material: u32) -> bool { return material==1u || material==4u || material==5u || material==6u; }
 
 
 @vertex
@@ -1787,13 +1825,10 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         } else if v < 288u {
             // ---- pebble: one squat hexagonal prism on bare ground, and
             // sparsely on grass at the reference's own third.
-            let rock_chance = select(params.clutter_chance.z*0.3,params.clutter_chance.z,dry);
-            if (green||dry) && roll(id,SALT_ROCK) < rock_chance {
-                let k = u32(roll(id,SALT_ROCK+1u)*f32(degree));
-                let f0 = 0.15+0.60*roll(id,SALT_ROCK+2u);
-                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+            if clutter_grows(0u,id,material,params.clutter_chance.z) {
+                let bottom = clutter_seat(id,SALT_ROCK,degree,axis,cell.corners,radius);
                 let rad = params.clutter_size.z*(0.6+0.8*roll(id,SALT_ROCK+3u));
-                let h = rad*(0.4+0.5*roll(id,SALT_ROCK+4u))*fade;
+                let h = rad*(0.4+0.5*roll(id,SALT_ROCK+4u))*fade*(1.-clutter_sunk(id,0u));
                 let phase = roll(id,SALT_ROCK+5u)*TAU;
                 material = 5u;
                 let piece = prism_vertex(v-234u,bottom,axis,tangent,bitangent,rad,h,phase);
@@ -1804,10 +1839,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             }
         } else if v < 396u {
             // ---- bush: two leafy lumps, the reference's pair.
-            if green && roll(id,SALT_BUSH) < params.clutter_chance.w {
-                let k = u32(roll(id,SALT_BUSH+1u)*f32(degree));
-                let f0 = 0.15+0.60*roll(id,SALT_BUSH+2u);
-                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+            if clutter_grows(1u,id,material,params.clutter_chance.w) {
+                let bottom = clutter_seat(id,SALT_BUSH,degree,axis,cell.corners,radius);
                 let size = params.clutter_size.w*(0.8+0.4*roll(id,SALT_BUSH+3u));
                 let phase = roll(id,SALT_BUSH+4u)*TAU;
                 material = 9u;
@@ -1815,7 +1848,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 let lump = select(bottom,
                     bottom+(tangent*cos(phase)+bitangent*sin(phase))*(size*1.1),second);
                 let rad = select(size,size*0.6,second);
-                let h = select(size*0.9,size*0.55,second)*fade;
+                let h = select(size*0.9,size*0.55,second)*fade*(1.-clutter_sunk(id,1u));
                 let turn = select(phase,phase+0.7,second);
                 let part = select(v-288u,v-342u,second);
                 let piece = prism_vertex(part,lump,axis,tangent,bitangent,rad,h,turn);
@@ -1828,14 +1861,13 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             // ---- dead shrub: a splay of dry twigs, which on desert sand and
             // tundra snow is the only ground cover there is.
             let i = v-396u;
-            if (material==4u||material==6u) && roll(id,SALT_SHRUB) < params.clutter_more.y {
+            if clutter_grows(2u,id,material,params.clutter_more.y) {
                 let twig = i/6u;
-                let k = u32(roll(id,SALT_SHRUB+1u)*f32(degree));
-                let f0 = 0.15+0.60*roll(id,SALT_SHRUB+2u);
-                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let bottom = clutter_seat(id,SALT_SHRUB,degree,axis,cell.corners,radius);
                 let phase = roll(id,SALT_SHRUB+3u)*TAU;
                 let ang = phase+f32(twig)*TAU/6.+roll(id,SALT_SHRUB+8u+twig)*0.5;
-                let h = params.clutter_more.z*(0.6+0.7*roll(id,SALT_SHRUB+16u+twig))*fade;
+                let h = params.clutter_more.z*(0.6+0.7*roll(id,SALT_SHRUB+16u+twig))*fade
+                    *(1.-clutter_sunk(id,2u));
                 let out_dir = tangent*cos(ang)+bitangent*sin(ang);
                 let side = tangent*cos(ang+1.57)+bitangent*sin(ang+1.57);
                 let top = bottom+axis*h+out_dir*(h*0.6);
@@ -1875,17 +1907,15 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             // ---- fern (`flora-v2` design 3): four fronds arching out of a
             // hashed seat, each cut to its shape by a pixel mask.
             let chance = min(params.flora_more.y*params.flora_biome[biome].x, 1.);
-            if green && roll(id,SALT_FERN) < chance {
+            if clutter_grows(3u,id,material,chance) {
                 let frond = (v-540u)/6u;
-                let k = u32(roll(id,SALT_FERN+1u)*f32(degree));
-                let f0 = 0.15+0.60*roll(id,SALT_FERN+2u);
-                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let bottom = clutter_seat(id,SALT_FERN,degree,axis,cell.corners,radius);
                 let size = 0.8+0.4*roll(id,SALT_FERN+3u);
                 let ang = roll(id,SALT_FERN+4u)*TAU+f32(frond)*TAU*0.25
                     +(roll(id,SALT_FERN+8u+frond)-0.5)*0.6;
                 let out_dir = tangent*cos(ang)+bitangent*sin(ang);
                 let side = tangent*cos(ang+1.5708)+bitangent*sin(ang+1.5708);
-                let len = 0.6*size*fade;
+                let len = 0.6*size*fade*(1.-clutter_sunk(id,3u));
                 let sway = sin(1.5*params.settings.z+f32(frond)*2.1+roll(id,SALT_FERN+5u)*TAU)*0.04*len;
                 let tip = bottom+out_dir*(len*0.8)+axis*(len*0.55)+side*sway;
                 let hw = 0.12*size;

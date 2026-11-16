@@ -25,6 +25,7 @@ use bevy::mesh::PrimitiveTopology;
 use bevy::prelude::*;
 use pbd_core::fauna::{self, HOME_BODY, School, Species, Water, WaterClass};
 use pbd_core::fishing::{Angler, Controls, Event, Line, Phase};
+use pbd_core::goods::Good;
 use pbd_core::inventory::{Equipment, Item, Tool};
 use pbd_core::sea::LocalSea;
 use std::collections::HashMap;
@@ -72,6 +73,10 @@ pub struct Fishery {
     /// it is dropped, never there or gone in one frame
     /// (`ocean-environments` B18).
     fades: HashMap<u64, (f32, bool)>,
+    /// Whether the line out was cast with bait in the pack: its bites come
+    /// more readily, and a fish landed on it uses one (`starter-missions`
+    /// G1).
+    pub baited: bool,
 }
 
 /// How long a school takes to fade in when spawned, or out before it is
@@ -119,6 +124,7 @@ impl Default for Fishery {
             beds: Mutex::new(HashMap::new()),
             told_refusal: false,
             fades: HashMap::new(),
+            baited: false,
         }
     }
 }
@@ -352,6 +358,10 @@ fn fish(
                 .fishing
                 .bite_factor(sample.cover, sample.rain_rate * 3600.0)
         });
+        // A baited line draws bites more readily (`starter-missions` G1).
+        let factor = settings
+            .fishing
+            .baited(factor, fishery.baited && fishery.line.is_out());
         // Steady hands: the line's rules eased while the effect runs.
         let fishing = pbd_core::cooking::steadied(
             &settings.fishing,
@@ -376,6 +386,12 @@ fn fish(
                 at: fishery.line.float,
             });
             let float = fishery.line.float;
+            if let Event::Cast { .. } = event {
+                // The bait goes on the hook as the line goes out.
+                fishery.baited = hotbar
+                    .as_deref()
+                    .is_some_and(|h| h.count(Item::Good(Good::BAIT)) > 0);
+            }
             for happened in report(
                 &mut status,
                 event,
@@ -383,6 +399,7 @@ fn fish(
                 hotbar.as_deref_mut(),
                 save.as_deref_mut(),
                 float,
+                fishery.baited,
             ) {
                 did.write(happened);
             }
@@ -818,6 +835,7 @@ fn report(
     hotbar: Option<&mut Hotbar>,
     save: Option<&mut WorldSave>,
     float: Vec3,
+    baited: bool,
 ) -> Vec<crate::missions::Did> {
     use pbd_core::missions::Kind;
     let name = |species: u16| {
@@ -849,15 +867,22 @@ fn report(
         ),
         Event::Caught { species, length_cm } => {
             status.say(format!("{} - {length_cm} cm", name(species)), 3.0);
-            let first = save.as_deref().is_some_and(|s| !s.has_caught(species));
-            if land(species, length_cm, hotbar, save, status) {
+            // A baited line's catch uses one bait, taken in the catch's own
+            // durable write (`starter-missions` G1); given back if the fish
+            // is let go.
+            let bait = Item::Good(Good::BAIT);
+            let mut hotbar = hotbar;
+            let used_bait = baited && hotbar.as_deref_mut().is_some_and(|h| h.take_item(bait, 1));
+            if land(species, length_cm, hotbar.as_deref_mut(), save, status) {
                 use crate::missions::Did;
-                let mut did = vec![Did::new(Kind::Catch, name(species).to_lowercase(), 1)];
-                // A kind the field guide had not seen (`starter-missions`
-                // T.2, "Three kinds of fish").
-                if first {
-                    did.push(Did::new(Kind::Species, "fish", 1));
+                let kind = name(species).to_lowercase();
+                let mut did = vec![Did::new(Kind::Catch, kind.clone(), 1)];
+                if used_bait {
+                    did.push(Did::new(Kind::Baited, kind.clone(), 1));
                 }
+                // Each kind, counted once a mission ("Three kinds of fish",
+                // G4).
+                did.push(Did::new(Kind::Species, kind, 1));
                 // The sea or fresh water: water standing above the sea's
                 // level is a river or a lake ("Off the shore").
                 let fresh = float.length() - crate::planet::PLANET_RADIUS > 0.6;
@@ -867,6 +892,9 @@ fn report(
                     1,
                 ));
                 return did;
+            }
+            if used_bait && let Some(h) = hotbar {
+                h.give(bait, 1);
             }
         }
         Event::Splash => return vec![crate::missions::Did::new(Kind::Cast, "water", 1)],
