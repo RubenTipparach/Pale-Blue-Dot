@@ -343,6 +343,27 @@ Nothing heavy runs beside a benchmark: a browser rendering on the CPU or the
 GPU, a build or a second game makes the numbers worthless (perf-measure rule
 2). Run mockup screenshots before or after a perf sitting, not during it.
 
+## Performance improvements need no permission (owner, 2026-11-16)
+
+**Standing instruction from the user:** "Don't need to ask me permissions
+for perf improvement." When a measurement finds a frame cost, cut it
+without asking first:
+1. measure;
+2. write the finding and the fix in `openspec/` (the write-up still comes
+   first, but it is not a stop to wait for the owner);
+3. make the change;
+4. measure again in the same sitting;
+5. push it.
+
+What stays the owner's is anything a player would see or hear differently:
+- a lower draw distance;
+- a dropped effect;
+- a changed default.
+
+That goes to the survey with screenshots, as any look change does. A cut
+that keeps the picture and the sound the same is just done. Report it
+afterwards, with the before-and-after numbers.
+
 ## Build with `fast`, always; `--release` only for performance (owner, 2026-11-13)
 
 **Standing instruction from the user:** "build with fast ALWAYS unless doing

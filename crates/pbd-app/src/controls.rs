@@ -400,8 +400,9 @@ const WASD: [Key; 4] = [
     Key::Board(KeyCode::KeyD),
 ];
 
-const ON_FOOT: [Binding; 3] = [
+const ON_FOOT: [Binding; 4] = [
     row(&WASD, " ", "move"),
+    row(&[Key::Board(KeyCode::KeyB)], " ", "breeding"),
     row(
         &[Key::Board(KeyCode::Space)],
         " ",

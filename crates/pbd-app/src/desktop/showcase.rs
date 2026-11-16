@@ -581,7 +581,11 @@ impl Bot {
             let material = r.metadata[1] & 0xff;
             if !matches!(material, 2 | 3 | 7)
                 || r.direction_height[3] < 0.6
-                || pbd_core::flora::grows_tree(r.spare[0], r.metadata[1])
+                || pbd_core::flora::grows_tree(
+                    &pbd_app::planet::terrain_config().trees,
+                    r.spare[0],
+                    r.metadata[1],
+                )
                 || self.used.contains(&key)
                 || !s.save.edits.for_cell(key).is_empty()
             {
@@ -1430,7 +1434,11 @@ fn chop(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
             let d = Vec3::from_slice(&r.direction_height[..3]);
             let Some(d) = d.try_normalize() else { continue };
             if d.dot(toward) < cos
-                || !pbd_core::flora::grows_tree(r.spare[0], r.metadata[1])
+                || !pbd_core::flora::grows_tree(
+                    &pbd_app::planet::terrain_config().trees,
+                    r.spare[0],
+                    r.metadata[1],
+                )
                 || bot.gave_up.contains(&r.key())
             {
                 continue;
@@ -2706,7 +2714,13 @@ mod tests {
         fine.set
             .finest_records()
             .iter()
-            .filter(|r| pbd_core::flora::grows_tree(r.spare[0], r.metadata[1]))
+            .filter(|r| {
+                pbd_core::flora::grows_tree(
+                    &pbd_app::planet::terrain_config().trees,
+                    r.spare[0],
+                    r.metadata[1],
+                )
+            })
             .filter(|r| r.direction_height[3] > 2.0)
             .filter_map(|r| {
                 let d = Vec3::from_slice(&r.direction_height[..3]).normalize();

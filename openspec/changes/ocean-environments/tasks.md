@@ -62,3 +62,8 @@ against what it would cost.
 - [x] 8.1 (Built 2026-11-15, generator version 8 on 7, design 13: `every_river_cell_drains_to_the_sea`, `a_rivers_water_sits_on_its_own_bed`, version 8's digest pinned and 7's unchanged; `docs/screenshots/water-flow/river-*.jpg`.) A drainage river pass that steps down from springs, in a new generator version. Verify: a test that every river cell drains to the sea; captures beside the river tab.
 - [ ] 8.2 The beaver colony record and the `beaver` world process through the journal. Verify: a catch-up test to day 40; a test that a broken dam is not rebuilt on the player's cells and the colony moves on.
 - [x] 8.3 (Marsh pools built 2026-11-15 in version 8: version 5's swamp water only where a rim holds it; `marsh-pools-day.jpg`. The estuary is the river's mouth into the sea; no estuary of its own.) Marsh pools and the estuary. Verify: captures beside the marsh tab.
+
+## 11. Kelp that reads as kelp (design B16; owner, 2026-11-15: "kelp needs fixing")
+
+- [x] 11.1 (Built 2026-11-15, cloud session, lavapipe: `a_kelp_stand_is_slender_and_in_the_frond_s_colours`; `docs/screenshots/ocean-environments/kelp-before-after.jpg` at the owner's spot, with `kelp-after-first.jpg` the take before the green was deepened. The rocks read pale cyan: grey rock under the water's tint. Frame cost not measured.) The kelp stand redrawn after M25's frond: slender crossed stipes, narrow spiralling blades with gas floats, a surface canopy, one colour a part in the frond's palette; the rocks at its foot in the rock's palette. Placement unchanged. Verify: a test of the stand's widths and colours; captures at `--walk --at 71.308 -8.196 --time 12` before and after.
+

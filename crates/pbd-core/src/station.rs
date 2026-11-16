@@ -292,6 +292,14 @@ impl Default for RecipeFile {
                 &[("planks", 3), ("rope", 1)],
                 &[("bucket", 1)],
             ),
+            recipe(
+                "incubator",
+                "INCUBATOR",
+                "workbench",
+                4.0,
+                &[("planks", 4), ("rope", 2)],
+                &[("incubator", 1)],
+            ),
             metal_tool("bronze", "pickaxe", "BRONZE PICK"),
             metal_tool("bronze", "shovel", "BRONZE SHOVEL"),
             metal_tool("bronze", "axe", "BRONZE AXE"),
@@ -653,8 +661,8 @@ mod tests {
         assert_eq!(book.at("hand").count(), 5);
         assert_eq!(
             book.at("workbench").count(),
-            13,
-            "with the bucket (water-flow E11)"
+            14,
+            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2) and the incubator (animal-husbandry E4)"
         );
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));
         assert_eq!(item_named("coal"), Some(Item::Good(Good::COAL)));

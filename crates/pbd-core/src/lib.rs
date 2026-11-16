@@ -36,6 +36,7 @@ pub mod missions;
 pub mod night_lights;
 pub mod ocean;
 pub mod orbit;
+pub mod ore;
 pub mod overlay;
 pub mod planet_gen;
 pub mod records;

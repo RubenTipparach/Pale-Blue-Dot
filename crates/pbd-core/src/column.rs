@@ -469,6 +469,19 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
             continue;
         }
         *layer = material_at_depth(top, surface_m - altitude);
+        // Ore veins in the stone (generator version 10, `flora-v2` 12.8).
+        if *layer == Material::Stone
+            && let Some(ore) = terrain.ore
+            && ore.is_ore(
+                terrain.seed,
+                terrain.radius_m,
+                direction,
+                altitude + 0.5,
+                surface_m - altitude,
+            )
+        {
+            *layer = Material::Ore;
+        }
     }
     // A river's water over its bed (generator version 8, `ocean-environments`
     // design 13): sources to its reach's level, and below a riffle or a fall
@@ -836,10 +849,13 @@ mod tests {
                 if altitude >= surface_m {
                     continue;
                 }
-                assert_eq!(
-                    column.layers[index],
-                    material_at_depth(top, surface_m - altitude),
-                    "layer {index} at {altitude} m under a {surface_m} m {top:?} surface"
+                // Version 10's veins turn some of the rule's stone to ore
+                // (`flora-v2` 12.8); nothing else departs from it.
+                let rule = material_at_depth(top, surface_m - altitude);
+                let got = column.layers[index];
+                assert!(
+                    got == rule || (rule == Material::Stone && got == Material::Ore),
+                    "layer {index} at {altitude} m under a {surface_m} m {top:?} surface: {got:?} for {rule:?}"
                 );
             }
         }
@@ -1107,4 +1123,87 @@ mod tests {
             );
         }
     }
+
+    /// Sample directions over the body, the golden spiral.
+    fn spiral(n: usize) -> impl Iterator<Item = Vec3> {
+        (0..n).map(move |i| {
+            let y = 1.0 - 2.0 * (i as f32 + 0.5) / n as f32;
+            let r = (1.0 - y * y).sqrt();
+            let phi = i as f32 * 2.399_963;
+            Vec3::new(r * phi.cos(), y, r * phi.sin())
+        })
+    }
+
+    /// `flora-v2` 12.8: version 10's columns are version 9's, cell for cell,
+    /// but for stone turned to ore; version 9 has no ore at all. Compared
+    /// live, so it holds on every machine.
+    #[test]
+    fn version_10_is_version_9_s_ground_with_ore_veins() {
+        let v9 = planet_gen::TerrainConfig::TENEBRIS_V9;
+        let v10 = planet_gen::TerrainConfig::TENEBRIS_V10;
+        let (mut turned, mut stone) = (0usize, 0usize);
+        for d in spiral(3_000) {
+            let a = generate_solid(&v9, d);
+            let b = generate_solid(&v10, d);
+            for i in 0..LAYERS {
+                assert_ne!(a.material(i), Material::Ore, "version 9 grows no ore");
+                if a.material(i) == b.material(i) {
+                    stone += usize::from(a.material(i) == Material::Stone);
+                    continue;
+                }
+                assert_eq!(
+                    (a.material(i), b.material(i)),
+                    (Material::Stone, Material::Ore),
+                    "only stone turns, and only to ore"
+                );
+                turned += 1;
+            }
+        }
+        let share = turned as f32 / (turned + stone) as f32;
+        assert!((0.02..0.12).contains(&share), "{share} of the stone is ore");
+    }
+
+    /// `flora-v2` 12.8: on land, ore lies within 14 layers of the surface in
+    /// most columns, so a stone pickaxe on a hillside finds it early.
+    #[test]
+    fn version_10_has_ore_near_the_surface_on_land() {
+        let v10 = planet_gen::TerrainConfig::TENEBRIS_V10;
+        let (mut land, mut found) = (0usize, 0usize);
+        for d in spiral(2_000) {
+            let surface = surface_m(&v10, d);
+            if surface <= v10.sea_level_m {
+                continue;
+            }
+            land += 1;
+            let column = generate_solid(&v10, d);
+            let near = (0..LAYERS).any(|i| {
+                let depth = surface - layer_altitude(i);
+                depth > 0.0 && depth <= 14.0 && column.material(i) == Material::Ore
+            });
+            found += usize::from(near);
+        }
+        assert!(land > 300, "{land} land columns");
+        let share = found as f32 / land as f32;
+        assert!(share > 0.3, "{share} of land columns have ore within 14 m");
+        eprintln!("ore within 14 m of the surface in {found} of {land} land columns ({share:.2})");
+    }
+
+    /// Version 10's columns pinned as it lands (x86_64; the ground under
+    /// them differs between targets, `flora-v2` 12.1).
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn version_10_s_columns_are_pinned() {
+        let v10 = planet_gen::TerrainConfig::TENEBRIS_V10;
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for d in spiral(2_000) {
+            let column = generate_solid(&v10, d);
+            for i in 0..LAYERS {
+                hash = (hash ^ column.material(i) as u64).wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+        assert_eq!(hash, VERSION_10_COLUMN_DIGEST);
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    const VERSION_10_COLUMN_DIGEST: u64 = 7_866_721_340_977_067_839;
 }

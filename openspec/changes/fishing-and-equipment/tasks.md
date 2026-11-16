@@ -73,12 +73,37 @@
       pickaxe mid-chop on a cracking block).
 
 ## 4. Trees
-- [ ] `pbd_core::flora::tree_at`; the WGSL reads its density table from a
-      uniform; a compute-shader test that it agrees over 10,000 cell IDs.
-- [ ] Aim tests the trunk and canopy; `Material::Wood` on the (2,1) tile.
-- [ ] A felled flag in `Edits`, uploaded with the fine set and honoured by the
-      visibility pass; a `fell` save line.
-- [ ] Test: felled after a tier rebuild and after a reload.
+Built by `tool-crafting` (its task 1.4, decision 3), in a different shape
+from this plan; recorded here so the two changes agree.
+- [x] The CPU tree rule: `pbd_core::flora::grows_tree(tree_id, word)` with
+      `shader_hash` and `TREE_DENSITY`, the foliage pass's rule on the CPU
+      (`crates/pbd-core/src/flora.rs`); `planet_lod.rs`
+      `tool_crafting_ground` counts trees by it round the spawn.
+- [x] The WGSL reads its density table from the uniform (`flora-v2` design
+      12.1, built 2026-11-15 with generator version 10): the table is the
+      world's (`TerrainConfig::trees`), packed into `plant_means[b].w`, and
+      the literals are gone. Agreement is held by
+      `flora::tests::the_tree_rule_is_the_foliage_pass_s`: the shader's rule
+      lines must stand word for word in both passes, and a Rust mirror of
+      those lines agrees with `grows_tree` over 10,000 cell IDs, every biome
+      and material, both tables. Not a compute-shader run: the cloud session
+      has no GPU to run one on; the launch to READY compiles the pipelines.
+- [x] Aim tests the trunk and canopy: `desktop/digging.rs` `tree_on_ray`
+      (a trunk column 0.45 m to 3 m, a canopy 1 m to 6.5 m). Wood is a good,
+      `Good::LOG`, not a placeable `Material::Wood` (the planks of
+      `tool-crafting` are the placeable wood).
+- [x] What a tree has given is a stored record, `tree` by the cell's key
+      (`gather::TREE_KIND`, `TreeTaken`), written with the slots in one
+      `store_with_hands` line; hands take one branch, an axe up to
+      `gather.axe_logs` (4). It survives a reload as every record does.
+- [x] A spent tree no longer stands (`flora-v2` design 12.5, 2026-11-15):
+      `trees_taken` lists the 64 felled trees nearest the camera (a `tree`
+      record at `axe_logs`) by tree id in the uniform, and both passes leave
+      them out; the list is rebuilt from the records twice a second, so it
+      holds after a tier rebuild. Test
+      `trees_taken::tests::the_lists_pack_nearest_first_and_a_spent_tree_is_felled`;
+      capture with `--take-trees` (`docs/screenshots/flora-v2/`). Limit: a
+      felled tree beyond the 64 nearest is drawn again.
 
 ## 5. Fauna
 - [x] `pbd_core::fauna::School`: packed arrays, the boid terms of design
@@ -89,8 +114,15 @@
       rosters, and that the shipped file equals the code defaults.
 - [x] Spawn gate: water class from the terrain, temperature now from
       `Atmosphere::sample(dir).temperature`, nothing in frozen water.
-- [ ] `tools/fish_ranges.py` reads its rules from `fauna.ron`, and the atlas is
-      regenerated from the built roster.
+- [x] `tools/fish_ranges.py` reads its rules from `fauna.ron` (through
+      `tools/ron_read.py`), so every species on the roster, the water life
+      of `ocean-environments` 7.1 included, gets a range map; the atlas page
+      takes each species' icon and entry from the run, and is regenerated
+      from the built roster (`docs/wiki/fish-ranges/`, day one and 200 days
+      of the shipped settings).
+      Regenerated 2026-11-15 with the full roster (1 and 200 days of the
+      shipped settings; the sea now holds near 17 C and nothing freezes all
+      year, so the old 'sea that freezes' series is gone).
 - [x] Bottom dwellers: the goal off the bed and the vertical hold.
 - [x] App: spawn ring, caps, despawn, a fixed 30 Hz step. Drawn as one mesh
       per school rebuilt from its arrays rather than an instanced draw per
@@ -115,8 +147,14 @@
       species record (`fish::guide_facts`), and the player's catch record.
       A click on a slot does not open it: the pointer is captured while
       playing, so there is no cursor over the slots to click with.
-- [ ] `tools/gen_fish_wiki.py` writes `docs/wiki/fish.md`; a test that the
-      committed page equals the generator's output.
+- [x] `tools/gen_fish_wiki.py` writes `docs/wiki/fish.md` from `fauna.ron`:
+      one section per species in roster order (all 18, the eight fish and
+      `ocean-environments` 7.1's water life), with its icon, kind, origin, entry,
+      the field guide's numbers in its formatting, its places, whether it
+      takes a line and its tip; `--check` holds the page.
+      `fish::tests::the_wiki_page_holds_to_the_roster` (pbd-app) reads the
+      committed page back against the roster and the field guide's own
+      `guide_facts`.
 - [x] Tests: J opens the guide; a catch raises the count and best length, and
       both survive a reload.
 
@@ -126,7 +164,8 @@
       a kit grant: a world with no `hand` line is dealt the default
       `Equipment` (all four, rod in hand), which is the same once-only answer
       without a grant to version.
-- [ ] The `fell` line, with the trees.
+- [x] No `fell` line: `tool-crafting` saves what a tree gave as a `tree`
+      record (section 4 above), which the record path already carries.
 - [x] Copy Tenebris's five fish PNGs into `assets/items/fish/` with
       `PROVENANCE.md` and recorded hashes; a test checks them.
 - [x] `tools/gen_item_icons.py` writes 16x16 PNGs for the tools and the three
@@ -136,6 +175,11 @@
 - [x] Capture: `--fish` stands on a warm shore and scripts one cast, logging
       the schools (`docs/screenshots/fishing-cast.png`).
 - [ ] Captures: the picker open, the field guide open, a felled tree.
+      (2026-11-15, cloud session: the field guide taken with `--menu guide`,
+      `docs/screenshots/fishing-and-equipment/field-guide.jpg`, all 18
+      species of the water roster in the list; a felled tree's capture is
+      `flora-v2`'s `--take-trees` shot. Still open: the picker has no
+      capture flag.)
 - [x] `openspec validate --all`, fmt, clippy and tests.
 - [x] Moved into `openspec/specs`: `world/fauna`, `player/fishing`, the tool
       slot, picker and saved tool change of `player/equipment`, and the tap

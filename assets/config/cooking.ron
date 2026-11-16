@@ -86,6 +86,15 @@
             inputs: [("egg", 1)],
             outputs: [("fried-egg", 1)],
         ),
+        // A fertile egg cooks like an egg (`animal-husbandry` design 13, E3).
+        (
+            code: "fried-fertile-egg",
+            name: "FRIED EGG",
+            station: "campfire",
+            secs: 15.0,
+            inputs: [("fertile-egg", 1)],
+            outputs: [("fried-egg", 1)],
+        ),
         // Pending until `animal-husbandry` adds raw meat.
         (
             code: "roast-meat",

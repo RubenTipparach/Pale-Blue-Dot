@@ -51,3 +51,17 @@ reduction:
 | `assets/items/stations/workbench.png` | the workbench block slot icon | M3 `workbench.png`, reduced to 16 px |
 | `assets/items/tools/{stone,bronze,iron}-pickaxe.png` | a pick of each tier | M3 `pick-<tier>.png`, reduced to 16 px |
 | `assets/items/tools/{stone,bronze,iron}-{shovel,axe}.png` | a shovel and an axe of each tier | the game own `shovel.png` and `axe.png` with the head three greys swapped for the tier three (iron is the picture as drawn) |
+
+`fertile-egg` and `incubator` (`animal-husbandry` design 13, E3 and E4) are
+drawn the same way by `tools/gen_item_icons.py`, in the same palette with a
+speckle brown and two glass blues (`HATCH`).
+
+## flora-v2 design 12.5: the trees' fruit
+
+`apple`, `pear`, `plum`, `cherry`, `mango`, `papaya`, `marula`, `baobab` and
+`pine-cone` are M13's own hanging-fruit sprites
+(`docs/mockups/foliage/fruit/hang_<kind>.png`, 16 px, drawn by
+`docs/mockups/foliage/fruit_art.py` in the Sweaft-64 palette), given the 1 px
+outline of an inventory icon (the sprite's darkest tone at 45%) by
+`tools/gen_fruit_icons.py`; `--check` holds them.
+

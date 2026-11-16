@@ -53,10 +53,12 @@ struct Params {
     flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
     flora_biome: array<vec4<f32>,8>, // per biome: fern weight, mushroom weight, flower bits, deciduous
     tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
-    plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits
+    plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits (low 16), tree table (high 16)
     flora_fall: vec4<f32>,     // 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w fruit chance
     night: vec4<f32>,          // `night-lights-from-space`: x how many far lights `night_lights` holds
     night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
+    felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty
+    picked: array<vec4<u32>,8>,   // and the trees picked bare
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -701,6 +703,23 @@ struct VertexOut {
     // PART_NEW or PART_OLD.
     @location(15) @interpolate(flat) part_mark: u32,
 }
+// `flora-v2` design 12.5: whether a tree a player felled, or picked bare, is
+// in the uniform's short lists (`trees_taken::TreesTaken`, nearest first).
+fn tree_felled(id: u32) -> bool {
+    if id == 0u { return false; }
+    for (var i = 0u; i < 16u; i++) {
+        if any(params.felled[i] == vec4<u32>(id)) { return true; }
+    }
+    return false;
+}
+fn tree_picked(id: u32) -> bool {
+    if id == 0u { return false; }
+    for (var i = 0u; i < 8u; i++) {
+        if any(params.picked[i] == vec4<u32>(id)) { return true; }
+    }
+    return false;
+}
+
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
     h = ((h >> ((h >> 28u)+4u))^h)*277803737u;
@@ -758,15 +777,18 @@ fn stands_tree(cell: Cell) -> bool {
     let roll = hash(cell.spare.x) & 0xffu;
     let material = cell.metadata.y & 0xffu;
     let biome = (cell.metadata.y >> 8u) & 0xffu;
+    // `flora-v2` design 12.1: the world's tree table, from the uniform: the
+    // high half of `plant_means[biome].w` (`pbd_core::flora::TreeTable::packed`),
+    // so an old world keeps its trees and version 10 grows M13's forests.
+    let entry = params.plant_means[min(biome, 7u)].w;
+    let density = (entry >> 16u) & 0xffu;
     let grass = material==2u || material==3u || material==7u;
-    let pine = biome==7u && material==6u;
-    var density = 0u;
-    if biome==4u { density = 115u; }
-    if biome==5u { density = 34u; }
-    if biome==2u || biome==1u { density = 13u; }
-    if biome==7u { density = 2u; }
-    let tree = (grass||pine) && roll < density;
-    return tree;
+    let sand = ((entry >> 24u) & 1u) == 1u && material==1u;
+    let pine = ((entry >> 25u) & 1u) == 1u && material==6u;
+    let tree = (grass||sand||pine) && roll < density;
+    // A tree felled for its wood is gone (design 12.5).
+    let standing = tree && !tree_felled(cell.spare.x);
+    return standing;
 }
 
 // A tree's crown, metres over its cell and widths as a share of the cell:
@@ -1183,7 +1205,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             // the base like a part a tree lacks.
             let f = local - vmax;
             let b = min(biome, 7u);
-            let bits = params.plant_means[b].w;
+            // The low half is the fruit; the high half the tree table (12.1).
+            let bits = params.plant_means[b].w & 0xffffu;
             let anchors = kit[t.header + 3u];
             if bits != 0u && anchors > 0u && roll(id,SALT_FRUIT) < params.flora_fall.w {
                 // Neighbouring trees tend to bear the same kind: a patch is a
@@ -1205,7 +1228,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 let season = season_at(axis);
                 let keep = select(mix(0.85, 1.01, season.x)*(1.0-0.92*season.y), 1.0, cone);
                 let item = select(4u + (f-48u)/6u, f/12u, f < 48u);
-                if roll(id,SALT_FRUIT+2u+item) < keep {
+                // A tree picked bare keeps only what fell (design 12.5).
+                if roll(id,SALT_FRUIT+2u+item) < keep && !(f < 48u && tree_picked(id)) {
                     let size = select(0.40, 0.46, cone)*(0.9+0.3*roll(id,SALT_FRUIT+30u+item));
                     var corners = array<vec3<f32>,4>(axis,axis,axis,axis);
                     if f < 48u {
@@ -2237,7 +2261,8 @@ fn flora_albedo(input: VertexOut, albedo_in: vec3<f32>, grain: f32, variation: f
     }
     if !(leafy || grass) { return albedo; }
     let season = season_at(normalized(input.position));
-    if grass { albedo = mix(albedo, STRAW*(0.7 + 0.6*grain)*variation, season.z*0.65); }
+    // The tufts and blades dry with the ground under them (design 12.6).
+    if grass { albedo = mix(albedo, STRAW*(0.7 + 0.6*grain)*variation, ground_season(normalized(input.position)).x*0.65); }
     if leafy && params.flora_biome[biome].w > 0.5 {
         // Autumn: a texel at a time turns gold, orange or red, more of them
         // as the season deepens; winter fades the prism's leaves toward
@@ -2519,10 +2544,63 @@ fn tree_autumn(albedo: vec3<f32>, tree: f32, card: f32, turn: f32) -> vec3<f32> 
     return mix(albedo, aut, turn*smoothstep(0.1, 0.6, k + 0.35));
 }
 
+// The ground follows the seasons (design 12.6): `pbd_core::flora::
+// ground_season`, the trees' calendar. A grass texel keeps its own light and
+// dark; dry multiplies its luminance into the dried-grass ochre, frost lifts
+// it toward a pale rime. x dry, y frost.
+const GROUND_DRY = vec3<f32>(1.25, 1.0, 0.45);
+const GROUND_FROST = vec3<f32>(0.8, 0.84, 0.9);
+const GROUND_DRY_MIX: f32 = 0.6;
+const GROUND_FROST_MIX: f32 = 0.45;
+fn ground_season(radial: vec3<f32>) -> vec2<f32> {
+    let s = season_at(radial);
+    return vec2(max(s.z, s.y), s.y*smoothstep(SNOW_COLD.x, SNOW_COLD.y, abs(radial.y)));
+}
+fn ground_tint(albedo: vec3<f32>, radial: vec3<f32>) -> vec3<f32> {
+    let g = ground_season(radial);
+    if g.x <= 0.0 && g.y <= 0.0 { return albedo; }
+    let lum = dot(albedo, vec3(0.299, 0.587, 0.114));
+    let dried = mix(albedo, lum*GROUND_DRY, g.x*GROUND_DRY_MIX);
+    return mix(dried, GROUND_FROST*(0.6 + 0.8*lum), g.y*GROUND_FROST_MIX);
+}
+
+// Snow on the branches (design 12.3): `pbd_core::flora::winter_cover`, the
+// season's bare months times the cold of the latitude, laid on the up-facing
+// side of a near tree's bark and leaves and on the top of a baked crown. A
+// pine keeps its needles and carries the most; bare twigs a thin line.
+const SNOW_COLD = vec2<f32>(0.574, 0.766);
+const BRANCH_SNOW = vec3<f32>(0.80, 0.83, 0.88);
+fn winter_cover(radial: vec3<f32>) -> f32 {
+    return season_at(radial).y*smoothstep(SNOW_COLD.x, SNOW_COLD.y, abs(radial.y));
+}
+fn tree_snow(input: VertexOut, albedo: vec3<f32>, code: u32, deciduous: bool) -> vec3<f32> {
+    let radial = normalized(input.position);
+    let cover = winter_cover(radial);
+    if cover <= 0.0 { return albedo; }
+    var on = 0.0;
+    if code == IMPOSTOR_CODE {
+        // A baked view's rows run bottom up: the crown's top third.
+        on = smoothstep(0.55, 0.9, input.uv.y);
+    } else {
+        on = smoothstep(0.15, 0.6, dot(normalize(input.normal), radial));
+    }
+    // In clumps a texel across, not a wash.
+    let clump = 0.75 + 0.25*h12(floor(input.uv*16.0) + vec2(f32(input.seed & 255u), 0.0));
+    let amount = select(0.95, 0.6, deciduous);
+    // The snow keeps the scene's brightness (one art style): lit as the
+    // ground's own snow is, never a flat white.
+    return mix(albedo, BRANCH_SNOW, clamp(cover*on*amount*clump, 0.0, 1.0));
+}
+
 // A detailed tree's albedo: its bark or leaf texel pulled to the texture's
 // mean (design 9.2's 0.7 and 0.45), the acacia's leaves in the dry olive, or
-// a baked impostor's pixel; with the season laid on live.
+// a baked impostor's pixel; with the season laid on live, and its snow.
 fn tree_albedo(input: VertexOut) -> vec3<f32> {
+    let code = input.material & 0xffu;
+    let flags = kit[min((input.material >> SPECIES_SHIFT) & 0xfu, 7u)*KIT_SPECIES_WORDS + 3u];
+    return tree_snow(input, tree_albedo_bare(input), code, (flags & 1u) != 0u);
+}
+fn tree_albedo_bare(input: VertexOut) -> vec3<f32> {
     let code = input.material & 0xffu;
     let sh = min((input.material >> SPECIES_SHIFT) & 0xfu, 7u)*KIT_SPECIES_WORDS;
     let flags = kit[sh + 3u];
@@ -3443,6 +3521,12 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let up = dot(n, radial);
     if cap == BLOOM_CODE { albedo = vec3(0.55, 0.90, 0.82)*(0.75 + 0.5*grain); }
     albedo = flora_albedo(input, albedo, grain, cell_variation);
+    // Design 12.6: the ground's grass (a top, the sod lip down a column's
+    // side, a terrace) dries and frosts with the season.
+    if (input.kind == 0u || input.kind == 1u || input.kind == 4u)
+        && (code == 2u || code == 3u || code == 7u || code == GRASS_SIDE_CODE) {
+        albedo = ground_tint(albedo, normalized(input.position));
+    }
     // Design 9.4: the year's fallen leaves, in the cap's own texels.
     if input.kind == 0u && cap != 0u {
         albedo = fallen_leaves(input, albedo);

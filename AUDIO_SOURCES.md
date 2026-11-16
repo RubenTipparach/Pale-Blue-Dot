@@ -1,6 +1,6 @@
 # Audio sources
 
-Every recording Pale Blue Dot's sounds are cut from. 91 packs, every one CC0 or public domain by its own page when `tools/audio/fetch_cc0.py` read it (a pack whose page does not say so is refused), except the few the owner asked for under another licence (`tools/audio/licence_exceptions.json`), each printed with the credit its page asks for, which the game's credits must carry. CC0 asks for no credit; the people who recorded them are named anyway.
+Every recording Pale Blue Dot's sounds are cut from. 92 packs, every one CC0 or public domain by its own page when `tools/audio/fetch_cc0.py` read it (a pack whose page does not say so is refused), except the few the owner asked for under another licence (`tools/audio/licence_exceptions.json`), each printed with the credit its page asks for, which the game's credits must carry. CC0 asks for no credit; the people who recorded them are named anyway.
 
 This file is written by `python3 tools/audio/list_sources.py` (run by `tools/audio/render_sfx.sh`) from `tools/audio/cc0_cues.json` and `tools/audio/cc0_licences.json`: edit those, not this. Each cue's exact files and edits are in `assets/audio/sfx/SOURCES.md` and `assets/audio/ambience/SOURCES.md`. Freesound sounds are taken from the high-quality preview Freesound serves without an account (an MP3), under the same licence as the sound.
 
@@ -37,6 +37,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Steam.wav](https://freesound.org/people/sniperous/sounds/365071/) | Freesound | sniperous | CC0 | `fire_hiss` |
 | [Waves Up Close 3](https://freesound.org/people/amholma/sounds/376805/) | Freesound | amholma | CC0 | `amb_surf` |
 | [MUDDY AND WET FOOTSTEPS.wav](https://freesound.org/people/Alex_hears_things/sounds/376809/) | Freesound | Alex_hears_things | CC0 | `step_wet` |
+| [Footsteps Dirt 01](https://freesound.org/people/aglinder/sounds/264469/) | Freesound | aglinder | CC0 | `step_dirt` |
 | [Swimming.wav](https://freesound.org/people/13FPanska_Marval_Lukas/sounds/379334/) | Freesound | 13FPanska_Marval_Lukas | CC0 | `swim_stroke`, `swim_stroke_under` |
 | [Foot_Step_grit_Sand.wav](https://freesound.org/people/savataivanov/sounds/384082/) | Freesound | savataivanov | CC0 | `jump_sand`, `land_sand`, `place_sand`, `step_sand` |
 | [Digging a Hole and Shovelling Soil/Dirt 2](https://freesound.org/people/Ali_6868/sounds/384362/) | Freesound | Ali_6868 | CC0 | `dig_dirt`, `dig_dry`, `dig_grass` |
@@ -96,7 +97,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Tumbleweed Firestarter Torch Ignite Denoised 02](https://freesound.org/people/loganzsound/sounds/872960/) | Freesound | loganzsound | CC0 | `fire_ignite` |
 | [SPLASH.wav](https://freesound.org/people/petenice/sounds/9508/) | Freesound | petenice | CC0 | `catch_splash` |
 | [Impact Sounds · Kenney](https://kenney.nl/assets/impact-sounds) | Kenney | Kenney | CC0 | `break_dirt`, `break_grass`, `break_snow`, `break_stone`, `dig_grass`, `dig_stone`, `float_dry`, `jump_grass`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `land_dry`, `land_grass`, `land_hard`, `land_sand`, `land_shallow`, `land_snow`, `land_stone`, `land_wood`, `place_dirt`, `place_dry`, `place_grass`, `place_lamp`, `place_sand`, `place_snow`, `place_stone`, `place_wood`, `step_grass`, `step_snow`, `step_stone`, `step_wood` |
-| [RPG Audio · Kenney](https://kenney.nl/assets/rpg-audio) | Kenney | Kenney | CC0 | `amb_town_night`, `break_wood`, `jump_dirt`, `jump_dry`, `jump_grass`, `jump_sand`, `jump_shallow`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `place_dirt`, `rigging_creak`, `step_dirt` |
+| [RPG Audio · Kenney](https://kenney.nl/assets/rpg-audio) | Kenney | Kenney | CC0 | `amb_town_night`, `break_wood`, `jump_dirt`, `jump_dry`, `jump_grass`, `jump_sand`, `jump_shallow`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `place_dirt`, `rigging_creak` |
 
 ## Not recorded
 

@@ -12,13 +12,18 @@
 use bevy::prelude::*;
 use pbd_core::husbandry::{Genome, LandSpecies, Plan, Sex};
 
-/// A mesh being built: flat-shaded boxes with a colour each.
+/// A mesh being built: flat-shaded boxes with a colour each, or (for a pen
+/// piece, `animal-husbandry` design 14) boxes wearing a texture.
 #[derive(Default)]
 pub struct Builder {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub colours: Vec<[f32; 4]>,
+    pub uvs: Vec<[f32; 2]>,
     pub indices: Vec<u32>,
+    /// Whether any box was textured: only then are UVs written, so an
+    /// animal's mesh keeps the layout its pipeline was built for.
+    pub textured: bool,
 }
 
 impl Builder {
@@ -26,6 +31,17 @@ impl Builder {
     /// extent), in the mesh's space. The colour is sRGB, as the data and a
     /// `Color::srgb` are; a vertex colour is linear, so it is converted.
     pub fn cuboid(&mut self, centre: Vec3, axes: [Vec3; 3], colour: [f32; 3]) {
+        self.boxed(centre, axes, colour, None);
+    }
+
+    /// A box wearing a texture that repeats every `repeat_m` metres along
+    /// each face (the settlement manifest's scale), untinted.
+    pub fn textured_cuboid(&mut self, centre: Vec3, axes: [Vec3; 3], repeat_m: f32) {
+        self.textured = true;
+        self.boxed(centre, axes, [1.0, 1.0, 1.0], Some(repeat_m.max(0.05)));
+    }
+
+    fn boxed(&mut self, centre: Vec3, axes: [Vec3; 3], colour: [f32; 3], repeat: Option<f32>) {
         let [r, g, b, _] = Color::srgb(colour[0], colour[1], colour[2])
             .to_linear()
             .to_f32_array();
@@ -35,15 +51,23 @@ impl Builder {
             for sign in [1.0f32, -1.0] {
                 let n = (a * sign).normalize_or(Vec3::Y);
                 let face = centre + a * sign;
-                let mut quad = [face - b - d, face + b - d, face + b + d, face - b + d];
-                if (quad[1] - quad[0]).cross(quad[2] - quad[0]).dot(n) < 0.0 {
+                let (u, v) =
+                    repeat.map_or((0.0, 0.0), |m| (2.0 * b.length() / m, 2.0 * d.length() / m));
+                let mut quad = [
+                    (face - b - d, [0.0, 0.0]),
+                    (face + b - d, [u, 0.0]),
+                    (face + b + d, [u, v]),
+                    (face - b + d, [0.0, v]),
+                ];
+                if (quad[1].0 - quad[0].0).cross(quad[2].0 - quad[0].0).dot(n) < 0.0 {
                     quad.reverse();
                 }
                 let base = self.positions.len() as u32;
-                for p in quad {
+                for (p, uv) in quad {
                     self.positions.push(p.to_array());
                     self.normals.push(n.to_array());
                     self.colours.push(c);
+                    self.uvs.push(uv);
                 }
                 self.indices.extend_from_slice(&[
                     base,
@@ -61,6 +85,9 @@ impl Builder {
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, self.positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals);
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, self.colours);
+        if self.textured {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs);
+        }
         mesh.insert_indices(bevy::mesh::Indices::U32(self.indices));
     }
 }

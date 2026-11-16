@@ -190,7 +190,8 @@ pub struct MixConfig {
     /// be ten steps a second (build decision 10).
     pub step_rate_walk_hz: f32,
     pub step_rate_run_hz: f32,
-    /// A landing faster than this adds `land_hard`.
+    /// Unused: a landing is an ordinary step (owner, 2026-11-15, no
+    /// thump). Kept so a `mix.ron` that names it still reads.
     pub land_hard_m_s: f32,
     /// A fall slower than this makes no landing sound.
     pub land_from_m_s: f32,

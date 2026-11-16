@@ -13,7 +13,10 @@
 //! every frame (S11), faded in and out through the terrain's mask. Wild ones
 //! are derived from the world seed and never saved (S10).
 
+pub mod breed;
 pub mod rig;
+
+pub use breed::BreedingPick;
 
 use crate::config::HusbandryConfig;
 use crate::field_light::{Faded, LitByField};
@@ -131,6 +134,10 @@ struct Beast {
     leaving: bool,
     entity: Option<(Entity, Handle<Mesh>)>,
     clock_s: f32,
+    /// A kept animal's birth day, for its life stage (design 13, E1).
+    born: Option<f64>,
+    /// A hen sitting on a clutch (E4): she rests on it.
+    sitting: bool,
 }
 
 impl Beast {
@@ -179,6 +186,8 @@ impl Beast {
             leaving: false,
             entity: None,
             clock_s: 0.0,
+            born: None,
+            sitting: false,
         }
     }
 }
@@ -193,8 +202,11 @@ pub struct Farmyard {
     /// What the HUD line says, and how long a one-off message stays.
     status: String,
     hold_s: f32,
-    fences_drawn: Option<(BTreeMap<Edge, bool>, usize)>,
+    fences_drawn: Option<(BTreeMap<Edge, bool>, Vec<u32>, usize)>,
     material: Option<Handle<StandardMaterial>>,
+    /// The pen's textured materials in [`PEN_TEXTURES`] order, and each
+    /// texture's repeat in metres (design 14).
+    pen_materials: Option<([Handle<StandardMaterial>; 4], [f32; 4])>,
     /// What the player did this frame, announced as messages.
     deeds: Vec<Deed>,
     gained: Vec<(Item, u16)>,
@@ -210,6 +222,7 @@ impl Default for Farmyard {
             hold_s: 0.0,
             fences_drawn: None,
             material: None,
+            pen_materials: None,
             deeds: Vec::new(),
             gained: Vec::new(),
         }
@@ -267,6 +280,7 @@ impl Plugin for HusbandryPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Farmyard>()
             .init_resource::<AimedGround>()
+            .init_resource::<BreedingPick>()
             .add_message::<Deed>()
             .add_message::<crate::hotbar::Gained>()
             .add_systems(Startup, spawn)
@@ -371,7 +385,48 @@ fn spawn(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     config: Res<HusbandryConfig>,
+    assets: Option<Res<AssetServer>>,
 ) {
+    // The pen's own wood (design 14): the towns' textures, sampled nearest
+    // and repeated at the manifest's scale.
+    if let Some(assets) = assets.as_deref() {
+        let repeats = crate::towns::load_repeats();
+        let repeat = PEN_TEXTURES.map(|n| repeats.get(n).copied().unwrap_or(1.0).max(0.25));
+        let pen = PEN_TEXTURES.map(|n| {
+            materials.add(StandardMaterial {
+                base_color_texture: Some(crate::towns::texture(assets, n)),
+                perceptual_roughness: 0.93,
+                reflectance: 0.2,
+                ..default()
+            })
+        });
+        // Its pipeline built behind the loading screen: one hidden post.
+        let mut post = rig::Builder::default();
+        post.textured_cuboid(
+            Vec3::ZERO,
+            [Vec3::X * 0.07, Vec3::Y * 0.6, Vec3::Z * 0.07],
+            1.0,
+        );
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        post.write(&mut mesh);
+        commands
+            .spawn((
+                Name::new("Pen prewarm template"),
+                LitByField,
+                Faded(1.0),
+                Transform::from_xyz(0.0, -1.0e5, 0.0),
+                Visibility::Hidden,
+            ))
+            .with_child((
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(pen[0].clone()),
+                Transform::default(),
+            ));
+        yard.pen_materials = Some((pen, repeat));
+    }
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 0.9,
@@ -522,7 +577,24 @@ fn conditions(world: &World, pen: Option<&Pen>, herd: &[(u16, Sex)]) -> Conditio
 }
 
 /// A kept animal's farm state now, from its record and its pen.
-fn farm_now(world: &World, yard: &mut Farmyard, save: &WorldSave, body: &AnimalBody) -> FarmState {
+fn farm_now(
+    world: &World,
+    yard: &mut Farmyard,
+    save: &WorldSave,
+    id: u64,
+    body: &AnimalBody,
+) -> FarmState {
+    farm_and_conditions(world, yard, save, id, body).0
+}
+
+/// [`farm_now`], and the conditions its pen gives now.
+fn farm_and_conditions(
+    world: &World,
+    yard: &mut Farmyard,
+    save: &WorldSave,
+    id: u64,
+    body: &AnimalBody,
+) -> (FarmState, Conditions) {
     let pieces = record::pieces(&save.records);
     let pen = body
         .pen
@@ -538,16 +610,21 @@ fn farm_now(world: &World, yard: &mut Farmyard, save: &WorldSave, body: &AnimalB
     let c = conditions(world, pen.as_ref(), &herd);
     let roster = world.roster();
     let Some(keep) = roster.get(body.sp as usize).and_then(|s| s.keep.as_ref()) else {
-        return body.farm();
+        return (body.farm(), c);
     };
-    body.farm().advance(
+    // A young animal gives from adulthood, a hen that sat from the hatching
+    // (design 13, E1, E4).
+    let from = breed::productive_from(&save.records, id, body, keep);
+    let state = body.farm().advance_from(
         world.day(),
         c,
         keep,
         body.sex,
         body.genome().yield_factor(),
         &world.settings().needs,
-    )
+        from,
+    );
+    (state, c)
 }
 
 /// The centres of a pen's cells, for an animal to wander between.
@@ -566,19 +643,21 @@ fn pen_range(world: &World, pen: &Pen) -> Option<Range> {
 
 /// Keep the yard's animals the ones near the player: wild herds derived
 /// here, kept animals read from the records. Twice a second.
-fn sync(world: World, save: Option<Res<WorldSave>>, mut yard: ResMut<Farmyard>) {
+fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farmyard>) {
     let dt = world.time.delta_secs().min(0.1);
     yard.sync_s -= dt;
     if yard.sync_s > 0.0 {
         return;
     }
     yard.sync_s = 0.5;
-    let (Some(feet), Some(save)) = (world.feet(), save) else {
+    let (Some(feet), Some(save)) = (world.feet(), save.as_deref_mut()) else {
         return;
     };
     if world.cell(feet).is_none() {
         return;
     }
+    // The farm's own births and conceptions up to now (design 13, E5, E6).
+    breed::realise(&world, &mut yard, save);
     let s = world.settings().clone();
     let near = s.herds.near_m;
     let up = feet.normalize_or(Vec3::Y);
@@ -606,11 +685,14 @@ fn sync(world: World, save: Option<Res<WorldSave>>, mut yard: ResMut<Farmyard>) 
             .as_ref()
             .and_then(|p| pen_range(&world, p))
             .unwrap_or(Range::Around(home, 6.0));
+        let sitting = breed::sitting(&save.records, *id);
         if let Some(b) = yard.beasts.iter_mut().find(|b| b.who == who) {
             if b.mode != Mode::Follow {
                 b.range = range;
             }
             b.leaving = false;
+            b.born = Some(body.born);
+            b.sitting = sitting;
             continue;
         }
         // A tamed animal already standing here as wild becomes this one.
@@ -621,6 +703,7 @@ fn sync(world: World, save: Option<Res<WorldSave>>, mut yard: ResMut<Farmyard>) 
         {
             b.who = who;
             b.range = range;
+            b.born = Some(body.born);
             continue;
         }
         if world.roster().get(body.sp as usize).is_none() {
@@ -634,7 +717,7 @@ fn sync(world: World, save: Option<Res<WorldSave>>, mut yard: ResMut<Farmyard>) 
         };
         let d = (home * PLANET_RADIUS + jitter).normalize();
         let pos = d * world.ground(d);
-        yard.beasts.push(Beast::new(
+        let mut beast = Beast::new(
             who,
             body.sp,
             body.sex,
@@ -642,7 +725,10 @@ fn sync(world: World, save: Option<Res<WorldSave>>, mut yard: ResMut<Farmyard>) 
             pos,
             range,
             hash2(*id, 0xbea57),
-        ));
+        );
+        beast.born = Some(body.born);
+        beast.sitting = sitting;
+        yard.beasts.push(beast);
     }
     // Wild herds near, on dry grass.
     let roster: Vec<LandSpecies> = world.roster().to_vec();
@@ -764,6 +850,12 @@ fn hands(
         }
         return;
     }
+    if placed && hotbar.held().map(|s| s.item) == Some(Item::Good(Good::INCUBATOR)) {
+        if let Some(point) = aimed.0 {
+            breed::place_incubator(&world, &mut yard, hotbar, save, point);
+        }
+        return;
+    }
     if !used {
         return;
     }
@@ -771,7 +863,8 @@ fn hands(
         use_on(&world, &mut yard, hotbar, save, k);
         true
     } else if let Some(point) = aimed.0 {
-        take_piece(&world, &mut yard, hotbar, save, point)
+        breed::use_incubator(&world, &mut yard, hotbar, save, point)
+            || take_piece(&world, &mut yard, hotbar, save, point)
     } else {
         false
     };
@@ -867,14 +960,27 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
             let Some(mut body) = rec.read::<AnimalBody>() else {
                 return;
             };
-            let mut now = farm_now(world, yard, save, &body);
+            // Fertile eggs in hand on a hen: she goes broody (design 13, E4).
+            if held == Some(Item::Good(Good::FERTILE_EGG))
+                && breed::set_under_hen(world, yard, hotbar, save, id, &mut body)
+            {
+                return;
+            }
+            let mut now = farm_now(world, yard, save, id, &body);
             // Collect what is waiting first.
             let mut got = Vec::new();
             for p in sp.keep.iter().flat_map(|k| k.products.iter()) {
                 let waiting = now.waiting(&p.good);
-                let Some(good) = p.good() else { continue };
+                let Some(mut good) = p.good() else { continue };
                 if waiting == 0 {
                     continue;
+                }
+                // A hen's eggs with a cockerel in her pen are fertile, their
+                // parentage stored as she gives them (design 13, E3).
+                if good == Good::EGG
+                    && let Some(keep) = sp.keep.as_ref()
+                {
+                    good = breed::collected_eggs(world, save, id, &body, keep, waiting);
                 }
                 let left = hotbar.give(Item::Good(good), waiting as u16);
                 let took = waiting - u32::from(left);
@@ -884,6 +990,8 @@ fn use_on(world: &World, yard: &mut Farmyard, hotbar: &mut Slots, save: &mut Wor
                 if took > 0 {
                     yard.gained.push((Item::Good(good), took as u16));
                     got.push(match (p.good.as_str(), took) {
+                        ("egg", 1) if good == Good::FERTILE_EGG => "a fertile egg".to_string(),
+                        ("egg", n) if good == Good::FERTILE_EGG => format!("{n} fertile eggs"),
                         ("egg", 1) => "an egg".to_string(),
                         ("egg", n) => format!("{n} eggs"),
                         ("milk", 1) => "a pail of milk".to_string(),
@@ -1010,7 +1118,7 @@ fn settle(world: &World, yard: &mut Farmyard, save: &mut WorldSave, k: usize) {
         .get(body.sp as usize)
         .map_or("It".to_string(), |s| s.name.clone());
     // The farm state up to now under the old home, then the new home.
-    let now = farm_now(world, yard, save, &body);
+    let now = farm_now(world, yard, save, id, &body);
     body.set_farm(&now);
     let Some((_, cell)) = world.cell(yard.beasts[k].pos) else {
         return;
@@ -1270,7 +1378,7 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
             b.goal = (d > 1.8).then(|| feet + (b.pos - feet).normalize_or(b.facing) * 1.4);
         }
         // Sleep at night, where nothing is chasing it.
-        let resting = night && matches!(b.mode, Mode::Idle | Mode::Walk);
+        let resting = (night || b.sitting) && matches!(b.mode, Mode::Idle | Mode::Walk);
         let target_down = if resting { 1.0 } else { 0.0 };
         b.down += (target_down - b.down).clamp(-dt * 0.6, dt * 0.6);
         if resting {
@@ -1459,6 +1567,7 @@ fn draw(
         return;
     };
     let centre = world.frame.center;
+    let day = world.day();
     for b in &mut yard.beasts {
         let Some(sp) = roster.get(b.species as usize) else {
             continue;
@@ -1499,14 +1608,18 @@ fn draw(
             [b.facing, up, right],
         );
         let at = (centre + b.pos.as_dvec3()).as_vec3();
+        // A young animal is drawn at its stage's size (design 13, E1).
+        let size = b
+            .born
+            .zip(sp.keep.as_ref())
+            .map_or(1.0, |(born, k)| k.young.stage(b.sex, born, day).1);
+        let place = Transform::from_translation(at).with_scale(Vec3::splat(size));
         match &b.entity {
             Some((e, handle)) => {
                 if let Some(mesh) = meshes.get_mut(handle) {
                     builder.write(mesh);
                 }
-                commands
-                    .entity(*e)
-                    .insert((Transform::from_translation(at), Faded(1.0 - b.shown)));
+                commands.entity(*e).insert((place, Faded(1.0 - b.shown)));
             }
             None => {
                 let mut mesh = Mesh::new(
@@ -1520,7 +1633,7 @@ fn draw(
                         Name::new(sp.name.clone()),
                         LitByField,
                         Faded(1.0 - b.shown),
-                        Transform::from_translation(at),
+                        place,
                         Visibility::default(),
                     ))
                     .with_child((
@@ -1558,11 +1671,12 @@ fn draw_fences(
         return;
     };
     let pieces = record::pieces(&save.records);
+    let incubators = pbd_core::husbandry::breeding::incubators(&save.records);
     let version = Arc::as_ptr(&fine.set) as usize;
     if yard
         .fences_drawn
         .as_ref()
-        .is_some_and(|(p, v)| *p == pieces && *v == version)
+        .is_some_and(|(p, i, v)| *p == pieces && *i == incubators && *v == version)
     {
         return;
     }
@@ -1581,9 +1695,13 @@ fn draw_fences(
             .collect()
     };
     let mut origin = None;
-    let mut builder = rig::Builder::default();
-    let wood = [0.42, 0.28, 0.16];
-    let light = [0.80, 0.70, 0.52];
+    let Some((materials, repeat)) = yard.pen_materials.clone() else {
+        return;
+    };
+    let mut pen = PenMeshes {
+        repeat,
+        ..PenMeshes::default()
+    };
     let mut drawn = 0;
     for (edge, &gate) in &pieces {
         let (a, b) = edge.cells();
@@ -1597,16 +1715,16 @@ fn draw_fences(
         let pb = cb * world.ground(cb);
         let o = *origin.get_or_insert(pa);
         fence_piece(
-            &mut builder,
+            &mut pen,
             pa - o,
             pb - o,
             (ca + cb).normalize_or(Vec3::Y),
             gate,
-            if gate { light } else { wood },
         );
         drawn += 1;
     }
-    yard.fences_drawn = Some((pieces, version));
+    drawn += breed::draw_incubators(&world, &save, &mut pen, &mut origin);
+    yard.fences_drawn = Some((pieces, incubators, version));
     if let Some(children) = children {
         for c in children.iter() {
             commands.entity(c).despawn();
@@ -1615,75 +1733,114 @@ fn draw_fences(
     let Some(o) = origin else {
         return;
     };
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-    builder.write(&mut mesh);
-    let Some(material) = yard.material.clone() else {
+    let Some(flat) = yard.material.clone() else {
         return;
     };
-    commands
-        .entity(root)
-        .insert(Transform::from_translation(
-            (world.frame.center + o.as_dvec3()).as_vec3(),
-        ))
-        .with_child((
+    commands.entity(root).insert(Transform::from_translation(
+        (world.frame.center + o.as_dvec3()).as_vec3(),
+    ));
+    let parts = [
+        (pen.timber, materials[0].clone()),
+        (pen.poles, materials[1].clone()),
+        (pen.boards, materials[2].clone()),
+        (pen.plank, materials[3].clone()),
+        (pen.glass, flat),
+    ];
+    for (builder, material) in parts {
+        if builder.positions.is_empty() {
+            continue;
+        }
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        builder.write(&mut mesh);
+        commands.entity(root).with_child((
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(material),
             Transform::default(),
         ));
+    }
     debug!("husbandry: {drawn} fence pieces drawn");
 }
 
 /// A piece between two corners on the ground: two posts and two rails; a
 /// gate adds a brace.
-fn fence_piece(out: &mut rig::Builder, a: Vec3, b: Vec3, up: Vec3, gate: bool, colour: [f32; 3]) {
+fn fence_piece(pen: &mut PenMeshes, a: Vec3, b: Vec3, up: Vec3, gate: bool) {
     let along = b - a;
     let side = along.cross(up).normalize_or(Vec3::Z);
-    let post = |out: &mut rig::Builder, at: Vec3| {
-        let fwd = along.normalize_or(Vec3::X);
-        out.cuboid(
+    let fwd = along.normalize_or(Vec3::X);
+    // The posts stand on the corners in timber, the rails run between them
+    // in poles; a gate is boards (M26's `pen()`).
+    for at in [a, b] {
+        pen.timber.textured_cuboid(
             at + up * 0.6,
             [fwd * 0.07, up * 0.65, side * 0.07],
-            [0.33, 0.22, 0.12],
+            pen.repeat[0],
         );
+    }
+    let (rails, repeat) = if gate {
+        (&mut pen.boards, pen.repeat[2])
+    } else {
+        (&mut pen.poles, pen.repeat[1])
     };
-    post(out, a);
-    post(out, b);
-    // The posts stand on the corners, the rails run between them.
-    let rail = |out: &mut rig::Builder, h: f32| {
+    let mut rail = |h: f32| {
         let mid = (a + b) * 0.5 + up * h;
-        out.cuboid(mid, [along * 0.5, up * 0.05, side * 0.03], colour);
+        rails.textured_cuboid(mid, [along * 0.5, up * 0.05, side * 0.03], repeat);
     };
-    rail(out, 0.35);
-    rail(out, 0.85);
+    rail(0.35);
+    rail(0.85);
     if gate {
+        rail(0.6);
         // A brace from bottom corner to top corner.
         let from = a + up * 0.35;
         let to = b + up * 0.85;
         let brace = to - from;
         let bup = brace.cross(side).normalize_or(up);
-        out.cuboid(
+        pen.boards.textured_cuboid(
             (from + to) * 0.5,
             [brace * 0.5, bup * 0.045, side * 0.035],
-            colour,
+            repeat,
         );
-        rail(out, 0.6);
     }
 }
+
+/// The pen's meshes, one per texture (`animal-husbandry` design 14): posts
+/// and legs in timber, rails in poles, gates in boards, an incubator's body
+/// in plank, and its glass flat. `repeat` is each texture's metres, in that
+/// order.
+#[derive(Default)]
+pub(crate) struct PenMeshes {
+    pub(crate) timber: rig::Builder,
+    pub(crate) poles: rig::Builder,
+    pub(crate) boards: rig::Builder,
+    pub(crate) plank: rig::Builder,
+    pub(crate) glass: rig::Builder,
+    pub(crate) repeat: [f32; 4],
+}
+
+/// The pen's textures by name, in [`PenMeshes`] order.
+const PEN_TEXTURES: [&str; 4] = ["timber", "poles", "boards", "plank"];
 
 /// The HUD line: a one-off message, or what the aimed animal is.
 fn hud(
     world: World,
     save: Option<Res<WorldSave>>,
+    aimed: Res<AimedGround>,
     mut yard: ResMut<Farmyard>,
     mut texts: Query<&mut Text, With<FarmText>>,
 ) {
     let line = if yard.hold_s > 0.0 {
         yard.status.clone()
     } else {
-        describe(&world, save.as_deref(), &mut yard).unwrap_or_default()
+        describe(&world, save.as_deref(), &mut yard)
+            .or_else(|| {
+                let walking = world.walking.as_ref().is_some_and(|w| w.active);
+                walking
+                    .then(|| breed::describe_incubator(&world, save.as_deref()?, aimed.0?))
+                    .flatten()
+            })
+            .unwrap_or_default()
     };
     for mut text in &mut texts {
         if text.0 != line {
@@ -1701,6 +1858,14 @@ fn describe(world: &World, save: Option<&WorldSave>, yard: &mut Farmyard) -> Opt
     let b = &yard.beasts[k];
     let sp = world.roster().get(b.species as usize)?.clone();
     let sex = if b.sex == Sex::M { "male" } else { "female" };
+    // A young one is named by its stage: a chick, a lamb (design 13, E1).
+    let young = b
+        .born
+        .and_then(|born| breed::stage_now(world, b.species, b.sex, born))
+        .filter(|(_, size)| *size < 1.0)
+        .map(|(name, _)| format!(" {name}"))
+        .unwrap_or_default();
+    let sitting = if b.sitting { ", sitting" } else { "" };
     match b.who {
         Who::Wild { .. } => Some(match (sp.refusal(), sp.keep.as_ref()) {
             (Some(why), _) => format!("{} (wild) - {why}", sp.name),
@@ -1715,7 +1880,7 @@ fn describe(world: &World, save: Option<&WorldSave>, yard: &mut Farmyard) -> Opt
         Who::Kept { id } => {
             let save = save?;
             let body = save.records.get(record::ANIMAL, id)?.read::<AnimalBody>()?;
-            let now = farm_now(world, yard, save, &body);
+            let now = farm_now(world, yard, save, id, &body);
             let n = &world.settings().needs;
             let keep = sp.keep.as_ref()?;
             let waiting: Vec<String> = keep
@@ -1740,10 +1905,10 @@ fn describe(world: &World, save: Option<&WorldSave>, yard: &mut Farmyard) -> Opt
                 "loose"
             };
             Some(if waiting.is_empty() {
-                format!("{} ({sex}, {pen}) - {c_mood}", sp.name)
+                format!("{}{young} ({sex}, {pen}{sitting}) - {c_mood}", sp.name)
             } else {
                 format!(
-                    "{} ({sex}, {pen}) - {c_mood} - {} waiting [E]",
+                    "{}{young} ({sex}, {pen}{sitting}) - {c_mood} - {} waiting [E]",
                     sp.name,
                     waiting.join(", ")
                 )
@@ -1760,6 +1925,7 @@ fn script(
     mut yard: ResMut<Farmyard>,
     mut hotbar: Option<ResMut<Hotbar>>,
     mut save: Option<ResMut<WorldSave>>,
+    mut pick: ResMut<BreedingPick>,
     mut done: Local<u32>,
 ) {
     let Some(script) = script else {
@@ -1908,7 +2074,72 @@ fn script(
                 }
             }
         }
-        other => warn!("--husbandry {other}: wild, tame, pen or collect"),
+        "eggs" | "breed" => {
+            let Some((_, centre)) = world.cell(spot) else {
+                return;
+            };
+            build_ring(&world, &mut yard, hotbar, save, centre, feet);
+            let (sp, herd): (&str, &[(u64, f32, f32)]) = if script.scene == "eggs" {
+                // The cockerel first (the script's n = 0 is male), three hens.
+                (
+                    "meadow-hen",
+                    &[(0, 0.0, 0.0), (1, 0.8, 0.6), (2, -0.7, 0.9), (3, 0.6, -0.8)],
+                )
+            } else {
+                (
+                    "woolback",
+                    &[(0, 0.0, 0.0), (1, 2.0, 0.6), (2, -2.0, 0.6), (3, 0.4, 2.2)],
+                )
+            };
+            for &(n, x, y) in herd {
+                let k = wild(&mut yard, index(sp), n, spot + right * x + ahead * y);
+                select_food(hotbar, &roster[index(sp) as usize]);
+                for _ in 0..12 {
+                    if matches!(yard.beasts[k].who, Who::Kept { .. }) {
+                        break;
+                    }
+                    feed_wild(&world, &mut yard, hotbar, save, k);
+                }
+                settle(&world, &mut yard, save, k);
+            }
+            if script.scene == "eggs" {
+                // As if kept three days (the instrument's one liberty, as in
+                // `collect`), then a hen's eggs collected and set under
+                // another through the player's own path, then five more days
+                // so the clutch has hatched two days ago.
+                breed::rebase(save, 3.0);
+                let hens: Vec<usize> = yard
+                    .beasts
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, b)| matches!(b.who, Who::Kept { .. }) && b.sex == Sex::F)
+                    .map(|(k, _)| k)
+                    .collect();
+                if let [first, second, ..] = hens[..] {
+                    use_on(&world, &mut yard, hotbar, save, first);
+                    if select_item(hotbar, Item::Good(Good::FERTILE_EGG)) {
+                        use_on(&world, &mut yard, hotbar, save, second);
+                    }
+                }
+                breed::rebase(save, 5.0);
+                hotbar.give(Item::Good(Good::INCUBATOR), 1);
+                if select_item(hotbar, Item::Good(Good::INCUBATOR)) {
+                    let at = feet + ahead * 2.5 - right * 1.5;
+                    breed::place_incubator(&world, &mut yard, hotbar, save, at);
+                }
+                let born = breed::realise(&world, &mut yard, save);
+                info!("HUSBANDRY eggs: {born} hatched");
+            } else {
+                // Forty days of the farm run at once as if every need were met
+                // (the instrument's liberty: a capture's pen has no water),
+                // through the same rule and the same proposals as play.
+                let born = breed::run_content(&world, &mut yard, save, 40.0);
+                *pick = breed::pick_kin(save, index(sp));
+                info!("HUSBANDRY breed: {born} born");
+            }
+            yard.hold_s = 1.0e6;
+        }
+        other => warn!("--husbandry {other}: wild, tame, pen, collect, eggs or breed"),
     }
     info!(
         "HUSBANDRY scene {} set: {} animals, {} pieces, {} kept",
@@ -1925,10 +2156,21 @@ fn select_food(hotbar: &mut Slots, species: &LandSpecies) {
     let Some(keep) = species.keep.as_ref() else {
         return;
     };
-    let Some(k) = (0..pbd_core::inventory::CARRIED)
-        .find(|&k| hotbar.get(k).is_some_and(|s| keep.eats(s.item)))
+    select_where(hotbar, |item| keep.eats(item));
+}
+
+/// Put an item in hand, from the pack if need be. Whether there was one.
+fn select_item(hotbar: &mut Slots, item: Item) -> bool {
+    select_where(hotbar, |i| i == item)
+}
+
+/// Put the first carried stack that `want`s in hand, swapping it from the
+/// pack into the last hotbar slot if need be. Whether there was one.
+fn select_where(hotbar: &mut Slots, want: impl Fn(Item) -> bool) -> bool {
+    let Some(k) =
+        (0..pbd_core::inventory::CARRIED).find(|&k| hotbar.get(k).is_some_and(|s| want(s.item)))
     else {
-        return;
+        return false;
     };
     // From the pack, swapped with the last hotbar slot.
     let k = if k >= pbd_core::inventory::SLOTS {
@@ -1941,6 +2183,7 @@ fn select_food(hotbar: &mut Slots, species: &LandSpecies) {
         k
     };
     hotbar.select(k);
+    true
 }
 
 /// A ring of fence round a cell and its neighbours, the gate on the side

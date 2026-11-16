@@ -588,6 +588,8 @@ pub struct TreeModel {
     pub vertices: Vec<TreeVertex>,
     /// How many of `vertices` are bark (they come first).
     pub bark: usize,
+    /// How many are vines (they come last, design 12.4).
+    pub vines: usize,
     pub anchors: Vec<[f32; 3]>,
     /// The mockup's `Hh` and `Wd`: the height and the width the impostor
     /// spans, metres.
@@ -879,6 +881,43 @@ pub fn build(species: Species, v: u32) -> TreeModel {
             }
         }
     }
+    // Vines (`flora-v2` design 12.4): M13 hangs them from the jungle's and
+    // the swamp's trees. A strand of narrow leaf cards falls from some of the
+    // model's anchors, on a stream of its own so the tree it hangs from is the
+    // one it always was. No strand is longer than the lowest anchor is high.
+    let vine_chance = match species {
+        Species::Kapok => 0.35,
+        Species::Palm => 0.2,
+        Species::Willow => 0.25,
+        _ => 0.0,
+    };
+    let leaves = l.v.len();
+    if vine_chance > 0.0 && !anchors.is_empty() {
+        let mut vr = Rng::new(0x7a1e + v * 131 + species.index() * 17);
+        let floor = anchors.iter().map(|a| a[1]).fold(f64::MAX, f64::min);
+        let reach = (floor * 0.8).max(0.0);
+        for (k, a) in anchors.clone().iter().enumerate() {
+            if vr.float() >= vine_chance {
+                continue;
+            }
+            let cards = 3 + (vr.float() * 4.0) as u32;
+            let piece = (reach / f64::from(cards)).min(0.5);
+            if piece < 0.1 {
+                continue;
+            }
+            let az = vr.float() * 6.28;
+            let face = [az.cos(), 0.0, az.sin()];
+            let mut at = *a;
+            for c in 0..cards {
+                let sway = (vr.float() - 0.5) * 0.12;
+                let dir = norm([sway, -1.0, sway * 0.5]);
+                let cid = 900.0 + k as f64 + f64::from(c) * 0.01;
+                leaf_card(&mut l, at, dir, piece, 0.16, &mut vr, cid, face, None);
+                at = add(at, scl(dir, piece * 0.95));
+            }
+        }
+    }
+    let vines = l.v.len() - leaves;
     let bark = b.v.len();
     let mut vertices = b.v;
     vertices.extend(l.v);
@@ -896,6 +935,7 @@ pub fn build(species: Species, v: u32) -> TreeModel {
         variant: v,
         vertices,
         bark,
+        vines,
         anchors: anchors.into_iter().map(|a| a.map(|x| x as f32)).collect(),
         height,
         width,
@@ -1165,7 +1205,9 @@ mod tests {
                     .sum::<f32>()
                     .sqrt()
             };
-            for tri in m.vertices[m.bark..].chunks(6) {
+            // The crown's cards; a vine hangs from the card above it (its own
+            // test), so it is left out here.
+            for tri in m.vertices[m.bark..m.vertices.len() - m.vines].chunks(6) {
                 let root = [0, 1, 2].map(|i| (tri[0].position[i] + tri[1].position[i]) / 2.0);
                 let near = edges
                     .iter()
@@ -1200,7 +1242,9 @@ mod tests {
         for id in 0..10_000u32 {
             for word in [1 | 3 << 8, 4 | 3 << 8] {
                 if grows_cactus(id, word) {
-                    assert!(!crate::flora::grows_tree(id, word));
+                    for table in [crate::flora::TreeTable::V4, crate::flora::TreeTable::V10] {
+                        assert!(!crate::flora::grows_tree(&table, id, word));
+                    }
                 }
             }
             assert!(!grows_cactus(id, 2 | 2 << 8));
@@ -1209,6 +1253,45 @@ mod tests {
             .filter(|id| grows_cactus(*id, 4 | 3 << 8))
             .count();
         assert!(n > 150 && n < 500, "{n}");
+    }
+
+    /// Vines (design 12.4): the kapok, the palm and the willow carry some;
+    /// every strand hangs from one of the model's anchors and falls no lower
+    /// than the ground; the other species carry none.
+    #[test]
+    fn vines_hang_from_anchors_and_never_reach_the_ground() {
+        let mut strands = 0;
+        for species in SPECIES {
+            for v in 0..VARIANTS {
+                let m = build(species, v);
+                let vines = &m.vertices[m.vertices.len() - m.vines..];
+                if !matches!(species, Species::Kapok | Species::Palm | Species::Willow) {
+                    assert_eq!(m.vines, 0, "{species:?}");
+                    continue;
+                }
+                assert_eq!(m.vines % 6, 0, "whole cards");
+                for card in vines.chunks(6) {
+                    assert!(card.iter().all(|p| p.leaf && p.position[1] > 0.0));
+                }
+                // Each strand's first card starts within a hand of an anchor.
+                let mut card = 0;
+                while card < vines.len() {
+                    let top = vines[card].position;
+                    let near = m
+                        .anchors
+                        .iter()
+                        .any(|a| (0..3).map(|i| (a[i] - top[i]).powi(2)).sum::<f32>().sqrt() < 0.2);
+                    if near {
+                        strands += 1;
+                    }
+                    card += 6;
+                }
+            }
+        }
+        assert!(
+            strands >= 8,
+            "{strands} strands across the jungle and swamp trees"
+        );
     }
 
     #[test]

@@ -130,12 +130,13 @@
  },
  "step_dirt": {
   "group": "Steps",
-  "what": "A boot on soil or dirt: a soft, dull thud.",
+  "what": "A boot on soil or dirt: a soft, dull crunch.",
   "takes": [
    {
     "layers": [
      {
-      "src": "kenney/rpg-audio:footstep00.ogg",
+      "src": "freesound/264469:264469.mp3",
+      "shot": 1,
       "dur": 0.35,
       "fadeout": 0.08
      }
@@ -144,7 +145,8 @@
    {
     "layers": [
      {
-      "src": "kenney/rpg-audio:footstep01.ogg",
+      "src": "freesound/264469:264469.mp3",
+      "shot": 2,
       "dur": 0.35,
       "fadeout": 0.08
      }
@@ -153,7 +155,8 @@
    {
     "layers": [
      {
-      "src": "kenney/rpg-audio:footstep02.ogg",
+      "src": "freesound/264469:264469.mp3",
+      "shot": 3,
       "dur": 0.35,
       "fadeout": 0.08
      }
@@ -162,7 +165,8 @@
    {
     "layers": [
      {
-      "src": "kenney/rpg-audio:footstep03.ogg",
+      "src": "freesound/264469:264469.mp3",
+      "shot": 4,
       "dur": 0.35,
       "fadeout": 0.08
      }
@@ -171,7 +175,8 @@
    {
     "layers": [
      {
-      "src": "kenney/rpg-audio:footstep04.ogg",
+      "src": "freesound/264469:264469.mp3",
+      "shot": 5,
       "dur": 0.35,
       "fadeout": 0.08
      }
@@ -180,7 +185,8 @@
    {
     "layers": [
      {
-      "src": "kenney/rpg-audio:footstep05.ogg",
+      "src": "freesound/264469:264469.mp3",
+      "shot": 6,
       "dur": 0.35,
       "fadeout": 0.08
      }
@@ -189,7 +195,8 @@
   ],
   "layers": [
    {
-    "src": "kenney/rpg-audio:footstep00.ogg",
+    "src": "freesound/264469:264469.mp3",
+    "shot": 1,
     "dur": 0.35,
     "fadeout": 0.08
    }
@@ -197,7 +204,7 @@
   "len": 0.45,
   "hp": 70,
   "peak_db": -1.0,
-  "edits": "Kenney's RPG footsteps 0 to 5, trimmed"
+  "edits": "Six steps from aglinder's walk on dirt, one shot each, trimmed (it replaced Kenney's RPG footsteps, which read as wood: owner, 2026-11-16)"
  },
  "step_grass": {
   "group": "Steps",
