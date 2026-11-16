@@ -696,6 +696,46 @@ write-up); it pins version 10's digests per target
 aarch64 ones so both machines' test runs mean something, and lists the
 cross-machine drift as an open question for the owner.
 
+**Versions 4 and 5 on the Mac, bisected and measured (2026-11-16,
+`claude/old-ground-digests`).** `version_4_makes_the_ground_every_old_world_was_made_on`
+and `version_5_makes_the_ground_its_worlds_were_made_on` failed on the M4 Max
+Mac. There is no breaking commit to bisect to: each test already fails on the
+Mac at the commit that added it, `69cf22a` (version 4's digest) and `792a6f0`
+(version 5's), with the very values the branch gives today (version 4
+`7957956841201382435`, version 5 `10767986828596518258`). The pinned values
+were taken in the cloud container (x86_64 Linux). Nothing moved the old
+ground; the digest was never the Mac's.
+
+The proof, run with each commit's own source (`git archive`, a probe test
+added to the scratch copy only): for each of the 10,000 digest directions,
+the direction's bits, the altitude's bits, the biome and the top block were
+written out for versions 4 and 5.
+
+| Run | Version 4 dump (sha1) | Version 5 dump (sha1) |
+| --- | --- | --- |
+| `69cf22a`, aarch64 Mac | `b2fce595...` | (version 5 not yet made) |
+| `792a6f0`, aarch64 Mac | `b2fce595...` | `3c748530...` |
+| `b924ff8` (`claude/env-v2`), aarch64 Mac | `b2fce595...` | `3c748530...` |
+| `b924ff8`, x86_64 Mac (Rosetta) | `b2fce595...` | `3c748530...` |
+
+Byte for byte the same ground, from the commit that pinned each version to
+today. The top-block digests (`3219747905282479865`, `13661571992430582298`)
+match the pinned values on the Mac, as on Linux.
+
+What this corrects in the paragraph above: the split is the **operating
+system's maths library**, not the processor. An x86_64 build on the Mac makes
+the aarch64 values for versions 4 to 9, so `cfg(target_arch)` was the wrong
+switch. The digests are now pinned per `cfg(target_os = "macos")`, versions 4
+and 5 included, with the Linux values kept as they were. Version 10's column
+digest (materials only, pinned on x86_64 Linux) passes on both Mac targets
+too, so its `cfg(target_arch = "x86_64")` gate is dropped: on those 2,000
+columns the platforms part in an altitude's last bits, not in which material
+a cell holds. Which call differs (the test's own `sin` and `cos` that lay out
+the sample directions, or the generator's `f64` `powf`) was not isolated
+without a Linux machine; Windows (the desktop) was not measured, and gets the
+Linux values as before. Whether worlds made on one OS and opened on another
+can differ in the odd cell stays the open question above.
+
 ### 12.2 M13's densities
 
 M13 rolls a tree on a cell with probability `treeP × (0.25 + 1.5 × forest)`,
@@ -920,3 +960,248 @@ like play adds `--rain-shadows off`.
   fungal forest.
 - The cross-machine digest drift (12.1), written up, not fixed.
 - Frame cost, not measured (no GPU in the cloud session).
+
+### 12.10 Nothing grows where water stands; a drowned top is drawn as a bed (owner, 2026-11-16)
+
+The owner: "tree and grass is spawned there, river should be dirt"
+(`docs/screenshots/rain-artifacts/owner-river-43.webp`, `-44.webp`). On a
+river's bed stand grass tufts, a tree and red mushrooms, on a green sward.
+
+**Reproduced** at a version 10 river 60 m from the spawn
+(`docs/screenshots/river-fixes/before-*.jpg`).
+
+**Why, measured in the code.** The generator writes a column's top from
+`top_material`, which knows nothing of rivers: a river carves its bed two
+layers under its water and the bed keeps the meadow's top, `DryGrass` or
+`Grass` (`rivers::water` puts the water over it; at 28.25, 0.75 the ground
+is 63 m, `DryGrass`, with water to 65 m). Every plant is then decided at
+draw time from the cell record's material word: tufts, flowers, ferns and
+mushrooms on a grassy code (`grassy` in `planet_visibility.wgsl` and
+`planet_surface.wgsl`), a tree on a grass, snow or (version 10's beach)
+sand code (`TreeTable::grows`, the foliage pass). The record's code is the
+column's top (`reconcile_surface`) on the column tier and `surface_code`
+beyond it. No rule asks whether water stands over the cell.
+
+**Two ways to make the bed dirt.**
+
+1. *A new generator version, 11*, writing river beds as dirt. Honest for
+   digging (a bed would give dirt), but only for new worlds: every world
+   made so far keeps green beds, and version 10's digests and a new
+   version's would both have to be pinned and carried forever.
+2. *A draw-time rule*: a top with water standing on it is DRAWN as a bed.
+   The material the column holds is unchanged, nothing new is saved, no
+   generator version moves, and every world, old and new, shows it.
+
+**Chosen: 2, the draw-time rule**, because it is derived state (CLAUDE.md:
+"what the seed and the rules decide is derived and never saved"), fixes
+old worlds' beds as well as their plants, and puts no save at risk. The
+rule, one function in each place that turns a material into a drawn code:
+
+- `Material::drowned` (core): a grass of any kind or snow under water is
+  drawn as dirt; everything else as itself. `Column::drawn_material(layer)`
+  applies it where the layer over is water; `packed_runs` and the tier's
+  per-layer codes and `reconcile_surface` draw from it.
+- Sand under water is drawn as the seabed's sand (code 0), as
+  `material_index` already draws sand below the sea, so a version 10
+  acacia cannot stand in a river's mouth either. On the column tier this
+  applies only above the sea's level, so the near seabed is unchanged.
+- Beyond the column tier the record's word asks the generator's river
+  (`rivers::floods`: a reach's water stands over the ground here), the
+  same answer the column will give.
+
+Dirt (code 10) is neither `grassy` nor `bare`, so it grows no tufts,
+flowers, ferns, mushrooms, bushes or pebbles, and no tree's table names
+it. The CPU's tree list (`grows_tree` over the records, used by the axe
+and the fruit) reads the same words, so a tree that is not drawn cannot be
+chopped. A `tree` record for a cell that no longer stands one is kept and
+harmless: the tree is simply not there.
+
+**What it leaves.** Digging a drowned bed still gives what its material is
+(a grass block gives fibre and sod): the column is unchanged. If that
+matters, version 11 can write beds as dirt for new worlds on top of this
+rule. Water the player pours over grass draws the grass under it as dirt
+too, and the sward comes back when the water goes: one rule for every
+water.
+
+## 13. Trees in rain, and a fade that ends (owner, 2026-11-16)
+
+The owner, on a terraced valley in rain: "theres massive artifacts here";
+then "distant forest stuff has that weird pale ghost look too" (a jungle in
+rain), "no rain drops on tree leaves either" (looking up into an oak), and
+"dithering should either stay or go, dont have it linger if the player isnt
+moving" (a jungle at night, the camera still). The pictures are in
+`docs/screenshots/rain-artifacts/` (`owner-*`), and the captures that
+reproduce them are listed in its README.
+
+### 13.1 What the ghost trees are
+
+Two causes, measured apart.
+
+**The wet ground's whole block runs on the trees.** `planet_surface.wgsl`'s
+rain branch (`wet_amt > 0.001`) gates on `rain_open`, which is 1 for every
+tree vertex, and its puddle test `floor_like` is "not grass, not leaves"
+by material code, which every tree code passes (`TREE_BARK_CODE` to
+`IMPOSTOR_CODE` are none of 2, 3, 7, 9). A mid card and a far billboard
+take the tree's up axis as their normal (`normal = axis`; the billboard
+`0.4` sideways), so to the wet block they are a flat floor: a puddle
+(`flat` 1 on a card, about 0.5 on a billboard), with the full Fresnel
+mirror of the sky at the grazing angle a standing card is seen from, the
+rings, the sheet's waves, the GGX glint and a reflection request. A card
+in rain is drawn as a pale sky-coloured sheet in the shape of a tree: the
+"ghost trees". The near model's leaf cards turn to the eye, many of them
+tilted up, and take the same rings, sheet and sheen ("no rain drops on tree
+leaves"). Evidence: `before-valley-dry.jpg` against `before-valley-rain.jpg`,
+one spot, one frame count, the forcing the only change: every mid and far
+tree turns from green to pale grey-blue blotches.
+
+**The cross-fade dither lingers.** The near model, the mid cards and the
+far billboard cross-fade over the last 0.3 of each ring (`ring_t`, design
+10.4) by a Bayer mask, by distance. A tree that stands inside a ring is
+drawn half in one representation and half in the next for as long as it
+stands there: on a still camera, a permanent screen-door of tree pixels and
+background pixels. Against a pale sky or the rain's haze that reads as a
+grey checker ("pale dithered checker patches at the canopy line"). Evidence:
+`before-jungle-rain.jpg` with the clouds pass off (`PBD_PASS_OFF=clouds`)
+and with the rain passes off still shows the checker behind the near
+kapoks, so it is neither the clouds' upsampling nor the rain volume. The
+foliage range's outer edge thins trees by the same mask over
+`tree_fade_m` (the same lingering, at a longer range).
+
+### 13.2 The fix for the first: a tree is not a floor
+
+The rain branch gives a detailed tree (`kind == 2`) and every piece of
+ground clutter (`kind == 3`: tufts, blades, flowers, ferns, mushrooms,
+pebbles, fallen fruit) one thing only: a uniform darkening by
+`rain_plant_darken` (`weather.ron`, 0.88 at full wetness) times the
+wetness. No puddle, rings, sheet, rivulets, mirror, glint, lamp glints or
+reflection request. Bark takes the same: the weather-rain design's
+"rivulets down trunks" were Tenebris's prism trunks, and on the detailed
+trees' 20 cm limbs the kernel is noise; recommendation taken (ask only with
+screenshots).
+
+### 13.3 The fix for the second: a fade is a moment in time
+
+The rule (CLAUDE.md, priority 1, owner 2026-11-16): "A dither cross-fade
+starts when something crosses its distance, runs to the end over its fade
+time, and finishes. Nothing is drawn half-dithered for as long as it sits
+inside a distance band, and a still camera sees no dithered object once the
+fade time has passed."
+
+**Two camera snapshots, no per-tree state.** The CPU keeps two points in
+the body's frame, `from` and `to`, and a clock. Each tree's representation
+is decided at both points by hard thresholds (no ring): the near model
+inside `0.85 * tree_near_m`, the mid cards inside `0.85 * tree_mid_m`, the
+far billboard beyond, and nothing past the foliage range's edge (its
+`TREE_FADE_MARGIN_M` and half the old thinning band inside the reach). If a
+tree's representation at `from` equals the one at `to`, it is drawn whole in
+it: no dither at all. If they differ, the one at `to` comes in and the one
+at `from` goes out through the existing Bayer split, by the fade's progress
+`t = (now - start) / fade_s`, not by distance. When `t` reaches 1 the CPU
+sets `from = to`; while the camera has moved since, it then sets `to` to the
+camera and starts the next fade. A still camera therefore has `from == to`
+one fade after it stops: nothing dithered. Hysteresis comes free: the
+snapshot moves only with the camera, so a tree beside a threshold cannot
+flap while the camera stands.
+
+**Fade time and speed.** `tree_fade_s` 0.5 s (`scatter.ron`). The level is
+decided at `to`, which trails the camera by at most the fade time; so the
+fade is shortened to keep that lag under `tree_fade_lag_m` 5 m
+(`fade = min(tree_fade_s, tree_fade_lag_m / speed)`): 0.5 s on foot, about
+0.17 s at 30 m/s, a frame or two in flight, where the camera's own motion
+already hides a fade. The 5 m lag sits inside the margins the visibility
+pass lists with (the near list to `tree_near_m`, the cards from
+`0.7 * tree_near_m` to `tree_mid_m`, the billboard past `0.7 * tree_mid_m`),
+so both representations of a tree in its fade are always listed: the
+switches at 0.85 of each range leave 6.6 m and 13.5 m either side.
+
+**What stays.** The billboard's growth past the fine band
+(`distance-lod-fade`) is a size, not a dither, and stays. The terrain's own
+band cross-fade (`fade_t`) and the clutter's reach are spatial too; the
+terrain's is measured and written up in `distance-lod-fade`; the clutter's
+reach takes the same two snapshots (a piece is shown or not at each, faded
+by `t` between).
+
+**Verify.** A still camera in a forest captured at 0 s, 0.3 s and 2 s after
+it stops (`PBD_CAPTURE_RUN` frames): dithered tree pixels at 2 s, none. A
+walk through a forest shows no pop (every change fades over its time). A
+launch to READY with no `LATE_PIPELINE`.
+
+### 13.4 The far trees glow at night
+
+The owner, at night by a jungle and the sea: "distant trees appear to be
+glowing evenly, there should be some sort of lighting? idk"
+(`owner-far-trees-glow-night.webp`). Reproduced at the owner's spot
+(`--walk --at 28.2398 -19.596 --yaw 330 --pitch -5 --time 2`,
+`before-far-trees-night.jpg`): the mean sRGB of the far band is
+(0.4, 12.9, 14.1), the near kapoks' crowns beside it (0.5, 9.5, 12.4), the
+ground (0.3, 7.6, 22.8). The far band is a third brighter than the near
+crowns and flat.
+
+**Cause.** The impostors are lit by the terrain's own fragment, like the
+near trees, the ground and the cascades' shadow, so they do take the sun,
+the sky, the lamps, the field's sky light and the haze; what differs is the
+normal. A mid card's is the tree's up axis, the billboard's nearly so
+(`0.4` toward the eye). Lit as a floor, a card takes the zenith's full sky
+irradiance and the sun from above, all of it the same on every pixel, while
+the near crown's leaf cards turn to face the eye and take the light of a
+standing face, which at night is a fraction of the zenith's. The bake's
+brightness was matched to the near crown's mean (design 10.7), so the whole
+difference is the normal.
+
+**Fix.** Both impostors take a standing normal: toward the eye across the
+ground, tilted up by `0.35` (the near crown's leaves face the eye and lean
+a little skyward), so a card is lit as the near crown's leaves are, the
+sun-side brighter and the far side darker. Nothing else of the lighting
+changes. Verify: the same view at night and by day, near and far trees in
+one frame, before and after, with the band's mean against the near crowns'.
+
+### 13.5 Where a plant's colour comes from (owner, 2026-11-16)
+
+The owner: "the tinting is because you are sharing ground tint with
+vegetation, really the tint should be like based on texture not
+shading/lighting/reflections", and "very pronounced trees tinted by sun".
+Checked every place a plant could borrow the ground's colour:
+
+- **`ground_tint`** (the season's dry and frost on the grass) runs only on
+  `kind` 0, 1 and 4 (caps, walls, cut walls): no plant takes it.
+- **`flora_albedo`, `plant_art`, `tree_albedo`**: a plant's albedo is its
+  own texels (the tuft ramp, the flower, fern and fruit palettes, the kit's
+  bark and leaf tiles pulled to their means, the bake's pixel matched to the
+  near crown's mean) and the season laid on that art. None reads a lit,
+  hazed or reflected term.
+- **The bake** (`pbd_core::tree_bake::shade`) carries a fixed key: 1.15 on
+  every leaf (a scale the shader's mean match takes out) and 0.85 to 1.15 on
+  bark by its normal. A shape term in texture space, not the scene's light;
+  kept.
+- **What did borrow the ground's look was the wet block** (13.2): the
+  puddle mirror of the sky, the glint toward the sun and the rings, all run
+  on plants as on a floor. Toward a low sun on wet ground that is the
+  bleached, pale silhouettes ("trees tinted by sun"); in rain, the ghosts.
+  Gone with 13.2. Measured with the ground soaked under a clear sky and a
+  sun 16 degrees up (`before/after-soaked-toward-sun.jpg`).
+- **The light** is then applied once, by the plant's own normal: a near
+  leaf card's (turned to the eye), the impostors' standing normal (13.4),
+  the clutter's surface up (design 9: a piece shades as the cap it stands
+  on, so it does not pop against it; its colour is still its own).
+
+### 13.6 As built (2026-11-16, branch `claude/rain-artifacts`)
+
+- 13.2: `plant` in the rain branch of `planet_surface.wgsl`;
+  `rain_plant_darken` 0.88 in `weather.ron` (`rain_near.z`).
+- 13.3: `TreeFade` in `planet.rs` (two points, a progress, `tree_fade` in
+  the uniform, which `planet_visibility.wgsl` and `rain_splash.wgsl` copy);
+  `tree_level` and `tree_show` in the shader; the foliage edge and the
+  clutter reach by the same two points; `tree_fade_s` 0.5,
+  `tree_fade_lag_m` 5 in `scatter.ron`. Test:
+  `the_trees_fade_by_time_and_a_still_camera_is_whole`. Instrument:
+  `PBD_TREE_ARRIVE=<m>@<s>`; `seq-tree-fade-still-camera.jpg` shows the
+  dither at 0.1 and 0.3 s and none at 2 s. While a fade runs, the dropped
+  pixels of a tree whose two representations differ in outline show what is
+  behind (half a second, then gone).
+- 13.4: the impostors' normal `t.x*dir.x + t.z*dir.y + axis*IMPOSTOR_LIFT`
+  (0.35). Night, leaf pixels' mean: far band 15.6 to 13.8 against the near
+  crowns' 16.5.
+- Frame cost not measured (a Mac sitting is owed with the branch; the
+  changes remove work from plants in rain and add two distance tests a tree
+  vertex).
+

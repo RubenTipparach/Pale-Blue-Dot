@@ -112,6 +112,18 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .card.st-now .badge { color: var(--ink); background: var(--title); border-color: var(--title); }
 .card.st-open .badge { color: var(--stone-4); }
 .card.st-locked { opacity: .82; }
+/* zoomed out: each card its mission's icon, big, in the same frame; a done card keeps its check */
+#world.icons .card { padding: 0; }
+#world.icons .card > :not(.hd), #world.icons .card .hd > :not(.slot):not(.ck) { display: none; }
+#world.icons .card .hd { height: 100%; justify-content: center; align-items: center; }
+#world.icons .card .hd .slot { width: 150px; height: 150px; }
+#world.icons .card .hd .slot img { width: 120px; height: 120px; }
+#world.icons .card .ck.big { width: 56px; height: 56px; right: -10px; top: -12px; }
+/* the full card on hover, at full size, over everything */
+.card.tip { position: fixed; z-index: 20; pointer-events: none; display: none; }
+#world.small .card, #world.small .lane, #world.small .slot { image-rendering: auto; }
+/* a locked card reads as locked by its dim silhouettes; no badge (owner, 2026-11-16) */
+.card.st-locked .badge { display: none; }
 .card.st-locked .tt b { color: var(--label-dim); }
 .card.st-locked .obj li, .card.st-locked .obj li em { color: var(--label-dim); }
 .card.st-locked .hd .slot img { filter: brightness(0) invert(1) brightness(.34); }
@@ -121,15 +133,33 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 @keyframes fresh { 0% { box-shadow: 0 0 0 4px var(--rune), 0 0 30px 8px rgba(132,227,181,.5); } 100% { box-shadow: none; } }
 @media (prefers-reduced-motion: reduce) { .card .lit, .card.fresh { animation: none; } }
 
-/* far away, a card is its icon and title */
-#world.far .card .obj, #world.far .card .un, #world.far .card .tt small, #world.far .card .badge { display: none; }
-#world.far .card .hd { flex-direction: column; justify-content: center; flex: 1; gap: 6px; }
-#world.far .card .hd .slot { width: 60px; height: 60px; }
-#world.far .card .hd .slot img { width: 46px; height: 46px; }
-#world.far .card .tt { flex: none; width: 100%; }
-#world.far .card .tt b { font-size: 33px; -webkit-line-clamp: 3; text-align: center; line-height: .95; }
-#world.far .card .ck.big { position: absolute; right: 2px; top: 2px; width: 44px; height: 44px; }
-#world.far .lane { transform: scale(2); transform-origin: 0 100%; }
+/* the zoom levels (TS.3): the world is never scaled, so a card's frame is always 2 CSS px an art
+   pixel; a level sets the card's size (from tree.js), its detail and its type */
+#world.lv0 .card > :not(.hd), #world.lv0 .card .hd > :not(.slot), #world.lv0 .lane, #world.lv1 .lane, #world.lv2 .lane, #world.lv3 .lane { display: none; }
+#world.lv0 .card { padding: 0; }
+/* the overview is the tree of icons: each card its mission's icon in its slot */
+#world.lv0 .card .hd { min-height: 0; height: 100%; justify-content: center; }
+#world.lv0 .card .hd .slot, #world.lv1 .card .hd .slot { width: 32px; height: 32px; }
+#world.lv0 .card .hd .slot img, #world.lv1 .card .hd .slot img { width: 24px; height: 24px; }
+#world.lv0 #edges path, #world.lv1 #edges path { stroke-width: 2; }
+#world.lv0 #edges path.e-hl, #world.lv1 #edges path.e-hl { stroke-width: 4; }
+#world.lv1 .card .obj, #world.lv1 .card .un, #world.lv1 .card .tt small,
+#world.lv2 .card .obj, #world.lv2 .card .un, #world.lv2 .card .tt small { display: none; }
+#world.lv1 .card, #world.lv2 .card { padding: 0 4px; justify-content: center; }
+#world.lv1 .card .hd { min-height: 0; }
+#world.lv1 .card .tt b { -webkit-line-clamp: 1; font-size: 17px; }
+#world.lv1 .badge, #world.lv2 .badge { position: static; flex: none; font-size: 13px; }
+#world.lv1 .card .ck.big, #world.lv2 .card .ck.big { position: static; width: 18px; height: 18px; }
+#world.lv5 .card .tt b { font-size: 24px; }
+#world.lv5 .card .tt small, #world.lv5 .un .chip { font-size: 19px; }
+#world.lv5 .obj li { font-size: 21px; }
+#world.lv5 .un .lbl, #world.lv5 .nw { font-size: 17px; }
+#world.lv5 .badge { font-size: 18px; top: -24px; }
+#world.lv6 .card .tt b { font-size: 29px; }
+#world.lv6 .card .tt small, #world.lv6 .un .chip { font-size: 22px; }
+#world.lv6 .obj li { font-size: 25px; }
+#world.lv6 .un .lbl, #world.lv6 .nw { font-size: 19px; }
+#world.lv6 .badge { font-size: 21px; top: -28px; }
 
 /* the HUD line and the log, in the game's face */
 .hud:empty { display: none; }
@@ -275,7 +305,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
     <p>The phase-1 showcase is a bot whose goal is this tree. It plays the trunk, then each branch in order: fishing, farming, herding, mining and smelting, cooking, light and building, getting about. Each branch is a goal and a section of the video. It plays every objective through the player's inputs and never sets a count or an item; waits on a crop, an egg or the night are sped up and captioned. A branch it cannot finish fails the run and the log names the stalled objective: that is the test that every mechanic is reachable by play.</p>
     <p>The Bot run controls walk that order here. Reset is a new world; Step takes one step (a mission becomes Now, an objective fills, the mission is Done and its unlocks light); Play runs the steps at the chosen speed. The page opens on a world partway through, the bot in the middle of "Go fishing". Nothing moves until Step or Play is pressed.</p>
     <h3>Reading the page</h3>
-    <p>Drag to pan, wheel or pinch to zoom, Fit to see the whole tree. Click a mission for its full objectives, help line and unlocks. Far out, a card shows only its icon and title.</p>
+    <p>Drag to pan, wheel or pinch to zoom, Fit to see the whole tree. Click a mission for its full objectives, help line and unlocks. Zoom steps through set levels, so the card frames stay crisp: far out a card is its icon and title, then its frame alone; close in, the cards and their type grow.</p>
     <h3>Art</h3>
     <p>Panels, plaques, slots, checks and bars are the game's own stone-and-carved-wood kit (<code>assets/ui/stone</code>, <code>assets/ui/oak</code>); item icons are the game's (<code>assets/items</code>), kept with their 1 px UI outline. The yard hen is the husbandry mockup's sprite and the map glyph the UI mockup's, since the game has no item icon for either. Where a mission has no icon of its own (a rowboat, a town), it borrows the nearest good. Help lines for missions that exist today are the game's (<code>missions.ron</code>); the others are drafted for this mockup.</p>
   </div>

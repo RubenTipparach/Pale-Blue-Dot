@@ -114,8 +114,7 @@ impl Overlay {
     pub fn unit(self) -> &'static str {
         match self {
             Overlay::Wind | Overlay::Jet | Overlay::Currents => "m/s",
-            Overlay::Cloud | Overlay::Humidity => "%",
-            Overlay::Rain => "mm/h",
+            Overlay::Cloud | Overlay::Humidity | Overlay::Rain => "%",
             Overlay::Sunlight => "W/m2",
             Overlay::Temperature => "C",
         }
@@ -134,7 +133,8 @@ impl Overlay {
             // ramp is set so a gyre reads.
             Overlay::Currents => (0.0, 0.08),
             Overlay::Cloud | Overlay::Humidity => (0.0, 100.0),
-            Overlay::Rain => (-10.0, 10.0),
+            // The rain seen, in percent of a full rain (`rain-matches-map`).
+            Overlay::Rain => (-100.0, 100.0),
             Overlay::Sunlight => (0.0, 1000.0),
             Overlay::Temperature => (-30.0, 40.0),
         }
@@ -180,10 +180,10 @@ impl Overlay {
         let scalar = match self {
             Overlay::Wind | Overlay::Jet | Overlay::Currents => flow.length(),
             Overlay::Cloud => sample.cover * 100.0,
-            Overlay::Rain => {
-                let mmh = sample.rain_rate * 3600.0;
-                if sample.snow { -mmh } else { mmh }
-            }
+            // What the player there stands in, not the simulation's rate,
+            // which comes in bursts the rain seen bridges: the map shows rain
+            // exactly where it falls on the ground (`rain-matches-map`).
+            Overlay::Rain => crate::weather::shown_precipitation(sample) * 100.0,
             Overlay::Humidity => sample.humidity * 100.0,
             Overlay::Sunlight => sample.sunlight,
             Overlay::Temperature => sample.temperature,
@@ -213,6 +213,7 @@ mod tests {
         let sample = Sample {
             cover: 0.4,
             rain_rate: 2.0 / 3600.0,
+            rain_seen: 0.3,
             snow: true,
             wind: Vec3::new(3.0, 0.0, 4.0),
             upper: Vec3::new(0.0, 30.0, 0.0),
@@ -227,8 +228,8 @@ mod tests {
         assert_eq!(at(Overlay::Jet)[0], 30.0);
         assert!((at(Overlay::Currents)[0] - 0.1).abs() < 1e-6);
         assert!((at(Overlay::Cloud)[0] - 40.0).abs() < 1e-4);
-        // Snow is written as negative rain, in mm/h.
-        assert!((at(Overlay::Rain)[0] + 2.0).abs() < 1e-4);
+        // The rain seen, not the rate, in percent; snow is written negative.
+        assert!((at(Overlay::Rain)[0] + 30.0).abs() < 1e-4);
         assert_eq!(at(Overlay::Humidity)[0], 75.0);
         assert_eq!(at(Overlay::Sunlight)[0], 640.0);
         assert_eq!(at(Overlay::Temperature)[0], -4.0);

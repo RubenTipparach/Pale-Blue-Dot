@@ -95,7 +95,7 @@ pub enum Act {
     Look(f32, f32, f32),
     /// Walk ahead for seconds.
     Walk(f32),
-    /// Smelt at the nearest forge: open it with E, press the recipe's
+    /// Smelt at the nearest forge: open it with F, press the recipe's
     /// plaque this many times, collect.
     Smelt(String, u32),
     /// Open the map with M for seconds, then close it.
@@ -115,7 +115,7 @@ pub enum Act {
     Chop(Until),
     /// Dig fresh ground ahead, `depth` blocks down a cell, until.
     Dig(Until, u32),
-    /// The pack's Craft row: a recipe, this many times.
+    /// The pack's Craft panel: a recipe, this many times.
     Craft(String, u32),
     /// Set a block or a station down on the ground ahead.
     Place(String),
@@ -143,7 +143,7 @@ pub enum Act {
     Pen,
     /// Lead a kept animal of this species into the pen and let it stay.
     Lead(String),
-    /// E on a kept animal of this species until it gives what it has.
+    /// F on a kept animal of this species until it gives what it has.
     Collect(String),
     /// Eat the dish in hand (selected first).
     Eat(String),

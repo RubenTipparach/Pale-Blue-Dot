@@ -349,7 +349,8 @@ pub enum When {
     Always,
     OnFoot,
     Flying,
-    /// On foot (F boards) and aboard anything (F steps off, V, T).
+    /// On foot (F interacts and boards) and aboard anything (F steps off,
+    /// V, T).
     OnFootOrAboard,
     Aboard(Kind),
 }
@@ -411,12 +412,25 @@ const ON_FOOT: [Binding; 4] = [
     row(&[Key::Board(KeyCode::ShiftLeft)], " ", "sprint"),
 ];
 
-const HANDS: [Binding; 6] = [
-    row(
-        &[Key::Board(KeyCode::KeyE)],
-        " ",
-        "use: a door, a forge, a campfire, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till",
-    ),
+/// F: the one interact key (owner, 2026-11-16: "we should use F for
+/// interact since E will be used for roll in space"). What one press does is
+/// the highest row of `interact::ACTS` the eye is on; with nothing there, it
+/// boards a craft in reach, and aboard it steps off.
+const INTERACT: [Binding; 1] = [row(
+    &[Key::Board(KeyCode::KeyF)],
+    " ",
+    "open, harvest, pick, feed, till; board or step off",
+)];
+
+/// The interact slot's name in the settings file.
+pub const INTERACT_SLOT: &str = "interact:KeyF";
+
+/// The slots the interact slot replaced (settings version 8), the first
+/// winning: a player who moved "use" keeps that key, else one who moved
+/// "board" keeps that.
+pub const BEFORE_INTERACT: [&str; 2] = ["hands:KeyE", "vehicles:KeyF"];
+
+const HANDS: [Binding; 5] = [
     row(
         &[Key::Mouse(MouseButton::Left)],
         " ",
@@ -464,8 +478,7 @@ const W_S: [Key; 2] = [Key::Board(KeyCode::KeyW), Key::Board(KeyCode::KeyS)];
 const A_D: [Key; 2] = [Key::Board(KeyCode::KeyA), Key::Board(KeyCode::KeyD)];
 const Q_E: [Key; 2] = [Key::Board(KeyCode::KeyQ), Key::Board(KeyCode::KeyE)];
 
-const VEHICLES: [Binding; 3] = [
-    row(&[Key::Board(KeyCode::KeyF)], " ", "board, or step off"),
+const VEHICLES: [Binding; 2] = [
     row(&[Key::Board(KeyCode::KeyV)], " ", "seat or chase view"),
     row(
         &[Key::Board(KeyCode::KeyT)],
@@ -536,8 +549,9 @@ const fn group(heading: &'static str, tab: Tab, when: When, rows: &'static [Bind
 /// Every control in the game, once. (The Kestrel's group, KESTREL on the
 /// Flying sub-tab, went with it in `retire-kestrel`; a saved rebind of one of
 /// its slots is kept in the file and read by nothing.)
-pub static BINDINGS: [Group; 10] = [
+pub static BINDINGS: [Group; 11] = [
     group("ON FOOT", Tab::OnFoot, When::OnFoot, &ON_FOOT),
+    group("INTERACT", Tab::Hands, When::OnFootOrAboard, &INTERACT),
     group("HANDS", Tab::Hands, When::OnFoot, &HANDS),
     group("FLYING", Tab::Flying, When::Flying, &FLYING),
     group("VEHICLES", Tab::Vehicles, When::OnFootOrAboard, &VEHICLES),
@@ -682,7 +696,8 @@ impl KeyBinds {
         let known: Vec<Slot> = slots().collect();
         let mut binds = Self::default();
         let mut skipped = Vec::new();
-        for (slot, key) in names {
+        let names = migrate_interact(names);
+        for (slot, key) in &names {
             match (known.iter().find(|s| s.name() == *slot), key_named(key)) {
                 (Some(slot), Some(key)) => binds.set(slot, key),
                 _ => {
@@ -729,6 +744,22 @@ impl KeyBinds {
         }
         also
     }
+}
+
+/// The rebinds of the two slots `interact:KeyF` replaced, moved onto it
+/// (settings version 8): a file that already names it is left alone; else
+/// the first of [`BEFORE_INTERACT`] it names is moved, and any other is left
+/// in place, unread and written back as it was.
+fn migrate_interact(names: &BTreeMap<String, String>) -> BTreeMap<String, String> {
+    let mut names = names.clone();
+    if names.contains_key(INTERACT_SLOT) {
+        return names;
+    }
+    if let Some(old) = BEFORE_INTERACT.iter().find(|old| names.contains_key(**old)) {
+        let key = names.remove(*old).expect("found");
+        names.insert(INTERACT_SLOT.to_string(), key);
+    }
+    names
 }
 
 /// The number row, which the slots read one key each.
@@ -1164,25 +1195,21 @@ mod tests {
         }
         let sprint = slots().find(|s| s.name() == "on_foot:ShiftLeft").unwrap();
         let mut binds = KeyBinds::default();
-        binds.set(&sprint, KeyCode::KeyE);
+        binds.set(&sprint, KeyCode::KeyF);
         assert_eq!(
             binds.clashes(&sprint),
-            vec![
-                "use: a door, a forge, a campfire, a ripe crop, an animal (feed, lead, collect), a fence; with the shovel, till"
-            ]
+            vec!["open, harvest, pick, feed, till; board or step off"]
         );
-        // E is the Tern's hiking too, but never on foot.
-        assert!(
-            !binds
-                .clashes(&sprint)
-                .contains(&"hike to port or starboard")
-        );
+        // E is free on foot (owner, 2026-11-16): the Tern's hiking and the
+        // roll read it, but never on foot.
+        binds.set(&sprint, KeyCode::KeyE);
+        assert!(binds.clashes(&sprint).is_empty());
         // A digit is the number row's, which reads every digit.
         binds.set(&sprint, KeyCode::Digit5);
         assert_eq!(binds.clashes(&sprint), vec!["select a slot"]);
         // The other side of the clash is flagged too.
-        binds.set(&sprint, KeyCode::KeyE);
-        let door = slots().find(|s| s.name() == "hands:KeyE").unwrap();
+        binds.set(&sprint, KeyCode::KeyF);
+        let door = slots().find(|s| s.name() == INTERACT_SLOT).unwrap();
         assert_eq!(binds.clashes(&door), vec!["sprint"]);
         // Its own default takes a slot off the list; a tab resets its own.
         binds.set(&sprint, KeyCode::ShiftLeft);
@@ -1192,6 +1219,56 @@ mod tests {
         assert!(!binds.is_empty(), "another tab's reset leaves it");
         binds.reset(Tab::OnFoot);
         assert!(binds.is_empty());
+    }
+
+    /// Interact on F (owner, 2026-11-16): "use" and "board" are one slot.
+    /// A player who moved "use" keeps that key as interact; else one who
+    /// moved "board" keeps that; with both moved, use's wins and the
+    /// board's is kept in the file, unread; a file that already names the
+    /// interact slot is read as it is.
+    #[test]
+    fn an_old_use_or_board_rebind_becomes_the_interact_key() {
+        let interact = slots().find(|s| s.name() == INTERACT_SLOT).unwrap();
+        let read = |pairs: &[(&str, &str)]| {
+            let names: BTreeMap<String, String> = pairs
+                .iter()
+                .map(|(a, b)| (a.to_string(), b.to_string()))
+                .collect();
+            KeyBinds::from_names(&names)
+        };
+        assert_eq!(KeyBinds::default().key(&interact), KeyCode::KeyF);
+        let (binds, skipped) = read(&[("hands:KeyE", "KeyK")]);
+        assert_eq!(binds.key(&interact), KeyCode::KeyK, "use's key kept");
+        assert!(skipped.is_empty());
+        assert_eq!(
+            binds.to_names(),
+            BTreeMap::from([(INTERACT_SLOT.to_string(), "KeyK".to_string())]),
+            "written back under the new name"
+        );
+        let (binds, _) = read(&[("vehicles:KeyF", "KeyJ")]);
+        assert_eq!(binds.key(&interact), KeyCode::KeyJ, "board's key kept");
+        let (binds, skipped) = read(&[("hands:KeyE", "KeyK"), ("vehicles:KeyF", "KeyJ")]);
+        assert_eq!(binds.key(&interact), KeyCode::KeyK, "use's wins");
+        assert_eq!(skipped, vec!["vehicles:KeyF = KeyJ".to_string()]);
+        assert_eq!(
+            binds.to_names().get("vehicles:KeyF").map(String::as_str),
+            Some("KeyJ"),
+            "the other is kept in the file"
+        );
+        // Use moved onto F, where board was: F is the default now.
+        let (binds, _) = read(&[("hands:KeyE", "KeyF")]);
+        assert!(binds.is_empty());
+        assert_eq!(binds.key(&interact), KeyCode::KeyF);
+        // A new file is read as it is.
+        let (binds, _) = read(&[(INTERACT_SLOT, "KeyG"), ("hands:KeyE", "KeyK")]);
+        assert_eq!(binds.key(&interact), KeyCode::KeyG);
+        // E reads nothing on foot now; Q/E still roll in flight.
+        let on_foot = live_pairs(&binds, Live::OnFoot, false);
+        assert!(on_foot.iter().all(|(d, _)| *d != KeyCode::KeyE));
+        assert_eq!(
+            line("FLYING", &KeyBinds::default()).split("   ").nth(2),
+            Some("Q / E roll")
+        );
     }
 
     /// The file's names round trip, and a slot or key this build does not
@@ -1268,31 +1345,34 @@ mod tests {
             .resource_mut::<ButtonInput<KeyCode>>()
             .release(KeyCode::KeyW);
 
-        // The door (on foot) moved from E to K.
-        let door = slots().find(|s| s.name() == "hands:KeyE").unwrap();
+        // Interact (on foot) moved from F to K.
+        let door = slots().find(|s| s.name() == INTERACT_SLOT).unwrap();
         app.world_mut()
             .resource_mut::<KeyBinds>()
             .set(&door, KeyCode::KeyK);
         send(&mut app, KeyCode::KeyK, true);
         app.update();
-        assert!(keys(&app).just_pressed(KeyCode::KeyE), "K opens the door");
+        assert!(keys(&app).just_pressed(KeyCode::KeyF), "K interacts");
         app.update();
-        assert!(keys(&app).pressed(KeyCode::KeyE) && !keys(&app).just_pressed(KeyCode::KeyE));
+        assert!(keys(&app).pressed(KeyCode::KeyF) && !keys(&app).just_pressed(KeyCode::KeyF));
         send(&mut app, KeyCode::KeyK, false);
         app.update();
-        assert!(keys(&app).just_released(KeyCode::KeyE) && !keys(&app).pressed(KeyCode::KeyE));
-        send(&mut app, KeyCode::KeyE, true);
+        assert!(keys(&app).just_released(KeyCode::KeyF) && !keys(&app).pressed(KeyCode::KeyF));
+        send(&mut app, KeyCode::KeyF, true);
         app.update();
         assert!(
-            !keys(&app).pressed(KeyCode::KeyE),
-            "E no longer opens it on foot"
+            !keys(&app).pressed(KeyCode::KeyF),
+            "F no longer interacts on foot"
         );
-        assert!(!keys(&app).just_pressed(KeyCode::KeyE));
+        assert!(!keys(&app).just_pressed(KeyCode::KeyF));
+        send(&mut app, KeyCode::KeyF, false);
+        app.update();
 
-        // Flying, E is the roll's own again, held as it is.
+        // Flying, interact is not read: F is its physical self, and E rolls.
         app.world_mut()
             .resource_mut::<crate::walking::WalkingReadout>()
             .active = false;
+        send(&mut app, KeyCode::KeyE, true);
         app.update();
         assert!(keys(&app).pressed(KeyCode::KeyE), "E rolls in flight");
         send(&mut app, KeyCode::KeyE, false);
@@ -1307,7 +1387,7 @@ mod tests {
         app.update();
         assert!(keys(&app).just_pressed(KeyCode::KeyK));
         assert!(
-            !keys(&app).pressed(KeyCode::KeyE),
+            !keys(&app).pressed(KeyCode::KeyF),
             "the menu reads the real keys"
         );
     }

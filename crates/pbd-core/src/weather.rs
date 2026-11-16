@@ -8,7 +8,7 @@
 //! that is `solar`, the drifting noise the atmosphere uses for weather finer
 //! than a cell.
 
-use crate::atmosphere::Atmosphere;
+use crate::atmosphere::{Atmosphere, Sample};
 use crate::planet_gen;
 use glam::Vec3;
 
@@ -87,19 +87,39 @@ pub struct CloudCell {
 /// The rain seen below which nothing is drawn falling.
 pub const RAIN_SEEN_MIN: f32 = 0.01;
 
+/// What falls at a sample as a person sees it, in one signed number: the rain
+/// seen (`Atmosphere::rain_seen`, 0..1), NEGATIVE where it snows, and nothing
+/// where less than [`RAIN_SEEN_MIN`] is seen (`rain-matches-map`). The ONE
+/// rule for what is falling: the player's rain (`cloud_cell`), the rain
+/// shafts, the rain volume's map, the world map's clouds-and-rain layer and
+/// the RAIN overlay all read it, so the map shows rain exactly where a player
+/// stands in it. The simulation's rain RATE is the physics' own number and
+/// comes in bursts the rain seen bridges; nothing that shows rain reads it.
+pub fn shown_precipitation(sample: &Sample) -> f32 {
+    if sample.rain_seen <= RAIN_SEEN_MIN {
+        0.0
+    } else if sample.snow {
+        -sample.rain_seen
+    } else {
+        sample.rain_seen
+    }
+}
+
 /// Sample the whole of one column's weather.
 pub fn cloud_cell(atmosphere: &Atmosphere, direction: Vec3) -> CloudCell {
     let sample = atmosphere.sample(direction);
     let raining = sample.rain_rate >= atmosphere.settings.raining_rate;
-    let falling = sample.rain_seen > RAIN_SEEN_MIN;
+    let shown = shown_precipitation(&sample);
     CloudCell {
         cover: sample.cover,
         raining,
-        rain: sample.rain_seen,
-        precip: match (falling, sample.snow) {
-            (false, _) => Precip::None,
-            (true, true) => Precip::Snow,
-            (true, false) => Precip::Rain,
+        rain: shown.abs(),
+        precip: if shown > 0.0 {
+            Precip::Rain
+        } else if shown < 0.0 {
+            Precip::Snow
+        } else {
+            Precip::None
         },
     }
 }

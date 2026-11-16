@@ -4,6 +4,9 @@
 // Tenebris's weather.yaml and the values are its shipped ones.
 (
     wet_fade_tau_s: 1.6,
+    // Seconds (e-fold) for rain's water effects (lens drops, puddle rings,
+    // rain fog, wet sheen) to give way where rain turns to snow, and back.
+    snow_switch_s: 3.0,
     // The wind a craft feels (pbd_core::wind): gust strength as a share of
     // the mean wind, and more of it per mm/h of rain; roughness lengths (m)
     // for the log-law profile; its cap; the downdraft under rain, m/s per
@@ -108,6 +111,29 @@
     // the last `fade` metres before it. Past it the ground is only wet.
     rain_detail_reach_m: 20.0,
     rain_detail_fade_m: 4.0,
+    // A plant in rain (flora-v2 13.2; owner: "grass blades shouldnt have rain
+    // shader on them"): trees and ground clutter only darken, to this share
+    // at full wetness, and take none of the wet ground's film.
+    rain_plant_darken: 0.88,
+    // The drops on the lens wet and dry over time (weather-rain R3; owner:
+    // "fade out instead of abruptly cut", "gradually increase as well"):
+    // seconds (e-fold) to build up in rain and to dry off out of it.
+    lens_wet_tau_s: 3.0,
+    lens_dry_tau_s: 2.5,
+    // Splashes where rain lands (`weather-rain` 6.4, the approved M32
+    // mockup's defaults): S slots per near column, K droplets per slot, a
+    // slot's cycle; droplet sizes, launch speeds up and out (crown, wet
+    // ground, grass, the crown's jet); the share of cycles that fire in full
+    // rain (puddle, wet ground, grass); the droplets' opacity. S x K is the
+    // draw's size: S comes down first if the perf A/B asks.
+    splash_slots: 48,
+    splash_droplets: 8,
+    splash_period_s: 0.5,
+    splash_size_m: (0.016, 0.013, 0.011, 0.018),
+    splash_up_mps: (1.1, 0.75, 0.5, 1.4),
+    splash_out_mps: (0.3, 0.2, 0.15, 0.03),
+    splash_keep: (1.0, 0.8, 0.5),
+    splash_alpha: 1.0,
 
     // Overcast: the cover over the player dims the light, so the ground cannot
     // go stormy while the sun still shines on it. Tenebris's values.
@@ -213,6 +239,11 @@
     rain_volume_density: 0.003,
     rain_volume_range_m: 2000.0,
     rain_volume_stretch: 10.0,
+    // With RAIN SHADOW off the volume does not draw; a height fog takes its
+    // place (`weather-rain` 7), its density falling by e every this many
+    // metres over the ground or sea under the eye at full rain (half as deep
+    // at no rain), at the volume's own density where the player stands.
+    rain_height_fog_falloff_m: 250.0,
     rain_volume_color: (0.55, 0.58, 0.62),
     // Or streaks on six cylinders round the eye, 6 to 1,500 m out, each standing
     // for the air between it and the next (`rain-shells`). Volume until the

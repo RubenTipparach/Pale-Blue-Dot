@@ -59,7 +59,7 @@ struct ReflectViewUniform {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct PlanetTerrainLabel;
+pub(super) struct PlanetTerrainLabel;
 
 #[derive(Resource)]
 struct ReflectPipelines {
@@ -463,9 +463,10 @@ mod tests {
         use crate::config::Validated;
         let mut lighting = crate::config::LightingSettings::default();
         assert_eq!(lighting.reflect_render_scale, 0.5);
+        assert!(lighting.reflect_split_on(crate::config::Reflections::High));
         lighting.reflect_render_scale = 1.0;
         assert!(lighting.validate().is_ok());
-        assert!(!lighting.reflect_split_on());
+        assert!(!lighting.reflect_split_on(crate::config::Reflections::High));
         lighting.reflect_render_scale = 0.1;
         assert!(lighting.validate().is_err());
     }

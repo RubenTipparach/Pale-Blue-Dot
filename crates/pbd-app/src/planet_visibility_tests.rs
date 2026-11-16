@@ -380,6 +380,7 @@ fn params(count: usize, camera_height: f32, half_width: f32) -> PlanetParams {
         tuft_ramps: [UVec4::ZERO; 8],
         plant_means: [UVec4::ZERO; 8],
         flora_fall: Vec4::ZERO,
+        tree_fade: [Vec4::ZERO; 2],
         night: Vec4::ZERO,
         night_lights: [Vec4::ZERO; 2 * crate::night_lights::MAX_FAR_LIGHTS],
         felled: [UVec4::ZERO; crate::trees_taken::FELLED / 4],

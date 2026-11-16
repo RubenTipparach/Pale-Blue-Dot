@@ -106,6 +106,23 @@ pub fn run_ticks(
                 })
             })
             .collect();
+        // The rule moves water through air and water only, so a player's
+        // block or light under a water change is a bug, and the save is about
+        // to lose it: said with what was there and what replaces it.
+        for edit in &edits {
+            if let Some(&(_, placed)) = save
+                .edits
+                .for_cell(edit.cell)
+                .iter()
+                .find(|&&(l, m)| l == edit.layer && m != Material::Air && !m.is_water())
+            {
+                error!(
+                    "REMOVED {placed:?} at cell {} layer {} by the water rule, which has no \
+                     business there: was {placed:?}, now {:?}",
+                    edit.cell, edit.layer, edit.material
+                );
+            }
+        }
         if !save.accept_water(&edits) {
             error!("water BLOCKED: the save did not take {} cells", edits.len());
             return 0;

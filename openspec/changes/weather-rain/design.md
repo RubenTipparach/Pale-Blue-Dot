@@ -208,3 +208,180 @@ per-frame mesh rebuild and upload. It is recorded here as a candidate in the
 spirit of the owner's "the more gpu native rain we can have the better", and
 is a separate change with its own A/B; the mockup draws its streaks that way
 already, which is a demonstration, not a plan of record.
+
+## Rain artifacts (owner, 2026-11-16)
+
+The owner, on a terraced valley in rain: "theres massive artifacts here";
+then "grass blades shouldnt have rain shader on them", "the wet camera fx
+need to fade out instead of abruptly cut when going into a dry space (or
+rain stopped)" and "also wetness amount needs to gradually increase as
+well". Pictures and the captures that reproduce them:
+`docs/screenshots/rain-artifacts/` and its README. The trees' part is
+`flora-v2` design 13; the river's is `water-flow` "Rain rings that alias".
+
+### R1. The bright blue lines are the streaks, lit by the old model
+
+Measured off `before-valley-rain.jpg` (11:00, full cover, `--rain 1`): a
+near-shower streak is (110, 128, 180) in sRGB over a stone wall of
+(50, 60, 60) and grass of (28, 43, 32): two to three times brighter than
+everything it falls in front of, and saturated blue. The shower is an unlit
+mesh, so its light is `rain_light`: the old model's day curve times
+`1 - cover * overcast_amb_dim`, about 0.5 under a full deck at noon. The
+ground under the new lighting model (`lighting-model` L2, the default) is
+lit by the sky's nine coefficients mixed by the cover, which under a full
+deck is far dimmer: the streak is lit for a sky the ground no longer has,
+and at 0.78 alpha it glows. Their length is not the fault: 1.5 m at
+70 m/s, Tenebris's; a streak 3 to 6 m out spans a quarter of the screen
+whatever its brightness, and lit as the ground is it reads as rain.
+
+**Fix.** Under the new model the shower and the shafts take the light a
+standing face takes there: `sh_irradiance` of the camera's sky
+(`sky_sh_pair`, mixed by the cover) averaged over four horizontal normals,
+times `rain_color` (display to linear, as now). Today's model keeps
+`rain_light`. Expected from the numbers: a streak a little brighter and
+bluer than the wall behind it, not three times it.
+
+### R2. Tufts and every plant: no wet block
+
+The pixel tufts (`flora-v2` design 6) are clutter (`kind == 3`), and the
+rain branch's puddle test `floor_like` passes them (the tuft code is not 2,
+3, 7 or 9) where their normal faces up: puddle mirror, rings, the sheet's
+waves and the glint on a grass blade (`owner-tufts-wet.png`). The fix is
+`flora-v2` 13.2's: trees and all clutter take a uniform darkening by
+`rain_plant_darken` and nothing else.
+
+### R3. The lens dries and wets over time
+
+Today `lens_rain` is the rain, or 0 when `weather.sheltered`: the drops on
+the lens appear and vanish in one frame when the eye walks under cover or
+out of it, and follow the rain's own easing otherwise.
+
+**Fix.** `lens_wet`, per view in the render world, follows `lens_rain`
+exponentially, `lens_wet_tau_s` 3.0 s rising and `lens_dry_tau_s` 2.5 s
+falling (`weather.ron`), on the capture's own clock so a fixed-step capture
+dries as a live one does. The lens draws its drops from `lens_wet`, not the
+rain: their layers thin (`l0..l2` from `lens_wet`), the drop field is
+scaled by it so each drop shrinks under its edge threshold and the small
+ones go first, and the whole fades by it. **No new drops while dry**: the
+drops' clock (`t`, which slides them down and starts a new one at each
+cycle) advances only by `dt * lens_rain / max(lens_wet, eps)` clamped to
+one, so it stops when the rain stops reaching the lens and the drops that
+are there stay where they are, shrink and fade; back in the rain it runs
+again and drops build up as `lens_wet` rises. The emerge drips keep the
+camera clock.
+
+### R4. What else snaps (checked)
+
+- **The ground's wetness** eases both ways (`settle_wetness`, symmetric, on
+  `wet_fade_tau_s`), and the puddle mask, the darkening and the mirror all
+  read it (`params.weather.x`). The ring count reads the rain itself
+  (`params.weather.y`), which the field already builds in and dies away
+  (`smooth-weather` 1). No change; a sequence of the rain starting and
+  stopping shows it.
+- **The near shower** under cover: `near_shower` is skipped whole while
+  `weather.sheltered`, so walking under a roof takes the 18 m disk of
+  streaks away in one frame, including the streaks out in the open. Fix:
+  the shower's own `shower_open` follows `!sheltered` on
+  `lens_wet_tau_s` / `lens_dry_tau_s`'s faster half (0.4 s), so the disk
+  thins over a moment instead. (Drawing each streak only where its own
+  column is open would be truer; it costs 1,700 column lookups a frame and
+  is not taken here.)
+- **The splashes** are not on this branch (`claude/rain-splashes` is not
+  merged into `claude/env-v2`): nothing to check.
+
+### R5. Instruments
+
+`PBD_WEATHER_SCRIPT=<frame>:<event>,...` in a capture (events `dry`,
+`rain`, `cover`, `open`): from that capture frame the rain under the player
+is held at 0 or let through, or the eye is taken as under cover or not. It
+changes nothing else, and only with `--capture`. With
+`PBD_CAPTURE_RUN` it gives the sequences: the rain stopping, the rain
+starting, walking into cover, walking out of it.
+
+## Height fog with RAIN SHADOW off (owner, 2026-11-16)
+
+**The owner's words:** "when on the planet, if we have rain shadow turned off
+can we just do normal distance fog?", and then "or height fog?".
+
+RAIN SHADOW is the whole rain volume (CLAUDE.md, "What the owner means by
+rain shadow"): the rain fog, the streaks on its shells and its lighting, the
+`rain` / `rain_half` / `rain_compose` passes in `water.wgsl`, run while
+`rain_needed` (`planet_water.rs`). With the setting off, which is the
+default, `rain_needed` is false and a storm gets no rain murk at all: the
+terrain's own haze thickens a little with the cover and the rain
+(`rain_fog_mult`), and that is all. A storm reads as a dark day.
+
+### What is drawn instead
+
+With RAIN SHADOW off, and only then, a standard analytic **exponential height
+fog** takes the volume's place:
+
+- **Density** at a height `h` above a reference level `h0`:
+  `sigma(h) = sigma0 * exp(-(h - h0) / H)`, with `sigma0 = rain *
+  rain_volume_density` (the volume's own extinction per metre of full rain,
+  0.003: a kilometre of full rain is an optical depth of 3) and `rain` the
+  rain over the camera (`haze_weather.y`, the haze's own).
+- **Height** is along the planet's local up, in the body-local frame: `h =
+  |p| - R`, never world Y. The reference `h0` is the ground or the sea under
+  the eye, whichever is higher (`terrain::surface_height` of the eye's
+  direction, at least 0), so the fog lies on the ground where the player is:
+  the valley below fills with murk (its density grows as it sinks below
+  `h0`), a hilltop stands clearer, the view up thins out, and looking down
+  from a height the murk is below.
+- **Falloff** `H = rain_height_fog_falloff_m * (0.5 + 0.5 * rain)`: the
+  layer is shallower in light rain and deeper in a storm. The knob is new in
+  `weather.ron`, 250 m. (A first cut at 120 m left the horizon a third as
+  murky as the volume: on a 4.8 km body a level ray rises 400 m in its 2 km,
+  so the fog thinned out of it. At 250 m the sky at the horizon and the far
+  sea read within a few levels of the volume's, measured on the beach shot.)
+- **Integrated along the ray**, analytically: with the ray's heights at the
+  eye and at its end, `h_a` and `h_b` (each `|p| - R - h0`, exact on the
+  sphere), the optical depth over the length `L` is `sigma0 * L * e^(-h_a/H)
+  * (1 - e^(-(h_b - h_a)/H)) / ((h_b - h_a)/H)` (the limit `sigma0 * L *
+  e^(-h_a/H)` when level). Taking the height linear in distance between the
+  two exact end heights is the flat-ground form laid on the sphere, and the
+  error is in the curvature between them. Each end's height is held at no
+  more than 2.5 `H` under `h0`, so a ray into a deep valley murks heavily but
+  never overflows.
+- **The ray's end** is the volume's: the scene's depth, the sea, the cloud
+  base or `rain_volume_range_m`, whichever is first (`rain_far`). No fog
+  above the cloud base, none under the sea, and none from an eye above the
+  cloud base, where the clouds hide the storm, as the volume does.
+- **Colour** is the colour the renderer it stands in for gives its rain,
+  without its streaks, shadows and lamps. The shipped renderer is the volume
+  (`rain_renderer: Volume`), which lights its rain by `rain_light`: the
+  rain's tint times a light set by the sun's height and the cover, which is
+  the sky's light at that hour (dark at night, lit by day, greyed under the
+  deck). Under the shells it is their light: the tint times the sky's mean
+  radiance (`rain_sky`) plus the sun through the forward phase (`rain_sun`,
+  `rain_phase`).
+
+### Where it runs: no new pass
+
+It is folded into the end of the `clouds` composite in `water.wgsl`, the
+full-screen pass that already lays the clouds over the scene and runs
+whenever the volume could (a planet with air, no map overlay). That is where
+the volume's light lands too (just after the clouds), so the fog lies over
+the clouds as the volume did. The pass gains one branch, taken only when
+`height_fog.x > 0` (a new `WaterView` lane): RAIN SHADOW off, rain at the
+camera, the eye under the cloud base and out of the sea. With RAIN SHADOW
+on, `height_fog.x` is zero and nothing changes, to the pixel.
+
+### Matching the volume, so the switch does not jump
+
+At the reference level along a level ray, the fog's optical depth is
+`rain * 0.003 * L`, the volume's mean (the volume's streak term averages
+about one: `0.3 + 1.4 * streak`, `streak` about one half). So the two agree
+where the player stands, and differ in what the cheap one leaves out: the
+volume's streaks, its sun shafts in the cascades, the lamps' glow in the
+rain, and rain that is falling somewhere else than over the camera (the
+volume reads the precipitation map per step; the fog takes the rain here).
+
+### Proof
+
+- Captures of a storm with RAIN SHADOW off, before and after, and with it
+  on for comparison; and one looking over a valley in a storm.
+- Its cost, in the `reflection-quality` sitting: `storm` with RAIN SHADOW
+  off, the fog off (`PBD_HEIGHT_FOG=0`, a pricing instrument, the
+  `PBD_REFLECT` kind: the fog's lane zero, so the frame is today's) against
+  on.

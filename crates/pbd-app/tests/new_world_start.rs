@@ -74,7 +74,11 @@ fn a_new_world_starts_where_it_did_before_its_towns_stood() {
         // Within 0.03: version 8's river valleys change a few of the biome
         // cells the weather reads (its settled climate is version 7's, design
         // 13), which moved the start's cover from 0.69 to 0.67; no rain.
-        (cell.cover - 0.69).abs() < 0.03 && cell.rain == 0.0,
+        // `rain-matches-map` halved the water cycle (the owner, 2026-11-16:
+        // "50% less rain on the planet") and remade the settled climates, and
+        // the start's sky thinned with it, to 0.56: the perf suite's `walk`
+        // starts under that sky from then on.
+        (cell.cover - 0.56).abs() < 0.03 && cell.rain == 0.0,
         "the start's weather at 10:00: cover {:.3}, rain {:.3}",
         cell.cover,
         cell.rain

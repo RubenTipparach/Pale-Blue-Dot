@@ -32,7 +32,7 @@ use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future};
 use bevy::ui::FocusPolicy;
 use bevy::ui_render::prelude::{MaterialNode, UiMaterial, UiMaterialPlugin};
 use bevy::window::PrimaryWindow;
-use pbd_app::atmosphere::{Air, MAP_SIZE};
+use pbd_app::atmosphere::{Air, MAP_SIZE, WeatherMaps};
 use pbd_app::flight_view::PilotShip;
 use pbd_app::overlay::{OverlayMode, RAMPS, overlay_rgba, overlay_texels};
 use pbd_app::planet::{PLANET_RADIUS, terrain_config};
@@ -469,12 +469,17 @@ fn cube_image(format: TextureFormat) -> Image {
 }
 
 /// The clouds as the map draws them, one texel per weather map texel: the
-/// cover, and the rain and the snow at up to 8 mm an hour.
-pub fn cloud_bytes(cloud: &[[f32; 4]]) -> Vec<u8> {
+/// cover, and the rain and the snow a person there sees
+/// (`WeatherMaps::rain_seen`, `weather::shown_precipitation`), the same
+/// number the player's own rain is, so the map shows rain exactly where a
+/// player stands in it (`rain-matches-map`). Not the simulation's rain rate,
+/// which comes in bursts the rain seen bridges.
+pub fn cloud_bytes(maps: &WeatherMaps) -> Vec<u8> {
     let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-    cloud
+    maps.cloud
         .iter()
-        .flat_map(|t| [byte(t[0]), byte(t[2] / 8.0), byte(-t[2] / 8.0), 255])
+        .zip(&maps.rain_seen)
+        .flat_map(|(t, &seen)| [byte(t[0]), byte(seen), byte(-seen), 255])
         .collect()
 }
 
@@ -1493,7 +1498,7 @@ pub fn live(
         if choice.clouds && live.cloud_generation != air.generation {
             live.cloud_generation = air.generation;
             if let Some(image) = images.get_mut(&live.cloud) {
-                image.data = Some(cloud_bytes(&air.maps.cloud));
+                image.data = Some(cloud_bytes(&air.maps));
             }
         }
         // The overlay, coloured from the same texels the globe's overlay is.
@@ -2346,7 +2351,7 @@ mod tests {
         assert_eq!(texts_under(&app, key), names, "a row per biome, in order");
         app.world_mut().resource_mut::<MapChoice>().overlay = MapOverlay::Weather(Overlay::Rain);
         app.update();
-        assert_eq!(texts_under(&app, key), ["10 snow", "0", "10"]);
+        assert_eq!(texts_under(&app, key), ["100 snow", "0", "100"]);
         let bar = app
             .world()
             .get::<Children>(key)
@@ -2359,8 +2364,90 @@ mod tests {
     /// rain and snow.
     #[test]
     fn the_clouds_split_rain_from_snow() {
-        let bytes = cloud_bytes(&[[1.0, 0.0, 8.0, 0.0], [0.5, 0.0, -4.0, 0.0]]);
+        // The rain RATE in the cloud map's third channel is not what is drawn.
+        let maps = WeatherMaps {
+            cloud: vec![[1.0, 0.0, 0.0, 0.0], [0.5, 0.0, 8.0, 0.0]],
+            wind: vec![[0.0; 4]; 2],
+            rain_seen: vec![1.0, -0.5],
+        };
+        let bytes = cloud_bytes(&maps);
         assert_eq!(&bytes[..4], &[255, 255, 0, 255]);
         assert_eq!(&bytes[4..], &[128, 0, 128, 255]);
+    }
+
+    /// `rain-matches-map`: the map's rain and the rain the player stands in
+    /// are one field. On the shipped settled climate, at every weather map
+    /// texel and at several moments as it steps, the clouds layer's rain and
+    /// snow bytes, the RAIN overlay's value and the player's rain
+    /// (`weather::cloud_cell`, which `sample_field` makes `Weather.rain`)
+    /// agree within a byte, and nowhere does the player stand in rain the
+    /// map leaves dry. The moments include places between two bursts, where
+    /// the rain rate is under the raining threshold while the rain seen is
+    /// still letting go: the owner's report of 2026-11-16, which the map
+    /// drew as dry when it read the rate.
+    #[test]
+    fn the_map_rains_where_the_player_stands_in_rain() {
+        use pbd_core::weather::{Precip, cloud_cell};
+        let settings = pbd_core::atmosphere::AtmosphereSettings::default();
+        let mut air = Air::open(
+            settings,
+            terrain_config().seed,
+            None,
+            pbd_app::atmosphere::settled_at_s(),
+        );
+        let byte = 1.0 / 255.0;
+        let (mut raining, mut between_bursts) = (0, 0);
+        for steps in [0u32, 20, 40, 60] {
+            if steps > 0 {
+                air.run(steps, &[]);
+            }
+            let maps = pbd_app::atmosphere::weather_maps(&air.now);
+            let bytes = cloud_bytes(&maps);
+            let mut i = 0;
+            for face in 0..6 {
+                for row in 0..MAP_SIZE {
+                    for column in 0..MAP_SIZE {
+                        let up = pbd_app::atmosphere::cube_direction(face, row, column, MAP_SIZE);
+                        let cell = cloud_cell(&air.now, up);
+                        let (rain, snow) = match cell.precip {
+                            Precip::Rain => (cell.rain, 0.0),
+                            Precip::Snow => (0.0, cell.rain),
+                            Precip::None => (0.0, 0.0),
+                        };
+                        let map_rain = f32::from(bytes[i * 4 + 1]) / 255.0;
+                        let map_snow = f32::from(bytes[i * 4 + 2]) / 255.0;
+                        assert!(
+                            (map_rain - rain).abs() <= byte && (map_snow - snow).abs() <= byte,
+                            "texel {face}/{row}/{column} at +{steps} s: the player stands in \
+                             rain {rain} snow {snow}, the map draws {map_rain} and {map_snow}"
+                        );
+                        let sample = air.now.sample(up);
+                        let overlay = Overlay::Rain.texel(&sample)[0] / 100.0;
+                        assert!(
+                            (overlay - (rain - snow)).abs() <= byte,
+                            "texel {face}/{row}/{column}: the overlay reads {overlay}, the \
+                             player stands in {}",
+                            rain - snow
+                        );
+                        if rain > 0.3 {
+                            raining += 1;
+                            assert!(map_rain > 0.29, "rain the map leaves dry");
+                            if sample.rain_rate < settings.raining_rate {
+                                between_bursts += 1;
+                            }
+                        }
+                        i += 1;
+                    }
+                }
+            }
+        }
+        assert!(
+            raining > 100,
+            "only {raining} raining texels: no rain to compare"
+        );
+        assert!(
+            between_bursts > 0,
+            "no texel between two bursts: the case the owner saw is not covered"
+        );
     }
 }

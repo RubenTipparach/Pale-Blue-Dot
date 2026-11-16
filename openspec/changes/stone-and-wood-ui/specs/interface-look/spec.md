@@ -5,9 +5,9 @@ made true moved to `openspec/specs/interface-look/spec.md` with the tests
 that pin them: the UI scale, the smooth kit, 9-slice panels, the rock frames,
 rock in play and oak out of play, the kit's font, one palette module and
 legible text (section 1); then key bindings grouped by context and
-changeable, the stone sliders and the slots' tooltips (section 2). What
-follows is a recommendation not yet taken, written as the requirement it
-would be.
+changeable, the stone sliders and the slots' tooltips (section 2); and
+section 4's interact key and its prompt (2026-11-16). What follows is a
+recommendation not yet taken, written as the requirement it would be.
 
 ## ADDED Requirements
 

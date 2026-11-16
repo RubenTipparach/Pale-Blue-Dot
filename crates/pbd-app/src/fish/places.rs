@@ -1015,10 +1015,151 @@ fn floe(origin: Vec3, axes: (Vec3, Vec3, Vec3), r: f32, above: f32, out: &mut Ve
 /// hauled out on a floe. Positions are the tile's (its anchor taken off).
 #[derive(Clone, Copy, Debug)]
 enum Ambient {
-    Anthias { at: Vec3, up: Vec3, seed: u32 },
-    Clowns { at: Vec3, up: Vec3, seed: u32 },
-    Smoke { at: Vec3, up: Vec3, seed: u32 },
-    Seal { at: Vec3, up: Vec3, yaw: f32 },
+    Anthias {
+        at: Vec3,
+        up: Vec3,
+        seed: u32,
+    },
+    Clowns {
+        at: Vec3,
+        up: Vec3,
+        seed: u32,
+    },
+    Smoke {
+        at: Vec3,
+        up: Vec3,
+        seed: u32,
+    },
+    Seal {
+        at: Vec3,
+        up: Vec3,
+        yaw: f32,
+        /// Its floe's radius and how high its top stands, m.
+        reach: f32,
+        tall: f32,
+        state: SealState,
+    },
+}
+
+/// Where a floe's seal is in its slide (`ocean-environments` B18): each
+/// step keyed to the moment it began, so the seal is seen going and coming,
+/// never there or gone in one frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SealState {
+    /// Lying out on its floe.
+    Out,
+    /// Slid off at `since` (the tile clock, s), away along `away`, and
+    /// swimming off under the surface; `near_s` is when the eye was last
+    /// within reach.
+    Off { since: f32, away: Vec3, near_s: f32 },
+    /// Coming back from `from_m` off at `since`, to climb out.
+    Back { since: f32, away: Vec3, from_m: f32 },
+}
+
+/// Within this of the eye a floe's seal slides off, m.
+const SEAL_SHY_M: f32 = 9.0;
+/// How long the seal stays off after the eye has gone, s (the seals'
+/// `UNDER_S`).
+const SEAL_OFF_S: f32 = pbd_core::fauna::UNDER_S;
+/// How long its slide off the floe, or its climb back, takes, s.
+const SEAL_SLIDE_S: f32 = 1.2;
+/// How fast it swims off, m/s, and how far, m.
+const SEAL_SWIM_MPS: f32 = 1.8;
+const SEAL_SWIM_M: f32 = 14.0;
+/// How deep it swims under the surface, m.
+const SEAL_UNDER_M: f32 = 0.45;
+
+/// Where a floe's seal is drawn and which way it faces at `clock`, in its
+/// tile's frame (`at` its place on the floe), stepping its state on: it
+/// slides off when the eye comes within [`SEAL_SHY_M`], swims away under
+/// the surface, and comes back and climbs out once the eye has been gone
+/// [`SEAL_OFF_S`]. Never skipped.
+#[allow(clippy::too_many_arguments)]
+fn seal_at(
+    state: &mut SealState,
+    at: Vec3,
+    up: Vec3,
+    forward: Vec3,
+    reach: f32,
+    tall: f32,
+    eye: Vec3,
+    clock: f32,
+) -> (Vec3, Vec3) {
+    let ease = |x: f32| {
+        let x = x.clamp(0.0, 1.0);
+        x * x * (3.0 - 2.0 * x)
+    };
+    let near = at.distance(eye) < SEAL_SHY_M;
+    // Off the edge and under: `k` 0 on the floe to 1 in the water at its
+    // edge; then `d` metres on.
+    let place = |away: Vec3, k: f32, d: f32| {
+        let k = ease(k);
+        at + away * (reach * 1.1 * k + d) - up * ((tall + SEAL_UNDER_M) * k)
+    };
+    match *state {
+        SealState::Out => {
+            if near {
+                let off = at - eye;
+                let away = (off - up * off.dot(up)).normalize_or(forward);
+                *state = SealState::Off {
+                    since: clock,
+                    away,
+                    near_s: clock,
+                };
+            }
+            (at, forward)
+        }
+        SealState::Off {
+            since,
+            away,
+            near_s,
+        } => {
+            let s = clock - since;
+            let d = ((s - SEAL_SLIDE_S).max(0.0) * SEAL_SWIM_MPS).min(SEAL_SWIM_M);
+            let here = place(away, s / SEAL_SLIDE_S, d);
+            let near_s = if here.distance(eye) < SEAL_SHY_M || near {
+                clock
+            } else {
+                near_s
+            };
+            *state = if clock - near_s >= SEAL_OFF_S {
+                SealState::Back {
+                    since: clock,
+                    away,
+                    from_m: d,
+                }
+            } else {
+                SealState::Off {
+                    since,
+                    away,
+                    near_s,
+                }
+            };
+            (here, away)
+        }
+        SealState::Back {
+            since,
+            away,
+            from_m,
+        } => {
+            let s = clock - since;
+            let swim_s = from_m / SEAL_SWIM_MPS;
+            let d = (from_m - s * SEAL_SWIM_MPS).max(0.0);
+            let k = 1.0 - ((s - swim_s) / SEAL_SLIDE_S).clamp(0.0, 1.0);
+            let here = place(away, k, d);
+            if near {
+                // Startled again on the way back: off it goes from here.
+                *state = SealState::Off {
+                    since: clock - SEAL_SLIDE_S * k - d / SEAL_SWIM_MPS,
+                    away,
+                    near_s: clock,
+                };
+            } else if k <= 0.0 {
+                *state = SealState::Out;
+            }
+            (here, -away)
+        }
+    }
 }
 
 /// The swaying pieces of a tile, kept at rest so each frame can bend them:
@@ -1077,11 +1218,42 @@ fn lay_swaying(
     sway.uvs.extend_from_slice(&shape.uvs);
 }
 
+/// How deep a floe's ice goes under the water, m (the slab's `above + 0.6`
+/// less what stands above).
+const FLOE_DRAFT_M: f32 = 0.6;
+
+/// Whether a floe at `dir` of radius `r` floats at low water: the ground
+/// under its middle and its six corners stands at least its draft under the
+/// sea at its lowest (`low_water_m` under the mean). A floe the environment
+/// function puts on a beach or a shore terrace is not laid at all, where it
+/// stood in the sand tipped and stacked (`ocean-environments` B18).
+fn floe_floats(
+    dir: Vec3,
+    axes: (Vec3, Vec3, Vec3),
+    r: f32,
+    bed: &impl Fn(Vec3) -> f32,
+    sea_radius: f32,
+    low_water_m: f32,
+) -> bool {
+    let lowest = sea_radius - low_water_m - FLOE_DRAFT_M;
+    let centre = dir * sea_radius;
+    (0..7).all(|k| {
+        let at = if k == 0 {
+            centre
+        } else {
+            let a = (k - 1) as f32 * TAU / 6.0;
+            centre + (axes.0 * a.cos() + axes.2 * a.sin()) * r
+        };
+        bed(at.normalize_or(dir)) <= lowest
+    })
+}
+
 fn build_tile(
     pieces: &[Piece],
     anchor: Vec3,
     bed: impl Fn(Vec3) -> f32,
     sea_radius: f32,
+    low_water_m: f32,
     downwell: [f32; 3],
     seed: u32,
 ) -> Built {
@@ -1091,6 +1263,9 @@ fn build_tile(
     for (i, p) in pieces.iter().enumerate() {
         let axes = frame_at(p.dir, p.yaw);
         if p.floe {
+            if !floe_floats(p.dir, axes, p.reach, &bed, sea_radius, low_water_m) {
+                continue;
+            }
             let origin = p.dir * sea_radius - anchor;
             floe(origin, axes, p.reach, p.tall, &mut out.floes);
             // A seal hauled out on one floe in nine.
@@ -1099,6 +1274,9 @@ fn build_tile(
                     at: origin + p.dir * p.tall,
                     up: p.dir,
                     yaw: p.yaw,
+                    reach: p.reach,
+                    tall: p.tall,
+                    state: SealState::Out,
                 });
             }
             continue;
@@ -1189,9 +1367,11 @@ fn build_tile(
 
 /// A tile's ambient life and plumes at a moment, round the eye (`eye` in
 /// the tile's frame): lit fish and seals, and the unlit smoke.
+#[allow(clippy::too_many_arguments)]
 fn ambient(
-    list: &[Ambient],
+    list: &mut [Ambient],
     t: f32,
+    clock: f32,
     tide: f32,
     eye: Vec3,
     lit: &mut Verts,
@@ -1234,7 +1414,7 @@ fn ambient(
             lu,
         );
     };
-    for a in list {
+    for a in list.iter_mut() {
         match *a {
             Ambient::Anthias { at, up, seed } => {
                 let (e, n) = frame_tangents(up);
@@ -1282,18 +1462,24 @@ fn ambient(
                     );
                 }
             }
-            Ambient::Seal { at, up, yaw } => {
+            Ambient::Seal {
+                at,
+                up,
+                yaw,
+                reach,
+                tall,
+                ref mut state,
+            } => {
                 // On its floe, which rides the tide.
                 let at = at + up * tide;
-                // Slid in once the eye is within its nine metres.
-                if at.distance(eye) < 9.0 {
-                    continue;
-                }
                 let (e, n) = frame_tangents(up);
                 let forward = e * yaw.cos() + n * yaw.sin();
+                // It slides off and swims away once the eye is within its
+                // nine metres, and comes back later: drawn every frame.
+                let (origin, forward) = seal_at(state, at, up, forward, reach, tall, eye, clock);
                 let body = model_for("seal", 0);
                 let place = Place {
-                    origin: at,
+                    origin,
                     forward,
                     up,
                     scale: 1.6 / body.length,
@@ -1359,8 +1545,11 @@ const FADE_FROM_M: f32 = 34.0;
 const FADE_TO_M: f32 = 46.0;
 const WANT_M: f32 = 52.0;
 const LAND_S: f32 = 0.8;
-/// Within this of the eye a tile sways and draws its ambient life, m.
+/// Within this of the eye a tile sways, m; the sway eases out over the
+/// last `SWAY_EASE_M` (`ocean-environments` B18: it snapped to rest). Its
+/// ambient life is drawn while the tile is, and fades with it.
 const NEAR_M: f32 = 30.0;
+const SWAY_EASE_M: f32 = 4.0;
 
 /// How far a tile has faded out, 0 whole to 1 gone: `metres` its middle from
 /// the eye, `since_s` since it landed.
@@ -1570,7 +1759,8 @@ fn tiles(
                 }
             }
         }
-        let near = m <= NEAR_M;
+        let bend = ((NEAR_M - m) / SWAY_EASE_M).clamp(0.0, 1.0);
+        let near = bend > 0.0;
         let local_eye = eye - drawn.anchor;
         // The surge: soft corals, anemones, grass and kelp bend, near the eye.
         if let Some((_, handle)) = &drawn.sway
@@ -1578,7 +1768,6 @@ fn tiles(
             && let Some(mesh) = meshes.get_mut(handle)
         {
             let s = &drawn.still;
-            let bend = if near { 1.0 } else { 0.0 };
             let positions: Vec<[f32; 3]> = (0..s.rest.len())
                 .map(|i| {
                     let h = s.height[i];
@@ -1590,13 +1779,15 @@ fn tiles(
             mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
             drawn.swayed = near;
         }
-        // The ambient life and the plumes, near the eye; none further off.
+        // The ambient life and the plumes, while the tile is drawn: they
+        // fade with it, never cut at a distance.
         if !drawn.ambient.is_empty() {
             let (mut lit, mut smoke) = (Verts::default(), Verts::default());
-            if near {
+            if fade < 1.0 {
                 ambient(
-                    &drawn.ambient,
+                    &mut drawn.ambient,
                     seconds,
+                    now,
                     tide,
                     local_eye,
                     &mut lit,
@@ -1665,7 +1856,17 @@ fn tiles(
     let seed = (key.1 as u32).wrapping_mul(73_856_093)
         ^ (key.2 as u32).wrapping_mul(19_349_663)
         ^ u32::from(key.0);
-    let built = build_tile(&pieces, anchor, bed, sea.radius, downwell, seed);
+    // The tide's lowest under the mean: a third of its range.
+    let low_water_m = sea.tide_range_m / 3.0;
+    let built = build_tile(
+        &pieces,
+        anchor,
+        bed,
+        sea.radius,
+        low_water_m,
+        downwell,
+        seed,
+    );
     for a in &built.ambient {
         let (Ambient::Anthias { at, .. }
         | Ambient::Clowns { at, .. }
@@ -1818,6 +2019,82 @@ fn write_mesh(mesh: &mut Mesh, verts: Verts, textured: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Design B18: a floe is laid only where its ice clears the ground at
+    /// low water, so none stands on a beach or a terrace; and the floe seal
+    /// is drawn on every frame of its slide off, its swim and its climb back,
+    /// never moving further in a frame than it could swim.
+    #[test]
+    fn floes_float_and_their_seals_slide_off_and_come_back() {
+        let radius = 1000.0;
+        let dir = Vec3::Y;
+        let axes = frame_at(dir, 0.3);
+        let flat = |depth: f32| move |_: Vec3| radius - depth;
+        // 3 m of water clears 0.6 m of ice at a 1 m low water; 1.2 m does not.
+        assert!(floe_floats(dir, axes, 1.3, &flat(3.0), radius, 1.0));
+        assert!(!floe_floats(dir, axes, 1.3, &flat(1.2), radius, 1.0));
+        // Dry sand above the sea: none.
+        assert!(!floe_floats(dir, axes, 1.3, &flat(-0.6), radius, 1.0));
+        // A terrace under one corner only (the bed takes a direction): none.
+        let step = |p: Vec3| {
+            if p.x > 0.001 {
+                radius + 0.5
+            } else {
+                radius - 3.0
+            }
+        };
+        assert!(!floe_floats(dir, axes, 1.3, &step, radius, 1.0));
+        let pieces = [Piece {
+            dir,
+            kind: None,
+            scale: 1.0,
+            tall: 0.4,
+            yaw: 0.3,
+            colour: [1.0; 3],
+            over: 0.0,
+            reach: 1.3,
+            floe: true,
+        }];
+        let built = build_tile(&pieces, dir * radius, flat(-0.6), radius, 1.0, [0.1; 3], 1);
+        assert!(built.floes.positions.is_empty(), "no floe on the beach");
+        let built = build_tile(&pieces, dir * radius, flat(4.0), radius, 1.0, [0.1; 3], 1);
+        assert!(!built.floes.positions.is_empty(), "a floe on the sea");
+
+        // The seal: the eye walks in from 30 m to 2 m, waits, then leaves.
+        let at = Vec3::new(0.0, 0.4, 0.0);
+        let (up, forward) = (Vec3::Y, Vec3::X);
+        let mut state = SealState::Out;
+        let dt = 1.0 / 60.0;
+        let mut last: Option<Vec3> = None;
+        let mut slid = false;
+        let mut back_out = false;
+        for frame in 0..(60 * 70) {
+            let clock = frame as f32 * dt;
+            let metres = if clock < 14.0 {
+                (30.0 - clock * 2.0).max(2.0)
+            } else {
+                40.0
+            };
+            let eye = at + Vec3::Z * metres + up * 1.6;
+            let (here, facing) = seal_at(&mut state, at, up, forward, 1.3, 0.4, eye, clock);
+            assert!(here.is_finite() && facing.is_finite());
+            if let Some(last) = last {
+                assert!(
+                    here.distance(last) <= SEAL_SWIM_MPS * dt * 2.5 + 0.06,
+                    "it jumped {} m at {clock} s",
+                    here.distance(last)
+                );
+            }
+            slid |= here.y < 0.0;
+            if slid && state == SealState::Out {
+                back_out = true;
+            }
+            last = Some(here);
+        }
+        assert!(slid, "it went into the water");
+        assert!(back_out, "and climbed back out after the eye had gone");
+        assert_eq!(last, Some(at), "on its floe again");
+    }
 
     /// Design B16: a kelp stand is slender (every triangle a sliver no
     /// thicker than 0.15 m: stipes, blades, floats and canopy), rises to the

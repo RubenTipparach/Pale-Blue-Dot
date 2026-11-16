@@ -365,6 +365,16 @@ pub fn apply_edit(
         }
         Hands::Empty | Hands::Till(None) => {}
     }
+    // Whether what this replaces is something a player put there: its
+    // removal is logged by author (the owner, 2026-11-16: "if an object a
+    // user placed despawns, i need logs").
+    let was_placed = !matches!(was, Material::Air)
+        && !was.is_water()
+        && save
+            .edits
+            .for_cell(cell)
+            .iter()
+            .any(|&(l, m)| usize::from(l) == layer && m == was);
     if !save.accept(
         Edit {
             cell,
@@ -379,6 +389,9 @@ pub fn apply_edit(
         error!("edit BLOCKED: the save did not accept cell {cell} layer {layer} {material:?}");
         return None;
     }
+    if was_placed {
+        info!("REMOVED {was:?} at cell {cell} layer {layer} by the player, now {material:?}");
+    }
     slots.0 = moved;
     drops.live.extend(dropped);
     let started = std::time::Instant::now();
@@ -390,35 +403,12 @@ pub fn apply_edit(
         debug_assert!(adopted, "adoption was checked before the save");
         info!("adopted cell {cell} into the tier ahead of the streaming");
     }
-    set.columns.set_layer(record, layer, material);
-    set.columns.repack(record);
-    for &neighbor in set.finest_neighbors[record].iter() {
-        if neighbor != u32::MAX {
-            set.columns.repack(neighbor as usize);
-        }
-    }
-    // The water (`water-flow` decision 5, `volumetric-water` phase 2): the
-    // sea floods what this opened onto it, and the cell and its neighbours
-    // are queued for the rule, so a dig beside water or a poured source
-    // starts it moving.
-    let flooded = set.columns.water_after_edit(record, layer, &save.edits);
-    for &slot in &flooded {
-        set.columns.repack_slot(slot);
-    }
-    // And the SURFACE, which is a second representation of where the ground
-    // is: the terrain pass draws its cap from the cell record and every
-    // neighbour draws its wall down to it. Repacking the runs and leaving that
-    // alone is the bug the owner reported as broken geometry - the tier's own
-    // build pass says what it looks like in as many words, "a meadow over the
-    // hole and a wall across it", and that pass ran only at build.
-    set.reconcile(record);
-    // Whether the sea sheet lies over the edited cell and what the flood
-    // reached: a pit dug below sea level is dry until the sea comes in.
-    let flooded: Vec<usize> = flooded
-        .iter()
-        .filter_map(|&slot| set.columns.water.records.get(slot).copied())
-        .collect();
-    set.mark_sheets(std::iter::once(record).chain(flooded));
+    // The column, its record and its neighbours', the water and the surface
+    // (`FineSet::write_layer`, the one path a landing's replay takes too).
+    // The surface matters as much as the runs: repacking the runs and leaving
+    // the record's cap alone is the bug the owner reported as broken geometry,
+    // "a meadow over the hole and a wall across it".
+    set.write_layer(record, layer, material, &save.edits);
     // The whole tier, at the measured six milliseconds. A block changes what
     // light reaches every cell it can be seen from, which is not a region this
     // code can name: a dug shaft lets daylight forty metres down, and a torch
@@ -702,7 +692,7 @@ pub fn dig_and_place(
     let line_out = fishery.is_some_and(|f| f.line.phase != pbd_core::fishing::Phase::Ready);
     if buttons.just_pressed(MouseButton::Right) && !line_out {
         let Some(place) = target.place else {
-            info!("edit refused: no air along the ray to place into");
+            info!("PLACE refused: no air along the ray to place into");
             return;
         };
         let wall_s = time.elapsed_secs();
@@ -751,12 +741,13 @@ pub fn dig_and_place(
                 .map(|t| (t.dig.cell, t.dig.layer))
             };
             let Some((cell, layer)) = at else {
+                info!("PLACE refused: the bucket found no water or cell along the ray");
                 return;
             };
             let Some(now) = material_of(&fine, &edits, (cell, layer))
                 .and_then(|was| pbd_core::liquid::bucket(full, was))
             else {
-                info!("edit refused: the bucket has nothing to take or nowhere to pour");
+                info!("PLACE refused: the bucket has nothing to take or nowhere to pour");
                 return;
             };
             let swapped = if full {
@@ -800,10 +791,14 @@ pub fn dig_and_place(
             return;
         }
         let Some(Item::Block(material)) = slots.held().map(|stack| stack.item) else {
-            info!("edit refused: the selected slot holds no block");
+            info!("PLACE refused: the selected slot holds no block");
             return;
         };
         if super::farm::crop_in_the_way(&fine, &edits, place.cell, place.layer) {
+            info!(
+                "PLACE refused: a crop grows in cell {} layer {}",
+                place.cell, place.layer
+            );
             note.say(wall_s, "A crop grows there");
             return;
         }
@@ -811,7 +806,10 @@ pub fn dig_and_place(
         // rock is a world you cannot move in, and the walker's own feet and
         // eye are what say where you are.
         if occupies(&fine, &contact, eye, place) {
-            info!("edit refused: that cell is where the player stands");
+            info!(
+                "PLACE refused: {material:?} into cell {} layer {} is where the player stands",
+                place.cell, place.layer
+            );
             return;
         }
         if apply_edit(
@@ -831,13 +829,19 @@ pub fn dig_and_place(
         .is_some()
         {
             info!(
-                "placed {material:?} in cell {} layer {}, fine set version {}",
+                "PLACE ok: {material:?} in cell {} layer {}, fine set version {}",
                 place.cell, place.layer, fine.version
             );
             did.write(pbd_app::missions::Did::block(
                 pbd_core::missions::Kind::Place,
                 material,
             ));
+        } else {
+            // The reason is the `edit refused` / `edit BLOCKED` line just above.
+            info!(
+                "PLACE refused: {material:?} into cell {} layer {} (reason in the line above)",
+                place.cell, place.layer
+            );
         }
     }
 }
@@ -996,13 +1000,19 @@ fn occupies(fine: &PlanetFine, contact: &PlanetContact, eye: Vec3, place: Sample
     let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
     let north = up.cross(east);
     let rim = 0.35;
-    [Vec3::ZERO, east, -east, north, -north]
+    // Keys from the contact tier's own set: a key is the same in every set,
+    // so this holds while the tier lags the newest set after an edit. Asking
+    // `contact.serves(&fine.set)` here refused every place at foot level in
+    // that window, and the window followed every edit (owner, 2026-11-16:
+    // "now suddenly I cant place anything").
+    let _ = fine;
+    let keys: Vec<u32> = [Vec3::ZERO, east, -east, north, -north]
         .into_iter()
-        .filter_map(|offset| contact.finest_cell((eye + offset * rim).normalize()))
-        .filter_map(|i| fine.set.finest_records().get(i))
-        // Unknown ground answers as before: the body is there.
-        .any(|record| record.key() == place.cell)
-        || !contact.serves(&fine.set)
+        .filter_map(|offset| contact.finest_key((eye + offset * rim).normalize()))
+        .collect();
+    // No contact tier at all (the first frames): the body may be anywhere,
+    // so refuse, as before.
+    keys.is_empty() || keys.contains(&place.cell)
 }
 
 /// `--lamps`: every light in a row across the view, one cell apart, each on
@@ -1098,17 +1108,9 @@ pub fn scripted_dig(
     mut edits: ResMut<WorldSave>,
     mut slots: ResMut<super::slots::Hotbar>,
     (mut drops, sun): (ResMut<Drops>, Res<pbd_app::sky::Sun>),
-    refresh: Res<pbd_app::planet::LodRefresh>,
     mut done: Local<bool>,
 ) {
     if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch && !launch.lamps) {
-        return;
-    }
-    // A set in flight was built from the edits as they stood when it was
-    // asked for, and landing it would undo anything scripted since
-    // (`edit-pipeline` design, "undone when it lands"). Until that is fixed,
-    // the rig waits for the landing so the picture shows its edits.
-    if refresh.in_flight_s().is_some() {
         return;
     }
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {

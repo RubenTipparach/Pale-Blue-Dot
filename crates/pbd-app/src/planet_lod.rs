@@ -486,6 +486,153 @@ impl FineSet {
             .adopt(&mut self.levels[3], &self.finest_neighbors, record, column)
     }
 
+    /// Write one layer of a record's column and bring round everything the
+    /// tier derives from that column: the record's runs and its neighbours'
+    /// (their flanks clip against it), the sea's flood and the water queue
+    /// (`water-flow` decision 5), the surface the heightfield draws, and the
+    /// sea sheet. Not the light, which the caller re-bakes once for however
+    /// many layers it wrote. `edits` are the save's as they stand, the edit
+    /// included. `false`, changing nothing, where the record has no column or
+    /// the column refused the layer (bedrock does).
+    ///
+    /// One path for an edit (`apply_edit`) and for a landing's replay
+    /// ([`FineSet::replay`]), so the two cannot bring a column round
+    /// differently.
+    pub fn write_layer(
+        &mut self,
+        record: usize,
+        layer: usize,
+        material: pbd_core::terrain::Material,
+        edits: &Edits,
+    ) -> bool {
+        if !self.columns.set_layer(record, layer, material) {
+            return false;
+        }
+        self.columns.repack(record);
+        for &neighbor in self.finest_neighbors[record].iter() {
+            if neighbor != u32::MAX {
+                self.columns.repack(neighbor as usize);
+            }
+        }
+        // The sea floods what this opened onto it, and the cell and its
+        // neighbours are queued for the rule, so a dig beside water or a
+        // poured source starts it moving.
+        let flooded = self.columns.water_after_edit(record, layer, edits);
+        for &slot in &flooded {
+            self.columns.repack_slot(slot);
+        }
+        // And the SURFACE, which is a second representation of where the
+        // ground is: the terrain pass draws its cap from the cell record and
+        // every neighbour draws its wall down to it.
+        self.reconcile(record);
+        // Whether the sea sheet lies over the edited cell and what the flood
+        // reached: a pit dug below sea level is dry until the sea comes in.
+        let flooded: Vec<usize> = flooded
+            .iter()
+            .filter_map(|&slot| self.columns.water.records.get(slot).copied())
+            .collect();
+        self.mark_sheets(std::iter::once(record).chain(flooded));
+        true
+    }
+
+    /// Bring a set built from the edits `built` round to the edits as they
+    /// stand `now` (`edit-pipeline` 1b): a set is built off the frame from the
+    /// edits as they were when it was REQUESTED, and anything accepted while it
+    /// was building (a lamp placed, a hole dug) is in the save and in the set
+    /// standing, and not in this one. Landed as it is, the lamp goes out and
+    /// the hole fills until the next rebuild (the owner, 2026-11-16: "I placed
+    /// a lamp but it somehow despawned").
+    ///
+    /// Each cell edited since has the save's current changes written over its
+    /// column. The column was built as generation, then `built`'s changes for
+    /// the cell; every layer those named, `now` names again, so the result is
+    /// the column a build from `now` makes, worms and rim included. A cell the
+    /// tier has no column for is adopted, as an edit past the edge is. Then
+    /// one relight. Returns how many cells were replayed.
+    pub fn replay(&mut self, built: &Edits, now: &Edits) -> usize {
+        let changed = now.changed_since(built);
+        if changed.is_empty() {
+            return 0;
+        }
+        let wanted: std::collections::HashSet<u32> = changed.into_iter().collect();
+        // In key order, whatever order the records are in: a replay of the
+        // same edits onto the same set is the same tier.
+        let mut cells: Vec<(u32, usize)> = self.levels[3]
+            .iter()
+            .enumerate()
+            .filter(|(_, cell)| wanted.contains(&cell.key()))
+            .map(|(record, cell)| (cell.key(), record))
+            .collect();
+        cells.sort_unstable();
+        let mut replayed = 0;
+        for (key, record) in cells {
+            if self.columns.column(record).is_none() {
+                let Some(column) = self.adoptable(record, now) else {
+                    continue;
+                };
+                if !self.adopt(record, column) {
+                    bevy::log::error!(
+                        "replay BLOCKED: cell {key} needs a column and the tier is full"
+                    );
+                    continue;
+                }
+            }
+            for &(layer, material) in now.for_cell(key) {
+                self.write_layer(record, usize::from(layer), material, now);
+            }
+            replayed += 1;
+        }
+        if replayed > 0 {
+            self.columns.relight();
+        }
+        replayed
+    }
+
+    /// Every saved change this set's columns do not hold, as `(cell, layer,
+    /// saved, held)`, in key order: what a rebuild, a replay or a load lost
+    /// (the owner, 2026-11-16: "my objects shouldnt be destroyed without any
+    /// reason"). Only the cells the tier has a column for; a cell past its
+    /// edge is drawn from the heightfield and adopted on its next edit.
+    ///
+    /// Two differences are the world's and not losses: a dug cell the sea
+    /// has flooded since (`volumetric-water` phase 2, derived and never
+    /// saved), and saved water whose level the rule has settled differently
+    /// at the build (the rule's, `water-flow`).
+    pub fn missing_edits(
+        &self,
+        edits: &Edits,
+    ) -> Vec<(
+        u32,
+        u16,
+        pbd_core::terrain::Material,
+        pbd_core::terrain::Material,
+    )> {
+        use pbd_core::terrain::Material;
+        let mut missing = Vec::new();
+        if edits.is_empty() {
+            return missing;
+        }
+        for (record, cell) in self.levels[3].iter().enumerate() {
+            let changes = edits.for_cell(cell.key());
+            if changes.is_empty() {
+                continue;
+            }
+            let Some(column) = self.columns.column(record) else {
+                continue;
+            };
+            for &(layer, saved) in changes {
+                let held = column.material(usize::from(layer));
+                let worlds = (saved == Material::Air && held.is_water())
+                    || (saved.is_water() && (held.is_water() || held == Material::Air));
+                if held != saved && !worlds && layer != 0 {
+                    missing.push((cell.key(), layer, saved, held));
+                }
+            }
+        }
+        missing.sort_unstable_by_key(|&(cell, layer, _, _)| (cell, layer));
+        missing
+    }
+
     /// Take the column tier out, leaving an empty one. For tests that want the
     /// tier and the records it was stamped into side by side.
     #[cfg(test)]
@@ -1199,6 +1346,10 @@ pub struct LodRefresh {
     /// When the last set landed, on the game clock (what the render world's
     /// dissolve is timed on: `PlanetClock` is this same elapsed time).
     landed_s: Option<f32>,
+    /// The edits the in-flight set is being built from: what its landing
+    /// compares the save's against, to replay what was accepted while it
+    /// built (`edit-pipeline` 1b). The task's own copy, shared.
+    built_from: Option<Arc<Edits>>,
 }
 
 /// A built set waiting to land (`LodRefresh::held`).
@@ -1244,6 +1395,7 @@ impl LodRefresh {
         self.task = None;
         self.held = None;
         self.started = None;
+        self.built_from = None;
         self.force = true;
     }
 
@@ -1350,6 +1502,7 @@ pub fn refresh_lod(
             built_s,
         } = held;
         refresh.started = None;
+        let built_from = refresh.built_from.take();
         if now_s > built_s {
             info!(
                 "LOD_FADE held: set {} waited {:.2} s for the last landing's dissolve",
@@ -1371,7 +1524,34 @@ pub fn refresh_lod(
             set.anchor.distance(fine.set.anchor) > 1e-3
         );
         let timer = std::time::Instant::now();
-        contact.set_prepared(prepared);
+        // What was accepted while it built goes into it before it is drawn
+        // (`edit-pipeline` 1b): a lamp placed during the build is in the save
+        // and the set standing, and would otherwise go out as this one lands.
+        let (set, prepared) = match built_from {
+            Some(built) if built.revision() != edits.edits.revision() => {
+                let mut owned = (*set).clone();
+                let replayed = owned.replay(&built, &edits.edits);
+                if replayed == 0 {
+                    (set, Some(prepared))
+                } else {
+                    info!(
+                        "fine set {} replayed {replayed} cells edited while it was built",
+                        fine.version + 1
+                    );
+                    (Arc::new(owned), None)
+                }
+            }
+            _ => (set, Some(prepared)),
+        };
+        match prepared {
+            Some(prepared) => contact.set_prepared(prepared),
+            // Built for the set before the replay, which is not this one.
+            None => contact.set_fine(&set),
+        }
+        // Every saved change is in what lands, or the log says which is not.
+        let checked = std::time::Instant::now();
+        report_missing_edits(&set, &edits.edits, "landing a rebuilt fine set");
+        spent("landing: checking the edits", checked);
         // Its bounce and lamp bake go up in the same frame as its records
         // (`baked-light-ease` 7.2): no frame without them.
         super::bounce::publish_with_set(
@@ -1417,7 +1597,8 @@ pub fn refresh_lod(
         // a set built without them would quietly undig every hole the moment
         // the player walked far enough.
         let timer = std::time::Instant::now();
-        let made = edits.edits.clone();
+        let made = Arc::new(edits.edits.clone());
+        refresh.built_from = Some(made.clone());
         spent("request: cloning the edits", timer);
         let replacing = fine.set.replaced();
         let width = scatter.lod_fade_width;
@@ -1458,6 +1639,27 @@ pub fn refresh_lod(
             (set, prepared, light)
         }));
     }
+}
+
+/// Log, at `error!`, every saved change `set` does not hold
+/// ([`FineSet::missing_edits`]) as `REMOVED <saved> at cell C layer L by
+/// <what>`, with what is there instead. Nothing should ever be listed: a
+/// change lost without an author is a bug in `what`. Returns how many.
+pub fn report_missing_edits(set: &FineSet, edits: &Edits, what: &str) -> usize {
+    let missing = set.missing_edits(edits);
+    for &(cell, layer, saved, held) in missing.iter().take(20) {
+        error!(
+            "REMOVED {saved:?} at cell {cell} layer {layer} by {what}, with no author: \
+             the save holds {saved:?}, the set {held:?}"
+        );
+    }
+    if missing.len() > 20 {
+        error!(
+            "REMOVED {} more saved changes by {what}; the first 20 are above",
+            missing.len() - 20
+        );
+    }
+    missing.len()
 }
 
 /// MEASUREMENT (`far-side-flight`, the walk's spikes): log a main-thread step
@@ -2444,5 +2646,197 @@ mod tool_crafting_ground {
         assert!(grass >= 30, "{grass} grass cells");
         assert!(land >= 100, "{land} dry cells");
         eprintln!("within 200 m of the spawn: {trees} trees, {grass} grass cells, {land} dry");
+    }
+}
+
+/// A set landing with what was edited while it built (`edit-pipeline` 1b).
+#[cfg(test)]
+mod landing_replay {
+    use super::*;
+
+    /// `edit-pipeline` 1b, the owner's vanished lamp (2026-11-16: "I placed a
+    /// lamp but it somehow despawned"). A set is built from the edits as they
+    /// stood at its request; every light and a dig are accepted while it
+    /// builds. Landed as built, none of them is in it, which is what the
+    /// player saw. Replayed at its landing, it is the tier a build from the
+    /// edits after would make: every column, every record and every cell's
+    /// light. A cell past the tier's edge is adopted with its lamp, as an
+    /// edit there is.
+    #[test]
+    fn a_set_built_before_lamps_and_a_dig_lands_with_them() {
+        use pbd_core::edits::Edit;
+        use pbd_core::terrain::Material;
+        let anchor = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let settings = ColumnSettings::default();
+        let before = Edits::new();
+        let mut set = generate_fine(anchor, &settings, &before);
+        // Interior columns well apart, so each light has a column of its own
+        // (one lamp to a column) and none is the rim.
+        let interior: Vec<usize> = (0..set.levels[3].len())
+            .filter(|&record| {
+                let slot = set.columns.slots[record];
+                slot != usize::MAX
+                    && set.columns.gpu_records()[slot].more[3] & column::RIM_BIT == 0
+                    // Dry ground with open air over it: no river or sea to
+                    // stand a lamp in.
+                    && set.columns.column(record).is_some_and(|c| {
+                        c.surface().is_some_and(|top| {
+                            c.material(top + 1) == Material::Air
+                                && (0..pbd_core::column::LAYERS).all(|l| !c.material(l).is_water())
+                        })
+                    })
+            })
+            .step_by(97)
+            .collect();
+        assert!(
+            interior.len() > Material::LAMPS.len() + 2,
+            "{}",
+            interior.len()
+        );
+        let top =
+            |set: &FineSet, record: usize| set.columns.column(record).unwrap().surface().unwrap();
+        let mut now = before.clone();
+        let mut lit = Vec::new();
+        for (&lamp, &record) in Material::LAMPS.iter().zip(&interior) {
+            let layer = top(&set, record) + 1;
+            now.set(Edit {
+                cell: set.levels[3][record].key(),
+                layer: layer as u16,
+                material: lamp,
+            });
+            lit.push((record, layer, lamp));
+        }
+        let dug = interior[Material::LAMPS.len()];
+        let dug_layer = top(&set, dug);
+        now.set(Edit {
+            cell: set.levels[3][dug].key(),
+            layer: dug_layer as u16,
+            material: Material::Air,
+        });
+        // A block placed on the ground and a torch stood on it: the block
+        // raises the cell's cap and puts out any tree there, as the edit did
+        // live, so a rebuild must not grow the tree back through the torch.
+        let raised = interior[Material::LAMPS.len() + 1];
+        let block_layer = top(&set, raised) + 1;
+        for (layer, material) in [
+            (block_layer, Material::Stone),
+            (block_layer + 1, Material::Torch),
+        ] {
+            now.set(Edit {
+                cell: set.levels[3][raised].key(),
+                layer: layer as u16,
+                material,
+            });
+        }
+        // And one past the edge: a finest record with no column.
+        let outside = (0..set.levels[3].len())
+            .find(|&record| set.columns.slots[record] == usize::MAX)
+            .expect("a finest record past the tier");
+        let outside_layer = set
+            .adoptable(outside, &before)
+            .and_then(|c| c.surface())
+            .expect("ground")
+            + 1;
+        now.set(Edit {
+            cell: set.levels[3][outside].key(),
+            layer: outside_layer as u16,
+            material: Material::Torch,
+        });
+
+        // The bug: the set as built has none of it.
+        for &(record, layer, lamp) in &lit {
+            assert_eq!(
+                set.columns.column(record).unwrap().material(layer),
+                Material::Air,
+                "{lamp:?} is not in a set built before it"
+            );
+        }
+
+        // And the landing's check names every one of them (the cell past the
+        // edge has no column, and is drawn from the heightfield).
+        let missing = set.missing_edits(&now);
+        assert_eq!(missing.len(), lit.len() + 3, "{missing:?}");
+        assert_eq!(report_missing_edits(&set, &now, "a test"), lit.len() + 3);
+
+        let replayed = set.replay(&before, &now);
+        assert!(
+            set.missing_edits(&now).is_empty(),
+            "nothing lost after the replay"
+        );
+        assert_eq!(replayed, lit.len() + 3, "every cell edited since");
+        assert_eq!(set.replay(&now, &now), 0, "nothing to replay twice");
+
+        for &(record, layer, lamp) in &lit {
+            let slot = set.columns.slots[record];
+            assert_eq!(set.columns.column(record).unwrap().material(layer), lamp);
+            assert_eq!(
+                (set.columns.gpu_records()[slot].more[3] >> column::TORCH_SHIFT)
+                    & column::LAMP_LAYER_MASK,
+                layer as u32 + 1,
+                "{lamp:?}: its record draws it"
+            );
+            if !lamp.dusk_lit() {
+                assert_eq!(
+                    set.columns.light_at(slot, layer).block(),
+                    lamp.emission(),
+                    "{lamp:?} lights its cell"
+                );
+            }
+        }
+        assert_eq!(
+            set.columns.column(dug).unwrap().material(dug_layer),
+            Material::Air,
+            "the hole stays dug"
+        );
+        let cap = set.levels[3][raised];
+        assert_eq!(
+            cap.direction_height[3],
+            pbd_core::column::layer_altitude(block_layer) + 1.0,
+            "the block raised the cap"
+        );
+        assert_eq!(
+            cap.metadata[1] & 0xff,
+            super::super::terrain::render_code(Material::Stone),
+            "and the cap wears it, so no tree stands there"
+        );
+        let adopted = set.columns.column(outside).expect("adopted");
+        assert_eq!(adopted.material(outside_layer), Material::Torch);
+
+        // Exactly the tier a build from the edits after makes, everywhere it
+        // has a column (the adopted one is past that build's edge).
+        let fresh = generate_fine(anchor, &settings, &now);
+        for record in 0..fresh.levels[3].len() {
+            let slot = fresh.columns.slots[record];
+            if slot == usize::MAX {
+                continue;
+            }
+            assert_eq!(set.columns.slots[record], slot, "record {record}");
+            let (a, b) = (
+                set.columns.column(record).unwrap(),
+                fresh.columns.column(record).unwrap(),
+            );
+            for layer in 0..pbd_core::column::LAYERS {
+                assert_eq!(
+                    a.material(layer),
+                    b.material(layer),
+                    "record {record} layer {layer}"
+                );
+                assert_eq!(
+                    set.columns.light_at(slot, layer),
+                    fresh.columns.light_at(slot, layer),
+                    "record {record} layer {layer}: light"
+                );
+            }
+            assert_eq!(
+                bytemuck::bytes_of(&set.columns.gpu_records()[slot]),
+                bytemuck::bytes_of(&fresh.columns.gpu_records()[slot]),
+                "record {record}: its GPU record"
+            );
+            assert_eq!(
+                bytemuck::bytes_of(&set.levels[3][record]),
+                bytemuck::bytes_of(&fresh.levels[3][record]),
+                "record {record}: its cell record"
+            );
+        }
     }
 }

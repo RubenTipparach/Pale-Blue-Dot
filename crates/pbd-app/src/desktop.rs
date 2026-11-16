@@ -186,9 +186,11 @@ pub struct Launch {
     pub bare: bool,
     /// `--tier stone|bronze|iron|steel`, for `--tool`.
     pub tier: pbd_core::inventory::Tier,
-    /// `--craft pack|bench [metres]` (`tool-crafting` task 4.2, a capture
-    /// instrument): the pack's Craft row mid-craft, or a workbench that far
-    /// ahead with its panel open mid-craft.
+    /// `--craft pack|pack-empty|pack-pick|pack-locked|bench [metres]`
+    /// (`tool-crafting` tasks 4.2 and 5.5, a capture instrument): the pack's
+    /// Craft panel (mid-craft, with nothing chosen, on a recipe, or with a
+    /// locked row hovered), or a workbench that far ahead with its panel
+    /// open mid-craft.
     pub craft: Option<(String, f32)>,
     /// `--place N` stacks N stones on the last hole, so a tower somebody built
     /// can be photographed wearing the stone it is made of.
@@ -293,6 +295,15 @@ pub struct Launch {
     /// `--farm-harvest`: with `--farm`, harvests the ripe cells and picks the
     /// nearest wild plant, so the hotbar shows what came of it.
     pub farm_harvest: bool,
+    /// `--farm-ripe`: with `--farm`, every crop of the field is sown ripe
+    /// (a capture's instrument, `stone-and-wood-ui` 4.8: the crop the eye
+    /// is on is one F harvests).
+    pub farm_ripe: bool,
+    /// `--hold-pointer`: a capture's instrument (`stone-and-wood-ui` 4.8).
+    /// The walker holds the pointer as a player's does after a click, so the
+    /// aim and the interact prompt show in a still capture, whose window
+    /// never has the focus.
+    pub hold_pointer: bool,
     /// `--forge [metres]`: a forge that far ahead, stocked and given two jobs,
     /// the first part done; with `--forge-panel`, its panel open.
     pub forge: Option<f32>,
@@ -310,6 +321,10 @@ pub struct Launch {
     /// `--tree-select <id>`: the Missions tab opens with this mission's card
     /// in the side panel (a capture instrument, `starter-missions` TS.2).
     pub tree_select: Option<String>,
+    /// `--tree-zoom <level>`: the Missions tab opens at this zoom level,
+    /// 0 (farthest) to 6, on the selected card or the current mission (a
+    /// capture instrument, `starter-missions` TS.3).
+    pub tree_zoom: Option<usize>,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -442,6 +457,8 @@ impl Launch {
             lamps_across: 0.0,
             farm: None,
             farm_harvest: false,
+            hold_pointer: false,
+            farm_ripe: false,
             forge: None,
             forge_panel: false,
             bare: false,
@@ -452,6 +469,7 @@ impl Launch {
             eat: Vec::new(),
             missions: None,
             tree_select: None,
+            tree_zoom: None,
             dig_ahead: false,
             take_trees: false,
             pitch: None,
@@ -512,8 +530,16 @@ impl Launch {
                     i += 1;
                     let scene = args.get(i).expect("--craft requires pack or bench").clone();
                     assert!(
-                        matches!(scene.as_str(), "pack" | "bench" | "bench-view"),
-                        "--craft takes pack, bench or bench-view"
+                        matches!(
+                            scene.as_str(),
+                            "pack"
+                                | "pack-empty"
+                                | "pack-pick"
+                                | "pack-locked"
+                                | "bench"
+                                | "bench-view"
+                        ),
+                        "--craft takes pack, pack-empty, pack-pick, pack-locked, bench or bench-view"
                     );
                     let mut metres = 4.0;
                     if let Some(m) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok()) {
@@ -609,6 +635,8 @@ impl Launch {
                     }
                 }
                 "--farm-harvest" => result.farm_harvest = true,
+                "--hold-pointer" => result.hold_pointer = true,
+                "--farm-ripe" => result.farm_ripe = true,
                 "--forge-panel" => result.forge_panel = true,
                 "--campfire" => {
                     let mut metres = 4.0;
@@ -626,6 +654,14 @@ impl Launch {
                         .get(i)
                         .expect("--eat takes dish codes, comma separated");
                     result.eat = dishes.split(',').map(str::to_string).collect();
+                }
+                "--tree-zoom" => {
+                    i += 1;
+                    result.tree_zoom = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--tree-zoom takes a level, 0 to 6"),
+                    );
                 }
                 "--tree-select" => {
                     i += 1;
@@ -896,6 +932,16 @@ impl Launch {
                         "off" => false,
                         _ => panic!("--rain-shadows takes on or off"),
                     });
+                }
+                "--reflections" => {
+                    i += 1;
+                    let level = args
+                        .get(i)
+                        .expect("--reflections requires off, low, medium or high");
+                    result.settings.reflections = Some(
+                        pbd_app::config::Reflections::parse(level)
+                            .expect("--reflections takes off, low, medium or high"),
+                    );
                 }
                 "--grass" => {
                     i += 1;
@@ -1440,6 +1486,12 @@ pub fn run(args: &[String]) {
     // The starter missions (`starter-missions`): the chain, its counting
     // and the player's record; the HUD line and the tab are `missions`.
     .add_plugins(pbd_app::missions::MissionsPlugin)
+    // `--craft pack-locked`'s pointer, after the UI's focus pass (a capture
+    // instrument, `tool-crafting` 5.5).
+    .add_systems(
+        PreUpdate,
+        craft::hover_locked.after(bevy::ui::UiSystems::Focus),
+    )
     .add_systems(
         Update,
         (
@@ -1448,6 +1500,7 @@ pub fn run(args: &[String]) {
                 missions::paint,
                 missions::show_line,
                 mission_tree::steer,
+                mission_tree::relayout,
                 mission_tree::place,
                 mission_tree::paint,
             )
@@ -1510,6 +1563,22 @@ pub fn run(args: &[String]) {
             cracks::spawn,
             farm::make_looks,
             farm::spawn_note,
+            pbd_app::interact::spawn_prompt.run_if(resource_exists::<pbd_app::ui_kit::UiKit>),
+        ),
+    )
+    // The interact key's offers from the fruit and the farm (the husbandry
+    // hands, the doors and the boats offer from their own plugins), and the
+    // prompt that names the one F will do (`stone-and-wood-ui`, "Interact on
+    // F").
+    .add_systems(
+        PostUpdate,
+        (
+            fruit::offer.in_set(pbd_app::interact::InteractSet::Offer),
+            farm::offer
+                .in_set(pbd_app::interact::InteractSet::Offer)
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::saves::WorldSave>),
+            pbd_app::interact::show_prompt.after(pbd_app::interact::InteractSet::Resolve),
         ),
     )
     // The column tier is built by a startup system and its records land when
@@ -1615,7 +1684,7 @@ pub fn run(args: &[String]) {
         Update,
         (
             // Picking fruit from a tree (`flora-v2` 12.5), ahead of the
-            // farm's E, after the husbandry hands'.
+            // farm's F, after the husbandry hands'.
             fruit::scripted
                 .after(digging::scripted_dig)
                 .run_if(pbd_app::loading::ready),
@@ -1636,7 +1705,7 @@ pub fn run(args: &[String]) {
                 .after(digging::dig_and_place)
                 .after(pbd_app::husbandry::HusbandryHands),
             // The campfire's panel opens from `farm::use_key` (after the
-            // husbandry hands, which clear an E they used).
+            // husbandry hands, which clear an F they used).
             (
                 kitchen::work,
                 kitchen::grey,
@@ -1846,6 +1915,16 @@ pub fn run(args: &[String]) {
                 since: None,
             })
             .add_systems(Update, sail_for);
+        }
+        if launch.hold_pointer {
+            app.add_systems(
+                PreUpdate,
+                (|mut state: ResMut<pbd_app::walking::WalkingState>| {
+                    state.scripted = true;
+                    state.captured = true;
+                })
+                .after(bevy::input::InputSystems),
+            );
         }
         if launch.walk_distance.is_some() {
             // Where the swim's keys go, for the same reason (below).
@@ -3728,6 +3807,9 @@ const LANDING_SHOT_LAST: u32 = 70;
 type WatchedLanding = (u64, Option<u32>);
 
 /// MEASUREMENT (`two-set-dissolve` design section 5): with
+/// `PBD_CAPTURE_RUN`'s stretch: where, the first and the end frame, the stride.
+type CaptureRun = (PathBuf, u64, u64, u64);
+
 /// `PBD_LANDING_SHOTS=27,28` in a capture, frames round the landing of fine
 /// set 27 (and 28) are saved beside the `--capture` path as
 /// `landing-<set>-f<frame>.png`, with a `LANDING_SHOT` line naming the set
@@ -3808,7 +3890,7 @@ fn capture(
     progress: Res<TourProgress>,
     mut exit: MessageWriter<AppExit>,
     count: Option<Res<pbd_app::loading::FrameCount>>,
-    mut burst: Local<Option<Option<(PathBuf, u64, u64)>>>,
+    mut burst: Local<Option<Option<CaptureRun>>>,
 ) {
     state.frame += 1;
     // MEASUREMENT (`baked-light-ease`): `PBD_CAPTURE_RUN=<dir>,<first>,<count>`
@@ -3816,18 +3898,26 @@ fn capture(
     // world's first open frame, as `--frames` is, so a run that loads slowly
     // saves the same stretch) for `count` frames, so a swap can be seen frame
     // by frame. Each is named by the frame log's frame number, which the
-    // `BAKED_LIGHT` lines give.
+    // `BAKED_LIGHT` lines give. An optional fourth field saves every
+    // `stride`th frame of the stretch instead (`weather-rain` R5: seconds of
+    // a lens drying, not every frame of them).
     let run = burst.get_or_insert_with(|| {
         let spec = std::env::var("PBD_CAPTURE_RUN").ok()?;
         let mut parts = spec.split(',');
         let dir = PathBuf::from(parts.next()?.trim());
         let first = parts.next()?.trim().parse().ok()?;
         let count: u64 = parts.next()?.trim().parse().ok()?;
+        let stride: u64 = parts
+            .next()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(1)
+            .max(1);
         std::fs::create_dir_all(&dir).ok()?;
-        Some((dir, first, first + count))
+        Some((dir, first, first + count, stride))
     });
-    if let (Some((dir, first, end)), Some(count)) = (run.as_ref(), count.as_ref())
+    if let (Some((dir, first, end, stride)), Some(count)) = (run.as_ref(), count.as_ref())
         && (*first..*end).contains(&u64::from(state.frame))
+        && (u64::from(state.frame) - *first).is_multiple_of(*stride)
     {
         let path = dir.join(format!("f{:06}.png", count.0));
         commands.spawn(Screenshot::primary_window()).observe(
@@ -4021,13 +4111,14 @@ fn write_frame_log(
 /// wet ground's traces in it at `reflect_render_scale: 1.0`, else in
 /// `reflect_half` and `reflect_compose`. A pass that did not run in a frame
 /// reads 0; spans not named here are summed in `gpu_other_ms`.
-const PASS_COLUMNS: [&str; 21] = [
+const PASS_COLUMNS: [&str; 22] = [
     "planet_cull",
     "planet_shadow",
     "main_opaque_pass_3d",
     "planet_terrain",
     "reflect_half",
     "reflect_compose",
+    "rain_splash",
     "main_transparent_pass_3d",
     "water_compose",
     "ssr_capture",

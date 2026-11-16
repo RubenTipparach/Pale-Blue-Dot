@@ -211,6 +211,19 @@ impl Material {
         self == Material::Water || self.flow().is_some()
     }
 
+    /// What this top is DRAWN as with water standing on it (`flora-v2`
+    /// 12.10): a grass of any kind or snow is a bed of dirt, and nothing
+    /// grows there; everything else is itself. A draw-time rule only: the
+    /// column keeps its material, and no generator version or save moves.
+    pub fn drowned(self) -> Material {
+        match self {
+            Material::Grass | Material::DryGrass | Material::JungleGrass | Material::Snow => {
+                Material::Dirt
+            }
+            other => other,
+        }
+    }
+
     /// Whether this light burns only from dusk to dawn. A property of the
     /// kind of light, not of where it stands (`lamps-and-lanterns` decision
     /// 4): a street lantern the player places behaves like a city's.

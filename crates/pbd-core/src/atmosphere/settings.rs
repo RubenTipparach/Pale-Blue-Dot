@@ -157,6 +157,14 @@ pub struct AtmosphereSettings {
     /// out of less water than a flat deck does, so storms and the afternoon's
     /// cumulus rain and a stratus deck mostly does not.
     pub convective_rain_mps: f32,
+    /// Rain falling through the dry air over arid ground evaporates before it
+    /// lands (virga): over ground whose wetness (the biome's, 1 for the sea,
+    /// 0.1 for desert) is `virga_dry_wetness` or less, none of it reaches the
+    /// ground and it goes back to vapour; at `virga_wet_wetness` or more, all
+    /// of it does, smoothly between (`rain-matches-map`, the owner,
+    /// 2026-11-16: "avoid rain cells over desert").
+    pub virga_dry_wetness: f32,
+    pub virga_wet_wetness: f32,
     /// How fast cloud in unsaturated air evaporates, s.
     pub cloud_evaporate_s: f32,
     /// Cloud water that starts to show, and that makes full cover, kg/m^2.
@@ -290,7 +298,7 @@ impl Default for AtmosphereSettings {
             sensible_wm2k: 15.0,
             heat_diffusivity_m2s: 65.73,
             lapse_k_per_m: 0.08,
-            evaporation: 3.0e-4,
+            evaporation: 0.75e-4,
             evaporation_wind_mps: 10.0,
             saturation_kg: 30.0,
             saturation_per_k: 0.068,
@@ -298,9 +306,11 @@ impl Default for AtmosphereSettings {
             lift_depth_m: 1000.0,
             condense_s: 60.0,
             latent_k_per_kg: 0.35,
-            rain_threshold_kg: 4.0,
+            rain_threshold_kg: 8.0,
             rain_s: 150.0,
             convective_rain_mps: 0.5,
+            virga_dry_wetness: 0.15,
+            virga_wet_wetness: 0.3,
             cloud_evaporate_s: 120.0,
             cover_min_kg: 0.2,
             cover_full_kg: 0.8,
@@ -454,6 +464,13 @@ impl AtmosphereSettings {
         ];
         if every.iter().any(|v| !v.is_finite() || *v < 0.0) {
             return Err("every atmosphere setting must be finite and not negative".into());
+        }
+        if !(self.virga_dry_wetness.is_finite()
+            && self.virga_dry_wetness >= 0.0
+            && self.virga_wet_wetness > self.virga_dry_wetness
+            && self.virga_wet_wetness <= 1.0)
+        {
+            return Err("virga wetness must run 0 <= dry < wet <= 1".into());
         }
         for (name, value) in [
             ("cloud_albedo", self.cloud_albedo),

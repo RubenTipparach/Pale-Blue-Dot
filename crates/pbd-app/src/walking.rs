@@ -199,7 +199,10 @@ pub struct WalkingConfig {
     /// Water up to this deep over the feet is waded, not swum: a grounded
     /// walker in it jumps at full strength and the water does not drag the
     /// jump down (owner, 2026-11-15: "I should be able to jump full strength
-    /// if I'm wading in water - shallow depth of 1"). In metres.
+    /// if I'm wading in water - shallow depth of 1"), then on 2026-11-16:
+    /// "change jumpable water height to 2 blocks instead of 1"). Up to this
+    /// depth the walker stands on the bed and jumps at full strength even with
+    /// its eyes under; deeper is swum. In metres.
     pub water_wade_depth: f32,
 }
 
@@ -242,9 +245,9 @@ impl Default for WalkingConfig {
             water_swim_force: 20.0,
             water_swim_max_rise: 14.0,
             water_submerged_jump_mult: 0.30,
-            // One terrain layer of water, plus a skin for the tide and the
+            // Two terrain layers of water, plus a skin for the tide and the
             // sheet's offset.
-            water_wade_depth: crate::planet::column::STEP_M + 0.1,
+            water_wade_depth: 2.0 * crate::planet::column::STEP_M + 0.1,
         }
     }
 }
@@ -1013,7 +1016,8 @@ fn drive_walker(
         // Fully submerged is never grounded, even standing on the seabed: it
         // is what makes a swimmer always take gravity and never get the
         // standing jump. Wading, feet down and head out, stays grounded.
-        if wet.eyes {
+        let wading = wet.wading(&config);
+        if wet.eyes && !wading {
             ground.grounded = false;
         }
         let mut speed = if state.sprinting {
@@ -1037,7 +1041,7 @@ fn drive_walker(
         let drift = ground.drift - up * ground.drift.dot(up);
         let planar = (right * state.axes.x + state.heading * state.axes.y) * speed + drift;
         let mut vertical = velocity.0.dot(up);
-        let swimming = wet.eyes || (wet.body && !ground.grounded);
+        let swimming = (wet.eyes && !wading) || (wet.body && !ground.grounded);
         if state.jump || (state.jump_held && swimming) {
             if swimming {
                 // Continuous while held, as the reference does it. The second
@@ -1049,7 +1053,7 @@ fn drive_walker(
                     (vertical + config.water_swim_force * dt).min(config.water_swim_max_rise);
             } else if ground.grounded {
                 vertical = config.jump_speed
-                    * if wet.body && !wet.wading(&config) {
+                    * if wet.body && !wading {
                         config.water_submerged_jump_mult
                     } else {
                         1.0
@@ -1059,7 +1063,7 @@ fn drive_walker(
         }
         // A jump out of wading water rises at full strength: the drag is
         // for a swimmer and a fall into water, not a jump out of a shallow.
-        let wading_jump = wet.wading(&config) && vertical > 0.0;
+        let wading_jump = wading && vertical > 0.0;
         // Nor does it lighten gravity under one: the jump goes as high as
         // it does on land.
         submerged = wet.body && !wading_jump;
@@ -1101,9 +1105,10 @@ pub(crate) struct WaterState {
 }
 
 impl WaterState {
-    /// In water, head out, no deeper than [`WalkingConfig::water_wade_depth`].
+    /// In water no deeper than [`WalkingConfig::water_wade_depth`] (two
+    /// layers), the head out or not.
     pub fn wading(&self, config: &WalkingConfig) -> bool {
-        self.body && !self.eyes && self.depth <= config.water_wade_depth
+        self.body && self.depth <= config.water_wade_depth
     }
 }
 
@@ -1609,7 +1614,7 @@ mod tests {
     }
 
     #[test]
-    fn one_layer_of_water_is_waded_and_deeper_is_not() {
+    fn two_layers_of_water_are_waded_and_deeper_is_not() {
         let config = WalkingConfig::default();
         let at = |depth: f32| WaterState {
             body: depth > config.water_body_check_height,
@@ -1619,8 +1624,12 @@ mod tests {
         assert!(at(1.0).wading(&config), "one layer deep is waded");
         assert!(at(0.6).wading(&config));
         assert!(!at(0.3).wading(&config), "ankle deep is dry to the body");
-        assert!(!at(1.4).wading(&config), "past one layer is not waded");
-        assert!(!at(2.5).wading(&config), "over the eyes is swum");
+        assert!(at(1.4).wading(&config), "one and a half layers is waded");
+        assert!(
+            at(2.0).wading(&config),
+            "two layers is waded, eyes under or not"
+        );
+        assert!(!at(2.5).wading(&config), "past two layers is swum");
     }
 
     fn app_with_terrain(terrain: PlanetContact) -> App {
@@ -2977,17 +2986,17 @@ mod tests {
         app.world_mut().resource_mut::<WalkingState>().captured = true;
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyE);
+            .press(KeyCode::KeyF);
         app.update();
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .release(KeyCode::KeyE);
+            .release(KeyCode::KeyF);
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
-            .clear_just_pressed(KeyCode::KeyE);
+            .clear_just_pressed(KeyCode::KeyF);
         assert!(
             app.world().resource::<Structures>().0[0].doors[0].open,
-            "E opened it"
+            "F opened it"
         );
         let save = app.world().resource::<crate::saves::WorldSave>();
         assert!(

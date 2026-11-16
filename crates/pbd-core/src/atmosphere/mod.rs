@@ -80,7 +80,11 @@ pub struct Sample {
     pub rain_rate: f32,
     /// The rain a person sees here, 0..1: `Atmosphere::rain_seen`.
     pub rain_seen: f32,
-    /// Whether that falls as snow.
+    /// Whether that falls as snow: the AIR at the ground at or below
+    /// freezing (`rain-matches-map`; the owner, 2026-11-16: "no rain in the
+    /// cold regions, snow only please"). It was the ground's temperature,
+    /// which a low sun warms past zero under freezing air, and 0.9% of all
+    /// that fell was rain in air at or below 0 C.
     pub snow: bool,
     /// Surface wind and the cloud-level wind, m/s, tangent.
     pub wind: Vec3,
@@ -93,6 +97,9 @@ pub struct Sample {
     pub sunlight: f32,
     /// Surface temperature, deg C, at the ground's own height.
     pub temperature: f32,
+    /// The air's temperature at the ground's own height, deg C: what decides
+    /// whether what falls is snow (`snow`).
+    pub air_c: f32,
     /// Optical depth of the column's cloud, for lighting it.
     pub optical_depth: f32,
     /// The wind the sea state has caught up with, m/s: the speed that sets
@@ -323,6 +330,7 @@ impl Atmosphere {
         let air = weighted(&self.air_k, cells, w);
         let elevation = weighted(&self.surface.elevation, cells, w);
         let ground = weighted(&self.ground_k, cells, w) - self.settings.lapse_k_per_m * elevation;
+        let air_c = air - self.settings.lapse_k_per_m * elevation;
         let vapour = weighted(&self.vapour, cells, w).max(0.0);
         let ocean_share: f32 = cells
             .iter()
@@ -343,7 +351,7 @@ impl Atmosphere {
             cloud_top: self.cloud_top(cloud, lift),
             rain_rate: weighted(&self.rain_rate, cells, w).max(0.0),
             rain_seen: weighted(&self.rain_seen, cells, w).clamp(0.0, 1.0),
-            snow: ground < 0.0,
+            snow: air_c <= 0.0,
             wind: weighted_vec(&self.wind, cells, w),
             upper: weighted_vec(&self.upper, cells, w),
             current: if ocean_share > 0.5 {
@@ -354,6 +362,7 @@ impl Atmosphere {
             humidity,
             sunlight: weighted(&self.sunlight, cells, w).max(0.0),
             temperature: ground,
+            air_c,
             optical_depth: cloud.max(self.water_for_cover(humid)) * 20.0,
             sea: if ocean_share > 0.5 {
                 weighted(&self.sea, cells, w).max(0.0)

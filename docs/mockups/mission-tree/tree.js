@@ -256,8 +256,23 @@
     return isOpen(byId[id], st.done) ? "open" : "locked";
   }
 
-  // ---- layout
-  const CW = 236, CH = 188, GX = 110, GY = 104, OX = 40, OY = 90;
+  // ---- layout. Every card keeps one shape at every zoom (owner, 2026-11-16: "chaning shape of
+  // these nodes is annoying, I wish they stayed the same size, and maybe had 2x spacing", "this
+  // shape is best" of the full card): the full card, its frame 10 CSS px = 5 art px, laid out with
+  // twice the gaps the native view had. A zoom level is a scale of the whole tree, in fixed steps;
+  // below one the frames are smoothed rather than pixel-sampled, so a 9-slice never tears.
+  const CARD = { cw: 236, ch: 188, gx: 220, gy: 208, lanes: true };
+  const SCALES = [0.1, 0.14, 0.2, 0.3, 0.42, 0.6, 0.8, 1, 1.4, 2];
+  const LEVELS = SCALES.map(() => CARD);
+  const OPEN = 7;
+  let lv = OPEN;
+  let CW, CH, GX, GY, OX = 40, OY;
+  const setLevel = (n) => {
+    lv = n;
+    ({ cw: CW, ch: CH, gx: GX, gy: GY } = LEVELS[n]);
+    OY = LEVELS[n].lanes ? 90 : 24;
+  };
+  setLevel(OPEN);
   const px = (c) => OX + c * (CW + GX);
   const py = (r) => OY + r * (CH + GY);
   {
@@ -281,26 +296,45 @@
   }
   const cols = Math.max(...M.map((m) => m.col)) + 1;
   const rows = Math.max(...M.map((m) => m.row)) + 1;
-  const W = px(cols) - GX + OX;
-  const H = py(rows) - GY + 40;
+  let W = 0, H = 0;
+  const sizeAt = (n) => {
+    const L = LEVELS[n], oy = L.lanes ? 90 : 24;
+    return [OX + cols * (L.cw + L.gx) - L.gx + OX, oy + rows * (L.ch + L.gy) - L.gy + 40];
+  };
 
   const $ = (s) => document.querySelector(s);
   const view = $("#view"), world = $("#world"), svg = $("#edges");
-  world.style.width = W + "px";
-  world.style.height = H + "px";
-  svg.setAttribute("width", W);
-  svg.setAttribute("height", H);
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  // ---- hover: the full card beside the pointer, at full size, while the tree is zoomed out
+  const tip = document.createElement("div");
+  tip.className = "card tip";
+  tip.setAttribute("aria-hidden", "true");
+  document.body.appendChild(tip);
+  let tipFor = null;
+  function hideTip() { tip.style.display = "none"; tipFor = null; }
+  function showTip(id, x, y) {
+    const el = cards[id];
+    if (tipFor !== id) {
+      tip.className = el.className.replace(/\b(sel|fresh)\b/g, "") + " tip";
+      tip.innerHTML = el.innerHTML;
+      tipFor = id;
+    }
+    tip.style.display = "flex";
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    const left = x + 18 + w > innerWidth ? x - 18 - w : x + 18;
+    const top = Math.min(Math.max(8, y - h / 2), innerHeight - h - 8);
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+
 
   // lane labels above each branch's first card
-  BRANCHES.forEach((b) => {
+  const lanes = BRANCHES.map((b) => {
     const first = M.find((m) => m.b === b.key);
     const el = document.createElement("div");
     el.className = "lane";
     el.textContent = b.name;
-    el.style.left = px(first.col) + "px";
-    el.style.top = py(first.row) - 46 + "px";
     world.appendChild(el);
+    return { el, first };
   });
 
   // edges
@@ -311,12 +345,7 @@
   // One line per child: out of the parent's side, down the gap between the two columns, into the
   // child's side. A subtree owns its rows, so no line crosses a card or another subtree.
   edges.forEach((e) => {
-    const a = byId[e.from], b = byId[e.to];
-    const x1 = px(a.col) + CW, y1 = py(a.row) + CH / 2, x2 = px(b.col), y2 = py(b.row) + CH / 2;
-    const xm = x1 + GX / 2;
-    const d = a.row === b.row ? `M${x1},${y1} L${x2},${y2}` : `M${x1},${y1} L${xm},${y1} L${xm},${y2} L${x2},${y2}`;
     const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    p.setAttribute("d", d);
     p.setAttribute("fill", "none");
     e.el = p;
     svg.appendChild(p);
@@ -328,13 +357,43 @@
     const el = document.createElement("div");
     el.className = "card";
     el.dataset.id = m.id;
-    el.style.left = px(m.col) + "px";
-    el.style.top = py(m.row) + "px";
     el.tabIndex = 0;
     el.setAttribute("role", "button");
     world.appendChild(el);
     cards[m.id] = el;
   });
+
+  // Size and place every card, line and plaque for the level.
+  function relayout() {
+    [W, H] = sizeAt(lv);
+    // Zoomed out, a card is its mission's icon, big, in the same frame (owner, 2026-11-16: "it
+    // should be big icons when zoomed out"); hovering one shows the full card.
+    world.className = "lv4" + (SCALES[lv] < 1 ? " small" : "") + (SCALES[lv] <= 0.6 ? " icons" : "");
+    hideTip();
+    world.style.width = W + "px";
+    world.style.height = H + "px";
+    svg.setAttribute("width", W);
+    svg.setAttribute("height", H);
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    lanes.forEach(({ el, first }) => {
+      el.style.left = px(first.col) + "px";
+      el.style.top = py(first.row) - 46 + "px";
+    });
+    edges.forEach((e) => {
+      const a = byId[e.from], b = byId[e.to];
+      const x1 = px(a.col) + CW, y1 = py(a.row) + CH / 2, x2 = px(b.col), y2 = py(b.row) + CH / 2;
+      const xm = x1 + GX / 2;
+      e.el.setAttribute("d", a.row === b.row ? `M${x1},${y1} L${x2},${y2}` : `M${x1},${y1} L${xm},${y1} L${xm},${y2} L${x2},${y2}`);
+    });
+    M.forEach((m) => {
+      const el = cards[m.id];
+      el.style.left = px(m.col) + "px";
+      el.style.top = py(m.row) + "px";
+      el.style.width = CW + "px";
+      el.style.height = CH + "px";
+    });
+  }
+  relayout();
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const icon = (name, cls) => `<img src="${IMG}${name}.png" alt="" class="${cls || ""}">`;
@@ -497,35 +556,82 @@
   $("#tabR").addEventListener("click", () => { tab = "r"; render(); });
   $("#recipesBtn").addEventListener("click", () => { tab = "r"; render(); });
 
-  // ---- pan and zoom: only by the viewer's hand
-  let tx = 0, ty = 0, sc = 1;
-  const SMIN = 0.12, SMAX = 2.2;
+  // ---- pan and zoom: only by the viewer's hand. The wheel, the buttons and a pinch step through
+  // the levels about the pointer; the pan is snapped to whole device pixels. On a screen whose
+  // device pixel ratio does not make 2 CSS px a whole number of device pixels (1.25, say), the
+  // world is scaled once by a fixed factor that does, never by the zoom.
+  let tx = 0, ty = 0;
+  const dpr = () => window.devicePixelRatio || 1;
+  const unit = () => SCALES[lv] * Math.max(1, Math.round(2 * dpr())) / (2 * dpr());
+  const snap = (v) => Math.round(v * dpr()) / dpr();
   function apply() {
-    world.style.transform = `translate(${tx}px,${ty}px) scale(${sc})`;
-    world.classList.toggle("far", sc < 0.5);
-    view.style.backgroundSize = `${40 * sc}px ${40 * sc}px`;
+    // Bounds (owner, 2026-11-16: "a max bounds so the user doesnt get lost"): the tree may slide
+    // only until its edge reaches the middle of the view, so some of it is always in sight.
+    // The pull is toward the nearest card, so at least 40 px of a card always stays in view.
+    const q = unit(), r = view.getBoundingClientRect();
+    let cx = (r.width / 2 - tx) / q, cy = (r.height / 2 - ty) / q;
+    const hx = (r.width / 2 - 40) / q, hy = (r.height / 2 - 40) / q;
+    let best = null;
+    for (const m of M) {
+      const x0 = px(m.col), y0 = py(m.row);
+      const dx = Math.max(x0 - cx, 0, cx - (x0 + CW)), dy = Math.max(y0 - cy, 0, cy - (y0 + CH));
+      const over = Math.max(dx - hx, 0) + Math.max(dy - hy, 0);
+      if (!best || over < best.over) best = { over, x0, y0 };
+      if (!over) break;
+    }
+    if (best && best.over) {
+      cx = Math.min(Math.max(cx, best.x0 - hx), best.x0 + CW + hx);
+      cy = Math.min(Math.max(cy, best.y0 - hy), best.y0 + CH + hy);
+      tx = r.width / 2 - cx * q;
+      ty = r.height / 2 - cy * q;
+    }
+    tx = snap(tx);
+    ty = snap(ty);
+    world.style.transform = `translate(${tx}px,${ty}px)` + (q !== 1 ? ` scale(${q})` : "");
     view.style.backgroundPosition = `${tx}px ${ty}px`;
   }
-  function zoomAt(f, cx, cy) {
-    const ns = Math.min(SMAX, Math.max(SMIN, sc * f));
-    tx = cx - ((cx - tx) * ns) / sc;
-    ty = cy - ((cy - ty) * ns) / sc;
-    sc = ns;
+  // Step to level n, keeping the point at (cx, cy) between the same cards.
+  function stepTo(n, cx, cy) {
+    n = Math.max(0, Math.min(LEVELS.length - 1, n));
+    if (n === lv) return;
+    // The layout is the same at every level; only the scale changes, so the world point under
+    // (cx, cy) is read at the old scale and put back under it at the new one.
+    const q0 = unit();
+    const wx = (cx - tx) / q0, wy = (cy - ty) / q0;
+    setLevel(n);
+    relayout();
+    const q1 = unit();
+    tx = cx - wx * q1;
+    ty = cy - wy * q1;
     apply();
   }
   function fit() {
     const r = view.getBoundingClientRect();
     const pad = 12;
     const bottomRoom = Math.min(130, r.height * 0.22); // the log sits at the foot
-    sc = Math.min((r.width - pad * 2) / W, (r.height - pad - bottomRoom) / H);
-    tx = (r.width - W * sc) / 2;
-    ty = pad + Math.max(0, (r.height - pad - bottomRoom - H * sc) / 2);
+    let n = LEVELS.length - 1;
+    while (n > 0) {
+      const [w, h] = sizeAt(n);
+      const qn = SCALES[n] * Math.max(1, Math.round(2 * dpr())) / (2 * dpr());
+      if (w * qn <= r.width - pad * 2 && h * qn <= r.height - pad - bottomRoom) break;
+      n--;
+    }
+    setLevel(n);
+    relayout();
+    const q = unit();
+    tx = (r.width - W * q) / 2;
+    ty = pad + Math.max(0, (r.height - pad - bottomRoom - H * q) / 2);
     apply();
   }
+  let spin = 0;
   view.addEventListener("wheel", (e) => {
     e.preventDefault();
     const r = view.getBoundingClientRect();
-    zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+    spin += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
+    const steps = Math.trunc(spin / 100);
+    if (!steps) return;
+    spin -= steps * 100;
+    stepTo(lv - steps, e.clientX - r.left, e.clientY - r.top);
   }, { passive: false });
 
   const ptrs = new Map();
@@ -545,6 +651,13 @@
     }
   });
   view.addEventListener("pointermove", (e) => {
+    if (ptrs.size || !world.classList.contains("icons") || e.pointerType === "touch") { hideTip(); return; }
+    const card = e.target.closest && e.target.closest(".card");
+    const id = card && Object.keys(cards).find((k) => cards[k] === card);
+    if (id) showTip(id, e.clientX, e.clientY); else hideTip();
+  });
+  view.addEventListener("pointerleave", hideTip);
+  view.addEventListener("pointermove", (e) => {
     const p = ptrs.get(e.pointerId);
     if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
@@ -557,8 +670,10 @@
       const [a, b] = [...ptrs.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
       const r = view.getBoundingClientRect();
-      zoomAt(d / pinch.d, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
-      pinch.d = d;
+      if (d / pinch.d > 1.3 || d / pinch.d < 1 / 1.3) {
+        stepTo(lv + (d > pinch.d ? 1 : -1), (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+        pinch.d = d;
+      }
       moved = 99;
     }
   });
@@ -583,8 +698,8 @@
 
   $("#fitBtn").addEventListener("click", fit);
   const centre = () => { const r = view.getBoundingClientRect(); return [r.width / 2, r.height / 2]; };
-  $("#zoomIn").addEventListener("click", () => zoomAt(1.3, ...centre()));
-  $("#zoomOut").addEventListener("click", () => zoomAt(1 / 1.3, ...centre()));
+  $("#zoomIn").addEventListener("click", () => stepTo(lv + 1, ...centre()));
+  $("#zoomOut").addEventListener("click", () => stepTo(lv - 1, ...centre()));
 
   // ---- the bot run: off until the viewer presses Play
   let timer = null;
@@ -625,17 +740,18 @@
 
   // ---- a world partway through: the bot in the middle of "Go fishing" (cast, one fish of three)
   const sample = steps.findIndex((s) => s.t === "obj" && s.m === "go-fishing" && s.i === 1) + 1;
-  // centre a mission at a scale (used by the stills; the page never calls it on its own)
-  function focus(id, scale) {
-    const m = byId[id], r = view.getBoundingClientRect();
-    sc = scale;
+  // centre a mission at a level (used by the stills; the page never calls it on its own)
+  function focus(id, level) {
+    if (level !== undefined) { setLevel(Math.max(0, Math.min(LEVELS.length - 1, level))); relayout(); }
+    const m = byId[id], r = view.getBoundingClientRect(), q = unit();
     const room = $("#panel").classList.contains("open") && r.width > 640 ? $("#panel").offsetWidth : 0;
-    tx = (r.width - room) / 2 - (px(m.col) + CW / 2) * sc;
-    ty = r.height / 2 - (py(m.row) + CH / 2) * sc;
+    tx = (r.width - room) / 2 - (px(m.col) + CW / 2) * q;
+    ty = r.height / 2 - (py(m.row) + CH / 2) * q;
     apply();
   }
   // test hooks for the stills
-  window.missionTree = { steps: steps.length, missions: M.length, unlocks: M.reduce((n, m) => n + m.unl.length, 0), setStep, select, fit, focus, sample };
+  window.missionTree = { steps: steps.length, missions: M.length, unlocks: M.reduce((n, m) => n + m.unl.length, 0), setStep, select, fit, focus, sample, levels: LEVELS.length, level: () => lv };
   setStep(sample);
-  fit();
+  // Open at full size on the mission the bot is playing; Fit shows the whole tree.
+  focus("go-fishing", OPEN);
 })();

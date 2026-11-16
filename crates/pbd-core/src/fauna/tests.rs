@@ -764,3 +764,64 @@ fn a_species_spawns_only_in_its_place_once_the_places_exist() {
         }
     }
 }
+
+/// A startled seal goes under over time and comes back up over time, never
+/// in one step, and swims away from the eye while it is startled
+/// (`ocean-environments` B18: "they disappear when I get close").
+#[test]
+fn a_startled_seal_dives_over_time_and_swims_away() {
+    let flock = FlockSettings::default();
+    let r = roster();
+    let i = index_of("seal");
+    let sp = &r[i];
+    let mut school = School::spawn(i as u16, sp, at(0.0, 1.0, 12.0), 4, &Swell);
+    let start = school.centre();
+    let up = start.normalize();
+    let side = up.cross(Vec3::X).normalize();
+    // The eye 5 m to one side, on the surface.
+    let eye = start + side * 5.0;
+    let dt = 1.0 / 30.0;
+    let most = dt / school::DIVE_S.min(school::SURFACE_S) + 1e-5;
+    let mut last = school.under.clone();
+    let mut shares = Vec::new();
+    for tick in 0..(30 * 40) {
+        if tick < 30 * 3 {
+            school.notice(eye, sp, 6.0);
+        }
+        school.step(dt, sp, &flock, &Swell, None);
+        for (a, b) in school.under.iter().zip(&last) {
+            assert!((a - b).abs() <= most, "under moved {} in a step", a - b);
+        }
+        last = school.under.clone();
+        shares.push(under_share(sp, &school, 0, 0.0, false));
+        if tick == 30 * 3 {
+            let off = school.centre() - eye;
+            assert!(
+                off.length() > 6.0 && off.dot(side) < 0.0,
+                "it swam away from the eye: {} m off",
+                off.length()
+            );
+        }
+    }
+    assert!(shares.iter().any(|s| *s > 0.99), "it went under");
+    assert!(shares[2] < 0.2, "not at once");
+    assert_eq!(*shares.last().unwrap(), 0.0, "and came back up");
+}
+
+/// A diving duck sinks and rises over time: its share under never jumps.
+#[test]
+fn a_diving_duck_sinks_and_rises_never_in_one_frame() {
+    let r = roster();
+    let i = index_of("pond_diver");
+    let sp = &r[i];
+    let school = School::spawn(i as u16, sp, at(0.0, 1.0, 12.0), 9, &Swell);
+    let mut last = under_share(sp, &school, 0, 0.0, false);
+    let mut deepest: f32 = 0.0;
+    for k in 1..(30 * 30) {
+        let now = under_share(sp, &school, 0, k as f64 / 30.0, false);
+        assert!((now - last).abs() < 0.1, "jumped {last} -> {now} at {k}");
+        deepest = deepest.max(now);
+        last = now;
+    }
+    assert!(deepest > 0.99, "it dives");
+}

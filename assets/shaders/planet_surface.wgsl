@@ -47,7 +47,7 @@ struct Params {
     lamp_bake: vec4<f32>,      // L7: x the newest bake's fade-in 0..1, y the older half holds this set, z the newest does, w the newest half
     ssr_clip: mat4x4<f32>,     // L8 (10.2): the screen trace history's clip_from_body
     ssr_eye: vec4<f32>,        // and its eye; w one once there is a history
-    rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m
+    rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m; z a plant's darkening at full wetness (`flora-v2` 13.2)
     light_ease: vec4<f32>,     // `baked-light-ease` 7.3: x the light field's newest half blended in 0..1, y that half, z one while the other is blended from
     flora: vec4<f32>,          // `flora-v2`: x tufts per cell (zero: blades), y tuft width m, z tuft height m, w the year 0..1
     flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
@@ -55,6 +55,7 @@ struct Params {
     tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
     plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits (low 16), tree table (high 16)
     flora_fall: vec4<f32>,     // 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w fruit chance
+    tree_fade: array<vec4<f32>,2>, // `flora-v2` 13.3: the point the trees' cross-fade runs from (w its progress 0..1), the point it runs to
     night: vec4<f32>,          // `night-lights-from-space`: x how many far lights `night_lights` holds
     night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
     felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty
@@ -362,6 +363,10 @@ fn lamp_box(i: u32, c: vec3<f32>, x: vec3<f32>, y: vec3<f32>, z: vec3<f32>, e: v
 // one; `planet_column.rs` packs it and a test holds the two shifts together.
 const COLUMN_WATER_SHIFT: u32 = 4u;
 const COLUMN_WATER_MASK: u32 = 0x1ffu;
+// How far the top water layer's surface stands under its top, in eighths of
+// a metre: nought for a source, more for a flowing cell's lower level.
+const COLUMN_WATER_SHORT_SHIFT: u32 = 13u;
+const COLUMN_WATER_SHORT_MASK: u32 = 0x7u;
 // The altitude of this column's water SURFACE, or a depth no world reaches
 // when it holds none. Below the world rather than a flag, so the reader is a
 // `min` against the sheet and never a branch: a column with no water has its
@@ -369,7 +374,8 @@ const COLUMN_WATER_MASK: u32 = 0x1ffu;
 fn column_water_top_m(rec: ColumnRec) -> f32 {
     let packed = (rec.more[3] >> COLUMN_WATER_SHIFT) & COLUMN_WATER_MASK;
     if packed == 0u { return -1.0e9; }
-    return COLUMN_BASE_M + f32(packed);
+    let short = (rec.more[3] >> COLUMN_WATER_SHORT_SHIFT) & COLUMN_WATER_SHORT_MASK;
+    return COLUMN_BASE_M + f32(packed) - f32(short)*0.125;
 }
 const NO_NEIGHBOR: u32 = 0xffffffffu;
 
@@ -888,7 +894,8 @@ const IMPOSTOR_VIEW_W: u32 = 48u;
 const IMPOSTOR_H: u32 = 72u;
 const IMPOSTOR_W: u32 = 384u;
 // The rings' cross-fade: the last share of each ring (the mockup's 0.3).
-const TREE_RING_FADE: f32 = 0.3;
+// How far up a far tree's standing normal leans (design 13.4).
+const IMPOSTOR_LIFT: f32 = 0.35;
 const TREE_BARK_CODE: u32 = 24u;
 const TREE_LEAF_CODE: u32 = 25u;
 const IMPOSTOR_CODE: u32 = 26u;
@@ -960,10 +967,34 @@ fn tree_sway(t: TreeFrame, w: vec3<f32>, amp: f32) -> vec3<f32> {
     return w + wind*bend*sway - t.up*bend*sway*sway*0.25*TREE_WIND_H
         + side*bend*TREE_WIND*0.18*sin(time*2.7 + ph*1.7);
 }
-// The rings' weights at a tree `d` metres away (design 10.4): how far into
-// the near ring's cross-fade, and into the mid ring's, 0..1.
-fn ring_t(d: f32, end: f32) -> f32 {
-    return clamp((d - end*(1.0 - TREE_RING_FADE))/max(end*TREE_RING_FADE, 1e-3), 0.0, 1.0);
+// A tree's cross-fade is a moment in time, never a place (design 13.3;
+// owner, 2026-11-16: "dithering should either stay or go, dont have it
+// linger if the player isnt moving"). Which representation a tree at `base`
+// takes seen from `eye`: 0 the near model, 1 the mid cards, 2 the far
+// billboard, 3 none. Hard thresholds, in the middle of the old rings'
+// cross-fades (0.85 of each ring, `TREE_SWITCH`), so the visibility pass,
+// which lists by the camera itself, still holds both representations while
+// the point they are decided at trails it (`tree_fade_lag_m`).
+const TREE_SWITCH: f32 = 0.85;
+fn tree_level(eye: vec3<f32>, base: vec3<f32>) -> u32 {
+    let d = distance(eye, base);
+    if d > params.settings.w - TREE_FADE_MARGIN_M - 0.5*params.fade.x { return 3u; }
+    if d < params.flora_more.z*TREE_SWITCH { return 0u; }
+    if d < params.flora_more.w*TREE_SWITCH { return 1u; }
+    return 2u;
+}
+// How representation `r` of the tree at `base` is drawn (`out_height`, which
+// `tree_dropped` reads): 1 whole, 1 - t going out, 2 + t coming in, 0 not at
+// all. Whole wherever the two points the fade runs between agree, which is
+// everywhere one fade after the camera stops.
+fn tree_show(base: vec3<f32>, r: u32) -> f32 {
+    let was = tree_level(params.tree_fade[0].xyz, base);
+    let now = tree_level(params.tree_fade[1].xyz, base);
+    let t = clamp(params.tree_fade[0].w, 0.0, 1.0);
+    if was == now { return select(0.0, 1.0, r == now); }
+    if r == now { return 2.0 + t; }
+    if r == was { return 1.0 - t; }
+    return 0.0;
 }
 
 fn grassy(material: u32) -> bool { return material==2u || material==3u || material==7u; }
@@ -1158,7 +1189,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         tree_split = vec3(f32(hash(id) & 3u), 0.0, 0.0);
         let local = (vertex - NEAR_TREE_FIRST_VERTEX) & 0xffffu;
         // Outgoing across the near ring's last 0.3 (design 10.4).
-        out_height = 1.0 - ring_t(distance(params.camera.xyz, t.base), params.flora_more.z);
+        out_height = tree_show(t.base, 0u);
         position = t.base;
         let count = kit[t.header + 1u];
         let vmax = kit[t.species*KIT_SPECIES_WORDS + 12u];
@@ -1536,39 +1567,44 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         let tall = t.size*sqrt(grown);
         let y0 = kit_f(t.header + 6u)*tall;
         let y1 = kit_f(t.header + 7u)*tall;
-        let d = distance(params.camera.xyz, t.base);
-        let near_m = params.flora_more.z;
-        let mid_m = params.flora_more.w;
         let to_eye = params.camera.xyz - t.base;
         let eye = vec2(dot(to_eye, t.x), dot(to_eye, t.z));
+        let eye_l = length(eye);
+        let dir = select(vec2(0.0, 1.0), eye/max(eye_l, 1e-6), eye_l > 1e-3);
+        // Lit as a standing tree, not a floor (design 13.4; owner: "distant
+        // trees appear to be glowing evenly"): toward the eye across the
+        // ground and a little up, as the near crown's leaf cards face it. The
+        // tree's up axis lit a card with the zenith's whole sky, flat.
+        normal = normalized(t.x*dir.x + t.z*dir.y + axis*IMPOSTOR_LIFT);
         let v = vertex - 60u;
         var shown = false;
         var along = t.x;
         var view = 0u;
         var flip = false;
         if v < 24u {
-            // The mid ring: four crossed cards, each showing the view baked
-            // from its own side (seen from behind, the view from there).
-            if d < mid_m && d > near_m*(1.0 - TREE_RING_FADE) {
+            // The mid cards: four crossed cards, each showing the view baked
+            // from its own side (seen from behind, the view from there),
+            // whole, or fading in or out by time (design 13.3).
+            let f = tree_show(t.base, 1u);
+            if f > 0.0 {
                 shown = true;
-                // Incoming across the near ring's fade, outgoing across the mid's.
-                out_height = select(1.0 - ring_t(d, mid_m), 2.0 + ring_t(d, near_m), d < near_m);
+                out_height = f;
                 let k = v/6u;
                 let phi = f32(k)*TAU/8.0;
                 along = t.x*cos(phi) - t.z*sin(phi);
                 flip = dot(eye, vec2(sin(phi), cos(phi))) < 0.0;
                 view = select(k, k + 4u, flip);
             }
-        } else if d > mid_m*(1.0 - TREE_RING_FADE) {
+        } else {
             // The far billboard, turned to the eye, showing the baked view
             // nearest the eye's bearing in the tree's own frame.
-            shown = true;
-            out_height = 2.0 + ring_t(d, mid_m);
-            let l = length(eye);
-            let dir = select(vec2(0.0, 1.0), eye/max(l, 1e-6), l > 1e-3);
-            view = u32(floor(atan2(dir.x, dir.y)/(TAU/8.0) + 8.5)) % 8u;
-            along = t.x*dir.y - t.z*dir.x;
-            normal = normalized((t.x*dir.x + t.z*dir.y)*0.4 + axis);
+            let f = tree_show(t.base, 2u);
+            if f > 0.0 {
+                shown = true;
+                out_height = f;
+                view = u32(floor(atan2(dir.x, dir.y)/(TAU/8.0) + 8.5)) % 8u;
+                along = t.x*dir.y - t.z*dir.x;
+            }
         }
         if shown {
             let corners = array<vec3<f32>,4>(
@@ -2683,8 +2719,18 @@ fn dropped(input: VertexOut) -> bool {
     if code == FERN_CODE && fern_cut(input.uv) { return true; }
     if code == FRUIT_CODE && fruit_pixel(input.uv) == 0u { return true; }
     if input.kind == 3u || code == FRUIT_CODE {
-        let left = params.clutter.x - 2.0 - distance(input.position, params.camera.xyz);
-        if mask >= clamp(left/max(params.clutter.y, 0.001), 0.0, 1.0) { return true; }
+        // At the reach's edge by time, as the trees (`flora-v2` 13.3): shown
+        // inside the middle of the old thinning band, seen from each end of
+        // the trees' fade, and dithered between only while that fade runs.
+        let edge = params.clutter.x - 2.0 - 0.5*max(params.clutter.y, 0.0);
+        let was = distance(input.position, params.tree_fade[0].xyz) < edge;
+        let now = distance(input.position, params.tree_fade[1].xyz) < edge;
+        let t = clamp(params.tree_fade[0].w, 0.0, 1.0);
+        if was == now {
+            if !now { return true; }
+        } else if now == (mask >= t) {
+            return true;
+        }
     }
     if input.kind == 2u && tree_dropped(input) { return true; }
     // A landing's dissolve (`detail-fade`): each pixel shows the new
@@ -2720,17 +2766,10 @@ fn dropped(input: VertexOut) -> bool {
             if owner_t <= mask { return true; }
         }
     }
-    // A tree thins out through the same mask over the last `tree_fade_m`
-    // before the edge of the trees' outermost band (they stand on the three
-    // finest levels) or the foliage range, whichever is nearer, and is gone
-    // TREE_FADE_MARGIN_M before it, before its cell stops being drawn: a
-    // forest's edge is no longer a hard line of whole trees.
-    if input.kind == 2u && params.fade.x > 0.0 {
-        // Only the foliage range now: at a band's edge a tree fades with its
-        // cell, across the ring (`distance-lod-fade`).
-        let left = params.settings.w - distance(input.position, params.camera.xyz) - TREE_FADE_MARGIN_M;
-        if mask >= clamp(left/params.fade.x, 0.0, 1.0) { return true; }
-    }
+    // A tree at the edge of the foliage range no longer thins out through
+    // the mask by distance, which left a band of half-drawn trees standing
+    // round a still camera: it is gone past the middle of the old thinning
+    // band, by the time fade (`tree_level`, design 13.3).
     return false;
 }
 
@@ -3658,12 +3697,19 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // The tide (`water_deep.w`, at the camera) lifts or lowers the sheet, and
     // the tint with it; a column's own water is the sea where it reaches sea
     // level, and takes the tide too (`ocean-environments` 5.1).
+    // Water standing over the sea's level (a river, a pool, a flowing sheet)
+    // is its own: the tint stops at ITS surface, the flowing level included,
+    // and never at the sea's (owner, 2026-11-16: "underwater ground tint is
+    // happening before the water line"). Each fragment is tested against it
+    // by its own radius.
     let tided = params.water_absorption.w + params.water_deep.w;
     var water_surface = tided;
     if input.slot != 0u {
         let column_top = column_water_top_m(columns[input.slot-1u]);
         if column_top < -0.5 {
             water_surface = min(water_surface, params.settings.x + column_top);
+        } else if column_top > 0.5 {
+            water_surface = params.settings.x + column_top;
         }
     }
     let water_depth = max(water_surface - length(input.position), 0.);
@@ -3694,7 +3740,17 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     // (no rings on the seabed).
     let above_water = 1.-step(0.001,water_depth);
     let wet_amt = clamp(params.weather.x,0.,1.)*input.rain_open*above_water;
-    if wet_amt > 0.001 {
+    // A plant is not wet ground (`flora-v2` 13.2; owner, 2026-11-16: "grass
+    // blades shouldnt have rain shader on them", "no rain drops on tree
+    // leaves either"): a detailed tree and every piece of clutter only
+    // darken a little as the ground soaks. No puddle, rings, sheet,
+    // rivulets, mirror or glint: on a card standing up with the tree's up
+    // axis for its normal those drew the sky in the shape of a tree.
+    let plant = input.kind == 2u || input.kind == 3u;
+    if plant && wet_amt > 0.001 {
+        color *= mix(1., clamp(params.rain_near.z,0.,1.), wet_amt);
+    }
+    if wet_amt > 0.001 && !plant {
         let k_ripple_scale = params.rain[0].x;
         let k_ripple_strength = params.rain[0].y;
         let k_flow_across = params.rain[0].z;
