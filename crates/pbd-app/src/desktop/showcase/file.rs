@@ -95,6 +95,14 @@ pub enum Act {
     Look(f32, f32, f32),
     /// Walk ahead for seconds.
     Walk(f32),
+    /// Smelt at the nearest forge: open it with E, press the recipe's
+    /// plaque this many times, collect.
+    Smelt(String, u32),
+    /// Open the map with M for seconds, then close it.
+    Map(f32),
+    /// The right button once, on what is aimed at, with what is in hand
+    /// (the bucket filled at the water or poured).
+    Use,
     /// The tool in hand by G and the wheel: `axe`, `shovel`, `pickaxe`,
     /// `rod`, or `hand` for bare hands.
     Hand(String),

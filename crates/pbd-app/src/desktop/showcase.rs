@@ -103,6 +103,7 @@ enum Click {
     Well(usize),
     CraftBench,
     Cook(String),
+    Smelt(String),
     Cell(usize),
 }
 
@@ -1118,13 +1119,14 @@ pub fn press_controls(
         Option<&super::craft::Well>,
         Option<&super::kitchen::CookPlaque>,
         Option<&super::pack::PackCell>,
+        Option<&super::forge::RecipePlaque>,
     )>,
 ) {
     let Some(click) = pending.0.take() else {
         return;
     };
     let mut hit = false;
-    for (mut interaction, drop, option, button, well, cook, cell) in &mut controls {
+    for (mut interaction, drop, option, button, well, cook, cell, smelt) in &mut controls {
         let this = match &click {
             Click::DropDown => drop.is_some(),
             Click::DropOption(k) => option.is_some_and(|o| o.0 == *k),
@@ -1134,6 +1136,7 @@ pub fn press_controls(
                 w.station == "workbench" && w.role == super::craft::Role::Pick(*k)
             }),
             Click::Cook(code) => cook.is_some_and(|c| &c.0 == code),
+            Click::Smelt(code) => smelt.is_some_and(|c| &c.0 == code),
             Click::Cell(k) => cell.is_some_and(|c| c.0 == *k),
         };
         if this {
@@ -1158,6 +1161,17 @@ fn run(
     match act {
         Act::Wait(secs) => {
             if bot.act_s >= *secs {
+                Status::Done
+            } else {
+                Status::Running
+            }
+        }
+        Act::Use => {
+            if bot.phase == 0 && bot.act_s > 0.4 {
+                out.rmb_tap = true;
+                bot.next_phase();
+            }
+            if bot.phase == 1 && bot.phase_s > 0.6 {
                 Status::Done
             } else {
                 Status::Running
@@ -1215,6 +1229,25 @@ fn run(
         Act::Place(name) => place(bot, name, s, out),
         Act::Bench(code, times) => station(bot, Material::Workbench, code, *times, s, out),
         Act::Cook(code, times) => station(bot, Material::Campfire, code, *times, s, out),
+        Act::Smelt(code, times) => station(bot, Material::Forge, code, *times, s, out),
+        Act::Map(secs) => match bot.phase {
+            0 => {
+                if s.screen != Screen::Map {
+                    out.taps.push(KeyCode::KeyM);
+                }
+                bot.next_phase();
+                Status::Running
+            }
+            1 if bot.phase_s > *secs => {
+                if s.screen == Screen::Map {
+                    out.taps.push(KeyCode::KeyM);
+                }
+                bot.next_phase();
+                Status::Running
+            }
+            2 if bot.phase_s > 0.4 => Status::Done,
+            _ => Status::Running,
+        },
         Act::Shore => match bot.phase {
             0 => match shore(s) {
                 Some((water, stand)) => {
@@ -1750,16 +1783,16 @@ fn station(
                     bot.phase_s = 0.0;
                 }
             } else if !busy && bot.phase_s > 0.5 {
-                out.click = Some(if material == Material::Campfire {
-                    Click::Cook(code.to_string())
-                } else {
-                    Click::Well(k)
+                out.click = Some(match material {
+                    Material::Campfire => Click::Cook(code.to_string()),
+                    Material::Forge => Click::Smelt(code.to_string()),
+                    _ => Click::Well(k),
                 });
                 bot.next_phase();
             }
         }
         4 if bot.phase_s > 0.5 => {
-            if material != Material::Campfire {
+            if material == Material::Workbench {
                 out.click = Some(Click::CraftBench);
             }
             if bot.stilled.insert(if material == Material::Campfire {

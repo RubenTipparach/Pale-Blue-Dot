@@ -1,0 +1,54 @@
+// The phase-1 showcase, one file per branch of the mission tree
+// (`step-videos` 5.2, `starter-missions` T.5): a bot plays the branch
+// through the player's own inputs, each shot ending when its missions are
+// done, or the run failing as stalled. Farming: seeds, a field, water from the bucket, a harvest.
+//
+// Each branch starts from the world the earlier ones left: run them in
+// order on one `--world` (trunk, fishing, farming, herding, cooking, then
+// mining, light and about). Nothing is set; every mission is played.
+//
+// The start is a level pasture with the sea within thirty metres (measured
+// once: the only such place within 3 km of the fields spawn).
+(
+    goal: "Goal: farming, from seeds to a harvest",
+    at: Some((11.5085, -25.0992)),
+    hour: 8.5,
+    shots: [
+        (
+            caption: "Farming. Find seeds: wild plants give them when picked",
+            until: ["find-seeds"],
+            repeat: true,
+            max_s: 150.0,
+            acts: [Hand("hand"), Pick(1)],
+        ),
+        (
+            caption: "Break ground with the shovel, and sow wheat",
+            until: ["till", "plant"],
+            max_s: 300.0,
+            acts: [Hand("shovel"), Dig(Have("wheat-seed", 4), 1), Till(4), Plant(4), Look(0.0, -35.0, 1.0), Still],
+        ),
+        (
+            caption: "Water the field: a bucket filled at the sea, and poured",
+            until: ["water-field"],
+            max_s: 300.0,
+            acts: [Bench("bucket", 1), Hand("hand"), Select("bucket"), Shore, Look(0.0, -40.0, 1.0), Use, Look(180.0, -45.0, 1.5), Use, Still],
+        ),
+        (
+            caption: "Six days later: the wheat is ripe",
+            rate: Some(400.0),
+            max_s: 60.0,
+            acts: [Wait(43.2)],
+        ),
+        (
+            caption: "Harvest the wheat",
+            until: ["harvest"],
+            max_s: 120.0,
+            acts: [Hand("hand"), Harvest(4), Still],
+        ),
+        (
+            caption: "Farming done",
+            max_s: 20.0,
+            acts: [Missions(6.0)],
+        ),
+    ],
+)

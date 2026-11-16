@@ -1,0 +1,60 @@
+// The phase-1 showcase, one file per branch of the mission tree
+// (`step-videos` 5.2, `starter-missions` T.5): a bot plays the branch
+// through the player's own inputs, each shot ending when its missions are
+// done, or the run failing as stalled. Herding: fences, a hen tamed, a pen, eggs.
+//
+// Each branch starts from the world the earlier ones left: run them in
+// order on one `--world` (trunk, fishing, farming, herding, cooking, then
+// mining, light and about). Nothing is set; every mission is played.
+//
+// The start is a level pasture with the sea within thirty metres (measured
+// once: the only such place within 3 km of the fields spawn).
+(
+    goal: "Goal: herding, from fences to eggs",
+    at: Some((11.5085, -25.0992)),
+    hour: 8.5,
+    shots: [
+        (
+            caption: "Herding. Make fences and a gate at the bench",
+            until: ["fence"],
+            max_s: 300.0,
+            acts: [Hand("axe"), Chop(Have("log", 2)), Craft("planks", 2), Hand("shovel"), Dig(Have("fibre", 3), 1), Craft("rope", 1), Bench("fence", 6), Bench("gate", 1)],
+        ),
+        // Animals come to food only by day.
+        (
+            caption: "The next morning",
+            rate: Some(300.0),
+            max_s: 60.0,
+            acts: [Hour(8.0)],
+        ),
+        (
+            caption: "Tame a hen: stand still with seed in hand, and feed her",
+            until: ["tame"],
+            max_s: 200.0,
+            acts: [Hand("hand"), Tame("meadow-hen"), Still],
+        ),
+        (
+            caption: "Build a pen, and lead her in",
+            until: ["pen"],
+            max_s: 200.0,
+            acts: [Walk(2.0), Pen, Select("fence"), Lead("meadow-hen"), Still],
+        ),
+        (
+            caption: "Two days later: eggs to collect",
+            rate: Some(300.0),
+            max_s: 30.0,
+            acts: [Wait(20.0)],
+        ),
+        (
+            caption: "Collect the eggs",
+            until: ["collect"],
+            max_s: 90.0,
+            acts: [Collect("meadow-hen"), Still],
+        ),
+        (
+            caption: "Herding done",
+            max_s: 20.0,
+            acts: [Missions(6.0)],
+        ),
+    ],
+)
