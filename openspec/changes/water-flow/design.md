@@ -968,3 +968,102 @@ The owner's tuning applies under the proposed mist rule too ("Mist on every fall
 - **The owner's edge tuning** (2026-11-16, "here are the edge settings for now"): under Glassy, smooth for 0.70 m
   before the edge, glassy for 0.50 m over it, froth filled in by 2.25 m down, glassy green 0.25, no edge highlight.
   These are the mockup's defaults.
+
+## Porting M35 (6.6; owner, 2026-11-16: "alright, I'm happy with this, send it yo")
+
+The New tab of `docs/mockups/waterfall-mist.html` (version 22) goes into the
+game with the mockup's defaults (`S` in `PBDMist`). `waterfall-mist/mist.js`
+is the reference: every term below is ported from it, not re-derived. The
+rounded lip (`LIP_R`) was taken back by the owner and is not ported: the edge
+stays square. Droplet streaks are not ported (owner: "I dont want them in game
+yet"): each fall droplet is one drop.
+
+**Where each part goes.**
+
+| Part | Where | Pass |
+| --- | --- | --- |
+| The proposed mist rule (puffs, spray, fall droplets, the open side) | CPU, `animate_splash` (`water_flow.rs`), as quads | the splash pass |
+| Timed reach fade (140 m, 0.6 s in time, never by distance) | CPU, a per-foot visibility kept across frames, keyed by the foot's column | - |
+| Puff fade-in at birth, frame cross-fade, the centre at 0.2 x size | CPU (alpha, a continuous frame number) and the splash fragment (two cells mixed) | splash |
+| The puff sheet, smooth | `assets/textures/fx/mist_puffs/albedo.png`, sRGB, the water's linear sampler | splash |
+| Soft particles against the depth after the water | the splash fragment reads the main pass's depth and the water's own depth | splash, now its own render pass |
+| Bubbles | GPU only: camera-facing quads made in `bubble_vertex` from the feet uniform, a pure function of the time | splash pass, before the quads |
+| Teal churn, foot ripples, pool outward flow | the water's fragment, on tops near a foot | cap and flowing |
+| Fall speed-up `fallC`, the glassy lip | the water's fragment, falling faces and the tops by a lip | flowing |
+
+**What the splash pass becomes.** Today the splash draws inside the water's
+render pass against the water's depth attachment. Soft particles need that
+depth as a texture, which a pass cannot read while it is its attachment. So
+the water pass stores its depth (`StoreOp::Store`, only on frames with a
+splash) and the splash draws in a second pass with no depth attachment: its
+fragment tests the main pass's depth (terrain in front) and the water's depth
+(water in front) itself, and fades by the gap to the nearer of the two over
+the wall blend (1.2 m). The water depth texture gains `TEXTURE_BINDING`.
+
+**What the quads carry.** Three lanes a quad instead of two: centre and half
+size; colour; and the cell (-1 the old dot, -2 a fall droplet, 0..16 a
+continuous puff frame, row x 4 + age x 4) with the flip. `SPLASH_LANES` in Rust
+and the shader's stride are one constant, checked by a test.
+
+**The uniform.** `WaterView` gains seven lanes and two arrays of eight:
+- `fall_look`, `fall_flow`, `fall_lip`, `fall_more`, `fall_splash`, `aer_color`:
+  the tuning below, read from `water.ron`'s `falls`;
+- `feet[8]`: xyz the foot (body-local), w its drop `D`, m;
+- `feet_more[8]`: x the pool's depth under it, m; y a seed; z its timed fade.
+
+The feet are the nearest eight within the splash's reach, each faded in time
+as it joins or leaves the eight, so a ninth fall coming nearer swaps in
+without a pop. Every per-fragment loop over feet is bounded by that eight and
+by `fall_look.x`, the count.
+
+**What the mesher must supply that it does not today.**
+- A foot's drop `D`: the falling run's lip water (the drawn top of the run's
+  highest cell) less the landing cell's drawn top. Today a foot has only the
+  whole layers fallen, `h`.
+- The way the water goes over: the side the top of the run is fed from, as
+  a tangent direction at the foot. The proposed rule puts the puffs on the
+  open side, within 110 degrees of it.
+- The pool's depth under the foot (water layers down to solid), which bounds
+  how deep a bubble is born.
+- The foot's column, which keys its timed fade.
+- Metres under the lip on the face of a foot cell under a fall (a
+  `KIND_FALLING` face of a cell that is not itself falling): today 0, which
+  would read as glassy all the way down. It becomes the run above plus the
+  fraction, as on a falling cell's face, so the face is one fall with the run
+  over it.
+- On a top, `flow_uv.z` stays the lip weight (1 at a corner on an edge that
+  goes over, 0 away from it); the fragment reads it as metres before the lip,
+  `-(1 - lip) x 1.42` (half a cell). The mockup's metres along the flow ray are
+  sharper; the difference is one of the listed differences.
+
+**The tuning, in `water.ron` (`falls`), validated, one source of defaults.**
+Proposed rule; FX smooth; mist opacity 2, amount 1, size 1.65; wall blend
+1.2 m; fall droplets 1; droplet streak 0; bubbles 1; teal churn 1; fall
+speed-up 2 (g = 3 x 2 m/s^2, at most 8 m/s); ripples 0.5 high, 0.9 m apart,
+6 m reach; pool flow 0.1, 6 m reach; Glassy, smooth 0.70 m before the edge,
+0.50 m over it, froth filled by 2.25 m; glassy green 0.25; edge highlight 0;
+splash reach 140 m and a 0.6 s fade; the aerated colour (0.16, 0.50, 0.46).
+
+**Frame-cost risks.**
+- **The pool flow's doubled noise.** Within reach of a foot a top evaluates
+  its waves twice more (two copies, each the height and three gradient taps:
+  eight more `fbm3`, 24 `gnoise3`). Bounded to fragments within 6 m of one of
+  eight feet and at its level (0.3 m), and skipped where the summed flow is
+  under 1e-3 m/s. Elsewhere the cost is the feet loop's distance tests.
+- **Per-fragment loops over feet.** Three loops (flow, ripples, churn) over at
+  most eight feet, each a level test and a distance before any work; on the
+  sea and every flowing top. Cheap per foot, but it is on every water pixel;
+  the eight is the bound.
+- **The bubbles.** 60 + 14 D quads per foot (at most 256), eight feet: at most
+  12 288 vertices, each a few hashes; small on screen, but blended and
+  overlapping at the foot. Feet with a fade of zero emit nothing (degenerate
+  quads cost the vertex stage only).
+- **The soft-particle depth read.** Two depth loads and a reconstruction a
+  splash fragment, and the water's depth now stored (a full-screen Depth32
+  store) on frames with a splash. The puffs are large and overlap: overdraw
+  is the real cost, as it was.
+- **The second pass.** One more render pass begin on frames with a splash.
+
+A `perf_suite.py` A/B (old exe against new, interleaved, release) over a fall
+is the gate the owner set ("need to be a bit careful with perf"); if the
+machine is not quiet in this sitting it is owed and said so.
