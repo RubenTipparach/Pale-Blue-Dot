@@ -535,3 +535,12 @@ at every zoom, laid out with twice the native gaps (220 by 208 px); zoom
 scales the whole tree in fixed steps (0.2 to 2), with the frames smoothed
 below full size so a 9-slice never tears. The page opens at full size on
 the bot's current mission; Fit shows the whole tree.
+
+Then (owner, 2026-11-16): "the zoom is now completely broken" (it kept the
+old scale when re-anchoring), "it should be big icons when zoomed out",
+"I can hover over nodes to get more info", "zoom should make sure ... the
+cursor is at the same tree position", "a max bounds so the user doesnt get
+lost". The zoom keeps the tree point under the cursor fixed; at 0.6 and
+below a card is its mission's icon filling the same frame, and hovering
+one shows the full card beside the pointer; a pan stops when no card would
+keep 40 px in view; scales run 0.1 to 2, so Fit shows the whole tree.

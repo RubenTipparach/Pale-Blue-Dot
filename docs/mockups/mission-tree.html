@@ -112,6 +112,15 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .card.st-now .badge { color: var(--ink); background: var(--title); border-color: var(--title); }
 .card.st-open .badge { color: var(--stone-4); }
 .card.st-locked { opacity: .82; }
+/* zoomed out: each card its mission's icon, big, in the same frame; a done card keeps its check */
+#world.icons .card { padding: 0; }
+#world.icons .card > :not(.hd), #world.icons .card .hd > :not(.slot):not(.ck) { display: none; }
+#world.icons .card .hd { height: 100%; justify-content: center; align-items: center; }
+#world.icons .card .hd .slot { width: 150px; height: 150px; }
+#world.icons .card .hd .slot img { width: 120px; height: 120px; }
+#world.icons .card .ck.big { width: 56px; height: 56px; right: -10px; top: -12px; }
+/* the full card on hover, at full size, over everything */
+.card.tip { position: fixed; z-index: 20; pointer-events: none; display: none; }
 #world.small .card, #world.small .lane, #world.small .slot { image-rendering: auto; }
 /* a locked card reads as locked by its dim silhouettes; no badge (owner, 2026-11-16) */
 .card.st-locked .badge { display: none; }

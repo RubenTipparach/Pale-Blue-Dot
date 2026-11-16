@@ -262,9 +262,9 @@
   // twice the gaps the native view had. A zoom level is a scale of the whole tree, in fixed steps;
   // below one the frames are smoothed rather than pixel-sampled, so a 9-slice never tears.
   const CARD = { cw: 236, ch: 188, gx: 220, gy: 208, lanes: true };
-  const SCALES = [0.2, 0.3, 0.42, 0.6, 0.8, 1, 1.4, 2];
+  const SCALES = [0.1, 0.14, 0.2, 0.3, 0.42, 0.6, 0.8, 1, 1.4, 2];
   const LEVELS = SCALES.map(() => CARD);
-  const OPEN = 5;
+  const OPEN = 7;
   let lv = OPEN;
   let CW, CH, GX, GY, OX = 40, OY;
   const setLevel = (n) => {
@@ -304,6 +304,28 @@
 
   const $ = (s) => document.querySelector(s);
   const view = $("#view"), world = $("#world"), svg = $("#edges");
+  // ---- hover: the full card beside the pointer, at full size, while the tree is zoomed out
+  const tip = document.createElement("div");
+  tip.className = "card tip";
+  tip.setAttribute("aria-hidden", "true");
+  document.body.appendChild(tip);
+  let tipFor = null;
+  function hideTip() { tip.style.display = "none"; tipFor = null; }
+  function showTip(id, x, y) {
+    const el = cards[id];
+    if (tipFor !== id) {
+      tip.className = el.className.replace(/\b(sel|fresh)\b/g, "") + " tip";
+      tip.innerHTML = el.innerHTML;
+      tipFor = id;
+    }
+    tip.style.display = "flex";
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    const left = x + 18 + w > innerWidth ? x - 18 - w : x + 18;
+    const top = Math.min(Math.max(8, y - h / 2), innerHeight - h - 8);
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+
 
   // lane labels above each branch's first card
   const lanes = BRANCHES.map((b) => {
@@ -344,7 +366,10 @@
   // Size and place every card, line and plaque for the level.
   function relayout() {
     [W, H] = sizeAt(lv);
-    world.className = "lv4" + (SCALES[lv] < 1 ? " small" : "");
+    // Zoomed out, a card is its mission's icon, big, in the same frame (owner, 2026-11-16: "it
+    // should be big icons when zoomed out"); hovering one shows the full card.
+    world.className = "lv4" + (SCALES[lv] < 1 ? " small" : "") + (SCALES[lv] <= 0.6 ? " icons" : "");
+    hideTip();
     world.style.width = W + "px";
     world.style.height = H + "px";
     svg.setAttribute("width", W);
@@ -540,9 +565,28 @@
   const unit = () => SCALES[lv] * Math.max(1, Math.round(2 * dpr())) / (2 * dpr());
   const snap = (v) => Math.round(v * dpr()) / dpr();
   function apply() {
+    // Bounds (owner, 2026-11-16: "a max bounds so the user doesnt get lost"): the tree may slide
+    // only until its edge reaches the middle of the view, so some of it is always in sight.
+    // The pull is toward the nearest card, so at least 40 px of a card always stays in view.
+    const q = unit(), r = view.getBoundingClientRect();
+    let cx = (r.width / 2 - tx) / q, cy = (r.height / 2 - ty) / q;
+    const hx = (r.width / 2 - 40) / q, hy = (r.height / 2 - 40) / q;
+    let best = null;
+    for (const m of M) {
+      const x0 = px(m.col), y0 = py(m.row);
+      const dx = Math.max(x0 - cx, 0, cx - (x0 + CW)), dy = Math.max(y0 - cy, 0, cy - (y0 + CH));
+      const over = Math.max(dx - hx, 0) + Math.max(dy - hy, 0);
+      if (!best || over < best.over) best = { over, x0, y0 };
+      if (!over) break;
+    }
+    if (best && best.over) {
+      cx = Math.min(Math.max(cx, best.x0 - hx), best.x0 + CW + hx);
+      cy = Math.min(Math.max(cy, best.y0 - hy), best.y0 + CH + hy);
+      tx = r.width / 2 - cx * q;
+      ty = r.height / 2 - cy * q;
+    }
     tx = snap(tx);
     ty = snap(ty);
-    const q = unit();
     world.style.transform = `translate(${tx}px,${ty}px)` + (q !== 1 ? ` scale(${q})` : "");
     view.style.backgroundPosition = `${tx}px ${ty}px`;
   }
@@ -550,12 +594,15 @@
   function stepTo(n, cx, cy) {
     n = Math.max(0, Math.min(LEVELS.length - 1, n));
     if (n === lv) return;
-    const q = unit();
-    const ux = ((cx - tx) / q - OX) / (CW + GX), uy = ((cy - ty) / q - OY) / (CH + GY);
+    // The layout is the same at every level; only the scale changes, so the world point under
+    // (cx, cy) is read at the old scale and put back under it at the new one.
+    const q0 = unit();
+    const wx = (cx - tx) / q0, wy = (cy - ty) / q0;
     setLevel(n);
     relayout();
-    tx = cx - (OX + ux * (CW + GX)) * q;
-    ty = cy - (OY + uy * (CH + GY)) * q;
+    const q1 = unit();
+    tx = cx - wx * q1;
+    ty = cy - wy * q1;
     apply();
   }
   function fit() {
@@ -603,6 +650,13 @@
       downCard = null;
     }
   });
+  view.addEventListener("pointermove", (e) => {
+    if (ptrs.size || !world.classList.contains("icons") || e.pointerType === "touch") { hideTip(); return; }
+    const card = e.target.closest && e.target.closest(".card");
+    const id = card && Object.keys(cards).find((k) => cards[k] === card);
+    if (id) showTip(id, e.clientX, e.clientY); else hideTip();
+  });
+  view.addEventListener("pointerleave", hideTip);
   view.addEventListener("pointermove", (e) => {
     const p = ptrs.get(e.pointerId);
     if (!p) return;
