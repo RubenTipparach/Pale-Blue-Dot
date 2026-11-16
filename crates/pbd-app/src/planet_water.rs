@@ -2253,6 +2253,10 @@ static PASSES_OFF: std::sync::LazyLock<[bool; 4]> = std::sync::LazyLock::new(|| 
     ]
 });
 
+/// `PBD_PASS_OFF=splash`: the fall splash undrawn, to see the water under
+/// it (`water-flow` 6.1).
+static SPLASH_OFF: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| pass_off("splash"));
+
 #[derive(Default)]
 struct WaterCompositeNode;
 
@@ -2387,6 +2391,7 @@ impl ViewNode for WaterCompositeNode {
             // stands in front of, against the water's depth, and behind the
             // terrain by the main pass's (`splash_fragment`).
             if water.splash_count > 0
+                && !*SPLASH_OFF
                 && let Some(splash) = cache.get_render_pipeline(water.splash_pipe)
             {
                 pass.set_bind_group(3, &splash_group, &[]);

@@ -20,3 +20,24 @@ water" (`docs/screenshots/handoff/fall-splash-behind-water.webp`).
 
 The finding of a fall foot was a temporary instrument (a log of the tier's
 tallest `FallFeet`), not committed.
+
+## The coordinator's review: is the pools' teal the water's? (2026-11-16)
+
+Each `*-4way.jpg` is the same frame four ways: before (main), before with
+the splash off, after with the splash off (`PBD_PASS_OFF=splash`), after.
+"Before with the splash off" is a temporary build of `b9635f4` that skips
+every foot (`PBD_NO_SPLASH`); it was not committed.
+
+| Sheet | Before off vs after off (mean difference, of 255) | What it shows |
+| --- | --- | --- |
+| `down-4way` | 0.003 | With no splash, both builds draw the pools a dark slate with rain rings. The teal in "before" is the mist, drawn into the scene under the water, showing through it. |
+| `side-4way` | 0.002 | The same from eye level: no splash, no teal, in both builds. |
+| `under-pool-4way` | 0.000 | From under the pool. |
+| `control-4way` | 0.004 | A shallow sandy reach upstream: teal in all four, with or without the splash. The deep pool's slate is the water's depth colour (shallow to deep), not something the change hides. |
+
+So the change draws no water differently: the water pass, its blend and
+its depth are the same as before; the splash pass draws after them and only
+adds its quads. What changes is the mist: over a pool it is now the same
+quads at the same opacity as over the bank (the bank's mist is the same
+pixels in all four frames), where before it showed only as a teal glow
+through the water.
