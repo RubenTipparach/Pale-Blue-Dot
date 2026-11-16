@@ -1,0 +1,206 @@
+<title>Playtest Bug List</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg: #0b1119; --panel: #131c28; --ink: #dfe8f1; --muted: #8a9bb0; --line: #2a3a4f; --accent: #e8b44c;
+  --done: #7fcf86; --done-soft: #17301c; --part: #e8b44c; --part-soft: #3a2c12; --open: #f07a6a; --open-soft: #3a1a17;
+  --display: "Pixelify Sans", "Courier New", monospace; --body: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #e9eef3; --panel: #f7f9fb; --ink: #142030; --muted: #52637a; --line: #c5d0dc; --accent: #9a6a10;
+  --done: #2f7a3a; --done-soft: #dcefdc; --part: #9a6a10; --part-soft: #f6e6c4; --open: #b8392b; --open-soft: #f8e1dd; color-scheme: light; } }
+:root[data-theme="light"] { --bg: #e9eef3; --panel: #f7f9fb; --ink: #142030; --muted: #52637a; --line: #c5d0dc; --accent: #9a6a10;
+  --done: #2f7a3a; --done-soft: #dcefdc; --part: #9a6a10; --part-soft: #f6e6c4; --open: #b8392b; --open-soft: #f8e1dd; color-scheme: light; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.45 var(--body); margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 18px; }
+header { padding-top: 22px; display: grid; gap: 8px; }
+h1 { font: 700 clamp(28px, 6vw, 42px)/1 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 700 22px/1.1 var(--display); margin: 14px 0 0; }
+a { color: var(--accent); }
+.top a { font-size: 13px; color: var(--muted); }
+.counts, .filters { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 14px; color: var(--muted); }
+.filters button { font: 500 14px var(--body); background: var(--panel); color: var(--ink); border: 1px solid var(--line); padding: 6px 10px; cursor: pointer; }
+.filters button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.st { font: 600 11px/1 var(--body); letter-spacing: .06em; text-transform: uppercase; padding: 4px 7px; border: 1px solid currentColor; white-space: nowrap; }
+.st.fixed { color: var(--done); background: var(--done-soft); }
+.st.part { color: var(--part); background: var(--part-soft); }
+.st.open { color: var(--open); background: var(--open-soft); }
+.bug { background: var(--panel); border: 1px solid var(--line); padding: 14px; display: grid; gap: 8px; min-width: 0; }
+.bug .hd { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.bug .hd b { font-size: 18px; }
+.bug .hd small { color: var(--muted); }
+.bug q { color: var(--muted); font-style: italic; }
+.bug p { margin: 0; }
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 8px; }
+figure { margin: 0; display: grid; gap: 4px; min-width: 0; }
+figure img { width: 100%; height: 160px; object-fit: cover; border: 1px solid var(--line); cursor: zoom-in; display: block; background: #000; }
+figcaption { font-size: 12px; color: var(--muted); }
+.lb { position: fixed; inset: 0; background: rgba(0,0,0,.88); display: grid; place-items: center; z-index: 10; padding: 16px; cursor: zoom-out; }
+.lb img { max-width: 100%; max-height: 92vh; }
+</style>
+
+<div class="wrap">
+<header>
+  <p class="top"><a href="https://claude.ai/artifact/EwNcNzHQU3B7C3jyi629Wk" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+  <h1>Playtest Bug List</h1>
+  <p style="margin:0;color:var(--muted)">Everything you reported while playtesting environment v2, 2026-11-15 to 16. Each entry has your words, what was done, where it landed, and screenshots (your shot first where there is one, then before and after). Click a picture to enlarge it. Everything marked fixed is merged into <code>claude/env-v2</code>, which PR #49 takes to main.</p>
+  <div class="counts" id="counts"></div>
+  <div class="filters" id="filters"></div>
+</header>
+<div id="list"></div>
+</div>
+
+<script>
+// status: fixed | part | open. shots: [file, caption].
+const BUGS = [
+ { area: 'Rain and trees', items: [
+  { t: 'Ghost trees and pale white slabs in rain', q: 'theres massive artifacts here', s: 'fixed', pr: '#51',
+    d: 'The wet-ground shader ran on the far-tree cards (it took them for floor: sky mirror, rings, glint), and the tree cross-fades were by distance so a tree could sit half-dithered forever. Plants now only darken slightly when wet; fades are timed (0.5 s).',
+    shots: [['o-valley','Your shot'],['b-valley','Before'],['a-valley','After']] },
+  { t: 'Distant forest has a pale ghost look', q: 'distant forest stuff has that weird pale ghost look too', s: 'fixed', pr: '#51',
+    d: 'Same two causes as above.', shots: [['o-jungle','Your shot'],['b-jungle','Before'],['a-jungle','After']] },
+  { t: 'Dithering lingers when standing still', q: 'dithering should either stay or go, dont have it linger if the player isnt moving', s: 'part', pr: '#51',
+    d: 'Tree fades now run by time and finish: dithered at 0.1 s and 0.3 s, none at 2 s. Now a CLAUDE.md rule. Still open: the terrain\'s own far distance band (~210 m) is still a distance fade, written up, not built.',
+    shots: [['o-dither','Your shot'],['seq-fade','Still camera after arriving: 0.1 s, 0.3 s, 2 s']] },
+  { t: 'Far trees glow evenly at night', q: 'distant trees appear to be glowing evenly, there should be some sort of lighting?', s: 'fixed', pr: '#51',
+    d: 'The far cards were lit as if flat floor. They now take a standing normal and sit as dark as the near trees.',
+    shots: [['o-glow','Your shot'],['b-glow','Before'],['a-glow','After']] },
+  { t: 'Vegetation tinted like the ground', q: 'the tint should be like based on texture not shading/lighting/reflections', s: 'fixed', pr: '#51',
+    d: 'Plant colour was already texture-only; what borrowed the ground\'s look was the wet block, now off for plants.',
+    shots: [['o-tint','Your shot'],['b-tint','Before'],['a-tint','After']] },
+  { t: 'Trees toward the sun bleached pale', q: 'very pronounced trees tinted by sun, which is not right', s: 'fixed', pr: '#51',
+    d: 'The wet sheen\'s glint toward a low sun turned whole trees into pale sheets. Gone with the wet block off plants.',
+    shots: [['o-sun','Your shot'],['b-sun','Before, toward the sun'],['a-sun','After']] },
+  { t: 'Grass blades have the rain shader', q: 'grass blades shouldnt have rain shader on them', s: 'fixed', pr: '#51',
+    d: 'Tufts and all clutter get only a slight even darkening when wet.', shots: [['o-tufts','Your shot'],['b-tufts','Before'],['a-tufts','After']] },
+  { t: 'Rain drops on tree leaves', q: 'no rain drops on tree leaves either', s: 'fixed', pr: '#51',
+    d: 'Leaves, fruit and far cards take no rings, drops or sheen.', shots: [['o-leaves','Your shot'],['b-leaves','Before'],['a-leaves','After']] },
+  { t: 'Long bright-blue rain lines', q: 'theres massive artifacts here', s: 'fixed', pr: '#51',
+    d: 'The near rain streaks were lit by the old lighting model, 2-3x too bright under cloud. Now lit like the scene; length unchanged.',
+    shots: [['b-valley','Before'],['a-valley','After']] },
+  { t: 'Speckled water; distant ripples invisible', q: 'distant ripples arent visible so maybe we should be using something less intense for distant water', s: 'fixed', pr: '#51',
+    d: 'Rain rings fade with distance and screen size and stop at 20 m; the far water is calm. Far-water speckle measured 42 before, 25 after.',
+    shots: [['b-beach','Before'],['a-beach','After']] },
+  { t: 'Lens drops cut abruptly; wetness should ease both ways', q: 'the wet camera fx need to fade out instead of abruptly cut', s: 'fixed', pr: '#51',
+    d: 'Lens wetness eases in (~3 s) and dries (~2.5 s); no new drops while drying; the near shower thins under cover. Ground wetness and splashes follow eased values too.',
+    shots: [['seq-lens','Walking into cover'],['seq-start','Rain starting']] },
+ ]},
+ { area: 'Weather', items: [
+  { t: 'Rain where the map shows none', q: 'there shouldnt be rain here, theres no rain on the map', s: 'fixed', pr: '#50',
+    d: 'The map drew the raw rain rate (bursts with gaps); the world used a smoothed "falling" value. One function now feeds both, and a test holds them equal everywhere.',
+    shots: [['b-map','Map before'],['a-map','Map after'],['a-mapworld','The world at the same moment']] },
+  { t: 'Half the rain; no rain cells over desert', q: '50% less rain on the planet, and avoid rain cells over desert', s: 'fixed', pr: '#50',
+    d: 'Share of planet raining 19.8% → 9.6%; desert raining 29.7% → 0%. Done in the weather model, so map, rain and wet ground all follow.',
+    shots: [['b-half','Rain before'],['a-half','Rain after']] },
+  { t: 'Snow only in the cold', q: 'no rain in the cold regions, snow only please', s: 'part', pr: '#50',
+    d: 'The air at the ground decides: at or below 0 °C it snows and every wet-rain effect fades out over 3 s. Open question: tundra still rains in its summer, when its air is above freezing.',
+    shots: [['snow','Snow at -2 °C'],['snow-map','The map shows snow']] },
+  { t: 'Ground stays summer-green in winter', q: 'winter isn\'t changing terrain texture', s: 'fixed', pr: '#43 (cloud)',
+    d: 'Grass and tufts follow the season: browning in autumn, dull in winter.', shots: [['o-winter','Your shot'],['a-winter','After: summer and winter']] },
+ ]},
+ { area: 'Water and rivers', items: [
+  { t: 'Being under a river looks like dry air', q: 'problems with submerging in rivers', s: 'fixed', pr: '#55',
+    d: 'The water view now measures from the river\'s own surface, not the sea\'s. Swimming in and out of rivers works.',
+    shots: [['o-river43','Your shot'],['b-under','Before'],['a-under','After']] },
+  { t: 'Grass, trees and mushrooms on river beds', q: 'tree and grass is spawned there, river should be dirt', s: 'fixed', pr: '#55',
+    d: 'A top with water on it draws as a bed and grows nothing. Done at draw time, so old worlds are fixed too.',
+    shots: [['b-walk','Before'],['a-walk','After']] },
+  { t: 'Underwater tint and wobble above the waterline', q: 'underwater ground tint is happening before the water line', s: 'fixed', pr: '#55',
+    d: 'The tint, darkening and wobble now stop at the real water surface, to about 6 cm.',
+    shots: [['o-river44','Your shot'],['b-skim','Before'],['a-skim','After']] },
+  { t: 'Bright blocks right at the waterline', q: 'the blocks right before water line gets bright', s: 'open', pr: '',
+    d: 'Did not reproduce: the far-shore strip found was ordinary beach sand. A screenshot with the debug position line would pin it down.',
+    shots: [['night-bank','Night river bank, no bright strip found']] },
+  { t: 'Water pops in a tick at a time', q: 'is there a better way to lerp the sim? so it doesn look like it just pops in?', s: 'part', pr: '#52',
+    d: 'Merged at your word. Levels ease, new water slides in from its source, falls grow down from the lip, dried cells recede. Perf check still owed (your condition).',
+    shots: [['smooth','Pops vs smoothed through a tick']] },
+  { t: 'Kelp looks wrong', q: 'kelp needs fixing', s: 'fixed', pr: '#43 (cloud)',
+    d: 'Redrawn after M25\'s fronds: slender stems, narrow fronds, the water\'s palette.', shots: [['kelp','Before and after']] },
+ ]},
+ { area: 'Sea life', items: [
+  { t: 'Fish acting weird at the sea ice', q: 'what the heck are these fish doing', s: 'fixed', pr: '#57',
+    d: 'Floes were laid on beaches and terraces, with ground poking through (the tipped, stacked look). Now only where they float.',
+    shots: [['floes','Shore: before and after']] },
+  { t: 'Creatures vanish when you get close', q: 'they disappear when I get close to them', s: 'fixed', pr: '#57',
+    d: 'Seals slide off floes and swim away; startled seals, otters and ducks swim off; dives are smooth; reef life and groups fade instead of popping. Known limit: a seal can still clip a floe in dense ice.',
+    shots: [['seal','Approaching a seal, 30 m to 5 m: before and after']] },
+ ]},
+ { area: 'Placing and interaction', items: [
+  { t: 'Suddenly can\'t place anything', q: 'now suddenly I cant place anything', s: 'fixed', pr: 'direct',
+    d: 'The "would this go inside you" check refused every foot-level place while the collision layer lagged after an edit. Fixed; every try logs PLACE ok / PLACE refused with the reason.', shots: [] },
+  { t: 'A placed lamp despawned', q: 'I placed a lamp but it somehow despawned', s: 'fixed', pr: '#54',
+    d: 'Two causes: an edit made while terrain was rebuilding was undone when it landed; and a rebuild drew an edited cell as freshly generated, so plants regrew over it. Every removal now logs REMOVED … by whom.',
+    shots: [['b-lamp','Before: the lantern hidden by a regrown cactus'],['a-lamp','After']] },
+  { t: 'Harvest with F; F for interact; a prompt', q: 'I should be able to harvest plants by pressing F … F to harvest should popup', s: 'fixed', pr: '#53',
+    d: 'F interacts (E freed for roll), plants are aimed by their leaves, and a prompt under the crosshair names what F will do.',
+    shots: [['prompt','The prompt']] },
+  { t: 'Twig snapping when walking', q: 'theres also some weird twig snapping sound when i walk', s: 'fixed', pr: 'direct',
+    d: 'In rain a wet squelch was layered on grass steps and sounded like a twig. Grass now plays its own step only.', shots: [] },
+  { t: 'Jumpable water 2 blocks', q: 'change jumpable water height to 2 blocks instead of 1', s: 'fixed', pr: 'direct',
+    d: 'Water up to two layers deep is waded: you stand and jump at full strength.', shots: [] },
+ ]},
+ { area: 'UI', items: [
+  { t: 'Pack too narrow; Craft should be a side menu', q: 'this menu should be wider … I expect craft to be a menu on the side', s: 'fixed', pr: 'pack-layout',
+    d: 'Wider pack; Craft is a recipe list on the right; nothing hangs outside the frame.', shots: [['b-pack','Before'],['a-pack','After']] },
+  { t: '9-slice seams when zooming the tree', q: 'lets make zoom in integers so that we dont have 9 slice seems - or virtualize the zooms', s: 'fixed', pr: 'TS.3',
+    d: 'Zoom is virtual: frames are never scaled; each level sets spacing, card size and text.', shots: [['o-seam','Your crop'],['a-seam','Card corners at every level, 4x']] },
+  { t: 'Mission tree a mess; font unreadable', q: 'a child node cannot have multiple parents … the font you picked sucks', s: 'fixed', pr: 'M33 v3',
+    d: 'A strict one-parent tree with hidden gates, laid out from its structure, readable type. Now in the game\'s Missions tab.',
+    shots: [['tree','Mockup'],['tree-game','In the game']] },
+  { t: 'Old outlined plant sprites', q: 'some plants are still using the old sprites', s: 'fixed', pr: 'direct',
+    d: 'Crops and wild plants use the outline-free world stages.', shots: [['crops','Before above, after below']] },
+  { t: 'Audio sliders', q: 'we need some audio sliders in here', s: 'fixed', pr: 'already built',
+    d: 'Esc → Settings → SOUND has Master, Effects, Ambience, Music and Menus.', shots: [] },
+ ]},
+ { area: 'Still open', items: [
+  { t: 'Performance not measured', q: 'performance being the condition you need to validate', s: 'open', pr: '',
+    d: 'Water smoothing, rain splashes, the four reflection levels and the height fog are merged but unmeasured. Needs the Mac unlocked and quiet for an hour, Chrome closed, or the desktop.',
+    shots: [['refl','Reflection levels'],['fog','Height fog'],['splash','Rain splashes']] },
+  { t: 'The bot can\'t finish every branch', q: 'make sure the bot completes it', s: 'open', pr: '',
+    d: 'Trunk, fishing and farming pass; herding stalls taming (hens far across terraces); getting about stalls on the 200 m walk; mining is now testable with ore.', shots: [] },
+  { t: 'Climb out of water onto a 1-2 block ledge', q: 'introduce auto climb when in water and trying to climb up a ledge of 1 or 2 blocks', s: 'open', pr: '',
+    d: 'Being built: pushing against a ledge up to two blocks high while in water climbs you onto it.', shots: [] },
+  { t: 'Inner tubes', q: 'also what about innertubes?', s: 'open', pr: '',
+    d: 'Not in anything yet. Being added to the River Craft mockup (M34) beside rafting, the tug, log drives, net boats and anchoring.', shots: [] },
+  { t: 'Windows ground check', q: '', s: 'open', pr: '#56',
+    d: 'Old worlds\' ground is proven unchanged on the Mac; Windows has not been measured. Run cargo test -p pbd-core planet_gen on the desktop.', shots: [] },
+ ]},
+];
+const NAMES = { fixed: 'Fixed', part: 'Partly', open: 'Open' };
+const el = (t, a = {}, ...k) => { const n = document.createElement(t); for (const [x, v] of Object.entries(a)) x === 'text' ? n.textContent = v : n.setAttribute(x, v); n.append(...k.filter(Boolean)); return n; };
+let filter = 'all';
+function render() {
+  const list = document.getElementById('list'); list.replaceChildren();
+  for (const g of BUGS) {
+    const items = g.items.filter(b => filter === 'all' || b.s === filter);
+    if (!items.length) continue;
+    list.append(el('h2', { text: g.area }));
+    for (const b of items) {
+      const shots = el('div', { class: 'shots' });
+      for (const [f, c] of b.shots) shots.append(el('figure', {}, el('img', { src: `bug-list/img/${f}.jpg`, alt: c, loading: 'lazy' }), el('figcaption', { text: c })));
+      list.append(el('div', { class: 'bug' },
+        el('div', { class: 'hd' }, el('span', { class: `st ${b.s}`, text: NAMES[b.s] }), el('b', { text: b.t }), b.pr ? el('small', { text: b.pr }) : null),
+        b.q ? el('p', {}, el('q', { text: b.q })) : null,
+        el('p', { text: b.d }),
+        b.shots.length ? shots : null));
+    }
+  }
+}
+const all = BUGS.flatMap(g => g.items), c = document.getElementById('counts');
+for (const k of ['fixed', 'part', 'open']) c.append(el('span', { class: `st ${k}`, text: `${all.filter(b => b.s === k).length} ${NAMES[k]}` }));
+const fl = document.getElementById('filters');
+for (const [k, n] of [['all', 'All'], ['fixed', 'Fixed'], ['part', 'Partly'], ['open', 'Open']]) {
+  const btn = el('button', { 'aria-pressed': String(k === filter), text: n });
+  btn.onclick = () => { filter = k; for (const x of fl.children) x.setAttribute('aria-pressed', String(x === btn)); render(); };
+  fl.append(btn);
+}
+document.addEventListener('click', e => {
+  if (e.target.matches('figure img')) { const lb = el('div', { class: 'lb' }, el('img', { src: e.target.src, alt: e.target.alt })); lb.onclick = () => lb.remove(); document.body.append(lb); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelector('.lb')?.remove(); });
+render();
+</script>
