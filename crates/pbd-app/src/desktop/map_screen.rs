@@ -500,7 +500,8 @@ pub fn launch_mark(
         return;
     };
     let up = at.normalize();
-    let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
+    // East as the compass reads it (`compass-bar`).
+    let (_, east) = geo::compass_north_east(up);
     let t = metres / PLANET_RADIUS;
     let place = up * t.cos() + east * t.sin();
     *done = true;
