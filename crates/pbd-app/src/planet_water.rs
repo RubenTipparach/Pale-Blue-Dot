@@ -1515,7 +1515,8 @@ fn prepare_water_views(
                 .map(|fine| super::near_lamps(&fine.set.columns, camera, 32.0))
                 .unwrap_or([Vec4::ZERO; super::NEAR_LAMPS]),
             ssr_clip: planet_view.ssr_clip,
-            haze_weather: Vec4::new(weather.cover, weather.rain, 0.0, 0.0),
+            // The rain fog is rain's: none in snow.
+            haze_weather: Vec4::new(weather.cover, weather.liquid(), 0.0, 0.0),
             sky_sh,
             under: Vec4::new(s.shafts, s.shaft_reach_m, s.snow, s.snow_from_m),
             under_more: Vec4::new(s.snow_glow, sea_now.wind_mps, s.spray_from_mps, s.spray),

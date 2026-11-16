@@ -1784,7 +1784,8 @@ fn prepare_views(
             water_deep: Vec3::from_array(water_settings.deep_color).extend(tide_here),
             weather: Vec4::new(
                 weather.wetness,
-                weather.rain,
+                // The rain's rings and sheen are water's: none in snow.
+                weather.liquid(),
                 weather.cover,
                 // Lightning, as the ground takes it: the strike's brightness
                 // now times `lightning_ground`.

@@ -72,8 +72,12 @@
     heat_diffusivity_m2s: 65.73,
     lapse_k_per_m: 0.08,
 
-    // Water.
-    evaporation: 3.0e-4,
+    // Water. Half the rain (the owner, 2026-11-16: "50% less rain on the
+    // planet"): evaporation 3.0e-4 -> 0.75e-4 halves how much falls, and the
+    // rain threshold 4 -> 8 kg/m^2 halves how often (`rain-matches-map`;
+    // over 30 days from the settled climate, 19.8% of the planet raining at
+    // a mean 11.5 mm/h became 9.8% at 5.9 mm/h with the virga below).
+    evaporation: 0.75e-4,
     evaporation_wind_mps: 10.0,
     saturation_kg: 30.0,
     saturation_per_k: 0.068,
@@ -90,10 +94,16 @@
     // updraft (a storm, the afternoon's cumulus) past less again: the
     // threshold halves at convective_rain_mps of ascent. So storms rain and
     // a flat deck mostly does not; at 0.3 with neither rule 29% of the planet
-    // was raining at once, and it is 17% now.
-    rain_threshold_kg: 4.0,
+    // was raining at once; at 4 with the old evaporation, 20%.
+    rain_threshold_kg: 8.0,
     rain_s: 150.0,
     convective_rain_mps: 0.5,
+    // Rain over arid ground evaporates on its way down (virga): none lands
+    // where the ground's wetness is this or less (the desert's is 0.1), all
+    // of it from the second up (the mountains' and tundra's 0.3), smoothly
+    // between (`rain-matches-map`: "avoid rain cells over desert").
+    virga_dry_wetness: 0.15,
+    virga_wet_wetness: 0.3,
     cloud_evaporate_s: 120.0,
     cover_min_kg: 0.2,
     cover_full_kg: 0.8,

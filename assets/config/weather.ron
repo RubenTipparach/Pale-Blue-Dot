@@ -4,6 +4,9 @@
 // Tenebris's weather.yaml and the values are its shipped ones.
 (
     wet_fade_tau_s: 1.6,
+    // Seconds (e-fold) for rain's water effects (lens drops, puddle rings,
+    // rain fog, wet sheen) to give way where rain turns to snow, and back.
+    snow_switch_s: 3.0,
     // The wind a craft feels (pbd_core::wind): gust strength as a share of
     // the mean wind, and more of it per mm/h of rain; roughness lengths (m)
     // for the log-law profile; its cap; the downdraft under rain, m/s per

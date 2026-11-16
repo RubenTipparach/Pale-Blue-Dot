@@ -31,9 +31,13 @@ pub struct Weather {
     /// Cloud cover over the player, 0..1. The sky shader reads it, so the
     /// overcast a player stands under is the same one that is raining on them.
     pub cover: f32,
-    /// What is falling here. The shower draws rain streaks either way until
-    /// there is a snow particle; the field knows the difference already.
+    /// What is falling here, from `pbd_core::weather::shown_precipitation`:
+    /// snow where the air at the ground is at or below freezing.
     pub snowing: bool,
+    /// How far what falls has turned to snow, 0..1: follows `snowing` over
+    /// `snow_switch_s`, so the water's effects ease out where rain turns to
+    /// snow rather than switching. Read through [`Weather::liquid`].
+    pub snow_share: f32,
     /// Whether something solid stands over the camera's eye, so the rain in
     /// the sky does not reach it: no drops on the lens and no shower round
     /// it. The column's answer (`PlanetContact::open_to_sky`).
@@ -52,7 +56,7 @@ impl Weather {
     /// The rain that is WATER: what wets the ground, runs down the lens and
     /// rings the sea. Snow is precipitation and none of those.
     pub fn liquid(&self) -> f32 {
-        if self.snowing { 0.0 } else { self.rain }
+        self.rain * (1.0 - self.snow_share.clamp(0.0, 1.0))
     }
 }
 
@@ -203,6 +207,13 @@ fn falling(a: &field::CloudCell, b: &field::CloudCell, t: f32) -> Precip {
 }
 
 fn follow_rain(time: Res<Time>, settings: Res<WeatherSettings>, mut weather: ResMut<Weather>) {
+    let snow = if weather.snowing { 1.0 } else { 0.0 };
+    weather.snow_share = settle_wetness(
+        weather.snow_share,
+        snow,
+        time.delta_secs(),
+        settings.snow_switch_s,
+    );
     // Snow does not wet the ground.
     let liquid = weather.liquid();
     weather.wetness = settle_wetness(
@@ -892,6 +903,7 @@ impl Plugin for WeatherPlugin {
             wetness: forcing,
             cover: forcing,
             snowing: false,
+            snow_share: 0.0,
             sheltered: false,
             flash: Vec4::ZERO,
             here: Vec3::ZERO,
@@ -1027,5 +1039,43 @@ mod tests {
         assert!(dry < 0.01, "five e-folds should be dry, got {dry}");
         assert_eq!(settle_wetness(0.5, 0.5, 100.0, tau), 0.5);
         assert_eq!(settle_wetness(0.3, 1.0, 0.0, tau), 0.3);
+    }
+
+    /// Where rain turns to snow (`rain-matches-map`: "no rain in the cold
+    /// regions, snow only please"), the water's effects (everything that
+    /// reads `liquid`: the lens, the rings, the rain fog, the wet ground)
+    /// ease out over `snow_switch_s` and are gone once it is snow, and come
+    /// back the same way.
+    #[test]
+    fn rain_gives_way_to_snow_over_the_switch_time() {
+        let mut app = App::new();
+        app.insert_resource(WeatherSettings::default())
+            .insert_resource(Time::<()>::default())
+            .insert_resource(Weather {
+                rain: 1.0,
+                snowing: true,
+                ..default()
+            })
+            .add_systems(Update, follow_rain);
+        let tau = WeatherSettings::default().snow_switch_s;
+        let mut seen = Vec::new();
+        for _ in 0..(tau * 10.0 * 10.0) as u32 {
+            app.world_mut()
+                .resource_mut::<Time>()
+                .advance_by(std::time::Duration::from_millis(100));
+            app.update();
+            seen.push(app.world().resource::<Weather>().liquid());
+        }
+        assert!(seen[0] > 0.9, "the water does not vanish at once: {}", seen[0]);
+        let at_tau = seen[(tau * 10.0) as usize - 1];
+        assert!((at_tau - (-1.0f32).exp()).abs() < 0.05, "one e-fold: {at_tau}");
+        assert!(*seen.last().unwrap() < 1e-3, "snow is not water");
+        assert!(seen.windows(2).all(|w| w[1] <= w[0]), "it only eases out");
+        let full = Weather {
+            rain: 1.0,
+            snow_share: 1.0,
+            ..default()
+        };
+        assert_eq!(full.liquid(), 0.0);
     }
 }

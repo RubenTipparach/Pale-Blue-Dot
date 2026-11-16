@@ -374,6 +374,11 @@ impl RainRenderer {
 pub struct WeatherSettings {
     /// Seconds for ground wetness to follow the rain intensity (e-fold).
     pub wet_fade_tau_s: f32,
+    /// Seconds (e-fold) for the water that falls to give way to snow, and
+    /// back, where what falls changes between rain and snow: the lens drops,
+    /// the puddle rings, the rain fog and the wet sheen ease out rather than
+    /// switching (`rain-matches-map`).
+    pub snow_switch_s: f32,
     /// The wind a craft feels: the atmosphere's wind sheared with height and
     /// gusting (`pbd_core::wind`).
     pub gusts: pbd_core::wind::GustSettings,
@@ -670,6 +675,7 @@ impl Default for WeatherSettings {
     fn default() -> Self {
         Self {
             wet_fade_tau_s: 1.6,
+            snow_switch_s: 3.0,
             gusts: pbd_core::wind::GustSettings::default(),
             rain_fall_mps: 70.0,
             rain_width_m: 0.012,
@@ -984,6 +990,9 @@ impl Validated for WeatherSettings {
         (s.wet_fade_tau_s > 0.0)
             .then_some(())
             .ok_or("wet_fade_tau_s must be positive")?;
+        (s.snow_switch_s > 0.0)
+            .then_some(())
+            .ok_or("snow_switch_s must be positive")?;
         (s.rain_glint_power >= 1.0)
             .then_some(())
             .ok_or("rain_glint_power must be at least 1")?;

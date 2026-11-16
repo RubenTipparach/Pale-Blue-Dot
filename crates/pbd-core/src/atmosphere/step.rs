@@ -306,10 +306,29 @@ impl Atmosphere {
             let threshold = s.rain_threshold_kg * cold / (1.0 + lift / s.convective_rain_mps);
             let rained = ((self.cloud[i] - threshold).max(0.0) * dt / s.rain_s).min(self.cloud[i]);
             self.cloud[i] -= rained;
-            self.rain_rate[i] = rained / dt;
+            let landed = self.rain_lands(i, rained);
+            self.rain_rate[i] = landed / dt;
             self.charge[i] += s.charge_rate * (condensed / dt) * lift * dt;
             self.charge[i] /= 1.0 + dt / s.charge_decay_s;
         }
+    }
+
+    /// Of `rained` kg/m^2 falling out of cell `i`'s cloud, what reaches the
+    /// ground. Over arid ground the dry air under the cloud evaporates the
+    /// rest on the way down (virga): it goes back to vapour and takes its
+    /// latent heat from the air, so the water and the heat are kept. The share
+    /// that lands follows the ground's wetness between `virga_dry_wetness`
+    /// (none) and `virga_wet_wetness` (all): no rain falls on the desert.
+    fn rain_lands(&mut self, i: usize, rained: f32) -> f32 {
+        let s = self.settings;
+        let wet = ((self.surface.wetness[i] - s.virga_dry_wetness)
+            / (s.virga_wet_wetness - s.virga_dry_wetness))
+            .clamp(0.0, 1.0);
+        let lands = rained * wet * wet * (3.0 - 2.0 * wet);
+        let lost = rained - lands;
+        self.vapour[i] += lost;
+        self.air_k[i] -= s.latent_k_per_kg * lost;
+        lands
     }
 
     /// Stage 7: a charged storm strikes. The strike rains out much of its
@@ -334,7 +353,8 @@ impl Atmosphere {
             self.charge[i] = 0.0;
             let rained = self.cloud[i] * s.strike_rain_share;
             self.cloud[i] -= rained;
-            self.rain_rate[i] += rained / dt;
+            let landed = self.rain_lands(i, rained);
+            self.rain_rate[i] += landed / dt;
             self.phi[i] += s.pool_pressure;
             self.air_k[i] -= s.pool_k;
             pooled += s.pool_k as f64 * self.grid.area[i] as f64;
