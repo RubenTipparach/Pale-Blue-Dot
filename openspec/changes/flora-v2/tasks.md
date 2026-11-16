@@ -87,3 +87,7 @@ The owner, 2026-11-15: "finish up fishing wiki, herding, and flora". Cloud sessi
 - [x] 9.8 (Built 2026-11-16 in the core; the three tests pass; no capture: ore is drawn as stone, 9.9.) Ore veins in version 10 (12.8): `OreVeins` in `TerrainConfig` (None to 9), stone turned to mixed ore in clustered veins in `column::generate_solid`. Verify: version 10's columns equal version 9's but for stone turned to ore (every target); a v10 column digest; ore within 14 layers of the surface in most sampled land columns; a capture of a dug hillside.
 - [ ] 9.9 Ore drawn as ore: a fifth bit in the column's material word (six codes a word, Rust and WGSL), an ore code, and an ore tile on the stone sheet. Verify: a capture of a dug hillside showing the veins; the material word's packing tests.
 
+
+## 10. Nothing grows where water stands (owner, 2026-11-16: "river should be dirt"; design 12.10)
+
+- [ ] 10.1 `Material::drowned` and `Column::drawn_material` in the core; the tier's codes (`packed_runs`, the per-layer words, `reconcile_surface`) and the far records (`surface_code` with `rivers::floods`) draw a top under water as a bed: grass and snow as dirt, sand as the seabed. No generator version. Verify: core tests that a drowned grass top is drawn as dirt and that along version 10's rivers no bed is drawn grassy and no tree stands; an app test that a river bed's record grows no tree or clutter; captures of a river bed before and after in `docs/screenshots/river-fixes/`; the version digests unchanged.

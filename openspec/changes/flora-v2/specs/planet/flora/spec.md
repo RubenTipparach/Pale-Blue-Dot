@@ -147,3 +147,17 @@ id at draw time and SHALL NOT enter a save.
 
 - **WHEN** a world saved before the detailed trees is opened
 - **THEN** a tree stands on exactly the cells it did, and the same cells can be chopped
+
+### Requirement: Nothing grows where water stands
+
+A cell whose top has water standing on it SHALL be drawn as a bed: a grass
+of any kind or snow as dirt, sand as the seabed's sand. No tuft, flower,
+fern, mushroom, bush or tree SHALL be drawn on it or be workable there. The
+rule SHALL be decided at draw time from the column (and the generator's
+river beyond the column tier), SHALL NOT change any cell's material or any
+save, and SHALL need no new generator version.
+
+#### Scenario: A river's bed
+
+- **WHEN** the player looks down at a river's bed in any world, old or new
+- **THEN** the bed is dirt, with no grass, flowers, mushrooms or trees on it

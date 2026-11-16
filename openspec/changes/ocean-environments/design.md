@@ -1177,3 +1177,61 @@ screenshots)", not the owner's words:
 - D11. Turbidity per place, from reef (over 100 m of sight) to marsh (5 m).
 - The page's title is "Seas, Rivers and Marshes"; the file stays
   `ocean.html`.
+
+### B17. Under a river's water (owner, 2026-11-16)
+
+The owner: "problems with submerging in rivers"
+(`docs/screenshots/rain-artifacts/owner-river-43.webp`). Down in a river
+channel the river's sheet hangs over the eye as a thin translucent layer,
+and the view under it reads as dry air: no fog, no tint, no light.
+
+**Reproduced** (`docs/screenshots/river-fixes/before-under.jpg`,
+`before-up.jpg`): a version 10 world, a river 60 m from the spawn
+(`--fly --at 28.2500 0.7500 --height 0.8`: the ground at 63 m, the river's
+water's surface, as the column reports it at the eye, at 65.8 m, the eye at
+64.6 m).
+
+**What decides "under water" today, measured in the code:**
+- The eye's water is the column's: `publish_eye_water` asks the column at
+  the eye (`Column::water_surface`), which knows river and flowing water,
+  and `submersion` turns it into the tri-state `fx.y`. In the river it is
+  1, fully under: that is why the river's sheet is drawn at all from below
+  (`water.wgsl` discards the back of the game's own water unless `fx.y` is
+  over 0.75), and why audio already muffles there.
+- The composite that draws the underwater view (`compose` in `water.wgsl`)
+  then measures everything against the SEA's sphere, `planet_center.w`:
+  how deep the eye is (`cam_gap`), which pixels are under water (the
+  waterline mask `pixel_alt`), how far a sky ray travels to the surface,
+  and the shafts' and the snow's depth. A river stands over the sea, so
+  every pixel is "above the water", the mask is nought and the frame is
+  passed through untouched. The sea worked only because its surface IS
+  that sphere.
+- `submersion` also adds the sea's swell at the camera to the surface,
+  which a river does not have.
+- The near shower (`weather.rs`) stops only under the sea's level.
+
+**The fix: the eye's own surface.** The water view carries the surface of
+the water the eye is in (`sea_frame.y`, a spare lane: nought means the sea
+and the sphere as before). Every underwater term in `compose` and in
+`under_water_light` reads that surface instead of the sea's sphere when
+it is set: depth fog and colour by how far the view travels in the water,
+the turbidity, the sky seen through the surface, the shafts and the
+snow by depth under it, the distortion. The sheet's own from-below path
+already measures the murk from the sheet it draws, so the surface from
+below is the sea's (Snell's window, the murk past it). The swell is added
+only to the sea's surface; a river's is where the column puts it. The near
+shower stops when the eye's water says it is under.
+
+Everything else that asks "is the eye under" already reads `fx.y` or
+`EyeWaterState` (the clouds, the rain, the lens, the emerge drips, audio),
+so it follows.
+
+**Swimming** reads the column already (`walking::Sea::state`, `water-flow`
+E10): a walker in a river floats, swims and climbs out as in the sea. A
+test pins it.
+
+**Limit.** The mask is a sphere at the river's surface round the planet's
+centre, as the sea's is. A pixel of ground lower than the river's surface
+but seen past the river's end (down a fall, in the air) counts as wet. The
+river is narrow and its reach ends in a fall; the eye under it sees the
+fall's own sheet first. Written down, not fixed.

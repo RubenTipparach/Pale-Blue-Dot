@@ -67,3 +67,9 @@ against what it would cost.
 
 - [x] 11.1 (Built 2026-11-15, cloud session, lavapipe: `a_kelp_stand_is_slender_and_in_the_frond_s_colours`; `docs/screenshots/ocean-environments/kelp-before-after.jpg` at the owner's spot, with `kelp-after-first.jpg` the take before the green was deepened. The rocks read pale cyan: grey rock under the water's tint. Frame cost not measured.) The kelp stand redrawn after M25's frond: slender crossed stipes, narrow spiralling blades with gas floats, a surface canopy, one colour a part in the frond's palette; the rocks at its foot in the rock's palette. Placement unchanged. Verify: a test of the stand's widths and colours; captures at `--walk --at 71.308 -8.196 --time 12` before and after.
 
+
+## 12. Under a river's water (owner, 2026-11-16: "problems with submerging in rivers"; design B17)
+
+- [ ] 12.1 The water view carries the eye's own water surface (`sea_frame.y`, nought the sea); `compose`, `under_water_light` and the shafts measure depth, the waterline and the sky's exit against it; the swell only on the sea's. Verify: an app test that an eye in a river's column reads as under water against the river's surface; captures under a river before and after at one spot in `docs/screenshots/river-fixes/`.
+- [ ] 12.2 The near shower stops for an eye under any water. Verify: the same capture's rain-on test.
+- [ ] 12.3 A walker in a river swims and climbs out. Verify: an app test of `swim_surface` and the walker's water state in a river column.
