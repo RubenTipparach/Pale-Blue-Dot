@@ -134,7 +134,9 @@
   capture with `--audio-log` logged `water_enter_big`, `step_shallow`,
   `land_shallow` and `water_exit`; strokes and bubbles are not yet seen in
   a log (the script's swim is short).
-- [ ] 5.8 Water sounds read the walker's water (design, "Water sounds read the
+- [x] 5.8 (Built 2026-11-16, `claude/water-gameplay`: `hooks::water_underfoot`;
+  `a_seabed_block_over_the_low_tide_is_dry_underfoot` fails before, the feet
+  wet at the lowest tide, and passes after.) Water sounds read the walker's water (design, "Water sounds read the
   walker's water"; owner, 2026-11-16: "water sfx also plays when I'm standing
   on land"): `walker_sounds` takes `walking::Sea::state` at the walker, not
   `PlanetContact::stand`. Verify: a test at a version 10 shore, a seabed

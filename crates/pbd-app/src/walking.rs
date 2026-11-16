@@ -1221,7 +1221,7 @@ impl Sea<'_> {
         PLANET_RADIUS - self.settings.depth_offset_m + tide
     }
 
-    fn state(&self, config: &WalkingConfig, position: Vec3) -> WaterState {
+    pub(crate) fn state(&self, config: &WalkingConfig, position: Vec3) -> WaterState {
         let direction = position.normalize_or(Vec3::Y);
         let feet = position.length() - HALF_HEIGHT;
         let sheet = self.sheet_radius(direction);
