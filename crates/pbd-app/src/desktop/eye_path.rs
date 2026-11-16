@@ -9,7 +9,7 @@
 //! variable: no text, no system doing anything, never in the game.
 
 use bevy::prelude::*;
-use pbd_app::planet::{EyeWater, EyeWaterState, PLANET_RADIUS, PlanetContact, PlanetFine};
+use pbd_app::planet::{EyeWater, PLANET_RADIUS, PlanetContact, PlanetFine};
 
 /// One keyframe: the frame it is reached at, where, and the look.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -100,6 +100,7 @@ pub fn setup(mut commands: Commands) {
         ));
     }
     commands.insert_resource(EyePath(keys));
+    commands.init_resource::<EyePathNow>();
 }
 
 /// The water surface over or under the eye, metres over the sea's level, as
@@ -139,11 +140,10 @@ pub fn drive(
     count: Option<Res<super::CaptureState>>,
     contact: Option<Res<PlanetContact>>,
     fine: Option<Res<PlanetFine>>,
-    eye: Option<Res<EyeWaterState>>,
     sea: Option<Res<pbd_app::sea::Sea>>,
     water: Option<Res<pbd_app::config::WaterSettings>>,
     mut cameras: Query<(&mut Transform, &Camera), With<Camera3d>>,
-    mut labels: Query<&mut Text, With<EyePathLabel>>,
+    mut now: ResMut<EyePathNow>,
 ) {
     let (Some(keys), Some(count), Some(water)) =
         (path.as_ref().and_then(|p| p.0.as_ref()), count, water)
@@ -166,8 +166,8 @@ pub fn drive(
     // `PBD_EYE_PATH_RELATIVE=1`: the altitudes are over the water surface
     // under the eye (the ground where it is dry), so a path follows the
     // water across a step.
-    let tide0 = sea.as_deref().map_or(0.0, |s| s.tide_at(up));
-    let sheet0 = -water.depth_offset_m + tide0;
+    let tide = sea.as_deref().map_or(0.0, |s| s.tide_at(up));
+    let sheet0 = -water.depth_offset_m + tide;
     let mut key = key;
     if std::env::var("PBD_EYE_PATH_RELATIVE").is_ok_and(|v| v == "1")
         && let Some(c) = contact.as_deref()
@@ -183,24 +183,59 @@ pub fn drive(
             *transform = Transform::from_translation(position).looking_to(look, up);
         }
     }
-    let tide = sea.as_deref().map_or(0.0, |s| s.tide_at(up));
     let sheet = -water.depth_offset_m + tide;
     let surface = contact
         .as_deref()
         .and_then(|c| surface_near(c, fine.as_deref(), up, key.alt, sheet));
-    let in_water = matches!(eye.as_deref().map(|e| e.0), Some(EyeWater::Water { .. }));
-    let rel = surface.map(|s| key.alt - s);
+    now.0 = Some((position, key.alt, surface, tide, frame));
+}
+
+/// This frame's eye for the label: where, its altitude, the water found
+/// under or over it, the tide, the frame.
+#[derive(Resource, Default)]
+pub struct EyePathNow(Option<(Vec3, f32, Option<f32>, f32, u32)>);
+
+/// Label the frame with the renderer's own answer: after the eye's water is
+/// published for THIS frame's camera, so the label and the picture are one.
+pub fn label(
+    now: Res<EyePathNow>,
+    contact: Option<Res<PlanetContact>>,
+    fine: Option<Res<PlanetFine>>,
+    water: Option<Res<pbd_app::config::WaterSettings>>,
+    mut labels: Query<&mut Text, With<EyePathLabel>>,
+) {
+    let (Some((position, alt, surface, tide, frame)), Some(water)) = (now.0, water) else {
+        return;
+    };
+    // The eye's water by the renderer's own rule, at this frame's eye.
+    let high_water = pbd_core::sea::tide_high_m(water.tide_range_m);
+    let eye_state = match (contact.as_deref(), fine.as_deref()) {
+        (Some(c), Some(f)) => pbd_app::planet::eye_water_at(position, c, f, high_water),
+        _ => EyeWater::Unknown,
+    };
+    // The renderer's own test: the eye's surface as `eye_surface_radius`
+    // gives it, and under where the eye is below it.
+    let judged = pbd_app::planet::eye_surface_radius(
+        eye_state,
+        position,
+        PLANET_RADIUS - water.depth_offset_m,
+        tide,
+    );
+    let in_water = judged.is_some_and(|s| position.length() < s);
+    // The height shown is against the renderer's surface where it has one
+    // (the eye's water), else the water found under or over the eye.
+    let rel = judged
+        .map(|s| position.length() - s)
+        .or(surface.map(|s| alt - s));
+    let state = if in_water { "under" } else { "above" };
     let line = match rel {
-        Some(rel) => format!(
-            "{rel:+.2} m to water  eye:{}  f{}",
-            if in_water { "water" } else { "air" },
-            frame
-        ),
-        None => format!("no water  f{}", frame),
+        Some(rel) => format!("{rel:+.2} m to water  eye:{state}  f{frame}"),
+        None => format!("no water  eye:{state}  f{frame}"),
     };
     info!(
-        "EYE_PATH frame {} alt {:.3} surface {:?} in_water {in_water}",
-        frame, key.alt, surface
+        "EYE_PATH frame {frame} alt {alt:.3} surface {:?} in_water {in_water} judged {:?}",
+        surface,
+        judged.map(|s| s - PLANET_RADIUS)
     );
     for mut text in &mut labels {
         text.0 = line.clone();

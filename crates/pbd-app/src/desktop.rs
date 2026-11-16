@@ -1782,7 +1782,15 @@ pub fn run(args: &[String]) {
         PostUpdate,
         eye_path::drive
             .after(pbd_app::flight_view::follow_flight_camera)
-            .before(bevy::transform::TransformSystems::Propagate),
+            .before(bevy::transform::TransformSystems::Propagate)
+            .run_if(resource_exists::<eye_path::EyePathNow>),
+    )
+    .add_systems(
+        PostUpdate,
+        eye_path::label
+            .after(eye_path::drive)
+            .before(bevy::ui::UiSystems::Layout)
+            .run_if(resource_exists::<eye_path::EyePathNow>),
     )
     .add_systems(
         Update,

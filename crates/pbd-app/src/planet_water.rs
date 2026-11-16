@@ -344,28 +344,13 @@ pub fn submersion(camera_body: Vec3, sea_radius: f32, wave: f32, band: f32, eye:
     if camera_body.length_squared() < 1e-6 {
         return 0.0;
     }
-    let surface = match eye {
-        EyeWater::Air => return 0.0,
-        EyeWater::Water { surface_radius } => surface_radius,
-        // Off the tier there are no caves, so the ground's own height is the
-        // whole of it: over land, dry.
-        EyeWater::Unknown => {
-            if terrain::surface_height(camera_body) >= 0.0 {
-                return 0.0;
-            }
-            sea_radius
-        }
+    // The one surface every reader judges the eye against (B18, second
+    // review): it took the column's own sea top, half a metre over the drawn
+    // sheet, plus the tide, so an eye over the tided sheet was "under" and
+    // its whole sky went to murk.
+    let Some(surface) = eye_surface_radius(eye, camera_body, sea_radius, wave) else {
+        return 0.0;
     };
-    // The band stands about the surface as it is under the camera now: a
-    // trough passing under a camera just over the sea leaves it dry. The
-    // swell is the sea's: a river's or a pool's surface is where the column
-    // puts it (`ocean-environments` B17).
-    let wave = if inland_surface(eye).is_some() {
-        0.0
-    } else {
-        wave
-    };
-    let surface = surface + wave;
     let radius = camera_body.length();
     if radius < surface - band {
         1.0
@@ -384,8 +369,32 @@ pub fn submersion(camera_body: Vec3, sea_radius: f32, wave: f32, band: f32, eye:
 pub fn inland_surface(eye: EyeWater) -> Option<f32> {
     let sea = terrain::PLANET_RADIUS + terrain::terrain_config().sea_level_m;
     match eye {
-        EyeWater::Water { surface_radius } if surface_radius > sea + 0.05 => Some(surface_radius),
+        // Any water but the sea's own: a river over it, a pool in a cave
+        // under it.
+        EyeWater::Water { surface_radius } if (surface_radius - sea).abs() > 0.05 => {
+            Some(surface_radius)
+        }
         _ => None,
+    }
+}
+
+/// The surface the eye's side of the water is judged against, as a body
+/// radius: an inland water's drawn top; the sea's mean surface lifted by the
+/// tide (never the waves) where the eye's water is the sea's, or where off
+/// the tier the ground under it is below the sea; `None` in air. The ONE
+/// answer the tri-state, the composite's measure and the capture label read.
+pub fn eye_surface_radius(
+    eye: EyeWater,
+    camera_body: Vec3,
+    sea_radius: f32,
+    tide: f32,
+) -> Option<f32> {
+    match eye {
+        EyeWater::Air => None,
+        EyeWater::Water { .. } => Some(inland_surface(eye).unwrap_or(sea_radius + tide)),
+        EyeWater::Unknown => (camera_body.length_squared() > 1e-6
+            && terrain::surface_height(camera_body) < 0.0)
+            .then_some(sea_radius + tide),
     }
 }
 
@@ -449,6 +458,18 @@ fn eye_water(
         return EyeWater::Unknown;
     };
     let body = (transform.translation().as_dvec3() - frame.center).as_vec3();
+    eye_water_at(body, contact, fine, high_water)
+}
+
+/// What the tier says is at a body-local eye: the one rule
+/// `publish_eye_water` applies to the active camera, for any reader that
+/// must give the same answer (the capture label).
+pub fn eye_water_at(
+    body: Vec3,
+    contact: &crate::planet::PlanetContact,
+    fine: &crate::planet::PlanetFine,
+    high_water: f32,
+) -> EyeWater {
     let Some(direction) = body.try_normalize() else {
         return EyeWater::Unknown;
     };
@@ -1410,7 +1431,13 @@ fn prepare_water_views(
         // edge was seen dry and bright ("submerged at just the right
         // height", "I dont see water surface above the player").
         let band = settings.partial_band_m.min(INLAND_BAND_M);
-        let state = submersion(camera, sea_radius, sea_now.camera_height, band, eye.0);
+        // Against the sea's TIDED surface, not its waves (B18, second
+        // review): with no band left to hold the swell, a crest passing a
+        // hand over the mean put an eye that is above the drawn sheet "under"
+        // for that frame, and the whole sky above the water went to murk.
+        // The sheet drawn over a crest is the sheet's own business, seen
+        // from below where it stands over the eye.
+        let state = submersion(camera, sea_radius, sea_now.tide_here, band, eye.0);
         let (mut was_under, mut emerge_until) = existing
             .as_ref()
             .map(|gpu| (gpu.was_under, gpu.emerge_until))
@@ -1663,7 +1690,7 @@ fn prepare_water_views(
                 // The sea's own surface over the eye is its tided, swelling
                 // one: the composite measured the sea from its mean, so the
                 // tide's water between was dry (a bright band at high water).
-                inland_surface(eye.0).unwrap_or(sea_radius + sea_now.camera_height),
+                eye_surface_radius(eye.0, camera, sea_radius, sea_now.tide_here).unwrap_or(0.0),
                 ease.smooth,
                 ease.linear,
             ),
