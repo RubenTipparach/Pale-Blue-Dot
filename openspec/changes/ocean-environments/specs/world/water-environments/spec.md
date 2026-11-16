@@ -80,17 +80,3 @@ dam SHALL NOT be saved.
 - **WHEN** the player has built across the stream at a colony's site before
   the colony's first dam proposal
 - **THEN** that proposal is refused and the dam is built at the next site
-
-### Requirement: The eye under any water sees the underwater view
-
-When the eye is in water (the sea, a river, a pool, flowing water), the
-underwater view SHALL be measured from the surface of the water the eye is
-in: the depth fog and colour, the turbidity, the surface seen from below,
-the light shafts and the distortion, as the sea gives them. The swell SHALL
-be added only to the sea's surface.
-
-#### Scenario: Down in a river
-
-- **WHEN** the eye is under a river's water, above sea level
-- **THEN** the view is fogged and tinted by the river's water from its own surface
-- **AND** the river's sheet is drawn from below as the sea's is

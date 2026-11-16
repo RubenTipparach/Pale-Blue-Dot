@@ -123,6 +123,18 @@ pub fn surface_code(direction: Vec3, height: f32) -> u32 {
 /// `planet_visibility.wgsl`'s foliage pass reads it.
 pub const CLEARED_BIT: u32 = 24;
 
+/// The record's code for a top with water standing on it, already
+/// [`Material::drowned`] (`flora-v2` 12.10): sand is the seabed's (0), as
+/// sand below the sea is, so no beach tree stands in a river's mouth; the
+/// rest as they are drawn anywhere. A RECORD code only: in a column's
+/// per-layer words nought is air.
+pub fn bed_code(drowned: Material) -> u32 {
+    match drowned {
+        Material::Sand => 0,
+        other => render_code(other),
+    }
+}
+
 /// Which of `planet_surface.wgsl`'s material codes a material is drawn in.
 ///
 /// ONE table, because a cave wall of stone and a mountain top of stone are the
@@ -264,8 +276,27 @@ pub const WOOD: u32 = 8;
 
 fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
     // A town's lanes and floors are its own top (`cities-in-the-world`).
-    let material = pbd_core::settlement::ground::top(terrain_config(), direction)
-        .unwrap_or_else(|| planet_gen::top_material(terrain_config(), direction, height));
+    let town = pbd_core::settlement::ground::top(terrain_config(), direction);
+    let material =
+        town.unwrap_or_else(|| planet_gen::top_material(terrain_config(), direction, height));
+    // A river's bed is drawn as a bed (`flora-v2` 12.10): a grass or snow
+    // top under its water as dirt, sand as the seabed's sand, so nothing
+    // grows there. The generator's river, the answer the column tier's
+    // `reconcile_surface` gives from the column's own water.
+    // Not in a town's footprint, where the generator puts no river.
+    if town.is_none()
+        && matches!(
+            material,
+            Material::Grass
+                | Material::DryGrass
+                | Material::JungleGrass
+                | Material::Snow
+                | Material::Sand
+        )
+        && pbd_core::rivers::floods(terrain_config(), direction)
+    {
+        return bed_code(material.drowned());
+    }
     match (material, biome) {
         // Beach sand below the waterline is the seabed, which the water pass
         // tints; a desert dune and a swamp sward are their own tiles.
@@ -273,6 +304,50 @@ fn material_index(direction: Vec3, height: f32, biome: Biome) -> u32 {
         (Material::Sand, Biome::Desert) => 4,
         (Material::Grass, Biome::Swamp) => 7,
         _ => render_code(material),
+    }
+}
+
+#[cfg(test)]
+mod bed_tests {
+    use super::*;
+
+    /// `flora-v2` 12.10: the river the owner stood in. Off the column tier
+    /// the record of its bed is dirt and stands no tree; on the tier,
+    /// reconciled from the column with the river's water over the meadow's
+    /// top, the same; and the column itself still holds the meadow's grass.
+    #[test]
+    fn a_river_bed_record_is_dirt_and_grows_nothing() {
+        let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: 28.25_f32.to_radians(),
+            lon: 0.75_f32.to_radians(),
+        });
+        let cfg = terrain_config();
+        assert!(pbd_core::rivers::floods(cfg, d));
+        let height = surface_height(d);
+        let top = planet_gen::top_material(cfg, d, height);
+        assert!(
+            matches!(
+                top,
+                Material::Grass | Material::DryGrass | Material::JungleGrass
+            ),
+            "the generator's top is the meadow's: {top:?}"
+        );
+        let word = surface_code(d, height);
+        assert_eq!(word & 0xff, DIRT, "the far record draws the bed as dirt");
+        let grows =
+            |word: u32| (0..20_000u32).any(|id| pbd_core::flora::grows_tree(&cfg.trees, id, word));
+        assert!(!grows(word), "no tree on a river's bed");
+        // The meadow beside it, with the same biome byte, does grow them.
+        assert!(grows(word & !0xff | render_code(top)));
+        // On the tier: the column with the river over the bed.
+        let column = pbd_core::column::generate_solid(cfg, d);
+        let surface = column.surface().unwrap();
+        assert_eq!(column.material(surface), top, "the column keeps its grass");
+        let mut finest = vec![<crate::planet::GpuCell as bytemuck::Zeroable>::zeroed()];
+        finest[0].metadata[1] = word & !0xff | render_code(top);
+        crate::planet::column::reconcile_surface(&mut finest, &[], 0, &column);
+        assert_eq!(finest[0].metadata[1] & 0xff, DIRT);
+        assert!(!grows(finest[0].metadata[1]));
     }
 }
 
@@ -409,6 +484,14 @@ mod tests {
             format!(
                 "const COLUMN_WATER_MASK: u32 = {:#x}u;",
                 crate::planet::column::WATER_MASK
+            ),
+            format!(
+                "const COLUMN_WATER_SHORT_SHIFT: u32 = {}u;",
+                crate::planet::column::WATER_SHORT_SHIFT
+            ),
+            format!(
+                "const COLUMN_WATER_SHORT_MASK: u32 = {:#x}u;",
+                crate::planet::column::WATER_SHORT_MASK
             ),
             format!(
                 "const TORCH_TINT: vec3<f32> = vec3<f32>({:.2}, {:.2}, {:.2});",

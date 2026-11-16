@@ -50,7 +50,7 @@ pub use terrain::{
     nearest_ground_near, river_channel, snow_slot, surface_code, surface_height, switch_generator,
     terrain_config, terrain_epoch, terrain_radius, tileset_slot,
 };
-pub use water::{EyeWater, EyeWaterState, RainShadows, emerge, submersion};
+pub use water::{EyeWater, EyeWaterState, RainShadows, emerge, inland_surface, submersion};
 
 use bevy::math::{DMat4, DVec3};
 use bevy::{
