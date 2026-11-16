@@ -715,10 +715,13 @@ Measured (read off the code, 2026-11-16):
   falling (`falling || above_water && flow.is_some()`), so a river's edges
   and level steps get the lip's streaked froth.
 - **The rain splashes** (M32, `weather-rain` 6.3, approved 2026-11-15) are
-  not in the game: tasks 6.4 (port), 6.5 (perf A/B, which gates the push)
-  and 6.6 (captures) are open. As designed they stand on ground tops only,
-  so a river or the sea would get none, and drawn after the opaque terrain
-  they would meet the same overdraw as the spray.
+  built on `claude/rain-splashes` (`weather-rain` 6.4, `planet_splash.rs`,
+  captures 6.6) and now merged into `claude/env-v2`; 6.5, the perf A/B
+  that gates the push to main, is open. A build from main before that merge
+  has none, which is what the owner saw. As designed they stand on ground
+  tops only, so a river or the sea gets none, and drawn before the water
+  composite a droplet in front of water would meet the same overdraw as the
+  spray.
 - **Crab Breeze's effects** are not in this repository or `.reference/`:
   the repo cites Crab Breeze for its water lighting, cloud puffs, frame
   latency and audio tools, never for particles. Matching it needs its
@@ -736,10 +739,10 @@ The plan, in order:
    (a step of a layer or more); a level river's side keeps the plain water
    sides. This touches the fall look, so it is shown in M31 beside today's
    first (the waterfall rule).
-3. **The rain splashes ported** (`weather-rain` 6.4 to 6.6), on water as
-   well as ground: rings already mark rain on water; a crown of droplets
-   over it is the M32 crown on the water's surface. The perf A/B that gates
-   the push runs on the owner's desktop.
+3. **The rain splashes on water too** (built for ground in `weather-rain`
+   6.4): rings already mark rain on water; a crown of droplets over it is
+   the M32 crown on the water's surface. The perf A/B (6.5) that gates the
+   push to main runs on the owner's desktop.
 4. **Better splashes, in a mockup first.** A splash kit for every place
    water is struck: fall foot, a player or craft entering water, a float's
    cast, a fish breaking the surface, a wake. Built in M31 (a Splash tab)

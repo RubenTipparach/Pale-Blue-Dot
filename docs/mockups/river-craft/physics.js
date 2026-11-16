@@ -293,6 +293,11 @@ NP.inside = function (x, z) {
   }
   return inside;
 };
+// A fish swimming into the twine is gilled: any point below the corks within r of it.
+NP.touches = function (x, z, r) {
+  for (let i = this.cols * 3; i < this.N * 3; i += 3) { const dx = this.p[i] - x, dz = this.p[i + 2] - z; if (dx * dx + dz * dz < r * r) return true; }
+  return false;
+};
 NP.area = function () {
   const C = this.cols; let A = 0;
   for (let c = 0, d = C - 1; c < C; d = c++) { const a = this.idx(c, 0), b = this.idx(d, 0); A += this.p[b] * this.p[a + 2] - this.p[a] * this.p[b + 2]; }
