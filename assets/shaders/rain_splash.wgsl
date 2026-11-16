@@ -56,10 +56,12 @@ struct Params {
     flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
     flora_biome: array<vec4<f32>,8>, // per biome: fern weight, mushroom weight, flower bits, deciduous
     tuft_ramps: array<vec4<u32>,8>,  // per biome: the tuft's three tones 0xRRGGBB, w red caps
-    plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits
+    plant_means: array<vec4<u32>,8>, // `flora-v2` 9.2, 9.6: per biome the leaves, bark, stone tiles' means 0xRRGGBB, w fruit bits (low 16), tree table (high 16)
     flora_fall: vec4<f32>,     // 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w fruit chance
     night: vec4<f32>,          // `night-lights-from-space`: x how many far lights `night_lights` holds
     night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
+    felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty
+    picked: array<vec4<u32>,8>,   // and the trees picked bare
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(3) var atlas: texture_2d<f32>;
