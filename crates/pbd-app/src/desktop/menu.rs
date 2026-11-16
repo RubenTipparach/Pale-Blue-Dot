@@ -128,8 +128,6 @@ pub enum MenuAction {
     /// A sound volume (`audio-and-ambience` 7.2): 0 master, 1 effects,
     /// 2 ambience, 3 music, 4 menus, each 0..=100 % in steps of 10.
     Volume(u8),
-    /// The pixel tuft grass, on or off (`flora-v2`).
-    PixelGrass,
     /// Arrows on the flowing water, on or off (`water-flow` 3.4).
     FlowArrows,
     /// Put the open Input sub-tab's keys back to their defaults.
@@ -361,7 +359,6 @@ fn settings_checked(
         MenuAction::Bloom => graphics.bloom,
         MenuAction::RainShadows => player.rain_shadows,
         MenuAction::MissionLine => player.mission_line,
-        MenuAction::PixelGrass => player.pixel_grass,
         MenuAction::FlowArrows => player.flow_arrows,
         MenuAction::AutoStep => player.auto_step,
         _ => return None,
@@ -390,7 +387,6 @@ pub fn press_graphics(
             MenuAction::AutoStep => changed.auto_step = !changed.auto_step,
             MenuAction::RainShadows => changed.rain_shadows = !changed.rain_shadows,
             MenuAction::MissionLine => changed.mission_line = !changed.mission_line,
-            MenuAction::PixelGrass => changed.pixel_grass = !changed.pixel_grass,
             MenuAction::FlowArrows => changed.flow_arrows = !changed.flow_arrows,
             _ => {}
         }
@@ -853,7 +849,6 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                         // On PICTURE beside Reflections (owner, 2026-11-16:
                         // "rain shadow should be under picture").
                         check_row(rows, kit, "Rain shadow", "", MenuAction::RainShadows);
-                        check_row(rows, kit, "Pixel grass", "", MenuAction::PixelGrass);
                         check_row(rows, kit, "Flow arrows", "", MenuAction::FlowArrows);
                     });
                     let weather = page(panel, 1);
@@ -1207,6 +1202,8 @@ pub fn rebuild_input(
                                     for (i, key) in binding.keys.iter().enumerate() {
                                         if i > 0 && binding.range {
                                             caps.spawn(body("-", 10.0, ui_kit::TEXT_DIM));
+                                        } else if i > 0 && binding.chord {
+                                            caps.spawn(body("+", 10.0, ui_kit::TEXT_DIM));
                                         }
                                         match controls::slot_at(group, binding, i) {
                                             Some(slot) => {
@@ -1693,10 +1690,9 @@ pub fn press(
         front,
         name,
     } = &mut page;
-    let root = save.as_ref().map_or_else(
-        || std::path::PathBuf::from(saves::ROOT),
-        |s| s.root().into(),
-    );
+    let root = save
+        .as_ref()
+        .map_or_else(pbd_app::paths::saves_dir, |s| s.root().into());
     let seed = pbd_app::planet::terrain_config().seed;
     // Enter in the name field is the NEW WORLD button pressed.
     let submitted = std::mem::take(&mut name.submit);
@@ -1796,7 +1792,6 @@ pub fn press(
             | MenuAction::Reflections
             | MenuAction::MissionLine
             | MenuAction::Volume(_)
-            | MenuAction::PixelGrass
             | MenuAction::FlowArrows
             | MenuAction::ResetTab => {}
             MenuAction::Load(row) => {
@@ -1846,10 +1841,9 @@ pub fn paint(
         if *screen == Screen::Saves {
             // Read the directory on the way IN, however the screen was
             // opened, so the list is always what is on disk right now.
-            let root = save.as_ref().map_or_else(
-                || std::path::PathBuf::from(saves::ROOT),
-                |s| s.root().into(),
-            );
+            let root = save
+                .as_ref()
+                .map_or_else(pbd_app::paths::saves_dir, |s| s.root().into());
             index.slots = saves::list(&root);
             index.asking = None;
             index.trouble = None;

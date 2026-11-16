@@ -15,10 +15,10 @@
     hour: 8.5,
     shots: [
         (
-            caption: "Gather by hand: fibre and loose stone turn up in the ground",
+            caption: "Gather by hand: stones and fibre off the ground with F, then soil",
             until: ["gather"],
             max_s: 240.0,
-            acts: [Dig(Mission("gather"), 2), Still],
+            acts: [PickUp(Have("fibre", 8)), Still, PickUp(Have("stone", 9)), Dig(Mission("gather"), 2), Still],
         ),
         (
             caption: "Craft an axe: a branch pulled from a tree, then the pack's Craft row",
@@ -36,7 +36,7 @@
             caption: "Make planks and rope",
             until: ["planks-rope"],
             max_s: 240.0,
-            acts: [Craft("planks", 2), Hand("hand"), Dig(Have("fibre", 6), 1), Craft("rope", 2)],
+            acts: [Craft("planks", 2), Hand("hand"), PickUp(Have("fibre", 6)), Craft("rope", 2)],
         ),
         (
             caption: "Build a crafting bench",

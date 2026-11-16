@@ -49,7 +49,7 @@ pub const WEATHER_SAVE_S: f32 = 60.0;
 /// and on the pose's cadence while any moves.
 pub const VEHICLES: &str = "vehicles.ron";
 /// Where the slots live, relative to the working directory.
-pub const ROOT: &str = "saves";
+pub const ROOT: &str = crate::paths::DEV_SAVES;
 /// The longest a world's name may be, in bytes. Tenebris's `NAME_MAX`, for
 /// its reason: a name is drawn in a list and used to make a path, and both
 /// have a width past which they stop working.
@@ -329,7 +329,7 @@ impl Default for WorldSave {
             identity: Identity::new(pbd_core::planet_gen::TerrainConfig::TENEBRIS.seed),
             next_drop: 0,
             slot: None,
-            root: PathBuf::from(ROOT),
+            root: crate::paths::saves_dir(),
             writer: SaveWriter::none(),
             serial: next_serial(),
         }

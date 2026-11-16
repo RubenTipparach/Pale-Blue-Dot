@@ -218,3 +218,18 @@ in snow they still rang the puddles and fogged the air.
   sky: cover 0.56 where it was 0.69 (`tests/new_world_start.rs`, updated).
   Its frame time was not measured here.
 - The remade settled climates' new worlds settle at 15.1 C (the target, 15).
+
+## Snow over snowy ground, whatever the air (owner, 2026-11-16)
+
+The owner, on "tundra still rains in its summer": *"I really want it to be if
+snow on the ground, no rain, if snow biome, must snow not rain"*.
+
+The weather's `Surface` now holds `snowy` per cell: whether the ground's top
+is snow (`planet_gen::top_material`), which covers tundra at every height and
+land above the snow line. `Sample::snow` is true in freezing air as before,
+and also wherever more than half the sample's weight is snowy ground. So
+nothing but snow falls on snow, in any season. `Surface` is derived from the
+terrain and never saved, so no save changes.
+`what_falls_in_freezing_air_is_snow` now also asserts no rain on snowy ground,
+and that snow fell there in the run.
+

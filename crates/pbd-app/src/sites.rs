@@ -23,10 +23,7 @@ use std::path::PathBuf;
 
 /// `assets/config/sites.ron`.
 pub fn rules_path() -> PathBuf {
-    PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../assets/config/sites.ron"
-    ))
+    crate::paths::assets_dir().join("config/sites.ron")
 }
 
 /// The rules, read and checked. A file that does not parse or validate is a

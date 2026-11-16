@@ -23,10 +23,7 @@ pub const MAX_FAR_LIGHTS: usize = 64;
 
 /// `assets/config/night_lights.ron`.
 pub fn rules_path() -> PathBuf {
-    PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../assets/config/night_lights.ron"
-    ))
+    crate::paths::assets_dir().join("config/night_lights.ron")
 }
 
 /// The rules, read and checked: a file that does not parse or validate is a

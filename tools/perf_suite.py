@@ -14,6 +14,7 @@ Scenarios (each ends itself):
     walk      --walk-distance 1000
     town      a walk from Ashenstead's middle out through the walled town, rain forced
     sail      Holinghaven's cog cast off from its helm, --sail-for 60
+    pour      a live pour by the spawn (--pour-for 60), sampled POUR_START to POUR_DONE
 
 Variants are `name|exe|ENV=1;ENV2=2|assets` (all but the name optional); an
 item of the third field that starts with `--` is a launch flag instead
@@ -73,10 +74,19 @@ SCENARIOS = {
     # (`sail-the-cog` task 6.1).
     "sail": ["--walk", "--at", "23.71891", "-115.27982", "--aboard", "cog", "--sail", "-40",
              "--seat", "--sail-for", "60"],
+    # A live pour by the spawn (`water-flow` 5.3, smooth water between
+    # ticks): three sources 12 m ahead beside a 9-deep pit, stopped and
+    # started again every 12 s, so water spreads, falls into the pit and
+    # dries in view the whole sample. Sampled from POUR_START to POUR_DONE.
+    "pour": ["--walk", "--pitch", "-30", "--yaw", "90", "--pour", "3", "--pour-ahead", "12",
+             "--pit", "9", "--pour-for", "60"],
 }
 DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE", "rain-stroll": "STROLL_DONE",
         "town": "WALK_DONE",
-        "sail": "SAIL_DONE"}
+        "sail": "SAIL_DONE", "pour": "POUR_DONE"}
+# A scenario whose hard part starts on a line of its own: sampled from that
+# line (no further warm-up) to its DONE line, not from the ready line.
+START = {"pour": "POUR_START"}
 WANT_MS = 1000 / 120
 FLOOR_MS = 1000 / 60
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -341,7 +351,19 @@ def analyse(scenario: str, variant: dict, index: int, a, csv_path: Path, log_pat
     warm_from, warm_mark = warm_up_start(text, every, zero, a.ready)
     stalls = rebuild_frames(text, every, zero)
     rebuild_ms = [every[i]["ms"] for i in sorted(stalls)]
-    rows = [r for i, r in enumerate(every) if r["t"] >= warm_from + a.skip_s and i not in stalls]
+    skip_s, until = a.skip_s, math.inf
+    if scenario in START:
+        marks = {}
+        for line in text.splitlines():
+            for key, word in (("start", START[scenario]), ("done", DONE[scenario])):
+                if word in line and key not in marks:
+                    marks[key] = stamp_s(line, zero)
+        if marks.get("start") is not None:
+            warm_from, warm_mark, skip_s = marks["start"], START[scenario], 0.0
+        if marks.get("done") is not None:
+            until = marks["done"]
+    rows = [r for i, r in enumerate(every)
+            if warm_from + skip_s <= r["t"] <= until and i not in stalls]
 
     problems = []
     if timed_out:
@@ -351,7 +373,7 @@ def analyse(scenario: str, variant: dict, index: int, a, csv_path: Path, log_pat
     # A window out of focus or hidden is paced by the OS, not the game
     # (`frame-budget`): 60 Hz unfocused in Bevy, throttled under a locked
     # screen on macOS. Its frames say nothing about the frame's cost.
-    problems += attention_problems(text, warm_from + a.skip_s)
+    problems += attention_problems(text, warm_from + skip_s)
     if DONE[scenario] not in text:
         problems.append(f"no {DONE[scenario]} line")
     if len(rows) < 300:
@@ -368,12 +390,12 @@ def analyse(scenario: str, variant: dict, index: int, a, csv_path: Path, log_pat
         "gpu_clouds_ms": stats([r["gpu_clouds"] for r in rows]),
         "gpu_pass_ms": {name: stats([r["passes"].get(name, math.nan) for r in rows])
                         for name in sorted({k for r in rows for k in r["passes"]})},
-        "warm_up": {"from_s": round(warm_from, 2), "marked_by": warm_mark, "skip_s": a.skip_s},
+        "warm_up": {"from_s": round(warm_from, 2), "marked_by": warm_mark, "skip_s": skip_s},
         "rebuild_ms": rebuild_ms,
         # Frames over SPIKE_MS, by where along the scenario they fell (the
         # route's or the walk's metre, else seconds after the warm-up), for
         # the report to say which recur in other runs.
-        "spikes": spike_places(rows, warm_from + a.skip_s),
+        "spikes": spike_places(rows, warm_from + skip_s),
     }
     adapter = re.search(r'AdapterInfo \{ name: "([^"]+)".*?backend: (\w+)', text)
     if adapter:
@@ -572,7 +594,7 @@ def plot(results: list[dict], a) -> None:
         fig, (ax, ax2) = plt.subplots(2, 1, figsize=(16, 8), sharex=True, gridspec_kw={"height_ratios": [3, 2]})
         for r in rs:
             c = colours[a.variant_names.index(r["variant"]) % len(colours)]
-            warm = r.get("warm_up", {}).get("from_s", 0.0) + a.skip_s
+            warm = r.get("warm_up", {}).get("from_s", 0.0) + r.get("warm_up", {}).get("skip_s", a.skip_s)
             rows = [x for x in load_frames(Path(r["csv"])) if x["t"] >= warm]
             t0 = rows[0]["t"] if rows else 0
             label = f"{r['variant']} #{r['index']}" + ("" if r["valid"] else " (invalid)")
