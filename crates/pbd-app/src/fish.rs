@@ -140,7 +140,7 @@ pub struct FishingStatus {
 }
 
 impl FishingStatus {
-    fn say(&mut self, text: impl Into<String>, hold_s: f32) {
+    pub(crate) fn say(&mut self, text: impl Into<String>, hold_s: f32) {
         self.text = text.into();
         self.hold_s = hold_s;
     }
@@ -267,6 +267,11 @@ struct Surroundings<'w, 's> {
     time: Res<'w, Time>,
     walkers: Query<'w, 's, &'static Position, With<Walker>>,
     cameras: Query<'w, 's, &'static GlobalTransform, With<WalkingCamera>>,
+    /// Aboard a paddled boat the seat is the angler (`small-boats` design 6).
+    aboard: Option<Res<'w, crate::vehicles::Aboard>>,
+    vehicles: Query<'w, 's, &'static crate::vehicles::Vehicle>,
+    vehicle_view: Option<Res<'w, crate::vehicles::view::VehicleView>>,
+    vehicle_cameras: Query<'w, 's, &'static GlobalTransform, With<crate::vehicles::VehicleCamera>>,
     /// Steady hands (`cooking` design S5).
     meals: Option<Res<'w, crate::kitchen::MealEffects>>,
 }
@@ -283,22 +288,31 @@ fn fish(
     mut save: Option<ResMut<WorldSave>>,
     mut did: MessageWriter<crate::missions::Did>,
     mut heard: MessageWriter<crate::audio::hooks::FishHeard>,
+    mut was_aboard: Local<Option<Entity>>,
 ) {
     let Some(sea) = world.sea.as_deref() else {
         return;
     };
     let dt = world.time.delta_secs().min(0.1);
     status.hold_s = (status.hold_s - dt).max(0.0);
-    let Some(feet) = world
-        .walkers
-        .iter()
-        .next()
-        .map(|p| (p.0.as_dvec3() - world.frame.center).as_vec3())
-    else {
+    // Aboard a paddled boat (`small-boats` design 6): the craft, its seat
+    // as the angler's place, and whether the seat view is the camera.
+    let aboard = world.aboard.as_ref().and_then(|a| a.0);
+    let afloat = aboard
+        .and_then(|e| world.vehicles.get(e).ok())
+        .filter(|v| v.craft.kind.paddled())
+        .map(|v| &v.craft);
+    let feet = match afloat {
+        Some(craft) => Some(craft.exit().as_vec3()),
+        None => world.walkers.iter().next().map(|p| {
+            let at = (p.0.as_dvec3() - world.frame.center).as_vec3();
+            at - at.normalize_or(Vec3::Y) * HALF_HEIGHT
+        }),
+    };
+    let Some(feet) = feet else {
         return;
     };
     let up = feet.normalize_or(Vec3::Y);
-    let feet = feet - up * HALF_HEIGHT;
     let roster = world.fauna.0.roster(&world.body.0);
     let settings = &world.fauna.0;
     let seconds = world.sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
@@ -306,28 +320,49 @@ fn fish(
     let contact = world.contact.as_deref();
     let fishery = &mut *fishery;
 
-    // The line. Only the rod fishes, only on foot, only with the pointer
-    // held and no menu or picker open; put the rod away and the line comes in.
-    let walking = world.walking.as_ref().is_some_and(|w| w.active);
+    // The line. Only the rod fishes, on foot or from a paddled boat's seat,
+    // only with the pointer held and no menu or picker open; put the rod
+    // away, or board or step off, and the line comes in.
+    let walking =
+        (world.walking.as_ref().is_some_and(|w| w.active) && aboard.is_none()) || afloat.is_some();
     let rod = tools.held() == Some(Tool::Rod);
-    if (!rod || !walking) && fishery.line.phase != Phase::Ready {
+    let moved = *was_aboard != aboard;
+    *was_aboard = aboard;
+    if (!rod || !walking || moved) && fishery.line.phase != Phase::Ready {
         let flock = settings.flock;
         fishery.line.wind_in(&mut fishery.schools, &flock);
     }
+    let captured = match afloat {
+        Some(_) => world.vehicle_view.as_ref().is_some_and(|v| v.captured),
+        None => world.walking.as_ref().is_some_and(|w| w.captured),
+    };
     let listening = walking
         && rod
-        && world.walking.as_ref().is_some_and(|w| w.captured)
+        && captured
         && !world.menu.as_ref().is_some_and(|m| m.0)
         && !world.key.as_ref().is_some_and(|k| k.holding);
-    let camera = world.cameras.iter().next().map(|t| {
-        let eye = (t.translation().as_dvec3() - world.frame.center).as_vec3();
-        (
-            eye,
-            t.forward().as_vec3(),
-            t.right().as_vec3(),
-            t.up().as_vec3(),
-        )
-    });
+    let camera = match afloat {
+        // The vehicle camera's look, from the seat's own eye: in the seat
+        // view they are one place, and from the chase view the line still
+        // leaves the paddler, not the camera behind them.
+        Some(craft) => world.vehicle_cameras.iter().next().map(|t| {
+            (
+                craft.eye().as_vec3(),
+                t.forward().as_vec3(),
+                t.right().as_vec3(),
+                t.up().as_vec3(),
+            )
+        }),
+        None => world.cameras.iter().next().map(|t| {
+            let eye = (t.translation().as_dvec3() - world.frame.center).as_vec3();
+            (
+                eye,
+                t.forward().as_vec3(),
+                t.right().as_vec3(),
+                t.up().as_vec3(),
+            )
+        }),
+    };
     if let (Some((eye, look, right, cam_up)), true) = (camera, rod && walking) {
         let buttons = world.buttons.as_deref();
         let pressed = |b| listening && buttons.is_some_and(|i| i.just_pressed(b));

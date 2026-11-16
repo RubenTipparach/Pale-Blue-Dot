@@ -538,7 +538,10 @@ pub fn about_watch(
         .filter(|(_, v)| {
             matches!(
                 v.craft.kind,
-                pbd_core::vehicle::Kind::Rowboat | pbd_core::vehicle::Kind::Cog
+                pbd_core::vehicle::Kind::Rowboat
+                    | pbd_core::vehicle::Kind::Cog
+                    | pbd_core::vehicle::Kind::Raft
+                    | pbd_core::vehicle::Kind::Tube
             )
         });
     match (craft, state.aboard) {
