@@ -896,6 +896,24 @@ codes a word, both the Rust packing and `material_at` in
 atlas's stone sheet. That is a rendering change of its own, proposed as the
 next step (task 9.9) and not taken here.
 
+### 12.10 Captures draw the grass the player sees (owner, 2026-11-16)
+
+The owner, on a capture: "this screenshot shows the wrong grass", and on
+their own play: the pixel tufts. Measured: a run with `--capture`,
+`--frame-log` or a showcase starts from `PlayerSettings::ISOLATED` (the
+engine before player settings existed), which kept `pixel_grass: false`, so
+every capture since the tufts became the player's default (design 1) drew
+the old blades cut from the ground tile. A test pinned it ("captures keep
+the blades").
+
+`ISOLATED` now draws the tufts, as the player's default does; `--grass
+blades` still draws the old look. A perf-suite number taken before this and
+one after differ by the grass as well as the change measured, so a
+comparison runs both exes in one sitting as it always does, or passes
+`--grass blades` to both. Rain shadows stay on in `ISOLATED` (player
+default off) because the perf suite measures them; a capture meant to look
+like play adds `--rain-shadows off`.
+
 ### 12.9 What this pass leaves
 
 - The forest-and-clearing noise (12.2), alien species, the desert palm, the
