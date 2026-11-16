@@ -21,3 +21,20 @@ radius, so a fragment the sky cannot reach and a submerged seabed stay dry.
 - **WHEN** a vertical face is viewed in rain
 - **THEN** rivulets run down it and it darkens
 - **AND** the seabed below the waterline shows no rings
+
+### Requirement: With RAIN SHADOW off, rain still fogs the air
+While the rain volume is off (the player's RAIN SHADOW setting), rain over
+the camera on a planet with air SHALL draw an exponential height fog in its
+place, measured along the body's local up from the ground or sea under the
+eye, coloured by the sky's light at that hour, and thickening with the rain.
+It SHALL add no full-screen pass. While the rain volume is on, the fog SHALL
+NOT draw.
+
+#### Scenario: A storm with RAIN SHADOW off
+- **WHEN** the rain is at full and RAIN SHADOW is off
+- **THEN** the far side of a valley is lost in grey murk
+- **AND** the murk is thicker in the valley than at the hilltop
+
+#### Scenario: Clear air
+- **WHEN** there is no rain
+- **THEN** the picture is as it was before the fog existed
