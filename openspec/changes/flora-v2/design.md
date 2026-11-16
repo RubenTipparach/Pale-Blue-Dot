@@ -888,8 +888,8 @@ nothing but stone to ore; ore 2 to 12% of the stone; version 9 none),
 material word packs eight 4-bit codes, and `planet_terrain::render_code`
 gives `Ore` the stone's code (5); all sixteen codes are taken (water 13,
 dirt 10, the sod and snow sides 11 and 12, tilled 14, the forge 15, wood
-8). So a vein is real (a pickaxe on it gives coal or mixed ore, the aim's
-HUD names it ORE) but a dug wall shows it as stone, and a capture cannot
+8). So a vein is real (a pickaxe on it gives coal or mixed ore,
+`station::ore_yield`) but a dug wall shows it as stone, and a capture cannot
 show the veins. Drawing ore needs a fifth bit in the material word (six
 codes a word, both the Rust packing and `material_at` in
 `planet_surface.wgsl`, and the runs' code field) and an ore tile on the
