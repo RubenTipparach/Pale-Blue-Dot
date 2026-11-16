@@ -3,7 +3,10 @@
 // circle puff, use blender/krita or whatever, look at crab breeze smoke puffs as a model", and "in the water there
 // should be bubbles particles, this should give it that teal color".
 // Built on waterfall/waterfall.js (M31): its world, its port of the game's water fragment (water.wgsl at dc0c5cb)
-// and its lights, copied here with the pit made 12 deep (3.35 m of water) and the view from under the water added.
+// and its lights, copied here with pools 3.35 m deep and the view from under the water added. Since the owner's
+// "show me a comparison of different water fall heights" (2026-11-16) the scene is five falls side by side (a
+// riffle and falls of 1, 2, 4 and 9 layers), and the New tab carries the proposed mist rule (every fall, however
+// short, mists) and the fall's scroll speeding up down its height.
 // The splash is a port of the game's `animate_splash` (water_flow.rs): the same drops and mist puffs, the same
 // 32-texel dot. Needs three.js r128 (THREE) before it.
 (function () {
@@ -17,21 +20,47 @@ const key = (q, r) => q + "," + r;
 const hexDist = (q, r) => (Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2;
 
 // ---------------- the world: cells and their tops ----------------
-const GRID = 10, GRID_LOOK = GRID;
-const PIT = new Set();
-for (let q = -2; q <= 2; q++) for (let r = -2; r <= 2; r++) if (hexDist(q, r) <= 2) PIT.add(key(q, r));
+// The height comparison (owner, 2026-11-16: "show me a comparison of different water fall heights"): five falls side
+// by side along z, each off the same plateau's lip (ground 0, x >= 1.5 cells), so one view frames them all.
+//   riffle  a river stepping down one layer: the source spills into a falling cell over a channel one layer lower,
+//           whose shallow water (0.7 m) runs on toward the eye;
+//   f1..f9  a fall of N layers into a pool 3.35 m deep, dug into a shore N - 1 layers under the plateau (open to the
+//           front, so the side view sees every fall's whole face). f9 is the scene the owner tuned on (a pit two
+//           rings wide); the others are one ring wide.
+// N is the game's h: the falling layers over the foot. rc is the fall's row (z); its basin is centred on x = 0.
+const SPECS = [
+  {name: "riffle", label: "Riffle", N: 1, rc: -10, rad: 0},
+  {name: "f1", label: "1 layer", N: 1, rc: -6, rad: 1},
+  {name: "f2", label: "2 layers", N: 2, rc: -2, rad: 1},
+  {name: "f4", label: "4 layers", N: 4, rc: 2, rad: 1},
+  {name: "f9", label: "9 layers", N: 9, rc: 8, rad: 2},
+];
+const GRID = 22, GRID_LOOK = GRID, DEEP_M = -16;
+const X0 = -14 * HW, X1 = 4.6 * HW, Z0 = cz(-13.2), Z1 = cz(12.2), PLATEAU_X = 1.5 * HW - 1e-6;
+const BASIN = new Map();                       // a basin or channel cell -> its fall
+// S the source's cell (on the plateau), R the falling cell over the drop.
+const FALLS = SPECS.map(sp => {
+  const cq = -sp.rc / 2, k = Math.max(sp.rad, 1), riffle = sp.rad === 0;
+  const F = {name: sp.name, label: sp.label, N: sp.N, riffle, rad: sp.rad, c: [cq, sp.rc],
+    S: [cq + k + 1, sp.rc], R: [cq + k, sp.rc], y0: 0, levelS: 0.9, hR: 0.75,
+    floor: riffle ? -1 : -sp.N - 3, poolY: riffle ? -0.3 : -sp.N + 0.35, shore: riffle ? 0 : 1 - sp.N, pool: []};
+  if (riffle) for (let j = 1; j >= -4; j--) F.pool.push([cq + j, sp.rc]);
+  else for (let q = -sp.rad; q <= sp.rad; q++) for (let r = -sp.rad; r <= sp.rad; r++) if (hexDist(q, r) <= sp.rad) F.pool.push([cq + q, sp.rc + r]);
+  for (const [q, r] of F.pool) BASIN.set(key(q, r), F);
+  return F;
+});
+// The fall whose row is nearest: its shore is the lower ground in front of the plateau there.
+const segOf = z => FALLS.reduce((a, b) => Math.abs(cz(b.c[1]) - z) < Math.abs(cz(a.c[1]) - z) ? b : a);
 const topLook = (q, r) => top(q, r);
 function top(q, r) {
-  if (hexDist(q, r) > GRID) return null;
-  if (PIT.has(key(q, r))) return -12;         // the pit: the cell and two rings round it, 12 layers down
-  if (r >= 3) return -2;                       // the lower terrace: the 2-layer step
-  return 0;
+  const x = cx(q, r), z = cz(r);
+  if (x < X0 || x > X1 || z < Z0 || z > Z1) return null;
+  const B = BASIN.get(key(q, r)); if (B) return B.floor;
+  if (x >= PLATEAU_X) return 0;
+  return segOf(z).shore;
 }
-// The two falls. S the source's cell (on the upper ground), R the falling cell over the drop.
-const FALLS = [
-  {name: "pit", S: [3, 0], R: [2, 0], y0: 0, floor: -12, poolY: -8.65, levelS: 0.9, hR: 0.75,
-    pool: [...PIT].map(k => k.split(",").map(Number))},
-];
+// The ground's rim: the height a cell's own sky is open from (its fall's shore in a basin, else its top).
+function rimOf(q, r) { const B = BASIN.get(key(q, r)); return B ? B.shore : top(q, r); }
 for (const F of FALLS) {
   const [sq, sr] = F.S, [rq, rr] = F.R;
   F.iSR = DIRS.findIndex(([dq, dr]) => sq + dq === rq && sr + dr === rr);
@@ -42,8 +71,24 @@ for (const F of FALLS) {
   F.H = F.hR - F.poolY;                       // the fall's height, metres
   F.drop = F.y0 - F.poolY;                    // from the lip's ground to the pool
   F.poolSet = new Set(F.pool.map(([q, r]) => key(q, r)));
+  F.cC = [cx(F.c[0], F.c[1]), cz(F.c[1])];
 }
-const poolAt = (q, r) => { for (const F of FALLS) if (F.poolSet.has(key(q, r))) return F.poolY; return null; };
+const poolAt = (q, r) => { const B = BASIN.get(key(q, r)); return B ? B.poolY : null; };
+// The hex a point is over (cube rounding), for the eye's pool.
+function hexAt(x, z) {
+  const r = z / (1.5 * HR), q = x / HW - r / 2, s = -q - r;
+  let rq = Math.round(q), rr = Math.round(r); const rs = Math.round(s);
+  const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s);
+  if (dq > dr && dq > ds) rq = -rr - rs; else if (dr > ds) rr = -rq - rs;
+  return [rq, rr];
+}
+// The lamps (night): one on the plateau by each fall's lip, one on its shore in front, left of the pool.
+const LAMP_SPOTS = [];
+for (const F of FALLS) {
+  const [cq, cr] = F.c, k = Math.max(F.rad, 1);
+  for (const [q, r] of [[F.S[0], F.S[1] - 1], [cq - k, cr - 1]]) LAMP_SPOTS.push([cx(q, r), top(q, r), cz(r)]);
+}
+const NL = LAMP_SPOTS.length, NF = FALLS.length;
 
 // ---------------- GLSL: the game's noise, ported ----------------
 const NOISE_GLSL = `
@@ -84,10 +129,10 @@ float fbm3(vec3 p, float t) {
 // Lights shared by the ground and the water: a sun (day), a moon, the sky's ambient and the lamps (night).
 const LIGHT_GLSL = `
 uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmb;
-uniform vec3 uLampPos[3]; uniform vec3 uLampCol[3]; uniform float uLampOn;
+uniform vec3 uLampPos[${NL}]; uniform vec3 uLampCol[${NL}]; uniform float uLampOn;
 vec3 lampLight(vec3 p, vec3 n, float wrap) {
   vec3 e = vec3(0.0);
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < ${NL}; i++) {
     vec3 l = uLampPos[i] - p; float d = length(l); l /= max(d, 1e-4);
     float fall = pow(clamp(1.0 - pow(d/16.0, 4.0), 0.0, 1.0), 2.0)/(1.0 + 0.35*d*d);
     e += uLampCol[i]*fall*clamp((dot(n, l) + wrap)/(1.0 + wrap), 0.0, 1.0);
@@ -120,12 +165,14 @@ function sandTexture() {
 }
 // o (optional, the Pour tab's): {top(q, r), grid, deep}; by default the Look tab's pit scene.
 function groundMesh(U, o) {
-  const top = (o && o.top) || topLook, GRID = (o && o.grid) || GRID_LOOK, DEEP = (o && o.deep) || -14;
-  const pos = [], nor = [], uvw = [];
-  const tri = (a, b, c, n, uv) => { pos.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) nor.push(...n); uvw.push(...uv); };
+  const top = (o && o.top) || topLook, GRID = (o && o.grid) || GRID_LOOK, DEEP = (o && o.deep) || DEEP_M;
+  const pos = [], nor = [], uvw = [], rim = [];
+  let rimNow = 0;
+  const tri = (a, b, c, n, uv) => { pos.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) { nor.push(...n); rim.push(rimNow); } uvw.push(...uv); };
   for (let q = -GRID; q <= GRID; q++) for (let r = -GRID; r <= GRID; r++) {
     const t = top(q, r); if (t === null) continue;
     const c = [cx(q, r), t, cz(r)];
+    rimNow = rimOf(q, r);
     for (let i = 0; i < 6; i++) {
       const a = cornerXZ(q, r, i), b = cornerXZ(q, r, (i + 1) % 6);
       tri(c, [b[0], t, b[1]], [a[0], t, a[1]], [0, 1, 0], [c[0], c[2], 0, b[0], b[1], 0, a[0], a[1], 0]);
@@ -143,15 +190,16 @@ function groundMesh(U, o) {
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute("aUV", new THREE.Float32BufferAttribute(uvw, 3));
+  g.setAttribute("aRim", new THREE.Float32BufferAttribute(rim, 1));
   // The cells' tops as a texture, for the sun's shadow: a march toward the sun over the hex height field.
   const N = 2 * GRID + 1, tops = new Float32Array(N * N * 4);
   for (let q = -GRID; q <= GRID; q++) for (let r = -GRID; r <= GRID; r++) { const t = top(q, r); tops[4 * ((r + GRID) * N + (q + GRID))] = t === null ? DEEP : t; }
   const topTex = new THREE.DataTexture(tops, N, N, THREE.RGBAFormat, THREE.FloatType);
   topTex.minFilter = topTex.magFilter = THREE.NearestFilter; topTex.generateMipmaps = false; topTex.needsUpdate = true;
   const mat = new THREE.ShaderMaterial({uniforms: Object.assign({uSand: {value: sandTexture()}, uTops: {value: topTex}}, U), side: THREE.DoubleSide,
-    vertexShader: `attribute vec3 aUV; varying vec3 vUV; varying vec3 vN; varying vec3 vP;
-      void main() { vUV = aUV; vN = normal; vP = position; gl_Position = projectionMatrix*viewMatrix*vec4(position, 1.0); }`,
-    fragmentShader: `uniform sampler2D uSand; uniform sampler2D uTops; varying vec3 vUV; varying vec3 vN; varying vec3 vP; ${LIGHT_GLSL} ${UNDER_GLSL}
+    vertexShader: `attribute vec3 aUV; attribute float aRim; varying vec3 vUV; varying vec3 vN; varying vec3 vP; varying float vRim;
+      void main() { vUV = aUV; vN = normal; vP = position; vRim = aRim; gl_Position = projectionMatrix*viewMatrix*vec4(position, 1.0); }`,
+    fragmentShader: `uniform sampler2D uSand; uniform sampler2D uTops; varying vec3 vUV; varying vec3 vN; varying vec3 vP; varying float vRim; ${LIGHT_GLSL} ${UNDER_GLSL}
       float topAt(vec2 xz) {
         float r = xz.y/${(1.5 * HR).toFixed(5)}, q = xz.x/${HW.toFixed(4)} - r*0.5, s = -q - r;
         float rq = floor(q + 0.5), rr = floor(r + 0.5), rs = floor(s + 0.5);
@@ -172,9 +220,10 @@ function groundMesh(U, o) {
       void main() {
         vec3 tex = texture2D(uSand, vUV.xy/2.0).rgb;
         vec3 alb = pow(tex, vec3(2.2));
-        // Deeper than 2.5 m the walls are dirt, the layers marked as the game's blocks are.
-        if (vUV.z > 0.5 && vP.y < -2.5) alb = pow(tex*vec3(0.62, 0.50, 0.42), vec3(2.2));
-        float sky = vP.y < -0.01 ? mix(0.42, 1.0, smoothstep(-9.0, 0.0, vP.y)) : 1.0;
+        // Deeper than 2.5 m under the rim the walls are dirt, the layers marked as the game's blocks are.
+        if (vUV.z > 0.5 && vP.y < vRim - 2.5) alb = pow(tex*vec3(0.62, 0.50, 0.42), vec3(2.2));
+        // The sky's share: less down a pit or under a cliff, by the depth under the cell's own rim.
+        float sky = vP.y < vRim - 0.01 ? mix(0.42, 1.0, smoothstep(vRim - 9.0, vRim, vP.y)) : 1.0;
         vec3 n = normalize(vN);
         float lit = max(dot(n, uSunDir), 0.0);
         if (lit > 0.0) lit *= sunShadow(vP, n);
@@ -250,7 +299,7 @@ function waterGeometry(lean) {
     }
   }
   for (const F of FALLS) {
-    const skyAt = y => y < F.y0 ? mix(0.62, 1.0, smooth(F.floor, F.y0, y)) : 1.0;
+    const skyAt = y => y < F.y0 ? mix(0.62, 1.0, smooth(F.floor, Math.min(F.y0, F.shore + 1), y)) : 1.0;
     const [sq, sr] = F.S, [rq, rr] = F.R;
     const flowW = [F.flow[0] * 0.8, 0, F.flow[1] * 0.8];
     // The source's top, sloping down to the falling cell's.
@@ -269,7 +318,7 @@ function waterGeometry(lean) {
     for (let i = 0; i < 6; i++) {
       if (i === F.iRS) continue;
       const nq = rq + DIRS[i][0], nr = rr + DIRS[i][1];
-      let nt = top(nq, nr); if (nt === null) nt = -14;
+      let nt = top(nq, nr); if (nt === null) nt = DEEP_M;
       const pl = poolAt(nq, nr); const bottom = pl !== null ? Math.max(nt, pl) : nt;
       const a = cornerXZ(rq, rr, i), b = cornerXZ(rq, rr, (i + 1) % 6), n = sideN(i);
       if (bottom >= F.y0 - 0.01) { face(F, a, b, n, F.hR, F.y0, 2, 1.0, skyAt); continue; }
@@ -283,7 +332,8 @@ function waterGeometry(lean) {
     // The pool at the foot.
     for (const [q, r] of F.pool) {
       depthNow = F.poolY - top(q, r);
-      cap(null, q, r, Array(6).fill(F.poolY), 8, 0, F.name === "pit" ? 0.62 : 0.9, null, false);
+      // A riffle's lower water runs on, away from the step (its waves stream as a flowing top's do).
+      cap(null, q, r, Array(6).fill(F.poolY), 8, 0, F.riffle ? 0.9 : 0.8, F.riffle ? flowW : null, false);
       depthNow = 0.35;
       for (let i = 0; i < 6; i++) {
         const nq = q + DIRS[i][0], nr = r + DIRS[i][1];
@@ -312,7 +362,8 @@ function waterMaterial(U, vertexShader) {
       uM: {value: new THREE.Matrix3()}, uRp: {value: 2400}, uTime: {value: 0}, uScene: {value: null}, uRes: {value: new THREE.Vector2(1, 1)},
       uStretch: {value: 1}, uSpeed: {value: 1}, uAccel: {value: 0}, uLip: {value: 0}, uFallFrame: {value: 0},
       uOpen: {value: new THREE.Vector3(1, 1, 1)}, uNight: {value: 0}, uRain: {value: 0}, uSunI: {value: 1},
-      uFoot: {value: new THREE.Vector3()}, uFootH: {value: 9}, uAer: {value: 0}, uAerAmt: {value: 1}}, U),
+      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1},
+      uG: {value: 0}, uVmax: {value: 8}}, U),
     side: THREE.DoubleSide,
     vertexShader: `attribute vec3 aRest; attribute vec3 aFaceN; attribute float aKind; attribute float aFroth; attribute vec3 aPath;
       attribute float aTop; attribute vec3 aFlowN; attribute vec3 aFlow; attribute float aSky; attribute float aDepth; varying float vDepth;
@@ -326,7 +377,8 @@ function waterMaterial(U, vertexShader) {
       uniform vec3 uOpen; uniform float uNight; uniform float uRain; uniform float uSunI;
       varying vec3 vRest; varying vec3 vFaceN; varying float vKind; varying float vFroth; varying vec3 vPath; varying float vTop;
       varying vec3 vFlowN; varying vec3 vFlow; varying float vSky; varying vec3 vP; varying float vDepth;
-      uniform vec3 uFoot; uniform float uFootH; uniform float uAer; uniform float uAerAmt;
+      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt;
+      uniform float uG; uniform float uVmax;
       ${NOISE_GLSL}
       ${LIGHT_GLSL}
       ${UNDER_GLSL}
@@ -346,6 +398,18 @@ function waterMaterial(U, vertexShader) {
         if (s >= 0.0) { float g = 3.0; float T = (sqrt(1.0 + 2.0*g*s) - 1.0)/g; return mix(s, T, uAccel); }
         float k = 1.2*uAccel; float u = max(s, -3.0);
         return u - k*u*u*0.5 + (s - u)*(1.0 + 3.0*k);
+      }
+      // The water's speed down a fall (New tab; owner, 2026-11-16: "can you make the side scrolling texture increase
+      // with the height of the fall?"): s metres under the lip it is v(s) = min(sqrt(v0^2 + 2 g s), vmax). A pattern
+      // scrolled at v0 and read at c(s) = v0 tau(s), tau(s) the time the water takes to fall s metres, has its
+      // features move at v(s): one continuous pattern, steady in time, stretched as the water speeds up. g 0 is
+      // c(s) = s, the game's constant scroll. (Reading the pattern at s - t v(s) instead would shear: neighbouring
+      // heights slide apart a little more every second.)
+      float fallC(float s, float v0) {
+        if (uG <= 0.0 || s <= 0.0) return s;
+        float vm = max(uVmax, v0 + 1e-3), sc = (vm*vm - v0*v0)/(2.0*uG);
+        float tau = s <= sc ? (sqrt(v0*v0 + 2.0*uG*s) - v0)/uG : (vm - v0)/uG + (s - sc)/vm;
+        return v0*tau;
       }
       vec2 rings(vec2 uv, float t) {
         vec2 g = vec2(0.0); vec2 cell = floor(uv);
@@ -367,7 +431,11 @@ function waterMaterial(U, vertexShader) {
         if (vKind > 0.5 && dot(uM*(cameraPosition - vP), face) < 0.0) discard;
         vec3 tu = tangentU(face), tv = cross(face, tu);
         float falls = vKind > 2.5 ? 0.0 : 1.0;
-        vec3 body = uM*vRest + radial*uRp;
+        bool fallFace = vKind > 1.5 && vKind < 2.5 && horizontal < 0.5;
+        // The waves on a falling face, scrolled at the game's 1 m/s at the lip; with the speed-up, read at c(s).
+        vec3 rest = vRest;
+        if (fallFace && uG > 0.0) rest.y = vTop - fallC(vPath.z, FALL_SPEED*uSpeed);
+        vec3 body = uM*rest + radial*uRp;
         vec3 flowB = uM*vFlow;
         vec3 advected = body + radial*(uTime*FALL_SPEED*(1.0 - horizontal)*falls) - flowB*uTime*0.35*horizontal;
         vec3 p = advected*RIPPLE_SCALE; float t = uTime*RIPPLE_SPEED;
@@ -408,9 +476,12 @@ function waterMaterial(U, vertexShader) {
         // water there reads a lighter, aerated teal and the eye sees less deep into it.
         float aer = 0.0;
         if (uAer > 0.5 && vKind < 0.5) {
-          float R = 2.2 + 0.15*uFootH, d = length(vP.xz - uFoot.xz);
           float churn = gnoise3(vec3(vP.x*1.3, uTime*0.9, vP.z*1.3))*0.5 + 0.5;
-          aer = (1.0 - smoothstep(0.8, R, d))*(0.7 + 0.3*churn);
+          for (int i = 0; i < ${NF}; i++) {
+            if (abs(vP.y - uFeet[i].y) > 0.3) continue;
+            float R = 2.2 + 0.15*uFeetH[i], d = length(vP.xz - uFeet[i].xz);
+            aer = max(aer, (1.0 - smoothstep(0.8, R, d))*(0.7 + 0.3*churn));
+          }
         }
         vec3 scene = fromSrgb(texture2D(uScene, gl_FragCoord.xy/uRes).rgb);
         vec3 albedo = mix(SHALLOW, DEEP, smoothstep(0.0, SHALLOW_DEPTH, depth_under));
@@ -420,13 +491,15 @@ function waterMaterial(U, vertexShader) {
         float slope = smoothstep(0.50, 1.20, raw_slope)*0.26;
         float foam = clamp(max(crest, slope)*FOAM_INT, 0.0, 1.0);
         // ---- the fall's froth: water.wgsl dc0c5cb, line 806 on ----
-        bool fallFace = vKind > 1.5 && vKind < 2.5 && horizontal < 0.5;
         bool lipTop = vKind < 0.5 && vPath.z > -50.0 && uLip > 0.0;
         if (fallFace || lipTop) {
           // Where the noise is read: the rest point, its height measured down the path from the lip and divided by
           // the stretch (B), the path warped by the speed-up (D). With stretch 1 and no speed-up this is the rest
           // point itself, exactly the game's.
           vec3 wN = vec3(vPath.x, vTop - pathC(vPath.z)/uStretch, vPath.y);
+          // The froth's own streaks move at (0.35 + 0.6)/0.35 = 2.71 m/s (the scroll and the 0.6 drift on the
+          // stretched noise, below): with the speed-up they start at that at the lip and speed up from it.
+          if (fallFace && uG > 0.0) wN.y = vTop - fallC(vPath.z, uSpeed*(FALL_SPEED + 0.6/0.35));
           vec3 fr = uFallFrame > 0.5 ? normalize(uM*vFlowN) : face;
           vec3 fu = tangentU(fr), fv = cross(fr, fu);
           vec3 down_p = uM*wN + radial*uRp + radial*(uTime*uSpeed*FALL_SPEED);
@@ -462,11 +535,34 @@ function hash01(a, b) {
   h = (h ^ (h >>> 15)) >>> 0; h = Math.imul(h, 0x2C1B3C6D) >>> 0; h = (h ^ (h >>> 12)) >>> 0;
   return (h & 0xFFFF) / 65535;
 }
-// foot {at: Vector3 (the landing cell's surface), h: layers fallen, sky}; light the game's (0.12 + 0.88 day) * sky.
-// tune (New tab only): {mist: puff count x, mistSize: puff size x}; 1, 1 is the game's.
+// foot {at: Vector3 (the landing cell's surface), h: layers fallen, D: metres from the lip's water to the water it
+// lands in, sky}; light the game's (0.12 + 0.88 day) * sky.
+// tune (New tab only): {mist: puff count x, mistSize: puff size x, rule: "new" | "game"}; 1, 1, "game" is the game's.
+// The proposed rule (New tab; owner, 2026-11-16: "anything that exposes this even a tiny bit of the water falling
+// animation should have some mist"): every fall is measured in metres it drops, D, not in whole falling layers, and
+// has a floor, so a riffle's metre reads as misty:
+//   puffs  clamp(round(7 + 0.75 D), 8, 24)            (the game's: clamp((h - 1) 1.5, 1, 24), so 1 for h = 1 or 2)
+//   alpha  0.45, every fall                           (the game's: 0.12 + 0.33 min(h / 8, 1), 0.45 from 8 layers)
+//   size   max(0.35, min(0.25 + 0.19 D, 5))           (the game's: min(0.5 + 0.18 h, 5))
+//   rise   0.15 + 0.05 D m/s                          (the game's: 0.25 + 0.04 h), so a short fall's mist hugs its foot
+//   drops  max(12, min(3 + 6 D, 160))                 (the game's: min(3 + 6 h, 160))
+//   fall droplets  max(6, min(160, 9 D))
+//   where  the puffs rise on the fall's open side, within 110 degrees of the way the water goes over (the game's
+//          ring all round the foot puts half of a short fall's few puffs on the ground behind its lip)
+// The tall end is the game's (a 9-layer fall's 9.4 m gives 14 puffs at 0.45 and 2.04 m, the game's 12 at 0.45 and
+// 2.12 m).
+const RULES = {
+  game: h => ({m: Math.max(h.h, 1), puffs: Math.min(24, Math.max(1, (Math.max(h.h, 1) - 1) * 1.5)) | 0,
+    alpha: m => 0.12 + 0.33 * Math.min(m / 8, 1), size: m => Math.min(0.5 + 0.18 * m, 5), rise: m => 0.25 + 0.04 * m, drops: m => Math.min(3 + 6 * m, 160) | 0,
+    veil: m => Math.min(160, 9 * m)}),
+  new: h => ({m: h.D, puffs: Math.min(24, Math.max(8, Math.round(7 + 0.75 * h.D))), open: true,
+    alpha: () => 0.45, size: m => Math.max(0.35, Math.min(0.25 + 0.19 * m, 5)), rise: m => 0.15 + 0.05 * m,
+    drops: m => Math.max(12, Math.min(3 + 6 * m, 160)) | 0, veil: m => Math.max(6, Math.min(160, 9 * m))}),
+};
 function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
   const mistN = newPuffs && tune ? tune.mist : 1, mistS = newPuffs && tune ? tune.mistSize : 1;
   const veilN = newPuffs && tune ? tune.veil : 0;
+  const rule = RULES[newPuffs && tune && tune.rule === "new" ? "new" : "game"];
   out.n = 0;
   const quad = (p, size, rgba, cell, flip) => {
     if (out.n >= SPLASH_BUDGET) return;
@@ -475,10 +571,10 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
   };
   const near = feet.slice().sort((a, b) => a.at.distanceTo(eye) - b.at.distanceTo(eye));
   for (const f of near) {
-    const foot = f.at, h = Math.max(f.h, 1), fade = 1 - Math.min(1, Math.max(0, (foot.distanceTo(eye) - 55) / 15));
+    const R = rule(f), foot = f.at, h = R.m, fade = 1 - Math.min(1, Math.max(0, (foot.distanceTo(eye) - 55) / 15));
     const light = (0.12 + 0.88 * day) * Math.max(f.sky, 0.15);
     const seed = ((Math.trunc(foot.x * 7) >>> 0) ^ (((Math.trunc(foot.z * 13) >>> 0) << 11) | ((Math.trunc(foot.z * 13) >>> 0) >>> 21))) >>> 0;
-    const drops = Math.min(3 + 6 * h, 160) | 0;
+    const drops = R.drops(h);
     for (let i = 0; i < drops; i++) {
       const r = k => hash01(seed, i * 8 + k);
       const period = 0.7 + 0.5 * r(0), phase = (t / period + r(1)) % 1, s = phase * period;
@@ -489,15 +585,16 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       quad({x: foot.x + Math.cos(a) * d, y: foot.y + lift, z: foot.z + Math.sin(a) * d}, size,
         [light, light, light * 1.02, 0.75 * (1 - phase) * fade], -1, 0);
     }
-    const puffs = Math.round((Math.min(24, Math.max(1, (h - 1) * 1.5)) | 0) * mistN);
+    const puffs = Math.round(R.puffs * mistN);
     for (let i = 0; i < puffs; i++) {
       const r = k => hash01((seed ^ 0xA5A5) >>> 0, i * 8 + k);
       const period = 2 + 1.5 * r(0), phase = (t / period + r(1)) % 1, s = phase * period;
-      const a = r(2) * Math.PI * 2, spread = Math.min(0.5 + 0.12 * h, 5);
-      const size = Math.min(0.5 + 0.18 * h, 5) * (0.6 + 0.8 * phase) * mistS;
+      const a = R.open && f.flow ? Math.atan2(f.flow[1], f.flow[0]) + (r(2) * 2 - 1) * 110 * Math.PI / 180 : r(2) * Math.PI * 2;
+      const spread = Math.min(0.5 + 0.12 * h, 5);
+      const size = R.size(h) * (0.6 + 0.8 * phase) * mistS;
       const d = SPLASH_EDGE_M + spread * (0.3 + phase) * r(3);
-      const y = foot.y + (0.25 + 0.04 * h) * s + size + SPLASH_CLEAR_M;
-      const alpha = (0.12 + 0.33 * Math.min(h / 8, 1)) * (1 - phase) * fade;
+      const y = foot.y + R.rise(h) * s + size + SPLASH_CLEAR_M;
+      const alpha = R.alpha(h) * (1 - phase) * fade;
       // The new puffs: a variant by the puff's own hash, its frame by its age.
       const cell = newPuffs ? Math.floor(r(5) * 4) * 4 + Math.min(3, Math.floor(phase * 4)) : -1;
       quad({x: foot.x + Math.cos(a) * d, y, z: foot.z + Math.sin(a) * d}, size, [light, light, light, alpha], cell, r(6) < 0.5 ? 1 : 0);
@@ -507,7 +604,7 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
     // down at the fall's speed there, flung a little outward, and falls under gravity until it reaches the pool.
     // More of them low down, where the water has fallen furthest and broken up most. Drawn as hard 8-texel
     // droplets (cell -2), not soft puffs.
-    const veil = Math.round(Math.min(160, 9 * h) * veilN);
+    const veil = Math.round(R.veil(h) * veilN);
     const G = 15;  // the splash's own gravity, m/s^2
     const STREAK_S = 0.035 * (tune && tune.streak !== undefined ? tune.streak : 1);  // a streak's length in seconds of travel
     for (let i = 0; i < veil; i++) {
@@ -671,10 +768,11 @@ function lampMesh(x, y, z) {
   grp.userData.bulb = bulbMat; return grp;
 }
 
-window.PBDMist = function (canvas, sheetUrl) {
+// opts: {labels: an element over the canvas for each fall's one-line label}.
+window.PBDMist = function (canvas, sheetUrl, opts) {
   const renderer = new THREE.WebGLRenderer({canvas, antialias: false, preserveDrawingBuffer: true});
   renderer.autoClear = false;
-  const LAMPS = [[cx(-3, 1), 0, cz(1)], [cx(1, -3), 0, cz(-3)], [cx(-1, 3), 0, cz(3)]];
+  const LAMPS = LAMP_SPOTS;
   const U = {uSunDir: {value: new THREE.Vector3()}, uSunCol: {value: new THREE.Vector3()}, uAmb: {value: new THREE.Vector3()},
     uLampPos: {value: LAMPS.map(([x, y, z]) => new THREE.Vector3(x, y + 2.55, z))}, uLampCol: {value: LAMPS.map(() => new THREE.Vector3(1.0, 0.62, 0.30).multiplyScalar(1.7))}, uLampOn: {value: 0},
     uEyeUnder: {value: 0}, uMurk: {value: new THREE.Vector3()}, uExt: {value: new THREE.Vector3(0.39, 0.105, 0.082)}};
@@ -694,10 +792,13 @@ window.PBDMist = function (canvas, sheetUrl) {
   const east = new THREE.Vector3(0, 1, 0).cross(up).normalize(), north = up.clone().cross(east);
   wmat.uniforms.uM.value.set(north.x, up.x, east.x, north.y, up.y, east.y, north.z, up.z, east.z);
   const water = new THREE.Mesh(waterGeometry(0), wmat); water.frustumCulled = false; waterScene.add(water);
-  const F = FALLS[0];
-  const foot = new THREE.Vector3(F.cR[0], F.poolY, F.cR[1]);
-  const feet = [{at: foot, h: Math.round(F.drop), sky: 0.9}];
-  wmat.uniforms.uFoot.value.copy(foot); wmat.uniforms.uFootH.value = F.drop;
+  // Every fall's foot: where it lands, the game's h (its falling layers) and D (metres from the lip's water to the
+  // water it lands in, the proposed rule's measure).
+  const feet = FALLS.map((F, i) => {
+    const at = new THREE.Vector3(F.cR[0], F.poolY, F.cR[1]);
+    wmat.uniforms.uFeet.value[i].copy(at); wmat.uniforms.uFeetH.value[i] = F.drop;
+    return {at, h: F.N, D: F.H, sky: 0.9, flow: F.flow};
+  });
   // The new sheet, sampled nearest with no mipmaps.
   const sheet = new THREE.TextureLoader().load(sheetUrl);
   sheet.magFilter = sheet.minFilter = THREE.NearestFilter; sheet.generateMipmaps = false;
@@ -705,13 +806,16 @@ window.PBDMist = function (canvas, sheetUrl) {
   // it) and after the water (B and C, the order fix).
   const leak = splashMesh(U, sheet); leak.renderOrder = 5; opaque.add(leak);
   const front = splashMesh(U, sheet); fx.add(front);
-  const bubbles = bubblePoints(F, U); bubbles.material.uniforms.uFoot.value.copy(foot); opaque.add(bubbles);
+  const bubbles = FALLS.map((F, i) => { const b = bubblePoints(F, U); b.material.uniforms.uFoot.value.copy(feet[i].at); opaque.add(b); return b; });
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
-  const S = {variant: "today", night: false, running: true, gain: 1.5, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 1};
+  const S = {variant: "today", night: false, running: true, gain: 1.5, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 1,
+    rule: "new", accel: 1};
+  // The eye's pool (the cell under it, if it is a basin's), for the view from under the water.
+  let eyePool = null;
   function murk(open) {
     // The game's murk: the deep's albedo lit by the light on open water, dimmed by the water above the eye.
-    const eyeDepth = Math.max(0, F.poolY - camera.position.y);
+    const eyeDepth = eyePool === null ? 0 : Math.max(0, eyePool - camera.position.y);
     const k = Math.exp(-0.12 * eyeDepth);
     return new THREE.Vector3(0.020, 0.090, 0.075).lerp(new THREE.Vector3(0.004, 0.018, 0.040), 0.35).multiply(open).multiplyScalar(2.2 * k);
   }
@@ -725,14 +829,19 @@ window.PBDMist = function (canvas, sheetUrl) {
     open = U.uSunCol.value.clone().multiplyScalar(Math.max(U.uSunDir.value.y, 0)).add(U.uAmb.value).multiplyScalar(S.night ? 1 : 0.82);
     wmat.uniforms.uOpen.value.copy(open); wmat.uniforms.uNight.value = S.night ? 1 : 0; wmat.uniforms.uSunI.value = S.night ? 0 : 1;
     skyMat.uniforms.uNight.value = S.night ? 1 : 0;
-    bubbles.material.uniforms.uOpen.value.copy(open).multiplyScalar(0.8);
+    for (const b of bubbles) b.material.uniforms.uOpen.value.copy(open).multiplyScalar(0.8);
     for (const l of lamps) l.userData.bulb.color.set(S.night ? 0xffd28a : 0x443322);
   }
+  // The speed-up down a fall: g = 3 m/s^2 at strength 1, to at most 8 m/s (New tab only; the others keep the game's
+  // constant scroll).
+  const ACCEL_G = 3, ACCEL_VMAX = 8;
   function apply() {
     const v = S.variant;
     leak.visible = v === "today"; front.visible = v !== "today";
-    bubbles.visible = v === "new"; wmat.uniforms.uAer.value = v === "new" ? 1 : 0;
-    bubbles.material.uniforms.uAmt.value = S.bubbles; wmat.uniforms.uAerAmt.value = S.teal;
+    for (const b of bubbles) { b.visible = v === "new"; b.material.uniforms.uAmt.value = S.bubbles; }
+    wmat.uniforms.uAer.value = v === "new" ? 1 : 0;
+    wmat.uniforms.uAerAmt.value = S.teal;
+    wmat.uniforms.uG.value = v === "new" ? ACCEL_G * S.accel : 0; wmat.uniforms.uVmax.value = ACCEL_VMAX;
     front.material.uniforms.uGain.value = S.gain; front.material.uniforms.uLamps.value = v === "new" ? 1 : 0;
     front.material.uniforms.uSoft.value = v === "new" ? S.soft : 0;
     lighting();
@@ -754,7 +863,7 @@ window.PBDMist = function (canvas, sheetUrl) {
       depthRT.depthTexture.minFilter = depthRT.depthTexture.magFilter = THREE.NearestFilter;
       front.material.uniforms.uDepthTex.value = depthRT.depthTexture; front.material.uniforms.uDRes.value.set(copyW, copyH);
     }
-    bubbles.material.uniforms.uPx.value = sz.y / (2 * Math.tan(camera.fov * Math.PI / 360));
+    for (const b of bubbles) b.material.uniforms.uPx.value = sz.y / (2 * Math.tan(camera.fov * Math.PI / 360));
   }
   // ---- the view: drag to turn, wheel or pinch to come closer. Nothing moves on its own.
   const V = {target: new THREE.Vector3(), yaw: 0, pitch: -0.7, dist: 10};
@@ -762,46 +871,79 @@ window.PBDMist = function (canvas, sheetUrl) {
     const d = new THREE.Vector3(Math.cos(V.pitch) * Math.cos(V.yaw), Math.sin(V.pitch), Math.cos(V.pitch) * Math.sin(V.yaw));
     camera.position.copy(V.target).addScaledVector(d, -V.dist); camera.lookAt(V.target);
   }
+  // Looking at a point from yaw, pitch (degrees) and a distance; or from an eye.
+  function frame(target, yawDeg, pitchDeg, dist) {
+    V.yaw = yawDeg * Math.PI / 180; V.pitch = pitchDeg * Math.PI / 180; V.dist = dist; V.target.set(...target); place();
+  }
   function view(eye, yawDeg, pitchDeg, dist) {
     V.yaw = yawDeg * Math.PI / 180; V.pitch = pitchDeg * Math.PI / 180; V.dist = dist;
     const d = new THREE.Vector3(Math.cos(V.pitch) * Math.cos(V.yaw), Math.sin(V.pitch), Math.cos(V.pitch) * Math.sin(V.yaw));
     V.target.set(...eye).addScaledVector(d, dist); place();
   }
-  const VIEWS = {
-    above: () => view([cx(-1, 0), -2.5, cz(0) + 0.6], -4, -42, 8),
-    side: () => view([cx(-1, 0), F.poolY + 1.7, cz(0) + 0.6], -5, -8, 7),
-    under: () => view([cx(0, 0) - 0.5, F.poolY - 1.6, cz(0) + 0.4], -4, 16, 6),
-  };
+  // The views: of every fall at once ("all"), or of one, framed by its height. Under is always one fall's pool (the
+  // 9-layer one for "all").
+  const zMid = (cz(FALLS[0].c[1]) + cz(FALLS[NF - 1].c[1])) / 2;
+  function close(F, which) {
+    const [Rx, Rz] = F.cR, [Cx, Cz] = F.cC;
+    if (which === "above") return frame([Rx - 0.5, F.poolY + 0.45 * F.H, Rz + 0.4], -4, -36, 6 + 0.85 * F.H);
+    if (which === "side") return frame([Rx - 0.6, F.poolY + 0.4 * F.H + 0.3, Rz + 0.4], -5, -9, 5 + 0.55 * F.H);
+    return view([Cx - 0.5, Math.max(F.poolY - 1.6, F.floor + 0.3), Cz + 0.4], -4, 16, 6);
+  }
+  let FOCUS = "all", VIEW = "above";
+  function look(viewName, focus) {
+    if (viewName) VIEW = viewName; if (focus !== undefined) FOCUS = focus;
+    const F = FOCUS === "all" ? null : FALLS.find(f => f.name === FOCUS);
+    if (F) return close(F, VIEW);
+    if (VIEW === "above") return frame([HW * 0.6, -3.2, zMid], 0, -34, 46);
+    if (VIEW === "side") return frame([HW, -2.6, zMid + 1], 0, -9, 36);
+    return close(FALLS[NF - 1], "under");
+  }
+  const VIEWS = {above: () => look("above"), side: () => look("side"), under: () => look("under")};
   const ptrs = new Map(); let pinch0 = 0;
   canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
   canvas.addEventListener("pointermove", e => {
     if (!ptrs.has(e.pointerId)) return; const [px, py] = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
     if (ptrs.size === 1) { V.yaw += (e.clientX - px) * 0.006; V.pitch = Math.max(-1.45, Math.min(1.2, V.pitch - (e.clientY - py) * 0.006)); place(); }
-    else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 > 0) { V.dist = Math.max(1, Math.min(60, V.dist * pinch0 / d)); place(); } pinch0 = d; }
+    else if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 > 0) { V.dist = Math.max(1, Math.min(90, V.dist * pinch0 / d)); place(); } pinch0 = d; }
   });
   const up_ = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
   canvas.addEventListener("pointerup", up_); canvas.addEventListener("pointercancel", up_);
-  canvas.addEventListener("wheel", e => { e.preventDefault(); V.dist = Math.max(1, Math.min(60, V.dist * Math.exp(e.deltaY * 0.001))); place(); }, {passive: false});
+  canvas.addEventListener("wheel", e => { e.preventDefault(); V.dist = Math.max(1, Math.min(90, V.dist * Math.exp(e.deltaY * 0.001))); place(); }, {passive: false});
+  // ---- each fall's label, over its lip
+  const labelHost = opts && opts.labels;
+  const labels = labelHost ? FALLS.map(F => { const d = document.createElement("span"); d.textContent = F.label; labelHost.appendChild(d); return d; }) : [];
+  const lp = new THREE.Vector3();
+  function placeLabels() {
+    if (!labels.length) return;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    FALLS.forEach((F, i) => {
+      lp.set(F.cS[0], 1.9, F.cS[1]).project(camera);
+      const shown = lp.z > -1 && lp.z < 1 && Math.abs(lp.x) < 0.98 && Math.abs(lp.y) < 0.98 && U.uEyeUnder.value < 0.5;
+      labels[i].hidden = !shown;
+      if (shown) labels[i].style.transform = `translate(${((lp.x + 1) / 2 * w).toFixed(1)}px, ${((1 - lp.y) / 2 * h).toFixed(1)}px) translate(-50%, -100%)`;
+    });
+  }
   // ---- the frame
   let simT = 0, raf = 0, last = performance.now();
-  function frame(now) {
-    raf = requestAnimationFrame(frame);
+  function frameLoop(now) {
+    raf = requestAnimationFrame(frameLoop);
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (S.running) simT += dt;
     draw();
   }
   function draw() {
     wmat.uniforms.uTime.value = simT * 0.75;
-    bubbles.material.uniforms.uTime.value = simT;
-    // The eye under the pool: the game's compose fogs everything by its distance, and the water draws from below.
-    const pitXZ = Math.hypot(camera.position.x - cx(0, 0), camera.position.z - cz(0)) < 2.6 * HW;
-    const under = pitXZ && camera.position.y < F.poolY;
+    for (const b of bubbles) b.material.uniforms.uTime.value = simT;
+    // The eye under a pool: the game's compose fogs everything by its distance, and the water draws from below.
+    const [hq, hr] = hexAt(camera.position.x, camera.position.z);
+    eyePool = poolAt(hq, hr);
+    const under = eyePool !== null && camera.position.y < eyePool;
     U.uEyeUnder.value = under ? 1 : 0; U.uMurk.value.copy(murk(open));
     const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), upCam = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
     const day = S.night ? 0 : 1;
     for (const m of [leak, front]) {
       if (!m.visible) continue;
-      splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q, {mist: S.mist, mistSize: S.mistSize, veil: S.veil, streak: S.streak});
+      splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q, {mist: S.mist, mistSize: S.mistSize, veil: S.veil, streak: S.streak, rule: S.rule});
       m.material.uniforms.uRight.value.copy(right); m.material.uniforms.uUpCam.value.copy(upCam);
       m.userData.upload();
     }
@@ -815,12 +957,13 @@ window.PBDMist = function (canvas, sheetUrl) {
     renderer.copyFramebufferToTexture(new THREE.Vector2(0, 0), copyTex);
     renderer.render(waterScene, camera);
     renderer.render(fx, camera);
+    placeLabels();
   }
-  resize(); VIEWS.above(); apply();
+  resize(); look("above", "all"); apply();
   window.addEventListener("resize", resize);
   return {
-    S, apply, resize, views: VIEWS,
-    start() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } },
+    S, apply, resize, views: VIEWS, look, falls: FALLS.map(F => ({name: F.name, label: F.label, N: F.N, D: F.H})),
+    start() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frameLoop); } },
     stop() { cancelAnimationFrame(raf); raf = 0; },
     setTime(sec) { simT = sec; draw(); },
     info() { const gl = renderer.getContext(); const ext = gl.getExtension("WEBGL_debug_renderer_info"); return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); },
