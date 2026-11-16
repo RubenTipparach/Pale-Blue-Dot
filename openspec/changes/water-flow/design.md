@@ -751,6 +751,35 @@ The plan, in order:
    beside today's spray for the owner's approval before any game code.
    Crab Breeze's source or a clip of its splashes would be the reference.
 
+### The fall splash drawn after the water (6.1, 2026-11-16)
+
+The owner again: "water fall splash fx still not drawn in front of water"
+(`docs/screenshots/handoff/fall-splash-behind-water.webp`). The cause is the
+one measured above: the spray and mist are a Transparent3d mesh, and the
+water composite runs after `EndMainPass` and paints over them, with no depth
+of theirs to stop it. The sharp white panels in that shot are not the splash
+but the lip froth on the pool's side faces (item 2 above), which is a look
+change and waits for M31.
+
+The fix, order and depth only:
+
+- `animate_splash` keeps building exactly the same quads (same count,
+  places, sizes, colours, alpha, nearest first) but hands them to the render
+  world as a list (`SplashQuads`: the camera's right and up, then a centre,
+  size and colour per quad) instead of rewriting a Bevy mesh; the Bevy mesh
+  and its `StandardMaterial` go.
+- The water's pass draws them last, after the cap and the flowing water, in
+  `water.wgsl`'s `splash_vertex` / `splash_fragment`: the same 32-texel dot
+  sampled nearest (as `ImagePlugin::default_nearest` sampled the image), the
+  same unlit colour, the same straight alpha blend.
+- Hidden by terrain in front by the cap's own test against the main pass's
+  depth; hidden by water in front by the water's depth attachment, tested
+  and not written. So from above a pool the splash stands on the surface,
+  behind a fall's column it is hidden by the column, and from under the pool
+  the surface overhead hides it.
+- Its pipeline is one of the water's, queued with the others when the view's
+  water state is made, so the loading screen compiles it before `READY`.
+
 ## Risks / Trade-offs
 
 - **Infinite water.** Renewing makes infinite water, as in Luanti. With
