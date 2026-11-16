@@ -82,3 +82,49 @@ step setting.
 - **WHEN** a walker wading in a shallow holds forward into a bank two layers
   over the feet
 - **THEN** they climb onto it
+
+### Requirement: A walker in water steps up a submerged step on its own
+While the walker's body is in water and the forward control presses its feet
+into a step in the bed it is facing, whose top is still under the water's
+surface, the walker SHALL rise onto the step, without the jump control, when
+the step's top is no more than two layers over the feet, and SHALL do so as
+the same eased rise and step forward as the climb onto a bank. A taller step
+SHALL NOT be climbed this way, and a step met moving along it SHALL NOT be
+climbed. The step-up SHALL follow the auto step setting.
+
+#### Scenario: Swimming from two-layer water onto a one-layer shelf
+- **WHEN** a swimmer over water two layers deep holds forward into a shelf
+  one layer under the surface
+- **THEN** they rise onto the shelf and carry on over it
+
+#### Scenario: Deep water, a shelf, then the bank
+- **WHEN** a swimmer holds forward from water two layers deep, over a shelf
+  one layer deep, toward a bank level with the surface
+- **THEN** they end standing on the bank without stopping at either step
+
+#### Scenario: Swimming along a submerged step
+- **WHEN** a swimmer moves along a submerged step rather than into it
+- **THEN** they do not climb it
+
+### Requirement: A wall the walker only grazes is never stood on
+A refused move SHALL NOT raise the walker onto a wall that a point of its
+footprint grazes by no more than the rounding of its position. A walker or a
+swimmer pressed into a wall taller than a step SHALL stay at the wall's foot
+or in the water, however long it presses and wherever on the planet it
+stands.
+
+#### Scenario: Sinking beside a tall bank
+- **WHEN** a swimmer sinks while holding forward into a bank three layers
+  over the water
+- **THEN** no tick lifts them more than a step, and they never stand on it
+
+### Requirement: A walker slides along a hex bank
+A walker or a swimmer heading along a terrain bank and leaning into it SHALL
+slide along the bank's zig-zag of hex faces, past its corners, rather than
+stopping at the first corner it meets.
+
+#### Scenario: Leaning into a bank
+- **WHEN** a walker holds forward along a three-layer bank, leaning up to
+  0.6 rad into it
+- **THEN** it travels along the bank at least half as far as the same walk
+  in the open

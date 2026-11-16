@@ -1370,6 +1370,28 @@ fn footprint_in(terrain: &PlanetContact, meets: Meets, position: Vec3, reach: f3
     }
 }
 
+/// How far into a wall a footprint point may sit and still be the rounding's
+/// (`wall-snap`): a position on the planet holds about 0.5 mm in an `f32`.
+const SLIVER_M: f32 = 0.01;
+
+/// The support a body at `position` stands on when a point of its footprint
+/// only grazes a wall: the least of the footprint's supports nudged
+/// [`SLIVER_M`] eight ways round it. A point a millimetre inside a wall is
+/// clear of it in at least one nudge; a body truly in a wall is in it in all
+/// of them.
+fn support_past_sliver(terrain: &PlanetContact, meets: Meets, position: Vec3, reach: f32) -> f32 {
+    let up = position.normalize();
+    let e1 = up.any_orthonormal_vector() * SLIVER_M;
+    let e2 = up.cross(e1);
+    [e1, -e1, e2, -e2, e1 + e2, e1 - e2, -e1 + e2, -e1 - e2]
+        .into_iter()
+        .map(|nudge| {
+            let at = (position + nudge).normalize() * position.length();
+            footprint_in(terrain, meets, at, reach).support
+        })
+        .fold(f32::INFINITY, f32::min)
+}
+
 /// Whether a body standing on `support` has room under `ceiling`.
 fn headroom(support: f32, ceiling: Option<f32>) -> bool {
     ceiling.is_none_or(|c| c - (support + CONTACT_SKIN) >= 2.0 * HALF_HEIGHT + CONTACT_SKIN)
@@ -1379,6 +1401,9 @@ fn headroom(support: f32, ceiling: Option<f32>) -> bool {
 struct Swept {
     accepted: Vec3,
     grounded: bool,
+    /// Whether the move was refused anywhere along it, with a face to slide
+    /// along or not.
+    refused: bool,
     /// Where the sweep was refused: the face's normal along the ground,
     /// pointing back at the body, and the tangential velocity before the
     /// refusal took it.
@@ -1460,17 +1485,35 @@ fn sweep(
             let tangential = *velocity - old_up * velocity.dot(old_up);
             // Only block tangential motion. Preserve the full fixed tick's
             // vertical displacement, independent of the first hit fraction.
-            let floor =
-                footprint_in(terrain, meets, accepted, reach).support + HALF_HEIGHT + CONTACT_SKIN;
+            // The floor under the body where it stays. A body pressed against
+            // a wall rests with a footprint point within a millimetre of the
+            // wall's edge, and re-rounding its direction in the radial move
+            // below (a swimmer sinking, a walker held at a floor) puts that
+            // point inside the wall every so often: read as the support, it
+            // stood the body on the wall's top in one tick, at any height
+            // (`wall-snap`). So the body is raised over where it stands only
+            // to what it stands on past such a sliver: a body truly in a wall
+            // (a pillar built beside it) is put on it as before.
+            let support = footprint_in(terrain, meets, accepted, reach).support;
+            let raise_to = if support > old_feet - CONTACT_SKIN {
+                support_past_sliver(terrain, meets, accepted, reach).max(old_feet - CONTACT_SKIN)
+            } else {
+                support
+            };
+            let floor = support.min(raise_to) + HALF_HEIGHT + CONTACT_SKIN;
             accepted = old_up * destination.length().max(floor);
             *velocity = old_up * velocity.dot(old_up);
-            grounded = accepted.length() <= floor + 0.03 && velocity.dot(old_up) <= 0.0;
+            // Not rising, to within the rounding a slide leaves in the
+            // vertical (the same 1e-4 as the hold below): an exact zero test
+            // let a walker standing still against a wall lose its footing.
+            grounded = accepted.length() <= floor + 0.03 && velocity.dot(old_up) <= 1e-4;
             if grounded {
                 *velocity = Vec3::ZERO;
             }
             return Swept {
                 accepted,
                 grounded,
+                refused: true,
                 blocked: normal.map(|n| (n, tangential)),
             };
         }
@@ -1492,6 +1535,7 @@ fn sweep(
     Swept {
         accepted,
         grounded,
+        refused: false,
         blocked: None,
     }
 }
@@ -1542,6 +1586,9 @@ fn resolve_ground(
         // The face the move was first refused at, for the climb out of the
         // water (`swimming` 4).
         let mut face = None;
+        // The velocity along the ground before the first refusal took it.
+        let mut first_tangential = None;
+        let (wish_from, wish_to) = (start, destination);
         for slide in 0..3 {
             let swept = sweep(
                 start,
@@ -1558,6 +1605,7 @@ fn resolve_ground(
                 break;
             };
             face = face.or(Some(normal));
+            first_tangential = first_tangential.or(Some(tangential));
             let up = accepted.normalize();
             let rest = destination - accepted;
             let rest = rest - up * rest.dot(up);
@@ -1571,6 +1619,52 @@ fn resolve_ground(
             velocity.0 = up * velocity.0.dot(up) + tangential - up * tangential.dot(up);
             start = accepted;
             destination = (accepted + along).normalize() * accepted.length();
+        }
+        // The slide along the face's normal stops dead at a corner of the
+        // hex zig-zag: the normal is the support's fall over the probes round
+        // the body, which at a corner is neither face's, so the move along it
+        // is refused again (`wall-snap`). Where the slides made under half
+        // the move, the move is tried turned away from the wish, 10 degrees
+        // at a time up to 80 either way and shortened to its part along the
+        // wish, and the first that is not refused is taken. A wall met head
+        // on refuses all of them, as it refused the slide.
+        if let Some(first) = first_tangential {
+            let up = wish_from.normalize();
+            let wish = wish_to - wish_from;
+            let wish = wish - up * wish.dot(up);
+            let length = wish.length();
+            let made = (accepted - wish_from).dot(wish / length.max(1e-6));
+            if length > 1e-3 && made < 0.5 * length {
+                let here = accepted.normalize();
+                let speed = (first - up * first.dot(up)).length();
+                let remaining = length - made.max(0.0);
+                'turn: for step in 1..=8 {
+                    let angle = (10.0 * step as f32).to_radians();
+                    for sign in [1.0, -1.0] {
+                        let way =
+                            tangent_heading(Quat::from_axis_angle(here, sign * angle) * wish, here);
+                        let to = (accepted + way * remaining * angle.cos()).normalize()
+                            * accepted.length();
+                        let mut turned = velocity.0;
+                        let swept = sweep(
+                            accepted,
+                            to,
+                            was_grounded,
+                            &mut turned,
+                            &config,
+                            &terrain,
+                            meets,
+                        );
+                        if !swept.refused && (swept.grounded || !was_grounded) {
+                            let up = swept.accepted.normalize();
+                            velocity.0 = up * turned.dot(up) + way * speed * angle.cos();
+                            accepted = swept.accepted;
+                            grounded = swept.grounded;
+                            break 'turn;
+                        }
+                    }
+                }
+            }
         }
         // The head against a ceiling. A jump under a cave roof stops at the
         // roof: the body drops to hang under it and the rise is taken off,
@@ -1699,9 +1793,12 @@ fn water_climb(
     let top = ledge.support;
     let climbs_over_surface = top >= surface - 0.1 && top - surface <= config.water_climb_m;
     let climbs_over_feet = wading && top - feet <= config.water_climb_wade_m;
+    // A step in the bed still under the water (`swimming` 5): the feet meet
+    // it, so it is measured from them, as a wader's bank is.
+    let steps_under_water = top < surface - 0.1 && top - feet <= config.water_climb_wade_m;
     if top - feet <= 0.03
         || top - feet > config.water_climb_reach_m
-        || !(climbs_over_surface || climbs_over_feet)
+        || !(climbs_over_surface || climbs_over_feet || steps_under_water)
     {
         return None;
     }
@@ -2841,19 +2938,35 @@ mod tests {
         surface: f32,
     }
 
-    fn pool_and_bank(depth: usize, rise: usize) -> Pool {
+    /// Water `depth` layers deep round `W` and a bank `rise` layers over its
+    /// surface past it; with `on_circle` the pool sits on the great circle
+    /// z = 0, where `any_orthonormal_vector` flips (`wall-snap`), with the
+    /// bank's row crossing that circle as steeply as the hex allows.
+    fn pool_and_bank_at(depth: usize, rise: usize, on_circle: bool) -> Pool {
+        pool_rows(&[-(depth as isize), rise as isize], on_circle)
+    }
+
+    /// A pool whose bed or bank in each row of cells parallel to the bank is
+    /// `rows[k]` layers over the water's surface (negative: under it), the
+    /// row through `W` first and the last row going on: the owner's
+    /// staircase (`swimming` 5) is `[-2, -1, 0]`.
+    fn pool_rows(rows: &[isize], on_circle: bool) -> Pool {
         use pbd_core::{column::layer_altitude, terrain::Material};
-        // Land, and off the great circle z = 0, where the footprint's
-        // tangent flips (written up in `swimming` 4).
-        let inland = (0..4096)
-            .map(|index| {
-                let y = 1.0 - 2.0 * (index as f32 + 0.5) / 4096.0;
-                let r = (1.0 - y * y).max(0.0).sqrt();
-                let a = std::f32::consts::PI * (3.0 - 5_f32.sqrt()) * index as f32;
-                Vec3::new(r * a.cos(), y, r * a.sin())
-            })
-            .find(|d| d.z.abs() > 0.3 && crate::planet::surface_height(*d) > 10.0)
-            .expect("land on the test planet");
+        let fibonacci = (0..4096).map(|index| {
+            let y = 1.0 - 2.0 * (index as f32 + 0.5) / 4096.0;
+            let r = (1.0 - y * y).max(0.0).sqrt();
+            let a = std::f32::consts::PI * (3.0 - 5_f32.sqrt()) * index as f32;
+            Vec3::new(r * a.cos(), y, r * a.sin())
+        });
+        let land = |d: &Vec3| crate::planet::surface_height(*d) > 10.0;
+        let inland = if on_circle {
+            fibonacci
+                .map(|d| Vec3::new(d.x, d.y, 0.0).normalize())
+                .find(land)
+        } else {
+            fibonacci.filter(|d| d.z.abs() > 0.3).find(land)
+        }
+        .expect("land on the test planet");
         let mut set = crate::planet::lod::generate_fine(
             inland,
             &crate::config::ColumnSettings::default(),
@@ -2865,12 +2978,29 @@ mod tests {
             .max_by(|&a, &b| centre(a).dot(inland).total_cmp(&centre(b).dot(inland)))
             .unwrap();
         let wc = centre(w);
-        let (b1, b2) = (
-            set.finest_neighbors[w][0] as usize,
-            set.finest_neighbors[w][1] as usize,
-        );
         let tangent = |v: Vec3| (v - wc * v.dot(wc)).normalize();
-        let into = tangent((centre(b1) + centre(b2)) * 0.5 - wc);
+        let degree = records[w].degree();
+        let pair = |k: usize| {
+            (
+                set.finest_neighbors[w][k] as usize,
+                set.finest_neighbors[w][(k + 1) % degree] as usize,
+            )
+        };
+        let side = |(b1, b2): (usize, usize)| tangent((centre(b1) + centre(b2)) * 0.5 - wc);
+        // Off the circle the first side, as it always was; on it, the side
+        // whose row runs most nearly across the circle.
+        let k = if on_circle {
+            (0..degree)
+                .max_by(|&a, &b| {
+                    let z = |k| wc.cross(side(pair(k))).z.abs();
+                    z(a).total_cmp(&z(b))
+                })
+                .unwrap()
+        } else {
+            0
+        };
+        let (b1, b2) = pair(k);
+        let into = side((b1, b2));
         let heading = tangent(centre(b1) - wc);
         let along = wc.cross(into).normalize();
         let g = set.columns.column(w).and_then(|c| c.surface()).unwrap();
@@ -2879,17 +3009,15 @@ mod tests {
             surface > crate::planet::terrain_config().sea_level_m + 2.0,
             "a pool above the sea, not the sea: {surface}"
         );
-        let spacing = (centre(b1) - wc).length() * PLANET_RADIUS;
+        // The distance between rows of cells along the bank's normal.
+        let pitch = ((centre(b1) + centre(b2)) * 0.5 - wc).length() * PLANET_RADIUS;
         let near: Vec<usize> = (0..records.len())
             .filter(|&i| wc.angle_between(centre(i)) * PLANET_RADIUS < 25.0)
             .collect();
         for i in near {
             let s = (centre(i) - wc).dot(into) * PLANET_RADIUS;
-            let top = if s > 0.4 * spacing {
-                g + rise
-            } else {
-                g - depth
-            };
+            let row = ((s / pitch).round().max(0.0) as usize).min(rows.len() - 1);
+            let top = (g as isize + rows[row]) as usize;
             let column = set.columns.column_mut(i).expect("a column");
             for layer in 1..pbd_core::column::LAYERS {
                 let material = if layer <= top {
@@ -2923,6 +3051,8 @@ mod tests {
         into_bank: f32,
         climb_ticks: u32,
         longest_step: f32,
+        /// The lowest the feet went, metres over the surface.
+        lowest_feet: f32,
     }
 
     /// How a run in the pool starts: feet `under` metres under the surface
@@ -2947,7 +3077,12 @@ mod tests {
 
     /// Put a walker in the pool and hold forward for two seconds.
     fn swim_into_bank(depth: usize, rise: usize, start: Start) -> Swim {
-        let pool = pool_and_bank(depth, rise);
+        swim_into_rows(&[-(depth as isize), rise as isize], start, 128)
+    }
+
+    /// [`swim_into_bank`] in a [`pool_rows`] pool, holding forward `ticks`.
+    fn swim_into_rows(rows: &[isize], start: Start, ticks: u32) -> Swim {
+        let pool = pool_rows(rows, false);
         let (wc, into, surface) = (pool.w, pool.into, pool.surface);
         let heading = if start.along_bank {
             pool.along
@@ -2979,13 +3114,15 @@ mod tests {
         let mut climb_ticks = 0;
         let mut longest_step = 0.0_f32;
         let mut last = app.world().get::<Position>(walker).unwrap().0;
-        for _ in 0..128 {
+        let mut lowest_feet = f32::MAX;
+        for _ in 0..ticks {
             app.update();
             if app.world().resource::<WalkingState>().climb.is_some() {
                 climb_ticks += 1;
             }
             let now = app.world().get::<Position>(walker).unwrap().0;
             longest_step = longest_step.max(now.distance(last));
+            lowest_feet = lowest_feet.min(now.length() - HALF_HEIGHT - surface);
             last = now;
         }
         let ground = app.world().get::<GroundState>(walker).unwrap();
@@ -2995,6 +3132,7 @@ mod tests {
             into_bank: (last.normalize() - wc).dot(into) * PLANET_RADIUS,
             climb_ticks,
             longest_step,
+            lowest_feet,
         }
     }
 
@@ -3080,6 +3218,85 @@ mod tests {
         }
     }
 
+    /// `swimming` 5, the owner: "Often times I'm swimming in 2 depth water
+    /// and my feet hits the floor when swimming to depth 1." A swimmer in
+    /// mid-water over a two-layer pool, its feet under the top of a shelf
+    /// one layer under the surface and off the bed, holding forward into the
+    /// shelf, steps up onto it before it has sunk to the bed (where a wader's
+    /// rule would take it), and carries on over it.
+    #[test]
+    fn a_swimmer_steps_from_two_layer_water_onto_a_one_layer_shelf() {
+        for (under, offset) in [(1.3, 0.5), (1.5, 0.5), (1.5, 0.3)] {
+            let swim = swim_into_rows(
+                &[-2, -1],
+                Start {
+                    under,
+                    offset,
+                    ..SWIMMING
+                },
+                128,
+            );
+            let what = format!("{under} m under, {offset} m toward the shelf");
+            assert!(swim.climb_ticks > 0, "{what}: no step up");
+            assert!(
+                swim.lowest_feet > -1.9,
+                "{what}: sank to the bed first, feet {:.2} m under the surface",
+                -swim.lowest_feet
+            );
+            assert!(
+                swim.into_bank > 4.0 && swim.feet_over_surface > -1.1,
+                "{what}: {:.2} m on, feet {:.2} m over the surface",
+                swim.into_bank,
+                swim.feet_over_surface
+            );
+            assert!(
+                swim.longest_step < 0.35,
+                "{what}: a step of {:.2} m in one tick",
+                swim.longest_step
+            );
+        }
+    }
+
+    /// The owner's sketch: water two deep, a shelf one deep, then the bank
+    /// level with the surface. Holding forward ends standing on the bank.
+    #[test]
+    fn a_swimmer_climbs_the_owners_staircase_onto_the_bank() {
+        for (under, offset) in [(1.0, 0.0), (1.5, 0.5)] {
+            let swim = swim_into_rows(
+                &[-2, -1, 0],
+                Start {
+                    under,
+                    offset,
+                    ..SWIMMING
+                },
+                256,
+            );
+            assert!(
+                swim.grounded && swim.feet_over_surface.abs() < 0.1 && swim.into_bank > 4.5,
+                "{under} m under: {:.2} m on, feet {:.2} m over the surface, grounded {}",
+                swim.into_bank,
+                swim.feet_over_surface,
+                swim.grounded
+            );
+        }
+    }
+
+    /// Swimming along a submerged step, brushing it, does not climb it.
+    #[test]
+    fn a_swimmer_moving_along_a_submerged_step_does_not_climb() {
+        let swim = swim_into_rows(
+            &[-2, -1],
+            Start {
+                under: 1.5,
+                offset: 0.6,
+                along_bank: true,
+                ..SWIMMING
+            },
+            128,
+        );
+        assert_eq!(swim.climb_ticks, 0, "climbed swimming along the step");
+    }
+
     /// With auto step off the climb is off too, and the bank stops the swimmer.
     #[test]
     fn with_auto_step_off_a_swimmer_does_not_auto_climb() {
@@ -3093,6 +3310,206 @@ mod tests {
         );
         assert_eq!(swim.climb_ticks, 0);
         assert!(swim.feet_over_surface < 0.0, "still in the water");
+    }
+
+    /// What a run beside a wall did (`wall-snap`).
+    struct Brush {
+        /// The most the feet rose in one tick, metres.
+        highest_tick_rise: f32,
+        /// The highest the feet came over the floor (or the water's surface
+        /// for a swimmer), metres.
+        highest_feet: f32,
+        /// How many times the walker crossed z = 0.
+        crossings: u32,
+        /// How far it ended along the bank from where it started, metres.
+        along: f32,
+    }
+
+    /// Walk or swim beside a wall `rise` layers tall, for `ticks` at 64 Hz,
+    /// holding forward. The walker starts `offset` metres toward the bank
+    /// from `W` and `back` metres back along the bank (from where its row
+    /// crosses z = 0, `on_circle`), heading along the bank and turned `lean`
+    /// radians into it, turning right (into the bank) at `turn` radians a
+    /// second. With `depth` zero it walks on dry ground; with `depth` it swims
+    /// `under` metres under the surface.
+    #[allow(clippy::too_many_arguments)]
+    fn brush_wall(
+        on_circle: bool,
+        depth: usize,
+        rise: usize,
+        under: f32,
+        offset: f32,
+        back: f32,
+        lean: f32,
+        turn: f32,
+        ticks: u32,
+    ) -> Brush {
+        let pool = pool_and_bank_at(depth, rise, on_circle);
+        let (wc, into, along, surface) = (pool.w, pool.into, pool.along, pool.surface);
+        let line = wc * surface + into * offset;
+        // Where the line along the bank crosses z = 0, on the circle.
+        let t0 = if on_circle {
+            assert!(
+                along.z.abs() > 0.5,
+                "the bank runs across the circle: {along}"
+            );
+            -line.z / along.z
+        } else {
+            0.0
+        };
+        assert!(t0.abs() < 12.0, "z = 0 is {t0} m along the bank");
+        let dry = depth == 0;
+        let mut app = app_with_terrain_at(pool.terrain, wc);
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+            1.0 / 64.0,
+        )));
+        app.world_mut().resource_mut::<WalkingConfig>().turn = turn;
+        let at = (line + along * (t0 - back)).normalize();
+        // On the circle exactly, where the sign of z is the rounding's.
+        let at = if on_circle && back == 0.0 {
+            Vec3::new(at.x, at.y, 0.0).normalize()
+        } else {
+            at
+        };
+        let walker = place_at(
+            &mut app,
+            if dry {
+                at * (surface + CONTACT_SKIN + HALF_HEIGHT)
+            } else {
+                at * (surface - under + HALF_HEIGHT)
+            },
+            dry,
+        );
+        let heading = along * lean.cos() + into * lean.sin();
+        {
+            let mut state = app.world_mut().resource_mut::<WalkingState>();
+            state.up = at;
+            state.heading = tangent_heading(heading, at);
+            state.pitch = 0.0;
+            state.captured = true;
+            state.scripted = true;
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyW);
+        let start = app.world().get::<Position>(walker).unwrap().0;
+        let clear = footprint(app.world().resource::<PlanetContact>(), start).support;
+        assert!(
+            start.length() - HALF_HEIGHT - clear > -0.05,
+            "the walker starts clear of the wall"
+        );
+        let mut last = start;
+        let mut brush = Brush {
+            highest_tick_rise: 0.0,
+            highest_feet: f32::MIN,
+            crossings: 0,
+            along: 0.0,
+        };
+        for _ in 0..ticks {
+            app.update();
+            let now = app.world().get::<Position>(walker).unwrap().0;
+            brush.highest_tick_rise = brush.highest_tick_rise.max(now.length() - last.length());
+            brush.highest_feet = brush.highest_feet.max(now.length() - HALF_HEIGHT - surface);
+            if now.z.signum() != last.z.signum() {
+                brush.crossings += 1;
+            }
+            last = now;
+        }
+        brush.along = (last.normalize() - start.normalize()).dot(along) * PLANET_RADIUS;
+        brush
+    }
+
+    /// `wall-snap`: a body pressed into a wall rests with a footprint point
+    /// within a millimetre of the wall's edge, and the refused move's radial
+    /// step (a swimmer sinking, a walker held at its floor) re-rounds its
+    /// direction and every so often puts that point inside the wall. The
+    /// refusal read the wall's top as the floor and stood the body on it in
+    /// one tick: a swimmer 4.4 to 7 m, a walker 3 m, in 40 of these 240
+    /// runs before the fix. Two seconds pressed into a three-layer wall at
+    /// spots 14 cm apart along it, on the circle z = 0 the swimming write-up
+    /// suspected and off it, walking and swimming: never lifted.
+    #[test]
+    fn a_body_pressed_against_a_tall_wall_is_never_stood_on_its_top() {
+        use std::f32::consts::FRAC_PI_2;
+        let mut lifted = Vec::new();
+        let mut runs = 0;
+        for (on_circle, depth, under) in [
+            (false, 4, 1.0),
+            (false, 4, 0.2),
+            (true, 4, 1.0),
+            (false, 0, 0.0),
+        ] {
+            for k in 0..20 {
+                let back = (k as f32 - 9.5) * 0.14;
+                for lean in [FRAC_PI_2, 1.2, 1.9] {
+                    let brush = brush_wall(on_circle, depth, 3, under, 0.3, back, lean, 0.0, 128);
+                    runs += 1;
+                    // A walker on dry ground may step a layer; nothing rises
+                    // more than that in a tick, and nothing stands on the wall.
+                    if brush.highest_tick_rise > 1.05 || brush.highest_feet > 0.5 {
+                        lifted.push(format!(
+                            "z = 0 {on_circle}, depth {depth}, {under} m under, {back:.2} m along, leaning {lean:.2}: rose {:.2} m in a tick, feet {:.2} m up",
+                            brush.highest_tick_rise, brush.highest_feet
+                        ));
+                    }
+                }
+            }
+        }
+        assert!(
+            lifted.is_empty(),
+            "stood on the wall in {} of {runs} runs:\n{}",
+            lifted.len(),
+            lifted.join("\n")
+        );
+    }
+
+    /// `wall-snap`, the swimming write-up's second finding: a walker or a
+    /// swimmer heading along a bank and leaning into it slid along the hex
+    /// zig-zag only to its first inner corner and stopped dead there. It
+    /// carries on now, at least half as far as the same walk with no bank.
+    #[test]
+    fn a_walker_leaning_into_a_hex_bank_slides_along_its_zig_zag() {
+        for (depth, under) in [(0, 0.0), (4, 1.0)] {
+            // The same walk out in the open, far from the bank.
+            let free = brush_wall(false, depth, 3, under, -6.0, 2.0, 0.0, 0.0, 64).along;
+            for lean in [0.3_f32, 0.6] {
+                let brush = brush_wall(false, depth, 3, under, 0.3, 2.0, lean, 0.0, 64);
+                let open = free * lean.cos();
+                assert!(
+                    brush.along > 0.5 * open,
+                    "depth {depth}, leaning {lean}: {:.2} m along the bank, {:.2} m in the open",
+                    brush.along,
+                    open
+                );
+                assert!(brush.highest_feet < 0.5, "never on the bank");
+            }
+        }
+    }
+
+    /// `wall-snap`: walking round and round in a circle that crosses z = 0
+    /// and runs into the wall every lap never stands the walker on the wall.
+    #[test]
+    fn walking_a_full_circle_round_z_0_beside_a_wall_never_snaps_up() {
+        let step = WalkingConfig::default().step_height;
+        for (depth, under, turn) in [(0, 0.0, 3.0), (4, 1.0, 1.5)] {
+            let brush = brush_wall(true, depth, 3, under, 0.3, 0.5, 0.0, turn, 640);
+            let what = format!("depth {depth}, turning {turn}");
+            assert!(
+                brush.crossings >= 2,
+                "{what}: crossed z = 0 {} times",
+                brush.crossings
+            );
+            assert!(
+                brush.highest_tick_rise < step + 0.05,
+                "{what}: lifted {:.2} m in one tick",
+                brush.highest_tick_rise
+            );
+            assert!(
+                brush.highest_feet < 0.5,
+                "{what}: feet {:.2} m over the floor or surface",
+                brush.highest_feet
+            );
+        }
     }
 
     /// `taller-mountains` decision 8, survey H4: a new version-6 world starts

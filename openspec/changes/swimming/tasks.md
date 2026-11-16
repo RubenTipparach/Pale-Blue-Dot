@@ -80,6 +80,40 @@ water".
       does not climb; a wader at a 2-layer bank climbs.
 - [x] Captures, a short sequence of swimming up to a bank and climbing out, in
       `docs/screenshots/water-autoclimb/` (`--climb-out --time 21`).
-- [ ] The footprint's flip on the great circle z = 0 (design, "Found on the
-      way"): its own write-up and fix.
+- [x] The lift up a wall (design, "Wall snap: what it was"), `wall-snap`.
+      Measured, it was not the footprint's flip on z = 0, which this task
+      named. It was the rounding of a position pressed against a wall. On
+      the old code, 40 of 240 runs of a walker or a swimmer pressed into a
+      three-layer wall were stood on its top, on and off that circle. A
+      refused move now raises the body only for a footprint point truly
+      inside a wall, never for one that grazes it (`support_past_sliver`).
+      The frame is unchanged. Tests:
+      `a_body_pressed_against_a_tall_wall_is_never_stood_on_its_top` (fails
+      before, 40 of 240) and
+      `walking_a_full_circle_round_z_0_beside_a_wall_never_snaps_up` (fails
+      before).
+- [x] The slide along a hex bank stopped at the zig-zag's first corner. The
+      move is now tried turned up to 80° from the wish when the slides make
+      under half of it. Test:
+      `a_walker_leaning_into_a_hex_bank_slides_along_its_zig_zag` (before:
+      2.8 m against 7.4 m in the open; after: 6.5 m).
+- [x] Found with it: a walker standing still against a wall lost its footing
+      to the rounding of its vertical velocity. The refusal's grounded test
+      takes the hold's 1e-4 now.
 - [ ] The owner swims up to a bank in the running game.
+
+## 5. Stepping up a submerged step (owner, 2026-11-16)
+
+"Often times I'm swimming in 2 depth water and my feet hits the floor when
+swimming to depth 1. I expect auto climb to work here too." The rule is in
+the design, "Stepping up a submerged step".
+
+- [x] `water_climb` takes a step whose top is under the surface, up to two
+      layers over the feet (`water_climb_wade_m`), with the same gates
+      (`steps_under_water`).
+- [x] Tests on the pool (`pool_rows`):
+      `a_swimmer_steps_from_two_layer_water_onto_a_one_layer_shelf` (fails
+      before: the swimmer sinks to the bed first);
+      `a_swimmer_climbs_the_owners_staircase_onto_the_bank`;
+      `a_swimmer_moving_along_a_submerged_step_does_not_climb`.
+- [ ] The owner swims the staircase in the running game.

@@ -95,7 +95,7 @@ walker climbs onto the ledge beyond the face when:
 | facing the face: heading · (into the face) | at least **0.7** (within about 45°; a hex bank's faces meet the line of the bank at 30°, so swimming along it is 0.5 and does not climb) | `water_climb_facing` |
 | ledge top over the water surface | at most **2.7 m** (two layers, 2 × 1.05, plus the sea sheet's 0.5 m under its layer top and a 0.1 m skin) | `water_climb_m` |
 | or, standing on the bed in wading water, ledge top over the feet | at most **2.2 m** (two layers plus 0.1, the wade depth), whether or not the top is above the surface | `water_climb_wade_m` |
-| otherwise, ledge top against the surface | **at or above it** (within 0.1 m; a step still under water is the seabed's, and swimming down past it is left alone) | - |
+| otherwise, ledge top against the surface | **at or above it** (within 0.1 m; a step still under water is taken by "Stepping up a submerged step" below) | - |
 | ledge top over the feet | at most **4.5 m** (a body's length under the surface plus two layers; a swimmer deeper than that swims up first) | `water_climb_reach_m` |
 | room on the ledge | the body stands there under any ceiling, and no town solid holds it | - |
 | how long | **0.4 s**: the body rises to stand on the ledge over the first 60 % and moves **0.8 m** forward onto it over the rest, both eased | `water_climb_secs`, `water_climb_forward_m` |
@@ -120,7 +120,6 @@ share of 0.4 s.
 What does not climb: a ledge more than the table allows (the swimmer stays in
 the water or uses the swim rise, unchanged); a walker moving away from the bank
 or along it (no refused move, or a heading within 60° of along the face); a
-swimmer under water beside a step whose top is still under the surface; a
 swimmer more than 4.5 m under the ledge top; a walker with the forward control
 up.
 
@@ -157,17 +156,126 @@ letting go, rises from 2.3 m under sea level to the bank's top 2 m over it
 (2.5 m over the drawn sheet) in 0.23 s, and steps on over the next 0.15 s.
 Shots in `docs/screenshots/water-autoclimb/`.
 
-**Found on the way, not fixed (a write-up for its own change):** the
-walker's footprint takes its five points round `up.any_orthonormal_vector()`,
-which flips where `up.z` changes sign. On the great circle z = 0 the footprint
-turns between ticks, so a body pressed against a wall can find a point inside
-it that was not there a tick before, and the refused-move branch stands the
-walker on the wall's top, at any height: a swimmer sinking beside a
-three-layer bank on that circle was put 5.5 m up it in one tick. The pool
-tests stand off that circle. The fix is a footprint basis that does not flip
-(a fixed reference axis away from `up`), which changes where every walker's
-footprint samples, so it is written up rather than slipped in here.
+**Found on the way, and fixed after (`wall-snap`, 2026-11-16):** a swimmer
+sinking beside a three-layer bank was put 5.5 m up it in one tick. This
+write-up first blamed the footprint's frame (`up.any_orthonormal_vector()`,
+which flips where `up.z` changes sign). That was wrong, and the measurements
+below say why.
 
-Also seen: swimming along a terrain bank, the slide sticks at the hex
-zig-zag's first corner (the walker stops rather than sliding along). That is
-the existing slide on terrain faces, and unchanged.
+### Wall snap: what it was
+
+- **Not the frame.** The footprint is a pure function of the position: a
+  position the sweep accepted is read the same way the next tick, whichever
+  way its frame points. The frame flip only changes the footprint's shape
+  between one side of z = 0 and the other. Walkers and swimmers pressed into a
+  wall across z = 0, from starts 5 cm apart, were never lifted on the old
+  code. The lift seen on that circle was a pool test placing its swimmer, at
+  1.2 m toward the bank, with a footprint point already inside the zig-zag.
+  Placed like that it is lifted on either side of the circle.
+- **The rounding.** A position on a 4.8 km planet holds about 0.5 mm in an
+  `f32`. A body pressed into a wall rests with a footprint point within a
+  millimetre of the wall's edge. The refused move then moves the body
+  radially (`old_up * destination.length().max(floor)`): a swimmer sinking,
+  a walker held at its floor. That re-rounds its direction, and every so
+  often the point lands inside the wall. The refusal took the footprint's
+  support there as the floor, which is the wall's top, and stood the body on
+  it in one tick, at any height.
+- **Measured** on the old code: two seconds pressing into a three-layer wall
+  at 240 spots 14 cm apart along it, walking and swimming, on and off z = 0.
+  40 runs ended on the wall: a walker 3 m up, a swimmer 4.4 to 7 m.
+
+**The fix:** a refused move raises the body only for a footprint point
+truly inside a wall, never for one that grazes it. The refusal's floor is
+still the footprint's support where that is no higher than the body stands.
+Where it is higher, the body is raised only to the least support of the
+footprint nudged 1 cm (`SLIVER_M`) eight ways round it:
+- a point a millimetre inside a wall is clear of it in at least one nudge,
+  so the body stays where it stands;
+- a body really in a wall (a pillar built beside it) is in it in every
+  nudge, and is put on its top as it always was.
+
+The footprint's frame is unchanged, so every footprint samples exactly where
+it did. Measured after: none of the 240 runs. An earlier version, which never
+raised the body at all, also took none of a denser sweep of 480. It was
+narrowed to this one so that a body truly in a wall keeps today's behaviour.
+
+Found with it: the refusal called a walker grounded only when its vertical
+velocity was at most exactly zero. After a slide that velocity is ±1e-9 of
+rounding, so a walker standing still against a wall could lose its footing.
+The tolerance is the hold's 1e-4 now.
+
+### The slide along a hex bank
+
+Swimming or walking along a terrain bank and leaning into it, the walker
+stopped dead at the zig-zag's first inner corner. It walked 2.8 m and then
+nothing, leaning 0.3 rad, where the open ground gave 7.4 m. The slide moves
+along the face's normal, which `rise_normal` takes as the support's fall over
+four probes 0.25 m round the body. At a corner that is neither face's normal,
+so the move along it is refused again, three times, and the tick ends with
+no motion.
+
+**The fix:** after the three slides, if the walker made under half the move,
+the move is tried turned away from the wish, 10° at a time up to 80° either
+way. Each try is shortened to its part along the wish (cos θ), and the first
+the sweep does not refuse is taken. A grounded walker must stay grounded
+taking it, so the fallback never walks anyone off a ledge. A wall met head on
+refuses every try, as it refused the slide. Measured: leaning 0.3 rad, 6.5 m
+in a second against 7.4 m in the open; leaning 0.6, 5.0 m. Before, 2.8 and
+2.2 m.
+
+## Stepping up a submerged step (owner, 2026-11-16)
+
+The owner, with a sketch (side view; P the player, w water, x solid):
+
+```
+P > w w x
+    w x x
+    x x x x
+```
+
+*"Often times I'm swimming in 2 depth water and my feet hits the floor when
+swimming to depth 1. I expect auto climb to work here too."*
+
+The climb above only takes a ledge whose top is at or above the water's
+surface. A step in the bed whose top is still under water was left to the
+swimmer. A swimmer is not grounded, so auto step does not take it either:
+the feet stop against the step, and the swimmer bobs there.
+
+### The rule
+
+Everything in the table above holds: the body in water, forward held, the
+move refused against a face within about 45° of the heading, room to stand,
+and following auto step. One more case climbs:
+
+| test | value | knob |
+| --- | ---: | --- |
+| a step whose top is **under the water's surface** (more than 0.1 m under it) | its top at most **2.2 m** over the feet: one or two layers, the same as a wader's | `water_climb_wade_m` |
+
+So a swimmer whose feet meet a one- or two-layer step in the bed rises onto
+it in the same eased 0.4 s, and goes on wading or swimming from there. If the
+next step is the bank above the water, the climb above takes it. Deep water
+to the shelf to the bank, with no stop. The step's height is measured from the
+feet, not the surface, because the surface is not what the feet meet. Two
+layers is the most a step-up takes anywhere: auto step's one on land, and the
+water climb's two.
+
+What still does not climb: a step more than two layers over the feet (swim up
+first); a step met swimming along it (the facing test); auto step off.
+
+### Built (2026-11-16)
+
+The rule is one more case in `water_climb`, `steps_under_water`. Measured on
+the pool, where the bed or bank in each row of cells is set by `pool_rows`:
+
+- **Before:** a swimmer in mid-water over a two-layer pool, its feet 1.3 m
+  under the surface, held forward into a one-layer shelf. Its feet stopped
+  at the shelf, and it sank to the bed (1.95 m under) before the wader's rule
+  took it up.
+- **After:** it steps onto the shelf from mid-water and carries on past the
+  shelf's first row.
+
+A swimmer floating with its feet at or over the shelf's top glides onto it,
+as before. The owner's staircase (two deep, a one-deep shelf, the bank level
+with the surface) ends standing on the bank both ways. It passed before as
+well, by the slower way: sinking to the bed, then the wader's rule.
+
