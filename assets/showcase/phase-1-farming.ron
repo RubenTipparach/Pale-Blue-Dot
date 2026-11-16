@@ -25,13 +25,13 @@
             caption: "Break ground with the shovel, and sow wheat",
             until: ["till", "plant"],
             max_s: 300.0,
-            acts: [Hand("shovel"), Dig(Have("wheat-seed", 4), 1), Till(4), Plant(4), Look(0.0, -35.0, 1.0), Still],
+            acts: [Shore, Look(180.0, -10.0, 1.0), Walk(4.0), Hand("shovel"), Dig(Have("wheat-seed", 4), 1), Till(6), Plant(4), Look(0.0, -35.0, 1.0), Still],
         ),
         (
             caption: "Water the field: a bucket filled at the sea, and poured",
             until: ["water-field"],
             max_s: 300.0,
-            acts: [Bench("bucket", 1), Hand("hand"), Select("bucket"), Shore, Look(0.0, -40.0, 1.0), Use, Look(180.0, -45.0, 1.5), Use, Still],
+            acts: [Hand("axe"), Chop(Have("log", 1)), Craft("planks", 1), Hand("shovel"), Dig(Have("fibre", 3), 1), Craft("rope", 1), Bench("bucket", 1), Hand("hand"), Select("bucket"), Shore, Walk(0.8), Look(0.0, -35.0, 1.0), Wait(0.6), Use, Look(180.0, -45.0, 1.5), Wait(0.6), Use, Still],
         ),
         (
             caption: "Six days later: the wheat is ripe",

@@ -430,6 +430,22 @@ impl Bot {
             info!("showcase: climbing out of a pit");
         }
         self.climb_s += s.dt;
+        // Building up has not lifted it (a roof over the hole, or no room
+        // to jump): dig a step out instead, ahead and a little up, and walk
+        // into it, as a player cuts stairs.
+        let cycle = self.climb_s % 14.0;
+        if cycle > 7.0 {
+            if cycle - s.dt <= 7.0 {
+                info!("showcase: cutting steps out of a pit");
+            }
+            self.steer(s, out, s.heading, 0.25);
+            out.lmb = true;
+            out.held.insert(KeyCode::KeyW);
+            if (cycle % 1.0) < s.dt * 1.5 {
+                out.taps.push(KeyCode::Space);
+            }
+            return;
+        }
         let dirt = (0..SLOTS).find(|&k| {
             s.slots.get(k).is_some_and(|st| {
                 matches!(
@@ -2102,7 +2118,10 @@ fn plant(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     if bot.count >= n {
         return Status::Done;
     }
-    let Some(&key) = bot.field.get(bot.count as usize + bot.tries as usize / 3) else {
+    // Round the field again for a cell it could not see or reach.
+    let unplanted = bot.field.len().saturating_sub(bot.count as usize).max(1);
+    let at = bot.count as usize + (bot.tries as usize / 3) % unplanted;
+    let Some(&key) = bot.field.get(at) else {
         return Status::Fail(format!("planted {} of {n}: no tilled cell left", bot.count));
     };
     let Some(top) = bot.top_of(s, key) else {
@@ -2115,13 +2134,14 @@ fn plant(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
         bot.phase_s = 0.0;
         return Status::Running;
     }
-    if off < 1.4 {
-        // Standing on it: a step back to see it.
+    if off < 2.2 {
+        // On it or at its edge, where the body is in the cell the seed
+        // goes in: a step back.
         out.held.insert(KeyCode::KeyS);
     }
     bot.aim_at(s, out, top - s.up * 0.2);
     let on = bot.aimed_cell(s).is_some_and(|(c, _)| c == key);
-    if on && bot.phase_s > 0.5 {
+    if on && off >= 2.0 && bot.phase_s > 0.5 {
         out.rmb_tap = true;
         bot.tries += 1;
         bot.phase_s = 0.0;
@@ -2130,7 +2150,7 @@ fn plant(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
         bot.tries += 3;
         bot.phase_s = 0.0;
     }
-    if bot.act_s > 60.0 {
+    if bot.act_s > 120.0 {
         return Status::Fail(format!("planted {} of {n}", bot.count));
     }
     Status::Running
