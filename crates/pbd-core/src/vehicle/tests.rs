@@ -1274,3 +1274,22 @@ fn every_boat_floats_on_the_tide() {
         );
     }
 }
+
+/// The tube's rider turns it by kicking on one side (`small-boats`): ten
+/// seconds of A turns it a good way round, with no rudder at all.
+#[test]
+fn a_tube_turns_on_its_kicks() {
+    let mut craft = at_pole(Kind::Tube, 0.0, 0.0);
+    craft.occupied = true;
+    craft.weigh();
+    let mut world = World::new(RADIUS - 40.0);
+    world.run(&mut craft, 3.0, |_| Input::default());
+    let before = heading(&craft);
+    world.run(&mut craft, 10.0, |_| Input {
+        steer: 1.0,
+        ..Default::default()
+    });
+    let turned = (heading(&craft) - before).abs().to_degrees();
+    println!("tube turned {turned:.0} deg in 10 s of kicking to one side");
+    assert!(turned > 30.0, "turned {turned} deg");
+}

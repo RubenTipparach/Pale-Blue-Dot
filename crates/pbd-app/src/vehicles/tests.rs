@@ -393,7 +393,11 @@ fn each_craft_maps_its_controls_and_menus_suppress_keys_and_look() {
                 (input.steer, input.sheet, input.crew, input.bail),
                 (1.0, 1.0, -1.0, true)
             ),
-            Kind::Loon | Kind::Rowboat | Kind::Tube | Kind::Raft => assert_eq!(
+            Kind::Tube => assert_eq!(
+                (input.forward, input.steer, input.rudder, input.bail),
+                (1.0, 1.0, 0.0, true)
+            ),
+            Kind::Loon | Kind::Rowboat | Kind::Raft => assert_eq!(
                 (input.forward, input.steer, input.rudder, input.bail),
                 (1.0, 1.0, 1.0, true)
             ),

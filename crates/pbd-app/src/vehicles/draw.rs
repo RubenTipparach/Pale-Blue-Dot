@@ -47,6 +47,9 @@ enum Moving {
     Flame,
     /// The figure aboard, drawn only from the chase view.
     Crew,
+    /// The tube rider's shin on a side (-1 left, +1 right), kicking from
+    /// the knee while a stroke runs.
+    Kick(i8),
 }
 
 impl Part {
@@ -419,14 +422,9 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
                 &seam,
                 Transform::from_xyz(0.0, 0.05, 0.0),
             );
-            let wood = paint(b.world, Color::srgb_u8(0x6e, 0x4f, 0x30), false);
-            b.cuboid(
-                entity,
-                Vec3::new(0.05, 0.7, 0.05),
-                Vec3::new(0.0, 0.4, 0.55),
-                &wood,
-            );
-            b.lantern(entity, Vec3::new(0.0, 0.82, 0.55), 0.55);
+            // M34's lantern pole is left off (owner, 2026-11-16: "dont need
+            // the stick thing in the tube, the guy can just kick his feet
+            // around to turn and accelerate"): the rider kicks.
             // Its rider lies back in the ring (owner, 2026-11-16: "shouldnt the
             // dude be laid back"): seat in the water through the hole, back
             // against the ring's far side, knees over its near side, and each
@@ -463,7 +461,13 @@ pub fn build(world: &mut World, entity: Entity, craft: &Craft) {
                     Vec2::splat(0.16),
                     &trousers,
                 );
-                b.limb(at, lp(knee), lp(foot), Vec2::splat(0.14), &trousers);
+                // The shin swings from the knee: a kick.
+                let shin = b.pivot(
+                    at,
+                    Moving::Kick(side as i8),
+                    Transform::from_translation(lp(knee)),
+                );
+                b.limb(shin, Vec3::ZERO, foot - knee, Vec2::splat(0.14), &trousers);
                 let top = shoulder + Vec3::X * side * 0.24;
                 let elbow = Vec3::new(side * 0.6, 0.33, 0.3);
                 let wrist = Vec3::new(side * 0.68, 0.32, -0.08);
@@ -689,6 +693,24 @@ pub fn place(
             (Moving::Paddle, CraftState::Loon(s)) => {
                 *transform = paddle(craft, s);
                 *visibility = visible(craft.occupied);
+            }
+            (Moving::Kick(side), CraftState::Loon(s)) => {
+                // A kick on its own side swings that shin down and back
+                // through the power phase and up again through the
+                // recovery; the other shin rests.
+                let swing = s.stroke.map_or(0.0, |stroke| {
+                    if stroke.side.signum() as i8 != side {
+                        return 0.0;
+                    }
+                    let u = stroke.phase as f32;
+                    let reach = 0.7 * stroke.direction.signum() as f32;
+                    if u < 1.0 {
+                        reach * (std::f32::consts::PI * u).sin()
+                    } else {
+                        -0.25 * reach * (std::f32::consts::PI * (u - 1.0)).sin()
+                    }
+                });
+                transform.rotation = Quat::from_rotation_x(swing);
             }
             (Moving::Crew, state) => {
                 let chase = !(view.seat && aboard.0 == Some(entity));

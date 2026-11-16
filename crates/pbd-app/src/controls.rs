@@ -529,10 +529,9 @@ const ROWBOAT: [Binding; 4] = [
     row(&[Key::Board(KeyCode::KeyB)], " ", "bail"),
 ];
 
-const TUBE: [Binding; 3] = [
-    row(&W_S, "/", "paddle forward or back"),
+const TUBE: [Binding; 2] = [
+    row(&W_S, "/", "kick forward or back"),
     row(&A_D, "/", "turn"),
-    row(&Q_E, "/", "steer with a hand"),
 ];
 
 const RAFT: [Binding; 3] = [
@@ -853,6 +852,18 @@ impl Binding {
     /// The key column with the player's keys: what the settings page, an
     /// instrument panel and `--help` print. One function, so they cannot
     /// print a control differently.
+    /// Each key's own label, with the player's rebinds: one glyph a key.
+    pub fn key_labels(&'static self, group: &'static Group, binds: &KeyBinds) -> Vec<&'static str> {
+        self.keys
+            .iter()
+            .enumerate()
+            .map(|(index, key)| match slot_at(group, self, index) {
+                Some(slot) => key_label(binds.key(&slot)),
+                None => key.label(),
+            })
+            .collect()
+    }
+
     pub fn keys_label(&'static self, group: &'static Group, binds: &KeyBinds) -> String {
         let this = self;
         this.keys
@@ -871,6 +882,17 @@ impl Binding {
 /// prints, off the same table the settings page reads, with the player's keys.
 /// A group's rows, one `keys  what` string each, off the one table: what a
 /// boat's panel lists (`small-boats`).
+/// A group's rows as each key's label and what the row does: what a key
+/// glyph row draws (`small-boats`).
+pub fn caps(heading: &str, binds: &KeyBinds) -> Vec<(Vec<&'static str>, &'static str)> {
+    BINDINGS
+        .iter()
+        .filter(|group| group.heading == heading)
+        .flat_map(|group| group.rows.iter().map(move |row| (group, row)))
+        .map(|(group, binding)| (binding.key_labels(group, binds), binding.does))
+        .collect()
+}
+
 pub fn rows(heading: &str, binds: &KeyBinds) -> Vec<String> {
     BINDINGS
         .iter()
