@@ -46,14 +46,31 @@
 
 ## 6. Splashes (design "Splashes that show, and better ones", 2026-11-16)
 
-- [ ] 6.1 Blended effects over water (fall spray and mist, the near shower)
+- [x] 6.1 (The fall spray and mist, 2026-11-16, design "The fall splash drawn
+      after the water": `SplashQuads` drawn by the water's pass after the cap
+      and the flowing water, against the water's depth and the main pass's;
+      the near shower is not moved yet.) Blended effects over water (fall
+      spray and mist, the near shower)
       drawn after the water composite, depth-tested against the water;
-      captures of a fall's foot before and after.
+      captures of a fall's foot before and after. Verify:
+      `docs/screenshots/fall-splash-order/` (down, side, under the pool,
+      under the river); a launch to READY with no LATE_PIPELINE.
 - [ ] 6.2 M31: froth only on faces that fall a layer or more, beside today's
       bank; the owner's approval before game code.
 - [ ] 6.3 The rain splashes (built for ground, `weather-rain` 6.4) on water as well.
 - [ ] 6.4 M31 Splash tab: fall foot, entry, cast, fish, wake, beside today's
       spray; the owner's approval before game code.
+
+- [ ] 6.5 (Mockup built 2026-11-16: `docs/mockups/waterfall-mist.html`,
+      screenshots in `docs/screenshots/waterfall-mist/`; waiting for the
+      owner.) Mist puffs after Crab Breeze's smoke puffs and bubbles under
+      the water at a fall's foot (design "Mist puffs and bubbles, in a
+      mockup first"), shown beside today's look and the order fix; the
+      owner's approval before game code.
+- [ ] 6.6 In the game, once 6.5 is approved: the puff sheet in the splash
+      pass, the bubbles on the GPU in the water's pass, the aerated colour
+      in the water's fragment. Verify: captures above, beside and under a
+      fall; a launch to READY with no LATE_PIPELINE.
 
 ## 7. Rain rings that alias (design "Rain rings that alias"; owner, 2026-11-16)
 
