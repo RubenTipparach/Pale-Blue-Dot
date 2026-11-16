@@ -50,6 +50,12 @@ impl FarmNote {
         self.until_s = now_s + 3.0;
         info!("farm: {}", self.text);
     }
+
+    /// Say it for `seconds` rather than the farm's three.
+    pub fn say_for(&mut self, now_s: f32, text: impl Into<String>, seconds: f32) {
+        self.text = text.into().to_uppercase();
+        self.until_s = now_s + seconds;
+    }
 }
 
 /// The station whose panel is open: its cell and layer.

@@ -20,6 +20,7 @@ mod mission_tree;
 mod missions;
 mod overlay_ui;
 mod pack;
+mod repro;
 mod scene;
 mod showcase;
 mod slots;
@@ -397,6 +398,10 @@ pub struct Launch {
     /// `--showcase-from N`: start at shot N, a development aid with a
     /// `--world` that already holds the shots before it.
     pub showcase_from: usize,
+    /// `--generator <v>` (`repro-capture`): the terrain generator a run with
+    /// no `--world` is made by, so a repro of an older world stands on its
+    /// own ground. Refused with `--world`, whose generator is its own.
+    pub generator: Option<u32>,
 }
 
 impl Launch {
@@ -461,6 +466,7 @@ impl Launch {
             showcase: None,
             showcase_stills: None,
             showcase_from: 1,
+            generator: None,
             torch: false,
             pour: 0,
             water_ticks: 0,
@@ -763,6 +769,14 @@ impl Launch {
                         .and_then(|d| d.parse().ok())
                         .expect("--day requires a day number");
                     result.day = Some(day);
+                }
+                "--generator" => {
+                    i += 1;
+                    result.generator = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--generator requires a version number"),
+                    );
                 }
                 "--world" => {
                     i += 1;
@@ -1258,6 +1272,10 @@ impl Launch {
             i += 1;
         }
         assert!(
+            result.generator.is_none() || result.world.is_none() && result.load.is_none(),
+            "--generator is for a run with no --world: a world keeps its own generator"
+        );
+        assert!(
             !(result.walk && (result.fly || result.tour)),
             "--walk cannot be combined with --fly or --tour"
         );
@@ -1357,6 +1375,9 @@ pub fn run(args: &[String]) {
     // anchored. Restoring the pose afterwards would build the world around the
     // spawn and then teleport away from it.
     let mut world = open_world(&launch);
+    if let Some(version) = launch.generator {
+        world.identity.generator = version;
+    }
     // The planet is made by the generator the world was made by (an old
     // world keeps its biomes, survey B3), chosen here, before anything builds
     // it (`bigger-biomes` decision 6). The logger is not up yet.
@@ -1675,7 +1696,22 @@ pub fn run(args: &[String]) {
         )
             .chain()
             .after(bevy::input::InputSystems)
+            .after(pbd_app::controls::remap_keys)
+            .after(repro::read_key),
+    )
+    // The repro key (`repro-capture`): read before the menus and every F
+    // reader, saved in an exclusive system that sees the whole world.
+    .init_resource::<repro::Asked>()
+    .add_systems(
+        PreUpdate,
+        repro::read_key
+            .after(bevy::input::InputSystems)
             .after(pbd_app::controls::remap_keys),
+    )
+    .add_systems(Update, repro::save)
+    .add_systems(
+        First,
+        repro::scripted_press.run_if(resource_exists::<CaptureState>),
     )
     .add_systems(Update, (breeding::press, breeding::paint).chain())
     .add_systems(

@@ -316,11 +316,9 @@ fn spawn_pose(config: FlightViewConfig) -> (Vec3, Quat, Vec3) {
     };
     let position = up * radius;
     let ahead = match config.view_yaw_deg {
-        Some(yaw) => {
-            let (north, east) = pbd_core::geo::compass_north_east(up);
-            let yaw = yaw.to_radians();
-            (-east * yaw.cos() + north * yaw.sin()).normalize_or(east)
-        }
+        // The walker's start reads the same function, so `--yaw` faces one
+        // way on foot and in the air.
+        Some(yaw) => crate::place::heading_at_yaw(up, yaw.to_radians()),
         None => east,
     };
     let view_direction = ahead * config.view_pitch_down.cos() - up * config.view_pitch_down.sin();

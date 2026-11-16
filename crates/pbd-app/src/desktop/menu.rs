@@ -1202,6 +1202,8 @@ pub fn rebuild_input(
                                     for (i, key) in binding.keys.iter().enumerate() {
                                         if i > 0 && binding.range {
                                             caps.spawn(body("-", 10.0, ui_kit::TEXT_DIM));
+                                        } else if i > 0 && binding.chord {
+                                            caps.spawn(body("+", 10.0, ui_kit::TEXT_DIM));
                                         }
                                         match controls::slot_at(group, binding, i) {
                                             Some(slot) => {
