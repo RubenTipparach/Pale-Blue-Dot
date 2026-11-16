@@ -714,10 +714,64 @@ fn paint_well(
     }
 }
 
+/// The tint a locked recipe's pictures take: a dim silhouette
+/// (`starter-missions` T.4).
+pub const SILHOUETTE: Color = Color::srgba(0.02, 0.07, 0.12, 0.85);
+
+/// An icon in a station's recipe row, by its recipe: drawn as a silhouette
+/// while the mission tree holds the recipe shut.
+#[derive(Component)]
+pub struct LockTint(pub String);
+
+/// The line at a recipe row's end that names the mission opening it.
+#[derive(Component)]
+pub struct LockLine(pub String);
+
+/// The forge's and the campfire's locked rows: their pictures dimmed to a
+/// silhouette and the mission that opens them named. Runs after their own
+/// paints, which set the pictures each frame.
+pub fn paint_locks(
+    screen: Res<Screen>,
+    locks: Res<pbd_app::missions::RecipeLocks>,
+    mut tints: Query<(&LockTint, &mut ImageNode)>,
+    mut lines: Query<(&LockLine, &mut KitText, &mut Node)>,
+) {
+    if !matches!(*screen, Screen::Forge | Screen::Kitchen) {
+        return;
+    }
+    for (tint, mut image) in &mut tints {
+        if locks.locked(&tint.0).is_some() && image.color != SILHOUETTE {
+            image.color = SILHOUETTE;
+        }
+    }
+    for (line, mut text, mut node) in &mut lines {
+        let words = locks
+            .locked(&line.0)
+            .map(|m| format!("OPENS WITH: {}", m.to_uppercase()));
+        let display = if words.is_some() {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != display {
+            node.display = display;
+        }
+        let words = words.unwrap_or_default();
+        if text.text != words {
+            text.text = words;
+        }
+    }
+}
+
 /// Paint both widgets from the picked recipes, the slots and the queues.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn paint(
-    (screen, at, pick): (Res<Screen>, Res<StationAt>, Res<CraftPick>),
+    (screen, at, pick, locks): (
+        Res<Screen>,
+        Res<StationAt>,
+        Res<CraftPick>,
+        Res<pbd_app::missions::RecipeLocks>,
+    ),
     (recipes, save, hotbar, tools, sun): (
         Res<Recipes>,
         Res<WorldSave>,
@@ -778,7 +832,8 @@ pub fn paint(
         let refused = probe
             .queue_for(&mut slots, Some(&tools.0), Some(&recipes.0), recipe, now_s)
             .is_err();
-        Some((recipe, state, short || refused))
+        let locked = locks.locked(&recipe.code).is_some();
+        Some((recipe, state, short || refused || locked))
     };
     let hand = view("hand");
     let bench = if *screen == Screen::Forge {
@@ -825,7 +880,17 @@ pub fn paint(
         if piece.image != want {
             piece.image = want;
         }
+        // The recipe this well shows, when the mission tree holds it shut.
+        let shut = match well.role {
+            Role::Pick(k) => recipes.0.at(well.station).nth(k),
+            Role::Result => of(well.station).as_ref().map(|(r, _, _)| *r),
+            Role::Need(_) => None,
+        }
+        .and_then(|r| locks.locked(&r.code));
         let words = match (well.role, item) {
+            (Role::Pick(_) | Role::Result, Some(_)) if shut.is_some() => {
+                format!("Opens with: {}", shut.unwrap_or_default())
+            }
             (_, None) => String::new(),
             (Role::Need(_), Some((item, n, _))) => {
                 format!("{}: need {n}, have {}", item.name(), carried(item))
@@ -845,6 +910,9 @@ pub fn paint(
         for child in children.iter() {
             if let Ok(mut image) = well_icons.get_mut(child) {
                 paint_well(&mut image, item, &icons, &images);
+                if shut.is_some() && item.is_some() {
+                    image.color = SILHOUETTE;
+                }
             }
             if let Ok(mut text) = counts.get_mut(child)
                 && text.text != number
@@ -859,9 +927,10 @@ pub fn paint(
             plaque.disabled = disabled;
         }
     }
-    // The hands' plaque counts a running job up.
+    // The hands' plaque counts a running job up; a locked recipe's says so.
     for (label, mut text) in &mut labels {
         let want = match of(label.0) {
+            Some((recipe, _, _)) if locks.locked(&recipe.code).is_some() => "LOCKED".to_string(),
             Some((_, state, _)) if label.0 == "hand" && state.busy() => {
                 let p = state.head_progress(&recipes.0, now_s).unwrap_or(0.0);
                 format!("{:.0}%", (p * 100.0).min(99.0))
@@ -887,6 +956,10 @@ pub fn paint(
         let item = hand_recipes.get(k).and_then(|r| shown(r));
         paint_well(&mut image, item, &icons, &images);
         if let Some(recipe) = hand_recipes.get(k)
+            && locks.locked(&recipe.code).is_some()
+        {
+            image.color = SILHOUETTE;
+        } else if let Some(recipe) = hand_recipes.get(k)
             && option.is_some()
             && recipe
                 .inputs
@@ -909,7 +982,11 @@ pub fn paint(
     }
     let (line, fill) = &mut bench_line;
     if let Some((_, state, _)) = &bench {
+        let shut = picked(&recipes, &pick, "workbench").and_then(|r| locks.locked(&r.code));
         let text = match state.jobs.first().and_then(|j| recipes.0.get(&j.recipe)) {
+            _ if state.jobs.is_empty() && shut.is_some() => {
+                format!("OPENS WITH: {}", shut.unwrap_or_default().to_uppercase())
+            }
             Some(recipe) => {
                 let waiting = state.jobs.len() - 1;
                 if waiting > 0 {

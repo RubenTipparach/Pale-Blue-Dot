@@ -316,7 +316,15 @@ pub fn refresh_locks(
             .outputs
             .iter()
             .map(|(item, _)| item_code(*item))
-            .chain(recipe.tools.iter().map(|(t, _)| item_code(Item::Tool(*t))))
+            // A tool's name has no tier: only the stone one is the tool a
+            // mission's `tool:<name>` meant.
+            .chain(
+                recipe
+                    .tools
+                    .iter()
+                    .filter(|(_, tier)| *tier == pbd_core::inventory::Tier::Stone)
+                    .map(|(t, _)| item_code(Item::Tool(*t))),
+            )
             .collect();
         if !chain.recipe_open(&missions.progress, &recipe.code, &makes, holds(recipe))
             && let Some(m) = chain.unlocked_by(&recipe.code)

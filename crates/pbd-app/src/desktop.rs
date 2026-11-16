@@ -1607,7 +1607,13 @@ pub fn run(args: &[String]) {
                 .after(pbd_app::husbandry::HusbandryHands),
             // The campfire's panel opens from `farm::use_key` (after the
             // husbandry hands, which clear an E they used).
-            (kitchen::work, kitchen::grey, kitchen::paint, kitchen::eat)
+            (
+                kitchen::work,
+                kitchen::grey,
+                kitchen::paint,
+                kitchen::eat,
+                craft::paint_locks.after(forge::paint),
+            )
                 .chain()
                 .after(farm::use_key)
                 .after(pbd_app::husbandry::HusbandryHands),
