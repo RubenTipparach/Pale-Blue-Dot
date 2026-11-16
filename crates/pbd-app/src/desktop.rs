@@ -372,8 +372,8 @@ pub struct Launch {
     /// weather overlay, `--map-layer <name>` a raster layer such as
     /// `biomes`, `--map-night` and `--map-clouds` those live layers, and
     /// `--map-at <lat> <lon>` the centre in degrees (the player otherwise);
-    /// `--map-mark-east <metres>` sets the player's mark that far east of
-    /// them (a capture instrument).
+    /// `--map-mark-east <metres>`, repeatable, adds a waypoint that far
+    /// from the player, the first due east (a capture instrument).
     pub map: map_screen::MapLaunch,
     /// `--showcase <name>` (`step-videos` 2.1, 5.1): a bot plays
     /// `assets/showcase/<name>.ron` toward its goal through the player's
@@ -816,7 +816,7 @@ impl Launch {
                 }
                 "--map-mark-east" => {
                     i += 1;
-                    result.map.mark_east_m = Some(
+                    result.map.mark_east_m.push(
                         args.get(i)
                             .and_then(|v| v.parse().ok())
                             .filter(|m: &f32| m.is_finite() && *m > 0.0)

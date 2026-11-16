@@ -616,6 +616,21 @@ nothing could be marked.
   a place at least 200 m away, walk there. Its label reads "reach the mark".
 - The plain 200 m walk is gone.
 
+**G3, revised (owner, 2026-11-16: "up to 4 waypoints allowed, the next one
+despawns the first, you can click on a waypoint to get rid of it anytime").**
+The one mark becomes up to four waypoints:
+- **A right click** on the map adds a waypoint there. With four already
+  set, the fifth removes the oldest.
+- **A click on a waypoint**, left or right, removes it. A left click counts
+  only if the pointer has not dragged (under 4 px of movement), so panning
+  never deletes one.
+- **The record** is still `map-mark`, at schema 2: the waypoints in the
+  order they were set, oldest first. A schema 1 body (one optional mark,
+  written only on this branch) reads as a list of none or one.
+- **Counting.** "Read the map" counts reaching any waypoint that was set
+  200 m or more away. Reaching it does not remove it.
+- **The bot.** `Mark` adds a waypoint. `ToMark` walks to the newest one.
+
 **G4. "Three kinds of fish" counts kinds new to the mission.** `species`
 was raised only for a kind the world had never landed, so a player who had
 fished widely had nothing left to find. Now:

@@ -49,11 +49,16 @@ pub fn base_texel(cfg: &TerrainConfig, direction: Vec3) -> Texel {
     }
 }
 
-/// The record kind of the player's map mark, its schema and its one id
-/// (`starter-missions` G3).
+/// The record kind of the player's waypoints, its schema and its one id
+/// (`starter-missions` G3). Schema 2 is the list; schema 1 was one optional
+/// mark, and still reads ([`read_marks`]).
 pub const MARK_KIND: &str = "map-mark";
-pub const MARK_SCHEMA: u32 = 1;
+pub const MARK_SCHEMA: u32 = 2;
 pub const MARK_ID: u64 = 0;
+
+/// The most waypoints a player keeps; a new one past this removes the
+/// oldest (owner, 2026-11-16).
+pub const MARKS_MAX: usize = 4;
 
 /// The least distance a mark is set from the player for "Read the map" to
 /// count reaching it, m.
@@ -99,6 +104,23 @@ impl Mark {
         };
         self.set_from_m >= MARK_FAR_M && ground_m(self.direction(), feet, radius_m) <= MARK_NEAR_M
     }
+}
+
+/// Add a waypoint, oldest first, dropping the oldest past [`MARKS_MAX`].
+pub fn add_mark(marks: &mut Vec<Mark>, mark: Mark) {
+    marks.push(mark);
+    let over = marks.len().saturating_sub(MARKS_MAX);
+    marks.drain(..over);
+}
+
+/// The waypoints a `map-mark` record's body holds: a schema 2 list, or a
+/// schema 1 body of one optional mark. `None` for a body that is neither.
+pub fn read_marks(body: &str) -> Option<Vec<Mark>> {
+    ron::from_str::<Vec<Mark>>(body).ok().or_else(|| {
+        ron::from_str::<Option<Mark>>(body)
+            .ok()
+            .map(|m| m.into_iter().collect())
+    })
 }
 
 /// The distance along the ground between two unit directions, m.
@@ -178,6 +200,28 @@ mod tests {
         assert!(Mark::set(Vec3::ZERO, home, r).is_none());
         let body = ron::to_string(&far).unwrap();
         assert_eq!(ron::from_str::<Mark>(&body).unwrap(), far);
+    }
+
+    /// Four waypoints at most, oldest dropped first; a schema 1 body reads
+    /// as none or one (owner, 2026-11-16).
+    #[test]
+    fn a_fifth_waypoint_drops_the_first() {
+        let mark = |x: f32| Mark::set(Vec3::new(x, 1.0, 0.0), Vec3::Y, 4_800.0).unwrap();
+        let mut marks = Vec::new();
+        for k in 0..5 {
+            add_mark(&mut marks, mark(k as f32 * 0.01));
+        }
+        assert_eq!(marks.len(), MARKS_MAX);
+        assert_eq!(marks[0], mark(0.01), "the first is gone");
+        assert_eq!(marks[3], mark(0.04));
+        let body = ron::to_string(&marks).unwrap();
+        assert_eq!(read_marks(&body), Some(marks));
+        let one = ron::to_string(&Some(mark(0.0))).unwrap();
+        assert_eq!(read_marks(&one), Some(vec![mark(0.0)]));
+        assert_eq!(
+            read_marks(&ron::to_string(&None::<Mark>).unwrap()),
+            Some(vec![])
+        );
     }
 
     /// A direction's length does not matter.

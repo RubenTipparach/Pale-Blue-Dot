@@ -59,10 +59,10 @@ pub struct MapLaunch {
     pub night: bool,
     pub clouds: bool,
     pub at: Option<(f32, f32)>,
-    /// A capture instrument (`--map-mark-east M`): a mark set this many
-    /// metres east of the player once the map is up, through the save's
-    /// own path, so a still shows the pin.
-    pub mark_east_m: Option<f32>,
+    /// A capture instrument (`--map-mark-east M`, repeatable): a waypoint
+    /// this many metres from the player for each, once the map is up,
+    /// through the save's own path, so a still shows the pins.
+    pub mark_east_m: Vec<f32>,
 }
 
 /// Where the map is looking: the map position at the centre of the screen
@@ -345,9 +345,9 @@ pub enum MapMarker {
     Player,
     Ship,
     Craft(Entity),
-    /// The place the player marked with a right click (`starter-missions`
-    /// G3).
-    Mark,
+    /// A waypoint the player set with a right click, by its place in the
+    /// list, oldest first (`starter-missions` G3).
+    Mark(usize),
 }
 /// The legend's buttons.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
@@ -459,21 +459,22 @@ fn pin_icon() -> Image {
     })
 }
 
-/// The player's mark, as the save holds it (`starter-missions` G3).
-pub fn mark_of(save: &WorldSave) -> Option<pbd_core::map::Mark> {
-    use pbd_core::map::{MARK_ID, MARK_KIND};
+/// The player's waypoints, oldest first, as the save holds them
+/// (`starter-missions` G3).
+pub fn marks_of(save: &WorldSave) -> Vec<pbd_core::map::Mark> {
+    use pbd_core::map::{MARK_ID, MARK_KIND, read_marks};
     save.records
-        .get(MARK_KIND, MARK_ID)?
-        .read::<Option<pbd_core::map::Mark>>()
-        .flatten()
+        .get(MARK_KIND, MARK_ID)
+        .and_then(|r| read_marks(&r.body))
+        .unwrap_or_default()
 }
 
-/// Set, move or clear the player's mark through the save's durable path.
-/// `false` once the writer has failed.
-pub fn store_mark(save: &mut WorldSave, mark: Option<pbd_core::map::Mark>) -> bool {
+/// Store the player's waypoints through the save's durable path. `false`
+/// once the writer has failed.
+pub fn store_marks(save: &mut WorldSave, marks: &[pbd_core::map::Mark]) -> bool {
     use pbd_core::map::{MARK_ID, MARK_KIND, MARK_SCHEMA};
     use pbd_core::records::{Author, Record as StoredRecord};
-    let record = StoredRecord::of(MARK_KIND, MARK_ID, MARK_SCHEMA, &mark);
+    let record = StoredRecord::of(MARK_KIND, MARK_ID, MARK_SCHEMA, &marks.to_vec());
     if save.store(&Author::Player(0), vec![record]).is_none() {
         return false;
     }
@@ -482,7 +483,8 @@ pub fn store_mark(save: &mut WorldSave, mark: Option<pbd_core::map::Mark>) -> bo
 }
 
 /// The `--map-mark-east` capture instrument: once, with the map up and the
-/// player placed, mark the place that many metres east of them.
+/// player placed, add a waypoint at each distance given, the first due east
+/// of the player and each next one turned 72 degrees toward the north.
 pub fn launch_mark(
     launch: Res<MapLaunch>,
     screen: Res<Screen>,
@@ -490,32 +492,46 @@ pub fn launch_mark(
     save: Option<ResMut<WorldSave>>,
     mut done: Local<bool>,
 ) {
-    let (Some(metres), Some(mut save)) = (launch.mark_east_m, save) else {
+    let Some(mut save) = save else {
         return;
     };
-    if *done || *screen != Screen::Map {
+    if launch.mark_east_m.is_empty() || *done || *screen != Screen::Map {
         return;
     }
     let Some(at) = player.get() else {
         return;
     };
     let up = at.normalize();
-    // East as the compass reads it (`compass-bar`).
-    let (_, east) = geo::compass_north_east(up);
-    let t = metres / PLANET_RADIUS;
-    let place = up * t.cos() + east * t.sin();
+    // East and north as the compass reads them (`compass-bar`).
+    let (north, east) = geo::compass_north_east(up);
+    let mut marks = marks_of(&save);
+    for (k, metres) in launch.mark_east_m.iter().enumerate() {
+        let a = (k as f32 * 72.0).to_radians();
+        let along = east * a.cos() + north * a.sin();
+        let t = metres / PLANET_RADIUS;
+        if let Some(mark) =
+            pbd_core::map::Mark::set(up * t.cos() + along * t.sin(), at, PLANET_RADIUS)
+        {
+            pbd_core::map::add_mark(&mut marks, mark);
+        }
+    }
     *done = true;
-    let mark = pbd_core::map::Mark::set(place, at, PLANET_RADIUS);
-    if !store_mark(&mut save, mark) {
-        warn!("map mark not saved: the save writer has failed");
+    if !store_marks(&mut save, &marks) {
+        warn!("map waypoints not saved: the save writer has failed");
     }
 }
 
-/// A right click this near the mark on screen clears it, px.
+/// A click this near a waypoint's head on screen removes it, px.
 pub const MARK_CLEAR_PX: f32 = 12.0;
+/// How far above its place a pin's head is drawn, px.
+pub const PIN_HEAD_PX: f32 = 8.0;
+/// A left click that moves the pointer further than this is a pan, not a
+/// click on a waypoint, px.
+pub const CLICK_SLOP_PX: f32 = 4.0;
 
-/// The right button on the map sets the mark there, moves it, or, on the
-/// mark itself, clears it (`starter-missions` G3).
+/// The player's waypoints on the map (`starter-missions` G3, owner
+/// 2026-11-16): a right click adds one, the oldest going past four; a click
+/// on one, either button, removes it. A left click that dragged was a pan.
 #[allow(clippy::too_many_arguments)]
 pub fn mark(
     screen: Res<Screen>,
@@ -525,8 +541,10 @@ pub fn mark(
     view: Res<MapView>,
     player: PlayerPlace,
     save: Option<ResMut<WorldSave>>,
+    mut pressed_at: Local<Option<Vec2>>,
 ) {
-    if *screen != Screen::Map || !mouse.just_pressed(MouseButton::Right) {
+    if *screen != Screen::Map {
+        *pressed_at = None;
         return;
     }
     let (Ok(window), Some(mut save)) = (windows.single(), save) else {
@@ -535,34 +553,72 @@ pub fn mark(
     let Some(pointer) = window.cursor_position() else {
         return;
     };
-    if !canvas.iter().any(|i| *i != Interaction::None) {
+    let over_map = canvas.iter().any(|i| *i != Interaction::None);
+    if mouse.just_pressed(MouseButton::Left) {
+        *pressed_at = over_map.then_some(pointer);
+    }
+    let left_click = mouse.just_released(MouseButton::Left)
+        && pressed_at
+            .take()
+            .is_some_and(|from| from.distance(pointer) <= CLICK_SLOP_PX);
+    let right_click = mouse.just_pressed(MouseButton::Right) && over_map;
+    if !left_click && !right_click {
         return;
     }
     let size = Vec2::new(window.width(), window.height());
     let view = view.clamped(size);
-    let next = mark_click(&view, size, pointer, mark_of(&save), player.get());
-    if next != mark_of(&save) && !store_mark(&mut save, next) {
-        warn!("map mark not saved: the save writer has failed");
+    let was = marks_of(&save);
+    let next = if left_click {
+        // A left click only ever removes: off a waypoint it does nothing.
+        mark_removed(&view, size, pointer, &was).unwrap_or_else(|| was.clone())
+    } else {
+        mark_click(&view, size, pointer, &was, player.get())
+    };
+    if next != was && !store_marks(&mut save, &next) {
+        warn!("map waypoints not saved: the save writer has failed");
     }
 }
 
-/// What a right click at `pointer` makes of the mark: cleared when it is on
-/// the mark, else a new mark under the pointer.
+/// The waypoints without the one under `pointer`, the newest first when two
+/// overlap; `None` when no waypoint is under it.
+pub fn mark_removed(
+    view: &MapView,
+    size: Vec2,
+    pointer: Vec2,
+    marks: &[pbd_core::map::Mark],
+) -> Option<Vec<pbd_core::map::Mark>> {
+    // The pin stands on its point: its head, where a click lands, is half
+    // its height above the place.
+    let head = Vec2::new(0.0, -PIN_HEAD_PX);
+    let hit = marks.iter().rposition(|m| {
+        (view.to_screen(geo::project(m.direction()), size) + head).distance(pointer)
+            <= MARK_CLEAR_PX
+    })?;
+    let mut left = marks.to_vec();
+    left.remove(hit);
+    Some(left)
+}
+
+/// What a right click at `pointer` makes of the waypoints: the one under it
+/// removed, or a new one under it added, the oldest dropped past four.
 pub fn mark_click(
     view: &MapView,
     size: Vec2,
     pointer: Vec2,
-    was: Option<pbd_core::map::Mark>,
+    marks: &[pbd_core::map::Mark],
     player: Option<Vec3>,
-) -> Option<pbd_core::map::Mark> {
-    if let Some(was) = was {
-        let on = view.to_screen(geo::project(was.direction()), size);
-        if on.distance(pointer) <= MARK_CLEAR_PX {
-            return None;
-        }
+) -> Vec<pbd_core::map::Mark> {
+    if let Some(left) = mark_removed(view, size, pointer, marks) {
+        return left;
     }
+    let mut next = marks.to_vec();
     let at = geo::unproject(view.to_map(pointer, size));
-    pbd_core::map::Mark::set(at, player.unwrap_or(at), pbd_app::planet::PLANET_RADIUS)
+    if let Some(mark) =
+        pbd_core::map::Mark::set(at, player.unwrap_or(at), pbd_app::planet::PLANET_RADIUS)
+    {
+        pbd_core::map::add_mark(&mut next, mark);
+    }
+    next
 }
 
 /// A picture of `width x height` RGBA8 sRGB pixels, drawn filtered
@@ -798,16 +854,18 @@ pub fn spawn(
                 canvas
                     .spawn((MarkerLayer, full(), FocusPolicy::Pass))
                     .with_children(|markers| {
-                        markers.spawn((
-                            MapMarker::Mark,
-                            ImageNode::new(icons.pin.clone()),
-                            hidden(Node {
-                                position_type: PositionType::Absolute,
-                                width: px(16),
-                                height: px(16),
-                                ..default()
-                            }),
-                        ));
+                        for k in 0..pbd_core::map::MARKS_MAX {
+                            markers.spawn((
+                                MapMarker::Mark(k),
+                                ImageNode::new(icons.pin.clone()),
+                                hidden(Node {
+                                    position_type: PositionType::Absolute,
+                                    width: px(16),
+                                    height: px(16),
+                                    ..default()
+                                }),
+                            ));
+                        }
                         markers.spawn((
                             MapMarker::Ship,
                             ImageNode::new(icons.craft.clone()),
@@ -1742,6 +1800,7 @@ pub fn markers(
         .find(|(camera, _)| camera.is_active)
         .map(|(_, t)| (t.forward().as_vec3(), t.up().as_vec3()));
     let ship_at = ship.iter().next().map(|p| p.0);
+    let waypoints = save.as_deref().map(marks_of).unwrap_or_default();
     let mut seen_crafts = Vec::new();
     for (entity, mark, mut node, mut turn) in &mut marks {
         let (at, heading) = match *mark {
@@ -1759,9 +1818,9 @@ pub fn markers(
                 None => (None, None),
             },
             MapMarker::Ship => (ship_at, None),
-            MapMarker::Mark => (
-                save.as_deref()
-                    .and_then(mark_of)
+            MapMarker::Mark(k) => (
+                waypoints
+                    .get(k)
                     .map(|m| m.direction() * pbd_app::planet::PLANET_RADIUS),
                 None,
             ),
@@ -1787,7 +1846,7 @@ pub fn markers(
         };
         node.left = px(pixel.x / s - w / 2.0);
         // A pin stands on its point; the rest are centred on their place.
-        let rise = if *mark == MapMarker::Mark {
+        let rise = if matches!(*mark, MapMarker::Mark(_)) {
             h / 2.0
         } else {
             0.0
@@ -1921,43 +1980,55 @@ mod tests {
 
     const SCREEN: Vec2 = Vec2::new(1440.0, 900.0);
 
-    /// A right click marks the place under the pointer, with how far the
-    /// player stood from it; another moves it; one on the mark clears it
-    /// (`starter-missions` G3).
+    /// A right click adds a waypoint under the pointer, with how far the
+    /// player stood from it; a fifth drops the oldest; a click on a pin's
+    /// head removes it (`starter-missions` G3, owner 2026-11-16).
     #[test]
-    fn a_right_click_sets_moves_and_clears_the_mark() {
+    fn right_clicks_add_waypoints_and_a_click_removes_one() {
         let view = MapView::at_metres_per_pixel(Vec2::new(0.5, 0.5), 2.0).clamped(SCREEN);
         let player = geo::unproject(view.to_map(SCREEN / 2.0, SCREEN)) * PLANET_RADIUS;
         let right = SCREEN / 2.0 + Vec2::new(120.0, 0.0);
-        let set = mark_click(&view, SCREEN, right, None, Some(player)).unwrap();
+        let one = mark_click(&view, SCREEN, right, &[], Some(player));
+        assert_eq!(one.len(), 1);
         let under = geo::unproject(view.to_map(right, SCREEN));
-        assert!(set.direction().distance(under) < 1e-5);
+        assert!(one[0].direction().distance(under) < 1e-5);
         // 120 px at 2 m a pixel, along the equator.
-        assert!((set.set_from_m - 240.0).abs() < 3.0, "{}", set.set_from_m);
-        let moved = mark_click(
-            &view,
-            SCREEN,
-            SCREEN / 2.0 - Vec2::new(0.0, 80.0),
-            Some(set),
-            Some(player),
-        )
-        .unwrap();
-        assert!(moved.direction().distance(set.direction()) > 1e-4);
-        let on = right + Vec2::new(MARK_CLEAR_PX - 2.0, 0.0);
-        assert_eq!(mark_click(&view, SCREEN, on, Some(set), Some(player)), None);
+        assert!(
+            (one[0].set_from_m - 240.0).abs() < 3.0,
+            "{}",
+            one[0].set_from_m
+        );
+        let mut marks = one.clone();
+        for k in 1..5 {
+            let at = SCREEN / 2.0 + Vec2::new(-200.0 + 60.0 * k as f32, -100.0);
+            marks = mark_click(&view, SCREEN, at, &marks, Some(player));
+        }
+        assert_eq!(marks.len(), pbd_core::map::MARKS_MAX);
+        assert!(!marks.contains(&one[0]), "the fifth dropped the first");
+        // A click on the second pin's head removes it, and only it.
+        let second = view.to_screen(geo::project(marks[1].direction()), SCREEN);
+        let on_head = second - Vec2::new(0.0, PIN_HEAD_PX - 3.0);
+        let left = mark_removed(&view, SCREEN, on_head, &marks).unwrap();
+        assert_eq!(left.len(), 3);
+        assert!(!left.contains(&marks[1]));
+        assert_eq!(
+            mark_click(&view, SCREEN, on_head, &marks, Some(player)),
+            left
+        );
+        // Off every pin a left click removes nothing.
+        assert_eq!(mark_removed(&view, SCREEN, SCREEN / 2.0, &marks), None);
     }
 
-    /// The mark is a `map-mark` record: stored, read back, and cleared by a
-    /// record of no mark.
+    /// The waypoints are a `map-mark` record: stored, read back, emptied.
     #[test]
-    fn the_mark_is_a_saved_record() {
+    fn the_waypoints_are_a_saved_record() {
         let mut save = WorldSave::memory_only();
-        assert_eq!(mark_of(&save), None);
+        assert!(marks_of(&save).is_empty());
         let mark = pbd_core::map::Mark::set(Vec3::X, Vec3::Y, PLANET_RADIUS).unwrap();
-        assert!(store_mark(&mut save, Some(mark)));
-        assert_eq!(mark_of(&save), Some(mark));
-        assert!(store_mark(&mut save, None));
-        assert_eq!(mark_of(&save), None);
+        assert!(store_marks(&mut save, &[mark, mark]));
+        assert_eq!(marks_of(&save), [mark, mark]);
+        assert!(store_marks(&mut save, &[]));
+        assert!(marks_of(&save).is_empty());
     }
 
     /// Zoomed all the way out the whole planet is on screen; zoomed all the

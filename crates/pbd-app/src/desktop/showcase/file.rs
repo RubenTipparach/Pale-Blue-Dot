@@ -106,7 +106,7 @@ pub enum Act {
     /// Mark a place this many metres away on the map: open it with M, put
     /// the pointer on dry ground that far off, right-click, close it.
     Mark(f32),
-    /// Walk to the map's mark.
+    /// Walk to the newest waypoint on the map.
     ToMark,
     /// The right button once, on what is aimed at, with what is in hand
     /// (the bucket filled at the water or poured).

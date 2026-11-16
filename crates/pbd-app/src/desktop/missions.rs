@@ -444,7 +444,8 @@ pub const TOWN_NEAR_M: f32 = 60.0;
 pub struct AboutState {
     /// The screen last frame.
     screen: Option<Screen>,
-    /// The mark last counted as reached, so a mark counts once.
+    /// The waypoint last counted as reached, so standing at one counts it
+    /// once.
     reached_mark: Option<[f32; 3]>,
     /// The last place the walker was counted from, in the water.
     swam_from: Option<Vec3>,
@@ -484,10 +485,14 @@ pub fn about_watch(
     }
     let Some(feet) = at else { return };
     let up = feet.normalize_or(Vec3::Y);
-    // The player's mark, reached: one set far enough away counts once.
-    if let Some(mark) = save.as_deref().and_then(super::map_screen::mark_of)
-        && state.reached_mark != Some(mark.at)
-        && mark.reached_far(feet, PLANET_RADIUS)
+    // A waypoint reached: one set far enough away counts once.
+    let marks = save
+        .as_deref()
+        .map(super::map_screen::marks_of)
+        .unwrap_or_default();
+    if let Some(mark) = marks
+        .iter()
+        .find(|m| state.reached_mark != Some(m.at) && m.reached_far(feet, PLANET_RADIUS))
     {
         state.reached_mark = Some(mark.at);
         did.write(Did::new(Kind::Reach, "marked", 1));

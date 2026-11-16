@@ -1311,7 +1311,7 @@ fn run(
             _ => Status::Running,
         },
         Act::Mark(metres) => mark(bot, *metres, s, out),
-        Act::ToMark => match super::map_screen::mark_of(s.save) {
+        Act::ToMark => match super::map_screen::marks_of(s.save).last().copied() {
             None => Status::Fail("no mark on the map".into()),
             Some(mark) => {
                 let d = mark.direction();
@@ -1941,8 +1941,12 @@ fn mark(bot: &mut Bot, metres: f32, s: &Sight, out: &mut Intent) -> Status {
             Status::Running
         }
         3 if bot.phase_s > 1.0 => {
-            if super::map_screen::mark_of(s.save).is_none() {
-                return Status::Fail("the right click set no mark".into());
+            let set = super::map_screen::marks_of(s.save)
+                .last()
+                .zip(bot.mark_goal)
+                .is_some_and(|(m, goal)| m.direction().distance(goal.normalize()) < 0.01);
+            if !set {
+                return Status::Fail("the right click set no waypoint".into());
             }
             out.taps.push(KeyCode::KeyM);
             bot.next_phase();

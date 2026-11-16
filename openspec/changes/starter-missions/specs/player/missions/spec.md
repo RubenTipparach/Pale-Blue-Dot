@@ -67,12 +67,18 @@ counted where the game already acts.
 - **WHEN** the player lands a minnow twice and a perch once while "Three kinds of fish" is open
 - **THEN** it counts two kinds
 
-### Requirement: The map marks a place
+### Requirement: The map marks up to four waypoints
 
-A right click on the map SHALL set the player's one mark there, move it, or,
-on the mark, clear it, as a saved record of the world. "Read the map" SHALL
-count the walker reaching within 8 m of a mark that was set at least 200 m
+A right click on the map SHALL add a waypoint there, and with four already
+set the oldest SHALL be removed. A click on a waypoint SHALL remove it. The
+waypoints SHALL be a saved record of the world. "Read the map" SHALL count
+the walker reaching within 8 m of a waypoint that was set at least 200 m
 from where the player stood.
+
+#### Scenario: A fifth waypoint
+
+- **WHEN** the player right-clicks five places on the map
+- **THEN** the last four are waypoints, and the first is gone
 
 #### Scenario: A near mark
 
