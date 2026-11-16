@@ -119,6 +119,9 @@ pub struct TerrainConfig {
     /// Where trees stand (`flora-v2` design 12.1): [`crate::flora::TreeTable::V4`]
     /// for versions 4 to 9, M13's densities from version 10.
     pub trees: crate::flora::TreeTable,
+    /// Ore veins in the stone (`flora-v2` design 12.8): `None` for versions
+    /// 4 to 9, version 10's from it.
+    pub ore: Option<crate::ore::OreVeins>,
 }
 
 /// A second ridge field, wider than the mountain field and standing only in
@@ -149,6 +152,7 @@ impl TerrainConfig {
     /// is version 9's; only where trees stand moves.
     pub const TENEBRIS_V10: Self = Self {
         trees: crate::flora::TreeTable::V10,
+        ore: Some(crate::ore::OreVeins::V10),
         ..Self::TENEBRIS_V9
     };
 
@@ -275,6 +279,7 @@ impl TerrainConfig {
         ocean: None,
         rivers: None,
         trees: crate::flora::TreeTable::V4,
+        ore: None,
     };
 }
 
@@ -969,12 +974,15 @@ mod tests {
         assert_eq!(
             TerrainConfig {
                 trees: v9.trees,
+                ore: None,
                 ..v10
             },
             v9
         );
         assert_eq!(v9.trees, crate::flora::TreeTable::V4);
         assert_eq!(v10.trees, crate::flora::TreeTable::V10);
+        assert_eq!(v9.ore, None, "version 9 grows no ore");
+        assert_eq!(v10.ore, Some(crate::ore::OreVeins::V10));
     }
 
     /// The ground digest differs by target: the Mac's (aarch64) and the

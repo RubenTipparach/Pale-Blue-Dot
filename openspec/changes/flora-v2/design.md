@@ -877,6 +877,25 @@ and the cell, never saved):
   layers of the surface, and by a capture of a dug hillside showing the
   veins.
 
+**As built** (2026-11-16): `pbd_core::ore::OreVeins`, `TerrainConfig::ore`
+(`None` to 9, `V10` at 10), and `column::generate_solid` turning stone to ore.
+Tests: `version_10_is_version_9_s_ground_with_ore_veins` (3,000 columns:
+nothing but stone to ore; ore 2 to 12% of the stone; version 9 none),
+`version_10_has_ore_near_the_surface_on_land` (ore within 14 m in 390 of
+768 sampled land columns, 51%), `version_10_s_columns_are_pinned` (x86_64).
+
+**A finding that stops the capture: ore is drawn as stone.** The column's
+material word packs eight 4-bit codes, and `planet_terrain::render_code`
+gives `Ore` the stone's code (5); all sixteen codes are taken (water 13,
+dirt 10, the sod and snow sides 11 and 12, tilled 14, the forge 15, wood
+8). So a vein is real (a pickaxe on it gives coal or mixed ore, the aim's
+HUD names it ORE) but a dug wall shows it as stone, and a capture cannot
+show the veins. Drawing ore needs a fifth bit in the material word (six
+codes a word, both the Rust packing and `material_at` in
+`planet_surface.wgsl`, and the runs' code field) and an ore tile on the
+atlas's stone sheet. That is a rendering change of its own, proposed as the
+next step (task 9.9) and not taken here.
+
 ### 12.9 What this pass leaves
 
 - The forest-and-clearing noise (12.2), alien species, the desert palm, the
