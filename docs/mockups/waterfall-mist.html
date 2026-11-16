@@ -102,6 +102,7 @@ button{font:inherit;color:inherit}
   </div>
   <section id="newPanel" hidden>
     <div class="bar" style="margin-bottom:8px"><span class="lbl">Mist rule</span><span class="seg" id="rule"><button data-rule="game" aria-pressed="false">Game's</button><button data-rule="new" aria-pressed="true">Proposed</button></span></div>
+    <div class="bar" style="margin-bottom:8px"><span class="lbl">FX</span><span class="seg" id="pix"><button data-pix="1" aria-pressed="true">Pixelated</button><button data-pix="0" aria-pressed="false">Smooth</button></span></div>
     <div class="sl one"><label for="accel">Fall speed-up</label><input id="accel" type="range" min="0" max="2" step="0.05" value="1"><output id="accelOut">1.00</output></div>
     <div class="sl one"><label for="gain">Mist opacity</label><input id="gain" type="range" min="0.2" max="2" step="0.05" value="1.5"><output id="gainOut">1.50</output></div>
     <div class="sl one"><label for="mist">Mist amount</label><input id="mist" type="range" min="0" max="3" step="0.05" value="1"><output id="mistOut">1.00</output></div>
@@ -214,7 +215,7 @@ button{font:inherit;color:inherit}
 <template id="tab-fixed"><p><b>Fixed order.</b> The same splash, drawn after the water against its depth: in front of the water, hidden by it. The pool shows its own deep colour. The mist is the game's gradient dot.</p></template>
 <template id="tab-new"><p><b>New mist + bubbles.</b> The fixed order, with lumpy lit mist puffs in place of the dot, bubbles rising in the pool under the fall, and the aerated teal over them. <b>Mist opacity</b> scales the puffs; 0.80 matches the dot's total cover.</p><p><b>Mist rule</b>: <b>Proposed</b> mists every fall by the metres it drops, with a floor, so the riffle and the 1 and 2-layer falls read as misty; <b>Game's</b> is today's count by whole falling layers. <b>Fall speed-up</b>: the falling faces scroll faster further down, so a taller fall's foot runs fastest (0 is the game's one speed). The About modal has the rules and numbers.</p></template>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="waterfall-mist/mist.js?v=17"></script>
+<script src="waterfall-mist/mist.js?v=18"></script>
 <script>
 "use strict";
 let MODAL_BACK = null;
@@ -269,6 +270,10 @@ document.getElementById("focus").addEventListener("click", e => {
 document.getElementById("rule").addEventListener("click", e => {
   const b = e.target.closest("button[data-rule]"); if (!b) return; P.S.rule = b.dataset.rule;
   for (const x of document.querySelectorAll("#rule button")) x.setAttribute("aria-pressed", String(x === b));
+});
+document.getElementById("pix").addEventListener("click", e => {
+  const b = e.target.closest("button[data-pix]"); if (!b) return; P.S.pixel = b.dataset.pix === "1"; P.apply();
+  for (const x of document.querySelectorAll("#pix button")) x.setAttribute("aria-pressed", String(x === b));
 });
 document.getElementById("pause").addEventListener("change", e => { P.S.running = !e.target.checked; });
 document.getElementById("showRef").addEventListener("change", refresh);

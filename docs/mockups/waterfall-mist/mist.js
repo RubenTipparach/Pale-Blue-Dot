@@ -662,14 +662,14 @@ function splashMesh(U, sheet) {
   g.setAttribute("aCell", new THREE.BufferAttribute(cell, 2));
   const mat = new THREE.ShaderMaterial({transparent: true, depthWrite: false, depthTest: true,
     uniforms: Object.assign({uRight: {value: new THREE.Vector3()}, uUpCam: {value: new THREE.Vector3()}, uSheet: {value: sheet},
-      uGain: {value: 1}, uLamps: {value: 0},
+      uGain: {value: 1}, uLamps: {value: 0}, uPix: {value: 1},
       uDepthTex: {value: null}, uDRes: {value: new THREE.Vector2(1, 1)}, uNear: {value: 0.05}, uFar: {value: 600}, uSoft: {value: 0}}, U),
     vertexShader: `attribute vec2 aCorner; attribute vec4 aC; attribute vec4 aCol; attribute vec2 aCell; uniform vec3 uRight; uniform vec3 uUpCam;
       varying vec2 vUV; varying vec4 vCol; varying vec2 vCell; varying vec3 vP; varying float vViewZ;
       void main() { vec3 p = aC.xyz + (uRight*aCorner.x + uUpCam*aCorner.y)*aC.w; vP = p; vViewZ = -(viewMatrix*vec4(p, 1.0)).z;
         vUV = vec2(0.5*(aCorner.x + 1.0), 0.5*(1.0 - aCorner.y)); if (aCell.y > 0.5) vUV.x = 1.0 - vUV.x;
         vCol = aCol; vCell = aCell; gl_Position = projectionMatrix*viewMatrix*vec4(p, 1.0); }`,
-    fragmentShader: `uniform sampler2D uSheet; uniform float uGain; uniform float uLamps; varying vec2 vUV; varying vec4 vCol; varying vec2 vCell; varying vec3 vP; varying float vViewZ;
+    fragmentShader: `uniform sampler2D uSheet; uniform float uGain; uniform float uLamps; uniform float uPix; varying vec2 vUV; varying vec4 vCol; varying vec2 vCell; varying vec3 vP; varying float vViewZ;
       uniform sampler2D uDepthTex; uniform vec2 uDRes; uniform float uNear; uniform float uFar; uniform float uSoft;
       ${LIGHT_GLSL} ${UNDER_GLSL}
       void main() {
@@ -677,18 +677,25 @@ function splashMesh(U, sheet) {
         if (vCell.x < -1.5) {
           // A fall droplet: 8 texels, sampled nearest; a bright core, a lit rim, a glint, no outline.
           vec2 tx = clamp(floor(vUV*8.0), 0.0, 7.0); float r = length((tx + 0.5)/4.0 - 1.0);
+          if (uPix < 0.5) {
+            // Not pixelated (mockup toggle): a smooth round drop with a soft rim and a soft glint.
+            r = length(vUV*2.0 - 1.0); if (r > 1.0) discard;
+            a = mix(0.95, 0.0, smoothstep(0.55, 1.0, r)); rgb = mix(vec3(0.86, 0.95, 1.0), vec3(1.25), 1.0 - smoothstep(0.0, 0.3, length(vUV - 0.3)));
+          } else {
           if (r > 0.95) discard;
           a = r < 0.55 ? 0.95 : 0.7; rgb = vec3(0.86, 0.95, 1.0);
           if (tx.x == 2.0 && tx.y == 2.0) rgb = vec3(1.25);
+          }
         } else if (vCell.x < -0.5) {
           // The game's dot: alpha (1 - r)^2 at the texel's centre, a byte, sampled nearest.
           vec2 texel = clamp(floor(vUV*32.0), 0.0, 31.0);
           float r = length((texel + 0.5)/32.0*2.0 - 1.0), k = clamp(1.0 - r, 0.0, 1.0);
           a = floor(k*k*255.0)/255.0; rgb = vec3(1.0);
+          if (uPix < 0.5) { k = clamp(1.0 - length(vUV*2.0 - 1.0), 0.0, 1.0); a = k*k; }
         } else {
           float vr = floor(vCell.x/4.0 + 1e-4), fr = clamp(vCell.x - vr*4.0, 0.0, 3.0);
           float f0 = floor(fr), f1 = min(f0 + 1.0, 3.0), w = fr - f0;
-          vec2 tx = clamp(floor(vUV*32.0), 0.0, 31.0) + 0.5;
+          vec2 tx = uPix > 0.5 ? clamp(floor(vUV*32.0), 0.0, 31.0) + 0.5 : clamp(vUV*32.0, 0.75, 31.25);
           vec2 uv0 = (vec2(f0, vr)*32.0 + tx)/128.0, uv1 = (vec2(f1, vr)*32.0 + tx)/128.0;
           vec4 tex = mix(texture2D(uSheet, vec2(uv0.x, 1.0 - uv0.y)), texture2D(uSheet, vec2(uv1.x, 1.0 - uv1.y)), w);
           rgb = pow(tex.rgb, vec3(2.2)); a = tex.a*uGain;
@@ -737,7 +744,7 @@ function bubblePoints(F, U) {
   const depth = F.poolY - F.floor;
   const mat = new THREE.ShaderMaterial({transparent: true, depthWrite: false,
     uniforms: Object.assign({uFoot: {value: new THREE.Vector3()}, uH: {value: F.H}, uDepth: {value: depth}, uTime: {value: 0},
-      uOpen: {value: new THREE.Vector3(1, 1, 1)}, uPx: {value: 600}, uAmt: {value: 1}}, U),
+      uOpen: {value: new THREE.Vector3(1, 1, 1)}, uPx: {value: 600}, uAmt: {value: 1}, uPix: {value: 1}}, U),
     vertexShader: `attribute vec4 aSeed; attribute float aRank; uniform float uAmt; uniform vec3 uFoot; uniform float uH; uniform float uDepth; uniform float uTime; uniform float uPx;
       varying float vA; varying vec3 vP;
       void main() {
@@ -756,16 +763,17 @@ function bubblePoints(F, U) {
         gl_PointSize = vA > 0.0 ? max(2.0, size*uPx/max(-mv.z, 0.1)) : 0.0;
         gl_Position = projectionMatrix*mv;
       }`,
-    fragmentShader: `uniform vec3 uOpen; uniform vec3 uFoot; varying float vA; varying vec3 vP; ${LIGHT_GLSL} ${UNDER_GLSL}
+    fragmentShader: `uniform vec3 uOpen; uniform vec3 uFoot; uniform float uPix; varying float vA; varying vec3 vP; ${LIGHT_GLSL} ${UNDER_GLSL}
       void main() {
         // An 8-texel bubble, sampled nearest: a bright rim, a clear middle, a glint up and to the left. No outline:
         // the rim is the bubble.
-        vec2 tx = floor(gl_PointCoord*8.0); vec2 d = (tx + 0.5)/4.0 - 1.0; float r = length(d);
+        vec2 tx = uPix > 0.5 ? floor(gl_PointCoord*8.0) : gl_PointCoord*8.0 - 0.5; vec2 d = (tx + 0.5)/4.0 - 1.0; float r = length(d);
         if (r > 1.0) discard;
         float rim = smoothstep(0.55, 0.8, r);
         float a = mix(0.28, 0.9, rim);
         vec3 c = vec3(0.86, 0.97, 1.0);
-        if (tx.x == 2.0 && tx.y == 2.0) { c = vec3(1.2); a = 1.0; }
+        if (uPix > 0.5 && tx.x == 2.0 && tx.y == 2.0) { c = vec3(1.2); a = 1.0; }
+        if (uPix < 0.5) { a *= 1.0 - smoothstep(0.85, 1.0, r); float g = 1.0 - smoothstep(0.0, 0.3, length(d + 0.4)); c = mix(c, vec3(1.2), g); a = max(a, g); }
         vec3 lit = uOpen*0.9 + lampLight(vP, vec3(0.0, 1.0, 0.0), 1.0);
         vec3 col = c*lit;
         // Seen from above, a bubble is under the water: it takes the aerated water's teal and fades by its own
@@ -833,7 +841,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
   const S = {variant: "new", night: false, running: true, gain: 1.5, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 1,
-    rule: "new", accel: 1};
+    rule: "new", accel: 1, pixel: true};
   // The eye's pool (the cell under it, if it is a basin's), for the view from under the water.
   let eyePool = null;
   function murk(open) {
@@ -867,6 +875,11 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     wmat.uniforms.uG.value = v === "new" ? ACCEL_G * S.accel : 0; wmat.uniforms.uVmax.value = ACCEL_VMAX;
     front.material.uniforms.uGain.value = S.gain; front.material.uniforms.uLamps.value = v === "new" ? 1 : 0;
     front.material.uniforms.uSoft.value = v === "new" ? S.soft : 0;
+    // Pixelated FX (mockup toggle): off samples the puff sheet smoothly and draws the drops and bubbles round.
+    const pix = v !== "new" || S.pixel;
+    front.material.uniforms.uPix.value = pix ? 1 : 0; for (const b of bubbles) b.material.uniforms.uPix.value = pix ? 1 : 0;
+    const filt = pix ? THREE.NearestFilter : THREE.LinearFilter;
+    if (sheet.magFilter !== filt) { sheet.magFilter = sheet.minFilter = filt; sheet.needsUpdate = true; }
     lighting();
   }
   function resize() {
