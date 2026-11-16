@@ -833,7 +833,51 @@ save change):
   `--day 2` (summer), `--day 27` (autumn) and `--day 52` (winter), side by
   side.
 
-### 12.7 What this pass leaves
+### 12.8 Ore veins, in the same version 10 (owner, 2026-11-15)
+
+The owner: there is no ore anywhere in the generated ground, so mining and
+smelting cannot be played. They approved adding veins in this same new
+generator version, so worlds take one bump, not two.
+
+**Finding.** `column::material_at_depth` gives sod, then soil, then stone,
+and nothing else: no generated cell is ever `Material::Ore`. Everything after
+the ground is already wired:
+- digging an ore cell yields coal one time in three (a seam hashed on the
+  cell and layer) and mixed ore otherwise (`station::ore_yield`);
+- `Material::Ore` is tier 1, so a stone pickaxe takes it (`dig::ore_tier`);
+- the forge's `mixed-ore` recipe smelts four mixed ore and two coal into two
+  copper, one iron and one tin, and `bronze` makes bronze from copper and
+  tin.
+So the whole mining and smelting loop is one missing generator rule.
+
+**Change** (generator version 10, beside version 9; derived from the seed
+and the cell, never saved):
+- **`TerrainConfig` gains `ore: Option<OreVeins>`**, `None` for versions 4
+  to 9 and `Some(OreVeins::V10)` for version 10. `column::generate_solid`
+  turns a stone layer to `Ore` where `OreVeins::is_ore` says so; nothing
+  else in a column moves.
+- **Veins are clusters.** Space is cut into 3 m cubes in the body's frame. A
+  cube holds a vein on its own hash at a share that depends on depth (18%
+  of cubes within 14 m of the surface, 7% deeper), and inside a vein cube
+  each 1 m cell is ore on its own hash, 55% of them. So ore comes in
+  clumps a few cells across, often just under the soil of a hillside, and
+  a stone pickaxe finds it in the first minutes.
+- **Which ore.** Recommendation taken (ask only with screenshots): the
+  game's one ore block, mixed ore, rather than four new blocks. It already
+  yields coal (a third of cells), and its smelt gives copper, tin and iron
+  together, so bronze is reachable from the first vein. Separate copper,
+  tin, iron and coal blocks, with iron deeper, need new blocks, tiles and
+  icons, and wait for the owner (a mockup of the veins first).
+- **Saves.** Version 9 keeps its columns cell for cell. A test holds version
+  10's columns to version 9's everywhere except stone turned to ore, so
+  the comparison holds on every machine whatever the cross-machine drift
+  (12.1). A digest of version 10's columns is pinned per target. A world on
+  version 9 opens on version 9 and finds no new ore; a new world is on 10.
+- **Verified** by a test that most land columns sampled have ore within 14
+  layers of the surface, and by a capture of a dug hillside showing the
+  veins.
+
+### 12.9 What this pass leaves
 
 - The forest-and-clearing noise (12.2), alien species, the desert palm, the
   fungal forest.
