@@ -1241,6 +1241,18 @@ and that a diver's submersion never jumps; captures before and after at the
 polar shore and the `--life` approach sequence at 30, 20, 12, 8, 5, 3 and
 2 m; READY with no new `LATE_PIPELINE`.
 
+**Built** (2026-11-16, `claude/sea-life-fixes`): as above. The first
+flee only aimed straight away and pulled at the goal's weak 0.45, and the
+seal stayed about 5 m off while it dived; it now tries bearings off the
+straight line and nearer reaches for water that fits, and pulls with a
+lure's weight, and swims from 5.6 m to 17 m in 6 s
+(`docs/screenshots/sea-life-fixes/seal-approach-trace.txt`). Known limit: a
+seal of the schools rides the water's surface and knows nothing of the
+floes, so in a dense floe field it can lie half inside one; hauling it out
+onto a floe needs the floes in the water the schools read, and is not done
+here. The `--life` approach ends at 5 m at the polar shore: no water nearer
+is deep enough for a seal.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

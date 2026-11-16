@@ -23,6 +23,8 @@ memory-only worlds, generator version 9. "Before" is `claude/env-v2` at
 
 - `seal-approach-before-after.jpg`: `--life seal:D --yaw 35`, D = 30, 20,
   12, 8 and 5 m (rows), before (left) and after (right), the same shore.
+  `--life seal:3` and `seal:2` put the seal at 5 m too: no water nearer is
+  deep enough for a seal at this shore, so the sequence ends at 5 m.
   Honest read: at this spot the seals are hard to pick out among the floes
   at this size; the frames show the floes moving off the beach more than
   the seal. The seal's behaviour is read off the trace below.
