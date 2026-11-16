@@ -364,6 +364,10 @@ impl Bot {
         }
         // In a hole of its own digging: up out of it, as a player does,
         // a block set under the feet at the top of each jump.
+        // In the sea (roamed off the shore): up and back to dry land.
+        if surface_height(s.up) < -0.3 && (point.length() - PLANET_RADIUS) > 0.0 {
+            out.taps.push(KeyCode::Space);
+        }
         // Or stuck twice over in the same spot: a trench of its own digging
         // the pit test misses. Up a few blocks, then on.
         if self.in_pit(s) || s.now < self.climb_until {
@@ -667,10 +671,7 @@ impl Bot {
                     "anywhere"
                 }
             );
-            self.roam_to = Some(pick.unwrap_or_else(|| {
-                let away = Quat::from_axis_angle(s.up, 1.7) * s.heading;
-                s.feet + away * 8.0
-            }));
+            self.roam_to = Some(pick.unwrap_or_else(|| dry_ground(s)));
         }
         let to = self.roam_to.expect("set above");
         self.roam_s += s.dt;
@@ -1164,7 +1165,7 @@ fn run(
         }
         Act::Hour(hour) => {
             let behind = (hour - s.hour).rem_euclid(24.0);
-            if behind < 0.5 || behind > 23.5 {
+            if !(0.5..=23.5).contains(&behind) {
                 Status::Done
             } else {
                 Status::Running
@@ -1790,6 +1791,32 @@ fn station(
         return Status::Fail(format!("{code} at the {} never finished", row.name));
     }
     Status::Running
+}
+
+/// Dry ground a few metres off, never the sea: of sixteen headings at ten
+/// metres, the one with the highest ground that is not a climb, turned
+/// from the heading where it can be; the way inland when the bot is in the
+/// water.
+fn dry_ground(s: &Sight) -> Vec3 {
+    let east = Vec3::Y.cross(s.up).normalize_or(Vec3::X);
+    let north = s.up.cross(east);
+    let here = surface_height(s.up);
+    (0..16)
+        .map(|k| {
+            let a = k as f32 / 16.0 * std::f32::consts::TAU;
+            let along = east * a.cos() + north * a.sin();
+            let d = (s.up * PLANET_RADIUS + along * 10.0).normalize();
+            let h = surface_height(d);
+            let turn = signed_angle(s.heading, along, s.up).abs();
+            let score = if h < 0.5 {
+                -100.0
+            } else {
+                -(h - here - 1.0).abs() - turn * 0.5
+            };
+            (d * (PLANET_RADIUS + h.max(0.0)), score)
+        })
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map_or(s.feet, |(p, _)| p)
 }
 
 /// The sea's edge nearest the feet: a point on the water and where to stand
@@ -2623,53 +2650,6 @@ mod tests {
             .min_by(|a, b| a.3.total_cmp(&b.3))
             .map(|(k, base, stand, _)| (k, base, stand))
             .expect("a tree near the spawn")
-    }
-
-    /// MEASUREMENT (`step-videos` 5.2, run by hand with `--ignored`): the
-    /// nearest pasture to the fields spawn with the sea within thirty
-    /// metres, as `--at` degrees, for the phase-1 showcase's start: a field
-    /// the bot can fish from without a long walk.
-    #[test]
-    #[ignore]
-    fn find_a_coastal_field() {
-        let spawn = fields();
-        let east = Vec3::Y.cross(spawn).normalize();
-        let north = spawn.cross(east);
-        let at = |d: Vec3, e: f32, n: f32| (d * PLANET_RADIUS + east * e + north * n).normalize();
-        let mut found = Vec::new();
-        for i in -300..=300 {
-            for j in -300..=300 {
-                let d = at(spawn, i as f32 * 10.0, j as f32 * 10.0);
-                let h = surface_height(d);
-                if !(1.0..8.0).contains(&h) || pbd_app::planet::surface_code(d, h) & 0xff != 2 {
-                    continue;
-                }
-                let sea = (0..12).any(|k| {
-                    let a = k as f32 / 12.0 * std::f32::consts::TAU;
-                    [15.0, 30.0]
-                        .iter()
-                        .any(|r| surface_height(at(d, a.cos() * r, a.sin() * r)) < -0.6)
-                });
-                // Level ground behind the shore: nothing over two metres up
-                // or down within twenty-five metres inland.
-                let level = (0..8).all(|k| {
-                    let a = k as f32 / 8.0 * std::f32::consts::TAU;
-                    [10.0, 25.0].iter().all(|r| {
-                        let hh = surface_height(at(d, a.cos() * r, a.sin() * r));
-                        hh < 0.0 || (hh - h).abs() < 2.0
-                    })
-                });
-                if sea && level {
-                    found.push((d.distance(spawn) * PLANET_RADIUS, d));
-                }
-            }
-        }
-        found.sort_by(|a, b| a.0.total_cmp(&b.0));
-        for (m, d) in found.iter().take(8) {
-            let (lat, lon) = pbd_core::geo::lat_lon(*d).degrees();
-            println!("COASTAL_FIELD {m:.0} m from the fields spawn: --at {lat:.4} {lon:.4}");
-        }
-        assert!(!found.is_empty());
     }
 
     /// `step-videos` 5.1's verify: a short showcase's chop and craft go

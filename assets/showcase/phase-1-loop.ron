@@ -9,8 +9,10 @@
 // generates holds ore), and light and building, getting about and the
 // later cooking dishes are for a follow-up.
 //
-// The start is a level pasture with the sea within thirty metres, found by
-// `showcase::tests::find_a_coastal_field` (a measurement, run by hand).
+// The start is a level pasture with the sea within thirty metres: measured
+// once by a throwaway search of pasture within 3 km of the fields spawn
+// (ground 1 to 8 m up, the sea within 30 m, nothing over 2 m up or down
+// within 25 m inland), the only such place it found.
 (
     goal: "Goal: the mission tree's trunk, then fishing, farming, herding and cooking",
     at: Some((11.5085, -25.0992)),
