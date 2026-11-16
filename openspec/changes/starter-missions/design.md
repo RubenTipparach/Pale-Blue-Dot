@@ -401,3 +401,35 @@ and captioned. A branch the bot cannot finish fails the run and the log
 names the stalled objective. That is the test that every mechanic is
 reachable by play.
 
+### One parent per mission (owner, 2026-11-15)
+
+The owner, on M33 version 2: *"the mission tree is a mess, please dont make
+multi dependencies. a child node cannot have multiple parents, parents can
+have multiple child nodes. if something depends on something to be done,
+simply dont unlock it until the dependent thing is done. space nodes out so
+the connections are clear"*.
+
+The tree above is therefore a strict tree:
+- **Every mission has exactly one parent**, the one line drawn. A mission
+  may have many children.
+- **An extra requirement is a hidden gate** (`after` in the data). The
+  mission stays locked until the gate is done, and no line is drawn for it.
+- The tree is laid out from its structure, left to right. A branch is one
+  straight line, and side chains hang below it.
+
+What moved, so the real needs still hold:
+- **`fire` (Make a fire) joins the trunk** after `stone-tools`. Every
+  branch hangs off it, so the campfire is there before any cooking.
+- **Cooking is spread to where its food comes from:**
+  - `cook-fish`, then `eat`, hang off `go-fishing`;
+  - `bread` hangs off `harvest`;
+  - `farm-meal`, then `feast`, hang off `three-crops`;
+  - `fried-egg` hangs off `collect`.
+- **`water-field`** keeps `plant` as its parent, with a hidden gate on
+  `go-fishing` (the bucket).
+- **The dotted "uses" links are gone.**
+
+`needs` in `missions.ron` becomes one parent per mission. The all-of
+groups used today (cooking on fishing and `harvest`) are replaced by this
+placement plus `after` gates.
+
