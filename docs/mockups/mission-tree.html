@@ -6,7 +6,7 @@
 <title>Mission Tree</title>
 <meta name="description" content="Pale Blue Dot's Missions screen redrawn as the tree that unlocks the tech: the trunk and seven branches, every mission, objective and unlock from starter-missions, with a bot run that plays it in order.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=VT323&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
 /* Tokens: the stone-and-carved-wood kit's colours (tools/art/ui_art.py, Sweaft-64), as ui.html.
    The game UI has one look by day and by night, so both schemes share them. */
@@ -17,8 +17,8 @@
   --rune: #84e3b5; --rune-dim: #53998b; --new: #ff8a3d;
   --page: #010e1a; --page-2: #011c34; --page-line: #1f3b52; --page-text: #bfcad7; --page-dim: #92a3b2;
   --canvas: #06121d; --grid: rgba(62, 88, 110, .22);
-  --display: "Pixelify Sans", "VT323", ui-monospace, monospace;
-  --body: "VT323", ui-monospace, monospace;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #010e1a; } }
@@ -90,7 +90,7 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .slot.on { background-image: url(mission-tree/ui/stone-slot-selected.png); }
 .sil { filter: brightness(0) invert(1) brightness(.34); }
 .card .tt { min-width: 0; flex: 1; }
-.card .tt b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font: 600 17px/1.05 var(--display); color: var(--title); text-shadow: 0 2px 0 var(--ink); overflow: hidden; padding-right: 2px; }
+.card .tt b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font: 700 19px/1.1 var(--display); color: var(--title); text-shadow: 0 2px 0 var(--ink); overflow: hidden; padding-right: 2px; }
 .card .tt small { display: block; font: 16px/1.1 var(--body); color: var(--label-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .badge { position: absolute; right: 6px; top: -20px; font: 15px/1 var(--body); padding: 2px 5px 1px; border: 1px solid currentColor; color: var(--label-dim); background: var(--well); white-space: nowrap; }
 .card .ck.big { position: absolute; right: -4px; top: -6px; }
@@ -111,7 +111,7 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .card.st-now { border-image-source: url(mission-tree/ui/oak-tooltip.png); box-shadow: 0 0 0 3px var(--title), 0 0 26px 6px rgba(250, 175, 92, .45); }
 .card.st-now .badge { color: var(--ink); background: var(--title); border-color: var(--title); }
 .card.st-open .badge { color: var(--stone-4); }
-.card.st-locked { opacity: .55; }
+.card.st-locked { opacity: .82; }
 .card.st-locked .tt b { color: var(--label-dim); }
 .card.st-locked .obj li, .card.st-locked .obj li em { color: var(--label-dim); }
 .card.st-locked .hd .slot img { filter: brightness(0) invert(1) brightness(.34); }

@@ -55,8 +55,10 @@
   // recipe.
   const o = (s, n, t, nw) => ({ s, n, t: t || s, nw: !!nw });
 
-  // col/row place the card. needs: groups, every group must have one mission done (a group of two
-  // is an "or"). uses: a crop or egg from another branch (drawn dotted, never locks).
+  // A strict tree (owner, 2026-11-15: "a child node cannot have multiple parents, parents can have
+  // multiple child nodes. if something depends on something to be done, simply dont unlock it until
+  // the dependent thing is done"). needs: the one parent, the only line drawn. after: missions that
+  // must also be done before it opens, never drawn. col/row are worked out from the tree below.
   const M = [
     // 0. Trunk
     { id: "gather", b: "trunk", col: 0, row: 3, icon: "hand", title: "Gather by hand", needs: [],
@@ -79,7 +81,7 @@
       unl: ["branches"], help: "Loose stone comes off rock outcrops by hand. At the workbench (E), make a stone pickaxe and a stone shovel." },
 
     // 1. Fishing
-    { id: "rod", b: "fishing", col: 6, row: 2, icon: "rod", title: "Make a fishing rod", needs: [["stone-tools"]],
+    { id: "rod", b: "fishing", col: 6, row: 2, icon: "rod", title: "Make a fishing rod", needs: [["fire"]],
       obj: [o("craft a rod", 1, "craft rod")], unl: ["casting"], help: "Make a rod at the workbench from planks, rope and fibre." },
     { id: "go-fishing", b: "fishing", col: 7, row: 2, icon: "perch", title: "Go fishing", needs: [["rod"]],
       obj: [o("cast onto water", 1), o("catch fish", 3, "catch 3 fish")], unl: ["bucket"],
@@ -95,14 +97,14 @@
       help: "Cast from the shore into the sea, then from a river bank or a lake." },
 
     // 2. Farming
-    { id: "find-seeds", b: "farming", col: 6, row: 4, icon: "chili-seed", title: "Find seeds", needs: [["stone-tools"]],
+    { id: "find-seeds", b: "farming", col: 6, row: 4, icon: "chili-seed", title: "Find seeds", needs: [["fire"]],
       obj: [o("dig grass for a seed", 1), o("pick a wild plant", 1, "pick 1 wild plant")], unl: ["tilling"],
       help: "Seeds turn up when you dig grass, and wild plants give them when picked (E)." },
     { id: "till", b: "farming", col: 7, row: 4, icon: "stone-shovel", title: "Break ground", needs: [["find-seeds"]],
       obj: [o("till cells", 4, "till 4 cells")], unl: [], help: "With the shovel in hand, E tills soil." },
     { id: "plant", b: "farming", col: 8, row: 4, icon: "wheat-seed", title: "Plant a field", needs: [["till"]],
       obj: [o("plant wheat seed", 4, "plant 4 wheat-seed")], unl: [], help: "Plant a seed on tilled soil with the right button." },
-    { id: "water-field", b: "farming", col: 9, row: 4, icon: "water-bucket", title: "Water the field", needs: [["plant"]],
+    { id: "water-field", b: "farming", col: 9, row: 4, icon: "water-bucket", title: "Water the field", needs: [["plant"]], after: ["go-fishing"],
       obj: [o("pour a water bucket", 1, "pour a water-bucket beside the field", true)], unl: [],
       help: "Fill the bucket at water (E), then pour it beside the field." },
     { id: "harvest", b: "farming", col: 10, row: 4, icon: "wheat", title: "Harvest", needs: [["water-field"]],
@@ -113,7 +115,7 @@
       help: "Turnip and chili seeds come with the first harvest; frost kale grows where it is cold." },
 
     // 3. Herding
-    { id: "fence", b: "herding", col: 6, row: 5, icon: "fence", title: "Make fences", needs: [["stone-tools"]],
+    { id: "fence", b: "herding", col: 6, row: 5, icon: "fence", title: "Make fences", needs: [["fire"]],
       obj: [o("craft fences", 12, "craft 12 fence (new recipe, from planks and rope)", true), o("craft a gate", 1, "craft 1 gate (new recipe, from planks and rope)", true)], unl: [],
       help: "At the workbench, make fences and a gate from planks and rope." },
     { id: "tame", b: "herding", col: 7, row: 5, icon: "yard_hen", title: "Tame an animal", needs: [["fence"]],
@@ -130,7 +132,7 @@
       help: "Woolbacks and plodders graze in open country; tame one as you did the hen." },
 
     // 4. Mining and smelting
-    { id: "dig-deep", b: "mining", col: 6, row: 6, icon: "stone", title: "Dig into the hill", needs: [["stone-tools"]],
+    { id: "dig-deep", b: "mining", col: 6, row: 6, icon: "stone", title: "Dig into the hill", needs: [["fire"]],
       obj: [o("dig stone", 10, "dig 10 stone with the stone pickaxe")], unl: ["forge"],
       help: "Hold the stone pickaxe and dig into a hillside; stone comes out a cell at a time." },
     { id: "ore", b: "mining", col: 7, row: 6, icon: "tin-ore", title: "Find ore", needs: [["dig-deep"]],
@@ -150,28 +152,28 @@
       help: "Iron ore smelts hotter: feed the forge more coal." },
 
     // 5. Cooking
-    { id: "fire", b: "cooking", col: 13, row: 3, icon: "campfire", title: "Make a fire", needs: [["three-kinds"], ["harvest", "collect"]],
+    { id: "fire", b: "trunk", col: 13, row: 3, icon: "campfire", title: "Make a fire", needs: [["stone-tools"]],
       obj: [o("craft a campfire", 1, "craft a campfire (new recipe)", true), o("place it", 1, "place the campfire")], unl: ["campfire-dishes"],
       help: "Make a campfire in the Craft row from five loose stone and two logs, and set it down near water." },
-    { id: "cook-fish", b: "cooking", col: 14, row: 3, icon: "grilled-fish", title: "Cook fish", needs: [["fire"]],
+    { id: "cook-fish", b: "cooking", col: 14, row: 3, icon: "grilled-fish", title: "Cook fish", needs: [["go-fishing"]],
       obj: [o("cook grilled fish", 2, "cook 2 grilled-fish")], unl: [], help: "Open the campfire with E and grill the fish you caught." },
-    { id: "bread", b: "cooking", col: 15, row: 3, icon: "flatbread", title: "Bake bread", needs: [["cook-fish"]], uses: ["harvest"],
+    { id: "bread", b: "farming", col: 15, row: 3, icon: "flatbread", title: "Bake bread", needs: [["harvest"]],
       obj: [o("cook flatbread", 2, "cook 2 flatbread from your wheat")], unl: [], help: "At the campfire, bake flatbread from wheat you grew." },
-    { id: "eat", b: "cooking", col: 16, row: 3, icon: "kale-skewer", title: "Eat well", needs: [["bread"]],
+    { id: "eat", b: "cooking", col: 16, row: 3, icon: "kale-skewer", title: "Eat well", needs: [["cook-fish"]],
       obj: [o("eat a dish", 1, "eat 1 dish; its effect shows", true)], unl: [],
       help: "Put a dish on the hotbar and use it; its effect shows beside the health bar." },
-    { id: "farm-meal", b: "cooking", col: 17, row: 3, icon: "roast-turnip", title: "A farm meal", needs: [["eat"]], uses: ["three-crops"],
+    { id: "farm-meal", b: "farming", col: 17, row: 3, icon: "roast-turnip", title: "A farm meal", needs: [["three-crops"]],
       obj: [o("cook a farm dish", 1, "cook roast-turnip, kale-skewer or chili-fish")], unl: [],
       help: "At the campfire, cook a dish from your field." },
-    { id: "fried-egg", b: "cooking", col: 18, row: 3, icon: "fried-egg", title: "Breakfast", needs: [["farm-meal"]], uses: ["collect"],
+    { id: "fried-egg", b: "herding", col: 18, row: 3, icon: "fried-egg", title: "Breakfast", needs: [["collect"]],
       obj: [o("cook a fried egg", 1, "cook a fried-egg from your hen's egg")], unl: [],
       help: "At the campfire, fry an egg from your own hens." },
-    { id: "feast", b: "cooking", col: 19, row: 3, icon: "chili-fish", title: "A feast", needs: [["fried-egg"]],
+    { id: "feast", b: "farming", col: 19, row: 3, icon: "chili-fish", title: "A feast", needs: [["farm-meal"]],
       obj: [o("eat different dishes", 3, "eat 3 different dishes", true)], unl: ["kitchen"],
       help: "Eat three different dishes; every effect shows at once." },
 
     // 6. Light and building
-    { id: "build", b: "light", col: 6, row: 0, icon: "stone", title: "Build a shelter", needs: [["stone-tools"]],
+    { id: "build", b: "light", col: 6, row: 0, icon: "stone", title: "Build a shelter", needs: [["fire"]],
       obj: [o("place blocks", 20, "place 20 blocks (planks, stone or soil)")], unl: ["torches"],
       help: "Hold planks, stone or soil and place blocks with the right button: walls and a roof." },
     { id: "torch", b: "light", col: 7, row: 0, icon: "torch", title: "Light the night", needs: [["build"]],
@@ -195,6 +197,7 @@
   ];
 
   const byId = Object.fromEntries(M.map((m) => [m.id, m]));
+  const byIdRaw = byId;
   const order = BRANCHES.flatMap((b) => M.filter((m) => m.b === b.key).map((m) => m.id));
   const unlockedBy = {};
   M.forEach((m) => m.unl.forEach((u) => (unlockedBy[u] = m.id)));
@@ -211,7 +214,7 @@
     steps.push({ t: "done", m: id });
   });
 
-  const isOpen = (m, done) => m.needs.every((g) => g.some((id) => done.has(id)));
+  const isOpen = (m, done) => m.needs.every((g) => g.some((id) => done.has(id))) && (m.after || []).every((id) => done.has(id));
   const unlName = (u) => U[u].name.replace(/ \(.*\)$/, "");
 
   function stateAt(k) {
@@ -254,9 +257,28 @@
   }
 
   // ---- layout
-  const CW = 236, CH = 188, GX = 50, GY = 76, OX = 40, OY = 70;
+  const CW = 236, CH = 188, GX = 110, GY = 104, OX = 40, OY = 90;
   const px = (c) => OX + c * (CW + GX);
   const py = (r) => OY + r * (CH + GY);
+  {
+    const kids = {};
+    M.forEach((m) => { const p = m.needs.flat()[0]; if (p) (kids[p] = kids[p] || []).push(m); });
+    const rank = (m) => BRANCHES.findIndex((b) => b.key === m.b);
+    // the same branch's child first, so a branch reads as one straight line
+    Object.entries(kids).forEach(([pid, list]) => {
+      const pb = byIdRaw[pid].b;
+      list.sort((a, b) => (b.b === pb) - (a.b === pb) || rank(a) - rank(b));
+    });
+    let next = 0;
+    const place = (m, depth) => {
+      m.col = depth;
+      const list = kids[m.id] || [];
+      if (!list.length) { m.row = next++; return; }
+      list.forEach((k, i) => place(k, depth + 1));
+      m.row = list[0].row;
+    };
+    M.filter((m) => !m.needs.length).forEach((m) => place(m, 0));
+  }
   const cols = Math.max(...M.map((m) => m.col)) + 1;
   const rows = Math.max(...M.map((m) => m.row)) + 1;
   const W = px(cols) - GX + OX;
@@ -277,7 +299,7 @@
     el.className = "lane";
     el.textContent = b.name;
     el.style.left = px(first.col) + "px";
-    el.style.top = py(first.row) - 58 + "px";
+    el.style.top = py(first.row) - 46 + "px";
     world.appendChild(el);
   });
 
@@ -285,35 +307,14 @@
   const edges = [];
   M.forEach((m) => {
     m.needs.forEach((g) => g.forEach((from) => edges.push({ from, to: m.id, kind: g.length > 1 ? "or" : "need" })));
-    (m.uses || []).forEach((from) => edges.push({ from, to: m.id, kind: "uses" }));
   });
-  // Every link runs in the gaps: out of the source's side into the column gap
-  // beside it, along the row gap next to the target's row, down the column
-  // gap before the target, into its side. Cards sit only in the cells, so no
-  // link crosses one. Links sharing a gap are offset a few pixels apart.
-  const gapX = (c) => px(c) - GX / 2;            // the column gap left of column c
-  const gapY = (r) => py(r) - GY / 2;            // the row gap above row r
-  const lane = {};
-  const slot = (key) => { lane[key] = (lane[key] || 0) + 1; return (lane[key] - 1) * 6 - 6; };
+  // One line per child: out of the parent's side, down the gap between the two columns, into the
+  // child's side. A subtree owns its rows, so no line crosses a card or another subtree.
   edges.forEach((e) => {
     const a = byId[e.from], b = byId[e.to];
-    const y1 = py(a.row) + CH / 2, y2 = py(b.row) + CH / 2;
-    const x1 = px(a.col) + CW, x2 = px(b.col);
-    let d;
-    if (a.row === b.row && b.col === a.col + 1) {
-      d = `M${x1},${y1} L${x2},${y2}`;
-    } else {
-      const xs = gapX(a.col + 1) + slot("c" + (a.col + 1));
-      const xt = gapX(b.col) + slot("c" + b.col + "t");
-      if (b.col === a.col + 1) {
-        d = `M${x1},${y1} L${xs},${y1} L${xs},${y2} L${x2},${y2}`;
-      } else {
-        // the row gap on the target's side: above it when coming down, below it when going up
-        const ry = b.row > a.row ? gapY(b.row) : b.row < a.row ? gapY(b.row + 1) : gapY(b.row + 1);
-        const yr = ry + slot("r" + ry);
-        d = `M${x1},${y1} L${xs},${y1} L${xs},${yr} L${xt},${yr} L${xt},${y2} L${x2},${y2}`;
-      }
-    }
+    const x1 = px(a.col) + CW, y1 = py(a.row) + CH / 2, x2 = px(b.col), y2 = py(b.row) + CH / 2;
+    const xm = x1 + GX / 2;
+    const d = a.row === b.row ? `M${x1},${y1} L${x2},${y2}` : `M${x1},${y1} L${xm},${y1} L${xm},${y2} L${x2},${y2}`;
     const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
     p.setAttribute("d", d);
     p.setAttribute("fill", "none");
@@ -338,7 +339,7 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const icon = (name, cls) => `<img src="${IMG}${name}.png" alt="" class="${cls || ""}">`;
   const check = (on, cls) => `<img src="${UI}stone-check-${on ? "on" : "off"}.png" alt="${on ? "done" : ""}" class="ck ${cls || ""}">`;
-  const needText = (m) => "after " + m.needs.map((g) => g.map((id) => byId[id].title).join(" or ")).join(" + ");
+  const needText = (m) => "after " + [...m.needs.flat(), ...(m.after || [])].map((id) => byId[id].title).join(" + ");
   const branchName = (m) => BRANCHES.find((b) => b.key === m.b).name.replace(/^\d · /, "");
   const WORD = { done: "DONE", now: "NOW", open: "OPEN", locked: "LOCKED" };
 
