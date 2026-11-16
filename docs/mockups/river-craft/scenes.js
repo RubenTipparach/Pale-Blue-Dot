@@ -315,7 +315,7 @@ RC.scenes.logs = function () {
   }
   const def = {
     river, posts: [[-28, -1], [4, -1]], followDefault: false,
-    home: {tx: -12, ty: 0, tz: -2, yaw: -1.3, pitch: -0.72, dist: 56},
+    home: {tx: -14, ty: 0, tz: -2, yaw: -1.0, pitch: -0.72, dist: 40},
     hold: inp,
     press(d) { if (d === "up") T.thr = Math.min(4, T.thr + 1); if (d === "down") T.thr = Math.max(-2, T.thr - 1); },
     build(c) {
@@ -442,7 +442,7 @@ RC.scenes.nets = function () {
   const spars = () => [p3(boat, -2.5, -1.7, 0.0), p3(boat, -2.5, 1.7, 0.0)];
   const def = {
     river, posts: [[-30, 1], [-52, -1]], followDefault: true,
-    home: {yaw: -0.6, pitch: -0.55, dist: 20},
+    home: {yaw: 2.55, pitch: -0.68, dist: 17},
     hold: inp,
     build(c) {
       ctx = c; R = c.river;
@@ -509,7 +509,7 @@ RC.scenes.nets = function () {
       fish.forEach((f, i) => { const m = fishMeshes[i]; m.visible = !f.landed; m.position.set(f.x, f.y, f.z); if (!f.caught) m.rotation.y = -Math.atan2(f.vz, f.vx || 1e-3); });
     },
     lanterns: () => [model.userData.lantern],
-    follow: () => [boat.x - 2 * Math.cos(boat.yaw), boat.y, boat.z - 2 * Math.sin(boat.yaw)],
+    follow: () => [boat.x - 4 * Math.cos(boat.yaw), boat.y, boat.z - 4 * Math.sin(boat.yaw)],
     hud() {
       const pull = Math.hypot(net.pull[0], net.pull[1]);
       return [["Net", state === "out" ? "out" : state === "hauling" ? "hauling " + Math.round(net.haul * 100) + "%" : "stowed", state === "stowed" ? "" : "on"],
@@ -548,9 +548,9 @@ RC.scenes.anchor = function () {
   function makeAnchor(lx, name) {
     const a = {lx, name, state: "stowed", x: 0, y: 0, z: 0, rode: 0, set: 0, hooked: false, drag: 0, dragV: 0, line: null, rope: new RC.Rope(18, true), tube: null, mesh: null, trail: [], marks: [], target: 0};
     a.line = new RC.Line(boat, [lx, 0], null, null, 1); a.line.at = [0, 0];
-    a.tube = new RC.Tube(18, 0.04, mat(U, 0x8a8f96)); a.tube.mesh.visible = false; ctx.scene.add(a.tube.mesh);
-    a.mesh = anchorModel(U); ctx.scene.add(a.mesh);
-    for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(RC.box(0.32, 0.03, 0.22, "mud"), mat(U, 0x7a6a58)); m.visible = false; ctx.scene.add(m); a.marks.push(m); }
+    a.tube = new RC.Tube(18, 0.09, mat(U, 0xc8ccd2)); a.tube.mesh.visible = false; ctx.scene.add(a.tube.mesh);
+    a.mesh = anchorModel(U); a.mesh.scale.setScalar(1.35); ctx.scene.add(a.mesh);
+    for (let i = 0; i < 60; i++) { const m = new THREE.Mesh(RC.box(0.5, 0.04, 0.34, "sand"), mat(U, bed === "mud" ? 0x6a5a48 : 0xe8dcc0)); m.visible = false; ctx.scene.add(m); a.marks.push(m); }
     a.mark = 0; a.lastMark = null;
     return a;
   }
@@ -611,7 +611,7 @@ RC.scenes.anchor = function () {
   }
   const def = {
     river: mkRiver(), posts: [[-12, -1], [26, 1]], followDefault: true,
-    home: {yaw: 2.35, pitch: -0.5, dist: 19},
+    home: {yaw: 2.75, pitch: -0.62, dist: 21},
     hold: inp,
     choice: {id: "bed", label: "Bed", options: [["sand", "Sand"], ["mud", "Mud"], ["rock", "Rock"]], get: () => bed,
       set(v) { bed = v; ctx.setRiver(mkRiver()); R = ctx.river; def.reset(); }},
@@ -648,7 +648,7 @@ RC.scenes.anchor = function () {
       }
     },
     lanterns: () => [model.userData.lantern],
-    follow: () => [boat.x, boat.y, boat.z],
+    follow: () => { const a = anchors[0]; return a.state === "down" ? [(boat.x * 2 + a.x) / 3, boat.y - 0.5, (boat.z * 2 + a.z) / 3] : [boat.x, boat.y, boat.z]; },
     hud() {
       const a = anchors[0], s = anchors[1], b = bow(a);
       const out = [["Bed", BEDS[bed] && bed[0].toUpperCase() + bed.slice(1)], anchorLabel(a), anchorLabel(s)];
@@ -657,6 +657,7 @@ RC.scenes.anchor = function () {
       return out;
     },
     keys: "W S row · A D turn · R F pay out or shorten the bow rode",
+    probe: () => ({boat, anchors}),
     actions: [
       {id: "bow", label: "Drop bow", key: "Z", run() { const a = anchors[0]; if (a.state === "stowed") drop(a); else if (a.state === "down") a.weigh = !a.weigh; },
         label2: () => { const a = anchors[0]; return a.state === "stowed" ? "Drop bow" : a.weigh ? "Stop hauling" : a.state === "down" ? "Weigh bow" : "Bow anchor"; }},

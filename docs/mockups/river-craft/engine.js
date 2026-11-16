@@ -204,7 +204,7 @@ vec3 skyRad(vec3 d) {
 }
 vec3 toSrgb(vec3 c) { c = c/(1.0 + 0.08*c); return pow(clamp(c, 0.0, 1.0), vec3(1.0/2.2)); }
 vec3 fromSrgb(vec3 c) { return pow(c, vec3(2.2)); }
-vec3 fogged(vec3 c, vec3 p) { float d = length(cameraPosition - p); return mix(c, uFog, 1.0 - exp(-d*mix(0.0055, 0.012, uNight))); }`;
+vec3 fogged(vec3 c, vec3 p) { float d = length(cameraPosition - p); return mix(c, uFog, 1.0 - exp(-d*mix(0.0035, 0.012, uNight))); }`;
 RC.LIGHT_GLSL = LIGHT_GLSL;
 
 // The lit material: the atlas tile at the vertex (aTile), world-space or face UVs, the sun, the sky, the lamps.
@@ -514,7 +514,7 @@ RC.Stage = function (canvas, def) {
         vec3 q = floor(d*180.0); float s = step(0.9975, h2(q))*smoothstep(0.05, 0.3, d.y); c += vec3(0.20)*s*uNight;
         gl_FragColor = vec4(toSrgb(c), 1.0); }`});
   const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 24, 12), skyMat); sky.frustumCulled = false; sky.renderOrder = -1; scene.add(sky);
-  const S = {night: false, arrows: false, follow: true, playing: false, speed: 1, simT: 0, waterT: 0};
+  const S = {night: false, arrows: false, follow: !!def.followDefault, playing: false, speed: 1, simT: 0, waterT: 0};
   const ctx = {U, scene, S, camera, stage: null};
   let river = null, ground = null, water = null, arrows = null;
   function setRiver(cfg) {
