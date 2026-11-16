@@ -3336,6 +3336,8 @@ const REQUEST_FLAG: u32 = 0x8000u;
 // match the nearest-sampled textures. Two warped three-wave sums, each bright
 // where it crosses zero, give a web that drifts and never tiles; `cell` is
 // its spacing, m. Returns 0..about 1.
+// The web's mean over the bed, what a pixel spanning many of its blocks sees.
+const CAUSTIC_MEAN: f32 = 0.34;
 fn caustic_web(position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>, depth: f32, t: f32, cell: f32) -> f32 {
     let sun_up = max(dot(sun, radial), 0.2);
     let surface = position + (sun - radial*dot(sun, radial))*(depth/sun_up)*0.75;
@@ -3686,7 +3688,11 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         if params.lod_spare.x > 0. && params.light.x > 0.5 && direct > 0. {
             let fade = 1. - smoothstep(0., max(params.lod_spare.z, 1e-3), water_depth);
             if fade > 0. {
-                let web = caustic_web(input.position, radial, sun, water_depth, params.settings.z, params.lod_spare.y);
+                // Faded to its mean where a pixel spans its 0.25 m blocks
+                // (`ocean-environments` B19): point-sampled past that, the
+                // far bed of a river turned to per-pixel speckle.
+                let web = mix(caustic_web(input.position, radial, sun, water_depth, params.settings.z, params.lod_spare.y),
+                    CAUSTIC_MEAN, smoothstep(0.12, 0.35, foot));
                 color += albedo*sun_air(sun_elevation)*direct*skylight*attenuation
                     *(web*params.lod_spare.x*fade);
             }
