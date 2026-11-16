@@ -808,7 +808,8 @@ struct PlanetParams {
     ssr_clip: Mat4,
     ssr_eye: Vec4,
     // `wet-near-detail`: x how far from the eye rain's fine detail is drawn,
-    // metres; y the band it fades out over before that; zw spare.
+    // metres; y the band it fades out over before that; z a plant's
+    // darkening at full wetness (`flora-v2` 13.2); w spare.
     rain_near: Vec4,
     // `baked-light-ease` 7.3: the light field across a dusk or dawn relight:
     // x how far the newest half has blended in, 0..1; y which half is the
@@ -831,6 +832,9 @@ struct PlanetParams {
     // Design 9.4, 9.6: x leaf fall, y gathered under trees, z leaf size, w
     // fruit chance.
     flora_fall: Vec4,
+    // `flora-v2` 13.3: the trees' cross-fade by time (`TreeFade`): the point
+    // it fades from with its progress 0..1, then the point it fades to (w 1).
+    tree_fade: [Vec4; 2],
     // `night-lights-from-space`: x how many far lights `night_lights` holds,
     // yzw spare; then two vec4 a light (`night_lights::FarLights::pack`).
     // Last, so the visibility pass, which reads a prefix of this uniform,
@@ -851,6 +855,121 @@ const LIGHT_HALF_WORDS: usize = column::COLUMN_CAPACITY as usize * column::LIGHT
 /// How far the newest lamp bake shows over the one before it
 /// (`baked-light-ease`): whole from its first frame when it came with its
 /// set's landing (7.2), else the rule's blend from when it landed (7.7).
+/// The trees' cross-fade by time (`flora-v2` 13.3; owner, 2026-11-16: "dithering
+/// should either stay or go, dont have it linger if the player isnt moving").
+///
+/// Two points the camera stood at, `from` and `to`, body-local, and the fade
+/// between them: the surface shader decides each tree's representation (near
+/// model, mid cards, far billboard, none) at both by hard thresholds, draws it
+/// whole where they agree and dithers from the one to the other by the fade's
+/// progress where they do not. A new fade starts only when the last has run
+/// out and the camera has moved, so a still camera has `from == to` one fade
+/// after it stops, and nothing is dithered. No state per tree.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TreeFade {
+    pub from: Vec3,
+    pub to: Vec3,
+    start_s: f32,
+    len_s: f32,
+    last_s: f32,
+    last_eye: Vec3,
+    /// Whether `PBD_TREE_ARRIVE` has been applied.
+    arrived: bool,
+}
+
+/// MEASUREMENT (`flora-v2` 13.3): `PBD_TREE_ARRIVE=<metres>@<seconds>`: at
+/// that time on the planet clock the trees are taken as if the camera had
+/// just come that far across the ground and stopped, so the ones it carried
+/// across a threshold fade, and a capture run shows the frames 0, 0.3 and 2 s
+/// after. It changes nothing else.
+static TREE_ARRIVE: std::sync::LazyLock<Option<(f32, f32)>> = std::sync::LazyLock::new(|| {
+    let spec = std::env::var("PBD_TREE_ARRIVE").ok()?;
+    let (metres, at) = spec.split_once('@')?;
+    let metres: f32 = metres.trim().parse().ok()?;
+    let at: f32 = at.trim().parse().ok()?;
+    (metres.is_finite() && metres > 0.0 && metres < TREE_FADE_JUMP_M && at.is_finite())
+        .then_some((metres, at))
+});
+
+/// A camera that moves further than this in one frame has been put somewhere,
+/// not walked or flown there: the trees are decided where it now is.
+const TREE_FADE_JUMP_M: f32 = 200.0;
+
+impl TreeFade {
+    pub fn new(eye: Vec3, now_s: f32) -> Self {
+        Self {
+            from: eye,
+            to: eye,
+            start_s: now_s,
+            len_s: 0.0,
+            last_s: now_s,
+            last_eye: eye,
+            arrived: false,
+        }
+    }
+
+    /// One frame: the camera at `eye` at `now_s`; the fade takes `fade_s`,
+    /// shortened so `to` never trails a moving camera by more than `lag_m`.
+    pub fn step(&mut self, eye: Vec3, now_s: f32, fade_s: f32, lag_m: f32) {
+        let dt = now_s - self.last_s;
+        let speed = if dt > 1e-4 {
+            self.last_eye.distance(eye) / dt
+        } else {
+            0.0
+        };
+        self.last_s = now_s;
+        self.last_eye = eye;
+        if eye.distance(self.to) > TREE_FADE_JUMP_M || !eye.is_finite() {
+            let arrived = self.arrived;
+            *self = Self::new(eye, now_s);
+            self.arrived = arrived;
+            return;
+        }
+        if let Some((metres, at_s)) = *TREE_ARRIVE
+            && !self.arrived
+            && now_s >= at_s
+            && let Some(up) = eye.try_normalize()
+        {
+            let across = Vec3::Y.cross(up).try_normalize().unwrap_or(Vec3::X);
+            self.arrived = true;
+            self.from = eye + across * metres;
+            self.to = eye;
+            self.start_s = now_s;
+            self.len_s = fade_s;
+            info!("TREE_ARRIVE {metres} m at {now_s:.2} s, fading over {fade_s} s");
+            return;
+        }
+        if self.progress(now_s) < 1.0 {
+            return;
+        }
+        self.from = self.to;
+        if eye.distance(self.to) <= 0.01 {
+            return;
+        }
+        let len = fade_s.min(lag_m / speed.max(1e-3));
+        self.to = eye;
+        self.start_s = now_s;
+        self.len_s = len;
+        if len <= 1e-3 {
+            self.from = eye;
+        }
+    }
+
+    /// How far the fade from `from` to `to` has come, 0..1; one when they agree.
+    pub fn progress(&self, now_s: f32) -> f32 {
+        if self.from == self.to || self.len_s <= 0.0 {
+            1.0
+        } else {
+            ((now_s - self.start_s) / self.len_s).clamp(0.0, 1.0)
+        }
+    }
+
+    /// The uniform's two lanes: `from` with the progress, `to` with a one.
+    fn lanes(&self, now_s: f32) -> [Vec4; 2] {
+        [self.from.extend(self.progress(now_s)), self.to.extend(1.0)]
+    }
+}
+
 fn lamp_fade(at_once: bool, landed_s: f32, now_s: f32) -> f32 {
     if at_once {
         1.0
@@ -1140,6 +1259,8 @@ struct PlanetViewGpu {
     /// for the sea's trace as well as the terrain's.
     ssr_clip: Mat4,
     ssr_eye: Vec4,
+    /// The trees' cross-fade by time (`flora-v2` 13.3).
+    tree_fade: TreeFade,
 }
 
 /// The slowest the fade centre catches up with the camera after a landing,
@@ -1729,6 +1850,16 @@ fn prepare_views(
             .unwrap_or_default();
         let lod = &planet.lod;
         let landing = planet.lod_prev.map(|(_, landed)| landed);
+        let mut tree_fade = existing.as_ref().map_or_else(
+            || TreeFade::new(camera_position, clock.0),
+            |gpu| gpu.tree_fade,
+        );
+        tree_fade.step(
+            camera_position,
+            clock.0,
+            scatter.tree_fade_s,
+            scatter.tree_fade_lag_m,
+        );
         // The fade centre (`distance-lod-fade`): the ground under the camera,
         // held within what the records hold round the anchor, and caught up
         // after a landing at twice the camera's speed rather than jumping.
@@ -1953,7 +2084,12 @@ fn prepare_views(
             ssr_clip: existing
                 .as_ref()
                 .map_or(Mat4::IDENTITY, |gpu| gpu.last_clip),
-            rain_near: Vec4::new(w.rain_detail_reach_m, w.rain_detail_fade_m, 0.0, 0.0),
+            rain_near: Vec4::new(
+                w.rain_detail_reach_m,
+                w.rain_detail_fade_m,
+                w.rain_plant_darken,
+                0.0,
+            ),
             light_ease: light_ease_state(
                 planet.light_new,
                 planet.light_blending,
@@ -1985,6 +2121,7 @@ fn prepare_views(
                 scatter.leaf_size,
                 scatter.fruit_chance,
             ),
+            tree_fade: tree_fade.lanes(clock.0),
             night,
             night_lights,
             felled,
@@ -2010,6 +2147,7 @@ fn prepare_views(
             gpu.last = now;
             gpu.last_camera = camera_position;
             gpu.last_clip = clip_from_body;
+            gpu.tree_fade = tree_fade;
             continue;
         }
         let mut uniform = UniformBuffer::from(params);
@@ -2132,6 +2270,7 @@ fn prepare_views(
             last_clip: clip_from_body,
             ssr_clip,
             ssr_eye,
+            tree_fade,
         });
     }
 }
@@ -2355,6 +2494,50 @@ impl render_graph::Node for PlanetComputeNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `flora-v2` 13.3: a fade is a moment in time, never a place. A still
+    /// camera has nothing to fade; one that moves fades from where it was to
+    /// where it is over the fade time and then is whole there; a fast one
+    /// fades quicker so the point the trees are decided at keeps up.
+    #[test]
+    fn the_trees_fade_by_time_and_a_still_camera_is_whole() {
+        let eye = Vec3::new(0.0, 4800.0, 0.0);
+        let mut fade = TreeFade::new(eye, 0.0);
+        for k in 1..60 {
+            fade.step(eye, k as f32 / 60.0, 0.5, 5.0);
+        }
+        assert_eq!(fade.from, fade.to);
+        assert_eq!(fade.progress(1.0), 1.0, "still: nothing fading");
+        // Walk 2 m over a second and stop: a fade starts there and ends 0.5 s on.
+        let moved = eye + Vec3::X * 2.0;
+        fade.step(moved, 2.0, 0.5, 5.0);
+        assert_eq!(fade.to, moved);
+        assert_ne!(fade.from, fade.to);
+        assert!((fade.progress(2.25) - 0.5).abs() < 1e-4);
+        let mut t = 2.0;
+        while t < 2.6 {
+            t += 1.0 / 60.0;
+            fade.step(moved, t, 0.5, 5.0);
+        }
+        assert_eq!(
+            fade.from, fade.to,
+            "the fade ends and the camera stood still"
+        );
+        assert_eq!(fade.progress(t), 1.0);
+        // Flying at 100 m/s the fade shortens to keep within 5 m.
+        let mut fast = TreeFade::new(eye, 0.0);
+        fast.step(eye + Vec3::X * (100.0 / 60.0), 1.0 / 60.0, 0.5, 5.0);
+        fast.step(eye + Vec3::X * (200.0 / 60.0), 2.0 / 60.0, 0.5, 5.0);
+        assert!(
+            fast.len_s <= 0.05 + 1e-4,
+            "fade {} s at 100 m/s",
+            fast.len_s
+        );
+        // A teleport is no fade at all.
+        let mut jump = TreeFade::new(eye, 0.0);
+        jump.step(eye + Vec3::X * 500.0, 1.0 / 60.0, 0.5, 5.0);
+        assert_eq!(jump.from, jump.to);
+    }
 
     /// `baked-light-ease` 7.2 and 7.7: a lamp bake that came with its set's
     /// landing is whole from its first frame (the set before drew the same

@@ -35,8 +35,8 @@ struct WaterView {
     water_light: vec4<f32>,   // rgb the light on open water at the camera, w shallows' depth m
     haze: vec4<f32>,          // the terrain's cloud_fog_add, rain_fog_mult, overcast blue cut, overcast dim
     foam_color: vec4<f32>,    // rgb, w foam intensity
-    foam_crest: vec4<f32>,    // lo, hi, weight, spare
-    foam_slope: vec4<f32>,    // lo, hi, weight, spare
+    foam_crest: vec4<f32>,    // lo, hi, weight, w rain's fine detail's reach m (`wet-near-detail`)
+    foam_slope: vec4<f32>,    // lo, hi, weight, w the fade band before that reach m
     sun_tint: vec4<f32>,      // rgb, w specular power
     fog_night: vec4<f32>,     // rgb sky colour at night, w fog density per metre
     fog_day: vec4<f32>,       // rgb sky colour by day, w fog height m
@@ -705,7 +705,20 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         fbm3(p+vec3<f32>(0.,0.08,0.),t)-fbm3(p,t),
         fbm3(p+vec3<f32>(0.,0.,0.08),t)-fbm3(p,t))*12.5*detail;
     gradient -= radial*dot(gradient,radial);
-    if (view.fx.z > 0.001) {
+    // The rain's rings fade with their own footprint (`water-flow` "Rain
+    // rings that alias"; owner, 2026-11-16: the river "covered in a dense
+    // white speckle"): a ring is `sin(31 d)` in the kernel's uv, so this is
+    // how many of its wavelengths one pixel spans. Whole while a ring spans
+    // five pixels or more, gone by about two; past that the rings fell under
+    // a pixel and point-sampled into per-pixel noise the mirror lit white.
+    let ring_cycles = length(fwidth(in.body_position))*view.ripple.z*31.0/6.2831853;
+    // And only within rain's fine detail's reach, as on the ground
+    // (`wet-near-detail`): past it the water keeps its broad waves.
+    let ring_reach = max(view.foam_crest.w, 0.0);
+    let ring_near = 1.0 - smoothstep(ring_reach - max(view.foam_slope.w, 0.0), ring_reach,
+        length(view.camera_time.xyz - in.local_position));
+    let ring_detail = (1.0 - smoothstep(0.2, 0.45, ring_cycles))*ring_near;
+    if (view.fx.z > 0.001 && ring_detail > 0.0) {
         let uv = vec2<f32>(dot(in.body_position,tangent_u),dot(in.body_position,tangent_v))*view.ripple.z;
         var g = rain_ripple_grad(uv,time)*(view.fx.z*view.ripple.w);
         if view.rain.w > 0.5 {
@@ -715,7 +728,7 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         }
         // Only on water that faces up (owner, 2026-11-15: "when raining - no
         // droplets on vertical water"): a fall's or a wall's face takes none.
-        g *= smoothstep(0.7, 0.95, horizontal);
+        g *= smoothstep(0.7, 0.95, horizontal)*ring_detail;
         gradient += tangent_u*g.x + tangent_v*g.y;
     }
     // Slope cap BEFORE the gradient bends the normal: the rain kernel spikes it
@@ -1218,8 +1231,14 @@ fn lens(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // The drops `rain_lens_scale` times smaller than Tenebris's, trails and
     // beads with them (`lens-weather`).
     let drop_uv = tenebris_uv*max(view.mist_look.w, 0.05);
-    let t = view.camera_time.w*0.2*view.lens.z;
-    // The rain on the camera, not on the sea: under a roof it is none.
+    // The drops' own clock (`weather-rain` R3): it runs while rain lands on
+    // the glass and stops while none does, so a drying lens grows no new
+    // drop and the ones on it stay where they are as they shrink and fade.
+    let t = view.lens_look.z*0.2*view.lens.z;
+    // How wet the lens is, not the rain itself: it builds up over a few
+    // seconds in rain and dries off over a few out of it (owner, 2026-11-16:
+    // "fade out instead of abruptly cut", "gradually increase as well"). The
+    // layers thin with it, the drops shrink with it, and the whole fades.
     let rain = clamp(view.rain.x,0.0,1.0);
     var wipe = 0.0;
     var drops = vec4<f32>(0.0);
@@ -1254,7 +1273,7 @@ fn lens(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let emerge = clamp(view.fx.w,0.0,1.0);
     if (emerge > 0.001) {
         var dry = 0.0;
-        let r = refract_through_drops(uv,drop_uv,t,0.0,1.0,0.6,&dry);
+        let r = refract_through_drops(uv,drop_uv,view.camera_time.w*0.2*view.lens.z,0.0,1.0,0.6,&dry);
         color = mix(color,r.rgb,r.a*emerge*above_water);
     }
     return vec4<f32>(color,1.0);

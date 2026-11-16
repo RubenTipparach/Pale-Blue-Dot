@@ -108,6 +108,15 @@
     // the last `fade` metres before it. Past it the ground is only wet.
     rain_detail_reach_m: 20.0,
     rain_detail_fade_m: 4.0,
+    // A plant in rain (flora-v2 13.2; owner: "grass blades shouldnt have rain
+    // shader on them"): trees and ground clutter only darken, to this share
+    // at full wetness, and take none of the wet ground's film.
+    rain_plant_darken: 0.88,
+    // The drops on the lens wet and dry over time (weather-rain R3; owner:
+    // "fade out instead of abruptly cut", "gradually increase as well"):
+    // seconds (e-fold) to build up in rain and to dry off out of it.
+    lens_wet_tau_s: 3.0,
+    lens_dry_tau_s: 2.5,
     // Splashes where rain lands (`weather-rain` 6.4, the approved M32
     // mockup's defaults): S slots per near column, K droplets per slot, a
     // slot's cycle; droplet sizes, launch speeds up and out (crown, wet
