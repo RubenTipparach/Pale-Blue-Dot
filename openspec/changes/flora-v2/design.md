@@ -1114,3 +1114,54 @@ a little skyward), so a card is lit as the near crown's leaves are, the
 sun-side brighter and the far side darker. Nothing else of the lighting
 changes. Verify: the same view at night and by day, near and far trees in
 one frame, before and after, with the band's mean against the near crowns'.
+
+### 13.5 Where a plant's colour comes from (owner, 2026-11-16)
+
+The owner: "the tinting is because you are sharing ground tint with
+vegetation, really the tint should be like based on texture not
+shading/lighting/reflections", and "very pronounced trees tinted by sun".
+Checked every place a plant could borrow the ground's colour:
+
+- **`ground_tint`** (the season's dry and frost on the grass) runs only on
+  `kind` 0, 1 and 4 (caps, walls, cut walls): no plant takes it.
+- **`flora_albedo`, `plant_art`, `tree_albedo`**: a plant's albedo is its
+  own texels (the tuft ramp, the flower, fern and fruit palettes, the kit's
+  bark and leaf tiles pulled to their means, the bake's pixel matched to the
+  near crown's mean) and the season laid on that art. None reads a lit,
+  hazed or reflected term.
+- **The bake** (`pbd_core::tree_bake::shade`) carries a fixed key: 1.15 on
+  every leaf (a scale the shader's mean match takes out) and 0.85 to 1.15 on
+  bark by its normal. A shape term in texture space, not the scene's light;
+  kept.
+- **What did borrow the ground's look was the wet block** (13.2): the
+  puddle mirror of the sky, the glint toward the sun and the rings, all run
+  on plants as on a floor. Toward a low sun on wet ground that is the
+  bleached, pale silhouettes ("trees tinted by sun"); in rain, the ghosts.
+  Gone with 13.2. Measured with the ground soaked under a clear sky and a
+  sun 16 degrees up (`before/after-soaked-toward-sun.jpg`).
+- **The light** is then applied once, by the plant's own normal: a near
+  leaf card's (turned to the eye), the impostors' standing normal (13.4),
+  the clutter's surface up (design 9: a piece shades as the cap it stands
+  on, so it does not pop against it; its colour is still its own).
+
+### 13.6 As built (2026-11-16, branch `claude/rain-artifacts`)
+
+- 13.2: `plant` in the rain branch of `planet_surface.wgsl`;
+  `rain_plant_darken` 0.88 in `weather.ron` (`rain_near.z`).
+- 13.3: `TreeFade` in `planet.rs` (two points, a progress, `tree_fade` in
+  the uniform, which `planet_visibility.wgsl` and `rain_splash.wgsl` copy);
+  `tree_level` and `tree_show` in the shader; the foliage edge and the
+  clutter reach by the same two points; `tree_fade_s` 0.5,
+  `tree_fade_lag_m` 5 in `scatter.ron`. Test:
+  `the_trees_fade_by_time_and_a_still_camera_is_whole`. Instrument:
+  `PBD_TREE_ARRIVE=<m>@<s>`; `seq-tree-fade-still-camera.jpg` shows the
+  dither at 0.1 and 0.3 s and none at 2 s. While a fade runs, the dropped
+  pixels of a tree whose two representations differ in outline show what is
+  behind (half a second, then gone).
+- 13.4: the impostors' normal `t.x*dir.x + t.z*dir.y + axis*IMPOSTOR_LIFT`
+  (0.35). Night, leaf pixels' mean: far band 15.6 to 13.8 against the near
+  crowns' 16.5.
+- Frame cost not measured (a Mac sitting is owed with the branch; the
+  changes remove work from plants in rain and add two distance tests a tree
+  vertex).
+
