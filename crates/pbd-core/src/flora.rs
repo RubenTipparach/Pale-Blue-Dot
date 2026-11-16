@@ -103,7 +103,9 @@ impl TreeTable {
     /// pass's rule, which reads the same numbers from the uniform
     /// ([`Self::packed`]).
     pub fn grows(&self, tree_id: u32, word: u32) -> bool {
-        if (word >> 24) & 1 == 1 {
+        // A town's cleared footprint (bit 24), or a cell water stands on at
+        // any tide ([`FLOODED_BIT`]).
+        if (word >> 24) & 1 == 1 || (word >> FLOODED_BIT) & 1 == 1 {
             return false;
         }
         let material = word & 0xff;
@@ -127,6 +129,14 @@ impl TreeTable {
             | u32::from(ground & SNOW_CODE != 0) << 25
     }
 }
+
+/// The bit of a record's material word that says water stands on the cell
+/// at some tide (`flora-v2` 12.11): the sea, the tide's reach, a river, a
+/// pool. Nothing grows there: no tree, cactus or ground clutter. Set by the
+/// app where it builds a record (`surface_code`, `reconcile_surface`); read
+/// by [`TreeTable::grows`] and the visibility and surface passes. A draw-time
+/// fact, never saved, so no generator version moves for it.
+pub const FLOODED_BIT: u32 = 25;
 
 /// Whether a finest cell stands a tree (`tool-crafting` decision 3) under
 /// the world's table: the foliage pass's rule (`planet_visibility.wgsl`,
@@ -587,7 +597,7 @@ mod tests {
             "let sand = ((entry >> 24u) & 1u) == 1u && material==1u;",
             "let pine = ((entry >> 25u) & 1u) == 1u && material==6u;",
             "let tree = (grass||sand||pine) && roll < density;",
-            "if ((cell.metadata.y >> 24u) & 1u) == 1u { return false; }",
+            "if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }",
         ];
         for (name, shader) in [
             (
@@ -619,7 +629,7 @@ mod tests {
         }
         // The mirror, line for line.
         fn shader_rule(means_w: &[u32; 8], id: u32, word: u32) -> bool {
-            if (word >> 24) & 1 == 1 {
+            if (word >> 24) & 3 != 0 {
                 return false;
             }
             let roll = shader_hash(id) & 0xff;
@@ -639,7 +649,7 @@ mod tests {
             let w: [u32; 8] = std::array::from_fn(|b| BIOME_FRUIT[b] | table.packed(b));
             for biome in 0..8u32 {
                 for material in 0..16u32 {
-                    for cleared in [0, 1 << 24] {
+                    for cleared in [0, 1 << 24, 1 << FLOODED_BIT] {
                         let word = material | biome << 8 | cleared;
                         for id in 0..10_000u32 {
                             assert_eq!(
@@ -662,6 +672,24 @@ mod tests {
         assert!((4_500..5_700).contains(&trees), "{trees}");
         assert!(!(0..10_000u32).any(|id| grows_tree(&v4, id, field(1))));
         assert!(!(0..10_000u32).any(|id| grows_tree(&v4, id, field(2) | 1 << 24)));
+    }
+
+    /// `flora-v2` 12.11: a cell water stands on grows no tree under any
+    /// table, on any ground a tree stands on; the same word without the bit
+    /// does.
+    #[test]
+    fn a_flooded_cell_stands_no_tree() {
+        for table in [&TreeTable::V4, &TreeTable::V10] {
+            for biome in 0..8u32 {
+                for material in [1u32, 2, 3, 6, 7] {
+                    let word = material | biome << 8;
+                    let flooded = word | 1 << FLOODED_BIT;
+                    assert!(!(0..10_000u32).any(|id| grows_tree(table, id, flooded)));
+                }
+            }
+        }
+        let beach_sand = 1 | 1 << 8;
+        assert!((0..10_000u32).any(|id| grows_tree(&TreeTable::V10, id, beach_sand)));
     }
 
     /// Where trees stand under a table, folded: every biome, material code

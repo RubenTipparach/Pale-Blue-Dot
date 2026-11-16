@@ -279,3 +279,59 @@ as before. The owner's staircase (two deep, a one-deep shelf, the bank level
 with the surface) ends standing on the bank both ways. It passed before as
 well, by the slower way: sinking to the bed, then the wader's rule.
 
+
+## Swimming up out of shallow water (owner, 2026-11-16)
+
+The owner: *"in river, I can't swim to the surface if I start at a lower
+block on a waterfall"*. Starting on the bed under a step, holding swim-up
+never brings the head out.
+
+### What it is, measured
+
+The suspect was the surface: read from the upper reach's column or from the
+sea's level. It is not. A probe on the real column tier ran a walker from the
+bed of every river cell with a higher reach beside it, at three version 10
+rivers (`23.70 -2.80`, `28.25 0.75`, `24.00 1.00`), holding the swim control
+for five seconds. `Sea::state` reads this column's own water every time. The
+walker still fails:
+- **Water under 2.1 m deep:** the walker never leaves the bed. It stands
+  1.76 to 1.98 m under the surface, eyes under, not grounded, at 0 m/s.
+- **Deeper water** (a fall's pool, three or four layers): the walker rises
+  until the water over its feet is 2.1 m, then sinks back and hangs there,
+  its eyes about 0.5 m under.
+
+**The cause is the wading jump** (`drive_walker`).
+- Water up to `water_wade_depth` (two layers and 0.1 m; owner,
+  2026-11-16: "change jumpable water height to 2 blocks") is waded, "eyes
+  under or not", so a jump from it rises at full strength.
+- The rule took ANY rise in wading water for that jump: `wading_jump =
+  wading && vertical > 0`. While it holds, the water's drag and its lighter
+  gravity are off.
+- A swimmer holding the control is rising, so in water two layers deep the
+  swim thrust (20 m/s²) pulls against full gravity (25 m/s²) and loses.
+- A river is two layers deep (12.10: its bed is carved two layers under its
+  water), and a source's surface is its layer's top. So a walker on a river's
+  bed has its eyes 0.4 m under and is always in the trap.
+- The sea hides it: its sheet is 0.5 m under its layer's top, so two layers
+  of sea is 1.5 m, and the eyes are out.
+
+### The rule
+
+A wading jump is a jump: the rise after a jump taken from the ground in
+wading water, at full strength, with land gravity and no drag, while the
+walker keeps rising. It ends when the walker stops rising or lands.
+- Rising any other way is swimming, with the water's drag and gravity: the
+  swim thrust from the bed, from mid-water, or from deeper water into the
+  wading band.
+- What a jump from wading water does is unchanged, held or tapped.
+
+It is one flag on `WalkingState`, set by the jump and cleared when the rise
+ends.
+
+### Verify
+
+A test beside the pool tests (`pool_rows`): a pool two layers deep and a
+fall's pool four layers deep beside a higher reach. A walker on the bed
+holding the swim control brings its eyes over the surface within three
+seconds. It fails before: the eyes stay under. The wading tests
+(`a_wading_walker_climbs_a_two_layer_bank`, the jump tests) still pass.
