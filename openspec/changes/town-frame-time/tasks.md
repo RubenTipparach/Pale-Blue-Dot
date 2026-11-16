@@ -12,7 +12,7 @@
 - [ ] 1.4 Frame-log columns `baked_verts`, `mats_touched`, `air_gen`,
       `blend_t`, `cover`, `rain`; `frame_graph.py` marks pair moves.
 - [ ] 1.5 (Town runs done, 2026-10-08: `docs/benchmarks/2026-10-08-town-frame-time/`,
-      https://claude.ai/artifact/UijFaGpci12P1wHjR4otzk. The sitting was
+      https://claude.ai/artifact/HcaNSF8Ub9mLa35kcgcq7v. The sitting was
       stopped at the owner's request before clouds, storm and walk.) The sitting: `before` (09-25 baseline) against `after`, and
       `after` with `--no-shadows` and with `PBD_NO_CLOUDS=1`, on `town`,
       `clouds`, `storm`, `walk`, two repeats; the report in

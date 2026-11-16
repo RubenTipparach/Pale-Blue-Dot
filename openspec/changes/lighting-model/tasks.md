@@ -1,7 +1,7 @@
 ## 1. Look
 
 - [x] 1.1 Capture the meadow today at 09:00, 13:00, 17:30 and 19:00.
-- [x] 1.2 Mockup `docs/mockups/lighting.html` (https://claude.ai/artifact/LLzP5j8G8k3Do9j4Z7Qyaj; stills in `docs/screenshots/lighting-model/mockup-*.jpg`): the game's model now beside
+- [x] 1.2 Mockup `docs/mockups/lighting.html` (https://claude.ai/artifact/FDTW2Ltsa3FaV2fpQNAuMw; stills in `docs/screenshots/lighting-model/mockup-*.jpg`): the game's model now beside
   L1–L6, toggle by toggle, with time of day, cover and night lamps.
 - [x] 1.3 G3 answered by the owner on the mockup, 2026-10-28: "perfect, we
   have all requirements, add this new rendering model to the game!" (all

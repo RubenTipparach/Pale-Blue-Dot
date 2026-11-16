@@ -30,7 +30,7 @@ Today:
 ## What changes
 
 - **A mockup came first, as asked.** `docs/mockups/fishing.html`, published at
-  <https://claude.ai/artifact/9XiEvkxSFJMtqaktg4eovj>, is a three.js
+  <https://claude.ai/artifact/2Xv7xcf9UWkCLgnHUxDf5P>, is a three.js
   prototype. It uses the engine's gravity (25 m/s²) and a small sea standing in
   for `pbd_core::sea`. It has eight fish species in three kinds of water, each with a
   field-guide entry, swimming as schools of boids, and a rod you charge,

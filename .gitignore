@@ -16,3 +16,6 @@ __pycache__/
 # would have committed a tree that does not build.
 /saves/
 logs/
+
+# Git Bash (msys) tools write <name>.exe.stackdump where they crash
+*.stackdump

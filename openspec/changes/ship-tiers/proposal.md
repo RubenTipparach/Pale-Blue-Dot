@@ -5,7 +5,7 @@ Status: **planning only**. Nothing here is built. One decision is the owner's
 the recommendation and marked provisional until it is answered.
 
 Mockup: `docs/mockups/ship-tiers.html`, published at
-https://claude.ai/artifact/2Sb7mNRv4wauJh8WFoR9eD (link recorded in `docs/mockups/mockup-work.md`,
+https://claude.ai/artifact/4e3jLcjN4yH6NhJmyWKuY5 (link recorded in `docs/mockups/mockup-work.md`,
 id M21 on the tracker). Screenshots: `docs/screenshots/mockup-ship-tiers/` (the
 assembly building's four so far; the GPU screenshot gate, including G4's
 orbit shots for the survey, was not run: mockup work moved off the desktop

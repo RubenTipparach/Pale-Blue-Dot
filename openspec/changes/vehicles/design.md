@@ -3,7 +3,7 @@
 Three craft (a VTOL tiltrotor, a sailing keelboat and a paddled canoe), the sea
 they float on, the air that pushes them, and the rules that keep them in the
 world after you step out. The JS prototype in `docs/mockups/vehicles.html`
-([published](https://claude.ai/artifact/UJebv7EdJUg1NLpvfVHi3D)) was approved
+([published](https://claude.ai/artifact/GSBu5RPm6Nagc56K2m9RTH)) was approved
 and the Rust port is **built**: the sea, the gusts, the three craft, boarding
 and saving. Section 11 records where the build departs from this design and
 what is still open. The requirements that are true and tested have moved to
