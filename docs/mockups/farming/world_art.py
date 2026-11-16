@@ -8,7 +8,11 @@ This script redraws the same stages from the same functions for the world:
 
 - no outline ring and no seams between parts: a silhouette's edge is the plant's own tones;
 - the darkest tone of each ramp lifted one step where it is near-black (#003227 -> #297537 and
-  the like), so stripes and shadows no longer read as harsh dark detail against the soft ground.
+  the like), so stripes and shadows no longer read as harsh dark detail against the soft ground;
+- no frost sparkles, and the lightest tone of each ramp of four or more drawn as the one below
+  (owner, 2026-11-16: "they are two contrasting colors ontop of eachother";
+  `farming-and-smelting` decision 16), so a plant's light and shade are the scene's, not a lit
+  top baked over a dark underside.
 
 It writes docs/mockups/farming/world/<crop>_<s>.png, which the farm plot draws, and the same bytes
 to docs/mockups/foliage/crops/<crop>_<s>.png, which the foliage playground's "Crops and gardens"
@@ -51,22 +55,40 @@ def dark_lift():
     return lift
 
 
+def top_fold():
+    """ramp[-1] -> ramp[-2] for every ramp of four or more tones (the first ramp to name a tone
+    decides it)."""
+    fold = {}
+    for ramp in fa.R.values():
+        # White is a flower's petal (the chili's), never a lit top: it keeps its colour.
+        if ramp[-1].lower() == fa.WHITE:
+            continue
+        if len(ramp) >= 4 and hexrgb(ramp[-1]) not in fold:
+            fold[hexrgb(ramp[-1])] = hexrgb(ramp[-2])
+    return fold
+
+
 def world_stage(fn, *args):
-    part, outline = Sprite.part, Sprite.outline
+    part, outline, spark = Sprite.part, Sprite.outline, fa.spark
 
     def part_no_seam(self, m, ramp, mode="rim", base=None, depth=1, seam=True, glow=False, seam_color=None):
         return part(self, m, ramp, mode, base, depth, False, glow, seam_color)
     Sprite.part = part_no_seam
     Sprite.outline = lambda self, *a, **k: None
+    fa.spark = lambda *a, **k: None
     try:
         sp = Sprite(fa.CW, fa.CW)
         fn(sp, *args)
     finally:
-        Sprite.part, Sprite.outline = part, outline
+        Sprite.part, Sprite.outline, fa.spark = part, outline, spark
     img = np.array(sp.image())
-    for src, dst in dark_lift().items():
-        m = (img[..., 3] == 255) & np.all(img[..., :3] == src, axis=-1)
-        img[m, :3] = dst
+    # Both maps read the drawing as it came out, so a lifted dark is never folded again.
+    rgb = img[..., :3].copy()
+    solid = img[..., 3] == 255
+    for table in (dark_lift(), top_fold()):
+        for src, dst in table.items():
+            m = solid & np.all(rgb == src, axis=-1)
+            img[m, :3] = dst
     from PIL import Image
     return Image.fromarray(img, "RGBA")
 

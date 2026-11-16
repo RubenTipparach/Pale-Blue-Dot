@@ -43,3 +43,15 @@
   - Built (2026-11-15), waiting on stills: `docs/mockups/waterfall.html#pour` (the Look tab is `#look`; the old `#A` to `#D` still open it) with `PBDPour` in `waterfall/waterfall.js`. A source on three 1 m terraces falls 5 layers into a pit; `liquid.js` ticks at 1 s (0.25 to 2 s). Controls: Pops (today) / Smoothed, Pour again, Stop source (so S4 shows), Pause, Step one tick, Day / Night, Rain. The mesher is the game's `liquid_mesh` (corner levels, sides over air, falling faces' froth weights) on `waterMaterial`'s `dc0c5cb` froth, with its own vertex shader. Every vertex carries its last-tick position (`aPrev`): S1 levels smoothstepped; S2 a new cell squashed onto its wettest last-tick side at a quarter height, sweeping across; S3 a cell under last tick's water grows down from its top, the foot's splash fading in at landing; S4 a dried cell squashed toward the water under it or its wettest side, hidden at the tick's end. Fronts (S2 to S4) ease linearly so a pour creeps at one speed; levels are smoothstepped. Checked: `node --check` of both scripts; headless, a pour reaches the pit floor at tick 14 with a 5-layer fall, and drains to nothing after Stop source, with every vertex finite. Not yet: stills, the tracker and `mockup-work.md`.
 - [x] 5.2 (2026-11-15, the owner on M31 version 2: "the waterfall look is pretty good, need to be a bit careful with perf on that, on my laptop it is a bit rough, so hopefulyy in game it will work well", then "I will aprpove the mockup, but with performance being the condition you need to validate".) The owner's approval of the mockup. No game code before it.
 - [ ] 5.3 In the game: previous heights in the mesher's lanes, the kept dried cells, the tick uniform, `vertex_flowing` easing. Verify: captures mid-tick; a launch to READY with no `LATE_PIPELINE`; THE CONDITION OF APPROVAL: a `perf_suite.py` A/B on the release build (before = claude/env-v2 without it, after = with it), interleaved, on a live pour scene and the `walk`, with no regression past the spread between repeats, reported in `docs/benchmarks/2026-11-15-water-smooth/` and published.
+
+## 6. Splashes (design "Splashes that show, and better ones", 2026-11-16)
+
+- [ ] 6.1 Blended effects over water (fall spray and mist, the near shower)
+      drawn after the water composite, depth-tested against the water;
+      captures of a fall's foot before and after.
+- [ ] 6.2 M31: froth only on faces that fall a layer or more, beside today's
+      bank; the owner's approval before game code.
+- [ ] 6.3 The rain splashes (`weather-rain` 6.4-6.6) on ground and water.
+- [ ] 6.4 M31 Splash tab: fall foot, entry, cast, fish, wake, beside today's
+      spray; the owner's approval before game code.
+

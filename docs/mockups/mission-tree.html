@@ -78,7 +78,7 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
   image-rendering: pixelated; color: var(--oak-label); font: 600 17px/1 var(--display); letter-spacing: 1px; padding: 0 4px; white-space: nowrap; height: 32px; display: flex; align-items: center; }
 
 /* a mission card: the kit's stone tooltip; the current goal in carved oak */
-.card { position: absolute; width: 236px; height: 188px; border-style: solid; border-width: 12px; border-image: url(mission-tree/ui/stone-tooltip.png) 48 fill stretch;
+.card { position: absolute; width: 236px; height: 188px; border-style: solid; border-width: 10px; border-image: url(mission-tree/ui/stone-tooltip-trim.png) 40 fill stretch;
   image-rendering: pixelated; color: var(--text); padding: 2px 4px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
 .card.sel { outline: 3px solid var(--rune); outline-offset: 4px; }
 .card .hd { display: flex; gap: 8px; align-items: center; min-height: 44px; }
@@ -108,7 +108,7 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .un .none { color: var(--label-dim); }
 
 .card.st-done .badge { color: var(--rune); }
-.card.st-now { border-image-source: url(mission-tree/ui/oak-tooltip.png); box-shadow: 0 0 0 3px var(--title), 0 0 26px 6px rgba(250, 175, 92, .45); }
+.card.st-now { border-image-source: url(mission-tree/ui/oak-tooltip-trim.png); box-shadow: 0 0 0 3px var(--title), 0 0 26px 6px rgba(250, 175, 92, .45); }
 .card.st-now .badge { color: var(--ink); background: var(--title); border-color: var(--title); }
 .card.st-open .badge { color: var(--stone-4); }
 .card.st-locked { opacity: .82; }
@@ -149,7 +149,7 @@ header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 
 .hud:empty { display: none; }
 .hud { position: absolute; right: 12px; top: 10px; background: rgba(1, 14, 26, .78); padding: 4px 8px 2px; border: 1px solid var(--stone-1); font: 22px/1 var(--body); color: var(--text); text-shadow: 0 2px 0 var(--ink), 0 0 4px var(--ink); pointer-events: none; text-transform: uppercase; text-align: right; }
 .hud.done { color: var(--rune); }
-.log { position: absolute; left: 10px; bottom: 10px; width: min(560px, calc(100% - 20px)); border-style: solid; border-width: 12px; border-image: url(mission-tree/ui/stone-tooltip.png) 48 fill stretch;
+.log { position: absolute; left: 10px; bottom: 10px; width: min(560px, calc(100% - 20px)); border-style: solid; border-width: 10px; border-image: url(mission-tree/ui/stone-tooltip-trim.png) 40 fill stretch;
   image-rendering: pixelated; font: 17px/1.15 var(--body); color: var(--text-dim); pointer-events: none; padding: 0 4px; }
 .log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
 .log div:last-child { color: var(--text); }
