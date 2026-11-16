@@ -21,13 +21,27 @@ the only code this change has produced so far.
       is a measurement, so the shape is a bound on the phase, not a mock.
 
 ## 1b. Keep an edit made while the tier is being rebuilt (design: "undone when it lands")
-- [ ] `LodRefresh` notes the cells edited after its request. The landing
-      rebuilds those columns from the save's current edits and relights them
-      before the set goes in.
-- [ ] An app test: request a set, apply a dig and a torch before it lands, and
-      the landed set has the hole and the lit torch. It fails on today's code.
-- [ ] Take the wait out of `scripted_dig` once this holds. `--torch` then
-      captures the same frame without it.
+- [x] `LodRefresh` notes the edits its set was requested with
+      (`built_from`). The landing replays the cells edited since
+      (`Edits::changed_since`, `FineSet::replay`) through the same
+      `FineSet::write_layer` an edit takes, and relights once (2026-11-16, the
+      owner's vanished lamp).
+- [x] An app test: a set built before every light, a dig and a block with a
+      torch on it lands with all of them, and equals a set built after, record
+      for record and light for light
+      (`planet::lod::landing_replay::a_set_built_before_lamps_and_a_dig_lands_with_them`).
+      It fails on the code before.
+- [x] Take the wait out of `scripted_dig` once this holds.
+- [x] A rebuilt tier reconciles an edited cell's surface both ways, as the edit
+      did (`planet::column::build`): a block raised above the ground used to
+      draw the generated cap again after a rebuild or a reload, and a plant the
+      edit had put out grew back.
+- [x] Removals are logged (owner, 2026-11-16: "if an object a user placed
+      despawns, i need logs"): `REMOVED <material> at cell C layer L by the
+      player` on a dig or replace of a placed block; `error!` lines for the
+      water rule touching one, and for any saved change a landed or loaded set
+      does not hold (`FineSet::missing_edits`, checked at every landing and at
+      the first set of a load).
 
 ## 2. Tell the GPU only what changed
 - [ ] `PlanetFine` carries a dirty list of finest-level slots beside its
