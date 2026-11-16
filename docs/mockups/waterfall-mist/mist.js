@@ -509,6 +509,7 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
     // droplets (cell -2), not soft puffs.
     const veil = Math.round(Math.min(160, 9 * h) * veilN);
     const G = 15;  // the splash's own gravity, m/s^2
+    const STREAK_S = 0.035 * (tune && tune.streak !== undefined ? tune.streak : 1);  // a streak's length in seconds of travel
     for (let i = 0; i < veil; i++) {
       const r = k => hash01((seed ^ 0x5C3E) >>> 0, i * 8 + k);
       const along = Math.pow(r(2), 0.7);                          // 0 at the lip .. 1 at the foot
@@ -519,11 +520,21 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       const period = tLand + 0.15 + 0.4 * r(0), s = ((t / period + r(1)) % 1) * period;
       if (s > tLand) continue;                                      // gone into the pool
       const a = r(3) * Math.PI * 2;
-      const d = SPLASH_EDGE_M * 0.95 + vOut * s;
-      const y = y0 - vDown * s - 0.5 * G * s * s;
       const size = (0.035 + 0.05 * r(6)) * mistS;
-      const alpha = 0.9 * Math.min(1, s / 0.05) * fade;
-      quad({x: foot.x + Math.cos(a) * d, y, z: foot.z + Math.sin(a) * d}, size, [light, light, light * 1.03, alpha], -2, 0);
+      // A streak (owner: "make droplets more like streaks"): the drop and a trail of droplets along the path it
+      // just took, packed a little closer than their own size so they join into one line, fading towards the tail.
+      // Its length follows its speed, so a drop low on a tall fall streaks longest.
+      const at = s2 => ({d: SPLASH_EDGE_M * 0.95 + vOut * s2, y: y0 - vDown * s2 - 0.5 * G * s2 * s2});
+      const speed = Math.hypot(vOut, vDown + G * s);
+      const TRAIL = STREAK_S <= 0 ? 1 : Math.max(3, Math.min(14, Math.round(STREAK_S * speed / (0.8 * size))));
+      const head = 0.9 * Math.min(1, s / 0.05) * fade;
+      for (let k = 0; k < TRAIL; k++) {
+        const s2 = s - k * 0.8 * size / speed;
+        if (s2 < 0) break;
+        const p = at(s2);
+        quad({x: foot.x + Math.cos(a) * p.d, y: p.y, z: foot.z + Math.sin(a) * p.d}, size * (1 - 0.35 * k / TRAIL),
+          [light, light, light * 1.03, head * (1 - k / TRAIL)], -2, 0);
+      }
     }
   }
 }
@@ -697,7 +708,7 @@ window.PBDMist = function (canvas, sheetUrl) {
   const bubbles = bubblePoints(F, U); bubbles.material.uniforms.uFoot.value.copy(foot); opaque.add(bubbles);
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
-  const S = {variant: "today", night: false, running: true, gain: 1.5, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2};
+  const S = {variant: "today", night: false, running: true, gain: 1.5, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 1};
   function murk(open) {
     // The game's murk: the deep's albedo lit by the light on open water, dimmed by the water above the eye.
     const eyeDepth = Math.max(0, F.poolY - camera.position.y);
@@ -790,7 +801,7 @@ window.PBDMist = function (canvas, sheetUrl) {
     const day = S.night ? 0 : 1;
     for (const m of [leak, front]) {
       if (!m.visible) continue;
-      splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q, {mist: S.mist, mistSize: S.mistSize, veil: S.veil});
+      splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q, {mist: S.mist, mistSize: S.mistSize, veil: S.veil, streak: S.streak});
       m.material.uniforms.uRight.value.copy(right); m.material.uniforms.uUpCam.value.copy(upCam);
       m.userData.upload();
     }
