@@ -779,7 +779,9 @@ const UNDER_TREE_BIT: u32 = 0x10000u;
 // (`has_nearby_foliage`), the same lines, for the cap under it (design 9.4).
 // `pbd_core::flora::grows_tree` is the CPU's copy and a test holds all three.
 fn stands_tree(cell: Cell) -> bool {
-    if ((cell.metadata.y >> 24u) & 1u) == 1u { return false; }
+    // Nor a cell water stands on at any tide (`flora-v2` 12.11): bit 25,
+    // `pbd_core::flora::FLOODED_BIT`.
+    if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }
     let roll = hash(cell.spare.x) & 0xffu;
     let material = cell.metadata.y & 0xffu;
     let biome = (cell.metadata.y >> 8u) & 0xffu;

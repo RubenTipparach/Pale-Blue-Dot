@@ -1022,7 +1022,15 @@ pub fn reconcile_surface(
     } else {
         render_code(column.drawn_material(top))
     };
-    finest[index].metadata[1] = (finest[index].metadata[1] & !0xff) | code;
+    // And whether water stands on it at any tide (`flora-v2` 12.11): the
+    // column's own water on its top, or a top under the high tide's sheet.
+    // Set or cleared, so a pool that drains grows its plants again. The code
+    // above is left as it was: under the sea it is the beach's sand, which
+    // stood a beach tree in the sea before this bit.
+    let flooded = column.water_over(top) || top_m < super::terrain::high_water_m();
+    let flood_bit = 1 << super::terrain::FLOODED_BIT;
+    let word = finest[index].metadata[1] & !0xff & !flood_bit;
+    finest[index].metadata[1] = word | code | if flooded { flood_bit } else { 0 };
     let Some(table) = neighbors.get(index).copied() else {
         return;
     };

@@ -1928,7 +1928,11 @@ pub struct ConfigPlugin;
 impl Plugin for ConfigPlugin {
     fn build(&self, app: &mut App) {
         let (recipes, kitchen) = recipe_book();
-        app.insert_resource(load::<WaterSettings>("water"))
+        let water = load::<WaterSettings>("water");
+        // The high-water line every record reads (`flora-v2` 12.11), before
+        // any record is built.
+        crate::planet::terrain::set_high_water(&water);
+        app.insert_resource(water)
             .insert_resource(load::<WeatherSettings>("weather"))
             .insert_resource(load::<ScatterSettings>("scatter"))
             .insert_resource(load::<ColumnSettings>("column"))
