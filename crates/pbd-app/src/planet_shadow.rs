@@ -653,6 +653,14 @@ fn prepare_shadows(
     }
 }
 
+/// A measurement instrument (`main-perf-2026-11`): `PBD_SHADOW_SKIP=terrain,
+/// foliage,column,towns` leaves those casters out of every cascade, so a
+/// sitting can price each part of the shadow pass on the same walk.
+fn shadow_skip() -> &'static str {
+    static SKIP: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    SKIP.get_or_init(|| std::env::var("PBD_SHADOW_SKIP").unwrap_or_default())
+}
+
 /// Draw this frame's cascades for one view: each one's cull, then its
 /// terrain, trees, column tier and towns into its layer. Called from
 /// `PlanetComputeNode` after the camera's own cull.
@@ -716,13 +724,23 @@ pub(super) fn draw_cascades(
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
+        let skip = shadow_skip();
         pass.set_pipeline(planet);
-        pass.set_bind_group(0, &*gpu.terrain[i], &[]);
-        pass.draw_indirect(&gpu.indirect, 0);
-        pass.set_bind_group(0, &*gpu.foliage[i], &[]);
-        pass.draw_indirect(&gpu.indirect, 16);
-        pass.set_bind_group(0, &*gpu.column[i], &[]);
-        pass.draw_indirect(&gpu.indirect, 64);
+        if !skip.contains("terrain") {
+            pass.set_bind_group(0, &*gpu.terrain[i], &[]);
+            pass.draw_indirect(&gpu.indirect, 0);
+        }
+        if !skip.contains("foliage") {
+            pass.set_bind_group(0, &*gpu.foliage[i], &[]);
+            pass.draw_indirect(&gpu.indirect, 16);
+        }
+        if !skip.contains("column") {
+            pass.set_bind_group(0, &*gpu.column[i], &[]);
+            pass.draw_indirect(&gpu.indirect, 64);
+        }
+        if skip.contains("towns") {
+            continue;
+        }
         pass.set_pipeline(town);
         pass.set_bind_group(0, &*gpu.casters[i].1, &[]);
         // Only the chunks this cascade's box holds, and a town's dressing

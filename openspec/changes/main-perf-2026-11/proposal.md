@@ -90,3 +90,28 @@ reopened three times as its level hovered at the one start-and-stop edge.
 - The ground the wandering walks reached, where the GPU climbs from 6 to
   40-60 ms, is not yet found.
 - `cloud-hop` gives no valid run.
+
+## The shadow pass (2026-11-16)
+
+The rain stroll (Holbrook's lane, scripted, the same ground every run) is
+the on-foot measure. Against 2026-11-12's sitting (GPU time does not
+depend on the build profile), the GPU frame is 1.6 to 2 ms heavier and the
+p99 19.9 ms against 12.9-13.1. The shadow pass grew most: 2.14-2.36 ms to
+3.35 ms; terrain 2.01-2.19 to 2.63; half-size reflections 0.34 to 0.53.
+
+An instrument, `PBD_SHADOW_SKIP=terrain,foliage,column,towns`, leaves
+casters out of every cascade. Priced on the stroll, 2 repeats
+(`output/perf/2026-11-16-shadow-parts`):
+
+| left out | shadow pass (ms) | so the part costs |
+| --- | --- | --- |
+| nothing | 3.41 | |
+| terrain | 2.27 | 1.14 |
+| column tier | 2.46 | 0.95 |
+| foliage | 2.73 | 0.68 |
+| towns | 3.21 | 0.20 |
+
+The rest, about 0.44 ms, is each cascade's cull. Every cascade draws every
+caster its box holds, and the boxes nest, so ground near the eye is drawn
+into all of them. Next: keep a caster out of a cascade whose band of
+receivers it cannot shade.
