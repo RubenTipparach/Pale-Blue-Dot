@@ -140,18 +140,18 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
         let chain = &app.world().resource::<MissionChain>().0;
         app.world().resource::<Missions>().progress.line(chain)
     };
-    assert_eq!(line(&app).as_deref(), Some("Gather by hand: fibre 0/4"));
+    assert_eq!(line(&app).as_deref(), Some("Gather by hand: fibre 0/8"));
     let world = app.world_mut();
-    for good in ["fibre", "stone"] {
+    for (good, count) in [("fibre", 8), ("stone", 9)] {
         world.write_message(Gained {
             item: Item::Good(Good::by_code(good).unwrap()),
-            count: 4,
+            count,
             how: How::Found,
         });
     }
     app.update();
-    assert_eq!(line(&app).as_deref(), Some("Gather by hand: soil 0/4"));
-    for _ in 0..4 {
+    assert_eq!(line(&app).as_deref(), Some("Gather by hand: soil 0/6"));
+    for _ in 0..6 {
         app.world_mut()
             .write_message(Did::block(Kind::Gather, Material::Dirt));
     }

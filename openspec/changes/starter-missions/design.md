@@ -467,3 +467,54 @@ reference shows how it can read clearly:
 This stays a proposal until the owner asks for it. The strict tree remains
 the approved design.
 
+
+### Goals worth doing: more of the common things (owner, 2026-11-16)
+
+The owner, on M33's "Find seeds" card ("dig grass for a seed 0/1, pick a
+wild plant 0/1"): "for items like this, I think there should be more.
+instead of get 1 resource, more common resource should be either 5-10, for
+uncommon things like fish, 3-5 is fine", and "crafting 1 item is fine,
+unless a recipe requires multiples".
+
+**Rule.** A goal to gather a common thing asks for 5 to 10; an uncommon
+thing (fish, ore, coal, the less common crops, wool and milk) 3 to 5; a
+goal to craft or place asks for 1, unless the recipe the player is heading
+for takes several, in which case it asks for what that recipe takes.
+
+**The counts**, in `assets/config/missions.ron` (the game) and M33's
+`docs/mockups/mission-tree/tree.js` alike:
+
+| Goal | Was | Now | Why |
+| --- | ---: | ---: | --- |
+| Gather fibre | 4 | 8 | common |
+| Gather stone | 4 | 9 | common; three stone tools take 3 each |
+| Gather soil | 4 | 6 | common |
+| Find seeds: dig grass, pick a wild plant | 1 + 1 (the game: 2 seeds) | 5 + 5 (the game: 10 seeds) | common |
+| Till; plant wheat; harvest wheat | 4 | 6 each | common field work |
+| Harvest turnip, chili, frost kale | 1 each | 3 each | uncommon crops |
+| Collect eggs | 2 | 5 | common |
+| Collect wool or milk | 1 | 3 | uncommon |
+| Dig bait; catch with bait | 1 | 3 | uncommon |
+| Catch in the sea; in fresh water | 1 each | 3 each | fish |
+| Dig mixed ore | 1 | 4 | the forge's smelt takes 4 |
+| Dig coal | 1 | 3 | uncommon |
+| Smelt iron | 1 | 3 | the iron pickaxe takes 3 ingots |
+
+Unchanged: crafting and placing at 1, or at the multiple a recipe needs
+(fences, planks, rope, bronze, torches); fish caught (3), species (3), logs
+(10), stone dug (10), and the explorer's goals.
+
+### The mission card's frame (owner, 2026-11-16: "9 slice lines broo")
+
+The mockup's cards and log drew the kit's `tooltip` piece whole. That PNG
+(24 x 18 native, 8 render pixels a native pixel) keeps one native pixel of
+render background round the slab, and its right and bottom bevels fall into
+near-black shade. Stretched down a card's side, those two outer columns read
+as a black stripe and then a pale blue line outside the frame: the seam
+lines the owner saw. The mockup now slices a copy trimmed by that native
+pixel on every side (`mission-tree/ui/*-tooltip-trim.png`, slice 40 = 5
+native, border 10 px so a native pixel stays 2 CSS pixels). The game's
+mission tree (`desktop/mission_tree.rs`) draws the same `tooltip` piece; the
+lasting fix is in the art (`tools/art/ui_panels_blend.py` `r_tooltip` and
+`r_oak_tooltip`, whose outside should render transparent), which needs
+Blender and waits for a request.
