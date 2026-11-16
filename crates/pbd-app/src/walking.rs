@@ -196,6 +196,11 @@ pub struct WalkingConfig {
     pub water_swim_max_rise: f32,
     /// Multiplier on a jump taken from the seabed with the body in water.
     pub water_submerged_jump_mult: f32,
+    /// Water up to this deep over the feet is waded, not swum: a grounded
+    /// walker in it jumps at full strength and the water does not drag the
+    /// jump down (owner, 2026-11-15: "I should be able to jump full strength
+    /// if I'm wading in water - shallow depth of 1"). In metres.
+    pub water_wade_depth: f32,
 }
 
 /// Exactly where a save left the player.
@@ -237,6 +242,9 @@ impl Default for WalkingConfig {
             water_swim_force: 20.0,
             water_swim_max_rise: 14.0,
             water_submerged_jump_mult: 0.30,
+            // One terrain layer of water, plus a skin for the tide and the
+            // sheet's offset.
+            water_wade_depth: crate::planet::column::STEP_M + 0.1,
         }
     }
 }
@@ -1002,7 +1010,6 @@ fn drive_walker(
         state.transport_up(up);
         let right = state.heading.cross(up).normalize();
         let wet = sea.state(&config, position);
-        submerged = wet.body;
         // Fully submerged is never grounded, even standing on the seabed: it
         // is what makes a swimmer always take gravity and never get the
         // standing jump. Wading, feet down and head out, stays grounded.
@@ -1042,7 +1049,7 @@ fn drive_walker(
                     (vertical + config.water_swim_force * dt).min(config.water_swim_max_rise);
             } else if ground.grounded {
                 vertical = config.jump_speed
-                    * if wet.body {
+                    * if wet.body && !wet.wading(&config) {
                         config.water_submerged_jump_mult
                     } else {
                         1.0
@@ -1050,7 +1057,13 @@ fn drive_walker(
                 ground.grounded = false;
             }
         }
-        if wet.body {
+        // A jump out of wading water rises at full strength: the drag is
+        // for a swimmer and a fall into water, not a jump out of a shallow.
+        let wading_jump = wet.wading(&config) && vertical > 0.0;
+        // Nor does it lighten gravity under one: the jump goes as high as
+        // it does on land.
+        submerged = wet.body && !wading_jump;
+        if wet.body && !wading_jump {
             // Water takes the fall off, so a swimmer neither plummets nor
             // rockets. Horizontal is written outright from the input every
             // frame here, as it is in the reference, so a tangential drag
@@ -1083,6 +1096,15 @@ fn drive_walker(
 pub(crate) struct WaterState {
     pub body: bool,
     pub eyes: bool,
+    /// How deep the water is over the feet, in metres; 0 where dry.
+    pub depth: f32,
+}
+
+impl WaterState {
+    /// In water, head out, no deeper than [`WalkingConfig::water_wade_depth`].
+    pub fn wading(&self, config: &WalkingConfig) -> bool {
+        self.body && !self.eyes && self.depth <= config.water_wade_depth
+    }
 }
 
 /// The terrain and the sheet it is under, together, because answering where
@@ -1142,6 +1164,7 @@ impl Sea<'_> {
         WaterState {
             body: feet + config.water_body_check_height < surface,
             eyes: feet + EYE_HEIGHT < surface,
+            depth: (surface - feet).max(0.0),
         }
     }
 }
@@ -1583,6 +1606,21 @@ mod tests {
 
     fn app() -> App {
         app_with_terrain(PlanetContact::test_planet(5))
+    }
+
+    #[test]
+    fn one_layer_of_water_is_waded_and_deeper_is_not() {
+        let config = WalkingConfig::default();
+        let at = |depth: f32| WaterState {
+            body: depth > config.water_body_check_height,
+            eyes: depth > EYE_HEIGHT,
+            depth,
+        };
+        assert!(at(1.0).wading(&config), "one layer deep is waded");
+        assert!(at(0.6).wading(&config));
+        assert!(!at(0.3).wading(&config), "ankle deep is dry to the body");
+        assert!(!at(1.4).wading(&config), "past one layer is not waded");
+        assert!(!at(2.5).wading(&config), "over the eyes is swum");
     }
 
     fn app_with_terrain(terrain: PlanetContact) -> App {

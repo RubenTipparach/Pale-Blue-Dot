@@ -20,7 +20,6 @@ use pbd_core::terrain::Material;
 /// test can hold them to `cues.ron`. The family-made names are listed by
 /// [`family_cues`].
 pub const NAMED: &[&str] = &[
-    "land_hard",
     "step_wet",
     "water_enter_small",
     "water_enter_big",
@@ -63,7 +62,7 @@ pub const NAMED: &[&str] = &[
 pub fn family_cues() -> Vec<String> {
     let mut out = Vec::new();
     for family in Family::ALL {
-        for verb in ["step", "jump", "land"] {
+        for verb in ["step", "jump"] {
             out.push(format!("{verb}_{}", family.name()));
         }
         if family.diggable() {
@@ -181,6 +180,7 @@ fn read_surroundings(
     mut env: ResMut<Environment>,
     mut last: Local<(f32, Vec3)>,
 ) {
+    let _spent = super::Spent::new("read_surroundings");
     let _ = menu;
     let (since, was) = &mut *last;
     *since += time.delta_secs();
@@ -312,6 +312,7 @@ fn walker_sounds(
     mut sfx: ResMut<Sfx>,
     mut body: Local<Body>,
 ) {
+    let _spent = super::Spent::new("walker_sounds");
     let (Some(walking), Some(config), Some(contact)) = (walking, config, contact) else {
         return;
     };
@@ -375,9 +376,18 @@ fn walker_sounds(
             } else {
                 0.0
             };
-            sfx.play_with(named("step", family), at, quiet, 1.0);
-            if wet && family.takes_wet() {
-                sfx.play_with("step_wet", at, quiet, 1.0);
+            if wet && family == Family::Dirt {
+                // Wet dirt is mud: the squelch is the step, brought up to a
+                // step's level (`step_wet` sits 6 dB under `step_dirt` in
+                // the book, as a layer). The owner, 2026-11-16: "walking
+                // outside sounds like walking on wet wood, but the ground is
+                // wet dirt".
+                sfx.play_with("step_wet", at, quiet + 6.0, 1.0);
+            } else {
+                sfx.play_with(named("step", family), at, quiet, 1.0);
+                if wet && family.takes_wet() {
+                    sfx.play_with("step_wet", at, quiet, 1.0);
+                }
             }
         }
     }
@@ -392,10 +402,15 @@ fn walker_sounds(
         if fall > mix.land_from_m_s
             && let Some(family) = family
         {
-            let level = (20.0 * (fall / mix.land_hard_m_s).log10()).clamp(-10.0, 3.0);
-            sfx.play_with(named("land", family), at, level, 1.0);
-            if fall > mix.land_hard_m_s {
-                sfx.play("land_hard", at);
+            // A landing is heard as an ordinary step, at a step's level,
+            // however far the fall (owner, 2026-11-15: "I dont like the fall
+            // thump, please get rid of that, regular step when falling and
+            // hitting ground is fine"). The `land_*` and `land_hard` takes
+            // stay in the book, unplayed.
+            if wet && family == Family::Dirt {
+                sfx.play_with("step_wet", at, 6.0, 1.0);
+            } else {
+                sfx.play(named("step", family), at);
             }
         }
         body.stride.reset();
@@ -480,6 +495,7 @@ fn deeds(
     mut sfx: ResMut<Sfx>,
     mut slot: Local<Option<usize>>,
 ) {
+    let _spent = super::Spent::new("deeds");
     let hand = in_hand(&listener);
     if gained.read().count() > 0 {
         sfx.play("pickup", Where::Menu);
@@ -520,6 +536,7 @@ fn fishing(
     mut sfx: ResMut<Sfx>,
     listener: Res<Listener>,
 ) {
+    let _spent = super::Spent::new("fishing");
     for FishHeard { event, at } in heard.read() {
         let at = Where::At(*at);
         match event {
@@ -558,6 +575,7 @@ fn menus(
     mut was: Local<std::collections::HashMap<Entity, Interaction>>,
     mut sfx: ResMut<Sfx>,
 ) {
+    let _spent = super::Spent::new("menus");
     for (entity, interaction) in &buttons {
         let before = was.insert(entity, *interaction);
         match interaction {
@@ -585,6 +603,7 @@ fn fires(
     mut sfx: ResMut<Sfx>,
     mut cache: Local<FireCache>,
 ) {
+    let _spent = super::Spent::new("fires");
     let Some(fine) = fine else {
         return;
     };
@@ -637,6 +656,7 @@ fn thunder_from_strikes(
     mut sfx: ResMut<Sfx>,
     mut heard: Local<(Option<u64>, f32)>,
 ) {
+    let _spent = super::Spent::new("thunder_from_strikes");
     let (Some(air), Some(sun)) = (air, sun) else {
         return;
     };
@@ -704,6 +724,7 @@ fn scatters(
     mut sfx: ResMut<Sfx>,
     mut state: Local<(f32, u64)>,
 ) {
+    let _spent = super::Spent::new("scatters");
     let Some(beds) = env.beds else {
         return;
     };
