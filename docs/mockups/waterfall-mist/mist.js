@@ -963,7 +963,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
   const S = {variant: "new", night: false, running: true, gain: 2, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 0,
-    rule: "new", accel: 2, pixel: false, rip: 0.5, out: 0.1, arrows: false, glass: true, ripLen: 0.9, ripReach: 6, outReach: 6, glassTop: 2, glassFace: 0.9, fill: 2.5, glassTint: 0.7, edgeHi: 0};
+    rule: "new", accel: 2, pixel: false, rip: 0.5, out: 0.1, arrows: false, glass: true, ripLen: 0.9, ripReach: 6, outReach: 6, glassTop: 0.7, glassFace: 0.5, fill: 2.25, glassTint: 0.25, edgeHi: 0};
   // The eye's pool (the cell under it, if it is a basin's), for the view from under the water.
   let eyePool = null;
   function murk(open) {

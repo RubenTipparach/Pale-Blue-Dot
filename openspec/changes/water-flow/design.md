@@ -965,3 +965,6 @@ The owner's tuning applies under the proposed mist rule too ("Mist on every fall
   arc and take its normal, and the sides start 0.45 m below the top where the arc ends. In the game this is a mesher
   change (the falling cell's cap and the top of its side quads), so it is the larger part of a port.
   **Taken back** (owner, on seeing it: "nope go back"): the lip stays square; Glassy keeps only its shading.
+- **The owner's edge tuning** (2026-11-16, "here are the edge settings for now"): under Glassy, smooth for 0.70 m
+  before the edge, glassy for 0.50 m over it, froth filled in by 2.25 m down, glassy green 0.25, no edge highlight.
+  These are the mockup's defaults.
