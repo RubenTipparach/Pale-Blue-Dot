@@ -1,0 +1,59 @@
+== --life seal:30 (after; one line in 15 frames, 60 frames a second)
+LIFE_TRACE seal eye 30.27 m under 0.000 fade 1.000 spook 0.0
+LIFE_TRACE seal eye 30.26 m under 0.000 fade 0.688 spook 0.0
+LIFE_TRACE seal eye 30.13 m under 0.000 fade 0.375 spook 0.0
+LIFE_TRACE seal eye 29.95 m under 0.000 fade 0.063 spook 0.0
+LIFE_TRACE seal eye 29.83 m under 0.000 fade 0.000 spook 0.0
+LIFE_TRACE seal eye 29.81 m under 0.000 fade 0.000 spook 0.0
+== --life seal:20 (after; one line in 15 frames, 60 frames a second)
+LIFE_TRACE seal eye 20.28 m under 0.000 fade 1.000 spook 0.0
+LIFE_TRACE seal eye 20.29 m under 0.000 fade 0.688 spook 0.0
+LIFE_TRACE seal eye 20.16 m under 0.000 fade 0.375 spook 0.0
+LIFE_TRACE seal eye 19.96 m under 0.000 fade 0.063 spook 0.0
+LIFE_TRACE seal eye 19.78 m under 0.000 fade 0.000 spook 0.0
+LIFE_TRACE seal eye 19.57 m under 0.000 fade 0.000 spook 0.0
+LIFE_TRACE seal eye 19.51 m under 0.000 fade 0.000 spook 0.0
+LIFE_TRACE seal eye 19.71 m under 0.000 fade 0.000 spook 0.0
+LIFE_TRACE seal eye 19.89 m under 0.000 fade 0.000 spook 0.0
+== --life seal:12 (after; one line in 15 frames, 60 frames a second)
+LIFE_TRACE seal eye 12.35 m under 0.000 fade 1.000 spook 0.0
+LIFE_TRACE seal eye 12.42 m under 0.000 fade 0.688 spook 0.0
+LIFE_TRACE seal eye 12.53 m under 0.000 fade 0.375 spook 0.0
+LIFE_TRACE seal eye 12.64 m under 0.000 fade 0.063 spook 0.0
+LIFE_TRACE seal eye 12.72 m under 0.000 fade 0.000 spook 0.0
+LIFE_TRACE seal eye 12.81 m under 0.000 fade 0.000 spook 0.0
+LIFE_TRACE seal eye 12.91 m under 0.000 fade 0.000 spook 0.0
+== --life seal:8 (after; one line in 15 frames, 60 frames a second)
+LIFE_TRACE seal eye 8.44 m under 0.002 fade 1.000 spook 20.0
+LIFE_TRACE seal eye 8.48 m under 0.126 fade 0.688 spook 20.0
+LIFE_TRACE seal eye 8.50 m under 0.417 fade 0.375 spook 20.0
+LIFE_TRACE seal eye 8.50 m under 0.703 fade 0.063 spook 20.0
+LIFE_TRACE seal eye 8.41 m under 0.947 fade 0.000 spook 20.0
+LIFE_TRACE seal eye 8.37 m under 0.991 fade 0.000 spook 20.0
+== --life seal:5 (after; one line in 15 frames, 60 frames a second)
+LIFE_TRACE seal eye 5.61 m under 0.002 fade 1.000 spook 20.0
+LIFE_TRACE seal eye 5.65 m under 0.126 fade 0.688 spook 20.0
+LIFE_TRACE seal eye 5.67 m under 0.417 fade 0.375 spook 20.0
+LIFE_TRACE seal eye 5.66 m under 0.703 fade 0.063 spook 20.0
+LIFE_TRACE seal eye 5.57 m under 0.947 fade 0.000 spook 20.0
+LIFE_TRACE seal eye 5.47 m under 1.000 fade 0.000 spook 20.0
+LIFE_TRACE seal eye 5.34 m under 1.000 fade 0.000 spook 20.0
+LIFE_TRACE seal eye 5.30 m under 1.000 fade 0.000 spook 20.0
+
+== --life seal:5, 600 frames, after the flee fix: dives over 1.2 s and swims off (one line in 20 frames)
+LIFE_TRACE seal eye 5.61 m under 0.002 fade 1.000 spook 20.0
+LIFE_TRACE seal eye 5.77 m under 0.223 fade 0.583 spook 20.0
+LIFE_TRACE seal eye 6.04 m under 0.624 fade 0.167 spook 20.0
+LIFE_TRACE seal eye 6.40 m under 0.947 fade 0.000 spook 20.0
+LIFE_TRACE seal eye 6.90 m under 1.000 fade 0.000 spook 20.0
+LIFE_TRACE seal eye 7.56 m under 1.000 fade 0.000 spook 20.0
+LIFE_TRACE seal eye 8.30 m under 1.000 fade 0.000 spook 20.0
+LIFE_TRACE seal eye 9.19 m under 1.000 fade 0.000 spook 19.9
+LIFE_TRACE seal eye 10.12 m under 1.000 fade 0.000 spook 19.6
+LIFE_TRACE seal eye 11.07 m under 1.000 fade 0.000 spook 19.2
+LIFE_TRACE seal eye 12.03 m under 1.000 fade 0.000 spook 18.9
+LIFE_TRACE seal eye 13.01 m under 1.000 fade 0.000 spook 18.6
+LIFE_TRACE seal eye 14.00 m under 1.000 fade 0.000 spook 18.2
+LIFE_TRACE seal eye 14.99 m under 1.000 fade 0.000 spook 17.9
+LIFE_TRACE seal eye 15.98 m under 1.000 fade 0.000 spook 17.6
+LIFE_TRACE seal eye 16.97 m under 1.000 fade 0.000 spook 17.2

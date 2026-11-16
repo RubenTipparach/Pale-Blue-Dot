@@ -23,7 +23,7 @@ use glam::Vec3;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub use school::{School, Water, crawl_lift, pose};
+pub use school::{School, Water, crawl_lift, pose, under_share};
 
 /// The home planet's key in the roster. The world has one body with water
 /// today; a second gets its own key and its own species.

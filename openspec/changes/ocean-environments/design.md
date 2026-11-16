@@ -1161,6 +1161,98 @@ version):
   test that a stand's blades are narrow (no part wider than 0.15 m but
   the canopy) and that its colours are only the frond's.
 
+### B18. Sea life that vanishes up close, and floes on the beach (owner, 2026-11-16)
+
+The owner, on a cold coast with sea ice: "what the heck are these fish
+doing" and "they disappear when I get close to them". Their frame: white hex
+floes tipped at odd angles and stacked between sandy, snow-topped terraces,
+and a dark rounded shape (a seal) between them.
+
+**Reproduced** at the polar shore of B13, `--walk --at 86.965 -17.827 --time
+12 --pitch -10` (`docs/screenshots/sea-life-fixes/`). The walker stands on
+sand 0.6 m above the sea, and floes lie all over that sand.
+
+**What was found, each from the code and the capture:**
+- **Floes are put on dry land.** `places::plan` puts a floe on every 2.8 m
+  lattice point the environment function calls `UnderIce`, and that
+  function is coarse (a 3 m lattice and a zone noise): it calls the beach
+  and the shore terraces under-ice too. `build_tile` then lays every floe at
+  the mean sea radius with 0.6 m of ice below it, whatever the ground there.
+  On a beach the terrain's hex columns stand up through the slab, so the
+  floes read as tipped and stacked; at low tide (a third of the 3 m range
+  below the mean) even the ones over shallow water sit in the sand. The
+  slabs themselves are flat: each is built square to its own up.
+- **A seal on a floe vanishes at 9 m.** `places::ambient` skips a floe's
+  seal in one frame once the eye is within nine metres ("slid in"). There
+  is no slide: it is there, then it is not.
+- **A swimming seal drops 1.2 m in one frame.** A seal of the schools is
+  `HaulsOut`: within its 9 m `shy_m` its pose becomes `Under`, and
+  `draw::build` draws it 1.2 m lower at once, under the surface; from above
+  the water that is a vanish. It does not swim away either: the startle only
+  raises its speed cap, so it keeps paddling round the goal it had.
+- **A diving duck vanishes.** A `Dives` duck is `Under` for a third of every
+  14 s cycle, and `draw::build` skips a creature that is `Under`: gone in
+  one frame, back in one frame.
+- **The reef's ambient life pops at 30 m.** A tile draws its anthias cloud,
+  clownfish and floe seals only while its middle is within `NEAR_M` (30 m),
+  but the tile itself is whole to 34 m and fades out from 34 to 46 m. The
+  life appears and goes in one frame at 30 m, in the whole part of the tile.
+  The sway snaps to rest at the same line.
+- **Schools appear and go in one frame.** A school is spawned 20 to 60 m out
+  and dropped at 90 m with no fade: a duck or a seal on the surface 20 m off
+  appears whole in one frame.
+- Not the cause: frustum culling (Bevy 0.18 recomputes a mesh's bounds when
+  its asset changes, and every school mesh is rebuilt each frame), the
+  camera's near plane (creatures are drawn at 2 m in the lineup), and the
+  fishing line (only a splash scatters fish, and they swim, not jump).
+
+**Change** (drawing and the creatures' state; no generator version, since
+floes are pieces drawn from the plan, not cells, and nothing is saved):
+- **Floes float or are not there.** A floe is laid only where the water
+  under its middle and its six corners is deep enough for its 0.6 m of ice
+  at low water (the mean less a third of the tide's range); elsewhere,
+  beaches and shore terraces included, there is none. The ones left still
+  ride the tide.
+- **A seal on a floe slides off.** When the eye first comes within 9 m, the
+  seal slides forward off its floe's edge and into the water over 1.2 s,
+  then swims away from the eye under the surface, visibly, and stays off
+  the floe until the eye has been gone 20 s; then it climbs back out over
+  1.2 s. Each step is a moment in time, keyed to when it started.
+- **A seal of the schools dives and swims off.** Each creature keeps an
+  `under` share, 0 on the surface to 1 dived, eased toward 1 over 1.2 s
+  while startled and back over 2 s after; it is drawn that share of 1.2 m
+  down. A startled floater (seal, otter, duck) also turns its school's goal
+  away from the eye, 12 m on in water that fits it, so it is seen leaving.
+- **A diving duck dives.** Its `Under` window ramps: it sinks nose-first
+  over its first 0.6 s and rises over its last 0.6 s, drawn under the water
+  in between, never skipped.
+- **Ambient life is drawn while its tile is drawn**, and so fades with the
+  tile's screen-door mask from 34 to 46 m. The sway eases out from 26 to
+  30 m rather than snapping.
+- **Schools fade in and out.** A new school fades in over 0.8 s through the
+  same screen-door mask as the sea's places; a school past 90 m fades out
+  over 0.8 s and only then is dropped.
+
+**Verified** by: core tests that a startled seal's `under` share moves no
+more than its rate allows in a step and that a startled floater's goal is
+away from the eye; app tests that no floe is laid over ground above its
+draft at low water, that a floe seal is drawn on every frame of its slide,
+and that a diver's submersion never jumps; captures before and after at the
+polar shore and the `--life` approach sequence at 30, 20, 12, 8, 5, 3 and
+2 m; READY with no new `LATE_PIPELINE`.
+
+**Built** (2026-11-16, `claude/sea-life-fixes`): as above. The first
+flee only aimed straight away and pulled at the goal's weak 0.45, and the
+seal stayed about 5 m off while it dived; it now tries bearings off the
+straight line and nearer reaches for water that fits, and pulls with a
+lure's weight, and swims from 5.6 m to 17 m in 6 s
+(`docs/screenshots/sea-life-fixes/seal-approach-trace.txt`). Known limit: a
+seal of the schools rides the water's surface and knows nothing of the
+floes, so in a dense floe field it can lie half inside one; hauling it out
+onto a floe needs the floes in the water the schools read, and is not done
+here. The `--life` approach ends at 5 m at the polar shore: no water nearer
+is deep enough for a seal.
+
 ## Recommendations taken (ask only with screenshots)
 
 Each of these is recorded as "recommendation taken (ask only with

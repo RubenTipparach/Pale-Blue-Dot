@@ -249,3 +249,59 @@ fn the_float_rides_the_sea_the_hulls_ride() {
         - heights.iter().cloned().fold(f32::MAX, f32::min);
     assert!(spread > 0.01, "the float rises and falls: {heights:?}");
 }
+
+/// A school fades in over its first frames and, once too far, fades out and
+/// only then is dropped: never there or gone in one frame
+/// (`ocean-environments` B18).
+#[test]
+fn a_school_fades_in_and_fades_out_before_it_is_dropped() {
+    struct Deep;
+    impl Water for Deep {
+        fn surface(&self, point: Vec3) -> f32 {
+            let _ = point;
+            1000.0
+        }
+        fn bed(&self, point: Vec3) -> f32 {
+            let _ = point;
+            990.0
+        }
+    }
+    let roster = FaunaConfig::default().0.roster(HOME_BODY).to_vec();
+    let mut fishery = Fishery::default();
+    let anchor = Vec3::Y * 1000.0;
+    fishery
+        .schools
+        .push(School::spawn(0, &roster[0], anchor, 7, &Deep));
+    let dt = 1.0 / 60.0;
+    let school = fishery.schools[0].clone();
+    assert_eq!(
+        fishery.fade_of(&school),
+        1.0,
+        "unseen before its first frame"
+    );
+    let mut last = 1.0;
+    for _ in 0..60 {
+        fishery.fade(dt);
+        let now = fishery.fade_of(&school);
+        assert!((last - now).abs() <= dt / SCHOOL_FADE_S + 1e-5);
+        last = now;
+    }
+    assert_eq!(last, 0.0, "whole after its fade");
+    // The player 200 m off: it starts leaving, and is kept until faded.
+    let feet = (Vec3::Y * 1000.0 + Vec3::X * 200.0).normalize() * 1000.0;
+    let mut frames = 0;
+    while !fishery.schools.is_empty() {
+        drop_far(&mut fishery, feet, 90.0);
+        if fishery.schools.is_empty() {
+            break;
+        }
+        let now = fishery.fade_of(&fishery.schools[0]);
+        assert!((now - last).abs() <= dt / SCHOOL_FADE_S + 1e-5);
+        last = now;
+        fishery.fade(dt);
+        frames += 1;
+        assert!(frames < 200, "it was dropped");
+    }
+    assert!(last >= 0.99, "dropped only once faded: {last}");
+    assert!(frames as f32 * dt >= SCHOOL_FADE_S - 2.0 * dt);
+}

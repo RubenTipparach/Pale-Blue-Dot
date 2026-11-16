@@ -61,6 +61,18 @@ phase SHALL follow the world clock. It SHALL NOT be saved.
   same point and time with a 3 m tide
 - **THEN** they agree within 1 mm
 
+### Requirement: Floes float
+
+A floe SHALL be laid only where the water under it is deep enough for its
+ice at low water, and SHALL ride the tide there. No floe SHALL stand on a
+beach, a shore terrace or any ground its ice would reach.
+
+#### Scenario: No floes on the beach
+
+- **WHEN** the environment function calls a stretch of sand above the sea
+  under-ice
+- **THEN** no floe is laid on it
+
 ### Requirement: A beaver colony changes a valley through the journal
 
 A beaver colony SHALL be a stored record, and its felled trees, dam cells and

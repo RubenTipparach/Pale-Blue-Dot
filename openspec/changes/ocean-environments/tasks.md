@@ -74,3 +74,11 @@ against what it would cost.
 - [x] 12.2 (Built 2026-11-16: `rebuild_shower` asks `inland_surface`. Not shown in a capture: the shots turn the shower off.) The near shower stops for an eye under any water. Verify: the same capture's rain-on test.
 - [x] 12.3 (Already true: the walker reads the column, `water-flow` E10; pinned by `a_walker_swims_in_a_river_and_climbs_out`.) A walker in a river swims and climbs out. Verify: an app test of `swim_surface` and the walker's water state in a river column.
 - [x] 12.4 (Built 2026-11-16, design B17 second pass: `WATERLINE_EDGE_M`; `WATER_SHORT_SHIFT`, `a_flowing_tops_surface_rides_its_record_to_the_eighth`; `before-skim.jpg`, `after-skim.jpg`, `after-bank.jpg`.) The waterline: the composite's mask and wobble only under the surface; the terrain's tint, darkening and caustics against the column's own water surface, a flowing level included. Verify: the packing test; captures at a river's surface and from the bank.
+
+## 13. Sea life that vanishes up close, floes on the beach (owner, 2026-11-16; design B18)
+
+- [x] 13.1 (Built 2026-11-16 on `claude/sea-life-fixes`; `docs/screenshots/sea-life-fixes/`.) Floes only where they float at low water; none on beaches or terraces. Verify: an app test that no floe is laid over ground above its draft; captures at the polar shore before and after.
+- [x] 13.2 (Built 2026-11-16 on `claude/sea-life-fixes`; `docs/screenshots/sea-life-fixes/`.) A floe seal slides off and swims away, and climbs back later; never skipped in one frame. Verify: an app test over the slide that it is drawn every frame.
+- [x] 13.3 (Built 2026-11-16 on `claude/sea-life-fixes`; `docs/screenshots/sea-life-fixes/`.) A startled seal dives over time and swims away; a diving duck sinks and rises, never skipped. Verify: core tests of the `under` rate and the flee goal; the `--life seal` approach sequence 30 m to 2 m.
+- [x] 13.4 (Built 2026-11-16 on `claude/sea-life-fixes`; `docs/screenshots/sea-life-fixes/`.) Ambient life fades with its tile (no 30 m cut); the sway eases out. Verify: captures; the tile-fade test.
+- [x] 13.5 (Built 2026-11-16 on `claude/sea-life-fixes`; `docs/screenshots/sea-life-fixes/`.) Schools fade in when spawned and out before they are dropped. Verify: an app test of the fade; READY with no new `LATE_PIPELINE`.
