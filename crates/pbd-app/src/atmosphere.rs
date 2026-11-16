@@ -1311,4 +1311,47 @@ mod tests {
             }
         }
     }
+
+    /// A measurement instrument for the `rain-matches-map` captures: places
+    /// on land where snow falls hard, as a capture at `--time 12` builds the
+    /// weather, and the few nearest freezing where rain falls, printed as
+    /// `--at` arguments with the air there. Run with
+    /// `cargo test -p pbd-app --profile fast --lib snow_falling -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn snow_falling() {
+        let settings = pbd_core::atmosphere::AtmosphereSettings::default();
+        let clock = 12.0 / 24.0 * pbd_core::daylight::DAY_S as f64;
+        let air = Air::open(settings, terrain_config().seed, None, clock);
+        let (mut snow, mut rain) = (Vec::new(), Vec::new());
+        for i in -85..=85 {
+            for j in -180..180 {
+                let (lat, lon) = (i as f32, j as f32);
+                let p = pbd_core::geo::direction(pbd_core::geo::LatLon {
+                    lat: lat.to_radians(),
+                    lon: lon.to_radians(),
+                });
+                if crate::planet::surface_height(p) < 2.0 {
+                    continue;
+                }
+                let s = air.now.sample(p);
+                let falls = pbd_core::weather::shown_precipitation(&s);
+                if falls < -0.6 {
+                    snow.push((s.air_c, lat, lon, falls));
+                } else if falls > 0.6 {
+                    rain.push((s.air_c, lat, lon, falls));
+                }
+            }
+        }
+        // Snow a few degrees inside the freezing line, warmest first: clearly
+        // snow, and near the rain.
+        snow.retain(|s| s.0 < -2.0);
+        snow.sort_by(|a, b| b.0.total_cmp(&a.0));
+        rain.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for (name, list) in [("snow", &snow), ("rain", &rain)] {
+            for (air_c, lat, lon, falls) in list.iter().take(6) {
+                eprintln!("{name}: --at {lat} {lon}: falls {falls:.2}, air {air_c:.1} C");
+            }
+        }
+    }
 }

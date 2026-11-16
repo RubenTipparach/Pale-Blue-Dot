@@ -33,6 +33,12 @@ struct Tally {
     cold_rain: f64,
     /// Area precipitating at all (rain or snow).
     falling: f64,
+    /// Area where what falls is snow.
+    snowing: f64,
+    /// The air at the ground where anything falls, deg C, area-summed.
+    falling_air_c: f64,
+    /// Each sample of it, for its percentiles.
+    falling_air: Vec<f32>,
 }
 
 impl Tally {
@@ -45,9 +51,15 @@ impl Tally {
         if air.rain_seen[i] > pbd_core::weather::RAIN_SEEN_MIN {
             self.falling += area;
             let sample = air.sample(air.grid.centre[i]);
-            if pbd_core::weather::shown_precipitation(&sample) > 0.0 && sample.air_c <= 0.0 {
+            let falls = pbd_core::weather::shown_precipitation(&sample);
+            if falls > 0.0 && sample.air_c <= 0.0 {
                 self.cold_rain += area;
             }
+            if falls < 0.0 {
+                self.snowing += area;
+            }
+            self.falling_air_c += f64::from(sample.air_c) * area;
+            self.falling_air.push(sample.air_c);
         }
         self.rate_mmh += rate * area;
         self.seen += f64::from(air.rain_seen[i]) * area;
@@ -67,9 +79,26 @@ impl Tally {
             self.peak_mmh
         );
         println!(
-            "{name}: of the area where anything falls, {:.2}% is rain in air at or below 0 C",
-            100.0 * self.cold_rain / self.falling.max(1e-12)
+            "{name}: of the area where anything falls, {:.2}% is snow and {:.2}% rain in air \
+             at or below 0 C; the air there averages {:.1} C",
+            100.0 * self.snowing / self.falling.max(1e-12),
+            100.0 * self.cold_rain / self.falling.max(1e-12),
+            self.falling_air_c / self.falling.max(1e-12)
         );
+        let mut air = self.falling_air.clone();
+        air.sort_by(f32::total_cmp);
+        if !air.is_empty() {
+            let at = |q: usize| air[(air.len() * q / 100).min(air.len() - 1)];
+            println!(
+                "{name}: the air where anything falls, C: 10th {:.1}, 25th {:.1}, median {:.1}, \
+                 75th {:.1}, 90th {:.1}",
+                at(10),
+                at(25),
+                at(50),
+                at(75),
+                at(90)
+            );
+        }
     }
 }
 
@@ -95,27 +124,29 @@ fn main() {
     );
     let bytes = std::fs::read(&path).expect("the shipped settled climate");
     air.restore(&bytes).expect("a settled state for this grid");
-    let desert: Vec<bool> = air
+    let biome: Vec<Option<Biome>> = air
         .grid
         .centre
         .iter()
         .map(|&c| {
             let height = planet_gen::surface_altitude(&terrain, c);
-            height >= terrain.sea_level_m
-                && planet_gen::biome_at(&terrain, c, height) == Biome::Desert
+            (height >= terrain.sea_level_m).then(|| planet_gen::biome_at(&terrain, c, height))
         })
         .collect();
+    let desert: Vec<bool> = biome.iter().map(|b| *b == Some(Biome::Desert)).collect();
+    let tundra: Vec<bool> = biome.iter().map(|b| *b == Some(Biome::Tundra)).collect();
     println!(
-        "level {level}, generator {generator}: {} cells, {} desert; {days} days",
+        "level {level}, generator {generator}: {} cells, {} desert, {} tundra; {days} days",
         air.grid.len(),
-        desert.iter().filter(|d| **d).count()
+        desert.iter().filter(|d| **d).count(),
+        tundra.iter().filter(|d| **d).count()
     );
     let start = pbd_core::daylight::START_HOUR as f64 / 24.0 * DAY_S as f64;
     let dt = f64::from(settings.dt_s);
     let steps = (days * f64::from(DAY_S) / dt).round() as u64;
     let warm = (f64::from(DAY_S) / dt).round() as u64;
     let every = (60.0 / dt).round().max(1.0) as u64;
-    let (mut planet, mut dry) = (Tally::default(), Tally::default());
+    let (mut planet, mut dry, mut cold) = (Tally::default(), Tally::default(), Tally::default());
     let started = std::time::Instant::now();
     for step in 0..steps + warm {
         let t = start + (step + 1) as f64 * dt;
@@ -129,10 +160,14 @@ fn main() {
             if desert[i] {
                 dry.add(&air, i, area);
             }
+            if tundra[i] {
+                cold.add(&air, i, area);
+            }
         }
     }
     planet.print("whole planet");
     dry.print("desert");
+    cold.print("tundra");
     println!(
         "mean surface {:.2} C, sun trim {:.3}; {:.0} s",
         air.mean_surface_c(),

@@ -1072,9 +1072,16 @@ mod tests {
             app.update();
             seen.push(app.world().resource::<Weather>().liquid());
         }
-        assert!(seen[0] > 0.9, "the water does not vanish at once: {}", seen[0]);
+        assert!(
+            seen[0] > 0.9,
+            "the water does not vanish at once: {}",
+            seen[0]
+        );
         let at_tau = seen[(tau * 10.0) as usize - 1];
-        assert!((at_tau - (-1.0f32).exp()).abs() < 0.05, "one e-fold: {at_tau}");
+        assert!(
+            (at_tau - (-1.0f32).exp()).abs() < 0.05,
+            "one e-fold: {at_tau}"
+        );
         assert!(*seen.last().unwrap() < 1e-3, "snow is not water");
         assert!(seen.windows(2).all(|w| w[1] <= w[0]), "it only eases out");
         let full = Weather {

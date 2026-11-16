@@ -76,7 +76,7 @@
     // planet"): evaporation 3.0e-4 -> 0.75e-4 halves how much falls, and the
     // rain threshold 4 -> 8 kg/m^2 halves how often (`rain-matches-map`;
     // over 30 days from the settled climate, 19.8% of the planet raining at
-    // a mean 11.5 mm/h became 9.8% at 5.9 mm/h with the virga below).
+    // a mean 11.5 mm/h became 9.6% at 5.4 mm/h with the virga below).
     evaporation: 0.75e-4,
     evaporation_wind_mps: 10.0,
     saturation_kg: 30.0,
