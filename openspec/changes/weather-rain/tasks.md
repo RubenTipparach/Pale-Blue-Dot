@@ -71,9 +71,11 @@
 - [x] 7.1 The write-up: design.md, "Height fog with RAIN SHADOW off", the
       owner's words, the form, the reference level, the colour, the pass it
       folds into and the match to the volume.
-- [ ] 7.2 `rain_height_fog_falloff_m` in `weather.ron`, validated; the
+- [x] 7.2 `rain_height_fog_falloff_m` in `weather.ron`, validated; the
       `height_fog` lane; the fog at the end of the `clouds` composite;
       `PBD_HEIGHT_FOG=0` to price it.
-- [ ] 7.3 Captures: a storm, RAIN SHADOW off before and after and on; a
-      valley in a storm.
+- [x] 7.3 Captures: a storm, RAIN SHADOW off before and after and on; a
+      valley in a storm (`docs/screenshots/height-fog/`). The falloff went
+      from 120 m to 250 m on the first look: at 120 m the horizon was a
+      third as murky as the volume's.
 - [ ] 7.4 Its cost on `storm`, RAIN SHADOW off, fog off against on.
