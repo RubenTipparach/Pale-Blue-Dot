@@ -117,3 +117,17 @@ the design, "Stepping up a submerged step".
       `a_swimmer_climbs_the_owners_staircase_onto_the_bank`;
       `a_swimmer_moving_along_a_submerged_step_does_not_climb`.
 - [ ] The owner swims the staircase in the running game.
+
+## 6. Swimming up out of shallow water (owner, 2026-11-16)
+
+"in river, I can't swim to the surface if I start at a lower block on a
+waterfall". The finding and the rule are in the design, "Swimming up out of
+shallow water".
+
+- [ ] 6.1 The wading jump is only a jump: a flag on `WalkingState` set by a
+      jump taken in wading water, cleared when the rise ends; a held swim
+      in wading water takes the water's drag and gravity.
+- [ ] 6.2 A test on the pool (`pool_rows`): a walker on the bed of two- and
+      four-layer water beside a higher reach, holding the swim control,
+      brings its eyes over the surface (fails before).
+- [ ] 6.3 The owner swims up from a river's bed in the running game.

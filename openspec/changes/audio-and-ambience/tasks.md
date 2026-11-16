@@ -134,6 +134,12 @@
   capture with `--audio-log` logged `water_enter_big`, `step_shallow`,
   `land_shallow` and `water_exit`; strokes and bubbles are not yet seen in
   a log (the script's swim is short).
+- [ ] 5.8 Water sounds read the walker's water (design, "Water sounds read the
+  walker's water"; owner, 2026-11-16: "water sfx also plays when I'm standing
+  on land"): `walker_sounds` takes `walking::Sea::state` at the walker, not
+  `PlanetContact::stand`. Verify: a test at a version 10 shore, a seabed
+  block 1 m under the sea level, dry to the audio at the lowest tide (fails
+  before) and wet at the highest.
 - [ ] 5.4 Craft loops and one-shots from each `Telemetry`; the 1 kHz
   structure filter above the air.
   Waits for the owner's first listen (build decision 9).
