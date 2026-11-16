@@ -209,6 +209,20 @@ fn script() -> Vec<Scripted> {
         S::Did(Kind::Cast, "water"),
     ]);
     steps.extend(n(3, S::Did(Kind::Catch, "minnow")));
+    steps.extend(n(3, S::Did(Kind::Species, "fish")));
+    steps.extend([
+        S::Did(Kind::Waters, "sea"),
+        S::Did(Kind::Waters, "fresh"),
+        S::Did(Kind::Open, "map"),
+        S::Did(Kind::Reach, "marked"),
+    ]);
+    steps.extend(n(20, S::Did(Kind::Swim, "water")));
+    steps.extend([
+        S::Did(Kind::Reach, "reef"),
+        S::Did(Kind::Reach, "town"),
+        S::Did(Kind::Board, "boat"),
+    ]);
+    steps.extend(n(100, S::Did(Kind::Travel, "boat")));
     steps.extend([
         S::Cooked("grilled-fish", 2),
         S::Did(Kind::Eat, "grilled-fish"),
@@ -216,6 +230,7 @@ fn script() -> Vec<Scripted> {
     steps.push(S::Gained(good("wheat-seed"), 2, Found));
     steps.extend(n(4, S::Did(Kind::Till, "block:grass")));
     steps.extend(n(4, S::Planted("wheat")));
+    steps.push(S::Did(Kind::Pour, "water"));
     steps.extend([
         S::Gained(good("wheat"), 4, Harvested),
         S::Cooked("flatbread", 2),
@@ -415,5 +430,128 @@ mod tests {
             app.update();
             assert_eq!(*app.world().resource::<Screen>(), to, "{label}");
         }
+    }
+}
+
+/// How far from where the map was read a player walks for "Read the map".
+pub const MAP_WALK_M: f32 = 200.0;
+/// How near a town's terrace counts as reaching it.
+pub const TOWN_NEAR_M: f32 = 60.0;
+
+/// What `about_watch` carries between frames.
+#[derive(Default)]
+pub struct AboutState {
+    /// The screen last frame.
+    screen: Option<Screen>,
+    /// Where the map was first read, for its walk.
+    read_at: Option<Vec3>,
+    reached_mark: bool,
+    /// The last place the walker was counted from, in the water.
+    swam_from: Option<Vec3>,
+    swum_m: f32,
+    /// The craft boarded, and where it was last counted from.
+    aboard: Option<(Entity, Vec3)>,
+    travelled_m: f32,
+    town: Option<u32>,
+    reef: bool,
+}
+
+/// Getting about (`starter-missions` T.2): the map opened, the walk from
+/// where it was read, metres swum, a boat boarded and the metres it went, a
+/// town and a reef reached. Each is raised where the game already knows it:
+/// the screen, the walker's position against the sea and the towns, the
+/// craft the player is aboard.
+#[allow(clippy::too_many_arguments)]
+pub fn about_watch(
+    screen: Res<Screen>,
+    aboard: Option<Res<pbd_app::vehicles::Aboard>>,
+    vehicles: Query<&pbd_app::vehicles::Vehicle>,
+    towns: Option<Res<pbd_app::towns::Towns>>,
+    walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    mut did: MessageWriter<pbd_app::missions::Did>,
+    mut state: Local<AboutState>,
+) {
+    use pbd_app::missions::Did;
+    use pbd_app::planet::{PLANET_RADIUS, surface_height};
+    use pbd_core::missions::Kind;
+    let at = walkers.single().ok().map(|p| p.0);
+    if state.screen != Some(*screen) {
+        if *screen == Screen::Map {
+            did.write(Did::new(Kind::Open, "map", 1));
+            if state.read_at.is_none() {
+                state.read_at = at;
+            }
+        }
+        state.screen = Some(*screen);
+    }
+    let Some(feet) = at else { return };
+    let up = feet.normalize_or(Vec3::Y);
+    // The walk from where the map was read.
+    if let Some(read) = state.read_at
+        && !state.reached_mark
+        && read.normalize_or(Vec3::Y).distance(up) * PLANET_RADIUS >= MAP_WALK_M
+    {
+        state.reached_mark = true;
+        did.write(Did::new(Kind::Reach, "marked", 1));
+    }
+    // Swimming: the feet under the sea's level over the sea floor.
+    let ground = surface_height(up);
+    let altitude = feet.length() - PLANET_RADIUS;
+    if ground < -1.0 && altitude < -0.3 {
+        if let Some(from) = state.swam_from {
+            state.swum_m += (feet - from).length();
+        }
+        state.swam_from = Some(feet);
+        while state.swum_m >= 1.0 {
+            state.swum_m -= 1.0;
+            did.write(Did::new(Kind::Swim, "water", 1));
+        }
+        // A reef under the swimmer.
+        if !state.reef
+            && pbd_core::ocean::places::environment(pbd_app::planet::terrain_config(), up)
+                == Some(pbd_core::fauna::Environment::Reef)
+        {
+            state.reef = true;
+            did.write(Did::new(Kind::Reach, "reef", 1));
+        }
+    } else {
+        state.swam_from = None;
+    }
+    // A town reached.
+    if let Some(towns) = towns {
+        let near = towns.held.iter().find(|h| {
+            h.point(PLANET_RADIUS).normalize_or(Vec3::Y).distance(up) * PLANET_RADIUS < TOWN_NEAR_M
+        });
+        let id = near.map(|h| h.site.id);
+        if id.is_some() && id != state.town {
+            did.write(Did::new(Kind::Reach, "town", 1));
+        }
+        state.town = id;
+    }
+    // A boat boarded, and the metres it goes.
+    let craft = aboard
+        .and_then(|a| a.0)
+        .and_then(|e| vehicles.get(e).ok().map(|v| (e, v)))
+        .filter(|(_, v)| {
+            matches!(
+                v.craft.kind,
+                pbd_core::vehicle::Kind::Rowboat | pbd_core::vehicle::Kind::Cog
+            )
+        });
+    match (craft, state.aboard) {
+        (Some((e, v)), Some((was, from))) if e == was => {
+            let here = v.craft.body.position.as_vec3();
+            state.travelled_m += (here - from).length();
+            state.aboard = Some((e, here));
+            while state.travelled_m >= 1.0 {
+                state.travelled_m -= 1.0;
+                did.write(Did::new(Kind::Travel, "boat", 1));
+            }
+        }
+        (Some((e, v)), _) => {
+            did.write(Did::new(Kind::Board, "boat", 1));
+            state.aboard = Some((e, v.craft.body.position.as_vec3()));
+        }
+        (None, _) => state.aboard = None,
     }
 }

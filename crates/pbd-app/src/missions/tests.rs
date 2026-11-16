@@ -194,8 +194,8 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
         }
     }
     assert!(done(&app, "go-fishing"));
-    // Cooking the catch hangs off fishing (M33 version 3).
-    assert_eq!(line(&app).as_deref(), Some("Cook fish 0/2"));
+    // Bait waits for a good, so the three kinds are next (M33 version 3).
+    assert_eq!(line(&app).as_deref(), Some("Three kinds of fish 0/3"));
 }
 
 /// An old world, saved before missions and before tool crafting, opens with

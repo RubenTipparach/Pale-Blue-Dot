@@ -89,7 +89,7 @@ impl Kind {
     /// The kinds a chain may name whatever the build: every kind the game
     /// raises an event for (all of them, since felling, eating and the
     /// night came in with the Homestead chain).
-    pub const LIVE: [Kind; 18] = [
+    pub const LIVE: [Kind; 26] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -108,6 +108,14 @@ impl Kind {
         Kind::Fell,
         Kind::Eat,
         Kind::Night,
+        Kind::Pour,
+        Kind::Species,
+        Kind::Waters,
+        Kind::Reach,
+        Kind::Swim,
+        Kind::Board,
+        Kind::Travel,
+        Kind::Open,
     ];
 }
 

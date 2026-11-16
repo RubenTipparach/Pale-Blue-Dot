@@ -1437,6 +1437,7 @@ pub fn run(args: &[String]) {
                 .chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
             missions::night_watch.run_if(pbd_app::loading::ready),
+            missions::about_watch.run_if(pbd_app::loading::ready),
         ),
     )
     // The world, loaded before the planet is built: `create_planet` reads its

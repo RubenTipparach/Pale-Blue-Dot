@@ -764,6 +764,7 @@ pub fn dig_and_place(
             } else {
                 Good::WATER_BUCKET
             };
+            let poured = full;
             if apply_edit(
                 &mut Edited {
                     fine: &mut fine,
@@ -788,6 +789,13 @@ pub fn dig_and_place(
                         "took water from"
                     }
                 );
+                if poured {
+                    did.write(pbd_app::missions::Did::new(
+                        pbd_core::missions::Kind::Pour,
+                        "water",
+                        1,
+                    ));
+                }
             }
             return;
         }

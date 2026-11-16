@@ -342,25 +342,9 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
         assert_eq!(chain.get(id).unwrap().needs, ["fire"], "{id}");
     }
     assert_eq!(chain.get("water-field").unwrap().after, ["go-fishing"]);
-    // What waits on the game: the kinds not raised yet, and bait.
+    // What waits on the game: only bait, which has no good yet.
     let pending: Vec<&str> = chain.pending().map(|(id, _)| id).collect();
-    for id in &pending {
-        assert!(
-            [
-                "bait",
-                "three-kinds",
-                "sea-fishing",
-                "water-field",
-                "map",
-                "swim",
-                "reef",
-                "town",
-                "boat"
-            ]
-            .contains(id),
-            "{id} pending"
-        );
-    }
+    assert_eq!(pending, ["bait"]);
     let progress = Progress::default();
     assert_eq!(
         progress.current(&chain).map(|m| m.id.as_str()),
@@ -408,11 +392,22 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
         ev(Kind::Craft, "tool:rod", 1),
         ev(Kind::Cast, "water", 1),
         ev(Kind::Catch, "minnow", 3),
+        ev(Kind::Species, "fish", 3),
+        ev(Kind::Waters, "sea", 1),
+        ev(Kind::Waters, "fresh", 1),
+        ev(Kind::Open, "map", 1),
+        ev(Kind::Reach, "marked", 1),
+        ev(Kind::Swim, "water", 20),
+        ev(Kind::Reach, "reef", 1),
+        ev(Kind::Reach, "town", 1),
+        ev(Kind::Board, "boat", 1),
+        ev(Kind::Travel, "boat", 100),
         ev(Kind::Cook, "grilled-fish", 2),
         ev(Kind::Eat, "grilled-fish", 1),
         ev(Kind::Find, "wheat-seed", 2),
         ev(Kind::Till, "any", 4),
         ev(Kind::Plant, "wheat-seed", 4),
+        ev(Kind::Pour, "water", 1),
         ev(Kind::Harvest, "wheat", 4),
         ev(Kind::Cook, "flatbread", 2),
         ev(Kind::Harvest, "turnip", 1),

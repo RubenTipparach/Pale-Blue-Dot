@@ -161,7 +161,7 @@
             help: "Fish in other water and at other hours; the field guide (J) fills in each new kind.",
             needs: ["bait"],
             objectives: [
-                (kind: species, what: "fish", count: 3, label: "species"),
+                (kind: species, what: "any", count: 3, label: "species"),
             ],
         ),
         (
@@ -454,11 +454,11 @@
             id: "map",
             branch: "about",
             title: "Read the map",
-            help: "Open the map (M), mark a place 200 m off, and walk there.",
+            help: "Open the map (M), and walk 200 m from where you read it.",
             needs: ["go-fishing"],
             objectives: [
                 (kind: open, what: "map", count: 1, label: "open the map"),
-                (kind: reach, what: "marked", count: 1, label: "reach the mark"),
+                (kind: reach, what: "marked", count: 1, label: "walk 200 m"),
             ],
         ),
         (
