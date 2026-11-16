@@ -97,7 +97,7 @@ button{font:inherit;color:inherit}
     <span class="seg" id="focus"><button data-focus="all" aria-pressed="true">All</button><button data-focus="riffle" aria-pressed="false">Riffle</button><button data-focus="f1" aria-pressed="false">1</button><button data-focus="f2" aria-pressed="false">2</button><button data-focus="f4" aria-pressed="false">4</button><button data-focus="f9" aria-pressed="false">9</button></span>
     <span class="seg" id="tod"><button data-tod="day" aria-pressed="true">Day</button><button data-tod="night" aria-pressed="false">Night</button></span>
     <label class="chk"><input type="checkbox" id="showRef"> Game shot</label>
-    <label class="chk"><input type="checkbox" id="pause"> Pause</label>
+    <label class="chk"><input type="checkbox" id="pause"> Pause</label> <label class="chk"><input type="checkbox" id="arrows"> Flow arrows</label>
     <button class="info" id="tabInfo" aria-label="What this tab shows">i</button>
   </div>
   <section id="newPanel" hidden>
@@ -111,6 +111,8 @@ button{font:inherit;color:inherit}
     <div class="sl one"><label for="streak">Droplet streak</label><input id="streak" type="range" min="0" max="3" step="0.05" value="0"><output id="streakOut">0.00</output></div>
     <div class="sl one"><label for="soft">Wall blend</label><input id="soft" type="range" min="0" max="3" step="0.05" value="1.2"><output id="softOut">1.20</output></div>
     <div class="sl one"><label for="bub">Bubbles</label><input id="bub" type="range" min="0" max="2" step="0.05" value="1"><output id="bubOut">1.00</output></div>
+    <div class="sl one"><label for="rip">Foot ripples</label><input id="rip" type="range" min="0" max="3" step="0.05" value="1"><output id="ripOut">1.00</output></div>
+    <div class="sl one"><label for="out">Pool flow</label><input id="out" type="range" min="0" max="3" step="0.05" value="1"><output id="outOut">1.00</output></div>
     <div class="sl one"><label for="teal">Teal churn</label><input id="teal" type="range" min="0" max="2" step="0.05" value="1"><output id="tealOut">1.00</output></div>
     <div class="sheet" style="margin-top:10px">
       <figure><img src="waterfall-mist/mist_puffs.png?v=1" width="384" height="384" alt="The new mist puff sheet: four puffs, four frames each"><figcaption>Mist puffs, 4 x 4 cells of 32 texels (3x)</figcaption></figure>
@@ -215,7 +217,7 @@ button{font:inherit;color:inherit}
 <template id="tab-fixed"><p><b>Fixed order.</b> The same splash, drawn after the water against its depth: in front of the water, hidden by it. The pool shows its own deep colour. The mist is the game's gradient dot.</p></template>
 <template id="tab-new"><p><b>New mist + bubbles.</b> The fixed order, with lumpy lit mist puffs in place of the dot, bubbles rising in the pool under the fall, and the aerated teal over them. <b>Mist opacity</b> scales the puffs; 0.80 matches the dot's total cover.</p><p><b>Mist rule</b>: <b>Proposed</b> mists every fall by the metres it drops, with a floor, so the riffle and the 1 and 2-layer falls read as misty; <b>Game's</b> is today's count by whole falling layers. <b>Fall speed-up</b>: the falling faces scroll faster further down, so a taller fall's foot runs fastest (0 is the game's one speed). The About modal has the rules and numbers.</p></template>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="waterfall-mist/mist.js?v=19"></script>
+<script src="waterfall-mist/mist.js?v=21"></script>
 <script>
 "use strict";
 let MODAL_BACK = null;
@@ -275,11 +277,12 @@ document.getElementById("pix").addEventListener("click", e => {
   const b = e.target.closest("button[data-pix]"); if (!b) return; P.S.pixel = b.dataset.pix === "1"; P.apply();
   for (const x of document.querySelectorAll("#pix button")) x.setAttribute("aria-pressed", String(x === b));
 });
+document.getElementById("arrows").addEventListener("change", e => { P.S.arrows = e.target.checked; P.apply(); });
 document.getElementById("pause").addEventListener("change", e => { P.S.running = !e.target.checked; });
 document.getElementById("showRef").addEventListener("change", refresh);
 const gain = document.getElementById("gain");
 gain.addEventListener("input", () => { P.S.gain = +gain.value; document.getElementById("gainOut").textContent = (+gain.value).toFixed(2); P.apply(); });
-for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"], ["mist", "mist"], ["mistSize", "mistSize"], ["veil", "veil"], ["soft", "soft"], ["streak", "streak"], ["accel", "accel"]]) {
+for (const [id, key] of [["bub", "bubbles"], ["teal", "teal"], ["mist", "mist"], ["mistSize", "mistSize"], ["veil", "veil"], ["soft", "soft"], ["streak", "streak"], ["accel", "accel"], ["rip", "rip"], ["out", "out"]]) {
   const el = document.getElementById(id);
   el.addEventListener("input", () => { P.S[key] = +el.value; document.getElementById(id + "Out").textContent = (+el.value).toFixed(2); P.apply(); });
 }

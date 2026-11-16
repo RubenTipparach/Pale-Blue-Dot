@@ -362,7 +362,7 @@ function waterMaterial(U, vertexShader) {
       uM: {value: new THREE.Matrix3()}, uRp: {value: 2400}, uTime: {value: 0}, uScene: {value: null}, uRes: {value: new THREE.Vector2(1, 1)},
       uStretch: {value: 1}, uSpeed: {value: 1}, uAccel: {value: 0}, uLip: {value: 0}, uFallFrame: {value: 0},
       uOpen: {value: new THREE.Vector3(1, 1, 1)}, uNight: {value: 0}, uRain: {value: 0}, uSunI: {value: 1},
-      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1},
+      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1}, uRip: {value: 0}, uOut: {value: 0},
       uG: {value: 0}, uVmax: {value: 8}}, U),
     side: THREE.DoubleSide,
     vertexShader: `attribute vec3 aRest; attribute vec3 aFaceN; attribute float aKind; attribute float aFroth; attribute vec3 aPath;
@@ -377,7 +377,7 @@ function waterMaterial(U, vertexShader) {
       uniform vec3 uOpen; uniform float uNight; uniform float uRain; uniform float uSunI;
       varying vec3 vRest; varying vec3 vFaceN; varying float vKind; varying float vFroth; varying vec3 vPath; varying float vTop;
       varying vec3 vFlowN; varying vec3 vFlow; varying float vSky; varying vec3 vP; varying float vDepth;
-      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt;
+      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt; uniform float uRip; uniform float uOut;
       uniform float uG; uniform float uVmax;
       ${NOISE_GLSL}
       ${LIGHT_GLSL}
@@ -443,12 +443,59 @@ function waterMaterial(U, vertexShader) {
         float f0 = fbm3(p, t);
         float height = f0*detail;
         vec3 gradient = vec3(fbm3(p + vec3(0.08, 0.0, 0.0), t) - f0, fbm3(p + vec3(0.0, 0.08, 0.0), t) - f0, fbm3(p + vec3(0.0, 0.0, 0.08), t) - f0)*12.5*detail;
+        // Pool flow away from the fall (New tab, mockup; owner, 2026-11-16: "set some flow direction away from the
+        // source too"): the pool's waves and foam drift outward from the column, fastest at it (1.2 m/s under a
+        // 9-layer fall) and slowing over a few metres. A spreading flow can't be scrolled for ever without
+        // stretching, so it is the usual flow-map trick: two copies of the waves, each dragged along the flow for
+        // 2 s and reset, cross-faded so neither reset shows.
+        if (uOut > 0.0 && vKind < 0.5) {
+          vec2 fl = vec2(0.0);
+          for (int i = 0; i < ${NF}; i++) {
+            if (abs(vP.y - uFeet[i].y) > 0.3) continue;
+            vec2 off = vP.xz - uFeet[i].xz; float d = length(off), x = d - 1.25;
+            if (x <= -0.5 || x > 10.0) continue;
+            fl += off/max(d, 1e-3)*(0.5 + 0.07*min(uFeetH[i], 10.0))*exp(-max(x, 0.0)/(2.5 + 0.3*uFeetH[i]))*smoothstep(-0.5, 0.3, x);
+          }
+          fl *= uOut;
+          if (dot(fl, fl) > 1e-6) {
+            const float T = 2.0;
+            float a0 = fract(uTime/0.75/T), a1 = fract(uTime/0.75/T + 0.5);
+            vec3 flB = uM*vec3(fl.x, 0.0, fl.y)*T*RIPPLE_SCALE;
+            vec3 p0 = p - flB*a0, p1 = p - flB*a1 + vec3(0.37, 0.0, 0.61);
+            float w0 = 1.0 - abs(2.0*a0 - 1.0), w1 = 1.0 - w0;
+            float g0 = fbm3(p0, t), g1 = fbm3(p1, t);
+            vec3 gr0 = vec3(fbm3(p0 + vec3(0.08, 0.0, 0.0), t) - g0, fbm3(p0 + vec3(0.0, 0.08, 0.0), t) - g0, fbm3(p0 + vec3(0.0, 0.0, 0.08), t) - g0);
+            vec3 gr1 = vec3(fbm3(p1 + vec3(0.08, 0.0, 0.0), t) - g1, fbm3(p1 + vec3(0.0, 0.08, 0.0), t) - g1, fbm3(p1 + vec3(0.0, 0.0, 0.08), t) - g1);
+            float m = clamp(length(fl)/0.3, 0.0, 1.0);
+            height = mix(height, (g0*w0 + g1*w1)*detail, m);
+            gradient = mix(gradient, (gr0*w0 + gr1*w1)*12.5*detail, m);
+          }
+        }
         gradient -= radial*dot(gradient, radial);
         if (uRain > 0.5) {
           vec2 g = rings(vec2(dot(body, tu), dot(body, tv))*3.0, uTime)*6.0;
           // Only on water that faces up (owner, 2026-11-15: "when raining - no droplets on vertical water").
           g *= smoothstep(0.7, 0.95, horizontal);
           gradient += tu*g.x + tv*g.y;
+        }
+        // Foot ripples (New tab, mockup; owner, 2026-11-16: "is there some rippling you can do here too? to show
+        // water being pushed outward"): rings run out from the falling column across the pool, 0.9 m apart at
+        // 1.3 m/s, strongest at the column and dying over a few metres, larger under a taller fall. They tilt the
+        // normal (so the reflection and the fresnel ring) and whiten a little on their crests near the column.
+        float ripFoam = 0.0;
+        if (uRip > 0.0 && vKind < 0.5) {
+          for (int i = 0; i < ${NF}; i++) {
+            if (abs(vP.y - uFeet[i].y) > 0.3) continue;
+            vec2 off = vP.xz - uFeet[i].xz; float d = length(off), x = d - 1.25;
+            if (x <= 0.0 || x > 9.0) continue;
+            float k = 6.2831853/0.9, ph = k*x - uTime/0.75*1.3*k;
+            float reach = 2.0 + 0.35*uFeetH[i];
+            float env = exp(-x/reach)*smoothstep(0.0, 0.25, x)*(0.6 + 0.06*min(uFeetH[i], 10.0))*uRip;
+            vec2 dir = off/max(d, 1e-3);
+            float slope = cos(ph)*env*0.55;
+            gradient += uM*vec3(dir.x*slope, 0.0, dir.y*slope)*12.5*0.25;
+            ripFoam = max(ripFoam, smoothstep(0.55, 0.95, sin(ph))*env*exp(-x/1.2)*0.6);
+          }
         }
         float raw_slope = length(gradient);
         vec3 capped = gradient*min(1.0, SLOPE_MAX/max(raw_slope, 1e-6));
@@ -489,7 +536,7 @@ function waterMaterial(U, vertexShader) {
         transmitted = mix(transmitted, AER_COL*water_lit, clamp(aer*0.85*uAerAmt, 0.0, 1.0));
         float crest = smoothstep(0.35, 0.60, height)*0.55;
         float slope = smoothstep(0.50, 1.20, raw_slope)*0.26;
-        float foam = clamp(max(crest, slope)*FOAM_INT, 0.0, 1.0);
+        float foam = clamp(max(crest, slope)*FOAM_INT + ripFoam, 0.0, 1.0);
         // ---- the fall's froth: water.wgsl dc0c5cb, line 806 on ----
         bool lipTop = vKind < 0.5 && vPath.z > -50.0 && uLip > 0.0;
         if (fallFace || lipTop) {
@@ -833,6 +880,21 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     wmat.uniforms.uFeet.value[i].copy(at); wmat.uniforms.uFeetH.value[i] = F.drop;
     return {at, h: F.N, D: F.H, sky: 0.9, flow: F.flow};
   });
+  // Flow arrows (mockup toggle): the pool's outward flow round each foot, the same field the water shader drifts
+  // its waves along, drawn on top. Arrow length is the speed, 1 m per m/s.
+  const arrows = new THREE.Group(); arrows.visible = false; arrows.renderOrder = 10; fx.add(arrows);
+  feet.forEach((f, i) => {
+    const H = FALLS[i].drop;
+    for (const rr of [1.8, 3.2, 4.8, 6.6]) for (let k = 0; k < 10; k++) {
+      const a = k / 10 * Math.PI * 2 + rr, x = f.at.x + Math.cos(a) * rr, z = f.at.z + Math.sin(a) * rr;
+      const [q, r] = hexAt(x, z), pl = poolAt(q, r);
+      if (pl === null || Math.abs(pl - f.at.y) > 0.3) continue;
+      const sp = (0.5 + 0.07 * Math.min(H, 10)) * Math.exp(-Math.max(rr - 1.25, 0) / (2.5 + 0.3 * H));
+      const arr = new THREE.ArrowHelper(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), new THREE.Vector3(x, f.at.y + 0.06, z), Math.max(0.35, sp * 1.6), 0xff6a2a, 0.22, 0.14);
+      arr.traverse(o => { if (o.material) { o.material.depthTest = false; o.material.transparent = true; o.renderOrder = 10; } });
+      arr.userData.sp = sp; arrows.add(arr);
+    }
+  });
   // The new sheet, sampled nearest with no mipmaps.
   const sheet = new THREE.TextureLoader().load(sheetUrl);
   sheet.magFilter = sheet.minFilter = THREE.NearestFilter; sheet.generateMipmaps = false;
@@ -844,7 +906,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
   const S = {variant: "new", night: false, running: true, gain: 2, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 0,
-    rule: "new", accel: 2, pixel: false};
+    rule: "new", accel: 2, pixel: false, rip: 1, out: 1, arrows: false};
   // The eye's pool (the cell under it, if it is a basin's), for the view from under the water.
   let eyePool = null;
   function murk(open) {
@@ -874,7 +936,8 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     leak.visible = v === "today"; front.visible = v !== "today";
     for (const b of bubbles) { b.visible = v === "new"; b.material.uniforms.uAmt.value = S.bubbles; }
     wmat.uniforms.uAer.value = v === "new" ? 1 : 0;
-    wmat.uniforms.uAerAmt.value = S.teal;
+    wmat.uniforms.uAerAmt.value = S.teal; wmat.uniforms.uRip.value = v === "new" ? S.rip : 0; wmat.uniforms.uOut.value = v === "new" ? S.out : 0;
+    if (arrows) arrows.visible = v === "new" && S.arrows;
     wmat.uniforms.uG.value = v === "new" ? ACCEL_G * S.accel : 0; wmat.uniforms.uVmax.value = ACCEL_VMAX;
     front.material.uniforms.uGain.value = S.gain; front.material.uniforms.uLamps.value = v === "new" ? 1 : 0;
     front.material.uniforms.uSoft.value = v === "new" ? S.soft : 0;
@@ -882,7 +945,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     const pix = v !== "new" || S.pixel;
     front.material.uniforms.uPix.value = pix ? 1 : 0; for (const b of bubbles) b.material.uniforms.uPix.value = pix ? 1 : 0;
     const filt = pix ? THREE.NearestFilter : THREE.LinearFilter;
-    if (sheet.magFilter !== filt) { sheet.magFilter = sheet.minFilter = filt; sheet.needsUpdate = true; }
+    if (sheet.magFilter !== filt) { sheet.magFilter = sheet.minFilter = filt; if (sheet.image) sheet.needsUpdate = true; }
     lighting();
   }
   function resize() {
