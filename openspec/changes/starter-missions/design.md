@@ -518,3 +518,8 @@ mission tree (`desktop/mission_tree.rs`) draws the same `tooltip` piece; the
 lasting fix is in the art (`tools/art/ui_panels_blend.py` `r_tooltip` and
 `r_oak_tooltip`, whose outside should render transparent), which needs
 Blender and waits for a request.
+
+The overview level (TS.3's level 0) showed bare frames; the owner on it:
+"bad, wheres the icons". Level 0 is now the tree of icons (52 px cards,
+each its mission's icon in a 32 px slot), and level 1 keeps the icon
+beside the title.

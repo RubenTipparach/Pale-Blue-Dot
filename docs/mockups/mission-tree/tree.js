@@ -260,11 +260,11 @@
   // virtualize them, so that way we still control how we want to zoom in"): the world is never
   // scaled, so a card's 9-slice frame (10 CSS px = 5 art px, the tooltip without its outer ring) is always 2 CSS px an art pixel. A
   // level is a designed view: the card's size and detail, the gaps and the type, all in whole
-  // (even) CSS pixels. 0 is the overview (frames only), 1 title and badge, 2 icon, title and badge,
+  // (even) CSS pixels. 0 is the overview (each card its icon), 1 icon, title and badge, 2 icon, title and badge,
   // 3 the full card packed close, 4 the native card, 5 and 6 bigger cards with bigger type.
   const LEVELS = [
-    { cw: 48, ch: 24, gx: 8, gy: 8, lanes: false },
-    { cw: 200, ch: 48, gx: 16, gy: 12, lanes: false },
+    { cw: 52, ch: 52, gx: 10, gy: 10, lanes: false },
+    { cw: 200, ch: 52, gx: 16, gy: 12, lanes: false },
     { cw: 236, ch: 72, gx: 24, gy: 16, lanes: false },
     { cw: 236, ch: 188, gx: 40, gy: 32, lanes: false },
     { cw: 236, ch: 188, gx: 110, gy: 104, lanes: true },
