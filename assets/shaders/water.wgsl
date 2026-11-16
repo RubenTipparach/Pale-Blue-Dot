@@ -90,8 +90,9 @@ struct WaterView {
     // The sea's table (`pbd::sea`), the same one the hulls float on.
     sea: SeaView,
     // x how far the sheet sits below sea level (`depth_offset_m`); y the
-    // surface of the inland water the eye is in, a body radius, nought for
-    // the sea (`ocean-environments` B17); z and w how far the drawing is
+    // surface of the water the eye is in or over, a body radius: an inland
+    // water's drawn top, else the sea's tided, swelling surface at the eye
+    // (`ocean-environments` B17, B18); z and w how far the drawing is
     // through the water's last tick, smoothstepped (the levels) and linear
     // (the fronts), both one when it is drawn as it is (`water_flow::WaterEase`).
     sea_frame: vec4<f32>,
@@ -558,9 +559,10 @@ const WATERLINE_EDGE_M: f32 = 0.1;
 // the composite stands in for it.
 const NEAR_SHEET_M: f32 = 0.3;
 
-// The surface of the water the eye is in, as a body radius: a river's or a
-// pool's where the eye is in inland water, the sea's sphere otherwise
-// (`ocean-environments` B17). Everything the underwater view measures, depth,
+// The surface of the water the eye is in or over, as a body radius: a
+// river's or a pool's drawn top where the eye is in inland water, the sea's
+// tided, swelling surface at the eye otherwise (`ocean-environments` B17,
+// B18). Everything the underwater view measures, depth,
 // the waterline, the sky's exit, is measured from it.
 fn eye_water_surface() -> f32 {
     return select(view.planet_center.w, view.sea_frame.y, view.sea_frame.y > 0.0);

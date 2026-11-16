@@ -113,7 +113,7 @@ fn surface_near(
 ) -> Option<f32> {
     let sea = pbd_app::planet::terrain_config().sea_level_m;
     let mut a = alt + 4.0;
-    while a > alt - 8.0 {
+    while a > alt - 40.0 {
         if let Some(Some(top)) = contact.column_water(direction * (PLANET_RADIUS + a)) {
             if (top - sea).abs() < 0.01 {
                 return Some(sheet);
@@ -163,6 +163,20 @@ pub fn drive(
     let ahead = (-east * yaw.cos() + north * yaw.sin()).normalize_or(east);
     let pitch = key.pitch.to_radians();
     let look = ahead * pitch.cos() + up * pitch.sin();
+    // `PBD_EYE_PATH_RELATIVE=1`: the altitudes are over the water surface
+    // under the eye (the ground where it is dry), so a path follows the
+    // water across a step.
+    let tide0 = sea.as_deref().map_or(0.0, |s| s.tide_at(up));
+    let sheet0 = -water.depth_offset_m + tide0;
+    let mut key = key;
+    if std::env::var("PBD_EYE_PATH_RELATIVE").is_ok_and(|v| v == "1")
+        && let Some(c) = contact.as_deref()
+    {
+        let ground = pbd_app::planet::surface_height(up);
+        let base = surface_near(c, fine.as_deref(), up, ground.max(sheet0) + 30.0, sheet0)
+            .map_or(ground, |s| s.max(ground.min(s)));
+        key.alt += base;
+    }
     let position = up * (PLANET_RADIUS + key.alt);
     for (mut transform, camera) in &mut cameras {
         if camera.is_active {

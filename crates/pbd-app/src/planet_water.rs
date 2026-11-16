@@ -139,8 +139,9 @@ pub(super) struct WaterView {
     /// The sea's table (`pbd::sea` in `sea.wgsl`), the one the hulls float on.
     sea: SeaView,
     /// x how far the sheet sits below sea level, m; y the surface of the
-    /// inland water the eye is in, a body radius, nought for the sea
-    /// (`inland_surface`); zw spare.
+    /// water the eye is in or over, a body radius: an inland water's drawn
+    /// top (`inland_surface`), else the sea's tided surface at the eye; zw
+    /// the water's easing between ticks.
     sea_frame: Vec4,
     /// The lens mist (`lens-weather`): seconds to mist over and to clear
     /// standing still, how much faster per m/s of airspeed, its strength.
@@ -416,9 +417,19 @@ pub fn publish_eye_water(
     frame: Res<PlanetRenderFrame>,
     contact: Option<Res<crate::planet::PlanetContact>>,
     fine: Option<Res<crate::planet::PlanetFine>>,
+    settings: Option<Res<WaterSettings>>,
     mut eye: ResMut<EyeWaterState>,
 ) {
-    let answer = eye_water(&cameras, &frame, contact.as_deref(), fine.as_deref());
+    let high_water = settings
+        .as_deref()
+        .map_or(0.0, |s| pbd_core::sea::tide_high_m(s.tide_range_m));
+    let answer = eye_water(
+        &cameras,
+        &frame,
+        contact.as_deref(),
+        fine.as_deref(),
+        high_water,
+    );
     if eye.0 != answer {
         eye.0 = answer;
     }
@@ -429,6 +440,7 @@ fn eye_water(
     frame: &PlanetRenderFrame,
     contact: Option<&crate::planet::PlanetContact>,
     fine: Option<&crate::planet::PlanetFine>,
+    high_water: f32,
 ) -> EyeWater {
     let (Some(contact), Some(fine)) = (contact, fine) else {
         return EyeWater::Unknown;
@@ -466,6 +478,24 @@ fn eye_water(
                 });
             EyeWater::Water {
                 surface_radius: terrain::PLANET_RADIUS + drawn.unwrap_or(surface),
+            }
+        }
+        // Open air over ground the high tide reaches: the sea's, at its mean;
+        // `submersion` adds the tide and the swell, so an eye under the
+        // tided sheet over a beach is under the sea there (the owner's
+        // "submerged at just the right height": one layer down at high
+        // water the column held only air, and the eye was dry under the
+        // sheet).
+        None if pbd_core::column::layer_at(altitude)
+            .is_some_and(|l| column.material(l) == pbd_core::terrain::Material::Air)
+            && column.open_to_sky(altitude)
+            && column.surface().is_none_or(|top| {
+                pbd_core::column::layer_altitude(top) + 1.0
+                    < terrain::terrain_config().sea_level_m + high_water
+            }) =>
+        {
+            EyeWater::Water {
+                surface_radius: terrain::PLANET_RADIUS + terrain::terrain_config().sea_level_m,
             }
         }
         // Rock reads as air: a camera inside a wall sees nothing, and what it
@@ -1371,15 +1401,14 @@ fn prepare_water_views(
             view.clip_from_world,
         );
         let sea_radius = terrain::PLANET_RADIUS - settings.depth_offset_m;
-        // The straddle band holds the sea's swell; inland water has none,
-        // so an eye a hand under a river's surface is under it, and the
-        // river's sheet is drawn from below (owner, 2026-11-16: "I dont see
-        // water surface above the player").
-        let band = if inland_surface(eye.0).is_some() {
-            settings.partial_band_m.min(INLAND_BAND_M)
-        } else {
-            settings.partial_band_m
-        };
+        // The straddle band about the surface (B18): the swell is in the
+        // surface the CPU measures (`camera_height` is the sea's own height
+        // at the eye, tide and waves), so no band is left to hold it. With
+        // one, an eye a hand under the surface was "straddling": the sheet
+        // over it was not drawn from below and the bank past the sheet's
+        // edge was seen dry and bright ("submerged at just the right
+        // height", "I dont see water surface above the player").
+        let band = settings.partial_band_m.min(INLAND_BAND_M);
         let state = submersion(camera, sea_radius, sea_now.camera_height, band, eye.0);
         let (mut was_under, mut emerge_until) = existing
             .as_ref()
@@ -1625,12 +1654,15 @@ fn prepare_water_views(
                 .map_or(camera, |gpu| gpu.prev_camera)
                 .extend(0.0),
             sea: SeaView::from(&sea_now.gpu),
-            // y the surface of the inland water the eye is in, nought for
-            // the sea (`ocean-environments` B17); z and w the water's easing
+            // y the surface of the water the eye is in or over (B17, B18);
+            // z and w the water's easing
             // between ticks, smoothstepped and linear (`water_flow::WaterEase`).
             sea_frame: Vec4::new(
                 s.depth_offset_m,
-                inland_surface(eye.0).unwrap_or(0.0),
+                // The sea's own surface over the eye is its tided, swelling
+                // one: the composite measured the sea from its mean, so the
+                // tide's water between was dry (a bright band at high water).
+                inland_surface(eye.0).unwrap_or(sea_radius + sea_now.camera_height),
                 ease.smooth,
                 ease.linear,
             ),
@@ -3061,5 +3093,258 @@ mod lens_wet_tests {
         }
         assert!(lens.wet > 0.94);
         assert!(lens.clock - start > 8.0);
+    }
+}
+
+/// `ocean-environments` B18 (owner, 2026-11-16: "there's two rivers: above
+/// sea level river and sea level river, both needs to merge", "we should also
+/// validate wherever they merge"): where two waters meet, sampled off the
+/// generator's own rivers on a real column tier. Along a line across each
+/// junction, every finest cell is read as the eye and the drawing read it:
+/// the sea's water (drawn by the sheet), inland water (its drawn top), or dry.
+/// What must hold everywhere: no cell draws two surfaces (the sea's sheet
+/// under an inland water's top), and the eye's decision follows the local
+/// water (the sea's sphere exactly where the water is the sea's, the drawn
+/// top elsewhere), so it never flips where the water does not. The steps and
+/// gaps along each line are printed for the report.
+#[cfg(test)]
+mod water_junction_tests {
+    use super::*;
+    use crate::planet::column::{DRY_SHEET_BIT, sea_layer};
+    use pbd_core::rivers;
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum Here {
+        Dry,
+        Sea(f32),
+        Inland(f32),
+    }
+
+    struct Line {
+        samples: Vec<Here>,
+        overlaps: usize,
+        flips: usize,
+    }
+
+    fn read_line(points: &[Vec3]) -> Line {
+        let anchor = points[points.len() / 2];
+        let set = std::sync::Arc::new(super::super::lod::generate_fine(
+            anchor,
+            &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
+        ));
+        let mut contact = crate::planet::PlanetContact::test_planet(5);
+        contact.set_fine(&set);
+        let sheet = terrain::terrain_config().sea_level_m - WaterSettings::default().depth_offset_m;
+        let sea = sea_layer();
+        let (mut samples, mut overlaps, mut flips) = (Vec::new(), 0, 0);
+        for &p in points {
+            let Some(record) = contact.finest_cell(p) else {
+                continue;
+            };
+            let (Some(column), Some(slot)) = (set.columns.column(record), set.columns.slot(record))
+            else {
+                continue;
+            };
+            let ground = column.surface().unwrap_or(0);
+            let top = (ground + 1..pbd_core::column::LAYERS)
+                .take_while(|&l| column.material(l).is_water())
+                .last();
+            let here = match top {
+                None => Here::Dry,
+                Some(t)
+                    if t + 1 == sea && column.material(t) == pbd_core::terrain::Material::Water =>
+                {
+                    Here::Sea(sheet)
+                }
+                Some(t) => Here::Inland(
+                    crate::water_flow::drawn_top_m(&set.columns, slot, t).unwrap_or(
+                        pbd_core::column::layer_altitude(t)
+                            + pbd_core::liquid::top_fraction(column.material(t)),
+                    ),
+                ),
+            };
+            // Two surfaces in one cell: the sea's sheet drawn under an inland
+            // top (the record under sea level, its sheet not marked dry).
+            let cell = &set.levels[3][record];
+            let sheet_drawn = cell.direction_height[3] < terrain::terrain_config().sea_level_m
+                && cell.spare[2] & DRY_SHEET_BIT == 0;
+            if sheet_drawn && matches!(here, Here::Inland(_)) {
+                overlaps += 1;
+            }
+            // The eye 0.3 m under the local water: the decision follows it.
+            if let Here::Inland(s) | Here::Sea(s) = here {
+                let water_top = match here {
+                    Here::Sea(_) => terrain::terrain_config().sea_level_m,
+                    _ => s,
+                };
+                let eye_alt = water_top - 0.3;
+                let eye = match column.water_surface(eye_alt) {
+                    Some(surface) => {
+                        let t = pbd_core::column::layer_at(surface - 1e-3);
+                        let drawn =
+                            t.and_then(|t| crate::water_flow::drawn_top_m(&set.columns, slot, t));
+                        EyeWater::Water {
+                            surface_radius: terrain::PLANET_RADIUS + drawn.unwrap_or(surface),
+                        }
+                    }
+                    None => EyeWater::Air,
+                };
+                let inland = inland_surface(eye).is_some();
+                if inland != matches!(here, Here::Inland(_)) {
+                    flips += 1;
+                }
+            }
+            samples.push(here);
+        }
+        Line {
+            samples,
+            overlaps,
+            flips,
+        }
+    }
+
+    /// The largest step between neighbouring wet samples, and the dry
+    /// samples between the first and the last wet one (a gap in the water).
+    fn steps_and_gaps(samples: &[Here]) -> (f32, usize) {
+        let level = |h: &Here| match h {
+            Here::Sea(s) | Here::Inland(s) => Some(*s),
+            Here::Dry => None,
+        };
+        let wet: Vec<usize> = (0..samples.len())
+            .filter(|&i| level(&samples[i]).is_some())
+            .collect();
+        let (Some(&first), Some(&last)) = (wet.first(), wet.last()) else {
+            return (0.0, 0);
+        };
+        let gaps = (first..=last)
+            .filter(|&i| level(&samples[i]).is_none())
+            .count();
+        let step = samples
+            .windows(2)
+            .filter_map(|w| Some((level(&w[0])? - level(&w[1])?).abs()))
+            .fold(0.0, f32::max);
+        (step, gaps)
+    }
+
+    fn line(a: Vec3, b: Vec3, beyond_m: f32) -> Vec<Vec3> {
+        let r = terrain::PLANET_RADIUS;
+        let dir = (b - a).normalize_or(Vec3::X);
+        let end = (b + dir * (beyond_m / r)).normalize();
+        let len_m = a.angle_between(end) * r;
+        let n = (len_m / 1.0).ceil().max(2.0) as usize;
+        (0..=n)
+            .map(|i| a.lerp(end, i as f32 / n as f32).normalize())
+            .collect()
+    }
+
+    #[test]
+    fn where_waters_meet_the_surfaces_join_and_the_eye_follows_them() {
+        let cfg = terrain::terrain_config();
+        let Some(settings) = cfg.rivers else {
+            return;
+        };
+        let map = rivers::map(cfg, &settings);
+        let nodes: Vec<usize> = map.rivers().collect();
+        let mut upstream: std::collections::HashMap<usize, Vec<usize>> = Default::default();
+        for &k in &nodes {
+            if let Some(d) = map.down(k) {
+                upstream.entry(d).or_default().push(k);
+            }
+        }
+        let centre = |k: usize| map.describe(k).0;
+        let spawn = Vec3::new(0.8776, 0.4794, 0.0).normalize();
+        let mut by_distance = nodes.clone();
+        by_distance.sort_by(|&a, &b| {
+            centre(a)
+                .angle_between(spawn)
+                .total_cmp(&centre(b).angle_between(spawn))
+                .then(a.cmp(&b))
+        });
+        // Mouths: the river's last cell, draining into a cell of the sea:
+        // the line runs from it down into the sea.
+        let is_river: std::collections::HashSet<usize> = nodes.iter().copied().collect();
+        let mouths: Vec<(usize, usize)> = by_distance
+            .iter()
+            .filter_map(|&k| Some((k, map.down(k)?)))
+            .filter(|&(_, d)| !is_river.contains(&d))
+            .take(5)
+            .collect();
+        // Tributaries: a cell two rivers drain into.
+        let tributaries: Vec<(usize, usize)> = by_distance
+            .iter()
+            .filter(|&&k| upstream.get(&k).is_some_and(|u| u.len() >= 2) && map.down(k).is_some())
+            .filter_map(|&k| Some((upstream[&k][1], k)))
+            .take(3)
+            .collect();
+        // Falls of three layers or more: into a river's pool, into the sea.
+        let falls: Vec<(usize, usize)> = by_distance
+            .iter()
+            .filter(|&&k| map.describe(k).2 >= 3)
+            .filter_map(|&k| Some((*upstream.get(&k)?.first()?, k)))
+            .take(3)
+            .collect();
+        let falls_to_sea = falls
+            .iter()
+            .filter(|&&(_, k)| map.down(k).is_some_and(|d| !is_river.contains(&d)))
+            .count();
+        let mut report = Vec::new();
+        let (mut overlaps, mut flips) = (0, 0);
+        for (kind, list) in [
+            ("mouth", &mouths),
+            ("tributary", &tributaries),
+            ("fall", &falls),
+        ] {
+            for &(up, k) in list.iter() {
+                let l = read_line(&line(centre(up), centre(k), 40.0));
+                let (step, gaps) = steps_and_gaps(&l.samples);
+                let sea = l
+                    .samples
+                    .iter()
+                    .filter(|h| matches!(h, Here::Sea(_)))
+                    .count();
+                let inland = l
+                    .samples
+                    .iter()
+                    .filter(|h| matches!(h, Here::Inland(_)))
+                    .count();
+                let ll = pbd_core::geo::lat_lon(centre(k)).degrees();
+                let lu = pbd_core::geo::lat_lon(centre(up)).degrees();
+                report.push(format!(
+                    "{kind} from {:.4} {:.4} at {:.4} {:.4}: {} samples, inland {inland}, sea {sea}, max step {step:.2} m, dry gaps {gaps}, double surfaces {}, eye flips {}",
+                    lu.0,
+                    lu.1,
+                    ll.0,
+                    ll.1,
+                    l.samples.len(),
+                    l.overlaps,
+                    l.flips
+                ));
+                overlaps += l.overlaps;
+                flips += l.flips;
+            }
+        }
+        report.push(format!(
+            "mouths {}, tributaries {}, falls {} ({falls_to_sea} into the sea)",
+            mouths.len(),
+            tributaries.len(),
+            falls.len()
+        ));
+        for line in &report {
+            eprintln!("JUNCTION {line}");
+        }
+        assert!(mouths.len() >= 5, "five mouths sampled");
+        assert_eq!(
+            overlaps,
+            0,
+            "no cell draws two surfaces:\n{}",
+            report.join("\n")
+        );
+        assert_eq!(
+            flips,
+            0,
+            "the eye follows the local water:\n{}",
+            report.join("\n")
+        );
     }
 }

@@ -1215,9 +1215,14 @@ pub const DRY_SHEET_BIT: u32 = 2;
 /// Mark or clear a record's [`DRY_SHEET_BIT`] from its column.
 pub fn mark_sheet(cell: &mut GpuCell, column: &Column) {
     let sea = sea_layer();
+    // Dry where the sea's layer holds no water; and where a river's water
+    // stands on over the sea's level (a mouth whose bed is under the sea):
+    // the river's own top is that cell's one surface, and the sheet under
+    // it was a second one inside the river's water (`ocean-environments`
+    // B18, the junction check).
     let dry = sea > 0
         && cell.direction_height[3] < terrain_config().sea_level_m
-        && !column.material(sea - 1).is_water();
+        && (!column.material(sea - 1).is_water() || column.material(sea).is_water());
     cell.spare[2] = (cell.spare[2] & !DRY_SHEET_BIT) | if dry { DRY_SHEET_BIT } else { 0 };
 }
 
