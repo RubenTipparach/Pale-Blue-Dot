@@ -153,6 +153,14 @@ pub struct Launch {
     /// photographed and the fishery's numbers logged. A capture instrument,
     /// like `--swim`: a headless run has no hand on the mouse.
     pub fish: bool,
+    /// `--cast`: aboard (`--aboard tube|raft|loon|rowboat`), take up the rod
+    /// and cast once from the seat, scripted as `--fish` casts on shore
+    /// (`small-boats` design 6). A capture instrument.
+    pub cast: bool,
+    /// `--load-hold`: aboard a raft, put twelve logs in its hold through the
+    /// pack's own move and save (`small-boats` design 5). A capture
+    /// instrument.
+    pub load_hold: bool,
     /// `--husbandry SCENE`: set a farm scene in front of the walker through
     /// the player's own paths (`wild`, `tame`, `pen` or `collect`), so the
     /// animals can be photographed (`animal-husbandry` S12). A capture
@@ -324,6 +332,10 @@ pub struct Launch {
     /// `--forge [metres]`: a forge that far ahead, stocked and given two jobs,
     /// the first part done; with `--forge-panel`, its panel open.
     pub forge: Option<f32>,
+    /// `--gather-around <metres>` (`gather-by-hand`, a capture instrument):
+    /// once the ground is in, every stone and shrub that near the player is
+    /// taken through the same path F takes one, so a still shows them gone.
+    pub gather_around: Option<f32>,
     pub forge_panel: bool,
     /// `--campfire [metres]` (`cooking` task 9.5, a capture instrument): a
     /// campfire that far ahead, stocked, flatbread done on it and a fish
@@ -388,7 +400,9 @@ pub struct Launch {
     /// as metres a screen pixel at the centre, `--map-overlay <name>` a
     /// weather overlay, `--map-layer <name>` a raster layer such as
     /// `biomes`, `--map-night` and `--map-clouds` those live layers, and
-    /// `--map-at <lat> <lon>` the centre in degrees (the player otherwise).
+    /// `--map-at <lat> <lon>` the centre in degrees (the player otherwise);
+    /// `--map-mark-east <metres>`, repeatable, adds a waypoint that far
+    /// from the player, the first due east (a capture instrument).
     pub map: map_screen::MapLaunch,
     /// `--showcase <name>` (`step-videos` 2.1, 5.1): a bot plays
     /// `assets/showcase/<name>.ron` toward its goal through the player's
@@ -440,6 +454,8 @@ impl Launch {
             swim: false,
             climb_out: false,
             fish: false,
+            cast: false,
+            load_hold: false,
             husbandry: None,
             life: None,
             aboard: None,
@@ -485,6 +501,7 @@ impl Launch {
             hold_pointer: false,
             farm_ripe: false,
             forge: None,
+            gather_around: None,
             forge_panel: false,
             bare: false,
             tier: pbd_core::inventory::Tier::Stone,
@@ -683,6 +700,15 @@ impl Launch {
                         result.forge = Some(metres);
                     }
                 }
+                "--gather-around" => {
+                    i += 1;
+                    result.gather_around = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .filter(|m: &f32| m.is_finite() && *m > 0.0)
+                            .expect("--gather-around requires metres"),
+                    );
+                }
                 "--farm-harvest" => result.farm_harvest = true,
                 "--hold-pointer" => result.hold_pointer = true,
                 "--farm-ripe" => result.farm_ripe = true,
@@ -868,6 +894,15 @@ impl Launch {
                     i += 1;
                     result.map.layer =
                         Some(args.get(i).expect("--map-layer requires a name").clone());
+                }
+                "--map-mark-east" => {
+                    i += 1;
+                    result.map.mark_east_m.push(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .filter(|m: &f32| m.is_finite() && *m > 0.0)
+                            .expect("--map-mark-east requires metres"),
+                    );
                 }
                 "--map-night" => result.map.night = true,
                 "--map-clouds" => result.map.clouds = true,
@@ -1114,6 +1149,8 @@ impl Launch {
                     result.walk = true;
                     result.fish = true;
                 }
+                "--cast" => result.cast = true,
+                "--load-hold" => result.load_hold = true,
                 "--life" => {
                     i += 1;
                     result.walk = true;
@@ -1137,7 +1174,7 @@ impl Launch {
                     let key = args.get(i).expect("--aboard requires a craft");
                     result.aboard = Some(
                         pbd_core::vehicle::Kind::from_key(key)
-                            .expect("--aboard knows tern, loon, cog and rowboat"),
+                            .expect("--aboard knows tern, loon, cog, rowboat, tube and raft"),
                     );
                     result.walk = true;
                 }
@@ -1539,6 +1576,7 @@ pub fn run(args: &[String]) {
     // husbandry plugin, and the screen's systems still run.
     .init_resource::<pbd_app::husbandry::BreedingPick>()
     .init_resource::<pack::PackHand>()
+    .init_resource::<pack::HoldView>()
     // Farming and the forge (`farming-and-smelting`).
     .init_resource::<farm::FarmNote>()
     .init_resource::<water::PourSources>()
@@ -1738,7 +1776,14 @@ pub fn run(args: &[String]) {
             scene::turn_stars,
             scene::follow_sun,
             (equipment::pick, slots::input, equipment::paint).chain(),
-            (pack::press, slots::update, pack::paint).chain(),
+            (
+                pack::find_hold,
+                pack::press,
+                slots::update,
+                pack::paint_hold,
+                pack::paint,
+            )
+                .chain(),
             guide::press,
             guide::paint,
             hud::near_field,
@@ -1802,6 +1847,7 @@ pub fn run(args: &[String]) {
             kitchen::scripted.after(farm::scripted),
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
+            farm::scripted_gather.after(digging::scripted_dig),
             craft::scripted.after(digging::scripted_dig),
             // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
             water::scripted
@@ -2004,6 +2050,15 @@ pub fn run(args: &[String]) {
         }
         if let Some(scene) = launch.husbandry.clone() {
             app.insert_resource(pbd_app::husbandry::HusbandryScript { scene });
+        }
+        if launch.cast {
+            app.add_systems(
+                PreUpdate,
+                cast_afloat_script.after(bevy::input::InputSystems),
+            );
+        }
+        if launch.load_hold {
+            app.add_systems(Update, load_hold_script.before(pack::find_hold));
         }
         if launch.fish {
             app.add_systems(
@@ -4005,6 +4060,89 @@ fn break_script(
         }
     } else {
         buttons.release(MouseButton::Left);
+    }
+}
+
+/// `--cast`: once aboard, the rod granted and taken up, the pointer held,
+/// and the left button held for a second from 60 frames after boarding, as
+/// `fish_script` does on shore; the line's phase logged every second.
+fn cast_afloat_script(
+    aboard: Res<pbd_app::vehicles::Aboard>,
+    mut buttons: ResMut<ButtonInput<MouseButton>>,
+    mut tools: ResMut<pbd_app::fish::ToolSlot>,
+    mut view: ResMut<pbd_app::vehicles::VehicleView>,
+    fishery: Option<Res<pbd_app::fish::Fishery>>,
+    mut frame: Local<u32>,
+) {
+    if aboard.0.is_none() {
+        return;
+    }
+    *frame += 1;
+    let _ = tools.0.grant(
+        pbd_core::inventory::Tool::Rod,
+        pbd_core::inventory::Tier::Stone,
+    );
+    tools.hold(pbd_core::inventory::Tool::Rod);
+    view.captured = true;
+    view.scripted = true;
+    match *frame {
+        60 => buttons.press(MouseButton::Left),
+        61..=119 => {}
+        120 => buttons.release(MouseButton::Left),
+        _ => {}
+    }
+    if frame.is_multiple_of(60)
+        && let Some(fishery) = fishery
+    {
+        info!(
+            "cast script frame {}: line {:?}, float at {:.1} m",
+            *frame,
+            fishery.line.phase,
+            fishery.line.float.length() - pbd_app::planet::PLANET_RADIUS
+        );
+    }
+}
+
+/// `--load-hold`: aboard a raft, twelve logs into the slots and then into
+/// its hold's first square, by the pack's own move and the one save line.
+fn load_hold_script(
+    aboard: Res<pbd_app::vehicles::Aboard>,
+    vehicles: Query<&pbd_app::vehicles::Vehicle>,
+    mut hotbar: ResMut<slots::Hotbar>,
+    mut save: ResMut<pbd_app::saves::WorldSave>,
+    mut done: Local<bool>,
+) {
+    if *done {
+        return;
+    }
+    let Some(craft) = aboard
+        .0
+        .and_then(|e| vehicles.get(e).ok())
+        .map(|v| &v.craft)
+    else {
+        return;
+    };
+    if craft.kind != pbd_core::vehicle::Kind::Raft {
+        return;
+    }
+    *done = true;
+    let mut slots = hotbar.0.clone();
+    let log = pbd_core::inventory::Item::Good(pbd_core::goods::Good::LOG);
+    slots.give(log, 12);
+    let mut hold = pbd_app::vehicles::hold::read(&save, craft.id);
+    let Some(from) =
+        (0..pbd_core::inventory::CARRIED).find(|&i| slots.get(i).is_some_and(|s| s.item == log))
+    else {
+        return;
+    };
+    pbd_core::vehicle::hold::send(
+        &mut slots,
+        &mut hold,
+        pbd_core::vehicle::hold::Place::Carried(from),
+    );
+    if pbd_app::vehicles::hold::store(&mut save, craft.id, &hold, &slots) {
+        hotbar.0 = slots;
+        info!("load-hold: twelve logs in the raft's hold");
     }
 }
 

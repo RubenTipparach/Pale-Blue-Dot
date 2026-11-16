@@ -217,7 +217,7 @@ pub struct HeldPlugin;
 impl Plugin for HeldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Swinging>()
-            .add_systems(Update, (spawn, hold, light_held, tint_held).chain());
+            .add_systems(Update, (spawn, carry, hold, light_held, tint_held).chain());
     }
 }
 
@@ -408,18 +408,64 @@ fn spawn(
     }
 }
 
+/// Whether the player sits in a paddled boat's seat view, where the tool in
+/// hand is shown on the vehicle camera (`small-boats` design 6).
+fn seated_afloat(
+    aboard: Option<&crate::vehicles::Aboard>,
+    view: Option<&crate::vehicles::view::VehicleView>,
+    vehicles: &Query<&crate::vehicles::Vehicle>,
+) -> bool {
+    view.is_some_and(|v| v.seat)
+        && aboard
+            .and_then(|a| a.0)
+            .and_then(|e| vehicles.get(e).ok())
+            .is_some_and(|v| v.craft.kind.paddled())
+}
+
+/// Hang the held tools on the camera in use: the vehicle camera in a
+/// paddled boat's seat, else the walking camera.
+fn carry(
+    mut commands: Commands,
+    aboard: Option<Res<crate::vehicles::Aboard>>,
+    view: Option<Res<crate::vehicles::view::VehicleView>>,
+    vehicles: Query<&crate::vehicles::Vehicle>,
+    walking: Query<Entity, With<WalkingCamera>>,
+    seat: Query<Entity, With<crate::vehicles::VehicleCamera>>,
+    held: Query<(Entity, &ChildOf), With<Held>>,
+) {
+    let afloat = seated_afloat(aboard.as_deref(), view.as_deref(), &vehicles);
+    let camera = if afloat {
+        seat.iter().next()
+    } else {
+        walking.iter().next()
+    };
+    let Some(camera) = camera else {
+        return;
+    };
+    for (entity, parent) in &held {
+        if parent.parent() != camera {
+            commands.entity(entity).insert(ChildOf(camera));
+        }
+    }
+}
+
 /// Show the tool in hand, sway it, and chop while a block is being broken.
+#[allow(clippy::too_many_arguments)]
 fn hold(
     settings: Res<HeldConfig>,
     tools: Res<ToolSlot>,
     walking: Option<Res<WalkingReadout>>,
+    aboard: Option<Res<crate::vehicles::Aboard>>,
+    view: Option<Res<crate::vehicles::view::VehicleView>>,
+    vehicles: Query<&crate::vehicles::Vehicle>,
     swinging: Res<Swinging>,
     time: Res<Time>,
     mut phase: Local<f32>,
     mut models: Query<(&Held, &mut Transform, &mut Visibility)>,
 ) {
     let s = &settings.0;
-    let on_foot = walking.is_some_and(|w| w.active);
+    let on_foot = walking.is_some_and(|w| w.active)
+        || seated_afloat(aboard.as_deref(), view.as_deref(), &vehicles);
     // The chop advances while breaking and snaps back when it stops, as
     // Tenebris's does; a tool changed mid-swing does not pop.
     *phase = if swinging.0 {

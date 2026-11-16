@@ -17,7 +17,7 @@ pub struct VehicleCamera;
 /// How far the look turns, rad.
 const PITCH_LIMIT: f32 = 1.45;
 /// The chase camera's stand-off, m, per craft, and its range.
-const CHASE_M: [f32; 4] = [16.0, 8.0, 34.0, 9.0];
+const CHASE_M: [f32; 6] = [16.0, 8.0, 34.0, 9.0, 5.0, 9.0];
 const CHASE_RANGE_M: [f32; 2] = [4.0, 80.0];
 /// How far one wheel line moves it, as a share.
 const ZOOM_STEP: f32 = 0.12;
@@ -28,6 +28,8 @@ pub(super) fn default_distance(kind: Kind) -> f32 {
         Kind::Loon => 1,
         Kind::Cog => 2,
         Kind::Rowboat => 3,
+        Kind::Tube => 4,
+        Kind::Raft => 5,
     }]
 }
 
@@ -37,6 +39,10 @@ pub struct VehicleView {
     /// In the seat, rather than the chase view.
     pub seat: bool,
     pub captured: bool,
+    /// A capture script holds the pointer: a headless window never has
+    /// focus, which would otherwise let the pointer go every frame (as
+    /// `WalkingState::scripted` does on foot).
+    pub scripted: bool,
     /// The look off the craft's bow, rad: about its up, then up from level.
     pub yaw: f32,
     pub pitch: f32,
@@ -49,6 +55,7 @@ impl Default for VehicleView {
         Self {
             seat: false,
             captured: false,
+            scripted: false,
             yaw: 0.0,
             pitch: -0.25,
             distance: 0.0,
@@ -98,7 +105,7 @@ pub fn look(
         view.captured = true;
     }
     if let Ok((window, mut cursor)) = windows.single_mut() {
-        if !window.focused {
+        if !window.focused && !view.scripted {
             view.captured = false;
         }
         cursor.visible = !view.captured;

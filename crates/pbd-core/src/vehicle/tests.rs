@@ -23,6 +23,8 @@ struct World {
     gravity: f64,
     current: DVec3,
     seconds: f64,
+    /// The tide: the moon's direction and the range (`sea::tide_m`).
+    tide: glam::Vec4,
 }
 
 impl World {
@@ -40,6 +42,7 @@ impl World {
             gravity: G,
             current: DVec3::ZERO,
             seconds: 1000.0,
+            tide: glam::Vec4::ZERO,
         }
     }
 
@@ -51,7 +54,7 @@ impl World {
             let env = Surroundings {
                 sea: &self.sea,
                 sea_state: self.sea.state(self.sea_wind, self.wind),
-                tide: glam::Vec4::ZERO,
+                tide: self.tide,
                 sea_radius: RADIUS,
                 depth: (RADIUS - self.ground).max(0.0) as f32,
                 air: AirHere {
@@ -1157,5 +1160,117 @@ fn print_an_open_boat_with_its_paddler() {
             );
         }
         println!("  floor {:?}", craft.floor());
+    }
+}
+
+/// The inner tube and the raft (`small-boats` 1.1): each floats upright,
+/// empty and with its paddler, its bottom under the sea and its top over it,
+/// and moves ahead under a forward stroke.
+#[test]
+fn a_tube_and_a_raft_float_upright_and_paddle_ahead() {
+    for (kind, bottom_y, top_y, least_m) in
+        [(Kind::Tube, -0.14, 0.2, 2.0), (Kind::Raft, -0.1, 0.2, 6.0)]
+    {
+        for occupied in [false, true] {
+            let mut craft = at_pole(kind, 0.0, 0.0);
+            craft.occupied = occupied;
+            craft.weigh();
+            let mut world = World::new(RADIUS - 40.0);
+            world.run(&mut craft, 30.0, |_| Input::default());
+            let up = craft.body.position.normalize();
+            let upright = craft.body.axis(DVec3::Y).dot(up);
+            let bottom = over_the_sea(&world, craft.reference_point([0.0, bottom_y, 0.0]));
+            let top = over_the_sea(&world, craft.reference_point([0.0, top_y, 0.0]));
+            println!(
+                "{}, occupied {occupied}: upright {upright:.4}, bottom {bottom:+.3} m, top {top:+.3} m, bilge {:.1} kg",
+                kind.name(),
+                craft.bilge_kg
+            );
+            assert!(
+                upright > 5f64.to_radians().cos(),
+                "{kind:?} heeled: {upright}"
+            );
+            assert!(
+                bottom < 0.0 && top > 0.05,
+                "{kind:?}: bottom {bottom}, top {top}"
+            );
+            assert!(craft.bilge_kg < 1.0, "{kind:?} took water");
+        }
+        let mut craft = at_pole(kind, 0.0, 0.0);
+        craft.occupied = true;
+        craft.weigh();
+        let mut world = World::new(RADIUS - 40.0);
+        world.run(&mut craft, 5.0, |_| Input::default());
+        let start = craft.body.position;
+        let ahead = craft.body.axis(FORWARD);
+        world.run(&mut craft, 30.0, |_| Input {
+            forward: 1.0,
+            ..Default::default()
+        });
+        let made = (craft.body.position - start).dot(ahead);
+        let speed = craft.body.velocity.dot(craft.body.axis(FORWARD));
+        println!(
+            "{} paddled 30 s: {made:.1} m ahead, {speed:.2} m/s",
+            kind.name()
+        );
+        assert!(made > least_m, "{kind:?}: {made} m, {speed} m/s");
+    }
+}
+
+/// A made boat's good names its kind, both ways, and only made kinds have one.
+#[test]
+fn a_boat_good_names_its_kind() {
+    for kind in [Kind::Tube, Kind::Raft, Kind::Rowboat] {
+        let code = kind.good_code().expect("a made kind");
+        assert_eq!(Kind::of_good_code(code), Some(kind));
+        assert!(
+            crate::goods::Good::by_code(code).is_some(),
+            "{code} is a good"
+        );
+    }
+    for kind in [Kind::Tern, Kind::Loon, Kind::Cog] {
+        assert_eq!(kind.good_code(), None);
+    }
+    assert!(Kind::Tube.paddled() && Kind::Raft.paddled() && !Kind::Tern.paddled());
+}
+
+/// At high water every boat floats on the tide (`small-boats`): with the moon
+/// overhead and a 1.2 m range the sea stands 0.8 m over its mean, and each
+/// open or decked boat rides up with it, its gunwale clear and its bilge dry.
+/// (Until the sea's reach counted the tide, every cell more than the waves'
+/// height over the mean was taken as dry, and boats sat on the mean and
+/// swamped under the tide.)
+#[test]
+fn every_boat_floats_on_the_tide() {
+    for kind in [Kind::Loon, Kind::Rowboat, Kind::Tube, Kind::Raft] {
+        // Put on the water where it stands, as a launch or a new world's
+        // placement puts it.
+        let high = f64::from(crate::sea::tide_m(
+            glam::Vec3::Y,
+            glam::Vec4::new(0.0, 1.0, 0.0, 1.2),
+        ));
+        let mut craft = at_pole(kind, high, 0.0);
+        craft.occupied = true;
+        craft.weigh();
+        let mut world = World::new(RADIUS - 40.0);
+        world.tide = glam::Vec4::new(0.0, 1.0, 0.0, 1.2);
+        world.run(&mut craft, 30.0, |_| Input::default());
+        let freeboard = match &craft.telemetry {
+            crate::vehicle::Telemetry::Loon(t) => t.freeboard,
+            _ => unreachable!(),
+        };
+        let lift = craft.reference_position().length() - RADIUS;
+        println!(
+            "{} at high water: lifted {lift:+.3} m, freeboard {freeboard:+.3} m, bilge {:.1} kg",
+            kind.name(),
+            craft.bilge_kg
+        );
+        assert!(lift > 0.4, "{kind:?} did not rise with the tide: {lift}");
+        assert!(freeboard > 0.05, "{kind:?} under the tide: {freeboard}");
+        assert!(
+            craft.bilge_kg < 5.0,
+            "{kind:?} took water: {}",
+            craft.bilge_kg
+        );
     }
 }

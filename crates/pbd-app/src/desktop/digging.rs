@@ -191,8 +191,9 @@ pub enum Hands {
     Swap(Item),
     /// A dig that also turns up finds into the hands, on the same line: a
     /// seed out of dug grass (`farming-and-smelting` decision 14), fibre out
-    /// of grass and loose stone out of earth (`tool-crafting` decision 2).
-    TakeFinds([Option<Item>; 2]),
+    /// of grass and loose stone out of earth (`tool-crafting` decision 2),
+    /// bait out of wet ground at the shore (`starter-missions` G1).
+    TakeFinds([Option<Item>; 3]),
 }
 
 /// What a dug block yields (`farming-and-smelting` decisions 2 and 10):
@@ -634,10 +635,20 @@ pub fn dig_and_place(
                 .any(|&(l, e)| usize::from(l) == layer && e == m)
         });
         let find = was.and_then(|m| gather.0.find(m, cell, layer as u16, placed));
-        let hands = if seed.is_none() && find.is_none() {
+        // Bait worms out of wet ground at the shore (`starter-missions` G1).
+        let bait = was.and_then(|m| {
+            gather
+                .0
+                .bait(m, cell, layer as u16, placed, column::layer_altitude(layer))
+        });
+        let hands = if seed.is_none() && find.is_none() && bait.is_none() {
             Hands::Take
         } else {
-            Hands::TakeFinds([seed.map(Item::Good), find.map(Item::Good)])
+            Hands::TakeFinds([
+                seed.map(Item::Good),
+                find.map(Item::Good),
+                bait.map(Item::Good),
+            ])
         };
         if let Some(taken) = apply_edit(
             &mut Edited {
@@ -653,7 +664,7 @@ pub fn dig_and_place(
             layer,
             Material::Air,
         ) {
-            for good in [seed, find].into_iter().flatten() {
+            for good in [seed, find, bait].into_iter().flatten() {
                 gained.write(pbd_app::hotbar::Gained {
                     item: Item::Good(good),
                     count: 1,

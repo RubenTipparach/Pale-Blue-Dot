@@ -339,6 +339,10 @@ impl Plugin for PlanetPlugin {
         .add_plugins(ExtractResourcePlugin::<crate::trees_taken::TreesTaken>::default())
         .init_resource::<crate::trees_taken::TreesTaken>()
         .add_systems(Update, crate::trees_taken::refresh)
+        // And what a hand took from the ground clutter (`gather-by-hand`).
+        .add_plugins(ExtractResourcePlugin::<crate::clutter::ClutterTaken>::default())
+        .init_resource::<crate::clutter::ClutterTaken>()
+        .add_systems(Update, crate::clutter::refresh)
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
         .init_resource::<lod::DuskRelight>()
@@ -840,6 +844,9 @@ struct PlanetParams {
     // (`trees_taken::TreesTaken`).
     felled: [UVec4; crate::trees_taken::FELLED / 4],
     picked: [UVec4; crate::trees_taken::PICKED / 4],
+    // `gather-by-hand`: the cells with a piece a hand took, two a lane, each
+    // its clutter id and a sink byte a piece (`clutter::ClutterTaken`).
+    clutter_taken: [UVec4; crate::clutter::TAKEN_CELLS / 2],
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1787,6 +1794,8 @@ pub(crate) struct Tunables<'w> {
     sea_now: Option<Res<'w, crate::sea::SeaNow>>,
     /// The trees felled and picked near the camera (`flora-v2` 12.5).
     taken: Option<Res<'w, crate::trees_taken::TreesTaken>>,
+    /// The ground clutter taken near the camera (`gather-by-hand`).
+    clutter_taken: Option<Res<'w, crate::clutter::ClutterTaken>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1849,6 +1858,11 @@ fn prepare_views(
             .taken
             .as_deref()
             .map(crate::trees_taken::TreesTaken::packed)
+            .unwrap_or_default();
+        let clutter_taken = tunables
+            .clutter_taken
+            .as_deref()
+            .map(crate::clutter::ClutterTaken::packed)
             .unwrap_or_default();
         let lod = &planet.lod;
         let landing = planet.lod_prev.map(|(_, landed)| landed);
@@ -2130,6 +2144,7 @@ fn prepare_views(
             night_lights,
             felled,
             picked,
+            clutter_taken,
             // w: there is a history to read, so not while the capture is off,
             // nor the frame it comes back on (REFLECTIONS raised from OFF):
             // the history is then of a frame from before (`reflection-quality`
