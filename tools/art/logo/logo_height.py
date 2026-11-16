@@ -43,6 +43,7 @@ MOON = (1600, 1590, 118)                 # cx, cy, radius
 MOON_SOCKET = 150
 
 rng = np.random.default_rng(7)
+PLACED = []   # where each frieze scene was etched, for the key
 YY, XX = np.mgrid[0:H, 0:W].astype(np.float32)
 
 
@@ -461,6 +462,7 @@ def carved_border(points, inset, d0, d1, seed, scroll_edges=None, frieze_edges=N
                 x = r0 + gap
                 for n, z, wd in zip(seq, sizes, widths):
                     glyphs(fdr, x, yb + z * 0.18, z, n, fw)
+                    PLACED.append({"name": n, "x": x + wd / 2, "y": yb})
                     x += wd + gap
             continue
         if scroll_edges is not None and ei not in scroll_edges:
@@ -557,12 +559,12 @@ def main(out):
     # the letters stand well proud (owner: "make text pop out more so theres more dramatic shadows")
     letters, _ = text_mask("PALE BLUE", 370, (tx0 + tx1) / 2, tmid + 20, spacing=0.03)
     letters &= t_mask
-    h += raised(letters, 0.55, 9.0, 30)
+    h += raised(letters, 0.55, 9.0, 0)
     mcx, mcy, mr = MOON
     dl, _ = text_mask("D", 380, mcx - MOON_SOCKET - 150, dmid + 8)
     tl, _ = text_mask("T", 380, mcx + MOON_SOCKET + 140, dmid + 8)
     dot_letters = (dl | tl) & t_mask
-    h += raised(dot_letters, 0.55, 9.0, 30)
+    h += raised(dot_letters, 0.55, 9.0, 0)
     rr = np.hypot(XX - mcx, YY - mcy)
     lip = np.exp(-((rr - MOON_SOCKET) / 14.0) ** 2) * 0.10
     cup = np.where(rr < MOON_SOCKET, -0.22 * np.sqrt(np.clip(1 - (rr / MOON_SOCKET) ** 2, 0, 1)) - 0.06, 0)
@@ -645,6 +647,9 @@ def main(out):
 
     # what the materials need: carved (letters), glyphs, cavity (for dirt in the cuts), lichen
     cavity = np.clip((ndimage.gaussian_filter(h, 6) - h) * 8, 0, 1)
+    # no dark ring at the letters' feet (owner: "why is there a dark edge around the text so much?"):
+    # their cast shadow is the edge
+    cavity *= ~ndimage.binary_dilation(letters | dot_letters, iterations=40)
     lichen = np.clip((fbm(60, 4, 51) - 0.70) * 5, 0, 1) * np.clip((rough - 0.45) * 4, 0, 1) * (~(letters | dot_letters))
     np.savez_compressed(os.path.join(out, "field.npz"), h=h.astype(np.float32), mask=mask,
                         letters=(letters | dot_letters), glyphs=glyph_mask, paint=paint, ticks=tick_mask & e_mask, cavity=cavity.astype(np.float32),
@@ -654,6 +659,10 @@ def main(out):
     shade = np.clip(0.55 + (-gx * 0.7 - gy * 0.7) / np.sqrt(1 + gx * gx + gy * gy) * 0.6, 0, 1)
     img = (shade * 255 * mask + 30 * ~mask).astype(np.uint8)
     Image.fromarray(img).resize((W // 2, H // 2), Image.LANCZOS).save(os.path.join(out, "preview.png"))
+    import json
+    PLACED.append({"name": "elevator", "x": EMBLEM[0], "y": EMBLEM[1] + EMBLEM[2] + 220})
+    with open(os.path.join(out, "glyphs.json"), "w") as fh:
+        json.dump(PLACED, fh)
     print("field written", h.min(), h.max())
 
 

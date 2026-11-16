@@ -22,3 +22,7 @@ game's night blue.
 
 Fonts: Young Serif (SIL Open Font License), read from the system's canvas-fonts folder at build
 time and not committed here. The planet is the game's own render.
+
+The key (`docs/logo/pale-blue-dot-logo-key.jpg`), every etched scene numbered and the story under it:
+
+    python3 tools/art/logo/logo_key.py out/logo.png out/glyphs.json docs/logo/pale-blue-dot-logo-key.jpg
