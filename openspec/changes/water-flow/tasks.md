@@ -61,6 +61,17 @@
 - [ ] 6.4 M31 Splash tab: fall foot, entry, cast, fish, wake, beside today's
       spray; the owner's approval before game code.
 
+- [ ] 6.5 (Mockup built 2026-11-16: `docs/mockups/waterfall-mist.html`,
+      screenshots in `docs/screenshots/waterfall-mist/`; waiting for the
+      owner.) Mist puffs after Crab Breeze's smoke puffs and bubbles under
+      the water at a fall's foot (design "Mist puffs and bubbles, in a
+      mockup first"), shown beside today's look and the order fix; the
+      owner's approval before game code.
+- [ ] 6.6 In the game, once 6.5 is approved: the puff sheet in the splash
+      pass, the bubbles on the GPU in the water's pass, the aerated colour
+      in the water's fragment. Verify: captures above, beside and under a
+      fall; a launch to READY with no LATE_PIPELINE.
+
 ## 7. Rain rings that alias (design "Rain rings that alias"; owner, 2026-11-16)
 
 - [x] 7.1 (Built: the rings fade by footprint and end at `rain_detail_reach_m`; river 30.2 to 20.8 (dry 19.0), the beach's far water 42.3 to 24.8 with the near rings kept; the falls' froth not touched.) The water's rain rings fade with their footprint. Verify: the valley's river in rain from 25 m and from the bank, before and after, with the speckle measure (`hf.py`) against the dry frame; the falls' froth unchanged.
