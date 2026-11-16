@@ -433,3 +433,37 @@ What moved, so the real needs still hold:
 groups used today (cooking on fishing and `harvest`) are replaced by this
 placement plus `after` gates.
 
+### Zoom by whole pixels; converging links as an option (owner, 2026-11-16)
+
+The owner sent two pictures: the tab's card frame tearing at its corner
+(`docs/screenshots/mockup-mission-tree/owner/nine-slice-seam.png`), and a
+reference tree with hex nodes joined by chevron links
+(`.../owner/reference-converging-tree.webp`). Their words: *"an idea if you
+want a node to have multiple parents. Also lets make zoom in integers so that
+we dont have 9 slice seems - or virtualize the zooms"*.
+
+**Zoom.** Today the tab scales the whole tree by any factor (`UiTransform`,
+x1.2 a wheel step, 0.2 to 2.0), so a 9-slice frame lands between screen
+pixels and its slices pull apart. Instead:
+- **Cards only at whole-pixel scales.** A card's art is drawn only at a
+  scale where one art pixel is a whole number of screen pixels:
+  `UiScale x zoom` is an integer, so `zoom = k / UiScale` for k = 1, 2, 3....
+- **Below 1:1, zoom is virtual.** The cards keep their 1:1 size, and
+  zooming out shrinks the spacing between them (and so the canvas). At the
+  farthest steps a card shows only its icon and title. Zooming in uses the
+  integer scales above.
+- **The pan snaps to whole screen pixels.**
+- **The wheel steps through the levels.** F fits to the largest level
+  that shows the whole tree.
+- **The mockup does the same,** in CSS pixels times the device pixel ratio.
+
+**Converging links (an option, not built).** The approved tree has one
+parent per mission. If a node is ever to have more than one parent, the
+reference shows how it can read clearly:
+- links are directed: chevrons point from parent to child;
+- several links can flow into one node, like streams joining;
+- the node opens when all of its parents are done.
+
+This stays a proposal until the owner asks for it. The strict tree remains
+the approved design.
+
