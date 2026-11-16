@@ -6,6 +6,7 @@ mod craft;
 mod digging;
 mod drops_view;
 mod equipment;
+mod eye_path;
 mod farm;
 mod forge;
 mod frame_graph;
@@ -20,6 +21,7 @@ mod mission_tree;
 mod missions;
 mod overlay_ui;
 mod pack;
+mod repro;
 mod scene;
 mod showcase;
 mod slots;
@@ -141,6 +143,11 @@ pub struct Launch {
     /// Walk mode, placed at the shoreline and holding forward, so a capture can
     /// photograph the water being entered. A walker with no input never moves.
     pub swim: bool,
+    /// `--climb-out`: put the walker in the sea a tile off a bank one or two
+    /// layers over the water, facing it, and hold forward once the column
+    /// tier is under it, so a capture can photograph the climb out of the
+    /// water (`swimming` 4). A capture instrument.
+    pub climb_out: bool,
     /// `--fish`: stand on a warm shore facing the sea with the rod, and cast
     /// once, scripted, so the float, the line and the schools can be
     /// photographed and the fishery's numbers logged. A capture instrument,
@@ -268,6 +275,16 @@ pub struct Launch {
     pub pour_ahead: f32,
     /// `--pit DEPTH`: dig a pit that deep two cells short of the pour.
     pub pit: u32,
+    /// `--pour-for SECONDS`: a measurement instrument (`water-flow` 5.3,
+    /// `perf_suite.py`'s `pour`). The `--pour`/`--pit` script runs in real
+    /// time without a capture, then the poured sources are stopped and
+    /// started again in turn so water flows, falls and dries the whole
+    /// while; logs `POUR_START` and `POUR_DONE` and quits after that long.
+    pub pour_for: Option<f32>,
+    /// `--water-tick-frac F` (0..1): the water drawn F of the way through the
+    /// last of `--water-ticks`, and held there: the rule does not tick on
+    /// its own, so a capture shows smooth water mid-tick (`water-flow` 5.3).
+    pub water_tick_frac: Option<f32>,
     /// `--tide high|low`: the tide's moon over the camera or a quarter turn
     /// round (`ocean-environments` 5.1), for the tide's captures.
     pub tide: Option<String>,
@@ -388,6 +405,10 @@ pub struct Launch {
     /// `--showcase-from N`: start at shot N, a development aid with a
     /// `--world` that already holds the shots before it.
     pub showcase_from: usize,
+    /// `--generator <v>` (`repro-capture`): the terrain generator a run with
+    /// no `--world` is made by, so a repro of an older world stands on its
+    /// own ground. Refused with `--world`, whose generator is its own.
+    pub generator: Option<u32>,
 }
 
 impl Launch {
@@ -423,6 +444,7 @@ impl Launch {
             fly: false,
             walk: false,
             swim: false,
+            climb_out: false,
             fish: false,
             husbandry: None,
             life: None,
@@ -451,11 +473,14 @@ impl Launch {
             showcase: None,
             showcase_stills: None,
             showcase_from: 1,
+            generator: None,
             torch: false,
             pour: 0,
             water_ticks: 0,
             pour_ahead: 0.0,
             pit: 0,
+            pour_for: None,
+            water_tick_frac: None,
             tide: None,
             arrows: false,
             lamps: false,
@@ -598,6 +623,30 @@ impl Launch {
                         .and_then(|n| n.parse().ok())
                         .expect("--pit requires a depth");
                 }
+                "--pour-for" => {
+                    i += 1;
+                    let seconds: f32 = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--pour-for requires seconds");
+                    assert!(
+                        seconds.is_finite() && seconds > 0.0,
+                        "--pour-for takes seconds"
+                    );
+                    result.pour_for = Some(seconds);
+                }
+                "--water-tick-frac" => {
+                    i += 1;
+                    let frac: f32 = args
+                        .get(i)
+                        .and_then(|n| n.parse().ok())
+                        .expect("--water-tick-frac requires a fraction");
+                    assert!(
+                        (0.0..=1.0).contains(&frac),
+                        "--water-tick-frac takes 0 to 1"
+                    );
+                    result.water_tick_frac = Some(frac);
+                }
                 "--pour-ahead" => {
                     i += 1;
                     result.pour_ahead = args
@@ -737,6 +786,14 @@ impl Launch {
                         .and_then(|d| d.parse().ok())
                         .expect("--day requires a day number");
                     result.day = Some(day);
+                }
+                "--generator" => {
+                    i += 1;
+                    result.generator = Some(
+                        args.get(i)
+                            .and_then(|v| v.parse().ok())
+                            .expect("--generator requires a version number"),
+                    );
                 }
                 "--world" => {
                     i += 1;
@@ -970,12 +1027,10 @@ impl Launch {
                 }
                 "--grass" => {
                     i += 1;
-                    let look = args.get(i).expect("--grass requires tufts or blades");
-                    result.settings.pixel_grass = Some(match look.as_str() {
-                        "tufts" => true,
-                        "blades" => false,
-                        _ => panic!("--grass takes tufts or blades"),
-                    });
+                    // Tufts are the only grass (owner, 2026-11-16); the flag
+                    // stays so old capture recipes still run.
+                    let look = args.get(i).expect("--grass requires tufts");
+                    assert!(look == "tufts", "--grass takes tufts: the blades are gone");
                 }
                 "--upscale" => {
                     i += 1;
@@ -1075,6 +1130,10 @@ impl Launch {
                 "--swim" => {
                     result.walk = true;
                     result.swim = true;
+                }
+                "--climb-out" => {
+                    result.walk = true;
+                    result.climb_out = true;
                 }
                 "--fish" => {
                     result.walk = true;
@@ -1239,6 +1298,10 @@ impl Launch {
             i += 1;
         }
         assert!(
+            result.generator.is_none() || result.world.is_none() && result.load.is_none(),
+            "--generator is for a run with no --world: a world keeps its own generator"
+        );
+        assert!(
             !(result.walk && (result.fly || result.tour)),
             "--walk cannot be combined with --fly or --tour"
         );
@@ -1297,7 +1360,7 @@ impl Launch {
 
 #[derive(Resource)]
 struct CaptureState {
-    frame: u32,
+    pub(crate) frame: u32,
     requested: bool,
     saved: bool,
     finish_frame: u32,
@@ -1338,6 +1401,9 @@ pub fn run(args: &[String]) {
     // anchored. Restoring the pose afterwards would build the world around the
     // spawn and then teleport away from it.
     let mut world = open_world(&launch);
+    if let Some(version) = launch.generator {
+        world.identity.generator = version;
+    }
     // The planet is made by the generator the world was made by (an old
     // world keeps its biomes, survey B3), chosen here, before anything builds
     // it (`bigger-biomes` decision 6). The logger is not up yet.
@@ -1376,7 +1442,7 @@ pub fn run(args: &[String]) {
     app.add_plugins(
         DefaultPlugins
             .set(AssetPlugin {
-                file_path: concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets").into(),
+                file_path: pbd_app::paths::assets_dir().to_string_lossy().into_owned(),
                 ..default()
             })
             .set(ImagePlugin::default_nearest())
@@ -1500,6 +1566,7 @@ pub fn run(args: &[String]) {
     .init_resource::<pack::PackHand>()
     // Farming and the forge (`farming-and-smelting`).
     .init_resource::<farm::FarmNote>()
+    .init_resource::<water::PourSources>()
     .init_resource::<farm::StationAt>()
     .init_resource::<craft::CraftPick>()
     .add_message::<pbd_app::hotbar::Gained>()
@@ -1655,7 +1722,22 @@ pub fn run(args: &[String]) {
         )
             .chain()
             .after(bevy::input::InputSystems)
+            .after(pbd_app::controls::remap_keys)
+            .after(repro::read_key),
+    )
+    // The repro key (`repro-capture`): read before the menus and every F
+    // reader, saved in an exclusive system that sees the whole world.
+    .init_resource::<repro::Asked>()
+    .add_systems(
+        PreUpdate,
+        repro::read_key
+            .after(bevy::input::InputSystems)
             .after(pbd_app::controls::remap_keys),
+    )
+    .add_systems(Update, repro::save)
+    .add_systems(
+        First,
+        (repro::scripted_press, repro::scripted_keys).run_if(resource_exists::<CaptureState>),
     )
     .add_systems(Update, (breeding::press, breeding::paint).chain())
     .add_systems(
@@ -1753,12 +1835,34 @@ pub fn run(args: &[String]) {
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
                 .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
                 .run_if(resource_exists::<pbd_app::drops::Drops>),
+            water::pour_cycle
+                .after(water::scripted)
+                .run_if(|launch: Res<Launch>| launch.pour_for.is_some())
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
+                .run_if(resource_exists::<pbd_app::drops::Drops>),
             water::keys
                 .after(digging::dig_and_place)
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
                 .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
                 .run_if(resource_exists::<pbd_app::drops::Drops>),
         ),
+    )
+    // MEASUREMENT: `PBD_EYE_PATH`, the waterline videos' camera (`eye_path`).
+    .add_systems(Startup, eye_path::setup)
+    .add_systems(
+        PostUpdate,
+        eye_path::drive
+            .after(pbd_app::flight_view::follow_flight_camera)
+            .before(bevy::transform::TransformSystems::Propagate)
+            .run_if(resource_exists::<eye_path::EyePathNow>),
+    )
+    .add_systems(
+        PostUpdate,
+        eye_path::label
+            .after(eye_path::drive)
+            .before(bevy::ui::UiSystems::Layout)
+            .run_if(resource_exists::<eye_path::EyePathNow>),
     )
     .add_systems(
         Update,
@@ -2005,6 +2109,9 @@ pub fn run(args: &[String]) {
             // one unconditionally panics the first frame.
             app.add_systems(PreUpdate, swim_script.after(bevy::input::InputSystems));
         }
+        if launch.climb_out {
+            app.add_systems(PreUpdate, climb_out_script.after(bevy::input::InputSystems));
+        }
     }
     if launch.fixed || (launch.capture.is_some() && !launch.real_time) {
         app.insert_resource(TimeUpdateStrategy::ManualDuration(step));
@@ -2073,7 +2180,7 @@ pub fn run(args: &[String]) {
 /// then saves it poisons the world for every later run. A capture that means
 /// to write says which world.
 fn open_world(launch: &Launch) -> WorldSave {
-    let root = std::path::PathBuf::from(saves::ROOT);
+    let root = pbd_app::paths::saves_dir();
     // The world's seed, which every generator version shares. Not read off
     // `terrain_config()`, which would fix this run's generator before the
     // world that chooses it is open.
@@ -2157,7 +2264,7 @@ fn load_on_cue(
     if let Some(name) = launch.new_world.as_deref() {
         *asked = true;
         let seed = pbd_core::planet_gen::TerrainConfig::TENEBRIS.seed;
-        match saves::create(std::path::Path::new(saves::ROOT), name, seed) {
+        match saves::create(&pbd_app::paths::saves_dir(), name, seed) {
             Ok(slot) => {
                 info!(
                     "--new-world: made '{name}' ({}) at frame {}",
@@ -2174,7 +2281,7 @@ fn load_on_cue(
     };
     *asked = true;
     let id = saves::slot_id(name);
-    match saves::list(std::path::Path::new(saves::ROOT))
+    match saves::list(&pbd_app::paths::saves_dir())
         .into_iter()
         .find(|slot| slot.id == id || slot.file.name == name)
     {
@@ -3736,6 +3843,153 @@ fn swim_script(
     if launch.swim {
         keys.press(KeyCode::KeyW);
     }
+}
+
+/// The frames after the go `--climb-out` photographs: the swim up to the
+/// bank, the rise, the step onto it and standing on it.
+const CLIMB_SHOTS: [u32; 6] = [2, 30, 38, 44, 52, 75];
+
+/// Where `--climb-out` swims from: along the parallels from 10 to 80
+/// degrees, a tile at a time, the first sea cell three layers deep (else
+/// two) whose next cell east is a bank one or two layers over sea level
+/// (else level with it), with deep water a tile further out. The
+/// swimmer's start (the sea cell) and the bank, as directions.
+fn climb_out_site() -> Option<(Vec3, Vec3)> {
+    let step = tile_width_m(FINEST_LEVEL) / PLANET_RADIUS;
+    for (deep, banks) in [(-3.0, 1.0..=2.0), (-2.0, 1.0..=2.0), (-2.0, 0.0..=2.0)] {
+        if let Some(site) = climb_out_site_with(step, deep, banks) {
+            return Some(site);
+        }
+    }
+    None
+}
+
+fn climb_out_site_with(
+    step: f32,
+    deep: f32,
+    banks: std::ops::RangeInclusive<f32>,
+) -> Option<(Vec3, Vec3)> {
+    for lat in (10..=80).step_by(2) {
+        let lat = (lat as f32).to_radians();
+        let at = |lon: f32| Vec3::new(lat.cos() * lon.cos(), lat.sin(), lat.cos() * lon.sin());
+        let mut lon = 0.0_f32;
+        while lon < std::f32::consts::TAU {
+            let (out, sea, bank) = (at(lon - step), at(lon), at(lon + step));
+            if surface_height(out) <= -3.0
+                && surface_height(sea) <= deep
+                && banks.contains(&surface_height(bank))
+            {
+                return Some((sea, bank));
+            }
+            lon += step / lat.cos().max(0.2);
+        }
+    }
+    None
+}
+
+/// The scripted climb out of the water (`swimming` 4): the walker is held in
+/// the sea at [`climb_out_site`], its feet a metre under the sheet and facing
+/// the bank, until the column tier is under it, and then holds forward and
+/// nothing else. It logs `CLIMB_GO <frame>` when it lets go, and each frame
+/// after `CLIMB <frame> <feet over the datum> <metres from the bank's centre>`.
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+fn climb_out_script(
+    mut commands: Commands,
+    launch: Res<Launch>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+    mut state: ResMut<pbd_app::walking::WalkingState>,
+    mut coarse_site: Local<Option<Option<(Vec3, Vec3)>>>,
+    mut site: Local<Option<(Vec3, Vec3)>>,
+    mut go: Local<Option<u32>>,
+    mut frame: Local<u32>,
+    terrain: Res<pbd_app::planet::PlanetContact>,
+    mut walkers: Query<
+        (
+            &mut Position,
+            &mut LinearVelocity,
+            &mut pbd_app::walking::GroundState,
+            &mut Transform,
+        ),
+        With<pbd_app::walking::Walker>,
+    >,
+) {
+    if !state.active {
+        return;
+    }
+    *frame += 1;
+    let Some((coarse, _)) = *coarse_site.get_or_insert_with(|| {
+        let found = climb_out_site();
+        if found.is_none() {
+            warn!("CLIMB_SITE none");
+        }
+        found
+    }) else {
+        return;
+    };
+    let Ok((mut position, mut velocity, mut ground, mut transform)) = walkers.single_mut() else {
+        return;
+    };
+    // Held at the coarse site until the column tier is under it, then at the
+    // nearest bank the tier itself has, one or two layers over the water.
+    if site.is_none() && terrain.finest_cell(coarse).is_some() {
+        *site = terrain
+            .bank_near(coarse, 120.0, 3.0, 1.0..=2.0)
+            .or_else(|| terrain.bank_near(coarse, 120.0, 2.0, 1.0..=2.0));
+        match *site {
+            Some((water, _)) => {
+                info!("CLIMB_SITE {water}");
+                *go = Some(*frame + 60);
+            }
+            None => warn!("CLIMB_SITE no bank on the tier"),
+        }
+    }
+    let (out, bank) = site.unwrap_or((coarse, coarse));
+    if go.is_none_or(|g| *frame < g) {
+        let sheet = PLANET_RADIUS - 0.5;
+        // Half a tile further out than the water cell's centre, so the
+        // first shots see the bank whole.
+        let from = if site.is_some() {
+            (out + (out - bank) * 0.5).normalize()
+        } else {
+            out
+        };
+        let start = from * (sheet - 1.0 + pbd_app::walking::HALF_HEIGHT);
+        position.0 = start;
+        transform.translation = start;
+        velocity.0 = Vec3::ZERO;
+        ground.previous = start;
+        ground.grounded = false;
+        state.captured = true;
+        state.scripted = true;
+        if site.is_some() {
+            state.face(from, (bank - from).normalize_or_zero());
+        }
+        return;
+    }
+    if *go == Some(*frame) {
+        info!("CLIMB_GO {}", *frame);
+    }
+    // The sequence, frames after letting go, beside the capture's own shot:
+    // `<capture>-climb-<frames>.png`. Counted from the go, which follows the
+    // tier's landing on the wall clock, so it has to come out of one run.
+    if let (Some(path), Some(g)) = (launch.capture.as_ref(), *go) {
+        let after = *frame - g;
+        if CLIMB_SHOTS.contains(&after) {
+            let stem = path.with_extension("");
+            let shot = format!("{}-climb-{after:02}.png", stem.display());
+            info!("CLIMB_SHOT {after} {shot}");
+            commands
+                .spawn(Screenshot::primary_window())
+                .observe(bevy::render::view::screenshot::save_to_disk(shot));
+        }
+    }
+    keys.press(KeyCode::KeyW);
+    info!(
+        "CLIMB {} {:.2} {:.2}",
+        *frame,
+        position.0.length() - pbd_app::walking::HALF_HEIGHT - PLANET_RADIUS,
+        (position.0.normalize() - bank).length() * PLANET_RADIUS
+    );
 }
 
 /// `--break SECONDS`: from frame 90, hold the use button on whatever is under

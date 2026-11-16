@@ -195,7 +195,7 @@ struct Stepped {
 /// The shipped settled climates, `assets/climate`, resolved as the config
 /// directory is.
 fn climate_dir() -> PathBuf {
-    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/climate"))
+    crate::paths::assets_dir().join("climate")
 }
 
 /// Where in the year a shipped settled state stands, seconds: `START_HOUR` of

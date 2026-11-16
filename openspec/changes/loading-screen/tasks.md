@@ -51,4 +51,10 @@
       from below, rain at night) by showing each once behind the screen.
   - [x] 5.3a `LATE_PIPELINE` names the vertex layout and shader defs (decision 6).
   - [x] 5.3b One proxy per material and vertex layout behind the screen (decision 6). On the Mac, no `LATE_PIPELINE` in a new world, `--load` still, `--load` turning, rain at night turning, or the scenic flight (67 proxies; 91 pipelines before `READY` against 86; time to playable unchanged).
+  - [x] 5.3c What a real-time session still compiles late (decision 7):
+        the screenshot blit and the map's two UI materials and gradient,
+        warmed behind the screen; `PBD_KEY_SCRIPT` opens screens after
+        `READY`. Verify: the decision 7 sessions rerun with no
+        `LATE_PIPELINE`; `READY` before and after; a test that the map shows
+        its proxies once.
 - [ ] 5.4 The step's video, for the owner's batch.

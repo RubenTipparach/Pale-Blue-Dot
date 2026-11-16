@@ -630,3 +630,43 @@ Grass now takes no wet layer: a step on grass is `step_grass` alone, in rain
 or not. Stone keeps its wet layer, and wet dirt keeps the squelch as its step
 (mud). `Family::takes_wet` is the one rule, and a test pins it.
 
+
+## Water sounds read the walker's water (owner, 2026-11-16)
+
+The owner: *"water sfx also plays when I'm standing on land (the blue stuff
+peeking above water)"*. Standing on a seabed block whose top is above the
+drawn sea, the steps are the shallow-water splash (`step_shallow`), and
+stepping on or off it plays the water's enter and exit.
+
+**Why, measured in the code.** `walker_sounds` asked
+`PlanetContact::stand(feet)` for the water. On the column tier that is the
+column's own water over the floor, and the sea's water in a column fills its
+layer to the sea level. The sea is drawn 0.5 m under that
+(`depth_offset_m`), and the tide moves the sheet by up to 2 m either way.
+So a seabed block 1 m under the sea level:
+- has 1 m of water over it to the audio, at every tide;
+- stands dry over the sheet at low tide;
+- stands 0.5 m under it at the mean tide.
+
+Its top is drawn in the seabed's blue-tinted sand, which is the owner's "blue
+stuff peeking above water". Nothing else reads the water this way:
+- the walker reads `walking::Sea::state` (the column's water, the sea's at
+  the tided sheet, a beach under high water);
+- the renderer reads `eye_surface_radius` (the same, with a river's drawn
+  top).
+
+**The rule.** The walker's sounds read the walker's own answer,
+`Sea::state` at the walker's position:
+- the feet are in water (a step is `step_shallow`) when it puts any water
+  over the feet;
+- the body is in water (enter, exit, strokes) when it puts the water over
+  the body's centre.
+
+One answer, so a walker the physics wades is the walker the audio splashes.
+The ambience beds' shore and open-water reads (the surf bed) are a 25 m to
+200 m look at the coast, not the feet, and are unchanged.
+
+**Verify.** A test on the real column tier: at a version 10 sea shore, a
+seabed block 1 m under the sea level, with the tide at its lowest:
+- the audio's reading is dry (it fails before: 1 m of water);
+- at the highest tide it is wet.

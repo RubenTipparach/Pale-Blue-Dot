@@ -241,6 +241,8 @@ fn has_clutter(cell: Cell, center: vec3<f32>) -> bool {
     // range a blade is a pixel wide at anyway.
     let level = cell.metadata.x >> 8u;
     if level != finest_level() { return false; }
+    // Nothing grows where water stands at any tide (`flora-v2` 12.11).
+    if ((cell.metadata.y >> 25u) & 1u) == 1u { return false; }
     if !(owner_fine(cell.owner_a.xyz, level) && owner_fine(cell.owner_b.xyz, level)) { return false; }
     if distance(params.camera.xyz,center) >= reach { return false; }
     let id = cell.metadata.w;
@@ -288,7 +290,9 @@ fn has_nearby_foliage(cell: Cell, center: vec3<f32>, part: Partition) -> bool {
     // trees per level out, each wider (the surface pass), so the cover holds.
     // A town's footprint grows nothing (`cities-in-the-world` decision 3):
     // bit 24 of the material word, `planet_terrain::CLEARED_BIT`.
-    if ((cell.metadata.y >> 24u) & 1u) == 1u { return false; }
+    // Nor a cell water stands on at any tide (`flora-v2` 12.11): bit 25,
+    // `pbd_core::flora::FLOODED_BIT`.
+    if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }
     let roll = hash(cell.spare.x) & 0xffu;
     let material = cell.metadata.y & 0xffu;
     let biome = (cell.metadata.y >> 8u) & 0xffu;

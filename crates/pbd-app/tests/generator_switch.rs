@@ -34,7 +34,7 @@ fn reads_as(version: u32) -> bool {
     directions().all(|d| {
         let height = surface_height(d);
         height == pbd_core::column::surface_m(&cfg, d)
-            && (surface_code(d, height) >> 8) == biome_at(&cfg, d, height) as u32
+            && (surface_code(d, height) >> 8) & 0xff == biome_at(&cfg, d, height) as u32
     })
 }
 

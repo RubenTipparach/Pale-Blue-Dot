@@ -52,7 +52,10 @@ pub use terrain::{
     nearest_ground_near, river_channel, snow_slot, surface_code, surface_height, switch_generator,
     terrain_config, terrain_epoch, terrain_radius, tileset_slot,
 };
-pub use water::{EyeWater, EyeWaterState, RainShadows, emerge, inland_surface, submersion};
+pub use water::{
+    EyeWater, EyeWaterState, RainShadows, emerge, eye_surface_radius, eye_water_at, inland_surface,
+    submersion,
+};
 
 use bevy::math::{DMat4, DVec3};
 use bevy::{
@@ -271,13 +274,6 @@ struct PlanetBase {
 #[derive(Resource, Clone, Default, ExtractResource)]
 pub(crate) struct PlanetClock(f32);
 
-/// How the plant decoration is drawn, from the player's settings
-/// (`flora-v2` design 1): the pixel tufts in the grass slots, or the blades.
-#[derive(Resource, Clone, Copy, Default, ExtractResource)]
-pub struct FloraLook {
-    pub tufts: bool,
-}
-
 /// The per-biome flora tables as the shaders read them (`flora-v2` design
 /// 6): fern weight, mushroom weight, flower colour bits and deciduous per
 /// biome; then the tuft ramps as `0xRRGGBB`, w one for red caps; then the
@@ -331,7 +327,6 @@ impl Plugin for PlanetPlugin {
             ExtractResourcePlugin::<PlanetArt>::default(),
             ExtractResourcePlugin::<water::EyeWaterState>::default(),
             ExtractResourcePlugin::<water::RainShadows>::default(),
-            ExtractResourcePlugin::<FloraLook>::default(),
             ExtractResourcePlugin::<PlanetRenderFrame>::default(),
             ExtractComponentPlugin::<PlanetSurface>::default(),
             ExtractResourcePlugin::<bounce::BounceField>::default(),
@@ -360,7 +355,6 @@ impl Plugin for PlanetPlugin {
         )
         .init_resource::<PlanetClock>()
         .init_resource::<water::RainShadows>()
-        .init_resource::<FloraLook>()
         .init_resource::<PlanetRenderFrame>()
         .init_resource::<lod::LodRefresh>()
         .init_resource::<lod::NearField>()
@@ -1796,8 +1790,6 @@ pub(crate) struct Tunables<'w> {
     maps: Res<'w, weather_maps::WeatherMapsNow>,
     /// The night side's far lights (`night-lights-from-space`).
     far: Option<Res<'w, crate::night_lights::FarLights>>,
-    /// The player's grass (`flora-v2`).
-    flora: Option<Res<'w, FloraLook>>,
     /// The sea now, for the tide (`ocean-environments` 5.1).
     sea_now: Option<Res<'w, crate::sea::SeaNow>>,
     /// The trees felled and picked near the camera (`flora-v2` 12.5).
@@ -2127,11 +2119,7 @@ fn prepare_views(
                 clock.0,
             ),
             flora: Vec4::new(
-                if tunables.flora.as_ref().is_some_and(|f| f.tufts) {
-                    scatter.tuft_count
-                } else {
-                    0.0
-                },
+                scatter.tuft_count,
                 scatter.tuft_width_m,
                 scatter.tuft_height_m,
                 sun.clock.year_fraction() as f32,

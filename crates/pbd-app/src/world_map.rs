@@ -113,10 +113,7 @@ fn sheet_name(biome: Biome) -> &'static str {
 
 /// The shipped tilesets, resolved as the config directory is.
 pub fn tileset_dir() -> PathBuf {
-    PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../assets/tilesets"
-    ))
+    crate::paths::assets_dir().join("tilesets")
 }
 
 /// The mean colour of tile `(col, row)` of a 4 x 4 sheet, 0..255 sRGB.

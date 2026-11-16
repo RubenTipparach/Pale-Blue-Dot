@@ -819,7 +819,9 @@ const UNDER_TREE_BIT: u32 = 0x10000u;
 // (`has_nearby_foliage`), the same lines, for the cap under it (design 9.4).
 // `pbd_core::flora::grows_tree` is the CPU's copy and a test holds all three.
 fn stands_tree(cell: Cell) -> bool {
-    if ((cell.metadata.y >> 24u) & 1u) == 1u { return false; }
+    // Nor a cell water stands on at any tide (`flora-v2` 12.11): bit 25,
+    // `pbd_core::flora::FLOODED_BIT`.
+    if ((cell.metadata.y >> 24u) & 3u) != 0u { return false; }
     let roll = hash(cell.spare.x) & 0xffu;
     let material = cell.metadata.y & 0xffu;
     let biome = (cell.metadata.y >> 8u) & 0xffu;
@@ -1703,69 +1705,32 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         normal = axis;
 
         if v < 216u {
-            // ---- grass: a blade of two stacked quads that curve and taper.
+            // ---- grass: a pixel tuft, two crossed cards in the slot's twelve
+            // vertices (`flora-v2` design 1; the only grass since 2026-11-16,
+            // the owner: "grass should be pixel tufts, remove the other grass").
             let j = v/12u;
             let i = v%12u;
-            let blades = u32((0.6+0.4*roll(id,SALT_GRASS+1u))*params.clutter.z);
-            // `flora-v2` design 1: with the player's Pixel grass on, a slot
-            // is a tuft - two crossed cards, the same twelve vertices - on
-            // its own count, at the seat and facing the blade would take.
             let tufts = u32(round((0.6+0.4*roll(id,SALT_GRASS+1u))*params.flora.x));
-            if params.flora.x > 0. {
-                if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < tufts {
-                    let sj = SALT_GRASS+16u+j*8u;
-                    let k = u32(roll(id,sj)*f32(degree));
-                    let f0 = 0.15+0.60*roll(id,sj+1u);
-                    let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
-                    let size = 0.8+0.5*roll(id,sj+3u);
-                    let half_w = params.flora.y*size*0.5;
-                    let h = params.flora.z*size;
-                    let a = roll(id,sj+2u)*TAU+f32(i/6u)*TAU*0.25;
-                    let dir = tangent*cos(a)+bitangent*sin(a);
-                    // The tip row sways along the card; the root stays put.
-                    let sway = sin(1.7*params.settings.z+roll(id,sj+6u)*TAU)*0.06*h;
-                    let top = bottom+axis*h+dir*sway;
-                    quad = array<vec3<f32>,4>(bottom-dir*half_w,bottom+dir*half_w,
-                        top+dir*half_w,top-dir*half_w);
-                    // The variant in the integer part, the card in the fraction.
-                    let variant = f32(u32(roll(id,sj+5u)*3.));
-                    quad_uv = array<vec2<f32>,4>(vec2(variant,0.),vec2(variant+0.999,0.),
-                        vec2(variant+0.999,1.),vec2(variant,1.));
-                    material = TUFT_CODE;
-                    is_quad = true;
-                    grown = h > 0.0001;
-                }
-            } else if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < blades {
+            if green && roll(id,SALT_GRASS) < params.clutter_chance.x && j < tufts {
                 let sj = SALT_GRASS+16u+j*8u;
                 let k = u32(roll(id,sj)*f32(degree));
                 let f0 = 0.15+0.60*roll(id,sj+1u);
-                let seat_dir = axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0;
-                let bottom = seat_dir*radius;
-                let ang = roll(id,sj+2u)*TAU;
-                let side = tangent*cos(ang)+bitangent*sin(ang);
-                let across = tangent*cos(ang+0.9)+bitangent*sin(ang+0.9);
-                let h = params.clutter_size.x*(0.8+0.4*roll(id,sj+3u))*fade;
-                let hw = params.clutter_size.y*(0.7+0.6*roll(id,sj+4u));
-                // Each blade crops its own vertical strip of the ground tile,
-                // so neighbouring blades pick up different pixels of art the
-                // project already ships. That is the reference's
-                // `tile_uv_slice` and it is why clutter needs no new texture.
-                let strip = roll(id,sj+5u)*0.78;
-                let seg = i/6u;
-                let a = f32(seg)*0.5;
-                let b = f32(seg+1u)*0.5;
-                // One cross-section: the centre walks up and leans on the
-                // SQUARE of the height fraction, so the blade curves rather
-                // than shearing, and the half-width tapers toward the tip.
-                let ca = bottom+axis*(h*a)+across*(h*0.15*a*a);
-                let cb = bottom+axis*(h*b)+across*(h*0.15*b*b);
-                let wa = hw*(1.-0.55*a);
-                let wb = hw*(1.-0.55*b);
-                quad = array<vec3<f32>,4>(ca-side*wa,ca+side*wa,cb+side*wb,cb-side*wb);
-                quad_uv = array<vec2<f32>,4>(vec2(strip,1.-a),vec2(strip+0.18,1.-a),
-                    vec2(strip+0.18,1.-b),vec2(strip,1.-b));
-                shade_lo = mix(base_shade,1.,a);
-                shade_hi = mix(base_shade,1.,b);
+                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let size = 0.8+0.5*roll(id,sj+3u);
+                let half_w = params.flora.y*size*0.5;
+                let h = params.flora.z*size;
+                let a = roll(id,sj+2u)*TAU+f32(i/6u)*TAU*0.25;
+                let dir = tangent*cos(a)+bitangent*sin(a);
+                // The tip row sways along the card; the root stays put.
+                let sway = sin(1.7*params.settings.z+roll(id,sj+6u)*TAU)*0.06*h;
+                let top = bottom+axis*h+dir*sway;
+                quad = array<vec3<f32>,4>(bottom-dir*half_w,bottom+dir*half_w,
+                    top+dir*half_w,top-dir*half_w);
+                // The variant in the integer part, the card in the fraction.
+                let variant = f32(u32(roll(id,sj+5u)*3.));
+                quad_uv = array<vec2<f32>,4>(vec2(variant,0.),vec2(variant+0.999,0.),
+                    vec2(variant+0.999,1.),vec2(variant,1.));
+                material = TUFT_CODE;
                 is_quad = true;
                 grown = h > 0.0001;
             }
@@ -3403,6 +3368,8 @@ const REQUEST_FLAG: u32 = 0x8000u;
 // match the nearest-sampled textures. Two warped three-wave sums, each bright
 // where it crosses zero, give a web that drifts and never tiles; `cell` is
 // its spacing, m. Returns 0..about 1.
+// The web's mean over the bed, what a pixel spanning many of its blocks sees.
+const CAUSTIC_MEAN: f32 = 0.34;
 fn caustic_web(position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>, depth: f32, t: f32, cell: f32) -> f32 {
     let sun_up = max(dot(sun, radial), 0.2);
     let surface = position + (sun - radial*dot(sun, radial))*(depth/sun_up)*0.75;
@@ -3753,7 +3720,11 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         if params.lod_spare.x > 0. && params.light.x > 0.5 && direct > 0. {
             let fade = 1. - smoothstep(0., max(params.lod_spare.z, 1e-3), water_depth);
             if fade > 0. {
-                let web = caustic_web(input.position, radial, sun, water_depth, params.settings.z, params.lod_spare.y);
+                // Faded to its mean where a pixel spans its 0.25 m blocks
+                // (`ocean-environments` B19): point-sampled past that, the
+                // far bed of a river turned to per-pixel speckle.
+                let web = mix(caustic_web(input.position, radial, sun, water_depth, params.settings.z, params.lod_spare.y),
+                    CAUSTIC_MEAN, smoothstep(0.12, 0.35, foot));
                 color += albedo*sun_air(sun_elevation)*direct*skylight*attenuation
                     *(web*params.lod_spare.x*fade);
             }

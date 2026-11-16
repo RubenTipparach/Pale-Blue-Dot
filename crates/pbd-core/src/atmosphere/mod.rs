@@ -65,6 +65,9 @@ pub struct Surface {
     pub wetness: Vec<f32>,
     pub albedo: Vec<f32>,
     pub heat_capacity: Vec<f32>,
+    /// Whether the ground's top is snow (`planet_gen::top_material`): tundra,
+    /// and land above the snow line. What falls on it is always snow.
+    pub snowy: Vec<bool>,
 }
 
 /// Everything at one point, interpolated from the cells around it.
@@ -351,7 +354,22 @@ impl Atmosphere {
             cloud_top: self.cloud_top(cloud, lift),
             rain_rate: weighted(&self.rain_rate, cells, w).max(0.0),
             rain_seen: weighted(&self.rain_seen, cells, w).clamp(0.0, 1.0),
-            snow: air_c <= 0.0,
+            // Snow in freezing air, and always over snow-covered ground,
+            // whatever the air (owner, 2026-11-16: "if snow on the ground, no
+            // rain, if snow biome, must snow not rain").
+            snow: air_c <= 0.0
+                || cells
+                    .iter()
+                    .zip(w)
+                    .map(|(&c, w)| {
+                        if self.surface.snowy[c as usize] {
+                            w
+                        } else {
+                            0.0
+                        }
+                    })
+                    .sum::<f32>()
+                    > 0.5,
             wind: weighted_vec(&self.wind, cells, w),
             upper: weighted_vec(&self.upper, cells, w),
             current: if ocean_share > 0.5 {
@@ -604,6 +622,7 @@ fn surface_of(grid: &Grid, terrain: &TerrainConfig, settings: &AtmosphereSetting
         wetness: Vec::with_capacity(n),
         albedo: Vec::with_capacity(n),
         heat_capacity: Vec::with_capacity(n),
+        snowy: Vec::with_capacity(n),
     };
     for &c in &grid.centre {
         let height = planet_gen::surface_altitude(terrain, c);
@@ -634,6 +653,10 @@ fn surface_of(grid: &Grid, terrain: &TerrainConfig, settings: &AtmosphereSetting
         } else {
             settings.land_heat_capacity
         });
+        surface.snowy.push(
+            !ocean
+                && planet_gen::top_material(terrain, c, height) == crate::terrain::Material::Snow,
+        );
     }
     for cell in 0..n {
         surface.slope[cell] = grid.gradient(&surface.elevation, cell, |_| false);

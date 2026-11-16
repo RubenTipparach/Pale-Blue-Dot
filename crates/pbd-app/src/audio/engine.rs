@@ -31,7 +31,7 @@ pub const MOCK_RATE: u32 = 48_000;
 
 /// Where the audio files live.
 pub fn audio_dir() -> PathBuf {
-    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/audio"))
+    crate::paths::assets_dir().join("audio")
 }
 
 /// Every cue decoded whole, by name, one entry per take.

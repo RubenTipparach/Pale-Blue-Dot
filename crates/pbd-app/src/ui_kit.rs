@@ -55,7 +55,7 @@ pub fn ui_scale_for(physical_height: u32) -> u32 {
 
 /// The assets folder (the same one `AssetPlugin` is pointed at).
 pub fn assets_dir() -> PathBuf {
-    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets"))
+    crate::paths::assets_dir()
 }
 
 // ---------------------------------------------------------------- tokens

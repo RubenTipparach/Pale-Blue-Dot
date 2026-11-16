@@ -1,0 +1,95 @@
+command: target/fast/pbd-app --walk --at 20.30000 40.20000 --yaw 60.00 --pitch -10.00 --time 15.0000 --day 2 --render-scale 100 --reflections high --rain-shadows on --capture repro/2026-11-16-151047-again.png
+saved: 2026-11-16 15:10:47 UTC
+world: (unsaved)
+seed: 1592598566
+generator: 10 (this build's newest: 10)
+edits: 0 (in the world, not in the command's fresh world)
+mode: walking
+at: 20.30000 40.20000 (as --at takes it; the map reads 20.300S 40.200E)
+elevation_m: 52.62
+above_ground_m: 1.62
+eye_height_m: 1.60
+yaw_deg: 60.00
+pitch_deg: -10.00
+water: dry
+clock: hour 15.0000, day 2, southern summer
+weather: rain 0.00, wetness 0.00, cover 0.17, wind 1.2 m/s toward 275 deg
+weather_flag: none (dry here; the simulated weather is not seeded by any flag)
+settings: render scale 100, reflections high, rain shadow on
+commit: 8b11c6daf7ba
+blocks: 37 cells within 3 rings (hex rings over the finest level's neighbour table), layers 193..=200 (feet L196, head L197; L = metres above -145 m); facing side 0 (bearing 306 deg); * = edited
+cell 387769521 ring 0 (here): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387765426 ring 1 (0.9 fwd 0.4 left): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387765425 ring 1 (0.2 fwd 1.1 left): surface 50.00 m (L194), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 DryGrass | L193 Soil
+cell 387769520 ring 1 (0.7 back 0.7 left): surface 50.00 m (L194), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 DryGrass | L193 Soil
+cell 387773616 ring 1 (0.9 back 0.4 right): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387773617 ring 1 (0.2 back 1.1 right): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387769522 ring 1 (0.7 fwd 0.7 right): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387761331 ring 2 (1.7 fwd 0.8 left): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387761330 ring 2 (1.1 fwd 1.5 left): surface 50.00 m (L194), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 DryGrass | L193 Soil
+cell 387765427 ring 2 (1.6 fwd 0.3 right): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387761329 ring 2 (0.4 fwd 2.1 left): surface 50.00 m (L194), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 DryGrass | L193 Soil
+cell 387765424 ring 2 (0.5 back 1.7 left): surface 50.00 m (L194), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 DryGrass | L193 Soil
+cell 387769519 ring 2 (1.4 back 1.3 left): surface 50.00 m (L194), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 DryGrass | L193 Soil
+cell 387773615 ring 2 (1.6 back 0.3 left): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387777711 ring 2 (1.7 back 0.8 right): surface 51.00 m (L195), desert, top Sand
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Sand | L194 Sand | L193 Sand
+cell 387777712 ring 2 (1.1 back 1.5 right): surface 51.00 m (L195), desert, top Sand
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Sand | L194 Sand | L193 Sand
+cell 387777713 ring 2 (0.4 back 2.1 right): surface 51.00 m (L195), desert, top Sand
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Sand | L194 Sand | L193 Sand
+cell 387773618 ring 2 (0.5 fwd 1.7 right): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387769523 ring 2 (1.4 fwd 1.3 right): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387757236 ring 3 (2.6 fwd 1.2 left): surface 50.00 m (L194), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 DryGrass | L193 Soil
+cell 387757235 ring 3 (1.9 fwd 1.9 left): surface 50.00 m (L194), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 DryGrass | L193 Soil
+cell 387761332 ring 3 (2.4 fwd 0.1 left): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387757234 ring 3 (1.3 fwd 2.5 left): surface 49.00 m (L193), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 Air | L193 DryGrass
+cell 387765428 ring 3 (2.2 fwd 1.0 right): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387757233 ring 3 (0.6 fwd 3.2 left): surface 49.00 m (L193), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 Air | L193 DryGrass
+cell 387761328 ring 3 (0.3 back 2.8 left): surface 49.00 m (L193), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 Air | L193 DryGrass
+cell 387765423 ring 3 (1.2 back 2.4 left): surface 50.00 m (L194), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 DryGrass | L193 Soil
+cell 387769518 ring 3 (2.0 back 2.0 left): surface 50.00 m (L194), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Air | L194 DryGrass | L193 Soil
+cell 387773614 ring 3 (2.2 back 1.0 left): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387777710 ring 3 (2.4 back 0.1 right): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387781806 ring 3 (2.6 back 1.2 right): surface 52.00 m (L196), desert, top Sand
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Sand | L195 Sand | L194 Sand | L193 Sand
+cell 387781807 ring 3 (1.9 back 1.9 right): surface 51.00 m (L195), desert, top Sand
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Sand | L194 Sand | L193 Sand
+cell 387781808 ring 3 (1.3 back 2.5 right): surface 51.00 m (L195), desert, top Sand
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Sand | L194 Sand | L193 Sand
+cell 387781809 ring 3 (0.6 back 3.2 right): surface 51.00 m (L195), desert, top Sand
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Sand | L194 Sand | L193 Sand
+cell 387777714 ring 3 (0.3 fwd 2.8 right): surface 51.00 m (L195), desert, top Sand
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 Sand | L194 Sand | L193 Sand
+cell 387773619 ring 3 (1.2 fwd 2.4 right): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+cell 387769524 ring 3 (2.0 fwd 2.0 right): surface 51.00 m (L195), fields, top DryGrass
+  L200 Air | L199 Air | L198 Air | L197 Air | L196 Air | L195 DryGrass | L194 Soil | L193 Soil
+screenshot: repro/2026-11-16-151047.png
