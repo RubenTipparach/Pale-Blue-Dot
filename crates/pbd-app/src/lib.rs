@@ -41,6 +41,7 @@ pub mod missions;
 pub mod night_lights;
 #[cfg(feature = "desktop")]
 pub mod overlay;
+pub mod paths;
 #[cfg(feature = "desktop")]
 pub mod place;
 #[cfg(feature = "desktop")]

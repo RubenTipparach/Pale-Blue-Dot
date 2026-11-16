@@ -63,7 +63,7 @@ pub fn patch_m(kind: SiteKind) -> f32 {
 }
 
 fn asset(path: &str) -> PathBuf {
-    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets")).join(path)
+    crate::paths::assets_dir().join(path)
 }
 
 /// `assets/config/kits.ron`, checked.

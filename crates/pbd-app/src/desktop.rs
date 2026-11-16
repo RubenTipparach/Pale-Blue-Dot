@@ -1417,7 +1417,7 @@ pub fn run(args: &[String]) {
     app.add_plugins(
         DefaultPlugins
             .set(AssetPlugin {
-                file_path: concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets").into(),
+                file_path: pbd_app::paths::assets_dir().to_string_lossy().into_owned(),
                 ..default()
             })
             .set(ImagePlugin::default_nearest())
@@ -2154,7 +2154,7 @@ pub fn run(args: &[String]) {
 /// then saves it poisons the world for every later run. A capture that means
 /// to write says which world.
 fn open_world(launch: &Launch) -> WorldSave {
-    let root = std::path::PathBuf::from(saves::ROOT);
+    let root = pbd_app::paths::saves_dir();
     // The world's seed, which every generator version shares. Not read off
     // `terrain_config()`, which would fix this run's generator before the
     // world that chooses it is open.
@@ -2238,7 +2238,7 @@ fn load_on_cue(
     if let Some(name) = launch.new_world.as_deref() {
         *asked = true;
         let seed = pbd_core::planet_gen::TerrainConfig::TENEBRIS.seed;
-        match saves::create(std::path::Path::new(saves::ROOT), name, seed) {
+        match saves::create(&pbd_app::paths::saves_dir(), name, seed) {
             Ok(slot) => {
                 info!(
                     "--new-world: made '{name}' ({}) at frame {}",
@@ -2255,7 +2255,7 @@ fn load_on_cue(
     };
     *asked = true;
     let id = saves::slot_id(name);
-    match saves::list(std::path::Path::new(saves::ROOT))
+    match saves::list(&pbd_app::paths::saves_dir())
         .into_iter()
         .find(|slot| slot.id == id || slot.file.name == name)
     {

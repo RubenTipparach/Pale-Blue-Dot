@@ -18,7 +18,7 @@ use std::path::PathBuf;
 /// The shipped `assets/config` directory, resolved the same way the desktop
 /// app resolves its asset root.
 pub fn config_dir() -> PathBuf {
-    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/config"))
+    crate::paths::assets_dir().join("config")
 }
 
 /// Read `assets/config/<name>.ron`, or fall back to the code defaults when the
