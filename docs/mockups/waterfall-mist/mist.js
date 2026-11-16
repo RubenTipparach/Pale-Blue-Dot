@@ -381,7 +381,7 @@ function waterMaterial(U, vertexShader) {
       uM: {value: new THREE.Matrix3()}, uRp: {value: 2400}, uTime: {value: 0}, uScene: {value: null}, uRes: {value: new THREE.Vector2(1, 1)},
       uStretch: {value: 1}, uSpeed: {value: 1}, uAccel: {value: 0}, uLip: {value: 0}, uFallFrame: {value: 0},
       uOpen: {value: new THREE.Vector3(1, 1, 1)}, uNight: {value: 0}, uRain: {value: 0}, uSunI: {value: 1},
-      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1}, uRip: {value: 0}, uOut: {value: 0}, uGlass: {value: 0},
+      uFeet: {value: FALLS.map(() => new THREE.Vector3())}, uFeetH: {value: FALLS.map(() => 9)}, uAer: {value: 0}, uAerAmt: {value: 1}, uRip: {value: 0}, uOut: {value: 0}, uGlass: {value: 0}, uRipLen: {value: 0.9}, uRipReach: {value: 6}, uOutReach: {value: 6},
       uG: {value: 0}, uVmax: {value: 8}}, U),
     side: THREE.DoubleSide,
     vertexShader: `attribute vec3 aRest; attribute vec3 aFaceN; attribute float aKind; attribute float aFroth; attribute vec3 aPath;
@@ -396,7 +396,7 @@ function waterMaterial(U, vertexShader) {
       uniform vec3 uOpen; uniform float uNight; uniform float uRain; uniform float uSunI;
       varying vec3 vRest; varying vec3 vFaceN; varying float vKind; varying float vFroth; varying vec3 vPath; varying float vTop;
       varying vec3 vFlowN; varying vec3 vFlow; varying float vSky; varying vec3 vP; varying float vDepth;
-      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt; uniform float uRip; uniform float uOut; uniform float uGlass;
+      uniform vec3 uFeet[${NF}]; uniform float uFeetH[${NF}]; uniform float uAer; uniform float uAerAmt; uniform float uRip; uniform float uOut; uniform float uGlass; uniform float uRipLen; uniform float uRipReach; uniform float uOutReach;
       uniform float uG; uniform float uVmax;
       ${NOISE_GLSL}
       ${LIGHT_GLSL}
@@ -441,6 +441,11 @@ function waterMaterial(U, vertexShader) {
         }
         return g;
       }
+      // The pool's outward speed, m/s, x metres out from the column (the Flow arrows draw the same function).
+      float outSpeed(float x, float H, float reachMax) {
+        return (0.5 + 0.07*min(H, 10.0))*exp(-max(x, 0.0)/min(2.5 + 0.3*H, reachMax))*smoothstep(-0.5, 0.3, x)
+          *(1.0 - smoothstep(0.6*reachMax, reachMax, x));
+      }
       void main() {
         vec3 radial = uM*vec3(0.0, 1.0, 0.0);
         vec3 face = normalize(uM*vFaceN);
@@ -472,8 +477,8 @@ function waterMaterial(U, vertexShader) {
           for (int i = 0; i < ${NF}; i++) {
             if (abs(vP.y - uFeet[i].y) > 0.3) continue;
             vec2 off = vP.xz - uFeet[i].xz; float d = length(off), x = d - 1.25;
-            if (x <= -0.5 || x > 10.0) continue;
-            fl += off/max(d, 1e-3)*(0.5 + 0.07*min(uFeetH[i], 10.0))*exp(-max(x, 0.0)/(2.5 + 0.3*uFeetH[i]))*smoothstep(-0.5, 0.3, x);
+            if (x <= -0.5 || x > uOutReach) continue;
+            fl += off/max(d, 1e-3)*outSpeed(x, uFeetH[i], uOutReach);
           }
           fl *= uOut;
           if (dot(fl, fl) > 1e-6) {
@@ -506,12 +511,14 @@ function waterMaterial(U, vertexShader) {
           for (int i = 0; i < ${NF}; i++) {
             if (abs(vP.y - uFeet[i].y) > 0.3) continue;
             vec2 off = vP.xz - uFeet[i].xz; float d = length(off), x = d - 1.25;
-            if (x <= 0.0 || x > 9.0) continue;
-            float k = 6.2831853/0.9, ph = k*x - uTime/0.75*1.3*k;
-            float reach = 2.0 + 0.35*uFeetH[i];
-            float env = exp(-x/reach)*smoothstep(0.0, 0.25, x)*(0.6 + 0.06*min(uFeetH[i], 10.0))*uRip;
+            if (x <= 0.0 || x > uRipReach) continue;
+            // uRipLen: metres between rings (the wave's size); uRipReach: metres out from the column where the rings
+            // have died to nothing (a hard limit, faded over its last 40%); uRip: their height.
+            float k = 6.2831853/uRipLen, ph = k*x - uTime/0.75*1.3*k;
+            float reach = min(2.0 + 0.35*uFeetH[i], uRipReach);
+            float env = exp(-x/reach)*smoothstep(0.0, 0.25, x)*(1.0 - smoothstep(0.6*uRipReach, uRipReach, x))*(0.6 + 0.06*min(uFeetH[i], 10.0))*uRip;
             vec2 dir = off/max(d, 1e-3);
-            float slope = cos(ph)*env*0.55;
+            float slope = cos(ph)*env*0.55*(0.9/uRipLen);
             gradient += uM*vec3(dir.x*slope, 0.0, dir.y*slope)*12.5*0.25;
             ripFoam = max(ripFoam, smoothstep(0.55, 0.95, sin(ph))*env*exp(-x/1.2)*0.6);
           }
@@ -928,14 +935,13 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   const arrows = new THREE.Group(); arrows.visible = false; arrows.renderOrder = 10; fx.add(arrows);
   feet.forEach((f, i) => {
     const H = FALLS[i].drop;
-    for (const rr of [1.8, 3.2, 4.8, 6.6]) for (let k = 0; k < 10; k++) {
+    for (const rr of [1.8, 3.2, 4.8, 6.6, 8.6, 10.8]) for (let k = 0; k < 10; k++) {
       const a = k / 10 * Math.PI * 2 + rr, x = f.at.x + Math.cos(a) * rr, z = f.at.z + Math.sin(a) * rr;
       const [q, r] = hexAt(x, z), pl = poolAt(q, r);
       if (pl === null || Math.abs(pl - f.at.y) > 0.3) continue;
-      const sp = (0.5 + 0.07 * Math.min(H, 10)) * Math.exp(-Math.max(rr - 1.25, 0) / (2.5 + 0.3 * H));
-      const arr = new THREE.ArrowHelper(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), new THREE.Vector3(x, f.at.y + 0.06, z), Math.max(0.35, sp * 1.6), 0xff6a2a, 0.22, 0.14);
+      const arr = new THREE.ArrowHelper(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), new THREE.Vector3(x, f.at.y + 0.06, z), 1, 0xff6a2a, 0.22, 0.14);
       arr.traverse(o => { if (o.material) { o.material.depthTest = false; o.material.transparent = true; o.renderOrder = 10; } });
-      arr.userData.sp = sp; arrows.add(arr);
+      arr.userData = {x: rr - 1.25, H}; arrows.add(arr);
     }
   });
   // The new sheet, sampled nearest with no mipmaps.
@@ -949,7 +955,7 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0, depthRT = null;
   const S = {variant: "new", night: false, running: true, gain: 2, bubbles: 1, teal: 1, mist: 1, mistSize: 1.65, veil: 1, soft: 1.2, streak: 0,
-    rule: "new", accel: 2, pixel: false, rip: 1, out: 1, arrows: false, glass: true};
+    rule: "new", accel: 2, pixel: false, rip: 0.5, out: 0.1, arrows: false, glass: true, ripLen: 0.9, ripReach: 6, outReach: 6};
   // The eye's pool (the cell under it, if it is a basin's), for the view from under the water.
   let eyePool = null;
   function murk(open) {
@@ -979,7 +985,13 @@ window.PBDMist = function (canvas, sheetUrl, opts) {
     leak.visible = v === "today"; front.visible = v !== "today";
     for (const b of bubbles) { b.visible = v === "new"; b.material.uniforms.uAmt.value = S.bubbles; }
     wmat.uniforms.uAer.value = v === "new" ? 1 : 0;
-    wmat.uniforms.uAerAmt.value = S.teal; wmat.uniforms.uRip.value = v === "new" ? S.rip : 0; wmat.uniforms.uOut.value = v === "new" ? S.out : 0; wmat.uniforms.uGlass.value = v === "new" && S.glass ? 1 : 0;
+    wmat.uniforms.uAerAmt.value = S.teal; wmat.uniforms.uRip.value = v === "new" ? S.rip : 0; wmat.uniforms.uOut.value = v === "new" ? S.out : 0;
+    wmat.uniforms.uRipLen.value = S.ripLen; wmat.uniforms.uRipReach.value = S.ripReach; wmat.uniforms.uOutReach.value = S.outReach;
+    for (const arr of arrows.children) {
+      const {x, H} = arr.userData, R = S.outReach, sm = (a, b, t) => { const u = Math.min(1, Math.max(0, (t - a) / (b - a))); return u * u * (3 - 2 * u); };
+      const sp = S.out * (0.5 + 0.07 * Math.min(H, 10)) * Math.exp(-Math.max(x, 0) / Math.min(2.5 + 0.3 * H, R)) * (1 - sm(0.6 * R, R, x));
+      arr.visible = sp > 0.02; if (arr.visible) arr.setLength(Math.max(0.3, sp * 1.6), 0.22, 0.14);
+    } wmat.uniforms.uGlass.value = v === "new" && S.glass ? 1 : 0;
     const wantR = v === "new" && S.glass ? 0.45 : 0;
     if (wantR !== LIP_R) { LIP_R = wantR; water.geometry.dispose(); water.geometry = waterGeometry(0); }
     if (arrows) arrows.visible = v === "new" && S.arrows;
