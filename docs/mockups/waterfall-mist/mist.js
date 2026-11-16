@@ -466,6 +466,7 @@ function hash01(a, b) {
 // tune (New tab only): {mist: puff count x, mistSize: puff size x}; 1, 1 is the game's.
 function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
   const mistN = newPuffs && tune ? tune.mist : 1, mistS = newPuffs && tune ? tune.mistSize : 1;
+  const veilN = newPuffs && tune ? tune.veil : 0;
   out.n = 0;
   const quad = (p, size, rgba, cell, flip) => {
     if (out.n >= SPLASH_BUDGET) return;
@@ -499,6 +500,23 @@ function splashQuads(feet, t, eye, right, upCam, day, newPuffs, out, tune) {
       const alpha = (0.12 + 0.33 * Math.min(h / 8, 1)) * (1 - phase) * fade;
       // The new puffs: a variant by the puff's own hash, its frame by its age.
       const cell = newPuffs ? Math.floor(r(5) * 4) * 4 + Math.min(3, Math.floor(phase * 4)) : -1;
+      quad({x: foot.x + Math.cos(a) * d, y, z: foot.z + Math.sin(a) * d}, size, [light, light, light, alpha], cell, r(6) < 0.5 ? 1 : 0);
+    }
+    // The veil (New tab only, mockup): mist shed by the falling sheet itself. Puffs leave the column's face at a
+    // height along the drop, drift out and a little down while they swell and fray, and fade; more of them low down,
+    // where the water has fallen furthest and broken up most.
+    const veil = Math.round(Math.min(48, 2.5 * h) * veilN);
+    for (let i = 0; i < veil; i++) {
+      const r = k => hash01((seed ^ 0x5C3E) >>> 0, i * 8 + k);
+      const period = 1.6 + 1.2 * r(0), phase = (t / period + r(1)) % 1, s = phase * period;
+      const along = Math.pow(r(2), 0.6);                         // 0 at the lip .. 1 at the foot, weighted low
+      const a = r(3) * Math.PI * 2;
+      const d = SPLASH_EDGE_M * 0.9 + (0.25 + 0.5 * r(4)) * s;   // out from the sheet, m
+      const size = (0.35 + 0.25 * along) * (0.6 + 0.9 * phase) * mistS;
+      const y = foot.y + h * (1 - along) - 0.35 * s + size * 0.5 + SPLASH_CLEAR_M;
+      if (y < foot.y + SPLASH_CLEAR_M + size * 0.5) continue;
+      const alpha = (0.10 + 0.22 * along) * Math.sin(Math.PI * phase) * fade;
+      const cell = Math.floor(r(5) * 4) * 4 + Math.min(3, Math.floor(phase * 4));
       quad({x: foot.x + Math.cos(a) * d, y, z: foot.z + Math.sin(a) * d}, size, [light, light, light, alpha], cell, r(6) < 0.5 ? 1 : 0);
     }
   }
@@ -657,7 +675,7 @@ window.PBDMist = function (canvas, sheetUrl) {
   const bubbles = bubblePoints(F, U); bubbles.material.uniforms.uFoot.value.copy(foot); opaque.add(bubbles);
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 600);
   let copyTex = null, copyW = 0, copyH = 0;
-  const S = {variant: "today", night: false, running: true, gain: 0.8, bubbles: 1, teal: 1, mist: 1, mistSize: 1};
+  const S = {variant: "today", night: false, running: true, gain: 0.8, bubbles: 1, teal: 1, mist: 1, mistSize: 1, veil: 1};
   function murk(open) {
     // The game's murk: the deep's albedo lit by the light on open water, dimmed by the water above the eye.
     const eyeDepth = Math.max(0, F.poolY - camera.position.y);
@@ -744,7 +762,7 @@ window.PBDMist = function (canvas, sheetUrl) {
     const day = S.night ? 0 : 1;
     for (const m of [leak, front]) {
       if (!m.visible) continue;
-      splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q, {mist: S.mist, mistSize: S.mistSize});
+      splashQuads(feet, simT, camera.position, right, upCam, day, S.variant === "new", m.userData.Q, {mist: S.mist, mistSize: S.mistSize, veil: S.veil});
       m.material.uniforms.uRight.value.copy(right); m.material.uniforms.uUpCam.value.copy(upCam);
       m.userData.upload();
     }
