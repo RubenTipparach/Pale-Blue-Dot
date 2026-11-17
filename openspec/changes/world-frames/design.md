@@ -346,6 +346,10 @@ What a rebase can and cannot disturb:
 
 ## 8. Not converted (limits)
 
+(Written for the first pass. The herd, drops, decks, the towns' floors and
+the line's sag are converted by the second pass, design 10; what still
+stays is 10.5.)
+
 - **Decks** (`decks.rs`, the cog's deck): a deck's frame is planet-local f32,
   so a walker on a deck holds the deck's half millimetre. The fix is the
   vessel frame of design 4, a deck as its own frame.
@@ -493,3 +497,43 @@ from.
   planet's centre (the bug of 10.1).
 - `tests/origin_guard.rs` reads `husbandry.rs`, `husbandry/breed.rs`,
   `drops.rs`, `decks.rs` too.
+
+### 10.7 Measured (M4 Max MacBook Pro, 2026-11-17)
+
+**The instrument** (a measurement instrument, as design 2's):
+`PBD_HERD_TRACE=<csv>` writes one row per animal per stride: its feet
+before and after in the planet's frame (f64, through the origin), the stride
+it was asked (`facing * speed * dt`) and the origin. The error is the move
+against the ask along the ground (the tangent plane), over strides on level
+ground (a stride down a column layer is the ground's, not rounding). The
+"before" is `PBD_HOLD_SIM_ORIGIN=1`, the origin at the planet's centre,
+which is the yard's old planet-centred f32. Runs: `--new-world <throwaway>
+--husbandry tame --walk-distance <m>` (a tamed woolback follows the walker,
+wild ones flee it), `fast` build.
+
+| | strides | p50 | p99 | max |
+| --- | ---: | ---: | ---: | ---: |
+| held origin (the yard before), 150 m walk | 8 855 | 65.2 µm | 231.8 µm | 409.3 µm |
+| this change, 700 m walk | 21 627 | **1.55 µm** | **12.6 µm** | **15.5 µm** |
+| this change, 300 m walk, 3 rebases | 13 970 | 2.34 µm | 13.2 µm | (16 strides across a rebase: max 14.4 µm) |
+
+The guard tests (`husbandry::tests::stride_error_report`, a sphere, 300 s):
+
+| | p50 | max |
+| --- | ---: | ---: |
+| 4 800 m, 1 m/s, planet-centred | 113.8 µm | 360.0 µm |
+| 4 800 m, 1 m/s, local (2 rebases) | 1.97 µm | 8.47 µm |
+| 4 800 m, 8 m/s, planet-centred | 109.8 µm | 378.2 µm |
+| 4 800 m, 8 m/s, local (17 rebases) | 2.49 µm | 9.09 µm |
+| 4 800 km, 1 m/s, local | 0.73 µm | 4.61 µm |
+| 4 800 km, 8 m/s, local (18 rebases) | 1.83 µm | 10.7 µm |
+
+What is left is the f32 step of a local value at the far side of a cell
+(a coordinate up to 96 m on each axis, about 160 m from the origin, where
+an f32 holds 15 µm): 40 to 70 times smaller than before at the median, and
+a stride across a rebase is in the same band as the strides round it.
+
+Launches: three fresh throwaway worlds (deleted after), each to `READY`
+with no `LATE_PIPELINE` and no panic; the tame scene tamed a woolback and it
+followed. `ORIGIN_LEAK` is a debug-build check, so a `fast` run cannot show
+one; the debug tests run the yard and drops.

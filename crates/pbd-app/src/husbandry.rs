@@ -1475,8 +1475,40 @@ fn announce(
     }
 }
 
+/// MEASUREMENT (`world-frames` 10.7): `PBD_HERD_TRACE=<path.csv>` writes one
+/// row per frame per animal that strode: its planet-frame feet before and
+/// after the stride (f64, through the origin), the stride it was asked
+/// (`facing * speed * dt`), and the origin, so the move can be compared with
+/// what was asked along the ground. Changes nothing simulated.
+struct HerdTrace(std::io::BufWriter<std::fs::File>, u64);
+
+fn herd_trace() -> Option<HerdTrace> {
+    use std::io::Write as _;
+    let path = std::env::var_os("PBD_HERD_TRACE")?;
+    let mut out = std::io::BufWriter::new(std::fs::File::create(&path).ok()?);
+    writeln!(
+        out,
+        "frame,animal,mode,dt_s,ask_x,ask_y,ask_z,before_x,before_y,before_z,after_x,after_y,after_z,origin_x,origin_y,origin_z"
+    )
+    .ok()?;
+    info!(
+        "HERD_TRACE writing {}",
+        std::path::Path::new(&path).display()
+    );
+    Some(HerdTrace(out, 0))
+}
+
 /// Move and animate every animal.
-fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
+fn step(
+    world: World,
+    mut yard: ResMut<Farmyard>,
+    hotbar: Option<Res<Hotbar>>,
+    mut trace: Local<Option<Option<HerdTrace>>>,
+) {
+    let trace = trace.get_or_insert_with(herd_trace);
+    if let Some(t) = trace.as_mut() {
+        t.1 += 1;
+    }
     let dt = world.time.delta_secs().min(0.1);
     if dt <= 0.0 {
         return;
@@ -1501,6 +1533,7 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
         let Some(sp) = roster.get(b.species as usize) else {
             continue;
         };
+        pbd_core::world_frame::check_local("animal", b.pos);
         let up = o.up_at(b.pos);
         let night = world.night_at(up);
         let bird = sp.plan == Plan::Bird;
@@ -1614,7 +1647,36 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
             _ => true,
         };
         let travelled = if allowed && b.speed > 0.0 {
+            let before = b.pos;
             b.pos = stride(&o, b.pos, b.facing, b.speed, dt, ground);
+            if let Some(t) = trace.as_mut() {
+                use std::io::Write as _;
+                let (w0, w1) = (o.to_world(before).pos, o.to_world(b.pos).pos);
+                let ask = moved.as_dvec3();
+                let _ = writeln!(
+                    t.0,
+                    "{},{},{:?},{:?},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{},{},{}",
+                    t.1,
+                    match b.who {
+                        Who::Wild { seed } => seed,
+                        Who::Kept { id } => id,
+                    },
+                    b.mode,
+                    dt,
+                    ask.x,
+                    ask.y,
+                    ask.z,
+                    w0.x,
+                    w0.y,
+                    w0.z,
+                    w1.x,
+                    w1.y,
+                    w1.z,
+                    o.origin.x,
+                    o.origin.y,
+                    o.origin.z
+                );
+            }
             moved.length()
         } else {
             if !allowed {

@@ -52,17 +52,17 @@
 
 ## 6. The second pass (design 10)
 
-- [ ] 6.1 The herd in local space: `stride`, the f64 stand, the hook, the
+- [x] 6.1 The herd in local space: `stride`, the f64 stand, the hook, the
   drawing through the render frame; `Seen` a query point.
-- [ ] 6.2 Drops as body-frame f64; the save's text unchanged.
-- [ ] 6.3 Decks in local space (moored and under sail) with a hook; the
+- [x] 6.2 Drops as body-frame f64; the save's text unchanged.
+- [x] 6.3 Decks in local space (moored and under sail) with a hook; the
   sailing cog's solids asked in local space.
-- [ ] 6.4 Towns' floors, stairs and ceilings in f64 (`Frame::local_f64`,
+- [x] 6.4 Towns' floors, stairs and ceilings in f64 (`Frame::local_f64`,
   `world_f64`, `stand_in`, `ceiling_in`).
-- [ ] 6.5 The line's sag laid in local points.
-- [ ] 6.6 Tests (design 10.6) and the source check extended.
-- [ ] 6.7 The rule in CLAUDE.md.
-- [ ] 6.8 Measure: an animal's step error before and after; a fresh world
+- [x] 6.5 The line's sag laid in local points.
+- [x] 6.6 Tests (design 10.6) and the source check extended.
+- [x] 6.7 The rule in CLAUDE.md.
+- [x] 6.8 Measure: an animal's step error before and after; a fresh world
   near animals walked past a rebase (READY, no panic, no LATE_PIPELINE).
 - [ ] 6.9 Later: saved points with their frame, when a second frame can be
   saved in; terrain as altitudes for large radii (design 9).

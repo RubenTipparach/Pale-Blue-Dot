@@ -46,6 +46,27 @@ no drawn transform is moved.
 - **THEN** every body's planet-frame point is where it was to 1e-6 m and
   every velocity is the same
 
+#### Scenario: An animal across a rebase
+
+- **WHEN** a herd animal walks at 1 m/s or runs at 8 m/s, 4 800 m or
+  4 800 km from its body's centre, and the origin rebases under it
+- **THEN** each step's planet-frame move is the step it was asked to 1e-5 m,
+  where planet-centred it is off by more
+
+#### Scenario: A drop and a deck across a rebase
+
+- **WHEN** the origin is rebased by a cell with a drop floating and a
+  moored deck swinging 4.4 km from the planet's centre
+- **THEN** the drop's planet-frame point is unchanged and it is drawn where it
+  was, and the deck's planet-frame pose is unchanged to the f32 step of a
+  local value and a point it carries moves on as with the origin held
+
+#### Scenario: A deck under sail away from the planet's centre
+
+- **WHEN** a walker's foot is over a sailing cog's deck with the origin
+  4.4 km from the planet's centre
+- **THEN** the walker finds the deck's floor at its f64 radius
+
 ### Requirement: Frames convert exactly between any two
 
 Positions and velocities SHALL convert between any two frames of the frame
