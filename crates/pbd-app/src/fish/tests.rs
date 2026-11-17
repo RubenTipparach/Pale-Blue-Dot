@@ -540,13 +540,15 @@ fn a_hooked_float_jump_is_eased_and_nothing_else_moves() {
     drawn.update(dt, at(10.0), Phase::Floating, 0.0);
     assert_eq!(drawn.drawn(at(10.0)), at(10.0));
     drawn.update(dt, at(10.0), Phase::Bite, 0.0);
-    // The strike, with a jump of a metre: drawn where it was.
+    // The strike, and on the next step the swing goes on with a jump of a
+    // metre: drawn where it was.
+    drawn.update(dt, at(10.0), Phase::Hooked, 0.8);
     drawn.update(dt, at(11.0), Phase::Hooked, 0.8);
     assert!(drawn.drawn(at(11.0)).distance(at(10.0)) < 1e-3);
     assert!(drawn.drawn(at(11.0)).length() - r < 1e-3, "on the water");
     // Eased: each frame closer, no step larger than a sixth of the jump.
     let mut was = drawn.drawn(at(11.0));
-    for frame in 0..15 {
+    for frame in 0..25 {
         drawn.update(dt, at(11.0), Phase::Hooked, 0.8);
         let now = drawn.drawn(at(11.0));
         assert!(

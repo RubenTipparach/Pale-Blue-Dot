@@ -1221,8 +1221,9 @@ pub(crate) mod draw {
     pub struct LineMesh;
 
     /// How quickly a jump of the hooked float is eased out, 1/s: critically
-    /// damped, so 95% of it is gone in about 4.7 / this (a quarter second).
-    pub(crate) const FLOAT_EASE_PER_S: f32 = 19.0;
+    /// damped, so 95% of it is gone in about 4.7 / this (a third of a
+    /// second).
+    pub(crate) const FLOAT_EASE_PER_S: f32 = 14.0;
 
     /// Where the float is drawn (`movement-smoothness` design 7.1): the
     /// line's float plus an offset that takes up the one-frame jump the line
@@ -1236,6 +1237,9 @@ pub(crate) mod draw {
         velocity: Vec3,
         /// The line as last frame left it: its float, phase and run.
         last: Option<(Vec3, Phase, f32)>,
+        /// Struck, and not yet swung: the line's first hooked step, a frame
+        /// after the strike, puts the swing on.
+        struck: bool,
     }
 
     impl DrawnFloat {
@@ -1244,8 +1248,16 @@ pub(crate) mod draw {
         pub fn update(&mut self, dt: f32, float: Vec3, phase: Phase, run: f32) {
             let hooked = phase == Phase::Hooked;
             let jumped = match self.last {
-                Some((was, Phase::Hooked, was_run)) if hooked && was_run != run => Some(was),
-                Some((was, Phase::Bite, _)) if hooked => Some(was),
+                Some((was, Phase::Hooked, was_run))
+                    if hooked && (was_run != run || self.struck) =>
+                {
+                    self.struck = false;
+                    Some(was)
+                }
+                Some((was, Phase::Bite, _)) if hooked => {
+                    self.struck = true;
+                    Some(was)
+                }
                 _ => None,
             };
             self.last = Some((float, phase, run));
