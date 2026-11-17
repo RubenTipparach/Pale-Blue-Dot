@@ -55,7 +55,7 @@ non-negative where it is a size or a rate. Defaults live in one place (the
 
 ## 5. The mockup
 
-**Rod in Hand** (M36, `docs/mockups/rod-motion.html`):
+**Tools in Hand** (M36, `docs/mockups/tool-motion.html`), its Fish tab. The owner, 2026-11-17: "Actually make a new tools mockup ... for all the tools stuff for digging, choppin and fishing". One page shows the three tools' motion: Dig, Chop (the `held-swing` STRIKE stroke) and Fish (this change), each with a Today / Proposed toggle in its one view.
 
 - **Models.** The same first-person rod and hand as the game, from the
   generator's data (`tools/gen_held_tools.py`, the same JSON the Hex Tool
@@ -65,9 +65,7 @@ non-negative where it is a size or a rate. Defaults live in one place (the
   - The view stays where the viewer leaves it, and nothing turns on its own.
   - At night, a lantern on the bank lights the water and the hand, the moon
     is dim, and the float carries a small glow.
-- **Tabs, one 3D view at a time:**
-  - **Proposed** is the motion of section 2.
-  - **Today** is the still rod the game draws now.
+- **Today / Proposed** in the Fish tab's one view: Proposed is the motion of section 2, and Today is the still rod the game draws now.
 - **Controls.**
   - Play-through buttons for each phase (Charge, Cast, Nibble, Bite, Fight,
     Catch), plus "Play all".
@@ -84,5 +82,5 @@ non-negative where it is a size or a rate. Defaults live in one place (the
   the fight first; a bend can come later if the owner asks.
   Recommendation taken (ask only with screenshots).
 - The game moves in the same push as the mockup, since the owner asked to
-  "fix that up". If the owner tunes the mockup, its printed `held.ron` block
+  "fix that up" before asking for the mockup. If the owner tunes the mockup, its printed `held.ron` block
   goes into the game unchanged.

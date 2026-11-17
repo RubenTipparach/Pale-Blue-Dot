@@ -23,5 +23,6 @@
    stroke and its stage from the dig's progress. `hold` draws from it and the
    sound code plays on its impacts: one schedule, two readers.
 3. The hold on impact holds the tool only. Game time and the dig run on.
-4. The mockup shows TODAY and STRIKE side by side in the bench's one view
-   (a toggle), with the curve's values as sliders.
+4. The mockup (Tools in Hand, M36, `docs/mockups/tool-motion.html`) shows
+   TODAY and STRIKE in each of its Dig and Chop tabs' one view (a toggle),
+   with the curve's values as sliders.

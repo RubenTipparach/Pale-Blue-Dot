@@ -19,7 +19,7 @@
 
 ## 3. The mockup
 
-- [ ] 3.1 `docs/mockups/rod-motion.html` (M36): Proposed and Today tabs, phase
+- [ ] 3.1 `docs/mockups/tool-motion.html` (M36), Fish tab: a Today / Proposed toggle, phase
   buttons, hold to cast, day and night, sliders with the `held.ron` printout
 - [ ] 3.2 Publish it, add it to the tracker, record it in `mockup-work.md`
 

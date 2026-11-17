@@ -34,8 +34,9 @@ that up. Make a new fishing mockup".
   - it lifts on a catch.
 - The line leaves the rod tip where the rod is drawn this frame.
 - The motion's numbers are tunables in `held.ron`.
-- A new mockup, **Rod in Hand** (M36, `docs/mockups/rod-motion.html`). It
-  plays every phase on the game's own hand and rod, beside today's still rod,
+- The Fish tab of a new mockup, **Tools in Hand** (M36,
+  `docs/mockups/tool-motion.html`), which shows digging, chopping and fishing.
+  It plays every phase on the game's own hand and rod, beside today's still rod,
   at day and at night by a lantern.
 
 ## Impact
