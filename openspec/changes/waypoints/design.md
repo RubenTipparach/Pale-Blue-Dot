@@ -1,110 +1,100 @@
 ## Context
 
 - **The map** (`desktop/map_screen.rs`) is a menu screen. Left-drag pans it,
-  the wheel zooms, Home finds the player, and `markers` lays out the player,
-  the ship and every craft from body-local positions through `geo::project`.
+  the wheel zooms, Home finds the player. Since `starter-missions` G3 (revised
+  2026-11-16) a right click adds a waypoint, up to four, the fifth dropping
+  the oldest, and a click on a pin (either button, a left one only if it did
+  not drag) removes it. The pins are red teardrops with no label.
+- **The save** holds them as one `map-mark` record (`pbd_core::map`), id 0,
+  authored by the player, through the durable path: schema 2 is the list,
+  oldest first; schema 1 was one optional mark and still reads.
 - **The compass** (`compass.rs`, `desktop/compass_bar.rs`) turns body-local
   points into `Place { bearing, distance_m }` with `Place::seen`, and lays out
-  marks: N, E, S, W, the four between, ticks, and `Place(i)` diamonds for the
-  twelve nearest towns in reach, naming the one nearest the middle.
-- **The save** is a journal of lines. Records (`pbd_core::records`) are
-  "something generated once that must then stay put or be able to change",
-  each with a kind, a stable id, a schema version and a RON body kept as
-  text, and every line names its author. A kind this build does not know is
-  kept as it came.
+  N, E, S, W, the four between, ticks, and a brass stud for each of the
+  twelve nearest towns in reach, naming the one nearest the middle in the
+  line under the bar. It knows nothing of waypoints.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Place and remove waypoints from the map in two clicks.
-- See every waypoint on the compass while walking, flying or sailing.
-- Waypoints outlive the session and every later change, as everything the
-  player does must.
+- See every waypoint on the compass while walking, flying or sailing, and
+  read which one is ahead.
+- Tell waypoints apart on the map and the compass by a number that does not
+  change under the player.
+- Every save that has waypoints keeps them, numbered.
 
 **Non-Goals:**
 - **Naming, renaming or recolouring a waypoint.** They are numbered. A name
   field can come later in the same record.
-- **A route, or a line drawn to a waypoint in the world.** The compass gives
-  the bearing; a beam or a ground path is a separate request.
-- **Waypoints on other bodies.** A waypoint belongs to the body it was placed
-  on. Only one body has a map today.
-- **Sharing waypoints between players.** The record carries its author, so
-  multiplayer can decide later.
+- **A route, or a line drawn to a waypoint in the world.**
+- **Waypoints on other bodies.** Only one body has a map today.
+- **Sharing waypoints between players.** The record carries its author.
 
 ## Decisions
 
-Every decision here is a recommendation taken (ask only with screenshots);
-the owner sees the capture shots before code lands in a PR.
+Every decision here is a recommendation taken (ask only with screenshots),
+except where it quotes the owner; the capture shots go to the owner with the
+build.
 
-1. **Right-click places and removes.** Left-drag is the pan, and a left-click
-   that ends a drag must not drop a pin. A right-click within 12 px of a pin
-   removes that pin; anywhere else on the map it places one. No dialog, and
-   no confirmation: putting a pin back is one click.
-2. **At most eight, numbered 1 to 8, each with its own colour.** A new
-   waypoint takes the lowest free number. At eight, a right-click on empty map
-   shows "Eight waypoints: right-click one to remove it" in the readout for
-   three seconds and places nothing. Eight keeps the bar legible, and eight
-   distinct colours can be told apart against the bar and the map.
-   Alternative: one waypoint only, which is simpler but means removing one to
-   mark the next place.
-3. **A waypoint is a direction on the body, not a height.** It is stored as
-   the unit direction from the body's centre (f64 x, y, z), so the map
-   projects it, the compass gets its bearing from `Place::seen` and its
-   distance along the ground, and a change to the terrain never moves it.
-   The compass distance is along the ground, as a town's already is.
-4. **Every waypoint shows on the compass, whatever its distance.** Towns are
-   limited to the nearest twelve in reach so the bar does not fill with
-   them. A waypoint is the player's own, so all of them always show. They
-   are drawn as pins on the bar's foot row, as the town diamonds are, so a
-   letter is never hidden, and over the towns where both fall on the same
-   spot.
-5. **The label goes to the waypoint nearest the middle**, ahead of a town:
-   "Waypoint 3 · 1.2 km". When no waypoint is within the bar's label window,
-   the town rule is unchanged.
-6. **Saved as records of a new kind, `waypoint`.**
-   - Each waypoint has a stable id from the journal's id counter, never
-     reused, and its number 1 to 8 is a field of the record.
-   - A body holds `(direction: (f64, f64, f64), number: u8)`, schema
-     version 1.
-   - Placing one writes the record; removing it writes the record's removal
-     (the journal's existing way to retire a record).
-   - Both go through the same durable path as an edit, on the frame of the
-     click, authored by the player.
-   - Old saves have no `waypoint` records and open with none: no migration.
-   - An older build keeps the records as text, so a waypoint survives a round
-     trip through it.
-7. **The arrival rule is none.** A waypoint stays until it is removed. A
-   waypoint that is reached has distance 0 m on the bar and the map; removing
-   it is the player's choice. Alternative: auto-remove within 10 m, rejected
-   because it surprises a player who meant to come back to the spot.
-8. **The instrument**: `--waypoint LAT LON`, repeatable, in `--at`'s frame
-   (body frame, +Y north), places waypoints at launch and is otherwise a
-   normal placement, saved with the world. It exists so a capture can show
-   pins.
+1. **Placing and removing is as built** (`starter-missions` G3, owner
+   2026-11-16): a right click adds; a click on a pin's head, within 12 px,
+   removes it; a left click that dragged more than 4 px was a pan.
+2. **At most four (owner, 2026-11-16); a fifth drops the oldest.** This
+   replaces this change's first draft (eight, the ninth refused).
+3. **Numbered W1 to W4 by the lowest free number.** A new waypoint takes the
+   smallest number from 1 not held by another. Placed one after another they
+   go W1, W2, W3, W4 (the owner's "w1,w2...."); removing W2 leaves W1, W3 and
+   W4 as they were, and the next one placed is W2. When a fifth drops the
+   oldest, it takes the oldest's number. Alternative: number by place in the
+   list, rejected because every waypoint after a removed one would change its
+   number while the player was walking to it.
+4. **The number is saved with the waypoint**: `Mark { at, set_from_m,
+   number }`, the `map-mark` record at schema 3. `number` is a serde default
+   field, so a schema 1 or 2 body reads, and `read_marks` numbers any
+   waypoint without a number (or with a repeated one) by the lowest free
+   number in list order, oldest first: an old save's waypoints come out W1,
+   W2, ... in the order they were set. The record kind, its id and its author
+   are unchanged; the journal keeps writing one record line per change.
+5. **The map labels each pin** "W1" ... in the kit's pixel font (`KitText`),
+   `LABEL` with an `INK` outline, just right of the pin's head, so it reads
+   on sea, sand and snow alike. The pin stays the red teardrop.
+6. **The compass draws every waypoint, whatever its distance**, as a small
+   red pin, 5 x 6 native pixels, on the bar's foot row where the town studs
+   are, drawn over them, so a letter is never hidden. It is the map pin's
+   shape and red (`ui_kit::WAYPOINT`) with an `INK` rim, so the player knows
+   it as the same thing. It fades toward the bar's ends as everything on the
+   bar does, and not with distance (it is the player's own).
+7. **The line under the bar names the waypoint faced.** The waypoint nearest
+   the middle within `NAMED_WITHIN` (7 degrees) is named there as its label
+   and its distance along the ground, "W2 1.2 km", in `TEXT` with the `INK`
+   shadow the town line already uses; it is named ahead of a town. With no
+   waypoint in that window the town rule is unchanged. The label is the
+   waypoint's number and a distance and nothing more.
+8. **The instrument**: `--map-mark-east M` (repeatable; the first due east,
+   each next turned 72 degrees toward north) now also runs in play once the
+   walker is out, not only with the map up, so a capture with `--yaw 180`
+   (facing east) faces the first waypoint on the compass.
 
 ## Risks / Trade-offs
 
-- **The bar's foot row gets busy** when a waypoint sits by a town. Pins are
-  drawn over diamonds and are a different shape (a teardrop, not a diamond),
-  so both read. Verify in a capture beside a town.
-- **Right-click on a Mac trackpad** is a two-finger click. Ctrl+click is the
-  same on macOS and is accepted too.
-- **A removal line written by this build, read by an older one.** The older
-  build keeps unknown kinds as text and must keep the removal too, or the
-  waypoint would come back in it. Verify against how the journal retires
-  records of a kind the build does not know, before the save code lands.
+- **An older build reading a schema 3 body.** It parses `Mark` without
+  `number`, and serde passes over a field a struct does not declare, so the
+  older build reads the same waypoints and keeps them; if it then changes
+  one it writes the list without numbers, and this build numbers it again
+  in order on the next open (decision 4). A unit test reads a schema 3 body
+  as the schema 2 struct to pin this.
+- **The foot row with a waypoint beside a town**: both are on the same row;
+  the pin is drawn over the stud and is a different shape and colour.
 
 ## Verification
 
 - **Unit tests:**
-  - placing and removing on the `Waypoints` resource, including lowest free
-    number and the eight-cap refusal;
-  - the compass marks for a waypoint at a known bearing and distance;
-  - a journal round trip: place two, remove one, reload, and one remains with
-    its number;
-  - an old save with no waypoint records opens with none.
-- **Captures** in `docs/screenshots/waypoints/`, placed with `--waypoint`:
-  - the map with three pins;
-  - the compass facing a pin with its label;
-  - the compass with a pin and a town on the same bearing.
-- **A real-time check** of right-click placing and removing on the map.
+  - `pbd_core::map`: lowest free number on add, after a removal, after a
+    fifth drops the oldest; a schema 2 body with no numbers reads numbered
+    W1.. in order; a schema 3 round trip.
+  - `compass`: a waypoint at a known bearing lands on the bar there at any
+    distance, and is named over a town on the same bearing; its label text.
+  - `map_screen`: the saved record round trip keeps the numbers.
+- **Captures** in `docs/screenshots/compass-waypoints/`, placed with
+  `--map-mark-east`: the compass facing W1 with its label, and the map with
+  labelled pins. Rendered in a cloud container on lavapipe with no GPU.

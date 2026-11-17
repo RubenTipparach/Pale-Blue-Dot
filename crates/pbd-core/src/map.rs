@@ -95,10 +95,11 @@ pub fn river_cover(cfg: &TerrainConfig, direction: Vec3, east_m: f32, north_m: f
 }
 
 /// The record kind of the player's waypoints, its schema and its one id
-/// (`starter-missions` G3). Schema 2 is the list; schema 1 was one optional
-/// mark, and still reads ([`read_marks`]).
+/// (`starter-missions` G3). Schema 3 is the list with each waypoint's number
+/// (`waypoints` decision 4); schema 2 was the list without numbers and
+/// schema 1 one optional mark, and both still read ([`read_marks`]).
 pub const MARK_KIND: &str = "map-mark";
-pub const MARK_SCHEMA: u32 = 2;
+pub const MARK_SCHEMA: u32 = 3;
 pub const MARK_ID: u64 = 0;
 
 /// The most waypoints a player keeps; a new one past this removes the
@@ -120,6 +121,12 @@ pub struct Mark {
     pub at: [f32; 3],
     /// How far, along the ground, the player stood from it when it was set.
     pub set_from_m: f32,
+    /// Its number, shown as "W1", "W2" ... (`waypoints` decision 3): the
+    /// lowest free one when it was added, kept until it is removed. Zero
+    /// before [`add_mark`] numbers it, and in a schema 1 or 2 body, which
+    /// [`read_marks`] numbers in order.
+    #[serde(default)]
+    pub number: u8,
 }
 
 impl Mark {
@@ -134,7 +141,13 @@ impl Mark {
         Some(Self {
             at: at.to_array(),
             set_from_m,
+            number: 0,
         })
+    }
+
+    /// What the map and the compass call it: "W1", "W2" ...
+    pub fn label(&self) -> String {
+        format!("W{}", self.number)
     }
 
     pub fn direction(&self) -> Vec3 {
@@ -151,21 +164,45 @@ impl Mark {
     }
 }
 
-/// Add a waypoint, oldest first, dropping the oldest past [`MARKS_MAX`].
-pub fn add_mark(marks: &mut Vec<Mark>, mark: Mark) {
+/// Add a waypoint, oldest first, dropping the oldest past [`MARKS_MAX`],
+/// and give it the lowest number the others leave free.
+pub fn add_mark(marks: &mut Vec<Mark>, mut mark: Mark) {
+    let over = (marks.len() + 1).saturating_sub(MARKS_MAX);
+    marks.drain(..over.min(marks.len()));
+    mark.number = lowest_free(marks);
     marks.push(mark);
-    let over = marks.len().saturating_sub(MARKS_MAX);
-    marks.drain(..over);
 }
 
-/// The waypoints a `map-mark` record's body holds: a schema 2 list, or a
-/// schema 1 body of one optional mark. `None` for a body that is neither.
+/// The lowest number from 1 that no waypoint in `marks` holds.
+fn lowest_free(marks: &[Mark]) -> u8 {
+    (1..=u8::MAX)
+        .find(|n| marks.iter().all(|m| m.number != *n))
+        .unwrap_or(u8::MAX)
+}
+
+/// The waypoints a `map-mark` record's body holds: a schema 3 or 2 list, or
+/// a schema 1 body of one optional mark, each numbered. A waypoint with no
+/// number (schema 1 and 2), or with one a waypoint before it holds, takes
+/// the lowest free number in list order, so an old save's come out W1, W2
+/// ... oldest first. `None` for a body that is none of these.
 pub fn read_marks(body: &str) -> Option<Vec<Mark>> {
-    ron::from_str::<Vec<Mark>>(body).ok().or_else(|| {
+    let mut marks = ron::from_str::<Vec<Mark>>(body).ok().or_else(|| {
         ron::from_str::<Option<Mark>>(body)
             .ok()
             .map(|m| m.into_iter().collect())
-    })
+    })?;
+    for k in 0..marks.len() {
+        let n = marks[k].number;
+        if marks[..k].iter().any(|m| m.number == n) {
+            marks[k].number = 0;
+        }
+    }
+    for k in 0..marks.len() {
+        if marks[k].number == 0 {
+            marks[k].number = lowest_free(&marks);
+        }
+    }
+    Some(marks)
 }
 
 /// The distance along the ground between two unit directions, m.
@@ -257,12 +294,16 @@ mod tests {
             add_mark(&mut marks, mark(k as f32 * 0.01));
         }
         assert_eq!(marks.len(), MARKS_MAX);
-        assert_eq!(marks[0], mark(0.01), "the first is gone");
-        assert_eq!(marks[3], mark(0.04));
+        assert_eq!(marks[0].at, mark(0.01).at, "the first is gone");
+        assert_eq!(marks[3].at, mark(0.04).at);
         let body = ron::to_string(&marks).unwrap();
         assert_eq!(read_marks(&body), Some(marks));
         let one = ron::to_string(&Some(mark(0.0))).unwrap();
-        assert_eq!(read_marks(&one), Some(vec![mark(0.0)]));
+        let first = Mark {
+            number: 1,
+            ..mark(0.0)
+        };
+        assert_eq!(read_marks(&one), Some(vec![first]));
         assert_eq!(
             read_marks(&ron::to_string(&None::<Mark>).unwrap()),
             Some(vec![])
@@ -305,6 +346,72 @@ mod tests {
             }
         }
         assert!(wet > 100, "{wet} wet points: the sample holds rivers");
+    }
+
+    /// Waypoints are numbered W1, W2 ... in the order placed by the lowest
+    /// free number: a removal leaves the others' numbers, the next one takes
+    /// the gap, and a fifth takes the number of the oldest it drops
+    /// (`waypoints` decision 3).
+    #[test]
+    fn waypoints_take_the_lowest_free_number() {
+        let mark = |x: f32| Mark::set(Vec3::new(x, 1.0, 0.0), Vec3::Y, 4_800.0).unwrap();
+        let numbers = |marks: &[Mark]| marks.iter().map(|m| m.number).collect::<Vec<_>>();
+        let mut marks = Vec::new();
+        for k in 0..3 {
+            add_mark(&mut marks, mark(k as f32 * 0.01));
+        }
+        assert_eq!(numbers(&marks), [1, 2, 3]);
+        assert_eq!(marks[0].label(), "W1");
+        marks.remove(1);
+        assert_eq!(numbers(&marks), [1, 3], "W3 keeps its number");
+        add_mark(&mut marks, mark(0.1));
+        assert_eq!(numbers(&marks), [1, 3, 2], "the next is W2");
+        add_mark(&mut marks, mark(0.2));
+        assert_eq!(numbers(&marks), [1, 3, 2, 4]);
+        add_mark(&mut marks, mark(0.3));
+        assert_eq!(numbers(&marks), [3, 2, 4, 1], "the fifth takes W1's");
+        assert_eq!(marks[3].label(), "W1");
+    }
+
+    /// A schema 2 body has no numbers: it reads numbered in order, oldest
+    /// W1. A schema 3 body reads back as written, and an older build that
+    /// knows no number still reads its waypoints (`waypoints` decision 4).
+    #[test]
+    fn old_waypoint_records_read_numbered_in_order() {
+        /// The schema 2 shape, as the build before numbers wrote it.
+        #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+        struct OldMark {
+            at: [f32; 3],
+            set_from_m: f32,
+        }
+        let old = vec![
+            OldMark {
+                at: [1.0, 0.0, 0.0],
+                set_from_m: 250.0,
+            },
+            OldMark {
+                at: [0.0, 1.0, 0.0],
+                set_from_m: 30.0,
+            },
+        ];
+        let body = ron::to_string(&old).unwrap();
+        let read = read_marks(&body).expect("a schema 2 body reads");
+        assert_eq!(read.iter().map(|m| m.number).collect::<Vec<_>>(), [1, 2]);
+        assert_eq!(read[0].at, old[0].at);
+        assert_eq!(read[1].set_from_m, 30.0);
+        // Two with one number are numbered again in order.
+        let mut clash = read.clone();
+        clash[1].number = 1;
+        let clash = read_marks(&ron::to_string(&clash).unwrap()).unwrap();
+        assert_eq!(clash.iter().map(|m| m.number).collect::<Vec<_>>(), [1, 2]);
+        // A schema 3 body keeps a gap in the numbers.
+        let mut gap = read.clone();
+        gap[0].number = 3;
+        let three = ron::to_string(&gap).unwrap();
+        assert_eq!(read_marks(&three), Some(gap));
+        // An older build reading schema 3 passes over the number.
+        let older: Vec<OldMark> = ron::from_str(&three).expect("an older build reads it");
+        assert_eq!(older, old);
     }
 
     /// A direction's length does not matter.

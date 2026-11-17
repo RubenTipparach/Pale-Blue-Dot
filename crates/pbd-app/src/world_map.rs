@@ -914,3 +914,45 @@ mod tests {
         assert_eq!(at(28.25, 0.75, 2).river, RIVER_FULL);
     }
 }
+
+#[cfg(test)]
+mod river_bank_probe {
+    /// Instrument (`fishing-anywhere` 1.4): where the spawn river's banks
+    /// are along its latitude, for a capture of a cast into it.
+    #[test]
+    #[ignore = "instrument: the spawn river's banks"]
+    fn print_the_spawn_river_banks() {
+        use pbd_core::geo;
+        let cfg = *crate::planet::terrain_config();
+        let mut row = String::new();
+        let mut lon = 0.70_f32;
+        while lon <= 0.80 {
+            let d = geo::direction(geo::LatLon {
+                lat: 28.25_f32.to_radians(),
+                lon: lon.to_radians(),
+            });
+            row.push(if pbd_core::rivers::floods(&cfg, d) {
+                '~'
+            } else {
+                '.'
+            });
+            lon += 0.001;
+        }
+        println!("lat 28.25, lon 0.700..0.800 by 0.001: {row}");
+        let mut col = String::new();
+        let mut lat = 28.20_f32;
+        while lat <= 28.30 {
+            let d = geo::direction(geo::LatLon {
+                lat: lat.to_radians(),
+                lon: 0.75_f32.to_radians(),
+            });
+            col.push(if pbd_core::rivers::floods(&cfg, d) {
+                '~'
+            } else {
+                '.'
+            });
+            lat += 0.001;
+        }
+        println!("lon 0.75, lat 28.200..28.300 by 0.001: {col}");
+    }
+}

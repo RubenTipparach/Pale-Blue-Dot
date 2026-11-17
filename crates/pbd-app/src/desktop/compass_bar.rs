@@ -2,18 +2,25 @@
 //! 5 and 6), as Skyrim has it: N, E, S and W, the four between, a tick every
 //! fifteen degrees, and a diamond for each town in reach, all sliding as the
 //! view turns; the town nearest the middle named under it with how far it
-//! is. It is a navigation control, as the crosshair is an aiming one, which
-//! is why it may stand on the quiet screen (`menus-and-a-quiet-screen`).
+//! is. The player's waypoints ride the same row as small red pins at every
+//! distance, and the one faced is named ahead of a town (`waypoints`). It is
+//! a navigation control, as the crosshair is an aiming one, which is why it
+//! may stand on the quiet screen (`menus-and-a-quiet-screen`).
 //!
 //! The sums are `pbd_app::compass`'s; this only lays the nodes out. North is
 //! the compass's, so facing N the sun rises under E.
 
 use super::menu::Screen;
+use bevy::asset::RenderAssetUsages;
+use bevy::image::ImageSampler;
 use bevy::prelude::*;
-use pbd_app::compass::{self, CompassView, DIRECTIONS, MarkKind, Place};
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use pbd_app::compass::{self, CompassView, DIRECTIONS, MarkKind, Named, Place};
 use pbd_app::planet::PLANET_RADIUS;
+use pbd_app::saves::WorldSave;
 use pbd_app::sites::WorldSites;
 use pbd_app::ui_kit::{self, KitPiece, KitText, Set, UiKit};
+use pbd_core::map::{MARK_ID, MARK_KIND, MARKS_MAX, Mark, read_marks};
 
 /// The strip, native pixels: the light dressed-stone `compass` piece
 /// (`stone-and-wood-ui`), as the mockup's HUD draws it. Its letters and ticks
@@ -28,6 +35,10 @@ const INNER_W: f32 = BAR_W - 2.0 * INSET;
 const PLACES: usize = 12;
 /// A town's brass stud.
 const STUD: f32 = 5.0;
+/// A waypoint's pin, native pixels: the map pin's teardrop, its point on the
+/// bar's foot (`waypoints` decision 6). `k` the ink rim, `r` the red, `w` its
+/// pale glint, `.` clear.
+const PIN: [&str; 6] = [".kkk.", "krwrk", "krrrk", ".krk.", ".krk.", "..k.."];
 
 /// The bar's root, shown only while walking or flying low.
 #[derive(Component)]
@@ -45,12 +56,47 @@ pub struct CompassMark(usize);
 #[derive(Component)]
 pub struct CompassPlace(usize);
 
+/// One of the waypoint pins, by slot.
+#[derive(Component)]
+pub struct CompassWaypoint(usize);
+
 /// The line naming the town nearest the middle.
 #[derive(Component)]
 pub struct CompassName;
 
-pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
+/// The waypoint pin's picture, from the palette, drawn nearest.
+fn pin_image() -> Image {
+    let (w, h) = (PIN[0].len(), PIN.len());
+    let rgba = |c: Color| c.to_srgba().to_u8_array();
+    let mut data = Vec::with_capacity(w * h * 4);
+    for row in PIN {
+        for c in row.chars() {
+            data.extend(match c {
+                'k' => rgba(ui_kit::INK),
+                'r' => rgba(ui_kit::WAYPOINT),
+                'w' => rgba(ui_kit::LABEL),
+                _ => [0; 4],
+            });
+        }
+    }
+    let mut image = Image::new(
+        Extent3d {
+            width: w as u32,
+            height: h as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    image.sampler = ImageSampler::nearest();
+    image
+}
+
+pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<Image>>) {
     let kit = &*kit;
+    let pin = images.add(pin_image());
     commands
         .spawn((
             CompassRoot,
@@ -132,6 +178,21 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                             },
                         ));
                     }
+                    // Spawned after the studs, so a pin stands over a town.
+                    for k in 0..MARKS_MAX {
+                        inner.spawn((
+                            CompassWaypoint(k),
+                            ImageNode::new(pin.clone()),
+                            Node {
+                                position_type: PositionType::Absolute,
+                                width: px(PIN[0].len() as f32),
+                                height: px(PIN.len() as f32),
+                                top: px(10),
+                                display: Display::None,
+                                ..default()
+                            },
+                        ));
+                    }
                 });
                 // The oak pointer over the middle (design 3, accent 3).
                 bar.spawn((
@@ -167,9 +228,17 @@ pub fn update(
     view: Res<CompassView>,
     screen: Res<Screen>,
     sites: Option<Res<WorldSites>>,
+    save: Option<Res<WorldSave>>,
     kit: Res<UiKit>,
     mut root: Query<&mut Visibility, With<CompassRoot>>,
-    mut bar: Query<&mut ImageNode, (With<CompassBar>, Without<CompassPlace>)>,
+    mut bar: Query<
+        &mut ImageNode,
+        (
+            With<CompassBar>,
+            Without<CompassPlace>,
+            Without<CompassWaypoint>,
+        ),
+    >,
     mut marks: Query<
         (
             &CompassMark,
@@ -177,13 +246,22 @@ pub fn update(
             Option<&mut KitText>,
             Option<&mut BackgroundColor>,
         ),
-        Without<CompassPlace>,
+        (Without<CompassPlace>, Without<CompassWaypoint>),
     >,
     mut studs: Query<
         (&CompassPlace, &mut Node, &mut ImageNode),
+        (
+            Without<CompassMark>,
+            Without<CompassBar>,
+            Without<CompassWaypoint>,
+        ),
+    >,
+    mut pins: Query<
+        (&CompassWaypoint, &mut Node, &mut ImageNode),
         (Without<CompassMark>, Without<CompassBar>),
     >,
     mut name: Query<&mut KitText, (With<CompassName>, Without<CompassMark>)>,
+    mut read: Local<(String, Vec<Mark>)>,
 ) {
     let Ok(mut visibility) = root.single_mut() else {
         return;
@@ -271,16 +349,38 @@ pub fn update(
             None => node.display = Display::None,
         }
     }
+    // The player's waypoints, read again only when their record changes.
+    let body = save
+        .as_ref()
+        .and_then(|s| s.records.get(MARK_KIND, MARK_ID))
+        .map_or("", |r| r.body.as_str());
+    if read.0 != body {
+        *read = (body.to_string(), read_marks(body).unwrap_or_default());
+    }
+    let waypoints: Vec<Place> = read
+        .1
+        .iter()
+        .map(|m| Place::seen(view.up, m.direction(), PLANET_RADIUS))
+        .collect();
+    let on_bar = compass::waypoint_marks(heading, &waypoints);
+    for (slot, mut node, mut image) in &mut pins {
+        match on_bar.get(slot.0) {
+            Some(m) => {
+                node.display = Display::Flex;
+                node.left = x(m.offset, PIN[0].len() as f32);
+                image.color = Color::WHITE.with_alpha(m.fade * alpha);
+            }
+            None => node.display = Display::None,
+        }
+    }
     if let Ok(mut text) = name.single_mut() {
-        let line = compass::named(heading, &places)
-            .map(|i| {
-                format!(
-                    "{} {}",
-                    towns[i].0,
-                    compass::distance_text(towns[i].1.distance_m)
-                )
-            })
-            .unwrap_or_default();
+        let line = match compass::named_ahead(heading, &waypoints, &places) {
+            Some(Named::Waypoint(i)) => {
+                compass::name_line(&read.1[i].label(), waypoints[i].distance_m)
+            }
+            Some(Named::Place(i)) => compass::name_line(towns[i].0, towns[i].1.distance_m),
+            None => String::new(),
+        };
         if text.text != line {
             text.text = line;
         }

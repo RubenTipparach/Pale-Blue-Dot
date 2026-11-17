@@ -89,6 +89,8 @@ pub const TAB_DIM: Color = hex(0xbfcad7);
 pub const CUT: Color = hex(0x011c34);
 /// The N on the compass, red inlay.
 pub const NORTH: Color = hex(0x4a051e);
+/// A waypoint's pin on the compass, the map pin's red (`waypoints`).
+pub const WAYPOINT: Color = hex(0xd63a2e);
 /// A title or label cut into oak.
 pub const OAK_LABEL: Color = hex(0x010000);
 /// Focus and selection: the one glow.
