@@ -7,7 +7,7 @@
 (
     cues: {
         "airframe_wind": (volume_db: -6.0, cap: 4, full_within_m: 6.0, audible_m: 300.0, looped: true, stream: true),
-        "bite_splash": (volume_db: -3.0, cap: 2, full_within_m: 4.0, audible_m: 60.0),
+        "bite_splash": (volume_db: -3.0, cap: 2, full_within_m: 45.0, audible_m: 60.0),
         "bow_splash": (volume_db: -8.0, cap: 3, full_within_m: 4.0, audible_m: 80.0),
         "break_dirt": (volume_db: -3.0, pitch: (0.95, 1.05), cap: 3, audible_m: 50.0),
         "break_dry": (volume_db: -3.0, pitch: (0.95, 1.05), cap: 3, audible_m: 50.0),

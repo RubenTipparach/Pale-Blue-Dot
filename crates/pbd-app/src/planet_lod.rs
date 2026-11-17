@@ -451,20 +451,11 @@ impl FineSet {
         column::reconcile_surface(&mut self.levels[3], &self.finest_neighbors, record, &column);
     }
 
-    /// Whether the sea sheet is drawn over a record and the slots' records,
-    /// from their columns (`planet::column::mark_sheet`).
-    pub fn mark_sheets(&mut self, records: impl IntoIterator<Item = usize>) {
-        for record in records {
-            let Some(&slot) = self.columns.slots.get(record) else {
-                continue;
-            };
-            if let (Some(column), Some(cell)) = (
-                self.columns.columns.get(slot),
-                self.levels[3].get_mut(record),
-            ) {
-                column::mark_sheet(cell, column);
-            }
-        }
+    /// Where the sea's sheet lies over the tier, from its columns, the sea's
+    /// reach and the light (`planet::column::mark_sea`): after any change to
+    /// a column, and again once the light is re-baked.
+    pub fn mark_sea(&mut self) {
+        column::mark_sea(&self.columns, &mut self.levels[3]);
     }
 
     /// The column a finest record would have if the tier adopted it now:
@@ -489,9 +480,9 @@ impl FineSet {
     /// Write one layer of a record's column and bring round everything the
     /// tier derives from that column: the record's runs and its neighbours'
     /// (their flanks clip against it), the sea's flood and the water queue
-    /// (`water-flow` decision 5), the surface the heightfield draws, and the
-    /// sea sheet. Not the light, which the caller re-bakes once for however
-    /// many layers it wrote. `edits` are the save's as they stand, the edit
+    /// (`water-flow` decision 5) and the surface the heightfield draws. Not
+    /// the light or the sea's sheet, which the caller re-bakes and marks
+    /// (`mark_sea`) once for however many layers it wrote. `edits` are the save's as they stand, the edit
     /// included. `false`, changing nothing, where the record has no column or
     /// the column refused the layer (bedrock does).
     ///
@@ -525,13 +516,11 @@ impl FineSet {
         // ground is: the terrain pass draws its cap from the cell record and
         // every neighbour draws its wall down to it.
         self.reconcile(record);
-        // Whether the sea sheet lies over the edited cell and what the flood
-        // reached: a pit dug below sea level is dry until the sea comes in.
-        let flooded: Vec<usize> = flooded
-            .iter()
-            .filter_map(|&slot| self.columns.water.records.get(slot).copied())
-            .collect();
-        self.mark_sheets(std::iter::once(record).chain(flooded));
+        // Where the sea's sheet lies is not marked here: the sea's reach can
+        // change anywhere the dig joins to it, and its shade is the light's,
+        // so the caller marks the whole tier once, after the light is
+        // re-baked (`mark_sea`): a pit dug below sea level is dry until the
+        // sea comes in.
         true
     }
 
@@ -584,6 +573,7 @@ impl FineSet {
         }
         if replayed > 0 {
             self.columns.relight();
+            self.mark_sea();
         }
         replayed
     }

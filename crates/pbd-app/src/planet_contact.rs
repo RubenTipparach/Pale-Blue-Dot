@@ -446,6 +446,18 @@ impl PlanetContact {
         point.length() >= self.sample(direction).radius - 1e-3
     }
 
+    /// Whether the sea's surface reaches the finest cell under `direction` at
+    /// some tide (`planet::column::sea_reached`, `ocean-environments` B22):
+    /// the mark the sheet is listed by. `false` off the column tier.
+    pub fn sea_reached(&self, direction: Vec3) -> bool {
+        let direction = direction.try_normalize().unwrap_or(Vec3::Y);
+        self.fine.as_ref().is_some_and(|fine| {
+            fine.locate(direction)
+                .and_then(|id| fine.set.finest_records().get(id))
+                .is_some_and(super::column::sea_reached)
+        })
+    }
+
     /// The base level's records, which tests and the spawn walk read.
     #[cfg(test)]
     fn columns(&self) -> &[GpuCell] {

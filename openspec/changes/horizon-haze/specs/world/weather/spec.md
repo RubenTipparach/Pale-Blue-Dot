@@ -18,3 +18,21 @@ shell's top, and the sky straight up from the ground SHALL keep its colour.
 
 - **WHEN** the eye is on the ground at noon under a clear sky
 - **THEN** the sky straight up is the colour it was before the change
+
+### Requirement: The sea meets the sky without a seam
+
+From inside the atmosphere, the sky SHALL be drawn in the colour of the air
+just over the horizon wherever a ray under the horizon is left uncovered by
+the sea or the ground, so that the sea's far edge meets the sky in the sky's
+own haze at every tide, eye height, time of day and cloud cover, with no
+dark band between them.
+
+#### Scenario: Low over open sea at low tide
+
+- **WHEN** the eye is 1.7 m over the sea at low tide and looks out to the horizon
+- **THEN** the rows between the sea's far edge and the sky are the sky's horizon colour, not a band darker than the sky over it and the sea under it
+
+#### Scenario: At dusk and under cloud
+
+- **WHEN** the same view is taken at dusk or under full cloud
+- **THEN** the sea meets the sky without a dark line, from 1.7, 10 and 100 m

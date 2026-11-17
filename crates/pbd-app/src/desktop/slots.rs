@@ -261,13 +261,16 @@ pub fn spawn(
     let atlas = atlas.0.clone();
     let commands = &mut commands;
     commands
-        .spawn(Node {
-            position_type: PositionType::Absolute,
-            bottom: px(HOTBAR_BOTTOM),
-            left: percent(50),
-            margin: UiRect::left(px(-(SLOTS as f32 * SLOT) / 2.0)),
-            ..default()
-        })
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                bottom: px(HOTBAR_BOTTOM),
+                left: percent(50),
+                margin: UiRect::left(px(-(SLOTS as f32 * SLOT) / 2.0)),
+                ..default()
+            },
+            super::menu::InPlayHud,
+        ))
         .with_children(|row| {
             for index in 0..SLOTS {
                 // Hovered while the pack has the pointer, for its tooltip.

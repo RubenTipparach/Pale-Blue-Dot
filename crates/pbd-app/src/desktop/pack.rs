@@ -632,7 +632,7 @@ mod tests {
         app.insert_resource(ItemIcons {
             atlas: Handle::default(),
             fish: Vec::new(),
-            tools: Vec::new(),
+            tools: vec![Handle::default(); pbd_core::inventory::Tool::ALL.len()],
             hand: Handle::default(),
             lights: Vec::new(),
             fish_names: Vec::new(),
@@ -701,6 +701,15 @@ mod tests {
             "and the hold's ten, shown with a raft"
         );
         assert!(cells.iter(world).all(|i| slots.contains(&i.image)));
+        // The hand over the HOTBAR row (`pack-tool-slot` decision 3), and its
+        // list: bare hands and every tool.
+        let mut hand = world.query_filtered::<(), With<super::super::equipment::PackToolCell>>();
+        assert_eq!(hand.iter(world).count(), 1, "the pack's hand cell");
+        let mut rows = world.query::<&super::super::equipment::HandListRow>();
+        assert_eq!(
+            rows.iter(world).count(),
+            1 + pbd_core::inventory::Tool::ALL.len()
+        );
     }
 
     fn kit() -> Slots {
