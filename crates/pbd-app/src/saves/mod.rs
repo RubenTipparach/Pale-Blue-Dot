@@ -1134,7 +1134,7 @@ mod tests {
             id,
             item: Item::Block(material),
             count: 1,
-            position: Vec3::new(1.25, 300.5, -2.0),
+            position: bevy::math::DVec3::new(1.25, 300.5, -2.0),
             made_s: 1000.0 + id as f64,
         };
         let dig = |layer| Edit {

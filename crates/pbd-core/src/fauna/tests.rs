@@ -1,5 +1,10 @@
 use super::*;
 
+/// The planet-centred origin: the tests below are written in the planet's
+/// frame, which is the local space of this origin (`world-frames`).
+const PLANET: crate::world_frame::SimOrigin =
+    crate::world_frame::SimOrigin::new(crate::world_frame::FrameId(1), glam::DVec3::ZERO);
+
 pub(crate) const R: f32 = 4800.0;
 
 /// A shore on a sphere: near the +Y pole, dry for z < 0 and shelving to the
@@ -357,7 +362,7 @@ fn school_of(id: &str, anchor: Vec3, seed: u64, water: &Shore) -> (School, Speci
     let r = roster();
     let i = index_of(id);
     (
-        School::spawn(i as u16, &r[i], anchor, seed, water),
+        School::spawn(&PLANET, i as u16, &r[i], anchor, seed, water),
         r[i].clone(),
     )
 }
@@ -383,7 +388,7 @@ fn a_school_stays_in_the_water() {
             "{id}: {n} fish"
         );
         for tick in 0..3600 {
-            school.step(1.0 / 30.0, &species, &flock, &water, None);
+            school.step(&PLANET, 1.0 / 30.0, &species, &flock, &water, None);
             for p in &school.positions {
                 assert!(p.is_finite(), "{id} tick {tick}");
                 let r = p.length();
@@ -419,6 +424,7 @@ fn a_school_is_a_function_of_its_seed_and_its_steps() {
         let (mut school, species) = school_of("minnow", at(3.0, 1.0, 10.0), 77, &water);
         for _ in 0..600 {
             school.step(
+                &PLANET,
                 1.0 / 30.0,
                 &species,
                 &flock,
@@ -439,9 +445,9 @@ fn a_scented_school_reaches_the_lure() {
     let (mut school, species) = school_of("silverfin", at(-10.0, 1.0, 14.0), 9, &water);
     let lure = at(8.0, 0.35, 11.0);
     let start = school.centre().distance(lure);
-    school.scent(&species, lure, &water, 30.0);
+    school.scent(&PLANET, &species, lure, &water, 30.0);
     for _ in 0..30 * 20 {
-        school.step(1.0 / 30.0, &species, &flock, &water, None);
+        school.step(&PLANET, 1.0 / 30.0, &species, &flock, &water, None);
     }
     // Inside its sense range is what matters: there one of it can commit to
     // the lure. The school keeps its own depth and spread round the goal.
@@ -535,10 +541,10 @@ fn a_crawler_walks_the_bed_and_a_floater_rides_the_sea() {
     for (id, seed) in [("shore_crab", 11), ("lobster", 12), ("giant_clam", 13)] {
         let i = index_of(id);
         let water = Shore { max_depth: 6.0 };
-        let mut school = School::spawn(i as u16, &r[i], at(0.0, 1.0, 12.0), seed, &water);
+        let mut school = School::spawn(&PLANET, i as u16, &r[i], at(0.0, 1.0, 12.0), seed, &water);
         assert!(!school.is_empty());
         for tick in 0..3600 {
-            school.step(1.0 / 30.0, &r[i], &flock, &water, None);
+            school.step(&PLANET, 1.0 / 30.0, &r[i], &flock, &water, None);
             for p in &school.positions {
                 let off = p.length() - water.bed(*p);
                 assert!(
@@ -550,9 +556,9 @@ fn a_crawler_walks_the_bed_and_a_floater_rides_the_sea() {
     }
     for (id, seed) in [("sea_otter", 21), ("reed_dabbler", 22), ("pond_diver", 23)] {
         let i = index_of(id);
-        let mut school = School::spawn(i as u16, &r[i], at(0.0, 1.0, 12.0), seed, &Swell);
+        let mut school = School::spawn(&PLANET, i as u16, &r[i], at(0.0, 1.0, 12.0), seed, &Swell);
         for tick in 0..3600 {
-            school.step(1.0 / 30.0, &r[i], &flock, &Swell, None);
+            school.step(&PLANET, 1.0 / 30.0, &r[i], &flock, &Swell, None);
             for p in &school.positions {
                 let off = p.length() - Swell.surface(*p);
                 assert!(
@@ -572,7 +578,7 @@ fn a_clam_shuts_when_the_eye_comes_close_and_opens_after() {
     let flock = FlockSettings::default();
     let r = roster();
     let i = index_of("giant_clam");
-    let mut school = School::spawn(i as u16, &r[i], at(0.0, 1.0, 12.0), 5, &water);
+    let mut school = School::spawn(&PLANET, i as u16, &r[i], at(0.0, 1.0, 12.0), 5, &water);
     let clam = school.positions[0];
     let up = clam.normalize();
     let pose_now = |s: &School| pose(&r[i], s, 0, 100.0, false);
@@ -582,11 +588,11 @@ fn a_clam_shuts_when_the_eye_comes_close_and_opens_after() {
     school.notice(clam + up * 3.5, &r[i], 6.0);
     assert_eq!(pose_now(&school), Pose::Shut, "3.5 m off: shut");
     for _ in 0..(5 * 30) {
-        school.step(1.0 / 30.0, &r[i], &flock, &water, None);
+        school.step(&PLANET, 1.0 / 30.0, &r[i], &flock, &water, None);
     }
     assert_eq!(pose_now(&school), Pose::Shut, "still shut 5 s on");
     for _ in 0..(2 * 30) {
-        school.step(1.0 / 30.0, &r[i], &flock, &water, None);
+        school.step(&PLANET, 1.0 / 30.0, &r[i], &flock, &water, None);
     }
     assert_eq!(pose_now(&school), Pose::Moving, "open again after the hold");
 }
@@ -597,7 +603,7 @@ fn a_clam_shuts_when_the_eye_comes_close_and_opens_after() {
 fn a_dabbler_tips_up_by_day_paddles_off_when_startled_and_sleeps_at_night() {
     let r = roster();
     let i = index_of("reed_dabbler");
-    let mut school = School::spawn(i as u16, &r[i], at(0.0, 1.0, 12.0), 9, &Swell);
+    let mut school = School::spawn(&PLANET, i as u16, &r[i], at(0.0, 1.0, 12.0), 9, &Swell);
     let n = school.len();
     let mut tipped = 0;
     let mut samples = 0;
@@ -634,12 +640,12 @@ fn an_octopus_inks_jets_home_and_hides_until_the_eye_has_gone() {
     let r = roster();
     let i = index_of("octopus");
     let sp = &r[i];
-    let mut school = School::spawn(i as u16, sp, at(0.0, 1.0, 20.0), 21, &water);
+    let mut school = School::spawn(&PLANET, i as u16, sp, at(0.0, 1.0, 20.0), 21, &water);
     let home = school.homes[0];
     let pose_now = |s: &School| pose(sp, s, 0, 100.0, false);
     // A minute of crawling takes it from its den.
     for _ in 0..(60 * 30) {
-        school.step(1.0 / 30.0, sp, &flock, &water, None);
+        school.step(&PLANET, 1.0 / 30.0, sp, &flock, &water, None);
     }
     assert_eq!(pose_now(&school), Pose::Moving);
     let away = school.positions[0].distance(home);
@@ -655,7 +661,7 @@ fn an_octopus_inks_jets_home_and_hides_until_the_eye_has_gone() {
     let mut home_by = None;
     for tick in 0..(10 * 30) {
         school.notice(eye, sp, 6.0);
-        school.step(1.0 / 30.0, sp, &flock, &water, None);
+        school.step(&PLANET, 1.0 / 30.0, sp, &flock, &water, None);
         if home_by.is_none() && pose_now(&school) == Pose::Hidden {
             home_by = Some(tick as f32 / 30.0);
         }
@@ -669,19 +675,19 @@ fn an_octopus_inks_jets_home_and_hides_until_the_eye_has_gone() {
     let near = home + up * 7.0;
     for _ in 0..(30 * 30) {
         school.notice(near, sp, 6.0);
-        school.step(1.0 / 30.0, sp, &flock, &water, None);
+        school.step(&PLANET, 1.0 / 30.0, sp, &flock, &water, None);
     }
     assert_eq!(pose_now(&school), Pose::Hidden, "7 m off: hidden");
     // The eye 9 m off: 11 s later still hidden, 13 s later out.
     let far = home + up * 9.0;
     for _ in 0..(11 * 30) {
         school.notice(far, sp, 6.0);
-        school.step(1.0 / 30.0, sp, &flock, &water, None);
+        school.step(&PLANET, 1.0 / 30.0, sp, &flock, &water, None);
     }
     assert_eq!(pose_now(&school), Pose::Hidden, "hidden for 12 s");
     for _ in 0..(2 * 30) {
         school.notice(far, sp, 6.0);
-        school.step(1.0 / 30.0, sp, &flock, &water, None);
+        school.step(&PLANET, 1.0 / 30.0, sp, &flock, &water, None);
     }
     assert_eq!(pose_now(&school), Pose::Moving, "out again");
 }
@@ -695,7 +701,7 @@ fn a_plume_worm_pulls_its_plume_in_within_five_metres() {
     let r = roster();
     let i = index_of("tube_worm");
     let sp = &r[i];
-    let mut school = School::spawn(i as u16, sp, at(0.0, 1.0, 12.0), 3, &water);
+    let mut school = School::spawn(&PLANET, i as u16, sp, at(0.0, 1.0, 12.0), 3, &water);
     assert!(school.len() >= 10, "a cluster");
     let worm = school.positions[0];
     let up = worm.normalize();
@@ -704,7 +710,7 @@ fn a_plume_worm_pulls_its_plume_in_within_five_metres() {
     school.notice(worm + up * 4.5, sp, 6.0);
     assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::Shut);
     for _ in 0..(10 * 30) {
-        school.step(1.0 / 30.0, sp, &flock, &water, None);
+        school.step(&PLANET, 1.0 / 30.0, sp, &flock, &water, None);
     }
     assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::Moving);
     assert!(
@@ -722,7 +728,7 @@ fn a_seal_slides_in_within_nine_metres_and_hauls_out_after() {
     let i = index_of("seal");
     let sp = &r[i];
     assert_eq!(sp.catch_refusal(), Some("protected: it may not be caught"));
-    let mut school = School::spawn(i as u16, sp, at(0.0, 1.0, 12.0), 4, &Swell);
+    let mut school = School::spawn(&PLANET, i as u16, sp, at(0.0, 1.0, 12.0), 4, &Swell);
     let seal = school.positions[0];
     let up = seal.normalize();
     assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::HauledOut);
@@ -731,7 +737,7 @@ fn a_seal_slides_in_within_nine_metres_and_hauls_out_after() {
     school.notice(seal + up * 8.0, sp, 6.0);
     assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::Under);
     for _ in 0..(19 * 30) {
-        school.step(1.0 / 30.0, sp, &flock, &Swell, None);
+        school.step(&PLANET, 1.0 / 30.0, sp, &flock, &Swell, None);
     }
     assert_eq!(
         pose(sp, &school, 0, 0.0, false),
@@ -739,7 +745,7 @@ fn a_seal_slides_in_within_nine_metres_and_hauls_out_after() {
         "under 19 s on"
     );
     for _ in 0..(2 * 30) {
-        school.step(1.0 / 30.0, sp, &flock, &Swell, None);
+        school.step(&PLANET, 1.0 / 30.0, sp, &flock, &Swell, None);
     }
     assert_eq!(pose(sp, &school, 0, 0.0, false), Pose::HauledOut);
 }
@@ -785,7 +791,7 @@ fn a_startled_seal_dives_over_time_and_swims_away() {
     let r = roster();
     let i = index_of("seal");
     let sp = &r[i];
-    let mut school = School::spawn(i as u16, sp, at(0.0, 1.0, 12.0), 4, &Swell);
+    let mut school = School::spawn(&PLANET, i as u16, sp, at(0.0, 1.0, 12.0), 4, &Swell);
     let start = school.centre();
     let up = start.normalize();
     let side = up.cross(Vec3::X).normalize();
@@ -799,7 +805,7 @@ fn a_startled_seal_dives_over_time_and_swims_away() {
         if tick < 30 * 3 {
             school.notice(eye, sp, 6.0);
         }
-        school.step(dt, sp, &flock, &Swell, None);
+        school.step(&PLANET, dt, sp, &flock, &Swell, None);
         for (a, b) in school.under.iter().zip(&last) {
             assert!((a - b).abs() <= most, "under moved {} in a step", a - b);
         }
@@ -825,7 +831,7 @@ fn a_diving_duck_sinks_and_rises_never_in_one_frame() {
     let r = roster();
     let i = index_of("pond_diver");
     let sp = &r[i];
-    let school = School::spawn(i as u16, sp, at(0.0, 1.0, 12.0), 9, &Swell);
+    let school = School::spawn(&PLANET, i as u16, sp, at(0.0, 1.0, 12.0), 9, &Swell);
     let mut last = under_share(sp, &school, 0, 0.0, false);
     let mut deepest: f32 = 0.0;
     for k in 1..(30 * 30) {
@@ -843,7 +849,7 @@ fn a_diving_duck_sinks_and_rises_never_in_one_frame() {
 fn a_smaller_school_has_smaller_fish() {
     let r = roster();
     let i = r.iter().position(|s| s.can_bite()).expect("a fish");
-    let mut school = School::spawn(i as u16, &r[i], at(0.0, 1.0, 12.0), 77, &Swell);
+    let mut school = School::spawn(&PLANET, i as u16, &r[i], at(0.0, 1.0, 12.0), 77, &Swell);
     assert_eq!(school.scale, 1.0);
     let full: Vec<u32> = (0..school.len())
         .map(|f| school.length_cm(f, &r[i]))
@@ -856,4 +862,29 @@ fn a_smaller_school_has_smaller_fish() {
             "fish {f}: {now} cm against {was} cm at full size"
         );
     }
+}
+
+/// A school is drawn between its last two steps (`movement-smoothness`):
+/// at the step before for alpha 0, at the last step for 1, halfway for a
+/// half, never at the raw step while its clock runs between them. A fish
+/// held at the lure is drawn at the lure, and a caught fish leaves the two
+/// steps in step with each other.
+#[test]
+fn a_school_is_drawn_between_its_steps_and_a_held_fish_at_the_lure() {
+    let water = Shore { max_depth: 8.0 };
+    let flock = FlockSettings::default();
+    let (mut school, species) = school_of("silverfin", at(-10.0, 1.0, 14.0), 9, &water);
+    // No step behind it yet: drawn where it is.
+    assert_eq!(school.drawn(0, 0.0), school.positions[0]);
+    school.step(&PLANET, 1.0 / 30.0, &species, &flock, &water, None);
+    let (was, now) = (school.before[0], school.positions[0]);
+    assert!(was.distance(now) > 1e-4, "the fish moved in the step");
+    assert!(school.drawn(0, 0.0).distance(was) < 1e-6);
+    assert!(school.drawn(0, 1.0).distance(now) < 1e-6);
+    assert!(school.drawn(0, 0.5).distance(was.lerp(now, 0.5)) < 1e-6);
+    let lure = at(8.0, 0.35, 11.0);
+    school.held = Some((0, lure));
+    assert_eq!(school.drawn(0, 0.3), lure);
+    school.remove(0);
+    assert_eq!(school.before.len(), school.positions.len());
 }

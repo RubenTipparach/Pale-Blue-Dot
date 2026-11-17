@@ -13,7 +13,7 @@ pub enum RailsBodyKind {
     Station,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CircularOrbit {
     radius: f64,
     period: f64,

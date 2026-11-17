@@ -676,7 +676,10 @@ pub fn show_effects(
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted(
     launch: Res<super::Launch>,
-    cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
     refresh: Res<pbd_app::planet::LodRefresh>,
     (mut fine, mut contact, mut save, mut hotbar, mut drops, sun): (
         ResMut<pbd_app::planet::PlanetFine>,
@@ -708,7 +711,7 @@ pub fn scripted(
     let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
         return;
     };
-    let eye = transform.translation();
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
     let up = eye.normalize_or(Vec3::Y);
     let forward = transform.forward().as_vec3();
     let ahead = (forward - up * forward.dot(up)).normalize_or(Vec3::X);

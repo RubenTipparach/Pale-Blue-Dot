@@ -45,8 +45,9 @@ pub fn spawn_fleet(world: &mut World) {
     if world.get_resource::<Fleet>().is_none_or(|f| f.spawned) {
         return;
     }
-    // The craft are placed round the walker.
-    let Some(walker) = world
+    // The craft are placed round the walker, by its planet point.
+    let o = crate::sim_origin::origin_of(world);
+    let Some(local) = world
         .query_filtered::<&Position, With<Walker>>()
         .iter(world)
         .next()
@@ -54,6 +55,7 @@ pub fn spawn_fleet(world: &mut World) {
     else {
         return;
     };
+    let walker = o.query_point(local);
     let Some(Gathered {
         crafts,
         retired,
@@ -63,14 +65,16 @@ pub fn spawn_fleet(world: &mut World) {
     else {
         return;
     };
-    let center = world.resource::<crate::planet::PlanetRenderFrame>().center;
+    let center = world
+        .resource::<crate::planet::PlanetRenderFrame>()
+        .physics_center();
     for craft in crafts {
         let at = (center + craft.reference_position()).as_vec3();
         info!(
             "{} {} at {:.1} m from the player",
             craft.kind.name(),
             if fresh { "placed" } else { "restored" },
-            at.distance(walker)
+            at.distance(local)
         );
         spawn_craft(world, craft);
     }
@@ -156,7 +160,10 @@ fn gather(world: &World, walker: Vec3) -> Option<Gathered> {
             }
         }
         None => {
-            let center = world.resource::<crate::planet::PlanetRenderFrame>().center;
+            // The walker is a physics `Position`.
+            let center = world
+                .resource::<crate::planet::PlanetRenderFrame>()
+                .physics_center();
             let local = walker.as_dvec3() - center;
             let berths = Berths::find(sea, local.normalize_or(DVec3::Y).as_vec3());
             for (kind, berth) in berths.0 {

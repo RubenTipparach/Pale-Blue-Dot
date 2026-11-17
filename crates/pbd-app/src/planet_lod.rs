@@ -1365,12 +1365,12 @@ pub fn hold_for(landed_s: Option<f32>, now_s: f32, fade_s: f32) -> f32 {
 /// player whether walking or flying, body-local (from the planet's centre).
 fn player_position(
     cameras: &Query<(&GlobalTransform, &Camera), With<Camera3d>>,
-    center: Vec3,
+    center: bevy::math::DVec3,
 ) -> Option<Vec3> {
     cameras
         .iter()
         .find(|(_, camera)| camera.is_active)
-        .map(|(transform, _)| transform.translation() - center)
+        .map(|(transform, _)| (transform.translation().as_dvec3() - center).as_vec3())
 }
 
 impl LodRefresh {
@@ -1437,7 +1437,7 @@ pub fn refresh_lod(
         ResMut<super::bounce::LampBakeField>,
     ),
 ) {
-    let player = player_position(&cameras, frame.center.as_vec3());
+    let player = player_position(&cameras, frame.center);
     let direction = player.and_then(|p| p.try_normalize());
     if let Some(direction) = direction {
         let column = contact

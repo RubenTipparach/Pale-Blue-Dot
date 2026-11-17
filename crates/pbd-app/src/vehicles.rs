@@ -256,7 +256,7 @@ fn step_vehicles(
         let direction = up.as_vec3();
         let sample = world.air.as_deref().map(|air| air.now.sample(direction));
         let over_land = crate::planet::terrain::surface_height(direction) >= 0.0;
-        let global = world.frame.center + craft.body.position + world.physics.0.origin;
+        let global = world.frame.physics_center() + craft.body.position + world.physics.0.origin;
         // A river or a lake over the sea's level floats the craft on its own
         // surface (`small-boats` design 2b): no tide, its waves shoaled
         // to nothing, and the surface's slope as the current.
@@ -329,7 +329,7 @@ fn step_vehicles(
         // so a save taken aboard puts them on foot beside it on reload.
         if aboard.0 == Some(entity) {
             let exit = vehicle.craft.exit();
-            let at = (world.frame.center + exit).as_vec3();
+            let at = (world.frame.physics_center() + exit).as_vec3();
             let up = exit.normalize().as_vec3();
             if let Ok((mut position, mut transform)) = walkers.single_mut() {
                 position.0 = at + up * crate::walking::HALF_HEIGHT;
@@ -626,7 +626,7 @@ fn offer_board(
     let Some(walker) = walkers.iter().next() else {
         return;
     };
-    let at = walker.0.as_dvec3() - frame.center;
+    let at = walker.0.as_dvec3() - frame.physics_center();
     if let Some((_, vehicle)) = nearest_in_reach(vehicles.iter(), at) {
         interact.offer(crate::interact::Offer::new(
             crate::interact::Act::Board,
@@ -644,7 +644,10 @@ fn board(world: &mut World) {
         return;
     }
     let captured = state.captured;
-    let frame = world.resource::<crate::planet::PlanetRenderFrame>().center;
+    // Physics space: the walker's `Position` (`movement-smoothness` 6.1).
+    let frame = world
+        .resource::<crate::planet::PlanetRenderFrame>()
+        .physics_center();
     let Some(walker) = world
         .query_filtered::<&Position, With<Walker>>()
         .iter(world)
@@ -755,7 +758,10 @@ fn scripted_board(world: &mut World) {
 
 /// Step off: the craft stays, unattended; the walker is put at its exit.
 pub fn leave(world: &mut World, entity: Entity) {
-    let frame = world.resource::<crate::planet::PlanetRenderFrame>().center;
+    // The walker is dropped in physics space.
+    let frame = world
+        .resource::<crate::planet::PlanetRenderFrame>()
+        .physics_center();
     let (exit, velocity, name) = {
         let Some(mut vehicle) = world.get_mut::<Vehicle>(entity) else {
             world.resource_mut::<Aboard>().0 = None;

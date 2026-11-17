@@ -717,6 +717,7 @@ pub struct PlayerPlace<'w, 's> {
     walking: Option<Res<'w, WalkingReadout>>,
     walker: Query<'w, 's, &'static Position, With<Walker>>,
     ship: Query<'w, 's, &'static Position, (With<PilotShip>, Without<Walker>)>,
+    space: pbd_app::SimSpace<'w>,
 }
 
 impl PlayerPlace<'_, '_> {
@@ -727,7 +728,15 @@ impl PlayerPlace<'_, '_> {
         } else {
             self.ship.iter().next()
         };
-        at.map(|p| p.0).filter(|p| p.length_squared() > 1.0)
+        // A planet point (`world-frames`): the map places by direction.
+        let o = self.space.origin();
+        at.map(|p| o.query_point(p.0))
+            .filter(|p| p.length_squared() > 1.0)
+    }
+
+    /// The local origin, for a planet point of another body.
+    pub fn origin(&self) -> pbd_core::world_frame::SimOrigin {
+        self.space.origin()
     }
 
     /// Whether the walker is out: the place is then the walker's, which a
@@ -1820,12 +1829,13 @@ pub fn markers(
     };
     let size = Vec2::new(window.width(), window.height());
     let view = view.clamped(size);
+    let origin = player.origin();
     let player = player.get();
     let view_of = cameras
         .iter()
         .find(|(camera, _)| camera.is_active)
         .map(|(_, t)| (t.forward().as_vec3(), t.up().as_vec3()));
-    let ship_at = ship.iter().next().map(|p| p.0);
+    let ship_at = ship.iter().next().map(|p| origin.query_point(p.0));
     let waypoints = save.as_deref().map(marks_of).unwrap_or_default();
     for (label, mut text) in &mut labels {
         let want = waypoints

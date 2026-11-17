@@ -183,6 +183,21 @@ mockup with more than one 3D view puts each in its own tab:
 - 2D panels (a builder grid, a chart, stats) may sit beside the one 3D
   view in its tab.
 
+## Before and after is one video (owner, 2026-11-17)
+
+**Standing instruction from the user:** "I dont need before and after
+video by themselves, before after and comparison should all be one video,
+not 3 separate videos". A fix proved on video gets one file, not three:
+- the before, the after and their side-by-side comparison are cut into a
+  single video, each part labelled BEFORE, AFTER or BEFORE | AFTER in the
+  frame (a labelled side-by-side alone is enough when it shows it all);
+- separate before and after clips may exist locally for measuring, but only
+  the one combined video goes to Drive;
+- it is named `<what>-before-after-<height>p60.mp4`.
+
+This applies to every before-and-after video, including the Drive
+validation videos for complex water bugs.
+
 ## Every major step ends in a video (owner, 2026-09-27)
 
 **Standing instruction from the user:** "each major step needs a video
@@ -679,6 +694,21 @@ a test pins it. When the scale moves, both move in the same commit.
 - Free rotation is quaternion-backed. Rebase poses, interpolation history,
   physics state, and frame-relative velocities together at a tick boundary.
   Station passengers simulate in the station's local frame.
+- **All position math stays in the floating origin (owner, 2026-11-17):** "it
+  is extremely important to build this for a solar system scaled world".
+  - Everything simulated (bodies, the walker, animals, fish, decks) is a
+    local `f32` relative to the one `SimOrigin`, moved by its rebase (a
+    `RebaseHook` for anything kept outside Avian).
+  - Up, a radius and a planet point come only from the origin's methods,
+    in `f64` before the cast; never `position.normalize()` or
+    `position.length()` on a local or planet-centred `f32`.
+  - A planet-centred `f32` is a query (a terrain column, a town wall),
+    never a state that is stored or integrated.
+  - A stored position (a save, a drop) is body-relative `f64`, a
+    `WorldPos` with its frame named, converted at the boundary; save
+    formats do not change for it.
+  - `tests/origin_guard.rs` lists the converted files; a new simulation
+    file goes on it.
 - Start the desktop explorer in first-person walking mode on dry land. Player
   mouse look uses the current frame's raw displacement, with no camera easing,
   smoothing, interpolation delay, or dependence on ship angular response.

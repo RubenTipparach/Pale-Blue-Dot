@@ -313,20 +313,18 @@ pub fn in_range(at: DVec3, viewer: DVec3, was: bool) -> bool {
 
 /// The viewer, planet-local: the walker, or the camera where there is none.
 fn viewer(world: &mut World) -> Option<DVec3> {
-    let centre = world
-        .get_resource::<crate::planet::PlanetRenderFrame>()?
-        .center;
+    let frame = *world.get_resource::<crate::planet::PlanetRenderFrame>()?;
+    let centre = frame.center;
     let mut walkers =
         world.query_filtered::<&avian3d::prelude::Position, With<crate::walking::Walker>>();
     if let Some(p) = walkers.iter(world).next() {
-        return Some(centre + p.0.as_dvec3());
+        return Some(p.0.as_dvec3() - frame.physics_center());
     }
     let mut cameras = world.query_filtered::<(&Camera, &GlobalTransform), With<Camera3d>>();
     cameras
         .iter(world)
         .find(|(c, _)| c.is_active)
         .map(|(_, at)| at.translation().as_dvec3() - centre)
-        .map(|local| centre + local)
 }
 
 /// Every berth the fleet holds a craft of, in the world or stowed.

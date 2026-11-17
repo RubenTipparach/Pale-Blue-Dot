@@ -13,7 +13,7 @@
 //! agree about. Drawing one is the app's business.
 
 use crate::inventory::{Item, Slots};
-use glam::Vec3;
+use glam::DVec3;
 use std::f32::consts::TAU;
 
 /// How far a drop is pushed sideways from the cell's centre, m, so a pile
@@ -56,8 +56,11 @@ pub struct ItemDrop {
     pub item: Item,
     /// How many are on it. A drop that is partly picked up keeps the rest.
     pub count: u16,
-    /// Where it floats, planet-local metres.
-    pub position: Vec3,
+    /// Where it floats: metres in its body's frame, f64 (`world-frames`
+    /// design 10.4). A drop is stored state, so it is a body-frame point,
+    /// never a planet-centred f32 (which holds half a millimetre at the
+    /// home planet's radius and half a metre at a thousand times it).
+    pub position: DVec3,
     /// The world time it was made, s since midnight of day 0.
     pub made_s: f64,
 }
@@ -68,6 +71,11 @@ impl ItemDrop {
     /// n here, and is stable across a load.
     pub fn phase(&self) -> f32 {
         ((self.id % 1024) as f32 * 1.7) % TAU
+    }
+
+    /// Up at the drop: away from its body's centre, in f64.
+    pub fn up(&self) -> DVec3 {
+        self.position.normalize_or(DVec3::Y)
     }
 
     /// Whether it has outlived its time at world time `now_s`.
@@ -89,13 +97,13 @@ impl ItemDrop {
 /// Where a drop from a cell starts: the cell's centre, pushed sideways by
 /// [`SCATTER_M`] in a direction its id picks. Tenebris keys the direction off
 /// the same counter as the phase, so two drops from one cut part.
-pub fn scattered(centre: Vec3, id: u64) -> Vec3 {
-    let up = centre.normalize_or(Vec3::Y);
-    let reference = if up.y.abs() < 0.9 { Vec3::Y } else { Vec3::X };
+pub fn scattered(centre: DVec3, id: u64) -> DVec3 {
+    let up = centre.normalize_or(DVec3::Y);
+    let reference = if up.y.abs() < 0.9 { DVec3::Y } else { DVec3::X };
     let east = reference.cross(up).normalize();
     let north = up.cross(east);
-    let angle = ((id % 1024) as f32 * 1.7) % TAU;
-    centre + (east * angle.cos() + north * angle.sin()) * SCATTER_M
+    let angle = f64::from(((id % 1024) as f32 * 1.7) % TAU);
+    centre + (east * angle.cos() + north * angle.sin()) * f64::from(SCATTER_M)
 }
 
 /// What one frame did to a drop.
@@ -117,9 +125,11 @@ pub enum Moved {
 /// A drop inside the pickup radius that does not fit is tried again the next
 /// frame, and stays where it is until something makes room: a full pack is
 /// the owner's "floating blocks".
-pub fn step(drop: &mut ItemDrop, chest: Vec3, dt: f32, slots: &mut Slots) -> Moved {
+pub fn step(drop: &mut ItemDrop, chest: DVec3, dt: f32, slots: &mut Slots) -> Moved {
+    // In the body's frame, in f64: a pull of a few millimetres a frame is
+    // not rounded to the planet's half millimetre.
     let to_chest = chest - drop.position;
-    let distance = to_chest.length();
+    let distance = to_chest.length() as f32;
     if distance < PICKUP_M {
         let left = slots.give(drop.item, drop.count);
         let taken = drop.count - left;
@@ -133,7 +143,7 @@ pub fn step(drop: &mut ItemDrop, chest: Vec3, dt: f32, slots: &mut Slots) -> Mov
     if distance < MAGNET_M && distance > 1e-6 && dt > 0.0 {
         let speed = MAGNET_SPEED_MPS * (1.0 + (MAGNET_M - distance));
         let moved = (speed * dt).min(distance);
-        drop.position += to_chest * (moved / distance);
+        drop.position += to_chest * f64::from(moved / distance);
         return Moved::Pulled;
     }
     Moved::Stayed
@@ -145,7 +155,7 @@ mod tests {
     use crate::inventory::{CARRIED, Stack};
     use crate::terrain::Material;
 
-    fn dirt(at: Vec3) -> ItemDrop {
+    fn dirt(at: DVec3) -> ItemDrop {
         ItemDrop {
             id: 7,
             item: Item::Block(Material::Dirt),
@@ -155,20 +165,20 @@ mod tests {
         }
     }
 
-    const CHEST: Vec3 = Vec3::new(0.0, 300.8, 0.0);
+    const CHEST: DVec3 = DVec3::new(0.0, 300.8, 0.0);
 
     /// Inside the magnet a drop moves toward the chest, by the magnet's speed
     /// for the frame, and outside it does not move at all.
     #[test]
     fn the_magnet_pulls_inside_its_reach_and_not_outside() {
         let mut slots = Slots::new();
-        let mut near = dirt(CHEST + Vec3::X * 2.0);
+        let mut near = dirt(CHEST + DVec3::X * 2.0);
         assert_eq!(step(&mut near, CHEST, 0.01, &mut slots), Moved::Pulled);
         let expected = MAGNET_SPEED_MPS * (1.0 + (MAGNET_M - 2.0)) * 0.01;
-        assert!(((2.0 - (near.position - CHEST).length()) - expected).abs() < 1e-4);
-        let mut far = dirt(CHEST + Vec3::X * 3.0);
+        assert!(((2.0 - (near.position - CHEST).length() as f32) - expected).abs() < 1e-4);
+        let mut far = dirt(CHEST + DVec3::X * 3.0);
         assert_eq!(step(&mut far, CHEST, 0.01, &mut slots), Moved::Stayed);
-        assert_eq!(far.position, CHEST + Vec3::X * 3.0);
+        assert_eq!(far.position, CHEST + DVec3::X * 3.0);
         assert_eq!(slots.iter().flatten().count(), 0, "nothing picked up");
     }
 
@@ -177,7 +187,7 @@ mod tests {
     #[test]
     fn a_pull_never_overshoots_the_chest() {
         let mut slots = Slots::new();
-        let mut drop = dirt(CHEST + Vec3::Z * 1.5);
+        let mut drop = dirt(CHEST + DVec3::Z * 1.5);
         step(&mut drop, CHEST, 10.0, &mut slots);
         assert!((drop.position - CHEST).length() < 1e-4);
     }
@@ -188,7 +198,7 @@ mod tests {
     fn a_drop_in_reach_is_picked_up_by_the_give_order() {
         let mut slots = Slots::new();
         slots.set(3, Some(Stack::new(Item::Block(Material::Dirt), 5)));
-        let mut drop = dirt(CHEST + Vec3::X);
+        let mut drop = dirt(CHEST + DVec3::X);
         drop.count = 2;
         assert_eq!(
             step(&mut drop, CHEST, 0.01, &mut slots),
@@ -206,11 +216,11 @@ mod tests {
         for k in 0..CARRIED {
             slots.set(k, Some(Stack::new(Item::Fish(k as u16), 16)));
         }
-        let mut drop = dirt(CHEST + Vec3::X);
+        let mut drop = dirt(CHEST + DVec3::X);
         drop.count = 3;
         assert_eq!(step(&mut drop, CHEST, 0.01, &mut slots), Moved::Stayed);
         assert_eq!(drop.count, 3);
-        assert_eq!(drop.position, CHEST + Vec3::X, "it floats where it was");
+        assert_eq!(drop.position, CHEST + DVec3::X, "it floats where it was");
         slots.set(20, Some(Stack::new(Item::Block(Material::Dirt), 98)));
         assert_eq!(
             step(&mut drop, CHEST, 0.01, &mut slots),
@@ -231,18 +241,18 @@ mod tests {
     /// drops from one cut.
     #[test]
     fn the_scatter_is_sideways_and_parts_neighbours() {
-        let centre = Vec3::new(120.0, 250.0, -90.0);
+        let centre = DVec3::new(120.0, 250.0, -90.0);
         let a = scattered(centre, 1);
         let b = scattered(centre, 2);
         for p in [a, b] {
-            assert!(((p - centre).length() - SCATTER_M).abs() < 1e-4);
+            assert!(((p - centre).length() - f64::from(SCATTER_M)).abs() < 1e-4);
             assert!(
                 (p - centre).dot(centre.normalize()).abs() < 1e-3,
                 "sideways"
             );
         }
         assert!((a - b).length() > 0.1);
-        let pole = Vec3::new(0.0, 300.0, 0.0);
+        let pole = DVec3::new(0.0, 300.0, 0.0);
         assert!(scattered(pole, 5).is_finite());
     }
 }
