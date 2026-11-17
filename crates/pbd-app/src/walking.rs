@@ -1861,6 +1861,18 @@ pub struct StepHistory {
     pub current: Vec3,
 }
 
+/// Whether the walking camera is drawn between physics steps (design 6.5).
+/// On in play; a `--capture` steps one physics step a frame, so it has no
+/// beat to smooth and draws the step itself, as it always has.
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct DrawBetweenSteps(pub bool);
+
+impl Default for DrawBetweenSteps {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
 /// A step longer than this is a teleport, drawn where it lands, never as a
 /// glide: a walker's fastest step at 60 Hz is a fraction of a metre.
 pub const STEP_SNAP_M: f32 = 2.0;
@@ -1891,7 +1903,7 @@ pub(crate) fn follow_walker(
     mut state: ResMut<WalkingState>,
     mut readout: ResMut<WalkingReadout>,
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
-    fixed: Option<Res<Time<Fixed>>>,
+    (fixed, between): (Option<Res<Time<Fixed>>>, Option<Res<DrawBetweenSteps>>),
     mut walkers: Query<
         (
             &Position,
@@ -1915,7 +1927,10 @@ pub(crate) fn follow_walker(
     // The body between its last two physics steps, by how far the fixed
     // clock has run past the last one: the position only. The look below
     // is this frame's raw mouse.
-    let alpha = fixed.map_or(1.0, |f| f.overstep_fraction());
+    let alpha = match between {
+        Some(b) if !b.0 => 1.0,
+        _ => fixed.map_or(1.0, |f| f.overstep_fraction()),
+    };
     let body = history.map_or(position.0, |mut h| h.drawn(position.0, alpha));
     let drawn_up = body.normalize_or(up);
     for mut camera in &mut cameras {

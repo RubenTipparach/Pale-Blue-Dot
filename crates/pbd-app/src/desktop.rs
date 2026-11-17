@@ -1552,6 +1552,7 @@ pub fn run(args: &[String]) {
     // The render origin starts at -offset, so a camera placed at a
     // planet-local eye plus the offset is in render space from its first
     // frame (`movement-smoothness` design 6.6).
+    .insert_resource(pbd_app::walking::DrawBetweenSteps(launch.capture.is_none()))
     .insert_resource(pbd_app::render_origin::RenderOffset(
         launch.render_offset.as_dvec3(),
     ))
