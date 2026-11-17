@@ -416,6 +416,18 @@ pub fn at(cfg: &TerrainConfig, d: Vec3) -> Option<RiverHere> {
     map(cfg, settings).at(cfg, settings, d)
 }
 
+/// Whether a river's banks reach within `extra_m` of `d`: the cheap read a
+/// caller that tests an area with [`floods`] (the map's pixel, `map-rivers`)
+/// makes first, since no water stands anywhere this says no.
+pub fn near(cfg: &TerrainConfig, d: Vec3, extra_m: f32) -> bool {
+    let Some(settings) = cfg.rivers.as_ref() else {
+        return false;
+    };
+    map(cfg, settings)
+        .at_widened(cfg, settings, d, extra_m.max(0.0))
+        .is_some()
+}
+
 /// Where a river's valley and a margin past its banks are sealed from
 /// caves (`water-flow` E16): the altitude, metres over the radius, above
 /// which no cave opens in a column here. Four metres under the sea's level,
