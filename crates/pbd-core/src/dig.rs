@@ -330,6 +330,19 @@ impl<C: Copy + PartialEq> Breaking<C> {
             .map(|(block, secs)| (block, (self.elapsed_s / secs).clamp(0.0, 1.0)))
     }
 
+    /// The block being broken's break time and the time it has had, s, or
+    /// `None`. Read by what draws the swing (`held-swing` decision 5),
+    /// never written by it.
+    pub fn timing(&self) -> Option<(f32, f32)> {
+        self.target.map(|(_, secs)| (secs, self.elapsed_s))
+    }
+
+    /// The pause left before the next block may start, s: after a block
+    /// broke, while the button stays down.
+    pub fn pause_left(&self) -> f32 {
+        self.pause_s
+    }
+
     /// One frame. `aim` is the block under the reticle and the time it needs
     /// with the tool in hand (`None` for nothing breakable, or the rod);
     /// `held` is the use button. Letting go, or aiming at another block,

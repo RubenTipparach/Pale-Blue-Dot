@@ -42,3 +42,41 @@ These are shown in the mockup's Hand tab. The owner picks one of each.
   - every part's normals point outward;
   - the fist closes on each handle without passing through it;
   - the textures are on the palette and exactly the sizes stated.
+
+## 4. As built (2026-11-17)
+
+The proposed hand of Tools in Hand version 8, approved by the owner.
+
+- **Blocks.** `tools/gen_held_tools.py` ports `proposedHandGeometry`: each of
+  the game's bones becomes a chamfered block (the octagonal section, the
+  bevelled ends, the fingers at 0.94 of the bone turned so a flat face is the
+  back, the back of the hand 1.08 deep, the wrist 1.15 long into the cuff),
+  the thumb two segments of the 0.72-shortened chain split half way along it,
+  a nail plate on each tip, a hem ring on the sleeve, and the wrist joint the
+  arm turns about. They go into `held_tools.ron` as `hand` blocks (with
+  `part` names) and `wrist`, in place of the 19 prisms. The sleeve's extra
+  length is the game's (`held.ron` `stroke.sleeve_extra`, 6 tool units),
+  along the sleeve block's `grow`. `pbd_core::hand::block` builds the faces,
+  each wound out from its block's centre with its own flat normal, a planar
+  UV at one texel per 0.24 tool units (along the cuff, end to end), and the
+  knuckle crease on the bevels.
+- **Textures.** `handTextures` ported with its generator: the four 16 px PNGs
+  in `assets/textures/hand/` are the mockup's pixel for pixel (checked
+  against the page's own function run in node). Nearest-sampled and tiled;
+  the v coordinate is flipped for wgpu.
+- **Light.** The cheaper honest one: the vertex colours are re-baked on the
+  CPU (`held::shade_hands`) whenever the hand's turn into eye space changes
+  by more than a milliradian, with the light and the fill taken into the
+  model through the drawn pose (the arm's through its bend). A shader would
+  be a new material and pipeline for about 4,600 vertices a hand; the bake
+  touches only the shown hand, and only while it turns. The shade's three
+  values are `held.ron` `hand_light` (the mockup prints them as a comment).
+  The materials stay unlit and take the field's light at the eye
+  (`light_held`), as before.
+- **One skin.** The hand's colour is the textures': skin, nail, cloth and
+  cuff. The hem is drawn in the cloth texture, as the mockup's textured hand
+  draws it.
+- **The mockup's own data.** `tool-motion.html`'s `HELD` data still holds
+  the game's old prisms, which its Today mode draws; it is not regenerated.
+
+Frame cost was not measured (a cloud container, no GPU).

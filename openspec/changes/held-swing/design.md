@@ -135,3 +135,43 @@
    "Two thumbs segments not 3"); that is `hand-model`'s.
 
    It keeps the four stages (decision 7) and the steady beat (decision 5).
+
+## As built (2026-11-17)
+
+Ported from Tools in Hand version 8 (`docs/mockups/tool-motion.html`, the
+Proposed mode) into `crates/pbd-app/src/held/stroke.rs`: the same curves
+(`timings`, `keys`, `strokeAt`, `strokePose`, `shovelKeys`, `shovelAt`,
+`Schedule`) and the same defaults, in `held.ron`'s `stroke` and `shovel`
+blocks as the mockup's Copy RON prints them. Decision 1's three `swing_*`
+values are gone. Where it differs from the mockup, and why:
+
+- **The beat on the game's rule.** The mockup runs one clock while the
+  button is held. The game's dig (`pbd_core::dig::Breaking`) restarts each
+  block, so the stroke's clock is the cycle count times L plus the rule's
+  time into the block and its pause (`DigBeat`, written by `digging.rs` from
+  `Breaking::timing` and `pause_left`; read only). The rule's own events the
+  mockup has no button for (aimed at another block mid-way, a tool changed, a
+  different break time) start the beat again from nought, and the tool eases
+  there from where it is drawn over `recover_s`. Taking the dig up again
+  while the tool is easing back does the same, where the mockup snaps it to
+  rest.
+- **The shovel's keys stay in eye space** as the mockup lays them out for its
+  Dig tab's view, which looks down `DIG_PITCH` (-0.56 rad). The game does
+  not re-aim the entry by where the player looks.
+- **The arm bend** (`arm_follow`) turns the arm's meshes (the wrist, the cuff
+  and the sleeve) about the wrist joint, as the mockup's `HandPair` does; at
+  the approved 1 it stays straight.
+- **Sounds** (2.2): each impact but a block's last plays the dig sound; the
+  last lands on the break, which plays the break sound. The thirds of
+  progress are gone. Bare hands keep the beat for the sounds and draw
+  nothing, as before.
+- **Not in the game:** the camera kick (approved at 0; `held.ron` refuses any
+  other value, since the walking camera's look is the player's raw mouse),
+  and the mockup's chips flying off each hit and the hit marker. The
+  shovel's clump of dirt is in, shaded as the tool is, without the mockup's
+  burst of four chips as it tips off.
+- **Weights:** a tool's weight at its tier uses `Tier::digit` (stone 0 to
+  steel 3), the mockup's tier index.
+
+Frame cost was not measured: the work was done in a cloud container with no
+GPU (CLAUDE.md). The captures are on lavapipe.
