@@ -90,6 +90,7 @@ Done on `claude/starter-missions` (2026-11-14): tests in `pbd_core::missions` an
 
 ## J. The goals on the HUD and the jingle (owner, 2026-11-17; design "The goals on the HUD, and a jingle")
 
-- [ ] J.1 The goals block at the left: the title, every objective with its check and count, dimmed when met, "MISSION COMPLETE" for the notice. Verify: an app test of the rows for a mission of three objectives; captures mid-mission and at a completion.
-- [ ] J.2 The labels rewritten as instructions; metres on distance goals. Verify: the load test; the tests that read the line.
-- [ ] J.3 `mission_done` in `gen_sfx.py`, played once when a mission closes. Verify: the sfx checks (`inspect_sfx.py`), a spectrogram, an app test that one close plays one jingle.
+- [x] J.1 The goals block at the left: the title, every objective with its check and count, dimmed when met, "MISSION COMPLETE" for the notice. Verify: an app test of the rows for a mission of three objectives; captures mid-mission and at a completion.
+- [x] J.2 The labels rewritten as instructions; metres on distance goals. Verify: the load test; the tests that read the line.
+- [x] J.3 `mission_done` in `gen_sfx.py`, played once when a mission closes. Verify: the sfx checks (`inspect_sfx.py`), a spectrogram, an app test that one close plays one jingle.
+  - Built 2026-11-17: `desktop/missions.rs` (`goals_view`, `goal_words`, `show_goals`; `GOALS_AT` (6, 62) UI px, four rows); `MissionDone` from the counting, `mission_done` in `audio/hooks.rs` and `cues.ron` (-6 dB, Menus); 67 labels in `missions.ron`. Tests: `the_goals_list_every_objective_and_a_finished_mission_all_met`, `a_distance_goal_counts_in_metres`, and the new-world test reads one `MissionDone` for "gather". Captures: `docs/screenshots/mission-goals/` (lavapipe). The jingle: `inspect_sfx.py check` ok (2.8 s with the room), and a spectrogram showing the two figures, the held chord and the bell. Not heard: only the owner's ears approve a sound.
