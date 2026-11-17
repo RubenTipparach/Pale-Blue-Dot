@@ -679,6 +679,21 @@ a test pins it. When the scale moves, both move in the same commit.
 - Free rotation is quaternion-backed. Rebase poses, interpolation history,
   physics state, and frame-relative velocities together at a tick boundary.
   Station passengers simulate in the station's local frame.
+- **All position math stays in the floating origin (owner, 2026-11-17):** "it
+  is extremely important to build this for a solar system scaled world".
+  - Everything simulated (bodies, the walker, animals, fish, decks) is a
+    local `f32` relative to the one `SimOrigin`, moved by its rebase (a
+    `RebaseHook` for anything kept outside Avian).
+  - Up, a radius and a planet point come only from the origin's methods,
+    in `f64` before the cast; never `position.normalize()` or
+    `position.length()` on a local or planet-centred `f32`.
+  - A planet-centred `f32` is a query (a terrain column, a town wall),
+    never a state that is stored or integrated.
+  - A stored position (a save, a drop) is body-relative `f64`, a
+    `WorldPos` with its frame named, converted at the boundary; save
+    formats do not change for it.
+  - `tests/origin_guard.rs` lists the converted files; a new simulation
+    file goes on it.
 - Start the desktop explorer in first-person walking mode on dry land. Player
   mouse look uses the current frame's raw displacement, with no camera easing,
   smoothing, interpolation delay, or dependence on ship angular response.
