@@ -438,6 +438,13 @@ impl Plugin for FieldLightPlugin {
                 )
                     .chain()
                     .after(bevy::transform::TransformSystems::Propagate)
+                    // The swap from the standard material to the field-lit one
+                    // must land before Bevy lists the meshes to specialise this
+                    // frame. Otherwise the render world gets the new material
+                    // with no specialisation tick and panics
+                    // (bevy_pbr material.rs, `specialize_material_meshes`).
+                    .before(bevy::pbr::check_entities_needing_specialization::<FieldLitMaterial>)
+                    .before(bevy::pbr::check_entities_needing_specialization::<StandardMaterial>)
                     .run_if(crate::world_open),
             )
             .add_systems(Update, bake_town_outsides)
