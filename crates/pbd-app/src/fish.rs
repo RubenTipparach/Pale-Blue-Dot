@@ -135,6 +135,10 @@ impl Default for Fishery {
 pub struct FishingStatus {
     pub text: String,
     pub meter: Option<(&'static str, f32)>,
+    /// The float is out and a right click reels it in: the interact prompt
+    /// shows that button under the crosshair (owner, 2026-11-16: "just have a
+    /// button prompt to right click to reel in").
+    pub reel_prompt: bool,
     /// Seconds a one-off message (a catch, a snap) stays up.
     hold_s: f32,
 }
@@ -474,6 +478,8 @@ fn fish(
     if status.hold_s <= 0.0 {
         status.text = idle_text(&fishery.line, rod && walking, roster);
     }
+    status.reel_prompt =
+        rod && walking && fishery.line.phase == Phase::Floating && !roster.is_empty();
     status.meter = match fishery.line.phase {
         Phase::Charging => Some(("CAST", fishery.line.power)),
         Phase::Hooked => Some(("TENSION", fishery.line.tension)),
@@ -1010,7 +1016,8 @@ fn idle_text(line: &Line, rod: bool, roster: &[Species]) -> String {
         Phase::Ready => "Hold the left button to cast".into(),
         Phase::Charging => "Let go to cast".into(),
         Phase::Flying => String::new(),
-        Phase::Floating => "Watch the float - right click winds in".into(),
+        // The button prompt says it (`reel_prompt`).
+        Phase::Floating => String::new(),
         Phase::Nibble => "Something is nibbling - wait for the float to go under".into(),
         Phase::Bite => "Bite! Click now".into(),
         Phase::Hooked => "Hold to reel - ease off when it runs".into(),
