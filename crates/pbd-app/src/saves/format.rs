@@ -25,7 +25,6 @@
 //! so the line that records the hole records where the block went, and a
 //! pickup is a line of its own.
 
-use bevy::math::Vec3;
 use pbd_core::drops::ItemDrop;
 use pbd_core::edits::Edit;
 use pbd_core::goods::Good;
