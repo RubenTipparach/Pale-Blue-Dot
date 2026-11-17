@@ -836,3 +836,24 @@ fn a_diving_duck_sinks_and_rises_never_in_one_frame() {
     }
     assert!(deepest > 0.99, "it dives");
 }
+
+/// A school's scale shortens every fish in it by that much (`fishing-anywhere`
+/// design 3), and a school in the sea keeps its species' size.
+#[test]
+fn a_smaller_school_has_smaller_fish() {
+    let r = roster();
+    let i = r.iter().position(|s| s.can_bite()).expect("a fish");
+    let mut school = School::spawn(i as u16, &r[i], at(0.0, 1.0, 12.0), 77, &Swell);
+    assert_eq!(school.scale, 1.0);
+    let full: Vec<u32> = (0..school.len())
+        .map(|f| school.length_cm(f, &r[i]))
+        .collect();
+    school.scale = 0.5;
+    for (f, was) in full.iter().enumerate() {
+        let now = school.length_cm(f, &r[i]);
+        assert!(
+            (now as f32 - *was as f32 * 0.5).abs() <= 1.0,
+            "fish {f}: {now} cm against {was} cm at full size"
+        );
+    }
+}

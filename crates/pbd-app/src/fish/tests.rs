@@ -305,3 +305,20 @@ fn a_school_fades_in_and_fades_out_before_it_is_dropped() {
     assert!(last >= 0.99, "dropped only once faded: {last}");
     assert!(frames as f32 * dt >= SCHOOL_FADE_S - 2.0 * dt);
 }
+
+/// A puddle's fish are a third of their size; a wide, deep river's are full
+/// size; a narrow brook sits between (`fishing-anywhere` design 3).
+#[test]
+fn smaller_water_makes_smaller_fish() {
+    use crate::fish::body_scale;
+    use bevy::prelude::Vec3;
+    let up = Vec3::Y;
+    let r = crate::planet::PLANET_RADIUS;
+    let within = |metres: f32| move |p: Vec3| p.normalize().angle_between(up) * r <= metres;
+    let puddle = body_scale(up, 0.4, within(2.0));
+    let brook = body_scale(up, 1.0, within(7.0));
+    let river = body_scale(up, 3.5, within(40.0));
+    assert!((puddle - 0.35).abs() < 1e-3, "puddle {puddle}");
+    assert!(brook > puddle && brook < river, "brook {brook}");
+    assert!((river - 1.0).abs() < 1e-3, "river {river}");
+}

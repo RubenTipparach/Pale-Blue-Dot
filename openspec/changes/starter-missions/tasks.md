@@ -70,6 +70,8 @@ Done on `claude/starter-missions` (2026-11-14): tests in `pbd_core::missions` an
   - M33: `LEVELS` in `docs/mockups/mission-tree/tree.js` and the `#world.lv<n>` rules in `mission-tree.html`; stills at every level on this Mac's GPU (Chromium, `--use-angle=metal`, 1440x900 at 2x) in `docs/screenshots/mockup-mission-tree/zoom/`, with the same 4x corner crops.
 
 
+- [ ] TS.4 M33's new look in the game (design TS.4): one card shape scaled in ten steps (0.1-2) at twice the gaps, icon tiles at 0.6 and below with the full card on hover, mission icons on the cards (`missions.ron` `icon`), pan bounds, Fit. Verify: the whole-pixels test over the new levels, a test that every mission's icon exists, and captures at 1, at Fit and with a hovered tile beside M33's.
+
 ## G. Closing the gaps (owner, 2026-11-16: "fix the gaps"; design "Closing the tree's gaps")
 
 - [x] G.1 Bait: the `bait` good and its icon; found in wet ground at the shore (`gather.ron` `bait_one_in`, `bait_band_m`); a cast with bait in the pack is baited, bites more readily (`fauna.ron` `bait_bite`), and a landed fish uses one; the kind `baited`; "Dig for bait" live, `awaited` empty. Verify: core tests that bait turns up only in the shore band, in about a third of cells, never from a placed block; that a baited line's bite factor is raised; the shipped-tree test with no pending mission.

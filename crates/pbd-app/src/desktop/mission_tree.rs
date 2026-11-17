@@ -46,116 +46,205 @@ pub struct Level {
     pub badge: u32,
     /// The card's padding, left and right, top and bottom.
     pub pad: (f32, f32),
+    /// The mission's icon beside the title, px; nought where the card is
+    /// its icon instead.
+    pub icon: f32,
+    /// The icon a card is at this level, px, filling its frame; nought on
+    /// a full card.
+    pub big: f32,
+    /// An objective's tick, px: the kit's check at a whole multiple.
+    pub check: f32,
 }
 
-/// The levels, farthest first. 0 is the overview, each card its frame
-/// only; 1 and 2 collapse a card to its title and badge; 3 is the full card
-/// packed close; 4 is the kit's native card; 5 and 6 are bigger cards with
-/// bigger type.
-pub const LEVELS: [Level; 7] = [
+/// The levels, farthest first (`starter-missions` TS.4, M33's look): one
+/// card shape at every zoom, each level M33's scale (0.1 to 2) of the
+/// native card (132 x 96) laid out at twice the native gaps (92 x 80), in
+/// whole UI pixels. At 0.6 and below a card is its mission's icon filling
+/// the frame; hovering one shows the full card (`TipCard`).
+pub const LEVELS: [Level; 10] = [
+    // x0.1
     Level {
-        cw: 40.0,
-        ch: 12.0,
-        gx: 4.0,
-        gy: 4.0,
+        cw: 13.0,
+        ch: 10.0,
+        gx: 10.0,
+        gy: 8.0,
         text: false,
         full: false,
         labels: false,
-        title: 8.0,
-        sub: 8.0,
-        line: 8.0,
+        title: 6.0,
+        sub: 5.0,
+        line: 6.0,
         badge: 1,
-        pad: (0.0, 0.0),
+        pad: (1.0, 0.0),
+        icon: 0.0,
+        big: 8.0,
+        check: 12.0,
     },
+    // x0.14
     Level {
-        cw: 112.0,
-        ch: 18.0,
-        gx: 10.0,
-        gy: 6.0,
-        text: true,
+        cw: 18.0,
+        ch: 13.0,
+        gx: 12.0,
+        gy: 12.0,
+        text: false,
         full: false,
         labels: false,
-        title: 8.0,
-        sub: 8.0,
-        line: 8.0,
+        title: 6.0,
+        sub: 5.0,
+        line: 6.0,
         badge: 1,
-        pad: (5.0, 4.0),
+        pad: (1.0, 1.0),
+        icon: 0.0,
+        big: 8.0,
+        check: 12.0,
     },
+    // x0.2
     Level {
-        cw: 132.0,
-        ch: 24.0,
+        cw: 26.0,
+        ch: 19.0,
         gx: 18.0,
-        gy: 10.0,
-        text: true,
+        gy: 16.0,
+        text: false,
         full: false,
         labels: false,
-        title: 10.0,
-        sub: 8.0,
-        line: 8.0,
+        title: 6.0,
+        sub: 5.0,
+        line: 6.0,
         badge: 1,
-        pad: (6.0, 5.0),
+        pad: (1.0, 1.0),
+        icon: 0.0,
+        big: 8.0,
+        check: 12.0,
     },
+    // x0.3
     Level {
-        cw: 132.0,
-        ch: 96.0,
-        gx: 22.0,
-        gy: 18.0,
-        text: true,
-        full: true,
+        cw: 40.0,
+        ch: 29.0,
+        gx: 28.0,
+        gy: 24.0,
+        text: false,
+        full: false,
         labels: false,
-        title: 10.0,
-        sub: 8.0,
-        line: 9.0,
+        title: 6.0,
+        sub: 5.0,
+        line: 6.0,
         badge: 1,
-        pad: (7.0, 5.0),
+        pad: (2.0, 2.0),
+        icon: 0.0,
+        big: 16.0,
+        check: 12.0,
     },
+    // x0.42
     Level {
-        cw: 132.0,
-        ch: 96.0,
-        gx: 46.0,
-        gy: 40.0,
-        text: true,
-        full: true,
-        labels: true,
-        title: 10.0,
-        sub: 8.0,
-        line: 9.0,
+        cw: 55.0,
+        ch: 40.0,
+        gx: 38.0,
+        gy: 34.0,
+        text: false,
+        full: false,
+        labels: false,
+        title: 6.0,
+        sub: 5.0,
+        line: 6.0,
         badge: 1,
-        pad: (7.0, 5.0),
+        pad: (3.0, 2.0),
+        icon: 0.0,
+        big: 16.0,
+        check: 12.0,
     },
+    // x0.6
     Level {
-        cw: 176.0,
-        ch: 124.0,
+        cw: 79.0,
+        ch: 58.0,
         gx: 56.0,
         gy: 48.0,
-        text: true,
-        full: true,
-        labels: true,
-        title: 13.0,
-        sub: 10.0,
-        line: 11.0,
+        text: false,
+        full: false,
+        labels: false,
+        title: 6.0,
+        sub: 5.0,
+        line: 6.0,
         badge: 1,
-        pad: (9.0, 7.0),
+        pad: (4.0, 3.0),
+        icon: 0.0,
+        big: 32.0,
+        check: 12.0,
     },
+    // x0.8
     Level {
-        cw: 224.0,
-        ch: 156.0,
-        gx: 64.0,
-        gy: 56.0,
+        cw: 106.0,
+        ch: 77.0,
+        gx: 74.0,
+        gy: 64.0,
         text: true,
         full: true,
         labels: true,
-        title: 16.0,
-        sub: 12.0,
+        title: 8.0,
+        sub: 6.0,
+        line: 7.0,
+        badge: 1,
+        pad: (6.0, 4.0),
+        icon: 16.0,
+        big: 0.0,
+        check: 12.0,
+    },
+    // x1.0
+    Level {
+        cw: 132.0,
+        ch: 96.0,
+        gx: 92.0,
+        gy: 80.0,
+        text: true,
+        full: true,
+        labels: true,
+        title: 10.0,
+        sub: 8.0,
+        line: 9.0,
+        badge: 1,
+        pad: (7.0, 5.0),
+        icon: 16.0,
+        big: 0.0,
+        check: 12.0,
+    },
+    // x1.4
+    Level {
+        cw: 185.0,
+        ch: 134.0,
+        gx: 128.0,
+        gy: 112.0,
+        text: true,
+        full: true,
+        labels: true,
+        title: 14.0,
+        sub: 11.0,
         line: 13.0,
+        badge: 1,
+        pad: (10.0, 7.0),
+        icon: 16.0,
+        big: 0.0,
+        check: 12.0,
+    },
+    // x2.0
+    Level {
+        cw: 264.0,
+        ch: 192.0,
+        gx: 184.0,
+        gy: 160.0,
+        text: true,
+        full: true,
+        labels: true,
+        title: 20.0,
+        sub: 16.0,
+        line: 18.0,
         badge: 2,
-        pad: (11.0, 9.0),
+        pad: (14.0, 10.0),
+        icon: 32.0,
+        big: 0.0,
+        check: 24.0,
     },
 ];
-/// The level the tab opens at: the native card.
-pub const OPEN_LEVEL: usize = 4;
-/// A tick's size: the kit's check, one art pixel a UI pixel.
-const CHECK: f32 = 12.0;
+/// The level the tab opens at: the native card, x1.
+pub const OPEN_LEVEL: usize = 7;
 /// The margin round the tree, with room above a row for a branch's name
 /// where the level draws the names.
 const OX: f32 = 20.0;
@@ -349,6 +438,19 @@ pub struct EdgeSeg(pub usize);
 /// A branch's plaque, over the card of the mission at this index.
 #[derive(Component)]
 pub struct BranchLabel(pub usize);
+/// The mission's icon beside its title on a full card.
+#[derive(Component)]
+pub struct CardIcon;
+/// The mission's icon filling the card zoomed out (`TS.4`).
+#[derive(Component)]
+pub struct CardBig;
+/// A part of a hover card: the full card shown beside the pointer over an
+/// icon tile, laid out once at the native level and never by `relayout`.
+#[derive(Component)]
+pub struct TipPart;
+/// A hover card's root, for the mission at this index.
+#[derive(Component)]
+pub struct TipCard(pub usize);
 /// A part of a card a collapsed card hides: its branch line, objectives
 /// and unlocks.
 #[derive(Component)]
@@ -372,8 +474,14 @@ fn body(text: &str, size: f32, colour: Color) -> impl Bundle {
     menu::body(text.to_string(), size, colour)
 }
 
-pub fn spawn(mut commands: Commands, kit: Res<UiKit>, chain: Res<MissionChain>) {
+pub fn spawn(
+    mut commands: Commands,
+    kit: Res<UiKit>,
+    chain: Res<MissionChain>,
+    assets: Res<AssetServer>,
+) {
     let kit = &*kit;
+    let assets = &*assets;
     let chain = &chain.0;
     // `relayout` sizes and places every part for the view's level.
     commands
@@ -414,11 +522,16 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, chain: Res<MissionChain>) 
                             spawn_edges(world, chain);
                             spawn_labels(world, kit, chain);
                             for (i, m) in chain.missions.iter().enumerate() {
-                                spawn_card(world, kit, i, m);
+                                spawn_card(world, kit, assets, i, m, false);
                             }
                         });
                 });
             spawn_side(layer, kit);
+            // The hover cards: each mission's full card at the native
+            // level, hidden until its tile is hovered zoomed out.
+            for (i, m) in chain.missions.iter().enumerate() {
+                spawn_card(layer, kit, assets, i, m, true);
+            }
         });
 }
 
@@ -462,84 +575,170 @@ fn spawn_labels(world: &mut ChildSpawnerCommands, kit: &UiKit, chain: &Chain) {
     }
 }
 
+/// A card for mission `i`: in the tree (`tip` false), or its hover card
+/// beside the pointer (`tip` true), every part of which carries [`TipPart`]
+/// so `relayout` leaves it at the native level.
 fn spawn_card(
     world: &mut ChildSpawnerCommands,
     kit: &UiKit,
+    assets: &AssetServer,
     i: usize,
     m: &pbd_core::missions::Mission,
+    tip: bool,
 ) {
-    world
-        .spawn((
-            Button,
-            kit.nine(Set::Stone, "tooltip"),
+    let native = &LEVELS[OPEN_LEVEL];
+    let icon = (!m.icon.is_empty()).then(|| assets.load(format!("items/{}.png", m.icon)));
+    let mut root = world.spawn((
+        kit.nine(Set::Stone, "tooltip"),
+        Node {
+            position_type: PositionType::Absolute,
+            flex_direction: FlexDirection::Column,
+            row_gap: px(2),
+            border: UiRect::all(px(1)),
+            overflow: Overflow::clip(),
+            ..default()
+        },
+        BorderColor::all(Color::NONE),
+        Card(i),
+    ));
+    if tip {
+        root.insert((
+            TipPart,
+            TipCard(i),
+            GlobalZIndex(30),
             Node {
                 position_type: PositionType::Absolute,
                 flex_direction: FlexDirection::Column,
                 row_gap: px(2),
                 border: UiRect::all(px(1)),
                 overflow: Overflow::clip(),
+                width: px(native.cw),
+                height: px(native.ch),
+                padding: UiRect::axes(px(native.pad.0), px(native.pad.1)),
+                display: Display::None,
                 ..default()
             },
-            BorderColor::all(Color::NONE),
-            Card(i),
-        ))
-        .with_children(|card| {
-            card.spawn(Node {
-                justify_content: JustifyContent::SpaceBetween,
-                align_items: AlignItems::FlexStart,
-                width: percent(100),
-                ..default()
-            })
-            .with_children(|head| {
-                head.spawn((body(&m.title, 10.0, ui_kit::TITLE), CardTitle(i)));
-                head.spawn((
-                    KitText::new("", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
-                    Node {
-                        margin: UiRect::left(px(3)),
-                        flex_shrink: 0.0,
-                        ..default()
-                    },
-                    CardBadge(i),
-                ));
+        ));
+    } else {
+        root.insert(Button);
+    }
+    let part = move |e: &mut EntityCommands| {
+        if tip {
+            e.insert(TipPart);
+        }
+    };
+    root.with_children(|card| {
+        // Zoomed out, the card is its icon, centred in the frame.
+        if !tip {
+            card.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(0),
+                    top: px(0),
+                    width: percent(100),
+                    height: percent(100),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    display: Display::None,
+                    ..default()
+                },
+                CardBig,
+            ))
+            .with_children(|big| {
+                if let Some(icon) = icon.clone() {
+                    big.spawn((ImageNode::new(icon), Node::default(), CardBig));
+                }
             });
-            card.spawn((body("", 8.0, ui_kit::LABEL_DIM), CardSub(i), CardDetail));
-            for (k, objective) in m.objectives.iter().enumerate() {
-                card.spawn((
-                    Node {
-                        align_items: AlignItems::Center,
-                        column_gap: px(3),
-                        width: percent(100),
-                        ..default()
-                    },
-                    CardDetail,
-                ))
-                .with_children(|line| {
-                    line.spawn((
-                        kit.whole(Set::Stone, "check-off"),
+        }
+        let mut head = card.spawn(Node {
+            justify_content: JustifyContent::SpaceBetween,
+            align_items: AlignItems::FlexStart,
+            width: percent(100),
+            ..default()
+        });
+        part(&mut head);
+        head.with_children(|head| {
+            let mut row = head.spawn(Node {
+                column_gap: px(4),
+                align_items: AlignItems::Center,
+                ..default()
+            });
+            part(&mut row);
+            row.with_children(|row| {
+                if let Some(icon) = icon.clone() {
+                    let mut e = row.spawn((
+                        ImageNode::new(icon),
                         Node {
-                            width: px(CHECK),
-                            height: px(CHECK),
+                            width: px(native.icon),
+                            height: px(native.icon),
                             flex_shrink: 0.0,
                             ..default()
                         },
-                        CardCheck(i, k),
+                        CardIcon,
                     ));
-                    line.spawn((
-                        body(&objective.label, 9.0, ui_kit::TEXT),
-                        CardObjective(i, k),
-                    ));
-                });
-            }
-            card.spawn((
-                body("", 8.0, ui_kit::RUNE_DIM),
+                    part(&mut e);
+                }
+                let mut e = row.spawn((body(&m.title, native.title, ui_kit::TITLE), CardTitle(i)));
+                part(&mut e);
+            });
+            let mut e = head.spawn((
+                KitText::new("", ui_kit::TEXT_DIM).shadow(ui_kit::INK),
                 Node {
-                    margin: UiRect::top(px(2)),
+                    margin: UiRect::left(px(3)),
+                    flex_shrink: 0.0,
                     ..default()
                 },
-                CardUnlocks(i),
+                CardBadge(i),
+            ));
+            part(&mut e);
+        });
+        let mut e = card.spawn((
+            body("", native.sub, ui_kit::LABEL_DIM),
+            CardSub(i),
+            CardDetail,
+        ));
+        part(&mut e);
+        for (k, objective) in m.objectives.iter().enumerate() {
+            let mut line = card.spawn((
+                Node {
+                    align_items: AlignItems::Center,
+                    column_gap: px(3),
+                    width: percent(100),
+                    ..default()
+                },
                 CardDetail,
             ));
-        });
+            part(&mut line);
+            line.with_children(|line| {
+                let mut e = line.spawn((
+                    kit.whole(Set::Stone, "check-off"),
+                    Node {
+                        width: px(native.check),
+                        height: px(native.check),
+                        flex_shrink: 0.0,
+                        ..default()
+                    },
+                    CardCheck(i, k),
+                ));
+                part(&mut e);
+                let mut e = line.spawn((
+                    body(&objective.label, native.line, ui_kit::TEXT),
+                    CardObjective(i, k),
+                ));
+                part(&mut e);
+            });
+        }
+        let mut e = card.spawn((
+            body("", native.sub, ui_kit::RUNE_DIM),
+            Node {
+                margin: UiRect::top(px(2)),
+                ..default()
+            },
+            CardUnlocks(i),
+            CardDetail,
+        ));
+        part(&mut e);
+    });
 }
 
 fn spawn_side(layer: &mut ChildSpawnerCommands, kit: &UiKit) {
@@ -1011,9 +1210,105 @@ pub fn steer(
         next.selected = None;
         *press = None;
     }
+    // Bounds (M33, owner 2026-11-16: "a max bounds so the user doesnt get
+    // lost"): the tree may slide only so far that some card keeps 40 px in
+    // view.
+    next.pan = bounded(next.pan, &LEVELS[next.level], &layout(&chain.0), size);
     next.pan = snap(next.pan, k);
     if next != *view {
         *view = next;
+    }
+}
+
+/// How much of a card must stay in view, UI px.
+const KEEP: f32 = 40.0;
+
+/// The pan moved back, if need be, so that some card keeps [`KEEP`] px on a
+/// screen of `size` (M33's bounds): the view's middle is pulled toward the
+/// nearest card until it does.
+pub fn bounded(pan: Vec2, lv: &Level, at: &[(usize, usize)], size: Vec2) -> Vec2 {
+    let mut c = size / 2.0 - pan;
+    let half = (size / 2.0 - Vec2::splat(KEEP)).max(Vec2::ZERO);
+    let mut best: Option<(f32, Vec2)> = None;
+    for &cell in at {
+        let p = lv.card(cell);
+        let dx = (p.x - c.x).max(0.0).max(c.x - (p.x + lv.cw));
+        let dy = (p.y - c.y).max(0.0).max(c.y - (p.y + lv.ch));
+        let over = (dx - half.x).max(0.0) + (dy - half.y).max(0.0);
+        if best.is_none_or(|(b, _)| over < b) {
+            best = Some((over, p));
+        }
+        if over == 0.0 {
+            return pan;
+        }
+    }
+    let Some((_, p)) = best else {
+        return pan;
+    };
+    c.x = c.x.clamp(p.x - half.x, p.x + lv.cw + half.x);
+    c.y = c.y.clamp(p.y - half.y, p.y + lv.ch + half.y);
+    size / 2.0 - c
+}
+
+/// Zoomed out, the card under the pointer shows its full card beside it
+/// (M33, owner 2026-11-16: "I can hover over nodes to get more info").
+#[allow(clippy::type_complexity)]
+pub fn hover_tip(
+    screen: Res<Screen>,
+    view: Res<TreeView>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    ui_scale: Option<Res<UiScale>>,
+    cards: Query<(&Card, &Interaction), Without<TipPart>>,
+    mut tips: Query<(&TipCard, &mut Node)>,
+    chain: Res<MissionChain>,
+    launch: Res<super::Launch>,
+) {
+    let lv = &LEVELS[view.level.min(LEVELS.len() - 1)];
+    let zoomed_out = lv.big > 0.0;
+    let scale = ui_scale.map_or(1.0, |s| s.0);
+    let window = windows.single().ok();
+    let mut pointer = window.and_then(|w| w.cursor_position()).map(|p| p / scale);
+    let mut hovered = (*screen == Screen::Missions && zoomed_out)
+        .then(|| {
+            cards
+                .iter()
+                .find(|(_, i)| **i != Interaction::None)
+                .map(|(c, _)| c.0)
+        })
+        .flatten();
+    // A capture's hover (`--tree-hover <id>`, a capture instrument): a
+    // headless run has no pointer, so the pointer is put on that card.
+    if *screen == Screen::Missions
+        && zoomed_out
+        && let Some(id) = launch.tree_hover.as_deref()
+        && let Some(i) = chain.0.missions.iter().position(|m| m.id == id)
+    {
+        let at = layout(&chain.0);
+        hovered = Some(i);
+        pointer = Some(view.pan + lv.card(at[i]) + Vec2::new(lv.cw, lv.ch) / 2.0);
+    }
+    let screen_size = window.map_or(Vec2::splat(800.0), |w| {
+        Vec2::new(w.width(), w.height()) / scale
+    });
+    let native = &LEVELS[OPEN_LEVEL];
+    for (tip, mut node) in &mut tips {
+        let show = hovered == Some(tip.0) && pointer.is_some();
+        let want = if show { Display::Flex } else { Display::None };
+        if node.display != want {
+            node.display = want;
+        }
+        if let (true, Some(at)) = (show, pointer) {
+            // Right of the pointer, or left where it would leave the
+            // screen; level with it, kept on screen.
+            let x = if at.x + 18.0 + native.cw > screen_size.x {
+                at.x - 18.0 - native.cw
+            } else {
+                at.x + 18.0
+            };
+            let y = (at.y - native.ch / 2.0).clamp(8.0, (screen_size.y - native.ch - 8.0).max(8.0));
+            node.left = px(x.round());
+            node.top = px(y.round());
+        }
     }
 }
 
@@ -1047,20 +1342,25 @@ pub fn relayout(
     added: Query<(), Added<Card>>,
     mut last: Local<Option<usize>>,
     mut nodes: ParamSet<(
-        Query<(&Card, &mut Node)>,
+        Query<(&Card, &mut Node), Without<TipPart>>,
         Query<(&Edge, &EdgeSeg, &mut Node)>,
         Query<(&BranchLabel, &mut Node)>,
-        Query<&mut Node, With<CardDetail>>,
+        Query<&mut Node, (With<CardDetail>, Without<TipPart>)>,
         Query<&mut Node, With<TreeWorld>>,
-        Query<&mut Node, Or<(With<CardTitle>, With<CardBadge>)>>,
+        Query<&mut Node, (Or<(With<CardTitle>, With<CardBadge>)>, Without<TipPart>)>,
+        Query<(&mut Node, Has<ImageNode>), (With<CardBig>, Without<TipPart>)>,
+        Query<
+            (&mut Node, Has<CardIcon>),
+            (Or<(With<CardIcon>, With<CardCheck>)>, Without<TipPart>),
+        >,
     )>,
     mut fonts: ParamSet<(
-        Query<(&mut TextFont, &mut TextLayout), With<CardTitle>>,
-        Query<&mut TextFont, With<CardSub>>,
-        Query<&mut TextFont, With<CardObjective>>,
-        Query<&mut TextFont, With<CardUnlocks>>,
+        Query<(&mut TextFont, &mut TextLayout), (With<CardTitle>, Without<TipPart>)>,
+        Query<&mut TextFont, (With<CardSub>, Without<TipPart>)>,
+        Query<&mut TextFont, (With<CardObjective>, Without<TipPart>)>,
+        Query<&mut TextFont, (With<CardUnlocks>, Without<TipPart>)>,
     )>,
-    mut badges: Query<&mut KitText, With<CardBadge>>,
+    mut badges: Query<&mut KitText, (With<CardBadge>, Without<TipPart>)>,
 ) {
     if added.is_empty() && *last == Some(view.level) {
         return;
@@ -1125,6 +1425,26 @@ pub fn relayout(
     };
     for mut node in &mut nodes.p5() {
         node.display = text;
+    }
+    // Zoomed out, the card is its icon, filling the frame.
+    let big = if lv.big > 0.0 {
+        Display::Flex
+    } else {
+        Display::None
+    };
+    for (mut node, image) in &mut nodes.p6() {
+        if image {
+            node.width = px(lv.big);
+            node.height = px(lv.big);
+        } else {
+            node.display = big;
+        }
+    }
+    // The title's icon and the objectives' ticks, at the level's sizes.
+    for (mut node, icon) in &mut nodes.p7() {
+        let side = if icon { lv.icon } else { lv.check };
+        node.width = px(side);
+        node.height = px(side);
     }
     for (mut font, mut text) in &mut fonts.p0() {
         font.font_size = lv.title;
@@ -1220,7 +1540,8 @@ mod tests {
         let whole = |v: f32| v.fract() == 0.0;
         for (n, lv) in LEVELS.iter().enumerate() {
             for v in [
-                lv.cw, lv.ch, lv.gx, lv.gy, lv.title, lv.sub, lv.line, lv.pad.0, lv.pad.1,
+                lv.cw, lv.ch, lv.gx, lv.gy, lv.title, lv.sub, lv.line, lv.pad.0, lv.pad.1, lv.icon,
+                lv.big, lv.check,
             ] {
                 assert!(whole(v), "level {n}: {v}");
             }
@@ -1251,6 +1572,37 @@ mod tests {
                 let p = snap(pan, k) * k;
                 assert!(whole(p.x) && whole(p.y), "{pan} at {k}");
             }
+        }
+    }
+
+    /// Every card is one shape at every zoom (TS.4): each level is the
+    /// native card in proportion, a card is its icon at 0.6 and below and
+    /// the full card above, and every mission names an icon that exists, at
+    /// a whole multiple of the art.
+    #[test]
+    fn every_level_is_the_native_card_in_proportion_with_its_icon() {
+        let native = &LEVELS[OPEN_LEVEL];
+        for lv in &LEVELS {
+            let (sx, sy) = (lv.cw / native.cw, lv.ch / native.ch);
+            assert!(
+                (sx - sy).abs() < 0.08,
+                "{lv:?} is not the native card's shape"
+            );
+            assert_eq!(lv.big > 0.0, !lv.full, "icon tile or full card, never both");
+            if lv.big > 0.0 {
+                assert!(lv.big <= lv.ch.min(lv.cw) && lv.big % 8.0 == 0.0, "{lv:?}");
+            }
+        }
+        for m in &shipped().missions {
+            assert!(!m.icon.is_empty(), "{} has no icon", m.id);
+            let path = format!(
+                "{}/../../assets/items/{}.png",
+                env!("CARGO_MANIFEST_DIR"),
+                m.icon
+            );
+            let size =
+                image::image_dimensions(&path).unwrap_or_else(|e| panic!("{}: {path}: {e}", m.id));
+            assert_eq!(size, (16, 16), "{}: {}", m.id, m.icon);
         }
     }
 

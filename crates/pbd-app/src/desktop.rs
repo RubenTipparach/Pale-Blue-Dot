@@ -153,8 +153,9 @@ pub struct Launch {
     /// photographed and the fishery's numbers logged. A capture instrument,
     /// like `--swim`: a headless run has no hand on the mouse.
     pub fish: bool,
-    /// `--cast`: aboard (`--aboard tube|raft|loon|rowboat`), take up the rod
-    /// and cast once from the seat, scripted as `--fish` casts on shore
+    /// `--cast`: take up the rod and cast once, from a boat's seat
+    /// (`--aboard tube|raft|loon|rowboat`) or on foot where the walker
+    /// stands (`--at`), scripted as `--fish` casts on its shore
     /// (`small-boats` design 6). A capture instrument.
     pub cast: bool,
     /// `--load-hold`: aboard a raft, put twelve logs in its hold through the
@@ -354,6 +355,9 @@ pub struct Launch {
     /// 0 (farthest) to 6, on the selected card or the current mission (a
     /// capture instrument, `starter-missions` TS.3).
     pub tree_zoom: Option<usize>,
+    /// `--tree-hover <id>`: zoomed out, show that mission's hover card as if
+    /// the pointer were on its tile (a capture instrument).
+    pub tree_hover: Option<String>,
     /// `--time <hour>` pins the clock, 0..24, and STOPS it. A capture whose
     /// world has a day in it is a different picture every run, and a harness
     /// cannot wait six minutes for dusk.
@@ -512,6 +516,7 @@ impl Launch {
             missions: None,
             tree_select: None,
             tree_zoom: None,
+            tree_hover: None,
             dig_ahead: false,
             take_trees: false,
             pitch: None,
@@ -735,7 +740,15 @@ impl Launch {
                     result.tree_zoom = Some(
                         args.get(i)
                             .and_then(|v| v.parse().ok())
-                            .expect("--tree-zoom takes a level, 0 to 6"),
+                            .expect("--tree-zoom takes a level, 0 to 9"),
+                    );
+                }
+                "--tree-hover" => {
+                    i += 1;
+                    result.tree_hover = Some(
+                        args.get(i)
+                            .expect("--tree-hover takes a mission id")
+                            .clone(),
                     );
                 }
                 "--tree-select" => {
@@ -1608,6 +1621,7 @@ pub fn run(args: &[String]) {
                 mission_tree::relayout,
                 mission_tree::place,
                 mission_tree::paint,
+                mission_tree::hover_tip,
             )
                 .chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
@@ -4068,14 +4082,20 @@ fn break_script(
 /// `fish_script` does on shore; the line's phase logged every second.
 fn cast_afloat_script(
     aboard: Res<pbd_app::vehicles::Aboard>,
+    mut walking: ResMut<pbd_app::walking::WalkingState>,
     mut buttons: ResMut<ButtonInput<MouseButton>>,
     mut tools: ResMut<pbd_app::fish::ToolSlot>,
     mut view: ResMut<pbd_app::vehicles::VehicleView>,
     fishery: Option<Res<pbd_app::fish::Fishery>>,
     mut frame: Local<u32>,
 ) {
+    // Aboard, or on foot (a cast from a bank, `fishing-anywhere`).
     if aboard.0.is_none() {
-        return;
+        if !walking.active {
+            return;
+        }
+        walking.captured = true;
+        walking.scripted = true;
     }
     *frame += 1;
     let _ = tools.0.grant(

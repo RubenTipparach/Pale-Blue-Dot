@@ -180,6 +180,10 @@ pub struct MissionEntry {
     /// The branch it is drawn in (`trunk`, `fishing`, ...).
     #[serde(default)]
     pub branch: String,
+    /// Its icon on the mission tree (`starter-missions` TS.4): a path under
+    /// `assets/items/` without `.png` (`tools/hand`); none for a plain card.
+    #[serde(default)]
+    pub icon: String,
 }
 
 /// `assets/config/missions.ron`.
@@ -272,6 +276,8 @@ pub struct Mission {
     pub after: Vec<String>,
     /// The branch it is drawn in.
     pub branch: String,
+    /// Its icon on the mission tree, a path under `assets/items/`.
+    pub icon: String,
 }
 
 /// What the build knows, for resolving names: built by the app from its
@@ -464,6 +470,7 @@ impl MissionFile {
                 unlocks: entry.unlocks.clone(),
                 after: entry.after.clone(),
                 branch: entry.branch.clone(),
+                icon: entry.icon.clone(),
             });
         }
         for m in &missions {

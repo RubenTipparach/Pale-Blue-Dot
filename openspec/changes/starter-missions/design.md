@@ -657,3 +657,44 @@ version 10 has ore in the ground.
 **Superseded, not a gap.** "Cooking needs fishing and one of farming or
 herding" could not be written as one `needs` list. One parent per mission
 replaced it: cooking is spread to where its food comes from.
+
+
+### TS.4: the tree in the game takes M33's new look (owner, 2026-11-17: "I dont think the new mission tree look is implemented, can you implement that?")
+
+M33 moved on after TS.3 (`c65384f2`, `04262ddc`, `88e3c2c8`), and the game's
+tab did not. The game now follows it, keeping the virtual zoom (the art is
+never resampled, so a 9-slice never tears):
+
+- **One card shape at every zoom, twice the gaps.** A level is M33's scale
+  of the native card. The ten scales are 0.1, 0.14, 0.2, 0.3, 0.42, 0.6,
+  0.8, 1, 1.4 and 2, and the tab opens at 1.
+  - At each scale, the card (132 x 96), the gaps (twice the native view's,
+    92 x 80), the padding, the type and the icon are that scale of the
+    native ones, in whole UI pixels, the gaps even.
+  - The layout is the same at every level, so a wheel step keeps the tree
+    point under the cursor.
+- **Big icons zoomed out.** At 0.6 and below a card is its mission's icon
+  filling the same frame (a tick on a done one). Hovering one shows the full
+  native card beside the pointer.
+- **Icons on the cards.** At 0.8 and above the card's title has its
+  mission's icon beside it.
+  - The icons are the game's item icons M33 names (`missions.ron` `icon`, a
+    path under `assets/items/`).
+  - The hen and the map are copied from M33 (`assets/items/missions/`,
+    provenance there).
+- **Pan bounds.** A pan stops when no card would keep 40 px in view, so the
+  tree never leaves the screen.
+- **Fit (F)** picks the largest scale the whole tree fits at, under the tab
+  strip.
+- **Not done here: the card frame's outer pixel** (M33's trimmed copy). The
+  game's `tooltip` piece is the kit's, and its lasting fix is in the art
+  (above), which needs Blender. It is left as it is.
+
+Recommendation taken (ask only with screenshots): the game's scales are
+M33's; the native card stays the game's 132 x 96 (M33's 236 x 188 CSS px is
+the same card at 2 CSS px an art pixel plus its frame).
+
+The tool picker in the help (owner, 2026-11-17: "as part of tutorial when
+teach player to swap to an axe, tell them to hold G"): "Gather wood" says
+to hold G and pick the axe with the wheel, and "Till the soil" the same for
+the shovel, as "Go fishing" already did for the rod.

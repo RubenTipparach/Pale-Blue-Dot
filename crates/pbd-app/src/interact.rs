@@ -272,7 +272,7 @@ pub struct PromptWords;
 /// The prompt, just under the crosshair: a stone tooltip holding the key in
 /// an oak cap and the verb and thing.
 pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
-    use crate::ui_kit::{KitPiece, KitText, Set};
+    use crate::ui_kit::KitText;
     commands
         .spawn((
             Node {
@@ -287,16 +287,14 @@ pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
             Prompt,
         ))
         .with_children(|row| {
-            row.spawn((
-                kit.nine(Set::Stone, "tooltip"),
-                KitPiece("tooltip".into()),
-                Node {
-                    padding: UiRect::new(px(4), px(6), px(3), px(3)),
-                    column_gap: px(5),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-            ))
+            // No box round it (owner, 2026-11-17: "we dont have a box around
+            // stuff, just the letter glyph and teh text with black outline"),
+            // as the boat panel.
+            row.spawn(Node {
+                column_gap: px(5),
+                align_items: AlignItems::Center,
+                ..default()
+            })
             .with_children(|tip| {
                 crate::ui_kit::key_cap(tip, &kit, "F", PromptKey);
                 tip.spawn((
@@ -304,7 +302,7 @@ pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
                         padding: UiRect::top(px(2)),
                         ..default()
                     },
-                    KitText::new("", crate::ui_kit::LABEL).shadow(crate::ui_kit::INK),
+                    KitText::new("", crate::ui_kit::LABEL).outline(crate::ui_kit::INK),
                     PromptWords,
                 ));
             });

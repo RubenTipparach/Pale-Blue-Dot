@@ -219,9 +219,33 @@ impl<'a> PlanetWater<'a> {
     }
 }
 
+impl PlanetWater<'_> {
+    /// The fresh water's top over the column at a point, radius from the
+    /// planet's centre: a river, a lake, a pond or poured water standing
+    /// over the sea's own cells (`fishing-anywhere` design 1). `None` at
+    /// sea, on dry ground or off the column tier.
+    fn fresh(&self, point: Vec3) -> Option<f32> {
+        let contact = self.contact?;
+        let up = point.normalize_or(Vec3::Y);
+        let floor = self.bed(point);
+        fresh_top(contact, up, floor)
+    }
+}
+
+/// The fresh water standing in the column at `up` just over its ground
+/// (`floor`, a radius): its top as a radius, if it stands more than a
+/// quarter metre over the sea's own cells' top (`fishing-anywhere` design 1,
+/// the rule the small boats float by).
+pub fn fresh_top(contact: &PlanetContact, up: Vec3, floor: f32) -> Option<f32> {
+    let top = contact.column_water(up * (floor + 0.3)).flatten()?;
+    let sea_top = pbd_core::column::layer_altitude(crate::planet::column::sea_layer());
+    (top > sea_top + 0.25).then_some(crate::planet::PLANET_RADIUS + top)
+}
+
 impl Water for PlanetWater<'_> {
     fn surface(&self, point: Vec3) -> f32 {
-        self.sea.radius + self.local.height(point, self.sea.radius)
+        self.fresh(point)
+            .unwrap_or_else(|| self.sea.radius + self.local.height(point, self.sea.radius))
     }
 
     fn bed(&self, point: Vec3) -> f32 {
@@ -798,14 +822,26 @@ fn try_spawn(
         .range(settings.spawn.ring_m.0, settings.spawn.ring_m.1);
     let direction =
         (feet + (east * bearing.cos() + north * bearing.sin()) * distance).normalize_or(up);
-    let depth = sea.depth_at(direction);
-    let Some(class) = fauna::water_class(
-        crate::planet::terrain_config(),
-        direction,
-        depth,
-        &settings.water,
-    ) else {
-        return;
+    // Fresh water the world holds (a river, a lake, a pond, poured water)
+    // is river water at its own top (`fishing-anywhere` design 2); the sea
+    // keeps its classes.
+    let floor =
+        crate::vehicles::ground_under(contact, direction.as_dvec3() * f64::from(sea.radius)) as f32;
+    let fresh = contact.and_then(|c| fresh_top(c, direction, floor));
+    let (depth, class) = match fresh {
+        Some(top) => (top - floor, WaterClass::River),
+        None => {
+            let depth = sea.depth_at(direction);
+            let Some(class) = fauna::water_class(
+                crate::planet::terrain_config(),
+                direction,
+                depth,
+                &settings.water,
+            ) else {
+                return;
+            };
+            (depth, class)
+        }
     };
     let temperature = air.now.sample(direction).temperature;
     // The place, from the one environment function the generator and the
@@ -846,9 +882,16 @@ fn try_spawn(
             .iter()
             .fold(0u64, |h, v| fauna::hash2(h, u64::from(v.to_bits()))),
     );
-    let anchor = direction * sea.radius;
+    let anchor = direction * fresh.unwrap_or(sea.radius);
     let water = PlanetWater::at(sea, Some(air), contact, &fishery.beds, anchor, seconds);
-    let school = School::spawn(pick as u16, &roster[pick], anchor, seed, &water);
+    let mut school = School::spawn(pick as u16, &roster[pick], anchor, seed, &water);
+    // Smaller water, smaller fish (`fishing-anywhere` design 3).
+    if let (Some(top), Some(contact)) = (fresh, contact) {
+        school.scale = body_scale(direction, top - floor, |p| {
+            let floor = crate::vehicles::ground_under(Some(contact), p.as_dvec3()) as f32;
+            fresh_top(contact, p.normalize_or(Vec3::Y), floor).is_some()
+        });
+    }
     debug!(
         "{} school of {} spawned in {} at {:.1} C, {:.0} m out",
         roster[pick].name,
@@ -858,6 +901,35 @@ fn try_spawn(
         distance
     );
     fishery.schools.push(school);
+}
+
+/// How big a body of fresh water is, as the size its fish grow to, 0.35 to
+/// 1 (`fishing-anywhere` design 3): how far it reaches round `up` (the
+/// furthest of 3, 6, 12 and 24 m at which at least half of eight bearings
+/// are still water) against 24 m, and its depth against 3 m, the smaller of
+/// the two.
+pub fn body_scale(up: Vec3, depth_m: f32, wet: impl Fn(Vec3) -> bool) -> f32 {
+    let up = up.normalize_or(Vec3::Y);
+    let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
+    let north = up.cross(east);
+    let radius = crate::planet::PLANET_RADIUS;
+    let mut reach = 0.0_f32;
+    for r in [3.0_f32, 6.0, 12.0, 24.0] {
+        let wet_bearings = (0..8)
+            .filter(|k| {
+                let a = *k as f32 * std::f32::consts::TAU / 8.0;
+                let at = (up * radius + (east * a.cos() + north * a.sin()) * r).normalize_or(up)
+                    * radius;
+                wet(at)
+            })
+            .count();
+        if wet_bearings < 4 {
+            break;
+        }
+        reach = r;
+    }
+    let size = (reach / 24.0).min(depth_m.max(0.0) / 3.0);
+    (0.35 + 0.65 * size).clamp(0.35, 1.0)
 }
 
 /// What a line event means to the player, and what a catch does to the
