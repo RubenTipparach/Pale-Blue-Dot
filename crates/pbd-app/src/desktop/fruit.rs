@@ -5,7 +5,6 @@
 //! hands in one line, and the draw leaves a picked tree's hanging fruit out
 //! until it grows back (`trees_taken`).
 
-use super::digging::tree_on_ray;
 use super::farm::FarmNote;
 use super::menu::Screen;
 use bevy::prelude::*;
@@ -42,6 +41,57 @@ impl OnTree {
     }
 }
 
+/// The fruiting tree whose hanging fruit the eye ray meets nearest within
+/// reach, by its cell (`fruit-aim`): the trunk and the leaves are not the
+/// fruit.
+fn fruit_on_ray(
+    fine: &PlanetFine,
+    scatter: &pbd_app::config::ScatterSettings,
+    year: f64,
+    eye: Vec3,
+    look: Vec3,
+) -> Option<u32> {
+    let reach = pbd_core::aim::REACH_M;
+    let toward = eye.normalize_or(Vec3::Y);
+    let near = ((reach + 8.0) / PLANET_RADIUS).cos();
+    let table = &pbd_app::planet::terrain_config().trees;
+    let mut best: Option<(f32, u32)> = None;
+    for record in fine.set.finest_records() {
+        let Some(up) = Vec3::from_slice(&record.direction_height[..3]).try_normalize() else {
+            continue;
+        };
+        if up.dot(toward) < near
+            || !pbd_core::flora::grows_tree(table, record.spare[0], record.metadata[1])
+        {
+            continue;
+        }
+        let biome = (record.metadata[1] >> 8) & 0xff;
+        let points = pbd_core::flora::hanging_fruit_points(
+            record.spare[0],
+            biome,
+            up.to_array(),
+            PLANET_RADIUS,
+            record.direction_height[3],
+            year,
+            scatter.fruit_chance,
+        );
+        for (centre, r) in points {
+            // The ray against the fruit's sphere: the nearest crossing ahead.
+            let to = Vec3::from(centre) - eye;
+            let along = to.dot(look);
+            let miss = to.length_squared() - along * along;
+            if along < 0.0 || miss > r * r {
+                continue;
+            }
+            let t = along - (r * r - miss).sqrt();
+            if t <= reach && best.is_none_or(|(bt, _)| t < bt) {
+                best = Some((t, record.key()));
+            }
+        }
+    }
+    best.map(|(_, key)| key)
+}
+
 /// The fruiting tree on the eye ray, if one bears anything.
 #[allow(clippy::too_many_arguments)]
 fn on_tree(
@@ -53,10 +103,10 @@ fn on_tree(
     eye: Vec3,
     look: Vec3,
 ) -> Option<OnTree> {
-    let cell = tree_on_ray(fine, eye, look, pbd_core::aim::REACH_M)?;
+    let year = sun.map_or(0.0, |s| s.clock.year_fraction());
+    let cell = fruit_on_ray(fine, scatter, year, eye, look)?;
     let record = fine.set.finest_records().iter().find(|r| r.key() == cell)?;
     let day = sun.map_or(0.0, |s| s.clock.seconds / f64::from(DAY_S));
-    let year = sun.map_or(0.0, |s| s.clock.year_fraction());
     let axis = Vec3::from_slice(&record.direction_height[..3]).normalize_or(Vec3::Y);
     let biome = (record.metadata[1] >> 8) & 0xff;
     let (kind, hanging) = hanging_fruit(
@@ -193,17 +243,14 @@ pub fn pick(
     let wall_s = time.elapsed_secs();
     let (cell, kind, hanging, day) = (tree.cell, tree.kind, tree.hanging, tree.day);
     if let Some(left) = tree.bare_for {
-        note.say(
-            wall_s,
-            format!("Picked bare: it bears again in {left:.0} days"),
-        );
+        note.say(wall_s, format!("No fruit. Grows back in {left:.0} days"));
         return;
     }
     let Some(good) = Good::by_code(FRUIT_GOODS[kind]) else {
         return;
     };
     if hanging == 0 {
-        note.say(wall_s, "Nothing ripe on it now");
+        note.say(wall_s, "No ripe fruit");
         return;
     }
     let item = Item::Good(good);

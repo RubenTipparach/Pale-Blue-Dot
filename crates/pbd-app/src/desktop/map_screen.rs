@@ -257,7 +257,7 @@ impl UiMaterial for MapImageMaterial {
     }
 }
 
-/// How opaque a weather overlay is drawn over the greyed base: the mockup's
+/// How opaque a weather overlay is drawn over the grayed base: the mockup's
 /// 0.9 (decision 11). The globe keeps its own `overlay_opacity`.
 pub const MAP_OVERLAY_OPACITY: f32 = 0.9;
 /// How strongly the night side is drawn over an overlay, as a share of its
@@ -680,7 +680,7 @@ pub fn cloud_bytes(maps: &WeatherMaps) -> Vec<u8> {
 pub fn biomes_layer() -> RasterLayer {
     RasterLayer {
         name: "Biomes",
-        note: "Each place's biome over the greyed base (survey M3).",
+        note: "Each place's biome over the grayed base (survey M3).",
         paint: raster::biome_colour,
         key: raster::BIOME_KEY,
         class: raster::biome_class,
@@ -1255,7 +1255,7 @@ pub fn paint_legend(
             MapOverlay::Weather(overlay) => {
                 let (low, high) = overlay.range();
                 format!(
-                    "{} now, {} to {} {}, over the greyed base.",
+                    "{} now, {} to {} {}, over the grayed base.",
                     overlay.name(),
                     low,
                     high,
@@ -2224,7 +2224,7 @@ mod tests {
         let centre = app.world().resource::<MapView>().centre;
         assert!(
             centre.distance(geo::project(east)) < 1e-6,
-            "centred on the player"
+            "centered on the player"
         );
         let before = app.world().resource::<Sun>().clock.seconds;
         for _ in 0..8 {

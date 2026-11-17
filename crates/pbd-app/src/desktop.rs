@@ -821,12 +821,13 @@ impl Launch {
                 "--menu" => {
                     i += 1;
                     let screen = args.get(i).expect(
-                        "--menu requires pause, settings, saves, pack, map, guide, missions or breeding",
+                        "--menu requires title, pause, settings, saves, pack, map, guide, missions or breeding",
                     );
                     assert!(
                         matches!(
                             screen.as_str(),
-                            "pause"
+                            "title"
+                                | "pause"
                                 | "settings"
                                 | "saves"
                                 | "pack"
@@ -835,7 +836,7 @@ impl Launch {
                                 | "missions"
                                 | "breeding"
                         ),
-                        "--menu takes pause, settings, saves, pack, map, guide, missions or breeding"
+                        "--menu takes title, pause, settings, saves, pack, map, guide, missions or breeding"
                     );
                     result.menu = Some(screen.clone());
                 }
@@ -1691,8 +1692,12 @@ pub fn run(args: &[String]) {
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
     .insert_resource(opening)
-    .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
+    .insert_resource(menu::FrontDoor(matches!(
+        opening,
+        menu::Screen::Title | menu::Screen::Saves
+    )))
     .init_resource::<menu::NameField>()
+    .init_resource::<equipment::HandListOpen>()
     .init_resource::<mission_tree::TreeView>()
     .insert_resource(menu::SettingsTab(launch.settings_tab))
     .insert_resource(menu::InputTab(launch.input_tab))
@@ -1775,7 +1780,13 @@ pub fn run(args: &[String]) {
             scene::move_moon,
             scene::turn_stars,
             scene::follow_sun,
-            (equipment::pick, slots::input, equipment::paint).chain(),
+            (
+                equipment::pick,
+                slots::input,
+                equipment::pack_hand,
+                equipment::paint,
+            )
+                .chain(),
             (
                 pack::find_hold,
                 pack::press,

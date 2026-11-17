@@ -83,7 +83,7 @@ pub const GOODS: &[GoodRow] = &[
     // work it into. Named by code, never by index (`Good::FIBRE` and the
     // rest are found by code at compile time), so other branches' rows can
     // land above or below these in either order.
-    row("fibre", "plant fibre", 99, "items/goods/fibre.png"),
+    row("fibre", "plant fiber", 99, "items/goods/fibre.png"),
     row("stone", "loose stone", 99, "items/goods/stone.png"),
     row("log", "log", 99, "items/goods/log.png"),
     row("planks", "planks", 99, "items/goods/planks.png"),

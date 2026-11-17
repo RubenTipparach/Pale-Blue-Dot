@@ -34,3 +34,5 @@ crafting tools, fishing, farming, herding, cooking" (2026-11-14).
 - [x] 5.3 Locked rows: disabled plaque, silhouette, "Opens with" tooltip; a click picks nothing. Verify: a test.
 - [x] 5.4 The showcase's craft act clicks the row. Verify: the showcase test.
 - [x] 5.5 Captures before and after in `docs/screenshots/pack-layout/`: nothing chosen, a recipe chosen, a locked row hovered; `--craft pack-empty|pack-pick|pack-locked` are the instruments.
+
+- [ ] 3a.1 The top block under a standing tree refuses dig and till, with "Cut down the tree first"; a felled tree's ground digs (`under_standing_tree`, a test).
