@@ -19,7 +19,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Fire Crackling 01.wav](https://freesound.org/people/kingsrow/sounds/181563/) | Freesound | kingsrow | CC0 | `fire_crackle`, `fire_out` |
 | [Rain heavy 2 (rural)](https://freesound.org/people/jmbphilmes/sounds/200272/) | Freesound | jmbphilmes | CC0 | `amb_rain_heavy` |
 | [Rain light 2 (rural)](https://freesound.org/people/jmbphilmes/sounds/200273/) | Freesound | jmbphilmes | CC0 | `amb_rain_light` |
-| [01-20 Footsteps, sneakers on dry leaves.wav](https://freesound.org/people/SpliceSound/sounds/218305/) | Freesound | SpliceSound | CC0 | `break_dry`, `dig_dry`, `jump_dry`, `land_dry`, `place_dry`, `step_dry` |
+| [01-20 Footsteps, sneakers on dry leaves.wav](https://freesound.org/people/SpliceSound/sounds/218305/) | Freesound | SpliceSound | CC0 | `break_dry`, `dig_dry`, `jump_dry`, `place_dry`, `step_dry` |
 | [Steam/hiss](https://freesound.org/people/wubitog/sounds/234782/) | Freesound | wubitog | CC0 | `fire_out`, `strike_hit_tree` |
 | [Water Sloshing](https://freesound.org/people/vmgraw/sounds/235625/) | Freesound | vmgraw | CC0 | `water_slosh` |
 | [WavesOnTheShore.wav](https://freesound.org/people/richardemoore/sounds/260263/) | Freesound | richardemoore | CC0 | `amb_surf` |
@@ -39,7 +39,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [MUDDY AND WET FOOTSTEPS.wav](https://freesound.org/people/Alex_hears_things/sounds/376809/) | Freesound | Alex_hears_things | CC0 | `step_wet` |
 | [Footsteps Dirt 01](https://freesound.org/people/aglinder/sounds/264469/) | Freesound | aglinder | CC0 | `step_dirt` |
 | [Swimming.wav](https://freesound.org/people/13FPanska_Marval_Lukas/sounds/379334/) | Freesound | 13FPanska_Marval_Lukas | CC0 | `swim_stroke`, `swim_stroke_under` |
-| [Foot_Step_grit_Sand.wav](https://freesound.org/people/savataivanov/sounds/384082/) | Freesound | savataivanov | CC0 | `jump_sand`, `land_sand`, `place_sand`, `step_sand` |
+| [Foot_Step_grit_Sand.wav](https://freesound.org/people/savataivanov/sounds/384082/) | Freesound | savataivanov | CC0 | `jump_sand`, `place_sand`, `step_sand` |
 | [Digging a Hole and Shovelling Soil/Dirt 2](https://freesound.org/people/Ali_6868/sounds/384362/) | Freesound | Ali_6868 | CC0 | `dig_dirt`, `dig_dry`, `dig_grass` |
 | [Torch - Ignite flame on soft](https://freesound.org/people/ldezem/sounds/386385/) | Freesound | ldezem | CC0 | `fire_ignite_small` |
 | [Large rope pulley operated.wav](https://freesound.org/people/mikewest/sounds/394222/) | Freesound | mikewest | CC0 | `sheet_run` |
@@ -70,7 +70,6 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Guitar string snap or breaks - various sounds](https://freesound.org/people/khenshom/sounds/537084/) | Freesound | khenshom | CC0 | `line_snap` |
 | [Seagulls distant.wav](https://freesound.org/people/Ambientsoundapp/sounds/537854/) | Freesound | Ambientsoundapp | CC0 | `amb_gulls` |
 | [Bubbles 001.wav](https://freesound.org/people/ristooooo1/sounds/539823/) | Freesound | ristooooo1 | CC0 | `bubbles` |
-| [FOOT_STEPS_SNOW_HEAVY.wav](https://freesound.org/people/alexo400/sounds/543385/) | Freesound | alexo400 | CC0 | `step_snow` |
 | [distant_dog.wav](https://freesound.org/people/Heigh-hoo/sounds/54545/) | Freesound | Heigh-hoo | CC0 | `amb_town_night`, `dog_far` |
 | [forest swamp](https://freesound.org/people/Kostrava/sounds/548629/) | Freesound | Kostrava | CC0 | `amb_swamp_day` |
 | [RAH_Flapping_Fabric_3.flac](https://freesound.org/people/_earthbound_/sounds/57280/) | Freesound | _earthbound_ | CC0 | `sail_luff` |
@@ -96,7 +95,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Splashing Footsteps Shallow Water](https://freesound.org/people/ChristopherJngs/sounds/861369/) | Freesound | ChristopherJngs | CC0 | `jump_shallow`, `land_shallow`, `step_shallow` |
 | [Tumbleweed Firestarter Torch Ignite Denoised 02](https://freesound.org/people/loganzsound/sounds/872960/) | Freesound | loganzsound | CC0 | `fire_ignite` |
 | [SPLASH.wav](https://freesound.org/people/petenice/sounds/9508/) | Freesound | petenice | CC0 | `catch_splash` |
-| [Impact Sounds · Kenney](https://kenney.nl/assets/impact-sounds) | Kenney | Kenney | CC0 | `break_dirt`, `break_grass`, `break_snow`, `break_stone`, `dig_grass`, `dig_stone`, `float_dry`, `jump_grass`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `land_dry`, `land_grass`, `land_hard`, `land_sand`, `land_shallow`, `land_snow`, `land_stone`, `land_wood`, `place_dirt`, `place_dry`, `place_grass`, `place_lamp`, `place_sand`, `place_snow`, `place_stone`, `place_wood`, `step_grass`, `step_snow`, `step_stone`, `step_wood` |
+| [Impact Sounds · Kenney](https://kenney.nl/assets/impact-sounds) | Kenney | Kenney | CC0 | `break_dirt`, `break_grass`, `break_snow`, `break_stone`, `dig_grass`, `dig_stone`, `float_dry`, `jump_grass`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `land_grass`, `land_hard`, `land_shallow`, `land_snow`, `land_stone`, `land_wood`, `place_dirt`, `place_dry`, `place_grass`, `place_lamp`, `place_sand`, `place_snow`, `place_stone`, `place_wood`, `step_grass`, `step_snow`, `step_stone`, `step_wood` |
 | [RPG Audio · Kenney](https://kenney.nl/assets/rpg-audio) | Kenney | Kenney | CC0 | `amb_town_night`, `break_wood`, `jump_dirt`, `jump_dry`, `jump_grass`, `jump_sand`, `jump_shallow`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `place_dirt`, `rigging_creak` |
 
 ## Not recorded

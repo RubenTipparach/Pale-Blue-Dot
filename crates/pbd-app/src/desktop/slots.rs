@@ -40,52 +40,50 @@ pub struct BlockArt {
 /// A block's art, or `None` for air and for a light, which is its own
 /// picture (`hotbar::light_icon`, `lamps-and-lanterns` task 5.3).
 pub fn block_art(material: Material) -> Option<BlockArt> {
-    use pbd_app::planet::{snow_slot, tileset_slot};
-    use pbd_core::planet_gen::Biome;
-    // Which SHEET a block comes from, which is the biome it is found in: sand
-    // is a beach's, snow is the tundra's, and the rest are the home meadow's.
-    // The ground asks the same two functions for the same answer. The tiles
-    // are each sheet's layout: #0 its ground, #1 that ground over the earth,
-    // #2 the earth, #3 the stone.
-    let home = |biome| tileset_slot(biome);
-    let one = |sheet: u32, x: f32, y: f32| BlockArt {
+    use pbd_app::planet::tileset_slot;
+    // Which SHEET a block comes from: its home (`pbd_core::column::home_biome`:
+    // sand a beach's, snow the tundra's, jungle sward the jungle's, rock and
+    // the forge's bricks the mountains', the rest the home meadow's). The
+    // ground draws a PLACED block from the same table
+    // (`placed-blocks-keep-material`), so the slot and the block put down are
+    // one picture wherever it lands. The tiles are each sheet's layout: #0 its
+    // ground, #1 that ground over the earth, #2 the earth, #3 the stone.
+    let sheet = tileset_slot(pbd_core::column::home_biome(material)?);
+    let one = |x: f32, y: f32| BlockArt {
         sheet,
         top: Vec2::new(x, y),
         side: Vec2::new(x, y),
         under: Vec2::new(x, y),
     };
-    let grassy = |sheet: u32| BlockArt {
+    let grassy = BlockArt {
         sheet,
         top: Vec2::new(0., 0.),
         side: Vec2::new(1., 0.),
         under: Vec2::new(2., 0.),
     };
     Some(match material {
-        Material::Air => return None,
         // Grass and dry grass are one render code: the ground draws them alike.
-        Material::Grass | Material::DryGrass => grassy(home(Biome::Fields)),
-        Material::JungleGrass => grassy(home(Biome::Jungle)),
-        Material::Soil | Material::Dirt => one(home(Biome::Fields), 2., 0.),
-        Material::Sand => one(home(Biome::Beach), 0., 0.),
-        Material::Stone => one(home(Biome::Fields), 3., 0.),
-        Material::Rock => one(home(Biome::Mountains), 3., 0.),
-        Material::Snow => one(snow_slot(), 0., 0.),
-        Material::Ore => one(home(Biome::Fields), 0., 1.),
-        Material::Water | pbd_core::flowing_water!() => one(home(Biome::Ocean), 2., 2.),
+        Material::Grass | Material::DryGrass | Material::JungleGrass => grassy,
+        Material::Soil | Material::Dirt => one(2., 0.),
+        Material::Sand | Material::Snow => one(0., 0.),
+        Material::Stone | Material::Rock => one(3., 0.),
+        Material::Ore => one(0., 1.),
+        Material::Water | pbd_core::flowing_water!() => one(2., 2.),
         // The fields sheet's own tilled soil over its earth, as the ground
         // draws it (`farming-and-smelting` decision 2).
         Material::Tilled => BlockArt {
-            sheet: home(Biome::Fields),
+            sheet,
             top: Vec2::new(2., 3.),
             side: Vec2::new(2., 0.),
             under: Vec2::new(2., 0.),
         },
         // Slate bricks all round (decision 8).
-        Material::Forge => one(home(Biome::Mountains), 1., 3.),
+        Material::Forge => one(1., 3.),
         // Cut oak boards (`tool-crafting` decision 5); its slot draws M3's
         // own picture, so this is only the floating drop's face.
-        Material::Workbench => one(home(Biome::Fields), 1., 3.),
-        Material::Torch
+        Material::Workbench => one(1., 3.),
+        Material::Air
+        | Material::Torch
         | Material::LanternPost
         | Material::LanternWall
         | Material::LanternHanging
@@ -541,6 +539,22 @@ pub fn input(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `placed-blocks-keep-material`: a block's slot and the block put down
+    /// on the ground are one picture. The sheet the slot crops is the sheet
+    /// the ground draws the placed block from, for every block.
+    #[test]
+    fn a_slot_and_a_placed_block_share_a_sheet() {
+        for material in Material::ALL {
+            let mut column = pbd_core::column::Column::bedrock();
+            assert!(column.place(10, material));
+            let ground = pbd_app::planet::column::placed_sheet(&column, 10);
+            match block_art(material) {
+                Some(art) => assert_eq!(art.sheet + 1, ground, "{material:?}"),
+                None => assert_eq!(ground, 0, "{material:?} has no block picture"),
+            }
+        }
+    }
 
     /// Every material the terrain can put on screen has a thumbnail, so a new
     /// material cannot ship as a blank slot. Air is the one exclusion and it is

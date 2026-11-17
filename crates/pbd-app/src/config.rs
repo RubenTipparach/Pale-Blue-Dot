@@ -186,6 +186,151 @@ pub struct WaterSettings {
     /// where footprint is the per-pixel change of the noise coordinate. Zero
     /// is Tenebris exactly, which sparkles from altitude.
     pub detail_fade: f32,
+    /// The look of a fall: its mist, spray, droplets and bubbles, the pool's
+    /// churn, ripples and outward flow, the speed-up down its face and its
+    /// glassy lip (`water-flow` 6.6, mockup M35 approved 2026-11-16).
+    pub falls: FallLook,
+}
+
+/// Which rule sizes a fall's splash (`water-flow` "Mist on every fall").
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
+pub enum MistRule {
+    /// By the metres the water drops, with a floor, on the fall's open side.
+    #[default]
+    Proposed,
+    /// By whole falling layers, all round the foot (the look before M35).
+    Layers,
+}
+
+/// A fall's look, M35's New tab (`docs/mockups/waterfall-mist/mist.js`, `S`
+/// in `PBDMist`), its defaults the mockup's. A zero turns a part off.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct FallLook {
+    /// Which rule sizes the splash.
+    pub rule: MistRule,
+    /// Smooth (true) or pixelated (false) puffs, drops and bubbles.
+    pub smooth: bool,
+    /// The mist puffs' opacity, a multiplier on the sheet's alpha.
+    pub mist_opacity: f32,
+    /// The mist puffs' count, a multiplier.
+    pub mist_amount: f32,
+    /// The mist puffs' and fall droplets' size, a multiplier.
+    pub mist_size: f32,
+    /// The soft fade of a puff against the ground, a wall or the water
+    /// behind it, m (zero: a hard edge).
+    pub wall_blend_m: f32,
+    /// The fall droplets' count, a multiplier.
+    pub droplets: f32,
+    /// The bubbles' count under the foot, a multiplier (0 to 2).
+    pub bubbles: f32,
+    /// The aerated teal over the foot, a multiplier.
+    pub teal_churn: f32,
+    /// The aerated water's colour, linear.
+    pub aer_color: [f32; 3],
+    /// The speed-up down a fall's face: g = 3 m/s^2 times this (zero: one
+    /// speed from lip to foot).
+    pub fall_speed_up: f32,
+    /// The fastest a fall's face moves, m/s.
+    pub fall_speed_max_mps: f32,
+    /// The foot's ripples: their height (zero: none), the metres between
+    /// rings and how far out they reach, m.
+    pub ripple_height: f32,
+    pub ripple_length_m: f32,
+    pub ripple_reach_m: f32,
+    /// The pool's flow away from the foot, a multiplier on its speed (zero:
+    /// none), and how far out it reaches, m.
+    pub pool_flow: f32,
+    pub pool_flow_reach_m: f32,
+    /// The glassy lip (false: the froth up to the edge).
+    pub glassy: bool,
+    /// Glassy: smooth over this far before the edge, m; glassy this far over
+    /// it, m; the froth filled in by this far down, m.
+    pub glass_top_m: f32,
+    pub glass_face_m: f32,
+    pub froth_fill_m: f32,
+    /// Glassy: how much of the water's own green the smooth sheet shows, 0..1.
+    pub glass_tint: f32,
+    /// Glassy: the light a rounded lip would catch (zero: none).
+    pub edge_highlight: f32,
+    /// How far from the eye a fall's splash is drawn, m, and the seconds it
+    /// fades in or out over on crossing that reach (a fade in time, never by
+    /// distance).
+    pub splash_reach_m: f32,
+    pub splash_fade_s: f32,
+}
+
+impl Default for FallLook {
+    fn default() -> Self {
+        Self {
+            rule: MistRule::Proposed,
+            smooth: true,
+            mist_opacity: 2.0,
+            mist_amount: 1.0,
+            mist_size: 1.65,
+            wall_blend_m: 1.2,
+            droplets: 1.0,
+            bubbles: 1.0,
+            teal_churn: 1.0,
+            aer_color: [0.16, 0.50, 0.46],
+            fall_speed_up: 2.0,
+            fall_speed_max_mps: 8.0,
+            ripple_height: 0.5,
+            ripple_length_m: 0.9,
+            ripple_reach_m: 6.0,
+            pool_flow: 0.1,
+            pool_flow_reach_m: 6.0,
+            glassy: true,
+            glass_top_m: 0.70,
+            glass_face_m: 0.50,
+            froth_fill_m: 2.25,
+            glass_tint: 0.25,
+            edge_highlight: 0.0,
+            splash_reach_m: 140.0,
+            splash_fade_s: 0.6,
+        }
+    }
+}
+
+impl Validated for FallLook {
+    fn validate(&self) -> Result<(), String> {
+        let s = self;
+        non_negative(
+            "falls",
+            &[
+                s.mist_opacity,
+                s.mist_amount,
+                s.mist_size,
+                s.wall_blend_m,
+                s.droplets,
+                s.teal_churn,
+                s.fall_speed_up,
+                s.ripple_height,
+                s.pool_flow,
+                s.edge_highlight,
+            ],
+        )?;
+        non_negative("falls.aer_color", &s.aer_color)?;
+        positive(
+            "falls lengths",
+            &[
+                s.fall_speed_max_mps,
+                s.ripple_length_m,
+                s.ripple_reach_m,
+                s.pool_flow_reach_m,
+                s.glass_top_m,
+                s.glass_face_m,
+                s.froth_fill_m,
+                s.splash_reach_m,
+                s.splash_fade_s,
+            ],
+        )?;
+        unit("falls.glass_tint", s.glass_tint)?;
+        (s.bubbles.is_finite() && (0.0..=2.0).contains(&s.bubbles))
+            .then_some(())
+            .ok_or_else(|| format!("falls.bubbles must be within 0..=2, got {}", s.bubbles))?;
+        Ok(())
+    }
 }
 
 impl Default for WaterSettings {
@@ -239,6 +384,7 @@ impl Default for WaterSettings {
             flow_uv_speed_falling: 1.0,
             tide_range_m: 3.0,
             detail_fade: 4.0,
+            falls: FallLook::default(),
         }
     }
 }
@@ -278,6 +424,7 @@ impl Validated for WaterSettings {
         non_negative("absorption_per_m", &s.absorption_per_m)?;
         non_negative("downwell_per_m", &s.downwell_per_m)?;
         s.turbidity.validate()?;
+        s.falls.validate()?;
         non_negative(
             "under water",
             &[
@@ -1179,6 +1326,12 @@ pub struct ScatterSettings {
     /// it when the camera moves fast. Within 1..=6 m, inside the margins the
     /// visibility pass lists the near model and the cards with.
     pub tree_fade_lag_m: f32,
+    /// How much of the near model's relief a far tree takes
+    /// (`tree-impostor-depth`), 0..=1, unitless: its mid cards and billboard
+    /// lit by the normals and root-to-tip AO baked beside their colour, so a
+    /// crown has a sunlit side and a shaded one. Zero is the flat card of
+    /// `flora-v2` 13.4 (one standing normal and the crown's mean shade).
+    pub tree_impostor_relief: f32,
 }
 
 impl Default for ScatterSettings {
@@ -1215,6 +1368,7 @@ impl Default for ScatterSettings {
             tree_mid_m: 90.,
             tree_fade_s: 0.5,
             tree_fade_lag_m: 5.0,
+            tree_impostor_relief: 1.0,
         }
     }
 }
@@ -1254,6 +1408,7 @@ impl Validated for ScatterSettings {
         unit("leaf_fall", self.leaf_fall)?;
         unit("leaf_under", self.leaf_under)?;
         unit("fruit_chance", self.fruit_chance)?;
+        unit("tree_impostor_relief", self.tree_impostor_relief)?;
         (self.tree_near_m.is_finite() && (10.0..=60.0).contains(&self.tree_near_m))
             .then_some(())
             .ok_or("tree_near_m must lie within 10 and 60 m, the near list's reach")?;

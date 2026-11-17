@@ -46,14 +46,50 @@
 
 ## 6. Splashes (design "Splashes that show, and better ones", 2026-11-16)
 
-- [ ] 6.1 Blended effects over water (fall spray and mist, the near shower)
+- [x] 6.1 (The fall spray and mist, 2026-11-16, design "The fall splash drawn
+      after the water": `SplashQuads` drawn by the water's pass after the cap
+      and the flowing water, against the water's depth and the main pass's;
+      the near shower is not moved yet.) Blended effects over water (fall
+      spray and mist, the near shower)
       drawn after the water composite, depth-tested against the water;
-      captures of a fall's foot before and after.
+      captures of a fall's foot before and after. Verify:
+      `docs/screenshots/fall-splash-order/` (down, side, under the pool,
+      under the river); a launch to READY with no LATE_PIPELINE.
 - [ ] 6.2 M31: froth only on faces that fall a layer or more, beside today's
       bank; the owner's approval before game code.
 - [ ] 6.3 The rain splashes (built for ground, `weather-rain` 6.4) on water as well.
 - [ ] 6.4 M31 Splash tab: fall foot, entry, cast, fish, wake, beside today's
       spray; the owner's approval before game code.
+
+- [x] 6.5 (Approved 2026-11-16 on version 22, https://claude.ai/artifact/WzzTsEVPa3SviHQBfnanMo: "alright, I'm happy
+      with this, send it yo". The game port is 6.6, with the mockup's defaults: the proposed mist rule, smooth FX,
+      opacity 2, size 1.65, wall blend 1.2, droplets as single drops (no streaks, owner), speed-up 2, ripples 0.5 /
+      0.9 m / 6 m, pool flow 0.1 / 6 m, Glassy lip 0.70 / 0.50 / 2.25 / green 0.25 / highlight 0. Mockup:
+      `docs/mockups/waterfall-mist.html`.) Mist puffs after Crab Breeze's smoke puffs and bubbles under
+      the water at a fall's foot (design "Mist puffs and bubbles, in a
+      mockup first"), shown beside today's look and the order fix; the
+      owner's approval before game code.
+- [ ] 6.6 In the game, once 6.5 is approved: the puff sheet in the splash
+      pass, the bubbles on the GPU in the water's pass, the aerated colour
+      in the water's fragment. Verify: captures above, beside and under a
+      fall; a launch to READY with no LATE_PIPELINE.
+  - [x] 6.6.1 The write-up (design "Porting M35"). Verify: `openspec validate --all`.
+  - [x] 6.6.2 The mesher's feet carry the drop `D`, the way over, the pool's depth and the column; a foot
+        cell's falling face carries metres under the lip. Verify: unit tests on a ring tier.
+  - [x] 6.6.3 `falls` in `water.ron`, validated, the mockup's defaults. Verify: the shipped-file test.
+  - [x] 6.6.4 `animate_splash` on the proposed rule: puffs on the open side, fade in at birth, centre at
+        0.2 x size, continuous frames; spray floors; fall droplets as single drops; the 140 m reach faded
+        in time. Verify: unit tests of the rule against the mockup's table.
+  - [x] 6.6.5 The splash pass: three lanes a quad, the puff sheet smooth with the frame cross-fade, soft
+        against the main and water depth in its own pass, lamps on the mist. Verify: naga validation, the
+        layout test, captures.
+  - [x] 6.6.6 Bubbles on the GPU from the feet uniform. Verify: captures above and under a pool.
+  - [x] 6.6.7 (Stills and the differences: `docs/screenshots/waterfall-look/`; a normal launch at the
+        cascade reaches READY with 113 pipelines and no LATE_PIPELINE.) The water's fragment: teal churn, foot ripples, pool flow, fall speed-up, Glassy lip.
+        Verify: captures above, beside and under a tall and a short fall beside the mockup's
+        (`docs/screenshots/waterfall-look/`); a launch to READY with no LATE_PIPELINE.
+  - [ ] 6.6.8 (Owed: not run in this sitting; the suite has no fall scenario, a held-view command is in
+        `docs/screenshots/waterfall-look/README.md`.) The frame cost: `perf_suite.py`, before and after, on the release build (owner's condition).
 
 ## 7. Rain rings that alias (design "Rain rings that alias"; owner, 2026-11-16)
 
