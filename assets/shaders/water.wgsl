@@ -2090,7 +2090,50 @@ fn height_fog(uv: vec2<f32>, color: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn clouds(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(height_fog(in.uv, clouds_over(in.uv)), 1.0);
+    let uv = sea_gap_uv(in.uv);
+    return vec4<f32>(height_fog(uv, clouds_over(uv)), 1.0);
+}
+
+// The sea's horizon line (`horizon-haze` 4). A pixel whose depth says sky
+// but whose ray meets the sea's sphere looks into the gap between the sea's
+// silhouette and that sphere's tangent: the tide and the troughs take the
+// sheet under the sphere, and a few rows of rays under the horizon meet no
+// sea. The cloud stops such a ray at the sphere, short of its layer, so
+// under cover the gap kept the clear dome's blue under a greyed sky: a dark
+// band. Such a pixel is drawn as the one `SEA_GAP_LIFT_PX` over the
+// sphere's horizon in the same compass direction, its cloud and fog
+// included. Anything else is its own pixel: the sheet is not in the scene's
+// depth, so a pixel the sheet drew (its own depth target, `water_depth`) is
+// the sea, not the gap.
+const SEA_GAP_LIFT_PX: f32 = 2.0;
+// Whether `uv` is open to the sky in both the scene's depth and the sheet's:
+// a ray there that meets the sea's sphere is in the gap, not on the sea.
+fn sea_gap(uv: vec2<f32>) -> bool {
+    return load_depth(uv) <= 1e-7
+        && water_depth_at(uv*vec2<f32>(textureDimensions(water_depth))) <= 1e-7;
+}
+fn sea_gap_uv(uv: vec2<f32>) -> vec2<f32> {
+    if (!sea_gap(uv)) { return uv; }
+    let ray = view_ray(uv);
+    let eye = ray.origin - view.planet_center.xyz;
+    let radius = view.planet_center.w;
+    let r = length(eye);
+    if (r <= radius || cloud_sphere_hit(eye, ray.direction, radius).x <= 0.0) { return uv; }
+    let up = eye/r;
+    let across = ray.direction - up*dot(ray.direction, up);
+    if (dot(across, across) < 1e-10) { return uv; }
+    let level = radius/r;
+    let horizon = safe_normal(safe_normal(across)*level - up*sqrt(max(1.0 - level*level, 0.0)));
+    let far = ray.origin + horizon*1.0e4;
+    let a = view.clip_from_local*vec4<f32>(far, 1.0);
+    let b = view.clip_from_local*vec4<f32>(far + up*10.0, 1.0);
+    if (a.w <= 1e-4 || b.w <= 1e-4) { return uv; }
+    let at = vec2<f32>(a.x/a.w*0.5 + 0.5, 0.5 - a.y/a.w*0.5);
+    let above = vec2<f32>(b.x/b.w*0.5 + 0.5, 0.5 - b.y/b.w*0.5);
+    let size = vec2<f32>(textureDimensions(scene_color));
+    let step = (above - at)*size;
+    if (dot(step, step) < 1e-8) { return uv; }
+    return clamp(at + normalize(step)*SEA_GAP_LIFT_PX/size, vec2<f32>(0.0), vec2<f32>(1.0));
 }
 
 // The clouds laid over the scene at `uv`.
@@ -2616,7 +2659,7 @@ fn rain_far(uv: vec2<f32>) -> f32 {
         far = min(far,length(reconstruct_local(uv,depth)-ray.origin));
     }
     let sea = cloud_sphere_hit(eye,ray.direction,view.planet_center.w);
-    if (sea.x > 0.0) { far = min(far,sea.x); }
+    if (sea.x > 0.0 && !sea_gap(uv)) { far = min(far,sea.x); }
     let ceiling = cloud_sphere_hit(eye,ray.direction,base);
     if (ceiling.y > 0.0) { far = min(far,ceiling.y); }
     return select(0.0, far, far > 1.0);
@@ -2637,7 +2680,15 @@ fn rain_half(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 // The distance to what a pixel shows, for weighing the small texels by it.
 fn rain_depth_m(uv: vec2<f32>) -> f32 {
     let depth = load_depth(uv);
-    if (depth <= 1e-7) { return 1.0e6; }
+    if (depth <= 1e-7) {
+        // The sheet is not in the scene's depth: where it drew, its sphere's
+        // hit, so the sky's long rain does not bleed down onto the sea at the
+        // horizon (`horizon-haze` 4).
+        let ray = view_ray(uv);
+        let sea = cloud_sphere_hit(ray.origin-view.planet_center.xyz, ray.direction, view.planet_center.w);
+        if (sea.x > 0.0 && !sea_gap(uv)) { return sea.x; }
+        return 1.0e6;
+    }
     return length(reconstruct_local(uv, depth)-view_ray(uv).origin);
 }
 
@@ -2689,7 +2740,7 @@ fn rain(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         far = min(far,length(reconstruct_local(uv,depth)-ray.origin));
     }
     let sea = cloud_sphere_hit(eye,ray.direction,view.planet_center.w);
-    if (sea.x > 0.0) { far = min(far,sea.x); }
+    if (sea.x > 0.0 && !sea_gap(uv)) { far = min(far,sea.x); }
     let ceiling = cloud_sphere_hit(eye,ray.direction,base);
     if (ceiling.y > 0.0) { far = min(far,ceiling.y); }
     if (far <= 1.0) { return vec4<f32>(scene,1.0); }

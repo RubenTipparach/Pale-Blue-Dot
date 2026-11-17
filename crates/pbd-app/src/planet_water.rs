@@ -710,6 +710,9 @@ fn composite_layout() -> BindGroupLayoutDescriptor {
                     16,
                     texture_2d(TextureSampleType::Float { filterable: false }),
                 ),
+                // The sheet's own depth: a sky pixel the sheet did not draw
+                // is the gap at the sea's horizon (`horizon-haze` 4).
+                (20, texture_depth_2d()),
             ),
         ),
     )
@@ -788,6 +791,8 @@ fn rain_light_layout() -> BindGroupLayoutDescriptor {
                         NonZeroU64::new(size_of::<super::shadow::GpuCascades>() as u64),
                     ),
                 ),
+                // The sheet's own depth (`horizon-haze` 4), as the clouds'.
+                (20, texture_depth_2d()),
             ),
         ),
     )
@@ -1024,10 +1029,14 @@ fn rain_compose_layout() -> BindGroupLayoutDescriptor {
         "rain: the small target",
         &BindGroupLayoutEntries::with_indices(
             ShaderStages::FRAGMENT,
-            ((
-                15,
-                texture_2d(TextureSampleType::Float { filterable: false }),
-            ),),
+            (
+                (
+                    15,
+                    texture_2d(TextureSampleType::Float { filterable: false }),
+                ),
+                // The sheet's own depth (`horizon-haze` 4), as the clouds'.
+                (20, texture_depth_2d()),
+            ),
         ),
     )
 }
@@ -2520,8 +2529,11 @@ impl ViewNode for WaterCompositeNode {
                     view: &water.depth,
                     depth_ops: Some(Operations {
                         load: LoadOp::Clear(0.0),
-                        // Kept for the splash's pass when it draws.
-                        store: if splash_on || bubbles_on {
+                        // Kept for the splash's pass when it draws, and for
+                        // the clouds' composite and the rain, which tell the
+                        // sea's horizon gap from the sheet by it
+                        // (`horizon-haze` 4).
+                        store: if splash_on || bubbles_on || clouds_on || water.rain_needed {
                             StoreOp::Store
                         } else {
                             StoreOp::Discard
@@ -2601,6 +2613,7 @@ impl ViewNode for WaterCompositeNode {
                 (4, depth_write),
                 (7, &water.current[2]),
                 (16, &water.puff_cover),
+                (20, &water.depth),
             )),
         );
         if clouds_on {
@@ -2798,6 +2811,7 @@ impl ViewNode for WaterCompositeNode {
                             (11, &map.texture_view),
                             (12, &map.sampler),
                             (13, cascades.buffer.as_entire_binding()),
+                            (20, &water.depth),
                         )),
                     )
                 })
@@ -2815,7 +2829,7 @@ impl ViewNode for WaterCompositeNode {
         let rain_compose_group = device.create_bind_group(
             Some("rain: the small target"),
             &cache.get_bind_group_layout(&pipelines.rain_compose_layout),
-            &BindGroupEntries::with_indices(((15, &water.rain_half),)),
+            &BindGroupEntries::with_indices(((15, &water.rain_half), (20, &water.depth))),
         );
         let lens_group = device.create_bind_group(
             Some("lens mist"),
