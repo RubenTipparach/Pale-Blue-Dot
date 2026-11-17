@@ -1538,3 +1538,18 @@ a sea shore and a river mouth: one steady descent and one steady ascent at
 burnt in. On Drive as `waterline3-<place>-<before|after>-1080p60.mp4`;
 contact sheets and the frame-by-frame list in
 `docs/screenshots/waterline-3/README.md`.
+
+### B20. Kelp that does not hammer the frame (owner, 2026-11-16)
+
+The owner, looking across shallow sea from just above the surface toward
+jungle islands: "kelp forest is HAMMERING PERF", "FIX THEM, they dont need
+that MANY POLYGONS". A dense field of stands to the edge of the view, each a
+dark stipe with a star of pale blades lying out on the surface.
+
+**Measurement instruments** (code whose only job is a number this section
+needs; no behaviour changes with them unset):
+- `PBD_PASS_OFF=kelp` lays no kelp stand in a sea-places tile (its rocks
+  stay), so a held view can be priced with kelp and without on the same
+  exe, in the same sitting.
+- A `SEA_PLACES` log line, once a second: the tiles drawn, the triangles in
+  them, the kelp's share, and the swaying vertices rewritten that frame.

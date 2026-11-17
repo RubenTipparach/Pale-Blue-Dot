@@ -1185,6 +1185,17 @@ struct Built {
     glow: Verts,
     sway: Sway,
     ambient: Vec<Ambient>,
+    /// The kelp stands' triangles (the `SEA_PLACES` log line).
+    kelp_tris: usize,
+}
+
+/// `PBD_PASS_OFF=kelp`: no kelp stand is laid (its rocks stay), a pricing
+/// instrument (`ocean-environments` B20) beside `shower` and `splash`.
+fn kelp_off() -> bool {
+    static OFF: OnceLock<bool> = OnceLock::new();
+    *OFF.get_or_init(|| {
+        std::env::var("PBD_PASS_OFF").is_ok_and(|list| list.split(',').any(|p| p.trim() == "kelp"))
+    })
 }
 
 /// Whether a kind bends in the surge.
@@ -1286,9 +1297,13 @@ fn build_tile(
         match p.kind {
             None => {
                 // Kelp, to the surface, swaying.
+                if kelp_off() {
+                    continue;
+                }
                 let height = (sea_radius - ground - 0.3).max(1.0);
                 let mut kelp = Verts::default();
                 kelp_stand(origin, axes, height, i as f32 * 0.37, &mut kelp);
+                out.kelp_tris += kelp.positions.len() / 3;
                 let light = dimmed(downwell, height * 0.5);
                 out.sway.uvs.extend_from_slice(&kelp.uvs);
                 for (q, c) in kelp.positions.into_iter().zip(kelp.colours) {
@@ -1572,6 +1587,9 @@ struct Drawn {
     still: Sway,
     ambient: Vec<Ambient>,
     swayed: bool,
+    /// The tile's triangles and the kelp's share of them (`SEA_PLACES`).
+    tris: usize,
+    kelp_tris: usize,
 }
 
 #[derive(Resource, Default)]
@@ -1582,6 +1600,8 @@ struct Tiles {
     /// Whether the world has sea places: a world switching its generator
     /// drops the tiles.
     version: Option<bool>,
+    /// When the `SEA_PLACES` line was last logged, s.
+    logged_s: f32,
 }
 
 /// The unlit material a vent's glow is drawn with.
@@ -1719,6 +1739,7 @@ fn tiles(
         .map_or(now as f64, |s| s.clock.seconds)
         .rem_euclid(3600.0) as f32;
     let mut gone = Vec::new();
+    let mut swayed_verts = 0usize;
     for (key, drawn) in state.drawn.iter_mut() {
         let m = metres(*key);
         let fade = tile_fade(m, now - drawn.landed_s);
@@ -1776,6 +1797,7 @@ fn tiles(
                     (s.rest[i] + s.axis[i] * wave * reach).to_array()
                 })
                 .collect();
+            swayed_verts += positions.len();
             mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
             drawn.swayed = near;
         }
@@ -1808,6 +1830,19 @@ fn tiles(
         if let Some(drawn) = state.drawn.remove(&key) {
             commands.entity(drawn.root).despawn();
         }
+    }
+    // A measurement instrument (`ocean-environments` B20): what the sea's
+    // places draw and rewrite, once a second.
+    if now - state.logged_s >= 1.0 {
+        state.logged_s = now;
+        let (tris, kelp) = state
+            .drawn
+            .values()
+            .fold((0, 0), |(t, k), d| (t + d.tris, k + d.kelp_tris));
+        info!(
+            "SEA_PLACES tiles={} tris={tris} kelp_tris={kelp} swayed_verts={swayed_verts}",
+            state.drawn.len()
+        );
     }
     state.planning.retain(|k, _| wanted.contains(k));
     // Plan what is new, off the main thread.
@@ -1883,6 +1918,12 @@ fn tiles(
             }
         );
     }
+    let tris = (built.pieces.positions.len()
+        + built.floes.positions.len()
+        + built.glow.positions.len()
+        + built.sway.rest.len())
+        / 3;
+    let kelp_tris = built.kelp_tris;
     let at = (frame.center + anchor.as_dvec3()).as_vec3();
     let root = commands
         .spawn((
@@ -1993,6 +2034,8 @@ fn tiles(
             still: built.sway,
             ambient: built.ambient,
             swayed: false,
+            tris,
+            kelp_tris,
         },
     );
 }
