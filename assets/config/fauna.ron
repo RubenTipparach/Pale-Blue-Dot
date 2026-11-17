@@ -128,7 +128,7 @@
                 shape: (0.5, 0.5, 1.0),
                 icon: "fish/silverfin",
                 guide: (
-                    entry: "A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two metres and scatter at a splash, then close ranks again a few seconds later.",
+                    entry: "A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two meters and scatter at a splash, then close ranks again a few seconds later.",
                     tip: "Let the splash settle before you expect a bite.",
                 ),
             ),
@@ -271,7 +271,7 @@
                 shape: (0.55, 0.55, 1.0),
                 icon: "fish/deepback",
                 guide: (
-                    entry: "A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half metres, and a hooked deepback runs long and tires slowly.",
+                    entry: "A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half meters, and a hooked deepback runs long and tires slowly.",
                     tip: "Fish where the shelf drops close to the shore, where the water turns dark.",
                 ),
             ),
@@ -396,7 +396,7 @@
                 shape: (1.2, 0.6, 0.8),
                 icon: "water_life/giant_clam",
                 guide: (
-                    entry: "A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four metres and opens again once it has gone.",
+                    entry: "A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four meters and opens again once it has gone.",
                     tip: "Swim up slowly and it still shuts. Wait a while at a distance and it opens.",
                 ),
                 mover: Crawler,
@@ -529,7 +529,7 @@
                 icon: "water_life/pond_diver",
                 guide: (
                     entry: "A dark little duck that dives for its food and comes up somewhere else. Pond divers keep to deeper pools and slow river reaches in ones and twos. Ducks are protected.",
-                    tip: "Watch the water where it went under; it surfaces a few metres off.",
+                    tip: "Watch the water where it went under; it surfaces a few meters off.",
                 ),
                 mover: Floater,
                 env: [Marsh, Pool],
@@ -563,7 +563,7 @@
                 shape: (0.8, 0.4, 1.0),
                 icon: "water_life/octopus",
                 guide: (
-                    entry: "A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the colour of the rock when still and flushes red when it moves. Come within six metres and it inks and jets home, and stays hidden until you have gone.",
+                    entry: "A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the color of the rock when still and flushes red when it moves. Come within six meters and it inks and jets home, and stays hidden until you have gone.",
                     tip: "Look for the shells at its door, then keep back and wait.",
                 ),
                 mover: Crawler,
@@ -595,7 +595,7 @@
                 shape: (0.15, 0.05, 0.15),
                 icon: "water_life/tube_worm",
                 guide: (
-                    entry: "White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five metres. They live on the vent, not on the light.",
+                    entry: "White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five meters. They live on the vent, not on the light.",
                     tip: "Only at the vents on the deepest floor. Nothing worth taking; the vent is the prize.",
                 ),
                 mover: Crawler,
@@ -628,7 +628,7 @@
                 shape: (0.4, 0.35, 1.0),
                 icon: "water_life/seal",
                 guide: (
-                    entry: "Grey seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine metres, then surface somewhere else a while later. Seals are protected: none may be caught.",
+                    entry: "Gray seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine meters, then surface somewhere else a while later. Seals are protected: none may be caught.",
                     tip: "Cold water, near the ice or the kelp. Where seals are, the fish are.",
                 ),
                 mover: Floater,

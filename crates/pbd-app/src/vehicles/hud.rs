@@ -12,8 +12,16 @@ use bevy::prelude::*;
 use pbd_core::vehicle::{CraftState, Kind, SailState, Telemetry};
 use std::fmt::Write;
 
+/// The instruments behind F3: plain text, a developer's.
 #[derive(Component)]
 pub struct VehicleText;
+
+/// The boat panel: the stone panel a player reads aboard, and the column its
+/// rows are rebuilt into when they change.
+#[derive(Component)]
+pub struct BoatPanel;
+#[derive(Component)]
+pub struct BoatPanelBody;
 
 pub fn spawn(mut commands: Commands) {
     commands.spawn((
@@ -27,7 +35,7 @@ pub fn spawn(mut commands: Commands) {
         Node {
             position_type: PositionType::Absolute,
             left: px(5),
-            bottom: px(40),
+            top: px(130),
             padding: UiRect::all(px(5)),
             ..default()
         },
@@ -37,45 +45,156 @@ pub fn spawn(mut commands: Commands) {
     ));
 }
 
+/// What the panel says: the title, a row per control (each key's label and
+/// what it does), and a warning when there is one.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct Lines {
+    pub title: String,
+    pub rows: Vec<(Vec<&'static str>, String)>,
+    pub warning: Option<String>,
+}
+
+impl Lines {
+    /// As one string: what a test reads.
+    #[cfg(test)]
+    pub fn text(&self) -> String {
+        let mut s = self.title.clone();
+        for (keys, what) in &self.rows {
+            let _ = write!(s, "\n{}  {what}", keys.join("/"));
+        }
+        if let Some(w) = &self.warning {
+            let _ = write!(s, "\n{w}");
+        }
+        s
+    }
+}
+
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn show(
+    mut commands: Commands,
     aboard: Res<Aboard>,
     view: Res<VehicleView>,
     vehicles: Query<&Vehicle>,
-    mut text: Query<(&mut Text, &mut Visibility), With<VehicleText>>,
+    mut text: Query<(&mut Text, &mut Visibility), (With<VehicleText>, Without<BoatPanel>)>,
+    mut panels: Query<&mut Visibility, (With<BoatPanel>, Without<VehicleText>)>,
+    bodies: Query<Entity, With<BoatPanelBody>>,
+    kit: Option<Res<crate::ui_kit::UiKit>>,
     binds: Option<Res<crate::controls::KeyBinds>>,
     menu: Option<Res<crate::controls::MenuOpen>>,
     debug: Option<Res<crate::controls::DebugOverlay>>,
+    mut shown: Local<Option<Lines>>,
 ) {
     let none = crate::controls::KeyBinds::default();
     let binds = binds.as_deref().unwrap_or(&none);
-    let Ok((mut text, mut visibility)) = text.single_mut() else {
+    let vehicle = aboard.0.and_then(|e| vehicles.get(e).ok());
+    // A menu aboard (the pack, with a raft's hold) stands over the panel,
+    // which would draw through it.
+    let menu = menu.is_some_and(|m| m.0);
+    let lines = vehicle.filter(|_| !menu).map(|v| panel(v, binds));
+    // The instruments, behind F3.
+    if let Ok((mut text, mut visibility)) = text.single_mut() {
+        let line = vehicle
+            .filter(|_| !menu && debug.is_some_and(|d| d.0))
+            .map(|v| instruments(v, view.seat))
+            .unwrap_or_default();
+        let want = if line.is_empty() {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+        if *visibility != want {
+            *visibility = want;
+        }
+        if text.0 != line {
+            text.0 = line;
+        }
+    }
+    let Some(kit) = kit else {
         return;
     };
-    let line = aboard
-        .0
-        .and_then(|e| vehicles.get(e).ok())
-        .map(|vehicle| {
-            if debug.is_some_and(|d| d.0) {
-                format!(
-                    "{}\n\n{}",
-                    panel(vehicle, binds),
-                    instruments(vehicle, view.seat)
-                )
-            } else {
-                panel(vehicle, binds)
-            }
-        })
-        .unwrap_or_default();
-    // A menu aboard (the pack, with a raft's hold) stands over the
-    // instruments, which would draw through it.
-    let menu = menu.is_some_and(|m| m.0);
-    *visibility = if line.is_empty() || menu {
-        Visibility::Hidden
-    } else {
+    if panels.is_empty() {
+        spawn_panel(&mut commands);
+        *shown = None;
+        return;
+    }
+    let want = if lines.is_some() {
         Visibility::Inherited
+    } else {
+        Visibility::Hidden
     };
-    if text.0 != line {
-        text.0 = line;
+    for mut visibility in &mut panels {
+        if *visibility != want {
+            *visibility = want;
+        }
+    }
+    if *shown == lines {
+        return;
+    }
+    shown.clone_from(&lines);
+    let Some(lines) = lines else {
+        return;
+    };
+    for body in &bodies {
+        commands.entity(body).despawn_related::<Children>();
+        commands
+            .entity(body)
+            .with_children(|body| fill(body, &kit, &lines));
+    }
+}
+
+/// The panel, empty and hidden, bottom left: no background of its own
+/// (owner, 2026-11-16: "probably leave off the background here, and add drop
+/// shadow or outline for text"), its words outlined so they read over water
+/// and sand alike.
+fn spawn_panel(commands: &mut Commands) {
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(8),
+            bottom: px(40),
+            flex_direction: FlexDirection::Column,
+            row_gap: px(3),
+            ..default()
+        },
+        Visibility::Hidden,
+        BoatPanel,
+        BoatPanelBody,
+    ));
+}
+
+/// The panel's rows: the title, then each control as its keys' stone
+/// glyphs and what it does, then the warning.
+fn fill(body: &mut ChildSpawnerCommands, kit: &crate::ui_kit::UiKit, lines: &Lines) {
+    use crate::ui_kit::{INK, KitText, LABEL, TITLE};
+    body.spawn((
+        KitText::new(lines.title.clone(), TITLE).outline(INK),
+        Node {
+            margin: UiRect::bottom(px(2)),
+            ..default()
+        },
+    ));
+    for (keys, what) in &lines.rows {
+        body.spawn(Node {
+            column_gap: px(2),
+            align_items: AlignItems::Center,
+            ..default()
+        })
+        .with_children(|row| {
+            for key in keys {
+                crate::ui_kit::key_cap(row, kit, key, ());
+            }
+            row.spawn((
+                KitText::new(what.clone(), LABEL).outline(INK),
+                Node {
+                    margin: UiRect::left(px(4)),
+                    padding: UiRect::top(px(2)),
+                    ..default()
+                },
+            ));
+        });
+    }
+    if let Some(w) = &lines.warning {
+        body.spawn(KitText::new(w.clone(), TITLE).outline(INK));
     }
 }
 
@@ -96,51 +215,52 @@ const BAIL_KG: f64 = 20.0;
 /// the camera, and a word to bail only when there is water to bail. The
 /// instruments are a developer's and stand behind F3 with the frame graph
 /// ([`instruments`]).
-fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> String {
+fn panel(vehicle: &Vehicle, binds: &crate::controls::KeyBinds) -> Lines {
     let craft = &vehicle.craft;
-    let mut s = String::new();
     let moored = match craft.mooring {
         Some(m) if m.anchored => " - at anchor",
         Some(_) => " - tied up",
         None => "",
     };
-    let _ = writeln!(s, "{}{moored}", craft.kind.name().to_uppercase());
+    let mut lines = Lines {
+        title: format!("{}{moored}", craft.kind.name().to_uppercase()),
+        ..default()
+    };
     let bail = craft.bilge_kg > BAIL_KG;
-    for row in crate::controls::rows(&craft.kind.name().to_uppercase(), binds) {
+    for (keys, what) in crate::controls::caps(&craft.kind.name().to_uppercase(), binds) {
         // The bail key only while there is water to bail.
-        if row.ends_with("bail") && !bail {
+        if what == "bail" && !bail {
             continue;
         }
-        let _ = writeln!(s, "{row}");
+        // Moving on W, A, S and D goes without saying (owner, 2026-11-16:
+        // "we probably dont need WASD, its obvious enough"); a row the
+        // player has moved to other keys is shown.
+        if keys.iter().all(|k| ["W", "A", "S", "D"].contains(k)) {
+            continue;
+        }
+        lines.rows.push((keys, what.to_string()));
     }
-    let t = bound("vehicles:KeyT", KeyCode::KeyT, binds);
     let anchor = match craft.mooring {
         Some(m) if m.anchored => "raise the anchor",
         Some(_) => "cast off",
         None => "drop the anchor",
     };
-    let _ = writeln!(s, "{t}  {anchor}");
-    let _ = write!(
-        s,
-        "{}  step off   {}  camera",
-        crate::controls::key_label(crate::interact::key(binds)),
-        bound("vehicles:KeyV", KeyCode::KeyV, binds)
-    );
+    lines.rows.push((
+        vec![bound("vehicles:KeyT", KeyCode::KeyT, binds)],
+        anchor.into(),
+    ));
+    lines.rows.push((
+        vec![crate::controls::key_label(crate::interact::key(binds))],
+        "step off".into(),
+    ));
+    lines.rows.push((
+        vec![bound("vehicles:KeyV", KeyCode::KeyV, binds)],
+        "camera".into(),
+    ));
     if bail {
-        let _ = write!(
-            s,
-            "\nWater aboard: bail with {}",
-            bound(
-                &format!(
-                    "{}:KeyB",
-                    craft.kind.name().to_lowercase().replace(' ', "_")
-                ),
-                KeyCode::KeyB,
-                binds
-            )
-        );
+        lines.warning = Some("Water aboard: bail".into());
     }
-    s
+    lines
 }
 
 /// The instruments, behind F3 (`DebugOverlay`): what the panel showed before
@@ -311,18 +431,17 @@ mod tests {
             speed: 2.0,
             ..default()
         });
-        let text = panel(&v, &Default::default());
+        let text = panel(&v, &Default::default()).text();
         for want in [
             "RAFT",
-            "W/S  pole forward or back",
-            "A/D  turn",
+            "Q/E  steer with the pole",
             "drop the anchor",
             "step off",
             "camera",
         ] {
             assert!(text.contains(want), "missing {want}: {text}");
         }
-        for not in ["m/s", "freeboard", "slip", "bail", "deg"] {
+        for not in ["W/S", "A/D", "m/s", "freeboard", "slip", "bail", "deg"] {
             assert!(!text.contains(not), "{not} in the panel: {text}");
         }
         v.craft.bilge_kg = 80.0;
@@ -331,12 +450,19 @@ mod tests {
             length: 10.0,
             anchored: true,
         });
-        let text = panel(&v, &Default::default());
+        let text = panel(&v, &Default::default()).text();
         assert!(
             text.contains("at anchor") && text.contains("raise the anchor"),
             "{text}"
         );
-        assert!(text.contains("Water aboard: bail with B"), "{text}");
+        let mut loon = vehicle(Kind::Loon);
+        assert!(!panel(&loon, &Default::default()).text().contains("bail"));
+        loon.craft.bilge_kg = 80.0;
+        let wet = panel(&loon, &Default::default()).text();
+        assert!(
+            wet.contains("Water aboard: bail") && wet.contains("B  bail"),
+            "{wet}"
+        );
         let deep = instruments(&v, false);
         assert!(
             deep.contains("water  1.0") && deep.contains("freeboard"),

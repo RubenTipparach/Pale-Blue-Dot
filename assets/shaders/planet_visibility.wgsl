@@ -576,7 +576,7 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // Or a river's water over a far cell (`spare.w`, design 13).
     // And over every cell the sea's surface reaches at some tide whatever
     // its ground's or roof's height (`SEA_REACH_BIT`, 4u: a cavern under a
-    // bank opening onto the sea, `ocean-environments` B20); the Rust
+    // bank opening onto the sea, `ocean-environments` B22); the Rust
     // `planet::column::sheet_listed` is this test for the CPU's readers.
     if !cascade && (cell.direction_height.w < max(params.lod_spare.w, 0.0)
         && (cell.spare.z & 2u) == 0u || (cell.spare.z & 4u) != 0u || cell.spare.w != 0u) {

@@ -527,10 +527,16 @@ fn read_controls(
             input.sheet = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.crew = axis(KeyCode::KeyE, KeyCode::KeyQ);
         }
-        Kind::Loon | Kind::Rowboat | Kind::Tube | Kind::Raft => {
+        Kind::Loon | Kind::Rowboat | Kind::Raft => {
             input.forward = axis(KeyCode::KeyW, KeyCode::KeyS);
             input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
             input.rudder = axis(KeyCode::KeyQ, KeyCode::KeyE);
+        }
+        // The tube's rider kicks: ahead or back, and to turn
+        // (`small-boats`).
+        Kind::Tube => {
+            input.forward = axis(KeyCode::KeyW, KeyCode::KeyS);
+            input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);
         }
         Kind::Cog => {
             input.steer = axis(KeyCode::KeyA, KeyCode::KeyD);

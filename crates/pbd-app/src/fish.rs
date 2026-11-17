@@ -135,6 +135,10 @@ impl Default for Fishery {
 pub struct FishingStatus {
     pub text: String,
     pub meter: Option<(&'static str, f32)>,
+    /// The float is out and a right click reels it in: the interact prompt
+    /// shows that button under the crosshair (owner, 2026-11-16: "just have a
+    /// button prompt to right click to reel in").
+    pub reel_prompt: bool,
     /// Seconds a one-off message (a catch, a snap) stays up.
     hold_s: f32,
 }
@@ -178,17 +182,28 @@ impl Plugin for FishPlugin {
                     life_script.run_if(resource_exists::<LifeScript>),
                     fish,
                     draw::schools,
-                    draw::tackle,
+                    draw::hud,
                 )
                     .chain()
                     .in_set(FishSet),
+            )
+            // The float and the line are placed where the rod is drawn this
+            // frame: after the camera follows the walker, before transforms
+            // propagate (`fishing-and-equipment` design 4, the line's far
+            // end).
+            .add_systems(
+                PostUpdate,
+                draw::tackle
+                    .after(crate::walking::follow_walker)
+                    .after(crate::planet::update_planet_frame)
+                    .before(bevy::transform::TransformSystems::Propagate),
             );
     }
 }
 
 /// The water as a school or the line sees it: the sea's surface from one
 /// local wave table, and the bed from the craft's ground rule, remembered.
-struct PlanetWater<'a> {
+pub(crate) struct PlanetWater<'a> {
     sea: &'a Sea,
     local: LocalSea,
     contact: Option<&'a PlanetContact>,
@@ -330,6 +345,26 @@ fn fish(
     *was_aboard = aboard;
     if (!rod || !walking || moved) && fishery.line.phase != Phase::Ready {
         let flock = settings.flock;
+        // A fish on the line is lost with it, and the player is told so.
+        if matches!(
+            fishery.line.phase,
+            Phase::Nibble | Phase::Bite | Phase::Hooked
+        ) && let Some(school) = fishery
+            .line
+            .target
+            .and_then(|t| fishery.schools.get(t.school))
+        {
+            let species = school.species;
+            let _ = report(
+                &mut status,
+                Event::Lost { species },
+                roster,
+                None,
+                None,
+                fishery.line.float,
+                false,
+            );
+        }
         fishery.line.wind_in(&mut fishery.schools, &flock);
     }
     let captured = match afloat {
@@ -443,6 +478,8 @@ fn fish(
     if status.hold_s <= 0.0 {
         status.text = idle_text(&fishery.line, rod && walking, roster);
     }
+    status.reel_prompt =
+        rod && walking && fishery.line.phase == Phase::Floating && !roster.is_empty();
     status.meter = match fishery.line.phase {
         Phase::Charging => Some(("CAST", fishery.line.power)),
         Phase::Hooked => Some(("TENSION", fishery.line.tension)),
@@ -893,6 +930,10 @@ fn report(
             ),
             2.0,
         ),
+        Event::Lost { species } => status.say(
+            format!("Wound in - the {} got away", name(species).to_lowercase()),
+            2.0,
+        ),
         Event::Snapped { species } => status.say(
             format!(
                 "The line snapped - the {} is gone",
@@ -975,7 +1016,8 @@ fn idle_text(line: &Line, rod: bool, roster: &[Species]) -> String {
         Phase::Ready => "Hold the left button to cast".into(),
         Phase::Charging => "Let go to cast".into(),
         Phase::Flying => String::new(),
-        Phase::Floating => "Watch the float - right click winds in".into(),
+        // The button prompt says it (`reel_prompt`).
+        Phase::Floating => String::new(),
         Phase::Nibble => "Something is nibbling - wait for the float to go under".into(),
         Phase::Bite => "Bite! Click now".into(),
         Phase::Hooked => "Hold to reel - ease off when it runs".into(),
@@ -1479,25 +1521,28 @@ pub(crate) mod draw {
         mesh.compute_flat_normals();
     }
 
-    /// The rod in hand, the float on the water, the line between them, and the
-    /// HUD line.
+    /// The float on the water and the line from the rod's tip to it, placed
+    /// in `PostUpdate` after the camera has moved, so the rod, the line and
+    /// the float are drawn from one frame's state.
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
     pub fn tackle(
         fishery: Res<Fishery>,
         tools: Res<ToolSlot>,
-        status: Res<FishingStatus>,
         walking: Option<Res<WalkingReadout>>,
         frame: Res<crate::planet::PlanetRenderFrame>,
         sea: Option<Res<Sea>>,
-        cameras: Query<(Entity, &GlobalTransform), With<WalkingCamera>>,
-        mut floats: Query<(&mut Transform, &mut Visibility), (With<Float>, Without<LineMesh>)>,
+        air: Option<Res<Air>>,
+        contact: Option<Res<PlanetContact>>,
+        sun: Option<Res<crate::sky::Sun>>,
+        cameras: Query<&Transform, With<WalkingCamera>>,
+        mut floats: Query<
+            (&mut Transform, &mut Visibility),
+            (With<Float>, Without<LineMesh>, Without<WalkingCamera>),
+        >,
         mut lines: Query<
             (&Mesh3d, &mut Transform, &mut Visibility),
-            (With<LineMesh>, Without<Float>),
+            (With<LineMesh>, Without<Float>, Without<WalkingCamera>),
         >,
-        mut texts: Query<&mut Text, With<StatusText>>,
-        mut meter: Query<&mut Node, (With<Meter>, Without<MeterFill>)>,
-        mut fill: Query<(&mut Node, &mut BackgroundColor), (With<MeterFill>, Without<Meter>)>,
         mut meshes: ResMut<Assets<Mesh>>,
     ) {
         let walking = walking.is_some_and(|w| w.active);
@@ -1523,40 +1568,159 @@ pub(crate) mod draw {
             } else {
                 Visibility::Hidden
             };
-            let Some((_, eye)) = camera else {
+            let Some(eye) = camera else {
                 continue;
             };
             if !out {
                 continue;
             }
-            let tip = eye.transform_point(crate::held::rod_tip());
-            transform.translation = tip;
+            // The camera is a top-level entity: its `Transform`, which
+            // `follow_walker` has just set, is where the rod is drawn this
+            // frame. (Its `GlobalTransform` is still last frame's here.)
+            let tip_local =
+                (eye.transform_point(crate::held::rod_tip()).as_dvec3() - frame.center).as_vec3();
+            transform.translation = (frame.center + tip_local.as_dvec3()).as_vec3();
             let slack = match line.phase {
                 Phase::Hooked => 0.1 + 0.5 * (1.0 - line.tension.min(1.0)),
                 _ => 0.6,
             };
-            let tip_local = (tip.as_dvec3() - frame.center).as_vec3();
-            let down = -tip_local.normalize_or(Vec3::Y);
-            // A slack line lies on the water rather than hanging through it:
-            // the mockup's sag ran under the surface and looped back up.
-            let surface = sea.as_ref().map_or(0.0, |sea| sea.radius);
-            let points: Vec<Vec3> = (0..LINE_POINTS)
-                .map(|k| {
-                    let u = k as f32 / (LINE_POINTS - 1) as f32;
-                    let offset = (float_at - tip) * u + down * slack * 4.0 * u * (1.0 - u);
-                    let at = tip_local + offset;
-                    let r = at.length();
-                    if r > 0.0 && r < surface + 0.01 {
-                        at * ((surface + 0.01) / r) - tip_local
-                    } else {
-                        offset
-                    }
-                })
-                .collect();
+            // A slack line is held just over the water rather than hanging
+            // through it (the mockup's sag ran under the surface and looped
+            // back up): the water the float rides, with its waves and tide,
+            // not the mean sea, which stands a metre over it at low water.
+            // It ends on the top of the float, where it is tied.
+            let end = line.float + line.float.normalize_or(Vec3::Y) * FLOAT_TOP_M;
+            let points = match sea.as_deref() {
+                Some(sea) => {
+                    let seconds = sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
+                    let water = PlanetWater::at(
+                        sea,
+                        air.as_deref(),
+                        contact.as_deref(),
+                        &fishery.beds,
+                        line.float,
+                        seconds,
+                    );
+                    line_points(tip_local, end, slack, |p| line_floor(&water, end, p))
+                }
+                None => line_points(tip_local, end, slack, |_| 0.0),
+            };
             if let Some(mesh) = meshes.get_mut(&mesh.0) {
                 mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, points);
             }
         }
+    }
+
+    /// Where the line is tied: the top of the float's red half, m over the
+    /// float's own point (the red sphere's centre 0.03 m up, radius 0.06).
+    pub(crate) const FLOAT_TOP_M: f32 = 0.09;
+
+    /// How far over the water the slack of the line is held, m: enough that
+    /// the drawn waves never cover it, so it reads white all the way to the
+    /// float.
+    pub(crate) const LINE_CLEARANCE_M: f32 = 0.05;
+
+    /// How far round a point the drawn sea can take its height from, m. The
+    /// sea is drawn as a heightfield sampled at the cells' corners
+    /// (`water.wgsl`, `vertex`) and flat between them, so between corners it
+    /// can stand over the true wave by up to the wave's height. A corner is
+    /// never further than this from a point on the sea (a cell is about
+    /// 2.8 m across).
+    const DRAWN_REACH_M: f32 = 1.6;
+
+    /// The highest the drawn sea can stand over a point: the most of the
+    /// surface at the point and round it at `DRAWN_REACH_M`. The slack of the
+    /// line is held over this, so the drawn waves never cover it.
+    pub(crate) fn drawn_surface(water: &impl Water, point: Vec3) -> f32 {
+        let up = point.normalize_or(Vec3::Y);
+        let (a, b) = up.any_orthonormal_pair();
+        (0..6)
+            .map(|k| {
+                let angle = k as f32 * std::f32::consts::TAU / 6.0;
+                let off = (a * angle.cos() + b * angle.sin()) * DRAWN_REACH_M;
+                water.surface(point + off)
+            })
+            .fold(water.surface(point), f32::max)
+    }
+
+    /// Over how much of its last stretch the line comes down from the wave
+    /// crests onto the float, m across the water.
+    const APPROACH_M: f32 = 0.5;
+
+    /// The radius the slack of the line is held over at `point`, before
+    /// `LINE_CLEARANCE_M`; `end` is where it is tied on the float.
+    ///
+    /// - Never under the drawn sea ([`drawn_surface`]).
+    /// - Never under the waterline the frame's composite tints
+    ///   (`water.wgsl` `compose`): the mean sea lifted by the tide, without
+    ///   the waves. A line under it is drawn as seen through water, dark.
+    /// - Over the crests: every wave at its crest, on the tide here. The eye
+    ///   looks down on the line from the rod, so a line over every crest has
+    ///   no wave between it and the eye. A line lying low on the water in
+    ///   front of the float was seen through the crests nearer the eye, dark
+    ///   and broken, and read as stopping short of the float.
+    /// - The crest hold eases off over the last `APPROACH_M` so the line comes
+    ///   down onto the float where it is tied.
+    pub(crate) fn line_floor(water: &PlanetWater, end: Vec3, point: Vec3) -> f32 {
+        let sea = water.sea;
+        let under = drawn_surface(water, point).max(sea.radius + sea.tide_at(point));
+        // Every wave at its crest: the table's reach less the tide's highest,
+        // which it adds; the tide here instead.
+        let waves = water.local.reach() - pbd_core::sea::tide_high_m(sea.tide.w.max(0.0));
+        let crests = sea.radius + waves.max(0.0) + sea.tide_at(point);
+        let up = end.normalize_or(Vec3::Y);
+        let rel = point - end;
+        let across = (rel - up * rel.dot(up)).length();
+        let t = (across / APPROACH_M).min(1.0);
+        under + (crests - under).max(0.0) * t
+    }
+
+    /// The line's points, as offsets from the rod tip, from `tip` to
+    /// `float` (both planet-local; `float` is where the line is tied, the
+    /// top of the float): a curve that sags by `slack` toward the planet,
+    /// every point between the ends held `LINE_CLEARANCE_M` over `surface`
+    /// (the radius of the water under a point). The first point is the tip
+    /// and the last is the float, exactly: a float pulled under on a bite
+    /// is still where the line ends (`fishing-and-equipment` design 4, the
+    /// line's far end).
+    pub(crate) fn line_points(
+        tip: Vec3,
+        float: Vec3,
+        slack: f32,
+        surface: impl Fn(Vec3) -> f32,
+    ) -> Vec<Vec3> {
+        let down = -tip.normalize_or(Vec3::Y);
+        let last = LINE_POINTS - 1;
+        (0..LINE_POINTS)
+            .map(|k| {
+                if k == 0 {
+                    return Vec3::ZERO;
+                }
+                if k == last {
+                    return float - tip;
+                }
+                let u = k as f32 / last as f32;
+                let offset = (float - tip) * u + down * slack * 4.0 * u * (1.0 - u);
+                let at = tip + offset;
+                let r = at.length();
+                let floor = surface(at) + LINE_CLEARANCE_M;
+                if r > 0.0 && r < floor {
+                    at * (floor / r) - tip
+                } else {
+                    offset
+                }
+            })
+            .collect()
+    }
+
+    /// The HUD line under the crosshair, and the cast or tension meter.
+    #[allow(clippy::type_complexity)]
+    pub fn hud(
+        status: Res<FishingStatus>,
+        mut texts: Query<&mut Text, With<StatusText>>,
+        mut meter: Query<&mut Node, (With<Meter>, Without<MeterFill>)>,
+        mut fill: Query<(&mut Node, &mut BackgroundColor), (With<MeterFill>, Without<Meter>)>,
+    ) {
         for mut text in &mut texts {
             if text.0 != status.text {
                 text.0 = status.text.clone();

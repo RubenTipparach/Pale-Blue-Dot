@@ -69,9 +69,26 @@
   /* tabs: one part of the mockup at a time, so only one 3D view is ever on the page (owner, 2026-11-13) */
   body { padding-block: 8px 32px; }
   .wrap { gap: 12px; }
-  details.about { font-size: 14px; color: var(--muted); }
-  details.about summary { cursor: pointer; font: 500 12px "IBM Plex Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brass); }
-  details.about[open] { display: grid; gap: 8px; }
+  /* info modal: descriptive text lives here, not on screen (owner, 2026-11-14) */
+  .headrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .info { width: 28px; height: 28px; padding: 0; border-radius: 50%; font: 700 14px/1 "IBM Plex Mono", monospace; color: var(--brass); }
+  dialog.modal { max-width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; }
+  dialog.modal::backdrop { background: rgba(5, 8, 10, 0.7); }
+  dialog.modal .mbody { padding: 18px 18px 20px; display: grid; gap: 10px; overflow: auto; }
+  dialog.modal h3 { margin: 6px 0 0; font: 700 17px "Pixelify Sans", monospace; letter-spacing: 0.02em; }
+  dialog.modal p, dialog.modal li { font-size: 14px; }
+  dialog.modal .mclose { position: sticky; top: 0; float: right; margin: 8px 8px 0 0; }
+  /* the chop: TODAY's sine against the staged STRIKE stroke (held-swing) */
+  .hitmark { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; transform: translate(-50%, -50%); pointer-events: none; opacity: 0; }
+  .hitmark line { stroke: #fff; stroke-width: 2.5; stroke-linecap: square; }
+  details.tune summary { cursor: pointer; font: 500 12px "IBM Plex Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brass); }
+  details.tune[open] { display: grid; gap: 10px; }
+  .sliders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin-top: 8px; }
+  @media (max-width: 560px) { .sliders { grid-template-columns: 1fr; } }
+  .sl { display: grid; grid-template-columns: 118px minmax(0, 1fr) 46px; gap: 8px; align-items: center; font: 12px "IBM Plex Mono", monospace; color: var(--muted); }
+  .sl input { width: 100%; min-width: 0; accent-color: var(--brass); }
+  .sl output { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+  .curve { width: 100%; max-width: 100%; height: 120px; background: #0e1215; border-radius: 4px; display: block; }
   .ptabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--ground); padding-top: 4px; }
   .ptabs button { all: unset; cursor: pointer; font: 700 16px "Pixelify Sans", "IBM Plex Mono", monospace; letter-spacing: 0.04em; padding: 8px 14px; border: 1px solid transparent; border-bottom: 0; border-radius: 5px 5px 0 0; color: var(--muted); }
   .ptabs button[aria-selected="true"] { color: var(--brass); border-color: var(--line); background: var(--panel); }
@@ -91,12 +108,27 @@
 
 <div class="wrap">
   <header>
-    <h1>Hex Tool Bench</h1>
+    <div class="headrow"><h1>Hex Tool Bench</h1><button class="info" id="info-open" aria-label="About this mockup" title="About this mockup">i</button></div>
     <p class="pbd-tracker" style="margin:4px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
-    <details class="about"><summary>About this mockup</summary>
-    <p>A mockup of the four held tools, <strong>drawn on the hex grid</strong>, and <strong>held in a stubby hex hand</strong>. The grid is <strong>4× finer</strong> than the first draft: a hex is a quarter as wide, so a tool is sixteen times as many hexes. Each handle lies exactly on row&nbsp;0, so it is straight at any density. Each hex also has its own depth, so a handle is thick and round and a blade is thin. Nothing here is in the game yet.</p>
-    </details>
   </header>
+
+  <dialog class="modal" id="info" aria-labelledby="info-title">
+    <button class="mclose" id="info-close" aria-label="Close">✕</button>
+    <div class="mbody">
+      <h3 id="info-title">About this mockup</h3>
+      <p>A mockup of the four held tools, <strong>drawn on the hex grid</strong>, and <strong>held in a stubby hex hand</strong>. The grid is <strong>4× finer</strong> than the first draft: a hex is a quarter as wide, so a tool is sixteen times as many hexes. Each handle lies exactly on row&nbsp;0, so it is straight at any density. Each hex also has its own depth, so a handle is thick and round and a blade is thin. Nothing here is in the game yet.</p>
+      <p>The right hand grips each tool the way the reference photos do: the pick, axe and shovel upright on long handles with the head pointing ahead, and the rod standing at 80°. At 2×, every tool is twice as long and twice as thick as the in-game size today.</p>
+      <h3>The chop: TODAY and STRIKE</h3>
+      <p>The owner on the game's axe: <em>"man that axe swing is weak, it should be more visceral, more faster"</em>. The plan is <code>openspec/changes/held-swing</code>. Tick <strong>Chop</strong> to hold the button on the log in front of you; nothing moves until you do.</p>
+      <ul>
+        <li><strong>TODAY</strong> is the game's swing as it is: one sine at 9&nbsp;rad/s pitching the tool 0.85&nbsp;rad forward about the fist and 6&nbsp;cm down. A cycle is 0.70&nbsp;s and the strike reaches the block in 0.175&nbsp;s, fastest when it leaves and slowest when it lands. The swing has no hits of its own: the block simply breaks when the dig's time is up, so with the stone axe on wood (0.6&nbsp;s) it breaks before one swing ends.</li>
+        <li><strong>STRIKE</strong> is the staged stroke from the design: a wind-up of 0.08&nbsp;s back to −0.35&nbsp;rad (eased out), the strike in 0.07&nbsp;s to +1.15&nbsp;rad eased in with t³ so it is fastest at the moment of impact, a 0.05&nbsp;s hold on the impact, a 0.12&nbsp;rad kick back, then 0.18&nbsp;s easing back to rest. The fist drops 9&nbsp;cm at impact, in step with the angle.</li>
+        <li><strong>Strokes fit the dig.</strong> A block that takes <em>T</em> seconds gets N&nbsp;=&nbsp;max(1,&nbsp;round(T&nbsp;/&nbsp;0.4)) strokes, and the impacts land at k/N of the break time, so the last impact is the one that breaks it. The hit marker and the log's shake mark each impact; the block breaks on the last, then there is a 0.15&nbsp;s pause before the next block. A stroke that starts before the last one has finished recovering winds up from wherever the tool is.</li>
+        <li><strong>Camera kick</strong> (off by default) pitches the view down a little on each impact and lets it settle. The hold on impact holds the tool only: the dig and the game run on.</li>
+        <li><strong>Slow ×0.25</strong> runs the chop at a quarter speed so the curve can be followed by eye. <strong>Tune</strong> holds the stroke's values (the names are the ones planned for <code>held.ron</code>) and a plot of one stroke, STRIKE in brass and TODAY's sine dashed, with the impact marked.</li>
+      </ul>
+    </div>
+  </dialog>
 
   <nav class="ptabs" role="tablist" aria-label="Parts of the mockup">
     <button role="tab" data-tab="in-hand">In hand</button><button role="tab" data-tab="tools">The four tools</button><button role="tab" data-tab="blender">Checked in Blender</button><button role="tab" data-tab="game">Into the game</button>
@@ -109,15 +141,25 @@
         <h2>In hand</h2>
         <div class="seg" id="toolpick" role="group" aria-label="Tool"></div>
       </div>
-      <div class="held" data-fit="h" data-reserve="104"><canvas id="held"></canvas><div class="crosshair"></div></div>
+      <div class="held" data-fit="h" data-reserve="132"><canvas id="held"></canvas><div class="crosshair"></div>
+        <svg class="hitmark" id="hitmark" viewBox="0 0 34 34" aria-hidden="true"><line x1="5" y1="5" x2="12" y2="12"/><line x1="29" y1="5" x2="22" y2="12"/><line x1="5" y1="29" x2="12" y2="22"/><line x1="29" y1="29" x2="22" y2="22"/></svg></div>
       <div class="checks">
         <label><input type="checkbox" id="chop"> Chop</label>
+        <span class="seg" id="swingmode" role="group" aria-label="Swing"></span>
+        <label><input type="checkbox" id="slow"> Slow ×0.25</label>
+        <label><input type="checkbox" id="kick"> Camera kick</label>
+        <span class="stat" id="chopstat" aria-live="off"></span>
+      </div>
+      <div class="checks">
         <label><input type="checkbox" id="sway" checked> Idle sway</label>
         <label><input type="checkbox" id="hand" checked> Hand</label>
         <span class="row"><span class="label">Size</span><span class="seg" id="size"></span></span>
         <span class="row"><span class="label">Skin</span><span class="seg" id="skins"></span></span>
       </div>
-      <p class="stat">The right hand grips each tool the way the reference photos do: the pick, axe and shovel upright on long handles with the head pointing ahead, and the rod standing at 80°. At 2×, every tool is twice as long and twice as thick as the in-game size today.</p>
+      <details class="tune" id="tune"><summary>Tune</summary>
+        <div class="sliders" id="sliders"></div>
+        <canvas class="curve" id="curve" aria-label="One stroke: angle against time"></canvas>
+      </details>
     </div>
 
     <div class="panel" data-fit="max">
@@ -216,7 +258,12 @@
   document.querySelectorAll(".ptabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
   window.addEventListener("hashchange", () => { const t = tabOf(location.hash); if (t) setTab(t, false); });
   window.addEventListener("resize", fitTab);
-  document.querySelector("details.about").addEventListener("toggle", fitTab);
+  document.getElementById("tune").addEventListener("toggle", fitTab);
+  // The info modal: opened from the "i" button, closed by its ✕, Esc or a tap outside.
+  const infoDlg = document.getElementById("info");
+  document.getElementById("info-open").addEventListener("click", () => { try { infoDlg.showModal(); } catch (_) { infoDlg.setAttribute("open", ""); } });
+  document.getElementById("info-close").addEventListener("click", () => infoDlg.close());
+  infoDlg.addEventListener("click", e => { if (e.target === infoDlg) infoDlg.close(); });
   setTab(TAB, false);
 
   // Everything about the tools and the hand comes from tools/gen_held_tools.py,
@@ -617,22 +664,216 @@
   let phase = 0, then = performance.now();
   const X = new THREE.Vector3(1, 0, 0);
   let heldRunning = false, heldRaf = 0, turnRunning = false, turnRaf = 0;
+
+  // ---- The chop (openspec/changes/held-swing). TODAY is the game's swing as
+  // it is: one sine at 9 rad/s, 0.85 rad forward, 6 cm down. STRIKE is the
+  // staged stroke of the design: wind-up, strike eased in (t^3), hold on
+  // impact, recoil kick, recover. Strokes are fitted to the dig: a block that
+  // takes T s gets N = max(1, round(T / stroke_target_s)) strokes, impacts at
+  // k/N of T, the block breaks on the last, then a 0.15 s pause.
+  const P = {   // the values planned for held.ron, and the dig's break time
+    windup_s: 0.08, windup_rad: 0.35, strike_s: 0.07, strike_rad: 1.15,
+    impact_hold_s: 0.05, recoil_rad: 0.12, recover_s: 0.18, drop_m: 0.09,
+    stroke_target_s: 0.4, camera_kick_rad: 0.03, break_s: 0.6,
+  };
+  const SLIDERS = [
+    ["break_s", "break time", 0.2, 2.4, 0.05, "s"],
+    ["stroke_target_s", "stroke_target_s", 0.2, 0.8, 0.01, ""],
+    ["windup_s", "windup_s", 0.02, 0.3, 0.01, ""],
+    ["windup_rad", "windup_rad", 0, 0.8, 0.01, ""],
+    ["strike_s", "strike_s", 0.03, 0.3, 0.01, ""],
+    ["strike_rad", "strike_rad", 0.4, 1.6, 0.01, ""],
+    ["impact_hold_s", "impact_hold_s", 0, 0.15, 0.01, ""],
+    ["recoil_rad", "recoil_rad", 0, 0.4, 0.01, ""],
+    ["recover_s", "recover_s", 0.05, 0.5, 0.01, ""],
+    ["drop_m", "drop_m", 0, 0.2, 0.005, ""],
+    ["camera_kick_rad", "camera_kick_rad", 0, 0.1, 0.005, ""],
+  ];
+  const DEFAULTS = { ...P };
+  const slidersEl = document.getElementById("sliders");
+  for (const [k, label, lo, hi, step] of SLIDERS) {
+    const row = document.createElement("label");
+    row.className = "sl";
+    row.innerHTML = `<span>${label}</span><input type="range" min="${lo}" max="${hi}" step="${step}" value="${P[k]}"><output></output>`;
+    const inp = row.querySelector("input"), out = row.querySelector("output");
+    const show = () => { out.textContent = (+P[k]).toFixed(step < 0.01 ? 3 : 2); };
+    inp.addEventListener("input", () => { P[k] = +inp.value; show(); if (k === "break_s" || k === "stroke_target_s") resetChop(); });
+    show(); slidersEl.appendChild(row);
+  }
+  {
+    const b = document.createElement("button");
+    b.textContent = "Defaults"; b.style.justifySelf = "start";
+    b.addEventListener("click", () => {
+      Object.assign(P, DEFAULTS);
+      slidersEl.querySelectorAll(".sl").forEach((row, i) => { const k = SLIDERS[i][0]; row.querySelector("input").value = P[k]; row.querySelector("input").dispatchEvent(new Event("input")); });
+    });
+    slidersEl.appendChild(b);
+  }
+  let swingMode = "strike";
+  makeSeg(document.getElementById("swingmode"), [["TODAY", "today"], ["STRIKE", "strike"]], swingMode, v => { swingMode = v; resetChop(); });
+  const slow = document.getElementById("slow"), kickBox = document.getElementById("kick");
+  const hitmark = document.getElementById("hitmark"), chopstat = document.getElementById("chopstat");
+
+  const easeOut = u => 1 - (1 - u) * (1 - u);
+  const smooth = u => u * u * (3 - 2 * u);
+  const clamp01 = u => Math.max(0, Math.min(1, u));
+  const strokeLen = () => P.windup_s + P.strike_s + P.impact_hold_s + P.recover_s;
+  const toImpact = () => P.windup_s + P.strike_s;
+  // One stroke's angle (rad, forward positive) e seconds after it starts,
+  // winding up from `from` (the angle the tool was at when it began).
+  function strokeAngle(e, from) {
+    const wr = -P.windup_rad, sr = P.strike_rad;
+    if (e < 0) return from;
+    if (e < P.windup_s) return from + (wr - from) * easeOut(e / P.windup_s);
+    e -= P.windup_s;
+    if (e < P.strike_s) { const u = e / P.strike_s; return wr + (sr - wr) * u * u * u; }
+    e -= P.strike_s;
+    if (e < P.impact_hold_s) return sr;
+    e -= P.impact_hold_s;
+    if (e >= P.recover_s) return 0;
+    const u = e / P.recover_s, KICK = 0.15, low = sr - P.recoil_rad;
+    if (u < KICK) return sr - P.recoil_rad * easeOut(u / KICK);
+    return low * (1 - smooth((u - KICK) / (1 - KICK)));
+  }
+  const PAUSE = 0.15;
+  const strokesPerBlock = () => Math.max(1, Math.round(P.break_s / P.stroke_target_s + 1e-9));   // + 1e-9: 0.6 / 0.4 is 1.4999… in floats
+  const cycleLen = () => P.break_s + PAUSE;
+  // Every stroke start (global chop time) of cycles c-1..c, in order.
+  function strokeStarts(c) {
+    const out = [], n = strokesPerBlock();
+    for (let cc = Math.max(0, c - 1); cc <= c; cc++)
+      for (let k = 1; k <= n; k++) out.push(cc * cycleLen() + k * P.break_s / n - toImpact());
+    return out;
+  }
+  // STRIKE's angle at chop time tc: the latest stroke that has started, wound
+  // up from where the stroke before it had the tool when it was cut off.
+  function strikeAt(tc) {
+    const starts = strokeStarts(Math.floor(tc / cycleLen())).filter(s => s <= tc);
+    if (!starts.length) return { a: 0, e: -1 };
+    let from = 0;
+    const first = Math.max(0, starts.length - 4);
+    for (let i = first; i < starts.length - 1; i++) from = strokeAngle(starts[i + 1] - starts[i], from);
+    const e = tc - starts[starts.length - 1];
+    return { a: strokeAngle(e, from), e };
+  }
+
+  // The log in front of the player: a column of hex wood cells, the one under
+  // the crosshair the block being chopped. Lit, unlike the flat-shaded tool.
+  heldScene.add(new THREE.HemisphereLight(0xdfe9f2, 0x3a4a2a, 0.75));
+  { const sun = new THREE.DirectionalLight(0xfff1dc, 0.65); sun.position.set(-3, 5, 2); heldScene.add(sun); }
+  const bark = new THREE.MeshPhongMaterial({ color: new THREE.Color("#6e4c2c").convertSRGBToLinear(), flatShading: true, shininess: 0, specular: 0x000000 });
+  const rings = new THREE.MeshPhongMaterial({ color: new THREE.Color("#b48d58").convertSRGBToLinear(), flatShading: true, shininess: 0, specular: 0x000000 });
+  const leafMat = new THREE.MeshPhongMaterial({ color: new THREE.Color("#456b2e").convertSRGBToLinear(), flatShading: true, shininess: 0, specular: 0x000000 });
+  const cellGeo = new THREE.CylinderGeometry(0.42, 0.42, 1, 6);
+  const log = new THREE.Group();
+  log.position.set(0, 0, -3.2);
+  log.visible = false;
+  heldScene.add(log);
+  for (const y of [-1.2, 1, 2]) { const m = new THREE.Mesh(cellGeo, [bark, rings, rings]); m.position.y = y; log.add(m); }
+  const target = new THREE.Mesh(cellGeo, [bark, rings, rings]);
+  log.add(target);
+  { const crown = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 1.4, 6), leafMat); crown.position.y = 3.1; log.add(crown); }
+  const chips = [...Array(10)].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.09), rings); m.visible = false; log.add(m); return { m, v: new THREE.Vector3() }; });
+
+  let tc = 0, lastTc = 0, hitAt = -9, kickAt = -9, brokeAt = -9, shake = 0;
+  function resetChop() { tc = 0; lastTc = 0; hitAt = kickAt = brokeAt = -9; phase = 0; target.visible = true; chips.forEach(c => { c.m.visible = false; }); }
+  function onImpact(at, last) {
+    if (swingMode === "strike") { hitAt = at; kickAt = at; shake = 1; }
+    if (last) {
+      brokeAt = at; target.visible = false;
+      chips.forEach((c, i) => {
+        const a = i / chips.length * Math.PI * 2;
+        c.m.visible = true; c.m.position.set(0, 0, 0.2);
+        c.v.set(Math.cos(a) * 1.4, 1.2 + (i % 3) * 0.6, 1 + (i % 4) * 0.3);
+      });
+    }
+  }
+  // Impacts between chop times t0 (exclusive) and t1 (inclusive), in order.
+  function impactsBetween(t0, t1) {
+    const out = [], n = strokesPerBlock(), L = cycleLen();
+    for (let c = Math.max(0, Math.floor(t0 / L)); c <= Math.floor(t1 / L); c++)
+      for (let k = 1; k <= n; k++) { const at = c * L + k * P.break_s / n; if (at > t0 && at <= t1) out.push([at, k === n]); }
+    return out;
+  }
+
+  const curve = document.getElementById("curve"), cctx = curve.getContext("2d"), tune = document.getElementById("tune");
+  function drawCurve(cursor) {
+    if (!tune.open) return;
+    const w = curve.clientWidth, h = curve.clientHeight, dpr = window.devicePixelRatio || 1;
+    if (curve.width !== Math.round(w * dpr)) { curve.width = Math.round(w * dpr); curve.height = Math.round(h * dpr); }
+    cctx.setTransform(dpr, 0, 0, dpr, 0, 0); cctx.clearRect(0, 0, w, h);
+    const span = Math.max(0.7, strokeLen() + 0.05), aMax = 1.7, aMin = -0.9;
+    const X = t => 8 + t / span * (w - 16), Y = a => 8 + (aMax - a) / (aMax - aMin) * (h - 16);
+    cctx.strokeStyle = "#2d3740"; cctx.lineWidth = 1; cctx.beginPath(); cctx.moveTo(8, Y(0)); cctx.lineTo(w - 8, Y(0)); cctx.stroke();
+    const ti = toImpact();
+    cctx.strokeStyle = "#8d99a2"; cctx.setLineDash([2, 3]); cctx.beginPath(); cctx.moveTo(X(ti), 6); cctx.lineTo(X(ti), h - 6); cctx.stroke();
+    cctx.setLineDash([5, 4]); cctx.beginPath();
+    for (let i = 0; i <= 200; i++) { const t = i / 200 * span; const a = 0.85 * Math.max(0, Math.sin(9 * t)); i ? cctx.lineTo(X(t), Y(a)) : cctx.moveTo(X(t), Y(a)); }
+    cctx.stroke(); cctx.setLineDash([]);
+    cctx.strokeStyle = "#d9a441"; cctx.lineWidth = 2; cctx.beginPath();
+    for (let i = 0; i <= 300; i++) { const t = i / 300 * span; const a = strokeAngle(t, 0); i ? cctx.lineTo(X(t), Y(a)) : cctx.moveTo(X(t), Y(a)); }
+    cctx.stroke();
+    cctx.fillStyle = "#8d99a2"; cctx.font = "11px 'IBM Plex Mono', monospace";
+    cctx.fillText("impact", X(ti) + 4, 16); cctx.fillText(span.toFixed(2) + " s", w - 50, h - 10);
+    if (cursor != null && cursor >= 0 && cursor <= span) {
+      cctx.fillStyle = "#e4e8ea"; cctx.beginPath(); cctx.arc(X(cursor), Y(swingMode === "strike" ? strokeAngle(cursor, 0) : 0.85 * Math.max(0, Math.sin(9 * cursor))), 4, 0, Math.PI * 2); cctx.fill();
+    }
+  }
+
   function frame(now) {
     if (!heldRunning) return;
     const dt = Math.min(0.05, (now - then) / 1000); then = now;
     const t = now / 1000;
     fit(heldRenderer, heldCam, heldCanvas);
+    const cdt = dt * (slow.checked ? 0.25 : 1);   // the chop's own clock, slowed by Slow
+    log.visible = chop.checked;
+    let a = 0, drop = 0, cursor = null;
+    if (chop.checked) {
+      lastTc = tc; tc += cdt;
+      for (const [at, last] of impactsBetween(lastTc, tc)) onImpact(at, last);
+      const L = cycleLen(), local = tc % L;
+      if (brokeAt > 0 && tc - brokeAt >= PAUSE) { target.visible = true; brokeAt = -9; }
+      if (swingMode === "strike") {
+        const s = strikeAt(tc); a = s.a; cursor = s.e;
+        drop = P.drop_m * Math.max(0, a) / Math.max(1e-3, P.strike_rad);
+        const n = strokesPerBlock(), hits = Math.min(n, Math.floor(local / (P.break_s / n) + 1e-9));
+        chopstat.textContent = local >= P.break_s ? `broken · ${n} hit${n > 1 ? "s" : ""}` : `hit ${hits}/${n}`;
+      } else {
+        // The game today: the sine runs on while digging; the block breaks
+        // when the dig's time is up, wherever the swing is.
+        phase += cdt * 9;
+        a = 0.85 * Math.max(0, Math.sin(phase)); drop = 0.06 * a / 0.85;
+        cursor = (phase / 9) % (2 * Math.PI / 9);
+        chopstat.textContent = local >= P.break_s ? "broken" : `dig ${(local / P.break_s * 100).toFixed(0)}%`;
+      }
+    } else { resetChop(); chopstat.textContent = ""; }
+    // Hit marker and the block's shake, on the chop's clock.
+    const sinceHit = tc - hitAt;
+    hitmark.style.opacity = chop.checked && sinceHit >= 0 && sinceHit < 0.09 ? String(1 - sinceHit / 0.09 * 0.6) : "0";
+    const sh = chop.checked && sinceHit >= 0 && sinceHit < 0.08 ? 1 - sinceHit / 0.08 : 0;
+    target.position.set(Math.sin(tc * 173) * 0.035 * sh, Math.cos(tc * 211) * 0.02 * sh, 0);
+    target.rotation.y = Math.sin(tc * 97) * 0.06 * sh;
+    for (const c of chips) if (c.m.visible) {
+      c.v.y -= 9.8 * cdt; c.m.position.addScaledVector(c.v, cdt); c.m.rotation.x += cdt * 9; c.m.rotation.z += cdt * 7;
+      if (c.m.position.y < -1.7) c.m.visible = false;
+    }
+    // Camera kick: the view pitches down on impact and settles in 0.12 s.
+    const sinceKick = tc - kickAt;
+    let kick = 0;
+    if (chop.checked && kickBox.checked && sinceKick >= 0 && sinceKick < 0.14) {
+      const u = sinceKick / 0.14; kick = P.camera_kick_rad * (u < 0.15 ? u / 0.15 : (1 - (u - 0.15) / 0.85) ** 2);
+    }
+    heldCam.rotation.set(-kick, 0, 0);
     const holder = heldRoot.children[0];
     if (holder && pose) {
       // Tenebris's viewmodel: a few millimetres of sway; the chop pitches the
-      // tool about its grip at 9 rad/s, 0.85 rad and 6 cm down at the bottom.
+      // tool about its grip (forward is positive) and drops the fist.
       const sw = sway.checked ? new THREE.Vector3(Math.sin(t * 1.3) * 0.006, Math.cos(t * 1.7) * 0.005, 0) : new THREE.Vector3();
-      phase = chop.checked ? phase + dt * 9 : 0;
-      const c = chop.checked ? Math.max(0, Math.sin(phase)) : 0;
       holder.scale.setScalar(pose.scale);
-      holder.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(X, -0.85 * c)).multiply(pose.q);
-      holder.position.copy(pose.grip).add(sw).add(new THREE.Vector3(0, -0.06 * c, 0));
+      holder.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(X, -a)).multiply(pose.q);
+      holder.position.copy(pose.grip).add(sw).add(new THREE.Vector3(0, -drop, 0));
     }
+    drawCurve(cursor);
     heldRenderer.render(heldScene, heldCam);
     heldRaf = requestAnimationFrame(frame);
   }

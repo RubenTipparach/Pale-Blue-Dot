@@ -1,4 +1,4 @@
-# Holes in the sea at caverns beside it (`ocean-environments` B20)
+# Holes in the sea at caverns beside it (`ocean-environments` B22)
 
 The owner, 2026-11-16, on a beach at `41.636 11.664`: "theres some holes here
 in caverns next to the ocean".
@@ -51,7 +51,7 @@ high tide).
 ## Frame by frame: every issue seen, and what became of it
 
 1. **The hole at the pit and the cavern** (before, all of the owner's spot):
-   fixed, the sea's reach (design B20).
+   fixed, the sea's reach (design B22).
 2. **The sea cave's floating slab and double surface** (before, sea cave
    f767-f990, f2109-f2332; bay cave f320-f712, f1890-f2283): fixed, the
    sheet draws the sea's top wherever it is listed.

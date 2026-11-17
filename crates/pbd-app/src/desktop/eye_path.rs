@@ -131,7 +131,7 @@ fn surface_near(
         a -= 0.05;
     }
     // No water in the column: the sea's tided sheet where its surface
-    // reaches this cell (`ocean-environments` B20, the mark the sheet is
+    // reaches this cell (`ocean-environments` B22, the mark the sheet is
     // listed by), else where the height field's ground is under it.
     (contact.sea_reached(direction) || pbd_app::planet::surface_height(direction) < sheet)
         .then_some(sheet)

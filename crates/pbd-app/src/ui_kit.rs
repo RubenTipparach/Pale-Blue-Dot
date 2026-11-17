@@ -673,6 +673,32 @@ pub fn follow_window(
 #[derive(Component, Clone, Debug)]
 pub struct KitPiece(pub String);
 
+/// A key's stone glyph (owner, 2026-11-16: "make some stone button glyphs
+/// ... to go with the controls prompt"): the kit's own stone button, 9-sliced
+/// to the key's name and with it carved in, as a stone plaque's label is.
+/// The interact prompt and a boat's panel draw every key this way.
+pub fn key_cap(parent: &mut ChildSpawnerCommands, kit: &UiKit, label: &str, extra: impl Bundle) {
+    parent
+        .spawn((
+            kit.nine(Set::Stone, "button-idle"),
+            KitPiece(Set::Stone.key("button-idle")),
+            Node {
+                min_width: px(KEY_CAP),
+                height: px(KEY_CAP),
+                padding: UiRect::new(px(5), px(5), px(6), px(0)),
+                justify_content: JustifyContent::Center,
+                flex_shrink: 0.0,
+                ..default()
+            },
+        ))
+        .with_children(|cap| {
+            cap.spawn((KitText::new(label, LABEL).shadow(WELL), extra));
+        });
+}
+
+/// A key glyph's side, native px.
+pub const KEY_CAP: f32 = 19.0;
+
 // ---------------------------------------------------------------- kit text
 
 /// A line in the kit's pixel font: titles, plaque and tab labels, section

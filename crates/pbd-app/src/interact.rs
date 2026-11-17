@@ -298,21 +298,7 @@ pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
                 },
             ))
             .with_children(|tip| {
-                tip.spawn((
-                    kit.nine(Set::Oak, "tooltip"),
-                    KitPiece(Set::Oak.key("tooltip")),
-                    Node {
-                        min_width: px(18),
-                        height: px(18),
-                        padding: UiRect::new(px(6), px(6), px(5), px(0)),
-                        justify_content: JustifyContent::Center,
-                        flex_shrink: 0.0,
-                        ..default()
-                    },
-                ))
-                .with_children(|cap| {
-                    cap.spawn((KitText::new("F", crate::ui_kit::TEXT), PromptKey));
-                });
+                crate::ui_kit::key_cap(tip, &kit, "F", PromptKey);
                 tip.spawn((
                     Node {
                         padding: UiRect::top(px(2)),
@@ -329,13 +315,16 @@ pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
 pub fn show_prompt(
     interact: Res<Interact>,
     binds: Option<Res<crate::controls::KeyBinds>>,
+    fishing: Option<Res<crate::fish::FishingStatus>>,
     mut prompt: Query<&mut Visibility, With<Prompt>>,
     mut key_text: Query<&mut crate::ui_kit::KitText, (With<PromptKey>, Without<PromptWords>)>,
     mut words: Query<&mut crate::ui_kit::KitText, (With<PromptWords>, Without<PromptKey>)>,
 ) {
     let shown = interact.now.as_ref();
+    // With nothing to interact with, a float out shows its own button.
+    let reel = shown.is_none() && fishing.as_deref().is_some_and(|f| f.reel_prompt);
     for mut visibility in &mut prompt {
-        let want = if shown.is_some() {
+        let want = if shown.is_some() || reel {
             Visibility::Inherited
         } else {
             Visibility::Hidden
@@ -344,17 +333,25 @@ pub fn show_prompt(
             *visibility = want;
         }
     }
-    let Some(offer) = shown else {
-        return;
+    let (label, line) = match shown {
+        Some(offer) => {
+            let none = crate::controls::KeyBinds::default();
+            (
+                crate::controls::key_label(key(binds.as_deref().unwrap_or(&none))),
+                offer.words().to_uppercase(),
+            )
+        }
+        None if reel => (
+            crate::controls::Key::Mouse(MouseButton::Right).label(),
+            "REEL IN".to_string(),
+        ),
+        None => return,
     };
-    let none = crate::controls::KeyBinds::default();
-    let label = crate::controls::key_label(key(binds.as_deref().unwrap_or(&none)));
     for mut text in &mut key_text {
         if text.text != label {
             text.text = label.to_string();
         }
     }
-    let line = offer.words().to_uppercase();
     for mut text in &mut words {
         if text.text != line {
             text.text.clone_from(&line);

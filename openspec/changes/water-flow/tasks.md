@@ -61,9 +61,11 @@
 - [ ] 6.4 M31 Splash tab: fall foot, entry, cast, fish, wake, beside today's
       spray; the owner's approval before game code.
 
-- [ ] 6.5 (Mockup built 2026-11-16: `docs/mockups/waterfall-mist.html`,
-      screenshots in `docs/screenshots/waterfall-mist/`; waiting for the
-      owner.) Mist puffs after Crab Breeze's smoke puffs and bubbles under
+- [x] 6.5 (Approved 2026-11-16 on version 22, https://claude.ai/artifact/WzzTsEVPa3SviHQBfnanMo: "alright, I'm happy
+      with this, send it yo". The game port is 6.6, with the mockup's defaults: the proposed mist rule, smooth FX,
+      opacity 2, size 1.65, wall blend 1.2, droplets as single drops (no streaks, owner), speed-up 2, ripples 0.5 /
+      0.9 m / 6 m, pool flow 0.1 / 6 m, Glassy lip 0.70 / 0.50 / 2.25 / green 0.25 / highlight 0. Mockup:
+      `docs/mockups/waterfall-mist.html`.) Mist puffs after Crab Breeze's smoke puffs and bubbles under
       the water at a fall's foot (design "Mist puffs and bubbles, in a
       mockup first"), shown beside today's look and the order fix; the
       owner's approval before game code.
@@ -71,7 +73,45 @@
       pass, the bubbles on the GPU in the water's pass, the aerated colour
       in the water's fragment. Verify: captures above, beside and under a
       fall; a launch to READY with no LATE_PIPELINE.
+  - [x] 6.6.1 The write-up (design "Porting M35"). Verify: `openspec validate --all`.
+  - [x] 6.6.2 The mesher's feet carry the drop `D`, the way over, the pool's depth and the column; a foot
+        cell's falling face carries metres under the lip. Verify: unit tests on a ring tier.
+  - [x] 6.6.3 `falls` in `water.ron`, validated, the mockup's defaults. Verify: the shipped-file test.
+  - [x] 6.6.4 `animate_splash` on the proposed rule: puffs on the open side, fade in at birth, centre at
+        0.2 x size, continuous frames; spray floors; fall droplets as single drops; the 140 m reach faded
+        in time. Verify: unit tests of the rule against the mockup's table.
+  - [x] 6.6.5 The splash pass: three lanes a quad, the puff sheet smooth with the frame cross-fade, soft
+        against the main and water depth in its own pass, lamps on the mist. Verify: naga validation, the
+        layout test, captures.
+  - [x] 6.6.6 Bubbles on the GPU from the feet uniform. Verify: captures above and under a pool.
+  - [x] 6.6.7 (Stills and the differences: `docs/screenshots/waterfall-look/`; a normal launch at the
+        cascade reaches READY with 113 pipelines and no LATE_PIPELINE.) The water's fragment: teal churn, foot ripples, pool flow, fall speed-up, Glassy lip.
+        Verify: captures above, beside and under a tall and a short fall beside the mockup's
+        (`docs/screenshots/waterfall-look/`); a launch to READY with no LATE_PIPELINE.
+  - [ ] 6.6.8 (Owed: not run in this sitting; the suite has no fall scenario, a held-view command is in
+        `docs/screenshots/waterfall-look/README.md`.) The frame cost: `perf_suite.py`, before and after, on the release build (owner's condition).
 
 ## 7. Rain rings that alias (design "Rain rings that alias"; owner, 2026-11-16)
 
 - [x] 7.1 (Built: the rings fade by footprint and end at `rain_detail_reach_m`; river 30.2 to 20.8 (dry 19.0), the beach's far water 42.3 to 24.8 with the near rings kept; the falls' froth not touched.) The water's rain rings fade with their footprint. Verify: the valley's river in rain from 25 m and from the bank, before and after, with the speckle measure (`hf.py`) against the dry frame; the falls' froth unchanged.
+
+## 8. The sound of a fall (design "The sound of a fall"; owner, 2026-11-16)
+
+- [x] 8.1 (Built 2026-11-16.) Three looping fall cues, recorded CC0 (`fall_light`, `fall_medium`,
+      `fall_roar`), mono, 8 s, in `assets/audio/sfx/`, named in
+      `SOURCES.md` and `AUDIO_SOURCES.md`. Verify: `inspect_sfx.py check`
+      (no clipping, seams) and the contact sheet
+      `docs/screenshots/audio/fall-sheet.jpg`; the light bright, the roar
+      led by its lows.
+- [x] 8.2 (Built 2026-11-16, five tests.) `pbd_core::audio`: the band by the drop (`fall_band`), the loudest
+      falls with merging and the 3 dB hold (`loudest_falls`), and the voices'
+      fades under a cap (`FallVoices`); the thresholds, cap, merge distance
+      and fade in `mix.ron`, validated. Verify: unit tests for the band
+      edges, the merge, the ranking, the cap and the fades.
+- [ ] 8.3 (Built 2026-11-16; `cargo test -p pbd-app` passes; the `--audio-log` launch beside a fall is not yet run.) The hook (`audio/hooks.rs` `falls`): `FallFeet` to placed loops at
+      each fall's foot, through `Sfx::keep`. Verify: `cargo test -p
+      pbd-app` (the cue book names every fall cue, the files exist and are
+      mono); a launch with `--audio-log` beside a fall shows `AUDIO start
+      fall_*` and its stop on walking away.
+- [ ] 8.4 (On the Sounds page, version 2, 2026-11-16; waiting for the owner's ears.) The three loops on the Sounds page for the owner to hear; the
+      owner's ears approve them.

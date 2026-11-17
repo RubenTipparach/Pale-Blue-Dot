@@ -93,11 +93,11 @@ pub fn spawn(
                                         p.spawn(ui_kit::plaque_label(Set::Stone, &recipe.name));
                                     });
                                     for &input in &recipe.inputs {
-                                        icon(row, &atlas, input, &recipe.code);
+                                        icon(row, &atlas, input, &recipe.code, true);
                                     }
                                     row.spawn(KitText::new("→", ui_kit::TEXT).shadow(ui_kit::INK));
                                     for &output in &recipe.outputs {
-                                        icon(row, &atlas, output, &recipe.code);
+                                        icon(row, &atlas, output, &recipe.code, false);
                                     }
                                     row.spawn((
                                         KitText::new("", ui_kit::LABEL_DIM).shadow(ui_kit::INK),
@@ -153,7 +153,13 @@ pub fn spawn(
 }
 
 /// One item picture with its count.
-fn icon(row: &mut ChildSpawnerCommands, atlas: &Handle<Image>, (it, n): (Item, u16), code: &str) {
+fn icon(
+    row: &mut ChildSpawnerCommands,
+    atlas: &Handle<Image>,
+    (it, n): (Item, u16),
+    code: &str,
+    need: bool,
+) {
     row.spawn((
         ImageNode {
             image: atlas.clone(),
@@ -171,11 +177,7 @@ fn icon(row: &mut ChildSpawnerCommands, atlas: &Handle<Image>, (it, n): (Item, u
     ))
     .with_children(|icon| {
         icon.spawn((
-            KitText::new(
-                if n > 1 { n.to_string() } else { String::new() },
-                ui_kit::LABEL,
-            )
-            .outline(ui_kit::INK),
+            KitText::new(super::craft::need_count(need, n), ui_kit::LABEL).outline(ui_kit::INK),
             Node {
                 position_type: PositionType::Absolute,
                 bottom: px(-3),

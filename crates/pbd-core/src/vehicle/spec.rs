@@ -652,15 +652,19 @@ impl LoonSpec {
                 cd0: 0.05,
             },
             paddle: PaddleSpec {
-                reach_m: 0.62,
-                depth_m: -0.12,
-                catch_z: -0.3,
-                stroke_m: 0.55,
-                power_s: 0.45,
-                recovery_s: 0.4,
-                blade_m2: 0.035,
+                // The rider's feet, kicking over the ring's near side
+                // (owner, 2026-11-16: "the guy can just kick his feet around
+                // to turn and accelerate"): a foot each side of the middle,
+                // under the water ahead, each kick a short sweep aft.
+                reach_m: 0.3,
+                depth_m: -0.2,
+                catch_z: -0.95,
+                stroke_m: 0.45,
+                power_s: 0.4,
+                recovery_s: 0.35,
+                blade_m2: 0.05,
                 blade_cd: 1.2,
-                rudder_at: [0.55, 0.5],
+                rudder_at: [0.3, -0.9],
                 rudder_m2: 0.02,
             },
             resistance: ResistanceSpec {

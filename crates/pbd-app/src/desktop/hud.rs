@@ -41,6 +41,7 @@ pub fn setup(mut commands: Commands) {
             ..default()
         },
         BackgroundColor(Color::srgba(0.88, 0.94, 0.91, 0.75)),
+        super::menu::InPlayHud,
     ));
     commands.spawn((
         Text::new(NearField::default().line()),

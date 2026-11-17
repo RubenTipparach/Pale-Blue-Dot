@@ -447,7 +447,7 @@ impl PlanetContact {
     }
 
     /// Whether the sea's surface reaches the finest cell under `direction` at
-    /// some tide (`planet::column::sea_reached`, `ocean-environments` B20):
+    /// some tide (`planet::column::sea_reached`, `ocean-environments` B22):
     /// the mark the sheet is listed by. `false` off the column tier.
     pub fn sea_reached(&self, direction: Vec3) -> bool {
         let direction = direction.try_normalize().unwrap_or(Vec3::Y);

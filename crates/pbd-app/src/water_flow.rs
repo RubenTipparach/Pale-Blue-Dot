@@ -352,6 +352,53 @@ pub struct Foot {
     pub height: f32,
     pub sky: f32,
     pub born: bool,
+    /// The metres from the lip's water to the water it lands in, `D` of the
+    /// proposed mist rule (`water-flow` 6.6): a part layer counts.
+    pub drop_m: f32,
+    /// The way the water goes over, a unit tangent at the foot pointing away
+    /// from the side the fall is fed from; zero where no side feeds it.
+    pub over: Vec3,
+    /// How deep the water is under the foot's surface, m: how deep a bubble
+    /// can be born.
+    pub pool_m: f32,
+    /// The foot's column in the tier, which keys its fade across frames.
+    pub column: u32,
+    /// The landing cell's layer: with the column, which foot this is (a
+    /// cascade can stack two in one column).
+    pub layer: u32,
+}
+
+impl Foot {
+    /// The key its fades are kept under across frames.
+    pub fn key(&self) -> u64 {
+        u64::from(self.column) << 32 | u64::from(self.layer)
+    }
+}
+
+/// What `cell_pieces` finds of a fall's foot, before the tick's own fields.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct FootFound {
+    at: Vec3,
+    height: f32,
+    drop_m: f32,
+    over: Vec3,
+    pool_m: f32,
+}
+
+impl FootFound {
+    fn foot(self, sky: f32, born: bool, column: usize, layer: usize) -> Foot {
+        Foot {
+            at: self.at,
+            height: self.height,
+            sky,
+            born,
+            drop_m: self.drop_m,
+            over: self.over,
+            pool_m: self.pool_m,
+            column: column as u32,
+            layer: layer as u32,
+        }
+    }
 }
 
 /// What the mesher makes: the water's triangles and the arrows'.
@@ -551,7 +598,7 @@ struct CellFrame {
     sides: [Option<usize>; 6],
     /// The sea's sheet is listed over the cell, so the sea's own top here is
     /// the sheet's (`planet::column::sheet_listed`, `ocean-environments`
-    /// B20): in a cave the sea reaches too, not only under sea level.
+    /// B22): in a cave the sea reaches too, not only under sea level.
     sheet_listed: bool,
     /// The shader's tangent frame at the centre.
     t: Vec3,
@@ -648,7 +695,7 @@ fn cell_pieces(
     radius: f32,
     pieces: &mut Vec<Piece>,
     mut out: Option<&mut LiquidMesh>,
-) -> Option<(Vec3, f32)> {
+) -> Option<FootFound> {
     pieces.clear();
     let sea = sea_layer();
     let material = |slot: usize, layer: usize| material_in(tier, slot, layer);
@@ -713,7 +760,45 @@ fn cell_pieces(
         let height = (layer + 1..LAYERS)
             .take_while(|&l| is_falling(column.material(l)))
             .count();
-        (middle, height as f32)
+        // `D` (`water-flow` 6.6): from the run's lip water, the drawn top of
+        // its highest cell (a full block where water stands on it), to the
+        // landing's own drawn top.
+        let lip = layer + height;
+        let lip_top = drawn_top_m(tier, slot, lip).unwrap_or(column::layer_altitude(lip) + 1.0);
+        let drop_m = (lip_top - (floor + mean)).max(0.0);
+        // The way over: away from the side that feeds the run's top cell, a
+        // still or flowing cell beside it that is not itself falling.
+        let mut feed: Option<(usize, i32)> = None;
+        for (s, side) in sides.iter().enumerate().take(degree) {
+            let Some(n) = *side else {
+                continue;
+            };
+            let m = material(n, lip);
+            let rank = if m == Material::Water {
+                8
+            } else if let Some((level, false)) = m.flow() {
+                i32::from(level)
+            } else {
+                continue;
+            };
+            if feed.is_none_or(|(_, r)| rank > r) {
+                feed = Some((s, rank));
+            }
+        }
+        let over = feed.map_or(Vec3::ZERO, |(s, _)| -f.side_normal(s));
+        // The pool under the foot: its own water and the water layers under
+        // it, down to the first that is not water.
+        let under = (1..layer)
+            .rev()
+            .take_while(|&l| column.material(l).is_water())
+            .count();
+        FootFound {
+            at: middle,
+            height: height as f32,
+            drop_m,
+            over,
+            pool_m: mean + under as f32,
+        }
     });
     if !above_water && !sheet {
         if let Some(out) = out.as_deref_mut() {
@@ -830,14 +915,32 @@ fn cell_pieces(
         };
         // How far under its fall's lip each corner is, metres: the falling
         // run over this layer, and the fraction into it.
-        let run = if falling {
+        // A foot cell's face under a fall (`KIND_FALLING`, not itself
+        // falling) is the bottom of that fall: its metres run on from the
+        // falling run over it (`water-flow` 6.6), so the Glassy lip and the
+        // speed-up read it as one face with the run.
+        let measured = falling || kind == KIND_FALLING;
+        let run = if measured {
             (layer + 1..LAYERS)
                 .take_while(|&l| is_falling(column.material(l)))
                 .count() as f32
         } else {
             0.0
         };
-        let under = |fraction: f32| if falling { run + 1.0 - fraction } else { 0.0 };
+        // On the run's top cell the lip is the face's own top edge, at each
+        // corner's level (a falling cell's top slopes down to its low
+        // corners), so the metres start there; under it, from the top of
+        // the cell.
+        let under = |fraction: f32, top: f32| {
+            if !measured {
+                0.0
+            } else if run == 0.0 {
+                (top - fraction).max(0.0)
+            } else {
+                run + 1.0 - fraction
+            }
+        };
+        let tops = [top_a, top_z, top_z, top_a];
         let pts = [
             (at(a, bottom_a), bottom_a),
             (at(z, bottom_z), bottom_z),
@@ -852,7 +955,7 @@ fn cell_pieces(
                 PieceVertex {
                     p,
                     n: normal,
-                    flow: Vec3::new(froth, 0.0, under(fraction)),
+                    flow: Vec3::new(froth, 0.0, under(fraction, tops[k])),
                     kind,
                 },
                 pts[raised].0,
@@ -1069,13 +1172,9 @@ pub fn liquid_mesh_eased(
                             out.emit(w, &w.alt[..w.n], &from, lit, EASE_FRONT | EASE_GONE);
                         }
                     }
-                    if let Some((at, height)) = foot {
-                        out.feet.push(Foot {
-                            at,
-                            height,
-                            sky: lit,
-                            born: !is_foot(p, slot, layer),
-                        });
+                    if let Some(found) = foot {
+                        out.feet
+                            .push(found.foot(lit, !is_foot(p, slot, layer), slot, layer));
                     }
                 }
                 Some(p) if wet_now && !wet_was => {
@@ -1094,13 +1193,8 @@ pub fn liquid_mesh_eased(
                         }
                         out.emit(c, &positions, &to[..c.n], lit, EASE_FRONT);
                     }
-                    if let Some((at, height)) = foot {
-                        out.feet.push(Foot {
-                            at,
-                            height,
-                            sky: lit,
-                            born: true,
-                        });
+                    if let Some(found) = foot {
+                        out.feet.push(found.foot(lit, true, slot, layer));
                     }
                 }
                 Some(p) if wet_was && !wet_now => {
@@ -1127,13 +1221,8 @@ pub fn liquid_mesh_eased(
                     for c in &now {
                         out.emit_still(c, lit);
                     }
-                    if let Some((at, height)) = foot {
-                        out.feet.push(Foot {
-                            at,
-                            height,
-                            sky: lit,
-                            born: false,
-                        });
+                    if let Some(found) = foot {
+                        out.feet.push(found.foot(lit, false, slot, layer));
                     }
                 }
             }
@@ -1246,6 +1335,10 @@ impl Plugin for WaterFlowPlugin {
             >::default())
             .init_resource::<FallFeet>()
             .init_resource::<SplashQuads>()
+            .init_resource::<FallFeetGpu>()
+            .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
+                FallFeetGpu,
+            >::default())
             .add_plugins(bevy::render::extract_resource::ExtractResourcePlugin::<
                 SplashQuads,
             >::default())
@@ -1392,6 +1485,64 @@ mod tests {
         liquid_mesh_eased(now, before, &ring_cells(), RADIUS)
     }
 
+    /// A fall's foot carries what the proposed mist rule and the pool's
+    /// terms need (`water-flow` 6.6): its drop `D` in metres from the lip's
+    /// water, the way over (away from the side that feeds it), the pool's
+    /// depth and its column; and a foot cell's face under the fall reads
+    /// metres under the lip on from the run over it.
+    #[test]
+    fn a_fall_s_foot_knows_its_drop_its_way_over_and_its_pool() {
+        // Slot 0 a ledge three layers up with a source on it; slot 1 falls
+        // three layers beside it into a pool on the ground.
+        let falling = Material::flowing(7, true);
+        let tier = ring(&[
+            (0, AT, Material::Stone),
+            (0, AT + 1, Material::Stone),
+            (0, AT + 2, Material::Stone),
+            (0, AT + 3, Material::Water),
+            (1, AT + 3, falling),
+            (1, AT + 2, falling),
+            (1, AT + 1, falling),
+            (1, AT, Material::Water),
+        ]);
+        let made = mesh(&tier, None);
+        let foot = made
+            .feet
+            .iter()
+            .find(|f| f.column == 1)
+            .expect("the fall has a foot");
+        assert_eq!(foot.height, 3.0);
+        assert!(foot.drop_m > 2.5 && foot.drop_m < 4.0, "{}", foot.drop_m);
+        assert!(foot.pool_m > 0.0 && foot.pool_m <= 1.0, "{}", foot.pool_m);
+        let cells = ring_cells();
+        let f = CellFrame::of(&tier, 1, &cells[1]);
+        assert_eq!(f.sides[3], Some(0));
+        assert!(foot.over.dot(-f.side_normal(3)) > 0.99, "{}", foot.over);
+        // Every falling face's metres under the lip run from 0 to the run's
+        // height, never negative, and not all zero.
+        let unders: Vec<f32> = made
+            .vertices
+            .iter()
+            .filter(|v| v.kind == KIND_FALLING)
+            .map(|v| v.flow.z)
+            .collect();
+        assert!(!unders.is_empty());
+        assert!(unders.iter().all(|u| (0.0..=4.0).contains(u)), "{unders:?}");
+        assert!(unders.iter().any(|u| *u > 2.0), "{unders:?}");
+        // The run's top cell starts at its own top edge, every corner of it,
+        // however its top slopes: a face's top vertices read 0 there.
+        let lip_top = made
+            .vertices
+            .iter()
+            .filter(|v| v.kind == KIND_FALLING && v.flow.z < 1e-4)
+            .count();
+        assert!(lip_top >= 6, "{unders:?}");
+        // Two feet in one column are two keys.
+        let mut stacked = *foot;
+        stacked.layer += 3;
+        assert_ne!(stacked.key(), foot.key());
+    }
+
     /// S2: a cell that turns wet starts as a thin sheet on the side its
     /// water came from: every vertex it eases from lies on that side's edge,
     /// within `THIN` of the cell's floor.
@@ -1523,21 +1674,51 @@ mod tests {
 
 // ---- The splash at a fall's foot (owner, 2026-11-15: "can you also add some
 // particle fx to bottom of the waterfall? more fx based on distance it fell")
+// Since `water-flow` 6.6 it is mockup M35's New tab (`docs/mockups/waterfall-
+// mist/mist.js`, `splashQuads`), approved 2026-11-16: the proposed mist rule,
+// the puff sheet, fall droplets and a reach faded in time.
 
 /// Every fall's foot in the tier, as the mesher found them: where, how many
 /// layers it fell, the sky's share there, and whether it landed this tick.
 #[derive(Resource, Default)]
 pub struct FallFeet(pub Vec<Foot>);
 
-/// The splash's quads as the water pass draws them (`water-flow` 6.1): drawn
-/// after the water, against its depth, so a splash over a pool stands on the
-/// pool's surface rather than under it. `lanes[0]` is the camera's right and
-/// `lanes[1]` its up the quads face along, then two lanes a quad: its centre
-/// (body-local) and half size, and its colour (rgb unlit, a its alpha). Empty
-/// when nothing splashes.
+/// The splash's quads as the water pass draws them (`water-flow` 6.1, 6.6):
+/// drawn after the water, against its depth, so a splash over a pool stands
+/// on the pool's surface rather than under it. `lanes[0]` is the camera's
+/// right and `lanes[1]` its up the quads face along, then `SPLASH_LANES` a
+/// quad: its centre (body-local) and half size; its colour (rgb the light on
+/// it, a its alpha); and its cell and flip (`SPLASH_DOT`, `SPLASH_DROPLET`, or
+/// a puff's continuous frame on the sheet, row x 4 + age x 4) and the radius
+/// of its pool's surface, under which none of it is drawn. Empty when
+/// nothing splashes.
 #[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
 pub struct SplashQuads {
     pub lanes: Vec<[f32; 4]>,
+}
+
+/// Lanes (vec4s) a splash quad: centre and size, colour, cell and flip.
+/// `splash_vertex`'s stride (`water.wgsl`); a test holds the two together.
+pub const SPLASH_LANES: usize = 3;
+/// The cell of a spray drop: the soft round dot.
+pub const SPLASH_DOT: f32 = -1.0;
+/// The cell of a fall droplet: a small hard drop.
+pub const SPLASH_DROPLET: f32 = -2.0;
+
+/// The most feet the water's fragment and the bubbles are told of, nearest
+/// first (`water-flow` 6.6): `feet` in `water.wgsl`'s `WaterView`, and the
+/// bound on every loop over them.
+pub const FALL_FEET_MAX: usize = 8;
+
+/// The feet the water pass is told of (`water-flow` 6.6): per foot, xyz where
+/// it lands (body-local) and w its drop `D`, m; then x the pool's depth under
+/// it, m, y its seed 0..1, z its fade 0..1 (in time, as it joins or leaves the
+/// nearest eight); and how many there are.
+#[derive(Resource, Clone, Default, bevy::render::extract_resource::ExtractResource)]
+pub struct FallFeetGpu {
+    pub feet: [Vec4; FALL_FEET_MAX],
+    pub more: [Vec4; FALL_FEET_MAX],
+    pub count: u32,
 }
 
 /// How far out from a fall's foot the splash starts: the falling column's
@@ -1550,8 +1731,8 @@ const SPLASH_CLEAR_M: f32 = 0.05;
 
 /// The most quads the splash draws in a frame, drops and mist together.
 pub const SPLASH_BUDGET: usize = 4000;
-/// Feet are drawn out to this far, fading out over the last 15 m.
-const SPLASH_REACH_M: f32 = 70.0;
+/// The splash's own gravity, m/s^2.
+const SPLASH_G: f32 = 15.0;
 
 fn hash01(a: u32, b: u32) -> f32 {
     let mut h = a.wrapping_mul(0x9E37_79B9) ^ b.wrapping_mul(0x85EB_CA6B);
@@ -1561,9 +1742,87 @@ fn hash01(a: u32, b: u32) -> f32 {
     (h & 0xFFFF) as f32 / 65535.0
 }
 
-/// Spray and mist at every fall's foot near the eye: thrown up and out and
-/// falling back, a low white puff, more of both, higher and wider the further
-/// the water fell. A pure function of the time, so nothing is stored.
+/// How much splash a fall makes, by the mist rule (`RULES` in `mist.js`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SplashRule {
+    /// The measure the sizes run on: `D` m (proposed) or whole layers.
+    m: f32,
+    puffs: u32,
+    alpha: f32,
+    size: f32,
+    rise: f32,
+    drops: u32,
+    droplets: f32,
+    /// The puffs rise on the fall's open side only.
+    open: bool,
+}
+
+impl SplashRule {
+    fn of(rule: crate::config::MistRule, height: f32, drop_m: f32) -> Self {
+        match rule {
+            crate::config::MistRule::Proposed => {
+                let d = drop_m.max(0.0);
+                Self {
+                    m: d,
+                    puffs: (7.0 + 0.75 * d).round().clamp(8.0, 24.0) as u32,
+                    alpha: 0.45,
+                    size: (0.25 + 0.19 * d).clamp(0.35, 5.0),
+                    rise: 0.15 + 0.05 * d,
+                    drops: (3.0 + 6.0 * d).clamp(12.0, 160.0) as u32,
+                    droplets: (9.0 * d).clamp(6.0, 160.0),
+                    open: true,
+                }
+            }
+            crate::config::MistRule::Layers => {
+                let h = height.max(1.0);
+                Self {
+                    m: h,
+                    puffs: ((h - 1.0) * 1.5).clamp(1.0, 24.0) as u32,
+                    alpha: 0.12 + 0.33 * (h / 8.0).min(1.0),
+                    size: (0.5 + 0.18 * h).min(5.0),
+                    rise: 0.25 + 0.04 * h,
+                    drops: (3.0 + 6.0 * h).min(160.0) as u32,
+                    droplets: (9.0 * h).min(160.0),
+                    open: false,
+                }
+            }
+        }
+    }
+}
+
+/// A foot's fades across frames, in time (CLAUDE.md, "a fade is a moment in
+/// time"): the splash's, as it crosses the reach, and the water's, as it
+/// joins or leaves the nearest `FALL_FEET_MAX`.
+#[derive(Clone, Copy, Default)]
+struct FootFade {
+    splash: f32,
+    near: f32,
+    seen: u32,
+}
+
+/// What the splash keeps between frames: each foot's fades, keyed by its
+/// column and layer (a lookup only; nothing is ordered by it), and a scratch list kept
+/// so no frame allocates.
+#[derive(Default)]
+struct SplashState {
+    fades: std::collections::HashMap<u64, FootFade>,
+    frame: u32,
+    order: Vec<(f32, usize)>,
+}
+
+/// Step `v` toward `want` (0 or 1) by `dt` over `fade_s`.
+fn fade_toward(v: f32, want: f32, dt: f32, fade_s: f32) -> f32 {
+    let step = (dt / fade_s.max(1e-3)).min(1.0);
+    if want > v {
+        (v + step).min(want)
+    } else {
+        (v - step).max(want)
+    }
+}
+
+/// Spray, mist and fall droplets at every fall's foot near the eye, and the
+/// feet the water pass is told of. A pure function of the time and the
+/// fades, so nothing else is stored.
 #[allow(clippy::too_many_arguments)]
 fn animate_splash(
     time: Res<Time>,
@@ -1571,20 +1830,23 @@ fn animate_splash(
     frame: Option<Res<PlanetRenderFrame>>,
     feet: Res<FallFeet>,
     ease: Res<WaterEase>,
+    water: Option<Res<crate::config::WaterSettings>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut splash: ResMut<SplashQuads>,
+    mut gpu_feet: ResMut<FallFeetGpu>,
+    mut state: Local<SplashState>,
 ) {
+    let defaults = crate::config::FallLook::default();
+    let look = water.as_deref().map_or(&defaults, |w| &w.falls);
     let Some(frame) = frame else {
-        if !splash.lanes.is_empty() {
-            splash.lanes.clear();
-        }
+        splash.lanes.clear();
+        gpu_feet.count = 0;
         return;
     };
     let centre = frame.center.as_vec3();
     let Some((camera, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
-        if !splash.lanes.is_empty() {
-            splash.lanes.clear();
-        }
+        splash.lanes.clear();
+        gpu_feet.count = 0;
         return;
     };
     let eye = camera.translation() - centre;
@@ -1595,15 +1857,66 @@ fn animate_splash(
         ((e + 0.12) / 0.32).clamp(0.0, 1.0)
     });
     let t = time.elapsed_secs_wrapped();
+    let dt = time.delta_secs().clamp(0.0, 0.1);
     // A fall that lands this tick splashes when its column reaches the
     // foot, at the end of the tick, not when the tick starts (S3).
     let landed = ((ease.linear - 0.95) / 0.05).clamp(0.0, 1.0);
-    let mut near: Vec<&Foot> = feet
-        .0
-        .iter()
-        .filter(|f| f.at.distance(eye) < SPLASH_REACH_M && (!f.born || landed > 0.0))
-        .collect();
-    near.sort_by(|a, b| a.at.distance(eye).total_cmp(&b.at.distance(eye)));
+    let state = &mut *state;
+    state.frame = state.frame.wrapping_add(1);
+    let stamp = state.frame;
+    // Every foot, nearest first.
+    state.order.clear();
+    for (i, f) in feet.0.iter().enumerate() {
+        let distance = f.at.distance(eye);
+        if distance.is_finite() {
+            state.order.push((distance, i));
+        }
+    }
+    state.order.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut near_rank = 0usize;
+    gpu_feet.count = 0;
+    for &(distance, i) in &state.order {
+        let f = &feet.0[i];
+        let fade = state.fades.entry(f.key()).or_default();
+        let inside = distance < look.splash_reach_m;
+        let want_near = inside && near_rank < FALL_FEET_MAX;
+        if inside {
+            near_rank += 1;
+        }
+        // Once a frame a foot: a key met twice in one frame is not stepped
+        // twice (nor reset by its own second sight).
+        if fade.seen != stamp {
+            // A foot not seen last frame starts from nothing and fades in.
+            if fade.seen != stamp.wrapping_sub(1) {
+                fade.splash = 0.0;
+                fade.near = 0.0;
+            }
+            fade.splash = fade_toward(
+                fade.splash,
+                f32::from(u8::from(inside)),
+                dt,
+                look.splash_fade_s,
+            );
+            fade.near = fade_toward(
+                fade.near,
+                f32::from(u8::from(want_near)),
+                dt,
+                look.splash_fade_s,
+            );
+            fade.seen = stamp;
+        }
+        if fade.near > 0.0 && (gpu_feet.count as usize) < FALL_FEET_MAX {
+            let k = gpu_feet.count as usize;
+            let gain = if f.born { landed } else { 1.0 };
+            let seed = ((f.column ^ f.layer.rotate_left(16)).wrapping_mul(0x9E37_79B9) >> 16)
+                as f32
+                / 65535.0;
+            gpu_feet.feet[k] = f.at.extend(f.drop_m);
+            gpu_feet.more[k] = Vec4::new(f.pool_m, seed, fade.near * gain, 0.0);
+            gpu_feet.count += 1;
+        }
+    }
+    state.fades.retain(|_, f| f.seen == stamp);
     // The same quads, nearest foot first, as the mesh they were drawn as:
     // the water pass expands each to its corners along the camera's right
     // and up (`splash_vertex`).
@@ -1611,27 +1924,40 @@ fn animate_splash(
     lanes.clear();
     lanes.push(right.extend(0.0).to_array());
     lanes.push(up_cam.extend(0.0).to_array());
-    let quad = |p: Vec3, size: f32, rgba: [f32; 4], lanes: &mut Vec<[f32; 4]>| {
+    let mut quads = 0usize;
+    let mut quad = |p: Vec3, size: f32, rgba: [f32; 4], cell: f32, flip: f32, surface: f32| {
+        if quads >= SPLASH_BUDGET || !p.is_finite() || !size.is_finite() || rgba[3] <= 0.0 {
+            return;
+        }
+        quads += 1;
         lanes.push(p.extend(size).to_array());
         lanes.push(rgba);
+        lanes.push([cell, flip, surface, 0.0]);
     };
-    for f in near {
-        if (lanes.len() - 2) / 2 >= SPLASH_BUDGET {
-            break;
-        }
-        let (foot, height, sky) = (&f.at, &f.height, &f.sky);
-        let distance = foot.distance(eye);
+    for &(_, i) in &state.order {
+        let f = &feet.0[i];
+        let Some(fades) = state.fades.get(&f.key()) else {
+            continue;
+        };
         let gain = if f.born { landed } else { 1.0 };
-        let fade = gain * (1.0 - ((distance - (SPLASH_REACH_M - 15.0)) / 15.0).clamp(0.0, 1.0));
+        let fade = fades.splash * gain;
+        if fade <= 0.0 {
+            continue;
+        }
+        let foot = f.at;
+        // The pool's surface, a radius: nothing of the splash is drawn under
+        // it (a puff's low centre puts part of it there).
+        let surface = foot.length();
         let up = foot.normalize_or(Vec3::Y);
         let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
         let north = up.cross(east);
-        let light = (0.12 + 0.88 * day) * sky.max(0.15);
-        let h = height.max(1.0);
+        let light = (0.12 + 0.88 * day) * f.sky.max(0.15);
+        let rule = SplashRule::of(look.rule, f.height, f.drop_m);
+        let h = rule.m;
         let seed = (foot.x * 7.0) as i32 as u32 ^ ((foot.z * 13.0) as i32 as u32).rotate_left(11);
-        // Spray: drops thrown up and out, falling back under gravity.
-        let drops = (3.0 + 6.0 * h).min(160.0) as u32;
-        for i in 0..drops {
+        // Spray: drops thrown up and out, falling back under gravity, each
+        // fading in over the first 15% of its flight.
+        for i in 0..rule.drops {
             let r = |k: u32| hash01(seed, i * 8 + k);
             let period = 0.7 + 0.5 * r(0);
             let phase = (t / period + r(1)).fract();
@@ -1640,38 +1966,135 @@ fn animate_splash(
             let out = (0.6 + 0.15 * h).min(4.0) * (0.3 + 0.7 * r(3));
             let a = r(4) * std::f32::consts::TAU;
             let dir = east * a.cos() + north * a.sin();
-            let lift = rise * s - 0.5 * 15.0 * s * s;
+            let lift = rise * s - 0.5 * SPLASH_G * s * s;
             let size = 0.08 + 0.1 * r(6);
             // A drop back down at the pool is gone: none is drawn under it.
             if lift < SPLASH_CLEAR_M + size {
                 continue;
             }
-            let p = *foot + up * lift + dir * (SPLASH_EDGE_M + out * s + 0.4 * r(5));
-            let alpha = 0.75 * (1.0 - phase) * fade;
-            quad(p, size, [light, light, light * 1.02, alpha], &mut lanes);
+            let p = foot + up * lift + dir * (SPLASH_EDGE_M + out * s + 0.4 * r(5));
+            let alpha = 0.75 * (1.0 - phase) * (phase / 0.15).min(1.0) * fade;
+            quad(
+                p,
+                size,
+                [light, light, light * 1.02, alpha],
+                SPLASH_DOT,
+                0.0,
+                surface,
+            );
         }
-        // Mist: a low white puff, bigger and denser from a taller fall.
-        let puffs = ((h - 1.0) * 1.5).clamp(1.0, 24.0) as u32;
+        // Mist: puffs off the sheet, on the fall's open side under the
+        // proposed rule, each fading in over the first fifth of its life,
+        // its centre low so its body meets the pool and the wall blend
+        // fades it at the waterline.
+        let puffs = (rule.puffs as f32 * look.mist_amount).round() as u32;
+        let over = Vec2::new(f.over.dot(east), f.over.dot(north));
+        let open = rule.open && over.length_squared() > 0.25;
         for i in 0..puffs {
             let r = |k: u32| hash01(seed ^ 0xA5A5, i * 8 + k);
             let period = 2.0 + 1.5 * r(0);
             let phase = (t / period + r(1)).fract();
             let s = phase * period;
-            let a = r(2) * std::f32::consts::TAU;
+            let a = if open {
+                over.y.atan2(over.x) + (r(2) * 2.0 - 1.0) * 110f32.to_radians()
+            } else {
+                r(2) * std::f32::consts::TAU
+            };
             let dir = east * a.cos() + north * a.sin();
             let spread = (0.5 + 0.12 * h).min(5.0);
-            let size = (0.5 + 0.18 * h).min(5.0) * (0.6 + 0.8 * phase);
-            // Outside the falling column, and lifted by its own size so its
-            // lower edge stays over the pool's surface.
-            let p = *foot
-                + up * ((0.25 + 0.04 * h) * s + size + SPLASH_CLEAR_M)
+            let size = rule.size * (0.6 + 0.8 * phase) * look.mist_size;
+            let p = foot
+                + up * (rule.rise * s + 0.2 * size)
                 + dir * (SPLASH_EDGE_M + spread * (0.3 + phase) * r(3));
-            let alpha = (0.12 + 0.33 * (h / 8.0).min(1.0)) * (1.0 - phase) * fade;
-            quad(p, size, [light, light, light, alpha], &mut lanes);
+            let born = (phase / 0.2).min(1.0);
+            let alpha = rule.alpha * (1.0 - phase) * born * fade;
+            // A continuous frame (row * 4 + 0..3): the fragment cross-fades
+            // the two frames either side, so a puff never changes shape in
+            // one frame.
+            let cell = (r(5) * 4.0).floor().min(3.0) * 4.0 + (phase * 4.0).min(3.0);
+            let flip = if r(6) < 0.5 { 1.0 } else { 0.0 };
+            quad(p, size, [light, light, light, alpha], cell, flip, surface);
+        }
+        // Fall droplets (owner: "fall mist shouldnt be mist, should be like
+        // water droplets fx"): shaken off the sheet at a height along the
+        // drop, already falling at the sheet's speed there, flung a little
+        // out, falling under gravity into the pool. More low down. One drop
+        // each: no streak trails in the game (owner, 2026-11-16: "I dont want
+        // them in game yet").
+        let droplets = (rule.droplets * look.droplets).round() as u32;
+        for i in 0..droplets {
+            let r = |k: u32| hash01(seed ^ 0x5C3E, i * 8 + k);
+            let along = r(2).powf(0.7);
+            let fallen = h * along;
+            let y0 = h - fallen;
+            let v_down = (2.0 * SPLASH_G * fallen.max(0.2)).sqrt();
+            let v_out = (0.6 + 1.6 * r(4)) * (0.5 + 0.5 * along);
+            let t_land =
+                (-v_down + (v_down * v_down + 2.0 * SPLASH_G * y0.max(0.05)).sqrt()) / SPLASH_G;
+            let period = t_land + 0.15 + 0.4 * r(0);
+            let s = (t / period + r(1)).fract() * period;
+            if s > t_land {
+                continue;
+            }
+            let a = r(3) * std::f32::consts::TAU;
+            let dir = east * a.cos() + north * a.sin();
+            let size = (0.035 + 0.05 * r(6)) * look.mist_size;
+            let d = SPLASH_EDGE_M * 0.95 + v_out * s;
+            let y = y0 - v_down * s - 0.5 * SPLASH_G * s * s;
+            let head = 0.9 * (s / 0.05).min(1.0) * fade;
+            quad(
+                foot + up * y + dir * d,
+                size,
+                [light, light, light * 1.03, head],
+                SPLASH_DROPLET,
+                0.0,
+                surface,
+            );
         }
     }
-    if lanes.len() == 2 {
+    if quads == 0 {
         lanes.clear();
     }
     splash.lanes = lanes;
+}
+
+#[cfg(test)]
+mod splash_tests {
+    use super::*;
+    use crate::config::MistRule;
+
+    /// The proposed rule against the mockup's height comparison
+    /// (`water-flow` design, "The height comparison"): puffs and alpha for
+    /// the riffle and the 1, 2, 4 and 9-layer falls.
+    #[test]
+    fn the_proposed_rule_mists_every_fall_as_the_mockup_does() {
+        for (d, puffs) in [(1.05, 8), (1.4, 8), (2.4, 9), (4.4, 10), (9.4, 14)] {
+            let r = SplashRule::of(MistRule::Proposed, 1.0, d);
+            assert_eq!(r.puffs, puffs, "D {d}");
+            assert_eq!(r.alpha, 0.45);
+            assert!(r.drops >= 12 && r.droplets >= 6.0 && r.open);
+        }
+        let tall = SplashRule::of(MistRule::Proposed, 9.0, 9.4);
+        assert!((tall.size - 2.036).abs() < 1e-3, "{}", tall.size);
+        // The rule before M35, kept behind the switch: one puff for a
+        // two-layer fall, twelve for nine.
+        assert_eq!(SplashRule::of(MistRule::Layers, 2.0, 2.4).puffs, 1);
+        assert_eq!(SplashRule::of(MistRule::Layers, 9.0, 9.4).puffs, 12);
+    }
+
+    /// A fade runs in time to its end and stops: never held part way.
+    #[test]
+    fn a_foot_s_fade_is_a_moment_in_time() {
+        let mut v = 0.0;
+        for _ in 0..30 {
+            v = fade_toward(v, 1.0, 1.0 / 60.0, 0.6);
+        }
+        assert!(v > 0.8 && v < 0.9, "{v}");
+        for _ in 0..10 {
+            v = fade_toward(v, 1.0, 1.0 / 60.0, 0.6);
+        }
+        assert_eq!(v, 1.0);
+        v = fade_toward(v, 0.0, 1.0, 0.6);
+        assert_eq!(v, 0.0);
+    }
 }

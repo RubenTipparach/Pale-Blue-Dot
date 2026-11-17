@@ -98,6 +98,45 @@ pub(super) fn material_of(
     }
 }
 
+/// Whether a tree has been felled: the axe has taken all its logs.
+pub(super) fn tree_felled(taken: u16, axe_logs: u16) -> bool {
+    taken >= axe_logs
+}
+
+/// Whether `block` is the ground a standing tree grows from: its cell grows a
+/// tree the axe has not felled, and the block is the cell's top (solid, with
+/// air over it). That ground is not dug or tilled until the tree is cut down
+/// (`tool-crafting` decision 3a).
+pub(super) fn under_standing_tree(
+    fine: &PlanetFine,
+    save: &WorldSave,
+    axe_logs: u16,
+    (cell, layer): Block,
+) -> bool {
+    use pbd_core::gather::{TREE_KIND, TreeTaken};
+    let Some(record) = record_of(fine, cell) else {
+        return false;
+    };
+    let r = &fine.set.finest_records()[record];
+    if !pbd_core::flora::grows_tree(
+        &pbd_app::planet::terrain_config().trees,
+        r.spare[0],
+        r.metadata[1],
+    ) {
+        return false;
+    }
+    let taken = save
+        .records
+        .get(TREE_KIND, u64::from(cell))
+        .and_then(|r| r.read::<TreeTaken>())
+        .map_or(0, |t| t.logs);
+    if tree_felled(taken, axe_logs) {
+        return false;
+    }
+    material_of(fine, save, (cell, layer)).is_some_and(|m| m != Material::Air && !m.is_water())
+        && material_of(fine, save, (cell, layer + 1)) == Some(Material::Air)
+}
+
 /// Which cell and layer a world point is in, and whether it is solid.
 ///
 /// The walk is `PlanetContact`'s, which steps cell to cell across whichever
@@ -583,7 +622,11 @@ pub fn dig_and_place(
     // has that button; bare hands break nothing (`inventory-grid` decision
     // 8); every other tool digs, the right one fastest.
     let block = (target.dig.cell, target.dig.layer);
-    let held = buttons.pressed(MouseButton::Left) && digger.is_some();
+    let rooted = under_standing_tree(&fine, &edits, gather.0.axe_logs, block);
+    if rooted && buttons.just_pressed(MouseButton::Left) && digger.is_some() {
+        note.say(time.elapsed_secs(), "Cut down the tree first");
+    }
+    let held = buttons.pressed(MouseButton::Left) && digger.is_some() && !rooted;
     let secs = match digger {
         // Keen (`cooking` design S5): a break takes its time over the
         // effect's strength while it runs.
@@ -598,9 +641,9 @@ pub fn dig_and_place(
     {
         let wall_s = time.elapsed_secs();
         match why {
-            Refusal::NotByHand => note.say(wall_s, "Hands take soft ground: make a tool"),
+            Refusal::NotByHand => note.say(wall_s, "Too hard to dig by hand"),
             Refusal::TierTooLow(tier) => {
-                note.say(wall_s, format!("That wants a {} pick", tier.name()))
+                note.say(wall_s, format!("Needs a {} pickaxe", tier.name()))
             }
             Refusal::NotADiggingTool | Refusal::NotABlock => {}
         }
@@ -812,7 +855,7 @@ pub fn dig_and_place(
                 "PLACE refused: a crop grows in cell {} layer {}",
                 place.cell, place.layer
             );
-            note.say(wall_s, "A crop grows there");
+            note.say(wall_s, "Something is planted here");
             return;
         }
         // A block may not be placed into the player. Sealing yourself into
@@ -937,12 +980,10 @@ fn take_log(
         .and_then(|r| r.read())
         .unwrap_or_default();
     match gather.0.tree_gives(taken.logs, by_axe) {
-        Err(TreeSpent::BranchTaken) => {
-            note.say(wall_s, "Its branch is taken: an axe takes more");
-            return;
-        }
+        // Nothing to say (owner, 2026-11-17: the line "sounds like AI writing").
+        Err(TreeSpent::BranchTaken) => return,
         Err(TreeSpent::Felled) => {
-            note.say(wall_s, "This tree has given all its wood");
+            note.say(wall_s, "No more wood");
             return;
         }
         Ok(()) => {}
@@ -1033,21 +1074,64 @@ fn occupies(fine: &PlanetFine, contact: &PlanetContact, eye: Vec3, place: Sample
 /// lantern gets a two-block pillar in the cell beyond it to hang on, and the
 /// hanging lantern a block over it to hang from. Returns how many lights were
 /// placed.
-fn lamp_row(world: &mut Edited, eye: Vec3, forward: Vec3, row: f32, aside: f32) -> usize {
+/// The cell `metres` ahead of the eye along the ground and `across` to its
+/// right, as its key and the first layer over its ground: where a capture's
+/// row of lamps or blocks stands each one.
+fn row_spot(
+    world: &Edited,
+    eye: Vec3,
+    forward: Vec3,
+    metres: f32,
+    across: f32,
+) -> Option<(u32, usize)> {
     let up = eye.normalize_or(Vec3::Y);
     let ahead = (forward - up * forward.dot(up)).normalize_or(Vec3::X);
     let right = ahead.cross(up).normalize_or(Vec3::Z);
-    // The cell `metres` ahead and `across` to the right, its key and the first
-    // layer over its ground.
-    let spot = |world: &Edited, metres: f32, across: f32| -> Option<(u32, usize)> {
-        let offset = ahead * metres + right * across;
-        let angle = offset.length() / PLANET_RADIUS;
-        let direction = (up * angle.cos() + offset.normalize_or(ahead) * angle.sin()).normalize();
-        let record = world.contact.finest_cell(direction)?;
-        let key = world.fine.set.finest_records().get(record)?.key();
-        let top = world.fine.set.columns.column(record)?.surface()?;
-        Some((key, top + 1))
-    };
+    let offset = ahead * metres + right * across;
+    let angle = offset.length() / PLANET_RADIUS;
+    let direction = (up * angle.cos() + offset.normalize_or(ahead) * angle.sin()).normalize();
+    let record = world.contact.finest_cell(direction)?;
+    let key = world.fine.set.finest_records().get(record)?.key();
+    let top = world.fine.set.columns.column(record)?.surface()?;
+    Some((key, top + 1))
+}
+
+/// `--place-row` (`placed-blocks-keep-material`): each block on the ground
+/// in a row across the view, `row` metres ahead, one cell apart, each in a
+/// cell of its own. Nought before the fine set is under the camera.
+fn block_row(world: &mut Edited, eye: Vec3, forward: Vec3, row: f32, blocks: &[Material]) -> usize {
+    if row_spot(world, eye, forward, row, 0.0).is_none() {
+        return 0;
+    }
+    let mut used = Vec::new();
+    let mut across = -0.5 * LAMP_SPACING_M * (blocks.len() as f32 - 1.0);
+    let mut placed = 0;
+    for &block in blocks {
+        let mut found = None;
+        for _ in 0..16 {
+            match row_spot(world, eye, forward, row, across) {
+                Some((cell, layer)) if !used.contains(&cell) => {
+                    found = Some((cell, layer));
+                    break;
+                }
+                _ => across += 0.5,
+            }
+        }
+        if let Some((cell, layer)) = found {
+            used.push(cell);
+            if apply_edit(world, Hands::Empty, cell, layer, block).is_some() {
+                info!("scripted {block:?} placed in cell {cell} layer {layer}");
+                placed += 1;
+            }
+        }
+        across += LAMP_SPACING_M;
+    }
+    placed
+}
+
+fn lamp_row(world: &mut Edited, eye: Vec3, forward: Vec3, row: f32, aside: f32) -> usize {
+    let spot =
+        |world: &Edited, metres: f32, across: f32| row_spot(world, eye, forward, metres, across);
     // Before the fine set is under the camera there is no cell to put a lamp
     // in, and the caller tries again next frame.
     if spot(world, row, 0.0).is_none() {
@@ -1123,7 +1207,10 @@ pub fn scripted_dig(
     (mut drops, sun): (ResMut<Drops>, Res<pbd_app::sky::Sun>),
     mut done: Local<bool>,
 ) {
-    if *done || launch.capture.is_none() || (launch.dig == 0 && !launch.torch && !launch.lamps) {
+    if *done
+        || launch.capture.is_none()
+        || (launch.dig == 0 && !launch.torch && !launch.lamps && launch.place_row.is_empty())
+    {
         return;
     }
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
@@ -1257,6 +1344,29 @@ pub fn scripted_dig(
             *done = true;
         }
     }
+    if !launch.place_row.is_empty() {
+        let forward = transform.forward().as_vec3();
+        let placed = block_row(
+            &mut Edited {
+                fine: &mut fine,
+                contact: &mut contact,
+                save: &mut edits,
+                slots: &mut slots,
+                drops: &mut drops,
+                now_s: sun.clock.seconds,
+            },
+            eye,
+            forward,
+            launch.lamps_at,
+            &launch.place_row,
+        );
+        // Before the fine set is under the camera, the next frame tries again.
+        if placed > 0 {
+            info!("scripted blocks: {placed} placed");
+            *done = true;
+        }
+        return;
+    }
     if dug == 0 && !launch.torch && !launch.lamps {
         // Say why nothing happened rather than failing silently: a scripted
         // dig that finds no ground is either out of the tier or aimed wrong,
@@ -1284,6 +1394,85 @@ pub fn scripted_dig(
                 "scripted dig: {dug} layers taken under the camera;                  the hole's floor cell is lit to {sky} of {}",
                 pbd_core::light::MAX
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tree_tests {
+    /// A tree stands until the axe has taken all its logs, and its ground
+    /// holds until then (`tool-crafting` decision 3a).
+    #[test]
+    fn a_tree_stands_until_its_last_log() {
+        assert!(!super::tree_felled(0, 4));
+        assert!(!super::tree_felled(3, 4));
+        assert!(super::tree_felled(4, 4));
+    }
+}
+
+/// `placed-blocks-keep-material`: what a placed block gives back when it is
+/// dug, wherever it was put down.
+#[cfg(test)]
+mod placed_tests {
+    use super::*;
+    use pbd_app::planet::terrain_config;
+    use pbd_core::edits::Edit;
+    use pbd_core::inventory::{Item, Slots};
+    use pbd_core::planet_gen::{self, Biome};
+
+    /// A block placed on desert sand is dug as that block, never as the
+    /// sand under it: the column the tier builds from the save is what the
+    /// dig reads (`material_of`), and that is what it yields.
+    #[test]
+    fn a_placed_block_on_desert_sand_digs_as_itself() {
+        let cfg = terrain_config();
+        let desert = (0..60_000)
+            .map(|i| {
+                let y = 1.0 - 2.0 * (i as f32 + 0.5) / 60_000.0;
+                let r = (1.0 - y * y).sqrt();
+                let phi = i as f32 * 2.399_963;
+                Vec3::new(r * phi.cos(), y, r * phi.sin())
+            })
+            .find(|&d| {
+                let surface = column::surface_m(cfg, d);
+                planet_gen::biome_at(cfg, d, surface) == Biome::Desert
+                    && planet_gen::top_material(cfg, d, surface) == Material::Sand
+                    && surface > cfg.sea_level_m
+            })
+            .expect("the shipped world has a desert");
+        let under = column::generate_solid(cfg, desert).surface().unwrap();
+        for (cell, material) in Material::ALL
+            .into_iter()
+            .filter(|&m| column::home_biome(m).is_some() && !m.is_water())
+            .enumerate()
+        {
+            let cell = cell as u32 + 1;
+            let mut save = WorldSave::memory_only();
+            assert!(save.accept(
+                Edit {
+                    cell,
+                    layer: under as u16 + 1,
+                    material,
+                },
+                None,
+                &Slots::new()
+            ));
+            let built = column::generate_edited_solid(cfg, desert, save.edits.for_cell(cell));
+            let was = built.material(under + 1);
+            assert_eq!(was, material, "{material:?}: stored");
+            let expected = match material {
+                // Turned soil is dirt again (`farming-and-smelting` decision 2).
+                Material::Tilled => Item::Block(Material::Dirt),
+                Material::Ore => pbd_core::station::ore_yield(cell, under as u16 + 1, true),
+                other => Item::Block(other),
+            };
+            assert_eq!(
+                yield_of(&save, was, cell, under + 1),
+                expected,
+                "{material:?}"
+            );
+            // And the sand under it is still the desert's sand.
+            assert_eq!(built.material(under), Material::Sand);
         }
     }
 }

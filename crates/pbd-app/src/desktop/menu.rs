@@ -32,6 +32,8 @@ use pbd_app::ui_kit::{self, KitPiece, KitText, Plaque, Set, UiKit, plaque, plaqu
 pub enum Screen {
     #[default]
     Playing,
+    /// The title screen, the front door of a plain launch (`title-screen`).
+    Title,
     Pause,
     Settings,
     Saves,
@@ -55,20 +57,17 @@ impl Screen {
     /// One step back out. Settings to pause, pause to the world, and the world
     /// to the menu - which is what `Escape` does from wherever it is pressed.
     ///
-    /// The saves page is the FRONT DOOR when the game opened on it: stepping
-    /// back from there goes into the open world, since a returning player
-    /// who presses nothing means "continue", and goes nowhere at all when no
-    /// world is open yet, since there is nothing to continue into.
-    fn back(self, front_door: bool, has_world: bool) -> Self {
-        if self == Screen::Saves && front_door {
-            return if has_world {
-                Screen::Playing
-            } else {
-                Screen::Saves
-            };
+    /// The title is the FRONT DOOR of a plain launch (`title-screen`): the
+    /// saves page and settings step back to it while it is, and it stays
+    /// where it is. Once the world is entered they step back to the pause
+    /// menu, and the title is not seen again.
+    fn back(self, front_door: bool, _has_world: bool) -> Self {
+        if front_door && matches!(self, Screen::Title | Screen::Saves | Screen::Settings) {
+            return Screen::Title;
         }
         match self {
             Screen::Playing => Screen::Pause,
+            Screen::Title => Screen::Playing,
             Screen::Pause
             | Screen::Guide
             | Screen::Pack
@@ -88,6 +87,8 @@ impl Screen {
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
     Resume,
+    /// The title's NEW WORLD: the saves page, with the keyboard in the name.
+    NewWorld,
     Settings,
     Saves,
     Quit,
@@ -486,11 +487,12 @@ pub fn settings_tabs(
 #[derive(Resource, Default, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct FrontDoor(pub bool);
 
-/// The screen a launch opens on: what `--menu` names, else the saves page for
-/// a plain desktop launch, else the world. A launch that names its world, or
+/// The screen a launch opens on: what `--menu` names, else the title screen
+/// for a plain desktop launch (`title-screen`), else the world. A launch that names its world, or
 /// takes a capture, does not want a menu in front of it.
 pub fn opening_screen(menu: Option<&str>, world_named: bool, capture: bool) -> Screen {
     match menu {
+        Some("title") => Screen::Title,
         Some("pause") => Screen::Pause,
         Some("settings") => Screen::Settings,
         Some("saves") => Screen::Saves,
@@ -499,7 +501,7 @@ pub fn opening_screen(menu: Option<&str>, world_named: bool, capture: bool) -> S
         Some("guide") => Screen::Guide,
         Some("missions") => Screen::Missions,
         Some("breeding") => Screen::Breeding,
-        _ if !world_named && !capture => Screen::Saves,
+        _ if !world_named && !capture => Screen::Title,
         _ => Screen::Playing,
     }
 }
@@ -640,6 +642,87 @@ pub(super) fn layer() -> Node {
     }
 }
 
+/// The title screen (`title-screen`): the game's logo over the open world,
+/// and under it the way in.
+fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>) {
+    let logo = {
+        let path = pbd_app::paths::assets_dir().join("ui/logo.png");
+        let pixels = image::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let mut img = Image::from_dynamic(pixels, true, bevy::asset::RenderAssetUsages::default());
+        img.sampler = bevy::image::ImageSampler::linear();
+        let aspect = img.width() as f32 / img.height().max(1) as f32;
+        (images.add(img), aspect)
+    };
+    let logo_w = 300.0;
+    commands
+        .spawn(timber_layer(Screen::Title))
+        .with_children(|layer| {
+            layer
+                // The logo near the top of the screen, the way in centred in
+                // the space under it (owner, 2026-11-17: "this logo should be
+                // closer to top of the screen").
+                .spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    height: percent(100),
+                    padding: UiRect::top(px(10)),
+                    ..default()
+                })
+                .with_children(|column| {
+                    column.spawn((
+                        ImageNode::new(logo.0),
+                        Node {
+                            width: px(logo_w),
+                            height: px(logo_w / logo.1),
+                            flex_shrink: 0.0,
+                            ..default()
+                        },
+                    ));
+                    // The way in right under the logo (owner: "move the menu
+                    // text up too").
+                    column
+                        .spawn(Node {
+                            margin: UiRect::top(px(8)),
+                            ..default()
+                        })
+                        .with_children(|gap| {
+                            gap.spawn(framed(kit, Set::Oak, 120.0))
+                                .with_children(|panel| {
+                                    let go = button(panel, kit, "CONTINUE", MenuAction::Resume);
+                                    panel.commands().entity(go).insert(Plaque {
+                                        focus: true,
+                                        ..Plaque::new(Set::Oak)
+                                    });
+                                    button(panel, kit, "NEW WORLD", MenuAction::NewWorld);
+                                    button(panel, kit, "LOAD WORLD", MenuAction::Saves);
+                                    button(panel, kit, "SETTINGS", MenuAction::Settings);
+                                    button(panel, kit, "QUIT", MenuAction::Quit);
+                                });
+                        });
+                });
+        });
+}
+
+/// The in-play HUD the title screen hides: the hotbar, the hand and the
+/// crosshair (owner, 2026-11-17: "why would you have hot bar in title
+/// screen?").
+#[derive(Component)]
+pub struct InPlayHud;
+
+/// Hide the in-play HUD while the title screen is up.
+pub fn hide_hud_on_title(screen: Res<Screen>, mut hud: Query<&mut Visibility, With<InPlayHud>>) {
+    let want = if *screen == Screen::Title {
+        Visibility::Hidden
+    } else {
+        Visibility::Inherited
+    };
+    for mut visibility in &mut hud {
+        if *visibility != want {
+            *visibility = want;
+        }
+    }
+}
+
 /// An out-of-play menu's layer: the world dimmed behind the timber.
 fn timber_layer(screen: Screen) -> impl Bundle {
     (
@@ -753,9 +836,10 @@ fn plaque_node() -> Node {
     }
 }
 
-pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
+pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<Image>>) {
     let kit = &*kit;
     spawn_saves(&mut commands, kit);
+    spawn_title(&mut commands, kit, &mut images);
     commands
         // Above the slot row, which is spawned a schedule later and would
         // otherwise draw over the panel: within a UI, later is on top.
@@ -1717,6 +1801,10 @@ pub fn press(
                 *screen = Screen::Playing;
             }
             MenuAction::Settings => *screen = Screen::Settings,
+            MenuAction::NewWorld => {
+                name.focused = true;
+                *screen = Screen::Saves;
+            }
             // Only the screen: what is ON it is filled by `paint`, from the
             // one place that knows the screen has changed. Filling it here
             // meant the list was empty for anything that opened the screen
@@ -1886,6 +1974,10 @@ mod tests {
             assert!(screens.contains(&screen), "{screen:?} has a panel");
         }
         for (screen, frame) in found {
+            // The title's first child is its logo and panel, in a column.
+            if screen == Screen::Title {
+                continue;
+            }
             let image = world.get::<ImageNode>(frame).expect("a framed panel");
             assert_eq!(image.image, oak, "{screen:?} is framed in oak");
         }
@@ -1909,21 +2001,24 @@ mod tests {
         assert_eq!(Screen::Pack.back(false, true), Screen::Playing);
     }
 
-    /// The saves page as the front door: back goes into the open world, and
-    /// nowhere when there is none to go into. Through the pause menu it is
-    /// the page it always was.
+    /// The title as the front door (`title-screen`): Escape stays on it, and
+    /// the saves page and settings step back to it. Through the pause menu
+    /// they are the pages they always were.
     #[test]
-    fn the_front_door_steps_into_the_world_or_stays() {
-        assert_eq!(Screen::Saves.back(true, true), Screen::Playing);
-        assert_eq!(Screen::Saves.back(true, false), Screen::Saves);
+    fn the_front_door_steps_back_to_the_title() {
+        assert_eq!(Screen::Title.back(true, true), Screen::Title);
+        assert_eq!(Screen::Saves.back(true, true), Screen::Title);
+        assert_eq!(Screen::Settings.back(true, true), Screen::Title);
         assert_eq!(Screen::Saves.back(false, false), Screen::Pause);
+        assert_eq!(Screen::Settings.back(false, true), Screen::Pause);
     }
 
-    /// A plain launch opens on the saves page; a named world or a capture
+    /// A plain launch opens on the title screen; a named world or a capture
     /// opens on the world; `--menu` names its own.
     #[test]
-    fn a_plain_launch_opens_on_the_saves() {
-        assert_eq!(opening_screen(None, false, false), Screen::Saves);
+    fn a_plain_launch_opens_on_the_title() {
+        assert_eq!(opening_screen(None, false, false), Screen::Title);
+        assert_eq!(opening_screen(Some("title"), true, true), Screen::Title);
         assert_eq!(opening_screen(None, true, false), Screen::Playing);
         assert_eq!(opening_screen(None, false, true), Screen::Playing);
         assert_eq!(opening_screen(Some("pause"), true, true), Screen::Pause);

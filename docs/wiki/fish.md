@@ -57,7 +57,7 @@ The first fish most anglers land. Minnows crowd the shallows and river mouths in
 
 new · fish
 
-A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two metres and scatter at a splash, then close ranks again a few seconds later.
+A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two meters and scatter at a splash, then close ranks again a few seconds later.
 
 | | |
 | --- | --- |
@@ -162,7 +162,7 @@ The prize of warm water. Tall-finned and nervous, reef fish shoal in small group
 
 new · fish
 
-A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half metres, and a hooked deepback runs long and tires slowly.
+A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half meters, and a hooked deepback runs long and tires slowly.
 
 | | |
 | --- | --- |
@@ -248,7 +248,7 @@ A long-feelered crawler of rocky shelf and reef, from cool kelp to warm coral. I
 
 new · mollusc or soft-bodied · bottom dweller · not taken on a line
 
-A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four metres and opens again once it has gone.
+A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four meters and opens again once it has gone.
 
 | | |
 | --- | --- |
@@ -350,7 +350,7 @@ A dark little duck that dives for its food and comes up somewhere else. Pond div
 | SPEED | 0.2-0.7 m/s |
 | PLACES | marsh, rock pools |
 
-*Tip:* Watch the water where it went under; it surfaces a few metres off.
+*Tip:* Watch the water where it went under; it surfaces a few meters off.
 
 <a id="octopus"></a>
 
@@ -358,7 +358,7 @@ A dark little duck that dives for its food and comes up somewhere else. Pond div
 
 new · mollusc or soft-bodied · bottom dweller · not taken on a line
 
-A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the colour of the rock when still and flushes red when it moves. Come within six metres and it inks and jets home, and stays hidden until you have gone.
+A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the color of the rock when still and flushes red when it moves. Come within six meters and it inks and jets home, and stays hidden until you have gone.
 
 | | |
 | --- | --- |
@@ -380,7 +380,7 @@ A clever crawler of reefs and rocky shelf that keeps a den with shells piled at 
 
 new · mollusc or soft-bodied · bottom dweller · not taken on a line
 
-White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five metres. They live on the vent, not on the light.
+White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five meters. They live on the vent, not on the light.
 
 | | |
 | --- | --- |
@@ -402,7 +402,7 @@ White tubes taller than a person crowd round the deep vents, each with a red plu
 
 new · mammal · protected: it may not be caught
 
-Grey seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine metres, then surface somewhere else a while later. Seals are protected: none may be caught.
+Gray seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine meters, then surface somewhere else a while later. Seals are protected: none may be caught.
 
 | | |
 | --- | --- |

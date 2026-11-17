@@ -366,14 +366,23 @@ pub fn spawn(
                                     ..default()
                                 })
                                 .with_children(|foot| {
-                                    foot.spawn((
-                                        KitText::new("HOTBAR", ui_kit::TEXT_DIM)
-                                            .shadow(ui_kit::INK),
-                                        Node {
-                                            margin: UiRect::bottom(px(3)),
-                                            ..default()
-                                        },
-                                    ));
+                                    // The hand over the hotbar's first slot,
+                                    // as the HUD has it beside the hotbar
+                                    // (`pack-tool-slot` decision 3): the
+                                    // baked rock is the ten slots wide.
+                                    foot.spawn(Node {
+                                        align_items: AlignItems::End,
+                                        column_gap: px(4),
+                                        margin: UiRect::bottom(px(3)),
+                                        ..default()
+                                    })
+                                    .with_children(|line| {
+                                        super::equipment::spawn_pack_hand(line, kit, &icons);
+                                        line.spawn(
+                                            KitText::new("HOTBAR", ui_kit::TEXT_DIM)
+                                                .shadow(ui_kit::INK),
+                                        );
+                                    });
                                     slot_line(foot, kit, &atlas, 0);
                                 });
                         });
@@ -623,7 +632,7 @@ mod tests {
         app.insert_resource(ItemIcons {
             atlas: Handle::default(),
             fish: Vec::new(),
-            tools: Vec::new(),
+            tools: vec![Handle::default(); pbd_core::inventory::Tool::ALL.len()],
             hand: Handle::default(),
             lights: Vec::new(),
             fish_names: Vec::new(),
@@ -692,6 +701,15 @@ mod tests {
             "and the hold's ten, shown with a raft"
         );
         assert!(cells.iter(world).all(|i| slots.contains(&i.image)));
+        // The hand over the HOTBAR row (`pack-tool-slot` decision 3), and its
+        // list: bare hands and every tool.
+        let mut hand = world.query_filtered::<(), With<super::super::equipment::PackToolCell>>();
+        assert_eq!(hand.iter(world).count(), 1, "the pack's hand cell");
+        let mut rows = world.query::<&super::super::equipment::HandListRow>();
+        assert_eq!(
+            rows.iter(world).count(),
+            1 + pbd_core::inventory::Tool::ALL.len()
+        );
     }
 
     fn kit() -> Slots {

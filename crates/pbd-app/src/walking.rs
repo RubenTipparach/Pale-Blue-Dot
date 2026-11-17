@@ -1255,7 +1255,7 @@ impl Sea<'_> {
             PLANET_RADIUS + crate::planet::surface_height(direction)
         };
         // Whether the sea's surface reaches this cell: the mark the sheet is
-        // listed by and the eye reads (`ocean-environments` B20).
+        // listed by and the eye reads (`ocean-environments` B22).
         let reached = self.terrain.sea_reached(direction);
         let surface = swim_surface(on_tier, in_water, sheet, sea_level, ground, reached);
         let Some(surface) = surface else {
@@ -1300,7 +1300,7 @@ pub fn walker_feet(world: &mut World) -> Option<Vec3> {
 /// its own level, the sea's water); `sheet`: the drawn sea's radius here, the
 /// tide on it; `ground`: the ground under the body (on the tier the feet,
 /// off it the height field's); `reached`: the sea's surface reaches this cell
-/// at some tide (`ocean-environments` B20). The sea's water in the column is
+/// at some tide (`ocean-environments` B22). The sea's water in the column is
 /// swum to the tided sheet; a dry column the sea reaches to the sheet where
 /// the tide stands over its ground (a beach at high water, a pit or a cavern
 /// the tide overtops); off the tier, the height field's sea.
@@ -1845,7 +1845,7 @@ fn water_climb(
     Some(to)
 }
 
-fn follow_walker(
+pub(crate) fn follow_walker(
     mut state: ResMut<WalkingState>,
     mut readout: ResMut<WalkingReadout>,
     walkers: Query<(&Position, &LinearVelocity, &GroundState), With<Walker>>,

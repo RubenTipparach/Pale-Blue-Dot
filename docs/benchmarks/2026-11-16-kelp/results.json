@@ -1,0 +1,449 @@
+[
+ {
+  "variant": "before",
+  "run": 0,
+  "frames": 727,
+  "p50": 49.904,
+  "p95": 87.915,
+  "p99": 122.523,
+  "max": 287.2,
+  "mean": 54.00014442916095,
+  "sea_places_last": [
+   "71",
+   "686184",
+   "624984",
+   "1874952"
+  ],
+  "late_pipelines": 0,
+  "ready_s": 18.01,
+  "contaminated": [
+   "39304 timeout 300 target/fast/pbd-app --world uw-ready2-39303 --frames 600",
+   "39305 target/fast/pbd-app --world uw-ready2-39303 --frames 600",
+   "39908 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo-clippy clippy -"
+  ],
+  "sitting": 1
+ },
+ {
+  "variant": "after",
+  "run": 1,
+  "frames": 1233,
+  "p50": 35.423,
+  "p95": 87.28,
+  "p99": 114.922,
+  "max": 1024.89,
+  "mean": 41.74450283860501,
+  "sea_places_last": [
+   "71",
+   "38734",
+   "8974",
+   "26922"
+  ],
+  "late_pipelines": 0,
+  "ready_s": 7.15,
+  "contaminated": [
+   "39304 timeout 300 target/fast/pbd-app --world uw-ready2-39303 --frames 600",
+   "39305 target/fast/pbd-app --world uw-ready2-39303 --frames 600",
+   "40804 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo-fmt fmt --all"
+  ],
+  "sitting": 1
+ },
+ {
+  "variant": "before-nokelp",
+  "run": 2,
+  "frames": 1231,
+  "p50": 37.218,
+  "p95": 91.216,
+  "p99": 147.771,
+  "max": 211.23,
+  "mean": 42.99054427294876,
+  "sea_places_last": [
+   "71",
+   "61200",
+   "0",
+   "0"
+  ],
+  "late_pipelines": 0,
+  "ready_s": 6.73,
+  "contaminated": [
+   "39304 timeout 300 target/fast/pbd-app --world uw-ready2-39303 --frames 600",
+   "39305 target/fast/pbd-app --world uw-ready2-39303 --frames 600",
+   "40865 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo test --profile "
+  ],
+  "sitting": 1
+ },
+ {
+  "variant": "before-nokelp",
+  "run": 3,
+  "frames": 1406,
+  "p50": 30.52,
+  "p95": 84.032,
+  "p99": 112.768,
+  "max": 160.326,
+  "mean": 36.894180654338584,
+  "sea_places_last": [
+   "71",
+   "61200",
+   "0",
+   "0"
+  ],
+  "late_pipelines": 0,
+  "ready_s": 7.15,
+  "contaminated": [
+   "46705 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo build --profile",
+   "46710 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc --crate-name pb",
+   "48934 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc --crate-name pb"
+  ],
+  "sitting": 1
+ },
+ {
+  "variant": "after",
+  "run": 4,
+  "frames": 1013,
+  "p50": 46.584,
+  "p95": 101.377,
+  "p99": 148.817,
+  "max": 191.842,
+  "mean": 49.692661401776846,
+  "sea_places_last": [
+   "71",
+   "38734",
+   "8974",
+   "26922"
+  ],
+  "late_pipelines": 0,
+  "ready_s": 10.01,
+  "contaminated": [
+   "52012 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo build --profile",
+   "52051 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc --crate-name pb",
+   "52209 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo test --profile "
+  ],
+  "sitting": 1
+ },
+ {
+  "variant": "before",
+  "run": 5,
+  "frames": 862,
+  "p50": 54.37,
+  "p95": 108.187,
+  "p99": 153.545,
+  "max": 220.599,
+  "mean": 62.01678306264508,
+  "sea_places_last": [
+   "71",
+   "686184",
+   "624984",
+   "1874952"
+  ],
+  "late_pipelines": 0,
+  "ready_s": 5.25,
+  "contaminated": [
+   "",
+   "- `config::tests::shipped_files_parse_validate_and_agree_with_the_defaults`: fauna \"meters\" against ",
+   "- `desktop::pack::tests::the_pack_is_framed_in_its_own_rock`: a `slots.rs:136` index panic."
+  ],
+  "sitting": 1
+ },
+ {
+  "variant": "before",
+  "run": 6,
+  "frames": 1180,
+  "p50": 38.458,
+  "p95": 91.701,
+  "p99": 142.511,
+  "max": 236.142,
+  "mean": 45.91089491525423,
+  "sea_places_last": [
+   "71",
+   "686184",
+   "624984",
+   "1874952"
+  ],
+  "late_pipelines": 0,
+  "ready_s": 5.09,
+  "contaminated": [
+   "\"a point of the line is not held clear over the drawn water\\\"\"\"\"",
+   "\"a point of the line is not held clear over the water\\\"\"\"\"",
+   "let points = draw::line_points(tip, tied, slack, drawn);\"\"\""
+  ],
+  "sitting": 1
+ },
+ {
+  "variant": "after",
+  "run": 7,
+  "frames": 1506,
+  "p50": 32.985,
+  "p95": 72.234,
+  "p99": 111.209,
+  "max": 181.088,
+  "mean": 36.099237051792805,
+  "sea_places_last": [
+   "71",
+   "38734",
+   "8974",
+   "26922"
+  ],
+  "late_pipelines": 0,
+  "ready_s": 5.51,
+  "contaminated": [
+   "\"a point of the line is not held clear over the drawn water\\\"\"\"\"",
+   "\"a point of the line is not held clear over the water\\\"\"\"\"",
+   "let points = draw::line_points(tip, tied, slack, drawn);\"\"\""
+  ],
+  "sitting": 1
+ },
+ {
+  "variant": "before-nokelp",
+  "run": 8,
+  "frames": 1801,
+  "p50": 23.507,
+  "p95": 72.263,
+  "p99": 110.008,
+  "max": 163.046,
+  "mean": 30.16241143808997,
+  "sea_places_last": [
+   "71",
+   "61200",
+   "0",
+   "0"
+  ],
+  "late_pipelines": 0,
+  "ready_s": 5.32,
+  "contaminated": [
+   "54505 ./target/fast/pbd-app --capture /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2",
+   "54635 ./target/fast/pbd-app --capture /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2"
+  ],
+  "sitting": 1
+ },
+ {
+  "variant": "before",
+  "run": 0,
+  "frames": 777,
+  "p50": 62.031,
+  "p95": 110.594,
+  "p99": 128.255,
+  "max": 202.696,
+  "mean": 64.06529343629352,
+  "sea_places_last": [
+   "71",
+   "686184",
+   "624984",
+   "1874952",
+   "6.676"
+  ],
+  "tiles_ms_med": 6.903,
+  "late_pipelines": 0,
+  "ready_s": 5.06,
+  "contaminated": [
+   "",
+   "// horizon gap from the sheet by it (`horizon-haze` 4).",
+   "// the clouds'\"'\"' composite, which tells the sea'\"'\"'s"
+  ],
+  "sitting": 2
+ },
+ {
+  "variant": "after",
+  "run": 1,
+  "frames": 892,
+  "p50": 64.65,
+  "p95": 100.505,
+  "p99": 114.223,
+  "max": 177.171,
+  "mean": 59.74409080717487,
+  "sea_places_last": [
+   "71",
+   "38734",
+   "8974",
+   "26922",
+   "0.168"
+  ],
+  "tiles_ms_med": 0.157,
+  "late_pipelines": 0,
+  "ready_s": 5.26,
+  "contaminated": [
+   "74393 ./target/fast/pbd-app --capture /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2",
+   "74849 ./target/fast/pbd-app --capture /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2",
+   "75028 ./target/fast/pbd-app --capture /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2"
+  ],
+  "sitting": 2
+ },
+ {
+  "variant": "before-nokelp",
+  "run": 2,
+  "frames": 1344,
+  "p50": 25.929,
+  "p95": 110.603,
+  "p99": 150.7,
+  "max": 196.781,
+  "mean": 38.50386532738098,
+  "sea_places_last": [
+   "71",
+   "61200",
+   "0",
+   "0",
+   "0.038"
+  ],
+  "tiles_ms_med": 0.032,
+  "late_pipelines": 0,
+  "ready_s": 7.66,
+  "contaminated": [
+   "75028 ./target/fast/pbd-app --capture /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2",
+   "75136 ./target/fast/pbd-app --capture /private/tmp/claude-501/-Users-rubentipparach-pale-blue-dot/a2",
+   "a=Image.open('\"'\"'after-overcast-10.png'\"'\"').convert('\"'\"'RGB'\"'\"').resize((960,600)); a.save('\"'\"'"
+  ],
+  "sitting": 2
+ },
+ {
+  "variant": "before-nokelp",
+  "run": 3,
+  "frames": 568,
+  "p50": 93.078,
+  "p95": 134.799,
+  "p99": 150.4,
+  "max": 176.358,
+  "mean": 87.36068838028177,
+  "sea_places_last": [
+   "71",
+   "61200",
+   "0",
+   "0",
+   "0.022"
+  ],
+  "tiles_ms_med": 0.026,
+  "late_pipelines": 0,
+  "ready_s": 8.55,
+  "contaminated": [
+   ".then_some(sheet)",
+   "(contact.sea_reached(direction) || pbd_app::planet::surface_height(direction) < sheet)",
+   "// listed by), else where the height field'\"'\"'s ground is under it."
+  ],
+  "sitting": 2
+ },
+ {
+  "variant": "after",
+  "run": 4,
+  "frames": 505,
+  "p50": 104.39,
+  "p95": 145.535,
+  "p99": 160.599,
+  "max": 243.4,
+  "mean": 102.52980594059414,
+  "sea_places_last": [
+   "71",
+   "38734",
+   "8974",
+   "26922",
+   "0.141"
+  ],
+  "tiles_ms_med": 0.154,
+  "late_pipelines": 0,
+  "ready_s": 5.57,
+  "contaminated": [
+   "",
+   ".then_some(sheet)",
+   "(contact.sea_reached(direction) || pbd_app::planet::surface_height(direction) < sheet)"
+  ],
+  "sitting": 2
+ },
+ {
+  "variant": "before",
+  "run": 5,
+  "frames": 790,
+  "p50": 54.821,
+  "p95": 131.683,
+  "p99": 171.947,
+  "max": 300.261,
+  "mean": 68.9665037974683,
+  "sea_places_last": [
+   "71",
+   "686211",
+   "625011",
+   "1875033",
+   "6.609"
+  ],
+  "tiles_ms_med": 7.153,
+  "late_pipelines": 0,
+  "ready_s": 5.21,
+  "contaminated": [
+   "",
+   "(20, &water.depth),",
+   ")),\"\"\")"
+  ],
+  "sitting": 2
+ },
+ {
+  "variant": "before",
+  "run": 6,
+  "frames": 970,
+  "p50": 46.428,
+  "p95": 97.713,
+  "p99": 134.796,
+  "max": 222.068,
+  "mean": 54.14155051546389,
+  "sea_places_last": [
+   "71",
+   "686184",
+   "624984",
+   "1874952",
+   "7.882"
+  ],
+  "tiles_ms_med": 6.938,
+  "late_pipelines": 0,
+  "ready_s": 5.36,
+  "contaminated": [
+   "",
+   "(20, &water.depth),",
+   ")),\"\"\")"
+  ],
+  "sitting": 2
+ },
+ {
+  "variant": "after",
+  "run": 7,
+  "frames": 1845,
+  "p50": 18.662,
+  "p95": 76.172,
+  "p99": 119.475,
+  "max": 190.125,
+  "mean": 27.97931382113819,
+  "sea_places_last": [
+   "71",
+   "38734",
+   "8974",
+   "26922",
+   "0.203"
+  ],
+  "tiles_ms_med": 0.182,
+  "late_pipelines": 0,
+  "ready_s": 7.48,
+  "contaminated": [
+   "88935 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo test --profile ",
+   "88942 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc --crate-name pb",
+   "98108 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc --crate-name pb"
+  ],
+  "sitting": 2
+ },
+ {
+  "variant": "before-nokelp",
+  "run": 8,
+  "frames": 1386,
+  "p50": 19.603,
+  "p95": 68.178,
+  "p99": 95.724,
+  "max": 185.148,
+  "mean": 28.02088383838386,
+  "sea_places_last": [
+   "71",
+   "61200",
+   "0",
+   "0",
+   "0.033"
+  ],
+  "tiles_ms_med": 0.031,
+  "late_pipelines": 0,
+  "ready_s": 19.81,
+  "contaminated": [
+   "88935 /Users/rubentipparach/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo test --profile "
+  ],
+  "sitting": 2
+ }
+]

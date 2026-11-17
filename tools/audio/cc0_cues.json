@@ -301,46 +301,6 @@
       "fadeout": 0.15
      }
     ]
-   },
-   {
-    "layers": [
-     {
-      "src": "freesound/218305:218305.mp3",
-      "start": 7.56,
-      "dur": 0.42,
-      "fadeout": 0.15
-     }
-    ]
-   },
-   {
-    "layers": [
-     {
-      "src": "freesound/218305:218305.mp3",
-      "start": 15.98,
-      "dur": 0.42,
-      "fadeout": 0.15
-     }
-    ]
-   },
-   {
-    "layers": [
-     {
-      "src": "freesound/218305:218305.mp3",
-      "start": 19.47,
-      "dur": 0.42,
-      "fadeout": 0.15
-     }
-    ]
-   },
-   {
-    "layers": [
-     {
-      "src": "freesound/218305:218305.mp3",
-      "start": 21.28,
-      "dur": 0.42,
-      "fadeout": 0.15
-     }
-    ]
    }
   ],
   "layers": [
@@ -354,22 +314,12 @@
   "len": 0.45,
   "hp": 70,
   "peak_db": -1.0,
-  "edits": "Six steps from a walk in sneakers on dry leaves, each from its onset"
+  "edits": "Six steps from a walk in sneakers on dry leaves, each from its onset; takes 3 to 6 dropped (owner, 2026-11-16: crackling)"
  },
  "step_sand": {
   "group": "Steps",
   "what": "A boot in sand: a soft crunch and a hiss of grains.",
   "takes": [
-   {
-    "layers": [
-     {
-      "src": "freesound/384082:384082.mp3",
-      "shot": 1,
-      "dur": 0.42,
-      "fadeout": 0.15
-     }
-    ]
-   },
    {
     "layers": [
      {
@@ -432,7 +382,7 @@
   "len": 0.45,
   "hp": 70,
   "peak_db": -1.0,
-  "edits": "Six steps from a recording of gritty sand steps, each from its onset"
+  "edits": "Six steps from a recording of gritty sand steps, each from its onset; take 1 of 6 dropped (owner, 2026-11-16), the rest renumbered"
  },
  "step_snow": {
   "group": "Steps",
@@ -482,16 +432,6 @@
       "fadeout": 0.1
      }
     ]
-   },
-   {
-    "layers": [
-     {
-      "src": "freesound/543385:543385.mp3",
-      "shot": 1,
-      "dur": 0.42,
-      "fadeout": 0.12
-     }
-    ]
    }
   ],
   "layers": [
@@ -504,7 +444,7 @@
   "len": 0.45,
   "hp": 70,
   "peak_db": -1.0,
-  "edits": "Kenney's snow steps and one heavy snow step from Freesound"
+  "edits": "Kenney's snow steps and one heavy snow step from Freesound; take 6 of 6 dropped (owner, 2026-11-16), the rest renumbered"
  },
  "step_wood": {
   "group": "Steps",
@@ -915,36 +855,6 @@
   "peak_db": -1.0,
   "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
  },
- "land_dry": {
-  "group": "Steps",
-  "what": "Landing on dry: both feet at once, heavier than a step.",
-  "layers": [
-   {
-    "src": "freesound/218305:218305.mp3",
-    "start": 20.02,
-    "dur": 0.45,
-    "fadeout": 0.15,
-    "pitch": 0.85
-   },
-   {
-    "src": "freesound/218305:218305.mp3",
-    "start": 20.02,
-    "dur": 0.45,
-    "fadeout": 0.15,
-    "pitch": 0.92,
-    "delay": 0.025,
-    "gain": -3
-   },
-   {
-    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
-    "gain": -6
-   }
-  ],
-  "len": 0.6,
-  "hp": 50,
-  "peak_db": -1.0,
-  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
- },
  "jump_sand": {
   "group": "Steps",
   "what": "Pushing off sand into a jump: a scuff and a rustle of clothes.",
@@ -966,36 +876,6 @@
   "hp": 70,
   "peak_db": -1.0,
   "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
- },
- "land_sand": {
-  "group": "Steps",
-  "what": "Landing on sand: both feet at once, heavier than a step.",
-  "layers": [
-   {
-    "src": "freesound/384082:384082.mp3",
-    "shot": 2,
-    "dur": 0.45,
-    "fadeout": 0.15,
-    "pitch": 0.85
-   },
-   {
-    "src": "freesound/384082:384082.mp3",
-    "shot": 2,
-    "dur": 0.45,
-    "fadeout": 0.15,
-    "pitch": 0.92,
-    "delay": 0.025,
-    "gain": -3
-   },
-   {
-    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
-    "gain": -6
-   }
-  ],
-  "len": 0.6,
-  "hp": 50,
-  "peak_db": -1.0,
-  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
  },
  "jump_snow": {
   "group": "Steps",
@@ -3455,5 +3335,81 @@
   "hp": 40,
   "peak_db": -14.0,
   "edits": "40 s of an underwater ambience; the bed treatment with its low pass at 1.5 kHz"
+ },
+ "fall_light": {
+  "group": "Water",
+  "what": "A small fall, one or two layers: a bright trickle and splash into the pool at its foot, heard from its foot (loops).",
+  "layers": [
+   {
+    "src": "freesound/454340:454340.mp3",
+    "start": 20.0,
+    "dur": 9.0
+   },
+   {
+    "src": "freesound/363119:363119.mp3",
+    "start": 1.0,
+    "dur": 9.0,
+    "gain": -8
+   }
+  ],
+  "len": 9.0,
+  "hp": 120,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "nine seconds of a small splashy stream falling into water, with water poured onto stone 8 dB under; 120 Hz high pass so it stays light; looped over a 1 s crossfade (8 s)"
+ },
+ "fall_medium": {
+  "group": "Water",
+  "what": "A fall of three to five layers: a steady full pour into its pool, heard from its foot (loops).",
+  "layers": [
+   {
+    "src": "freesound/530170:530170.mp3",
+    "start": 3.0,
+    "dur": 9.0
+   },
+   {
+    "src": "freesound/352903:352903.mp3",
+    "start": 1.0,
+    "dur": 9.0,
+    "gain": -5
+   }
+  ],
+  "len": 9.0,
+  "hp": 60,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "nine seconds of a medium waterfall, with a mid-sized waterfall 5 dB under; 60 Hz high pass; looped over a 1 s crossfade (8 s)"
+ },
+ "fall_roar": {
+  "group": "Water",
+  "what": "A tall fall, six layers or more: a low full roar of heavy water, heard from its foot and from far off (loops).",
+  "layers": [
+   {
+    "src": "freesound/379905:379905.mp3",
+    "start": 6.0,
+    "dur": 9.0
+   },
+   {
+    "src": "freesound/44880:44880.mp3",
+    "start": 0.5,
+    "dur": 9.0,
+    "gain": -4
+   },
+   {
+    "src": "freesound/383732:383732.mp3",
+    "start": 4.0,
+    "dur": 9.0,
+    "gain": -10
+   }
+  ],
+  "len": 9.0,
+  "hp": 30,
+  "lp": 6000,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "nine seconds of Niagara's roar, with a big waterfall 4 dB under and a huge waterfall 10 dB under for its spray; 30 Hz high pass, 6 kHz low pass so the low roar leads; looped over a 1 s crossfade (8 s)"
  }
 }

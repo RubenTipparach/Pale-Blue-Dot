@@ -153,6 +153,12 @@ pub struct Launch {
     /// photographed and the fishery's numbers logged. A capture instrument,
     /// like `--swim`: a headless run has no hand on the mouse.
     pub fish: bool,
+    /// `--fish-play`: with `--fish`, play the bite out through the mouse as
+    /// a player would: click when the float goes under, then hold to reel
+    /// and ease off when the tension climbs, logging every phase and the
+    /// fish in the slots (`fishing-and-equipment` tasks 11). A measurement
+    /// instrument.
+    pub fish_play: bool,
     /// `--cast`: aboard (`--aboard tube|raft|loon|rowboat`), take up the rod
     /// and cast once from the seat, scripted as `--fish` casts on shore
     /// (`small-boats` design 6). A capture instrument.
@@ -311,6 +317,13 @@ pub struct Launch {
     pub lamps: bool,
     pub lamps_at: f32,
     pub lamps_across: f32,
+    /// `--place-row <block,block,...> [metres]` (`placed-blocks-keep-material`,
+    /// a capture instrument): one of each named block (`stone`, `dirt`, ...)
+    /// placed on the ground in a row across the view, that far ahead of the
+    /// camera (5 m when no distance follows), through the edit path a
+    /// player's place takes, so a capture shows what a placed block is drawn
+    /// as on the ground it stands on.
+    pub place_row: Vec<pbd_core::terrain::Material>,
     /// `--farm [metres]` (`farming-and-smelting` task 5.1, a capture
     /// instrument): tills two rows of four cells that far ahead, sows wheat
     /// and turnip in them at staggered world times so the rows show all four
@@ -454,6 +467,7 @@ impl Launch {
             swim: false,
             climb_out: false,
             fish: false,
+            fish_play: false,
             cast: false,
             load_hold: false,
             husbandry: None,
@@ -496,6 +510,7 @@ impl Launch {
             lamps: false,
             lamps_at: 5.0,
             lamps_across: 0.0,
+            place_row: Vec::new(),
             farm: None,
             farm_harvest: false,
             hold_pointer: false,
@@ -683,6 +698,28 @@ impl Launch {
                         }
                     }
                 }
+                "--place-row" => {
+                    i += 1;
+                    let names = args.get(i).expect("--place-row requires blocks");
+                    result.place_row = names
+                        .split(',')
+                        .map(|name| {
+                            pbd_core::terrain::Material::ALL
+                                .into_iter()
+                                .find(|&m| pbd_core::inventory::material_name(m) == name)
+                                .unwrap_or_else(|| panic!("--place-row: no block named {name}"))
+                        })
+                        .collect();
+                    if let Some(metres) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
+                    {
+                        assert!(
+                            metres.is_finite() && metres > 0.0,
+                            "--place-row takes metres ahead"
+                        );
+                        result.lamps_at = metres;
+                        i += 1;
+                    }
+                }
                 "--farm" | "--forge" => {
                     let farm = args[i] == "--farm";
                     let mut metres = 6.0;
@@ -821,12 +858,13 @@ impl Launch {
                 "--menu" => {
                     i += 1;
                     let screen = args.get(i).expect(
-                        "--menu requires pause, settings, saves, pack, map, guide, missions or breeding",
+                        "--menu requires title, pause, settings, saves, pack, map, guide, missions or breeding",
                     );
                     assert!(
                         matches!(
                             screen.as_str(),
-                            "pause"
+                            "title"
+                                | "pause"
                                 | "settings"
                                 | "saves"
                                 | "pack"
@@ -835,7 +873,7 @@ impl Launch {
                                 | "missions"
                                 | "breeding"
                         ),
-                        "--menu takes pause, settings, saves, pack, map, guide, missions or breeding"
+                        "--menu takes title, pause, settings, saves, pack, map, guide, missions or breeding"
                     );
                     result.menu = Some(screen.clone());
                 }
@@ -1148,6 +1186,11 @@ impl Launch {
                 "--fish" => {
                     result.walk = true;
                     result.fish = true;
+                }
+                "--fish-play" => {
+                    result.walk = true;
+                    result.fish = true;
+                    result.fish_play = true;
                 }
                 "--cast" => result.cast = true,
                 "--load-hold" => result.load_hold = true,
@@ -1691,8 +1734,12 @@ pub fn run(args: &[String]) {
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
     .insert_resource(opening)
-    .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
+    .insert_resource(menu::FrontDoor(matches!(
+        opening,
+        menu::Screen::Title | menu::Screen::Saves
+    )))
     .init_resource::<menu::NameField>()
+    .init_resource::<equipment::HandListOpen>()
     .init_resource::<mission_tree::TreeView>()
     .insert_resource(menu::SettingsTab(launch.settings_tab))
     .insert_resource(menu::InputTab(launch.input_tab))
@@ -1775,7 +1822,14 @@ pub fn run(args: &[String]) {
             scene::move_moon,
             scene::turn_stars,
             scene::follow_sun,
-            (equipment::pick, slots::input, equipment::paint).chain(),
+            (
+                equipment::pick,
+                slots::input,
+                equipment::pack_hand,
+                equipment::paint,
+                menu::hide_hud_on_title,
+            )
+                .chain(),
             (
                 pack::find_hold,
                 pack::press,
@@ -2061,6 +2115,9 @@ pub fn run(args: &[String]) {
             app.add_systems(Update, load_hold_script.before(pack::find_hold));
         }
         if launch.fish {
+            if launch.fish_play {
+                app.insert_resource(FishPlay);
+            }
             app.add_systems(
                 PreUpdate,
                 (swim_script, fish_script)
@@ -4146,22 +4203,82 @@ fn load_hold_script(
     }
 }
 
+/// `--fish-play` is on: `fish_script` plays the bite out.
+#[derive(Resource)]
+struct FishPlay;
+
 /// One scripted cast for `--fish`: the left button held for most of a second
 /// from frame 90, and the fishery's state logged every second, so a run says
 /// what the water held as well as showing it.
+#[allow(clippy::too_many_arguments)]
 fn fish_script(
     mut buttons: ResMut<ButtonInput<MouseButton>>,
     fishery: Option<Res<pbd_app::fish::Fishery>>,
     status: Option<Res<pbd_app::fish::FishingStatus>>,
     fauna: Res<pbd_app::config::FaunaConfig>,
+    play: Option<Res<FishPlay>>,
+    hotbar: Option<Res<pbd_app::hotbar::Hotbar>>,
+    mut tools: ResMut<pbd_app::fish::ToolSlot>,
+    mut was: Local<Option<pbd_core::fishing::Phase>>,
     mut frame: Local<u32>,
 ) {
+    use pbd_core::fishing::Phase;
     *frame += 1;
+    // A world made with tool crafting starts with no rod (`tool-crafting`
+    // decision 8): the instrument is handed one, as `--cast` is.
+    if *frame == 60 {
+        let _ = tools.0.grant(
+            pbd_core::inventory::Tool::Rod,
+            pbd_core::inventory::Tier::Stone,
+        );
+        tools.hold(pbd_core::inventory::Tool::Rod);
+    }
     match *frame {
         90 => buttons.press(MouseButton::Left),
         91..=149 => {}
         150 => buttons.release(MouseButton::Left),
         _ => {}
+    }
+    // `--fish-play`: the bite played out as a player plays it.
+    if play.is_some()
+        && *frame > 150
+        && let Some(fishery) = fishery.as_deref()
+    {
+        let line = &fishery.line;
+        let fish: u16 = hotbar.as_deref().map_or(0, |h| {
+            h.iter()
+                .flatten()
+                .filter(|s| matches!(s.item, pbd_core::inventory::Item::Fish(_)))
+                .map(|s| s.count)
+                .sum()
+        });
+        if *was != Some(line.phase) {
+            info!(
+                "fish play frame {}: {:?} -> {:?}, tension {:.2}, fish in the slots {fish}, status {:?}",
+                *frame,
+                *was,
+                line.phase,
+                line.tension,
+                status.as_deref().map(|s| s.text.as_str())
+            );
+            *was = Some(line.phase);
+        }
+        match line.phase {
+            // The float has gone under: click.
+            Phase::Bite if !buttons.pressed(MouseButton::Left) => {
+                buttons.press(MouseButton::Left);
+            }
+            Phase::Hooked if line.tension < 0.6 => {
+                if !buttons.pressed(MouseButton::Left) {
+                    buttons.press(MouseButton::Left);
+                }
+            }
+            _ => {
+                if buttons.pressed(MouseButton::Left) {
+                    buttons.release(MouseButton::Left);
+                }
+            }
+        }
     }
     if frame.is_multiple_of(60)
         && let (Some(fishery), Some(status)) = (fishery, status)
