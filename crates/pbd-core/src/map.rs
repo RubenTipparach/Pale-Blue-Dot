@@ -33,20 +33,65 @@ pub struct Texel {
     /// The sea's place here (`ocean-environments` 6.1), as the chart shows
     /// it: `None` on land and on a world made before the sea's places.
     pub place: Option<crate::fauna::Environment>,
+    /// How much of the pixel a river's water covers (`map-rivers`), in
+    /// thirds: 0 dry, [`RIVER_FULL`] all water. A river stands over the
+    /// sea's level on its carved bed, so `sea` never says it.
+    pub river: u8,
+}
+
+/// A texel's [`Texel::river`] when the river's water covers all of it.
+pub const RIVER_FULL: u8 = 3;
+
+/// Whether the column at `d` holds a river's water: the river test the
+/// column itself makes (`column::generate_solid`, through
+/// [`crate::rivers::water`]), which puts no river in a town's footprint.
+pub fn river_water(cfg: &TerrainConfig, d: Vec3) -> bool {
+    crate::settlement::ground::top(cfg, d).is_none() && crate::rivers::floods(cfg, d)
 }
 
 /// What the map shows at `direction`, a direction from the planet's centre.
-/// Any length but zero; it is normalised here.
+/// Any length but zero; it is normalised here. Its river is the point's:
+/// all or none ([`river_cover`] gives a pixel's share).
 pub fn base_texel(cfg: &TerrainConfig, direction: Vec3) -> Texel {
     let d = direction.normalize_or(Vec3::Y);
     let altitude_m = column::surface_m(cfg, d);
+    let sea = altitude_m < cfg.sea_level_m;
     Texel {
         altitude_m,
         biome: biome_at(cfg, d, altitude_m),
         top: top_material(cfg, d, altitude_m),
-        sea: altitude_m < cfg.sea_level_m,
+        sea,
         place: crate::ocean::places::chart_at(cfg, d, altitude_m),
+        river: if !sea && river_water(cfg, d) {
+            RIVER_FULL
+        } else {
+            0
+        },
     }
+}
+
+/// How much of a map pixel centred on `direction` a river's water covers,
+/// in thirds ([`Texel::river`]): [`river_water`] at a 3 x 3 grid across the
+/// pixel, `east_m` wide and `north_m` tall. Only read where a river's banks
+/// reach the pixel ([`crate::rivers::near`]), so dry land pays one lattice
+/// read.
+pub fn river_cover(cfg: &TerrainConfig, direction: Vec3, east_m: f32, north_m: f32) -> u8 {
+    let d = direction.normalize_or(Vec3::Y);
+    if !crate::rivers::near(cfg, d, 0.5 * east_m.hypot(north_m)) {
+        return 0;
+    }
+    let east = Vec3::Y.cross(d).try_normalize().unwrap_or(Vec3::X);
+    let north = d.cross(east);
+    let wet = (-1..=1)
+        .flat_map(|j| (-1..=1).map(move |i| (i, j)))
+        .filter(|&(i, j)| {
+            let offset = east * (i as f32 * east_m / 3.0) + north * (j as f32 * north_m / 3.0);
+            river_water(cfg, (d + offset / cfg.radius_m).normalize())
+        })
+        .count();
+    // Nine points to the nearest third: one point alone is a grazed corner,
+    // two to four a third.
+    ((wet as u32 * u32::from(RIVER_FULL) + 4) / 9).min(u32::from(RIVER_FULL)) as u8
 }
 
 /// The record kind of the player's waypoints, its schema and its one id
@@ -222,6 +267,44 @@ mod tests {
             read_marks(&ron::to_string(&None::<Mark>).unwrap()),
             Some(vec![])
         );
+    }
+
+    /// `map-rivers`: a texel's river is the column's river water, the
+    /// generator's own test, on seeded directions near rivers and off them;
+    /// never on the sea; and a pixel's cover is all of it where the point
+    /// and its neighbours are all river, none where the banks are far.
+    #[test]
+    fn the_map_river_is_the_column_river() {
+        let cfg = TerrainConfig::for_version(10).expect("version 10");
+        let settings = cfg.rivers.expect("rivers");
+        let rivers = crate::rivers::map(&cfg, &settings);
+        // Points along the rivers' lines as well as anywhere, so the sample
+        // holds water.
+        let along = rivers
+            .rivers()
+            .step_by(7)
+            .take(600)
+            .map(|k| rivers.describe(k).0);
+        let mut wet = 0;
+        for d in directions(2_000).chain(along) {
+            let texel = base_texel(&cfg, d);
+            let water = crate::rivers::water(&cfg, d);
+            assert_eq!(
+                texel.river == RIVER_FULL,
+                !texel.sea && river_water(&cfg, d),
+                "{d}"
+            );
+            if crate::settlement::ground::top(&cfg, d).is_none() && !texel.sea {
+                assert_eq!(texel.river == RIVER_FULL, !water.is_empty(), "{d}");
+            }
+            assert!(!(texel.sea && texel.river > 0), "{d}");
+            wet += usize::from(texel.river > 0);
+            let cover = river_cover(&cfg, d, 2.833, 2.833);
+            if texel.river == 0 && !crate::rivers::near(&cfg, d, 3.0) {
+                assert_eq!(cover, 0, "{d}");
+            }
+        }
+        assert!(wet > 100, "{wet} wet points: the sample holds rivers");
     }
 
     /// A direction's length does not matter.
