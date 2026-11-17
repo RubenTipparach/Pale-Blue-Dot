@@ -59,7 +59,7 @@ What reads as unnatural today, from the video and the code (design 1):
 ## Status
 
 Drafted 2026-11-17. **M37 approved for the game by the owner, 2026-11-17: "New fish behavior approved"** (versions 1 and 2: the lure, swimming, hooked and body-wave proposals). No game code
-is written for it until the owner approves and asks.
+is written for it until the owner asks.
 
 ## Capabilities
 
