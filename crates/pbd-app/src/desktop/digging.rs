@@ -98,6 +98,45 @@ pub(super) fn material_of(
     }
 }
 
+/// Whether a tree has been felled: the axe has taken all its logs.
+pub(super) fn tree_felled(taken: u16, axe_logs: u16) -> bool {
+    taken >= axe_logs
+}
+
+/// Whether `block` is the ground a standing tree grows from: its cell grows a
+/// tree the axe has not felled, and the block is the cell's top (solid, with
+/// air over it). That ground is not dug or tilled until the tree is cut down
+/// (`tool-crafting` decision 3a).
+pub(super) fn under_standing_tree(
+    fine: &PlanetFine,
+    save: &WorldSave,
+    axe_logs: u16,
+    (cell, layer): Block,
+) -> bool {
+    use pbd_core::gather::{TREE_KIND, TreeTaken};
+    let Some(record) = record_of(fine, cell) else {
+        return false;
+    };
+    let r = &fine.set.finest_records()[record];
+    if !pbd_core::flora::grows_tree(
+        &pbd_app::planet::terrain_config().trees,
+        r.spare[0],
+        r.metadata[1],
+    ) {
+        return false;
+    }
+    let taken = save
+        .records
+        .get(TREE_KIND, u64::from(cell))
+        .and_then(|r| r.read::<TreeTaken>())
+        .map_or(0, |t| t.logs);
+    if tree_felled(taken, axe_logs) {
+        return false;
+    }
+    material_of(fine, save, (cell, layer)).is_some_and(|m| m != Material::Air && !m.is_water())
+        && material_of(fine, save, (cell, layer + 1)) == Some(Material::Air)
+}
+
 /// Which cell and layer a world point is in, and whether it is solid.
 ///
 /// The walk is `PlanetContact`'s, which steps cell to cell across whichever
@@ -581,7 +620,11 @@ pub fn dig_and_place(
     // has that button; bare hands break nothing (`inventory-grid` decision
     // 8); every other tool digs, the right one fastest.
     let block = (target.dig.cell, target.dig.layer);
-    let held = buttons.pressed(MouseButton::Left) && digger.is_some();
+    let rooted = under_standing_tree(&fine, &edits, gather.0.axe_logs, block);
+    if rooted && buttons.just_pressed(MouseButton::Left) && digger.is_some() {
+        note.say(time.elapsed_secs(), "Cut down the tree first");
+    }
+    let held = buttons.pressed(MouseButton::Left) && digger.is_some() && !rooted;
     let secs = match digger {
         // Keen (`cooking` design S5): a break takes its time over the
         // effect's strength while it runs.
@@ -596,9 +639,9 @@ pub fn dig_and_place(
     {
         let wall_s = time.elapsed_secs();
         match why {
-            Refusal::NotByHand => note.say(wall_s, "Hands take soft ground: make a tool"),
+            Refusal::NotByHand => note.say(wall_s, "Too hard to dig by hand"),
             Refusal::TierTooLow(tier) => {
-                note.say(wall_s, format!("That wants a {} pick", tier.name()))
+                note.say(wall_s, format!("Needs a {} pickaxe", tier.name()))
             }
             Refusal::NotADiggingTool | Refusal::NotABlock => {}
         }
@@ -810,7 +853,7 @@ pub fn dig_and_place(
                 "PLACE refused: a crop grows in cell {} layer {}",
                 place.cell, place.layer
             );
-            note.say(wall_s, "A crop grows there");
+            note.say(wall_s, "Something is planted here");
             return;
         }
         // A block may not be placed into the player. Sealing yourself into
@@ -935,12 +978,10 @@ fn take_log(
         .and_then(|r| r.read())
         .unwrap_or_default();
     match gather.0.tree_gives(taken.logs, by_axe) {
-        Err(TreeSpent::BranchTaken) => {
-            note.say(wall_s, "Its branch is taken: an axe takes more");
-            return;
-        }
+        // Nothing to say (owner, 2026-11-17: the line "sounds like AI writing").
+        Err(TreeSpent::BranchTaken) => return,
         Err(TreeSpent::Felled) => {
-            note.say(wall_s, "This tree has given all its wood");
+            note.say(wall_s, "No more wood");
             return;
         }
         Ok(()) => {}
@@ -1352,6 +1393,18 @@ pub fn scripted_dig(
                 pbd_core::light::MAX
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tree_tests {
+    /// A tree stands until the axe has taken all its logs, and its ground
+    /// holds until then (`tool-crafting` decision 3a).
+    #[test]
+    fn a_tree_stands_until_its_last_log() {
+        assert!(!super::tree_felled(0, 4));
+        assert!(!super::tree_felled(3, 4));
+        assert!(super::tree_felled(4, 4));
     }
 }
 

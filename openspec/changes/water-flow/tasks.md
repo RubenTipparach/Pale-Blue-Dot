@@ -94,3 +94,24 @@
 ## 7. Rain rings that alias (design "Rain rings that alias"; owner, 2026-11-16)
 
 - [x] 7.1 (Built: the rings fade by footprint and end at `rain_detail_reach_m`; river 30.2 to 20.8 (dry 19.0), the beach's far water 42.3 to 24.8 with the near rings kept; the falls' froth not touched.) The water's rain rings fade with their footprint. Verify: the valley's river in rain from 25 m and from the bank, before and after, with the speckle measure (`hf.py`) against the dry frame; the falls' froth unchanged.
+
+## 8. The sound of a fall (design "The sound of a fall"; owner, 2026-11-16)
+
+- [x] 8.1 (Built 2026-11-16.) Three looping fall cues, recorded CC0 (`fall_light`, `fall_medium`,
+      `fall_roar`), mono, 8 s, in `assets/audio/sfx/`, named in
+      `SOURCES.md` and `AUDIO_SOURCES.md`. Verify: `inspect_sfx.py check`
+      (no clipping, seams) and the contact sheet
+      `docs/screenshots/audio/fall-sheet.jpg`; the light bright, the roar
+      led by its lows.
+- [x] 8.2 (Built 2026-11-16, five tests.) `pbd_core::audio`: the band by the drop (`fall_band`), the loudest
+      falls with merging and the 3 dB hold (`loudest_falls`), and the voices'
+      fades under a cap (`FallVoices`); the thresholds, cap, merge distance
+      and fade in `mix.ron`, validated. Verify: unit tests for the band
+      edges, the merge, the ranking, the cap and the fades.
+- [ ] 8.3 (Built 2026-11-16; `cargo test -p pbd-app` passes; the `--audio-log` launch beside a fall is not yet run.) The hook (`audio/hooks.rs` `falls`): `FallFeet` to placed loops at
+      each fall's foot, through `Sfx::keep`. Verify: `cargo test -p
+      pbd-app` (the cue book names every fall cue, the files exist and are
+      mono); a launch with `--audio-log` beside a fall shows `AUDIO start
+      fall_*` and its stop on walking away.
+- [ ] 8.4 (On the Sounds page, version 2, 2026-11-16; waiting for the owner's ears.) The three loops on the Sounds page for the owner to hear; the
+      owner's ears approve them.

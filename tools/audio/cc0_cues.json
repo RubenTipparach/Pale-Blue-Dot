@@ -3335,5 +3335,81 @@
   "hp": 40,
   "peak_db": -14.0,
   "edits": "40 s of an underwater ambience; the bed treatment with its low pass at 1.5 kHz"
+ },
+ "fall_light": {
+  "group": "Water",
+  "what": "A small fall, one or two layers: a bright trickle and splash into the pool at its foot, heard from its foot (loops).",
+  "layers": [
+   {
+    "src": "freesound/454340:454340.mp3",
+    "start": 20.0,
+    "dur": 9.0
+   },
+   {
+    "src": "freesound/363119:363119.mp3",
+    "start": 1.0,
+    "dur": 9.0,
+    "gain": -8
+   }
+  ],
+  "len": 9.0,
+  "hp": 120,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "nine seconds of a small splashy stream falling into water, with water poured onto stone 8 dB under; 120 Hz high pass so it stays light; looped over a 1 s crossfade (8 s)"
+ },
+ "fall_medium": {
+  "group": "Water",
+  "what": "A fall of three to five layers: a steady full pour into its pool, heard from its foot (loops).",
+  "layers": [
+   {
+    "src": "freesound/530170:530170.mp3",
+    "start": 3.0,
+    "dur": 9.0
+   },
+   {
+    "src": "freesound/352903:352903.mp3",
+    "start": 1.0,
+    "dur": 9.0,
+    "gain": -5
+   }
+  ],
+  "len": 9.0,
+  "hp": 60,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "nine seconds of a medium waterfall, with a mid-sized waterfall 5 dB under; 60 Hz high pass; looped over a 1 s crossfade (8 s)"
+ },
+ "fall_roar": {
+  "group": "Water",
+  "what": "A tall fall, six layers or more: a low full roar of heavy water, heard from its foot and from far off (loops).",
+  "layers": [
+   {
+    "src": "freesound/379905:379905.mp3",
+    "start": 6.0,
+    "dur": 9.0
+   },
+   {
+    "src": "freesound/44880:44880.mp3",
+    "start": 0.5,
+    "dur": 9.0,
+    "gain": -4
+   },
+   {
+    "src": "freesound/383732:383732.mp3",
+    "start": 4.0,
+    "dur": 9.0,
+    "gain": -10
+   }
+  ],
+  "len": 9.0,
+  "hp": 30,
+  "lp": 6000,
+  "loop": true,
+  "loop_fade": 1.0,
+  "peak_db": -1.0,
+  "edits": "nine seconds of Niagara's roar, with a big waterfall 4 dB under and a huge waterfall 10 dB under for its spray; 30 Hz high pass, 6 kHz low pass so the low roar leads; looped over a 1 s crossfade (8 s)"
  }
 }

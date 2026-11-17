@@ -181,5 +181,8 @@
  "sounds/step_sand_2.mp3": "docs/mockups/sounds/step_sand_2.mp3",
  "sounds/step_sand_3.mp3": "docs/mockups/sounds/step_sand_3.mp3",
  "sounds/step_sand_4.mp3": "docs/mockups/sounds/step_sand_4.mp3",
- "sounds/step_sand_5.mp3": "docs/mockups/sounds/step_sand_5.mp3"
+ "sounds/step_sand_5.mp3": "docs/mockups/sounds/step_sand_5.mp3",
+ "sounds/fall_light.mp3": "docs/mockups/sounds/fall_light.mp3",
+ "sounds/fall_medium.mp3": "docs/mockups/sounds/fall_medium.mp3",
+ "sounds/fall_roar.mp3": "docs/mockups/sounds/fall_roar.mp3"
 }
