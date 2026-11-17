@@ -140,8 +140,9 @@ pub(super) struct WaterView {
     sea: SeaView,
     /// x how far the sheet sits below sea level, m; y the surface of the
     /// water the eye is in or over, a body radius: an inland water's drawn
-    /// top (`inland_surface`), else the sea's tided surface at the eye; zw
-    /// the water's easing between ticks.
+    /// top (`inland_surface`), else the sea's tided surface at the eye; z
+    /// seconds since the water was meshed, w the tick's length: the clock
+    /// the flowing water's vertices ease on.
     sea_frame: Vec4,
     /// The lens mist (`lens-weather`): seconds to mist over and to clear
     /// standing still, how much faster per m/s of airspeed, its strength.
@@ -1881,8 +1882,8 @@ fn prepare_water_views(
                 .extend(0.0),
             sea: SeaView::from(&sea_now.gpu),
             // y the surface of the water the eye is in or over (B17, B18);
-            // z and w the water's easing
-            // between ticks, smoothstepped and linear (`water_flow::WaterEase`).
+            // z the seconds since the water was meshed and w the tick, the
+            // clock every vertex's ease runs on (`water_flow::WaterEase`).
             sea_frame: Vec4::new(
                 s.depth_offset_m,
                 // The sea's own surface over the eye is its tided, swelling
@@ -1891,8 +1892,8 @@ fn prepare_water_views(
                 // An eye in the air is over the same tided sea (`fishing-and-equipment`
                 // design 4, `ocean-environments` B21): one helper says it.
                 composite_surface_radius(eye.0, camera, sea_radius, sea_now.tide_here),
-                ease.smooth,
-                ease.linear,
+                ease.since_mesh_s,
+                pbd_core::liquid::TICK_S,
             ),
             mist: Vec4::new(
                 weather_settings.lens_mist_fog_s,

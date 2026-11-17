@@ -1925,6 +1925,12 @@ pub fn run(args: &[String]) {
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
                 .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
                 .run_if(resource_exists::<pbd_app::drops::Drops>),
+            water::pour_stop
+                .after(water::scripted)
+                .run_if(|launch: Res<Launch>| launch.capture.is_some())
+                .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
+                .run_if(resource_exists::<pbd_app::planet::PlanetContact>)
+                .run_if(resource_exists::<pbd_app::drops::Drops>),
             water::pour_cycle
                 .after(water::scripted)
                 .run_if(|launch: Res<Launch>| launch.pour_for.is_some())

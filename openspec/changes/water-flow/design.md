@@ -658,6 +658,136 @@ It is measured, not assumed. A `perf_suite.py` A/B on the release build
 goes in `docs/benchmarks/` with the port. Any slower frame is fixed before
 the push.
 
+### Water that dries eases out too (5.4; owner, 2026-11-17)
+
+The owner, on the merged smoothing: *"water spawning does animate correctly.
+Looks great, might have some geometry weirdness but very minor. The despawn
+is still step based. So if we can apply something similar to that would be
+nice."* This is the smoothing M31's Pour tab already shows and the owner
+approved (S1 to S4), carried to every way water leaves. It is not a new look:
+the fall look stays `water.wgsl`'s as approved, and nothing here changes a
+froth, a lip or a splash term.
+
+**Measured (2026-11-17, the M4 Max, `--profile fast`).** A capture rig pours
+one source 12 m ahead into a pit five layers deep (`--pour 1 --pour-ahead 12
+--pit 5`) and stops it (`PBD_POUR_STOP_S`, a measurement instrument: the
+poured source taken through the ordinary edit path, as a bucket takes one),
+filmed frame by frame (`PBD_CAPTURE_RUN`). A frame-to-frame change measure
+with the HUD masked finds a spike on every tick, 60 frames apart: change
+2 to 4 times the steady water's during the pour, and up to 7.6 times (mean
+change 10.0 against a median of 1.3) while the pit drains. Inside each
+drain tick the fall stands still, then at the tick it is a layer shorter.
+
+Logging every remesh in the game named three causes. The geometry itself is
+continuous: at every drain tick, every triangle drawn at the end of the last
+tick is drawn at the start of the next (counted on the real tier, rounded to
+a millimetre). The causes are around it.
+
+1. **An edit remeshes with nothing to ease from.** Taking water (a bucket, a
+   dig, the stopped source) replaces the fine set through `apply_edit`, not
+   a tick, so `rebuild_water` meshes it with no tick before it. The taken
+   cell is gone in one frame, and every ease still in flight snaps to its
+   end (30 visible triangles gone at once at the stop). An edit and a tick
+   in the same frame are worse: the tick eases from the set the edit made,
+   so the edit is never eased at all.
+2. **The shading jumps at the tick.** Only the position eases. The face's
+   other lanes are this tick's from the first frame: the flow lane (a top's
+   pan and lip nearness; a falling face's froth weight and its metres under
+   the lip), the normal and the sky. On a draining fall the lip drops a
+   layer a tick, so every falling face's metres under the lip (which places
+   the froth pattern, its speed-up and the Glassy lip) moves a metre at
+   once, and the face that becomes the new lip goes from froth 0.55 to 1.0.
+   The fall reads as stepping although its faces ease. A sloped top's normal
+   steps as its levels change, so its light steps too.
+3. **Nothing carries an ease across a remesh that is not a tick.** A fine
+   set landing from the streaming (the player moving) or an edit mid-tick
+   remeshes from scratch, and the water jumps to where the tick was going.
+
+**The spawn's "geometry weirdness"** is found by the same count: at a new
+cell's first frame, 72 triangles appear that were not drawn the frame before.
+S2 squashes a new cell onto the side its water came from by projecting every
+point onto that side's plane. On a hexagon the far corners project past the
+side's two corners, so the starting sheet is twice the side's width and pokes
+half a cell into the neighbours on either side, into the stone or the air
+beside the source. M31's `squasher` does the same. S4 ends a dried cell on the
+same over-wide sheet.
+
+**The design.**
+- **The tick's ease is unchanged** (M31's S1 to S4): a cell wet in both
+  ticks eases its pieces; a new cell sweeps in from its wettest last-tick
+  side (S2) or grows down from the water over it (S3); a dried cell is kept
+  in the mesh for one tick, squashed toward the water under it (a fall
+  drains down, its top sinking onto that water's surface) or toward its
+  wettest side
+  (S4), and dropped at the tick's end. Fronts ease linearly, levels by the
+  smoothstep. A falling column whose source stopped drains a cell a tick
+  from the top (the rule's own order), each cell's top sinking to its floor
+  over its tick, so the column's top goes down at one speed.
+- **Every lane eases, not only the position.** Each vertex carries its last
+  flow lane, normal and sky beside its last position. `vertex_flowing`
+  mixes them by the same `t` as the position (the normal renormalised), so
+  a fall's froth slides with its lip rather than jumping.
+- **Any change to the water eases, not only a tick.** The mesher eases from
+  the set it last meshed whenever the fine set changes (an edit, a landing),
+  and from the set before the last tick when several ticks ran at once (the
+  capture rig's `--water-ticks`). A taken cell is an S4 cell: it shrinks
+  away over one tick from the moment it is taken. Water placed is an S2 one.
+- **Each vertex has its own clock.** A vertex carries when its ease
+  started, in seconds against the mesh's epoch (its last rebuild), and the
+  uniform is the seconds since that epoch (`sea_frame.z`) and the tick
+  length (`sea_frame.w`, `liquid::TICK_S`, one source). A remesh carries what
+  is in flight: a piece of the last mesh still easing toward the same end
+  keeps its start and its from; one whose end moved starts again from where
+  it is drawn now; a dried piece still shrinking is kept until its own tick
+  has played. So an edit or a landing mid-tick never snaps, and a dried
+  cell is always given its full tick.
+- **The squash stays on its side.** S2's start and S4's end clamp each point
+  to the side's own span, between its two corners, so the thin sheet
+  (`THIN`, a quarter of the cell's height, as M31) covers the side the water
+  came from and nothing beside it.
+
+- **A foot that leaves fades out.** Found in the "after" frames: with the
+  mesh continuous in every lane (counted in the game at every remesh), the
+  steps left were at fall feet. A foot fades in over `splash_fade_s` when it
+  appears (6.6), but one that leaves the mesher's list (its fall drained, or
+  its landing moved a layer) was dropped at once, so its teal churn, ripples
+  and mist went in a frame. It now fades out over the same time from its
+  last place, as it faded in: "a fade is a moment in time" (CLAUDE.md). No
+  term of the fall's look changes; only when it goes.
+- **A foot's drop eases.** The splash is sized by the drop `D` (6.6), which
+  moves a whole metre when a drain lowers the lip a layer, so the mist's
+  size, count and placement stepped at the tick. Each foot's drawn `D`
+  follows its own with a time constant of 0.35 s (most of the way in a
+  tick).
+- **A drained cell ends on the water it drained into.** The first S4 port
+  pressed a cell with water under it down to its own floor, the layer
+  boundary. Where the water under it stands lower (a flowing level), the
+  surface stepped down at the tick's end when the cell was hidden: a band
+  of the water's colour changed at once. It now ends on the top of the
+  water under it, at that top's own corner levels, so hiding it changes
+  nothing drawn.
+
+**Bounded.**
+- Six lanes a vertex instead of four (96 bytes against 64).
+- The kept dried pieces are at most one tick's dried cells: each goes when
+  its own tick has played, whatever remeshes happen meanwhile.
+- No allocation per frame: the mesh and its piece table are built once per
+  remesh (a tick, an edit, a landing). The last mesh and the set it was made
+  from are kept for the next.
+- Saves, the rule and its tick are untouched: this is drawing only.
+
+- **A face that changes kind is wiped.** The kind (a falling face's
+  streaming froth against a still face) is a switch the fragment branches on,
+  not a number to ease, and switching it at the tick stepped a whole face (a
+  fall's foot turning still as its fall ends). Such a face is drawn twice for
+  the tick: the old face, of its old kind, drains down (its top sinks to its
+  bottom), while the new one grows down from its top, both fronts at one
+  speed, so the two meet at one line and the froth runs off the face.
+- **Only a fall that arrived holds its splash.** S3 holds a new foot's
+  splash until its column lands. A foot that moved down a layer because its
+  pool drained is the same fall, not an arrival: it cross-fades with the foot
+  it replaces from the tick's start.
+
 ## Rain rings that alias (owner, 2026-11-16)
 
 The owner's valley in rain shows the river "covered in a dense white
