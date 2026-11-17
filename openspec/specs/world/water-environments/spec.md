@@ -53,7 +53,7 @@ the water's own murk, the waves and the rain's rings only a gentle shading
 on it (at most 12% of the murk either way). It SHALL NOT mirror the scene
 under the water and SHALL NOT read the screen-space reflection history, at
 any REFLECTIONS level, in the sheet or in the composite's stand-in for the
-sheet the near plane clips (`ocean-environments` B20).
+sheet the near plane clips (`ocean-environments` B21).
 
 #### Scenario: Looking up from under the sea
 
@@ -67,7 +67,7 @@ The composite SHALL measure the waterline from the surface of the water the
 eye is in, and for an eye in air from the sea's tided surface, never the
 sea's mean sphere, so a jump or a flight over a beach at low tide tints and
 wobbles none of the dry sand between the tided water and the mean
-(`ocean-environments` B20).
+(`ocean-environments` B21).
 
 #### Scenario: A jump on a beach at low tide
 

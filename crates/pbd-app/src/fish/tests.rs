@@ -422,19 +422,31 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
             float.length() < sea.radius - 0.5,
             "the float rides under the mean"
         );
-        let points = draw::line_points(tip, float, slack, surface);
+        let tied = float + float.normalize() * draw::FLOAT_TOP_M;
+        let floor = |p: Vec3| draw::line_floor(&here, tied, p);
+        let points = draw::line_points(tip, tied, slack, floor);
         assert_eq!(points[0], Vec3::ZERO, "the line leaves the rod tip");
         let end = tip + *points.last().unwrap();
         assert!(
-            end.distance(float) < 1e-3,
+            end.distance(tied) < 1e-3,
             "the line ends at the float: {} m off",
-            end.distance(float)
+            end.distance(tied)
         );
         for p in &points[1..points.len() - 1] {
             let at = tip + *p;
             assert!(
-                at.length() >= surface(at),
-                "a point of the line is under the water"
+                at.length() >= floor(at) + draw::LINE_CLEARANCE_M - 1e-3,
+                "a point of the line is not held clear of the water"
+            );
+            // Clear of the drawn sea and of the composite's tided waterline,
+            // so nothing of it is drawn as under water.
+            assert!(
+                at.length() > draw::drawn_surface(&here, at),
+                "a point of the line is under the drawn sea"
+            );
+            assert!(
+                at.length() > sea.radius + sea.tide_at(at),
+                "a point of the line is under the tided waterline"
             );
         }
     }

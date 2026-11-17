@@ -18,3 +18,10 @@ Nothing here is hand-edited or taken from outside the repository.
 The same PNG and the manifest as JSON are copied to `docs/mockups/fish/`
 (`water_life_atlas.png`, `water_life_atlas.json`), so M9 and the game wear the
 same pixels.
+
+## `kelp_card.png`
+
+16 x 64, hard alpha, sampled nearest: M25's kelp card, a byte-for-byte copy
+of `docs/mockups/ocean/card-kelp.png`, drawn by `tools/art/ocean_art.py`
+`kelp_card` with the balatro-pixel-art kit (Sweaft-64). The game's kelp
+stands wear it as the mockup's do (`ocean-environments` design B20).

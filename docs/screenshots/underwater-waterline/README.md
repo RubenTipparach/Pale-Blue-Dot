@@ -1,4 +1,4 @@
-# No mirror under the water; the split frame; the jump on the beach (ocean-environments B20)
+# No mirror under the water; the split frame; the jump on the beach (ocean-environments B21)
 
 The owner, 2026-11-16:
 - "some weirdness happening here when I'm partially submerged camera"
@@ -70,7 +70,7 @@ of the surface.
   none. The `--fly` capture runs log 32 to 38 of them, before and after
   alike (the capture path compiles pipelines after its own READY); not from
   this change.
-- **The frame cost is owed** (task 15.3): the Mac was not quiet (other
+- **The frame cost is owed** (task 16.3): the Mac was not quiet (other
   sessions' builds, captures and a perf run). The held under-water view is
   ready to run: `PBD_EYE_PATH` holding the eye at `40.455 14.582`, -3.4 m,
   20 degrees up, in rain, `--no-vsync --frame-log`, release, the two builds

@@ -351,6 +351,74 @@ fn the_sun_is_drawn_from_outside_the_shell_by_its_own_quad() {
     assert!(edge < 1e-5, "the glow at the quad's edge is {edge}");
 }
 
+/// `horizon-haze` 4, the sea's horizon line: from inside the shell, a ray
+/// that meets the solid sphere is one the sea should have covered, and where
+/// the tided sheet dips under that sphere it does not. The dome draws the
+/// horizon's air there, the ray just over the sphere's tangent, instead of a
+/// sliver of air cut at the hit, which was a dark line along the horizon.
+/// From outside, the cut stays: the column over the ground needs it.
+#[test]
+fn the_dome_under_the_horizon_is_the_horizons_air() {
+    let src = include_str!("../../../assets/shaders/sky_atmosphere.wgsl").replace("\r\n", "\n");
+    let dome = &src[src.find("#else\n").expect("the dome's variant")..];
+    let fragment = wgsl_fn_body(dome, "fragment");
+    let bend = fragment
+        .find("if (inside && ground.x > 0.0) {\n        direction = horizon_ray(camera,direction,sky.center_radius.w);\n        ground = vec2<f32>(-1.0);\n    }")
+        .expect("an inside ray that meets the ground takes the horizon's");
+    let march = fragment
+        .find("let air_hit = cloud_sphere_hit(camera,direction,sky.atmosphere.x);")
+        .expect("the air's march");
+    assert!(
+        bend < march,
+        "the ray is bent before the air is marched along it"
+    );
+    assert!(fragment.contains("if (ground.x > 0.0) { end = min(end, ground.x); }"));
+    assert!(fragment.contains("let over_ground = !inside && ground.x > 0.0;"));
+    let ray = wgsl_fn_body(&src, "horizon_ray");
+    assert!(ray.contains("let dip = sqrt(max(1.0-level*level,0.0))*HORIZON_CLEAR;"));
+    assert!(ray.contains("return normalize(along*level - up*dip);"));
+    let clear: f32 = src
+        .split("const HORIZON_CLEAR: f32 = ")
+        .nth(1)
+        .and_then(|rest| rest.split(';').next())
+        .and_then(|v| v.parse().ok())
+        .expect("HORIZON_CLEAR");
+    // Just over the tangent, never past it: past it the ray would meet the
+    // sphere again and march through the ground's air.
+    assert!(clear > 0.9 && clear < 1.0, "HORIZON_CLEAR {clear}");
+}
+
+/// `horizon-haze` 4, under cloud and in the rain: the clouds and the rain stop
+/// a sky ray at the sea's sphere, because the sheet is not in the scene's
+/// depth. A pixel that is sky in the sheet's own depth too is the gap under
+/// the horizon, not the sea: the clouds draw it as the sky over the horizon,
+/// and the rain does not stop it at the sea.
+#[test]
+fn the_clouds_and_the_rain_tell_the_horizon_gap_from_the_sea() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    let gap = wgsl_fn_body(&src, "sea_gap");
+    assert!(gap.contains("load_depth(uv) <= 1e-7"));
+    assert!(gap.contains("water_depth_at(uv*vec2<f32>(textureDimensions(water_depth))) <= 1e-7"));
+    let clouds = wgsl_fn_body(&src, "clouds");
+    assert!(clouds.contains("let uv = sea_gap_uv(in.uv);"));
+    assert!(clouds.contains("height_fog(uv, clouds_over(uv))"));
+    assert!(wgsl_fn_body(&src, "sea_gap_uv").contains("if (!sea_gap(uv)) { return uv; }"));
+    for name in ["rain_far", "rain"] {
+        assert!(
+            wgsl_fn_body(&src, name)
+                .contains("if (sea.x > 0.0 && !sea_gap(uv)) { far = min(far,sea.x); }"),
+            "{name} stops a gap ray at the sea"
+        );
+    }
+    assert!(wgsl_fn_body(&src, "rain_depth_m").contains("!sea_gap(uv)"));
+    // The passes that read it have the sheet's depth bound, and it is kept
+    // past the cap pass while they draw.
+    let rust = include_str!("planet_water.rs");
+    assert_eq!(rust.matches("(20, texture_depth_2d())").count(), 4);
+    assert_eq!(rust.matches("(20, &water.depth)").count(), 4);
+    assert!(rust.contains("store: if splash_on || bubbles_on || clouds_on || water.rain_needed {"));
+}
+
 /// `dusk-sky`: seen from the ground the dome is lit on the ground's twilight,
 /// not through the small planet's shadow, which kept high air lit to 34
 /// degrees under and drew its edge across the sky.
@@ -634,7 +702,7 @@ fn the_rain_volume_is_not_drawn_under_the_sea() {
     );
 }
 
-/// `ocean-environments` B20 (owner, 2026-11-16: "do we really need SSR from
+/// `ocean-environments` B21 (owner, 2026-11-16: "do we really need SSR from
 /// bottom of the water?"): the surface seen from below is Snell's window and
 /// the murk, never a mirror of the scene under the water, at any REFLECTIONS
 /// level. Neither the sheet's from-below path nor the composite's stand-in
@@ -909,7 +977,10 @@ fn the_mockups_plants_are_the_cores() {
 fn the_height_fog_rides_the_clouds_composite() {
     let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
     let entry = wgsl_fn_body(&src, "clouds");
-    assert!(entry.contains("height_fog(in.uv, clouds_over(in.uv))"));
+    // A pixel in the sea's horizon gap reads the sky over it (`horizon-haze`
+    // 4); every other pixel is its own.
+    assert!(entry.contains("let uv = sea_gap_uv(in.uv);"));
+    assert!(entry.contains("height_fog(uv, clouds_over(uv))"));
     let fog = wgsl_fn_body(&src, "height_fog");
     for line in [
         "if (sigma0 <= 0.0) { return color; }",
