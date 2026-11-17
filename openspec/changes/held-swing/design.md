@@ -36,15 +36,25 @@
    c·L + T − (N − k)·P, so the last one still lands on the break, and the
    strokes run on at one beat while the button is held. Break times do not
    change.
-6. The arm reaches (owner, 2026-11-17: "I think hand should extend outward
-   when doing actions", pointing at a first-person chopping animation,
-   https://sketchfab.com/3d-models/chopping-animation-8f4e1c3d4ec74e7580eae93d045e3581).
-   Pitching the tool about a fixed fist reads as a wrist flick. The fist
-   moves too: on the wind-up it draws back toward the eye and up
-   (`windup_pull_m`, 0.06 back and 0.03 up). On the strike it drives forward
-   along the view toward the target (`reach_m`, 0.16, eased in with the
-   strike's t³) and in toward the crosshair (`reach_in_m`, 0.05). It holds
-   through the impact and returns with the recover. The sleeve is long enough
-   that the arm still runs off the screen at full reach. Shown in the Tools
-   in Hand mockup's Proposed strokes before the game.
-
+6. The arm swings from the shoulder (owner, 2026-11-17).
+   - The owner's words: "I think hand should extend outward when doing
+     actions", pointing at a first-person chopping animation
+     (https://sketchfab.com/3d-models/chopping-animation-8f4e1c3d4ec74e7580eae93d045e3581).
+     Then at Quaternius's Universal Animation Library viewer
+     (https://quaternius.com/animviewer.html), its Sword_Attack_Standing:
+     "thats a sword but similar idea".
+   - What is wrong today: pitching the tool about a fixed fist reads as a
+     wrist flick.
+   - The motion is reference only. No asset is taken from either page.
+   - The fist moves on an arc about a virtual shoulder (`shoulder`, eye
+     space, about 0.2 m right, 0.25 m down and 0.05 m behind the eye):
+     - on the wind-up it rises up and back toward the shoulder
+       (`raise_rad`);
+     - on the strike it sweeps forward and down to full reach at the block
+       (`reach_rad`, the arm lengthening by `extend_m`);
+     - it follows through a little past the impact (`follow_rad`);
+     - it returns with the recover.
+   - The tool's own pitch rides on top.
+   - The sleeve is long enough that the arm still runs off the screen at full
+     reach.
+   - Shown in the Tools in Hand mockup's Proposed strokes before the game.
