@@ -82,14 +82,21 @@ pub fn reach(radius: f64, altitude: f64) -> f64 {
 /// The cascades' edges from `near` to `far`, the practical split: `LAMBDA` of
 /// the logarithmic split and the rest of the uniform one.
 pub fn splits(near: f64, far: f64) -> [f64; CASCADES + 1] {
-    let mut edges = [near; CASCADES + 1];
-    for (i, edge) in edges.iter_mut().enumerate().skip(1) {
-        let s = i as f64 / CASCADES as f64;
+    splits_for(near, far, CASCADES)
+}
+
+/// [`splits`] for the first `count` cascades; the edges past them stand at
+/// `far`.
+pub fn splits_for(near: f64, far: f64, count: usize) -> [f64; CASCADES + 1] {
+    let count = count.clamp(1, CASCADES);
+    let mut edges = [far; CASCADES + 1];
+    edges[0] = near;
+    for (i, edge) in edges.iter_mut().enumerate().take(count).skip(1) {
+        let s = i as f64 / count as f64;
         let log = near * (far / near).powf(s);
         let uniform = near + (far - near) * s;
         *edge = LAMBDA * log + (1.0 - LAMBDA) * uniform;
     }
-    edges[CASCADES] = far;
     edges
 }
 
@@ -134,8 +141,21 @@ fn exit_shell(from: DVec3, z: DVec3, shell: f64) -> f64 {
 /// Fit the four cascades to a view, with the sun toward `sun`, on a planet of
 /// `radius` metres centred at the origin.
 pub fn fit(view: &View, sun: DVec3, radius: f64) -> [Cascade; CASCADES] {
+    fit_for(view, sun, radius, CASCADES, TEXELS)
+}
+
+/// [`fit`] for the player's shadow quality (`shadow-quality`): `count`
+/// cascades across the same reach, each drawn `texels` a side. The cascades
+/// past `count` are fitted to an empty slice at the far edge and never drawn.
+pub fn fit_for(
+    view: &View,
+    sun: DVec3,
+    radius: f64,
+    count: usize,
+    texels: u32,
+) -> [Cascade; CASCADES] {
     let altitude = view.eye.length() - radius;
-    let edges = splits(NEAR_M, reach(radius, altitude));
+    let edges = splits_for(NEAR_M, reach(radius, altitude), count);
     let tan = (0.5 * view.fov_y).tan();
     let k2 = tan * tan * (1.0 + view.aspect * view.aspect);
     let (x, y, z) = light_axes(sun);
@@ -143,7 +163,7 @@ pub fn fit(view: &View, sun: DVec3, radius: f64) -> [Cascade; CASCADES] {
     std::array::from_fn(|i| {
         let (along, r) = slice_sphere(edges[i], edges[i + 1], k2);
         let r = (r / RADIUS_STEP_M).ceil() * RADIUS_STEP_M;
-        let texel = 2.0 * r / f64::from(TEXELS);
+        let texel = 2.0 * r / f64::from(texels);
         let raw = view.eye + view.forward * along;
         let snap = |v: f64| (v / texel).round() * texel;
         let centre = x * snap(raw.dot(x)) + y * snap(raw.dot(y)) + z * raw.dot(z);
@@ -191,7 +211,27 @@ pub fn fit(view: &View, sun: DVec3, radius: f64) -> [Cascade; CASCADES] {
 /// third every other and the fourth every fourth, staggered so they do not
 /// fall on the same frame.
 pub fn due(frame: u64) -> [bool; CASCADES] {
-    std::array::from_fn(|i| (frame + i as u64).is_multiple_of(PERIOD[i]))
+    due_for(frame, CASCADES)
+}
+
+/// [`due`] for the first `count` cascades (`shadow-quality`): the finest
+/// every frame and the farthest every fourth whatever the count, so drawing
+/// fewer never redraws the far reach more often; with three, the middle one
+/// every other. Past the count, never.
+pub fn due_for(frame: u64, count: usize) -> [bool; CASCADES] {
+    let count = count.clamp(1, CASCADES);
+    std::array::from_fn(|i| {
+        if i >= count {
+            return false;
+        }
+        // The period of the cascade with as many coarser than it at full count.
+        let period = if i == 0 {
+            1
+        } else {
+            PERIOD[CASCADES - count + i]
+        };
+        (frame + i as u64).is_multiple_of(period)
+    })
 }
 
 /// The cascades as they were last drawn. A cascade not redrawn keeps the
@@ -209,7 +249,12 @@ impl Drawn {
     /// Take this frame's fit for the cascades that are due, or for all of
     /// them after a jump in time (or on the first frame).
     pub fn update(&mut self, fitted: [Cascade; CASCADES], jumped: bool) {
-        let due = due(self.frame);
+        self.update_for(fitted, jumped, CASCADES);
+    }
+
+    /// [`Self::update`] for the first `count` cascades.
+    pub fn update_for(&mut self, fitted: [Cascade; CASCADES], jumped: bool, count: usize) {
+        let due = due_for(self.frame, count);
         match &mut self.cascades {
             Some(drawn) if !jumped => {
                 for i in 0..CASCADES {
@@ -394,5 +439,37 @@ mod tests {
         drawn.update(first, true);
         assert_eq!(drawn.redraw, [true; CASCADES], "a jump redraws all");
         assert_eq!(drawn.cascades.unwrap(), first);
+    }
+
+    /// `shadow-quality`: two cascades split the same reach, the second
+    /// ending at it; the ones past the count stand at the far edge.
+    #[test]
+    fn fewer_cascades_split_the_same_reach() {
+        let two = splits_for(NEAR_M, FOOT_REACH_M, 2);
+        assert_eq!(two[0], NEAR_M);
+        assert!(two[1] > NEAR_M && two[1] < FOOT_REACH_M);
+        assert!(two[2..].iter().all(|e| *e == FOOT_REACH_M));
+        assert_eq!(
+            splits_for(NEAR_M, FOOT_REACH_M, CASCADES),
+            splits(NEAR_M, FOOT_REACH_M)
+        );
+    }
+
+    /// `shadow-quality`: two cascades are the finest every frame and the far
+    /// reach every fourth, three add the middle every other, four are [`due`].
+    #[test]
+    fn the_far_cascade_is_redrawn_every_fourth_frame_at_any_count() {
+        let periods = |count: usize| -> Vec<usize> {
+            (0..CASCADES)
+                .map(|i| (0..16).filter(|f| due_for(*f, count)[i]).count())
+                .collect()
+        };
+        assert_eq!(periods(2), vec![16, 4, 0, 0]);
+        assert_eq!(periods(3), vec![16, 8, 4, 0]);
+        assert_eq!(periods(4), vec![16, 16, 8, 4]);
+        assert_eq!(
+            (0..16).map(due).collect::<Vec<_>>(),
+            (0..16).map(|f| due_for(f, 4)).collect::<Vec<_>>()
+        );
     }
 }

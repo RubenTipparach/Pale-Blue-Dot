@@ -1,6 +1,7 @@
 mod arrival;
 mod breeding;
 mod compass_bar;
+mod cpu_times;
 mod cracks;
 mod craft;
 mod digging;
@@ -1094,6 +1095,16 @@ impl Launch {
                             .expect("--reflections takes off, low, medium or high"),
                     );
                 }
+                "--shadows" => {
+                    i += 1;
+                    let level = args
+                        .get(i)
+                        .expect("--shadows requires low, medium, high or ultra");
+                    result.settings.shadows = Some(
+                        pbd_app::config::ShadowQuality::parse(level)
+                            .expect("--shadows takes low, medium, high or ultra"),
+                    );
+                }
                 "--grass" => {
                     i += 1;
                     // Tufts are the only grass (owner, 2026-11-16); the flag
@@ -1872,7 +1883,12 @@ pub fn run(args: &[String]) {
             guide::paint,
             hud::near_field,
             compass_bar::update,
-            (frame_graph::toggle, frame_graph::update).chain(),
+            (
+                frame_graph::toggle,
+                frame_graph::update,
+                frame_graph::breakdown,
+            )
+                .chain(),
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
             (time_ui::press, time_ui::toggle, time_ui::show).chain(),
@@ -2006,25 +2022,33 @@ pub fn run(args: &[String]) {
     .add_systems(
         Last,
         (
-            (measure_frames, write_frame_log).chain(),
+            (cpu_times::main_end, measure_frames, write_frame_log).chain(),
             // The save is the loading thread's until the world opens.
             drain_saves.run_if(pbd_app::world_open),
         )
             // The frame limiter holds the loop after these.
             .in_set(pbd_app::settings::PacingSet),
     );
+    cpu_times::add(&mut app);
     if launch.frame_log.is_some() {
-        // GPU time per render pass for the frame log (`perf-rig`), and a
-        // route that ends the run when it lands, like `--walk-distance`.
-        // Not on macOS: its spans write timestamps inside a pass, which Apple
-        // GPUs cannot, so they read nought there, and the counter sample
-        // buffers it still makes for every frame in flight ran out under slow
-        // frames ("Cannot allocate sample buffer", a crash). The clouds'
-        // boundary timer measures them there instead (`cloud-puffs`).
-        if !cfg!(target_os = "macos") {
-            app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
-        }
-        app.add_systems(Last, (quit_after_route, log_window_attention));
+        // A route that ends the run when it lands, like `--walk-distance`.
+        app.add_systems(
+            Last,
+            (
+                quit_after_route,
+                log_window_attention,
+                cpu_times::log_shadow_spans,
+            ),
+        );
+    }
+    // GPU time per render pass, for the frame log (`perf-rig`) and the F3
+    // breakdown. Not on macOS: its spans write timestamps inside a pass,
+    // which Apple GPUs cannot, so they read nought there, and the counter
+    // sample buffers it still makes for every frame in flight ran out under
+    // slow frames ("Cannot allocate sample buffer", a crash). The clouds'
+    // boundary timer measures them there instead (`cloud-puffs`).
+    if !cfg!(target_os = "macos") {
+        app.add_plugins(bevy::render::diagnostic::RenderDiagnosticsPlugin);
     }
     // Towns are lit by the field in every run, a still from above as much as
     // a walk (`cities-in-the-world` slice 4a): without it a photo drew them
@@ -4735,7 +4759,7 @@ impl FrameLog {
                 .collect();
             writeln!(
                 out,
-                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency"
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency,cpu_main_ms,cpu_render_ms,acquire_ms,shot"
             )
             .expect("frame log header");
             out
@@ -4761,6 +4785,8 @@ fn write_frame_log(
     walk: Option<Res<WalkProgress>>,
     diagnostics: Option<Res<bevy::diagnostic::DiagnosticsStore>>,
     route: Option<Res<pbd_app::flight_view::RouteState>>,
+    cpu: Res<cpu_times::CpuTimes>,
+    showcase: Option<Res<showcase::Player>>,
 ) {
     use std::io::Write;
     let latency = log.1;
@@ -4784,7 +4810,7 @@ fn write_frame_log(
     let passes: String = gpu.passes.iter().map(|ms| format!(",{ms:.3}")).collect();
     let _ = writeln!(
         out,
-        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency}",
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency},{:.3},{:.3},{:.3},{}",
         stats.samples.len(),
         stats.started.elapsed().as_secs_f64(),
         fine.map_or(0, |fine| fine.version),
@@ -4794,6 +4820,10 @@ fn write_frame_log(
         route.map_or(f64::NAN, |route| route.flown_rad
             * f64::from(pbd_app::planet::PLANET_RADIUS)),
         gpu.other,
+        cpu.main_ms,
+        cpu.render_ms(),
+        cpu.acquire_ms(),
+        showcase.map_or(0, |player| player.shot()),
     );
 }
 

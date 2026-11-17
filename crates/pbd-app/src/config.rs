@@ -1984,6 +1984,86 @@ impl Reflections {
     }
 }
 
+/// The player's SHADOW QUALITY (`shadow-quality`; owner, 2026-11-17: "reduce
+/// to 2? 1024 in size, and is there some way to blur them? also add shadow
+/// quality slider"). ULTRA is the sun's shadows as they were before the
+/// setting: four cascades of 2048.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, Deserialize,
+)]
+pub enum ShadowQuality {
+    #[default]
+    Low,
+    Medium,
+    High,
+    Ultra,
+}
+
+impl ShadowQuality {
+    /// Low to high: the slider's steps.
+    pub const ALL: [Self; 4] = [Self::Low, Self::Medium, Self::High, Self::Ultra];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Low => "LOW",
+            Self::Medium => "MEDIUM",
+            Self::High => "HIGH",
+            Self::Ultra => "ULTRA",
+        }
+    }
+
+    /// From a flag's word.
+    pub fn parse(word: &str) -> Option<Self> {
+        match word {
+            "low" => Some(Self::Low),
+            "medium" | "med" => Some(Self::Medium),
+            "high" => Some(Self::High),
+            "ultra" => Some(Self::Ultra),
+            _ => None,
+        }
+    }
+
+    /// How many cascades are drawn, finest first.
+    pub fn cascades(self) -> usize {
+        match self {
+            Self::Low => 2,
+            Self::Medium => 3,
+            Self::High | Self::Ultra => 4,
+        }
+    }
+
+    /// Texels along a side of each cascade's map.
+    pub fn texels(self) -> u32 {
+        match self {
+            Self::Ultra => 2048,
+            _ => 1024,
+        }
+    }
+
+    /// The blur: the soft filter's least radius and the 3 x 3 filter's
+    /// spacing, in texels. ULTRA's are the filters as they were.
+    pub fn blur_texels(self) -> (f32, f32) {
+        match self {
+            Self::Low => (1.5, 1.35),
+            Self::Medium => (1.0, 1.15),
+            Self::High => (0.75, 1.0),
+            Self::Ultra => (0.5, 1.0),
+        }
+    }
+}
+
+/// The shadow quality the render world draws at; the player's setting
+/// follows into it (`settings::follow_shadows`).
+/// ULTRA where nothing has chosen, the shadows as they were.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq, ExtractResource)]
+pub struct SunShadowQuality(pub ShadowQuality);
+
+impl Default for SunShadowQuality {
+    fn default() -> Self {
+        Self(ShadowQuality::Ultra)
+    }
+}
+
 /// The level the render world draws at; the player's setting follows into it
 /// (`settings::follow_reflections`). HIGH where nothing has chosen.
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq, ExtractResource)]
