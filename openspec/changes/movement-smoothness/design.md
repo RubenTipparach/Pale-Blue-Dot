@@ -708,3 +708,20 @@ lies level at the lure through the nibble and the strike with no frame
 turning, and swims off level. What is still seen after: an eel climbing
 straight up from the bed to the lure is drawn pitched up while it climbs
 (its real heading, pitched by half as before), easing level as it arrives.
+
+## 9. Correction: the simulation was rounded too (owner, 2026-11-17)
+
+Section 4 kept "physics and simulation planet-centred ... collision needs
+0.5 mm, not 0.005". That was wrong. The owner: "its not the camera thats the
+problem, the math still shows: 4436.446780"; "think about it, your
+translations still have limited precision". The render origin subtracts
+after the store has rounded: every position the simulation integrates (the
+walker's `Position += v dt`, the skiff, the fish's step, the float's bob)
+was stored as an f32 4 800 m from the centre, on a 0.488 mm grid, so a 1 m/s
+walk's steps were off by 0.11 mm at p50 and 0.92 mm at worst. Collision does
+not need 0.005 mm; motion does. The fix is a local origin for the simulation
+too, as CLAUDE.md prescribes, and it is its own change:
+`openspec/changes/world-frames` (the frame tree, `SimOrigin`, rebase and
+handoff, and the guards). Section 6's render origin stays, as an offset
+inside that local space; a sim rebase moves it with physics, so nothing
+drawn moves.

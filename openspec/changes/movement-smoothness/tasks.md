@@ -74,6 +74,11 @@
 - [x] 6.6 Video: the nibble and strike from under water, before and after,
   one file.
 
+## 7. The simulation's precision (design 9)
+
+- [x] 7.1 The claim that the simulation may stay planet-centred withdrawn;
+  built in `world-frames`.
+
 ## 4. Gate
 
 - [ ] 4.1 The owner plays the fishing again.
