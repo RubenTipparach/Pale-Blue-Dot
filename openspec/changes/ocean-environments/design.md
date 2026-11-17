@@ -1538,3 +1538,288 @@ a sea shore and a river mouth: one steady descent and one steady ascent at
 burnt in. On Drive as `waterline3-<place>-<before|after>-1080p60.mp4`;
 contact sheets and the frame-by-frame list in
 `docs/screenshots/waterline-3/README.md`.
+
+### B20. Kelp that does not hammer the frame (owner, 2026-11-16)
+
+The owner, looking across shallow sea from just above the surface toward
+jungle islands: "kelp forest is HAMMERING PERF", "FIX THEM, they dont need
+that MANY POLYGONS". A dense field of stands to the edge of the view, each a
+dark stipe with a star of pale blades lying out on the surface.
+
+**Measurement instruments** (code whose only job is a number this section
+needs; no behaviour changes with them unset):
+- `PBD_PASS_OFF=kelp` lays no kelp stand in a sea-places tile (its rocks
+  stay), so a held view can be priced with kelp and without on the same
+  exe, in the same sitting.
+- A `SEA_PLACES` log line, once a second: the tiles drawn, the triangles in
+  them, the kelp's share, the swaying vertices rewritten that frame, and
+  the main thread's mean time in the sea places' system.
+
+**Finding** (the `SEA_PLACES` line at the B16 spot, `--walk --at 71.308
+-8.196`, the Mac; the bed 9 m down):
+- **625,011 kelp triangles** are drawn round the eye, 91% of the sea's
+  places (686,211), in 71 tiles out to the 46 m fade.
+- **1,875,033 vertices are rewritten on the CPU every frame** for the
+  sway: every tile within 30 m rebuilds its whole swaying mesh and Bevy
+  uploads all of it again (position, normal, UV and colour, about 90 MB a
+  frame).
+- **A stand is about 575 triangles in 12 m of water** (420 at this spot,
+  1,935 at 40 m): B16 drew M25's frond as geometry, two or three crossed
+  stipes a joint every metre, a 5-triangle blade and two crossed floats
+  every 0.6 m up each, and a canopy of four 5-triangle blades a stipe. And
+  the stands stand every 2 m at 70%, 0.175 a square metre.
+- **The approved mockup is a couple of polygons a plant** (the owner,
+  2026-11-16: "kelp forest in the mockup was like just a couple polygons
+  from what I remember"). M25's kelp forest (`docs/mockups/ocean.html`,
+  `sceneKelp`) draws each stand as two crossed cards of its frond texture
+  (`card-kelp.png`, 16 x 64, cut out) for every 4 m of water, stretched to
+  the surface, and one card of the same frond lying flat on the surface
+  1.4 m off to one side: **14 triangles in 12 m of water**. Its stands sit
+  on 58% of the 2.833 m hex cells, **0.083 a square metre**.
+- **The game had drifted from the mockup's look.** B16 rebuilt the frond as
+  slender geometry and gave the canopy four long blades a stipe, which is
+  the "star of pale blades lying out on the surface" the owner saw; M25's
+  canopy is one frond card lying on the water.
+- Not the cause: shadows (Bevy's are off; the sun's cascades draw the
+  planet and the towns only), reflection or refraction passes (none draw
+  the sea's places), or a prepass (none).
+- The kelp's tiles are drawn with `NoFrustumCulling`, so the half behind
+  the eye was drawn too.
+
+**Change** (drawing only; where kelp stands is a derived piece, never
+saved, so no generator version):
+- **The stand is M25's**: two crossed cards a 4 m of water and one card
+  flat on the surface 1.4 m off, `4 * ceil(depth / 4) + 2` triangles, in
+  M25's own card (`assets/textures/water_life/kelp_card.png`, a byte copy
+  of `card-kelp.png`), cut out at half alpha, both faces, nearest
+  sampling. The vertex colour carries the depth's light as before; the
+  card carries the frond's colours.
+- **M25's density**: a 3 m lattice at 75%, 0.083 a square metre. The rocks
+  at a stand's foot stay, one stand in two.
+- The kelp is its own mesh in its own material (the field lights it as it
+  lights the reef; its pipeline is warmed on the loading screen by a
+  hidden card, as the water life's is), and it is frustum culled.
+- The sway is unchanged (the same wave, to the same 30 m), on the far
+  fewer vertices.
+- No distance LOD: at 14 triangles a stand there is nothing left to cut
+  with distance, and none to cross-fade.
+
+**Measured** (`docs/benchmarks/2026-11-16-kelp/`, the Mac, release, a held
+view on the bed in the forest, before, after and before without kelp
+interleaved, two sittings): kelp triangles round the eye 625,011 to 8,974;
+vertices rewritten a frame 1,875,033 to 26,922 (about 90 MB to 1.3 MB of
+upload); the sea places' system on the main thread 7 ms to 0.16 ms a frame.
+Frame time was not measured cleanly: other sessions' games and builds ran on
+the Mac through both sittings, and the repeats spread 19 to 104 ms at p50.
+The sitting is to be repeated on a quiet machine. Stills before and after,
+from 1.6 m over the water and on the bed, are in
+`docs/screenshots/kelp-perf/`. Known, and not changed here: the stands are
+cut to the mean sea, so at low tide the canopy card lies above the water, as
+B16's canopy did.
+
+### B21. No mirror on the water's underside; the split frame (owner, 2026-11-16)
+
+Two owner reports from the playtest build:
+
+- **The split frame.** "some weirdness happening here when I'm partially
+  submerged camera", in shallow sea at `39.566 14.326`, the eye at -1.4 m,
+  looking level with the eye at or just under the surface. The top of the
+  frame is a flat dark navy, a hard-edged trapezoid of bright teal sea floor
+  floats in the middle as if the floor were drawn upside down over the
+  waterline, a band of horizontal streaks and smears runs across the middle,
+  and the lower half is the real sea floor.
+- **The mirror from below.** "do we really need SSR from bottom of the
+  water?", "I dont think it looks that good", under the sea at
+  `40.455 14.582` (-3.4 m) looking up and ahead in rain. The underside of
+  the surface is a dark mirror of the scene under the water, with rain
+  rings, fading into a speckled band toward the horizon.
+
+**The owner's call:** remove the reflection on the underside of the water.
+From below, the surface shows Snell's window (the sky, refracted, straight
+up) and outside it the water's own murk colour, the rain rings and the
+waves only a gentle shading on it. No mirrored scene and no SSR, at any
+REFLECTIONS level.
+
+**Cause, both reports: B19's mirror.** B19 made the sheet seen from below
+mirror the water outside Snell's window (`under_mirror` in `water.wgsl`),
+called from two places:
+1. the sheet's from-below path in `fragment` (the `if (below)` branch):
+   a screen-space trace of the reflected ray through last frame's colour
+   (`sea_ssr` over `ssr_history`), and where it missed, the history's texel
+   in the mirrored direction 25 m out, faded to the murk from 6 to 20 m;
+2. the composite's stand-in for the sheet the near plane clips (`compose`,
+   `NEAR_SHEET_M`), the second form only.
+
+With the eye just under a shallow sea, every ray rising less than about
+40 degrees meets the surface outside the window, so nearly the whole upper
+half of the frame is the mirror:
+- **the trapezoid** is the sea floor in front of the eye, found by the
+  mirrored ray in the history and drawn over the waterline, upside down and
+  hard-edged where the trace's hits end;
+- **the streaks** are the trace under the waves: the normal is bent a
+  quarter of the waves' tilt, which is still enough to swing a grazing
+  reflected ray across rows of the history, and hits alternate with misses;
+- **the flat navy** is past `MIRROR_FADE_M` (20 m), where the mirror gives
+  way to the murk.
+
+The rain report's speckled band is the same trace's hits and misses at the
+6 to 20 m fade, the rings bending the mirrored ray.
+
+**The fix.**
+- **`under_mirror` is gone**, with its two constants and the trace's
+  `sea_ssr_t`. The sheet from below is Snell's window inside (unchanged: the
+  scene over the water, refracted, through the water between) and outside
+  it the murk, `murk` at the eye's depth, which is also what the composite
+  fogs the far water to, so the ceiling meets the far water with no seam.
+- **The waves and the rings shade the ceiling gently** (`under_ceiling`): a
+  facet tilted toward the eye faces nearer the window and takes a little
+  more of its light, one tilted away a little less, at most 12% of the murk
+  either way. Only a face that faces up; a step's or a fall's side face
+  stays the plain murk, as in B19.
+- **The composite's stand-in** for the clipped sheet is the murk outside
+  the window and the view through it inside.
+- **No setting turns it back on.** The REFLECTIONS levels (`reflection-quality`)
+  keep governing the reflections seen from above; nothing under the water
+  reads the screen history, at any level.
+
+**A third report, the same day: the dry beach tinted on a jump.** "dry
+ground had the weird water blur pass that we fixed earlier. This only
+happens when you jump above water", "you can see the subtle sand tinted blue
+green": standing or jumping on a dry sand beach beside shallow water, the
+whole beach in front takes a faint underwater tint and wobble.
+
+*Cause.* The composite's waterline is `eye_water_surface()` in `water.wgsl`,
+which reads `sea_frame.y` and falls back to the sea's MEAN sphere
+(`planet_center.w`) when it is nought. `sea_frame.y` was
+`eye_surface_radius(..).unwrap_or(0.0)` (`planet_water.rs`), nought for an
+eye in air. An eye standing on a beach under the high tide's reach (ground
+plus eye height under the sea's level plus `tide_high_m`, 2 m) is "over the
+sea's water" (`eye_water_at`'s second arm), so the composite measured from
+the tided surface; a jump lifts the eye out of that reach into air, and the
+composite measured from the mean sphere instead. At low tide the mean lies a
+metre or so over the tided water, so the dry sand between the two, a whole
+beach's strip, was taken for under water for the frames of the jump: tinted
+by the travel under the mean and wobbled by the distortion.
+
+*Fix.* `composite_surface_radius`: the eye's water's surface where it has
+one, else the sea's tided surface, never nought, so the composite's
+waterline is the tided sea whether the eye stands, jumps or flies. The
+sheet's side test (`sea_eye`) reads the same lane and gives the same answer
+it gave per fragment for an eye in air. Pinned by
+`a_jump_over_a_beach_keeps_the_composites_waterline_at_the_tide`; shown in
+the `jump-beach` video at low tide, three jumps at play speed and a slow
+rise through the reach.
+
+**What it costs.** It removes work: per pixel of the underside, a trace of
+up to 32 steps through the history and one more history read, and in the
+composite one history read for the near rays. It is measured with a held
+under-water view (`--frame-log`, release build, the two builds interleaved)
+when the Mac is quiet; otherwise it is owed (tasks 15.3).
+
+**Not changed.** The look from above, the shafts, the snow, the window's
+edge (the same Fresnel ramp, 0.55 to 0.75), the river bed.
+
+**Validation** (the waterline videos' method, B19). Before and after MP4s
+at 1080p60 at the owner's two spots, the place and the look fixed, the eye
+going from 0.6 m over the surface to 0.4 m under it at 0.1 m/s, on down,
+and back up through it, its height burnt in. On Drive as
+`underwater-waterline-<place>-<before|after>-1080p60.mp4`; contact sheets
+and the frame-by-frame list in `docs/screenshots/underwater-waterline/`.
+
+**Validated** (2026-11-16, `docs/screenshots/underwater-waterline/README.md`):
+at the owner's shallow-sea spot the before video shows the split frame for
+every frame under the surface (the mirrored floor over the waterline, the
+streak band); the after video shows the floor under water and the murk
+ceiling over the waterline, no mirror and no streaks. Under the sea in rain
+the dark mirror and its speckled band are gone; the rings shade the murk.
+On the beach the before video's beach band steps 2.5 to 3.1 (of 255) in
+colour at every flip into air and back; the after video's steps none over
+1.0. **Open:** the murk ceiling is darker than a bright shallow floor; a
+lighter ceiling would be a look change, for the owner with the sheets.
+
+### B22. Holes in the sea at caverns beside it (owner, 2026-11-16)
+
+The owner, on a beach at `41.636 11.664` (1.6 m up, on the column tier):
+"theres some holes here in caverns next to the ocean". A narrow channel
+cut into a grass and dirt bank, a small cavern under the bank's overhang
+open to the sea, and the sea's surface broken in both: patches of it
+missing, the stone and cobble walls and floor showing through as stepped,
+hard-edged blocks, worst under the overhang and at the cavern's back.
+
+**Reproduced.** A measurement (`sea_cave_report`, an ignored test that
+builds the fine set at a place and maps, metre by metre, what is drawn over
+each cell's water at the sea's top layer) at the owner's spot, and a scan of
+39 coastal places round it and further south, then captures with the eye
+path at the default and the high tide (`--tide high`). The owner's place is
+a cave system of dry pits and roofed air pockets (`D`, `C` on the map) two to
+twelve metres west of the beach, whose floors are 2 to 5 m under sea level;
+the sea's own caves (`W`: the sea's water under a roof) are as common along
+other shores (`35.952 18.251`, `40 10`, `44 6`). Two causes, one family: the
+sea's surface is decided in three places that do not agree.
+
+1. **The tide overtops pockets the column holds dry.** The tide is drawn,
+   not simulated: the sheet stands at `sea - 0.5 + tide`, up to 1.5 m over
+   the mean, over every cell whose ground is under the high water
+   (`planet_visibility.wgsl`, the sheet's listing), but not over a cell
+   marked dry (`DRY_SHEET_BIT`, `planet_column.rs` `mark_sheet`): one whose
+   ground is under sea level and whose column holds no water at the sea's
+   top. The build's flood (`flood_from`) fills only what is joined to the
+   sea UNDER sea level, so a pit or cavern behind a beach whose sand stands
+   at sea level stays air, which is right at the mean. At any tide over the
+   beach the sheet runs up to the pit and stops: a hole in the sea with the
+   pit's walls and floor in it (`D`). Under a bank whose top stands over the
+   high water (`C`, `h >= 1.5`) the sheet is not listed at all, so under the
+   overhang the eye looks below the sea's surface into dry stone. The eye's
+   own test (`eye_water_at`, the "open air over ground the high tide
+   reaches" branch) meanwhile calls an open pit under the tide's sheet the
+   sea's water, and the swimmer (`swim_surface`) reads the height field's
+   ground: three answers for one place.
+2. **The sea's water under a roof is drawn at the wrong height.** A cell of
+   the sea's own water under a roof (`W`) has the roof's top as its record
+   height. Over the sea level, the mesher draws it (`water_flow.rs`
+   `cell_pieces`: the sea's top is the sheet's only where the record is
+   under sea level) at its layer's top, 0 m, while the sheet beside it
+   stands at the tide's height, anywhere from -1.5 to +1.5 m. Neither draws
+   a face between them (the mesher skips a side toward water; the sheet has
+   no sides), so at the cave's mouth the eye sees past a step of up to 1.5 m
+   into the cave under its surface. Where the roof's top is under the high
+   water the cell is drawn twice: the sheet at the tide's height and the
+   mesher's top at 0 m.
+
+**The fix: one answer, the sea's reach.** At the tier's build, and after
+every edit, a walk from the open sea (cells whose column holds the sea's
+water at its top layer with open air over it, under sea level) through every
+cell that is not solid, at every layer up to the high water's, sideways and
+up and down. A cell the walk reaches is one the sea's surface reaches at
+some tide: its finest record is marked (`SEA_REACH_BIT`).
+- **The sheet** is listed over a reached cell whatever its ground's or
+  roof's height, and over an unreached cell under the high water only if
+  its column holds water at the sea's top (a sealed pool someone poured).
+  A dry pit or cavern behind a beach is under the sea's sheet; a hollow
+  inland that no water reaches is no longer flooded at high tide.
+- **The sea's own top under a roof is the sheet's**: the mesher leaves the
+  sea's top layer to the sheet wherever the sheet is listed (one Rust
+  function, `sheet_listed`, read by the mesher and the tests, beside the
+  listing it mirrors). One surface, at one height, inside the cave and out.
+- **Under a roof the sheet is lit by the cave**: the record carries the sky
+  light over the water's top in its column (four bits), so the sea in a
+  cave is as dark as the mesher's water in it was, not the open sky's.
+- **The eye and the swimmer** read the same mark: on the tier, air under the
+  high water in a reached cell is the sea's water at the tided sheet
+  (`eye_water_at`, `swim_surface`); in an unreached cell it is dry.
+
+Derived, like the flood: never saved, and the same tier marks the same way
+however often it is built. The columns, the edits and the generator are
+untouched, so saves are too. The tide is still drawn, not simulated: at low
+tide a pit behind the beach holds the sea's surface at the tide's height,
+like a tide pool.
+
+**Not changed.** The flood, the water rule and the generator. Rivers: a cell
+with inland water over the sea's level keeps its own surface (B18). The
+sheet's look.
+
+**Validation.** Before and after MP4s at 1080p60 at the owner's spot and two
+other places, slowly across the cavern's mouth, under the overhang and
+through the waterline, the eye's height burnt in; on Drive as
+`sea-cavern-<place>-<before|after>-1080p60.mp4`, contact sheets and the
+frame-by-frame list in `docs/screenshots/sea-cavern-holes/`.

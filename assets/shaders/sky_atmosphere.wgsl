@@ -15,6 +15,26 @@
 #import bevy_pbr::forward_io::VertexOutput
 #endif
 
+// How far under the sphere's tangent `horizon_ray` dips, as a share of the
+// tangent's own dip: just short of it, so the ray clears the sphere by
+// millimetres to centimetres at eye height (its hit is dropped all the same).
+const HORIZON_CLEAR: f32 = 0.995;
+
+// The ray toward the solid sphere's horizon (radius `radius`) in the same
+// compass direction as `direction`, a hair over the tangent so it clears the
+// sphere: the air seen just over the horizon. An eye at or under the sphere's
+// radius gets the level ray.
+fn horizon_ray(camera: vec3<f32>, direction: vec3<f32>, radius: f32) -> vec3<f32> {
+    let r = length(camera);
+    let up = camera/max(r,1e-3);
+    let across = direction - up*dot(direction,up);
+    let along = select(normalize(cross(up,vec3<f32>(0.0,0.0,1.0)) + vec3<f32>(1e-4,0.0,0.0)),
+        across*inverseSqrt(max(dot(across,across),1e-12)), dot(across,across) > 1e-10);
+    let level = clamp(radius/max(r,1e-3),0.0,1.0);
+    let dip = sqrt(max(1.0-level*level,0.0))*HORIZON_CLEAR;
+    return normalize(along*level - up*dip);
+}
+
 struct SkyParameters {
     center_radius: vec4<f32>,
     atmosphere: vec4<f32>,
@@ -175,13 +195,26 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0
     let camera = view.world_position - sky.center_radius.xyz;
     let inside = length(camera) < sky.atmosphere.x;
     if (inside == front) { discard; }
-    let direction = normalize(in.world_position.xyz - view.world_position);
+    var direction = normalize(in.world_position.xyz - view.world_position);
+    // From inside, a ray that meets the solid sphere is one the sea or the
+    // ground should have covered: what the dome draws there shows only where
+    // they do not reach it (`horizon-haze` 4, the sea's horizon line). The
+    // sheet's tide and troughs take it as much as a metre under that sphere,
+    // and its silhouette under the sphere's tangent, so a few rows of rays
+    // under the horizon met no sea. Cut at the ground a few hundred metres
+    // out, their air was too thin to cover the black behind the dome: a hard
+    // dark line along the sea's horizon. Such a ray takes the horizon's air
+    // instead, the tangent's, so the gap is the sky's own colour there.
+    var ground = cloud_sphere_hit(camera,direction,sky.center_radius.w);
+    if (inside && ground.x > 0.0) {
+        direction = horizon_ray(camera,direction,sky.center_radius.w);
+        ground = vec2<f32>(-1.0);
+    }
     let sun = normalize(sky.sun.xyz);
     let shell = max(sky.atmosphere.x-sky.center_radius.w, 1.0);
     let air_hit = cloud_sphere_hit(camera,direction,sky.atmosphere.x);
     let start = max(air_hit.x,0.0);
     var end = air_hit.y;
-    let ground = cloud_sphere_hit(camera,direction,sky.center_radius.w);
     if (ground.x > 0.0) { end = min(end, ground.x); }
     if (end <= start) { discard; }
 

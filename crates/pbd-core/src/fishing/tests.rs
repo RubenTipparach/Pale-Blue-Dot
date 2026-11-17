@@ -302,3 +302,44 @@ fn a_missed_bite_lets_the_fish_go() {
         "{events:?}"
     );
 }
+
+/// The strike is either button while the float is under: a right click at
+/// the bite, the button the prompt says winds in, hooks the fish rather than
+/// letting it go (owner, 2026-11-16).
+#[test]
+fn a_right_click_at_the_bite_hooks_the_fish() {
+    let mut world = World::new(50);
+    world.add("minnow", at(0.0, 1.0, 8.0), 50);
+    world.cast(0.6);
+    world.wait_for(Phase::Floating, 5.0);
+    world.wait_for(Phase::Bite, 90.0);
+    assert_eq!(world.line.phase, Phase::Bite);
+    let events = world.tick(Controls {
+        reel_in: true,
+        ..Default::default()
+    });
+    assert!(
+        matches!(events.first(), Some(Event::Hooked { .. })),
+        "{events:?}"
+    );
+    assert_eq!(world.line.phase, Phase::Hooked);
+}
+
+/// Winding in with a fish nibbling says it got away, so a line that was not
+/// empty never comes in silently.
+#[test]
+fn winding_in_on_a_nibble_says_the_fish_got_away() {
+    let mut world = World::new(60);
+    world.add("minnow", at(0.0, 1.0, 8.0), 60);
+    world.cast(0.6);
+    world.wait_for(Phase::Floating, 5.0);
+    world.wait_for(Phase::Nibble, 90.0);
+    assert_eq!(world.line.phase, Phase::Nibble);
+    let species = world.schools[0].species;
+    let events = world.tick(Controls {
+        reel_in: true,
+        ..Default::default()
+    });
+    assert_eq!(events, vec![Event::Lost { species }, Event::ReeledIn]);
+    assert_eq!(world.line.phase, Phase::Ready);
+}

@@ -596,14 +596,17 @@ struct CellFrame {
     centre: Vec3,
     corners: [Vec3; 6],
     sides: [Option<usize>; 6],
-    under_sea: bool,
+    /// The sea's sheet is listed over the cell, so the sea's own top here is
+    /// the sheet's (`planet::column::sheet_listed`, `ocean-environments`
+    /// B22): in a cave the sea reaches too, not only under sea level.
+    sheet_listed: bool,
     /// The shader's tangent frame at the centre.
     t: Vec3,
     b: Vec3,
 }
 
 impl CellFrame {
-    fn of(tier: &ColumnTier, slot: usize, cell: &GpuCell, sea_level_m: f32) -> Self {
+    fn of(tier: &ColumnTier, slot: usize, cell: &GpuCell) -> Self {
         let degree = cell.degree().min(6);
         let centre = Vec3::from_slice(&cell.direction_height[..3]).normalize_or(Vec3::Y);
         let mut corners = [centre; 6];
@@ -616,7 +619,7 @@ impl CellFrame {
             centre,
             corners,
             sides: tier.sides_of(slot),
-            under_sea: cell.direction_height[3] < sea_level_m,
+            sheet_listed: crate::planet::column::sheet_listed(cell),
             t,
             b,
         }
@@ -704,8 +707,9 @@ fn cell_pieces(
     let above_water = column.material(layer + 1).is_water();
     let flow = here.flow();
     let falling = flow.is_some_and(|(_, f)| f);
-    // The sea's own top: the sheet draws it.
-    let sheet = here == Material::Water && layer + 1 == sea && f.under_sea;
+    // The sea's own top: the sheet draws it wherever it is listed, under a
+    // roof too, so a sea cave has one surface at the sheet's tided height.
+    let sheet = here == Material::Water && layer + 1 == sea && f.sheet_listed;
     let side_of = |s: usize| -> Option<Side> {
         let n = sides[s]?;
         Some(Side {
@@ -1071,13 +1075,8 @@ fn is_foot(tier: &ColumnTier, slot: usize, layer: usize) -> bool {
 }
 
 /// Mesh every water cell of the tier the sea sheet does not draw, as it is.
-pub fn liquid_mesh(
-    tier: &ColumnTier,
-    finest: &[GpuCell],
-    radius: f32,
-    sea_level_m: f32,
-) -> LiquidMesh {
-    liquid_mesh_eased(tier, None, finest, radius, sea_level_m)
+pub fn liquid_mesh(tier: &ColumnTier, finest: &[GpuCell], radius: f32) -> LiquidMesh {
+    liquid_mesh_eased(tier, None, finest, radius)
 }
 
 /// Mesh every water cell of the tier the sea sheet does not draw, each
@@ -1096,7 +1095,6 @@ pub fn liquid_mesh_eased(
     prev: Option<&ColumnTier>,
     finest: &[GpuCell],
     radius: f32,
-    sea_level_m: f32,
 ) -> LiquidMesh {
     let mut out = LiquidMesh::default();
     // The tick before is eased from only when it is the same tier.
@@ -1133,7 +1131,7 @@ pub fn liquid_mesh_eased(
                 continue;
             }
             let (f, prev) = &*frame.get_or_insert_with(|| {
-                let f = CellFrame::of(tier, slot, cell, sea_level_m);
+                let f = CellFrame::of(tier, slot, cell);
                 let near = prev.is_some()
                     && (changed[slot] || f.sides[..f.degree].iter().flatten().any(|&n| changed[n]));
                 (f, prev.filter(|_| near))
@@ -1263,7 +1261,6 @@ fn rebuild_water(
         prev.as_deref().map(|p| &p.columns),
         fine.set.finest_records(),
         PLANET_RADIUS,
-        crate::planet::terrain_config().sea_level_m,
     );
     if made.cells > 0 {
         debug!(
@@ -1485,7 +1482,7 @@ mod tests {
     }
 
     fn mesh(now: &ColumnTier, before: Option<&ColumnTier>) -> LiquidMesh {
-        liquid_mesh_eased(now, before, &ring_cells(), RADIUS, 0.0)
+        liquid_mesh_eased(now, before, &ring_cells(), RADIUS)
     }
 
     /// A fall's foot carries what the proposed mist rule and the pool's
@@ -1518,7 +1515,7 @@ mod tests {
         assert!(foot.drop_m > 2.5 && foot.drop_m < 4.0, "{}", foot.drop_m);
         assert!(foot.pool_m > 0.0 && foot.pool_m <= 1.0, "{}", foot.pool_m);
         let cells = ring_cells();
-        let f = CellFrame::of(&tier, 1, &cells[1], 0.0);
+        let f = CellFrame::of(&tier, 1, &cells[1]);
         assert_eq!(f.sides[3], Some(0));
         assert!(foot.over.dot(-f.side_normal(3)) > 0.99, "{}", foot.over);
         // Every falling face's metres under the lip run from 0 to the run's
@@ -1559,7 +1556,7 @@ mod tests {
         let made = mesh(&now, Some(&before));
         assert_eq!((made.born, made.dried), (1, 0));
         let cells = ring_cells();
-        let f = CellFrame::of(&now, 1, &cells[1], 0.0);
+        let f = CellFrame::of(&now, 1, &cells[1]);
         // Slot 1's side toward slot 0 is its side 3.
         assert_eq!(f.sides[3], Some(0));
         let (n, edge) = (f.side_normal(3), f.corners[3]);
@@ -1632,7 +1629,7 @@ mod tests {
             .filter(|v| v.flags & EASE_GONE != 0)
             .collect();
         assert!(!gone.is_empty(), "the dried cell is drawn this tick");
-        let f = CellFrame::of(&dry, 1, &ring_cells()[1], 0.0);
+        let f = CellFrame::of(&dry, 1, &ring_cells()[1]);
         let base = RADIUS + column::layer_altitude(AT);
         let mut on_edge = 0;
         for v in &gone {
