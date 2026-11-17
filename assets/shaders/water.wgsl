@@ -515,8 +515,12 @@ fn view_extinction() -> vec3<f32> {
 const SHAFT_MEAN: f32 = 0.045;
 fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: f32, extinction: vec3<f32>) -> vec3<f32> {
     let strength = view.under.x;
-    let reach = min(dist, view.under.y);
-    if (strength <= 0.0 || reach <= 0.0) { return vec3<f32>(0.0); }
+    // The march is laid over the shafts' own reach and the scene only clips
+    // it (`underwater-shafts`): spread over the scene's distance, two
+    // neighbouring pixels at different depths sampled unrelated parts of the
+    // pattern, and the scene's outline was drawn into the light.
+    let reach = view.under.y;
+    if (strength <= 0.0 || reach <= 0.0 || dist <= 0.0) { return vec3<f32>(0.0); }
     let up = safe_normal(origin-center);
     let sun = view.sun.xyz;
     let sun_up = dot(sun, up);
@@ -533,7 +537,7 @@ fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: 
     if (a.x >= a.y && a.x >= a.z) { axes = vec2<u32>(1u, 2u); } else if (a.z >= a.y) { axes = vec2<u32>(0u, 1u); }
     let t = view.camera_time.w;
     var gathered = vec3<f32>(0.0);
-    let steps = 10;
+    let steps = 16;
     // One offset for every ray (B19): a random offset per ray put each
     // pixel's samples on a different part of the pattern, per-pixel speckle
     // wherever the samples stood further apart than the pattern is wide.
@@ -545,11 +549,21 @@ fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: 
     // jitter landed on a different part of it, and the far end of a river's
     // channel was a band of per-pixel speckle. Each sample now weighs its
     // own stretch of the ray and fades to the pattern's mean where that
-    // stretch outgrows the pattern.
+    // stretch outgrows the pattern. A stretch is weighed by its part in
+    // front of the scene, and the march stops at the first stretch behind it.
+    // The one stretch the scene cuts is sampled in the middle of its part in
+    // front (never past the surface seen from below) and fades by that
+    // part's length; an uncut stretch is sampled where it always was, since
+    // the middle of its length is never nearer than `reach*u*u`.
     for (var i = 0; i < steps; i++) {
         let u = (f32(i)+jitter)/f32(steps);
-        let d = reach*u*u;
-        let stretch = 2.0*reach*max(u, 0.5/f32(steps))/f32(steps);
+        let u0 = f32(i)/f32(steps);
+        let u1 = f32(i+1)/f32(steps);
+        let lo = reach*u0*u0;
+        if (lo >= dist) { break; }
+        let stretch = reach*(u1*u1 - u0*u0);
+        let weight = clamp(dist - lo, 0.0, stretch);
+        let d = min(reach*u*u, lo + 0.5*weight);
         let q = origin + dir*d;
         let depth = sea - length(q-center);
         if (depth <= 0.0) { continue; }
@@ -557,8 +571,8 @@ fn shafts(origin: vec3<f32>, dir: vec3<f32>, dist: f32, center: vec3<f32>, sea: 
         let uv = vec2<f32>(s[axes.x], s[axes.y])*1.4;
         let a = sin(uv.x + 1.7*sin(uv.y*0.43 + t*0.21) + t*0.33);
         let b = sin(uv.y*1.13 + 1.7*sin(uv.x*0.37 - t*0.17) - t*0.29);
-        let bright = mix(pow(max(a*b, 0.0), 6.0), SHAFT_MEAN, smoothstep(0.8, 2.5, stretch));
-        gathered += bright*light_left(depth)*exp(-extinction*d)*stretch;
+        let bright = mix(pow(max(a*b, 0.0), 6.0), SHAFT_MEAN, smoothstep(0.8, 2.5, weight));
+        gathered += bright*light_left(depth)*exp(-extinction*d)*weight;
     }
     let toward = max(dot(dir, sun_w), 0.0);
     let phase = 0.3 + 1.6*pow(toward, 6.0);
