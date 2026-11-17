@@ -947,6 +947,108 @@ and by night. Game code waits for the owner's approval.
   moves toward a lighter teal (the churn scattering light back up), fading
   out over 2.2 m + 0.15 m per metre fallen from the foot.
 
+## The sound of a fall (owner, 2026-11-16)
+
+The owner: "did you add sfx to the waterfall?" ... "which should have like a
+light, medium, and roaring based on height". Measured (read off the code,
+2026-11-16): the game has no falling-water sound. `assets/audio/ambience/`
+has `amb_open_water`, `amb_surf` and `amb_underwater`, beds for the sea and
+the shore; `crates/pbd-app/src/audio/hooks.rs` has no fall hook. The sound
+only plays; it changes no look (mist, froth and the fall shaders stay as
+they are, waiting on the owner's mockups).
+
+**One source of truth for where falls are.** The mesher already finds
+every fall's foot for the splash (`liquid_mesh_eased`, the `Foot` records
+in `FallFeet`, read by `animate_splash`): its body-local point on the
+landing cell's surface and `height`, the number of falling cells over it.
+The sound reads that same `FallFeet` resource. No second fall finder.
+
+**The drop, D.** D is metres from the lip's water to the landing water: the
+falling run over the foot, `Foot::height` layers of one 1.000 m cell each
+(CLAUDE.md, the gold-standard cell height), so D = `height` metres. It is
+the same measure the splash sizes its spray and mist by.
+
+**Three beds by the drop** (`pbd_core::audio::fall_band`, thresholds in
+`mix.ron`):
+
+| Band | Drop D | What it is | Cue | Heard full within | Silent past |
+| --- | --- | --- | --- | ---: | ---: |
+| Light | under 3 m (1 or 2 layers, a riffle or a step) | a bright trickle and splash | `fall_light` | 3 m | 40 m |
+| Medium | 3 m to under 6 m (3 to 5 layers) | a steady full pour | `fall_medium` | 6 m | 90 m |
+| Roaring | 6 m and over | a low, full roar | `fall_roar` | 12 m | 220 m |
+
+`fall_medium_from_m: 3.0` and `fall_roar_from_m: 6.0`. A fall is as loud
+as the cue's level and the distance law every placed sound keeps (full
+within the near distance, then 6 dB a doubling, faded to nothing over the
+last fifth before its reach; the air's low pass darkens it with distance and
+behind the head). The roar carries furthest, as a big fall does; a trickle
+is gone at 40 m. A fall is only heard while its foot is in the fine tier
+(the near terrain), so on a flight the roar ends where the tier ends.
+
+**Placed at its foot.** Each fall is a mono loop at its `Foot::at`, a
+body-local point, given to the mixer as `Where::At` and placed against the
+camera's eye in the camera's frame, as every placed sound is
+(`audio-and-ambience` section 3). The cues are placed effects, so they are
+mono files in `assets/audio/sfx/` (`fall_light.ogg`, `fall_medium.ogg`,
+`fall_roar.ogg`), not stereo `amb_` beds, which are unplaced.
+
+**A wide fall is one source.** A river over a cliff lands as a row of feet,
+one a column. Feet within `fall_merge_m` (10 m) of a louder foot fold into
+it: the fall sounds once, from its loudest foot, at that foot's band.
+
+**How many play.** At most `fall_voices` (4) falls sound at once, the
+loudest at the ears (the cue's level times its distance gain), so a roar at
+100 m outranks a trickle at 30 m. A fall already playing is ranked 3 dB up,
+so two falls of nearly the same loudness do not trade places every frame.
+Each heard fall holds one voice. A source follows its fall as the loudest
+foot of that fall moves (the same band, within the merge distance), rather
+than restarting at the new foot. The cap is on voices, fading ones
+included: a fall newly among the loudest takes a voice when one is free,
+which is at most one fade after another fall left the list.
+
+**Never a pop.** A fall fades in over `fall_fade_s` (1.5 s) from silence
+when it is first heard (walking up to it, or a fall that has just landed),
+and fades out over the same when it leaves the list or its foot is gone
+(the water stopped, or the fall left the fine tier). Only at silence is its
+voice let go. The distance law already takes a sound to nothing at its
+reach, so walking away never cuts it either.
+
+**Under water, sheltered, paused.** The falls play on the effects bus under
+`world`, which already muffles every placed sound when the eye is under
+water (600 Hz low pass, 9 dB down, more reverb), pauses with the world and
+ducks under a menu. Nothing new is needed for it.
+
+**Cost.** One pass over the feet a frame (the fine tier's few dozen to few
+hundred), into a fixed list of at most four, with no allocation after the
+first frame; at most four looping voices, streamed from disk as the other
+long loops are (`stream: true`, as `fire_crackle` and `hull_water`), so the
+decoded bank stays inside its 64 MB budget. No perf suite: no render or
+simulation work changes.
+
+**The sounds** (the `sound-effects` skill: recorded CC0 first; nothing
+synthesised). Each is 8 s, mono, 48 kHz, looped over a 1 s crossfade, cut
+from Freesound recordings whose pages say Creative Commons 0
+(`tools/audio/cc0_cues.json`, sources in `assets/audio/sfx/SOURCES.md` and
+`AUDIO_SOURCES.md`):
+
+- `fall_light`: a small splashy stream falling into water (kyles, 454340),
+  water poured onto stone 8 dB under (TheWoodlandNomad, 363119); a 120 Hz
+  high pass keeps it light. Spectral centre 4.4 kHz, 2 % of its energy
+  under 250 Hz and 52 % over 4 kHz: bright and splashy.
+- `fall_medium`: a medium waterfall (Osiruswaltz, 530170) with a mid-sized
+  one 5 dB under (ProductionNow, 352903); 60 Hz high pass. Centre 1.3 kHz,
+  10 % under 250 Hz, 5 % over 4 kHz: a broad pour.
+- `fall_roar`: Niagara's roar (KevinT1001, 379905) with a big waterfall 4 dB
+  under (A.Deathy, 44880) and a huge one 10 dB under for its spray
+  (deleted_user_7146007, 383732); 30 Hz high pass, 6 kHz low pass. Centre
+  345 Hz, 73 % of its energy under 250 Hz, 1 % over 4 kHz: led by the low
+  roar.
+
+Every seam is under a typical sample step and its level across the seam is
+within 1 dB of the whole; the contact sheet is
+`docs/screenshots/audio/fall-sheet.jpg`. A Claude session cannot listen:
+only the owner's ears approve them, on the Sounds page.
+
 ### Mist on every fall, the heights compared, and a faster scroll lower down (6.5, owner, 2026-11-16)
 
 The owner asked three more things of the same mockup: "whats rules behind
@@ -1049,108 +1151,6 @@ metres-under-the-lip (`flow_uv.z` on a falling face, which the mesher
 already writes and the shader does not yet read), applied to the waves'
 advected position and to the froth's, each with its own `v0`. The game keeps
 the one speed until the owner approves.
-
-## The sound of a fall (owner, 2026-11-16)
-
-The owner: "did you add sfx to the waterfall?" ... "which should have like a
-light, medium, and roaring based on height". Measured (read off the code,
-2026-11-16): the game has no falling-water sound. `assets/audio/ambience/`
-has `amb_open_water`, `amb_surf` and `amb_underwater`, beds for the sea and
-the shore; `crates/pbd-app/src/audio/hooks.rs` has no fall hook. The sound
-only plays; it changes no look (mist, froth and the fall shaders stay as
-they are, waiting on the owner's mockups).
-
-**One source of truth for where falls are.** The mesher already finds
-every fall's foot for the splash (`liquid_mesh_eased`, the `Foot` records
-in `FallFeet`, read by `animate_splash`): its body-local point on the
-landing cell's surface and `height`, the number of falling cells over it.
-The sound reads that same `FallFeet` resource. No second fall finder.
-
-**The drop, D.** D is metres from the lip's water to the landing water: the
-falling run over the foot, `Foot::height` layers of one 1.000 m cell each
-(CLAUDE.md, the gold-standard cell height), so D = `height` metres. It is
-the same measure the splash sizes its spray and mist by.
-
-**Three beds by the drop** (`pbd_core::audio::fall_band`, thresholds in
-`mix.ron`):
-
-| Band | Drop D | What it is | Cue | Heard full within | Silent past |
-| --- | --- | --- | --- | ---: | ---: |
-| Light | under 3 m (1 or 2 layers, a riffle or a step) | a bright trickle and splash | `fall_light` | 3 m | 40 m |
-| Medium | 3 m to under 6 m (3 to 5 layers) | a steady full pour | `fall_medium` | 6 m | 90 m |
-| Roaring | 6 m and over | a low, full roar | `fall_roar` | 12 m | 220 m |
-
-`fall_medium_from_m: 3.0` and `fall_roar_from_m: 6.0`. A fall is as loud
-as the cue's level and the distance law every placed sound keeps (full
-within the near distance, then 6 dB a doubling, faded to nothing over the
-last fifth before its reach; the air's low pass darkens it with distance and
-behind the head). The roar carries furthest, as a big fall does; a trickle
-is gone at 40 m. A fall is only heard while its foot is in the fine tier
-(the near terrain), so on a flight the roar ends where the tier ends.
-
-**Placed at its foot.** Each fall is a mono loop at its `Foot::at`, a
-body-local point, given to the mixer as `Where::At` and placed against the
-camera's eye in the camera's frame, as every placed sound is
-(`audio-and-ambience` section 3). The cues are placed effects, so they are
-mono files in `assets/audio/sfx/` (`fall_light.ogg`, `fall_medium.ogg`,
-`fall_roar.ogg`), not stereo `amb_` beds, which are unplaced.
-
-**A wide fall is one source.** A river over a cliff lands as a row of feet,
-one a column. Feet within `fall_merge_m` (10 m) of a louder foot fold into
-it: the fall sounds once, from its loudest foot, at that foot's band.
-
-**How many play.** At most `fall_voices` (4) falls sound at once, the
-loudest at the ears (the cue's level times its distance gain), so a roar at
-100 m outranks a trickle at 30 m. A fall already playing is ranked 3 dB up,
-so two falls of nearly the same loudness do not trade places every frame.
-Each heard fall holds one voice. A source follows its fall as the loudest
-foot of that fall moves (the same band, within the merge distance), rather
-than restarting at the new foot. The cap is on voices, fading ones
-included: a fall newly among the loudest takes a voice when one is free,
-which is at most one fade after another fall left the list.
-
-**Never a pop.** A fall fades in over `fall_fade_s` (1.5 s) from silence
-when it is first heard (walking up to it, or a fall that has just landed),
-and fades out over the same when it leaves the list or its foot is gone
-(the water stopped, or the fall left the fine tier). Only at silence is its
-voice let go. The distance law already takes a sound to nothing at its
-reach, so walking away never cuts it either.
-
-**Under water, sheltered, paused.** The falls play on the effects bus under
-`world`, which already muffles every placed sound when the eye is under
-water (600 Hz low pass, 9 dB down, more reverb), pauses with the world and
-ducks under a menu. Nothing new is needed for it.
-
-**Cost.** One pass over the feet a frame (the fine tier's few dozen to few
-hundred), into a fixed list of at most four, with no allocation after the
-first frame; at most four looping voices, streamed from disk as the other
-long loops are (`stream: true`, as `fire_crackle` and `hull_water`), so the
-decoded bank stays inside its 64 MB budget. No perf suite: no render or
-simulation work changes.
-
-**The sounds** (the `sound-effects` skill: recorded CC0 first; nothing
-synthesised). Each is 8 s, mono, 48 kHz, looped over a 1 s crossfade, cut
-from Freesound recordings whose pages say Creative Commons 0
-(`tools/audio/cc0_cues.json`, sources in `assets/audio/sfx/SOURCES.md` and
-`AUDIO_SOURCES.md`):
-
-- `fall_light`: a small splashy stream falling into water (kyles, 454340),
-  water poured onto stone 8 dB under (TheWoodlandNomad, 363119); a 120 Hz
-  high pass keeps it light. Spectral centre 4.4 kHz, 2 % of its energy
-  under 250 Hz and 52 % over 4 kHz: bright and splashy.
-- `fall_medium`: a medium waterfall (Osiruswaltz, 530170) with a mid-sized
-  one 5 dB under (ProductionNow, 352903); 60 Hz high pass. Centre 1.3 kHz,
-  10 % under 250 Hz, 5 % over 4 kHz: a broad pour.
-- `fall_roar`: Niagara's roar (KevinT1001, 379905) with a big waterfall 4 dB
-  under (A.Deathy, 44880) and a huge one 10 dB under for its spray
-  (deleted_user_7146007, 383732); 30 Hz high pass, 6 kHz low pass. Centre
-  345 Hz, 73 % of its energy under 250 Hz, 1 % over 4 kHz: led by the low
-  roar.
-
-Every seam is under a typical sample step and its level across the seam is
-within 1 dB of the whole; the contact sheet is
-`docs/screenshots/audio/fall-sheet.jpg`. A Claude session cannot listen:
-only the owner's ears approve them, on the Sounds page.
 
 ## Risks / Trade-offs
 
