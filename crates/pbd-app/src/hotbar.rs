@@ -17,23 +17,11 @@ use pbd_core::terrain::Material;
 /// what it missed, once.
 pub const KIT_VERSION: u32 = KIT_GRANTS.len() as u32;
 
-/// What a new world is dealt before the grants. Only a new world reads it: a
-/// saved world carries its own slots, whatever the base was when it began.
-///
-/// Snow, rock and ore were in it until the lights needed their slots
-/// (`lamps-and-lanterns` decision 12, the owner in survey L2: "dont need
-/// those blocks in the inventory really"). Digging gives them back.
-const KIT_BASE: [(Material, u16); 4] = [
-    (Material::Grass, 64),
-    (Material::Dirt, 64),
-    (Material::Stone, 48),
-    (Material::Sand, 32),
-];
-
-/// What each kit version added, in order; version N is entry N - 1. A new
-/// world is dealt the base and all of these; a saved world is dealt the ones
-/// past the version its log records. Append, never reorder: a saved version
-/// names a prefix of this table.
+/// What each kit version added, in order; version N is entry N - 1. A saved
+/// world is dealt the ones past the version its log records; a new world is
+/// dealt none of them (it starts empty-handed, `starter-missions` "A new world
+/// starts empty-handed") and is recorded as dealt at [`KIT_VERSION`]. Append,
+/// never reorder: a saved version names a prefix of this table.
 const KIT_GRANTS: [&[(Item, u16)]; 6] = [
     // Something to see with. A kit that could dig into the dark and not light
     // it was a kit that could only dig in daylight.
@@ -62,16 +50,6 @@ const KIT_GRANTS: [&[(Item, u16)]; 6] = [
     // Version 6 dealt a campfire (`cooking` design S3) until the hands could
     // make one; they can (`tool-crafting` decision 10), so it is empty.
     &[],
-];
-
-/// What the mission tree earns, so a new world is not dealt it
-/// (`starter-missions` G2): fences and gates ("Make fences") and torches
-/// ("Light the night"). The grants keep them, so a save from before a grant
-/// is still dealt it; only [`Hotbar::starting_kit`] leaves them out.
-const EARNED: [Item; 3] = [
-    Item::Block(Material::Torch),
-    Item::Good(Good::FENCE),
-    Item::Good(Good::GATE),
 ];
 
 /// A light's own icon, as an asset path, or `None` for a block that is not
@@ -134,24 +112,12 @@ pub struct Planted {
 pub struct Hotbar(pub Slots);
 
 impl Hotbar {
-    /// What the player starts carrying.
-    ///
-    /// A kit rather than an empty row, and that is a preview decision worth
-    /// naming: there is nothing to dig yet, so an empty hotbar would draw ten
-    /// blank squares and prove nothing about the thumbnails. It goes when
-    /// mining lands and the world can fill the slots itself.
+    /// What the player starts carrying in a new world: nothing (owner,
+    /// 2026-11-17: "get rid of this silly starting inventory"). The first
+    /// mission is gathering by hand, and every tool, block and light after it
+    /// is earned. A saved world keeps whatever it carries.
     pub fn starting_kit() -> Self {
-        let mut slots = Slots::new();
-        for (material, count) in KIT_BASE {
-            slots.give(Item::Block(material), count);
-        }
-        for &(item, count) in KIT_GRANTS.iter().copied().flatten() {
-            if !EARNED.contains(&item) {
-                let left = slots.give(item, count);
-                debug_assert_eq!(left, 0, "a new world's kit fits");
-            }
-        }
-        Self(slots)
+        Self(Slots::new())
     }
 
     /// The hotbar a world opens with: the kit for a new world, the saved
@@ -222,45 +188,22 @@ mod kit_tests {
         slots.count(Item::Block(material))
     }
 
-    /// A new world is dealt the base and every grant but what the mission
-    /// tree earns (`starter-missions` G2): the kit is one table and the
-    /// version is its length, so a grant cannot be in one and not the other.
-    /// It fills nine of the ten slots, and holds every light but the torch
-    /// and the campfire, and not the blocks digging gives back (decision 12).
+    /// A new world starts empty-handed, and is recorded as dealt at the
+    /// latest version, so no grant is dealt to it later.
     #[test]
-    fn a_new_world_is_dealt_the_base_and_every_grant_but_the_earned() {
+    fn a_new_world_starts_empty_handed() {
         let kit = Hotbar::starting_kit();
-        for (material, expected) in KIT_BASE.iter() {
-            assert_eq!(count(&kit, *material), u32::from(*expected), "{material:?}");
-        }
-        for (item, expected) in KIT_GRANTS.iter().copied().flatten() {
-            let want = if EARNED.contains(item) { 0 } else { *expected };
-            assert_eq!(kit.count(*item), u32::from(want), "{item:?}");
-        }
+        assert!(kit.hotbar().all(|slot| slot.is_none()), "an empty hotbar");
         assert_eq!(KIT_VERSION, 6);
-        assert_eq!(
-            kit.hotbar().filter(|slot| slot.is_some()).count(),
-            9,
-            "nine slots full, one free"
+        let mut save = WorldSave::memory_only();
+        let opened = Hotbar::restore(&mut save);
+        assert!(opened.hotbar().all(|slot| slot.is_none()));
+        assert_eq!(save.kit, KIT_VERSION, "dealt, at the latest version");
+        let again = Hotbar::restore(&mut save);
+        assert!(
+            again.hotbar().all(|slot| slot.is_none()),
+            "and nothing later"
         );
-        for light in Material::LAMPS {
-            if matches!(light, Material::Campfire | Material::Torch) {
-                // Made by hand, never dealt (`tool-crafting` decision 10,
-                // `starter-missions` G2).
-                assert_eq!(count(&kit, light), 0, "{light:?}");
-                continue;
-            }
-            assert!(count(&kit, light) > 0, "{light:?} is in the kit");
-        }
-        for earned in [Good::FENCE, Good::GATE] {
-            assert_eq!(kit.count(Item::Good(earned)), 0, "{earned:?} is earned");
-        }
-        // No free station: the forge is made at the workbench.
-        assert_eq!(count(&kit, Material::Forge), 0);
-        assert_eq!(count(&kit, Material::Workbench), 0);
-        for dug in [Material::Snow, Material::Rock, Material::Ore] {
-            assert_eq!(count(&kit, dug), 0, "{dug:?} is dug, not dealt");
-        }
     }
 
     /// The kit as it was dealt at version 1: seven blocks and the torches.

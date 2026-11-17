@@ -366,14 +366,23 @@ pub fn spawn(
                                     ..default()
                                 })
                                 .with_children(|foot| {
-                                    foot.spawn((
-                                        KitText::new("HOTBAR", ui_kit::TEXT_DIM)
-                                            .shadow(ui_kit::INK),
-                                        Node {
-                                            margin: UiRect::bottom(px(3)),
-                                            ..default()
-                                        },
-                                    ));
+                                    // The hand over the hotbar's first slot,
+                                    // as the HUD has it beside the hotbar
+                                    // (`pack-tool-slot` decision 3): the
+                                    // baked rock is the ten slots wide.
+                                    foot.spawn(Node {
+                                        align_items: AlignItems::End,
+                                        column_gap: px(4),
+                                        margin: UiRect::bottom(px(3)),
+                                        ..default()
+                                    })
+                                    .with_children(|line| {
+                                        super::equipment::spawn_pack_hand(line, kit, &icons);
+                                        line.spawn(
+                                            KitText::new("HOTBAR", ui_kit::TEXT_DIM)
+                                                .shadow(ui_kit::INK),
+                                        );
+                                    });
                                     slot_line(foot, kit, &atlas, 0);
                                 });
                         });

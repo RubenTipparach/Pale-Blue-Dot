@@ -658,6 +658,10 @@ version 10 has ore in the ground.
 herding" could not be written as one `needs` list. One parent per mission
 replaced it: cooking is spread to where its food comes from.
 
+"Gather soil" counted only plain grass (owner, 2026-11-17: "apparently grass
+blocks dont count as soil for the mission"): a cell dug in the drier or the
+jungle biomes is `dry grass` or `jungle grass`, not `grass`, so those digs did
+not count. The objective now names every grass the ground is made of.
 
 ### TS.4: the tree in the game takes M33's new look (owner, 2026-11-17: "I dont think the new mission tree look is implemented, can you implement that?")
 
@@ -698,3 +702,13 @@ The tool picker in the help (owner, 2026-11-17: "as part of tutorial when
 teach player to swap to an axe, tell them to hold G"): "Gather wood" says
 to hold G and pick the axe with the wheel, and "Till the soil" the same for
 the shovel, as "Go fishing" already did for the rod.
+
+## A new world starts empty-handed (owner, 2026-11-17)
+
+The owner, on a new world's hotbar (grass, dirt, stone, sand, lanterns,
+candles, braziers): "get rid of this silly starting inventory". A new world's
+player now carries nothing: the trunk's first mission is gathering by hand,
+and every block, light and tool after it is earned. `Hotbar::starting_kit` is
+an empty row, and the deal is recorded at the kit's latest version so no
+grant reaches a new world later. A saved world keeps everything it carries,
+and an old save is still dealt the grants it missed, as before.

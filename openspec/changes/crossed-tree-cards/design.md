@@ -97,3 +97,16 @@ cards.
 Nothing saved changes. Where trees stand and which cells can be chopped are
 `pbd_core::flora::grows_tree`'s, and a tree's species, variant, turn and
 size are rolled from its id at draw time, exactly as before.
+
+## 8. With the baked relief (merge, 2026-11-17)
+
+`tree-impostor-depth` landed beside this change and lights each impostor
+pixel by the near model's own baked normal and AO. Section 5's one normal
+per tree is kept as that change's standing normal (what the knob
+`tree_impostor_relief` mixes from), and each card and the cap now carry
+their baked view's level direction for the relief to be rebuilt in. The
+top view has its own relief strip (the strip and its relief are nine views,
+`IMPOSTOR_RELIEF` 31104 words). Because the baked normals are the model's
+own in the tree's frame, every plane of a tree takes the same light from
+the same leaf, which is what section 5 asked for. Nothing of either change
+is given up; `tree-impostor-depth` design 5 has the detail.

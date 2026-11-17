@@ -42,6 +42,17 @@ pub struct CraftPick {
     pub bench: usize,
 }
 
+/// The number on a well: an input always shows how many it takes, one
+/// included; a made thing or a stack shows a number only above one
+/// (`pack-tool-slot` decision 1).
+pub(super) fn need_count(need: bool, n: u16) -> String {
+    if need || n > 1 {
+        n.to_string()
+    } else {
+        String::new()
+    }
+}
+
 /// What a well shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
@@ -202,7 +213,7 @@ pub fn queue(
             return false;
         }
         Err(station::Refused::NotBetter) => {
-            note.say(wall_s, "You have that tool, or a better one");
+            note.say(wall_s, "You already have this tool");
             return false;
         }
         Err(station::Refused::Elsewhere) => return false,
@@ -902,8 +913,8 @@ pub fn paint(
             tip.0 = words;
         }
         let number = match item {
-            Some((_, n, _)) if n > 1 => n.to_string(),
-            _ => String::new(),
+            Some((_, n, _)) => need_count(matches!(well.role, Role::Need(_)), n),
+            None => String::new(),
         };
         for child in children.iter() {
             if let Ok(mut image) = well_icons.get_mut(child) {
@@ -1170,6 +1181,17 @@ pub fn hover_locked(
 
 #[cfg(test)]
 mod tests {
+
+    /// An input shows its count, one included; a result or a stack of one
+    /// shows none (`pack-tool-slot` decision 1: the stone axe's log).
+    #[test]
+    fn an_input_of_one_shows_its_count() {
+        assert_eq!(super::need_count(true, 1), "1");
+        assert_eq!(super::need_count(true, 3), "3");
+        assert_eq!(super::need_count(false, 1), "");
+        assert_eq!(super::need_count(false, 2), "2");
+    }
+
     use super::*;
 
     fn book() -> Recipes {

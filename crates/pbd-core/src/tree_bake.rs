@@ -94,6 +94,10 @@ impl Palette {
 struct Target {
     colour: Vec<[u8; 3]>,
     depth: Vec<f32>,
+    /// The surface's relief (`tree-impostor-depth`): its normal in the
+    /// view's level frame (across, up, toward the view) and its root-to-tip
+    /// AO, as the near pass lights them.
+    relief: Vec<[f32; 4]>,
 }
 
 fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
@@ -217,6 +221,15 @@ fn draw(
         z[2] * x[0] - z[0] * x[2],
         z[0] * x[1] - z[1] * x[0],
     ];
+    // The view's direction laid level: the frame a baked normal is kept in,
+    // so the shader rebuilds it from the card's own level facing. The top
+    // view (`crossed-tree-cards` 3) keeps it in the tree's own frame: across
+    // along x, up, and z, which is bearing 8 x 45 degrees = bearing 0.
+    let level = if top {
+        [0.0, 0.0, 1.0]
+    } else {
+        [th.sin() as f32, 0.0, th.cos() as f32]
+    };
     let (w3, h3) = ((VIEW_W * S3) as f32, (VIEW_H * S3) as f32);
     let x0 = view * VIEW_W * S3;
     let project = |p: [f32; 3]| {
@@ -286,6 +299,12 @@ fn draw(
                 };
                 target.depth[i] = d;
                 target.colour[i] = shade(&input, look, tex, means);
+                let nw = |k: usize| {
+                    w0 * tri[0].normal[k] + w1 * tri[1].normal[k] + w2 * tri[2].normal[k]
+                };
+                let n = [nw(0), nw(1), nw(2)];
+                let ao = w0 * tri[0].ao + w1 * tri[1].ao + w2 * tri[2].ao;
+                target.relief[i] = [dot(n, x), n[1], dot(n, level), ao];
             }
         }
     }
@@ -298,18 +317,19 @@ fn snapped(
     tex: &Textures,
     means: &([f32; 3], [f32; 3]),
     pal: &Palette,
-) -> Vec<i16> {
+) -> (Vec<i16>, Vec<[f32; 4]>) {
     let n = STRIP_W * S3 * VIEW_H * S3;
     let mut t = Target {
         colour: vec![[0; 3]; n],
         depth: vec![f32::MIN; n],
+        relief: vec![[0.0; 4]; n],
     };
     for view in 0..STRIP_VIEWS {
         draw(&mut t, verts, m, view, look, tex, means);
     }
     // A bake holds a few dozen distinct colours: snap each once.
     let mut seen = std::collections::HashMap::new();
-    (0..n)
+    let ids = (0..n)
         .map(|i| {
             if t.depth[i] == f32::MIN {
                 -1
@@ -319,7 +339,8 @@ fn snapped(
                     .or_insert_with(|| pal.snap(t.colour[i]))
             }
         })
-        .collect()
+        .collect();
+    (ids, t.relief)
 }
 
 /// Alpha of a baked pixel that came from the crown (leaves), and of one from
@@ -332,6 +353,28 @@ pub const BARK_ALPHA: u32 = 254;
 /// winter). Returns the strip's RGBA8 words, `STRIP_W` x `VIEW_H`, from the
 /// bottom row up; alpha is 0, [`BARK_ALPHA`] or [`CROWN_ALPHA`].
 pub fn bake(m: &TreeModel, look: &Look, tex: &Textures, bare: bool) -> Vec<u32> {
+    bake_with_relief(m, look, tex, bare).0
+}
+
+/// Pack a baked pixel's relief: its normal (across, up, toward the view, the
+/// view's level frame) as three snorm bytes and its root-to-tip AO as a
+/// unorm byte over them (`unpack4x8snorm` and `>> 24` in the shader).
+pub fn pack_relief(r: [f32; 4]) -> u32 {
+    let sn = |x: f32| ((x.clamp(-1.0, 1.0) * 127.0).round() as i32 as u8) as u32;
+    let ao = (r[3].clamp(0.0, 1.0) * 255.0).round() as u32;
+    sn(r[0]) | sn(r[1]) << 8 | sn(r[2]) << 16 | ao << 24
+}
+
+/// A bake and its relief strip (`tree-impostor-depth`): beside each colour
+/// word, the mean normal and AO of the same 3 x 3 block of the pass that
+/// gave it, so a far tree is lit by the near model's own normals. Zero
+/// where the pixel is clear.
+pub fn bake_with_relief(
+    m: &TreeModel,
+    look: &Look,
+    tex: &Textures,
+    bare: bool,
+) -> (Vec<u32>, Vec<u32>) {
     let means = (
         tex.mean(look.bark),
         look.leaf.map_or([0.0; 3], |l| tex.mean(l)),
@@ -341,10 +384,10 @@ pub fn bake(m: &TreeModel, look: &Look, tex: &Textures, bare: bool) -> Vec<u32> 
     // A tree with leaves: the crown and the bark are two passes, the bark
     // laid over the crown only where it fills most of a block.
     let split = !leaves.is_empty();
-    let crown = if !split {
+    let (crown, crown_relief) = if !split {
         snapped(bark, m, look, tex, &means, &pal)
     } else if bare {
-        vec![-1; STRIP_W * S3 * VIEW_H * S3]
+        (vec![-1; STRIP_W * S3 * VIEW_H * S3], Vec::new())
     } else {
         snapped(leaves, m, look, tex, &means, &pal)
     };
@@ -374,17 +417,41 @@ pub fn bake(m: &TreeModel, look: &Look, tex: &Textures, bare: bool) -> Vec<u32> 
         }
         best
     };
+    // The mean relief of a block's drawn sub-pixels in one pass.
+    let relief = |snap: &[i16], rel: &[[f32; 4]], x: usize, y: usize| {
+        let mut sum = [0.0f32; 4];
+        for j in 0..S3 {
+            for i in 0..S3 {
+                let k = (S3 * y + j) * w3 + S3 * x + i;
+                if snap[k] >= 0 {
+                    for c in 0..4 {
+                        sum[c] += rel[k][c];
+                    }
+                }
+            }
+        }
+        let l = (sum[0] * sum[0] + sum[1] * sum[1] + sum[2] * sum[2]).sqrt();
+        let count = block(snap, x, y).len().max(1) as f32;
+        if l < 1e-6 {
+            [0.0, 1.0, 0.0, sum[3] / count]
+        } else {
+            [sum[0] / l, sum[1] / l, sum[2] / l, sum[3] / count]
+        }
+    };
     let mut out = vec![0u32; STRIP_W * VIEW_H];
+    let mut out_relief = vec![0u32; STRIP_W * VIEW_H];
     for y in 0..VIEW_H {
         for x in 0..STRIP_W {
             let ids = block(&crown, x, y);
             let mut best = -1;
             // A tree with no leaves draws its whole self in the crown pass.
             let mut alpha = if split { CROWN_ALPHA } else { BARK_ALPHA };
+            let mut rel = [0.0f32; 4];
             if ids.len() >= 6 {
                 best = mode(&ids);
+                rel = relief(&crown, &crown_relief, x, y);
             }
-            if let Some(bp) = &bark_pass {
+            if let Some((bp, br)) = &bark_pass {
                 let b = block(bp, x, y);
                 // From above the crown hides the trunk and the boughs under
                 // it: the bark shows only where no leaf is.
@@ -392,17 +459,19 @@ pub fn bake(m: &TreeModel, look: &Look, tex: &Textures, bare: bool) -> Vec<u32> 
                 if over || (best < 0 && b.len() >= 5) {
                     best = mode(&b);
                     alpha = BARK_ALPHA;
+                    rel = relief(bp, br, x, y);
                 }
             }
             if best < 0 {
                 continue;
             }
+            out_relief[y * STRIP_W + x] = pack_relief(rel);
             let c = pal.rgb[best as usize];
             out[y * STRIP_W + x] =
                 u32::from(c[0]) | u32::from(c[1]) << 8 | u32::from(c[2]) << 16 | alpha << 24;
         }
     }
-    out
+    (out, out_relief)
 }
 
 /// The mean linear colour of a bake's crown pixels in its side views: what
@@ -513,6 +582,51 @@ mod tests {
                 crown > 4 * bark,
                 "{s:?} from above: {crown} crown, {bark} bark"
             );
+        }
+        // The relief strip (`tree-impostor-depth`) covers exactly the
+        // drawn pixels, with unit normals, and a crown's are the model's:
+        // an oak's and a kapok's turned outward, so each half of a view
+        // leans its own way, and every crown on the whole skyward (the
+        // cards' normals are turned up).
+        for s in [Species::Oak, Species::Pine, Species::Kapok] {
+            let m = build(s, 0);
+            let (colour, relief) = bake_with_relief(&m, &look(s), &tex, false);
+            assert_eq!(colour, bake(&m, &look(s), &tex, false));
+            assert_eq!(relief.len(), colour.len());
+            let (mut left, mut right, mut up, mut n) = (0.0, 0.0, 0.0, 0.0);
+            // The crown cap's view (`crossed-tree-cards` 3) is relieved too.
+            let (mut top_up, mut top_n) = (0.0, 0.0);
+            for (i, (c, r)) in colour.iter().zip(&relief).enumerate() {
+                assert_eq!(*c == 0, *r == 0, "{s:?} pixel {i}");
+                if *c >> 24 != CROWN_ALPHA {
+                    continue;
+                }
+                let v = [0, 8, 16].map(|k| f32::from((r >> k) as u8 as i8) / 127.0);
+                let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+                assert!((l - 1.0).abs() < 0.03, "{s:?} normal length {l}");
+                if i % STRIP_W % VIEW_W < VIEW_W / 2 {
+                    left += v[0];
+                } else {
+                    right += v[0];
+                }
+                up += v[1];
+                n += 1.0;
+                if i % STRIP_W / VIEW_W == TOP_VIEW {
+                    top_up += v[1];
+                    top_n += 1.0;
+                }
+            }
+            assert!(top_n > 150.0, "{s:?}: {top_n} crown px from above");
+            assert!(
+                top_up / top_n > 0.2,
+                "{s:?}: up from above {}",
+                top_up / top_n
+            );
+            // A pine's needle sprays face up, not out (the model's own).
+            if s != Species::Pine {
+                assert!(left < 0.0 && right > 0.0, "{s:?}: {left} {right}");
+            }
+            assert!(up / n > 0.2, "{s:?}: up {}", up / n);
         }
         // Bare is the bark alone: fewer pixels than the leafy crown.
         let m = build(Species::Oak, 0);

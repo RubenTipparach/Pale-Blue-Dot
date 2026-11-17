@@ -379,7 +379,7 @@ fn the_water_is_lit_not_luminous() {
     let src = include_str!("../../../assets/shaders/water.wgsl");
     for line in [
         "return view.deep_color.rgb*view.water_light.rgb*light_left(eye_depth);",
-        "let transmitted = mix(albedo*water_lit,scene,exp(-view_extinction()*path_length));",
+        "var transmitted = mix(albedo*water_lit,scene,exp(-view_extinction()*path_length));",
         "var reflected = water_sky_radiance(water_sky_frame(reflected_ray,radial,sun_direction));",
     ] {
         assert!(src.contains(line), "missing `{line}`");

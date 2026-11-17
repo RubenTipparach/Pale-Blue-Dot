@@ -17,6 +17,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use bevy::app::MainScheduleOrder;
+use bevy::asset::RenderAssetUsages;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::ecs::schedule::{ExecutorKind, ScheduleLabel};
 use bevy::prelude::*;
@@ -54,7 +55,7 @@ const PLANET_GUESS_S: f32 = 5.5;
 const BLOCKS: usize = 32;
 
 // The screen's colours are the kit's tokens (`ui_kit`); it keeps no copy.
-use crate::ui_kit::{self, KitText, NIGHT, Set, TEXT_DIM, TITLE, UiKit};
+use crate::ui_kit::{self, NIGHT, Set, TEXT_DIM, UiKit};
 
 /// The schedule a loading frame runs between `First` and `PostUpdate`.
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
@@ -459,8 +460,8 @@ fn run_main_gated(world: &mut World, mut started: Local<bool>) {
 }
 
 /// The loading slab (`stone-and-wood-ui`, the Loading tab): the approved
-/// base rock baked at the slab's own size, the emblem, the name carved in
-/// the kit's font, the step in the body face and the bar as the stone band
+/// base rock baked at the slab's own size, the game's logo (`loading-screen`
+/// decision 8), the step in the body face and the bar as the stone band
 /// with its progress fill. The kit is decoded before the first frame
 /// (`ui_kit::install`), so the first frame the window shows is this one.
 fn spawn_screen(world: &mut World) {
@@ -476,9 +477,19 @@ fn spawn_screen(world: &mut World) {
             LoadingCamera,
         ))
         .id();
+    // The logo's emblem, the crystal ball in its ring (`loading-screen` decision
+    // 8), decoded now so the first frame shows it: a painted render, sampled
+    // linear. The full logo is the main menu's.
+    let logo = {
+        let pixels = image::open(crate::paths::assets_dir().join("ui/logo-emblem.png"))
+            .unwrap_or_else(|e| panic!("assets/ui/logo-emblem.png: {e}"));
+        let mut img = Image::from_dynamic(pixels, true, RenderAssetUsages::default());
+        img.sampler = bevy::image::ImageSampler::linear();
+        let aspect = img.width() as f32 / img.height().max(1) as f32;
+        (world.resource_mut::<Assets<Image>>().add(img), aspect)
+    };
     let kit = world.resource::<UiKit>();
     let (slab, (w, h)) = kit.rock("loading");
-    let emblem = kit.whole(Set::Stone, "emblem");
     let bar = kit.nine(Set::Stone, "bar");
     let fill = kit.whole(Set::Stone, "fill-progress");
     world
@@ -510,19 +521,14 @@ fn spawn_screen(world: &mut World) {
                 },
             ))
             .with_children(|panel| {
+                let logo_w = 96.0;
                 panel.spawn((
-                    emblem,
+                    ImageNode::new(logo.0.clone()),
                     Node {
-                        width: px(48),
-                        height: px(48),
+                        width: px(logo_w),
+                        height: px(logo_w / logo.1),
                         flex_shrink: 0.0,
-                        ..default()
-                    },
-                ));
-                panel.spawn((
-                    KitText::new("PALE BLUE DOT", TITLE).shadow(ui_kit::INK),
-                    Node {
-                        margin: UiRect::vertical(px(3)),
+                        margin: UiRect::bottom(px(3)),
                         ..default()
                     },
                 ));

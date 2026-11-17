@@ -312,6 +312,13 @@ pub struct Launch {
     pub lamps: bool,
     pub lamps_at: f32,
     pub lamps_across: f32,
+    /// `--place-row <block,block,...> [metres]` (`placed-blocks-keep-material`,
+    /// a capture instrument): one of each named block (`stone`, `dirt`, ...)
+    /// placed on the ground in a row across the view, that far ahead of the
+    /// camera (5 m when no distance follows), through the edit path a
+    /// player's place takes, so a capture shows what a placed block is drawn
+    /// as on the ground it stands on.
+    pub place_row: Vec<pbd_core::terrain::Material>,
     /// `--farm [metres]` (`farming-and-smelting` task 5.1, a capture
     /// instrument): tills two rows of four cells that far ahead, sows wheat
     /// and turnip in them at staggered world times so the rows show all four
@@ -500,6 +507,7 @@ impl Launch {
             lamps: false,
             lamps_at: 5.0,
             lamps_across: 0.0,
+            place_row: Vec::new(),
             farm: None,
             farm_harvest: false,
             hold_pointer: false,
@@ -688,6 +696,28 @@ impl Launch {
                         }
                     }
                 }
+                "--place-row" => {
+                    i += 1;
+                    let names = args.get(i).expect("--place-row requires blocks");
+                    result.place_row = names
+                        .split(',')
+                        .map(|name| {
+                            pbd_core::terrain::Material::ALL
+                                .into_iter()
+                                .find(|&m| pbd_core::inventory::material_name(m) == name)
+                                .unwrap_or_else(|| panic!("--place-row: no block named {name}"))
+                        })
+                        .collect();
+                    if let Some(metres) = args.get(i + 1).and_then(|next| next.parse::<f32>().ok())
+                    {
+                        assert!(
+                            metres.is_finite() && metres > 0.0,
+                            "--place-row takes metres ahead"
+                        );
+                        result.lamps_at = metres;
+                        i += 1;
+                    }
+                }
                 "--farm" | "--forge" => {
                     let farm = args[i] == "--farm";
                     let mut metres = 6.0;
@@ -834,12 +864,13 @@ impl Launch {
                 "--menu" => {
                     i += 1;
                     let screen = args.get(i).expect(
-                        "--menu requires pause, settings, saves, pack, map, guide, missions or breeding",
+                        "--menu requires title, pause, settings, saves, pack, map, guide, missions or breeding",
                     );
                     assert!(
                         matches!(
                             screen.as_str(),
-                            "pause"
+                            "title"
+                                | "pause"
                                 | "settings"
                                 | "saves"
                                 | "pack"
@@ -848,7 +879,7 @@ impl Launch {
                                 | "missions"
                                 | "breeding"
                         ),
-                        "--menu takes pause, settings, saves, pack, map, guide, missions or breeding"
+                        "--menu takes title, pause, settings, saves, pack, map, guide, missions or breeding"
                     );
                     result.menu = Some(screen.clone());
                 }
@@ -1705,8 +1736,12 @@ pub fn run(args: &[String]) {
     // cave has to be placed a schedule later.
     .add_systems(PostStartup, cave_camera)
     .insert_resource(opening)
-    .insert_resource(menu::FrontDoor(opening == menu::Screen::Saves))
+    .insert_resource(menu::FrontDoor(matches!(
+        opening,
+        menu::Screen::Title | menu::Screen::Saves
+    )))
     .init_resource::<menu::NameField>()
+    .init_resource::<equipment::HandListOpen>()
     .init_resource::<mission_tree::TreeView>()
     .insert_resource(menu::SettingsTab(launch.settings_tab))
     .insert_resource(menu::InputTab(launch.input_tab))
@@ -1789,7 +1824,13 @@ pub fn run(args: &[String]) {
             scene::move_moon,
             scene::turn_stars,
             scene::follow_sun,
-            (equipment::pick, slots::input, equipment::paint).chain(),
+            (
+                equipment::pick,
+                slots::input,
+                equipment::pack_hand,
+                equipment::paint,
+            )
+                .chain(),
             (
                 pack::find_hold,
                 pack::press,

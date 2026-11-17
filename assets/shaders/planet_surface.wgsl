@@ -48,7 +48,7 @@ struct Params {
     ssr_clip: mat4x4<f32>,     // L8 (10.2): the screen trace history's clip_from_body
     ssr_eye: vec4<f32>,        // and its eye; w one once there is a history
     rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m; z a plant's darkening at full wetness (`flora-v2` 13.2)
-    light_ease: vec4<f32>,     // `baked-light-ease` 7.3: x the light field's newest half blended in 0..1, y that half, z one while the other is blended from
+    light_ease: vec4<f32>,     // `baked-light-ease` 7.3: x the light field's newest half blended in 0..1, y that half, z one while the other is blended from; w the far trees' baked relief 0..1 (`tree-impostor-depth`)
     flora: vec4<f32>,          // `flora-v2`: x tufts per cell (zero: blades), y tuft width m, z tuft height m, w the year 0..1
     flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
     flora_biome: array<vec4<f32>,8>, // per biome: fern weight, mushroom weight, flower bits, deciduous
@@ -223,6 +223,23 @@ fn material_at(slot: u32, layer: u32) -> u32 {
     if word >= arrayLength(&materials) { return 0u; }
     return (materials[word] >> ((layer % MATERIAL_PER_WORD) * 4u)) & 0xfu;
 }
+// `placed-blocks-keep-material`: after every slot's render codes, every
+// slot's PLACED sheets, laid out as the codes are: nought for generated
+// ground, which takes its biome's sheet, and for a block somebody placed its
+// own sheet plus one, so it is drawn as the block it is whatever biome it
+// stands in. `ColumnTier::gpu_placed_sheets` packs it.
+const PLACED_SHEETS_BASE: u32 = 1032192u;
+fn placed_sheet_at(slot: u32, layer: u32) -> u32 {
+    if slot == 0u || layer >= LIGHT_LAYERS { return 0u; }
+    let word = PLACED_SHEETS_BASE + (slot - 1u) * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
+    if word >= arrayLength(&materials) { return 0u; }
+    return (materials[word] >> ((layer % MATERIAL_PER_WORD) * 4u)) & 0xfu;
+}
+// And the record's own: the sheet its PLACED top is drawn from, plus one,
+// in four bits of its material word (`planet_terrain::PLACED_SHEET_SHIFT`),
+// which the cap and its heightfield wall carry to the fragment.
+const PLACED_SHEET_SHIFT: u32 = 26u;
+const PLACED_SHEET_MASK: u32 = 0x3c000000u;
 
 // The bottom and top of a column's span, metres against sea level.
 // `column::BASE_M` and `LAYERS` in pbd-core are the one source; the visibility
@@ -946,6 +963,9 @@ const IMPOSTOR_LIFT: f32 = 0.35;
 const TREE_BARK_CODE: u32 = 24u;
 const TREE_LEAF_CODE: u32 = 25u;
 const IMPOSTOR_CODE: u32 = 26u;
+// Words from an impostor strip to its relief strip (`tree-impostor-depth`):
+// `pbd_core::tree_kit::IMPOSTOR_RELIEF`, which a test holds.
+const IMPOSTOR_RELIEF: u32 = 31104u;
 // The species and variant ride over the material word's biome byte.
 const SPECIES_SHIFT: u32 = 17u;
 const VARIANT_SHIFT: u32 = 21u;
@@ -1635,7 +1655,9 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // ground and a little up, as the near crown's leaf cards face it. The
         // tree's up axis lit a card with the zenith's whole sky, flat. One
         // normal for every card and the cap, so no plane of a tree is lit
-        // apart from the others.
+        // apart from the others. Each shown card and the cap then carry
+        // their baked view's level direction instead (`tree-impostor-depth`),
+        // and the fragment rebuilds this standing normal from the eye.
         normal = normalized(t.x*dir.x + t.z*dir.y + axis*IMPOSTOR_LIFT);
         let v = vertex - 60u;
         let k = v/6u;
@@ -1687,6 +1709,13 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 var u = array<f32,4>(0.0, 0.999, 0.999, 0.0)[c];
                 if flip { u = 0.999 - u; }
                 uv = vec2(f32(view) + u, select(0.0, 1.0, c >= 2u));
+                // `tree-impostor-depth`: the baked view's own direction,
+                // laid level, which is the frame its relief strip keeps the
+                // near model's normals in; the fragment lights each pixel by
+                // them. The cap's view (8) is bearing 0's frame, the tree's
+                // own, so every card and the cap rebuild the same normals.
+                let th = f32(view)*TAU/8.0;
+                normal = t.x*sin(th) + t.z*cos(th);
             }
         }
     } else {
@@ -1961,7 +1990,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // The material in the low byte and the cell's BIOME above it, exactly as
     // the record packs them: the fragment needs the biome to pick its sheet,
     // and carrying it in a word it already has costs no interpolator.
-    out.material = (material & 0xffu) | (cell.metadata.y & 0xff00u) | out_flags;
+    out.material = (material & 0xffu) | (cell.metadata.y & 0xff00u) | out_flags
+        | (cell.metadata.y & PLACED_SHEET_MASK);
     out.height = out_height;
     // The low half only: the high half carries the column tier slot.
     out.skylight = f32(cell.metadata.z & 0xffffu)/65535.;
@@ -2581,6 +2611,9 @@ fn tree_flags(input: VertexOut) -> u32 {
 // the pixel by the uv's fraction. A deciduous tree's leafy bake gives way to
 // its bare one a texel at a time as winter comes (design 10.6).
 fn impostor_pixel(input: VertexOut) -> u32 {
+    return kit[impostor_index(input)];
+}
+fn impostor_index(input: VertexOut) -> u32 {
     let header = tree_header(input);
     let view = min(u32(max(floor(input.uv.x), 0.0)), IMPOSTOR_TOP_VIEW);
     let px = view*IMPOSTOR_VIEW_W + min(u32(fract(input.uv.x)*f32(IMPOSTOR_VIEW_W)), IMPOSTOR_VIEW_W - 1u);
@@ -2590,7 +2623,41 @@ fn impostor_pixel(input: VertexOut) -> u32 {
         let bare = season_at(normalized(input.position)).y;
         if random(input.seed*977u + px*131u + py*7919u) < bare { at = kit[header + 9u]; }
     }
-    return kit[at + py*IMPOSTOR_W + px];
+    return at + py*IMPOSTOR_W + px;
+}
+
+// `tree-impostor-depth`: a far tree is lit by the near model's own normals
+// and its root-to-tip AO, baked beside each view (`pbd_core::tree_bake::
+// bake_with_relief`), so a crown has its sunlit side and its shaded side as
+// the near crown does. `level` is the baked view's direction laid level (the
+// vertex's normal); the relief's x runs across it, y up the tree, z toward
+// the view. Mixed by `light_ease.w` with the standing normal of `flora-v2`
+// 13.4 and the near crown's mean shade (0: the flat card). Returns the
+// normal and the shade over the crown's matched albedo.
+var<private> impostor_shade: f32 = 1.0;
+fn impostor_relief(input: VertexOut, level_in: vec3<f32>) -> vec3<f32> {
+    let up = normalized(input.position);
+    let level = normalized(level_in - up*dot(level_in, up));
+    let across = cross(up, level);
+    let index = impostor_index(input);
+    let word = kit[index + IMPOSTOR_RELIEF];
+    let r = unpack4x8snorm(word).xyz;
+    let baked = normalized(across*r.x + up*r.y + level*r.z);
+    // The standing normal is `crossed-tree-cards` 5's: toward the eye
+    // across the ground and a little up, one for every card and the cap, so
+    // with the relief at nought no plane is lit apart from the others.
+    let to_eye = params.camera.xyz - input.position;
+    let flat_eye = to_eye - up*dot(to_eye, up);
+    let toward = select(level, flat_eye/max(length(flat_eye), 1e-6), length(flat_eye) > 1e-3);
+    let standing = normalized(toward + up*IMPOSTOR_LIFT);
+    let k = clamp(params.light_ease.w, 0.0, 1.0);
+    // The near pass's `mix(0.45, 1, ao)`; the crown's albedo was already met
+    // to the near crown's under its MEAN of that, so a crown pixel takes its
+    // own over the mean, and bark its own.
+    let ao = mix(0.45, 1.0, f32(word >> 24u)/255.0);
+    let crown = (kit[index] >> 24u) == 255u;
+    impostor_shade = mix(1.0, select(ao, ao/NEAR_CROWN_SHADE, crown), k);
+    return normalized(mix(standing, baked, k));
 }
 
 // The mockup's autumn on a leaf: the whole card (or a far tree's crown) to
@@ -2687,7 +2754,7 @@ fn tree_albedo_bare(input: VertexOut) -> vec3<f32> {
                 albedo = tree_autumn(albedo, tree, 0.0, max(season.x, season.y));
             }
         }
-        return albedo;
+        return albedo*impostor_shade;
     }
     if code == TREE_LEAF_CODE {
         var albedo = tree_texel(kit[sh + 1u], input.uv);
@@ -3428,7 +3495,10 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let foot = length(fwidth(input.position));
     if dropped(input) { discard; }
     let radial = normalized(input.position);
-    let n = normalized(input.normal);
+    var n = normalized(input.normal);
+    if input.kind == 2u && (input.material & 0xffu) == IMPOSTOR_CODE {
+        n = impostor_relief(input, input.normal);
+    }
     let sun = params.sun.xyz;
     let toward_camera = normalized(params.camera.xyz-input.position);
     let distance_to_camera = distance(input.position,params.camera.xyz);
@@ -3488,11 +3558,20 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     var slot = tileset_slot((input.material >> 8u) & 0xffu);
     var code = cap;
     let face_altitude = length(input.position)-params.settings.x;
+    // A block somebody PLACED is drawn from its own sheet, never the biome's
+    // (`placed-blocks-keep-material`): dirt on desert sand is the meadow's
+    // earth, not the desert's. The cap carries its record's.
+    let placed_cap = (input.material & PLACED_SHEET_MASK) >> PLACED_SHEET_SHIFT;
+    if input.kind==0u && placed_cap != 0u { slot = placed_cap - 1u; }
     if input.kind==1u {
         // The heightfield's own wall, which stands only where a cell has no
         // column: no layer to ask, so the depth rule, which is the
         // generator's own stack.
-        code = face_code(cap,max(input.height-face_altitude,0.));
+        let depth = max(input.height-face_altitude,0.);
+        code = face_code(cap,depth);
+        // Its top metre is the placed block's own side; under it, the
+        // generated ground.
+        if placed_cap != 0u && depth <= 1.0 { slot = placed_cap - 1u; }
     }
     if input.kind==4u {
         // A column-pass face wears the LAYER it bounds: the block under an
@@ -3509,6 +3588,8 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         else { layer = min(layer, max(light_layer(input.height-0.5), 0u)); }
         let own = material_at(input.slot, layer);
         code = own;
+        let placed = placed_sheet_at(input.slot, layer);
+        if placed != 0u { slot = placed - 1u; }
         if abs(facing) < 0.5 {
             if grassy(own) { code = GRASS_SIDE_CODE; }
             if own == 6u { code = SNOW_SIDE_CODE; }

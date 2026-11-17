@@ -12,7 +12,7 @@
 //! a player dug. Generated cave systems are this project's own addition, and
 //! they are Perlin worms: see `crate::worms`.
 
-use crate::planet_gen::{self, TerrainConfig};
+use crate::planet_gen::{self, Biome, TerrainConfig};
 use crate::terrain::Material;
 use crate::worms::{WormField, Worms};
 use glam::Vec3;
@@ -39,20 +39,74 @@ pub fn layer_at(altitude: f32) -> Option<usize> {
     (index >= 0.0 && index < LAYERS as f32).then_some(index as usize)
 }
 
+/// Words of the placed mask: one bit a layer.
+const PLACED_WORDS: usize = LAYERS.div_ceil(64);
+
 /// One cell's stack.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Column {
     layers: [Material; LAYERS],
+    /// Which layers hold what an EDIT put there (`placed-blocks-keep-material`):
+    /// a block the player placed, as against ground the generator or a rule
+    /// (the water's flow) wrote. What decides that a placed block is drawn
+    /// as its own material, never dressed by the ground it stands in.
+    placed: [u64; PLACED_WORDS],
 }
 
 impl Column {
+    /// A column of exactly these layers, nothing in it placed: what the
+    /// generator builds.
+    fn generated(layers: [Material; LAYERS]) -> Self {
+        Self {
+            layers,
+            placed: [0; PLACED_WORDS],
+        }
+    }
+
     /// A column of nothing but its bedrock floor, for a test or a caller that
     /// is about to fill it. `set` refuses layer zero, so the floor is here
     /// rather than left to the caller to remember.
     pub fn bedrock() -> Self {
         let mut layers = [Material::Air; LAYERS];
         layers[0] = Material::Stone;
-        Self { layers }
+        Self::generated(layers)
+    }
+
+    /// Whether a layer holds a block somebody PLACED: written by an edit
+    /// ([`Column::place`]) and not overwritten by a rule since. Air is never
+    /// placed: a dug cell is a hole, not a block.
+    pub fn placed(&self, index: usize) -> bool {
+        index < LAYERS
+            && self.placed[index / 64] >> (index % 64) & 1 == 1
+            && self.layers[index] != Material::Air
+    }
+
+    /// Whether any layer of this column is placed: what lets a reader skip
+    /// the nearly every column nobody has touched.
+    pub fn any_placed(&self) -> bool {
+        self.placed.iter().any(|&word| word != 0) && (0..LAYERS).any(|index| self.placed(index))
+    }
+
+    /// Write a layer as an EDIT writes it: a block somebody placed (or a hole
+    /// somebody dug). The layer is then drawn as its own material wherever
+    /// it is ([`Column::drawn_sheet`]). Refuses bedrock, as [`Column::set`].
+    pub fn place(&mut self, index: usize, material: Material) -> bool {
+        if !self.set(index, material) {
+            return false;
+        }
+        self.placed[index / 64] |= 1 << (index % 64);
+        true
+    }
+
+    /// Which biome's tileset a layer is drawn from: a placed block's own
+    /// ([`home_biome`]), whatever ground it stands in; generated ground the
+    /// biome it is in, `ground`.
+    pub fn drawn_sheet(&self, index: usize, ground: Biome) -> Biome {
+        if self.placed(index) {
+            home_biome(self.material(index)).unwrap_or(ground)
+        } else {
+            ground
+        }
     }
 
     pub fn material(&self, index: usize) -> Material {
@@ -79,6 +133,8 @@ impl Column {
             return false;
         }
         self.layers[index] = material;
+        // A rule's write: whatever was placed here is gone.
+        self.placed[index / 64] &= !(1 << (index % 64));
         true
     }
 
@@ -126,7 +182,9 @@ impl Column {
     /// column holds, and what digging it gives, are unchanged.
     pub fn drawn_material(&self, layer: usize) -> Material {
         let material = self.material(layer);
-        if self.water_over(layer) {
+        // A placed block is the block placed, under water or not: the bed
+        // is a dressing of GENERATED ground (`placed-blocks-keep-material`).
+        if self.water_over(layer) && !self.placed(layer) {
             material.drowned()
         } else {
             material
@@ -338,13 +396,53 @@ pub fn generate_edited_solid(
     edits: &[(u16, Material)],
 ) -> Column {
     let mut column = generate_solid(terrain, direction);
+    apply_edits(&mut column, edits);
+    column
+}
+
+/// A cell's edits over its generated column, front to back, each one a
+/// [`Column::place`], so what they put there is known to be placed. Bedrock
+/// is refused, so no edit opens a hole through the bottom of the world
+/// however it was recorded.
+fn apply_edits(column: &mut Column, edits: &[(u16, Material)]) {
     for &(layer, material) in edits {
-        if let Some(slot) = column.layers.get_mut(layer as usize) {
-            *slot = material;
-        }
+        column.place(layer as usize, material);
     }
     column.layers[0] = Material::Stone;
-    column
+}
+
+/// Which biome's tileset a block is drawn from when it is PLACED
+/// (`placed-blocks-keep-material`): the block in the pack is the block on
+/// the ground, so a placed block never takes the sheet of the biome it lands
+/// in. Sand is a beach's, snow the tundra's, jungle sward the jungle's, rock
+/// and the forge's bricks the mountains', water the ocean's, and the rest
+/// the home meadow's. `None` for air and for a light, which is its own
+/// picture. The pack's block icons read the same table, so a slot and the
+/// ground show one block.
+pub fn home_biome(material: Material) -> Option<Biome> {
+    Some(match material {
+        Material::Air
+        | Material::Torch
+        | Material::LanternPost
+        | Material::LanternWall
+        | Material::LanternHanging
+        | Material::Brazier
+        | Material::Candle
+        | Material::Campfire => return None,
+        Material::Grass
+        | Material::DryGrass
+        | Material::Soil
+        | Material::Dirt
+        | Material::Stone
+        | Material::Ore
+        | Material::Tilled
+        | Material::Workbench => Biome::Fields,
+        Material::JungleGrass => Biome::Jungle,
+        Material::Sand => Biome::Beach,
+        Material::Rock | Material::Forge => Biome::Mountains,
+        Material::Snow => Biome::Tundra,
+        Material::Water | crate::flowing_water!() => Biome::Ocean,
+    })
 }
 
 pub fn generate_edited(
@@ -369,12 +467,7 @@ pub fn generate_edited(
             }
         }
     }
-    for &(layer, material) in edits {
-        if let Some(slot) = column.layers.get_mut(layer as usize) {
-            *slot = material;
-        }
-    }
-    column.layers[0] = Material::Stone;
+    apply_edits(&mut column, edits);
     column
 }
 
@@ -528,7 +621,7 @@ pub fn generate_solid(terrain: &TerrainConfig, direction: Vec3) -> Column {
     }
     // Bedrock. Never mineable, and the reference's own rule.
     layers[0] = Material::Stone;
-    Column { layers }
+    Column::generated(layers)
 }
 
 #[cfg(test)]
@@ -540,7 +633,7 @@ mod rain_tests {
         let mut layers = [Material::Air; LAYERS];
         layers[..=ground].fill(Material::Stone);
         layers[roof_from..=roof_to].fill(Material::Stone);
-        Column { layers }
+        Column::generated(layers)
     }
 
     #[test]
@@ -659,7 +752,7 @@ mod water_tests {
         let mut layers = [Material::Air; LAYERS];
         layers[..=ground].fill(Material::Stone);
         layers[ground + 1..=sea].fill(Material::Water);
-        Column { layers }
+        Column::generated(layers)
     }
 
     /// The sea: a walker on the seabed stands in water as deep as the sea is
@@ -689,7 +782,7 @@ mod water_tests {
         // A pocket of air well under the ground, and nothing above sea level.
         layers[30..36].fill(Material::Air);
         layers[100..].fill(Material::Air);
-        let column = Column { layers };
+        let column = Column::generated(layers);
         let floor = layer_altitude(29) + 1.0;
         let contact = column.contact(floor + 0.5);
         assert_eq!(contact.floor, Some(floor));
@@ -1263,4 +1356,169 @@ mod tests {
     }
 
     const VERSION_10_COLUMN_DIGEST: u64 = 7_866_721_340_977_067_839;
+}
+
+/// `placed-blocks-keep-material`: a block the player places is the block
+/// they placed, wherever it lands (the owner, 2026-11-16: "I placed dirt on
+/// sand and it became sand ... not just for dirt block but any block in
+/// inventory").
+#[cfg(test)]
+mod placed_tests {
+    use super::*;
+
+    /// Every block a pack can hold and put on the ground: everything with a
+    /// picture of its own but the sea, which is poured from a bucket.
+    fn placeable() -> impl Iterator<Item = Material> {
+        Material::ALL
+            .into_iter()
+            .filter(|&m| home_biome(m).is_some() && !m.is_water())
+    }
+
+    /// Directions on the shipped world, the golden spiral.
+    fn spiral(n: usize) -> impl Iterator<Item = Vec3> {
+        (0..n).map(move |i| {
+            let y = 1.0 - 2.0 * (i as f32 + 0.5) / n as f32;
+            let r = (1.0 - y * y).sqrt();
+            let phi = i as f32 * 2.399_963;
+            Vec3::new(r * phi.cos(), y, r * phi.sin())
+        })
+    }
+
+    /// The first direction on the spiral whose generated ground is `want`.
+    fn find(cfg: &TerrainConfig, want: impl Fn(Vec3, &Column) -> bool) -> (Vec3, Column) {
+        spiral(60_000)
+            .map(|d| (d, generate_solid(cfg, d)))
+            .find(|(d, column)| want(*d, column))
+            .expect("the shipped world has this ground")
+    }
+
+    /// The grounds the owner's rule names: desert sand, snow, a river's bed,
+    /// a beach under the sea, and (standing in for a town's lane, whose
+    /// ground is installed by the app) a stone top in the desert.
+    fn grounds() -> Vec<(&'static str, Column, Biome)> {
+        let cfg = TerrainConfig::default();
+        let biome = |d: Vec3| planet_gen::biome_at(&cfg, d, surface_m(&cfg, d));
+        let top = |c: &Column| c.surface().map(|t| c.material(t));
+        let desert = find(&cfg, |d, c| {
+            top(c) == Some(Material::Sand)
+                && biome(d) == Biome::Desert
+                && !c.water_over(c.surface().unwrap())
+        });
+        let snow = find(&cfg, |_, c| top(c) == Some(Material::Snow));
+        let river = find(&cfg, |d, c| {
+            crate::rivers::floods(&cfg, d)
+                && c.water_over(c.surface().unwrap())
+                && surface_m(&cfg, d) > cfg.sea_level_m
+        });
+        let beach = find(&cfg, |d, c| {
+            top(c) == Some(Material::Sand) && surface_m(&cfg, d) < cfg.sea_level_m - 1.0
+        });
+        let mut lane = desert.1.clone();
+        let lane_top = lane.surface().unwrap();
+        lane.set(lane_top, Material::Stone);
+        vec![
+            ("desert sand", desert.1, Biome::Desert),
+            ("snow", snow.1, biome(snow.0)),
+            ("a river bed", river.1, biome(river.0)),
+            ("a beach under the sea", beach.1, biome(beach.0)),
+            ("a town's lane", lane, Biome::Desert),
+        ]
+    }
+
+    #[test]
+    fn a_placed_block_keeps_its_material_on_any_ground() {
+        for (name, ground, biome) in grounds() {
+            let under = ground.surface().unwrap();
+            // The ground itself is generated, and drawn as its biome draws it.
+            assert!(
+                !ground.placed(under),
+                "{name}: generated ground is not placed"
+            );
+            assert_eq!(ground.drawn_sheet(under, biome), biome, "{name}");
+            for material in placeable() {
+                let mut column = ground.clone();
+                let at = under + 1;
+                assert!(column.place(at, material), "{name}: {material:?} placed");
+                let what = format!("{material:?} on {name}");
+                assert_eq!(column.material(at), material, "{what}: stored");
+                assert!(column.placed(at), "{what}: known to be placed");
+                assert_eq!(column.drawn_material(at), material, "{what}: drawn");
+                assert_eq!(
+                    column.drawn_sheet(at, biome),
+                    home_biome(material).unwrap(),
+                    "{what}: drawn from its own sheet, never the {biome:?}'s"
+                );
+                // And on top of it, another placed block: both keep theirs.
+                for second in placeable() {
+                    let mut stack = column.clone();
+                    assert!(stack.place(at + 1, second));
+                    for (layer, m) in [(at, material), (at + 1, second)] {
+                        let what = format!("{what} under {second:?}");
+                        assert_eq!(stack.material(layer), m, "{what}");
+                        assert_eq!(stack.drawn_material(layer), m, "{what}");
+                        assert_eq!(
+                            stack.drawn_sheet(layer, biome),
+                            home_biome(m).unwrap(),
+                            "{what}"
+                        );
+                    }
+                }
+                // Rebuilt from the edit, as a reload or a set landing does:
+                // the same column, the block still placed.
+                let mut rebuilt = ground.clone();
+                apply_edits(&mut rebuilt, &[(at as u16, material)]);
+                assert!(rebuilt == column, "{what}: a rebuild is the same column");
+            }
+        }
+    }
+
+    /// A placed block under water is the block placed, not the bed that
+    /// generated ground under water is drawn as: the river-bed dressing is
+    /// the generator's (`flora-v2` 12.10), and a placed grass block stays
+    /// grass.
+    #[test]
+    fn a_placed_block_under_water_is_not_a_bed() {
+        let cfg = TerrainConfig::default();
+        let (_, river) = find(&cfg, |d, c| {
+            crate::rivers::floods(&cfg, d)
+                && c.water_over(c.surface().unwrap())
+                && matches!(
+                    c.material(c.surface().unwrap()),
+                    Material::Grass | Material::DryGrass | Material::JungleGrass | Material::Snow
+                )
+        });
+        let bed = river.surface().unwrap();
+        assert_eq!(
+            river.drawn_material(bed),
+            Material::Dirt,
+            "generated sward under water is still dressed as a bed"
+        );
+        for material in placeable() {
+            let mut column = river.clone();
+            // In place of the bed's own top, with the river over it.
+            assert!(column.place(bed, material));
+            assert!(column.water_over(bed));
+            assert_eq!(
+                column.drawn_material(bed),
+                material,
+                "{material:?} under a river"
+            );
+        }
+    }
+
+    /// What a rule writes over a placed block is the rule's: the water's flow
+    /// filling a dug cell, a generated layer. And a dug cell is a hole, not
+    /// a placed block.
+    #[test]
+    fn only_an_edit_places() {
+        let mut column = Column::bedrock();
+        assert!(column.place(10, Material::Dirt));
+        assert!(column.placed(10));
+        assert!(column.set(10, Material::Sand));
+        assert!(!column.placed(10), "a rule's write is not a placement");
+        assert!(column.place(10, Material::Air));
+        assert!(!column.placed(10), "a hole is not a block");
+        assert!(!column.place(0, Material::Dirt), "bedrock refuses");
+        assert!(!column.placed(0));
+    }
 }

@@ -279,3 +279,20 @@ reaches its end before it is done.
 ## Measured (filled in by task 4)
 
 See `tasks.md` 4.x and `docs/benchmarks/2026-11-12-loading-screen/`.
+
+## Decision 8: the logo's emblem on the slab (owner, 2026-11-17)
+
+The owner, on the loading slab: "can you replace this logo too?", then "the
+loading logo should just have the globe part with the circle stone. no need to
+put pale blue dot there, people know what they are playing. the main logo can
+be in the main menu". The menu emblem and the kit-font title make way for the
+logo's own emblem: the crystal ball holding the planet in its stone ring
+(`docs/promo/pale-blue-dot-emblem.png`, `tools/art/logo/logo_emblem.py`),
+96 UI units square at the top of the slab. The slab keeps its size (150 x 148
+UI units), its step line and its bar.
+
+It ships as `assets/ui/logo-emblem.png` (512 px) and is decoded before the
+first frame like the kit (`ui_kit::install`), so the first frame the window
+shows is still the full slab, never a blank one. It is a painted render, not
+pixel art: it is sampled linear, as the kit's baked rock is. The full logo
+(`assets/ui/logo.png`) is the main menu's (`title-screen`).

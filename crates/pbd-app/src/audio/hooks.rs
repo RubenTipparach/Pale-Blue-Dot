@@ -9,8 +9,8 @@ use crate::walking::{GroundState, HALF_HEIGHT, Walker, WalkingConfig, WalkingSta
 use avian3d::prelude::{LinearVelocity, Position};
 use bevy::prelude::*;
 use pbd_core::audio::{
-    BIOMES, Bed, Family, Stride, Surroundings, air_density_scale, bed_weights, stride_m,
-    surface_family, thunder,
+    BIOMES, Bed, FallBand, FallHeard, FallReach, FallVoices, Family, Stride, Surroundings,
+    air_density_scale, bed_weights, loudest_falls, stride_m, surface_family, thunder,
 };
 use pbd_core::fishing::Event;
 use pbd_core::planet_gen::Biome;
@@ -52,6 +52,9 @@ pub const NAMED: &[&str] = &[
     "thunder_roll",
     "fire_crackle",
     "fire_ignite_small",
+    "fall_light",
+    "fall_medium",
+    "fall_roar",
     "gull",
     "owl",
     "dog_far",
@@ -118,6 +121,7 @@ pub(super) fn register(app: &mut App) {
                 fishing,
                 menus,
                 fires,
+                falls,
                 thunder_from_strikes,
                 scatters,
             ),
@@ -672,6 +676,60 @@ fn fires(
         let key = (point.x.to_bits() as u64) << 32 | point.z.to_bits() as u64;
         let db = if campfire { 0.0 } else { -4.0 };
         sfx.keep(("fire", key), "fire_crackle", Where::At(point), db, 1.0);
+    }
+}
+
+/// What `falls` keeps between frames: the heard list and the voices, both
+/// capped at `fall_voices`, so nothing is allocated after the first frame.
+#[derive(Default)]
+struct FallSounds {
+    heard: Vec<FallHeard>,
+    voices: FallVoices,
+}
+
+/// Every fall sounds at its foot, light, medium or roaring by its drop
+/// (`water-flow` design "The sound of a fall"): the loudest few at the ears,
+/// each a placed loop fading in and out. The feet are the splash's own
+/// (`FallFeet`, found by the water mesher).
+fn falls(
+    feet: Option<Res<crate::water_flow::FallFeet>>,
+    listener: Res<Listener>,
+    data: Res<AudioData>,
+    time: Res<Time>,
+    mut sfx: ResMut<Sfx>,
+    mut state: Local<FallSounds>,
+) {
+    let _spent = super::Spent::new("falls");
+    let state = &mut *state;
+    let mix = &data.mix;
+    let reach = FallBand::ALL.map(|band| {
+        let cue = data.cues.cues.get(band.cue());
+        FallReach {
+            volume_db: cue.map_or(0.0, |c| c.volume_db),
+            full_within_m: cue.map_or(1.0, |c| c.full_within_m),
+            audible_m: cue.map_or(0.0, |c| c.audible_m),
+        }
+    });
+    match feet.as_deref() {
+        Some(feet) if listener.valid => loudest_falls(
+            feet.0.iter().map(|f| (f.at, f.height)),
+            listener.eye,
+            mix,
+            &reach,
+            &state.voices.voices,
+            &mut state.heard,
+        ),
+        _ => state.heard.clear(),
+    }
+    state.voices.update(&state.heard, mix, time.delta_secs());
+    for voice in &state.voices.voices {
+        sfx.keep(
+            ("fall", voice.id),
+            voice.band.cue(),
+            Where::At(voice.at),
+            pbd_core::audio::decibels(voice.gain()),
+            1.0,
+        );
     }
 }
 

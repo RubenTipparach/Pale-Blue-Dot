@@ -73,6 +73,179 @@ pub struct PickerRow(pub Option<Tool>);
 #[derive(Component)]
 pub struct PickerIcon;
 
+/// The hand cell's square and its tool picture: the HUD's, left of the
+/// hotbar, and the pack's, over its HOTBAR row (`pack-tool-slot` decision 2).
+/// Both carry `ToolSlotCell` and `ToolIcon`, so [`paint`] paints both.
+pub fn tool_cell(kit: &UiKit, node: Node, extra: impl Bundle) -> impl Bundle {
+    (
+        Node {
+            width: px(SIZE),
+            height: px(SIZE),
+            flex_shrink: 0.0,
+            ..node
+        },
+        kit.whole(Set::Stone, "slot-idle"),
+        Interaction::default(),
+        Tooltip(hand_tip(&Equipment::new_world())),
+        ToolSlotCell,
+        extra,
+    )
+}
+
+/// The tool's picture inside a [`tool_cell`].
+pub fn tool_icon(icons: &ItemIcons) -> impl Bundle {
+    (
+        ImageNode::new(icons.in_hand(None)),
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(4),
+            top: px(4),
+            width: px(16),
+            height: px(16),
+            ..default()
+        },
+        ToolIcon,
+    )
+}
+
+/// The pack's hand cell (`pack-tool-slot` decision 3).
+#[derive(Component)]
+pub struct PackToolCell;
+
+/// The list a click on the pack's hand cell opens: bare hands, then each
+/// tool owned (`pack-tool-slot` decision 4).
+#[derive(Component)]
+pub struct HandList;
+
+/// A row of that list, for the tool it holds, or `None` for bare hands.
+#[derive(Component)]
+pub struct HandListRow(pub Option<Tool>);
+
+/// Whether the pack's hand list is open.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HandListOpen(pub bool);
+
+/// The pack's hand cell and its (hidden) list, beside the HOTBAR label.
+pub fn spawn_pack_hand(parent: &mut ChildSpawnerCommands, kit: &UiKit, icons: &ItemIcons) {
+    parent
+        .spawn(tool_cell(kit, Node::default(), (Button, PackToolCell)))
+        .with_children(|cell| {
+            cell.spawn(tool_icon(icons));
+        });
+    parent
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(SIZE + 4.0),
+                bottom: px(0),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(1),
+                padding: UiRect::all(px(14)),
+                display: Display::None,
+                ..default()
+            },
+            kit.nine(Set::Stone, "frame"),
+            KitPiece("frame".into()),
+            GlobalZIndex(15),
+            HandList,
+        ))
+        .with_children(|list| {
+            let entries = std::iter::once(None).chain(Tool::ALL.into_iter().map(Some));
+            for tool in entries {
+                list.spawn((
+                    Button,
+                    Node {
+                        align_items: AlignItems::Center,
+                        column_gap: px(4),
+                        padding: UiRect::axes(px(3), px(2)),
+                        width: px(110),
+                        ..default()
+                    },
+                    BackgroundColor(Color::NONE),
+                    HandListRow(tool),
+                ))
+                .with_children(|row| {
+                    row.spawn((
+                        ImageNode::new(icons.in_hand(tool)),
+                        Node {
+                            width: px(16),
+                            height: px(16),
+                            flex_shrink: 0.0,
+                            ..default()
+                        },
+                        PickerIcon,
+                        PickerRow(tool),
+                    ));
+                    row.spawn((
+                        KitText::new(
+                            tool.map_or(BARE, |t| t.name()).to_uppercase(),
+                            ui_kit::TITLE,
+                        )
+                        .shadow(ui_kit::INK),
+                        PickerName(tool),
+                    ));
+                });
+            }
+        });
+}
+
+/// A click on the pack's hand cell opens or shuts its list; a click on a
+/// row puts that tool in hand, saved as the G picker saves it.
+#[allow(clippy::type_complexity)]
+pub fn pack_hand(
+    screen: Res<super::menu::Screen>,
+    mut open: ResMut<HandListOpen>,
+    mut tools: ResMut<ToolSlot>,
+    mut save: Option<ResMut<WorldSave>>,
+    cell: Query<&Interaction, (Changed<Interaction>, With<PackToolCell>)>,
+    rows: Query<(&Interaction, &HandListRow), Changed<Interaction>>,
+    mut list: Query<&mut Node, With<HandList>>,
+    mut shown: Query<(&HandListRow, &mut Node, &mut BackgroundColor), Without<HandList>>,
+) {
+    let mut want = open.0 && *screen == super::menu::Screen::Pack;
+    if cell.iter().any(|i| *i == Interaction::Pressed) {
+        want = !want;
+    }
+    for (interaction, row) in &rows {
+        if *interaction == Interaction::Pressed {
+            want = false;
+            if tools.hold(row.0) {
+                if let Some(save) = save.as_deref_mut() {
+                    save.record_hand(&tools);
+                }
+                info!("in hand: {}", hand_tip(&tools));
+            }
+        }
+    }
+    if open.0 != want {
+        open.0 = want;
+    }
+    for mut node in &mut list {
+        let display = if want { Display::Flex } else { Display::None };
+        if node.display != display {
+            node.display = display;
+        }
+    }
+    if !want {
+        return;
+    }
+    for (row, mut node, mut fill) in &mut shown {
+        let display = if row.0.is_none_or(|t| tools.owns(t)) {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != display {
+            node.display = display;
+        }
+        let lit = row.0 == tools.held();
+        let color = if lit { lit_row() } else { Color::NONE };
+        if fill.0 != color {
+            fill.0 = color;
+        }
+    }
+}
+
 /// Build the tool slot and the (hidden) picker above it. `PostStartup` beside
 /// the hotbar, after the icons are loaded.
 pub fn spawn(
@@ -85,36 +258,21 @@ pub fn spawn(
         return;
     }
     let left = -HOTBAR / 2.0 - APART - SIZE;
+    // Hovered while the pack has the pointer: what is in hand.
     commands
-        .spawn((
+        .spawn(tool_cell(
+            &kit,
             Node {
                 position_type: PositionType::Absolute,
                 bottom: px(super::slots::HOTBAR_BOTTOM),
                 left: percent(50),
                 margin: UiRect::left(px(left)),
-                width: px(SIZE),
-                height: px(SIZE),
                 ..default()
             },
-            kit.whole(Set::Stone, "slot-idle"),
-            // Hovered while the pack has the pointer: what is in hand.
-            Interaction::default(),
-            Tooltip(hand_tip(&Equipment::new_world())),
-            ToolSlotCell,
+            (),
         ))
         .with_children(|cell| {
-            cell.spawn((
-                ImageNode::new(icons.in_hand(None)),
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(4),
-                    top: px(4),
-                    width: px(16),
-                    height: px(16),
-                    ..default()
-                },
-                ToolIcon,
-            ));
+            cell.spawn(tool_icon(&icons));
         });
     commands
         .spawn((
