@@ -91,3 +91,9 @@ against what it would cost.
 - [ ] 14.3 (Built 2026-11-16 on `claude/waterline-3`; not yet shown: the sea was calm on every shot, so no far crest stood over the eye. Open until a windy shore is filmed.) The sea's far sheet is seen from below only when the eye is under its own surface. Verify: the shore video's frames just over the surface show no dark band at the far waterline.
 - [x] 14.4 (Built 2026-11-16 on `claude/waterline-3`; `docs/screenshots/waterline-3/`.) The shafts and the caustic web fade to their mean by their sampling footprint. Verify: the far end of the river channel without speckle in the after video.
 - [x] 14.5 (Built 2026-11-16 on `claude/waterline-3`; `docs/screenshots/waterline-3/`.) Before and after videos at the owner's two spots, a sea shore and a river mouth, smooth crossings at 0.1 m/s, on Drive, with contact sheets and the stepped frame list in `docs/screenshots/waterline-3/`. Verify: the README's list.
+
+## 15. No mirror on the water's underside; the split frame (owner, 2026-11-16; design B20)
+
+- [ ] 15.1 The sheet seen from below is Snell's window and the murk, the waves and rings a gentle shading on the murk (at most 12% either way); no mirror and no screen-space trace, at any REFLECTIONS level; the composite's stand-in for the clipped sheet the same. Verify: `the_underside_of_the_water_never_mirrors`; the owner's two spots before and after in the videos.
+- [ ] 15.2 The split frame at the owner's shallow-sea spot is gone: the frames within 0.3 m of every crossing show no mirrored sea floor and no streak band. Verify: the stepped frame list in `docs/screenshots/underwater-waterline/README.md`.
+- [ ] 15.3 The frame cost of the change, under the water. Verify: a held under-water view, `--frame-log`, release build, before and after interleaved on a quiet machine.
