@@ -73,3 +73,33 @@
    - The whole stroke fits inside the steady beat's period (decision 5). When
      it would not, the windup, the anticipation and the recover shorten in
      proportion; the hit never does.
+8. The twelve principles of animation (owner, 2026-11-17,
+   https://en.wikipedia.org/wiki/Twelve_basic_principles_of_animation). They
+   apply to every motion in hand: the dig and chop strokes and the rod
+   (`rod-motion`).
+
+   **Already in decisions 6 and 7:**
+   - **Anticipation:** the coil before the hit, and the rod's draw-back
+     before the cast.
+   - **Arcs:** the fist moves about the shoulder, and the rod tip arcs on the
+     cast.
+   - **Slow in and slow out:** ease into and out of the held poses. The hit
+     is fast in, with no ease at contact.
+   - **Staging:** the tool head lands at the crosshair.
+
+   **Added:**
+   - **Follow-through and overlapping action:** the head lags the fist on
+     the wind-up and carries a little past it at the hit (`lag_s` 0.03,
+     `overlap_rad` 0.06). The rod tip overshoots and wobbles after the
+     flick.
+   - **Squash and stretch:** the arm stretches at full reach (`extend_m`)
+     and gathers at the top.
+   - **Secondary action:** chips, the hit marker, an optional camera kick,
+     and the breathing sway between strokes.
+   - **Timing:** a heavier tool winds up slower and holds the impact
+     longer.
+   - **Exaggeration:** one `exaggerate` value (default 1) scales the raise,
+     the recoil and the kick together.
+   - **Pose to pose, solid drawing and appeal:** four keyed poses (rest,
+     top, hit, recoil) blended by the curves, and the fist reads as solid in
+     each.
