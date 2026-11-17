@@ -1076,3 +1076,15 @@ the water gives exactly the mockup's water-over-bubble result); none of the
 splash is drawn under its own pool's surface (the third lane carries that
 surface's radius), so a puff's low centre no longer hangs in the pool seen
 from under; and the frame cost (6.6.8) is owed.
+
+**Second round (6.6, after the coordinator's review).** Three fixes: a
+foot's fades are keyed by its column and layer (two feet stacked in one
+column of a cascade reset each other's fade every frame); on a fall's top
+cell the metres under the lip start at each corner's own level (a falling
+cell's top slopes to its low corners, so most of the edge started past the
+glassy band and Glassy looked off); and the stills are of the mockup's own
+scene made in the game (`--pit` and `--pour` at the spawn), where the mist
+rolls as the mockup's does. In a cascade of side-by-side falls the wall blend
+fades each puff against the neighbouring sheets, so the mist reads thinner
+than the mockup's single fall; narrowing the blend there would change the
+approved look and is the owner's to ask for.

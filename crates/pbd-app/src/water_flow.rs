@@ -363,6 +363,16 @@ pub struct Foot {
     pub pool_m: f32,
     /// The foot's column in the tier, which keys its fade across frames.
     pub column: u32,
+    /// The landing cell's layer: with the column, which foot this is (a
+    /// cascade can stack two in one column).
+    pub layer: u32,
+}
+
+impl Foot {
+    /// The key its fades are kept under across frames.
+    pub fn key(&self) -> u64 {
+        u64::from(self.column) << 32 | u64::from(self.layer)
+    }
 }
 
 /// What `cell_pieces` finds of a fall's foot, before the tick's own fields.
@@ -376,7 +386,7 @@ struct FootFound {
 }
 
 impl FootFound {
-    fn foot(self, sky: f32, born: bool, column: usize) -> Foot {
+    fn foot(self, sky: f32, born: bool, column: usize, layer: usize) -> Foot {
         Foot {
             at: self.at,
             height: self.height,
@@ -386,6 +396,7 @@ impl FootFound {
             over: self.over,
             pool_m: self.pool_m,
             column: column as u32,
+            layer: layer as u32,
         }
     }
 }
@@ -912,7 +923,20 @@ fn cell_pieces(
         } else {
             0.0
         };
-        let under = |fraction: f32| if measured { run + 1.0 - fraction } else { 0.0 };
+        // On the run's top cell the lip is the face's own top edge, at each
+        // corner's level (a falling cell's top slopes down to its low
+        // corners), so the metres start there; under it, from the top of
+        // the cell.
+        let under = |fraction: f32, top: f32| {
+            if !measured {
+                0.0
+            } else if run == 0.0 {
+                (top - fraction).max(0.0)
+            } else {
+                run + 1.0 - fraction
+            }
+        };
+        let tops = [top_a, top_z, top_z, top_a];
         let pts = [
             (at(a, bottom_a), bottom_a),
             (at(z, bottom_z), bottom_z),
@@ -927,7 +951,7 @@ fn cell_pieces(
                 PieceVertex {
                     p,
                     n: normal,
-                    flow: Vec3::new(froth, 0.0, under(fraction)),
+                    flow: Vec3::new(froth, 0.0, under(fraction, tops[k])),
                     kind,
                 },
                 pts[raised].0,
@@ -1152,7 +1176,7 @@ pub fn liquid_mesh_eased(
                     }
                     if let Some(found) = foot {
                         out.feet
-                            .push(found.foot(lit, !is_foot(p, slot, layer), slot));
+                            .push(found.foot(lit, !is_foot(p, slot, layer), slot, layer));
                     }
                 }
                 Some(p) if wet_now && !wet_was => {
@@ -1172,7 +1196,7 @@ pub fn liquid_mesh_eased(
                         out.emit(c, &positions, &to[..c.n], lit, EASE_FRONT);
                     }
                     if let Some(found) = foot {
-                        out.feet.push(found.foot(lit, true, slot));
+                        out.feet.push(found.foot(lit, true, slot, layer));
                     }
                 }
                 Some(p) if wet_was && !wet_now => {
@@ -1200,7 +1224,7 @@ pub fn liquid_mesh_eased(
                         out.emit_still(c, lit);
                     }
                     if let Some(found) = foot {
-                        out.feet.push(found.foot(lit, false, slot));
+                        out.feet.push(found.foot(lit, false, slot, layer));
                     }
                 }
             }
@@ -1508,6 +1532,18 @@ mod tests {
         assert!(!unders.is_empty());
         assert!(unders.iter().all(|u| (0.0..=4.0).contains(u)), "{unders:?}");
         assert!(unders.iter().any(|u| *u > 2.0), "{unders:?}");
+        // The run's top cell starts at its own top edge, every corner of it,
+        // however its top slopes: a face's top vertices read 0 there.
+        let lip_top = made
+            .vertices
+            .iter()
+            .filter(|v| v.kind == KIND_FALLING && v.flow.z < 1e-4)
+            .count();
+        assert!(lip_top >= 6, "{unders:?}");
+        // Two feet in one column are two keys.
+        let mut stacked = *foot;
+        stacked.layer += 3;
+        assert_ne!(stacked.key(), foot.key());
     }
 
     /// S2: a cell that turns wet starts as a thin sheet on the side its
@@ -1768,11 +1804,11 @@ struct FootFade {
 }
 
 /// What the splash keeps between frames: each foot's fades, keyed by its
-/// column (a lookup only; nothing is ordered by it), and a scratch list kept
+/// column and layer (a lookup only; nothing is ordered by it), and a scratch list kept
 /// so no frame allocates.
 #[derive(Default)]
 struct SplashState {
-    fades: std::collections::HashMap<u32, FootFade>,
+    fades: std::collections::HashMap<u64, FootFade>,
     frame: u32,
     order: Vec<(f32, usize)>,
 }
@@ -1844,34 +1880,40 @@ fn animate_splash(
     gpu_feet.count = 0;
     for &(distance, i) in &state.order {
         let f = &feet.0[i];
-        let fade = state.fades.entry(f.column).or_default();
+        let fade = state.fades.entry(f.key()).or_default();
         let inside = distance < look.splash_reach_m;
         let want_near = inside && near_rank < FALL_FEET_MAX;
         if inside {
             near_rank += 1;
         }
-        // A foot not seen last frame starts from nothing and fades in.
-        if fade.seen != stamp.wrapping_sub(1) {
-            fade.splash = 0.0;
-            fade.near = 0.0;
+        // Once a frame a foot: a key met twice in one frame is not stepped
+        // twice (nor reset by its own second sight).
+        if fade.seen != stamp {
+            // A foot not seen last frame starts from nothing and fades in.
+            if fade.seen != stamp.wrapping_sub(1) {
+                fade.splash = 0.0;
+                fade.near = 0.0;
+            }
+            fade.splash = fade_toward(
+                fade.splash,
+                f32::from(u8::from(inside)),
+                dt,
+                look.splash_fade_s,
+            );
+            fade.near = fade_toward(
+                fade.near,
+                f32::from(u8::from(want_near)),
+                dt,
+                look.splash_fade_s,
+            );
+            fade.seen = stamp;
         }
-        fade.splash = fade_toward(
-            fade.splash,
-            f32::from(u8::from(inside)),
-            dt,
-            look.splash_fade_s,
-        );
-        fade.near = fade_toward(
-            fade.near,
-            f32::from(u8::from(want_near)),
-            dt,
-            look.splash_fade_s,
-        );
-        fade.seen = stamp;
         if fade.near > 0.0 && (gpu_feet.count as usize) < FALL_FEET_MAX {
             let k = gpu_feet.count as usize;
             let gain = if f.born { landed } else { 1.0 };
-            let seed = (f.column.wrapping_mul(0x9E37_79B9) >> 16) as f32 / 65535.0;
+            let seed = ((f.column ^ f.layer.rotate_left(16)).wrapping_mul(0x9E37_79B9) >> 16)
+                as f32
+                / 65535.0;
             gpu_feet.feet[k] = f.at.extend(f.drop_m);
             gpu_feet.more[k] = Vec4::new(f.pool_m, seed, fade.near * gain, 0.0);
             gpu_feet.count += 1;
@@ -1897,7 +1939,7 @@ fn animate_splash(
     };
     for &(_, i) in &state.order {
         let f = &feet.0[i];
-        let Some(fades) = state.fades.get(&f.column) else {
+        let Some(fades) = state.fades.get(&f.key()) else {
             continue;
         };
         let gain = if f.born { landed } else { 1.0 };
