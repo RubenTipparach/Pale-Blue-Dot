@@ -157,7 +157,7 @@ None of these is a large f32:
   is 7 200 s, an f32 step of 0.49 ms, which moves a 1 rad/s sway by 5e-4 rad.
   Not visible.
 
-## 3. The walking camera stays raw
+## 3. The walking camera stays raw (superseded by 6.5)
 
 A camera drawn at the raw physics step moves in whole steps. Easing it between
 steps (the fixed clock's overstep) would cost up to one step of latency for the
@@ -170,9 +170,10 @@ history is kept in the physics frame, which never rebases, and it snaps on a
 teleport (respawn, restore, climb-out). Recommendation: do it with the render
 origin (section 4), since both write the camera's translation.
 
-## 4. Proposed: a camera-relative render origin
+## 4. A camera-relative render origin
 
-**Not built.** It waits for a go-ahead.
+Proposed here; the owner's go-ahead came on 2026-11-17 ("Build floating
+origin"). How it is being built, stage by stage, is section 6.
 
 The rule in `CLAUDE.md` is: "render and simulate collision in bounded local
 f32 frames. Subtract the origin before casting". The render side breaks it,
@@ -271,3 +272,113 @@ and only the render side needs to change:
 - The hooked float hangs off the walker's raw physics `Position` (`feet`). If
   the angler moves while a fish is on, the float moves in the walker's
   physics steps. That goes with the camera interpolation in section 3.
+
+## 6. Building the floating origin (owner, 2026-11-17: "Build floating origin")
+
+Built on `claude/floating-origin`, in this order, each stage measured before
+the next. Sections 4.1 to 4.7 are the plan; this is what is built and the
+decisions taken building it.
+
+### 6.1 Three spaces, named
+
+- **Physics space**: Avian's `Position`, and the walker's and the skiff's own
+  `Transform` (Avian writes it). Planet-centred in play: the planet's centre
+  there is `body.position - PhysicsFrame.origin`, 0. Unchanged.
+- **Planet-local**: relative to the planet's centre. What every simulation
+  stores (fish, line, herd, towns, drops) and what `up = p.normalize()` needs.
+- **Render space**: every other `Transform` and `GlobalTransform`, the views
+  and everything drawn. `render = physics - origin`, with `origin` a
+  `DVec3` in physics space.
+
+`PlanetRenderFrame` carries both: `center`, the planet's centre in render
+space (`physics centre - origin`), and `origin`. `frame.physics_center()` is
+`center + origin`. So the rules are:
+
+- drawn (render space) from planet-local: `frame.center + local` in f64, then
+  cast;
+- planet-local from a drawn transform: `translation - frame.center` in f64;
+- planet-local from an Avian `Position`: `position - frame.physics_center()`;
+- render space from an Avian `Position`: `position - frame.origin`.
+
+Every site that used `center` for a `Position` (`fish.rs`, `husbandry.rs`,
+`vehicles.rs`, `audio/hooks.rs`) moves to `physics_center()`.
+
+### 6.2 The origin and the rebase (stage 1)
+
+- `RenderOrigin` lives in `PlanetRenderFrame.origin`. The camera's
+  planet-local position is snapped to a 16 m grid (`ORIGIN_CELL_M`): a
+  rebase happens when the camera leaves its cell, at most once a frame. At
+  16 m the f32 step of anything within 32 m of the eye is 2^-19 m (2 µm).
+- `rebase_render_origin` runs in `PostUpdate`, after every camera writer
+  (walking, flight, vehicle, capture), and before `update_planet_frame` and
+  transform propagation. It reads the active 3D camera's `Transform`, gets
+  its planet-local point as `translation - center` in f64, and when the
+  snapped cell differs:
+  - `origin += delta`, `center -= delta`;
+  - every **root** `Transform` that is not a physics body (no `RigidBody`)
+    is moved by `-delta`. Entities spawned once at a place (towns, props,
+    drops, lamps, the stars) stay where they are in the world without any of
+    them knowing; entities rewritten each frame from planet-local data are
+    right whether they were written before the rebase (and moved by it) or
+    after it (with the new centre). `delta` is a multiple of 16 m, so the
+    f32 subtraction is exact for every coordinate in range and repeated
+    rebases never drift.
+- `update_planet_frame` computes `center = body - PhysicsFrame.origin -
+  origin`, so the two agree every frame.
+- Physics and simulation do not move. No `Position`, velocity or simulation
+  history is touched by a rebase.
+
+### 6.3 The cameras (stage 2)
+
+The walking (`follow_walker`), flight (`follow_flight_camera`) and vehicle
+(`vehicles/view.rs`) cameras write `position - origin` (f64, then cast). The
+capture cameras spawned at startup are placed in render space at the origin
+they start with. Measured: held-tool shimmer from `PBD_MOTION_TRACE`, walking
+and fishing, real time; the target is under 0.05 px rms.
+
+### 6.4 Everything else drawn (stage 3) and the shaders (stage 4)
+
+The audit of sections 4.4 and 4.5, file by file, with each converted
+explicitly: per-frame writers from physics space (the moon, the skiff, the
+vehicles' crew) and readers that took a drawn translation as planet-local
+(`normalize()` as up, `length()` against the radius or the sea, cell
+lookups, the audio listener). The eleven shaders already take the centre as
+a uniform; each feeder is checked to write the render-space centre, and any
+that sampled absolute world position is moved to planet-local so nothing
+shifts on a rebase. `--render-offset` becomes a render-space offset that
+works in play (6.6) and is the test of all of it.
+
+### 6.5 The walking camera between physics steps (stage 5)
+
+The owner's ask (2026-11-17) brings section 3's option in with the origin:
+
+- the walker keeps its physics `Position` at the last two fixed steps
+  (`StepHistory`), recorded after each step in physics space, which never
+  rebases;
+- `follow_walker` places the eye at `lerp(previous, current,
+  Time<Fixed>::overstep_fraction())`, then subtracts the origin;
+- the look is not touched: it stays this frame's raw mouse;
+- a `Position` that changed outside the fixed loop (respawn, restore,
+  climb-out, boarding), or a step longer than 2 m, snaps the history to it,
+  so a teleport is never drawn as a glide.
+
+The cost is up to one physics step (16.7 ms) of position latency, the price
+of drawing between steps.
+
+### 6.6 `--render-offset` in play, tests and checks (stage 6)
+
+- `--render-offset x y z` no longer moves physics. It puts the render origin
+  that far from the camera's cell, so the planet's centre and the camera are
+  both away from 0 in render space. It is allowed in play.
+- Tests: a camera far from the centre with origins at 0, at 4 800 m and at a
+  random offset derives the same planet-local eye, up and clip; a rebase
+  keeps every drawn point where it was (no jump); a walker crossing a cell
+  draws continuously.
+- Launch to `READY` with no `LATE_PIPELINE`.
+
+### 6.7 No look change
+
+Same-frame `--capture` stills before and after (`tools/capture_repeat.py
+--against`) at a town by day and at night with lamps, the sea, under water, a
+waterfall and flying at 1 km. A pixel difference beyond the repeat noise is a
+bug.
