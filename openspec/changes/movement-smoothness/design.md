@@ -502,7 +502,9 @@ line's length), and is not changed here. The drawing takes the jump out:
   `run` changed, or the frame the line goes from a bite to hooked, the
   offset takes up the whole of that frame's move (the float is drawn where it
   was), and from there it eases to nothing, critically damped (no kick in
-  speed at either end), over about a quarter of a second;
+  speed at either end), over about a third of a second
+  (`FLOAT_EASE_PER_S` 14/s). The swing goes on at the line's first hooked
+  step, the frame after the strike, so that frame is taken up too;
 - the offset is kept along the water: the drawn float stays at the simulated
   float's height over the planet's centre;
 - in every other frame and phase the offset only decays, and the line's
@@ -510,7 +512,7 @@ line's length), and is not changed here. The drawing takes the jump out:
 - the float, the line's far end and the hooked fish (drawn at the lure) all
   use the drawn float, so they stay together.
 
-The cost is that for a quarter of a second after a run starts or stops the
+The cost is that for a third of a second after a run starts or stops the
 float is drawn up to a metre from where the line's rules have it. Nothing
 reads the drawn float.
 
@@ -544,6 +546,23 @@ rest tip. The cast still leaves from the rest tip (`Angler.tip`, simulation).
 - The cast's first frames are the float thrown at 15 m/s from the tip; their
   residual is the throw's own acceleration, not a step.
 
-### 7.5 Results
+### 7.5 Results (M4 Max MacBook Pro, 2026-11-17)
 
-Filled in with the same trace after the change.
+The same 45 s fishing trace, real time, windowed, vsync on, each on a fresh
+world; one fish hooked and landed in each. "Before" is this branch with the
+drawing changes switched off in a local build (the trace's new columns need
+the instrument); its hooked numbers match the run on `787964cb` itself
+(rms 14.4, p99 86.7 px). Reports and plots: `docs/screenshots/fishing-line-smooth/`.
+
+| | before | after, same scripted hand | after, steady hand (7.2) |
+| --- | --- | --- | --- |
+| hooked float jitter, rms / p50 / p99 px | 19.0 / 1.49 / 131 | 4.5 / 1.69 / 18.1 | **2.9 / 1.06 / 11.3** |
+| hooked frames over 20 px | 38 of 793 | 6 of 790 | **0 of 788** |
+| largest float move in one frame | 152 cm | 20 cm (an eased slide) | 19 cm (an eased slide) |
+| line start from the drawn rod tip, rms / max px | 16.3 / 23.6 | **0.31 / 0.65** | 0.31 / 0.63 |
+
+The 6 frames left over 20 px with the old hand are its 20 Hz stutter with
+the float 4 m out; the steady hand takes them. What is left at p99 is the
+reel starting and stopping, which a player's hand does too. The 0.3 px left
+between the line's start and the rod tip is the rod model's tip against
+the line's first vertex, constant, not a motion.

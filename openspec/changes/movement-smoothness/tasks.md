@@ -48,15 +48,15 @@
 
 ## 5. The hooked float and the line (design 7)
 
-- [ ] 5.1 Trace column: the line's start and the swayed rod's tip in camera
+- [x] 5.1 Trace column: the line's start and the swayed rod's tip in camera
   space, as drawn.
-- [ ] 5.2 `DrawnFloat`: a run starting or stopping, or the strike, is eased
+- [x] 5.2 `DrawnFloat`: a run starting or stopping, or the strike, is eased
   out over a quarter second; float, line end and hooked fish drawn from it.
-- [ ] 5.3 The line starts at the rod's tip as posed this frame.
-- [ ] 5.4 `--fish-play` holds the button in a band (0.45 to 0.75), as a hand.
-- [ ] 5.5 Tests: a jump is eased, nothing else is moved; the tip follows the
+- [x] 5.3 The line starts at the rod's tip as posed this frame.
+- [x] 5.4 `--fish-play` holds the button in a band (0.45 to 0.75), as a hand.
+- [x] 5.5 Tests: a jump is eased, nothing else is moved; the tip follows the
   pose.
-- [ ] 5.6 The trace again: hooked float rms/p99 and frames over 20 px; the
+- [x] 5.6 The trace again: hooked float rms/p99 and frames over 20 px; the
   tip gap.
 - [ ] 5.7 Video: a bite seen from under water, before and after, one file.
 
