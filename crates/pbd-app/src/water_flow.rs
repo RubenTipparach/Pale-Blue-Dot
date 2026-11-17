@@ -414,6 +414,28 @@ pub struct PieceSpan {
     pub n: u32,
 }
 
+/// A side piece pressed down: each vertex to the lowest of the piece's
+/// vertices on its own corner (its top sunk to its bottom).
+fn lowered(piece: &Piece) -> [Vec3; PIECE_MAX] {
+    let mut out = piece.positions();
+    let n = piece.n;
+    for k in 0..n {
+        let dir = piece.v[k].p.normalize_or(Vec3::Y);
+        let mut low = piece.v[k].p;
+        for v in &piece.v[..n] {
+            if (v.p.normalize_or(Vec3::Y) - dir).length() < 1e-5 && v.p.length() < low.length() {
+                low = v.p;
+            }
+        }
+        out[k] = low;
+    }
+    out
+}
+
+/// Set in a piece's name for the old face of a face that changed kind this
+/// tick, drawn beside the new one.
+const REKINDED: u64 = 0x40;
+
 /// A piece's name across meshes: the cell's key, its layer and which piece.
 fn ident(key: u32, layer: usize, id: PieceId) -> u64 {
     let code = match id {
@@ -1297,7 +1319,7 @@ pub fn liquid_mesh_eased(
                     for c in &now {
                         let matched = was
                             .iter()
-                            .position(|w| w.id == c.id && w.n == c.n)
+                            .position(|w| w.id == c.id && w.n == c.n && w.v[0].kind == c.v[0].kind)
                             .filter(|&i| !used[i]);
                         let positions = c.positions();
                         match matched {
@@ -1326,14 +1348,21 @@ pub fn liquid_mesh_eased(
                             ),
                         }
                     }
-                    // And one gone this tick collapses away.
+                    // And one gone this tick collapses away. A face whose
+                    // kind changed (a fall's face turning still as its fall
+                    // ends) is wiped: the old face drains down, its top
+                    // sunk to its bottom, as the new one grows down from
+                    // its top, so the two meet at one line.
                     for (i, w) in was.iter().enumerate() {
                         if !used[i] {
                             let from = w.positions();
+                            let rekinded = now.iter().any(|c| c.id == w.id && c.n == w.n);
+                            let to = if rekinded { lowered(w) } else { w.alt };
+                            let key = if rekinded { id(w) | REKINDED } else { id(w) };
                             out.emit(
-                                id(w),
+                                key,
                                 w,
-                                &w.alt[..w.n],
+                                &to[..w.n],
                                 &from,
                                 None,
                                 (lit_was, lit_was),
@@ -1342,8 +1371,13 @@ pub fn liquid_mesh_eased(
                         }
                     }
                     if let Some(found) = foot {
-                        out.feet
-                            .push(found.foot(lit, !is_foot(p, slot, layer), slot, layer));
+                        // Born, and its splash held until its column lands
+                        // (S3), only where the fall arrived this tick: a
+                        // foot that moved down a pool draining is the same
+                        // fall, and cross-fades (`water-flow` 5.4).
+                        let arrived =
+                            !is_foot(p, slot, layer) && !material_in(p, slot, layer + 1).is_water();
+                        out.feet.push(found.foot(lit, arrived, slot, layer));
                     }
                 }
                 Some(p) if wet_now && !wet_was => {

@@ -776,10 +776,17 @@ same over-wide sheet.
   from are kept for the next.
 - Saves, the rule and its tick are untouched: this is drawing only.
 
-**What it does not do.** A face that changes kind between ticks (a fall's
-foot cell, falling face to still face when its fall has gone) changes kind
-at the tick: the kind is a switch, not a number to ease. The froth weight it
-carries eases.
+- **A face that changes kind is wiped.** The kind (a falling face's
+  streaming froth against a still face) is a switch the fragment branches on,
+  not a number to ease, and switching it at the tick stepped a whole face (a
+  fall's foot turning still as its fall ends). Such a face is drawn twice for
+  the tick: the old face, of its old kind, drains down (its top sinks to its
+  bottom), while the new one grows down from its top, both fronts at one
+  speed, so the two meet at one line and the froth runs off the face.
+- **Only a fall that arrived holds its splash.** S3 holds a new foot's
+  splash until its column lands. A foot that moved down a layer because its
+  pool drained is the same fall, not an arrival: it cross-fades with the foot
+  it replaces from the tick's start.
 
 ## Rain rings that alias (owner, 2026-11-16)
 
