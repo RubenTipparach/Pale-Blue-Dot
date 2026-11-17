@@ -911,7 +911,7 @@ fn home_roster() -> Vec<Species> {
             1,
             [0.81, 0.89, 0.92],
             [0.5, 0.5, 1.0],
-            "A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two metres and scatter at a splash, then close ranks again a few seconds later.",
+            "A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two meters and scatter at a splash, then close ranks again a few seconds later.",
             "Let the splash settle before you expect a bite.",
         ),
         sp(
@@ -1016,7 +1016,7 @@ fn home_roster() -> Vec<Species> {
             4,
             [0.31, 0.44, 0.56],
             [0.55, 0.55, 1.0],
-            "A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half metres, and a hooked deepback runs long and tires slowly.",
+            "A heavy cold-water fish of the shelf and the deep. Small schools cruise below two and a half meters, and a hooked deepback runs long and tires slowly.",
             "Fish where the shelf drops close to the shore, where the water turns dark.",
         ),
         sp(
@@ -1133,7 +1133,7 @@ fn water_life() -> Vec<Species> {
             shape: [1.2, 0.6, 0.8],
             icon: "water_life/giant_clam".into(),
             guide: Guide {
-                entry: "A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four metres and opens again once it has gone.".into(),
+                entry: "A clam as wide as a cart wheel, set in the sand of warm reef shallows with its blue mantle open to the sun. It shuts when anything comes within four meters and opens again once it has gone.".into(),
                 tip: "Swim up slowly and it still shuts. Wait a while at a distance and it opens.".into(),
             },
             mover: Mover::Crawler,
@@ -1254,7 +1254,7 @@ fn water_life() -> Vec<Species> {
             icon: "water_life/pond_diver".into(),
             guide: Guide {
                 entry: "A dark little duck that dives for its food and comes up somewhere else. Pond divers keep to deeper pools and slow river reaches in ones and twos. Ducks are protected.".into(),
-                tip: "Watch the water where it went under; it surfaces a few metres off.".into(),
+                tip: "Watch the water where it went under; it surfaces a few meters off.".into(),
             },
             mover: Mover::Floater,
             env: vec![Marsh, Pool],
@@ -1284,7 +1284,7 @@ fn water_life() -> Vec<Species> {
             shape: [0.8, 0.4, 1.0],
             icon: "water_life/octopus".into(),
             guide: Guide {
-                entry: "A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the colour of the rock when still and flushes red when it moves. Come within six metres and it inks and jets home, and stays hidden until you have gone.".into(),
+                entry: "A clever crawler of reefs and rocky shelf that keeps a den with shells piled at its door. It takes the color of the rock when still and flushes red when it moves. Come within six meters and it inks and jets home, and stays hidden until you have gone.".into(),
                 tip: "Look for the shells at its door, then keep back and wait.".into(),
             },
             mover: Mover::Crawler,
@@ -1314,7 +1314,7 @@ fn water_life() -> Vec<Species> {
             shape: [0.15, 0.05, 0.15],
             icon: "water_life/tube_worm".into(),
             guide: Guide {
-                entry: "White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five metres. They live on the vent, not on the light.".into(),
+                entry: "White tubes taller than a person crowd round the deep vents, each with a red plume out in the warm water. The plume snaps back into its tube when anything comes within five meters. They live on the vent, not on the light.".into(),
                 tip: "Only at the vents on the deepest floor. Nothing worth taking; the vent is the prize.".into(),
             },
             mover: Mover::Crawler,
@@ -1344,7 +1344,7 @@ fn water_life() -> Vec<Species> {
             shape: [0.4, 0.35, 1.0],
             icon: "water_life/seal".into(),
             guide: Guide {
-                entry: "Grey seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine metres, then surface somewhere else a while later. Seals are protected: none may be caught.".into(),
+                entry: "Gray seals of the cold seas and the kelp. They lie out on the floes and slide in when you come within nine meters, then surface somewhere else a while later. Seals are protected: none may be caught.".into(),
                 tip: "Cold water, near the ice or the kelp. Where seals are, the fish are.".into(),
             },
             mover: Mover::Floater,

@@ -26,6 +26,38 @@ lands on ground SHALL come back empty.
 - **THEN** its height is the sea table's height at its position
   (`fish::tests::the_float_rides_the_sea_the_hulls_ride`)
 
+### Requirement: The line runs from the rod tip to the float
+While the float is out, the drawn line SHALL start at the rod's tip and end
+at the drawn float, each frame, from the same frame's camera and float. The
+points between SHALL lie on or over the water the float rides, waves and tide
+included, not through it.
+
+#### Scenario: Low water and a bite
+- **WHEN** the float rides a wave trough at low tide, or is pulled under on a
+  bite
+- **THEN** the line's last point is the float and no point between is under
+  the water (`fish::tests::the_line_runs_from_the_rod_tip_to_the_float`)
+
+### Requirement: A strike at the bite lands the fish, and a lost fish is said
+While the float is under, either the use button or the wind-in button SHALL
+hook the fish. A hooked fish reeled in without snapping the line SHALL be in
+the slots and the save on the frame it lands. Winding in, or losing the line,
+with a fish nibbling, biting or hooked SHALL say the fish got away.
+
+#### Scenario: Striking with the wind-in button
+- **WHEN** the player presses the wind-in button while the float is under
+- **THEN** the fish is hooked (`fishing::tests::a_right_click_at_the_bite_hooks_the_fish`)
+
+#### Scenario: A struck bite reeled in
+- **WHEN** a bite is struck inside its window and reeled patiently
+- **THEN** the fish is in the slots and the save
+  (`fish::tests::a_bite_struck_in_its_window_puts_the_fish_in_the_slots`)
+
+#### Scenario: Winding in on a nibble
+- **WHEN** the line is wound in while a fish nibbles
+- **THEN** a `Lost` event names it before the line comes in
+  (`fishing::tests::winding_in_on_a_nibble_says_the_fish_got_away`)
+
 ### Requirement: The fish that bites is a fish that was swimming there
 A bite SHALL come from a fish of a school simulated near the float, and the
 species caught SHALL be that fish's species. There SHALL be no catch table

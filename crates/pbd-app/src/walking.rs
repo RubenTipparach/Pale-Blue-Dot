@@ -1835,7 +1835,7 @@ fn water_climb(
     Some(to)
 }
 
-fn follow_walker(
+pub(crate) fn follow_walker(
     mut state: ResMut<WalkingState>,
     mut readout: ResMut<WalkingReadout>,
     walkers: Query<(&Position, &LinearVelocity, &GroundState), With<Walker>>,
