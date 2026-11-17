@@ -20,7 +20,7 @@
   on an arc, in the mockup and the game; `cast_raise_m`, `cast_back_m`,
   `cast_reach_m` in place of `draw_lift_m`; a capture of the charge
   (`docs/screenshots/rod-motion/charging-raised.jpg`)
-- [ ] 2.7 A technical montage of the mockup's motion
+- [x] 2.7 A technical montage of the mockup's motion
   (`docs/videos/tool-motion/`), fixed-step on SwiftShader
 
 ## 3. The mockup
