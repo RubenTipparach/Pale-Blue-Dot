@@ -91,3 +91,8 @@ against what it would cost.
 - [ ] 14.3 (Built 2026-11-16 on `claude/waterline-3`; not yet shown: the sea was calm on every shot, so no far crest stood over the eye. Open until a windy shore is filmed.) The sea's far sheet is seen from below only when the eye is under its own surface. Verify: the shore video's frames just over the surface show no dark band at the far waterline.
 - [x] 14.4 (Built 2026-11-16 on `claude/waterline-3`; `docs/screenshots/waterline-3/`.) The shafts and the caustic web fade to their mean by their sampling footprint. Verify: the far end of the river channel without speckle in the after video.
 - [x] 14.5 (Built 2026-11-16 on `claude/waterline-3`; `docs/screenshots/waterline-3/`.) Before and after videos at the owner's two spots, a sea shore and a river mouth, smooth crossings at 0.1 m/s, on Drive, with contact sheets and the stepped frame list in `docs/screenshots/waterline-3/`. Verify: the README's list.
+
+## 15. Kelp that does not hammer the frame (owner, 2026-11-16: "kelp forest is HAMMERING PERF"; design B20)
+
+- [x] 15.1 (Built 2026-11-16 on `claude/kelp-perf`.) Measurement instruments: `PBD_PASS_OFF=kelp` and the `SEA_PLACES` log line. Verify: the before exe prices kelp on and off in one sitting.
+- [x] 15.2 (Built 2026-11-16 on `claude/kelp-perf`: `a_kelp_stand_is_the_mockup_s_few_cards`, `kelp_stands_at_the_mockup_s_density`; `docs/screenshots/kelp-perf/`.) The kelp stand is M25's: two crossed frond cards a 4 m of water and one flat on the surface, in M25's own card, cut out; at M25's density; its own mesh, frustum culled, its pipeline warmed at load. Verify: the tests; before and after stills from just above the surface and on the bed; the held-view sitting in `docs/benchmarks/2026-11-16-kelp/`.

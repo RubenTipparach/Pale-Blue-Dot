@@ -724,13 +724,13 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
             out.push(p);
         }
     }
-    // Kelp: stands every 2 m, to the surface, on the kelp's rock.
+    // Kelp: M25's density (design B20), to the surface, on the kelp's rock.
     if any(Environment::Kelp) {
-        let n = (TILE_M / 2.0) as i32;
+        let n = (TILE_M / KELP_STEP_M) as i32;
         for i in 0..n {
             for j in 0..n {
                 let k = tile_k.wrapping_mul(7_919) ^ ((i as u64) << 16) ^ j as u64 ^ 0x4e1b;
-                if hash_unit(seed ^ 30, k) > 0.7 {
+                if hash_unit(seed ^ 30, k) > KELP_KEEP {
                     continue;
                 }
                 let fu = (i as f32 + 0.5 + (hash_unit(seed ^ 31, k) - 0.5) * 0.9) / n as f32;
@@ -880,113 +880,66 @@ struct Verts {
     uvs: Vec<[f32; 2]>,
 }
 
-/// The kelp frond's colours (design B16): M25's `kelp_card`, one a part.
-const KELP_STIPE: u32 = 0x725244;
-const KELP_BLADE: u32 = 0xab8465;
-const KELP_BLADE_GREEN: u32 = 0x05582d;
-const KELP_FLOAT: u32 = 0xc56d25;
 /// The rocks a kelp bed stands on: the rock's palette, not the coral's.
 const KELP_ROCK: [u32; 3] = [0x434137, 0x725244, 0xa09f91];
 
-/// One kelp stand from the bed to the surface (design B16), after M25's
-/// frond: two or three slender stipes, each two crossed strips; narrow
-/// tapered blades spiralling up them, each with a gas float at its base;
-/// a canopy of longer blades lying out at the surface. One colour a part.
+/// M25's kelp card (`docs/mockups/ocean.html`, "Kelp forest";
+/// `tools/art/ocean_art.py` `kelp_card`), byte for byte: a frond, its stipe,
+/// blades and gas floats, 16 x 64 with hard alpha (design B20).
+const KELP_CARD_PNG: &[u8] = include_bytes!("../../../../assets/textures/water_life/kelp_card.png");
+/// The card's width and the height of one card up a stipe, m (M25's
+/// `PlaneGeometry(1.2, 4)`).
+const KELP_CARD_W: f32 = 1.2;
+const KELP_CARD_H: f32 = 4.0;
+/// How far the canopy's card lies off the stipe, m (M25's 1.4).
+const KELP_CANOPY_OFF_M: f32 = 1.4;
+/// Kelp stands on a lattice of this, m, and on this share of its points
+/// (M25: a stand on 58% of the 2.833 m cells, 0.083 a square metre).
+const KELP_STEP_M: f32 = 3.0;
+const KELP_KEEP: f32 = 0.75;
+
+/// One kelp stand from the bed to the surface as M25 draws it (design B20,
+/// owner 2026-11-16: "kelp forest in the mockup was like just a couple
+/// polygons"): two crossed cards of the frond up the stipe, a card for every
+/// 4 m of water stretched to reach the surface, and one card lying flat on
+/// the surface beside it as the canopy. `4 * ceil(height / 4) + 2`
+/// triangles; the card carries the frond's own colours, the vertex colour
+/// the depth's light.
 fn kelp_stand(origin: Vec3, axes: (Vec3, Vec3, Vec3), height: f32, k: f32, out: &mut Verts) {
-    let mut kit = Kit::default();
-    kit.tile("veins");
-    // A part laid along `dir` (its length) with its width along `side`,
-    // rooted at `at`.
-    let along = |at: Vec3, dir: Vec3, side: Vec3| {
-        let dir = dir.normalize_or(Vec3::Y);
-        let side = side.normalize_or(Vec3::X);
-        Mat4::from_cols(
-            dir.extend(0.0),
-            side.extend(0.0),
-            dir.cross(side).normalize_or(Vec3::Z).extend(0.0),
-            at.extend(1.0),
-        )
-    };
-    let blade = |len: f32, half: f32| {
-        shape(&[
-            [0.0, -half * 0.4],
-            [len * 0.35, -half],
-            [len * 0.85, -half * 0.55],
-            [len, 0.0],
-            [len * 0.85, half * 0.55],
-            [len * 0.35, half],
-            [0.0, half * 0.4],
-        ])
-    };
-    let stipes = 2 + ((k * 7.3).sin().abs() * 1.99) as usize;
-    for stipe in 0..stipes {
-        let a = stipe as f32 * 2.1 + k;
-        let foot = Vec3::new(a.cos() * 0.12, 0.0, a.sin() * 0.12);
-        let top = height * (0.88 + 0.12 * (stipe as f32 * 1.7 + k).sin().abs());
-        // The stipe: two crossed strips, a metre a segment.
-        let segs = top.ceil().max(1.0) as usize;
-        for i in 0..segs {
-            let (y0, y1) = (
-                i as f32 * top / segs as f32,
-                (i + 1) as f32 * top / segs as f32,
-            );
-            let w = 0.035;
-            for turn in [a, a + FRAC_PI_2] {
-                kit.add(
-                    shape(&[[-w, y0], [w, y0], [w, y1], [-w, y1]]),
-                    atr(foot.to_array(), [0.0, turn, 0.0]),
-                    KELP_STIPE,
-                );
-            }
+    let (east, up, south) = axes;
+    let mut quad = |corners: [Vec3; 4]| {
+        // Corners: bottom left, bottom right, top right, top left; the
+        // card's top row at the top.
+        let uv = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
+        for i in [0, 1, 2, 0, 2, 3] {
+            out.positions.push((origin + corners[i]).to_array());
+            out.colours.push([1.0; 4]);
+            out.uvs.push(uv[i]);
         }
-        // The blades, spiralling up, each with its float.
-        let n = ((top - 1.2) / 0.6).floor().max(0.0) as usize;
-        for b in 0..n {
-            let y = 0.8 + b as f32 * 0.6;
-            let yaw = a + b as f32 * 2.4;
-            let out_dir = Vec3::new(yaw.cos(), 0.0, yaw.sin());
-            let side = Vec3::new(-yaw.sin(), 0.0, yaw.cos());
-            let lift: f32 = 0.7;
-            let dir = out_dir * lift.cos() + Vec3::Y * lift.sin();
-            let root = foot + Vec3::Y * y + out_dir * 0.03;
-            let colour = if (b + stipe) % 3 == 2 {
-                KELP_BLADE_GREEN
-            } else {
-                KELP_BLADE
-            };
-            kit.add(blade(0.85, 0.06), along(root, dir, side), colour);
-            for turn in [0.0, FRAC_PI_2] {
-                kit.add(
-                    shape(&[[0.0, -0.04], [0.04, 0.0], [0.0, 0.04], [-0.04, 0.0]]),
-                    atr(root.to_array(), [0.0, yaw + turn, 0.0]),
-                    KELP_FLOAT,
-                );
-            }
-        }
-        // The canopy: longer blades lying out at the surface.
-        for c in 0..4 {
-            let yaw = a + c as f32 * FRAC_PI_2 + 0.4;
-            let out_dir = Vec3::new(yaw.cos(), 0.0, yaw.sin());
-            let side = Vec3::new(-yaw.sin(), 0.0, yaw.cos());
-            let dir = out_dir + Vec3::Y * 0.08;
-            kit.add(
-                blade(1.3, 0.07),
-                along(foot + Vec3::Y * (top - 0.1), dir, side),
-                if c % 3 == 2 {
-                    KELP_BLADE_GREEN
-                } else {
-                    KELP_BLADE
-                },
-            );
+    };
+    let n = (height / KELP_CARD_H).ceil().max(1.0);
+    let step = height / n;
+    let turn = k * 3.0;
+    for j in 0..2 {
+        let a = turn + j as f32 * FRAC_PI_2;
+        let across = (east * a.cos() + south * a.sin()) * (KELP_CARD_W * 0.5);
+        for i in 0..n as usize {
+            let (y0, y1) = (up * (i as f32 * step), up * ((i + 1) as f32 * step));
+            quad([y0 - across, y0 + across, y1 + across, y1 - across]);
         }
     }
-    let shape = kit.build();
-    for (p, c) in shape.positions.iter().zip(&shape.colours) {
-        out.positions
-            .push((origin + axes.0 * p.x + axes.1 * p.y + axes.2 * p.z).to_array());
-        out.colours.push([c[0], c[1], c[2], 1.0]);
-    }
-    out.uvs.extend_from_slice(&shape.uvs);
+    // The canopy: the card lying flat on the surface, off to one side,
+    // turned its own way.
+    let centre = east * KELP_CANOPY_OFF_M + up * (height - 0.15);
+    let c = (k * 17.0).sin() * PI;
+    let length = (east * c.cos() + south * c.sin()) * (KELP_CARD_H * 0.5);
+    let across = (east * -c.sin() + south * c.cos()) * (KELP_CARD_W * 0.5);
+    quad([
+        centre - length - across,
+        centre - length + across,
+        centre + length + across,
+        centre + length - across,
+    ]);
 }
 
 fn floe(origin: Vec3, axes: (Vec3, Vec3, Vec3), r: f32, above: f32, out: &mut Verts) {
@@ -1184,9 +1137,9 @@ struct Built {
     floes: Verts,
     glow: Verts,
     sway: Sway,
+    /// The kelp stands: M25's cards, in the cut-out kelp material (B20).
+    kelp: Sway,
     ambient: Vec<Ambient>,
-    /// The kelp stands' triangles (the `SEA_PLACES` log line).
-    kelp_tris: usize,
 }
 
 /// `PBD_PASS_OFF=kelp`: no kelp stand is laid (its rocks stay), a pricing
@@ -1303,18 +1256,17 @@ fn build_tile(
                 let height = (sea_radius - ground - 0.3).max(1.0);
                 let mut kelp = Verts::default();
                 kelp_stand(origin, axes, height, i as f32 * 0.37, &mut kelp);
-                out.kelp_tris += kelp.positions.len() / 3;
                 let light = dimmed(downwell, height * 0.5);
-                out.sway.uvs.extend_from_slice(&kelp.uvs);
+                out.kelp.uvs.extend_from_slice(&kelp.uvs);
                 for (q, c) in kelp.positions.into_iter().zip(kelp.colours) {
                     let q = Vec3::from_array(q);
-                    out.sway.rest.push(q);
-                    out.sway
+                    out.kelp.rest.push(q);
+                    out.kelp
                         .colours
                         .push([c[0] * light[0], c[1] * light[1], c[2] * light[2], 1.0]);
-                    out.sway.height.push((q - origin).dot(p.dir).max(0.0));
-                    out.sway.axis.push(axes.0);
-                    out.sway.phase.push(i as f32 * 0.37);
+                    out.kelp.height.push((q - origin).dot(p.dir).max(0.0));
+                    out.kelp.axis.push(axes.0);
+                    out.kelp.phase.push(i as f32 * 0.37);
                 }
             }
             Some(kind) => {
@@ -1574,6 +1526,22 @@ fn tile_fade(metres: f32, since_s: f32) -> f32 {
     by_distance.max(by_landing)
 }
 
+/// Bend a swaying mesh in the surge, `bend` 0 at rest to 1 full: its
+/// positions only. Returns the vertices written.
+fn bend_mesh(mesh: &mut Mesh, still: &Sway, seconds: f32, bend: f32) -> usize {
+    let positions: Vec<[f32; 3]> = (0..still.rest.len())
+        .map(|i| {
+            let h = still.height[i];
+            let wave = (seconds * 1.1 + still.phase[i] + h * 0.6).sin();
+            let reach = (0.07 * h).min(0.7) * bend;
+            (still.rest[i] + still.axis[i] * wave * reach).to_array()
+        })
+        .collect();
+    let n = positions.len();
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    n
+}
+
 struct Drawn {
     root: Entity,
     glow: Option<Entity>,
@@ -1587,6 +1555,10 @@ struct Drawn {
     still: Sway,
     ambient: Vec<Ambient>,
     swayed: bool,
+    /// The kelp's mesh (design B20), at rest, and whether it was bent.
+    kelp: Option<Handle<Mesh>>,
+    kelp_still: Sway,
+    kelp_swayed: bool,
     /// The tile's triangles and the kelp's share of them (`SEA_PLACES`).
     tris: usize,
     kelp_tris: usize,
@@ -1607,6 +1579,37 @@ struct Tiles {
 /// The unlit material a vent's glow is drawn with.
 #[derive(Resource)]
 pub struct GlowMaterial(pub Handle<StandardMaterial>);
+
+/// The kelp's material (design B20): M25's card, cut out at half alpha,
+/// both faces, lit by the field as the reef's pieces are.
+#[derive(Resource)]
+pub struct KelpMaterial(pub Handle<StandardMaterial>);
+
+fn kelp_desc(card: Handle<Image>) -> StandardMaterial {
+    StandardMaterial {
+        base_color: Color::WHITE,
+        base_color_texture: Some(card),
+        perceptual_roughness: 1.0,
+        reflectance: 0.3,
+        alpha_mode: AlphaMode::Mask(0.5),
+        cull_mode: None,
+        double_sided: true,
+        ..default()
+    }
+}
+
+fn kelp_card() -> Image {
+    let pixels = image::load_from_memory(KELP_CARD_PNG)
+        .expect("assets/textures/water_life/kelp_card.png")
+        .to_rgba8();
+    let mut image = Image::from_dynamic(
+        image::DynamicImage::ImageRgba8(pixels),
+        true,
+        RenderAssetUsages::default(),
+    );
+    image.sampler = bevy::image::ImageSampler::nearest();
+    image
+}
 
 pub struct SeaPlacesPlugin;
 
@@ -1633,7 +1636,28 @@ fn warm_glow(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
 ) {
+    // The kelp's material, with a tiny card held hidden under a field-lit
+    // root so the loading screen warms its pipeline (B20).
+    let kelp = materials.add(kelp_desc(images.add(kelp_card())));
+    let mut card = Verts::default();
+    kelp_stand(
+        Vec3::ZERO,
+        (Vec3::X, Vec3::Y, Vec3::Z),
+        0.01,
+        0.0,
+        &mut card,
+    );
+    commands.spawn((
+        Name::new("Kelp (warm)"),
+        crate::field_light::LitByField,
+        Mesh3d(meshes.add(mesh_of(card, true))),
+        MeshMaterial3d(kelp.clone()),
+        Transform::default(),
+        Visibility::Hidden,
+    ));
+    commands.insert_resource(KelpMaterial(kelp));
     let glow = materials.add(glow_desc());
     let mut warm = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -1671,6 +1695,21 @@ fn mesh_of(verts: Verts, textured: bool) -> Mesh {
     mesh
 }
 
+/// A measurement instrument (`ocean-environments` B20): the main thread's
+/// time in [`tiles`], summed until the `SEA_PLACES` line reads it.
+static TILES_NS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static TILES_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+struct TilesTimer(std::time::Instant);
+
+impl Drop for TilesTimer {
+    fn drop(&mut self) {
+        use std::sync::atomic::Ordering::Relaxed;
+        TILES_NS.fetch_add(self.0.elapsed().as_nanos() as u64, Relaxed);
+        TILES_CALLS.fetch_add(1, Relaxed);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn tiles(
     mut commands: Commands,
@@ -1681,6 +1720,7 @@ fn tiles(
     sea: Option<Res<crate::sea::Sea>>,
     life: Option<Res<super::draw::LifeMaterial>>,
     glow: Option<Res<GlowMaterial>>,
+    kelp_material: Option<Res<KelpMaterial>>,
     water: Option<Res<crate::config::WaterSettings>>,
     time: Res<Time>,
     sun: Option<Res<crate::sky::Sun>>,
@@ -1689,6 +1729,7 @@ fn tiles(
     mut parts: Query<&mut Transform, Without<crate::field_light::Faded>>,
     mut shown: Query<&mut Visibility>,
 ) {
+    let _timer = TilesTimer(std::time::Instant::now());
     let cfg = *crate::planet::terrain_config();
     let has_places = cfg.ocean.is_some();
     if state.version != Some(has_places) {
@@ -1699,8 +1740,8 @@ fn tiles(
         state.ready.clear();
         state.version = Some(has_places);
     }
-    let (Some(camera), Some(sea), Some(life), Some(glow)) =
-        (cameras.iter().next(), sea, life, glow)
+    let (Some(camera), Some(sea), Some(life), Some(glow), Some(kelp_material)) =
+        (cameras.iter().next(), sea, life, glow, kelp_material)
     else {
         return;
     };
@@ -1788,18 +1829,15 @@ fn tiles(
             && (near || !drawn.swayed)
             && let Some(mesh) = meshes.get_mut(handle)
         {
-            let s = &drawn.still;
-            let positions: Vec<[f32; 3]> = (0..s.rest.len())
-                .map(|i| {
-                    let h = s.height[i];
-                    let wave = (seconds * 1.1 + s.phase[i] + h * 0.6).sin();
-                    let reach = (0.07 * h).min(0.7) * bend;
-                    (s.rest[i] + s.axis[i] * wave * reach).to_array()
-                })
-                .collect();
-            swayed_verts += positions.len();
-            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+            swayed_verts += bend_mesh(mesh, &drawn.still, seconds, bend);
             drawn.swayed = near;
+        }
+        if let Some(handle) = &drawn.kelp
+            && (near || !drawn.kelp_swayed)
+            && let Some(mesh) = meshes.get_mut(handle)
+        {
+            swayed_verts += bend_mesh(mesh, &drawn.kelp_still, seconds, bend);
+            drawn.kelp_swayed = near;
         }
         // The ambient life and the plumes, while the tile is drawn: they
         // fade with it, never cut at a distance.
@@ -1840,8 +1878,13 @@ fn tiles(
             .values()
             .fold((0, 0), |(t, k), d| (t + d.tris, k + d.kelp_tris));
         info!(
-            "SEA_PLACES tiles={} tris={tris} kelp_tris={kelp} swayed_verts={swayed_verts}",
-            state.drawn.len()
+            "SEA_PLACES tiles={} tris={tris} kelp_tris={kelp} swayed_verts={swayed_verts} tiles_ms={:.3}",
+            state.drawn.len(),
+            {
+                use std::sync::atomic::Ordering::Relaxed;
+                let ns = TILES_NS.swap(0, Relaxed) as f64;
+                ns / 1e6 / TILES_CALLS.swap(0, Relaxed).max(1) as f64
+            }
         );
     }
     state.planning.retain(|k, _| wanted.contains(k));
@@ -1921,9 +1964,10 @@ fn tiles(
     let tris = (built.pieces.positions.len()
         + built.floes.positions.len()
         + built.glow.positions.len()
-        + built.sway.rest.len())
+        + built.sway.rest.len()
+        + built.kelp.rest.len())
         / 3;
-    let kelp_tris = built.kelp_tris;
+    let kelp_tris = built.kelp.rest.len() / 3;
     let at = (frame.center + anchor.as_dvec3()).as_vec3();
     let root = commands
         .spawn((
@@ -1992,6 +2036,27 @@ fn tiles(
             handle,
         )
     });
+    // The kelp: M25's cards, cut out, frustum culled (a tile behind the eye
+    // draws none of it).
+    let kelp = (!built.kelp.rest.is_empty()).then(|| {
+        let verts = Verts {
+            positions: built.kelp.rest.iter().map(|p| p.to_array()).collect(),
+            colours: built.kelp.colours.clone(),
+            uvs: built.kelp.uvs.clone(),
+        };
+        let handle = meshes.add(mesh_of(verts, true));
+        let id = commands
+            .spawn((
+                Name::new("Kelp"),
+                Mesh3d(handle.clone()),
+                MeshMaterial3d(kelp_material.0.clone()),
+                Transform::default(),
+                Visibility::default(),
+            ))
+            .id();
+        commands.entity(root).add_child(id);
+        handle
+    });
     // The ambient meshes start with one hidden triangle, so the field gives
     // them their material at once and they never need it again.
     let blank = |textured: bool| {
@@ -2034,6 +2099,9 @@ fn tiles(
             still: built.sway,
             ambient: built.ambient,
             swayed: false,
+            kelp,
+            kelp_still: built.kelp,
+            kelp_swayed: false,
             tris,
             kelp_tris,
         },
@@ -2139,42 +2207,36 @@ mod tests {
         assert_eq!(last, Some(at), "on its floe again");
     }
 
-    /// Design B16: a kelp stand is slender (every triangle a sliver no
-    /// thicker than 0.15 m: stipes, blades, floats and canopy), rises to the
-    /// surface, and wears only the frond's four colours, one a part.
+    /// Design B20 (owner, 2026-11-16: "kelp forest in the mockup was like
+    /// just a couple polygons"): a stand is M25's, two crossed cards a 4 m
+    /// of water and one flat on the surface, `4 * ceil(h / 4) + 2`
+    /// triangles; it rises to the surface; its canopy lies flat there; every
+    /// UV is on the card.
     #[test]
-    fn a_kelp_stand_is_slender_and_in_the_frond_s_colours() {
+    fn a_kelp_stand_is_the_mockup_s_few_cards() {
         let axes = (Vec3::X, Vec3::Y, Vec3::Z);
-        let mut kelp = Verts::default();
-        kelp_stand(Vec3::ZERO, axes, 18.0, 0.7, &mut kelp);
-        assert_eq!(kelp.positions.len() % 3, 0);
-        for tri in kelp.positions.chunks(3) {
-            let [a, b, c] = [0, 1, 2].map(|i| Vec3::from_array(tri[i]));
-            let area2 = (b - a).cross(c - a).length();
-            let longest = (b - a).length().max((c - b).length()).max((a - c).length());
-            let thinnest = area2 / longest.max(1e-6);
-            assert!(thinnest <= 0.15, "a part {thinnest} m across");
-        }
-        let top = kelp.positions.iter().map(|p| p[1]).fold(0.0f32, f32::max);
-        assert!(top > 15.0 && top <= 18.5, "to the surface: {top}");
-        let frond: Vec<[f32; 4]> = [KELP_STIPE, KELP_BLADE, KELP_BLADE_GREEN, KELP_FLOAT]
-            .into_iter()
-            .map(lin)
-            .collect();
-        for c in &kelp.colours {
+        for (height, tris) in [(6.0, 10), (12.0, 14), (18.0, 22), (40.0, 42)] {
+            let mut kelp = Verts::default();
+            kelp_stand(Vec3::ZERO, axes, height, 0.7, &mut kelp);
+            assert_eq!(kelp.positions.len(), tris * 3, "{height} m");
+            let top = kelp.positions.iter().map(|p| p[1]).fold(0.0f32, f32::max);
+            assert!((top - height).abs() < 1e-3, "to the surface: {top}");
+            let canopy = &kelp.positions[kelp.positions.len() - 6..];
+            assert!(canopy.iter().all(|p| (p[1] - (height - 0.15)).abs() < 1e-3));
             assert!(
-                frond
+                kelp.uvs
                     .iter()
-                    .any(|f| (0..3).all(|i| (f[i] - c[i]).abs() < 1e-4)),
-                "{c:?} is not the frond's"
+                    .all(|uv| (0.0..=1.0).contains(&uv[0]) && (0.0..=1.0).contains(&uv[1]))
             );
         }
-        let blades = kelp
-            .colours
-            .iter()
-            .filter(|c| (0..3).all(|i| (c[i] - lin(KELP_BLADE)[i]).abs() < 1e-4))
-            .count();
-        assert!(blades > 100, "fronds all the way up: {blades}");
+    }
+
+    /// Design B20: kelp stands at M25's density, about 0.083 a square metre.
+    #[test]
+    fn kelp_stands_at_the_mockup_s_density() {
+        let per_m2 = (TILE_M / KELP_STEP_M).floor().powi(2) * KELP_KEEP / (TILE_M * TILE_M);
+        let mockup = 0.58 / (3f32.sqrt() / 2.0 * 2.833 * 2.833);
+        assert!((per_m2 - mockup).abs() < 0.01, "{per_m2} against {mockup}");
     }
 
     /// A tile is the same tile whoever comes near it, and its plan is a
@@ -2282,9 +2344,6 @@ mod tests {
             check(&format!("{kind:?}"), shape.positions.len(), &shape.uvs);
         }
         let axes = (Vec3::X, Vec3::Y, Vec3::Z);
-        let mut kelp = Verts::default();
-        kelp_stand(Vec3::ZERO, axes, 8.0, 0.3, &mut kelp);
-        check("kelp", kelp.positions.len(), &kelp.uvs);
         let mut ice = Verts::default();
         floe(Vec3::ZERO, axes, 2.0, 0.4, &mut ice);
         check("floe", ice.positions.len(), &ice.uvs);

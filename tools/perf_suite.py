@@ -15,7 +15,6 @@ Scenarios (each ends itself):
     town      a walk from Ashenstead's middle out through the walled town, rain forced
     sail      Holinghaven's cog cast off from its helm, --sail-for 60
     pour      a live pour by the spawn (--pour-for 60), sampled POUR_START to POUR_DONE
-    kelp      back and forth at the surface over the kelp forest at 71.308 -8.196
 
 Variants are `name|exe|ENV=1;ENV2=2|assets` (all but the name optional); an
 item of the third field that starts with `--` is a launch flag instead
@@ -75,10 +74,6 @@ SCENARIOS = {
     # (`sail-the-cog` task 6.1).
     "sail": ["--walk", "--at", "23.71891", "-115.27982", "--aboard", "cog", "--sail", "-40",
              "--seat", "--sail-for", "60"],
-    # Back and forth at the surface over the B16 kelp forest
-    # (`ocean-environments` B20): stands to the edge of the sea's places
-    # round the eye, swaying, the owner's view from just above the water.
-    "kelp": ["--walk", "--at", "71.308", "-8.196", "--stroll", "40", "--stroll-leg", "6"],
     # A live pour by the spawn (`water-flow` 5.3, smooth water between
     # ticks): three sources 12 m ahead beside a 9-deep pit, stopped and
     # started again every 12 s, so water spreads, falls into the pit and
@@ -88,7 +83,7 @@ SCENARIOS = {
 }
 DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE", "rain-stroll": "STROLL_DONE",
         "town": "WALK_DONE",
-        "sail": "SAIL_DONE", "pour": "POUR_DONE", "kelp": "STROLL_DONE"}
+        "sail": "SAIL_DONE", "pour": "POUR_DONE"}
 # A scenario whose hard part starts on a line of its own: sampled from that
 # line (no further warm-up) to its DONE line, not from the ready line.
 START = {"pour": "POUR_START"}

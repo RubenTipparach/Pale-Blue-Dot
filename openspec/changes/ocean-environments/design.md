@@ -1553,3 +1553,52 @@ needs; no behaviour changes with them unset):
   exe, in the same sitting.
 - A `SEA_PLACES` log line, once a second: the tiles drawn, the triangles in
   them, the kelp's share, and the swaying vertices rewritten that frame.
+
+**Finding** (the `SEA_PLACES` line at the B16 spot, `--walk --at 71.308
+-8.196`, the Mac; the bed 9 m down):
+- **625,011 kelp triangles** are drawn round the eye, 91% of the sea's
+  places (686,211), in 71 tiles out to the 46 m fade.
+- **1,875,033 vertices are rewritten on the CPU every frame** for the
+  sway: every tile within 30 m rebuilds its whole swaying mesh and Bevy
+  uploads all of it again (position, normal, UV and colour, about 90 MB a
+  frame).
+- **A stand is about 575 triangles in 12 m of water** (420 at this spot,
+  1,935 at 40 m): B16 drew M25's frond as geometry, two or three crossed
+  stipes a joint every metre, a 5-triangle blade and two crossed floats
+  every 0.6 m up each, and a canopy of four 5-triangle blades a stipe. And
+  the stands stand every 2 m at 70%, 0.175 a square metre.
+- **The approved mockup is a couple of polygons a plant** (the owner,
+  2026-11-16: "kelp forest in the mockup was like just a couple polygons
+  from what I remember"). M25's kelp forest (`docs/mockups/ocean.html`,
+  `sceneKelp`) draws each stand as two crossed cards of its frond texture
+  (`card-kelp.png`, 16 x 64, cut out) for every 4 m of water, stretched to
+  the surface, and one card of the same frond lying flat on the surface
+  1.4 m off to one side: **14 triangles in 12 m of water**. Its stands sit
+  on 58% of the 2.833 m hex cells, **0.083 a square metre**.
+- **The game had drifted from the mockup's look.** B16 rebuilt the frond as
+  slender geometry and gave the canopy four long blades a stipe, which is
+  the "star of pale blades lying out on the surface" the owner saw; M25's
+  canopy is one frond card lying on the water.
+- Not the cause: shadows (Bevy's are off; the sun's cascades draw the
+  planet and the towns only), reflection or refraction passes (none draw
+  the sea's places), or a prepass (none).
+- The kelp's tiles are drawn with `NoFrustumCulling`, so the half behind
+  the eye was drawn too.
+
+**Change** (drawing only; where kelp stands is a derived piece, never
+saved, so no generator version):
+- **The stand is M25's**: two crossed cards a 4 m of water and one card
+  flat on the surface 1.4 m off, `4 * ceil(depth / 4) + 2` triangles, in
+  M25's own card (`assets/textures/water_life/kelp_card.png`, a byte copy
+  of `card-kelp.png`), cut out at half alpha, both faces, nearest
+  sampling. The vertex colour carries the depth's light as before; the
+  card carries the frond's colours.
+- **M25's density**: a 3 m lattice at 75%, 0.083 a square metre. The rocks
+  at a stand's foot stay, one stand in two.
+- The kelp is its own mesh in its own material (the field lights it as it
+  lights the reef; its pipeline is warmed on the loading screen by a
+  hidden card, as the water life's is), and it is frustum culled.
+- The sway is unchanged (the same wave, to the same 30 m), on the far
+  fewer vertices.
+- No distance LOD: at 14 triangles a stand there is nothing left to cut
+  with distance, and none to cross-fade.
