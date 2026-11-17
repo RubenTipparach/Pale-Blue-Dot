@@ -56,7 +56,16 @@ pub fn rebase(
         (With<Camera3d>, Without<ChildOf>, Without<RigidBody>),
     >,
     mut globals: Query<&mut GlobalTransform, (Without<RigidBody>, Without<Node>)>,
+    mut held: Local<Option<bool>>,
 ) {
+    // MEASUREMENT (`movement-smoothness` design 6.7): `PBD_HOLD_ORIGIN=1`
+    // never moves the origin, so it stays where it starts (the planet's
+    // centre in play). Every conversion still runs; a still taken so must
+    // match the build before the floating origin pixel for pixel, which
+    // shows that what differs with the origin moving is the origin alone.
+    if *held.get_or_insert_with(|| std::env::var_os("PBD_HOLD_ORIGIN").is_some_and(|v| v == "1")) {
+        return;
+    }
     let Some(eye) = cameras
         .iter()
         .find(|(c, _)| c.is_active)

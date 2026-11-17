@@ -15,7 +15,7 @@ use pbd_core::aim;
 use pbd_core::terrain::Material;
 
 /// F5 and F6, on foot with the pointer captured.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn keys(
     keys: Res<ButtonInput<KeyCode>>,
     mut arrows: ResMut<FlowArrows>,
@@ -104,7 +104,7 @@ fn pour(world: &mut Edited, eye: Vec3, look: Vec3) -> Option<(u32, usize)> {
 /// `--pour` pours one source where the capture camera looks, then runs
 /// `--water-ticks` of the rule at once, so a capture shows water that has
 /// had that long to move. `--arrows` turns the overlay on.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted(
     launch: Res<super::Launch>,
     (cameras, frame): (

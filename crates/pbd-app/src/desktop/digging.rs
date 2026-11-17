@@ -1199,7 +1199,7 @@ const LAMP_SPACING_M: f32 = 2.9;
 /// certainly in reach of a standing player is the ground under them. Then
 /// `--place` puts one block back on top of the hole, so a frame shows both
 /// verbs: a pit, and a block standing in it.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted_dig(
     launch: Res<super::Launch>,
     (cameras, frame): (

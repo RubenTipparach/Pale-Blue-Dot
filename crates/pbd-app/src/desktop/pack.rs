@@ -161,6 +161,7 @@ pub fn hold_click(
 /// Which raft's hold the pack shows, read from the save when it changes,
 /// and the HOLD panel shown with it. Aboard a raft, that raft; on foot, the
 /// nearest within [`HOLD_REACH_M`].
+#[allow(clippy::too_many_arguments)]
 pub fn find_hold(
     screen: Res<Screen>,
     aboard: Option<Res<pbd_app::vehicles::Aboard>>,

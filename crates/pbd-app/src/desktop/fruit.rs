@@ -153,7 +153,7 @@ pub fn many(name: &str) -> String {
 }
 
 /// Offer the fruit on the tree aimed at to the interact key.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn offer(
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
     (cameras, frame): (
@@ -298,7 +298,7 @@ pub fn pick(
 /// `tree` records stored as the player's (the records a player's hands
 /// write; the instrument's liberty is not walking to each). The draw then
 /// leaves their fruit and the felled trees out.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn scripted(
     launch: Res<super::Launch>,
     (cameras, frame): (
