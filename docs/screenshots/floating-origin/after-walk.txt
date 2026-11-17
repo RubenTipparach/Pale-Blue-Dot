@@ -1,0 +1,14 @@
+after-walk.csv: 1247 frames after-walk
+frame dt: mean 19.68 ms, min 3.75, max 127.74
+fixed steps per frame: {0: 136, 1: 850, 2: 200, 3: 41, 4: 11, 5: 3, 6: 3, 7: 1, 8: 2}
+camera world speed while moving: mean 6.571 m/s, sd 5.753 (87.5%), frames with no camera move 334
+camera speed while walking, frames with 1 physics step(s): n 504, mean 8.16 m/s
+camera speed while walking, frames with 2 physics step(s): n 117, mean 7.93 m/s
+camera speed while walking, frames with 3 physics step(s): n 22, mean 6.11 m/s
+camera speed while walking, frames with 4 physics step(s): n 4, mean 7.26 m/s
+float on screen, jitter (px from its neighbours' mean): n 0, rms nan, p50 nan, p99 nan
+fish on screen, jitter (px from its neighbours' mean): n 457, rms 9632.018, p50 17.537, p99 21785.678
+held tool shimmer, floating render origin (as drawn): n 1246, rms 0.0046 px, p50 0.0036, p99 0.0118 px
+held tool shimmer, origin rebased to the camera (16 m grid): n 1246, rms 0.0047 px, p50 0.0037, p99 0.0109 px
+fish drawn: frames it did not move 2 of 1199; speed per frame p10 0.032, p50 0.322, p90 0.586 m/s (p90/p10 18.2)
+camera distance from the render origin: up to 12.0 m, f32 step there 0.001 mm

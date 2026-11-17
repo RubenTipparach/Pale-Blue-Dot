@@ -288,7 +288,8 @@ pub(crate) fn move_craft_decks(
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
     assets: Option<Res<crate::towns::TownAssets>>,
 ) {
-    let centre = frame.map_or(bevy::math::DVec3::ZERO, |f| f.center);
+    // Physics space: the walker meets these decks with its `Position`.
+    let centre = frame.map_or(bevy::math::DVec3::ZERO, |f| f.physics_center());
     let decks = &mut *decks;
     decks.list.retain(|d| {
         vehicles

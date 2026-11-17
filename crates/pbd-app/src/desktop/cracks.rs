@@ -44,6 +44,7 @@ pub fn spawn(
     assets: Res<AssetServer>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    frame: Option<Res<pbd_app::planet::PlanetRenderFrame>>,
 ) {
     let stages = (0..STAGES)
         .map(|k| {
@@ -62,7 +63,9 @@ pub fn spawn(
     commands.spawn((
         Mesh3d(meshes.add(prism(None))),
         MeshMaterial3d(stages[0].clone()),
-        Transform::IDENTITY,
+        // Planet-local vertices under the planet's centre in render space;
+        // the rebase moves it with every other root.
+        Transform::from_translation(frame.map_or(Vec3::ZERO, |f| f.center.as_vec3())),
         Visibility::Hidden,
         NotShadowCaster,
         Cracks::default(),

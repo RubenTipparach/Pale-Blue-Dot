@@ -336,7 +336,7 @@ impl World<'_, '_> {
     /// The player's feet, body-local.
     fn feet(&self) -> Option<Vec3> {
         let p = self.walkers.iter().next()?;
-        let at = (p.0.as_dvec3() - self.frame.center).as_vec3();
+        let at = (p.0.as_dvec3() - self.frame.physics_center()).as_vec3();
         Some(at - at.normalize_or(Vec3::Y) * HALF_HEIGHT)
     }
 

@@ -362,7 +362,7 @@ fn walker_sounds(
     let Some(frame) = frame else {
         return;
     };
-    let position = (position.0.as_dvec3() - frame.center).as_vec3();
+    let position = (position.0.as_dvec3() - frame.physics_center()).as_vec3();
     let up = position.normalize_or(Vec3::Y);
     let feet = position - up * HALF_HEIGHT;
     let v = velocity.0;

@@ -111,6 +111,20 @@ def main() -> None:
         still = sum(1 for s in cam_speed if not math.isnan(s) and s <= 0.05)
         report.append(f"camera world speed while moving: mean {mean:.3f} m/s, sd {sd:.3f} "
                       f"({100 * sd / mean:.1f}%), frames with no camera move {still}")
+    # The beat of physics steps (`movement-smoothness` design 6.5): while the
+    # body walks (over 1 m/s), the camera's speed on frames that ran one
+    # physics step against those that ran two. Drawn at the raw step, a
+    # two-step frame moves the camera twice as far in the same time.
+    body_speed = speed("body")
+    by_steps: dict[int, list[float]] = {}
+    for r, c, b_ in zip(rows, cam_speed, body_speed):
+        if not (math.isnan(c) or math.isnan(b_)) and b_ > 1.0 and c < 100.0:
+            by_steps.setdefault(int(r["steps"]), []).append(c)
+    for k in sorted(by_steps):
+        v = by_steps[k]
+        if len(v) > 3:
+            report.append(f"camera speed while walking, frames with {k} physics step(s): n {len(v)}, "
+                          f"mean {sum(v) / len(v):.2f} m/s")
 
     series = {}
     for name in ("float", "fish"):
@@ -145,9 +159,12 @@ def main() -> None:
         n, rms, p50, p99 = stats(res)
         report.append(f"{name} on screen, jitter (px from its neighbours' mean): "
                       f"n {n}, rms {rms:.3f}, p50 {p50:.3f}, p99 {p99:.3f}")
+    floating = "origin_x" in rows[0]
+    drawn_label = ("floating render origin (as drawn)" if floating
+                   else "origin at the planet's centre (as drawn)")
     n, rms, p50, p99 = stats(hand_now)
-    report.append(f"held tool shimmer, origin at the planet's centre (as drawn): n {n}, "
-                  f"rms {rms:.3f} px, p50 {p50:.3f}, p99 {p99:.3f} px")
+    report.append(f"held tool shimmer, {drawn_label}: n {n}, "
+                  f"rms {rms:.4f} px, p50 {p50:.4f}, p99 {p99:.4f} px")
     if has_rebased:
         n, rms, p50, p99 = stats(hand_rebased)
         report.append(f"held tool shimmer, origin rebased to the camera (16 m grid): n {n}, "
@@ -178,7 +195,36 @@ def main() -> None:
         report.append(f"fish drawn: frames it did not move {still} of {still + len(v)}; "
                       f"speed per frame p10 {q(0.1):.3f}, p50 {q(0.5):.3f}, p90 {q(0.9):.3f} m/s "
                       f"(p90/p10 {q(0.9) / max(q(0.1), 1e-6):.1f})")
-    radius = [math.dist((0, 0, 0), (r["cam_x"], r["cam_y"], r["cam_z"])) for r in rows]
+    # The hooked float and the line's start (`movement-smoothness` 7): the
+    # float's jitter while a fish is on, the frames it jumps (over 20 px from
+    # its neighbours) and its largest move in one frame; and how far the
+    # line's start is drawn from the rod's drawn tip.
+    float_res = series["float"][1] if "float" in series else []
+    hooked = [i for i, r in enumerate(rows) if r["phase"] == "Hooked"]
+    if hooked and float_res:
+        n, rms, p50, p99 = stats([float_res[i] for i in hooked])
+        jumps = sum(1 for i in hooked if not math.isnan(float_res[i]) and float_res[i] > 20)
+        moves = [math.dist((rows[i]["float_x"], rows[i]["float_y"], rows[i]["float_z"]),
+                           (rows[i - 1]["float_x"], rows[i - 1]["float_y"], rows[i - 1]["float_z"]))
+                 for i in hooked if i > 0 and rows[i - 1]["phase"] == "Hooked"]
+        report.append(f"hooked float on screen, jitter: n {n}, rms {rms:.3f}, p50 {p50:.3f}, "
+                      f"p99 {p99:.3f} px; frames over 20 px {jumps}; "
+                      f"largest move in a frame {100 * max(moves, default=0):.1f} cm")
+    if "line_vx" in rows[0]:
+        gaps = []
+        for r in rows:
+            line = screen(r["line_vx"], r["line_vy"], r["line_vz"], focal)
+            tip = screen(r["tip_vx"], r["tip_vy"], r["tip_vz"], focal)
+            if not (math.isnan(line[0]) or math.isnan(tip[0])):
+                gaps.append(math.hypot(line[0] - tip[0], line[1] - tip[1]))
+        n, rms, p50, p99 = stats(gaps)
+        report.append(f"line start from the drawn rod tip: n {n}, rms {rms:.2f}, "
+                      f"p50 {p50:.2f}, p99 {p99:.2f}, max {max(gaps, default=math.nan):.2f} px")
+    # With a floating origin the trace writes it (physics space, whose
+    # centre is the planet's in play); before, the origin was the centre.
+    o = ("origin_x", "origin_y", "origin_z") if "origin_x" in rows[0] else None
+    radius = [math.dist((r[o[0]], r[o[1]], r[o[2]]) if o else (0, 0, 0),
+                        (r["cam_x"], r["cam_y"], r["cam_z"])) for r in rows]
     rmax = max(radius)
     ulp = 2.0 ** (math.floor(math.log2(rmax)) - 23)
     report.append(f"camera distance from the render origin: up to {rmax:.1f} m, "
@@ -213,7 +259,8 @@ def main() -> None:
     # not jitter: keep the scale on the jitter.
     ax[2].set_ylim(0, 40)
     ax[2].legend(loc="upper right")
-    ax[3].plot(t, hand_now, lw=0.7, color="#839", label="origin at planet centre")
+    ax[3].plot(t, hand_now, lw=0.7, color="#839",
+               label="floating origin, as drawn" if "origin_x" in rows[0] else "origin at planet centre")
     if has_rebased:
         ax[3].plot(t, hand_rebased, lw=0.9, color="#2a6", label="origin rebased to camera")
     ax[3].legend(loc="upper right")

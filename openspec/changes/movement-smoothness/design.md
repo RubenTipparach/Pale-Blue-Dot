@@ -157,7 +157,7 @@ None of these is a large f32:
   is 7 200 s, an f32 step of 0.49 ms, which moves a 1 rad/s sway by 5e-4 rad.
   Not visible.
 
-## 3. The walking camera stays raw
+## 3. The walking camera stays raw (superseded by 6.5)
 
 A camera drawn at the raw physics step moves in whole steps. Easing it between
 steps (the fixed clock's overstep) would cost up to one step of latency for the
@@ -170,9 +170,10 @@ history is kept in the physics frame, which never rebases, and it snaps on a
 teleport (respawn, restore, climb-out). Recommendation: do it with the render
 origin (section 4), since both write the camera's translation.
 
-## 4. Proposed: a camera-relative render origin
+## 4. A camera-relative render origin
 
-**Not built.** It waits for a go-ahead.
+Proposed here; the owner's go-ahead came on 2026-11-17 ("Build floating
+origin"). How it is being built, stage by stage, is section 6.
 
 The rule in `CLAUDE.md` is: "render and simulate collision in bounded local
 f32 frames. Subtract the origin before casting". The render side breaks it,
@@ -271,3 +272,325 @@ and only the render side needs to change:
 - The hooked float hangs off the walker's raw physics `Position` (`feet`). If
   the angler moves while a fish is on, the float moves in the walker's
   physics steps. That goes with the camera interpolation in section 3.
+
+## 6. Building the floating origin (owner, 2026-11-17: "Build floating origin")
+
+Built on `claude/floating-origin`, in this order, each stage measured before
+the next. Sections 4.1 to 4.7 are the plan; this is what is built and the
+decisions taken building it.
+
+### 6.1 Three spaces, named
+
+- **Physics space**: Avian's `Position`, and the walker's and the skiff's own
+  `Transform` (Avian writes it). Planet-centred in play: the planet's centre
+  there is `body.position - PhysicsFrame.origin`, 0. Unchanged.
+- **Planet-local**: relative to the planet's centre. What every simulation
+  stores (fish, line, herd, towns, drops) and what `up = p.normalize()` needs.
+- **Render space**: every other `Transform` and `GlobalTransform`, the views
+  and everything drawn. `render = physics - origin`, with `origin` a
+  `DVec3` in physics space.
+
+`PlanetRenderFrame` carries both: `center`, the planet's centre in render
+space (`physics centre - origin`), and `origin`. `frame.physics_center()` is
+`center + origin`. So the rules are:
+
+- drawn (render space) from planet-local: `frame.center + local` in f64, then
+  cast;
+- planet-local from a drawn transform: `translation - frame.center` in f64;
+- planet-local from an Avian `Position`: `position - frame.physics_center()`;
+- render space from an Avian `Position`: `position - frame.origin`.
+
+Every site that used `center` for a `Position` (`fish.rs`, `husbandry.rs`,
+`vehicles.rs`, `audio/hooks.rs`) moves to `physics_center()`.
+
+### 6.2 The origin and the rebase (stage 1)
+
+- `RenderOrigin` lives in `PlanetRenderFrame.origin`. The camera's
+  planet-local position is snapped to a 16 m grid (`ORIGIN_CELL_M`): a
+  rebase happens when the camera leaves its cell, at most once a frame. At
+  16 m the f32 step of anything within 32 m of the eye is 2^-19 m (2 µm).
+- `rebase_render_origin` runs in `PostUpdate`, after every camera writer
+  (walking, flight, vehicle, capture), and before `update_planet_frame` and
+  transform propagation. It reads the active 3D camera's `Transform`, gets
+  its planet-local point as `translation - center` in f64, and when the
+  snapped cell differs:
+  - `origin += delta`, `center -= delta`;
+  - every **root** `Transform` that is not a physics body (no `RigidBody`)
+    is moved by `-delta`. Entities spawned once at a place (towns, props,
+    drops, lamps, the stars) stay where they are in the world without any of
+    them knowing; entities rewritten each frame from planet-local data are
+    right whether they were written before the rebase (and moved by it) or
+    after it (with the new centre). `delta` is a multiple of 16 m, so the
+    f32 subtraction is exact for every coordinate in range and repeated
+    rebases never drift.
+- `update_planet_frame` computes `center = body - PhysicsFrame.origin -
+  origin`, so the two agree every frame.
+- Physics and simulation do not move. No `Position`, velocity or simulation
+  history is touched by a rebase.
+
+### 6.3 The cameras (stage 2)
+
+The walking (`follow_walker`), flight (`follow_flight_camera`) and vehicle
+(`vehicles/view.rs`) cameras write `position - origin` (f64, then cast). The
+capture cameras spawned at startup are placed in render space at the origin
+they start with. Measured: held-tool shimmer from `PBD_MOTION_TRACE`, walking
+and fishing, real time; the target is under 0.05 px rms.
+
+### 6.4 Everything else drawn (stage 3) and the shaders (stage 4)
+
+The audit of sections 4.4 and 4.5, file by file, with each converted
+explicitly: per-frame writers from physics space (the moon, the skiff, the
+vehicles' crew) and readers that took a drawn translation as planet-local
+(`normalize()` as up, `length()` against the radius or the sea, cell
+lookups, the audio listener). The eleven shaders already take the centre as
+a uniform; each feeder is checked to write the render-space centre, and any
+that sampled absolute world position is moved to planet-local so nothing
+shifts on a rebase. `--render-offset` becomes a render-space offset that
+works in play (6.6) and is the test of all of it.
+
+### 6.5 The walking camera between physics steps (stage 5)
+
+The owner's ask (2026-11-17) brings section 3's option in with the origin:
+
+- the walker keeps its physics `Position` at the last two fixed steps
+  (`StepHistory`), recorded after each step in physics space, which never
+  rebases;
+- `follow_walker` places the eye at `lerp(previous, current,
+  Time<Fixed>::overstep_fraction())`, then subtracts the origin;
+- the look is not touched: it stays this frame's raw mouse;
+- a `Position` that changed outside the fixed loop (respawn, restore,
+  climb-out, boarding), or a step longer than 2 m, snaps the history to it,
+  so a teleport is never drawn as a glide.
+
+The cost is up to one physics step (16.7 ms) of position latency, the price
+of drawing between steps. A `--capture` runs one physics step a frame and
+has no beat to smooth, so it draws the step itself (`DrawBetweenSteps`):
+drawn between steps, a capture showed the body a step behind, 105 000
+pixels of a still moved (found by the held-origin check of 6.7).
+
+### 6.6 `--render-offset` in play, tests and checks (stage 6)
+
+- `--render-offset x y z` no longer moves physics. It puts the render origin
+  that far from the camera's cell, so the planet's centre and the camera are
+  both away from 0 in render space. It is allowed in play.
+- Tests: a camera far from the centre with origins at 0, at 4 800 m and at a
+  random offset derives the same planet-local eye, up and clip; a rebase
+  keeps every drawn point where it was (no jump); a walker crossing a cell
+  draws continuously.
+- Launch to `READY` with no `LATE_PIPELINE`.
+
+### 6.7 No look change
+
+Same-frame `--capture` stills before and after (`tools/capture_repeat.py
+--against`) at a town by day and at night with lamps, the sea, under water, a
+waterfall and flying at 1 km. A pixel difference beyond the repeat noise is a
+bug.
+
+### 6.8 Results (M4 Max MacBook Pro, 2026-11-17)
+
+Real-time windowed traces, walking (`--walk-distance 1000 --turn 15`) and
+fishing (`--fish --fish-play --hold-pointer`), the build before against this
+one, each on a fresh world; plots and reports in
+`docs/screenshots/floating-origin/`. The machine was not quiet (other agents
+building, another game running), so frame time is not the measure.
+
+| held-tool shimmer (rms / p50 / p99 px, 1 800 px tall) | before | after |
+| --- | --- | --- |
+| walking (1 342 / 1 247 frames) | 2.60 / 2.02 / 6.23 | **0.0046 / 0.0036 / 0.0118** |
+| fishing (1 549 / 1 490 frames) | 1.33 / 0.94 / 3.23 | **0.0022 / 0.0016 / 0.0055** |
+
+The target was 0.05 px; the trace's own A/B (the same frames re-rebased in
+f64) agrees with what is drawn to a thousandth of a pixel. The camera sits
+at most 12 m from the origin, where an f32 holds 1 µm.
+
+Camera speed while walking, by physics steps in the frame:
+
+| | 1 step | 2 steps |
+| --- | --- | --- |
+| before (raw step) | 10.3 m/s | 16.4 m/s |
+| after (between steps) | 8.2 m/s | 7.9 m/s |
+
+The beat is gone. On the 11 frames with a rebase in the walking trace the
+camera moved by its walk (6 to 74 cm, in proportion to the frame's time), so
+nothing jumps across a rebase.
+
+**Stills** (`tools/capture_repeat.py --against`, 300 frames, GPU, 2880 x 1800;
+pixels differing by more than 1/255):
+
+| scene | before vs before (noise) | after vs before | after with the origin held (`PBD_HOLD_ORIGIN=1`) vs before |
+| --- | --- | --- | --- |
+| Ashenstead by day (walk) | 0 | 58 261 (1.1%), max 77 | 0 |
+| Ashenstead at night, lamps | 0 | 63 254 (1.2%), max 160 | 0 |
+| Holbrook lane at night | 0 | 5 905, max 221 | 16 (the noise) |
+| harbour from 30 m | 0 | 109, max 14 | 0 |
+| under water | 0 | 0 | 0 |
+| waterfall (walk) | 16 | 53 | 16 |
+| flying at 1 km | 0 | 7 | 0 |
+
+Every difference is an edge or a texel boundary moved by under a pixel, and
+the held-origin column shows they are the origin alone: with the origin held
+at the planet's centre and every conversion still running, the stills match
+the old build pixel for pixel. The old view matrix carried the camera's
+4 800 m translation in f32 and so drew the eye up to half a millimetre off;
+that error is the jitter, and a still taken at one instant shows it as a
+sub-pixel shift of near geometry (the town walls are a metre from the eye).
+
+`--render-offset 8192 -4096 2048` in play: a walk to `READY` with no
+`LATE_PIPELINE`, the camera drawn round the walker as without; the held
+tool's shimmer comes back (4.2 px rms at 9.4 km from the origin), which is
+the offset being applied. Stills with the offset: under water 0 pixels
+against no offset, flying at 1 km 2 115 (near terrain edges at the coarser
+precision). It found one bug: the flight and walking cameras were spawned
+in physics space, and a static flying capture never moves its camera.
+
+Launches to `READY`: the four real-time traces and the offset walk, no
+`LATE_PIPELINE`.
+
+**Frame cost: owed.** The machine was not quiet; `perf_suite.py` before and
+after is to be run on a quiet machine. A rebase walks every root transform
+once per 16 m cell (every few seconds on foot) and marks them changed, so
+that frame re-propagates and re-uploads them; the field-lit rows' world
+bounds move too and are rewritten (`field_light.rs`).
+
+### 6.9 Not converted, or left as they are
+
+- The hooked float hangs off the walker's raw physics `Position`
+  (`Line::step`), so while a fish is on and the angler walks, the float moves
+  in physics steps against an eye drawn between them. The line's simulation
+  is not touched here.
+- The vehicle cameras and the flight camera are not drawn between steps (a
+  craft is stepped on its own clock; the skiff is an Avian body).
+- `desktop/scene.rs` stars are spawned once at the frame's centre and move
+  with the rebase like any root.
+- Bodies under Avian (the walker, the skiff) keep physics-space transforms;
+  neither has a drawn child. A drawn rigid body would need its own render
+  transform.
+
+## 7. The hooked float and the line (owner, 2026-11-17)
+
+The owner, on the fish before/after videos: "I'm noticing that the fish line
+is not all smooth, it jumps around a bit". Measured on `claude/floating-origin`
+(`787964cb`) with the fishing trace of section 1 (`--fish-play
+--hold-pointer --time 10`, 45 s, one hook played out), the float on screen by
+phase (px from the mean of its two neighbours each side, 1 800 px tall):
+
+| phase | frames | rms | p50 | p99 |
+| --- | --- | --- | --- | --- |
+| floating | 1 183 | 0.64 | 0.018 | 0.086 |
+| hooked | 733 | **14.4** | 1.49 | **86.7** |
+
+The float is smooth while it waits. While a fish is on it is not, for two
+reasons, both found frame by frame in the trace's planet-local float:
+
+### 7.1 The swing switches on and off in one frame (the jumps)
+
+`Line::step` (`pbd-core/src/fishing.rs`, `Phase::Hooked`) puts the float at
+`feet + away * line_m`, with `away` the fish's heading turned by a swing of
+`sin(clock * 1.7) * 0.12 * run`. `run` is the fish's pull while it runs and
+0 while it rests, and it changes in one step when `run_s` runs out (and at
+the strike, from nothing). So the swing angle drops to 0 or jumps to its
+value in one frame, and the float with it, sideways across the water: **1.47,
+1.19, 1.06 m ... 0.26 m in one frame** in the trace, at 14 m to 4 m of line,
+with the float's distance from the angler unchanged. The line's far end and
+the fish drawn at the lure jump with it. These are the 50 to 120 px spikes.
+
+The rule is the simulation's (the float's point decides the landing and the
+line's length), and is not changed here. The drawing takes the jump out:
+
+- a draw-only `DrawnFloat` keeps an offset from the simulated float;
+- on a frame where the line was hooked last frame and is hooked now and its
+  `run` changed, or the frame the line goes from a bite to hooked, the
+  offset takes up the whole of that frame's move (the float is drawn where it
+  was), and from there it eases to nothing, critically damped (no kick in
+  speed at either end), over about a third of a second
+  (`FLOAT_EASE_PER_S` 14/s). The swing goes on at the line's first hooked
+  step, the frame after the strike, so that frame is taken up too;
+- the offset is kept along the water: the drawn float stays at the simulated
+  float's height over the planet's centre;
+- in every other frame and phase the offset only decays, and the line's
+  leaving the water (caught, snapped, wound in) or any other phase clears it;
+- the float, the line's far end and the hooked fish (drawn at the lure) all
+  use the drawn float, so they stay together.
+
+The cost is that for a third of a second after a run starts or stops the
+float is drawn up to a metre from where the line's rules have it. Nothing
+reads the drawn float.
+
+### 7.2 The scripted hand flickers the button (the stutter)
+
+Between the jumps, the float moved 3.5 cm, 3.5 cm, 0, 3.5, 3.5, 0 ... a 20 Hz
+stutter (`hooked` p50 1.5 px, against 0.018 floating). That is the
+`--fish-play` bot of section 5: it presses below a tension of 0.6 and lets go
+above it, deciding every frame, so it holds two frames and lets go one. A
+player holds the button down and lets it up. The bot now does the same, with
+a band (hold from under 0.45 until over 0.75), so a video shows the reel a
+player's hand would give. That is the instrument; the game's controls are not
+touched.
+
+### 7.3 The line leaves the rod's tip at rest, not the swayed rod
+
+`draw::tackle` starts the line at `held::rod_tip()`, the tip of the rod in its
+rest pose, but `held::hold` sways the rod by up to 6 mm right and 5 mm up
+(`held.ron`). The rod's tip is 0.73 m in front of the eye, so the line's
+start and the drawn tip drift up to 20 px apart and back over about four
+seconds. The trace gets a column for it (the line mesh's start and the
+swayed rod's tip, in camera space, as drawn). The line now starts at the
+held rod's tip as posed this frame: its `Transform` (written in `Update`,
+before `tackle` in `PostUpdate`) times its rest pose's inverse, applied to the
+rest tip. The cast still leaves from the rest tip (`Angler.tip`, simulation).
+
+### 7.4 Left as it is
+
+- The hooked float hangs off the walker's physics `Position` (6.9); the bot
+  stands still, so the trace does not show it.
+- The cast's first frames are the float thrown at 15 m/s from the tip; their
+  residual is the throw's own acceleration, not a step.
+
+### 7.5 Results (M4 Max MacBook Pro, 2026-11-17)
+
+The same 45 s fishing trace, real time, windowed, vsync on, each on a fresh
+world; one fish hooked and landed in each. "Before" is this branch with the
+drawing changes switched off in a local build (the trace's new columns need
+the instrument); its hooked numbers match the run on `787964cb` itself
+(rms 14.4, p99 86.7 px). Reports and plots: `docs/screenshots/fishing-line-smooth/`.
+
+| | before | after, same scripted hand | after, steady hand (7.2) |
+| --- | --- | --- | --- |
+| hooked float jitter, rms / p50 / p99 px | 19.0 / 1.49 / 131 | 4.5 / 1.69 / 18.1 | **2.9 / 1.06 / 11.3** |
+| hooked frames over 20 px | 38 of 793 | 6 of 790 | **0 of 788** |
+| largest float move in one frame | 152 cm | 20 cm (an eased slide) | 19 cm (an eased slide) |
+| line start from the drawn rod tip, rms / max px | 16.3 / 23.6 | **0.31 / 0.65** | 0.31 / 0.63 |
+
+The 6 frames left over 20 px with the old hand are its 20 Hz stutter with
+the float 4 m out; the steady hand takes them. What is left at p99 is the
+reel starting and stopping, which a player's hand does too. The 0.3 px left
+between the line's start and the rod tip is the rod model's tip against
+the line's first vertex, constant, not a motion.
+
+### 7.6 The bite from under the water (`--watch-hook`)
+
+A recording instrument: with `--fish`, when the float lands an eye is put
+under the water 0.85 m beside the lure, a little under it, and looks at it
+for the rest of the cast; the HUD, the readout and the rod in hand are
+hidden. Only the drawn frame moves: the walking camera is put back in
+`First`, so the line, the cast and the creatures see the angler's eye, and
+the line is placed from the rod before the view moves. The before build
+(`d0f101b3`) got the same instrument as a local commit only.
+
+Recorded with OBS (real time, windowed, `--no-vsync`, 60 fps), one file:
+`fish-bite-underwater-before-after-2026-11-17-1080p60.mp4` in the
+validation folder on Drive (before, after, then side by side aligned on the
+strike, in real time and at a quarter speed). Read frame by frame:
+
+- Both builds show the fish come to the lure, nibble and take it under the
+  float. The game draws no hook: the fish noses an empty point 0.35 m under
+  the float (`Line::lure`). The two runs hooked different fish (a pike-like
+  fish before, a ray after): the line's draws differ.
+- Before: about 0.15 s after the strike the float and the fish jump about a
+  metre in one frame (the swing of 7.1), then race off.
+- After: the float holds at the strike and glides off over the next frames;
+  no frame jumps.
+- In both builds the fish on the line is drawn standing on its tail under
+  the float for 6 to 8 frames at the strike, then snaps level. That is its
+  pose (built from its velocity), not this change; it is left for a
+  follow-up.

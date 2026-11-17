@@ -212,6 +212,29 @@ pub struct Held {
     fist: Vec3,
 }
 
+impl Held {
+    pub fn tool(&self) -> Tool {
+        self.tool
+    }
+
+    /// A point given in eye space at the rest pose (a tool's tip) where it
+    /// is with the tool posed as `pose` (its `Transform` under the camera,
+    /// swayed and swung by [`hold`]): the pose times the rest pose's inverse.
+    pub fn posed(&self, pose: &Transform, at_rest: Vec3) -> Vec3 {
+        pose.compute_affine()
+            .transform_point3(self.in_tool(at_rest))
+    }
+
+    /// A point given in eye space at the rest pose, in the tool's own frame
+    /// (its `Transform`'s local space).
+    pub fn in_tool(&self, at_rest: Vec3) -> Vec3 {
+        self.rest
+            .compute_affine()
+            .inverse()
+            .transform_point3(at_rest)
+    }
+}
+
 pub struct HeldPlugin;
 
 impl Plugin for HeldPlugin {
@@ -578,6 +601,25 @@ mod tests {
         let tip = rod.rest().transform_point(far.extend(0.0));
         let near = models().spacing * rod.scale;
         assert!(tip.distance(rod_tip()) < near, "{tip} vs {}", rod_tip());
+    }
+
+    /// The line's start follows the rod as it is posed (`movement-smoothness`
+    /// 7.3): at rest the posed tip is the rest tip, and swayed it moves with
+    /// the sway.
+    #[test]
+    fn the_posed_tip_follows_the_sway() {
+        let rod = models().get(Tool::Rod);
+        let held = Held {
+            tool: Tool::Rod,
+            rest: rod.rest(),
+            fist: rod.fist.into(),
+        };
+        let tip = rod_tip();
+        assert!(held.posed(&rod.rest(), tip).distance(tip) < 1e-5);
+        let sway = Vec3::new(0.006, -0.005, 0.0);
+        let mut pose = rod.rest();
+        pose.translation += sway;
+        assert!(held.posed(&pose, tip).distance(tip + sway) < 1e-5);
     }
 
     /// The fist, where the chop pivots, is on the handle: the hand holds the

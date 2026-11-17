@@ -148,6 +148,7 @@ pub fn drive(
     water: Option<Res<pbd_app::config::WaterSettings>>,
     mut cameras: Query<(&mut Transform, &Camera), With<Camera3d>>,
     mut now: ResMut<EyePathNow>,
+    render: Option<Res<pbd_app::planet::PlanetRenderFrame>>,
 ) {
     let (Some(keys), Some(count), Some(water)) =
         (path.as_ref().and_then(|p| p.0.as_ref()), count, water)
@@ -184,7 +185,9 @@ pub fn drive(
     let position = up * (PLANET_RADIUS + key.alt);
     for (mut transform, camera) in &mut cameras {
         if camera.is_active {
-            *transform = Transform::from_translation(position).looking_to(look, up);
+            // Render space (`movement-smoothness` design 6.1).
+            let drawn = pbd_app::render_origin::drawn_of(render.as_deref(), position);
+            *transform = Transform::from_translation(drawn).looking_to(look, up);
         }
     }
     let sheet = -water.depth_offset_m + tide;

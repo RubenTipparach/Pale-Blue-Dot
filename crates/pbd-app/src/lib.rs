@@ -50,6 +50,7 @@ pub mod place;
 #[cfg(feature = "desktop")]
 pub mod planet;
 #[cfg(feature = "desktop")]
+pub mod render_origin;
 pub mod repro;
 #[cfg(feature = "desktop")]
 pub mod saves;

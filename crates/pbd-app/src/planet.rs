@@ -175,8 +175,12 @@ pub(crate) fn column_first_vertex() -> u32 {
 /// The preview body's centre in the translating render/physics frame. System
 /// positions are subtracted in f64 before any bounded GPU coordinate is cast.
 #[derive(Resource, Clone, Copy, Default, ExtractResource)]
-pub(crate) struct PlanetRenderFrame {
-    pub(crate) center: DVec3,
+pub struct PlanetRenderFrame {
+    /// The planet's centre in render space (`movement-smoothness` design 6):
+    /// `-origin` in play.
+    pub center: DVec3,
+    /// The render origin, in physics space: render = physics - origin.
+    pub origin: DVec3,
 }
 
 pub(crate) fn update_planet_frame(
@@ -185,11 +189,18 @@ pub(crate) fn update_planet_frame(
     mut render_frame: ResMut<PlanetRenderFrame>,
 ) {
     if let Some(body) = scene.states.first() {
-        render_frame.center = body.position - frame.0.origin;
+        render_frame.center = body.position - frame.0.origin - render_frame.origin;
     }
 }
 
 impl PlanetRenderFrame {
+    /// The planet's centre in physics space (Avian's `Position`): 0 in play.
+    /// A `Position` is planet-local as `position - physics_center()`, never
+    /// `- center`, which is render space.
+    pub fn physics_center(self) -> DVec3 {
+        self.center + self.origin
+    }
+
     fn camera_and_clip(
         self,
         world_from_view: &GlobalTransform,
@@ -364,7 +375,9 @@ impl Plugin for PlanetPlugin {
         .add_systems(Update, (lod::switch_dusk_lamps, lod::refresh_lod).chain())
         .add_systems(
             PostUpdate,
-            update_planet_frame.before(TransformSystems::Propagate),
+            (crate::render_origin::rebase, update_planet_frame)
+                .chain()
+                .before(TransformSystems::Propagate),
         )
         .add_systems(Update, |time: Res<Time>, mut clock: ResMut<PlanetClock>| {
             clock.0 = time.elapsed_secs();

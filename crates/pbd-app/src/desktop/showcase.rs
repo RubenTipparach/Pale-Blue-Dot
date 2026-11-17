@@ -806,6 +806,8 @@ pub struct World<'w, 's> {
     state: Option<ResMut<'w, pbd_app::walking::WalkingState>>,
     walkers: Query<'w, 's, &'static Position, With<pbd_app::walking::Walker>>,
     cameras: Query<'w, 's, &'static GlobalTransform, With<pbd_app::walking::WalkingCamera>>,
+    /// Render space to planet-local (`movement-smoothness` design 6.1).
+    frame: Option<Res<'w, pbd_app::planet::PlanetRenderFrame>>,
     windows: Query<'w, 's, Entity, With<PrimaryWindow>>,
     fine: Option<Res<'w, PlanetFine>>,
     contact: Option<Res<'w, PlanetContact>>,
@@ -921,7 +923,7 @@ pub fn drive(
         dt,
         feet,
         up: feet.normalize_or(Vec3::Y),
-        eye: camera.translation(),
+        eye: pbd_app::render_origin::local_of(w.frame.as_deref(), camera.translation()),
         look: camera.forward().as_vec3(),
         heading,
         pitch,

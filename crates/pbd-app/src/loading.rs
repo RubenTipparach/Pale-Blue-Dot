@@ -1068,8 +1068,13 @@ fn look_round(
     }
     let turn = Quat::from_rotation_y(quarter as f32 * std::f32::consts::FRAC_PI_2);
     for (entity, at) in base.iter() {
-        if let Ok((_, _, mut global, _)) = cameras.get_mut(*entity) {
-            let (scale, rotation, translation) = at.to_scale_rotation_translation();
+        if let Ok((_, _, mut global, local)) = cameras.get_mut(*entity) {
+            let (scale, rotation, _) = at.to_scale_rotation_translation();
+            // Where the camera is now, not where it was cached: a rebase
+            // of the render origin while warming moves it
+            // (`movement-smoothness` design 6.2). A camera is a root, so its
+            // own translation is its global one.
+            let translation = local.translation;
             *global = GlobalTransform::from(Transform {
                 translation,
                 rotation: rotation * turn,
