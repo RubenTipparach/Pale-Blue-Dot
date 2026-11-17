@@ -1,0 +1,1053 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tools in Hand</title>
+<meta name="description" content="Mockup M36: the pickaxe, shovel, axe and rod in first person, today's motion against the proposed strike and rod motion, by day and by lantern at night.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #12161a;
+    --panel: #1a2026;
+    --panel-2: #212930;
+    --line: #2d3740;
+    --text: #e4e8ea;
+    --muted: #8d99a2;
+    --brass: #d9a441;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--ground); color: var(--text); margin: 0; }
+  body { font: 15px/1.55 "IBM Plex Sans", system-ui, sans-serif; padding: 8px 16px 32px; }
+  .wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 12px; }
+  header { display: grid; gap: 4px; }
+  .headrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  h1 { font: 700 30px/1.1 "Pixelify Sans", "IBM Plex Mono", monospace; margin: 0; letter-spacing: 0.02em; }
+  h3 { margin: 0; }
+  p { margin: 0; color: var(--muted); }
+  code { font-family: "IBM Plex Mono", monospace; font-size: 0.92em; color: var(--text); }
+  button {
+    font: 500 13px/1 "IBM Plex Mono", monospace; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px;
+    padding: 8px 11px; cursor: pointer; min-height: 32px;
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  button[aria-pressed="true"] { border-color: var(--brass); color: var(--brass); }
+  .info { width: 30px; height: 30px; min-height: 0; padding: 0; border-radius: 50%; font: 700 14px/1 "IBM Plex Mono", monospace; color: var(--brass); }
+  .seg { display: inline-flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .row { display: flex; gap: 8px 14px; flex-wrap: wrap; align-items: center; }
+  .label { font: 12px "IBM Plex Mono", monospace; color: var(--muted); }
+  .stat { font: 12px "IBM Plex Mono", monospace; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ptabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; background: var(--ground); padding-top: 4px; align-items: end; }
+  .ptabs [role="tab"] { all: unset; cursor: pointer; font: 700 16px "Pixelify Sans", "IBM Plex Mono", monospace; letter-spacing: 0.04em; padding: 8px 14px; border: 1px solid transparent; border-bottom: 0; border-radius: 5px 5px 0 0; color: var(--muted); }
+  .ptabs [role="tab"][aria-selected="true"] { color: var(--brass); border-color: var(--line); background: var(--panel); }
+  .ptabs [role="tab"]:focus-visible { outline: 2px solid var(--brass); }
+  .ptabs .spacer { flex: 1; }
+  .ptabs .seg { padding-bottom: 4px; }
+  [hidden] { display: none !important; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; gap: 10px; }
+  .view { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 4px; overflow: hidden; background: #0b0f14; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+  .view canvas { display: block; width: 100%; height: 100%; }
+  .crosshair { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%); pointer-events: none; }
+  .crosshair::before, .crosshair::after { content: ""; position: absolute; background: #fff; opacity: 0.75; }
+  .crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
+  .crosshair::after { top: 6px; left: 0; height: 2px; width: 14px; }
+  .hitmark { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; transform: translate(-50%, -50%); pointer-events: none; opacity: 0; }
+  .hitmark line { stroke: #fff; stroke-width: 2.5; stroke-linecap: square; }
+  .hud { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; pointer-events: none; }
+  .hud .say { font: 12px "IBM Plex Mono", monospace; color: #f2d485; text-shadow: 1px 1px 0 #000; white-space: nowrap; }
+  .hud .meter { width: 130px; height: 6px; border: 1px solid rgba(140, 191, 189, 0.6); background: rgba(5, 15, 20, 0.72); }
+  .hud .meter > i { display: block; height: 100%; width: 0; background: #f0b53d; }
+  .mode { position: absolute; left: 8px; top: 8px; font: 700 13px "Pixelify Sans", monospace; letter-spacing: 0.08em; color: #fff; background: rgba(10, 14, 18, 0.55); padding: 3px 7px; border-radius: 3px; pointer-events: none; }
+  details.tune summary { cursor: pointer; font: 500 12px "IBM Plex Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brass); padding: 4px 0; }
+  details.tune[open] { display: grid; gap: 10px; }
+  .sliders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; margin-top: 6px; }
+  @media (max-width: 640px) { .sliders { grid-template-columns: 1fr; } }
+  .sl { display: grid; grid-template-columns: 128px minmax(0, 1fr) 52px; gap: 8px; align-items: center; font: 12px "IBM Plex Mono", monospace; color: var(--muted); }
+  .sl input { width: 100%; min-width: 0; accent-color: var(--brass); }
+  .sl output { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+  textarea.ron { width: 100%; min-height: 220px; resize: vertical; font: 12px/1.45 "IBM Plex Mono", monospace; color: var(--text); background: #0e1215; border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
+  label.chk { display: inline-flex; gap: 6px; align-items: center; font: 12px "IBM Plex Mono", monospace; color: var(--muted); cursor: pointer; }
+  dialog.modal { max-width: min(700px, calc(100vw - 24px)); max-height: calc(100vh - 32px); padding: 0; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; }
+  dialog.modal::backdrop { background: rgba(5, 8, 10, 0.72); }
+  dialog.modal .mbody { padding: 16px 16px 20px; display: grid; gap: 10px; }
+  dialog.modal h3 { font: 700 17px "Pixelify Sans", monospace; letter-spacing: 0.02em; margin-top: 6px; }
+  dialog.modal p, dialog.modal li { font-size: 14px; color: var(--muted); }
+  dialog.modal strong { color: var(--text); font-weight: 600; }
+  dialog.modal ul { margin: 0; padding-left: 20px; display: grid; gap: 5px; }
+  dialog.modal .mclose { position: sticky; top: 8px; float: right; margin: 8px 8px 0 0; z-index: 1; }
+  @media (max-width: 560px) { .ptabs [role="tab"] { padding: 6px 9px; font-size: 14px; } h1 { font-size: 24px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="headrow"><h1>Tools in Hand</h1><button class="info" id="info-open" aria-label="About this mockup" title="About this mockup">i</button></div>
+    <p class="pbd-tracker" style="margin:2px 0 0;font:500 12px/1.4 ui-monospace,Menlo,Consolas,monospace"><a href="https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu" target="_blank" rel="noopener" style="color:inherit">All Pale Blue Dot mockups (the tracker)</a></p>
+  </header>
+
+  <dialog class="modal" id="info" aria-labelledby="info-title">
+    <button class="mclose" id="info-close" aria-label="Close">✕</button>
+    <div class="mbody">
+      <h3 id="info-title">About this mockup</h3>
+      <p>Mockup M36, the tool in hand: digging, chopping and fishing in first person. The owner, 2026-11-17: <em>"The dudes hand kinda of has weird normals. Also the fishing rod isnt animated when casting or when a fish is bighting let's fix that up. Make a new fishing mockup"</em>, then <em>"make a new mockup for all the tools stuff for digging, choppin and fishing"</em>, after <em>"man that axe swing is weak, it should be more visceral, more faster"</em>. Plans: <code>openspec/changes/held-swing</code> (dig and chop) and <code>openspec/changes/rod-motion</code> (the rod and the hand).</p>
+      <p>Each tab has one 3D view and a <strong>Today / Proposed</strong> switch in it. <strong>Day / Night</strong> at the top applies to every tab. Nothing moves until you hold the mouse on the view or press a button; only the world moves on its own (water, the float on it, a lantern's flame).</p>
+
+      <h3>Dig</h3>
+      <ul>
+        <li>The pickaxe on a stone cell, or the shovel on a grass cell (the picker). Hold the mouse on the view, or press <strong>Dig</strong>, to dig the cell ahead. Cracks grow with the dig's progress, the cell breaks and pops away, and a fresh one comes back after 0.15&nbsp;s (<code>between_s</code>, <code>dig.ron</code>).</li>
+        <li>The break times are the game's, <code>assets/config/dig.ron</code>: the stone tier's matrix (pickaxe on stone 1.2&nbsp;s, rock 1.6&nbsp;s, ore 2.0&nbsp;s; shovel on dirt 0.5&nbsp;s; axe on wood 0.6&nbsp;s) divided by the tier's speed (1, 1.6, 2.4, 3.6).</li>
+        <li><strong>Today</strong> is the game's chop (<code>held::hold</code>): a sine at 9&nbsp;rad/s, <code>chop = sin(phase).max(-0.2)</code>, pitching the tool 0.85&nbsp;rad forward about the fist and dropping it 6&nbsp;cm; it has no hits of its own, the block breaks when the time is up, and letting go snaps the tool to rest.</li>
+        <li><strong>Proposed</strong> is the STRIKE stroke of <code>held-swing</code>: a wind-up of 0.08&nbsp;s back to −0.35&nbsp;rad, the strike in 0.07&nbsp;s to +1.15&nbsp;rad eased in with t³ (fastest at impact), a 0.05&nbsp;s hold on impact (the tool only; the dig runs on), a 0.12&nbsp;rad kick back and 0.18&nbsp;s back to rest. The fist drops 9&nbsp;cm in step with the angle. A block of break time T gets N&nbsp;=&nbsp;max(1,&nbsp;round(T&nbsp;/&nbsp;0.4)) strokes, the k-th impact at progress k/N, the last on the break. Letting go eases the tool back over <code>recover_s</code>. The camera kick is 0 unless its slider is raised.</li>
+      </ul>
+      <h3>Chop</h3>
+      <ul><li>The axe on a tree trunk, the same two strokes as Dig. Wood with the stone axe is 0.6&nbsp;s, which is 2 strokes (round(1.5)); an iron axe's 0.25&nbsp;s is one.</li></ul>
+      <h3>Fish</h3>
+      <ul>
+        <li>Hold the mouse on the view to charge, let go to cast, as in the game (power over 1.2&nbsp;s; the float flies at 5–18&nbsp;m/s with 3–6&nbsp;m/s of lift, <code>fauna.ron</code>). Click while the float is under to strike; hold to reel while a fish is on; right click winds the line in.</li>
+        <li>The buttons play one phase each: <strong>Charge</strong>, <strong>Cast</strong>, <strong>Nibble</strong>, <strong>Bite</strong>, <strong>Fight</strong> (the fish stays on until another button; <strong>Reel</strong> turns the crank, <strong>Tension</strong> sets the line's tension) and <strong>Catch</strong>. <strong>Play all</strong> runs the whole cast to a catch once.</li>
+        <li><strong>Today</strong>: the rod stands still in every phase; only the float and the line change, and the line leaves the rod's rest tip.</li>
+        <li><strong>Proposed</strong> (<code>rod-motion</code> design 2): a pitch about the fist (tip up and back positive), a roll and a shift of the fist, driven by a damped spring toward each phase's target (<code>spring_hz</code> 9, <code>damping</code> 0.7), so a phase change never pops the rod. Charging draws back to +<code>draw_rad</code> with the charge, eased, the fist up and back <code>draw_lift_m</code>; the cast flicks to −<code>flick_rad</code> in <code>flick_s</code> and springs to the fishing pose −<code>settle_rad</code> with a slow bob; a nibble twitches the tip <code>nibble_rad</code> for <code>nibble_s</code>; a bite dips it to −<code>bite_rad</code> at once and shakes at 14&nbsp;Hz for the window; a fish on lifts it to +<code>fight_rad</code>, shaking <code>fight_shake_rad</code>&nbsp;×&nbsp;tension at 9&nbsp;Hz, rolling toward the fish's pull up to <code>roll_rad</code>, and while reeling the fist turns a <code>crank_m</code> circle at 3&nbsp;Hz; a catch lifts +<code>catch_rad</code> and eases back over <code>catch_s</code>; a miss, a snap or a wind-in eases back over <code>ease_s</code>. The line leaves the tip where the rod is drawn this frame.</li>
+      </ul>
+
+      <h3>The hand's faces</h3>
+      <p>The game shaded each side face of a hand prism by the direction from the prism's middle to the middle of that side. On a round finger the two are the same; on the flattened back of the hand (1.97 by 0.70 tool units) its four slanted faces were shaded as if they pointed up to about 50° away from where they do: the patchy back of the hand. <code>hexel::prism</code> now shades each side by its true normal, the side edge crossed with the axis turned outward (commit <code>8a769c43</code>), as the approved Hex Tool Bench did. Every hand here is built by a port of that function. The fingers are unchanged.</p>
+
+      <h3>Tuning</h3>
+      <p>Each tab's <strong>Tune</strong> holds its values as sliders and prints the <code>assets/config/held.ron</code> they make. The stroke values replace the three <code>swing_*</code> values (<code>held-swing</code> decision 1); the rod's are its <code>rod</code> block. Names in the design tables: <code>windup_s</code>, <code>windup_rad</code>, <code>strike_s</code>, <code>strike_rad</code>, <code>impact_hold_s</code>, <code>recoil_rad</code>, <code>recover_s</code>, <code>stroke_target_s</code>, <code>drop_m</code>, <code>camera_kick_rad</code>; <code>draw_rad</code>, <code>draw_lift_m</code>, <code>flick_rad</code>, <code>flick_s</code>, <code>settle_rad</code>, <code>nibble_rad</code>, <code>bite_rad</code>, <code>fight_rad</code>, <code>fight_shake_rad</code>, <code>crank_m</code>, <code>spring_hz</code>, <code>damping</code>. The rod-motion table gives numbers but no names for the rest; this page names them <code>bob_rad</code>, <code>nibble_s</code>, <code>bite_shake_rad</code>, <code>bite_shake_hz</code>, <code>fight_shake_hz</code>, <code>crank_hz</code>, <code>roll_rad</code>, <code>catch_rad</code>, <code>catch_s</code> and <code>ease_s</code>. The table gives no value for <code>fight_shake_rad</code>, the bite's shake or the bob; 0.06, 0.04 and 0.015&nbsp;rad are this page's.</p>
+
+      <h3>Game-exact and approximated</h3>
+      <ul>
+        <li><strong>Exact:</strong> the four tools' hexes, the hands' prisms, each tool's butt, rotation, scale, fist and rod tip, from <code>assets/models/held_tools.ron</code>; the hex mesh and its face shades (<code>hexel::mesh</code>, <code>shade</code>); the hand's shade 0.62&nbsp;+&nbsp;0.38·max(n·light,&nbsp;0) against (0.3,&nbsp;0.8,&nbsp;0.55) in eye space at the rest pose; the unlit held material tinted by the light at the eye; the 60° camera; today's chop and sway; the cast's physics, the float's two spheres and its dips (0.035&nbsp;m nibble, 0.14&nbsp;m bite); the line's sag (0.6&nbsp;m slack, 0.1&nbsp;+&nbsp;0.5·(1&nbsp;−&nbsp;tension) on a fish) held 5&nbsp;cm over the water; the break times.</li>
+        <li><strong>Approximated:</strong> the ground, water, trees and sky are simple stand-ins in the game's palette, lit by three.js lights, not the game's terrain, water and atmosphere shaders. The light on the tool in hand is the moon plus the lantern at the hand, worked out the way the page lights the ground, standing in for the game's light field. A tool head's tier tint is not shown. The fish is scripted: when it nibbles and bites, and how it runs, are set by the page, not by the game's schools. The rod's roll is about the view's forward axis.</li>
+        <li><strong>Not modelled:</strong> the rod does not bend (<code>rod-motion</code> decision 6): it is a rigid hex model, and the pitch and shake carry the fight. A bend can come later if wanted.</li>
+        <li>The screenshots for this page were rendered in a cloud container without a GPU (SwiftShader); they show the look, not the frame rate.</li>
+      </ul>
+    </div>
+  </dialog>
+
+  <nav class="ptabs" role="tablist" aria-label="Tools">
+    <button role="tab" data-tab="dig">Dig</button><button role="tab" data-tab="chop">Chop</button><button role="tab" data-tab="fish">Fish</button>
+    <span class="spacer"></span>
+    <span class="seg" id="daynight" role="group" aria-label="Time of day"></span>
+  </nav>
+
+  <!-- Dig -->
+  <section id="tab-dig" class="tabpanel" role="tabpanel" hidden>
+    <div class="panel">
+      <div class="view" data-view="dig"><canvas aria-label="First-person view: hold to dig"></canvas><div class="crosshair"></div>
+        <svg class="hitmark" viewBox="0 0 34 34" aria-hidden="true"><line x1="5" y1="5" x2="12" y2="12"/><line x1="29" y1="5" x2="22" y2="12"/><line x1="5" y1="29" x2="12" y2="22"/><line x1="29" y1="29" x2="22" y2="22"/></svg>
+        <span class="mode"></span></div>
+      <div class="row">
+        <span class="seg" data-ctl="mode"></span>
+        <span class="seg" data-ctl="tool"></span>
+        <button data-ctl="hold" aria-pressed="false">Dig</button>
+        <span class="stat" data-ctl="stat"></span>
+      </div>
+      <div class="row">
+        <span class="label">Block</span><span class="seg" data-ctl="material"></span>
+        <span class="label">Tier</span><span class="seg" data-ctl="tier"></span>
+        <label class="chk"><input type="checkbox" data-ctl="slow"> Slow ×0.25</label>
+      </div>
+      <details class="tune"><summary>Tune</summary><div class="sliders" data-ctl="sliders"></div><textarea class="ron" readonly data-ctl="ron" aria-label="held.ron"></textarea></details>
+    </div>
+  </section>
+
+  <!-- Chop -->
+  <section id="tab-chop" class="tabpanel" role="tabpanel" hidden>
+    <div class="panel">
+      <div class="view" data-view="chop"><canvas aria-label="First-person view: hold to chop"></canvas><div class="crosshair"></div>
+        <svg class="hitmark" viewBox="0 0 34 34" aria-hidden="true"><line x1="5" y1="5" x2="12" y2="12"/><line x1="29" y1="5" x2="22" y2="12"/><line x1="5" y1="29" x2="12" y2="22"/><line x1="29" y1="29" x2="22" y2="22"/></svg>
+        <span class="mode"></span></div>
+      <div class="row">
+        <span class="seg" data-ctl="mode"></span>
+        <button data-ctl="hold" aria-pressed="false">Chop</button>
+        <span class="stat" data-ctl="stat"></span>
+      </div>
+      <div class="row">
+        <span class="label">Tier</span><span class="seg" data-ctl="tier"></span>
+        <label class="chk"><input type="checkbox" data-ctl="slow"> Slow ×0.25</label>
+      </div>
+      <details class="tune"><summary>Tune</summary><div class="sliders" data-ctl="sliders"></div><textarea class="ron" readonly data-ctl="ron" aria-label="held.ron"></textarea></details>
+    </div>
+  </section>
+
+  <!-- Fish -->
+  <section id="tab-fish" class="tabpanel" role="tabpanel" hidden>
+    <div class="panel">
+      <div class="view" data-view="fish"><canvas aria-label="First-person view: hold to charge, let go to cast"></canvas><div class="crosshair"></div>
+        <div class="hud"><span class="say"></span><span class="meter" hidden><i></i></span></div>
+        <span class="mode"></span></div>
+      <div class="row">
+        <span class="seg" data-ctl="mode"></span>
+        <span class="seg" data-ctl="phases"></span>
+        <button data-ctl="play" aria-pressed="false">Play all</button>
+      </div>
+      <div class="row">
+        <button data-ctl="reel" aria-pressed="false">Reel</button>
+        <label class="sl" style="grid-template-columns:auto 160px 40px">Tension <input type="range" min="0" max="0.95" step="0.01" value="0.5" data-ctl="tension"><output data-ctl="tension-out">0.50</output></label>
+        <label class="chk"><input type="checkbox" data-ctl="slow"> Slow ×0.25</label>
+        <span class="stat" data-ctl="stat"></span>
+      </div>
+      <details class="tune"><summary>Tune</summary><div class="sliders" data-ctl="sliders"></div><textarea class="ron" readonly data-ctl="ron" aria-label="held.ron"></textarea></details>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+"use strict";
+// The game's own tools and hands: assets/models/held_tools.ron as JSON
+// (tools/gen_held_tools.py writes the RON). hexes are flat [q, r, colour, depth].
+const HELD = /*HELD-DATA*/{"spacing":0.25,"colours":[[238,243,244],[125,138,143],[201,211,214],[94,58,24],[122,77,34],[138,90,43],[114,71,31],[224,123,42],[185,162,122],[156,134,94],[227,93,74],[154,166,171]],"tools":[{"id":"pickaxe","butt":[0.299211,-0.484212,-0.533947],"rotation":[0.421189,0.567979,0.449027,0.546237],"scale":0.0380208,"fist":[0.29,-0.3,-0.58],"tip":[0.263842,0.223161,-0.71079],"hexes":[67,-21,0,0.33,68,-21,0,0.33,69,-21,0,0.33,70,-21,0,0.33,71,-21,0,0.33,72,-21,0,0.33,73,-21,0,0.33,70,-20,1,0.44,71,-20,1,0.44,72,-20,1,0.44,73,-20,0,0.35,74,-20,0,0.35,75,-20,0,0.35,72,-19,1,0.47,73,-19,1,0.47,74,-19,2,0.47,75,-19,0,0.37,76,-19,0,0.37,73,-18,1,0.49,74,-18,2,0.49,75,-18,2,0.49,76,-18,0,0.4,77,-18,0,0.4,74,-17,1,0.52,75,-17,2,0.52,76,-17,2,0.52,77,-17,0,0.42,78,-17,0,0.42,74,-16,1,0.55,75,-16,1,0.55,76,-16,2,0.55,77,-16,2,0.55,78,-16,0,0.44,75,-15,1,0.58,76,-15,2,0.58,77,-15,2,0.58,78,-15,0,0.47,79,-15,0,0.47,75,-14,1,0.61,76,-14,2,0.61,77,-14,2,0.61,78,-14,2,0.61,79,-14,0,0.49,75,-13,1,0.64,76,-13,2,0.64,77,-13,2,0.64,78,-13,2,0.64,79,-13,0,0.51,75,-12,1,0.67,76,-12,2,0.67,77,-12,2,0.67,78,-12,2,0.67,79,-12,0,0.54,75,-11,1,0.7,76,-11,2,0.7,77,-11,2,0.7,78,-11,2,0.7,79,-11,0,0.56,75,-10,1,0.73,76,-10,2,0.73,77,-10,2,0.73,78,-10,2,0.73,79,-10,0,0.58,75,-9,1,0.75,76,-9,2,0.75,77,-9,2,0.75,78,-9,2,0.75,79,-9,0,0.6,75,-8,1,0.75,76,-8,2,0.75,77,-8,2,0.75,78,-8,2,0.75,79,-8,0,0.6,75,-7,1,0.75,76,-7,2,0.75,77,-7,2,0.75,78,-7,2,0.75,79,-7,0,0.6,75,-6,1,0.75,76,-6,2,0.75,77,-6,2,0.75,78,-6,2,0.75,79,-6,0,0.6,74,-5,1,0.75,75,-5,2,0.75,76,-5,2,0.75,77,-5,2,0.75,78,-5,0,0.6,74,-4,1,0.75,75,-4,2,0.75,76,-4,2,0.75,77,-4,2,0.75,78,-4,0,0.6,71,-3,1,1.15,72,-3,1,1.15,73,-3,1,1.15,74,-3,1,1.15,75,-3,1,1.15,76,-3,1,1.15,77,-3,2,0.75,78,-3,0,0.6,0,-2,3,1.0,1,-2,4,0.67,2,-2,3,0.67,3,-2,3,0.67,4,-2,3,0.67,5,-2,4,0.67,6,-2,3,0.67,7,-2,3,0.67,8,-2,3,0.67,9,-2,4,0.67,10,-2,3,0.67,11,-2,3,0.67,12,-2,4,0.67,13,-2,5,0.59,14,-2,5,0.59,15,-2,5,0.59,16,-2,5,0.59,17,-2,5,0.59,18,-2,5,0.59,19,-2,5,0.59,20,-2,5,0.59,21,-2,5,0.59,22,-2,5,0.59,23,-2,5,0.59,24,-2,5,0.59,25,-2,5,0.59,26,-2,5,0.59,27,-2,5,0.59,28,-2,5,0.59,29,-2,5,0.59,30,-2,5,0.59,31,-2,5,0.59,32,-2,5,0.59,33,-2,5,0.59,34,-2,5,0.59,35,-2,5,0.59,36,-2,5,0.59,37,-2,5,0.59,38,-2,5,0.59,39,-2,5,0.59,40,-2,5,0.59,41,-2,5,0.59,42,-2,5,0.59,43,-2,5,0.59,44,-2,5,0.59,45,-2,5,0.59,46,-2,5,0.59,47,-2,5,0.59,48,-2,5,0.59,49,-2,5,0.59,50,-2,5,0.59,51,-2,5,0.59,52,-2,5,0.59,53,-2,5,0.59,54,-2,5,0.59,55,-2,5,0.59,56,-2,5,0.59,57,-2,5,0.59,58,-2,5,0.59,59,-2,5,0.59,60,-2,5,0.59,61,-2,5,0.59,62,-2,5,0.59,63,-2,5,0.59,64,-2,5,0.59,65,-2,5,0.59,66,-2,5,0.59,67,-2,5,0.59,68,-2,5,0.59,69,-2,5,0.59,70,-2,5,0.59,71,-2,1,1.15,72,-2,1,1.15,73,-2,1,1.15,74,-2,1,1.15,75,-2,1,1.15,76,-2,2,0.75,77,-2,0,0.6,0,-1,3,1.0,1,-1,4,0.97,2,-1,3,0.97,3,-1,3,0.97,4,-1,3,0.97,5,-1,3,0.97,6,-1,3,0.97,7,-1,3,0.97,8,-1,4,0.97,9,-1,3,0.97,10,-1,3,0.97,11,-1,3,0.97,12,-1,4,0.97,13,-1,6,0.89,14,-1,6,0.89,15,-1,5,0.89,16,-1,5,0.89,17,-1,6,0.89,18,-1,6,0.89,19,-1,6,0.89,20,-1,5,0.89,21,-1,5,0.89,22,-1,6,0.89,23,-1,6,0.89,24,-1,6,0.89,25,-1,6,0.89,26,-1,6,0.89,27,-1,5,0.89,28,-1,5,0.89,29,-1,6,0.89,30,-1,6,0.89,31,-1,6,0.89,32,-1,5,0.89,33,-1,5,0.89,34,-1,6,0.89,35,-1,6,0.89,36,-1,6,0.89,37,-1,6,0.89,38,-1,6,0.89,39,-1,5,0.89,40,-1,5,0.89,41,-1,6,0.89,42,-1,6,0.89,43,-1,5,0.89,44,-1,5,0.89,45,-1,5,0.89,46,-1,6,0.89,47,-1,6,0.89,48,-1,6,0.89,49,-1,6,0.89,50,-1,5,0.89,51,-1,5,0.89,52,-1,5,0.89,53,-1,6,0.89,54,-1,6,0.89,55,-1,5,0.89,56,-1,5,0.89,57,-1,6,0.89,58,-1,6,0.89,59,-1,6,0.89,60,-1,6,0.89,61,-1,6,0.89,62,-1,5,0.89,63,-1,5,0.89,64,-1,5,0.89,65,-1,6,0.89,66,-1,6,0.89,67,-1,5,0.89,68,-1,5,0.89,69,-1,6,0.89,70,-1,1,1.15,71,-1,1,1.15,72,-1,1,1.15,73,-1,1,1.15,74,-1,1,1.15,75,-1,1,1.15,76,-1,2,0.75,77,-1,0,0.6,-1,0,3,1.0,0,0,4,1.03,1,0,3,1.03,2,0,3,1.03,3,0,3,1.03,4,0,4,1.03,5,0,3,1.03,6,0,3,1.03,7,0,3,1.03,8,0,4,1.03,9,0,3,1.03,10,0,3,1.03,11,0,4,1.03,12,0,5,0.95,13,0,5,0.95,14,0,5,0.95,15,0,5,0.95,16,0,5,0.95,17,0,5,0.95,18,0,5,0.95,19,0,5,0.95,20,0,5,0.95,21,0,5,0.95,22,0,5,0.95,23,0,5,0.95,24,0,5,0.95,25,0,5,0.95,26,0,5,0.95,27,0,5,0.95,28,0,5,0.95,29,0,5,0.95,30,0,5,0.95,31,0,5,0.95,32,0,5,0.95,33,0,5,0.95,34,0,5,0.95,35,0,5,0.95,36,0,5,0.95,37,0,5,0.95,38,0,5,0.95,39,0,5,0.95,40,0,5,0.95,41,0,5,0.95,42,0,5,0.95,43,0,5,0.95,44,0,5,0.95,45,0,5,0.95,46,0,5,0.95,47,0,5,0.95,48,0,5,0.95,49,0,5,0.95,50,0,5,0.95,51,0,5,0.95,52,0,5,0.95,53,0,5,0.95,54,0,5,0.95,55,0,5,0.95,56,0,5,0.95,57,0,5,0.95,58,0,5,0.95,59,0,5,0.95,60,0,5,0.95,61,0,5,0.95,62,0,5,0.95,63,0,5,0.95,64,0,5,0.95,65,0,5,0.95,66,0,5,0.95,67,0,5,0.95,68,0,5,0.95,69,0,5,0.95,70,0,1,1.15,71,0,1,1.15,72,0,1,1.15,73,0,1,1.15,74,0,1,1.15,75,0,2,0.75,76,0,0,0.6,-1,1,3,1.0,0,1,4,0.97,1,1,3,0.97,2,1,3,0.97,3,1,3,0.97,4,1,3,0.97,5,1,3,0.97,6,1,3,0.97,7,1,4,0.97,8,1,3,0.97,9,1,3,0.97,10,1,3,0.97,11,1,4,0.97,12,1,5,0.89,13,1,5,0.89,14,1,6,0.89,15,1,6,0.89,16,1,6,0.89,17,1,6,0.89,18,1,6,0.89,19,1,5,0.89,20,1,5,0.89,21,1,6,0.89,22,1,6,0.89,23,1,6,0.89,24,1,5,0.89,25,1,5,0.89,26,1,6,0.89,27,1,6,0.89,28,1,6,0.89,29,1,6,0.89,30,1,6,0.89,31,1,5,0.89,32,1,5,0.89,33,1,6,0.89,34,1,6,0.89,35,1,5,0.89,36,1,5,0.89,37,1,5,0.89,38,1,6,0.89,39,1,6,0.89,40,1,6,0.89,41,1,6,0.89,42,1,5,0.89,43,1,5,0.89,44,1,5,0.89,45,1,6,0.89,46,1,6,0.89,47,1,5,0.89,48,1,5,0.89,49,1,6,0.89,50,1,6,0.89,51,1,6,0.89,52,1,6,0.89,53,1,6,0.89,54,1,5,0.89,55,1,5,0.89,56,1,6,0.89,57,1,6,0.89,58,1,6,0.89,59,1,5,0.89,60,1,5,0.89,61,1,6,0.89,62,1,6,0.89,63,1,6,0.89,64,1,6,0.89,65,1,6,0.89,66,1,5,0.89,67,1,5,0.89,68,1,6,0.89,69,1,1,1.15,70,1,1,1.15,71,1,1,1.15,72,1,1,1.15,73,1,1,1.15,74,1,1,1.15,75,1,2,0.75,76,1,0,0.6,-2,2,3,1.0,-1,2,4,0.67,0,2,3,0.67,1,2,3,0.67,2,2,3,0.67,3,2,4,0.67,4,2,3,0.67,5,2,3,0.67,6,2,3,0.67,7,2,4,0.67,8,2,3,0.67,9,2,3,0.67,10,2,4,0.67,11,2,5,0.59,12,2,5,0.59,13,2,5,0.59,14,2,5,0.59,15,2,5,0.59,16,2,5,0.59,17,2,5,0.59,18,2,5,0.59,19,2,5,0.59,20,2,5,0.59,21,2,5,0.59,22,2,5,0.59,23,2,5,0.59,24,2,5,0.59,25,2,5,0.59,26,2,5,0.59,27,2,5,0.59,28,2,5,0.59,29,2,5,0.59,30,2,5,0.59,31,2,5,0.59,32,2,5,0.59,33,2,5,0.59,34,2,5,0.59,35,2,5,0.59,36,2,5,0.59,37,2,5,0.59,38,2,5,0.59,39,2,5,0.59,40,2,5,0.59,41,2,5,0.59,42,2,5,0.59,43,2,5,0.59,44,2,5,0.59,45,2,5,0.59,46,2,5,0.59,47,2,5,0.59,48,2,5,0.59,49,2,5,0.59,50,2,5,0.59,51,2,5,0.59,52,2,5,0.59,53,2,5,0.59,54,2,5,0.59,55,2,5,0.59,56,2,5,0.59,57,2,5,0.59,58,2,5,0.59,59,2,5,0.59,60,2,5,0.59,61,2,5,0.59,62,2,5,0.59,63,2,5,0.59,64,2,5,0.59,65,2,5,0.59,66,2,5,0.59,67,2,5,0.59,68,2,5,0.59,69,2,1,1.15,70,2,1,1.15,71,2,1,1.15,72,2,1,1.15,73,2,1,1.15,74,2,2,0.75,75,2,0,0.6,68,3,1,1.15,69,3,1,1.15,70,3,1,1.15,71,3,1,1.15,72,3,1,1.15,73,3,1,1.15,74,3,2,0.75,75,3,0,0.6,70,4,1,0.75,71,4,2,0.75,72,4,2,0.75,73,4,2,0.75,74,4,0,0.6,69,5,1,0.75,70,5,2,0.75,71,5,2,0.75,72,5,2,0.75,73,5,0,0.6,69,6,1,0.75,70,6,2,0.75,71,6,2,0.75,72,6,2,0.75,73,6,0,0.6,68,7,1,0.75,69,7,2,0.75,70,7,2,0.75,71,7,2,0.75,72,7,0,0.6,67,8,1,0.75,68,8,2,0.75,69,8,2,0.75,70,8,2,0.75,71,8,0,0.6,66,9,1,0.75,67,9,2,0.75,68,9,2,0.75,69,9,2,0.75,70,9,0,0.6,65,10,1,0.73,66,10,2,0.73,67,10,2,0.73,68,10,2,0.73,69,10,0,0.58,64,11,1,0.7,65,11,2,0.7,66,11,2,0.7,67,11,2,0.7,68,11,0,0.56,63,12,1,0.67,64,12,2,0.67,65,12,2,0.67,66,12,2,0.67,67,12,0,0.54,62,13,1,0.64,63,13,2,0.64,64,13,2,0.64,65,13,2,0.64,66,13,0,0.51,61,14,1,0.61,62,14,2,0.61,63,14,2,0.61,64,14,2,0.61,65,14,0,0.49,60,15,1,0.58,61,15,2,0.58,62,15,2,0.58,63,15,0,0.47,64,15,0,0.47,58,16,1,0.55,59,16,1,0.55,60,16,2,0.55,61,16,2,0.55,62,16,0,0.44,57,17,1,0.52,58,17,2,0.52,59,17,2,0.52,60,17,0,0.42,61,17,0,0.42,55,18,1,0.49,56,18,2,0.49,57,18,2,0.49,58,18,0,0.4,59,18,0,0.4,53,19,1,0.47,54,19,1,0.47,55,19,2,0.47,56,19,0,0.37,57,19,0,0.37,50,20,1,0.44,51,20,1,0.44,52,20,1,0.44,53,20,0,0.35,54,20,0,0.35,55,20,0,0.35,46,21,0,0.33,47,21,0,0.33,48,21,0,0.33,49,21,0,0.33,50,21,0,0.33,51,21,0,0.33,52,21,0,0.33],"hand":[{"axis":[0.0853,-0.8729,-0.4804],"at":[4.6159,1.1732,1.7209],"radius":0.6955,"length":4.9745,"across":[0.9964,0.0747,0.0411],"width":1.9739,"colour":[227,176,137]},{"axis":[0.1287,0.0922,-0.9874],"at":[6.3541,-0.6165,-0.003],"radius":0.4827,"length":2.0066,"colour":[227,176,137]},{"axis":[-0.0904,0.9832,0.1584],"at":[6.4204,0.036,-0.8214],"radius":0.4827,"length":1.3181,"colour":[195,151,118]},{"axis":[-0.1786,0.5352,0.8257],"at":[6.285,0.8532,-0.3445],"radius":0.4345,"length":1.0972,"colour":[227,176,137]},{"axis":[0.1759,0.1779,-0.9682],"at":[5.4803,-0.6639,-0.1872],"radius":0.5073,"length":2.1907,"colour":[227,176,137]},{"axis":[-0.0192,0.9431,0.332],"at":[5.646,0.1375,-0.9496],"radius":0.5073,"length":1.4805,"colour":[195,151,118]},{"axis":[-0.1094,0.4909,0.8643],"at":[5.5825,0.9865,-0.3297],"radius":0.4565,"length":1.0923,"colour":[227,176,137]},{"axis":[0.2313,0.2889,-0.929],"at":[4.5263,-0.588,-0.2277],"radius":0.4786,"length":1.9972,"colour":[227,176,137]},{"axis":[0.0483,0.9263,0.3738],"at":[4.7697,0.2794,-0.8364],"radius":0.4786,"length":1.4645,"colour":[195,151,118]},{"axis":[-0.1192,0.2775,0.9533],"at":[4.7558,0.9871,-0.2314],"radius":0.4308,"length":0.9225,"colour":[227,176,137]},{"axis":[0.2927,0.4388,-0.8496],"at":[3.544,-0.486,-0.2342],"radius":0.4173,"length":1.3042,"colour":[227,176,137]},{"axis":[0.1508,0.8521,0.5012],"at":[3.7805,0.1579,-0.4872],"radius":0.4173,"length":1.0878,"colour":[195,151,118]},{"axis":[-0.08,0.2912,0.9533],"at":[3.8259,0.641,0.0374],"radius":0.3755,"length":0.7781,"colour":[227,176,137]},{"axis":[0.3218,-0.446,-0.8352],"at":[5.9769,2.1244,0.9781],"radius":0.6075,"length":1.8712,"colour":[227,176,137]},{"axis":[0.1516,-0.6103,-0.7775],"at":[6.3553,1.3261,-0.2667],"radius":0.5245,"length":1.532,"colour":[195,151,118]},{"axis":[-0.0239,-0.6924,-0.7211],"at":[6.4486,0.614,-1.1055],"radius":0.4692,"length":1.0141,"colour":[227,176,137]},{"axis":[-0.6428,0.6717,0.3683],"at":[3.9646,3.6108,3.0614],"radius":1.0227,"length":1.4318,"colour":[227,176,137]},{"axis":[-0.6428,0.6717,0.3683],"at":[3.2679,4.339,3.4606],"radius":1.35,"length":0.7364,"colour":[58,82,110]},{"axis":[-0.6428,0.6717,0.3683],"at":[-0.913,8.7082,5.8559],"radius":1.2682,"length":12.2727,"colour":[77,106,140]}]},{"id":"shovel","butt":[0.29809,-0.461792,-0.539552],"rotation":[-0.546237,-0.449027,0.567979,0.421189],"scale":0.0333934,"fist":[0.29,-0.3,-0.58],"tip":[0.258612,0.327752,-0.736938],"hexes":[78,-11,1,0.5,79,-11,1,0.5,80,-11,0,0.26,81,-11,0,0.26,82,-11,0,0.26,83,-11,0,0.26,84,-11,0,0.26,85,-11,0,0.26,86,-11,0,0.26,87,-11,0,0.26,88,-11,0,0.26,89,-11,0,0.26,90,-11,0,0.26,91,-11,0,0.26,77,-10,1,0.5,78,-10,1,0.5,79,-10,0,0.26,80,-10,0,0.26,81,-10,0,0.26,82,-10,0,0.26,83,-10,0,0.26,84,-10,0,0.26,85,-10,0,0.26,86,-10,0,0.26,87,-10,0,0.26,88,-10,0,0.26,89,-10,0,0.26,90,-10,0,0.26,91,-10,0,0.26,92,-10,0,0.26,93,-10,0,0.26,94,-10,0,0.26,77,-9,1,0.5,78,-9,1,0.5,79,-9,2,0.36,80,-9,2,0.36,81,-9,2,0.36,82,-9,2,0.36,83,-9,2,0.36,84,-9,2,0.36,85,-9,2,0.36,86,-9,2,0.36,87,-9,2,0.36,88,-9,2,0.36,89,-9,2,0.36,90,-9,2,0.36,91,-9,2,0.36,92,-9,2,0.36,93,-9,2,0.36,94,-9,0,0.26,95,-9,0,0.26,96,-9,0,0.26,76,-8,1,0.5,77,-8,1,0.5,78,-8,2,0.36,79,-8,2,0.36,80,-8,2,0.36,81,-8,2,0.36,82,-8,2,0.36,83,-8,2,0.36,84,-8,2,0.36,85,-8,2,0.36,86,-8,2,0.36,87,-8,2,0.36,88,-8,2,0.36,89,-8,2,0.36,90,-8,2,0.36,91,-8,2,0.36,92,-8,2,0.36,93,-8,2,0.36,94,-8,2,0.36,95,-8,0,0.26,96,-8,0,0.26,76,-7,1,0.5,77,-7,1,0.5,78,-7,2,0.36,79,-7,2,0.36,80,-7,2,0.36,81,-7,2,0.36,82,-7,2,0.36,83,-7,2,0.36,84,-7,2,0.36,85,-7,2,0.36,86,-7,2,0.36,87,-7,2,0.36,88,-7,2,0.36,89,-7,2,0.36,90,-7,2,0.36,91,-7,2,0.36,92,-7,2,0.36,93,-7,2,0.36,94,-7,2,0.36,95,-7,2,0.36,96,-7,0,0.26,97,-7,0,0.26,75,-6,1,0.5,76,-6,1,0.5,77,-6,2,0.36,78,-6,2,0.36,79,-6,2,0.36,80,-6,2,0.36,81,-6,2,0.36,82,-6,2,0.36,83,-6,2,0.36,84,-6,2,0.36,85,-6,2,0.36,86,-6,2,0.36,87,-6,2,0.36,88,-6,2,0.36,89,-6,2,0.36,90,-6,2,0.36,91,-6,2,0.36,92,-6,2,0.36,93,-6,2,0.36,94,-6,2,0.36,95,-6,2,0.36,96,-6,2,0.36,97,-6,0,0.26,75,-5,1,0.5,76,-5,1,0.5,77,-5,2,0.36,78,-5,2,0.36,79,-5,2,0.36,80,-5,2,0.36,81,-5,2,0.36,82,-5,2,0.36,83,-5,2,0.36,84,-5,2,0.36,85,-5,2,0.36,86,-5,2,0.36,87,-5,2,0.36,88,-5,2,0.36,89,-5,2,0.36,90,-5,2,0.36,91,-5,2,0.36,92,-5,2,0.36,93,-5,2,0.36,94,-5,2,0.36,95,-5,2,0.36,96,-5,2,0.36,97,-5,0,0.26,98,-5,0,0.26,74,-4,1,0.5,75,-4,1,0.5,76,-4,2,0.36,77,-4,2,0.36,78,-4,2,0.36,79,-4,2,0.36,80,-4,2,0.36,81,-4,2,0.36,82,-4,2,0.36,83,-4,2,0.36,84,-4,2,0.36,85,-4,2,0.36,86,-4,2,0.36,87,-4,2,0.36,88,-4,2,0.36,89,-4,2,0.36,90,-4,2,0.36,91,-4,2,0.36,92,-4,2,0.36,93,-4,2,0.36,94,-4,2,0.36,95,-4,2,0.36,96,-4,2,0.36,97,-4,0,0.26,98,-4,0,0.26,74,-3,1,0.5,75,-3,1,0.5,76,-3,2,0.36,77,-3,2,0.36,78,-3,2,0.36,79,-3,2,0.36,80,-3,2,0.36,81,-3,2,0.36,82,-3,2,0.36,83,-3,2,0.36,84,-3,2,0.36,85,-3,2,0.36,86,-3,2,0.36,87,-3,2,0.36,88,-3,2,0.36,89,-3,2,0.36,90,-3,2,0.36,91,-3,2,0.36,92,-3,2,0.36,93,-3,2,0.36,94,-3,2,0.36,95,-3,2,0.36,96,-3,2,0.36,97,-3,0,0.26,98,-3,0,0.26,1,-2,3,0.76,2,-2,3,0.76,3,-2,7,0.76,4,-2,7,0.76,5,-2,7,0.76,6,-2,7,0.76,7,-2,7,0.76,8,-2,7,0.76,9,-2,7,0.76,10,-2,7,0.76,11,-2,7,0.76,12,-2,5,0.71,13,-2,5,0.71,14,-2,5,0.71,15,-2,5,0.71,16,-2,5,0.71,17,-2,5,0.71,18,-2,5,0.71,19,-2,5,0.71,20,-2,5,0.71,21,-2,5,0.71,22,-2,5,0.71,23,-2,5,0.71,24,-2,5,0.71,25,-2,5,0.71,26,-2,5,0.71,27,-2,5,0.71,28,-2,5,0.71,29,-2,5,0.71,30,-2,5,0.71,31,-2,5,0.71,32,-2,5,0.71,33,-2,5,0.71,34,-2,5,0.71,35,-2,5,0.71,36,-2,5,0.71,37,-2,5,0.71,38,-2,5,0.71,39,-2,5,0.71,40,-2,5,0.71,41,-2,5,0.71,42,-2,5,0.71,43,-2,5,0.71,44,-2,5,0.71,45,-2,5,0.71,46,-2,5,0.71,47,-2,5,0.71,48,-2,5,0.71,49,-2,5,0.71,50,-2,5,0.71,51,-2,5,0.71,52,-2,5,0.71,53,-2,5,0.71,54,-2,5,0.71,55,-2,5,0.71,56,-2,5,0.71,57,-2,5,0.71,58,-2,5,0.71,59,-2,5,0.71,60,-2,5,0.71,61,-2,5,0.71,62,-2,5,0.71,63,-2,5,0.71,64,-2,5,0.71,65,-2,5,0.71,66,-2,5,0.71,67,-2,5,0.71,68,-2,5,0.71,69,-2,1,0.9,70,-2,1,0.9,71,-2,1,0.9,72,-2,1,0.9,73,-2,1,0.5,74,-2,1,0.5,75,-2,2,0.36,76,-2,2,0.36,77,-2,2,0.36,78,-2,2,0.36,79,-2,2,0.36,80,-2,2,0.36,81,-2,2,0.36,82,-2,2,0.36,83,-2,2,0.36,84,-2,2,0.36,85,-2,2,0.36,86,-2,2,0.36,87,-2,2,0.36,88,-2,2,0.36,89,-2,2,0.36,90,-2,2,0.36,91,-2,2,0.36,92,-2,2,0.36,93,-2,2,0.36,94,-2,2,0.36,95,-2,2,0.36,96,-2,2,0.36,97,-2,0,0.26,98,-2,0,0.26,1,-1,3,0.95,2,-1,7,0.95,3,-1,7,0.95,4,-1,7,0.95,5,-1,7,0.95,6,-1,7,0.95,7,-1,7,0.95,8,-1,7,0.95,9,-1,7,0.95,10,-1,7,0.95,11,-1,6,0.9,12,-1,6,0.9,13,-1,6,0.9,14,-1,6,0.9,15,-1,5,0.9,16,-1,5,0.9,17,-1,6,0.9,18,-1,6,0.9,19,-1,6,0.9,20,-1,5,0.9,21,-1,5,0.9,22,-1,6,0.9,23,-1,6,0.9,24,-1,6,0.9,25,-1,6,0.9,26,-1,6,0.9,27,-1,5,0.9,28,-1,5,0.9,29,-1,6,0.9,30,-1,6,0.9,31,-1,6,0.9,32,-1,5,0.9,33,-1,5,0.9,34,-1,6,0.9,35,-1,6,0.9,36,-1,6,0.9,37,-1,6,0.9,38,-1,6,0.9,39,-1,5,0.9,40,-1,5,0.9,41,-1,6,0.9,42,-1,6,0.9,43,-1,5,0.9,44,-1,5,0.9,45,-1,5,0.9,46,-1,6,0.9,47,-1,6,0.9,48,-1,6,0.9,49,-1,6,0.9,50,-1,5,0.9,51,-1,5,0.9,52,-1,5,0.9,53,-1,6,0.9,54,-1,6,0.9,55,-1,5,0.9,56,-1,5,0.9,57,-1,6,0.9,58,-1,6,0.9,59,-1,6,0.9,60,-1,6,0.9,61,-1,6,0.9,62,-1,5,0.9,63,-1,5,0.9,64,-1,5,0.9,65,-1,6,0.9,66,-1,6,0.9,67,-1,5,0.9,68,-1,1,0.9,69,-1,1,0.9,70,-1,1,0.9,71,-1,1,0.9,72,-1,1,0.9,73,-1,1,0.8,74,-1,1,0.8,75,-1,1,0.8,76,-1,1,0.8,77,-1,1,0.8,78,-1,1,0.8,79,-1,1,0.8,80,-1,1,0.8,81,-1,1,0.8,82,-1,1,0.8,83,-1,1,0.8,84,-1,1,0.8,85,-1,1,0.8,86,-1,1,0.8,87,-1,2,0.36,88,-1,2,0.36,89,-1,2,0.36,90,-1,2,0.36,91,-1,2,0.36,92,-1,2,0.36,93,-1,2,0.36,94,-1,2,0.36,95,-1,2,0.36,96,-1,2,0.36,97,-1,0,0.26,0,0,3,1.0,1,0,3,1.0,2,0,7,1.0,3,0,7,1.0,4,0,7,1.0,5,0,7,1.0,6,0,7,1.0,7,0,7,1.0,8,0,7,1.0,9,0,7,1.0,10,0,7,1.0,11,0,5,0.95,12,0,5,0.95,13,0,5,0.95,14,0,5,0.95,15,0,5,0.95,16,0,5,0.95,17,0,5,0.95,18,0,5,0.95,19,0,5,0.95,20,0,5,0.95,21,0,5,0.95,22,0,5,0.95,23,0,5,0.95,24,0,5,0.95,25,0,5,0.95,26,0,5,0.95,27,0,5,0.95,28,0,5,0.95,29,0,5,0.95,30,0,5,0.95,31,0,5,0.95,32,0,5,0.95,33,0,5,0.95,34,0,5,0.95,35,0,5,0.95,36,0,5,0.95,37,0,5,0.95,38,0,5,0.95,39,0,5,0.95,40,0,5,0.95,41,0,5,0.95,42,0,5,0.95,43,0,5,0.95,44,0,5,0.95,45,0,5,0.95,46,0,5,0.95,47,0,5,0.95,48,0,5,0.95,49,0,5,0.95,50,0,5,0.95,51,0,5,0.95,52,0,5,0.95,53,0,5,0.95,54,0,5,0.95,55,0,5,0.95,56,0,5,0.95,57,0,5,0.95,58,0,5,0.95,59,0,5,0.95,60,0,5,0.95,61,0,5,0.95,62,0,5,0.95,63,0,5,0.95,64,0,5,0.95,65,0,5,0.95,66,0,5,0.95,67,0,5,0.95,68,0,1,0.9,69,0,1,0.9,70,0,1,0.9,71,0,1,0.9,72,0,1,0.8,73,0,1,0.8,74,0,1,0.8,75,0,1,0.8,76,0,1,0.8,77,0,1,0.8,78,0,1,0.8,79,0,1,0.8,80,0,1,0.8,81,0,1,0.8,82,0,1,0.8,83,0,1,0.8,84,0,1,0.8,85,0,1,0.8,86,0,1,0.8,87,0,2,0.36,88,0,2,0.36,89,0,2,0.36,90,0,2,0.36,91,0,2,0.36,92,0,2,0.36,93,0,2,0.36,94,0,2,0.36,95,0,2,0.36,96,0,2,0.36,97,0,0,0.26,0,1,3,0.95,1,1,7,0.95,2,1,7,0.95,3,1,7,0.95,4,1,7,0.95,5,1,7,0.95,6,1,7,0.95,7,1,7,0.95,8,1,7,0.95,9,1,7,0.95,10,1,6,0.9,11,1,6,0.9,12,1,5,0.9,13,1,5,0.9,14,1,6,0.9,15,1,6,0.9,16,1,6,0.9,17,1,6,0.9,18,1,6,0.9,19,1,5,0.9,20,1,5,0.9,21,1,6,0.9,22,1,6,0.9,23,1,6,0.9,24,1,5,0.9,25,1,5,0.9,26,1,6,0.9,27,1,6,0.9,28,1,6,0.9,29,1,6,0.9,30,1,6,0.9,31,1,5,0.9,32,1,5,0.9,33,1,6,0.9,34,1,6,0.9,35,1,5,0.9,36,1,5,0.9,37,1,5,0.9,38,1,6,0.9,39,1,6,0.9,40,1,6,0.9,41,1,6,0.9,42,1,5,0.9,43,1,5,0.9,44,1,5,0.9,45,1,6,0.9,46,1,6,0.9,47,1,5,0.9,48,1,5,0.9,49,1,6,0.9,50,1,6,0.9,51,1,6,0.9,52,1,6,0.9,53,1,6,0.9,54,1,5,0.9,55,1,5,0.9,56,1,6,0.9,57,1,6,0.9,58,1,6,0.9,59,1,5,0.9,60,1,5,0.9,61,1,6,0.9,62,1,6,0.9,63,1,6,0.9,64,1,6,0.9,65,1,6,0.9,66,1,5,0.9,67,1,1,0.9,68,1,1,0.9,69,1,1,0.9,70,1,1,0.9,71,1,1,0.9,72,1,1,0.8,73,1,1,0.8,74,1,1,0.8,75,1,1,0.8,76,1,1,0.8,77,1,1,0.8,78,1,1,0.8,79,1,1,0.8,80,1,1,0.8,81,1,1,0.8,82,1,1,0.8,83,1,1,0.8,84,1,1,0.8,85,1,1,0.8,86,1,2,0.36,87,1,2,0.36,88,1,2,0.36,89,1,2,0.36,90,1,2,0.36,91,1,2,0.36,92,1,2,0.36,93,1,2,0.36,94,1,2,0.36,95,1,2,0.36,96,1,0,0.26,-1,2,3,0.76,0,2,3,0.76,1,2,7,0.76,2,2,7,0.76,3,2,7,0.76,4,2,7,0.76,5,2,7,0.76,6,2,7,0.76,7,2,7,0.76,8,2,7,0.76,9,2,7,0.76,10,2,5,0.71,11,2,5,0.71,12,2,5,0.71,13,2,5,0.71,14,2,5,0.71,15,2,5,0.71,16,2,5,0.71,17,2,5,0.71,18,2,5,0.71,19,2,5,0.71,20,2,5,0.71,21,2,5,0.71,22,2,5,0.71,23,2,5,0.71,24,2,5,0.71,25,2,5,0.71,26,2,5,0.71,27,2,5,0.71,28,2,5,0.71,29,2,5,0.71,30,2,5,0.71,31,2,5,0.71,32,2,5,0.71,33,2,5,0.71,34,2,5,0.71,35,2,5,0.71,36,2,5,0.71,37,2,5,0.71,38,2,5,0.71,39,2,5,0.71,40,2,5,0.71,41,2,5,0.71,42,2,5,0.71,43,2,5,0.71,44,2,5,0.71,45,2,5,0.71,46,2,5,0.71,47,2,5,0.71,48,2,5,0.71,49,2,5,0.71,50,2,5,0.71,51,2,5,0.71,52,2,5,0.71,53,2,5,0.71,54,2,5,0.71,55,2,5,0.71,56,2,5,0.71,57,2,5,0.71,58,2,5,0.71,59,2,5,0.71,60,2,5,0.71,61,2,5,0.71,62,2,5,0.71,63,2,5,0.71,64,2,5,0.71,65,2,5,0.71,66,2,5,0.71,67,2,1,0.9,68,2,1,0.9,69,2,1,0.9,70,2,1,0.9,71,2,1,0.5,72,2,1,0.5,73,2,2,0.36,74,2,2,0.36,75,2,2,0.36,76,2,2,0.36,77,2,2,0.36,78,2,2,0.36,79,2,2,0.36,80,2,2,0.36,81,2,2,0.36,82,2,2,0.36,83,2,2,0.36,84,2,2,0.36,85,2,2,0.36,86,2,2,0.36,87,2,2,0.36,88,2,2,0.36,89,2,2,0.36,90,2,2,0.36,91,2,2,0.36,92,2,2,0.36,93,2,2,0.36,94,2,2,0.36,95,2,0,0.26,96,2,0,0.26,71,3,1,0.5,72,3,1,0.5,73,3,2,0.36,74,3,2,0.36,75,3,2,0.36,76,3,2,0.36,77,3,2,0.36,78,3,2,0.36,79,3,2,0.36,80,3,2,0.36,81,3,2,0.36,82,3,2,0.36,83,3,2,0.36,84,3,2,0.36,85,3,2,0.36,86,3,2,0.36,87,3,2,0.36,88,3,2,0.36,89,3,2,0.36,90,3,2,0.36,91,3,2,0.36,92,3,2,0.36,93,3,2,0.36,94,3,0,0.26,95,3,0,0.26,70,4,1,0.5,71,4,1,0.5,72,4,2,0.36,73,4,2,0.36,74,4,2,0.36,75,4,2,0.36,76,4,2,0.36,77,4,2,0.36,78,4,2,0.36,79,4,2,0.36,80,4,2,0.36,81,4,2,0.36,82,4,2,0.36,83,4,2,0.36,84,4,2,0.36,85,4,2,0.36,86,4,2,0.36,87,4,2,0.36,88,4,2,0.36,89,4,2,0.36,90,4,2,0.36,91,4,2,0.36,92,4,2,0.36,93,4,0,0.26,94,4,0,0.26,70,5,1,0.5,71,5,1,0.5,72,5,2,0.36,73,5,2,0.36,74,5,2,0.36,75,5,2,0.36,76,5,2,0.36,77,5,2,0.36,78,5,2,0.36,79,5,2,0.36,80,5,2,0.36,81,5,2,0.36,82,5,2,0.36,83,5,2,0.36,84,5,2,0.36,85,5,2,0.36,86,5,2,0.36,87,5,2,0.36,88,5,2,0.36,89,5,2,0.36,90,5,2,0.36,91,5,2,0.36,92,5,0,0.26,93,5,0,0.26,69,6,1,0.5,70,6,1,0.5,71,6,2,0.36,72,6,2,0.36,73,6,2,0.36,74,6,2,0.36,75,6,2,0.36,76,6,2,0.36,77,6,2,0.36,78,6,2,0.36,79,6,2,0.36,80,6,2,0.36,81,6,2,0.36,82,6,2,0.36,83,6,2,0.36,84,6,2,0.36,85,6,2,0.36,86,6,2,0.36,87,6,2,0.36,88,6,2,0.36,89,6,2,0.36,90,6,2,0.36,91,6,0,0.26,69,7,1,0.5,70,7,1,0.5,71,7,2,0.36,72,7,2,0.36,73,7,2,0.36,74,7,2,0.36,75,7,2,0.36,76,7,2,0.36,77,7,2,0.36,78,7,2,0.36,79,7,2,0.36,80,7,2,0.36,81,7,2,0.36,82,7,2,0.36,83,7,2,0.36,84,7,2,0.36,85,7,2,0.36,86,7,2,0.36,87,7,2,0.36,88,7,2,0.36,89,7,0,0.26,90,7,0,0.26,68,8,1,0.5,69,8,1,0.5,70,8,2,0.36,71,8,2,0.36,72,8,2,0.36,73,8,2,0.36,74,8,2,0.36,75,8,2,0.36,76,8,2,0.36,77,8,2,0.36,78,8,2,0.36,79,8,2,0.36,80,8,2,0.36,81,8,2,0.36,82,8,2,0.36,83,8,2,0.36,84,8,2,0.36,85,8,2,0.36,86,8,2,0.36,87,8,0,0.26,88,8,0,0.26,68,9,1,0.5,69,9,1,0.5,70,9,2,0.36,71,9,2,0.36,72,9,2,0.36,73,9,2,0.36,74,9,2,0.36,75,9,2,0.36,76,9,2,0.36,77,9,2,0.36,78,9,2,0.36,79,9,2,0.36,80,9,2,0.36,81,9,2,0.36,82,9,2,0.36,83,9,2,0.36,84,9,2,0.36,85,9,0,0.26,86,9,0,0.26,87,9,0,0.26,67,10,1,0.5,68,10,1,0.5,69,10,0,0.26,70,10,0,0.26,71,10,0,0.26,72,10,0,0.26,73,10,0,0.26,74,10,0,0.26,75,10,0,0.26,76,10,0,0.26,77,10,0,0.26,78,10,0,0.26,79,10,0,0.26,80,10,0,0.26,81,10,0,0.26,82,10,0,0.26,83,10,0,0.26,84,10,0,0.26,67,11,1,0.5,68,11,1,0.5,69,11,0,0.26,70,11,0,0.26,71,11,0,0.26,72,11,0,0.26,73,11,0,0.26,74,11,0,0.26,75,11,0,0.26,76,11,0,0.26,77,11,0,0.26,78,11,0,0.26,79,11,0,0.26,80,11,0,0.26],"hand":[{"axis":[0.0853,0.8729,0.4804],"at":[4.5646,-1.3297,-1.9503],"radius":0.7882,"length":5.6378,"across":[0.9964,-0.0747,-0.0411],"width":2.237,"colour":[227,176,137]},{"axis":[0.1287,-0.0922,0.9874],"at":[6.5346,0.6987,0.0034],"radius":0.5471,"length":2.2741,"colour":[227,176,137]},{"axis":[-0.0904,-0.9832,-0.1584],"at":[6.6097,-0.0408,0.9309],"radius":0.5471,"length":1.4938,"colour":[195,151,118]},{"axis":[-0.1786,-0.5352,-0.8257],"at":[6.4563,-0.967,0.3904],"radius":0.4924,"length":1.2435,"colour":[227,176,137]},{"axis":[0.1759,-0.1779,0.9682],"at":[5.5443,0.7524,0.2121],"radius":0.5749,"length":2.4828,"colour":[227,176,137]},{"axis":[-0.0192,-0.9431,-0.332],"at":[5.7321,-0.1559,1.0762],"radius":0.5749,"length":1.6779,"colour":[195,151,118]},{"axis":[-0.1094,-0.4909,-0.8643],"at":[5.6602,-1.118,0.3737],"radius":0.5174,"length":1.2379,"colour":[227,176,137]},{"axis":[0.2313,-0.2889,0.929],"at":[4.4631,0.6665,0.258],"radius":0.5425,"length":2.2635,"colour":[227,176,137]},{"axis":[0.0483,-0.9263,-0.3738],"at":[4.739,-0.3166,0.9479],"radius":0.5425,"length":1.6598,"colour":[195,151,118]},{"axis":[-0.1192,-0.2775,-0.9533],"at":[4.7232,-1.1188,0.2623],"radius":0.4882,"length":1.0455,"colour":[227,176,137]},{"axis":[0.2927,-0.4388,0.8496],"at":[3.3499,0.5508,0.2655],"radius":0.4729,"length":1.4781,"colour":[227,176,137]},{"axis":[0.1508,-0.8521,-0.5012],"at":[3.6179,-0.179,0.5522],"radius":0.4729,"length":1.2328,"colour":[195,151,118]},{"axis":[-0.08,-0.2912,-0.9533],"at":[3.6694,-0.7265,-0.0424],"radius":0.4256,"length":0.8818,"colour":[227,176,137]},{"axis":[0.3218,0.446,0.8352],"at":[6.1072,-2.4077,-1.1085],"radius":0.6885,"length":2.1207,"colour":[227,176,137]},{"axis":[0.1516,0.6103,0.7775],"at":[6.536,-1.5029,0.3023],"radius":0.5944,"length":1.7363,"colour":[195,151,118]},{"axis":[-0.0239,0.6924,0.7211],"at":[6.6417,-0.6958,1.2529],"radius":0.5318,"length":1.1494,"colour":[227,176,137]},{"axis":[-0.6428,-0.6717,-0.3683],"at":[3.8265,-4.0922,-3.4696],"radius":1.1591,"length":1.6227,"colour":[227,176,137]},{"axis":[-0.6428,-0.6717,-0.3683],"at":[3.037,-4.9175,-3.922],"radius":1.53,"length":0.8345,"colour":[58,82,110]},{"axis":[-0.6428,-0.6717,-0.3683],"at":[-1.7014,-9.8693,-6.6367],"radius":1.4373,"length":13.9091,"colour":[77,106,140]}]},{"id":"axe","butt":[0.299066,-0.481313,-0.534672],"rotation":[-0.546237,-0.449027,0.567979,0.421189],"scale":0.0374227,"fist":[0.29,-0.3,-0.58],"tip":[0.263891,0.222183,-0.710546],"hexes":[77,-22,0,0.3,78,-22,0,0.3,79,-22,0,0.3,80,-22,0,0.3,81,-22,0,0.3,82,-22,0,0.3,83,-22,0,0.3,84,-22,0,0.3,85,-22,0,0.3,86,-22,0,0.3,73,-21,0,0.3,74,-21,0,0.3,75,-21,0,0.3,76,-21,0,0.3,77,-21,0,0.3,78,-21,0,0.3,79,-21,0,0.3,80,-21,0,0.3,81,-21,0,0.3,82,-21,0,0.3,83,-21,0,0.3,84,-21,0,0.3,85,-21,0,0.3,86,-21,0,0.3,87,-21,0,0.3,88,-21,0,0.3,89,-21,0,0.3,71,-20,0,0.3,72,-20,0,0.3,73,-20,0,0.3,74,-20,0,0.3,75,-20,2,0.39,76,-20,2,0.39,77,-20,2,0.39,78,-20,2,0.39,79,-20,2,0.39,80,-20,2,0.39,81,-20,2,0.39,82,-20,2,0.39,83,-20,2,0.39,84,-20,2,0.39,85,-20,2,0.39,86,-20,2,0.39,87,-20,0,0.3,88,-20,0,0.3,89,-20,0,0.3,90,-20,0,0.3,71,-19,1,0.42,72,-19,2,0.42,73,-19,2,0.42,74,-19,2,0.42,75,-19,2,0.42,76,-19,2,0.42,77,-19,2,0.42,78,-19,2,0.42,79,-19,2,0.42,80,-19,2,0.42,81,-19,2,0.42,82,-19,2,0.42,83,-19,2,0.42,84,-19,2,0.42,85,-19,2,0.42,86,-19,2,0.42,87,-19,2,0.42,88,-19,2,0.42,89,-19,0,0.3,71,-18,1,0.45,72,-18,2,0.45,73,-18,2,0.45,74,-18,2,0.45,75,-18,2,0.45,76,-18,2,0.45,77,-18,2,0.45,78,-18,2,0.45,79,-18,2,0.45,80,-18,2,0.45,81,-18,2,0.45,82,-18,2,0.45,83,-18,2,0.45,84,-18,2,0.45,85,-18,2,0.45,86,-18,2,0.45,87,-18,2,0.45,88,-18,1,0.45,71,-17,1,0.48,72,-17,2,0.48,73,-17,2,0.48,74,-17,2,0.48,75,-17,2,0.48,76,-17,2,0.48,77,-17,2,0.48,78,-17,2,0.48,79,-17,2,0.48,80,-17,2,0.48,81,-17,2,0.48,82,-17,2,0.48,83,-17,2,0.48,84,-17,2,0.48,85,-17,2,0.48,86,-17,2,0.48,87,-17,1,0.48,71,-16,1,0.51,72,-16,2,0.51,73,-16,2,0.51,74,-16,2,0.51,75,-16,2,0.51,76,-16,2,0.51,77,-16,2,0.51,78,-16,2,0.51,79,-16,2,0.51,80,-16,2,0.51,81,-16,2,0.51,82,-16,2,0.51,83,-16,2,0.51,84,-16,2,0.51,85,-16,2,0.51,86,-16,1,0.51,70,-15,1,0.54,71,-15,1,0.54,72,-15,2,0.54,73,-15,2,0.54,74,-15,2,0.54,75,-15,2,0.54,76,-15,2,0.54,77,-15,2,0.54,78,-15,2,0.54,79,-15,2,0.54,80,-15,2,0.54,81,-15,2,0.54,82,-15,2,0.54,83,-15,2,0.54,84,-15,2,0.54,85,-15,1,0.54,70,-14,1,0.57,71,-14,2,0.57,72,-14,2,0.57,73,-14,2,0.57,74,-14,2,0.57,75,-14,2,0.57,76,-14,2,0.57,77,-14,2,0.57,78,-14,2,0.57,79,-14,2,0.57,80,-14,2,0.57,81,-14,2,0.57,82,-14,2,0.57,83,-14,2,0.57,84,-14,2,0.57,85,-14,1,0.57,70,-13,1,0.6,71,-13,2,0.6,72,-13,2,0.6,73,-13,2,0.6,74,-13,2,0.6,75,-13,2,0.6,76,-13,2,0.6,77,-13,2,0.6,78,-13,2,0.6,79,-13,2,0.6,80,-13,2,0.6,81,-13,2,0.6,82,-13,2,0.6,83,-13,2,0.6,84,-13,1,0.6,70,-12,1,0.63,71,-12,2,0.63,72,-12,2,0.63,73,-12,2,0.63,74,-12,2,0.63,75,-12,2,0.63,76,-12,2,0.63,77,-12,2,0.63,78,-12,2,0.63,79,-12,2,0.63,80,-12,2,0.63,81,-12,2,0.63,82,-12,2,0.63,83,-12,1,0.63,70,-11,1,0.66,71,-11,2,0.66,72,-11,2,0.66,73,-11,2,0.66,74,-11,2,0.66,75,-11,2,0.66,76,-11,2,0.66,77,-11,2,0.66,78,-11,2,0.66,79,-11,2,0.66,80,-11,2,0.66,81,-11,2,0.66,82,-11,1,0.66,70,-10,1,0.69,71,-10,2,0.69,72,-10,2,0.69,73,-10,2,0.69,74,-10,2,0.69,75,-10,2,0.69,76,-10,2,0.69,77,-10,2,0.69,78,-10,2,0.69,79,-10,2,0.69,80,-10,2,0.69,81,-10,1,0.69,70,-9,1,0.72,71,-9,2,0.72,72,-9,2,0.72,73,-9,2,0.72,74,-9,2,0.72,75,-9,2,0.72,76,-9,2,0.72,77,-9,2,0.72,78,-9,2,0.72,79,-9,2,0.72,80,-9,1,0.72,70,-8,1,0.75,71,-8,2,0.75,72,-8,2,0.75,73,-8,2,0.75,74,-8,2,0.75,75,-8,2,0.75,76,-8,2,0.75,77,-8,2,0.75,78,-8,2,0.75,79,-8,1,0.75,70,-7,1,0.78,71,-7,2,0.78,72,-7,2,0.78,73,-7,2,0.78,74,-7,2,0.78,75,-7,2,0.78,76,-7,2,0.78,77,-7,2,0.78,78,-7,1,0.78,70,-6,1,0.81,71,-6,2,0.81,72,-6,2,0.81,73,-6,2,0.81,74,-6,2,0.81,75,-6,2,0.81,76,-6,2,0.81,77,-6,1,0.81,70,-5,1,0.84,71,-5,1,0.84,72,-5,1,0.84,73,-5,1,0.84,74,-5,1,0.84,75,-5,1,0.84,76,-5,1,0.84,68,-4,1,1.15,69,-4,1,1.15,70,-4,1,1.15,71,-4,1,1.15,72,-4,1,1.15,73,-4,1,1.15,74,-4,1,1.15,75,-4,1,1.15,76,-4,1,1.15,77,-4,1,1.15,68,-3,1,1.15,69,-3,1,1.15,70,-3,1,1.15,71,-3,1,1.15,72,-3,1,1.15,73,-3,1,1.15,74,-3,1,1.15,75,-3,1,1.15,76,-3,1,1.15,1,-2,4,0.67,2,-2,3,0.67,3,-2,3,0.67,4,-2,3,0.67,5,-2,4,0.67,6,-2,3,0.67,7,-2,3,0.67,8,-2,3,0.67,9,-2,4,0.67,10,-2,3,0.67,11,-2,3,0.67,12,-2,4,0.67,13,-2,5,0.59,14,-2,5,0.59,15,-2,5,0.59,16,-2,5,0.59,17,-2,5,0.59,18,-2,5,0.59,19,-2,5,0.59,20,-2,5,0.59,21,-2,5,0.59,22,-2,5,0.59,23,-2,5,0.59,24,-2,5,0.59,25,-2,5,0.59,26,-2,5,0.59,27,-2,5,0.59,28,-2,5,0.59,29,-2,5,0.59,30,-2,5,0.59,31,-2,5,0.59,32,-2,5,0.59,33,-2,5,0.59,34,-2,5,0.59,35,-2,5,0.59,36,-2,5,0.59,37,-2,5,0.59,38,-2,5,0.59,39,-2,5,0.59,40,-2,5,0.59,41,-2,5,0.59,42,-2,5,0.59,43,-2,5,0.59,44,-2,5,0.59,45,-2,5,0.59,46,-2,5,0.59,47,-2,5,0.59,48,-2,5,0.59,49,-2,5,0.59,50,-2,5,0.59,51,-2,5,0.59,52,-2,5,0.59,53,-2,5,0.59,54,-2,5,0.59,55,-2,5,0.59,56,-2,5,0.59,57,-2,5,0.59,58,-2,5,0.59,59,-2,5,0.59,60,-2,5,0.59,61,-2,5,0.59,62,-2,5,0.59,63,-2,5,0.59,64,-2,5,0.59,65,-2,5,0.59,66,-2,5,0.59,67,-2,1,1.15,68,-2,1,1.15,69,-2,1,1.15,70,-2,1,1.15,71,-2,1,1.15,72,-2,1,1.15,73,-2,1,1.15,74,-2,1,1.15,75,-2,1,1.15,76,-2,1,1.15,77,-2,5,0.59,78,-2,5,0.59,1,-1,4,0.97,2,-1,3,0.97,3,-1,3,0.97,4,-1,3,0.97,5,-1,3,0.97,6,-1,3,0.97,7,-1,3,0.97,8,-1,4,0.97,9,-1,3,0.97,10,-1,3,0.97,11,-1,3,0.97,12,-1,4,0.97,13,-1,6,0.89,14,-1,6,0.89,15,-1,5,0.89,16,-1,5,0.89,17,-1,6,0.89,18,-1,6,0.89,19,-1,6,0.89,20,-1,5,0.89,21,-1,5,0.89,22,-1,6,0.89,23,-1,6,0.89,24,-1,6,0.89,25,-1,6,0.89,26,-1,6,0.89,27,-1,5,0.89,28,-1,5,0.89,29,-1,6,0.89,30,-1,6,0.89,31,-1,6,0.89,32,-1,5,0.89,33,-1,5,0.89,34,-1,6,0.89,35,-1,6,0.89,36,-1,6,0.89,37,-1,6,0.89,38,-1,6,0.89,39,-1,5,0.89,40,-1,5,0.89,41,-1,6,0.89,42,-1,6,0.89,43,-1,5,0.89,44,-1,5,0.89,45,-1,5,0.89,46,-1,6,0.89,47,-1,6,0.89,48,-1,6,0.89,49,-1,6,0.89,50,-1,5,0.89,51,-1,5,0.89,52,-1,5,0.89,53,-1,6,0.89,54,-1,6,0.89,55,-1,5,0.89,56,-1,5,0.89,57,-1,6,0.89,58,-1,6,0.89,59,-1,6,0.89,60,-1,6,0.89,61,-1,6,0.89,62,-1,5,0.89,63,-1,5,0.89,64,-1,5,0.89,65,-1,6,0.89,66,-1,6,0.89,67,-1,1,1.15,68,-1,1,1.15,69,-1,1,1.15,70,-1,1,1.15,71,-1,1,1.15,72,-1,1,1.15,73,-1,1,1.15,74,-1,1,1.15,75,-1,1,1.15,76,-1,6,0.89,77,-1,6,0.89,78,-1,6,0.89,0,0,4,1.03,1,0,3,1.03,2,0,3,1.03,3,0,3,1.03,4,0,4,1.03,5,0,3,1.03,6,0,3,1.03,7,0,3,1.03,8,0,4,1.03,9,0,3,1.03,10,0,3,1.03,11,0,4,1.03,12,0,5,0.95,13,0,5,0.95,14,0,5,0.95,15,0,5,0.95,16,0,5,0.95,17,0,5,0.95,18,0,5,0.95,19,0,5,0.95,20,0,5,0.95,21,0,5,0.95,22,0,5,0.95,23,0,5,0.95,24,0,5,0.95,25,0,5,0.95,26,0,5,0.95,27,0,5,0.95,28,0,5,0.95,29,0,5,0.95,30,0,5,0.95,31,0,5,0.95,32,0,5,0.95,33,0,5,0.95,34,0,5,0.95,35,0,5,0.95,36,0,5,0.95,37,0,5,0.95,38,0,5,0.95,39,0,5,0.95,40,0,5,0.95,41,0,5,0.95,42,0,5,0.95,43,0,5,0.95,44,0,5,0.95,45,0,5,0.95,46,0,5,0.95,47,0,5,0.95,48,0,5,0.95,49,0,5,0.95,50,0,5,0.95,51,0,5,0.95,52,0,5,0.95,53,0,5,0.95,54,0,5,0.95,55,0,5,0.95,56,0,5,0.95,57,0,5,0.95,58,0,5,0.95,59,0,5,0.95,60,0,5,0.95,61,0,5,0.95,62,0,5,0.95,63,0,5,0.95,64,0,5,0.95,65,0,5,0.95,66,0,1,1.15,67,0,1,1.15,68,0,1,1.15,69,0,1,1.15,70,0,1,1.15,71,0,1,1.15,72,0,1,1.15,73,0,1,1.15,74,0,1,1.15,75,0,1,1.15,76,0,5,0.95,77,0,5,0.95,0,1,4,0.97,1,1,3,0.97,2,1,3,0.97,3,1,3,0.97,4,1,3,0.97,5,1,3,0.97,6,1,3,0.97,7,1,4,0.97,8,1,3,0.97,9,1,3,0.97,10,1,3,0.97,11,1,4,0.97,12,1,5,0.89,13,1,5,0.89,14,1,6,0.89,15,1,6,0.89,16,1,6,0.89,17,1,6,0.89,18,1,6,0.89,19,1,5,0.89,20,1,5,0.89,21,1,6,0.89,22,1,6,0.89,23,1,6,0.89,24,1,5,0.89,25,1,5,0.89,26,1,6,0.89,27,1,6,0.89,28,1,6,0.89,29,1,6,0.89,30,1,6,0.89,31,1,5,0.89,32,1,5,0.89,33,1,6,0.89,34,1,6,0.89,35,1,5,0.89,36,1,5,0.89,37,1,5,0.89,38,1,6,0.89,39,1,6,0.89,40,1,6,0.89,41,1,6,0.89,42,1,5,0.89,43,1,5,0.89,44,1,5,0.89,45,1,6,0.89,46,1,6,0.89,47,1,5,0.89,48,1,5,0.89,49,1,6,0.89,50,1,6,0.89,51,1,6,0.89,52,1,6,0.89,53,1,6,0.89,54,1,5,0.89,55,1,5,0.89,56,1,6,0.89,57,1,6,0.89,58,1,6,0.89,59,1,5,0.89,60,1,5,0.89,61,1,6,0.89,62,1,6,0.89,63,1,6,0.89,64,1,6,0.89,65,1,6,0.89,66,1,1,1.15,67,1,1,1.15,68,1,1,1.15,69,1,1,1.15,70,1,1,1.15,71,1,1,1.15,72,1,1,1.15,73,1,1,1.15,74,1,1,1.15,75,1,6,0.89,76,1,6,0.89,77,1,6,0.89,-1,2,4,0.67,0,2,3,0.67,1,2,3,0.67,2,2,3,0.67,3,2,4,0.67,4,2,3,0.67,5,2,3,0.67,6,2,3,0.67,7,2,4,0.67,8,2,3,0.67,9,2,3,0.67,10,2,4,0.67,11,2,5,0.59,12,2,5,0.59,13,2,5,0.59,14,2,5,0.59,15,2,5,0.59,16,2,5,0.59,17,2,5,0.59,18,2,5,0.59,19,2,5,0.59,20,2,5,0.59,21,2,5,0.59,22,2,5,0.59,23,2,5,0.59,24,2,5,0.59,25,2,5,0.59,26,2,5,0.59,27,2,5,0.59,28,2,5,0.59,29,2,5,0.59,30,2,5,0.59,31,2,5,0.59,32,2,5,0.59,33,2,5,0.59,34,2,5,0.59,35,2,5,0.59,36,2,5,0.59,37,2,5,0.59,38,2,5,0.59,39,2,5,0.59,40,2,5,0.59,41,2,5,0.59,42,2,5,0.59,43,2,5,0.59,44,2,5,0.59,45,2,5,0.59,46,2,5,0.59,47,2,5,0.59,48,2,5,0.59,49,2,5,0.59,50,2,5,0.59,51,2,5,0.59,52,2,5,0.59,53,2,5,0.59,54,2,5,0.59,55,2,5,0.59,56,2,5,0.59,57,2,5,0.59,58,2,5,0.59,59,2,5,0.59,60,2,5,0.59,61,2,5,0.59,62,2,5,0.59,63,2,5,0.59,64,2,5,0.59,65,2,1,1.15,66,2,1,1.15,67,2,1,1.15,68,2,1,1.15,69,2,1,1.15,70,2,1,1.15,71,2,1,1.15,72,2,1,1.15,73,2,1,1.15,74,2,1,1.15,75,2,5,0.59,76,2,5,0.59,65,3,1,1.15,66,3,1,1.15,67,3,1,1.15,68,3,1,1.15,69,3,1,1.15,70,3,1,1.15,71,3,1,1.15,72,3,1,1.15,73,3,1,1.15,64,4,1,1.15,65,4,1,1.15,66,4,1,1.15,67,4,1,1.15,68,4,1,1.15,69,4,1,1.15,70,4,1,1.15,71,4,1,1.15,72,4,1,1.15,73,4,1,1.15,65,5,1,0.9,66,5,1,0.9,67,5,1,0.9,68,5,1,0.9,69,5,1,0.9,70,5,1,0.9,71,5,1,0.9,64,6,1,0.9,65,6,1,0.9,66,6,1,0.9,67,6,1,0.9,68,6,1,0.9,69,6,1,0.9,70,6,1,0.9,71,6,1,0.9,64,7,1,0.9,65,7,1,0.9,66,7,1,0.9,67,7,1,0.9,68,7,1,0.9,69,7,1,0.9,70,7,1,0.9,63,8,1,0.9,64,8,1,0.9,65,8,1,0.9,66,8,1,0.9,67,8,1,0.9,68,8,1,0.9,69,8,1,0.9,70,8,1,0.9],"hand":[{"axis":[0.0853,0.8729,0.4804],"at":[4.6159,-1.1732,-1.7209],"radius":0.6955,"length":4.9745,"across":[0.9964,-0.0747,-0.0411],"width":1.9739,"colour":[227,176,137]},{"axis":[0.1287,-0.0922,0.9874],"at":[6.3541,0.6165,0.003],"radius":0.4827,"length":2.0066,"colour":[227,176,137]},{"axis":[-0.0904,-0.9832,-0.1584],"at":[6.4204,-0.036,0.8214],"radius":0.4827,"length":1.3181,"colour":[195,151,118]},{"axis":[-0.1786,-0.5352,-0.8257],"at":[6.285,-0.8532,0.3445],"radius":0.4345,"length":1.0972,"colour":[227,176,137]},{"axis":[0.1759,-0.1779,0.9682],"at":[5.4803,0.6639,0.1872],"radius":0.5073,"length":2.1907,"colour":[227,176,137]},{"axis":[-0.0192,-0.9431,-0.332],"at":[5.646,-0.1375,0.9496],"radius":0.5073,"length":1.4805,"colour":[195,151,118]},{"axis":[-0.1094,-0.4909,-0.8643],"at":[5.5825,-0.9865,0.3297],"radius":0.4565,"length":1.0923,"colour":[227,176,137]},{"axis":[0.2313,-0.2889,0.929],"at":[4.5263,0.588,0.2277],"radius":0.4786,"length":1.9972,"colour":[227,176,137]},{"axis":[0.0483,-0.9263,-0.3738],"at":[4.7697,-0.2794,0.8364],"radius":0.4786,"length":1.4645,"colour":[195,151,118]},{"axis":[-0.1192,-0.2775,-0.9533],"at":[4.7558,-0.9871,0.2314],"radius":0.4308,"length":0.9225,"colour":[227,176,137]},{"axis":[0.2927,-0.4388,0.8496],"at":[3.544,0.486,0.2342],"radius":0.4173,"length":1.3042,"colour":[227,176,137]},{"axis":[0.1508,-0.8521,-0.5012],"at":[3.7805,-0.1579,0.4872],"radius":0.4173,"length":1.0878,"colour":[195,151,118]},{"axis":[-0.08,-0.2912,-0.9533],"at":[3.8259,-0.641,-0.0374],"radius":0.3755,"length":0.7781,"colour":[227,176,137]},{"axis":[0.3218,0.446,0.8352],"at":[5.9769,-2.1244,-0.9781],"radius":0.6075,"length":1.8712,"colour":[227,176,137]},{"axis":[0.1516,0.6103,0.7775],"at":[6.3553,-1.3261,0.2667],"radius":0.5245,"length":1.532,"colour":[195,151,118]},{"axis":[-0.0239,0.6924,0.7211],"at":[6.4486,-0.614,1.1055],"radius":0.4692,"length":1.0141,"colour":[227,176,137]},{"axis":[-0.6428,-0.6717,-0.3683],"at":[3.9646,-3.6108,-3.0614],"radius":1.0227,"length":1.4318,"colour":[227,176,137]},{"axis":[-0.6428,-0.6717,-0.3683],"at":[3.2679,-4.339,-3.4606],"radius":1.35,"length":0.7364,"colour":[58,82,110]},{"axis":[-0.6428,-0.6717,-0.3683],"at":[-0.913,-8.7082,-5.8559],"radius":1.2682,"length":12.2727,"colour":[77,106,140]}]},{"id":"rod","butt":[0.301468,-0.445429,-0.557064],"rotation":[0.546788,0.651636,0.337933,0.402733],"scale":0.0615301,"fist":[0.29,-0.3,-0.58],"tip":[0.214025,0.663465,-0.73195],"hexes":[1,-1,8,0.46,2,-1,8,0.46,3,-1,9,0.46,4,-1,8,0.46,5,-1,8,0.46,6,-1,1,0.62,7,-1,1,0.62,8,-1,1,0.62,9,-1,1,0.62,10,-1,1,0.62,11,-1,8,0.46,12,-1,8,0.46,13,-1,8,0.46,14,-1,8,0.46,15,-1,9,0.46,16,-1,1,0.5,72,-1,10,0.4,73,-1,10,0.4,0,0,9,0.56,1,0,8,0.56,2,0,8,0.56,3,0,8,0.56,4,0,8,0.56,5,0,1,0.62,6,0,1,0.62,7,0,1,0.62,8,0,1,0.62,9,0,1,0.62,10,0,1,0.62,11,0,8,0.56,12,0,9,0.56,13,0,8,0.56,14,0,8,0.56,15,0,8,0.56,16,0,1,0.5,17,0,3,0.44,18,0,3,0.44,19,0,3,0.44,20,0,3,0.44,21,0,3,0.44,22,0,3,0.44,23,0,3,0.44,24,0,3,0.44,25,0,3,0.44,26,0,3,0.44,27,0,3,0.44,28,0,3,0.44,29,0,3,0.44,30,0,3,0.44,31,0,3,0.44,32,0,3,0.44,33,0,3,0.44,34,0,3,0.44,35,0,3,0.44,36,0,3,0.44,37,0,3,0.44,38,0,3,0.44,39,0,3,0.44,40,0,3,0.44,41,0,3,0.44,42,0,3,0.44,43,0,3,0.44,44,0,3,0.44,45,0,3,0.44,46,0,3,0.44,47,0,3,0.44,48,0,3,0.44,49,0,3,0.44,50,0,3,0.44,51,0,3,0.44,52,0,3,0.44,53,0,3,0.44,54,0,3,0.44,55,0,3,0.44,56,0,3,0.44,57,0,3,0.44,58,0,3,0.44,59,0,3,0.44,60,0,3,0.44,61,0,3,0.44,62,0,3,0.44,63,0,3,0.44,64,0,3,0.44,65,0,3,0.44,66,0,3,0.44,67,0,3,0.44,68,0,3,0.44,69,0,3,0.44,70,0,3,0.44,71,0,10,0.4,72,0,10,0.4,73,0,10,0.4,0,1,8,0.46,1,1,8,0.46,2,1,9,0.46,3,1,8,0.46,4,1,8,0.46,5,1,1,0.62,6,1,1,0.62,7,1,1,0.62,8,1,1,0.62,9,1,1,0.62,10,1,8,0.46,11,1,8,0.46,12,1,8,0.46,13,1,8,0.46,14,1,9,0.46,15,1,1,0.5,27,1,1,0.3,28,1,1,0.3,43,1,1,0.3,44,1,1,0.3,57,1,1,0.3,58,1,1,0.3,67,1,1,0.3,71,1,10,0.4,72,1,10,0.4,6,2,1,0.6,7,2,1,0.6,27,2,1,0.3,43,2,1,0.3,57,2,1,0.3,66,2,1,0.3,4,3,1,0.9,5,3,1,0.9,6,3,1,0.9,7,3,1,0.9,8,3,1,0.9,26,3,1,0.3,27,3,1,0.3,42,3,1,0.3,43,3,1,0.3,56,3,1,0.3,57,3,1,0.3,65,3,1,0.3,66,3,1,0.3,3,4,1,0.9,4,4,11,0.9,5,4,11,0.9,6,4,11,0.9,7,4,11,0.9,8,4,1,0.9,25,4,1,0.3,27,4,1,0.3,41,4,1,0.3,43,4,1,0.3,55,4,1,0.3,57,4,1,0.3,64,4,1,0.3,66,4,1,0.3,2,5,1,0.9,3,5,11,0.9,4,5,11,0.9,5,5,11,0.9,6,5,11,0.9,7,5,11,0.9,8,5,1,0.9,25,5,1,0.3,26,5,1,0.3,41,5,1,0.3,42,5,1,0.3,55,5,1,0.3,56,5,1,0.3,65,5,1,0.3,1,6,1,0.9,2,6,11,0.9,3,6,11,0.9,4,6,1,1.1,5,6,1,1.1,6,6,11,0.9,7,6,11,0.9,8,6,1,0.9,1,7,11,0.9,2,7,11,0.9,3,7,1,1.1,4,7,1,1.1,5,7,1,1.1,6,7,11,0.9,7,7,11,0.9,8,7,1,0.9,0,8,1,0.9,1,8,11,0.9,2,8,11,0.9,3,8,1,1.1,4,8,1,1.1,5,8,11,0.9,6,8,11,0.9,7,8,1,0.9,0,9,1,0.9,1,9,11,0.9,2,9,11,0.9,3,9,11,0.9,4,9,11,0.9,5,9,11,0.9,6,9,1,0.9,0,10,1,0.9,1,10,1,0.9,2,10,11,0.9,3,10,11,0.9,4,10,11,0.9,5,10,1,0.9,1,11,1,0.9,2,11,1,0.9,3,11,1,0.9],"hand":[{"axis":[0.0853,-0.9958,-0.0333],"at":[2.161,1.1356,0.6243],"radius":0.4327,"length":3.0953,"across":[0.9964,0.0852,0.0028],"width":1.2282,"colour":[227,176,137]},{"axis":[0.1287,-0.3647,-0.9222],"at":[3.2425,-0.3429,0.172],"radius":0.3004,"length":1.2485,"colour":[227,176,137]},{"axis":[-0.0904,0.9484,-0.3038],"at":[3.2838,-0.2114,-0.4659],"radius":0.3004,"length":0.8201,"colour":[195,151,118]},{"axis":[-0.1786,0.8509,0.494],"at":[3.1995,0.3763,-0.4314],"radius":0.2703,"length":0.6827,"colour":[227,176,137]},{"axis":[0.1759,-0.2797,-0.9438],"at":[2.6988,-0.4211,0.0832],"radius":0.3156,"length":1.3631,"colour":[227,176,137]},{"axis":[-0.0192,0.9912,-0.1309],"at":[2.8019,-0.1911,-0.5656],"radius":0.3156,"length":0.9212,"colour":[195,151,118]},{"axis":[-0.1094,0.829,0.5485],"at":[2.7625,0.4544,-0.4608],"radius":0.2841,"length":0.6796,"colour":[227,176,137]},{"axis":[0.2313,-0.1629,-0.9591],"at":[2.1052,-0.3904,0.0393],"radius":0.2978,"length":1.2427,"colour":[227,176,137]},{"axis":[0.0483,0.9951,-0.086],"at":[2.2567,-0.0806,-0.5427],"radius":0.2978,"length":0.9113,"colour":[195,151,118]},{"axis":[-0.1192,0.679,0.7244],"at":[2.248,0.4825,-0.4064],"radius":0.268,"length":0.574,"colour":[227,176,137]},{"axis":[0.2927,0.0067,-0.9562],"at":[1.4941,-0.3356,0.0069],"radius":0.2596,"length":0.8115,"colour":[227,176,137]},{"axis":[0.1508,0.9867,0.0612],"at":[1.6412,-0.0496,-0.3148],"radius":0.2596,"length":0.6768,"colour":[195,151,118]},{"axis":[-0.08,0.6912,0.7182],"at":[1.6695,0.3662,-0.1598],"radius":0.2337,"length":0.4841,"colour":[227,176,137]},{"axis":[0.3218,-0.7758,-0.5428],"at":[3.0079,1.4542,-0.0557],"radius":0.378,"length":1.1643,"colour":[227,176,137]},{"axis":[0.1516,-0.8962,-0.417],"at":[3.2433,0.6606,-0.5215],"radius":0.3263,"length":0.9533,"colour":[195,151,118]},{"axis":[-0.0239,-0.9438,-0.3295],"at":[3.3013,0.0293,-0.7863],"radius":0.292,"length":0.631,"colour":[227,176,137]},{"axis":[-0.6428,0.7657,0.0243],"at":[1.7557,2.8656,0.6815],"radius":0.6364,"length":0.8909,"colour":[227,176,137]},{"axis":[-0.6428,0.7657,0.0243],"at":[1.3223,3.3821,0.6979],"radius":0.84,"length":0.4582,"colour":[58,82,110]},{"axis":[-0.6428,0.7657,0.0243],"at":[-1.2792,6.4809,0.7962],"radius":0.7891,"length":7.6364,"colour":[77,106,140]}]}]};
+const TOOL = Object.fromEntries(HELD.tools.map(t => [t.id, t]));
+const S3 = Math.sqrt(3);
+const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+const lin8 = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+const clamp01 = u => Math.max(0, Math.min(1, u));
+const smooth = u => { u = clamp01(u); return u * u * (3 - 2 * u); };
+const easeOut = u => 1 - (1 - u) * (1 - u);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+// ---------------------------------------------------------------------------
+// hexel::mesh and hexel::prism, ported (crates/pbd-core/src/hexel.rs).
+const NEIGHBOURS = [[1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1], [1, 0]];
+function shade(n) { return n.z > 0.5 ? 1.0 : n.z < -0.5 ? 0.72 : 0.78 + 0.18 * n.y; }
+function Mesher() {
+  const P = [], C = [], a = new THREE.Vector3(), b = new THREE.Vector3();
+  const push = (tri, out, col, k) => {
+    a.subVectors(tri[1], tri[0]); b.subVectors(tri[2], tri[0]);
+    if (a.cross(b).dot(out) < 0) tri = [tri[0], tri[2], tri[1]];
+    for (const p of tri) { P.push(p.x, p.y, p.z); C.push(lin8(col[0]) * k, lin8(col[1]) * k, lin8(col[2]) * k); }
+  };
+  return {
+    push,
+    quad(q, out, col, k) { push([q[0], q[1], q[2]], out, col, k); push([q[0], q[2], q[3]], out, col, k); },
+    geometry() {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3));
+      g.setAttribute("color", new THREE.Float32BufferAttribute(C, 3));
+      return g;
+    },
+  };
+}
+function hexMesh(tool) {
+  const s = HELD.spacing, R = s / S3, m = Mesher(), H = tool.hexes, depth = new Map();
+  for (let i = 0; i < H.length; i += 4) depth.set(H[i] + "," + H[i + 1], H[i + 3]);
+  const Z = new THREE.Vector3(0, 0, 1), NZ = new THREE.Vector3(0, 0, -1);
+  for (let i = 0; i < H.length; i += 4) {
+    const q = H[i], r = H[i + 1], col = HELD.colours[H[i + 2]], half = H[i + 3] * 0.5;
+    const cx = s * (q + r / 2), cy = -s * r * S3 / 2;
+    const corner = (k, z) => { const an = (30 + 60 * k) * Math.PI / 180; return new THREE.Vector3(cx + Math.cos(an) * R, cy + Math.sin(an) * R, z); };
+    for (let k = 0; k < 6; k++) {
+      const k1 = (k + 1) % 6;
+      m.push([new THREE.Vector3(cx, cy, half), corner(k, half), corner(k1, half)], Z, col, shade(Z));
+      m.push([new THREE.Vector3(cx, cy, -half), corner(k, -half), corner(k1, -half)], NZ, col, shade(NZ));
+      const d = depth.get((q + NEIGHBOURS[k][0]) + "," + (r + NEIGHBOURS[k][1]));
+      const spans = d === undefined ? [[-half, half]] : d * 0.5 < half ? [[d * 0.5, half], [-half, -d * 0.5]] : [];
+      const f = (60 + 60 * k) * Math.PI / 180, out = new THREE.Vector3(Math.cos(f), Math.sin(f), 0);
+      for (const [z0, z1] of spans) m.quad([corner(k, z0), corner(k1, z0), corner(k1, z1), corner(k, z1)], out, col, shade(out));
+    }
+  }
+  return m.geometry();
+}
+// The hand: each face shaded by its own normal against the light in the
+// model's frame (the fixed hexel::prism, commit 8a769c43).
+function handMesh(tool) {
+  const restQ = new THREE.Quaternion(...tool.rotation).normalize();
+  const light = new THREE.Vector3(0.3, 0.8, 0.55).normalize().applyQuaternion(restQ.clone().invert());
+  const m = Mesher();
+  for (const part of tool.hand) {
+    const axis = v3(part.axis).normalize();
+    const first = part.across ? v3(part.across) : Math.abs(axis.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+    const u = first.clone().addScaledVector(axis, -first.dot(axis)).normalize();
+    const v = axis.clone().cross(u), at = v3(part.at), w = part.width || part.radius;
+    const ring = z => [...Array(6)].map((_, k) => { const an = k * Math.PI / 3; return at.clone().addScaledVector(u, Math.cos(an) * w).addScaledVector(v, Math.sin(an) * part.radius).addScaledVector(axis, z); });
+    const lo = ring(-part.length / 2), hi = ring(part.length / 2);
+    const lit = n => 0.62 + 0.38 * Math.max(0, n.dot(light));
+    const bottom = at.clone().addScaledVector(axis, -part.length / 2), top = at.clone().addScaledVector(axis, part.length / 2);
+    const na = axis.clone().negate();
+    for (let k = 0; k < 6; k++) {
+      const k1 = (k + 1) % 6;
+      m.push([bottom, lo[k], lo[k1]], na, part.colour, lit(na));
+      m.push([top, hi[k], hi[k1]], axis, part.colour, lit(axis));
+      const mid = lo[k].clone().add(lo[k1]).multiplyScalar(0.5).sub(bottom);
+      let edge = lo[k1].clone().sub(lo[k]).cross(axis);
+      edge = edge.lengthSq() > 1e-12 ? edge.normalize() : u.clone();
+      const side = edge.dot(mid) < 0 ? edge.negate() : edge;
+      m.quad([lo[k], lo[k1], hi[k1], hi[k]], side, part.colour, lit(side));
+    }
+  }
+  return m.geometry();
+}
+// One holder per tool: the tool's and the hand's meshes in tool units under a
+// transform in eye space (held::rest), sharing one unlit material whose
+// colour is the light at the eye (held::light_held).
+function makeHeld(id) {
+  const t = TOOL[id], mat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(hexMesh(t), mat), new THREE.Mesh(handMesh(t), mat));
+  g.traverse(o => { o.frustumCulled = false; });
+  return { group: g, mat, butt: v3(t.butt), q: new THREE.Quaternion(...t.rotation).normalize(), scale: t.scale, fist: v3(t.fist), tip: v3(t.tip) };
+}
+// Pose a holder: pitch (about eye x, tip up and back positive) and roll
+// (about eye z) about the fist, plus a shift (eye space, m).
+const QX = new THREE.Vector3(1, 0, 0), QZ = new THREE.Vector3(0, 0, 1);
+function posed(h, pitch, roll, shift) {
+  const r = new THREE.Quaternion().setFromAxisAngle(QX, pitch).multiply(new THREE.Quaternion().setFromAxisAngle(QZ, roll));
+  return { r, at: (p) => p.clone().sub(h.fist).applyQuaternion(r).add(h.fist).add(shift) };
+}
+function applyPose(h, pitch, roll, shift) {
+  const P = posed(h, pitch, roll, shift);
+  h.group.position.copy(P.at(h.butt));
+  h.group.quaternion.copy(P.r).multiply(h.q);
+  h.group.scale.setScalar(h.scale);
+  return P;
+}
+const swayAt = t => new THREE.Vector3(Math.sin(t * 1.3) * 0.006, Math.cos(t * 1.7) * 0.005, 0);
+
+// ---------------------------------------------------------------------------
+// Pixel textures in the ground's palette (nearest sampling, as the game's).
+function pixTex(w, h, draw) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d"); draw(x, w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+function noisy(base, tones, seed) {
+  return (x, w, h) => { const r = rng(seed); x.fillStyle = base; x.fillRect(0, 0, w, h); for (let i = 0; i < w * h * 0.45; i++) { x.fillStyle = tones[Math.floor(r() * tones.length)]; x.fillRect(Math.floor(r() * w), Math.floor(r() * h), 1, 1); } };
+}
+const PAL = {
+  grass: ["#5b8a3c", ["#4f7a33", "#679846", "#557f37"]],
+  dirt: ["#7a5636", ["#6a4a2d", "#86613e", "#5f4229"]],
+  stone: ["#83878a", ["#74787b", "#91959a", "#6b6f72"]],
+  sand: ["#c9b487", ["#bba77a", "#d4c194", "#b19d71"]],
+  bark: ["#6b4a2b", ["#5c3f24", "#77553a", "#634427"]],
+  rings: ["#b48d58", ["#a07a49", "#c39b66"]],
+  leaf: ["#456b2e", ["#3b5f27", "#507a37", "#3f6429"]],
+};
+const crackDraw = (base, tones, seed, stage, dark) => (x, w, h) => {
+  noisy(base, tones, seed)(x, w, h);
+  if (!stage) return;
+  const r = rng(99); x.fillStyle = dark;
+  // Cracks in a darker tone of the block's own palette, from the middle of
+  // the face, growing with progress.
+  const dirs = [[1, 0], [-1, 1], [0, -1], [1, 1], [-1, -1], [-1, 0]];
+  const len = Math.min(w, h) * 0.12 * stage;
+  for (let p = 0; p < Math.min(dirs.length, stage + 2); p++) {
+    let cx = w / 2, cy = h / 2; const [dx, dy] = dirs[p];
+    for (let i = 0; i < len; i++) { x.fillRect(Math.floor(cx), Math.floor(cy), 1, 1); cx += dx + (r() - 0.5) * 1.2; cy += dy + (r() - 0.5) * 1.2; }
+  }
+};
+const pm = (name, seed, rx, ry) => { const m = phong({ map: pixTex(16, 16, noisy(...PAL[name], seed)) }); m.map.repeat.set(rx, ry); return m; };
+const phong = (opts) => new THREE.MeshPhongMaterial(Object.assign({ flatShading: true, shininess: 0, specular: 0x000000 }, opts));
+
+// The hex cell: 2.833 m flat to flat, 1 m tall (the gold standard), a flat
+// face ahead.
+const CELL_W = 2.833, CELL_R = CELL_W / S3;
+function cellGeo(h) { const g = new THREE.CylinderGeometry(CELL_R, CELL_R, h, 6, 1); g.rotateY(Math.PI / 6); return g; }
+const cellAt = (q, r) => new THREE.Vector3(CELL_W * (q * 0 + r * Math.sin(Math.PI / 3)), 0, -CELL_W * (q + r * 0.5));
+
+// ---------------------------------------------------------------------------
+// The scene every tab shares in kind: sky, sun or moon, a lantern near the
+// work. At night every lamp lights what is near it (a point light with a
+// reach), the moon stays dim enough that the lantern reads.
+const NIGHT = { on: false };
+const LANTERN_COLOUR = new THREE.Color(1.0, 0.68, 0.36);
+const LANTERN_I = 1.25;
+function makeWorld(scene) {
+  const sky = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { top: { value: new THREE.Color() }, low: { value: new THREE.Color() } },
+    vertexShader: "varying vec3 p; void main(){ p = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }",
+    fragmentShader: "uniform vec3 top; uniform vec3 low; varying vec3 p; void main(){ float t = clamp(normalize(p).y*2.4, 0.0, 1.0); gl_FragColor = vec4(mix(low, top, t), 1.0); }",
+  });
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(300, 32, 16), sky));
+  const stars = new THREE.Points((() => { const g = new THREE.BufferGeometry(), r = rng(7), P = []; for (let i = 0; i < 500; i++) { const a = r() * Math.PI * 2, y = 0.08 + r() * 0.9, c = Math.sqrt(1 - y * y); P.push(Math.cos(a) * c * 280, y * 280, Math.sin(a) * c * 280); } g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); return g; })(), new THREE.PointsMaterial({ color: 0x9aa6bb, size: 1.3, sizeAttenuation: false, fog: false }));
+  scene.add(stars);
+  const moon = new THREE.Mesh(new THREE.CircleGeometry(7, 20), new THREE.MeshBasicMaterial({ color: 0xc9d2de, fog: false }));
+  moon.position.set(-90, 120, -220); moon.lookAt(0, 0, 0); scene.add(moon);
+  const hemi = new THREE.HemisphereLight(0xdfe9f2, 0x3a4a2a, 0.75); scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 0.7); sun.position.set(-3, 5, 2); scene.add(sun);
+  scene.fog = new THREE.Fog(0xc3d3dd, 40, 200);
+  const lamps = [];
+  function lantern(pos, height) {
+    const g = new THREE.Group(); g.position.copy(pos);
+    const wood = phong({ color: new THREE.Color("#4a3320").convertSRGBToLinear() });
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.07, height, 0.07), wood); post.position.y = height / 2; g.add(post);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.05), wood); arm.position.set(0.1, height - 0.03, 0); g.add(arm);
+    const frame = phong({ color: new THREE.Color("#2f2f30").convertSRGBToLinear() });
+    const cage = new THREE.Group(); cage.position.set(0.2, height - 0.2, 0); g.add(cage);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 0.06, 6), frame); cap.position.y = 0.12; cage.add(cap);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 6), frame); base.position.y = -0.1; cage.add(base);
+    const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.18, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    cage.add(glass);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffb35c, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    glow.scale.setScalar(0.9); cage.add(glow);
+    const light = new THREE.PointLight(LANTERN_COLOUR, 0, 9, 2); cage.add(light);
+    scene.add(g);
+    const lamp = { light, glass, glow, cage, base: LANTERN_I, reach: 9 };
+    lamps.push(lamp);
+    return lamp;
+  }
+  function setNight(n) {
+    sky.uniforms.top.value.set(n ? "#05080f" : "#5f86ad").convertSRGBToLinear();
+    sky.uniforms.low.value.set(n ? "#141b27" : "#c3d3dd").convertSRGBToLinear();
+    stars.visible = moon.visible = n;
+    hemi.color.set(n ? 0x34445e : 0xdfe9f2); hemi.groundColor.set(n ? 0x0c0f14 : 0x3a4a2a); hemi.intensity = n ? 0.32 : 0.75;
+    sun.color.set(n ? 0x9fb3d6 : 0xfff1dc); sun.intensity = n ? 0.1 : 0.7;
+    if (n) sun.position.set(-90, 120, -220).normalize(); else sun.position.set(-3, 5, 2);
+    scene.fog.color.set(n ? 0x0b1019 : 0xc3d3dd); scene.fog.near = n ? 25 : 40; scene.fog.far = n ? 110 : 200;
+    for (const l of lamps) { l.glow.visible = n; l.glass.material.color.set(n ? 0xffd27a : 0x8a7a5a); }
+  }
+  // The light on the tool in hand: the sky's (or the moon's) plus each lamp
+  // at the eye with the same reach the ground gets, standing in for the
+  // game's light field at the eye.
+  const lampAt = (lamp, p) => { const w = new THREE.Vector3(); lamp.light.getWorldPosition(w); const d = w.distanceTo(p); return Math.pow(clamp01(1 - d / lamp.reach), 2) * lamp.light.intensity; };
+  function heldLight(eyeWorld, out) {
+    if (!NIGHT.on) return out.setRGB(1, 1, 1);
+    out.setRGB(0.1, 0.12, 0.17);
+    for (const l of lamps) { const k = lampAt(l, eyeWorld) * 0.6; out.r += LANTERN_COLOUR.r * k; out.g += LANTERN_COLOUR.g * k; out.b += LANTERN_COLOUR.b * k; }
+    out.r = Math.min(1, out.r); out.g = Math.min(1, out.g); out.b = Math.min(1, out.b);
+    return out;
+  }
+  function tick(t) {
+    for (const l of lamps) {
+      const f = 1 + 0.05 * Math.sin(t * 11.3) + 0.04 * Math.sin(t * 7.1 + 1.3);
+      l.light.intensity = NIGHT.on ? l.base * f : 0;
+      l.glow.scale.setScalar(0.9 * f);
+    }
+  }
+  return { lantern, setNight, heldLight, tick, lamps };
+}
+let GLOW = null;
+function glowTex() {
+  if (GLOW) return GLOW;
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const x = c.getContext("2d"), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,0.9)"); g.addColorStop(0.25, "rgba(255,255,255,0.35)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  return (GLOW = new THREE.CanvasTexture(c));
+}
+
+// ---------------------------------------------------------------------------
+// Values. The stroke (held-swing decision 1) and the rod (rod-motion design 2).
+const STROKE_DEF = { windup_s: 0.08, windup_rad: 0.35, strike_s: 0.07, strike_rad: 1.15, impact_hold_s: 0.05, recoil_rad: 0.12, recover_s: 0.18, stroke_target_s: 0.4, drop_m: 0.09, camera_kick_rad: 0.0 };
+const STROKE_SL = [["windup_s", 0.02, 0.3, 0.01], ["windup_rad", 0, 1, 0.01], ["strike_s", 0.03, 0.25, 0.005], ["strike_rad", 0.3, 1.8, 0.01], ["impact_hold_s", 0, 0.2, 0.005], ["recoil_rad", 0, 0.4, 0.01], ["recover_s", 0.05, 0.5, 0.01], ["stroke_target_s", 0.2, 1.0, 0.01], ["drop_m", 0, 0.2, 0.005], ["camera_kick_rad", 0, 0.15, 0.005]];
+const ROD_DEF = { draw_rad: 0.9, draw_lift_m: 0.05, flick_rad: 0.35, flick_s: 0.14, settle_rad: 0.12, bob_rad: 0.015, nibble_rad: 0.05, nibble_s: 0.15, bite_rad: 0.22, bite_shake_rad: 0.04, bite_shake_hz: 14, fight_rad: 0.45, fight_shake_rad: 0.06, fight_shake_hz: 9, crank_m: 0.012, crank_hz: 3, roll_rad: 0.15, catch_rad: 0.6, catch_s: 0.6, ease_s: 0.3, spring_hz: 9, damping: 0.7 };
+const ROD_SL = [["draw_rad", 0, 1.6, 0.01], ["draw_lift_m", 0, 0.15, 0.005], ["flick_rad", 0, 1, 0.01], ["flick_s", 0.04, 0.4, 0.01], ["settle_rad", -0.3, 0.5, 0.01], ["bob_rad", 0, 0.08, 0.005], ["nibble_rad", 0, 0.2, 0.005], ["nibble_s", 0.05, 0.5, 0.01], ["bite_rad", 0, 0.6, 0.01], ["bite_shake_rad", 0, 0.15, 0.005], ["bite_shake_hz", 2, 24, 0.5], ["fight_rad", 0, 1, 0.01], ["fight_shake_rad", 0, 0.2, 0.005], ["fight_shake_hz", 2, 20, 0.5], ["crank_m", 0, 0.04, 0.001], ["crank_hz", 0.5, 6, 0.1], ["roll_rad", 0, 0.4, 0.01], ["catch_rad", 0, 1.2, 0.01], ["catch_s", 0.1, 1.5, 0.05], ["ease_s", 0.05, 1, 0.01], ["spring_hz", 1, 20, 0.5], ["damping", 0.1, 1.5, 0.01]];
+const ST = Object.assign({}, STROKE_DEF), ROD = Object.assign({}, ROD_DEF);
+const fmt = v => { const s = (+v.toFixed(4)).toString(); return s.includes(".") ? s : s + ".0"; };
+function ronText() {
+  const lines = ["// assets/config/held.ron, as set on this page", "(", "    sway_m: (0.006, 0.005),", "    sway_rate: (1.3, 1.7),", "    // The stroke (held-swing), replacing swing_rate, swing_drop_m and swing_pitch_rad."];
+  for (const [k] of STROKE_SL) lines.push(`    ${k}: ${fmt(ST[k])},`);
+  lines.push("    // The rod in hand (rod-motion design 2).", "    rod: (");
+  for (const [k] of ROD_SL) lines.push(`        ${k}: ${fmt(ROD[k])},`);
+  lines.push("    ),", ")");
+  return lines.join("\n");
+}
+const RONS = [];
+const refreshRon = () => { const t = ronText(); for (const el of RONS) el.value = t; };
+function sliders(el, list, vals, defs, onChange) {
+  const rows = [];
+  for (const [k, lo, hi, step] of list) {
+    const row = document.createElement("label"); row.className = "sl";
+    row.innerHTML = `<span>${k}</span><input type="range" min="${lo}" max="${hi}" step="${step}"><output></output>`;
+    const inp = row.querySelector("input"), out = row.querySelector("output");
+    const show = () => { out.textContent = (+vals[k]).toFixed(step < 0.01 ? 3 : 2); };
+    inp.value = vals[k];
+    inp.addEventListener("input", () => { vals[k] = +inp.value; show(); refreshRon(); onChange && onChange(k); });
+    show(); el.appendChild(row); rows.push([k, inp, show]);
+  }
+  const b = document.createElement("button"); b.textContent = "Defaults"; b.style.justifySelf = "start";
+  b.addEventListener("click", () => { Object.assign(vals, defs); for (const [k, inp, show] of rows) { inp.value = vals[k]; show(); } refreshRon(); onChange && onChange(); });
+  el.appendChild(b);
+  return () => { for (const [k, inp, show] of rows) { inp.value = vals[k]; show(); } };
+}
+const syncStroke = [];
+function seg(el, options, value, onPick) {
+  el.innerHTML = "";
+  const btns = options.map(([label, v]) => { const b = document.createElement("button"); b.textContent = label; b.setAttribute("aria-pressed", String(v === value)); b.addEventListener("click", () => { btns.forEach((x, i) => x.setAttribute("aria-pressed", String(options[i][1] === v))); onPick(v); }); el.appendChild(b); return b; });
+  return (v) => btns.forEach((x, i) => x.setAttribute("aria-pressed", String(options[i][1] === v)));
+}
+
+// ---------------------------------------------------------------------------
+// The STRIKE stroke (held-swing), the same curve as the Hex Tool Bench's.
+const strokeLen = () => ST.windup_s + ST.strike_s + ST.impact_hold_s + ST.recover_s;
+const toImpact = () => ST.windup_s + ST.strike_s;
+function strokeAngle(e, from) {   // forward positive
+  const wr = -ST.windup_rad, sr = ST.strike_rad;
+  if (e < 0) return from;
+  if (e < ST.windup_s) return from + (wr - from) * easeOut(e / ST.windup_s);
+  e -= ST.windup_s;
+  if (e < ST.strike_s) { const u = e / ST.strike_s; return wr + (sr - wr) * u * u * u; }
+  e -= ST.strike_s;
+  if (e < ST.impact_hold_s) return sr;
+  e -= ST.impact_hold_s;
+  if (e >= ST.recover_s) return 0;
+  const u = e / ST.recover_s, KICK = 0.15, low = sr - ST.recoil_rad;
+  if (u < KICK) return sr - ST.recoil_rad * easeOut(u / KICK);
+  return low * (1 - smooth((u - KICK) / (1 - KICK)));
+}
+const BETWEEN_S = 0.15;   // dig.ron between_s
+function Schedule(breakS) {
+  const n = () => Math.max(1, Math.round(breakS() / ST.stroke_target_s + 1e-9));   // + 1e-9: 0.6 / 0.4 is 1.4999… in floats
+  const L = () => breakS() + BETWEEN_S;
+  function starts(c) { const out = []; for (let cc = Math.max(0, c - 1); cc <= c; cc++) for (let k = 1; k <= n(); k++) out.push(cc * L() + k * breakS() / n() - toImpact()); return out; }
+  return {
+    n, L,
+    angle(tc) {
+      const s = starts(Math.floor(tc / L())).filter(x => x <= tc);
+      if (!s.length) return { a: 0, e: -1 };
+      let from = 0;
+      for (let i = Math.max(0, s.length - 4); i < s.length - 1; i++) from = strokeAngle(s[i + 1] - s[i], from);
+      return { a: strokeAngle(tc - s[s.length - 1], from), e: tc - s[s.length - 1] };
+    },
+    impacts(t0, t1) { const out = []; for (let c = Math.max(0, Math.floor(t0 / L())); c <= Math.floor(t1 / L()); c++) for (let k = 1; k <= n(); k++) { const at = c * L() + k * breakS() / n(); if (at > t0 && at <= t1) out.push([at, k === n()]); } return out; },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// A view: one canvas, made when its tab first opens, drawing only while open.
+const FOV = 60;   // the walking camera's vertical field of view
+function View(id, build) {
+  const box = document.querySelector(`[data-view="${id}"]`), canvas = box.querySelector("canvas");
+  const v = { id, box, canvas, renderer: null, running: false, raf: 0, then: 0, time: 0, frozen: false };
+  v.scene = new THREE.Scene();
+  v.cam = new THREE.PerspectiveCamera(FOV, 16 / 9, 0.05, 600);
+  v.cam.position.set(0, 1.62, 0);
+  v.cam.rotation.order = "YXZ";
+  v.scene.add(v.cam);
+  v.world = makeWorld(v.scene);
+  v.panel = document.getElementById("tab-" + id);
+  v.q = sel => v.panel.querySelector(sel);
+  const logic = build(v);
+  v.world.setNight(NIGHT.on);
+  function fit() {
+    const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { v.renderer.setPixelRatio(dpr); v.renderer.setSize(w, h, false); v.cam.aspect = w / h; v.cam.updateProjectionMatrix(); }
+  }
+  const lightCol = new THREE.Color(), eye = new THREE.Vector3();
+  function frame(now) {
+    if (!v.running) return;
+    const dt = v.frozen ? 0 : Math.min(0.05, (now - v.then) / 1000 || 0); v.then = now;
+    fit();
+    v.time += dt;
+    const t = v.time;
+    v.world.tick(t);
+    logic.update(dt, t);
+    v.cam.updateMatrixWorld(true);
+    v.cam.getWorldPosition(eye);
+    v.world.heldLight(eye.add(new THREE.Vector3(0.25, -0.35, -0.5)), lightCol);
+    for (const h of logic.helds()) h.mat.color.copy(lightCol);
+    v.renderer.render(v.scene, v.cam);
+    v.raf = requestAnimationFrame(frame);
+  }
+  v.show = () => {
+    if (!v.renderer) { v.renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); v.renderer.outputEncoding = THREE.sRGBEncoding; }
+    if (v.running) return;
+    v.running = true; v.then = performance.now(); v.raf = requestAnimationFrame(frame);
+  };
+  v.hide = () => { v.running = false; cancelAnimationFrame(v.raf); logic.hide && logic.hide(); };
+  v.setNight = n => v.world.setNight(n);
+  // For the screenshot script: stop the clock, or step it by a set time.
+  v.advance = secs => { const n = Math.round(secs * 240); for (let i = 0; i < n; i++) { v.time += 1 / 240; v.world.tick(v.time); logic.update(1 / 240, v.time); } };
+  v.logic = logic;
+  return v;
+}
+
+// Shared bits of the Dig and Chop tabs: Today / Proposed, hold to work, the
+// strokes, the block's cracks, its break and return.
+function WorkTab(v, opts) {
+  const state = { mode: "proposed", holding: false, button: false, tc: 0, phase: 0, rel: null, hitAt: -9, kickAt: -9, brokeAt: -9, lastA: 0, lastDrop: 0, back: 1 };
+  const modeTag = v.q(".mode"), hitmark = v.q(".hitmark"), stat = v.q('[data-ctl="stat"]'), slow = v.q('[data-ctl="slow"]');
+  seg(v.q('[data-ctl="mode"]'), [["Today", "today"], ["Proposed", "proposed"]], state.mode, m => { state.mode = m; reset(); });
+  const holdBtn = v.q('[data-ctl="hold"]');
+  holdBtn.addEventListener("click", () => { state.button = !state.button; holdBtn.setAttribute("aria-pressed", String(state.button)); });
+  v.box.addEventListener("pointerdown", e => { if (e.button !== 0) return; state.holding = true; try { v.box.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault(); });
+  const up = () => { state.holding = false; };
+  v.box.addEventListener("pointerup", up); v.box.addEventListener("pointercancel", up);
+  const sched = Schedule(opts.breakS);
+  function reset() { state.tc = 0; state.phase = 0; state.hitAt = state.kickAt = state.brokeAt = -9; opts.block.restore(); }
+  RONS.push(v.q('[data-ctl="ron"]'));
+  syncStroke.push(sliders(v.q('[data-ctl="sliders"]'), STROKE_SL, ST, STROKE_DEF, () => { syncStroke.forEach(f => f()); reset(); }));
+  const chips = [...Array(14)].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), opts.chipMat()); m.visible = false; v.scene.add(m); return { m, vel: new THREE.Vector3(), life: 0 }; });
+  function burst(at, count, speed) {
+    let n = 0;
+    for (const c of chips) {
+      if (c.m.visible || n >= count) continue;
+      n++; c.m.material = opts.chipMat(); c.m.visible = true; c.m.position.copy(at); c.life = 0.9;
+      c.vel.set((Math.random() - 0.5) * 2.4 * speed, (1 + Math.random() * 1.6) * speed, (0.4 + Math.random()) * speed);
+    }
+  }
+  return {
+    state, reset,
+    update(dt, t) {
+      const working = state.holding || state.button;
+      const cdt = dt * (slow.checked ? 0.25 : 1);
+      modeTag.textContent = state.mode === "today" ? "TODAY" : "PROPOSED";
+      let a = 0, drop = 0;
+      if (working) {
+        state.rel = null;
+        const t0 = state.tc; state.tc += cdt;
+        const L = sched.L(), B = opts.breakS();
+        for (const [at, last] of sched.impacts(t0, state.tc)) {
+          if (state.mode === "proposed") { state.hitAt = at; state.kickAt = at; burst(opts.block.hitPoint(), last ? 0 : 3, 1); opts.block.shake(); }
+          if (last) { state.brokeAt = at; opts.block.breakNow(); burst(opts.block.hitPoint(), 12, 1.4); }
+        }
+        const local = state.tc % L;
+        if (state.brokeAt > 0 && state.tc - state.brokeAt >= BETWEEN_S) { state.brokeAt = -9; opts.block.restore(); }
+        if (local < B) opts.block.progress(local / B);
+        if (state.mode === "proposed") {
+          a = sched.angle(state.tc).a;
+          drop = ST.drop_m * Math.max(0, a) / Math.max(1e-3, ST.strike_rad);
+          const n = sched.n(), hits = Math.min(n, Math.floor(local / (B / n) + 1e-9));
+          stat.textContent = local >= B ? `broken · ${n} stroke${n > 1 ? "s" : ""}` : `hit ${hits}/${n} · ${B.toFixed(2)} s`;
+        } else {
+          // held::hold today: the phase runs at swing_rate while swinging.
+          state.phase += cdt * 9.0;
+          const chop = state.phase > 0 ? Math.max(Math.sin(state.phase), -0.2) : 0;
+          a = chop * 0.85; drop = chop * 0.06;
+          stat.textContent = local >= B ? "broken" : `dig ${(local / B * 100).toFixed(0)}% · ${B.toFixed(2)} s`;
+        }
+        state.lastA = a; state.lastDrop = drop;
+      } else {
+        // Letting go: today snaps to rest; proposed eases back over recover_s.
+        if (state.tc > 0) { if (state.mode === "proposed") state.rel = { a: state.lastA, d: state.lastDrop, t: 0 }; state.tc = 0; state.phase = 0; opts.block.restore(); }
+        if (state.rel) { state.rel.t += cdt; const k = 1 - smooth(state.rel.t / ST.recover_s); a = state.rel.a * k; drop = state.rel.d * k; if (k <= 0) state.rel = null; }
+        stat.textContent = "";
+      }
+      const since = state.tc - state.hitAt;
+      hitmark.style.opacity = working && since >= 0 && since < 0.09 ? String(1 - since / 0.09 * 0.6) : "0";
+      for (const c of chips) if (c.m.visible) {
+        c.vel.y -= 9.8 * cdt; c.m.position.addScaledVector(c.vel, cdt); c.m.rotation.x += cdt * 9; c.m.rotation.z += cdt * 7; c.life -= cdt;
+        if (c.life <= 0) c.m.visible = false;
+      }
+      let kick = 0; const sk = state.tc - state.kickAt;
+      if (working && state.mode === "proposed" && sk >= 0 && sk < 0.14) { const u = sk / 0.14; kick = ST.camera_kick_rad * (u < 0.15 ? u / 0.15 : (1 - (u - 0.15) / 0.85) ** 2); }
+      v.cam.rotation.x = opts.pitch - kick;
+      opts.block.tick(cdt);
+      const h = opts.held();
+      applyPose(h, -a, 0, swayAt(t).add(new THREE.Vector3(0, -drop, 0)));
+    },
+  };
+}
+
+// A hex-celled block that cracks, breaks and comes back.
+function Breakable(scene, mats, geo, pos, hit) {
+  const mesh = new THREE.Mesh(geo, mats.stages[0]); mesh.position.copy(pos); scene.add(mesh);
+  let shakeT = 0, popT = 1, stage = -1;
+  return {
+    mesh,
+    setMats(m) { mats = m; stage = -1; this.progress(0); },
+    progress(p) { const s = Math.min(mats.stages.length - 1, Math.floor(p * mats.stages.length)); if (s !== stage) { stage = s; mesh.material = mats.stages[s]; } },
+    shake() { shakeT = 0.08; },
+    breakNow() { mesh.visible = false; },
+    restore() { if (!mesh.visible) { mesh.visible = true; popT = 0; } this.progress(0); },
+    hitPoint: () => hit.clone(),
+    tick(dt) {
+      shakeT = Math.max(0, shakeT - dt); popT = Math.min(1, popT + dt / 0.1);
+      const sh = shakeT / 0.08;
+      mesh.position.set(pos.x + Math.sin(performance.now() * 0.173) * 0.03 * sh, pos.y + Math.cos(performance.now() * 0.211) * 0.015 * sh, pos.z);
+      mesh.scale.setScalar(0.85 + 0.15 * easeOut(popT));
+    },
+  };
+}
+function stageMats(name, sideName, seed) {
+  const [base, tones] = PAL[name], dark = new THREE.Color(base).multiplyScalar(0.55).getStyle();
+  const stages = [];
+  for (let s = 0; s < 5; s++) {
+    const n = name === "rings" ? 16 : 48;
+    const top = phong({ map: pixTex(n, n, crackDraw(base, tones, seed, s, dark)) });
+    const [b2, t2] = sideName ? PAL[sideName] : [base, tones], d2 = new THREE.Color(b2).multiplyScalar(0.55).getStyle();
+    const side = phong({ map: pixTex(sideName === "bark" ? 48 : 96, 16, crackDraw(b2, t2, seed + 1, s, d2)) });
+    stages.push([side, top, side]);
+  }
+  return { stages };
+}
+
+// ---------------------------------------------------------------------------
+// Dig: the pickaxe on stone, the shovel on grass.
+const TIERS = [["Stone", 1.0], ["Bronze", 1.6], ["Iron", 2.4], ["Steel", 3.6]];
+const DIG = { pickaxe: [["Stone", 1.2, "stone"], ["Rock", 1.6, "stone"], ["Ore", 2.0, "stone"]], shovel: [["Grass", 0.5, "grass"], ["Sand", 0.5, "sand"]] };
+function groundCells(scene, skip, mat) {
+  const g = cellGeo(1);
+  const far = new THREE.Mesh(new THREE.RingGeometry(7, 160, 6, 1), pm("grass", 40, 300, 300)); far.rotation.x = -Math.PI / 2; far.position.y = -0.02; scene.add(far);
+  for (let q = -3; q <= 3; q++) for (let r = -3; r <= 3; r++) {
+    if (Math.abs(q + r) > 3) continue;
+    const p = cellAt(q, r);
+    if (skip && skip(q, r, p)) continue;
+    const m = new THREE.Mesh(g, mat(q, r)); m.position.set(p.x, -0.5, p.z); scene.add(m);
+  }
+}
+function scenery(scene, seed, ringR) {
+  // Far hills and blocky trees round the clearing, no outlines.
+  const r = rng(seed), hill = phong({ color: new THREE.Color("#3d5d29").convertSRGBToLinear() });
+  const trunkM = phong({ color: new THREE.Color(PAL.bark[0]).convertSRGBToLinear() }), leafM = phong({ color: new THREE.Color(PAL.leaf[0]).convertSRGBToLinear() });
+  for (let i = 0; i < 12; i++) {
+    const a = -1.3 + i * 0.24, d = 70 + r() * 40;
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(8 + r() * 6, 12 + r() * 6, 6 + r() * 6, 6), hill);
+    h.position.set(Math.sin(a) * d, -1, -Math.cos(a) * d); scene.add(h);
+  }
+  for (let i = 0; i < 14; i++) {
+    const a = (r() - 0.5) * 2.6, d = ringR + r() * 14;
+    const tr = new THREE.Group(); tr.position.set(Math.sin(a) * d, 0, -Math.cos(a) * d);
+    const ht = 2 + Math.floor(r() * 3);
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, ht, 6), trunkM); t.position.y = ht / 2; tr.add(t);
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 1.6, 6), leafM); c.position.y = ht + 0.6; tr.add(c);
+    const c2 = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.8, 6), leafM); c2.position.y = ht + 1.7; tr.add(c2);
+    scene.add(tr);
+  }
+}
+const views = {};
+views.dig = View("dig", v => {
+  const S = { tool: "pickaxe", mat: 0, tier: 0 };
+  const helds = { pickaxe: makeHeld("pickaxe"), shovel: makeHeld("shovel") };
+  for (const h of Object.values(helds)) v.cam.add(h.group);
+  const grassTop = pm("grass", 3, 3, 3), dirtSide = pm("dirt", 4, 6, 1);
+  const stoneTop = pm("stone", 5, 3, 3), stoneSide = pm("stone", 5, 6, 1), stoneAll = [stoneSide, stoneTop, stoneTop];
+  const stoneish = new Set(["-1,1", "2,-1", "3,-2"]);
+  groundCells(v.scene, (q, r) => q === 1 && r === 0, (q, r) => stoneish.has(q + "," + r) ? stoneAll : [dirtSide, grassTop, dirtSide]);
+  // Under the cell being dug: the next layer down, the same material.
+  const tgt = cellAt(1, 0);
+  const under = new THREE.Mesh(cellGeo(1), stoneAll); under.position.set(tgt.x, -1.5, tgt.z); v.scene.add(under);
+  const MATS = { stone: stageMats("stone", null, 11), grass: stageMats("grass", "dirt", 12), sand: stageMats("sand", null, 13) };
+  const block = Breakable(v.scene, MATS.stone, cellGeo(1), new THREE.Vector3(tgt.x, -0.5, tgt.z), new THREE.Vector3(0.05, 0.02, -1.75));
+  scenery(v.scene, 21, 14);
+  v.world.lantern(new THREE.Vector3(-1.55, 0, -2.3), 1.1);
+  const cur = () => DIG[S.tool][S.mat];
+  const breakS = () => cur()[1] / TIERS[S.tier][1];
+  const chipMat = () => block.mesh.material[1];
+  const work = WorkTab(v, { breakS, held: () => helds[S.tool], block, pitch: -0.56, chipMat });
+  const matSeg = v.q('[data-ctl="material"]');
+  function pickMat() {
+    seg(matSeg, DIG[S.tool].map(([n, s], i) => [`${n} ${s}s`, i]), S.mat, i => { S.mat = i; apply(); });
+  }
+  function apply() {
+    for (const [k, h] of Object.entries(helds)) h.group.visible = k === S.tool;
+    under.material = cur()[2] === "stone" ? stoneAll : [dirtSide, dirtSide, dirtSide];
+    block.setMats(MATS[cur()[2]]); work.reset();
+  }
+  seg(v.q('[data-ctl="tool"]'), [["Pickaxe", "pickaxe"], ["Shovel", "shovel"]], S.tool, tl => { S.tool = tl; S.mat = 0; pickMat(); apply(); });
+  seg(v.q('[data-ctl="tier"]'), TIERS.map(([n], i) => [n, i]), S.tier, i => { S.tier = i; work.reset(); });
+  pickMat(); apply();
+  return { update: work.update, helds: () => [helds[S.tool]], work };
+});
+
+// Chop: the axe on a trunk.
+views.chop = View("chop", v => {
+  const S = { tier: 0 };
+  const axe = makeHeld("axe"); v.cam.add(axe.group);
+  const grassTop = pm("grass", 6, 3, 3), dirtSide = pm("dirt", 7, 6, 1);
+  groundCells(v.scene, null, () => [dirtSide, grassTop, dirtSide]);
+  const barkM = pm("bark", 8, 3, 1), ringM = pm("rings", 9, 1, 1);
+  const leafM = pm("leaf", 10, 6, 1);
+  const TZ = -2.3, TR = 0.45, segGeo = new THREE.CylinderGeometry(TR, TR, 1, 6);
+  const lowGeo = new THREE.CylinderGeometry(TR, TR, 0.99, 6);
+  for (const y of [0.495, 2.505, 3.5]) { const m = new THREE.Mesh(y < 1 ? lowGeo : segGeo, [barkM, barkM, barkM]); m.position.set(0, y, TZ); v.scene.add(m); }
+  for (const [y, r] of [[4.6, 1.9], [5.6, 1.3]]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1.2, 6), leafM); c.position.set(0, y, TZ); v.scene.add(c); }
+  const woodStages = (() => { const s = stageMats("bark", "bark", 14); const r = stageMats("rings", null, 15); return { stages: s.stages.map((m, i) => [m[0], r.stages[i][1], r.stages[i][1]]) }; })();
+  const block = Breakable(v.scene, woodStages, segGeo, new THREE.Vector3(0, 1.5, TZ), new THREE.Vector3(0.1, 1.35, TZ + TR));
+  scenery(v.scene, 33, 10);
+  v.world.lantern(new THREE.Vector3(-1.3, 0, -2.2), 1.5);
+  const work = WorkTab(v, { breakS: () => 0.6 / TIERS[S.tier][1], held: () => axe, block, pitch: -0.1, chipMat: () => ringM });
+  seg(v.q('[data-ctl="tier"]'), TIERS.map(([n], i) => [n, i]), S.tier, i => { S.tier = i; work.reset(); });
+  return { update: work.update, helds: () => [axe], work };
+});
+
+// ---------------------------------------------------------------------------
+// Fish: the bank, the water, the float and the line, and the rod in hand.
+const FISH = { charge_s: 1.2, speed: [5, 18], lift: [3, 6], gravity: 9.81, hook_window_s: 0.9, bite_dip_m: 0.14, nibble_dip_m: 0.035, reel_mps: 1.8, land_line_m: 1.3 };
+const WATER_Y = -0.42, BANK_Z = -1.416, FLOAT_TOP_M = 0.09, LINE_CLEARANCE_M = 0.05, LINE_POINTS = 24;
+const waveAt = (x, z, t) => 0.025 * Math.sin(x * 0.9 + t * 1.3) + 0.018 * Math.sin(z * 1.3 - t * 1.7 + x * 0.4) + 0.01 * Math.sin((x + z) * 2.1 + t * 2.3);
+views.fish = View("fish", v => {
+  const rod = makeHeld("rod"); v.cam.add(rod.group);
+  const PITCH = -0.13;
+  v.cam.rotation.x = PITCH;
+  v.cam.position.z = 1.1;   // a step back from the bank's edge
+  // The bank: the player's row of cells, dropping to sand under the water.
+  const grassTop = pm("grass", 16, 3, 3), dirtSide = pm("dirt", 17, 6, 1.6);
+  const sandM = pm("sand", 18, 3, 3);
+  const tall = cellGeo(1.6);
+  for (let q = -3; q <= 0; q++) for (let r = -4; r <= 4; r++) {
+    const p = cellAt(q, r); if (p.z < -1.5 || Math.abs(p.x) > 14) continue;
+    const m = new THREE.Mesh(tall, [dirtSide, grassTop, dirtSide]); m.position.set(p.x, -0.8, p.z); v.scene.add(m);
+  }
+  for (let q = 0; q <= 3; q++) for (let r = -5; r <= 4; r++) {
+    const p = cellAt(q, r); if (p.z >= -1.5 || Math.abs(p.x) > 16) continue;
+    const m = new THREE.Mesh(cellGeo(1), [sandM, sandM, sandM]); m.position.set(p.x, -1.4 - Math.max(0, q - 1) * 0.6, p.z); v.scene.add(m);
+  }
+  // The far shore.
+  for (let i = -8; i <= 8; i++) {
+    const m = new THREE.Mesh(cellGeo(1.6), [dirtSide, grassTop, dirtSide]); m.position.set(i * CELL_W * 0.87, -0.5 + (i % 3 === 0 ? 0.6 : 0), -46 - (i & 1) * 1.4); v.scene.add(m);
+  }
+  scenery(v.scene, 45, 50);
+  // The water: a faceted sheet that moves with the waves (world motion).
+  const wg = new THREE.PlaneGeometry(120, 90, 90, 60); wg.rotateX(-Math.PI / 2); wg.translate(0, WATER_Y, -44);
+  const water = new THREE.Mesh(wg, phong({ color: new THREE.Color("#2b5d74").convertSRGBToLinear(), shininess: 40, specular: 0x2a3a40, transparent: true, opacity: 0.92 }));
+  v.scene.add(water);
+  const wpos = wg.getAttribute("position"), wx = Float32Array.from({ length: wpos.count }, (_, i) => wpos.getX(i)), wz = Float32Array.from({ length: wpos.count }, (_, i) => wpos.getZ(i));
+  v.world.lantern(new THREE.Vector3(-1.15, 0, -1.0), 1.05);
+  // The float: a red half over a white half (fish.rs), lit; at night a small glow.
+  const fl = new THREE.Group();
+  const red = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), new THREE.MeshPhongMaterial({ color: new THREE.Color(0.85, 0.2, 0.15).convertSRGBToLinear(), shininess: 10, specular: 0x111111 })); red.position.y = 0.03;
+  const white = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 8), new THREE.MeshPhongMaterial({ color: new THREE.Color(0.93, 0.93, 0.9).convertSRGBToLinear(), shininess: 10, specular: 0x111111 })); white.position.y = -0.02;
+  const fglow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xff8a5c, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.9, fog: false, depthTest: false })); fglow.scale.setScalar(0.7); fglow.renderOrder = 5;
+  const flight = new THREE.PointLight(0xff9a6a, 0, 1.6, 2);
+  fl.add(red, white, fglow, flight); fl.visible = false; v.scene.add(fl);
+  const lineGeo = new THREE.BufferGeometry(); lineGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(LINE_POINTS * 3), 3));
+  const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: new THREE.Color(0.92, 0.95, 0.95).convertSRGBToLinear() })); line.frustumCulled = false; line.visible = false; v.scene.add(line);
+  const rings = [...Array(5)].map(() => { const m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 24), new THREE.MeshLambertMaterial({ color: 0xd8e6ea, transparent: true, opacity: 0, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.visible = false; v.scene.add(m); return { m, t: 9 }; });
+  let ringNext = 0;
+  const ripple = (p, big) => { const r = rings[ringNext++ % rings.length]; r.t = 0; r.big = big; r.m.position.set(p.x, WATER_Y + 0.02, p.z); r.m.visible = true; };
+
+  // The line's phases (pbd_core::fishing), scripted fish.
+  const F = { phase: "ready", te: 0, power: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), dip: 0, lineM: 10, heading: new THREE.Vector3(0, 0, -1), clock: 0, timer: 0, nibbles: 0, twitchAt: -9, ease: null, catchAt: -9, say: "", sayT: 0, script: null, auto: null };
+  const UI = { mode: "proposed", reel: false, tension: 0.5, holding: false };
+  const modeTag = v.q(".mode"), sayEl = v.q(".say"), meter = v.q(".meter"), meterFill = meter.firstElementChild, stat = v.q('[data-ctl="stat"]'), slow = v.q('[data-ctl="slow"]');
+  seg(v.q('[data-ctl="mode"]'), [["Today", "today"], ["Proposed", "proposed"]], UI.mode, m => { UI.mode = m; });
+  const reelBtn = v.q('[data-ctl="reel"]');
+  const setReel = on => { UI.reel = on; reelBtn.setAttribute("aria-pressed", String(on)); };
+  reelBtn.addEventListener("click", () => setReel(!UI.reel));
+  const tens = v.q('[data-ctl="tension"]'), tensOut = v.q('[data-ctl="tension-out"]');
+  const setTension = x => { UI.tension = x; tens.value = x; tensOut.textContent = (+x).toFixed(2); };
+  tens.addEventListener("input", () => setTension(+tens.value));
+  RONS.push(v.q('[data-ctl="ron"]'));
+  sliders(v.q('[data-ctl="sliders"]'), ROD_SL, ROD, ROD_DEF);
+
+  // The rod's pose: a damped spring toward each phase's target.
+  const spring = { p: { x: 0, v: 0 }, r: { x: 0, v: 0 }, y: { x: 0, v: 0 }, z: { x: 0, v: 0 } };
+  const springTo = (s, target, dt) => { const w = 2 * Math.PI * ROD.spring_hz; const n = Math.max(1, Math.ceil(dt * 480)), h = dt / n; for (let i = 0; i < n; i++) { s.v += (w * w * (target - s.x) - 2 * ROD.damping * w * s.v) * h; s.x += s.v * h; } };
+  const eye = () => { v.cam.updateMatrixWorld(true); return v.cam.matrixWorld; };
+  const look = () => new THREE.Vector3(0, 0, -1).applyQuaternion(v.cam.quaternion);
+  let tipEye = rod.tip.clone();
+
+  function event(name) { F.evt = name; }
+  function setPhase(p) { F.phase = p; F.te = 0; }
+  const say = (s, t) => { F.say = s; F.sayT = t || 0; };
+  function windIn() { setPhase("ready"); fl.visible = line.visible = false; F.ease = { from: spring.p.x, t: 0 }; }
+  function cast() {
+    const tipW = tipEye.clone().applyMatrix4(eye());
+    const speed = lerp(FISH.speed[0], FISH.speed[1], F.power), lift = lerp(FISH.lift[0], FISH.lift[1], F.power);
+    F.pos.copy(tipW); F.vel.copy(look()).multiplyScalar(speed).add(new THREE.Vector3(0, lift, 0));
+    F.flickFrom = spring.p.x; F.flickT = 0; F.dip = 0;
+    setPhase("flying"); fl.visible = line.visible = true;
+  }
+  function putOut() {   // a scripted phase with no float out yet: the float is already on the water
+    if (["floating", "nibble", "bite", "hooked"].includes(F.phase)) return;
+    F.pos.set(0.5, WATER_Y, -8.5); F.dip = 0; fl.visible = line.visible = true; setPhase("floating");
+    if (spring.p.x > -0.05) { spring.p.x = -ROD.settle_rad; spring.p.v = 0; }
+  }
+  function startNibble(n) { setPhase("nibble"); F.nibbles = n; F.timer = 0.15; F.twitchAt = -9; }
+  function startBite() { setPhase("bite"); F.timer = FISH.hook_window_s; }
+  function hook() { setPhase("hooked"); F.lineM = Math.hypot(F.pos.x, F.pos.z); F.heading.set(F.pos.x, 0, F.pos.z).normalize(); F.dip = 0.05; }
+  function caught() { setPhase("caught"); fl.visible = line.visible = false; say("Caught a fish", 1.5); setReel(false); }
+  function missed() { F.ease = { from: spring.p.x, t: 0 }; setPhase("floating"); F.timer = 9; say("It got away", 1.2); }
+
+  v.box.addEventListener("contextmenu", e => { e.preventDefault(); stopScript(); if (["flying", "floating", "nibble"].includes(F.phase)) windIn(); });
+  v.box.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return; e.preventDefault(); stopScript();
+    try { v.box.setPointerCapture(e.pointerId); } catch (_) {}
+    UI.holding = true;
+    F.auto = null;
+    if (F.phase === "ready" || F.phase === "caught") { setPhase("charging"); F.power = 0; F.ease = null; }
+    else if (F.phase === "bite") hook();
+    else if (F.phase === "nibble") { missed(); say("Too early", 1.2); }
+  });
+  const release = () => { if (!UI.holding) return; UI.holding = false; if (F.phase === "charging") cast(); };
+  v.box.addEventListener("pointerup", release); v.box.addEventListener("pointercancel", release);
+
+  // Phase buttons and Play all: a short script of timed steps.
+  const playBtn = v.q('[data-ctl="play"]');
+  function stopScript() { F.script = null; playBtn.setAttribute("aria-pressed", "false"); playBtn.textContent = "Play all"; }
+  function run(steps) { F.script = { steps: steps.slice(), t: 0 }; }
+  const PH = {
+    Charge: () => { windIn(); F.ease = null; setPhase("charging"); F.power = 0; F.auto = "hold"; },
+    Cast: () => { if (F.phase !== "charging") { windIn(); F.ease = null; setPhase("charging"); F.power = 0.3; } run([[0.3, cast]]); },
+    Nibble: () => { putOut(); startNibble(2); F.auto = "nibbleOnly"; },
+    Bite: () => { putOut(); startBite(); },
+    Fight: () => { putOut(); hook(); F.auto = "hold"; },
+    Catch: () => { if (F.phase !== "hooked") { putOut(); hook(); } run([[0.25, caught]]); },
+  };
+  const phaseSeg = v.q('[data-ctl="phases"]');
+  for (const name of Object.keys(PH)) { const b = document.createElement("button"); b.textContent = name; b.addEventListener("click", () => { stopScript(); F.auto = null; PH[name](); }); phaseSeg.appendChild(b); }
+  playBtn.addEventListener("click", () => {
+    if (F.script) { stopScript(); return; }
+    F.auto = null; windIn(); F.ease = null;
+    run([[0.2, () => { setPhase("charging"); F.power = 0; }], [1.0, cast], [2.6, () => startNibble(2)], [1.4, () => { if (F.phase !== "bite") startBite(); }], [0.45, hook], [0.6, () => setReel(true)], [1.4, () => { setReel(false); setTension(0.8); }], [1.2, () => { setReel(true); setTension(0.4); }], [1.6, caught], [1.2, () => { setReel(false); setTension(0.5); }]]);
+    playBtn.setAttribute("aria-pressed", "true"); playBtn.textContent = "Stop";
+  });
+
+  function step(dt) {
+    F.te += dt; F.clock += dt; F.sayT -= dt;
+    if (F.script) { F.script.t += dt; while (F.script && F.script.steps.length && F.script.t >= F.script.steps[0][0]) { F.script.t -= F.script.steps[0][0]; const fn = F.script.steps.shift()[1]; fn(); if (F.script && !F.script.steps.length) stopScript(); } }
+    if (F.ease) { F.ease.t += dt; if (F.ease.t > ROD.ease_s) F.ease = null; }
+    const surf = (x, z) => WATER_Y + waveAt(x, z, F.clock);
+    switch (F.phase) {
+      case "charging": F.power = Math.min(1, F.power + dt / FISH.charge_s); break;
+      case "flying":
+        F.flickT += dt;
+        F.vel.y -= FISH.gravity * dt; F.pos.addScaledVector(F.vel, dt);
+        if (F.pos.y <= surf(F.pos.x, F.pos.z) && F.pos.z < BANK_Z) { setPhase("floating"); ripple(F.pos, true); F.timer = 2.2 + Math.random() * 1.5; }
+        else if (F.pos.y < -2) windIn();
+        break;
+      case "floating":
+        F.timer -= dt;
+        if (F.timer <= 0 && !F.script && F.auto !== "nibbleOnly") startNibble(1 + Math.floor(Math.random() * 2));
+        break;
+      case "nibble":
+        F.timer -= dt;
+        if (F.timer <= 0) {
+          F.twitchAt = F.clock; ripple(F.pos, false); F.nibbles--;
+          if (F.nibbles > 0) F.timer = 0.7;
+          else if (F.auto === "nibbleOnly") { F.auto = null; setPhase("floating"); F.timer = 99; }
+          else if (!F.script) startBite();
+          else { F.timer = 99; }
+        }
+        break;
+      case "bite": F.timer -= dt; if (F.timer <= 0) { missed(); } break;
+      case "hooked": {
+        const reeling = UI.holding || UI.reel;
+        if (reeling) F.lineM -= FISH.reel_mps * dt * 0.8;
+        if (F.auto === "hold" || F.script) F.lineM = Math.max(F.lineM, 4.5);
+        if (F.lineM <= FISH.land_line_m + 0.8) { caught(); break; }
+        const sw = Math.sin(F.clock * 1.7) * 0.12;
+        const hd = F.heading.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), sw);
+        F.pos.set(hd.x * F.lineM, 0, hd.z * F.lineM);
+        if (Math.random() < dt * 3) ripple(F.pos, false);
+        break;
+      }
+      case "caught": if (F.te > ROD.catch_s + 0.4) setPhase("ready"); break;
+    }
+    if (["floating", "nibble", "bite", "hooked"].includes(F.phase)) {
+      const want = F.phase === "bite" ? FISH.bite_dip_m : F.phase === "nibble" && F.clock - F.twitchAt < 0.12 ? FISH.nibble_dip_m : F.phase === "hooked" ? 0.05 + 0.03 * Math.sin(F.clock * 9) : 0;
+      F.dip += (want - F.dip) * Math.min(1, dt * 14);
+      F.pos.y = surf(F.pos.x, F.pos.z) - F.dip;
+    }
+    // The fish pulls it under at the moment of a nibble too.
+    if (F.phase === "nibble" && F.clock - F.twitchAt < 0.12) { /* the dip above */ }
+  }
+
+  // The proposed pose from the phase (rod-motion design 2).
+  function rodPose(dt, t) {
+    let T = 0, R = 0, Y = 0, Z = 0, addP = 0;
+    const out = new THREE.Vector3();
+    switch (F.phase) {
+      case "charging": { const e = smooth(F.power); T = ROD.draw_rad * e; Y = Z = ROD.draw_lift_m * e * Math.SQRT1_2; break; }
+      case "flying": case "floating": case "nibble":
+        T = -ROD.settle_rad; addP += ROD.bob_rad * Math.sin(t * 2 * Math.PI * 0.35); break;
+      case "bite": T = -ROD.bite_rad; addP += ROD.bite_shake_rad * Math.sin(F.te * 2 * Math.PI * ROD.bite_shake_hz) * smooth(F.te / 0.04); break;
+      case "hooked": {
+        T = ROD.fight_rad; R = ROD.roll_rad * Math.sin(F.clock * 1.7) * clamp01(0.4 + UI.tension);
+        addP += ROD.fight_shake_rad * UI.tension * Math.sin(F.clock * 2 * Math.PI * ROD.fight_shake_hz) * smooth(F.te / 0.1);
+        if (UI.holding || UI.reel) { const a = F.clock * 2 * Math.PI * ROD.crank_hz; out.set(0, Math.sin(a) * ROD.crank_m, Math.cos(a) * ROD.crank_m); }
+        break;
+      }
+      case "caught": T = ROD.catch_rad * (1 - smooth(F.te / ROD.catch_s)); break;
+    }
+    if (F.ease) { T = F.ease.from * (1 - smooth(F.ease.t / ROD.ease_s)); R = 0; Y = Z = 0; }
+    // A nibble twitches the tip down for nibble_s.
+    const tw = F.clock - F.twitchAt; if (tw >= 0 && tw < ROD.nibble_s) addP -= ROD.nibble_rad * Math.sin(Math.PI * tw / ROD.nibble_s);
+    springTo(spring.r, R, dt); springTo(spring.y, Y, dt); springTo(spring.z, Z, dt);
+    if (F.phase === "flying" && F.flickT < ROD.flick_s) {
+      // The flick: from the drawn pitch to -flick_rad in flick_s, then the spring.
+      const u = F.flickT / ROD.flick_s, k = u * u * (3 - 2 * u), dk = 6 * u * (1 - u) / ROD.flick_s;
+      spring.p.x = F.flickFrom + (-ROD.flick_rad - F.flickFrom) * k; spring.p.v = (-ROD.flick_rad - F.flickFrom) * dk;
+    } else springTo(spring.p, T, dt);
+    return { pitch: spring.p.x + addP, roll: spring.r.x, shift: new THREE.Vector3(0, spring.y.x, spring.z.x).add(out) };
+  }
+
+  const pts = lineGeo.getAttribute("position");
+  function drawLine(tipW, slack) {
+    const end = F.pos.clone().add(new THREE.Vector3(0, FLOAT_TOP_M, 0)), last = LINE_POINTS - 1;
+    for (let k = 0; k <= last; k++) {
+      let p;
+      if (k === 0) p = tipW; else if (k === last) p = end;
+      else {
+        const u = k / last; p = tipW.clone().lerp(end, u); p.y -= slack * 4 * u * (1 - u);
+        const floor = (p.z < BANK_Z ? WATER_Y + waveAt(p.x, p.z, F.clock) + 0.04 : 0) + LINE_CLEARANCE_M;
+        if (p.y < floor) p.y = floor;
+      }
+      pts.setXYZ(k, p.x, p.y, p.z);
+    }
+    pts.needsUpdate = true;
+  }
+
+  return {
+    helds: () => [rod],
+    hide() { UI.holding = false; },
+    update(dt, t) {
+      const sdt = dt * (slow.checked ? 0.25 : 1);
+      // The water moves on its own: the world, not the mockup.
+      for (let i = 0; i < wpos.count; i++) wpos.setY(i, WATER_Y + waveAt(wx[i], wz[i], t));
+      wpos.needsUpdate = true; wg.computeVertexNormals();
+      for (const r of rings) if (r.m.visible) { r.t += dt; const s = (r.big ? 0.15 : 0.08) + r.t * (r.big ? 0.9 : 0.5); r.m.scale.setScalar(s); r.m.material.opacity = Math.max(0, 0.5 - r.t * 0.45); if (r.t > 1.1) r.m.visible = false; }
+      step(sdt);
+      modeTag.textContent = UI.mode === "today" ? "TODAY" : "PROPOSED";
+      let pose = { pitch: 0, roll: 0, shift: new THREE.Vector3() };
+      const p = rodPose(sdt, t);
+      if (UI.mode === "proposed") pose = p;
+      const P = applyPose(rod, pose.pitch, pose.roll, pose.shift.add(swayAt(t)));
+      // The line leaves the tip where the rod is drawn (proposed), or the rest tip (today).
+      tipEye = UI.mode === "proposed" ? P.at(rod.tip) : rod.tip.clone();
+      fl.position.copy(F.pos);
+      fglow.visible = NIGHT.on; flight.intensity = NIGHT.on ? 0.5 : 0;
+      if (line.visible) drawLine(tipEye.clone().applyMatrix4(eye()), F.phase === "hooked" ? 0.1 + 0.5 * (1 - Math.min(1, UI.tension)) : 0.6);
+      // The game's HUD line and meter.
+      const texts = { ready: "Hold the left button to cast", charging: "Let go to cast", nibble: "Something is nibbling - wait for the float to go under", bite: "Bite! Click now", hooked: "Hold to reel - ease off when it runs" };
+      sayEl.textContent = F.sayT > 0 ? F.say : (texts[F.phase] || "");
+      meter.hidden = !(F.phase === "charging" || F.phase === "hooked");
+      meterFill.style.width = ((F.phase === "charging" ? F.power : UI.tension) * 100).toFixed(0) + "%";
+      stat.textContent = `${F.phase}${F.phase === "hooked" ? ` · line ${F.lineM.toFixed(1)} m` : ""} · pitch ${pose.pitch.toFixed(2)} rad`;
+    },
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Tabs: one 3D view at a time; the open tab is the URL's bare hash.
+const TABS = ["dig", "chop", "fish"];
+const tabOf = h => { h = String(h || "").replace(/^#/, ""); return TABS.includes(h) ? h : null; };
+let TAB = null;
+function fitTab() {
+  const wide = window.matchMedia("(min-width: 901px)").matches;
+  for (const id of TABS) { const box = views[id].box; box.style.height = ""; box.style.aspectRatio = ""; }
+  if (!wide || !TAB) return;
+  const box = views[TAB].box, top = box.getBoundingClientRect().top + window.scrollY;
+  const room = window.innerHeight - top - 110;
+  const h = Math.max(300, Math.min(room, box.clientWidth * 9 / 16));
+  box.style.aspectRatio = "auto"; box.style.height = Math.round(h) + "px";
+}
+function setTab(t, push) {
+  if (!TABS.includes(t)) return;
+  const prev = TAB; TAB = t;
+  TABS.forEach(n => { document.getElementById("tab-" + n).hidden = n !== t; });
+  document.querySelectorAll('.ptabs [role="tab"]').forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+  if (push) try { history.replaceState(null, "", location.pathname + location.search + "#" + t); } catch (_) {}
+  if (prev && prev !== t) views[prev].hide();
+  fitTab();
+  views[t].show();
+}
+document.querySelectorAll('.ptabs [role="tab"]').forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab, true)));
+window.addEventListener("hashchange", () => { const t = tabOf(location.hash); if (t) setTab(t, false); });
+window.addEventListener("resize", fitTab);
+seg(document.getElementById("daynight"), [["Day", false], ["Night", true]], NIGHT.on, n => { NIGHT.on = n; for (const id of TABS) views[id].setNight(n); });
+const infoDlg = document.getElementById("info");
+document.getElementById("info-open").addEventListener("click", () => { try { infoDlg.showModal(); } catch (_) { infoDlg.setAttribute("open", ""); } });
+document.getElementById("info-close").addEventListener("click", () => infoDlg.close());
+infoDlg.addEventListener("click", e => { if (e.target === infoDlg) infoDlg.close(); });
+refreshRon();
+setTab(tabOf(location.hash) || "dig", false);
+// For checking: the page's state, read by the screenshot script.
+window.__toolMotion = { views, NIGHT, ST, ROD };
+})();
+</script>
+</body>
+</html>
