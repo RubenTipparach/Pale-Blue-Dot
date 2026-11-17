@@ -44,6 +44,7 @@ https://claude.ai/artifact/PXs3jhCUa5e5tch6Ru4tFu (`docs/mockups/tracker.html`, 
 | 32 | 2026-11-15 | Phase 1 built: crafting tools and starter missions done on `claude/phase-1`. |
 | 43 | 2026-11-16 | M23 version 8: a full-size Map window (M) to lay waypoints. |
 | 1 (new account) | 2026-11-16 | The owner changed claude.ai accounts: the tracker republished as a new artifact on the new account, every committed page with it, M35 Waterfall mist and bubbles added. |
+| 5 (new account) | 2026-11-17 | M37 Fish Behaviour added (built on the live version 4, which carried M36 Tools in Hand from `claude/peaceful-thompson-fyoxgt`). |
 
 **Back on one account (2026-11-14).** On 2026-11-13 a cloud session republished this week's pages
 on a second claude.ai account and moved every link here to it; later sessions added M25 to M29
@@ -127,6 +128,8 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 | M33 | Mission Tree | `mission-tree.html` | starter-missions | Approved for the game (2026-11-15, version 3: "that tree is better, I approve", "implement in game"); drafted (2026-11-15; "Maybe make a mock up of mission tree for me") | https://claude.ai/artifact/V1yL4DmywiEhC7Pv3AKjfY |
 | M34 | River Craft | `river-craft.html` | river-craft | Version 2 (2026-11-16: the Tube tab, "also what about innertubes?"); drafted (2026-11-16; "can you make a mock up of stuff like rafting physics? or design a boat that can tug other boats? log hauling? boats with nets, also anchoring") | https://claude.ai/artifact/93iZ1pBszzY8u6gmWZFRyJ |
 | M35 | Waterfall mist and bubbles | `waterfall-mist.html` (on `claude/fall-splash-order`) | water-flow | Approved for build and for the game (owner, 2026-11-16, in chat: "alright, I'm happy with this, send it yo", on version 22); the game port requested in the same message | https://claude.ai/artifact/WzzTsEVPa3SviHQBfnanMo |
+| M36 | Tools in Hand | `tool-motion.html` (on `claude/peaceful-thompson-fyoxgt`) | held-swing, rod-motion | Drafted (2026-11-17); listed here from the live tracker | https://claude.ai/artifact/Xx3xB3ouaKdJ2NdnxAL9PX |
+| M37 | Fish Behaviour | `fish-behaviour.html` | fish-behaviour | Drafted (2026-11-17; the owner on the under-water bite video: "the fish behavior is super unnatural", "why is rotation all snappy?", "the fish is glitching like hell"). Today (the game's rules, ported) beside Proposed: approach, pecks timed to the float, the take, the fight, banking and a tail tied to speed. Waiting for the owner's review | https://claude.ai/artifact/BkznFkfte6Ph8GLKWfczUz |
 
 The thirteen of 2026-11-12 were published as one batch. Their commit (`d468860`) says "Fourteen",
 but it names thirteen subjects, and thirteen pages were published.
