@@ -47,6 +47,32 @@ pub fn light_left(downwell_per_m: [f32; 3], depth_m: f32) -> [f32; 3] {
     downwell_per_m.map(|k| (-k.max(0.0) * d).exp())
 }
 
+/// The darkest share of daylight a creature or a sea piece is drawn with,
+/// so a shape still reads against the murk.
+pub const UNDER_WATER_FLOOR: f32 = 0.04;
+
+/// What the water makes of a colour `depth_m` under its surface
+/// (`ocean-environments` B23): the terrain's own rule for the seabed
+/// (`planet_surface.wgsl`, `mix(c*att, deep*light*att, (1-mean(att))*0.5)`)
+/// with the light taken out, so a creature or a sea piece beside the bed is
+/// tinted as the bed is. `att` is the daylight left ([`light_left`]),
+/// floored at [`UNDER_WATER_FLOOR`] where it dims; the deep's share is the
+/// terrain's, from the unfloored light. Linear RGB. At or above the surface
+/// the colour is returned as it is.
+pub fn under_water_albedo(
+    colour: [f32; 3],
+    downwell_per_m: [f32; 3],
+    deep: [f32; 3],
+    depth_m: f32,
+) -> [f32; 3] {
+    let att = light_left(downwell_per_m, depth_m);
+    let share = (1.0 - (att[0] + att[1] + att[2]) / 3.0) * 0.5;
+    std::array::from_fn(|i| {
+        let tinted = colour[i] + (deep[i] - colour[i]) * share;
+        tinted * att[i].max(UNDER_WATER_FLOOR)
+    })
+}
+
 /// The zone a point `depth_m` under the surface is in.
 pub fn zone(downwell_per_m: [f32; 3], depth_m: f32) -> Zone {
     let blue = light_left(downwell_per_m, depth_m)[2];
@@ -152,6 +178,35 @@ pub const OCEAN_DOWNWELL_PER_M: [f32; 3] = [0.40, 0.065, 0.046];
 mod tests {
     use super::*;
     use crate::column::BASE_M;
+
+    #[test]
+    fn under_water_a_colour_dims_and_greys_toward_the_deep() {
+        let down = OCEAN_DOWNWELL_PER_M;
+        let deep = [0.004, 0.018, 0.040];
+        let yellow = [0.85, 0.63, 0.23];
+        assert_eq!(under_water_albedo(yellow, down, deep, 0.0), yellow);
+        assert_eq!(under_water_albedo(yellow, down, deep, -3.0), yellow);
+        let at_2 = under_water_albedo(yellow, down, deep, 2.0);
+        let at_8 = under_water_albedo(yellow, down, deep, 8.0);
+        for i in 0..3 {
+            assert!(
+                at_2[i] < yellow[i] && at_8[i] < at_2[i],
+                "{at_2:?} {at_8:?}"
+            );
+        }
+        // Red goes first: the yellow turns toward the water's green-blue.
+        assert!(at_8[0] / at_8[1] < yellow[0] / yellow[1]);
+        // The terrain's rule, worked by hand at 2 m.
+        let att = light_left(down, 2.0);
+        let share = (1.0 - (att[0] + att[1] + att[2]) / 3.0) * 0.5;
+        for i in 0..3 {
+            let want = (yellow[i] * (1.0 - share) + deep[i] * share) * att[i];
+            assert!((at_2[i] - want).abs() < 1e-6);
+        }
+        // Never quite black, however deep.
+        let abyss = under_water_albedo([1.0; 3], down, [1.0; 3], 500.0);
+        assert!(abyss.iter().all(|&c| c >= UNDER_WATER_FLOOR * 0.999));
+    }
 
     #[test]
     fn the_zones_fall_at_forty_and_ninety_metres_inside_the_column() {

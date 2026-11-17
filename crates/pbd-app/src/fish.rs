@@ -626,6 +626,7 @@ fn life_script(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     life: Option<Res<draw::LifeMaterial>>,
+    settings: Option<Res<crate::config::WaterSettings>>,
 ) {
     if script.placed || !world.walking.as_ref().is_some_and(|w| w.active) {
         return;
@@ -653,11 +654,13 @@ fn life_script(
         );
         let seconds = world.sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
         let above = eye.length() > water.surface(eye);
-        let mesh = lineup(eye, look, &water, seconds, above);
+        let under = places::UnderWater::of(settings.as_deref());
+        let mesh = lineup(eye, look, &water, seconds, above, under);
         if let Some(life) = life {
             commands.spawn((
                 Name::new("Water life lineup"),
                 crate::field_light::LitByField,
+                crate::field_light::LitLikeTerrain,
                 Mesh3d(meshes.add(mesh)),
                 MeshMaterial3d(life.0.clone()),
                 Transform::from_translation(world.frame.center.as_vec3()),
@@ -720,6 +723,7 @@ fn lineup(
     water: &impl fauna::Water,
     seconds: f64,
     floaters_up: bool,
+    under: places::UnderWater,
 ) -> Mesh {
     use bodies::{Look, Place, emit, model_for};
     use fauna::Pose;
@@ -777,11 +781,14 @@ fn lineup(
             phase: k as f32,
             pose,
         };
+        // Tinted by the water over it as the bed it lies on is (B23), so a
+        // body beside the sand can be read against it.
+        let tint = under.albedo([1.0; 3], water.surface(at) - radius);
         emit(
             body,
             &look,
             &place,
-            [1.0; 3],
+            tint,
             &mut positions,
             &mut colours,
             &mut uvs,
@@ -1413,6 +1420,8 @@ pub(crate) mod draw {
         life: Res<LifeMaterial>,
         water: Option<Res<crate::config::WaterSettings>>,
         sea: Option<Res<Sea>>,
+        air: Option<Res<Air>>,
+        contact: Option<Res<PlanetContact>>,
         sun: Option<Res<crate::sky::Sun>>,
     ) {
         let roster = fauna.0.roster(&body.0);
@@ -1420,12 +1429,25 @@ pub(crate) mod draw {
         let now = sun
             .as_deref()
             .map(|sun| (sun.clock.seconds, sun.direction()));
-        // The daylight left at a creature's depth (`ocean-environments` B6's
-        // known limit, closed in B12).
-        let dim = sea
-            .as_deref()
-            .zip(water.as_deref())
-            .map(|(sea, water)| (sea.radius, water.downwell_per_m));
+        // What the water does to a creature's colour at its depth
+        // (`ocean-environments` B12, B23): the depth under the surface of
+        // the water its school swims in, a lake's or a river's own top, the
+        // sea's tided one otherwise, never the mean sea sphere.
+        let under = super::places::UnderWater::of(water.as_deref());
+        let seconds = now.map_or(0.0, |(seconds, _)| seconds);
+        let dim = |school: &School| {
+            sea.as_deref().map(|sea| {
+                let water = PlanetWater::at(
+                    sea,
+                    air.as_deref(),
+                    contact.as_deref(),
+                    &fishery.beds,
+                    school.anchor,
+                    seconds,
+                );
+                (water.surface(school.anchor), under)
+            })
+        };
         let alpha = fishery.step_alpha(fauna.0.spawn.step_hz);
         let mut seen = vec![false; fishery.schools.len()];
         for (entity, school_mesh, mut transform, mut faded) in &mut drawn {
@@ -1443,7 +1465,7 @@ pub(crate) mod draw {
                 faded.0 = fade;
             }
             if let Some(mesh) = meshes.get_mut(&school_mesh.mesh) {
-                build(mesh, school, species, now, dim, alpha);
+                build(mesh, school, species, now, dim(school), alpha);
             }
         }
         for (index, school) in fishery.schools.iter().enumerate() {
@@ -1458,7 +1480,7 @@ pub(crate) mod draw {
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::default(),
             );
-            build(&mut mesh, school, species, now, dim, alpha);
+            build(&mut mesh, school, species, now, dim(school), alpha);
             let handle = meshes.add(mesh);
             commands
                 .spawn((
@@ -1468,6 +1490,10 @@ pub(crate) mod draw {
                         mesh: handle.clone(),
                     },
                     crate::field_light::LitByField,
+                    // Lit as the seabed and the shore are, by the
+                    // terrain's fill, sun and lamps (`ocean-environments`
+                    // B23), not by Bevy's picture.
+                    crate::field_light::LitLikeTerrain,
                     crate::field_light::Faded(fishery.fade_of(school)),
                     Transform::from_translation(
                         (frame.center + school.anchor.as_dvec3()).as_vec3(),
@@ -1517,7 +1543,7 @@ pub(crate) mod draw {
         school: &School,
         species: &Species,
         now: Option<(f64, Vec3)>,
-        dim: Option<(f32, [f32; 3])>,
+        dim: Option<(f32, super::places::UnderWater)>,
         alpha: f32,
     ) {
         let mut positions: Vec<[f32; 3]> = Vec::new();
@@ -1586,9 +1612,8 @@ pub(crate) mod draw {
             } else {
                 [1.0; 3]
             };
-            if let Some((surface, downwell)) = dim {
-                let light = super::places::dimmed(downwell, surface - p.length());
-                tint = [tint[0] * light[0], tint[1] * light[1], tint[2] * light[2]];
+            if let Some((surface, water)) = dim {
+                tint = water.albedo(tint, surface - p.length());
             }
             let look = bodies::Look { t, phase, pose };
             let place = bodies::Place {
