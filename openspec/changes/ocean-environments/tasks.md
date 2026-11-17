@@ -94,8 +94,8 @@ against what it would cost.
 
 ## 15. Holes in the sea at caverns beside it (owner, 2026-11-16; design B20)
 
-- [ ] 15.1 The sea's reach: a walk from the open sea through every open cell up to the high water's layer, at the build and after an edit, marks each reached finest record. Verify: an app test that a pit behind a beach and a cavern under a bank are reached and an inland pit is not.
-- [ ] 15.2 The sheet is listed over every reached cell and the mesher leaves it the sea's top there; one surface in a sea cave. Verify: an app test over the owner's spot that no cell draws two surfaces and no reached cell draws none.
-- [ ] 15.3 The sheet under a roof takes the cave's sky light from its record. Verify: captures in a sea cave before and after.
-- [ ] 15.4 The eye and the swimmer read the reach. Verify: an app test of `eye_water_at` in a reached pit and an unreached one.
-- [ ] 15.5 Before and after videos at the owner's spot and two other sea caves, on Drive, stepped frame by frame. Verify: `docs/screenshots/sea-cavern-holes/README.md`.
+- [x] 15.1 (Built 2026-11-16 on `claude/sea-cavern-holes`; `docs/screenshots/sea-cavern-holes/`.) The sea's reach: a walk from the open sea through every open cell up to the high water's layer, at the build and after an edit, marks each reached finest record. Verify: an app test that a pit behind a beach and a cavern under a bank are reached and an inland pit is not.
+- [x] 15.2 (Built 2026-11-16 on `claude/sea-cavern-holes`; `docs/screenshots/sea-cavern-holes/`.) The sheet is listed over every reached cell and the mesher leaves it the sea's top there; one surface in a sea cave. Verify: an app test over the owner's spot that no cell draws two surfaces and no reached cell draws none.
+- [x] 15.3 (Built 2026-11-16 on `claude/sea-cavern-holes`; `docs/screenshots/sea-cavern-holes/`.) The sheet under a roof takes the cave's sky light from its record. Verify: captures in a sea cave before and after.
+- [x] 15.4 (Built 2026-11-16 on `claude/sea-cavern-holes`; `docs/screenshots/sea-cavern-holes/`.) The eye and the swimmer read the reach. Verify: an app test of `eye_water_at` in a reached pit and an unreached one.
+- [x] 15.5 (Built 2026-11-16 on `claude/sea-cavern-holes`; `docs/screenshots/sea-cavern-holes/`.) Before and after videos at the owner's spot and two other sea caves, on Drive, stepped frame by frame. Verify: `docs/screenshots/sea-cavern-holes/README.md`.
