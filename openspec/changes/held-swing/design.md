@@ -130,6 +130,14 @@
      of the view, and that is fine (owner: "that might be a situation where
      the camera just cant see the hand, which is fine ... if the player looked
      down far enough they would see the arm digging").
+   - **The shoulder stays low** (owner, 2026-11-17, on version 10: "with
+     shoveling the shoulder is too high. I think the arm has to be lowered
+     more. Remember I said it's ok if shovel animation moves hand off screen
+     for a split second"): the fist drops 0.16 below rest at the hit
+     (`fist_drop_m`, was 0.04) and the arm follows 0.7 of the spade's turn
+     (`arm_follow`, was 1), so the sleeve no longer climbs the right of the
+     view; the hand leaves the bottom of the view through the tip-down and
+     the slide and comes back with the lift.
 
    The proposed hand's thumb has two segments, not three (owner, 2026-11-17:
    "Two thumbs segments not 3"); that is `hand-model`'s.

@@ -8,5 +8,5 @@
 - [x] 2.3 (after approval) Tests and captures, before and after (`docs/screenshots/hand-model/`): closed blocks facing out, the texel size, the sleeve's growth and the wrapped light (`pbd_core::hand::tests`); the thumb's two segments, one skin with nails, cuff and sleeve, the fist on the handle, the textures' size and palette, the lit side staying toward the light, the hand re-lit as it swings (`held::tests`)
 - [ ] 2.4 The owner's look in the game
 - [x] 3.1 Mockup: palm and back (design 5) on the Hand tab of Tools in Hand, with a switch against one tone
-- [ ] 3.2 The owner's look at the mockup
+- [x] 3.2 The owner's look at the mockup: version 10's hand ("You know what that hand looks good", 2026-11-17)
 - [ ] 3.3 (after approval) The generator and the game: a fifth texture (the palm), the faces split by side
