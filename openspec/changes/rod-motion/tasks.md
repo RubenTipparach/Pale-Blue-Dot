@@ -2,7 +2,7 @@
 
 ## 1. The hand's faces
 
-- [ ] 1.1 `hexel::prism`: shade each side face by its true normal; a test that
+- [x] 1.1 `hexel::prism`: shade each side face by its true normal; a test that
   a round prism is unchanged and a flattened one's slanted faces point along
   the edge's normal
 - [ ] 1.2 Capture the hand before and after (`docs/screenshots/rod-motion/`)
