@@ -305,6 +305,101 @@ extra code.
   water and loops.
 - The bobber is two half-spheres, red over white.
 
+**The line's far end, found 2026-11-16.** The owner: "end of fishing rod rope
+is not connected to bobber". In the screenshot the line came down from the rod
+tip and ended in a sharp V a metre or two above and beside the float, its last
+segment bent back up, the float on the water to the side of it.
+
+- **Cause.** `draw::tackle` (`fish.rs`) clamped every point of the line,
+  the last one included, to lie no lower than `sea.radius + 0.01`: the *mean*
+  sea. The float rides the sea it is cast on, `PlanetWater::surface`, which is
+  the mean plus the waves plus the tide (`LocalSea::height`, the tide added in
+  `small-boats`). The tide's range is 3 m (`water.ron`), so at low water the
+  drawn sea stands up to 1 m under the mean, and a wave trough takes it lower.
+  Every point of the line under the mean was lifted straight up onto the mean
+  sphere, so the tail of the line ran along an invisible surface up to a
+  metre or more over the water and its end hung over the float. Seen from the
+  eye, the lifted tail is the V. The float was drawn in the right place; the
+  line's end was not at it.
+- **A second, smaller mismatch.** `tackle` ran in `Update` and placed the
+  line at the rod tip read from the walking camera's `GlobalTransform`, which
+  in `Update` is last frame's: the camera is moved in `PostUpdate`
+  (`walking::follow_walker`). The rod is a child of the camera and is drawn
+  where the camera is this frame, so while the player walked or turned, the
+  line left a point a frame behind the rod's tip.
+- **Fix.**
+  - The line's points are made by one function, `draw::line_points`, from
+    the tip, the float, the slack and the water surface. The first point is
+    the tip and the last is the float, exactly, never clamped. The points
+    between are held over the surface the float rides
+    (`PlanetWater::surface`, waves and tide), not over the mean, so the line
+    lies on the water it meets. The float pulled under on a bite is still the
+    line's end: the line goes in at the float.
+  - The float and the line are placed in `PostUpdate`, after the camera has
+    moved (`follow_walker`) and the render frame is set
+    (`update_planet_frame`), and before transforms are propagated, from the
+    camera's own `Transform` (a top-level entity, so its `Transform` is its
+    place). Rod, line and float are drawn from one frame's state. The HUD
+    line and meter stay in `Update`.
+  - Not changed: the rod's idle sway (about 6 mm, `held.ron`) and the chop
+    swing are not added to the tip, as before; the sway is under a pixel at
+    the tip's distance, and the rod does not chop while fishing.
+- **Proof.** `fish::tests::the_line_runs_from_the_rod_tip_to_the_float`: the
+  first point is the tip and the last is the float at low tide, in a wave
+  trough and pulled under, and no point between is under the water.
+
+**No bite heard, and no fish, found 2026-11-16.** The owner: "I think fishing
+is broken, there should be a sound when its ready to catch but I seem to have
+pulled it in at the right moment, but no fish is added to my inventory".
+
+- **Measured first** with a capture instrument, `--fish-play` (`desktop.rs`):
+  `--fish` with the bite played out through the mouse as a player plays it
+  (click when the float goes under, hold to reel, ease off past 0.6 tension),
+  logging each phase and the fish in the slots, with `--audio-log`. The
+  `--fish` script also now hands the walker a stone rod, as `--cast` does:
+  since `tool-crafting` a new world starts with no rod, so `--fish` had been
+  standing on the shore casting nothing.
+  - On the shore, the real systems land the fish: cast at frame 151, float at
+    217, nibble at 872, bite at 924, hooked at 925, landed at 2052 ("Eel -
+    104 cm"), one fish in the slots. The catch path itself (`report`, `land`,
+    `Hotbar::give`, `WorldSave::record_catch`) is sound.
+  - The bite cue does fire, but quietly: `AUDIO start bite_splash ... at 18.3
+    m gain -16.2 dB`. `bite_splash` was full only within 4 m
+    (`cues.ron`), and a cast lands 10 to 20 m out, so the one cue that says
+    "now" was 13 dB down under the surf and the wind. With a 0.14 m dip on a
+    6 cm float 18 m away and a hook window of 0.25 to 0.77 s, the player has
+    almost nothing to strike on.
+- **Why no fish.** Two ways a player striking "at the right moment" came
+  away with nothing, neither said on screen:
+  - The prompt while the float is out says "right click winds in". A right
+    click is "pull it in"; at the bite it wound the line in and let the fish
+    go (`pbd_core::fishing::Line::step`, the `reel_in` branch, which took
+    `Bite` with the other phases). The only event was `ReeledIn`, which the
+    HUD says nothing for, so the fish simply was not there.
+  - Winding in, walking out of reach, or putting the rod away with a fish
+    nibbling or hooked dropped it the same silent way.
+- **Fix.**
+  - The strike is either button while the float is under: a right click at
+    the bite hooks the fish, as a left click does. Before and after the bite
+    the right button still winds in. (Recommendation taken, ask only with
+    screenshots.)
+  - A new `Event::Lost { species }`, raised before `ReeledIn` when the line
+    held a fish nibbling, biting or hooked; the HUD says "Wound in - the
+    minnow got away". Putting the rod away or boarding with a fish on says
+    the same.
+  - `bite_splash` is full out to 45 m, the line's longest (`line_max_m`), so
+    the bite is heard at its own level wherever the float is. The other
+    fishing cues keep their distance law: the plop and the nibble tick are
+    meant to be faint.
+  - Not changed: the hook window (`hook_window_s`, `hook_step`,
+    `hook_floor_s`). It is the owner's tuning, from Tenebris; with the bite
+    now audible it should be tried again before it is widened.
+- **Proof.** `fishing::tests::a_right_click_at_the_bite_hooks_the_fish`,
+  `fishing::tests::winding_in_on_a_nibble_says_the_fish_got_away`, and
+  `fish::tests::a_bite_struck_in_its_window_puts_the_fish_in_the_slots`: a
+  scripted bite struck with either button and reeled patiently ends with the
+  fish in the slots and the save, through the game's own `report`.
+
 ## 5. The axe and trees
 
 **The measured fact.** A tree is decided on the GPU and nowhere else.

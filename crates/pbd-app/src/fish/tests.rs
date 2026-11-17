@@ -46,6 +46,150 @@ fn a_full_pack_lets_the_fish_go() {
     assert!(status.text.contains("let go"), "{}", status.text);
 }
 
+/// A bite struck inside its window and reeled patiently ends with the fish
+/// in the slots and the save, through the same `report` the game runs; and a
+/// fish wound in on a nibble is said to have got away rather than vanishing
+/// (owner, 2026-11-16: "I seem to have pulled it in at the right moment, but
+/// no fish is added to my inventory").
+#[test]
+fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
+    const R: f32 = 4800.0;
+    struct Shore;
+    impl Water for Shore {
+        fn surface(&self, _point: Vec3) -> f32 {
+            R
+        }
+        fn bed(&self, point: Vec3) -> f32 {
+            let z = (point.normalize_or(Vec3::Y) * R).z;
+            R - (0.4 * z).clamp(-2.0, 8.0)
+        }
+    }
+    let at = |x: f32, depth: f32, z: f32| Vec3::new(x, R, z).normalize() * (R - depth);
+    let feet = at(0.0, -0.4, -1.0);
+    let up = feet.normalize();
+    let angler = Angler {
+        tip: feet + up * 1.9,
+        look: (Vec3::Z - up * Vec3::Z.dot(up) + up * 0.1).normalize(),
+        feet,
+    };
+    let fauna = pbd_core::fauna::FaunaSettings::default();
+    let roster = fauna.roster(HOME_BODY).to_vec();
+    let minnow = roster.iter().position(|s| s.id == "minnow").unwrap();
+
+    for (strike, seed) in [("left", 70), ("right", 71)] {
+        let mut line = Line::new(seed);
+        let mut schools = vec![School::spawn(
+            minnow as u16,
+            &roster[minnow],
+            at(0.0, 1.0, 8.0),
+            seed,
+            &Shore,
+        )];
+        let mut hotbar = Hotbar::default();
+        let mut save = WorldSave::memory_only();
+        let mut status = FishingStatus::default();
+        let mut landed = false;
+        let mut seen = Vec::new();
+        let dt = 1.0 / 30.0;
+        for frame in 0..30 * 150 {
+            // A player: hold to cast for 0.6 s, watch, strike when the float
+            // goes under, then reel and ease off as the tension climbs.
+            let controls = match line.phase {
+                Phase::Ready if frame == 0 => Controls {
+                    pressed: true,
+                    held: true,
+                    ..Default::default()
+                },
+                Phase::Charging if line.power < 0.5 => Controls {
+                    held: true,
+                    ..Default::default()
+                },
+                Phase::Charging => Controls {
+                    released: true,
+                    ..Default::default()
+                },
+                Phase::Bite if strike == "left" => Controls {
+                    pressed: true,
+                    held: true,
+                    ..Default::default()
+                },
+                Phase::Bite => Controls {
+                    reel_in: true,
+                    ..Default::default()
+                },
+                Phase::Hooked => Controls {
+                    held: line.tension < 0.6,
+                    ..Default::default()
+                },
+                _ => Controls::default(),
+            };
+            let events = line.step(
+                dt,
+                controls,
+                &angler,
+                &mut schools,
+                &roster,
+                &fauna.fishing,
+                &fauna.flock,
+                &Shore,
+                25.0,
+                1.0,
+            );
+            let splash = line.splash();
+            for school in &mut schools {
+                school.step(dt, &roster[minnow], &fauna.flock, &Shore, splash);
+            }
+            for event in events {
+                seen.push(event);
+                let did = report(
+                    &mut status,
+                    event,
+                    &roster,
+                    Some(&mut hotbar),
+                    Some(&mut save),
+                    line.float,
+                    false,
+                );
+                if matches!(event, Event::Caught { .. }) {
+                    assert!(!did.is_empty(), "a landed fish counts for the missions");
+                    landed = true;
+                }
+            }
+            if landed {
+                break;
+            }
+        }
+        assert!(landed, "{strike}: never landed: {seen:?}");
+        assert!(
+            seen.iter().any(|e| matches!(e, Event::Bite { .. })),
+            "{seen:?}"
+        );
+        let fish: u16 = hotbar
+            .iter()
+            .flatten()
+            .filter(|s| s.item == Item::Fish(minnow as u16))
+            .map(|s| s.count)
+            .sum();
+        assert_eq!(fish, 1, "{strike}: the minnow is in the slots");
+        assert_eq!(save.catches.get(&(minnow as u16)).map(|r| r.count), Some(1));
+    }
+
+    // Wound in on a nibble: the line was not empty, and the player is told.
+    let mut status = FishingStatus::default();
+    report(
+        &mut status,
+        Event::Lost {
+            species: minnow as u16,
+        },
+        &roster,
+        None,
+        None,
+        Vec3::ZERO,
+        false,
+    );
+    assert!(status.text.contains("got away"), "{}", status.text);
+}
+
 /// A world with no roster for its body has nothing in the water, and the rod
 /// says so.
 #[test]
@@ -248,6 +392,52 @@ fn the_float_rides_the_sea_the_hulls_ride() {
     let spread = heights.iter().cloned().fold(f32::MIN, f32::max)
         - heights.iter().cloned().fold(f32::MAX, f32::min);
     assert!(spread > 0.01, "the float rises and falls: {heights:?}");
+}
+
+/// The drawn line starts at the rod tip and ends at the drawn float, at low
+/// tide, in a wave trough and pulled under on a bite, and lies on the water
+/// between rather than through it (owner, 2026-11-16: "end of fishing rod
+/// rope is not connected to bobber"; `fishing-and-equipment` design 4). The
+/// line was held over the mean sea, so at low water its end hung over the
+/// float.
+#[test]
+fn the_line_runs_from_the_rod_tip_to_the_float() {
+    let water = crate::config::WaterSettings::default();
+    let mut sea = Sea::new(&water);
+    let beds = Mutex::new(HashMap::new());
+    let direction = Vec3::new(0.3, 0.9, 0.2).normalize();
+    // Low water here: the moon a quarter turn round, the tide's full range.
+    sea.set_moon(direction.any_orthonormal_vector());
+    assert!(sea.tide_at(direction) < -0.9, "low water");
+    let side = direction.any_orthonormal_vector();
+    let feet = direction * (sea.radius + 1.5);
+    let tip = feet + direction * 1.6 + side * 0.8;
+    for (seconds, dip, slack) in [(0.0, 0.0, 0.6), (2.3, 0.14, 0.6), (4.1, 0.0, 0.2)] {
+        let out = (direction + side * 0.004).normalize();
+        let here = PlanetWater::at(&sea, None, None, &beds, out * sea.radius, seconds);
+        let surface = |p: Vec3| here.surface(p);
+        // The float as `Line` places it: on the sea, less its dip.
+        let float = out * (surface(out * sea.radius) - dip);
+        assert!(
+            float.length() < sea.radius - 0.5,
+            "the float rides under the mean"
+        );
+        let points = draw::line_points(tip, float, slack, surface);
+        assert_eq!(points[0], Vec3::ZERO, "the line leaves the rod tip");
+        let end = tip + *points.last().unwrap();
+        assert!(
+            end.distance(float) < 1e-3,
+            "the line ends at the float: {} m off",
+            end.distance(float)
+        );
+        for p in &points[1..points.len() - 1] {
+            let at = tip + *p;
+            assert!(
+                at.length() >= surface(at),
+                "a point of the line is under the water"
+            );
+        }
+    }
 }
 
 /// A school fades in over its first frames and, once too far, fades out and

@@ -186,3 +186,24 @@ from this plan; recorded here so the two changes agree.
       rule of `player/vehicles`. Timed breaking, felling, and the generated
       wiki page stay here.
 - [ ] The owner's in-game check of the feel of the bite and reel.
+
+## 10. The line meets the float (owner, 2026-11-16)
+- [x] Write up the cause (design 4, "The line's far end"): the line was held
+      over the mean sea while the float rides the tide and the waves.
+- [x] `draw::line_points`: first point the tip, last point the float, the
+      points between over the float's own water; the float and line placed in
+      `PostUpdate` after the camera moves.
+- [x] Test `the_line_runs_from_the_rod_tip_to_the_float`.
+- [ ] The owner's check in game, at low tide, that the line reaches the float.
+
+## 11. The bite is heard and the strike lands (owner, 2026-11-16)
+- [x] Measure with `--fish-play` and `--audio-log` (design 4, "No bite
+      heard, and no fish"): the catch path lands the fish; the bite cue was
+      -16 dB at 18 m.
+- [x] `--fish` hands the walker a rod (a new world has none).
+- [x] Either button strikes at the bite; `Event::Lost` says a fish got away.
+- [x] `bite_splash` full out to the line's reach.
+- [x] Tests: `a_right_click_at_the_bite_hooks_the_fish`,
+      `winding_in_on_a_nibble_says_the_fish_got_away`,
+      `a_bite_struck_in_its_window_puts_the_fish_in_the_slots`.
+- [ ] The owner's check in game that the bite is heard and a strike lands.
