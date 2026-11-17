@@ -2748,6 +2748,7 @@ mod splash_tests {
             ))
             .insert_resource(PlanetRenderFrame {
                 center: bevy::math::DVec3::ZERO,
+                origin: bevy::math::DVec3::ZERO,
             })
             .init_resource::<FallFeet>()
             .init_resource::<WaterEase>()
