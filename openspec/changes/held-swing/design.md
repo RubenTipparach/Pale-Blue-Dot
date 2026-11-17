@@ -123,6 +123,13 @@
    - **Pull up:** the spade rises and draws back toward the player with a
      clump of dirt on it (`lift_m` 0.14 up, `pull_m` 0.05 back).
    - **Return:** the clump tips off as the spade returns to rest.
+   - **A straight wrist:** the arm follows the spade's whole turn
+     (`arm_follow` 1) and the fist stays on its own side (`across_m` 0), so
+     the wrist never bends back against the handle (owner, 2026-11-17: "looks
+     like it hurst the angle"). Low in the stroke the hand leaves the bottom
+     of the view, and that is fine (owner: "that might be a situation where
+     the camera just cant see the hand, which is fine ... if the player looked
+     down far enough they would see the arm digging").
 
    The proposed hand's thumb has two segments, not three (owner, 2026-11-17:
    "Two thumbs segments not 3"); that is `hand-model`'s.
