@@ -418,16 +418,17 @@ pub struct PieceSpan {
 /// vertices on its own corner (its top sunk to its bottom).
 fn lowered(piece: &Piece) -> [Vec3; PIECE_MAX] {
     let mut out = piece.positions();
-    let n = piece.n;
-    for k in 0..n {
-        let dir = piece.v[k].p.normalize_or(Vec3::Y);
-        let mut low = piece.v[k].p;
-        for v in &piece.v[..n] {
-            if (v.p.normalize_or(Vec3::Y) - dir).length() < 1e-5 && v.p.length() < low.length() {
-                low = v.p;
-            }
-        }
-        out[k] = low;
+    let own = &piece.v[..piece.n];
+    for (o, v) in out.iter_mut().zip(own) {
+        let dir = v.p.normalize_or(Vec3::Y);
+        *o = own
+            .iter()
+            .map(|w| w.p)
+            .filter(|p| (p.normalize_or(Vec3::Y) - dir).length() < 1e-5)
+            .fold(
+                v.p,
+                |low, p| if p.length() < low.length() { p } else { low },
+            );
     }
     out
 }
