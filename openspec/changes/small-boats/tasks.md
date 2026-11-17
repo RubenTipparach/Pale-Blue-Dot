@@ -15,6 +15,8 @@ scope (they need a dock).
 
 - [x] 1.6 The tube's rider lies back with two-part arms; every boat's panel is its name and plain keys, the instruments behind F3 (design 2a-1). Verify: `the_panel_is_simple_and_the_instruments_are_behind_f3`; captures.
 
+- [x] 1.7 The tube's rider kicks (no stick); stone key glyphs in the prompt and the boat panel (design 2a-2). Verify: `a_tube_turns_on_its_kicks`; the panel test; captures.
+
 ## 2. Recipes and goods
 
 - [x] 2.1 Goods `inner-tube`, `raft`, `rowboat`, appended, stack 1, 16 px icons with provenance. Verify: the goods table test.

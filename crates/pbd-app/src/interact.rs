@@ -298,21 +298,7 @@ pub fn spawn_prompt(mut commands: Commands, kit: Res<crate::ui_kit::UiKit>) {
                 },
             ))
             .with_children(|tip| {
-                tip.spawn((
-                    kit.nine(Set::Oak, "tooltip"),
-                    KitPiece(Set::Oak.key("tooltip")),
-                    Node {
-                        min_width: px(18),
-                        height: px(18),
-                        padding: UiRect::new(px(6), px(6), px(5), px(0)),
-                        justify_content: JustifyContent::Center,
-                        flex_shrink: 0.0,
-                        ..default()
-                    },
-                ))
-                .with_children(|cap| {
-                    cap.spawn((KitText::new("F", crate::ui_kit::TEXT), PromptKey));
-                });
+                crate::ui_kit::key_cap(tip, &kit, "F", PromptKey);
                 tip.spawn((
                     Node {
                         padding: UiRect::top(px(2)),

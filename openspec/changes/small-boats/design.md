@@ -111,6 +111,36 @@ Every label is read off the bindings, so a rebind shows. The instruments
 moved behind F3 with the frame graph (`controls::DebugOverlay`), for whoever
 tunes a hull.
 
+## 2a-2. The tube kicks; stone key glyphs (owner, 2026-11-16)
+
+**The tube kicks.** The owner: "dont need the stick thing in the tube, the
+guy can just kick his feet around to turn and accelerate".
+- M34's lantern pole is off the tube.
+- The tube's stroke is the rider's feet: a foot either side of the middle
+  (0.3 m out), under the water ahead of the ring (0.95 m forward, 0.2 m
+  down), each kick a 0.45 m sweep aft.
+- W/S kick forward or back, and A/D turn by kicking on one side. The tube
+  has no Q/E row.
+- The shins swing from the knee with each kick.
+- Tests: `a_tube_turns_on_its_kicks` (131 degrees in 10 s), and it still
+  makes 0.7 m/s ahead.
+
+**Stone key glyphs.** The owner: "can you also make some stone button glyphs?
+to go with the controls prompt". A key is drawn as the UI kit's own stone
+button (`button-idle`, the approved stone-and-wood art), 9-sliced to the
+key's name with the name carved in as a stone plaque's label is
+(`ui_kit::key_cap`).
+- **The interact prompt** draws its key this way (it was the oak tooltip).
+- **The boat panel** has no background of its own (owner: "probably leave
+  off the background here, and add drop shadow or outline for text"):
+  - the boat's name in the title colour;
+  - then a row a control, each key its own stone glyph, followed by what it
+    does;
+  - every word outlined in ink, so it reads over water and sand alike.
+  - no row for moving on W, A, S and D (owner: "we probably dont need WASD,
+    its obvious enough"); a row the player has rebound to other keys shows.
+- The F3 instruments stay plain text, a developer's.
+
 ## 2b. Rivers and lakes float a boat (found building it)
 
 Craft floated only on the sea: `Surroundings.sea_radius` was the drawn sea
