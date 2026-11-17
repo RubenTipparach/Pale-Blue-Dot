@@ -7,7 +7,8 @@
   - four fingers of three prisms each;
   - the thumb, three prisms in the game; the proposed hand draws it as two
     (owner, 2026-11-17: "Two thumbs segments not 3"), shortened to 0.72 of
-    the game's length ("thumb is too long");
+    the game's length ("thumb is too long"), the two halves equal ("should
+    be 50/50 for the thumb");
   - the wrist, the cuff and the sleeve.
 - **Colours:**
   - the middle finger segments are (195, 151, 118);

@@ -546,9 +546,8 @@ function proposedHandGeometry(tool, sleeveExtra, only) {
   // The thumb is shortened from its root out (owner, 2026-11-17: "thumb is
   // too long"): the game's three segments, each HAND_SHAPE.thumb_len of its
   // length, chained from the root. Then two segments, not three (owner:
-  // "Two thumbs segments not 3"): the first runs from the root to the end of
-  // the game's second, the second is the game's tip, so the tip stays where
-  // it closes on the handle.
+  // "Two thumbs segments not 3"), from the root to the tip, so the tip stays
+  // where it closes on the handle.
   const thumb = {};
   { let start = null; const pts = [];
     for (let i = 13; i <= 15; i++) {
@@ -557,7 +556,12 @@ function proposedHandGeometry(tool, sleeveExtra, only) {
       start = start.clone().addScaledVector(ax, L); pts.push(start.clone());
     }
     const seg = (a, b) => ({ at: a.clone().add(b).multiplyScalar(0.5), len: a.distanceTo(b), axis: b.clone().sub(a).normalize() });
-    thumb[13] = seg(pts[0], pts[2]); thumb[14] = { skip: true }; thumb[15] = seg(pts[2], pts[3]); }
+    // The two halves are equal (owner: "should be 50/50 for the thumb"): the
+    // joint sits half way along the chain from the root to the tip.
+    const L = [0, 1, 2].map(k => pts[k].distanceTo(pts[k + 1])), half = (L[0] + L[1] + L[2]) / 2;
+    let mid = pts[3].clone(), run = 0;
+    for (let k = 0; k < 3; k++) { if (run + L[k] >= half) { mid = pts[k].clone().lerp(pts[k + 1], (half - run) / L[k]); break; } run += L[k]; }
+    thumb[13] = seg(pts[0], mid); thumb[14] = { skip: true }; thumb[15] = seg(mid, pts[3]); }
   parts.forEach((p, i) => {
     if (only === "hand" && i >= 16 || only === "arm" && i < 16) return;
     let axis = v3(p.axis).normalize(), at = v3(p.at), len = p.length;
