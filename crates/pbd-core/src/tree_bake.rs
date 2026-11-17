@@ -1,7 +1,8 @@
 //! The impostor bake (`flora-v2` design 10.3): the mockup's `bakeImpostors`
 //! on the CPU. Each variant's near model is drawn orthographically from 8
-//! bearings, tilted [`crate::tree_kit::BAKE_TILT`] down, into a strip of
-//! 48 x 72 px views at three times that size; every pixel is snapped to
+//! bearings, tilted [`crate::tree_kit::BAKE_TILT`] down, and once from
+//! straight above for the crown cap (`crossed-tree-cards` design 3), into a
+//! strip of 48 x 72 px views at three times that size; every pixel is snapped to
 //! Sweaft-64 in OKLab and each 3 x 3 block folded to one pixel. A small
 //! depth-tested rasteriser does the drawing, so the bake is deterministic
 //! and nothing is read back from the GPU.
@@ -10,9 +11,15 @@ use crate::tree_kit::{Look, OLIVE_COLOURS, Tex, Textures, TreeModel, TreeVertex,
 
 pub const VIEW_W: usize = 48;
 pub const VIEW_H: usize = 72;
+/// The bearings baked from the side, 45 degrees apart.
 pub const VIEWS: usize = 8;
+/// The view from straight above, after the side views: the model's width
+/// across both of its axes, x along the view's 48 px and -z up its 72.
+pub const TOP_VIEW: usize = VIEWS;
+/// Views in a strip: the side bearings and the top.
+pub const STRIP_VIEWS: usize = VIEWS + 1;
 /// The strip's width and height, pixels.
-pub const STRIP_W: usize = VIEW_W * VIEWS;
+pub const STRIP_W: usize = VIEW_W * STRIP_VIEWS;
 const S3: usize = 3;
 
 /// The Sweaft-64 palette (`foliage.html`, `SWEAFT`).
@@ -183,7 +190,8 @@ fn leaf_ramp(look: &Look, tex: &Textures, means: &([f32; 3], [f32; 3])) -> Vec<[
         .collect()
 }
 
-/// Draw `verts` from bearing `view` into the 3x strip.
+/// Draw `verts` from bearing `view` (or from above, [`TOP_VIEW`]) into the
+/// 3x strip.
 fn draw(
     target: &mut Target,
     verts: &[TreeVertex],
@@ -193,10 +201,17 @@ fn draw(
     tex: &Textures,
     means: &([f32; 3], [f32; 3]),
 ) {
+    let top = view == TOP_VIEW;
     let th = view as f64 * std::f64::consts::TAU / VIEWS as f64;
     let tilt = crate::tree_kit::BAKE_TILT;
-    let z = [th.sin() * tilt.cos(), tilt.sin(), th.cos() * tilt.cos()].map(|x| x as f32);
-    let x = [th.cos(), 0.0, -th.sin()].map(|x| x as f32);
+    let (z, x) = if top {
+        ([0.0, 1.0, 0.0], [1.0, 0.0, 0.0])
+    } else {
+        (
+            [th.sin() * tilt.cos(), tilt.sin(), th.cos() * tilt.cos()].map(|x| x as f32),
+            [th.cos(), 0.0, -th.sin()].map(|x| x as f32),
+        )
+    };
     let y = [
         z[1] * x[2] - z[2] * x[1],
         z[2] * x[0] - z[0] * x[2],
@@ -205,9 +220,14 @@ fn draw(
     let (w3, h3) = ((VIEW_W * S3) as f32, (VIEW_H * S3) as f32);
     let x0 = view * VIEW_W * S3;
     let project = |p: [f32; 3]| {
+        let up = if top {
+            (dot(p, y) + m.width / 2.0) / m.width
+        } else {
+            (dot(p, y) - m.lo) / (m.hi - m.lo)
+        };
         [
             (dot(p, x) + m.width / 2.0) / m.width * w3,
-            (dot(p, y) - m.lo) / (m.hi - m.lo) * h3,
+            up * h3,
             dot(p, z),
         ]
     };
@@ -284,7 +304,7 @@ fn snapped(
         colour: vec![[0; 3]; n],
         depth: vec![f32::MIN; n],
     };
-    for view in 0..VIEWS {
+    for view in 0..STRIP_VIEWS {
         draw(&mut t, verts, m, view, look, tex, means);
     }
     // A bake holds a few dozen distinct colours: snap each once.
@@ -366,7 +386,10 @@ pub fn bake(m: &TreeModel, look: &Look, tex: &Textures, bare: bool) -> Vec<u32> 
             }
             if let Some(bp) = &bark_pass {
                 let b = block(bp, x, y);
-                if b.len() >= 6 || (best < 0 && b.len() >= 5) {
+                // From above the crown hides the trunk and the boughs under
+                // it: the bark shows only where no leaf is.
+                let over = x / VIEW_W != TOP_VIEW && b.len() >= 6;
+                if over || (best < 0 && b.len() >= 5) {
                     best = mode(&b);
                     alpha = BARK_ALPHA;
                 }
@@ -382,13 +405,19 @@ pub fn bake(m: &TreeModel, look: &Look, tex: &Textures, bare: bool) -> Vec<u32> 
     out
 }
 
-/// The mean linear colour of a bake's crown pixels: what the shader scales
-/// a baked crown by to meet the near crown's own mean (design 10.3). Zero
-/// where the bake has no crown.
+/// The mean linear colour of a bake's crown pixels in its side views: what
+/// the shader scales a baked crown by to meet the near crown's own mean
+/// (design 10.3). Zero where the bake has no crown. The top view is left
+/// out, so adding it moved no tree's colour.
 pub fn crown_mean(bake: &[u32]) -> [f32; 3] {
     let mut m = [0.0f64; 3];
     let mut n = 0.0;
-    for p in bake.iter().filter(|p| *p >> 24 == CROWN_ALPHA) {
+    let side = bake
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| i % STRIP_W < VIEWS * VIEW_W)
+        .map(|(_, p)| p);
+    for p in side.filter(|p| *p >> 24 == CROWN_ALPHA) {
         for (c, v) in m.iter_mut().enumerate() {
             *v += (f64::from((p >> (8 * c)) & 0xff) / 255.0).powf(2.2);
         }
@@ -462,13 +491,28 @@ mod tests {
                     assert!(pal.contains(&rgb), "{rgb:06x}");
                 }
             }
-            for view in 0..VIEWS {
+            for view in 0..STRIP_VIEWS {
                 let filled = (0..VIEW_H)
                     .flat_map(|y| (0..VIEW_W).map(move |x| (x, y)))
                     .filter(|(x, y)| a[y * STRIP_W + view * VIEW_W + x] >> 24 != 0)
                     .count();
                 assert!(filled > 150, "{s:?} view {view}: {filled} px");
             }
+        }
+        // The view from above is mostly crown for every leafy species.
+        for s in [Species::Oak, Species::Pine, Species::Acacia] {
+            let a = bake(&build(s, 0), &look(s), &tex, false);
+            let top = |alpha: u32| {
+                (0..VIEW_H)
+                    .flat_map(|y| (0..VIEW_W).map(move |x| y * STRIP_W + TOP_VIEW * VIEW_W + x))
+                    .filter(|i| a[*i] >> 24 == alpha)
+                    .count()
+            };
+            let (crown, bark) = (top(CROWN_ALPHA), top(BARK_ALPHA));
+            assert!(
+                crown > 4 * bark,
+                "{s:?} from above: {crown} crown, {bark} bark"
+            );
         }
         // Bare is the bark alone: fewer pixels than the leafy crown.
         let m = build(Species::Oak, 0);

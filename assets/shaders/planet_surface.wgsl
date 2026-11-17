@@ -234,8 +234,8 @@ const COLUMN_RUNS: u32 = 4u;
 // under the lowest, between each pair, and over the highest.
 const COLUMN_GAPS: u32 = COLUMN_RUNS + 1u;
 // Where the column branch starts in the shared vertex shader, after the
-// terrain's 60, the trees' 30 (`flora-v2` design 10.5: the mid cards and the
-// far billboard) and the clutter's 564 (432, then `flora-v2`'s mushroom and
+// terrain's 60, the trees' 30 (four crossed cards and the crown cap,
+// `crossed-tree-cards`) and the clutter's 564 (432, then `flora-v2`'s mushroom and
 // fern).
 const COLUMN_FIRST_VERTEX: u32 = 654u;
 // Where the clutter branch starts: after the terrain and the trees.
@@ -934,7 +934,12 @@ const KIT_VERTEX_WORDS: u32 = 6u;
 const TREE_VARIANTS: u32 = 4u;
 const IMPOSTOR_VIEW_W: u32 = 48u;
 const IMPOSTOR_H: u32 = 72u;
-const IMPOSTOR_W: u32 = 384u;
+const IMPOSTOR_W: u32 = 432u;
+// The bake's ninth view, the tree from straight above, which the crown cap
+// shows (`crossed-tree-cards` design 3).
+const IMPOSTOR_TOP_VIEW: u32 = 8u;
+// How far up the tree's height the crown cap lies.
+const IMPOSTOR_CAP_HEIGHT: f32 = 0.55;
 // The rings' cross-fade: the last share of each ring (the mockup's 0.3).
 // How far up a far tree's standing normal leans (design 13.4).
 const IMPOSTOR_LIFT: f32 = 0.35;
@@ -1013,7 +1018,7 @@ fn tree_sway(t: TreeFrame, w: vec3<f32>, amp: f32) -> vec3<f32> {
 // owner, 2026-11-16: "dithering should either stay or go, dont have it
 // linger if the player isnt moving"). Which representation a tree at `base`
 // takes seen from `eye`: 0 the near model, 1 the mid cards, 2 the far
-// billboard, 3 none. Hard thresholds, in the middle of the old rings'
+// cards, 3 none. Hard thresholds, in the middle of the old rings'
 // cross-fades (0.85 of each ring, `TREE_SWITCH`), so the visibility pass,
 // which lists by the camera itself, still holds both representations while
 // the point they are decided at trails it (`tree_fade_lag_m`).
@@ -1036,6 +1041,20 @@ fn tree_show(base: vec3<f32>, r: u32) -> f32 {
     if was == now { return select(0.0, 1.0, r == now); }
     if r == now { return 2.0 + t; }
     if r == was { return 1.0 - t; }
+    return 0.0;
+}
+// The same for what the mid and the far ring both draw, the X's two cards
+// and the crown cap (`crossed-tree-cards` design 4): whole while the tree is
+// in either ring, so going from mid to far fades only the diagonal cards.
+fn ring_show(base: vec3<f32>) -> f32 {
+    let was = tree_level(params.tree_fade[0].xyz, base);
+    let now = tree_level(params.tree_fade[1].xyz, base);
+    let t = clamp(params.tree_fade[0].w, 0.0, 1.0);
+    let a = was == 1u || was == 2u;
+    let b = now == 1u || now == 2u;
+    if a && b { return 1.0; }
+    if b { return 2.0 + t; }
+    if a { return 1.0 - t; }
     return 0.0;
 }
 
@@ -1581,12 +1600,12 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             }
         }
     } else if vertex < CLUTTER_FIRST_VERTEX {
-        // ---- A tree's mid cards and far billboard (`flora-v2` design 10.3),
-        // baked from its near model. The tree is the finest cell's at this
-        // cell's centre (`distance-lod-fade`): it rolls on that id, so a
-        // coarse level draws the same tree the fine one did. The compute
-        // pass selects the cells; no tree vertex is invoked for a cell
-        // without one.
+        // ---- A tree's crossed cards and crown cap (`flora-v2` design 10.3,
+        // `crossed-tree-cards`), baked from its near model. The tree is the
+        // finest cell's at this cell's centre (`distance-lod-fade`): it rolls
+        // on that id, so a coarse level draws the same tree the fine one did.
+        // The compute pass selects the cells; no tree vertex is invoked for a
+        // cell without one.
         kind = 2u;
         let id = cell.spare.x;
         let biome = (cell.metadata.y >> 8u) & 0xffu;
@@ -1614,52 +1633,61 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         // Lit as a standing tree, not a floor (design 13.4; owner: "distant
         // trees appear to be glowing evenly"): toward the eye across the
         // ground and a little up, as the near crown's leaf cards face it. The
-        // tree's up axis lit a card with the zenith's whole sky, flat.
+        // tree's up axis lit a card with the zenith's whole sky, flat. One
+        // normal for every card and the cap, so no plane of a tree is lit
+        // apart from the others.
         normal = normalized(t.x*dir.x + t.z*dir.y + axis*IMPOSTOR_LIFT);
         let v = vertex - 60u;
-        var shown = false;
-        var along = t.x;
-        var view = 0u;
-        var flip = false;
-        if v < 24u {
-            // The mid cards: four crossed cards, each showing the view baked
-            // from its own side (seen from behind, the view from there),
-            // whole, or fading in or out by time (design 13.3).
-            let f = tree_show(t.base, 1u);
-            if f > 0.0 {
-                shown = true;
-                out_height = f;
-                let k = v/6u;
+        let k = v/6u;
+        // Four cards crossed through the trunk at fixed angles on the tree's
+        // own turn, never turned to the eye (owner, 2026-11-17: "2 - 4
+        // billboards with no rotation"), then the crown cap. The far ring
+        // draws cards 0 and 2, an X, and the cap; the mid ring all five.
+        // Whole, or fading in or out by time (design 13.3).
+        var f = ring_show(t.base);
+        if k == 1u || k == 3u { f = tree_show(t.base, 1u); }
+        if f > 0.0 {
+            out_height = f;
+            var corners = array<vec3<f32>,4>(t.base, t.base, t.base, t.base);
+            var view = 0u;
+            var flip = false;
+            var shown = true;
+            if k < 4u {
+                // Each card shows the view baked from its own side (seen
+                // from behind, the view from there).
                 let phi = f32(k)*TAU/8.0;
-                along = t.x*cos(phi) - t.z*sin(phi);
+                let along = t.x*cos(phi) - t.z*sin(phi);
                 flip = dot(eye, vec2(sin(phi), cos(phi))) < 0.0;
                 view = select(k, k + 4u, flip);
+                corners = array<vec3<f32>,4>(
+                    t.base + axis*y0 - along*half_w, t.base + axis*y0 + along*half_w,
+                    t.base + axis*y1 + along*half_w, t.base + axis*y1 - along*half_w);
+            } else {
+                // The crown cap (design 3): level, a little over halfway up,
+                // showing the bake from straight above; drawn only while the
+                // eye is above it, where it is edge-on as the eye crosses.
+                let cap = t.base + axis*(kit_f(t.header + 4u)*IMPOSTOR_CAP_HEIGHT*tall);
+                shown = dot(params.camera.xyz - cap, axis) > 0.0;
+                view = IMPOSTOR_TOP_VIEW;
+                corners = array<vec3<f32>,4>(
+                    cap + (t.z - t.x)*half_w, cap + (t.z + t.x)*half_w,
+                    cap + (t.x - t.z)*half_w, cap - (t.x + t.z)*half_w);
             }
-        } else {
-            // The far billboard, turned to the eye, showing the baked view
-            // nearest the eye's bearing in the tree's own frame.
-            let f = tree_show(t.base, 2u);
-            if f > 0.0 {
-                shown = true;
-                out_height = f;
-                view = u32(floor(atan2(dir.x, dir.y)/(TAU/8.0) + 8.5)) % 8u;
-                along = t.x*dir.y - t.z*dir.x;
+            if shown {
+                for (var c = 0u; c < 4u; c++) {
+                    corners[c] = tree_sway(t, corners[c], 0.08);
+                }
+                let i = v%6u;
+                let facing = dot(cross(corners[1]-corners[0],corners[3]-corners[0]),params.camera.xyz-corners[0]);
+                let forward = array<u32,6>(0u,1u,2u,0u,2u,3u);
+                let reversed = array<u32,6>(0u,2u,1u,0u,3u,2u);
+                var c = forward[i];
+                if facing < 0. { c = reversed[i]; }
+                position = corners[c];
+                var u = array<f32,4>(0.0, 0.999, 0.999, 0.0)[c];
+                if flip { u = 0.999 - u; }
+                uv = vec2(f32(view) + u, select(0.0, 1.0, c >= 2u));
             }
-        }
-        if shown {
-            let corners = array<vec3<f32>,4>(
-                tree_sway(t, t.base + axis*y0 - along*half_w, 0.08), tree_sway(t, t.base + axis*y0 + along*half_w, 0.08),
-                tree_sway(t, t.base + axis*y1 + along*half_w, 0.08), tree_sway(t, t.base + axis*y1 - along*half_w, 0.08));
-            let i = v%6u;
-            let facing = dot(cross(corners[1]-corners[0],corners[3]-corners[0]),params.camera.xyz-corners[0]);
-            let forward = array<u32,6>(0u,1u,2u,0u,2u,3u);
-            let reversed = array<u32,6>(0u,2u,1u,0u,3u,2u);
-            var c = forward[i];
-            if facing < 0. { c = reversed[i]; }
-            position = corners[c];
-            var u = array<f32,4>(0.0, 0.999, 0.999, 0.0)[c];
-            if flip { u = 0.999 - u; }
-            uv = vec2(f32(view) + u, select(0.0, 1.0, c >= 2u));
         }
     } else {
         kind = 3u;
@@ -2554,7 +2582,7 @@ fn tree_flags(input: VertexOut) -> u32 {
 // its bare one a texel at a time as winter comes (design 10.6).
 fn impostor_pixel(input: VertexOut) -> u32 {
     let header = tree_header(input);
-    let view = min(u32(max(floor(input.uv.x), 0.0)), 7u);
+    let view = min(u32(max(floor(input.uv.x), 0.0)), IMPOSTOR_TOP_VIEW);
     let px = view*IMPOSTOR_VIEW_W + min(u32(fract(input.uv.x)*f32(IMPOSTOR_VIEW_W)), IMPOSTOR_VIEW_W - 1u);
     let py = min(u32(clamp(input.uv.y, 0.0, 0.9999)*f32(IMPOSTOR_H)), IMPOSTOR_H - 1u);
     var at = kit[header + 8u];
@@ -2610,8 +2638,10 @@ fn tree_snow(input: VertexOut, albedo: vec3<f32>, code: u32, deciduous: bool) ->
     if cover <= 0.0 { return albedo; }
     var on = 0.0;
     if code == IMPOSTOR_CODE {
-        // A baked view's rows run bottom up: the crown's top third.
+        // A baked view's rows run bottom up: the crown's top third; the
+        // view from above is all top.
         on = smoothstep(0.55, 0.9, input.uv.y);
+        if floor(input.uv.x) >= f32(IMPOSTOR_TOP_VIEW) { on = 1.0; }
     } else {
         on = smoothstep(0.15, 0.6, dot(normalize(input.normal), radial));
     }
