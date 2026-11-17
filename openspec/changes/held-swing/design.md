@@ -36,4 +36,15 @@
    c·L + T − (N − k)·P, so the last one still lands on the break, and the
    strokes run on at one beat while the button is held. Break times do not
    change.
+6. The arm reaches (owner, 2026-11-17: "I think hand should extend outward
+   when doing actions", pointing at a first-person chopping animation,
+   https://sketchfab.com/3d-models/chopping-animation-8f4e1c3d4ec74e7580eae93d045e3581).
+   Pitching the tool about a fixed fist reads as a wrist flick. The fist
+   moves too: on the wind-up it draws back toward the eye and up
+   (`windup_pull_m`, 0.06 back and 0.03 up). On the strike it drives forward
+   along the view toward the target (`reach_m`, 0.16, eased in with the
+   strike's t³) and in toward the crosshair (`reach_in_m`, 0.05). It holds
+   through the impact and returns with the recover. The sleeve is long enough
+   that the arm still runs off the screen at full reach. Shown in the Tools
+   in Hand mockup's Proposed strokes before the game.
 
