@@ -221,6 +221,8 @@ struct Sight<'a> {
     screen: Screen,
     fishery: Option<&'a pbd_app::fish::Fishery>,
     yard: Option<&'a pbd_app::husbandry::Farmyard>,
+    /// The local origin, for the yard's local feet as planet points.
+    origin: pbd_core::world_frame::SimOrigin,
     missions: &'a pbd_app::missions::Missions,
     chain: &'a pbd_core::missions::Chain,
     recipes: &'a pbd_app::config::Recipes,
@@ -938,6 +940,7 @@ pub fn drive(
         screen: *w.screen,
         fishery: w.fishery.as_deref(),
         yard: w.yard.as_deref(),
+        origin: w.space.origin(),
         missions: &w.missions,
         chain: &chain.0,
         recipes: &w.recipes,
@@ -2510,7 +2513,7 @@ fn animals<'a>(
 > + 'a {
     s.yard
         .into_iter()
-        .flat_map(|y| y.seen())
+        .flat_map(|y| y.seen(s.origin))
         .filter_map(move |a| {
             let sp = s.land.get(a.species as usize)?;
             (species == "any" || sp.id == species).then_some((a, sp))

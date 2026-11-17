@@ -39,6 +39,7 @@ use pbd_core::husbandry::{
 use pbd_core::inventory::{Item, Slots};
 use pbd_core::records::Author;
 use pbd_core::terrain::Material;
+use pbd_core::world_frame::SimOrigin;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
@@ -106,11 +107,13 @@ struct Beast {
     species: u16,
     sex: Sex,
     genome: Genome,
-    /// Feet, body-local.
+    /// Feet, local (physics space, `world-frames` design 10): relative to
+    /// the one `SimOrigin`, moved by its rebase.
     pos: Vec3,
     /// Unit, along the ground.
     facing: Vec3,
     speed: f32,
+    /// Where it is going, local like `pos`.
     goal: Option<Vec3>,
     mode: Mode,
     mode_s: f32,
@@ -147,11 +150,11 @@ impl Beast {
         sex: Sex,
         genome: Genome,
         pos: Vec3,
+        up: Vec3,
         range: Range,
         seed: u64,
     ) -> Self {
         let mut rng = Rng::new(seed);
-        let up = pos.normalize_or(Vec3::Y);
         let a = rng.range(0.0, std::f32::consts::TAU);
         let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
         let north = up.cross(east);
@@ -234,7 +237,7 @@ impl Default for Farmyard {
 /// looks for an animal the way a player does (`step-videos` 5.1).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Seen {
-    /// Feet, body-local.
+    /// Feet, a planet query point (the bot reasons in planet points).
     pub pos: Vec3,
     /// Roster index on this body.
     pub species: u16,
@@ -244,13 +247,14 @@ pub struct Seen {
 }
 
 impl Farmyard {
-    /// The animals in view: drawn, and not leaving.
-    pub fn seen(&self) -> impl Iterator<Item = Seen> + '_ {
+    /// The animals in view: drawn, and not leaving. Their feet are local;
+    /// `origin` gives them as planet points.
+    pub fn seen(&self, origin: SimOrigin) -> impl Iterator<Item = Seen> + '_ {
         self.beasts
             .iter()
             .filter(|b| !b.leaving && b.shown > 0.5)
-            .map(|b| Seen {
-                pos: b.pos,
+            .map(move |b| Seen {
+                pos: origin.query_point(b.pos),
                 species: b.species,
                 wild: matches!(b.who, Who::Wild { .. }),
                 following: b.mode == Mode::Follow,
@@ -278,6 +282,8 @@ pub struct HusbandryPlugin;
 
 impl Plugin for HusbandryPlugin {
     fn build(&self, app: &mut App) {
+        // The yard's feet and goals are local (`world-frames` 10.2).
+        crate::sim_origin::add_rebase_hook(app, rebase_yard);
         app.init_resource::<Farmyard>()
             .init_resource::<AimedGround>()
             .init_resource::<BreedingPick>()
@@ -308,6 +314,27 @@ impl Plugin for HusbandryPlugin {
     }
 }
 
+/// A rebase of the local origin: every animal's feet and goal move with it
+/// (`world-frames` 10.2). Its facing is a direction, and the rig is rebuilt
+/// every frame, so nothing else is kept in local space.
+fn rebase_yard(world: &mut bevy::ecs::world::World, shift: Vec3) {
+    if let Some(mut yard) = world.get_resource_mut::<Farmyard>() {
+        yard.rebase(shift);
+    }
+}
+
+impl Farmyard {
+    /// Move every local point by `-shift` (a rebase).
+    pub fn rebase(&mut self, shift: Vec3) {
+        for b in &mut self.beasts {
+            b.pos -= shift;
+            if let Some(goal) = b.goal.as_mut() {
+                *goal -= shift;
+            }
+        }
+    }
+}
+
 /// The world as the yard reads it.
 #[derive(bevy::ecs::system::SystemParam)]
 struct World<'w, 's> {
@@ -322,6 +349,7 @@ struct World<'w, 's> {
     time: Res<'w, Time>,
     walkers: Query<'w, 's, &'static Position, With<Walker>>,
     cameras: Query<'w, 's, &'static GlobalTransform, With<WalkingCamera>>,
+    space: crate::SimSpace<'w>,
 }
 
 impl World<'_, '_> {
@@ -333,20 +361,44 @@ impl World<'_, '_> {
         self.config.0.roster(&self.body.0)
     }
 
-    /// The player's feet, body-local.
-    fn feet(&self) -> Option<Vec3> {
-        let p = self.walkers.iter().next()?;
-        let at = (p.0.as_dvec3() - self.frame.physics_center()).as_vec3();
-        Some(at - at.normalize_or(Vec3::Y) * HALF_HEIGHT)
+    /// The local origin (`world-frames`): every animal's feet are relative
+    /// to it.
+    fn origin(&self) -> SimOrigin {
+        self.space.origin()
     }
 
-    /// The eye and the look, body-local.
+    /// The player's feet, local: what an animal flees, follows and comes to.
+    fn feet_local(&self) -> Option<Vec3> {
+        let p = self.walkers.iter().next()?;
+        let o = self.origin();
+        Some(o.with_radius(p.0, o.radius_at(p.0) - f64::from(HALF_HEIGHT)))
+    }
+
+    /// The player's feet as a planet query point: for a cell, a herd's
+    /// square, a piece's reach.
+    fn feet_point(&self) -> Option<Vec3> {
+        self.feet_local().map(|f| self.origin().query_point(f))
+    }
+
+    /// An animal's local point as a planet query point.
+    fn query(&self, local: Vec3) -> Vec3 {
+        self.origin().query_point(local)
+    }
+
+    /// The eye, local, and the look.
     fn eye(&self) -> Option<(Vec3, Vec3)> {
         let t = self.cameras.iter().next()?;
         Some((
-            (t.translation().as_dvec3() - self.frame.center).as_vec3(),
+            crate::sim_origin::local_from_render(&self.frame, t.translation()),
             t.forward().as_vec3(),
         ))
+    }
+
+    /// The local point standing on the ground along the planet direction
+    /// `d`, in f64.
+    fn stood(&self, d: Vec3) -> Vec3 {
+        let d = d.normalize_or(Vec3::Y);
+        self.origin().at(d.as_dvec3(), self.ground_precise(d))
     }
 
     /// World days now.
@@ -368,6 +420,17 @@ impl World<'_, '_> {
         match self.contact.as_deref() {
             Some(c) => c.stand(d * (surface + 1.5)).floor_radius,
             None => surface,
+        }
+    }
+
+    /// [`World::ground`] in f64: the floor an animal is stood on. An f32
+    /// radius holds half a millimetre, a stair on a tilted facet.
+    fn ground_precise(&self, d: Vec3) -> f64 {
+        let d = d.normalize_or(Vec3::Y);
+        let surface = PLANET_RADIUS + crate::planet::surface_height(d).max(0.0);
+        match self.contact.as_deref() {
+            Some(c) => c.stand(d * (surface + 1.5)).floor_precise,
+            None => f64::from(surface),
         }
     }
 
@@ -656,17 +719,17 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
         return;
     }
     yard.sync_s = 0.5;
-    let (Some(feet), Some(save)) = (world.feet(), save.as_deref_mut()) else {
+    let (Some(feet_point), Some(save)) = (world.feet_point(), save.as_deref_mut()) else {
         return;
     };
-    if world.cell(feet).is_none() {
+    if world.cell(feet_point).is_none() {
         return;
     }
     // The farm's own births and conceptions up to now (design 13, E5, E6).
     breed::realise(&world, &mut yard, save);
     let s = world.settings().clone();
     let near = s.herds.near_m;
-    let up = feet.normalize_or(Vec3::Y);
+    let up = feet_point.normalize_or(Vec3::Y);
     let kept = record::animals(&save.records);
     let tamed: BTreeSet<u64> = kept.iter().map(|(_, b)| b.wild).collect();
     let mut wanted: Vec<Who> = Vec::new();
@@ -722,13 +785,14 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
             (east * r.range(-1.0, 1.0) + north * r.range(-1.0, 1.0)) * 0.8
         };
         let d = (home * PLANET_RADIUS + jitter).normalize();
-        let pos = d * world.ground(d);
+        let pos = world.stood(d);
         let mut beast = Beast::new(
             who,
             body.sp,
             body.sex,
             body.genome(),
             pos,
+            d,
             range,
             hash2(*id, 0xbea57),
         );
@@ -772,7 +836,8 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
                 herd.species,
                 m.sex,
                 genome,
-                d * world.ground(d),
+                world.stood(d),
+                d,
                 Range::Around(herd.centre, s.herds.spread_m * 1.5),
                 m.seed,
             ));
@@ -987,7 +1052,7 @@ fn aimed_beast(world: &World, yard: &Farmyard) -> Option<usize> {
         .filter(|(_, b)| !b.leaving && b.shown > 0.5)
         .filter_map(|(k, b)| {
             let sp = roster.get(b.species as usize)?;
-            let centre = b.pos + b.pos.normalize_or(Vec3::Y) * sp.height_m * 0.5;
+            let centre = b.pos + world.origin().up_at(b.pos) * sp.height_m * 0.5;
             let to = centre - eye;
             let d = to.length();
             let off = (to - look * to.dot(look)).length();
@@ -1170,7 +1235,7 @@ fn feed_wild(
     }
     // Tamed: the record, at once, as the player's (decision 10).
     let day = world.day();
-    let home = world.cell(b.pos).map_or(0, |(_, key)| key);
+    let home = world.cell(world.query(b.pos)).map_or(0, |(_, key)| key);
     let mut body = AnimalBody {
         body: world.body.0.clone(),
         sp: b.species,
@@ -1222,7 +1287,7 @@ fn settle(world: &World, yard: &mut Farmyard, save: &mut WorldSave, k: usize) {
     // The farm state up to now under the old home, then the new home.
     let now = farm_now(world, yard, save, id, &body);
     body.set_farm(&now);
-    let Some((_, cell)) = world.cell(yard.beasts[k].pos) else {
+    let Some((_, cell)) = world.cell(world.query(yard.beasts[k].pos)) else {
         return;
     };
     let pieces = record::pieces(&save.records);
@@ -1257,7 +1322,7 @@ fn settle(world: &World, yard: &mut Farmyard, save: &mut WorldSave, k: usize) {
             yard.say(format!("{name} is penned"), 2.5);
         }
         None => {
-            b.range = Range::Around(b.pos.normalize(), 6.0);
+            b.range = Range::Around(world.origin().up_at(b.pos), 6.0);
             yard.say(format!("{name} stays here, loose"), 2.5);
         }
     }
@@ -1309,7 +1374,7 @@ fn place_piece(
     point: Vec3,
     gate: bool,
 ) -> bool {
-    let Some(feet) = world.feet() else {
+    let Some(feet) = world.feet_point() else {
         return false;
     };
     if point.distance(feet) > world.settings().taming.reach_m * 2.5 {
@@ -1418,7 +1483,10 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
     }
     let s = world.settings().clone();
     let roster = world.roster().to_vec();
-    let feet = world.feet();
+    // Everything the step compares is local (`world-frames` 10.2).
+    let o = world.origin();
+    let ground = |up: Vec3| world.ground_precise(up);
+    let feet = world.feet_local();
     let moving = world.walking.as_ref().is_some_and(|w| w.speed > 0.6);
     let held = hotbar.as_ref().and_then(|h| h.held()).map(|st| st.item);
     let hours = dt / DAY_S * 24.0;
@@ -1433,7 +1501,7 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
         let Some(sp) = roster.get(b.species as usize) else {
             continue;
         };
-        let up = b.pos.normalize_or(Vec3::Y);
+        let up = o.up_at(b.pos);
         let night = world.night_at(up);
         let bird = sp.plan == Plan::Bird;
         // What it wants.
@@ -1491,7 +1559,7 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
         if b.mode == Mode::Idle && !resting && b.down < 0.05 {
             b.idle_s -= dt;
             if b.idle_s <= 0.0 {
-                b.goal = wander_goal(b, bird);
+                b.goal = wander_goal(b, bird, &o);
                 b.mode = Mode::Walk;
                 b.idle_s = if bird {
                     b.rng.range(1.5, 4.0)
@@ -1540,14 +1608,13 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
         let moved = b.facing * b.speed * dt;
         let next = b.pos + moved;
         let allowed = match &b.range {
-            Range::Pen(_, cells) if b.mode != Mode::Follow => {
-                world.cell(next).is_none_or(|(_, key)| cells.contains(&key))
-            }
+            Range::Pen(_, cells) if b.mode != Mode::Follow => world
+                .cell(world.query(next))
+                .is_none_or(|(_, key)| cells.contains(&key)),
             _ => true,
         };
         let travelled = if allowed && b.speed > 0.0 {
-            let d = next.normalize();
-            b.pos = d * world.ground(d);
+            b.pos = stride(&o, b.pos, b.facing, b.speed, dt, ground);
             moved.length()
         } else {
             if !allowed {
@@ -1555,11 +1622,10 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
                 b.mode = Mode::Idle;
                 b.speed = 0.0;
             }
-            let d = b.pos.normalize();
-            b.pos = d * world.ground(d);
+            b.pos = stand_on(&o, b.pos, ground);
             0.0
         };
-        let up = b.pos.normalize_or(Vec3::Y);
+        let up = o.up_at(b.pos);
         b.facing = (b.facing - up * b.facing.dot(up)).normalize_or(up.any_orthonormal_vector());
         // The legs: phase from distance over stride, so no foot slides.
         let stride = sp.stride_m * b.genome.size_factor();
@@ -1621,18 +1687,39 @@ fn step(world: World, mut yard: ResMut<Farmyard>, hotbar: Option<Res<Hotbar>>) {
         .retain(|b| !(b.leaving && b.shown <= 0.0 && b.entity.is_none()));
 }
 
+/// `local` stood on the ground under it: moved along its own up to the
+/// ground's radius there (`ground(up)`, f64), through the origin, so nothing
+/// is rounded at the planet's scale (`world-frames` 10.2).
+fn stand_on(origin: &SimOrigin, local: Vec3, ground: impl Fn(Vec3) -> f64) -> Vec3 {
+    origin.with_radius(local, ground(origin.up_at(local)))
+}
+
+/// One stride of an animal: its feet moved `speed * dt` along `facing` and
+/// stood on the ground, all in local space.
+fn stride(
+    origin: &SimOrigin,
+    pos: Vec3,
+    facing: Vec3,
+    speed: f32,
+    dt: f32,
+    ground: impl Fn(Vec3) -> f64,
+) -> Vec3 {
+    stand_on(origin, pos + facing * speed * dt, ground)
+}
+
 /// A new place to potter to: a bird a short way, a beast a few metres,
-/// always inside its range.
-fn wander_goal(b: &mut Beast, bird: bool) -> Option<Vec3> {
-    let up = b.pos.normalize_or(Vec3::Y);
+/// always inside its range. Local, laid from the range's directions through
+/// the origin.
+fn wander_goal(b: &mut Beast, bird: bool, o: &SimOrigin) -> Option<Vec3> {
+    let up = o.up_at(b.pos);
     let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
     let north = up.cross(east);
-    let r = b.pos.length();
+    let r = o.radius_at(b.pos);
     match &b.range {
         Range::Pen(centres, _) => {
             let c = centres[(b.rng.next_u64() % centres.len() as u64) as usize];
             let jitter = (east * b.rng.range(-0.9, 0.9) + north * b.rng.range(-0.9, 0.9)) * 0.6;
-            let goal = c * r + jitter;
+            let goal = o.at(c.as_dvec3(), r) + jitter;
             if bird {
                 // A hen potters: a short step toward that cell.
                 let to = goal - b.pos;
@@ -1649,7 +1736,7 @@ fn wander_goal(b: &mut Beast, bird: bool) -> Option<Vec3> {
                 b.rng.range(1.0, 4.0)
             };
             let goal = b.pos + (east * a.cos() + north * a.sin()) * step;
-            let home = *centre * r;
+            let home = o.at(centre.as_dvec3(), r);
             let off = goal - home;
             Some(home + off.clamp_length_max(*radius))
         }
@@ -1668,7 +1755,7 @@ fn draw(
     let Some(material) = yard.material.clone() else {
         return;
     };
-    let centre = world.frame.center;
+    let o = world.origin();
     let day = world.day();
     for b in &mut yard.beasts {
         let Some(sp) = roster.get(b.species as usize) else {
@@ -1680,7 +1767,7 @@ fn draw(
             }
             continue;
         }
-        let up = b.pos.normalize_or(Vec3::Y);
+        let up = o.up_at(b.pos);
         let right = b.facing.cross(up).normalize_or(Vec3::Z);
         let pose = rig::Pose {
             phase: b.phase,
@@ -1709,7 +1796,8 @@ fn draw(
             &pose,
             [b.facing, up, right],
         );
-        let at = (centre + b.pos.as_dvec3()).as_vec3();
+        // Local to render space, in f64 before the cast.
+        let at = crate::render_origin::render_from_physics(&world.frame, b.pos);
         // A young animal is drawn at its stage's size (design 13, E1).
         let size = b
             .born
@@ -2039,18 +2127,17 @@ fn script(
     let (Some(hotbar), Some(save)) = (hotbar.as_deref_mut(), save.as_deref_mut()) else {
         return;
     };
-    let (Some((_, look)), Some(feet)) = (world.eye(), world.feet()) else {
+    let (Some((_, look)), Some(feet_point)) = (world.eye(), world.feet_point()) else {
         return;
     };
-    if world.cell(feet).is_none() {
+    if world.cell(feet_point).is_none() {
         return;
     }
-    let up = feet.normalize();
+    let up = feet_point.normalize();
     let ahead = (look - up * look.dot(up)).normalize_or(up.any_orthonormal_vector());
     let right = ahead.cross(up);
     let roster = world.roster().to_vec();
     let index = |id: &str| roster.iter().position(|s| s.id == id).unwrap_or(0) as u16;
-    let ground = |at: Vec3| at.normalize() * world.ground(at);
     let wild = |yard: &mut Farmyard, sp: u16, n: u64, at: Vec3| -> usize {
         let seed = (0x5c_u64 << 56) | (u64::from(sp) << 16) | n;
         let s = &roster[sp as usize];
@@ -2058,14 +2145,15 @@ fn script(
             Genome::roll(seed, k.coats.len(), k.patterns.len())
         });
         let sex = if n == 0 { Sex::M } else { Sex::F };
-        let pos = ground(at);
+        let d = at.normalize();
         let mut b = Beast::new(
             Who::Wild { seed },
             sp,
             sex,
             genome,
-            pos,
-            Range::Around(pos.normalize(), 3.0),
+            world.stood(d),
+            d,
+            Range::Around(d, 3.0),
             seed,
         );
         b.facing = -ahead;
@@ -2077,7 +2165,7 @@ fn script(
         // The first frame only finds the ground; the scene is set on the next.
         return;
     }
-    let spot = feet + ahead * 7.0;
+    let spot = feet_point + ahead * 7.0;
     // The hands the scene needs, where a capture's `--lamps` took the kit
     // (a capture's save is memory-only, so nothing is kept).
     for (item, count) in [
@@ -2113,7 +2201,7 @@ fn script(
             }
         }
         "tame" => {
-            let k = wild(&mut yard, index("woolback"), 1, feet + ahead * 3.2);
+            let k = wild(&mut yard, index("woolback"), 1, feet_point + ahead * 3.2);
             select_food(hotbar, &roster[index("woolback") as usize]);
             for _ in 0..12 {
                 if matches!(yard.beasts[k].who, Who::Kept { .. }) {
@@ -2126,7 +2214,7 @@ fn script(
                     &mut yard,
                     index("meadow-hen"),
                     n + 5,
-                    feet + ahead * 5.0 + right * (n as f32 - 1.0) * 1.2,
+                    feet_point + ahead * 5.0 + right * (n as f32 - 1.0) * 1.2,
                 );
             }
         }
@@ -2134,7 +2222,7 @@ fn script(
             let Some((_, centre)) = world.cell(spot) else {
                 return;
             };
-            build_ring(&world, &mut yard, hotbar, save, centre, feet);
+            build_ring(&world, &mut yard, hotbar, save, centre, feet_point);
             let herd = [
                 ("meadow-hen", 0u64, 0.0f32, 0.0f32),
                 ("meadow-hen", 1, 0.8, 0.6),
@@ -2180,7 +2268,7 @@ fn script(
             let Some((_, centre)) = world.cell(spot) else {
                 return;
             };
-            build_ring(&world, &mut yard, hotbar, save, centre, feet);
+            build_ring(&world, &mut yard, hotbar, save, centre, feet_point);
             let (sp, herd): (&str, &[(u64, f32, f32)]) = if script.scene == "eggs" {
                 // The cockerel first (the script's n = 0 is male), three hens.
                 (
@@ -2226,7 +2314,7 @@ fn script(
                 breed::rebase(save, 5.0);
                 hotbar.give(Item::Good(Good::INCUBATOR), 1);
                 if select_item(hotbar, Item::Good(Good::INCUBATOR)) {
-                    let at = feet + ahead * 2.5 - right * 1.5;
+                    let at = feet_point + ahead * 2.5 - right * 1.5;
                     breed::place_incubator(&world, &mut yard, hotbar, save, at);
                 }
                 let born = breed::realise(&world, &mut yard, save);
