@@ -1067,3 +1067,12 @@ splash reach 140 m and a 0.6 s fade; the aerated colour (0.16, 0.50, 0.46).
 A `perf_suite.py` A/B (old exe against new, interleaved, release) over a fall
 is the gate the owner set ("need to be a bit careful with perf"); if the
 machine is not quiet in this sitting it is owed and said so.
+
+**As built (6.6, 2026-11-16).** As above, with three notes from the stills
+(`docs/screenshots/waterfall-look/`): the bubbles are drawn after the water
+and take the water's transmission over them themselves (the colour is
+`mix(water's lit albedo, bubble, T)` over the pool's depth, which blended over
+the water gives exactly the mockup's water-over-bubble result); none of the
+splash is drawn under its own pool's surface (the third lane carries that
+surface's radius), so a puff's low centre no longer hangs in the pool seen
+from under; and the frame cost (6.6.8) is owed.

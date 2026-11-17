@@ -145,8 +145,26 @@ struct WaterView {
     // The height fog in the rain volume's place while RAIN SHADOW is off
     // (`weather-rain` 7): x the extinction per metre at the reference level
     // (zero: none), y the falloff height m, z the reference level's radius
-    // from the body's centre (the ground or the sea under the eye) m.
     height_fog: vec4<f32>,
+    // A fall's look (`water-flow` 6.6, M35's New tab; `water.ron` `falls`):
+    // x the feet told of, y the teal churn, z the ripples' height, w the
+    // metres between rings; x the ripples' reach m, y the pool flow, z its
+    // reach m, w the speed-up g m/s^2; the glassy lip: x on, y smooth before
+    // the edge m, z glassy over it m, w the froth filled by m; x the glassy
+    // green, y the edge highlight, z the fastest a face moves m/s, w the
+    // bubbles; the splash: x the wall blend m, y the mist's opacity, z one
+    // when smooth, w the viewport's height px; rgb the aerated colour, w
+    // the water's time scale.
+    fall_look: vec4<f32>,
+    fall_flow: vec4<f32>,
+    fall_lip: vec4<f32>,
+    fall_more: vec4<f32>,
+    fall_splash: vec4<f32>,
+    aer_color: vec4<f32>,
+    // The nearest feet: xyz where each lands (body-local), w its drop m;
+    // then x the pool's depth under it m, y a seed, z its fade.
+    feet: array<vec4<f32>, 8>,
+    feet_more: array<vec4<f32>, 8>,
 }
 @group(0) @binding(0) var<uniform> view: WaterView;
 @group(0) @binding(1) var<storage,read> cells: array<Cell>;
@@ -690,6 +708,60 @@ fn distance_fog(local_position: vec3<f32>, radial: vec3<f32>, sun: vec3<f32>) ->
     return vec4<f32>(water_ground_sky(sun_elevation,cover), amount);
 }
 
+// ---- A fall's look (`water-flow` 6.6; M35, `waterfall-mist/mist.js`) -------
+// The most feet the fragment and the bubbles loop over (`FALL_FEET_MAX`).
+const FALL_FEET: u32 = 8u;
+// The falling column's radius from its foot, m, where the pool's terms start.
+const FALL_COLUMN_M: f32 = 1.25;
+
+// The path coordinate down a fall's face with the speed-up (`fallC`): `s`
+// metres under the lip the water moves at min(sqrt(v0^2 + 2 g s), vmax); a
+// pattern scrolled at `v0` and read at v0 tau(s) moves at that speed, one
+// continuous pattern stretched as the water speeds up. g 0 is `s` itself.
+fn fall_c(s: f32, v0: f32) -> f32 {
+    let g = view.fall_flow.w;
+    if (g <= 0.0 || s <= 0.0) { return s; }
+    let vm = max(view.fall_more.z, v0 + 1e-3);
+    let sc = (vm*vm - v0*v0)/(2.0*g);
+    var tau = (vm - v0)/g + (s - sc)/vm;
+    if (s <= sc) { tau = (sqrt(v0*v0 + 2.0*g*s) - v0)/g; }
+    return v0*tau;
+}
+
+// The pool's outward speed, m/s, `x` metres out from the column of a fall
+// `h` metres high (`outSpeed`).
+fn fall_out_speed(x: f32, h: f32, reach_max: f32) -> f32 {
+    return (0.5 + 0.07*min(h, 10.0))*exp(-max(x, 0.0)/min(2.5 + 0.3*h, reach_max))
+        *smoothstep(-0.5, 0.3, x)*(1.0 - smoothstep(0.6*reach_max, reach_max, x));
+}
+
+// A foot's offset from `p` in the tangent plane, or none (w < 0) where `p`
+// is not at the foot's level (0.3 m) or the foot has faded out.
+fn fall_foot_offset(i: u32, p: vec3<f32>, radial: vec3<f32>) -> vec4<f32> {
+    let foot = view.feet[i];
+    let fade = view.feet_more[i].z;
+    let rel = p - foot.xyz;
+    let up = dot(rel, radial);
+    if (abs(up) > 0.3 || fade <= 0.0) { return vec4<f32>(0.0, 0.0, 0.0, -1.0); }
+    return vec4<f32>(rel - radial*up, fade);
+}
+
+// The lamps near the eye on a point (`lampLight` with a wrap of one), as the
+// mist and the bubbles take them.
+fn fall_lamps(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    var e = vec3<f32>(0.0);
+    for (var i = 0u; i < 8u; i++) {
+        let lamp = view.rain_lamps[i];
+        if (lamp.w <= 0.0) { continue; }
+        let l = lamp.xyz - p;
+        let d = length(l);
+        if (d > 16.0) { continue; }
+        let fall = pow(clamp(1.0 - pow(d/16.0, 4.0), 0.0, 1.0), 2.0)/(1.0 + 0.35*d*d);
+        e += vec3<f32>(1.0, 0.62, 0.30)*1.7*lamp.w*fall*clamp((dot(n, l/max(d, 1e-4)) + 1.0)*0.5, 0.0, 1.0);
+    }
+    return e;
+}
+
 @fragment
 fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
     let radial = safe_normal(in.body_position);
@@ -736,7 +808,18 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // scroll radially at the falling speed. A zero field is the unadvected form.
     // A still face of the game's water (kind 3) does not stream down.
     let falls = select(1.0, 0.0, in.kind == 3u);
-    let advected = in.body_position
+    // A falling face (`water-flow` 6.6): its waves read down the face at
+    // the speed-up's path, `flow_uv.z` its metres under the lip.
+    let fall_face = in.kind == 2u && horizontal < 0.5;
+    let under_lip = in.flow_uv.z;
+    var rest = in.body_position;
+    if (fall_face && view.fall_flow.w > 0.0) {
+        rest += radial*(under_lip - fall_c(under_lip, view.deep_color.w));
+    }
+    // A top of the water near a foot takes its churn, ripples and flow.
+    let pool_top = in.kind <= 1u && horizontal >= 0.5 && view.fall_look.x > 0.5;
+    let feet_n = min(u32(view.fall_look.x), FALL_FEET);
+    let advected = rest
         + radial*(time*view.deep_color.w*(1.0-horizontal)*falls)
         - (tangent_u*in.flow_uv.x + tangent_v*in.flow_uv.y)*time*0.35*horizontal;
     let p = advected*view.ripple.x;
@@ -747,10 +830,47 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // by the per-pixel footprint of the noise coordinate; `detail_fade` 0 is
     // the unfiltered original.
     let detail = 1.0/(1.0+length(fwidth(p))*max(view.screen.w,0.0));
-    let height = fbm3(p,t)*detail;
+    var height = fbm3(p,t)*detail;
     var gradient = vec3<f32>(fbm3(p+vec3<f32>(0.08,0.,0.),t)-fbm3(p,t),
         fbm3(p+vec3<f32>(0.,0.08,0.),t)-fbm3(p,t),
         fbm3(p+vec3<f32>(0.,0.,0.08),t)-fbm3(p,t))*12.5*detail;
+    // The real seconds the mockup's pool terms run on.
+    let seconds = time/max(view.aer_color.w, 1e-3);
+    // The pool's flow away from a fall (M35, `uOut`): the waves and foam
+    // drift outward from the column, by the flow-map method: two copies of
+    // the waves, each dragged along the flow for 2 s and reset, cross-faded
+    // so neither reset shows. Only within reach of a foot at its level.
+    if (pool_top && view.fall_flow.y > 0.0) {
+        var fl = vec3<f32>(0.0);
+        for (var i = 0u; i < feet_n; i++) {
+            let o = fall_foot_offset(i, in.body_position, radial);
+            if (o.w < 0.0) { continue; }
+            let d = length(o.xyz);
+            let x = d - FALL_COLUMN_M;
+            if (x <= -0.5 || x > view.fall_flow.z) { continue; }
+            fl += o.xyz/max(d, 1e-3)*fall_out_speed(x, view.feet[i].w, view.fall_flow.z)*o.w;
+        }
+        fl *= view.fall_flow.y;
+        if (dot(fl, fl) > 1e-6) {
+            let period = 2.0;
+            let a0 = fract(seconds/period);
+            let a1 = fract(seconds/period + 0.5);
+            let drag = fl*period*view.ripple.x;
+            let p0 = p - drag*a0;
+            let p1 = p - drag*a1 + vec3<f32>(0.37, 0.0, 0.61);
+            let w0 = 1.0 - abs(2.0*a0 - 1.0);
+            let w1 = 1.0 - w0;
+            let g0 = fbm3(p0, t);
+            let g1 = fbm3(p1, t);
+            let gr0 = vec3<f32>(fbm3(p0 + vec3<f32>(0.08, 0.0, 0.0), t) - g0,
+                fbm3(p0 + vec3<f32>(0.0, 0.08, 0.0), t) - g0, fbm3(p0 + vec3<f32>(0.0, 0.0, 0.08), t) - g0);
+            let gr1 = vec3<f32>(fbm3(p1 + vec3<f32>(0.08, 0.0, 0.0), t) - g1,
+                fbm3(p1 + vec3<f32>(0.0, 0.08, 0.0), t) - g1, fbm3(p1 + vec3<f32>(0.0, 0.0, 0.08), t) - g1);
+            let m = clamp(length(fl)/0.3, 0.0, 1.0);
+            height = mix(height, (g0*w0 + g1*w1)*detail, m);
+            gradient = mix(gradient, (gr0*w0 + gr1*w1)*12.5*detail, m);
+        }
+    }
     gradient -= radial*dot(gradient,radial);
     // The rain's rings fade with their own footprint (`water-flow` "Rain
     // rings that alias"; owner, 2026-11-16: the river "covered in a dense
@@ -777,6 +897,47 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         // droplets on vertical water"): a fall's or a wall's face takes none.
         g *= smoothstep(0.7, 0.95, horizontal)*ring_detail;
         gradient += tangent_u*g.x + tangent_v*g.y;
+    }
+    // Foot ripples (M35, `uRip`): rings run out from the falling column
+    // across the pool, `fall_look.w` apart at 1.3 m/s, strongest at the
+    // column and gone by the reach; they tilt the normal and whiten a little
+    // on their crests near the column.
+    var rip_foam = 0.0;
+    if (pool_top && view.fall_look.z > 0.0) {
+        let len = max(view.fall_look.w, 0.05);
+        let reach_max = view.fall_flow.x;
+        for (var i = 0u; i < feet_n; i++) {
+            let o = fall_foot_offset(i, in.body_position, radial);
+            if (o.w < 0.0) { continue; }
+            let d = length(o.xyz);
+            let x = d - FALL_COLUMN_M;
+            if (x <= 0.0 || x > reach_max) { continue; }
+            let h = view.feet[i].w;
+            let k = 6.2831853/len;
+            let ph = k*x - seconds*1.3*k;
+            let reach = min(2.0 + 0.35*h, reach_max);
+            let env = exp(-x/reach)*smoothstep(0.0, 0.25, x)*(1.0 - smoothstep(0.6*reach_max, reach_max, x))
+                *(0.6 + 0.06*min(h, 10.0))*view.fall_look.z*o.w;
+            let slope = cos(ph)*env*0.55*(0.9/len);
+            gradient += o.xyz/max(d, 1e-3)*slope*12.5*0.25;
+            rip_foam = max(rip_foam, smoothstep(0.55, 0.95, sin(ph))*env*exp(-x/1.2)*0.6);
+        }
+    }
+    // The glassy lip (M35, `uGlass`): the top's small waves die away over the
+    // last metres before the edge and the first part of the drop stays
+    // smooth. On a top `flow_uv.z` is how near a lip its corner is, read as
+    // metres before it over half a cell; on a face, metres under it.
+    var glass = 0.0;
+    if (view.fall_lip.x > 0.5) {
+        let glass_top = max(view.fall_lip.y, 0.05);
+        if (in.kind == 1u && horizontal >= 0.5 && in.flow_uv.z > 0.0) {
+            let before = -(1.0 - clamp(in.flow_uv.z, 0.0, 1.0))*1.42;
+            glass = smoothstep(-glass_top, -0.15*glass_top, before);
+        }
+        if (fall_face) {
+            glass = 1.0 - smoothstep(0.17*view.fall_lip.z, max(view.fall_lip.z, 0.02), under_lip);
+        }
+        gradient *= 1.0 - 0.9*glass;
     }
     // Slope cap BEFORE the gradient bends the normal: the rain kernel spikes it
     // to ~8x the waves and, uncapped, flipped the sheet into a flat mirror.
@@ -890,24 +1051,61 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // is already lit.
     let water_lit = view.water_light.rgb*clamp(in.sky_light,0.,1.);
     let albedo = mix(view.shallow.rgb,view.deep_color.rgb,smoothstep(0.0,max(view.water_light.w,1e-3),depth_under));
-    let transmitted = mix(albedo*water_lit,scene,exp(-view_extinction()*path_length));
+    var transmitted = mix(albedo*water_lit,scene,exp(-view_extinction()*path_length));
+    // The churn over a fall's foot (M35, `uAer`): the bubbles under the
+    // surface scatter the light back up, so the water there reads a lighter,
+    // aerated teal and the eye sees less deep into it.
+    if (pool_top && view.fall_look.y > 0.0) {
+        let churn = gnoise3(vec3<f32>(dot(in.body_position, tangent_u)*1.3, time*0.9,
+            dot(in.body_position, tangent_v)*1.3))*0.5 + 0.5;
+        var aer = 0.0;
+        for (var i = 0u; i < feet_n; i++) {
+            let o = fall_foot_offset(i, in.body_position, radial);
+            if (o.w < 0.0) { continue; }
+            let r = 2.2 + 0.15*view.feet[i].w;
+            aer = max(aer, (1.0 - smoothstep(0.8, r, length(o.xyz)))*(0.7 + 0.3*churn)*o.w);
+        }
+        transmitted = mix(transmitted, view.aer_color.rgb*water_lit, clamp(aer*0.85*view.fall_look.y, 0.0, 1.0));
+    }
+    // The glassy sheet over the edge is a thick body of water: it shows the
+    // water's own green, not the wall behind it.
+    if (fall_face && glass > 0.0) {
+        transmitted = mix(transmitted, mix(view.shallow.rgb, view.deep_color.rgb, 0.35)*water_lit*1.3,
+            clamp(view.fall_more.x*glass, 0.0, 1.0));
+    }
     let crest = smoothstep(view.foam_crest.x,max(view.foam_crest.y,view.foam_crest.x+1e-4),height)*view.foam_crest.z;
     let slope = smoothstep(view.foam_slope.x,max(view.foam_slope.y,view.foam_slope.x+1e-4),raw_slope)*view.foam_slope.z;
-    var foam = clamp(max(crest,slope)*view.foam_color.w,0.,1.);
+    var foam = clamp(max(crest,slope)*view.foam_color.w + rip_foam,0.,1.);
     // A falling face of the game's water is white water: froth streaming down
     // its own advected waves (`water-flow` 7a, the mockups' fall froth).
     // White water on a fall (owner, 2026-11-15: "vertical water should have
     // a bit froth to it"): streaks of froth stretched down the face and
     // scrolled down it with the fall's own advection, denser at a fall's lip
     // and foot (the mesher's froth weight, `flow_uv.x` on a falling face).
-    if (in.kind == 2u && horizontal < 0.5) {
-        let down_p = advected*vec3<f32>(1.0, 1.0, 1.0);
+    if (fall_face) {
+        var down_p = advected;
+        // With the speed-up the froth's streaks leave the lip at their own
+        // (0.35 + 0.6)/0.35 m/s and speed up from it.
+        if (view.fall_flow.w > 0.0) {
+            down_p = in.body_position
+                + radial*(under_lip - fall_c(under_lip, view.deep_color.w + 0.6/0.35))
+                + radial*(time*view.deep_color.w);
+        }
         let along = vec3<f32>(dot(down_p, tangent_u), dot(down_p, radial), dot(down_p, tangent_v));
         let streak_p = vec3<f32>(along.x*5.0, along.y*0.35, along.z*5.0) + vec3<f32>(0.0, time*0.6, 0.0);
         let n = gnoise3(streak_p)*0.5 + gnoise3(streak_p*2.3)*0.3 + 0.5;
         let weight = clamp(in.flow_uv.x, 0.35, 1.0);
-        let froth = smoothstep(0.42, 0.7, n)*0.75 + 0.15;
-        foam = max(foam, clamp(froth*weight + 0.12, 0.0, 0.92));
+        var froth = smoothstep(0.42, 0.7, n)*0.75 + 0.15;
+        // Glassy: thin strands first, narrow long streaks with clear water
+        // between, filling in to the full froth down the face.
+        if (view.fall_lip.x > 0.5) {
+            let sp = vec3<f32>(along.x*16.0, along.y*0.12, along.z*16.0) + vec3<f32>(0.0, time*0.9, 0.0);
+            let strands = smoothstep(0.55, 0.8, gnoise3(sp)*0.5 + gnoise3(sp*2.1)*0.25 + 0.5);
+            let fill_m = view.fall_lip.w;
+            let fill = smoothstep(0.24*fill_m, max(fill_m, 0.05), under_lip);
+            froth = mix(strands*0.85*smoothstep(0.22*view.fall_lip.z, 0.78*view.fall_lip.z, under_lip), froth, fill);
+        }
+        foam = max(foam, clamp(froth*weight + 0.12*(1.0 - glass), 0.0, 0.92));
     }
     // A gale and up (`ocean-environments` 4.3): foam torn into streaks along
     // the wind and spray off the crests, growing from `spray_from_mps` to
@@ -926,6 +1124,18 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
     // Foam is lit as the water is; the glint is the sun as it reaches the
     // water, after the air and the cloud (`rain_sun`), gone at night.
     var color = mix(mix(transmitted,reflected,fresnel),view.foam_color.rgb*water_lit,foam);
+    // Glassy's edge highlight (M35, `uEdgeHi`): the light a rounded lip would
+    // catch, a soft band either side of the edge. Zero by default.
+    if (view.fall_lip.x > 0.5 && view.fall_more.y > 0.0) {
+        var e = 0.0;
+        if (in.kind == 1u && horizontal >= 0.5 && in.flow_uv.z > 0.0) {
+            e = 1.0 - smoothstep(0.0, 0.25, (1.0 - clamp(in.flow_uv.z, 0.0, 1.0))*1.42);
+        }
+        if (fall_face) { e = 1.0 - smoothstep(0.0, 0.3, under_lip); }
+        let sky_up = water_sky_radiance(water_sky_frame(radial, radial, sun_direction));
+        color = mix(color, mix(view.foam_color.rgb, sky_up, 0.4)*water_lit*1.15,
+            clamp(e*e*0.6*view.fall_more.y, 0.0, 1.0));
+    }
     let half_vector = safe_normal(look+sun_direction);
     color += view.sun_tint.rgb
         *pow(max(dot(normal,half_vector),0.),max(view.sun_tint.w,1.))
@@ -2663,21 +2873,34 @@ fn overlay(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(mix(grey,colour,alpha),1.0);
 }
 
-// ---- The fall splash, after the water (`water-flow` 6.1) --------------------
-// The spray and mist at a fall's foot (`water_flow.rs` `animate_splash`): the
-// same camera-facing quads, the same 32-texel dot sampled nearest and the
-// same unlit colour and straight alpha the main pass drew them with, but
-// drawn here after the water so a splash over a pool stands on its surface.
-// The water's depth attachment hides it behind water in front (tested, not
-// written); the main pass's depth hides it behind the terrain, as the cap's
-// own test. Lane 0 the camera's right, lane 1 its up, then per quad its
-// body-local centre and half size, and its colour.
+// ---- The fall splash, after the water (`water-flow` 6.1, 6.6) ---------------
+// The spray, mist and fall droplets at a fall's foot (`water_flow.rs`
+// `animate_splash`, M35's `splashQuads`): camera-facing quads drawn after the
+// water in their own pass, so a splash over a pool stands on its surface.
+// The fragment tests the main pass's depth (terrain in front) and the water's
+// own depth (water in front) itself and fades softly against the nearer of
+// the two (M35's wall blend). Lane 0 the camera's right, lane 1 its up, then
+// per quad (`SPLASH_LANES`) its body-local centre and half size, its colour,
+// and its cell and flip.
 @group(3) @binding(17) var<storage, read> splash_quads: array<vec4<f32>>;
+// The mist puffs' sheet: 4 x 4 cells of 32 texels, rows four puffs, columns
+// four frames of a puff's life (`assets/textures/fx/mist_puffs`), sRGB.
+@group(3) @binding(18) var fall_puffs: texture_2d<f32>;
+@group(3) @binding(19) var fall_puffs_sampler: sampler;
+// The water's own depth, as its pass left it (reversed Z; zero none).
+@group(3) @binding(20) var water_depth: texture_depth_2d;
+
+// `water_flow::SPLASH_LANES`.
+const SPLASH_LANES: u32 = 3u;
 
 struct SplashOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) colour: vec4<f32>,
+    @location(2) body: vec3<f32>,
+    @location(3) @interpolate(flat) cell: f32,
+    // The radius of the pool's surface the quad's foot stands on.
+    @location(4) @interpolate(flat) surface: f32,
 }
 
 @vertex
@@ -2688,45 +2911,269 @@ fn splash_vertex(@builtin(vertex_index) vertex: u32) -> SplashOut {
     let corner = select(select(k, k - 2u, k >= 3u), 0u, k == 3u);
     let sx = select(-1.0, 1.0, corner == 1u || corner == 2u);
     let sy = select(-1.0, 1.0, corner >= 2u);
-    let centre = splash_quads[2u + quad*2u];
+    let base = 2u + quad*SPLASH_LANES;
+    let centre = splash_quads[base];
+    let cell = splash_quads[base + 2u];
     let p = centre.xyz + (splash_quads[0].xyz*sx + splash_quads[1].xyz*sy)*centre.w;
     var out: SplashOut;
     out.clip = view.clip_from_local*vec4<f32>(view.planet_center.xyz + p, 1.0);
     out.uv = vec2<f32>(0.5*(sx + 1.0), 0.5*(1.0 - sy));
-    out.colour = splash_quads[3u + quad*2u];
+    if (cell.y > 0.5) { out.uv.x = 1.0 - out.uv.x; }
+    out.colour = splash_quads[base + 1u];
+    out.body = p;
+    out.cell = cell.x;
+    out.surface = cell.z;
     return out;
+}
+
+// The water's depth at a pixel.
+fn water_depth_at(pixel: vec2<f32>) -> f32 {
+    let size = vec2<i32>(textureDimensions(water_depth));
+    return textureLoad(water_depth, clamp(vec2<i32>(pixel), vec2<i32>(0), size - 1), 0);
+}
+
+// How far the nearer of the terrain and the water behind a pixel is from the
+// eye, m; a large number where there is neither.
+fn splash_behind_m(screen: vec2<f32>, ground: f32, water_d: f32) -> f32 {
+    let eye = view.camera_time.xyz;
+    var nearest = 1.0e9;
+    if (ground > 1e-7) { nearest = length(reconstruct_local(screen, ground) - eye); }
+    if (water_d > 1e-7) { nearest = min(nearest, length(reconstruct_local(screen, water_d) - eye)); }
+    return nearest;
+}
+
+// With the eye fully under, what no sheet hides is seen through water: the
+// murk the compose lays over this pixel, by the same terms, over `travel` m.
+fn splash_murk(colour: vec3<f32>, travel: f32) -> vec3<f32> {
+    let center = view.planet_center.xyz;
+    let eye = view.camera_time.xyz;
+    let cam_gap = max(0.0, eye_water_surface() - length(eye - center));
+    let deep = murk(cam_gap, safe_normal(eye - center));
+    return mix(deep, colour, exp(-view_extinction()*travel));
 }
 
 @fragment
 fn splash_fragment(in: SplashOut) -> @location(0) vec4<f32> {
-    // Behind the terrain: the main pass's depth is nearer (reversed Z).
+    // Behind the terrain or the water: either depth is nearer (reversed Z).
     let screen = in.clip.xy/vec2<f32>(textureDimensions(scene_depth));
-    if (load_depth(screen) > in.clip.z + 1e-6) { discard; }
-    // The dot's texel, as `splash_dot` baked it: alpha (1 - r)^2 at the
-    // texel's centre, stored in a byte.
-    let texel = clamp(floor(in.uv*32.0), vec2<f32>(0.0), vec2<f32>(31.0));
-    let r = length((texel + 0.5)/32.0*2.0 - 1.0);
-    let a = clamp(1.0 - r, 0.0, 1.0);
-    let dot_alpha = floor(a*a*255.0)/255.0;
-    var colour = in.colour.rgb;
-    // With the eye fully under, what no sheet hides is seen through water:
-    // the murk the compose lays over this pixel of the scene, by the same
-    // terms and the same distance (the scene's, behind the splash), as it
-    // did when the splash was drawn into the scene before it.
-    if (view.fx.y > 0.75) {
-        let center = view.planet_center.xyz;
-        let eye = view.camera_time.xyz;
-        let cam_gap = max(0.0, eye_water_surface() - length(eye - center));
-        let behind = load_depth(screen);
-        var travel = 100000.0;
-        if (behind > 1e-7) {
-            travel = length(reconstruct_local(screen, behind) - eye);
+    let ground = load_depth(screen);
+    if (ground > in.clip.z + 1e-6) { discard; }
+    let water_d = water_depth_at(in.clip.xy);
+    if (water_d > in.clip.z + 1e-6) { discard; }
+    // Nothing of the splash under its pool's surface: from above the water
+    // hides it, from under it would hang in the pool.
+    if (length(in.body) < in.surface - 0.02) { discard; }
+    let smooth_fx = view.fall_splash.z > 0.5;
+    var rgb = vec3<f32>(1.0);
+    var a = 0.0;
+    if (in.cell < -1.5) {
+        // A fall droplet: a bright core, a soft rim and a glint, no outline.
+        if (smooth_fx) {
+            let r = length(in.uv*2.0 - 1.0);
+            if (r > 1.0) { discard; }
+            a = mix(0.95, 0.0, smoothstep(0.55, 1.0, r));
+            rgb = mix(vec3<f32>(0.86, 0.95, 1.0), vec3<f32>(1.25), 1.0 - smoothstep(0.0, 0.3, length(in.uv - 0.3)));
         } else {
-            let ray_d_up = dot(view_ray(screen).direction, safe_normal(eye - center));
-            if (ray_d_up > 0.0008) { travel = cam_gap/ray_d_up; }
+            let tx = clamp(floor(in.uv*8.0), vec2<f32>(0.0), vec2<f32>(7.0));
+            let r = length((tx + 0.5)/4.0 - 1.0);
+            if (r > 0.95) { discard; }
+            a = select(0.7, 0.95, r < 0.55);
+            rgb = vec3<f32>(0.86, 0.95, 1.0);
+            if (tx.x == 2.0 && tx.y == 2.0) { rgb = vec3<f32>(1.25); }
         }
-        let deep = murk(cam_gap, safe_normal(eye - center));
-        colour = mix(deep, colour, exp(-view_extinction()*travel));
+    } else if (in.cell < -0.5) {
+        // A spray drop: the soft dot, alpha (1 - r)^2, smooth or as the
+        // 32-texel byte it was baked as.
+        if (smooth_fx) {
+            let k = clamp(1.0 - length(in.uv*2.0 - 1.0), 0.0, 1.0);
+            a = k*k;
+        } else {
+            let texel = clamp(floor(in.uv*32.0), vec2<f32>(0.0), vec2<f32>(31.0));
+            let r = length((texel + 0.5)/32.0*2.0 - 1.0);
+            let k = clamp(1.0 - r, 0.0, 1.0);
+            a = floor(k*k*255.0)/255.0;
+        }
+    } else {
+        // A mist puff: its row, and the two frames either side of its age
+        // cross-faded, so it never changes shape in one frame.
+        let row = floor(in.cell/4.0 + 1e-4);
+        let age = clamp(in.cell - row*4.0, 0.0, 3.0);
+        let f0 = floor(age);
+        let f1 = min(f0 + 1.0, 3.0);
+        let w = age - f0;
+        var tx = clamp(floor(in.uv*32.0), vec2<f32>(0.0), vec2<f32>(31.0)) + 0.5;
+        if (smooth_fx) { tx = clamp(in.uv*32.0, vec2<f32>(0.75), vec2<f32>(31.25)); }
+        let uv0 = (vec2<f32>(f0, row)*32.0 + tx)/128.0;
+        let uv1 = (vec2<f32>(f1, row)*32.0 + tx)/128.0;
+        let tex = mix(textureSampleLevel(fall_puffs, fall_puffs_sampler, uv0, 0.0),
+            textureSampleLevel(fall_puffs, fall_puffs_sampler, uv1, 0.0), w);
+        rgb = tex.rgb;
+        a = tex.a*view.fall_splash.y;
     }
-    return vec4<f32>(colour, in.colour.a*dot_alpha);
+    var colour = rgb*in.colour.rgb + rgb*fall_lamps(in.body, safe_normal(in.body));
+    let eye = view.camera_time.xyz;
+    let here = length(view.planet_center.xyz + in.body - eye);
+    let behind = splash_behind_m(screen, ground, water_d);
+    if (view.fx.y > 0.75) {
+        colour = splash_murk(colour, select(behind, 100000.0, behind > 1.0e8));
+    }
+    // The wall blend (M35): a soft particle, faded as it nears the ground,
+    // a wall or the water behind it, so a quad cutting into them leaves no
+    // hard edge and the mist meets the pool softly.
+    if (view.fall_splash.x > 0.0) {
+        a *= smoothstep(0.0, 1.0, clamp((behind - here)/view.fall_splash.x, 0.0, 1.0));
+    }
+    return vec4<f32>(colour, clamp(in.colour.a*a, 0.0, 1.0));
+}
+
+// ---- Bubbles under a fall's foot (`water-flow` 6.6; M35's `bubblePoints`) ---
+// Small bubbles rising through the pool where the fall lands: born under the
+// falling column and round it, deeper and more of them the further the water
+// fell, rising and wobbling, gone at the surface. All on the GPU, from the
+// feet in the view: a camera-facing quad per bubble, its place a function of
+// the time. Drawn after the water, so each takes the water's transmission
+// over it itself: the mockup drew them under the water, which mixed them by
+// the pool's own colour; the colour here is that mix, so the result is the
+// same.
+
+// `planet_water::BUBBLES_MAX`: the most bubbles under one foot.
+const BUBBLES_MAX: u32 = 256u;
+
+struct BubbleOut {
+    @builtin(position) clip: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+    @location(1) body: vec3<f32>,
+    @location(2) alpha: f32,
+    @location(3) @interpolate(flat) foot: u32,
+}
+
+fn bubble_hash(n: u32) -> f32 {
+    var h = n*747796405u + 2891336453u;
+    h = ((h >> ((h >> 28u) + 4u)) ^ h)*277803737u;
+    h = (h >> 22u) ^ h;
+    return f32(h & 0xffffu)/65536.0;
+}
+
+@vertex
+fn bubble_vertex(@builtin(vertex_index) vertex: u32) -> BubbleOut {
+    var out: BubbleOut;
+    // Nothing drawn: outside the clip volume.
+    out.clip = vec4<f32>(0.0, 0.0, 2.0, 1.0);
+    out.uv = vec2<f32>(0.0);
+    out.body = vec3<f32>(0.0);
+    out.alpha = 0.0;
+    out.foot = 0u;
+    let i = vertex/(BUBBLES_MAX*6u);
+    let b = (vertex/6u)%BUBBLES_MAX;
+    let k = vertex%6u;
+    if (i >= min(u32(view.fall_look.x), FALL_FEET)) { return out; }
+    let foot = view.feet[i];
+    let more = view.feet_more[i];
+    let h = max(foot.w, 0.0);
+    let count = min(u32(round((60.0 + 14.0*h)*view.fall_more.w)), BUBBLES_MAX);
+    if (b >= count || more.z <= 0.0) { return out; }
+    let salt = u32(more.y*65535.0)*7919u + b*4u;
+    let seed = vec4<f32>(bubble_hash(salt), bubble_hash(salt + 1u), bubble_hash(salt + 2u), bubble_hash(salt + 3u));
+    let seconds = view.camera_time.w/max(view.aer_color.w, 1e-3);
+    let depth = max(more.x, 0.2);
+    let d0 = mix(0.25, max(min(depth - 0.15, 0.6 + 0.22*h), 0.25), seed.y);
+    let speed = 0.35 + 0.35*seed.z;
+    let life = d0/speed + 0.4;
+    let tl = fract(seconds/life + seed.x)*life;
+    let ang = seed.w*6.2831853;
+    let rad = pow(fract(seed.x*7.31 + seed.y*3.7), 0.7)*(1.2 + 0.09*h);
+    let y = -d0 + speed*tl;
+    let visible = smoothstep(0.0, 0.25, tl)*select(0.0, 1.0, y < -0.04)*more.z;
+    if (visible <= 0.0) { return out; }
+    let up = safe_normal(foot.xyz);
+    let east = safe_normal(cross(vec3<f32>(0.0, 1.0, 0.0), up));
+    let north = cross(up, east);
+    let c = foot.xyz
+        + east*(cos(ang)*rad + 0.08*sin(tl*7.0 + seed.z*20.0))
+        + north*(sin(ang)*rad + 0.08*cos(tl*6.0 + seed.w*20.0))
+        + up*min(y, -0.04);
+    // The camera's right and up: the view's rows.
+    let m = view.clip_from_local;
+    let right = safe_normal(vec3<f32>(m[0].x, m[1].x, m[2].x));
+    let cam_up = safe_normal(vec3<f32>(m[0].y, m[1].y, m[2].y));
+    var half = 0.5*(0.05 + 0.09*seed.z);
+    // At least a couple of pixels across, as the mockup's points are.
+    let c0 = m*vec4<f32>(view.planet_center.xyz + c, 1.0);
+    let c1 = m*vec4<f32>(view.planet_center.xyz + c + cam_up*half, 1.0);
+    if (c0.w <= 1e-4 || c1.w <= 1e-4) { return out; }
+    let px = abs(c1.y/c1.w - c0.y/c0.w)*0.5*view.fall_splash.w;
+    half *= max(1.0, 1.0/max(px, 1e-3));
+    let corner = select(select(k, k - 2u, k >= 3u), 0u, k == 3u);
+    let sx = select(-1.0, 1.0, corner == 1u || corner == 2u);
+    let sy = select(-1.0, 1.0, corner >= 2u);
+    let p = c + (right*sx + cam_up*sy)*half;
+    out.clip = m*vec4<f32>(view.planet_center.xyz + p, 1.0);
+    out.uv = vec2<f32>(0.5*(sx + 1.0), 0.5*(1.0 - sy));
+    out.body = c;
+    out.alpha = visible;
+    out.foot = i;
+    return out;
+}
+
+@fragment
+fn bubble_fragment(in: BubbleOut) -> @location(0) vec4<f32> {
+    let screen = in.clip.xy/vec2<f32>(textureDimensions(scene_depth));
+    let ground = load_depth(screen);
+    if (ground > in.clip.z + 1e-6) { discard; }
+    // Hidden by water in front of it, but not by the pool's own surface over
+    // it: the fall's column or another pool is.
+    let foot = view.feet[in.foot];
+    let foot_r = length(foot.xyz);
+    let water_d = water_depth_at(in.clip.xy);
+    if (water_d > in.clip.z + 1e-6) {
+        let w = reconstruct_local(screen, water_d) - view.planet_center.xyz;
+        let rel = w - foot.xyz;
+        let up = dot(rel, safe_normal(foot.xyz));
+        let across = length(rel - safe_normal(foot.xyz)*up);
+        if (abs(up) > 0.25 || across > 2.5 + 0.1*max(foot.w, 0.0)) { discard; }
+    }
+    // An 8-texel bubble: a bright rim, a clear middle, a glint up and to the
+    // left. No outline: the rim is the bubble.
+    let smooth_fx = view.fall_splash.z > 0.5;
+    var tx = in.uv*8.0 - 0.5;
+    if (!smooth_fx) { tx = floor(in.uv*8.0); }
+    let d = (tx + 0.5)/4.0 - 1.0;
+    let r = length(d);
+    if (r > 1.0) { discard; }
+    let rim = smoothstep(0.55, 0.8, r);
+    var a = mix(0.28, 0.9, rim);
+    var c = vec3<f32>(0.86, 0.97, 1.0);
+    if (!smooth_fx && tx.x == 2.0 && tx.y == 2.0) { c = vec3<f32>(1.2); a = 1.0; }
+    if (smooth_fx) {
+        a *= 1.0 - smoothstep(0.85, 1.0, r);
+        let g = 1.0 - smoothstep(0.0, 0.3, length(d + 0.4));
+        c = mix(c, vec3<f32>(1.2), g);
+        a = max(a, g);
+    }
+    let radial = safe_normal(in.body);
+    let lit = view.water_light.rgb*0.72 + fall_lamps(in.body, radial);
+    var col = c*lit;
+    let eye = view.camera_time.xyz;
+    let travel = length(view.planet_center.xyz + in.body - eye);
+    if (view.fx.y > 0.75) {
+        col = splash_murk(col, travel);
+    } else {
+        // Seen from above, a bubble is under the water: it takes the
+        // aerated teal and fades by its own depth below the surface, then
+        // the water's transmission over it (the pool's depth along the
+        // view, as the water's own fragment measures it) mixes it with the
+        // water's lit colour.
+        let below = max(foot_r - length(in.body), 0.0);
+        let kd = exp(-1.6*below);
+        col = mix(view.aer_color.rgb*lit, col, 0.25 + 0.5*kd);
+        a *= 0.25 + 0.55*kd;
+        let look = safe_normal(eye - view.planet_center.xyz - in.body);
+        let path = max(view.feet_more[in.foot].x, 0.0)/max(dot(look, radial), 0.15);
+        let through = exp(-view_extinction()*path);
+        let depth_under = max(view.feet_more[in.foot].x, 0.0);
+        let albedo = mix(view.shallow.rgb, view.deep_color.rgb,
+            smoothstep(0.0, max(view.water_light.w, 1e-3), depth_under));
+        col = col*through + albedo*view.water_light.rgb*(1.0 - through);
+    }
+    return vec4<f32>(col, clamp(a*in.alpha, 0.0, 1.0));
 }
