@@ -14,4 +14,9 @@ Mac (Metal GPU), `--profile fast`, with
 
 Before: the owner's V. The line's tail was held over the mean sea, a metre
 over the low-tide water, and its end hangs over the float. After: the line
-comes down onto the water and runs along it to the float.
+is held over the drawn waves and their crests and comes down onto the top of
+the float, white all the way. The float itself is no longer tinted as if
+seen through water: an eye in the air now measures the composite's waterline
+from the tided sea, not the mean (design 4, "The last stretch still read as
+short"). Some runs hit a wgpu queue timeout while other agents were
+rendering on the same GPU; those shots were retaken.
