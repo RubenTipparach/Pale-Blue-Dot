@@ -64,6 +64,12 @@ impl Player {
         }
     }
 
+    /// The shot being played, counted from 1 (`play-frame-budget`'s
+    /// frame-log column).
+    pub fn shot(&self) -> usize {
+        self.bot.shot + 1
+    }
+
     /// Start at shot `n`, counted from 1.
     pub fn starting_at(mut self, n: usize) -> Self {
         self.bot.shot = n.saturating_sub(1);
@@ -2383,6 +2389,7 @@ fn pick_up(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status 
         bot.count = gathered;
         bot.clutter_goal = None;
         bot.phase = 0;
+        bot.tries = 0;
     }
     if bot.until_met(s, until) {
         return Status::Done;
@@ -2425,12 +2432,14 @@ fn pick_up(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status 
         bot.clutter_goal = Some(goal);
         bot.phase = 0;
         bot.phase_s = 0.0;
+        bot.tries = 0;
         return Status::Running;
     };
     let give_up = |bot: &mut Bot| {
         bot.clutter_gave_up.insert((key, kind));
         bot.clutter_goal = None;
         bot.phase = 0;
+        bot.tries = 0;
     };
     match bot.phase {
         0 => match bot.walk_to(s, out, centre, 1.4) {
@@ -2440,11 +2449,14 @@ fn pick_up(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status 
         },
         _ => {
             let aimed = bot.aim_at(s, out, centre);
-            if aimed && bot.phase_s > 0.4 {
+            // A piece that three presses of F do not take (out of reach,
+            // or already gone) is left for the next.
+            if aimed && bot.phase_s > 0.4 && bot.tries < 3 {
                 out.taps.push(KeyCode::KeyF);
+                bot.tries += 1;
                 bot.phase_s = -1.0;
             }
-            if bot.phase_s > 3.0 {
+            if bot.phase_s > 3.0 || (bot.tries >= 3 && bot.phase_s > 1.0) {
                 give_up(bot);
             }
         }

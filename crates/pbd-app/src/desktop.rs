@@ -1,6 +1,7 @@
 mod arrival;
 mod breeding;
 mod compass_bar;
+mod cpu_times;
 mod cracks;
 mod craft;
 mod digging;
@@ -1983,13 +1984,14 @@ pub fn run(args: &[String]) {
     .add_systems(
         Last,
         (
-            (measure_frames, write_frame_log).chain(),
+            (cpu_times::main_end, measure_frames, write_frame_log).chain(),
             // The save is the loading thread's until the world opens.
             drain_saves.run_if(pbd_app::world_open),
         )
             // The frame limiter holds the loop after these.
             .in_set(pbd_app::settings::PacingSet),
     );
+    cpu_times::add(&mut app);
     if launch.frame_log.is_some() {
         // A route that ends the run when it lands, like `--walk-distance`.
         app.add_systems(Last, (quit_after_route, log_window_attention));
@@ -4576,7 +4578,7 @@ impl FrameLog {
                 .collect();
             writeln!(
                 out,
-                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency"
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency,cpu_main_ms,cpu_render_ms,acquire_ms,shot"
             )
             .expect("frame log header");
             out
@@ -4602,6 +4604,8 @@ fn write_frame_log(
     walk: Option<Res<WalkProgress>>,
     diagnostics: Option<Res<bevy::diagnostic::DiagnosticsStore>>,
     route: Option<Res<pbd_app::flight_view::RouteState>>,
+    cpu: Res<cpu_times::CpuTimes>,
+    showcase: Option<Res<showcase::Player>>,
 ) {
     use std::io::Write;
     let latency = log.1;
@@ -4625,7 +4629,7 @@ fn write_frame_log(
     let passes: String = gpu.passes.iter().map(|ms| format!(",{ms:.3}")).collect();
     let _ = writeln!(
         out,
-        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency}",
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency},{:.3},{:.3},{:.3},{}",
         stats.samples.len(),
         stats.started.elapsed().as_secs_f64(),
         fine.map_or(0, |fine| fine.version),
@@ -4635,6 +4639,10 @@ fn write_frame_log(
         route.map_or(f64::NAN, |route| route.flown_rad
             * f64::from(pbd_app::planet::PLANET_RADIUS)),
         gpu.other,
+        cpu.main_ms,
+        cpu.render_ms(),
+        cpu.acquire_ms(),
+        showcase.map_or(0, |player| player.shot()),
     );
 }
 
