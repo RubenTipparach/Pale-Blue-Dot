@@ -87,3 +87,9 @@ Done on `claude/starter-missions` (2026-11-14): tests in `pbd_core::missions` an
     - G.3: `pbd_core::map::Mark` (`MARK_KIND` `map-mark`, `MARK_FAR_M` 200, `MARK_NEAR_M` 8); `map_screen::mark` (right click: set, move, or clear within 12 px), `mark_of`, `store_mark`, the pin (`MapMarker::Mark`), "right-click mark" on the map's key line; `missions::about_watch` counts `reach marked` off the saved mark. Tests: `a_far_mark_is_reached_within_eight_metres`, `a_right_click_sets_moves_and_clears_the_mark`, `the_mark_is_a_saved_record`. `--map-mark-east <metres>` is a capture instrument. Capture: `docs/screenshots/map-mark/mark.jpg` (lavapipe).
     - G.4: `Progress::seen`, optional in the record. Test: `a_kind_of_fish_counts_once_a_mission`, which reads a record without it.
   - G.5: `Act::Mark(metres)` and `Act::ToMark` in `desktop/showcase.rs` (the pointer moved over the open map and the right button pressed, as `Hands::pointer`), and `phase-1-about.ron` marks 230 m away and walks there. The file parses (`every_showcase_file_parses`); the run is the owner's, with herding and mining, on real hardware.
+
+## J. The goals on the HUD and the jingle (owner, 2026-11-17; design "The goals on the HUD, and a jingle")
+
+- [ ] J.1 The goals block at the left: the title, every objective with its check and count, dimmed when met, "MISSION COMPLETE" for the notice. Verify: an app test of the rows for a mission of three objectives; captures mid-mission and at a completion.
+- [ ] J.2 The labels rewritten as instructions; metres on distance goals. Verify: the load test; the tests that read the line.
+- [ ] J.3 `mission_done` in `gen_sfx.py`, played once when a mission closes. Verify: the sfx checks (`inspect_sfx.py`), a spectrogram, an app test that one close plays one jingle.

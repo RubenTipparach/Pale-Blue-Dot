@@ -712,3 +712,49 @@ and every block, light and tool after it is earned. `Hotbar::starting_kit` is
 an empty row, and the deal is recorded at the kit's latest version so no
 grant reaches a new world later. A saved world keeps everything it carries,
 and an old save is still dealt the grants it missed, as before.
+
+### The goals on the HUD, and a jingle (owner, 2026-11-17)
+
+The owner: *"We need a nice jingle when mission success. Also need to improve
+goals text. Move it to the left side of the screen. And show all goals for
+the current mission"*, and *"Get me screenshots too of your implementation
+and a sound byte of the goal complete"*.
+
+**Where and what.** The one HUD line at the top right becomes a goals block
+at the left, under the position readout:
+- the current mission's title, in the kit's lettering (`TITLE`);
+- under it every objective, one a row: the kit's check (`check-off`, or
+  `check-on` once met) and the objective in the body face (VT323), with its
+  count (`Pull fiber 3/8`);
+- a met objective's row dims to `RUNE_DIM`, and the next one is in `TEXT`;
+- behind it the HUD's own dim (`DIMMER`) with a little padding, so the text
+  reads over sand and snow.
+
+The player's "Mission line" setting still hides it.
+
+**When a mission closes**, for the notice's four seconds:
+- the block reads "MISSION COMPLETE" over the finished mission's title,
+  every check on;
+- the jingle plays once.
+
+**Better goal text.** Each objective's `label` in `missions.ron` becomes a
+short instruction in sentence case, a verb first ("Pull fiber", "Make a
+workbench", "Set it down", "Catch fish on bait", "Stay by them at
+nightfall"). The tree's cards read the same labels. A distance goal (`swim`,
+`travel`) shows its count in metres ("Swim 4/20 m").
+
+**The jingle**, `mission_done`, is synthesised in `tools/audio/gen_sfx.py`
+beside `catch_chime`. It is a UI sound, played on the menu bus, unplaced.
+- About two seconds: a rising mallet phrase in C major (G4 C5 E5, then D5 E5
+  G5) settling on a held C major chord with a soft bell over it and a short
+  room.
+- Warmer and longer than the catch chime, so a mission closing never sounds
+  like a fish landing.
+- Written at -8 dBFS peak, as the chime is.
+- Named in `assets/audio/sfx/SOURCES.md`.
+
+It is a sound effect, not a music cue: Pale Blue Dot has no music pipeline
+yet (the `music-authoring` skill's note).
+
+This is all recommendation taken (ask only with screenshots). The
+screenshots and the sound go to the owner with the reply.
