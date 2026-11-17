@@ -2172,10 +2172,11 @@ pub(crate) mod draw {
                 .map_or(crate::held::rod_tip(), |(held, pose)| {
                     held.posed(pose, crate::held::rod_tip())
                 });
-            // The line's shape is laid in planet points, which hold half a
-            // millimetre: draw only, never stored (`world-frames` design 9).
+            // The line's shape is laid in local points (`world-frames`
+            // 10.1), from the drawn rod tip to the drawn float; the water is
+            // asked at planet query points.
             let tip_render = eye.transform_point(tip);
-            let tip_local = (tip_render.as_dvec3() - frame.center).as_vec3();
+            let tip_local = crate::sim_origin::local_from_render(&frame, tip_render);
             transform.translation = tip_render;
             let slack = match line.phase {
                 Phase::Hooked => 0.1 + 0.5 * (1.0 - line.tension.min(1.0)),
@@ -2186,7 +2187,8 @@ pub(crate) mod draw {
             // back up): the water the float rides, with its waves and tide,
             // not the mean sea, which stands a metre over it at low water.
             // It ends on the top of the float, where it is tied.
-            let end = o.query_point(float + o.up_at(float) * FLOAT_TOP_M);
+            let end = float + o.up_at(float) * FLOAT_TOP_M;
+            let end_point = o.query_point(end);
             let points = match sea.as_deref() {
                 Some(sea) => {
                     let seconds = sun.as_ref().map_or(0.0, |sun| sun.clock.seconds);
@@ -2195,12 +2197,14 @@ pub(crate) mod draw {
                         air.as_deref(),
                         contact.as_deref(),
                         &fishery.beds,
-                        end,
+                        end_point,
                         seconds,
                     );
-                    line_points(tip_local, end, slack, |p| line_floor(&water, end, p))
+                    line_points(&o, tip_local, end, slack, |p| {
+                        line_floor(&water, end_point, o.query_point(p))
+                    })
                 }
-                None => line_points(tip_local, end, slack, |_| 0.0),
+                None => line_points(&o, tip_local, end, slack, |_| 0.0),
             };
             if let Some(mesh) = meshes.get_mut(&mesh.0) {
                 mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, points);
@@ -2273,20 +2277,22 @@ pub(crate) mod draw {
     }
 
     /// The line's points, as offsets from the rod tip, from `tip` to
-    /// `float` (both planet-local; `float` is where the line is tied, the
-    /// top of the float): a curve that sags by `slack` toward the planet,
-    /// every point between the ends held `LINE_CLEARANCE_M` over `surface`
-    /// (the radius of the water under a point). The first point is the tip
+    /// `float` (both local, relative to `origin`; `float` is where the line
+    /// is tied, the top of the float): a curve that sags by `slack` toward
+    /// the planet, every point between the ends held `LINE_CLEARANCE_M` over
+    /// `surface` (the radius of the water under a local point), lifted
+    /// through the origin in f64. The first point is the tip
     /// and the last is the float, exactly: a float pulled under on a bite
     /// is still where the line ends (`fishing-and-equipment` design 4, the
     /// line's far end).
     pub(crate) fn line_points(
+        origin: &SimOrigin,
         tip: Vec3,
         float: Vec3,
         slack: f32,
         surface: impl Fn(Vec3) -> f32,
     ) -> Vec<Vec3> {
-        let down = -tip.normalize_or(Vec3::Y);
+        let down = -origin.up_at(tip);
         let last = LINE_POINTS - 1;
         (0..LINE_POINTS)
             .map(|k| {
@@ -2299,10 +2305,10 @@ pub(crate) mod draw {
                 let u = k as f32 / last as f32;
                 let offset = (float - tip) * u + down * slack * 4.0 * u * (1.0 - u);
                 let at = tip + offset;
-                let r = at.length();
-                let floor = surface(at) + LINE_CLEARANCE_M;
+                let r = origin.radius_at(at);
+                let floor = f64::from(surface(at) + LINE_CLEARANCE_M);
                 if r > 0.0 && r < floor {
-                    at * (floor / r) - tip
+                    origin.with_radius(at, floor) - tip
                 } else {
                     offset
                 }

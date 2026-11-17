@@ -431,7 +431,9 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
         );
         let tied = float + float.normalize() * draw::FLOAT_TOP_M;
         let floor = |p: Vec3| draw::line_floor(&here, tied, p);
-        let points = draw::line_points(tip, tied, slack, floor);
+        let centre =
+            pbd_core::world_frame::SimOrigin::new(crate::sim_origin::HOME, bevy::math::DVec3::ZERO);
+        let points = draw::line_points(&centre, tip, tied, slack, floor);
         assert_eq!(points[0], Vec3::ZERO, "the line leaves the rod tip");
         let end = tip + *points.last().unwrap();
         assert!(
@@ -439,6 +441,19 @@ fn the_line_runs_from_the_rod_tip_to_the_float() {
             "the line ends at the float: {} m off",
             end.distance(tied)
         );
+        // The same line laid in local space (`world-frames` 10.1), the origin
+        // a cell from the angler: the same points, and its end exactly the
+        // float's.
+        let near = pbd_core::world_frame::SimOrigin::new(
+            crate::sim_origin::HOME,
+            (feet.as_dvec3() / 128.0).round() * 128.0,
+        );
+        let (tip_l, tied_l) = (near.from_query_point(tip), near.from_query_point(tied));
+        let local = draw::line_points(&near, tip_l, tied_l, slack, |p| floor(near.query_point(p)));
+        assert!((tip_l + *local.last().unwrap()).distance(tied_l) < 1e-5);
+        for (a, b) in points.iter().zip(&local) {
+            assert!(a.distance(*b) < 2e-3, "{a} {b}");
+        }
         for p in &points[1..points.len() - 1] {
             let at = tip + *p;
             assert!(

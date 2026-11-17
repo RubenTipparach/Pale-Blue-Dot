@@ -52,8 +52,9 @@ before casting."
 
 Not in this change (design 8): ship gameplay, other bodies' content,
 system-scale drawing of distant bodies, the vehicles' own simulation (already
-f64), the herd, drops, towns, decks as vessel frames, and terrain queries in
-f64. Saves keep their format (the pose is the home body's frame).
+f64), decks as vessel frames, and terrain queries as altitudes. The herd,
+drops, decks (in local space), the towns' floors (f64) and the line's sag
+follow in a second pass (design 10). Saves keep their format (the pose is the home body's frame).
 
 ## Capabilities
 

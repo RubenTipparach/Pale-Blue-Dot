@@ -9,6 +9,11 @@
 //! piece in the walker's [`Structures`] swung about where it rests. A ship
 //! under sail's ([`CraftDecks`], step 3) is held by the craft and stands
 //! where its physics puts it.
+//!
+//! A deck's [`Motion`] is in local (physics) space, relative to the one
+//! `SimOrigin` (`world-frames` 10.3): its heave, roll and way are small
+//! numbers there, never rounded to the planet's half millimetre, and a
+//! rebase moves it ([`rebase_decks`]).
 
 use crate::towns::Towns;
 use crate::vehicles::Vehicle;
@@ -16,6 +21,7 @@ use crate::walking::Structures;
 use bevy::prelude::*;
 use pbd_core::settlement::pieces::{BuildingSolids, Frame, Meshes};
 use pbd_core::vehicle::Kind;
+use pbd_core::world_frame::SimOrigin;
 
 /// How a deck moved over the last tick: where its frame was, and is.
 #[derive(Clone, Copy, Debug)]
@@ -25,19 +31,19 @@ pub struct Motion {
 }
 
 impl Motion {
-    /// Where a planet-local point on the deck went over the last tick.
+    /// Where a local point on the deck went over the last tick.
     pub fn carry(&self, p: Vec3) -> Vec3 {
         self.now.world(self.then.local(p))
     }
 
-    /// Where a planet-local direction on the deck turned over the last tick.
+    /// Where a direction on the deck turned over the last tick.
     pub fn carry_dir(&self, v: Vec3) -> Vec3 {
         let l = Vec3::new(v.dot(self.then.x), v.dot(self.then.y), v.dot(self.then.z));
         self.now.x * l.x + self.now.y * l.y + self.now.z * l.z
     }
 
-    /// The deck's own velocity at a planet-local point on it, over the last
-    /// tick of `dt` seconds.
+    /// The deck's own velocity at a local point on it, over the last tick of
+    /// `dt` seconds.
     pub fn velocity_at(&self, p: Vec3, dt: f32) -> Vec3 {
         if dt > 0.0 {
             (self.carry(p) - p) / dt
@@ -127,12 +133,17 @@ pub struct Deck {
     /// place.
     pub site: Option<(u32, usize)>,
     pub structure: usize,
+    /// Where it rests, a planet frame (the town's).
     pub rest: Frame,
     /// The bow, a unit tangent: what it rolls about.
     pub bow: Vec3,
     pub swing: Swing,
+    /// Where it was a tick ago and is now, local (physics) frames once it
+    /// has moved ([`move_decks`]).
     pub then: Frame,
     pub now: Frame,
+    /// Whether `then` and `now` are local yet (the first move makes them).
+    moved: bool,
     /// Its drawing, which is moved with it.
     pub mesh: Option<Entity>,
 }
@@ -153,8 +164,14 @@ impl Deck {
             swing,
             then: rest,
             now: rest,
+            moved: false,
             mesh: None,
         }
+    }
+
+    /// Whether its frames are local yet (it has moved once).
+    pub fn is_local(&self) -> bool {
+        self.moved
     }
 
     /// How it moved over the last tick.
@@ -165,20 +182,41 @@ impl Deck {
         }
     }
 
-    /// Where a planet-local point on the deck went over the last tick.
+    /// Where a local point on the deck went over the last tick.
     pub fn carry(&self, p: Vec3) -> Vec3 {
         self.motion().carry(p)
     }
 
+    /// Where it is now as a planet frame, for the town piece's other
+    /// readers (rain shelter, doors): the local frame's origin added to the
+    /// origin in f64.
+    pub fn now_planet(&self, origin: &SimOrigin) -> Frame {
+        Frame {
+            origin: origin.query_point(self.now.origin),
+            ..self.now
+        }
+    }
+
     /// Its drawing's transform under the town's root: from where it rests
-    /// to where it is.
-    fn transform(&self) -> Transform {
+    /// to where it is, the translation found in f64 (it is small; the two
+    /// frames' origins are not).
+    fn transform(&self, origin: &SimOrigin) -> Transform {
         let m = |f: &Frame| Mat3::from_cols(f.x, f.y, f.z);
         let turn = Quat::from_mat3(&(m(&self.now) * m(&self.rest).transpose())).normalize();
+        let now = origin.origin + self.now.origin.as_dvec3();
+        let rest = (turn.as_dquat() * self.rest.origin.as_dvec3()).as_vec3();
         Transform {
-            translation: self.now.origin - turn * self.rest.origin,
+            translation: (now - rest.as_dvec3()).as_vec3(),
             rotation: turn,
             scale: Vec3::ONE,
+        }
+    }
+
+    /// The rest frame moved into local space, in f64.
+    fn rest_local(&self, origin: &SimOrigin) -> Frame {
+        Frame {
+            origin: origin.from_query_point(self.rest.origin),
+            ..self.rest
         }
     }
 }
@@ -216,10 +254,12 @@ pub fn move_decks(
     structures: Option<ResMut<Structures>>,
     towns: Option<Res<Towns>>,
     mut transforms: Query<&mut Transform>,
+    space: crate::SimSpace,
 ) {
     let dt = time.delta_secs();
     decks.t += dt;
     let t = decks.t;
+    let o = space.origin();
     let mut structures = structures;
     decks.list.retain_mut(|d| {
         if let Some((site, n)) = d.site {
@@ -228,21 +268,43 @@ pub fn move_decks(
                 None => return false,
             }
         }
-        d.then = d.now;
-        d.now = d.swing.at(&d.rest, d.bow, t);
+        // Swung in local space, about the rest frame moved there in f64.
+        let now = d.swing.at(&d.rest_local(&o), d.bow, t);
+        d.then = if d.moved { d.now } else { now };
+        d.now = now;
+        d.moved = true;
         if let Some(piece) = structures.as_mut().and_then(|s| s.0.get_mut(d.structure)) {
-            piece.frame = d.now;
+            piece.frame = d.now_planet(&o);
         }
         if let Some(mut transform) = d.mesh.and_then(|e| transforms.get_mut(e).ok()) {
-            *transform = d.transform();
+            *transform = d.transform(&o);
         }
         true
     });
 }
 
+/// A rebase of the local origin: every deck's local frames move with it, so
+/// its next carry is continuous across the rebase (`world-frames` 10.3).
+pub fn rebase_decks(world: &mut World, shift: Vec3) {
+    if let Some(mut decks) = world.get_resource_mut::<Decks>() {
+        for d in decks.list.iter_mut().filter(|d| d.moved) {
+            d.then.origin -= shift;
+            d.now.origin -= shift;
+        }
+    }
+    if let Some(mut crafts) = world.get_resource_mut::<CraftDecks>() {
+        for d in &mut crafts.list {
+            d.motion.then.origin -= shift;
+            d.motion.now.origin -= shift;
+            d.solids.frame.origin -= shift;
+        }
+    }
+}
+
 /// A ship's deck under sail (`sail-the-cog` step 3): the craft's ship cut
 /// once in its own frame ([`pbd_core::settlement::pieces::cog::sailing`]),
-/// standing where the craft is.
+/// standing where the craft is. Its solids' frame and its motion are local
+/// (physics) frames, and are asked in local space (`world-frames` 10.3).
 #[derive(Clone, Debug)]
 pub struct CraftDeck {
     pub craft: Entity,
@@ -267,8 +329,8 @@ impl CraftDecks {
 }
 
 /// Where a craft stands, as a frame in the walker's: its reference frame's
-/// origin and axes, the render frame's centre added (`PlanetRenderFrame`),
-/// as the vehicles reach the walker.
+/// origin and axes, `centre` (the planet's centre in physics space) added
+/// in f64, as the vehicles reach the walker: a local (physics) frame.
 pub fn craft_frame(craft: &pbd_core::vehicle::Craft, centre: bevy::math::DVec3) -> Frame {
     let o = craft.body.orientation;
     Frame {
@@ -368,13 +430,98 @@ mod tests {
         assert!(deck.now.local(p).distance(local) < 1e-3);
     }
 
+    /// `world-frames` 10.6: a moored deck 4.4 km from the planet's centre,
+    /// swung in local space, survives a rebase unchanged in the planet's
+    /// frame (to the f32 step of a local value, micrometres), and a point it carries moves on across the rebase as it does
+    /// with the origin held.
+    #[test]
+    fn a_deck_survives_a_rebase_unchanged() {
+        use crate::sim_origin::{HOME, SimFrame, add_rebase_hook, apply};
+        use bevy::math::DVec3;
+        use pbd_core::world_frame::Rebase;
+        let up = DVec3::new(0.62, 0.41, -0.67).normalize();
+        let y = up.as_vec3();
+        let x = y.any_orthonormal_vector();
+        let rest = Frame {
+            origin: (up * 4436.4468).as_vec3(),
+            x,
+            y,
+            z: x.cross(y),
+        };
+        let origin = SimOrigin::new(HOME, (rest.origin.as_dvec3() / 128.0).round() * 128.0);
+        let make = || {
+            let mut app = App::new();
+            app.add_plugins(MinimalPlugins)
+                .insert_resource(SimFrame(origin))
+                .insert_resource(Decks {
+                    list: vec![Deck::new(None, 0, rest, rest.x, Swing::MOORED.scaled(4.0))],
+                    t: 0.0,
+                })
+                .add_systems(Update, move_decks);
+            add_rebase_hook(&mut app, rebase_decks);
+            app
+        };
+        // Fixed time steps, so the two apps swing alike.
+        let step = |app: &mut App| {
+            app.world_mut()
+                .resource_mut::<Time>()
+                .advance_by(std::time::Duration::from_millis(16));
+            app.world_mut().run_schedule(Update);
+        };
+        let (mut moved, mut held) = (make(), make());
+        for _ in 0..30 {
+            step(&mut moved);
+            step(&mut held);
+        }
+        let planet = |app: &App| {
+            let o = app.world().resource::<SimFrame>().0;
+            let d = &app.world().resource::<Decks>().list[0];
+            (
+                o.origin + d.now.origin.as_dvec3(),
+                o.origin + d.then.origin.as_dvec3(),
+            )
+        };
+        let before = planet(&moved);
+        // One cell, as a rebase on foot moves it.
+        let delta = DVec3::new(128.0, 0.0, -128.0);
+        apply(
+            moved.world_mut(),
+            Rebase {
+                shift: delta.as_vec3(),
+                delta,
+            },
+        );
+        let after = planet(&moved);
+        // A local value moved by a cell rounds only at its own small size.
+        assert!((after.0 - before.0).length() < 1e-5 && (after.1 - before.1).length() < 1e-5);
+        // A point on the deck, carried on in both.
+        let on_deck = Vec3::new(2.0, 1.9, -0.5);
+        let o_moved = moved.world().resource::<SimFrame>().0;
+        let mut p_moved = moved.world().resource::<Decks>().list[0].now.world(on_deck);
+        let mut p_held = held.world().resource::<Decks>().list[0].now.world(on_deck);
+        for _ in 0..30 {
+            step(&mut moved);
+            step(&mut held);
+            p_moved = moved.world().resource::<Decks>().list[0].carry(p_moved);
+            p_held = held.world().resource::<Decks>().list[0].carry(p_held);
+            let a = o_moved.to_world(p_moved).pos;
+            let b = origin.to_world(p_held).pos;
+            assert!((a - b).length() < 1e-4, "{a} {b}");
+        }
+    }
+
     #[test]
     fn a_decks_drawing_goes_where_its_frame_does() {
         let rest = rest();
         let mut deck = Deck::new(None, 0, rest, rest.x, Swing::MOORED.scaled(5.0));
         deck.now = deck.swing.at(&deck.rest, deck.bow, 4.2);
         let local = Vec3::new(-6.0, 3.5, 2.0);
-        let drawn = deck.transform().transform_point(rest.world(local));
+        let drawn = deck
+            .transform(&SimOrigin::new(
+                crate::sim_origin::HOME,
+                bevy::math::DVec3::ZERO,
+            ))
+            .transform_point(rest.world(local));
         assert!(drawn.distance(deck.now.world(local)) < 1e-3);
     }
 }

@@ -76,10 +76,10 @@ pub(super) fn lamp_near(world: &World, cell: u32) -> bool {
 /// How each kept animal near the player fares now (S7), by id. One far away
 /// (beyond the herds' reach) is left out: nothing pairs where no one sees it.
 fn fitness_now(world: &World, yard: &mut Farmyard, save: &WorldSave) -> BTreeMap<u64, Fitness> {
-    let Some(feet) = world.feet() else {
+    let Some(feet_point) = world.feet_point() else {
         return BTreeMap::new();
     };
-    let up = feet.normalize_or(Vec3::Y);
+    let up = feet_point.normalize_or(Vec3::Y);
     let near = world.settings().herds.near_m;
     let n = world.settings().needs;
     let mut out = BTreeMap::new();
@@ -357,7 +357,7 @@ pub(super) fn place_incubator(
     save: &mut WorldSave,
     point: Vec3,
 ) -> bool {
-    let Some(feet) = world.feet() else {
+    let Some(feet) = world.feet_point() else {
         return false;
     };
     if point.distance(feet) > world.settings().taming.reach_m * 2.5 {
