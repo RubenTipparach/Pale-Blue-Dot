@@ -116,7 +116,7 @@
         <li>The break times are the game's, <code>assets/config/dig.ron</code>: the stone tier's matrix (pickaxe on stone 1.2&nbsp;s, rock 1.6&nbsp;s, ore 2.0&nbsp;s; shovel on dirt 0.5&nbsp;s; axe on wood 0.6&nbsp;s) divided by the tier's speed (1, 1.6, 2.4, 3.6).</li>
         <li><strong>Today</strong> is the game's chop (<code>held::hold</code>): a sine at 9&nbsp;rad/s, <code>chop = sin(phase).max(-0.2)</code>, pitching the tool 0.85&nbsp;rad forward about a fixed fist and dropping it 6&nbsp;cm: a wrist flick, slowest at the moment it should land. It has no hits of its own, and letting go snaps the tool to rest.</li>
         <li>At the hit the arm also swings in toward the middle of the view (<code>sweep_rad</code>, about the shoulder's upright), so the head lands at the crosshair rather than off to the right where the fist rests.</li>
-        <li><strong>The shovel</strong> (the owner: <em>"the spade definitely need to take a steep angle approach to dirt, angle up and lift"</em>) has no overhead arc. The windup turns the spade onto a steep line, <code>entry_deg</code> below the horizontal with the tip leading, and the anticipation draws it back up that line. The hit stabs it in along its own handle by <code>thrust_m</code>. The fist stays low: at the hit it is <code>fist_drop_m</code> below and <code>fist_fwd_m</code> ahead of where it rests, <code>across_m</code> in toward the middle, and the blade goes in wherever the handle's steep line from there meets the ground (the owner: <em>"the hand is raised to high"</em>). The recoil angles it up about the point where the blade is in the ground (<code>lever_rad</code>, not about the fist), then lifts (<code>lift_m</code>) with a clump of dirt on the blade, which tips off as it returns. The arm follows only <code>arm_follow</code> of the spade's turn and the wrist takes the rest, so the sleeve stays below the hand.</li>
+        <li><strong>The shovel</strong> (the owner: <em>"shovel tips down and should move forward like a sliding motion into the dirt, tip and pull up dirt"</em>, with a GIF of a man digging a bank) has no overhead arc. The windup tips the spade down, <code>entry_deg</code> below the horizontal with the tip leading, and brings the fist low and back. The hit slides it forward along the ground into the dirt by <code>slide_m</code>, sinking <code>slide_drop_m</code>: a push, not a stab. The fist stays low: at the hit it is <code>fist_drop_m</code> below and <code>fist_fwd_m</code> ahead of where it rests, <code>across_m</code> in toward the middle. The recoil tips the spade about the point where the blade is in the dirt (<code>lever_rad</code>), then pulls the dirt up (<code>lift_m</code>) and back (<code>pull_m</code>) with a clump on the blade, which tips off as it returns. The arm follows only <code>arm_follow</code> of the spade's turn and the wrist takes the rest.</li>
         <li>In Proposed the hand is the proposed hand (below), and its sleeve is <code>sleeve_extra</code> tool units longer at its far end, so the arm still runs off the screen at full reach.</li>
       </ul>
 
@@ -544,20 +544,25 @@ function proposedHandGeometry(tool, sleeveExtra, only) {
   const pc = i => v3(parts[i].at);
   const handleDir = pc(10).sub(pc(1)).normalize();   // index to little finger: along the handle
   // The thumb is shortened from its root out (owner, 2026-11-17: "thumb is
-  // too long"): each of its three segments is HAND_SHAPE.thumb_len of the
-  // game's length, and each starts where the one before now ends.
+  // too long"): the game's three segments, each HAND_SHAPE.thumb_len of its
+  // length, chained from the root. Then two segments, not three (owner:
+  // "Two thumbs segments not 3"): the first runs from the root to the end of
+  // the game's second, the second is the game's tip, so the tip stays where
+  // it closes on the handle.
   const thumb = {};
-  { let start = null;
+  { let start = null; const pts = [];
     for (let i = 13; i <= 15; i++) {
       const p = parts[i], ax = v3(p.axis).normalize(), L = p.length * HAND_SHAPE.thumb_len;
-      if (start === null) start = v3(p.at).addScaledVector(ax, -p.length / 2);
-      thumb[i] = { at: start.clone().addScaledVector(ax, L / 2), len: L };
-      start = start.clone().addScaledVector(ax, L);
-    } }
+      if (start === null) { start = v3(p.at).addScaledVector(ax, -p.length / 2); pts.push(start.clone()); }
+      start = start.clone().addScaledVector(ax, L); pts.push(start.clone());
+    }
+    const seg = (a, b) => ({ at: a.clone().add(b).multiplyScalar(0.5), len: a.distanceTo(b), axis: b.clone().sub(a).normalize() });
+    thumb[13] = seg(pts[0], pts[2]); thumb[14] = { skip: true }; thumb[15] = seg(pts[2], pts[3]); }
   parts.forEach((p, i) => {
     if (only === "hand" && i >= 16 || only === "arm" && i < 16) return;
     let axis = v3(p.axis).normalize(), at = v3(p.at), len = p.length;
-    if (thumb[i]) { at = thumb[i].at; len = thumb[i].len; }
+    if (thumb[i] && thumb[i].skip) return;
+    if (thumb[i]) { at = thumb[i].at; len = thumb[i].len; axis = thumb[i].axis; }
     const first = p.across ? v3(p.across) : Math.abs(axis.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
     let u = first.clone().addScaledVector(axis, -first.dot(axis)).normalize();
     const finger = i >= 1 && i <= 15, distal = finger && (i % 3 === 0), seg = finger ? (i - 1) % 3 : -1;
@@ -875,10 +880,10 @@ const STROKE_SL = [
 ];
 const ROD_DEF = { draw_rad: 0.9, cast_raise_m: 0.28, cast_back_m: 0.18, cast_reach_m: 0.07, flick_rad: 0.35, flick_s: 0.14, flick_wobble_rad: 0.05, settle_rad: 0.12, bob_rad: 0.015, bob_hz: 0.4, nibble_rad: 0.05, nibble_s: 0.15, bite_rad: 0.22, bite_shake_rad: 0.04, bite_shake_hz: 14, fight_rad: 0.45, run_dip_rad: 0.2, fight_shake_rad: 0.06, fight_shake_hz: 9, crank_m: 0.012, crank_hz: 3, roll_rad: 0.15, catch_dip_rad: 0.08, catch_rad: 0.6, catch_s: 0.6, ease_s: 0.3, spring_hz: 9, damping: 0.7 };
 const ROD_SL = [["draw_rad", 0, 1.6, 0.01], ["cast_raise_m", 0, 0.45, 0.005], ["cast_back_m", 0, 0.4, 0.005], ["cast_reach_m", 0, 0.2, 0.005], ["flick_rad", 0, 1, 0.01], ["flick_s", 0.04, 0.4, 0.01], ["flick_wobble_rad", 0, 0.2, 0.005], ["settle_rad", 0, 0.5, 0.01], ["bob_rad", 0, 0.08, 0.005], ["bob_hz", 0.1, 2, 0.05], ["nibble_rad", 0, 0.2, 0.005], ["nibble_s", 0.05, 0.5, 0.01], ["bite_rad", 0, 0.6, 0.01], ["bite_shake_rad", 0, 0.15, 0.005], ["bite_shake_hz", 2, 24, 0.5], ["fight_rad", 0, 1, 0.01], ["run_dip_rad", 0, 0.6, 0.01], ["fight_shake_rad", 0, 0.2, 0.005], ["fight_shake_hz", 2, 20, 0.5], ["crank_m", 0, 0.04, 0.001], ["crank_hz", 0.5, 6, 0.1], ["roll_rad", 0, 0.4, 0.01], ["catch_dip_rad", 0, 0.3, 0.01], ["catch_rad", 0, 1.2, 0.01], ["catch_s", 0.1, 1.5, 0.05], ["ease_s", 0.05, 1, 0.01], ["spring_hz", 1, 20, 0.5], ["damping", 0.1, 1.5, 0.01]];
-// The shovel's own stroke: a steep stab along the handle, then angle up
-// about the blade in the ground, and lift (shovelAt).
-const SHOVEL_DEF = { entry_deg: 65, thrust_m: 0.10, lever_rad: 0.4, lift_m: 0.07, scoop_s: 0.22, across_m: 0.12, arm_follow: 0.1, fist_drop_m: 0.06, fist_fwd_m: 0.10 };
-const SHOVEL_SL = [["entry_deg", 30, 85, 1], ["thrust_m", 0, 0.3, 0.005], ["lever_rad", 0, 0.9, 0.01], ["lift_m", 0, 0.2, 0.005], ["scoop_s", 0.08, 0.5, 0.01], ["across_m", 0, 0.35, 0.01], ["arm_follow", 0, 1, 0.05], ["fist_drop_m", -0.1, 0.25, 0.005], ["fist_fwd_m", -0.1, 0.3, 0.005]];
+// The shovel's own stroke: tip down, slide forward into the dirt, tip
+// about the blade in the dirt, and pull the dirt up (shovelAt).
+const SHOVEL_DEF = { entry_deg: 6, slide_m: 0.28, slide_drop_m: 0.03, lever_rad: 0.5, lift_m: 0.14, pull_m: 0.05, scoop_s: 0.26, across_m: 0.12, arm_follow: 0.1, fist_drop_m: 0.04, fist_fwd_m: 0.12 };
+const SHOVEL_SL = [["entry_deg", -20, 85, 1], ["slide_m", 0, 0.4, 0.005], ["slide_drop_m", 0, 0.1, 0.005], ["lever_rad", 0, 0.9, 0.01], ["lift_m", 0, 0.3, 0.005], ["pull_m", 0, 0.2, 0.005], ["scoop_s", 0.08, 0.5, 0.01], ["across_m", 0, 0.35, 0.01], ["arm_follow", 0, 1, 0.05], ["fist_drop_m", -0.1, 0.25, 0.005], ["fist_fwd_m", -0.1, 0.3, 0.005]];
 const ROD_GAME = ["draw_rad", "cast_raise_m", "cast_back_m", "cast_reach_m", "flick_rad", "flick_s", "settle_rad", "bob_rad", "bob_hz", "nibble_rad", "nibble_s", "bite_rad", "bite_shake_rad", "bite_shake_hz", "fight_rad", "fight_shake_rad", "fight_shake_hz", "crank_m", "crank_hz", "roll_rad", "catch_rad", "catch_s", "ease_s", "spring_hz", "damping"];
 const ST = Object.assign({}, STROKE_DEF), ROD = Object.assign({}, ROD_DEF), SHOVEL = Object.assign({}, SHOVEL_DEF);
 const fmt = v => { const s = (+v.toFixed(4)).toString(); return s.includes(".") ? s : s + ".0"; };
@@ -889,7 +894,7 @@ function ronText() {
     if (k === "shoulder_x") { lines.push(`        shoulder: (${fmt(ST.shoulder_x)}, ${fmt(ST.shoulder_y)}, ${fmt(ST.shoulder_z)}),`); continue; }
     lines.push(`        ${k}: ${fmt(ST[k])},`);
   }
-  lines.push("    ),", "    // The shovel's stroke: a steep stab along the handle, angle up about", "    // the blade in the ground, lift (its times are the stroke's, scoop_s in", "    // place of recoil_s).", "    shovel: (");
+  lines.push("    ),", "    // The shovel's stroke: tip down, slide into the dirt, tip about", "    // the blade in the dirt, pull up (its times are the stroke's, scoop_s in", "    // place of recoil_s).", "    shovel: (");
   for (const [k] of SHOVEL_SL) lines.push(`        ${k}: ${fmt(SHOVEL[k])},`);
   lines.push("    ),", "    // The rod in hand (rod-motion design 2).", "    rod: (");
   // The game's rod block (held.rs RodSettings): sizes, rates and times, all
@@ -1048,11 +1053,13 @@ function keyedPose(name, tool) {
   if (tool === "shovel") { const K = shovelKeys(); return name === "TOP" ? mixS(K.coil, K.coil, 0) : name === "HIT" ? mixS(K.hit, K.hit, 0) : name === "RECOIL" ? Object.assign(mixS(K.lift, K.lift, 0), { scoop: true }) : mixS(SREST, SREST, 0); }
   const K = keys(); return name === "TOP" ? K.coil : name === "HIT" ? K.hit : name === "RECOIL" ? K.recoil : REST;
 }
-// The shovel's stroke: no overhead arc. The spade turns to a steep entry
-// (entry_deg below the horizontal, tip leading), stabs in along its own
-// handle (thrust_m), levers back about the point where the blade is in the
-// ground (lever_rad: the tip rises, the heel pivots), lifts the dirt
-// (lift_m), and returns. Eye space; the view looks down DIG_PITCH as the Dig
+// The shovel's stroke: no overhead arc (owner, 2026-11-17: "shovel tips
+// down and should move forward like a sliding motion into the dirt, tip and
+// pull up dirt"). The windup tips the spade down (entry_deg below the
+// horizontal, tip leading) with the fist low and back; the hit slides it
+// forward into the dirt (slide_m, sinking slide_drop_m); the recoil levers
+// back about the point where the blade is in the dirt (lever_rad: the face
+// turns up), then pulls the dirt up and back (lift_m, pull_m); it returns. Eye space; the view looks down DIG_PITCH as the Dig
 // tab's does.
 const DIG_PITCH = -0.56;
 function shovelKeys() {
@@ -1069,13 +1076,15 @@ function shovelKeys() {
   // the ground. The fist is placed and the blade follows, not the reverse.
   const fistHit = FIST0.clone().add(new THREE.Vector3(-V.across_m, -V.fist_drop_m, -V.fist_fwd_m));
   const hit = { pitch: entry, shift: fistHit.clone().sub(FIST0) };
-  const coil = { pitch: entry, shift: hit.shift.clone().addScaledVector(D, -V.thrust_m) };
-  const top = { pitch: entry * 0.8, shift: coil.shift.clone().add(new THREE.Vector3(0, 0.01 * ex, 0.02)) };
+  // The slide: back toward the player and up off the dirt by the slide's
+  // length, so the hit pushes the spade forward along the ground into it.
+  const coil = { pitch: entry, shift: hit.shift.clone().add(new THREE.Vector3(0, V.slide_drop_m, V.slide_m)) };
+  const top = { pitch: entry * 0.85, shift: coil.shift.clone().add(new THREE.Vector3(0, 0.03 * ex, 0.02)) };
   // The lever: turn about the blade's point in the ground.
   const C = tipAt(hit.pitch, hit.shift);
   const leverAt = k => { const r = V.lever_rad * ex * k, f = FIST0.clone().add(hit.shift).sub(C).applyAxisAngle(QX, r).add(C); return { pitch: hit.pitch + r, shift: f.sub(FIST0) }; };
   const lever = leverAt(1);
-  const lift = { pitch: lever.pitch, shift: lever.shift.clone().add(new THREE.Vector3(0, V.lift_m * ex, 0.02)) };
+  const lift = { pitch: lever.pitch, shift: lever.shift.clone().add(new THREE.Vector3(0, V.lift_m * ex, V.pull_m)) };
   return { top, coil, hit, lever, lift, leverAt };
 }
 const mixS = (p, q, t) => ({ shovel: true, pitch: lerp(p.pitch, q.pitch, t), shift: p.shift.clone().lerp(q.shift, t) });
@@ -1094,11 +1103,11 @@ function shovelAt(e, T) {
   if (e < T.rc) {
     // Angle up about the blade in the ground, then lift.
     const u = e / T.rc;
-    if (u < 0.55) return Object.assign(Object.assign({ shovel: true }, K.leverAt(smooth(u / 0.55))), { stage: "RECOIL (ANGLE UP)", scoop: true });
-    return Object.assign(mixS(K.lever, K.lift, easeOut((u - 0.55) / 0.45)), { stage: "RECOIL (LIFT)", scoop: true });
+    if (u < 0.45) return Object.assign(Object.assign({ shovel: true }, K.leverAt(smooth(u / 0.45))), { stage: "RECOIL (TIP)", scoop: true });
+    return Object.assign(mixS(K.lever, K.lift, easeOut((u - 0.45) / 0.55)), { stage: "RECOIL (PULL UP)", scoop: true });
   }
   e -= T.rc;
-  if (e < T.rv) return Object.assign(mixS(K.lift, SREST, smooth(e / T.rv)), { stage: "RECOIL (LIFT)", rv: e / T.rv, scoop: e / T.rv < 0.45 });
+  if (e < T.rv) return Object.assign(mixS(K.lift, SREST, smooth(e / T.rv)), { stage: "RECOIL (PULL UP)", rv: e / T.rv, scoop: e / T.rv < 0.45 });
   return Object.assign(mixS(SREST, SREST, 0), { stage: "" });
 }
 

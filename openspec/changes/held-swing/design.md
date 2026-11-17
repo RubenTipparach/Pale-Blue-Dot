@@ -103,18 +103,28 @@
    - **Pose to pose, solid drawing and appeal:** four keyed poses (rest,
      top, hit, recoil) blended by the curves, and the fist reads as solid in
      each.
-9. The shovel digs at a steep angle and scoops (owner, 2026-11-17: "the
+9. The shovel tips down, slides into the dirt and scoops (owner, 2026-11-17: "the
    shovel should go down fast, lift slightly like its lifting dirt", then on
    the mockup: "shovel in the mockup looked like it was smashing dirt, the
    spade definiely need to take a stteep angle approach to dirt, angle up and
    lift"). It has no overhead chop arc:
-   - **Entry:** the spade comes in steeply, tip first, about 65° below level
-     (`entry_deg`). It is driven along the handle's own axis into the ground
-     just ahead (`thrust_m`). The fist pushes forward and down, and the tool
-     barely pitches.
-   - **Angle up:** the handle levers back about the blade's contact point in
-     the ground (`lever_rad`, 0.4). The tip rises.
-   - **Lift:** the spade rises with a clump of dirt on it (`lift_m`, 0.06).
-   - **Return:** the clump tips off as the spade returns.
+   - **Tip down (windup):** the spade tips down from rest until its tip
+     points at the ground ahead (`entry_deg`, 6° below level: the spade lies
+     low and long in front, the way the digger in the owner's reference GIF
+     holds it), and the fist comes low and a little back (owner, 2026-11-17, on version 5: "Digging
+     is still wrong shovel tips down and should move forward like a sliding
+     motion into the dirt, tip and pull up dirt").
+   - **Slide (hit):** the spade slides forward along the ground into the dirt,
+     tip first, at that angle (`slide_m` 0.28 forward, sinking `slide_drop_m`
+     0.03). It is a push, not a stab: the steep 65° drive along the handle
+     of version 5 is replaced.
+   - **Tip (recoil):** the handle levers back about the blade's point in the
+     dirt (`lever_rad`, 0.5). The spade's face turns up under the dirt.
+   - **Pull up:** the spade rises and draws back toward the player with a
+     clump of dirt on it (`lift_m` 0.14 up, `pull_m` 0.05 back).
+   - **Return:** the clump tips off as the spade returns to rest.
+
+   The proposed hand's thumb has two segments, not three (owner, 2026-11-17:
+   "Two thumbs segments not 3"); that is `hand-model`'s.
 
    It keeps the four stages (decision 7) and the steady beat (decision 5).

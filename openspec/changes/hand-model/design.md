@@ -5,7 +5,9 @@
 - **Parts:** 19 prisms per tool from `held_tools.ron`, all in tool units:
   - one palm prism, width 2.0 and height 0.70;
   - four fingers of three prisms each;
-  - the thumb, three prisms;
+  - the thumb, three prisms in the game; the proposed hand draws it as two
+    (owner, 2026-11-17: "Two thumbs segments not 3"), shortened to 0.72 of
+    the game's length ("thumb is too long");
   - the wrist, the cuff and the sleeve.
 - **Colours:**
   - the middle finger segments are (195, 151, 118);
