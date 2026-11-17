@@ -20,6 +20,7 @@ use crate::saves::WorldSave;
 use crate::sky::Sun;
 use crate::walking::{HALF_HEIGHT, Walker, WalkingReadout};
 use bevy::asset::RenderAssetUsages;
+use bevy::math::DVec3;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use pbd_core::drops::{self, ItemDrop, Moved};
@@ -55,10 +56,11 @@ impl Drops {
         }
     }
 
-    /// The drop a dug block makes: one of `item`, at `centre` pushed aside by
-    /// the scatter, named by the save's next id and made at world time
-    /// `now_s`. It is not added here: the dig's line has to be accepted first.
-    pub fn make(save: &WorldSave, item: Item, centre: Vec3, now_s: f64) -> ItemDrop {
+    /// The drop a dug block makes: one of `item`, at `centre` (the body's
+    /// frame, f64) pushed aside by the scatter, named by the save's next id
+    /// and made at world time `now_s`. It is not added here: the dig's line
+    /// has to be accepted first.
+    pub fn make(save: &WorldSave, item: Item, centre: DVec3, now_s: f64) -> ItemDrop {
         let id = save.next_drop_id();
         ItemDrop {
             id,
@@ -70,10 +72,14 @@ impl Drops {
     }
 }
 
-/// The walker's chest, planet-local: where a drop is pulled to.
-pub fn chest(walker: Vec3) -> Vec3 {
-    let up = walker.normalize_or(Vec3::Y);
-    walker - up * HALF_HEIGHT + up * drops::CHEST_M
+/// The walker's chest, from its local (physics) body centre: where a drop is
+/// pulled to, a point in the body's frame in f64 (`world-frames` 10.4).
+pub fn chest(origin: &pbd_core::world_frame::SimOrigin, walker: Vec3) -> DVec3 {
+    let at = origin.with_radius(
+        walker,
+        origin.radius_at(walker) - f64::from(HALF_HEIGHT) + f64::from(drops::CHEST_M),
+    );
+    origin.to_world(at).pos
 }
 
 /// One frame of every drop. Those past their time go, and write nothing: a
@@ -97,14 +103,15 @@ pub fn gather(
     let Some(walker) = walkers.iter().next().filter(|_| on_foot) else {
         return;
     };
-    // The walker's body is local; drops are planet points (`world-frames`).
-    let chest = chest(space.origin().query_point(walker.translation));
+    // The walker's body is local; drops are body-frame f64 points
+    // (`world-frames` 10.4), so nothing here is rounded at the planet's scale.
+    let chest = chest(&space.origin(), walker.translation);
     let dt = time.delta_secs();
     if let Some(nearest) = drops
         .live
         .iter()
         .map(|d| (d.position - chest).length())
-        .reduce(f32::min)
+        .reduce(f64::min)
     {
         trace!(
             "{} drops, nearest {nearest:.2} m from the chest",
@@ -240,11 +247,13 @@ pub fn prism(faces: PrismFaces) -> Mesh {
 }
 
 /// Where a drop is drawn at time `t` s, in the render frame: its floating
-/// point plus its bob along the local up. A prism turns about the up; a card
-/// turns to face `eye`, upright.
-fn pose(drop: &ItemDrop, centre: Vec3, t: f32, card: bool, eye: Option<Vec3>) -> Transform {
-    let up = drop.position.normalize_or(Vec3::Y);
-    let at = centre + drop.position + up * drop.bob(t);
+/// point plus its bob along the local up, placed by `centre` (the planet's
+/// centre in render space) in f64 before the cast. A prism turns about the
+/// up; a card turns to face `eye`, upright.
+fn pose(drop: &ItemDrop, centre: DVec3, t: f32, card: bool, eye: Option<Vec3>) -> Transform {
+    let up64 = drop.position.normalize_or(DVec3::Y);
+    let up = up64.as_vec3();
+    let at = (centre + drop.position + up64 * f64::from(drop.bob(t))).as_vec3();
     let standing = Quat::from_rotation_arc(Vec3::Y, up);
     let rotation = match (card, eye) {
         (true, Some(eye)) => {
@@ -287,7 +296,7 @@ fn draw(
             meshes.add(Rectangle::new(side, side))
         })
         .clone();
-    let centre = frame.center.as_vec3();
+    let centre = frame.center;
     let eye = cameras
         .iter()
         .find(|(_, camera)| camera.is_active)
@@ -359,7 +368,7 @@ mod tests {
             id,
             item: Item::Block(Material::Dirt),
             count: 1,
-            position: at,
+            position: at.as_dvec3(),
             made_s,
         }
     }
@@ -415,7 +424,7 @@ mod tests {
         let live = &app.world().resource::<Drops>().live;
         assert_eq!(live.len(), 1, "the old one went");
         assert_eq!(live[0].id, 1);
-        assert_eq!(live[0].position, far);
+        assert_eq!(live[0].position, far.as_dvec3());
     }
 
     /// The prism is closed and every face points out: each triangle's
@@ -461,7 +470,7 @@ mod tests {
     #[test]
     fn a_drop_is_drawn_where_it_floats() {
         let drop = dirt(0, FEET, 0.0);
-        let still = pose(&drop, Vec3::ZERO, 0.0, false, None);
+        let still = pose(&drop, DVec3::ZERO, 0.0, false, None);
         let up = FEET.normalize();
         assert!(
             (still.translation - FEET).cross(up).length() < 1e-4,
@@ -469,7 +478,7 @@ mod tests {
         );
         assert!((still.translation - FEET).length() <= drops::BOB_M + 1e-5);
         let eye = FEET + Vec3::X * 3.0;
-        let card = pose(&drop, Vec3::ZERO, 0.0, true, Some(eye));
+        let card = pose(&drop, DVec3::ZERO, 0.0, true, Some(eye));
         let facing = card.rotation * Vec3::Z;
         assert!(
             facing.dot(Vec3::X) > 0.99,
@@ -482,9 +491,88 @@ mod tests {
     #[test]
     fn a_new_drop_takes_the_next_id() {
         let save = WorldSave::memory_only();
-        let drop = Drops::make(&save, Item::Block(Material::Stone), FEET, 50.0);
+        let drop = Drops::make(&save, Item::Block(Material::Stone), FEET.as_dvec3(), 50.0);
         assert_eq!(drop.id, 0);
         assert_eq!(drop.count, 1);
-        assert!(((drop.position - FEET).length() - drops::SCATTER_M).abs() < 1e-4);
+        assert!(
+            ((drop.position - FEET.as_dvec3()).length() - f64::from(drops::SCATTER_M)).abs() < 1e-4
+        );
+    }
+
+    /// `world-frames` 10.6: a drop is a body-frame point, so a rebase of the
+    /// local origin leaves it where it was, drawn where it was, and the pull
+    /// toward a walker far from the planet's centre is continuous across it.
+    #[test]
+    fn a_drop_survives_a_rebase_unchanged() {
+        use crate::planet::PlanetRenderFrame;
+        use crate::sim_origin::{HOME, SimFrame, apply};
+        use pbd_core::world_frame::{Rebase, SimOrigin};
+        // The home planet's radius, off every axis, the origin near.
+        let feet = DVec3::new(0.62, 0.41, -0.67).normalize() * 4_436.4468;
+        let origin = SimOrigin::new(HOME, (feet / 128.0).round() * 128.0);
+        let local_feet = origin.to_local(pbd_core::world_frame::WorldPos::new(HOME, feet));
+        let up = origin.up_at(local_feet);
+        let mut app = app(vec![], Hotbar::default());
+        app.insert_resource(SimFrame(origin));
+        app.insert_resource(PlanetRenderFrame {
+            center: -origin.origin,
+            origin: DVec3::ZERO,
+        });
+        {
+            let mut q = app
+                .world_mut()
+                .query_filtered::<&mut Transform, With<Walker>>();
+            let mut t = q.single_mut(app.world_mut()).unwrap();
+            t.translation = local_feet + up * HALF_HEIGHT;
+        }
+        let t = now(&app);
+        // In the magnet's reach, outside the pickup: it is pulled.
+        let start = feet + up.as_dvec3() * 0.8 + DVec3::from(up.any_orthonormal_vector()) * 2.2;
+        let mut drop = dirt(5, Vec3::ZERO, t);
+        drop.position = start;
+        app.world_mut().resource_mut::<Drops>().live = vec![drop];
+        // The first frame's time step is zero.
+        for _ in 0..3 {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            app.update();
+        }
+        let pulled = app.world().resource::<Drops>().live[0].position;
+        let toward = (pulled - start).dot(chest(&origin, local_feet + up * HALF_HEIGHT) - start);
+        assert!(toward > 0.0, "pulled toward the chest");
+        let drawn = pose(
+            &app.world().resource::<Drops>().live[0],
+            -origin.origin,
+            0.0,
+            false,
+            None,
+        );
+        let delta = DVec3::new(128.0, -128.0, 0.0);
+        apply(
+            app.world_mut(),
+            Rebase {
+                shift: delta.as_vec3(),
+                delta,
+            },
+        );
+        let after = app.world().resource::<Drops>().live[0].position;
+        assert_eq!(
+            after, pulled,
+            "a rebase moves no drop in the planet's frame"
+        );
+        // The render frame moved with the origin: drawn where it was.
+        let frame = *app.world().resource::<PlanetRenderFrame>();
+        let redrawn = pose(
+            &app.world().resource::<Drops>().live[0],
+            frame.center,
+            0.0,
+            false,
+            None,
+        );
+        assert!(
+            (redrawn.translation - drawn.translation).length() < 1e-4,
+            "{} {}",
+            redrawn.translation,
+            drawn.translation
+        );
     }
 }

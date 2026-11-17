@@ -384,7 +384,11 @@ pub fn apply_edit(
                 } else {
                     0.5
                 };
-                let centre = direction * (PLANET_RADIUS + column::layer_altitude(layer) + lift);
+                // The body's frame in f64 (`world-frames` 10.4).
+                let centre = direction.as_dvec3().normalize()
+                    * (f64::from(PLANET_RADIUS)
+                        + f64::from(column::layer_altitude(layer))
+                        + f64::from(lift));
                 dropped = Some(Drops::make(save, item, centre, *now_s));
             }
         }
