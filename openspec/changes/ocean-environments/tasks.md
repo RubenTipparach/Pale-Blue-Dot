@@ -96,4 +96,5 @@ against what it would cost.
 
 - [ ] 15.1 The sheet seen from below is Snell's window and the murk, the waves and rings a gentle shading on the murk (at most 12% either way); no mirror and no screen-space trace, at any REFLECTIONS level; the composite's stand-in for the clipped sheet the same. Verify: `the_underside_of_the_water_never_mirrors`; the owner's two spots before and after in the videos.
 - [ ] 15.2 The split frame at the owner's shallow-sea spot is gone: the frames within 0.3 m of every crossing show no mirrored sea floor and no streak band. Verify: the stepped frame list in `docs/screenshots/underwater-waterline/README.md`.
+- [ ] 15.4 A jump on a dry beach at low tide tints and wobbles nothing: the composite's waterline is the sea's tided surface for an eye in air as for one over the sea's water. Verify: `a_jump_over_a_beach_keeps_the_composites_waterline_at_the_tide`; the `jump-beach` video before and after, stepped.
 - [ ] 15.3 The frame cost of the change, under the water. Verify: a held under-water view, `--frame-log`, release build, before and after interleaved on a quiet machine.

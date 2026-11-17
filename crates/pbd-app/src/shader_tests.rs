@@ -634,6 +634,40 @@ fn the_rain_volume_is_not_drawn_under_the_sea() {
     );
 }
 
+/// `ocean-environments` B20 (owner, 2026-11-16: "do we really need SSR from
+/// bottom of the water?"): the surface seen from below is Snell's window and
+/// the murk, never a mirror of the scene under the water, at any REFLECTIONS
+/// level. Neither the sheet's from-below path nor the composite's stand-in
+/// for the clipped sheet reads the screen history, and the ceiling is the
+/// murk shaded by at most `CEILING_SHADE` either way.
+#[test]
+fn the_underside_of_the_water_never_mirrors() {
+    let src = include_str!("../../../assets/shaders/water.wgsl").replace("\r\n", "\n");
+    assert!(
+        !src.contains("fn under_mirror("),
+        "the under-water mirror is back"
+    );
+    let fragment = wgsl_fn_body(&src, "fragment");
+    let below = &fragment[fragment
+        .find("    if (below) {\n")
+        .expect("the from-below path")..];
+    let below = &below[..below.find("\n    }\n").expect("its end")];
+    for read in ["sea_ssr", "ssr_history", "reflect("] {
+        assert!(!below.contains(read), "the underside reads `{read}`");
+    }
+    assert!(below.contains("ceiling = under_ceiling(deep, -look, normal, radial);"));
+    let compose = wgsl_fn_body(&src, "compose");
+    for read in ["sea_ssr", "ssr_history"] {
+        assert!(!compose.contains(read), "the composite reads `{read}`");
+    }
+    assert!(compose.contains("color = mix(deep, through, smoothstep(0.55,0.75,ray_d_up));"));
+    let ceiling = wgsl_fn_body(&src, "under_ceiling");
+    assert!(ceiling.contains(
+        "return deep*(1.0 + clamp(tilt*CEILING_TILT_GAIN, -CEILING_SHADE, CEILING_SHADE));"
+    ));
+    assert!(src.contains("const CEILING_SHADE: f32 = 0.12;"));
+}
+
 /// `dusk-clouds` design 1-2: the shaders light a cloud by the core's sun and
 /// sky, number for number, the puffs and the march alike.
 #[test]

@@ -44,3 +44,32 @@ be added only to the sea's surface.
 - **WHEN** the eye is under a river's water, above sea level
 - **THEN** the view is fogged and tinted by the river's water from its own surface
 - **AND** the river's sheet is drawn from below as the sea's is
+
+### Requirement: The surface seen from below is Snell's window and the murk
+
+Seen from under the water, the surface SHALL show Snell's window (what is
+over the water, refracted, seen through the water between) and outside it
+the water's own murk, the waves and the rain's rings only a gentle shading
+on it (at most 12% of the murk either way). It SHALL NOT mirror the scene
+under the water and SHALL NOT read the screen-space reflection history, at
+any REFLECTIONS level, in the sheet or in the composite's stand-in for the
+sheet the near plane clips (`ocean-environments` B20).
+
+#### Scenario: Looking up from under the sea
+
+- **WHEN** the eye is under the sea and looks at the surface outside Snell's window
+- **THEN** the surface is the murk, shaded by the waves
+- **AND** no part of the sea floor or the scene under the water is drawn in it
+
+### Requirement: The composite's waterline is the tided sea for an eye in air
+
+The composite SHALL measure the waterline from the surface of the water the
+eye is in, and for an eye in air from the sea's tided surface, never the
+sea's mean sphere, so a jump or a flight over a beach at low tide tints and
+wobbles none of the dry sand between the tided water and the mean
+(`ocean-environments` B20).
+
+#### Scenario: A jump on a beach at low tide
+
+- **WHEN** the eye rises from standing on a beach within the high tide's reach into air over it
+- **THEN** the composite's waterline stays at the sea's tided surface

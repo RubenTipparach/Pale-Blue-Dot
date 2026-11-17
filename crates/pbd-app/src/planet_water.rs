@@ -549,6 +549,23 @@ pub fn eye_water_at(
     }
 }
 
+/// The surface the composite measures the waterline from, as a body radius
+/// (`sea_frame.y`): the eye's own water's ([`eye_surface_radius`]), and for an
+/// eye in air the sea's TIDED surface (`ocean-environments` B20). It was
+/// nought in air, and the shader fell back to the sea's mean sphere: at low
+/// tide a dry beach between the tided water and the mean was taken for
+/// under water, tinted blue-green and wobbled, whenever the eye rose out of
+/// the high tide's reach over it, as in a jump (owner, 2026-11-16: "this
+/// only happens when you jump above water").
+pub fn composite_surface_radius(
+    eye: EyeWater,
+    camera_body: Vec3,
+    sea_radius: f32,
+    tide: f32,
+) -> f32 {
+    eye_surface_radius(eye, camera_body, sea_radius, tide).unwrap_or(sea_radius + tide)
+}
+
 /// The drops on the lens (`weather-rain` R3): how wet the glass is, 0..1,
 /// following the rain that reaches it exponentially, up on `lens_wet_tau_s`
 /// and down on `lens_dry_tau_s`; and the drops' clock, seconds, which runs
@@ -1860,7 +1877,7 @@ fn prepare_water_views(
                 // The sea's own surface over the eye is its tided, swelling
                 // one: the composite measured the sea from its mean, so the
                 // tide's water between was dry (a bright band at high water).
-                eye_surface_radius(eye.0, camera, sea_radius, sea_now.tide_here).unwrap_or(0.0),
+                composite_surface_radius(eye.0, camera, sea_radius, sea_now.tide_here),
                 ease.smooth,
                 ease.linear,
             ),
@@ -3309,6 +3326,44 @@ mod tests {
         assert_eq!(submersion(ocean * (sea - 5.0), sea, 0.0, band, pool), 0.0);
         assert_eq!(submersion(ocean * (sea - 10.5), sea, 0.0, band, pool), 0.5);
         assert_eq!(submersion(deep, sea, 0.0, band, pool), 1.0);
+    }
+
+    /// `ocean-environments` B20 (owner, 2026-11-16: "dry ground had the weird
+    /// water blur pass ... only happens when you jump above water"). On a
+    /// beach at low tide the eye standing within the high tide's reach is
+    /// over the sea's water, and the same eye a jump higher is in air; the
+    /// composite measures the waterline from the sea's tided surface for
+    /// both, never the mean sphere, which lies over the dry sand at low tide.
+    #[test]
+    fn a_jump_over_a_beach_keeps_the_composites_waterline_at_the_tide() {
+        let sea = terrain::PLANET_RADIUS - 0.5;
+        let low_tide = -1.2;
+        let up = Vec3::Y;
+        let sea_level = terrain::PLANET_RADIUS + terrain::terrain_config().sea_level_m;
+        let standing = EyeWater::Water {
+            surface_radius: sea_level,
+        };
+        let stand = composite_surface_radius(standing, up * (sea + 1.0), sea, low_tide);
+        let jump = composite_surface_radius(EyeWater::Air, up * (sea + 2.6), sea, low_tide);
+        assert_eq!(stand, sea + low_tide);
+        assert_eq!(jump, stand, "the jump moved the composite's waterline");
+        // Both dry: no tint, wobble or murk is armed for the eye itself.
+        assert_eq!(
+            submersion(up * (sea + 1.0), sea, low_tide, 0.0, standing),
+            0.0
+        );
+        assert_eq!(
+            submersion(up * (sea + 2.6), sea, low_tide, 0.0, EyeWater::Air),
+            0.0
+        );
+        // An inland water's own top is still the eye's.
+        let river = EyeWater::Water {
+            surface_radius: sea + 30.0,
+        };
+        assert_eq!(
+            composite_surface_radius(river, up * (sea + 29.0), sea, low_tide),
+            sea + 30.0
+        );
     }
 
     #[test]

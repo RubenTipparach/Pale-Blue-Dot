@@ -1604,6 +1604,34 @@ The rain report's speckled band is the same trace's hits and misses at the
   keep governing the reflections seen from above; nothing under the water
   reads the screen history, at any level.
 
+**A third report, the same day: the dry beach tinted on a jump.** "dry
+ground had the weird water blur pass that we fixed earlier. This only
+happens when you jump above water", "you can see the subtle sand tinted blue
+green": standing or jumping on a dry sand beach beside shallow water, the
+whole beach in front takes a faint underwater tint and wobble.
+
+*Cause.* The composite's waterline is `eye_water_surface()` in `water.wgsl`,
+which reads `sea_frame.y` and falls back to the sea's MEAN sphere
+(`planet_center.w`) when it is nought. `sea_frame.y` was
+`eye_surface_radius(..).unwrap_or(0.0)` (`planet_water.rs`), nought for an
+eye in air. An eye standing on a beach under the high tide's reach (ground
+plus eye height under the sea's level plus `tide_high_m`, 2 m) is "over the
+sea's water" (`eye_water_at`'s second arm), so the composite measured from
+the tided surface; a jump lifts the eye out of that reach into air, and the
+composite measured from the mean sphere instead. At low tide the mean lies a
+metre or so over the tided water, so the dry sand between the two, a whole
+beach's strip, was taken for under water for the frames of the jump: tinted
+by the travel under the mean and wobbled by the distortion.
+
+*Fix.* `composite_surface_radius`: the eye's water's surface where it has
+one, else the sea's tided surface, never nought, so the composite's
+waterline is the tided sea whether the eye stands, jumps or flies. The
+sheet's side test (`sea_eye`) reads the same lane and gives the same answer
+it gave per fragment for an eye in air. Pinned by
+`a_jump_over_a_beach_keeps_the_composites_waterline_at_the_tide`; shown in
+the `jump-beach` video at low tide, three jumps at play speed and a slow
+rise through the reach.
+
 **What it costs.** It removes work: per pixel of the underside, a trace of
 up to 32 steps through the history and one more history read, and in the
 composite one history read for the near rays. It is measured with a held
