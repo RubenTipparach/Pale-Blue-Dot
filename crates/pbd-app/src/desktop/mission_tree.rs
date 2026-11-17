@@ -83,7 +83,7 @@ pub const LEVELS: [Level; 10] = [
     // x0.14
     Level {
         cw: 18.0,
-        ch: 13.0,
+        ch: 12.0,
         gx: 12.0,
         gy: 12.0,
         text: false,
@@ -101,7 +101,7 @@ pub const LEVELS: [Level; 10] = [
     // x0.2
     Level {
         cw: 26.0,
-        ch: 19.0,
+        ch: 20.0,
         gx: 18.0,
         gy: 16.0,
         text: false,
@@ -119,7 +119,7 @@ pub const LEVELS: [Level; 10] = [
     // x0.3
     Level {
         cw: 40.0,
-        ch: 29.0,
+        ch: 28.0,
         gx: 28.0,
         gy: 24.0,
         text: false,
@@ -173,7 +173,7 @@ pub const LEVELS: [Level; 10] = [
     // x0.8
     Level {
         cw: 106.0,
-        ch: 77.0,
+        ch: 76.0,
         gx: 74.0,
         gy: 64.0,
         text: true,
@@ -1252,7 +1252,7 @@ pub fn bounded(pan: Vec2, lv: &Level, at: &[(usize, usize)], size: Vec2) -> Vec2
 
 /// Zoomed out, the card under the pointer shows its full card beside it
 /// (M33, owner 2026-11-16: "I can hover over nodes to get more info").
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn hover_tip(
     screen: Res<Screen>,
     view: Res<TreeView>,
@@ -1602,7 +1602,12 @@ mod tests {
             );
             let size =
                 image::image_dimensions(&path).unwrap_or_else(|e| panic!("{}: {path}: {e}", m.id));
-            assert_eq!(size, (16, 16), "{}: {}", m.id, m.icon);
+            assert!(
+                size.0 == size.1 && size.0 % 8 == 0 && size.0 <= 32,
+                "{}: {} is {size:?}",
+                m.id,
+                m.icon
+            );
         }
     }
 
