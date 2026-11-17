@@ -1616,3 +1616,123 @@ from 1.6 m over the water and on the bed, are in
 `docs/screenshots/kelp-perf/`. Known, and not changed here: the stands are
 cut to the mean sea, so at low tide the canopy card lies above the water, as
 B16's canopy did.
+
+### B21. No mirror on the water's underside; the split frame (owner, 2026-11-16)
+
+Two owner reports from the playtest build:
+
+- **The split frame.** "some weirdness happening here when I'm partially
+  submerged camera", in shallow sea at `39.566 14.326`, the eye at -1.4 m,
+  looking level with the eye at or just under the surface. The top of the
+  frame is a flat dark navy, a hard-edged trapezoid of bright teal sea floor
+  floats in the middle as if the floor were drawn upside down over the
+  waterline, a band of horizontal streaks and smears runs across the middle,
+  and the lower half is the real sea floor.
+- **The mirror from below.** "do we really need SSR from bottom of the
+  water?", "I dont think it looks that good", under the sea at
+  `40.455 14.582` (-3.4 m) looking up and ahead in rain. The underside of
+  the surface is a dark mirror of the scene under the water, with rain
+  rings, fading into a speckled band toward the horizon.
+
+**The owner's call:** remove the reflection on the underside of the water.
+From below, the surface shows Snell's window (the sky, refracted, straight
+up) and outside it the water's own murk colour, the rain rings and the
+waves only a gentle shading on it. No mirrored scene and no SSR, at any
+REFLECTIONS level.
+
+**Cause, both reports: B19's mirror.** B19 made the sheet seen from below
+mirror the water outside Snell's window (`under_mirror` in `water.wgsl`),
+called from two places:
+1. the sheet's from-below path in `fragment` (the `if (below)` branch):
+   a screen-space trace of the reflected ray through last frame's colour
+   (`sea_ssr` over `ssr_history`), and where it missed, the history's texel
+   in the mirrored direction 25 m out, faded to the murk from 6 to 20 m;
+2. the composite's stand-in for the sheet the near plane clips (`compose`,
+   `NEAR_SHEET_M`), the second form only.
+
+With the eye just under a shallow sea, every ray rising less than about
+40 degrees meets the surface outside the window, so nearly the whole upper
+half of the frame is the mirror:
+- **the trapezoid** is the sea floor in front of the eye, found by the
+  mirrored ray in the history and drawn over the waterline, upside down and
+  hard-edged where the trace's hits end;
+- **the streaks** are the trace under the waves: the normal is bent a
+  quarter of the waves' tilt, which is still enough to swing a grazing
+  reflected ray across rows of the history, and hits alternate with misses;
+- **the flat navy** is past `MIRROR_FADE_M` (20 m), where the mirror gives
+  way to the murk.
+
+The rain report's speckled band is the same trace's hits and misses at the
+6 to 20 m fade, the rings bending the mirrored ray.
+
+**The fix.**
+- **`under_mirror` is gone**, with its two constants and the trace's
+  `sea_ssr_t`. The sheet from below is Snell's window inside (unchanged: the
+  scene over the water, refracted, through the water between) and outside
+  it the murk, `murk` at the eye's depth, which is also what the composite
+  fogs the far water to, so the ceiling meets the far water with no seam.
+- **The waves and the rings shade the ceiling gently** (`under_ceiling`): a
+  facet tilted toward the eye faces nearer the window and takes a little
+  more of its light, one tilted away a little less, at most 12% of the murk
+  either way. Only a face that faces up; a step's or a fall's side face
+  stays the plain murk, as in B19.
+- **The composite's stand-in** for the clipped sheet is the murk outside
+  the window and the view through it inside.
+- **No setting turns it back on.** The REFLECTIONS levels (`reflection-quality`)
+  keep governing the reflections seen from above; nothing under the water
+  reads the screen history, at any level.
+
+**A third report, the same day: the dry beach tinted on a jump.** "dry
+ground had the weird water blur pass that we fixed earlier. This only
+happens when you jump above water", "you can see the subtle sand tinted blue
+green": standing or jumping on a dry sand beach beside shallow water, the
+whole beach in front takes a faint underwater tint and wobble.
+
+*Cause.* The composite's waterline is `eye_water_surface()` in `water.wgsl`,
+which reads `sea_frame.y` and falls back to the sea's MEAN sphere
+(`planet_center.w`) when it is nought. `sea_frame.y` was
+`eye_surface_radius(..).unwrap_or(0.0)` (`planet_water.rs`), nought for an
+eye in air. An eye standing on a beach under the high tide's reach (ground
+plus eye height under the sea's level plus `tide_high_m`, 2 m) is "over the
+sea's water" (`eye_water_at`'s second arm), so the composite measured from
+the tided surface; a jump lifts the eye out of that reach into air, and the
+composite measured from the mean sphere instead. At low tide the mean lies a
+metre or so over the tided water, so the dry sand between the two, a whole
+beach's strip, was taken for under water for the frames of the jump: tinted
+by the travel under the mean and wobbled by the distortion.
+
+*Fix.* `composite_surface_radius`: the eye's water's surface where it has
+one, else the sea's tided surface, never nought, so the composite's
+waterline is the tided sea whether the eye stands, jumps or flies. The
+sheet's side test (`sea_eye`) reads the same lane and gives the same answer
+it gave per fragment for an eye in air. Pinned by
+`a_jump_over_a_beach_keeps_the_composites_waterline_at_the_tide`; shown in
+the `jump-beach` video at low tide, three jumps at play speed and a slow
+rise through the reach.
+
+**What it costs.** It removes work: per pixel of the underside, a trace of
+up to 32 steps through the history and one more history read, and in the
+composite one history read for the near rays. It is measured with a held
+under-water view (`--frame-log`, release build, the two builds interleaved)
+when the Mac is quiet; otherwise it is owed (tasks 15.3).
+
+**Not changed.** The look from above, the shafts, the snow, the window's
+edge (the same Fresnel ramp, 0.55 to 0.75), the river bed.
+
+**Validation** (the waterline videos' method, B19). Before and after MP4s
+at 1080p60 at the owner's two spots, the place and the look fixed, the eye
+going from 0.6 m over the surface to 0.4 m under it at 0.1 m/s, on down,
+and back up through it, its height burnt in. On Drive as
+`underwater-waterline-<place>-<before|after>-1080p60.mp4`; contact sheets
+and the frame-by-frame list in `docs/screenshots/underwater-waterline/`.
+
+**Validated** (2026-11-16, `docs/screenshots/underwater-waterline/README.md`):
+at the owner's shallow-sea spot the before video shows the split frame for
+every frame under the surface (the mirrored floor over the waterline, the
+streak band); the after video shows the floor under water and the murk
+ceiling over the waterline, no mirror and no streaks. Under the sea in rain
+the dark mirror and its speckled band are gone; the rings shade the murk.
+On the beach the before video's beach band steps 2.5 to 3.1 (of 255) in
+colour at every flip into air and back; the after video's steps none over
+1.0. **Open:** the murk ceiling is darker than a bright shallow floor; a
+lighter ceiling would be a look change, for the owner with the sheets.
