@@ -241,3 +241,19 @@ with a capture once it is built.
   on; the note says it has given its wood.
 - **The tree rule is in two places** (the shader and the core). A test reads
   the shader's own numbers.
+
+## Decision 3a: the ground under a standing tree holds (owner, 2026-11-17)
+
+The owner: "player shouldnt be able to easily dig dirt with a tree on top,
+actually they have to destroy the tree before digging that dirt up", and "same
+thing with till grass". Measured: `dig_and_place` breaks the cell's top block
+wherever the ray meets it, and `farm_act` tills it, with nothing asking whether
+the cell grows a tree (`pbd_core::flora::grows_tree`) that is still standing
+(its `tree` record has fewer than `axe_logs` logs taken).
+
+The top block of a cell whose tree stands (the solid block with air over it)
+is not broken and not tilled. A press on it says "Cut down the tree first".
+Once the axe has felled the tree, the ground digs and tills as any other.
+Blocks under the top, reached from a cave or a side, are not held: the roots
+are not modelled. The check is one function, `digging::under_standing_tree`,
+used by both verbs.

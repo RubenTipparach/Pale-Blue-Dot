@@ -87,51 +87,46 @@ pub fn spawn(
                                 .with_children(|p| {
                                     p.spawn(ui_kit::plaque_label(Set::Stone, &recipe.name));
                                 });
-                                let item =
-                                    |row: &mut ChildSpawnerCommands, (it, n): (Item, u16)| {
-                                        row.spawn((
-                                            ImageNode {
-                                                image: atlas.clone(),
-                                                color: Color::NONE,
-                                                ..default()
-                                            },
+                                let item = |row: &mut ChildSpawnerCommands,
+                                            (it, n): (Item, u16),
+                                            need: bool| {
+                                    row.spawn((
+                                        ImageNode {
+                                            image: atlas.clone(),
+                                            color: Color::NONE,
+                                            ..default()
+                                        },
+                                        Node {
+                                            width: px(16),
+                                            height: px(16),
+                                            flex_shrink: 0.0,
+                                            ..default()
+                                        },
+                                        RecipeIcon(it, n),
+                                        super::craft::LockTint(recipe.code.clone()),
+                                    ))
+                                    .with_children(|icon| {
+                                        icon.spawn((
+                                            KitText::new(
+                                                super::craft::need_count(need, n),
+                                                ui_kit::LABEL,
+                                            )
+                                            .outline(ui_kit::INK),
                                             Node {
-                                                width: px(16),
-                                                height: px(16),
-                                                flex_shrink: 0.0,
+                                                position_type: PositionType::Absolute,
+                                                bottom: px(-3),
+                                                right: px(-2),
                                                 ..default()
                                             },
-                                            RecipeIcon(it, n),
-                                            super::craft::LockTint(recipe.code.clone()),
-                                        ))
-                                        .with_children(
-                                            |icon| {
-                                                icon.spawn((
-                                                    KitText::new(
-                                                        if n > 1 {
-                                                            n.to_string()
-                                                        } else {
-                                                            String::new()
-                                                        },
-                                                        ui_kit::LABEL,
-                                                    )
-                                                    .outline(ui_kit::INK),
-                                                    Node {
-                                                        position_type: PositionType::Absolute,
-                                                        bottom: px(-3),
-                                                        right: px(-2),
-                                                        ..default()
-                                                    },
-                                                ));
-                                            },
-                                        );
-                                    };
+                                        ));
+                                    });
+                                };
                                 for &input in &recipe.inputs {
-                                    item(row, input);
+                                    item(row, input, true);
                                 }
                                 row.spawn(KitText::new("→", ui_kit::TEXT).shadow(ui_kit::INK));
                                 for &output in &recipe.outputs {
-                                    item(row, output);
+                                    item(row, output, false);
                                 }
                                 row.spawn((
                                     KitText::new("", ui_kit::LABEL_DIM).shadow(ui_kit::INK),
@@ -220,7 +215,7 @@ pub fn queue(
             return false;
         }
         Err(station::Refused::Full) => {
-            note.say(wall_s, "The forge's queue is full");
+            note.say(wall_s, "Forge queue is full");
             return false;
         }
         Err(station::Refused::Elsewhere | station::Refused::NotBetter) => return false,

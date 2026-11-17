@@ -480,6 +480,81 @@ pub fn hanging_fruit(
     Some((which as usize, hanging))
 }
 
+/// Each near-tree model's fruit anchors, by `species.index() * VARIANTS +
+/// variant`: built once, as the kit is.
+fn model_anchors() -> &'static [Vec<[f32; 3]>] {
+    use crate::tree_kit::{SPECIES, VARIANTS, build};
+    static ANCHORS: std::sync::OnceLock<Vec<Vec<[f32; 3]>>> = std::sync::OnceLock::new();
+    ANCHORS.get_or_init(|| {
+        let mut all = vec![Vec::new(); SPECIES.len() * VARIANTS as usize];
+        for s in SPECIES {
+            for v in 0..VARIANTS {
+                all[(s.index() * VARIANTS + v) as usize] = build(s, v).anchors;
+            }
+        }
+        all
+    })
+}
+
+/// Where the fruit [`hanging_fruit`] counts hang (`fruit-aim` decision 1):
+/// each kept one's centre in body-local metres and a radius to hit it by.
+/// The near tree draw's placement on the CPU: item k hangs from the model's
+/// anchor `roll(SALT_FRUIT + 10 + k)`, placed in the tree's frame (the cell's
+/// tangent, `tree_kit::pick`'s turn and size), a card `size` tall under it.
+/// The radius adds 0.1 m for the sway this does not model.
+///
+/// `axis` is the tree's unit direction, `radius` the body's and `height` the
+/// cell's cap, so the tree stands at `axis * (radius + height)`.
+pub fn hanging_fruit_points(
+    tree_id: u32,
+    biome: u32,
+    axis: [f32; 3],
+    radius: f32,
+    height: f32,
+    year_fraction: f64,
+    fruit_chance: f32,
+) -> Vec<([f32; 3], f32)> {
+    use crate::tree_kit::{VARIANTS, pick, roll};
+    use glam::Vec3;
+    let Some((which, _)) = hanging_fruit(tree_id, biome, axis, radius, year_fraction, fruit_chance)
+    else {
+        return Vec::new();
+    };
+    let Some(tree) = pick(tree_id, biome) else {
+        return Vec::new();
+    };
+    let anchors = &model_anchors()[(tree.species.index() * VARIANTS + tree.variant) as usize];
+    if anchors.is_empty() {
+        return Vec::new();
+    }
+    let cone = which == 8;
+    let season = season_at(year_fraction, axis[1]);
+    let keep = if cone {
+        1.0
+    } else {
+        (0.85 + (1.01 - 0.85) * season.turn) * (1.0 - 0.92 * season.bare)
+    };
+    let up = Vec3::from(axis).normalize_or(Vec3::Y);
+    let reference = if up.y.abs() > 0.95 { Vec3::X } else { Vec3::Y };
+    let tangent = reference.cross(up).normalize_or(Vec3::X);
+    let bitangent = up.cross(tangent);
+    let x = tangent * tree.turn.cos() + bitangent * tree.turn.sin();
+    let z = x.cross(up);
+    let base = up * (radius + height);
+    (0..4u32)
+        .filter(|k| roll(tree_id, SALT_FRUIT + 2 + k) < keep)
+        .map(|k| {
+            let at = ((roll(tree_id, SALT_FRUIT + 10 + k) * anchors.len() as f32) as usize)
+                .min(anchors.len() - 1);
+            let p = Vec3::from(anchors[at]);
+            let top = base + (x * p.x + up * p.y + z * p.z) * tree.size;
+            let size =
+                if cone { 0.46 } else { 0.40 } * (0.9 + 0.3 * roll(tree_id, SALT_FRUIT + 30 + k));
+            ((top - up * size * 0.5).to_array(), size * 0.5 + 0.1)
+        })
+        .collect()
+}
+
 /// Where snow lies on the trees' branches in winter (`flora-v2` design
 /// 12.3): from no cover at 35 degrees of latitude (its sine) to full at 50.
 pub const SNOW_COLD: [f32; 2] = [0.574, 0.766];
@@ -800,6 +875,14 @@ mod tests {
             "var pick = (p + select(0u, 1u, roll(id,SALT_FRUIT+1u) < 0.25)) % count;",
             "let keep = select(mix(0.85, 1.01, season.x)*(1.0-0.92*season.y), 1.0, cone);",
             "if roll(id,SALT_FRUIT+2u+item) < keep && !(f < 48u && tree_picked(id)) {",
+            // Where each hangs (`fruit-aim`): `hanging_fruit_points`.
+            "let reference = select(vec3(0.,1.,0.),vec3(1.,0.,0.),abs(axis.y)>0.95);",
+            "t.x = tangent*cos(turn) + bitangent*sin(turn);",
+            "t.z = cross(t.x, axis);",
+            "return t.base + (t.x*p.x + t.up*p.y + t.z*p.z)*t.size;",
+            "let at = min(u32(roll(id,SALT_FRUIT+10u+item)*f32(anchors)), anchors - 1u);",
+            "let size = select(0.40, 0.46, cone)*(0.9+0.3*roll(id,SALT_FRUIT+30u+item));",
+            "corners = array<vec3<f32>,4>(top-axis*size-dir*half_w,top-axis*size+dir*half_w,",
         ] {
             assert!(
                 shader.contains(line),
@@ -849,6 +932,40 @@ mod tests {
     /// The ground follows the trees' calendar (design 12.6): green in
     /// summer and spring, dry through autumn and winter, frosted only in a
     /// cold winter, never in the tropics; and the WGSL is the same numbers.
+
+    /// Each fruit counted hangs somewhere on its tree (`fruit-aim`): as many
+    /// points as `hanging_fruit` counts, in the crown, above the ground and
+    /// within the model's reach of the trunk.
+    #[test]
+    fn each_counted_fruit_hangs_in_the_crown() {
+        let axis = {
+            let v = [0.6f32, 0.6, 0.53];
+            let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            v.map(|x| x / l)
+        };
+        let (radius, height) = (4_800.0, 12.0);
+        let mut seen = 0;
+        for id in 0..400u32 {
+            let Some((_, n)) = hanging_fruit(id, 2, axis, radius, 0.27, 0.5) else {
+                assert!(hanging_fruit_points(id, 2, axis, radius, height, 0.27, 0.5).is_empty());
+                continue;
+            };
+            let points = hanging_fruit_points(id, 2, axis, radius, height, 0.27, 0.5);
+            assert_eq!(points.len() as u32, n, "tree {id}");
+            for (p, r) in points {
+                let p = glam::Vec3::from(p);
+                let up = glam::Vec3::from(axis);
+                let base = up * (radius + height);
+                let rise = (p - base).dot(up);
+                let across = (p - base - up * rise).length();
+                assert!((0.3..14.0).contains(&rise), "tree {id}: {rise} m up");
+                assert!(across < 8.0, "tree {id}: {across} m out");
+                assert!((0.25..0.45).contains(&r));
+                seen += 1;
+            }
+        }
+        assert!(seen > 100, "{seen} fruit");
+    }
     #[test]
     fn the_ground_follows_the_seasons() {
         let north_40 = 0.643;

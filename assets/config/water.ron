@@ -84,4 +84,33 @@
     // (`ocean-environments` design 10). 0 is no tide.
     tide_range_m: 3.0,
     detail_fade: 4.0,
+    // A fall's look (`water-flow` 6.6): mockup M35's New tab, approved by the
+    // owner 2026-11-16, with its defaults. Sizes and reaches in metres.
+    falls: (
+        rule: Proposed,
+        smooth: true,
+        mist_opacity: 2.0,
+        mist_amount: 1.0,
+        mist_size: 1.65,
+        wall_blend_m: 1.2,
+        droplets: 1.0,
+        bubbles: 1.0,
+        teal_churn: 1.0,
+        aer_color: (0.16, 0.50, 0.46),
+        fall_speed_up: 2.0,
+        fall_speed_max_mps: 8.0,
+        ripple_height: 0.5,
+        ripple_length_m: 0.9,
+        ripple_reach_m: 6.0,
+        pool_flow: 0.1,
+        pool_flow_reach_m: 6.0,
+        glassy: true,
+        glass_top_m: 0.70,
+        glass_face_m: 0.50,
+        froth_fill_m: 2.25,
+        glass_tint: 0.25,
+        edge_highlight: 0.0,
+        splash_reach_m: 140.0,
+        splash_fade_s: 0.6,
+    ),
 )

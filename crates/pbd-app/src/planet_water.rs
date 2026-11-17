@@ -199,6 +199,29 @@ pub(super) struct WaterView {
     /// (zero: none), y the falloff height, m, z the reference level's radius
     /// from the body's centre (the ground or the sea under the eye), m.
     height_fog: Vec4,
+    /// A fall's look (`water-flow` 6.6, M35), `water.ron`'s `falls`: x the
+    /// feet told of, y the teal churn, z the ripples' height, w the metres
+    /// between rings.
+    fall_look: Vec4,
+    /// x the ripples' reach m, y the pool flow, z its reach m, w the speed-up
+    /// down a face, g m/s^2 (zero: one speed).
+    fall_flow: Vec4,
+    /// The glassy lip: x one when on, y smooth this far before the edge m,
+    /// z glassy this far over it m, w the froth filled in by m.
+    fall_lip: Vec4,
+    /// x the glassy green, y the edge highlight, z the fastest a face moves
+    /// m/s, w the bubbles' count.
+    fall_more: Vec4,
+    /// The splash: x the wall blend m, y the mist's opacity, z one when the
+    /// effects are smooth (zero pixelated), w the viewport's height px.
+    fall_splash: Vec4,
+    /// rgb the aerated water's colour, linear; w the water's time scale.
+    aer_color: Vec4,
+    /// The nearest feet (`water_flow::FallFeetGpu`): xyz where each lands,
+    /// body-local, w its drop m; then x the pool's depth m, y a seed, z its
+    /// fade.
+    feet: [Vec4; crate::water_flow::FALL_FEET_MAX],
+    feet_more: [Vec4; crate::water_flow::FALL_FEET_MAX],
 }
 
 /// `weather-rain` 7: the height fog's lane. Only with the rain volume off,
@@ -621,6 +644,9 @@ struct WaterPipelines {
     sampler: Sampler,
     cells: TextureView,
     cells_sampler: Sampler,
+    /// The mist puffs' sheet (`water-flow` 6.6): 4 x 4 cells of 32 texels,
+    /// sRGB, so it samples linear.
+    mist_puffs: TextureView,
 }
 
 fn history_layout() -> BindGroupLayoutDescriptor {
@@ -710,18 +736,29 @@ fn splash_layout() -> BindGroupLayoutDescriptor {
     BindGroupLayoutDescriptor::new(
         "water: the fall splash",
         &BindGroupLayoutEntries::with_indices(
-            ShaderStages::VERTEX,
-            ((
-                17,
-                storage_buffer_read_only_sized(false, NonZeroU64::new(16)),
-            ),),
+            ShaderStages::VERTEX_FRAGMENT,
+            (
+                (
+                    17,
+                    storage_buffer_read_only_sized(false, NonZeroU64::new(16)),
+                ),
+                // The mist puffs' sheet and its sampler (`water-flow` 6.6).
+                (
+                    18,
+                    texture_2d(TextureSampleType::Float { filterable: true }),
+                ),
+                (19, sampler(SamplerBindingType::Filtering)),
+                // The water's own depth, for the soft fade and the test.
+                (20, texture_depth_2d()),
+            ),
         ),
     )
 }
 
-/// Room for the splash's whole budget: the camera's right and up, then two
-/// lanes a quad.
-const SPLASH_BUFFER_BYTES: u64 = ((2 + 2 * crate::water_flow::SPLASH_BUDGET) * 16) as u64;
+/// Room for the splash's whole budget: the camera's right and up, then
+/// `SPLASH_LANES` a quad.
+const SPLASH_BUFFER_BYTES: u64 =
+    ((2 + crate::water_flow::SPLASH_LANES * crate::water_flow::SPLASH_BUDGET) * 16) as u64;
 
 fn ssr_layout() -> BindGroupLayoutDescriptor {
     BindGroupLayoutDescriptor::new(
@@ -830,6 +867,46 @@ fn cloud_cells(device: &RenderDevice, queue: &RenderQueue) -> TextureView {
     texture.create_view(&TextureViewDescriptor::default())
 }
 
+/// The mist puffs' sheet (`assets/textures/fx/mist_puffs`, `SOURCE.md`),
+/// built into the binary and uploaded once.
+fn mist_puffs(device: &RenderDevice, queue: &RenderQueue) -> TextureView {
+    let png = include_bytes!("../../../assets/textures/fx/mist_puffs/albedo.png");
+    let image = image::load_from_memory_with_format(png, image::ImageFormat::Png)
+        .map(|i| i.to_rgba8())
+        .unwrap_or_else(|_| image::RgbaImage::new(1, 1));
+    let extent = Extent3d {
+        width: image.width(),
+        height: image.height(),
+        depth_or_array_layers: 1,
+    };
+    let texture = device.create_texture(&TextureDescriptor {
+        label: Some("fall mist puffs"),
+        size: extent,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8UnormSrgb,
+        usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: Origin3d::ZERO,
+            aspect: TextureAspect::All,
+        },
+        image.as_raw(),
+        TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * image.width()),
+            rows_per_image: Some(image.height()),
+        },
+        extent,
+    );
+    texture.create_view(&TextureViewDescriptor::default())
+}
+
 fn data_layout() -> BindGroupLayoutDescriptor {
     BindGroupLayoutDescriptor::new(
         "water view, cells, water ids, flow, precipitation map",
@@ -873,6 +950,7 @@ fn initialize_pipelines(
     fullscreen: Res<FullscreenShader>,
 ) {
     commands.insert_resource(WaterPipelines {
+        mist_puffs: mist_puffs(&device, &queue),
         cells: cloud_cells(&device, &queue),
         cells_sampler: device.create_sampler(&SamplerDescriptor {
             label: Some("clouds cellular noise sampler"),
@@ -917,6 +995,9 @@ enum Pass {
     /// The fall splash, after the water and against its depth (`water-flow`
     /// 6.1).
     Splash,
+    /// The bubbles under a fall's foot (`water-flow` 6.6), in the splash's
+    /// pass before it.
+    Bubbles,
     Compose,
     CloudMarch,
     CloudResolve,
@@ -1001,6 +1082,16 @@ impl SpecializedRenderPipeline for WaterPipelines {
                 },
                 "splash_fragment",
             ),
+            Pass::Bubbles => (
+                "Bubbles under a fall's foot",
+                VertexState {
+                    shader: self.shader.clone(),
+                    shader_defs: defs.clone(),
+                    entry_point: Some(Cow::Borrowed("bubble_vertex")),
+                    ..default()
+                },
+                "bubble_fragment",
+            ),
             Pass::Compose => (
                 "Water compose: underwater fog, distortion, blur",
                 self.fullscreen.to_vertex_state(),
@@ -1071,6 +1162,8 @@ impl SpecializedRenderPipeline for WaterPipelines {
         let depth_stencil = match key.pass {
             Pass::Lens
             | Pass::LensMist
+            | Pass::Splash
+            | Pass::Bubbles
             | Pass::Rain
             | Pass::RainHalf
             | Pass::RainCompose
@@ -1082,7 +1175,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
             pass => Some(DepthStencilState {
                 format: WATER_DEPTH_FORMAT,
                 depth_write_enabled: matches!(pass, Pass::Cap | Pass::Flowing),
-                depth_compare: if matches!(pass, Pass::Cap | Pass::Flowing | Pass::Splash) {
+                depth_compare: if matches!(pass, Pass::Cap | Pass::Flowing) {
                     CompareFunction::GreaterEqual
                 } else {
                     CompareFunction::Always
@@ -1108,7 +1201,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
                         _ => self.composite_layout.clone(),
                     },
                 ]
-            } else if key.pass == Pass::Splash {
+            } else if matches!(key.pass, Pass::Splash | Pass::Bubbles) {
                 vec![
                     self.data_layout.clone(),
                     scene,
@@ -1222,7 +1315,7 @@ impl SpecializedRenderPipeline for WaterPipelines {
                             write_mask: ColorWrites::ALL,
                         }),
                     ]
-                } else if key.pass == Pass::Splash {
+                } else if matches!(key.pass, Pass::Splash | Pass::Bubbles) {
                     // Straight alpha "over", as the splash's `AlphaMode::Blend`
                     // material blended in the main pass.
                     vec![Some(ColorTargetState {
@@ -1271,6 +1364,9 @@ pub(super) struct WaterViewGpu {
     splash: Buffer,
     splash_count: u32,
     splash_pipe: CachedRenderPipelineId,
+    /// The feet whose bubbles draw, and their pipeline (`water-flow` 6.6).
+    bubble_feet: u32,
+    bubbles_pipe: CachedRenderPipelineId,
     data_bind_group: BindGroup,
     cap: CachedRenderPipelineId,
     flowing_pipe: CachedRenderPipelineId,
@@ -1404,6 +1500,8 @@ pub(super) struct WaterSky<'w> {
     ease: Option<Res<'w, crate::water_flow::WaterEase>>,
     /// The fall splash's quads (`water-flow` 6.1).
     splash: Option<Res<'w, crate::water_flow::SplashQuads>>,
+    /// The nearest falls' feet (`water-flow` 6.6).
+    fall_feet: Option<Res<'w, crate::water_flow::FallFeetGpu>>,
     /// The column tier's reach, for the far rivers' fade (design 13).
     columns: Option<Res<'w, crate::config::ColumnSettings>>,
 }
@@ -1460,6 +1558,7 @@ fn prepare_water_views(
         flowing,
         ease,
         splash,
+        fall_feet,
         columns,
     } = sky;
     // The fall splash's quads, within the buffer's room.
@@ -1467,7 +1566,16 @@ fn prepare_water_views(
         let room = (SPLASH_BUFFER_BYTES / 16) as usize;
         &q.lanes[..q.lanes.len().min(room)]
     });
-    let splash_count = (splash_lanes.len().saturating_sub(2) / 2) as u32;
+    let splash_count =
+        (splash_lanes.len().saturating_sub(2) / crate::water_flow::SPLASH_LANES) as u32;
+    // The nearest feet (`water-flow` 6.6), and the bubbles under them.
+    const FEET: usize = crate::water_flow::FALL_FEET_MAX;
+    let fall_count = fall_feet.as_deref().map_or(0, |f| f.count.min(FEET as u32));
+    let bubble_feet = if settings.falls.bubbles > 0.0 {
+        fall_count
+    } else {
+        0
+    };
     let reflect_level = reflect_quality.map_or_else(default, |q| q.0);
     let ease = ease.as_deref().copied().unwrap_or_default();
     let lit_rain = lighting.as_ref().is_some_and(|l| l.new_model_on());
@@ -1824,6 +1932,39 @@ fn prepare_water_views(
                         .anchor
                         .extend(columns.as_deref().map_or(0.0, |c| c.reach_m))
                 }),
+            fall_look: Vec4::new(
+                fall_count as f32,
+                s.falls.teal_churn,
+                s.falls.ripple_height,
+                s.falls.ripple_length_m,
+            ),
+            fall_flow: Vec4::new(
+                s.falls.ripple_reach_m,
+                s.falls.pool_flow,
+                s.falls.pool_flow_reach_m,
+                3.0 * s.falls.fall_speed_up,
+            ),
+            fall_lip: Vec4::new(
+                f32::from(u8::from(s.falls.glassy)),
+                s.falls.glass_top_m,
+                s.falls.glass_face_m,
+                s.falls.froth_fill_m,
+            ),
+            fall_more: Vec4::new(
+                s.falls.glass_tint,
+                s.falls.edge_highlight,
+                s.falls.fall_speed_max_mps,
+                s.falls.bubbles,
+            ),
+            fall_splash: Vec4::new(
+                s.falls.wall_blend_m,
+                s.falls.mist_opacity,
+                f32::from(u8::from(s.falls.smooth)),
+                view.viewport.w.max(1) as f32,
+            ),
+            aer_color: Vec3::from_array(s.falls.aer_color).extend(s.time_scale.max(1e-3)),
+            feet: fall_feet.as_deref().map_or([Vec4::ZERO; FEET], |f| f.feet),
+            feet_more: fall_feet.as_deref().map_or([Vec4::ZERO; FEET], |f| f.more),
             height_fog: height_fog_lane(
                 !rain_shadows
                     && state <= 0.75
@@ -1980,6 +2121,7 @@ fn prepare_water_views(
                 queue.write_buffer(&gpu.puff_buffer, 0, bytes);
             }
             gpu.splash_count = splash_count;
+            gpu.bubble_feet = bubble_feet;
             if splash_count > 0 {
                 queue.write_buffer(&gpu.splash, 0, bytemuck::cast_slice(splash_lanes));
             }
@@ -2081,6 +2223,8 @@ fn prepare_water_views(
             splash: splash_buffer,
             splash_count,
             splash_pipe: pipeline(Pass::Splash),
+            bubble_feet,
+            bubbles_pipe: pipeline(Pass::Bubbles),
             compose: pipeline(Pass::Compose),
             cloud_march: pipeline(Pass::CloudMarch),
             cloud_resolve: pipeline(Pass::CloudResolve),
@@ -2212,7 +2356,8 @@ fn water_depth(device: &RenderDevice, size: UVec2) -> TextureView {
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: WATER_DEPTH_FORMAT,
-            usage: TextureUsages::RENDER_ATTACHMENT,
+            // The splash reads it (`water-flow` 6.6).
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         })
         .create_view(&TextureViewDescriptor::default())
@@ -2252,6 +2397,10 @@ static PASSES_OFF: std::sync::LazyLock<[bool; 4]> = std::sync::LazyLock::new(|| 
         pass_off("mist"),
     ]
 });
+
+/// The most bubbles under one foot (`water-flow` 6.6): `BUBBLES_MAX` in
+/// `water.wgsl`; a test holds the two together.
+const BUBBLES_MAX: u32 = 256;
 
 /// `PBD_PASS_OFF=splash`: the fall splash undrawn, to see the water under
 /// it (`water-flow` 6.1).
@@ -2335,11 +2484,19 @@ impl ViewNode for WaterCompositeNode {
             &cache.get_bind_group_layout(&pipelines.ssr_layout),
             &BindGroupEntries::with_indices(((14, &planet_gpu.ssr_view),)),
         );
-        // The fall splash's quads (`water-flow` 6.1), drawn after the water.
+        // The fall splash's quads (`water-flow` 6.1), drawn after the water,
+        // and the bubbles (6.6): in their own pass, reading the water's depth.
+        let splash_on = water.splash_count > 0 && !*SPLASH_OFF;
+        let bubbles_on = water.bubble_feet > 0 && !*SPLASH_OFF;
         let splash_group = device.create_bind_group(
             Some("water: the fall splash"),
             &cache.get_bind_group_layout(&pipelines.splash_layout),
-            &BindGroupEntries::with_indices(((17, water.splash.as_entire_binding()),)),
+            &BindGroupEntries::with_indices((
+                (17, water.splash.as_entire_binding()),
+                (18, &pipelines.mist_puffs),
+                (19, &pipelines.sampler),
+                (20, &water.depth),
+            )),
         );
         // Compose then the cap, both reading the scene and writing the other
         // main texture. Compose touches every pixel, so nothing needs clearing.
@@ -2363,7 +2520,12 @@ impl ViewNode for WaterCompositeNode {
                     view: &water.depth,
                     depth_ops: Some(Operations {
                         load: LoadOp::Clear(0.0),
-                        store: StoreOp::Discard,
+                        // Kept for the splash's pass when it draws.
+                        store: if splash_on || bubbles_on {
+                            StoreOp::Store
+                        } else {
+                            StoreOp::Discard
+                        },
                     }),
                     stencil_ops: None,
                 }),
@@ -2387,18 +2549,44 @@ impl ViewNode for WaterCompositeNode {
                 pass.set_render_pipeline(flowing);
                 pass.draw(0..water.flowing_count, 0..1);
             }
-            // The fall splash last (`water-flow` 6.1): over the water it
-            // stands in front of, against the water's depth, and behind the
-            // terrain by the main pass's (`splash_fragment`).
-            if water.splash_count > 0
-                && !*SPLASH_OFF
-                && let Some(splash) = cache.get_render_pipeline(water.splash_pipe)
-            {
-                pass.set_bind_group(3, &splash_group, &[]);
-                pass.set_render_pipeline(splash);
-                pass.draw(0..water.splash_count * 6, 0..1);
-            }
             span.end(&mut pass);
+            drop(pass);
+            // The fall splash last (`water-flow` 6.1, 6.6), in its own pass:
+            // over the water it stands in front of and behind the terrain,
+            // both tested in `splash_fragment` against the depths it reads,
+            // and faded softly against the nearer. The bubbles first, under
+            // the pool's surface.
+            if splash_on || bubbles_on {
+                let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
+                    label: Some("Fall splash and bubbles"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view: post.destination,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Load,
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                pass.set_bind_group(0, &water.data_bind_group, &[]);
+                pass.set_bind_group(1, &scene, &[]);
+                pass.set_bind_group(2, &maps.bind_group, &[]);
+                pass.set_bind_group(3, &splash_group, &[]);
+                let span = diagnostics.pass_span(&mut pass, "water_splash");
+                if bubbles_on && let Some(bubbles) = cache.get_render_pipeline(water.bubbles_pipe) {
+                    pass.set_render_pipeline(bubbles);
+                    pass.draw(0..water.bubble_feet * BUBBLES_MAX * 6, 0..1);
+                }
+                if splash_on && let Some(splash) = cache.get_render_pipeline(water.splash_pipe) {
+                    pass.set_render_pipeline(splash);
+                    pass.draw(0..water.splash_count * 6, 0..1);
+                }
+                span.end(&mut pass);
+            }
         }
         // The march reads last frame's history and writes this frame's, and
         // the cloud's distances; the composite reads both.
@@ -3002,12 +3190,14 @@ mod tests {
         let start = shader.find("struct WaterView {").unwrap();
         let block = &shader[start..start + shader[start..].find('}').unwrap()];
         let mat4 = block.matches("mat4x4<f32>").count();
-        // The lit rain's lamps are one array of eight lanes (`lighting-model`).
-        let lamps = block.matches("array<vec4<f32>, 8>").count();
+        // The lit rain's lamps are one array of eight lanes (`lighting-model`),
+        // and a fall's feet two (`water-flow` 6.6).
+        let eights = block.matches("array<vec4<f32>, 8>").count();
         // And the sky's nine coefficients (`water-lit`).
         let sh = block.matches("array<vec4<f32>, 9>").count();
-        let vec4 = block.matches("vec4<f32>").count() + 7 * lamps + 8 * sh;
-        assert_eq!((mat4, vec4, lamps, sh), (4, 78, 1, 1));
+        let vec4 = block.matches("vec4<f32>").count() + 7 * eights + 8 * sh;
+        assert_eq!((mat4, vec4, eights, sh), (4, 100, 3, 1));
+        assert_eq!(crate::water_flow::FALL_FEET_MAX, 8);
         assert!(block.contains("sea: SeaView,"));
         let sea = crate::shader_tests::sea_source();
         let sea_size = crate::shader_tests::wgsl_struct_size("sea.wgsl", &sea, "SeaView");
@@ -3017,6 +3207,25 @@ mod tests {
             mat4 * 64 + vec4 * 16 + sea_size as usize,
             "the Rust uniform must be the WGSL struct's size"
         );
+    }
+
+    /// The splash's lanes a quad and the bubbles' room are one number each in
+    /// Rust and in the shader (`water-flow` 6.6).
+    #[test]
+    fn the_splash_s_stride_and_the_bubbles_agree_with_the_shader() {
+        let shader = include_str!("../../../assets/shaders/water.wgsl");
+        let lanes = format!(
+            "const SPLASH_LANES: u32 = {}u;",
+            crate::water_flow::SPLASH_LANES
+        );
+        assert!(shader.contains(&lanes), "{lanes}");
+        let bubbles = format!("const BUBBLES_MAX: u32 = {BUBBLES_MAX}u;");
+        assert!(shader.contains(&bubbles), "{bubbles}");
+        let feet = format!(
+            "const FALL_FEET: u32 = {}u;",
+            crate::water_flow::FALL_FEET_MAX
+        );
+        assert!(shader.contains(&feet), "{feet}");
     }
 
     /// The shells' fall wraps where every streak cycle does, so the pattern

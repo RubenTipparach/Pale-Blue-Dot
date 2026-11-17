@@ -83,7 +83,7 @@ pub const GOODS: &[GoodRow] = &[
     // work it into. Named by code, never by index (`Good::FIBRE` and the
     // rest are found by code at compile time), so other branches' rows can
     // land above or below these in either order.
-    row("fibre", "plant fibre", 99, "items/goods/fibre.png"),
+    row("fibre", "plant fiber", 99, "items/goods/fibre.png"),
     row("stone", "loose stone", 99, "items/goods/stone.png"),
     row("log", "log", 99, "items/goods/log.png"),
     row("planks", "planks", 99, "items/goods/planks.png"),
@@ -140,6 +140,13 @@ pub const GOODS: &[GoodRow] = &[
     row("marula", "marula", 32, "items/goods/marula.png"),
     row("baobab", "baobab fruit", 32, "items/goods/baobab.png"),
     row("pine-cone", "pine cone", 32, "items/goods/pine-cone.png"),
+    // ---- starter-missions G1: worms dug from wet ground at the shore, put
+    // on the hook when a cast is made with them in the pack.
+    row("bait", "bait worms", 99, "items/goods/bait.png"),
+    // ---- small-boats design 3: a made boat, carried until it is launched.
+    row("inner-tube", "inner tube", 1, "items/goods/inner-tube.png"),
+    row("raft", "raft", 1, "items/goods/raft.png"),
+    row("rowboat", "rowboat", 1, "items/goods/rowboat.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -198,6 +205,11 @@ impl Good {
     pub const WATER_BUCKET: Good = by_code_const("water-bucket");
     pub const FERTILE_EGG: Good = by_code_const("fertile-egg");
     pub const INCUBATOR: Good = by_code_const("incubator");
+    pub const BAIT: Good = by_code_const("bait");
+    // small-boats: the made boats.
+    pub const INNER_TUBE: Good = by_code_const("inner-tube");
+    pub const RAFT: Good = by_code_const("raft");
+    pub const ROWBOAT: Good = by_code_const("rowboat");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
@@ -284,6 +296,7 @@ mod tests {
             (Good::ROPE, "rope"),
             (Good::FERTILE_EGG, "fertile-egg"),
             (Good::INCUBATOR, "incubator"),
+            (Good::BAIT, "bait"),
         ] {
             assert_eq!(good.code(), code);
             assert_eq!(Good::by_code(code), Some(good));

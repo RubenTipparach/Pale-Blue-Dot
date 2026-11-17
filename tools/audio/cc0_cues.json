@@ -301,46 +301,6 @@
       "fadeout": 0.15
      }
     ]
-   },
-   {
-    "layers": [
-     {
-      "src": "freesound/218305:218305.mp3",
-      "start": 7.56,
-      "dur": 0.42,
-      "fadeout": 0.15
-     }
-    ]
-   },
-   {
-    "layers": [
-     {
-      "src": "freesound/218305:218305.mp3",
-      "start": 15.98,
-      "dur": 0.42,
-      "fadeout": 0.15
-     }
-    ]
-   },
-   {
-    "layers": [
-     {
-      "src": "freesound/218305:218305.mp3",
-      "start": 19.47,
-      "dur": 0.42,
-      "fadeout": 0.15
-     }
-    ]
-   },
-   {
-    "layers": [
-     {
-      "src": "freesound/218305:218305.mp3",
-      "start": 21.28,
-      "dur": 0.42,
-      "fadeout": 0.15
-     }
-    ]
    }
   ],
   "layers": [
@@ -354,22 +314,12 @@
   "len": 0.45,
   "hp": 70,
   "peak_db": -1.0,
-  "edits": "Six steps from a walk in sneakers on dry leaves, each from its onset"
+  "edits": "Six steps from a walk in sneakers on dry leaves, each from its onset; takes 3 to 6 dropped (owner, 2026-11-16: crackling)"
  },
  "step_sand": {
   "group": "Steps",
   "what": "A boot in sand: a soft crunch and a hiss of grains.",
   "takes": [
-   {
-    "layers": [
-     {
-      "src": "freesound/384082:384082.mp3",
-      "shot": 1,
-      "dur": 0.42,
-      "fadeout": 0.15
-     }
-    ]
-   },
    {
     "layers": [
      {
@@ -432,7 +382,7 @@
   "len": 0.45,
   "hp": 70,
   "peak_db": -1.0,
-  "edits": "Six steps from a recording of gritty sand steps, each from its onset"
+  "edits": "Six steps from a recording of gritty sand steps, each from its onset; take 1 of 6 dropped (owner, 2026-11-16), the rest renumbered"
  },
  "step_snow": {
   "group": "Steps",
@@ -482,16 +432,6 @@
       "fadeout": 0.1
      }
     ]
-   },
-   {
-    "layers": [
-     {
-      "src": "freesound/543385:543385.mp3",
-      "shot": 1,
-      "dur": 0.42,
-      "fadeout": 0.12
-     }
-    ]
    }
   ],
   "layers": [
@@ -504,7 +444,7 @@
   "len": 0.45,
   "hp": 70,
   "peak_db": -1.0,
-  "edits": "Kenney's snow steps and one heavy snow step from Freesound"
+  "edits": "Kenney's snow steps and one heavy snow step from Freesound; take 6 of 6 dropped (owner, 2026-11-16), the rest renumbered"
  },
  "step_wood": {
   "group": "Steps",
@@ -915,36 +855,6 @@
   "peak_db": -1.0,
   "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
  },
- "land_dry": {
-  "group": "Steps",
-  "what": "Landing on dry: both feet at once, heavier than a step.",
-  "layers": [
-   {
-    "src": "freesound/218305:218305.mp3",
-    "start": 20.02,
-    "dur": 0.45,
-    "fadeout": 0.15,
-    "pitch": 0.85
-   },
-   {
-    "src": "freesound/218305:218305.mp3",
-    "start": 20.02,
-    "dur": 0.45,
-    "fadeout": 0.15,
-    "pitch": 0.92,
-    "delay": 0.025,
-    "gain": -3
-   },
-   {
-    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
-    "gain": -6
-   }
-  ],
-  "len": 0.6,
-  "hp": 50,
-  "peak_db": -1.0,
-  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
- },
  "jump_sand": {
   "group": "Steps",
   "what": "Pushing off sand into a jump: a scuff and a rustle of clothes.",
@@ -966,36 +876,6 @@
   "hp": 70,
   "peak_db": -1.0,
   "edits": "the family's step, a touch higher, and Kenney's cloth rustle 8 dB down"
- },
- "land_sand": {
-  "group": "Steps",
-  "what": "Landing on sand: both feet at once, heavier than a step.",
-  "layers": [
-   {
-    "src": "freesound/384082:384082.mp3",
-    "shot": 2,
-    "dur": 0.45,
-    "fadeout": 0.15,
-    "pitch": 0.85
-   },
-   {
-    "src": "freesound/384082:384082.mp3",
-    "shot": 2,
-    "dur": 0.45,
-    "fadeout": 0.15,
-    "pitch": 0.92,
-    "delay": 0.025,
-    "gain": -3
-   },
-   {
-    "src": "kenney/impact-sounds:impactSoft_heavy_001.ogg",
-    "gain": -6
-   }
-  ],
-  "len": 0.6,
-  "hp": 50,
-  "peak_db": -1.0,
-  "edits": "the family's step twice, 25 ms apart and lower, over Kenney's soft heavy impact"
  },
  "jump_snow": {
   "group": "Steps",

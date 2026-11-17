@@ -20,7 +20,24 @@ use bevy::window::PrimaryWindow;
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit::{self, KitText, UiKit};
 use pbd_app::walking::WalkingReadout;
-use pbd_core::inventory::{PACK, SLOTS, Slots, Stack};
+use pbd_core::inventory::{CARRIED, PACK, SLOTS, Slots, Stack};
+use pbd_core::vehicle::hold::{self, HOLD, Hold, Place};
+
+/// How near a raft must be, m, for the pack opened on foot to show its hold.
+pub const HOLD_REACH_M: f64 = 3.5;
+
+/// The raft whose hold the pack shows (`small-boats` design 5): the one
+/// aboard, or the nearest in reach on foot; and its hold as last read or
+/// written. Its slots are the pack's squares from `CARRIED` on.
+#[derive(Resource, Default, Debug, Clone)]
+pub struct HoldView {
+    pub craft: Option<(Entity, u64)>,
+    pub hold: Hold,
+}
+
+/// The HOLD panel under the pack's.
+#[derive(Component)]
+pub struct HoldPanel;
 
 /// The stack picked up: which slot, and how many of it go on the next click
 /// (all of it, or the larger half for a right-click).
@@ -90,6 +107,156 @@ pub fn click(
     }
 }
 
+/// A pack square's place: the player's slots below `CARRIED`, the hold's
+/// from it.
+fn place_of(index: usize) -> Place {
+    if index >= CARRIED {
+        Place::Hold(index - CARRIED)
+    } else {
+        Place::Carried(index)
+    }
+}
+
+/// What a click does with a hold open (`small-boats` design 5): the same as
+/// [`click`], across the slots and the hold. A shift-click sends a stack
+/// between the hold and the player's slots. Changes `slots` and `hold` in
+/// place and returns what is in hand after.
+pub fn hold_click(
+    slots: &mut Slots,
+    hold_now: &mut Hold,
+    hand: Option<Held>,
+    index: usize,
+    button: Click,
+    shift: bool,
+) -> Option<Held> {
+    if index >= CARRIED + HOLD {
+        return hand;
+    }
+    let at = place_of(index);
+    let stack = match at {
+        Place::Carried(i) => slots.get(i),
+        Place::Hold(i) => hold_now.get(i),
+    };
+    match hand {
+        None => {
+            let stack = stack?;
+            if shift {
+                hold::send(slots, hold_now, at);
+                return None;
+            }
+            let count = match button {
+                Click::Left => stack.count,
+                Click::Right => stack.count.div_ceil(2),
+            };
+            Some(Held { from: index, count })
+        }
+        Some(held) if held.from == index => None,
+        Some(held) => {
+            hold::shift(slots, hold_now, place_of(held.from), at, held.count);
+            None
+        }
+    }
+}
+
+/// Which raft's hold the pack shows, read from the save when it changes,
+/// and the HOLD panel shown with it. Aboard a raft, that raft; on foot, the
+/// nearest within [`HOLD_REACH_M`].
+pub fn find_hold(
+    screen: Res<Screen>,
+    aboard: Option<Res<pbd_app::vehicles::Aboard>>,
+    vehicles: Query<(Entity, &pbd_app::vehicles::Vehicle, &GlobalTransform)>,
+    walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    save: Res<WorldSave>,
+    mut view: ResMut<HoldView>,
+    mut panels: Query<&mut Node, With<HoldPanel>>,
+) {
+    let raft = |kind| kind == pbd_core::vehicle::Kind::Raft;
+    let found = if *screen != Screen::Pack {
+        None
+    } else if let Some(entity) = aboard.and_then(|a| a.0) {
+        vehicles
+            .get(entity)
+            .ok()
+            .filter(|(_, v, _)| raft(v.craft.kind))
+            .map(|(e, v, _)| (e, v.craft.id))
+    } else {
+        // Both in the render frame: the walker's position and the craft's
+        // drawn place.
+        let feet = walkers.iter().next().map(|p| p.0.as_dvec3());
+        feet.and_then(|feet| {
+            vehicles
+                .iter()
+                .filter(|(_, v, _)| raft(v.craft.kind))
+                .map(|(e, v, at)| (e, v.craft.id, at.translation().as_dvec3().distance(feet)))
+                .filter(|(_, _, d)| *d <= HOLD_REACH_M)
+                .min_by(|a, b| a.2.total_cmp(&b.2))
+                .map(|(e, id, _)| (e, id))
+        })
+    };
+    if found != view.craft {
+        view.hold = found.map_or_else(Hold::default, |(_, id)| {
+            pbd_app::vehicles::hold::read(&save, id)
+        });
+        view.craft = found;
+    }
+    let want = if found.is_some() {
+        Display::Flex
+    } else {
+        Display::None
+    };
+    for mut node in &mut panels {
+        if node.display != want {
+            node.display = want;
+        }
+    }
+}
+
+/// Paint the hold's squares from the hold. After `slots::update`, which
+/// paints every square from the player's slots and so leaves these empty.
+#[allow(clippy::type_complexity)]
+pub fn paint_hold(
+    screen: Res<Screen>,
+    view: Res<HoldView>,
+    icons: Option<Res<ItemIcons>>,
+    images: Res<Assets<Image>>,
+    mut icon_nodes: Query<(&slots::SlotIcon, &mut ImageNode)>,
+    mut counts: Query<(&slots::SlotCount, &mut KitText)>,
+    mut tips: Query<(&SlotCell, &mut ui_kit::Tooltip)>,
+) {
+    let Some(icons) = icons else {
+        return;
+    };
+    if *screen != Screen::Pack || view.craft.is_none() {
+        return;
+    }
+    for (icon, mut node) in &mut icon_nodes {
+        if icon.0 >= CARRIED {
+            slots::paint_icon(&mut node, view.hold.get(icon.0 - CARRIED), &icons, &images);
+        }
+    }
+    for (count, mut text) in &mut counts {
+        if count.0 < CARRIED {
+            continue;
+        }
+        let label = match view.hold.get(count.0 - CARRIED) {
+            Some(stack) if stack.count > 1 => stack.count.to_string(),
+            _ => String::new(),
+        };
+        if text.text != label {
+            text.text = label;
+        }
+    }
+    for (cell, mut tip) in &mut tips {
+        if cell.0 < CARRIED {
+            continue;
+        }
+        let want = slots::stack_tip(view.hold.get(cell.0 - CARRIED), &icons);
+        if tip.0 != want {
+            tip.0 = want;
+        }
+    }
+}
+
 /// I or Tab opens the pack from the world on foot and closes it again. `PreUpdate`
 /// after `menu::toggle`, before the world's readers, like the guide's J. The
 /// pack does not open in a ship's seat, where the hotbar is not drawn either.
@@ -97,7 +264,15 @@ pub fn open(
     keys: Res<ButtonInput<KeyCode>>,
     mut screen: ResMut<Screen>,
     walking: Option<Res<WalkingReadout>>,
+    aboard: Option<Res<pbd_app::vehicles::Aboard>>,
+    vehicles: Query<&pbd_app::vehicles::Vehicle>,
 ) {
+    // Aboard a paddled boat the pack opens too (`small-boats` design 5): a
+    // raft's hold is filled and emptied from it, and a catch looked at.
+    let afloat = aboard
+        .and_then(|a| a.0)
+        .and_then(|e| vehicles.get(e).ok())
+        .is_some_and(|v| v.craft.kind.paddled());
     // I is the pack and O the starter missions (`starter-missions` design
     // 13): each opens its own screen from the world, shuts it again, and
     // switches to it from the other.
@@ -109,7 +284,7 @@ pub fn open(
         return;
     };
     match *screen {
-        Screen::Playing if walking.is_some_and(|readout| readout.active) => *screen = to,
+        Screen::Playing if afloat || walking.is_some_and(|readout| readout.active) => *screen = to,
         open if open == to => *screen = Screen::Playing,
         Screen::Pack | Screen::Missions => *screen = to,
         _ => {}
@@ -141,8 +316,17 @@ pub fn spawn(
     let atlas = icons.atlas.clone();
     let kit = &*kit;
     let (rock, (w, h)) = kit.rock("pack-wide");
+    let (hold_rock, (hold_w, _)) = kit.rock("pack");
     commands
-        .spawn((menu::layer(), GlobalZIndex(10), Panel(Screen::Pack)))
+        .spawn((
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: px(6),
+                ..menu::layer()
+            },
+            GlobalZIndex(10),
+            Panel(Screen::Pack),
+        ))
         .with_children(|layer| {
             layer
                 .spawn((
@@ -182,18 +366,45 @@ pub fn spawn(
                                     ..default()
                                 })
                                 .with_children(|foot| {
-                                    foot.spawn((
-                                        KitText::new("HOTBAR", ui_kit::TEXT_DIM)
-                                            .shadow(ui_kit::INK),
-                                        Node {
-                                            margin: UiRect::bottom(px(3)),
-                                            ..default()
-                                        },
-                                    ));
+                                    // The hand over the hotbar's first slot,
+                                    // as the HUD has it beside the hotbar
+                                    // (`pack-tool-slot` decision 3): the
+                                    // baked rock is the ten slots wide.
+                                    foot.spawn(Node {
+                                        align_items: AlignItems::End,
+                                        column_gap: px(4),
+                                        margin: UiRect::bottom(px(3)),
+                                        ..default()
+                                    })
+                                    .with_children(|line| {
+                                        super::equipment::spawn_pack_hand(line, kit, &icons);
+                                        line.spawn(
+                                            KitText::new("HOTBAR", ui_kit::TEXT_DIM)
+                                                .shadow(ui_kit::INK),
+                                        );
+                                    });
                                     slot_line(foot, kit, &atlas, 0);
                                 });
                         });
                     super::craft::spawn_pack_craft(panel, kit, &atlas, &recipes);
+                });
+            // A raft's hold, under the pack, while one is aboard or in reach
+            // (`small-boats` design 5).
+            layer
+                .spawn((
+                    hold_rock,
+                    Node {
+                        width: px(hold_w),
+                        padding: UiRect::all(px(RIM)),
+                        flex_direction: FlexDirection::Column,
+                        display: Display::None,
+                        ..default()
+                    },
+                    HoldPanel,
+                ))
+                .with_children(|panel| {
+                    menu::lintel(panel, kit, "HOLD");
+                    slot_line(panel, kit, &atlas, CARRIED);
                 });
         });
     commands
@@ -245,6 +456,7 @@ pub fn press(
     mut hand: ResMut<PackHand>,
     mut hotbar: ResMut<Hotbar>,
     mut save: ResMut<WorldSave>,
+    mut view: ResMut<HoldView>,
 ) {
     if *screen != Screen::Pack {
         if hand.0.is_some() {
@@ -268,6 +480,27 @@ pub fn press(
         return;
     };
     let shift = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
+    if let Some((_, id)) = view.craft
+        && (index >= CARRIED || hand.0.is_some_and(|h| h.from >= CARRIED) || shift)
+    {
+        let mut slots = hotbar.0.clone();
+        let mut held_hold = view.hold.clone();
+        let held = hold_click(&mut slots, &mut held_hold, hand.0, index, button, shift);
+        if slots != hotbar.0 || held_hold != view.hold {
+            if !pbd_app::vehicles::hold::store(&mut save, id, &held_hold, &slots) {
+                error!("hold move BLOCKED: the save did not accept it");
+                hand.0 = None;
+                return;
+            }
+            hotbar.0 = slots;
+            view.hold = held_hold;
+        }
+        hand.0 = held;
+        return;
+    }
+    if index >= CARRIED {
+        return;
+    }
     let (moved, held) = click(&hotbar.0, hand.0, index, button, shift);
     if let Some(moved) = moved {
         if !save.record_pack(&moved) {
@@ -287,6 +520,7 @@ pub fn paint(
     screen: Res<Screen>,
     hand: Res<PackHand>,
     hotbar: Res<Hotbar>,
+    view: Res<HoldView>,
     icons: Option<Res<ItemIcons>>,
     images: Res<Assets<Image>>,
     windows: Query<&Window, With<PrimaryWindow>>,
@@ -304,9 +538,12 @@ pub fn paint(
     };
     let in_hand = hand.0.filter(|_| *screen == Screen::Pack);
     let stack = in_hand.and_then(|h| {
-        hotbar
-            .get(h.from)
-            .map(|s| Stack::new(s.item, h.count.min(s.count)))
+        let from = if h.from >= CARRIED {
+            view.hold.get(h.from - CARRIED)
+        } else {
+            hotbar.get(h.from)
+        };
+        from.map(|s| Stack::new(s.item, h.count.min(s.count)))
     });
     let cursor = windows.iter().next().and_then(Window::cursor_position);
     for (mut node, mut image) in &mut held {
@@ -353,6 +590,35 @@ pub fn paint(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// With a raft's hold open, a click picks a stack up out of the hold and
+    /// a second puts it down in the pack, and a shift-click sends a stack of
+    /// the pack's into the hold (`small-boats` design 5).
+    #[test]
+    fn a_click_moves_stacks_across_the_hold() {
+        use pbd_core::goods::Good;
+        let log = pbd_core::inventory::Item::Good(Good::LOG);
+        let rope = pbd_core::inventory::Item::Good(Good::ROPE);
+        let mut slots = Slots::new();
+        slots.set(SLOTS + 3, Some(Stack::new(rope, 4)));
+        let mut hold = Hold::default();
+        hold.slots[1] = Some(Stack::new(log, 20));
+        let held = hold_click(&mut slots, &mut hold, None, CARRIED + 1, Click::Left, false);
+        assert_eq!(
+            held,
+            Some(Held {
+                from: CARRIED + 1,
+                count: 20
+            })
+        );
+        let held = hold_click(&mut slots, &mut hold, held, SLOTS + 5, Click::Left, false);
+        assert_eq!(held, None);
+        assert_eq!(slots.get(SLOTS + 5), Some(Stack::new(log, 20)));
+        assert!(hold.get(1).is_none());
+        hold_click(&mut slots, &mut hold, None, SLOTS + 3, Click::Left, true);
+        assert_eq!(hold.get(0), Some(Stack::new(rope, 4)));
+        assert_eq!(slots.get(SLOTS + 3), None);
+    }
     use pbd_core::inventory::Item;
     use pbd_core::terrain::Material;
 
@@ -424,12 +690,16 @@ mod tests {
         let mut images = world.query::<&ImageNode>();
         assert_eq!(
             images.iter(world).filter(|i| i.image == lintel).count(),
-            2,
-            "an oak lintel over each column, PACK and CRAFT"
+            3,
+            "an oak lintel over each column, PACK and CRAFT, and over a raft's HOLD"
         );
         let mut cells = world.query_filtered::<&ImageNode, With<PackCell>>();
         let n = cells.iter(world).count();
-        assert_eq!(n, PACK + SLOTS);
+        assert_eq!(
+            n,
+            PACK + SLOTS + HOLD,
+            "and the hold's ten, shown with a raft"
+        );
         assert!(cells.iter(world).all(|i| slots.contains(&i.image)));
     }
 
@@ -501,6 +771,7 @@ mod tests {
             .insert_resource(Hotbar(kit()))
             .insert_resource(PackHand(Some(Held { from: 0, count: 64 })))
             .insert_resource(WorldSave::memory_only())
+            .init_resource::<HoldView>()
             .add_systems(Update, (open, press).chain());
         let tap_i = |app: &mut App| {
             let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();

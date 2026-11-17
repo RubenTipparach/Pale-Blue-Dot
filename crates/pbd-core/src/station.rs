@@ -306,6 +306,31 @@ impl Default for RecipeFile {
             metal_tool("iron", "pickaxe", "IRON PICK"),
             metal_tool("iron", "shovel", "IRON SHOVEL"),
             metal_tool("iron", "axe", "IRON AXE"),
+            // small-boats design 3: the boats, up to a small rowboat.
+            recipe(
+                "inner-tube",
+                "INNER TUBE",
+                "workbench",
+                4.0,
+                &[("wool", 4), ("rope", 2)],
+                &[("inner-tube", 1)],
+            ),
+            recipe(
+                "raft",
+                "RAFT",
+                "workbench",
+                6.0,
+                &[("log", 6), ("rope", 4)],
+                &[("raft", 1)],
+            ),
+            recipe(
+                "rowboat",
+                "ROWBOAT",
+                "workbench",
+                10.0,
+                &[("planks", 16), ("rope", 2)],
+                &[("rowboat", 1)],
+            ),
         ]);
         file
     }
@@ -661,8 +686,8 @@ mod tests {
         assert_eq!(book.at("hand").count(), 5);
         assert_eq!(
             book.at("workbench").count(),
-            14,
-            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2) and the incubator (animal-husbandry E4)"
+            17,
+            "with the bucket (water-flow E11), the fence and gate (starter-missions T.2), the incubator (animal-husbandry E4), and the three boats (small-boats)"
         );
         assert_eq!(item_named("block:ore"), Some(Item::Block(Material::Ore)));
         assert_eq!(item_named("coal"), Some(Item::Good(Good::COAL)));

@@ -339,6 +339,10 @@ impl Plugin for PlanetPlugin {
         .add_plugins(ExtractResourcePlugin::<crate::trees_taken::TreesTaken>::default())
         .init_resource::<crate::trees_taken::TreesTaken>()
         .add_systems(Update, crate::trees_taken::refresh)
+        // And what a hand took from the ground clutter (`gather-by-hand`).
+        .add_plugins(ExtractResourcePlugin::<crate::clutter::ClutterTaken>::default())
+        .init_resource::<crate::clutter::ClutterTaken>()
+        .add_systems(Update, crate::clutter::refresh)
         .init_resource::<bounce::BounceField>()
         .init_resource::<bounce::LampBakeField>()
         .init_resource::<lod::DuskRelight>()
@@ -807,8 +811,8 @@ struct PlanetParams {
     rain_near: Vec4,
     // `baked-light-ease` 7.3: the light field across a dusk or dawn relight:
     // x how far the newest half has blended in, 0..1; y which half is the
-    // newest; z one while the other half holds the field it blends from; w
-    // spare.
+    // newest; z one while the other half holds the field it blends from;
+    // w the far trees' baked relief, 0..1 (`tree-impostor-depth`).
     light_ease: Vec4,
     // `flora-v2` design 6: x tufts per cell (zero: the blades), y and z the
     // tuft's width and height, m; w how far round the year, 0..1.
@@ -840,6 +844,9 @@ struct PlanetParams {
     // (`trees_taken::TreesTaken`).
     felled: [UVec4; crate::trees_taken::FELLED / 4],
     picked: [UVec4; crate::trees_taken::PICKED / 4],
+    // `gather-by-hand`: the cells with a piece a hand took, two a lane, each
+    // its clutter id and a sink byte a piece (`clutter::ClutterTaken`).
+    clutter_taken: [UVec4; crate::clutter::TAKEN_CELLS / 2],
 }
 
 /// Words of one half of the light buffer: a level per cell, four to a word,
@@ -1363,8 +1370,10 @@ fn upload_planet(
         mapped_at_creation: false,
     });
     let materials = device.create_buffer(&BufferDescriptor {
-        label: Some("Persistent planet voxel materials for the column tier"),
-        size: column::COLUMN_CAPACITY as u64 * column::MATERIAL_WORDS as u64 * 4,
+        label: Some("Persistent planet voxel materials for the column tier, then placed sheets"),
+        // Two halves: every slot's render codes, then every slot's placed
+        // sheets from `PLACED_SHEETS_BASE` (`placed-blocks-keep-material`).
+        size: 2 * column::PLACED_SHEETS_BASE as u64 * 4,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -1564,6 +1573,14 @@ fn upload_fine(
         // layer is a placed stone wearing the earth that was there before.
         let materials = fine.set.columns.gpu_materials();
         queue.write_buffer(&planet.materials, 0, bytemuck::cast_slice(&materials));
+        // And which of those layers somebody placed, so a placed block is
+        // drawn as itself (`placed-blocks-keep-material`).
+        let sheets = fine.set.columns.gpu_placed_sheets();
+        queue.write_buffer(
+            &planet.materials,
+            (column::PLACED_SHEETS_BASE * 4) as u64,
+            bytemuck::cast_slice(&sheets),
+        );
         let centres = fine.set.columns.gpu_centres();
         queue.write_buffer(&planet.centres, 0, bytemuck::cast_slice(&centres));
     }
@@ -1787,6 +1804,8 @@ pub(crate) struct Tunables<'w> {
     sea_now: Option<Res<'w, crate::sea::SeaNow>>,
     /// The trees felled and picked near the camera (`flora-v2` 12.5).
     taken: Option<Res<'w, crate::trees_taken::TreesTaken>>,
+    /// The ground clutter taken near the camera (`gather-by-hand`).
+    clutter_taken: Option<Res<'w, crate::clutter::ClutterTaken>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1849,6 +1868,11 @@ fn prepare_views(
             .taken
             .as_deref()
             .map(crate::trees_taken::TreesTaken::packed)
+            .unwrap_or_default();
+        let clutter_taken = tunables
+            .clutter_taken
+            .as_deref()
+            .map(crate::clutter::ClutterTaken::packed)
             .unwrap_or_default();
         let lod = &planet.lod;
         let landing = planet.lod_prev.map(|(_, landed)| landed);
@@ -2103,7 +2127,8 @@ fn prepare_views(
                 planet.light_blending,
                 planet.light_from_s,
                 clock.0,
-            ),
+            )
+            .with_w(scatter.tree_impostor_relief),
             flora: Vec4::new(
                 scatter.tuft_count,
                 scatter.tuft_width_m,
@@ -2130,6 +2155,7 @@ fn prepare_views(
             night_lights,
             felled,
             picked,
+            clutter_taken,
             // w: there is a history to read, so not while the capture is off,
             // nor the frame it comes back on (REFLECTIONS raised from OFF):
             // the history is then of a frame from before (`reflection-quality`

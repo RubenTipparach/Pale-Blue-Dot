@@ -19,11 +19,13 @@
 // a good's code, `block:<name>`, `tool:<name>`, `recipe:<code>`; animals
 // and fish by their roster name in lower case. `fell` counts the axe's
 // last log from a tree, `eat` a dish eaten, `night` the clock passing 20:00
-// near a light in the world.
+// near a light in the world. `species` counts each kind of fish once in a
+// mission, `baited` a fish landed on bait, `reach marked` the walker at
+// the map's mark when it was set 200 m or more away.
 //
 // A craft of `recipe:<code>` counts the makes at a station, one a job, and
-// is never met by what the world carries (the starting kit deals fences,
-// gates and torches to every world today).
+// is never met by what the world carries (a world from before the tree may
+// carry the fences, gates and torches the old starting kit dealt).
 //
 // `awaited` names what another branch will bring: a mission naming only
 // these where it names anything unknown is PENDING - logged at load, shown
@@ -35,19 +37,18 @@
 // tree dropped (`metal-tool`) stays in an old world's record, unread.
 //
 (
-    // Bait has no good yet: "Dig for bait" waits for it.
-    awaited: ["bait"],
+    awaited: [],
     missions: [
         // ---- 0. The trunk: hands to tools, and a fire.
         (
             id: "gather",
             branch: "trunk",
             title: "Gather by hand",
-            help: "Dig soft ground with bare hands: fibre turns up in grass, loose stone in the soil under it.",
+            help: "Pick up loose stones and pull fiber from shrubs and ferns with F, and dig soft ground with bare hands for soil.",
             objectives: [
-                (kind: gather, what: "fibre", count: 8, label: "fibre"),
+                (kind: gather, what: "fibre", count: 8, label: "fiber"),
                 (kind: gather, what: "stone", count: 9, label: "stone"),
-                (kind: gather, what: "block:dirt|block:grass|block:soil|block:sand", count: 6, label: "soil"),
+                (kind: gather, what: "block:dirt|block:grass|block:dry grass|block:jungle grass|block:soil|block:sand", count: 6, label: "soil"),
             ],
             unlocks: ["stone-axe"],
         ),
@@ -77,7 +78,7 @@
             id: "planks-rope",
             branch: "trunk",
             title: "Planks and rope",
-            help: "In the pack (I), the Craft row makes planks from a log and rope from three fibre.",
+            help: "In the pack (I), the Craft row makes planks from a log and rope from three fiber.",
             needs: ["wood"],
             objectives: [
                 (kind: craft, what: "planks", count: 8, label: "planks"),
@@ -125,7 +126,7 @@
             id: "rod",
             branch: "fishing",
             title: "Make a fishing rod",
-            help: "Make a rod at the workbench from planks, rope and fibre.",
+            help: "Make a rod at the workbench from planks, rope and fiber.",
             needs: ["fire"],
             objectives: [
                 (kind: craft, what: "tool:rod|recipe:rod", count: 1, label: "rod"),
@@ -147,11 +148,11 @@
             id: "bait",
             branch: "fishing",
             title: "Dig for bait",
-            help: "Dig wet ground by the water for bait, and cast again with it on the hook.",
+            help: "Dig wet ground at the water's edge for bait worms; cast with them in your pack and they go on the hook.",
             needs: ["go-fishing"],
             objectives: [
                 (kind: gather, what: "bait", count: 3, label: "dig bait"),
-                (kind: catch, what: "bait", count: 3, label: "catch with bait"),
+                (kind: baited, what: "any", count: 3, label: "catch with bait"),
             ],
         ),
         (
@@ -454,11 +455,11 @@
             id: "map",
             branch: "about",
             title: "Read the map",
-            help: "Open the map (M), and walk 200 m from where you read it.",
+            help: "Open the map (M), right-click a place at least 200 m away to mark it, and walk there.",
             needs: ["go-fishing"],
             objectives: [
                 (kind: open, what: "map", count: 1, label: "open the map"),
-                (kind: reach, what: "marked", count: 1, label: "walk 200 m"),
+                (kind: reach, what: "marked", count: 1, label: "reach the mark"),
             ],
         ),
         (
@@ -468,7 +469,7 @@
             help: "Walk into deep water and swim.",
             needs: ["map"],
             objectives: [
-                (kind: swim, what: "water", count: 20, label: "metres"),
+                (kind: swim, what: "water", count: 20, label: "meters"),
             ],
         ),
         (
@@ -499,7 +500,7 @@
             needs: ["town"],
             objectives: [
                 (kind: board, what: "boat", count: 1, label: "board"),
-                (kind: travel, what: "boat", count: 100, label: "metres"),
+                (kind: travel, what: "boat", count: 100, label: "meters"),
             ],
         ),
     ],

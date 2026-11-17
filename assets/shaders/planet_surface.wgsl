@@ -48,7 +48,7 @@ struct Params {
     ssr_clip: mat4x4<f32>,     // L8 (10.2): the screen trace history's clip_from_body
     ssr_eye: vec4<f32>,        // and its eye; w one once there is a history
     rain_near: vec4<f32>,      // `wet-near-detail`: x the reach of rain's fine detail, m; y the fade band before it, m; z a plant's darkening at full wetness (`flora-v2` 13.2)
-    light_ease: vec4<f32>,     // `baked-light-ease` 7.3: x the light field's newest half blended in 0..1, y that half, z one while the other is blended from
+    light_ease: vec4<f32>,     // `baked-light-ease` 7.3: x the light field's newest half blended in 0..1, y that half, z one while the other is blended from; w the far trees' baked relief 0..1 (`tree-impostor-depth`)
     flora: vec4<f32>,          // `flora-v2`: x tufts per cell (zero: blades), y tuft width m, z tuft height m, w the year 0..1
     flora_more: vec4<f32>,     // x mushroom chance, y fern chance, zw spare
     flora_biome: array<vec4<f32>,8>, // per biome: fern weight, mushroom weight, flower bits, deciduous
@@ -60,6 +60,7 @@ struct Params {
     night_lights: array<vec4<f32>,128>, // two a light: direction, cos(reach); radius m, strength now, seed, points' spacing m
     felled: array<vec4<u32>,16>,  // `flora-v2` 12.5: felled tree ids near the camera, four a lane, zero empty
     picked: array<vec4<u32>,8>,   // and the trees picked bare
+    clutter_taken: array<vec4<u32>,16>, // `gather-by-hand`: cells with a piece taken, two a lane (id, a sink byte a piece), zero empty
 }
 // The weather maps (`planet_weather.rs`): cover, cloud top, rain and optical
 // depth per place, the wind aloft, the overlay; one sampler.
@@ -222,6 +223,23 @@ fn material_at(slot: u32, layer: u32) -> u32 {
     if word >= arrayLength(&materials) { return 0u; }
     return (materials[word] >> ((layer % MATERIAL_PER_WORD) * 4u)) & 0xfu;
 }
+// `placed-blocks-keep-material`: after every slot's render codes, every
+// slot's PLACED sheets, laid out as the codes are: nought for generated
+// ground, which takes its biome's sheet, and for a block somebody placed its
+// own sheet plus one, so it is drawn as the block it is whatever biome it
+// stands in. `ColumnTier::gpu_placed_sheets` packs it.
+const PLACED_SHEETS_BASE: u32 = 1032192u;
+fn placed_sheet_at(slot: u32, layer: u32) -> u32 {
+    if slot == 0u || layer >= LIGHT_LAYERS { return 0u; }
+    let word = PLACED_SHEETS_BASE + (slot - 1u) * MATERIAL_WORDS + layer / MATERIAL_PER_WORD;
+    if word >= arrayLength(&materials) { return 0u; }
+    return (materials[word] >> ((layer % MATERIAL_PER_WORD) * 4u)) & 0xfu;
+}
+// And the record's own: the sheet its PLACED top is drawn from, plus one,
+// in four bits of its material word (`planet_terrain::PLACED_SHEET_SHIFT`),
+// which the cap and its heightfield wall carry to the fragment.
+const PLACED_SHEET_SHIFT: u32 = 26u;
+const PLACED_SHEET_MASK: u32 = 0x3c000000u;
 
 // The bottom and top of a column's span, metres against sea level.
 // `column::BASE_M` and `LAYERS` in pbd-core are the one source; the visibility
@@ -726,6 +744,11 @@ fn tree_picked(id: u32) -> bool {
     return false;
 }
 
+// clutter:shared begin
+// What the ground clutter is rolled from, shared with `pbd_core::scatter`,
+// which a GPU test (`clutter_gpu_tests.rs`) holds to it: the hash, the rolls
+// and their salts, the grounds, and where and whether a piece a hand can
+// take stands. Standalone: it reads no binding.
 fn hash(x: u32) -> u32 {
     var h = x*747796405u+2891336453u;
     h = ((h >> ((h >> 28u)+4u))^h)*277803737u;
@@ -758,6 +781,40 @@ const SALT_SHRUB: u32 = 0x55u;
 const SALT_MUSH: u32 = 0x56u;
 const SALT_FERN: u32 = 0x57u;
 const SALT_FRUIT: u32 = 0x58u;
+fn grassy(material: u32) -> bool { return material==2u || material==3u || material==7u; }
+fn bare(material: u32) -> bool { return material==1u || material==4u || material==5u || material==6u; }
+// Where a piece salted `salt` stands on a cell: the reference's lerp from the
+// cap's centre toward a hashed corner, at the cap's radius.
+fn clutter_seat(id: u32, salt: u32, degree: u32, axis: vec3<f32>,
+        corners: array<vec4<f32>,6>, radius: f32) -> vec3<f32> {
+    let k = u32(roll(id,salt+1u)*f32(degree));
+    let f0 = 0.15+0.60*roll(id,salt+2u);
+    return (axis*(1.-f0)+corners[min(k,degree-1u)].xyz*f0)*radius;
+}
+// Whether a piece a hand can take grows on a cell: 0 a pebble, 1 a bush,
+// 2 a dead shrub, 3 a fern, at `chance` (a fern's with its biome's weight).
+fn clutter_grows(piece: u32, id: u32, material: u32, chance: f32) -> bool {
+    let green = grassy(material);
+    let dry = bare(material);
+    if piece == 0u {
+        return (green||dry) && roll(id,SALT_ROCK) < select(chance*0.3,chance,dry);
+    }
+    if piece == 1u { return green && roll(id,SALT_BUSH) < chance; }
+    if piece == 2u { return (material==4u||material==6u) && roll(id,SALT_SHRUB) < chance; }
+    return green && roll(id,SALT_FERN) < chance;
+}
+// clutter:shared end
+// How far a piece a hand took is sunk into the ground, 0 whole to 1 gone
+// (`gather-by-hand`): its byte in the taken cells' list, nought off it.
+fn clutter_sunk(id: u32, piece: u32) -> f32 {
+    for (var i = 0u; i < 16u; i++) {
+        let lane = params.clutter_taken[i];
+        if lane.x == 0u && lane.z == 0u { break; }
+        if lane.x == id { return f32((lane.y >> (8u*piece)) & 0xffu)/255.; }
+        if lane.z == id { return f32((lane.w >> (8u*piece)) & 0xffu)/255.; }
+    }
+    return 0.;
+}
 const TAU: f32 = 6.28318530718;
 
 // `flora-v2`: the plants' own material codes, past the ground's (0-15) and
@@ -901,6 +958,9 @@ const IMPOSTOR_LIFT: f32 = 0.35;
 const TREE_BARK_CODE: u32 = 24u;
 const TREE_LEAF_CODE: u32 = 25u;
 const IMPOSTOR_CODE: u32 = 26u;
+// Words from an impostor strip to its relief strip (`tree-impostor-depth`):
+// `pbd_core::tree_kit::IMPOSTOR_RELIEF`, which a test holds.
+const IMPOSTOR_RELIEF: u32 = 27648u;
 // The species and variant ride over the material word's biome byte.
 const SPECIES_SHIFT: u32 = 17u;
 const VARIANT_SHIFT: u32 = 21u;
@@ -999,8 +1059,6 @@ fn tree_show(base: vec3<f32>, r: u32) -> f32 {
     return 0.0;
 }
 
-fn grassy(material: u32) -> bool { return material==2u || material==3u || material==7u; }
-fn bare(material: u32) -> bool { return material==1u || material==4u || material==5u || material==6u; }
 
 
 @vertex
@@ -1622,6 +1680,11 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             var u = array<f32,4>(0.0, 0.999, 0.999, 0.0)[c];
             if flip { u = 0.999 - u; }
             uv = vec2(f32(view) + u, select(0.0, 1.0, c >= 2u));
+            // `tree-impostor-depth`: the baked view's own direction, laid
+            // level, which is the frame its relief strip keeps the near
+            // model's normals in; the fragment lights each pixel by them.
+            let th = f32(view)*TAU/8.0;
+            normal = t.x*sin(th) + t.z*cos(th);
         }
     } else {
         kind = 3u;
@@ -1752,13 +1815,10 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
         } else if v < 288u {
             // ---- pebble: one squat hexagonal prism on bare ground, and
             // sparsely on grass at the reference's own third.
-            let rock_chance = select(params.clutter_chance.z*0.3,params.clutter_chance.z,dry);
-            if (green||dry) && roll(id,SALT_ROCK) < rock_chance {
-                let k = u32(roll(id,SALT_ROCK+1u)*f32(degree));
-                let f0 = 0.15+0.60*roll(id,SALT_ROCK+2u);
-                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+            if clutter_grows(0u,id,material,params.clutter_chance.z) {
+                let bottom = clutter_seat(id,SALT_ROCK,degree,axis,cell.corners,radius);
                 let rad = params.clutter_size.z*(0.6+0.8*roll(id,SALT_ROCK+3u));
-                let h = rad*(0.4+0.5*roll(id,SALT_ROCK+4u))*fade;
+                let h = rad*(0.4+0.5*roll(id,SALT_ROCK+4u))*fade*(1.-clutter_sunk(id,0u));
                 let phase = roll(id,SALT_ROCK+5u)*TAU;
                 material = 5u;
                 let piece = prism_vertex(v-234u,bottom,axis,tangent,bitangent,rad,h,phase);
@@ -1769,10 +1829,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             }
         } else if v < 396u {
             // ---- bush: two leafy lumps, the reference's pair.
-            if green && roll(id,SALT_BUSH) < params.clutter_chance.w {
-                let k = u32(roll(id,SALT_BUSH+1u)*f32(degree));
-                let f0 = 0.15+0.60*roll(id,SALT_BUSH+2u);
-                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+            if clutter_grows(1u,id,material,params.clutter_chance.w) {
+                let bottom = clutter_seat(id,SALT_BUSH,degree,axis,cell.corners,radius);
                 let size = params.clutter_size.w*(0.8+0.4*roll(id,SALT_BUSH+3u));
                 let phase = roll(id,SALT_BUSH+4u)*TAU;
                 material = 9u;
@@ -1780,7 +1838,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                 let lump = select(bottom,
                     bottom+(tangent*cos(phase)+bitangent*sin(phase))*(size*1.1),second);
                 let rad = select(size,size*0.6,second);
-                let h = select(size*0.9,size*0.55,second)*fade;
+                let h = select(size*0.9,size*0.55,second)*fade*(1.-clutter_sunk(id,1u));
                 let turn = select(phase,phase+0.7,second);
                 let part = select(v-288u,v-342u,second);
                 let piece = prism_vertex(part,lump,axis,tangent,bitangent,rad,h,turn);
@@ -1793,14 +1851,13 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             // ---- dead shrub: a splay of dry twigs, which on desert sand and
             // tundra snow is the only ground cover there is.
             let i = v-396u;
-            if (material==4u||material==6u) && roll(id,SALT_SHRUB) < params.clutter_more.y {
+            if clutter_grows(2u,id,material,params.clutter_more.y) {
                 let twig = i/6u;
-                let k = u32(roll(id,SALT_SHRUB+1u)*f32(degree));
-                let f0 = 0.15+0.60*roll(id,SALT_SHRUB+2u);
-                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let bottom = clutter_seat(id,SALT_SHRUB,degree,axis,cell.corners,radius);
                 let phase = roll(id,SALT_SHRUB+3u)*TAU;
                 let ang = phase+f32(twig)*TAU/6.+roll(id,SALT_SHRUB+8u+twig)*0.5;
-                let h = params.clutter_more.z*(0.6+0.7*roll(id,SALT_SHRUB+16u+twig))*fade;
+                let h = params.clutter_more.z*(0.6+0.7*roll(id,SALT_SHRUB+16u+twig))*fade
+                    *(1.-clutter_sunk(id,2u));
                 let out_dir = tangent*cos(ang)+bitangent*sin(ang);
                 let side = tangent*cos(ang+1.57)+bitangent*sin(ang+1.57);
                 let top = bottom+axis*h+out_dir*(h*0.6);
@@ -1840,17 +1897,15 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
             // ---- fern (`flora-v2` design 3): four fronds arching out of a
             // hashed seat, each cut to its shape by a pixel mask.
             let chance = min(params.flora_more.y*params.flora_biome[biome].x, 1.);
-            if green && roll(id,SALT_FERN) < chance {
+            if clutter_grows(3u,id,material,chance) {
                 let frond = (v-540u)/6u;
-                let k = u32(roll(id,SALT_FERN+1u)*f32(degree));
-                let f0 = 0.15+0.60*roll(id,SALT_FERN+2u);
-                let bottom = (axis*(1.-f0)+cell.corners[min(k,degree-1u)].xyz*f0)*radius;
+                let bottom = clutter_seat(id,SALT_FERN,degree,axis,cell.corners,radius);
                 let size = 0.8+0.4*roll(id,SALT_FERN+3u);
                 let ang = roll(id,SALT_FERN+4u)*TAU+f32(frond)*TAU*0.25
                     +(roll(id,SALT_FERN+8u+frond)-0.5)*0.6;
                 let out_dir = tangent*cos(ang)+bitangent*sin(ang);
                 let side = tangent*cos(ang+1.5708)+bitangent*sin(ang+1.5708);
-                let len = 0.6*size*fade;
+                let len = 0.6*size*fade*(1.-clutter_sunk(id,3u));
                 let sway = sin(1.5*params.settings.z+f32(frond)*2.1+roll(id,SALT_FERN+5u)*TAU)*0.04*len;
                 let tip = bottom+out_dir*(len*0.8)+axis*(len*0.55)+side*sway;
                 let hw = 0.12*size;
@@ -1903,7 +1958,8 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     // The material in the low byte and the cell's BIOME above it, exactly as
     // the record packs them: the fragment needs the biome to pick its sheet,
     // and carrying it in a word it already has costs no interpolator.
-    out.material = (material & 0xffu) | (cell.metadata.y & 0xff00u) | out_flags;
+    out.material = (material & 0xffu) | (cell.metadata.y & 0xff00u) | out_flags
+        | (cell.metadata.y & PLACED_SHEET_MASK);
     out.height = out_height;
     // The low half only: the high half carries the column tier slot.
     out.skylight = f32(cell.metadata.z & 0xffffu)/65535.;
@@ -2523,6 +2579,9 @@ fn tree_flags(input: VertexOut) -> u32 {
 // the pixel by the uv's fraction. A deciduous tree's leafy bake gives way to
 // its bare one a texel at a time as winter comes (design 10.6).
 fn impostor_pixel(input: VertexOut) -> u32 {
+    return kit[impostor_index(input)];
+}
+fn impostor_index(input: VertexOut) -> u32 {
     let header = tree_header(input);
     let view = min(u32(max(floor(input.uv.x), 0.0)), 7u);
     let px = view*IMPOSTOR_VIEW_W + min(u32(fract(input.uv.x)*f32(IMPOSTOR_VIEW_W)), IMPOSTOR_VIEW_W - 1u);
@@ -2532,7 +2591,35 @@ fn impostor_pixel(input: VertexOut) -> u32 {
         let bare = season_at(normalized(input.position)).y;
         if random(input.seed*977u + px*131u + py*7919u) < bare { at = kit[header + 9u]; }
     }
-    return kit[at + py*IMPOSTOR_W + px];
+    return at + py*IMPOSTOR_W + px;
+}
+
+// `tree-impostor-depth`: a far tree is lit by the near model's own normals
+// and its root-to-tip AO, baked beside each view (`pbd_core::tree_bake::
+// bake_with_relief`), so a crown has its sunlit side and its shaded side as
+// the near crown does. `level` is the baked view's direction laid level (the
+// vertex's normal); the relief's x runs across it, y up the tree, z toward
+// the view. Mixed by `light_ease.w` with the standing normal of `flora-v2`
+// 13.4 and the near crown's mean shade (0: the flat card). Returns the
+// normal and the shade over the crown's matched albedo.
+var<private> impostor_shade: f32 = 1.0;
+fn impostor_relief(input: VertexOut, level_in: vec3<f32>) -> vec3<f32> {
+    let up = normalized(input.position);
+    let level = normalized(level_in - up*dot(level_in, up));
+    let across = cross(up, level);
+    let index = impostor_index(input);
+    let word = kit[index + IMPOSTOR_RELIEF];
+    let r = unpack4x8snorm(word).xyz;
+    let baked = normalized(across*r.x + up*r.y + level*r.z);
+    let standing = normalized(level + up*IMPOSTOR_LIFT);
+    let k = clamp(params.light_ease.w, 0.0, 1.0);
+    // The near pass's `mix(0.45, 1, ao)`; the crown's albedo was already met
+    // to the near crown's under its MEAN of that, so a crown pixel takes its
+    // own over the mean, and bark its own.
+    let ao = mix(0.45, 1.0, f32(word >> 24u)/255.0);
+    let crown = (kit[index] >> 24u) == 255u;
+    impostor_shade = mix(1.0, select(ao, ao/NEAR_CROWN_SHADE, crown), k);
+    return normalized(mix(standing, baked, k));
 }
 
 // The mockup's autumn on a leaf: the whole card (or a far tree's crown) to
@@ -2627,7 +2714,7 @@ fn tree_albedo_bare(input: VertexOut) -> vec3<f32> {
                 albedo = tree_autumn(albedo, tree, 0.0, max(season.x, season.y));
             }
         }
-        return albedo;
+        return albedo*impostor_shade;
     }
     if code == TREE_LEAF_CODE {
         var albedo = tree_texel(kit[sh + 1u], input.uv);
@@ -3368,7 +3455,10 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     let foot = length(fwidth(input.position));
     if dropped(input) { discard; }
     let radial = normalized(input.position);
-    let n = normalized(input.normal);
+    var n = normalized(input.normal);
+    if input.kind == 2u && (input.material & 0xffu) == IMPOSTOR_CODE {
+        n = impostor_relief(input, input.normal);
+    }
     let sun = params.sun.xyz;
     let toward_camera = normalized(params.camera.xyz-input.position);
     let distance_to_camera = distance(input.position,params.camera.xyz);
@@ -3428,11 +3518,20 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     var slot = tileset_slot((input.material >> 8u) & 0xffu);
     var code = cap;
     let face_altitude = length(input.position)-params.settings.x;
+    // A block somebody PLACED is drawn from its own sheet, never the biome's
+    // (`placed-blocks-keep-material`): dirt on desert sand is the meadow's
+    // earth, not the desert's. The cap carries its record's.
+    let placed_cap = (input.material & PLACED_SHEET_MASK) >> PLACED_SHEET_SHIFT;
+    if input.kind==0u && placed_cap != 0u { slot = placed_cap - 1u; }
     if input.kind==1u {
         // The heightfield's own wall, which stands only where a cell has no
         // column: no layer to ask, so the depth rule, which is the
         // generator's own stack.
-        code = face_code(cap,max(input.height-face_altitude,0.));
+        let depth = max(input.height-face_altitude,0.);
+        code = face_code(cap,depth);
+        // Its top metre is the placed block's own side; under it, the
+        // generated ground.
+        if placed_cap != 0u && depth <= 1.0 { slot = placed_cap - 1u; }
     }
     if input.kind==4u {
         // A column-pass face wears the LAYER it bounds: the block under an
@@ -3449,6 +3548,8 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
         else { layer = min(layer, max(light_layer(input.height-0.5), 0u)); }
         let own = material_at(input.slot, layer);
         code = own;
+        let placed = placed_sheet_at(input.slot, layer);
+        if placed != 0u { slot = placed - 1u; }
         if abs(facing) < 0.5 {
             if grassy(own) { code = GRASS_SIDE_CODE; }
             if own == 6u { code = SNOW_SIDE_CODE; }
