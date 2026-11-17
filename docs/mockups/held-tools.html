@@ -836,8 +836,8 @@
       if (swingMode === "strike") {
         const s = strikeAt(tc); a = s.a; cursor = s.e;
         drop = P.drop_m * Math.max(0, a) / Math.max(1e-3, P.strike_rad);
-        const n = strokesPerBlock(), k = Math.min(n, Math.floor(Math.min(local, P.break_s - 1e-6) / (P.break_s / n)) + 1);
-        chopstat.textContent = local >= P.break_s ? `broken · ${n} stroke${n > 1 ? "s" : ""}` : `stroke ${k}/${n}`;
+        const n = strokesPerBlock(), hits = Math.min(n, Math.floor(local / (P.break_s / n) + 1e-9));
+        chopstat.textContent = local >= P.break_s ? `broken · ${n} hit${n > 1 ? "s" : ""}` : `hit ${hits}/${n}`;
       } else {
         // The game today: the sine runs on while digging; the block breaks
         // when the dig's time is up, wherever the swing is.
