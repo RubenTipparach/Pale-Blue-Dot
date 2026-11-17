@@ -60,3 +60,9 @@ Read and not copied:
   "In this repository (Pale Blue Dot)" note.
 - `mockup-tracker`: Fleet Command at `ebcb205` (2026-11-12), its "In Pale Blue Dot" section.
 - The others carry their history in their own `SKILL.md`.
+
+## Written here
+
+| Skill | Source | Date | Notes |
+| --- | --- | --- | --- |
+| `animation` | Written in this repository at the owner's ask ("make up an animation skill too so we can reuse these ideas for future tool animations, and various characters"), from the owner's notes on the Tools in Hand mockup and `held-swing` decisions 5 to 8 | 2026-11-17 | Cites the twelve principles of animation (Wikipedia) and two motion references (a Sketchfab chopping animation, Quaternius's animation viewer) as links only; no text or assets copied. |
