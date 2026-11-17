@@ -19,7 +19,7 @@ visceral, more faster".
   the view, never touching the raw mouse look) and a swing whoosh.
 
 Shown first in the Dig and Chop tabs of the Tools in Hand mockup (M36,
-`docs/mockups/tool-motion.html`, the owner on 2026-11-17: "make a new
+`docs/mockups/tool-motion.html`, https://claude.ai/artifact/Xx3xB3ouaKdJ2NdnxAL9PX; the owner on 2026-11-17: "make a new
 mockup for all the tools stuff for digging, choppin and fishing"), as the
 STRIKE stroke beside today's chop, running the same curve the game would. The
 game changes only after the owner approves it.

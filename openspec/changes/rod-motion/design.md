@@ -55,7 +55,7 @@ non-negative where it is a size or a rate. Defaults live in one place (the
 
 ## 5. The mockup
 
-**Tools in Hand** (M36, `docs/mockups/tool-motion.html`), its Fish tab. The owner, 2026-11-17: "Actually make a new tools mockup ... for all the tools stuff for digging, choppin and fishing". One page shows the three tools' motion: Dig, Chop (the `held-swing` STRIKE stroke) and Fish (this change), each with a Today / Proposed toggle in its one view.
+**Tools in Hand** (M36, `docs/mockups/tool-motion.html`, https://claude.ai/artifact/Xx3xB3ouaKdJ2NdnxAL9PX), its Fish tab. The owner, 2026-11-17: "Actually make a new tools mockup ... for all the tools stuff for digging, choppin and fishing". One page shows the three tools' motion: Dig, Chop (the `held-swing` STRIKE stroke) and Fish (this change), each with a Today / Proposed toggle in its one view.
 
 - **Models.** The same first-person rod and hand as the game, from the
   generator's data (`tools/gen_held_tools.py`, the same JSON the Hex Tool
