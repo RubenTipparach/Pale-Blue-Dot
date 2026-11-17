@@ -253,10 +253,13 @@ def rod_along(elevation_deg):
 TOOLS = [
     {"id": "pickaxe", "name": "Pickaxe", "note": "Stone, rock and ore", "shape": pickaxe, "len": 19.2, "fist": 5.0,
      "grip_r": 0.45, "along": UPRIGHT, "length": 0.365, "work": (0, -1, 0), "toward": AHEAD, "back": BACK_RIGHT},
-    # The same setup as the pickaxe and the axe: upright, gripped a quarter of
-    # the way up, the head (the blade) pointing ahead.
+    # Upright and gripped a quarter of the way up like the pickaxe and the
+    # axe, but rolled a quarter turn about the handle so the spade's face is
+    # toward the eye, as a spade is held to scoop (owner, 2026-11-17: "the
+    # spade on the shovel needs to look like its scooping, so roll the shovel
+    # by 90 degrees"). With its blade ahead it was seen edge on.
     {"id": "shovel", "name": "Shovel", "note": "Dirt, sand and snow", "shape": shovel, "len": 24.4, "fist": 5.0,
-     "grip_r": 0.51, "along": UPRIGHT, "length": 0.4074, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},
+     "grip_r": 0.51, "along": UPRIGHT, "length": 0.4074, "work": (0, 1, 0), "toward": (-1.0, 0.0, 0.0), "back": BACK_RIGHT},
     # The blade ahead, its edge facing away.
     {"id": "axe", "name": "Axe", "note": "Wood", "shape": axe, "len": 19.4, "fist": 5.0,
      "grip_r": 0.45, "along": UPRIGHT, "length": 0.363, "work": (0, 1, 0), "toward": AHEAD, "back": BACK_RIGHT},

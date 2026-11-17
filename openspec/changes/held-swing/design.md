@@ -26,3 +26,14 @@
 4. The mockup (Tools in Hand, M36, `docs/mockups/tool-motion.html`) shows
    TODAY and STRIKE in each of its Dig and Chop tabs' one view (a toggle),
    with the curve's values as sliders.
+5. One steady beat from block to block (owner, 2026-11-17, on the Tools in
+   Hand mockup: "why is it in sets of 3?", "it should be like continous").
+   Timing each block's N strokes at progress k/N left the 0.15 s
+   `between_s` pause, plus a whole stroke, between a block's last impact and
+   the next block's first: three hits, a gap, three hits. Instead a block and
+   its pause, L = T + between_s, take N = max(1, round(L / stroke_target_s))
+   strokes of one period P = L / N. The k-th impact of cycle c lands at
+   c·L + T − (N − k)·P, so the last one still lands on the break, and the
+   strokes run on at one beat while the button is held. Break times do not
+   change.
+

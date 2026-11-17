@@ -84,3 +84,9 @@ non-negative where it is a size or a rate. Defaults live in one place (the
 - The game moves in the same push as the mockup, since the owner asked to
   "fix that up" before asking for the mockup. If the owner tunes the mockup, its printed `held.ron` block
   goes into the game unchanged.
+- The controls stay as they are: hold the left button to reel a hooked fish,
+  and right click winds in an empty line. The owner, 2026-11-17, on the Tools
+  in Hand mockup's Fish tab: "are you deciding to do left click to real in
+  fish insetad now?", "that seems better imo". This closes the open question
+  of whether right click should hook or reel.
+

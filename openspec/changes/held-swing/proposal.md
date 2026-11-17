@@ -10,9 +10,10 @@ visceral, more faster".
 - The chop is no longer one sine wave on its own clock. Each stroke has
   stages: a quick wind-up, a strike that speeds up into the block, a short hold
   on impact, a small kick back and an eased return.
-- Strokes are timed to the dig: a block with break time T gets
-  N = max(1, round(T / 0.4 s)) strokes, the k-th impact at progress k/N, the
-  last on the break. Break times do not change.
+- Strokes are timed to the dig at one steady beat (design 5): a block with
+  break time T and the pause after it get N = max(1, round((T + 0.15 s) /
+  0.4 s)) strokes of one period, the last on the break. Break times do not
+  change.
 - The dig sounds play on the impacts, from the same schedule.
 - Letting go eases the tool back to rest instead of snapping it.
 - Optional, the owner's call: a small camera kick on impact (added on top of
