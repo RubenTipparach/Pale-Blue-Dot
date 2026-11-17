@@ -726,11 +726,15 @@ at the left, under the position readout:
 - under it every objective, one a row: the kit's check (`check-off`, or
   `check-on` once met) and the objective in the body face (VT323), with its
   count (`Pull fiber 3/8`);
-- a met objective's row dims to `RUNE_DIM`, and the next one is in `TEXT`;
+- a met objective's row turns the kit's green (`RUNE`), the next one to do
+  is white (`LABEL`) and the rest are in `TEXT`. A first try dimmed a met
+  row to `RUNE_DIM`; it could not be read over the bright meadow in the
+  capture, so it is the full green;
 - behind it the HUD's own dim (`DIMMER`) with a little padding, so the text
   reads over sand and snow.
 
-The player's "Mission line" setting still hides it.
+The player's setting still hides it, and its label in Settings is now
+"Mission goals".
 
 **When a mission closes**, for the notice's four seconds:
 - the block reads "MISSION COMPLETE" over the finished mission's title,

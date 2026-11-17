@@ -1700,7 +1700,7 @@ pub fn run(args: &[String]) {
             (
                 missions::press_tabs,
                 missions::paint,
-                missions::show_line,
+                missions::show_goals,
                 mission_tree::steer,
                 mission_tree::relayout,
                 mission_tree::place,

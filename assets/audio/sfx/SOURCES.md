@@ -26,6 +26,7 @@ The plan: `openspec/changes/audio-and-ambience` (design sections 4, 5 and 7).
 | cast_whoosh | [Fishing Rod Cast - Swoosh](https://freesound.org/people/mwchristian95/sounds/725426/) (mwchristian95) `725426.mp3`, CC0 | a fishing rod cast, as recorded |
 | catch_chime | `tools/audio/gen_sfx.py` (synthesised, ours) | none |
 | hook_jingle | `tools/audio/gen_sfx.py` (synthesised, ours) | none |
+| mission_done | `tools/audio/gen_sfx.py` (synthesised, ours) | none |
 | catch_splash | [SPLASH.wav](https://freesound.org/people/petenice/sounds/9508/) (petenice) `9508.mp3`, CC0 | a splash, as recorded |
 | dig_dirt_1 .. dig_dirt_3 | [Digging a Hole and Shovelling Soil/Dirt 2](https://freesound.org/people/Ali_6868/sounds/384362/) (Ali_6868) `384362.mp3`, CC0 | three spade strokes from a recording of digging a hole |
 | dig_dry_1 .. dig_dry_3 | [Digging a Hole and Shovelling Soil/Dirt 2](https://freesound.org/people/Ali_6868/sounds/384362/) (Ali_6868) `384362.mp3`, CC0; [01-20 Footsteps, sneakers on dry leaves.wav](https://freesound.org/people/SpliceSound/sounds/218305/) (SpliceSound) `218305.mp3`, CC0 | spade strokes 3 dB down under steps in dry leaves |

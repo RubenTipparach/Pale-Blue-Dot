@@ -3,9 +3,12 @@
 //!
 //! The counting and the record are `pbd_app::missions`; this only draws them.
 //!
-//! - **The HUD line** sits top right under the compass strip, in the kit's
-//!   face: `CATCH FISH 1/3`, then `DONE: CATCH FISH` for a few seconds when
-//!   one closes. The player's "Mission line" setting hides it.
+//! - **The goals** sit at the left under the position readout (design "The
+//!   goals on the HUD, and a jingle"): the current mission's title in the
+//!   kit's face, then every objective with the kit's check and its count in
+//!   the body face, a met one green; for a few seconds after one closes,
+//!   "MISSION COMPLETE" over it with every check on. The player's "Mission
+//!   goals" setting hides it.
 //! - **The tab** is a menu screen of its own (`Screen::Missions`), opened
 //!   with O, as the pack is with I; a strip of two oak tabs over both
 //!   switches between them. The tab draws the tree (`mission_tree`).
@@ -16,9 +19,28 @@ use pbd_app::missions::{MissionChain, Missions};
 use pbd_app::settings::PlayerSettings;
 use pbd_app::ui_kit::{self, KitText, Plaque, Set, UiKit};
 
-/// The HUD line.
+/// The goals block on the HUD.
 #[derive(Component)]
-pub struct MissionLine;
+pub struct MissionGoals;
+/// Its line over the title, shown while a finished mission is on it.
+#[derive(Component)]
+pub struct GoalsKicker;
+/// The mission's title.
+#[derive(Component)]
+pub struct GoalsTitle;
+/// One objective's row, its check and its words, by the objective's index.
+#[derive(Component)]
+pub struct GoalRow(pub usize);
+#[derive(Component)]
+pub struct GoalCheck(pub usize);
+#[derive(Component)]
+pub struct GoalText(pub usize);
+
+/// The most objectives a mission has (`torch` has three); the rows past a
+/// mission's own are hidden.
+pub const GOAL_ROWS: usize = 4;
+/// Where the block sits, UI px: under the position readout's two lines.
+pub const GOALS_AT: (f32, f32) = (6.0, 62.0);
 
 /// The strip of tabs over the pack and the missions, and what each opens.
 #[derive(Component)]
@@ -40,18 +62,75 @@ pub const TABS: [(&str, Screen); 5] = [
 
 pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
     let kit = &*kit;
-    // The HUD line, under the compass strip at the right.
-    commands.spawn((
-        KitText::new("", ui_kit::TEXT).shadow(ui_kit::INK),
-        Node {
-            position_type: PositionType::Absolute,
-            right: px(6),
-            top: px(36),
-            ..default()
-        },
-        Visibility::Hidden,
-        MissionLine,
-    ));
+    // The goals, at the left under the position readout.
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(GOALS_AT.0),
+                top: px(GOALS_AT.1),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(3),
+                padding: UiRect::axes(px(6), px(5)),
+                ..default()
+            },
+            BackgroundColor(ui_kit::DIMMER),
+            Visibility::Hidden,
+            MissionGoals,
+        ))
+        .with_children(|goals| {
+            goals.spawn((
+                KitText::new("MISSION COMPLETE", ui_kit::RUNE).shadow(ui_kit::INK),
+                Node {
+                    display: Display::None,
+                    ..default()
+                },
+                GoalsKicker,
+            ));
+            goals.spawn((
+                KitText::new("", ui_kit::TITLE).shadow(ui_kit::INK),
+                Node {
+                    margin: UiRect::bottom(px(1)),
+                    ..default()
+                },
+                GoalsTitle,
+            ));
+            for k in 0..GOAL_ROWS {
+                goals
+                    .spawn((
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: px(4),
+                            display: Display::None,
+                            ..default()
+                        },
+                        GoalRow(k),
+                    ))
+                    .with_children(|row| {
+                        row.spawn((
+                            kit.whole(Set::Stone, "check-off"),
+                            Node {
+                                width: px(8),
+                                height: px(8),
+                                flex_shrink: 0.0,
+                                ..default()
+                            },
+                            GoalCheck(k),
+                        ));
+                        row.spawn((
+                            Text::new(""),
+                            TextFont {
+                                font_size: 12.0,
+                                ..default()
+                            },
+                            TextColor(ui_kit::TEXT),
+                            ui_kit::text_shadow(),
+                            GoalText(k),
+                        ));
+                    });
+            }
+        });
     // The tabs, over whichever of the two panels is open.
     commands
         .spawn((
@@ -79,28 +158,82 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
         });
 }
 
-/// The HUD line: the current mission, or the one just done, unless the
+/// What the goals block says: an optional kicker, the title, and each
+/// objective's words with whether it is met.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GoalsView {
+    pub kicker: bool,
+    pub title: String,
+    pub goals: Vec<(String, bool)>,
+}
+
+/// One objective's words: its label, and its count where it needs more than
+/// one ("Pull fiber 3/8"), in metres for a distance ("Swim 4/20 m").
+pub fn goal_words(objective: &pbd_core::missions::Objective, count: u32) -> String {
+    use pbd_core::missions::Kind;
+    let count = count.min(objective.count);
+    if objective.count <= 1 {
+        return objective.label.clone();
+    }
+    let unit = if matches!(objective.kind, Kind::Swim | Kind::Travel) {
+        " m"
+    } else {
+        ""
+    };
+    format!("{} {count}/{}{unit}", objective.label, objective.count)
+}
+
+/// The block for the world's progress: the mission just finished while its
+/// notice lasts, every goal met, under "MISSION COMPLETE"; else the current
+/// mission. `None` once the tree is done.
+pub fn goals_view(missions: &Missions, chain: &pbd_core::missions::Chain) -> Option<GoalsView> {
+    let (mission, kicker) = match &missions.notice {
+        Some((title, _)) => (chain.missions.iter().find(|m| &m.title == title)?, true),
+        None => (missions.progress.current(chain)?, false),
+    };
+    let counts = missions.progress.counts(mission);
+    let goals = mission
+        .objectives
+        .iter()
+        .zip(&counts)
+        .map(|(o, c)| {
+            let met = kicker || *c >= o.count;
+            (goal_words(o, if kicker { o.count } else { *c }), met)
+        })
+        .collect();
+    Some(GoalsView {
+        kicker,
+        title: mission.title.clone(),
+        goals,
+    })
+}
+
+/// The goals block: the current mission, or the one just done, unless the
 /// player hid it or a menu is open.
-pub fn show_line(
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+pub fn show_goals(
     missions: Res<Missions>,
     chain: Res<MissionChain>,
     screen: Res<Screen>,
     settings: Res<PlayerSettings>,
     walking: Option<Res<pbd_app::walking::WalkingReadout>>,
-    mut line: Query<(&mut KitText, &mut Visibility), With<MissionLine>>,
+    kit: Res<UiKit>,
+    mut block: Query<&mut Visibility, With<MissionGoals>>,
+    mut words: ParamSet<(
+        Query<&mut Node, With<GoalsKicker>>,
+        Query<&mut KitText, With<GoalsTitle>>,
+        Query<(&GoalRow, &mut Node)>,
+        Query<(&GoalCheck, &mut ImageNode)>,
+        Query<(&GoalText, &mut Text, &mut TextColor)>,
+    )>,
+    mut last: Local<Option<GoalsView>>,
 ) {
-    let (text, colour) = match &missions.notice {
-        Some((title, _)) => (format!("DONE: {title}"), ui_kit::RUNE),
-        None => (
-            missions.progress.line(&chain.0).unwrap_or_default(),
-            ui_kit::TEXT,
-        ),
-    };
+    let view = goals_view(&missions, &chain.0);
     let shown = settings.mission_line
         && *screen == Screen::Playing
         && walking.is_some_and(|w| w.active)
-        && !text.is_empty();
-    for (mut words, mut visibility) in &mut line {
+        && view.is_some();
+    for mut visibility in &mut block {
         let want = if shown {
             Visibility::Inherited
         } else {
@@ -109,11 +242,53 @@ pub fn show_line(
         if *visibility != want {
             *visibility = want;
         }
-        if words.text != text || words.colour != colour {
-            words.text.clone_from(&text);
-            words.colour = colour;
+    }
+    if *last == view {
+        return;
+    }
+    let v = view.clone().unwrap_or_default();
+    for mut node in &mut words.p0() {
+        node.display = if v.kicker {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+    for mut title in &mut words.p1() {
+        title.text.clone_from(&v.title);
+    }
+    for (row, mut node) in &mut words.p2() {
+        node.display = if row.0 < v.goals.len() {
+            Display::Flex
+        } else {
+            Display::None
+        };
+    }
+    for (check, mut image) in &mut words.p3() {
+        let met = v.goals.get(check.0).is_some_and(|g| g.1);
+        let want = kit.whole(Set::Stone, if met { "check-on" } else { "check-off" });
+        if image.image != want.image {
+            image.image = want.image;
         }
     }
+    // The first goal not met is the one to do next: it reads brightest.
+    let next = v.goals.iter().position(|g| !g.1);
+    for (goal, mut text, mut colour) in &mut words.p4() {
+        let Some((line, met)) = v.goals.get(goal.0) else {
+            continue;
+        };
+        text.0.clone_from(line);
+        colour.0 = if v.kicker {
+            ui_kit::RUNE
+        } else if *met {
+            ui_kit::RUNE
+        } else if next == Some(goal.0) {
+            ui_kit::LABEL
+        } else {
+            ui_kit::TEXT
+        };
+    }
+    *last = view;
 }
 
 /// Keep the tab strip current (the tab itself is `mission_tree`).
@@ -382,6 +557,76 @@ pub fn night_watch(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The goals block (design "The goals on the HUD, and a jingle"): every
+    /// objective of the current mission with its count, the first not met
+    /// still to do; and while a finished mission's notice lasts, that
+    /// mission with every goal met under the kicker.
+    #[test]
+    fn the_goals_list_every_objective_and_a_finished_mission_all_met() {
+        use pbd_core::missions::{Happened, Kind};
+        let (recipes, _) = pbd_app::config::recipe_book();
+        let fauna = pbd_app::config::FaunaConfig(
+            ron::from_str(include_str!("../../../../assets/config/fauna.ron")).unwrap(),
+        );
+        let land = pbd_app::config::HusbandryConfig(Default::default());
+        let chain = pbd_app::missions::load_chain(&recipes, &fauna, &land);
+        let mut missions = Missions::default();
+        let view = goals_view(&missions, &chain).unwrap();
+        assert!(!view.kicker);
+        assert_eq!(view.title, "Gather by hand");
+        assert_eq!(
+            view.goals,
+            [
+                ("Pull fiber 0/8".to_string(), false),
+                ("Pick up stones 0/9".to_string(), false),
+                ("Dig soil 0/6".to_string(), false),
+            ]
+        );
+        let none = |_: &pbd_core::missions::Objective| 0;
+        missions
+            .progress
+            .record(&chain, &Happened::new(Kind::Gather, "fibre", 8), &none);
+        missions
+            .progress
+            .record(&chain, &Happened::new(Kind::Gather, "stone", 3), &none);
+        let view = goals_view(&missions, &chain).unwrap();
+        assert_eq!(view.goals[0], ("Pull fiber 8/8".to_string(), true));
+        assert_eq!(view.goals[1], ("Pick up stones 3/9".to_string(), false));
+        // A finished mission of three goals, all met, under the kicker.
+        missions.notice = Some(("Light the night".into(), 2.0));
+        let view = goals_view(&missions, &chain).unwrap();
+        assert!(view.kicker);
+        assert_eq!(
+            view.goals,
+            [
+                ("Make torches 2/2".to_string(), true),
+                ("Place torches 4/4".to_string(), true),
+                ("Stay by them at nightfall".to_string(), true),
+            ]
+        );
+        assert!(view.goals.len() <= GOAL_ROWS);
+        assert!(
+            chain
+                .missions
+                .iter()
+                .all(|m| m.objectives.len() <= GOAL_ROWS),
+            "a row for every goal"
+        );
+    }
+
+    /// A distance goal counts in metres.
+    #[test]
+    fn a_distance_goal_counts_in_metres() {
+        let swim = pbd_core::missions::Objective {
+            kind: pbd_core::missions::Kind::Swim,
+            want: pbd_core::missions::Want::Any,
+            count: 20,
+            label: "Swim".into(),
+        };
+        assert_eq!(goal_words(&swim, 4), "Swim 4/20 m");
+        assert_eq!(goal_words(&swim, 99), "Swim 20/20 m");
+    }
 
     /// The instrument's script walks the shipped chain to its end, through
     /// the same counting the game runs.

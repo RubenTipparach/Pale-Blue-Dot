@@ -210,7 +210,7 @@ fn a_state_met_mission_completes_on_open() {
     }
     assert_eq!(
         progress.line(&chain).as_deref(),
-        Some("Go fishing: cast 0/1")
+        Some("Go fishing: Cast into water 0/1")
     );
 }
 
@@ -306,7 +306,10 @@ fn the_record_round_trips_and_keeps_what_it_does_not_know() {
     assert!(read.done.contains("a-later-mission"));
     // On the tree, the old line's done ids stay done; the trunk's new step
     // after the axe is next.
-    assert_eq!(read.line(&chain).as_deref(), Some("Gather wood: trees 0/2"));
+    assert_eq!(
+        read.line(&chain).as_deref(),
+        Some("Gather wood: Fell trees 0/2")
+    );
 }
 
 /// The shipped tree (`starter-missions` TS.1, M33 version 3): every `what`

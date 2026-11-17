@@ -957,7 +957,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                     panel.commands().entity(world).with_children(|rows| {
                         super::time_ui::spawn(rows, kit);
                         super::overlay_ui::spawn_row(rows, kit);
-                        check_row(rows, kit, "Mission line", "", MenuAction::MissionLine);
+                        check_row(rows, kit, "Mission goals", "", MenuAction::MissionLine);
                     });
                     let movement = page(panel, 3);
                     panel.commands().entity(movement).with_children(|rows| {

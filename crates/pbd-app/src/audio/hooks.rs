@@ -47,6 +47,7 @@ pub const NAMED: &[&str] = &[
     "line_snap",
     "catch_splash",
     "catch_chime",
+    "mission_done",
     "thunder_crack",
     "thunder_close",
     "thunder_roll",
@@ -112,6 +113,7 @@ pub(super) fn register(app: &mut App) {
         .add_message::<crate::kitchen::Cooked>()
         .add_message::<crate::kitchen::Ate>()
         .add_message::<crate::missions::Did>()
+        .add_message::<crate::missions::MissionDone>()
         .add_systems(
             Update,
             (
@@ -521,6 +523,7 @@ fn deeds(
     mut cooked: MessageReader<crate::kitchen::Cooked>,
     mut ate: MessageReader<crate::kitchen::Ate>,
     mut did: MessageReader<crate::missions::Did>,
+    mut finished: MessageReader<crate::missions::MissionDone>,
     hotbar: Option<Res<crate::hotbar::Hotbar>>,
     mut sfx: ResMut<Sfx>,
     mut slot: Local<Option<usize>>,
@@ -549,6 +552,11 @@ fn deeds(
         if happened.kind == pbd_core::missions::Kind::Till {
             sfx.play("dig_dirt", hand);
         }
+    }
+    // A mission done (owner, 2026-11-17: "a nice jingle when mission
+    // success"): once a frame, however many closed in it.
+    if finished.read().count() > 0 {
+        sfx.play("mission_done", Where::Menu);
     }
     if let Some(hotbar) = hotbar {
         let now = hotbar.selected();

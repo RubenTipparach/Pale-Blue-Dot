@@ -141,7 +141,10 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
         let chain = &app.world().resource::<MissionChain>().0;
         app.world().resource::<Missions>().progress.line(chain)
     };
-    assert_eq!(line(&app).as_deref(), Some("Gather by hand: fiber 0/8"));
+    assert_eq!(
+        line(&app).as_deref(),
+        Some("Gather by hand: Pull fiber 0/8")
+    );
     let world = app.world_mut();
     for (good, count) in [("fibre", 8), ("stone", 9)] {
         world.write_message(Gained {
@@ -151,13 +154,21 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
         });
     }
     app.update();
-    assert_eq!(line(&app).as_deref(), Some("Gather by hand: soil 0/6"));
+    assert_eq!(line(&app).as_deref(), Some("Gather by hand: Dig soil 0/6"));
     for _ in 0..6 {
         app.world_mut()
             .write_message(Did::block(Kind::Gather, Material::Dirt));
     }
     app.update();
     assert!(done(&app, "gather"));
+    // The close is told once, for the jingle (design "The goals on the HUD,
+    // and a jingle").
+    {
+        let told = app.world().resource::<Messages<MissionDone>>();
+        let mut cursor = told.get_cursor();
+        let ids: Vec<String> = cursor.read(told).map(|d| d.id.clone()).collect();
+        assert_eq!(ids, ["gather"]);
+    }
     assert_eq!(line(&app).as_deref(), Some("Craft an axe 0/1"));
     let missions = app.world().resource::<Missions>();
     assert_eq!(
@@ -191,12 +202,12 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
             .write_message(Did::new(Kind::Catch, "minnow", 1));
         app.update();
         if n < 3 {
-            assert_eq!(line(&app), Some(format!("Go fishing: fish {n}/3")));
+            assert_eq!(line(&app), Some(format!("Go fishing: Catch fish {n}/3")));
         }
     }
     assert!(done(&app, "go-fishing"));
     // Bait is a good now: digging it and landing fish on it is next (G1).
-    assert_eq!(line(&app).as_deref(), Some("Dig for bait: dig bait 0/3"));
+    assert_eq!(line(&app).as_deref(), Some("Dig for bait: Dig up bait 0/3"));
     app.world_mut().write_message(Gained {
         item: Item::Good(Good::BAIT),
         count: 3,
@@ -261,6 +272,6 @@ fn an_old_world_joins_with_what_it_holds_and_a_record_reads_back() {
             .progress
             .line(chain)
             .as_deref(),
-        Some("Go fishing: fish 0/3")
+        Some("Go fishing: Catch fish 0/3")
     );
 }
