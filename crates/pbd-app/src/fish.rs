@@ -86,6 +86,17 @@ const SCHOOL_FADE_S: f32 = 0.8;
 impl Fishery {
     /// How far a school has faded out, 0 whole to 1 gone; one not yet
     /// stepped is gone, so it fades in from its first frame.
+    /// How far the schools' clock has run from its last step to the next,
+    /// 0 to 1: where between their two steps the fish are drawn
+    /// (`movement-smoothness`).
+    pub fn step_alpha(&self, step_hz: f32) -> f32 {
+        if step_hz > 0.0 && step_hz.is_finite() {
+            (self.step_s * step_hz).clamp(0.0, 1.0)
+        } else {
+            1.0
+        }
+    }
+
     pub fn fade_of(&self, school: &School) -> f32 {
         self.fades.get(&school.seed).map_or(1.0, |f| f.0)
     }
@@ -1415,6 +1426,7 @@ pub(crate) mod draw {
             .as_deref()
             .zip(water.as_deref())
             .map(|(sea, water)| (sea.radius, water.downwell_per_m));
+        let alpha = fishery.step_alpha(fauna.0.spawn.step_hz);
         let mut seen = vec![false; fishery.schools.len()];
         for (entity, school_mesh, mut transform, mut faded) in &mut drawn {
             let Some(school) = fishery.schools.get(school_mesh.index) else {
@@ -1431,7 +1443,7 @@ pub(crate) mod draw {
                 faded.0 = fade;
             }
             if let Some(mesh) = meshes.get_mut(&school_mesh.mesh) {
-                build(mesh, school, species, now, dim);
+                build(mesh, school, species, now, dim, alpha);
             }
         }
         for (index, school) in fishery.schools.iter().enumerate() {
@@ -1446,7 +1458,7 @@ pub(crate) mod draw {
                 PrimitiveTopology::TriangleList,
                 RenderAssetUsages::default(),
             );
-            build(&mut mesh, school, species, now, dim);
+            build(&mut mesh, school, species, now, dim, alpha);
             let handle = meshes.add(mesh);
             commands
                 .spawn((
@@ -1473,6 +1485,20 @@ pub(crate) mod draw {
         }
     }
 
+    /// Where creature `i` of school `s` is drawn this frame, planet-local
+    /// (before the school's own wobble and pose), between the school's last
+    /// two steps: the point the mesh is built round, and the one the motion
+    /// trace (`movement-smoothness`) follows.
+    pub(crate) fn creature_drawn(
+        fishery: &Fishery,
+        s: usize,
+        i: usize,
+        step_hz: f32,
+    ) -> Option<Vec3> {
+        let school = fishery.schools.get(s)?;
+        (i < school.len()).then(|| school.drawn(i, fishery.step_alpha(step_hz)))
+    }
+
     /// How far under a diving duck is drawn when wholly dived, m.
     const DUCK_UNDER_M: f32 = 0.8;
 
@@ -1492,12 +1518,15 @@ pub(crate) mod draw {
         species: &Species,
         now: Option<(f64, Vec3)>,
         dim: Option<(f32, [f32; 3])>,
+        alpha: f32,
     ) {
         let mut positions: Vec<[f32; 3]> = Vec::new();
         let mut colours: Vec<[f32; 4]> = Vec::new();
         let mut uvs: Vec<[f32; 2]> = Vec::new();
         let t = now.map_or(0.0, |(seconds, _)| seconds.rem_euclid(3600.0) as f32);
-        for (i, p) in school.positions.iter().enumerate() {
+        for i in 0..school.len() {
+            // Between the school's last two steps (`movement-smoothness`).
+            let p = &school.drawn(i, alpha);
             let up = p.normalize_or(Vec3::Y);
             let pose = now.map_or(fauna::Pose::Moving, |(seconds, sun)| {
                 fauna::pose(species, school, i, seconds, sun.dot(up) < -0.05)
