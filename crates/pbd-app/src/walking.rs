@@ -1247,9 +1247,17 @@ impl Sea<'_> {
             .flatten()
             .copied()
             .reduce(f32::max);
-        let ground = PLANET_RADIUS + crate::planet::surface_height(direction);
-        let open = self.terrain.open_to_sky(direction * (feet + 0.1));
-        let surface = swim_surface(on_tier, in_water, sheet, sea_level, ground, open);
+        // On the tier the ground is the column's, which the feet stand on or
+        // over; the height field's knows nothing of a pit or a cavern.
+        let ground = if on_tier {
+            feet
+        } else {
+            PLANET_RADIUS + crate::planet::surface_height(direction)
+        };
+        // Whether the sea's surface reaches this cell: the mark the sheet is
+        // listed by and the eye reads (`ocean-environments` B20).
+        let reached = self.terrain.sea_reached(direction);
+        let surface = swim_surface(on_tier, in_water, sheet, sea_level, ground, reached);
         let Some(surface) = surface else {
             return WaterState::default();
         };
@@ -1290,24 +1298,26 @@ pub fn walker_feet(world: &mut World) -> Option<Vec3> {
 /// (`water-flow` E10). `on_tier`: the column answers here; `in_water`: the
 /// top of the water the column puts the body in (a pool, a flowing cell at
 /// its own level, the sea's water); `sheet`: the drawn sea's radius here, the
-/// tide on it; `ground`: the height field's ground; `open`: nothing over the
-/// body. The sea's water in the column is swum to the tided sheet; a dry
-/// column under open sky to the sheet where the tide stands over its ground
-/// (a beach at high water); off the tier, the height field's sea.
+/// tide on it; `ground`: the ground under the body (on the tier the feet,
+/// off it the height field's); `reached`: the sea's surface reaches this cell
+/// at some tide (`ocean-environments` B20). The sea's water in the column is
+/// swum to the tided sheet; a dry column the sea reaches to the sheet where
+/// the tide stands over its ground (a beach at high water, a pit or a cavern
+/// the tide overtops); off the tier, the height field's sea.
 pub(crate) fn swim_surface(
     on_tier: bool,
     in_water: Option<f32>,
     sheet: f32,
     sea_level: f32,
     ground: f32,
-    open: bool,
+    reached: bool,
 ) -> Option<f32> {
     if on_tier {
         match in_water {
             // Water topping out at sea level is the sea's: the tided sheet.
             Some(top) if (top - sea_level).abs() < 0.01 => Some(sheet),
             Some(top) => Some(top),
-            None => (open && ground < sheet).then_some(sheet),
+            None => (reached && ground < sheet).then_some(sheet),
         }
     } else {
         (ground < sheet).then_some(sheet)

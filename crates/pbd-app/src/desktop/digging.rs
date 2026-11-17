@@ -418,6 +418,8 @@ pub fn apply_edit(
     // buys the exactness instead.
     let repacked = started.elapsed();
     set.columns.relight();
+    // The sea's sheet over the tier, its shade from the light just baked.
+    set.mark_sea();
     let relit = started.elapsed();
     let set = Arc::new(set);
     contact.set_fine(&set);

@@ -574,8 +574,12 @@ fn compact_visible(@builtin(global_invocation_id) id: vec3<u32>) {
     // so the sheet runs on over a beach the tide covers (`ocean-environments`
     // B7); where the ground stands over the sheet, the ground hides it.
     // Or a river's water over a far cell (`spare.w`, design 13).
+    // And over every cell the sea's surface reaches at some tide whatever
+    // its ground's or roof's height (`SEA_REACH_BIT`, 4u: a cavern under a
+    // bank opening onto the sea, `ocean-environments` B20); the Rust
+    // `planet::column::sheet_listed` is this test for the CPU's readers.
     if !cascade && (cell.direction_height.w < max(params.lod_spare.w, 0.0)
-        && (cell.spare.z & 2u) == 0u || cell.spare.w != 0u) {
+        && (cell.spare.z & 2u) == 0u || (cell.spare.z & 4u) != 0u || cell.spare.w != 0u) {
         let sea = params.water_absorption.w;
         let sheet = cell.direction_height.xyz*sea;
         var reach = 0.0;

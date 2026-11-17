@@ -1213,25 +1213,156 @@ const _: () = assert!(GLOW_LIT_BIT > LAMP_LIT_BIT);
 /// chosen once from the cell's exact key (`pbd_core::flora::glows`).
 pub const GLOW_FLOWER_BIT: u32 = 1;
 
-/// Set in a finest record's `spare[2]` where its cell's ground is under sea
-/// level and yet its column holds no water at the sheet's layer: a pit dug
-/// below sea level that nothing has flooded. The visibility pass lists no sea
-/// sheet over it (`volumetric-water` phase 2), so a sealed pocket is dry on
-/// screen as it is in the column.
+/// Set in a finest record's `spare[2]` where its cell's ground is under the
+/// high water and yet no sea sheet lies over it: a pit or a hollow the sea's
+/// water reaches at no tide (`volumetric-water` phase 2, `ocean-environments`
+/// B20), or a river's mouth whose own top is the cell's one surface (B18).
+/// The visibility pass lists no sea sheet over it, so a sealed pocket is dry
+/// on screen as it is in the column.
 pub const DRY_SHEET_BIT: u32 = 2;
 
-/// Mark or clear a record's [`DRY_SHEET_BIT`] from its column.
-pub fn mark_sheet(cell: &mut GpuCell, column: &Column) {
+/// Set in a finest record's `spare[2]` where the sea's surface reaches the
+/// cell at some tide (`ocean-environments` B20, [`ColumnTier::sea_reach`]):
+/// the sheet is listed over it whatever its ground's or roof's height.
+pub const SEA_REACH_BIT: u32 = 4;
+
+/// Where `spare[2]` carries how much darker than the open sky the sea's top
+/// is lit in the cell, `15 - sky light` over the water's top in its column,
+/// four bits: nought (the open sky) outside a cave. The sheet is lit by it
+/// under a roof, as the mesher's water there was.
+pub const SHEET_SHADE_SHIFT: u32 = 8;
+const SHEET_SHADE_MASK: u32 = 0xf << SHEET_SHADE_SHIFT;
+
+/// Whether the sea's sheet is drawn over a finest record: the visibility
+/// pass's listing (`planet_visibility.wgsl`), for the readers on the CPU that
+/// must agree with it (the mesher leaves the sea's top to the sheet exactly
+/// where this holds). A record off the tier is listed by its height alone.
+pub fn sheet_listed(cell: &GpuCell) -> bool {
+    let high = super::terrain::high_water_m();
+    (cell.direction_height[3] < high && cell.spare[2] & DRY_SHEET_BIT == 0)
+        || cell.spare[2] & SEA_REACH_BIT != 0
+}
+
+/// Whether a finest record is marked as reached by the sea's surface.
+pub fn sea_reached(cell: &GpuCell) -> bool {
+    cell.spare[2] & SEA_REACH_BIT != 0
+}
+
+/// Mark every record of the tier for the sea's sheet from its column and the
+/// sea's reach: [`DRY_SHEET_BIT`], [`SEA_REACH_BIT`] and the sheet's shade.
+/// Derived from the columns, the light and nothing else, like the flood: the
+/// same tier marks the same way however often it is built, and nothing of it
+/// is saved. Called at the build and after an edit, once the light is baked.
+pub fn mark_sea(tier: &ColumnTier, finest: &mut [GpuCell]) {
     let sea = sea_layer();
-    // Dry where the sea's layer holds no water; and where a river's water
-    // stands on over the sea's level (a mouth whose bed is under the sea):
-    // the river's own top is that cell's one surface, and the sheet under
-    // it was a second one inside the river's water (`ocean-environments`
-    // B18, the junction check).
-    let dry = sea > 0
-        && cell.direction_height[3] < terrain_config().sea_level_m
-        && (!column.material(sea - 1).is_water() || column.material(sea).is_water());
-    cell.spare[2] = (cell.spare[2] & !DRY_SHEET_BIT) | if dry { DRY_SHEET_BIT } else { 0 };
+    let high = super::terrain::high_water_m();
+    let reach = tier.sea_reach();
+    for (slot, &record) in tier.water.records.iter().enumerate() {
+        let (Some(column), Some(cell)) = (tier.columns.get(slot), finest.get_mut(record)) else {
+            continue;
+        };
+        // A river's water standing on over the sea's level (a mouth whose bed
+        // is under the sea, or a bed over it): the river's own top is that
+        // cell's one surface,
+        // and the sheet under it was a second one inside the river's water
+        // (`ocean-environments` B18, the junction check).
+        let river_over = sea > 0 && (sea..LAYERS).any(|l| column.material(l).is_water());
+        // Flowing water at the sea's top layer is a river's, whose own top
+        // the mesher draws: the sheet under it would be a second surface.
+        let flowing_top = sea > 0 && {
+            let top = column.material(sea - 1);
+            top.is_water() && top != Material::Water
+        };
+        let reached = reach.get(slot).copied().unwrap_or(false) && !river_over && !flowing_top;
+        // Dry: under the high water, and the sea's surface reaches it at no
+        // tide (a pit or a hollow nothing joins to the sea), unless its
+        // column holds water at the sea's top (a pool somebody poured), or
+        // a river stands over it.
+        let dry = sea > 0
+            && cell.direction_height[3] < high
+            && (river_over || (!reached && !column.material(sea - 1).is_water()));
+        // The light over the water's top: the sea's top layer or the air
+        // over it, whichever is lit more.
+        let shade = if reached && sea > 0 {
+            let sky = tier
+                .light_at(slot, sea - 1)
+                .sky()
+                .max(tier.light_at(slot, sea).sky());
+            u32::from(light::MAX.saturating_sub(sky)).min(0xf)
+        } else {
+            0
+        };
+        cell.spare[2] = (cell.spare[2] & !(DRY_SHEET_BIT | SEA_REACH_BIT | SHEET_SHADE_MASK))
+            | if dry { DRY_SHEET_BIT } else { 0 }
+            | if reached { SEA_REACH_BIT } else { 0 }
+            | shade << SHEET_SHADE_SHIFT;
+    }
+}
+
+impl ColumnTier {
+    /// Which slots the sea's surface reaches at some tide (`ocean-environments`
+    /// B20): a walk from the open sea (a column holding the sea's water at
+    /// its top layer, open air over it, its record under sea level) through
+    /// every layer that is not solid, up to the high water's, across the
+    /// sides and up and down. A pit behind a beach the tide overtops, and a
+    /// cavern under a bank opening onto the sea, are reached; a hollow inland
+    /// that joins no water is not. The rim is walked like any column: its
+    /// water is the sea's.
+    pub fn sea_reach(&self) -> Vec<bool> {
+        let sea = sea_layer();
+        let n = self.columns.len();
+        let mut reached = vec![false; n];
+        if sea == 0 || n == 0 {
+            return reached;
+        }
+        let high = super::terrain::high_water_m();
+        let top = column::layer_at(high - 1e-3).unwrap_or(sea).max(sea);
+        let band = top + 1;
+        let mut seen = vec![false; n * band];
+        let mut open: std::collections::VecDeque<(usize, usize)> = Default::default();
+        // Air, or water under the sea's level: a river's or a pool's water
+        // over it is its own, and the sea's surface does not run through it.
+        let passable = |slot: usize, layer: usize| {
+            let m = self.columns[slot].material(layer);
+            layer >= 1 && (m == Material::Air || (m.is_water() && layer < sea))
+        };
+        for slot in 0..n {
+            let column = &self.columns[slot];
+            let under_sea = self
+                .water
+                .records
+                .get(slot)
+                .and_then(|_| column.surface())
+                .is_none_or(|top| {
+                    column::layer_altitude(top) + 1.0 <= terrain_config().sea_level_m
+                });
+            if column.material(sea - 1) == Material::Water
+                && !column.solid(sea)
+                && !column.material(sea).is_water()
+                && under_sea
+            {
+                seen[slot * band + sea - 1] = true;
+                open.push_back((slot, sea - 1));
+            }
+        }
+        while let Some((slot, layer)) = open.pop_front() {
+            reached[slot] = true;
+            let mut visit = |s: usize, l: usize, open: &mut std::collections::VecDeque<_>| {
+                if l < band && !seen[s * band + l] && passable(s, l) {
+                    seen[s * band + l] = true;
+                    open.push_back((s, l));
+                }
+            };
+            visit(slot, layer + 1, &mut open);
+            if layer > 1 {
+                visit(slot, layer - 1, &mut open);
+            }
+            for side in self.sides_of(slot).into_iter().flatten() {
+                visit(side, layer, &mut open);
+            }
+        }
+        reached
+    }
 }
 
 /// Whether a record's cell grows a glowing flower.
@@ -1429,14 +1560,13 @@ pub fn build(
     }
     // Water the edits hold picks up where it was (`water-flow` E4).
     tier.queue_edited_water(edits);
-    // And no sea sheet over a pit the sea has not reached.
-    for (slot, &index) in members.iter().enumerate() {
-        mark_sheet(&mut finest[index], &tier.columns[slot]);
-    }
     // The light comes last, because it is a function of the finished columns:
     // the rim's solid ring and every edit are already in them, and lighting
     // before either would light a world that is not the one being drawn.
     tier.relight();
+    // And where the sea's sheet lies, from the sea's reach and the light
+    // (`ocean-environments` B20): none over a pit the sea has not reached.
+    mark_sea(&tier, finest);
     tier
 }
 
@@ -3028,6 +3158,64 @@ mod water_tier_tests {
             Material::Stone,
             "the rim is solid"
         );
+    }
+
+    /// `ocean-environments` B20, the owner's caverns beside the sea: a pit
+    /// behind a beach the tide overtops and a cavern opening off it under a
+    /// bank are reached by the sea's surface, so the sheet lies over both
+    /// and the mesher leaves the sea's top to it; a pit inland that joins no
+    /// water is not, and no sheet lies over it, though its ground is as low.
+    #[test]
+    fn the_sea_reaches_a_cavern_behind_the_beach_and_not_a_pit_inland() {
+        let sea = sea_layer();
+        let mut tier = line();
+        // Column 5 a beach whose sand stands at sea level; 6 a pit in it,
+        // open to the sky, its floor under sea level; 7 a cavern off the pit
+        // under the bank, roofed to the land's height; 8 land; 9 and 10 a pit
+        // as deep, open to the sky, beyond the land.
+        carve(&mut tier, 5..=5, sea..=LAND);
+        carve(&mut tier, 6..=6, BED + 5..=LAND);
+        carve(&mut tier, 7..=7, BED + 5..=sea - 1);
+        carve(&mut tier, 9..=10, BED + 5..=LAND);
+        // The build's flood leaves them all dry: nothing joins them to the
+        // sea under sea level.
+        let seeds = tier.sea_seeds(&Edits::new());
+        assert!(tier.flood_from(seeds).is_empty());
+        let reach = tier.sea_reach();
+        let reached: Vec<usize> = (0..N).filter(|&slot| reach[slot]).collect();
+        assert_eq!(
+            reached,
+            (1..=7).collect::<Vec<_>>(),
+            "the sea, the beach, the pit, the cavern"
+        );
+        // The records, their heights the columns' tops, marked as a build
+        // marks them.
+        tier.relight();
+        let mut finest: Vec<GpuCell> = (0..N)
+            .map(|slot| {
+                let mut cell = GpuCell::zeroed();
+                cell.direction_height[3] = tier.columns[slot]
+                    .surface()
+                    .map_or(-100.0, |top| column::layer_altitude(top) + 1.0);
+                cell
+            })
+            .collect();
+        mark_sea(&tier, &mut finest);
+        for (slot, cell) in finest.iter().enumerate().take(8).skip(1) {
+            assert!(sheet_listed(cell), "the sheet lies over slot {slot}");
+        }
+        // The cavern's roof stands over the high water, and the sheet lies
+        // under it all the same, shaded as dark as the cavern is.
+        assert!(finest[7].direction_height[3] > super::super::terrain::high_water_m());
+        assert!(finest[7].spare[2] >> SHEET_SHADE_SHIFT & 0xf > 0, "shaded");
+        assert_eq!(finest[4].spare[2] >> SHEET_SHADE_SHIFT & 0xf, 0, "open sea");
+        for (slot, cell) in finest.iter().enumerate().take(11).skip(9) {
+            assert!(!sheet_listed(cell), "no sheet over the inland pit {slot}");
+            assert!(cell.spare[2] & DRY_SHEET_BIT != 0);
+        }
+        // The sea's top in the open sea is the sheet's, not the mesher's.
+        let mesh = crate::water_flow::liquid_mesh(&tier, &finest, PLANET_RADIUS);
+        assert_eq!(mesh.tops, 0, "no second surface under the sheet");
     }
 
     /// An edit's flood: digging the rock between the flooded tunnel and the

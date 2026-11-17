@@ -91,3 +91,11 @@ against what it would cost.
 - [ ] 14.3 (Built 2026-11-16 on `claude/waterline-3`; not yet shown: the sea was calm on every shot, so no far crest stood over the eye. Open until a windy shore is filmed.) The sea's far sheet is seen from below only when the eye is under its own surface. Verify: the shore video's frames just over the surface show no dark band at the far waterline.
 - [x] 14.4 (Built 2026-11-16 on `claude/waterline-3`; `docs/screenshots/waterline-3/`.) The shafts and the caustic web fade to their mean by their sampling footprint. Verify: the far end of the river channel without speckle in the after video.
 - [x] 14.5 (Built 2026-11-16 on `claude/waterline-3`; `docs/screenshots/waterline-3/`.) Before and after videos at the owner's two spots, a sea shore and a river mouth, smooth crossings at 0.1 m/s, on Drive, with contact sheets and the stepped frame list in `docs/screenshots/waterline-3/`. Verify: the README's list.
+
+## 15. Holes in the sea at caverns beside it (owner, 2026-11-16; design B20)
+
+- [ ] 15.1 The sea's reach: a walk from the open sea through every open cell up to the high water's layer, at the build and after an edit, marks each reached finest record. Verify: an app test that a pit behind a beach and a cavern under a bank are reached and an inland pit is not.
+- [ ] 15.2 The sheet is listed over every reached cell and the mesher leaves it the sea's top there; one surface in a sea cave. Verify: an app test over the owner's spot that no cell draws two surfaces and no reached cell draws none.
+- [ ] 15.3 The sheet under a roof takes the cave's sky light from its record. Verify: captures in a sea cave before and after.
+- [ ] 15.4 The eye and the swimmer read the reach. Verify: an app test of `eye_water_at` in a reached pit and an unreached one.
+- [ ] 15.5 Before and after videos at the owner's spot and two other sea caves, on Drive, stepped frame by frame. Verify: `docs/screenshots/sea-cavern-holes/README.md`.

@@ -501,20 +501,22 @@ pub fn eye_water_at(
                 surface_radius: terrain::PLANET_RADIUS + drawn.unwrap_or(surface),
             }
         }
-        // Open air over ground the high tide reaches: the sea's, at its mean;
-        // `submersion` adds the tide and the swell, so an eye under the
+        // Air the sea's surface reaches at some tide: the sea's, at its
+        // mean; `submersion` adds the tide and the swell, so an eye under the
         // tided sheet over a beach is under the sea there (the owner's
         // "submerged at just the right height": one layer down at high
         // water the column held only air, and the eye was dry under the
-        // sheet).
+        // sheet). The sea's reach is the mark the sheet is listed by
+        // (`ocean-environments` B20): a pit or a cavern the tide overtops is
+        // the sea's, roofed or not, and a hollow no water joins is dry.
         None if altitude < terrain::terrain_config().sea_level_m + high_water
             && pbd_core::column::layer_at(altitude)
                 .is_some_and(|l| column.material(l) == pbd_core::terrain::Material::Air)
-            && column.open_to_sky(altitude)
-            && column.surface().is_none_or(|top| {
-                pbd_core::column::layer_altitude(top) + 1.0
-                    < terrain::terrain_config().sea_level_m + high_water
-            }) =>
+            && fine
+                .set
+                .finest_records()
+                .get(record)
+                .is_some_and(crate::planet::column::sea_reached) =>
         {
             EyeWater::Water {
                 surface_radius: terrain::PLANET_RADIUS + terrain::terrain_config().sea_level_m,
@@ -3237,7 +3239,7 @@ mod lens_wet_tests {
 #[cfg(test)]
 mod water_junction_tests {
     use super::*;
-    use crate::planet::column::{DRY_SHEET_BIT, sea_layer};
+    use crate::planet::column::sea_layer;
     use pbd_core::rivers;
 
     #[derive(Clone, Copy, Debug, PartialEq)]
@@ -3294,8 +3296,7 @@ mod water_junction_tests {
             // Two surfaces in one cell: the sea's sheet drawn under an inland
             // top (the record under sea level, its sheet not marked dry).
             let cell = &set.levels[3][record];
-            let sheet_drawn = cell.direction_height[3] < terrain::terrain_config().sea_level_m
-                && cell.spare[2] & DRY_SHEET_BIT == 0;
+            let sheet_drawn = crate::planet::column::sheet_listed(cell);
             if sheet_drawn && matches!(here, Here::Inland(_)) {
                 overlaps += 1;
             }
@@ -3472,6 +3473,111 @@ mod water_junction_tests {
             0,
             "the eye follows the local water:\n{}",
             report.join("\n")
+        );
+    }
+}
+/// MEASUREMENT (`ocean-environments` B20, the owner's sea caverns): a map of
+/// what the sea's sheet lies over round a place, one character a metre,
+/// compass north up, read off a fine set built there as the game builds it.
+/// `PBD_AT='lat lon'` (the game's `--at`), `PBD_SPAN` metres each way.
+#[cfg(test)]
+mod sea_cave_report {
+    use super::*;
+    use crate::planet::column::{DRY_SHEET_BIT, sea_layer, sheet_listed};
+    use pbd_core::terrain::Material;
+
+    #[test]
+    #[ignore = "a report: PBD_AT='41.636 11.664' cargo test -p pbd-app sea_cave_report -- --ignored --nocapture"]
+    fn sea_cave_report() {
+        let at = std::env::var("PBD_AT").unwrap_or_else(|_| "41.636 11.664".into());
+        let v: Vec<f32> = at
+            .split_whitespace()
+            .filter_map(|x| x.parse().ok())
+            .collect();
+        let span: i32 = std::env::var("PBD_SPAN")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(30);
+        let up = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: v[0].to_radians(),
+            lon: v[1].to_radians(),
+        });
+        let set = std::sync::Arc::new(super::super::lod::generate_fine(
+            up,
+            &crate::config::ColumnSettings::default(),
+            &pbd_core::edits::Edits::new(),
+        ));
+        let mut contact = crate::planet::PlanetContact::test_planet(5);
+        contact.set_fine(&set);
+        let sea = sea_layer();
+        let high = terrain::high_water_m();
+        let (n, e) = pbd_core::geo::compass_north_east(up);
+        let r = terrain::PLANET_RADIUS;
+        // `~` the sheet over the sea's water; `s` the sheet over ground
+        // under the high water; `D` dry under the high water (no sheet); `C`
+        // air under a roof at the sea's top layer; `W` the sea's water under
+        // a roof; lower case where the sheet lies over the pocket; `w` other
+        // water; `#` land; `@` the place; ` ` off the tier.
+        let mut pockets = [0usize; 2];
+        for j in (-span..=span).rev() {
+            let mut row = String::new();
+            for i in -span..=span {
+                let p = (up + (n * j as f32 + e * i as f32) * (1.0 / r)).normalize();
+                let ch = (|| {
+                    let record = contact.finest_cell(p)?;
+                    let column = set.columns.column(record)?;
+                    let cell = &set.levels[3][record];
+                    let h = cell.direction_height[3];
+                    let dry = cell.spare[2] & DRY_SHEET_BIT != 0;
+                    let roof = (sea..pbd_core::column::LAYERS).any(|l| column.solid(l));
+                    let top = column.material(sea - 1);
+                    // `PBD_ROW=j`: that row's stacks round the sea's level,
+                    // for laying a capture path through open cells.
+                    if std::env::var("PBD_ROW").ok().and_then(|r| r.parse().ok()) == Some(j) {
+                        let stack: String = (sea - 4..sea + 4)
+                            .map(|l| match column.material(l) {
+                                Material::Air => '.',
+                                m if m.is_water() => 'w',
+                                _ => '#',
+                            })
+                            .collect();
+                        eprintln!("ROW i {i:>3} layers -4..+4 m [{stack}]");
+                    }
+                    let ch = if i == 0 && j == 0 {
+                        '@'
+                    } else if roof && top == Material::Air {
+                        'C'
+                    } else if roof && top.is_water() {
+                        'W'
+                    } else if h < high && dry {
+                        'D'
+                    } else if h < high && top.is_water() {
+                        '~'
+                    } else if h < high {
+                        's'
+                    } else if top.is_water() || column.material(sea).is_water() {
+                        'w'
+                    } else {
+                        '#'
+                    };
+                    let listed = sheet_listed(cell);
+                    if matches!(ch, 'D' | 'C' | 'W') {
+                        pockets[usize::from(listed)] += 1;
+                    }
+                    Some(if listed && matches!(ch, 'D' | 'C' | 'W') {
+                        ch.to_ascii_lowercase()
+                    } else {
+                        ch
+                    })
+                })()
+                .unwrap_or(' ');
+                row.push(ch);
+            }
+            println!("{row}");
+        }
+        println!(
+            "pockets under no sheet {}, under the sheet {}",
+            pockets[0], pockets[1]
         );
     }
 }
