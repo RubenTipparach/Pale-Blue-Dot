@@ -8,7 +8,12 @@
 //! draws the slot icons from the same hexes, so the icon and the model cannot
 //! differ. The sway and the chop are tunables in `assets/config/held.ron`.
 //! The fishing line leaves from the rod model's own tip
-//! (`openspec/changes/hex-held-tools`).
+//! (`openspec/changes/hex-held-tools`), where the rod is drawn this frame.
+//!
+//! The rod moves with the line (`openspec/changes/rod-motion`): it draws
+//! back on the charge, flicks on the cast, twitches on a nibble, dips on a
+//! bite and shakes with a fish on. The motion is drawn only: no rule reads
+//! it.
 
 use crate::config::HeldConfig;
 use crate::fish::ToolSlot;
@@ -17,6 +22,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::light::NotShadowCaster;
 use bevy::mesh::PrimitiveTopology;
 use bevy::prelude::*;
+use pbd_core::fishing::{Event, Phase};
 use pbd_core::hexel::{self, Hex, HexelMesh, Prism};
 use pbd_core::inventory::{Tier, Tool};
 use serde::{Deserialize, Serialize};
@@ -35,6 +41,125 @@ pub struct HeldSettings {
     pub swing_rate: f32,
     pub swing_drop_m: f32,
     pub swing_pitch_rad: f32,
+    /// How the rod moves with the line (`rod-motion` design 2).
+    pub rod: RodSettings,
+}
+
+/// How the rod in hand moves with the line, in `held.rod`. Pitch is about
+/// the fist, rod tip up and back positive; every value here is a size, a
+/// rate or a time, and the code gives it its sign.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RodSettings {
+    /// Charging: how far the rod draws back at full charge, rad, and how far
+    /// the fist rises and comes back with it, m.
+    pub draw_rad: f32,
+    pub draw_lift_m: f32,
+    /// The cast: how far forward of rest the rod flicks, rad, and for how
+    /// long it is held there, s.
+    pub flick_rad: f32,
+    pub flick_s: f32,
+    /// The float out: how far forward of rest the rod is held, rad, and its
+    /// slow bob, rad and Hz.
+    pub settle_rad: f32,
+    pub bob_rad: f32,
+    pub bob_hz: f32,
+    /// A nibble: the tip's twitch down, rad, and how long it lasts, s.
+    pub nibble_rad: f32,
+    pub nibble_s: f32,
+    /// A bite: how far the tip dips, rad, and its shake, rad and Hz, until
+    /// the window ends.
+    pub bite_rad: f32,
+    pub bite_shake_rad: f32,
+    pub bite_shake_hz: f32,
+    /// A fish on: how far the rod is held up, rad, and its shake at full
+    /// tension, rad and Hz (the shake scales with the tension).
+    pub fight_rad: f32,
+    pub fight_shake_rad: f32,
+    pub fight_shake_hz: f32,
+    /// Reeling a fish in: the circle the fist turns, radius m, and Hz.
+    pub crank_m: f32,
+    pub crank_hz: f32,
+    /// How far the rod rolls toward a hooked fish's pull, rad.
+    pub roll_rad: f32,
+    /// A catch: the rod lifts this far, rad, and eases back to rest over
+    /// this long, s.
+    pub catch_rad: f32,
+    pub catch_s: f32,
+    /// A snap, a miss, a strike too early or a line wound in: how long the
+    /// rod takes to ease back, s.
+    pub ease_s: f32,
+    /// The spring that carries the rod toward each target: its natural
+    /// frequency, Hz, and damping ratio (1 is critical).
+    pub spring_hz: f32,
+    pub damping: f32,
+}
+
+impl Default for RodSettings {
+    fn default() -> Self {
+        Self {
+            draw_rad: 0.9,
+            draw_lift_m: 0.05,
+            flick_rad: 0.35,
+            flick_s: 0.14,
+            settle_rad: 0.12,
+            bob_rad: 0.015,
+            bob_hz: 0.4,
+            nibble_rad: 0.05,
+            nibble_s: 0.15,
+            bite_rad: 0.22,
+            bite_shake_rad: 0.04,
+            bite_shake_hz: 14.0,
+            fight_rad: 0.45,
+            fight_shake_rad: 0.06,
+            fight_shake_hz: 9.0,
+            crank_m: 0.012,
+            crank_hz: 3.0,
+            roll_rad: 0.15,
+            catch_rad: 0.6,
+            catch_s: 0.6,
+            ease_s: 0.3,
+            spring_hz: 9.0,
+            damping: 0.7,
+        }
+    }
+}
+
+impl RodSettings {
+    pub fn validate(&self) -> Result<(), String> {
+        let all = [
+            self.draw_rad,
+            self.draw_lift_m,
+            self.flick_rad,
+            self.flick_s,
+            self.settle_rad,
+            self.bob_rad,
+            self.bob_hz,
+            self.nibble_rad,
+            self.nibble_s,
+            self.bite_rad,
+            self.bite_shake_rad,
+            self.bite_shake_hz,
+            self.fight_rad,
+            self.fight_shake_rad,
+            self.fight_shake_hz,
+            self.crank_m,
+            self.crank_hz,
+            self.roll_rad,
+            self.catch_rad,
+            self.catch_s,
+            self.ease_s,
+            self.spring_hz,
+            self.damping,
+        ];
+        if all.iter().any(|v| !v.is_finite() || *v < 0.0) {
+            return Err("held.rod: every value is finite and non-negative".into());
+        }
+        if self.spring_hz <= 0.0 {
+            return Err("held.rod: spring_hz is positive, or the rod never moves".into());
+        }
+        Ok(())
+    }
 }
 
 impl Default for HeldSettings {
@@ -45,6 +170,7 @@ impl Default for HeldSettings {
             swing_rate: 9.0,
             swing_drop_m: 0.06,
             swing_pitch_rad: 0.85,
+            rod: RodSettings::default(),
         }
     }
 }
@@ -63,7 +189,7 @@ impl HeldSettings {
         if all.iter().any(|v| !v.is_finite() || *v < 0.0) {
             return Err("held: sway and swing are finite and non-negative".into());
         }
-        Ok(())
+        self.rod.validate()
     }
 }
 
@@ -177,8 +303,8 @@ pub fn models() -> &'static HeldModels {
     })
 }
 
-/// Where the fishing line leaves the rod, in eye space: the rod model's own
-/// tip.
+/// The rod tip at rest, in eye space: the rod model's own tip. The line
+/// leaves from where the tip is drawn this frame, `RodTipNow`.
 pub fn rod_tip() -> Vec3 {
     models().get(Tool::Rod).tip.into()
 }
@@ -203,6 +329,263 @@ pub fn meshes(model: &HeldModel, spacing: f32) -> (HexelMesh, HexelMesh) {
 #[derive(Resource, Default, Clone, Copy, Debug)]
 pub struct Swinging(pub bool);
 
+/// An offset from a held tool's rest pose: a pitch about the fist (tip up
+/// and back positive), a roll about the view's forward axis (tip right
+/// positive), and a shift of the whole, eye space, m. The chop is one, and
+/// so is the rod's motion.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct HeldPose {
+    pub pitch: f32,
+    pub roll: f32,
+    pub shift: Vec3,
+}
+
+impl HeldPose {
+    pub fn rotation(&self) -> Quat {
+        Quat::from_rotation_z(-self.roll) * Quat::from_rotation_x(self.pitch)
+    }
+
+    /// A point of the rest pose, eye space, where this pose puts it.
+    pub fn place(&self, point: Vec3, fist: Vec3) -> Vec3 {
+        fist + self.rotation() * (point - fist) + self.shift
+    }
+
+    /// The rest pose moved by this one.
+    pub fn apply(&self, rest: Transform, fist: Vec3) -> Transform {
+        Transform {
+            translation: self.place(rest.translation, fist),
+            rotation: self.rotation() * rest.rotation,
+            scale: rest.scale,
+        }
+    }
+
+    fn lerp(self, to: Self, t: f32) -> Self {
+        Self {
+            pitch: self.pitch + (to.pitch - self.pitch) * t,
+            roll: self.roll + (to.roll - self.roll) * t,
+            shift: self.shift.lerp(to.shift, t),
+        }
+    }
+
+    fn to_array(self) -> [f32; 5] {
+        [
+            self.pitch,
+            self.roll,
+            self.shift.x,
+            self.shift.y,
+            self.shift.z,
+        ]
+    }
+
+    fn from_array(a: [f32; 5]) -> Self {
+        Self {
+            pitch: a[0],
+            roll: a[1],
+            shift: Vec3::new(a[2], a[3], a[4]),
+        }
+    }
+}
+
+/// What the line is doing this frame, as the rod in hand needs it: written
+/// by the fishing (`fish.rs`) each frame and read only to draw the rod.
+#[derive(Resource, Clone, Debug, PartialEq)]
+pub struct RodCue {
+    pub phase: Phase,
+    /// The cast's charge, 0..1.
+    pub power: f32,
+    /// The line's tension with a fish on, 0..1.
+    pub tension: f32,
+    /// A fish is on and the reel is being wound.
+    pub reeling: bool,
+    /// Which side of the eye a hooked fish pulls, -1 left to 1 right.
+    pub pull: f32,
+    /// The line's events since the rod last moved; the rod takes them.
+    pub events: Vec<Event>,
+}
+
+impl Default for RodCue {
+    fn default() -> Self {
+        Self {
+            phase: Phase::Ready,
+            power: 0.0,
+            tension: 0.0,
+            reeling: false,
+            pull: 0.0,
+            events: Vec::new(),
+        }
+    }
+}
+
+/// A motion an event starts, over the phase's own target, for a while.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum Moment {
+    #[default]
+    None,
+    /// The cast: the rod flicks forward.
+    Flick,
+    /// A nibble: the tip twitches.
+    Nibble,
+    /// From a pose to the phase's target: after a catch, a snap, a miss.
+    Ease { from: HeldPose, over_s: f32 },
+}
+
+/// The rod's motion: its pose as drawn, the spring carrying it toward each
+/// target, and the moment the last event started.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct RodMotion {
+    pub pose: HeldPose,
+    velocity: HeldPose,
+    moment: Moment,
+    since_s: f32,
+    clock_s: f32,
+}
+
+/// Where the rod tip is drawn this frame, eye space: the rest tip through
+/// the frame's pose. The line leaves from here.
+#[derive(Resource, Clone, Copy, Debug, PartialEq)]
+pub struct RodTipNow(pub Vec3);
+
+impl Default for RodTipNow {
+    fn default() -> Self {
+        Self(rod_tip())
+    }
+}
+
+/// 0..1 eased in and out.
+fn smooth(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// How far a timed motion is through, 0..1; one with no time is done.
+fn through(since_s: f32, over_s: f32) -> f32 {
+    if over_s > 0.0 {
+        (since_s / over_s).clamp(0.0, 1.0)
+    } else {
+        1.0
+    }
+}
+
+impl RodMotion {
+    /// A wave of this many Hz on the motion's clock, -1..1.
+    fn wave(&self, hz: f32) -> f32 {
+        (self.clock_s * hz * std::f32::consts::TAU).sin()
+    }
+
+    /// Where the line's phase holds the rod, with nothing starting.
+    pub fn phase_target(&self, s: &RodSettings, cue: &RodCue) -> HeldPose {
+        match cue.phase {
+            Phase::Ready => HeldPose::default(),
+            Phase::Charging => {
+                let drawn = smooth(cue.power);
+                HeldPose {
+                    pitch: s.draw_rad * drawn,
+                    roll: 0.0,
+                    shift: Vec3::new(0.0, s.draw_lift_m, s.draw_lift_m) * drawn,
+                }
+            }
+            Phase::Flying | Phase::Floating | Phase::Nibble => HeldPose {
+                pitch: -s.settle_rad + s.bob_rad * self.wave(s.bob_hz),
+                ..default()
+            },
+            Phase::Bite => HeldPose {
+                pitch: -s.bite_rad + s.bite_shake_rad * self.wave(s.bite_shake_hz),
+                ..default()
+            },
+            Phase::Hooked => {
+                let tension = cue.tension.clamp(0.0, 1.0);
+                let crank = if cue.reeling {
+                    let turn = self.clock_s * s.crank_hz * std::f32::consts::TAU;
+                    Vec3::new(0.0, turn.sin(), turn.cos()) * s.crank_m
+                } else {
+                    Vec3::ZERO
+                };
+                HeldPose {
+                    pitch: s.fight_rad + s.fight_shake_rad * tension * self.wave(s.fight_shake_hz),
+                    roll: s.roll_rad * cue.pull.clamp(-1.0, 1.0),
+                    shift: crank,
+                }
+            }
+        }
+    }
+
+    /// Where the rod is carried toward this frame: the phase's target, or
+    /// the motion the last event started while it lasts.
+    pub fn target(&self, s: &RodSettings, cue: &RodCue) -> HeldPose {
+        let phase = self.phase_target(s, cue);
+        match self.moment {
+            Moment::None => phase,
+            Moment::Flick => HeldPose {
+                pitch: -s.flick_rad,
+                ..default()
+            },
+            Moment::Nibble => HeldPose {
+                pitch: phase.pitch - s.nibble_rad,
+                ..phase
+            },
+            Moment::Ease { from, over_s } => {
+                from.lerp(phase, smooth(through(self.since_s, over_s)))
+            }
+        }
+    }
+
+    /// Take the line's events and carry the rod a frame on.
+    pub fn step(&mut self, s: &RodSettings, cue: &RodCue, events: &[Event], dt: f32) {
+        let dt = dt.clamp(0.0, 0.1);
+        // The clock only drives the shakes and the bob; wrapped so it keeps
+        // its precision in a long sitting.
+        self.clock_s = (self.clock_s + dt).rem_euclid(3600.0);
+        self.since_s += dt;
+        for event in events {
+            let moment = match event {
+                Event::Cast { .. } => Moment::Flick,
+                Event::Nibble { .. } => Moment::Nibble,
+                Event::Caught { .. } => Moment::Ease {
+                    from: HeldPose {
+                        pitch: s.catch_rad,
+                        ..default()
+                    },
+                    over_s: s.catch_s,
+                },
+                Event::Snapped { .. }
+                | Event::Missed { .. }
+                | Event::TooEarly { .. }
+                | Event::Lost { .. }
+                | Event::ReeledIn
+                | Event::Dry => Moment::Ease {
+                    from: self.pose,
+                    over_s: s.ease_s,
+                },
+                _ => continue,
+            };
+            self.moment = moment;
+            self.since_s = 0.0;
+        }
+        let lasts = match self.moment {
+            Moment::None => f32::INFINITY,
+            Moment::Flick => s.flick_s,
+            Moment::Nibble => s.nibble_s,
+            Moment::Ease { over_s, .. } => over_s,
+        };
+        if self.since_s > lasts {
+            self.moment = Moment::None;
+        }
+        let target = self.target(s, cue).to_array();
+        // A damped spring, stepped implicitly so a long frame never throws
+        // it: the rod is carried from wherever it is, so nothing pops.
+        let w = s.spring_hz * std::f32::consts::TAU;
+        let damp = 1.0 + 2.0 * s.damping * w * dt + w * w * dt * dt;
+        let mut x = self.pose.to_array();
+        let mut v = self.velocity.to_array();
+        for i in 0..5 {
+            v[i] = (v[i] + dt * w * w * (target[i] - x[i])) / damp;
+            x[i] += v[i] * dt;
+        }
+        self.pose = HeldPose::from_array(x);
+        self.velocity = HeldPose::from_array(v);
+    }
+}
+
 /// A held tool, one per tool, a child of the walking camera: it carries the
 /// pose, and its two children are the tool's mesh and the hand's.
 #[derive(Component)]
@@ -217,9 +600,25 @@ pub struct HeldPlugin;
 impl Plugin for HeldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Swinging>()
-            .add_systems(Update, (spawn, carry, hold, light_held, tint_held).chain());
+            .init_resource::<RodCue>()
+            .init_resource::<RodMotion>()
+            .init_resource::<RodTipNow>()
+            // The rod is posed after the fishing has stepped the line, so it
+            // moves on this frame's events; the line is drawn from its tip
+            // in `PostUpdate`.
+            .add_systems(
+                Update,
+                (spawn, carry, hold.in_set(HoldSet), light_held, tint_held)
+                    .chain()
+                    .after(crate::fish::FishSet),
+            );
     }
 }
+
+/// The system that poses the tool in hand, so a capture instrument can be
+/// ordered before it.
+#[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct HoldSet;
 
 /// A held tool's mesh and its colours as drawn, so its head can be recoloured
 /// for its tier (`tool-crafting` decision 9).
@@ -449,7 +848,8 @@ fn carry(
     }
 }
 
-/// Show the tool in hand, sway it, and chop while a block is being broken.
+/// Show the tool in hand, sway it, chop while a block is being broken, and
+/// move the rod with the line.
 #[allow(clippy::too_many_arguments)]
 fn hold(
     settings: Res<HeldConfig>,
@@ -460,10 +860,17 @@ fn hold(
     vehicles: Query<&crate::vehicles::Vehicle>,
     swinging: Res<Swinging>,
     time: Res<Time>,
+    mut cue: ResMut<RodCue>,
+    mut rod: ResMut<RodMotion>,
+    mut tip_now: ResMut<RodTipNow>,
     mut phase: Local<f32>,
-    mut models: Query<(&Held, &mut Transform, &mut Visibility)>,
+    mut held_tools: Query<(&Held, &mut Transform, &mut Visibility)>,
 ) {
     let s = &settings.0;
+    // The rod moves with the line whether or not it is shown, so taking it
+    // up mid-motion does not pop.
+    let events = std::mem::take(&mut cue.events);
+    rod.step(&s.rod, &cue, &events, time.delta_secs());
     let on_foot = walking.is_some_and(|w| w.active)
         || seated_afloat(aboard.as_deref(), view.as_deref(), &vehicles);
     // The chop advances while breaking and snaps back when it stops, as
@@ -484,7 +891,20 @@ fn hold(
         (t * s.sway_rate[1]).cos() * s.sway_m[1],
         0.0,
     );
-    for (held, mut transform, mut visibility) in &mut models {
+    // The chop pitches the tool and the hand about the fist and drops them:
+    // the rod does not chop, it moves with the line.
+    let chopped = HeldPose {
+        pitch: -chop * s.swing_pitch_rad,
+        roll: 0.0,
+        shift: sway - Vec3::Y * chop * s.swing_drop_m,
+    };
+    let rod_pose = HeldPose {
+        shift: rod.pose.shift + sway,
+        ..rod.pose
+    };
+    let rod_model = models().get(Tool::Rod);
+    tip_now.0 = rod_pose.place(rod_model.tip.into(), rod_model.fist.into());
+    for (held, mut transform, mut visibility) in &mut held_tools {
         let shown = on_foot && tools.held() == Some(held.tool);
         let want = if shown {
             Visibility::Inherited
@@ -497,15 +917,12 @@ fn hold(
         if !shown {
             continue;
         }
-        // The chop pitches the tool and the hand about the fist and drops
-        // them: the rod does not chop, it casts.
-        let chop = if held.tool == Tool::Rod { 0.0 } else { chop };
-        let pitch = Quat::from_rotation_x(-chop * s.swing_pitch_rad);
-        let mut pose = held.rest;
-        pose.translation = held.fist + pitch * (pose.translation - held.fist) + sway
-            - Vec3::Y * chop * s.swing_drop_m;
-        pose.rotation = pitch * pose.rotation;
-        *transform = pose;
+        let pose = if held.tool == Tool::Rod {
+            rod_pose
+        } else {
+            chopped
+        };
+        *transform = pose.apply(held.rest, held.fist);
     }
 }
 
@@ -612,6 +1029,9 @@ mod tests {
                 ..default()
             })
             .init_resource::<Swinging>()
+            .init_resource::<RodCue>()
+            .init_resource::<RodMotion>()
+            .init_resource::<RodTipNow>()
             .insert_resource({
                 let mut slot = ToolSlot::default();
                 slot.hold(Tool::Pickaxe);
@@ -648,5 +1068,248 @@ mod tests {
             ..Default::default()
         };
         assert!(bad.validate().is_err());
+        for rod in [
+            RodSettings {
+                bite_rad: f32::NAN,
+                ..Default::default()
+            },
+            RodSettings {
+                crank_m: -0.01,
+                ..Default::default()
+            },
+            RodSettings {
+                spring_hz: 0.0,
+                ..Default::default()
+            },
+        ] {
+            let bad = HeldSettings {
+                rod,
+                ..Default::default()
+            };
+            assert!(bad.validate().is_err(), "{rod:?}");
+        }
+        // A missing rod block, or a field of it, takes the default.
+        let partial: HeldSettings = ron::from_str("(rod: (draw_rad: 0.5))").unwrap();
+        assert_eq!(partial.rod.draw_rad, 0.5);
+        assert_eq!(partial.rod.bite_rad, RodSettings::default().bite_rad);
+    }
+
+    const DT: f32 = 1.0 / 60.0;
+
+    fn cue(phase: Phase) -> RodCue {
+        RodCue {
+            phase,
+            ..Default::default()
+        }
+    }
+
+    /// Run the rod `seconds` on one cue, events on the first frame only;
+    /// the largest change of pitch in a frame.
+    fn run(rod: &mut RodMotion, cue: &RodCue, events: &[Event], seconds: f32) -> f32 {
+        let s = RodSettings::default();
+        let mut most: f32 = 0.0;
+        let frames = (seconds / DT).round() as usize;
+        for frame in 0..frames {
+            let was = rod.pose.pitch;
+            let now = if frame == 0 { events } else { &[] };
+            rod.step(&s, cue, now, DT);
+            most = most.max((rod.pose.pitch - was).abs());
+        }
+        most
+    }
+
+    /// Each phase holds the rod where the design's table says: drawn back
+    /// with the charge, forward on the water, dipped on a bite, up with a
+    /// fish on and rolled toward its pull, at rest with nothing out.
+    #[test]
+    fn each_phase_has_its_target() {
+        let s = RodSettings::default();
+        let rod = RodMotion::default();
+        let near = |a: f32, b: f32, by: f32| (a - b).abs() <= by;
+        assert_eq!(
+            rod.phase_target(&s, &cue(Phase::Ready)),
+            HeldPose::default()
+        );
+        let charged = RodCue {
+            power: 1.0,
+            ..cue(Phase::Charging)
+        };
+        let drawn = rod.phase_target(&s, &charged);
+        assert!(near(drawn.pitch, s.draw_rad, 1e-6));
+        assert!(near(drawn.shift.y, s.draw_lift_m, 1e-6) && drawn.shift.z > 0.0);
+        let half = rod.phase_target(
+            &s,
+            &RodCue {
+                power: 0.5,
+                ..cue(Phase::Charging)
+            },
+        );
+        assert!(near(half.pitch, s.draw_rad * 0.5, 1e-6), "eased");
+        for phase in [Phase::Flying, Phase::Floating, Phase::Nibble] {
+            let t = rod.phase_target(&s, &cue(phase));
+            assert!(near(t.pitch, -s.settle_rad, s.bob_rad), "{phase:?}");
+        }
+        let bite = rod.phase_target(&s, &cue(Phase::Bite));
+        assert!(near(bite.pitch, -s.bite_rad, s.bite_shake_rad));
+        let fight = RodCue {
+            tension: 1.0,
+            pull: 1.0,
+            reeling: true,
+            ..cue(Phase::Hooked)
+        };
+        let hooked = rod.phase_target(&s, &fight);
+        assert!(near(hooked.pitch, s.fight_rad, s.fight_shake_rad));
+        assert!(near(hooked.roll, s.roll_rad, 1e-6), "toward the pull");
+        assert!(near(hooked.shift.length(), s.crank_m, 1e-6), "the crank");
+        // A cast flicks forward of the fishing pose, and a nibble twitches
+        // the tip down from it.
+        let mut cast = RodMotion::default();
+        cast.step(
+            &s,
+            &cue(Phase::Flying),
+            &[Event::Cast { speed_mps: 9.0 }],
+            DT,
+        );
+        assert_eq!(cast.target(&s, &cue(Phase::Flying)).pitch, -s.flick_rad);
+        let mut nibble = RodMotion::default();
+        nibble.step(&s, &cue(Phase::Nibble), &[Event::Nibble { species: 0 }], DT);
+        let twitched = nibble.target(&s, &cue(Phase::Nibble)).pitch;
+        assert!(twitched < nibble.phase_target(&s, &cue(Phase::Nibble)).pitch - 0.9 * s.nibble_rad);
+        // A catch lifts the rod, then it eases back to rest.
+        let mut caught = RodMotion::default();
+        caught.step(
+            &s,
+            &cue(Phase::Ready),
+            &[Event::Caught {
+                species: 0,
+                length_cm: 30,
+            }],
+            DT,
+        );
+        assert!(caught.target(&s, &cue(Phase::Ready)).pitch > 0.9 * s.catch_rad);
+        run(&mut caught, &cue(Phase::Ready), &[], 1.5);
+        assert!(caught.pose.pitch.abs() < 1e-3, "at rest: {:?}", caught.pose);
+    }
+
+    /// The spring carries the rod from wherever it is: a change of phase
+    /// never moves it more in one frame than a share of the jump, it
+    /// settles on the target, and a bite dips the tip within a frame.
+    #[test]
+    fn the_spring_settles_without_popping() {
+        let s = RodSettings::default();
+        let mut rod = RodMotion::default();
+        let charged = RodCue {
+            power: 1.0,
+            ..cue(Phase::Charging)
+        };
+        let jump = run(&mut rod, &charged, &[], 1.0);
+        assert!(jump < 0.4 * s.draw_rad, "the draw popped: {jump}");
+        assert!((rod.pose.pitch - s.draw_rad).abs() < 1e-3, "{:?}", rod.pose);
+        // The cast: from drawn back to the flick, then to the water.
+        let jump = run(
+            &mut rod,
+            &cue(Phase::Flying),
+            &[Event::Cast { speed_mps: 9.0 }],
+            0.1,
+        );
+        assert!(jump < 0.4 * (s.draw_rad + s.flick_rad), "{jump}");
+        assert!(rod.pose.pitch < 0.0, "flicked forward: {:?}", rod.pose);
+        // A bite while the float is out: the tip dips at once.
+        run(&mut rod, &cue(Phase::Floating), &[], 1.0);
+        let floating = rod.pose.pitch;
+        rod.step(
+            &s,
+            &cue(Phase::Bite),
+            &[Event::Bite {
+                species: 0,
+                window_s: 0.6,
+            }],
+            DT,
+        );
+        assert!(
+            rod.pose.pitch < floating - 0.1 * (s.bite_rad - s.settle_rad),
+            "{floating} -> {:?}",
+            rod.pose
+        );
+        // A snap from a hard fight eases back, never pops.
+        let fight = RodCue {
+            tension: 1.0,
+            pull: -1.0,
+            ..cue(Phase::Hooked)
+        };
+        run(&mut rod, &fight, &[], 1.0);
+        let jump = run(
+            &mut rod,
+            &cue(Phase::Ready),
+            &[Event::Snapped { species: 0 }],
+            1.0,
+        );
+        assert!(jump < 0.1, "the snap popped: {jump}");
+        assert!(rod.pose.pitch.abs() < 1e-3 && rod.pose.roll.abs() < 1e-3);
+        // A long frame does not throw it.
+        rod.step(&s, &charged, &[], 0.5);
+        assert!(rod.pose.pitch.is_finite() && rod.pose.pitch <= s.draw_rad + 0.01);
+    }
+
+    /// The tip as drawn is the rest tip through the frame's pose: the rod
+    /// holder's own transform carries the model's tip there, and a rod
+    /// drawn back carries the tip up and back from its rest.
+    #[test]
+    fn the_tip_follows_the_pose() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_secs_f32(DT),
+            ))
+            .init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
+            .insert_resource(HeldConfig::default())
+            .insert_resource(WalkingReadout {
+                active: true,
+                ..default()
+            })
+            .init_resource::<Swinging>()
+            .init_resource::<RodMotion>()
+            .init_resource::<RodTipNow>()
+            .insert_resource(RodCue {
+                power: 1.0,
+                ..cue(Phase::Charging)
+            })
+            .insert_resource({
+                let mut slot = ToolSlot::default();
+                slot.hold(Tool::Rod);
+                slot
+            })
+            .add_systems(Update, (spawn, hold).chain());
+        app.world_mut().spawn((WalkingCamera, Transform::default()));
+        for _ in 0..90 {
+            app.update();
+        }
+        let model = models().get(Tool::Rod);
+        let rest_tip: Vec3 = model.tip.into();
+        let tip = app.world().resource::<RodTipNow>().0;
+        let mut holders = app.world_mut().query::<(&Held, &Transform)>();
+        let (_, transform) = holders
+            .iter(app.world())
+            .find(|(h, _)| h.tool == Tool::Rod)
+            .unwrap();
+        let in_tool = model
+            .rest()
+            .compute_affine()
+            .inverse()
+            .transform_point3(rest_tip);
+        let drawn = transform.transform_point(in_tool);
+        assert!(drawn.distance(tip) < 1e-4, "{drawn} vs {tip}");
+        assert!(
+            tip.z > rest_tip.z + 0.2,
+            "drawn back: {tip} from {rest_tip}"
+        );
+        // Let go: the rod comes forward of its rest, and the tip with it.
+        app.insert_resource(cue(Phase::Floating));
+        for _ in 0..90 {
+            app.update();
+        }
+        let tip = app.world().resource::<RodTipNow>().0;
+        assert!(tip.z < rest_tip.z, "forward: {tip} from {rest_tip}");
     }
 }

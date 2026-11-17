@@ -53,6 +53,50 @@ with the units in the field docs. Each value is validated finite, and
 non-negative where it is a size or a rate. Defaults live in one place (the
 `Default` impl), and `held.ron` states them.
 
+As built (`RodSettings` in `held.rs`), every value is a size, a rate or a
+time and the code gives it its sign, so all are validated finite and
+non-negative, and `spring_hz` positive. The table's fixed numbers became
+fields beside its named ones, named plainly and as the Rod in Hand mockup
+prints them, so its `rod: (...)` block pastes into `held.ron` unchanged.
+Each phase's pitch is measured from the rest pose (not from the pose before
+it) and written as a size: the fishing pose is at `-settle_rad`, so
+`settle_rad: 0.12`, never `-0.12`.
+
+| Field | Default | Unit | What |
+| --- | ---: | --- | --- |
+| `draw_rad` | 0.9 | rad | pitch back at full charge |
+| `draw_lift_m` | 0.05 | m | fist up and back at full charge |
+| `flick_rad` | 0.35 | rad | pitch forward on the cast |
+| `flick_s` | 0.14 | s | how long the flick is held |
+| `settle_rad` | 0.12 | rad | pitch forward while the float is out |
+| `bob_rad` | 0.015 | rad | the slow bob's size |
+| `bob_hz` | 0.4 | Hz | the slow bob's rate |
+| `nibble_rad` | 0.05 | rad | the twitch down on a nibble |
+| `nibble_s` | 0.15 | s | how long the twitch lasts |
+| `bite_rad` | 0.22 | rad | the dip forward on a bite |
+| `bite_shake_rad` | 0.04 | rad | the bite's shake |
+| `bite_shake_hz` | 14 | Hz | the bite's shake rate |
+| `fight_rad` | 0.45 | rad | pitch up with a fish on |
+| `fight_shake_rad` | 0.06 | rad | the fight's shake at full tension |
+| `fight_shake_hz` | 9 | Hz | the fight's shake rate |
+| `crank_m` | 0.012 | m | the fist's circle while reeling |
+| `crank_hz` | 3 | Hz | the circle's rate |
+| `roll_rad` | 0.15 | rad | roll toward the fish's pull, at most |
+| `catch_rad` | 0.6 | rad | the lift on a catch |
+| `catch_s` | 0.6 | s | the catch's ease back to rest |
+| `ease_s` | 0.3 | s | the ease back after a snap, miss, strike too early or a line wound in |
+| `spring_hz` | 9 | Hz | the spring's natural frequency |
+| `damping` | 0.7 | ratio | the spring's damping (1 critical) |
+
+The spring is stepped implicitly, so a long frame does not throw it. The
+shakes, the bob and the crank are part of the spring's target, so they too
+are carried and never pop. The line's events reach the rod through a
+`RodCue` resource that `fish.rs` writes each frame (phase, charge, tension,
+whether the reel is wound, which side the fish pulls, and the frame's
+events), and the rod is posed after the fishing systems in `Update`. The
+cast's `Angler::tip` reads `RodTipNow` as last drawn, a frame old; the line
+mesh in `PostUpdate` reads this frame's.
+
 ## 5. The mockup
 
 **Tools in Hand** (M36, `docs/mockups/tool-motion.html`, https://claude.ai/artifact/Xx3xB3ouaKdJ2NdnxAL9PX), its Fish tab. The owner, 2026-11-17: "Actually make a new tools mockup ... for all the tools stuff for digging, choppin and fishing". One page shows the three tools' motion: Dig, Chop (the `held-swing` STRIKE stroke) and Fish (this change), each with a Today / Proposed toggle in its one view.

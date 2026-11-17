@@ -7,6 +7,11 @@
 // while a block is being broken (rate, rad/s; drop, m; pitch about the fist,
 // rad) are Tenebris's viewmodel's.
 //
+// `rod` is how the rod moves with the line (openspec/changes/rod-motion,
+// design 2). Pitch is about the fist, tip up and back positive; each value
+// is a size, rate or time and the code gives it its sign. rad, m, s and Hz
+// as named; the spring's damping is a ratio (1 is critical).
+//
 // The code defaults written out; a test holds the two together.
 (
     sway_m: (0.006, 0.005),
@@ -14,4 +19,29 @@
     swing_rate: 9.0,
     swing_drop_m: 0.06,
     swing_pitch_rad: 0.85,
+    rod: (
+        draw_rad: 0.9,
+        draw_lift_m: 0.05,
+        flick_rad: 0.35,
+        flick_s: 0.14,
+        settle_rad: 0.12,
+        bob_rad: 0.015,
+        bob_hz: 0.4,
+        nibble_rad: 0.05,
+        nibble_s: 0.15,
+        bite_rad: 0.22,
+        bite_shake_rad: 0.04,
+        bite_shake_hz: 14.0,
+        fight_rad: 0.45,
+        fight_shake_rad: 0.06,
+        fight_shake_hz: 9.0,
+        crank_m: 0.012,
+        crank_hz: 3.0,
+        roll_rad: 0.15,
+        catch_rad: 0.6,
+        catch_s: 0.6,
+        ease_s: 0.3,
+        spring_hz: 9.0,
+        damping: 0.7,
+    ),
 )
