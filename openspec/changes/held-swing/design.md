@@ -58,3 +58,18 @@
    - The sleeve is long enough that the arm still runs off the screen at full
      reach.
    - Shown in the Tools in Hand mockup's Proposed strokes before the game.
+7. Four stages, by the animation principles (owner, 2026-11-17: "animation
+   principles: windup, anticipation, hit, recoil"):
+   - **Windup** (`windup_s` 0.10): the arm raises the tool up and back.
+   - **Anticipation** (`anticipate_s` 0.07, `anticipate_rad` 0.08): at the
+     top the tool settles a little further back and pauses, the beat before
+     the release. Decision 1's curve had no such stage: the wind-up ran
+     straight into the strike.
+   - **Hit** (`strike_s` 0.06, eased in with t cubed, then `impact_hold_s`
+     0.05): the fast sweep to full reach and a held frame on contact.
+   - **Recoil** (`recoil_rad` 0.15 over `recoil_s` 0.06, then `recover_s`
+     0.16): the tool bounces back off the block, with a slight overshoot,
+     then eases to rest or into the next stroke.
+   - The whole stroke fits inside the steady beat's period (decision 5). When
+     it would not, the windup, the anticipation and the recover shorten in
+     proportion; the hit never does.
