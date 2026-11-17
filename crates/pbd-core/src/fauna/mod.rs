@@ -911,7 +911,7 @@ fn home_roster() -> Vec<Species> {
             1,
             [0.81, 0.89, 0.92],
             [0.5, 0.5, 1.0],
-            "A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two metres and scatter at a splash, then close ranks again a few seconds later.",
+            "A bright, fast surface fish of cool coasts, from the edge of the ice to water as warm as 17 degrees. Silverfin skim the top two meters and scatter at a splash, then close ranks again a few seconds later.",
             "Let the splash settle before you expect a bite.",
         ),
         sp(
