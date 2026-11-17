@@ -853,7 +853,7 @@ mod tests {
         }
         // And what the f32 build wrote for an f32 point, this one writes for
         // the same point widened.
-        let p = bevy::math::Vec3::new(4436.4468, 1987.8191, -230.91805);
+        let p = bevy::math::DVec3::new(4436.4468, 1987.8191, -230.91805).as_vec3();
         let old = format!("{:.3},{:.3},{:.3}", p.x, p.y, p.z);
         let wide = p.as_dvec3();
         assert_eq!(format!("{:.3},{:.3},{:.3}", wide.x, wide.y, wide.z), old);

@@ -443,7 +443,7 @@ mod tests {
         let y = up.as_vec3();
         let x = y.any_orthonormal_vector();
         let rest = Frame {
-            origin: (up * 4_436.4468).as_vec3(),
+            origin: (up * 4436.4468).as_vec3(),
             x,
             y,
             z: x.cross(y),

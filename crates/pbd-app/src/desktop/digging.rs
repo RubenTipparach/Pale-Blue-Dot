@@ -388,7 +388,7 @@ pub fn apply_edit(
                 let centre = direction.as_dvec3().normalize()
                     * (f64::from(PLANET_RADIUS)
                         + f64::from(column::layer_altitude(layer))
-                        + f64::from(lift));
+                        + lift);
                 dropped = Some(Drops::make(save, item, centre, *now_s));
             }
         }

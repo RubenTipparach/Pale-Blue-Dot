@@ -144,6 +144,7 @@ struct Beast {
 }
 
 impl Beast {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         who: Who,
         species: u16,

@@ -4571,7 +4571,7 @@ mod sim_origin_tests {
         use crate::sim_origin::HOME;
         use pbd_core::settlement::pieces::{Frame, Meshes, cog};
         let up = DVec3::new(0.62, 0.41, -0.67).normalize();
-        let deck_at = up * 4_436.4468;
+        let deck_at = up * 4436.4468;
         let origin = SimOrigin::new(HOME, (deck_at / 128.0).round() * 128.0);
         let y = up.as_vec3();
         let x = y.any_orthonormal_vector();

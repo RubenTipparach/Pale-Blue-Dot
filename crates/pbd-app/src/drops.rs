@@ -508,7 +508,7 @@ mod tests {
         use crate::sim_origin::{HOME, SimFrame, apply};
         use pbd_core::world_frame::{Rebase, SimOrigin};
         // The home planet's radius, off every axis, the origin near.
-        let feet = DVec3::new(0.62, 0.41, -0.67).normalize() * 4_436.4468;
+        let feet = DVec3::new(0.62, 0.41, -0.67).normalize() * 4436.4468;
         let origin = SimOrigin::new(HOME, (feet / 128.0).round() * 128.0);
         let local_feet = origin.to_local(pbd_core::world_frame::WorldPos::new(HOME, feet));
         let up = origin.up_at(local_feet);
