@@ -80,3 +80,35 @@ The proposed hand of Tools in Hand version 8, approved by the owner.
   the game's old prisms, which its Today mode draws; it is not regenerated.
 
 Frame cost was not measured (a cloud container, no GPU).
+
+## 5. Palm and back (proposed, 2026-11-17)
+
+The owner, on the hand in the game, with two reference photos of real
+hands: "usually back of the hand and fingers a little darker than palm,
+and palm has kind of that palm texture". One skin tone (section 2) reads
+too even next to a real hand, where the back is darker and a little
+browner and the palm is paler, pinker and creased.
+
+Proposed (in the mockup first; the game waits for the owner's look):
+
+- **Two sides of one skin.** Every face of the hand's blocks (the back of
+  the hand, the fingers, the thumb, the wrist) is the back or the palm by
+  its normal: a face turned toward the handle (the palm's side of the
+  fist, the inside of each curled finger and the thumb) is the palm, the
+  rest is the back. The side is decided per face from the part's own
+  frame, so it holds in every grip.
+- **The back** is the skin tone a little darker (`back_k`, 0.92 of the
+  skin), with the same mottle.
+- **The palm** is the skin lifted toward a pale pink (`palm_mix`, 0.28 of
+  the way to (246, 206, 190)), with its own 16 × 16 texture: the mottle,
+  plus darker crease rows across it (the palm's lines and the finger
+  joints' folds), nearest-sampled at the same one texel per 0.24 tool
+  units.
+- The nails stay as they are; the skin picker's other tones get the same
+  two sides.
+- A **Palm and back** switch on the Hand tab shows it against version 8's
+  one tone.
+
+In first person the back of the fist is what the player sees most, so the
+whole hand reads slightly darker; the palm shows in the gaps of the grip,
+inside the curled fingers and when the hand turns.

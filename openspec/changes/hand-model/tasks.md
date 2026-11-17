@@ -7,3 +7,6 @@
 - [x] 2.2 (after approval) `held.rs`: four textured, nearest-sampled materials, and the wrapped light in eye space, re-baked into the vertex colours when the hand turns (`shade_hands`); still multiplied by the field's light at the eye (`light_held`)
 - [x] 2.3 (after approval) Tests and captures, before and after (`docs/screenshots/hand-model/`): closed blocks facing out, the texel size, the sleeve's growth and the wrapped light (`pbd_core::hand::tests`); the thumb's two segments, one skin with nails, cuff and sleeve, the fist on the handle, the textures' size and palette, the lit side staying toward the light, the hand re-lit as it swings (`held::tests`)
 - [ ] 2.4 The owner's look in the game
+- [x] 3.1 Mockup: palm and back (design 5) on the Hand tab of Tools in Hand, with a switch against one tone
+- [ ] 3.2 The owner's look at the mockup
+- [ ] 3.3 (after approval) The generator and the game: a fifth texture (the palm), the faces split by side
