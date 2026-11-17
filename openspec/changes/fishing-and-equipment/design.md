@@ -347,6 +347,32 @@ segment bent back up, the float on the water to the side of it.
 - **Proof.** `fish::tests::the_line_runs_from_the_rod_tip_to_the_float`: the
   first point is the tip and the last is the float at low tide, in a wave
   trough and pulled under, and no point between is under the water.
+- **The last stretch still read as short (review, 2026-11-16).** In the
+  first fixed still the line came down in front of the float and its last
+  metre or so, running to the float, was thin, dark teal and broken. A log
+  of the line's points (heights over the float, metres across) showed the
+  line was never under the float: it came in from the eye's side at 0.1 to
+  0.3 m over the water and ended on the float. It was *drawn* dark:
+  - **The composite's waterline.** `water.wgsl` `compose` lays the
+    underwater murk over every pixel under `eye_water_surface()`. For an eye
+    in the air that was the *mean* sea (`sea_frame.y` was 0, so the shader
+    fell back to `planet_center.w`). At low tide the sea, the float and the
+    line's last stretch all sit up to a metre under the mean, so they were
+    tinted as seen through that much water. The eye in or by the sea already
+    used the tided surface (B17, B18); an eye in the air now does too
+    (`planet_water.rs`, `sea_frame.y = sea + tide here`). This changes the
+    look of anything an eye in the air sees between the low-water sea and
+    the mean at low tide: it is no longer tinted as if under water.
+  - **The drawn sea and the crests.** The slack is now held
+    `LINE_CLEARANCE_M` (5 cm) over `draw::line_floor`: over the drawn sea
+    (the heightfield is drawn flat between cell corners, so the floor is the
+    most of the surface within 1.6 m), over the tided waterline, and over
+    every wave at its crest, easing down to the float over the last 0.5 m.
+    The eye looks down on the line from the rod, so a line over every crest
+    has no wave between it and the eye.
+  - **Tied on top.** The line ends on the top of the float's red half
+    (`FLOAT_TOP_M`, 0.09 m over the float's point), where a line is tied,
+    rather than inside it.
 
 **No bite heard, and no fish, found 2026-11-16.** The owner: "I think fishing
 is broken, there should be a sound when its ready to catch but I seem to have

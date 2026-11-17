@@ -1860,7 +1860,12 @@ fn prepare_water_views(
                 // The sea's own surface over the eye is its tided, swelling
                 // one: the composite measured the sea from its mean, so the
                 // tide's water between was dry (a bright band at high water).
-                eye_surface_radius(eye.0, camera, sea_radius, sea_now.tide_here).unwrap_or(0.0),
+                // An eye in the air is over the same tided sea: measured from
+                // the mean, everything between the low-water sea and the mean
+                // was drawn as seen through water, dark (a float and its
+                // line at low tide, `fishing-and-equipment` design 4).
+                eye_surface_radius(eye.0, camera, sea_radius, sea_now.tide_here)
+                    .unwrap_or(sea_radius + sea_now.tide_here),
                 ease.smooth,
                 ease.linear,
             ),
