@@ -96,6 +96,12 @@ pub enum Event {
     },
     /// Wound in empty, or the angler walked away from it.
     ReeledIn,
+    /// Wound in, or walked out of reach, with a fish nibbling, biting or
+    /// hooked: it got away. Raised before the `ReeledIn` it comes with, so
+    /// the player is told the line was not empty.
+    Lost {
+        species: u16,
+    },
 }
 
 /// Which fish the line is working: a school and a fish in it.
@@ -188,6 +194,16 @@ impl Line {
         self.tension = 0.0;
     }
 
+    /// The species of the fish on the line, if one is nibbling, biting or
+    /// hooked: what winding in now would lose.
+    fn working(&self, schools: &[School]) -> Option<u16> {
+        if !matches!(self.phase, Phase::Nibble | Phase::Bite | Phase::Hooked) {
+            return None;
+        }
+        let t = self.target?;
+        schools.get(t.school).map(|school| school.species)
+    }
+
     fn release(&mut self, schools: &mut [School], flock: &FlockSettings) {
         if let Some(t) = self.target.take()
             && let Some(school) = schools.get_mut(t.school)
@@ -239,17 +255,25 @@ impl Line {
             school.lure = None;
             school.held = None;
         }
-        if controls.reel_in
-            && matches!(
-                self.phase,
-                Phase::Flying | Phase::Floating | Phase::Nibble | Phase::Bite
-            )
+        // The strike: while the float is under, either button hooks the
+        // fish. A player who sees the bite and pulls with the button the
+        // prompt says winds in means to strike, not to let the fish go
+        // (owner, 2026-11-16: "I seem to have pulled it in at the right
+        // moment, but no fish is added").
+        let strike = controls.pressed || (controls.reel_in && self.phase == Phase::Bite);
+        if controls.reel_in && matches!(self.phase, Phase::Flying | Phase::Floating | Phase::Nibble)
         {
+            if let Some(species) = self.working(schools) {
+                events.push(Event::Lost { species });
+            }
             self.wind_in(schools, flock);
             events.push(Event::ReeledIn);
             return events;
         }
         if self.is_out() && self.float.distance(angler.feet) > s.line_max_m {
+            if let Some(species) = self.working(schools) {
+                events.push(Event::Lost { species });
+            }
             self.wind_in(schools, flock);
             events.push(Event::ReeledIn);
             return events;
@@ -357,7 +381,7 @@ impl Line {
                 };
                 let species = schools[t.school].species;
                 schools[t.school].held = Some((t.fish, self.lure()));
-                if controls.pressed {
+                if strike {
                     let pull = roster.get(species as usize).map_or(0.5, |sp| sp.pull);
                     self.phase = Phase::Hooked;
                     self.tension = 0.2;
